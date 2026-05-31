@@ -2,6 +2,33 @@
 
 Lisette is under active development. Any version before 1.0.0 may include breaking changes.
 
+## [0.2.16](https://github.com/ivov/lisette/compare/lisette-v0.2.15...lisette-v0.2.16) - 2026-05-31
+
+- fix: reject value names in type annotations [#555](https://github.com/ivov/lisette/pull/555) [`c4dabbd`](https://github.com/ivov/lisette/commit/c4dabbd9d1a400cdcb08557b4874c5e193154696)
+- feat: add `#[iterable]` for enum iteration [#557](https://github.com/ivov/lisette/pull/557) [`6a0db29`](https://github.com/ivov/lisette/commit/6a0db29d8bed754e9125196a243121ed220850ea)
+- refactor: share ufcs methods across inference [#556](https://github.com/ivov/lisette/pull/556) [`f4a635b`](https://github.com/ivov/lisette/commit/f4a635b0648bc7f052ff4622730a0d857fa35244)
+- fix: emit remaining pattern checks in switch case bodies [#554](https://github.com/ivov/lisette/pull/554) [`0cd4e5f`](https://github.com/ivov/lisette/commit/0cd4e5fe834aaa5967293b2cd1ef3c6a5283ebdf)
+- feat: suggest is_some/is_ok over match-to-bool [#552](https://github.com/ivov/lisette/pull/552) [`0a34bf2`](https://github.com/ivov/lisette/commit/0a34bf29fddac6740e7c62fdb2bdf825ec447119)
+- fix: validate unknown attributes on enums [#551](https://github.com/ivov/lisette/pull/551) [`00fcbf4`](https://github.com/ivov/lisette/commit/00fcbf48de22d2acb1850f3b96fe389052616e5f)
+- refactor: render enums as bare variant names [#550](https://github.com/ivov/lisette/pull/550) [`4d817a4`](https://github.com/ivov/lisette/commit/4d817a4c308503169929fd80efca69c6034aacf5)
+- feat: warn on range loop that only indexes a slice [#549](https://github.com/ivov/lisette/pull/549) [`69e5f43`](https://github.com/ivov/lisette/commit/69e5f43d04974b9cc4343b960b3dc53423b9e8e2)
+- perf: box function variant to shrink type enum [#548](https://github.com/ivov/lisette/pull/548) [`9b679d9`](https://github.com/ivov/lisette/commit/9b679d94ce1011ba6c4b4721f8c1adf4a0a973f5)
+- fix: reject enum and module types used as runtime values [#532](https://github.com/ivov/lisette/pull/532) [`30a5e73`](https://github.com/ivov/lisette/commit/30a5e7303b39f19534c361937df2f3df00849f98)
+- feat: warn on loop that runs at most once [#545](https://github.com/ivov/lisette/pull/545) [`d3b1d9e`](https://github.com/ivov/lisette/commit/d3b1d9e923ac008a661a2dd654e39dee9ec59ac6)
+- perf: avoid per-node allocations in ast traversal [#544](https://github.com/ivov/lisette/pull/544) [`e6ca8c2`](https://github.com/ivov/lisette/commit/e6ca8c2f3d5f43db1c1b1eba2dadcc0a4510bb6d)
+- test: check lis learn project e2e [#543](https://github.com/ivov/lisette/pull/543) [`6dff023`](https://github.com/ivov/lisette/commit/6dff0239d9bdcdb0b0e7319855cf5adc00ec57e5)
+- refactor: consolidate context-free checks onto shared visitor [#542](https://github.com/ivov/lisette/pull/542) [`a116b4b`](https://github.com/ivov/lisette/commit/a116b4b7cde0cfc5a2abde8ff8ed5c59aef946f7)
+- test: build no-entry emit snapshots in e2e suite [#541](https://github.com/ivov/lisette/pull/541) [`b0bae23`](https://github.com/ivov/lisette/commit/b0bae2333efb5f324cd9d2ab22ec513a32295e8e)
+- feat: reject loop with unchanging condition [#540](https://github.com/ivov/lisette/pull/540) [`80a0f1e`](https://github.com/ivov/lisette/commit/80a0f1ea8f6fb1f784d3817d439b19e4a1ffa8b2)
+- test: check emitted Go with go vet [#539](https://github.com/ivov/lisette/pull/539) [`09d6c96`](https://github.com/ivov/lisette/commit/09d6c9638fffbdd933c97a5a58a26ae28b32d5fa)
+- refactor: unify unit enum variant emission via constructor [#538](https://github.com/ivov/lisette/pull/538) [`a694be0`](https://github.com/ivov/lisette/commit/a694be0236644142b95cd589ba3e52e0cd84dcb0)
+- fix: resolve enum variant access through a type alias [#537](https://github.com/ivov/lisette/pull/537) [`701d20b`](https://github.com/ivov/lisette/commit/701d20be7f10b3b3f7d609cbac0dfff117748bc9)
+- ci: run in-crate unit tests [#536](https://github.com/ivov/lisette/pull/536) [`bde0e25`](https://github.com/ivov/lisette/commit/bde0e254d35aa72830c17379893e0dc02f66c5c8)
+- feat: warn on WaitGroup.Add inside a task [#535](https://github.com/ivov/lisette/pull/535) [`186ed22`](https://github.com/ivov/lisette/commit/186ed221df9f9379c3438a6d52056c50cbe24142)
+- feat: warn on needless boolean if-else [#534](https://github.com/ivov/lisette/pull/534) [`36a2a2a`](https://github.com/ivov/lisette/commit/36a2a2ad158426cb512e782ee6ac67d5c11837a2)
+- fix: stop flattening tuple payloads of fallible calls [#533](https://github.com/ivov/lisette/pull/533) [`611906c`](https://github.com/ivov/lisette/commit/611906c179e6259f7b22b86ab0403ba014c82e0b)
+- feat: warn on needless return in tail position [#530](https://github.com/ivov/lisette/pull/530) [`2128a29`](https://github.com/ivov/lisette/commit/2128a296dfa4ef10af47c70ee0363b6e9b2b4b56)
+
 ## [0.2.15](https://github.com/ivov/lisette/compare/lisette-v0.2.14...lisette-v0.2.15) - 2026-05-28
 
 - fix: emit middle index for capped range-from slice [#527](https://github.com/ivov/lisette/pull/527) [`00f3b56`](https://github.com/ivov/lisette/commit/00f3b562a9e0887655766e7ebaf75828fe85da72)
