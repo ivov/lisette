@@ -89,6 +89,14 @@ impl TaskState<'_> {
                             *annotation_span,
                             receiver.as_deref(),
                         ));
+                    } else if let Some((kind, help)) = self.classify_non_type_name(store, type_name)
+                    {
+                        self.sink.push(diagnostics::infer::not_a_type(
+                            type_name,
+                            kind,
+                            *annotation_span,
+                            help,
+                        ));
                     } else {
                         self.sink.push(diagnostics::infer::type_not_found(
                             type_name,
@@ -214,6 +222,68 @@ impl TaskState<'_> {
                 unreachable!("Annotation::Opaque should not be converted to a type")
             }
         }
+    }
+
+    /// Returns `Some((kind, help))` if `type_name` resolves to a value
+    /// (constant, function, or enum variant) rather than a type — used to
+    /// produce a more targeted diagnostic than the generic "type not found".
+    pub(super) fn classify_non_type_name(
+        &self,
+        store: &Store,
+        type_name: &str,
+    ) -> Option<(&'static str, Option<String>)> {
+        let qualified_name = self.lookup_qualified_name(store, type_name)?;
+        let definition = store.get_definition(&qualified_name)?;
+        if !matches!(definition.body, DefinitionBody::Value { .. }) {
+            return None;
+        }
+        // Pre-registration placeholders share `DefinitionBody::Value` but
+        // point at themselves — those are real type names, not values.
+        let body = definition.ty.unwrap_forall();
+        let resolves_to_self = body
+            .get_qualified_id()
+            .is_some_and(|id| id == qualified_name);
+        if resolves_to_self {
+            return None;
+        }
+
+        // Tuple/struct variants are registered as constructor functions
+        // returning the parent enum; unit variants are registered with the
+        // parent enum as their `ty`. Inspect both shapes.
+        let constructor_return_id = if let Type::Function(f) = body {
+            f.return_type.get_qualified_id()
+        } else {
+            None
+        };
+        let parent_enum_id = constructor_return_id
+            .or_else(|| body.get_qualified_id())
+            .filter(|id| {
+                store.get_definition(id).is_some_and(|d| {
+                    matches!(
+                        d.body,
+                        DefinitionBody::Enum { .. } | DefinitionBody::ValueEnum { .. }
+                    )
+                })
+            });
+
+        if let Some(enum_id) = parent_enum_id {
+            let enum_name = enum_id.rsplit_once('.').map(|(_, n)| n).unwrap_or(enum_id);
+            let help = if constructor_return_id.is_some() {
+                format!(
+                    "Use `{}` for the enum type, or call `{}(...)` to construct a value.",
+                    enum_name, type_name
+                )
+            } else {
+                format!("Use `{}` for the enum type.", enum_name)
+            };
+            return Some(("enum variant", Some(help)));
+        }
+
+        if matches!(body, Type::Function(_)) {
+            return Some(("function", None));
+        }
+
+        Some(("value", None))
     }
 
     pub(super) fn resolve_type_with_arity(

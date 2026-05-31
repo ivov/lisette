@@ -262,7 +262,13 @@ impl TaskState<'_> {
                     variant.name_span
                 };
                 if let Some(&(v_a, f_a, is_struct_a, ty_a, _)) = seen.get(&go_name) {
-                    if ty_a.resolve_in(&self.env) != resolved {
+                    let ty_a_resolved = ty_a.resolve_in(&self.env);
+                    // Skip the conflict check if either side already errored — the
+                    // primary diagnostic on the bad annotation is enough.
+                    if !matches!(ty_a_resolved, Type::Error)
+                        && !matches!(resolved, Type::Error)
+                        && ty_a_resolved != resolved
+                    {
                         let loc_a = if is_struct_a {
                             format!("{}.{}.{}", name, v_a, f_a)
                         } else {

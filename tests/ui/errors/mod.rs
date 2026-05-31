@@ -1806,6 +1806,56 @@ type Foo<T: Undefined> = T
 }
 
 #[test]
+fn infer_not_a_type_unit_variant_local() {
+    let input = r#"
+enum Kind {
+  Int,
+  String,
+}
+
+enum Column {
+  PrimaryKey { name: string, kind: Kind },
+  String { name: string, kind: Kind.String },
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_not_a_type_unit_variant_prelude() {
+    let input = r#"
+fn nothing() -> None {
+  return None
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_not_a_type_constructor_variant() {
+    let input = r#"
+fn test() {
+  let x: Some = Some(1)
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_not_a_type_function_name() {
+    let input = r#"
+fn helper(x: int) -> int {
+  return x * 2
+}
+
+fn run(f: helper) -> int {
+  return f(21)
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
 fn infer_variable_not_found_no_suggestion() {
     let input = r#"
 fn test() {

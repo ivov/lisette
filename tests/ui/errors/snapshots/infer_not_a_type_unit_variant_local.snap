@@ -1,0 +1,13 @@
+---
+source: tests/ui/errors/mod.rs
+assertion_line: 1821
+---
+  [error] `Kind.String` is not a type
+    ╭─[test.lis:9:32]
+  8 │   PrimaryKey { name: string, kind: Kind },
+  9 │   String { name: string, kind: Kind.String },
+    ·                                ─────┬─────
+    ·                                     ╰── enum variant used in type position
+ 10 │ }
+    ╰────
+  help: Use `Kind` for the enum type · code: [resolve.not_a_type]

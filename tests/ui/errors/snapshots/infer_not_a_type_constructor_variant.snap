@@ -1,0 +1,13 @@
+---
+source: tests/ui/errors/mod.rs
+assertion_line: 1841
+---
+  [error] `Some` is not a type
+   ╭─[test.lis:3:10]
+ 2 │ fn test() {
+ 3 │   let x: Some = Some(1)
+   ·          ──┬─
+   ·            ╰── enum variant used in type position
+ 4 │ }
+   ╰────
+  help: Use `Option` for the enum type, or call `Some(...)` to construct a value · code: [resolve.not_a_type]
