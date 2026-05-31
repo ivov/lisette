@@ -108,6 +108,8 @@ pub struct TaskState<'s> {
     pub satisfying_stack: rustc_hash::FxHashSet<(String, String)>,
     method_cache: RefCell<HashMap<EcoString, MethodSignatures>>,
     pub ufcs_methods: HashSet<(String, String)>,
+    /// When set, parallel workers read UFCS methods from here instead of cloning into `ufcs_methods`.
+    pub ufcs_shared: Option<Arc<HashSet<(String, String)>>>,
     /// Typed files produced by inference.
     pub typed_files: Vec<(String, File)>,
     /// Reentrancy counter: > 0 while resolving a generic bound annotation.
@@ -129,6 +131,7 @@ impl<'s> TaskState<'s> {
             satisfying_stack: rustc_hash::FxHashSet::default(),
             method_cache: RefCell::new(HashMap::default()),
             ufcs_methods: HashSet::default(),
+            ufcs_shared: None,
             typed_files: Vec::new(),
             bound_position_depth: 0,
         }
@@ -136,6 +139,10 @@ impl<'s> TaskState<'s> {
 
     pub fn with_fresh_allocator(sink: &'s LocalSink) -> Self {
         Self::new(sink, Arc::new(BindingIdAllocator::new()))
+    }
+
+    fn effective_ufcs_methods(&self) -> &HashSet<(String, String)> {
+        self.ufcs_shared.as_deref().unwrap_or(&self.ufcs_methods)
     }
 
     pub fn new_type_var(&mut self) -> Type {

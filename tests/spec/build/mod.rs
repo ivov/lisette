@@ -6261,3 +6261,53 @@ fn main() {
 
     assert_build_snapshot!(fs, "github.com/user/myproject");
 }
+
+#[test]
+fn ufcs_method_resolves_across_modules_on_parallel_path() {
+    let mut fs = MockFileSystem::new();
+
+    fs.add_file(
+        "lib",
+        "box.lis",
+        r#"
+pub struct Box<T> { pub value: T }
+
+impl<T> Box<T> {
+  pub fn map<U>(self, f: fn(T) -> U) -> Box<U> {
+    Box { value: f(self.value) }
+  }
+}
+"#,
+    );
+    fs.add_file("filler_a", "a.lis", "pub fn ping() -> int { 1 }\n");
+    fs.add_file("filler_b", "b.lis", "pub fn ping() -> int { 2 }\n");
+    fs.add_file("filler_c", "c.lis", "pub fn ping() -> int { 3 }\n");
+
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+import "lib"
+import "filler_a"
+import "filler_b"
+import "filler_c"
+
+fn main() {
+  let _ = filler_a.ping();
+  let _ = filler_b.ping();
+  let _ = filler_c.ping();
+  let b: lib.Box<int> = lib.Box { value: 5 };
+  let mapped = b.map(|x| x + 1);
+  let _ = mapped.value;
+}
+"#,
+    );
+
+    let files = compile_project_files(fs, "github.com/user/myproject", false);
+    let go: String = files.iter().map(|f| f.to_go()).collect();
+    assert!(
+        go.contains("Box_Map("),
+        "UFCS method must lower to a free-function call (Box_Map) even on the \
+         parallel inference path; got:\n{go}"
+    );
+}

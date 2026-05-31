@@ -1105,7 +1105,7 @@ impl TaskState<'_> {
                 // UFCS method: receiver.method() where method is a free function
                 if let Type::Nominal { id, .. } = &receiver_ty
                     && self
-                        .ufcs_methods
+                        .effective_ufcs_methods()
                         .contains(&(id.to_string(), member.to_string()))
                 {
                     return CallKind::UfcsMethod;
@@ -1229,7 +1229,7 @@ impl TaskState<'_> {
 
         // If it's a UFCS-lowered method, skip — the emitter handles it differently
         if self
-            .ufcs_methods
+            .effective_ufcs_methods()
             .contains(&(qualified_name.to_string(), method.to_string()))
         {
             return None;
