@@ -2,6 +2,8 @@ use diagnostics::LisetteDiagnostic;
 use syntax::ast::{Expression, MatchArm, MatchOrigin, Pattern, Span};
 use syntax::types::unqualified_name;
 
+use super::helpers::enum_variant_binding;
+
 pub fn check_verbose_failure_propagation(
     expression: &Expression,
     diagnostics: &mut Vec<LisetteDiagnostic>,
@@ -48,7 +50,7 @@ fn check_option_propagation(arm_a: &MatchArm, arm_b: &MatchArm) -> bool {
             return false;
         };
         is_none_or_wildcard(&fail_arm.pattern)
-            && body_is_identifier(&some_arm.expression, &name)
+            && body_is_identifier(&some_arm.expression, name)
             && body_is_return_none(&fail_arm.expression)
     };
     try_pair(arm_a, arm_b) || try_pair(arm_b, arm_a)
@@ -62,32 +64,10 @@ fn check_result_propagation(arm_a: &MatchArm, arm_b: &MatchArm) -> bool {
         let Some(err_name) = enum_variant_binding(&err_arm.pattern, "Err") else {
             return false;
         };
-        body_is_identifier(&ok_arm.expression, &ok_name)
-            && body_is_return_err(&err_arm.expression, &err_name)
+        body_is_identifier(&ok_arm.expression, ok_name)
+            && body_is_return_err(&err_arm.expression, err_name)
     };
     try_pair(arm_a, arm_b) || try_pair(arm_b, arm_a)
-}
-
-fn enum_variant_binding(pattern: &Pattern, variant: &str) -> Option<String> {
-    let Pattern::EnumVariant {
-        identifier,
-        fields,
-        rest,
-        ..
-    } = pattern
-    else {
-        return None;
-    };
-    if unqualified_name(identifier) != variant || *rest || fields.len() != 1 {
-        return None;
-    }
-    let Pattern::Identifier {
-        identifier: name, ..
-    } = &fields[0]
-    else {
-        return None;
-    };
-    Some(name.to_string())
 }
 
 fn is_none_or_wildcard(pattern: &Pattern) -> bool {

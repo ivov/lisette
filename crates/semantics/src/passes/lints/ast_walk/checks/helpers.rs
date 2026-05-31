@@ -1,4 +1,7 @@
-use syntax::ast::{Expression, Literal};
+use syntax::ast::{Expression, Literal, Pattern};
+use syntax::types::unqualified_name;
+
+use super::super::visitor::visit_ast;
 
 pub(super) fn bool_literal(expression: &Expression) -> Option<bool> {
     if let Expression::Literal {
@@ -30,6 +33,50 @@ pub(super) fn is_side_effect_free(expression: &Expression) -> bool {
         } => is_side_effect_free(inner),
         _ => false,
     }
+}
+
+// The single identifier bound by a one-field enum-variant pattern such as
+// `Some(v)` or `Err(e)`, if the variant name matches.
+pub(super) fn enum_variant_binding<'a>(pattern: &'a Pattern, variant: &str) -> Option<&'a str> {
+    let Pattern::EnumVariant {
+        identifier,
+        fields,
+        rest,
+        ..
+    } = pattern
+    else {
+        return None;
+    };
+    if unqualified_name(identifier) != variant || *rest || fields.len() != 1 {
+        return None;
+    }
+    let Pattern::Identifier {
+        identifier: name, ..
+    } = &fields[0]
+    else {
+        return None;
+    };
+    Some(name.as_str())
+}
+
+// `?`, `return`, `break`, and `continue` target a scope outside a synthesized
+// closure, so a body containing them cannot be moved into one.
+pub(super) fn has_escaping_control_flow(body: &Expression) -> bool {
+    let mut found = false;
+    visit_ast(
+        std::slice::from_ref(body),
+        &mut |node| {
+            found |= matches!(
+                node,
+                Expression::Return { .. }
+                    | Expression::Propagate { .. }
+                    | Expression::Break { .. }
+                    | Expression::Continue { .. }
+            );
+        },
+        &mut |_| {},
+    );
+    found
 }
 
 pub(super) fn expressions_equivalent(a: &Expression, b: &Expression) -> bool {

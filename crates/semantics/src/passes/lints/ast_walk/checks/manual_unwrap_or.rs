@@ -2,8 +2,7 @@ use diagnostics::LisetteDiagnostic;
 use syntax::ast::{Expression, MatchArm, MatchOrigin, Pattern, Span};
 use syntax::types::unqualified_name;
 
-use super::super::visitor::visit_ast;
-use super::helpers::is_side_effect_free;
+use super::helpers::{has_escaping_control_flow, is_side_effect_free};
 
 pub fn check_manual_unwrap_or(expression: &Expression, diagnostics: &mut Vec<LisetteDiagnostic>) {
     let Expression::Match {
@@ -60,26 +59,6 @@ pub fn check_manual_unwrap_or(expression: &Expression, diagnostics: &mut Vec<Lis
         &match_keyword_span,
         default_has_effects,
     ));
-}
-
-// `?`, `return`, `break`, and `continue` target a scope outside the synthesized
-// `unwrap_or_else` closure, so a default containing them cannot be moved into one.
-fn has_escaping_control_flow(default: &Expression) -> bool {
-    let mut found = false;
-    visit_ast(
-        std::slice::from_ref(default),
-        &mut |node| {
-            found |= matches!(
-                node,
-                Expression::Return { .. }
-                    | Expression::Propagate { .. }
-                    | Expression::Break { .. }
-                    | Expression::Continue { .. }
-            );
-        },
-        &mut |_| {},
-    );
-    found
 }
 
 fn enum_variant_fields<'a>(arm: &'a MatchArm, variant: &str) -> Option<&'a [Pattern]> {

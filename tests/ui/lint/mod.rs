@@ -3952,6 +3952,148 @@ fn main() {
 }
 
 #[test]
+fn manual_map_option() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let o: Option<int> = Some(1)
+  let _ = match o {
+    Some(v) => Some(v + 1),
+    None => None,
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn manual_map_result() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let r: Result<int, string> = Ok(1)
+  let _ = match r {
+    Ok(v) => Ok(v + 1),
+    Err(e) => Err(e),
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn manual_map_reversed_arms() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let o: Option<int> = Some(1)
+  let _ = match o {
+    None => None,
+    Some(v) => Some(v + 1),
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn manual_map_identity_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let o: Option<int> = Some(1)
+  let _ = match o {
+    Some(v) => Some(v),
+    None => None,
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn manual_map_non_bare_none_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let o: Option<int> = Some(1)
+  let _ = match o {
+    Some(v) => Some(v + 1),
+    None => Some(0),
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn manual_map_propagating_body_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn run(o: Option<Option<int>>) -> Option<int> {
+  match o {
+    Some(v) => Some(v?),
+    None => None,
+  }
+}
+
+fn main() {
+  let _ = run(Some(Some(1)))
+}
+"#
+    );
+}
+
+#[test]
+fn manual_map_transformed_error_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let r: Result<int, int> = Ok(1)
+  let _ = match r {
+    Ok(v) => Ok(v + 1),
+    Err(e) => Err(e + 1),
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn manual_map_custom_enum_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+enum Maybe { Yes(int), Nope }
+
+fn main() {
+  let m = Maybe.Yes(1)
+  let _ = match m {
+    Maybe.Yes(v) => Maybe.Yes(v + 1),
+    Maybe.Nope => Maybe.Nope,
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn manual_map_rewraps_lookalike_enum_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+enum MyResult<T, E> { Ok(T), Err(E) }
+
+fn main() {
+  let r: Result<int, string> = Ok(1)
+  let _: MyResult<int, string> = match r {
+    Ok(v) => MyResult.Ok(v + 1),
+    Err(e) => MyResult.Err(e),
+  }
+}
+"#
+    );
+}
+
+#[test]
 fn redundant_if_let_else() {
     assert_lint_snapshot!(
         r#"
