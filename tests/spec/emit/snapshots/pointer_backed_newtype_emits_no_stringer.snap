@@ -1,0 +1,7 @@
+---
+source: tests/spec/emit/types.rs
+description: "input: \nstruct Handle(Ref<int>)\n"
+---
+package main
+
+type Handle *int

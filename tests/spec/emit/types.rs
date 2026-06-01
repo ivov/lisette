@@ -894,6 +894,14 @@ struct UserId(int)
 }
 
 #[test]
+fn pointer_backed_newtype_emits_no_stringer() {
+    let input = r#"
+struct Handle(Ref<int>)
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn tuple_struct_single_field_construction() {
     let input = r#"
 struct UserId(int)

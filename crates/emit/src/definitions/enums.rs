@@ -1,6 +1,7 @@
 use crate::EmitEffects;
 use crate::Planner;
 use crate::definitions::enum_layout::{ENUM_GO_STRINGER_METHOD, ENUM_STRINGER_METHOD};
+use crate::definitions::structs::should_synthesize_stringer;
 use crate::names::generics::receiver_generics_string;
 use crate::names::go_name;
 use syntax::ast::{Attribute, Generic};
@@ -46,9 +47,10 @@ impl Planner<'_> {
         let has_json = attributes.iter().any(|a| a.name == "json");
         let has_iterable = attributes.iter().any(|a| a.name == "iterable");
 
+        let synthesize = should_synthesize_stringer(attributes);
         let (has_user_string, has_user_go_string) = self.stringer_overrides(name);
-        let emit_string = !has_user_string;
-        let emit_go_string = !has_user_go_string;
+        let emit_string = synthesize && !has_user_string;
+        let emit_go_string = synthesize && !has_user_go_string;
         let needs_fmt = emit_string || emit_go_string;
         let layout = self.module.enum_layout(&enum_id).unwrap();
         let mut result = layout.emit_definition(&generics_string);

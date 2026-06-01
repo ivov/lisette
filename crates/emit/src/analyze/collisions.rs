@@ -8,7 +8,7 @@ use crate::Planner;
 use crate::definitions::enum_layout::{
     ENUM_GO_STRINGER_METHOD, ENUM_STRINGER_METHOD, ENUM_TAG_FIELD,
 };
-use crate::definitions::structs::struct_field_go_name;
+use crate::definitions::structs::{should_synthesize_stringer, struct_field_go_name};
 use crate::names::go_name;
 
 type SpanMap = HashMap<String, Vec<Span>>;
@@ -121,7 +121,7 @@ impl Planner<'_> {
                         }
                     }
                 }
-                if let Some(stringer) = self.stringer_method_name(name) {
+                if let Some(stringer) = self.stringer_method_name(name, attributes) {
                     members
                         .entry(stringer.to_string())
                         .or_default()
@@ -182,14 +182,15 @@ impl Planner<'_> {
                     .entry(ENUM_TAG_FIELD.to_string())
                     .or_default()
                     .push(*name_span);
+                let synthesize = should_synthesize_stringer(attributes);
                 let (has_user_string, has_user_go_string) = self.stringer_overrides(name);
-                if !has_user_string {
+                if synthesize && !has_user_string {
                     members
                         .entry(ENUM_STRINGER_METHOD.to_string())
                         .or_default()
                         .push(*name_span);
                 }
-                if !has_user_go_string {
+                if synthesize && !has_user_go_string {
                     members
                         .entry(ENUM_GO_STRINGER_METHOD.to_string())
                         .or_default()

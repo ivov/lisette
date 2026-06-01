@@ -8,7 +8,7 @@ use crate::names::go_name;
 use crate::utils::receiver_name;
 use syntax::ast::{Attribute, Generic, StructFieldDefinition, StructKind};
 use syntax::program::DefinitionBody;
-use syntax::types::{SimpleKind, Type};
+use syntax::types::Type;
 
 impl Planner<'_> {
     pub(crate) fn emit_struct_definition(
@@ -24,7 +24,14 @@ impl Planner<'_> {
         let generics_string = self.generics_to_string_for_symbol(&symbol, generics, fx);
 
         if *kind == StructKind::Tuple {
-            return self.emit_tuple_struct(name, &generics_string, fields, generics, fx);
+            return self.emit_tuple_struct(
+                name,
+                &generics_string,
+                fields,
+                generics,
+                struct_attrs,
+                fx,
+            );
         }
 
         let mut field_strings: Vec<String> = Vec::with_capacity(fields.len());
@@ -49,7 +56,7 @@ impl Planner<'_> {
             )
         };
 
-        if let Some(stringer_name) = self.stringer_method_name(name) {
+        if let Some(stringer_name) = self.stringer_method_name(name, struct_attrs) {
             let string_method = emit_struct_stringer_method(
                 name,
                 &receiver_generics,
@@ -72,10 +79,11 @@ impl Planner<'_> {
         generics_string: &str,
         fields: &[StructFieldDefinition],
         generics: &[Generic],
+        struct_attrs: &[Attribute],
         fx: &mut EmitEffects,
     ) -> String {
         let definition = self.emit_tuple_struct_definition(name, generics_string, fields, fx);
-        let Some(stringer_name) = self.stringer_method_name(name) else {
+        let Some(stringer_name) = self.stringer_method_name(name, struct_attrs) else {
             return definition;
         };
         let receiver_generics = receiver_generics_string(generics);
@@ -182,7 +190,7 @@ impl Planner<'_> {
             });
 
         let is_user_stringer = |method_name: &str| {
-            methods.is_some_and(|m| is_stringer_signature(m.get(method_name)))
+            methods.is_some_and(|m| m.get(method_name).is_some_and(Type::is_stringer_signature))
                 && !self.facts.is_ufcs_method(&qualified, method_name)
         };
 
@@ -196,13 +204,24 @@ impl Planner<'_> {
     /// `GoString` when the user already supplies `String`, none when both
     /// exist. Enums use [`Self::stringer_overrides`] directly, since they
     /// synthesize both a bare `String` and a qualified `GoString`.
-    pub(crate) fn stringer_method_name(&self, name: &str) -> Option<&'static str> {
+    pub(crate) fn stringer_method_name(
+        &self,
+        name: &str,
+        attributes: &[Attribute],
+    ) -> Option<&'static str> {
+        if !should_synthesize_stringer(attributes) {
+            return None;
+        }
         match self.stringer_overrides(name) {
             (true, true) => None,
             (true, false) => Some(ENUM_GO_STRINGER_METHOD),
             _ => Some(ENUM_STRINGER_METHOD),
         }
     }
+}
+
+pub(crate) fn should_synthesize_stringer(_attributes: &[Attribute]) -> bool {
+    true
 }
 
 pub(crate) fn struct_field_go_name(
@@ -234,20 +253,6 @@ pub(crate) fn is_raw_function_type(ty: &Type) -> bool {
 
 pub(crate) fn stringer_verb(is_function: bool) -> &'static str {
     if is_function { "%p" } else { "%v" }
-}
-
-fn is_stringer_signature(method_ty: Option<&Type>) -> bool {
-    let Some(ty) = method_ty else {
-        return false;
-    };
-    let func = match ty {
-        Type::Forall { body, .. } => body.as_ref(),
-        other => other,
-    };
-    let Type::Function(f) = func else {
-        return false;
-    };
-    f.params.len() == 1 && matches!(f.return_type.as_ref(), Type::Simple(SimpleKind::String))
 }
 
 fn is_option_type(ty: &Type) -> bool {

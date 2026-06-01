@@ -753,6 +753,19 @@ impl Type {
         }
     }
 
+    pub fn is_stringer_signature(&self) -> bool {
+        let func = match self {
+            Type::Forall { body, .. } => body.as_ref(),
+            other => other,
+        };
+        matches!(
+            func,
+            Type::Function(f)
+                if f.params.len() == 1
+                    && matches!(f.return_type.as_ref(), Type::Simple(SimpleKind::String))
+        )
+    }
+
     pub fn has_name(&self, name: &str) -> bool {
         match self {
             Type::Nominal { id, .. } => id.last_segment() == name,
