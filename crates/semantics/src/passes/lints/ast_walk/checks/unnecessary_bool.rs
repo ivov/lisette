@@ -3,7 +3,7 @@ use syntax::ast::Expression;
 
 use super::helpers::bool_literal;
 
-pub fn check_needless_bool(expression: &Expression, diagnostics: &mut Vec<LisetteDiagnostic>) {
+pub fn check_unnecessary_bool(expression: &Expression, diagnostics: &mut Vec<LisetteDiagnostic>) {
     let Expression::If {
         consequence,
         alternative,
@@ -26,7 +26,7 @@ pub fn check_needless_bool(expression: &Expression, diagnostics: &mut Vec<Lisett
         return;
     }
 
-    diagnostics.push(diagnostics::lint::needless_bool(span, then_value));
+    diagnostics.push(diagnostics::lint::unnecessary_bool(span, then_value));
 }
 
 fn block_single_bool(expression: &Expression) -> Option<bool> {

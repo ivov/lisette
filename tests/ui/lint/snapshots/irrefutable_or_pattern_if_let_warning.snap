@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [warning] Redundant `if let` pattern
+  [info] Redundant `if let` pattern
    ╭─[test.lis:3:10]
  2 │ fn test(opt: Option<int>) {
  3 │   if let Some(_) | None = opt {

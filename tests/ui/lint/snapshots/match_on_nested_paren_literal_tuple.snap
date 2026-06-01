@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [warning] Unnecessary parens
+  [info] Unnecessary parens
    ╭─[test.lis:3:9]
  2 │ fn main() {
  3 │   match (((1, 2))) {

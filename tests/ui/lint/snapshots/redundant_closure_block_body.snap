@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [warning] Redundant closure
+  [info] Redundant closure
    ╭─[test.lis:6:18]
  5 │   let xs = [1, 2, 3]
  6 │   let _ = xs.map(|x| { double(x) })

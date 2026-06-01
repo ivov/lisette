@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [warning] Manual map
+  [info] Manual map
    ╭─[test.lis:4:11]
  3 │   let o: Option<int> = Some(1)
  4 │   let _ = match o {

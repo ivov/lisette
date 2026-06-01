@@ -1,7 +1,7 @@
 use diagnostics::LisetteDiagnostic;
 use syntax::ast::{BindingId, Expression};
 
-pub fn check_needless_range_loop(
+pub fn check_unnecessary_range_loop(
     expression: &Expression,
     diagnostics: &mut Vec<LisetteDiagnostic>,
 ) {
@@ -40,7 +40,7 @@ pub fn check_needless_range_loop(
     walk.visit(body);
 
     if walk.found && !walk.blocked {
-        diagnostics.push(diagnostics::lint::needless_range_loop(span, collection));
+        diagnostics.push(diagnostics::lint::unnecessary_range_loop(span, collection));
     }
 }
 

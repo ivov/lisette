@@ -133,7 +133,7 @@ pub fn pattern_issue(span: &Span, kind: IssueKind) -> LisetteDiagnostic {
         ),
     };
 
-    LisetteDiagnostic::warn(message)
+    LisetteDiagnostic::info(message)
         .with_lint_code(code)
         .with_span_label(span, label)
         .with_help(help)
@@ -189,7 +189,7 @@ pub fn unnecessary_reference(span: &Span, name: Option<&str>) -> LisetteDiagnost
             "Remove the `&` operator".to_string(),
         ),
     };
-    LisetteDiagnostic::warn("Unnecessary `&`")
+    LisetteDiagnostic::info("Unnecessary `&`")
         .with_lint_code("unnecessary_reference")
         .with_span_label(span, label)
         .with_help(help)
@@ -225,7 +225,7 @@ pub fn replaceable_with_zero_fill(span: &Span, kept: &str, struct_name: &str) ->
     } else {
         format!("`{} {{ {}, .. }}`", struct_name, kept)
     };
-    LisetteDiagnostic::warn("Replaceable with zero-fill spread")
+    LisetteDiagnostic::info("Replaceable with zero-fill spread")
         .with_lint_code("replaceable_with_zero_fill")
         .with_span_label(span, "has zero-valued fields")
         .with_help(format!(
@@ -271,7 +271,7 @@ pub fn unsigned_comparison(span: &Span, always_true: bool) -> LisetteDiagnostic 
 }
 
 pub fn verbose_failure_propagation(span: &Span) -> LisetteDiagnostic {
-    LisetteDiagnostic::warn("Verbose failure propagation")
+    LisetteDiagnostic::info("Verbose failure propagation")
         .with_lint_code("verbose_failure_propagation")
         .with_span_label(span, "verbose")
         .with_help("Use `?` to propagate the failure concisely")
@@ -292,7 +292,7 @@ pub fn duplicate_logical_operand(span: &Span, operand_text: &str) -> LisetteDiag
 }
 
 pub fn bool_literal_comparison(span: &Span, replacement: &str) -> LisetteDiagnostic {
-    LisetteDiagnostic::warn("Redundant comparison to boolean literal")
+    LisetteDiagnostic::info("Redundant comparison to boolean literal")
         .with_lint_code("bool_literal_comparison")
         .with_span_label(span, "can be simpler")
         .with_help(format!("Simplify to `{replacement}`"))
@@ -307,9 +307,9 @@ pub fn loop_runs_once(span: &Span) -> LisetteDiagnostic {
         )
 }
 
-pub fn needless_return(span: &Span) -> LisetteDiagnostic {
-    LisetteDiagnostic::warn("Needless `return`")
-        .with_lint_code("needless_return")
+pub fn unnecessary_return(span: &Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::info("Unnecessary `return`")
+        .with_lint_code("unnecessary_return")
         .with_span_label(span, "redundant in tail position")
         .with_help("The final expression of a function is its return value. Drop `return` and keep the value")
 }
@@ -330,28 +330,28 @@ pub fn identical_match_arms(span: &Span) -> LisetteDiagnostic {
         )
 }
 
-pub fn needless_bool(span: &Span, consequence_is_true: bool) -> LisetteDiagnostic {
+pub fn unnecessary_bool(span: &Span, consequence_is_true: bool) -> LisetteDiagnostic {
     let help = if consequence_is_true {
         "Replace this `if... else` with the condition itself"
     } else {
         "Replace this `if... else` with the negated condition"
     };
 
-    LisetteDiagnostic::warn("Needless boolean if-else")
-        .with_lint_code("needless_bool")
+    LisetteDiagnostic::info("Unnecessary boolean if-else")
+        .with_lint_code("unnecessary_bool")
         .with_span_label(span, "can be simpler")
         .with_help(help)
 }
 
 pub fn redundant_pattern_matching(span: &Span, predicate: &str) -> LisetteDiagnostic {
-    LisetteDiagnostic::warn("Redundant pattern matching")
+    LisetteDiagnostic::info("Redundant pattern matching")
         .with_lint_code("redundant_pattern_matching")
         .with_span_label(span, "can be simpler")
         .with_help(format!("Replace this `match` with `.{predicate}()`"))
 }
 
 pub fn manual_map(span: &Span) -> LisetteDiagnostic {
-    LisetteDiagnostic::warn("Manual map")
+    LisetteDiagnostic::info("Manual map")
         .with_lint_code("manual_map")
         .with_span_label(span, "can be simpler")
         .with_help("Replace this `match` with `.map(...)`")
@@ -370,7 +370,7 @@ pub fn manual_unwrap_or(span: &Span, default_has_effects: bool) -> LisetteDiagno
 }
 
 pub fn redundant_closure(span: &Span, callee: &str) -> LisetteDiagnostic {
-    LisetteDiagnostic::warn("Redundant closure")
+    LisetteDiagnostic::info("Redundant closure")
         .with_lint_code("redundant_closure")
         .with_span_label(span, "can be simpler")
         .with_help(format!("Replace this closure with `{callee}`"))
@@ -384,7 +384,7 @@ pub fn empty_match_arm(span: &Span) -> LisetteDiagnostic {
 }
 
 pub fn unnecessary_parens(span: &Span, keyword: &str) -> LisetteDiagnostic {
-    LisetteDiagnostic::warn("Unnecessary parens")
+    LisetteDiagnostic::info("Unnecessary parens")
         .with_lint_code("excess_parens_on_condition")
         .with_span_label(span, "remove parens")
         .with_help(format!(
@@ -403,7 +403,7 @@ pub fn match_on_literal(span: &Span) -> LisetteDiagnostic {
 }
 
 pub fn single_arm_match(span: &Span, pattern_suggestion: &str) -> LisetteDiagnostic {
-    LisetteDiagnostic::warn("Ineffective match")
+    LisetteDiagnostic::info("Ineffective match")
         .with_lint_code("single_arm_match")
         .with_span_label(span, "should be `if let`")
         .with_help(format!(
@@ -413,14 +413,14 @@ pub fn single_arm_match(span: &Span, pattern_suggestion: &str) -> LisetteDiagnos
 }
 
 pub fn uninterpolated_fstring(span: &Span) -> LisetteDiagnostic {
-    LisetteDiagnostic::warn("Uninterpolated f-string")
+    LisetteDiagnostic::info("Uninterpolated f-string")
         .with_lint_code("uninterpolated_fstring")
         .with_span_label(span, "zero interpolations")
         .with_help("Remove the `f` prefix. A string without interpolations does not need to be a format string")
 }
 
 pub fn unnecessary_raw_string(span: &Span) -> LisetteDiagnostic {
-    LisetteDiagnostic::warn("Unnecessary raw string")
+    LisetteDiagnostic::info("Unnecessary raw string")
         .with_lint_code("unnecessary_raw_string")
         .with_span_label(span, "no backslashes")
         .with_help("Remove the `r` prefix. A string without backslashes does not need to be raw")
@@ -452,14 +452,14 @@ pub fn invisible_in_string(
 }
 
 pub fn expression_only_fstring(span: &Span) -> LisetteDiagnostic {
-    LisetteDiagnostic::warn("Expression-only f-string")
+    LisetteDiagnostic::info("Expression-only f-string")
         .with_lint_code("expression_only_fstring")
         .with_span_label(span, "the entire f-string is an expression")
         .with_help("Use the expression directly. Wrapping it in an f-string adds no value")
 }
 
 pub fn rest_only_slice_pattern(span: &Span, help: impl Into<String>) -> LisetteDiagnostic {
-    LisetteDiagnostic::warn("Ineffective pattern")
+    LisetteDiagnostic::info("Ineffective pattern")
         .with_lint_code("rest_only_slice_pattern")
         .with_span_label(span, "always matches")
         .with_help(help)
@@ -561,7 +561,7 @@ pub fn unknown_attribute(span: &Span, name: &str) -> LisetteDiagnostic {
 }
 
 pub fn tag_has_alias(span: &Span, key: &str) -> LisetteDiagnostic {
-    LisetteDiagnostic::warn("Prefer predefined tag alias")
+    LisetteDiagnostic::info("Prefer predefined tag alias")
         .with_lint_code("tag_has_alias")
         .with_span_label(span, "use alias instead")
         .with_help(format!(
@@ -617,9 +617,9 @@ pub fn waitgroup_add_in_task(span: &Span) -> LisetteDiagnostic {
         )
 }
 
-pub fn needless_range_loop(span: &Span, collection: &str) -> LisetteDiagnostic {
-    LisetteDiagnostic::warn("Needless range loop")
-        .with_lint_code("needless_range_loop")
+pub fn unnecessary_range_loop(span: &Span, collection: &str) -> LisetteDiagnostic {
+    LisetteDiagnostic::info("Unnecessary range loop")
+        .with_lint_code("unnecessary_range_loop")
         .with_span_label(span, "can be simpler")
         .with_help(format!(
             "This loop exposes the index only to access elements of `{collection}`. Iterate directly over the elements with `for value in {collection}`"

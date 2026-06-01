@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [warning] Replaceable with zero-fill spread
+  [info] Replaceable with zero-fill spread
    ╭─[test.lis:5:11]
  4 │ fn main() -> int {
  5 │   let c = Conf { name: "x", count: 0, on: false, retries: 0 };

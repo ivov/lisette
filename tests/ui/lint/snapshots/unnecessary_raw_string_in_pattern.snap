@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [warning] Unnecessary raw string
+  [info] Unnecessary raw string
    ╭─[test.lis:4:21]
  3 │   let s = "hello"
  4 │   let _ = match s { r"hello" => 1, _ => 0 }

@@ -1,7 +1,7 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  [warning] Redundant cast
+  [info] Redundant cast
    ╭─[test.lis:4:3]
  3 │   let x: int = 42;
  4 │   x as int

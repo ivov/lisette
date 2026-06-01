@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [warning] Redundant `if let` pattern
+  [info] Redundant `if let` pattern
    ╭─[test.lis:3:10]
  2 │ pub fn test(pair: (int, int)) {
  3 │   if let (a, b) = pair {

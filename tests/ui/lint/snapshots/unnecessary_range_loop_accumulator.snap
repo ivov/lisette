@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [warning] Needless range loop
+  [info] Unnecessary range loop
    ╭─[test.lis:5:12]
  4 │   let mut total = 0
  5 │   for i in 0..xs.length() {
@@ -9,4 +9,4 @@ source: tests/ui/lint/mod.rs
    ·                   ╰── can be simpler
  6 │     total = total + xs[i]
    ╰────
-  help: This loop exposes the index only to access elements of `xs`. Iterate directly over the elements with `for value in xs` · code: [lint.needless_range_loop]
+  help: This loop exposes the index only to access elements of `xs`. Iterate directly over the elements with `for value in xs` · code: [lint.unnecessary_range_loop]

@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [warning] Redundant `else` branch
+  [info] Redundant `else` branch
    ╭─[test.lis:5:5]
  4 │     let _ = x;
  5 │   } else {

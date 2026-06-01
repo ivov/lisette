@@ -2350,7 +2350,7 @@ pub fn chained_cast(span: Span) -> LisetteDiagnostic {
 }
 
 pub fn redundant_cast(ty: &Type, span: Span) -> LisetteDiagnostic {
-    LisetteDiagnostic::warn("Redundant cast")
+    LisetteDiagnostic::info("Redundant cast")
         .with_infer_code("redundant_cast")
         .with_span_label(&span, format!("casting `{}` to itself has no effect", ty))
         .with_help("Remove the unnecessary cast")

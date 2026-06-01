@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [warning] Verbose failure propagation
+  [info] Verbose failure propagation
    ╭─[test.lis:3:11]
  2 │ fn first(x: Option<int>) -> Option<int> {
  3 │   let v = match x {

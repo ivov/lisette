@@ -1,12 +1,12 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [warning] Needless boolean if-else
+  [info] Unnecessary boolean if-else
    ╭─[test.lis:5:11]
  4 │   let b = 10;
- 5 │   let x = if a > b { true } else { false };
+ 5 │   let x = if a > b { false } else { true };
    ·           ────────────────┬───────────────
    ·                           ╰── can be simpler
  6 │   let _ = x
    ╰────
-  help: Replace this `if... else` with the condition itself · code: [lint.needless_bool]
+  help: Replace this `if... else` with the negated condition · code: [lint.unnecessary_bool]

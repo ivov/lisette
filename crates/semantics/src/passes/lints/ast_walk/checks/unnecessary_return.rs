@@ -1,7 +1,7 @@
 use diagnostics::LisetteDiagnostic;
 use syntax::ast::Expression;
 
-pub fn check_needless_return(expression: &Expression, diagnostics: &mut Vec<LisetteDiagnostic>) {
+pub fn check_unnecessary_return(expression: &Expression, diagnostics: &mut Vec<LisetteDiagnostic>) {
     let Expression::Function { body, .. } = expression else {
         return;
     };
@@ -21,7 +21,7 @@ fn flag_tail_returns(expression: &Expression, diagnostics: &mut Vec<LisetteDiagn
             // Bare `return` is excluded: dropping it can change the block's
             // type when a preceding statement is non-unit.
             if !matches!(value.as_ref(), Expression::Unit { .. }) {
-                diagnostics.push(diagnostics::lint::needless_return(span));
+                diagnostics.push(diagnostics::lint::unnecessary_return(span));
             }
         }
         Expression::Block { items, .. } => {

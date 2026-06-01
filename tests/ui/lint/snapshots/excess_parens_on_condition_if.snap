@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [warning] Unnecessary parens
+  [info] Unnecessary parens
    ╭─[test.lis:4:6]
  3 │   let x = 5;
  4 │   if (x > 0) {

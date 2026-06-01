@@ -667,7 +667,7 @@ fn main() {
 }
 
 #[test]
-fn needless_return_simple() {
+fn unnecessary_return_simple() {
     assert_lint_snapshot!(
         r#"
 fn five() -> int {
@@ -682,7 +682,7 @@ fn main() {
 }
 
 #[test]
-fn needless_return_after_statements() {
+fn unnecessary_return_after_statements() {
     assert_lint_snapshot!(
         r#"
 fn doubled(n: int) -> int {
@@ -698,7 +698,7 @@ fn main() {
 }
 
 #[test]
-fn needless_return_if_else_branches() {
+fn unnecessary_return_if_else_branches() {
     assert_lint_snapshot!(
         r#"
 fn sign(n: int) -> int {
@@ -717,7 +717,7 @@ fn main() {
 }
 
 #[test]
-fn needless_return_match_arms() {
+fn unnecessary_return_match_arms() {
     assert_lint_snapshot!(
         r#"
 fn label(n: int) -> string {
@@ -735,7 +735,7 @@ fn main() {
 }
 
 #[test]
-fn needless_return_early_return_no_warning() {
+fn unnecessary_return_early_return_no_warning() {
     assert_no_lint_warnings!(
         r#"
 fn clamp(n: int) -> int {
@@ -753,7 +753,7 @@ fn main() {
 }
 
 #[test]
-fn needless_return_in_loop_no_warning() {
+fn unnecessary_return_in_loop_no_warning() {
     assert_no_lint_warnings!(
         r#"
 fn first_positive(xs: Slice<int>) -> int {
@@ -773,7 +773,7 @@ fn main() {
 }
 
 #[test]
-fn needless_return_bare_no_warning() {
+fn unnecessary_return_bare_no_warning() {
     assert_no_lint_warnings!(
         r#"
 fn greet() {
@@ -788,7 +788,7 @@ fn main() {
 }
 
 #[test]
-fn needless_return_let_else_no_warning() {
+fn unnecessary_return_let_else_no_warning() {
     assert_no_lint_warnings!(
         r#"
 fn unwrap_or_zero(x: Option<int>) -> int {
@@ -806,7 +806,7 @@ fn main() {
 }
 
 #[test]
-fn needless_return_in_lambda_no_warning() {
+fn unnecessary_return_in_lambda_no_warning() {
     assert_no_lint_warnings!(
         r#"
 fn apply() -> int {
@@ -1195,7 +1195,7 @@ pub fn pick() -> int {
 }
 
 #[test]
-fn needless_bool_true_false() {
+fn unnecessary_bool_true_false() {
     assert_lint_snapshot!(
         r#"
 fn main() {
@@ -1209,7 +1209,7 @@ fn main() {
 }
 
 #[test]
-fn needless_bool_false_true() {
+fn unnecessary_bool_false_true() {
     assert_lint_snapshot!(
         r#"
 fn main() {
@@ -1223,7 +1223,7 @@ fn main() {
 }
 
 #[test]
-fn needless_bool_non_bool_branches_no_warning() {
+fn unnecessary_bool_non_bool_branches_no_warning() {
     assert_no_lint_warnings!(
         r#"
 fn main() {
@@ -1237,7 +1237,7 @@ fn main() {
 }
 
 #[test]
-fn needless_bool_branch_not_literal_no_warning() {
+fn unnecessary_bool_branch_not_literal_no_warning() {
     assert_no_lint_warnings!(
         r#"
 fn main() {
@@ -6911,7 +6911,7 @@ fn main() {
 }
 
 #[test]
-fn needless_range_loop_read() {
+fn unnecessary_range_loop_read() {
     assert_lint_snapshot!(
         r#"
 fn main() {
@@ -6925,7 +6925,7 @@ fn main() {
 }
 
 #[test]
-fn needless_range_loop_accumulator() {
+fn unnecessary_range_loop_accumulator() {
     assert_lint_snapshot!(
         r#"
 fn main() {
@@ -6941,7 +6941,7 @@ fn main() {
 }
 
 #[test]
-fn needless_range_loop_index_used_directly_no_warning() {
+fn unnecessary_range_loop_index_used_directly_no_warning() {
     assert_no_lint_warnings!(
         r#"
 fn main() {
@@ -6955,7 +6955,7 @@ fn main() {
 }
 
 #[test]
-fn needless_range_loop_two_collections_no_warning() {
+fn unnecessary_range_loop_two_collections_no_warning() {
     assert_no_lint_warnings!(
         r#"
 fn main() {
@@ -6971,7 +6971,7 @@ fn main() {
 }
 
 #[test]
-fn needless_range_loop_writes_through_index_no_warning() {
+fn unnecessary_range_loop_writes_through_index_no_warning() {
     assert_no_lint_warnings!(
         r#"
 fn main() {
@@ -6985,7 +6985,7 @@ fn main() {
 }
 
 #[test]
-fn needless_range_loop_nonzero_start_no_warning() {
+fn unnecessary_range_loop_nonzero_start_no_warning() {
     assert_no_lint_warnings!(
         r#"
 fn main() {
@@ -6999,7 +6999,7 @@ fn main() {
 }
 
 #[test]
-fn needless_range_loop_inclusive_range_no_warning() {
+fn unnecessary_range_loop_inclusive_range_no_warning() {
     assert_no_lint_warnings!(
         r#"
 fn main() {
@@ -7013,7 +7013,7 @@ fn main() {
 }
 
 #[test]
-fn needless_range_loop_discarded_index_no_warning() {
+fn unnecessary_range_loop_discarded_index_no_warning() {
     assert_no_lint_warnings!(
         r#"
 fn main() {
@@ -7027,7 +7027,7 @@ fn main() {
 }
 
 #[test]
-fn needless_range_loop_shadowed_collection_no_warning() {
+fn unnecessary_range_loop_shadowed_collection_no_warning() {
     assert_no_lint_warnings!(
         r#"
 fn main() {
@@ -7042,7 +7042,7 @@ fn main() {
 }
 
 #[test]
-fn needless_range_loop_field_write_no_warning() {
+fn unnecessary_range_loop_field_write_no_warning() {
     assert_no_lint_warnings!(
         r#"
 struct Point {
@@ -7060,7 +7060,7 @@ fn main() {
 }
 
 #[test]
-fn needless_range_loop_method_receiver_no_warning() {
+fn unnecessary_range_loop_method_receiver_no_warning() {
     assert_no_lint_warnings!(
         r#"
 fn main() {
@@ -7074,7 +7074,7 @@ fn main() {
 }
 
 #[test]
-fn needless_range_loop_other_index_write_no_warning() {
+fn unnecessary_range_loop_other_index_write_no_warning() {
     assert_no_lint_warnings!(
         r#"
 fn main() {
@@ -7089,7 +7089,7 @@ fn main() {
 }
 
 #[test]
-fn needless_range_loop_map_no_warning() {
+fn unnecessary_range_loop_map_no_warning() {
     assert_no_lint_warnings!(
         r#"
 fn main() {
@@ -7105,7 +7105,7 @@ fn main() {
 }
 
 #[test]
-fn needless_range_loop_shadowed_inner_index() {
+fn unnecessary_range_loop_shadowed_inner_index() {
     assert_lint_snapshot!(
         r#"
 fn main() {
@@ -7124,7 +7124,7 @@ fn main() {
 }
 
 #[test]
-fn needless_range_loop_alias_write_no_warning() {
+fn unnecessary_range_loop_alias_write_no_warning() {
     assert_no_lint_warnings!(
         r#"
 fn main() {
@@ -7140,7 +7140,7 @@ fn main() {
 }
 
 #[test]
-fn needless_range_loop_collection_passed_to_call_no_warning() {
+fn unnecessary_range_loop_collection_passed_to_call_no_warning() {
     assert_no_lint_warnings!(
         r#"
 fn sum_all(s: Slice<int>) -> int {
@@ -7163,7 +7163,7 @@ fn main() {
 }
 
 #[test]
-fn needless_range_loop_alias_passed_to_call_no_warning() {
+fn unnecessary_range_loop_alias_passed_to_call_no_warning() {
     assert_no_lint_warnings!(
         r#"
 fn touch(mut s: Slice<int>) {
@@ -7183,7 +7183,7 @@ fn main() {
 }
 
 #[test]
-fn needless_range_loop_wrapper_passed_to_call_no_warning() {
+fn unnecessary_range_loop_wrapper_passed_to_call_no_warning() {
     assert_no_lint_warnings!(
         r#"
 struct Box {
@@ -7207,7 +7207,7 @@ fn main() {
 }
 
 #[test]
-fn needless_range_loop_lambda_call_no_warning() {
+fn unnecessary_range_loop_lambda_call_no_warning() {
     assert_no_lint_warnings!(
         r#"
 fn main() {
@@ -7225,7 +7225,7 @@ fn main() {
 }
 
 #[test]
-fn needless_range_loop_task_body_no_warning() {
+fn unnecessary_range_loop_task_body_no_warning() {
     assert_no_lint_warnings!(
         r#"
 fn main() {
@@ -7241,7 +7241,7 @@ fn main() {
 }
 
 #[test]
-fn needless_range_loop_lambda_body_no_warning() {
+fn unnecessary_range_loop_lambda_body_no_warning() {
     assert_no_lint_warnings!(
         r#"
 fn main() {
@@ -7255,7 +7255,7 @@ fn main() {
 }
 
 #[test]
-fn needless_range_loop_select_arm_binds_index_no_warning() {
+fn unnecessary_range_loop_select_arm_binds_index_no_warning() {
     assert_no_lint_warnings!(
         r#"
 fn main() {

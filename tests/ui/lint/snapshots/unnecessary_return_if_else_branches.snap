@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [warning] Needless `return`
+  [info] Unnecessary `return`
    ╭─[test.lis:4:5]
  3 │   if n > 0 {
  4 │     return 1
@@ -9,4 +9,4 @@ source: tests/ui/lint/mod.rs
    ·         ╰── redundant in tail position
  5 │   } else {
    ╰────
-  help: The final expression of a function is its return value. Drop `return` and keep the value · code: [lint.needless_return]
+  help: The final expression of a function is its return value. Drop `return` and keep the value · code: [lint.unnecessary_return]

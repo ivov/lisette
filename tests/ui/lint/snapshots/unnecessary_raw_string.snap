@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [warning] Unnecessary raw string
+  [info] Unnecessary raw string
    ╭─[test.lis:3:13]
  2 │ fn main() {
  3 │   let msg = r"hello";

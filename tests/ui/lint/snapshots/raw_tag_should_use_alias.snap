@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [warning] Prefer predefined tag alias
+  [info] Prefer predefined tag alias
    ╭─[test.lis:4:3]
  3 │ pub struct User {
  4 │   #[tag(`json:"user_name"`)]

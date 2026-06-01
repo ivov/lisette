@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [warning] Unnecessary `&`
+  [info] Unnecessary `&`
    ╭─[test.lis:3:11]
  2 │ pub fn foo(x: Ref<int>) {
  3 │   let _ = &x;
