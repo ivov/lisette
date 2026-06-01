@@ -599,6 +599,15 @@ pub fn duplicate_arguments(span: &Span, module: &str, function: &str) -> Lisette
         ))
 }
 
+pub fn lost_query_mutation(span: &Span, method: &str) -> LisetteDiagnostic {
+    LisetteDiagnostic::warn("Lost query mutation")
+        .with_lint_code("lost_query_mutation")
+        .with_span_label(span, "mutates a discarded copy")
+        .with_help(format!(
+            "`URL.Query` returns a fresh copy, so this `{method}` has no effect. Bind the copy returned by `Query()` to an identifier, mutate it, then assign `values.Encode()` back to the URL's `RawQuery` field."
+        ))
+}
+
 pub fn waitgroup_add_in_task(span: &Span) -> LisetteDiagnostic {
     LisetteDiagnostic::warn("`WaitGroup.Add` inside a `task`")
         .with_lint_code("waitgroup_add_in_task")

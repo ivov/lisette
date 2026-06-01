@@ -77,9 +77,10 @@ use checks::{
     check_duplicate_logical_operand, check_empty_match_arm, check_excess_parens_on_condition,
     check_expression_naming, check_identical_if_branches, check_identical_match_arms,
     check_invisible_in_string_expression, check_invisible_in_string_pattern, check_loop_runs_once,
-    check_manual_map, check_manual_unwrap_or, check_match_literal_collection, check_needless_bool,
-    check_needless_range_loop, check_needless_return, check_pattern_naming,
-    check_redundant_closure, check_redundant_pattern_matching, check_replaceable_with_zero_fill,
+    check_lost_query_mutation, check_manual_map, check_manual_unwrap_or,
+    check_match_literal_collection, check_needless_bool, check_needless_range_loop,
+    check_needless_return, check_pattern_naming, check_redundant_closure,
+    check_redundant_pattern_matching, check_replaceable_with_zero_fill,
     check_rest_only_slice_pattern, check_self_assignment, check_self_comparison,
     check_single_arm_match, check_uninterpolated_fstring, check_unnecessary_raw_string_expression,
     check_unnecessary_raw_string_pattern, check_unsigned_comparison,
@@ -149,6 +150,7 @@ impl AstLintGroup {
                 check_duplicate_logical_operand(expression, files, &mut sink);
                 check_expression_naming(expression, is_d_lis, &mut sink);
                 check_replaceable_with_zero_fill(expression, store, module_id, source, &mut sink);
+                check_lost_query_mutation(expression, store, &mut sink);
                 check_redundant_closure(expression, facts, &mut sink);
             },
             &mut |pattern| {

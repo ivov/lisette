@@ -10,6 +10,7 @@ mod identical_if_branches;
 mod identical_match_arms;
 mod invisible_in_string;
 mod loop_runs_once;
+mod lost_query_mutation;
 mod manual_map;
 mod manual_unwrap_or;
 mod match_literal_collection;
@@ -43,6 +44,7 @@ pub use invisible_in_string::{
     check_invisible_in_string_expression, check_invisible_in_string_pattern,
 };
 pub use loop_runs_once::check_loop_runs_once;
+pub use lost_query_mutation::check_lost_query_mutation;
 pub use manual_map::check_manual_map;
 pub use manual_unwrap_or::check_manual_unwrap_or;
 pub use match_literal_collection::check_match_literal_collection;

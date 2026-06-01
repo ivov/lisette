@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [warning] Lost query mutation
+   ╭─[test.lis:6:3]
+ 5 │   let Ok(u) = url.Parse("http://example.com?a=1") else { return }
+ 6 │   u.Query().Set("b", "2")
+   ·   ───────────┬───────────
+   ·              ╰── mutates a discarded copy
+ 7 │ }
+   ╰────
+  help: `URL.Query` returns a fresh copy, so this `Set` has no effect. Bind the copy returned by `Query()` to an identifier, mutate it, then assign `values.Encode()` back to the URL's `RawQuery` field · code: [lint.lost_query_mutation]

@@ -7444,3 +7444,129 @@ fn main() {
 "#
     );
 }
+
+#[test]
+fn lost_query_mutation_set() {
+    assert_lint_snapshot!(
+        r#"
+import "go:net/url"
+
+fn main() {
+  let Ok(u) = url.Parse("http://example.com?a=1") else { return }
+  u.Query().Set("b", "2")
+}
+"#
+    );
+}
+
+#[test]
+fn lost_query_mutation_add() {
+    assert_lint_snapshot!(
+        r#"
+import "go:net/url"
+
+fn main() {
+  let Ok(u) = url.Parse("http://example.com?a=1") else { return }
+  u.Query().Add("b", "2")
+}
+"#
+    );
+}
+
+#[test]
+fn lost_query_mutation_del() {
+    assert_lint_snapshot!(
+        r#"
+import "go:net/url"
+
+fn main() {
+  let Ok(u) = url.Parse("http://example.com?a=1") else { return }
+  u.Query().Del("a")
+}
+"#
+    );
+}
+
+#[test]
+fn lost_query_mutation_alias_receiver() {
+    assert_lint_snapshot!(
+        r#"
+import "go:net/url"
+
+type MyURL = url.URL
+
+fn main() {
+  let mut u: MyURL = url.URL { Scheme: "https", Host: "example.com", .. }
+  u.Query().Set("b", "2")
+}
+"#
+    );
+}
+
+#[test]
+fn lost_query_mutation_bound_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:net/url"
+import "go:fmt"
+
+fn main() {
+  let Ok(u) = url.Parse("http://example.com?a=1") else { return }
+  let q = u.Query()
+  q.Set("b", "2")
+  fmt.Println(q.Encode())
+}
+"#
+    );
+}
+
+#[test]
+fn lost_query_mutation_read_method_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:net/url"
+import "go:fmt"
+
+fn main() {
+  let Ok(u) = url.Parse("http://example.com?a=1") else { return }
+  fmt.Println(u.Query().Get("a"))
+}
+"#
+    );
+}
+
+#[test]
+fn lost_query_mutation_encode_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:net/url"
+import "go:fmt"
+
+fn main() {
+  let Ok(u) = url.Parse("http://example.com?a=1") else { return }
+  fmt.Println(u.Query().Encode())
+}
+"#
+    );
+}
+
+#[test]
+fn lost_query_mutation_user_type_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+struct Bag {
+  data: int,
+}
+
+impl Bag {
+  fn Query(self) -> Bag { self }
+  fn Set(self, k: string, v: string) -> int { self.data + k.length() + v.length() }
+}
+
+fn main() {
+  let b = Bag { data: 0 }
+  let _ = b.Query().Set("a", "b")
+}
+"#
+    );
+}
