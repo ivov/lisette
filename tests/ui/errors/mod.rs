@@ -7431,6 +7431,72 @@ interface Service {
 }
 
 #[test]
+fn displayable_on_function() {
+    let input = r#"
+#[displayable]
+fn run() -> int {
+  0
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn displayable_on_struct_field() {
+    let input = r#"
+struct Config {
+  #[displayable]
+  value: int,
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn displayable_on_impl_method() {
+    let input = r#"
+struct Widget {}
+
+impl Widget {
+  #[displayable]
+  fn build() -> int {
+    0
+  }
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn displayable_on_interface_method() {
+    let input = r#"
+interface Service {
+  #[displayable]
+  fn run() -> int
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn displayable_with_arguments() {
+    let input = r#"
+#[displayable(foo)]
+struct Point { x: int, y: int }
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn displayable_on_pointer_newtype() {
+    let input = r#"
+#[displayable]
+struct Handle(Ref<int>)
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
 fn infer_type_alias_record_struct_as_value() {
     let input = r#"
 struct Coord { x: int, y: int }

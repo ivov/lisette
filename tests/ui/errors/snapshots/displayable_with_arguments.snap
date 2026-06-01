@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] `#[displayable]` takes no arguments
+   ╭─[test.lis:2:1]
+ 1 │ 
+ 2 │ #[displayable(foo)]
+   · ─────────┬─────────
+   ·          ╰── remove the arguments
+ 3 │ struct Point { x: int, y: int }
+   ╰────
+  help: Write `#[displayable]` with no arguments · code: [attribute.displayable_with_arguments]

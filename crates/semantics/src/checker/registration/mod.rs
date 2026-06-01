@@ -1,5 +1,6 @@
 mod builtins;
 mod convert;
+mod displayable;
 mod iterables;
 mod methods;
 mod types;
@@ -47,6 +48,10 @@ pub(super) fn extract_go_name(attributes: &[Attribute]) -> Option<String> {
                 None
             }
         })
+}
+
+pub(super) fn has_displayable_attribute(attributes: &[Attribute]) -> bool {
+    attributes.iter().any(|a| a.name == "displayable")
 }
 
 pub(super) fn extract_attribute_flags(attributes: &[Attribute], name: &str) -> Vec<String> {
@@ -104,6 +109,7 @@ impl TaskState<'_> {
         }
 
         self.register_module_iterables(store, id);
+        self.register_module_displayable(store, id);
 
         let module = store.get_module(id).expect("module must exist");
         let ufcs_entries = crate::call_classification::compute_module_ufcs(module, id);
@@ -343,6 +349,7 @@ impl TaskState<'_> {
         self.register_impl_blocks(store, items);
         self.register_values(store, items, visibility);
         self.register_iterables(store, items);
+        self.register_displayable(store, items);
     }
 
     pub fn register_type_names(
@@ -499,8 +506,18 @@ impl TaskState<'_> {
                     variants,
                     span,
                     doc,
+                    attributes,
                     ..
-                } => self.populate_enum(store, name, name_span, generics, variants, span, doc),
+                } => self.populate_enum(
+                    store,
+                    name,
+                    name_span,
+                    generics,
+                    variants,
+                    span,
+                    doc,
+                    has_displayable_attribute(attributes),
+                ),
                 Expression::ValueEnum {
                     name,
                     name_span,
@@ -524,10 +541,19 @@ impl TaskState<'_> {
                     kind,
                     span,
                     doc,
+                    attributes,
                     ..
-                } => {
-                    self.populate_struct(store, name, name_span, generics, fields, *kind, span, doc)
-                }
+                } => self.populate_struct(
+                    store,
+                    name,
+                    name_span,
+                    generics,
+                    fields,
+                    *kind,
+                    span,
+                    doc,
+                    has_displayable_attribute(attributes),
+                ),
                 Expression::Interface {
                     name,
                     name_span,

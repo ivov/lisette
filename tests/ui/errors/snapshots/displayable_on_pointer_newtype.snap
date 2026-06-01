@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] `#[displayable]` on a pointer-backed newtype
+   ╭─[test.lis:2:1]
+ 1 │ 
+ 2 │ #[displayable]
+   · ───────┬──────
+   ·        ╰── a single-field tuple struct over `Ref<T>` cannot have a stringer
+ 3 │ struct Handle(Ref<int>)
+   ╰────
+  help: Go forbids methods on the named pointer type this lowers to. Format the value explicitly, or change the representation · code: [attribute.displayable_on_pointer_newtype]

@@ -61,6 +61,39 @@ pub fn iterable_in_typedef(attribute_span: &Span) -> LisetteDiagnostic {
         .with_help("Only enums in `.lis` source can be marked `#[iterable]`")
 }
 
+pub fn displayable_not_a_struct_or_enum(attribute_span: &Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("`#[displayable]` not on a struct or enum")
+        .with_attribute_code("displayable_not_a_struct_or_enum")
+        .with_span_label(attribute_span, "not on a struct or enum")
+        .with_help("Only a struct or enum can be marked `#[displayable]`")
+}
+
+pub fn displayable_in_typedef(attribute_span: &Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("`#[displayable]` in a typedef")
+        .with_attribute_code("displayable_in_typedef")
+        .with_span_label(attribute_span, "disallowed in a `.d.lis` typedef")
+        .with_help("Only structs or enums in `.lis` source can be marked `#[displayable]`")
+}
+
+pub fn displayable_with_arguments(attribute_span: &Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("`#[displayable]` takes no arguments")
+        .with_attribute_code("displayable_with_arguments")
+        .with_span_label(attribute_span, "remove the arguments")
+        .with_help("Write `#[displayable]` with no arguments")
+}
+
+pub fn displayable_on_pointer_newtype(attribute_span: &Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("`#[displayable]` on a pointer-backed newtype")
+        .with_attribute_code("displayable_on_pointer_newtype")
+        .with_span_label(
+            attribute_span,
+            "a single-field tuple struct over `Ref<T>` cannot have a stringer",
+        )
+        .with_help(
+            "Go forbids methods on the named pointer type this lowers to. Format the value explicitly, or change the representation.",
+        )
+}
+
 pub fn iterable_variants_conflict(
     attribute_span: &Span,
     existing_span: Option<&Span>,

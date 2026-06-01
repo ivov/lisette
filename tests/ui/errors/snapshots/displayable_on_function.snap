@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] `#[displayable]` not on a struct or enum
+   ╭─[test.lis:2:1]
+ 1 │ 
+ 2 │ #[displayable]
+   · ───────┬──────
+   ·        ╰── not on a struct or enum
+ 3 │ fn run() -> int {
+   ╰────
+  help: Only a struct or enum can be marked `#[displayable]` · code: [attribute.displayable_not_a_struct_or_enum]

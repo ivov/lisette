@@ -4484,6 +4484,31 @@ pub struct User {
 }
 
 #[test]
+fn displayable_attribute_is_known() {
+    assert_no_lint_warnings!(
+        r#"
+#[displayable]
+struct Point { x: int, y: int }
+
+#[displayable]
+enum Color {
+  Red,
+  Green,
+}
+
+fn main() {
+  let p = Point { x: 1, y: 2 }
+  let c = Color.Red
+  let _ = match c {
+    Red => p.x,
+    Green => p.y,
+  }
+}
+"#
+    );
+}
+
+#[test]
 fn duplicate_tag_key() {
     assert_lint_snapshot!(
         r#"
