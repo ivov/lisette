@@ -109,7 +109,14 @@ fn convert_lisette_diag(
     source: &str,
 ) -> JsDiagnostic {
     let message = diag.plain_message().to_string();
-    let severity = if diag.is_error() { "error" } else { "warning" }.to_string();
+    let severity = if diag.is_error() {
+        "error"
+    } else if diag.is_info() {
+        "info"
+    } else {
+        "warning"
+    }
+    .to_string();
 
     let offset = diag.primary_offset();
     let (line, col, end_line, end_col) = {
@@ -558,7 +565,7 @@ fn definition_to_completion_kind(def: &Definition) -> &'static str {
         DefinitionBody::Interface { .. } => "type",
         DefinitionBody::TypeAlias { .. } => "type",
         DefinitionBody::Value { .. } => {
-            if matches!(&def.ty, Type::Function { .. }) { "function" } else { "variable" }
+            if matches!(&def.ty, Type::Function(_)) { "function" } else { "variable" }
         }
     }
 }
@@ -647,7 +654,7 @@ fn build_dot_completions(
                     if !method.contains('.') {
                         items.push(JsCompletionItem {
                             label: method.to_string(),
-                            kind: if matches!(def.ty(), Type::Function { .. }) { "method" } else { "field" },
+                            kind: if matches!(def.ty(), Type::Function(_)) { "method" } else { "field" },
                             detail: Some(format!("{}", def.ty())),
                             insert_text: None,
                         });
@@ -884,11 +891,11 @@ pub fn signature_help(code: &str, offset: u32) -> String {
             Type::Forall { body, .. } => body.as_ref(),
             other => other,
         };
-        if let Type::Function { params, return_type, .. } = callee_ty_inner {
+        if let Type::Function(f) = callee_ty_inner {
             // Build the signature label
             let callee_name = callee.callee_name().unwrap_or_else(|| "fn".to_string());
-            let param_strs: Vec<String> = params.iter().map(|p| format!("{}", p)).collect();
-            let ret_str = format!("{}", return_type);
+            let param_strs: Vec<String> = f.params.iter().map(|p| format!("{}", p)).collect();
+            let ret_str = format!("{}", f.return_type);
             let ret_part = if ret_str == "()" { String::new() } else { format!(" -> {}", ret_str) };
             let label = format!("{}({}){}", callee_name, param_strs.join(", "), ret_part);
 
@@ -909,4 +916,21 @@ pub fn signature_help(code: &str, offset: u32) -> String {
     }
 
     String::new()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn info_diagnostic_converts_to_info_severity() {
+        let diag = lisette_diagnostics::LisetteDiagnostic::info("advisory");
+        assert_eq!(convert_lisette_diag(&diag, "").severity, "info");
+    }
+
+    #[test]
+    fn warning_diagnostic_converts_to_warning_severity() {
+        let diag = lisette_diagnostics::LisetteDiagnostic::warn("w");
+        assert_eq!(convert_lisette_diag(&diag, "").severity, "warning");
+    }
 }

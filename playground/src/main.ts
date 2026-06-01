@@ -87,7 +87,7 @@ tabBtns.forEach((btn) => {
 });
 
 // ─── Status helpers ───────────────────────────────────────────────────────────
-type StatusKind = "idle" | "running" | "ok" | "error" | "warning";
+type StatusKind = "idle" | "running" | "ok" | "error" | "warning" | "info";
 
 function setStatus(kind: StatusKind, label: string) {
   statusEl.className = `status-${kind}`;
@@ -236,8 +236,10 @@ async function main() {
 
     const errors = diags.filter((d) => d.severity === "error").length;
     const warnings = diags.filter((d) => d.severity === "warning").length;
+    const info = diags.filter((d) => d.severity === "info").length;
     if (errors > 0) setStatus("error", `${errors} error${errors > 1 ? "s" : ""}`);
     else if (warnings > 0) setStatus("warning", `${warnings} warning${warnings > 1 ? "s" : ""}`);
+    else if (info > 0) setStatus("info", `${info} info`);
     else setStatus("ok", "No issues");
     setButtons(false);
   });

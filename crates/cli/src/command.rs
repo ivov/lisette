@@ -189,6 +189,15 @@ impl Command {
                     }
                 }
 
+                if errors_only && warnings_only {
+                    return Err(ParseError::UnexpectedArgument {
+                        message: "`--errors-only` and `--warnings-only` cannot be used together"
+                            .to_string(),
+                        reason: "they select mutually exclusive sets of diagnostics".to_string(),
+                        hint: "Use only one of `--errors-only` or `--warnings-only`".to_string(),
+                    });
+                }
+
                 Ok(Command::Check {
                     path,
                     errors_only,
@@ -375,6 +384,14 @@ mod tests {
     fn check_format_invalid_value() {
         assert!(matches!(
             parse(&["lis", "check", "--format", "json"]),
+            Err(ParseError::UnexpectedArgument { .. })
+        ));
+    }
+
+    #[test]
+    fn check_rejects_both_filter_flags() {
+        assert!(matches!(
+            parse(&["lis", "check", "--errors-only", "--warnings-only"]),
             Err(ParseError::UnexpectedArgument { .. })
         ));
     }

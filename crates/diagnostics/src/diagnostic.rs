@@ -200,7 +200,7 @@ impl fmt::Display for LisetteDiagnostic {
                     format_with_backticks(&self.message, true, |s| format!("{}", s.yellow().bold()))
                 }
                 Severity::Advice => {
-                    format_with_backticks(&self.message, true, |s| format!("{}", s.cyan().bold()))
+                    format_with_backticks(&self.message, true, |s| format!("{}", s.blue().bold()))
                 }
             };
             write!(f, "{}", styled_message)?;
@@ -286,7 +286,7 @@ impl Diagnostic for LisetteDiagnostic {
                     let base_style = match severity {
                         Severity::Error => |s: &str| format!("{}", s.red()),
                         Severity::Warning => |s: &str| format!("{}", s.yellow()),
-                        Severity::Advice => |s: &str| format!("{}", s.cyan()),
+                        Severity::Advice => |s: &str| format!("{}", s.blue()),
                     };
                     format_with_backticks(label, true, base_style)
                 } else {
@@ -323,30 +323,29 @@ impl LisetteDiagnostic {
         self.note.as_deref()
     }
 
-    pub fn error(message: impl Into<String>) -> Self {
+    fn new(message: impl Into<String>, severity: Severity) -> Self {
         Self {
             message: message.into(),
             labels: Vec::new(),
             help: None,
             note: None,
-            severity: Severity::Error,
+            severity,
             code: None,
             file_id: None,
             use_color: false,
         }
     }
 
+    pub fn error(message: impl Into<String>) -> Self {
+        Self::new(message, Severity::Error)
+    }
+
     pub fn warn(message: impl Into<String>) -> Self {
-        Self {
-            message: message.into(),
-            labels: Vec::new(),
-            help: None,
-            note: None,
-            severity: Severity::Warning,
-            code: None,
-            file_id: None,
-            use_color: false,
-        }
+        Self::new(message, Severity::Warning)
+    }
+
+    pub fn info(message: impl Into<String>) -> Self {
+        Self::new(message, Severity::Advice)
     }
 
     pub fn with_color(mut self, use_color: bool) -> Self {
@@ -407,8 +406,8 @@ impl LisetteDiagnostic {
 
     pub fn with_lint_code(mut self, code: &str) -> Self {
         debug_assert!(
-            matches!(self.severity, Severity::Warning),
-            "with_lint_code requires Warning severity (got {:?}); \
+            matches!(self.severity, Severity::Warning | Severity::Advice),
+            "with_lint_code requires Warning or Advice severity (got {:?}); \
              use a phase-specific code constructor for errors",
             self.severity,
         );
@@ -455,7 +454,7 @@ impl LisetteDiagnostic {
         match self.severity {
             Severity::Error => "error",
             Severity::Warning => "warning",
-            Severity::Advice => "note",
+            Severity::Advice => "info",
         }
     }
 
@@ -471,11 +470,29 @@ impl LisetteDiagnostic {
         self.severity == Severity::Warning
     }
 
+    pub fn is_info(&self) -> bool {
+        self.severity == Severity::Advice
+    }
+
     pub fn sort_key(a: &Self, b: &Self) -> std::cmp::Ordering {
         a.file_id()
             .cmp(&b.file_id())
             .then_with(|| a.primary_offset().cmp(&b.primary_offset()))
             .then_with(|| a.code_str().cmp(&b.code_str()))
             .then_with(|| a.plain_message().cmp(b.plain_message()))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn info_constructor_is_advice_severity() {
+        let diagnostic = LisetteDiagnostic::info("advisory");
+        assert!(diagnostic.is_info());
+        assert!(!diagnostic.is_error());
+        assert!(!diagnostic.is_warning());
+        assert_eq!(diagnostic.severity_word(), "info");
     }
 }

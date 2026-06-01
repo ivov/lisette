@@ -92,7 +92,11 @@ pub fn compile(
     let semantic_result = analyze_output.result;
     let emit_stamps = analyze_output.emit_stamps;
 
-    let user_file_count = semantic_result.files.len();
+    let user_file_count: usize = semantic_result
+        .modules
+        .values()
+        .map(|module| module.file_ids.len())
+        .sum();
 
     let sources: HashMap<u32, SourceInfo> = semantic_result
         .files

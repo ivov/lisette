@@ -180,6 +180,7 @@ html, body {
 .status-ok     { background: rgba(63,185,80,.15);   color: var(--success); }
 .status-error  { background: rgba(248,81,73,.15);   color: var(--error); }
 .status-warning{ background: rgba(210,153,34,.15);  color: var(--warning); }
+.status-info   { background: rgba(88,166,255,.15);  color: var(--info); }
 
 /* ─── Layout ──────────────────────────────── */
 #main-layout {

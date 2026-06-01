@@ -363,7 +363,7 @@ pub fn manual_unwrap_or(span: &Span, default_has_effects: bool) -> LisetteDiagno
     } else {
         "unwrap_or"
     };
-    LisetteDiagnostic::warn("Manual unwrap_or")
+    LisetteDiagnostic::info("Manual `unwrap_or`")
         .with_lint_code("manual_unwrap_or")
         .with_span_label(span, "can be simpler")
         .with_help(format!("Replace this `match` with `.{method}(...)`"))

@@ -378,12 +378,12 @@ pub fn analyze(input: AnalyzeInput) -> AnalyzeOutput {
                     .map(|m| m.file_ids().collect())
                     .unwrap_or_default();
 
-                let has_module_warnings = lints.iter().any(|lint| {
+                let has_module_lints = lints.iter().any(|lint| {
                     lint.file_id()
                         .map(|fid| file_ids.contains(&fid))
                         .unwrap_or(true)
                 });
-                if !has_module_warnings
+                if !has_module_lints
                     && let Err(e) =
                         save_module_cache(&compiled, &store, project_root, &ufcs_methods)
                 {

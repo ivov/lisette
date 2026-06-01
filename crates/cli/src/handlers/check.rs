@@ -171,6 +171,7 @@ fn check_single_file(
             start.elapsed(),
             counts.errors,
             counts.warnings,
+            counts.info,
         );
     }
     counts.errors
@@ -243,6 +244,7 @@ fn check_loose_dir(dir: &Path, filter: &Filter, format: OutputFormat) -> i32 {
 
     let mut total_errors = 0;
     let mut total_warnings = 0;
+    let mut total_info = 0;
     let mut total_files = 0;
     let mut read_failures = 0;
 
@@ -298,6 +300,7 @@ fn check_loose_dir(dir: &Path, filter: &Filter, format: OutputFormat) -> i32 {
         };
         total_errors += counts.errors;
         total_warnings += counts.warnings;
+        total_info += counts.info;
         total_files += result.user_file_count;
     }
 
@@ -305,7 +308,7 @@ fn check_loose_dir(dir: &Path, filter: &Filter, format: OutputFormat) -> i32 {
 
     let all_errors = total_errors + read_failures;
     if !unix {
-        render::print_summary(total_files, elapsed, all_errors, total_warnings);
+        render::print_summary(total_files, elapsed, all_errors, total_warnings, total_info);
     }
 
     all_errors

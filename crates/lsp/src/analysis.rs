@@ -261,6 +261,8 @@ pub(crate) fn convert_diagnostic(d: &LisetteDiagnostic, index: &LineIndex) -> Di
         range,
         severity: Some(if d.is_error() {
             DiagnosticSeverity::ERROR
+        } else if d.is_info() {
+            DiagnosticSeverity::INFORMATION
         } else {
             DiagnosticSeverity::WARNING
         }),
@@ -279,5 +281,24 @@ pub(crate) fn convert_diagnostic(d: &LisetteDiagnostic, index: &LineIndex) -> Di
         source: Some("lisette".into()),
         code: d.code_str().map(|s| NumberOrString::String(s.to_string())),
         ..Default::default()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn info_maps_to_lsp_information() {
+        let index = LineIndex::new("");
+        let diagnostic = convert_diagnostic(&LisetteDiagnostic::info("advisory"), &index);
+        assert_eq!(diagnostic.severity, Some(DiagnosticSeverity::INFORMATION));
+    }
+
+    #[test]
+    fn warning_maps_to_lsp_warning() {
+        let index = LineIndex::new("");
+        let diagnostic = convert_diagnostic(&LisetteDiagnostic::warn("w"), &index);
+        assert_eq!(diagnostic.severity, Some(DiagnosticSeverity::WARNING));
     }
 }

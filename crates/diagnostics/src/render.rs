@@ -27,6 +27,10 @@ impl Filter {
     pub fn show_warnings(&self) -> bool {
         !self.errors_only
     }
+
+    pub fn show_info(&self) -> bool {
+        !self.errors_only && !self.warnings_only
+    }
 }
 
 fn format_time(elapsed: Duration) -> String {
@@ -39,7 +43,7 @@ fn format_time(elapsed: Duration) -> String {
     }
 }
 
-pub fn print_summary(file_count: usize, elapsed: Duration, errors: i32, warnings: i32) {
+pub fn print_summary(file_count: usize, elapsed: Duration, errors: i32, warnings: i32, info: i32) {
     let time_string = format_time(elapsed);
     let use_color = std::env::var("NO_COLOR").is_err();
     let time_display = if use_color {
@@ -53,7 +57,7 @@ pub fn print_summary(file_count: usize, elapsed: Duration, errors: i32, warnings
         &format!("{} files", file_count)
     };
 
-    if errors == 0 && warnings == 0 {
+    if errors == 0 && warnings == 0 && info == 0 {
         eprintln!("  ✓ No issues · {} {}", files_str, time_display);
     } else {
         let mut parts = Vec::new();
@@ -71,6 +75,9 @@ pub fn print_summary(file_count: usize, elapsed: Duration, errors: i32, warnings
                 format!("{} warnings", warnings)
             });
         }
+        if info > 0 {
+            parts.push(format!("{} info", info));
+        }
         let findings = format!("Found {}", parts.join(", "));
         let findings_display = if use_color {
             format!("{}", findings.bold())
@@ -86,11 +93,13 @@ fn color_handler(highlight: Style) -> GraphicalReportHandler {
         characters: ThemeCharacters {
             error: "🔴".into(),
             warning: "🟡".into(),
+            advice: "🔵".into(),
             ..ThemeCharacters::unicode()
         },
         styles: ThemeStyles {
             error: Style::new().red(),
             warning: Style::new().yellow(),
+            advice: Style::new().blue(),
             link: Style::new(),
             help: Style::new().dimmed(),
             highlights: vec![highlight],
@@ -105,6 +114,7 @@ fn nocolor_handler() -> GraphicalReportHandler {
         characters: ThemeCharacters {
             error: "[error]".into(),
             warning: "[warning]".into(),
+            advice: "[info]".into(),
             ..ThemeCharacters::unicode()
         },
         styles: ThemeStyles::none(),
@@ -129,10 +139,31 @@ fn render(
     }
 }
 
+fn render_group<F: Fn(u32) -> Option<(String, String)>>(
+    diagnostics: &[&LisetteDiagnostic],
+    highlight: Style,
+    use_color: bool,
+    sources: &mut SourceCache<F>,
+) {
+    if diagnostics.is_empty() {
+        return;
+    }
+    let handler = if use_color {
+        color_handler(highlight)
+    } else {
+        nocolor_handler()
+    };
+    for diagnostic in diagnostics {
+        let (src, name) = sources.get(diagnostic.file_id());
+        render(&handler, diagnostic, &src, &name, use_color);
+    }
+}
+
 pub struct Counts {
     pub files: usize,
     pub errors: i32,
     pub warnings: i32,
+    pub info: i32,
 }
 
 /// Resolves a `file_id` to its source, falling back to the entry file.
@@ -173,20 +204,30 @@ fn partition_diagnostics<'a>(
     errors: &'a [LisetteDiagnostic],
     lints: &'a [LisetteDiagnostic],
     filter: &Filter,
-) -> (Vec<&'a LisetteDiagnostic>, Vec<&'a LisetteDiagnostic>) {
-    let (errors, infer_warnings): (Vec<_>, Vec<_>) = if filter.show_errors() {
-        errors.iter().partition(|d| d.is_error())
-    } else {
-        (Vec::new(), Vec::new())
-    };
+) -> (
+    Vec<&'a LisetteDiagnostic>,
+    Vec<&'a LisetteDiagnostic>,
+    Vec<&'a LisetteDiagnostic>,
+) {
+    let mut error_bucket = Vec::new();
+    let mut warning_bucket = Vec::new();
+    let mut info_bucket = Vec::new();
 
-    let warnings: Vec<_> = if filter.show_warnings() {
-        infer_warnings.into_iter().chain(lints.iter()).collect()
-    } else {
-        Vec::new()
-    };
+    for diagnostic in errors.iter().chain(lints.iter()) {
+        if diagnostic.is_error() {
+            if filter.show_errors() {
+                error_bucket.push(diagnostic);
+            }
+        } else if diagnostic.is_info() {
+            if filter.show_info() {
+                info_bucket.push(diagnostic);
+            }
+        } else if filter.show_warnings() {
+            warning_bucket.push(diagnostic);
+        }
+    }
 
-    (errors, warnings)
+    (error_bucket, warning_bucket, info_bucket)
 }
 
 pub fn render_all(
@@ -198,9 +239,9 @@ pub fn render_all(
     default_source: &str,
     default_filename: &str,
 ) -> Counts {
-    let (errors, warnings) = partition_diagnostics(errors, lints, filter);
+    let (errors, warnings, info) = partition_diagnostics(errors, lints, filter);
 
-    let has_diagnostics = !errors.is_empty() || !warnings.is_empty();
+    let has_diagnostics = !errors.is_empty() || !warnings.is_empty() || !info.is_empty();
     if has_diagnostics {
         eprintln!(); // Blank line before first diagnostic
     }
@@ -208,34 +249,15 @@ pub fn render_all(
     let use_color = std::env::var("NO_COLOR").is_err();
     let mut sources = SourceCache::new(get_source, default_source, default_filename);
 
-    if !errors.is_empty() {
-        let handler = if use_color {
-            color_handler(Style::new().red())
-        } else {
-            nocolor_handler()
-        };
-        for error in &errors {
-            let (src, name) = sources.get(error.file_id());
-            render(&handler, error, &src, &name, use_color);
-        }
-    }
-
-    if !warnings.is_empty() {
-        let handler = if use_color {
-            color_handler(Style::new().yellow())
-        } else {
-            nocolor_handler()
-        };
-        for warning in &warnings {
-            let (src, name) = sources.get(warning.file_id());
-            render(&handler, warning, &src, &name, use_color);
-        }
-    }
+    render_group(&errors, Style::new().red(), use_color, &mut sources);
+    render_group(&warnings, Style::new().yellow(), use_color, &mut sources);
+    render_group(&info, Style::new().blue(), use_color, &mut sources);
 
     Counts {
         files: file_count.max(1),
         errors: errors.len() as i32,
         warnings: warnings.len() as i32,
+        info: info.len() as i32,
     }
 }
 
@@ -266,11 +288,11 @@ pub fn render_unix(
     default_source: &str,
     default_filename: &str,
 ) -> (String, Counts) {
-    let (errors, warnings) = partition_diagnostics(errors, lints, filter);
+    let (errors, warnings, info) = partition_diagnostics(errors, lints, filter);
 
     let mut sources = SourceCache::new(get_source, default_source, default_filename);
     let mut output = String::new();
-    for diagnostic in errors.iter().chain(warnings.iter()) {
+    for diagnostic in errors.iter().chain(warnings.iter()).chain(info.iter()) {
         let (src, name) = sources.get(diagnostic.file_id());
         output.push_str(&unix_line(diagnostic, &src, &name));
         output.push('\n');
@@ -280,6 +302,64 @@ pub fn render_unix(
         files: file_count.max(1),
         errors: errors.len() as i32,
         warnings: warnings.len() as i32,
+        info: info.len() as i32,
     };
     (output, counts)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn show_all() -> Filter {
+        Filter {
+            errors_only: false,
+            warnings_only: false,
+        }
+    }
+
+    #[test]
+    fn each_severity_lands_in_its_own_bucket() {
+        let errors = vec![LisetteDiagnostic::error("e")];
+        let lints = vec![LisetteDiagnostic::warn("w"), LisetteDiagnostic::info("i")];
+        let (errors, warnings, info) = partition_diagnostics(&errors, &lints, &show_all());
+        assert_eq!(errors.len(), 1);
+        assert_eq!(warnings.len(), 1);
+        assert_eq!(info.len(), 1);
+    }
+
+    #[test]
+    fn info_hidden_under_errors_only() {
+        let empty: Vec<LisetteDiagnostic> = Vec::new();
+        let lints = vec![LisetteDiagnostic::info("i")];
+        let filter = Filter {
+            errors_only: true,
+            warnings_only: false,
+        };
+        let (_, _, info) = partition_diagnostics(&empty, &lints, &filter);
+        assert!(info.is_empty());
+    }
+
+    #[test]
+    fn info_hidden_under_warnings_only() {
+        let empty: Vec<LisetteDiagnostic> = Vec::new();
+        let lints = vec![LisetteDiagnostic::info("i")];
+        let filter = Filter {
+            errors_only: false,
+            warnings_only: true,
+        };
+        let (_, _, info) = partition_diagnostics(&empty, &lints, &filter);
+        assert!(info.is_empty());
+    }
+
+    #[test]
+    fn unix_counts_and_labels_info_separately() {
+        let empty: Vec<LisetteDiagnostic> = Vec::new();
+        let lints = vec![LisetteDiagnostic::info("advisory")];
+        let (output, counts) = render_unix(&empty, &lints, |_| None, 1, &show_all(), "", "f.lis");
+        assert_eq!(counts.errors, 0);
+        assert_eq!(counts.warnings, 0);
+        assert_eq!(counts.info, 1);
+        assert!(output.contains("info: advisory"));
+    }
 }

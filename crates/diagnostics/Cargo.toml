@@ -10,7 +10,6 @@ repository.workspace = true
 
 [lib]
 doctest = false
-test = false
 
 [dependencies]
 syntax = { package = "lisette-syntax", version = "0.2.16", path = "../syntax" }

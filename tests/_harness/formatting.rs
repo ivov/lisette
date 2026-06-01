@@ -7,6 +7,7 @@ fn snapshot_theme() -> GraphicalTheme {
         characters: ThemeCharacters {
             error: "[error]".into(),
             warning: "[warning]".into(),
+            advice: "[info]".into(),
             ..ThemeCharacters::unicode()
         },
         styles: ThemeStyles::none(),
