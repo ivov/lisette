@@ -511,6 +511,102 @@ fn main() {
 }
 
 #[test]
+fn manual_compound_assignment_addition() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let mut x = 5;
+  x = x + 1;
+  let _ = x
+}
+"#
+    );
+}
+
+#[test]
+fn manual_compound_assignment_shift() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let mut x = 5;
+  x = x << 2;
+  let _ = x
+}
+"#
+    );
+}
+
+#[test]
+fn manual_compound_assignment_parenthesized_value() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let mut x = 5;
+  x = (x * 2);
+  let _ = x
+}
+"#
+    );
+}
+
+#[test]
+fn manual_compound_assignment_field() {
+    assert_lint_snapshot!(
+        r#"
+struct Counter {
+  count: int
+}
+
+fn main() {
+  let mut c = Counter { count: 0 };
+  c.count = c.count + 1;
+  let _ = c.count
+}
+"#
+    );
+}
+
+#[test]
+fn manual_compound_assignment_already_compound_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let mut x = 5;
+  x += 1;
+  let _ = x
+}
+"#
+    );
+}
+
+#[test]
+fn manual_compound_assignment_target_on_right_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let mut x = 5;
+  x = 1 - x;
+  let _ = x
+}
+"#
+    );
+}
+
+#[test]
+fn manual_compound_assignment_other_operand_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let y = 3;
+  let mut x = 5;
+  x = y + 1;
+  let _ = x
+}
+"#
+    );
+}
+
+#[test]
 fn self_comparison_equal() {
     assert_lint_snapshot!(
         r#"
@@ -1372,7 +1468,7 @@ fn unchanging_loop_condition_mutated_no_warning() {
 fn main() {
   let mut i = 0;
   while i < 10 {
-    i = i + 1
+    i += 1
   }
 }
 "#
@@ -1387,7 +1483,7 @@ fn main() {
   let mut a = 0;
   let b = 5;
   while a < b {
-    a = a + 1
+    a += 1
   }
 }
 "#
@@ -1525,7 +1621,7 @@ fn main() {
   let mut x = 0;
   let r = &x;
   while r.* < 10 {
-    x = x + 1
+    x += 1
   }
 }
 "#
@@ -1656,7 +1752,7 @@ fn loop_runs_once_continue_then_break_no_warning() {
 fn main() {
   let mut i = 0
   loop {
-    i = i + 1
+    i += 1
     if i < 10 {
       continue
     }
@@ -1674,7 +1770,7 @@ fn loop_runs_once_continue_in_return_value_no_warning() {
 fn pick(n: int) -> int {
   let mut i = 0
   loop {
-    i = i + 1
+    i += 1
     return if i < n { continue } else { 42 }
   }
 }
@@ -1693,7 +1789,7 @@ fn loop_runs_once_continue_in_break_value_no_warning() {
 fn main() {
   let mut i = 0
   let _x = loop {
-    i = i + 1
+    i += 1
     break if i < 10 { continue } else { 42 }
   }
 }
@@ -1708,7 +1804,7 @@ fn loop_runs_once_continue_in_nested_for_iterable_no_warning() {
 fn main() {
   let mut i = 0
   loop {
-    i = i + 1
+    i += 1
     for _ in if i < 10 { continue } else { 0..1 } {
       let _ = i
     }
@@ -6159,7 +6255,7 @@ fn empty_infinite_loop_non_empty_body_no_warning() {
 fn main() {
   let mut i = 0
   loop {
-    i = i + 1
+    i += 1
     if i > 5 {
       break
     }
@@ -6957,7 +7053,7 @@ fn main() {
   let xs = [1, 2, 3]
   let mut total = 0
   for i in 0..xs.length() {
-    total = total + xs[i]
+    total += xs[i]
   }
   let _ = total
 }
@@ -7171,7 +7267,7 @@ fn unnecessary_range_loop_collection_passed_to_call_no_warning() {
 fn sum_all(s: Slice<int>) -> int {
   let mut total = 0
   for x in s {
-    total = total + x
+    total += x
   }
   total
 }
@@ -7459,7 +7555,7 @@ fn main() {
 fn redundant_closure_mut_param_callee_no_warning() {
     assert_no_lint_warnings!(
         r#"
-fn dec(mut x: int) -> int { x = x - 1; x }
+fn dec(mut x: int) -> int { x -= 1; x }
 fn apply(f: fn(int) -> int, n: int) -> int { f(n) }
 
 fn main() {

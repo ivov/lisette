@@ -11,6 +11,7 @@ mod identical_match_arms;
 mod invisible_in_string;
 mod loop_runs_once;
 mod lost_query_mutation;
+mod manual_compound_assignment;
 mod manual_map;
 mod manual_unwrap_or;
 mod match_literal_collection;
@@ -45,6 +46,7 @@ pub use invisible_in_string::{
 };
 pub use loop_runs_once::check_loop_runs_once;
 pub use lost_query_mutation::check_lost_query_mutation;
+pub use manual_compound_assignment::check_manual_compound_assignment;
 pub use manual_map::check_manual_map;
 pub use manual_unwrap_or::check_manual_unwrap_or;
 pub use match_literal_collection::check_match_literal_collection;

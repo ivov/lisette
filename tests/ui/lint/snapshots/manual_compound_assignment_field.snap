@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [info] Manual compound assignment
+   ╭─[test.lis:8:3]
+ 7 │   let mut c = Counter { count: 0 };
+ 8 │   c.count = c.count + 1;
+   ·   ──────────┬──────────
+   ·             ╰── can be simpler
+ 9 │   let _ = c.count
+   ╰────
+  help: Use the `+=` compound assignment operator · code: [lint.manual_compound_assignment]

@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [info] Manual compound assignment
+   ╭─[test.lis:4:3]
+ 3 │   let mut x = 5;
+ 4 │   x = x + 1;
+   ·   ────┬────
+   ·       ╰── can be simpler
+ 5 │   let _ = x
+   ╰────
+  help: Use the `+=` compound assignment operator · code: [lint.manual_compound_assignment]

@@ -880,14 +880,7 @@ impl<'a> Formatter<'a> {
         compound_operator: Option<BinaryOperator>,
     ) -> Document<'a> {
         if let Some(op) = compound_operator
-            && let Some(op_str) = match op {
-                BinaryOperator::Addition => Some("+="),
-                BinaryOperator::Subtraction => Some("-="),
-                BinaryOperator::Multiplication => Some("*="),
-                BinaryOperator::Division => Some("/="),
-                BinaryOperator::Remainder => Some("%="),
-                _ => None,
-            }
+            && let Some(op_str) = op.compound_assignment_symbol()
             && let Expression::Binary { right, .. } = value
         {
             return self

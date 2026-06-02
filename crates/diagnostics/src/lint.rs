@@ -284,6 +284,13 @@ pub fn self_assignment(span: &Span) -> LisetteDiagnostic {
         .with_help("Correct this assignment")
 }
 
+pub fn manual_compound_assignment(span: &Span, symbol: &str) -> LisetteDiagnostic {
+    LisetteDiagnostic::info("Manual compound assignment")
+        .with_lint_code("manual_compound_assignment")
+        .with_span_label(span, "can be simpler")
+        .with_help(format!("Use the `{symbol}` compound assignment operator"))
+}
+
 pub fn duplicate_logical_operand(span: &Span, operand_text: &str) -> LisetteDiagnostic {
     LisetteDiagnostic::warn("Duplicate logical operand")
         .with_lint_code("duplicate_logical_operand")

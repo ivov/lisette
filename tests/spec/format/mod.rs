@@ -1332,6 +1332,36 @@ fn compound_assignment_rem() {
 }
 
 #[test]
+fn compound_assignment_bitand() {
+    assert_format_snapshot!("fn test() { x &= 3 }");
+}
+
+#[test]
+fn compound_assignment_bitor() {
+    assert_format_snapshot!("fn test() { x |= 3 }");
+}
+
+#[test]
+fn compound_assignment_bitxor() {
+    assert_format_snapshot!("fn test() { x ^= 3 }");
+}
+
+#[test]
+fn compound_assignment_bitandnot() {
+    assert_format_snapshot!("fn test() { x &^= 3 }");
+}
+
+#[test]
+fn compound_assignment_shiftleft() {
+    assert_format_snapshot!("fn test() { x <<= 2 }");
+}
+
+#[test]
+fn compound_assignment_shiftright() {
+    assert_format_snapshot!("fn test() { x >>= 2 }");
+}
+
+#[test]
 fn method_chain_two_calls() {
     assert_format_snapshot!(
         "fn test() { let result = Some(42).map(|x: int| -> int { x * 2 }).unwrap_or(0) }"

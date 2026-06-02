@@ -7,6 +7,6 @@ source: tests/ui/lint/mod.rs
  5 │   for i in 0..xs.length() {
    ·            ───────┬──────
    ·                   ╰── can be simpler
- 6 │     total = total + xs[i]
+ 6 │     total += xs[i]
    ╰────
   help: This loop exposes the index only to access elements of `xs`. Iterate directly over the elements with `for value in xs` · code: [lint.unnecessary_range_loop]

@@ -1911,6 +1911,28 @@ pub enum BinaryOperator {
     Pipeline,
 }
 
+impl BinaryOperator {
+    /// The compound-assignment form (`+=`, `<<=`, ...) for operators that have
+    /// one. Comparison, logical, and pipeline operators return `None`. Mirrors
+    /// the compound-assignment tokens accepted by `parse_assignment`.
+    pub fn compound_assignment_symbol(&self) -> Option<&'static str> {
+        match self {
+            BinaryOperator::Addition => Some("+="),
+            BinaryOperator::Subtraction => Some("-="),
+            BinaryOperator::Multiplication => Some("*="),
+            BinaryOperator::Division => Some("/="),
+            BinaryOperator::Remainder => Some("%="),
+            BinaryOperator::BitwiseAnd => Some("&="),
+            BinaryOperator::BitwiseOr => Some("|="),
+            BinaryOperator::BitwiseXor => Some("^="),
+            BinaryOperator::BitwiseAndNot => Some("&^="),
+            BinaryOperator::ShiftLeft => Some("<<="),
+            BinaryOperator::ShiftRight => Some(">>="),
+            _ => None,
+        }
+    }
+}
+
 impl std::fmt::Display for BinaryOperator {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let symbol = match self {

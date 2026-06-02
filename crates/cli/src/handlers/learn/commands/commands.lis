@@ -23,14 +23,14 @@ pub fn add(args: Slice<string>) -> Result<(), string> {
           return Err("--priority requires a value")
         }
         priority = models.parse_priority(val)?
-        i = i + 2
+        i += 2
       },
       "--tags" => {
         let Some(val) = args.get(i + 1) else {
           return Err("--tags requires a value")
         }
         tags = strings.Split(val, ",")
-        i = i + 2
+        i += 2
       },
       other => return Err(f"unknown flag: '{other}'"),
     }
