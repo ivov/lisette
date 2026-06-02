@@ -44,6 +44,7 @@ fn needs_explicit_type_declaration(
         Expression::Literal { literal, .. } => match literal {
             Literal::Integer { .. } => !matches!(binding_ty.get_name(), Some("int") | None),
             Literal::Float { .. } => !matches!(binding_ty.get_name(), Some("float64") | None),
+            Literal::String { .. } => !matches!(binding_ty.get_name(), Some("string") | None),
             _ => false,
         },
         _ => false,

@@ -1,9 +1,7 @@
 use crate::checker::EnvResolve;
 use crate::store::Store;
-use rustc_hash::FxHashSet;
 use syntax::ast::{Expression, FormatStringPart, Literal, Span};
-use syntax::program::DefinitionBody;
-use syntax::types::{SubstitutionMap, Symbol, Type, substitute};
+use syntax::types::{SimpleKind, Type};
 
 use super::super::TaskState;
 
@@ -84,12 +82,18 @@ impl TaskState<'_> {
             }
 
             Literal::String { value, raw } => {
-                let string_ty = self.type_string();
-                self.unify(store, expected_ty, &string_ty, &span);
+                let resolved = expected_ty.resolve_in(&self.env);
+                let ty = if adapts_to_string_value_enum(&resolved, store) {
+                    resolved.clone()
+                } else {
+                    let string_ty = self.type_string();
+                    self.unify(store, expected_ty, &string_ty, &span);
+                    string_ty
+                };
 
                 Expression::Literal {
                     literal: Literal::String { value, raw },
-                    ty: string_ty,
+                    ty,
                     span,
                 }
             }
@@ -195,31 +199,15 @@ impl TaskState<'_> {
     }
 }
 
-/// Walks the alias chain via the store so multi-hop aliases resolve, returning
-/// the underlying numeric type an untyped literal may adapt to (value enums and
-/// newtype structs included; a typed primitive still needs `as`).
 fn numeric_adapt_target(ty: &Type, store: &Store) -> Option<Type> {
-    let mut current = ty.clone();
-    let mut seen: FxHashSet<Symbol> = FxHashSet::default();
-    while let Type::Nominal { id, params, .. } = &current {
-        if !seen.insert(id.clone()) {
-            break;
-        }
-        let Some(def) = store.get_definition(id.as_str()) else {
-            break;
-        };
-        if !matches!(def.body, DefinitionBody::TypeAlias { .. }) {
-            break;
-        }
-        let def_ty = &def.ty;
-        let (vars, body) = match def_ty {
-            Type::Forall { vars, body } => (vars.clone(), body.as_ref().clone()),
-            other => (vec![], other.clone()),
-        };
-        let map: SubstitutionMap = vars.iter().cloned().zip(params.iter().cloned()).collect();
-        current = substitute(&body, &map);
-    }
-    current.literal_adaptation_target()
+    store.deep_resolve_alias(ty).literal_adaptation_target()
+}
+
+fn adapts_to_string_value_enum(ty: &Type, store: &Store) -> bool {
+    let peeled = store.deep_resolve_alias(ty);
+    matches!(&peeled, Type::Nominal { id, .. }
+        if store.is_nominal_value_enum(id.as_str())
+            && peeled.underlying_simple_kind() == Some(SimpleKind::String))
 }
 
 fn char_literal_codepoint(s: &str) -> Option<u64> {

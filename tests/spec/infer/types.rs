@@ -5153,3 +5153,118 @@ fn test() {
     )
     .assert_infer_code("type_mismatch");
 }
+
+fn code_typedef() -> &'static str {
+    r#"
+pub enum Code: string {
+  NotFound = "not found",
+  Timeout = "timeout",
+}
+pub fn needs(c: Code)
+"#
+}
+
+fn infer_code_main(body: &str) -> InferResult {
+    let mut fs = MockFileSystem::new();
+    fs.add_file("status", "status.d.lis", code_typedef());
+    fs.add_file(
+        "main",
+        "main.lis",
+        &format!("import \"status\"\n\nfn test() {{\n{body}\n}}\n"),
+    );
+    infer_module("main", fs)
+}
+
+#[test]
+fn string_value_enum_adapts_string_literal() {
+    infer_code_main(
+        r#"
+  let _c: status.Code = "not found"
+  let _eq = status.Code.NotFound == "timeout"
+  status.needs("timeout")
+"#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn string_value_enum_same_type_operators_ok() {
+    infer_code_main(
+        r#"
+  let _eq = status.Code.NotFound == status.Code.Timeout
+  let _lt = status.Code.NotFound < status.Code.Timeout
+  let _cat: status.Code = status.Code.NotFound + "!"
+"#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn string_value_enum_rejects_typed_string_in_assignment() {
+    infer_code_main(
+        r#"
+  let s: string = "x"
+  let _c: status.Code = s
+"#,
+    )
+    .assert_infer_code("type_mismatch");
+}
+
+#[test]
+fn string_value_enum_rejects_named_to_string_assignment() {
+    infer_code_main(
+        r#"
+  let _s: string = status.Code.NotFound
+"#,
+    )
+    .assert_infer_code("type_mismatch");
+}
+
+#[test]
+fn string_value_enum_rejects_typed_string_in_comparison() {
+    infer_code_main(
+        r#"
+  let s: string = "x"
+  let _eq = status.Code.NotFound == s
+"#,
+    )
+    .assert_infer_code("type_mismatch");
+}
+
+#[test]
+fn string_value_enum_rejects_typed_string_in_concat() {
+    infer_code_main(
+        r#"
+  let s: string = "x"
+  let _cat = status.Code.NotFound + s
+"#,
+    )
+    .assert_infer_code("type_mismatch");
+}
+
+#[test]
+fn string_value_enum_cast_escape_hatch() {
+    infer_code_main(
+        r#"
+  let s: string = "x"
+  let _to: status.Code = s as status.Code
+  let _from: string = status.Code.NotFound as string
+"#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn composite_newtype_identical_underlying_cast_ok() {
+    infer(
+        r#"
+struct Bytes(Slice<byte>)
+struct Mask(Slice<byte>)
+
+fn test(b: Bytes) {
+  let _m = b as Mask
+}
+"#,
+    )
+    .assert_no_errors();
+}

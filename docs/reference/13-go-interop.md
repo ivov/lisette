@@ -60,16 +60,18 @@ Compound types are different:
 
 Fixed-size arrays `[N]T` are not yet representable in Lisette. In return position they lower to `Slice<T>`. In any other position (e.g. parameters, struct fields, map keys, slice or map elements), the declaration is currently skipped.
 
-### Named numeric types
+### Named primitive types
 
-Go's named numeric types (`time.Duration`, `time.Weekday`, etc.) are nominal in Lisette just as in Go. This means that e.g. an `int` is not interchangeable with a named numeric type.
+Go's named primitive types (`time.Duration`, `time.Weekday`, etc.) are nominal in Lisette just as in Go. For example, this means that an `int` is not interchangeable with a named numeric type like `time.Weekday`.
 
-In both Lisette and Go, a literal adapts wherever the named type is expected; a typed value needs explicit conversion.
+In both languages, a literal adapts wherever the named type is expected; a typed value needs explicit conversion.
 
 ```rust
 time.Sleep(100 * time.Millisecond)    // literal adapts
 time.Sleep(elapsed as time.Duration)  // typed value needs `as`
 ```
+
+The same holds for string-backed named types such as `regexp/syntax.ErrorCode`, so a string literal adapts, while a typed `string` needs conversion.
 
 ### Variadic parameters
 

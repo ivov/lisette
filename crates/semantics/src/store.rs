@@ -207,12 +207,15 @@ impl Store {
         }
     }
 
-    pub fn is_numeric_value_enum(&self, qualified_name: &str) -> bool {
+    pub fn is_nominal_value_enum(&self, qualified_name: &str) -> bool {
         matches!(
             self.get_definition(qualified_name).map(|definition| &definition.body),
             Some(DefinitionBody::ValueEnum { underlying_ty: Some(underlying), .. })
                 if underlying.has_underlying_numeric_type()
-                    || underlying.underlying_simple_kind() == Some(SimpleKind::Uintptr)
+                    || matches!(
+                        underlying.underlying_simple_kind(),
+                        Some(SimpleKind::Uintptr | SimpleKind::String)
+                    )
         )
     }
 

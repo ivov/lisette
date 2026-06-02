@@ -4,6 +4,7 @@ import httpx "go:net/http"
 import "go:net/http/httptest"
 import "go:math"
 import "go:path"
+import "go:regexp/syntax"
 import "go:strconv"
 import "go:strings"
 import "go:sync"
@@ -2745,6 +2746,15 @@ fn test_duration_div_scalar() -> int {
   if half == 500000000 { 100 } else { 0 }
 }
 
+fn test_string_value_enum() -> int {
+  let code: syntax.ErrorCode = "invalid escape sequence"
+  let same = code == syntax.ErrInvalidEscape
+  let prefixed: syntax.ErrorCode = code + "!"
+  let raw = code as string
+  let ok = same && prefixed == "invalid escape sequence!" && raw == "invalid escape sequence"
+  if ok { 100 } else { 0 }
+}
+
 fn test_named_div_to_named_annotation() -> int {
   // Duration / Duration must stay Duration, not be cast to int64 in emit
   let d: time.Duration = time.Duration.Second / time.Duration.Millisecond
@@ -3941,6 +3951,7 @@ fn main() {
   report("duration_div_scalar", test_duration_div_scalar(), 100)
   report("named_div_to_named_annotation", test_named_div_to_named_annotation(), 100)
   report("named_div_literal_to_named_annotation", test_named_div_literal_to_named_annotation(), 100)
+  report("string_value_enum", test_string_value_enum(), 100)
   report("duration_add", test_duration_add(), 100)
   report("duration_sub", test_duration_sub(), 100)
   report("duration_comparison", test_duration_comparison(), 100)

@@ -1,7 +1,7 @@
 use crate::checker::EnvResolve;
 use crate::store::Store;
 use syntax::ast::{Expression, Span};
-use syntax::types::{SimpleKind, Type};
+use syntax::types::{SimpleKind, Type, peel_alias};
 
 use crate::checker::TaskState;
 
@@ -58,6 +58,10 @@ impl TaskState<'_> {
         }
 
         if uintptr_scalar_conversion(&source_ty, &target_ty) {
+            return;
+        }
+
+        if peel_alias(&source_ty, |_| true) == peel_alias(&target_ty, |_| true) {
             return;
         }
 
