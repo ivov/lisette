@@ -133,7 +133,7 @@ impl TaskState<'_> {
                 },
                 other @ (Type::Simple(_) | Type::Compound { .. }),
             ) => {
-                if matches!(other, Type::Simple(_)) && store.is_nominal_value_enum(id.as_str()) {
+                if matches!(other, Type::Simple(_)) && store.is_nominal_defined_type(id.as_str()) {
                     Err(UnifyError::TypeMismatch)
                 } else {
                     let u = underlying.as_ref().clone();
@@ -149,7 +149,7 @@ impl TaskState<'_> {
                     ..
                 },
             ) => {
-                if matches!(other, Type::Simple(_)) && store.is_nominal_value_enum(id.as_str()) {
+                if matches!(other, Type::Simple(_)) && store.is_nominal_defined_type(id.as_str()) {
                     Err(UnifyError::TypeMismatch)
                 } else {
                     let u = underlying.as_ref().clone();
@@ -377,7 +377,7 @@ impl TaskState<'_> {
                 ..
             } = t1
                 && store.get_interface(symbol2).is_none()
-                && !store.is_nominal_value_enum(symbol1.as_str())
+                && !store.is_nominal_defined_type(symbol1.as_str())
                 && self.try_unify(store, u, t2, span).is_ok()
             {
                 return Ok(());
@@ -387,7 +387,7 @@ impl TaskState<'_> {
                 ..
             } = t2
                 && store.get_interface(symbol1).is_none()
-                && !store.is_nominal_value_enum(symbol2.as_str())
+                && !store.is_nominal_defined_type(symbol2.as_str())
                 && self.try_unify(store, t1, u, span).is_ok()
             {
                 return Ok(());

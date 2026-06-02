@@ -98,9 +98,13 @@ impl TaskState<'_> {
         expected_ty: &Type,
         span: Span,
     ) -> Expression {
-        let propagate_to_operand = operator == Negative && {
+        let propagate_to_operand = {
             let resolved = expected_ty.resolve_in(&self.env);
-            resolved.is_numeric() || resolved.has_underlying_numeric_type()
+            match operator {
+                Negative => resolved.is_numeric() || resolved.has_underlying_numeric_type(),
+                Not => resolved.underlying_simple_kind() == Some(SimpleKind::Bool),
+                _ => false,
+            }
         };
         let operand_expected_ty = if propagate_to_operand {
             expected_ty.clone()
@@ -141,9 +145,16 @@ impl TaskState<'_> {
                 }
             }
             Not => {
-                let bool_ty = self.type_bool();
-                self.unify(store, &bool_ty, &operand_expected_ty, &span);
-                bool_ty
+                let resolved = operand_expected_ty.resolve_in(&self.env);
+                if !resolved.is_boolean()
+                    && resolved.underlying_simple_kind() == Some(SimpleKind::Bool)
+                {
+                    operand_expected_ty.clone()
+                } else {
+                    let bool_ty = self.type_bool();
+                    self.unify(store, &bool_ty, &operand_expected_ty, &span);
+                    bool_ty
+                }
             }
             BitwiseNot => {
                 let resolved = operand_expected_ty.resolve_in(&self.env);
@@ -422,7 +433,7 @@ impl TaskState<'_> {
                 let resolved_left_operand = left_operand_ty.resolve_in(&self.env);
                 let resolved_right_operand = right_operand_ty.resolve_in(&self.env);
 
-                if !self.report_value_enum_boundary(
+                if !self.report_named_type_boundary(
                     &resolved_left_operand,
                     &resolved_right_operand,
                     store,
@@ -450,17 +461,40 @@ impl TaskState<'_> {
             }
 
             And | Or => {
-                let bool_ty = self.type_bool();
-                self.unify(store, left_operand_ty, &bool_ty, &span);
-                self.unify(store, right_operand_ty, &bool_ty, &span);
-                bool_ty
+                let resolved_left_operand = left_operand_ty.resolve_in(&self.env);
+                let resolved_right_operand = right_operand_ty.resolve_in(&self.env);
+
+                if self.report_named_type_boundary(
+                    &resolved_left_operand,
+                    &resolved_right_operand,
+                    store,
+                    span,
+                ) {
+                    left_operand_ty.clone()
+                } else if resolved_left_operand.underlying_simple_kind() == Some(SimpleKind::Bool)
+                    || resolved_right_operand.underlying_simple_kind() == Some(SimpleKind::Bool)
+                {
+                    self.unify_binary_operands(
+                        store,
+                        operator,
+                        left_operand_ty,
+                        right_operand_ty,
+                        &span,
+                    );
+                    left_operand_ty.clone()
+                } else {
+                    let bool_ty = self.type_bool();
+                    self.unify(store, left_operand_ty, &bool_ty, &span);
+                    self.unify(store, right_operand_ty, &bool_ty, &span);
+                    bool_ty
+                }
             }
 
             LessThan | LessThanOrEqual | GreaterThan | GreaterThanOrEqual => {
                 let resolved_left_operand = left_operand_ty.resolve_in(&self.env);
                 let resolved_right_operand = right_operand_ty.resolve_in(&self.env);
 
-                if self.report_value_enum_boundary(
+                if self.report_named_type_boundary(
                     &resolved_left_operand,
                     &resolved_right_operand,
                     store,
@@ -503,7 +537,7 @@ impl TaskState<'_> {
                     &span,
                 ) {
                     result_ty
-                } else if self.report_value_enum_boundary(
+                } else if self.report_named_type_boundary(
                     &resolved_left_operand,
                     &resolved_right_operand,
                     store,
@@ -733,7 +767,7 @@ impl TaskState<'_> {
 
     /// Reports an operator boundary between a value enum and a typed primitive
     /// of its backing, or two different value enums; returns whether it emitted.
-    fn report_value_enum_boundary(
+    fn report_named_type_boundary(
         &mut self,
         left: &Type,
         right: &Type,
@@ -743,27 +777,26 @@ impl TaskState<'_> {
         if left == right || store.deep_resolve_alias(left) == store.deep_resolve_alias(right) {
             return false;
         }
-        let left_is_value_enum = is_nominal_value_enum(left, store);
-        let right_is_value_enum = is_nominal_value_enum(right, store);
+        let left_is_defined_type = is_nominal_defined_type(left, store);
+        let right_is_defined_type = is_nominal_defined_type(right, store);
 
-        if left_is_value_enum && right_is_value_enum {
+        if left_is_defined_type && right_is_defined_type {
             let underlying = left
                 .underlying_simple_kind()
                 .map(Type::Simple)
                 .unwrap_or_else(|| left.clone());
-            self.sink
-                .push(diagnostics::infer::incompatible_named_numeric_types(
-                    &underlying,
-                    span,
-                ));
+            self.sink.push(diagnostics::infer::incompatible_named_types(
+                &underlying,
+                span,
+            ));
             true
-        } else if left_is_value_enum && plain_primitive_of_backing(left, right) {
+        } else if left_is_defined_type && plain_primitive_of_backing(left, right) {
             self.sink
                 .push(diagnostics::infer::named_primitive_needs_cast(
                     right, left, span,
                 ));
             true
-        } else if right_is_value_enum && plain_primitive_of_backing(right, left) {
+        } else if right_is_defined_type && plain_primitive_of_backing(right, left) {
             self.sink
                 .push(diagnostics::infer::named_primitive_needs_cast(
                     left, right, span,
@@ -811,16 +844,15 @@ impl TaskState<'_> {
             }
 
             (true, true) => {
-                self.sink
-                    .push(diagnostics::infer::incompatible_named_numeric_types(
-                        &left_underlying,
-                        *span,
-                    ));
+                self.sink.push(diagnostics::infer::incompatible_named_types(
+                    &left_underlying,
+                    *span,
+                ));
                 Some(left_ty.clone())
             }
 
             (true, false) => {
-                if is_nominal_value_enum(left_ty, store) {
+                if is_nominal_defined_type(left_ty, store) {
                     self.sink
                         .push(diagnostics::infer::named_primitive_needs_cast(
                             right_ty, left_ty, *span,
@@ -829,7 +861,7 @@ impl TaskState<'_> {
                 Some(left_ty.clone())
             }
             (false, true) => {
-                if is_nominal_value_enum(right_ty, store) {
+                if is_nominal_defined_type(right_ty, store) {
                     self.sink
                         .push(diagnostics::infer::named_primitive_needs_cast(
                             left_ty, right_ty, *span,
@@ -1026,6 +1058,7 @@ enum LiteralKind {
     Integer,
     Float,
     String,
+    Boolean,
     None,
 }
 
@@ -1043,9 +1076,13 @@ fn literal_kind(expression: &Expression) -> LiteralKind {
             literal: Literal::String { .. },
             ..
         } => LiteralKind::String,
+        Expression::Literal {
+            literal: Literal::Boolean(_),
+            ..
+        } => LiteralKind::Boolean,
         Expression::Paren { expression, .. } => literal_kind(expression),
         Expression::Unary {
-            operator: Negative | BitwiseNot,
+            operator: Negative | BitwiseNot | Not,
             expression,
             ..
         } => literal_kind(expression),
@@ -1054,30 +1091,32 @@ fn literal_kind(expression: &Expression) -> LiteralKind {
 }
 
 fn literal_can_adapt_to(kind: &LiteralKind, target: &Type) -> bool {
+    let named_backed_by = |k: SimpleKind| {
+        matches!(target, Type::Nominal { .. }) && target.underlying_simple_kind() == Some(k)
+    };
     match kind {
         LiteralKind::Integer => target.literal_adaptation_target().is_some(),
         LiteralKind::Float => target
             .literal_adaptation_target()
             .is_some_and(|underlying| underlying.is_float()),
-        LiteralKind::String => {
-            matches!(target, Type::Nominal { .. })
-                && target.underlying_simple_kind() == Some(SimpleKind::String)
-        }
+        LiteralKind::String => named_backed_by(SimpleKind::String),
+        LiteralKind::Boolean => named_backed_by(SimpleKind::Bool),
         LiteralKind::None => false,
     }
 }
 
-fn is_nominal_value_enum(ty: &Type, store: &Store) -> bool {
-    matches!(store.deep_resolve_alias(ty), Type::Nominal { id, .. } if store.is_nominal_value_enum(id.as_str()))
+fn is_nominal_defined_type(ty: &Type, store: &Store) -> bool {
+    matches!(store.deep_resolve_alias(ty), Type::Nominal { id, .. } if store.is_nominal_defined_type(id.as_str()))
 }
 
 fn is_plain_numeric_primitive(ty: &Type) -> bool {
     ty.is_numeric() && !ty.is_aliased_numeric_type()
 }
 
-fn plain_primitive_of_backing(value_enum: &Type, other: &Type) -> bool {
-    match value_enum.underlying_simple_kind() {
+fn plain_primitive_of_backing(defined_ty: &Type, other: &Type) -> bool {
+    match defined_ty.underlying_simple_kind() {
         Some(SimpleKind::String) => other.is_string(),
+        Some(SimpleKind::Bool) => other.is_boolean(),
         _ => is_plain_numeric_primitive(other),
     }
 }

@@ -467,6 +467,8 @@ duration_div_scalar: PASS
 named_div_to_named_annotation: PASS
 named_div_literal_to_named_annotation: PASS
 string_value_enum: PASS
+newtype_struct_nominal: PASS
+bool_newtype_nominal: PASS
 duration_add: PASS
 duration_sub: PASS
 duration_comparison: PASS

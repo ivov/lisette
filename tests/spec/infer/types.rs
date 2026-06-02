@@ -2890,7 +2890,7 @@ fn test() {
 }
 "#,
     );
-    infer_module("main", fs).assert_infer_code("incompatible_named_numeric_types");
+    infer_module("main", fs).assert_infer_code("incompatible_named_types");
 }
 
 #[test]
@@ -2915,7 +2915,7 @@ fn test() -> bool {
 }
 "#,
     );
-    infer_module("main", fs).assert_infer_code("incompatible_named_numeric_types");
+    infer_module("main", fs).assert_infer_code("incompatible_named_types");
 }
 
 #[test]
@@ -4951,7 +4951,7 @@ fn main() { use_it(&MySource {}) }
 }
 
 #[test]
-fn transparent_newtype_division_order_still_errors() {
+fn newtype_division_with_typed_primitive_rejected() {
     infer(
         r#"
 struct Meters(int)
@@ -4961,7 +4961,7 @@ fn test(m: Meters) {
 }
 "#,
     )
-    .assert_infer_code("invalid_division_order");
+    .assert_infer_code("type_mismatch");
 }
 
 #[test]
@@ -5263,6 +5263,136 @@ struct Mask(Slice<byte>)
 
 fn test(b: Bytes) {
   let _m = b as Mask
+}
+"#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn newtype_struct_rejects_typed_primitive() {
+    infer(
+        r#"
+struct Meters(int)
+fn need(_m: Meters) {}
+fn test() {
+  let n: int = 5
+  need(n)
+}
+"#,
+    )
+    .assert_infer_code("type_mismatch");
+}
+
+#[test]
+fn newtype_struct_adapts_literal_and_casts() {
+    infer(
+        r#"
+struct Meters(int)
+fn need(_m: Meters) {}
+fn test() {
+  let _m: Meters = 5
+  let n: int = 5
+  need(n as Meters)
+}
+"#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn composite_newtype_transparent_to_unnamed_underlying() {
+    infer(
+        r#"
+struct Bytes(Slice<byte>)
+fn test(raw: Slice<byte>) {
+  let b: Bytes = raw
+  let _back: Slice<byte> = b
+}
+"#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn distinct_composite_newtypes_not_assignable() {
+    infer(
+        r#"
+struct Bytes(Slice<byte>)
+struct Mask(Slice<byte>)
+fn test(b: Bytes) {
+  let _m: Mask = b
+}
+"#,
+    )
+    .assert_infer_code("type_mismatch");
+}
+
+#[test]
+fn bool_newtype_adapts_literal_and_logical_ops() {
+    infer(
+        r#"
+struct Flag(bool)
+fn test(f: Flag) -> Flag {
+  let _g: Flag = true
+  let _neg: Flag = !true
+  let _eq = f == true
+  let _and = f && true
+  let _and_neg = f && !true
+  !f
+}
+"#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn bool_newtype_rejects_typed_bool() {
+    infer(
+        r#"
+struct Flag(bool)
+fn test(f: Flag) -> bool {
+  let b: bool = true
+  f == b
+}
+"#,
+    )
+    .assert_infer_code("type_mismatch");
+}
+
+#[test]
+fn bool_newtype_ordering_rejected() {
+    infer(
+        r#"
+struct Flag(bool)
+fn test(f: Flag, g: Flag) -> bool {
+  f < g
+}
+"#,
+    )
+    .assert_infer_code("type_mismatch");
+}
+
+#[test]
+fn bool_newtype_in_conditions() {
+    infer(
+        r#"
+struct Flag(bool)
+fn pick(f: Flag) -> int {
+  if f { 1 } else { 0 }
+}
+fn negated(f: Flag) -> int {
+  if !f { 1 } else { 0 }
+}
+fn loops(start: Flag) {
+  let mut f = start
+  while f { f = !f }
+}
+fn guarded(f: Flag, x: int) -> int {
+  match x {
+    _ if f => 1,
+    _ => 0,
+  }
 }
 "#,
     )

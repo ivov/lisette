@@ -45,6 +45,7 @@ fn needs_explicit_type_declaration(
             Literal::Integer { .. } => !matches!(binding_ty.get_name(), Some("int") | None),
             Literal::Float { .. } => !matches!(binding_ty.get_name(), Some("float64") | None),
             Literal::String { .. } => !matches!(binding_ty.get_name(), Some("string") | None),
+            Literal::Boolean(_) => !matches!(binding_ty.get_name(), Some("bool") | None),
             _ => false,
         },
         _ => false,

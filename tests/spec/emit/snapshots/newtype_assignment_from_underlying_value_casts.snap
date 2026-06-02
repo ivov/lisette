@@ -1,6 +1,6 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nstruct UserId(int)\n\nfn raw() -> int { 1 }\n\nfn take(u: UserId) {\n  let _ = u\n}\n\nfn test() {\n  let mut id = UserId(0)\n  id = raw()\n  take(id)\n}\n"
+description: "input: \nstruct UserId(int)\n\nfn raw() -> int { 1 }\n\nfn take(u: UserId) {\n  let _ = u\n}\n\nfn test() {\n  let mut id = UserId(0)\n  id = raw() as UserId\n  take(id)\n}\n"
 ---
 package main
 

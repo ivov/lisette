@@ -1075,9 +1075,9 @@ pub fn division_by_zero(span: Span) -> LisetteDiagnostic {
         .with_help("This operation will panic at runtime")
 }
 
-pub fn incompatible_named_numeric_types(underlying_ty: &Type, span: Span) -> LisetteDiagnostic {
+pub fn incompatible_named_types(underlying_ty: &Type, span: Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Type mismatch")
-        .with_infer_code("incompatible_named_numeric_types")
+        .with_infer_code("incompatible_named_types")
         .with_span_label(&span, "cannot compute")
         .with_help(format!(
             "Cast one to the other's type, or convert both to `{}`",

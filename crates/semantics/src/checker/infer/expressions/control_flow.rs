@@ -2,7 +2,7 @@ use crate::checker::EnvResolve;
 use crate::store::Store;
 use syntax::ast::BindingKind;
 use syntax::ast::{Binding, BindingId, Expression, MatchArm, MatchOrigin, Pattern, Span};
-use syntax::types::Type;
+use syntax::types::{SimpleKind, Type};
 
 use super::super::TaskState;
 
@@ -140,6 +140,16 @@ impl TaskState<'_> {
         result
     }
 
+    fn infer_condition(&mut self, store: &Store, condition: Expression, span: &Span) -> Expression {
+        let cond_ty = self.new_type_var();
+        let inferred = self.infer_expression(store, condition, &cond_ty);
+        if cond_ty.resolve_in(&self.env).underlying_simple_kind() != Some(SimpleKind::Bool) {
+            let bool_ty = self.type_bool();
+            self.unify(store, &bool_ty, &cond_ty, span);
+        }
+        inferred
+    }
+
     pub(super) fn infer_if(
         &mut self,
         store: &Store,
@@ -219,8 +229,7 @@ impl TaskState<'_> {
             consequence_ty
         };
 
-        let bool_ty = self.type_bool();
-        let new_condition = self.infer_expression(store, *condition, &bool_ty);
+        let new_condition = self.infer_condition(store, *condition, &span);
         if let Some(span) = Self::find_propagate(&new_condition) {
             self.sink
                 .push(diagnostics::infer::propagate_in_condition(span));
@@ -283,11 +292,9 @@ impl TaskState<'_> {
                 let (new_pattern, typed_pattern) =
                     self.infer_pattern(store, a.pattern, pattern_ty, arm_kind);
 
-                let bool_ty = self.type_bool();
-                let new_guard = a.guard.map(|guard| {
-                    let guard_expression = self.infer_expression(store, *guard, &bool_ty);
-                    Box::new(guard_expression)
-                });
+                let new_guard = a
+                    .guard
+                    .map(|guard| Box::new(self.infer_condition(store, *guard, &span)));
 
                 let independent_ty;
                 let arm_expected = if arms_independent || needs_reconciliation {
@@ -389,8 +396,7 @@ impl TaskState<'_> {
         let unit_ty = self.type_unit();
         self.unify(store, expected_ty, &unit_ty, &span);
 
-        let bool_ty = self.type_bool();
-        let new_condition = self.infer_expression(store, *condition, &bool_ty);
+        let new_condition = self.infer_condition(store, *condition, &span);
         if let Some(span) = Self::find_propagate(&new_condition) {
             self.sink
                 .push(diagnostics::infer::propagate_in_condition(span));

@@ -7,7 +7,7 @@ use syntax::ast::{EnumVariant, Expression, StructFieldDefinition};
 use syntax::program::{
     Definition, DefinitionBody, File, Interface, MethodSignatures, Module, ModuleId,
 };
-use syntax::types::{SimpleKind, SubstitutionMap, Symbol, Type, substitute};
+use syntax::types::{SubstitutionMap, Symbol, Type, substitute};
 
 pub const ENTRY_MODULE_ID: &str = "_entry_";
 pub const ENTRY_FILE_ID: u32 = 0;
@@ -207,16 +207,11 @@ impl Store {
         }
     }
 
-    pub fn is_nominal_value_enum(&self, qualified_name: &str) -> bool {
-        matches!(
-            self.get_definition(qualified_name).map(|definition| &definition.body),
-            Some(DefinitionBody::ValueEnum { underlying_ty: Some(underlying), .. })
-                if underlying.has_underlying_numeric_type()
-                    || matches!(
-                        underlying.underlying_simple_kind(),
-                        Some(SimpleKind::Uintptr | SimpleKind::String)
-                    )
-        )
+    pub fn is_nominal_defined_type(&self, qualified_name: &str) -> bool {
+        match self.get_definition(qualified_name) {
+            Some(def) => matches!(def.body, DefinitionBody::ValueEnum { .. }) || def.is_newtype(),
+            None => false,
+        }
     }
 
     pub fn fields_of(&self, qualified_name: &str) -> Option<&[StructFieldDefinition]> {

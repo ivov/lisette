@@ -15,12 +15,18 @@ impl TaskState<'_> {
     ) -> Expression {
         match literal {
             Literal::Boolean(boolean) => {
-                let bool_ty = self.type_bool();
-                self.unify(store, expected_ty, &bool_ty, &span);
+                let resolved = expected_ty.resolve_in(&self.env);
+                let ty = if adapts_to_named_type(&resolved, store, SimpleKind::Bool) {
+                    resolved.clone()
+                } else {
+                    let bool_ty = self.type_bool();
+                    self.unify(store, expected_ty, &bool_ty, &span);
+                    bool_ty
+                };
 
                 Expression::Literal {
                     literal: Literal::Boolean(boolean),
-                    ty: bool_ty,
+                    ty,
                     span,
                 }
             }
@@ -83,7 +89,7 @@ impl TaskState<'_> {
 
             Literal::String { value, raw } => {
                 let resolved = expected_ty.resolve_in(&self.env);
-                let ty = if adapts_to_string_value_enum(&resolved, store) {
+                let ty = if adapts_to_named_type(&resolved, store, SimpleKind::String) {
                     resolved.clone()
                 } else {
                     let string_ty = self.type_string();
@@ -203,11 +209,11 @@ fn numeric_adapt_target(ty: &Type, store: &Store) -> Option<Type> {
     store.deep_resolve_alias(ty).literal_adaptation_target()
 }
 
-fn adapts_to_string_value_enum(ty: &Type, store: &Store) -> bool {
+fn adapts_to_named_type(ty: &Type, store: &Store, kind: SimpleKind) -> bool {
     let peeled = store.deep_resolve_alias(ty);
     matches!(&peeled, Type::Nominal { id, .. }
-        if store.is_nominal_value_enum(id.as_str())
-            && peeled.underlying_simple_kind() == Some(SimpleKind::String))
+        if store.is_nominal_defined_type(id.as_str())
+            && peeled.underlying_simple_kind() == Some(kind))
 }
 
 fn char_literal_codepoint(s: &str) -> Option<u64> {

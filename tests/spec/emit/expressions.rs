@@ -4056,7 +4056,7 @@ fn newtype_return_from_underlying_variable_casts() {
 struct UserId(int)
 
 fn make(i: int) -> UserId {
-  i
+  i as UserId
 }
 "#;
     assert_emit_snapshot!(input);
@@ -4074,7 +4074,7 @@ fn take(u: UserId) {
 }
 
 fn test() {
-  let id: UserId = raw()
+  let id: UserId = raw() as UserId
   take(id)
 }
 "#;
@@ -4094,7 +4094,7 @@ fn take(u: UserId) {
 
 fn test() {
   let mut id = UserId(0)
-  id = raw()
+  id = raw() as UserId
   take(id)
 }
 "#;
@@ -4108,7 +4108,7 @@ struct UserId(int)
 struct Box { v: UserId }
 
 fn test(i: int) -> Box {
-  Box { v: i }
+  Box { v: i as UserId }
 }
 "#;
     assert_emit_snapshot!(input);

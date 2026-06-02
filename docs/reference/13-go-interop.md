@@ -71,7 +71,7 @@ time.Sleep(100 * time.Millisecond)    // literal adapts
 time.Sleep(elapsed as time.Duration)  // typed value needs `as`
 ```
 
-The same holds for string-backed named types such as `regexp/syntax.ErrorCode`, so a string literal adapts, while a typed `string` needs conversion.
+Composite-backed structs like `net.IP` (over `[]byte`) are the exception: they stay assignable to their underlying type, as in Go.
 
 ### Variadic parameters
 

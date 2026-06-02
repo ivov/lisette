@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
    ·                                 ╰── cannot compute
  6 │ }
    ╰────
-  help: Cast one to the other's type, or convert both to `int64` · code: [infer.incompatible_named_numeric_types]
+  help: Cast one to the other's type, or convert both to `int64` · code: [infer.incompatible_named_types]
