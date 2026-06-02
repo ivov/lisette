@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [info] Length comparison can use `is_empty()`
+   ╭─[test.lis:8:11]
+ 7 │   let b = Bag { items: [1, 2, 3] }
+ 8 │   let _ = b.items.length() == 0
+   ·           ──────────┬──────────
+   ·                     ╰── can be simpler
+ 9 │ }
+   ╰────
+  help: Simplify to `b.items.is_empty()` · code: [lint.manual_is_empty]

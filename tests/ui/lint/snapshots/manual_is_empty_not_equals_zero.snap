@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [info] Length comparison can use `is_empty()`
+   ╭─[test.lis:4:11]
+ 3 │   let xs = [1, 2, 3]
+ 4 │   let _ = xs.length() != 0
+   ·           ────────┬───────
+   ·                   ╰── can be simpler
+ 5 │ }
+   ╰────
+  help: Simplify to `!xs.is_empty()` · code: [lint.manual_is_empty]

@@ -291,6 +291,13 @@ pub fn manual_compound_assignment(span: &Span, symbol: &str) -> LisetteDiagnosti
         .with_help(format!("Use the `{symbol}` compound assignment operator"))
 }
 
+pub fn manual_is_empty(span: &Span, replacement: &str) -> LisetteDiagnostic {
+    LisetteDiagnostic::info("Length comparison can use `is_empty()`")
+        .with_lint_code("manual_is_empty")
+        .with_span_label(span, "can be simpler")
+        .with_help(format!("Simplify to `{replacement}`"))
+}
+
 pub fn duplicate_logical_operand(span: &Span, operand_text: &str) -> LisetteDiagnostic {
     LisetteDiagnostic::warn("Duplicate logical operand")
         .with_lint_code("duplicate_logical_operand")

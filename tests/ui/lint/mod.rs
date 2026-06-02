@@ -607,6 +607,188 @@ fn main() {
 }
 
 #[test]
+fn manual_is_empty_equals_zero() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let xs = [1, 2, 3]
+  let _ = xs.length() == 0
+}
+"#
+    );
+}
+
+#[test]
+fn manual_is_empty_not_equals_zero() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let xs = [1, 2, 3]
+  let _ = xs.length() != 0
+}
+"#
+    );
+}
+
+#[test]
+fn manual_is_empty_greater_than_zero() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let xs = [1, 2, 3]
+  let _ = xs.length() > 0
+}
+"#
+    );
+}
+
+#[test]
+fn manual_is_empty_zero_on_left() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let xs = [1, 2, 3]
+  let _ = 0 == xs.length()
+}
+"#
+    );
+}
+
+#[test]
+fn manual_is_empty_string_receiver() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let s = "hello"
+  let _ = s.length() == 0
+}
+"#
+    );
+}
+
+#[test]
+fn manual_is_empty_field_receiver() {
+    assert_lint_snapshot!(
+        r#"
+struct Bag {
+  items: Slice<int>
+}
+
+fn main() {
+  let b = Bag { items: [1, 2, 3] }
+  let _ = b.items.length() == 0
+}
+"#
+    );
+}
+
+#[test]
+fn manual_is_empty_less_or_equal_zero() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let xs = [1, 2, 3]
+  let _ = xs.length() <= 0
+}
+"#
+    );
+}
+
+#[test]
+fn manual_is_empty_zero_greater_or_equal() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let xs = [1, 2, 3]
+  let _ = 0 >= xs.length()
+}
+"#
+    );
+}
+
+#[test]
+fn manual_is_empty_less_than_zero_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let xs = [1, 2, 3]
+  let _ = xs.length() < 0
+}
+"#
+    );
+}
+
+#[test]
+fn manual_is_empty_greater_or_equal_zero_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let xs = [1, 2, 3]
+  let _ = xs.length() >= 0
+}
+"#
+    );
+}
+
+#[test]
+fn manual_is_empty_zero_less_or_equal_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let xs = [1, 2, 3]
+  let _ = 0 <= xs.length()
+}
+"#
+    );
+}
+
+#[test]
+fn manual_is_empty_compare_one_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let xs = [1, 2, 3]
+  let _ = xs.length() == 1
+}
+"#
+    );
+}
+
+#[test]
+fn manual_is_empty_user_type_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+struct Stack {
+  depth: int
+}
+
+impl Stack {
+  fn length(self) -> int {
+    self.depth
+  }
+}
+
+fn main() {
+  let st = Stack { depth: 0 }
+  let _ = st.length() == 0
+}
+"#
+    );
+}
+
+#[test]
+fn manual_is_empty_already_is_empty_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let xs = [1, 2, 3]
+  let _ = xs.is_empty()
+}
+"#
+    );
+}
+
+#[test]
 fn self_comparison_equal() {
     assert_lint_snapshot!(
         r#"
