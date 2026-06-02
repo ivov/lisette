@@ -98,14 +98,15 @@ impl TaskState<'_> {
         expected_ty: &Type,
         span: Span,
     ) -> Expression {
-        // For negation with numeric expected type, propagate it to the operand
-        // so literals can adapt (e.g., `let x: int8 = -1` works)
-        let operand_expected_ty =
-            if operator == Negative && expected_ty.resolve_in(&self.env).is_numeric() {
-                expected_ty.clone()
-            } else {
-                self.new_type_var()
-            };
+        let propagate_to_operand = operator == Negative && {
+            let resolved = expected_ty.resolve_in(&self.env);
+            resolved.is_numeric() || resolved.has_underlying_numeric_type()
+        };
+        let operand_expected_ty = if propagate_to_operand {
+            expected_ty.clone()
+        } else {
+            self.new_type_var()
+        };
 
         if operator == Negative {
             self.scopes.increment_negation_depth();
@@ -421,20 +422,28 @@ impl TaskState<'_> {
                 let resolved_left_operand = left_operand_ty.resolve_in(&self.env);
                 let resolved_right_operand = right_operand_ty.resolve_in(&self.env);
 
-                let same_aliased_numeric = resolved_left_operand == resolved_right_operand
-                    && resolved_left_operand.is_aliased_numeric_type();
+                if !self.report_value_enum_boundary(
+                    &resolved_left_operand,
+                    &resolved_right_operand,
+                    store,
+                    span,
+                ) {
+                    let same_aliased_numeric = resolved_left_operand == resolved_right_operand
+                        && resolved_left_operand.is_aliased_numeric_type();
 
-                let different_but_compatible = resolved_left_operand != resolved_right_operand
-                    && resolved_left_operand.is_numeric_compatible_with(&resolved_right_operand);
+                    let different_but_compatible = resolved_left_operand != resolved_right_operand
+                        && resolved_left_operand
+                            .is_numeric_compatible_with(&resolved_right_operand);
 
-                if !same_aliased_numeric && !different_but_compatible {
-                    self.unify_binary_operands(
-                        store,
-                        operator,
-                        left_operand_ty,
-                        right_operand_ty,
-                        &span,
-                    );
+                    if !same_aliased_numeric && !different_but_compatible {
+                        self.unify_binary_operands(
+                            store,
+                            operator,
+                            left_operand_ty,
+                            right_operand_ty,
+                            &span,
+                        );
+                    }
                 }
                 self.ensure_comparable(store, left_operand_ty, left_span);
                 self.type_bool()
@@ -450,6 +459,15 @@ impl TaskState<'_> {
             LessThan | LessThanOrEqual | GreaterThan | GreaterThanOrEqual => {
                 let resolved_left_operand = left_operand_ty.resolve_in(&self.env);
                 let resolved_right_operand = right_operand_ty.resolve_in(&self.env);
+
+                if self.report_value_enum_boundary(
+                    &resolved_left_operand,
+                    &resolved_right_operand,
+                    store,
+                    span,
+                ) {
+                    return self.type_bool();
+                }
 
                 let same_aliased_numeric = resolved_left_operand == resolved_right_operand
                     && resolved_left_operand.is_aliased_numeric_type();
@@ -478,6 +496,7 @@ impl TaskState<'_> {
                 let resolved_right_operand = right_operand_ty.resolve_in(&self.env);
 
                 if let Some(result_ty) = self.try_operation_with_numeric_alias(
+                    store,
                     operator,
                     &resolved_left_operand,
                     &resolved_right_operand,
@@ -523,6 +542,7 @@ impl TaskState<'_> {
                 }
 
                 if let Some(result_ty) = self.try_operation_with_numeric_alias(
+                    store,
                     operator,
                     &left_resolved,
                     &right_resolved,
@@ -554,6 +574,7 @@ impl TaskState<'_> {
                 let right_resolved = right_operand_ty.resolve_in(&self.env);
 
                 if let Some(result_ty) = self.try_operation_with_numeric_alias(
+                    store,
                     operator,
                     &left_resolved,
                     &right_resolved,
@@ -700,8 +721,51 @@ impl TaskState<'_> {
         }
     }
 
+    /// Reports a comparison between a value enum and a typed primitive or a
+    /// different named numeric; returns whether a diagnostic was emitted.
+    fn report_value_enum_boundary(
+        &mut self,
+        left: &Type,
+        right: &Type,
+        store: &Store,
+        span: Span,
+    ) -> bool {
+        if left == right || store.deep_resolve_alias(left) == store.deep_resolve_alias(right) {
+            return false;
+        }
+        let left_is_value_enum = is_numeric_value_enum(left, store);
+        let right_is_value_enum = is_numeric_value_enum(right, store);
+
+        if left_is_value_enum && right_is_value_enum {
+            let underlying = left
+                .underlying_numeric_type()
+                .unwrap_or_else(|| left.clone());
+            self.sink
+                .push(diagnostics::infer::incompatible_named_numeric_types(
+                    &underlying,
+                    span,
+                ));
+            true
+        } else if left_is_value_enum && is_plain_numeric_primitive(right) {
+            self.sink
+                .push(diagnostics::infer::named_primitive_needs_cast(
+                    right, left, span,
+                ));
+            true
+        } else if right_is_value_enum && is_plain_numeric_primitive(left) {
+            self.sink
+                .push(diagnostics::infer::named_primitive_needs_cast(
+                    left, right, span,
+                ));
+            true
+        } else {
+            false
+        }
+    }
+
     fn try_operation_with_numeric_alias(
         &mut self,
+        store: &Store,
         operator: &BinaryOperator,
         left_ty: &Type,
         right_ty: &Type,
@@ -725,35 +789,47 @@ impl TaskState<'_> {
         let left_is_aliased = left_ty.is_aliased_numeric_type();
         let right_is_aliased = right_ty.is_aliased_numeric_type();
 
-        match (left_is_aliased, right_is_aliased, operator) {
-            (true, true, _) if left_ty == right_ty => {
-                if matches!(operator, Division) {
-                    // T / T → U (ratio yields underlying type)
-                    Some(left_underlying)
-                } else {
-                    Some(left_ty.clone())
-                }
+        match (left_is_aliased, right_is_aliased) {
+            (false, false) => None,
+
+            (true, true)
+                if left_ty == right_ty
+                    || store.deep_resolve_alias(left_ty) == store.deep_resolve_alias(right_ty) =>
+            {
+                Some(left_ty.clone())
             }
 
-            (true, false, _) => Some(left_ty.clone()),
-
-            (false, true, Division | Remainder) => {
-                self.sink.push(diagnostics::infer::invalid_division_order(
-                    operator, left_ty, right_ty, *span,
-                ));
-                None
-            }
-            (false, true, _) => Some(right_ty.clone()),
-
-            (false, false, _) => None,
-
-            (true, true, _) => {
+            (true, true) => {
                 self.sink
                     .push(diagnostics::infer::incompatible_named_numeric_types(
                         &left_underlying,
                         *span,
                     ));
-                None
+                Some(left_ty.clone())
+            }
+
+            (true, false) => {
+                if is_numeric_value_enum(left_ty, store) {
+                    self.sink
+                        .push(diagnostics::infer::named_primitive_needs_cast(
+                            right_ty, left_ty, *span,
+                        ));
+                }
+                Some(left_ty.clone())
+            }
+            (false, true) => {
+                if is_numeric_value_enum(right_ty, store) {
+                    self.sink
+                        .push(diagnostics::infer::named_primitive_needs_cast(
+                            left_ty, right_ty, *span,
+                        ));
+                } else if matches!(operator, Division | Remainder) {
+                    self.sink.push(diagnostics::infer::invalid_division_order(
+                        operator, left_ty, right_ty, *span,
+                    ));
+                    return None;
+                }
+                Some(right_ty.clone())
             }
         }
     }
@@ -955,15 +1031,29 @@ fn numeric_literal_kind(expression: &Expression) -> NumericLiteralKind {
             ..
         } => NumericLiteralKind::Float,
         Expression::Paren { expression, .. } => numeric_literal_kind(expression),
+        Expression::Unary {
+            operator: Negative | BitwiseNot,
+            expression,
+            ..
+        } => numeric_literal_kind(expression),
         _ => NumericLiteralKind::None,
     }
 }
 
-/// Checks whether a literal of the given kind can adapt to the target type.
 fn literal_can_adapt_to(kind: &NumericLiteralKind, target: &Type) -> bool {
     match kind {
-        NumericLiteralKind::Integer => target.is_numeric(),
-        NumericLiteralKind::Float => target.is_float(),
+        NumericLiteralKind::Integer => target.literal_adaptation_target().is_some(),
+        NumericLiteralKind::Float => target
+            .literal_adaptation_target()
+            .is_some_and(|underlying| underlying.is_float()),
         NumericLiteralKind::None => false,
     }
+}
+
+fn is_numeric_value_enum(ty: &Type, store: &Store) -> bool {
+    matches!(store.deep_resolve_alias(ty), Type::Nominal { id, .. } if store.is_numeric_value_enum(id.as_str()))
+}
+
+fn is_plain_numeric_primitive(ty: &Type) -> bool {
+    ty.is_numeric() && !ty.is_aliased_numeric_type()
 }

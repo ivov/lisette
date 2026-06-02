@@ -2,11 +2,11 @@
 source: tests/ui/errors/mod.rs
 ---
   [error] Type mismatch
-   ╭─[main.lis:5:14]
- 4 │ fn test() {
- 5 │   time.Sleep(0);
+   ╭─[main.lis:6:14]
+ 5 │   let n: int64 = 0;
+ 6 │   time.Sleep(n);
    ·              ┬
-   ·              ╰── expected `Duration`, found `int`
- 6 │ }
+   ·              ╰── expected `Duration`, found `int64`
+ 7 │ }
    ╰────
   help: Cast with `as`, e.g. `value as Duration` · code: [infer.type_mismatch]

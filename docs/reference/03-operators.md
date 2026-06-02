@@ -28,7 +28,7 @@ a + b |> f         // f(a + b)
 
 ## Arithmetic
 
-`+`, `-`, `*`, `/`, `%` require both operands to be the same numeric type. An exception is made for named numeric types from Go (like `time.Duration`), which can be used in arithmetic with their underlying type. See [`13-go-interop.md`](13-go-interop.md)
+`+`, `-`, `*`, `/`, `%` require both operands to be the same numeric type. An untyped numeric literal adapts to the other operand.
 
 Unary `-` negates a number. Disallowed for unsigned types:
 

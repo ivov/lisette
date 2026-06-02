@@ -1,7 +1,7 @@
 use crate::checker::EnvResolve;
 use crate::store::Store;
 use syntax::ast::{Expression, Span};
-use syntax::types::Type;
+use syntax::types::{SimpleKind, Type};
 
 use crate::checker::TaskState;
 
@@ -54,6 +54,10 @@ impl TaskState<'_> {
         }
 
         if source_ty.has_underlying_numeric_type() && target_ty.has_underlying_numeric_type() {
+            return;
+        }
+
+        if uintptr_scalar_conversion(&source_ty, &target_ty) {
             return;
         }
 
@@ -153,6 +157,15 @@ impl TaskState<'_> {
             _ => {}
         }
     }
+}
+
+fn uintptr_scalar_conversion(source: &Type, target: &Type) -> bool {
+    let castable = |ty: &Type| {
+        ty.has_underlying_numeric_type() || ty.underlying_simple_kind() == Some(SimpleKind::Uintptr)
+    };
+    let either_uintptr = source.underlying_simple_kind() == Some(SimpleKind::Uintptr)
+        || target.underlying_simple_kind() == Some(SimpleKind::Uintptr);
+    either_uintptr && castable(source) && castable(target)
 }
 
 fn unwrap_parens_and_negation(expression: &Expression) -> &Expression {

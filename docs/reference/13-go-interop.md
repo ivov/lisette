@@ -62,21 +62,14 @@ Fixed-size arrays `[N]T` are not yet representable in Lisette. In return positio
 
 ### Named numeric types
 
-Go defines types like `time.Duration` as aliases for numeric primitives: `type Duration int64`. Go's nominal type system requires explicit casts for arithmetic between these types and their underlying type.
+Go's named numeric types (`time.Duration`, `time.Weekday`, etc.) are nominal in Lisette just as in Go. This means that e.g. an `int` is not interchangeable with a named numeric type.
 
-Lisette allows arithmetic between a named numeric type and compatible types from the same family (signed integers, unsigned integers, or floats). The compiler inserts the necessary casts in the generated Go code:
+In both Lisette and Go, a literal adapts wherever the named type is expected; a typed value needs explicit conversion.
 
 ```rust
-import "go:time"
-
-let multiplier = 100
-let delay = time.Millisecond * multiplier  // Duration * int → Duration
-let ratio = time.Minute / time.Second      // Duration / Duration → int64
+time.Sleep(100 * time.Millisecond)    // literal adapts
+time.Sleep(elapsed as time.Duration)  // typed value needs `as`
 ```
-
-The result type preserves the named type, with one exception: dividing two values of the same named type produces the underlying type (`T / T → U`), since a ratio is dimensionless.
-
-Cross-family arithmetic (e.g., `Duration * float64`) remains an error.
 
 ### Variadic parameters
 

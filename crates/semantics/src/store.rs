@@ -7,7 +7,7 @@ use syntax::ast::{EnumVariant, Expression, StructFieldDefinition};
 use syntax::program::{
     Definition, DefinitionBody, File, Interface, MethodSignatures, Module, ModuleId,
 };
-use syntax::types::{SubstitutionMap, Symbol, Type, substitute};
+use syntax::types::{SimpleKind, SubstitutionMap, Symbol, Type, substitute};
 
 pub const ENTRY_MODULE_ID: &str = "_entry_";
 pub const ENTRY_FILE_ID: u32 = 0;
@@ -205,6 +205,15 @@ impl Store {
             DefinitionBody::ValueEnum { variants, .. } => Some(variants),
             _ => None,
         }
+    }
+
+    pub fn is_numeric_value_enum(&self, qualified_name: &str) -> bool {
+        matches!(
+            self.get_definition(qualified_name).map(|definition| &definition.body),
+            Some(DefinitionBody::ValueEnum { underlying_ty: Some(underlying), .. })
+                if underlying.has_underlying_numeric_type()
+                    || underlying.underlying_simple_kind() == Some(SimpleKind::Uintptr)
+        )
     }
 
     pub fn fields_of(&self, qualified_name: &str) -> Option<&[StructFieldDefinition]> {

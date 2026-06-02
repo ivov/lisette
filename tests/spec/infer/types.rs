@@ -2432,7 +2432,7 @@ fn test() -> time.Duration {
 }
 
 #[test]
-fn numeric_alias_t_div_t_yields_underlying() {
+fn numeric_alias_t_div_t_yields_named() {
     let mut fs = MockFileSystem::new();
     fs.add_file("time", "time.d.lis", duration_typedef());
     fs.add_file(
@@ -2441,7 +2441,7 @@ fn numeric_alias_t_div_t_yields_underlying() {
         r#"
 import "time"
 
-fn test() -> int64 {
+fn test() -> time.Duration {
   time.Duration.Second / time.Duration.Millisecond
 }
 "#,
@@ -2612,7 +2612,43 @@ fn test() -> bool {
 }
 
 #[test]
-fn numeric_alias_u_div_t_error() {
+fn numeric_alias_u_div_t() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file("time", "time.d.lis", duration_typedef());
+    fs.add_file(
+        "main",
+        "main.lis",
+        r#"
+import "time"
+
+fn test() -> time.Duration {
+  100 / time.Duration.Second
+}
+"#,
+    );
+    infer_module("main", fs).assert_no_errors();
+}
+
+#[test]
+fn numeric_alias_u_rem_t() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file("time", "time.d.lis", duration_typedef());
+    fs.add_file(
+        "main",
+        "main.lis",
+        r#"
+import "time"
+
+fn test() -> time.Duration {
+  100 % time.Duration.Second
+}
+"#,
+    );
+    infer_module("main", fs).assert_no_errors();
+}
+
+#[test]
+fn numeric_alias_typed_primitive_divides_value_enum_rejected() {
     let mut fs = MockFileSystem::new();
     fs.add_file("time", "time.d.lis", duration_typedef());
     fs.add_file(
@@ -2622,33 +2658,16 @@ fn numeric_alias_u_div_t_error() {
 import "time"
 
 fn test() {
-  let x = 100 / time.Duration.Second;
+  let n: int = 100;
+  let x = n / time.Duration.Second;
 }
 "#,
     );
-    infer_module("main", fs).assert_infer_code("invalid_division_order");
+    infer_module("main", fs).assert_infer_code("type_mismatch");
 }
 
 #[test]
-fn numeric_alias_u_rem_t_error() {
-    let mut fs = MockFileSystem::new();
-    fs.add_file("time", "time.d.lis", duration_typedef());
-    fs.add_file(
-        "main",
-        "main.lis",
-        r#"
-import "time"
-
-fn test() {
-  let x = 100 % time.Duration.Second;
-}
-"#,
-    );
-    infer_module("main", fs).assert_infer_code("invalid_division_order");
-}
-
-#[test]
-fn numeric_alias_with_variable() {
+fn numeric_alias_with_variable_rejected() {
     let mut fs = MockFileSystem::new();
     fs.add_file("time", "time.d.lis", duration_typedef());
     fs.add_file(
@@ -2660,6 +2679,25 @@ import "time"
 fn test() -> time.Duration {
   let n: int = 5;
   time.Duration.Second * n
+}
+"#,
+    );
+    infer_module("main", fs).assert_infer_code("type_mismatch");
+}
+
+#[test]
+fn numeric_alias_with_variable_cast() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file("time", "time.d.lis", duration_typedef());
+    fs.add_file(
+        "main",
+        "main.lis",
+        r#"
+import "time"
+
+fn test() -> time.Duration {
+  let n: int = 5;
+  time.Duration.Second * (n as time.Duration)
 }
 "#,
     );
@@ -2715,7 +2753,7 @@ fn numeric_alias_in_return() {
 import "time"
 
 fn get_delay(multiplier: int) -> time.Duration {
-  time.Duration.Millisecond * multiplier
+  time.Duration.Millisecond * (multiplier as time.Duration)
 }
 "#,
     );
@@ -2856,6 +2894,140 @@ fn test() {
 }
 
 #[test]
+fn numeric_alias_compare_different_named_types_error() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "time",
+        "time.d.lis",
+        r#"
+pub enum DurationA: int64 { Second = 1000000000 }
+pub enum DurationB: int64 { Second = 1000000000 }
+"#,
+    );
+    fs.add_file(
+        "main",
+        "main.lis",
+        r#"
+import "time"
+
+fn test() -> bool {
+  time.DurationA.Second == time.DurationB.Second
+}
+"#,
+    );
+    infer_module("main", fs).assert_infer_code("incompatible_named_numeric_types");
+}
+
+#[test]
+fn alias_backed_value_enum_rejects_typed_primitive() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "time",
+        "time.d.lis",
+        r#"
+type Base = int64
+pub enum Duration: Base {
+  Second = 1000000000,
+}
+"#,
+    );
+    fs.add_file(
+        "main",
+        "main.lis",
+        r#"
+import "time"
+
+fn test() -> time.Duration {
+  let n: int64 = 5;
+  time.Duration.Second * n
+}
+"#,
+    );
+    infer_module("main", fs).assert_infer_code("type_mismatch");
+}
+
+#[test]
+fn uintptr_backed_value_enum_rejects_typed_primitive() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "sys",
+        "sys.d.lis",
+        r#"
+pub enum Errno: uintptr { EPERM = 1 }
+pub fn current() -> uintptr
+pub fn needs(e: Errno)
+"#,
+    );
+    fs.add_file(
+        "main",
+        "main.lis",
+        r#"
+import "sys"
+
+fn test() {
+  let n = sys.current()
+  sys.needs(n)
+}
+"#,
+    );
+    infer_module("main", fs).assert_infer_code("type_mismatch");
+}
+
+#[test]
+fn uintptr_backed_value_enum_cast_escape_hatch() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "sys",
+        "sys.d.lis",
+        r#"
+pub enum Errno: uintptr { EPERM = 1 }
+pub fn current() -> uintptr
+pub fn needs(e: Errno)
+"#,
+    );
+    fs.add_file(
+        "main",
+        "main.lis",
+        r#"
+import "sys"
+
+fn test() {
+  let n = sys.current()
+  sys.needs(n as sys.Errno)
+}
+"#,
+    );
+    infer_module("main", fs).assert_no_errors();
+}
+
+#[test]
+fn uintptr_backed_value_enum_member_and_const_ok() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "sys",
+        "sys.d.lis",
+        r#"
+pub enum Errno: uintptr { EPERM = 1 }
+pub const ENOENT: Errno = 2
+pub fn needs(e: Errno)
+"#,
+    );
+    fs.add_file(
+        "main",
+        "main.lis",
+        r#"
+import "sys"
+
+fn test() {
+  sys.needs(sys.Errno.EPERM)
+  sys.needs(sys.ENOENT)
+}
+"#,
+    );
+    infer_module("main", fs).assert_no_errors();
+}
+
+#[test]
 fn numeric_alias_complex_chained() {
     let mut fs = MockFileSystem::new();
     fs.add_file("time", "time.d.lis", duration_typedef());
@@ -2886,8 +3058,8 @@ fn numeric_alias_parenthesized_ratio() {
 import "time"
 
 fn test() -> int64 {
-  // T / T yields int64, which is the underlying type
-  let ratio: int64 = time.Duration.Second / time.Duration.Millisecond;
+  // T / T yields the named type now; cast to the underlying for a raw ratio
+  let ratio: int64 = (time.Duration.Second / time.Duration.Millisecond) as int64;
   ratio
 }
 "#,
@@ -2907,7 +3079,7 @@ import "time"
 
 fn test() {
   let d: time.Duration = time.Duration.Second * 2;
-  let ratio: int64 = time.Duration.Second / time.Duration.Millisecond;
+  let ratio: int64 = (time.Duration.Second / time.Duration.Millisecond) as int64;
 }
 "#,
     );
@@ -4776,4 +4948,208 @@ fn main() { use_it(&MySource {}) }
 "#;
     infer_with_go_typedefs(input, &[("go:example.com/ui", typedef)])
         .assert_infer_code("interface_not_implemented");
+}
+
+#[test]
+fn transparent_newtype_division_order_still_errors() {
+    infer(
+        r#"
+struct Meters(int)
+fn test(m: Meters) {
+  let n: int = 100
+  let _x = n / m
+}
+"#,
+    )
+    .assert_infer_code("invalid_division_order");
+}
+
+#[test]
+fn alias_to_value_enum_rejects_typed_primitive_in_operator() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file("time", "time.d.lis", duration_typedef());
+    fs.add_file(
+        "main",
+        "main.lis",
+        r#"
+import "time"
+
+type D = time.Duration
+
+fn test() {
+  let x: D = time.Duration.Second
+  let n: int64 = 2
+  let _y = x * n
+}
+"#,
+    );
+    infer_module("main", fs).assert_infer_code("type_mismatch");
+}
+
+#[test]
+fn alias_to_value_enum_rejects_typed_primitive_in_comparison() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file("time", "time.d.lis", duration_typedef());
+    fs.add_file(
+        "main",
+        "main.lis",
+        r#"
+import "time"
+
+type D = time.Duration
+
+fn test() -> bool {
+  let x: D = time.Duration.Second
+  let n: int64 = 2
+  x == n
+}
+"#,
+    );
+    infer_module("main", fs).assert_infer_code("type_mismatch");
+}
+
+#[test]
+fn alias_to_value_enum_with_underlying_value_ok() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file("time", "time.d.lis", duration_typedef());
+    fs.add_file(
+        "main",
+        "main.lis",
+        r#"
+import "time"
+
+type D = time.Duration
+
+fn test() -> D {
+  let x: D = time.Duration.Second
+  let _ = x == time.Duration.Second
+  x * time.Duration.Second
+}
+"#,
+    );
+    infer_module("main", fs).assert_no_errors();
+}
+
+#[test]
+fn alias_backed_uintptr_value_enum_rejects_typed_primitive() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "sys",
+        "sys.d.lis",
+        r#"
+type Base = uintptr
+pub enum Errno: Base { EPERM = 1 }
+pub fn current() -> uintptr
+pub fn needs(e: Errno)
+"#,
+    );
+    fs.add_file(
+        "main",
+        "main.lis",
+        r#"
+import "sys"
+
+fn test() {
+  let n = sys.current()
+  sys.needs(n)
+}
+"#,
+    );
+    infer_module("main", fs).assert_infer_code("type_mismatch");
+}
+
+#[test]
+fn uintptr_backed_value_enum_adapts_integer_literal() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "sys",
+        "sys.d.lis",
+        "pub enum Errno: uintptr { EPERM = 1 }\npub fn needs(e: Errno)\n",
+    );
+    fs.add_file(
+        "main",
+        "main.lis",
+        r#"
+import "sys"
+
+fn test() {
+  let _e: sys.Errno = 1
+  let _ = sys.Errno.EPERM == 0
+  sys.needs(2)
+}
+"#,
+    );
+    infer_module("main", fs).assert_no_errors();
+}
+
+#[test]
+fn uintptr_backed_value_enum_arithmetic_rejected() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "sys",
+        "sys.d.lis",
+        "pub enum Errno: uintptr { EPERM = 1 }\n",
+    );
+    fs.add_file(
+        "main",
+        "main.lis",
+        r#"
+import "sys"
+
+fn test() -> sys.Errno {
+  sys.Errno.EPERM + 1
+}
+"#,
+    );
+    infer_module("main", fs).assert_infer_code("type_mismatch");
+}
+
+#[test]
+fn uintptr_backed_value_enum_ordering_rejected() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "sys",
+        "sys.d.lis",
+        "pub enum Errno: uintptr { EPERM = 1 }\n",
+    );
+    fs.add_file(
+        "main",
+        "main.lis",
+        r#"
+import "sys"
+
+fn test() -> bool {
+  sys.Errno.EPERM < 10
+}
+"#,
+    );
+    infer_module("main", fs).assert_infer_code("type_mismatch");
+}
+
+#[test]
+fn bare_uintptr_arithmetic_rejected() {
+    infer(
+        r#"
+fn test() {
+  let a = 5 as uintptr
+  let b = 3 as uintptr
+  let _ = a + b
+}
+"#,
+    )
+    .assert_infer_code("type_mismatch");
+}
+
+#[test]
+fn bare_uintptr_ordering_rejected() {
+    infer(
+        r#"
+fn test() {
+  let a = 5 as uintptr
+  let b = 3 as uintptr
+  let _ = a < b
+}
+"#,
+    )
+    .assert_infer_code("type_mismatch");
 }

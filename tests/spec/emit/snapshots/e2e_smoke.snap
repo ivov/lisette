@@ -464,6 +464,8 @@ duration_times_literal: PASS
 duration_times_variable: PASS
 duration_div_duration: PASS
 duration_div_scalar: PASS
+named_div_to_named_annotation: PASS
+named_div_literal_to_named_annotation: PASS
 duration_add: PASS
 duration_sub: PASS
 duration_comparison: PASS

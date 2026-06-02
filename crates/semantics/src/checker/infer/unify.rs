@@ -127,24 +127,34 @@ impl TaskState<'_> {
             // Simple/Compound, follow the alias to the underlying type.
             (
                 Nominal {
+                    id,
                     underlying_ty: Some(underlying),
                     ..
                 },
-                Type::Simple(_) | Type::Compound { .. },
+                other @ (Type::Simple(_) | Type::Compound { .. }),
             ) => {
-                let u = underlying.as_ref().clone();
-                self.try_unify(store, &u, &r2, span)
+                if matches!(other, Type::Simple(_)) && store.is_numeric_value_enum(id.as_str()) {
+                    Err(UnifyError::TypeMismatch)
+                } else {
+                    let u = underlying.as_ref().clone();
+                    self.try_unify(store, &u, &r2, span)
+                }
             }
 
             (
-                Type::Simple(_) | Type::Compound { .. },
+                other @ (Type::Simple(_) | Type::Compound { .. }),
                 Nominal {
+                    id,
                     underlying_ty: Some(underlying),
                     ..
                 },
             ) => {
-                let u = underlying.as_ref().clone();
-                self.try_unify(store, &r1, &u, span)
+                if matches!(other, Type::Simple(_)) && store.is_numeric_value_enum(id.as_str()) {
+                    Err(UnifyError::TypeMismatch)
+                } else {
+                    let u = underlying.as_ref().clone();
+                    self.try_unify(store, &r1, &u, span)
+                }
             }
 
             // Simple/Compound vs Nominal interface: synthesise a nominal
@@ -367,6 +377,7 @@ impl TaskState<'_> {
                 ..
             } = t1
                 && store.get_interface(symbol2).is_none()
+                && !store.is_numeric_value_enum(symbol1.as_str())
                 && self.try_unify(store, u, t2, span).is_ok()
             {
                 return Ok(());
@@ -376,6 +387,7 @@ impl TaskState<'_> {
                 ..
             } = t2
                 && store.get_interface(symbol1).is_none()
+                && !store.is_numeric_value_enum(symbol2.as_str())
                 && self.try_unify(store, t1, u, span).is_ok()
             {
                 return Ok(());

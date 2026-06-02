@@ -387,18 +387,16 @@ let result = "  Hello World  "
 
 ## Named numeric types
 
-In Go, named numeric types like `time.Duration` require explicit casts for arithmetic with their underlying type:
+Named numeric types like `time.Duration` work as in Go, with the conversion spelled `as T` rather than `T(x)`:
 
 ```go
 multiplier := 100
-delay := time.Millisecond * time.Duration(multiplier) // cast required
+delay := time.Millisecond * time.Duration(multiplier)
 ```
-
-Lisette inserts the cast automatically:
 
 ```rust
 let multiplier = 100
-let delay = time.Millisecond * multiplier  // works directly
+let delay = time.Millisecond * (multiplier as time.Duration)
 ```
 
 ## Unused code

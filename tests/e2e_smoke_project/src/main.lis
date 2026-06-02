@@ -2727,15 +2727,15 @@ fn test_duration_times_literal() -> int {
 }
 
 fn test_duration_times_variable() -> int {
-  // Duration * variable - variable needs cast
+  // Duration * variable - a typed primitive needs an explicit cast
   let n: int = 3
-  let d = time.Duration.Second * n
+  let d = time.Duration.Second * (n as time.Duration)
   if d == 3000000000 { 100 } else { 0 }
 }
 
 fn test_duration_div_duration() -> int {
-  // Duration / Duration - yields underlying type (ratio)
-  let ratio: int64 = time.Duration.Second / time.Duration.Millisecond
+  // Duration / Duration - yields Duration (Go); cast for a raw ratio
+  let ratio: int64 = (time.Duration.Second / time.Duration.Millisecond) as int64
   if ratio == 1000 { 100 } else { 0 }
 }
 
@@ -2743,6 +2743,18 @@ fn test_duration_div_scalar() -> int {
   // Duration / scalar - yields Duration
   let half = time.Duration.Second / 2
   if half == 500000000 { 100 } else { 0 }
+}
+
+fn test_named_div_to_named_annotation() -> int {
+  // Duration / Duration must stay Duration, not be cast to int64 in emit
+  let d: time.Duration = time.Duration.Second / time.Duration.Millisecond
+  if d == 1000 { 100 } else { 0 }
+}
+
+fn test_named_div_literal_to_named_annotation() -> int {
+  // Duration / literal must stay Duration after the literal adapts
+  let d: time.Duration = time.Duration.Second / 2
+  if d == 500000000 { 100 } else { 0 }
 }
 
 fn test_duration_add() -> int {
@@ -2770,12 +2782,12 @@ fn test_duration_negation() -> int {
 
 fn test_eq_with_variable() -> int {
   let n: int = 1000000000
-  if time.Duration.Second == n { 100 } else { 0 }
+  if time.Duration.Second == (n as time.Duration) { 100 } else { 0 }
 }
 
 fn test_variable_not_variant() -> int {
   let n: int = 5
-  let result: time.Duration = time.Duration.Second * n
+  let result: time.Duration = time.Duration.Second * (n as time.Duration)
   if result == 5000000000 { 100 } else { 0 }
 }
 
@@ -2829,21 +2841,21 @@ fn get_duration_multiplier() -> int {
 }
 
 fn test_go_style_times_variable() -> int {
-  // Regression: time.Second * n should emit time.Duration(n), not go:time.Duration(n)
+  // Regression: time.Second * (n as Duration) should emit time.Duration(n), not go:time.Duration(n)
   let n = 5
-  let d = time.Second * n
+  let d = time.Second * (n as time.Duration)
   if d == 5000000000 { 100 } else { 0 }
 }
 
 fn test_go_style_times_function() -> int {
-  // Regression: time.Second * fn() should emit time.Duration(fn()), not go:time.Duration(fn())
-  let d = time.Second * get_duration_multiplier()
+  // Regression: time.Second * (fn() as Duration) emits time.Duration(fn()), not go:time.Duration(fn())
+  let d = time.Second * (get_duration_multiplier() as time.Duration)
   if d == 3000000000 { 100 } else { 0 }
 }
 
 fn test_lis_style_times_function() -> int {
   // Same for Lisette-style access
-  let d = time.Duration.Second * get_duration_multiplier()
+  let d = time.Duration.Second * (get_duration_multiplier() as time.Duration)
   if d == 3000000000 { 100 } else { 0 }
 }
 
@@ -3927,6 +3939,8 @@ fn main() {
   report("duration_times_variable", test_duration_times_variable(), 100)
   report("duration_div_duration", test_duration_div_duration(), 100)
   report("duration_div_scalar", test_duration_div_scalar(), 100)
+  report("named_div_to_named_annotation", test_named_div_to_named_annotation(), 100)
+  report("named_div_literal_to_named_annotation", test_named_div_literal_to_named_annotation(), 100)
   report("duration_add", test_duration_add(), 100)
   report("duration_sub", test_duration_sub(), 100)
   report("duration_comparison", test_duration_comparison(), 100)

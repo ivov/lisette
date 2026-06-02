@@ -195,19 +195,15 @@ impl TaskState<'_> {
     }
 }
 
-/// Walks the alias chain through the store rather than the cached
-/// `underlying_ty` field so multi-hop aliases (with forward-declared
-/// intermediates) resolve. Rejects when any nominal in the chain is a value
-/// enum — those are a hard boundary requiring an explicit `as` cast.
+/// Walks the alias chain via the store so multi-hop aliases resolve, returning
+/// the underlying numeric type an untyped literal may adapt to (value enums and
+/// newtype structs included; a typed primitive still needs `as`).
 fn numeric_adapt_target(ty: &Type, store: &Store) -> Option<Type> {
     let mut current = ty.clone();
     let mut seen: FxHashSet<Symbol> = FxHashSet::default();
     while let Type::Nominal { id, params, .. } = &current {
         if !seen.insert(id.clone()) {
             break;
-        }
-        if store.value_variants_of(id).is_some() {
-            return None;
         }
         let Some(def) = store.get_definition(id.as_str()) else {
             break;
@@ -223,7 +219,7 @@ fn numeric_adapt_target(ty: &Type, store: &Store) -> Option<Type> {
         let map: SubstitutionMap = vars.iter().cloned().zip(params.iter().cloned()).collect();
         current = substitute(&body, &map);
     }
-    current.underlying_numeric_type()
+    current.literal_adaptation_target()
 }
 
 fn char_literal_codepoint(s: &str) -> Option<u64> {

@@ -4862,7 +4862,8 @@ pub enum Duration: int64 {
 import "time"
 
 fn test() {
-  let x = 100 / time.Duration.Second;
+  let n: int = 100;
+  let x = n / time.Duration.Second;
 }
 "#;
     let mut fs = MockFileSystem::new();
@@ -4893,7 +4894,8 @@ pub enum Duration: int64 {
 import "time"
 
 fn test() {
-  let x = 100 % time.Duration.Second;
+  let n: int = 100;
+  let x = n % time.Duration.Second;
 }
 "#;
     let mut fs = MockFileSystem::new();
@@ -4992,7 +4994,8 @@ pub fn Sleep(d: Duration)
 import "time"
 
 fn test() {
-  time.Sleep(0);
+  let n: int64 = 0;
+  time.Sleep(n);
 }
 "#;
     let mut fs = MockFileSystem::new();

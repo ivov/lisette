@@ -11,7 +11,6 @@ use syntax::types::Type;
 struct NumericBinaryEmitInfo {
     cast_left_to: Option<Type>,
     cast_right_to: Option<Type>,
-    cast_result_to: Option<Type>,
 }
 
 struct BinaryOperand<'a> {
@@ -246,11 +245,6 @@ impl Planner<'_> {
         };
 
         let result = format!("{} {} {}", left_string, operator, right_string);
-
-        let result = match &info.cast_result_to {
-            Some(ty) => format!("{}({})", self.go_type_string(ty, fx), result),
-            None => result,
-        };
         (setup, result)
     }
 }
@@ -335,19 +329,12 @@ fn is_casting_needed(
         return None;
     }
 
-    let left_underlying_ty = matching_underlying_numeric(&left.ty, &right.ty)?;
+    matching_underlying_numeric(&left.ty, &right.ty)?;
 
     let left_is_aliased = left.ty.is_aliased_numeric_type();
     let right_is_aliased = right.ty.is_aliased_numeric_type();
 
     if left.ty == right.ty {
-        if left_is_aliased && matches!(operator, BinaryOperator::Division) {
-            return Some(NumericBinaryEmitInfo {
-                cast_left_to: None,
-                cast_right_to: None,
-                cast_result_to: Some(left_underlying_ty),
-            });
-        }
         return None;
     }
 
@@ -358,12 +345,10 @@ fn is_casting_needed(
         (true, false) => Some(NumericBinaryEmitInfo {
             cast_left_to: None,
             cast_right_to: cast_unless_literal(right_is_literal, &left.ty),
-            cast_result_to: None,
         }),
         (false, true) => Some(NumericBinaryEmitInfo {
             cast_left_to: cast_unless_literal(left_is_literal, &right.ty),
             cast_right_to: None,
-            cast_result_to: None,
         }),
         _ => None,
     }

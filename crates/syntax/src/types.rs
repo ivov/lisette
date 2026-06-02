@@ -1453,6 +1453,44 @@ impl Type {
         self.underlying_numeric_type().is_some()
     }
 
+    pub fn literal_adaptation_target(&self) -> Option<Type> {
+        if let Some(numeric) = self.underlying_numeric_type() {
+            return Some(numeric);
+        }
+        match self {
+            Type::Nominal { .. } if self.underlying_simple_kind() == Some(SimpleKind::Uintptr) => {
+                Some(Type::Simple(SimpleKind::Uintptr))
+            }
+            _ => None,
+        }
+    }
+
+    pub fn underlying_simple_kind(&self) -> Option<SimpleKind> {
+        self.underlying_simple_kind_recursive(&mut HashSet::default())
+    }
+
+    fn underlying_simple_kind_recursive(
+        &self,
+        visited: &mut HashSet<Symbol>,
+    ) -> Option<SimpleKind> {
+        if let Some(kind) = self.as_simple() {
+            return Some(kind);
+        }
+        match self {
+            Type::Nominal {
+                id,
+                underlying_ty: Some(underlying),
+                ..
+            } => {
+                if !visited.insert(id.clone()) {
+                    return None;
+                }
+                underlying.underlying_simple_kind_recursive(visited)
+            }
+            _ => None,
+        }
+    }
+
     fn underlying_numeric_type_recursive(&self, visited: &mut HashSet<Symbol>) -> Option<Type> {
         match self {
             Type::Simple(_) if self.is_numeric() => Some(self.clone()),

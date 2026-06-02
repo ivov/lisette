@@ -1085,6 +1085,20 @@ pub fn incompatible_named_numeric_types(underlying_ty: &Type, span: Span) -> Lis
         ))
 }
 
+pub fn named_primitive_needs_cast(
+    primitive_ty: &Type,
+    named_ty: &Type,
+    span: Span,
+) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Type mismatch")
+        .with_infer_code("type_mismatch")
+        .with_span_label(
+            &span,
+            format!("cannot compute `{}` with `{}`", primitive_ty, named_ty),
+        )
+        .with_help(format!("Cast with `as`, e.g. `value as {}`", named_ty))
+}
+
 pub fn invalid_division_order(
     operator: &BinaryOperator,
     left_ty: &Type,
