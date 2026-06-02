@@ -613,7 +613,7 @@ pub fn waitgroup_add_in_task(span: &Span) -> LisetteDiagnostic {
         .with_lint_code("waitgroup_add_in_task")
         .with_span_label(span, "may run after `Wait`")
         .with_help(
-            "If `Wait` runs before this `Add`, it sees a zero counter and returns immediately. Call `Add` before the `task`",
+            "Prefer `wg.Go(|| ...)`, which counts the task and starts it in one step and runs `Done` for you, or move `Add` before the `task`",
         )
 }
 

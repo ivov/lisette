@@ -9,4 +9,4 @@ source: tests/ui/lint/mod.rs
    ·         ╰── may run after `Wait`
  8 │     wg.Done()
    ╰────
-  help: If `Wait` runs before this `Add`, it sees a zero counter and returns immediately. Call `Add` before the `task` · code: [lint.waitgroup_add_in_task]
+  help: Prefer `wg.Go(|| ...)`, which counts the task and starts it in one step and runs `Done` for you, or move `Add` before the `task` · code: [lint.waitgroup_add_in_task]
