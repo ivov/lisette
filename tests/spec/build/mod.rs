@@ -45,6 +45,112 @@ fn main() {
 }
 
 #[test]
+fn displayable_cross_module_to_string_exported() {
+    let mut fs = MockFileSystem::new();
+
+    fs.add_file(
+        "util",
+        "point.lis",
+        r#"
+#[displayable]
+pub struct Point {
+  pub x: int,
+  pub y: int,
+}
+"#,
+    );
+
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+import "go:fmt"
+import "util"
+
+fn main() {
+  let p = util.Point { x: 1, y: 2 }
+  fmt.Print(p.to_string())
+}
+"#,
+    );
+
+    assert_build_snapshot!(fs, "github.com/user/myproject");
+}
+
+#[test]
+fn displayable_cross_module_satisfies_local_interface() {
+    let mut fs = MockFileSystem::new();
+
+    fs.add_file(
+        "util",
+        "point.lis",
+        r#"
+#[displayable]
+pub struct Point {
+  pub x: int,
+  pub y: int,
+}
+"#,
+    );
+
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+import "go:fmt"
+import "util"
+
+interface Display {
+  fn to_string(self) -> string
+}
+
+fn render(value: Display) -> string {
+  value.to_string()
+}
+
+fn main() {
+  let p = util.Point { x: 1, y: 2 }
+  fmt.Print(render(p))
+}
+"#,
+    );
+
+    assert_build_snapshot!(fs, "github.com/user/myproject");
+}
+
+#[test]
+fn go_name_collision_user_to_string_wrong_signature() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+#[displayable]
+struct A {
+  x: int,
+}
+
+impl A {
+  fn to_string(self) -> int {
+    0
+  }
+}
+
+fn main() {
+  let a = A { x: 1 }
+  let _ = a.to_string()
+}
+"#,
+    );
+
+    let codes = emit_diagnostic_codes(fs);
+    assert!(
+        codes.iter().any(|code| code == "emit.go_name_collision"),
+        "a wrong-signature user to_string does not suppress synthesis, so the synthesized to_string collides with it; got: {codes:?}"
+    );
+}
+
+#[test]
 fn user_function_returning_result_no_type_args() {
     let mut fs = MockFileSystem::new();
 
@@ -6176,6 +6282,32 @@ fn main() {
     assert!(
         codes.iter().any(|code| code == "emit.go_name_collision"),
         "field string exports to String, colliding with the generated String() method; got: {codes:?}"
+    );
+}
+
+#[test]
+fn go_name_collision_member_vs_synthesized_to_string() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+#[displayable]
+struct Point {
+  to_string: int,
+}
+
+fn main() {
+  let p = Point { to_string: 1 }
+  let _ = p.to_string
+}
+"#,
+    );
+
+    let codes = emit_diagnostic_codes(fs);
+    assert!(
+        codes.iter().any(|code| code == "emit.go_name_collision"),
+        "field to_string collides with the synthesized #[displayable] to_string() method; got: {codes:?}"
     );
 }
 

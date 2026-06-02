@@ -83,6 +83,7 @@ impl Planner<'_> {
             result.push_str("\n\n");
             result.push_str(&layout.emit_variants_function(&fn_name));
         }
+        self.append_to_string_method(&mut result, name, &receiver_generics, attributes);
         if needs_fmt {
             fx.require_fmt();
         }

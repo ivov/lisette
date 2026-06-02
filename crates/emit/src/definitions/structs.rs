@@ -56,7 +56,8 @@ impl Planner<'_> {
             )
         };
 
-        if let Some(stringer_name) = self.stringer_method_name(name, struct_attrs) {
+        let mut result = if let Some(stringer_name) = self.stringer_method_name(name, struct_attrs)
+        {
             let string_method = emit_struct_stringer_method(
                 name,
                 &receiver_generics,
@@ -69,7 +70,9 @@ impl Planner<'_> {
             format!("{definition}\n\n{string_method}")
         } else {
             definition
-        }
+        };
+        self.append_to_string_method(&mut result, name, &receiver_generics, struct_attrs);
+        result
     }
 
     /// Emit a tuple struct and its optional Stringer.
@@ -83,26 +86,28 @@ impl Planner<'_> {
         fx: &mut EmitEffects,
     ) -> String {
         let definition = self.emit_tuple_struct_definition(name, generics_string, fields, fx);
-        let Some(stringer_name) = self.stringer_method_name(name, struct_attrs) else {
-            return definition;
-        };
         let receiver_generics = receiver_generics_string(generics);
-        let is_type_alias = fields.len() == 1 && generics_string.is_empty();
-        let underlying_go_type = is_type_alias.then(|| self.go_type_string(&fields[0].ty, fx));
-        let string_method = emit_tuple_struct_stringer_method(
-            name,
-            &receiver_generics,
-            fields.len(),
-            underlying_go_type.as_deref(),
-            stringer_name,
-        );
-        if string_method.is_empty() {
-            return definition;
+        let mut result = definition;
+        if let Some(stringer_name) = self.stringer_method_name(name, struct_attrs) {
+            let is_type_alias = fields.len() == 1 && generics_string.is_empty();
+            let underlying_go_type = is_type_alias.then(|| self.go_type_string(&fields[0].ty, fx));
+            let string_method = emit_tuple_struct_stringer_method(
+                name,
+                &receiver_generics,
+                fields.len(),
+                underlying_go_type.as_deref(),
+                stringer_name,
+            );
+            if !string_method.is_empty() {
+                if string_method.contains("fmt.") {
+                    fx.require_fmt();
+                }
+                result.push_str("\n\n");
+                result.push_str(&string_method);
+            }
         }
-        if string_method.contains("fmt.") {
-            fx.require_fmt();
-        }
-        format!("{definition}\n\n{string_method}")
+        self.append_to_string_method(&mut result, name, &receiver_generics, struct_attrs);
+        result
     }
 
     /// Emit one Go struct field with its stringer metadata.
@@ -200,6 +205,32 @@ impl Planner<'_> {
         (has_stringer, has_go_stringer)
     }
 
+    pub(crate) fn should_synthesize_to_string(&self, name: &str, attributes: &[Attribute]) -> bool {
+        attributes.iter().any(|a| a.name == "displayable") && !self.module.has_user_to_string(name)
+    }
+
+    pub(crate) fn to_string_method_go_name(&self) -> String {
+        if self.method_needs_export("to_string") {
+            go_name::snake_to_camel("to_string")
+        } else {
+            go_name::escape_keyword("to_string").into_owned()
+        }
+    }
+
+    pub(crate) fn append_to_string_method(
+        &self,
+        out: &mut String,
+        name: &str,
+        receiver_generics: &str,
+        attributes: &[Attribute],
+    ) {
+        if self.should_synthesize_to_string(name, attributes) {
+            let go_method = self.to_string_method_go_name();
+            out.push_str("\n\n");
+            out.push_str(&emit_to_string_method(name, receiver_generics, &go_method));
+        }
+    }
+
     /// Single stringer to synthesize for structs: `String` by default,
     /// `GoString` when the user already supplies `String`, none when both
     /// exist. Enums use [`Self::stringer_overrides`] directly, since they
@@ -267,6 +298,15 @@ fn is_option_type(ty: &Type) -> bool {
         }
         _ => false,
     }
+}
+
+fn emit_to_string_method(name: &str, receiver_generics: &str, method_name: &str) -> String {
+    let receiver = receiver_name(name);
+    let go_type_name = go_name::escape_keyword(name);
+    let receiver_type = format!("{go_type_name}{receiver_generics}");
+    format!(
+        "func ({receiver} {receiver_type}) {method_name}() string {{\nreturn {receiver}.String()\n}}"
+    )
 }
 
 fn emit_struct_stringer_method(

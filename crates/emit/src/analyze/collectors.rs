@@ -39,6 +39,32 @@ impl Planner<'_> {
         }
     }
 
+    pub(crate) fn collect_user_to_string_types(&mut self, files: &[&File]) {
+        for file in files {
+            for item in &file.items {
+                let Expression::ImplBlock {
+                    receiver_name,
+                    methods,
+                    ..
+                } = item
+                else {
+                    continue;
+                };
+                for method in methods {
+                    if !is_display_to_string(method) {
+                        continue;
+                    }
+                    let qualified = self.facts.qualified_current(receiver_name);
+                    if self.facts.is_ufcs_method(qualified.as_str(), "to_string") {
+                        continue;
+                    }
+                    self.module
+                        .record_user_to_string_type(receiver_name.to_string());
+                }
+            }
+        }
+    }
+
     /// Detect free top-level private Lisette names (free functions and
     /// constants) whose natural Go form would collide after `escape_reserved`
     /// — e.g. `len` escapes to `len_` and clashes with a sibling `len_`. The
@@ -169,4 +195,21 @@ impl Planner<'_> {
 
         code
     }
+}
+
+fn is_display_to_string(method: &Expression) -> bool {
+    if !matches!(method, Expression::Function { .. }) {
+        return false;
+    }
+    let func = method.to_function_definition();
+    func.name.as_str() == "to_string"
+        && func.params.len() == 1
+        && matches!(
+            &func.params[0].pattern,
+            syntax::ast::Pattern::Identifier { identifier, .. } if identifier == "self"
+        )
+        && matches!(
+            func.return_type,
+            syntax::types::Type::Simple(syntax::types::SimpleKind::String)
+        )
 }

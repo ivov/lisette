@@ -1,0 +1,35 @@
+---
+source: tests/spec/emit/types.rs
+description: "input: \ninterface Display {\n  fn to_string(self) -> string\n}\n\n#[displayable]\nstruct Point { x: int, y: int }\n\nfn render(d: Display) -> string {\n  d.to_string()\n}\n\nfn use_it() -> string {\n  render(Point { x: 1, y: 2 })\n}\n"
+---
+package main
+
+import "fmt"
+
+type Display interface {
+	to_string() string
+}
+
+type Point struct {
+	x int
+	y int
+}
+
+func (p Point) String() string {
+	return fmt.Sprintf("Point { x: %v, y: %v }", p.x, p.y)
+}
+
+func (p Point) to_string() string {
+	return p.String()
+}
+
+func render(d Display) string {
+	return d.to_string()
+}
+
+func use_it() string {
+	return render(Point{
+		x: 1,
+		y: 2,
+	})
+}

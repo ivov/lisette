@@ -94,6 +94,15 @@ pub fn displayable_on_pointer_newtype(attribute_span: &Span) -> LisetteDiagnosti
         )
 }
 
+pub fn displayable_specialized_to_string(attribute_span: &Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("`#[displayable]` conflicts with your `to_string`")
+        .with_attribute_code("displayable_specialized_to_string")
+        .with_span_label(attribute_span, "adds a `to_string` of its own")
+        .with_help(
+            "`#[displayable]` needs a plain `fn to_string(self) -> string` on the type. Write `to_string` in that form, or remove `#[displayable]`.",
+        )
+}
+
 pub fn iterable_variants_conflict(
     attribute_span: &Span,
     existing_span: Option<&Span>,

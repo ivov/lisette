@@ -7497,6 +7497,23 @@ struct Handle(Ref<int>)
 }
 
 #[test]
+fn displayable_with_specialized_to_string() {
+    let input = r#"
+#[displayable]
+struct Box<T> {
+  value: T,
+}
+
+impl Box<int> {
+  fn to_string(self) -> string {
+    "boxed-int"
+  }
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
 fn infer_type_alias_record_struct_as_value() {
     let input = r#"
 struct Coord { x: int, y: int }

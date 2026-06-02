@@ -1,0 +1,37 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import (
+	"fmt"
+	"github.com/user/myproject/util"
+)
+
+func main() {
+	p := util.Point{
+		X: 1,
+		Y: 2,
+	}
+	fmt.Print(p.ToString())
+}
+
+
+// === util/point.go ===
+package util
+
+import "fmt"
+
+type Point struct {
+	X int
+	Y int
+}
+
+func (p Point) String() string {
+	return fmt.Sprintf("Point { x: %v, y: %v }", p.X, p.Y)
+}
+
+func (p Point) ToString() string {
+	return p.String()
+}

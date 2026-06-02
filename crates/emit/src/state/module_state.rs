@@ -9,6 +9,7 @@ pub(crate) struct ModuleState {
     enum_layouts: HashMap<String, EnumLayout>,
     tag_exported_fields: HashSet<String>,
     exported_method_names: HashSet<String>,
+    user_to_string_types: HashSet<String>,
     module_aliases: HashMap<String, String>,
     reverse_module_aliases: HashMap<String, String>,
     escape_remap: HashMap<String, String>,
@@ -42,6 +43,14 @@ impl ModuleState {
 
     pub(crate) fn has_local_exported_method_name(&self, name: &str) -> bool {
         self.exported_method_names.contains(name)
+    }
+
+    pub(crate) fn record_user_to_string_type(&mut self, type_name: impl Into<String>) {
+        self.user_to_string_types.insert(type_name.into());
+    }
+
+    pub(crate) fn has_user_to_string(&self, type_name: &str) -> bool {
+        self.user_to_string_types.contains(type_name)
     }
 
     pub(crate) fn record_module_alias(

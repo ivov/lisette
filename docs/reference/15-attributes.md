@@ -1,10 +1,6 @@
 # Attributes
 
-Attributes attach metadata or behavior to declarations:
-
-- structs and fields for serialization,
-- enums for iteration, and
-- functions for lint suppression.
+Attributes attach metadata or behavior to declarations.
 
 ## Serialization
 
@@ -167,6 +163,28 @@ for direction in Direction.variants() {
 ```
 
 `Direction.variants()` returns a `Slice<Direction>`. Only enums whose variants have no payloads can be `#[iterable]`.
+
+## Display
+
+Add `#[displayable]` to a struct or enum to synthesize a `to_string(self) -> string` method.
+
+```rs
+interface Display {
+  fn to_string(self) -> string
+}
+
+#[displayable]
+struct Point {
+  x: int,
+  y: int,
+}
+
+fn render(value: Display) -> string {
+  value.to_string()
+}
+
+render(Point { x: 1, y: 2 }) // `Point` satisfies `Display`
+```
 
 <br>
 

@@ -31,6 +31,84 @@ fn count() -> int {
 }
 
 #[test]
+fn displayable_struct_synthesizes_to_string() {
+    let input = r#"
+#[displayable]
+struct Point { x: int, y: int }
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn displayable_enum_synthesizes_to_string() {
+    let input = r#"
+#[displayable]
+enum Color { Red, Green }
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn displayable_generic_struct_to_string() {
+    let input = r#"
+#[displayable]
+struct Box<T> { value: T }
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn displayable_user_to_string_suppresses_synthesis() {
+    let input = r#"
+#[displayable]
+struct Point { x: int, y: int }
+
+impl Point {
+  fn to_string(self) -> string {
+    "p"
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn displayable_to_string_delegates_to_user_stringer() {
+    let input = r#"
+#[displayable]
+struct Point { x: int, y: int }
+
+impl Point {
+  fn string(self) -> string {
+    "p"
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn displayable_satisfies_display_interface() {
+    let input = r#"
+interface Display {
+  fn to_string(self) -> string
+}
+
+#[displayable]
+struct Point { x: int, y: int }
+
+fn render(d: Display) -> string {
+  d.to_string()
+}
+
+fn use_it() -> string {
+  render(Point { x: 1, y: 2 })
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn struct_instantiation() {
     let input = r#"
 struct Point { x: int, y: int }

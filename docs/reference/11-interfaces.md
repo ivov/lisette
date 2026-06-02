@@ -3,8 +3,8 @@
 An interface is a set of method signatures that a type can implement.
 
 ```rust
-interface Display {
-  fn to_string(self) -> string
+interface Shape {
+  fn area(self) -> int
 }
 ```
 
@@ -13,18 +13,18 @@ interface Display {
 Lisette uses structural typing for interfaces, so a type automatically implements an interface by having all its methods:
 
 ```rust
-struct Point {
-  x: int,
-  y: int,
+struct Rectangle {
+  width: int,
+  height: int,
 }
 
-impl Point {
-  fn to_string(self) -> string {
-    f"({self.x}, {self.y})"
-  }  
+impl Rectangle {
+  fn area(self) -> int {
+    self.width * self.height
+  }
 }
 
-// `Point` automatically implements `Display`
+// `Rectangle` automatically implements `Shape`
 ```
 
 📚 See [`05-functions.md`](05-functions.md)
