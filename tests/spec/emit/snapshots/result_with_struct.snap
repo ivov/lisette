@@ -4,18 +4,11 @@ description: "input: \nstruct Point { x: int, y: int }\n\nfn test() -> Result<Po
 ---
 package main
 
-import (
-	"fmt"
-	lisette "github.com/ivov/lisette/prelude"
-)
+import lisette "github.com/ivov/lisette/prelude"
 
 type Point struct {
 	x int
 	y int
-}
-
-func (p Point) String() string {
-	return fmt.Sprintf("Point { x: %v, y: %v }", p.x, p.y)
 }
 
 func test() lisette.Result[Point, string] {

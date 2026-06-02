@@ -4,14 +4,8 @@ description: "input: \nstruct Foo {\n  pub bar_baz: string,\n}\n\nimpl Foo {\n  
 ---
 package main
 
-import "fmt"
-
 type Foo struct {
 	BarBaz string
-}
-
-func (f Foo) String() string {
-	return fmt.Sprintf("Foo { bar_baz: %v }", f.BarBaz)
 }
 
 func (f *Foo) show() string {

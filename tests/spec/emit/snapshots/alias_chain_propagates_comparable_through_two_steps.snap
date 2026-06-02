@@ -4,18 +4,12 @@ description: "input: \ntype B<T> = Map<T, int>\ntype A<T> = B<T>\n\nstruct Box<T
 ---
 package main
 
-import "fmt"
-
 type B[T comparable] = map[T]int
 
 type A[T comparable] = B[T]
 
 type Box[T comparable] struct {
 	table A[T]
-}
-
-func (b Box[T]) String() string {
-	return fmt.Sprintf("Box { table: %v }", b.table)
 }
 
 func main() {

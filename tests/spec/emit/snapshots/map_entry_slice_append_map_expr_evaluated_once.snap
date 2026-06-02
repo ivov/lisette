@@ -4,14 +4,8 @@ description: "input: \nstruct Box {\n  items: Slice<int>,\n}\n\nfn get_map(m: Ma
 ---
 package main
 
-import "fmt"
-
 type Box struct {
 	items []int
-}
-
-func (b Box) String() string {
-	return fmt.Sprintf("Box { items: %v }", b.items)
 }
 
 func get_map(m map[string]Box) map[string]Box {

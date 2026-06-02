@@ -4,8 +4,6 @@ description: "input: \nenum Shape {\n  Rectangle { x: int, y: int, width: int, h
 ---
 package main
 
-import "fmt"
-
 func MakeShapeRectangle(arg0 int, arg1 int, arg2 int, arg3 int) Shape {
 	return Shape{Tag: ShapeRectangle, X: arg0, Y: arg1, Width: arg2, Height: arg3}
 }
@@ -22,24 +20,6 @@ type Shape struct {
 	Y      int
 	Width  int
 	Height int
-}
-
-func (s Shape) String() string {
-	switch s.Tag {
-	case ShapeRectangle:
-		return fmt.Sprintf("Rectangle { x: %v, y: %v, width: %v, height: %v }", s.X, s.Y, s.Width, s.Height)
-	default:
-		return fmt.Sprintf("Shape(%d)", s.Tag)
-	}
-}
-
-func (s Shape) GoString() string {
-	switch s.Tag {
-	case ShapeRectangle:
-		return fmt.Sprintf("Shape.Rectangle { x: %v, y: %v, width: %v, height: %v }", s.X, s.Y, s.Width, s.Height)
-	default:
-		return fmt.Sprintf("Shape(%d)", s.Tag)
-	}
 }
 
 func area(s Shape) int {

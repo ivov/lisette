@@ -4,18 +4,11 @@ description: "input: \nstruct User {\n  id: int,\n  name: string,\n}\n\nfn get_i
 ---
 package main
 
-import (
-	"fmt"
-	lisette "github.com/ivov/lisette/prelude"
-)
+import lisette "github.com/ivov/lisette/prelude"
 
 type User struct {
 	id   int
 	name string
-}
-
-func (u User) String() string {
-	return fmt.Sprintf("User { id: %v, name: %v }", u.id, u.name)
 }
 
 func get_id() lisette.Result[int, string] {

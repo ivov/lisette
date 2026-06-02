@@ -1,0 +1,15 @@
+---
+source: tests/spec/emit/types.rs
+description: "input: \n#[displayable]\nstruct Blank {}\n"
+---
+package main
+
+type Blank struct{}
+
+func (b Blank) String() string {
+	return "Blank"
+}
+
+func (b Blank) to_string() string {
+	return b.String()
+}

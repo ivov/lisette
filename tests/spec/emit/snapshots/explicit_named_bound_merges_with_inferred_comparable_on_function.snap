@@ -4,18 +4,12 @@ description: "input: \ninterface Named {\n  fn name(self) -> string\n}\n\nstruct
 ---
 package main
 
-import "fmt"
-
 type Named interface {
 	name() string
 }
 
 type Person struct {
 	value string
-}
-
-func (p Person) String() string {
-	return fmt.Sprintf("Person { value: %v }", p.value)
 }
 
 func (p Person) name() string {

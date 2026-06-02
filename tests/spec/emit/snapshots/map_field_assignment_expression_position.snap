@@ -10,10 +10,6 @@ type Config struct {
 	value int
 }
 
-func (c Config) String() string {
-	return fmt.Sprintf("Config { value: %v }", c.value)
-}
-
 func main() {
 	m := make(map[string]Config)
 	m["a"] = Config{value: 1}

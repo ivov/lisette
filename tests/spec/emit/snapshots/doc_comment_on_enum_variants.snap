@@ -4,8 +4,6 @@ description: "input: \n/// Result of a network operation.\nenum NetworkResult {\
 ---
 package main
 
-import "fmt"
-
 func MakeNetworkResultSuccess() NetworkResult {
 	return NetworkResult{Tag: NetworkResultSuccess}
 }
@@ -33,30 +31,4 @@ const (
 type NetworkResult struct {
 	Tag   NetworkResultTag
 	Error int
-}
-
-func (n NetworkResult) String() string {
-	switch n.Tag {
-	case NetworkResultSuccess:
-		return "Success"
-	case NetworkResultTimeout:
-		return "Timeout"
-	case NetworkResultError:
-		return fmt.Sprintf("Error(%v)", n.Error)
-	default:
-		return fmt.Sprintf("NetworkResult(%d)", n.Tag)
-	}
-}
-
-func (n NetworkResult) GoString() string {
-	switch n.Tag {
-	case NetworkResultSuccess:
-		return "NetworkResult.Success"
-	case NetworkResultTimeout:
-		return "NetworkResult.Timeout"
-	case NetworkResultError:
-		return fmt.Sprintf("NetworkResult.Error(%v)", n.Error)
-	default:
-		return fmt.Sprintf("NetworkResult(%d)", n.Tag)
-	}
 }

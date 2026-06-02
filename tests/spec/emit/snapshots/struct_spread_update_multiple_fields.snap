@@ -4,16 +4,10 @@ description: "input: \nstruct Config { host: string, port: int, timeout: int }\n
 ---
 package main
 
-import "fmt"
-
 type Config struct {
 	host    string
 	port    int
 	timeout int
-}
-
-func (c Config) String() string {
-	return fmt.Sprintf("Config { host: %v, port: %v, timeout: %v }", c.host, c.port, c.timeout)
 }
 
 func test() Config {

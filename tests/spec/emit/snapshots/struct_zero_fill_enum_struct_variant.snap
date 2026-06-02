@@ -4,8 +4,6 @@ description: "input: \nenum Action {\n  Move { x: int, y: int, dist: int },\n  S
 ---
 package main
 
-import "fmt"
-
 func MakeActionMove(arg0 int, arg1 int, arg2 int) Action {
 	return Action{Tag: ActionMove, X: arg0, Y: arg1, Dist: arg2}
 }
@@ -26,28 +24,6 @@ type Action struct {
 	X    int
 	Y    int
 	Dist int
-}
-
-func (a Action) String() string {
-	switch a.Tag {
-	case ActionMove:
-		return fmt.Sprintf("Move { x: %v, y: %v, dist: %v }", a.X, a.Y, a.Dist)
-	case ActionStop:
-		return "Stop"
-	default:
-		return fmt.Sprintf("Action(%d)", a.Tag)
-	}
-}
-
-func (a Action) GoString() string {
-	switch a.Tag {
-	case ActionMove:
-		return fmt.Sprintf("Action.Move { x: %v, y: %v, dist: %v }", a.X, a.Y, a.Dist)
-	case ActionStop:
-		return "Action.Stop"
-	default:
-		return fmt.Sprintf("Action(%d)", a.Tag)
-	}
 }
 
 func test() Action {

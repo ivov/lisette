@@ -4,14 +4,8 @@ description: "input: \nstruct S { x: int }\n\nimpl S {\n  fn inc(self: Ref<S>) {
 ---
 package main
 
-import "fmt"
-
 type S struct {
 	x int
-}
-
-func (s S) String() string {
-	return fmt.Sprintf("S { x: %v }", s.x)
 }
 
 func (s *S) inc() {

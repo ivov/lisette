@@ -4,13 +4,7 @@ description: "input: \n#[json(omitempty)]\nstruct User {\n  #[json(!omitempty)]\
 ---
 package main
 
-import "fmt"
-
 type User struct {
 	Id   int    `json:"id"`
 	Name string `json:"name,omitempty"`
-}
-
-func (u User) String() string {
-	return fmt.Sprintf("User { id: %v, name: %v }", u.Id, u.Name)
 }

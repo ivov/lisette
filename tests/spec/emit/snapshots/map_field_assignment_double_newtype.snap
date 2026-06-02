@@ -4,27 +4,13 @@ description: "input: \nstruct Inner { x: int }\nstruct A(Inner)\nstruct B(A)\n\n
 ---
 package main
 
-import "fmt"
-
 type Inner struct {
 	x int
 }
 
-func (i Inner) String() string {
-	return fmt.Sprintf("Inner { x: %v }", i.x)
-}
-
 type A Inner
 
-func (a A) String() string {
-	return fmt.Sprintf("A(%v)", Inner(a))
-}
-
 type B A
-
-func (b B) String() string {
-	return fmt.Sprintf("B(%v)", A(b))
-}
 
 func main() {
 	m := make(map[string]B)

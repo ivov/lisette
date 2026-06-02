@@ -4,8 +4,6 @@ description: "input: \nenum Val { A(int), B(int), C }\n\nfn test(items: Slice<Va
 ---
 package main
 
-import "fmt"
-
 func MakeValA(arg0 int) Val {
 	return Val{Tag: ValA, A: arg0}
 }
@@ -30,32 +28,6 @@ type Val struct {
 	Tag ValTag
 	A   int
 	B   int
-}
-
-func (v Val) String() string {
-	switch v.Tag {
-	case ValA:
-		return fmt.Sprintf("A(%v)", v.A)
-	case ValB:
-		return fmt.Sprintf("B(%v)", v.B)
-	case ValC:
-		return "C"
-	default:
-		return fmt.Sprintf("Val(%d)", v.Tag)
-	}
-}
-
-func (v Val) GoString() string {
-	switch v.Tag {
-	case ValA:
-		return fmt.Sprintf("Val.A(%v)", v.A)
-	case ValB:
-		return fmt.Sprintf("Val.B(%v)", v.B)
-	case ValC:
-		return "Val.C"
-	default:
-		return fmt.Sprintf("Val(%d)", v.Tag)
-	}
 }
 
 func test(items []Val) int {

@@ -10,10 +10,6 @@ type C struct {
 	value int
 }
 
-func (c C) String() string {
-	return fmt.Sprintf("C { value: %v }", c.value)
-}
-
 func make_key() string {
 	fmt.Println("key")
 	return "a"

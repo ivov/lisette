@@ -4,8 +4,6 @@ description: "input: \nstruct Handler<T> { callback: fn(T) -> int }\nenum E { A(
 ---
 package main
 
-import "fmt"
-
 func MakeEA(arg0 Handler[string]) E {
 	return E{Tag: EA, A: arg0}
 }
@@ -16,10 +14,6 @@ func MakeEB(arg0 Handler[string]) E {
 
 type Handler[T any] struct {
 	callback func(T) int
-}
-
-func (h Handler[T]) String() string {
-	return fmt.Sprintf("Handler { callback: %p }", h.callback)
 }
 
 type ETag int
@@ -33,28 +27,6 @@ type E struct {
 	Tag ETag
 	A   Handler[string]
 	B   Handler[string]
-}
-
-func (e E) String() string {
-	switch e.Tag {
-	case EA:
-		return fmt.Sprintf("A(%v)", e.A)
-	case EB:
-		return fmt.Sprintf("B(%v)", e.B)
-	default:
-		return fmt.Sprintf("E(%d)", e.Tag)
-	}
-}
-
-func (e E) GoString() string {
-	switch e.Tag {
-	case EA:
-		return fmt.Sprintf("E.A(%v)", e.A)
-	case EB:
-		return fmt.Sprintf("E.B(%v)", e.B)
-	default:
-		return fmt.Sprintf("E(%d)", e.Tag)
-	}
 }
 
 func test(e E) int {

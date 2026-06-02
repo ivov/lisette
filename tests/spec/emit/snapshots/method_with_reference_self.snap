@@ -4,14 +4,8 @@ description: "input: \nstruct Counter { count: int }\n\nimpl Counter {\n  fn get
 ---
 package main
 
-import "fmt"
-
 type Counter struct {
 	count int
-}
-
-func (c Counter) String() string {
-	return fmt.Sprintf("Counter { count: %v }", c.count)
 }
 
 func (c *Counter) get_count() int {

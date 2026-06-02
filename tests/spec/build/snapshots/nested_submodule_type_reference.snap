@@ -4,17 +4,10 @@ source: tests/spec/build/mod.rs
 // === lib/mod.go ===
 package lib
 
-import (
-	"fmt"
-	"github.com/user/myproject/lib/sub"
-)
+import "github.com/user/myproject/lib/sub"
 
 type Container struct {
 	Items []sub.Item
-}
-
-func (c Container) String() string {
-	return fmt.Sprintf("Container { items: %v }", c.Items)
 }
 
 func FirstItem(c Container) sub.Item {
@@ -25,15 +18,9 @@ func FirstItem(c Container) sub.Item {
 // === lib/sub/mod.go ===
 package sub
 
-import "fmt"
-
 type Item struct {
 	Name  string
 	Score int
-}
-
-func (i Item) String() string {
-	return fmt.Sprintf("Item { name: %v, score: %v }", i.Name, i.Score)
 }
 
 

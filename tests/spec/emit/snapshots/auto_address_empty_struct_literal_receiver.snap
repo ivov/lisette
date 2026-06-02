@@ -6,10 +6,6 @@ package main
 
 type Foo struct{}
 
-func (f Foo) String() string {
-	return "Foo"
-}
-
 func (f *Foo) need_ref() {}
 
 func test() {

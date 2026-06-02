@@ -10,10 +10,6 @@ type Box struct {
 	x int
 }
 
-func (b Box) String() string {
-	return fmt.Sprintf("Box { x: %v }", b.x)
-}
-
 func make_box() Box {
 	return Box{x: 1}
 }

@@ -4,17 +4,11 @@ description: "input: \nstruct Big { a: int, b: int, c: int, d: int }\n\nfn test(
 ---
 package main
 
-import "fmt"
-
 type Big struct {
 	a int
 	b int
 	c int
 	d int
-}
-
-func (b Big) String() string {
-	return fmt.Sprintf("Big { a: %v, b: %v, c: %v, d: %v }", b.a, b.b, b.c, b.d)
 }
 
 func test() int {

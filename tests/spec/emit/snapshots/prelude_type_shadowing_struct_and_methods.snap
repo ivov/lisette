@@ -4,15 +4,9 @@ description: "input: \nstruct Span {\n  start: int,\n  end: int,\n}\n\nimpl Span
 ---
 package main
 
-import "fmt"
-
 type Span struct {
 	start int
 	end   int
-}
-
-func (s Span) String() string {
-	return fmt.Sprintf("Span { start: %v, end: %v }", s.start, s.end)
 }
 
 func Span_new(start, end int) Span {

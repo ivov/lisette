@@ -31,28 +31,6 @@ type Either[L any, R any] struct {
 	Right R
 }
 
-func (e Either[L, R]) String() string {
-	switch e.Tag {
-	case EitherLeft:
-		return fmt.Sprintf("Left(%v)", e.Left)
-	case EitherRight:
-		return fmt.Sprintf("Right(%v)", e.Right)
-	default:
-		return fmt.Sprintf("Either(%d)", e.Tag)
-	}
-}
-
-func (e Either[L, R]) GoString() string {
-	switch e.Tag {
-	case EitherLeft:
-		return fmt.Sprintf("Either.Left(%v)", e.Left)
-	case EitherRight:
-		return fmt.Sprintf("Either.Right(%v)", e.Right)
-	default:
-		return fmt.Sprintf("Either(%d)", e.Tag)
-	}
-}
-
 func Either_describe(self Either[MyInt, MyString]) MyString {
 	if self.Tag == EitherLeft {
 		return fmt.Sprintf("int(%d)", self.Left)

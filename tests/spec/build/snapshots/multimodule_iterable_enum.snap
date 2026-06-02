@@ -18,8 +18,6 @@ func main() {
 // === phases/mod.go ===
 package phases
 
-import "fmt"
-
 func MakeBuildPhaseValidate() BuildPhase {
 	return BuildPhase{Tag: BuildPhaseValidate}
 }
@@ -42,32 +40,6 @@ const (
 
 type BuildPhase struct {
 	Tag BuildPhaseTag
-}
-
-func (b BuildPhase) String() string {
-	switch b.Tag {
-	case BuildPhaseValidate:
-		return "Validate"
-	case BuildPhaseParse:
-		return "Parse"
-	case BuildPhaseCodegen:
-		return "Codegen"
-	default:
-		return fmt.Sprintf("BuildPhase(%d)", b.Tag)
-	}
-}
-
-func (b BuildPhase) GoString() string {
-	switch b.Tag {
-	case BuildPhaseValidate:
-		return "BuildPhase.Validate"
-	case BuildPhaseParse:
-		return "BuildPhase.Parse"
-	case BuildPhaseCodegen:
-		return "BuildPhase.Codegen"
-	default:
-		return fmt.Sprintf("BuildPhase(%d)", b.Tag)
-	}
 }
 
 func BuildPhase_Variants() []BuildPhase {

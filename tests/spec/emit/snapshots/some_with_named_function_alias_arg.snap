@@ -4,10 +4,7 @@ description: "input: \ntype Handler = fn(int) -> int\n\nfn double(x: int) -> int
 ---
 package main
 
-import (
-	"fmt"
-	lisette "github.com/ivov/lisette/prelude"
-)
+import lisette "github.com/ivov/lisette/prelude"
 
 type Handler func(int) int
 
@@ -17,10 +14,6 @@ func double(x int) int {
 
 type Wrapper struct {
 	F lisette.Option[Handler]
-}
-
-func (w Wrapper) String() string {
-	return fmt.Sprintf("Wrapper { f: %v }", w.F)
 }
 
 func main() {

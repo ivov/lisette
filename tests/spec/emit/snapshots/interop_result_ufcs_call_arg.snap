@@ -11,10 +11,6 @@ import (
 
 type Box struct{}
 
-func (b Box) String() string {
-	return "Box"
-}
-
 func (b Box) apply(f func(string) (int, error)) (int, error) {
 	return f("1")
 }

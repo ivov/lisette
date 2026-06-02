@@ -32,32 +32,6 @@ type ASTNode struct {
 	ASTNodeString_ string
 }
 
-func (a ASTNode) String() string {
-	switch a.Tag {
-	case ASTNodeNumber:
-		return fmt.Sprintf("Number(%v)", a.Number)
-	case ASTNodeString:
-		return fmt.Sprintf("String(%v)", a.ASTNodeString_)
-	case ASTNodeNull:
-		return "Null"
-	default:
-		return fmt.Sprintf("ASTNode(%d)", a.Tag)
-	}
-}
-
-func (a ASTNode) GoString() string {
-	switch a.Tag {
-	case ASTNodeNumber:
-		return fmt.Sprintf("ASTNode.Number(%v)", a.Number)
-	case ASTNodeString:
-		return fmt.Sprintf("ASTNode.String(%v)", a.ASTNodeString_)
-	case ASTNodeNull:
-		return "ASTNode.Null"
-	default:
-		return fmt.Sprintf("ASTNode(%d)", a.Tag)
-	}
-}
-
 func visit(node ASTNode) string {
 	switch node.Tag {
 	case ASTNodeNumber:

@@ -4,15 +4,9 @@ description: "input: \nstruct Point2D(int, int)\ntype P = Point2D\n\nfn test() -
 ---
 package main
 
-import "fmt"
-
 type Point2D struct {
 	F0 int
 	F1 int
-}
-
-func (p Point2D) String() string {
-	return fmt.Sprintf("Point2D(%v, %v)", p.F0, p.F1)
 }
 
 type P = Point2D

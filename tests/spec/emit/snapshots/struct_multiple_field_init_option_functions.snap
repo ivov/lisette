@@ -4,18 +4,11 @@ description: "input: \nstruct MultiWrapper {\n  first: Option<int>,\n  second: O
 ---
 package main
 
-import (
-	"fmt"
-	lisette "github.com/ivov/lisette/prelude"
-)
+import lisette "github.com/ivov/lisette/prelude"
 
 type MultiWrapper struct {
 	first  lisette.Option[int]
 	second lisette.Option[string]
-}
-
-func (m MultiWrapper) String() string {
-	return fmt.Sprintf("MultiWrapper { first: %v, second: %v }", m.first, m.second)
 }
 
 func get_int(x int) (int, bool) {

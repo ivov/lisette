@@ -4,14 +4,8 @@ source: tests/spec/build/mod.rs
 // === main.go ===
 package main
 
-import "fmt"
-
 type Entry[T any] struct {
 	value T
-}
-
-func (e Entry[T]) String() string {
-	return fmt.Sprintf("Entry { value: %v }", e.value)
 }
 
 type Cache[T any] interface {
@@ -20,10 +14,6 @@ type Cache[T any] interface {
 
 type MyCache[T any] struct {
 	entry Entry[T]
-}
-
-func (m MyCache[T]) String() string {
-	return fmt.Sprintf("MyCache { entry: %v }", m.entry)
 }
 
 func (m MyCache[T]) Get(_ string) *Entry[T] {

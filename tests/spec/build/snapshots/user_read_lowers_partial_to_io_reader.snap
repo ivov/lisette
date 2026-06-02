@@ -8,10 +8,6 @@ import "io"
 
 type Reader struct{}
 
-func (r Reader) String() string {
-	return "Reader"
-}
-
 func (r Reader) Read(_ []uint8) (int, error) {
 	return 0, io.EOF
 }

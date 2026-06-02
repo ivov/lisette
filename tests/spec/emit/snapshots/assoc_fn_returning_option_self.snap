@@ -4,14 +4,8 @@ description: "input: \nstruct Thing {\n  name: string,\n}\n\nimpl Thing {\n  fn 
 ---
 package main
 
-import "fmt"
-
 type Thing struct {
 	name string
-}
-
-func (t Thing) String() string {
-	return fmt.Sprintf("Thing { name: %v }", t.name)
 }
 
 func Thing_maybe_create(name string) (Thing, bool) {

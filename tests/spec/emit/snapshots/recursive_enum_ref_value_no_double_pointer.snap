@@ -4,8 +4,6 @@ description: "input: \nenum Tree {\n  Leaf(int),\n  Node(Ref<Tree>, Ref<Tree>),\
 ---
 package main
 
-import "fmt"
-
 func MakeTreeLeaf(arg0 int) Tree {
 	return Tree{Tag: TreeLeaf, Leaf: arg0}
 }
@@ -26,28 +24,6 @@ type Tree struct {
 	Leaf  int
 	Node0 *Tree
 	Node1 *Tree
-}
-
-func (t Tree) String() string {
-	switch t.Tag {
-	case TreeLeaf:
-		return fmt.Sprintf("Leaf(%v)", t.Leaf)
-	case TreeNode:
-		return fmt.Sprintf("Node(%v, %v)", t.Node0, t.Node1)
-	default:
-		return fmt.Sprintf("Tree(%d)", t.Tag)
-	}
-}
-
-func (t Tree) GoString() string {
-	switch t.Tag {
-	case TreeLeaf:
-		return fmt.Sprintf("Tree.Leaf(%v)", t.Leaf)
-	case TreeNode:
-		return fmt.Sprintf("Tree.Node(%v, %v)", t.Node0, t.Node1)
-	default:
-		return fmt.Sprintf("Tree(%d)", t.Tag)
-	}
 }
 
 func leaf(n int) *Tree {

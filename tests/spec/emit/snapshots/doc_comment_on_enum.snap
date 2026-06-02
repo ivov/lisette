@@ -4,8 +4,6 @@ description: "input: \n/// Represents the status of a task.\nenum Status { Pendi
 ---
 package main
 
-import "fmt"
-
 func MakeStatusPending() Status {
 	return Status{Tag: StatusPending}
 }
@@ -29,30 +27,4 @@ const (
 
 type Status struct {
 	Tag StatusTag
-}
-
-func (s Status) String() string {
-	switch s.Tag {
-	case StatusPending:
-		return "Pending"
-	case StatusRunning:
-		return "Running"
-	case StatusComplete:
-		return "Complete"
-	default:
-		return fmt.Sprintf("Status(%d)", s.Tag)
-	}
-}
-
-func (s Status) GoString() string {
-	switch s.Tag {
-	case StatusPending:
-		return "Status.Pending"
-	case StatusRunning:
-		return "Status.Running"
-	case StatusComplete:
-		return "Status.Complete"
-	default:
-		return fmt.Sprintf("Status(%d)", s.Tag)
-	}
 }

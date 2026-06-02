@@ -6,10 +6,6 @@ package main
 
 type Marker struct{}
 
-func (m Marker) String() string {
-	return "Marker"
-}
-
 func test() Marker {
 	return Marker{}
 }

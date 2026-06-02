@@ -4,14 +4,8 @@ description: "input: \nstruct Carrier { p: Ref<int> }\n\nfn bump(c: Carrier) -> 
 ---
 package main
 
-import "fmt"
-
 type Carrier struct {
 	p *int
-}
-
-func (c Carrier) String() string {
-	return fmt.Sprintf("Carrier { p: %v }", c.p)
 }
 
 func bump(c Carrier) int {

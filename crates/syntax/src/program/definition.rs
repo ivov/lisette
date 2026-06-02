@@ -86,6 +86,18 @@ impl Definition {
         )
     }
 
+    pub fn is_pointer_backed_newtype<F>(&self, is_alias: F) -> bool
+    where
+        F: Fn(&str) -> bool,
+    {
+        self.is_newtype()
+            && matches!(
+                &self.body,
+                DefinitionBody::Struct { fields, .. }
+                    if crate::types::peel_alias(&fields[0].ty, is_alias).is_ref()
+            )
+    }
+
     pub fn allowed_lints(&self) -> &[String] {
         match &self.body {
             DefinitionBody::Value { allowed_lints, .. } => allowed_lints,

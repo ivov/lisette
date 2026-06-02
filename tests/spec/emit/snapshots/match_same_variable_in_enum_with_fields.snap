@@ -4,8 +4,6 @@ description: "input: \nenum Event {\n  Click(int, int),\n  KeyPress(string),\n}\
 ---
 package main
 
-import "fmt"
-
 func MakeEventClick(arg0 int, arg1 int) Event {
 	return Event{Tag: EventClick, Click0: arg0, Click1: arg1}
 }
@@ -26,28 +24,6 @@ type Event struct {
 	Click0   int
 	Click1   int
 	KeyPress string
-}
-
-func (e Event) String() string {
-	switch e.Tag {
-	case EventClick:
-		return fmt.Sprintf("Click(%v, %v)", e.Click0, e.Click1)
-	case EventKeyPress:
-		return fmt.Sprintf("KeyPress(%v)", e.KeyPress)
-	default:
-		return fmt.Sprintf("Event(%d)", e.Tag)
-	}
-}
-
-func (e Event) GoString() string {
-	switch e.Tag {
-	case EventClick:
-		return fmt.Sprintf("Event.Click(%v, %v)", e.Click0, e.Click1)
-	case EventKeyPress:
-		return fmt.Sprintf("Event.KeyPress(%v)", e.KeyPress)
-	default:
-		return fmt.Sprintf("Event(%d)", e.Tag)
-	}
 }
 
 func test() int {

@@ -4,15 +4,9 @@ description: "input: \nstruct Point(int, int)\n\nfn add_points(a: Point, b: Poin
 ---
 package main
 
-import "fmt"
-
 type Point struct {
 	F0 int
 	F1 int
-}
-
-func (p Point) String() string {
-	return fmt.Sprintf("Point(%v, %v)", p.F0, p.F1)
 }
 
 func add_points(a, b Point) Point {

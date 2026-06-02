@@ -6,10 +6,6 @@ package main
 
 type Resource struct{}
 
-func (r Resource) String() string {
-	return "Resource"
-}
-
 func (r Resource) Close() error {
 	return nil
 }

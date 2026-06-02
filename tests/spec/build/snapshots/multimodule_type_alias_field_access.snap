@@ -4,15 +4,9 @@ source: tests/spec/build/mod.rs
 // === geo/lib.go ===
 package geo
 
-import "fmt"
-
 type Point struct {
 	X int
 	Y int
-}
-
-func (p Point) String() string {
-	return fmt.Sprintf("Point { x: %v, y: %v }", p.X, p.Y)
 }
 
 type Coordinate = Point

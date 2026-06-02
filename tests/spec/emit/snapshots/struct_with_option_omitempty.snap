@@ -4,16 +4,9 @@ description: "input: \n#[json(omitempty)]\nstruct User {\n  name: string,\n  ema
 ---
 package main
 
-import (
-	"fmt"
-	lisette "github.com/ivov/lisette/prelude"
-)
+import lisette "github.com/ivov/lisette/prelude"
 
 type User struct {
 	Name  string                 `json:"name,omitempty"`
 	Email lisette.Option[string] `json:"email,omitempty,omitzero"`
-}
-
-func (u User) String() string {
-	return fmt.Sprintf("User { name: %v, email: %v }", u.Name, u.Email)
 }

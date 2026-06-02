@@ -4,8 +4,6 @@ description: "input: \nenum MyResult<T> {\n  Ok(T),\n  Fail(string),\n}\n\nfn ma
 ---
 package main
 
-import "fmt"
-
 func MakeMyResultOk[T any](arg0 T) MyResult[T] {
 	return MyResult[T]{Tag: MyResultOk, Ok: arg0}
 }
@@ -25,28 +23,6 @@ type MyResult[T any] struct {
 	Tag  MyResultTag
 	Ok   T
 	Fail string
-}
-
-func (m MyResult[T]) String() string {
-	switch m.Tag {
-	case MyResultOk:
-		return fmt.Sprintf("Ok(%v)", m.Ok)
-	case MyResultFail:
-		return fmt.Sprintf("Fail(%v)", m.Fail)
-	default:
-		return fmt.Sprintf("MyResult(%d)", m.Tag)
-	}
-}
-
-func (m MyResult[T]) GoString() string {
-	switch m.Tag {
-	case MyResultOk:
-		return fmt.Sprintf("MyResult.Ok(%v)", m.Ok)
-	case MyResultFail:
-		return fmt.Sprintf("MyResult.Fail(%v)", m.Fail)
-	default:
-		return fmt.Sprintf("MyResult(%d)", m.Tag)
-	}
 }
 
 func main() {

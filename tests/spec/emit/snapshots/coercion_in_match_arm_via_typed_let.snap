@@ -8,15 +8,7 @@ import "io"
 
 type A struct{}
 
-func (a A) String() string {
-	return "A"
-}
-
 type B struct{}
-
-func (b B) String() string {
-	return "B"
-}
 
 func (a A) Read(_ []uint8) (int, error) {
 	return 0, nil

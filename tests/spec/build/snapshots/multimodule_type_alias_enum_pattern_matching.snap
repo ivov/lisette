@@ -12,8 +12,6 @@ type UIEvent = events.Event
 // === events/mod.go ===
 package events
 
-import "fmt"
-
 func MakeEventClick(arg0 int, arg1 int) Event {
 	return Event{Tag: EventClick, X: arg0, Y: arg1}
 }
@@ -39,32 +37,6 @@ type Event struct {
 	X        int
 	Y        int
 	KeyPress string
-}
-
-func (e Event) String() string {
-	switch e.Tag {
-	case EventClick:
-		return fmt.Sprintf("Click { x: %v, y: %v }", e.X, e.Y)
-	case EventKeyPress:
-		return fmt.Sprintf("KeyPress(%v)", e.KeyPress)
-	case EventClose:
-		return "Close"
-	default:
-		return fmt.Sprintf("Event(%d)", e.Tag)
-	}
-}
-
-func (e Event) GoString() string {
-	switch e.Tag {
-	case EventClick:
-		return fmt.Sprintf("Event.Click { x: %v, y: %v }", e.X, e.Y)
-	case EventKeyPress:
-		return fmt.Sprintf("Event.KeyPress(%v)", e.KeyPress)
-	case EventClose:
-		return "Event.Close"
-	default:
-		return fmt.Sprintf("Event(%d)", e.Tag)
-	}
 }
 
 

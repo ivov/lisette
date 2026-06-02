@@ -4,14 +4,8 @@ description: "input: \nstruct Point { x: int }\n\nfn test_if() -> int {\n  let x
 ---
 package main
 
-import "fmt"
-
 type Point struct {
 	x int
-}
-
-func (p Point) String() string {
-	return fmt.Sprintf("Point { x: %v }", p.x)
 }
 
 func test_if() int {

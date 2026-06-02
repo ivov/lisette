@@ -18,14 +18,8 @@ func main() {
 // === util/box.go ===
 package util
 
-import "fmt"
-
 type Box[T any] struct {
 	Items []T
-}
-
-func (b Box[T]) String() string {
-	return fmt.Sprintf("Box { items: %v }", b.Items)
 }
 
 func Box_New[T any]() Box[T] {

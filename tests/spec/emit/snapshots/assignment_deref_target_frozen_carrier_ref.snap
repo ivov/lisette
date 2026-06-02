@@ -4,23 +4,13 @@ description: "input: \nstruct Holder { p: Ref<int> }\nstruct Carrier { h: Ref<Ho
 ---
 package main
 
-import "fmt"
-
 type Holder struct {
 	p *int
-}
-
-func (h Holder) String() string {
-	return fmt.Sprintf("Holder { p: %v }", h.p)
 }
 
 type Carrier struct {
 	h  *Holder
 	np *int
-}
-
-func (c Carrier) String() string {
-	return fmt.Sprintf("Carrier { h: %v, np: %v }", c.h, c.np)
 }
 
 func retarget(c Carrier) int {

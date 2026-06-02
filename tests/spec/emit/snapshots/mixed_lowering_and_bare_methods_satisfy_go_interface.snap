@@ -8,10 +8,6 @@ import "example.com/mixed"
 
 type Svc struct{}
 
-func (s Svc) String() string {
-	return "Svc"
-}
-
 func (s Svc) Load(_ string) (int, error) {
 	return 1, nil
 }

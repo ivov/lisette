@@ -17,8 +17,6 @@ func main() {
 // === utils/color.go ===
 package utils
 
-import "fmt"
-
 func MakeColorRGB() Color {
 	return Color{Tag: ColorRGB}
 }
@@ -31,22 +29,4 @@ const (
 
 type Color struct {
 	Tag ColorTag
-}
-
-func (c Color) String() string {
-	switch c.Tag {
-	case ColorRGB:
-		return "RGB"
-	default:
-		return fmt.Sprintf("Color(%d)", c.Tag)
-	}
-}
-
-func (c Color) GoString() string {
-	switch c.Tag {
-	case ColorRGB:
-		return "Color.RGB"
-	default:
-		return fmt.Sprintf("Color(%d)", c.Tag)
-	}
 }

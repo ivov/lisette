@@ -4,14 +4,8 @@ source: tests/spec/build/mod.rs
 // === foo/foo.go ===
 package foo
 
-import "fmt"
-
 type Foo struct {
 	Value int
-}
-
-func (f Foo) String() string {
-	return fmt.Sprintf("Foo { value: %v }", f.Value)
 }
 
 func Foo_New(v int) Foo {
@@ -40,7 +34,6 @@ func main() {
 package types
 
 import (
-	"fmt"
 	lisette "github.com/ivov/lisette/prelude"
 	"github.com/user/myproject/foo"
 )
@@ -58,24 +51,6 @@ const (
 type MyEnum struct {
 	Tag   MyEnumTag
 	Maybe lisette.Option[foo.Foo]
-}
-
-func (m MyEnum) String() string {
-	switch m.Tag {
-	case MyEnumMaybe:
-		return fmt.Sprintf("Maybe(%v)", m.Maybe)
-	default:
-		return fmt.Sprintf("MyEnum(%d)", m.Tag)
-	}
-}
-
-func (m MyEnum) GoString() string {
-	switch m.Tag {
-	case MyEnumMaybe:
-		return fmt.Sprintf("MyEnum.Maybe(%v)", m.Maybe)
-	default:
-		return fmt.Sprintf("MyEnum(%d)", m.Tag)
-	}
 }
 
 

@@ -4,8 +4,6 @@ description: "input: \nenum Res { Ok(int), Err(int) }\n\nfn test(r: Res, thresho
 ---
 package main
 
-import "fmt"
-
 func MakeResOk(arg0 int) Res {
 	return Res{Tag: ResOk, Ok: arg0}
 }
@@ -25,28 +23,6 @@ type Res struct {
 	Tag ResTag
 	Ok  int
 	Err int
-}
-
-func (r Res) String() string {
-	switch r.Tag {
-	case ResOk:
-		return fmt.Sprintf("Ok(%v)", r.Ok)
-	case ResErr:
-		return fmt.Sprintf("Err(%v)", r.Err)
-	default:
-		return fmt.Sprintf("Res(%d)", r.Tag)
-	}
-}
-
-func (r Res) GoString() string {
-	switch r.Tag {
-	case ResOk:
-		return fmt.Sprintf("Res.Ok(%v)", r.Ok)
-	case ResErr:
-		return fmt.Sprintf("Res.Err(%v)", r.Err)
-	default:
-		return fmt.Sprintf("Res(%d)", r.Tag)
-	}
 }
 
 func test(r Res, threshold int) int {

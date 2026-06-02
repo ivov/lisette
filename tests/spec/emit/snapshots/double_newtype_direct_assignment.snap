@@ -4,19 +4,9 @@ description: "input: \nstruct A(int)\nstruct B(A)\n\nfn main() {\n  let mut w = 
 ---
 package main
 
-import "fmt"
-
 type A int
 
-func (a A) String() string {
-	return fmt.Sprintf("A(%v)", int(a))
-}
-
 type B A
-
-func (b B) String() string {
-	return fmt.Sprintf("B(%v)", A(b))
-}
 
 func main() {
 	_ = B(A(1))

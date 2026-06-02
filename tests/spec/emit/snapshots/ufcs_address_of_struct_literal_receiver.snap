@@ -4,14 +4,8 @@ description: "input: \nstruct Counter { x: int }\n\nimpl Counter {\n  fn inc(sel
 ---
 package main
 
-import "fmt"
-
 type Counter struct {
 	x int
-}
-
-func (c Counter) String() string {
-	return fmt.Sprintf("Counter { x: %v }", c.x)
 }
 
 func (c *Counter) inc() int {

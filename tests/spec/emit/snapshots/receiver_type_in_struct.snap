@@ -4,14 +4,8 @@ description: "input: \nstruct Consumer { input: Receiver<int> }\n\nfn test(c: Co
 ---
 package main
 
-import "fmt"
-
 type Consumer struct {
 	input <-chan int
-}
-
-func (c Consumer) String() string {
-	return fmt.Sprintf("Consumer { input: %v }", c.input)
 }
 
 func test(c Consumer) <-chan int {

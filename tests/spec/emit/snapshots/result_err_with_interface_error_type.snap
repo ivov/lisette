@@ -4,14 +4,8 @@ description: "input: \nstruct MyError { msg: string }\n\nimpl MyError {\n  fn Er
 ---
 package main
 
-import "fmt"
-
 type MyError struct {
 	msg string
-}
-
-func (m MyError) String() string {
-	return fmt.Sprintf("MyError { msg: %v }", m.msg)
 }
 
 func (m MyError) Error() string {

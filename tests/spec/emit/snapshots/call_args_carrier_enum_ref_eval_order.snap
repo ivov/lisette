@@ -4,8 +4,6 @@ description: "input: \nenum Carrier {\n  C { p: Ref<int> },\n}\n\nfn bump(c: Car
 ---
 package main
 
-import "fmt"
-
 func MakeCarrierC(arg0 *int) Carrier {
 	return Carrier{Tag: CarrierC, P: arg0}
 }
@@ -19,24 +17,6 @@ const (
 type Carrier struct {
 	Tag CarrierTag
 	P   *int
-}
-
-func (c Carrier) String() string {
-	switch c.Tag {
-	case CarrierC:
-		return fmt.Sprintf("C { p: %v }", c.P)
-	default:
-		return fmt.Sprintf("Carrier(%d)", c.Tag)
-	}
-}
-
-func (c Carrier) GoString() string {
-	switch c.Tag {
-	case CarrierC:
-		return fmt.Sprintf("Carrier.C { p: %v }", c.P)
-	default:
-		return fmt.Sprintf("Carrier(%d)", c.Tag)
-	}
 }
 
 func bump(c Carrier) int {

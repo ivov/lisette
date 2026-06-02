@@ -19,14 +19,8 @@ func main() {
 // === models/user/user.go ===
 package user
 
-import "fmt"
-
 type User struct {
 	Name string
-}
-
-func (u User) String() string {
-	return fmt.Sprintf("User { name: %v }", u.Name)
 }
 
 func New(name string) User {

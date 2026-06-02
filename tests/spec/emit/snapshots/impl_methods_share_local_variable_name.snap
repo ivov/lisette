@@ -6,10 +6,6 @@ package main
 
 type Calc struct{}
 
-func (c Calc) String() string {
-	return "Calc"
-}
-
 func (c Calc) Wider() uint64 {
 	var total uint64 = 0
 	total++

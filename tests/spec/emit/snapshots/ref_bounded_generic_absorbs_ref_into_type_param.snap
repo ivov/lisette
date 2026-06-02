@@ -4,18 +4,12 @@ description: "input: \ninterface Mutable {\n  fn mutate(self, val: string)\n}\n\
 ---
 package main
 
-import "fmt"
-
 type Mutable interface {
 	mutate(string)
 }
 
 type Box struct {
 	content string
-}
-
-func (b Box) String() string {
-	return fmt.Sprintf("Box { content: %v }", b.content)
 }
 
 func (b *Box) mutate(val string) {

@@ -4,8 +4,6 @@ description: "input: \ninterface Displayable {\n  fn display(self) -> string\n}\
 ---
 package main
 
-import "fmt"
-
 type Displayable interface {
 	display() string
 }
@@ -13,10 +11,6 @@ type Displayable interface {
 type Labeled[T Displayable] struct {
 	label string
 	value T
-}
-
-func (l Labeled[T]) String() string {
-	return fmt.Sprintf("Labeled { label: %v, value: %v }", l.label, l.value)
 }
 
 func (l Labeled[T]) show() string {

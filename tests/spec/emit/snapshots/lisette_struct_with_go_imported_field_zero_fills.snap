@@ -4,17 +4,10 @@ description: "input: \nimport \"go:net/http\"\n\nstruct Wrapper { srv: http.Serv
 ---
 package main
 
-import (
-	"fmt"
-	"net/http"
-)
+import "net/http"
 
 type Wrapper struct {
 	srv http.Server
-}
-
-func (w Wrapper) String() string {
-	return fmt.Sprintf("Wrapper { srv: %v }", w.srv)
 }
 
 func test() Wrapper {

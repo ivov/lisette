@@ -8,10 +8,6 @@ import "example.com/shapes"
 
 type Square struct{}
 
-func (s Square) String() string {
-	return "Square"
-}
-
 func (s Square) Area() (int, error) {
 	return 4, nil
 }

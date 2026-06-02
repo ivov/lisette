@@ -4,8 +4,6 @@ description: "input: \nenum Status {\n  Ready,\n}\n\nimpl Status {\n  fn Marshal
 ---
 package main
 
-import "fmt"
-
 func MakeStatusReady() Status {
 	return Status{Tag: StatusReady}
 }
@@ -18,24 +16,6 @@ const (
 
 type Status struct {
 	Tag StatusTag
-}
-
-func (s Status) String() string {
-	switch s.Tag {
-	case StatusReady:
-		return "Ready"
-	default:
-		return fmt.Sprintf("Status(%d)", s.Tag)
-	}
-}
-
-func (s Status) GoString() string {
-	switch s.Tag {
-	case StatusReady:
-		return "Status.Ready"
-	default:
-		return fmt.Sprintf("Status(%d)", s.Tag)
-	}
 }
 
 func (s Status) MarshalJSON() ([]byte, error) {

@@ -4,8 +4,6 @@ source: tests/spec/build/mod.rs
 // === main.go ===
 package main
 
-import "fmt"
-
 func Makemap_A() map_ {
 	return map_{Tag: mapA}
 }
@@ -23,28 +21,6 @@ const (
 
 type map_ struct {
 	Tag mapTag
-}
-
-func (m map_) String() string {
-	switch m.Tag {
-	case mapA:
-		return "A"
-	case mapB:
-		return "B"
-	default:
-		return fmt.Sprintf("map(%d)", m.Tag)
-	}
-}
-
-func (m map_) GoString() string {
-	switch m.Tag {
-	case mapA:
-		return "map.A"
-	case mapB:
-		return "map.B"
-	default:
-		return fmt.Sprintf("map(%d)", m.Tag)
-	}
 }
 
 func map_variants() []map_ {

@@ -4,18 +4,11 @@ source: tests/spec/build/mod.rs
 // === main.go ===
 package main
 
-import (
-	"encoding/json"
-	"fmt"
-)
+import "encoding/json"
 
 type User struct {
 	FirstName  string `json:"firstName,omitempty"`
 	MiddleName string `json:"middleName,omitempty"`
-}
-
-func (u User) String() string {
-	return fmt.Sprintf("User { first_name: %v, middle_name: %v }", u.FirstName, u.MiddleName)
 }
 
 func main() {

@@ -6,10 +6,6 @@ package main
 
 type Factory struct{}
 
-func (f Factory) String() string {
-	return "Factory"
-}
-
 func Factory_Make[T any]() []T {
 	return []T{}
 }

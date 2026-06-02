@@ -8,8 +8,6 @@ package main
 // === main.go ===
 package main
 
-import "fmt"
-
 func MakeAA() A {
 	return A{Tag: AA}
 }
@@ -26,22 +24,4 @@ const (
 
 type A struct {
 	Tag ATag
-}
-
-func (a A) String() string {
-	switch a.Tag {
-	case AA:
-		return "A"
-	default:
-		return fmt.Sprintf("A(%d)", a.Tag)
-	}
-}
-
-func (a A) GoString() string {
-	switch a.Tag {
-	case AA:
-		return "A.A"
-	default:
-		return fmt.Sprintf("A(%d)", a.Tag)
-	}
 }

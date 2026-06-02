@@ -4,15 +4,9 @@ description: "input: \nstruct Message { id: int, data: int }\n\nfn test(ch: Rece
 ---
 package main
 
-import "fmt"
-
 type Message struct {
 	id   int
 	data int
-}
-
-func (m Message) String() string {
-	return fmt.Sprintf("Message { id: %v, data: %v }", m.id, m.data)
 }
 
 func test(ch <-chan Message) int {

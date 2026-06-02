@@ -4,8 +4,6 @@ description: "input: \nenum Tag { A, B, C }\n\nfn test() -> bool {\n  let u1 = T
 ---
 package main
 
-import "fmt"
-
 func MakeTagA() Tag {
 	return Tag{Tag: TagA}
 }
@@ -28,32 +26,6 @@ const (
 
 type Tag struct {
 	Tag TagTag
-}
-
-func (t Tag) String() string {
-	switch t.Tag {
-	case TagA:
-		return "A"
-	case TagB:
-		return "B"
-	case TagC:
-		return "C"
-	default:
-		return fmt.Sprintf("Tag(%d)", t.Tag)
-	}
-}
-
-func (t Tag) GoString() string {
-	switch t.Tag {
-	case TagA:
-		return "Tag.A"
-	case TagB:
-		return "Tag.B"
-	case TagC:
-		return "Tag.C"
-	default:
-		return fmt.Sprintf("Tag(%d)", t.Tag)
-	}
 }
 
 func test() bool {

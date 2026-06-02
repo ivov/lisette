@@ -4,14 +4,8 @@ description: "input: \nstruct Point { x: int }\n\nfn make() -> Point {\n  Point 
 ---
 package main
 
-import "fmt"
-
 type Point struct {
 	x int
-}
-
-func (p Point) String() string {
-	return fmt.Sprintf("Point { x: %v }", p.x)
 }
 
 func make_() Point {

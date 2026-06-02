@@ -4,14 +4,8 @@ description: "input: \nstruct Holder { slc: Slice<int> }\n\nfn run() -> int {\n 
 ---
 package main
 
-import "fmt"
-
 type Holder struct {
 	slc []int
-}
-
-func (h Holder) String() string {
-	return fmt.Sprintf("Holder { slc: %v }", h.slc)
 }
 
 func run() int {

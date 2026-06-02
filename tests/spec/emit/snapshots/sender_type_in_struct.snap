@@ -4,14 +4,8 @@ description: "input: \nstruct Producer { output: Sender<int> }\n\nfn test(p: Pro
 ---
 package main
 
-import "fmt"
-
 type Producer struct {
 	output chan<- int
-}
-
-func (p Producer) String() string {
-	return fmt.Sprintf("Producer { output: %v }", p.output)
 }
 
 func test(p Producer) chan<- int {

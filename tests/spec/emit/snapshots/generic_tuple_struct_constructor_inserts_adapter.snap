@@ -4,14 +4,8 @@ description: "input: \nstruct Entry { name: string }\n\npub interface Cache {\n 
 ---
 package main
 
-import "fmt"
-
 type Entry struct {
 	name string
-}
-
-func (e Entry) String() string {
-	return fmt.Sprintf("Entry { name: %v }", e.name)
 }
 
 type Cache interface {
@@ -20,20 +14,12 @@ type Cache interface {
 
 type MyCache struct{}
 
-func (m MyCache) String() string {
-	return "MyCache"
-}
-
 func (m MyCache) Get(_ string) *Entry {
 	return nil
 }
 
 type Wrapper[T any] struct {
 	F0 T
-}
-
-func (w Wrapper[T]) String() string {
-	return fmt.Sprintf("Wrapper(%v)", w.F0)
 }
 
 func main() {

@@ -4,8 +4,6 @@ description: "input: \nenum Validated<T> { Valid(T), Invalid(string) }\n\nstruct
 ---
 package main
 
-import "fmt"
-
 func MakeValidatedValid[T any](arg0 T) Validated[T] {
 	return Validated[T]{Tag: ValidatedValid, Valid: arg0}
 }
@@ -27,35 +25,9 @@ type Validated[T any] struct {
 	Invalid string
 }
 
-func (v Validated[T]) String() string {
-	switch v.Tag {
-	case ValidatedValid:
-		return fmt.Sprintf("Valid(%v)", v.Valid)
-	case ValidatedInvalid:
-		return fmt.Sprintf("Invalid(%v)", v.Invalid)
-	default:
-		return fmt.Sprintf("Validated(%d)", v.Tag)
-	}
-}
-
-func (v Validated[T]) GoString() string {
-	switch v.Tag {
-	case ValidatedValid:
-		return fmt.Sprintf("Validated.Valid(%v)", v.Valid)
-	case ValidatedInvalid:
-		return fmt.Sprintf("Validated.Invalid(%v)", v.Invalid)
-	default:
-		return fmt.Sprintf("Validated(%d)", v.Tag)
-	}
-}
-
 type ValidationResult[T any] struct {
 	value      Validated[T]
 	field_name string
-}
-
-func (v ValidationResult[T]) String() string {
-	return fmt.Sprintf("ValidationResult { value: %v, field_name: %v }", v.value, v.field_name)
 }
 
 func ValidationResult_new_invalid[T any](field, msg string) ValidationResult[T] {

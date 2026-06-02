@@ -4,8 +4,6 @@ description: "input: \nenum Transform<T> {\n  Identity,\n  Apply(fn(T) -> T),\n}
 ---
 package main
 
-import "fmt"
-
 func MakeTransformIdentity[T any]() Transform[T] {
 	return Transform[T]{Tag: TransformIdentity}
 }
@@ -24,28 +22,6 @@ const (
 type Transform[T any] struct {
 	Tag   TransformTag
 	Apply func(T) T
-}
-
-func (t Transform[T]) String() string {
-	switch t.Tag {
-	case TransformIdentity:
-		return "Identity"
-	case TransformApply:
-		return fmt.Sprintf("Apply(%p)", t.Apply)
-	default:
-		return fmt.Sprintf("Transform(%d)", t.Tag)
-	}
-}
-
-func (t Transform[T]) GoString() string {
-	switch t.Tag {
-	case TransformIdentity:
-		return "Transform.Identity"
-	case TransformApply:
-		return fmt.Sprintf("Transform.Apply(%p)", t.Apply)
-	default:
-		return fmt.Sprintf("Transform(%d)", t.Tag)
-	}
 }
 
 func test() int {

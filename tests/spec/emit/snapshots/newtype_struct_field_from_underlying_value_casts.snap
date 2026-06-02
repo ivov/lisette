@@ -4,20 +4,10 @@ description: "input: \nstruct UserId(int)\nstruct Box { v: UserId }\n\nfn test(i
 ---
 package main
 
-import "fmt"
-
 type UserId int
-
-func (u UserId) String() string {
-	return fmt.Sprintf("UserId(%v)", int(u))
-}
 
 type Box struct {
 	v UserId
-}
-
-func (b Box) String() string {
-	return fmt.Sprintf("Box { v: %v }", b.v)
 }
 
 func test(i int) Box {

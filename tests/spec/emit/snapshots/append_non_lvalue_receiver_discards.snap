@@ -4,14 +4,8 @@ description: "input: \nstruct Items { items: Slice<int> }\n\nfn get() -> Items {
 ---
 package main
 
-import "fmt"
-
 type Items struct {
 	items []int
-}
-
-func (i Items) String() string {
-	return fmt.Sprintf("Items { items: %v }", i.items)
 }
 
 func get() Items {

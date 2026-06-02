@@ -4,8 +4,6 @@ description: "input: \ntype Table<T> = Map<T, int>\n\nenum Holder<T> {\n  Some(T
 ---
 package main
 
-import "fmt"
-
 func MakeHolderSome[T comparable](arg0 Table[T]) Holder[T] {
 	return Holder[T]{Tag: HolderSome, Some: arg0}
 }
@@ -21,24 +19,6 @@ const (
 type Holder[T comparable] struct {
 	Tag  HolderTag
 	Some Table[T]
-}
-
-func (h Holder[T]) String() string {
-	switch h.Tag {
-	case HolderSome:
-		return fmt.Sprintf("Some(%v)", h.Some)
-	default:
-		return fmt.Sprintf("Holder(%d)", h.Tag)
-	}
-}
-
-func (h Holder[T]) GoString() string {
-	switch h.Tag {
-	case HolderSome:
-		return fmt.Sprintf("Holder.Some(%v)", h.Some)
-	default:
-		return fmt.Sprintf("Holder(%d)", h.Tag)
-	}
 }
 
 func main() {

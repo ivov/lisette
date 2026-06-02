@@ -10,10 +10,6 @@ type Cloner[T any] interface {
 
 type Foo struct{}
 
-func (f Foo) String() string {
-	return "Foo"
-}
-
 func (f Foo) Clone() Foo {
 	return Foo{}
 }

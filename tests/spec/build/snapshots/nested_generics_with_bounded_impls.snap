@@ -14,10 +14,6 @@ type Label struct {
 	text string
 }
 
-func (l Label) String() string {
-	return fmt.Sprintf("Label { text: %v }", l.text)
-}
-
 func (l Label) Show() string {
 	return l.text
 }
@@ -72,10 +68,6 @@ type Pair[A traits.Showable, B traits.Showable] struct {
 	Second B
 }
 
-func (p Pair[A, B]) String() string {
-	return fmt.Sprintf("Pair { first: %v, second: %v }", p.First, p.Second)
-}
-
 func (p Pair[A, B]) Show() string {
 	return fmt.Sprintf("(%s, %s)", p.First.Show(), p.Second.Show())
 }
@@ -87,10 +79,6 @@ func (p Pair[A, B]) Display() string {
 type Tagged[T traits.Showable] struct {
 	Value T
 	Label string
-}
-
-func (t Tagged[T]) String() string {
-	return fmt.Sprintf("Tagged { value: %v, label: %v }", t.Value, t.Label)
 }
 
 func (t Tagged[T]) Show() string {

@@ -10,10 +10,6 @@ type A struct {
 	a string
 }
 
-func (a A) String() string {
-	return fmt.Sprintf("A { a: %v }", a.a)
-}
-
 func (a A) GoString() string {
 	return "dbg_" + a.a
 }

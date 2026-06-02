@@ -6,10 +6,6 @@ package main
 
 type Blank struct{}
 
-func (b Blank) String() string {
-	return "Blank"
-}
-
 func test() {
 	_ = Blank{}
 }

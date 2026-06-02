@@ -4,17 +4,10 @@ description: "input: \nimport s \"go:sync\"\n\nstruct Wrapper {\n  mu: s.Mutex,\
 ---
 package main
 
-import (
-	"fmt"
-	s "sync"
-)
+import s "sync"
 
 type Wrapper struct {
 	mu s.Mutex
-}
-
-func (w Wrapper) String() string {
-	return fmt.Sprintf("Wrapper { mu: %v }", w.mu)
 }
 
 func main() {}

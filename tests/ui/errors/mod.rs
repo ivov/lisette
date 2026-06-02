@@ -7514,6 +7514,56 @@ impl Box<int> {
 }
 
 #[test]
+fn interpolate_struct_without_stringer() {
+    let input = r#"
+struct Point { x: int, y: int }
+
+fn show() -> string {
+  let p = Point { x: 1, y: 2 }
+  f"{p}"
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn interpolate_pointer_newtype() {
+    let input = r#"
+struct Handle(Ref<int>)
+
+fn show(h: Handle) -> string {
+  f"{h}"
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn displayable_on_alias_pointer_newtype() {
+    let input = r#"
+type R = Ref<int>
+
+#[displayable]
+struct Handle(R)
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn interpolate_alias_pointer_newtype() {
+    let input = r#"
+type R = Ref<int>
+
+struct Handle(R)
+
+fn show(h: Handle) -> string {
+  f"{h}"
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
 fn infer_type_alias_record_struct_as_value() {
     let input = r#"
 struct Coord { x: int, y: int }

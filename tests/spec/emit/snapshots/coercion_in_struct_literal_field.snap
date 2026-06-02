@@ -4,16 +4,9 @@ description: "input: \nimport \"go:io\"\n\nstruct Doubler {}\n\nimpl Doubler {\n
 ---
 package main
 
-import (
-	"fmt"
-	"io"
-)
+import "io"
 
 type Doubler struct{}
-
-func (d Doubler) String() string {
-	return "Doubler"
-}
 
 func (d Doubler) Read(_ []uint8) (int, error) {
 	return 0, nil
@@ -21,10 +14,6 @@ func (d Doubler) Read(_ []uint8) (int, error) {
 
 type Wrapper struct {
 	reader io.Reader
-}
-
-func (w Wrapper) String() string {
-	return fmt.Sprintf("Wrapper { reader: %v }", w.reader)
 }
 
 func main() {

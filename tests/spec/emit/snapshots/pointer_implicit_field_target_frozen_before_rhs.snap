@@ -4,17 +4,10 @@ description: "input: \nstruct Box { value: int }\n\nfn run() -> Result<(), strin
 ---
 package main
 
-import (
-	"fmt"
-	lisette "github.com/ivov/lisette/prelude"
-)
+import lisette "github.com/ivov/lisette/prelude"
 
 type Box struct {
 	value int
-}
-
-func (b Box) String() string {
-	return fmt.Sprintf("Box { value: %v }", b.value)
 }
 
 func run() lisette.Result[struct{}, string] {

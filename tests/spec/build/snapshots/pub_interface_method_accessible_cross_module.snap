@@ -29,10 +29,6 @@ type Person struct {
 	Name string
 }
 
-func (p Person) String() string {
-	return fmt.Sprintf("Person { name: %v }", p.Name)
-}
-
 func (p Person) Greet() string {
 	return fmt.Sprintf("Hello, I'm %s", p.Name)
 }

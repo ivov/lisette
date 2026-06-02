@@ -4,13 +4,7 @@ description: "input: \nstruct Wrap(int)\n\nfn run() -> int {\n  let mut xs = [Wr
 ---
 package main
 
-import "fmt"
-
 type Wrap int
-
-func (w Wrap) String() string {
-	return fmt.Sprintf("Wrap(%v)", int(w))
-}
 
 func run() int {
 	xs := []Wrap{Wrap(0), Wrap(0)}

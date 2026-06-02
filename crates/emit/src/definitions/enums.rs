@@ -51,7 +51,7 @@ impl Planner<'_> {
         let (has_user_string, has_user_go_string) = self.stringer_overrides(name);
         let emit_string = synthesize && !has_user_string;
         let emit_go_string = synthesize && !has_user_go_string;
-        let needs_fmt = emit_string || emit_go_string;
+        let needs_fmt = emit_string || emit_go_string || has_json;
         let layout = self.module.enum_layout(&enum_id).unwrap();
         let mut result = layout.emit_definition(&generics_string);
         if emit_string {

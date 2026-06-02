@@ -4,8 +4,6 @@ description: "input: \nenum Dir { North, South, East }\n\nfn test() -> string {\
 ---
 package main
 
-import "fmt"
-
 func MakeDirNorth() Dir {
 	return Dir{Tag: DirNorth}
 }
@@ -28,32 +26,6 @@ const (
 
 type Dir struct {
 	Tag DirTag
-}
-
-func (d Dir) String() string {
-	switch d.Tag {
-	case DirNorth:
-		return "North"
-	case DirSouth:
-		return "South"
-	case DirEast:
-		return "East"
-	default:
-		return fmt.Sprintf("Dir(%d)", d.Tag)
-	}
-}
-
-func (d Dir) GoString() string {
-	switch d.Tag {
-	case DirNorth:
-		return "Dir.North"
-	case DirSouth:
-		return "Dir.South"
-	case DirEast:
-		return "Dir.East"
-	default:
-		return fmt.Sprintf("Dir(%d)", d.Tag)
-	}
 }
 
 func test() string {

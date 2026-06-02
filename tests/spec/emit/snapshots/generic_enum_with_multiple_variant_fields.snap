@@ -4,8 +4,6 @@ description: "input: \nenum Either<L, R> { Left(L), Right(R) }\n\nfn test() -> E
 ---
 package main
 
-import "fmt"
-
 func MakeEitherLeft[L any, R any](arg0 L) Either[L, R] {
 	return Either[L, R]{Tag: EitherLeft, Left: arg0}
 }
@@ -25,28 +23,6 @@ type Either[L any, R any] struct {
 	Tag   EitherTag
 	Left  L
 	Right R
-}
-
-func (e Either[L, R]) String() string {
-	switch e.Tag {
-	case EitherLeft:
-		return fmt.Sprintf("Left(%v)", e.Left)
-	case EitherRight:
-		return fmt.Sprintf("Right(%v)", e.Right)
-	default:
-		return fmt.Sprintf("Either(%d)", e.Tag)
-	}
-}
-
-func (e Either[L, R]) GoString() string {
-	switch e.Tag {
-	case EitherLeft:
-		return fmt.Sprintf("Either.Left(%v)", e.Left)
-	case EitherRight:
-		return fmt.Sprintf("Either.Right(%v)", e.Right)
-	default:
-		return fmt.Sprintf("Either(%d)", e.Tag)
-	}
 }
 
 func test() Either[int, string] {

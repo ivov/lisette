@@ -11,10 +11,6 @@ type Point struct {
 	y int
 }
 
-func (p Point) String() string {
-	return fmt.Sprintf("Point { x: %v, y: %v }", p.x, p.y)
-}
-
 func test(p Point) int {
 	var result int
 	result = p.x + p.x

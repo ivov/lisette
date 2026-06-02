@@ -44,13 +44,7 @@ func main() {
 // === models/mod.go ===
 package models
 
-import "fmt"
-
 type Item struct {
 	Name  string
 	Value int
-}
-
-func (i Item) String() string {
-	return fmt.Sprintf("Item { name: %v, value: %v }", i.Name, i.Value)
 }

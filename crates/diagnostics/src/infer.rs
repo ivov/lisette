@@ -2101,6 +2101,22 @@ pub fn newtype_field_assignment(type_name: &str, span: Span) -> LisetteDiagnosti
         ))
 }
 
+pub fn interpolation_without_stringer(
+    type_name: &str,
+    span: Span,
+    pointer_newtype: bool,
+) -> LisetteDiagnostic {
+    let help = if pointer_newtype {
+        "Interpolate the inner value directly, or change the representation".to_string()
+    } else {
+        format!("Mark `{type_name}` with `#[displayable]`, or interpolate its fields directly.")
+    };
+    LisetteDiagnostic::error(format!("`{type_name}` cannot be interpolated"))
+        .with_infer_code("interpolation_without_stringer")
+        .with_span_label(&span, "has no display form")
+        .with_help(help)
+}
+
 pub fn complex_select_expression(span: Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Complex expression in `select` arm")
         .with_infer_code("complex_select_expression")

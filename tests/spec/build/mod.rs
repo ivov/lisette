@@ -6267,6 +6267,7 @@ fn go_name_collision_field_vs_generated_stringer() {
         ENTRY_MODULE_ID,
         "main.lis",
         r#"
+#[displayable]
 pub struct Thing {
   pub string: int,
 }

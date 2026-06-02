@@ -4,10 +4,7 @@ source: tests/spec/build/mod.rs
 // === main.go ===
 package main
 
-import (
-	"fmt"
-	lisette "github.com/ivov/lisette/prelude"
-)
+import lisette "github.com/ivov/lisette/prelude"
 
 type Face interface {
 }
@@ -18,10 +15,6 @@ func Lookup(_ int) Face {
 
 type Holder struct {
 	N int
-}
-
-func (h Holder) String() string {
-	return fmt.Sprintf("Holder { n: %v }", h.N)
 }
 
 func Holder_Resolve[R any](self Holder, f func(int) (R, bool)) (R, bool) {

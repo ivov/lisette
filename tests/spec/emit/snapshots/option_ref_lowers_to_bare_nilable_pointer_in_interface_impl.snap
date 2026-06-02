@@ -8,10 +8,6 @@ import "example.com/store"
 
 type Store struct{}
 
-func (s Store) String() string {
-	return "Store"
-}
-
 func (s Store) Find(_ string) *store.Entry {
 	return nil
 }

@@ -8,10 +8,6 @@ import "fmt"
 
 type Wrap []int
 
-func (w Wrap) String() string {
-	return fmt.Sprintf("Wrap(%v)", []int(w))
-}
-
 func get() *Wrap {
 	fmt.Println("get")
 	w := Wrap([]int{1})

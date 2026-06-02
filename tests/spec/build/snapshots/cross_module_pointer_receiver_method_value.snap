@@ -4,14 +4,8 @@ source: tests/spec/build/mod.rs
 // === lib/lib.go ===
 package lib
 
-import "fmt"
-
 type Counter struct {
 	Count int
-}
-
-func (c Counter) String() string {
-	return fmt.Sprintf("Counter { count: %v }", c.Count)
 }
 
 func (c *Counter) Increment() {

@@ -4,14 +4,8 @@ description: "input: \nstruct Outer { items: Slice<int> }\n\nfn key() -> string 
 ---
 package main
 
-import "fmt"
-
 type Outer struct {
 	items []int
-}
-
-func (o Outer) String() string {
-	return fmt.Sprintf("Outer { items: %v }", o.items)
 }
 
 func key() string {

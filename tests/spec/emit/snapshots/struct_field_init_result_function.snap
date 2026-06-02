@@ -4,17 +4,10 @@ description: "input: \nstruct Container {\n  res: Result<int, string>,\n}\n\nfn 
 ---
 package main
 
-import (
-	"fmt"
-	lisette "github.com/ivov/lisette/prelude"
-)
+import lisette "github.com/ivov/lisette/prelude"
 
 type Container struct {
 	res lisette.Result[int, string]
-}
-
-func (c Container) String() string {
-	return fmt.Sprintf("Container { res: %v }", c.res)
 }
 
 func get_res(b bool) lisette.Result[int, string] {

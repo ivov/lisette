@@ -4,26 +4,15 @@ description: "input: \nstruct Inner { opt: Option<int>, items: Slice<int> }\nstr
 ---
 package main
 
-import (
-	"fmt"
-	lisette "github.com/ivov/lisette/prelude"
-)
+import lisette "github.com/ivov/lisette/prelude"
 
 type Inner struct {
 	opt   lisette.Option[int]
 	items []int
 }
 
-func (i Inner) String() string {
-	return fmt.Sprintf("Inner { opt: %v, items: %v }", i.opt, i.items)
-}
-
 type Outer struct {
 	inner Inner
-}
-
-func (o Outer) String() string {
-	return fmt.Sprintf("Outer { inner: %v }", o.inner)
 }
 
 func test() Outer {

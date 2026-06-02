@@ -4,14 +4,8 @@ source: tests/spec/build/mod.rs
 // === lib/mod.go ===
 package lib
 
-import "fmt"
-
 type Box[T any] struct {
 	Val T
-}
-
-func (b Box[T]) String() string {
-	return fmt.Sprintf("Box { val: %v }", b.Val)
 }
 
 func Box_New[T any](v T) Box[T] {

@@ -244,6 +244,27 @@ async fn completion_includes_prelude_types() {
 }
 
 #[tokio::test]
+async fn completion_includes_synthesized_to_string() {
+    let mut client = TestClient::new().await;
+    client.initialize().await;
+    client
+        .open(
+            TEST_URI,
+            "#[displayable]\nstruct Point { x: int, y: int }\n\nfn main() {\n  let p = Point { x: 1, y: 2 }\n  p.\n}",
+        )
+        .await;
+
+    let response = client.completion(TEST_URI, 5, 4).await;
+    let labels = completion_labels(&response.unwrap());
+    assert!(
+        labels.iter().any(|l| l == "to_string"),
+        "expected synthesized `to_string` in instance completions; got: {labels:?}"
+    );
+
+    client.shutdown().await;
+}
+
+#[tokio::test]
 async fn completion_includes_local_bindings() {
     let mut client = TestClient::new().await;
     client.initialize().await;

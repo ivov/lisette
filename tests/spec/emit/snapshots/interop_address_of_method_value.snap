@@ -6,10 +6,6 @@ package main
 
 type S struct{}
 
-func (s S) String() string {
-	return "S"
-}
-
 func (s S) inc() int {
 	return 1
 }

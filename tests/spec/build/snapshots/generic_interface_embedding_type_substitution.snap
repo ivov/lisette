@@ -24,10 +24,6 @@ type Score struct {
 	val  int
 }
 
-func (s Score) String() string {
-	return fmt.Sprintf("Score { name: %v, val: %v }", s.name, s.val)
-}
-
 func (s Score) MapVal() string {
 	return s.name
 }

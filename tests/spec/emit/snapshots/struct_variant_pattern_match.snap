@@ -4,8 +4,6 @@ description: "input: \nenum Message {\n  Move { x: int, y: int },\n  Quit,\n}\n\
 ---
 package main
 
-import "fmt"
-
 func MakeMessageMove(arg0 int, arg1 int) Message {
 	return Message{Tag: MessageMove, X: arg0, Y: arg1}
 }
@@ -25,28 +23,6 @@ type Message struct {
 	Tag MessageTag
 	X   int
 	Y   int
-}
-
-func (m Message) String() string {
-	switch m.Tag {
-	case MessageMove:
-		return fmt.Sprintf("Move { x: %v, y: %v }", m.X, m.Y)
-	case MessageQuit:
-		return "Quit"
-	default:
-		return fmt.Sprintf("Message(%d)", m.Tag)
-	}
-}
-
-func (m Message) GoString() string {
-	switch m.Tag {
-	case MessageMove:
-		return fmt.Sprintf("Message.Move { x: %v, y: %v }", m.X, m.Y)
-	case MessageQuit:
-		return "Message.Quit"
-	default:
-		return fmt.Sprintf("Message(%d)", m.Tag)
-	}
 }
 
 func handle(m Message) int {

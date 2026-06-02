@@ -49,6 +49,24 @@ enum Color { Red, Green }
 }
 
 #[test]
+fn displayable_empty_struct_to_string() {
+    let input = r#"
+#[displayable]
+struct Blank {}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn displayable_tuple_struct_to_string() {
+    let input = r#"
+#[displayable]
+struct UserId(int)
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn displayable_generic_struct_to_string() {
     let input = r#"
 #[displayable]

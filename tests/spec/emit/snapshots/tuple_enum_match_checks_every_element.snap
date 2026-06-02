@@ -4,10 +4,7 @@ description: "input: \npub enum Hand {\n  Left,\n  Right,\n}\n\nimpl Hand {\n  p
 ---
 package main
 
-import (
-	"fmt"
-	lisette "github.com/ivov/lisette/prelude"
-)
+import lisette "github.com/ivov/lisette/prelude"
 
 func MakeHandLeft() Hand {
 	return Hand{Tag: HandLeft}
@@ -26,28 +23,6 @@ const (
 
 type Hand struct {
 	Tag HandTag
-}
-
-func (h Hand) String() string {
-	switch h.Tag {
-	case HandLeft:
-		return "Left"
-	case HandRight:
-		return "Right"
-	default:
-		return fmt.Sprintf("Hand(%d)", h.Tag)
-	}
-}
-
-func (h Hand) GoString() string {
-	switch h.Tag {
-	case HandLeft:
-		return "Hand.Left"
-	case HandRight:
-		return "Hand.Right"
-	default:
-		return fmt.Sprintf("Hand(%d)", h.Tag)
-	}
 }
 
 func (h Hand) LeftRight(other Hand) bool {

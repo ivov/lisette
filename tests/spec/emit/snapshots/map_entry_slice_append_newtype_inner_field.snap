@@ -4,21 +4,11 @@ description: "input: \nstruct Inner {\n  items: Slice<int>,\n}\nstruct Wrap(Inne
 ---
 package main
 
-import "fmt"
-
 type Inner struct {
 	items []int
 }
 
-func (i Inner) String() string {
-	return fmt.Sprintf("Inner { items: %v }", i.items)
-}
-
 type Wrap Inner
-
-func (w Wrap) String() string {
-	return fmt.Sprintf("Wrap(%v)", Inner(w))
-}
 
 func main() {
 	m := make(map[string]Wrap)

@@ -4,8 +4,6 @@ description: "input: \nenum Holder<T> {\n  Empty,\n}\n\nimpl<T> Holder<T> {\n  f
 ---
 package main
 
-import "fmt"
-
 func MakeHolderEmpty[T comparable]() Holder[T] {
 	return Holder[T]{Tag: HolderEmpty}
 }
@@ -18,24 +16,6 @@ const (
 
 type Holder[T comparable] struct {
 	Tag HolderTag
-}
-
-func (h Holder[T]) String() string {
-	switch h.Tag {
-	case HolderEmpty:
-		return "Empty"
-	default:
-		return fmt.Sprintf("Holder(%d)", h.Tag)
-	}
-}
-
-func (h Holder[T]) GoString() string {
-	switch h.Tag {
-	case HolderEmpty:
-		return "Holder.Empty"
-	default:
-		return fmt.Sprintf("Holder(%d)", h.Tag)
-	}
 }
 
 func (h Holder[T]) count() int {

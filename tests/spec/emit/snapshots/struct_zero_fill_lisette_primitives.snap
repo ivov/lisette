@@ -4,16 +4,10 @@ description: "input: \nstruct Conf { name: string, count: int, on: bool }\n\nfn 
 ---
 package main
 
-import "fmt"
-
 type Conf struct {
 	name  string
 	count int
 	on    bool
-}
-
-func (c Conf) String() string {
-	return fmt.Sprintf("Conf { name: %v, count: %v, on: %v }", c.name, c.count, c.on)
 }
 
 func test() Conf {

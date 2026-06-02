@@ -4,14 +4,8 @@ description: "input: \nstruct Wrapper<T>(T)\ntype W<T> = Wrapper<T>\n\nfn test()
 ---
 package main
 
-import "fmt"
-
 type Wrapper[T any] struct {
 	F0 T
-}
-
-func (w Wrapper[T]) String() string {
-	return fmt.Sprintf("Wrapper(%v)", w.F0)
 }
 
 type W[T any] = Wrapper[T]

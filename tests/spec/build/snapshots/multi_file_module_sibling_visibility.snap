@@ -13,15 +13,9 @@ func main() {
 // === point.go ===
 package main
 
-import "fmt"
-
 type Point struct {
 	x float64
 	y float64
-}
-
-func (p Point) String() string {
-	return fmt.Sprintf("Point { x: %v, y: %v }", p.x, p.y)
 }
 
 func Point_new(x, y float64) Point {

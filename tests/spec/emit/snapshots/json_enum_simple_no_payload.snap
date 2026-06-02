@@ -33,32 +33,6 @@ type Status struct {
 	Tag StatusTag
 }
 
-func (s Status) String() string {
-	switch s.Tag {
-	case StatusActive:
-		return "Active"
-	case StatusInactive:
-		return "Inactive"
-	case StatusSuspended:
-		return "Suspended"
-	default:
-		return fmt.Sprintf("Status(%d)", s.Tag)
-	}
-}
-
-func (s Status) GoString() string {
-	switch s.Tag {
-	case StatusActive:
-		return "Status.Active"
-	case StatusInactive:
-		return "Status.Inactive"
-	case StatusSuspended:
-		return "Status.Suspended"
-	default:
-		return fmt.Sprintf("Status(%d)", s.Tag)
-	}
-}
-
 func (s Status) MarshalJSON() ([]byte, error) {
 	switch s.Tag {
 	case StatusActive:

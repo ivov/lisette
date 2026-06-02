@@ -4,8 +4,6 @@ description: "input: \nenum Expr {\n  Num(int),\n  Add(Ref<Expr>, Ref<Expr>),\n}
 ---
 package main
 
-import "fmt"
-
 func MakeExprNum(arg0 int) Expr {
 	return Expr{Tag: ExprNum, Num: arg0}
 }
@@ -26,28 +24,6 @@ type Expr struct {
 	Num  int
 	Add0 *Expr
 	Add1 *Expr
-}
-
-func (e Expr) String() string {
-	switch e.Tag {
-	case ExprNum:
-		return fmt.Sprintf("Num(%v)", e.Num)
-	case ExprAdd:
-		return fmt.Sprintf("Add(%v, %v)", e.Add0, e.Add1)
-	default:
-		return fmt.Sprintf("Expr(%d)", e.Tag)
-	}
-}
-
-func (e Expr) GoString() string {
-	switch e.Tag {
-	case ExprNum:
-		return fmt.Sprintf("Expr.Num(%v)", e.Num)
-	case ExprAdd:
-		return fmt.Sprintf("Expr.Add(%v, %v)", e.Add0, e.Add1)
-	default:
-		return fmt.Sprintf("Expr(%d)", e.Tag)
-	}
 }
 
 func test() Expr {

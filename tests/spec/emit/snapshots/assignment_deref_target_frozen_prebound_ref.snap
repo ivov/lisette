@@ -4,14 +4,8 @@ description: "input: \nstruct Holder { p: Ref<int> }\n\nfn retarget(h: Ref<Holde
 ---
 package main
 
-import "fmt"
-
 type Holder struct {
 	p *int
-}
-
-func (h Holder) String() string {
-	return fmt.Sprintf("Holder { p: %v }", h.p)
 }
 
 func retarget(h *Holder, np *int) int {

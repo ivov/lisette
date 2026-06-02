@@ -12,15 +12,7 @@ type Printable interface {
 
 type A struct{}
 
-func (a A) String() string {
-	return "A"
-}
-
 type B struct{}
-
-func (b B) String() string {
-	return "B"
-}
 
 func (a A) text() string {
 	return "a"

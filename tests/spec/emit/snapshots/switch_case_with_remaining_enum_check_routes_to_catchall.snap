@@ -4,8 +4,6 @@ description: "input: \nenum Side { Left, Right }\nstruct Pair { a: Side, b: Side
 ---
 package main
 
-import "fmt"
-
 func MakeSideLeft() Side {
 	return Side{Tag: SideLeft}
 }
@@ -25,35 +23,9 @@ type Side struct {
 	Tag SideTag
 }
 
-func (s Side) String() string {
-	switch s.Tag {
-	case SideLeft:
-		return "Left"
-	case SideRight:
-		return "Right"
-	default:
-		return fmt.Sprintf("Side(%d)", s.Tag)
-	}
-}
-
-func (s Side) GoString() string {
-	switch s.Tag {
-	case SideLeft:
-		return "Side.Left"
-	case SideRight:
-		return "Side.Right"
-	default:
-		return fmt.Sprintf("Side(%d)", s.Tag)
-	}
-}
-
 type Pair struct {
 	a Side
 	b Side
-}
-
-func (p Pair) String() string {
-	return fmt.Sprintf("Pair { a: %v, b: %v }", p.a, p.b)
 }
 
 func classify(p Pair) int {

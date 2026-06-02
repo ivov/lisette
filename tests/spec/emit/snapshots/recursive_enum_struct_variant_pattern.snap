@@ -4,8 +4,6 @@ description: "input: \nenum Tree<T> {\n  Leaf(T),\n  Node { left: Tree<T>, right
 ---
 package main
 
-import "fmt"
-
 func MakeTreeLeaf[T any](arg0 T) Tree[T] {
 	return Tree[T]{Tag: TreeLeaf, Leaf: arg0}
 }
@@ -26,28 +24,6 @@ type Tree[T any] struct {
 	Leaf  T
 	Left  *Tree[T]
 	Right *Tree[T]
-}
-
-func (t Tree[T]) String() string {
-	switch t.Tag {
-	case TreeLeaf:
-		return fmt.Sprintf("Leaf(%v)", t.Leaf)
-	case TreeNode:
-		return fmt.Sprintf("Node { left: %v, right: %v }", t.Left, t.Right)
-	default:
-		return fmt.Sprintf("Tree(%d)", t.Tag)
-	}
-}
-
-func (t Tree[T]) GoString() string {
-	switch t.Tag {
-	case TreeLeaf:
-		return fmt.Sprintf("Tree.Leaf(%v)", t.Leaf)
-	case TreeNode:
-		return fmt.Sprintf("Tree.Node { left: %v, right: %v }", t.Left, t.Right)
-	default:
-		return fmt.Sprintf("Tree(%d)", t.Tag)
-	}
 }
 
 func count_leaves[T any](tree Tree[T]) int {

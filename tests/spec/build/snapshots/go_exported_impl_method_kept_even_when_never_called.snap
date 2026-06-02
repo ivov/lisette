@@ -4,14 +4,8 @@ source: tests/spec/build/mod.rs
 // === main.go ===
 package main
 
-import "fmt"
-
 type Widget struct {
 	name string
-}
-
-func (w Widget) String() string {
-	return fmt.Sprintf("Widget { name: %v }", w.name)
 }
 
 func (w Widget) MarshalJSON() string {

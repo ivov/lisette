@@ -4,14 +4,8 @@ description: "input: \nstruct Wrapper<T> {\n  value: T,\n}\n\nimpl Wrapper<strin
 ---
 package main
 
-import "fmt"
-
 type Wrapper[T any] struct {
 	value T
-}
-
-func (w Wrapper[T]) String() string {
-	return fmt.Sprintf("Wrapper { value: %v }", w.value)
 }
 
 func Wrapper_greet(_ Wrapper[string]) string {

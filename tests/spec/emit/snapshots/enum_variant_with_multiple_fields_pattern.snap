@@ -4,8 +4,6 @@ description: "input: \nenum Pair<A, B> { Both(A, B), Neither }\n\nfn test(p: Pai
 ---
 package main
 
-import "fmt"
-
 func MakePairBoth[A any, B any](arg0 A, arg1 B) Pair[A, B] {
 	return Pair[A, B]{Tag: PairBoth, Both0: arg0, Both1: arg1}
 }
@@ -25,28 +23,6 @@ type Pair[A any, B any] struct {
 	Tag   PairTag
 	Both0 A
 	Both1 B
-}
-
-func (p Pair[A, B]) String() string {
-	switch p.Tag {
-	case PairBoth:
-		return fmt.Sprintf("Both(%v, %v)", p.Both0, p.Both1)
-	case PairNeither:
-		return "Neither"
-	default:
-		return fmt.Sprintf("Pair(%d)", p.Tag)
-	}
-}
-
-func (p Pair[A, B]) GoString() string {
-	switch p.Tag {
-	case PairBoth:
-		return fmt.Sprintf("Pair.Both(%v, %v)", p.Both0, p.Both1)
-	case PairNeither:
-		return "Pair.Neither"
-	default:
-		return fmt.Sprintf("Pair(%d)", p.Tag)
-	}
 }
 
 func test(p Pair[int, string]) int {

@@ -4,14 +4,8 @@ description: "input: \nstruct H { ptr: Ref<int> }\n\nimpl H {\n  fn repoint(self
 ---
 package main
 
-import "fmt"
-
 type H struct {
 	ptr *int
-}
-
-func (h H) String() string {
-	return fmt.Sprintf("H { ptr: %v }", h.ptr)
 }
 
 func (h *H) repoint(q *int) int {

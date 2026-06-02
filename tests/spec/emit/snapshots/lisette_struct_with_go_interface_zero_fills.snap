@@ -4,17 +4,10 @@ description: "input: \nimport \"go:context\"\n\nstruct Wrapper { ctx: context.Co
 ---
 package main
 
-import (
-	"context"
-	"fmt"
-)
+import "context"
 
 type Wrapper struct {
 	ctx context.Context
-}
-
-func (w Wrapper) String() string {
-	return fmt.Sprintf("Wrapper { ctx: %v }", w.ctx)
 }
 
 func test() Wrapper {

@@ -6,10 +6,6 @@ package main
 
 type Empty struct{}
 
-func (e Empty) String() string {
-	return "Empty"
-}
-
 func test() Empty {
 	return Empty{}
 }

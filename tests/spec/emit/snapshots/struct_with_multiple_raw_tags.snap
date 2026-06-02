@@ -4,12 +4,6 @@ description: "input: \n#[tag(\"validate\")]\n#[tag(\"custom\")]\nstruct User {\n
 ---
 package main
 
-import "fmt"
-
 type User struct {
 	Name string `custom:"foo" validate:"required"`
-}
-
-func (u User) String() string {
-	return fmt.Sprintf("User { name: %v }", u.Name)
 }

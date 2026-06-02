@@ -4,8 +4,6 @@ source: tests/spec/build/mod.rs
 // === lib/lib.go ===
 package lib
 
-import "fmt"
-
 func MakeEventClick(arg0 int) Event {
 	return Event{Tag: EventClick, X: arg0}
 }
@@ -19,24 +17,6 @@ const (
 type Event struct {
 	Tag EventTag
 	X   int
-}
-
-func (e Event) String() string {
-	switch e.Tag {
-	case EventClick:
-		return fmt.Sprintf("Click { x: %v }", e.X)
-	default:
-		return fmt.Sprintf("Event(%d)", e.Tag)
-	}
-}
-
-func (e Event) GoString() string {
-	switch e.Tag {
-	case EventClick:
-		return fmt.Sprintf("Event.Click { x: %v }", e.X)
-	default:
-		return fmt.Sprintf("Event(%d)", e.Tag)
-	}
 }
 
 

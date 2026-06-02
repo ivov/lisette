@@ -4,14 +4,8 @@ description: "input: \nstruct Foo { ch: Channel<int> }\n\nimpl Foo {\n  fn new()
 ---
 package main
 
-import "fmt"
-
 type Foo struct {
 	ch chan int
-}
-
-func (f Foo) String() string {
-	return fmt.Sprintf("Foo { ch: %v }", f.ch)
 }
 
 func Foo_new() chan int {

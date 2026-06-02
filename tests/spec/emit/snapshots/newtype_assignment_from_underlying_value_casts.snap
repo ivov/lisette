@@ -4,13 +4,7 @@ description: "input: \nstruct UserId(int)\n\nfn raw() -> int { 1 }\n\nfn take(u:
 ---
 package main
 
-import "fmt"
-
 type UserId int
-
-func (u UserId) String() string {
-	return fmt.Sprintf("UserId(%v)", int(u))
-}
 
 func raw() int {
 	return 1

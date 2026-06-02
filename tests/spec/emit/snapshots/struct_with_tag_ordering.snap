@@ -4,12 +4,6 @@ description: "input: \n#[yaml]\n#[json]\n#[xml]\n#[db]\nstruct User {\n  #[yaml(
 ---
 package main
 
-import "fmt"
-
 type User struct {
 	Name string `json:"user" db:"user" xml:"user" yaml:"user"`
-}
-
-func (u User) String() string {
-	return fmt.Sprintf("User { name: %v }", u.Name)
 }

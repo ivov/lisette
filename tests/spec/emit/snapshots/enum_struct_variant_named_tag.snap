@@ -4,8 +4,6 @@ description: "input: \nenum E {\n  Tag { x: int },\n  Other { x: int },\n}\n\nfn
 ---
 package main
 
-import "fmt"
-
 func MakeETag(arg0 int) E {
 	return E{Tag: ETag_, X: arg0}
 }
@@ -24,28 +22,6 @@ const (
 type E struct {
 	Tag ETag
 	X   int
-}
-
-func (e E) String() string {
-	switch e.Tag {
-	case ETag_:
-		return fmt.Sprintf("Tag { x: %v }", e.X)
-	case EOther:
-		return fmt.Sprintf("Other { x: %v }", e.X)
-	default:
-		return fmt.Sprintf("E(%d)", e.Tag)
-	}
-}
-
-func (e E) GoString() string {
-	switch e.Tag {
-	case ETag_:
-		return fmt.Sprintf("E.Tag { x: %v }", e.X)
-	case EOther:
-		return fmt.Sprintf("E.Other { x: %v }", e.X)
-	default:
-		return fmt.Sprintf("E(%d)", e.Tag)
-	}
 }
 
 func main() {

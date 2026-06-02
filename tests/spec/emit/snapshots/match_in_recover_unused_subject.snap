@@ -4,17 +4,10 @@ description: "input: \nstruct P { v: int }\nfn test() {\n  let out = recover {\n
 ---
 package main
 
-import (
-	"fmt"
-	lisette "github.com/ivov/lisette/prelude"
-)
+import lisette "github.com/ivov/lisette/prelude"
 
 type P struct {
 	v int
-}
-
-func (p P) String() string {
-	return fmt.Sprintf("P { v: %v }", p.v)
 }
 
 func test() {

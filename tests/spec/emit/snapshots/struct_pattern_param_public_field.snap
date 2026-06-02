@@ -4,15 +4,9 @@ description: "input: \nstruct Point { pub x: int, pub y: int }\n\nfn get_x(Point
 ---
 package main
 
-import "fmt"
-
 type Point struct {
 	X int
 	Y int
-}
-
-func (p Point) String() string {
-	return fmt.Sprintf("Point { x: %v, y: %v }", p.X, p.Y)
 }
 
 func get_x(arg_1 Point) int {

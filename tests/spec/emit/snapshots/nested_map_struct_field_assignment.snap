@@ -4,23 +4,13 @@ description: "input: \nstruct Inner {\n  value: int,\n}\n\nstruct Outer {\n  inn
 ---
 package main
 
-import "fmt"
-
 type Inner struct {
 	value int
-}
-
-func (i Inner) String() string {
-	return fmt.Sprintf("Inner { value: %v }", i.value)
 }
 
 type Outer struct {
 	inner Inner
 	name  string
-}
-
-func (o Outer) String() string {
-	return fmt.Sprintf("Outer { inner: %v, name: %v }", o.inner, o.name)
 }
 
 func test() {

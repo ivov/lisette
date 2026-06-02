@@ -4,13 +4,7 @@ description: "input: \nstruct Wrap(Slice<int>)\n\nfn get() -> Ref<Wrap> {\n  let
 ---
 package main
 
-import "fmt"
-
 type Wrap []int
-
-func (w Wrap) String() string {
-	return fmt.Sprintf("Wrap(%v)", []int(w))
-}
 
 func get() *Wrap {
 	w := Wrap([]int{1})

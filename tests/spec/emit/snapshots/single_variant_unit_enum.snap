@@ -4,8 +4,6 @@ description: "input: \nenum Marker {\n  Value,\n}\n\nfn test() -> Marker {\n  Ma
 ---
 package main
 
-import "fmt"
-
 func MakeMarkerValue() Marker {
 	return Marker{Tag: MarkerValue}
 }
@@ -18,24 +16,6 @@ const (
 
 type Marker struct {
 	Tag MarkerTag
-}
-
-func (m Marker) String() string {
-	switch m.Tag {
-	case MarkerValue:
-		return "Value"
-	default:
-		return fmt.Sprintf("Marker(%d)", m.Tag)
-	}
-}
-
-func (m Marker) GoString() string {
-	switch m.Tag {
-	case MarkerValue:
-		return "Marker.Value"
-	default:
-		return fmt.Sprintf("Marker(%d)", m.Tag)
-	}
 }
 
 func test() Marker {

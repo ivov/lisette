@@ -4,14 +4,8 @@ description: "input: \nstruct Box { x: int }\n\nimpl Box {\n  fn range(self) -> 
 ---
 package main
 
-import "fmt"
-
 type Box struct {
 	x int
-}
-
-func (b Box) String() string {
-	return fmt.Sprintf("Box { x: %v }", b.x)
 }
 
 func (b Box) range_() int {

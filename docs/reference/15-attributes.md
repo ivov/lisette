@@ -166,17 +166,32 @@ for direction in Direction.variants() {
 
 ## Display
 
-Add `#[displayable]` to a struct or enum to synthesize a `to_string(self) -> string` method.
+Add `#[displayable]` to a struct or enum to render it as a readable string when displayed.
+
 
 ```rs
-interface Display {
-  fn to_string(self) -> string
-}
-
 #[displayable]
 struct Point {
   x: int,
   y: int,
+}
+
+let p = Point { x: 1, y: 2 }
+
+fmt.Println(p) // `Point { x: 1, y: 2 }`
+```
+
+Without `#[displayable]`, a struct or enum cannot be interpolated in an f-string, and displays using Go's `%v` default formatting.
+
+```rs
+fmt.Println(p) // `{1 2}` if Point is not `#[displayable]`
+```
+
+`#[displayable]` also gives the enum or struct a `to_string(self) -> string` method.
+
+```rs
+interface Display {
+  fn to_string(self) -> string
 }
 
 fn render(value: Display) -> string {

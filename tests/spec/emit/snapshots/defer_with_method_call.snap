@@ -8,10 +8,6 @@ import "fmt"
 
 type Resource struct{}
 
-func (r Resource) String() string {
-	return "Resource"
-}
-
 func (r Resource) close() {
 	fmt.Print("closed")
 }

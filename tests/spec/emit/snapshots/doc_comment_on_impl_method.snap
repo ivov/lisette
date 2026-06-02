@@ -4,14 +4,8 @@ description: "input: \nstruct Counter { count: int }\n\nimpl Counter {\n  /// Cr
 ---
 package main
 
-import "fmt"
-
 type Counter struct {
 	count int
-}
-
-func (c Counter) String() string {
-	return fmt.Sprintf("Counter { count: %v }", c.count)
 }
 
 // Creates a new counter starting at zero.

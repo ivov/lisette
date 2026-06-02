@@ -4,10 +4,7 @@ description: "input: \nfn f0(x: int) -> int { x + 10 }\nfn f1(x: int) -> int { x
 ---
 package main
 
-import (
-	"fmt"
-	lisette "github.com/ivov/lisette/prelude"
-)
+import lisette "github.com/ivov/lisette/prelude"
 
 func f0(x int) int {
 	return x + 10
@@ -19,10 +16,6 @@ func f1(x int) int {
 
 type Handler struct {
 	f func(int) int
-}
-
-func (h Handler) String() string {
-	return fmt.Sprintf("Handler { f: %p }", h.f)
 }
 
 func run() lisette.Result[int, string] {

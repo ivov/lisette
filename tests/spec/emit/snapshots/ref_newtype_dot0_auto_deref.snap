@@ -4,13 +4,7 @@ description: "input: \nstruct UserId(int)\n\nfn main() {\n  let id = UserId(5)\n
 ---
 package main
 
-import "fmt"
-
 type UserId int
-
-func (u UserId) String() string {
-	return fmt.Sprintf("UserId(%v)", int(u))
-}
 
 func main() {
 	id := UserId(5)

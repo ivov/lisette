@@ -4,14 +4,8 @@ description: "input: \nstruct Adder { base: int }\n\nimpl Adder {\n  fn add(self
 ---
 package main
 
-import "fmt"
-
 type Adder struct {
 	base int
-}
-
-func (a Adder) String() string {
-	return fmt.Sprintf("Adder { base: %v }", a.base)
 }
 
 func (aa Adder) add(a, b int) int {

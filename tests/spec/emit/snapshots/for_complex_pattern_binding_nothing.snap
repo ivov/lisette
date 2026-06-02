@@ -4,14 +4,8 @@ description: "input: \nstruct Foo { x: int }\n\nfn main() {\n  let items = [Foo 
 ---
 package main
 
-import "fmt"
-
 type Foo struct {
 	x int
-}
-
-func (f Foo) String() string {
-	return fmt.Sprintf("Foo { x: %v }", f.x)
 }
 
 func main() {

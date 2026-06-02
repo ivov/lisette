@@ -4,10 +4,7 @@ source: tests/spec/build/mod.rs
 // === main.go ===
 package main
 
-import (
-	"fmt"
-	lisette "github.com/ivov/lisette/prelude"
-)
+import lisette "github.com/ivov/lisette/prelude"
 
 type Face interface {
 }
@@ -18,10 +15,6 @@ func Fallible(arg int) (int, Face) {
 
 type Holder[T any] struct {
 	Val T
-}
-
-func (h Holder[T]) String() string {
-	return fmt.Sprintf("Holder { val: %v }", h.Val)
 }
 
 func Holder_Resolve[T any, R any, E any](self Holder[T], f func(T) lisette.Partial[R, E]) lisette.Partial[R, E] {

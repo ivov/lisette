@@ -4,17 +4,11 @@ description: "input: \nfn noop() {}\nstruct P((), int)\n\nfn test() -> P {\n  P(
 ---
 package main
 
-import "fmt"
-
 func noop() {}
 
 type P struct {
 	F0 struct{}
 	F1 int
-}
-
-func (p P) String() string {
-	return fmt.Sprintf("P(%v, %v)", p.F0, p.F1)
 }
 
 func test() P {

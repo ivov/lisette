@@ -4,14 +4,8 @@ description: "input: \nstruct Phantom<T, P> { pub value: T }\n\ntype IntPhantom 
 ---
 package main
 
-import "fmt"
-
 type Phantom[T any, P any] struct {
 	Value T
-}
-
-func (p Phantom[T, P]) String() string {
-	return fmt.Sprintf("Phantom { value: %v }", p.Value)
 }
 
 type IntPhantom = Phantom[int, string]

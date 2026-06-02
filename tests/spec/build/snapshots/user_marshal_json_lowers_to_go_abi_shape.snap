@@ -14,10 +14,6 @@ type Widget struct {
 	id int
 }
 
-func (w Widget) String() string {
-	return fmt.Sprintf("Widget { id: %v }", w.id)
-}
-
 func (w Widget) MarshalJSON() ([]uint8, error) {
 	return []uint8("\"custom\""), nil
 }

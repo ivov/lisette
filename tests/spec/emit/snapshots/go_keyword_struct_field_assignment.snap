@@ -4,15 +4,9 @@ description: "input: \nstruct Config {\n  range: int,\n  default: string,\n}\n\n
 ---
 package main
 
-import "fmt"
-
 type Config struct {
 	range_   int
 	default_ string
-}
-
-func (c Config) String() string {
-	return fmt.Sprintf("Config { range: %v, default: %v }", c.range_, c.default_)
 }
 
 func main() {

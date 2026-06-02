@@ -81,7 +81,11 @@ impl TaskState<'_> {
         let qualified = Symbol::from_parts(module_id, &name);
         if is_struct
             && let Some(definition) = store.get_definition(qualified.as_str())
-            && is_pointer_backed_newtype(definition)
+            && definition.is_pointer_backed_newtype(|id| {
+                store
+                    .get_definition(id)
+                    .is_some_and(Definition::is_type_alias)
+            })
         {
             self.sink
                 .push(diagnostics::attribute::displayable_on_pointer_newtype(
@@ -103,12 +107,14 @@ impl TaskState<'_> {
         let Some(scheme) = store.get_type(qualified.as_str()).cloned() else {
             return;
         };
-        let Some(generics) = store
-            .get_definition(qualified.as_str())
-            .and_then(type_generics)
-        else {
+        let Some(definition) = store.get_definition(qualified.as_str()) else {
             return;
         };
+        let Some(generics) = type_generics(definition) else {
+            return;
+        };
+        let visibility = definition.visibility().clone();
+        let name_span = definition.name_span();
 
         if let Some(user_ty) = user_to_string_type(store, qualified) {
             if is_ufcs_method_type(&user_ty, generics.len()) {
@@ -135,14 +141,30 @@ impl TaskState<'_> {
         );
         let method_ty = wrap_with_impl_generics(&fn_ty, &generics, &[]);
 
+        let to_string_key = qualified.with_segment("to_string");
         let module = store.get_module_mut(module_id).expect("module must exist");
         if let Some(methods) = module
             .definitions
             .get_mut(qualified.as_str())
             .and_then(Definition::methods_mut)
         {
-            methods.insert("to_string".into(), method_ty);
+            methods.insert("to_string".into(), method_ty.clone());
         }
+        module
+            .definitions
+            .entry(to_string_key)
+            .or_insert_with(|| Definition {
+                visibility,
+                ty: method_ty,
+                name: None,
+                name_span,
+                doc: None,
+                body: DefinitionBody::Value {
+                    allowed_lints: vec![],
+                    go_hints: vec![],
+                    go_name: None,
+                },
+            });
     }
 }
 
@@ -251,12 +273,4 @@ fn collect_displayable_candidates(
         } => collect_method_attributes(method_signatures, out),
         _ => {}
     }
-}
-
-fn is_pointer_backed_newtype(definition: &Definition) -> bool {
-    definition.is_newtype()
-        && matches!(
-            &definition.body,
-            DefinitionBody::Struct { fields, .. } if fields[0].ty.is_ref()
-        )
 }

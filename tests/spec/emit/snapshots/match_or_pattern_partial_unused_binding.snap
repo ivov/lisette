@@ -4,10 +4,7 @@ description: "input: \nenum E { A((int, int)), B((int, int)), C }\nfn eval(e: E)
 ---
 package main
 
-import (
-	"fmt"
-	lisette "github.com/ivov/lisette/prelude"
-)
+import lisette "github.com/ivov/lisette/prelude"
 
 func MakeEA(arg0 lisette.Tuple2[int, int]) E {
 	return E{Tag: EA, A: arg0}
@@ -33,32 +30,6 @@ type E struct {
 	Tag ETag
 	A   lisette.Tuple2[int, int]
 	B   lisette.Tuple2[int, int]
-}
-
-func (e E) String() string {
-	switch e.Tag {
-	case EA:
-		return fmt.Sprintf("A(%v)", e.A)
-	case EB:
-		return fmt.Sprintf("B(%v)", e.B)
-	case EC:
-		return "C"
-	default:
-		return fmt.Sprintf("E(%d)", e.Tag)
-	}
-}
-
-func (e E) GoString() string {
-	switch e.Tag {
-	case EA:
-		return fmt.Sprintf("E.A(%v)", e.A)
-	case EB:
-		return fmt.Sprintf("E.B(%v)", e.B)
-	case EC:
-		return "E.C"
-	default:
-		return fmt.Sprintf("E(%d)", e.Tag)
-	}
 }
 
 func eval(e E) int {

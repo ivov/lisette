@@ -4,14 +4,8 @@ source: tests/spec/build/mod.rs
 // === main.go ===
 package main
 
-import "fmt"
-
 type Entry struct {
 	name string
-}
-
-func (e Entry) String() string {
-	return fmt.Sprintf("Entry { name: %v }", e.name)
 }
 
 type Cache interface {
@@ -19,10 +13,6 @@ type Cache interface {
 }
 
 type MyCache struct{}
-
-func (m MyCache) String() string {
-	return "MyCache"
-}
 
 func (m MyCache) Get(_ string) *Entry {
 	return nil

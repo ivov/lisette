@@ -4,17 +4,10 @@ description: "input: \nimport \"go:time\"\n\nstruct Wrapper { d: time.Duration }
 ---
 package main
 
-import (
-	"fmt"
-	"time"
-)
+import "time"
 
 type Wrapper struct {
 	d time.Duration
-}
-
-func (w Wrapper) String() string {
-	return fmt.Sprintf("Wrapper { d: %v }", w.d)
 }
 
 func test() Wrapper {

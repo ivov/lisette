@@ -4,17 +4,10 @@ description: "input: \nimport \"go:example.com/events\"\n\nstruct Box {\n  e: ev
 ---
 package main
 
-import (
-	"example.com/events"
-	"fmt"
-)
+import "example.com/events"
 
 type Box struct {
 	e events.Event
-}
-
-func (b Box) String() string {
-	return fmt.Sprintf("Box { e: %v }", b.e)
 }
 
 func describe(b Box) int {

@@ -4,8 +4,6 @@ description: "input: \nenum Color {\n  Red,\n  Blue,\n}\n\nimpl Color {\n  pub f
 ---
 package main
 
-import "fmt"
-
 func MakeColorRed() Color {
 	return Color{Tag: ColorRed}
 }
@@ -23,17 +21,6 @@ const (
 
 type Color struct {
 	Tag ColorTag
-}
-
-func (c Color) GoString() string {
-	switch c.Tag {
-	case ColorRed:
-		return "Color.Red"
-	case ColorBlue:
-		return "Color.Blue"
-	default:
-		return fmt.Sprintf("Color(%d)", c.Tag)
-	}
 }
 
 func (c Color) String() string {

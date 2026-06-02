@@ -4,12 +4,6 @@ description: "input: \n#[json]\nstruct User {\n  #[json(skip)]\n  password: stri
 ---
 package main
 
-import "fmt"
-
 type User struct {
 	Password string `json:"-"`
-}
-
-func (u User) String() string {
-	return fmt.Sprintf("User { password: %v }", u.Password)
 }

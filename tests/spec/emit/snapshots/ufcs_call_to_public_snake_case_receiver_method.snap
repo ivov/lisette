@@ -6,10 +6,6 @@ package main
 
 type Service struct{}
 
-func (s Service) String() string {
-	return "Service"
-}
-
 func (s Service) GetSession() int {
 	return 42
 }

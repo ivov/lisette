@@ -7,7 +7,7 @@ use crate::names::generics::receiver_generics_string;
 use crate::names::go_name;
 use crate::utils::receiver_name;
 use syntax::ast::{Attribute, Generic, StructFieldDefinition, StructKind};
-use syntax::program::DefinitionBody;
+use syntax::program::{Definition, DefinitionBody};
 use syntax::types::Type;
 
 impl Planner<'_> {
@@ -88,6 +88,9 @@ impl Planner<'_> {
         let definition = self.emit_tuple_struct_definition(name, generics_string, fields, fx);
         let receiver_generics = receiver_generics_string(generics);
         let mut result = definition;
+        if self.is_pointer_backed_newtype(name) {
+            return result;
+        }
         if let Some(stringer_name) = self.stringer_method_name(name, struct_attrs) {
             let is_type_alias = fields.len() == 1 && generics_string.is_empty();
             let underlying_go_type = is_type_alias.then(|| self.go_type_string(&fields[0].ty, fx));
@@ -209,6 +212,19 @@ impl Planner<'_> {
         attributes.iter().any(|a| a.name == "displayable") && !self.module.has_user_to_string(name)
     }
 
+    pub(crate) fn is_pointer_backed_newtype(&self, name: &str) -> bool {
+        let qualified = self.facts.qualified_current(name);
+        self.facts
+            .definition(qualified.as_str())
+            .is_some_and(|definition| {
+                definition.is_pointer_backed_newtype(|id| {
+                    self.facts
+                        .definition(id)
+                        .is_some_and(Definition::is_type_alias)
+                })
+            })
+    }
+
     pub(crate) fn to_string_method_go_name(&self) -> String {
         if self.method_needs_export("to_string") {
             go_name::snake_to_camel("to_string")
@@ -251,8 +267,8 @@ impl Planner<'_> {
     }
 }
 
-pub(crate) fn should_synthesize_stringer(_attributes: &[Attribute]) -> bool {
-    true
+pub(crate) fn should_synthesize_stringer(attributes: &[Attribute]) -> bool {
+    attributes.iter().any(|a| a.name == "displayable")
 }
 
 pub(crate) fn struct_field_go_name(
@@ -354,9 +370,6 @@ fn emit_tuple_struct_stringer_method(
         );
     }
     if let Some(underlying) = underlying_go_type {
-        if underlying.starts_with('*') {
-            return String::new();
-        }
         return format!(
             "func ({receiver} {receiver_type}) {method_name}() string {{\nreturn fmt.Sprintf(\"{name}(%v)\", {underlying}({receiver}))\n}}"
         );

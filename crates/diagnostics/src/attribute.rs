@@ -85,13 +85,8 @@ pub fn displayable_with_arguments(attribute_span: &Span) -> LisetteDiagnostic {
 pub fn displayable_on_pointer_newtype(attribute_span: &Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("`#[displayable]` on a pointer-backed newtype")
         .with_attribute_code("displayable_on_pointer_newtype")
-        .with_span_label(
-            attribute_span,
-            "a single-field tuple struct over `Ref<T>` cannot have a stringer",
-        )
-        .with_help(
-            "Go forbids methods on the named pointer type this lowers to. Format the value explicitly, or change the representation.",
-        )
+        .with_span_label(attribute_span, "a `Ref` has no display form")
+        .with_help("Give the type named fields, or drop `#[displayable]`")
 }
 
 pub fn displayable_specialized_to_string(attribute_span: &Span) -> LisetteDiagnostic {

@@ -10,10 +10,6 @@ type Point struct {
 	x int
 }
 
-func (p Point) String() string {
-	return fmt.Sprintf("Point { x: %v }", p.x)
-}
-
 func main() {
 	var result int
 	subject_1 := Point{x: 1}.x

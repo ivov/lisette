@@ -8,10 +8,6 @@ import "crypto/tls"
 
 type MyCache struct{}
 
-func (m MyCache) String() string {
-	return "MyCache"
-}
-
 func (m MyCache) Get(_ string) *tls.ClientSessionState {
 	return nil
 }

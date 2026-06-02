@@ -4,18 +4,12 @@ description: "input: \ninterface Printable {\n  fn to_string(self) -> string\n}\
 ---
 package main
 
-import "fmt"
-
 type Printable interface {
 	ToString() string
 }
 
 type Box struct {
 	label string
-}
-
-func (b Box) String() string {
-	return fmt.Sprintf("Box { label: %v }", b.label)
 }
 
 func (b Box) ToString() string {

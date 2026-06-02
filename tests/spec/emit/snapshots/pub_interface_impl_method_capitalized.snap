@@ -4,18 +4,12 @@ description: "input: \npub interface Printable {\n  fn display(self) -> string\n
 ---
 package main
 
-import "fmt"
-
 type Printable interface {
 	Display() string
 }
 
 type Box struct {
 	value string
-}
-
-func (b Box) String() string {
-	return fmt.Sprintf("Box { value: %v }", b.value)
 }
 
 func (b Box) Display() string {

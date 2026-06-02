@@ -4,15 +4,9 @@ description: "input: \nstruct Container<T> {\n  items: Slice<T>,\n  name: string
 ---
 package main
 
-import "fmt"
-
 type Container[T any] struct {
 	items []T
 	name  string
-}
-
-func (c Container[T]) String() string {
-	return fmt.Sprintf("Container { items: %v, name: %v }", c.items, c.name)
 }
 
 func Container_new[T any](name string) Container[T] {

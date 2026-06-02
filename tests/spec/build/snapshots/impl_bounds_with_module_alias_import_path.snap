@@ -12,17 +12,10 @@ type Printable interface {
 // === main.go ===
 package main
 
-import (
-	"fmt"
-	I "github.com/user/myproject/ifaces"
-)
+import I "github.com/user/myproject/ifaces"
 
 type Box[T I.Printable] struct {
 	value T
-}
-
-func (b Box[T]) String() string {
-	return fmt.Sprintf("Box { value: %v }", b.value)
 }
 
 func (b Box[T]) show() string {
@@ -31,10 +24,6 @@ func (b Box[T]) show() string {
 
 type Name struct {
 	name string
-}
-
-func (n Name) String() string {
-	return fmt.Sprintf("Name { name: %v }", n.name)
 }
 
 func (n Name) Print() string {

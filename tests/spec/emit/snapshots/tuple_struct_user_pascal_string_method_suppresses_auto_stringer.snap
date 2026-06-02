@@ -4,13 +4,7 @@ description: "input: \nstruct UserId(int)\n\nimpl UserId {\n  fn String(self) ->
 ---
 package main
 
-import "fmt"
-
 type UserId int
-
-func (u UserId) GoString() string {
-	return fmt.Sprintf("UserId(%v)", int(u))
-}
 
 func (u UserId) String() string {
 	return "custom"

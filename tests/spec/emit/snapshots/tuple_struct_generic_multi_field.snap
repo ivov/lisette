@@ -4,15 +4,9 @@ description: "input: \nstruct Pair<A, B>(A, B)\n\nfn test() -> Pair<int, string>
 ---
 package main
 
-import "fmt"
-
 type Pair[A any, B any] struct {
 	F0 A
 	F1 B
-}
-
-func (p Pair[A, B]) String() string {
-	return fmt.Sprintf("Pair(%v, %v)", p.F0, p.F1)
 }
 
 func test() Pair[int, string] {

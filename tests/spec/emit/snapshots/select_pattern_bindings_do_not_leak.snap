@@ -10,10 +10,6 @@ type Point struct {
 	x int
 }
 
-func (p Point) String() string {
-	return fmt.Sprintf("Point { x: %v }", p.x)
-}
-
 func main() {
 	ch1 := make(chan Point, 1)
 	x := 99

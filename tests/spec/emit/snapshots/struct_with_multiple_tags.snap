@@ -4,12 +4,6 @@ description: "input: \n#[json]\n#[db]\nstruct User {\n  #[json(omitempty)]\n  #[
 ---
 package main
 
-import "fmt"
-
 type User struct {
 	Name string `json:"name,omitempty" db:"user_name"`
-}
-
-func (u User) String() string {
-	return fmt.Sprintf("User { name: %v }", u.Name)
 }

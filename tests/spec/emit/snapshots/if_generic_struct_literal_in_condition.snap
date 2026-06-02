@@ -4,14 +4,8 @@ description: "input: \nstruct Box<T> { v: T }\n\nfn test() -> int {\n  let b = B
 ---
 package main
 
-import "fmt"
-
 type Box[T any] struct {
 	v T
-}
-
-func (b Box[T]) String() string {
-	return fmt.Sprintf("Box { v: %v }", b.v)
 }
 
 func test() int {

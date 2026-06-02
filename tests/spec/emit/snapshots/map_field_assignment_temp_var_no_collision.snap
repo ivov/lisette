@@ -13,10 +13,6 @@ type Box struct {
 	x int
 }
 
-func (b Box) String() string {
-	return fmt.Sprintf("Box { x: %v }", b.x)
-}
-
 func main() {
 	m := lisette.MapFrom([]lisette.Tuple2[string, Box]{lisette.MakeTuple2("a", Box{x: 1})})
 	entry := m["a"]

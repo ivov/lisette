@@ -4,8 +4,6 @@ source: tests/spec/build/mod.rs
 // === lib/mod.go ===
 package lib
 
-import "fmt"
-
 func MakeValidatedValid[T any](arg0 T) Validated[T] {
 	return Validated[T]{Tag: ValidatedValid, Valid: arg0}
 }
@@ -27,35 +25,9 @@ type Validated[T any] struct {
 	Invalid string
 }
 
-func (v Validated[T]) String() string {
-	switch v.Tag {
-	case ValidatedValid:
-		return fmt.Sprintf("Valid(%v)", v.Valid)
-	case ValidatedInvalid:
-		return fmt.Sprintf("Invalid(%v)", v.Invalid)
-	default:
-		return fmt.Sprintf("Validated(%d)", v.Tag)
-	}
-}
-
-func (v Validated[T]) GoString() string {
-	switch v.Tag {
-	case ValidatedValid:
-		return fmt.Sprintf("Validated.Valid(%v)", v.Valid)
-	case ValidatedInvalid:
-		return fmt.Sprintf("Validated.Invalid(%v)", v.Invalid)
-	default:
-		return fmt.Sprintf("Validated(%d)", v.Tag)
-	}
-}
-
 type ValidationResult[T any] struct {
 	Value     Validated[T]
 	FieldName string
-}
-
-func (v ValidationResult[T]) String() string {
-	return fmt.Sprintf("ValidationResult { value: %v, field_name: %v }", v.Value, v.FieldName)
 }
 
 func ValidationResult_NewInvalid[T any](field, msg string) ValidationResult[T] {

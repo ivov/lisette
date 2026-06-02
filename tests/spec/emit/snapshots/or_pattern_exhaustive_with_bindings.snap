@@ -4,8 +4,6 @@ description: "input: \nenum Shape {\n  Circle(int),\n  Square(int),\n  Triangle(
 ---
 package main
 
-import "fmt"
-
 func MakeShapeCircle(arg0 int) Shape {
 	return Shape{Tag: ShapeCircle, Circle: arg0}
 }
@@ -31,32 +29,6 @@ type Shape struct {
 	Circle   int
 	Square   int
 	Triangle int
-}
-
-func (s Shape) String() string {
-	switch s.Tag {
-	case ShapeCircle:
-		return fmt.Sprintf("Circle(%v)", s.Circle)
-	case ShapeSquare:
-		return fmt.Sprintf("Square(%v)", s.Square)
-	case ShapeTriangle:
-		return fmt.Sprintf("Triangle(%v)", s.Triangle)
-	default:
-		return fmt.Sprintf("Shape(%d)", s.Tag)
-	}
-}
-
-func (s Shape) GoString() string {
-	switch s.Tag {
-	case ShapeCircle:
-		return fmt.Sprintf("Shape.Circle(%v)", s.Circle)
-	case ShapeSquare:
-		return fmt.Sprintf("Shape.Square(%v)", s.Square)
-	case ShapeTriangle:
-		return fmt.Sprintf("Shape.Triangle(%v)", s.Triangle)
-	default:
-		return fmt.Sprintf("Shape(%d)", s.Tag)
-	}
 }
 
 func shape_size(s Shape) int {

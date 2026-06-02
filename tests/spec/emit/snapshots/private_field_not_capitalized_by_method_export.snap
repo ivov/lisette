@@ -4,18 +4,12 @@ description: "input: \npub interface IFoo {\n  fn foo(self) -> int\n}\n\nstruct 
 ---
 package main
 
-import "fmt"
-
 type IFoo interface {
 	Foo() int
 }
 
 type S struct {
 	foo int
-}
-
-func (s S) String() string {
-	return fmt.Sprintf("S { foo: %v }", s.foo)
 }
 
 func main() {

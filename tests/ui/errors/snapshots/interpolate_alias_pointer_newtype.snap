@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] `Handle` cannot be interpolated
+   ╭─[test.lis:7:6]
+ 6 │ fn show(h: Handle) -> string {
+ 7 │   f"{h}"
+   ·      ┬
+   ·      ╰── has no display form
+ 8 │ }
+   ╰────
+  help: Interpolate the inner value directly, or change the representation · code: [infer.interpolation_without_stringer]

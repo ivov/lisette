@@ -4,15 +4,9 @@ description: "input: \nstruct Conf { items: Slice<int>, lookup: Map<string, int>
 ---
 package main
 
-import "fmt"
-
 type Conf struct {
 	items  []int
 	lookup map[string]int
-}
-
-func (c Conf) String() string {
-	return fmt.Sprintf("Conf { items: %v, lookup: %v }", c.items, c.lookup)
 }
 
 func test() Conf {

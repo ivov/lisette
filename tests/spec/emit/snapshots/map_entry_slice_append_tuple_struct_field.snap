@@ -4,15 +4,9 @@ description: "input: \nstruct Wrap(Slice<int>, int)\n\nfn main() {\n  let mut m 
 ---
 package main
 
-import "fmt"
-
 type Wrap struct {
 	F0 []int
 	F1 int
-}
-
-func (w Wrap) String() string {
-	return fmt.Sprintf("Wrap(%v, %v)", w.F0, w.F1)
 }
 
 func main() {

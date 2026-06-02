@@ -4,18 +4,11 @@ description: "input: \nstruct Node {\n  pub value: int,\n  pub next: Option<int>
 ---
 package main
 
-import (
-	"fmt"
-	lisette "github.com/ivov/lisette/prelude"
-)
+import lisette "github.com/ivov/lisette/prelude"
 
 type Node struct {
 	Value int
 	Next  lisette.Option[int]
-}
-
-func (n Node) String() string {
-	return fmt.Sprintf("Node { value: %v, next: %v }", n.Value, n.Next)
 }
 
 func (n Node) sum() int {

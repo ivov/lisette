@@ -4,14 +4,8 @@ description: "input: \nstruct Stack<T> { items: Slice<T> }\n\nimpl<T> Stack<T> {
 ---
 package main
 
-import "fmt"
-
 type Stack[T any] struct {
 	items []T
-}
-
-func (s Stack[T]) String() string {
-	return fmt.Sprintf("Stack { items: %v }", s.items)
 }
 
 func Stack_new[T any]() Stack[T] {

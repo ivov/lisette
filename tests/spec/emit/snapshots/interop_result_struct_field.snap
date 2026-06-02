@@ -5,17 +5,12 @@ description: "input: \nimport \"go:strconv\"\n\nstruct Parser { parse: fn(string
 package main
 
 import (
-	"fmt"
 	lisette "github.com/ivov/lisette/prelude"
 	"strconv"
 )
 
 type Parser struct {
 	parse func(string) (int, error)
-}
-
-func (p Parser) String() string {
-	return fmt.Sprintf("Parser { parse: %p }", p.parse)
 }
 
 func main() {

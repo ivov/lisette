@@ -10,10 +10,6 @@ type IntList struct {
 	items []int
 }
 
-func (i IntList) String() string {
-	return fmt.Sprintf("IntList { items: %v }", i.items)
-}
-
 func (i IntList) display() string {
 	s := "["
 	_bound_1 := len(i.items)

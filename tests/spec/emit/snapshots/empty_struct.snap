@@ -5,7 +5,3 @@ description: "input: \nstruct Blank {}\n"
 package main
 
 type Blank struct{}
-
-func (b Blank) String() string {
-	return "Blank"
-}

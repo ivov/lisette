@@ -4,14 +4,8 @@ description: "input: \nstruct S { a: int }\nfn test() -> int {\n  let _ = S { a:
 ---
 package main
 
-import "fmt"
-
 type S struct {
 	a int
-}
-
-func (s S) String() string {
-	return fmt.Sprintf("S { a: %v }", s.a)
 }
 
 func test() int {
