@@ -2,6 +2,28 @@
 
 Lisette is under active development. Any version before 1.0.0 may include breaking changes.
 
+## [0.2.17](https://github.com/ivov/lisette/compare/lisette-v0.2.16...lisette-v0.2.17) - 2026-06-02
+
+- feat: add manual emptiness check lint [#577](https://github.com/ivov/lisette/pull/577) [`6dd1cb1`](https://github.com/ivov/lisette/commit/6dd1cb16c933e952f5eaec1aff1e5bb915cce389)
+- feat: add manual compound assignment lint [#576](https://github.com/ivov/lisette/pull/576) [`3e569d9`](https://github.com/ivov/lisette/commit/3e569d9a02b3cb8c3b9a53beac002acccc430acf)
+- fix: make newtype structs and bool-backed named types nominal [#575](https://github.com/ivov/lisette/pull/575) [`c3b2f75`](https://github.com/ivov/lisette/commit/c3b2f7586e67829cc02e4bdb384586923f893c01)
+- fix: lsp goto-def on type alias with same name as origin type name [#569](https://github.com/ivov/lisette/pull/569) [`801ce11`](https://github.com/ivov/lisette/commit/801ce118b5f3d58fe49391076bbe72197a164fa5)
+- feat: gate stringer synthesis on `#[displayable]` [#574](https://github.com/ivov/lisette/pull/574) [`a9333a9`](https://github.com/ivov/lisette/commit/a9333a90d2fa4b2804e2d64fa7890d5cc4a8657b)
+- fix: make string value enums nominal [#573](https://github.com/ivov/lisette/pull/573) [`6066322`](https://github.com/ivov/lisette/commit/6066322f6ad46d3ffa7656c092d1850aa31deb09)
+- fix: make numeric value enums nominal [#572](https://github.com/ivov/lisette/pull/572) [`081757a`](https://github.com/ivov/lisette/commit/081757aec41dd92d4181dfc789f095a3f6476d60)
+- feat: introduce `#[displayable]` attribute [#571](https://github.com/ivov/lisette/pull/571) [`d7acbed`](https://github.com/ivov/lisette/commit/d7acbedbe93a4466cd05404d1d78be4b20743d56)
+- refactor: suggest WaitGroup.Go in waitgroup warning [#570](https://github.com/ivov/lisette/pull/570) [`190180b`](https://github.com/ivov/lisette/commit/190180b880b40f9552417c9f4f957d0febd2fb86)
+- refactor: route stringer synthesis through a single gate [#568](https://github.com/ivov/lisette/pull/568) [`e60bde0`](https://github.com/ivov/lisette/commit/e60bde0d0731076688dda49366ed2983b1564679)
+- refactor: set up opt-in stringer capability [#567](https://github.com/ivov/lisette/pull/567) [`1557c7c`](https://github.com/ivov/lisette/commit/1557c7cd37bfcb41cbe43d0dead61632c81b744f)
+- fix: lsp autocomplete via non-generic type aliases [#563](https://github.com/ivov/lisette/pull/563) [`3ea55c0`](https://github.com/ivov/lisette/commit/3ea55c0d3bc9920d0a9fc352dda969e072294fac)
+- refactor: reclassify diagnostics [#566](https://github.com/ivov/lisette/pull/566) [`afc5027`](https://github.com/ivov/lisette/commit/afc50275bbf94ddbd98a7929b17febed2387237f)
+- feat: advisory `info` diagnostics [#565](https://github.com/ivov/lisette/pull/565) [`bb13b0a`](https://github.com/ivov/lisette/commit/bb13b0a1ab42dd48758df4a13c8e39b150e11024)
+- feat: warn on lost url query mutation [#564](https://github.com/ivov/lisette/pull/564) [`a5f94c6`](https://github.com/ivov/lisette/commit/a5f94c60d530ef9943a2d26c48db921ebdb5c34d)
+- feat: warn on match with identical arms [#562](https://github.com/ivov/lisette/pull/562) [`1a44853`](https://github.com/ivov/lisette/commit/1a448531a6b8f301a08538fc4a1d7c9c06a02e8a)
+- feat: warn on closures replaceable by the function itself [#561](https://github.com/ivov/lisette/pull/561) [`07fd58a`](https://github.com/ivov/lisette/commit/07fd58a508743bca410be434fed5bfa7dcce0f0b)
+- feat: add manual_map lint [#560](https://github.com/ivov/lisette/pull/560) [`4c0bcd3`](https://github.com/ivov/lisette/commit/4c0bcd32d6dbfb204d7c1709e1e7751cb7ff8069)
+- feat: add manual_unwrap_or lint [#558](https://github.com/ivov/lisette/pull/558) [`0c19819`](https://github.com/ivov/lisette/commit/0c198199910e2e1512b143e39c74c4c13431fd8a)
+
 ## [0.2.16](https://github.com/ivov/lisette/compare/lisette-v0.2.15...lisette-v0.2.16) - 2026-05-31
 
 - fix: reject value names in type annotations [#555](https://github.com/ivov/lisette/pull/555) [`c4dabbd`](https://github.com/ivov/lisette/commit/c4dabbd9d1a400cdcb08557b4874c5e193154696)
