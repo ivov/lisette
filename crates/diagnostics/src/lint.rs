@@ -247,6 +247,19 @@ pub fn double_negation(span: &Span, is_bool: bool) -> LisetteDiagnostic {
         .with_help("Remove one of the negation operators")
 }
 
+pub fn negated_equality(span: &Span, is_equal: bool) -> LisetteDiagnostic {
+    let (from, to) = if is_equal {
+        ("!(a == b)", "a != b")
+    } else {
+        ("!(a != b)", "a == b")
+    };
+
+    LisetteDiagnostic::info("Negated equality comparison")
+        .with_lint_code("negated_equality")
+        .with_span_label(span, "can be simpler")
+        .with_help(format!("Rewrite `{from}` as `{to}`"))
+}
+
 pub fn tautological_comparison(span: &Span, always_true: bool) -> LisetteDiagnostic {
     let result = if always_true { "true" } else { "false" };
 

@@ -945,6 +945,71 @@ fn main() {
 }
 
 #[test]
+fn negated_equality_equal() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let a = true;
+  let b = false;
+  let _ = !(a == b)
+}
+"#
+    );
+}
+
+#[test]
+fn negated_equality_not_equal() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let a = true;
+  let b = false;
+  let _ = !(a != b)
+}
+"#
+    );
+}
+
+#[test]
+fn negated_relational_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let x = 1;
+  let y = 2;
+  let _ = !(x < y)
+}
+"#
+    );
+}
+
+#[test]
+fn negation_of_identifier_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let a = true;
+  let b = false;
+  let _ = !a == b
+}
+"#
+    );
+}
+
+#[test]
+fn negated_conjunction_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let a = true;
+  let b = false;
+  let _ = !(a && b)
+}
+"#
+    );
+}
+
+#[test]
 fn unnecessary_return_simple() {
     assert_lint_snapshot!(
         r#"
