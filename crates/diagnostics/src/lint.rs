@@ -426,6 +426,13 @@ pub fn single_arm_match(span: &Span, pattern_suggestion: &str) -> LisetteDiagnos
         ))
 }
 
+pub fn match_on_bool(span: &Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::info("Match on boolean")
+        .with_lint_code("match_on_bool")
+        .with_span_label(span, "should be `if`")
+        .with_help("A `match` on a boolean is better written as an `if` expression")
+}
+
 pub fn match_single_binding(span: &Span, binding: &str) -> LisetteDiagnostic {
     LisetteDiagnostic::info("Ineffective match")
         .with_lint_code("match_single_binding")

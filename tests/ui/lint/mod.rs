@@ -4073,6 +4073,120 @@ pub fn test(pair: (int, int)) -> int {
 }
 
 #[test]
+fn match_on_bool_true_false() {
+    assert_lint_snapshot!(
+        r#"
+pub fn test(b: bool) -> int {
+  match b {
+    true => 1,
+    false => 0,
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn match_on_bool_false_true() {
+    assert_lint_snapshot!(
+        r#"
+pub fn test(b: bool) -> int {
+  match b {
+    false => 0,
+    true => 1,
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn match_on_bool_guard_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+pub fn test(b: bool, n: int) -> int {
+  match b {
+    true if n > 0 => 1,
+    _ => 0,
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn match_on_bool_wildcard_arm_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+pub fn test(b: bool) -> int {
+  match b {
+    true => 1,
+    _ => 0,
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn match_on_bool_non_bool_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+pub fn test(x: int) -> int {
+  match x {
+    0 => 1,
+    _ => 2,
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn match_on_bool_duplicate_true_no_suggestion() {
+    let warnings = crate::_harness::lint::lint(
+        r#"
+pub fn test(b: bool) -> int {
+  match b {
+    true => 1,
+    true => 2,
+  }
+}
+"#,
+    );
+    let suggests_if = warnings
+        .iter()
+        .any(|w| w.code_str() == Some("lint.match_on_bool"));
+    assert!(
+        !suggests_if,
+        "expected no match_on_bool suggestion on duplicate `true` arms, got: {:?}",
+        warnings
+    );
+}
+
+#[test]
+fn match_on_bool_duplicate_false_no_suggestion() {
+    let warnings = crate::_harness::lint::lint(
+        r#"
+pub fn test(b: bool) -> int {
+  match b {
+    false => 1,
+    false => 2,
+  }
+}
+"#,
+    );
+    let suggests_if = warnings
+        .iter()
+        .any(|w| w.code_str() == Some("lint.match_on_bool"));
+    assert!(
+        !suggests_if,
+        "expected no match_on_bool suggestion on duplicate `false` arms, got: {:?}",
+        warnings
+    );
+}
+
+#[test]
 fn redundant_pattern_matching_option_is_some() {
     assert_lint_snapshot!(
         r#"

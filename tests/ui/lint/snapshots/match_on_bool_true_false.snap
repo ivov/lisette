@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [info] Match on boolean
+   ╭─[test.lis:3:3]
+ 2 │ pub fn test(b: bool) -> int {
+ 3 │   match b {
+   ·   ──┬──
+   ·     ╰── should be `if`
+ 4 │     true => 1,
+   ╰────
+  help: A `match` on a boolean is better written as an `if` expression · code: [lint.match_on_bool]
