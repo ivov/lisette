@@ -1,11 +1,11 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  [error] `#[iterable]` on enum with payload variant
+  [error] `#[iterate]` on enum with payload variant
    ╭─[test.lis:2:1]
  1 │ 
- 2 │ #[iterable]
-   · ─────┬─────
+ 2 │ #[iterate]
+   · ─────┬────
    ·      ╰── disallowed if a variant has a payload
  3 │ enum Token {
  4 │   Eof,
@@ -14,4 +14,4 @@ source: tests/ui/errors/mod.rs
    ·     ╰── this variant has a payload
  6 │ }
    ╰────
-  help: Remove the payload, or drop `#[iterable]` · code: [attribute.iterable_non_unit_variant]
+  help: Remove the payload, or drop `#[iterate]` · code: [attribute.iterate_non_unit_variant]

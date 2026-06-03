@@ -10,9 +10,9 @@ struct Point { x: int, y: int }
 }
 
 #[test]
-fn iterable_enum_variants() {
+fn iterate_enum_variants() {
     let input = r#"
-#[iterable]
+#[iterate]
 pub enum BuildPhase {
   Validate,
   Parse,
@@ -31,54 +31,54 @@ fn count() -> int {
 }
 
 #[test]
-fn displayable_struct_synthesizes_to_string() {
+fn display_struct_synthesizes_to_string() {
     let input = r#"
-#[displayable]
+#[display]
 struct Point { x: int, y: int }
 "#;
     assert_emit_snapshot!(input);
 }
 
 #[test]
-fn displayable_enum_synthesizes_to_string() {
+fn display_enum_synthesizes_to_string() {
     let input = r#"
-#[displayable]
+#[display]
 enum Color { Red, Green }
 "#;
     assert_emit_snapshot!(input);
 }
 
 #[test]
-fn displayable_empty_struct_to_string() {
+fn display_empty_struct_to_string() {
     let input = r#"
-#[displayable]
+#[display]
 struct Blank {}
 "#;
     assert_emit_snapshot!(input);
 }
 
 #[test]
-fn displayable_tuple_struct_to_string() {
+fn display_tuple_struct_to_string() {
     let input = r#"
-#[displayable]
+#[display]
 struct UserId(int)
 "#;
     assert_emit_snapshot!(input);
 }
 
 #[test]
-fn displayable_generic_struct_to_string() {
+fn display_generic_struct_to_string() {
     let input = r#"
-#[displayable]
+#[display]
 struct Box<T> { value: T }
 "#;
     assert_emit_snapshot!(input);
 }
 
 #[test]
-fn displayable_user_to_string_suppresses_synthesis() {
+fn display_user_to_string_suppresses_synthesis() {
     let input = r#"
-#[displayable]
+#[display]
 struct Point { x: int, y: int }
 
 impl Point {
@@ -91,9 +91,9 @@ impl Point {
 }
 
 #[test]
-fn displayable_to_string_delegates_to_user_stringer() {
+fn display_to_string_delegates_to_user_stringer() {
     let input = r#"
-#[displayable]
+#[display]
 struct Point { x: int, y: int }
 
 impl Point {
@@ -106,13 +106,13 @@ impl Point {
 }
 
 #[test]
-fn displayable_satisfies_display_interface() {
+fn display_satisfies_display_interface() {
     let input = r#"
 interface Display {
   fn to_string(self) -> string
 }
 
-#[displayable]
+#[display]
 struct Point { x: int, y: int }
 
 fn render(d: Display) -> string {

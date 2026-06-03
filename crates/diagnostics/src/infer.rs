@@ -2123,7 +2123,7 @@ pub fn interpolation_without_stringer(
     let help = if pointer_newtype {
         "Interpolate the inner value directly, or change the representation".to_string()
     } else {
-        format!("Mark `{type_name}` with `#[displayable]`, or interpolate its fields directly.")
+        format!("Mark `{type_name}` with `#[display]`, or interpolate its fields directly.")
     };
     LisetteDiagnostic::error(format!("`{type_name}` cannot be interpolated"))
         .with_infer_code("interpolation_without_stringer")

@@ -1,6 +1,6 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \n#[displayable]\nstruct Point { x: int, y: int }\n\nimpl Point {\n  fn string(self) -> string {\n    \"p\"\n  }\n}\n"
+description: "input: \n#[display]\nstruct Point { x: int, y: int }\n\nimpl Point {\n  fn string(self) -> string {\n    \"p\"\n  }\n}\n"
 ---
 package main
 

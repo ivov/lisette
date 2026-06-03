@@ -21,7 +21,7 @@ impl TaskState<'_> {
         variants: &[EnumVariant],
         span: &Span,
         doc: &Option<String>,
-        displayable: bool,
+        display: bool,
     ) {
         let qualified_name = self.qualify_name(name);
         let enum_ty = store
@@ -121,7 +121,7 @@ impl TaskState<'_> {
                     generics: generics.to_vec(),
                     variants: new_variants,
                     methods: MethodSignatures::default(),
-                    displayable,
+                    display,
                 },
             },
         );
@@ -389,7 +389,7 @@ impl TaskState<'_> {
         kind: StructKind,
         span: &Span,
         doc: &Option<String>,
-        displayable: bool,
+        display: bool,
     ) {
         let qualified_name = self.qualify_name(name);
         let struct_ty = store
@@ -458,7 +458,7 @@ impl TaskState<'_> {
                     kind,
                     methods: Default::default(),
                     constructor: None,
-                    displayable,
+                    display,
                 },
             },
         );

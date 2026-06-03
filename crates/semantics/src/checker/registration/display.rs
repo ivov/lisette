@@ -7,43 +7,43 @@ use crate::call_classification::is_ufcs_method_type;
 use crate::store::Store;
 
 impl TaskState<'_> {
-    pub(super) fn register_displayable(&mut self, store: &mut Store, items: &[Expression]) {
+    pub(super) fn register_display(&mut self, store: &mut Store, items: &[Expression]) {
         let module_id = self.cursor.module_id.clone();
         let is_d_lis = self.is_d_lis(store);
         let mut candidates = Vec::new();
         for item in items {
-            collect_displayable_candidates(item, is_d_lis, &mut candidates);
+            collect_display_candidates(item, is_d_lis, &mut candidates);
         }
         for candidate in candidates {
-            self.process_displayable_candidate(store, &module_id, candidate);
+            self.process_display_candidate(store, &module_id, candidate);
         }
     }
 
-    pub(super) fn register_module_displayable(&mut self, store: &mut Store, module_id: &str) {
+    pub(super) fn register_module_display(&mut self, store: &mut Store, module_id: &str) {
         let candidates = {
             let module = store.get_module(module_id).expect("module must exist");
             let mut candidates = Vec::new();
             for file in module.files.values() {
                 let is_d_lis = file.is_d_lis();
                 for item in &file.items {
-                    collect_displayable_candidates(item, is_d_lis, &mut candidates);
+                    collect_display_candidates(item, is_d_lis, &mut candidates);
                 }
             }
             candidates
         };
 
         for candidate in candidates {
-            self.process_displayable_candidate(store, module_id, candidate);
+            self.process_display_candidate(store, module_id, candidate);
         }
     }
 
-    fn process_displayable_candidate(
+    fn process_display_candidate(
         &mut self,
         store: &mut Store,
         module_id: &str,
-        candidate: DisplayableCandidate,
+        candidate: DisplayCandidate,
     ) {
-        let DisplayableCandidate {
+        let DisplayCandidate {
             attribute_span,
             kind,
         } = candidate;
@@ -55,7 +55,7 @@ impl TaskState<'_> {
         } = match kind {
             CandidateKind::Misplaced => {
                 self.sink
-                    .push(diagnostics::attribute::displayable_not_a_struct_or_enum(
+                    .push(diagnostics::attribute::display_not_a_struct_or_enum(
                         &attribute_span,
                     ));
                 return;
@@ -65,16 +65,14 @@ impl TaskState<'_> {
 
         if has_args {
             self.sink
-                .push(diagnostics::attribute::displayable_with_arguments(
+                .push(diagnostics::attribute::display_with_arguments(
                     &attribute_span,
                 ));
             return;
         }
         if is_d_lis {
             self.sink
-                .push(diagnostics::attribute::displayable_in_typedef(
-                    &attribute_span,
-                ));
+                .push(diagnostics::attribute::display_in_typedef(&attribute_span));
             return;
         }
 
@@ -88,7 +86,7 @@ impl TaskState<'_> {
             })
         {
             self.sink
-                .push(diagnostics::attribute::displayable_on_pointer_newtype(
+                .push(diagnostics::attribute::display_on_pointer_newtype(
                     &attribute_span,
                 ));
             return;
@@ -119,7 +117,7 @@ impl TaskState<'_> {
         if let Some(user_ty) = user_to_string_type(store, qualified) {
             if is_ufcs_method_type(&user_ty, generics.len()) {
                 self.sink
-                    .push(diagnostics::attribute::displayable_specialized_to_string(
+                    .push(diagnostics::attribute::display_specialized_to_string(
                         attribute_span,
                     ));
                 return;
@@ -186,7 +184,7 @@ fn type_generics(definition: &Definition) -> Option<Vec<syntax::ast::Generic>> {
     }
 }
 
-struct DisplayableCandidate {
+struct DisplayCandidate {
     attribute_span: Span,
     kind: CandidateKind,
 }
@@ -203,30 +201,26 @@ struct TypeCandidate {
     has_args: bool,
 }
 
-fn displayable_attribute(attributes: &[Attribute]) -> Option<&Attribute> {
-    attributes.iter().find(|a| a.name == "displayable")
+fn display_attribute(attributes: &[Attribute]) -> Option<&Attribute> {
+    attributes.iter().find(|a| a.name == "display")
 }
 
-fn misplaced_candidate(attribute: &Attribute) -> DisplayableCandidate {
-    DisplayableCandidate {
+fn misplaced_candidate(attribute: &Attribute) -> DisplayCandidate {
+    DisplayCandidate {
         attribute_span: attribute.span,
         kind: CandidateKind::Misplaced,
     }
 }
 
-fn collect_method_attributes(methods: &[Expression], out: &mut Vec<DisplayableCandidate>) {
+fn collect_method_attributes(methods: &[Expression], out: &mut Vec<DisplayCandidate>) {
     for method in methods {
         if let Expression::Function { attributes, .. } = method {
-            out.extend(displayable_attribute(attributes).map(misplaced_candidate));
+            out.extend(display_attribute(attributes).map(misplaced_candidate));
         }
     }
 }
 
-fn collect_displayable_candidates(
-    item: &Expression,
-    is_d_lis: bool,
-    out: &mut Vec<DisplayableCandidate>,
-) {
+fn collect_display_candidates(item: &Expression, is_d_lis: bool, out: &mut Vec<DisplayCandidate>) {
     match item {
         Expression::Struct {
             attributes,
@@ -234,8 +228,8 @@ fn collect_displayable_candidates(
             fields,
             ..
         } => {
-            if let Some(attribute) = displayable_attribute(attributes) {
-                out.push(DisplayableCandidate {
+            if let Some(attribute) = display_attribute(attributes) {
+                out.push(DisplayCandidate {
                     attribute_span: attribute.span,
                     kind: CandidateKind::Type(TypeCandidate {
                         name: name.to_string(),
@@ -246,14 +240,14 @@ fn collect_displayable_candidates(
                 });
             }
             for field in fields {
-                out.extend(displayable_attribute(&field.attributes).map(misplaced_candidate));
+                out.extend(display_attribute(&field.attributes).map(misplaced_candidate));
             }
         }
         Expression::Enum {
             attributes, name, ..
         } => {
-            if let Some(attribute) = displayable_attribute(attributes) {
-                out.push(DisplayableCandidate {
+            if let Some(attribute) = display_attribute(attributes) {
+                out.push(DisplayCandidate {
                     attribute_span: attribute.span,
                     kind: CandidateKind::Type(TypeCandidate {
                         name: name.to_string(),
@@ -265,7 +259,7 @@ fn collect_displayable_candidates(
             }
         }
         Expression::Function { attributes, .. } => {
-            out.extend(displayable_attribute(attributes).map(misplaced_candidate));
+            out.extend(display_attribute(attributes).map(misplaced_candidate));
         }
         Expression::ImplBlock { methods, .. } => collect_method_attributes(methods, out),
         Expression::Interface {

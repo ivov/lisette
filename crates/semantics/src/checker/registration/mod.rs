@@ -1,7 +1,7 @@
 mod builtins;
 mod convert;
-mod displayable;
-mod iterables;
+mod display;
+mod iterate;
 mod methods;
 mod types;
 
@@ -50,8 +50,8 @@ pub(super) fn extract_go_name(attributes: &[Attribute]) -> Option<String> {
         })
 }
 
-pub(super) fn has_displayable_attribute(attributes: &[Attribute]) -> bool {
-    attributes.iter().any(|a| a.name == "displayable")
+pub(super) fn has_display_attribute(attributes: &[Attribute]) -> bool {
+    attributes.iter().any(|a| a.name == "display")
 }
 
 pub(super) fn extract_attribute_flags(attributes: &[Attribute], name: &str) -> Vec<String> {
@@ -108,8 +108,8 @@ impl TaskState<'_> {
             self.register_file_values(store, id, *file_id, imports);
         }
 
-        self.register_module_iterables(store, id);
-        self.register_module_displayable(store, id);
+        self.register_module_iterate(store, id);
+        self.register_module_display(store, id);
 
         let module = store.get_module(id).expect("module must exist");
         let ufcs_entries = crate::call_classification::compute_module_ufcs(module, id);
@@ -348,8 +348,8 @@ impl TaskState<'_> {
         self.register_type_definitions(store, items);
         self.register_impl_blocks(store, items);
         self.register_values(store, items, visibility);
-        self.register_iterables(store, items);
-        self.register_displayable(store, items);
+        self.register_iterate(store, items);
+        self.register_display(store, items);
     }
 
     pub fn register_type_names(
@@ -516,7 +516,7 @@ impl TaskState<'_> {
                     variants,
                     span,
                     doc,
-                    has_displayable_attribute(attributes),
+                    has_display_attribute(attributes),
                 ),
                 Expression::ValueEnum {
                     name,
@@ -552,7 +552,7 @@ impl TaskState<'_> {
                     *kind,
                     span,
                     doc,
-                    has_displayable_attribute(attributes),
+                    has_display_attribute(attributes),
                 ),
                 Expression::Interface {
                     name,

@@ -146,10 +146,10 @@ fn warm_cache(path: string) {
 
 ## Iteration
 
-Add `#[iterable]` to an enum to synthesize a `variants()` associated function returning every variant, in declaration order:
+Add `#[iterate]` to an enum to synthesize a `variants()` associated function returning every variant, in declaration order:
 
 ```rs
-#[iterable]
+#[iterate]
 enum Direction {
   North,
   East,
@@ -162,15 +162,15 @@ for direction in Direction.variants() {
 }
 ```
 
-`Direction.variants()` returns a `Slice<Direction>`. Only enums whose variants have no payloads can be `#[iterable]`.
+`Direction.variants()` returns a `Slice<Direction>`. Only enums whose variants have no payloads can be `#[iterate]`.
 
 ## Display
 
-Add `#[displayable]` to a struct or enum to render it as a readable string when displayed.
+Add `#[display]` to a struct or enum to render it as a readable string when displayed.
 
 
 ```rs
-#[displayable]
+#[display]
 struct Point {
   x: int,
   y: int,
@@ -181,13 +181,13 @@ let p = Point { x: 1, y: 2 }
 fmt.Println(p) // `Point { x: 1, y: 2 }`
 ```
 
-Without `#[displayable]`, a struct or enum cannot be interpolated in an f-string, and displays using Go's `%v` default formatting.
+Without `#[display]`, a struct or enum cannot be interpolated in an f-string, and displays using Go's `%v` default formatting.
 
 ```rs
-fmt.Println(p) // `{1 2}` if Point is not `#[displayable]`
+fmt.Println(p) // `{1 2}` if Point is not `#[display]`
 ```
 
-`#[displayable]` also gives the enum or struct a `to_string(self) -> string` method.
+`#[display]` also gives the enum or struct a `to_string(self) -> string` method.
 
 ```rs
 interface Display {

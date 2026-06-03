@@ -1,6 +1,6 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \n#[displayable]\nstruct UserId(int)\n"
+description: "input: \n#[display]\nstruct UserId(int)\n"
 ---
 package main
 

@@ -45,7 +45,7 @@ impl Planner<'_> {
         let generics_string = self.generics_to_string_for_symbol(&enum_id, generics, fx);
         let receiver_generics = receiver_generics_string(generics);
         let has_json = attributes.iter().any(|a| a.name == "json");
-        let has_iterable = attributes.iter().any(|a| a.name == "iterable");
+        let has_iterate = attributes.iter().any(|a| a.name == "iterate");
 
         let synthesize = should_synthesize_stringer(attributes);
         let (has_user_string, has_user_go_string) = self.stringer_overrides(name);
@@ -74,7 +74,7 @@ impl Planner<'_> {
             result.push_str("\n\n");
             result.push_str(&layout.emit_json_methods(&receiver_generics));
         }
-        if has_iterable {
+        if has_iterate {
             let is_public = self
                 .facts
                 .definition(enum_id.as_str())
@@ -94,11 +94,11 @@ impl Planner<'_> {
         Some(result)
     }
 
-    /// Export-aware Go name for an `#[iterable]` enum's synthesized `variants`
+    /// Export-aware Go name for an `#[iterate]` enum's synthesized `variants`
     /// function. Matches the static-method call-site naming so the definition
     /// and its calls agree.
     pub(crate) fn variants_go_name(&self, enum_name: &str, is_public: bool) -> String {
-        go_name::iterable_variants_fn_name(
+        go_name::iterate_variants_fn_name(
             enum_name,
             is_public || self.method_needs_export("variants"),
         )

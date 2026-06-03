@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] `#[display]` conflicts with your `to_string`
+   ╭─[test.lis:2:1]
+ 1 │ 
+ 2 │ #[display]
+   · ─────┬────
+   ·      ╰── adds a `to_string` of its own
+ 3 │ struct Box<T> {
+   ╰────
+  help: `#[display]` needs a plain `fn to_string(self) -> string` on the type. Write `to_string` in that form, or remove `#[display]` · code: [attribute.display_specialized_to_string]

@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] `#[iterate]` not on enum
+   ╭─[test.lis:2:1]
+ 1 │ 
+ 2 │ #[iterate]
+   · ─────┬────
+   ·      ╰── not on an enum
+ 3 │ struct Point { x: int, y: int }
+   ╰────
+  help: Only an enum can be marked `#[iterate]` · code: [attribute.iterate_not_an_enum]

@@ -1,6 +1,6 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \n#[displayable]\nenum Color { Red, Green }\n"
+description: "input: \n#[display]\nenum Color { Red, Green }\n"
 ---
 package main
 

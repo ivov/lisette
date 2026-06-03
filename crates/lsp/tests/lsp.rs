@@ -250,7 +250,7 @@ async fn completion_includes_synthesized_to_string() {
     client
         .open(
             TEST_URI,
-            "#[displayable]\nstruct Point { x: int, y: int }\n\nfn main() {\n  let p = Point { x: 1, y: 2 }\n  p.\n}",
+            "#[display]\nstruct Point { x: int, y: int }\n\nfn main() {\n  let p = Point { x: 1, y: 2 }\n  p.\n}",
         )
         .await;
 

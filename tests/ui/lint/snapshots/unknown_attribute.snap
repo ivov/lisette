@@ -9,4 +9,4 @@ source: tests/ui/lint/mod.rs
    ·    ╰── not recognized
  3 │ pub struct User {
    ╰────
-  help: `foo` is not a recognized attribute. Known attributes: `#[json]`, `#[xml]`, `#[yaml]`, `#[toml]`, `#[db]`, `#[bson]`, `#[msgpack]`, `#[mapstructure]`, `#[tag]` · code: [lint.unknown_attribute]
+  help: `foo` is not a recognized attribute. Known attributes: `#[json]`, `#[xml]`, `#[yaml]`, `#[toml]`, `#[db]`, `#[bson]`, `#[mapstructure]`, `#[msgpack]`, `#[tag]`, `#[allow]`, `#[iterate]`, `#[display]` · code: [lint.unknown_attribute]

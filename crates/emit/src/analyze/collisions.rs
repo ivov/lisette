@@ -147,7 +147,7 @@ impl Planner<'_> {
 
                 if attributes
                     .iter()
-                    .any(|attribute| attribute.name == "iterable")
+                    .any(|attribute| attribute.name == "iterate")
                 {
                     let variants_fn =
                         self.variants_go_name(name, matches!(visibility, Visibility::Public));

@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] `#[display]` not on a struct or enum
+   ╭─[test.lis:3:3]
+ 2 │ struct Config {
+ 3 │   #[display]
+   ·   ─────┬────
+   ·        ╰── not on a struct or enum
+ 4 │   value: int,
+   ╰────
+  help: Only a struct or enum can be marked `#[display]` · code: [attribute.display_not_a_struct_or_enum]

@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
    ·      ╰── has no display form
  7 │ }
    ╰────
-  help: Mark `Point` with `#[displayable]`, or interpolate its fields directly · code: [infer.interpolation_without_stringer]
+  help: Mark `Point` with `#[display]`, or interpolate its fields directly · code: [infer.interpolation_without_stringer]

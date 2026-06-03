@@ -1,6 +1,6 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \n#[displayable]\nstruct Box<T> { value: T }\n"
+description: "input: \n#[display]\nstruct Box<T> { value: T }\n"
 ---
 package main
 

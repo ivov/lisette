@@ -564,13 +564,17 @@ pub fn private_type_in_public_api(
     diagnostic
 }
 
-pub fn unknown_attribute(span: &Span, name: &str) -> LisetteDiagnostic {
+pub fn unknown_attribute(span: &Span, name: &str, known: &[&str]) -> LisetteDiagnostic {
+    let known_list = known
+        .iter()
+        .map(|attribute| format!("`#[{attribute}]`"))
+        .collect::<Vec<_>>()
+        .join(", ");
     LisetteDiagnostic::warn("Unknown attribute")
         .with_lint_code("unknown_attribute")
         .with_span_label(span, "not recognized")
         .with_help(format!(
-            "`{}` is not a recognized attribute. Known attributes: `#[json]`, `#[xml]`, `#[yaml]`, `#[toml]`, `#[db]`, `#[bson]`, `#[msgpack]`, `#[mapstructure]`, `#[tag]`",
-            name
+            "`{name}` is not a recognized attribute. Known attributes: {known_list}"
         ))
 }
 

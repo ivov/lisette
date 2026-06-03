@@ -521,7 +521,7 @@ fn main() {
 #[test]
 fn parse_attribute_on_unsupported_declaration() {
     let input = r#"
-#[iterable]
+#[iterate]
 interface Service {
   fn run(self) -> int
 }
@@ -537,7 +537,7 @@ interface Parent {
 }
 
 interface Child {
-  #[iterable]
+  #[iterate]
   impl Parent
 }
 "#;
@@ -7334,9 +7334,9 @@ fn main() {
 }
 
 #[test]
-fn iterable_on_payload_variant() {
+fn iterate_on_payload_variant() {
     let input = r#"
-#[iterable]
+#[iterate]
 enum Token {
   Eof,
   Ident(string),
@@ -7346,9 +7346,9 @@ enum Token {
 }
 
 #[test]
-fn iterable_on_generic_enum() {
+fn iterate_on_generic_enum() {
     let input = r#"
-#[iterable]
+#[iterate]
 enum Cached<T> {
   Hit,
   Miss,
@@ -7358,18 +7358,18 @@ enum Cached<T> {
 }
 
 #[test]
-fn iterable_on_struct() {
+fn iterate_on_struct() {
     let input = r#"
-#[iterable]
+#[iterate]
 struct Point { x: int, y: int }
 "#;
     assert_infer_error_snapshot!(input);
 }
 
 #[test]
-fn iterable_variants_method_collision() {
+fn iterate_variants_method_collision() {
     let input = r#"
-#[iterable]
+#[iterate]
 enum Color {
   Red,
   Green,
@@ -7385,9 +7385,9 @@ impl Color {
 }
 
 #[test]
-fn iterable_variant_named_variants() {
+fn iterate_variant_named_variants() {
     let input = r#"
-#[iterable]
+#[iterate]
 enum Color {
   Red,
   variants,
@@ -7397,10 +7397,10 @@ enum Color {
 }
 
 #[test]
-fn iterable_on_struct_field() {
+fn iterate_on_struct_field() {
     let input = r#"
 struct Config {
-  #[iterable]
+  #[iterate]
   value: int,
 }
 "#;
@@ -7408,12 +7408,12 @@ struct Config {
 }
 
 #[test]
-fn iterable_on_impl_method() {
+fn iterate_on_impl_method() {
     let input = r#"
 struct Widget {}
 
 impl Widget {
-  #[iterable]
+  #[iterate]
   fn build() -> int {
     0
   }
@@ -7423,10 +7423,10 @@ impl Widget {
 }
 
 #[test]
-fn iterable_on_interface_method() {
+fn iterate_on_interface_method() {
     let input = r#"
 interface Service {
-  #[iterable]
+  #[iterate]
   fn run() -> int
 }
 "#;
@@ -7434,9 +7434,9 @@ interface Service {
 }
 
 #[test]
-fn displayable_on_function() {
+fn display_on_function() {
     let input = r#"
-#[displayable]
+#[display]
 fn run() -> int {
   0
 }
@@ -7445,10 +7445,10 @@ fn run() -> int {
 }
 
 #[test]
-fn displayable_on_struct_field() {
+fn display_on_struct_field() {
     let input = r#"
 struct Config {
-  #[displayable]
+  #[display]
   value: int,
 }
 "#;
@@ -7456,12 +7456,12 @@ struct Config {
 }
 
 #[test]
-fn displayable_on_impl_method() {
+fn display_on_impl_method() {
     let input = r#"
 struct Widget {}
 
 impl Widget {
-  #[displayable]
+  #[display]
   fn build() -> int {
     0
   }
@@ -7471,10 +7471,10 @@ impl Widget {
 }
 
 #[test]
-fn displayable_on_interface_method() {
+fn display_on_interface_method() {
     let input = r#"
 interface Service {
-  #[displayable]
+  #[display]
   fn run() -> int
 }
 "#;
@@ -7482,27 +7482,27 @@ interface Service {
 }
 
 #[test]
-fn displayable_with_arguments() {
+fn display_with_arguments() {
     let input = r#"
-#[displayable(foo)]
+#[display(foo)]
 struct Point { x: int, y: int }
 "#;
     assert_infer_error_snapshot!(input);
 }
 
 #[test]
-fn displayable_on_pointer_newtype() {
+fn display_on_pointer_newtype() {
     let input = r#"
-#[displayable]
+#[display]
 struct Handle(Ref<int>)
 "#;
     assert_infer_error_snapshot!(input);
 }
 
 #[test]
-fn displayable_with_specialized_to_string() {
+fn display_with_specialized_to_string() {
     let input = r#"
-#[displayable]
+#[display]
 struct Box<T> {
   value: T,
 }
@@ -7542,11 +7542,11 @@ fn show(h: Handle) -> string {
 }
 
 #[test]
-fn displayable_on_alias_pointer_newtype() {
+fn display_on_alias_pointer_newtype() {
     let input = r#"
 type R = Ref<int>
 
-#[displayable]
+#[display]
 struct Handle(R)
 "#;
     assert_infer_error_snapshot!(input);

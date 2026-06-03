@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] `#[iterate]` not on enum
+   ╭─[test.lis:3:3]
+ 2 │ interface Service {
+ 3 │   #[iterate]
+   ·   ─────┬────
+   ·        ╰── not on an enum
+ 4 │   fn run() -> int
+   ╰────
+  help: Only an enum can be marked `#[iterate]` · code: [attribute.iterate_not_an_enum]

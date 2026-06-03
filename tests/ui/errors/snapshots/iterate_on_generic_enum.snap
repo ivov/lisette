@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] `#[iterate]` on generic enum
+   ╭─[test.lis:2:1]
+ 1 │ 
+ 2 │ #[iterate]
+   · ─────┬────
+   ·      ╰── disallowed if enum has generics
+ 3 │ enum Cached<T> {
+   ╰────
+  help: Remove the generic type parameters, or drop `#[iterate]` · code: [attribute.iterate_generic_enum]

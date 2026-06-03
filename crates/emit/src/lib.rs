@@ -110,7 +110,7 @@ impl GlobalEmitData {
                 _ => {}
             }
 
-            if definition.visibility.is_public() && definition.is_displayable() {
+            if definition.visibility.is_public() && definition.is_display() {
                 globals
                     .exported_method_names
                     .insert("to_string".to_string());

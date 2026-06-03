@@ -93,7 +93,7 @@ fn has_stringer(
     if is_pointer_newtype(definition, store) {
         return false;
     }
-    if definition.is_displayable() {
+    if definition.is_display() {
         return true;
     }
     let Some(methods) = store.get_own_methods(id) else {

@@ -42,7 +42,7 @@ pub(crate) fn snake_to_camel(s: &str) -> String {
     s.split('_').map(capitalize_first).collect()
 }
 
-pub(crate) fn iterable_variants_fn_name(enum_name: &str, exported: bool) -> String {
+pub(crate) fn iterate_variants_fn_name(enum_name: &str, exported: bool) -> String {
     let method_segment = if exported {
         snake_to_camel("variants")
     } else {

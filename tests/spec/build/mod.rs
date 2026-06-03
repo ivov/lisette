@@ -45,14 +45,14 @@ fn main() {
 }
 
 #[test]
-fn displayable_cross_module_to_string_exported() {
+fn display_cross_module_to_string_exported() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
         "util",
         "point.lis",
         r#"
-#[displayable]
+#[display]
 pub struct Point {
   pub x: int,
   pub y: int,
@@ -78,14 +78,14 @@ fn main() {
 }
 
 #[test]
-fn displayable_cross_module_satisfies_local_interface() {
+fn display_cross_module_satisfies_local_interface() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
         "util",
         "point.lis",
         r#"
-#[displayable]
+#[display]
 pub struct Point {
   pub x: int,
   pub y: int,
@@ -125,7 +125,7 @@ fn go_name_collision_user_to_string_wrong_signature() {
         ENTRY_MODULE_ID,
         "main.lis",
         r#"
-#[displayable]
+#[display]
 struct A {
   x: int,
 }
@@ -1433,14 +1433,14 @@ fn main() {
 }
 
 #[test]
-fn iterable_enum_named_go_keyword() {
+fn iterate_enum_named_go_keyword() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
         ENTRY_MODULE_ID,
         "main.lis",
         r#"
-#[iterable]
+#[iterate]
 enum map {
   A,
   B,
@@ -1456,19 +1456,19 @@ fn main() {
 }
 
 #[test]
-fn iterable_enum_export_name_consistency() {
+fn iterate_enum_export_name_consistency() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
         ENTRY_MODULE_ID,
         "main.lis",
         r#"
-#[iterable]
+#[iterate]
 pub enum PublicPhase {
   Build,
 }
 
-#[iterable]
+#[iterate]
 enum LocalPhase {
   Check,
 }
@@ -1484,14 +1484,14 @@ fn main() {
 }
 
 #[test]
-fn multimodule_iterable_enum() {
+fn multimodule_iterate_enum() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
         "phases",
         "mod.lis",
         r#"
-#[iterable]
+#[iterate]
 pub enum BuildPhase {
   Validate,
   Parse,
@@ -6267,7 +6267,7 @@ fn go_name_collision_field_vs_generated_stringer() {
         ENTRY_MODULE_ID,
         "main.lis",
         r#"
-#[displayable]
+#[display]
 pub struct Thing {
   pub string: int,
 }
@@ -6293,7 +6293,7 @@ fn go_name_collision_member_vs_synthesized_to_string() {
         ENTRY_MODULE_ID,
         "main.lis",
         r#"
-#[displayable]
+#[display]
 struct Point {
   to_string: int,
 }
@@ -6308,7 +6308,7 @@ fn main() {
     let codes = emit_diagnostic_codes(fs);
     assert!(
         codes.iter().any(|code| code == "emit.go_name_collision"),
-        "field to_string collides with the synthesized #[displayable] to_string() method; got: {codes:?}"
+        "field to_string collides with the synthesized #[display] to_string() method; got: {codes:?}"
     );
 }
 

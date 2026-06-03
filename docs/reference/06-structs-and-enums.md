@@ -197,7 +197,7 @@ let err = Err("oh no")
 
 ### Iterating on enum variants
 
-To iterate on enum variants in declaration order, mark an enum with the `#[iterable]` attribute.
+To iterate on enum variants in declaration order, mark an enum with the `#[iterate]` attribute.
 
 📚 See [`15-attributes.md`](15-attributes.md)
 

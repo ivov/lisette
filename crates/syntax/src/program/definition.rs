@@ -28,7 +28,7 @@ pub enum DefinitionBody {
         generics: Vec<Generic>,
         variants: Vec<EnumVariant>,
         methods: MethodSignatures,
-        displayable: bool,
+        display: bool,
     },
     ValueEnum {
         variants: Vec<ValueEnumVariant>,
@@ -41,7 +41,7 @@ pub enum DefinitionBody {
         kind: StructKind,
         methods: MethodSignatures,
         constructor: Option<Type>,
-        displayable: bool,
+        display: bool,
     },
     Interface {
         definition: Interface,
@@ -129,16 +129,11 @@ impl Definition {
         }
     }
 
-    pub fn is_displayable(&self) -> bool {
+    pub fn is_display(&self) -> bool {
         matches!(
             &self.body,
-            DefinitionBody::Struct {
-                displayable: true,
-                ..
-            } | DefinitionBody::Enum {
-                displayable: true,
-                ..
-            }
+            DefinitionBody::Struct { display: true, .. }
+                | DefinitionBody::Enum { display: true, .. }
         )
     }
 

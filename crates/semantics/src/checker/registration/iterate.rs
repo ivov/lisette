@@ -6,46 +6,46 @@ use super::TaskState;
 use crate::store::Store;
 
 impl TaskState<'_> {
-    /// Register iterables from a single items list (the `register_types_and_values` path).
-    pub(super) fn register_iterables(&mut self, store: &mut Store, items: &[Expression]) {
+    /// Register `#[iterate]` enums from a single items list (the `register_types_and_values` path).
+    pub(super) fn register_iterate(&mut self, store: &mut Store, items: &[Expression]) {
         let module_id = self.cursor.module_id.clone();
         let is_d_lis = self.is_d_lis(store);
         let mut candidates = Vec::new();
         for item in items {
-            collect_iterable_candidates(item, is_d_lis, &mut candidates);
+            collect_iterate_candidates(item, is_d_lis, &mut candidates);
         }
         for candidate in candidates {
-            self.process_iterable_candidate(store, &module_id, candidate);
+            self.process_iterate_candidate(store, &module_id, candidate);
         }
     }
 
-    /// Register iterables across all of the module's files (the `register_module`
+    /// Register `#[iterate]` enums across all of the module's files (the `register_module`
     /// path), after every file is registered so cross-file collisions are visible.
-    pub(super) fn register_module_iterables(&mut self, store: &mut Store, module_id: &str) {
+    pub(super) fn register_module_iterate(&mut self, store: &mut Store, module_id: &str) {
         let candidates = {
             let module = store.get_module(module_id).expect("module must exist");
             let mut candidates = Vec::new();
             for file in module.files.values() {
                 let is_d_lis = file.is_d_lis();
                 for item in &file.items {
-                    collect_iterable_candidates(item, is_d_lis, &mut candidates);
+                    collect_iterate_candidates(item, is_d_lis, &mut candidates);
                 }
             }
             candidates
         };
 
         for candidate in candidates {
-            self.process_iterable_candidate(store, module_id, candidate);
+            self.process_iterate_candidate(store, module_id, candidate);
         }
     }
 
-    fn process_iterable_candidate(
+    fn process_iterate_candidate(
         &mut self,
         store: &mut Store,
         module_id: &str,
-        candidate: IterableCandidate,
+        candidate: IterateCandidate,
     ) {
-        let IterableCandidate {
+        let IterateCandidate {
             attribute_span,
             kind,
         } = candidate;
@@ -57,9 +57,8 @@ impl TaskState<'_> {
             payload_variant_span,
         } = match kind {
             CandidateKind::NotAnEnum => {
-                self.sink.push(diagnostics::attribute::iterable_not_an_enum(
-                    &attribute_span,
-                ));
+                self.sink
+                    .push(diagnostics::attribute::iterate_not_an_enum(&attribute_span));
                 return;
             }
             CandidateKind::Enum(enum_candidate) => enum_candidate,
@@ -67,19 +66,18 @@ impl TaskState<'_> {
 
         if is_d_lis {
             self.sink
-                .push(diagnostics::attribute::iterable_in_typedef(&attribute_span));
+                .push(diagnostics::attribute::iterate_in_typedef(&attribute_span));
             return;
         }
         if is_generic {
-            self.sink
-                .push(diagnostics::attribute::iterable_generic_enum(
-                    &attribute_span,
-                ));
+            self.sink.push(diagnostics::attribute::iterate_generic_enum(
+                &attribute_span,
+            ));
             return;
         }
         if let Some(variant_span) = payload_variant_span {
             self.sink
-                .push(diagnostics::attribute::iterable_non_unit_variant(
+                .push(diagnostics::attribute::iterate_non_unit_variant(
                     &attribute_span,
                     &variant_span,
                 ));
@@ -104,7 +102,7 @@ impl TaskState<'_> {
         };
         if existing_span.is_some() || has_instance_variants {
             self.sink
-                .push(diagnostics::attribute::iterable_variants_conflict(
+                .push(diagnostics::attribute::iterate_variants_conflict(
                     &attribute_span,
                     existing_span.as_ref(),
                 ));
@@ -140,7 +138,7 @@ impl TaskState<'_> {
     }
 }
 
-struct IterableCandidate {
+struct IterateCandidate {
     attribute_span: Span,
     kind: CandidateKind,
 }
@@ -158,37 +156,33 @@ struct EnumCandidate {
     payload_variant_span: Option<Span>,
 }
 
-fn iterable_attribute_span(attributes: &[Attribute]) -> Option<Span> {
+fn iterate_attribute_span(attributes: &[Attribute]) -> Option<Span> {
     attributes
         .iter()
-        .find(|a| a.name == "iterable")
+        .find(|a| a.name == "iterate")
         .map(|a| a.span)
 }
 
-fn misplaced_candidate(span: Span) -> IterableCandidate {
-    IterableCandidate {
+fn misplaced_candidate(span: Span) -> IterateCandidate {
+    IterateCandidate {
         attribute_span: span,
         kind: CandidateKind::NotAnEnum,
     }
 }
 
-/// Record any `#[iterable]` on a method (impl or interface) as misplaced.
-fn collect_method_attributes(methods: &[Expression], out: &mut Vec<IterableCandidate>) {
+/// Record any `#[iterate]` on a method (impl or interface) as misplaced.
+fn collect_method_attributes(methods: &[Expression], out: &mut Vec<IterateCandidate>) {
     for method in methods {
         if let Expression::Function { attributes, .. } = method {
-            out.extend(iterable_attribute_span(attributes).map(misplaced_candidate));
+            out.extend(iterate_attribute_span(attributes).map(misplaced_candidate));
         }
     }
 }
 
-/// Collect every `#[iterable]` occurrence on a top-level item: an enum to
+/// Collect every `#[iterate]` occurrence on a top-level item: an enum to
 /// validate and synthesize, anything else (including fields and methods)
 /// recorded as misplaced so the attribute is never silently accepted off an enum.
-fn collect_iterable_candidates(
-    item: &Expression,
-    is_d_lis: bool,
-    out: &mut Vec<IterableCandidate>,
-) {
+fn collect_iterate_candidates(item: &Expression, is_d_lis: bool, out: &mut Vec<IterateCandidate>) {
     match item {
         Expression::Enum {
             attributes,
@@ -198,12 +192,12 @@ fn collect_iterable_candidates(
             variants,
             ..
         } => {
-            if let Some(attribute_span) = iterable_attribute_span(attributes) {
+            if let Some(attribute_span) = iterate_attribute_span(attributes) {
                 let payload_variant_span = variants
                     .iter()
                     .find(|v| !matches!(v.fields, VariantFields::Unit))
                     .map(|v| v.name_span);
-                out.push(IterableCandidate {
+                out.push(IterateCandidate {
                     attribute_span,
                     kind: CandidateKind::Enum(EnumCandidate {
                         name: name.to_string(),
@@ -218,13 +212,13 @@ fn collect_iterable_candidates(
         Expression::Struct {
             attributes, fields, ..
         } => {
-            out.extend(iterable_attribute_span(attributes).map(misplaced_candidate));
+            out.extend(iterate_attribute_span(attributes).map(misplaced_candidate));
             for field in fields {
-                out.extend(iterable_attribute_span(&field.attributes).map(misplaced_candidate));
+                out.extend(iterate_attribute_span(&field.attributes).map(misplaced_candidate));
             }
         }
         Expression::Function { attributes, .. } => {
-            out.extend(iterable_attribute_span(attributes).map(misplaced_candidate));
+            out.extend(iterate_attribute_span(attributes).map(misplaced_candidate));
         }
         Expression::ImplBlock { methods, .. } => collect_method_attributes(methods, out),
         Expression::Interface {

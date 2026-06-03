@@ -323,7 +323,7 @@ fn store_get_definition_domain_style_go_module() {
                 kind: syntax::ast::StructKind::Record,
                 methods: Default::default(),
                 constructor: None,
-                displayable: false,
+                display: false,
             },
         },
     );

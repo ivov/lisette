@@ -371,7 +371,7 @@ pub enum CachedDefinitionBody {
         generics: Vec<CachedGeneric>,
         variants: Vec<CachedEnumVariant>,
         methods: HashMap<String, Type>,
-        displayable: bool,
+        display: bool,
     },
     ValueEnum {
         variants: Vec<CachedValueEnumVariant>,
@@ -384,7 +384,7 @@ pub enum CachedDefinitionBody {
         kind: StructKind,
         methods: HashMap<String, Type>,
         constructor: Option<Type>,
-        displayable: bool,
+        display: bool,
     },
     Interface {
         definition: CachedInterface,
@@ -425,7 +425,7 @@ impl CachedDefinition {
                 generics,
                 variants,
                 methods,
-                displayable,
+                display,
             } => CachedDefinitionBody::Enum {
                 generics: generics
                     .iter()
@@ -436,7 +436,7 @@ impl CachedDefinition {
                     .map(|v| CachedEnumVariant::from_variant(v, file_id_to_index))
                     .collect(),
                 methods: Self::convert_methods(methods),
-                displayable: *displayable,
+                display: *display,
             },
             DefinitionBody::ValueEnum {
                 variants,
@@ -456,7 +456,7 @@ impl CachedDefinition {
                 kind,
                 methods,
                 constructor,
-                displayable,
+                display,
             } => CachedDefinitionBody::Struct {
                 generics: generics
                     .iter()
@@ -469,7 +469,7 @@ impl CachedDefinition {
                 kind: *kind,
                 methods: Self::convert_methods(methods),
                 constructor: constructor.clone(),
-                displayable: *displayable,
+                display: *display,
             },
             DefinitionBody::Interface { definition } => CachedDefinitionBody::Interface {
                 definition: CachedInterface::from_interface(definition, file_id_to_index),
@@ -528,12 +528,12 @@ impl CachedDefinition {
                 generics,
                 variants,
                 methods,
-                displayable,
+                display,
             } => DefinitionBody::Enum {
                 generics: generics.iter().map(|g| g.to_generic(file_ids)).collect(),
                 variants: variants.iter().map(|v| v.to_variant(file_ids)).collect(),
                 methods: Self::restore_methods(methods),
-                displayable: *displayable,
+                display: *display,
             },
             CachedDefinitionBody::ValueEnum {
                 variants,
@@ -550,14 +550,14 @@ impl CachedDefinition {
                 kind,
                 methods,
                 constructor,
-                displayable,
+                display,
             } => DefinitionBody::Struct {
                 generics: generics.iter().map(|g| g.to_generic(file_ids)).collect(),
                 fields: fields.iter().map(|f| f.to_field(file_ids)).collect(),
                 kind: *kind,
                 methods: Self::restore_methods(methods),
                 constructor: constructor.clone(),
-                displayable: *displayable,
+                display: *display,
             },
             CachedDefinitionBody::Interface { definition } => DefinitionBody::Interface {
                 definition: definition.to_interface(file_ids),

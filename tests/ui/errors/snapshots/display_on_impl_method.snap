@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] `#[display]` not on a struct or enum
+   ╭─[test.lis:5:3]
+ 4 │ impl Widget {
+ 5 │   #[display]
+   ·   ─────┬────
+   ·        ╰── not on a struct or enum
+ 6 │   fn build() -> int {
+   ╰────
+  help: Only a struct or enum can be marked `#[display]` · code: [attribute.display_not_a_struct_or_enum]

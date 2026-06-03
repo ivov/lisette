@@ -4762,13 +4762,13 @@ pub struct User {
 }
 
 #[test]
-fn displayable_attribute_is_known() {
+fn display_attribute_is_known() {
     assert_no_lint_warnings!(
         r#"
-#[displayable]
+#[display]
 struct Point { x: int, y: int }
 
-#[displayable]
+#[display]
 enum Color {
   Red,
   Green,

@@ -4,8 +4,8 @@ source: tests/ui/errors/mod.rs
   [error] Attribute not supported on target
    ╭─[test.lis:7:3]
  6 │ interface Child {
- 7 │   #[iterable]
-   ·   ─────┬─────
+ 7 │   #[iterate]
+   ·   ─────┬────
    ·        ╰── not supported on target
  8 │   impl Parent
    ╰────

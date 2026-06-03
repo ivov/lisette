@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] `#[display]` on a pointer-backed newtype
+   ╭─[test.lis:2:1]
+ 1 │ 
+ 2 │ #[display]
+   · ─────┬────
+   ·      ╰── a `Ref` has no display form
+ 3 │ struct Handle(Ref<int>)
+   ╰────
+  help: Give the type named fields, or drop `#[display]` · code: [attribute.display_on_pointer_newtype]

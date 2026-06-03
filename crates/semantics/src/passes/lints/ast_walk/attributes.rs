@@ -13,6 +13,9 @@ pub(crate) const SERIALIZATION_KEYS: &[&str] = &[
     "msgpack",
 ];
 
+/// Recognized attributes that are not serialization keys.
+const OTHER_ATTRIBUTES: &[&str] = &["tag", "allow", "iterate", "display"];
+
 pub fn check_attributes(expression: &Expression, diagnostics: &mut Vec<LisetteDiagnostic>) {
     let attributes = match expression {
         Expression::Function { attributes, .. } => attributes,
@@ -65,7 +68,11 @@ fn check_unknown_attribute(attribute: &Attribute, diagnostics: &mut Vec<LisetteD
     let name = &attribute.name;
 
     if !is_known_attribute(name) {
-        diagnostics.push(diagnostics::lint::unknown_attribute(&attribute.span, name));
+        diagnostics.push(diagnostics::lint::unknown_attribute(
+            &attribute.span,
+            name,
+            &known_attributes(),
+        ));
     }
 }
 
@@ -230,8 +237,17 @@ fn check_tag_with_alias(attribute: &Attribute, diagnostics: &mut Vec<LisetteDiag
     }
 }
 
+/// The full set of recognized attributes, in display order, for diagnostics.
+fn known_attributes() -> Vec<&'static str> {
+    SERIALIZATION_KEYS
+        .iter()
+        .chain(OTHER_ATTRIBUTES.iter())
+        .copied()
+        .collect()
+}
+
 fn is_known_attribute(name: &str) -> bool {
-    is_serialization_key(name) || matches!(name, "tag" | "allow" | "iterable" | "displayable")
+    is_serialization_key(name) || OTHER_ATTRIBUTES.contains(&name)
 }
 
 fn is_serialization_key(key: &str) -> bool {

@@ -209,7 +209,7 @@ impl Planner<'_> {
     }
 
     pub(crate) fn should_synthesize_to_string(&self, name: &str, attributes: &[Attribute]) -> bool {
-        attributes.iter().any(|a| a.name == "displayable") && !self.module.has_user_to_string(name)
+        attributes.iter().any(|a| a.name == "display") && !self.module.has_user_to_string(name)
     }
 
     pub(crate) fn is_pointer_backed_newtype(&self, name: &str) -> bool {
@@ -268,7 +268,7 @@ impl Planner<'_> {
 }
 
 pub(crate) fn should_synthesize_stringer(attributes: &[Attribute]) -> bool {
-    attributes.iter().any(|a| a.name == "displayable")
+    attributes.iter().any(|a| a.name == "display")
 }
 
 pub(crate) fn struct_field_go_name(
