@@ -201,7 +201,8 @@ impl LanguageServer for Backend {
             return Ok(None);
         };
 
-        let (ty, span) = hover::get_hover_type_and_span(expression, offset);
+        let (ty, span) = hover::resolve_declaration_hover(expression, offset, file, &snapshot)
+            .unwrap_or_else(|| hover::get_hover_type_and_span(expression, offset));
 
         if ty.is_type_var() || ty.is_error() {
             return Ok(None);

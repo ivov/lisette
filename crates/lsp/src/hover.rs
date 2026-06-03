@@ -1,4 +1,4 @@
-use syntax::ast::{Expression, Pattern, Span, TypedPattern};
+use syntax::ast::{Annotation, Expression, Pattern, Span, TypedPattern};
 use syntax::program::{Definition, DefinitionBody};
 
 use crate::analysis::find_module_by_alias;
@@ -10,6 +10,136 @@ use crate::offset_in_span;
 use crate::snapshot::AnalysisSnapshot;
 use crate::traversal::find_expression_at;
 use crate::type_name;
+
+/// Hover for top-level declarations and the annotation trees inside them.
+pub(crate) fn resolve_declaration_hover(
+    expression: &Expression,
+    offset: u32,
+    file: &syntax::program::File,
+    snapshot: &AnalysisSnapshot,
+) -> Option<(syntax::types::Type, Span)> {
+    let name_hover = |name: &str, name_span: Span| -> Option<(syntax::types::Type, Span)> {
+        if !offset_in_span(offset, &name_span) {
+            return None;
+        }
+        let qualified = format!("{}.{}", file.module_id, name);
+        let definition = snapshot.definitions().get(qualified.as_str())?;
+        Some((definition.ty().clone(), name_span))
+    };
+
+    match expression {
+        Expression::TypeAlias {
+            name,
+            name_span,
+            annotation,
+            ..
+        } => resolve_annotation_hover(annotation, offset, file, snapshot)
+            .or_else(|| name_hover(name, *name_span)),
+        Expression::Function {
+            name,
+            name_span,
+            params,
+            return_annotation,
+            ..
+        } => params
+            .iter()
+            .filter_map(|p| p.annotation.as_ref())
+            .find_map(|a| resolve_annotation_hover(a, offset, file, snapshot))
+            .or_else(|| resolve_annotation_hover(return_annotation, offset, file, snapshot))
+            .or_else(|| name_hover(name, *name_span)),
+        Expression::Enum {
+            name, name_span, ..
+        }
+        | Expression::Struct {
+            name, name_span, ..
+        }
+        | Expression::Interface {
+            name, name_span, ..
+        } => name_hover(name, *name_span),
+        _ => None,
+    }
+}
+
+fn resolve_annotation_hover(
+    annotation: &Annotation,
+    offset: u32,
+    file: &syntax::program::File,
+    snapshot: &AnalysisSnapshot,
+) -> Option<(syntax::types::Type, Span)> {
+    if !offset_in_span(offset, &annotation.get_span()) {
+        return None;
+    }
+    let recurse = |child| resolve_annotation_hover(child, offset, file, snapshot);
+    match annotation {
+        Annotation::Constructor { name, params, span } => params
+            .iter()
+            .find_map(recurse)
+            .or_else(|| resolve_constructor_name_hover(name, *span, offset, file, snapshot)),
+        Annotation::Function {
+            params,
+            return_type,
+            ..
+        } => params
+            .iter()
+            .find_map(recurse)
+            .or_else(|| recurse(return_type.as_ref())),
+        Annotation::Tuple { elements, .. } => elements.iter().find_map(recurse),
+        Annotation::Unknown | Annotation::Opaque { .. } => None,
+    }
+}
+
+fn resolve_constructor_name_hover(
+    name: &str,
+    span: Span,
+    offset: u32,
+    file: &syntax::program::File,
+    snapshot: &AnalysisSnapshot,
+) -> Option<(syntax::types::Type, Span)> {
+    let cursor_in_name = (offset - span.byte_offset) as usize;
+    let dot_pos = name.find('.').unwrap_or(name.len());
+
+    if cursor_in_name > dot_pos {
+        let (qualifier, simple) = name.split_once('.')?;
+        let module_name = find_module_by_alias(file, qualifier, &snapshot.result.go_package_names)?;
+        let qualified = format!("{}.{}", module_name, simple);
+        let definition = snapshot.definitions().get(qualified.as_str())?;
+        let simple_offset = span.byte_offset + dot_pos as u32 + 1;
+        let simple_span = Span::new(span.file_id, simple_offset, simple.len() as u32);
+        return Some((definition.ty().clone(), simple_span));
+    }
+
+    let first = &name[..dot_pos];
+    let first_span = Span::new(span.file_id, span.byte_offset, dot_pos as u32);
+    let ty = lookup_type_by_name(first, file, snapshot)?;
+    Some((ty, first_span))
+}
+
+fn lookup_type_by_name(
+    name: &str,
+    file: &syntax::program::File,
+    snapshot: &AnalysisSnapshot,
+) -> Option<syntax::types::Type> {
+    let candidates = [
+        format!("{}.{}", file.module_id, name),
+        name.to_string(),
+        format!("prelude.{}", name),
+    ];
+    for qualified in &candidates {
+        if let Some(def) = snapshot.definitions().get(qualified.as_str()) {
+            return Some(def.ty().clone());
+        }
+    }
+    for import in file.imports() {
+        if import.name.starts_with("go:") {
+            continue;
+        }
+        let qualified = format!("{}.{}", import.name, name);
+        if let Some(def) = snapshot.definitions().get(qualified.as_str()) {
+            return Some(def.ty().clone());
+        }
+    }
+    None
+}
 
 /// Extract the type and span for hover display at the given offset within an expression.
 pub(crate) fn get_hover_type_and_span(
@@ -291,11 +421,13 @@ pub(crate) fn get_hover_type_and_span(
 /// the offset lands on a sub-item and returns that sub-item's doc instead.
 fn extract_doc_from_expression(expression: &Expression, offset: u32) -> Option<String> {
     match expression {
-        Expression::Function { doc, .. }
-        | Expression::Const { doc, .. }
-        | Expression::VariableDeclaration { doc, .. }
-        | Expression::TypeAlias { doc, .. }
-        | Expression::Interface { doc, .. } => doc.clone(),
+        Expression::Const { doc, .. } | Expression::VariableDeclaration { doc, .. } => doc.clone(),
+
+        Expression::Function { doc, name_span, .. }
+        | Expression::TypeAlias { doc, name_span, .. }
+        | Expression::Interface { doc, name_span, .. } => offset_in_span(offset, name_span)
+            .then(|| doc.clone())
+            .flatten(),
 
         Expression::Enum { doc, variants, .. } => variants
             .iter()

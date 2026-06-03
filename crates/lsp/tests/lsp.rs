@@ -563,6 +563,284 @@ async fn hover_on_function_name_works() {
 }
 
 #[tokio::test]
+async fn hover_on_type_alias_name_shows_target() {
+    let mut client = TestClient::new().await;
+    client.initialize().await;
+    client.open(TEST_URI, "type K = int").await;
+
+    let hover = client.hover(TEST_URI, 0, 5).await;
+    let content = hover_content(&hover.expect("hover on K"));
+    assert!(content.contains("int"), "got: {content}");
+
+    client.shutdown().await;
+}
+
+#[tokio::test]
+async fn hover_on_struct_name_shows_type() {
+    let mut client = TestClient::new().await;
+    client.initialize().await;
+    client
+        .open(TEST_URI, "struct Point { x: int, y: int }")
+        .await;
+
+    let hover = client.hover(TEST_URI, 0, 9).await;
+    let content = hover_content(&hover.expect("hover on Point"));
+    assert!(content.contains("Point"), "got: {content}");
+
+    client.shutdown().await;
+}
+
+#[tokio::test]
+async fn hover_on_enum_name_shows_type() {
+    let mut client = TestClient::new().await;
+    client.initialize().await;
+    client
+        .open(TEST_URI, "enum Color { Red, Green, Blue }")
+        .await;
+
+    let hover = client.hover(TEST_URI, 0, 7).await;
+    let content = hover_content(&hover.expect("hover on Color"));
+    assert!(content.contains("Color"), "got: {content}");
+
+    client.shutdown().await;
+}
+
+#[tokio::test]
+async fn hover_on_interface_name_shows_type() {
+    let mut client = TestClient::new().await;
+    client.initialize().await;
+    client
+        .open(TEST_URI, "interface Foo { fn bar() -> int }")
+        .await;
+
+    let hover = client.hover(TEST_URI, 0, 12).await;
+    let content = hover_content(&hover.expect("hover on Foo"));
+    assert!(content.contains("Foo"), "got: {content}");
+
+    client.shutdown().await;
+}
+
+#[tokio::test]
+async fn hover_on_alias_target_primitive() {
+    let mut client = TestClient::new().await;
+    client.initialize().await;
+    client.open(TEST_URI, "type K = int").await;
+
+    let hover = client.hover(TEST_URI, 0, 10).await;
+    let content = hover_content(&hover.expect("hover on int"));
+    assert!(content.contains("int"), "got: {content}");
+
+    client.shutdown().await;
+}
+
+#[tokio::test]
+async fn hover_on_alias_target_qualified() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    std::fs::write(root.join("lisette.toml"), "").unwrap();
+    let src = root.join("src");
+    std::fs::create_dir_all(&src).unwrap();
+    let response_dir = src.join("response");
+    std::fs::create_dir_all(&response_dir).unwrap();
+    std::fs::write(
+        response_dir.join("response.lis"),
+        "pub enum Code { Ok, Err }",
+    )
+    .unwrap();
+    let main_content = "import \"response\"\n\ntype Code = response.Code\n";
+    std::fs::write(src.join("main.lis"), main_content).unwrap();
+
+    let mut client = TestClient::new().await;
+    client.initialize_with_root(root).await;
+    let main_uri = Url::from_file_path(src.join("main.lis"))
+        .unwrap()
+        .to_string();
+    client.open(&main_uri, main_content).await;
+
+    // cursor on the member `Code` after the dot
+    let hover = client.hover(&main_uri, 2, 22).await;
+    let content = hover_content(&hover.expect("hover on response.Code"));
+    assert!(content.contains("Code"), "got: {content}");
+
+    client.shutdown().await;
+}
+
+#[tokio::test]
+async fn hover_on_alias_target_in_function_type() {
+    let mut client = TestClient::new().await;
+    client.initialize().await;
+    client
+        .open(TEST_URI, "type Handler = fn(int) -> string")
+        .await;
+
+    // cursor on `int` inside the function annotation
+    let hover_param = client.hover(TEST_URI, 0, 19).await;
+    let content = hover_content(&hover_param.expect("hover on int"));
+    assert!(content.contains("int"), "got: {content}");
+
+    // cursor on `string` (return type)
+    let hover_ret = client.hover(TEST_URI, 0, 27).await;
+    let content = hover_content(&hover_ret.expect("hover on string"));
+    assert!(content.contains("string"), "got: {content}");
+
+    client.shutdown().await;
+}
+
+#[tokio::test]
+async fn hover_on_alias_target_in_tuple_type() {
+    let mut client = TestClient::new().await;
+    client.initialize().await;
+    client.open(TEST_URI, "type Pair = (int, string)").await;
+
+    let hover = client.hover(TEST_URI, 0, 19).await;
+    let content = hover_content(&hover.expect("hover on string in tuple"));
+    assert!(content.contains("string"), "got: {content}");
+
+    client.shutdown().await;
+}
+
+#[tokio::test]
+async fn hover_on_alias_target_generic_arg() {
+    let mut client = TestClient::new().await;
+    client.initialize().await;
+    client.open(TEST_URI, "type Ints = Slice<int>").await;
+
+    let hover = client.hover(TEST_URI, 0, 19).await;
+    let content = hover_content(&hover.expect("hover on int inside Slice<int>"));
+    assert!(content.contains("int"), "got: {content}");
+
+    client.shutdown().await;
+}
+
+#[tokio::test]
+async fn hover_on_alias_target_generic_head() {
+    let mut client = TestClient::new().await;
+    client.initialize().await;
+    client.open(TEST_URI, "type Ints = Slice<int>").await;
+
+    let hover = client.hover(TEST_URI, 0, 13).await;
+    let content = hover_content(&hover.expect("hover on Slice head"));
+    assert!(content.contains("Slice"), "got: {content}");
+
+    client.shutdown().await;
+}
+
+#[tokio::test]
+async fn hover_on_function_return_annotation() {
+    let mut client = TestClient::new().await;
+    client.initialize().await;
+    client
+        .open(TEST_URI, "fn make() -> string { \"hi\" }")
+        .await;
+
+    let hover = client.hover(TEST_URI, 0, 14).await;
+    let content = hover_content(&hover.expect("hover on string return type"));
+    assert!(content.contains("string"), "got: {content}");
+    assert!(
+        !content.contains("->"),
+        "should be type only, got: {content}"
+    );
+
+    client.shutdown().await;
+}
+
+#[tokio::test]
+async fn hover_on_function_param_annotation() {
+    let mut client = TestClient::new().await;
+    client.initialize().await;
+    client
+        .open(TEST_URI, "fn add(x: int) -> string { \"hi\" }")
+        .await;
+
+    let hover = client.hover(TEST_URI, 0, 11).await;
+    let content = hover_content(&hover.expect("hover on int param type"));
+    assert!(content.contains("int"), "got: {content}");
+    assert!(
+        !content.contains("string"),
+        "should not leak return type, got: {content}"
+    );
+
+    client.shutdown().await;
+}
+
+#[tokio::test]
+async fn hover_on_function_qualified_return_annotation() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    std::fs::write(root.join("lisette.toml"), "").unwrap();
+    let src = root.join("src");
+    std::fs::create_dir_all(&src).unwrap();
+    let http_dir = src.join("http");
+    std::fs::create_dir_all(&http_dir).unwrap();
+    std::fs::write(
+        http_dir.join("http.lis"),
+        "pub struct HandlerFunc { name: string }",
+    )
+    .unwrap();
+    let main_content =
+        "import \"http\"\n\nfn handle() -> http.HandlerFunc { http.HandlerFunc { name: \"\" } }\n";
+    std::fs::write(src.join("main.lis"), main_content).unwrap();
+
+    let mut client = TestClient::new().await;
+    client.initialize_with_root(root).await;
+    let main_uri = Url::from_file_path(src.join("main.lis"))
+        .unwrap()
+        .to_string();
+    client.open(&main_uri, main_content).await;
+
+    // cursor on `HandlerFunc` after the dot in the return annotation
+    let hover = client.hover(&main_uri, 2, 24).await;
+    let content = hover_content(&hover.expect("hover on http.HandlerFunc"));
+    assert!(content.contains("HandlerFunc"), "got: {content}");
+    assert!(
+        !content.contains("->"),
+        "should be type only, not full signature, got: {content}"
+    );
+
+    client.shutdown().await;
+}
+
+#[tokio::test]
+async fn hover_on_param_annotation_excludes_function_doc() {
+    let mut client = TestClient::new().await;
+    client.initialize().await;
+    client
+        .open(
+            TEST_URI,
+            "/// Adds two ints\nfn add(x: int) -> string { \"hi\" }",
+        )
+        .await;
+
+    let hover = client.hover(TEST_URI, 1, 11).await;
+    let content = hover_content(&hover.expect("hover on int param type"));
+    assert!(content.contains("int"), "got: {content}");
+    assert!(
+        !content.contains("Adds two ints"),
+        "function doc leaked into param-type hover, got: {content}"
+    );
+
+    client.shutdown().await;
+}
+
+#[tokio::test]
+async fn hover_on_function_name_includes_doc() {
+    let mut client = TestClient::new().await;
+    client.initialize().await;
+    client
+        .open(
+            TEST_URI,
+            "/// Adds two ints\nfn add(x: int) -> string { \"hi\" }",
+        )
+        .await;
+
+    let hover = client.hover(TEST_URI, 1, 3).await;
+    let content = hover_content(&hover.expect("hover on function name"));
+    assert!(content.contains("Adds two ints"), "got: {content}");
+
+    client.shutdown().await;
+}
+
+#[tokio::test]
 async fn goto_definition_on_literal_returns_none() {
     let mut client = TestClient::new().await;
     client.initialize().await;
