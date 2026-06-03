@@ -4034,6 +4034,45 @@ fn main() { test(Some(1)); }
 }
 
 #[test]
+fn match_single_binding_identifier() {
+    assert_lint_snapshot!(
+        r#"
+pub fn test(x: int) -> int {
+  match x {
+    y => y + 1,
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn match_single_binding_wildcard_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+pub fn test(x: int) -> int {
+  match x {
+    _ => 42,
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn match_single_binding_tuple_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+pub fn test(pair: (int, int)) -> int {
+  match pair {
+    (a, b) => a + b,
+  }
+}
+"#
+    );
+}
+
+#[test]
 fn redundant_pattern_matching_option_is_some() {
     assert_lint_snapshot!(
         r#"

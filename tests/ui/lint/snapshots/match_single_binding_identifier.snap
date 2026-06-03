@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [info] Ineffective match
+   ╭─[test.lis:3:3]
+ 2 │ pub fn test(x: int) -> int {
+ 3 │   match x {
+   ·   ──┬──
+   ·     ╰── should be `let`
+ 4 │     y => y + 1,
+   ╰────
+  help: A match with a single binding is ineffective. Use `let y = value` instead · code: [lint.match_single_binding]

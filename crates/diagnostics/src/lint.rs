@@ -426,6 +426,16 @@ pub fn single_arm_match(span: &Span, pattern_suggestion: &str) -> LisetteDiagnos
         ))
 }
 
+pub fn match_single_binding(span: &Span, binding: &str) -> LisetteDiagnostic {
+    LisetteDiagnostic::info("Ineffective match")
+        .with_lint_code("match_single_binding")
+        .with_span_label(span, "should be `let`")
+        .with_help(format!(
+            "A match with a single binding is ineffective. Use `let {} = value` instead.",
+            binding
+        ))
+}
+
 pub fn uninterpolated_fstring(span: &Span) -> LisetteDiagnostic {
     LisetteDiagnostic::info("Uninterpolated f-string")
         .with_lint_code("uninterpolated_fstring")
