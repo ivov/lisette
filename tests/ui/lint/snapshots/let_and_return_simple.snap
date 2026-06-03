@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [info] Redundant binding before return
+   ╭─[test.lis:3:3]
+ 2 │ pub fn doubled(n: int) -> int {
+ 3 │   let x = n * 2
+   ·   ──────┬──────
+   ·         ╰── bound and immediately returned
+ 4 │   x
+   ╰────
+  help: Return the value directly instead of binding it first · code: [lint.let_and_return]

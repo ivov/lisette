@@ -8076,3 +8076,91 @@ fn main() {
 "#
     );
 }
+
+#[test]
+fn let_and_return_simple() {
+    assert_lint_snapshot!(
+        r#"
+pub fn doubled(n: int) -> int {
+  let x = n * 2
+  x
+}
+"#
+    );
+}
+
+#[test]
+fn let_and_return_after_statements() {
+    assert_lint_snapshot!(
+        r#"
+pub fn process(n: int) -> int {
+  let doubled = n * 2
+  let result = doubled + 1
+  result
+}
+"#
+    );
+}
+
+#[test]
+fn let_and_return_nested_block() {
+    assert_lint_snapshot!(
+        r#"
+pub fn compute() -> int {
+  let total = {
+    let inner = 5 + 1
+    inner
+  }
+  total + 1
+}
+"#
+    );
+}
+
+#[test]
+fn let_and_return_annotated_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+pub fn annotated() -> int {
+  let x: int = 7
+  x
+}
+"#
+    );
+}
+
+#[test]
+fn let_and_return_tail_expression_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+pub fn tail_expr(n: int) -> int {
+  let x = n
+  x + 1
+}
+"#
+    );
+}
+
+#[test]
+fn let_and_return_destructure_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+pub fn destructure() -> int {
+  let (a, _) = (1, 2)
+  a
+}
+"#
+    );
+}
+
+#[test]
+fn let_and_return_name_mismatch_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+pub fn name_mismatch(a: int, b: int) -> int {
+  let _ignored = a + b
+  a
+}
+"#
+    );
+}

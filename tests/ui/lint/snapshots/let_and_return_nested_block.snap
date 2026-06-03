@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [info] Redundant binding before return
+   ╭─[test.lis:4:5]
+ 3 │   let total = {
+ 4 │     let inner = 5 + 1
+   ·     ────────┬────────
+   ·             ╰── bound and immediately returned
+ 5 │     inner
+   ╰────
+  help: Return the value directly instead of binding it first · code: [lint.let_and_return]

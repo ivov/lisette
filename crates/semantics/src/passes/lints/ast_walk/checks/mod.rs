@@ -9,6 +9,7 @@ mod helpers;
 mod identical_if_branches;
 mod identical_match_arms;
 mod invisible_in_string;
+mod let_and_return;
 mod loop_runs_once;
 mod lost_query_mutation;
 mod manual_compound_assignment;
@@ -47,6 +48,7 @@ pub use identical_match_arms::check_identical_match_arms;
 pub use invisible_in_string::{
     check_invisible_in_string_expression, check_invisible_in_string_pattern,
 };
+pub use let_and_return::check_let_and_return;
 pub use loop_runs_once::check_loop_runs_once;
 pub use lost_query_mutation::check_lost_query_mutation;
 pub use manual_compound_assignment::check_manual_compound_assignment;

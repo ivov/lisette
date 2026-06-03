@@ -443,6 +443,13 @@ pub fn match_single_binding(span: &Span, binding: &str) -> LisetteDiagnostic {
         ))
 }
 
+pub fn let_and_return(span: &Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::info("Redundant binding before return")
+        .with_lint_code("let_and_return")
+        .with_span_label(span, "bound and immediately returned")
+        .with_help("Return the value directly instead of binding it first")
+}
+
 pub fn uninterpolated_fstring(span: &Span) -> LisetteDiagnostic {
     LisetteDiagnostic::info("Uninterpolated f-string")
         .with_lint_code("uninterpolated_fstring")
