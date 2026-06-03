@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [info] Redundant type assertion
+   ╭─[test.lis:4:11]
+ 3 │   let x = 5
+ 4 │   let _ = assert_type<int>(x)
+   ·           ─────────┬─────────
+   ·                    ╰── already of type `int`
+ 5 │ }
+   ╰────
+  help: `assert_type` narrows an `Unknown` value, but this value is already `int`, so the assertion always succeeds · code: [infer.redundant_assert_type]

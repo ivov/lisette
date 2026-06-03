@@ -468,6 +468,10 @@ impl TaskState<'_> {
             return_ty.clone()
         };
 
+        if call_kind == CallKind::AssertType {
+            self.check_redundant_assert_type(&return_ty, &new_args, span);
+        }
+
         Expression::Call {
             expression: callee_expression.into(),
             args: new_args,
@@ -898,6 +902,29 @@ impl TaskState<'_> {
                 self.with_value_context(|s| s.infer_expression(store, arg, &expected_ty))
             })
             .collect()
+    }
+
+    fn check_redundant_assert_type(&mut self, return_ty: &Type, args: &[Expression], span: Span) {
+        let resolved_return = return_ty.resolve_in(&self.env);
+        let Some(asserted_ty) = resolved_return.inner() else {
+            return;
+        };
+        let asserted_ty = asserted_ty.resolve_in(&self.env);
+
+        let Some(arg) = args.first() else {
+            return;
+        };
+        let value_ty = arg.get_type().resolve_in(&self.env);
+        if value_ty.is_unknown() {
+            return;
+        }
+
+        if value_ty == asserted_ty {
+            self.sink.push(diagnostics::infer::redundant_assert_type(
+                &asserted_ty,
+                span,
+            ));
+        }
     }
 
     /// Suggests postfix `f(xs...)` when a `..xs` range arg lands against a variadic callee.

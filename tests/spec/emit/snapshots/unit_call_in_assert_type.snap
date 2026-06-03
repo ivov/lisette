@@ -1,6 +1,6 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nfn noop() {}\n\nfn main() {\n  let x = assert_type<()>(noop())\n  let _ = x\n}\n"
+description: "input: \nfn noop() {}\n\nfn main() {\n  let x = assert_type<int>(noop())\n  let _ = x\n}\n"
 ---
 package main
 
@@ -10,6 +10,6 @@ func noop() {}
 
 func main() {
 	noop()
-	x := lisette.AssertType[struct{}](struct{}{})
+	x := lisette.AssertType[int](struct{}{})
 	_ = x
 }

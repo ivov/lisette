@@ -5527,6 +5527,40 @@ fn test() -> int {
 }
 
 #[test]
+fn assert_type_interface_narrowing_not_redundant() {
+    let input = r#"
+interface Animal {
+  fn sound(self) -> string
+}
+
+struct Dog {}
+
+impl Dog {
+  fn sound(self) -> string { "woof" }
+}
+
+fn pick(a: Animal) -> Option<Animal> {
+  assert_type<Dog>(a)
+}
+"#;
+    let result = crate::_harness::infer::infer(input);
+    assert!(
+        result
+            .errors
+            .iter()
+            .any(|e| e.code_str() == Some("infer.type_mismatch")),
+        "expected the coercion scenario to produce a type mismatch"
+    );
+    assert!(
+        !result
+            .errors
+            .iter()
+            .any(|e| e.code_str() == Some("infer.redundant_assert_type")),
+        "narrowing an interface to a concrete type must not be flagged redundant"
+    );
+}
+
+#[test]
 fn infer_integer_literal_overflow_int8() {
     let input = r#"
 fn test() {

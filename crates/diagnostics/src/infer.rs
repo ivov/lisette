@@ -2386,6 +2386,16 @@ pub fn redundant_cast(ty: &Type, span: Span) -> LisetteDiagnostic {
         .with_help("Remove the unnecessary cast")
 }
 
+pub fn redundant_assert_type(ty: &Type, span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::info("Redundant type assertion")
+        .with_infer_code("redundant_assert_type")
+        .with_span_label(&span, format!("already of type `{}`", ty))
+        .with_help(format!(
+            "`assert_type` narrows an `Unknown` value, but this value is already `{}`, so the assertion always succeeds",
+            ty
+        ))
+}
+
 pub fn integer_literal_overflow(
     target_ty: &str,
     min: i128,

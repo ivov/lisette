@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [info] Redundant type assertion
+   ╭─[test.lis:6:11]
+ 5 │   let p = Point { x: 1 }
+ 6 │   let _ = assert_type<Point>(p)
+   ·           ──────────┬──────────
+   ·                     ╰── already of type `Point`
+ 7 │ }
+   ╰────
+  help: `assert_type` narrows an `Unknown` value, but this value is already `Point`, so the assertion always succeeds · code: [infer.redundant_assert_type]

@@ -3693,7 +3693,7 @@ fn unit_call_in_assert_type() {
 fn noop() {}
 
 fn main() {
-  let x = assert_type<()>(noop())
+  let x = assert_type<int>(noop())
   let _ = x
 }
 "#;

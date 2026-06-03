@@ -7749,6 +7749,56 @@ fn main() {
 }
 
 #[test]
+fn redundant_assert_type_primitive() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let x = 5
+  let _ = assert_type<int>(x)
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_assert_type_named() {
+    assert_lint_snapshot!(
+        r#"
+struct Point { x: int }
+
+fn main() {
+  let p = Point { x: 1 }
+  let _ = assert_type<Point>(p)
+}
+"#
+    );
+}
+
+#[test]
+fn assert_type_on_unknown_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let value: Unknown = 7
+  let _ = assert_type<int>(value)
+}
+"#
+    );
+}
+
+#[test]
+fn assert_type_different_type_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let x = 5
+  let _ = assert_type<int64>(x)
+}
+"#
+    );
+}
+
+#[test]
 fn lost_query_mutation_set() {
     assert_lint_snapshot!(
         r#"
