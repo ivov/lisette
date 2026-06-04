@@ -71,9 +71,9 @@ fn parse_format(value: &str) -> Result<OutputFormat, ParseError> {
     match value {
         "unix" => Ok(OutputFormat::Unix),
         other => Err(ParseError::UnexpectedArgument {
-            message: format!("unexpected value `{}` for `--format`", other),
-            reason: "`--format` accepts `unix`".to_string(),
-            hint: "Use `lis check --format unix`".to_string(),
+            message: format!("unexpected value `{}` for `--output`", other),
+            reason: "`--output` accepts `unix`".to_string(),
+            hint: "Use `lis check --output unix`".to_string(),
         }),
     }
 }
@@ -170,16 +170,16 @@ impl Command {
                     match arg.as_str() {
                         "--errors-only" => errors_only = true,
                         "--warnings-only" => warnings_only = true,
-                        "--format" => {
+                        "--output" => {
                             let Some(value) = arguments.next() else {
                                 return Err(ParseError::MissingArgument {
                                     command: "check",
-                                    argument: "--format <value>",
+                                    argument: "--output <value>",
                                 });
                             };
                             format = parse_format(&value)?;
                         }
-                        s if s.starts_with("--format=") => {
+                        s if s.starts_with("--output=") => {
                             format = parse_format(s.split_once('=').unwrap().1)?;
                         }
                         s if s.starts_with('-') => {
@@ -354,36 +354,36 @@ mod tests {
     }
 
     #[test]
-    fn check_format_unix_space_form() {
-        let Ok(Command::Check { format, .. }) = parse(&["lis", "check", "--format", "unix"]) else {
+    fn check_output_unix_space_form() {
+        let Ok(Command::Check { format, .. }) = parse(&["lis", "check", "--output", "unix"]) else {
             panic!("expected Check command");
         };
         assert_eq!(format, OutputFormat::Unix);
     }
 
     #[test]
-    fn check_format_unix_equals_form() {
-        let Ok(Command::Check { format, .. }) = parse(&["lis", "check", "--format=unix"]) else {
+    fn check_output_unix_equals_form() {
+        let Ok(Command::Check { format, .. }) = parse(&["lis", "check", "--output=unix"]) else {
             panic!("expected Check command");
         };
         assert_eq!(format, OutputFormat::Unix);
     }
 
     #[test]
-    fn check_format_missing_value() {
+    fn check_output_missing_value() {
         assert!(matches!(
-            parse(&["lis", "check", "--format"]),
+            parse(&["lis", "check", "--output"]),
             Err(ParseError::MissingArgument {
                 command: "check",
-                argument: "--format <value>",
+                argument: "--output <value>",
             })
         ));
     }
 
     #[test]
-    fn check_format_invalid_value() {
+    fn check_output_invalid_value() {
         assert!(matches!(
-            parse(&["lis", "check", "--format", "json"]),
+            parse(&["lis", "check", "--output", "json"]),
             Err(ParseError::UnexpectedArgument { .. })
         ));
     }
@@ -397,13 +397,13 @@ mod tests {
     }
 
     #[test]
-    fn check_format_composes_with_errors_only() {
+    fn check_output_composes_with_errors_only() {
         let Ok(Command::Check {
             format,
             errors_only,
             warnings_only,
             ..
-        }) = parse(&["lis", "check", "--format", "unix", "--errors-only"])
+        }) = parse(&["lis", "check", "--output", "unix", "--errors-only"])
         else {
             panic!("expected Check command");
         };

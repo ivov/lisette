@@ -38,7 +38,7 @@ fn e2e_learn() {
     );
 
     let check = Command::new(&lis)
-        .args(["check", "--format", "unix"])
+        .args(["check", "--output", "unix"])
         .arg(&project)
         .env("NO_COLOR", "1")
         .output()

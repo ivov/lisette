@@ -131,13 +131,13 @@ Arguments:
 Options:
     `--errors-only`      Show only errors
     `--warnings-only`    Show only warnings
-    `--format` <unix>    Machine-readable output, one diagnostic per line
+    `--output` <unix>    Machine-readable output, one diagnostic per line
 
 Examples:
     `lis check`                          Check project in current dir
     `lis check` {path/to/project/dir:g}      Check project in specific dir
     `lis check` {script.lis:g}               Check single file
-    `lis check` {--format unix:g}            One diagnostic per line, for editors",
+    `lis check` {--output unix:g}            One diagnostic per line, for editors",
         ),
 
         "add" => print_help(

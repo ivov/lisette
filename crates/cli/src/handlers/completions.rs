@@ -56,10 +56,10 @@ fn bash_completions() -> &'static str {
             return 0
             ;;
         check)
-            COMPREPLY=( $(compgen -W "--errors-only --warnings-only --format" -- "$cur") )
+            COMPREPLY=( $(compgen -W "--errors-only --warnings-only --output" -- "$cur") )
             return 0
             ;;
-        --format)
+        --output)
             COMPREPLY=( $(compgen -W "unix" -- "$cur") )
             return 0
             ;;
@@ -125,7 +125,7 @@ _lis() {
                     _arguments \
                         '--errors-only[Show only errors]' \
                         '--warnings-only[Show only warnings]' \
-                        '--format[Machine-readable output]:format:(unix)'
+                        '--output[Machine-readable output]:output:(unix)'
                     ;;
                 doc)
                     _arguments {-s,--search}'[Search across prelude and Go stdlib]'
@@ -167,7 +167,7 @@ complete -c lis -n '__fish_seen_subcommand_from run' -l debug -d 'Include line d
 complete -c lis -n '__fish_seen_subcommand_from format' -l check -d 'Check formatting without modifying'
 complete -c lis -n '__fish_seen_subcommand_from check' -l errors-only -d 'Show only errors'
 complete -c lis -n '__fish_seen_subcommand_from check' -l warnings-only -d 'Show only warnings'
-complete -c lis -n '__fish_seen_subcommand_from check' -l format -r -a unix -d 'Machine-readable output'
+complete -c lis -n '__fish_seen_subcommand_from check' -l output -r -a unix -d 'Machine-readable output'
 complete -c lis -n '__fish_seen_subcommand_from doc' -s s -l search -d 'Search across prelude and Go stdlib'
 complete -c lis -n '__fish_seen_subcommand_from complete' -a 'bash zsh fish' -d 'Shell type'
 complete -c lis -n '__fish_seen_subcommand_from help' -a 'new build run format check add sync learn doc help complete version' -d 'Command'
