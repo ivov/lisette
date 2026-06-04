@@ -192,7 +192,6 @@ impl Planner<'_> {
             .and_then(|definition| match &definition.body {
                 DefinitionBody::Struct { methods, .. }
                 | DefinitionBody::Enum { methods, .. }
-                | DefinitionBody::ValueEnum { methods, .. }
                 | DefinitionBody::TypeAlias { methods, .. } => Some(methods),
                 _ => None,
             });

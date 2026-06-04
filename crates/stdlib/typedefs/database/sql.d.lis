@@ -8,16 +8,8 @@ import "go:database/sql/driver"
 import "go:reflect"
 import "go:time"
 
-pub enum IsolationLevel: int {
-  LevelDefault = 0,
-  LevelLinearizable = 7,
-  LevelReadCommitted = 2,
-  LevelReadUncommitted = 1,
-  LevelRepeatableRead = 4,
-  LevelSerializable = 6,
-  LevelSnapshot = 5,
-  LevelWriteCommitted = 3,
-}
+/// IsolationLevel is the transaction isolation level used in [TxOptions].
+pub struct IsolationLevel(int)
 
 pub const LevelDefault: IsolationLevel = 0
 

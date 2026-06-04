@@ -62,7 +62,13 @@ Fixed-size arrays `[N]T` are not yet representable in Lisette. In return positio
 
 ### Named primitive types
 
-Go's named primitive types (`time.Duration`, `time.Weekday`, etc.) are nominal in Lisette just as in Go. For example, this means that an `int` is not interchangeable with a named numeric type like `time.Weekday`.
+A Go `type X <primitive>` declaration like `type Duration int64` becomes a single-field tuple struct:
+
+```rust
+pub struct Duration(int64)
+```
+
+Named primitives are nominal just as in Go, so they are not interchangeable with the underlying primitive type.
 
 In both languages, a literal adapts wherever the named type is expected; a typed value needs explicit conversion.
 

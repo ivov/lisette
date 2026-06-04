@@ -45,7 +45,7 @@ impl Planner<'_> {
                     let filtered = strip_self_referential_bounds(generics, name);
                     table.ensure_seeded(key, &filtered);
                 }
-                DefinitionBody::Value { .. } | DefinitionBody::ValueEnum { .. } => {}
+                DefinitionBody::Value { .. } => {}
             }
         }
     }
@@ -223,7 +223,7 @@ impl Planner<'_> {
                         visit(key, &names, parent);
                     }
                 }
-                DefinitionBody::Value { .. } | DefinitionBody::ValueEnum { .. } => {}
+                DefinitionBody::Value { .. } => {}
             }
         }
     }

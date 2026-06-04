@@ -168,7 +168,7 @@ impl TaskState<'_> {
                 expected_ty,
             ),
 
-            Expression::Enum { .. } | Expression::ValueEnum { .. } => expression,
+            Expression::Enum { .. } => expression,
 
             Expression::Struct { .. } => self.infer_struct_definition(store, expression),
 

@@ -350,6 +350,14 @@ pub struct StructFieldPattern {
 pub enum TypedPattern {
     Wildcard,
     Literal(Literal),
+    /// A qualified const pattern (e.g. `time.Friday`). A value comparison, not
+    /// an enum constructor: `qualified_name` is the resolved constant, `value`
+    /// is its known case-eligible literal when available.
+    Const {
+        qualified_name: EcoString,
+        ty: Type,
+        value: Option<Literal>,
+    },
     EnumVariant {
         enum_name: EcoString,
         variant_name: EcoString,
@@ -446,15 +454,6 @@ pub struct EnumVariant {
     pub name: EcoString,
     pub name_span: Span,
     pub fields: VariantFields,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct ValueEnumVariant {
-    pub doc: Option<String>,
-    pub name: EcoString,
-    pub name_span: Span,
-    pub value: Literal,
-    pub value_span: Span,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -879,15 +878,6 @@ pub enum Expression {
         visibility: Visibility,
         span: Span,
     },
-    ValueEnum {
-        doc: Option<String>,
-        name: EcoString,
-        name_span: Span,
-        underlying_ty: Option<Annotation>,
-        variants: Vec<ValueEnumVariant>,
-        visibility: Visibility,
-        span: Span,
-    },
     Struct {
         doc: Option<String>,
         attributes: Vec<Attribute>,
@@ -1160,7 +1150,6 @@ impl Expression {
             | Self::Range { ty, .. }
             | Self::Cast { ty, .. } => ty.clone(),
             Self::Enum { .. }
-            | Self::ValueEnum { .. }
             | Self::Struct { .. }
             | Self::Assignment { .. }
             | Self::ImplBlock { .. }
@@ -1190,7 +1179,6 @@ impl Expression {
             | Self::Match { span, .. }
             | Self::Tuple { span, .. }
             | Self::Enum { span, .. }
-            | Self::ValueEnum { span, .. }
             | Self::Struct { span, .. }
             | Self::StructCall { span, .. }
             | Self::DotAccess { span, .. }
@@ -1544,7 +1532,6 @@ impl Expression {
             Expression::Unit { .. }
             | Expression::Continue { .. }
             | Expression::Enum { .. }
-            | Expression::ValueEnum { .. }
             | Expression::Struct { .. }
             | Expression::TypeAlias { .. }
             | Expression::VariableDeclaration { .. }
@@ -1679,23 +1666,6 @@ impl Expression {
                 name,
                 name_span,
                 generics,
-                variants,
-                visibility: Visibility::Public,
-                span,
-            },
-            Expression::ValueEnum {
-                doc,
-                name,
-                name_span,
-                underlying_ty,
-                variants,
-                span,
-                ..
-            } => Expression::ValueEnum {
-                doc,
-                name,
-                name_span,
-                underlying_ty,
                 variants,
                 visibility: Visibility::Public,
                 span,

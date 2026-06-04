@@ -466,7 +466,7 @@ duration_div_duration: PASS
 duration_div_scalar: PASS
 named_div_to_named_annotation: PASS
 named_div_literal_to_named_annotation: PASS
-string_value_enum: PASS
+string_named_primitive: PASS
 newtype_struct_nominal: PASS
 bool_newtype_nominal: PASS
 duration_add: PASS
@@ -478,7 +478,7 @@ variable_not_variant: PASS
 negated_literal_times_aliased: PASS
 paren_negated_literal_times_aliased: PASS
 
-// Go-style value enum access
+// Package constant access
 
 go_style_access: PASS
 go_style_times_literal: PASS

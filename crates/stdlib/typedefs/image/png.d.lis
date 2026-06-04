@@ -6,12 +6,8 @@
 import "go:image"
 import "go:io"
 
-pub enum CompressionLevel: int {
-  BestCompression = -3,
-  BestSpeed = -2,
-  DefaultCompression = 0,
-  NoCompression = -1,
-}
+/// CompressionLevel indicates the compression level.
+pub struct CompressionLevel(int)
 
 pub const BestCompression: CompressionLevel = -3
 

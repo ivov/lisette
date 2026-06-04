@@ -161,6 +161,7 @@ impl TaskState<'_> {
                     allowed_lints: vec![],
                     go_hints: vec![],
                     go_name: None,
+                    const_value: None,
                 },
             });
     }

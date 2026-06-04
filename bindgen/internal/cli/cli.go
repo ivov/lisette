@@ -158,12 +158,19 @@ func generateFromPackage(pkg *packages.Package, displayPath, lisetteVersion, goV
 
 	converter.FinalizeInterfaceBuilders(results)
 
-	valueEnums, constantTypes, valueEnumTypeNames, bitFlagSetTypeNames := convert.DetectValueEnums(results, exports, cfg, pkg.PkgPath)
+	constGroups, constantTypes, constGroupTypeNames, bitFlagSetTypeNames := convert.DetectConstGroups(results, exports, cfg, pkg.PkgPath)
 
-	enumConstants := make(map[string][]convert.ConvertResult)
+	groupConstants := make(map[string][]convert.ConvertResult)
 	for i, result := range results {
-		if typeName, isEnumConstant := constantTypes[i]; isEnumConstant {
-			enumConstants[typeName] = append(enumConstants[typeName], result)
+		if typeName, isGroupConstant := constantTypes[i]; isGroupConstant {
+			groupConstants[typeName] = append(groupConstants[typeName], result)
+		}
+	}
+
+	groupTypeResult := make(map[string]convert.ConvertResult)
+	for _, result := range results {
+		if result.Kind == extract.ExportType && constGroupTypeNames[result.Name] {
+			groupTypeResult[result.Name] = result
 		}
 	}
 
@@ -172,18 +179,20 @@ func generateFromPackage(pkg *packages.Package, displayPath, lisetteVersion, goV
 
 	emitter.EmitImports(converter.ExternalPkgs())
 
-	for _, ve := range valueEnums {
-		emitter.EmitValueEnum(ve)
-		for _, constResult := range enumConstants[ve.TypeName] {
-			emitter.EmitTypedConst(constResult, ve.TypeName)
+	for _, group := range constGroups {
+		if typeResult, ok := groupTypeResult[group.TypeName]; ok {
+			emitter.EmitExport(typeResult)
+		}
+		for _, constResult := range groupConstants[group.TypeName] {
+			emitter.EmitTypedConst(constResult, group.TypeName)
 		}
 	}
 
 	for i, result := range results {
-		if _, isEnumConstant := constantTypes[i]; isEnumConstant {
+		if _, isGroupConstant := constantTypes[i]; isGroupConstant {
 			continue
 		}
-		if result.Kind == extract.ExportType && valueEnumTypeNames[result.Name] {
+		if result.Kind == extract.ExportType && constGroupTypeNames[result.Name] {
 			continue
 		}
 		if result.SkipReason != nil {

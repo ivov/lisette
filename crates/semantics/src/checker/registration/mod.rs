@@ -54,6 +54,45 @@ pub(super) fn has_display_attribute(attributes: &[Attribute]) -> bool {
     attributes.iter().any(|a| a.name == "display")
 }
 
+fn canonical_const_literal(expression: &Expression) -> Option<syntax::ast::Literal> {
+    use syntax::ast::{Literal, UnaryOperator};
+    match expression.unwrap_parens() {
+        Expression::Literal { literal, .. } => match literal {
+            Literal::Integer { value, .. } => Some(Literal::Integer {
+                value: *value,
+                text: None,
+            }),
+            Literal::Float { value, .. } => Some(Literal::Float {
+                value: *value,
+                text: None,
+            }),
+            Literal::Boolean(b) => Some(Literal::Boolean(*b)),
+            Literal::String { value, .. } => Some(Literal::String {
+                value: value.clone(),
+                raw: false,
+            }),
+            Literal::Char(c) => Some(Literal::Char(c.clone())),
+            _ => None,
+        },
+        Expression::Unary {
+            operator: UnaryOperator::Negative,
+            expression,
+            ..
+        } => match canonical_const_literal(expression)? {
+            Literal::Integer { value, .. } => Some(Literal::Integer {
+                value: value.wrapping_neg(),
+                text: None,
+            }),
+            Literal::Float { value, .. } => Some(Literal::Float {
+                value: -value,
+                text: None,
+            }),
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
 pub(super) fn extract_attribute_flags(attributes: &[Attribute], name: &str) -> Vec<String> {
     attributes
         .iter()
@@ -86,7 +125,6 @@ impl TaskState<'_> {
                     d.body,
                     DefinitionBody::Struct { .. }
                         | DefinitionBody::Enum { .. }
-                        | DefinitionBody::ValueEnum { .. }
                         | DefinitionBody::Interface { .. }
                         | DefinitionBody::TypeAlias { .. }
                 )
@@ -384,9 +422,6 @@ impl TaskState<'_> {
                     visibility,
                     ..
                 } => (name, generics, *visibility),
-                Expression::ValueEnum {
-                    name, visibility, ..
-                } => (name, &Vec::new() as &Vec<Generic>, *visibility),
                 Expression::Struct {
                     name,
                     generics,
@@ -473,6 +508,7 @@ impl TaskState<'_> {
                         allowed_lints: vec![],
                         go_hints: vec![],
                         go_name: None,
+                        const_value: None,
                     },
                 },
             ));
@@ -517,21 +553,6 @@ impl TaskState<'_> {
                     span,
                     doc,
                     has_display_attribute(attributes),
-                ),
-                Expression::ValueEnum {
-                    name,
-                    name_span,
-                    underlying_ty,
-                    variants,
-                    doc,
-                    ..
-                } => self.populate_value_enum(
-                    store,
-                    name,
-                    name_span,
-                    underlying_ty.as_ref(),
-                    variants,
-                    doc,
                 ),
                 Expression::Struct {
                     name,
@@ -691,6 +712,7 @@ impl TaskState<'_> {
                     allowed_lints: extract_attribute_flags(attributes, "allow"),
                     go_hints: extract_attribute_flags(attributes, "go"),
                     go_name: extract_go_name(attributes),
+                    const_value: None,
                 },
             },
         );
@@ -752,6 +774,8 @@ impl TaskState<'_> {
             ));
         }
 
+        let const_value = canonical_const_literal(expression);
+
         let module = self.current_module_mut(store);
         module.const_names.insert(qualified_name.clone());
         module.definitions.insert(
@@ -766,6 +790,7 @@ impl TaskState<'_> {
                     allowed_lints: vec![],
                     go_hints: vec![],
                     go_name: None,
+                    const_value,
                 },
             },
         );
@@ -816,6 +841,7 @@ impl TaskState<'_> {
                     allowed_lints: vec![],
                     go_hints: vec![],
                     go_name: None,
+                    const_value: None,
                 },
             },
         );

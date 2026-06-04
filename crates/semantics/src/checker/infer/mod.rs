@@ -103,9 +103,6 @@ impl TaskState<'_> {
                 Expression::Enum {
                     name, name_span, ..
                 } => (name.as_str(), *name_span),
-                Expression::ValueEnum {
-                    name, name_span, ..
-                } => (name.as_str(), *name_span),
                 Expression::TypeAlias {
                     name, name_span, ..
                 } => (name.as_str(), *name_span),

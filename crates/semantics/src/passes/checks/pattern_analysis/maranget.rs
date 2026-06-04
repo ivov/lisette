@@ -1,9 +1,9 @@
 use rustc_hash::FxHashSet as HashSet;
 
-use super::NormalizedPattern::{Literal, Wildcard};
+use super::NormalizedPattern::{Literal, OpaqueConst, Wildcard};
 use super::pattern_matrix::{
     ScrutineeSignature, get_scrutinee_signature, is_complete, specialize_by_constructor,
-    specialize_by_literal, specialize_by_wildcard,
+    specialize_by_literal, specialize_by_opaque_const, specialize_by_wildcard,
 };
 use super::types::*;
 
@@ -220,6 +220,12 @@ pub fn is_useful(rows: &[Row], pattern: &Row, unions: &UnionTable) -> bool {
 
         Literal(literal) => {
             let specialized_rows = specialize_by_literal(rows, literal);
+            let specialized_pattern = pattern[1..].to_vec();
+            is_useful(&specialized_rows, &specialized_pattern, unions)
+        }
+
+        OpaqueConst(key) => {
+            let specialized_rows = specialize_by_opaque_const(rows, key);
             let specialized_pattern = pattern[1..].to_vec();
             is_useful(&specialized_rows, &specialized_pattern, unions)
         }

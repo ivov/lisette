@@ -179,26 +179,6 @@ enum Option { Some(int), None }
         name: (identifier)))))
 
 ================================================================================
-Value enum
-================================================================================
-
-enum Color: int { Red = 1, Blue = 2 }
-
---------------------------------------------------------------------------------
-
-(source_file
-  (value_enum_item
-    name: (type_identifier)
-    underlying_type: (type_identifier)
-    body: (value_enum_variant_list
-      (value_enum_variant
-        name: (identifier)
-        value: (integer_literal))
-      (value_enum_variant
-        name: (identifier)
-        value: (integer_literal)))))
-
-================================================================================
 Interface
 ================================================================================
 

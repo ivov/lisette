@@ -6,9 +6,6 @@
 (enum_item
   name: (type_identifier) @name) @definition.class
 
-(value_enum_item
-  name: (type_identifier) @name) @definition.class
-
 (type_item
   name: (type_identifier) @name) @definition.class
 

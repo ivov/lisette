@@ -765,8 +765,6 @@ impl TaskState<'_> {
         }
     }
 
-    /// Reports an operator boundary between a value enum and a typed primitive
-    /// of its backing, or two different value enums; returns whether it emitted.
     fn report_named_type_boundary(
         &mut self,
         left: &Type,

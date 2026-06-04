@@ -66,6 +66,19 @@ pub fn specialize_by_literal(rows: &[Row], literal: &Literal) -> Vec<Row> {
         .collect()
 }
 
+pub fn specialize_by_opaque_const(rows: &[Row], key: &str) -> Vec<Row> {
+    rows.iter()
+        .filter_map(|row| {
+            let first = row.first()?;
+            match first {
+                NormalizedPattern::OpaqueConst(k) if k == key => Some(row[1..].to_vec()),
+                NormalizedPattern::Wildcard => Some(row[1..].to_vec()),
+                _ => None,
+            }
+        })
+        .collect()
+}
+
 pub fn get_scrutinee_signature(rows: &[Row], unions: &UnionTable) -> Option<ScrutineeSignature> {
     if rows.is_empty() || rows[0].is_empty() {
         return None;

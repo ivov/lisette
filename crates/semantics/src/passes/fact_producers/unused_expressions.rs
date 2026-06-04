@@ -335,7 +335,6 @@ fn is_statement_only(expression: &Expression) -> bool {
             | Expression::For { .. }
             | Expression::Struct { .. }
             | Expression::Enum { .. }
-            | Expression::ValueEnum { .. }
             | Expression::TypeAlias { .. }
             | Expression::Interface { .. }
             | Expression::Function { .. }

@@ -3,11 +3,8 @@
 // Go: 0.0.0
 // Lisette: 0.0.0
 
-pub enum Offset: int16 {
-  OffsetMax = 0x7FFF,
-  OffsetMid = 0,
-  OffsetMin = -0x8000,
-}
+/// Negative hex notation (tests parseIntValue handles negative hex)
+pub struct Offset(int16)
 
 pub const OffsetMax: Offset = 0x7FFF
 
@@ -15,11 +12,7 @@ pub const OffsetMid: Offset = 0
 
 pub const OffsetMin: Offset = -0x8000
 
-pub enum Priority: int {
-  PriorityHigh = 1,
-  PriorityLow = -1,
-  PriorityNormal = 0,
-}
+pub struct Priority(int)
 
 pub const PriorityHigh: Priority = 1
 

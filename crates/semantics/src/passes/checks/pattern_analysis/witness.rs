@@ -6,9 +6,9 @@ pub fn format_witness(pattern: &NormalizedPattern) -> String {
     match pattern {
         NormalizedPattern::Wildcard => "_".to_string(),
 
-        // Literals are never produced as witnesses by the exhaustiveness algorithm.
-        // When patterns contain literals, missing coverage is shown as `_` (wildcard).
-        NormalizedPattern::Literal(_) => unreachable!("literals cannot be witnesses"),
+        NormalizedPattern::Literal(_) | NormalizedPattern::OpaqueConst(_) => {
+            unreachable!("literals cannot be witnesses")
+        }
 
         NormalizedPattern::Constructor {
             type_name,
@@ -30,7 +30,7 @@ pub fn format_witness(pattern: &NormalizedPattern) -> String {
 
             let display_tag = strip_module_prefix(tag);
 
-            if display_tag == "__value_enum_unknown__" || display_tag == INTERFACE_UNKNOWN_TAG {
+            if display_tag == INTERFACE_UNKNOWN_TAG {
                 return "_".to_string();
             }
 
@@ -58,6 +58,8 @@ pub fn format_pattern(pattern: &NormalizedPattern) -> String {
         // User-written patterns can contain literals in their fields
         NormalizedPattern::Literal(lit) => format_literal(lit),
 
+        NormalizedPattern::OpaqueConst(key) => strip_module_prefix(key),
+
         NormalizedPattern::Constructor {
             type_name,
             tag,
@@ -78,7 +80,7 @@ pub fn format_pattern(pattern: &NormalizedPattern) -> String {
 
             let display_tag = strip_module_prefix(tag);
 
-            if display_tag == "__value_enum_unknown__" || display_tag == INTERFACE_UNKNOWN_TAG {
+            if display_tag == INTERFACE_UNKNOWN_TAG {
                 return "_".to_string();
             }
 

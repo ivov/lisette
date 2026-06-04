@@ -124,6 +124,16 @@ pub fn normalize_typed_pattern(
             NormalizedPattern::Literal(literal.clone())
         }
 
+        TypedPattern::Const {
+            qualified_name,
+            value,
+            ..
+        } => match value {
+            Some(Literal::Boolean(b)) => normalize_boolean(*b, unions),
+            Some(literal) => NormalizedPattern::Literal(literal.clone()),
+            None => NormalizedPattern::OpaqueConst(qualified_name.to_string()),
+        },
+
         TypedPattern::EnumVariant {
             enum_name,
             variant_name,
@@ -175,20 +185,6 @@ pub fn normalize_typed_pattern(
                             arity: v.fields.len(),
                         })
                         .collect(),
-                    Some(DefinitionBody::ValueEnum { variants, .. }) => {
-                        let mut alts: Vec<Constructor> = variants
-                            .iter()
-                            .map(|v| Constructor {
-                                tag_id: format!("{}.{}", enum_name, v.name),
-                                arity: 0,
-                            })
-                            .collect();
-                        alts.push(Constructor {
-                            tag_id: format!("{}.__value_enum_unknown__", enum_name),
-                            arity: 0,
-                        });
-                        alts
-                    }
                     _ => vec![],
                 };
 

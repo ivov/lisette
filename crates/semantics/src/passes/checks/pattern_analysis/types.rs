@@ -19,6 +19,11 @@ pub type Union = Vec<Constructor>;
 pub enum NormalizedPattern {
     Wildcard,
     Literal(Literal),
+    /// A const pattern whose value is not known at analysis time, keyed by the
+    /// constant's qualified name. Behaves like a literal singleton (open domain,
+    /// never exhaustive) but in a separate namespace, so it catches repeated use
+    /// of the same constant without colliding with real string literals.
+    OpaqueConst(String),
     Constructor {
         type_name: TypeName,
         tag: TagId,

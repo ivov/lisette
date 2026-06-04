@@ -3,24 +3,8 @@
 // Go: 1.25.10
 // Lisette: 0.2.1
 
-pub enum ErrorCode: string {
-  ErrInternalError = "regexp/syntax: internal error",
-  ErrInvalidCharClass = "invalid character class",
-  ErrInvalidCharRange = "invalid character class range",
-  ErrInvalidEscape = "invalid escape sequence",
-  ErrInvalidNamedCapture = "invalid named capture",
-  ErrInvalidPerlOp = "invalid or unsupported Perl syntax",
-  ErrInvalidRepeatOp = "invalid nested repetition operator",
-  ErrInvalidRepeatSize = "invalid repeat count",
-  ErrInvalidUTF8 = "invalid UTF-8",
-  ErrLarge = "expression too large",
-  ErrMissingBracket = "missing closing ]",
-  ErrMissingParen = "missing closing )",
-  ErrMissingRepeatArgument = "missing argument to repetition operator",
-  ErrNestingDepth = "expression nests too deeply",
-  ErrTrailingBackslash = "trailing backslash at end of expression",
-  ErrUnexpectedParen = "unexpected )",
-}
+/// An ErrorCode describes a failure to parse a regular expression.
+pub struct ErrorCode(string)
 
 pub const ErrInternalError: ErrorCode = "regexp/syntax: internal error"
 
@@ -54,19 +38,8 @@ pub const ErrTrailingBackslash: ErrorCode = "trailing backslash at end of expres
 
 pub const ErrUnexpectedParen: ErrorCode = "unexpected )"
 
-pub enum InstOp: uint8 {
-  InstAlt = 0,
-  InstAltMatch = 1,
-  InstCapture = 2,
-  InstEmptyWidth = 3,
-  InstFail = 5,
-  InstMatch = 4,
-  InstNop = 6,
-  InstRune = 7,
-  InstRune1 = 8,
-  InstRuneAny = 9,
-  InstRuneAnyNotNL = 10,
-}
+/// An InstOp is an instruction opcode.
+pub struct InstOp(uint8)
 
 pub const InstAlt: InstOp = 0
 
@@ -90,27 +63,8 @@ pub const InstRuneAny: InstOp = 9
 
 pub const InstRuneAnyNotNL: InstOp = 10
 
-pub enum Op: uint8 {
-  OpAlternate = 19,
-  OpAnyChar = 6,
-  OpAnyCharNotNL = 5,
-  OpBeginLine = 7,
-  OpBeginText = 9,
-  OpCapture = 13,
-  OpCharClass = 4,
-  OpConcat = 18,
-  OpEmptyMatch = 2,
-  OpEndLine = 8,
-  OpEndText = 10,
-  OpLiteral = 3,
-  OpNoMatch = 1,
-  OpNoWordBoundary = 12,
-  OpPlus = 15,
-  OpQuest = 16,
-  OpRepeat = 17,
-  OpStar = 14,
-  OpWordBoundary = 11,
-}
+/// An Op is a single regular expression operator.
+pub struct Op(uint8)
 
 pub const OpAlternate: Op = 19
 

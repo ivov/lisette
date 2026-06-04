@@ -4,9 +4,9 @@ source: tests/ui/errors/mod.rs
   [error] Type mismatch
    ╭─[main.lis:6:11]
  5 │   let n: int = 100;
- 6 │   let x = n % time.Duration.Second;
-   ·           ────────────┬───────────
-   ·                       ╰── cannot compute `int` with `Duration`
+ 6 │   let x = n % time.Second;
+   ·           ───────┬───────
+   ·                  ╰── cannot compute `int` with `Duration`
  7 │ }
    ╰────
   help: Cast with `as`, e.g. `value as Duration` · code: [infer.type_mismatch]

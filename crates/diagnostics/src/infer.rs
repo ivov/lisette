@@ -529,13 +529,23 @@ pub fn enum_variant_constructor_not_found(
         .with_help(help)
 }
 
-pub fn value_enum_in_source_file(enum_name: &str, span: Span) -> LisetteDiagnostic {
-    LisetteDiagnostic::error("Invalid value enum")
-        .with_infer_code("value_enum_outside_typedef")
-        .with_span_label(&span, "not allowed in .lis files")
+pub fn const_pattern_not_eligible(name: &str, span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Pattern target is not a matchable value")
+        .with_infer_code("const_pattern_not_eligible")
+        .with_span_label(&span, "a function cannot be a match pattern")
         .with_help(format!(
-            "Use a regular enum instead: `enum {} {{ A, B, C }}`. Value enums exist only to represent Go's enums in typedefs.",
-            enum_name
+            "`{}` is a function or method value. Const patterns match named constants or package-level values that the compiler can emit as a Go `case`, not callables.",
+            name
+        ))
+}
+
+pub fn const_pattern_outside_match_arm(name: &str, span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Const pattern outside a match arm")
+        .with_infer_code("const_pattern_outside_match_arm")
+        .with_span_label(&span, "const patterns are only allowed in match arms")
+        .with_help(format!(
+            "`{}` is a constant, so this pattern is refutable. Match on it inside a `match` expression, or compare with `==` in a `let` or function parameter.",
+            name
         ))
 }
 

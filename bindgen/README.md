@@ -133,9 +133,9 @@ pub fn Open(name: string) -> Result<Ref<File>, error>
 pub fn NewFile(fd: uint, name: string) -> Option<Ref<File>>
 ```
 
-### Value enums
+### Named primitive types
 
-Groups of iota-based constants sharing a named type map to value enums:
+A Go `type X <primitive>` declaration maps to a single-field tuple struct.
 
 ```go
 type Month int
@@ -147,14 +147,13 @@ const (
 ```
 
 ```rs
-pub enum Month: int {
-  January = 1,
-  February = 2,
-  // ...
-}
+pub struct Month(int)
+
+pub const January: Month = 1
+pub const February: Month = 2
+// ...
 ```
 
-Value enums are a `.d.lis`-only construct for representing iota-based constant groups.
 
 ### Opaque types
 

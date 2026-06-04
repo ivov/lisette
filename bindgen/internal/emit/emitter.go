@@ -664,29 +664,6 @@ func (e *Emitter) EmitTypedConst(result convert.ConvertResult, typeName string) 
 	e.stats.constants++
 }
 
-func (e *Emitter) EmitValueEnum(info convert.ValueEnumInfo) {
-	var signature strings.Builder
-	signature.WriteString("pub enum ")
-	signature.WriteString(info.TypeName)
-	if info.UnderlyingType != "" {
-		signature.WriteString(": ")
-		signature.WriteString(info.UnderlyingType)
-	}
-	signature.WriteString(" {\n")
-	for _, v := range info.Variants {
-		signature.WriteString("  ")
-		signature.WriteString(v.Name)
-		signature.WriteString(" = ")
-		signature.WriteString(v.Value)
-		signature.WriteString(",\n")
-	}
-	signature.WriteString("}")
-
-	e.buf.WriteString(signature.String())
-	e.buf.WriteString("\n\n")
-	e.stats.types++
-}
-
 func (e *Emitter) emitDocWithIndent(doc, indent string) {
 	if doc == "" {
 		return

@@ -6,10 +6,8 @@
 import "go:image"
 import "go:image/color"
 
-pub enum Op: int {
-  Over = 0,
-  Src = 1,
-}
+/// Op is a Porter-Duff compositing operator.
+pub struct Op(int)
 
 pub const Over: Op = 0
 

@@ -133,9 +133,6 @@
 (enum_item
   name: (type_identifier) @type.definition)
 
-(value_enum_item
-  name: (type_identifier) @type.definition)
-
 ; Interface definitions
 (interface_item
   name: (type_identifier) @type.definition)
@@ -222,9 +219,6 @@
 
 ; Enum variants
 (enum_variant
-  name: (identifier) @constant)
-
-(value_enum_variant
   name: (identifier) @constant)
 
 ; Match wildcards

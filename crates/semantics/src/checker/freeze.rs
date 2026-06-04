@@ -101,6 +101,7 @@ impl<'a> FreezeFolder<'a> {
     fn freeze_typed_pattern(&self, tp: &mut TypedPattern) {
         match tp {
             TypedPattern::Wildcard | TypedPattern::Literal(_) => {}
+            TypedPattern::Const { ty, .. } => self.freeze_ty(ty),
             TypedPattern::EnumVariant {
                 type_args,
                 field_types,
@@ -373,7 +374,6 @@ impl<'a> FreezeFolder<'a> {
             | Expression::While { .. }
             | Expression::Break { .. }
             | Expression::Continue { .. }
-            | Expression::ValueEnum { .. }
             | Expression::ModuleImport { .. }
             | Expression::RawGo { .. }
             | Expression::NoOp => {}

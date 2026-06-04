@@ -5,11 +5,8 @@
 
 import "go:iter"
 
-pub enum ChanDir: int {
-  BothDir = 3,
-  RecvDir = 1,
-  SendDir = 2,
-}
+/// ChanDir represents a channel type's direction.
+pub struct ChanDir(int)
 
 pub const BothDir: ChanDir = 3
 
@@ -17,36 +14,9 @@ pub const RecvDir: ChanDir = 1
 
 pub const SendDir: ChanDir = 2
 
-pub enum Kind: uint {
-  Array = 17,
-  Bool = 1,
-  Chan = 18,
-  Complex128 = 16,
-  Complex64 = 15,
-  Float32 = 13,
-  Float64 = 14,
-  Func = 19,
-  Int = 2,
-  Int16 = 4,
-  Int32 = 5,
-  Int64 = 6,
-  Int8 = 3,
-  Interface = 20,
-  Invalid = 0,
-  Map = 21,
-  Pointer = 22,
-  Ptr = 22,
-  Slice = 23,
-  String = 24,
-  Struct = 25,
-  Uint = 7,
-  Uint16 = 9,
-  Uint32 = 10,
-  Uint64 = 11,
-  Uint8 = 8,
-  Uintptr = 12,
-  UnsafePointer = 26,
-}
+/// A Kind represents the specific kind of type that a [Type] represents.
+/// The zero Kind is not a valid kind.
+pub struct Kind(uint)
 
 pub const Array: Kind = 17
 
@@ -105,11 +75,8 @@ pub const Uintptr: Kind = 12
 
 pub const UnsafePointer: Kind = 26
 
-pub enum SelectDir: int {
-  SelectDefault = 3,
-  SelectRecv = 2,
-  SelectSend = 1,
-}
+/// A SelectDir describes the communication direction of a select case.
+pub struct SelectDir(int)
 
 pub const SelectDefault: SelectDir = 3
 

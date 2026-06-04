@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Assigned enum variant
+   ╭─[test.lis:3:10]
+ 2 │ enum Weekday {
+ 3 │   Sunday = 0,
+   ·          ┬
+   ·          ╰── enum variants cannot have assigned values
+ 4 │   Monday = 1,
+   ╰────
+  help: Lisette enums are sum types, not Go const groups. To model a Go defined primitive type, use a named primitive type such as `pub struct Weekday(int)` with package-level constants · code: [parse.enum_assigned_variant]

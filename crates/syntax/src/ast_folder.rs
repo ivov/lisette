@@ -529,7 +529,6 @@ pub trait AstFolder {
             Literal { .. }
             | Identifier { .. }
             | Enum { .. }
-            | ValueEnum { .. }
             | Struct { .. }
             | TypeAlias { .. }
             | VariableDeclaration { .. }

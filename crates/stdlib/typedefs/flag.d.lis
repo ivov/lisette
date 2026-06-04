@@ -7,11 +7,8 @@ import "go:encoding"
 import "go:io"
 import "go:time"
 
-pub enum ErrorHandling: int {
-  ContinueOnError = 0,
-  ExitOnError = 1,
-  PanicOnError = 2,
-}
+/// ErrorHandling defines how [FlagSet.Parse] behaves if the parse fails.
+pub struct ErrorHandling(int)
 
 pub const ContinueOnError: ErrorHandling = 0
 

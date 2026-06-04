@@ -2127,21 +2127,20 @@ fn tuple_struct_in_function_return() {
 }
 
 #[test]
-fn value_enum_in_typedef_file_succeeds() {
+fn const_pattern_or_pattern_succeeds() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
         "weekday",
         "lib.d.lis",
         r#"
-pub enum Weekday {
-  Sunday = 0,
-  Monday = 1,
-  Tuesday = 2,
-  Wednesday = 3,
-  Thursday = 4,
-  Friday = 5,
-  Saturday = 6,
-}
+pub struct Weekday(int)
+pub const Sunday: Weekday = 0
+pub const Monday: Weekday = 1
+pub const Tuesday: Weekday = 2
+pub const Wednesday: Weekday = 3
+pub const Thursday: Weekday = 4
+pub const Friday: Weekday = 5
+pub const Saturday: Weekday = 6
 "#,
     );
 
@@ -2161,16 +2160,15 @@ fn is_weekend(day: weekday.Weekday) -> bool {
 }
 
 #[test]
-fn value_enum_pattern_requires_catch_all() {
+fn const_pattern_requires_catch_all() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
         "weekday",
         "lib.d.lis",
         r#"
-pub enum Weekday {
-  Sunday = 0,
-  Monday = 1,
-}
+pub struct Weekday(int)
+pub const Sunday: Weekday = 0
+pub const Monday: Weekday = 1
 "#,
     );
 
@@ -2190,16 +2188,15 @@ fn get_name(day: weekday.Weekday) -> string {
 }
 
 #[test]
-fn value_enum_pattern_with_catch_all_succeeds() {
+fn const_pattern_with_catch_all_succeeds() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
         "weekday",
         "lib.d.lis",
         r#"
-pub enum Weekday {
-  Sunday = 0,
-  Monday = 1,
-}
+pub struct Weekday(int)
+pub const Sunday: Weekday = 0
+pub const Monday: Weekday = 1
 "#,
     );
 
@@ -2216,6 +2213,224 @@ fn get_name(day: weekday.Weekday) -> string {
 "#;
     fs.add_file("main", "main.lis", source);
 
+    infer_module("main", fs).assert_no_errors();
+}
+
+fn weekday_typedef() -> &'static str {
+    r#"
+pub struct Weekday(int)
+pub const Sunday: Weekday = 0
+pub const Monday: Weekday = 1
+pub const Friday: Weekday = 5
+"#
+}
+
+#[test]
+fn const_pattern_type_mismatch() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file("weekday", "lib.d.lis", weekday_typedef());
+    fs.add_file(
+        "time",
+        "time.d.lis",
+        "pub struct Duration(int64)\npub const Second: Duration = 1000000000\n",
+    );
+    let source = r#"
+import "weekday"
+import "time"
+
+fn get_name(day: weekday.Weekday) -> string {
+  match day {
+    time.Second => "second",
+    _ => "other",
+  }
+}
+"#;
+    fs.add_file("main", "main.lis", source);
+    infer_module("main", fs).assert_infer_code("type_mismatch");
+}
+
+#[test]
+fn const_pattern_duplicate_arm_redundant() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file("weekday", "lib.d.lis", weekday_typedef());
+    let source = r#"
+import "weekday"
+
+fn get_name(day: weekday.Weekday) -> string {
+  match day {
+    weekday.Friday => "fri",
+    weekday.Friday => "again",
+    _ => "other",
+  }
+}
+"#;
+    fs.add_file("main", "main.lis", source);
+    infer_module("main", fs).assert_infer_code("redundant_arm");
+}
+
+#[test]
+fn const_pattern_alias_same_value_redundant() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "codes",
+        "lib.d.lis",
+        r#"
+pub struct Code(int)
+pub const A: Code = 1
+pub const B: Code = 1
+"#,
+    );
+    let source = r#"
+import "codes"
+
+fn name(c: codes.Code) -> string {
+  match c {
+    codes.A => "a",
+    codes.B => "b",
+    _ => "other",
+  }
+}
+"#;
+    fs.add_file("main", "main.lis", source);
+    infer_module("main", fs).assert_infer_code("redundant_arm");
+}
+
+#[test]
+fn const_pattern_unknown_value_no_string_collision() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "codes",
+        "lib.d.lis",
+        r#"
+pub struct Code(string)
+pub const UNKNOWN: Code
+"#,
+    );
+    let source = r#"
+import "codes"
+
+fn name(c: codes.Code) -> int {
+  match c {
+    codes.UNKNOWN => 1,
+    "__const__codes.UNKNOWN" => 2,
+    _ => 0,
+  }
+}
+"#;
+    fs.add_file("main", "main.lis", source);
+    infer_module("main", fs).assert_no_errors();
+}
+
+#[test]
+fn const_pattern_unknown_value_same_symbol_redundant() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "codes",
+        "lib.d.lis",
+        r#"
+pub struct Code(string)
+pub const UNKNOWN: Code
+"#,
+    );
+    let source = r#"
+import "codes"
+
+fn name(c: codes.Code) -> int {
+  match c {
+    codes.UNKNOWN => 1,
+    codes.UNKNOWN => 2,
+    _ => 0,
+  }
+}
+"#;
+    fs.add_file("main", "main.lis", source);
+    infer_module("main", fs).assert_infer_code("redundant_arm");
+}
+
+#[test]
+fn const_pattern_in_let_rejected() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file("weekday", "lib.d.lis", weekday_typedef());
+    let source = r#"
+import "weekday"
+
+fn test() {
+  let weekday.Friday = weekday.Monday
+}
+"#;
+    fs.add_file("main", "main.lis", source);
+    infer_module("main", fs).assert_infer_code("const_pattern_outside_match_arm");
+}
+
+#[test]
+fn const_pattern_non_const_target_rejected() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "lib",
+        "lib.d.lis",
+        "pub struct Weekday(int)\npub fn Today() -> Weekday\n",
+    );
+    let source = r#"
+import "lib"
+
+fn name(day: lib.Weekday) -> string {
+  match day {
+    lib.Today => "today",
+    _ => "other",
+  }
+}
+"#;
+    fs.add_file("main", "main.lis", source);
+    infer_module("main", fs).assert_infer_code("const_pattern_not_eligible");
+}
+
+#[test]
+fn const_pattern_sentinel_var_ok() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "io",
+        "lib.d.lis",
+        "pub var EOF: error\npub fn read() -> Result<int, error>\n",
+    );
+    let source = r#"
+import "io"
+
+fn handle() -> int {
+  match io.read() {
+    Ok(n) => n,
+    Err(io.EOF) => 0,
+    Err(_) => -1,
+  }
+}
+"#;
+    fs.add_file("main", "main.lis", source);
+    infer_module("main", fs).assert_no_errors();
+}
+
+#[test]
+fn named_primitive_method_preserved() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "time",
+        "time.d.lis",
+        r#"
+pub struct Duration(int64)
+pub const Second: Duration = 1000000000
+impl Duration {
+  pub fn Seconds(self: Duration) -> float64
+  pub fn String(self: Duration) -> string
+}
+"#,
+    );
+    let source = r#"
+import "time"
+
+fn describe(d: time.Duration) -> string {
+  let _ = d.Seconds()
+  d.String()
+}
+"#;
+    fs.add_file("main", "main.lis", source);
     infer_module("main", fs).assert_no_errors();
 }
 
@@ -2332,12 +2547,11 @@ fn generic_static_method_infers_type_param_from_string() {
 
 fn duration_typedef() -> &'static str {
     r#"
-pub enum Duration: int64 {
-  Nanosecond = 1,
-  Microsecond = 1000,
-  Millisecond = 1000000,
-  Second = 1000000000,
-}
+pub struct Duration(int64)
+pub const Nanosecond: Duration = 1
+pub const Microsecond: Duration = 1000
+pub const Millisecond: Duration = 1000000
+pub const Second: Duration = 1000000000
 "#
 }
 
@@ -2352,7 +2566,7 @@ fn numeric_alias_t_plus_t() {
 import "time"
 
 fn test() -> time.Duration {
-  time.Duration.Second + time.Duration.Millisecond
+  time.Second + time.Millisecond
 }
 "#,
     );
@@ -2370,7 +2584,7 @@ fn numeric_alias_t_minus_t() {
 import "time"
 
 fn test() -> time.Duration {
-  time.Duration.Second - time.Duration.Millisecond
+  time.Second - time.Millisecond
 }
 "#,
     );
@@ -2388,7 +2602,7 @@ fn numeric_alias_t_times_t() {
 import "time"
 
 fn test() -> time.Duration {
-  time.Duration.Second * time.Duration.Millisecond
+  time.Second * time.Millisecond
 }
 "#,
     );
@@ -2406,7 +2620,7 @@ fn numeric_alias_t_times_u() {
 import "time"
 
 fn test() -> time.Duration {
-  time.Duration.Second * 5
+  time.Second * 5
 }
 "#,
     );
@@ -2424,7 +2638,7 @@ fn numeric_alias_u_times_t() {
 import "time"
 
 fn test() -> time.Duration {
-  5 * time.Duration.Second
+  5 * time.Second
 }
 "#,
     );
@@ -2442,7 +2656,7 @@ fn numeric_alias_t_div_t_yields_named() {
 import "time"
 
 fn test() -> time.Duration {
-  time.Duration.Second / time.Duration.Millisecond
+  time.Second / time.Millisecond
 }
 "#,
     );
@@ -2460,7 +2674,7 @@ fn numeric_alias_t_div_u() {
 import "time"
 
 fn test() -> time.Duration {
-  time.Duration.Second / 2
+  time.Second / 2
 }
 "#,
     );
@@ -2478,7 +2692,7 @@ fn numeric_alias_t_rem_u() {
 import "time"
 
 fn test() -> time.Duration {
-  time.Duration.Second % 3
+  time.Second % 3
 }
 "#,
     );
@@ -2496,7 +2710,7 @@ fn numeric_alias_unary_neg() {
 import "time"
 
 fn test() -> time.Duration {
-  -time.Duration.Second
+  -time.Second
 }
 "#,
     );
@@ -2514,7 +2728,7 @@ fn numeric_alias_t_lt_t() {
 import "time"
 
 fn test() -> bool {
-  time.Duration.Millisecond < time.Duration.Second
+  time.Millisecond < time.Second
 }
 "#,
     );
@@ -2532,7 +2746,7 @@ fn numeric_alias_t_gt_u() {
 import "time"
 
 fn test() -> bool {
-  time.Duration.Second > 1000
+  time.Second > 1000
 }
 "#,
     );
@@ -2550,7 +2764,7 @@ fn numeric_alias_u_lt_t() {
 import "time"
 
 fn test() -> bool {
-  1000 < time.Duration.Second
+  1000 < time.Second
 }
 "#,
     );
@@ -2568,7 +2782,7 @@ fn numeric_alias_t_eq_t() {
 import "time"
 
 fn test() -> bool {
-  time.Duration.Second == time.Duration.Millisecond
+  time.Second == time.Millisecond
 }
 "#,
     );
@@ -2586,7 +2800,7 @@ fn numeric_alias_t_eq_u() {
 import "time"
 
 fn test() -> bool {
-  time.Duration.Second == 1000000000
+  time.Second == 1000000000
 }
 "#,
     );
@@ -2604,7 +2818,7 @@ fn numeric_alias_t_neq_u() {
 import "time"
 
 fn test() -> bool {
-  time.Duration.Second != 0
+  time.Second != 0
 }
 "#,
     );
@@ -2622,7 +2836,7 @@ fn numeric_alias_u_div_t() {
 import "time"
 
 fn test() -> time.Duration {
-  100 / time.Duration.Second
+  100 / time.Second
 }
 "#,
     );
@@ -2640,7 +2854,7 @@ fn numeric_alias_u_rem_t() {
 import "time"
 
 fn test() -> time.Duration {
-  100 % time.Duration.Second
+  100 % time.Second
 }
 "#,
     );
@@ -2648,7 +2862,7 @@ fn test() -> time.Duration {
 }
 
 #[test]
-fn numeric_alias_typed_primitive_divides_value_enum_rejected() {
+fn numeric_alias_typed_primitive_divides_named_primitive_rejected() {
     let mut fs = MockFileSystem::new();
     fs.add_file("time", "time.d.lis", duration_typedef());
     fs.add_file(
@@ -2659,7 +2873,7 @@ import "time"
 
 fn test() {
   let n: int = 100;
-  let x = n / time.Duration.Second;
+  let x = n / time.Second;
 }
 "#,
     );
@@ -2678,7 +2892,7 @@ import "time"
 
 fn test() -> time.Duration {
   let n: int = 5;
-  time.Duration.Second * n
+  time.Second * n
 }
 "#,
     );
@@ -2697,7 +2911,7 @@ import "time"
 
 fn test() -> time.Duration {
   let n: int = 5;
-  time.Duration.Second * (n as time.Duration)
+  time.Second * (n as time.Duration)
 }
 "#,
     );
@@ -2715,7 +2929,7 @@ fn numeric_alias_chained_ops() {
 import "time"
 
 fn test() -> time.Duration {
-  time.Duration.Second * 2 + time.Duration.Millisecond * 500
+  time.Second * 2 + time.Millisecond * 500
 }
 "#,
     );
@@ -2735,7 +2949,7 @@ import "time"
 fn sleep(d: time.Duration) {}
 
 fn test() {
-  sleep(time.Duration.Second * 2);
+  sleep(time.Second * 2);
 }
 "#,
     );
@@ -2753,7 +2967,7 @@ fn numeric_alias_in_return() {
 import "time"
 
 fn get_delay(multiplier: int) -> time.Duration {
-  time.Duration.Millisecond * (multiplier as time.Duration)
+  time.Millisecond * (multiplier as time.Duration)
 }
 "#,
     );
@@ -2771,7 +2985,7 @@ fn numeric_alias_t_rem_t() {
 import "time"
 
 fn test() -> time.Duration {
-  time.Duration.Second % time.Duration.Millisecond
+  time.Second % time.Millisecond
 }
 "#,
     );
@@ -2789,7 +3003,7 @@ fn numeric_alias_t_lte_u() {
 import "time"
 
 fn test() -> bool {
-  time.Duration.Second <= 2000000000
+  time.Second <= 2000000000
 }
 "#,
     );
@@ -2807,7 +3021,7 @@ fn numeric_alias_t_gte_u() {
 import "time"
 
 fn test() -> bool {
-  time.Duration.Second >= 500000000
+  time.Second >= 500000000
 }
 "#,
     );
@@ -2825,7 +3039,7 @@ fn numeric_alias_u_eq_t() {
 import "time"
 
 fn test() -> bool {
-  1000000000 == time.Duration.Second
+  1000000000 == time.Second
 }
 "#,
     );
@@ -2843,7 +3057,7 @@ fn numeric_alias_u_neq_t() {
 import "time"
 
 fn test() -> bool {
-  0 != time.Duration.Second
+  0 != time.Second
 }
 "#,
     );
@@ -2861,7 +3075,7 @@ fn numeric_alias_cross_family_error() {
 import "time"
 
 fn test() {
-  let x = time.Duration.Second * 1.5;
+  let x = time.Second * 1.5;
 }
 "#,
     );
@@ -2875,8 +3089,10 @@ fn numeric_alias_different_named_types_error() {
         "time",
         "time.d.lis",
         r#"
-pub enum DurationA: int64 { Second = 1000000000 }
-pub enum DurationB: int64 { Second = 1000000000 }
+pub struct DurationA(int64)
+pub struct DurationB(int64)
+pub const SecondA: DurationA = 1000000000
+pub const SecondB: DurationB = 1000000000
 "#,
     );
     fs.add_file(
@@ -2886,7 +3102,7 @@ pub enum DurationB: int64 { Second = 1000000000 }
 import "time"
 
 fn test() {
-  let x = time.DurationA.Second + time.DurationB.Second;
+  let x = time.SecondA + time.SecondB;
 }
 "#,
     );
@@ -2900,8 +3116,10 @@ fn numeric_alias_compare_different_named_types_error() {
         "time",
         "time.d.lis",
         r#"
-pub enum DurationA: int64 { Second = 1000000000 }
-pub enum DurationB: int64 { Second = 1000000000 }
+pub struct DurationA(int64)
+pub struct DurationB(int64)
+pub const SecondA: DurationA = 1000000000
+pub const SecondB: DurationB = 1000000000
 "#,
     );
     fs.add_file(
@@ -2911,7 +3129,7 @@ pub enum DurationB: int64 { Second = 1000000000 }
 import "time"
 
 fn test() -> bool {
-  time.DurationA.Second == time.DurationB.Second
+  time.SecondA == time.SecondB
 }
 "#,
     );
@@ -2919,16 +3137,15 @@ fn test() -> bool {
 }
 
 #[test]
-fn alias_backed_value_enum_rejects_typed_primitive() {
+fn alias_backed_named_primitive_rejects_typed_primitive() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
         "time",
         "time.d.lis",
         r#"
 type Base = int64
-pub enum Duration: Base {
-  Second = 1000000000,
-}
+pub struct Duration(Base)
+pub const Second: Duration = 1000000000
 "#,
     );
     fs.add_file(
@@ -2939,7 +3156,7 @@ import "time"
 
 fn test() -> time.Duration {
   let n: int64 = 5;
-  time.Duration.Second * n
+  time.Second * n
 }
 "#,
     );
@@ -2947,13 +3164,14 @@ fn test() -> time.Duration {
 }
 
 #[test]
-fn uintptr_backed_value_enum_rejects_typed_primitive() {
+fn uintptr_backed_named_primitive_rejects_typed_primitive() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
         "sys",
         "sys.d.lis",
         r#"
-pub enum Errno: uintptr { EPERM = 1 }
+pub struct Errno(uintptr)
+pub const EPERM: Errno = 1
 pub fn current() -> uintptr
 pub fn needs(e: Errno)
 "#,
@@ -2974,13 +3192,14 @@ fn test() {
 }
 
 #[test]
-fn uintptr_backed_value_enum_cast_escape_hatch() {
+fn uintptr_backed_named_primitive_cast_escape_hatch() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
         "sys",
         "sys.d.lis",
         r#"
-pub enum Errno: uintptr { EPERM = 1 }
+pub struct Errno(uintptr)
+pub const EPERM: Errno = 1
 pub fn current() -> uintptr
 pub fn needs(e: Errno)
 "#,
@@ -3001,13 +3220,14 @@ fn test() {
 }
 
 #[test]
-fn uintptr_backed_value_enum_member_and_const_ok() {
+fn uintptr_backed_named_primitive_member_and_const_ok() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
         "sys",
         "sys.d.lis",
         r#"
-pub enum Errno: uintptr { EPERM = 1 }
+pub struct Errno(uintptr)
+pub const EPERM: Errno = 1
 pub const ENOENT: Errno = 2
 pub fn needs(e: Errno)
 "#,
@@ -3019,7 +3239,7 @@ pub fn needs(e: Errno)
 import "sys"
 
 fn test() {
-  sys.needs(sys.Errno.EPERM)
+  sys.needs(sys.EPERM)
   sys.needs(sys.ENOENT)
 }
 "#,
@@ -3038,9 +3258,9 @@ fn numeric_alias_complex_chained() {
 import "time"
 
 fn test() -> time.Duration {
-  let base = time.Duration.Second * 2;
-  let extra = time.Duration.Millisecond * 500;
-  base + extra - time.Duration.Millisecond
+  let base = time.Second * 2;
+  let extra = time.Millisecond * 500;
+  base + extra - time.Millisecond
 }
 "#,
     );
@@ -3059,7 +3279,7 @@ import "time"
 
 fn test() -> int64 {
   // T / T yields the named type now; cast to the underlying for a raw ratio
-  let ratio: int64 = (time.Duration.Second / time.Duration.Millisecond) as int64;
+  let ratio: int64 = (time.Second / time.Millisecond) as int64;
   ratio
 }
 "#,
@@ -3078,8 +3298,8 @@ fn numeric_alias_assignment_from_expression() {
 import "time"
 
 fn test() {
-  let d: time.Duration = time.Duration.Second * 2;
-  let ratio: int64 = (time.Duration.Second / time.Duration.Millisecond) as int64;
+  let d: time.Duration = time.Second * 2;
+  let ratio: int64 = (time.Second / time.Millisecond) as int64;
 }
 "#,
     );
@@ -4965,7 +5185,7 @@ fn test(m: Meters) {
 }
 
 #[test]
-fn alias_to_value_enum_rejects_typed_primitive_in_operator() {
+fn alias_to_named_primitive_rejects_typed_primitive_in_operator() {
     let mut fs = MockFileSystem::new();
     fs.add_file("time", "time.d.lis", duration_typedef());
     fs.add_file(
@@ -4977,7 +5197,7 @@ import "time"
 type D = time.Duration
 
 fn test() {
-  let x: D = time.Duration.Second
+  let x: D = time.Second
   let n: int64 = 2
   let _y = x * n
 }
@@ -4987,7 +5207,7 @@ fn test() {
 }
 
 #[test]
-fn alias_to_value_enum_rejects_typed_primitive_in_comparison() {
+fn alias_to_named_primitive_rejects_typed_primitive_in_comparison() {
     let mut fs = MockFileSystem::new();
     fs.add_file("time", "time.d.lis", duration_typedef());
     fs.add_file(
@@ -4999,7 +5219,7 @@ import "time"
 type D = time.Duration
 
 fn test() -> bool {
-  let x: D = time.Duration.Second
+  let x: D = time.Second
   let n: int64 = 2
   x == n
 }
@@ -5009,7 +5229,7 @@ fn test() -> bool {
 }
 
 #[test]
-fn alias_to_value_enum_with_underlying_value_ok() {
+fn alias_to_named_primitive_with_underlying_value_ok() {
     let mut fs = MockFileSystem::new();
     fs.add_file("time", "time.d.lis", duration_typedef());
     fs.add_file(
@@ -5021,9 +5241,9 @@ import "time"
 type D = time.Duration
 
 fn test() -> D {
-  let x: D = time.Duration.Second
-  let _ = x == time.Duration.Second
-  x * time.Duration.Second
+  let x: D = time.Second
+  let _ = x == time.Second
+  x * time.Second
 }
 "#,
     );
@@ -5031,14 +5251,15 @@ fn test() -> D {
 }
 
 #[test]
-fn alias_backed_uintptr_value_enum_rejects_typed_primitive() {
+fn alias_backed_uintptr_named_primitive_rejects_typed_primitive() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
         "sys",
         "sys.d.lis",
         r#"
 type Base = uintptr
-pub enum Errno: Base { EPERM = 1 }
+pub struct Errno(Base)
+pub const EPERM: Errno = 1
 pub fn current() -> uintptr
 pub fn needs(e: Errno)
 "#,
@@ -5059,12 +5280,12 @@ fn test() {
 }
 
 #[test]
-fn uintptr_backed_value_enum_adapts_integer_literal() {
+fn uintptr_backed_named_primitive_adapts_integer_literal() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
         "sys",
         "sys.d.lis",
-        "pub enum Errno: uintptr { EPERM = 1 }\npub fn needs(e: Errno)\n",
+        "pub struct Errno(uintptr)\npub const EPERM: Errno = 1\npub fn needs(e: Errno)\n",
     );
     fs.add_file(
         "main",
@@ -5074,7 +5295,7 @@ import "sys"
 
 fn test() {
   let _e: sys.Errno = 1
-  let _ = sys.Errno.EPERM == 0
+  let _ = sys.EPERM == 0
   sys.needs(2)
 }
 "#,
@@ -5083,12 +5304,12 @@ fn test() {
 }
 
 #[test]
-fn uintptr_backed_value_enum_arithmetic_rejected() {
+fn uintptr_backed_named_primitive_arithmetic_rejected() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
         "sys",
         "sys.d.lis",
-        "pub enum Errno: uintptr { EPERM = 1 }\n",
+        "pub struct Errno(uintptr)\npub const EPERM: Errno = 1\n",
     );
     fs.add_file(
         "main",
@@ -5097,7 +5318,7 @@ fn uintptr_backed_value_enum_arithmetic_rejected() {
 import "sys"
 
 fn test() -> sys.Errno {
-  sys.Errno.EPERM + 1
+  sys.EPERM + 1
 }
 "#,
     );
@@ -5105,12 +5326,12 @@ fn test() -> sys.Errno {
 }
 
 #[test]
-fn uintptr_backed_value_enum_ordering_rejected() {
+fn uintptr_backed_named_primitive_ordering_rejected() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
         "sys",
         "sys.d.lis",
-        "pub enum Errno: uintptr { EPERM = 1 }\n",
+        "pub struct Errno(uintptr)\npub const EPERM: Errno = 1\n",
     );
     fs.add_file(
         "main",
@@ -5119,7 +5340,7 @@ fn uintptr_backed_value_enum_ordering_rejected() {
 import "sys"
 
 fn test() -> bool {
-  sys.Errno.EPERM < 10
+  sys.EPERM < 10
 }
 "#,
     );
@@ -5156,10 +5377,9 @@ fn test() {
 
 fn code_typedef() -> &'static str {
     r#"
-pub enum Code: string {
-  NotFound = "not found",
-  Timeout = "timeout",
-}
+pub struct Code(string)
+pub const NotFound: Code = "not found"
+pub const Timeout: Code = "timeout"
 pub fn needs(c: Code)
 "#
 }
@@ -5176,11 +5396,11 @@ fn infer_code_main(body: &str) -> InferResult {
 }
 
 #[test]
-fn string_value_enum_adapts_string_literal() {
+fn string_named_primitive_adapts_string_literal() {
     infer_code_main(
         r#"
   let _c: status.Code = "not found"
-  let _eq = status.Code.NotFound == "timeout"
+  let _eq = status.NotFound == "timeout"
   status.needs("timeout")
 "#,
     )
@@ -5188,19 +5408,19 @@ fn string_value_enum_adapts_string_literal() {
 }
 
 #[test]
-fn string_value_enum_same_type_operators_ok() {
+fn string_named_primitive_same_type_operators_ok() {
     infer_code_main(
         r#"
-  let _eq = status.Code.NotFound == status.Code.Timeout
-  let _lt = status.Code.NotFound < status.Code.Timeout
-  let _cat: status.Code = status.Code.NotFound + "!"
+  let _eq = status.NotFound == status.Timeout
+  let _lt = status.NotFound < status.Timeout
+  let _cat: status.Code = status.NotFound + "!"
 "#,
     )
     .assert_no_errors();
 }
 
 #[test]
-fn string_value_enum_rejects_typed_string_in_assignment() {
+fn string_named_primitive_rejects_typed_string_in_assignment() {
     infer_code_main(
         r#"
   let s: string = "x"
@@ -5211,44 +5431,44 @@ fn string_value_enum_rejects_typed_string_in_assignment() {
 }
 
 #[test]
-fn string_value_enum_rejects_named_to_string_assignment() {
+fn string_named_primitive_rejects_named_to_string_assignment() {
     infer_code_main(
         r#"
-  let _s: string = status.Code.NotFound
+  let _s: string = status.NotFound
 "#,
     )
     .assert_infer_code("type_mismatch");
 }
 
 #[test]
-fn string_value_enum_rejects_typed_string_in_comparison() {
-    infer_code_main(
-        r#"
-  let s: string = "x"
-  let _eq = status.Code.NotFound == s
-"#,
-    )
-    .assert_infer_code("type_mismatch");
-}
-
-#[test]
-fn string_value_enum_rejects_typed_string_in_concat() {
+fn string_named_primitive_rejects_typed_string_in_comparison() {
     infer_code_main(
         r#"
   let s: string = "x"
-  let _cat = status.Code.NotFound + s
+  let _eq = status.NotFound == s
 "#,
     )
     .assert_infer_code("type_mismatch");
 }
 
 #[test]
-fn string_value_enum_cast_escape_hatch() {
+fn string_named_primitive_rejects_typed_string_in_concat() {
+    infer_code_main(
+        r#"
+  let s: string = "x"
+  let _cat = status.NotFound + s
+"#,
+    )
+    .assert_infer_code("type_mismatch");
+}
+
+#[test]
+fn string_named_primitive_cast_escape_hatch() {
     infer_code_main(
         r#"
   let s: string = "x"
   let _to: status.Code = s as status.Code
-  let _from: string = status.Code.NotFound as string
+  let _from: string = status.NotFound as string
 "#,
     )
     .assert_no_errors();

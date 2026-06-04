@@ -1,5 +1,3 @@
-use syntax::program::DefinitionBody;
-
 use crate::EmitEffects;
 use crate::Planner;
 use crate::context::expression::ExpressionContext;
@@ -11,8 +9,6 @@ use syntax::types::{Type, unqualified_name};
 pub(crate) enum IdentifierKind {
     /// `Unit` used as expression value → `struct{}{}`
     UnitValue,
-    /// Value enum variant (e.g., `Color.Red`) → module-qualified constant
-    ValueEnumVariant { go_constant: String },
     /// Public function needing Go capitalization
     PublicFunction { capitalized: String },
     /// Enum variant unit constructor → `MakeName[Types]()`
@@ -36,7 +32,6 @@ impl Planner<'_> {
         }
         match self.classify_identifier(value, ty, ctx, fx) {
             IdentifierKind::UnitValue => "struct{}{}".to_string(),
-            IdentifierKind::ValueEnumVariant { go_constant } => go_constant,
             IdentifierKind::PublicFunction { capitalized } => capitalized,
             IdentifierKind::UnitConstructor { name, type_args } => {
                 format!("{}{}()", self.resolve_go_name(&name, fx), type_args)
@@ -76,10 +71,6 @@ impl Planner<'_> {
             .resolve_binding_go_name(value)
             .unwrap_or(value)
             .to_string();
-
-        if let Some(go_constant) = self.try_classify_value_enum_variant(&name, ty, fx) {
-            return IdentifierKind::ValueEnumVariant { go_constant };
-        }
 
         if let Some(capitalized) = self.try_capitalize_public_function(&name, ty) {
             return IdentifierKind::PublicFunction { capitalized };
@@ -350,32 +341,6 @@ impl Planner<'_> {
             || self.method_needs_export(method_name);
 
         Some(self.qualify_method_call(&type_id, method_name, is_public, fx))
-    }
-
-    fn try_classify_value_enum_variant(
-        &mut self,
-        name: &str,
-        ty: &Type,
-        fx: &mut EmitEffects,
-    ) -> Option<String> {
-        if !name.contains('.') {
-            return None;
-        }
-
-        let Type::Nominal { id: enum_id, .. } = ty else {
-            return None;
-        };
-
-        let definition = self.facts.definition(enum_id.as_str())?;
-        if !matches!(definition.body, DefinitionBody::ValueEnum { .. }) {
-            return None;
-        }
-
-        let variant_name = go_name::unqualified_name(name);
-        let module = self.facts.module_for_qualified_name(enum_id.as_str())?;
-        let qualifier = self.require_module_import_fx(module, fx);
-
-        Some(format!("{}.{}", qualifier, variant_name))
     }
 
     /// `Some(capitalized)` when the identifier names a public function in

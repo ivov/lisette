@@ -48,7 +48,6 @@ impl Planner<'_> {
                     .unwrap_or_default();
                 format!("{}{}", doc_comment, code)
             }
-            Expression::ValueEnum { .. } => String::new(),
             Expression::TypeAlias {
                 doc,
                 name,

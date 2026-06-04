@@ -14,13 +14,9 @@ import "go:net"
 import "go:net/url"
 import "go:time"
 
-pub enum ConnState: int {
-  StateActive = 1,
-  StateClosed = 4,
-  StateHijacked = 3,
-  StateIdle = 2,
-  StateNew = 0,
-}
+/// A ConnState represents the state of a client connection to a server.
+/// It's used by the optional [Server.ConnState] hook.
+pub struct ConnState(int)
 
 pub const StateActive: ConnState = 1
 
@@ -32,12 +28,13 @@ pub const StateIdle: ConnState = 2
 
 pub const StateNew: ConnState = 0
 
-pub enum SameSite: int {
-  SameSiteDefaultMode = 1,
-  SameSiteLaxMode = 2,
-  SameSiteNoneMode = 4,
-  SameSiteStrictMode = 3,
-}
+/// SameSite allows a server to define a cookie attribute making it impossible for
+/// the browser to send this cookie along with cross-site requests. The main
+/// goal is to mitigate the risk of cross-origin information leakage, and provide
+/// some protection against cross-site request forgery attacks.
+/// 
+/// See https://tools.ietf.org/html/draft-ietf-httpbis-cookie-same-site-00 for details.
+pub struct SameSite(int)
 
 pub const SameSiteDefaultMode: SameSite = 1
 

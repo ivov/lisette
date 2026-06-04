@@ -3232,52 +3232,6 @@ fn test() {
 }
 
 #[test]
-fn value_enum_basic() {
-    let input = r#"
-enum Weekday {
-  Sunday = 0,
-  Monday = 1,
-  Tuesday = 2,
-}
-"#;
-    assert_parse_snapshot!(input);
-}
-
-#[test]
-fn value_enum_hex() {
-    let input = r#"
-enum FileMode {
-  ModeDir = 0x80000000,
-  ModeRegular = 0,
-}
-"#;
-    assert_parse_snapshot!(input);
-}
-
-#[test]
-fn value_enum_string() {
-    let input = r#"
-enum HttpMethod {
-  Get = "GET",
-  Post = "POST",
-  Put = "PUT",
-}
-"#;
-    assert_parse_snapshot!(input);
-}
-
-#[test]
-fn value_enum_negative() {
-    let input = r#"
-enum Offset {
-  Start = 0,
-  End = -1,
-}
-"#;
-    assert_parse_snapshot!(input);
-}
-
-#[test]
 fn negative_pattern_i64_min() {
     let input = r#"
 fn classify(x: int) -> string {
@@ -3285,16 +3239,6 @@ fn classify(x: int) -> string {
     -9223372036854775808 => "min",
     _ => "other",
   }
-}
-"#;
-    assert_parse_snapshot!(input);
-}
-
-#[test]
-fn value_enum_negative_i64_min() {
-    let input = r#"
-enum Time: int64 {
-  Earliest = -9223372036854775808,
 }
 "#;
     assert_parse_snapshot!(input);

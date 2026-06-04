@@ -437,19 +437,18 @@ pub struct Decoder {}
 }
 
 #[test]
-fn gopkg_in_value_enum_chain_access_emits_correct_qualifier() {
+fn gopkg_in_package_const_access_emits_correct_qualifier() {
     let input = r#"
 import "go:gopkg.in/yaml.v3"
 
 fn test() {
-  let _ = yaml.Kind.ScalarNode
+  let _ = yaml.ScalarNode
 }
 "#;
     let typedef = r#"// Package: yaml
 
-pub enum Kind: uint32 {
-  ScalarNode = 8,
-}
+pub struct Kind(uint32)
+pub const ScalarNode: Kind = 8
 "#;
     assert_emit_snapshot_with_go_typedefs!(input, &[("go:gopkg.in/yaml.v3", typedef)]);
 }

@@ -3,14 +3,10 @@
 // Go: 1.25.10
 // Lisette: 0.2.1
 
-pub enum Duration: int64 {
-  Hour = 3600000000000,
-  Microsecond = 1000,
-  Millisecond = 1000000,
-  Minute = 60000000000,
-  Nanosecond = 1,
-  Second = 1000000000,
-}
+/// A Duration represents the elapsed time between two instants
+/// as an int64 nanosecond count. The representation limits the
+/// largest representable duration to approximately 290 years.
+pub struct Duration(int64)
 
 /// Common durations. There is no definition for units of Day or larger
 /// to avoid confusion across daylight savings time zone transitions.
@@ -96,20 +92,8 @@ pub const Nanosecond: Duration = 1
 /// 	fmt.Print(time.Duration(seconds)*time.Second) // prints 10s
 pub const Second: Duration = 1000000000
 
-pub enum Month: int {
-  April = 4,
-  August = 8,
-  December = 12,
-  February = 2,
-  January = 1,
-  July = 7,
-  June = 6,
-  March = 3,
-  May = 5,
-  November = 11,
-  October = 10,
-  September = 9,
-}
+/// A Month specifies a month of the year (January = 1, ...).
+pub struct Month(int)
 
 pub const April: Month = 4
 
@@ -135,15 +119,8 @@ pub const October: Month = 10
 
 pub const September: Month = 9
 
-pub enum Weekday: int {
-  Friday = 5,
-  Monday = 1,
-  Saturday = 6,
-  Sunday = 0,
-  Thursday = 4,
-  Tuesday = 2,
-  Wednesday = 3,
-}
+/// A Weekday specifies a day of the week (Sunday = 0, ...).
+pub struct Weekday(int)
 
 pub const Friday: Weekday = 5
 

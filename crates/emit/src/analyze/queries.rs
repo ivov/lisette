@@ -127,16 +127,6 @@ impl Planner<'_> {
             .is_some_and(|d| d.is_newtype())
     }
 
-    pub(crate) fn is_go_value_enum(&self, ty: &Type) -> bool {
-        let Type::Nominal { id, .. } = ty.strip_refs() else {
-            return false;
-        };
-        matches!(
-            self.facts.definition(id.as_str()).map(|d| &d.body),
-            Some(DefinitionBody::ValueEnum { .. })
-        )
-    }
-
     pub(crate) fn get_newtype_underlying(&self, ty: &Type) -> Option<Type> {
         let Type::Nominal { id, .. } = ty.strip_refs() else {
             return None;

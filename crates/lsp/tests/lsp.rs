@@ -4300,15 +4300,15 @@ fn main() {
 }
 
 #[tokio::test]
-async fn stress_value_enum() {
+async fn stress_enum_match_positions() {
     assert!(
         stress_test_all_positions(
             "\
-enum Direction: string {
-  North = \"N\",
-  South = \"S\",
-  East = \"E\",
-  West = \"W\",
+enum Direction {
+  North,
+  South,
+  East,
+  West,
 }
 fn main() {
   let d = Direction.North
@@ -6699,18 +6699,18 @@ fn describe(s: Shape) -> string {
 }
 
 #[tokio::test]
-async fn stress_value_enum_all_handlers() {
+async fn stress_enum_match_all_handlers() {
     let mut client = TestClient::new().await;
     client.initialize().await;
     client
         .open(
             TEST_URI,
             "\
-enum Direction: string {
-  North = \"N\",
-  South = \"S\",
-  East = \"E\",
-  West = \"W\",
+enum Direction {
+  North,
+  South,
+  East,
+  West,
 }
 fn main() {
   let d = Direction.North
@@ -6730,8 +6730,6 @@ fn main() {
 
     // No completion assertion — just verify handlers don't crash
     let _ = client.completion(TEST_URI, 7, 19).await;
-
-    // Value enum completion is a known gap — verify no crash
 
     // Prepare rename on enum name
     let rename = client.prepare_rename(TEST_URI, 0, 6).await;
@@ -7474,6 +7472,68 @@ fn main() {
 
     // Signature help on `types.is_warm(c)`
     let _ = client.signature_help(&main_uri, 4, 17).await;
+
+    client.shutdown().await;
+}
+
+#[tokio::test]
+async fn goto_definition_const_pattern_resolves_exact_module() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    std::fs::write(root.join("lisette.toml"), "").unwrap();
+
+    let src = root.join("src");
+    std::fs::create_dir_all(&src).unwrap();
+
+    let a_dir = src.join("week_a");
+    std::fs::create_dir_all(&a_dir).unwrap();
+    std::fs::write(
+        a_dir.join("week_a.lis"),
+        "\
+pub struct Weekday(int)
+pub const Friday: Weekday = 5",
+    )
+    .unwrap();
+
+    let b_dir = src.join("week_b");
+    std::fs::create_dir_all(&b_dir).unwrap();
+    std::fs::write(
+        b_dir.join("week_b.lis"),
+        "\
+pub struct Workday(int)
+pub const Friday: Workday = 5",
+    )
+    .unwrap();
+
+    let main_content = "\
+import a \"week_a\"
+import b \"week_b\"
+
+fn classify(d: b.Workday) -> int {
+  match d {
+    b.Friday => 1,
+    _ => 0,
+  }
+}";
+    std::fs::write(src.join("main.lis"), main_content).unwrap();
+
+    let mut client = TestClient::new().await;
+    client.initialize_with_root(root).await;
+
+    let main_path = src.join("main.lis");
+    let main_uri = Url::from_file_path(&main_path).unwrap().to_string();
+    client.open(&main_uri, main_content).await;
+
+    let response = client.goto_definition(&main_uri, 5, 8).await;
+    let loc = response.as_ref().and_then(definition_location);
+    assert!(
+        loc.is_some(),
+        "const pattern should resolve to its constant definition"
+    );
+    assert!(
+        loc.unwrap().uri.as_str().contains("week_b"),
+        "const pattern must resolve to the matched module, not a same-named const elsewhere"
+    );
 
     client.shutdown().await;
 }

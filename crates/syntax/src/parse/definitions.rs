@@ -3,8 +3,7 @@ use ecow::EcoString;
 use super::Parser;
 use crate::ast::{
     Annotation, Attribute, AttributeArg, EnumFieldDefinition, EnumVariant, Expression, Generic,
-    Literal, ParentInterface, Span, StructFieldDefinition, StructKind, ValueEnumVariant,
-    VariantFields, Visibility,
+    ParentInterface, Span, StructFieldDefinition, StructKind, VariantFields, Visibility,
 };
 use crate::lex::Token;
 use crate::lex::TokenKind::*;
@@ -148,73 +147,28 @@ impl<'source> Parser<'source> {
         let generics = self.parse_generics();
 
         let underlying_start = self.current_token();
-        let underlying_ty = if self.advance_if(Colon) {
-            let annotation = self.parse_annotation();
-            Some((annotation, underlying_start))
-        } else {
-            None
-        };
-
-        self.ensure(LeftCurlyBrace);
-
-        if self.peek_is_value_enum_variant() {
-            if !generics.is_empty() {
-                let generics_span = generics.first().expect("non-empty").span;
-                let param_word = if generics.len() == 1 {
-                    "parameter"
-                } else {
-                    "parameters"
-                };
-                let error = ParseError::new(
-                    "Value enum with generics",
-                    generics_span,
-                    "not allowed on value enums",
-                )
-                .with_parse_code("value_enum_generics")
-                .with_help(format!(
-                    "Remove the generic {}. Value enums represent Go const groups, which cannot be generic.",
-                    param_word
-                ));
-                self.errors.push(error);
-            }
-
-            let underlying_ty = underlying_ty.map(|(annotation, _)| annotation);
-            return self.parse_value_enum_body(doc, name, name_span, underlying_ty, start);
-        }
-
-        if let Some((_, underlying_token)) = underlying_ty {
+        if self.advance_if(Colon) {
+            let _ = self.parse_annotation();
             let underlying_span = Span::new(
                 self.file_id,
-                underlying_token.byte_offset,
-                underlying_token.byte_length,
+                underlying_start.byte_offset,
+                underlying_start.byte_length,
             );
             let error = ParseError::new(
-                "Underlying type on regular enum",
+                "Enum with underlying type",
                 underlying_span,
-                "only allowed on value enums",
+                "enums cannot have an underlying type",
             )
             .with_parse_code("enum_underlying_type")
             .with_help(
-                "Remove the `: type` annotation. Underlying types are allowed only on value enums, which represent Go const groups.",
+                "Remove the `: type` annotation. To model a Go defined primitive type, use a named primitive type such as `pub struct Weekday(int)` with package-level constants.",
             );
             self.errors.push(error);
         }
 
+        self.ensure(LeftCurlyBrace);
+
         self.parse_regular_enum_body(doc, attributes, name, name_span, generics, start)
-    }
-
-    fn peek_is_value_enum_variant(&self) -> bool {
-        if self.is(RightCurlyBrace) {
-            return false;
-        }
-
-        let mut offset = 0;
-        while self.stream.peek_ahead(offset).kind == DocComment {
-            offset += 1;
-        }
-
-        self.stream.peek_ahead(offset).kind == Identifier
-            && self.stream.peek_ahead(offset + 1).kind == Equal
     }
 
     fn parse_regular_enum_body(
@@ -265,52 +219,6 @@ impl<'source> Parser<'source> {
         }
     }
 
-    fn parse_value_enum_body(
-        &mut self,
-        doc: Option<std::string::String>,
-        name: EcoString,
-        name_span: Span,
-        underlying_ty: Option<Annotation>,
-        start: Token<'source>,
-    ) -> Expression {
-        let mut variants = vec![];
-        let mut seen_variants: Vec<(EcoString, Span)> = vec![];
-
-        while self.is_not(RightCurlyBrace) {
-            let start_position = self.stream.position;
-
-            let variant_doc = self.collect_doc_comments().map(|(text, _)| text);
-            if let Some(variant) = self.parse_value_enum_variant_with_doc(variant_doc) {
-                if let Some((_, first_span)) =
-                    seen_variants.iter().find(|(n, _)| n == &variant.name)
-                {
-                    self.error_duplicate_enum_variant(
-                        &variant.name,
-                        *first_span,
-                        variant.name_span,
-                    );
-                } else {
-                    seen_variants.push((variant.name.clone(), variant.name_span));
-                }
-                variants.push(variant);
-            }
-            self.expect_comma_or(RightCurlyBrace);
-            self.ensure_progress(start_position, RightCurlyBrace);
-        }
-
-        self.ensure(RightCurlyBrace);
-
-        Expression::ValueEnum {
-            doc,
-            name,
-            name_span,
-            underlying_ty,
-            variants,
-            visibility: Visibility::Public,
-            span: self.span_from_tokens(start),
-        }
-    }
-
     fn parse_enum_variant_with_doc(
         &mut self,
         doc: Option<std::string::String>,
@@ -326,6 +234,24 @@ impl<'source> Parser<'source> {
         let name_token = self.current_token();
         let name_span = Span::new(self.file_id, name_token.byte_offset, name_token.byte_length);
         let name = self.read_identifier();
+
+        if self.is(Equal) {
+            let eq_token = self.current_token();
+            let eq_span = Span::new(self.file_id, eq_token.byte_offset, eq_token.byte_length);
+            let error = ParseError::new(
+                "Assigned enum variant",
+                eq_span,
+                "enum variants cannot have assigned values",
+            )
+            .with_parse_code("enum_assigned_variant")
+            .with_help(
+                "Lisette enums are sum types, not Go const groups. To model a Go defined primitive type, use a named primitive type such as `pub struct Weekday(int)` with package-level constants.",
+            );
+            self.errors.push(error);
+            self.next(); // consume `=`
+            self.skip_assigned_variant_value();
+        }
+
         let fields = self.parse_enum_variant_fields();
 
         Some(EnumVariant {
@@ -336,118 +262,10 @@ impl<'source> Parser<'source> {
         })
     }
 
-    fn parse_value_enum_variant_with_doc(
-        &mut self,
-        doc: Option<std::string::String>,
-    ) -> Option<ValueEnumVariant> {
-        if self.is_not(Identifier) {
-            self.track_error(
-                "expected variant name",
-                "Variant names must be identifiers.",
-            );
-            return None;
-        }
-
-        let name_token = self.current_token();
-        let name_span = Span::new(self.file_id, name_token.byte_offset, name_token.byte_length);
-        let name = self.read_identifier();
-
-        let (value, value_span) = if self.is(Equal) {
-            let eq_token = self.current_token();
-            let start_offset = eq_token.byte_offset;
-            self.next(); // consume `=`
-            let (value, value_end) = self.parse_value_enum_variant_value();
-            let span = Span::new(self.file_id, start_offset, value_end - start_offset);
-            (value, span)
-        } else {
-            (
-                Literal::Integer {
-                    value: 0,
-                    text: None,
-                },
-                name_span,
-            )
-        };
-
-        Some(ValueEnumVariant {
-            doc,
-            name,
-            name_span,
-            value,
-            value_span,
-        })
-    }
-
-    fn parse_value_enum_variant_value(&mut self) -> (Literal, u32) {
-        const EMPTY: Literal = Literal::Integer {
-            value: 0,
-            text: None,
-        };
-
-        let token = self.current_token();
-
-        match token.kind {
-            Integer => {
-                let text = token.text;
-                let end = token.byte_offset + token.byte_length;
-                let literal = self.parse_integer_text_with(text, true);
-                self.next();
-                (literal, end)
-            }
-            String => {
-                let text = token.text;
-                let end = token.byte_offset + token.byte_length;
-                self.next();
-                (
-                    Literal::String {
-                        value: text[1..text.len() - 1].to_string(),
-                        raw: false,
-                    },
-                    end,
-                )
-            }
-            Minus => {
-                let minus_offset = token.byte_offset;
-                self.next();
-                let next_token = self.current_token();
-                if next_token.kind != Integer {
-                    self.track_error(
-                        "expected integer after `-`",
-                        "Use `-42` for negative integers.",
-                    );
-                    return (EMPTY, next_token.byte_offset);
-                }
-                let text = next_token.text;
-                let end = next_token.byte_offset + next_token.byte_length;
-                let neg_span = Span::new(self.file_id, minus_offset, end - minus_offset);
-                let literal = self.parse_integer_text_with(text, true);
-                self.next();
-                let Literal::Integer { value, text: orig } = literal else {
-                    return (EMPTY, end);
-                };
-                if value > i64::MIN.unsigned_abs() {
-                    self.track_error_at(
-                        neg_span,
-                        "negative integer out of range",
-                        "Negative integer must be ≥ -9223372036854775808 (i64 minimum).",
-                    );
-                    return (EMPTY, end);
-                }
-                (
-                    Literal::Integer {
-                        value: value.wrapping_neg(),
-                        text: orig.map(|t| format!("-{t}")),
-                    },
-                    end,
-                )
-            }
-            _ => {
-                self.track_error(
-                    "expected integer or string literal",
-                    "Value enum variants require integer or string values.",
-                );
-                (EMPTY, token.byte_offset)
-            }
+    fn skip_assigned_variant_value(&mut self) {
+        self.advance_if(Minus);
+        if self.is(Integer) || self.is(String) {
+            self.next();
         }
     }
 

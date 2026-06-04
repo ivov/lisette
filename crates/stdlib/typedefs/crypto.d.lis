@@ -6,27 +6,9 @@
 import "go:hash"
 import "go:io"
 
-pub enum Hash: uint {
-  BLAKE2b_256 = 17,
-  BLAKE2b_384 = 18,
-  BLAKE2b_512 = 19,
-  BLAKE2s_256 = 16,
-  MD4 = 1,
-  MD5 = 2,
-  MD5SHA1 = 8,
-  RIPEMD160 = 9,
-  SHA1 = 3,
-  SHA224 = 4,
-  SHA256 = 5,
-  SHA384 = 6,
-  SHA3_224 = 10,
-  SHA3_256 = 11,
-  SHA3_384 = 12,
-  SHA3_512 = 13,
-  SHA512 = 7,
-  SHA512_224 = 14,
-  SHA512_256 = 15,
-}
+/// Hash identifies a cryptographic hash function that is implemented in another
+/// package.
+pub struct Hash(uint)
 
 pub const BLAKE2b_256: Hash = 17
 

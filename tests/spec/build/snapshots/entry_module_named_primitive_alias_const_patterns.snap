@@ -1,0 +1,27 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import (
+	"fmt"
+	"reflect"
+)
+
+type K = reflect.Kind
+
+func name_of(k K) string {
+	switch k {
+	case reflect.String:
+		return "string"
+	case reflect.Int:
+		return "int"
+	default:
+		return "other"
+	}
+}
+
+func main() {
+	fmt.Println(name_of(reflect.String))
+}

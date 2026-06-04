@@ -341,6 +341,14 @@ impl TaskState<'_> {
         expected_ty: Type,
         kind: BindingKind,
     ) -> (Pattern, TypedPattern) {
+        if fields.is_empty()
+            && identifier.contains('.')
+            && let Some(result) =
+                self.try_infer_const_pattern(store, &identifier, rest, kind, &expected_ty, span)
+        {
+            return result;
+        }
+
         let is_bare_name =
             fields.is_empty() && !identifier.contains('.') && !kind.is_pattern_position();
 
@@ -474,6 +482,76 @@ impl TaskState<'_> {
             span,
         };
         (pattern, typed)
+    }
+
+    fn try_infer_const_pattern(
+        &mut self,
+        store: &Store,
+        identifier: &str,
+        rest: bool,
+        kind: BindingKind,
+        expected_ty: &Type,
+        span: Span,
+    ) -> Option<(Pattern, TypedPattern)> {
+        let qualified = self.lookup_qualified_name(store, identifier)?;
+        let definition = store.get_definition(&qualified)?;
+        if !matches!(definition.body, DefinitionBody::Value { .. }) {
+            return None;
+        }
+
+        let definition_ty = definition.ty();
+        let unwrapped_ty = definition_ty.unwrap_forall();
+
+        // Enum-variant resolution takes precedence, so a unit variant of its own
+        // enum type stays on the enum-variant path.
+        let member_name = unqualified_name(&qualified);
+        if let Type::Nominal { id, .. } = unwrapped_ty
+            && store
+                .variants_of(id.as_str())
+                .is_some_and(|variants| variants.iter().any(|v| v.name == member_name))
+        {
+            return None;
+        }
+
+        if !kind.is_match_arm() {
+            self.sink
+                .push(diagnostics::infer::const_pattern_outside_match_arm(
+                    identifier, span,
+                ));
+            return Some((Pattern::WildCard { span }, TypedPattern::Wildcard));
+        }
+
+        if matches!(unwrapped_ty, Type::Function(_)) {
+            self.sink
+                .push(diagnostics::infer::const_pattern_not_eligible(
+                    identifier, span,
+                ));
+            return Some((Pattern::WildCard { span }, TypedPattern::Wildcard));
+        }
+
+        let (const_ty, _) = self.instantiate(definition_ty);
+        let const_value = definition.const_value().cloned();
+        let unify_expected = store.deep_resolve_alias(&expected_ty.resolve_in(&self.env));
+        self.unify(store, &unify_expected, &const_ty, &span);
+
+        if let Some(definition_span) = self.get_definition_name_span(store, &qualified) {
+            self.facts.add_usage(span, definition_span);
+        }
+
+        let resolved_ty = const_ty.resolve_in(&self.env);
+        let pattern = Pattern::EnumVariant {
+            identifier: identifier.into(),
+            fields: vec![],
+            rest,
+            ty: resolved_ty.clone(),
+            span,
+        };
+        let typed = TypedPattern::Const {
+            qualified_name: qualified.into(),
+            ty: resolved_ty,
+            value: const_value,
+        };
+        Some((pattern, typed))
     }
 
     #[allow(clippy::too_many_arguments)]

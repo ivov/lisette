@@ -69,7 +69,6 @@ const (
 	BinaryLong  = 0b11110000
 )
 
-// Value enum with negative values (tests parseIntValue handles negatives)
 type Priority int
 
 const (

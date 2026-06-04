@@ -284,13 +284,17 @@ impl Planner<'_> {
             return "nil".to_string();
         }
         let go_ty = self.go_type_string(ty, fx);
-        let is_struct_like = matches!(
-            self.facts.definition(id).map(|d| &d.body),
-            Some(DefinitionBody::Struct { .. })
-        ) || matches!(
-            self.facts.definition(id).map(|d| &d.body),
-            Some(DefinitionBody::TypeAlias { annotation, .. }) if annotation.is_opaque()
-        );
+        // A newtype is a Go named scalar (`type Duration int64`), so a composite
+        // literal `Duration{}` is invalid; `*new(Duration)` yields its zero.
+        let is_newtype = self.facts.definition(id).is_some_and(|d| d.is_newtype());
+        let is_struct_like = !is_newtype
+            && (matches!(
+                self.facts.definition(id).map(|d| &d.body),
+                Some(DefinitionBody::Struct { .. })
+            ) || matches!(
+                self.facts.definition(id).map(|d| &d.body),
+                Some(DefinitionBody::TypeAlias { annotation, .. }) if annotation.is_opaque()
+            ));
         if is_struct_like {
             format!("{}{{}}", go_ty)
         } else {

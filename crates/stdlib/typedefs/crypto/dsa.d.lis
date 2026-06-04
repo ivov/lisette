@@ -6,12 +6,9 @@
 import "go:io"
 import "go:math/big"
 
-pub enum ParameterSizes: int {
-  L1024N160 = 0,
-  L2048N224 = 1,
-  L2048N256 = 2,
-  L3072N256 = 3,
-}
+/// ParameterSizes is an enumeration of the acceptable bit lengths of the primes
+/// in a set of DSA parameters. See FIPS 186-3, section 4.2.
+pub struct ParameterSizes(int)
 
 pub const L1024N160: ParameterSizes = 0
 

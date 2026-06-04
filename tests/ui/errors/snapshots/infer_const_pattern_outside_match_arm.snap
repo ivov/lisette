@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Const pattern outside a match arm
+   ╭─[main.lis:5:7]
+ 4 │ fn test(day: weekday.Weekday) {
+ 5 │   let weekday.Friday = day
+   ·       ───────┬──────
+   ·              ╰── const patterns are only allowed in match arms
+ 6 │ }
+   ╰────
+  help: `weekday.Friday` is a constant, so this pattern is refutable. Match on it inside a `match` expression, or compare with `==` in a `let` or function parameter · code: [infer.const_pattern_outside_match_arm]

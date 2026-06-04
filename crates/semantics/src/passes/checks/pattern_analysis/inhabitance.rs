@@ -144,9 +144,7 @@ fn check_constructor_inhabited(
             is_inhabited(&target_ty, store, cache)
         }
 
-        DefinitionBody::ValueEnum { .. }
-        | DefinitionBody::Interface { .. }
-        | DefinitionBody::Value { .. } => true,
+        DefinitionBody::Interface { .. } | DefinitionBody::Value { .. } => true,
     }
 }
 

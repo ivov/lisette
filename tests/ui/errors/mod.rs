@@ -4745,14 +4745,14 @@ impl Container<T> {
 }
 
 #[test]
-fn infer_value_enum_outside_typedef() {
+fn parse_enum_assigned_variant() {
     let input = r#"
 enum Weekday {
   Sunday = 0,
   Monday = 1,
 }
 "#;
-    assert_infer_error_snapshot!(input);
+    assert_parse_error_snapshot!(input);
 }
 
 #[test]
@@ -4798,72 +4798,65 @@ fn classify(x: int) -> string {
 }
 
 #[test]
-fn parse_value_enum_negative_below_i64_min() {
+fn parse_enum_assigned_variant_string() {
     let input = r#"
-enum Bad: int64 {
-  Way = -9223372036854775809,
+enum HttpMethod {
+  Get = "GET",
+  Post = "POST",
 }
 "#;
     assert_parse_error_snapshot!(input);
 }
 
 #[test]
-fn parse_value_enum_positive_above_u64_max() {
-    let input = r#"
-enum Bad: int64 {
-  Way = 99999999999999999999999,
-}
-"#;
-    assert_parse_error_snapshot!(input);
-}
+fn infer_const_pattern_outside_match_arm() {
+    let typedef_source = "pub struct Weekday(int)\npub const Friday: Weekday = 5\n";
+    let main_source = r#"
+import "weekday"
 
-#[test]
-fn parse_value_enum_negative_below_u64_max() {
-    let input = r#"
-enum Bad: int64 {
-  Way = -18446744073709551616,
-}
-"#;
-    assert_parse_error_snapshot!(input);
-}
-
-#[test]
-fn parse_value_enum_with_generics() {
-    let source = r#"
-enum Status<T> {
-  Active = 0,
-  Inactive = 1,
+fn test(day: weekday.Weekday) {
+  let weekday.Friday = day
 }
 "#;
     let mut fs = MockFileSystem::new();
-    fs.add_file("types", "status.d.lis", source);
-    let result = infer_module("types", fs);
+    fs.add_file("weekday", "weekday.d.lis", typedef_source);
+    fs.add_file("main", "main.lis", main_source);
+    let result = infer_module("main", fs);
+    assert_multimodule_infer_error_snapshot!(result, main_source);
+}
 
-    assert!(!result.errors.is_empty(), "Expected parse error");
+#[test]
+fn infer_const_pattern_not_case_eligible() {
+    let typedef_source = "pub struct Weekday(int)\npub fn Today() -> Weekday\n";
+    let main_source = r#"
+import "lib"
 
-    let output = format_diagnostic_for_snapshot(&result.errors[0], source, "status.d.lis");
-
-    insta::with_settings!({
-        prepend_module_to_snapshot => false,
-        omit_expression => true,
-    }, {
-        insta::assert_snapshot!(output);
-    });
+fn name(day: lib.Weekday) -> string {
+  match day {
+    lib.Today => "today",
+    _ => "other",
+  }
+}
+"#;
+    let mut fs = MockFileSystem::new();
+    fs.add_file("lib", "lib.d.lis", typedef_source);
+    fs.add_file("main", "main.lis", main_source);
+    let result = infer_module("main", fs);
+    assert_multimodule_infer_error_snapshot!(result, main_source);
 }
 
 #[test]
 fn infer_invalid_division_by_numeric_alias() {
     let typedef_source = r#"
-pub enum Duration: int64 {
-  Second = 1000000000,
-}
+pub struct Duration(int64)
+pub const Second: Duration = 1000000000
 "#;
     let main_source = r#"
 import "time"
 
 fn test() {
   let n: int = 100;
-  let x = n / time.Duration.Second;
+  let x = n / time.Second;
 }
 "#;
     let mut fs = MockFileSystem::new();
@@ -4886,16 +4879,15 @@ fn test() {
 #[test]
 fn infer_invalid_remainder_by_numeric_alias() {
     let typedef_source = r#"
-pub enum Duration: int64 {
-  Second = 1000000000,
-}
+pub struct Duration(int64)
+pub const Second: Duration = 1000000000
 "#;
     let main_source = r#"
 import "time"
 
 fn test() {
   let n: int = 100;
-  let x = n % time.Duration.Second;
+  let x = n % time.Second;
 }
 "#;
     let mut fs = MockFileSystem::new();
@@ -4918,15 +4910,14 @@ fn test() {
 #[test]
 fn infer_cross_family_numeric_alias() {
     let typedef_source = r#"
-pub enum Duration: int64 {
-  Second = 1000000000,
-}
+pub struct Duration(int64)
+pub const Second: Duration = 1000000000
 "#;
     let main_source = r#"
 import "time"
 
 fn test() {
-  let x = time.Duration.Second * 1.5;
+  let x = time.Second * 1.5;
 }
 "#;
     let mut fs = MockFileSystem::new();
@@ -4949,19 +4940,16 @@ fn test() {
 #[test]
 fn infer_different_numeric_aliases() {
     let typedef_source = r#"
-pub enum DurationA: int64 {
-  Second = 1000000000,
-}
-
-pub enum DurationB: int64 {
-  Second = 1000000000,
-}
+pub struct DurationA(int64)
+pub struct DurationB(int64)
+pub const SecondA: DurationA = 1000000000
+pub const SecondB: DurationB = 1000000000
 "#;
     let main_source = r#"
 import "time"
 
 fn test() {
-  let x = time.DurationA.Second + time.DurationB.Second;
+  let x = time.SecondA + time.SecondB;
 }
 "#;
     let mut fs = MockFileSystem::new();
@@ -4984,9 +4972,8 @@ fn test() {
 #[test]
 fn infer_named_numeric_expected_suggests_as_cast() {
     let typedef_source = r#"
-pub enum Duration: int64 {
-  Second = 1000000000,
-}
+pub struct Duration(int64)
+pub const Second: Duration = 1000000000
 
 pub fn Sleep(d: Duration)
 "#;
@@ -8149,7 +8136,7 @@ fn main() {
 }
 
 #[test]
-fn infer_go_value_enum_type_alias_used_as_value() {
+fn infer_named_primitive_type_used_as_value() {
     let input = r#"
 import "go:time"
 

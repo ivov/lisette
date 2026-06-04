@@ -5,14 +5,8 @@
 
 import "go:go/token"
 
-pub enum Kind: int {
-  Bool = 1,
-  Complex = 5,
-  Float = 4,
-  Int = 3,
-  String = 2,
-  Unknown = 0,
-}
+/// Kind specifies the kind of value represented by a [Value].
+pub struct Kind(int)
 
 pub const Bool: Kind = 1
 

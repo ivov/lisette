@@ -480,12 +480,6 @@ impl LanguageServer for Backend {
                     name_span,
                     span,
                     ..
-                }
-                | Expression::ValueEnum {
-                    name,
-                    name_span,
-                    span,
-                    ..
                 } => (name, name_span, span, SymbolKind::ENUM, None),
                 Expression::Interface {
                     name,
@@ -826,31 +820,6 @@ impl LanguageServer for Backend {
                 }
                 let qualified_name = format!("{}.{}", file.module_id, name);
                 validation::check_rename_guards(&qualified_name)?;
-                Ok(Some(PrepareRenameResponse::RangeWithPlaceholder {
-                    range: line_index.span_to_range(*name_span),
-                    placeholder: name.to_string(),
-                }))
-            }
-
-            syntax::ast::Expression::ValueEnum {
-                name,
-                name_span,
-                variants,
-                ..
-            } => {
-                if let Some(variant) = variants
-                    .iter()
-                    .find(|v| offset_in_span(offset, &v.name_span))
-                {
-                    let qname = format!("{}.{}.{}", file.module_id, name, variant.name);
-                    validation::check_rename_guards(&qname)?;
-                    return Ok(Some(PrepareRenameResponse::RangeWithPlaceholder {
-                        range: line_index.span_to_range(variant.name_span),
-                        placeholder: variant.name.to_string(),
-                    }));
-                }
-                let qname = format!("{}.{}", file.module_id, name);
-                validation::check_rename_guards(&qname)?;
                 Ok(Some(PrepareRenameResponse::RangeWithPlaceholder {
                     range: line_index.span_to_range(*name_span),
                     placeholder: name.to_string(),

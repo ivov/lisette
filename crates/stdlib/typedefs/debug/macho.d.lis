@@ -7,14 +7,8 @@ import "go:debug/dwarf"
 import "go:encoding/binary"
 import "go:io"
 
-pub enum Cpu: uint32 {
-  Cpu386 = 7,
-  CpuAmd64 = 16777223,
-  CpuArm = 12,
-  CpuArm64 = 16777228,
-  CpuPpc = 18,
-  CpuPpc64 = 16777234,
-}
+/// A Cpu is a Mach-O cpu type.
+pub struct Cpu(uint32)
 
 pub const Cpu386: Cpu = 7
 
@@ -28,17 +22,8 @@ pub const CpuPpc: Cpu = 18
 
 pub const CpuPpc64: Cpu = 16777234
 
-pub enum LoadCmd: uint32 {
-  LoadCmdDylib = 0xc,
-  LoadCmdDylinker = 0xf,
-  LoadCmdDysymtab = 0xb,
-  LoadCmdRpath = 0x8000001c,
-  LoadCmdSegment = 0x1,
-  LoadCmdSegment64 = 0x19,
-  LoadCmdSymtab = 0x2,
-  LoadCmdThread = 0x4,
-  LoadCmdUnixThread = 0x5,
-}
+/// A LoadCmd is a Mach-O load command.
+pub struct LoadCmd(uint32)
 
 pub const LoadCmdDylib: LoadCmd = 0xc
 
@@ -58,18 +43,7 @@ pub const LoadCmdThread: LoadCmd = 0x4
 
 pub const LoadCmdUnixThread: LoadCmd = 0x5
 
-pub enum RelocTypeARM: int {
-  ARM_RELOC_BR24 = 5,
-  ARM_RELOC_HALF = 8,
-  ARM_RELOC_HALF_SECTDIFF = 9,
-  ARM_RELOC_LOCAL_SECTDIFF = 3,
-  ARM_RELOC_PAIR = 1,
-  ARM_RELOC_PB_LA_PTR = 4,
-  ARM_RELOC_SECTDIFF = 2,
-  ARM_RELOC_VANILLA = 0,
-  ARM_THUMB_32BIT_BRANCH = 7,
-  ARM_THUMB_RELOC_BR22 = 6,
-}
+pub struct RelocTypeARM(int)
 
 pub const ARM_RELOC_BR24: RelocTypeARM = 5
 
@@ -91,19 +65,7 @@ pub const ARM_THUMB_32BIT_BRANCH: RelocTypeARM = 7
 
 pub const ARM_THUMB_RELOC_BR22: RelocTypeARM = 6
 
-pub enum RelocTypeARM64: int {
-  ARM64_RELOC_ADDEND = 10,
-  ARM64_RELOC_BRANCH26 = 2,
-  ARM64_RELOC_GOT_LOAD_PAGE21 = 5,
-  ARM64_RELOC_GOT_LOAD_PAGEOFF12 = 6,
-  ARM64_RELOC_PAGE21 = 3,
-  ARM64_RELOC_PAGEOFF12 = 4,
-  ARM64_RELOC_POINTER_TO_GOT = 7,
-  ARM64_RELOC_SUBTRACTOR = 1,
-  ARM64_RELOC_TLVP_LOAD_PAGE21 = 8,
-  ARM64_RELOC_TLVP_LOAD_PAGEOFF12 = 9,
-  ARM64_RELOC_UNSIGNED = 0,
-}
+pub struct RelocTypeARM64(int)
 
 pub const ARM64_RELOC_ADDEND: RelocTypeARM64 = 10
 
@@ -127,14 +89,7 @@ pub const ARM64_RELOC_TLVP_LOAD_PAGEOFF12: RelocTypeARM64 = 9
 
 pub const ARM64_RELOC_UNSIGNED: RelocTypeARM64 = 0
 
-pub enum RelocTypeGeneric: int {
-  GENERIC_RELOC_LOCAL_SECTDIFF = 4,
-  GENERIC_RELOC_PAIR = 1,
-  GENERIC_RELOC_PB_LA_PTR = 3,
-  GENERIC_RELOC_SECTDIFF = 2,
-  GENERIC_RELOC_TLV = 5,
-  GENERIC_RELOC_VANILLA = 0,
-}
+pub struct RelocTypeGeneric(int)
 
 pub const GENERIC_RELOC_LOCAL_SECTDIFF: RelocTypeGeneric = 4
 
@@ -148,18 +103,7 @@ pub const GENERIC_RELOC_TLV: RelocTypeGeneric = 5
 
 pub const GENERIC_RELOC_VANILLA: RelocTypeGeneric = 0
 
-pub enum RelocTypeX86_64: int {
-  X86_64_RELOC_BRANCH = 2,
-  X86_64_RELOC_GOT = 4,
-  X86_64_RELOC_GOT_LOAD = 3,
-  X86_64_RELOC_SIGNED = 1,
-  X86_64_RELOC_SIGNED_1 = 6,
-  X86_64_RELOC_SIGNED_2 = 7,
-  X86_64_RELOC_SIGNED_4 = 8,
-  X86_64_RELOC_SUBTRACTOR = 5,
-  X86_64_RELOC_TLV = 9,
-  X86_64_RELOC_UNSIGNED = 0,
-}
+pub struct RelocTypeX86_64(int)
 
 pub const X86_64_RELOC_BRANCH: RelocTypeX86_64 = 2
 
@@ -181,12 +125,8 @@ pub const X86_64_RELOC_TLV: RelocTypeX86_64 = 9
 
 pub const X86_64_RELOC_UNSIGNED: RelocTypeX86_64 = 0
 
-pub enum Type: uint32 {
-  TypeBundle = 8,
-  TypeDylib = 6,
-  TypeExec = 2,
-  TypeObj = 1,
-}
+/// A Type is the Mach-O file type, e.g. an object file, executable, or dynamic library.
+pub struct Type(uint32)
 
 pub const TypeBundle: Type = 8
 

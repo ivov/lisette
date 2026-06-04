@@ -24,9 +24,6 @@ fn check_type_name(expression: &Expression, sink: &LocalSink) {
         Expression::Enum {
             name, name_span, ..
         }
-        | Expression::ValueEnum {
-            name, name_span, ..
-        }
         | Expression::Struct {
             name, name_span, ..
         }

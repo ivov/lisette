@@ -48,10 +48,9 @@ type TypeOverrides struct {
 	// Go reflection; each such param is lifted to a fresh `T` and rewritten
 	// to `Ref<T>`.
 	ReflectionDecode map[string][]string `json:"reflection_decode"`
-	// BitFlagSet forces named integer types to be emitted as bare newtypes
-	// (with #[go(bit_flag_set)]) instead of value enums. Used for types that
-	// look like enums to the heuristic but are semantically bit-flag sets,
-	// e.g. small flag types with <4 constants, or hybrids with mask outliers.
+	// BitFlagSet forces named integer types to carry the #[go(bit_flag_set)]
+	// attribute. Used for types that look like sequential const groups to the
+	// heuristic but are semantically bit-flag sets.
 	BitFlagSet map[string][]string `json:"bit_flag_set"`
 }
 

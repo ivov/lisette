@@ -363,7 +363,6 @@ impl Planner<'_> {
             // does not add one.
             Expression::Struct { .. }
             | Expression::Enum { .. }
-            | Expression::ValueEnum { .. }
             | Expression::TypeAlias { .. }
             | Expression::Interface { .. }
             | Expression::ImplBlock { .. } => {

@@ -1,7 +1,7 @@
 use crate::checker::EnvResolve;
 use syntax::ast::{
     Annotation, EnumFieldDefinition, EnumVariant, Generic, Span, StructFieldDefinition, StructKind,
-    ValueEnumVariant, VariantFields,
+    VariantFields,
 };
 use syntax::program::{Definition, DefinitionBody, MethodSignatures, Visibility};
 use syntax::types::Type;
@@ -95,6 +95,7 @@ impl TaskState<'_> {
                     allowed_lints: vec![],
                     go_hints: vec![],
                     go_name: None,
+                    const_value: None,
                 },
             };
             module
@@ -127,101 +128,6 @@ impl TaskState<'_> {
         );
 
         self.check_recursive_type(store, &qualified_name, name, name_span);
-    }
-
-    pub(super) fn populate_value_enum(
-        &mut self,
-        store: &mut Store,
-        name: &str,
-        name_span: &Span,
-        underlying_ty: Option<&Annotation>,
-        variants: &[ValueEnumVariant],
-        doc: &Option<String>,
-    ) {
-        if !self.is_d_lis(&*store) {
-            let span = variants
-                .first()
-                .map(|v| v.value_span)
-                .unwrap_or_else(|| *name_span);
-            self.sink
-                .push(diagnostics::infer::value_enum_in_source_file(name, span));
-            return;
-        }
-
-        let qualified_name = self.qualify_name(name);
-        let base_enum_ty = store
-            .get_type(&qualified_name)
-            .expect("enum type must exist")
-            .clone();
-
-        let visibility = self
-            .current_module(&*store)
-            .definitions
-            .get(qualified_name.as_str())
-            .map(|definition| definition.visibility().clone())
-            .unwrap_or(Visibility::Private);
-
-        let underlying_ty =
-            underlying_ty.map(|annotation| self.convert_to_type(&*store, annotation, name_span));
-
-        let enum_ty = if let (Type::Nominal { id, params, .. }, Some(underlying)) =
-            (&base_enum_ty, &underlying_ty)
-        {
-            Type::Nominal {
-                id: id.clone(),
-                params: params.clone(),
-                underlying_ty: Some(Box::new(underlying.clone())),
-            }
-        } else {
-            base_enum_ty
-        };
-
-        for variant in variants {
-            let qualified_variant_name = qualified_name.with_segment(&variant.name);
-            let module = self.current_module_mut(store);
-            module.definitions.insert(
-                qualified_variant_name,
-                Definition {
-                    visibility: visibility.clone(),
-                    ty: enum_ty.clone(),
-                    name: None,
-                    name_span: Some(variant.name_span),
-                    doc: variant.doc.clone(),
-                    body: DefinitionBody::Value {
-                        allowed_lints: vec![],
-                        go_hints: vec![],
-                        go_name: None,
-                    },
-                },
-            );
-        }
-
-        let scope = self.scopes.current_mut();
-        for variant in variants {
-            let qualified_variant_name = format!("{}.{}", name, variant.name);
-            scope.values.insert(qualified_variant_name, enum_ty.clone());
-            scope
-                .values
-                .insert(variant.name.to_string(), enum_ty.clone());
-        }
-
-        let module = self.current_module_mut(store);
-
-        module.definitions.insert(
-            qualified_name,
-            Definition {
-                visibility,
-                ty: enum_ty,
-                name: Some(name.into()),
-                name_span: Some(*name_span),
-                doc: doc.clone(),
-                body: DefinitionBody::ValueEnum {
-                    variants: variants.to_vec(),
-                    underlying_ty,
-                    methods: Default::default(),
-                },
-            },
-        );
     }
 
     /// Check for Go-level field name collisions across enum variants.

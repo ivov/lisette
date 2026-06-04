@@ -101,7 +101,6 @@ fn nominal_can_carry_mutation(
             })
         }
         DefinitionBody::TypeAlias { .. }
-        | DefinitionBody::ValueEnum { .. }
         | DefinitionBody::Interface { .. }
         | DefinitionBody::Value { .. } => false,
     }

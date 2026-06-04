@@ -18,10 +18,6 @@
   "enum" @context
   name: (type_identifier) @name) @item
 
-(value_enum_item
-  "enum" @context
-  name: (type_identifier) @name) @item
-
 ; Interfaces
 (interface_item
   "interface" @context

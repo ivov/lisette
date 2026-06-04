@@ -364,7 +364,6 @@ pub fn check(expression: &Expression, ctx: &PatternAnalysisContext, sink: &Local
         }
         Expression::Continue { .. } => {}
         Expression::NoOp => {}
-        Expression::ValueEnum { .. } => {}
     }
 }
 

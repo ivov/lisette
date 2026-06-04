@@ -469,10 +469,7 @@ impl<'s> TaskState<'s> {
         let Some(definition) = store.get_definition(id) else {
             return false;
         };
-        matches!(
-            definition.body,
-            DefinitionBody::Enum { .. } | DefinitionBody::ValueEnum { .. }
-        )
+        matches!(definition.body, DefinitionBody::Enum { .. })
     }
 
     pub(crate) fn resolve_type_name(

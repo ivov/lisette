@@ -316,7 +316,6 @@ impl<'a> Walker<'a> {
             }
 
             Expression::Enum { .. }
-            | Expression::ValueEnum { .. }
             | Expression::Struct { .. }
             | Expression::TypeAlias { .. }
             | Expression::ModuleImport { .. }

@@ -3,7 +3,7 @@ use rustc_hash::FxHashMap as HashMap;
 use ecow::EcoString;
 
 use crate::ast::{
-    Annotation, EnumVariant, Generic, Span, StructFieldDefinition, StructKind, ValueEnumVariant,
+    Annotation, EnumVariant, Generic, Literal, Span, StructFieldDefinition, StructKind,
 };
 use crate::types::Type;
 
@@ -30,11 +30,6 @@ pub enum DefinitionBody {
         methods: MethodSignatures,
         display: bool,
     },
-    ValueEnum {
-        variants: Vec<ValueEnumVariant>,
-        underlying_ty: Option<Type>,
-        methods: MethodSignatures,
-    },
     Struct {
         generics: Vec<Generic>,
         fields: Vec<StructFieldDefinition>,
@@ -50,6 +45,10 @@ pub enum DefinitionBody {
         allowed_lints: Vec<String>,
         go_hints: Vec<String>,
         go_name: Option<String>,
+        /// The known literal value when this definition is a case-eligible
+        /// constant (usable as a Go `case` and as a const-pattern target).
+        /// `None` for variables, functions, and non-literal constants.
+        const_value: Option<Literal>,
     },
 }
 
@@ -119,12 +118,18 @@ impl Definition {
         }
     }
 
+    pub fn const_value(&self) -> Option<&Literal> {
+        match &self.body {
+            DefinitionBody::Value { const_value, .. } => const_value.as_ref(),
+            _ => None,
+        }
+    }
+
     pub fn methods_mut(&mut self) -> Option<&mut MethodSignatures> {
         match &mut self.body {
             DefinitionBody::Struct { methods, .. } => Some(methods),
             DefinitionBody::TypeAlias { methods, .. } => Some(methods),
             DefinitionBody::Enum { methods, .. } => Some(methods),
-            DefinitionBody::ValueEnum { methods, .. } => Some(methods),
             _ => None,
         }
     }
@@ -142,7 +147,6 @@ impl Definition {
             self.body,
             DefinitionBody::Struct { .. }
                 | DefinitionBody::Enum { .. }
-                | DefinitionBody::ValueEnum { .. }
                 | DefinitionBody::TypeAlias { .. }
         )
     }

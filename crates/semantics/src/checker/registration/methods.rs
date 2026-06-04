@@ -12,7 +12,7 @@ use crate::store::Store;
 
 impl TaskState<'_> {
     /// Register an instance method on the receiver type's definition.
-    /// Returns `false` if the receiver was not found or is a ValueEnum (caller should skip).
+    /// Returns `false` if the receiver was not found (caller should skip).
     #[allow(clippy::too_many_arguments)]
     pub(super) fn try_register_instance_method(
         &mut self,
@@ -58,13 +58,11 @@ impl TaskState<'_> {
             }
         }
 
-        let is_value_enum = matches!(definition.body, DefinitionBody::ValueEnum { .. });
-
         if let Some(methods) = definition.methods_mut() {
             methods.insert(fn_name.into(), method_ty.clone());
         }
 
-        !is_value_enum
+        true
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -280,6 +278,7 @@ impl TaskState<'_> {
                         allowed_lints: extract_attribute_flags(fn_attrs, "allow"),
                         go_hints: extract_attribute_flags(fn_attrs, "go"),
                         go_name: None,
+                        const_value: None,
                     },
                 },
             );
@@ -431,6 +430,7 @@ impl TaskState<'_> {
                         allowed_lints,
                         go_hints,
                         go_name: None,
+                        const_value: None,
                     },
                 },
             );

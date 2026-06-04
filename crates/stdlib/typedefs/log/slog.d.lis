@@ -8,18 +8,8 @@ import "go:io"
 import "go:log"
 import "go:time"
 
-pub enum Kind: int {
-  KindAny = 0,
-  KindBool = 1,
-  KindDuration = 2,
-  KindFloat64 = 3,
-  KindGroup = 8,
-  KindInt64 = 4,
-  KindLogValuer = 9,
-  KindString = 5,
-  KindTime = 6,
-  KindUint64 = 7,
-}
+/// Kind is the kind of a [Value].
+pub struct Kind(int)
 
 pub const KindAny: Kind = 0
 
@@ -41,12 +31,9 @@ pub const KindTime: Kind = 6
 
 pub const KindUint64: Kind = 7
 
-pub enum Level: int {
-  LevelDebug = -4,
-  LevelError = 8,
-  LevelInfo = 0,
-  LevelWarn = 4,
-}
+/// A Level is the importance or severity of a log event.
+/// The higher the level, the more important or severe the event.
+pub struct Level(int)
 
 pub const LevelDebug: Level = -4
 

@@ -3,29 +3,8 @@
 // Go: 1.25.10
 // Lisette: 0.2.1
 
-pub enum NodeType: int {
-  NodeAction = 1,
-  NodeBool = 2,
-  NodeBreak = 21,
-  NodeChain = 3,
-  NodeCommand = 4,
-  NodeComment = 20,
-  NodeContinue = 22,
-  NodeDot = 5,
-  NodeField = 8,
-  NodeIdentifier = 9,
-  NodeIf = 10,
-  NodeList = 11,
-  NodeNil = 12,
-  NodeNumber = 13,
-  NodePipe = 14,
-  NodeRange = 15,
-  NodeString = 16,
-  NodeTemplate = 17,
-  NodeText = 0,
-  NodeVariable = 18,
-  NodeWith = 19,
-}
+/// NodeType identifies the type of a parse tree node.
+pub struct NodeType(int)
 
 pub const NodeAction: NodeType = 1
 

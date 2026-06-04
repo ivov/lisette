@@ -11,7 +11,7 @@ impl TaskState<'_> {
     ///
     /// Allowed conversions:
     /// - Numeric types (int, uint, float families) to any other numeric type,
-    ///   including types with numeric underlying types (e.g., `enum Duration: int64`).
+    ///   including types with numeric underlying types (e.g., `struct Duration(int64)`).
     /// - rune -> string (UTF-8 encodes the codepoint)
     /// - string <-> Slice<byte> / Slice<rune>
     ///

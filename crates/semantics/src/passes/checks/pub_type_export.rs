@@ -36,12 +36,6 @@ fn type_declaration(expression: &Expression) -> Option<(&str, &Span, &Visibility
             visibility,
             ..
         }
-        | Expression::ValueEnum {
-            name,
-            name_span,
-            visibility,
-            ..
-        }
         | Expression::TypeAlias {
             name,
             name_span,

@@ -802,12 +802,12 @@ fn main() {
 }
 
 #[test]
-fn interop_value_enum_aliased_import() {
+fn interop_package_const_aliased_import() {
     let input = r#"
 import t "go:time"
 
 fn main() {
-  let d = t.Duration.Second
+  let d = t.Second
   let _ = d
 }
 "#;
@@ -815,25 +815,25 @@ fn main() {
 }
 
 #[test]
-fn interop_go_value_enum_type_alias() {
+fn interop_package_const_in_call() {
     let input = r#"
 import "go:time"
 import "go:fmt"
 
 fn function() {
-  fmt.Println("march", time.Month.March)
+  fmt.Println("march", time.March)
 }
 "#;
     assert_emit_snapshot!(input);
 }
 
 #[test]
-fn interop_value_enum_nested_module() {
+fn interop_package_const_nested_module() {
     let input = r#"
 import "go:debug/dwarf"
 
 fn main() {
-  let t = dwarf.Tag.TagArrayType
+  let t = dwarf.TagArrayType
   let _ = t
 }
 "#;
@@ -841,14 +841,14 @@ fn main() {
 }
 
 #[test]
-fn interop_value_enum_match_arm_aliased() {
+fn interop_const_pattern_match_arm_aliased() {
     let input = r#"
 import t "go:time"
 
 fn describe(d: t.Duration) -> string {
   match d {
-    t.Duration.Second => "one second",
-    t.Duration.Minute => "one minute",
+    t.Second => "one second",
+    t.Minute => "one minute",
     _ => "other",
   }
 }
@@ -857,14 +857,14 @@ fn describe(d: t.Duration) -> string {
 }
 
 #[test]
-fn interop_value_enum_match_arm_nested_module() {
+fn interop_const_pattern_match_arm_nested_module() {
     let input = r#"
 import "go:debug/dwarf"
 
 fn describe(a: dwarf.Attr) -> string {
   match a {
-    dwarf.Attr.AttrArtificial => "artificial",
-    dwarf.Attr.AttrByteSize   => "byte size",
+    dwarf.AttrArtificial => "artificial",
+    dwarf.AttrByteSize   => "byte size",
     _ => "other",
   }
 }

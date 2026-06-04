@@ -26,8 +26,6 @@ pub enum DotAccessKind {
     TupleElement,
     /// Module member access (e.g., `mod.func`)
     ModuleMember,
-    /// Value enum variant (Go constant, e.g., `reflect.String`)
-    ValueEnumVariant,
     /// ADT enum variant constructor (e.g., `makeColorRed[T]()`)
     EnumVariant,
     /// Instance method (has `self` receiver)

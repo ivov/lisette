@@ -394,6 +394,10 @@ pub(crate) fn resolve_enum_in_pattern(
                         .get(qualified.as_str())
                         .and_then(|d| d.name_span())
                 }
+                Some(TypedPattern::Const { qualified_name, .. }) => snapshot
+                    .definitions()
+                    .get(qualified_name.as_str())
+                    .and_then(|d| d.name_span()),
                 _ => lookup_definition_span(identifier, file, snapshot),
             }
         }
@@ -532,23 +536,6 @@ pub(crate) fn resolve_definition_span(
                     .or(Some(*name_span)),
 
                 Expression::Enum {
-                    name,
-                    name_span,
-                    variants,
-                    ..
-                } => variants
-                    .iter()
-                    .find(|v| offset_in_span(offset, &v.name_span))
-                    .and_then(|v| {
-                        let qualified = format!("{}.{}.{}", file.module_id, name, v.name);
-                        snapshot
-                            .definitions()
-                            .get(qualified.as_str())
-                            .and_then(|d| d.name_span())
-                    })
-                    .or(Some(*name_span)),
-
-                Expression::ValueEnum {
                     name,
                     name_span,
                     variants,

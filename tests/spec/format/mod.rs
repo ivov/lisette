@@ -298,13 +298,6 @@ fn enum_empty() {
 }
 
 #[test]
-fn value_enum_with_underlying_type() {
-    assert_format_snapshot!(
-        "pub enum ParameterSizes: int { L1024N160 = 0, L2048N224 = 1, L2048N256 = 2, L3072N256 = 3 }"
-    );
-}
-
-#[test]
 fn for_loop() {
     assert_format_snapshot!("fn test() { for item in items { process(item) } }");
 }
@@ -1512,26 +1505,9 @@ fn comment_before_first_enum_variant() {
 }
 
 #[test]
-fn comment_between_value_enum_variants() {
-    assert_format_snapshot!("pub enum E: int {\n  A = 1,\n  // between\n  B = 2,\n}");
-}
-
-#[test]
-fn comment_trailing_in_value_enum_body() {
-    assert_format_snapshot!("pub enum E: int {\n  A = 1,\n  B = 2,\n  // trailing\n}");
-}
-
-#[test]
 fn doc_comment_on_enum_variant() {
     assert_format_snapshot!(
         "/// Enum doc\nenum Color {\n  /// Doc for R\n  R,\n  /// Doc for G\n  G,\n  /// Doc for B\n  B,\n}"
-    );
-}
-
-#[test]
-fn doc_comment_on_value_enum_variant() {
-    assert_format_snapshot!(
-        "pub enum E: int {\n  /// Doc for A\n  A = 1,\n  /// Doc for B\n  B = 2,\n}"
     );
 }
 
@@ -1645,11 +1621,6 @@ fn comment_same_line_trailing_on_select_arm() {
 #[test]
 fn comment_same_line_trailing_on_enum_variant() {
     assert_format_snapshot!("enum E {\n  A, // trailing variant\n  B,\n  C,\n}");
-}
-
-#[test]
-fn comment_same_line_trailing_on_value_enum_variant() {
-    assert_format_snapshot!("pub enum E: int {\n  A = 1, // trailing\n  B = 2,\n}");
 }
 
 #[test]

@@ -10,7 +10,7 @@ func mkConsts(values ...string) []constInfo {
 	return out
 }
 
-func TestLooksLikeBitFlags_SmallSequential_AreEnum(t *testing.T) {
+func TestLooksLikeBitFlags_SmallSequential_AreConstGroups(t *testing.T) {
 	cases := []struct {
 		name string
 		vals []string
@@ -26,7 +26,7 @@ func TestLooksLikeBitFlags_SmallSequential_AreEnum(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			if looksLikeBitFlags(mkConsts(c.vals...)) {
-				t.Errorf("%s: want enum, got flags", c.name)
+				t.Errorf("%s: want const group, got flags", c.name)
 			}
 		})
 	}
@@ -45,7 +45,7 @@ func TestLooksLikeBitFlags_TextbookFlags(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			if !looksLikeBitFlags(mkConsts(c.vals...)) {
-				t.Errorf("%s: want flags, got enum", c.name)
+				t.Errorf("%s: want flags, got const group", c.name)
 			}
 		})
 	}
@@ -53,13 +53,13 @@ func TestLooksLikeBitFlags_TextbookFlags(t *testing.T) {
 
 func TestLooksLikeBitFlags_BelowMinConstants(t *testing.T) {
 	if looksLikeBitFlags(mkConsts("1", "2", "4")) {
-		t.Error("3-value {1,2,4}: want enum (recover via config), got flags")
+		t.Error("3-value {1,2,4}: want const group (recover via config), got flags")
 	}
 }
 
 func TestLooksLikeBitFlags_HybridMaskAndBits(t *testing.T) {
 	if looksLikeBitFlags(mkConsts("1", "2", "4", "8", "0xff00000")) {
-		t.Error("hybrid mask+bits: want enum (recover via config), got flags")
+		t.Error("hybrid mask+bits: want const group (recover via config), got flags")
 	}
 }
 

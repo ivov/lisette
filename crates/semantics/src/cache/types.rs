@@ -84,11 +84,14 @@ impl CachedLiteral {
             },
             Literal::Boolean(v) => CachedLiteral::Boolean(*v),
             Literal::String { value, raw } => {
-                debug_assert!(!raw, "raw strings are not allowed in value-enum variants");
+                debug_assert!(
+                    !raw,
+                    "cached const literals are canonicalized to non-raw strings"
+                );
                 CachedLiteral::String(value.clone())
             }
             Literal::Char(v) => CachedLiteral::Char(v.clone()),
-            // These shouldn't appear in ValueEnum variants
+            // Canonical const literals are never one of these kinds.
             Literal::Imaginary(_) | Literal::FormatString(_) | Literal::Slice(_) => {
                 CachedLiteral::Integer {
                     value: 0,
@@ -273,38 +276,6 @@ impl CachedEnumField {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct CachedValueEnumVariant {
-    pub name: String,
-    pub name_span: CachedSpan,
-    pub value: CachedLiteral,
-    pub doc: Option<String>,
-}
-
-impl CachedValueEnumVariant {
-    pub fn from_variant(
-        variant: &syntax::ast::ValueEnumVariant,
-        file_id_to_index: &HashMap<u32, u32>,
-    ) -> Self {
-        Self {
-            name: variant.name.to_string(),
-            name_span: CachedSpan::from_span(&variant.name_span, file_id_to_index),
-            value: CachedLiteral::from_literal(&variant.value),
-            doc: variant.doc.clone(),
-        }
-    }
-
-    pub fn to_variant(&self, file_ids: &[u32]) -> syntax::ast::ValueEnumVariant {
-        syntax::ast::ValueEnumVariant {
-            doc: self.doc.clone(),
-            name: self.name.clone().into(),
-            name_span: self.name_span.to_span(file_ids),
-            value: self.value.to_literal(),
-            value_span: Span::dummy(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct CachedInterface {
     pub name: String,
     pub generics: Vec<CachedGeneric>,
@@ -373,11 +344,6 @@ pub enum CachedDefinitionBody {
         methods: HashMap<String, Type>,
         display: bool,
     },
-    ValueEnum {
-        variants: Vec<CachedValueEnumVariant>,
-        underlying_ty: Option<Type>,
-        methods: HashMap<String, Type>,
-    },
     Struct {
         generics: Vec<CachedGeneric>,
         fields: Vec<CachedStructField>,
@@ -393,6 +359,7 @@ pub enum CachedDefinitionBody {
         allowed_lints: Vec<String>,
         go_hints: Vec<String>,
         go_name: Option<String>,
+        const_value: Option<CachedLiteral>,
     },
 }
 
@@ -438,18 +405,6 @@ impl CachedDefinition {
                 methods: Self::convert_methods(methods),
                 display: *display,
             },
-            DefinitionBody::ValueEnum {
-                variants,
-                underlying_ty,
-                methods,
-            } => CachedDefinitionBody::ValueEnum {
-                variants: variants
-                    .iter()
-                    .map(|v| CachedValueEnumVariant::from_variant(v, file_id_to_index))
-                    .collect(),
-                underlying_ty: underlying_ty.clone(),
-                methods: Self::convert_methods(methods),
-            },
             DefinitionBody::Struct {
                 generics,
                 fields,
@@ -478,10 +433,12 @@ impl CachedDefinition {
                 allowed_lints,
                 go_hints,
                 go_name,
+                const_value,
             } => CachedDefinitionBody::Value {
                 allowed_lints: allowed_lints.clone(),
                 go_hints: go_hints.clone(),
                 go_name: go_name.clone(),
+                const_value: const_value.as_ref().map(CachedLiteral::from_literal),
             },
         };
         CachedDefinition {
@@ -535,15 +492,6 @@ impl CachedDefinition {
                 methods: Self::restore_methods(methods),
                 display: *display,
             },
-            CachedDefinitionBody::ValueEnum {
-                variants,
-                underlying_ty,
-                methods,
-            } => DefinitionBody::ValueEnum {
-                variants: variants.iter().map(|v| v.to_variant(file_ids)).collect(),
-                underlying_ty: underlying_ty.clone(),
-                methods: Self::restore_methods(methods),
-            },
             CachedDefinitionBody::Struct {
                 generics,
                 fields,
@@ -566,10 +514,12 @@ impl CachedDefinition {
                 allowed_lints,
                 go_hints,
                 go_name,
+                const_value,
             } => DefinitionBody::Value {
                 allowed_lints: allowed_lints.clone(),
                 go_hints: go_hints.clone(),
                 go_name: go_name.clone(),
+                const_value: const_value.as_ref().map(CachedLiteral::to_literal),
             },
         };
         Definition {

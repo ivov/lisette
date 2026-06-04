@@ -13,7 +13,7 @@ const (
 	FlagD
 )
 
-// Color is a small sequential enum. H13 emits as `pub enum`.
+// Color is a small sequential const group; H13 keeps it off the bit-flag path.
 type Color int
 
 const (
@@ -24,8 +24,6 @@ const (
 	Purple
 )
 
-// ForcedFlags is sequential 0..2 and would be a value enum under H13,
-// but the fixture bindgen.json forces it via the bit_flag_set override.
 type ForcedFlags int
 
 const (

@@ -355,7 +355,7 @@ fn store_module_for_qualified_name_domain_style() {
         store.module_for_qualified_name("mymod.MyType"),
         Some("mymod"),
     );
-    // Value enum variant: three dot-separated segments
+    // Enum variant: three dot-separated segments
     assert_eq!(
         store.module_for_qualified_name("go:github.com/gorilla/mux.Method.Get"),
         Some("go:github.com/gorilla/mux"),

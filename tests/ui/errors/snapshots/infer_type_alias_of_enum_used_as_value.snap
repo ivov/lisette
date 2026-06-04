@@ -1,12 +1,12 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  [error] Cannot use a module or enum-type alias as a value
+  [error] Cannot use native constructor as a value
    ╭─[test.lis:8:15]
  7 │ fn main() {
  8 │   fmt.Println(Month)
    ·               ──┬──
-   ·                 ╰── this alias refers to a type or module, not a runtime value
+   ·                 ╰── native constructors must be called directly
  9 │ }
    ╰────
-  help: Access a member instead, e.g. `alias.VariantName` · code: [infer.namespace_alias_used_as_value]
+  help: Use a closure instead: `|args| Month(args)` · code: [infer.native_constructor_value]

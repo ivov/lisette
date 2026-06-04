@@ -1372,7 +1372,7 @@ fn main() {
 }
 
 #[test]
-fn entry_module_type_alias_value_enum_variant_method_collision() {
+fn entry_module_named_primitive_alias_const_patterns() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
@@ -1384,9 +1384,16 @@ import "go:reflect"
 
 type K = reflect.Kind
 
+fn name_of(k: K) -> string {
+  match k {
+    reflect.String => "string",
+    reflect.Int => "int",
+    _ => "other",
+  }
+}
+
 fn main() {
-  fmt.Println(K.String)
-  fmt.Println(K.Int)
+  fmt.Println(name_of(reflect.String))
 }
 "#,
     );

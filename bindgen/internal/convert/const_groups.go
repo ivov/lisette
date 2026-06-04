@@ -11,7 +11,10 @@ import (
 	"github.com/ivov/lisette/bindgen/internal/extract"
 )
 
-type ValueEnumInfo struct {
+// ConstGroupInfo describes a Go defined primitive type (e.g. `type Duration
+// int64`) together with the constants declared at that type. It emits as a named
+// primitive struct plus package-level typed constants.
+type ConstGroupInfo struct {
 	TypeName       string
 	UnderlyingType string // e.g., "int64" for time.Duration
 	Variants       []EnumVariant
@@ -23,7 +26,10 @@ type constInfo struct {
 	value string
 }
 
-func DetectValueEnums(results []ConvertResult, exports []extract.SymbolExport, cfg *config.Config, pkgPath string) (valueEnums []ValueEnumInfo, constantTypes map[int]string, valueEnumTypeNames map[string]bool, bitFlagSetTypeNames map[string]bool) {
+// DetectConstGroups groups exported constants by their named primitive type,
+// returning one ConstGroupInfo per group (minimum two constants, not a bit-flag
+// set). `constGroupTypeNames` is the set of type names that own such a group.
+func DetectConstGroups(results []ConvertResult, exports []extract.SymbolExport, cfg *config.Config, pkgPath string) (constGroups []ConstGroupInfo, constantTypes map[int]string, constGroupTypeNames map[string]bool, bitFlagSetTypeNames map[string]bool) {
 	typeToConstants := make(map[string][]constInfo)
 	typeToUnderlying := make(map[string]string)
 
@@ -84,7 +90,7 @@ func DetectValueEnums(results []ConvertResult, exports []extract.SymbolExport, c
 	}
 
 	constantTypes = make(map[int]string)
-	valueEnumTypeNames = make(map[string]bool)
+	constGroupTypeNames = make(map[string]bool)
 	bitFlagSetTypeNames = make(map[string]bool)
 
 	typeNames := make([]string, 0, len(typeToConstants))
@@ -116,22 +122,22 @@ func DetectValueEnums(results []ConvertResult, exports []extract.SymbolExport, c
 			constantTypes[c.index] = typeName
 		}
 
-		valueEnums = append(valueEnums, ValueEnumInfo{
+		constGroups = append(constGroups, ConstGroupInfo{
 			TypeName:       typeName,
 			UnderlyingType: typeToUnderlying[typeName],
 			Variants:       variants,
 		})
-		valueEnumTypeNames[typeName] = true
+		constGroupTypeNames[typeName] = true
 	}
 
-	return valueEnums, constantTypes, valueEnumTypeNames, bitFlagSetTypeNames
+	return constGroups, constantTypes, constGroupTypeNames, bitFlagSetTypeNames
 }
 
 // looksLikeBitFlags classifies a named integer type as a bit-flag set.
 // Rule (H13): at least 4 constants, every nonzero value is a single bit,
 // and the values are not the sequential range 0..N-1 or 1..N. Small flag
-// types (under 4 constants) and hybrid mask/flag types pass through to
-// value-enum emission; recover them via the bit_flag_set config override.
+// types (under 4 constants) and hybrid mask/flag types pass through as plain
+// const groups; recover them via the bit_flag_set config override.
 func looksLikeBitFlags(constants []constInfo) bool {
 	const minConstants = 4
 	if len(constants) < minConstants {

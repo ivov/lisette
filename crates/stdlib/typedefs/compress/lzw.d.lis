@@ -5,10 +5,8 @@
 
 import "go:io"
 
-pub enum Order: int {
-  LSB = 0,
-  MSB = 1,
-}
+/// Order specifies the bit ordering in an LZW data stream.
+pub struct Order(int)
 
 pub const LSB: Order = 0
 

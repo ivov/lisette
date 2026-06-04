@@ -5,11 +5,7 @@
 
 import "go:time"
 
-pub enum Priority: int {
-  PriorityHigh = 1,
-  PriorityLow = -1,
-  PriorityNormal = 0,
-}
+pub struct Priority(int)
 
 pub const PriorityHigh: Priority = 1
 

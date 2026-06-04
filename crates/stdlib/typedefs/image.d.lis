@@ -6,14 +6,8 @@
 import "go:image/color"
 import "go:io"
 
-pub enum YCbCrSubsampleRatio: int {
-  YCbCrSubsampleRatio410 = 5,
-  YCbCrSubsampleRatio411 = 4,
-  YCbCrSubsampleRatio420 = 2,
-  YCbCrSubsampleRatio422 = 1,
-  YCbCrSubsampleRatio440 = 3,
-  YCbCrSubsampleRatio444 = 0,
-}
+/// YCbCrSubsampleRatio is the chroma subsample ratio used in a YCbCr image.
+pub struct YCbCrSubsampleRatio(int)
 
 pub const YCbCrSubsampleRatio410: YCbCrSubsampleRatio = 5
 

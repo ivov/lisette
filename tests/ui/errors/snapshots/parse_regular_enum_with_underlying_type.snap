@@ -1,12 +1,12 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  [error] Underlying type on regular enum
+  [error] Enum with underlying type
    ╭─[test.lis:2:12]
  1 │ 
  2 │ enum Status: int {
    ·            ┬
-   ·            ╰── only allowed on value enums
+   ·            ╰── enums cannot have an underlying type
  3 │   Active,
    ╰────
-  help: Remove the `: type` annotation. Underlying types are allowed only on value enums, which represent Go const groups · code: [parse.enum_underlying_type]
+  help: Remove the `: type` annotation. To model a Go defined primitive type, use a named primitive type such as `pub struct Weekday(int)` with package-level constants · code: [parse.enum_underlying_type]

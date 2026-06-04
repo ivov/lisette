@@ -10,13 +10,9 @@ import "go:io"
 import "go:net"
 import "go:time"
 
-pub enum ClientAuthType: int {
-  NoClientCert = 0,
-  RequestClientCert = 1,
-  RequireAndVerifyClientCert = 4,
-  RequireAnyClientCert = 2,
-  VerifyClientCertIfGiven = 3,
-}
+/// ClientAuthType declares the policy the server will follow for
+/// TLS Client Authentication.
+pub struct ClientAuthType(int)
 
 pub const NoClientCert: ClientAuthType = 0
 
@@ -28,13 +24,14 @@ pub const RequireAnyClientCert: ClientAuthType = 2
 
 pub const VerifyClientCertIfGiven: ClientAuthType = 3
 
-pub enum CurveID: uint16 {
-  CurveP256 = 23,
-  CurveP384 = 24,
-  CurveP521 = 25,
-  X25519 = 29,
-  X25519MLKEM768 = 4588,
-}
+/// CurveID is the type of a TLS identifier for a key exchange mechanism. See
+/// https://www.iana.org/assignments/tls-parameters/tls-parameters.xml#tls-parameters-8.
+/// 
+/// In TLS 1.2, this registry used to support only elliptic curves. In TLS 1.3,
+/// it was extended to other groups and renamed NamedGroup. See RFC 8446, Section
+/// 4.2.7. It was then also extended to other mechanisms, such as hybrid
+/// post-quantum KEMs.
+pub struct CurveID(uint16)
 
 pub const CurveP256: CurveID = 23
 
@@ -46,12 +43,9 @@ pub const X25519: CurveID = 29
 
 pub const X25519MLKEM768: CurveID = 4588
 
-pub enum QUICEncryptionLevel: int {
-  QUICEncryptionLevelApplication = 3,
-  QUICEncryptionLevelEarly = 1,
-  QUICEncryptionLevelHandshake = 2,
-  QUICEncryptionLevelInitial = 0,
-}
+/// QUICEncryptionLevel represents a QUIC encryption level used to transmit
+/// handshake messages.
+pub struct QUICEncryptionLevel(int)
 
 pub const QUICEncryptionLevelApplication: QUICEncryptionLevel = 3
 
@@ -61,18 +55,8 @@ pub const QUICEncryptionLevelHandshake: QUICEncryptionLevel = 2
 
 pub const QUICEncryptionLevelInitial: QUICEncryptionLevel = 0
 
-pub enum QUICEventKind: int {
-  QUICHandshakeDone = 7,
-  QUICNoEvent = 0,
-  QUICRejectedEarlyData = 6,
-  QUICResumeSession = 8,
-  QUICSetReadSecret = 1,
-  QUICSetWriteSecret = 2,
-  QUICStoreSession = 9,
-  QUICTransportParameters = 4,
-  QUICTransportParametersRequired = 5,
-  QUICWriteData = 3,
-}
+/// A QUICEventKind is a type of operation on a QUIC connection.
+pub struct QUICEventKind(int)
 
 pub const QUICHandshakeDone: QUICEventKind = 7
 
@@ -94,11 +78,21 @@ pub const QUICTransportParametersRequired: QUICEventKind = 5
 
 pub const QUICWriteData: QUICEventKind = 3
 
-pub enum RenegotiationSupport: int {
-  RenegotiateFreelyAsClient = 2,
-  RenegotiateNever = 0,
-  RenegotiateOnceAsClient = 1,
-}
+/// RenegotiationSupport enumerates the different levels of support for TLS
+/// renegotiation. TLS renegotiation is the act of performing subsequent
+/// handshakes on a connection after the first. This significantly complicates
+/// the state machine and has been the source of numerous, subtle security
+/// issues. Initiating a renegotiation is not supported, but support for
+/// accepting renegotiation requests may be enabled.
+/// 
+/// Even when enabled, the server may not change its identity between handshakes
+/// (i.e. the leaf certificate must be the same). Additionally, concurrent
+/// handshake and application data flow is not permitted so renegotiation can
+/// only be used with protocols that synchronise with the renegotiation, such as
+/// HTTPS.
+/// 
+/// Renegotiation is not defined in TLS 1.3.
+pub struct RenegotiationSupport(int)
 
 pub const RenegotiateFreelyAsClient: RenegotiationSupport = 2
 
@@ -106,20 +100,9 @@ pub const RenegotiateNever: RenegotiationSupport = 0
 
 pub const RenegotiateOnceAsClient: RenegotiationSupport = 1
 
-pub enum SignatureScheme: uint16 {
-  ECDSAWithP256AndSHA256 = 0x0403,
-  ECDSAWithP384AndSHA384 = 0x0503,
-  ECDSAWithP521AndSHA512 = 0x0603,
-  ECDSAWithSHA1 = 0x0203,
-  Ed25519 = 0x0807,
-  PKCS1WithSHA1 = 0x0201,
-  PKCS1WithSHA256 = 0x0401,
-  PKCS1WithSHA384 = 0x0501,
-  PKCS1WithSHA512 = 0x0601,
-  PSSWithSHA256 = 0x0804,
-  PSSWithSHA384 = 0x0805,
-  PSSWithSHA512 = 0x0806,
-}
+/// SignatureScheme identifies a signature algorithm supported by TLS. See
+/// RFC 8446, Section 4.2.3.
+pub struct SignatureScheme(uint16)
 
 pub const ECDSAWithP256AndSHA256: SignatureScheme = 0x0403
 

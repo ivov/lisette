@@ -258,9 +258,6 @@ impl TaskState<'_> {
                 DefinitionBody::Enum { variants, .. } => {
                     variants.iter().any(|v| v.name == variant_name)
                 }
-                DefinitionBody::ValueEnum { variants, .. } => {
-                    variants.iter().any(|v| v.name == variant_name)
-                }
                 _ => false,
             })
         });

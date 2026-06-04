@@ -15,22 +15,9 @@ import "go:net"
 import "go:net/url"
 import "go:time"
 
-pub enum ExtKeyUsage: int {
-  ExtKeyUsageAny = 0,
-  ExtKeyUsageClientAuth = 2,
-  ExtKeyUsageCodeSigning = 3,
-  ExtKeyUsageEmailProtection = 4,
-  ExtKeyUsageIPSECEndSystem = 5,
-  ExtKeyUsageIPSECTunnel = 6,
-  ExtKeyUsageIPSECUser = 7,
-  ExtKeyUsageMicrosoftCommercialCodeSigning = 12,
-  ExtKeyUsageMicrosoftKernelCodeSigning = 13,
-  ExtKeyUsageMicrosoftServerGatedCrypto = 10,
-  ExtKeyUsageNetscapeServerGatedCrypto = 11,
-  ExtKeyUsageOCSPSigning = 9,
-  ExtKeyUsageServerAuth = 1,
-  ExtKeyUsageTimeStamping = 8,
-}
+/// ExtKeyUsage represents an extended set of actions that are valid for a given key.
+/// Each of the ExtKeyUsage* constants define a unique action.
+pub struct ExtKeyUsage(int)
 
 pub const ExtKeyUsageAny: ExtKeyUsage = 0
 
@@ -60,19 +47,7 @@ pub const ExtKeyUsageServerAuth: ExtKeyUsage = 1
 
 pub const ExtKeyUsageTimeStamping: ExtKeyUsage = 8
 
-pub enum InvalidReason: int {
-  CANotAuthorizedForExtKeyUsage = 9,
-  CANotAuthorizedForThisName = 2,
-  Expired = 1,
-  IncompatibleUsage = 4,
-  NameConstraintsWithoutSANs = 6,
-  NameMismatch = 5,
-  NoValidChains = 10,
-  NotAuthorizedToSign = 0,
-  TooManyConstraints = 8,
-  TooManyIntermediates = 3,
-  UnconstrainedName = 7,
-}
+pub struct InvalidReason(int)
 
 pub const CANotAuthorizedForExtKeyUsage: InvalidReason = 9
 
@@ -96,13 +71,7 @@ pub const TooManyIntermediates: InvalidReason = 3
 
 pub const UnconstrainedName: InvalidReason = 7
 
-pub enum PEMCipher: int {
-  PEMCipher3DES = 2,
-  PEMCipherAES128 = 3,
-  PEMCipherAES192 = 4,
-  PEMCipherAES256 = 5,
-  PEMCipherDES = 1,
-}
+pub struct PEMCipher(int)
 
 pub const PEMCipher3DES: PEMCipher = 2
 
@@ -114,13 +83,7 @@ pub const PEMCipherAES256: PEMCipher = 5
 
 pub const PEMCipherDES: PEMCipher = 1
 
-pub enum PublicKeyAlgorithm: int {
-  DSA = 2,
-  ECDSA = 3,
-  Ed25519 = 4,
-  RSA = 1,
-  UnknownPublicKeyAlgorithm = 0,
-}
+pub struct PublicKeyAlgorithm(int)
 
 pub const DSA: PublicKeyAlgorithm = 2
 
@@ -132,25 +95,7 @@ pub const RSA: PublicKeyAlgorithm = 1
 
 pub const UnknownPublicKeyAlgorithm: PublicKeyAlgorithm = 0
 
-pub enum SignatureAlgorithm: int {
-  DSAWithSHA1 = 7,
-  DSAWithSHA256 = 8,
-  ECDSAWithSHA1 = 9,
-  ECDSAWithSHA256 = 10,
-  ECDSAWithSHA384 = 11,
-  ECDSAWithSHA512 = 12,
-  MD2WithRSA = 1,
-  MD5WithRSA = 2,
-  PureEd25519 = 16,
-  SHA1WithRSA = 3,
-  SHA256WithRSA = 4,
-  SHA256WithRSAPSS = 13,
-  SHA384WithRSA = 5,
-  SHA384WithRSAPSS = 14,
-  SHA512WithRSA = 6,
-  SHA512WithRSAPSS = 15,
-  UnknownSignatureAlgorithm = 0,
-}
+pub struct SignatureAlgorithm(int)
 
 pub const DSAWithSHA1: SignatureAlgorithm = 7
 

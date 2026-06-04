@@ -303,12 +303,6 @@ fn extract_doc_from_expression(expression: &Expression, offset: u32) -> Option<S
             .and_then(|v| v.doc.clone())
             .or_else(|| doc.clone()),
 
-        Expression::ValueEnum { doc, variants, .. } => variants
-            .iter()
-            .find(|v| offset_in_span(offset, &v.name_span))
-            .and_then(|v| v.doc.clone())
-            .or_else(|| doc.clone()),
-
         Expression::Struct { doc, fields, .. } => fields
             .iter()
             .find(|f| offset_in_span(offset, &f.name_span))

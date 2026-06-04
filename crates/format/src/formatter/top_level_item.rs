@@ -287,51 +287,6 @@ impl<'a> Formatter<'a> {
         Self::braced_body(header, body)
     }
 
-    pub(super) fn value_enum_definition(
-        &mut self,
-        name: &'a str,
-        underlying_ty: Option<&'a syntax::ast::Annotation>,
-        variants: &'a [syntax::ast::ValueEnumVariant],
-        span: &Span,
-    ) -> Document<'a> {
-        let header = if let Some(ty) = underlying_ty {
-            Document::str("enum ")
-                .append(name)
-                .append(": ")
-                .append(Self::annotation(ty))
-        } else {
-            Document::str("enum ").append(name)
-        };
-
-        if variants.is_empty() {
-            return header.append(" {}");
-        }
-
-        let mut entries: Vec<SiblingEntry<'a>> = Vec::with_capacity(variants.len());
-        for variant in variants {
-            let doc_leading = self
-                .comments
-                .take_doc_comments_before(variant.name_span.byte_offset);
-            self.push_sibling_entry(&mut entries, variant.name_span.byte_offset, |s| {
-                let value_doc = s.literal(&variant.value);
-                Document::string(variant.name.to_string())
-                    .append(" = ")
-                    .append(value_doc)
-                    .append(",")
-            });
-            if let Some(doc) = doc_leading
-                && let Some(last) = entries.last_mut()
-            {
-                last.leading = Some(match last.leading.take() {
-                    Some(reg) => doc.append(Document::Newline).append(reg),
-                    None => doc,
-                });
-            }
-        }
-        let body = self.join_sibling_body(entries, span.end());
-        Self::braced_body(header, body)
-    }
-
     fn enum_variant_body(&mut self, variant: &'a EnumVariant) -> Document<'a> {
         let name = Document::string(variant.name.to_string());
         match &variant.fields {

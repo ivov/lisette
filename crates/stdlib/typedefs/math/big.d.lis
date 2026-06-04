@@ -6,11 +6,9 @@
 import "go:fmt"
 import "go:math/rand"
 
-pub enum Accuracy: int8 {
-  Above = 1,
-  Below = -1,
-  Exact = 0,
-}
+/// Accuracy describes the rounding error produced by the most recent
+/// operation that generated a [Float] value, relative to the exact value.
+pub struct Accuracy(int8)
 
 pub const Above: Accuracy = 1
 
@@ -18,14 +16,10 @@ pub const Below: Accuracy = -1
 
 pub const Exact: Accuracy = 0
 
-pub enum RoundingMode: byte {
-  AwayFromZero = 3,
-  ToNearestAway = 1,
-  ToNearestEven = 0,
-  ToNegativeInf = 4,
-  ToPositiveInf = 5,
-  ToZero = 2,
-}
+/// RoundingMode determines how a [Float] value is rounded to the
+/// desired precision. Rounding may change the [Float] value; the
+/// rounding error is described by the [Float]'s [Accuracy].
+pub struct RoundingMode(byte)
 
 pub const AwayFromZero: RoundingMode = 3
 

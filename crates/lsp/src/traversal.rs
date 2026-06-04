@@ -169,7 +169,6 @@ fn child_containing_offset<'a>(expression: &'a Expression, offset: u32) -> Optio
         | Expression::VariableDeclaration { .. }
         | Expression::RawGo { .. }
         | Expression::Enum { .. }
-        | Expression::ValueEnum { .. }
         | Expression::Struct { .. }
         | Expression::TypeAlias { .. }
         | Expression::ModuleImport { .. }

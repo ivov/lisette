@@ -1022,6 +1022,13 @@ fn collect_enum_variant_checks(
         return;
     };
 
+    // A const pattern is a value comparison against a named constant, emitted
+    // as a Go `case` expression rather than an enum tag or newtype destructure.
+    if let Some(TypedPattern::Const { qualified_name, .. }) = typed {
+        collect_const_pattern_check(planner, path, qualified_name, collector);
+        return;
+    }
+
     let (typed_children, typed_variant_fields) = match typed {
         Some(TypedPattern::EnumVariant {
             fields: tf,
@@ -1050,10 +1057,6 @@ fn collect_enum_variant_checks(
         return;
     }
 
-    if handle_go_value_enum_variant(planner, path, ty, identifier, collector) {
-        return;
-    }
-
     if handle_foreign_variant_literal(planner, path, ty, identifier, collector) {
         return;
     }
@@ -1061,39 +1064,33 @@ fn collect_enum_variant_checks(
     collect_tagged_enum_checks(planner, path, &variant_data, collector);
 }
 
-/// `true` when `ty` is a Go value-enum (variant emitted as `Check::Literal`
-/// or skipped if unresolvable).
-fn handle_go_value_enum_variant(
+/// Emit a const pattern as a Go `case` constant (e.g. `time.Friday`), requiring
+/// the constant's package import when it is cross-module.
+fn collect_const_pattern_check(
     planner: &Planner,
     path: &AccessPath,
-    ty: &Type,
-    identifier: &str,
+    qualified_name: &str,
     collector: &mut PatternCollector,
-) -> bool {
-    if !planner.is_go_value_enum(ty) {
-        return false;
-    }
-    let Type::Nominal { id, .. } = ty.strip_refs() else {
-        return true;
-    };
-    let variant_name = go_name::unqualified_name(identifier);
-    let Some(module) = planner.facts.module_for_qualified_name(id.as_str()) else {
-        return true;
-    };
-    let qualifier = planner.go_pkg_qualifier(module);
-    let go_literal = if qualifier.is_empty() || qualifier == planner.facts.current_module() {
-        variant_name.to_string()
-    } else {
-        collector
-            .effects
-            .require_go_import(planner.go_import_path_for_module(module));
-        format!("{}.{}", qualifier, variant_name)
+) {
+    let const_name = go_name::unqualified_name(qualified_name);
+    let go_literal = match planner.facts.module_for_qualified_name(qualified_name) {
+        Some(module) => {
+            let qualifier = planner.go_pkg_qualifier(module);
+            if qualifier.is_empty() || qualifier == planner.facts.current_module() {
+                const_name.to_string()
+            } else {
+                collector
+                    .effects
+                    .require_go_import(planner.go_import_path_for_module(module));
+                format!("{}.{}", qualifier, const_name)
+            }
+        }
+        None => const_name.to_string(),
     };
     collector.checks.push(Check::Literal {
         path: path.clone(),
         go_literal,
     });
-    true
 }
 
 /// `true` when the variant is a foreign-module dotted name (e.g.

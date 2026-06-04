@@ -41,7 +41,7 @@ pub(crate) fn definition_to_completion_kind(
     use syntax::program::DefinitionBody;
     match &definition.body {
         DefinitionBody::Struct { .. } => CompletionItemKind::STRUCT,
-        DefinitionBody::Enum { .. } | DefinitionBody::ValueEnum { .. } => CompletionItemKind::ENUM,
+        DefinitionBody::Enum { .. } => CompletionItemKind::ENUM,
         DefinitionBody::Interface { .. } => CompletionItemKind::INTERFACE,
         DefinitionBody::TypeAlias { .. } => CompletionItemKind::TYPE_PARAMETER,
         DefinitionBody::Value { .. } => {
@@ -334,9 +334,6 @@ fn enum_variant_items(type_id: &str, snapshot: &AnalysisSnapshot) -> Option<Vec<
     };
     match &snapshot.definitions().get(type_id)?.body {
         DefinitionBody::Enum { variants, .. } => {
-            Some(variants.iter().map(|v| to_item(&v.name)).collect())
-        }
-        DefinitionBody::ValueEnum { variants, .. } => {
             Some(variants.iter().map(|v| to_item(&v.name)).collect())
         }
         _ => None,

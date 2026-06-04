@@ -8,21 +8,8 @@ import "go:io/fs"
 import "go:text/template"
 import "go:text/template/parse"
 
-pub enum ErrorCode: int {
-  ErrAmbigContext = 1,
-  ErrBadHTML = 2,
-  ErrBranchEnd = 3,
-  ErrEndContext = 4,
-  ErrJSTemplate = 12,
-  ErrNoSuchTemplate = 5,
-  ErrOutputContext = 6,
-  ErrPartialCharset = 7,
-  ErrPartialEscape = 8,
-  ErrPredefinedEscaper = 11,
-  ErrRangeLoopReentry = 9,
-  ErrSlashAmbig = 10,
-  OK = 0,
-}
+/// ErrorCode is a code for a kind of error.
+pub struct ErrorCode(int)
 
 pub const ErrAmbigContext: ErrorCode = 1
 

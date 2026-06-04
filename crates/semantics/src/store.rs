@@ -197,19 +197,9 @@ impl Store {
             .find(|v| v.name == variant_name)
     }
 
-    pub fn value_variants_of(
-        &self,
-        qualified_name: &str,
-    ) -> Option<&[syntax::ast::ValueEnumVariant]> {
-        match &self.get_definition(qualified_name)?.body {
-            DefinitionBody::ValueEnum { variants, .. } => Some(variants),
-            _ => None,
-        }
-    }
-
     pub fn is_nominal_defined_type(&self, qualified_name: &str) -> bool {
         match self.get_definition(qualified_name) {
-            Some(def) => matches!(def.body, DefinitionBody::ValueEnum { .. }) || def.is_newtype(),
+            Some(def) => def.is_newtype(),
             None => false,
         }
     }
@@ -343,7 +333,6 @@ impl Store {
             DefinitionBody::Struct { methods, .. } => Some(methods),
             DefinitionBody::TypeAlias { methods, .. } => Some(methods),
             DefinitionBody::Enum { methods, .. } => Some(methods),
-            DefinitionBody::ValueEnum { methods, .. } => Some(methods),
             _ => None,
         }
     }

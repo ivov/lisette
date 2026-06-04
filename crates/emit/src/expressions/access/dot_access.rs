@@ -93,9 +93,6 @@ impl Planner<'_> {
         fx: &mut EmitEffects,
     ) -> Option<String> {
         match dot_access_kind {
-            Some(SemanticDotKind::ValueEnumVariant) => {
-                self.emit_value_enum_variant(expression, member, fx)
-            }
             Some(SemanticDotKind::EnumVariant) => self.emit_enum_variant_dot(member, result_ty, fx),
             Some(SemanticDotKind::StaticMethod { .. }) => {
                 self.emit_static_method_dot(expression, member, result_ty, ctx, fx)

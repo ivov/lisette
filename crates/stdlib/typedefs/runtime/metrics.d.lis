@@ -3,12 +3,8 @@
 // Go: 1.25.10
 // Lisette: 0.2.1
 
-pub enum ValueKind: int {
-  KindBad = 0,
-  KindFloat64 = 2,
-  KindFloat64Histogram = 3,
-  KindUint64 = 1,
-}
+/// ValueKind is a tag for a metric [Value] which indicates its type.
+pub struct ValueKind(int)
 
 pub const KindBad: ValueKind = 0
 

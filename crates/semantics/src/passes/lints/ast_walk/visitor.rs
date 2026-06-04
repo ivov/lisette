@@ -63,7 +63,6 @@ where
         | Expression::RawGo { .. }
         | Expression::NoOp
         | Expression::Enum { .. }
-        | Expression::ValueEnum { .. }
         | Expression::Struct { .. }
         | Expression::TypeAlias { .. }
         | Expression::VariableDeclaration { .. }

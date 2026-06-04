@@ -167,9 +167,6 @@ impl TaskState<'_> {
                 DefinitionBody::Enum { variants, .. } => {
                     variants.iter().any(|variant| variant.name == member)
                 }
-                DefinitionBody::ValueEnum { variants, .. } => {
-                    variants.iter().any(|variant| variant.name == member)
-                }
                 _ => false,
             })
     }
@@ -587,7 +584,7 @@ impl TaskState<'_> {
                 && !self.scopes.is_let_binding_rhs()
                 && matches!(
                     store.get_definition(&qualified_name).map(|d| &d.body),
-                    Some(DefinitionBody::Enum { .. } | DefinitionBody::ValueEnum { .. })
+                    Some(DefinitionBody::Enum { .. })
                 )
             {
                 self.sink
@@ -907,21 +904,10 @@ impl TaskState<'_> {
                 variants.iter().any(|v| v.name == args.member_name),
                 DotAccessKind::EnumVariant,
             ),
-            DefinitionBody::ValueEnum { variants, .. } => (
-                variants.iter().any(|v| v.name == args.member_name),
-                DotAccessKind::ValueEnumVariant,
-            ),
             _ => return None,
         };
 
         if !is_enum_variant {
-            return None;
-        }
-
-        if let DefinitionBody::ValueEnum { methods, .. } = &definition.body
-            && methods.contains_key(args.member_name)
-            && !self.is_type_level_receiver(store, args.expression)
-        {
             return None;
         }
 
@@ -977,10 +963,7 @@ impl TaskState<'_> {
                 // Type access comes through DotAccess on a module import.
                 // Value access comes through an Identifier or other expression.
                 if let Some(def) = store.get_definition(id)
-                    && matches!(
-                        def.body,
-                        DefinitionBody::Enum { .. } | DefinitionBody::ValueEnum { .. }
-                    )
+                    && matches!(def.body, DefinitionBody::Enum { .. })
                 {
                     // Check if expression is a module member access (type-level access)
                     let is_type_access = matches!(

@@ -188,7 +188,7 @@ impl TaskState<'_> {
                 let qualified = Symbol::from_parts(module_id, member.as_str());
                 if matches!(
                     store.get_definition(&qualified).map(|d| &d.body),
-                    Some(DefinitionBody::Enum { .. } | DefinitionBody::ValueEnum { .. })
+                    Some(DefinitionBody::Enum { .. })
                 ) {
                     let type_name = format!("{}.{}", module_id, member);
                     self.sink.push(diagnostics::infer::let_binding_enum_type(

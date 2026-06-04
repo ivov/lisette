@@ -129,7 +129,6 @@ module.exports = grammar({
       $.attribute_item,
       $.struct_item,
       $.enum_item,
-      $.value_enum_item,
       $.type_item,
       $.function_item,
       $.function_signature_item,
@@ -196,30 +195,6 @@ module.exports = grammar({
       field('name', $._type_identifier),
       field('type_parameters', optional($.type_parameters)),
       field('body', $.enum_variant_list),
-    ),
-
-    value_enum_item: $ => seq(
-      optional($.visibility_modifier),
-      'enum',
-      field('name', $._type_identifier),
-      ':',
-      field('underlying_type', $._type),
-      field('body', $.value_enum_variant_list),
-    ),
-
-    value_enum_variant_list: $ => bracedList(seq(
-      optional($.doc_comment),
-      $.value_enum_variant,
-    )),
-
-    value_enum_variant: $ => seq(
-      field('name', $.identifier),
-      '=',
-      field('value', choice(
-        $.integer_literal,
-        $.negative_literal,
-        $.string_literal,
-      )),
     ),
 
     enum_variant_list: $ => bracedList(seq(

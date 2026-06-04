@@ -3,13 +3,8 @@
 // Go: 0.0.0
 // Lisette: 0.0.0
 
-pub enum Color: int {
-  Blue = 2,
-  Green = 1,
-  Purple = 4,
-  Red = 0,
-  Yellow = 3,
-}
+/// Color is a small sequential const group; H13 keeps it off the bit-flag path.
+pub struct Color(int)
 
 pub const Blue: Color = 2
 
@@ -21,8 +16,6 @@ pub const Red: Color = 0
 
 pub const Yellow: Color = 3
 
-/// ForcedFlags is sequential 0..2 and would be a value enum under H13,
-/// but the fixture bindgen.json forces it via the bit_flag_set override.
 #[go(bit_flag_set)]
 pub struct ForcedFlags(int)
 

@@ -7,33 +7,6 @@ use syntax::program::DefinitionBody;
 use syntax::types::{Type, unqualified_name};
 
 impl Planner<'_> {
-    /// Emit a value enum variant as a Go constant (e.g., `reflect.String`).
-    pub(crate) fn emit_value_enum_variant(
-        &mut self,
-        expression: &Expression,
-        member: &str,
-        fx: &mut EmitEffects,
-    ) -> Option<String> {
-        let expression_ty = expression.get_type();
-        let enum_id = match expression_ty.unwrap_forall() {
-            Type::Nominal { id, .. } => id.clone(),
-            Type::Function(f) => {
-                if let Type::Nominal { id, .. } = f.return_type.as_ref() {
-                    id.clone()
-                } else {
-                    return None;
-                }
-            }
-            _ => return None,
-        };
-
-        let module_key = self.facts.module_for_qualified_name(&enum_id)?;
-
-        let qualifier = self.require_module_import_fx(module_key, fx);
-
-        Some(format!("{}.{}", qualifier, member))
-    }
-
     /// ADT enum variant dot access (constructor or unit variant).
     pub(crate) fn emit_enum_variant_dot(
         &mut self,

@@ -202,18 +202,6 @@ impl<'a> Formatter<'a> {
                 self.enum_definition(name, generics, variants, span),
             ),
 
-            Expression::ValueEnum {
-                name,
-                underlying_ty,
-                variants,
-                visibility,
-                span,
-                ..
-            } => (
-                *visibility,
-                self.value_enum_definition(name, underlying_ty.as_ref(), variants, span),
-            ),
-
             Expression::TypeAlias {
                 name,
                 generics,

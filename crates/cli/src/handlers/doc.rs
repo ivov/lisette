@@ -1334,7 +1334,6 @@ fn has_go_module_matches(module_cache: &GoModuleCache, query_lower: &str) -> boo
         match &def.body {
             CachedDefinitionBody::TypeAlias { methods, .. }
             | CachedDefinitionBody::Enum { methods, .. }
-            | CachedDefinitionBody::ValueEnum { methods, .. }
             | CachedDefinitionBody::Struct { methods, .. } => {
                 if methods
                     .keys()

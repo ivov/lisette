@@ -5,10 +5,8 @@
 
 import "go:io"
 
-pub enum WordEncoder: byte {
-  BEncoding = 98,
-  QEncoding = 113,
-}
+/// A WordEncoder is an RFC 2047 encoded-word encoder.
+pub struct WordEncoder(byte)
 
 pub const BEncoding: WordEncoder = 98
 

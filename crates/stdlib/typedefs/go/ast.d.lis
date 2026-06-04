@@ -8,15 +8,8 @@ import "go:io"
 import "go:iter"
 import "go:reflect"
 
-pub enum ObjKind: int {
-  Bad = 0,
-  Con = 2,
-  Fun = 5,
-  Lbl = 6,
-  Pkg = 1,
-  Typ = 3,
-  Var = 4,
-}
+/// ObjKind describes what an [Object] represents.
+pub struct ObjKind(int)
 
 pub const Bad: ObjKind = 0
 
