@@ -1,7 +1,7 @@
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use diagnostics::{LisetteDiagnostic, LocalSink};
-use semantics::{checker::TaskState, store::Store};
+use semantics::{checker::TaskState, checker::infer::InferCtx, store::Store};
 use stdlib::{Target, get_go_stdlib_typedef};
 use syntax::{
     ast::Expression,
@@ -154,7 +154,7 @@ impl CompiledTest {
             checker.put_imported_modules_in_scope(&store, &imports);
 
             checker.register_types_and_values(&mut store, &self.ast, &Visibility::Local);
-            checker.check_const_cycles(&store, &[self.ast.as_slice()]);
+            InferCtx::new(&mut checker, &store).check_const_cycles(&[self.ast.as_slice()]);
 
             // Store AST in module so compute_module_ufcs can scan impl blocks (condition 3)
             let test_file_id = store.new_file_id();
@@ -182,7 +182,8 @@ impl CompiledTest {
 
             for expression in self.ast {
                 let type_var = checker.new_type_var();
-                let typed_expression = checker.infer_expression(&store, expression, &type_var);
+                let typed_expression =
+                    InferCtx::new(&mut checker, &store).infer_expression(expression, &type_var);
                 typed_ast.push(typed_expression);
 
                 if checker.failed() {

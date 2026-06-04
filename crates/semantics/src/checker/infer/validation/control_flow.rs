@@ -1,7 +1,7 @@
 use syntax::ast::{Expression, Span};
 use syntax::types::Type;
 
-use crate::checker::TaskState;
+use crate::checker::infer::InferCtx;
 
 fn is_sync_lock_type(ty: &Type) -> bool {
     matches!(
@@ -11,7 +11,7 @@ fn is_sync_lock_type(ty: &Type) -> bool {
     )
 }
 
-impl TaskState<'_> {
+impl InferCtx<'_, '_> {
     pub(crate) fn check_deferred_lock(&mut self, deferred: &Expression) {
         let Expression::Call {
             expression: callee,

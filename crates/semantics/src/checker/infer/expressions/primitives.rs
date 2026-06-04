@@ -1,15 +1,14 @@
 use crate::checker::EnvResolve;
-use crate::store::Store;
 use syntax::EcoString;
 use syntax::ast::DeadCodeCause;
 use syntax::ast::{BinaryOperator, Expression, Span, UnaryOperator};
 use syntax::program::DefinitionBody;
 use syntax::types::Type;
 
-use super::super::TaskState;
 use super::super::addressability::{
     check_is_non_addressable, check_non_addressable_assignment_target,
 };
+use crate::checker::infer::InferCtx;
 
 /// Checks whether an assignment target expression contains a deref (`.* `)
 /// anywhere in its chain. For example, `p.*.x` is a `DotAccess` wrapping a
@@ -87,10 +86,9 @@ fn contains_stored_reference_to(expression: &Expression, var_name: &str) -> bool
     }
 }
 
-impl TaskState<'_> {
+impl InferCtx<'_, '_> {
     pub(super) fn infer_paren(
         &mut self,
-        store: &Store,
         expression: Box<Expression>,
         span: Span,
         expected_ty: &Type,
@@ -117,7 +115,7 @@ impl TaskState<'_> {
         }
 
         self.scopes.set_in_subexpression(parent_is_subexpression);
-        let new_expression = self.infer_expression(store, *expression, expected_ty);
+        let new_expression = self.infer_expression(*expression, expected_ty);
         let new_ty = new_expression.get_type();
 
         Expression::Paren {
@@ -129,7 +127,6 @@ impl TaskState<'_> {
 
     pub(super) fn infer_block(
         &mut self,
-        store: &Store,
         items: Vec<Expression>,
         span: Span,
         expected_ty: &Type,
@@ -145,7 +142,7 @@ impl TaskState<'_> {
                 self.sink
                     .push(diagnostics::infer::invalid_map_initialization(&k, &v, span));
             } else {
-                self.unify(store, expected_ty, &unit_ty, &span);
+                self.unify(expected_ty, &unit_ty, &span);
             }
             return Expression::Block {
                 items,
@@ -155,9 +152,9 @@ impl TaskState<'_> {
         }
 
         self.scopes.push();
-        self.register_block_local_items(store, &items);
+        self.register_block_local_items(&items);
 
-        let new_items = self.infer_block_items(store, items, expected_ty.clone());
+        let new_items = self.infer_block_items(items, expected_ty.clone());
 
         let last_item = new_items.last().expect("block must have at least one item");
         let block_ty = last_item.get_type();
@@ -173,13 +170,13 @@ impl TaskState<'_> {
 
     pub(super) fn infer_reference(
         &mut self,
-        store: &Store,
         expression: Box<Expression>,
         span: Span,
         expected_ty: &Type,
     ) -> Expression {
+        let store = self.store;
         let inner_ty = self.new_type_var();
-        let new_expression = self.infer_expression(store, *expression, &inner_ty);
+        let new_expression = self.infer_expression(*expression, &inner_ty);
 
         let resolved_inner = inner_ty.resolve_in(&self.env);
         let is_already_ref = resolved_inner.is_ref();
@@ -193,7 +190,7 @@ impl TaskState<'_> {
             self.type_reference(inner_ty.clone())
         };
 
-        self.unify(store, expected_ty, &ref_ty, &span);
+        self.unify(expected_ty, &ref_ty, &span);
 
         if !is_already_ref {
             if let Some(kind) = check_is_non_addressable(&new_expression, &self.env) {
@@ -225,11 +222,11 @@ impl TaskState<'_> {
 
     pub(super) fn infer_identifier(
         &mut self,
-        store: &Store,
         value: EcoString,
         span: Span,
         expected_ty: &Type,
     ) -> Expression {
+        let store = self.store;
         let binding_id = self.scopes.lookup_binding_id(&value);
         if let Some(id) = binding_id {
             // Don't mark assignment targets as "used" - only mark actual uses
@@ -276,7 +273,7 @@ impl TaskState<'_> {
                     self.sink
                         .push(diagnostics::infer::self_in_static_method(span));
                 } else {
-                    self.error_name_not_found(store, &value, span, expected_ty);
+                    self.error_name_not_found(&value, span, expected_ty);
                 }
                 Type::Error
             }
@@ -284,7 +281,7 @@ impl TaskState<'_> {
 
         let (identifier_ty, _) = self.instantiate(&ty);
 
-        self.unify(store, expected_ty, &identifier_ty, &span);
+        self.unify(expected_ty, &identifier_ty, &span);
 
         Expression::Identifier {
             value,
@@ -297,12 +294,12 @@ impl TaskState<'_> {
 
     pub(super) fn infer_assignment(
         &mut self,
-        store: &Store,
         target: Box<Expression>,
         value: Box<Expression>,
         compound_operator: Option<BinaryOperator>,
         span: Span,
     ) -> Expression {
+        let store = self.store;
         let target_ty = self.new_type_var();
         // Prevent simple assignment targets from being marked as "used" in the lint system.
         // Complex targets like `a[i]` or `r.*` have subexpressions that ARE being read.
@@ -312,7 +309,7 @@ impl TaskState<'_> {
         } else {
             None
         };
-        let new_target = self.infer_expression(store, *target, &target_ty);
+        let new_target = self.infer_expression(*target, &target_ty);
         if let Some(ctx) = prev_ctx {
             self.scopes.restore_use_context(ctx);
         }
@@ -325,7 +322,7 @@ impl TaskState<'_> {
         // Propagates type information to the RHS (e.g., lambda params
         // get their types from a Map's value type).
         let value_expected = target_ty.resolve_in(&self.env);
-        let new_value = self.infer_expression(store, *value, &value_expected);
+        let new_value = self.infer_expression(*value, &value_expected);
         let value_ty = new_value.get_type();
 
         // Track mutation for binding-rooted targets. Call-based lvalues
@@ -389,7 +386,7 @@ impl TaskState<'_> {
         // type inference already emitted any mismatch diagnostic — a second
         // unify here would duplicate it.
         if value_ty.is_variable() {
-            self.unify(store, &target_ty, &value_ty, &span);
+            self.unify(&target_ty, &value_ty, &span);
         }
 
         Expression::Assignment {
@@ -402,7 +399,6 @@ impl TaskState<'_> {
 
     pub(super) fn infer_tuple(
         &mut self,
-        store: &Store,
         elements: Vec<Expression>,
         span: Span,
         expected_ty: &Type,
@@ -416,7 +412,7 @@ impl TaskState<'_> {
             .into_iter()
             .zip(expected_elements.iter())
             .map(|(element, expected)| {
-                self.with_value_context(|s| s.infer_expression(store, element, expected))
+                self.with_value_context(|s| s.infer_expression(element, expected))
             })
             .collect();
 
@@ -424,7 +420,7 @@ impl TaskState<'_> {
 
         let tuple_ty = Type::Tuple(element_types);
 
-        self.unify(store, expected_ty, &tuple_ty, &span);
+        self.unify(expected_ty, &tuple_ty, &span);
 
         Expression::Tuple {
             elements: inferred_elements,
@@ -435,7 +431,6 @@ impl TaskState<'_> {
 
     pub(super) fn infer_block_items(
         &mut self,
-        store: &Store,
         items: Vec<Expression>,
         last_item_expected_ty: Type,
     ) -> Vec<Expression> {
@@ -446,7 +441,7 @@ impl TaskState<'_> {
         for (i, item) in items.into_iter().enumerate() {
             if diverged_at.is_some() {
                 let dead_item_ty = self.new_type_var();
-                let inferred_item = self.infer_expression(store, item, &dead_item_ty);
+                let inferred_item = self.infer_expression(item, &dead_item_ty);
                 new_items.push(inferred_item);
                 continue;
             }
@@ -500,7 +495,7 @@ impl TaskState<'_> {
             };
 
             self.scopes.set_in_subexpression(false);
-            let inferred_item = self.infer_expression(store, item, &expression_ty);
+            let inferred_item = self.infer_expression(item, &expression_ty);
 
             if let Some(ctx) = prev_ctx {
                 self.scopes.restore_use_context(ctx);
@@ -524,11 +519,11 @@ impl TaskState<'_> {
 
     pub(super) fn error_name_not_found(
         &mut self,
-        store: &Store,
         variable_name: &str,
         span: Span,
         expected_ty: &Type,
     ) {
+        let store = self.store;
         if self.imports.failed_imports.contains(variable_name) {
             return;
         }

@@ -1,5 +1,7 @@
 use diagnostics::{LisetteDiagnostic, LocalSink};
-use semantics::{checker::TaskState, module_graph::build_module_graph, store::Store};
+use semantics::{
+    checker::TaskState, checker::infer::InferCtx, module_graph::build_module_graph, store::Store,
+};
 use stdlib::{Target, get_go_stdlib_typedef};
 use syntax::{ast::Expression, types::Type};
 
@@ -88,7 +90,7 @@ pub fn infer_module(module_name: &str, fs: MockFileSystem) -> InferResult {
             store.store_module(&module_id, files);
             checker.register_module(&mut store, &module_id);
             let module_files = checker.take_module_files(&mut store, &module_id);
-            checker.infer_module(&store, &module_id, module_files);
+            InferCtx::new(&mut checker, &store).infer_module(&module_id, module_files);
 
             checker.cursor.module_id = prev_module_id;
         }

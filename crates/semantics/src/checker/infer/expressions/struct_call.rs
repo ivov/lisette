@@ -9,7 +9,7 @@ use syntax::types::{
     CompoundKind, SimpleKind, SubstitutionMap, Symbol, Type, substitute, unqualified_name,
 };
 
-use super::super::TaskState;
+use crate::checker::infer::InferCtx;
 
 /// Chain of field accesses leading to a non-zero-constructible field.
 /// Used to render diagnostics like "outer.inner.b is private to module other".
@@ -46,16 +46,16 @@ pub(crate) enum NoZeroReason {
     },
 }
 
-impl TaskState<'_> {
+impl InferCtx<'_, '_> {
     pub(super) fn infer_struct_call(
         &mut self,
-        store: &Store,
         struct_name: EcoString,
         field_assignments: Vec<StructFieldAssignment>,
         spread: StructSpread,
         span: Span,
         expected_ty: &Type,
     ) -> Expression {
+        let store = self.store;
         if let Some(qualified_name) = self.lookup_qualified_name(store, &struct_name)
             && let Some(Definition {
                 ty: struct_ty,
@@ -72,7 +72,6 @@ impl TaskState<'_> {
 
             self.track_name_usage(store, &qualified_name, &span, struct_name.len() as u32);
             return self.infer_struct_call_for_struct(
-                store,
                 struct_name,
                 qualified_name,
                 struct_ty,
@@ -119,7 +118,6 @@ impl TaskState<'_> {
                     Some(underlying)
                 };
                 return self.infer_struct_call_for_struct(
-                    store,
                     struct_name,
                     struct_id_str,
                     struct_ty,
@@ -136,7 +134,7 @@ impl TaskState<'_> {
             // with T{} even though they have no struct definition.
             if is_opaque && field_assignments.is_empty() {
                 let (instantiated_ty, _) = self.instantiate(&alias_ty);
-                self.unify(store, expected_ty, &instantiated_ty, &span);
+                self.unify(expected_ty, &instantiated_ty, &span);
                 return Expression::StructCall {
                     name: struct_name,
                     field_assignments,
@@ -178,7 +176,6 @@ impl TaskState<'_> {
                     _ => instantiated_ty,
                 };
                 return self.infer_struct_call_for_enum_variant(
-                    store,
                     struct_name,
                     variant_fields,
                     map,
@@ -200,7 +197,7 @@ impl TaskState<'_> {
                 _ => {
                     self.sink
                         .push(diagnostics::infer::struct_not_found(&struct_name, span));
-                    self.unify(store, expected_ty, &Type::Error, &span);
+                    self.unify(expected_ty, &Type::Error, &span);
                     return Expression::StructCall {
                         name: struct_name,
                         field_assignments,
@@ -221,7 +218,6 @@ impl TaskState<'_> {
             {
                 let variant_fields: Vec<_> = variant.fields.iter().cloned().collect();
                 return self.infer_struct_call_for_enum_variant(
-                    store,
                     struct_name,
                     variant_fields,
                     map,
@@ -236,7 +232,7 @@ impl TaskState<'_> {
 
         self.sink
             .push(diagnostics::infer::struct_not_found(&struct_name, span));
-        self.unify(store, expected_ty, &Type::Error, &span);
+        self.unify(expected_ty, &Type::Error, &span);
         Expression::StructCall {
             name: struct_name,
             field_assignments,
@@ -249,7 +245,6 @@ impl TaskState<'_> {
     #[allow(clippy::too_many_arguments)]
     fn infer_struct_call_for_struct(
         &mut self,
-        store: &Store,
         struct_name: EcoString,
         qualified_name: String,
         struct_ty: Type,
@@ -260,20 +255,21 @@ impl TaskState<'_> {
         expected_ty: &Type,
         alias_underlying: Option<Type>,
     ) -> Expression {
+        let store = self.store;
         let (struct_call_ty, map) = self.instantiate(&struct_ty);
 
         if let Some(underlying) = alias_underlying {
-            self.unify(store, &struct_call_ty, &underlying, &span);
+            self.unify(&struct_call_ty, &underlying, &span);
         }
 
         let peeled_expected = store.deep_resolve_alias(&expected_ty.resolve_in(&self.env));
         if same_nominal(&peeled_expected, &struct_call_ty) && !peeled_expected.contains_unknown() {
             let _ = self.speculatively(|this| {
-                this.try_unify(store, &peeled_expected, &struct_call_ty, &span)
+                InferCtx::new(this, store).try_unify(&peeled_expected, &struct_call_ty, &span)
             });
         }
 
-        let new_spread = self.infer_struct_spread(store, spread, &struct_call_ty);
+        let new_spread = self.infer_struct_spread(spread, &struct_call_ty);
 
         let struct_module = store
             .module_for_qualified_name(&qualified_name)
@@ -285,7 +281,6 @@ impl TaskState<'_> {
         let is_go_imported = qualified_name.starts_with("go:");
 
         let (new_field_assignments, matched_fields) = self.infer_structish_fields(
-            store,
             StructishCtx {
                 field_assignments: &field_assignments,
                 target_ty: &struct_call_ty,
@@ -313,7 +308,6 @@ impl TaskState<'_> {
             && !is_go_imported
         {
             self.check_zero_fill_fields(
-                store,
                 &struct_name,
                 struct_fields.iter().map(|f| (&f.name, &f.ty)),
                 &matched_fields,
@@ -353,7 +347,7 @@ impl TaskState<'_> {
         }
 
         let final_expected = store.deep_resolve_alias(&expected_ty.resolve_in(&self.env));
-        self.unify(store, &final_expected, &struct_call_ty, &span);
+        self.unify(&final_expected, &struct_call_ty, &span);
 
         Expression::StructCall {
             name: struct_name,
@@ -367,7 +361,6 @@ impl TaskState<'_> {
     #[allow(clippy::too_many_arguments)]
     fn infer_struct_call_for_enum_variant(
         &mut self,
-        store: &Store,
         variant_name: EcoString,
         variant_fields: Vec<syntax::ast::EnumFieldDefinition>,
         map: SubstitutionMap,
@@ -377,7 +370,8 @@ impl TaskState<'_> {
         expected_ty: &Type,
         enum_ty: Type,
     ) -> Expression {
-        self.unify(store, expected_ty, &enum_ty, &span);
+        let store = self.store;
+        self.unify(expected_ty, &enum_ty, &span);
 
         let resolved_enum = enum_ty.resolve_in(&self.env);
         if let Type::Nominal { id, .. } = &resolved_enum {
@@ -386,10 +380,9 @@ impl TaskState<'_> {
             self.track_name_usage(store, &qualified, &span, span.byte_length);
         }
 
-        let new_spread = self.infer_struct_spread(store, spread, &enum_ty);
+        let new_spread = self.infer_struct_spread(spread, &enum_ty);
 
         let (new_field_assignments, matched_fields) = self.infer_structish_fields(
-            store,
             StructishCtx {
                 field_assignments: &field_assignments,
                 target_ty: &enum_ty,
@@ -410,7 +403,6 @@ impl TaskState<'_> {
 
         if let StructSpread::ZeroFill { span: spread_span } = &new_spread {
             self.check_zero_fill_fields(
-                store,
                 &variant_name,
                 variant_fields.iter().map(|f| (&f.name, &f.ty)),
                 &matched_fields,
@@ -428,17 +420,12 @@ impl TaskState<'_> {
         }
     }
 
-    fn infer_struct_spread(
-        &mut self,
-        store: &Store,
-        spread: StructSpread,
-        target_ty: &Type,
-    ) -> StructSpread {
+    fn infer_struct_spread(&mut self, spread: StructSpread, target_ty: &Type) -> StructSpread {
         match spread {
             StructSpread::None => StructSpread::None,
             StructSpread::From(s) => {
-                let inferred = self
-                    .with_value_context(|checker| checker.infer_expression(store, *s, target_ty));
+                let inferred =
+                    self.with_value_context(|checker| checker.infer_expression(*s, target_ty));
                 StructSpread::From(Box::new(inferred))
             }
             StructSpread::ZeroFill { span } => StructSpread::ZeroFill { span },
@@ -447,7 +434,6 @@ impl TaskState<'_> {
 
     fn infer_structish_fields<'a, FindDef>(
         &mut self,
-        store: &Store,
         ctx: StructishCtx<'a, '_, impl Iterator<Item = (&'a EcoString, &'a Type)> + Clone>,
         mut find_def: FindDef,
     ) -> (Vec<StructFieldAssignment>, HashSet<EcoString>)
@@ -478,9 +464,8 @@ impl TaskState<'_> {
                         self.new_type_var()
                     }
                 };
-                let new_value = self.with_value_context(|s| {
-                    s.infer_expression(store, (*field.value).clone(), &field_ty)
-                });
+                let new_value = self
+                    .with_value_context(|s| s.infer_expression((*field.value).clone(), &field_ty));
                 StructFieldAssignment {
                     name: field.name.clone(),
                     name_span: field.name_span,
@@ -511,7 +496,6 @@ impl TaskState<'_> {
 
     fn check_zero_fill_fields<'a>(
         &mut self,
-        store: &Store,
         owner_name: &str,
         fields: impl Iterator<Item = (&'a EcoString, &'a Type)>,
         matched_fields: &HashSet<EcoString>,
@@ -524,7 +508,7 @@ impl TaskState<'_> {
                 continue;
             }
             let resolved = substitute(ty, map);
-            let Err(no_zero) = self.has_zero(store, &resolved, &from_module) else {
+            let Err(no_zero) = self.has_zero(&resolved, &from_module) else {
                 continue;
             };
             let chain: Vec<&str> = no_zero.chain.iter().map(EcoString::as_str).collect();
@@ -548,12 +532,8 @@ impl TaskState<'_> {
     }
 
     #[allow(clippy::result_large_err)]
-    pub(crate) fn has_zero(
-        &self,
-        store: &Store,
-        ty: &Type,
-        from_module: &str,
-    ) -> Result<(), NoZero> {
+    pub(crate) fn has_zero(&self, ty: &Type, from_module: &str) -> Result<(), NoZero> {
+        let store = self.store;
         has_zero(store, ty, from_module)
     }
 }

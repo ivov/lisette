@@ -3,8 +3,7 @@ use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use ecow::EcoString;
 use syntax::ast::{Expression, Span};
 
-use crate::checker::TaskState;
-use crate::store::Store;
+use crate::checker::infer::InferCtx;
 
 struct ConstEntry<'a> {
     name: &'a EcoString,
@@ -12,8 +11,9 @@ struct ConstEntry<'a> {
     body: &'a Expression,
 }
 
-impl TaskState<'_> {
-    pub fn check_const_cycles(&mut self, store: &Store, items_per_file: &[&[Expression]]) {
+impl InferCtx<'_, '_> {
+    pub fn check_const_cycles(&mut self, items_per_file: &[&[Expression]]) {
+        let store = self.store;
         let module_const_names_empty = store
             .get_module(&self.cursor.module_id)
             .is_some_and(|m| m.const_names.is_empty());

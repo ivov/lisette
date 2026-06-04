@@ -1,9 +1,9 @@
 use syntax::ast::{Pattern, Span};
 use syntax::types::unqualified_name;
 
-use crate::checker::TaskState;
+use crate::checker::infer::InferCtx;
 
-impl TaskState<'_> {
+impl InferCtx<'_, '_> {
     pub(crate) fn check_select_match_arms(
         &mut self,
         match_arms: &[syntax::ast::MatchArm],

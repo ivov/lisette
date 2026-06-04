@@ -2,9 +2,9 @@ use crate::checker::EnvResolve;
 use syntax::ast::{Expression, Span};
 use syntax::types::Type;
 
-use crate::checker::TaskState;
+use crate::checker::infer::InferCtx;
 
-impl TaskState<'_> {
+impl InferCtx<'_, '_> {
     /// Validates that an integer literal fits within the target numeric type.
     /// Note: value is u64 from the parser, so negative literals are handled via unary minus.
     pub(crate) fn check_integer_literal_overflow(

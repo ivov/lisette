@@ -1,10 +1,12 @@
 pub(crate) mod addressability;
 mod carry_mut;
+mod context;
 pub(crate) mod expressions;
 mod interface;
 mod unify;
 mod validation;
 
+pub use context::InferCtx;
 pub(crate) use unify::BuiltinBound;
 
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
@@ -16,16 +18,6 @@ use syntax::ast::Expression;
 use syntax::program::{File, FileImport};
 
 impl TaskState<'_> {
-    /// Infer types for `files` belonging to `module_id`.
-    pub fn infer_module(&mut self, store: &Store, module_id: &str, files: Vec<File>) {
-        let items_per_file: Vec<&[Expression]> = files.iter().map(|f| f.items.as_slice()).collect();
-        self.check_const_cycles(store, &items_per_file);
-
-        for file in files {
-            self.infer_file(store, module_id, file);
-        }
-    }
-
     /// Extract a module's `.lis` files from the store.
     pub fn take_module_files(&mut self, store: &mut Store, module_id: &str) -> Vec<File> {
         self.with_module_cursor(module_id, |_this| {
@@ -35,8 +27,21 @@ impl TaskState<'_> {
             std::mem::take(&mut module.files).into_values().collect()
         })
     }
+}
 
-    fn infer_file(&mut self, store: &Store, module_id: &str, file: File) {
+impl InferCtx<'_, '_> {
+    /// Infer types for `files` belonging to `module_id`.
+    pub fn infer_module(&mut self, module_id: &str, files: Vec<File>) {
+        let items_per_file: Vec<&[Expression]> = files.iter().map(|f| f.items.as_slice()).collect();
+        self.check_const_cycles(&items_per_file);
+
+        for file in files {
+            self.infer_file(module_id, file);
+        }
+    }
+
+    fn infer_file(&mut self, module_id: &str, file: File) {
+        let store = self.store;
         let file_id = file.id;
         let imports = file.imports();
 
@@ -47,22 +52,26 @@ impl TaskState<'_> {
             &imports,
             FileContextKind::Standard,
             |this, store| {
-                this.check_definition_module_collisions(store, &file.items, &imports);
+                let mut ctx = InferCtx::new(this, store);
+                ctx.check_definition_module_collisions(&file.items, &imports);
 
                 let inferred_items: Vec<_> = file
                     .items
                     .into_iter()
                     .map(|item| {
-                        let type_var = this.new_type_var();
-                        this.infer_expression(store, item, &type_var)
+                        let type_var = ctx.new_type_var();
+                        ctx.infer_expression(item, &type_var)
                     })
                     .collect();
 
-                this.check_reference_sibling_aliasing(&inferred_items);
+                ctx.check_reference_sibling_aliasing(&inferred_items);
 
-                let folder = FreezeFolder::new(&this.env);
-                folder.freeze_facts(&mut this.facts);
-                let frozen_items = FreezeFolder::new(&this.env).freeze_items(inferred_items);
+                let frozen_items = {
+                    let state = &mut *ctx;
+                    let folder = FreezeFolder::new(&state.env);
+                    folder.freeze_facts(&mut state.facts);
+                    FreezeFolder::new(&state.env).freeze_items(inferred_items)
+                };
 
                 let typed_file = File {
                     id: file_id,
@@ -73,17 +82,13 @@ impl TaskState<'_> {
                     items: frozen_items,
                 };
 
-                this.typed_files.push((module_id.to_string(), typed_file));
+                ctx.typed_files.push((module_id.to_string(), typed_file));
             },
         );
     }
 
-    fn check_definition_module_collisions(
-        &mut self,
-        store: &Store,
-        items: &[Expression],
-        imports: &[FileImport],
-    ) {
+    fn check_definition_module_collisions(&mut self, items: &[Expression], imports: &[FileImport]) {
+        let store = self.store;
         let alias_to_path: HashMap<String, String> = imports
             .iter()
             .filter_map(|imp| {
@@ -128,17 +133,18 @@ impl TaskState<'_> {
         }
     }
 
-    pub(crate) fn register_block_local_items(&mut self, store: &Store, items: &[Expression]) {
+    pub(crate) fn register_block_local_items(&mut self, items: &[Expression]) {
         for item in items {
             match item {
-                Expression::Const { .. } => self.register_block_local_const(store, item),
-                Expression::Function { .. } => self.register_block_local_fn(store, item),
+                Expression::Const { .. } => self.register_block_local_const(item),
+                Expression::Function { .. } => self.register_block_local_fn(item),
                 _ => {}
             }
         }
     }
 
-    fn register_block_local_const(&mut self, store: &Store, item: &Expression) {
+    fn register_block_local_const(&mut self, item: &Expression) {
+        let store = self.store;
         let Expression::Const {
             identifier,
             identifier_span,
@@ -180,7 +186,7 @@ impl TaskState<'_> {
             .insert(identifier.to_string());
     }
 
-    fn register_block_local_fn(&mut self, store: &Store, item: &Expression) {
+    fn register_block_local_fn(&mut self, item: &Expression) {
         let Expression::Function {
             name,
             generics,
@@ -193,6 +199,7 @@ impl TaskState<'_> {
             return;
         };
 
+        let store = self.store;
         let before = self.sink.len();
         let fn_ty = self.extract_signature_parts(store, generics, params, return_annotation, span);
         self.sink.truncate(before);

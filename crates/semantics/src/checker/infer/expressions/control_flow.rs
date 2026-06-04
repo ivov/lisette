@@ -1,10 +1,9 @@
 use crate::checker::EnvResolve;
-use crate::store::Store;
 use syntax::ast::BindingKind;
 use syntax::ast::{Binding, BindingId, Expression, MatchArm, MatchOrigin, Pattern, Span};
 use syntax::types::{SimpleKind, Type};
 
-use super::super::TaskState;
+use crate::checker::infer::InferCtx;
 
 /// Outcome of unifying branch types: kept first, widened to a supertype, or failed.
 enum BranchReconciliation {
@@ -13,10 +12,9 @@ enum BranchReconciliation {
     Failed,
 }
 
-impl TaskState<'_> {
+impl InferCtx<'_, '_> {
     pub(crate) fn reconcile_and_unify(
         &mut self,
-        store: &Store,
         result_ty: &Type,
         branch_types: &[Type],
         span: &Span,
@@ -24,27 +22,27 @@ impl TaskState<'_> {
         if branch_types.is_empty() {
             return;
         }
-        match self.reconcile_branch_types(store, branch_types, span) {
+        match self.reconcile_branch_types(branch_types, span) {
             BranchReconciliation::FirstBranch => {
-                self.unify(store, result_ty, &branch_types[0], span);
+                self.unify(result_ty, &branch_types[0], span);
             }
             BranchReconciliation::Widened(ty) => {
-                self.unify(store, result_ty, &ty, span);
+                self.unify(result_ty, &ty, span);
             }
             BranchReconciliation::Failed => {
                 debug_assert!(branch_types.len() >= 2);
-                let _ = self.try_unify(store, &branch_types[0], &branch_types[1], span);
-                self.unify(store, result_ty, &branch_types[0], span);
+                let _ = self.try_unify(&branch_types[0], &branch_types[1], span);
+                self.unify(result_ty, &branch_types[0], span);
             }
         }
     }
 
     fn reconcile_branch_types(
         &mut self,
-        store: &Store,
         branch_types: &[Type],
         span: &Span,
     ) -> BranchReconciliation {
+        let store = self.store;
         if branch_types.len() < 2 {
             return BranchReconciliation::FirstBranch;
         }
@@ -55,7 +53,7 @@ impl TaskState<'_> {
         for next in &branch_types[1..] {
             let diag_count = self.sink.len();
             if self
-                .speculatively(|this| this.try_unify(store, &common, next, span))
+                .speculatively(|this| InferCtx::new(this, store).try_unify(&common, next, span))
                 .is_ok()
             {
                 continue;
@@ -63,7 +61,7 @@ impl TaskState<'_> {
             self.sink.truncate(diag_count);
 
             if self
-                .speculatively(|this| this.try_unify(store, next, &common, span))
+                .speculatively(|this| InferCtx::new(this, store).try_unify(next, &common, span))
                 .is_ok()
             {
                 common = next.clone();
@@ -140,19 +138,18 @@ impl TaskState<'_> {
         result
     }
 
-    fn infer_condition(&mut self, store: &Store, condition: Expression, span: &Span) -> Expression {
+    fn infer_condition(&mut self, condition: Expression, span: &Span) -> Expression {
         let cond_ty = self.new_type_var();
-        let inferred = self.infer_expression(store, condition, &cond_ty);
+        let inferred = self.infer_expression(condition, &cond_ty);
         if cond_ty.resolve_in(&self.env).underlying_simple_kind() != Some(SimpleKind::Bool) {
             let bool_ty = self.type_bool();
-            self.unify(store, &bool_ty, &cond_ty, span);
+            self.unify(&bool_ty, &cond_ty, span);
         }
         inferred
     }
 
     pub(super) fn infer_if(
         &mut self,
-        store: &Store,
         condition: Box<Expression>,
         consequence: Box<Expression>,
         alternative: Box<Expression>,
@@ -172,15 +169,15 @@ impl TaskState<'_> {
             is_expression && !has_no_else && !expected_ty.resolve_in(&self.env).is_variable();
 
         if expected_is_concrete {
-            self.unify(store, &consequence_ty, expected_ty, &span);
-            self.unify(store, &alternative_ty, expected_ty, &span);
+            self.unify(&consequence_ty, expected_ty, &span);
+            self.unify(&alternative_ty, expected_ty, &span);
         }
 
         // Branch bodies are tail-like contexts where Never calls are valid.
         let saved_subexpression = self.scopes.set_in_subexpression(false);
-        let new_consequence = self.infer_expression(store, *consequence, &consequence_ty);
+        let new_consequence = self.infer_expression(*consequence, &consequence_ty);
         self.scopes.set_in_subexpression(false);
-        let new_alternative = self.infer_expression(store, *alternative, &alternative_ty);
+        let new_alternative = self.infer_expression(*alternative, &alternative_ty);
         self.scopes.set_in_subexpression(saved_subexpression);
 
         if has_no_else {
@@ -188,7 +185,7 @@ impl TaskState<'_> {
             // The consequence body can produce any type — it's discarded.
             if is_expression {
                 let unit_ty = self.type_unit();
-                self.unify(store, expected_ty, &unit_ty, &span);
+                self.unify(expected_ty, &unit_ty, &span);
             }
         } else if is_expression && !expected_is_concrete {
             let consequence_span = new_consequence.get_span();
@@ -197,26 +194,24 @@ impl TaskState<'_> {
             let resolved_consequence = consequence_ty.resolve_in(&self.env);
             let resolved_alternative = alternative_ty.resolve_in(&self.env);
 
-            match self.reconcile_branch_types(
-                store,
-                &[consequence_ty.clone(), alternative_ty.clone()],
-                &span,
-            ) {
+            match self
+                .reconcile_branch_types(&[consequence_ty.clone(), alternative_ty.clone()], &span)
+            {
                 BranchReconciliation::FirstBranch => {
-                    self.unify(store, expected_ty, &consequence_ty, &consequence_span);
+                    self.unify(expected_ty, &consequence_ty, &consequence_span);
                 }
                 BranchReconciliation::Widened(ref ty) => {
-                    self.unify(store, expected_ty, ty, &alternative_span);
+                    self.unify(expected_ty, ty, &alternative_span);
                 }
                 BranchReconciliation::Failed => {
-                    let _ = self.try_unify(store, &consequence_ty, &alternative_ty, &span);
+                    let _ = self.try_unify(&consequence_ty, &alternative_ty, &span);
                     self.sink.push(diagnostics::infer::branch_type_mismatch(
                         &resolved_consequence,
                         consequence_span,
                         &resolved_alternative,
                         alternative_span,
                     ));
-                    self.unify(store, expected_ty, &consequence_ty, &consequence_span);
+                    self.unify(expected_ty, &consequence_ty, &consequence_span);
                 }
             }
         }
@@ -229,7 +224,7 @@ impl TaskState<'_> {
             consequence_ty
         };
 
-        let new_condition = self.infer_condition(store, *condition, &span);
+        let new_condition = self.infer_condition(*condition, &span);
         if let Some(span) = Self::find_propagate(&new_condition) {
             self.sink
                 .push(diagnostics::infer::propagate_in_condition(span));
@@ -245,7 +240,6 @@ impl TaskState<'_> {
 
     pub(super) fn infer_match(
         &mut self,
-        store: &Store,
         subject: Box<Expression>,
         arms: Vec<MatchArm>,
         origin: MatchOrigin,
@@ -254,7 +248,7 @@ impl TaskState<'_> {
     ) -> Expression {
         let result_ty = self.new_type_var();
         let subject_ty = self.new_type_var();
-        let new_subject = self.infer_expression(store, *subject, &subject_ty);
+        let new_subject = self.infer_expression(*subject, &subject_ty);
 
         let resolved_subject_ty = new_subject.get_type().resolve_in(&self.env);
         self.ensure_subject_matchable(&resolved_subject_ty, &new_subject.get_span());
@@ -269,10 +263,10 @@ impl TaskState<'_> {
         if !is_statement {
             if is_if_let_without_else {
                 let unit = self.type_unit();
-                self.unify(store, expected_ty, &unit, &span);
-                let _ = self.try_unify(store, &result_ty, &unit, &span);
+                self.unify(expected_ty, &unit, &span);
+                let _ = self.try_unify(&result_ty, &unit, &span);
             } else {
-                self.unify(store, expected_ty, &result_ty, &span);
+                self.unify(expected_ty, &result_ty, &span);
             }
         }
 
@@ -290,11 +284,11 @@ impl TaskState<'_> {
 
                 let pattern_ty = subject_ty.resolve_in(&self.env);
                 let (new_pattern, typed_pattern) =
-                    self.infer_pattern(store, a.pattern, pattern_ty, arm_kind);
+                    self.infer_pattern(a.pattern, pattern_ty, arm_kind);
 
                 let new_guard = a
                     .guard
-                    .map(|guard| Box::new(self.infer_condition(store, *guard, &span)));
+                    .map(|guard| Box::new(self.infer_condition(*guard, &span)));
 
                 let independent_ty;
                 let arm_expected = if arms_independent || needs_reconciliation {
@@ -306,7 +300,7 @@ impl TaskState<'_> {
                 let saved_in_match_arm = self.scopes.set_in_match_arm(true);
                 // Arm body is a tail-like context where Never calls are valid.
                 self.scopes.set_in_subexpression(false);
-                let new_expression = self.infer_expression(store, *a.expression, arm_expected);
+                let new_expression = self.infer_expression(*a.expression, arm_expected);
                 self.scopes.set_in_match_arm(saved_in_match_arm);
 
                 self.scopes.pop();
@@ -322,13 +316,13 @@ impl TaskState<'_> {
 
         if needs_reconciliation {
             let arm_types: Vec<Type> = new_arms.iter().map(|a| a.expression.get_type()).collect();
-            self.reconcile_and_unify(store, &result_ty, &arm_types, &span);
+            self.reconcile_and_unify(&result_ty, &arm_types, &span);
         } else if is_statement && let Some(first_arm) = new_arms.first() {
             // In statement position, set the match's type from the first arm so the
             // expression still has a well-defined type for inspection, even though
             // arms are not required to agree.
             let first_ty = first_arm.expression.get_type();
-            let _ = self.try_unify(store, &result_ty, &first_ty, &span);
+            let _ = self.try_unify(&result_ty, &first_ty, &span);
         }
 
         Expression::Match {
@@ -342,7 +336,6 @@ impl TaskState<'_> {
 
     pub(super) fn infer_loop(
         &mut self,
-        store: &Store,
         body: Box<Expression>,
         span: Span,
         expected_ty: &Type,
@@ -355,8 +348,7 @@ impl TaskState<'_> {
         let saved_in_match_arm = self.scopes.set_in_match_arm(false);
         self.scopes.push_loop_needs_label();
 
-        let new_body =
-            self.infer_in_loop_context(|s| s.infer_expression(store, *body, &Type::ignored()));
+        let new_body = self.infer_in_loop_context(|s| s.infer_expression(*body, &Type::ignored()));
 
         let needs_label = self.scopes.pop_loop_needs_label();
         self.scopes.set_in_match_arm(saved_in_match_arm);
@@ -374,7 +366,7 @@ impl TaskState<'_> {
         };
 
         if !expected_ty.is_ignored() {
-            self.unify(store, expected_ty, &loop_type, &span);
+            self.unify(expected_ty, &loop_type, &span);
         }
 
         Expression::Loop {
@@ -387,16 +379,15 @@ impl TaskState<'_> {
 
     pub(super) fn infer_while(
         &mut self,
-        store: &Store,
         condition: Box<Expression>,
         body: Box<Expression>,
         span: Span,
         expected_ty: &Type,
     ) -> Expression {
         let unit_ty = self.type_unit();
-        self.unify(store, expected_ty, &unit_ty, &span);
+        self.unify(expected_ty, &unit_ty, &span);
 
-        let new_condition = self.infer_condition(store, *condition, &span);
+        let new_condition = self.infer_condition(*condition, &span);
         if let Some(span) = Self::find_propagate(&new_condition) {
             self.sink
                 .push(diagnostics::infer::propagate_in_condition(span));
@@ -405,9 +396,8 @@ impl TaskState<'_> {
         let saved_in_match_arm = self.scopes.set_in_match_arm(false);
         self.scopes.push_loop_needs_label();
 
-        let new_body = self.infer_in_non_value_loop_context(|s| {
-            s.infer_expression(store, *body, &Type::ignored())
-        });
+        let new_body =
+            self.infer_in_non_value_loop_context(|s| s.infer_expression(*body, &Type::ignored()));
 
         let needs_label = self.scopes.pop_loop_needs_label();
         self.scopes.set_in_match_arm(saved_in_match_arm);
@@ -422,7 +412,6 @@ impl TaskState<'_> {
 
     pub(super) fn infer_while_let(
         &mut self,
-        store: &Store,
         pattern: Pattern,
         scrutinee: Box<Expression>,
         body: Box<Expression>,
@@ -430,10 +419,10 @@ impl TaskState<'_> {
         expected_ty: &Type,
     ) -> Expression {
         let unit_ty = self.type_unit();
-        self.unify(store, expected_ty, &unit_ty, &span);
+        self.unify(expected_ty, &unit_ty, &span);
 
         let scrutinee_ty = self.new_type_var();
-        let new_scrutinee = self.infer_expression(store, *scrutinee, &scrutinee_ty);
+        let new_scrutinee = self.infer_expression(*scrutinee, &scrutinee_ty);
 
         self.ensure_subject_matchable(
             &scrutinee_ty.resolve_in(&self.env),
@@ -442,7 +431,6 @@ impl TaskState<'_> {
 
         self.scopes.push();
         let (new_pattern, typed_pattern) = self.infer_pattern(
-            store,
             pattern,
             scrutinee_ty.resolve_in(&self.env),
             BindingKind::WhileLet,
@@ -451,9 +439,8 @@ impl TaskState<'_> {
         let saved_in_match_arm = self.scopes.set_in_match_arm(false);
         self.scopes.push_loop_needs_label();
 
-        let new_body = self.infer_in_non_value_loop_context(|s| {
-            s.infer_expression(store, *body, &Type::ignored())
-        });
+        let new_body =
+            self.infer_in_non_value_loop_context(|s| s.infer_expression(*body, &Type::ignored()));
 
         let needs_label = self.scopes.pop_loop_needs_label();
         self.scopes.set_in_match_arm(saved_in_match_arm);
@@ -472,18 +459,18 @@ impl TaskState<'_> {
 
     pub(super) fn infer_for(
         &mut self,
-        store: &Store,
         binding: Binding,
         iterable: Box<Expression>,
         body: Box<Expression>,
         span: Span,
         expected_ty: &Type,
     ) -> Expression {
+        let store = self.store;
         let unit_ty = self.type_unit();
-        self.unify(store, expected_ty, &unit_ty, &span);
+        self.unify(expected_ty, &unit_ty, &span);
 
         let iterable_ty = self.new_type_var();
-        let new_iterable = self.infer_expression(store, *iterable, &iterable_ty);
+        let new_iterable = self.infer_expression(*iterable, &iterable_ty);
 
         let resolved_iterable_ty = store.peel_alias(&iterable_ty.resolve_in(&self.env));
 
@@ -569,14 +556,13 @@ impl TaskState<'_> {
 
         if let Some(annotation) = &binding.annotation {
             let annotated_ty = self.convert_to_type(store, annotation, &span);
-            self.unify(store, &element_ty, &annotated_ty, &span);
+            self.unify(&element_ty, &annotated_ty, &span);
         }
 
         // Push a new scope so the loop variable doesn't shadow outer bindings
         self.scopes.push();
 
         let (inferred_pattern, typed_pattern) = self.infer_pattern(
-            store,
             binding.pattern,
             element_ty.clone(),
             BindingKind::Let { mutable: false },
@@ -613,9 +599,8 @@ impl TaskState<'_> {
         let saved_in_match_arm = self.scopes.set_in_match_arm(false);
         self.scopes.push_loop_needs_label();
 
-        let new_body = self.infer_in_non_value_loop_context(|s| {
-            s.infer_expression(store, *body, &Type::ignored())
-        });
+        let new_body =
+            self.infer_in_non_value_loop_context(|s| s.infer_expression(*body, &Type::ignored()));
 
         let needs_label = self.scopes.pop_loop_needs_label();
         self.scopes.set_in_match_arm(saved_in_match_arm);
@@ -634,7 +619,6 @@ impl TaskState<'_> {
 
     pub(super) fn infer_return_statement(
         &mut self,
-        store: &Store,
         expression: Box<Expression>,
         span: Span,
         parent_is_subexpression: bool,
@@ -666,15 +650,10 @@ impl TaskState<'_> {
             _ => {}
         }
         self.scopes.set_in_subexpression(false);
-        self.infer_return(store, expression, span)
+        self.infer_return(expression, span)
     }
 
-    fn infer_return(
-        &mut self,
-        store: &Store,
-        expression: Box<Expression>,
-        span: Span,
-    ) -> Expression {
+    fn infer_return(&mut self, expression: Box<Expression>, span: Span) -> Expression {
         let return_ty = self
             .scopes
             .lookup_fn_return_type()
@@ -686,7 +665,7 @@ impl TaskState<'_> {
             });
 
         let new_expression =
-            self.with_value_context(|s| s.infer_expression(store, *expression, &return_ty));
+            self.with_value_context(|s| s.infer_expression(*expression, &return_ty));
 
         Expression::Return {
             expression: new_expression.into(),
@@ -697,7 +676,6 @@ impl TaskState<'_> {
 
     pub(super) fn infer_defer(
         &mut self,
-        store: &Store,
         expression: Box<Expression>,
         span: Span,
         expected_ty: &Type,
@@ -712,7 +690,7 @@ impl TaskState<'_> {
         }
 
         let unit_ty = self.type_unit();
-        self.unify(store, expected_ty, &unit_ty, &span);
+        self.unify(expected_ty, &unit_ty, &span);
 
         let is_block = matches!(*expression, Expression::Block { .. });
         let saved_loop_depth = if is_block {
@@ -723,7 +701,7 @@ impl TaskState<'_> {
         };
 
         let defer_ty = self.new_type_var();
-        let new_expression = self.infer_expression(store, *expression, &defer_ty);
+        let new_expression = self.infer_expression(*expression, &defer_ty);
 
         if is_block {
             self.scopes.restore_loop_depth(saved_loop_depth);
@@ -746,7 +724,6 @@ impl TaskState<'_> {
 
     pub(super) fn infer_break(
         &mut self,
-        store: &Store,
         value: Option<Box<Expression>>,
         span: Span,
         parent_is_subexpression: bool,
@@ -774,12 +751,12 @@ impl TaskState<'_> {
                 .loop_break_type()
                 .cloned()
                 .unwrap_or_else(|| Type::Error);
-            let inferred = self.with_value_context(|s| s.infer_expression(store, *val, &break_ty));
+            let inferred = self.with_value_context(|s| s.infer_expression(*val, &break_ty));
             Some(Box::new(inferred))
         } else {
             if let Some(break_ty) = self.scopes.loop_break_type().cloned() {
                 let unit = self.type_unit();
-                self.unify(store, &break_ty, &unit, &span);
+                self.unify(&break_ty, &unit, &span);
             }
             None
         };
@@ -829,7 +806,6 @@ impl TaskState<'_> {
 
     pub(super) fn infer_task(
         &mut self,
-        store: &Store,
         expression: Box<Expression>,
         span: Span,
         expected_ty: &Type,
@@ -840,13 +816,13 @@ impl TaskState<'_> {
         }
 
         let unit_ty = self.type_unit();
-        self.unify(store, expected_ty, &unit_ty, &span);
+        self.unify(expected_ty, &unit_ty, &span);
 
         // task spawns a new goroutine — enclosing loop context doesn't apply
         let saved_loop_depth = self.scopes.reset_loop_depth();
 
         let task_ty = self.new_type_var();
-        let new_expression = self.infer_expression(store, *expression, &task_ty);
+        let new_expression = self.infer_expression(*expression, &task_ty);
 
         self.scopes.restore_loop_depth(saved_loop_depth);
 

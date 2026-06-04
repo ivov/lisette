@@ -1,11 +1,10 @@
 use crate::checker::EnvResolve;
-use crate::store::Store;
 use syntax::ast::{Expression, Span};
 use syntax::types::{SimpleKind, Type, peel_alias};
 
-use crate::checker::TaskState;
+use crate::checker::infer::InferCtx;
 
-impl TaskState<'_> {
+impl InferCtx<'_, '_> {
     /// Validates that a cast from source_ty to target_ty is allowed.
     /// Pushes a diagnostic if the cast is invalid.
     ///
@@ -23,11 +22,11 @@ impl TaskState<'_> {
     /// Complex types (complex64, complex128) are explicitly excluded.
     pub(crate) fn check_valid_cast(
         &mut self,
-        store: &Store,
         raw_source_ty: &Type,
         raw_target_ty: &Type,
         span: Span,
     ) {
+        let store = self.store;
         let source_ty = raw_source_ty.resolve_in(&self.env);
         let target_ty = raw_target_ty.resolve_in(&self.env);
 
@@ -86,7 +85,7 @@ impl TaskState<'_> {
         if let Type::Nominal { id, params, .. } = &peeled_target
             && let Some(interface) = store.get_interface(id).cloned()
             && self
-                .satisfies_interface(store, &source_ty, &interface, id, params, &span)
+                .satisfies_interface(&source_ty, &interface, id, params, &span)
                 .is_ok()
         {
             return;

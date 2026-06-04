@@ -8,14 +8,14 @@ use syntax::types::{
     Bound, SubstitutionMap, Symbol, Type, peel_to_range_type, substitute, unqualified_name,
 };
 
-use super::super::TaskState;
 use super::super::carry_mut::can_carry_mutation_across_fn_boundary;
 use super::super::unify::Dispatched;
 use super::primitives::contains_deref;
+use crate::checker::infer::InferCtx;
 use crate::checker::scopes::UseContext;
-use crate::store::{ENTRY_MODULE_ID, Store};
+use crate::store::ENTRY_MODULE_ID;
 
-impl TaskState<'_> {
+impl InferCtx<'_, '_> {
     pub(crate) fn check_call_arity(
         &mut self,
         param_types: &[Type],
@@ -95,13 +95,13 @@ fn has_numeric_member_in_chain(expression: &Expression) -> bool {
     false
 }
 
-impl TaskState<'_> {
+impl InferCtx<'_, '_> {
     pub(super) fn infer_function(
         &mut self,
-        store: &Store,
         expression: Expression,
         expected_ty: &Type,
     ) -> Expression {
+        let store = self.store;
         let Expression::Function {
             doc,
             attributes,
@@ -162,16 +162,11 @@ impl TaskState<'_> {
 
         let resolved_expected = expected_ty.resolve_in(&self.env);
         let expected_params = resolved_expected.get_function_params().unwrap_or_default();
-        let new_params = self.infer_function_params(store, params, expected_params, true);
+        let new_params = self.infer_function_params(params, expected_params, true);
 
         let unit_ty = self.type_unit();
-        let return_ty = self.infer_return_type(
-            store,
-            &return_annotation,
-            &resolved_expected,
-            &span,
-            unit_ty,
-        );
+        let return_ty =
+            self.infer_return_type(&return_annotation, &resolved_expected, &span, unit_ty);
 
         self.scopes.current_mut().fn_return_type = Some(return_ty.clone());
 
@@ -191,8 +186,7 @@ impl TaskState<'_> {
             return_ty.clone()
         };
 
-        let new_body =
-            self.infer_function_body(store, body, &body_ty, &return_annotation, &return_ty);
+        let new_body = self.infer_function_body(body, &body_ty, &return_annotation, &return_ty);
 
         self.scopes.pop();
 
@@ -207,7 +201,7 @@ impl TaskState<'_> {
 
         let (fn_ty, _) = self.instantiate(&fn_forall_ty);
 
-        self.unify(store, expected_ty, &fn_ty, &span);
+        self.unify(expected_ty, &fn_ty, &span);
 
         Expression::Function {
             doc,
@@ -227,7 +221,6 @@ impl TaskState<'_> {
 
     pub(super) fn infer_lambda(
         &mut self,
-        store: &Store,
         params: Vec<Binding>,
         return_annotation: Annotation,
         body: Box<Expression>,
@@ -240,11 +233,10 @@ impl TaskState<'_> {
         // unification (e.g. T = tea.Cmd) is visible as its underlying function shape.
         let resolved_expected = expected_ty.resolve_in(&self.env);
         let expected_params = resolved_expected.get_function_params().unwrap_or_default();
-        let new_params = self.infer_function_params(store, params, expected_params, false);
+        let new_params = self.infer_function_params(params, expected_params, false);
 
         let default_return = self.new_type_var();
         let return_ty = self.infer_return_type(
-            store,
             &return_annotation,
             &resolved_expected,
             &span,
@@ -272,15 +264,14 @@ impl TaskState<'_> {
         } else {
             return_ty.clone()
         };
-        let new_body =
-            self.infer_function_body(store, body, &body_ty, &return_annotation, &return_ty);
+        let new_body = self.infer_function_body(body, &body_ty, &return_annotation, &return_ty);
         self.scopes.restore_loop_depth(saved_loop_depth);
 
         self.scopes.pop();
 
         let (fn_ty, _) = self.instantiate(&base_fn_ty);
 
-        self.unify(store, expected_ty, &fn_ty, &span);
+        self.unify(expected_ty, &fn_ty, &span);
 
         Expression::Lambda {
             params: new_params,
@@ -294,7 +285,6 @@ impl TaskState<'_> {
     #[allow(clippy::too_many_arguments)]
     pub(super) fn infer_function_call(
         &mut self,
-        store: &Store,
         expression: Box<Expression>,
         args: Vec<Expression>,
         spread: Box<Option<Expression>>,
@@ -302,21 +292,19 @@ impl TaskState<'_> {
         span: Span,
         expected_ty: &Type,
     ) -> Expression {
+        let store = self.store;
         let callee_ty = self.new_type_var();
 
         let prev_context = self.scopes.set_callee_context();
-        let callee_expression = self.infer_expression(store, *expression, &callee_ty);
+        let callee_expression = self.infer_expression(*expression, &callee_ty);
         self.scopes.restore_use_context(prev_context);
 
-        let forall_ty = self.resolve_callee_forall_type(store, &callee_expression, &type_args);
+        let forall_ty = self.resolve_callee_forall_type(&callee_expression, &type_args);
         let (callee_ty, new_type_args) =
-            self.instantiate_callee_type(store, &forall_ty, &type_args, &callee_expression, &span);
+            self.instantiate_callee_type(&forall_ty, &type_args, &callee_expression, &span);
 
-        if let Some(underlying_fn) =
-            self.try_as_type_conversion(store, &callee_expression, &callee_ty)
-        {
+        if let Some(underlying_fn) = self.try_as_type_conversion(&callee_expression, &callee_ty) {
             return self.infer_type_conversion_call(
-                store,
                 callee_expression,
                 callee_ty,
                 underlying_fn,
@@ -346,7 +334,7 @@ impl TaskState<'_> {
         };
 
         let (param_types, param_mutability, return_ty, bounds) =
-            self.extract_call_signature(store, callee_ty, &args, &callee_expression);
+            self.extract_call_signature(callee_ty, &args, &callee_expression);
 
         if self.is_panic_call(&callee_expression)
             && self.scopes.is_value_context()
@@ -359,17 +347,19 @@ impl TaskState<'_> {
                 .push(diagnostics::infer::panic_in_expression_position(span));
         }
 
-        if self.is_generic_callee(store, &callee_expression)
+        if self.is_generic_callee(&callee_expression)
             && !expected_ty.resolve_in(&self.env).is_variable()
             && !expected_ty.is_ignored()
             && (self.is_enum_type(store, &return_ty.resolve_in(&self.env))
                 || !expected_ty.resolve_in(&self.env).contains_unknown())
         {
             let peeled = store.deep_resolve_alias(&expected_ty.resolve_in(&self.env));
-            let _ = self.speculatively(|this| this.try_unify(store, &peeled, &return_ty, &span));
+            let _ = self.speculatively(|this| {
+                InferCtx::new(this, store).try_unify(&peeled, &return_ty, &span)
+            });
         }
 
-        let call_kind = self.classify_call(store, &callee_expression);
+        let call_kind = self.classify_call(&callee_expression);
 
         let substring_range_idx =
             self.substring_carve_out_param_idx(call_kind, &callee_expression, &param_types);
@@ -381,10 +371,9 @@ impl TaskState<'_> {
             param_types.clone()
         };
 
-        let new_args = self.infer_call_arguments(store, args, &effective_param_types);
+        let new_args = self.infer_call_arguments(args, &effective_param_types);
         self.check_call_arity(&param_types, &new_args, &callee_expression, &span);
         self.check_mut_param_arguments(
-            store,
             &new_args,
             &param_types,
             &param_mutability,
@@ -395,7 +384,7 @@ impl TaskState<'_> {
         if let Some(idx) = substring_range_idx
             && let Some(arg) = new_args.get(idx)
         {
-            self.validate_substring_range_arg(store, arg);
+            self.validate_substring_range_arg(arg);
         }
 
         let new_spread = (*spread).map(|spread_expr| match variadic_elem_ty {
@@ -407,17 +396,17 @@ impl TaskState<'_> {
                     self.type_slice(elem_ty.clone())
                 };
                 let inferred =
-                    self.with_value_context(|s| s.infer_expression(store, spread_expr, &expected));
+                    self.with_value_context(|s| s.infer_expression(spread_expr, &expected));
                 if param_mutability.last().copied().unwrap_or(false) {
                     let callee_label = callee_label(&callee_expression);
-                    self.check_arg_against_mut_param(store, &inferred, &elem_ty, &callee_label);
+                    self.check_arg_against_mut_param(&inferred, &elem_ty, &callee_label);
                 }
                 inferred
             }
             None => {
                 self.sink
                     .push(diagnostics::infer::spread_on_non_variadic(span));
-                self.with_value_context(|s| s.infer_expression(store, spread_expr, &Type::Error))
+                self.with_value_context(|s| s.infer_expression(spread_expr, &Type::Error))
             }
         });
 
@@ -431,8 +420,8 @@ impl TaskState<'_> {
         // the store before the final unify (forward-declared intermediates
         // leave gaps in the cached `underlying_ty` chain).
         let resolved_expected = store.deep_resolve_alias(&expected_ty.resolve_in(&self.env));
-        self.unify(store, &resolved_expected, &return_ty, &span);
-        self.unify_trait_bounds(store, &bounds, &new_args, &span);
+        self.unify(&resolved_expected, &return_ty, &span);
+        self.unify_trait_bounds(&bounds, &new_args, &span);
 
         // Native mutating methods (append, extend, delete) are rewritten by
         // the emitter into mutations of the receiver binding. Require `mut`
@@ -443,9 +432,9 @@ impl TaskState<'_> {
             let resolved = expected_ty.resolve_in(&self.env);
             resolved.is_unit() || resolved.is_ignored() || expected_was_variable
         };
-        self.check_native_mutating_call(store, &callee_expression, result_unused, &span);
+        self.check_native_mutating_call(&callee_expression, result_unused, &span);
 
-        if self.is_generic_callee(store, &callee_expression)
+        if self.is_generic_callee(&callee_expression)
             && type_args.is_empty()
             && !self.is_enum_type(store, &return_ty.resolve_in(&self.env))
         {
@@ -485,10 +474,10 @@ impl TaskState<'_> {
 
     fn resolve_callee_forall_type(
         &mut self,
-        store: &Store,
         expression: &Expression,
         type_args: &[Annotation],
     ) -> Type {
+        let store = self.store;
         if type_args.is_empty() {
             return expression.get_type();
         }
@@ -533,7 +522,8 @@ impl TaskState<'_> {
         }
     }
 
-    fn is_generic_callee(&self, store: &Store, expression: &Expression) -> bool {
+    fn is_generic_callee(&self, expression: &Expression) -> bool {
+        let store = self.store;
         match expression {
             Expression::Identifier { value, .. } => self
                 .lookup_type(store, value)
@@ -556,12 +546,12 @@ impl TaskState<'_> {
 
     fn instantiate_callee_type(
         &mut self,
-        store: &Store,
         forall_ty: &Type,
         type_args: &[Annotation],
         callee_expression: &Expression,
         span: &Span,
     ) -> (Type, Vec<Annotation>) {
+        let store = self.store;
         let Type::Forall { vars, body } = forall_ty else {
             if !type_args.is_empty() {
                 self.sink.push(diagnostics::infer::type_args_on_non_generic(
@@ -587,7 +577,7 @@ impl TaskState<'_> {
                     .resolve_in(&self.env)
                     .strip_refs()
                     .clone();
-                self.get_receiver_generics_count(store, &receiver_ty)
+                self.get_receiver_generics_count(&receiver_ty)
             } else {
                 0
             };
@@ -649,13 +639,13 @@ impl TaskState<'_> {
                 let receiver_ty_stripped = receiver_ty.strip_refs();
                 if receiver_param.is_ref() && !receiver_ty.is_ref() {
                     if let Some(inner) = receiver_param.inner() {
-                        self.unify(store, &inner, &receiver_ty_stripped, span);
+                        self.unify(&inner, &receiver_ty_stripped, span);
                     }
                 } else {
-                    self.unify(store, &receiver_param, &receiver_ty_stripped, span);
+                    self.unify(&receiver_param, &receiver_ty_stripped, span);
                 }
             }
-            self.unify(store, &instantiated, &callee_expression.get_type(), span);
+            self.unify(&instantiated, &callee_expression.get_type(), span);
         }
 
         (instantiated, type_args.to_vec())
@@ -663,7 +653,6 @@ impl TaskState<'_> {
 
     fn extract_call_signature(
         &mut self,
-        store: &Store,
         callee_ty: Type,
         args: &[Expression],
         callee_expression: &Expression,
@@ -674,7 +663,7 @@ impl TaskState<'_> {
         let mut param_mutability = callee_ty.get_param_mutability().to_vec();
         let is_variadic = callee_ty.is_variadic();
 
-        let (param_types, return_ty) = match self.extract_function_type(store, &callee_ty) {
+        let (param_types, return_ty) = match self.extract_function_type(&callee_ty) {
             Some((mut params, return_type)) => {
                 if let Some(variadic_ty) = is_variadic {
                     params.pop();
@@ -731,7 +720,8 @@ impl TaskState<'_> {
         (param_types, param_mutability, return_ty, bounds)
     }
 
-    fn extract_function_type(&self, store: &Store, ty: &Type) -> Option<(Vec<Type>, Type)> {
+    fn extract_function_type(&self, ty: &Type) -> Option<(Vec<Type>, Type)> {
+        let store = self.store;
         let fn_type = |ty: &Type| -> Option<(Vec<Type>, Type)> {
             if let Type::Function(f) = ty {
                 Some((f.params.clone(), (*f.return_type).clone()))
@@ -779,12 +769,8 @@ impl TaskState<'_> {
         None
     }
 
-    fn try_as_type_conversion(
-        &self,
-        store: &Store,
-        callee: &Expression,
-        callee_ty: &Type,
-    ) -> Option<Type> {
+    fn try_as_type_conversion(&self, callee: &Expression, callee_ty: &Type) -> Option<Type> {
+        let store = self.store;
         let Type::Nominal {
             id,
             underlying_ty: Some(underlying),
@@ -827,7 +813,6 @@ impl TaskState<'_> {
     #[allow(clippy::too_many_arguments)]
     fn infer_type_conversion_call(
         &mut self,
-        store: &Store,
         callee_expression: Expression,
         named_ty: Type,
         underlying_fn: Type,
@@ -840,7 +825,7 @@ impl TaskState<'_> {
         if let Some(spread_expr) = *spread {
             self.sink
                 .push(diagnostics::infer::spread_on_non_variadic(span));
-            self.with_value_context(|s| s.infer_expression(store, spread_expr, &Type::Error));
+            self.with_value_context(|s| s.infer_expression(spread_expr, &Type::Error));
         }
 
         if args.len() != 1 {
@@ -854,11 +839,9 @@ impl TaskState<'_> {
             ));
             let new_args: Vec<Expression> = args
                 .into_iter()
-                .map(|arg| {
-                    self.with_value_context(|s| s.infer_expression(store, arg, &Type::Error))
-                })
+                .map(|arg| self.with_value_context(|s| s.infer_expression(arg, &Type::Error)))
                 .collect();
-            self.unify(store, expected_ty, &Type::Error, &span);
+            self.unify(expected_ty, &Type::Error, &span);
             return Expression::Call {
                 expression: callee_expression.into(),
                 args: new_args,
@@ -871,9 +854,9 @@ impl TaskState<'_> {
         }
 
         let arg = args.into_iter().next().unwrap();
-        let new_arg = self.with_value_context(|s| s.infer_expression(store, arg, &underlying_fn));
+        let new_arg = self.with_value_context(|s| s.infer_expression(arg, &underlying_fn));
 
-        self.unify(store, expected_ty, &named_ty, &span);
+        self.unify(expected_ty, &named_ty, &span);
 
         Expression::Call {
             expression: callee_expression.into(),
@@ -888,7 +871,6 @@ impl TaskState<'_> {
 
     fn infer_call_arguments(
         &mut self,
-        store: &Store,
         args: Vec<Expression>,
         param_types: &[Type],
     ) -> Vec<Expression> {
@@ -899,7 +881,7 @@ impl TaskState<'_> {
                     .get(i)
                     .cloned()
                     .unwrap_or_else(|| self.new_type_var());
-                self.with_value_context(|s| s.infer_expression(store, arg, &expected_ty))
+                self.with_value_context(|s| s.infer_expression(arg, &expected_ty))
             })
             .collect()
     }
@@ -967,13 +949,8 @@ impl TaskState<'_> {
         ));
     }
 
-    fn unify_trait_bounds(
-        &mut self,
-        store: &Store,
-        bounds: &[Bound],
-        args: &[Expression],
-        fallback_span: &Span,
-    ) {
+    fn unify_trait_bounds(&mut self, bounds: &[Bound], args: &[Expression], fallback_span: &Span) {
+        let store = self.store;
         for bound in bounds {
             let resolved_ty = bound.generic.resolve_in(&self.env);
 
@@ -987,8 +964,7 @@ impl TaskState<'_> {
                 .map(|arg| arg.get_span())
                 .unwrap_or_else(|| *fallback_span);
 
-            if self.dispatch_builtin_bound(store, bound, &resolved_ty, &span) == Dispatched::Handled
-            {
+            if self.dispatch_builtin_bound(bound, &resolved_ty, &span) == Dispatched::Handled {
                 continue;
             }
 
@@ -1001,13 +977,12 @@ impl TaskState<'_> {
                 continue;
             };
 
-            let _ = self.satisfies_interface(store, &resolved_ty, &interface, &id, &params, &span);
+            let _ = self.satisfies_interface(&resolved_ty, &interface, &id, &params, &span);
         }
     }
 
     fn infer_function_body(
         &mut self,
-        store: &Store,
         body: Box<Expression>,
         body_ty: &Type,
         return_annotation: &Annotation,
@@ -1034,16 +1009,16 @@ impl TaskState<'_> {
             };
         }
 
-        self.infer_expression(store, *body, body_ty)
+        self.infer_expression(*body, body_ty)
     }
 
     fn infer_function_params(
         &mut self,
-        store: &Store,
         params: Vec<Binding>,
         expected_params: &[Type],
         handle_self_receiver: bool,
     ) -> Vec<Binding> {
+        let store = self.store;
         params
             .into_iter()
             .enumerate()
@@ -1073,7 +1048,6 @@ impl TaskState<'_> {
                 });
 
                 let (new_pattern, typed_pattern) = self.infer_pattern(
-                    store,
                     binding.pattern,
                     binding_ty.clone(),
                     BindingKind::Parameter {
@@ -1094,12 +1068,12 @@ impl TaskState<'_> {
 
     fn infer_return_type(
         &mut self,
-        store: &Store,
         annotation: &Annotation,
         expected_ty: &Type,
         span: &Span,
         default_for_unknown: Type,
     ) -> Type {
+        let store = self.store;
         match annotation {
             Annotation::Unknown => {
                 if let Type::Function(f) = expected_ty {
@@ -1119,7 +1093,8 @@ impl TaskState<'_> {
         }
     }
 
-    fn classify_call(&self, store: &Store, callee: &Expression) -> CallKind {
+    fn classify_call(&self, callee: &Expression) -> CallKind {
+        let store = self.store;
         let callee = callee.unwrap_parens();
         match callee {
             Expression::DotAccess {
@@ -1168,7 +1143,7 @@ impl TaskState<'_> {
                 if definition.is_none() && value == "assert_type" {
                     return CallKind::AssertType;
                 }
-                if self.is_tuple_struct_definition(store, definition, callee) {
+                if self.is_tuple_struct_definition(definition, callee) {
                     return CallKind::TupleStructConstructor;
                 }
 
@@ -1191,7 +1166,7 @@ impl TaskState<'_> {
                 }
 
                 // Receiver method UFCS: Type.method(receiver, args)
-                if let Some(kind) = self.try_classify_receiver_ufcs(store, value) {
+                if let Some(kind) = self.try_classify_receiver_ufcs(value) {
                     return kind;
                 }
             }
@@ -1202,7 +1177,8 @@ impl TaskState<'_> {
 
     /// Classify `Type.method(receiver, args)` as `ReceiverMethodUfcs`.
     /// Uses scope-aware name resolution instead of the old suffix-matching heuristic.
-    fn try_classify_receiver_ufcs(&self, store: &Store, value: &str) -> Option<CallKind> {
+    fn try_classify_receiver_ufcs(&self, value: &str) -> Option<CallKind> {
+        let store = self.store;
         let last_dot = value.rfind('.')?;
         let method = &value[last_dot + 1..];
         let type_part = &value[..last_dot];
@@ -1273,10 +1249,10 @@ impl TaskState<'_> {
     /// Check if a definition (or type alias target) is a multi-field tuple struct constructor.
     fn is_tuple_struct_definition(
         &self,
-        store: &Store,
         definition: Option<&Definition>,
         callee: &Expression,
     ) -> bool {
+        let store = self.store;
         // Direct tuple struct
         if matches!(
             definition.map(|d| &d.body),
@@ -1326,11 +1302,11 @@ impl TaskState<'_> {
     ///   emitter rewrites to `s = append(s, ...)` in statement position)
     fn check_native_mutating_call(
         &mut self,
-        store: &Store,
         callee: &Expression,
         result_unused: bool,
         span: &Span,
     ) {
+        let store = self.store;
         let Expression::DotAccess {
             expression: receiver,
             member,
@@ -1400,7 +1376,6 @@ impl TaskState<'_> {
 
     fn check_mut_param_arguments(
         &mut self,
-        store: &Store,
         args: &[Expression],
         param_types: &[Type],
         param_mutability: &[bool],
@@ -1414,17 +1389,17 @@ impl TaskState<'_> {
             let Some(param_ty) = param_types.get(i) else {
                 continue;
             };
-            self.check_arg_against_mut_param(store, arg, param_ty, &callee_label);
+            self.check_arg_against_mut_param(arg, param_ty, &callee_label);
         }
     }
 
     fn check_arg_against_mut_param(
         &mut self,
-        store: &Store,
         arg: &Expression,
         param_ty: &Type,
         callee_label: &str,
     ) {
+        let store = self.store;
         if !can_carry_mutation_across_fn_boundary(param_ty, &self.env, store) {
             return;
         }
@@ -1445,18 +1420,19 @@ impl TaskState<'_> {
     }
 
     /// Verify the substring arg is a range type over `int`; emit a `Range<int>` mismatch otherwise.
-    fn validate_substring_range_arg(&mut self, store: &Store, arg: &Expression) {
+    fn validate_substring_range_arg(&mut self, arg: &Expression) {
+        let store = self.store;
         let arg_ty = arg.get_type().resolve_in(&self.env);
         let arg_span = arg.get_span();
         let int_ty = self.type_int();
 
         if let Some(peeled) = peel_to_range_type(&arg_ty) {
             if let Some(inner) = peeled.get_type_params().and_then(|p| p.first()) {
-                self.unify(store, &int_ty, inner, &arg_span);
+                self.unify(&int_ty, inner, &arg_span);
             }
         } else {
             let expected = self.type_range(store, int_ty);
-            self.unify(store, &expected, &arg_ty, &arg_span);
+            self.unify(&expected, &arg_ty, &arg_span);
         }
     }
 

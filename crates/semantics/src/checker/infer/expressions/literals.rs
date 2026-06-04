@@ -3,16 +3,16 @@ use crate::store::Store;
 use syntax::ast::{Expression, FormatStringPart, Literal, Span};
 use syntax::types::{SimpleKind, Type};
 
-use super::super::TaskState;
+use crate::checker::infer::InferCtx;
 
-impl TaskState<'_> {
+impl InferCtx<'_, '_> {
     pub(super) fn infer_literal(
         &mut self,
-        store: &Store,
         literal: Literal,
         expected_ty: &Type,
         span: Span,
     ) -> Expression {
+        let store = self.store;
         match literal {
             Literal::Boolean(boolean) => {
                 let resolved = expected_ty.resolve_in(&self.env);
@@ -20,7 +20,7 @@ impl TaskState<'_> {
                     resolved.clone()
                 } else {
                     let bool_ty = self.type_bool();
-                    self.unify(store, expected_ty, &bool_ty, &span);
+                    self.unify(expected_ty, &bool_ty, &span);
                     bool_ty
                 };
 
@@ -47,7 +47,7 @@ impl TaskState<'_> {
                     resolved.clone()
                 } else {
                     let int_ty = self.type_int();
-                    self.unify(store, expected_ty, &int_ty, &span);
+                    self.unify(expected_ty, &int_ty, &span);
                     int_ty
                 };
 
@@ -65,7 +65,7 @@ impl TaskState<'_> {
                     resolved.clone()
                 } else {
                     let float_ty = self.type_float();
-                    self.unify(store, expected_ty, &float_ty, &span);
+                    self.unify(expected_ty, &float_ty, &span);
                     float_ty
                 };
 
@@ -78,7 +78,7 @@ impl TaskState<'_> {
 
             Literal::Imaginary(coef) => {
                 let complex_ty = self.type_complex128();
-                self.unify(store, expected_ty, &complex_ty, &span);
+                self.unify(expected_ty, &complex_ty, &span);
 
                 Expression::Literal {
                     literal: Literal::Imaginary(coef),
@@ -93,7 +93,7 @@ impl TaskState<'_> {
                     resolved.clone()
                 } else {
                     let string_ty = self.type_string();
-                    self.unify(store, expected_ty, &string_ty, &span);
+                    self.unify(expected_ty, &string_ty, &span);
                     string_ty
                 };
 
@@ -113,7 +113,7 @@ impl TaskState<'_> {
                     resolved.clone()
                 } else {
                     let char_ty = self.type_char();
-                    self.unify(store, expected_ty, &char_ty, &span);
+                    self.unify(expected_ty, &char_ty, &span);
                     char_ty
                 };
 
@@ -139,14 +139,12 @@ impl TaskState<'_> {
                 let new_elements: Vec<Expression> = elements
                     .into_iter()
                     .map(|e| {
-                        self.with_value_context(|s| {
-                            s.infer_expression(store, e, &element_expected_ty)
-                        })
+                        self.with_value_context(|s| s.infer_expression(e, &element_expected_ty))
                     })
                     .collect();
 
                 let slice_ty = self.type_slice(element_expected_ty);
-                self.unify(store, expected_ty, &slice_ty, &span);
+                self.unify(expected_ty, &slice_ty, &span);
 
                 Expression::Literal {
                     literal: Literal::Slice(new_elements),
@@ -165,8 +163,7 @@ impl TaskState<'_> {
                         FormatStringPart::Text(text) => FormatStringPart::Text(text),
                         FormatStringPart::Expression(expression) => {
                             let type_var = self.new_type_var();
-                            let inferred_expression =
-                                self.infer_expression(store, *expression, &type_var);
+                            let inferred_expression = self.infer_expression(*expression, &type_var);
                             FormatStringPart::Expression(Box::new(inferred_expression))
                         }
                     })
@@ -180,7 +177,7 @@ impl TaskState<'_> {
                 }
 
                 let string_ty = self.type_string();
-                self.unify(store, expected_ty, &string_ty, &span);
+                self.unify(expected_ty, &string_ty, &span);
 
                 Expression::Literal {
                     literal: Literal::FormatString(new_parts),
@@ -191,16 +188,11 @@ impl TaskState<'_> {
         }
     }
 
-    pub(super) fn infer_unit(
-        &mut self,
-        store: &Store,
-        span: Span,
-        expected_ty: &Type,
-    ) -> Expression {
+    pub(super) fn infer_unit(&mut self, span: Span, expected_ty: &Type) -> Expression {
         let new_ty = self.new_type_var();
         let unit_ty = self.type_unit();
-        self.unify(store, &new_ty, &unit_ty, &span);
-        self.unify(store, expected_ty, &new_ty, &span);
+        self.unify(&new_ty, &unit_ty, &span);
+        self.unify(expected_ty, &new_ty, &span);
         Expression::Unit { ty: new_ty, span }
     }
 }

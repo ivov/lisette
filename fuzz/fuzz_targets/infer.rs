@@ -1,6 +1,7 @@
 #![no_main]
 
 use libfuzzer_sys::fuzz_target;
+use lisette_semantics::checker::infer::InferCtx;
 
 fuzz_target!(|data: &[u8]| {
     let Ok(source) = std::str::from_utf8(data) else {
@@ -37,7 +38,7 @@ fuzz_target!(|data: &[u8]| {
 
     for expression in desugar_result.ast {
         let type_var = checker.new_type_var();
-        let _ = checker.infer_expression(&mut store, expression, &type_var);
+        let _ = InferCtx::new(&mut checker, &store).infer_expression(expression, &type_var);
 
         if checker.failed() {
             break;

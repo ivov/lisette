@@ -1,11 +1,10 @@
 use crate::checker::EnvResolve;
-use crate::store::Store;
 use Type::{Function, Nominal};
 use diagnostics::LisetteDiagnostic;
 use syntax::ast::Span;
 use syntax::types::{Bound, Type, TypeVarId};
 
-use super::super::TaskState;
+use crate::checker::infer::InferCtx;
 use crate::checker::type_env::VarState;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -53,14 +52,14 @@ pub enum Dispatched {
     Fallthrough,
 }
 
-impl TaskState<'_> {
+impl InferCtx<'_, '_> {
     /// Make two types equal.
     ///
     /// - For two concrete types, verifies that they match.
     /// - For two variable types, records that the first equals the second.
     /// - For a concrete and a variable type, records that the variable equals the concrete.
-    pub(super) fn unify(&mut self, store: &Store, t1: &Type, t2: &Type, span: &Span) {
-        if let Err(unify_error) = self.try_unify(store, t1, t2, span) {
+    pub(super) fn unify(&mut self, t1: &Type, t2: &Type, span: &Span) {
+        if let Err(unify_error) = self.try_unify(t1, t2, span) {
             if unify_error == UnifyError::AlreadyReported {
                 return;
             }
@@ -71,11 +70,11 @@ impl TaskState<'_> {
 
     pub(super) fn try_unify(
         &mut self,
-        store: &Store,
         t1: &Type,
         t2: &Type,
         span: &Span,
     ) -> Result<(), UnifyError> {
+        let store = self.store;
         let r1 = self.env.shallow_resolve(t1);
         let r2 = self.env.shallow_resolve(t2);
         let r1_is_unknown = r1.is_unknown();
@@ -84,16 +83,14 @@ impl TaskState<'_> {
         match (&r1, &r2) {
             _ if r1.is_ignored() || r2.is_ignored() => Ok(()),
             _ if r1.is_receiver_placeholder() || r2.is_receiver_placeholder() => Ok(()),
-            _ if self.should_unify_refs(store, &r1, &r2, &r1, &r2) => {
-                self.unify_refs(store, &r1, &r2, span)
-            }
+            _ if self.should_unify_refs(&r1, &r2, &r1, &r2) => self.unify_refs(&r1, &r2, span),
 
             (Type::Var { id: i1, .. }, Type::Var { id: i2, .. }) if i1 == i2 => Ok(()),
 
             _ if r1_is_unknown && r2_is_unknown => Ok(()),
 
-            (Type::Var { id, .. }, _) => self.unify_type_variable(store, *id, &r2, span, false),
-            (_, Type::Var { id, .. }) => self.unify_type_variable(store, *id, &r1, span, true),
+            (Type::Var { id, .. }, _) => self.unify_type_variable(*id, &r2, span, false),
+            (_, Type::Var { id, .. }) => self.unify_type_variable(*id, &r1, span, true),
 
             _ if r1_is_unknown && self.scopes.is_inside_type_param() => {
                 Err(UnifyError::TypeMismatch)
@@ -105,11 +102,11 @@ impl TaskState<'_> {
             _ if matches!(r1, Type::Never) => Err(UnifyError::TypeMismatch),
 
             _ if matches!(r1, Type::Error) => {
-                self.collapse_vars_to_error(store, &r2, span);
+                self.collapse_vars_to_error(&r2, span);
                 Ok(())
             }
             _ if matches!(r2, Type::Error) => {
-                self.collapse_vars_to_error(store, &r1, span);
+                self.collapse_vars_to_error(&r1, span);
                 Ok(())
             }
 
@@ -137,7 +134,7 @@ impl TaskState<'_> {
                     Err(UnifyError::TypeMismatch)
                 } else {
                     let u = underlying.as_ref().clone();
-                    self.try_unify(store, &u, &r2, span)
+                    self.try_unify(&u, &r2, span)
                 }
             }
 
@@ -153,7 +150,7 @@ impl TaskState<'_> {
                     Err(UnifyError::TypeMismatch)
                 } else {
                     let u = underlying.as_ref().clone();
-                    self.try_unify(store, &r1, &u, span)
+                    self.try_unify(&r1, &u, span)
                 }
             }
 
@@ -166,7 +163,7 @@ impl TaskState<'_> {
                     params: vec![],
                     underlying_ty: None,
                 };
-                self.try_unify(store, &synth, &r2, span)
+                self.try_unify(&synth, &r2, span)
             }
             (Nominal { .. }, Type::Simple(kind)) => {
                 let synth = Type::Nominal {
@@ -174,7 +171,7 @@ impl TaskState<'_> {
                     params: vec![],
                     underlying_ty: None,
                 };
-                self.try_unify(store, &r1, &synth, span)
+                self.try_unify(&r1, &synth, span)
             }
             (Type::Compound { kind, args }, Nominal { .. }) => {
                 let synth = Type::Nominal {
@@ -182,7 +179,7 @@ impl TaskState<'_> {
                     params: args.clone(),
                     underlying_ty: None,
                 };
-                self.try_unify(store, &synth, &r2, span)
+                self.try_unify(&synth, &r2, span)
             }
             (Nominal { .. }, Type::Compound { kind, args }) => {
                 let synth = Type::Nominal {
@@ -190,7 +187,7 @@ impl TaskState<'_> {
                     params: args.clone(),
                     underlying_ty: None,
                 };
-                self.try_unify(store, &r1, &synth, span)
+                self.try_unify(&r1, &synth, span)
             }
 
             (Type::Compound { kind: k1, args: a1 }, Type::Compound { kind: k2, args: a2 })
@@ -202,14 +199,14 @@ impl TaskState<'_> {
                 let a1 = a1.clone();
                 let a2 = a2.clone();
                 self.scopes.increment_type_param_depth();
-                let result = self.unify_pairs(store, a1.iter().zip(a2.iter()), span);
+                let result = self.unify_pairs(a1.iter().zip(a2.iter()), span);
                 self.scopes.decrement_type_param_depth();
                 result
             }
 
-            (Nominal { .. }, Nominal { .. }) => self.unify_constructors(store, &r1, &r2, span),
+            (Nominal { .. }, Nominal { .. }) => self.unify_constructors(&r1, &r2, span),
 
-            (Function(_), Function(_)) => self.unify_functions(store, &r1, &r2, span),
+            (Function(_), Function(_)) => self.unify_functions(&r1, &r2, span),
 
             (Type::Tuple(elems1), Type::Tuple(elems2)) => {
                 if elems1.len() != elems2.len() {
@@ -217,7 +214,7 @@ impl TaskState<'_> {
                 }
                 let elems1 = elems1.clone();
                 let elems2 = elems2.clone();
-                self.unify_pairs(store, elems1.iter().zip(elems2.iter()), span)
+                self.unify_pairs(elems1.iter().zip(elems2.iter()), span)
             }
 
             (
@@ -228,7 +225,7 @@ impl TaskState<'_> {
                 Function(_),
             ) => {
                 let u = underlying.as_ref().clone();
-                self.try_unify(store, &u, &r2, span)
+                self.try_unify(&u, &r2, span)
             }
 
             (
@@ -239,17 +236,17 @@ impl TaskState<'_> {
                 },
             ) => {
                 let u = underlying.as_ref().clone();
-                self.try_unify(store, &r1, &u, span)
+                self.try_unify(&r1, &u, span)
             }
 
             _ => Err(UnifyError::TypeMismatch),
         }
     }
 
-    fn should_unify_refs(&self, store: &Store, t1: &Type, t2: &Type, r1: &Type, r2: &Type) -> bool {
+    fn should_unify_refs(&self, t1: &Type, t2: &Type, r1: &Type, r2: &Type) -> bool {
         let either_is_ref = t1.is_ref() || t2.is_ref();
         let both_concrete = !t1.is_variable() && !t2.is_variable();
-        let neither_is_interface = !self.is_interface(store, t1) && !self.is_interface(store, t2);
+        let neither_is_interface = !self.is_interface(t1) && !self.is_interface(t2);
         let neither_is_unknown = !r1.is_unknown() && !r2.is_unknown();
         let neither_is_error = !r1.is_error() && !r2.is_error();
 
@@ -260,7 +257,8 @@ impl TaskState<'_> {
             && neither_is_error
     }
 
-    fn is_interface(&self, store: &Store, ty: &Type) -> bool {
+    fn is_interface(&self, ty: &Type) -> bool {
+        let store = self.store;
         if let Type::Nominal { id, .. } = ty {
             store.get_interface(id).is_some()
         } else {
@@ -268,50 +266,44 @@ impl TaskState<'_> {
         }
     }
 
-    fn unify_refs(
-        &mut self,
-        store: &Store,
-        t1: &Type,
-        t2: &Type,
-        span: &Span,
-    ) -> Result<(), UnifyError> {
+    fn unify_refs(&mut self, t1: &Type, t2: &Type, span: &Span) -> Result<(), UnifyError> {
         match (t1.is_ref(), t2.is_ref()) {
-            (true, true) => self.try_unify(store, &t1.strip_refs(), &t2.strip_refs(), span),
+            (true, true) => self.try_unify(&t1.strip_refs(), &t2.strip_refs(), span),
             (true, false) | (false, true) => Err(UnifyError::TypeMismatch),
             (false, false) => unreachable!("unify_refs called without refs"),
         }
     }
 
-    fn collapse_vars_to_error(&mut self, store: &Store, ty: &Type, span: &Span) {
+    fn collapse_vars_to_error(&mut self, ty: &Type, span: &Span) {
         let resolved = self.env.shallow_resolve(ty);
         match resolved {
             Type::Var { id, .. } if !id.is_reserved() => {
-                let _ = self.unify_type_variable(store, id, &Type::Error, span, false);
+                let _ = self.unify_type_variable(id, &Type::Error, span, false);
             }
             Type::Nominal { params, .. } => {
                 for p in params {
-                    self.collapse_vars_to_error(store, &p, span);
+                    self.collapse_vars_to_error(&p, span);
                 }
             }
             Function(f) => {
                 let f = *f;
                 for p in f.params {
-                    self.collapse_vars_to_error(store, &p, span);
+                    self.collapse_vars_to_error(&p, span);
                 }
-                self.collapse_vars_to_error(store, &f.return_type, span);
+                self.collapse_vars_to_error(&f.return_type, span);
             }
             Type::Tuple(elems) => {
                 for e in elems {
-                    self.collapse_vars_to_error(store, &e, span);
+                    self.collapse_vars_to_error(&e, span);
                 }
             }
             Type::Compound { args, .. } => {
                 for a in args {
-                    self.collapse_vars_to_error(store, &a, span);
+                    self.collapse_vars_to_error(&a, span);
                 }
             }
             Type::Forall { body, .. } => {
-                self.collapse_vars_to_error(store, &body, span);
+                self.collapse_vars_to_error(&body, span);
             }
             _ => {}
         }
@@ -319,7 +311,6 @@ impl TaskState<'_> {
 
     fn unify_type_variable(
         &mut self,
-        store: &Store,
         id: TypeVarId,
         other_ty: &Type,
         span: &Span,
@@ -333,9 +324,9 @@ impl TaskState<'_> {
         match self.env.state(id).clone() {
             VarState::Bound(ty) => {
                 if var_on_right {
-                    self.try_unify(store, other_ty, &ty, span)
+                    self.try_unify(other_ty, &ty, span)
                 } else {
-                    self.try_unify(store, &ty, other_ty, span)
+                    self.try_unify(&ty, other_ty, span)
                 }
             }
             VarState::Unbound { .. } => {
@@ -348,13 +339,8 @@ impl TaskState<'_> {
         }
     }
 
-    fn unify_constructors(
-        &mut self,
-        store: &Store,
-        t1: &Type,
-        t2: &Type,
-        span: &Span,
-    ) -> Result<(), UnifyError> {
+    fn unify_constructors(&mut self, t1: &Type, t2: &Type, span: &Span) -> Result<(), UnifyError> {
+        let store = self.store;
         let (
             Nominal {
                 id: symbol1,
@@ -378,7 +364,7 @@ impl TaskState<'_> {
             } = t1
                 && store.get_interface(symbol2).is_none()
                 && !store.is_nominal_defined_type(symbol1.as_str())
-                && self.try_unify(store, u, t2, span).is_ok()
+                && self.try_unify(u, t2, span).is_ok()
             {
                 return Ok(());
             }
@@ -388,11 +374,11 @@ impl TaskState<'_> {
             } = t2
                 && store.get_interface(symbol1).is_none()
                 && !store.is_nominal_defined_type(symbol2.as_str())
-                && self.try_unify(store, t1, u, span).is_ok()
+                && self.try_unify(t1, u, span).is_ok()
             {
                 return Ok(());
             }
-            return self.try_coerce_or_satisfy_interface(store, t1, t2, span);
+            return self.try_coerce_or_satisfy_interface(t1, t2, span);
         }
 
         if params1.len() != params2.len() {
@@ -411,7 +397,7 @@ impl TaskState<'_> {
         self.scopes.increment_type_param_depth();
         let mut result = Ok(());
         for (p1, p2) in params1.iter().zip(params2) {
-            if let Err(e) = self.try_unify(store, p1, p2, span) {
+            if let Err(e) = self.try_unify(p1, p2, span) {
                 result = Err(e);
                 break;
             }
@@ -422,11 +408,11 @@ impl TaskState<'_> {
 
     fn try_coerce_or_satisfy_interface(
         &mut self,
-        store: &Store,
         t1: &Type,
         t2: &Type,
         span: &Span,
     ) -> Result<(), UnifyError> {
+        let store = self.store;
         let (
             Nominal {
                 id: symbol1,
@@ -458,27 +444,27 @@ impl TaskState<'_> {
             && symbol2.starts_with("go:")
             && store.get_interface(symbol2).is_some()
         {
-            return self.try_unify(store, &params1[0], t2, span);
+            return self.try_unify(&params1[0], t2, span);
         }
         if symbol2 == "prelude.Option"
             && params2.len() == 1
             && symbol1.starts_with("go:")
             && store.get_interface(symbol1).is_some()
         {
-            return self.try_unify(store, &params2[0], t1, span);
+            return self.try_unify(&params2[0], t1, span);
         }
 
         if let Some(interface) = store.get_interface(symbol1).cloned() {
             return self
-                .satisfies_interface(store, t2, &interface, symbol1, params1, span)
-                .and_then(|()| self.check_pointer_receivers(store, t2, &interface, symbol1, span))
+                .satisfies_interface(t2, &interface, symbol1, params1, span)
+                .and_then(|()| self.check_pointer_receivers(t2, &interface, symbol1, span))
                 .map_err(|_| UnifyError::AlreadyReported);
         }
 
         if let Some(interface) = store.get_interface(symbol2).cloned() {
             return self
-                .satisfies_interface(store, t1, &interface, symbol2, params2, span)
-                .and_then(|()| self.check_pointer_receivers(store, t1, &interface, symbol2, span))
+                .satisfies_interface(t1, &interface, symbol2, params2, span)
+                .and_then(|()| self.check_pointer_receivers(t1, &interface, symbol2, span))
                 .map_err(|_| UnifyError::AlreadyReported);
         }
 
@@ -487,14 +473,13 @@ impl TaskState<'_> {
 
     fn unify_pairs<'a>(
         &mut self,
-        store: &Store,
         pairs: impl Iterator<Item = (&'a Type, &'a Type)>,
         span: &Span,
     ) -> Result<(), UnifyError> {
         let mut errors = Vec::new();
 
         for (t1, t2) in pairs {
-            if let Err(e) = self.try_unify(store, t1, t2, span) {
+            if let Err(e) = self.try_unify(t1, t2, span) {
                 errors.push(e);
             }
         }
@@ -511,13 +496,7 @@ impl TaskState<'_> {
         }
     }
 
-    fn unify_functions(
-        &mut self,
-        store: &Store,
-        t1: &Type,
-        t2: &Type,
-        span: &Span,
-    ) -> Result<(), UnifyError> {
+    fn unify_functions(&mut self, t1: &Type, t2: &Type, span: &Span) -> Result<(), UnifyError> {
         let (Function(f1), Function(f2)) = (t1, t2) else {
             unreachable!("unify_functions called with non-Function types")
         };
@@ -532,11 +511,11 @@ impl TaskState<'_> {
             return Err(UnifyError::TypeMismatch);
         }
 
-        let params_result = self.unify_pairs(store, f1.params.iter().zip(&f2.params), span);
-        let return_type_result = self.try_unify(store, &f1.return_type, &f2.return_type, span);
+        let params_result = self.unify_pairs(f1.params.iter().zip(&f2.params), span);
+        let return_type_result = self.try_unify(&f1.return_type, &f2.return_type, span);
 
         for bound in f1.bounds.iter().chain(f2.bounds.iter()) {
-            self.check_function_bound(store, bound, span);
+            self.check_function_bound(bound, span);
         }
 
         if !self.bounds_equivalent(&f1.bounds, &f2.bounds) {
@@ -584,14 +563,15 @@ impl TaskState<'_> {
         all_in(bounds1, bounds2) && all_in(bounds2, bounds1)
     }
 
-    fn check_function_bound(&mut self, store: &Store, bound: &Bound, span: &Span) {
+    fn check_function_bound(&mut self, bound: &Bound, span: &Span) {
+        let store = self.store;
         let resolved_ty = bound.generic.resolve_in(&self.env);
 
         if resolved_ty.is_variable() {
             return;
         }
 
-        if self.dispatch_builtin_bound(store, bound, &resolved_ty, span) == Dispatched::Handled {
+        if self.dispatch_builtin_bound(bound, &resolved_ty, span) == Dispatched::Handled {
             return;
         }
 
@@ -604,17 +584,17 @@ impl TaskState<'_> {
             return;
         };
 
-        let _ = self.satisfies_interface(store, &resolved_ty, &interface, &id, &params, span);
+        let _ = self.satisfies_interface(&resolved_ty, &interface, &id, &params, span);
     }
 
     /// Built-in bound recognition; falls through to the interface path on miss.
     pub(super) fn dispatch_builtin_bound(
         &mut self,
-        store: &Store,
         bound: &Bound,
         resolved_generic: &Type,
         span: &Span,
     ) -> Dispatched {
+        let store = self.store;
         let bound_ty = bound.ty.resolve_in(&self.env);
         let Some(builtin) = bound_ty
             .get_qualified_id()

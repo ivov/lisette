@@ -2,16 +2,14 @@ use std::cell::Cell;
 
 use crate::checker::EnvResolve;
 use crate::checker::scopes::{CarrierKind, DepthCounter, RecoverBlockContext, TryBlockContext};
-use crate::store::Store;
 use syntax::ast::{Expression, Span};
 use syntax::types::Type;
 
-use super::super::TaskState;
+use crate::checker::infer::InferCtx;
 
-impl TaskState<'_> {
+impl InferCtx<'_, '_> {
     pub(super) fn infer_propagate(
         &mut self,
-        store: &Store,
         expression: Box<Expression>,
         span: Span,
         expected_ty: &Type,
@@ -24,7 +22,7 @@ impl TaskState<'_> {
         }
 
         let tried_ty = self.new_type_var();
-        let new_expression = self.infer_expression(store, *expression, &tried_ty);
+        let new_expression = self.infer_expression(*expression, &tried_ty);
         let resolved_tried_ty = new_expression.get_type().resolve_in(&self.env);
 
         if resolved_tried_ty.is_partial() {
@@ -74,7 +72,6 @@ impl TaskState<'_> {
 
         if let Some((try_ok_ty, try_err_ty)) = try_block_types {
             return self.infer_propagate_in_block(
-                store,
                 new_expression,
                 &resolved_tried_ty,
                 &try_ok_ty,
@@ -84,24 +81,17 @@ impl TaskState<'_> {
             );
         }
 
-        self.infer_propagate_in_function(
-            store,
-            new_expression,
-            &resolved_tried_ty,
-            span,
-            expected_ty,
-        )
+        self.infer_propagate_in_function(new_expression, &resolved_tried_ty, span, expected_ty)
     }
 
-    fn propagate_as_error(&mut self, store: &Store, expected_ty: &Type, span: Span) -> Type {
-        self.unify(store, expected_ty, &Type::Error, &span);
+    fn propagate_as_error(&mut self, expected_ty: &Type, span: Span) -> Type {
+        self.unify(expected_ty, &Type::Error, &span);
         Type::Error
     }
 
     #[allow(clippy::too_many_arguments)]
     fn infer_propagate_in_block(
         &mut self,
-        store: &Store,
         new_expression: Expression,
         tried_ty: &Type,
         try_ok_ty: &Type,
@@ -110,24 +100,24 @@ impl TaskState<'_> {
         expected_ty: &Type,
     ) -> Expression {
         let ty = if tried_ty.is_error() {
-            self.propagate_as_error(store, expected_ty, span)
+            self.propagate_as_error(expected_ty, span)
         } else if tried_ty.is_result() {
             let ok_ty = tried_ty.ok_type();
-            self.unify(store, try_err_ty, &tried_ty.err_type(), &span);
+            self.unify(try_err_ty, &tried_ty.err_type(), &span);
             if ok_ty.resolve_in(&self.env).is_variable() {
-                self.unify(store, try_ok_ty, &ok_ty, &span);
+                self.unify(try_ok_ty, &ok_ty, &span);
             }
-            self.unify(store, expected_ty, &ok_ty, &span);
+            self.unify(expected_ty, &ok_ty, &span);
             ok_ty
         } else if tried_ty.is_option() {
             let some_ty = tried_ty.ok_type();
             if some_ty.resolve_in(&self.env).is_variable() {
-                self.unify(store, try_ok_ty, &some_ty, &span);
+                self.unify(try_ok_ty, &some_ty, &span);
             }
-            self.unify(store, expected_ty, &some_ty, &span);
+            self.unify(expected_ty, &some_ty, &span);
             some_ty
         } else {
-            self.propagate_as_error(store, expected_ty, span)
+            self.propagate_as_error(expected_ty, span)
         };
 
         Expression::Propagate {
@@ -139,12 +129,12 @@ impl TaskState<'_> {
 
     fn infer_propagate_in_function(
         &mut self,
-        store: &Store,
         new_expression: Expression,
         tried_ty: &Type,
         span: Span,
         expected_ty: &Type,
     ) -> Expression {
+        let store = self.store;
         let fn_return_ty = self
             .scopes
             .lookup_fn_return_type()
@@ -156,7 +146,7 @@ impl TaskState<'_> {
             });
 
         let ty = if tried_ty.is_error() {
-            self.propagate_as_error(store, expected_ty, span)
+            self.propagate_as_error(expected_ty, span)
         } else if tried_ty.is_result() {
             let ok_ty = tried_ty.ok_type();
             let resolved_fn_return = fn_return_ty.resolve_in(&self.env);
@@ -165,7 +155,7 @@ impl TaskState<'_> {
                 let err_ty = tried_ty.err_type();
                 let new_ok = self.new_type_var();
                 let expected_return = self.type_result(store, new_ok, err_ty);
-                self.unify(store, &expected_return, &fn_return_ty, &span);
+                self.unify(&expected_return, &fn_return_ty, &span);
             } else {
                 self.sink.push(diagnostics::infer::try_return_type_mismatch(
                     "Result<T, E>",
@@ -174,7 +164,7 @@ impl TaskState<'_> {
                 ));
             }
 
-            self.unify(store, expected_ty, &ok_ty, &span);
+            self.unify(expected_ty, &ok_ty, &span);
             ok_ty
         } else if tried_ty.is_option() {
             let some_ty = tried_ty.ok_type();
@@ -183,7 +173,7 @@ impl TaskState<'_> {
             if resolved_fn_return.is_option() {
                 let new_some = self.new_type_var();
                 let expected_return = self.type_option(store, new_some);
-                self.unify(store, &expected_return, &fn_return_ty, &span);
+                self.unify(&expected_return, &fn_return_ty, &span);
             } else {
                 self.sink.push(diagnostics::infer::try_return_type_mismatch(
                     "Option<T>",
@@ -192,14 +182,14 @@ impl TaskState<'_> {
                 ));
             }
 
-            self.unify(store, expected_ty, &some_ty, &span);
+            self.unify(expected_ty, &some_ty, &span);
             some_ty
         } else if tried_ty.is_partial() {
-            self.propagate_as_error(store, expected_ty, span)
+            self.propagate_as_error(expected_ty, span)
         } else {
             self.sink
                 .push(diagnostics::infer::try_requires_result_or_option(span));
-            self.propagate_as_error(store, expected_ty, span)
+            self.propagate_as_error(expected_ty, span)
         };
 
         Expression::Propagate {
@@ -211,19 +201,19 @@ impl TaskState<'_> {
 
     pub(super) fn infer_try_block(
         &mut self,
-        store: &Store,
         items: Vec<Expression>,
         try_keyword_span: Span,
         span: Span,
         expected_ty: &Type,
     ) -> Expression {
+        let store = self.store;
         if items.is_empty() {
             self.sink
                 .push(diagnostics::infer::try_block_empty(try_keyword_span));
             let unit_ty = self.type_unit();
             let err_ty = self.new_type_var();
             let block_ty = self.type_result(store, unit_ty, err_ty);
-            self.unify(store, expected_ty, &block_ty, &span);
+            self.unify(expected_ty, &block_ty, &span);
             return Expression::TryBlock {
                 items: vec![],
                 ty: block_ty,
@@ -248,9 +238,9 @@ impl TaskState<'_> {
             });
         }
 
-        self.register_block_local_items(store, &items);
+        self.register_block_local_items(&items);
 
-        let new_items = self.infer_block_items(store, items, ok_ty.clone());
+        let new_items = self.infer_block_items(items, ok_ty.clone());
 
         let (has_question_mark, carrier) = {
             let ctx = self
@@ -299,11 +289,11 @@ impl TaskState<'_> {
 
         let block_ty = match carrier {
             Some(CarrierKind::Result) => {
-                self.unify(store, &ok_ty, &inner_ty, &span);
+                self.unify(&ok_ty, &inner_ty, &span);
                 self.type_result(store, inner_ty, err_ty)
             }
             Some(CarrierKind::Option) => {
-                self.unify(store, &ok_ty, &inner_ty, &span);
+                self.unify(&ok_ty, &inner_ty, &span);
                 self.type_option(store, inner_ty)
             }
             None => {
@@ -312,7 +302,7 @@ impl TaskState<'_> {
             }
         };
 
-        self.unify(store, expected_ty, &block_ty, &try_keyword_span);
+        self.unify(expected_ty, &block_ty, &try_keyword_span);
         self.scopes.pop();
 
         Expression::TryBlock {
@@ -337,12 +327,12 @@ impl TaskState<'_> {
 
     pub(super) fn infer_recover_block(
         &mut self,
-        store: &Store,
         items: Vec<Expression>,
         recover_keyword_span: Span,
         span: Span,
         expected_ty: &Type,
     ) -> Expression {
+        let store = self.store;
         let inner_ty = self.new_type_var();
 
         if items.is_empty() {
@@ -352,7 +342,7 @@ impl TaskState<'_> {
             let unit_ty = self.type_unit();
             let panic_value_ty = self.type_panic_value(store);
             let block_ty = self.type_result(store, unit_ty, panic_value_ty);
-            self.unify(store, expected_ty, &block_ty, &span);
+            self.unify(expected_ty, &block_ty, &span);
             return Expression::RecoverBlock {
                 items: vec![],
                 ty: block_ty,
@@ -371,9 +361,9 @@ impl TaskState<'_> {
             });
         }
 
-        self.register_block_local_items(store, &items);
+        self.register_block_local_items(&items);
 
-        let new_items = self.infer_block_items(store, items, inner_ty.clone());
+        let new_items = self.infer_block_items(items, inner_ty.clone());
 
         self.scopes.pop();
 
@@ -383,7 +373,7 @@ impl TaskState<'_> {
         let panic_value_ty = self.type_panic_value(store);
         let block_ty = self.type_result(store, result_inner_ty, panic_value_ty);
 
-        self.unify(store, expected_ty, &block_ty, &recover_keyword_span);
+        self.unify(expected_ty, &block_ty, &recover_keyword_span);
 
         Expression::RecoverBlock {
             items: new_items,

@@ -5,19 +5,18 @@ use syntax::ast::{Annotation, Expression, Generic, ParentInterface, Span};
 use syntax::program::{Definition, DefinitionBody};
 use syntax::types::Type;
 
-use super::super::TaskState;
-use crate::store::Store;
+use crate::checker::infer::InferCtx;
 
-impl TaskState<'_> {
+impl InferCtx<'_, '_> {
     pub(super) fn infer_impl_block(
         &mut self,
-        store: &Store,
         annotation: Annotation,
         methods: Vec<Expression>,
         receiver_name: EcoString,
         generics: Vec<Generic>,
         span: Span,
     ) -> Expression {
+        let store = self.store;
         self.scopes.push();
 
         self.put_in_scope(&generics);
@@ -77,7 +76,7 @@ impl TaskState<'_> {
             .into_iter()
             .map(|method| {
                 let method_ty = self.new_type_var();
-                self.infer_expression(store, method, &method_ty)
+                self.infer_expression(method, &method_ty)
             })
             .collect();
 
@@ -94,7 +93,8 @@ impl TaskState<'_> {
         }
     }
 
-    pub(super) fn infer_interface(&mut self, store: &Store, expression: Expression) -> Expression {
+    pub(super) fn infer_interface(&mut self, expression: Expression) -> Expression {
+        let store = self.store;
         let Expression::Interface {
             doc,
             name,
@@ -120,7 +120,7 @@ impl TaskState<'_> {
             .into_iter()
             .map(|method_signature| {
                 let signature_ty = self.new_type_var();
-                self.infer_expression(store, method_signature, &signature_ty)
+                self.infer_expression(method_signature, &signature_ty)
             })
             .collect();
         self.facts.remove_bindings_from(checkpoint);

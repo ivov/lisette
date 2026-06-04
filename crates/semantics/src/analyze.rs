@@ -17,6 +17,7 @@ use crate::cache::{
     save_module_cache, try_load_cache,
 };
 use crate::checker::TaskState;
+use crate::checker::infer::InferCtx;
 use crate::diagnostics::emit_for_locator_result;
 use crate::facts::{BindingIdAllocator, Facts};
 use crate::loader::Loader;
@@ -268,7 +269,7 @@ pub fn analyze(input: AnalyzeInput) -> AnalyzeOutput {
 
         if module_files.len() < PARALLEL_THRESHOLD {
             for (module_id, files) in module_files {
-                checker.infer_module(&store, &module_id, files);
+                InferCtx::new(&mut checker, &store).infer_module(&module_id, files);
             }
         } else {
             let allocator = binding_ids.clone();
@@ -282,7 +283,7 @@ pub fn analyze(input: AnalyzeInput) -> AnalyzeOutput {
                     let local_sink = LocalSink::new();
                     let mut worker = TaskState::new(&local_sink, allocator.clone());
                     worker.ufcs_shared = Some(ufcs_shared.clone());
-                    worker.infer_module(store_ref, &module_id, files);
+                    InferCtx::new(&mut worker, store_ref).infer_module(&module_id, files);
                     let typed_files = std::mem::take(&mut worker.typed_files);
                     let facts = std::mem::replace(&mut worker.facts, Facts::new(allocator.clone()));
                     (typed_files, facts, local_sink)

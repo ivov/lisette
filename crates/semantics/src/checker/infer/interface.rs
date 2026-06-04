@@ -5,12 +5,11 @@ use syntax::ast::Span;
 use syntax::program::{DefinitionBody, Interface, MethodSignatures};
 use syntax::types::{GO_IMPORT_PREFIX, SubstitutionMap, Type, substitute};
 
-use super::super::TaskState;
+use crate::checker::infer::InferCtx;
 
-impl TaskState<'_> {
+impl InferCtx<'_, '_> {
     pub(super) fn satisfies_interface(
         &mut self,
-        store: &Store,
         ty: &Type,
         interface: &Interface,
         interface_qualified_id: &str,
@@ -34,7 +33,6 @@ impl TaskState<'_> {
         let mut violations = Vec::new();
         let mut visited = rustc_hash::FxHashSet::default();
         self.collect_interface_violations(
-            store,
             ty,
             interface,
             interface_qualified_id,
@@ -88,12 +86,12 @@ impl TaskState<'_> {
     /// emitter may absorb Ref<T> into the type parameter.
     pub(super) fn check_pointer_receivers(
         &self,
-        store: &Store,
         ty: &Type,
         interface: &Interface,
         interface_qualified_id: &str,
         span: &Span,
     ) -> Result<(), Vec<InterfaceViolation>> {
+        let store = self.store;
         if ty.is_ref() {
             return Ok(());
         }
@@ -103,7 +101,6 @@ impl TaskState<'_> {
         let mut visited = rustc_hash::FxHashSet::default();
 
         self.collect_pointer_receiver_methods(
-            store,
             interface,
             interface_qualified_id,
             &methods,
@@ -128,13 +125,13 @@ impl TaskState<'_> {
 
     fn collect_pointer_receiver_methods(
         &self,
-        store: &Store,
         interface: &Interface,
         interface_qualified_id: &str,
         methods: &MethodSignatures,
         out: &mut Vec<String>,
         visited: &mut rustc_hash::FxHashSet<String>,
     ) {
+        let store = self.store;
         if !visited.insert(interface_qualified_id.to_string()) {
             return;
         }
@@ -155,7 +152,6 @@ impl TaskState<'_> {
             let parent_name = parent.get_qualified_name();
             if let Some(parent_interface) = store.get_interface(&parent_name) {
                 self.collect_pointer_receiver_methods(
-                    store,
                     parent_interface,
                     parent_name.as_str(),
                     methods,
@@ -170,7 +166,6 @@ impl TaskState<'_> {
     #[allow(clippy::too_many_arguments)]
     fn collect_interface_violations(
         &mut self,
-        store: &Store,
         ty: &Type,
         interface: &Interface,
         interface_qualified_id: &str,
@@ -180,6 +175,7 @@ impl TaskState<'_> {
         violations: &mut Vec<InterfaceViolation>,
         visited: &mut rustc_hash::FxHashSet<String>,
     ) {
+        let store = self.store;
         if !visited.insert(interface_qualified_id.to_string()) {
             return;
         }
@@ -271,8 +267,7 @@ impl TaskState<'_> {
 
             self.scopes.increment_type_param_depth();
             let sig_match = self.speculatively(|this| {
-                this.try_unify(
-                    store,
+                InferCtx::new(this, store).try_unify(
                     &strip_bounds(&substituted_method),
                     &strip_bounds(&impl_for_unify),
                     &Span::dummy(),
@@ -322,7 +317,6 @@ impl TaskState<'_> {
                     .map(|arg| substitute(arg, &map))
                     .collect();
                 self.collect_interface_violations(
-                    store,
                     ty,
                     &parent_interface,
                     &parent_name,

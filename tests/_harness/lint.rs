@@ -1,5 +1,5 @@
 use diagnostics::{LisetteDiagnostic, LocalSink};
-use semantics::{checker::TaskState, passes, store::Store};
+use semantics::{checker::TaskState, checker::infer::InferCtx, passes, store::Store};
 use stdlib::{Target, get_go_stdlib_typedef};
 use syntax::{
     ast::Expression,
@@ -86,7 +86,8 @@ pub fn lint(source: &str) -> Vec<LisetteDiagnostic> {
 
     for expression in ast {
         let type_var = checker.new_type_var();
-        let typed_expression = checker.infer_expression(&store, expression, &type_var);
+        let typed_expression =
+            InferCtx::new(&mut checker, &store).infer_expression(expression, &type_var);
         typed_ast.push(typed_expression);
 
         if checker.failed() {

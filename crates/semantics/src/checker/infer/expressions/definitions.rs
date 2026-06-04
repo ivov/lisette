@@ -1,15 +1,11 @@
 use syntax::ast::Expression;
 use syntax::program::{Definition, DefinitionBody};
 
-use super::super::super::TaskState;
-use crate::store::Store;
+use crate::checker::infer::InferCtx;
 
-impl TaskState<'_> {
-    pub(super) fn infer_struct_definition(
-        &mut self,
-        store: &Store,
-        expression: Expression,
-    ) -> Expression {
+impl InferCtx<'_, '_> {
+    pub(super) fn infer_struct_definition(&mut self, expression: Expression) -> Expression {
+        let store = self.store;
         let Expression::Struct {
             doc,
             attributes,
@@ -74,11 +70,8 @@ impl TaskState<'_> {
         }
     }
 
-    pub(super) fn infer_type_alias_definition(
-        &mut self,
-        store: &Store,
-        expression: Expression,
-    ) -> Expression {
+    pub(super) fn infer_type_alias_definition(&mut self, expression: Expression) -> Expression {
+        let store = self.store;
         let Expression::TypeAlias {
             doc,
             name,

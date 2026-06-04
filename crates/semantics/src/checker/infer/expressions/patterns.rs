@@ -10,9 +10,8 @@ use syntax::program::{Definition, DefinitionBody};
 use syntax::types::{Type, substitute, unqualified_name};
 
 use crate::checker::EnvResolve;
-use crate::store::Store;
 
-use super::super::TaskState;
+use crate::checker::infer::InferCtx;
 pub(crate) fn collect_pattern_bindings(pattern: &Pattern) -> Vec<(String, Span)> {
     match pattern {
         Pattern::Identifier { identifier, span } => vec![(identifier.to_string(), *span)],
@@ -50,25 +49,24 @@ pub(crate) fn collect_pattern_bindings(pattern: &Pattern) -> Vec<(String, Span)>
     }
 }
 
-impl TaskState<'_> {
+impl InferCtx<'_, '_> {
     pub(super) fn infer_pattern(
         &mut self,
-        store: &Store,
         pattern: Pattern,
         expected_ty: Type,
         kind: BindingKind,
     ) -> (Pattern, TypedPattern) {
-        self.infer_pattern_inner(store, pattern, expected_ty, kind, false)
+        self.infer_pattern_inner(pattern, expected_ty, kind, false)
     }
 
     fn infer_pattern_inner(
         &mut self,
-        store: &Store,
         pattern: Pattern,
         expected_ty: Type,
         kind: BindingKind,
         is_struct_field: bool,
     ) -> (Pattern, TypedPattern) {
+        let store = self.store;
         match pattern {
             Pattern::Identifier { identifier, span } => {
                 let is_d_lis = self.is_d_lis(store);
@@ -88,11 +86,8 @@ impl TaskState<'_> {
             }
 
             Pattern::Literal { literal, ty, span } => {
-                let inferred_literal = self.infer_expression(
-                    store,
-                    Expression::Literal { literal, ty, span },
-                    &expected_ty,
-                );
+                let inferred_literal =
+                    self.infer_expression(Expression::Literal { literal, ty, span }, &expected_ty);
 
                 match inferred_literal {
                     Expression::Literal { literal, ty, span } => {
@@ -118,7 +113,7 @@ impl TaskState<'_> {
                         let vars: Vec<Type> =
                             elements.iter().map(|_| self.new_type_var()).collect();
                         let tuple_ty = Type::Tuple(vars.clone());
-                        self.unify(store, &expected_ty, &tuple_ty, &span);
+                        self.unify(&expected_ty, &tuple_ty, &span);
                         vars
                     }
                 };
@@ -126,7 +121,7 @@ impl TaskState<'_> {
                 let (inferred_elements, typed_elements): (Vec<_>, Vec<_>) = elements
                     .into_iter()
                     .zip(element_types.iter())
-                    .map(|(p, ty)| self.infer_pattern_inner(store, p, ty.clone(), kind, false))
+                    .map(|(p, ty)| self.infer_pattern_inner(p, ty.clone(), kind, false))
                     .unzip();
 
                 let pattern = Pattern::Tuple {
@@ -146,15 +141,7 @@ impl TaskState<'_> {
                 rest,
                 span,
                 ..
-            } => self.infer_enum_variant_pattern(
-                store,
-                identifier,
-                fields,
-                rest,
-                span,
-                expected_ty,
-                kind,
-            ),
+            } => self.infer_enum_variant_pattern(identifier, fields, rest, span, expected_ty, kind),
 
             Pattern::Struct {
                 identifier,
@@ -162,15 +149,13 @@ impl TaskState<'_> {
                 rest,
                 span,
                 ..
-            } => {
-                self.infer_struct_pattern(store, identifier, fields, rest, span, expected_ty, kind)
-            }
+            } => self.infer_struct_pattern(identifier, fields, rest, span, expected_ty, kind),
 
             Pattern::WildCard { span } => (Pattern::WildCard { span }, TypedPattern::Wildcard),
 
             Pattern::Unit { span, .. } => {
                 let unit_ty = self.type_unit();
-                self.unify(store, &expected_ty, &unit_ty, &span);
+                self.unify(&expected_ty, &unit_ty, &span);
                 (Pattern::Unit { ty: unit_ty, span }, TypedPattern::Wildcard)
             }
 
@@ -185,14 +170,14 @@ impl TaskState<'_> {
                     _ => {
                         let element_ty = self.new_type_var();
                         let slice_ty = self.type_slice(element_ty.clone());
-                        self.unify(store, &expected_ty, &slice_ty, &span);
+                        self.unify(&expected_ty, &slice_ty, &span);
                         element_ty
                     }
                 };
 
                 let (inferred_prefix, typed_prefix): (Vec<_>, Vec<_>) = prefix
                     .into_iter()
-                    .map(|p| self.infer_pattern_inner(store, p, element_ty.clone(), kind, false))
+                    .map(|p| self.infer_pattern_inner(p, element_ty.clone(), kind, false))
                     .unzip();
 
                 if let RestPattern::Bind { ref name, ref span } = rest {
@@ -230,7 +215,7 @@ impl TaskState<'_> {
             }
 
             Pattern::Or { patterns, span } => {
-                self.infer_or_pattern(store, patterns, span, expected_ty, kind)
+                self.infer_or_pattern(patterns, span, expected_ty, kind)
             }
 
             Pattern::AsBinding {
@@ -267,7 +252,6 @@ impl TaskState<'_> {
                     other => other,
                 };
                 let (inner, typed) = self.infer_pattern_inner(
-                    store,
                     *pattern,
                     expected_ty.clone(),
                     inner_kind,
@@ -333,7 +317,6 @@ impl TaskState<'_> {
     #[allow(clippy::too_many_arguments)]
     fn infer_enum_variant_pattern(
         &mut self,
-        store: &Store,
         identifier: EcoString,
         fields: Vec<Pattern>,
         rest: bool,
@@ -341,10 +324,11 @@ impl TaskState<'_> {
         expected_ty: Type,
         kind: BindingKind,
     ) -> (Pattern, TypedPattern) {
+        let store = self.store;
         if fields.is_empty()
             && identifier.contains('.')
             && let Some(result) =
-                self.try_infer_const_pattern(store, &identifier, rest, kind, &expected_ty, span)
+                self.try_infer_const_pattern(&identifier, rest, kind, &expected_ty, span)
         {
             return result;
         }
@@ -353,7 +337,7 @@ impl TaskState<'_> {
             fields.is_empty() && !identifier.contains('.') && !kind.is_pattern_position();
 
         let bare_variant_ty = if kind.is_match_arm() {
-            self.resolve_bare_variant_type(store, &identifier, &expected_ty)
+            self.resolve_bare_variant_type(&identifier, &expected_ty)
         } else {
             None
         };
@@ -362,8 +346,7 @@ impl TaskState<'_> {
             ty
         } else if let Some(ty) = self.lookup_type(store, &identifier) {
             ty
-        } else if let Some((alias_ty, _)) = self.try_resolve_type_alias_variant(store, &identifier)
-        {
+        } else if let Some((alias_ty, _)) = self.try_resolve_type_alias_variant(&identifier) {
             alias_ty
         } else {
             if is_bare_name {
@@ -371,7 +354,7 @@ impl TaskState<'_> {
                     .push(diagnostics::infer::uppercase_binding(span, &identifier));
                 return (Pattern::WildCard { span }, TypedPattern::Wildcard);
             }
-            let enum_info = self.get_enum_variant_info(store, &expected_ty);
+            let enum_info = self.get_enum_variant_info(&expected_ty);
             let bare_name = unqualified_name(&identifier);
             self.sink
                 .push(diagnostics::infer::enum_variant_constructor_not_found(
@@ -409,14 +392,14 @@ impl TaskState<'_> {
         };
 
         let unify_expected = store.deep_resolve_alias(&expected_ty.resolve_in(&self.env));
-        self.unify(store, &unify_expected, &pattern_ty, &span);
+        self.unify(&unify_expected, &pattern_ty, &span);
 
         let (new_fields, mut typed_fields): (Vec<_>, Vec<_>) = fields
             .iter()
             .enumerate()
             .map(|(i, f)| {
                 let param_ty = params.get(i).cloned().unwrap_or_else(|| Type::Error);
-                self.infer_pattern_inner(store, f.clone(), param_ty, kind, false)
+                self.infer_pattern_inner(f.clone(), param_ty, kind, false)
             })
             .unzip();
 
@@ -486,13 +469,13 @@ impl TaskState<'_> {
 
     fn try_infer_const_pattern(
         &mut self,
-        store: &Store,
         identifier: &str,
         rest: bool,
         kind: BindingKind,
         expected_ty: &Type,
         span: Span,
     ) -> Option<(Pattern, TypedPattern)> {
+        let store = self.store;
         let qualified = self.lookup_qualified_name(store, identifier)?;
         let definition = store.get_definition(&qualified)?;
         if !matches!(definition.body, DefinitionBody::Value { .. }) {
@@ -532,7 +515,7 @@ impl TaskState<'_> {
         let (const_ty, _) = self.instantiate(definition_ty);
         let const_value = definition.const_value().cloned();
         let unify_expected = store.deep_resolve_alias(&expected_ty.resolve_in(&self.env));
-        self.unify(store, &unify_expected, &const_ty, &span);
+        self.unify(&unify_expected, &const_ty, &span);
 
         if let Some(definition_span) = self.get_definition_name_span(store, &qualified) {
             self.facts.add_usage(span, definition_span);
@@ -557,7 +540,6 @@ impl TaskState<'_> {
     #[allow(clippy::too_many_arguments)]
     fn infer_struct_pattern(
         &mut self,
-        store: &Store,
         identifier: EcoString,
         fields: Vec<StructFieldPattern>,
         rest: bool,
@@ -565,12 +547,12 @@ impl TaskState<'_> {
         expected_ty: Type,
         kind: BindingKind,
     ) -> (Pattern, TypedPattern) {
+        let store = self.store;
         if kind.is_match_arm()
             && self
-                .resolve_bare_variant_type(store, &identifier, &expected_ty)
+                .resolve_bare_variant_type(&identifier, &expected_ty)
                 .is_some()
             && let Some(result) = self.try_infer_enum_struct_variant(
-                store,
                 &identifier,
                 &fields,
                 rest,
@@ -585,7 +567,6 @@ impl TaskState<'_> {
         let Some(qualified_name) = self.lookup_qualified_name(store, &identifier) else {
             return self
                 .try_infer_enum_struct_variant(
-                    store,
                     &identifier,
                     &fields,
                     rest,
@@ -611,7 +592,6 @@ impl TaskState<'_> {
         else {
             return self
                 .try_infer_enum_struct_variant(
-                    store,
                     &identifier,
                     &fields,
                     rest,
@@ -633,7 +613,7 @@ impl TaskState<'_> {
 
         let (struct_ty, map) = self.instantiate(&struct_forall_ty);
 
-        self.unify(store, &expected_ty, &struct_ty, &span);
+        self.unify(&expected_ty, &struct_ty, &span);
 
         let scrutinee_is_error = expected_ty.shallow_resolve_in(&self.env).is_error();
 
@@ -681,13 +661,8 @@ impl TaskState<'_> {
                     &field.value,
                     Pattern::Identifier { identifier, .. } if identifier == &field.name
                 );
-                let (inferred_value, typed_value) = self.infer_pattern_inner(
-                    store,
-                    field.value.clone(),
-                    field_ty,
-                    kind,
-                    is_shorthand,
-                );
+                let (inferred_value, typed_value) =
+                    self.infer_pattern_inner(field.value.clone(), field_ty, kind, is_shorthand);
                 (
                     StructFieldPattern {
                         name: field.name.clone(),
@@ -734,14 +709,12 @@ impl TaskState<'_> {
 
     fn infer_or_pattern(
         &mut self,
-        store: &Store,
         patterns: Vec<Pattern>,
         span: Span,
         expected_ty: Type,
         kind: BindingKind,
     ) -> (Pattern, TypedPattern) {
         let (first, first_typed) = self.infer_pattern_inner(
-            store,
             patterns
                 .first()
                 .cloned()
@@ -772,7 +745,7 @@ impl TaskState<'_> {
             self.scopes.push();
             let checkpoint = self.facts.binding_checkpoint();
             let (alt, alt_typed) =
-                self.infer_pattern_inner(store, pattern.clone(), expected_ty.clone(), kind, false);
+                self.infer_pattern_inner(pattern.clone(), expected_ty.clone(), kind, false);
             let alt_bindings = collect_pattern_bindings(&alt);
             let alt_names: HashSet<&str> =
                 alt_bindings.iter().map(|(name, _)| name.as_str()).collect();
@@ -837,22 +810,24 @@ impl TaskState<'_> {
         (pattern, typed)
     }
 
-    fn get_enum_variant_info(&self, store: &Store, ty: &Type) -> Option<(String, Vec<String>)> {
+    fn get_enum_variant_info(&self, ty: &Type) -> Option<(String, Vec<String>)> {
+        let store = self.store;
         let resolved = ty.resolve_in(&self.env);
         let Type::Nominal { id: display_id, .. } = &resolved else {
             return None;
         };
-        let enum_ty = self.peel_to_enum(store, &resolved)?;
+        let enum_ty = self.peel_to_enum(&resolved)?;
         let Type::Nominal { id: enum_id, .. } = &enum_ty else {
             return None;
         };
         let variants = store.variants_of(enum_id.as_str())?;
         let variant_names: Vec<String> = variants.iter().map(|v| v.name.to_string()).collect();
-        let display_name = self.enum_display_name(store, display_id.as_str());
+        let display_name = self.enum_display_name(display_id.as_str());
         Some((display_name, variant_names))
     }
 
-    fn enum_display_name(&self, store: &Store, id: &str) -> String {
+    fn enum_display_name(&self, id: &str) -> String {
+        let store = self.store;
         let simple = unqualified_name(id);
         let Some(module_id) = store.module_for_qualified_name(id) else {
             return simple.to_string();
@@ -874,11 +849,8 @@ impl TaskState<'_> {
     /// Returns the variant constructor type and the variant name if successful.
     /// For tuple variants, returns the function type (e.g., `fn(string) -> Event`).
     /// For unit variants, returns the enum type directly.
-    fn try_resolve_type_alias_variant(
-        &mut self,
-        store: &Store,
-        identifier: &str,
-    ) -> Option<(Type, String)> {
+    fn try_resolve_type_alias_variant(&mut self, identifier: &str) -> Option<(Type, String)> {
+        let store = self.store;
         let (type_part, variant_name) = identifier.rsplit_once('.')?;
 
         let qualified_name = self.lookup_qualified_name(store, type_part)?;
@@ -910,7 +882,8 @@ impl TaskState<'_> {
         None
     }
 
-    fn peel_to_enum(&self, store: &Store, ty: &Type) -> Option<Type> {
+    fn peel_to_enum(&self, ty: &Type) -> Option<Type> {
+        let store = self.store;
         let resolved = store.deep_resolve_alias(&ty.resolve_in(&self.env));
         match &resolved {
             Type::Nominal { id, .. } if store.variants_of(id.as_str()).is_some() => Some(resolved),
@@ -918,16 +891,12 @@ impl TaskState<'_> {
         }
     }
 
-    fn resolve_bare_variant_type(
-        &self,
-        store: &Store,
-        identifier: &str,
-        expected_ty: &Type,
-    ) -> Option<Type> {
+    fn resolve_bare_variant_type(&self, identifier: &str, expected_ty: &Type) -> Option<Type> {
+        let store = self.store;
         if identifier.contains('.') || !identifier.chars().next().is_some_and(char::is_uppercase) {
             return None;
         }
-        let resolved = self.peel_to_enum(store, expected_ty)?;
+        let resolved = self.peel_to_enum(expected_ty)?;
         let Type::Nominal { id, .. } = &resolved else {
             return None;
         };
@@ -946,7 +915,6 @@ impl TaskState<'_> {
     #[allow(clippy::too_many_arguments)]
     fn try_infer_enum_struct_variant(
         &mut self,
-        store: &Store,
         identifier: &str,
         fields: &[StructFieldPattern],
         rest: bool,
@@ -954,8 +922,9 @@ impl TaskState<'_> {
         expected_ty: &Type,
         kind: BindingKind,
     ) -> Option<(Pattern, TypedPattern)> {
+        let store = self.store;
         let bare_variant = if kind.is_match_arm() {
-            self.resolve_bare_variant_type(store, identifier, expected_ty)
+            self.resolve_bare_variant_type(identifier, expected_ty)
                 .map(|ty| (ty, unqualified_name(identifier).to_string()))
         } else {
             None
@@ -967,7 +936,7 @@ impl TaskState<'_> {
             let variant_name = unqualified_name(identifier);
             (ty, variant_name.to_string())
         } else if let Some((alias_ty, variant_name)) =
-            self.try_resolve_type_alias_variant(store, identifier)
+            self.try_resolve_type_alias_variant(identifier)
         {
             (alias_ty, variant_name)
         } else {
@@ -983,7 +952,7 @@ impl TaskState<'_> {
         };
 
         let unify_expected = store.deep_resolve_alias(&expected_ty.resolve_in(&self.env));
-        self.unify(store, &unify_expected, &pattern_ty, span);
+        self.unify(&unify_expected, &pattern_ty, span);
 
         let resolved_ty = pattern_ty.resolve_in(&self.env);
 
@@ -1022,13 +991,8 @@ impl TaskState<'_> {
                     &field.value,
                     Pattern::Identifier { identifier, .. } if identifier == &field.name
                 );
-                let (inferred_value, typed_value) = self.infer_pattern_inner(
-                    store,
-                    field.value.clone(),
-                    field_ty,
-                    kind,
-                    is_shorthand,
-                );
+                let (inferred_value, typed_value) =
+                    self.infer_pattern_inner(field.value.clone(), field_ty, kind, is_shorthand);
                 (
                     StructFieldPattern {
                         name: field.name.clone(),
