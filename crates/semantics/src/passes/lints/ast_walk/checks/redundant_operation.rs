@@ -91,6 +91,13 @@ fn classify<'a>(
                 return None;
             }
         }
+        Remainder => {
+            if int_one(right) {
+                (left, Outcome::Constant("0"))
+            } else {
+                return None;
+            }
+        }
         BitwiseOr | BitwiseXor => {
             if int_zero(right) {
                 (left, Outcome::Identity)

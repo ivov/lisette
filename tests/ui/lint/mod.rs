@@ -1214,6 +1214,30 @@ fn main() {
 }
 
 #[test]
+fn redundant_operation_modulo_one() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let x = 5
+  let _ = x % 1
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_operation_modulo_reversed_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let x = 5
+  let _ = 1 % x
+}
+"#
+    );
+}
+
+#[test]
 fn negated_equality_equal() {
     assert_lint_snapshot!(
         r#"
