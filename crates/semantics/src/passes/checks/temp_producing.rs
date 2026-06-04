@@ -1,8 +1,10 @@
+use crate::passes::walk::NodeCtx;
 use diagnostics::LocalSink;
 use syntax::ast::{Expression, FormatStringPart, Literal};
 use syntax::program::ReceiverCoercion;
 
-pub(crate) fn check(expression: &Expression, sink: &LocalSink) {
+pub(crate) fn check(expression: &Expression, ctx: &NodeCtx) {
+    let sink = ctx.sink;
     match expression {
         Expression::Call { args, spread, .. } => {
             for arg in args {

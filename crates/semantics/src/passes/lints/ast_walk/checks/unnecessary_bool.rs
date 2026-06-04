@@ -1,9 +1,9 @@
-use diagnostics::LisetteDiagnostic;
+use crate::passes::walk::NodeCtx;
 use syntax::ast::Expression;
 
 use super::helpers::bool_literal;
 
-pub fn check_unnecessary_bool(expression: &Expression, diagnostics: &mut Vec<LisetteDiagnostic>) {
+pub fn check_unnecessary_bool(expression: &Expression, ctx: &NodeCtx) {
     let Expression::If {
         consequence,
         alternative,
@@ -26,7 +26,8 @@ pub fn check_unnecessary_bool(expression: &Expression, diagnostics: &mut Vec<Lis
         return;
     }
 
-    diagnostics.push(diagnostics::lint::unnecessary_bool(span, then_value));
+    ctx.sink
+        .push(diagnostics::lint::unnecessary_bool(span, then_value));
 }
 
 fn block_single_bool(expression: &Expression) -> Option<bool> {

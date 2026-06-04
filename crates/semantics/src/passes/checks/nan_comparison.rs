@@ -1,9 +1,9 @@
-use diagnostics::LocalSink;
+use crate::passes::walk::NodeCtx;
 use syntax::ast::{BinaryOperator, Expression};
 
 use crate::call_target::resolve_call;
 
-pub(crate) fn check(expression: &Expression, sink: &LocalSink) {
+pub(crate) fn check(expression: &Expression, ctx: &NodeCtx) {
     if let Expression::Binary {
         operator,
         left,
@@ -19,7 +19,8 @@ pub(crate) fn check(expression: &Expression, sink: &LocalSink) {
         ) && (is_math_nan_call(left.unwrap_parens()) || is_math_nan_call(right.unwrap_parens()))
         {
             let always_true = matches!(operator, NotEqual);
-            sink.push(diagnostics::infer::nan_comparison(span, always_true));
+            ctx.sink
+                .push(diagnostics::infer::nan_comparison(span, always_true));
         }
     }
 }

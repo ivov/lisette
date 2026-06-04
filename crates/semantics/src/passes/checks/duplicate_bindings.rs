@@ -4,13 +4,15 @@
 //! Walks every `Pattern` site in the typed AST. Mirrors the behaviour of the
 //! previous inline check in `checker/infer/checks.rs::check_duplicate_bindings`.
 
+use crate::passes::walk::NodeCtx;
 use diagnostics::LocalSink;
 use rustc_hash::FxHashMap as HashMap;
 use syntax::ast::{Binding, Expression, MatchArm, Pattern, SelectArm, SelectArmPattern, Span};
 
 use crate::checker::infer::expressions::patterns::collect_pattern_bindings;
 
-pub(crate) fn check(expression: &Expression, sink: &LocalSink) {
+pub(crate) fn check(expression: &Expression, ctx: &NodeCtx) {
+    let sink = ctx.sink;
     match expression {
         Expression::Let { binding, .. } | Expression::For { binding, .. } => {
             visit_binding(binding, sink);

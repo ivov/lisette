@@ -6,19 +6,21 @@ use diagnostics::LocalSink;
 use syntax::ast::{Expression, Span, UnaryOperator};
 use syntax::types::{Type, unqualified_name};
 
+use crate::passes::walk::NodeCtx;
 use crate::store::Store;
 
-pub(crate) fn check(expression: &Expression, store: &Store, sink: &LocalSink) {
+pub(crate) fn check(expression: &Expression, ctx: &NodeCtx) {
+    let sink = ctx.sink;
     match expression {
         Expression::Assignment { target, span, .. } => {
-            check_newtype_field_assignment(target, *span, store, sink);
+            check_newtype_field_assignment(target, *span, ctx.store, sink);
             if has_map_field_in_chain(target) {
                 sink.push(diagnostics::infer::map_field_chain_assignment(*span));
             }
         }
         Expression::Reference {
             expression, span, ..
-        } if targets_newtype_field(expression, store) => {
+        } if targets_newtype_field(expression, ctx.store) => {
             sink.push(diagnostics::infer::reference_through_newtype(*span));
         }
         _ => {}

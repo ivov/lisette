@@ -1,7 +1,7 @@
-use diagnostics::LisetteDiagnostic;
+use crate::passes::walk::NodeCtx;
 use syntax::ast::Expression;
 
-pub fn check_empty_match_arm(expression: &Expression, diagnostics: &mut Vec<LisetteDiagnostic>) {
+pub fn check_empty_match_arm(expression: &Expression, ctx: &NodeCtx) {
     let Expression::Match { arms, .. } = expression else {
         return;
     };
@@ -10,7 +10,7 @@ pub fn check_empty_match_arm(expression: &Expression, diagnostics: &mut Vec<Lise
         if let Expression::Block { items, span, .. } = &*arm.expression
             && items.is_empty()
         {
-            diagnostics.push(diagnostics::lint::empty_match_arm(span));
+            ctx.sink.push(diagnostics::lint::empty_match_arm(span));
         }
     }
 }

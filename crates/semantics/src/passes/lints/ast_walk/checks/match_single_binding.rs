@@ -1,10 +1,7 @@
-use diagnostics::LisetteDiagnostic;
+use crate::passes::walk::NodeCtx;
 use syntax::ast::{Expression, MatchOrigin, Pattern, Span};
 
-pub fn check_match_single_binding(
-    expression: &Expression,
-    diagnostics: &mut Vec<LisetteDiagnostic>,
-) {
+pub fn check_match_single_binding(expression: &Expression, ctx: &NodeCtx) {
     let Expression::Match {
         arms,
         origin: MatchOrigin::Explicit,
@@ -28,7 +25,7 @@ pub fn check_match_single_binding(
     };
 
     let match_keyword_span = Span::new(span.file_id, span.byte_offset, 5);
-    diagnostics.push(diagnostics::lint::match_single_binding(
+    ctx.sink.push(diagnostics::lint::match_single_binding(
         &match_keyword_span,
         identifier,
     ));

@@ -3,11 +3,12 @@
 //! named `self` has the right type. Methods with an unrelated first parameter
 //! are treated as static methods and skipped.
 
+use crate::passes::walk::NodeCtx;
 use diagnostics::LocalSink;
 use syntax::ast::{Expression, Pattern};
 use syntax::types::Type;
 
-pub(crate) fn check(expression: &Expression, sink: &LocalSink) {
+pub(crate) fn check(expression: &Expression, ctx: &NodeCtx) {
     if let Expression::ImplBlock {
         ty: impl_ty,
         methods,
@@ -15,7 +16,7 @@ pub(crate) fn check(expression: &Expression, sink: &LocalSink) {
     } = expression
     {
         for method in methods {
-            check_method_receiver(method, impl_ty, sink);
+            check_method_receiver(method, impl_ty, ctx.sink);
         }
     }
 }

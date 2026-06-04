@@ -1,10 +1,7 @@
-use diagnostics::LisetteDiagnostic;
+use crate::passes::walk::NodeCtx;
 use syntax::ast::{Expression, Literal};
 
-pub fn check_match_literal_collection(
-    expression: &Expression,
-    diagnostics: &mut Vec<LisetteDiagnostic>,
-) {
+pub fn check_match_literal_collection(expression: &Expression, ctx: &NodeCtx) {
     let Expression::Match { subject, .. } = expression else {
         return;
     };
@@ -26,6 +23,6 @@ pub fn check_match_literal_collection(
     };
 
     if let Some(span) = span {
-        diagnostics.push(diagnostics::lint::match_on_literal(span));
+        ctx.sink.push(diagnostics::lint::match_on_literal(span));
     }
 }

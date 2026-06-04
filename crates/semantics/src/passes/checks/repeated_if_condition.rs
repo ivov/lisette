@@ -1,7 +1,7 @@
-use diagnostics::LocalSink;
+use crate::passes::walk::NodeCtx;
 use syntax::ast::Expression;
 
-pub(crate) fn check(expression: &Expression, sink: &LocalSink) {
+pub(crate) fn check(expression: &Expression, ctx: &NodeCtx) {
     if let Expression::If {
         condition,
         alternative,
@@ -15,7 +15,7 @@ pub(crate) fn check(expression: &Expression, sink: &LocalSink) {
         && is_side_effect_free(next_condition)
         && expressions_equivalent(condition, next_condition)
     {
-        sink.push(diagnostics::infer::repeated_if_condition(
+        ctx.sink.push(diagnostics::infer::repeated_if_condition(
             &next_condition.get_span(),
         ));
     }

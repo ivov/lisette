@@ -1,15 +1,11 @@
-use diagnostics::LisetteDiagnostic;
+use crate::passes::walk::NodeCtx;
 use rustc_hash::FxHashMap as HashMap;
 use syntax::ast::{BinaryOperator, Expression, Span};
 use syntax::program::File;
 
 use super::helpers::{expressions_equivalent, is_side_effect_free};
 
-pub fn check_duplicate_logical_operand(
-    expression: &Expression,
-    files: &HashMap<u32, File>,
-    diagnostics: &mut Vec<LisetteDiagnostic>,
-) {
+pub fn check_duplicate_logical_operand(expression: &Expression, ctx: &NodeCtx) {
     let Expression::Binary {
         operator,
         left,
@@ -38,11 +34,11 @@ pub fn check_duplicate_logical_operand(
         return;
     }
 
-    let Some(operand_text) = source_text(left.get_span(), files) else {
+    let Some(operand_text) = source_text(left.get_span(), ctx.files) else {
         return;
     };
 
-    diagnostics.push(diagnostics::lint::duplicate_logical_operand(
+    ctx.sink.push(diagnostics::lint::duplicate_logical_operand(
         span,
         operand_text,
     ));

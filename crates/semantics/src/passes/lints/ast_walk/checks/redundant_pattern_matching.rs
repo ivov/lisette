@@ -1,13 +1,10 @@
-use diagnostics::LisetteDiagnostic;
+use crate::passes::walk::NodeCtx;
 use syntax::ast::{Expression, MatchArm, MatchOrigin, Pattern, Span};
 use syntax::types::unqualified_name;
 
 use super::helpers::bool_literal;
 
-pub fn check_redundant_pattern_matching(
-    expression: &Expression,
-    diagnostics: &mut Vec<LisetteDiagnostic>,
-) {
+pub fn check_redundant_pattern_matching(expression: &Expression, ctx: &NodeCtx) {
     let Expression::Match {
         subject,
         arms,
@@ -59,7 +56,7 @@ pub fn check_redundant_pattern_matching(
     };
 
     let match_keyword_span = Span::new(span.file_id, span.byte_offset, 5);
-    diagnostics.push(diagnostics::lint::redundant_pattern_matching(
+    ctx.sink.push(diagnostics::lint::redundant_pattern_matching(
         &match_keyword_span,
         predicate,
     ));

@@ -1,7 +1,7 @@
-use diagnostics::LocalSink;
+use crate::passes::walk::NodeCtx;
 use syntax::ast::{Expression, UnaryOperator};
 
-pub(crate) fn check(expression: &Expression, sink: &LocalSink) {
+pub(crate) fn check(expression: &Expression, ctx: &NodeCtx) {
     if let Expression::Range {
         start: Some(start),
         end: Some(end),
@@ -12,7 +12,7 @@ pub(crate) fn check(expression: &Expression, sink: &LocalSink) {
         && let Some(end_value) = signed_integer_literal(end.unwrap_parens())
         && start_value > end_value
     {
-        sink.push(diagnostics::infer::empty_range(span));
+        ctx.sink.push(diagnostics::infer::empty_range(span));
     }
 }
 

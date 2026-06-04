@@ -1,10 +1,6 @@
-use diagnostics::LocalSink;
-use rustc_hash::FxHashMap as HashMap;
-use syntax::ast::{BindingId, Expression};
+use syntax::ast::Expression;
 
-use crate::facts::BindingFact;
-use crate::passes::lints::ast_walk::visitor::visit_ast;
-use crate::store::Store;
+use crate::passes::walk::{NodeCheck, NodeCtx, walk_nodes};
 
 use super::{
     const_naming, decimal_file_mode, duplicate_bindings, empty_infinite_loop, empty_range,
@@ -12,8 +8,6 @@ use super::{
     oversized_shift, predeclared_shadowing, pub_type_export, receivers, repeated_if_condition,
     stringer_signature, temp_producing, unchanging_loop_condition,
 };
-
-type NodeCheck = fn(&Expression, &LocalSink);
 
 const NODE_CHECKS: &[NodeCheck] = &[
     nan_comparison::check,
@@ -30,28 +24,12 @@ const NODE_CHECKS: &[NodeCheck] = &[
     predeclared_shadowing::check,
     pub_type_export::check,
     temp_producing::check,
+    newtype::check,
+    enum_variant_value::check,
+    unchanging_loop_condition::check,
+    const_naming::check,
 ];
 
-pub(crate) fn run(
-    items: &[Expression],
-    store: &Store,
-    bindings: &HashMap<BindingId, BindingFact>,
-    is_d_lis: bool,
-    sink: &LocalSink,
-) {
-    visit_ast(
-        items,
-        &mut |expression| {
-            for check in NODE_CHECKS {
-                check(expression, sink);
-            }
-            newtype::check(expression, store, sink);
-            enum_variant_value::check(expression, store, sink);
-            unchanging_loop_condition::check(expression, bindings, sink);
-            if !is_d_lis {
-                const_naming::check(expression, sink);
-            }
-        },
-        &mut |_| {},
-    );
+pub(crate) fn run(items: &[Expression], ctx: &NodeCtx) {
+    walk_nodes(items, ctx, NODE_CHECKS, &[]);
 }

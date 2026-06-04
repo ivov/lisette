@@ -1,14 +1,10 @@
-use diagnostics::LisetteDiagnostic;
 use syntax::ast::{Expression, Pattern};
 use syntax::program::{CallKind, DotAccessKind};
 
 use crate::facts::Facts;
+use crate::passes::walk::NodeCtx;
 
-pub fn check_redundant_closure(
-    expression: &Expression,
-    facts: &Facts,
-    diagnostics: &mut Vec<LisetteDiagnostic>,
-) {
+pub fn check_redundant_closure(expression: &Expression, ctx: &NodeCtx) {
     let Expression::Lambda {
         params, body, span, ..
     } = expression
@@ -50,11 +46,13 @@ pub fn check_redundant_closure(
         param_names.push(identifier.as_str());
     }
 
-    let Some(callee_name) = hoistable_callee(callee.unwrap_parens(), &param_names, facts) else {
+    let Some(callee_name) = hoistable_callee(callee.unwrap_parens(), &param_names, ctx.facts)
+    else {
         return;
     };
 
-    diagnostics.push(diagnostics::lint::redundant_closure(span, &callee_name));
+    ctx.sink
+        .push(diagnostics::lint::redundant_closure(span, &callee_name));
 }
 
 fn lambda_body(body: &Expression) -> &Expression {

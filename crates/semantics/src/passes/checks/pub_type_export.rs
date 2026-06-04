@@ -4,17 +4,17 @@
 //! unexported Go definition while cross-module references reach for the
 //! exported spelling, so downstream packages fail to compile.
 
-use diagnostics::LocalSink;
+use crate::passes::walk::NodeCtx;
 use syntax::ast::{Expression, Span, Visibility};
 
 use crate::passes::lints::ast_walk::casing::to_pascal_case;
 
-pub(crate) fn check(expression: &Expression, sink: &LocalSink) {
+pub(crate) fn check(expression: &Expression, ctx: &NodeCtx) {
     if let Some((name, name_span, visibility)) = type_declaration(expression)
         && visibility.is_public()
         && !is_exportable(name)
     {
-        sink.push(diagnostics::infer::pub_type_not_exportable(
+        ctx.sink.push(diagnostics::infer::pub_type_not_exportable(
             name,
             &to_pascal_case(name),
             *name_span,

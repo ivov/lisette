@@ -6,7 +6,7 @@ use syntax::ast::{Expression, FormatStringPart, Literal};
 use syntax::program::{Definition, DefinitionBody, File};
 use syntax::types::Type;
 
-use crate::passes::lints::ast_walk::visitor::visit_ast;
+use crate::passes::walk::visit_ast;
 use crate::store::Store;
 
 pub(crate) fn run(

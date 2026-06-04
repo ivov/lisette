@@ -1,4 +1,4 @@
-use diagnostics::LisetteDiagnostic;
+use crate::passes::walk::NodeCtx;
 use syntax::ast::Expression;
 
 use super::helpers::{expressions_equivalent, is_side_effect_free};
@@ -17,7 +17,7 @@ const DUP_ARG_TARGETS: &[(&str, &str, usize, usize)] = &[
     ("go:strings", "ReplaceAll", 1, 2),
 ];
 
-pub fn check_dup_arg(expression: &Expression, diagnostics: &mut Vec<LisetteDiagnostic>) {
+pub fn check_dup_arg(expression: &Expression, ctx: &NodeCtx) {
     let Expression::Call {
         expression: callee,
         args,
@@ -55,7 +55,7 @@ pub fn check_dup_arg(expression: &Expression, diagnostics: &mut Vec<LisetteDiagn
         if !expressions_equivalent(arg_a, arg_b) {
             return;
         }
-        diagnostics.push(diagnostics::lint::duplicate_arguments(
+        ctx.sink.push(diagnostics::lint::duplicate_arguments(
             span,
             target_module,
             target_function,

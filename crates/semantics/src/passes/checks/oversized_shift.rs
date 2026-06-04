@@ -1,8 +1,8 @@
-use diagnostics::LocalSink;
+use crate::passes::walk::NodeCtx;
 use syntax::ast::{BinaryOperator, Expression};
 use syntax::types::SimpleKind;
 
-pub(crate) fn check(expression: &Expression, sink: &LocalSink) {
+pub(crate) fn check(expression: &Expression, ctx: &NodeCtx) {
     if let Expression::Binary {
         operator,
         left,
@@ -19,7 +19,7 @@ pub(crate) fn check(expression: &Expression, sink: &LocalSink) {
         && let Some(value) = right.as_integer()
         && value >= u64::from(bit_width)
     {
-        sink.push(diagnostics::infer::oversized_shift(
+        ctx.sink.push(diagnostics::infer::oversized_shift(
             span,
             kind.leaf_name(),
             bit_width,

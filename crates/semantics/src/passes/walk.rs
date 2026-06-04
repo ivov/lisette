@@ -1,7 +1,52 @@
+use std::cell::RefCell;
+
+use diagnostics::LocalSink;
+use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use syntax::ast::{
     Expression, FormatStringPart, Literal, MatchArm, Pattern, RestPattern, SelectArm,
-    SelectArmPattern,
+    SelectArmPattern, Span,
 };
+use syntax::program::File;
+
+use crate::facts::Facts;
+use crate::store::Store;
+
+pub(crate) struct NodeCtx<'a> {
+    pub store: &'a Store,
+    pub facts: &'a Facts,
+    pub files: &'a HashMap<u32, File>,
+    pub module_id: &'a str,
+    pub source: &'a str,
+    pub is_d_lis: bool,
+    pub sink: &'a LocalSink,
+    /// Per-walk scratch: literal spans already claimed by a parent node (e.g. a
+    /// negation's magnitude), so a check does not also judge them standalone.
+    pub claimed_spans: RefCell<HashSet<Span>>,
+}
+
+pub(crate) type NodeCheck = fn(&Expression, &NodeCtx);
+pub(crate) type PatternCheck = fn(&Pattern, &NodeCtx);
+
+pub(crate) fn walk_nodes(
+    ast: &[Expression],
+    ctx: &NodeCtx,
+    expr_checks: &[NodeCheck],
+    pattern_checks: &[PatternCheck],
+) {
+    visit_ast(
+        ast,
+        &mut |expression| {
+            for check in expr_checks {
+                check(expression, ctx);
+            }
+        },
+        &mut |pattern| {
+            for check in pattern_checks {
+                check(pattern, ctx);
+            }
+        },
+    );
+}
 
 pub fn visit_ast<E, P>(ast: &[Expression], expression_visitor: &mut E, pattern_visitor: &mut P)
 where

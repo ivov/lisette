@@ -283,6 +283,17 @@ pub fn unsigned_comparison(span: &Span, always_true: bool) -> LisetteDiagnostic 
         )
 }
 
+pub fn non_negative_comparison(span: &Span, always_true: bool) -> LisetteDiagnostic {
+    let result = if always_true { "true" } else { "false" };
+
+    LisetteDiagnostic::warn(format!("Comparison is always {result}"))
+        .with_lint_code("non_negative_comparison")
+        .with_span_label(span, format!("always {result}"))
+        .with_help(
+            "A length is never negative, so this comparison always has the same result. Did you mean to compare against a different value?",
+        )
+}
+
 pub fn redundant_operation(span: &Span, always: Option<&str>) -> LisetteDiagnostic {
     match always {
         Some(value) => LisetteDiagnostic::info(format!("Operation always evaluates to `{value}`"))

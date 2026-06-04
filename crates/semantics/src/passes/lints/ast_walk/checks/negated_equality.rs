@@ -1,7 +1,7 @@
-use diagnostics::LisetteDiagnostic;
+use crate::passes::walk::NodeCtx;
 use syntax::ast::{BinaryOperator, Expression, UnaryOperator};
 
-pub fn check_negated_equality(expression: &Expression, diagnostics: &mut Vec<LisetteDiagnostic>) {
+pub fn check_negated_equality(expression: &Expression, ctx: &NodeCtx) {
     let Expression::Unary {
         operator: UnaryOperator::Not,
         expression: operand,
@@ -22,5 +22,6 @@ pub fn check_negated_equality(expression: &Expression, diagnostics: &mut Vec<Lis
         _ => return,
     };
 
-    diagnostics.push(diagnostics::lint::negated_equality(span, is_equal));
+    ctx.sink
+        .push(diagnostics::lint::negated_equality(span, is_equal));
 }

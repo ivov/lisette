@@ -1,12 +1,9 @@
-use diagnostics::LisetteDiagnostic;
+use crate::passes::walk::NodeCtx;
 use syntax::ast::Expression;
 
 use super::helpers::{expressions_equivalent, is_side_effect_free};
 
-pub fn check_manual_compound_assignment(
-    expression: &Expression,
-    diagnostics: &mut Vec<LisetteDiagnostic>,
-) {
+pub fn check_manual_compound_assignment(expression: &Expression, ctx: &NodeCtx) {
     let Expression::Assignment {
         target,
         value,
@@ -29,5 +26,6 @@ pub fn check_manual_compound_assignment(
         return;
     }
 
-    diagnostics.push(diagnostics::lint::manual_compound_assignment(span, symbol));
+    ctx.sink
+        .push(diagnostics::lint::manual_compound_assignment(span, symbol));
 }

@@ -1,10 +1,10 @@
-use diagnostics::LisetteDiagnostic;
+use crate::passes::walk::NodeCtx;
 use rustc_hash::FxHashSet as HashSet;
 use syntax::ast::{Expression, Literal};
 
 const CUTSET_FUNCTIONS: &[&str] = &["Trim", "TrimLeft", "TrimRight"];
 
-pub fn check_duplicate_cutset(expression: &Expression, diagnostics: &mut Vec<LisetteDiagnostic>) {
+pub fn check_duplicate_cutset(expression: &Expression, ctx: &NodeCtx) {
     let Expression::Call {
         expression: callee,
         args,
@@ -41,7 +41,8 @@ pub fn check_duplicate_cutset(expression: &Expression, diagnostics: &mut Vec<Lis
     };
 
     if has_duplicate_char(value) {
-        diagnostics.push(diagnostics::lint::trim_charset_misuse(span, member));
+        ctx.sink
+            .push(diagnostics::lint::trim_charset_misuse(span, member));
     }
 }
 

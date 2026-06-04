@@ -1,11 +1,8 @@
-use std::cell::RefCell;
-
-use diagnostics::LisetteDiagnostic;
-use rustc_hash::FxHashSet as HashSet;
 use syntax::ast::{Expression, Literal, Span, UnaryOperator};
 use syntax::program::CallKind;
 use syntax::types::{SimpleKind, Type};
 
+use crate::passes::walk::NodeCtx;
 use crate::store::{ClosedDomain, ClosedMember, DomainValue, Store};
 
 /// Flags an out-of-domain literal targeting a `#[go(closed_domain)]` named
@@ -21,29 +18,24 @@ use crate::store::{ClosedDomain, ClosedMember, DomainValue, Store};
 /// The explicit `as` conversion (`7 as time.Weekday`) is the escape hatch and
 /// does not warn.
 ///
-/// `negated_operands` collects the spans of magnitude literals owned by a parent
+/// `ctx.claimed_spans` collects the spans of magnitude literals owned by a parent
 /// negation. The visitor walks parents before children, so the negation arm
 /// claims its magnitude before the literal arm reaches it; this stops `-1` from
 /// being judged on the magnitude `1` alone.
-pub fn check_out_of_domain_value(
-    expression: &Expression,
-    store: &Store,
-    negated_operands: &RefCell<HashSet<Span>>,
-    diagnostics: &mut Vec<LisetteDiagnostic>,
-) {
+pub fn check_out_of_domain_value(expression: &Expression, ctx: &NodeCtx) {
     match expression {
         Expression::Literal { literal, ty, span } => {
-            let Some(domain) = closed_domain_of(ty, store) else {
+            let Some(domain) = closed_domain_of(ty, ctx.store) else {
                 return;
             };
-            if negated_operands.borrow().contains(span) {
+            if ctx.claimed_spans.borrow().contains(span) {
                 return;
             }
             let Some(value) = DomainValue::from_literal(literal, domain.base) else {
                 return;
             };
             if !is_member(domain, &value) {
-                emit(*span, domain, diagnostics);
+                emit(*span, domain, ctx);
             }
         }
 
@@ -53,15 +45,15 @@ pub fn check_out_of_domain_value(
             ty,
             span,
         } => {
-            let Some(domain) = closed_domain_of(ty, store) else {
+            let Some(domain) = closed_domain_of(ty, ctx.store) else {
                 return;
             };
             let Some((value, magnitude_span)) = negative_value(inner, domain.base) else {
                 return;
             };
-            negated_operands.borrow_mut().insert(magnitude_span);
+            ctx.claimed_spans.borrow_mut().insert(magnitude_span);
             if !is_member(domain, &value) {
-                emit(*span, domain, diagnostics);
+                emit(*span, domain, ctx);
             }
         }
 
@@ -71,7 +63,7 @@ pub fn check_out_of_domain_value(
             ty,
             ..
         } => {
-            let Some(domain) = closed_domain_of(ty, store) else {
+            let Some(domain) = closed_domain_of(ty, ctx.store) else {
                 return;
             };
             let Some((value, span)) = args
@@ -81,7 +73,7 @@ pub fn check_out_of_domain_value(
                 return;
             };
             if !is_member(domain, &value) {
-                emit(span, domain, diagnostics);
+                emit(span, domain, ctx);
             }
         }
 
@@ -143,8 +135,8 @@ fn is_member(domain: &ClosedDomain, value: &DomainValue) -> bool {
     domain.members.iter().any(|member| member.value == *value)
 }
 
-fn emit(span: Span, domain: &ClosedDomain, diagnostics: &mut Vec<LisetteDiagnostic>) {
-    diagnostics.push(diagnostics::lint::out_of_domain_value(
+fn emit(span: Span, domain: &ClosedDomain, ctx: &NodeCtx) {
+    ctx.sink.push(diagnostics::lint::out_of_domain_value(
         &span,
         &domain.type_display,
         &render_valid(domain),

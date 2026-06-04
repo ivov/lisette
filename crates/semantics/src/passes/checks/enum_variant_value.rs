@@ -2,9 +2,10 @@ use diagnostics::LocalSink;
 use syntax::ast::{Expression, Span};
 use syntax::types::{Type, unqualified_name};
 
+use crate::passes::walk::NodeCtx;
 use crate::store::Store;
 
-pub(crate) fn check(expression: &Expression, store: &Store, sink: &LocalSink) {
+pub(crate) fn check(expression: &Expression, ctx: &NodeCtx) {
     match expression {
         Expression::Identifier {
             qualified: Some(qualified),
@@ -13,7 +14,7 @@ pub(crate) fn check(expression: &Expression, store: &Store, sink: &LocalSink) {
             ..
         } => {
             if let Some((enum_id, variant_name)) = qualified.rsplit_once('.') {
-                check_variant(enum_id, variant_name, value, *span, store, sink);
+                check_variant(enum_id, variant_name, value, *span, ctx.store, ctx.sink);
             }
         }
         Expression::DotAccess {
@@ -24,7 +25,7 @@ pub(crate) fn check(expression: &Expression, store: &Store, sink: &LocalSink) {
         } => {
             if let Type::Nominal { id, .. } = base.get_type().strip_refs() {
                 let display = format!("{}.{}", unqualified_name(&id), member);
-                check_variant(&id, member, &display, *span, store, sink);
+                check_variant(&id, member, &display, *span, ctx.store, ctx.sink);
             }
         }
         _ => {}

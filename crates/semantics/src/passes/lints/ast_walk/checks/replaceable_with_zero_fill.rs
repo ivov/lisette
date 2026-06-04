@@ -1,21 +1,15 @@
-use diagnostics::LisetteDiagnostic;
 use rustc_hash::FxHashSet as HashSet;
 use syntax::ast::{Expression, Literal, Span, StructFieldAssignment, StructSpread};
 use syntax::program::DefinitionBody;
 use syntax::types::{SubstitutionMap, Type, substitute, unqualified_name};
 
 use crate::checker::infer::expressions::struct_call::has_zero;
+use crate::passes::walk::NodeCtx;
 use crate::store::Store;
 
 const ZERO_FIELD_THRESHOLD: usize = 3;
 
-pub fn check_replaceable_with_zero_fill(
-    expression: &Expression,
-    store: &Store,
-    module_id: &str,
-    source: &str,
-    diagnostics: &mut Vec<LisetteDiagnostic>,
-) {
+pub fn check_replaceable_with_zero_fill(expression: &Expression, ctx: &NodeCtx) {
     let Expression::StructCall {
         name,
         field_assignments,
@@ -39,19 +33,19 @@ pub fn check_replaceable_with_zero_fill(
         return;
     }
 
-    let Some(unspecified) = unspecified_fields(store, ty, name, field_assignments) else {
+    let Some(unspecified) = unspecified_fields(ctx.store, ty, name, field_assignments) else {
         return;
     };
     if !unspecified.is_empty() {
         return;
     }
-    if !rewrite_would_typecheck(store, ty, name, field_assignments, module_id) {
+    if !rewrite_would_typecheck(ctx.store, ty, name, field_assignments, ctx.module_id) {
         return;
     }
 
-    let kept = render_kept_fields(source, field_assignments);
+    let kept = render_kept_fields(ctx.source, field_assignments);
     let owner_span = Span::new(span.file_id, span.byte_offset, name.len() as u32);
-    diagnostics.push(diagnostics::lint::replaceable_with_zero_fill(
+    ctx.sink.push(diagnostics::lint::replaceable_with_zero_fill(
         &owner_span,
         &kept,
         name,
