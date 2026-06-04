@@ -1,11 +1,11 @@
-use diagnostics::LisetteDiagnostic;
-use syntax::ast::{BinaryOperator, Expression, Literal};
+use syntax::ast::{BinaryOperator, Expression};
 use syntax::program::CallKind;
 
-pub fn check_non_negative_comparison(
-    expression: &Expression,
-    diagnostics: &mut Vec<LisetteDiagnostic>,
-) {
+use crate::passes::walk::NodeCtx;
+
+use super::helpers::{flip_comparison, is_zero_literal};
+
+pub fn check_non_negative_comparison(expression: &Expression, ctx: &NodeCtx) {
     let Expression::Binary {
         operator,
         left,
@@ -40,7 +40,7 @@ pub fn check_non_negative_comparison(
         _ => return,
     };
 
-    diagnostics.push(diagnostics::lint::non_negative_comparison(
+    ctx.sink.push(diagnostics::lint::non_negative_comparison(
         span,
         always_true,
     ));
@@ -73,26 +73,5 @@ fn native_method_name(callee: &Expression) -> Option<&str> {
             Some(value.split_once('.').map_or(value, |(_, m)| m))
         }
         _ => None,
-    }
-}
-
-fn is_zero_literal(expression: &Expression) -> bool {
-    matches!(
-        expression,
-        Expression::Literal {
-            literal: Literal::Integer { value: 0, .. },
-            ..
-        }
-    )
-}
-
-fn flip_comparison(operator: BinaryOperator) -> BinaryOperator {
-    use BinaryOperator::*;
-    match operator {
-        LessThan => GreaterThan,
-        GreaterThan => LessThan,
-        LessThanOrEqual => GreaterThanOrEqual,
-        GreaterThanOrEqual => LessThanOrEqual,
-        other => other,
     }
 }

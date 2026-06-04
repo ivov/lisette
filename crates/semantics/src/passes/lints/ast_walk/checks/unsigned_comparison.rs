@@ -1,10 +1,9 @@
-use diagnostics::LisetteDiagnostic;
-use syntax::ast::{BinaryOperator, Expression, Literal};
+use crate::passes::walk::NodeCtx;
+use syntax::ast::{BinaryOperator, Expression};
 
-pub fn check_unsigned_comparison(
-    expression: &Expression,
-    diagnostics: &mut Vec<LisetteDiagnostic>,
-) {
+use super::helpers::{flip_comparison, is_zero_literal};
+
+pub fn check_unsigned_comparison(expression: &Expression, ctx: &NodeCtx) {
     let Expression::Binary {
         operator,
         left,
@@ -39,26 +38,6 @@ pub fn check_unsigned_comparison(
         _ => return,
     };
 
-    diagnostics.push(diagnostics::lint::unsigned_comparison(span, always_true));
-}
-
-fn is_zero_literal(expression: &Expression) -> bool {
-    matches!(
-        expression,
-        Expression::Literal {
-            literal: Literal::Integer { value: 0, .. },
-            ..
-        }
-    )
-}
-
-fn flip_comparison(operator: BinaryOperator) -> BinaryOperator {
-    use BinaryOperator::*;
-    match operator {
-        LessThan => GreaterThan,
-        LessThanOrEqual => GreaterThanOrEqual,
-        GreaterThan => LessThan,
-        GreaterThanOrEqual => LessThanOrEqual,
-        other => other,
-    }
+    ctx.sink
+        .push(diagnostics::lint::unsigned_comparison(span, always_true));
 }

@@ -1,7 +1,7 @@
-use diagnostics::LisetteDiagnostic;
+use crate::passes::walk::NodeCtx;
 use syntax::ast::{Expression, Span};
 
-pub fn check_loop_runs_once(expression: &Expression, diagnostics: &mut Vec<LisetteDiagnostic>) {
+pub fn check_loop_runs_once(expression: &Expression, ctx: &NodeCtx) {
     let (body, span, keyword_len) = match expression {
         Expression::Loop { body, span, .. } => (body.as_ref(), span, 4),
         Expression::While { body, span, .. } | Expression::WhileLet { body, span, .. } => {
@@ -13,7 +13,7 @@ pub fn check_loop_runs_once(expression: &Expression, diagnostics: &mut Vec<Liset
 
     if always_exits(body) && !reenters_loop(body) {
         let keyword = Span::new(span.file_id, span.byte_offset, keyword_len);
-        diagnostics.push(diagnostics::lint::loop_runs_once(&keyword));
+        ctx.sink.push(diagnostics::lint::loop_runs_once(&keyword));
     }
 }
 

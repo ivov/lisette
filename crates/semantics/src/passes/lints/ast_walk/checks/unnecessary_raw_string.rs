@@ -1,10 +1,7 @@
-use diagnostics::LisetteDiagnostic;
+use crate::passes::walk::NodeCtx;
 use syntax::ast::{Expression, Literal, Pattern};
 
-pub fn check_unnecessary_raw_string_expression(
-    expression: &Expression,
-    diagnostics: &mut Vec<LisetteDiagnostic>,
-) {
+pub fn check_unnecessary_raw_string_expression(expression: &Expression, ctx: &NodeCtx) {
     let Expression::Literal {
         literal: Literal::String { value, raw: true },
         span,
@@ -14,14 +11,12 @@ pub fn check_unnecessary_raw_string_expression(
         return;
     };
     if !value.contains('\\') {
-        diagnostics.push(diagnostics::lint::unnecessary_raw_string(span));
+        ctx.sink
+            .push(diagnostics::lint::unnecessary_raw_string(span));
     }
 }
 
-pub fn check_unnecessary_raw_string_pattern(
-    pattern: &Pattern,
-    diagnostics: &mut Vec<LisetteDiagnostic>,
-) {
+pub fn check_unnecessary_raw_string_pattern(pattern: &Pattern, ctx: &NodeCtx) {
     let Pattern::Literal {
         literal: Literal::String { value, raw: true },
         span,
@@ -31,6 +26,7 @@ pub fn check_unnecessary_raw_string_pattern(
         return;
     };
     if !value.contains('\\') {
-        diagnostics.push(diagnostics::lint::unnecessary_raw_string(span));
+        ctx.sink
+            .push(diagnostics::lint::unnecessary_raw_string(span));
     }
 }

@@ -1,10 +1,7 @@
-use diagnostics::LisetteDiagnostic;
+use crate::passes::walk::NodeCtx;
 use syntax::ast::Expression;
 
-pub fn check_excess_parens_on_condition(
-    expression: &Expression,
-    diagnostics: &mut Vec<LisetteDiagnostic>,
-) {
+pub fn check_excess_parens_on_condition(expression: &Expression, ctx: &NodeCtx) {
     let (condition, keyword) = match expression {
         Expression::If { condition, .. } => (condition.as_ref(), "if"),
         Expression::While { condition, .. } => (condition.as_ref(), "while"),
@@ -13,6 +10,7 @@ pub fn check_excess_parens_on_condition(
     };
 
     if let Expression::Paren { span, .. } = condition {
-        diagnostics.push(diagnostics::lint::unnecessary_parens(span, keyword));
+        ctx.sink
+            .push(diagnostics::lint::unnecessary_parens(span, keyword));
     }
 }

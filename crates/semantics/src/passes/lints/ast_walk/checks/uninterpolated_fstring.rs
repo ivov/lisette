@@ -1,10 +1,7 @@
-use diagnostics::LisetteDiagnostic;
+use crate::passes::walk::NodeCtx;
 use syntax::ast::{Expression, FormatStringPart, Literal};
 
-pub fn check_uninterpolated_fstring(
-    expression: &Expression,
-    diagnostics: &mut Vec<LisetteDiagnostic>,
-) {
+pub fn check_uninterpolated_fstring(expression: &Expression, ctx: &NodeCtx) {
     let Expression::Literal {
         literal: Literal::FormatString(parts),
         span,
@@ -19,6 +16,7 @@ pub fn check_uninterpolated_fstring(
         .any(|p| matches!(p, FormatStringPart::Expression(_)));
 
     if !has_interpolation {
-        diagnostics.push(diagnostics::lint::uninterpolated_fstring(span));
+        ctx.sink
+            .push(diagnostics::lint::uninterpolated_fstring(span));
     }
 }

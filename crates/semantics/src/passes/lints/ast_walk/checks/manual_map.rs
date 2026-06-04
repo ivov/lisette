@@ -1,10 +1,10 @@
-use diagnostics::LisetteDiagnostic;
+use crate::passes::walk::NodeCtx;
 use syntax::ast::{Expression, MatchArm, MatchOrigin, Pattern, Span};
 use syntax::types::unqualified_name;
 
 use super::helpers::{enum_variant_binding, has_escaping_control_flow};
 
-pub fn check_manual_map(expression: &Expression, diagnostics: &mut Vec<LisetteDiagnostic>) {
+pub fn check_manual_map(expression: &Expression, ctx: &NodeCtx) {
     let Expression::Match {
         subject,
         arms,
@@ -42,7 +42,8 @@ pub fn check_manual_map(expression: &Expression, diagnostics: &mut Vec<LisetteDi
     }
 
     let match_keyword_span = Span::new(span.file_id, span.byte_offset, 5);
-    diagnostics.push(diagnostics::lint::manual_map(&match_keyword_span));
+    ctx.sink
+        .push(diagnostics::lint::manual_map(&match_keyword_span));
 }
 
 fn check_option_map(arm_a: &MatchArm, arm_b: &MatchArm) -> bool {

@@ -1,12 +1,9 @@
-use diagnostics::LisetteDiagnostic;
+use crate::passes::walk::NodeCtx;
 use syntax::ast::Expression;
 
 use super::helpers::{expressions_equivalent, is_empty_block};
 
-pub fn check_identical_if_branches(
-    expression: &Expression,
-    diagnostics: &mut Vec<LisetteDiagnostic>,
-) {
+pub fn check_identical_if_branches(expression: &Expression, ctx: &NodeCtx) {
     let Expression::If {
         consequence,
         alternative,
@@ -36,5 +33,6 @@ pub fn check_identical_if_branches(
         return;
     }
 
-    diagnostics.push(diagnostics::lint::identical_if_branches(span));
+    ctx.sink
+        .push(diagnostics::lint::identical_if_branches(span));
 }

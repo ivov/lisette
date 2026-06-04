@@ -4,14 +4,15 @@
 //! emitted Go would have two methods named `String` (or `GoString`) and fail
 //! to compile with "method redeclared".
 
+use crate::passes::walk::NodeCtx;
 use diagnostics::LocalSink;
 use syntax::ast::Expression;
 use syntax::types::{SimpleKind, Type};
 
-pub(crate) fn check(expression: &Expression, sink: &LocalSink) {
+pub(crate) fn check(expression: &Expression, ctx: &NodeCtx) {
     if let Expression::ImplBlock { methods, .. } = expression {
         for method in methods {
-            check_method(method, sink);
+            check_method(method, ctx.sink);
         }
     }
 }

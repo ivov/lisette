@@ -1,4 +1,5 @@
-use diagnostics::LisetteDiagnostic;
+use crate::passes::walk::NodeCtx;
+use diagnostics::LocalSink;
 use rustc_hash::FxHashSet as HashSet;
 use syntax::ast::{Attribute, AttributeArg, Expression, StructFieldDefinition};
 
@@ -16,28 +17,29 @@ pub(crate) const SERIALIZATION_KEYS: &[&str] = &[
 /// Recognized attributes that are not serialization keys.
 const OTHER_ATTRIBUTES: &[&str] = &["tag", "allow", "iterate", "display"];
 
-pub fn check_attributes(expression: &Expression, diagnostics: &mut Vec<LisetteDiagnostic>) {
+pub fn check_attributes(expression: &Expression, ctx: &NodeCtx) {
     let attributes = match expression {
         Expression::Function { attributes, .. } => attributes,
         _ => return,
     };
 
     for attribute in attributes {
-        check_unknown_attribute(attribute, diagnostics);
+        check_unknown_attribute(attribute, ctx.sink);
     }
 }
 
-pub fn check_enum_attributes(expression: &Expression, diagnostics: &mut Vec<LisetteDiagnostic>) {
+pub fn check_enum_attributes(expression: &Expression, ctx: &NodeCtx) {
     let Expression::Enum { attributes, .. } = expression else {
         return;
     };
 
     for attribute in attributes {
-        check_unknown_attribute(attribute, diagnostics);
+        check_unknown_attribute(attribute, ctx.sink);
     }
 }
 
-pub fn check_struct_attributes(expression: &Expression, diagnostics: &mut Vec<LisetteDiagnostic>) {
+pub fn check_struct_attributes(expression: &Expression, ctx: &NodeCtx) {
+    let sink = ctx.sink;
     let Expression::Struct {
         attributes: struct_attributes,
         fields,
@@ -48,9 +50,9 @@ pub fn check_struct_attributes(expression: &Expression, diagnostics: &mut Vec<Li
     };
 
     for attribute in struct_attributes {
-        check_unknown_attribute(attribute, diagnostics);
-        check_unknown_tag_options(attribute, diagnostics);
-        check_conflicting_case_transforms(attribute, diagnostics);
+        check_unknown_attribute(attribute, sink);
+        check_unknown_tag_options(attribute, sink);
+        check_conflicting_case_transforms(attribute, sink);
     }
 
     let struct_keys: HashSet<&str> = struct_attributes
@@ -60,15 +62,15 @@ pub fn check_struct_attributes(expression: &Expression, diagnostics: &mut Vec<Li
         .collect();
 
     for field in fields {
-        check_field_attributes(field, &struct_keys, diagnostics);
+        check_field_attributes(field, &struct_keys, sink);
     }
 }
 
-fn check_unknown_attribute(attribute: &Attribute, diagnostics: &mut Vec<LisetteDiagnostic>) {
+fn check_unknown_attribute(attribute: &Attribute, sink: &LocalSink) {
     let name = &attribute.name;
 
     if !is_known_attribute(name) {
-        diagnostics.push(diagnostics::lint::unknown_attribute(
+        sink.push(diagnostics::lint::unknown_attribute(
             &attribute.span,
             name,
             &known_attributes(),
@@ -79,21 +81,21 @@ fn check_unknown_attribute(attribute: &Attribute, diagnostics: &mut Vec<LisetteD
 fn check_field_attributes(
     field: &StructFieldDefinition,
     struct_keys: &HashSet<&str>,
-    diagnostics: &mut Vec<LisetteDiagnostic>,
+    sink: &LocalSink,
 ) {
     let mut seen_keys: Vec<(&str, &Attribute)> = Vec::new();
 
     for attribute in &field.attributes {
         let attribute_key = get_attribute_key(attribute);
 
-        check_unknown_attribute(attribute, diagnostics);
-        check_unknown_tag_options(attribute, diagnostics);
+        check_unknown_attribute(attribute, sink);
+        check_unknown_tag_options(attribute, sink);
 
         if let Some(key) = attribute_key
             && is_serialization_key(key)
             && !struct_keys.contains(key)
         {
-            diagnostics.push(
+            sink.push(
                 diagnostics::attribute::field_attribute_without_struct_attribute(
                     &attribute.span,
                     key,
@@ -103,7 +105,7 @@ fn check_field_attributes(
 
         if let Some(key) = attribute_key {
             if let Some((_, first_attribute)) = seen_keys.iter().find(|(k, _)| *k == key) {
-                diagnostics.push(diagnostics::attribute::duplicate_tag_key(
+                sink.push(diagnostics::attribute::duplicate_tag_key(
                     &attribute.span,
                     key,
                     &first_attribute.span,
@@ -114,10 +116,10 @@ fn check_field_attributes(
         }
 
         // Check for conflicting case transforms
-        check_conflicting_case_transforms(attribute, diagnostics);
+        check_conflicting_case_transforms(attribute, sink);
 
         // Check for raw tags that should use predefined aliases
-        check_tag_with_alias(attribute, diagnostics);
+        check_tag_with_alias(attribute, sink);
     }
 }
 
@@ -147,7 +149,7 @@ fn extract_key_from_raw(raw: &str) -> Option<&str> {
 /// Known tag options.
 const KNOWN_TAG_OPTIONS: &[&str] = &["snake_case", "camel_case", "omitempty", "skip", "string"];
 
-fn check_unknown_tag_options(attribute: &Attribute, diagnostics: &mut Vec<LisetteDiagnostic>) {
+fn check_unknown_tag_options(attribute: &Attribute, sink: &LocalSink) {
     // Only check serialization attributes (json, db, etc.) and structured #[tag("key", ...)]
     let is_serialization = is_serialization_key(&attribute.name);
     let is_structured_tag = attribute.name == "tag"
@@ -173,13 +175,13 @@ fn check_unknown_tag_options(attribute: &Attribute, diagnostics: &mut Vec<Lisett
         match arg {
             AttributeArg::Flag(flag) => {
                 if !KNOWN_TAG_OPTIONS.contains(&flag.as_str()) {
-                    diagnostics.push(diagnostics::lint::unknown_tag_option(&attribute.span, flag));
+                    sink.push(diagnostics::lint::unknown_tag_option(&attribute.span, flag));
                 }
             }
             AttributeArg::NegatedFlag(flag) => {
                 // Only omitempty can be negated
                 if flag != "omitempty" {
-                    diagnostics.push(diagnostics::lint::unknown_tag_option(
+                    sink.push(diagnostics::lint::unknown_tag_option(
                         &attribute.span,
                         &format!("!{}", flag),
                     ));
@@ -191,10 +193,7 @@ fn check_unknown_tag_options(attribute: &Attribute, diagnostics: &mut Vec<Lisett
     }
 }
 
-fn check_conflicting_case_transforms(
-    attribute: &Attribute,
-    diagnostics: &mut Vec<LisetteDiagnostic>,
-) {
+fn check_conflicting_case_transforms(attribute: &Attribute, sink: &LocalSink) {
     let mut has_snake_case = false;
     let mut has_camel_case = false;
 
@@ -209,14 +208,14 @@ fn check_conflicting_case_transforms(
     }
 
     if has_snake_case && has_camel_case {
-        diagnostics.push(diagnostics::attribute::conflicting_case_transforms(
+        sink.push(diagnostics::attribute::conflicting_case_transforms(
             &attribute.span,
         ));
     }
 }
 
 /// Checks if a #[tag(...)] uses a key that has a predefined alias.
-fn check_tag_with_alias(attribute: &Attribute, diagnostics: &mut Vec<LisetteDiagnostic>) {
+fn check_tag_with_alias(attribute: &Attribute, sink: &LocalSink) {
     // Only check #[tag(...)] attributes
     if attribute.name != "tag" {
         return;
@@ -233,7 +232,7 @@ fn check_tag_with_alias(attribute: &Attribute, diagnostics: &mut Vec<LisetteDiag
     if let Some(key) = key
         && is_serialization_key(key)
     {
-        diagnostics.push(diagnostics::lint::tag_has_alias(&attribute.span, key));
+        sink.push(diagnostics::lint::tag_has_alias(&attribute.span, key));
     }
 }
 

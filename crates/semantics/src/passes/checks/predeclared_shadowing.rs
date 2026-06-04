@@ -4,14 +4,15 @@
 //! constraints, so a user declaration of the same name shadows the builtin and
 //! the generated Go fails to compile.
 
+use crate::passes::walk::NodeCtx;
 use diagnostics::LocalSink;
 use syntax::ast::{Expression, Generic};
 
-pub(crate) fn check(expression: &Expression, sink: &LocalSink) {
-    check_type_name(expression, sink);
+pub(crate) fn check(expression: &Expression, ctx: &NodeCtx) {
+    check_type_name(expression, ctx.sink);
     for generic in generics_of(expression) {
         if is_reserved(&generic.name) {
-            sink.push(diagnostics::infer::predeclared_type_shadowed(
+            ctx.sink.push(diagnostics::infer::predeclared_type_shadowed(
                 &generic.name,
                 generic.span,
             ));

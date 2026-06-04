@@ -1,12 +1,9 @@
-use diagnostics::LisetteDiagnostic;
+use crate::passes::walk::NodeCtx;
 use syntax::ast::{BinaryOperator, Expression};
 
 use super::helpers::bool_literal;
 
-pub fn check_bool_literal_comparison(
-    expression: &Expression,
-    diagnostics: &mut Vec<LisetteDiagnostic>,
-) {
+pub fn check_bool_literal_comparison(expression: &Expression, ctx: &NodeCtx) {
     let Expression::Binary {
         operator,
         left,
@@ -49,7 +46,7 @@ pub fn check_bool_literal_comparison(
         other_text
     };
 
-    diagnostics.push(diagnostics::lint::bool_literal_comparison(
+    ctx.sink.push(diagnostics::lint::bool_literal_comparison(
         span,
         &replacement,
     ));

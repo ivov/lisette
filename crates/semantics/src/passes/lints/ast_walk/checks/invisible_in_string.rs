@@ -1,10 +1,7 @@
-use diagnostics::LisetteDiagnostic;
+use crate::passes::walk::NodeCtx;
 use syntax::ast::{Expression, FormatStringPart, Literal, Pattern};
 
-pub fn check_invisible_in_string_expression(
-    expression: &Expression,
-    diagnostics: &mut Vec<LisetteDiagnostic>,
-) {
+pub fn check_invisible_in_string_expression(expression: &Expression, ctx: &NodeCtx) {
     let Expression::Literal { literal, span, .. } = expression else {
         return;
     };
@@ -17,16 +14,13 @@ pub fn check_invisible_in_string_expression(
         _ => None,
     };
     if let Some((codepoint, name, is_bidi)) = found {
-        diagnostics.push(diagnostics::lint::invisible_in_string(
+        ctx.sink.push(diagnostics::lint::invisible_in_string(
             span, codepoint, name, is_bidi,
         ));
     }
 }
 
-pub fn check_invisible_in_string_pattern(
-    pattern: &Pattern,
-    diagnostics: &mut Vec<LisetteDiagnostic>,
-) {
+pub fn check_invisible_in_string_pattern(pattern: &Pattern, ctx: &NodeCtx) {
     let Pattern::Literal {
         literal: Literal::String { value, .. },
         span,
@@ -36,7 +30,7 @@ pub fn check_invisible_in_string_pattern(
         return;
     };
     if let Some((codepoint, name, is_bidi)) = first_invisible(value) {
-        diagnostics.push(diagnostics::lint::invisible_in_string(
+        ctx.sink.push(diagnostics::lint::invisible_in_string(
             span, codepoint, name, is_bidi,
         ));
     }

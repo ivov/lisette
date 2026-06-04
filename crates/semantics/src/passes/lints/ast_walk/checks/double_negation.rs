@@ -1,7 +1,7 @@
-use diagnostics::LisetteDiagnostic;
+use crate::passes::walk::NodeCtx;
 use syntax::ast::{Expression, Span, UnaryOperator};
 
-pub fn check_double_negation(expression: &Expression, diagnostics: &mut Vec<LisetteDiagnostic>) {
+pub fn check_double_negation(expression: &Expression, ctx: &NodeCtx) {
     let Expression::Unary {
         operator,
         expression: operand,
@@ -36,5 +36,6 @@ pub fn check_double_negation(expression: &Expression, diagnostics: &mut Vec<Lise
     );
 
     let is_bool = *operator == UnaryOperator::Not;
-    diagnostics.push(diagnostics::lint::double_negation(&operators_span, is_bool));
+    ctx.sink
+        .push(diagnostics::lint::double_negation(&operators_span, is_bool));
 }

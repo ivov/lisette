@@ -1,7 +1,7 @@
-use diagnostics::LisetteDiagnostic;
+use crate::passes::walk::NodeCtx;
 use syntax::ast::{BinaryOperator, Expression};
 
-pub fn check_self_comparison(expression: &Expression, diagnostics: &mut Vec<LisetteDiagnostic>) {
+pub fn check_self_comparison(expression: &Expression, ctx: &NodeCtx) {
     let Expression::Binary {
         operator,
         left,
@@ -43,7 +43,7 @@ pub fn check_self_comparison(expression: &Expression, diagnostics: &mut Vec<Lise
     }
 
     let always_true = matches!(operator, Equal | LessThanOrEqual | GreaterThanOrEqual);
-    diagnostics.push(diagnostics::lint::tautological_comparison(
+    ctx.sink.push(diagnostics::lint::tautological_comparison(
         span,
         always_true,
     ));

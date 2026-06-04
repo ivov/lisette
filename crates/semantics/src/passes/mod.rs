@@ -8,6 +8,7 @@ pub(crate) mod checks;
 mod deferred;
 mod fact_producers;
 mod lints;
+pub(crate) mod walk;
 
 pub use lints::Lint;
 

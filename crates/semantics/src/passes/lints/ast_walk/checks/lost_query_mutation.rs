@@ -1,15 +1,10 @@
-use diagnostics::LisetteDiagnostic;
 use syntax::ast::Expression;
 
-use crate::store::Store;
+use crate::passes::walk::NodeCtx;
 
 const MUTATING_METHODS: &[&str] = &["Set", "Add", "Del"];
 
-pub fn check_lost_query_mutation(
-    expression: &Expression,
-    store: &Store,
-    diagnostics: &mut Vec<LisetteDiagnostic>,
-) {
+pub fn check_lost_query_mutation(expression: &Expression, ctx: &NodeCtx) {
     let Expression::Call {
         expression: callee,
         span,
@@ -53,10 +48,11 @@ pub fn check_lost_query_mutation(
         return;
     }
 
-    let receiver_ty = store.peel_alias(&url.get_type().strip_refs());
+    let receiver_ty = ctx.store.peel_alias(&url.get_type().strip_refs());
     if receiver_ty.strip_refs().get_qualified_id() != Some("go:net/url.URL") {
         return;
     }
 
-    diagnostics.push(diagnostics::lint::lost_query_mutation(span, member));
+    ctx.sink
+        .push(diagnostics::lint::lost_query_mutation(span, member));
 }

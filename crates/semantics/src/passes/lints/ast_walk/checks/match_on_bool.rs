@@ -1,9 +1,9 @@
-use diagnostics::LisetteDiagnostic;
+use crate::passes::walk::NodeCtx;
 use syntax::ast::{Expression, Literal, MatchOrigin, Pattern, Span};
 
 use super::helpers::expressions_equivalent;
 
-pub fn check_match_on_bool(expression: &Expression, diagnostics: &mut Vec<LisetteDiagnostic>) {
+pub fn check_match_on_bool(expression: &Expression, ctx: &NodeCtx) {
     let Expression::Match {
         arms,
         origin: MatchOrigin::Explicit,
@@ -37,7 +37,8 @@ pub fn check_match_on_bool(expression: &Expression, diagnostics: &mut Vec<Lisett
     }
 
     let match_keyword_span = Span::new(span.file_id, span.byte_offset, 5);
-    diagnostics.push(diagnostics::lint::match_on_bool(&match_keyword_span));
+    ctx.sink
+        .push(diagnostics::lint::match_on_bool(&match_keyword_span));
 }
 
 fn bool_pattern(pattern: &Pattern) -> Option<bool> {

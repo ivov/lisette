@@ -14,10 +14,12 @@
 //! `let pat else { ... }` relaxes the or-pattern rule (the `else` arm handles
 //! the refutable case) but still rejects bare literal patterns.
 
+use crate::passes::walk::NodeCtx;
 use diagnostics::LocalSink;
 use syntax::ast::{Binding, Expression, Pattern, SelectArm, SelectArmPattern};
 
-pub(crate) fn check(expression: &Expression, sink: &LocalSink) {
+pub(crate) fn check(expression: &Expression, ctx: &NodeCtx) {
+    let sink = ctx.sink;
     match expression {
         Expression::Let {
             binding,

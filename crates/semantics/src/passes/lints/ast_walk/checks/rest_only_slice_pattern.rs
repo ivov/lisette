@@ -1,10 +1,10 @@
-use diagnostics::LisetteDiagnostic;
+use crate::passes::walk::NodeCtx;
 use syntax::ast::{Pattern, RestPattern};
 
-pub fn check_rest_only_slice_pattern(pattern: &Pattern, diagnostics: &mut Vec<LisetteDiagnostic>) {
+pub fn check_rest_only_slice_pattern(pattern: &Pattern, ctx: &NodeCtx) {
     if let Pattern::Or { patterns, .. } = pattern {
         for p in patterns {
-            check_rest_only_slice_pattern(p, diagnostics);
+            check_rest_only_slice_pattern(p, ctx);
         }
         return;
     }
@@ -22,6 +22,7 @@ pub fn check_rest_only_slice_pattern(pattern: &Pattern, diagnostics: &mut Vec<Li
             _ => "Use `let _` instead".to_string(),
         };
 
-        diagnostics.push(diagnostics::lint::rest_only_slice_pattern(span, help));
+        ctx.sink
+            .push(diagnostics::lint::rest_only_slice_pattern(span, help));
     }
 }

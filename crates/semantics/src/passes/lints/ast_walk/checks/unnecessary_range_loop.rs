@@ -1,10 +1,7 @@
-use diagnostics::LisetteDiagnostic;
+use crate::passes::walk::NodeCtx;
 use syntax::ast::{BindingId, Expression};
 
-pub fn check_unnecessary_range_loop(
-    expression: &Expression,
-    diagnostics: &mut Vec<LisetteDiagnostic>,
-) {
+pub fn check_unnecessary_range_loop(expression: &Expression, ctx: &NodeCtx) {
     let Expression::For {
         iterable,
         body,
@@ -40,7 +37,8 @@ pub fn check_unnecessary_range_loop(
     walk.visit(body);
 
     if walk.found && !walk.blocked {
-        diagnostics.push(diagnostics::lint::unnecessary_range_loop(span, collection));
+        ctx.sink
+            .push(diagnostics::lint::unnecessary_range_loop(span, collection));
     }
 }
 

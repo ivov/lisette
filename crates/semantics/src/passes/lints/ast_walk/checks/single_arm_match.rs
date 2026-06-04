@@ -1,10 +1,10 @@
-use diagnostics::LisetteDiagnostic;
+use crate::passes::walk::NodeCtx;
 use syntax::ast::{Expression, MatchOrigin, Pattern, Span};
 use syntax::types::unqualified_name;
 
 use crate::is_trivial_expression;
 
-pub fn check_single_arm_match(expression: &Expression, diagnostics: &mut Vec<LisetteDiagnostic>) {
+pub fn check_single_arm_match(expression: &Expression, ctx: &NodeCtx) {
     let Expression::Match {
         arms, origin, span, ..
     } = expression
@@ -40,7 +40,7 @@ pub fn check_single_arm_match(expression: &Expression, diagnostics: &mut Vec<Lis
         let pattern_string = pattern_to_suggestion(&first.pattern);
         let match_keyword_span = Span::new(span.file_id, span.byte_offset, 5);
 
-        diagnostics.push(diagnostics::lint::single_arm_match(
+        ctx.sink.push(diagnostics::lint::single_arm_match(
             &match_keyword_span,
             &pattern_string,
         ));

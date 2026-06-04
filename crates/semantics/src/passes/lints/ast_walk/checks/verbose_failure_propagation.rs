@@ -1,13 +1,10 @@
-use diagnostics::LisetteDiagnostic;
+use crate::passes::walk::NodeCtx;
 use syntax::ast::{Expression, MatchArm, MatchOrigin, Pattern, Span};
 use syntax::types::unqualified_name;
 
 use super::helpers::enum_variant_binding;
 
-pub fn check_verbose_failure_propagation(
-    expression: &Expression,
-    diagnostics: &mut Vec<LisetteDiagnostic>,
-) {
+pub fn check_verbose_failure_propagation(expression: &Expression, ctx: &NodeCtx) {
     let Expression::Match {
         subject,
         arms,
@@ -38,9 +35,10 @@ pub fn check_verbose_failure_propagation(
             MatchOrigin::IfLet { .. } => 2,
         };
         let keyword_span = Span::new(span.file_id, span.byte_offset, keyword_len);
-        diagnostics.push(diagnostics::lint::verbose_failure_propagation(
-            &keyword_span,
-        ));
+        ctx.sink
+            .push(diagnostics::lint::verbose_failure_propagation(
+                &keyword_span,
+            ));
     }
 }
 

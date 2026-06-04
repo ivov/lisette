@@ -1,7 +1,7 @@
-use diagnostics::LocalSink;
+use crate::passes::walk::NodeCtx;
 use syntax::ast::{Expression, Literal};
 
-pub(crate) fn check(expression: &Expression, sink: &LocalSink) {
+pub(crate) fn check(expression: &Expression, ctx: &NodeCtx) {
     let Expression::IndexedAccess {
         expression: receiver,
         index,
@@ -28,7 +28,7 @@ pub(crate) fn check(expression: &Expression, sink: &LocalSink) {
         && let Some(value) = index.as_integer()
         && value >= elements.len() as u64
     {
-        sink.push(diagnostics::infer::index_out_of_bounds(
+        ctx.sink.push(diagnostics::infer::index_out_of_bounds(
             span,
             &value.to_string(),
         ));
@@ -50,7 +50,7 @@ pub(crate) fn check(expression: &Expression, sink: &LocalSink) {
         && expressions_equivalent(receiver, call_receiver)
     {
         let receiver_text = receiver.root_identifier().unwrap_or("xs");
-        sink.push(diagnostics::infer::index_out_of_bounds(
+        ctx.sink.push(diagnostics::infer::index_out_of_bounds(
             span,
             &format!("{receiver_text}.length()"),
         ));

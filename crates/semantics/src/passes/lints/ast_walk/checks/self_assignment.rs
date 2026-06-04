@@ -1,7 +1,7 @@
-use diagnostics::LisetteDiagnostic;
+use crate::passes::walk::NodeCtx;
 use syntax::ast::Expression;
 
-pub fn check_self_assignment(expression: &Expression, diagnostics: &mut Vec<LisetteDiagnostic>) {
+pub fn check_self_assignment(expression: &Expression, ctx: &NodeCtx) {
     let Expression::Assignment {
         target,
         value,
@@ -28,5 +28,5 @@ pub fn check_self_assignment(expression: &Expression, diagnostics: &mut Vec<Lise
         return;
     }
 
-    diagnostics.push(diagnostics::lint::self_assignment(span));
+    ctx.sink.push(diagnostics::lint::self_assignment(span));
 }

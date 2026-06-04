@@ -1,8 +1,10 @@
-use diagnostics::LisetteDiagnostic;
-use syntax::ast::{BinaryOperator, Expression, Literal};
+use crate::passes::walk::NodeCtx;
+use syntax::ast::{BinaryOperator, Expression};
 use syntax::types::{CompoundKind, Type};
 
-pub fn check_manual_is_empty(expression: &Expression, diagnostics: &mut Vec<LisetteDiagnostic>) {
+use super::helpers::{flip_comparison, is_zero_literal};
+
+pub fn check_manual_is_empty(expression: &Expression, ctx: &NodeCtx) {
     let Expression::Binary {
         operator,
         left,
@@ -53,7 +55,8 @@ pub fn check_manual_is_empty(expression: &Expression, diagnostics: &mut Vec<Lise
         format!("{receiver_text}.is_empty()")
     };
 
-    diagnostics.push(diagnostics::lint::manual_is_empty(span, &replacement));
+    ctx.sink
+        .push(diagnostics::lint::manual_is_empty(span, &replacement));
 }
 
 fn length_call_receiver(expression: &Expression) -> Option<&Expression> {
@@ -89,25 +92,4 @@ fn type_has_is_empty(ty: &Type) -> bool {
         || ty.is_channel()
         || ty.is_native(CompoundKind::Sender)
         || ty.is_receiver()
-}
-
-fn is_zero_literal(expression: &Expression) -> bool {
-    matches!(
-        expression,
-        Expression::Literal {
-            literal: Literal::Integer { value: 0, .. },
-            ..
-        }
-    )
-}
-
-fn flip_comparison(operator: BinaryOperator) -> BinaryOperator {
-    use BinaryOperator::*;
-    match operator {
-        LessThan => GreaterThan,
-        GreaterThan => LessThan,
-        LessThanOrEqual => GreaterThanOrEqual,
-        GreaterThanOrEqual => LessThanOrEqual,
-        other => other,
-    }
 }

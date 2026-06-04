@@ -1,7 +1,38 @@
-use syntax::ast::{Expression, Literal, Pattern};
+use syntax::ast::{BinaryOperator, Expression, Literal, Pattern};
 use syntax::types::unqualified_name;
 
-use super::super::visitor::visit_ast;
+use crate::passes::walk::visit_ast;
+
+pub(super) fn is_zero_literal(expression: &Expression) -> bool {
+    matches!(
+        expression,
+        Expression::Literal {
+            literal: Literal::Integer { value: 0, .. },
+            ..
+        }
+    )
+}
+
+pub(super) fn is_one_literal(expression: &Expression) -> bool {
+    matches!(
+        expression,
+        Expression::Literal {
+            literal: Literal::Integer { value: 1, .. },
+            ..
+        }
+    )
+}
+
+pub(super) fn flip_comparison(operator: BinaryOperator) -> BinaryOperator {
+    use BinaryOperator::*;
+    match operator {
+        LessThan => GreaterThan,
+        GreaterThan => LessThan,
+        LessThanOrEqual => GreaterThanOrEqual,
+        GreaterThanOrEqual => LessThanOrEqual,
+        other => other,
+    }
+}
 
 pub(super) fn bool_literal(expression: &Expression) -> Option<bool> {
     if let Expression::Literal {

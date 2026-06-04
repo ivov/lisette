@@ -1,21 +1,17 @@
-use diagnostics::LocalSink;
 use rustc_hash::FxHashMap as HashMap;
 use syntax::ast::{BindingId, Expression, UnaryOperator};
 
 use crate::facts::BindingFact;
+use crate::passes::walk::NodeCtx;
 
-pub(crate) fn check(
-    expression: &Expression,
-    bindings: &HashMap<BindingId, BindingFact>,
-    sink: &LocalSink,
-) {
+pub(crate) fn check(expression: &Expression, ctx: &NodeCtx) {
     if let Expression::While {
         condition, body, ..
     } = expression
-        && condition_is_unchanging(condition, bindings)
+        && condition_is_unchanging(condition, &ctx.facts.bindings)
         && !body_has_exit(body)
     {
-        sink.push(diagnostics::infer::unchanging_loop_condition(
+        ctx.sink.push(diagnostics::infer::unchanging_loop_condition(
             &condition.get_span(),
         ));
     }

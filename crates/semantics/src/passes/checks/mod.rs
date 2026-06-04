@@ -29,12 +29,12 @@ pub(crate) mod visibility;
 
 use diagnostics::{LocalSink, PatternIssue};
 use rayon::prelude::*;
-use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
-use syntax::ast::BindingId;
+use rustc_hash::FxHashSet as HashSet;
 use syntax::program::{File, Module};
 
 use crate::context::AnalysisContext;
-use crate::facts::{BindingFact, Facts};
+use crate::facts::Facts;
+use crate::passes::walk::NodeCtx;
 use crate::store::Store;
 
 use super::PARALLEL_THRESHOLD;
@@ -61,8 +61,8 @@ pub(crate) fn run_all(analysis: &AnalysisContext, facts: &mut Facts, sink: &Loca
             .then_with(|| a.1.id.cmp(&b.1.id))
     });
 
-    let or_spans = &facts.or_pattern_error_spans;
-    let bindings = &facts.bindings;
+    let facts_ref: &Facts = &*facts;
+    let or_spans = &facts_ref.or_pattern_error_spans;
 
     let ufcs_methods = analysis.ufcs_methods;
 
@@ -73,7 +73,7 @@ pub(crate) fn run_all(analysis: &AnalysisContext, facts: &mut Facts, sink: &Loca
                 module,
                 file,
                 store,
-                bindings,
+                facts_ref,
                 ufcs_methods,
                 sink,
                 &pattern_ctx,
@@ -93,7 +93,7 @@ pub(crate) fn run_all(analysis: &AnalysisContext, facts: &mut Facts, sink: &Loca
                 module,
                 file,
                 store,
-                bindings,
+                facts_ref,
                 ufcs_methods,
                 &local_sink,
                 &pattern_ctx,
@@ -116,12 +116,21 @@ fn run_file_checks(
     module: &Module,
     file: &File,
     store: &Store,
-    bindings: &HashMap<BindingId, BindingFact>,
+    facts: &Facts,
     ufcs_methods: &HashSet<(String, String)>,
     sink: &LocalSink,
     pattern_ctx: &pattern_analysis::Context,
 ) {
-    node_walk::run(&file.items, store, bindings, file.is_d_lis(), sink);
+    let ctx = NodeCtx {
+        store,
+        facts,
+        files: &module.files,
+        module_id: &module.id,
+        source: &file.source,
+        is_d_lis: file.is_d_lis(),
+        sink,
+    };
+    node_walk::run(&file.items, &ctx);
     interpolation_stringer::run(&file.items, store, ufcs_methods, sink);
 
     prelude_shadowing::run(&file.items, store, sink);

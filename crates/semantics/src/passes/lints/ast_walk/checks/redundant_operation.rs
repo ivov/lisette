@@ -1,8 +1,8 @@
-use diagnostics::LisetteDiagnostic;
-use syntax::ast::{BinaryOperator, Expression, Literal};
+use crate::passes::walk::NodeCtx;
+use syntax::ast::{BinaryOperator, Expression};
 use syntax::types::Type;
 
-use super::helpers::{bool_literal, is_side_effect_free};
+use super::helpers::{bool_literal, is_one_literal, is_side_effect_free, is_zero_literal};
 
 enum Outcome {
     /// The operation returns its other operand unchanged (`x + 0`, `x && true`).
@@ -11,10 +11,7 @@ enum Outcome {
     Constant(&'static str),
 }
 
-pub fn check_redundant_operation(
-    expression: &Expression,
-    diagnostics: &mut Vec<LisetteDiagnostic>,
-) {
+pub fn check_redundant_operation(expression: &Expression, ctx: &NodeCtx) {
     let Expression::Binary {
         operator,
         left,
@@ -37,9 +34,11 @@ pub fn check_redundant_operation(
         if !is_side_effect_free(other) {
             return;
         }
-        diagnostics.push(diagnostics::lint::redundant_operation(span, Some(value)));
+        ctx.sink
+            .push(diagnostics::lint::redundant_operation(span, Some(value)));
     } else {
-        diagnostics.push(diagnostics::lint::redundant_operation(span, None));
+        ctx.sink
+            .push(diagnostics::lint::redundant_operation(span, None));
     }
 }
 
@@ -56,70 +55,70 @@ fn classify<'a>(
 
     let (other, outcome) = match operator {
         Addition => {
-            if int_zero(right) {
+            if is_zero_literal(right) {
                 (left, Outcome::Identity)
-            } else if int_zero(left) {
+            } else if is_zero_literal(left) {
                 (right, Outcome::Identity)
             } else {
                 return None;
             }
         }
         Subtraction => {
-            if int_zero(right) {
+            if is_zero_literal(right) {
                 (left, Outcome::Identity)
             } else {
                 return None;
             }
         }
         Multiplication => {
-            if int_one(right) {
+            if is_one_literal(right) {
                 (left, Outcome::Identity)
-            } else if int_one(left) {
+            } else if is_one_literal(left) {
                 (right, Outcome::Identity)
-            } else if int_zero(right) {
+            } else if is_zero_literal(right) {
                 (left, Outcome::Constant("0"))
-            } else if int_zero(left) {
+            } else if is_zero_literal(left) {
                 (right, Outcome::Constant("0"))
             } else {
                 return None;
             }
         }
         Division => {
-            if int_one(right) {
+            if is_one_literal(right) {
                 (left, Outcome::Identity)
             } else {
                 return None;
             }
         }
         Remainder => {
-            if int_one(right) {
+            if is_one_literal(right) {
                 (left, Outcome::Constant("0"))
             } else {
                 return None;
             }
         }
         BitwiseOr | BitwiseXor => {
-            if int_zero(right) {
+            if is_zero_literal(right) {
                 (left, Outcome::Identity)
-            } else if int_zero(left) {
+            } else if is_zero_literal(left) {
                 (right, Outcome::Identity)
             } else {
                 return None;
             }
         }
         BitwiseAnd => {
-            if int_zero(right) {
+            if is_zero_literal(right) {
                 (left, Outcome::Constant("0"))
-            } else if int_zero(left) {
+            } else if is_zero_literal(left) {
                 (right, Outcome::Constant("0"))
             } else {
                 return None;
             }
         }
         BitwiseAndNot => {
-            if int_zero(right) {
+            if is_zero_literal(right) {
                 (left, Outcome::Identity)
-            } else if int_zero(left) {
+            } else if is_zero_literal(left) {
                 (right, Outcome::Constant("0"))
             } else {
                 return None;
@@ -128,7 +127,7 @@ fn classify<'a>(
         ShiftLeft | ShiftRight => {
             // `0 << n` is not folded to `0`: a negative `n` panics at runtime,
             // so the result is not unconditionally `0`.
-            if int_zero(right) {
+            if is_zero_literal(right) {
                 (left, Outcome::Identity)
             } else {
                 return None;
@@ -175,24 +174,4 @@ fn boolean_outcome(other: &Expression, literal: bool, is_and: bool) -> (&Express
 fn is_integer(ty: &Type) -> bool {
     ty.as_simple()
         .is_some_and(|kind| kind.is_signed_int() || kind.is_unsigned_int())
-}
-
-fn int_zero(expression: &Expression) -> bool {
-    matches!(
-        expression,
-        Expression::Literal {
-            literal: Literal::Integer { value: 0, .. },
-            ..
-        }
-    )
-}
-
-fn int_one(expression: &Expression) -> bool {
-    matches!(
-        expression,
-        Expression::Literal {
-            literal: Literal::Integer { value: 1, .. },
-            ..
-        }
-    )
 }

@@ -1,10 +1,10 @@
-use diagnostics::LisetteDiagnostic;
+use crate::passes::walk::NodeCtx;
 use syntax::ast::{Expression, MatchArm, MatchOrigin, Pattern, Span};
 use syntax::types::unqualified_name;
 
 use super::helpers::{has_escaping_control_flow, is_side_effect_free};
 
-pub fn check_manual_unwrap_or(expression: &Expression, diagnostics: &mut Vec<LisetteDiagnostic>) {
+pub fn check_manual_unwrap_or(expression: &Expression, ctx: &NodeCtx) {
     let Expression::Match {
         subject,
         arms,
@@ -55,7 +55,7 @@ pub fn check_manual_unwrap_or(expression: &Expression, diagnostics: &mut Vec<Lis
     }
 
     let match_keyword_span = Span::new(span.file_id, span.byte_offset, 5);
-    diagnostics.push(diagnostics::lint::manual_unwrap_or(
+    ctx.sink.push(diagnostics::lint::manual_unwrap_or(
         &match_keyword_span,
         default_has_effects,
     ));

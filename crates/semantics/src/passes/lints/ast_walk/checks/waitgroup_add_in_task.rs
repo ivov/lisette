@@ -1,12 +1,9 @@
-use diagnostics::LisetteDiagnostic;
+use crate::passes::walk::NodeCtx;
 use rustc_hash::FxHashSet;
 use syntax::ast::{BindingId, Expression, Literal, Span, UnaryOperator};
 use syntax::types::Type;
 
-pub fn check_waitgroup_add_in_task(
-    expression: &Expression,
-    diagnostics: &mut Vec<LisetteDiagnostic>,
-) {
+pub fn check_waitgroup_add_in_task(expression: &Expression, ctx: &NodeCtx) {
     let body = match expression {
         Expression::Function { body, .. } | Expression::Lambda { body, .. } => body,
         _ => return,
@@ -18,7 +15,8 @@ pub fn check_waitgroup_add_in_task(
 
     for (binding, span) in adds {
         if waited.contains(&binding) {
-            diagnostics.push(diagnostics::lint::waitgroup_add_in_task(&span));
+            ctx.sink
+                .push(diagnostics::lint::waitgroup_add_in_task(&span));
         }
     }
 }

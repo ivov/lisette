@@ -1,14 +1,11 @@
-use diagnostics::LisetteDiagnostic;
+use crate::passes::walk::NodeCtx;
 use syntax::ast::{BinaryOperator, Expression, MatchOrigin, Span};
 
 use crate::checker::infer::expressions::patterns::collect_pattern_bindings;
 
 use super::helpers::{expressions_equivalent, is_empty_block};
 
-pub fn check_identical_match_arms(
-    expression: &Expression,
-    diagnostics: &mut Vec<LisetteDiagnostic>,
-) {
+pub fn check_identical_match_arms(expression: &Expression, ctx: &NodeCtx) {
     let Expression::Match {
         subject,
         arms,
@@ -55,7 +52,8 @@ pub fn check_identical_match_arms(
     }
 
     let match_keyword_span = Span::new(span.file_id, span.byte_offset, 5);
-    diagnostics.push(diagnostics::lint::identical_match_arms(&match_keyword_span));
+    ctx.sink
+        .push(diagnostics::lint::identical_match_arms(&match_keyword_span));
 }
 
 fn is_safe_to_drop(expression: &Expression) -> bool {
