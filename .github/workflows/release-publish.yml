@@ -50,6 +50,9 @@ jobs:
           TAG=$(echo "$RELEASES" | jq -er '.[] | select(.package_name == "lisette") | .tag')
           git fetch --tags origin
           git-cliff --config cliff.toml --latest --strip all | sed -e '/^## \[/d' -e '/./,$!d' > /tmp/notes.md
+          if grep -qE '^- [a-z]+(\([^)]*\))?!:' /tmp/notes.md; then
+            printf 'This version contains breaking changes.\n\n%s\n' "$(cat /tmp/notes.md)" > /tmp/notes.md
+          fi
           gh release edit "$TAG" --notes-file /tmp/notes.md
           { grep -oE 'pull/[0-9]+' /tmp/notes.md || true; } | cut -d/ -f2 | sort -u > "/tmp/prs-${TAG}.txt"
 
