@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [warning] Out-of-domain value
+    ╭─[test.lis:14:14]
+ 13 │ fn main() {
+ 14 │   let _ = at(2)
+    ·              ┬
+    ·              ╰── out of domain
+ 15 │   fmt.Println(NEG, ZERO, POS)
+    ╰────
+  help: `Sign` has a closed domain (`NEG=-1 ..= POS=1`) that excludes this value · code: [lint.out_of_domain_value]

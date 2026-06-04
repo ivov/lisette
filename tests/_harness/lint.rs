@@ -114,6 +114,7 @@ pub fn lint(source: &str) -> Vec<LisetteDiagnostic> {
     };
 
     store.store_file(TEST_MODULE_ID, typed_file);
+    store.build_closed_domains();
 
     let analysis = semantics::context::AnalysisContext::new(&store, &checker.ufcs_methods);
     let mut unused = UnusedInfo::default();

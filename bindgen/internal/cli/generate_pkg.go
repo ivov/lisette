@@ -29,7 +29,7 @@ func GeneratePkg(pkgPath, lisetteVersion, goVersion string, cfg *config.Config) 
 // generateUnloadableStub returns a header-only typedef with zero exports for
 // a package that failed to type-check under CGO_ENABLED=0.
 func generateUnloadableStub(pkgPath string, pkg *packages.Package, lisetteVersion, goVersion string) GeneratePkgResult {
-	emitter := emit.NewEmitter(nil, pkgPath, nil)
+	emitter := emit.NewEmitter(nil, pkgPath, nil, nil)
 	emitter.EmitHeader(pkgPath, pkg.Name, lisetteVersion, goVersion)
 	emitter.EmitUnloadableNote(pkg.Errors[0].Msg)
 	return GeneratePkgResult{

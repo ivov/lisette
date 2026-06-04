@@ -105,6 +105,7 @@ pub fn infer_module(module_name: &str, fs: MockFileSystem) -> InferResult {
             .collect();
 
         if !checker.failed() {
+            store.build_closed_domains();
             let analysis = semantics::context::AnalysisContext::new(&store, &checker.ufcs_methods);
             let mut unused = syntax::program::UnusedInfo::default();
             semantics::passes::run(

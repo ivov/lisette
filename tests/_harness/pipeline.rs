@@ -211,6 +211,7 @@ impl CompiledTest {
                         test_file_id,
                     ),
                 );
+                store.build_closed_domains();
                 let analysis =
                     semantics::context::AnalysisContext::new(&store, &checker.ufcs_methods);
                 let mut harness_unused = UnusedInfo::default();

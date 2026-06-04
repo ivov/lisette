@@ -29,6 +29,9 @@
         "regexp/syntax": ["Flags"],
         "text/template/parse": ["Mode"]
       },
+      "closed_domain": {
+        "time": ["Weekday", "Month"]
+      },
       "direct_error": {
         "errors": ["New"],
         "fmt": ["Errorf"]

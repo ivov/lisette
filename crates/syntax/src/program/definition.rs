@@ -37,6 +37,7 @@ pub enum DefinitionBody {
         methods: MethodSignatures,
         constructor: Option<Type>,
         display: bool,
+        closed_domain: bool,
     },
     Interface {
         definition: Interface,
@@ -139,6 +140,16 @@ impl Definition {
             &self.body,
             DefinitionBody::Struct { display: true, .. }
                 | DefinitionBody::Enum { display: true, .. }
+        )
+    }
+
+    pub fn is_closed_domain(&self) -> bool {
+        matches!(
+            &self.body,
+            DefinitionBody::Struct {
+                closed_domain: true,
+                ..
+            }
         )
     }
 

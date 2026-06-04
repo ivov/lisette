@@ -1,16 +1,99 @@
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU32, Ordering};
 
+use ecow::EcoString;
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
-use syntax::ast::{EnumVariant, Expression, StructFieldDefinition};
+use syntax::ast::{EnumVariant, Expression, Literal, StructFieldDefinition};
 use syntax::program::{
     Definition, DefinitionBody, File, Interface, MethodSignatures, Module, ModuleId,
 };
-use syntax::types::{SubstitutionMap, Symbol, Type, substitute};
+use syntax::types::{SimpleKind, SubstitutionMap, Symbol, Type, substitute};
 
 pub const ENTRY_MODULE_ID: &str = "_entry_";
 pub const ENTRY_FILE_ID: u32 = 0;
+
+#[derive(Debug, Clone)]
+pub struct ClosedMember {
+    /// Qualified the way the user writes it (e.g. `time.Sunday`), for the diagnostic.
+    pub display_name: EcoString,
+    /// The member's source literal, for rendering the valid-set hint.
+    pub literal: Literal,
+    /// The comparable form, derived once so membership and sort never disagree.
+    pub value: DomainValue,
+}
+
+/// The curated valid-value set of a `#[go(closed_domain)]` named primitive.
+#[derive(Debug, Clone)]
+pub struct ClosedDomain {
+    pub base: SimpleKind,
+    pub type_display: EcoString,
+    pub members: Vec<ClosedMember>,
+}
+
+/// A literal reduced to its comparable form for a closed domain's base kind.
+/// Float bases are not indexed, so only integers (signed `i128`) and strings occur.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub enum DomainValue {
+    Int(i128),
+    Str(String),
+}
+
+impl DomainValue {
+    pub fn from_literal(literal: &Literal, base: SimpleKind) -> Option<DomainValue> {
+        // `rune` is a signed integer kind, so handle it before the integer arm
+        // to accept char literals as codepoints. A negative const is stored as
+        // its two's-complement `u64`, so signed bases reinterpret it as `i64`.
+        match base {
+            SimpleKind::Rune => match literal {
+                Literal::Char(text) => char_codepoint(text).map(|cp| DomainValue::Int(cp as i128)),
+                Literal::Integer { value, .. } => Some(DomainValue::Int(*value as i64 as i128)),
+                _ => None,
+            },
+            SimpleKind::String => match literal {
+                Literal::String { value, .. } => Some(DomainValue::Str(value.clone())),
+                _ => None,
+            },
+            _ if is_unsigned_base(base) => match literal {
+                Literal::Integer { value, .. } => Some(DomainValue::Int(*value as i128)),
+                _ => None,
+            },
+            _ if base.is_signed_int() => match literal {
+                Literal::Integer { value, .. } => Some(DomainValue::Int(*value as i64 as i128)),
+                _ => None,
+            },
+            _ => None,
+        }
+    }
+}
+
+/// `uintptr` is an unsigned integer for value purposes but is excluded from
+/// `SimpleKind::is_unsigned_int`, so it is folded in here.
+pub fn is_unsigned_base(base: SimpleKind) -> bool {
+    base.is_unsigned_int() || base == SimpleKind::Uintptr
+}
+
+/// Decodes a rune literal's inner text to a codepoint, covering the escapes the
+/// lexer accepts (`\a \b \f \n \r \t \v \\ \'`, `\x` hex, and octal `\NNN`).
+fn char_codepoint(text: &str) -> Option<u64> {
+    let Some(rest) = text.strip_prefix('\\') else {
+        return text.chars().next().map(|c| c as u64);
+    };
+    match rest.as_bytes().first()? {
+        b'a' => Some(7),
+        b'b' => Some(8),
+        b'f' => Some(12),
+        b'n' => Some(10),
+        b'r' => Some(13),
+        b't' => Some(9),
+        b'v' => Some(11),
+        b'\\' => Some(92),
+        b'\'' => Some(39),
+        b'x' => u64::from_str_radix(&rest[1..], 16).ok(),
+        b'0'..=b'7' => u64::from_str_radix(rest, 8).ok(),
+        _ => None,
+    }
+}
 
 pub struct Store {
     pub modules: HashMap<String, Module>,
@@ -26,6 +109,9 @@ pub struct Store {
     visited_modules: HashSet<String>,
     /// File ID counter. Starts at 2 because 0 is reserved for entry, 1 for prelude.
     next_file_id: AtomicU32,
+    /// Closed-domain index, keyed by the type's qualified name (the `id` in
+    /// `Type::Nominal`). Built once after registration by `build_closed_domains`.
+    pub closed_domains: HashMap<Symbol, ClosedDomain>,
 }
 
 impl Default for Store {
@@ -56,6 +142,7 @@ impl Store {
             typedef_paths: Default::default(),
             visited_modules: Default::default(),
             next_file_id: AtomicU32::new(2), // 0 = entrypoint, 1 = prelude
+            closed_domains: Default::default(),
         }
     }
 
@@ -202,6 +289,73 @@ impl Store {
             Some(def) => def.is_newtype(),
             None => false,
         }
+    }
+
+    pub fn build_closed_domains(&mut self) {
+        // type id -> (base kind, id of the module that declares the type)
+        let mut bases: HashMap<Symbol, (SimpleKind, String)> = HashMap::default();
+        for module in self.modules.values() {
+            for (qualified_name, definition) in &module.definitions {
+                // Float domains rely on exact-equality over fragile values and do
+                // not occur in the Go stdlib; they are deliberately not indexed.
+                if definition.is_closed_domain()
+                    && let Some(base) = definition.ty().underlying_simple_kind()
+                    && !base.is_float()
+                {
+                    bases.insert(qualified_name.clone(), (base, module.id.clone()));
+                }
+            }
+        }
+
+        if bases.is_empty() {
+            return;
+        }
+
+        let mut members: HashMap<Symbol, Vec<ClosedMember>> = HashMap::default();
+        for module in self.modules.values() {
+            for (qualified_name, definition) in &module.definitions {
+                let Some(const_literal) = definition.const_value() else {
+                    continue;
+                };
+                let Type::Nominal { id, .. } = definition.ty() else {
+                    continue;
+                };
+                let Some((base, declaring_module)) = bases.get(id) else {
+                    continue;
+                };
+                // Only consts declared alongside the type extend its domain; a
+                // const of an imported closed type in user code must not widen it.
+                if module.id != *declaring_module {
+                    continue;
+                }
+                let Some(value) = DomainValue::from_literal(const_literal, *base) else {
+                    continue;
+                };
+                members.entry(id.clone()).or_default().push(ClosedMember {
+                    display_name: domain_display_name(qualified_name.as_str()).into(),
+                    literal: const_literal.clone(),
+                    value,
+                });
+            }
+        }
+
+        let mut domains: HashMap<Symbol, ClosedDomain> = HashMap::default();
+        for (type_id, (base, _)) in bases {
+            let Some(mut domain_members) = members.remove(&type_id) else {
+                continue;
+            };
+            domain_members.sort_by(|a, b| a.value.cmp(&b.value));
+            domains.insert(
+                type_id.clone(),
+                ClosedDomain {
+                    base,
+                    type_display: domain_display_name(type_id.as_str()).into(),
+                    members: domain_members,
+                },
+            );
+        }
+
+        self.closed_domains = domains;
     }
 
     pub fn fields_of(&self, qualified_name: &str) -> Option<&[StructFieldDefinition]> {
@@ -451,6 +605,19 @@ impl Store {
     }
 }
 
+fn domain_display_name(qualified: &str) -> String {
+    let Some((module, name)) = qualified.rsplit_once('.') else {
+        return qualified.to_string();
+    };
+    match module.strip_prefix("go:") {
+        Some(go_module) => {
+            let package = go_module.rsplit('/').next().unwrap_or(go_module);
+            format!("{package}.{name}")
+        }
+        None => name.to_string(),
+    }
+}
+
 /// Return the qualified name used to look up methods/fields for a given type.
 /// For `Type::Compound` and `Type::Simple`, this is the prelude-qualified name
 /// (e.g. `Type::Compound { Slice, .. }` → `"prelude.Slice"`).
@@ -460,5 +627,139 @@ fn method_lookup_key(ty: &Type) -> Option<Symbol> {
         Type::Compound { kind, .. } => Some(Symbol::from_parts("prelude", kind.leaf_name())),
         Type::Simple(kind) => Some(Symbol::from_parts("prelude", kind.leaf_name())),
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod closed_domain_tests {
+    use super::*;
+    use syntax::ast::StructKind;
+    use syntax::program::Visibility;
+
+    fn nominal_int(id: &str) -> Type {
+        Type::Nominal {
+            id: Symbol::from_raw(id),
+            params: vec![],
+            underlying_ty: Some(Box::new(Type::Simple(SimpleKind::Int))),
+        }
+    }
+
+    fn struct_def(ty: Type, closed_domain: bool) -> Definition {
+        Definition {
+            visibility: Visibility::Public,
+            ty,
+            name: None,
+            name_span: None,
+            doc: None,
+            body: DefinitionBody::Struct {
+                generics: vec![],
+                fields: vec![],
+                kind: StructKind::Tuple,
+                methods: Default::default(),
+                constructor: None,
+                display: false,
+                closed_domain,
+            },
+        }
+    }
+
+    fn int_const(ty: Type, value: u64) -> Definition {
+        Definition {
+            visibility: Visibility::Public,
+            ty,
+            name: None,
+            name_span: None,
+            doc: None,
+            body: DefinitionBody::Value {
+                allowed_lints: vec![],
+                go_hints: vec![],
+                go_name: None,
+                const_value: Some(Literal::Integer { value, text: None }),
+            },
+        }
+    }
+
+    fn insert(store: &mut Store, module: &str, name: &str, def: Definition) {
+        store.add_module(module);
+        store
+            .get_module_mut(module)
+            .unwrap()
+            .definitions
+            .insert(Symbol::from_raw(name), def);
+    }
+
+    #[test]
+    fn tagged_type_with_members_is_indexed_and_sorted() {
+        let mut store = Store::new();
+        let ty = nominal_int("m.Weekday");
+        insert(&mut store, "m", "m.Weekday", struct_def(ty.clone(), true));
+        insert(&mut store, "m", "m.Saturday", int_const(ty.clone(), 6));
+        insert(&mut store, "m", "m.Sunday", int_const(ty.clone(), 0));
+
+        store.build_closed_domains();
+
+        let domain = store
+            .closed_domains
+            .get("m.Weekday")
+            .expect("tagged type with members should be indexed");
+        assert_eq!(domain.base, SimpleKind::Int);
+        assert_eq!(domain.type_display.as_str(), "Weekday");
+        let names: Vec<&str> = domain
+            .members
+            .iter()
+            .map(|m| m.display_name.as_str())
+            .collect();
+        assert_eq!(names, vec!["Sunday", "Saturday"]);
+    }
+
+    #[test]
+    fn untagged_type_is_absent() {
+        let mut store = Store::new();
+        let ty = nominal_int("m.Plain");
+        insert(&mut store, "m", "m.Plain", struct_def(ty.clone(), false));
+        insert(&mut store, "m", "m.One", int_const(ty, 1));
+
+        store.build_closed_domains();
+
+        assert!(store.closed_domains.is_empty());
+    }
+
+    #[test]
+    fn tagged_type_without_members_records_no_domain() {
+        let mut store = Store::new();
+        insert(
+            &mut store,
+            "m",
+            "m.Empty",
+            struct_def(nominal_int("m.Empty"), true),
+        );
+
+        store.build_closed_domains();
+
+        assert!(!store.closed_domains.contains_key("m.Empty"));
+    }
+
+    #[test]
+    fn const_in_other_module_does_not_widen_domain() {
+        let mut store = Store::new();
+        let ty = nominal_int("lib.Weekday");
+        insert(
+            &mut store,
+            "lib",
+            "lib.Weekday",
+            struct_def(ty.clone(), true),
+        );
+        insert(&mut store, "lib", "lib.Sunday", int_const(ty.clone(), 0));
+        insert(&mut store, "user", "user.Bad", int_const(ty, 99));
+
+        store.build_closed_domains();
+
+        let domain = store.closed_domains.get("lib.Weekday").unwrap();
+        let names: Vec<&str> = domain
+            .members
+            .iter()
+            .map(|m| m.display_name.as_str())
+            .collect();
+        assert_eq!(names, vec!["Sunday"]);
     }
 }

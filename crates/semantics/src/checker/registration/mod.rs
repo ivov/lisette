@@ -54,6 +54,12 @@ pub(super) fn has_display_attribute(attributes: &[Attribute]) -> bool {
     attributes.iter().any(|a| a.name == "display")
 }
 
+pub(super) fn has_closed_domain_attribute(attributes: &[Attribute]) -> bool {
+    extract_attribute_flags(attributes, "go")
+        .iter()
+        .any(|flag| flag == "closed_domain")
+}
+
 fn canonical_const_literal(expression: &Expression) -> Option<syntax::ast::Literal> {
     use syntax::ast::{Literal, UnaryOperator};
     match expression.unwrap_parens() {
@@ -574,6 +580,7 @@ impl TaskState<'_> {
                     span,
                     doc,
                     has_display_attribute(attributes),
+                    has_closed_domain_attribute(attributes),
                 ),
                 Expression::Interface {
                     name,

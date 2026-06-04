@@ -12,8 +12,8 @@ use crate::store::Store;
 use diagnostics::LisetteDiagnostic;
 use diagnostics::LocalSink;
 use rayon::prelude::*;
-use rustc_hash::FxHashMap as HashMap;
-use syntax::ast::{Expression, Pattern};
+use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
+use syntax::ast::{Expression, Pattern, Span};
 use syntax::program::{File, Module};
 
 pub struct LintContext<'a> {
@@ -80,11 +80,11 @@ use checks::{
     check_loop_runs_once, check_lost_query_mutation, check_manual_compound_assignment,
     check_manual_is_empty, check_manual_map, check_manual_unwrap_or,
     check_match_literal_collection, check_match_on_bool, check_match_single_binding,
-    check_negated_equality, check_pattern_naming, check_redundant_closure,
-    check_redundant_operation, check_redundant_pattern_matching, check_replaceable_with_zero_fill,
-    check_rest_only_slice_pattern, check_self_assignment, check_self_comparison,
-    check_single_arm_match, check_uninterpolated_fstring, check_unnecessary_bool,
-    check_unnecessary_range_loop, check_unnecessary_raw_string_expression,
+    check_negated_equality, check_out_of_domain_value, check_pattern_naming,
+    check_redundant_closure, check_redundant_operation, check_redundant_pattern_matching,
+    check_replaceable_with_zero_fill, check_rest_only_slice_pattern, check_self_assignment,
+    check_self_comparison, check_single_arm_match, check_uninterpolated_fstring,
+    check_unnecessary_bool, check_unnecessary_range_loop, check_unnecessary_raw_string_expression,
     check_unnecessary_raw_string_pattern, check_unnecessary_return, check_unsigned_comparison,
     check_verbose_failure_propagation, check_waitgroup_add_in_task,
 };
@@ -142,6 +142,7 @@ pub struct AstLintGroup;
 impl AstLintGroup {
     pub fn check(&self, ctx: &LintContext) -> Vec<LisetteDiagnostic> {
         let diagnostics = RefCell::new(Vec::new());
+        let negated_operands: RefCell<HashSet<Span>> = RefCell::new(HashSet::default());
         let is_d_lis = ctx.is_d_lis;
         let files = ctx.files;
         let store = ctx.store;
@@ -159,6 +160,7 @@ impl AstLintGroup {
                 check_duplicate_logical_operand(expression, files, &mut sink);
                 check_expression_naming(expression, is_d_lis, &mut sink);
                 check_replaceable_with_zero_fill(expression, store, module_id, source, &mut sink);
+                check_out_of_domain_value(expression, store, &negated_operands, &mut sink);
                 check_lost_query_mutation(expression, store, &mut sink);
                 check_redundant_closure(expression, facts, &mut sink);
             },

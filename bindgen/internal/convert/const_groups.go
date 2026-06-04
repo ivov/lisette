@@ -108,7 +108,8 @@ func DetectConstGroups(results []ConvertResult, exports []extract.SymbolExport, 
 		// Bit operations on a string-underlying type are not meaningful;
 		// neither H13 nor the config override applies here.
 		isInteger := typeToUnderlying[typeName] != "string"
-		if isInteger && (cfg.ShouldTreatAsBitFlagSet(pkgPath, typeName) || looksLikeBitFlags(constants)) {
+		if isInteger && !cfg.IsClosedDomain(pkgPath, typeName) &&
+			(cfg.ShouldTreatAsBitFlagSet(pkgPath, typeName) || looksLikeBitFlags(constants)) {
 			bitFlagSetTypeNames[typeName] = true
 			continue
 		}

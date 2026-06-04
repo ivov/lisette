@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [warning] Out-of-domain value
+    ╭─[test.lis:13:14]
+ 12 │ fn main() {
+ 13 │   let _ = at(3)
+    ·              ┬
+    ·              ╰── out of domain
+ 14 │   fmt.Println(A, B)
+    ╰────
+  help: `P` has a closed domain (`A=1 ..= B=2`) that excludes this value · code: [lint.out_of_domain_value]

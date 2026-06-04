@@ -335,6 +335,8 @@ pub fn analyze(input: AnalyzeInput) -> AnalyzeOutput {
         )
     };
 
+    store.build_closed_domains();
+
     let analysis = crate::context::AnalysisContext::new(&store, &ufcs_methods);
 
     let mut unused = UnusedInfo::default();

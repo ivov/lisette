@@ -174,7 +174,14 @@ func generateFromPackage(pkg *packages.Package, displayPath, lisetteVersion, goV
 		}
 	}
 
-	emitter := emit.NewEmitter(cfg, pkg.PkgPath, bitFlagSetTypeNames)
+	closedDomainTypeNames := make(map[string]bool)
+	for typeName := range constGroupTypeNames {
+		if cfg.IsClosedDomain(pkg.PkgPath, typeName) {
+			closedDomainTypeNames[typeName] = true
+		}
+	}
+
+	emitter := emit.NewEmitter(cfg, pkg.PkgPath, bitFlagSetTypeNames, closedDomainTypeNames)
 	emitter.EmitHeader(displayPath, pkg.Name, lisetteVersion, goVersion)
 
 	emitter.EmitImports(converter.ExternalPkgs())

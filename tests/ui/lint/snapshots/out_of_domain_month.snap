@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [warning] Out-of-domain value
+   ╭─[test.lis:5:23]
+ 4 │ fn main() {
+ 5 │   let m: time.Month = 13
+   ·                       ─┬
+   ·                        ╰── out of domain
+ 6 │   let _ = m
+   ╰────
+  help: `time.Month` has a closed domain (`time.January=1 ..= time.December=12`) that excludes this value · code: [lint.out_of_domain_value]

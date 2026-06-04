@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [warning] Out-of-domain value
+   ╭─[test.lis:7:18]
+ 6 │ fn main() {
+ 7 │   let _ = payday(7)
+   ·                  ┬
+   ·                  ╰── out of domain
+ 8 │ }
+   ╰────
+  help: `time.Weekday` has a closed domain (`time.Sunday=0 ..= time.Saturday=6`) that excludes this value · code: [lint.out_of_domain_value]
