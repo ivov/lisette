@@ -2,6 +2,25 @@
 
 Lisette is under active development. Any version before 1.0.0 may include breaking changes.
 
+## [0.3.0](https://github.com/ivov/lisette/compare/lisette-v0.2.17...lisette-v0.3.0) - 2026-06-04
+
+- refactor: stop threading store through inference signatures [#597](https://github.com/ivov/lisette/pull/597) [`4890ad5`](https://github.com/ivov/lisette/commit/4890ad5be004222b4dfaf7f6ebe7ef8367e7874e)
+- feat: add out-of-domain value lint for closed named primitives [#596](https://github.com/ivov/lisette/pull/596) [`c434c3a`](https://github.com/ivov/lisette/commit/c434c3ab45e929a2e1e53b1a386f00fdf4ca1297)
+- refactor: share context and walk across checks and lints [#595](https://github.com/ivov/lisette/pull/595) [`40f5264`](https://github.com/ivov/lisette/commit/40f5264746c45021c1a54fd12bd9c230e56d0bd0)
+- feat: add non-negative length comparison lint [#593](https://github.com/ivov/lisette/pull/593) [`c268079`](https://github.com/ivov/lisette/commit/c2680798dfb5ddc02339a2f3da0fec9128f47913)
+- feat: catch x % 1 in redundant operation lint [#592](https://github.com/ivov/lisette/pull/592) [`7f26440`](https://github.com/ivov/lisette/commit/7f264408bfc85009116e1cb2afe15c4d00a3f3f4)
+- ci: flag breaking changes in github release notes [#591](https://github.com/ivov/lisette/pull/591) [`823ba05`](https://github.com/ivov/lisette/commit/823ba05269cddfd1e39e80ca7ef317f53a96287e)
+- refactor!: rename `--format` to `--output` in `lis check` [#590](https://github.com/ivov/lisette/pull/590) [`6b886fe`](https://github.com/ivov/lisette/commit/6b886fe9bae5d42939c9c9db999fd2f0c05a409d)
+- refactor!: remove value enums [#588](https://github.com/ivov/lisette/pull/588) [`260463c`](https://github.com/ivov/lisette/commit/260463cff8b0cd6cb6f4de675ff2694b8aba99ba)
+- feat: add redundant operation simplification lint [#589](https://github.com/ivov/lisette/pull/589) [`5b834b0`](https://github.com/ivov/lisette/commit/5b834b0b3c59e9e074e401946775d06da3a03989)
+- feat: add negated equality simplification lint [#586](https://github.com/ivov/lisette/pull/586) [`6edc4bf`](https://github.com/ivov/lisette/commit/6edc4bffaf48817b82bac2b4dc91fbcc7c6c99fc)
+- fix: lsp hover improvements [#583](https://github.com/ivov/lisette/pull/583) [`c536ba2`](https://github.com/ivov/lisette/commit/c536ba2d58d7d654e78ecd82570dbdd55a6e3c1b)
+- feat: add let-and-return simplification lint [#585](https://github.com/ivov/lisette/pull/585) [`fde3b5b`](https://github.com/ivov/lisette/commit/fde3b5bb304ef9b918f1fb10d2df45151eac3a96)
+- feat: lint match on bool that should be if/else [#584](https://github.com/ivov/lisette/pull/584) [`b08193d`](https://github.com/ivov/lisette/commit/b08193d3f80fd6b8fea54efb6b3f64a0dfc6d15f)
+- feat: add match-to-let simplification lint [#582](https://github.com/ivov/lisette/pull/582) [`e27c9b7`](https://github.com/ivov/lisette/commit/e27c9b70b9cbf5e9c4ea100b451d8e7ddc1a161b)
+- feat: add redundant assert_type lint [#580](https://github.com/ivov/lisette/pull/580) [`802bbfd`](https://github.com/ivov/lisette/commit/802bbfd03170e47679591d957081f235aaf567ba)
+- refactor!: rename attributes to `#[iterate]` and `#[display]` [#578](https://github.com/ivov/lisette/pull/578) [`ba0503e`](https://github.com/ivov/lisette/commit/ba0503e982bf21b76afa27f4f2d931600bd09afa)
+
 ## [0.2.17](https://github.com/ivov/lisette/compare/lisette-v0.2.16...lisette-v0.2.17) - 2026-06-02
 
 - feat: add manual emptiness check lint [#577](https://github.com/ivov/lisette/pull/577) [`6dd1cb1`](https://github.com/ivov/lisette/commit/6dd1cb16c933e952f5eaec1aff1e5bb915cce389)
