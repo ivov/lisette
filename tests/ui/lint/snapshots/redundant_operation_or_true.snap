@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [info] Operation always evaluates to `true`
+   ╭─[test.lis:4:11]
+ 3 │   let b = true
+ 4 │   let _ = b || true
+   ·           ────┬────
+   ·               ╰── always `true`
+ 5 │ }
+   ╰────
+  help: Simplify this operation to `true` · code: [lint.redundant_operation]

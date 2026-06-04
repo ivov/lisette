@@ -945,6 +945,275 @@ fn main() {
 }
 
 #[test]
+fn redundant_operation_add_zero() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let x = 5
+  let _ = x + 0
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_operation_zero_add() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let x = 5
+  let _ = 0 + x
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_operation_sub_zero() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let x = 5
+  let _ = x - 0
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_operation_mul_one() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let x = 5
+  let _ = x * 1
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_operation_div_one() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let x = 5
+  let _ = x / 1
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_operation_mul_zero() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let x = 5
+  let _ = x * 0
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_operation_bitwise_or_zero() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let x = 5
+  let _ = x | 0
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_operation_bitwise_and_zero() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let x = 5
+  let _ = x & 0
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_operation_bitwise_and_not_zero() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let x = 5
+  let _ = x &^ 0
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_operation_shift_left_zero() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let x = 5
+  let _ = x << 0
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_operation_shift_right_zero() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let x = 5
+  let _ = x >> 0
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_operation_unsigned_add_zero() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let u: uint = 5
+  let _ = u + 0
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_operation_identity_keeps_call() {
+    assert_lint_snapshot!(
+        r#"
+fn ident(n: int) -> int { n }
+
+fn main() {
+  let x = 5
+  let _ = ident(x) + 0
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_operation_and_true() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let b = true
+  let _ = b && true
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_operation_or_false() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let b = true
+  let _ = b || false
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_operation_and_false() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let b = true
+  let _ = b && false
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_operation_or_true() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let b = true
+  let _ = b || true
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_operation_float_add_zero_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let f: float64 = 1.5
+  let _ = f + 0
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_operation_string_concat_empty_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let s = "hi"
+  let _ = s + ""
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_operation_side_effecting_constant_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn ident(n: int) -> int { n }
+
+fn main() {
+  let x = 5
+  let _ = ident(x) * 0
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_operation_non_trivial_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let x = 5
+  let _ = x + 2
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_operation_zero_shift_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let n: int = 3
+  let _ = 0 << n
+  let _ = 0 >> n
+}
+"#
+    );
+}
+
+#[test]
 fn negated_equality_equal() {
     assert_lint_snapshot!(
         r#"

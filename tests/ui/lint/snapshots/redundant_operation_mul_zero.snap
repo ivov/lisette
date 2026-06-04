@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [info] Operation always evaluates to `0`
+   ╭─[test.lis:4:11]
+ 3 │   let x = 5
+ 4 │   let _ = x * 0
+   ·           ──┬──
+   ·             ╰── always `0`
+ 5 │ }
+   ╰────
+  help: Simplify this operation to `0` · code: [lint.redundant_operation]

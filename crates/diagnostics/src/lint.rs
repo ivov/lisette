@@ -283,6 +283,19 @@ pub fn unsigned_comparison(span: &Span, always_true: bool) -> LisetteDiagnostic 
         )
 }
 
+pub fn redundant_operation(span: &Span, always: Option<&str>) -> LisetteDiagnostic {
+    match always {
+        Some(value) => LisetteDiagnostic::info(format!("Operation always evaluates to `{value}`"))
+            .with_lint_code("redundant_operation")
+            .with_span_label(span, format!("always `{value}`"))
+            .with_help(format!("Simplify this operation to `{value}`")),
+        None => LisetteDiagnostic::info("Operation has no effect")
+            .with_lint_code("redundant_operation")
+            .with_span_label(span, "has no effect")
+            .with_help("Simplify this operation to its other operand"),
+    }
+}
+
 pub fn verbose_failure_propagation(span: &Span) -> LisetteDiagnostic {
     LisetteDiagnostic::info("Verbose failure propagation")
         .with_lint_code("verbose_failure_propagation")

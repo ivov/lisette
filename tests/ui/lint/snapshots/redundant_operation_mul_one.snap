@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [info] Operation has no effect
+   ╭─[test.lis:4:11]
+ 3 │   let x = 5
+ 4 │   let _ = x * 1
+   ·           ──┬──
+   ·             ╰── has no effect
+ 5 │ }
+   ╰────
+  help: Simplify this operation to its other operand · code: [lint.redundant_operation]
