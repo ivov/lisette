@@ -93,7 +93,10 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # ratchet:actions/checkout@v6
       - uses: ./.github/actions/setup-rust
         with:
+          just: 'true'
           go: 'true'
+      # Sync tests run `lis sync`, which uses bindgen/bin/bindgen in dev builds.
+      - run: cd bindgen && just build
       - run: cargo test -p tests --test suite --locked -- --format terse
       - run: cargo test --workspace --lib --bins --locked -- --format terse
 
