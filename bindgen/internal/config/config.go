@@ -52,6 +52,10 @@ type TypeOverrides struct {
 	// attribute. Used for types that look like sequential const groups to the
 	// heuristic but are semantically bit-flag sets.
 	BitFlagSet map[string][]string `json:"bit_flag_set"`
+	// ClosedDomain marks named primitive types whose valid values are a fixed
+	// finite set, emitting #[go(closed_domain)]. Drives the out_of_domain_value lint.
+	// Curated, never auto-detected; mutually exclusive with bit_flag_set.
+	ClosedDomain map[string][]string `json:"closed_domain"`
 }
 
 // LoadConfig loads bindgen configuration from the given path.
@@ -267,6 +271,19 @@ func (c *Config) ShouldTreatAsBitFlagSet(pkg, typeName string) bool {
 		return false
 	}
 	names, ok := lookupWithGlob(c.Overrides.Types.BitFlagSet, pkg)
+	if !ok {
+		return false
+	}
+	return slices.Contains(names, typeName)
+}
+
+// IsClosedDomain reports whether the given named type is curated as a closed
+// domain, so it should carry #[go(closed_domain)].
+func (c *Config) IsClosedDomain(pkg, typeName string) bool {
+	if c == nil {
+		return false
+	}
+	names, ok := lookupWithGlob(c.Overrides.Types.ClosedDomain, pkg)
 	if !ok {
 		return false
 	}

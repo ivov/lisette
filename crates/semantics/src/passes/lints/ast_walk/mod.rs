@@ -20,11 +20,12 @@ use checks::{
     check_loop_runs_once, check_lost_query_mutation, check_manual_compound_assignment,
     check_manual_is_empty, check_manual_map, check_manual_unwrap_or,
     check_match_literal_collection, check_match_on_bool, check_match_single_binding,
-    check_negated_equality, check_non_negative_comparison, check_pattern_naming,
-    check_redundant_closure, check_redundant_operation, check_redundant_pattern_matching,
-    check_replaceable_with_zero_fill, check_rest_only_slice_pattern, check_self_assignment,
-    check_self_comparison, check_single_arm_match, check_uninterpolated_fstring,
-    check_unnecessary_bool, check_unnecessary_range_loop, check_unnecessary_raw_string_expression,
+    check_negated_equality, check_non_negative_comparison, check_out_of_domain_value,
+    check_pattern_naming, check_redundant_closure, check_redundant_operation,
+    check_redundant_pattern_matching, check_replaceable_with_zero_fill,
+    check_rest_only_slice_pattern, check_self_assignment, check_self_comparison,
+    check_single_arm_match, check_uninterpolated_fstring, check_unnecessary_bool,
+    check_unnecessary_range_loop, check_unnecessary_raw_string_expression,
     check_unnecessary_raw_string_pattern, check_unnecessary_return, check_unsigned_comparison,
     check_verbose_failure_propagation, check_waitgroup_add_in_task,
 };
@@ -71,6 +72,7 @@ const EXPRESSION_CHECKS: &[NodeCheck] = &[
     check_replaceable_with_zero_fill,
     check_lost_query_mutation,
     check_redundant_closure,
+    check_out_of_domain_value,
 ];
 
 const PATTERN_CHECKS: &[PatternCheck] = &[
@@ -118,6 +120,7 @@ fn run_module(module: &Module, store: &Store, facts: &Facts, sink: &LocalSink) {
             source: &file.source,
             is_d_lis: file.is_d_lis(),
             sink,
+            claimed_spans: Default::default(),
         };
         walk_nodes(&file.items, &ctx, EXPRESSION_CHECKS, PATTERN_CHECKS);
     }

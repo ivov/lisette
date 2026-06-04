@@ -351,6 +351,7 @@ pub enum CachedDefinitionBody {
         methods: HashMap<String, Type>,
         constructor: Option<Type>,
         display: bool,
+        closed_domain: bool,
     },
     Interface {
         definition: CachedInterface,
@@ -412,6 +413,7 @@ impl CachedDefinition {
                 methods,
                 constructor,
                 display,
+                closed_domain,
             } => CachedDefinitionBody::Struct {
                 generics: generics
                     .iter()
@@ -425,6 +427,7 @@ impl CachedDefinition {
                 methods: Self::convert_methods(methods),
                 constructor: constructor.clone(),
                 display: *display,
+                closed_domain: *closed_domain,
             },
             DefinitionBody::Interface { definition } => CachedDefinitionBody::Interface {
                 definition: CachedInterface::from_interface(definition, file_id_to_index),
@@ -499,6 +502,7 @@ impl CachedDefinition {
                 methods,
                 constructor,
                 display,
+                closed_domain,
             } => DefinitionBody::Struct {
                 generics: generics.iter().map(|g| g.to_generic(file_ids)).collect(),
                 fields: fields.iter().map(|f| f.to_field(file_ids)).collect(),
@@ -506,6 +510,7 @@ impl CachedDefinition {
                 methods: Self::restore_methods(methods),
                 constructor: constructor.clone(),
                 display: *display,
+                closed_domain: *closed_domain,
             },
             CachedDefinitionBody::Interface { definition } => DefinitionBody::Interface {
                 definition: definition.to_interface(file_ids),

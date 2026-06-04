@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [warning] Out-of-domain value
+    ╭─[test.lis:13:14]
+ 12 │ fn main() {
+ 13 │   let _ = at('\b')
+    ·              ──┬─
+    ·                ╰── out of domain
+ 14 │   fmt.Println(BEL, TAB)
+    ╰────
+  help: `R` has a closed domain (`BEL='\a', TAB='\t'`) that excludes this value · code: [lint.out_of_domain_value]

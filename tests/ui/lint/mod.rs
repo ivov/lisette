@@ -8665,3 +8665,330 @@ pub fn name_mismatch(a: int, b: int) -> int {
 "#
     );
 }
+
+#[test]
+fn out_of_domain_call_argument() {
+    assert_lint_snapshot!(
+        r#"
+import "go:time"
+
+fn payday(_d: time.Weekday) -> int { 5 }
+
+fn main() {
+  let _ = payday(7)
+}
+"#
+    );
+}
+
+#[test]
+fn out_of_domain_annotated_binding() {
+    assert_lint_snapshot!(
+        r#"
+import "go:time"
+
+fn main() {
+  let w: time.Weekday = 99
+  let _ = w
+}
+"#
+    );
+}
+
+#[test]
+fn out_of_domain_month() {
+    assert_lint_snapshot!(
+        r#"
+import "go:time"
+
+fn main() {
+  let m: time.Month = 13
+  let _ = m
+}
+"#
+    );
+}
+
+#[test]
+fn out_of_domain_closed_string_domain() {
+    assert_lint_snapshot!(
+        r#"
+#[go(closed_domain)]
+pub struct Level(string)
+
+pub const LOW: Level = "low"
+pub const HIGH: Level = "high"
+
+pub fn at(l: Level) -> Level { l }
+
+fn main() {
+  let _ = at("medium")
+}
+"#
+    );
+}
+
+#[test]
+fn out_of_domain_in_domain_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:time"
+
+fn payday(_d: time.Weekday) -> int { 5 }
+
+fn main() {
+  let _ = payday(5)
+}
+"#
+    );
+}
+
+#[test]
+fn out_of_domain_explicit_cast_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:time"
+
+fn payday(_d: time.Weekday) -> int { 5 }
+
+fn main() {
+  let _ = payday(7 as time.Weekday)
+}
+"#
+    );
+}
+
+#[test]
+fn out_of_domain_constructor() {
+    assert_lint_snapshot!(
+        r#"
+import "go:time"
+
+fn main() {
+  let _ = time.Weekday(7)
+}
+"#
+    );
+}
+
+#[test]
+fn out_of_domain_constructor_in_domain_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:time"
+
+fn main() {
+  let _ = time.Weekday(6)
+}
+"#
+    );
+}
+
+#[test]
+fn out_of_domain_non_closed_type_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:time"
+
+fn main() {
+  let d: time.Duration = 99
+  let _ = d
+}
+"#
+    );
+}
+
+#[test]
+fn out_of_domain_bit_flag_set_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:io/fs"
+
+fn main() {
+  let mode: fs.FileMode = 99
+  let _ = mode
+}
+"#
+    );
+}
+
+#[test]
+fn out_of_domain_negative_literal() {
+    assert_lint_snapshot!(
+        r#"
+import "go:time"
+
+fn main() {
+  let w: time.Weekday = -1
+  let _ = w
+}
+"#
+    );
+}
+
+#[test]
+fn out_of_domain_constructor_negative() {
+    assert_lint_snapshot!(
+        r#"
+import "go:time"
+
+fn main() {
+  let _ = time.Weekday(-1)
+}
+"#
+    );
+}
+
+#[test]
+fn out_of_domain_sparse_integer_domain() {
+    assert_lint_snapshot!(
+        r#"
+#[go(closed_domain)]
+pub struct Lvl(int)
+
+pub const LOW: Lvl = 1
+pub const HIGH: Lvl = 3
+
+pub fn at(l: Lvl) -> Lvl { l }
+
+fn main() {
+  let _ = at(2)
+}
+"#
+    );
+}
+
+#[test]
+fn out_of_domain_negative_member_no_false_positive() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:fmt"
+
+#[go(closed_domain)]
+pub struct Sign(int)
+
+pub const NEG: Sign = -1
+pub const ZERO: Sign = 0
+pub const POS: Sign = 1
+
+pub fn at(s: Sign) -> Sign { s }
+
+fn main() {
+  let _ = at(-1)
+  fmt.Println(NEG, ZERO, POS)
+}
+"#
+    );
+}
+
+#[test]
+fn out_of_domain_negative_member_domain() {
+    assert_lint_snapshot!(
+        r#"
+import "go:fmt"
+
+#[go(closed_domain)]
+pub struct Sign(int)
+
+pub const NEG: Sign = -1
+pub const ZERO: Sign = 0
+pub const POS: Sign = 1
+
+pub fn at(s: Sign) -> Sign { s }
+
+fn main() {
+  let _ = at(2)
+  fmt.Println(NEG, ZERO, POS)
+}
+"#
+    );
+}
+
+#[test]
+fn out_of_domain_float_domain_not_linted() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:fmt"
+
+#[go(closed_domain)]
+pub struct F(float64)
+
+pub const ZERO: F = 0.0
+pub const ONE: F = 1.0
+
+pub fn at(x: F) -> F { x }
+
+fn main() {
+  let _ = at(2.5)
+  fmt.Println(ZERO, ONE)
+}
+"#
+    );
+}
+
+#[test]
+fn out_of_domain_uintptr_domain() {
+    assert_lint_snapshot!(
+        r#"
+import "go:fmt"
+
+#[go(closed_domain)]
+pub struct P(uintptr)
+
+pub const A: P = 1
+pub const B: P = 2
+
+pub fn at(p: P) -> P { p }
+
+fn main() {
+  let _ = at(3)
+  fmt.Println(A, B)
+}
+"#
+    );
+}
+
+#[test]
+fn out_of_domain_rune_escape_member_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:fmt"
+
+#[go(closed_domain)]
+pub struct R(rune)
+
+pub const BEL: R = '\a'
+pub const TAB: R = '\t'
+
+pub fn at(r: R) -> R { r }
+
+fn main() {
+  let _ = at(7)
+  let _ = at('\a')
+  fmt.Println(BEL, TAB)
+}
+"#
+    );
+}
+
+#[test]
+fn out_of_domain_rune_escape_domain() {
+    assert_lint_snapshot!(
+        r#"
+import "go:fmt"
+
+#[go(closed_domain)]
+pub struct R(rune)
+
+pub const BEL: R = '\a'
+pub const TAB: R = '\t'
+
+pub fn at(r: R) -> R { r }
+
+fn main() {
+  let _ = at('\b')
+  fmt.Println(BEL, TAB)
+}
+"#
+    );
+}

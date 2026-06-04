@@ -324,6 +324,7 @@ fn store_get_definition_domain_style_go_module() {
                 methods: Default::default(),
                 constructor: None,
                 display: false,
+                closed_domain: false,
             },
         },
     );

@@ -1,0 +1,12 @@
+{
+  "overrides": {
+    "types": {
+      "closed_domain": {
+        "github.com/ivov/lisette/bindgen/tests/testdata/fixtures/closed_domain": [
+          "Weekday",
+          "Flagish"
+        ]
+      }
+    }
+  }
+}

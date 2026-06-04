@@ -704,3 +704,16 @@ pub fn unnecessary_range_loop(span: &Span, collection: &str) -> LisetteDiagnosti
             "This loop exposes the index only to access elements of `{collection}`. Iterate directly over the elements with `for value in {collection}`"
         ))
 }
+
+pub fn out_of_domain_value(
+    span: &Span,
+    type_display: &str,
+    valid_display: &str,
+) -> LisetteDiagnostic {
+    LisetteDiagnostic::warn("Out-of-domain value")
+        .with_lint_code("out_of_domain_value")
+        .with_span_label(span, "out of domain")
+        .with_help(format!(
+            "`{type_display}` has a closed domain (`{valid_display}`) that excludes this value"
+        ))
+}

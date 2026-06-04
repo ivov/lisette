@@ -246,7 +246,10 @@ fn known_attributes() -> Vec<&'static str> {
 }
 
 fn is_known_attribute(name: &str) -> bool {
-    is_serialization_key(name) || OTHER_ATTRIBUTES.contains(&name)
+    // `go` is the Go-interop rail (e.g. `#[go(closed_domain)]`, `#[go(bit_flag_set)]`).
+    // Accepted but kept out of `known_attributes()` so it is not advertised as a
+    // general-purpose attribute in unknown-attribute help.
+    is_serialization_key(name) || OTHER_ATTRIBUTES.contains(&name) || name == "go"
 }
 
 fn is_serialization_key(key: &str) -> bool {

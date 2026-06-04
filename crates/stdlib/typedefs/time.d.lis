@@ -93,6 +93,7 @@ pub const Nanosecond: Duration = 1
 pub const Second: Duration = 1000000000
 
 /// A Month specifies a month of the year (January = 1, ...).
+#[go(closed_domain)]
 pub struct Month(int)
 
 pub const April: Month = 4
@@ -120,6 +121,7 @@ pub const October: Month = 10
 pub const September: Month = 9
 
 /// A Weekday specifies a day of the week (Sunday = 0, ...).
+#[go(closed_domain)]
 pub struct Weekday(int)
 
 pub const Friday: Weekday = 5

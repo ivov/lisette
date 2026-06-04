@@ -28,22 +28,24 @@ type stats struct {
 }
 
 type Emitter struct {
-	buf             strings.Builder
-	stats           stats
-	skipped         int
-	methods         map[string][]convert.ConvertResult // receiver type name -> methods
-	cfg             *config.Config
-	pkgPath         string
-	pkgAliases      map[string]string // package path -> local prefix used in references
-	bitFlagSetTypes map[string]bool   // type names emitted as #[go(bit_flag_set)] newtypes
+	buf               strings.Builder
+	stats             stats
+	skipped           int
+	methods           map[string][]convert.ConvertResult // receiver type name -> methods
+	cfg               *config.Config
+	pkgPath           string
+	pkgAliases        map[string]string // package path -> local prefix used in references
+	bitFlagSetTypes   map[string]bool   // type names emitted as #[go(bit_flag_set)] newtypes
+	closedDomainTypes map[string]bool   // type names emitted as #[go(closed_domain)] newtypes
 }
 
-func NewEmitter(cfg *config.Config, pkgPath string, bitFlagSetTypes map[string]bool) *Emitter {
+func NewEmitter(cfg *config.Config, pkgPath string, bitFlagSetTypes, closedDomainTypes map[string]bool) *Emitter {
 	return &Emitter{
-		methods:         make(map[string][]convert.ConvertResult),
-		cfg:             cfg,
-		pkgPath:         pkgPath,
-		bitFlagSetTypes: bitFlagSetTypes,
+		methods:           make(map[string][]convert.ConvertResult),
+		cfg:               cfg,
+		pkgPath:           pkgPath,
+		bitFlagSetTypes:   bitFlagSetTypes,
+		closedDomainTypes: closedDomainTypes,
 	}
 }
 
@@ -582,6 +584,9 @@ func (e *Emitter) emitType(result convert.ConvertResult) {
 		} else {
 			if e.bitFlagSetTypes[typeName] {
 				sig.WriteString("#[go(bit_flag_set)]\n")
+			}
+			if e.closedDomainTypes[typeName] {
+				sig.WriteString("#[go(closed_domain)]\n")
 			}
 			sig.WriteString("pub struct ")
 			sig.WriteString(typeName)

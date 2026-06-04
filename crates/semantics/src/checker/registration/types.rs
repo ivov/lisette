@@ -296,6 +296,7 @@ impl TaskState<'_> {
         span: &Span,
         doc: &Option<String>,
         display: bool,
+        closed_domain: bool,
     ) {
         let qualified_name = self.qualify_name(name);
         let struct_ty = store
@@ -365,6 +366,7 @@ impl TaskState<'_> {
                     methods: Default::default(),
                     constructor: None,
                     display,
+                    closed_domain,
                 },
             },
         );

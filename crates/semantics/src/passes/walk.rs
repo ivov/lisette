@@ -1,8 +1,10 @@
+use std::cell::RefCell;
+
 use diagnostics::LocalSink;
-use rustc_hash::FxHashMap as HashMap;
+use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use syntax::ast::{
     Expression, FormatStringPart, Literal, MatchArm, Pattern, RestPattern, SelectArm,
-    SelectArmPattern,
+    SelectArmPattern, Span,
 };
 use syntax::program::File;
 
@@ -17,6 +19,9 @@ pub(crate) struct NodeCtx<'a> {
     pub source: &'a str,
     pub is_d_lis: bool,
     pub sink: &'a LocalSink,
+    /// Per-walk scratch: literal spans already claimed by a parent node (e.g. a
+    /// negation's magnitude), so a check does not also judge them standalone.
+    pub claimed_spans: RefCell<HashSet<Span>>,
 }
 
 pub(crate) type NodeCheck = fn(&Expression, &NodeCtx);

@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [warning] Out-of-domain value
+    ╭─[test.lis:11:14]
+ 10 │ fn main() {
+ 11 │   let _ = at(2)
+    ·              ┬
+    ·              ╰── out of domain
+ 12 │ }
+    ╰────
+  help: `Lvl` has a closed domain (`LOW=1, HIGH=3`) that excludes this value · code: [lint.out_of_domain_value]
