@@ -707,42 +707,6 @@ fn main() {
 }
 
 #[test]
-fn manual_is_empty_less_than_zero_no_warning() {
-    assert_no_lint_warnings!(
-        r#"
-fn main() {
-  let xs = [1, 2, 3]
-  let _ = xs.length() < 0
-}
-"#
-    );
-}
-
-#[test]
-fn manual_is_empty_greater_or_equal_zero_no_warning() {
-    assert_no_lint_warnings!(
-        r#"
-fn main() {
-  let xs = [1, 2, 3]
-  let _ = xs.length() >= 0
-}
-"#
-    );
-}
-
-#[test]
-fn manual_is_empty_zero_less_or_equal_no_warning() {
-    assert_no_lint_warnings!(
-        r#"
-fn main() {
-  let xs = [1, 2, 3]
-  let _ = 0 <= xs.length()
-}
-"#
-    );
-}
-
-#[test]
 fn manual_is_empty_compare_one_no_warning() {
     assert_no_lint_warnings!(
         r#"
@@ -939,6 +903,185 @@ fn unsigned_comparison_with_nonzero_no_warning() {
 fn main() {
   let n: uint = 5;
   let _ = n < 10
+}
+"#
+    );
+}
+
+#[test]
+fn non_negative_comparison_less_than_zero() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let xs = [1, 2, 3]
+  let _ = xs.length() < 0
+}
+"#
+    );
+}
+
+#[test]
+fn non_negative_comparison_greater_or_equal_zero() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let xs = [1, 2, 3]
+  let _ = xs.length() >= 0
+}
+"#
+    );
+}
+
+#[test]
+fn non_negative_comparison_zero_greater() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let xs = [1, 2, 3]
+  let _ = 0 > xs.length()
+}
+"#
+    );
+}
+
+#[test]
+fn non_negative_comparison_zero_less_or_equal() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let xs = [1, 2, 3]
+  let _ = 0 <= xs.length()
+}
+"#
+    );
+}
+
+#[test]
+fn non_negative_comparison_string_receiver() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let s = "hello"
+  let _ = s.length() < 0
+}
+"#
+    );
+}
+
+#[test]
+fn non_negative_comparison_ref_receiver() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let xs = [1, 2, 3]
+  let r = &xs
+  let _ = r.length() < 0
+}
+"#
+    );
+}
+
+#[test]
+fn non_negative_comparison_native_identifier_form() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let xs = [1, 2, 3]
+  let _ = Slice.length(xs) < 0
+}
+"#
+    );
+}
+
+#[test]
+fn non_negative_comparison_pipeline_form() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let xs = [1, 2, 3]
+  let _ = (xs |> Slice.length) >= 0
+}
+"#
+    );
+}
+
+#[test]
+fn non_negative_comparison_with_parens() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let xs = [1, 2, 3]
+  let _ = (xs.length()) >= (0)
+}
+"#
+    );
+}
+
+#[test]
+fn non_negative_comparison_user_type_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+struct Stack {
+  depth: int
+}
+
+impl Stack {
+  fn length(self) -> int {
+    self.depth
+  }
+}
+
+fn main() {
+  let st = Stack { depth: 0 }
+  let _ = st.length() < 0
+}
+"#
+    );
+}
+
+#[test]
+fn non_negative_comparison_user_type_ufcs_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+struct Stack {
+  depth: int
+}
+
+impl Stack {
+  fn length(self) -> int {
+    self.depth - 100
+  }
+}
+
+fn main() {
+  let st = Stack { depth: 0 }
+  let _ = Stack.length(st) < 0
+}
+"#
+    );
+}
+
+#[test]
+fn non_negative_comparison_alias_identifier_form() {
+    assert_lint_snapshot!(
+        r#"
+type MyString = string
+
+fn main() {
+  let s: MyString = "hi"
+  let _ = MyString.length(s) < 0
+}
+"#
+    );
+}
+
+#[test]
+fn non_negative_comparison_nonzero_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let xs = [1, 2, 3]
+  let _ = xs.length() < 5
 }
 "#
     );

@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [warning] Comparison is always false
+   ╭─[test.lis:5:11]
+ 4 │   let r = &xs
+ 5 │   let _ = r.length() < 0
+   ·           ───────┬──────
+   ·                  ╰── always false
+ 6 │ }
+   ╰────
+  help: A length is never negative, so this comparison always has the same result. Did you mean to compare against a different value? · code: [lint.non_negative_comparison]
