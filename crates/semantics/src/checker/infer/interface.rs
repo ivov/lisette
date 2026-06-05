@@ -239,6 +239,17 @@ impl InferCtx<'_, '_> {
                 Type::Forall { .. } => self.instantiate(symbol_method).0,
                 _ => symbol_method.clone(),
             };
+            let receiver_to_pin = match symbol_method {
+                Type::Forall { .. } => match &instantiated_method {
+                    Type::Function(f) => f
+                        .params
+                        .first()
+                        .filter(|p| !p.is_receiver_placeholder())
+                        .map(Type::strip_refs),
+                    _ => None,
+                },
+                _ => None,
+            };
             let impl_method_without_receiver = Self::remove_first_param(&instantiated_method);
 
             // Strip bounds before comparing - bounds are checked separately via bounds_equivalent
@@ -264,21 +275,35 @@ impl InferCtx<'_, '_> {
             )
             .unwrap_or_else(|| impl_method_without_receiver.clone());
 
+            let candidate_ty = ty.strip_refs().resolve_in(&self.env);
+            let mut receiver_pinned = true;
+            let mut resolved_impl_method = None;
             self.scopes.increment_type_param_depth();
             let sig_match = self.speculatively(|this| {
-                InferCtx::new(this, store).try_unify(
+                let mut ctx = InferCtx::new(this, store);
+                if let Some(receiver) = &receiver_to_pin {
+                    ctx.try_unify(receiver, &candidate_ty, &Span::dummy())
+                        .inspect_err(|_| receiver_pinned = false)?;
+                }
+                let result = ctx.try_unify(
                     &strip_bounds(&substituted_method),
                     &strip_bounds(&impl_for_unify),
                     &Span::dummy(),
-                )
+                );
+                if result.is_err() {
+                    resolved_impl_method = Some(impl_method_without_receiver.resolve_in(&ctx.env));
+                }
+                result
             });
             self.scopes.decrement_type_param_depth();
 
-            if sig_match.is_err() {
+            if !receiver_pinned {
+                missing.push((method_name.to_string(), method_ty.clone()));
+            } else if sig_match.is_err() {
                 incompatible.push((
                     method_name.to_string(),
                     substituted_method,
-                    impl_method_without_receiver.clone(),
+                    resolved_impl_method.unwrap_or(impl_method_without_receiver),
                 ));
             } else if let Type::Nominal { id, .. } = ty.strip_refs().resolve_in(&self.env)
                 && let Some(module) = store.module_for_qualified_name(id.as_str())

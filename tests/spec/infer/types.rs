@@ -1635,6 +1635,108 @@ fn generic_interface_with_type_parameter_satisfied() {
 }
 
 #[test]
+fn generic_impl_satisfies_interface_for_matching_instantiation() {
+    infer(
+        r#"
+interface IntGetter { fn get(self) -> int }
+struct Box<T> { value: T }
+impl<T> Box<T> { fn get(self) -> T { self.value } }
+fn want(g: IntGetter) -> int { g.get() }
+fn main() {
+  let b: Box<int> = Box { value: 1 }
+  let _ = want(b)
+}
+"#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn generic_impl_mismatched_instantiation_rejected() {
+    infer(
+        r#"
+interface IntGetter { fn get(self) -> int }
+struct Box<T> { value: T }
+impl<T> Box<T> { fn get(self) -> T { self.value } }
+fn want(g: IntGetter) -> int { g.get() }
+fn main() {
+  let b: Box<string> = Box { value: "hello" }
+  let _ = want(b)
+}
+"#,
+    )
+    .assert_infer_code("interface_not_implemented");
+}
+
+#[test]
+fn generic_impl_mismatched_param_position_rejected() {
+    infer(
+        r#"
+interface IntSetter { fn set(self, v: int) }
+struct Box<T> { value: T }
+impl<T> Box<T> { fn set(self, v: T) {} }
+fn want(s: IntSetter) { s.set(1) }
+fn main() {
+  let b: Box<string> = Box { value: "hi" }
+  want(b)
+}
+"#,
+    )
+    .assert_infer_code("interface_not_implemented");
+}
+
+#[test]
+fn constrained_generic_impl_receiver_mismatch_rejected() {
+    infer(
+        r#"
+interface Same { fn same(self) -> int }
+struct Pair<A, B> { a: A, b: B }
+impl<A> Pair<A, A> { fn same(self) -> int { 1 } }
+fn want(s: Same) -> int { s.same() }
+fn main() {
+  let p: Pair<int, string> = Pair { a: 1, b: "x" }
+  let _ = want(p)
+}
+"#,
+    )
+    .assert_infer_code("interface_not_implemented");
+}
+
+#[test]
+fn constrained_generic_impl_receiver_match_accepted() {
+    infer(
+        r#"
+interface Same { fn same(self) -> int }
+struct Pair<A, B> { a: A, b: B }
+impl<A> Pair<A, A> { fn same(self) -> int { 1 } }
+fn want(s: Same) -> int { s.same() }
+fn main() {
+  let p: Pair<int, int> = Pair { a: 1, b: 2 }
+  let _ = want(p)
+}
+"#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn generic_impl_satisfies_generic_interface_for_matching_instantiation() {
+    infer(
+        r#"
+interface Getter<U> { fn get(self) -> U }
+struct Box<T> { value: T }
+impl<T> Box<T> { fn get(self) -> T { self.value } }
+fn want(g: Getter<string>) -> string { g.get() }
+fn main() {
+  let b: Box<string> = Box { value: "hi" }
+  let _ = want(b)
+}
+"#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
 fn unconstrained_bounded_type_param_produces_error() {
     infer(
         r#"
