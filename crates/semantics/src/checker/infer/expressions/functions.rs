@@ -190,16 +190,15 @@ impl InferCtx<'_, '_> {
 
         self.scopes.pop();
 
-        let fn_forall_ty = if generics.is_empty() {
-            base_fn_ty.clone()
+        let fn_ty = if generics.is_empty() {
+            base_fn_ty
         } else {
-            Type::Forall {
+            let fn_forall_ty = Type::Forall {
                 vars: generics.iter().map(|g| g.name.clone()).collect(),
                 body: Box::new(base_fn_ty),
-            }
+            };
+            self.instantiate(&fn_forall_ty).0
         };
-
-        let (fn_ty, _) = self.instantiate(&fn_forall_ty);
 
         self.unify(expected_ty, &fn_ty, &span);
 
@@ -269,15 +268,13 @@ impl InferCtx<'_, '_> {
 
         self.scopes.pop();
 
-        let (fn_ty, _) = self.instantiate(&base_fn_ty);
-
-        self.unify(expected_ty, &fn_ty, &span);
+        self.unify(expected_ty, &base_fn_ty, &span);
 
         Expression::Lambda {
             params: new_params,
             return_annotation,
             body: new_body.into(),
-            ty: fn_ty,
+            ty: base_fn_ty,
             span,
         }
     }
