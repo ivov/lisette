@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [info] Manual `time.Since`
+   ╭─[test.lis:6:11]
+ 5 │   let t = clock.Now()
+ 6 │   let _ = clock.Now().Sub(t)
+   ·           ─────────┬────────
+   ·                    ╰── can use `time.Since`
+ 7 │ }
+   ╰────
+  help: `clock.Since(t)` is shorthand for `clock.Now().Sub(t)` · code: [lint.manual_time_since]

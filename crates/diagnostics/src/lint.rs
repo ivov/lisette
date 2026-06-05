@@ -720,6 +720,15 @@ pub fn manual_equal_fold(
         ))
 }
 
+pub fn manual_time_since(span: &Span, namespace: &str, arg: &str) -> LisetteDiagnostic {
+    LisetteDiagnostic::info("Manual `time.Since`")
+        .with_lint_code("manual_time_since")
+        .with_span_label(span, "can use `time.Since`")
+        .with_help(format!(
+            "`{namespace}.Since({arg})` is shorthand for `{namespace}.Now().Sub({arg})`"
+        ))
+}
+
 pub fn lost_query_mutation(span: &Span, method: &str) -> LisetteDiagnostic {
     LisetteDiagnostic::warn("Lost query mutation")
         .with_lint_code("lost_query_mutation")

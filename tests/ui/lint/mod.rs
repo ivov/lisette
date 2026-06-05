@@ -888,6 +888,131 @@ fn main() {
 }
 
 #[test]
+fn manual_time_since() {
+    assert_lint_snapshot!(
+        r#"
+import "go:time"
+
+fn main() {
+  let t = time.Now()
+  let _ = time.Now().Sub(t)
+}
+"#
+    );
+}
+
+#[test]
+fn manual_time_since_aliased_import() {
+    assert_lint_snapshot!(
+        r#"
+import clock "go:time"
+
+fn main() {
+  let t = clock.Now()
+  let _ = clock.Now().Sub(t)
+}
+"#
+    );
+}
+
+#[test]
+fn manual_time_since_parenthesized() {
+    assert_lint_snapshot!(
+        r#"
+import "go:time"
+
+fn main() {
+  let t = time.Now()
+  let _ = (time.Now()).Sub(t)
+}
+"#
+    );
+}
+
+#[test]
+fn manual_time_since_variable_receiver_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:time"
+
+fn main() {
+  let t = time.Now()
+  let u = time.Now()
+  let _ = u.Sub(t)
+}
+"#
+    );
+}
+
+#[test]
+fn manual_time_since_add_method_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:time"
+
+fn main() {
+  let _ = time.Now().Add(time.Second)
+}
+"#
+    );
+}
+
+#[test]
+fn manual_time_since_user_type_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+struct Clock {
+  ticks: int
+}
+
+impl Clock {
+  fn Now(self) -> Clock {
+    self
+  }
+  fn Sub(self, other: Clock) -> int {
+    self.ticks - other.ticks
+  }
+}
+
+fn main() {
+  let c = Clock { ticks: 0 }
+  let _ = c.Now().Sub(c)
+}
+"#
+    );
+}
+
+#[test]
+fn manual_time_since_field_argument() {
+    assert_lint_snapshot!(
+        r#"
+import "go:time"
+
+struct Timer {
+  start: time.Time
+}
+
+fn elapsed(timer: Timer) -> time.Duration {
+  time.Now().Sub(timer.start)
+}
+"#
+    );
+}
+
+#[test]
+fn manual_time_since_effectful_argument_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:time"
+
+fn main() {
+  let _ = time.Now().Sub(time.Now())
+}
+"#
+    );
+}
+
+#[test]
 fn self_comparison_equal() {
     assert_lint_snapshot!(
         r#"

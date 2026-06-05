@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [info] Manual `time.Since`
+    ╭─[test.lis:9:3]
+  8 │ fn elapsed(timer: Timer) -> time.Duration {
+  9 │   time.Now().Sub(timer.start)
+    ·   ─────────────┬─────────────
+    ·                ╰── can use `time.Since`
+ 10 │ }
+    ╰────
+  help: `time.Since(timer.start)` is shorthand for `time.Now().Sub(timer.start)` · code: [lint.manual_time_since]
