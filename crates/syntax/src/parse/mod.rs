@@ -233,6 +233,21 @@ impl<'source> Parser<'source> {
             Function => self.parse_function(None, vec![]),
             Const => self.parse_const_definition(None),
 
+            Hash => {
+                let attributes = self.parse_attributes();
+                if let Some(attribute) = attributes.first() {
+                    self.error_misplaced_attribute(attribute.span);
+                }
+                if self.is(RightCurlyBrace) || self.at_eof() {
+                    ast::Expression::Unit {
+                        ty: Type::uninferred(),
+                        span: self.span_from_token(self.current_token()),
+                    }
+                } else {
+                    self.parse_block_item()
+                }
+            }
+
             Let => self.parse_let(),
             Return => self.parse_return(),
             For => self.parse_for(),

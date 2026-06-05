@@ -545,6 +545,24 @@ interface Child {
 }
 
 #[test]
+fn parse_attribute_inside_function_body() {
+    let input = r#"
+fn main() {
+  let command = "add"
+
+  #[iterate]
+  let result = match command {
+    "add" => 1,
+    _ => 0,
+  }
+
+  let _ = result
+}
+"#;
+    assert_parse_error_snapshot!(input);
+}
+
+#[test]
 fn parse_missing_closing_brace() {
     let input = r#"
 fn main() {
