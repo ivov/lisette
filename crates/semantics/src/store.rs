@@ -470,7 +470,7 @@ impl Store {
                 underlying_ty,
             },
             Type::Function(f) => {
-                let f = *f;
+                let f = std::sync::Arc::try_unwrap(f).unwrap_or_else(|arc| (*arc).clone());
                 Type::function(
                     f.params.iter().map(|p| self.peel_alias_deep(p)).collect(),
                     f.param_mutability,

@@ -641,6 +641,7 @@ impl InferCtx<'_, '_> {
             unreachable!();
         };
 
+        let f = std::sync::Arc::make_mut(f);
         let receiver_ty = f.params.remove(0);
         if !f.param_mutability.is_empty() {
             f.param_mutability.remove(0);

@@ -1,6 +1,7 @@
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use std::borrow::Borrow;
 use std::cell::OnceCell;
+use std::sync::Arc;
 
 use ecow::EcoString;
 
@@ -326,7 +327,7 @@ pub enum Type {
     /// Dot-access on this type resolves to the module's exports.
     ImportNamespace(EcoString),
 
-    Function(Box<FunctionType>),
+    Function(Arc<FunctionType>),
 
     /// Type variable handle. Binding state lives in a `TypeEnv` owned by the
     /// checker; the inline `hint` is display metadata set at allocation time
@@ -473,7 +474,7 @@ impl Type {
         bounds: Vec<Bound>,
         return_type: Box<Type>,
     ) -> Type {
-        Type::Function(Box::new(FunctionType {
+        Type::Function(Arc::new(FunctionType {
             params,
             param_mutability,
             bounds,
@@ -1330,7 +1331,7 @@ impl Type {
     pub fn with_receiver_placeholder(self) -> Type {
         match self {
             Type::Function(f) => {
-                let f = *f;
+                let f = Arc::try_unwrap(f).unwrap_or_else(|arc| (*arc).clone());
                 let mut new_params = vec![Type::ReceiverPlaceholder];
                 new_params.extend(f.params);
 

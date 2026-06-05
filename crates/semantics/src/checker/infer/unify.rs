@@ -286,9 +286,8 @@ impl InferCtx<'_, '_> {
                 }
             }
             Function(f) => {
-                let f = *f;
-                for p in f.params {
-                    self.collapse_vars_to_error(&p, span);
+                for p in &f.params {
+                    self.collapse_vars_to_error(p, span);
                 }
                 self.collapse_vars_to_error(&f.return_type, span);
             }

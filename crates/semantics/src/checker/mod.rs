@@ -322,21 +322,25 @@ impl<'s> TaskState<'s> {
         None
     }
 
-    pub(crate) fn lookup_qualified_name(&self, store: &Store, type_name: &str) -> Option<String> {
+    pub(crate) fn lookup_qualified_name(
+        &self,
+        store: &Store,
+        type_name: &str,
+    ) -> Option<EcoString> {
         if let Some((prefix, simple_name)) = type_name.split_once('.')
             && let Some(module_id) = self.imports.prefix_to_module.get(prefix)
             && let Some(imported_module) = store.get_module(module_id)
             && let Some((qualified_name, _)) =
                 self.resolve_in_imported_module(imported_module, simple_name)
         {
-            return Some(qualified_name);
+            return Some(qualified_name.into());
         }
 
         let module = store.get_module(&self.cursor.module_id)?;
         let qualified_name = Symbol::from_parts(&module.id, type_name);
 
         if module.definitions.contains_key(qualified_name.as_str()) {
-            return Some(qualified_name.to_string());
+            return Some(qualified_name.as_eco().clone());
         }
 
         for imported_module_id in &self.imports.unprefixed_imports {
@@ -346,7 +350,7 @@ impl<'s> TaskState<'s> {
                     .definitions
                     .contains_key(qualified_name.as_str())
                 {
-                    return Some(qualified_name.to_string());
+                    return Some(qualified_name.as_eco().clone());
                 }
             }
         }
@@ -494,7 +498,7 @@ impl<'s> TaskState<'s> {
         let qualified_name = self.lookup_qualified_name(store, type_name)?;
         let ty = store.get_type(&qualified_name)?.clone();
 
-        Some((qualified_name, ty))
+        Some((qualified_name.to_string(), ty))
     }
 
     pub(crate) fn resolve_type_from_prelude(

@@ -111,7 +111,7 @@ impl InferCtx<'_, '_> {
             {
                 let struct_ty = struct_ty.clone();
                 let struct_fields = struct_fields.clone();
-                let struct_id_str = struct_id.to_string();
+                let struct_id_str: EcoString = struct_id.into();
                 let alias_underlying = if matches!(&alias_ty, Type::Forall { .. }) {
                     None
                 } else {
@@ -172,7 +172,7 @@ impl InferCtx<'_, '_> {
             if let Some(variant_fields) = variant_fields {
                 let (instantiated_ty, map) = self.instantiate(&alias_ty);
                 let enum_ty = match instantiated_ty {
-                    Type::Function(f) => *f.return_type,
+                    Type::Function(f) => (*f.return_type).clone(),
                     _ => instantiated_ty,
                 };
                 return self.infer_struct_call_for_enum_variant(
@@ -192,7 +192,7 @@ impl InferCtx<'_, '_> {
             let (value_constructor_type, map) = self.instantiate(&ty);
 
             let pattern_ty = match value_constructor_type {
-                Type::Function(f) => *f.return_type,
+                Type::Function(f) => (*f.return_type).clone(),
                 Type::Nominal { .. } => value_constructor_type,
                 _ => {
                     self.sink
@@ -246,7 +246,7 @@ impl InferCtx<'_, '_> {
     fn infer_struct_call_for_struct(
         &mut self,
         struct_name: EcoString,
-        qualified_name: String,
+        qualified_name: EcoString,
         struct_ty: Type,
         struct_fields: Vec<syntax::ast::StructFieldDefinition>,
         field_assignments: Vec<StructFieldAssignment>,

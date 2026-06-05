@@ -628,6 +628,7 @@ impl InferCtx<'_, '_> {
                 && let Type::Function(ref mut f) = instantiated
                 && !f.params.is_empty()
             {
+                let f = std::sync::Arc::make_mut(f);
                 let receiver_param = f.params.remove(0);
                 if !f.param_mutability.is_empty() {
                     f.param_mutability.remove(0);

@@ -18,4 +18,4 @@ serde = ["dep:serde", "ecow/serde"]
 [dependencies]
 ecow.workspace = true
 rustc-hash.workspace = true
-serde = { version = "1", features = ["derive"], optional = true }
+serde = { version = "1", features = ["derive", "rc"], optional = true }

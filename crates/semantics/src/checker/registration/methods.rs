@@ -345,7 +345,7 @@ impl TaskState<'_> {
                 let fn_ty = if has_self_receiver {
                     match fn_ty {
                         Type::Function(f) => {
-                            let f = *f;
+                            let f = std::sync::Arc::try_unwrap(f).unwrap_or_else(|arc| (*arc).clone());
                             let param_mutability = if f.param_mutability.is_empty() {
                                 vec![]
                             } else {

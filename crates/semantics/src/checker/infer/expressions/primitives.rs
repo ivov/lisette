@@ -242,27 +242,25 @@ impl InferCtx<'_, '_> {
 
         let qualified: Option<EcoString> = if binding_id.is_none() {
             self.lookup_qualified_name(store, &value)
-                .map(EcoString::from)
         } else {
             None
         };
 
         if let Some(ref qname) = qualified
-            && let Some(definition_span) = self.get_definition_name_span(store, qname.as_str())
-        {
-            self.facts.add_usage(span, definition_span);
-        }
-
-        if let Some(ref qname) = qualified
             && let Some(definition) = store.get_definition(qname.as_str())
-            && let DefinitionBody::TypeAlias { .. } = &definition.body
-            && !self.scopes.is_callee_context()
-            && !self.scopes.is_dot_access_base()
         {
-            let underlying = definition.ty.unwrap_forall();
-            if self.is_enum_type(store, underlying) {
-                self.sink
-                    .push(diagnostics::infer::namespace_alias_used_as_value(span));
+            if let Some(definition_span) = definition.name_span() {
+                self.facts.add_usage(span, definition_span);
+            }
+            if let DefinitionBody::TypeAlias { .. } = &definition.body
+                && !self.scopes.is_callee_context()
+                && !self.scopes.is_dot_access_base()
+            {
+                let underlying = definition.ty.unwrap_forall();
+                if self.is_enum_type(store, underlying) {
+                    self.sink
+                        .push(diagnostics::infer::namespace_alias_used_as_value(span));
+                }
             }
         }
 

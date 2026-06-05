@@ -382,7 +382,7 @@ impl InferCtx<'_, '_> {
 
         let (pattern_ty, params) = match value_constructor_type {
             Type::Function(f) => {
-                let f = *f;
+                let f = std::sync::Arc::try_unwrap(f).unwrap_or_else(|arc| (*arc).clone());
                 (*f.return_type, f.params)
             }
             Type::Nominal { .. } | Type::Compound { .. } | Type::Simple(_) => {
@@ -530,7 +530,7 @@ impl InferCtx<'_, '_> {
             span,
         };
         let typed = TypedPattern::Const {
-            qualified_name: qualified.into(),
+            qualified_name: qualified,
             ty: resolved_ty,
             value: const_value,
         };
@@ -946,7 +946,7 @@ impl InferCtx<'_, '_> {
         let (value_constructor_type, map) = self.instantiate(&ty);
 
         let pattern_ty = match value_constructor_type {
-            Type::Function(f) => *f.return_type,
+            Type::Function(f) => (*f.return_type).clone(),
             Type::Nominal { .. } => value_constructor_type,
             _ => return None,
         };
