@@ -80,10 +80,9 @@ impl InferCtx<'_, '_> {
         }
     }
 
-    /// In Go, if any method has a pointer receiver, only a pointer to the
-    /// type satisfies the interface. This check runs only from `unify_constructors`
-    /// (direct value-to-interface assignment), not from bounds checking where the
-    /// emitter may absorb Ref<T> into the type parameter.
+    /// In Go, if any method has a pointer receiver, only a pointer satisfies the
+    /// interface. Runs on direct value-to-interface assignment and bounds checking,
+    /// minus generics absorbed via a `Ref<T>` param (see `generic_absorbed_via_ref_param`).
     pub(super) fn check_pointer_receivers(
         &self,
         ty: &Type,

@@ -4586,6 +4586,100 @@ fn test() { let _w: Worker = MyWorker { label: "t", count: 0 } }
 }
 
 #[test]
+fn pointer_receiver_through_value_bound_rejected() {
+    infer(
+        r#"
+interface Bumper { fn bump(self) }
+struct Counter { n: int }
+impl Counter { fn bump(self: Ref<Counter>) { self.n += 1 } }
+fn use_bound<T: Bumper>(x: T) { x.bump() }
+fn main() { let c = Counter { n: 0 }; use_bound(c) }
+"#,
+    )
+    .assert_infer_code("interface_not_implemented");
+}
+
+#[test]
+fn pointer_receiver_through_ref_bound_accepted() {
+    infer(
+        r#"
+interface Bumper { fn bump(self) }
+struct Counter { n: int }
+impl Counter { fn bump(self: Ref<Counter>) { self.n += 1 } }
+fn use_bound<T: Bumper>(x: Ref<T>) { x.bump() }
+fn main() { let mut c = Counter { n: 0 }; use_bound(&c) }
+"#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn pointer_receiver_through_value_bound_function_value_rejected() {
+    infer(
+        r#"
+interface Bumper { fn bump(self) }
+struct Counter { n: int }
+impl Counter { fn bump(self: Ref<Counter>) { self.n += 1 } }
+fn use_bound<T: Bumper>(x: T) { x.bump() }
+fn apply(f: fn(Counter)) { f(Counter { n: 0 }) }
+fn main() { apply(use_bound) }
+"#,
+    )
+    .assert_infer_code("interface_not_implemented");
+}
+
+#[test]
+fn pointer_receiver_through_ref_bound_function_value_accepted() {
+    infer(
+        r#"
+interface Bumper { fn bump(self) }
+struct Counter { n: int }
+impl Counter { fn bump(self: Ref<Counter>) { self.n += 1 } }
+fn use_bound<T: Bumper>(x: Ref<T>) { x.bump() }
+fn apply(f: fn(Ref<Counter>)) { let mut c = Counter { n: 0 }; f(&c) }
+fn main() { apply(use_bound) }
+"#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn pointer_receiver_through_mixed_value_and_ref_bound_rejected() {
+    infer(
+        r#"
+interface Bumper { fn bump(self) }
+struct Counter { n: int }
+impl Counter { fn bump(self: Ref<Counter>) { self.n += 1 } }
+fn use_bound<T: Bumper>(x: T, y: Ref<T>) { x.bump(); y.bump() }
+fn main() {
+  let c = Counter { n: 0 }
+  let mut d = Counter { n: 0 }
+  use_bound(c, &d)
+}
+"#,
+    )
+    .assert_infer_code("interface_not_implemented");
+}
+
+#[test]
+fn pointer_receiver_through_repeated_ref_bound_accepted() {
+    infer(
+        r#"
+interface Bumper { fn bump(self) }
+struct Counter { n: int }
+impl Counter { fn bump(self: Ref<Counter>) { self.n += 1 } }
+fn use_bound<T: Bumper>(x: Ref<T>, y: Ref<T>) { x.bump(); y.bump() }
+fn main() {
+  let mut c = Counter { n: 0 }
+  let mut d = Counter { n: 0 }
+  use_bound(&c, &d)
+}
+"#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
 fn cast_to_type_alias_to_interface() {
     infer(
         r#"

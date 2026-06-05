@@ -421,7 +421,7 @@ impl InferCtx<'_, '_> {
         // leave gaps in the cached `underlying_ty` chain).
         let resolved_expected = store.deep_resolve_alias(&expected_ty.resolve_in(&self.env));
         self.unify(&resolved_expected, &return_ty, &span);
-        self.unify_trait_bounds(&bounds, &new_args, &span);
+        self.unify_trait_bounds(&bounds, &param_types, &new_args, &span);
 
         // Native mutating methods (append, extend, delete) are rewritten by
         // the emitter into mutations of the receiver binding. Require `mut`
@@ -949,7 +949,13 @@ impl InferCtx<'_, '_> {
         ));
     }
 
-    fn unify_trait_bounds(&mut self, bounds: &[Bound], args: &[Expression], fallback_span: &Span) {
+    fn unify_trait_bounds(
+        &mut self,
+        bounds: &[Bound],
+        signature_params: &[Type],
+        args: &[Expression],
+        fallback_span: &Span,
+    ) {
         let store = self.store;
         for bound in bounds {
             let resolved_ty = bound.generic.resolve_in(&self.env);
@@ -977,7 +983,13 @@ impl InferCtx<'_, '_> {
                 continue;
             };
 
-            let _ = self.satisfies_interface(&resolved_ty, &interface, &id, &params, &span);
+            if self
+                .satisfies_interface(&resolved_ty, &interface, &id, &params, &span)
+                .is_ok()
+                && !self.generic_absorbed_via_ref_param(&bound.generic, signature_params)
+            {
+                let _ = self.check_pointer_receivers(&resolved_ty, &interface, &id, &span);
+            }
         }
     }
 

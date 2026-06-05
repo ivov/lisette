@@ -2,7 +2,7 @@ use crate::checker::EnvResolve;
 use Type::{Function, Nominal};
 use diagnostics::LisetteDiagnostic;
 use syntax::ast::Span;
-use syntax::types::{Bound, Type, TypeVarId};
+use syntax::types::{Bound, CompoundKind, Type, TypeVarId};
 
 use crate::checker::infer::InferCtx;
 use crate::checker::type_env::VarState;
@@ -514,8 +514,11 @@ impl InferCtx<'_, '_> {
         let params_result = self.unify_pairs(f1.params.iter().zip(&f2.params), span);
         let return_type_result = self.try_unify(&f1.return_type, &f2.return_type, span);
 
-        for bound in f1.bounds.iter().chain(f2.bounds.iter()) {
-            self.check_function_bound(bound, span);
+        for bound in &f1.bounds {
+            self.check_function_bound(bound, &f1.params, span);
+        }
+        for bound in &f2.bounds {
+            self.check_function_bound(bound, &f2.params, span);
         }
 
         if !self.bounds_equivalent(&f1.bounds, &f2.bounds) {
@@ -563,7 +566,7 @@ impl InferCtx<'_, '_> {
         all_in(bounds1, bounds2) && all_in(bounds2, bounds1)
     }
 
-    fn check_function_bound(&mut self, bound: &Bound, span: &Span) {
+    fn check_function_bound(&mut self, bound: &Bound, signature_params: &[Type], span: &Span) {
         let store = self.store;
         let resolved_ty = bound.generic.resolve_in(&self.env);
 
@@ -584,7 +587,13 @@ impl InferCtx<'_, '_> {
             return;
         };
 
-        let _ = self.satisfies_interface(&resolved_ty, &interface, &id, &params, span);
+        if self
+            .satisfies_interface(&resolved_ty, &interface, &id, &params, span)
+            .is_ok()
+            && !self.generic_absorbed_via_ref_param(&bound.generic, signature_params)
+        {
+            let _ = self.check_pointer_receivers(&resolved_ty, &interface, &id, span);
+        }
     }
 
     /// Built-in bound recognition; falls through to the interface path on miss.
@@ -788,6 +797,27 @@ impl InferCtx<'_, '_> {
             "Change the type annotation to `{}` or convert the value to `{}`",
             actual, expected
         )
+    }
+
+    /// Whether the emitter absorbs this bounded generic into a pointer type argument
+    /// via a top-level `Ref<T>` param (`with_absorbed_ref_generics`), so the pointer
+    /// satisfies the interface. Decided from params alone, like the emitter.
+    pub(super) fn generic_absorbed_via_ref_param(&self, generic: &Type, params: &[Type]) -> bool {
+        let is_absorbed_param = |param: &Type| matches!(param.as_compound(), Some((CompoundKind::Ref, [inner, ..])) if inner == generic);
+
+        let Type::Var { id, .. } = generic else {
+            return params.iter().any(is_absorbed_param);
+        };
+
+        let mut absorbed = false;
+        for param in params {
+            if is_absorbed_param(param) {
+                absorbed = true;
+            } else if self.env.occurs(*id, param) {
+                return false;
+            }
+        }
+        absorbed
     }
 }
 
