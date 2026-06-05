@@ -101,46 +101,112 @@ impl TypeEnv {
     /// reserved sentinel ids like `IGNORED`/`UNINFERRED`) are preserved as-is.
     /// Used both during inference and as the post-inference freeze pass.
     pub fn resolve(&self, ty: &Type) -> Type {
+        self.resolve_changed(ty).unwrap_or_else(|| ty.clone())
+    }
+
+    /// Resolve `ty` in place; skips the clone-and-rebuild when nothing is bound.
+    /// Returns whether anything changed.
+    pub fn resolve_in_place(&self, ty: &mut Type) -> bool {
+        if let Some(resolved) = self.resolve_changed(ty) {
+            *ty = resolved;
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Returns `Some` only when resolving `ty` would change it (some bound var
+    /// is reachable), allocating just the changed spine. `None` means unchanged.
+    fn resolve_changed(&self, ty: &Type) -> Option<Type> {
         match ty {
             Type::Var { id, .. } if !id.is_reserved() => match &self.entries[Self::slot(*id)] {
-                VarState::Unbound { .. } => ty.clone(),
-                VarState::Bound(bound) => self.resolve(bound),
+                VarState::Unbound { .. } => None,
+                VarState::Bound(bound) => Some(self.resolve(bound)),
             },
             Type::Nominal {
                 id,
                 params,
                 underlying_ty,
-            } => Type::Nominal {
-                id: id.clone(),
-                params: params.iter().map(|p| self.resolve(p)).collect(),
-                underlying_ty: underlying_ty.as_ref().map(|u| Box::new(self.resolve(u))),
-            },
-            Type::Compound { kind, args } => Type::Compound {
-                kind: *kind,
-                args: args.iter().map(|a| self.resolve(a)).collect(),
-            },
-            Type::Function(f) => Type::function(
-                f.params.iter().map(|p| self.resolve(p)).collect(),
-                f.param_mutability.clone(),
-                f.bounds
-                    .iter()
-                    .map(|b| Bound {
-                        param_name: b.param_name.clone(),
-                        generic: self.resolve(&b.generic),
-                        ty: self.resolve(&b.ty),
-                    })
-                    .collect(),
-                Box::new(self.resolve(&f.return_type)),
-            ),
-            Type::Forall { vars, body } => Type::Forall {
-                vars: vars.clone(),
-                body: Box::new(self.resolve(body)),
-            },
-            Type::Tuple(elements) => {
-                Type::Tuple(elements.iter().map(|e| self.resolve(e)).collect())
+            } => {
+                let new_params = self.resolve_slice(params);
+                let new_underlying = underlying_ty
+                    .as_ref()
+                    .and_then(|u| self.resolve_changed(u).map(Box::new));
+                if new_params.is_none() && new_underlying.is_none() {
+                    return None;
+                }
+                Some(Type::Nominal {
+                    id: id.clone(),
+                    params: new_params.unwrap_or_else(|| params.clone()),
+                    underlying_ty: new_underlying
+                        .map(Some)
+                        .unwrap_or_else(|| underlying_ty.clone()),
+                })
             }
-            _ => ty.clone(),
+            Type::Compound { kind, args } => self
+                .resolve_slice(args)
+                .map(|args| Type::Compound { kind: *kind, args }),
+            Type::Function(f) => {
+                let new_params = self.resolve_slice(&f.params);
+                let new_return = self.resolve_changed(&f.return_type).map(Box::new);
+                let new_bounds = self.resolve_bounds(&f.bounds);
+                if new_params.is_none() && new_return.is_none() && new_bounds.is_none() {
+                    return None;
+                }
+                Some(Type::function(
+                    new_params.unwrap_or_else(|| f.params.clone()),
+                    f.param_mutability.clone(),
+                    new_bounds.unwrap_or_else(|| f.bounds.clone()),
+                    new_return.unwrap_or_else(|| f.return_type.clone()),
+                ))
+            }
+            Type::Forall { vars, body } => self.resolve_changed(body).map(|body| Type::Forall {
+                vars: vars.clone(),
+                body: Box::new(body),
+            }),
+            Type::Tuple(elements) => self.resolve_slice(elements).map(Type::Tuple),
+            _ => None,
         }
+    }
+
+    /// [`resolve_changed`] over a slice; `Some` only if an element changed.
+    fn resolve_slice(&self, items: &[Type]) -> Option<Vec<Type>> {
+        let mut out: Option<Vec<Type>> = None;
+        for (i, item) in items.iter().enumerate() {
+            match self.resolve_changed(item) {
+                Some(resolved) => {
+                    out.get_or_insert_with(|| items[..i].to_vec())
+                        .push(resolved);
+                }
+                None => {
+                    if let Some(v) = out.as_mut() {
+                        v.push(item.clone());
+                    }
+                }
+            }
+        }
+        out
+    }
+
+    /// Bound-list variant of [`resolve_slice`].
+    fn resolve_bounds(&self, bounds: &[Bound]) -> Option<Vec<Bound>> {
+        let mut out: Option<Vec<Bound>> = None;
+        for (i, b) in bounds.iter().enumerate() {
+            let new_generic = self.resolve_changed(&b.generic);
+            let new_ty = self.resolve_changed(&b.ty);
+            if new_generic.is_none() && new_ty.is_none() {
+                if let Some(v) = out.as_mut() {
+                    v.push(b.clone());
+                }
+                continue;
+            }
+            out.get_or_insert_with(|| bounds[..i].to_vec()).push(Bound {
+                param_name: b.param_name.clone(),
+                generic: new_generic.unwrap_or_else(|| b.generic.clone()),
+                ty: new_ty.unwrap_or_else(|| b.ty.clone()),
+            });
+        }
+        out
     }
 
     /// Occurs check: does `id` appear anywhere inside `ty` (following Var

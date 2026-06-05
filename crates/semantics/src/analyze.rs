@@ -274,6 +274,8 @@ pub fn analyze(input: AnalyzeInput) -> AnalyzeOutput {
         } else {
             let allocator = binding_ids.clone();
             let ufcs_shared = Arc::new(std::mem::take(&mut checker.ufcs_methods));
+            // Share register-built projections so workers do not rebuild them.
+            let fields_shared = Arc::new(checker.module_fields_snapshot());
             let store_ref: &Store = &store;
 
             type WorkerOutput = (Vec<(String, File)>, Facts, LocalSink);
@@ -283,6 +285,7 @@ pub fn analyze(input: AnalyzeInput) -> AnalyzeOutput {
                     let local_sink = LocalSink::new();
                     let mut worker = TaskState::new(&local_sink, allocator.clone());
                     worker.ufcs_shared = Some(ufcs_shared.clone());
+                    worker.module_fields_shared = Some(fields_shared.clone());
                     InferCtx::new(&mut worker, store_ref).infer_module(&module_id, files);
                     let typed_files = std::mem::take(&mut worker.typed_files);
                     let facts = std::mem::replace(&mut worker.facts, Facts::new(allocator.clone()));

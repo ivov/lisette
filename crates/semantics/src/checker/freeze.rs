@@ -38,18 +38,18 @@ impl<'a> FreezeFolder<'a> {
 
     pub fn freeze_facts(&self, facts: &mut crate::facts::Facts) {
         for check in &mut facts.generic_call_checks {
-            check.return_ty = self.env.resolve(&check.return_ty);
+            self.env.resolve_in_place(&mut check.return_ty);
         }
         for check in &mut facts.empty_collection_checks {
-            check.ty = self.env.resolve(&check.ty);
+            self.env.resolve_in_place(&mut check.ty);
         }
         for check in &mut facts.statement_tail_checks {
-            check.expected_ty = self.env.resolve(&check.expected_ty);
+            self.env.resolve_in_place(&mut check.expected_ty);
         }
     }
 
     fn freeze_ty(&self, ty: &mut Type) {
-        *ty = self.env.resolve(ty);
+        self.env.resolve_in_place(ty);
     }
 
     fn freeze_binding(&self, binding: &mut Binding) {

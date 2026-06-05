@@ -44,8 +44,9 @@ impl Cursor {
 
 #[derive(Debug, Default)]
 pub struct ImportState {
-    /// Module prefix -> (struct fields, module type)
-    pub imported_modules: HashMap<String, (Vec<StructFieldDefinition>, Type)>,
+    /// Module prefix -> (struct fields, module type). Fields are `Arc`-shared
+    /// since the same module is put in scope once per file.
+    pub imported_modules: HashMap<String, (Arc<[StructFieldDefinition]>, Type)>,
     /// Import prefix -> actual module_id in Store (e.g., "http" -> "go:net/http")
     pub prefix_to_module: HashMap<String, String>,
     /// Modules whose exports are available without prefix (current module and prelude)
@@ -108,6 +109,12 @@ pub struct TaskState<'s> {
     /// transitively requires checking `T` against the same interface.
     pub satisfying_stack: rustc_hash::FxHashSet<(String, String)>,
     method_cache: RefCell<HashMap<EcoString, Rc<MethodSignatures>>>,
+    /// Per-module field projection, cached to avoid rebuilding it (and recloning
+    /// every type) on each file-context entry.
+    module_fields_cache: RefCell<HashMap<EcoString, Arc<[StructFieldDefinition]>>>,
+    /// Register-phase projections shared read-only with inference workers, so
+    /// workers reuse them instead of rebuilding.
+    pub module_fields_shared: Option<Arc<HashMap<EcoString, Arc<[StructFieldDefinition]>>>>,
     pub ufcs_methods: HashSet<(String, String)>,
     /// When set, parallel workers read UFCS methods from here instead of cloning into `ufcs_methods`.
     pub ufcs_shared: Option<Arc<HashSet<(String, String)>>>,
@@ -131,6 +138,8 @@ impl<'s> TaskState<'s> {
             facts: Facts::new(binding_ids),
             satisfying_stack: rustc_hash::FxHashSet::default(),
             method_cache: RefCell::new(HashMap::default()),
+            module_fields_cache: RefCell::new(HashMap::default()),
+            module_fields_shared: None,
             ufcs_methods: HashSet::default(),
             ufcs_shared: None,
             typed_files: Vec::new(),
@@ -700,22 +709,18 @@ impl<'s> TaskState<'s> {
         }
     }
 
-    pub fn put_module_in_scope(&mut self, store: &Store, module_id: &str, prefix: Option<String>) {
-        let Some(prefix) = prefix else {
-            self.imports
-                .unprefixed_imports
-                .insert(module_id.to_string());
-            return;
-        };
+    fn module_struct_fields(&self, module: &Module) -> Arc<[StructFieldDefinition]> {
+        if let Some(shared) = &self.module_fields_shared
+            && let Some(fields) = shared.get(module.id.as_str())
+        {
+            return fields.clone();
+        }
+        if let Some(cached) = self.module_fields_cache.borrow().get(module.id.as_str()) {
+            return cached.clone();
+        }
 
-        let module = store
-            .get_module(module_id)
-            .expect("module must exist when putting in scope");
-
-        let imported_module_id = module.id.clone();
         let module_prefix = format!("{}.", module.id);
-
-        let module_struct_fields: Vec<_> = module
+        let fields: Vec<StructFieldDefinition> = module
             .definitions
             .iter()
             .filter(|(qn, _)| module.is_public(qn))
@@ -747,6 +752,34 @@ impl<'s> TaskState<'s> {
                 }
             })
             .collect();
+
+        let shared: Arc<[StructFieldDefinition]> = fields.into();
+        self.module_fields_cache
+            .borrow_mut()
+            .insert(module.id.clone().into(), shared.clone());
+        shared
+    }
+
+    /// Cached projections so far, to seed workers' `module_fields_shared`.
+    pub fn module_fields_snapshot(&self) -> HashMap<EcoString, Arc<[StructFieldDefinition]>> {
+        self.module_fields_cache.borrow().clone()
+    }
+
+    pub fn put_module_in_scope(&mut self, store: &Store, module_id: &str, prefix: Option<String>) {
+        let Some(prefix) = prefix else {
+            self.imports
+                .unprefixed_imports
+                .insert(module_id.to_string());
+            return;
+        };
+
+        let module = store
+            .get_module(module_id)
+            .expect("module must exist when putting in scope");
+
+        let imported_module_id = module.id.clone();
+
+        let module_struct_fields = self.module_struct_fields(module);
 
         let ty = Type::ImportNamespace(imported_module_id.clone().into());
 
