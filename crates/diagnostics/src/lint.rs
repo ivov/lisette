@@ -307,6 +307,15 @@ pub fn redundant_operation(span: &Span, always: Option<&str>) -> LisetteDiagnost
     }
 }
 
+pub fn integer_division_to_zero(span: &Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::warn("Integer division is always `0`")
+        .with_lint_code("integer_division_to_zero")
+        .with_span_label(span, "always `0`")
+        .with_help(
+            "Dividing these integer literals truncates to `0` because the numerator is smaller in magnitude than the denominator. Did you mean floating-point division?",
+        )
+}
+
 pub fn verbose_failure_propagation(span: &Span) -> LisetteDiagnostic {
     LisetteDiagnostic::info("Verbose failure propagation")
         .with_lint_code("verbose_failure_propagation")

@@ -8,6 +8,7 @@ mod excess_parens_on_condition;
 mod helpers;
 mod identical_if_branches;
 mod identical_match_arms;
+mod integer_division_to_zero;
 mod invisible_in_string;
 mod let_and_return;
 mod loop_runs_once;
@@ -49,6 +50,7 @@ pub use empty_match_arm::check_empty_match_arm;
 pub use excess_parens_on_condition::check_excess_parens_on_condition;
 pub use identical_if_branches::check_identical_if_branches;
 pub use identical_match_arms::check_identical_match_arms;
+pub use integer_division_to_zero::check_integer_division_to_zero;
 pub use invisible_in_string::{
     check_invisible_in_string_expression, check_invisible_in_string_pattern,
 };

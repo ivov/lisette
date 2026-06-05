@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [warning] Integer division is always `0`
+   ╭─[test.lis:3:11]
+ 2 │ fn main() {
+ 3 │   let _ = (1) / (2)
+   ·           ────┬────
+   ·               ╰── always `0`
+ 4 │ }
+   ╰────
+  help: Dividing these integer literals truncates to `0` because the numerator is smaller in magnitude than the denominator. Did you mean floating-point division? · code: [lint.integer_division_to_zero]
