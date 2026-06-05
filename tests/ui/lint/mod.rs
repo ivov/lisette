@@ -1381,6 +1381,128 @@ fn main() {
 }
 
 #[test]
+fn integer_division_to_zero_basic() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let _ = 1 / 2
+}
+"#
+    );
+}
+
+#[test]
+fn integer_division_to_zero_larger_denominator() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let _ = 5 / 10
+}
+"#
+    );
+}
+
+#[test]
+fn integer_division_to_zero_parenthesized() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let _ = (1) / (2)
+}
+"#
+    );
+}
+
+#[test]
+fn integer_division_to_zero_numerator_zero_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let _ = 0 / 5
+}
+"#
+    );
+}
+
+#[test]
+fn integer_division_to_zero_exact_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let _ = 4 / 2
+}
+"#
+    );
+}
+
+#[test]
+fn integer_division_to_zero_equal_operands_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let _ = 2 / 2
+}
+"#
+    );
+}
+
+#[test]
+fn integer_division_to_zero_float_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let _ = 1.0 / 2.0
+}
+"#
+    );
+}
+
+#[test]
+fn integer_division_to_zero_variable_operand_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let x = 5
+  let _ = x / 10
+}
+"#
+    );
+}
+
+#[test]
+fn integer_division_to_zero_negative_numerator() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let _ = -1 / 2
+}
+"#
+    );
+}
+
+#[test]
+fn integer_division_to_zero_negative_denominator() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let _ = 1 / -2
+}
+"#
+    );
+}
+
+#[test]
+fn integer_division_to_zero_negative_non_truncating_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let _ = -3 / 2
+}
+"#
+    );
+}
+
+#[test]
 fn negated_equality_equal() {
     assert_lint_snapshot!(
         r#"
