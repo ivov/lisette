@@ -753,6 +753,141 @@ fn main() {
 }
 
 #[test]
+fn manual_equal_fold_to_lower() {
+    assert_lint_snapshot!(
+        r#"
+import "go:strings"
+
+fn main() {
+  let a = "Hello"
+  let b = "hELLO"
+  let _ = strings.ToLower(a) == strings.ToLower(b)
+}
+"#
+    );
+}
+
+#[test]
+fn manual_equal_fold_to_upper() {
+    assert_lint_snapshot!(
+        r#"
+import "go:strings"
+
+fn main() {
+  let a = "Hello"
+  let b = "hELLO"
+  let _ = strings.ToUpper(a) == strings.ToUpper(b)
+}
+"#
+    );
+}
+
+#[test]
+fn manual_equal_fold_not_equal() {
+    assert_lint_snapshot!(
+        r#"
+import "go:strings"
+
+fn main() {
+  let a = "Hello"
+  let b = "hELLO"
+  let _ = strings.ToLower(a) != strings.ToLower(b)
+}
+"#
+    );
+}
+
+#[test]
+fn manual_equal_fold_parenthesized() {
+    assert_lint_snapshot!(
+        r#"
+import "go:strings"
+
+fn main() {
+  let a = "Hello"
+  let b = "hELLO"
+  let _ = (strings.ToLower(a)) == strings.ToLower(b)
+}
+"#
+    );
+}
+
+#[test]
+fn manual_equal_fold_aliased_import() {
+    assert_lint_snapshot!(
+        r#"
+import mystrings "go:strings"
+
+fn main() {
+  let a = "Hello"
+  let b = "hELLO"
+  let _ = mystrings.ToLower(a) == mystrings.ToLower(b)
+}
+"#
+    );
+}
+
+#[test]
+fn manual_equal_fold_mixed_case_functions_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:strings"
+
+fn main() {
+  let a = "Hello"
+  let b = "hELLO"
+  let _ = strings.ToLower(a) == strings.ToUpper(b)
+}
+"#
+    );
+}
+
+#[test]
+fn manual_equal_fold_one_sided_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:strings"
+
+fn main() {
+  let a = "Hello"
+  let b = "hELLO"
+  let _ = strings.ToLower(a) == b
+}
+"#
+    );
+}
+
+#[test]
+fn manual_equal_fold_other_function_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:strings"
+
+fn main() {
+  let a = "Hello"
+  let b = "hELLO"
+  let _ = strings.TrimSpace(a) == strings.TrimSpace(b)
+}
+"#
+    );
+}
+
+#[test]
+fn manual_equal_fold_ordering_comparison_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:strings"
+
+fn main() {
+  let a = "Hello"
+  let b = "hELLO"
+  let _ = strings.ToLower(a) < strings.ToLower(b)
+}
+"#
+    );
+}
+
+#[test]
 fn self_comparison_equal() {
     assert_lint_snapshot!(
         r#"

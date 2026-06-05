@@ -704,6 +704,22 @@ pub fn duplicate_arguments(span: &Span, module: &str, function: &str) -> Lisette
         ))
 }
 
+pub fn manual_equal_fold(
+    span: &Span,
+    negated: bool,
+    namespace: &str,
+    left_arg: &str,
+    right_arg: &str,
+) -> LisetteDiagnostic {
+    let prefix = if negated { "!" } else { "" };
+    LisetteDiagnostic::info("Inefficient comparison")
+        .with_lint_code("manual_equal_fold")
+        .with_span_label(span, "can use `strings.EqualFold`")
+        .with_help(format!(
+            "Use `{prefix}{namespace}.EqualFold({left_arg}, {right_arg})` to compare case-insensitively in one call"
+        ))
+}
+
 pub fn lost_query_mutation(span: &Span, method: &str) -> LisetteDiagnostic {
     LisetteDiagnostic::warn("Lost query mutation")
         .with_lint_code("lost_query_mutation")

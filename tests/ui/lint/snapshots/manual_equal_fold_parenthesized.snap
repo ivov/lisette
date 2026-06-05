@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [info] Inefficient comparison
+   ╭─[test.lis:7:11]
+ 6 │   let b = "hELLO"
+ 7 │   let _ = (strings.ToLower(a)) == strings.ToLower(b)
+   ·           ─────────────────────┬────────────────────
+   ·                                ╰── can use `strings.EqualFold`
+ 8 │ }
+   ╰────
+  help: Use `strings.EqualFold(a, b)` to compare case-insensitively in one call · code: [lint.manual_equal_fold]
