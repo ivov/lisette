@@ -21,11 +21,14 @@ impl Symbol {
     ///
     /// `Symbol::from_parts("main", "Point.sum")` → `"main.Point.sum"`.
     pub fn from_parts(module: &str, local: &str) -> Self {
-        let mut s = String::with_capacity(module.len() + 1 + local.len());
+        // Build straight into the EcoString: results up to its 15-byte inline
+        // limit never touch the heap, and longer ones allocate once instead of
+        // twice (a temporary `String` plus the `EcoString` copy).
+        let mut s = EcoString::with_capacity(module.len() + 1 + local.len());
         s.push_str(module);
         s.push('.');
         s.push_str(local);
-        Self(EcoString::from(s))
+        Self(s)
     }
 
     /// Appends an additional dot-segment to an already-qualified symbol.
@@ -33,11 +36,11 @@ impl Symbol {
     /// `Symbol::from_raw("main.Shape").with_segment("Circle")` →
     /// `"main.Shape.Circle"`.
     pub fn with_segment(&self, segment: &str) -> Self {
-        let mut s = String::with_capacity(self.0.len() + 1 + segment.len());
+        let mut s = EcoString::with_capacity(self.0.len() + 1 + segment.len());
         s.push_str(&self.0);
         s.push('.');
         s.push_str(segment);
-        Self(EcoString::from(s))
+        Self(s)
     }
 
     /// Wraps an already-constructed qualified string. Prefer `from_parts`

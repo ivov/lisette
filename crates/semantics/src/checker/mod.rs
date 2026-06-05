@@ -6,6 +6,7 @@ pub mod type_env;
 
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use std::cell::RefCell;
+use std::rc::Rc;
 use std::sync::Arc;
 
 use crate::facts::{BindingIdAllocator, Facts};
@@ -106,7 +107,7 @@ pub struct TaskState<'s> {
     /// `collect_interface_violations` from diverging when a bound on `T`
     /// transitively requires checking `T` against the same interface.
     pub satisfying_stack: rustc_hash::FxHashSet<(String, String)>,
-    method_cache: RefCell<HashMap<EcoString, MethodSignatures>>,
+    method_cache: RefCell<HashMap<EcoString, Rc<MethodSignatures>>>,
     pub ufcs_methods: HashSet<(String, String)>,
     /// When set, parallel workers read UFCS methods from here instead of cloning into `ufcs_methods`.
     pub ufcs_shared: Option<Arc<HashSet<(String, String)>>>,
@@ -497,11 +498,11 @@ impl<'s> TaskState<'s> {
         Some((qualified_name, ty))
     }
 
-    pub(crate) fn get_all_methods(&self, store: &Store, ty: &Type) -> MethodSignatures {
+    pub(crate) fn get_all_methods(&self, store: &Store, ty: &Type) -> Rc<MethodSignatures> {
         if let Type::Parameter(name) = ty {
             let trait_bounds = self.scopes.collect_all_trait_bounds();
             let qualified_name = self.qualify_name(name);
-            return store.get_methods_from_bounds(&qualified_name, &trait_bounds);
+            return Rc::new(store.get_methods_from_bounds(&qualified_name, &trait_bounds));
         }
 
         let resolved = ty.strip_refs().resolve_in(&self.env);
@@ -509,7 +510,7 @@ impl<'s> TaskState<'s> {
             Type::Nominal { id, .. } => id.as_eco().clone(),
             Type::Compound { kind, .. } => format!("prelude.{}", kind.leaf_name()).into(),
             Type::Simple(kind) => format!("prelude.{}", kind.leaf_name()).into(),
-            _ => return MethodSignatures::default(),
+            _ => return Rc::new(MethodSignatures::default()),
         };
 
         // Interfaces need type-arg-dependent generic substitution, skip cache.
@@ -518,7 +519,7 @@ impl<'s> TaskState<'s> {
             && store.get_interface(peeled_id).is_some()
         {
             let empty = HashMap::default();
-            return store.get_all_methods(&peeled, &empty);
+            return Rc::new(store.get_all_methods(&peeled, &empty));
         }
 
         if let Some(cached) = self.method_cache.borrow().get(cache_key.as_str()) {
@@ -529,7 +530,7 @@ impl<'s> TaskState<'s> {
         // Pass the env-resolved type so the store's env-less `resolve()` stays
         // identity-safe: `Type::Var` chains are chased once here rather than
         // silently returning empty methods in the store.
-        let methods = store.get_all_methods(&resolved, &empty);
+        let methods = Rc::new(store.get_all_methods(&resolved, &empty));
         self.method_cache
             .borrow_mut()
             .insert(cache_key, methods.clone());

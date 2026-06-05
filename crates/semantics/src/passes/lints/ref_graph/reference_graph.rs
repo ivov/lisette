@@ -1,33 +1,30 @@
+use ecow::EcoString;
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use syntax::ast::Span;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ModuleItemId {
-    pub module: String,
-    pub name: String,
+    pub name: EcoString,
 }
 
 impl ModuleItemId {
-    pub fn new(module: &str, name: &str) -> Self {
-        Self {
-            module: module.to_string(),
-            name: name.to_string(),
-        }
+    pub fn new(name: &str) -> Self {
+        Self { name: name.into() }
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct StructFieldId {
-    pub type_name: String,
-    pub field_name: String,
+    pub type_name: EcoString,
+    pub field_name: EcoString,
 }
 
 impl StructFieldId {
     pub fn new(type_name: &str, field_name: &str) -> Self {
         Self {
-            type_name: type_name.to_string(),
-            field_name: field_name.to_string(),
+            type_name: type_name.into(),
+            field_name: field_name.into(),
         }
     }
 }
@@ -43,15 +40,15 @@ pub struct StructFieldInfo {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct EnumVariantId {
-    pub enum_name: String,
-    pub variant_name: String,
+    pub enum_name: EcoString,
+    pub variant_name: EcoString,
 }
 
 impl EnumVariantId {
     pub fn new(enum_name: &str, variant_name: &str) -> Self {
         Self {
-            enum_name: enum_name.to_string(),
-            variant_name: variant_name.to_string(),
+            enum_name: enum_name.into(),
+            variant_name: variant_name.into(),
         }
     }
 }

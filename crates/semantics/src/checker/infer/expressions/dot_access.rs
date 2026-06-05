@@ -330,7 +330,7 @@ impl InferCtx<'_, '_> {
         }
 
         let methods = self.get_all_methods(store, &deref_ty);
-        names.extend(methods.into_keys().map(|k| k.to_string()));
+        names.extend(methods.keys().map(|k| k.to_string()));
 
         names
     }

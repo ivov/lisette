@@ -14,11 +14,7 @@ pub struct AliasMap {
 }
 
 impl AliasMap {
-    pub fn build(
-        module: &Module,
-        files: &HashMap<u32, File>,
-        go_package_names: &HashMap<String, String>,
-    ) -> Self {
+    pub fn build(files: &HashMap<u32, File>, go_package_names: &HashMap<String, String>) -> Self {
         let mut aliases = HashMap::default();
 
         for file in files.values() {
@@ -27,7 +23,7 @@ impl AliasMap {
                     continue;
                 }
                 if let Some(effective) = import.effective_alias(go_package_names) {
-                    aliases.insert(effective.clone(), ModuleItemId::new(&module.id, &effective));
+                    aliases.insert(effective.clone(), ModuleItemId::new(&effective));
                 }
             }
         }
@@ -38,7 +34,7 @@ impl AliasMap {
     fn resolve(&self, module: &Module, name: &str) -> Option<ModuleItemId> {
         let qualified_name = Symbol::from_parts(&module.id, name);
         if module.definitions.contains_key(qualified_name.as_str()) {
-            return Some(ModuleItemId::new(&module.id, name));
+            return Some(ModuleItemId::new(name));
         }
         self.aliases.get(name).cloned()
     }
@@ -51,8 +47,8 @@ pub fn extract_references(
     alias_map: &AliasMap,
 ) {
     let ctx = match expression {
-        Expression::Function { name, .. } => Some(ModuleItemId::new(&module.id, name)),
-        Expression::Const { identifier, .. } => Some(ModuleItemId::new(&module.id, identifier)),
+        Expression::Function { name, .. } => Some(ModuleItemId::new(name)),
+        Expression::Const { identifier, .. } => Some(ModuleItemId::new(identifier)),
         _ => None,
     };
     walk_expression(module, expression, graph, alias_map, ctx.as_ref());
@@ -97,7 +93,7 @@ fn walk_expression(
             // add a reference to the method if it exists in the module.
             // The add_reference is a no-op if the target doesn't exist.
             if let Some(from) = ctx {
-                let method_id = ModuleItemId::new(&module.id, member);
+                let method_id = ModuleItemId::new(member);
                 graph.add_reference(from, method_id);
             }
         }
@@ -110,7 +106,7 @@ fn walk_expression(
             body,
             ..
         } => {
-            let fn_ctx = ModuleItemId::new(&module.id, name);
+            let fn_ctx = ModuleItemId::new(name);
             for g in generics {
                 for bound in &g.bounds {
                     walk_annotation(module, bound, graph, alias_map, &fn_ctx);
@@ -137,7 +133,7 @@ fn walk_expression(
             expression,
             ..
         } => {
-            let const_ctx = ModuleItemId::new(&module.id, identifier);
+            let const_ctx = ModuleItemId::new(identifier);
             if let Some(ann) = annotation {
                 walk_annotation(module, ann, graph, alias_map, &const_ctx);
             }
@@ -145,7 +141,7 @@ fn walk_expression(
         }
 
         Expression::Enum { name, variants, .. } => {
-            let enum_ctx = ModuleItemId::new(&module.id, name);
+            let enum_ctx = ModuleItemId::new(name);
             for v in variants {
                 for f in &v.fields {
                     walk_annotation(module, &f.annotation, graph, alias_map, &enum_ctx);
@@ -159,7 +155,7 @@ fn walk_expression(
             fields,
             ..
         } => {
-            let struct_ctx = ModuleItemId::new(&module.id, name);
+            let struct_ctx = ModuleItemId::new(name);
             for g in generics {
                 for bound in &g.bounds {
                     walk_annotation(module, bound, graph, alias_map, &struct_ctx);
@@ -173,7 +169,7 @@ fn walk_expression(
         Expression::TypeAlias {
             name, annotation, ..
         } => {
-            let alias_ctx = ModuleItemId::new(&module.id, name);
+            let alias_ctx = ModuleItemId::new(name);
             walk_annotation(module, annotation, graph, alias_map, &alias_ctx);
         }
 
@@ -183,7 +179,7 @@ fn walk_expression(
             parents,
             ..
         } => {
-            let iface_ctx = ModuleItemId::new(&module.id, name);
+            let iface_ctx = ModuleItemId::new(name);
             for p in parents {
                 walk_annotation(module, &p.annotation, graph, alias_map, &iface_ctx);
             }
@@ -242,7 +238,7 @@ fn walk_expression(
             if let Some(from) = ctx {
                 walk_annotation(module, annotation, graph, alias_map, from);
             }
-            let impl_id = ModuleItemId::new(&module.id, receiver_name);
+            let impl_id = ModuleItemId::new(receiver_name);
             let impl_context = ctx.unwrap_or(&impl_id);
             for g in generics {
                 for bound in &g.bounds {
@@ -331,21 +327,23 @@ fn walk_identifier(
     alias_map: &AliasMap,
     ctx: Option<&ModuleItemId>,
 ) {
-    add_ref(graph, ctx, alias_map, module, &extract_base_name(value));
-    let parts: Vec<&str> = value.split('.').collect();
-    if parts.len() >= 2 && is_upper(parts[0]) && is_upper(parts[1]) {
-        graph.mark_enum_variant_used(EnumVariantId::new(parts[0], parts[1]));
-    }
+    add_ref(graph, ctx, alias_map, module, extract_base_name(value));
+    let mut segments = value.split('.');
+    let first = segments.next().unwrap_or("");
     // Handle "Type.method" identifiers (method used as value).
     // The type checker desugars `Type.method` to `Identifier("Type.method")`.
     // Add references to both the type and the method so they aren't
     // falsely flagged as unused.
-    if parts.len() >= 2 && is_upper(parts[0]) {
-        add_ref(graph, ctx, alias_map, module, parts[0]);
+    if let Some(second) = segments.next()
+        && is_upper(first)
+    {
+        if is_upper(second) {
+            graph.mark_enum_variant_used(EnumVariantId::new(first, second));
+        }
+        add_ref(graph, ctx, alias_map, module, first);
         if let Some(from) = ctx {
-            let method_name = parts.last().unwrap_or(&"");
-            let method_id = ModuleItemId::new(&module.id, method_name);
-            graph.add_reference(from, method_id);
+            let method_name = value.rsplit('.').next().unwrap_or("");
+            graph.add_reference(from, ModuleItemId::new(method_name));
         }
     }
 }
@@ -362,13 +360,13 @@ fn walk_call(
     ctx: Option<&ModuleItemId>,
 ) {
     if let Expression::Identifier { value, .. } = callee {
-        let parts: Vec<&str> = value.split('.').collect();
-        if parts.len() >= 2 && is_upper(parts[0]) {
-            add_ref(graph, ctx, alias_map, module, parts[0]);
+        let mut segments = value.split('.');
+        let first = segments.next().unwrap_or("");
+        if segments.next().is_some() && is_upper(first) {
+            add_ref(graph, ctx, alias_map, module, first);
             if let Some(from) = ctx {
-                let method_name = parts.last().unwrap_or(&"");
-                let method_id = ModuleItemId::new(&module.id, method_name);
-                graph.add_reference(from, method_id);
+                let method_name = value.rsplit('.').next().unwrap_or("");
+                graph.add_reference(from, ModuleItemId::new(method_name));
             }
         }
     }
@@ -403,16 +401,19 @@ fn walk_struct_call(
     else {
         return;
     };
-    let parts: Vec<&str> = name.split('.').collect();
-    if !parts.is_empty() && !is_upper(parts[0]) {
-        add_ref(graph, ctx, alias_map, module, parts[0]);
+    let mut segments = name.split('.');
+    let p0 = segments.next().unwrap_or("");
+    let p1 = segments.next();
+    let p2 = segments.next();
+    if !is_upper(p0) {
+        add_ref(graph, ctx, alias_map, module, p0);
     } else {
-        add_ref(graph, ctx, alias_map, module, &extract_base_name(name));
+        add_ref(graph, ctx, alias_map, module, extract_base_name(name));
     }
-    if parts.len() >= 2 && is_upper(parts[0]) && is_upper(parts[1]) {
-        graph.mark_enum_variant_used(EnumVariantId::new(parts[0], parts[1]));
-    } else if parts.len() >= 3 && is_upper(parts[1]) && is_upper(parts[2]) {
-        graph.mark_enum_variant_used(EnumVariantId::new(parts[1], parts[2]));
+    if is_upper(p0) && p1.is_some_and(is_upper) {
+        graph.mark_enum_variant_used(EnumVariantId::new(p0, p1.unwrap()));
+    } else if p1.is_some_and(is_upper) && p2.is_some_and(is_upper) {
+        graph.mark_enum_variant_used(EnumVariantId::new(p1.unwrap(), p2.unwrap()));
     }
     for f in field_assignments {
         walk_expression(module, &f.value, graph, alias_map, ctx);
@@ -515,8 +516,9 @@ fn walk_pattern(
             let variant_name = unqualified_name(identifier);
 
             let enum_name = type_name(ty).or_else(|| {
-                let parts: Vec<&str> = identifier.split('.').collect();
-                (parts.len() >= 2).then(|| parts[0].to_string())
+                let mut segments = identifier.split('.');
+                let first = segments.next().unwrap_or("");
+                segments.next().is_some().then(|| first.to_string())
             });
 
             if let Some(ref enum_name) = enum_name {
@@ -538,8 +540,9 @@ fn walk_pattern(
             // Mark enum variant as used for struct variant patterns (e.g., Enum.Variant { ... })
             let variant_name = unqualified_name(identifier);
             let enum_name = type_name(ty).or_else(|| {
-                let parts: Vec<&str> = identifier.split('.').collect();
-                (parts.len() >= 2).then(|| parts[0].to_string())
+                let mut segments = identifier.split('.');
+                let first = segments.next().unwrap_or("");
+                segments.next().is_some().then(|| first.to_string())
             });
             if let Some(ref enum_name) = enum_name {
                 graph.mark_enum_variant_used(EnumVariantId::new(enum_name, variant_name));
@@ -600,7 +603,7 @@ fn walk_annotation(
         Annotation::Constructor { name, params, .. } => {
             // For qualified names like "models.Item", extract the import alias "models"
             let base_name = extract_base_name(name);
-            if let Some(to) = alias_map.resolve(module, &base_name) {
+            if let Some(to) = alias_map.resolve(module, base_name) {
                 graph.add_reference(from, to);
             }
             for p in params {
@@ -642,7 +645,7 @@ fn walk_type(
             let module_prefix = format!("{}.", module.id);
             let local_id = id.strip_prefix(&module_prefix).unwrap_or(id);
             let base_name = extract_base_name(local_id);
-            if let Some(to) = alias_map.resolve(module, &base_name) {
+            if let Some(to) = alias_map.resolve(module, base_name) {
                 graph.add_reference(from, to);
             }
             for p in params {
@@ -705,17 +708,21 @@ pub(crate) fn is_upper(s: &str) -> bool {
     s.chars().next().is_some_and(|c| c.is_uppercase())
 }
 
-fn extract_base_name(name: &str) -> String {
-    let parts: Vec<&str> = name.split('.').collect();
-    match parts.len() {
-        1 => parts[0].to_string(),
-        2 if is_upper(parts[1]) => parts[0].to_string(),
-        2 => parts[1].to_string(),
-        3 => parts[1].to_string(),
-        _ => parts
-            .iter()
-            .find(|p| is_upper(p))
-            .map(|s| s.to_string())
-            .unwrap_or_else(|| parts.last().unwrap_or(&"").to_string()),
+fn extract_base_name(name: &str) -> &str {
+    let mut segments = name.split('.');
+    let p0 = segments.next().unwrap_or("");
+    let Some(p1) = segments.next() else {
+        return p0; // 1 part
+    };
+    let Some(_p2) = segments.next() else {
+        return if is_upper(p1) { p0 } else { p1 }; // 2 parts
+    };
+    if segments.next().is_none() {
+        return p1; // 3 parts
     }
+    // 4+ parts: first uppercase segment, else the last segment.
+    name.split('.')
+        .find(|p| is_upper(p))
+        .or_else(|| name.split('.').next_back())
+        .unwrap_or("")
 }

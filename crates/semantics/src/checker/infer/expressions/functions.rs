@@ -347,31 +347,30 @@ impl InferCtx<'_, '_> {
                 .push(diagnostics::infer::panic_in_expression_position(span));
         }
 
-        if self.is_generic_callee(&callee_expression)
-            && !expected_ty.resolve_in(&self.env).is_variable()
-            && !expected_ty.is_ignored()
-            && (self.is_enum_type(store, &return_ty.resolve_in(&self.env))
-                || !expected_ty.resolve_in(&self.env).contains_unknown())
-        {
-            let peeled = store.deep_resolve_alias(&expected_ty.resolve_in(&self.env));
-            let _ = self.speculatively(|this| {
-                InferCtx::new(this, store).try_unify(&peeled, &return_ty, &span)
-            });
+        if self.is_generic_callee(&callee_expression) && !expected_ty.is_ignored() {
+            let resolved_expected = expected_ty.resolve_in(&self.env);
+            if !resolved_expected.is_variable()
+                && (self.is_enum_type(store, &return_ty.resolve_in(&self.env))
+                    || !resolved_expected.contains_unknown())
+            {
+                let peeled = store.deep_resolve_alias(&resolved_expected);
+                let _ = self.speculatively(|this| {
+                    InferCtx::new(this, store).try_unify(&peeled, &return_ty, &span)
+                });
+            }
         }
 
         let call_kind = self.classify_call(&callee_expression);
 
         let substring_range_idx =
             self.substring_carve_out_param_idx(call_kind, &callee_expression, &param_types);
-        let effective_param_types = if let Some(idx) = substring_range_idx {
+        let new_args = if let Some(idx) = substring_range_idx {
             let mut adjusted = param_types.clone();
             adjusted[idx] = self.new_type_var();
-            adjusted
+            self.infer_call_arguments(args, &adjusted)
         } else {
-            param_types.clone()
+            self.infer_call_arguments(args, &param_types)
         };
-
-        let new_args = self.infer_call_arguments(args, &effective_param_types);
         self.check_call_arity(&param_types, &new_args, &callee_expression, &span);
         self.check_mut_param_arguments(
             &new_args,

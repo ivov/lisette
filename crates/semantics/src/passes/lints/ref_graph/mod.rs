@@ -120,9 +120,9 @@ fn run_ref_lints(
     let mut unused_definition_spans = Vec::new();
     let mut graph = ReferenceGraph::new();
 
-    collect_items(module, files, go_package_names, &mut graph);
+    collect_items(files, go_package_names, &mut graph);
 
-    let alias_map = AliasMap::build(module, files, go_package_names);
+    let alias_map = AliasMap::build(files, go_package_names);
     for file in files.values() {
         for item in &file.items {
             extract_references(module, item, &mut graph, &alias_map);
@@ -131,7 +131,7 @@ fn run_ref_lints(
 
     for (method_module_id, method_name) in facts.interface_satisfied_methods.keys() {
         if method_module_id == &module.id {
-            let method_id = ModuleItemId::new(method_module_id, method_name);
+            let method_id = ModuleItemId::new(method_name);
             graph.mark_as_used(method_id);
         }
     }
@@ -139,7 +139,7 @@ fn run_ref_lints(
     for item_id in graph.get_unreachable() {
         if let Some(info) = graph.get_item(item_id) {
             if info.kind == ItemKind::Import {
-                unused_import_aliases.insert(item_id.name.clone());
+                unused_import_aliases.insert(item_id.name.to_string());
             }
             if info.kind == ItemKind::Function {
                 unused_definition_spans.push(info.span);
@@ -174,7 +174,6 @@ fn run_ref_lints(
 }
 
 fn collect_items(
-    module: &Module,
     files: &HashMap<u32, File>,
     go_package_names: &HashMap<String, String>,
     graph: &mut ReferenceGraph,
@@ -200,7 +199,7 @@ fn collect_items(
                     };
 
                     if let Some(effective) = file_import.effective_alias(go_package_names) {
-                        let id = ModuleItemId::new(&module.id, &effective);
+                        let id = ModuleItemId::new(&effective);
                         graph.add_import(id, *name_span);
                     }
                 }
@@ -210,7 +209,7 @@ fn collect_items(
                     visibility,
                     ..
                 } => {
-                    let id = ModuleItemId::new(&module.id, name);
+                    let id = ModuleItemId::new(name);
                     let is_entry = *visibility == Visibility::Public || name == "main";
                     graph.add_item(id, *name_span, ItemKind::Function, is_entry);
                 }
@@ -220,7 +219,7 @@ fn collect_items(
                     visibility,
                     ..
                 } => {
-                    let id = ModuleItemId::new(&module.id, identifier);
+                    let id = ModuleItemId::new(identifier);
                     graph.add_item(
                         id,
                         *identifier_span,
@@ -235,7 +234,7 @@ fn collect_items(
                     visibility,
                     ..
                 } => {
-                    let id = ModuleItemId::new(&module.id, name);
+                    let id = ModuleItemId::new(name);
                     let is_public = *visibility == Visibility::Public;
                     graph.add_item(id, *name_span, ItemKind::Type, is_public);
 
@@ -258,7 +257,7 @@ fn collect_items(
                     visibility,
                     ..
                 } => {
-                    let id = ModuleItemId::new(&module.id, name);
+                    let id = ModuleItemId::new(name);
                     let is_public = *visibility == Visibility::Public;
                     graph.add_item(id, *name_span, ItemKind::Type, is_public);
 
@@ -303,7 +302,7 @@ fn collect_items(
                     visibility,
                     ..
                 } => {
-                    let id = ModuleItemId::new(&module.id, name);
+                    let id = ModuleItemId::new(name);
                     graph.add_item(
                         id,
                         *name_span,
@@ -317,7 +316,7 @@ fn collect_items(
                     visibility,
                     ..
                 } => {
-                    let id = ModuleItemId::new(&module.id, name);
+                    let id = ModuleItemId::new(name);
                     graph.add_item(
                         id,
                         *name_span,
@@ -334,7 +333,7 @@ fn collect_items(
                             ..
                         } = method
                         {
-                            let id = ModuleItemId::new(&module.id, name);
+                            let id = ModuleItemId::new(name);
                             let is_entry = *visibility == Visibility::Public
                                 || is_upper(name)
                                 || matches!(name.as_str(), "string" | "goString" | "error");

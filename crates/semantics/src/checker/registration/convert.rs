@@ -129,9 +129,9 @@ impl TaskState<'_> {
                     return Type::Error;
                 }
 
-                let (generics, body) = match &ty {
-                    Type::Forall { vars, body } => (vars.clone(), body.as_ref().clone()),
-                    _ => (vec![], ty.clone()),
+                let (generics, body) = match ty {
+                    Type::Forall { vars, body } => (vars, *body),
+                    other => (vec![], other),
                 };
 
                 if generics.len() != params.len() {
@@ -153,12 +153,16 @@ impl TaskState<'_> {
                     .iter()
                     .map(|arg| self.convert_to_type(store, arg, span))
                     .collect();
-                let map: SubstitutionMap = generics
-                    .iter()
-                    .cloned()
-                    .zip(concrete_args.iter().cloned())
-                    .collect();
-                let resolved_ty = substitute(&body, &map);
+                let resolved_ty = if generics.is_empty() && concrete_args.is_empty() {
+                    body
+                } else {
+                    let map: SubstitutionMap = generics
+                        .iter()
+                        .cloned()
+                        .zip(concrete_args.iter().cloned())
+                        .collect();
+                    substitute(&body, &map)
+                };
 
                 // Reject Ref<InterfaceType> — Go pointer-to-interface is invalid
                 if self.is_lis(store)
