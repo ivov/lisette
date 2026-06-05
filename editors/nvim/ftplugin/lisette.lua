@@ -4,4 +4,7 @@ vim.bo.tabstop = 2
 vim.bo.expandtab = true
 vim.bo.suffixesadd = ".lis"
 
-pcall(vim.treesitter.start, 0, "lisette")
+local ok, err = pcall(vim.treesitter.start, 0, "lisette")
+if not ok then
+  vim.notify("Lisette: failed to start syntax highlighting:\n" .. tostring(err), vim.log.levels.WARN)
+end
