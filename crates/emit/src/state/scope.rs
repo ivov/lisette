@@ -1,5 +1,6 @@
 use rustc_hash::FxHashMap as HashMap;
 use rustc_hash::FxHashSet as HashSet;
+use std::rc::Rc;
 
 use crate::Bindings;
 use crate::ReturnContext;
@@ -13,7 +14,7 @@ pub(crate) struct ScopeState {
     declared: Vec<HashSet<String>>,
     scope_depth: usize,
     loop_stack: Vec<LoopContext>,
-    return_ctx_stack: Vec<ReturnContext>,
+    return_ctx_stack: Vec<Rc<ReturnContext>>,
     assign_targets: HashSet<String>,
     go_const_bindings: Vec<HashSet<String>>,
 }
@@ -182,7 +183,7 @@ impl ScopeState {
         self.loop_stack.pop();
     }
 
-    pub(crate) fn push_return_ctx(&mut self, ctx: ReturnContext) {
+    pub(crate) fn push_return_ctx(&mut self, ctx: Rc<ReturnContext>) {
         self.return_ctx_stack.push(ctx);
     }
 
@@ -190,8 +191,8 @@ impl ScopeState {
         self.return_ctx_stack.pop();
     }
 
-    pub(crate) fn current_return_ctx(&self) -> Option<&ReturnContext> {
-        self.return_ctx_stack.last()
+    pub(crate) fn current_return_ctx(&self) -> Option<Rc<ReturnContext>> {
+        self.return_ctx_stack.last().cloned()
     }
 
     pub(crate) fn current_loop_result_var(&self) -> Option<&str> {

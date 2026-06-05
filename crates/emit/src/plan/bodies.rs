@@ -1,43 +1,25 @@
 //! Lowered body IR: the typed vocabulary `plan::lower` produces and `render/`
 //! consumes. `RawGo` is a transitional node holding pre-rendered Go.
 
-use crate::ReturnContext;
 use crate::plan::values::ValuePlan;
 use crate::utils::{output_ends_with_diverge, output_references_var};
 use syntax::types::Type;
 
-/// Destination for a lowered block's tail. Every variant carries the enclosing
-/// function's `return_ctx` so nested `return`/`?` lower correctly regardless of
-/// the place's own destination; for `Return` it is also the tail target.
+/// Destination for a lowered block's tail. The enclosing function's return
+/// context (for nested `return`/`?`) is read from the scope stack via
+/// `Planner::return_ctx`; `Return` is also the tail target.
 pub(crate) enum PlacePlan<'a> {
-    Statement {
-        return_ctx: &'a ReturnContext,
-    },
-    Return(&'a ReturnContext),
+    Statement,
+    Return,
     Assign {
         local: &'a str,
         target_ty: Option<&'a Type>,
-        return_ctx: &'a ReturnContext,
     },
 }
 
-impl<'a> PlacePlan<'a> {
+impl PlacePlan<'_> {
     pub(crate) fn is_return(&self) -> bool {
-        matches!(self, PlacePlan::Return(_))
-    }
-
-    /// Construct a statement-position place for the given enclosing context.
-    pub(crate) fn statement(return_ctx: &'a ReturnContext) -> Self {
-        PlacePlan::Statement { return_ctx }
-    }
-
-    /// The enclosing function's return context (for nested `return`/`?`).
-    pub(crate) fn return_ctx(&self) -> &'a ReturnContext {
-        match self {
-            PlacePlan::Statement { return_ctx }
-            | PlacePlan::Return(return_ctx)
-            | PlacePlan::Assign { return_ctx, .. } => return_ctx,
-        }
+        matches!(self, PlacePlan::Return)
     }
 }
 

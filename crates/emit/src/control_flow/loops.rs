@@ -1,6 +1,5 @@
 use crate::EmitEffects;
 use crate::Planner;
-use crate::ReturnContext;
 use crate::context::expression::ExpressionContext;
 use crate::is_order_sensitive;
 use crate::patterns::binding_decls::pattern_has_bindings;
@@ -16,7 +15,6 @@ impl Planner<'_> {
     pub(crate) fn lower_for_statement(
         &mut self,
         full_expression: &Expression,
-        return_ctx: &ReturnContext,
         fx: &mut EmitEffects,
     ) -> LoweredStatement {
         let Expression::For {
@@ -53,24 +51,20 @@ impl Planner<'_> {
         let label = self.current_loop_label().map(str::to_string);
 
         let (prologue, header, lowered_body) = if is_range {
-            self.lower_range_for(binding, iterable, body, return_ctx, fx)
+            self.lower_range_for(binding, iterable, body, fx)
         } else if let Some(range_shape) = stored_range {
-            self.lower_stored_range_for(binding, iterable, range_shape, body, return_ctx, fx)
+            self.lower_stored_range_for(binding, iterable, range_shape, body, fx)
         } else if let Some((kind, receiver)) = string_view {
             match kind {
-                StringViewKind::Runes => {
-                    self.lower_runes_for(binding, receiver, body, return_ctx, fx)
-                }
-                StringViewKind::Bytes => {
-                    self.lower_bytes_for(binding, receiver, body, return_ctx, fx)
-                }
+                StringViewKind::Runes => self.lower_runes_for(binding, receiver, body, fx),
+                StringViewKind::Bytes => self.lower_bytes_for(binding, receiver, body, fx),
             }
         } else if map_tuple {
-            self.lower_map_tuple_for(binding, iterable, body, return_ctx, fx)
+            self.lower_map_tuple_for(binding, iterable, body, fx)
         } else if is_simple {
-            self.lower_simple_for(binding, iterable, body, return_ctx, fx)
+            self.lower_simple_for(binding, iterable, body, fx)
         } else {
-            self.lower_pattern_site_for(binding, iterable, body, return_ctx, fx)
+            self.lower_pattern_site_for(binding, iterable, body, fx)
         };
 
         self.pop_loop();
@@ -91,7 +85,6 @@ impl Planner<'_> {
         iterable: &Expression,
         range_shape: RangeShape,
         body: &Expression,
-        return_ctx: &ReturnContext,
         fx: &mut EmitEffects,
     ) -> (String, String, LoweredBlock) {
         self.enter_scope();
@@ -119,7 +112,7 @@ impl Planner<'_> {
                 unreachable!("RangeTo/RangeToInclusive are not iterable")
             }
         };
-        let lowered_body = self.lower_block_as_body(body, return_ctx, fx);
+        let lowered_body = self.lower_block_as_body(body, fx);
         self.exit_scope();
         (prologue, header, lowered_body)
     }
@@ -130,7 +123,6 @@ impl Planner<'_> {
         binding: &Binding,
         receiver: &Expression,
         body: &Expression,
-        return_ctx: &ReturnContext,
         fx: &mut EmitEffects,
     ) -> (String, String, LoweredBlock) {
         self.enter_scope();
@@ -143,7 +135,7 @@ impl Planner<'_> {
         } else {
             format!("for _, {} := range {} {{\n", loop_var, receiver_str)
         };
-        let lowered_body = self.lower_block_as_body(body, return_ctx, fx);
+        let lowered_body = self.lower_block_as_body(body, fx);
         self.exit_scope();
         (prologue, header, lowered_body)
     }
@@ -154,7 +146,6 @@ impl Planner<'_> {
         binding: &Binding,
         receiver: &Expression,
         body: &Expression,
-        return_ctx: &ReturnContext,
         fx: &mut EmitEffects,
     ) -> (String, String, LoweredBlock) {
         self.enter_scope();
@@ -176,7 +167,7 @@ impl Planner<'_> {
                 loop_var, receiver_var, index_var
             ));
         }
-        let lowered_body = self.lower_block_as_body(body, return_ctx, fx);
+        let lowered_body = self.lower_block_as_body(body, fx);
         self.exit_scope();
         (prologue, header, lowered_body)
     }
@@ -209,7 +200,6 @@ impl Planner<'_> {
         binding: &Binding,
         iterable: &Expression,
         body: &Expression,
-        return_ctx: &ReturnContext,
         fx: &mut EmitEffects,
     ) -> (String, String, LoweredBlock) {
         let (prologue, iter_expression, is_channel) = self.capture_iterable_operand(iterable, fx);
@@ -223,7 +213,7 @@ impl Planner<'_> {
         } else {
             format!("for _, {} := range {} {{\n", loop_var, iter_expression)
         };
-        let lowered_body = self.lower_block_as_body(body, return_ctx, fx);
+        let lowered_body = self.lower_block_as_body(body, fx);
         self.exit_scope();
         (prologue, header, lowered_body)
     }
@@ -236,7 +226,6 @@ impl Planner<'_> {
         binding: &Binding,
         iterable: &Expression,
         body: &Expression,
-        return_ctx: &ReturnContext,
         fx: &mut EmitEffects,
     ) -> (String, String, LoweredBlock) {
         let Pattern::Tuple { elements, .. } = &binding.pattern else {
@@ -256,7 +245,7 @@ impl Planner<'_> {
 
         self.enter_scope();
         let (header, lowered_body) = if first_is_simple && second_is_simple {
-            self.lower_map_tuple_simple_body(first, second, &iter_expression, body, return_ctx, fx)
+            self.lower_map_tuple_simple_body(first, second, &iter_expression, body, fx)
         } else {
             self.lower_map_tuple_compound_body(
                 first,
@@ -264,7 +253,6 @@ impl Planner<'_> {
                 &binding.ty,
                 &iter_expression,
                 body,
-                return_ctx,
                 fx,
             )
         };
@@ -279,7 +267,6 @@ impl Planner<'_> {
         second: &Pattern,
         iter_expression: &str,
         body: &Expression,
-        return_ctx: &ReturnContext,
         fx: &mut EmitEffects,
     ) -> (String, LoweredBlock) {
         let first_is_discard =
@@ -293,7 +280,7 @@ impl Planner<'_> {
             let value = self.bind_loop_pattern(second, None);
             format!("for {}, {} := range {} {{\n", key, value, iter_expression)
         };
-        (header, self.lower_block_as_body(body, return_ctx, fx))
+        (header, self.lower_block_as_body(body, fx))
     }
 
     /// Compound map-tuple element pattern: capture key/value into fresh vars,
@@ -306,7 +293,6 @@ impl Planner<'_> {
         binding_ty: &Type,
         iter_expression: &str,
         body: &Expression,
-        return_ctx: &ReturnContext,
         fx: &mut EmitEffects,
     ) -> (String, LoweredBlock) {
         let element_tys: &[Type] = match binding_ty {
@@ -340,7 +326,7 @@ impl Planner<'_> {
             second_ty,
             fx,
         );
-        let lowered_body = self.lower_block_as_body(body, return_ctx, fx);
+        let lowered_body = self.lower_block_as_body(body, fx);
 
         let mut inner = vec![LoweredStatement::RawGo(bindings)];
         inner.extend(lowered_body.statements);
@@ -366,7 +352,6 @@ impl Planner<'_> {
         binding: &Binding,
         iterable: &Expression,
         body: &Expression,
-        return_ctx: &ReturnContext,
         fx: &mut EmitEffects,
     ) -> (String, String, LoweredBlock) {
         let (prologue, iter_expression, is_channel) = self.capture_iterable_operand(iterable, fx);
@@ -374,7 +359,7 @@ impl Planner<'_> {
         self.enter_scope();
         let (header, body_block) = if !pattern_has_bindings(&binding.pattern) {
             let header = format!("for range {} {{\n", iter_expression);
-            (header, self.lower_block_as_body(body, return_ctx, fx))
+            (header, self.lower_block_as_body(body, fx))
         } else {
             let item_var = self.fresh_var(Some("item"));
             let header = if is_channel {
@@ -391,7 +376,7 @@ impl Planner<'_> {
                 &binding.ty,
                 fx,
             );
-            let lowered_body = self.lower_block_as_body(body, return_ctx, fx);
+            let lowered_body = self.lower_block_as_body(body, fx);
 
             let mut inner = vec![LoweredStatement::RawGo(bindings)];
             inner.extend(lowered_body.statements);
@@ -414,7 +399,6 @@ impl Planner<'_> {
         binding: &Binding,
         iterable: &Expression,
         body: &Expression,
-        return_ctx: &ReturnContext,
         fx: &mut EmitEffects,
     ) -> (String, String, LoweredBlock) {
         let Expression::Range {
@@ -459,7 +443,7 @@ impl Planner<'_> {
                 loop_var, start_expression, loop_var
             ),
         };
-        let lowered_body = self.lower_block_as_body(body, return_ctx, fx);
+        let lowered_body = self.lower_block_as_body(body, fx);
         self.exit_scope();
         (prologue, header, lowered_body)
     }

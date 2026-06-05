@@ -3,7 +3,6 @@ use syntax::types::peel_to_range_type;
 
 use crate::EmitEffects;
 use crate::Planner;
-use crate::ReturnContext;
 use crate::context::expression::ExpressionContext;
 use crate::expressions::emission::StagedExpression;
 use crate::is_order_sensitive;
@@ -18,7 +17,6 @@ impl Planner<'_> {
         &mut self,
         expression: &Expression,
         index: &Expression,
-        ambient: Option<&ReturnContext>,
         fx: &mut EmitEffects,
     ) -> ValuePlan {
         if let Expression::Range {
@@ -28,18 +26,12 @@ impl Planner<'_> {
             ..
         } = index
         {
-            let (setup, value) = self.plan_range_slice(
-                expression,
-                start.as_deref(),
-                end.as_deref(),
-                *inclusive,
-                ambient,
-                fx,
-            );
+            let (setup, value) =
+                self.plan_range_slice(expression, start.as_deref(), end.as_deref(), *inclusive, fx);
             return value_plan_from_statements(setup, value);
         }
 
-        let base_staged = self.stage_base_with_deref(expression, ambient, fx);
+        let base_staged = self.stage_base_with_deref(expression, fx);
 
         // Range-typed variable as index (e.g. `items[r]` where `r: Range<int>`,
         // or `r: Prefix` where `type Prefix = RangeTo<int>`).
@@ -53,11 +45,7 @@ impl Planner<'_> {
             return value_plan_from_statements(setup, value);
         }
 
-        let index_staged = self.stage_composite(
-            index,
-            ExpressionContext::value().with_ambient_return_ctx_opt(ambient),
-            fx,
-        );
+        let index_staged = self.stage_composite(index, ExpressionContext::value(), fx);
         let (setup, values) = self.sequence_structured(vec![base_staged, index_staged], "_base");
         value_plan_from_statements(setup, format!("{}[{}]", values[0], values[1]))
     }
@@ -65,21 +53,12 @@ impl Planner<'_> {
     fn stage_base_with_deref(
         &mut self,
         expression: &Expression,
-        ambient: Option<&ReturnContext>,
         fx: &mut EmitEffects,
     ) -> StagedExpression {
         let Some(inner) = expression.deref_inner() else {
-            return self.stage_operand(
-                expression,
-                ExpressionContext::value().with_ambient_return_ctx_opt(ambient),
-                fx,
-            );
+            return self.stage_operand(expression, ExpressionContext::value(), fx);
         };
-        let s = self.stage_operand(
-            inner,
-            ExpressionContext::value().with_ambient_return_ctx_opt(ambient),
-            fx,
-        );
+        let s = self.stage_operand(inner, ExpressionContext::value(), fx);
         StagedExpression {
             value: format!("(*{})", s.value),
             setup: s.setup,
@@ -97,26 +76,17 @@ impl Planner<'_> {
         start: Option<&Expression>,
         end: Option<&Expression>,
         inclusive: bool,
-        ambient: Option<&ReturnContext>,
         fx: &mut EmitEffects,
     ) -> (Vec<LoweredStatement>, String) {
         let needs_cap = self.is_native_shape(&expression.get_type(), NativeGoType::Slice);
-        let base_staged = self.stage_base_with_deref(expression, ambient, fx);
+        let base_staged = self.stage_base_with_deref(expression, fx);
 
         let mut all_stages = vec![base_staged];
         if let Some(s) = start {
-            all_stages.push(self.stage_operand(
-                s,
-                ExpressionContext::value().with_ambient_return_ctx_opt(ambient),
-                fx,
-            ));
+            all_stages.push(self.stage_operand(s, ExpressionContext::value(), fx));
         }
         if let Some(e) = end {
-            all_stages.push(self.stage_operand(
-                e,
-                ExpressionContext::value().with_ambient_return_ctx_opt(ambient),
-                fx,
-            ));
+            all_stages.push(self.stage_operand(e, ExpressionContext::value(), fx));
         }
         let (mut setup, values) = self.sequence_structured(all_stages, "_base");
         let base_str = values[0].clone();

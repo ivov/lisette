@@ -1,7 +1,6 @@
 use crate::EmitEffects;
 use crate::Planner;
 use crate::Renderer;
-use crate::ReturnContext;
 use crate::context::expression::ExpressionContext;
 use crate::names::go_name;
 use crate::patterns::sites::{
@@ -51,13 +50,7 @@ impl Planner<'_> {
 
         let mut setup: Vec<LoweredStatement> = Vec::new();
         let mut setup_buffer = String::new();
-        let prep = self.preprocess_select_arms(
-            &mut setup_buffer,
-            arms,
-            needs_retry_loop,
-            Some(place.return_ctx()),
-            fx,
-        );
+        let prep = self.preprocess_select_arms(&mut setup_buffer, arms, needs_retry_loop, fx);
         if !setup_buffer.is_empty() {
             setup.push(LoweredStatement::RawGo(setup_buffer));
         }
@@ -157,7 +150,6 @@ impl Planner<'_> {
         output: &mut String,
         arms: &[SelectArm],
         needs_retry_loop: bool,
-        ambient: Option<&ReturnContext>,
         fx: &mut EmitEffects,
     ) -> SelectPrep {
         let mut send_parts: Vec<Option<SendArmParts>> = Vec::with_capacity(arms.len());
@@ -169,13 +161,8 @@ impl Planner<'_> {
                 SelectArmPattern::Send {
                     send_expression, ..
                 } => {
-                    let parts = self.prepare_send_arm(
-                        output,
-                        send_expression,
-                        needs_retry_loop,
-                        ambient,
-                        fx,
-                    );
+                    let parts =
+                        self.prepare_send_arm(output, send_expression, needs_retry_loop, fx);
                     send_parts.push(Some(parts));
                     channel_operands.push(None);
                     channel_shadows.push(None);
@@ -186,7 +173,7 @@ impl Planner<'_> {
                     ..
                 } => {
                     let channel_has_call = channel_expression_has_call(receive_expression);
-                    let ch = self.emit_channel_operand(output, receive_expression, ambient, fx);
+                    let ch = self.emit_channel_operand(output, receive_expression, fx);
                     if is_some_pattern(binding) && needs_retry_loop {
                         let shadow = self.hoist_tmp_value(output, "ch", &ch);
                         channel_operands.push(Some(ch));
@@ -206,7 +193,7 @@ impl Planner<'_> {
                     receive_expression, ..
                 } => {
                     let channel_has_call = channel_expression_has_call(receive_expression);
-                    let ch = self.emit_channel_operand(output, receive_expression, ambient, fx);
+                    let ch = self.emit_channel_operand(output, receive_expression, fx);
                     let ch = if needs_retry_loop && channel_has_call {
                         self.hoist_tmp_value(output, "ch", &ch)
                     } else {
@@ -235,29 +222,18 @@ impl Planner<'_> {
         &mut self,
         output: &mut String,
         receive_expression: &Expression,
-        ambient: Option<&ReturnContext>,
         fx: &mut EmitEffects,
     ) -> String {
         let unwrapped = receive_expression.unwrap_parens();
         if let Some((channel, "receive", _)) = extract_channel_op(unwrapped) {
-            let ch = self.emit_value(
-                output,
-                channel,
-                ExpressionContext::value().with_ambient_return_ctx_opt(ambient),
-                fx,
-            );
+            let ch = self.emit_value(output, channel, ExpressionContext::value(), fx);
             return if channel.get_type().is_ref() {
                 cancel_deref_of_address(ch)
             } else {
                 ch
             };
         }
-        self.emit_value(
-            output,
-            receive_expression,
-            ExpressionContext::value().with_ambient_return_ctx_opt(ambient),
-            fx,
-        )
+        self.emit_value(output, receive_expression, ExpressionContext::value(), fx)
     }
 
     fn fresh_ok_var(&mut self) -> String {
@@ -502,18 +478,12 @@ impl Planner<'_> {
         output: &mut String,
         send_expression: &Expression,
         needs_hoist: bool,
-        ambient: Option<&ReturnContext>,
         fx: &mut EmitEffects,
     ) -> SendArmParts {
         let unwrapped = send_expression.unwrap_parens();
         if let Some((channel, member, args)) = extract_channel_op(unwrapped) {
             let ch_has_call = needs_hoist && contains_call(channel);
-            let mut ch = self.emit_value(
-                output,
-                channel,
-                ExpressionContext::value().with_ambient_return_ctx_opt(ambient),
-                fx,
-            );
+            let mut ch = self.emit_value(output, channel, ExpressionContext::value(), fx);
             if channel.get_type().is_ref() {
                 ch = cancel_deref_of_address(ch);
             }
@@ -523,12 +493,8 @@ impl Planner<'_> {
             match member {
                 "send" if !args.is_empty() => {
                     let val_has_call = needs_hoist && contains_call(&args[0]);
-                    let mut val = self.emit_composite_value(
-                        output,
-                        &args[0],
-                        ExpressionContext::value().with_ambient_return_ctx_opt(ambient),
-                        fx,
-                    );
+                    let mut val =
+                        self.emit_composite_value(output, &args[0], ExpressionContext::value(), fx);
                     if val_has_call {
                         val = self.hoist_tmp_value(output, "send_val", &val);
                     }
@@ -539,12 +505,7 @@ impl Planner<'_> {
             }
         } else {
             let expression_has_call = needs_hoist && contains_call(send_expression);
-            let mut ch = self.emit_value(
-                output,
-                send_expression,
-                ExpressionContext::value().with_ambient_return_ctx_opt(ambient),
-                fx,
-            );
+            let mut ch = self.emit_value(output, send_expression, ExpressionContext::value(), fx);
             if send_expression.get_type().is_ref() {
                 ch = cancel_deref_of_address(ch);
             }

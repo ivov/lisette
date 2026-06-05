@@ -37,7 +37,7 @@ impl Planner<'_> {
 
         if subject.get_type().is_never() {
             let mut buffer = String::new();
-            self.emit_statement(&mut buffer, subject, place.return_ctx(), fx);
+            self.emit_statement(&mut buffer, subject, fx);
             statements.push(LoweredStatement::RawGo(buffer));
             return LoweredBlock { statements };
         }

@@ -2,7 +2,6 @@ use super::NativeCallContext;
 use crate::EmitEffects;
 use crate::Planner;
 use crate::Renderer;
-use crate::ReturnContext;
 use crate::context::expression::ExpressionContext;
 use crate::expressions::access::index_access::range_var_bounds;
 use crate::expressions::emission::StagedExpression;
@@ -336,7 +335,7 @@ impl Planner<'_> {
         };
 
         if matches!(ctx.native_type, NativeGoType::String) && ctx.method == "substring" {
-            return self.lower_string_substring(expression, ctx.args, ctx.ambient_return_ctx, fx);
+            return self.lower_string_substring(expression, ctx.args, fx);
         }
 
         let (setup, receiver, emitted_args) = self.stage_native_dot_access_call(ctx, fx);
@@ -408,11 +407,7 @@ impl Planner<'_> {
 
         let mut all_stages: Vec<StagedExpression> =
             Vec::with_capacity(1 + ctx.args.len() + ctx.spread.is_some() as usize);
-        let mut receiver_stage = self.stage_operand(
-            expression,
-            ExpressionContext::value().with_ambient_return_ctx_opt(ctx.ambient_return_ctx),
-            fx,
-        );
+        let mut receiver_stage = self.stage_operand(expression, ExpressionContext::value(), fx);
         let receiver_is_call = matches!(expression.unwrap_parens(), Expression::Call { .. });
         if !receiver_is_call
             && reads_mutable_operand(expression)
@@ -425,23 +420,11 @@ impl Planner<'_> {
             receiver_stage.value = format!("*{}", receiver_stage.value);
         }
         all_stages.push(receiver_stage);
-        all_stages.extend(self.stage_native_method_args(
-            ctx.function,
-            ctx.args,
-            ctx.ambient_return_ctx,
-            fx,
-        ));
+        all_stages.extend(self.stage_native_method_args(ctx.function, ctx.args, fx));
 
         let combine = plan_variadic_spread(ctx.function, ctx.spread).map(|p| p.combine(1));
-        let (setup, all_values) = self.sequence_with_spread_structured(
-            all_stages,
-            ctx.spread,
-            false,
-            "_arg",
-            combine,
-            ctx.ambient_return_ctx,
-            fx,
-        );
+        let (setup, all_values) = self
+            .sequence_with_spread_structured(all_stages, ctx.spread, false, "_arg", combine, fx);
 
         let receiver = all_values[0].clone();
         let emitted_args: Vec<String> = all_values[1..].to_vec();
@@ -457,12 +440,7 @@ impl Planner<'_> {
             && ctx.method == "substring"
             && ctx.args.len() >= 2
         {
-            return self.lower_string_substring(
-                &ctx.args[0],
-                &ctx.args[1..],
-                ctx.ambient_return_ctx,
-                fx,
-            );
+            return self.lower_string_substring(&ctx.args[0], &ctx.args[1..], fx);
         }
 
         let (setup, emitted_args) = self.stage_native_identifier_args(ctx, fx);
@@ -511,8 +489,7 @@ impl Planner<'_> {
         ctx: &NativeCallContext,
         fx: &mut EmitEffects,
     ) -> (Vec<LoweredStatement>, Vec<String>) {
-        let mut stages =
-            self.stage_native_method_args(ctx.function, ctx.args, ctx.ambient_return_ctx, fx);
+        let mut stages = self.stage_native_method_args(ctx.function, ctx.args, fx);
         if let Some(receiver) = ctx.args.first()
             && !matches!(receiver.unwrap_parens(), Expression::Call { .. })
             && reads_mutable_operand(receiver)
@@ -522,22 +499,13 @@ impl Planner<'_> {
             self.pin_staged(&mut stages[0], "recv");
         }
         let combine = plan_variadic_spread(ctx.function, ctx.spread).map(|p| p.combine(0));
-        self.sequence_with_spread_structured(
-            stages,
-            ctx.spread,
-            false,
-            "_arg",
-            combine,
-            ctx.ambient_return_ctx,
-            fx,
-        )
+        self.sequence_with_spread_structured(stages, ctx.spread, false, "_arg", combine, fx)
     }
 
     fn lower_string_substring(
         &mut self,
         receiver_expr: &Expression,
         args: &[Expression],
-        ambient: Option<&ReturnContext>,
         fx: &mut EmitEffects,
     ) -> (Vec<LoweredStatement>, String) {
         fx.require_stdlib();
@@ -558,24 +526,13 @@ impl Planner<'_> {
             ..
         } = arg
         {
-            let mut stages = vec![self.stage_operand(
-                receiver_expr,
-                ExpressionContext::value().with_ambient_return_ctx_opt(ambient),
-                fx,
-            )];
+            let mut stages =
+                vec![self.stage_operand(receiver_expr, ExpressionContext::value(), fx)];
             if let Some(s) = start.as_deref() {
-                stages.push(self.stage_operand(
-                    s,
-                    ExpressionContext::value().with_ambient_return_ctx_opt(ambient),
-                    fx,
-                ));
+                stages.push(self.stage_operand(s, ExpressionContext::value(), fx));
             }
             if let Some(e) = end.as_deref() {
-                stages.push(self.stage_operand(
-                    e,
-                    ExpressionContext::value().with_ambient_return_ctx_opt(ambient),
-                    fx,
-                ));
+                stages.push(self.stage_operand(e, ExpressionContext::value(), fx));
             }
             let (setup, values) = self.sequence_structured(stages, "_arg");
             let mut bounds = values.iter().skip(1);
@@ -602,11 +559,7 @@ impl Planner<'_> {
         let range_kind = peel_to_range_type(&arg_ty)
             .and_then(|t| t.get_name())
             .expect("substring arg should resolve to a known range type");
-        let receiver_staged = self.stage_operand(
-            receiver_expr,
-            ExpressionContext::value().with_ambient_return_ctx_opt(ambient),
-            fx,
-        );
+        let receiver_staged = self.stage_operand(receiver_expr, ExpressionContext::value(), fx);
         let range_staged = self.stage_or_capture(arg, "range", fx);
         let (setup, values) = self.sequence_structured(vec![receiver_staged, range_staged], "_arg");
         let (start, end) = range_var_bounds(&values[1], range_kind);

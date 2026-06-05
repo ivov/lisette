@@ -1,7 +1,6 @@
 use crate::EmitEffects;
 use crate::Planner;
 use crate::Renderer;
-use crate::ReturnContext;
 use crate::abi::coercion::{Coercion, CoercionDirection};
 use crate::context::expression::ExpressionContext;
 use crate::is_order_sensitive;
@@ -20,10 +19,9 @@ impl Planner<'_> {
         &mut self,
         output: &mut String,
         expression: &Expression,
-        return_ctx: &ReturnContext,
         fx: &mut EmitEffects,
     ) {
-        let statement = self.lower_statement(expression, return_ctx, fx);
+        let statement = self.lower_statement(expression, fx);
         let block = LoweredBlock {
             statements: vec![statement],
         };
@@ -37,7 +35,6 @@ impl Planner<'_> {
         target: &Expression,
         value: &Expression,
         compound_operator: Option<&BinaryOperator>,
-        return_ctx: &ReturnContext,
         directive: String,
         fx: &mut EmitEffects,
     ) -> AssignPlan {
@@ -52,7 +49,7 @@ impl Planner<'_> {
 
         if value.get_type().is_never() {
             let mut buffer = String::new();
-            self.emit_statement(&mut buffer, value, return_ctx, fx);
+            self.emit_statement(&mut buffer, value, fx);
             return AssignPlan {
                 directive,
                 form: AssignForm::NeverTyped {
@@ -100,7 +97,7 @@ impl Planner<'_> {
 
         if self.target_binds_to_discard(target) {
             let mut buffer = String::new();
-            self.emit_discard(&mut buffer, value, return_ctx, fx);
+            self.emit_discard(&mut buffer, value, fx);
             return AssignPlan {
                 directive,
                 form: AssignForm::Discard {
@@ -141,11 +138,7 @@ impl Planner<'_> {
         // `target = value`. Stage RHS first (so the target capture knows
         // whether RHS produced setup), capture the target, then fold RHS
         // setup + coercion setup into the value plan in emission order.
-        let rhs_staged = self.stage_composite(
-            value,
-            ExpressionContext::value().with_ambient_return_ctx(return_ctx),
-            fx,
-        );
+        let rhs_staged = self.stage_composite(value, ExpressionContext::value(), fx);
         let rhs_has_setup = !rhs_staged.setup.is_empty() || self.rhs_contains_effectful_call(value);
         let mut target_setup = String::new();
         let target_str = if is_order_sensitive(target) {

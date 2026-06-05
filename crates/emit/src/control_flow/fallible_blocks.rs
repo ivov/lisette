@@ -18,13 +18,12 @@ impl Planner<'_> {
         &mut self,
         items: &[Expression],
         ty: &Type,
-        outer: Option<&ReturnContext>,
         fx: &mut EmitEffects,
     ) -> (Vec<LoweredStatement>, String) {
         fx.require_stdlib();
 
-        let fallback = self.current_return_ctx().cloned();
-        let effective_ty = resolve_fallible_block_type(items, ty, outer.or(fallback.as_ref()));
+        let return_ctx = self.return_ctx();
+        let effective_ty = resolve_fallible_block_type(items, ty, Some(return_ctx.as_ref()));
         let fallible = Fallible::from_type(&effective_ty)
             .expect("`try` block must have Result or Option type");
 
@@ -37,8 +36,7 @@ impl Planner<'_> {
 
         let body_ctx = ReturnContext::TaggedBlock(effective_ty);
         self.push_return_ctx(body_ctx.clone());
-        let body = self
-            .with_fresh_scope(|planner| planner.lower_try_body(items, &fallible, &body_ctx, fx));
+        let body = self.with_fresh_scope(|planner| planner.lower_try_body(items, &fallible, fx));
         self.pop_return_ctx();
 
         let setup = vec![LoweredStatement::ClosureBind {
@@ -54,7 +52,6 @@ impl Planner<'_> {
         &mut self,
         items: &[Expression],
         fallible: &Fallible,
-        return_ctx: &ReturnContext,
         fx: &mut EmitEffects,
     ) -> LoweredBlock {
         let Some((last, rest)) = items.split_last() else {
@@ -64,9 +61,9 @@ impl Planner<'_> {
         };
         let mut statements: Vec<LoweredStatement> = rest
             .iter()
-            .map(|item| self.lower_statement(item, return_ctx, fx))
+            .map(|item| self.lower_statement(item, fx))
             .collect();
-        statements.extend(self.lower_try_tail(last, fallible, return_ctx, fx));
+        statements.extend(self.lower_try_tail(last, fallible, fx));
         LoweredBlock { statements }
     }
 
@@ -77,11 +74,10 @@ impl Planner<'_> {
         &mut self,
         last: &Expression,
         fallible: &Fallible,
-        return_ctx: &ReturnContext,
         fx: &mut EmitEffects,
     ) -> Vec<LoweredStatement> {
         if last.diverges().is_some() || last.get_type().is_never() {
-            let mut statements = vec![self.lower_statement(last, return_ctx, fx)];
+            let mut statements = vec![self.lower_statement(last, fx)];
             if !is_go_never(last) {
                 statements.push(LoweredStatement::RawGo(
                     "panic(\"unreachable\")\n".to_string(),
@@ -102,19 +98,14 @@ impl Planner<'_> {
         );
         if is_statement_only || is_unit_call(last) {
             return vec![
-                self.lower_statement(last, return_ctx, fx),
+                self.lower_statement(last, fx),
                 self.lower_try_unit_return(fallible, fx),
             ];
         }
 
         let mut statements = Vec::new();
         let mut buffer = String::new();
-        let final_expression = self.emit_value(
-            &mut buffer,
-            last,
-            ExpressionContext::value().with_ambient_return_ctx(return_ctx),
-            fx,
-        );
+        let final_expression = self.emit_value(&mut buffer, last, ExpressionContext::value(), fx);
         if !buffer.is_empty() {
             statements.push(LoweredStatement::RawGo(buffer));
         }
@@ -155,7 +146,6 @@ impl Planner<'_> {
         &mut self,
         expression: &Expression,
         fallible: &Fallible,
-        return_ctx: &ReturnContext,
         fx: &mut EmitEffects,
     ) -> Option<Vec<LoweredStatement>> {
         let mut statements: Vec<LoweredStatement> = Vec::new();
@@ -185,6 +175,7 @@ impl Planner<'_> {
             _ => return None,
         };
 
+        let return_ctx = self.return_ctx();
         if let Some(shape) = return_ctx.lowered_shape() {
             let return_ty = return_ctx.expect_ty();
             let values = if fallible.is_result() {
@@ -201,7 +192,7 @@ impl Planner<'_> {
             fx.require_stdlib();
             let err_return = {
                 let mut fe = FalliblePlanner::new(self, fallible, fx);
-                fe.emit_contextual_failure(err_arg.as_deref(), return_ctx)
+                fe.emit_contextual_failure(err_arg.as_deref())
             };
             statements.push(plain_return(err_return));
         }
@@ -214,13 +205,12 @@ impl Planner<'_> {
         &mut self,
         items: &[Expression],
         ty: &Type,
-        outer: Option<&ReturnContext>,
         fx: &mut EmitEffects,
     ) -> (Vec<LoweredStatement>, String) {
         fx.require_stdlib();
 
-        let fallback = self.current_return_ctx().cloned();
-        let effective_ty = resolve_fallible_block_type(items, ty, outer.or(fallback.as_ref()));
+        let return_ctx = self.return_ctx();
+        let effective_ty = resolve_fallible_block_type(items, ty, Some(return_ctx.as_ref()));
         let fallible = Fallible::from_type(&effective_ty)
             .expect("recover block type must be Result<T, PanicValue>");
 
@@ -230,9 +220,8 @@ impl Planner<'_> {
 
         let body_return_ctx = self.return_context_for_type(fallible.ok_ty().clone());
         self.push_return_ctx(body_return_ctx.clone());
-        let body = self.with_fresh_scope(|planner| {
-            planner.lower_recover_body_block(items, &fallible, &body_return_ctx, fx)
-        });
+        let body =
+            self.with_fresh_scope(|planner| planner.lower_recover_body_block(items, &fallible, fx));
         self.pop_return_ctx();
 
         let setup = vec![LoweredStatement::ClosureBind {
@@ -248,7 +237,6 @@ impl Planner<'_> {
         &mut self,
         items: &[Expression],
         fallible: &Fallible,
-        return_ctx: &ReturnContext,
         fx: &mut EmitEffects,
     ) -> LoweredBlock {
         let Some((last, rest)) = items.split_last() else {
@@ -258,9 +246,9 @@ impl Planner<'_> {
         };
         let mut statements: Vec<LoweredStatement> = rest
             .iter()
-            .map(|item| self.lower_statement(item, return_ctx, fx))
+            .map(|item| self.lower_statement(item, fx))
             .collect();
-        statements.extend(self.lower_recover_tail(last, fallible, return_ctx, fx));
+        statements.extend(self.lower_recover_tail(last, fallible, fx));
         LoweredBlock { statements }
     }
 
@@ -271,12 +259,11 @@ impl Planner<'_> {
         &mut self,
         last: &Expression,
         fallible: &Fallible,
-        return_ctx: &ReturnContext,
         fx: &mut EmitEffects,
     ) -> Vec<LoweredStatement> {
         let item_ty = last.get_type();
         if item_ty.is_never() {
-            let mut statements = vec![self.lower_statement(last, return_ctx, fx)];
+            let mut statements = vec![self.lower_statement(last, fx)];
             if !is_go_never(last) {
                 statements.push(LoweredStatement::RawGo(
                     "panic(\"unreachable\")\n".to_string(),
@@ -286,18 +273,13 @@ impl Planner<'_> {
         }
         if item_ty.is_unit() || item_ty.is_variable() {
             return vec![
-                self.lower_statement(last, return_ctx, fx),
+                self.lower_statement(last, fx),
                 self.lower_zero_return(fallible.ok_ty(), fx),
             ];
         }
         let mut statements = Vec::new();
         let mut buffer = String::new();
-        let expression = self.emit_value(
-            &mut buffer,
-            last,
-            ExpressionContext::value().with_ambient_return_ctx(return_ctx),
-            fx,
-        );
+        let expression = self.emit_value(&mut buffer, last, ExpressionContext::value(), fx);
         if !buffer.is_empty() {
             statements.push(LoweredStatement::RawGo(buffer));
         }

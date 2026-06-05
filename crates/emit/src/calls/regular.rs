@@ -6,7 +6,6 @@ use rustc_hash::FxHashSet as HashSet;
 use crate::EmitEffects;
 use crate::Planner;
 use crate::Renderer;
-use crate::ReturnContext;
 use crate::abi::coercion::{Coercion, CoercionDirection, OptionShape, classify_option_shape};
 use crate::abi::transition::{emit_fn_arg_shape_adapter, emit_lisette_callback_wrapper};
 use crate::context::expression::ExpressionContext;
@@ -40,7 +39,6 @@ struct CallArgsContext<'a> {
     spread: Option<&'a Expression>,
     wrap_spread_to_any: bool,
     combine_variadic: Option<VariadicCombine>,
-    ambient_return_ctx: Option<&'a ReturnContext>,
 }
 
 /// Escape-aware close-quote search; plain `find` would collide with `\"` inside the literal.
@@ -153,7 +151,6 @@ impl<'a> Planner<'a> {
                 wrap_to_any,
                 "_arg",
                 combine,
-                expression_ctx.ambient_return_ctx(),
                 fx,
             );
             return (setup, format!("{}({})", go_name, args_strings.join(", ")));
@@ -185,7 +182,6 @@ impl<'a> Planner<'a> {
             spread,
             wrap_spread_to_any: spread_needs_any_wrap(function, spread),
             combine_variadic: call_plan.variadic_combine(0),
-            ambient_return_ctx: expression_ctx.ambient_return_ctx(),
         };
         let (args_setup, args_strings) = self.emit_call_args(args, &args_ctx, fx);
 
@@ -378,7 +374,6 @@ impl<'a> Planner<'a> {
             ctx.wrap_spread_to_any,
             "_arg",
             ctx.combine_variadic.as_ref().cloned(),
-            ctx.ambient_return_ctx,
             fx,
         )
     }
@@ -429,11 +424,7 @@ impl<'a> Planner<'a> {
                 fx,
             ),
             ArgumentPlan::RecursiveEnumPointer => {
-                let (mut setup, value) = self.lower_value(
-                    arg,
-                    ExpressionContext::value().with_ambient_return_ctx_opt(ctx.ambient_return_ctx),
-                    fx,
-                );
+                let (mut setup, value) = self.lower_value(arg, ExpressionContext::value(), fx);
                 if matches!(arg, Expression::Reference { .. }) || arg.get_type().is_ref() {
                     return (setup, value);
                 }
@@ -915,7 +906,7 @@ fn would_suppress_tagged_go(ctx: &CallArgsContext<'_>, effective_param_ty: Optio
 /// Compute the `ExpressionContext` for emitting a Direct or TaggedGoLowering
 /// argument's underlying value via `emit_composite_value`.
 fn direct_arg_emit_ctx<'b>(
-    ctx: &CallArgsContext<'b>,
+    _ctx: &CallArgsContext<'b>,
     effective_param_ty: Option<&'b Type>,
     suppress: bool,
 ) -> ExpressionContext<'b> {
@@ -924,7 +915,6 @@ fn direct_arg_emit_ctx<'b>(
     ExpressionContext::value()
         .with_forced_tagged_go_function(suppress)
         .with_unknown_argument_target(flows_to_unknown)
-        .with_ambient_return_ctx_opt(ctx.ambient_return_ctx)
 }
 
 pub(crate) fn effective_param_type(index: usize, fn_param_types: &[Type]) -> Option<&Type> {

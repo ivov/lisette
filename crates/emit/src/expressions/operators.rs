@@ -206,9 +206,7 @@ impl Planner<'_> {
         }
         if matches!(target, Expression::Call { .. }) {
             let mut buffer = String::new();
-            if let Some(negated) =
-                self.try_emit_negated_call(&mut buffer, target, ctx.ambient_return_ctx(), fx)
-            {
+            if let Some(negated) = self.try_emit_negated_call(&mut buffer, target, fx) {
                 return (setup_from_string(buffer), wrap(negated));
             }
         }

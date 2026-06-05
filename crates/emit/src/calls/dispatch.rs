@@ -6,7 +6,6 @@ use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use super::NativeCallContext;
 use crate::Planner;
 use crate::Renderer;
-use crate::ReturnContext;
 use crate::abi::coercion::{Coercion, CoercionDirection};
 use crate::context::expression::ExpressionContext;
 use crate::expressions::emission::StagedExpression;
@@ -182,7 +181,6 @@ impl Planner<'_> {
         &mut self,
         output: &mut String,
         call_expression: &Expression,
-        ambient: Option<&ReturnContext>,
         fx: &mut EmitEffects,
     ) -> Option<String> {
         let Expression::Call {
@@ -214,7 +212,6 @@ impl Planner<'_> {
             call_ty: None,
             native_type: &native_type,
             method,
-            ambient_return_ctx: ambient,
         };
         match call_kind {
             CallKind::NativeMethod(_) => {
@@ -277,14 +274,7 @@ impl Planner<'_> {
                 return self.lower_assert_type(function, args, type_args, fx);
             }
             CalleePlan::UfcsMethod => {
-                return self.lower_ufcs_call(
-                    function,
-                    args,
-                    type_args,
-                    spread,
-                    ctx.ambient_return_ctx(),
-                    fx,
-                );
+                return self.lower_ufcs_call(function, args, type_args, spread, fx);
             }
             CalleePlan::NativeConstructor(kind)
             | CalleePlan::NativeMethod(kind)
@@ -299,21 +289,13 @@ impl Planner<'_> {
                     call_ty,
                     native_type: &native_type,
                     method,
-                    ambient_return_ctx: ctx.ambient_return_ctx(),
                 };
                 return self.lower_native_call(&native_ctx, fx);
             }
             CalleePlan::ReceiverMethodUfcs { is_public } => {
                 let method = extract_receiver_ufcs_method(function);
                 return self.lower_receiver_method_ufcs(
-                    function,
-                    args,
-                    type_args,
-                    &method,
-                    *is_public,
-                    spread,
-                    ctx.ambient_return_ctx(),
-                    fx,
+                    function, args, type_args, &method, *is_public, spread, fx,
                 );
             }
             CalleePlan::GoInterop(_) | CalleePlan::Regular => {}

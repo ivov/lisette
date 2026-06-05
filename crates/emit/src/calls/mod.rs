@@ -6,7 +6,6 @@ mod ufcs;
 
 use crate::GoCallStrategy;
 use crate::Planner;
-use crate::ReturnContext;
 use crate::abi::AbiShape;
 use crate::plan::calls::{CallReturnShape, CalleePlan};
 use crate::types::native::NativeGoType;
@@ -49,5 +48,4 @@ pub(super) struct NativeCallContext<'a> {
     pub call_ty: Option<&'a Type>,
     pub native_type: &'a NativeGoType,
     pub method: &'a str,
-    pub ambient_return_ctx: Option<&'a ReturnContext>,
 }

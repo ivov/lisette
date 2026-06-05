@@ -1,6 +1,5 @@
 use crate::EmitEffects;
 use crate::Planner;
-use crate::ReturnContext;
 use crate::abi::transition::try_emit_lowered_tail_return;
 use crate::context::expression::ExpressionContext;
 use crate::control_flow::branching::wrap_if_struct_literal;
@@ -38,7 +37,6 @@ impl Planner<'_> {
         &mut self,
         expression: &Expression,
         ty: &Type,
-        ambient: Option<&ReturnContext>,
         fx: &mut EmitEffects,
     ) -> (Vec<LoweredStatement>, String) {
         let Expression::If {
@@ -51,10 +49,6 @@ impl Planner<'_> {
             unreachable!("plan_if_as_operand_temp called on non-If expression");
         };
         let (result_var, declaration) = self.operand_temp_declaration(ty, fx);
-        let return_ctx = ambient
-            .cloned()
-            .or_else(|| self.current_return_ctx().cloned())
-            .expect("operand-position control flow requires an enclosing return context");
         let plan = self.lower_if(
             String::new(),
             condition,
@@ -63,7 +57,6 @@ impl Planner<'_> {
             &PlacePlan::Assign {
                 local: &result_var,
                 target_ty: Some(ty),
-                return_ctx: &return_ctx,
             },
             fx,
         );
@@ -77,20 +70,14 @@ impl Planner<'_> {
         &mut self,
         expression: &Expression,
         ty: &Type,
-        ambient: Option<&ReturnContext>,
         fx: &mut EmitEffects,
     ) -> (Vec<LoweredStatement>, String) {
         let (result_var, declaration) = self.operand_temp_declaration(ty, fx);
-        let return_ctx = ambient
-            .cloned()
-            .or_else(|| self.current_return_ctx().cloned())
-            .expect("operand-position control flow requires an enclosing return context");
         let block = self.lower_branching_to_block(
             expression,
             &PlacePlan::Assign {
                 local: &result_var,
                 target_ty: Some(ty),
-                return_ctx: &return_ctx,
             },
             fx,
         );
@@ -106,7 +93,6 @@ impl Planner<'_> {
         &mut self,
         expression: &Expression,
         ty: &Type,
-        ambient: Option<&ReturnContext>,
         fx: &mut EmitEffects,
     ) -> (Vec<LoweredStatement>, String) {
         let Expression::Loop {
@@ -116,17 +102,12 @@ impl Planner<'_> {
             unreachable!("plan_loop_as_operand_temp called on non-Loop expression");
         };
         let (result_var, declaration) = self.operand_temp_declaration(ty, fx);
-        let return_ctx = ambient
-            .cloned()
-            .or_else(|| self.current_return_ctx().cloned())
-            .expect("operand-position control flow requires an enclosing return context");
         self.push_loop(result_var.clone());
         let plan = self.lower_loop_with_header(
             String::new(),
             "for {\n".to_string(),
             body,
             *needs_label,
-            &return_ctx,
             fx,
         );
         self.pop_loop();
@@ -137,19 +118,18 @@ impl Planner<'_> {
         &mut self,
         rest: &[Expression],
         last: &Expression,
-        return_ctx: &ReturnContext,
         fx: &mut EmitEffects,
     ) -> (Vec<LoweredStatement>, bool) {
         let mut statements: Vec<LoweredStatement> = Vec::with_capacity(rest.len() + 1);
         for item in rest {
-            let statement = self.lower_statement(item, return_ctx, fx);
+            let statement = self.lower_statement(item, fx);
             let diverged = statement.blocks_fallthrough();
             statements.push(statement);
             if diverged {
                 return (statements, true);
             }
         }
-        statements.extend(self.lower_return_tail(last, return_ctx, fx));
+        statements.extend(self.lower_return_tail(last, fx));
         (statements, false)
     }
 
@@ -157,11 +137,10 @@ impl Planner<'_> {
         &mut self,
         body: &Expression,
         should_return: bool,
-        return_ctx: &ReturnContext,
         fx: &mut EmitEffects,
     ) -> LoweredBlock {
         if !should_return {
-            return self.lower_block_as_body(body, return_ctx, fx);
+            return self.lower_block_as_body(body, fx);
         }
 
         let items: &[Expression] = if let Expression::Block { items, .. } = body {
@@ -176,7 +155,7 @@ impl Planner<'_> {
             };
         };
 
-        let (mut statements, diverged) = self.lower_body_until_diverge(rest, last, return_ctx, fx);
+        let (mut statements, diverged) = self.lower_body_until_diverge(rest, last, fx);
         if diverged {
             return LoweredBlock { statements };
         }
@@ -192,6 +171,7 @@ impl Planner<'_> {
         let is_unit_tail = !is_statement_only
             && !matches!(last, Expression::Return { .. })
             && last.get_type().is_unit();
+        let return_ctx = self.return_ctx();
         if (is_statement_only || is_unit_tail)
             && let Some(return_ty) = return_ctx.ty().filter(|ty| !ty.is_unit())
         {
@@ -212,7 +192,6 @@ impl Planner<'_> {
     pub(crate) fn lower_statement(
         &mut self,
         expression: &Expression,
-        return_ctx: &ReturnContext,
         fx: &mut EmitEffects,
     ) -> LoweredStatement {
         match expression {
@@ -228,7 +207,7 @@ impl Planner<'_> {
                     condition,
                     consequence,
                     alternative,
-                    &PlacePlan::statement(return_ctx),
+                    &PlacePlan::Statement,
                     fx,
                 );
                 LoweredStatement::If(plan)
@@ -237,13 +216,7 @@ impl Planner<'_> {
                 body, needs_label, ..
             } => {
                 let directive = self.maybe_line_directive(&expression.get_span());
-                LoweredStatement::Loop(self.lower_infinite_loop(
-                    directive,
-                    body,
-                    *needs_label,
-                    return_ctx,
-                    fx,
-                ))
+                LoweredStatement::Loop(self.lower_infinite_loop(directive, body, *needs_label, fx))
             }
             Expression::While {
                 condition,
@@ -257,17 +230,16 @@ impl Planner<'_> {
                     condition,
                     body,
                     *needs_label,
-                    return_ctx,
                     fx,
                 ))
             }
             Expression::Block { .. } => {
                 self.enter_scope();
-                let body = self.lower_block_as_body(expression, return_ctx, fx);
+                let body = self.lower_block_as_body(expression, fx);
                 self.exit_scope();
                 LoweredStatement::Block(body)
             }
-            Expression::For { .. } => self.lower_for_statement(expression, return_ctx, fx),
+            Expression::For { .. } => self.lower_for_statement(expression, fx),
             Expression::Continue { .. } => {
                 let directive = self.maybe_line_directive(&expression.get_span());
                 LoweredStatement::Continue {
@@ -303,7 +275,7 @@ impl Planner<'_> {
                 expression: value, ..
             } => {
                 let directive = self.maybe_line_directive(&expression.get_span());
-                let plan = self.build_return_plan(value, return_ctx, directive, fx);
+                let plan = self.build_return_plan(value, directive, fx);
                 LoweredStatement::Return(plan)
             }
             Expression::Let {
@@ -319,7 +291,6 @@ impl Planner<'_> {
                     value,
                     else_block.as_deref(),
                     *mutable,
-                    return_ctx,
                     directive,
                     fx,
                 );
@@ -336,7 +307,6 @@ impl Planner<'_> {
                     target,
                     value,
                     compound_operator.as_ref(),
-                    return_ctx,
                     directive,
                     fx,
                 );
@@ -344,19 +314,16 @@ impl Planner<'_> {
             }
             Expression::Match { subject, arms, .. } => {
                 let directive = self.maybe_line_directive(&expression.get_span());
-                let body =
-                    self.lower_match_to_block(subject, arms, &PlacePlan::statement(return_ctx), fx);
+                let body = self.lower_match_to_block(subject, arms, &PlacePlan::Statement, fx);
                 LoweredStatement::Match(MatchStatementPlan { directive, body })
             }
             Expression::Select { arms, .. } => {
                 let directive = self.maybe_line_directive(&expression.get_span());
-                let mut plan = self.lower_select(arms, &PlacePlan::statement(return_ctx), fx);
+                let mut plan = self.lower_select(arms, &PlacePlan::Statement, fx);
                 plan.directive = directive;
                 LoweredStatement::Select(plan)
             }
-            Expression::WhileLet { .. } => {
-                self.lower_while_let_statement(expression, return_ctx, fx)
-            }
+            Expression::WhileLet { .. } => self.lower_while_let_statement(expression, fx),
             // Top-level items (Struct/Enum/etc) shouldn't appear inside
             // function bodies, but dispatch handles them defensively. They
             // carry their own directive (via `emit_top_item`) so the wrapper
@@ -375,7 +342,7 @@ impl Planner<'_> {
                 }
                 LoweredStatement::RawGo(buffer)
             }
-            _ => self.lower_expression_statement(expression, return_ctx, fx),
+            _ => self.lower_expression_statement(expression, fx),
         }
     }
 
@@ -385,7 +352,6 @@ impl Planner<'_> {
     fn lower_expression_statement(
         &mut self,
         expression: &Expression,
-        return_ctx: &ReturnContext,
         fx: &mut EmitEffects,
     ) -> LoweredStatement {
         let unwrapped = expression.unwrap_parens();
@@ -394,11 +360,7 @@ impl Planner<'_> {
             unwrapped,
             Expression::Task { .. } | Expression::Defer { .. }
         ) {
-            let value = self.plan_operand(
-                unwrapped,
-                ExpressionContext::value().with_ambient_return_ctx(return_ctx),
-                fx,
-            );
+            let value = self.plan_operand(unwrapped, ExpressionContext::value(), fx);
             ExpressionStatementForm::Async { value }
         } else if let Expression::Propagate {
             expression: inner, ..
@@ -406,12 +368,12 @@ impl Planner<'_> {
         {
             ExpressionStatementForm::Propagate {
                 body: LoweredBlock {
-                    statements: self.lower_propagate_statement(inner, return_ctx, fx),
+                    statements: self.lower_propagate_statement(inner, fx),
                 },
             }
         } else {
             let mut rendered = String::new();
-            self.emit_discard(&mut rendered, unwrapped, return_ctx, fx);
+            self.emit_discard(&mut rendered, unwrapped, fx);
             ExpressionStatementForm::Discard {
                 body: LoweredBlock {
                     statements: vec![LoweredStatement::RawGo(rendered)],
@@ -426,7 +388,6 @@ impl Planner<'_> {
     fn lower_while_let_statement(
         &mut self,
         expression: &Expression,
-        return_ctx: &ReturnContext,
         fx: &mut EmitEffects,
     ) -> LoweredStatement {
         let Expression::WhileLet {
@@ -450,7 +411,6 @@ impl Planner<'_> {
             scrutinee,
             body,
             *needs_label,
-            return_ctx,
             fx,
         );
         self.pop_loop();
@@ -465,18 +425,11 @@ impl Planner<'_> {
         directive: String,
         body: &Expression,
         needs_label: bool,
-        return_ctx: &ReturnContext,
         fx: &mut EmitEffects,
     ) -> LoopPlan {
         self.push_loop("_");
-        let plan = self.lower_loop_with_header(
-            directive,
-            "for {\n".to_string(),
-            body,
-            needs_label,
-            return_ctx,
-            fx,
-        );
+        let plan =
+            self.lower_loop_with_header(directive, "for {\n".to_string(), body, needs_label, fx);
         self.pop_loop();
         plan
     }
@@ -487,7 +440,6 @@ impl Planner<'_> {
         condition: &Expression,
         body: &Expression,
         needs_label: bool,
-        return_ctx: &ReturnContext,
         fx: &mut EmitEffects,
     ) -> LoopPlan {
         self.push_loop("_");
@@ -514,8 +466,7 @@ impl Planner<'_> {
         } else {
             format!("for {} {{\n", wrap_if_struct_literal(rendered))
         };
-        let plan =
-            self.lower_loop_with_header(directive, header, body, needs_label, return_ctx, fx);
+        let plan = self.lower_loop_with_header(directive, header, body, needs_label, fx);
         self.pop_loop();
         plan
     }
@@ -528,13 +479,12 @@ impl Planner<'_> {
         header: String,
         body: &Expression,
         needs_label: bool,
-        return_ctx: &ReturnContext,
         fx: &mut EmitEffects,
     ) -> LoopPlan {
         self.set_current_loop_label_if_needed(needs_label);
         let label = self.current_loop_label().map(str::to_string);
         self.enter_scope();
-        let lowered_body = self.lower_block_as_body(body, return_ctx, fx);
+        let lowered_body = self.lower_block_as_body(body, fx);
         self.exit_scope();
         LoopPlan {
             directive,
@@ -550,7 +500,6 @@ impl Planner<'_> {
     pub(crate) fn lower_block_as_body(
         &mut self,
         expression: &Expression,
-        return_ctx: &ReturnContext,
         fx: &mut EmitEffects,
     ) -> LoweredBlock {
         let items: &[Expression] = if let Expression::Block { items, .. } = expression {
@@ -560,7 +509,7 @@ impl Planner<'_> {
         };
         let statements = items
             .iter()
-            .map(|item| self.lower_statement(item, return_ctx, fx))
+            .map(|item| self.lower_statement(item, fx))
             .collect();
         LoweredBlock { statements }
     }
@@ -611,15 +560,11 @@ impl Planner<'_> {
         fx: &mut EmitEffects,
     ) -> LoweredBlock {
         match place {
-            PlacePlan::Statement { return_ctx } => {
-                self.lower_block_as_body(expression, return_ctx, fx)
+            PlacePlan::Statement => self.lower_block_as_body(expression, fx),
+            PlacePlan::Return => self.lower_block_to_return(expression, fx),
+            PlacePlan::Assign { local, target_ty } => {
+                self.lower_block_to_assign(expression, local, *target_ty, fx)
             }
-            PlacePlan::Return(return_ctx) => self.lower_block_to_return(expression, return_ctx, fx),
-            PlacePlan::Assign {
-                local,
-                target_ty,
-                return_ctx,
-            } => self.lower_block_to_assign(expression, local, *target_ty, return_ctx, fx),
         }
     }
 
@@ -631,18 +576,15 @@ impl Planner<'_> {
         expression: &Expression,
         local: &str,
         target_ty: Option<&Type>,
-        return_ctx: &ReturnContext,
         fx: &mut EmitEffects,
     ) -> LoweredBlock {
         if expression.get_type().is_result() || expression.get_type().is_option() {
             return LoweredBlock {
-                statements: self
-                    .lower_option_result_assignment(local, target_ty, expression, return_ctx, fx),
+                statements: self.lower_option_result_assignment(local, target_ty, expression, fx),
             };
         }
         LoweredBlock {
-            statements: self
-                .lower_block_to_var(expression, local, target_ty, false, return_ctx, fx),
+            statements: self.lower_block_to_var(expression, local, target_ty, false, fx),
         }
     }
 
@@ -652,7 +594,6 @@ impl Planner<'_> {
     fn lower_block_to_return(
         &mut self,
         expression: &Expression,
-        return_ctx: &ReturnContext,
         fx: &mut EmitEffects,
     ) -> LoweredBlock {
         let items: &[Expression] = if let Expression::Block { items, .. } = expression {
@@ -667,7 +608,7 @@ impl Planner<'_> {
             };
         };
 
-        let (statements, _) = self.lower_body_until_diverge(rest, last, return_ctx, fx);
+        let (statements, _) = self.lower_body_until_diverge(rest, last, fx);
         LoweredBlock { statements }
     }
 
@@ -678,7 +619,6 @@ impl Planner<'_> {
     pub(crate) fn lower_return_tail(
         &mut self,
         last: &Expression,
-        return_ctx: &ReturnContext,
         fx: &mut EmitEffects,
     ) -> Vec<LoweredStatement> {
         let mut statements = Vec::new();
@@ -691,13 +631,13 @@ impl Planner<'_> {
 
         if last.get_type().is_unit() {
             if !matches!(last, Expression::Unit { .. }) {
-                statements.push(self.lower_statement(last, return_ctx, fx));
+                statements.push(self.lower_statement(last, fx));
             }
             return statements;
         }
 
         if last.get_type().is_never() {
-            return self.lower_never_return_tail(last, &return_span, return_ctx, fx);
+            return self.lower_never_return_tail(last, &return_span, fx);
         }
 
         let directive = self.maybe_line_directive(&return_span);
@@ -713,7 +653,7 @@ impl Planner<'_> {
                     condition,
                     consequence,
                     alternative,
-                    &PlacePlan::Return(return_ctx),
+                    &PlacePlan::Return,
                     fx,
                 );
                 statements.push(LoweredStatement::If(plan));
@@ -722,12 +662,11 @@ impl Planner<'_> {
                 if !directive.is_empty() {
                     statements.push(LoweredStatement::RawGo(directive));
                 }
-                let block =
-                    self.lower_match_to_block(subject, arms, &PlacePlan::Return(return_ctx), fx);
+                let block = self.lower_match_to_block(subject, arms, &PlacePlan::Return, fx);
                 statements.extend(block.statements);
             }
             Expression::Select { arms, .. } => {
-                let mut plan = self.lower_select(arms, &PlacePlan::Return(return_ctx), fx);
+                let mut plan = self.lower_select(arms, &PlacePlan::Return, fx);
                 plan.directive = directive;
                 statements.push(LoweredStatement::Select(plan));
             }
@@ -735,12 +674,12 @@ impl Planner<'_> {
                 if !directive.is_empty() {
                     statements.push(LoweredStatement::RawGo(directive));
                 }
-                if let Some(tail) = try_emit_lowered_tail_return(self, last, return_ctx, fx) {
+                if let Some(tail) = try_emit_lowered_tail_return(self, last, fx) {
                     statements.extend(tail);
-                } else if let Some(wrapped) = self.lower_wrapped_return(last, return_ctx, fx) {
+                } else if let Some(wrapped) = self.lower_wrapped_return(last, fx) {
                     statements.extend(wrapped);
                 } else {
-                    statements.extend(self.lower_plain_return_tail(last, return_ctx, fx));
+                    statements.extend(self.lower_plain_return_tail(last, fx));
                 }
             }
         }
@@ -752,11 +691,10 @@ impl Planner<'_> {
         &mut self,
         last: &Expression,
         return_span: &syntax::ast::Span,
-        return_ctx: &ReturnContext,
         fx: &mut EmitEffects,
     ) -> Vec<LoweredStatement> {
         let mut statements = setup_from_string(self.maybe_line_directive(return_span));
-        statements.push(self.lower_statement(last, return_ctx, fx));
+        statements.push(self.lower_statement(last, fx));
         if !is_go_never(last) {
             statements.push(LoweredStatement::RawGo(
                 "panic(\"unreachable\")\n".to_string(),
@@ -770,25 +708,20 @@ impl Planner<'_> {
     fn lower_plain_return_tail(
         &mut self,
         last: &Expression,
-        return_ctx: &ReturnContext,
         fx: &mut EmitEffects,
     ) -> Vec<LoweredStatement> {
         let mut buffer = String::new();
         if requires_temp_var(last) {
-            let expression_string = self.emit_operand(
-                &mut buffer,
-                last,
-                ExpressionContext::value().with_ambient_return_ctx(return_ctx),
-                fx,
-            );
+            let expression_string =
+                self.emit_operand(&mut buffer, last, ExpressionContext::value(), fx);
             if !expression_string.is_empty() {
                 write_line!(buffer, "return {}", expression_string);
             }
         } else {
-            let expression_string = self.emit_tail_value(&mut buffer, last, return_ctx, fx);
-            let return_ty = return_ctx.ty();
+            let expression_string = self.emit_tail_value(&mut buffer, last, fx);
+            let return_ctx = self.return_ctx();
             let expression_string =
-                self.apply_type_coercion(&mut buffer, return_ty, last, expression_string, fx);
+                self.apply_type_coercion(&mut buffer, return_ctx.ty(), last, expression_string, fx);
             write_line!(buffer, "return {}", expression_string);
         }
         vec![LoweredStatement::RawGo(buffer)]

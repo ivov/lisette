@@ -7,7 +7,6 @@ use syntax::types::Type;
 use crate::EmitEffects;
 use crate::Planner;
 use crate::Renderer;
-use crate::ReturnContext;
 use crate::context::expression::ExpressionContext;
 use crate::control_flow::branching::wrap_if_struct_literal;
 use crate::names::go_name;
@@ -186,7 +185,6 @@ impl Planner<'_> {
         binding_ty: &Type,
         scrutinee: &Expression,
         else_block: &Expression,
-        return_ctx: &ReturnContext,
         fx: &mut EmitEffects,
     ) -> Vec<LoweredStatement> {
         let value_ty = scrutinee.get_type();
@@ -202,9 +200,9 @@ impl Planner<'_> {
         };
 
         let body = if matches!(ap.pattern, Pattern::Or { .. }) {
-            self.lower_let_else_or_pattern(ap, binding_ty, subject, else_block, return_ctx, fx)
+            self.lower_let_else_or_pattern(ap, binding_ty, subject, else_block, fx)
         } else {
-            self.lower_let_else_single_pattern(ap, subject, else_block, return_ctx, fx)
+            self.lower_let_else_single_pattern(ap, subject, else_block, fx)
         };
         let body_block = LoweredBlock { statements: body };
 
@@ -230,7 +228,6 @@ impl Planner<'_> {
         scrutinee: &Expression,
         body: &Expression,
         needs_label: bool,
-        return_ctx: &ReturnContext,
         fx: &mut EmitEffects,
     ) {
         self.set_current_loop_label_if_needed(needs_label);
@@ -272,7 +269,6 @@ impl Planner<'_> {
                     ty: &scrutinee_ty,
                 },
                 body,
-                return_ctx,
                 fx,
             );
             return;
@@ -289,7 +285,7 @@ impl Planner<'_> {
             emit_tree_bindings_with_consumers(self, output, &info.bindings, &effective, &[body]);
         }
 
-        let block = self.lower_block_as_body(body, return_ctx, fx);
+        let block = self.lower_block_as_body(body, fx);
         Renderer.render_lowered_block(output, &block);
 
         self.emit_while_let_break_else(output);
@@ -300,7 +296,6 @@ impl Planner<'_> {
         ap: AnnotatedPattern,
         subject: TypedSubject,
         else_block: &Expression,
-        return_ctx: &ReturnContext,
         fx: &mut EmitEffects,
     ) -> Vec<LoweredStatement> {
         let AnnotatedPattern { pattern, typed } = ap;
@@ -342,7 +337,7 @@ impl Planner<'_> {
             guard_parts.push(wrap_if_struct_literal(negated));
         }
         let guard = guard_parts.join(" || ");
-        let else_lowered = self.lower_block_as_body(else_block, return_ctx, fx);
+        let else_lowered = self.lower_block_as_body(else_block, fx);
         statements.push(LoweredStatement::If(IfPlan {
             directive: String::new(),
             condition_setup: String::new(),
@@ -367,7 +362,6 @@ impl Planner<'_> {
         binding_ty: &Type,
         subject: TypedSubject,
         else_block: &Expression,
-        return_ctx: &ReturnContext,
         fx: &mut EmitEffects,
     ) -> Vec<LoweredStatement> {
         let AnnotatedPattern { pattern, typed } = ap;
@@ -444,7 +438,7 @@ impl Planner<'_> {
             }
             None => {
                 self.scope.restore_binding_snapshot(pre_let_snapshot);
-                let else_lowered = self.lower_block_as_body(else_block, return_ctx, fx);
+                let else_lowered = self.lower_block_as_body(else_block, fx);
                 self.scope
                     .restore_binding_snapshot(post_declaration_snapshot);
                 else_lowered
@@ -491,7 +485,6 @@ impl Planner<'_> {
         patterns: &[Pattern],
         subject: TypedSubject,
         body: &Expression,
-        return_ctx: &ReturnContext,
         fx: &mut EmitEffects,
     ) {
         let TypedSubject {
@@ -533,7 +526,7 @@ impl Planner<'_> {
 
             let overlays =
                 emit_tree_bindings_with_consumers(self, output, &info.bindings, effective, &[body]);
-            let block = self.lower_block_as_body(body, return_ctx, fx);
+            let block = self.lower_block_as_body(body, fx);
             Renderer.render_lowered_block(output, &block);
             drop_inline_overlays(self, &overlays);
         }

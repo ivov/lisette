@@ -1,7 +1,6 @@
 use crate::EmitEffects;
 use crate::Planner;
 use crate::Renderer;
-use crate::ReturnContext;
 use crate::abi::is_tagged_shape_fn_value;
 use crate::abi::transition::lower_arg_to_tagged;
 use crate::context::expression::ExpressionContext;
@@ -116,14 +115,11 @@ impl Planner<'_> {
         &mut self,
         expression: &Expression,
         param_ty: Option<&syntax::types::Type>,
-        ambient: Option<&ReturnContext>,
         fx: &mut EmitEffects,
     ) -> StagedExpression {
         let suppress =
             param_ty.is_some_and(|p| matches!(p.unwrap_forall(), syntax::types::Type::Function(_)));
-        let arg_ctx = ExpressionContext::value()
-            .with_forced_tagged_go_function(suppress)
-            .with_ambient_return_ctx_opt(ambient);
+        let arg_ctx = ExpressionContext::value().with_forced_tagged_go_function(suppress);
         let staged = self.stage_composite(expression, arg_ctx, fx);
 
         if suppress {
@@ -195,7 +191,6 @@ impl Planner<'_> {
         &mut self,
         function: &Expression,
         args: &[Expression],
-        ambient: Option<&ReturnContext>,
         fx: &mut EmitEffects,
     ) -> Vec<StagedExpression> {
         let fn_ty = function.get_type();
@@ -205,7 +200,7 @@ impl Planner<'_> {
         };
         args.iter()
             .enumerate()
-            .map(|(i, arg)| self.stage_prelude_arg(arg, formal_params.get(i), ambient, fx))
+            .map(|(i, arg)| self.stage_prelude_arg(arg, formal_params.get(i), fx))
             .collect()
     }
 
@@ -294,15 +289,10 @@ impl Planner<'_> {
         wrap_to_any: bool,
         prefix: &str,
         combine: Option<VariadicCombine>,
-        ambient: Option<&ReturnContext>,
         fx: &mut EmitEffects,
     ) -> (Vec<LoweredStatement>, Vec<String>) {
         let spread_index = spread.map(|s| {
-            stages.push(self.stage_operand(
-                s,
-                ExpressionContext::value().with_ambient_return_ctx_opt(ambient),
-                fx,
-            ));
+            stages.push(self.stage_operand(s, ExpressionContext::value(), fx));
             stages.len() - 1
         });
         let (setup, mut values) = self.sequence_structured(stages, prefix);

@@ -1,6 +1,5 @@
 use crate::EmitEffects;
 use crate::Planner;
-use crate::ReturnContext;
 use crate::abi::AbiShape;
 use crate::abi::transition::emit_return_adapter;
 use crate::names::go_name;
@@ -398,11 +397,8 @@ impl Planner<'_> {
         &mut self,
         inferred: Vec<Type>,
         in_tail: bool,
-        ambient: Option<&ReturnContext>,
     ) -> Vec<Type> {
-        let Some(resolved) = ambient.cloned() else {
-            return inferred;
-        };
+        let resolved = self.return_ctx();
         let return_slots = resolved.ty().and_then(|ty| {
             let Type::Tuple(slots) = ty else {
                 return None;

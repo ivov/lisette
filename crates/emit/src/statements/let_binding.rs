@@ -1,6 +1,5 @@
 use crate::EmitEffects;
 use crate::Planner;
-use crate::ReturnContext;
 use crate::abi::coercion::{Coercion, CoercionDirection};
 use crate::calls::go_interop::{GoCallStrategy, WrapperTarget};
 use crate::context::expression::ExpressionContext;
@@ -122,7 +121,6 @@ fn resolve_let_temp_declaration_ty(
     planner: &mut Planner,
     value: &Expression,
     binding_ty: &Type,
-    return_ctx: &ReturnContext,
 ) -> Type {
     let value_ty = value.get_type();
     let widens_to_interface =
@@ -144,7 +142,7 @@ fn resolve_let_temp_declaration_ty(
         Expression::If { .. } | Expression::Match { .. } | Expression::Select { .. }
     );
     if is_branching && let Type::Tuple(slots) = &base {
-        Type::Tuple(planner.resolve_tuple_slot_types(slots.clone(), false, Some(return_ctx)))
+        Type::Tuple(planner.resolve_tuple_slot_types(slots.clone(), false))
     } else {
         base
     }
@@ -172,7 +170,6 @@ impl Planner<'_> {
         output: &mut String,
         let_spec: LetSpec,
         raw_go_name: Option<&str>,
-        return_ctx: &ReturnContext,
         fx: &mut EmitEffects,
     ) {
         let LetSpec {
@@ -189,9 +186,9 @@ impl Planner<'_> {
         let Some(raw_go_name) = raw_go_name else {
             self.scope.bind(identifier, "_");
             if needs_temp {
-                self.emit_let_temp(output, "_", value, binding_ty, return_ctx, fx);
+                self.emit_let_temp(output, "_", value, binding_ty, fx);
             } else {
-                self.emit_discard(output, value, return_ctx, fx);
+                self.emit_discard(output, value, fx);
             }
             return;
         };
@@ -199,15 +196,15 @@ impl Planner<'_> {
             let go_identifier = escape_reserved(raw_go_name);
             if self.is_declared(&go_identifier) || expression_contains_binding(value, identifier) {
                 let fresh = self.fresh_var(Some(identifier));
-                self.emit_let_temp(output, &fresh, value, binding_ty, return_ctx, fx);
+                self.emit_let_temp(output, &fresh, value, binding_ty, fx);
                 self.scope.bind(identifier, &fresh);
             } else {
                 self.scope.bind(identifier, raw_go_name);
-                self.emit_let_temp(output, &go_identifier, value, binding_ty, return_ctx, fx);
+                self.emit_let_temp(output, &go_identifier, value, binding_ty, fx);
             }
             return;
         }
-        self.emit_let_direct(output, let_spec, raw_go_name, return_ctx, fx);
+        self.emit_let_direct(output, let_spec, raw_go_name, fx);
     }
 
     /// `let x = expr?`. Adds a leading `var x T` when the binding widens to
@@ -218,7 +215,6 @@ impl Planner<'_> {
         raw_go_name: Option<&str>,
         value: &Expression,
         binding_ty: &Type,
-        return_ctx: &ReturnContext,
         fx: &mut EmitEffects,
     ) -> Vec<LoweredStatement> {
         let Expression::Propagate {
@@ -229,7 +225,7 @@ impl Planner<'_> {
         };
         let Some(raw_go_name) = raw_go_name else {
             self.scope.bind(identifier, "_");
-            return self.lower_propagate(inner, Some("_"), return_ctx, fx).0;
+            return self.lower_propagate(inner, Some("_"), fx).0;
         };
         let go_identifier = self.choose_let_go_name(identifier, raw_go_name, false);
         let widens_to_interface =
@@ -243,10 +239,7 @@ impl Planner<'_> {
             )));
             self.declare(&go_identifier);
         }
-        statements.extend(
-            self.lower_propagate(inner, Some(&go_identifier), return_ctx, fx)
-                .0,
-        );
+        statements.extend(self.lower_propagate(inner, Some(&go_identifier), fx).0);
         self.scope.bind(identifier, &go_identifier);
         self.try_declare(&go_identifier);
         statements
@@ -285,7 +278,6 @@ impl Planner<'_> {
         output: &mut String,
         let_spec: LetSpec,
         raw_go_name: &str,
-        return_ctx: &ReturnContext,
         fx: &mut EmitEffects,
     ) {
         let LetSpec {
@@ -307,12 +299,7 @@ impl Planner<'_> {
             return;
         }
 
-        let value_expression = self.emit_value(
-            output,
-            value,
-            ExpressionContext::value().with_ambient_return_ctx(return_ctx),
-            fx,
-        );
+        let value_expression = self.emit_value(output, value, ExpressionContext::value(), fx);
         let coercion = Coercion::resolve(
             self,
             &value.get_type(),
@@ -392,14 +379,13 @@ impl Planner<'_> {
         name: &str,
         value: &Expression,
         binding_ty: &Type,
-        return_ctx: &ReturnContext,
         fx: &mut EmitEffects,
     ) {
         if !self.is_declared(name) {
-            self.emit_let_temp_var_declaration(output, name, value, binding_ty, return_ctx, fx);
+            self.emit_let_temp_var_declaration(output, name, value, binding_ty, fx);
             self.try_declare(name);
         }
-        self.emit_assign(output, value, name, Some(binding_ty), return_ctx, fx);
+        self.emit_assign(output, value, name, Some(binding_ty), fx);
     }
 
     fn emit_let_temp_var_declaration(
@@ -408,13 +394,13 @@ impl Planner<'_> {
         name: &str,
         value: &Expression,
         binding_ty: &Type,
-        return_ctx: &ReturnContext,
         fx: &mut EmitEffects,
     ) {
         if name == "_" {
             return;
         }
-        let resolved_ty = resolve_let_temp_declaration_ty(self, value, binding_ty, return_ctx);
+        let return_ctx = self.return_ctx();
+        let resolved_ty = resolve_let_temp_declaration_ty(self, value, binding_ty);
         let has_variable_ok_ty = matches!(
             value,
             Expression::TryBlock { .. } | Expression::RecoverBlock { .. }
@@ -454,7 +440,6 @@ pub(crate) struct LetPlanner<'a, 'e> {
     value: &'a Expression,
     else_block: Option<&'a Expression>,
     mutable: bool,
-    return_ctx: &'a ReturnContext,
 }
 
 impl<'a, 'e> LetPlanner<'a, 'e> {
@@ -464,7 +449,6 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
         value: &'a Expression,
         else_block: Option<&'a Expression>,
         mutable: bool,
-        return_ctx: &'a ReturnContext,
     ) -> Self {
         Self {
             planner,
@@ -472,7 +456,6 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
             value,
             else_block,
             mutable,
-            return_ctx,
         }
     }
 
@@ -497,8 +480,7 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
                 None
             };
             let mut buffer = String::new();
-            self.planner
-                .emit_statement(&mut buffer, self.value, self.return_ctx, fx);
+            self.planner.emit_statement(&mut buffer, self.value, fx);
             return LetForm::Never {
                 declaration,
                 body: wrap(buffer),
@@ -518,7 +500,6 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
                     &self.binding.ty,
                     self.value,
                     else_block,
-                    self.return_ctx,
                     fx,
                 );
                 LetForm::LetElse {
@@ -607,7 +588,6 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
                 raw_go_name.as_deref(),
                 self.value,
                 &self.binding.ty,
-                self.return_ctx,
                 fx,
             );
             return LoweredBlock { statements };
@@ -622,7 +602,6 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
                 mutable: self.mutable,
             },
             raw_go_name.as_deref(),
-            self.return_ctx,
             fx,
         );
         LoweredBlock {
@@ -635,14 +614,11 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
             expression: inner, ..
         } = self.value.unwrap_parens()
         {
-            let statements = self
-                .planner
-                .lower_propagate_statement(inner, self.return_ctx, fx);
+            let statements = self.planner.lower_propagate_statement(inner, fx);
             return LoweredBlock { statements };
         }
         let mut buffer = String::new();
-        self.planner
-            .emit_discard(&mut buffer, self.value, self.return_ctx, fx);
+        self.planner.emit_discard(&mut buffer, self.value, fx);
         LoweredBlock {
             statements: vec![LoweredStatement::RawGo(buffer)],
         }
@@ -687,13 +663,9 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
             .collect();
 
         let mut setup = String::new();
-        let call_str = self.planner.emit_call(
-            &mut setup,
-            self.value,
-            None,
-            ExpressionContext::value().with_ambient_return_ctx(self.return_ctx),
-            fx,
-        );
+        let call_str =
+            self.planner
+                .emit_call(&mut setup, self.value, None, ExpressionContext::value(), fx);
 
         for (identifier, go_name) in planned.iter().flatten() {
             self.planner.scope.bind(*identifier, go_name);
@@ -748,12 +720,10 @@ impl Planner<'_> {
         value: &Expression,
         else_block: Option<&Expression>,
         mutable: bool,
-        return_ctx: &ReturnContext,
         directive: String,
         fx: &mut EmitEffects,
     ) -> LetPlan {
-        let form =
-            LetPlanner::new(self, binding, value, else_block, mutable, return_ctx).build_form(fx);
+        let form = LetPlanner::new(self, binding, value, else_block, mutable).build_form(fx);
         LetPlan { directive, form }
     }
 }

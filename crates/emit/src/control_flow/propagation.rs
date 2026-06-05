@@ -1,7 +1,6 @@
 use crate::EmitEffects;
 use crate::Planner;
 use crate::Renderer;
-use crate::ReturnContext;
 use crate::abi::AbiShape;
 use crate::abi::transition;
 use crate::context::expression::ExpressionContext;
@@ -22,7 +21,6 @@ struct WrappedReturnInfo<'a> {
     fallible: &'a Fallible,
     return_ty: &'a Type,
     lowered: Option<&'a AbiShape>,
-    return_ctx: &'a ReturnContext,
 }
 
 pub(crate) fn plain_return(value: String) -> LoweredStatement {
@@ -53,7 +51,6 @@ impl Planner<'_> {
         &mut self,
         expression: &Expression,
         result_var_name: Option<&str>,
-        return_ctx: &ReturnContext,
         fx: &mut EmitEffects,
     ) -> (Vec<LoweredStatement>, String) {
         let expression_ty = expression.get_type();
@@ -64,8 +61,7 @@ impl Planner<'_> {
 
         // `Err(...)?` / `None?` literal already emits its own return.
         if let Some(var_name) = result_var_name
-            && let Some(head) =
-                self.try_lower_error_constructor(expression, &fallible, return_ctx, fx)
+            && let Some(head) = self.try_lower_error_constructor(expression, &fallible, fx)
         {
             statements.extend(head);
             self.declare_zero_for_dead_path(&mut statements, var_name, &fallible, fx);
@@ -75,7 +71,7 @@ impl Planner<'_> {
         fx.require_stdlib();
         let (check_setup, check_var) = self.hoist_propagate_check_var(expression, fx);
         statements.extend(check_setup);
-        statements.push(self.build_propagate_failure_check(&check_var, &fallible, return_ctx, fx));
+        statements.push(self.build_propagate_failure_check(&check_var, &fallible, fx));
 
         let ok_access = format!("{}.{}", check_var, fallible.ok_field());
         let value = match result_var_name {
@@ -95,10 +91,9 @@ impl Planner<'_> {
         output: &mut String,
         expression: &Expression,
         result_var_name: Option<&str>,
-        return_ctx: &ReturnContext,
         fx: &mut EmitEffects,
     ) -> String {
-        let (statements, value) = self.lower_propagate(expression, result_var_name, return_ctx, fx);
+        let (statements, value) = self.lower_propagate(expression, result_var_name, fx);
         let block = LoweredBlock { statements };
         Renderer.render_lowered_block(output, &block);
         value
@@ -162,11 +157,11 @@ impl Planner<'_> {
         &mut self,
         check_var: &str,
         fallible: &Fallible,
-        return_ctx: &ReturnContext,
         fx: &mut EmitEffects,
     ) -> LoweredStatement {
         let err_field = if fallible.is_result() { ".ErrVal" } else { "" };
         let success_tag = fallible.success_tag();
+        let return_ctx = self.return_ctx();
 
         let values = if let Some(shape) = return_ctx.lowered_shape() {
             let return_ty = return_ctx.expect_ty();
@@ -181,7 +176,7 @@ impl Planner<'_> {
         } else {
             let err_return = {
                 let mut fe = FalliblePlanner::new(self, fallible, fx);
-                fe.emit_contextual_failure(Some(&format!("{}{}", check_var, err_field)), return_ctx)
+                fe.emit_contextual_failure(Some(&format!("{}{}", check_var, err_field)))
             };
             vec![err_return]
         };
@@ -193,10 +188,9 @@ impl Planner<'_> {
     pub(crate) fn lower_propagate_statement(
         &mut self,
         inner: &Expression,
-        return_ctx: &ReturnContext,
         fx: &mut EmitEffects,
     ) -> Vec<LoweredStatement> {
-        self.lower_propagate(inner, Some("_"), return_ctx, fx).0
+        self.lower_propagate(inner, Some("_"), fx).0
     }
 
     fn bind_propagate_ok(&mut self, name: &str, ok_access: &str) -> LoweredStatement {
@@ -215,9 +209,9 @@ impl Planner<'_> {
         &mut self,
         output: &mut String,
         expression: &Expression,
-        return_ctx: &ReturnContext,
         fx: &mut EmitEffects,
     ) {
+        let return_ctx = self.return_ctx();
         let is_unit = return_ctx.ty().is_some_and(Type::is_unit);
 
         if is_unit {
@@ -228,11 +222,11 @@ impl Planner<'_> {
                     | Expression::Literal { .. }
             );
             if !is_pure {
-                self.emit_statement(output, expression, return_ctx, fx);
+                self.emit_statement(output, expression, fx);
             }
             output.push_str("return\n");
-        } else if !transition::render_lowered_tail_return(self, output, expression, return_ctx, fx)
-            && !self.emit_wrapped_return(output, expression, return_ctx, fx)
+        } else if !transition::render_lowered_tail_return(self, output, expression, fx)
+            && !self.emit_wrapped_return(output, expression, fx)
         {
             let expression_string =
                 self.emit_value(output, expression, ExpressionContext::value(), fx);
@@ -247,7 +241,6 @@ impl Planner<'_> {
     pub(crate) fn build_return_plan(
         &mut self,
         expression: &Expression,
-        return_ctx: &ReturnContext,
         directive: String,
         fx: &mut EmitEffects,
     ) -> ReturnStatementPlan {
@@ -255,6 +248,7 @@ impl Planner<'_> {
             statements: vec![LoweredStatement::RawGo(body_text)],
         };
 
+        let return_ctx = self.return_ctx();
         let is_unit = return_ctx.ty().is_some_and(Type::is_unit);
         if is_unit {
             // Mirror emit_return's unit path: impure expressions run as a
@@ -270,7 +264,7 @@ impl Planner<'_> {
                 None
             } else {
                 let mut buffer = String::new();
-                self.emit_statement(&mut buffer, expression, return_ctx, fx);
+                self.emit_statement(&mut buffer, expression, fx);
                 (!buffer.is_empty()).then(|| body_block(buffer))
             };
             return ReturnStatementPlan {
@@ -279,9 +273,7 @@ impl Planner<'_> {
             };
         }
 
-        if let Some(statements) =
-            transition::try_emit_lowered_tail_return(self, expression, return_ctx, fx)
-        {
+        if let Some(statements) = transition::try_emit_lowered_tail_return(self, expression, fx) {
             return ReturnStatementPlan {
                 directive,
                 form: ReturnForm::LoweredAbi {
@@ -290,7 +282,7 @@ impl Planner<'_> {
             };
         }
 
-        if let Some(statements) = self.lower_wrapped_return(expression, return_ctx, fx) {
+        if let Some(statements) = self.lower_wrapped_return(expression, fx) {
             return ReturnStatementPlan {
                 directive,
                 form: ReturnForm::Wrapped {
@@ -328,10 +320,10 @@ impl Planner<'_> {
     pub(crate) fn lower_wrapped_return(
         &mut self,
         expression: &Expression,
-        return_ctx: &ReturnContext,
         fx: &mut EmitEffects,
     ) -> Option<Vec<LoweredStatement>> {
         let expression_ty = expression.get_type();
+        let return_ctx = self.return_ctx();
 
         let return_ty = return_ctx
             .ty()
@@ -366,7 +358,6 @@ impl Planner<'_> {
                 &fallible,
                 &return_ty,
                 lowered.as_ref(),
-                return_ctx,
                 fx,
             ));
             return Some(statements);
@@ -376,7 +367,6 @@ impl Planner<'_> {
             fallible: &fallible,
             return_ty: &return_ty,
             lowered: lowered.as_ref(),
-            return_ctx,
         };
 
         if matches!(expression, Expression::Call { .. }) {
@@ -385,8 +375,7 @@ impl Planner<'_> {
         }
 
         if matches!(expression, Expression::If { .. } | Expression::Match { .. }) {
-            let block =
-                self.lower_branching_to_block(expression, &PlacePlan::Return(return_ctx), fx);
+            let block = self.lower_branching_to_block(expression, &PlacePlan::Return, fx);
             statements.extend(block.statements);
             return Some(statements);
         }
@@ -395,17 +384,13 @@ impl Planner<'_> {
             expression: inner, ..
         } = expression
         {
-            let (setup, value) = self.lower_propagate(inner, None, return_ctx, fx);
+            let (setup, value) = self.lower_propagate(inner, None, fx);
             statements.extend(setup);
             statements.extend(self.wrapped_value_return(value, &return_ty, lowered.as_ref(), fx));
             return Some(statements);
         }
 
-        let (setup, value) = self.lower_value(
-            expression,
-            ExpressionContext::value().with_ambient_return_ctx(return_ctx),
-            fx,
-        );
+        let (setup, value) = self.lower_value(expression, ExpressionContext::value(), fx);
         statements.extend(setup);
         statements.extend(self.wrapped_value_return(value, &return_ty, lowered.as_ref(), fx));
         Some(statements)
@@ -417,10 +402,9 @@ impl Planner<'_> {
         &mut self,
         output: &mut String,
         expression: &Expression,
-        return_ctx: &ReturnContext,
         fx: &mut EmitEffects,
     ) -> bool {
-        match self.lower_wrapped_return(expression, return_ctx, fx) {
+        match self.lower_wrapped_return(expression, fx) {
             Some(statements) => {
                 let block = LoweredBlock { statements };
                 Renderer.render_lowered_block(output, &block);
@@ -463,7 +447,6 @@ impl Planner<'_> {
             fallible,
             return_ty,
             lowered,
-            return_ctx,
         } = info;
         let Expression::Call {
             expression: call_expression,
@@ -475,11 +458,11 @@ impl Planner<'_> {
         };
         match fallible.classify_constructor(call_expression) {
             Some(ConstructorKind::Success) => {
-                self.lower_success_constructor_return(args, fallible, lowered, return_ctx, fx)
+                self.lower_success_constructor_return(args, fallible, lowered, fx)
             }
-            Some(ConstructorKind::Failure) => self.lower_failure_constructor_return(
-                args, fallible, return_ty, lowered, return_ctx, fx,
-            ),
+            Some(ConstructorKind::Failure) => {
+                self.lower_failure_constructor_return(args, fallible, return_ty, lowered, fx)
+            }
             None => self.lower_wrapped_passthrough_return(expression, return_ty, lowered, fx),
         }
     }
@@ -489,29 +472,22 @@ impl Planner<'_> {
         args: &[Expression],
         fallible: &Fallible,
         lowered: Option<&AbiShape>,
-        return_ctx: &ReturnContext,
         fx: &mut EmitEffects,
     ) -> Vec<LoweredStatement> {
         let mut statements = Vec::new();
         if let Some(shape) = lowered {
             let ok_arg = if matches!(shape, AbiShape::BareError) {
                 if !args.is_empty() {
-                    let (setup, _) = self.lower_composite_value(
-                        &args[0],
-                        ExpressionContext::value().with_ambient_return_ctx(return_ctx),
-                        fx,
-                    );
+                    let (setup, _) =
+                        self.lower_composite_value(&args[0], ExpressionContext::value(), fx);
                     statements.extend(setup);
                 }
                 String::new()
             } else if args.is_empty() {
                 "struct{}{}".to_string()
             } else {
-                let (setup, value) = self.lower_composite_value(
-                    &args[0],
-                    ExpressionContext::value().with_ambient_return_ctx(return_ctx),
-                    fx,
-                );
+                let (setup, value) =
+                    self.lower_composite_value(&args[0], ExpressionContext::value(), fx);
                 statements.extend(setup);
                 value
             };
@@ -519,11 +495,7 @@ impl Planner<'_> {
                 transition::lowered_ok_values(shape, &ok_arg),
             ));
         } else {
-            let (setup, arg) = self.lower_composite_value(
-                &args[0],
-                ExpressionContext::value().with_ambient_return_ctx(return_ctx),
-                fx,
-            );
+            let (setup, arg) = self.lower_composite_value(&args[0], ExpressionContext::value(), fx);
             let success = {
                 let mut fe = FalliblePlanner::new(self, fallible, fx);
                 fe.emit_success(&arg)
@@ -540,7 +512,6 @@ impl Planner<'_> {
         fallible: &Fallible,
         return_ty: &Type,
         lowered: Option<&AbiShape>,
-        return_ctx: &ReturnContext,
         fx: &mut EmitEffects,
     ) -> Vec<LoweredStatement> {
         let mut statements = Vec::new();
@@ -550,22 +521,16 @@ impl Planner<'_> {
                     transition::lowered_none_values(self, shape, return_ty, fx),
                 ));
             } else {
-                let (setup, err_expr) = self.lower_composite_value(
-                    &args[0],
-                    ExpressionContext::value().with_ambient_return_ctx(return_ctx),
-                    fx,
-                );
+                let (setup, err_expr) =
+                    self.lower_composite_value(&args[0], ExpressionContext::value(), fx);
                 let values = transition::lowered_err_values(self, shape, return_ty, &err_expr, fx);
                 statements.extend(setup);
                 statements.push(transition::multi_value_return(values));
             }
         } else {
             let failure = if fallible.is_result() {
-                let (setup, arg) = self.lower_composite_value(
-                    &args[0],
-                    ExpressionContext::value().with_ambient_return_ctx(return_ctx),
-                    fx,
-                );
+                let (setup, arg) =
+                    self.lower_composite_value(&args[0], ExpressionContext::value(), fx);
                 statements.extend(setup);
                 let mut fe = FalliblePlanner::new(self, fallible, fx);
                 fe.emit_failure(Some(&arg))

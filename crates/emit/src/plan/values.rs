@@ -118,7 +118,7 @@ impl Planner<'_> {
             } => self.plan_cast(expression, target_type, ty, ctx, fx),
             Expression::IndexedAccess {
                 expression, index, ..
-            } => self.plan_index_access(expression, index, ctx.ambient_return_ctx(), fx),
+            } => self.plan_index_access(expression, index, fx),
             Expression::Binary {
                 operator,
                 left,
@@ -131,7 +131,7 @@ impl Planner<'_> {
                 ..
             } => self.plan_unary(operator, expression, ctx, fx),
             Expression::Tuple { elements, ty, .. } => {
-                self.plan_tuple_value(elements, ty, false, ctx.ambient_return_ctx(), fx)
+                self.plan_tuple_value(elements, ty, false, fx)
             }
             Expression::Range {
                 start,
@@ -155,36 +155,28 @@ impl Planner<'_> {
             Expression::DotAccess { .. } => self.plan_dot_access(expression, ctx, fx),
             Expression::Task {
                 expression: inner, ..
-            } => self.plan_async_wrapper("go", inner, ctx.ambient_return_ctx(), fx),
+            } => self.plan_async_wrapper("go", inner, fx),
             Expression::Defer {
                 expression: inner, ..
-            } => self.plan_async_wrapper("defer", inner, ctx.ambient_return_ctx(), fx),
+            } => self.plan_async_wrapper("defer", inner, fx),
             Expression::TryBlock { items, ty, .. } => {
-                let (setup, value) = self.lower_try_block(items, ty, ctx.ambient_return_ctx(), fx);
+                let (setup, value) = self.lower_try_block(items, ty, fx);
                 value_plan_from_statements(setup, value)
             }
             Expression::RecoverBlock { items, ty, .. } => {
-                let (setup, value) =
-                    self.lower_recover_block(items, ty, ctx.ambient_return_ctx(), fx);
+                let (setup, value) = self.lower_recover_block(items, ty, fx);
                 value_plan_from_statements(setup, value)
             }
             Expression::If { ty, .. } => {
-                let (setup, value) =
-                    self.plan_if_as_operand_temp(expression, ty, ctx.ambient_return_ctx(), fx);
+                let (setup, value) = self.plan_if_as_operand_temp(expression, ty, fx);
                 value_plan_from_statements(setup, value)
             }
             Expression::Loop { ty, .. } => {
-                let (setup, value) =
-                    self.plan_loop_as_operand_temp(expression, ty, ctx.ambient_return_ctx(), fx);
+                let (setup, value) = self.plan_loop_as_operand_temp(expression, ty, fx);
                 value_plan_from_statements(setup, value)
             }
             Expression::Match { ty, .. } | Expression::Select { ty, .. } if !ty.is_never() => {
-                let (setup, value) = self.plan_branching_as_operand_temp(
-                    expression,
-                    ty,
-                    ctx.ambient_return_ctx(),
-                    fx,
-                );
+                let (setup, value) = self.plan_branching_as_operand_temp(expression, ty, fx);
                 value_plan_from_statements(setup, value)
             }
             Expression::Call { ty, .. } => match self.classify_call(expression) {

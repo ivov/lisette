@@ -3,7 +3,6 @@ use syntax::types::Type;
 use crate::EmitEffects;
 use crate::Planner;
 use crate::Renderer;
-use crate::ReturnContext;
 use crate::abi::{AbiShape, tuple_element_types};
 use crate::calls::go_interop::{TupleReturnLayout, WrapperTarget};
 use crate::context::expression::ExpressionContext;
@@ -619,17 +618,12 @@ pub(crate) fn lower_arg_to_tagged(
 pub(crate) fn try_emit_lowered_tail_return(
     planner: &mut Planner,
     expression: &syntax::ast::Expression,
-    return_ctx: &ReturnContext,
     fx: &mut EmitEffects,
 ) -> Option<Vec<LoweredStatement>> {
-    let shape = return_ctx.lowered_shape()?;
+    let shape = planner.return_ctx().lowered_shape()?;
     match shape {
-        AbiShape::PartialTuple => Some(emit_lowered_partial_tail(
-            planner, expression, return_ctx, fx,
-        )),
-        AbiShape::Tuple { arity } => Some(emit_lowered_tuple_tail(
-            planner, expression, arity, return_ctx, fx,
-        )),
+        AbiShape::PartialTuple => Some(emit_lowered_partial_tail(planner, expression, fx)),
+        AbiShape::Tuple { arity } => Some(emit_lowered_tuple_tail(planner, expression, arity, fx)),
         _ => None,
     }
 }
@@ -639,10 +633,9 @@ pub(crate) fn render_lowered_tail_return(
     planner: &mut Planner,
     output: &mut String,
     expression: &syntax::ast::Expression,
-    return_ctx: &ReturnContext,
     fx: &mut EmitEffects,
 ) -> bool {
-    match try_emit_lowered_tail_return(planner, expression, return_ctx, fx) {
+    match try_emit_lowered_tail_return(planner, expression, fx) {
         Some(statements) => {
             let block = LoweredBlock { statements };
             Renderer.render_lowered_block(output, &block);
@@ -656,14 +649,13 @@ fn emit_lowered_tuple_tail(
     planner: &mut Planner,
     expression: &syntax::ast::Expression,
     arity: usize,
-    return_ctx: &ReturnContext,
     fx: &mut EmitEffects,
 ) -> Vec<LoweredStatement> {
     use syntax::ast::Expression;
     if let Expression::Tuple { elements, .. } = expression
         && elements.len() == arity
     {
-        let return_ty = return_ctx.expect_ty();
+        let return_ty = planner.return_ctx().expect_ty();
         let slot_tys = tuple_element_types(&planner.facts.peel_alias(&return_ty));
         let stages: Vec<StagedExpression> = elements
             .iter()
@@ -686,7 +678,7 @@ fn emit_lowered_tuple_tail(
         return statements;
     }
 
-    let return_ty = return_ctx.expect_ty();
+    let return_ty = planner.return_ctx().expect_ty();
     let mut setup = String::new();
     let value = planner.emit_value(&mut setup, expression, ExpressionContext::value(), fx);
     let temp = planner.hoist_tmp_value(&mut setup, "tup", &value);
@@ -707,11 +699,10 @@ fn emit_lowered_tuple_tail(
 fn emit_lowered_partial_tail(
     planner: &mut Planner,
     expression: &syntax::ast::Expression,
-    return_ctx: &ReturnContext,
     fx: &mut EmitEffects,
 ) -> Vec<LoweredStatement> {
     use syntax::ast::Expression;
-    let return_ty = return_ctx.expect_ty();
+    let return_ty = planner.return_ctx().expect_ty();
 
     if let Expression::Call {
         expression: callee,

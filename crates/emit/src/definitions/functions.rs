@@ -47,7 +47,7 @@ impl Planner<'_> {
     ) {
         self.push_const_frame();
         self.push_return_ctx(return_ctx.clone());
-        self.emit_function_body_inner(output, body, should_return, return_ctx, fx);
+        self.emit_function_body_inner(output, body, should_return, fx);
         self.pop_return_ctx();
         self.pop_const_frame();
     }
@@ -57,10 +57,9 @@ impl Planner<'_> {
         output: &mut String,
         body: &Expression,
         should_return: bool,
-        return_ctx: &ReturnContext,
         fx: &mut EmitEffects,
     ) {
-        let lowered = self.lower_function_body(body, should_return, return_ctx, fx);
+        let lowered = self.lower_function_body(body, should_return, fx);
         Renderer.render_lowered_block(output, &lowered);
     }
 

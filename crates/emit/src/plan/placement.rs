@@ -1,7 +1,6 @@
 use crate::EmitEffects;
 use crate::Planner;
 use crate::Renderer;
-use crate::ReturnContext;
 use crate::analyze::inline_uses::region_blocks_inline;
 use crate::context::expression::ExpressionContext;
 use crate::control_flow::fallible::{ConstructorKind, Fallible, FalliblePlanner};
@@ -190,7 +189,6 @@ impl Planner<'_> {
         &mut self,
         output: &mut String,
         value: &Expression,
-        return_ctx: &ReturnContext,
         fx: &mut EmitEffects,
     ) {
         let unwrapped = value.unwrap_parens();
@@ -200,18 +198,13 @@ impl Planner<'_> {
         }
 
         if let Expression::Propagate { expression, .. } = unwrapped {
-            self.emit_propagate(output, expression, Some("_"), return_ctx, fx);
+            self.emit_propagate(output, expression, Some("_"), fx);
             return;
         }
 
         let value_ty = value.get_type();
         if value_ty.is_unit() || value_ty.is_variable() || value_ty.is_never() {
-            let value_expression = self.emit_operand(
-                output,
-                value,
-                ExpressionContext::value().with_ambient_return_ctx(return_ctx),
-                fx,
-            );
+            let value_expression = self.emit_operand(output, value, ExpressionContext::value(), fx);
             if !value_expression.is_empty() {
                 if matches!(unwrapped, Expression::Call { .. }) {
                     write_line!(output, "{}", value_expression);
@@ -229,12 +222,7 @@ impl Planner<'_> {
             return;
         }
 
-        let value_expression = self.emit_operand(
-            output,
-            value,
-            ExpressionContext::value().with_ambient_return_ctx(return_ctx),
-            fx,
-        );
+        let value_expression = self.emit_operand(output, value, ExpressionContext::value(), fx);
         write_line!(output, "_ = {}", value_expression);
     }
 
@@ -265,14 +253,12 @@ impl Planner<'_> {
         expression: &Expression,
         var: &str,
         target_ty: Option<&Type>,
-        return_ctx: &ReturnContext,
         fx: &mut EmitEffects,
     ) {
         let ty = expression.get_type();
         let is_fallible = ty.is_result() || ty.is_option();
         if is_fallible {
-            let statements =
-                self.lower_option_result_assignment(var, target_ty, expression, return_ctx, fx);
+            let statements = self.lower_option_result_assignment(var, target_ty, expression, fx);
             output.push_str(&Renderer.render_setup(&statements));
             return;
         }
@@ -282,7 +268,7 @@ impl Planner<'_> {
         } = expression
         {
             self.push_loop(var);
-            self.emit_labeled_loop(output, "for {\n", body, *needs_label, return_ctx, fx);
+            self.emit_labeled_loop(output, "for {\n", body, *needs_label, fx);
             self.pop_loop();
             return;
         }
@@ -291,14 +277,13 @@ impl Planner<'_> {
             && items.len() > 1
         {
             output.push_str("{\n");
-            let statements =
-                self.lower_block_to_var(expression, var, target_ty, true, return_ctx, fx);
+            let statements = self.lower_block_to_var(expression, var, target_ty, true, fx);
             output.push_str(&Renderer.render_setup(&statements));
             output.push_str("}\n");
             return;
         }
 
-        let statements = self.lower_block_to_var(expression, var, target_ty, false, return_ctx, fx);
+        let statements = self.lower_block_to_var(expression, var, target_ty, false, fx);
         output.push_str(&Renderer.render_setup(&statements));
     }
 
@@ -306,16 +291,11 @@ impl Planner<'_> {
         &mut self,
         target_var: &str,
         expression: &Expression,
-        return_ctx: &ReturnContext,
         fx: &mut EmitEffects,
     ) -> Vec<LoweredStatement> {
         let mut buffer = String::new();
-        let expression_string = self.emit_operand(
-            &mut buffer,
-            expression,
-            ExpressionContext::value().with_ambient_return_ctx(return_ctx),
-            fx,
-        );
+        let expression_string =
+            self.emit_operand(&mut buffer, expression, ExpressionContext::value(), fx);
         let value = value_plan_from_statements(setup_from_string(buffer), expression_string);
         vec![simple_assign(target_var, value)]
     }
@@ -329,7 +309,6 @@ impl Planner<'_> {
         target_var: &str,
         target_ty: Option<&Type>,
         expression: &Expression,
-        return_ctx: &ReturnContext,
         fx: &mut EmitEffects,
     ) -> Vec<LoweredStatement> {
         let ty = target_ty
@@ -337,7 +316,7 @@ impl Planner<'_> {
             .cloned()
             .unwrap_or_else(|| expression.get_type());
         let Some(fallible) = Fallible::from_type(&ty) else {
-            return self.lower_plain_assign(target_var, expression, return_ctx, fx);
+            return self.lower_plain_assign(target_var, expression, fx);
         };
 
         let actual_expression = if let Expression::Block { items, .. } = expression {
@@ -361,7 +340,7 @@ impl Planner<'_> {
                     Some(ConstructorKind::Success) => fallible.ok_constructor(),
                     Some(ConstructorKind::Failure) => fallible.err_constructor(),
                     None => {
-                        return self.lower_plain_assign(target_var, expression, return_ctx, fx);
+                        return self.lower_plain_assign(target_var, expression, fx);
                     }
                 };
                 if kind == Some(ConstructorKind::Success)
@@ -374,7 +353,7 @@ impl Planner<'_> {
                         let arg = fe.planner.emit_composite_value(
                             &mut arg_buffer,
                             &args[0],
-                            ExpressionContext::value().with_ambient_return_ctx(return_ctx),
+                            ExpressionContext::value(),
                             fe.fx,
                         );
                         (
@@ -402,10 +381,10 @@ impl Planner<'_> {
                     };
                     vec![simple_assign(target_var, ValuePlan::Operand(call_str))]
                 } else {
-                    self.lower_plain_assign(target_var, expression, return_ctx, fx)
+                    self.lower_plain_assign(target_var, expression, fx)
                 }
             }
-            _ => self.lower_block_to_var(expression, target_var, None, false, return_ctx, fx),
+            _ => self.lower_block_to_var(expression, target_var, None, false, fx),
         }
     }
 
@@ -419,7 +398,6 @@ impl Planner<'_> {
         var: &str,
         target_ty: Option<&Type>,
         has_go_braces: bool,
-        return_ctx: &ReturnContext,
         fx: &mut EmitEffects,
     ) -> Vec<LoweredStatement> {
         let is_block = matches!(expression, Expression::Block { .. });
@@ -435,9 +413,9 @@ impl Planner<'_> {
         if let Some((last, rest)) = items.split_last() {
             let is_new_target = self.scope.try_acquire_assign_target(var);
             for item in rest {
-                statements.push(self.lower_statement(item, return_ctx, fx));
+                statements.push(self.lower_statement(item, fx));
             }
-            statements.extend(self.lower_assign_tail(last, var, target_ty, return_ctx, fx));
+            statements.extend(self.lower_assign_tail(last, var, target_ty, fx));
             if is_new_target {
                 self.scope.release_assign_target(var);
             }
@@ -475,7 +453,6 @@ impl Planner<'_> {
         last: &Expression,
         var: &str,
         target_ty: Option<&Type>,
-        return_ctx: &ReturnContext,
         fx: &mut EmitEffects,
     ) -> Vec<LoweredStatement> {
         if matches!(
@@ -489,10 +466,10 @@ impl Planner<'_> {
                 | Expression::For { .. }
                 | Expression::Const { .. }
         ) {
-            return vec![self.lower_statement(last, return_ctx, fx)];
+            return vec![self.lower_statement(last, fx)];
         }
         if last.get_type().is_never() {
-            let mut statements = vec![self.lower_statement(last, return_ctx, fx)];
+            let mut statements = vec![self.lower_statement(last, fx)];
             if !is_go_never(last) {
                 statements.push(LoweredStatement::RawGo(
                     "panic(\"unreachable\")\n".to_string(),
@@ -503,7 +480,7 @@ impl Planner<'_> {
         if is_unit_call(last) {
             return self.lower_unit_call_into_var(last, var, fx);
         }
-        if let Some(statements) = self.lower_append_to_var(var, last, return_ctx, fx) {
+        if let Some(statements) = self.lower_append_to_var(var, last, fx) {
             return statements;
         }
         if matches!(
@@ -513,17 +490,11 @@ impl Planner<'_> {
             let place = PlacePlan::Assign {
                 local: var,
                 target_ty,
-                return_ctx,
             };
             return self.lower_branching_to_block(last, &place, fx).statements;
         }
         let mut buffer = String::new();
-        let expression_string = self.emit_value(
-            &mut buffer,
-            last,
-            ExpressionContext::value().with_ambient_return_ctx(return_ctx),
-            fx,
-        );
+        let expression_string = self.emit_value(&mut buffer, last, ExpressionContext::value(), fx);
         let expression_string =
             self.apply_type_coercion(&mut buffer, target_ty, last, expression_string, fx);
         let value = value_plan_from_statements(setup_from_string(buffer), expression_string);
@@ -535,7 +506,6 @@ impl Planner<'_> {
         &mut self,
         var: &str,
         last: &Expression,
-        return_ctx: &ReturnContext,
         fx: &mut EmitEffects,
     ) -> Option<Vec<LoweredStatement>> {
         let Expression::Call {
@@ -574,7 +544,6 @@ impl Planner<'_> {
                 args,
                 (**spread).as_ref(),
                 is_extend,
-                return_ctx,
                 fx,
             );
             let rhs_has_setup = !args_buffer.is_empty()
@@ -585,12 +554,7 @@ impl Planner<'_> {
             buffer.push_str(&args_buffer);
             format!("append({}, {})", receiver_lv, args_str)
         } else {
-            self.emit_value(
-                &mut buffer,
-                last,
-                ExpressionContext::value().with_ambient_return_ctx(return_ctx),
-                fx,
-            )
+            self.emit_value(&mut buffer, last, ExpressionContext::value(), fx)
         };
 
         let mut statements = setup_from_string(buffer);
@@ -617,29 +581,15 @@ impl Planner<'_> {
         args: &[Expression],
         spread: Option<&Expression>,
         is_extend: bool,
-        return_ctx: &ReturnContext,
         fx: &mut EmitEffects,
     ) -> String {
         let stages: Vec<StagedExpression> = args
             .iter()
-            .map(|a| {
-                self.stage_composite(
-                    a,
-                    ExpressionContext::value().with_ambient_return_ctx(return_ctx),
-                    fx,
-                )
-            })
+            .map(|a| self.stage_composite(a, ExpressionContext::value(), fx))
             .collect();
         let combine = plan_variadic_spread(function, spread).map(|p| p.combine(0));
-        let (setup, emitted_args) = self.sequence_with_spread_structured(
-            stages,
-            spread,
-            false,
-            "_arg",
-            combine,
-            Some(return_ctx),
-            fx,
-        );
+        let (setup, emitted_args) =
+            self.sequence_with_spread_structured(stages, spread, false, "_arg", combine, fx);
         output.push_str(&Renderer.render_setup(&setup));
         let args_str = emitted_args.join(", ");
         let suffix = if is_extend { "..." } else { "" };
@@ -652,18 +602,12 @@ impl Planner<'_> {
         &mut self,
         output: &mut String,
         last: &Expression,
-        return_ctx: &ReturnContext,
         fx: &mut EmitEffects,
     ) -> String {
         if let Expression::Tuple { elements, ty, .. } = last {
-            self.emit_tuple_value(output, elements, ty, true, Some(return_ctx), fx)
+            self.emit_tuple_value(output, elements, ty, true, fx)
         } else {
-            self.emit_value(
-                output,
-                last,
-                ExpressionContext::value().with_ambient_return_ctx(return_ctx),
-                fx,
-            )
+            self.emit_value(output, last, ExpressionContext::value(), fx)
         }
     }
 
@@ -672,17 +616,14 @@ impl Planner<'_> {
         output: &mut String,
         expression: &Expression,
         ty: &Type,
-        ambient: Option<&ReturnContext>,
         fx: &mut EmitEffects,
     ) -> String {
-        let return_ctx = ambient
-            .cloned()
-            .or_else(|| self.current_return_ctx().cloned())
-            .expect("operand-temp emission requires an enclosing return context");
+        let return_ctx = self.return_ctx();
+        let _return_ctx = return_ctx.as_ref();
         if let Expression::Block { items, .. } = expression {
             if ty.is_never() || ty.is_unit() || matches!(ty, Type::Var { .. } | Type::Forall { .. })
             {
-                self.emit_block(output, expression, &return_ctx, fx);
+                self.emit_block(output, expression, fx);
                 return String::new();
             }
             let result_var = self.declare_result_var(output, ty, fx);
@@ -690,14 +631,8 @@ impl Planner<'_> {
             if needs_braces {
                 output.push_str("{\n");
             }
-            let statements = self.lower_block_to_var(
-                expression,
-                &result_var,
-                None,
-                needs_braces,
-                &return_ctx,
-                fx,
-            );
+            let statements =
+                self.lower_block_to_var(expression, &result_var, None, needs_braces, fx);
             output.push_str(&Renderer.render_setup(&statements));
             if needs_braces {
                 output.push_str("}\n");
@@ -710,12 +645,12 @@ impl Planner<'_> {
         {
             let result_var = self.declare_result_var(output, ty, fx);
             self.push_loop(result_var.clone());
-            self.emit_labeled_loop(output, "for {\n", body, *needs_label, &return_ctx, fx);
+            self.emit_labeled_loop(output, "for {\n", body, *needs_label, fx);
             self.pop_loop();
             return result_var;
         }
         let result_var = self.declare_result_var(output, ty, fx);
-        self.emit_assign(output, expression, &result_var, Some(ty), &return_ctx, fx);
+        self.emit_assign(output, expression, &result_var, Some(ty), fx);
         result_var
     }
 

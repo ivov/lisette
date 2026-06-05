@@ -3,7 +3,6 @@ use std::fmt::Write;
 use crate::EmitEffects;
 use crate::Planner;
 use crate::Renderer;
-use crate::ReturnContext;
 use crate::abi::coercion::{Coercion, CoercionDirection};
 use crate::context::expression::ExpressionContext;
 use crate::expressions::emission::StagedExpression;
@@ -16,7 +15,6 @@ impl Planner<'_> {
         output: &mut String,
         literal: &Literal,
         ty: &Type,
-        ambient: Option<&ReturnContext>,
         fx: &mut EmitEffects,
     ) -> String {
         match literal {
@@ -50,7 +48,7 @@ impl Planner<'_> {
             Literal::Char(c) => {
                 format!("'{}'", convert_escape_sequences(c))
             }
-            Literal::FormatString(parts) => self.emit_format_string(output, parts, ambient, fx),
+            Literal::FormatString(parts) => self.emit_format_string(output, parts, fx),
             Literal::Slice(elements) => {
                 let element_lisette_ty = ty
                     .get_type_params()
@@ -69,13 +67,7 @@ impl Planner<'_> {
 
                 let stages: Vec<StagedExpression> = elements
                     .iter()
-                    .map(|e| {
-                        self.stage_composite(
-                            e,
-                            ExpressionContext::value().with_ambient_return_ctx_opt(ambient),
-                            fx,
-                        )
-                    })
+                    .map(|e| self.stage_composite(e, ExpressionContext::value(), fx))
                     .collect();
                 let (setup, rendered) = self.sequence_structured(stages, "_v");
                 output.push_str(&Renderer.render_setup(&setup));
@@ -110,7 +102,6 @@ impl Planner<'_> {
         &mut self,
         output: &mut String,
         parts: &[FormatStringPart],
-        ambient: Option<&ReturnContext>,
         fx: &mut EmitEffects,
     ) -> String {
         let has_interpolation = parts
@@ -121,11 +112,7 @@ impl Planner<'_> {
             .iter()
             .filter_map(|p| {
                 if let FormatStringPart::Expression(e) = p {
-                    Some(self.stage_composite(
-                        e,
-                        ExpressionContext::value().with_ambient_return_ctx_opt(ambient),
-                        fx,
-                    ))
+                    Some(self.stage_composite(e, ExpressionContext::value(), fx))
                 } else {
                     None
                 }

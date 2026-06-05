@@ -5,7 +5,6 @@ use rustc_hash::FxHashMap as HashMap;
 
 use crate::EmitEffects;
 use crate::Planner;
-use crate::ReturnContext;
 use crate::context::expression::ExpressionContext;
 use crate::expressions::emission::StagedExpression;
 use crate::names::generics::extract_type_mapping;
@@ -80,7 +79,6 @@ impl Planner<'_> {
         args: &[Expression],
         type_args: &[Annotation],
         spread: Option<&Expression>,
-        ambient: Option<&ReturnContext>,
         fx: &mut EmitEffects,
     ) -> (Vec<LoweredStatement>, String) {
         let Expression::DotAccess {
@@ -102,7 +100,7 @@ impl Planner<'_> {
         };
 
         let (mut setup, receiver_arg, emitted_args) =
-            self.lower_ufcs_call_args(function, receiver, args, spread, ambient, fx);
+            self.lower_ufcs_call_args(function, receiver, args, spread, fx);
         let receiver_arg =
             self.apply_receiver_coercion(&mut setup, receiver, receiver_arg, *coercion);
 
@@ -132,7 +130,6 @@ impl Planner<'_> {
         receiver: &Expression,
         args: &[Expression],
         spread: Option<&Expression>,
-        ambient: Option<&ReturnContext>,
         fx: &mut EmitEffects,
     ) -> (Vec<LoweredStatement>, String, Vec<String>) {
         // The DotAccess function type curries `self` out, so its params line
@@ -147,14 +144,10 @@ impl Planner<'_> {
             self.ufcs_declared_user_params(receiver, function, formal_params.len());
         let mut all_stages: Vec<StagedExpression> =
             Vec::with_capacity(1 + args.len() + spread.is_some() as usize);
-        all_stages.push(self.stage_operand(
-            receiver,
-            ExpressionContext::value().with_ambient_return_ctx_opt(ambient),
-            fx,
-        ));
+        all_stages.push(self.stage_operand(receiver, ExpressionContext::value(), fx));
         for (i, arg) in args.iter().enumerate() {
             let declared = declared_params.and_then(|p| effective_param_type(i, p));
-            all_stages.push(self.stage_ufcs_arg(arg, declared, formal_params.get(i), ambient, fx));
+            all_stages.push(self.stage_ufcs_arg(arg, declared, formal_params.get(i), fx));
         }
         let combine = plan_variadic_spread(function, spread).map(|p| p.combine(1));
 
@@ -168,9 +161,7 @@ impl Planner<'_> {
             self.finalize_spread_stage(&mut all_values, spread_index, false, combine, fx);
             (setup, all_values)
         } else {
-            self.sequence_with_spread_structured(
-                all_stages, spread, false, "_arg", combine, ambient, fx,
-            )
+            self.sequence_with_spread_structured(all_stages, spread, false, "_arg", combine, fx)
         };
         let receiver_arg = all_values[0].clone();
         let emitted_args: Vec<String> = all_values[1..].to_vec();
@@ -182,11 +173,10 @@ impl Planner<'_> {
         arg: &Expression,
         declared_param: Option<&Type>,
         formal_param: Option<&Type>,
-        ambient: Option<&ReturnContext>,
         fx: &mut EmitEffects,
     ) -> StagedExpression {
         let Some(declared) = declared_param else {
-            return self.stage_prelude_arg(arg, formal_param, ambient, fx);
+            return self.stage_prelude_arg(arg, formal_param, fx);
         };
         let mut setup = String::new();
         if let Some(value) =
@@ -194,11 +184,7 @@ impl Planner<'_> {
         {
             return StagedExpression::new(setup, value, arg);
         }
-        self.stage_composite(
-            arg,
-            ExpressionContext::value().with_ambient_return_ctx_opt(ambient),
-            fx,
-        )
+        self.stage_composite(arg, ExpressionContext::value(), fx)
     }
 
     fn build_ufcs_qualified_call(
@@ -259,7 +245,6 @@ impl Planner<'_> {
         method: &str,
         is_public: bool,
         spread: Option<&Expression>,
-        ambient: Option<&ReturnContext>,
         fx: &mut EmitEffects,
     ) -> (Vec<LoweredStatement>, String) {
         let go_method = if is_public {
@@ -270,18 +255,12 @@ impl Planner<'_> {
 
         let stages: Vec<StagedExpression> = args
             .iter()
-            .map(|a| {
-                self.stage_composite(
-                    a,
-                    ExpressionContext::value().with_ambient_return_ctx_opt(ambient),
-                    fx,
-                )
-            })
+            .map(|a| self.stage_composite(a, ExpressionContext::value(), fx))
             .collect();
 
         let combine = plan_variadic_spread(function, spread).map(|p| p.combine(0));
-        let (setup, emitted_all) = self
-            .sequence_with_spread_structured(stages, spread, false, "_arg", combine, ambient, fx);
+        let (setup, emitted_all) =
+            self.sequence_with_spread_structured(stages, spread, false, "_arg", combine, fx);
 
         let receiver = emitted_all[0].clone();
         let emitted_rest: Vec<String> = emitted_all[1..].to_vec();

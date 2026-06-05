@@ -94,10 +94,7 @@ impl Planner<'_> {
                 // Never-typed spread base diverges — emit as statement and
                 // return a zero-value struct literal (dead code follows).
                 if base.get_type().is_never() {
-                    let return_ctx = self
-                        .resolve_ambient_return_ctx(expression_ctx)
-                        .expect("never-typed spread base requires an enclosing return context");
-                    self.emit_statement(&mut tail, base, &return_ctx, fx);
+                    self.emit_statement(&mut tail, base, fx);
                     format!("{}{{}}", ctx.go_type)
                 } else {
                     let mut field_side_effects: Vec<bool> = Vec::new();

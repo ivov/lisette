@@ -6,7 +6,6 @@ use crate::EmitEffects;
 use crate::GoCallStrategy;
 use crate::Planner;
 use crate::Renderer;
-use crate::ReturnContext;
 use crate::abi::AbiShape;
 use crate::abi::coercion::{Coercion, CoercionDirection};
 use crate::abi::transition::{emit_callee_abi_wrapping, emit_lisette_callback_wrapper};
@@ -215,9 +214,7 @@ impl Planner<'_> {
         fx: &mut EmitEffects,
     ) -> String {
         match expression {
-            Expression::Literal { literal, ty, .. } => {
-                self.emit_literal(output, literal, ty, ctx.ambient_return_ctx(), fx)
-            }
+            Expression::Literal { literal, ty, .. } => self.emit_literal(output, literal, ty, fx),
             Expression::Identifier { value, ty, .. } => {
                 let raw = self.emit_identifier(value, ty, ctx, fx);
                 self.maybe_lower_tagged_fn_ref(output, expression, ty, raw, ctx, fx)
@@ -270,10 +267,7 @@ impl Planner<'_> {
                 params, body, ty, ..
             } => self.emit_lambda(params, body, ty, ctx, fx),
             Expression::Propagate { expression, .. } => {
-                let return_ctx = self
-                    .resolve_ambient_return_ctx(ctx)
-                    .expect("operand-position propagate requires an enclosing return context");
-                self.emit_propagate(output, expression, None, &return_ctx, fx)
+                self.emit_propagate(output, expression, None, fx)
             }
             Expression::TryBlock { .. } => {
                 unreachable!("TryBlock is handled structurally by plan_operand")
@@ -295,9 +289,7 @@ impl Planner<'_> {
             }
             Expression::Match { ty, .. }
             | Expression::Select { ty, .. }
-            | Expression::Block { ty, .. } => {
-                self.emit_to_operand_temp(output, expression, ty, ctx.ambient_return_ctx(), fx)
-            }
+            | Expression::Block { ty, .. } => self.emit_to_operand_temp(output, expression, ty, fx),
             Expression::IfLet { .. } => {
                 unreachable!("IfLet should be desugared to Match before emit")
             }
@@ -305,10 +297,7 @@ impl Planner<'_> {
                 expression: return_expression,
                 ..
             } => {
-                let return_ctx = self
-                    .resolve_ambient_return_ctx(ctx)
-                    .expect("operand-position return requires an enclosing return context");
-                self.emit_return(output, return_expression, &return_ctx, fx);
+                self.emit_return(output, return_expression, fx);
                 String::new()
             }
             Expression::Range { .. } => {
@@ -333,10 +322,9 @@ impl Planner<'_> {
         elements: &[Expression],
         ty: &Type,
         in_tail: bool,
-        ambient: Option<&ReturnContext>,
         fx: &mut EmitEffects,
     ) -> String {
-        let plan = self.plan_tuple_value(elements, ty, in_tail, ambient, fx);
+        let plan = self.plan_tuple_value(elements, ty, in_tail, fx);
         Renderer.render_value(output, &plan)
     }
 
@@ -346,7 +334,6 @@ impl Planner<'_> {
         elements: &[Expression],
         ty: &Type,
         in_tail: bool,
-        ambient: Option<&ReturnContext>,
         fx: &mut EmitEffects,
     ) -> ValuePlan {
         use value_plan_from_statements;
@@ -355,15 +342,14 @@ impl Planner<'_> {
             Type::Tuple(slots) => slots.clone(),
             _ => Vec::new(),
         };
-        let slot_types = self.resolve_tuple_slot_types(inferred_slot_types, in_tail, ambient);
+        let slot_types = self.resolve_tuple_slot_types(inferred_slot_types, in_tail);
 
         let stages: Vec<StagedExpression> = elements
             .iter()
             .enumerate()
             .map(|(i, e)| {
-                let element_ctx = ExpressionContext::value()
-                    .with_expected_slot_type(slot_types.get(i))
-                    .with_ambient_return_ctx_opt(ambient);
+                let element_ctx =
+                    ExpressionContext::value().with_expected_slot_type(slot_types.get(i));
                 self.stage_composite(e, element_ctx, fx)
             })
             .collect();
@@ -609,17 +595,10 @@ impl Planner<'_> {
         &mut self,
         keyword: &str,
         expression: &Expression,
-        ambient: Option<&ReturnContext>,
         fx: &mut EmitEffects,
     ) -> ValuePlan {
         if let Expression::Block { .. } = expression {
-            let return_ctx = ambient
-                .cloned()
-                .or_else(|| self.current_return_ctx().cloned())
-                .expect("async block body requires an enclosing return context");
-            let body = self.with_fresh_scope(|planner| {
-                planner.lower_block_as_body(expression, &return_ctx, fx)
-            });
+            let body = self.with_fresh_scope(|planner| planner.lower_block_as_body(expression, fx));
             let setup = vec![LoweredStatement::Expression(ExpressionStatementPlan {
                 directive: String::new(),
                 form: ExpressionStatementForm::AsyncBlock {

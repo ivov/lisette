@@ -1,4 +1,3 @@
-use crate::ReturnContext;
 use syntax::types::Type;
 
 /// Whether the expression is being emitted as the callee of a call.
@@ -48,10 +47,6 @@ pub(crate) struct ExpressionContext<'a> {
     go_array_return_policy: GoArrayReturnPolicy,
     go_function_value_policy: GoFunctionValuePolicy,
     argument_target: ArgumentTarget,
-    /// Enclosing function/lambda/try/recover return context, for lowering
-    /// operand-position `?`/`return`. Propagated through operand recursion;
-    /// set at every statement/value-emission entry that knows it.
-    ambient_return_ctx: Option<&'a ReturnContext>,
 }
 
 impl<'a> ExpressionContext<'a> {
@@ -103,26 +98,6 @@ impl<'a> ExpressionContext<'a> {
 
     pub(crate) fn expected_slot_type(self) -> Option<&'a Type> {
         self.expected_slot_type
-    }
-
-    /// Set the enclosing return context, preserved across operand recursion.
-    pub(crate) fn with_ambient_return_ctx(mut self, return_ctx: &'a ReturnContext) -> Self {
-        self.ambient_return_ctx = Some(return_ctx);
-        self
-    }
-
-    /// Carry an already-resolved ambient return context across a context
-    /// rebuild (call args, tuple/struct field staging) without dropping it.
-    pub(crate) fn with_ambient_return_ctx_opt(
-        mut self,
-        return_ctx: Option<&'a ReturnContext>,
-    ) -> Self {
-        self.ambient_return_ctx = return_ctx;
-        self
-    }
-
-    pub(crate) fn ambient_return_ctx(self) -> Option<&'a ReturnContext> {
-        self.ambient_return_ctx
     }
 
     pub(crate) fn is_callee(self) -> bool {

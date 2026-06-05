@@ -34,10 +34,10 @@ pub use output::OutputFile;
 pub use output::imports;
 
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
+use std::rc::Rc;
 use std::sync::Arc;
 
 use analyze::facts::{EmitFactsConfig, is_nullable_option};
-use context::expression::ExpressionContext;
 use output::imports::ImportBuilder;
 use plan::ModulePlan;
 use plan::bodies::{LoweredBlock, LoweredStatement};
@@ -328,33 +328,26 @@ impl<'a> Planner<'a> {
         self.scope.current_loop_label()
     }
 
-    /// Scope-guarded push of the enclosing function/lambda/try/recover return
-    /// context. Operand-position `?` and `return` fall back to this stack when
-    /// the threaded `ExpressionContext::ambient_return_ctx` is absent.
+    /// Push the enclosing function/lambda/try/recover return context. This
+    /// scope stack is the single source of truth for return-context lowering;
+    /// all readers consult it via [`Planner::return_ctx`].
     pub(crate) fn push_return_ctx(&mut self, ctx: ReturnContext) {
-        self.scope.push_return_ctx(ctx);
+        self.scope.push_return_ctx(Rc::new(ctx));
     }
 
     pub(crate) fn pop_return_ctx(&mut self) {
         self.scope.pop_return_ctx();
     }
 
-    pub(crate) fn current_return_ctx(&self) -> Option<&ReturnContext> {
-        self.scope.current_return_ctx()
-    }
-
-    /// Prefer the explicitly-threaded ambient context (carries any local
-    /// override), then fall back to the enclosing function/lambda/try/recover
-    /// context maintained on the scope stack. Returns an owned clone since
-    /// callers typically need a `ReturnContext` value, not a borrow that
-    /// conflicts with later `&mut self` calls.
-    pub(crate) fn resolve_ambient_return_ctx(
-        &self,
-        ctx: ExpressionContext<'_>,
-    ) -> Option<ReturnContext> {
-        ctx.ambient_return_ctx()
-            .cloned()
-            .or_else(|| self.current_return_ctx().cloned())
+    /// The enclosing function/lambda/try/recover return context, maintained on
+    /// the scope stack and shared cheaply via `Rc`. Defaults to
+    /// `ReturnContext::None` outside any function body (e.g. module-level
+    /// collection). This is the single source of truth for return-context
+    /// lowering.
+    pub(crate) fn return_ctx(&self) -> Rc<ReturnContext> {
+        self.scope
+            .current_return_ctx()
+            .unwrap_or_else(|| Rc::new(ReturnContext::None))
     }
 
     /// `true` if this is a new declaration in the current block (use `:=`),

@@ -1,7 +1,6 @@
 use crate::EmitEffects;
 use crate::Planner;
 use crate::Renderer;
-use crate::ReturnContext;
 use crate::write_line;
 use syntax::ast::Expression;
 
@@ -51,10 +50,9 @@ impl Planner<'_> {
         &mut self,
         output: &mut String,
         expression: &Expression,
-        return_ctx: &ReturnContext,
         fx: &mut EmitEffects,
     ) {
-        let body = self.lower_block_as_body(expression, return_ctx, fx);
+        let body = self.lower_block_as_body(expression, fx);
         Renderer.render_lowered_block(output, &body);
     }
 }
@@ -66,7 +64,6 @@ impl Planner<'_> {
         header: &str,
         body: &Expression,
         needs_label: bool,
-        return_ctx: &ReturnContext,
         fx: &mut EmitEffects,
     ) {
         self.set_current_loop_label_if_needed(needs_label);
@@ -75,7 +72,7 @@ impl Planner<'_> {
         }
         output.push_str(header);
         self.enter_scope();
-        self.emit_block(output, body, return_ctx, fx);
+        self.emit_block(output, body, fx);
         self.exit_scope();
         output.push_str("}\n");
     }
