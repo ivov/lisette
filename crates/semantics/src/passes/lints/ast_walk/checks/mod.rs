@@ -5,6 +5,7 @@ mod duplicate_cutset;
 mod duplicate_logical_operand;
 mod empty_match_arm;
 mod excess_parens_on_condition;
+mod goos_goarch_comparison;
 mod helpers;
 mod identical_if_branches;
 mod identical_match_arms;
@@ -47,6 +48,7 @@ pub use duplicate_cutset::check_duplicate_cutset;
 pub use duplicate_logical_operand::check_duplicate_logical_operand;
 pub use empty_match_arm::check_empty_match_arm;
 pub use excess_parens_on_condition::check_excess_parens_on_condition;
+pub use goos_goarch_comparison::check_goos_goarch_comparison;
 pub use identical_if_branches::check_identical_if_branches;
 pub use identical_match_arms::check_identical_match_arms;
 pub use invisible_in_string::{

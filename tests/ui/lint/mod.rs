@@ -1710,6 +1710,102 @@ fn main() {
 }
 
 #[test]
+fn goos_comparison_invalid_equal() {
+    assert_lint_snapshot!(
+        r#"
+import "go:runtime"
+fn main() {
+  let _ = runtime.GOOS == "windows10"
+}
+"#
+    );
+}
+
+#[test]
+fn goos_comparison_invalid_not_equal() {
+    assert_lint_snapshot!(
+        r#"
+import "go:runtime"
+fn main() {
+  let _ = runtime.GOOS != "frobnix"
+}
+"#
+    );
+}
+
+#[test]
+fn goarch_comparison_invalid_equal() {
+    assert_lint_snapshot!(
+        r#"
+import "go:runtime"
+fn main() {
+  let _ = runtime.GOARCH == "x86"
+}
+"#
+    );
+}
+
+#[test]
+fn goos_comparison_literal_on_left() {
+    assert_lint_snapshot!(
+        r#"
+import "go:runtime"
+fn main() {
+  let _ = "windows10" == runtime.GOOS
+}
+"#
+    );
+}
+
+#[test]
+fn goos_comparison_alias_import() {
+    assert_lint_snapshot!(
+        r#"
+import r "go:runtime"
+fn main() {
+  let _ = r.GOOS == "win"
+}
+"#
+    );
+}
+
+#[test]
+fn goos_comparison_valid_value_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:runtime"
+fn main() {
+  let _ = runtime.GOOS == "linux"
+}
+"#
+    );
+}
+
+#[test]
+fn goarch_comparison_valid_value_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:runtime"
+fn main() {
+  let _ = runtime.GOARCH == "amd64"
+}
+"#
+    );
+}
+
+#[test]
+fn goos_comparison_ordering_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:runtime"
+fn main() {
+  let _ = runtime.GOOS < "frobnix"
+}
+"#
+    );
+}
+
+#[test]
 fn double_bool_negation() {
     assert_lint_snapshot!(
         r#"

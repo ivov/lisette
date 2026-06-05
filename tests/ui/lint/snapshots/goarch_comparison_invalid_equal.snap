@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [warning] Comparison is always false
+   ╭─[test.lis:4:11]
+ 3 │ fn main() {
+ 4 │   let _ = runtime.GOARCH == "x86"
+   ·           ───────────┬───────────
+   ·                      ╰── always false
+ 5 │ }
+   ╰────
+  help: `runtime.GOARCH` only ever holds a known architecture, and this is not one. Did you mean a valid value such as `amd64`, `arm64`, or `386`? · code: [lint.goos_goarch_comparison]

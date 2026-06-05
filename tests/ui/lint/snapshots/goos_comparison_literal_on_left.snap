@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [warning] Comparison is always false
+   ╭─[test.lis:4:11]
+ 3 │ fn main() {
+ 4 │   let _ = "windows10" == runtime.GOOS
+   ·           ─────────────┬─────────────
+   ·                        ╰── always false
+ 5 │ }
+   ╰────
+  help: `runtime.GOOS` only ever holds a known operating system, and this is not one. Did you mean a valid value such as `linux`, `darwin`, or `windows`? · code: [lint.goos_goarch_comparison]

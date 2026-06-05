@@ -294,6 +294,23 @@ pub fn non_negative_comparison(span: &Span, always_true: bool) -> LisetteDiagnos
         )
 }
 
+pub fn goos_goarch_comparison(
+    span: &Span,
+    always_true: bool,
+    const_name: &str,
+    kind: &str,
+    examples: &str,
+) -> LisetteDiagnostic {
+    let result = if always_true { "true" } else { "false" };
+
+    LisetteDiagnostic::warn(format!("Comparison is always {result}"))
+        .with_lint_code("goos_goarch_comparison")
+        .with_span_label(span, format!("always {result}"))
+        .with_help(format!(
+            "`runtime.{const_name}` only ever holds a known {kind}, and this is not one. Did you mean a valid value such as {examples}?"
+        ))
+}
+
 pub fn redundant_operation(span: &Span, always: Option<&str>) -> LisetteDiagnostic {
     match always {
         Some(value) => LisetteDiagnostic::info(format!("Operation always evaluates to `{value}`"))
