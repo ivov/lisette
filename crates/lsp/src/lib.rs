@@ -19,8 +19,8 @@ use tower_lsp::lsp_types::*;
 
 use crate::analysis::{offset_in_span, type_name};
 use crate::completion::{
-    DotContext, definition_to_completion_kind, detect_dot_context, get_instance_completions,
-    get_module_prefix, get_type_completions, resolve_variable_type,
+    DotContext, attribute_completions, definition_to_completion_kind, detect_dot_context,
+    get_instance_completions, get_module_prefix, get_type_completions, resolve_variable_type,
 };
 use crate::definition::{
     find_struct_field_span, is_go_typedef_span, lookup_definition_span,
@@ -76,7 +76,12 @@ impl LanguageServer for Backend {
                     work_done_progress_options: Default::default(),
                 })),
                 completion_provider: Some(CompletionOptions {
-                    trigger_characters: Some(vec![".".to_string()]),
+                    // `.` for member access; `#`/`[` to open attribute completions
+                    trigger_characters: Some(vec![
+                        ".".to_string(),
+                        "#".to_string(),
+                        "[".to_string(),
+                    ]),
                     ..Default::default()
                 }),
                 signature_help_provider: Some(SignatureHelpOptions {
@@ -1072,6 +1077,13 @@ impl LanguageServer for Backend {
         let Some(offset) = line_index.position_to_offset(position) else {
             return Ok(None);
         };
+
+        // An in-progress `#[ ... ]` is exclusive: when the cursor is in attribute
+        // position, offer only the attributes relevant to the target it attaches
+        // to, never the general keyword/identifier completions below.
+        if let Some(items) = attribute_completions(&file.source, offset as usize) {
+            return Ok(Some(CompletionResponse::Array(items)));
+        }
 
         if let Some(module_name) = get_module_prefix(&file.source, offset as usize)
             && let Some(imp) = file.imports().iter().find(|imp| {

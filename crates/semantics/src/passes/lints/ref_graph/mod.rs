@@ -16,13 +16,13 @@ use syntax::program::UnusedInfo;
 use syntax::program::{File, FileImport};
 
 use super::Lint as LintEnum;
-use super::ast_walk::attributes::SERIALIZATION_KEYS;
 use super::from_facts::LintConfig;
 use extract::{AliasMap, extract_references, is_upper};
 use reference_graph::{
     EnumVariantId, EnumVariantInfo, ItemKind, ModuleItemId, ReferenceGraph, StructFieldId,
     StructFieldInfo,
 };
+use syntax::attributes::SERIALIZATION_KEYS;
 use visibility_constraints::check_visibility_constraints;
 
 struct RefLintResult {

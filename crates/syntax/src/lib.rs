@@ -1,5 +1,6 @@
 pub mod ast;
 pub mod ast_folder;
+pub mod attributes;
 pub mod desugar;
 mod display;
 pub mod lex;

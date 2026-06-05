@@ -1,4 +1,5 @@
 use syntax::ast::{Attribute, AttributeArg, StructFieldDefinition};
+use syntax::attributes::is_serialization_key;
 
 #[derive(Default)]
 pub(super) struct TagConfig {
@@ -252,13 +253,6 @@ fn interpret_tag_attribute(attribute: &Attribute) -> Option<TagConfig> {
 
         _ => None,
     }
-}
-
-fn is_serialization_key(key: &str) -> bool {
-    matches!(
-        key,
-        "json" | "xml" | "yaml" | "toml" | "db" | "bson" | "mapstructure" | "msgpack"
-    )
 }
 
 pub(super) fn format_tag_string(

@@ -942,6 +942,84 @@ async fn completion_empty_file() {
 }
 
 #[tokio::test]
+async fn completion_attribute_on_struct() {
+    let mut client = TestClient::new().await;
+    client.initialize().await;
+    client
+        .open(TEST_URI, "#[\nstruct Point { x: int, y: int }\n")
+        .await;
+
+    // Cursor right after `#[` on line 0.
+    let response = client.completion(TEST_URI, 0, 2).await;
+    let labels = completion_labels(&response.expect("attribute completions"));
+
+    // Relevant attributes for a struct, and none of the noise from before.
+    assert!(labels.contains(&"json".to_string()));
+    assert!(labels.contains(&"display".to_string()));
+    assert!(labels.contains(&"tag".to_string()));
+    assert!(!labels.contains(&"iterate".to_string()));
+    assert!(!labels.contains(&"allow".to_string()));
+    assert!(!labels.iter().any(|l| l == "fn" || l == "let" || l == "int"));
+
+    client.shutdown().await;
+}
+
+#[tokio::test]
+async fn completion_attribute_on_struct_field() {
+    let mut client = TestClient::new().await;
+    client.initialize().await;
+    client
+        .open(TEST_URI, "struct Point {\n  #[\n  x: int\n}\n")
+        .await;
+
+    // Cursor right after `#[` on line 1.
+    let response = client.completion(TEST_URI, 1, 4).await;
+    let labels = completion_labels(&response.expect("attribute completions"));
+
+    assert!(labels.contains(&"json".to_string()));
+    assert!(labels.contains(&"tag".to_string()));
+    assert!(!labels.contains(&"display".to_string()));
+
+    client.shutdown().await;
+}
+
+#[tokio::test]
+async fn completion_attribute_on_enum() {
+    let mut client = TestClient::new().await;
+    client.initialize().await;
+    client
+        .open(TEST_URI, "#[\nenum Direction { North, South }\n")
+        .await;
+
+    let response = client.completion(TEST_URI, 0, 2).await;
+    let labels = completion_labels(&response.expect("attribute completions"));
+
+    assert!(labels.contains(&"iterate".to_string()));
+    assert!(labels.contains(&"display".to_string()));
+    assert!(labels.contains(&"json".to_string()));
+    assert!(!labels.contains(&"tag".to_string()));
+
+    client.shutdown().await;
+}
+
+#[tokio::test]
+async fn completion_attribute_before_interface_is_empty() {
+    let mut client = TestClient::new().await;
+    client.initialize().await;
+    client
+        .open(TEST_URI, "#[\ninterface Service {\n  fn run(self)\n}\n")
+        .await;
+
+    // Attributes are rejected on interfaces, so offer nothing rather than a
+    // union that would immediately parse as misplaced.
+    let response = client.completion(TEST_URI, 0, 2).await;
+    let labels = completion_labels(&response.expect("attribute completions"));
+    assert!(labels.is_empty(), "expected no completions, got {labels:?}");
+
+    client.shutdown().await;
+}
+
+#[tokio::test]
 async fn goto_definition_struct_call() {
     let mut client = TestClient::new().await;
     client.initialize().await;

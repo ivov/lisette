@@ -2,20 +2,7 @@ use crate::passes::walk::NodeCtx;
 use diagnostics::LocalSink;
 use rustc_hash::FxHashSet as HashSet;
 use syntax::ast::{Attribute, AttributeArg, Expression, StructFieldDefinition};
-
-pub(crate) const SERIALIZATION_KEYS: &[&str] = &[
-    "json",
-    "xml",
-    "yaml",
-    "toml",
-    "db",
-    "bson",
-    "mapstructure",
-    "msgpack",
-];
-
-/// Recognized attributes that are not serialization keys.
-const OTHER_ATTRIBUTES: &[&str] = &["tag", "allow", "iterate", "display"];
+use syntax::attributes::is_serialization_key;
 
 pub fn check_attributes(expression: &Expression, ctx: &NodeCtx) {
     let attributes = match expression {
@@ -69,11 +56,11 @@ pub fn check_struct_attributes(expression: &Expression, ctx: &NodeCtx) {
 fn check_unknown_attribute(attribute: &Attribute, sink: &LocalSink) {
     let name = &attribute.name;
 
-    if !is_known_attribute(name) {
+    if !syntax::attributes::is_known_attribute(name) {
         sink.push(diagnostics::lint::unknown_attribute(
             &attribute.span,
             name,
-            &known_attributes(),
+            &syntax::attributes::known_attribute_names(),
         ));
     }
 }
@@ -234,24 +221,4 @@ fn check_tag_with_alias(attribute: &Attribute, sink: &LocalSink) {
     {
         sink.push(diagnostics::lint::tag_has_alias(&attribute.span, key));
     }
-}
-
-/// The full set of recognized attributes, in display order, for diagnostics.
-fn known_attributes() -> Vec<&'static str> {
-    SERIALIZATION_KEYS
-        .iter()
-        .chain(OTHER_ATTRIBUTES.iter())
-        .copied()
-        .collect()
-}
-
-fn is_known_attribute(name: &str) -> bool {
-    // `go` is the Go-interop rail (e.g. `#[go(closed_domain)]`, `#[go(bit_flag_set)]`).
-    // Accepted but kept out of `known_attributes()` so it is not advertised as a
-    // general-purpose attribute in unknown-attribute help.
-    is_serialization_key(name) || OTHER_ATTRIBUTES.contains(&name) || name == "go"
-}
-
-fn is_serialization_key(key: &str) -> bool {
-    SERIALIZATION_KEYS.contains(&key)
 }
