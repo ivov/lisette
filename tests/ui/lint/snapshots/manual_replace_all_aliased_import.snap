@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [info] Manual `strings.ReplaceAll`
+   ╭─[test.lis:6:11]
+ 5 │   let s = "hello world"
+ 6 │   let _ = mystr.Replace(s, "o", "0", -1)
+   ·           ───────────────┬──────────────
+   ·                          ╰── can use `strings.ReplaceAll`
+ 7 │ }
+   ╰────
+  help: `mystr.Replace(s, "o", "0", -1)` replaces every occurrence. Use `mystr.ReplaceAll(s, "o", "0")` · code: [lint.manual_replace_all]

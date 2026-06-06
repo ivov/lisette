@@ -752,6 +752,21 @@ pub fn redundant_sprintf(span: &Span, namespace: &str, value: &str) -> LisetteDi
         ))
 }
 
+pub fn manual_replace_all(
+    span: &Span,
+    namespace: &str,
+    s: &str,
+    old: &str,
+    new: &str,
+) -> LisetteDiagnostic {
+    LisetteDiagnostic::info("Manual `strings.ReplaceAll`")
+        .with_lint_code("manual_replace_all")
+        .with_span_label(span, "can use `strings.ReplaceAll`")
+        .with_help(format!(
+            "`{namespace}.Replace({s}, {old}, {new}, -1)` replaces every occurrence. Use `{namespace}.ReplaceAll({s}, {old}, {new})`"
+        ))
+}
+
 pub fn manual_time_since(span: &Span, namespace: &str, arg: &str) -> LisetteDiagnostic {
     LisetteDiagnostic::info("Manual `time.Since`")
         .with_lint_code("manual_time_since")

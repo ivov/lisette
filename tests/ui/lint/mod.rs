@@ -1000,6 +1000,110 @@ fn main() {
 }
 
 #[test]
+fn manual_replace_all() {
+    assert_lint_snapshot!(
+        r#"
+import "go:strings"
+
+fn main() {
+  let s = "hello world"
+  let _ = strings.Replace(s, "o", "0", -1)
+}
+"#
+    );
+}
+
+#[test]
+fn manual_replace_all_aliased_import() {
+    assert_lint_snapshot!(
+        r#"
+import mystr "go:strings"
+
+fn main() {
+  let s = "hello world"
+  let _ = mystr.Replace(s, "o", "0", -1)
+}
+"#
+    );
+}
+
+#[test]
+fn manual_replace_all_positive_count_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:strings"
+
+fn main() {
+  let s = "hello world"
+  let _ = strings.Replace(s, "o", "0", 2)
+}
+"#
+    );
+}
+
+#[test]
+fn manual_replace_all_zero_count_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:strings"
+
+fn main() {
+  let s = "hello world"
+  let _ = strings.Replace(s, "o", "0", 0)
+}
+"#
+    );
+}
+
+#[test]
+fn manual_replace_all_already_replace_all_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:strings"
+
+fn main() {
+  let s = "hello world"
+  let _ = strings.ReplaceAll(s, "o", "0")
+}
+"#
+    );
+}
+
+#[test]
+fn manual_replace_all_bytes_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:bytes"
+
+fn main() {
+  let bs = "hi" as Slice<byte>
+  let _ = bytes.Replace(bs, bs, bs, -1)
+}
+"#
+    );
+}
+
+#[test]
+fn manual_replace_all_user_type_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+struct Editor {}
+
+impl Editor {
+  fn Replace(self, s: string, _old: string, _new: string, _n: int) -> string {
+    s
+  }
+}
+
+fn main() {
+  let e = Editor {}
+  let _ = e.Replace("a", "b", "c", -1)
+}
+"#
+    );
+}
+
+#[test]
 fn manual_equal_fold_to_lower() {
     assert_lint_snapshot!(
         r#"
