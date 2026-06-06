@@ -200,7 +200,10 @@ impl Renderer {
                 self.render_lowered_block(output, body);
                 output.push_str(closure_close);
             }
-            LoweredStatement::RawGo(code) => output.push_str(code),
+            LoweredStatement::RawGo(code) | LoweredStatement::DivergingRawGo(code) => {
+                output.push_str(code)
+            }
+            LoweredStatement::UnreachablePanic => output.push_str("panic(\"unreachable\")\n"),
         }
     }
 
@@ -418,7 +421,7 @@ impl Renderer {
     }
 
     /// Render a value plan: emit its setup statements (if any), then return the
-    /// value text. Data-driven counterpart of `emit_value`.
+    /// value text.
     pub(crate) fn render_value(&self, output: &mut String, plan: &ValuePlan) -> String {
         match plan {
             ValuePlan::Operand(value) => value.clone(),

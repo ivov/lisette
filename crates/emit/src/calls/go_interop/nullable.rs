@@ -9,7 +9,6 @@ use crate::context::expression::ExpressionContext;
 use crate::control_flow::fallible::{Fallible, FalliblePlanner, OPTION_SOME_TAG};
 use crate::plan::bodies::{ElseArm, IfPlan, LoopPlan, LoweredBlock, LoweredStatement};
 use crate::types::shape::{CollectionKind, NullableCollectionElement, NullableCollectionShape};
-use crate::write_line;
 use syntax::ast::Expression;
 use syntax::types::Type;
 
@@ -53,7 +52,6 @@ impl Planner<'_> {
         (setup, outcome.expect("wrapper produced no slot"))
     }
 
-    /// String-context bridge over `lower_sentinel_wrapping`.
     pub(crate) fn emit_sentinel_wrapping(
         &mut self,
         output: &mut String,
@@ -91,7 +89,6 @@ impl Planner<'_> {
         (statements, outcome)
     }
 
-    /// String-context bridge over `lower_comma_ok_wrapping`.
     pub(crate) fn emit_comma_ok_wrapping(
         &mut self,
         output: &mut String,
@@ -203,7 +200,6 @@ impl Planner<'_> {
         (statements, outcome)
     }
 
-    /// String-context bridge over `lower_nil_check_option_wrap`.
     pub(crate) fn emit_nil_check_option_wrap(
         &mut self,
         output: &mut String,
@@ -268,24 +264,19 @@ impl Planner<'_> {
         address: bool,
         fx: &mut EmitEffects,
     ) -> String {
-        let opt_var = self.fresh_var(Some("opt"));
-        self.declare(&opt_var);
-        let slot_var = self.fresh_var(Some(slot_hint));
-        self.declare(&slot_var);
-
-        fx.require_stdlib();
-
-        let amp = if address { "&" } else { "" };
-        write_line!(output, "{} := {}", opt_var, option_value);
-        write_line!(output, "var {} {}", slot_var, slot_ty);
-        write_line!(output, "if {}.Tag == {} {{", opt_var, OPTION_SOME_TAG);
-        write_line!(output, "{} = {}{}.SomeVal", slot_var, amp, opt_var);
-        output.push_str("}\n");
-
+        let mut statements = Vec::new();
+        let slot_var = self.plan_option_projection(
+            &mut statements,
+            option_value,
+            slot_hint,
+            slot_ty,
+            address,
+            fx,
+        );
+        output.push_str(&Renderer.render_setup(&statements));
         slot_var
     }
 
-    /// Typed counterpart of `emit_option_projection`.
     pub(crate) fn plan_option_projection(
         &mut self,
         statements: &mut Vec<LoweredStatement>,

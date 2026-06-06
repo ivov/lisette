@@ -8,6 +8,7 @@ use crate::context::expression::ExpressionContext;
 use crate::control_flow::fallible::{
     Fallible, FalliblePlanner, PARTIAL_BOTH_CTOR, PARTIAL_ERR_CTOR, PARTIAL_OK_CTOR,
 };
+use crate::control_flow::propagation::plain_return;
 use crate::is_order_sensitive;
 use crate::names::go_name;
 use crate::plan::bodies::{ElseArm, IfPlan, LoweredBlock, LoweredStatement};
@@ -52,11 +53,11 @@ pub(super) enum ResolvedSink {
     Return,
 }
 
-/// `slot = value` / `return value` as a `RawGo` leaf.
+/// `slot = value` (a `RawGo` leaf) or a structured `return value`.
 pub(super) fn leaf_statement(sink: &ResolvedSink, value: &str) -> LoweredStatement {
     match sink {
         ResolvedSink::Slot(name) => LoweredStatement::RawGo(format!("{} = {}\n", name, value)),
-        ResolvedSink::Return => LoweredStatement::RawGo(format!("return {}\n", value)),
+        ResolvedSink::Return => plain_return(value.to_string()),
     }
 }
 
@@ -100,7 +101,6 @@ impl Planner<'_> {
         }
     }
 
-    /// Typed counterpart of `extract_go_returns`.
     fn push_go_returns(
         &mut self,
         statements: &mut Vec<LoweredStatement>,
@@ -138,7 +138,7 @@ impl Planner<'_> {
                 Some(name.to_string())
             }
             WrapperTarget::Return => {
-                statements.push(LoweredStatement::RawGo(format!("return {}\n", value_expr)));
+                statements.push(plain_return(value_expr.to_string()));
                 None
             }
         }
@@ -191,7 +191,6 @@ impl Planner<'_> {
         (setup, outcome.expect("wrapper produced no slot"))
     }
 
-    /// String-context bridge over `lower_partial_wrapping`.
     pub(crate) fn emit_partial_wrapping(
         &mut self,
         output: &mut String,
@@ -312,7 +311,6 @@ impl Planner<'_> {
         (setup, outcome.expect("wrapper produced no slot"))
     }
 
-    /// String-context bridge over `lower_result_wrapping`.
     pub(crate) fn emit_result_wrapping(
         &mut self,
         output: &mut String,

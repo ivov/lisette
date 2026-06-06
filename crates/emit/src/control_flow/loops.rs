@@ -179,9 +179,8 @@ impl Planner<'_> {
         iterable: &Expression,
         fx: &mut EmitEffects,
     ) -> (String, String, bool) {
-        let (prologue, iter_raw) = self.capture_emission(&mut String::new(), |this, buffer| {
-            this.emit_operand(buffer, iterable, ExpressionContext::value(), fx)
-        });
+        let mut prologue = String::new();
+        let iter_raw = self.emit_operand(&mut prologue, iterable, ExpressionContext::value(), fx);
         let iterable_ty = iterable.get_type();
         let iter_expression = if iterable_ty.is_ref() {
             format!("*{}", iter_raw)

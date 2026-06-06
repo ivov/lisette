@@ -41,7 +41,6 @@ impl GoCallStrategy {
 }
 
 impl Planner<'_> {
-    /// String-context bridge over `lower_go_wrapped_call`.
     pub(crate) fn emit_go_wrapped_call(
         &mut self,
         output: &mut String,

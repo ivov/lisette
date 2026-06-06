@@ -1,6 +1,5 @@
 use crate::EmitEffects;
 use crate::Planner;
-use crate::Renderer;
 use crate::abi::coercion::{Coercion, CoercionDirection};
 use crate::calls::go_interop::{GoCallStrategy, WrapperTarget};
 use crate::context::expression::ExpressionContext;
@@ -10,6 +9,7 @@ use crate::patterns::sites::{AnnotatedPattern, PatternSubject};
 use crate::plan::bodies::{LetForm, LetPlan, LoweredBlock, LoweredStatement};
 use crate::plan::calls::CalleePlan;
 use crate::plan::placement::{expression_contains_binding, is_unit_call, requires_temp_var};
+use crate::plan::values::setup_from_string;
 use crate::types::native::NativeGoType;
 use crate::write_line;
 use syntax::ast::{Binding, Expression, Literal, Pattern, UnaryOperator};
@@ -164,15 +164,14 @@ impl Planner<'_> {
         }
     }
 
-    /// Emit a `let identifier = value` binding; `raw_go_name == None` is
-    /// unused.
-    pub(crate) fn emit_let_value(
+    /// Lower a `let identifier = value` binding to statements; `raw_go_name ==
+    /// None` is unused.
+    pub(crate) fn lower_let_value(
         &mut self,
-        output: &mut String,
         let_spec: LetSpec,
         raw_go_name: Option<&str>,
         fx: &mut EmitEffects,
-    ) {
+    ) -> Vec<LoweredStatement> {
         let LetSpec {
             identifier,
             value,
@@ -180,32 +179,29 @@ impl Planner<'_> {
             ..
         } = let_spec;
         if is_unit_call(value) {
-            self.emit_let_unit_call(output, identifier, raw_go_name, value, fx);
-            return;
+            return self.lower_let_unit_call(identifier, raw_go_name, value, fx);
         }
         let needs_temp = requires_temp_var(value);
         let Some(raw_go_name) = raw_go_name else {
             self.scope.bind(identifier, "_");
-            if needs_temp {
-                self.emit_let_temp(output, "_", value, binding_ty, fx);
+            return if needs_temp {
+                self.lower_let_temp("_", value, binding_ty, fx)
             } else {
-                self.emit_discard(output, value, fx);
-            }
-            return;
+                self.lower_discard_value(value, fx)
+            };
         };
         if needs_temp {
             let go_identifier = escape_reserved(raw_go_name);
             if self.is_declared(&go_identifier) || expression_contains_binding(value, identifier) {
                 let fresh = self.fresh_var(Some(identifier));
-                self.emit_let_temp(output, &fresh, value, binding_ty, fx);
+                let statements = self.lower_let_temp(&fresh, value, binding_ty, fx);
                 self.scope.bind(identifier, &fresh);
-            } else {
-                self.scope.bind(identifier, raw_go_name);
-                self.emit_let_temp(output, &go_identifier, value, binding_ty, fx);
+                return statements;
             }
-            return;
+            self.scope.bind(identifier, raw_go_name);
+            return self.lower_let_temp(&go_identifier, value, binding_ty, fx);
         }
-        self.emit_let_direct(output, let_spec, raw_go_name, fx);
+        self.lower_let_direct(let_spec, raw_go_name, fx)
     }
 
     /// `let x = expr?`. Adds a leading `var x T` when the binding widens to
@@ -246,41 +242,47 @@ impl Planner<'_> {
         statements
     }
 
-    /// `let x = foo()` where `foo()` returns unit: emit the call as a
+    /// `let x = foo()` where `foo()` returns unit: run the call as a
     /// statement, then declare the binding as `struct{}{}`.
-    fn emit_let_unit_call(
+    fn lower_let_unit_call(
         &mut self,
-        output: &mut String,
         identifier: &str,
         raw_go_name: Option<&str>,
         value: &Expression,
         fx: &mut EmitEffects,
-    ) {
-        let value_expression = self.emit_value(output, value, ExpressionContext::value(), fx);
-        write_line!(output, "{}", value_expression);
+    ) -> Vec<LoweredStatement> {
+        let (mut statements, value_expression) =
+            self.lower_value(value, ExpressionContext::value(), fx);
+        statements.push(LoweredStatement::RawGo(format!("{}\n", value_expression)));
         let Some(raw_go_name) = raw_go_name else {
-            return;
+            return statements;
         };
         let escaped = escape_reserved(raw_go_name);
         if self.is_declared(&escaped) {
             let fresh = self.fresh_var(Some(identifier));
             self.declare(&fresh);
-            write_line!(output, "{} := struct{{}}{{}}", fresh);
+            statements.push(LoweredStatement::TempBind {
+                name: fresh.clone(),
+                value: "struct{}{}".to_string(),
+            });
             self.scope.bind(identifier, &fresh);
         } else {
             let go_identifier = self.scope.bind(identifier, raw_go_name);
             self.try_declare(&go_identifier);
-            write_line!(output, "{} := struct{{}}{{}}", go_identifier);
+            statements.push(LoweredStatement::TempBind {
+                name: go_identifier,
+                value: "struct{}{}".to_string(),
+            });
         }
+        statements
     }
 
-    fn emit_let_direct(
+    fn lower_let_direct(
         &mut self,
-        output: &mut String,
         let_spec: LetSpec,
         raw_go_name: &str,
         fx: &mut EmitEffects,
-    ) {
+    ) -> Vec<LoweredStatement> {
         let LetSpec {
             identifier,
             value,
@@ -288,19 +290,14 @@ impl Planner<'_> {
             mutable,
         } = let_spec;
         if !mutable
-            && self.try_emit_let_into_wrapper_slot(
-                output,
-                identifier,
-                raw_go_name,
-                value,
-                binding_ty,
-                fx,
-            )
+            && let Some(statements) =
+                self.try_lower_let_into_wrapper_slot(identifier, raw_go_name, value, binding_ty, fx)
         {
-            return;
+            return statements;
         }
 
-        let value_expression = self.emit_value(output, value, ExpressionContext::value(), fx);
+        let (mut statements, value_expression) =
+            self.lower_value(value, ExpressionContext::value(), fx);
         let coercion = Coercion::resolve(
             self,
             &value.get_type(),
@@ -308,7 +305,7 @@ impl Planner<'_> {
             CoercionDirection::Internal,
         );
         let (coercion_setup, value_expression) = coercion.lower(self, value_expression, fx);
-        output.push_str(&Renderer.render_setup(&coercion_setup));
+        statements.extend(coercion_setup);
         let value_expression = maybe_clone_subslice(self, value, mutable, value_expression, fx);
 
         let go_identifier = self.scope.bind(identifier, raw_go_name);
@@ -318,76 +315,83 @@ impl Planner<'_> {
             let fresh = self.fresh_var(Some(identifier));
             self.scope.bind(identifier, &fresh);
             self.try_declare(&fresh);
-            write_line!(output, "{} := {}", fresh, value_expression);
+            statements.push(LoweredStatement::TempBind {
+                name: fresh,
+                value: value_expression,
+            });
         } else if needs_explicit_type_declaration(self, value, binding_ty) {
             let var_ty = self.go_type_string(binding_ty, fx);
-            write_line!(
-                output,
-                "var {} {} = {}",
-                go_identifier,
-                var_ty,
-                value_expression
-            );
+            statements.push(LoweredStatement::RawGo(format!(
+                "var {} {} = {}\n",
+                go_identifier, var_ty, value_expression
+            )));
         } else {
-            write_line!(output, "{} := {}", go_identifier, value_expression);
+            statements.push(LoweredStatement::TempBind {
+                name: go_identifier,
+                value: value_expression,
+            });
         }
+        statements
     }
 
     /// Route a slot-style Go-interop wrapper into the let's Go name, removing
     /// the `name := result_N` alias.
-    fn try_emit_let_into_wrapper_slot(
+    fn try_lower_let_into_wrapper_slot(
         &mut self,
-        output: &mut String,
         identifier: &str,
         raw_go_name: &str,
         value: &Expression,
         binding_ty: &Type,
         fx: &mut EmitEffects,
-    ) -> bool {
+    ) -> Option<Vec<LoweredStatement>> {
         let go_identifier = escape_reserved(raw_go_name);
         if self.is_declared(&go_identifier)
             || self.scope.is_active_assign_target(&go_identifier)
             || self.scope.has_binding_for_go_name(&go_identifier)
         {
-            return false;
+            return None;
         }
         if value.get_type() != *binding_ty {
-            return false;
+            return None;
         }
-        let Some(plan) = self.plan_call(value) else {
-            return false;
-        };
+        let plan = self.plan_call(value)?;
         let CalleePlan::GoInterop(strategy) = plan.callee else {
-            return false;
+            return None;
         };
         if matches!(strategy, GoCallStrategy::Tuple { .. }) {
-            return false;
+            return None;
         }
         let target = WrapperTarget::Slot(&go_identifier);
-        let outcome =
-            self.emit_go_wrapped_call_to(output, value, &strategy, binding_ty, target, fx);
-        if outcome.is_none() {
-            return false;
-        }
+        let mut buffer = String::new();
+        self.emit_go_wrapped_call_to(&mut buffer, value, &strategy, binding_ty, target, fx)?;
         // `open_wrapper_slot` / `emit_simple_wrapper_value` already declared
         // `go_identifier`; only the binding from the user-name still needs setup.
         self.scope.bind(identifier, go_identifier.as_ref());
-        true
+        Some(setup_from_string(buffer))
     }
 
-    fn emit_let_temp(
+    fn lower_let_temp(
         &mut self,
-        output: &mut String,
         name: &str,
         value: &Expression,
         binding_ty: &Type,
         fx: &mut EmitEffects,
-    ) {
+    ) -> Vec<LoweredStatement> {
+        let mut statements = Vec::new();
         if !self.is_declared(name) {
-            self.emit_let_temp_var_declaration(output, name, value, binding_ty, fx);
+            let mut declaration = String::new();
+            self.emit_let_temp_var_declaration(&mut declaration, name, value, binding_ty, fx);
+            if !declaration.is_empty() {
+                statements.push(LoweredStatement::RawGo(declaration));
+            }
             self.try_declare(name);
         }
-        self.emit_assign(output, value, name, Some(binding_ty), fx);
+        let mut assignment = String::new();
+        self.emit_assign(&mut assignment, value, name, Some(binding_ty), fx);
+        if !assignment.is_empty() {
+            statements.push(LoweredStatement::RawGo(assignment));
+        }
+        statements
     }
 
     fn emit_let_temp_var_declaration(
@@ -463,10 +467,6 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
 
     /// Classify the binding and build the matching `LetForm`.
     pub(crate) fn build_form(mut self, fx: &mut EmitEffects) -> LetForm {
-        let wrap = |buffer: String| LoweredBlock {
-            statements: vec![LoweredStatement::RawGo(buffer)],
-        };
-
         // Never-typed values diverge (break/continue/return). Declare the
         // binding so dead code can reference it, then emit the value as a
         // statement.
@@ -481,11 +481,11 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
             } else {
                 None
             };
-            let mut buffer = String::new();
-            self.planner.emit_statement(&mut buffer, self.value, fx);
             return LetForm::Never {
                 declaration,
-                body: wrap(buffer),
+                body: LoweredBlock {
+                    statements: vec![self.planner.lower_statement(self.value, fx)],
+                },
             };
         }
 
@@ -594,9 +594,7 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
             );
             return LoweredBlock { statements };
         }
-        let mut buffer = String::new();
-        self.planner.emit_let_value(
-            &mut buffer,
+        let statements = self.planner.lower_let_value(
             LetSpec {
                 identifier,
                 value: self.value,
@@ -606,23 +604,12 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
             raw_go_name.as_deref(),
             fx,
         );
-        LoweredBlock {
-            statements: vec![LoweredStatement::RawGo(buffer)],
-        }
+        LoweredBlock { statements }
     }
 
     fn lower_discard(&mut self, fx: &mut EmitEffects) -> LoweredBlock {
-        if let Expression::Propagate {
-            expression: inner, ..
-        } = self.value.unwrap_parens()
-        {
-            let statements = self.planner.lower_propagate_statement(inner, fx);
-            return LoweredBlock { statements };
-        }
-        let mut buffer = String::new();
-        self.planner.emit_discard(&mut buffer, self.value, fx);
         LoweredBlock {
-            statements: vec![LoweredStatement::RawGo(buffer)],
+            statements: self.planner.lower_discard_value(self.value, fx),
         }
     }
 

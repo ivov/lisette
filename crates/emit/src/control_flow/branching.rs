@@ -45,7 +45,6 @@ impl Planner<'_> {
         output.push_str("}\n");
     }
 
-    /// String-context bridge over `lower_block_as_body`.
     pub(crate) fn emit_block(
         &mut self,
         output: &mut String,

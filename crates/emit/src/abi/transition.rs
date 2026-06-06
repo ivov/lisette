@@ -628,23 +628,6 @@ pub(crate) fn try_emit_lowered_tail_return(
     }
 }
 
-/// String-context bridge over `try_emit_lowered_tail_return`.
-pub(crate) fn render_lowered_tail_return(
-    planner: &mut Planner,
-    output: &mut String,
-    expression: &syntax::ast::Expression,
-    fx: &mut EmitEffects,
-) -> bool {
-    match try_emit_lowered_tail_return(planner, expression, fx) {
-        Some(statements) => {
-            let block = LoweredBlock { statements };
-            Renderer.render_lowered_block(output, &block);
-            true
-        }
-        None => false,
-    }
-}
-
 fn lowered_tail_fallback(
     planner: &mut Planner,
     expression: &syntax::ast::Expression,
@@ -653,16 +636,11 @@ fn lowered_tail_fallback(
     hoist_hint: Option<&str>,
     fx: &mut EmitEffects,
 ) -> Vec<LoweredStatement> {
-    let mut setup = String::new();
-    let value = planner.emit_value(&mut setup, expression, ExpressionContext::value(), fx);
+    let (mut statements, value) = planner.lower_value(expression, ExpressionContext::value(), fx);
     let value = match hoist_hint {
-        Some(hint) => planner.hoist_tmp_value(&mut setup, hint, &value),
+        Some(hint) => planner.hoist_tmp_value_statement(&mut statements, hint, &value),
         None => value,
     };
-    let mut statements = Vec::new();
-    if !setup.is_empty() {
-        statements.push(LoweredStatement::RawGo(setup));
-    }
     statements.extend(emit_lowered_result_return(
         planner, &value, return_ty, shape, fx,
     ));
@@ -684,17 +662,13 @@ fn emit_lowered_tuple_tail(
         let stages: Vec<StagedExpression> = elements
             .iter()
             .enumerate()
-            .map(|(i, e)| {
-                let mut setup = String::new();
-                let value = match slot_tys.get(i) {
-                    Some(slot_ty) if planner.facts.is_nullable_option(slot_ty) => {
-                        emit_nullable_slot_value(planner, &mut setup, e, slot_ty, fx)
-                    }
-                    _ => {
-                        planner.emit_composite_value(&mut setup, e, ExpressionContext::value(), fx)
-                    }
-                };
-                StagedExpression::new(setup, value, e)
+            .map(|(i, e)| match slot_tys.get(i) {
+                Some(slot_ty) if planner.facts.is_nullable_option(slot_ty) => {
+                    let mut setup = String::new();
+                    let value = emit_nullable_slot_value(planner, &mut setup, e, slot_ty, fx);
+                    StagedExpression::new(setup, value, e)
+                }
+                _ => planner.stage_composite(e, ExpressionContext::value(), fx),
             })
             .collect();
         let (mut statements, parts) = planner.sequence_structured(stages, "_ret");
@@ -728,49 +702,33 @@ fn emit_lowered_partial_tail(
     } = expression
         && let Some(variant) = callee.as_partial_constructor()
     {
-        let mut setup = String::new();
+        let mut statements = Vec::new();
         let ret = match variant {
             "Ok" => {
-                let v = planner.emit_composite_value(
-                    &mut setup,
-                    &args[0],
-                    ExpressionContext::value(),
-                    fx,
-                );
+                let (setup, v) =
+                    planner.lower_composite_value(&args[0], ExpressionContext::value(), fx);
+                statements.extend(setup);
                 multi_value_return(vec![v, "nil".to_string()])
             }
             "Err" => {
-                let e = planner.emit_composite_value(
-                    &mut setup,
-                    &args[0],
-                    ExpressionContext::value(),
-                    fx,
-                );
+                let (setup, e) =
+                    planner.lower_composite_value(&args[0], ExpressionContext::value(), fx);
+                statements.extend(setup);
                 let ok_ty = planner.facts.peel_alias(&return_ty).ok_type();
                 let ok_ty_str = planner.go_type_string(&ok_ty, fx);
                 multi_value_return(vec![format!("*new({})", ok_ty_str), e])
             }
             "Both" => {
-                let v = planner.emit_composite_value(
-                    &mut setup,
-                    &args[0],
-                    ExpressionContext::value(),
-                    fx,
-                );
-                let e = planner.emit_composite_value(
-                    &mut setup,
-                    &args[1],
-                    ExpressionContext::value(),
-                    fx,
-                );
+                let (setup_v, v) =
+                    planner.lower_composite_value(&args[0], ExpressionContext::value(), fx);
+                statements.extend(setup_v);
+                let (setup_e, e) =
+                    planner.lower_composite_value(&args[1], ExpressionContext::value(), fx);
+                statements.extend(setup_e);
                 multi_value_return(vec![v, e])
             }
             _ => unreachable!("as_partial_constructor only returns Ok/Err/Both"),
         };
-        let mut statements = Vec::new();
-        if !setup.is_empty() {
-            statements.push(LoweredStatement::RawGo(setup));
-        }
         statements.push(ret);
         return statements;
     }

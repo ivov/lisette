@@ -12,7 +12,6 @@ use crate::plan::bodies::{
 };
 use crate::plan::calls::{CallReturnShape, CalleePlan};
 use crate::plan::values::{ValuePlan, value_plan_from_statements};
-use crate::write_line;
 use syntax::ast::Expression;
 use syntax::types::Type;
 
@@ -83,20 +82,6 @@ impl Planner<'_> {
             }
         };
         (statements, value)
-    }
-
-    /// String-context bridge over `lower_propagate`.
-    pub(crate) fn emit_propagate(
-        &mut self,
-        output: &mut String,
-        expression: &Expression,
-        result_var_name: Option<&str>,
-        fx: &mut EmitEffects,
-    ) -> String {
-        let (statements, value) = self.lower_propagate(expression, result_var_name, fx);
-        let block = LoweredBlock { statements };
-        Renderer.render_lowered_block(output, &block);
-        value
     }
 
     /// `Err(...)?` and `None?` already emitted `return ...`. Declare the
@@ -205,38 +190,6 @@ impl Planner<'_> {
         }
     }
 
-    pub(crate) fn emit_return(
-        &mut self,
-        output: &mut String,
-        expression: &Expression,
-        fx: &mut EmitEffects,
-    ) {
-        let return_ctx = self.return_ctx();
-        let is_unit = return_ctx.ty().is_some_and(Type::is_unit);
-
-        if is_unit {
-            let is_pure = matches!(
-                expression,
-                Expression::Unit { .. }
-                    | Expression::Identifier { .. }
-                    | Expression::Literal { .. }
-            );
-            if !is_pure {
-                self.emit_statement(output, expression, fx);
-            }
-            output.push_str("return\n");
-        } else if !transition::render_lowered_tail_return(self, output, expression, fx)
-            && !self.emit_wrapped_return(output, expression, fx)
-        {
-            let expression_string =
-                self.emit_value(output, expression, ExpressionContext::value(), fx);
-            let return_ty = return_ctx.ty();
-            let expression_string =
-                self.apply_type_coercion(output, return_ty, expression, expression_string, fx);
-            write_line!(output, "return {}", expression_string);
-        }
-    }
-
     /// Build a `ReturnStatementPlan`, dispatching on return shape.
     pub(crate) fn build_return_plan(
         &mut self,
@@ -244,16 +197,11 @@ impl Planner<'_> {
         directive: String,
         fx: &mut EmitEffects,
     ) -> ReturnStatementPlan {
-        let body_block = |body_text: String| LoweredBlock {
-            statements: vec![LoweredStatement::RawGo(body_text)],
-        };
-
         let return_ctx = self.return_ctx();
         let is_unit = return_ctx.ty().is_some_and(Type::is_unit);
         if is_unit {
-            // Mirror emit_return's unit path: impure expressions run as a
-            // statement before the bare `return`; pure ones (Unit, Identifier,
-            // Literal) emit nothing.
+            // Unit return: impure expressions run as a statement before the
+            // bare `return`; pure ones (Unit, Identifier, Literal) emit nothing.
             let is_pure = matches!(
                 expression,
                 Expression::Unit { .. }
@@ -263,9 +211,10 @@ impl Planner<'_> {
             let side_effect = if is_pure {
                 None
             } else {
-                let mut buffer = String::new();
-                self.emit_statement(&mut buffer, expression, fx);
-                (!buffer.is_empty()).then(|| body_block(buffer))
+                let body = LoweredBlock {
+                    statements: vec![self.lower_statement(expression, fx)],
+                };
+                (!Renderer.renders_empty(&body)).then_some(body)
             };
             return ReturnStatementPlan {
                 directive,
@@ -394,24 +343,6 @@ impl Planner<'_> {
         statements.extend(setup);
         statements.extend(self.wrapped_value_return(value, &return_ty, lowered.as_ref(), fx));
         Some(statements)
-    }
-
-    /// String-context bridge over `lower_wrapped_return`. Returns `true`
-    /// when a wrapped return was emitted.
-    pub(crate) fn emit_wrapped_return(
-        &mut self,
-        output: &mut String,
-        expression: &Expression,
-        fx: &mut EmitEffects,
-    ) -> bool {
-        match self.lower_wrapped_return(expression, fx) {
-            Some(statements) => {
-                let block = LoweredBlock { statements };
-                Renderer.render_lowered_block(output, &block);
-                true
-            }
-            None => false,
-        }
     }
 
     fn wrapped_value_return(

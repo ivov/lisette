@@ -395,17 +395,6 @@ impl<'a> Planner<'a> {
         tmp
     }
 
-    pub(crate) fn capture_emission<F, R>(&mut self, output: &mut String, f: F) -> (String, R)
-    where
-        F: FnOnce(&mut Self, &mut String) -> R,
-    {
-        let before = output.len();
-        let value = f(self, output);
-        let captured = output[before..].to_string();
-        output.truncate(before);
-        (captured, value)
-    }
-
     /// Run `f` inside a fresh scope to build a `LoweredBlock`, returning `None`
     /// when it renders empty.
     pub(crate) fn capture_scoped_block<F>(&mut self, f: F) -> Option<LoweredBlock>

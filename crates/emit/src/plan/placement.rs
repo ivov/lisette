@@ -14,21 +14,17 @@ use crate::plan::values::{ValuePlan, setup_from_string, value_plan_from_statemen
 use crate::statements::assignments::is_lvalue_chain;
 use crate::types::native::NativeGoType;
 use crate::utils::contains_call;
-use crate::write_line;
 use syntax::ast::{Expression, Literal};
 use syntax::types::Type;
 
 /// Append `panic("unreachable")` after a branch construct in return position
 /// when the branch can fall through (no exhaustive default arm). Go would
 /// otherwise reject the function for missing a tail return.
-pub(crate) fn emit_unreachable_panic_if_needed(
-    output: &mut String,
+pub(crate) fn unreachable_panic_if_needed(
     place: &PlacePlan,
     is_exhaustive: bool,
-) {
-    if place.is_return() && !is_exhaustive {
-        output.push_str("panic(\"unreachable\")\n");
-    }
+) -> Option<LoweredStatement> {
+    (place.is_return() && !is_exhaustive).then_some(LoweredStatement::UnreachablePanic)
 }
 
 /// True when discarding `expression` is safe to omit: its value has no
@@ -185,45 +181,56 @@ pub(crate) fn expression_contains_binding(expression: &Expression, name: &str) -
 }
 
 impl Planner<'_> {
-    pub(crate) fn emit_discard(
+    /// Lower a discarded expression into structured statements: a bare
+    /// side-effecting call (`f()`), a `_ = value` discard, or a propagate.
+    pub(crate) fn lower_discard_value(
         &mut self,
-        output: &mut String,
         value: &Expression,
         fx: &mut EmitEffects,
-    ) {
+    ) -> Vec<LoweredStatement> {
         let unwrapped = value.unwrap_parens();
 
         if is_side_effect_free_discard(unwrapped) {
-            return;
+            return Vec::new();
         }
 
         if let Expression::Propagate { expression, .. } = unwrapped {
-            self.emit_propagate(output, expression, Some("_"), fx);
-            return;
+            return self.lower_propagate(expression, Some("_"), fx).0;
         }
 
         let value_ty = value.get_type();
         if value_ty.is_unit() || value_ty.is_variable() || value_ty.is_never() {
-            let value_expression = self.emit_operand(output, value, ExpressionContext::value(), fx);
-            if !value_expression.is_empty() {
+            let staged = self.stage_operand(value, ExpressionContext::value(), fx);
+            let mut statements = staged.setup;
+            if !staged.value.is_empty() {
                 if matches!(unwrapped, Expression::Call { .. }) {
-                    write_line!(output, "{}", value_expression);
+                    let line = format!("{}\n", staged.value);
+                    // A never-typed call (e.g. `panic(...)`) diverges.
+                    statements.push(if value_ty.is_never() {
+                        LoweredStatement::DivergingRawGo(line)
+                    } else {
+                        LoweredStatement::RawGo(line)
+                    });
                 } else {
-                    write_line!(output, "_ = {}", value_expression);
+                    statements.push(LoweredStatement::RawGo(format!("_ = {}\n", staged.value)));
                 }
             }
-            return;
+            return statements;
         }
 
-        if let Expression::Call { .. } = unwrapped
-            && let Some(raw) = self.emit_go_call_discarded(output, unwrapped, fx)
-        {
-            write_line!(output, "{}", raw);
-            return;
+        if let Expression::Call { .. } = unwrapped {
+            let mut buffer = String::new();
+            if let Some(raw) = self.emit_go_call_discarded(&mut buffer, unwrapped, fx) {
+                let mut statements = setup_from_string(buffer);
+                statements.push(LoweredStatement::RawGo(format!("{}\n", raw)));
+                return statements;
+            }
         }
 
-        let value_expression = self.emit_operand(output, value, ExpressionContext::value(), fx);
-        write_line!(output, "_ = {}", value_expression);
+        let staged = self.stage_operand(value, ExpressionContext::value(), fx);
+        let mut statements = staged.setup;
+        statements.push(LoweredStatement::RawGo(format!("_ = {}\n", staged.value)));
+        statements
     }
 
     /// Emit a unit-typed call as a statement, then store `struct{}{}` into
@@ -234,12 +241,10 @@ impl Planner<'_> {
         var: &str,
         fx: &mut EmitEffects,
     ) -> Vec<LoweredStatement> {
-        let mut buffer = String::new();
-        let call_str = self.emit_value(&mut buffer, value, ExpressionContext::value(), fx);
+        let (mut statements, call_str) = self.lower_value(value, ExpressionContext::value(), fx);
         if !call_str.is_empty() {
-            write_line!(buffer, "{call_str}");
+            statements.push(LoweredStatement::RawGo(format!("{call_str}\n")));
         }
-        let mut statements = setup_from_string(buffer);
         statements.push(simple_assign(
             var,
             ValuePlan::Operand("struct{}{}".to_string()),
@@ -471,9 +476,7 @@ impl Planner<'_> {
         if last.get_type().is_never() {
             let mut statements = vec![self.lower_statement(last, fx)];
             if !is_go_never(last) {
-                statements.push(LoweredStatement::RawGo(
-                    "panic(\"unreachable\")\n".to_string(),
-                ));
+                statements.push(LoweredStatement::UnreachablePanic);
             }
             return statements;
         }
@@ -493,11 +496,14 @@ impl Planner<'_> {
             };
             return self.lower_branching_to_block(last, &place, fx).statements;
         }
-        let mut buffer = String::new();
-        let expression_string = self.emit_value(&mut buffer, last, ExpressionContext::value(), fx);
+        let (mut setup, expression_string) = self.lower_value(last, ExpressionContext::value(), fx);
+        let mut coercion_buffer = String::new();
         let expression_string =
-            self.apply_type_coercion(&mut buffer, target_ty, last, expression_string, fx);
-        let value = value_plan_from_statements(setup_from_string(buffer), expression_string);
+            self.apply_type_coercion(&mut coercion_buffer, target_ty, last, expression_string, fx);
+        if !coercion_buffer.is_empty() {
+            setup.push(LoweredStatement::RawGo(coercion_buffer));
+        }
+        let value = value_plan_from_statements(setup, expression_string);
         vec![simple_assign(var, value)]
     }
 
@@ -535,8 +541,8 @@ impl Planner<'_> {
         let receiver_is_lvalue =
             is_lvalue_chain(unwrapped) && !self.contains_newtype_access(unwrapped);
 
-        let mut buffer = String::new();
-        let value = if receiver_is_lvalue {
+        let (value, mut statements) = if receiver_is_lvalue {
+            let mut buffer = String::new();
             let mut args_buffer = String::new();
             let args_str = self.emit_append_args(
                 &mut args_buffer,
@@ -552,12 +558,15 @@ impl Planner<'_> {
             let receiver_lv =
                 self.emit_left_value_capturing(&mut buffer, unwrapped, rhs_has_setup, fx);
             buffer.push_str(&args_buffer);
-            format!("append({}, {})", receiver_lv, args_str)
+            (
+                format!("append({}, {})", receiver_lv, args_str),
+                setup_from_string(buffer),
+            )
         } else {
-            self.emit_value(&mut buffer, last, ExpressionContext::value(), fx)
+            let (setup, value) = self.lower_value(last, ExpressionContext::value(), fx);
+            (value, setup)
         };
 
-        let mut statements = setup_from_string(buffer);
         statements.push(simple_assign(var, ValuePlan::Operand(value)));
         Some(statements)
     }
@@ -596,18 +605,19 @@ impl Planner<'_> {
         format!("{}{}", args_str, suffix)
     }
 
-    /// Emit `last` as a tail value. Tuple literals widen slot types to the
+    /// Lower `last` as a tail value. Tuple literals widen slot types to the
     /// return-slot types.
-    pub(crate) fn emit_tail_value(
+    pub(crate) fn lower_tail_value(
         &mut self,
-        output: &mut String,
         last: &Expression,
         fx: &mut EmitEffects,
-    ) -> String {
+    ) -> (Vec<LoweredStatement>, String) {
         if let Expression::Tuple { elements, ty, .. } = last {
-            self.emit_tuple_value(output, elements, ty, true, fx)
+            let plan = self.plan_tuple_value(elements, ty, true, fx);
+            let staged = StagedExpression::from_plan(plan, last);
+            (staged.setup, staged.value)
         } else {
-            self.emit_value(output, last, ExpressionContext::value(), fx)
+            self.lower_value(last, ExpressionContext::value(), fx)
         }
     }
 

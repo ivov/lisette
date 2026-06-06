@@ -17,7 +17,7 @@ use crate::patterns::binding_emit::{
     tree_binding_statements,
 };
 use crate::patterns::decision_tree::{self, PatternInfo, render_condition};
-use crate::plan::bodies::{ElseArm, IfPlan, LoweredBlock, LoweredStatement, PlacePlan};
+use crate::plan::bodies::{ElseArm, IfPlan, LoopPlan, LoweredBlock, LoweredStatement, PlacePlan};
 use crate::state::bindings::BindingValue;
 use crate::write_line;
 
@@ -97,7 +97,7 @@ struct LetElseAlternatives<'s> {
 impl Planner<'_> {
     fn resolve_pattern_subject(
         &mut self,
-        output: &mut String,
+        setup: &mut Vec<LoweredStatement>,
         subject: PatternSubject<'_>,
         fx: &mut EmitEffects,
     ) -> ResolvedSubject {
@@ -121,7 +121,9 @@ impl Planner<'_> {
                 }
                 let var = self.fresh_var(temp_hint);
                 self.declare(&var);
-                let expression = self.emit_value(output, scrutinee, ExpressionContext::value(), fx);
+                let (op_setup, expression) =
+                    self.lower_value(scrutinee, ExpressionContext::value(), fx);
+                setup.extend(op_setup);
                 ResolvedSubject::Composite { var, expression }
             }
         }
@@ -137,8 +139,8 @@ impl Planner<'_> {
         subject_ty: &Type,
         fx: &mut EmitEffects,
     ) -> Vec<LoweredStatement> {
-        let mut prologue = String::new();
-        let resolved = self.resolve_pattern_subject(&mut prologue, subject, fx);
+        let mut statements = Vec::new();
+        let resolved = self.resolve_pattern_subject(&mut statements, subject, fx);
         let info = decision_tree::collect_pattern_info(self, pattern, typed, subject_ty);
         fx.extend(&info.effects);
 
@@ -151,10 +153,6 @@ impl Planner<'_> {
         tree_binding_statements(self, &mut body, &info.bindings, &effective, &[]);
         let body_block = LoweredBlock { statements: body };
 
-        let mut statements = Vec::new();
-        if !prologue.is_empty() {
-            statements.push(LoweredStatement::RawGo(prologue));
-        }
         let mut declaration = String::new();
         resolved.emit_declaration(&mut declaration, &body_block);
         if !declaration.is_empty() {
@@ -188,9 +186,9 @@ impl Planner<'_> {
         fx: &mut EmitEffects,
     ) -> Vec<LoweredStatement> {
         let value_ty = scrutinee.get_type();
-        let mut prologue = String::new();
+        let mut statements = Vec::new();
         let resolved = self.resolve_pattern_subject(
-            &mut prologue,
+            &mut statements,
             PatternSubject::expression(scrutinee, ap.pattern, Some("subject")),
             fx,
         );
@@ -206,10 +204,6 @@ impl Planner<'_> {
         };
         let body_block = LoweredBlock { statements: body };
 
-        let mut statements = Vec::new();
-        if !prologue.is_empty() {
-            statements.push(LoweredStatement::RawGo(prologue));
-        }
         let mut declaration = String::new();
         resolved.emit_declaration(&mut declaration, &body_block);
         if !declaration.is_empty() {
@@ -219,50 +213,62 @@ impl Planner<'_> {
         statements
     }
 
-    #[allow(clippy::too_many_arguments)]
-    pub(crate) fn emit_while_let(
+    /// Resolve a while-let scrutinee to its loop-subject var, returning any
+    /// setup statements (none when the scrutinee is an inlinable identifier).
+    fn while_let_subject(
         &mut self,
-        output: &mut String,
         pattern: &Pattern,
-        typed: Option<&TypedPattern>,
         scrutinee: &Expression,
-        body: &Expression,
-        needs_label: bool,
         fx: &mut EmitEffects,
-    ) {
-        self.set_current_loop_label_if_needed(needs_label);
-        if let Some(label) = self.current_loop_label() {
-            write_line!(output, "{}:", label);
-        }
-        output.push_str("for {\n");
-
-        let inline_var = if let Expression::Identifier { value, .. } = scrutinee {
+    ) -> (String, Vec<LoweredStatement>) {
+        if let Expression::Identifier { value, .. } = scrutinee {
             let has_collision = pattern_binds_name(pattern, value);
             let bound_to_inline = matches!(
                 self.scope.resolve_identifier_binding(value),
                 Some(BindingValue::InlineExpr(_))
             );
             if !has_collision && !value.contains('.') && !bound_to_inline {
-                Some(self.scope.resolve_or_escape_go_name(value))
-            } else {
-                None
+                return (self.scope.resolve_or_escape_go_name(value), Vec::new());
             }
-        } else {
-            None
-        };
-        let subject_var = inline_var.unwrap_or_else(|| {
-            let var = self.fresh_var(Some("subject"));
-            let expression = self.emit_operand(output, scrutinee, ExpressionContext::value(), fx);
-            write_line!(output, "{} := {}", var, expression);
-            var
+        }
+        let var = self.fresh_var(Some("subject"));
+        let staged = self.stage_operand(scrutinee, ExpressionContext::value(), fx);
+        let mut setup = staged.setup;
+        setup.push(LoweredStatement::TempBind {
+            name: var.clone(),
+            value: staged.value,
         });
+        (var, setup)
+    }
 
+    pub(crate) fn lower_while_let(
+        &mut self,
+        pattern: &Pattern,
+        typed: Option<&TypedPattern>,
+        scrutinee: &Expression,
+        body: &Expression,
+        needs_label: bool,
+        fx: &mut EmitEffects,
+    ) -> LoweredBlock {
+        self.set_current_loop_label_if_needed(needs_label);
+        let label = self.current_loop_label().map(str::to_string);
         let scrutinee_ty = scrutinee.get_type();
+        let (subject_var, subject_setup) = self.while_let_subject(pattern, scrutinee, fx);
+
+        // Or-patterns with bindings render an `if/else if` chain that closes its
+        // own `for`, so they cannot wrap in a structured `Loop`; bridge them as
+        // one `RawGo`.
         if let Pattern::Or { patterns, .. } = pattern
             && pattern_has_bindings(pattern)
         {
+            let mut buffer = String::new();
+            if let Some(label) = &label {
+                write_line!(buffer, "{}:", label);
+            }
+            buffer.push_str("for {\n");
+            buffer.push_str(&Renderer.render_setup(&subject_setup));
             self.emit_while_let_or_pattern(
-                output,
+                &mut buffer,
                 patterns,
                 TypedSubject {
                     var: &subject_var,
@@ -271,24 +277,69 @@ impl Planner<'_> {
                 body,
                 fx,
             );
-            return;
+            return LoweredBlock {
+                statements: vec![LoweredStatement::RawGo(buffer)],
+            };
         }
 
         let info = decision_tree::collect_pattern_info(self, pattern, typed, &scrutinee_ty);
         fx.extend(&info.effects);
-        let (effective, ok_var) = apply_refutable_root_assertion(self, output, &info, &subject_var);
-        let condition = compose_refutable_condition(ok_var.as_deref(), &info.checks, &effective);
-        write_line!(output, "if {} {{", condition);
-        self.enter_scope();
-
-        if !matches!(pattern, Pattern::Or { .. }) {
-            emit_tree_bindings_with_consumers(self, output, &info.bindings, &effective, &[body]);
+        let mut loop_body = subject_setup;
+        let mut assertion = String::new();
+        let (effective, ok_var) =
+            apply_refutable_root_assertion(self, &mut assertion, &info, &subject_var);
+        if !assertion.is_empty() {
+            loop_body.push(LoweredStatement::RawGo(assertion));
         }
+        let condition = compose_refutable_condition(ok_var.as_deref(), &info.checks, &effective);
 
-        let block = self.lower_block_as_body(body, fx);
-        Renderer.render_lowered_block(output, &block);
+        self.enter_scope();
+        let mut then_body: Vec<LoweredStatement> = Vec::new();
+        if !matches!(pattern, Pattern::Or { .. }) {
+            let mut bindings = String::new();
+            emit_tree_bindings_with_consumers(
+                self,
+                &mut bindings,
+                &info.bindings,
+                &effective,
+                &[body],
+            );
+            if !bindings.is_empty() {
+                then_body.push(LoweredStatement::RawGo(bindings));
+            }
+        }
+        then_body.extend(self.lower_block_as_body(body, fx).statements);
+        self.exit_scope();
 
-        self.emit_while_let_break_else(output);
+        loop_body.push(LoweredStatement::If(IfPlan {
+            directive: String::new(),
+            condition_setup: String::new(),
+            condition,
+            then_body: LoweredBlock {
+                statements: then_body,
+            },
+            else_arm: ElseArm::Else {
+                body: LoweredBlock {
+                    statements: vec![LoweredStatement::Break {
+                        directive: String::new(),
+                        label: label.clone(),
+                    }],
+                },
+                inline: false,
+            },
+        }));
+
+        LoweredBlock {
+            statements: vec![LoweredStatement::Loop(LoopPlan {
+                directive: String::new(),
+                prologue: String::new(),
+                label,
+                header: "for {\n".to_string(),
+                body: LoweredBlock {
+                    statements: loop_body,
+                },
+            })],
+        }
     }
 
     fn lower_let_else_single_pattern(

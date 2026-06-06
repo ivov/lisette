@@ -2,7 +2,7 @@
 //! consumes. `RawGo` is a transitional node holding pre-rendered Go.
 
 use crate::plan::values::ValuePlan;
-use crate::utils::{output_ends_with_diverge, output_references_var};
+use crate::utils::output_references_var;
 use syntax::types::Type;
 
 /// Destination for a lowered block's tail. The enclosing function's return
@@ -63,6 +63,13 @@ pub(crate) enum LoweredStatement {
         closure_close: String,
     },
     RawGo(String),
+    /// Raw Go whose tail diverges (a never-typed call such as `panic(...)`).
+    /// Tracked separately from `RawGo` so divergence is structural rather than
+    /// re-derived by scanning text.
+    DivergingRawGo(String),
+    /// `panic("unreachable")` tail after a non-exhaustive branch in return
+    /// position — a structured diverging leaf.
+    UnreachablePanic,
 }
 
 /// A source `const` (or `var` when the value is not Go-const-eligible).
@@ -481,7 +488,8 @@ impl LoweredStatement {
             LoweredStatement::Switch(plan) => plan.ends_with_diverge(),
             LoweredStatement::WhileLet(plan) => plan.body.ends_with_diverge(),
             LoweredStatement::TempBind { .. } | LoweredStatement::ClosureBind { .. } => false,
-            LoweredStatement::RawGo(code) => output_ends_with_diverge(code),
+            LoweredStatement::RawGo(_) => false,
+            LoweredStatement::DivergingRawGo(_) | LoweredStatement::UnreachablePanic => true,
         }
     }
 
@@ -590,7 +598,10 @@ impl LoweredStatement {
                     || body.references_var(var)
                     || output_references_var(closure_close, var)
             }
-            LoweredStatement::RawGo(code) => output_references_var(code, var),
+            LoweredStatement::RawGo(code) | LoweredStatement::DivergingRawGo(code) => {
+                output_references_var(code, var)
+            }
+            LoweredStatement::UnreachablePanic => false,
         }
     }
 }

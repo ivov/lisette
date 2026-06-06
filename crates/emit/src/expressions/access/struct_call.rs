@@ -60,7 +60,6 @@ impl Planner<'_> {
             .collect();
         let (mut setup, emitted_values) = self.sequence_structured(stages, "_field");
 
-        let mut tail = String::new();
         let mut field_names: Vec<String> = Vec::new();
         let mut field_values: Vec<String> = Vec::new();
         for (slot, f) in kept.iter().enumerate() {
@@ -94,7 +93,7 @@ impl Planner<'_> {
                 // Never-typed spread base diverges — emit as statement and
                 // return a zero-value struct literal (dead code follows).
                 if base.get_type().is_never() {
-                    self.emit_statement(&mut tail, base, fx);
+                    setup.push(self.lower_statement(base, fx));
                     format!("{}{{}}", ctx.go_type)
                 } else {
                     let mut field_side_effects: Vec<bool> = Vec::new();
@@ -124,9 +123,6 @@ impl Planner<'_> {
             }
         };
 
-        if !tail.is_empty() {
-            setup.push(LoweredStatement::RawGo(tail));
-        }
         value_plan_from_statements(setup, value)
     }
 

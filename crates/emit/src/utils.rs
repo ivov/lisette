@@ -200,23 +200,3 @@ pub(crate) fn reads_mutable_operand(expression: &Expression) -> bool {
         _ => false,
     }
 }
-
-/// True when the last emitted Go line is `break`, `continue`, `return`, or `panic`.
-pub(crate) fn output_ends_with_diverge(output: &str) -> bool {
-    output
-        .trim_end()
-        .lines()
-        .next_back()
-        .is_some_and(is_diverge_line)
-}
-
-fn is_diverge_line(line: &str) -> bool {
-    let trimmed = line.trim();
-    trimmed == "break"
-        || trimmed.starts_with("break ")
-        || trimmed == "continue"
-        || trimmed.starts_with("continue ")
-        || trimmed == "return"
-        || trimmed.starts_with("return ")
-        || trimmed.starts_with("panic(")
-}

@@ -78,28 +78,18 @@ impl ValuePlan {
 }
 
 impl Planner<'_> {
-    /// String-emit bridge: capture `emit_value`'s setup buffer as one `RawGo`
-    /// statement.
     pub(crate) fn plan_value(
         &mut self,
         expression: &Expression,
         ctx: ExpressionContext<'_>,
         fx: &mut EmitEffects,
     ) -> ValuePlan {
-        let mut setup_buffer = String::new();
-        let value = self.emit_value(&mut setup_buffer, expression, ctx, fx);
-        if setup_buffer.is_empty() {
-            ValuePlan::Operand(value)
-        } else {
-            ValuePlan::Composite {
-                setup: vec![LoweredStatement::RawGo(setup_buffer)],
-                value,
-            }
-        }
+        let (setup, value) = self.lower_value(expression, ctx, fx);
+        value_plan_from_statements(setup, value)
     }
 
-    /// Plan a value-position expression into a structured `ValuePlan`.
-    /// Unconverted leaf kinds bridge through `emit_operand_raw` as `Operand`.
+    /// Plan a value-position expression into a structured `ValuePlan`. Leaf
+    /// kinds route through `plan_operand_leaf`.
     pub(crate) fn plan_operand(
         &mut self,
         expression: &Expression,
@@ -167,6 +157,10 @@ impl Planner<'_> {
                 let (setup, value) = self.lower_recover_block(items, ty, fx);
                 value_plan_from_statements(setup, value)
             }
+            Expression::Propagate { expression, .. } => {
+                let (setup, value) = self.lower_propagate(expression, None, fx);
+                value_plan_from_statements(setup, value)
+            }
             Expression::If { ty, .. } => {
                 let (setup, value) = self.plan_if_as_operand_temp(expression, ty, fx);
                 value_plan_from_statements(setup, value)
@@ -188,17 +182,9 @@ impl Planner<'_> {
                     let (setup, value) = self.lower_go_wrapped_call(expression, &strategy, ty, fx);
                     value_plan_from_statements(setup, value)
                 }
-                CallBoundary::LoweredCallee(_) => {
-                    let mut setup_buffer = String::new();
-                    let value = self.emit_operand_raw(&mut setup_buffer, expression, ctx, fx);
-                    value_plan_from_statements(setup_from_string(setup_buffer), value)
-                }
+                CallBoundary::LoweredCallee(_) => self.plan_operand_leaf(expression, ctx, fx),
             },
-            _ => {
-                let mut setup_buffer = String::new();
-                let value = self.emit_operand_raw(&mut setup_buffer, expression, ctx, fx);
-                value_plan_from_statements(setup_from_string(setup_buffer), value)
-            }
+            _ => self.plan_operand_leaf(expression, ctx, fx),
         }
     }
 }

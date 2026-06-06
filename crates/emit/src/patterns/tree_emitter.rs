@@ -16,7 +16,7 @@ use crate::plan::bodies::{
     ElseArm, IfPlan, LoopPlan, LoweredBlock, LoweredStatement, PlacePlan, SwitchCasePlan,
     SwitchKind, SwitchStatementPlan,
 };
-use crate::plan::placement::emit_unreachable_panic_if_needed;
+use crate::plan::placement::unreachable_panic_if_needed;
 use crate::state::bindings::{BindingValue, InlineExpr};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -179,10 +179,8 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         place: &PlacePlan,
     ) {
         self.emit_chain_root_decision(statements, &plan.tree, place);
-        let mut tail_buffer = String::new();
-        emit_unreachable_panic_if_needed(&mut tail_buffer, place, plan.chain_tail_is_exhaustive);
-        if !tail_buffer.is_empty() {
-            statements.push(LoweredStatement::RawGo(tail_buffer));
+        if let Some(panic) = unreachable_panic_if_needed(place, plan.chain_tail_is_exhaustive) {
+            statements.push(panic);
         }
     }
 
@@ -294,9 +292,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
             let ctx = WalkCtx::retry_loop(place, None);
             self.walk(statements, &plan.tree, &ctx);
             if use_direct_return && !plan.root_has_unguarded_terminal {
-                statements.push(LoweredStatement::RawGo(
-                    "panic(\"unreachable\")\n".to_string(),
-                ));
+                statements.push(LoweredStatement::UnreachablePanic);
             }
             return;
         }
@@ -1052,13 +1048,9 @@ fn build_chain_plan(branches: Vec<ChainBranch>, trailing: ElseArm) -> IfPlan {
 /// Build the post-switch unreachable panic (when the place requires a tail
 /// return and the switch is non-exhaustive), as a `RawGo` postlude.
 fn switch_postlude(place: &PlacePlan, has_default: bool) -> Vec<LoweredStatement> {
-    let mut panic_buffer = String::new();
-    emit_unreachable_panic_if_needed(&mut panic_buffer, place, has_default);
-    if panic_buffer.is_empty() {
-        Vec::new()
-    } else {
-        vec![LoweredStatement::RawGo(panic_buffer)]
-    }
+    unreachable_panic_if_needed(place, has_default)
+        .into_iter()
+        .collect()
 }
 
 /// Compute `ends_with_diverge` of `body_statements`, then move them into `statements`.

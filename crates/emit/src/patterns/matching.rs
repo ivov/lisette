@@ -1,14 +1,12 @@
 use crate::EmitEffects;
 use crate::Planner;
-use crate::Renderer;
 use crate::abi::AbiShape;
 use crate::context::expression::ExpressionContext;
 use crate::patterns::binding_decls::pattern_binds_name;
 use crate::patterns::tree_emitter::TreePlanner;
-use crate::plan::bodies::{LoweredBlock, LoweredStatement, PlacePlan};
+use crate::plan::bodies::{ElseArm, IfPlan, LoweredBlock, LoweredStatement, PlacePlan};
 use crate::plan::calls::CallReturnShape;
 use crate::state::bindings::BindingValue;
-use crate::write_line;
 use syntax::ast::{Expression, MatchArm, Pattern};
 
 /// How to render the subject declaration line, based on body usage.
@@ -36,25 +34,18 @@ impl Planner<'_> {
         let mut statements: Vec<LoweredStatement> = Vec::new();
 
         if subject.get_type().is_never() {
-            let mut buffer = String::new();
-            self.emit_statement(&mut buffer, subject, fx);
-            statements.push(LoweredStatement::RawGo(buffer));
+            statements.push(self.lower_statement(subject, fx));
             return LoweredBlock { statements };
         }
 
-        let mut fusion_buffer = String::new();
-        if self.try_emit_fused_lowered_match(&mut fusion_buffer, subject, arms, place, fx) {
-            statements.push(LoweredStatement::RawGo(fusion_buffer));
+        if let Some(fused) = self.lower_fused_lowered_match(subject, arms, place, fx) {
+            statements.extend(fused);
             return LoweredBlock { statements };
         }
 
         let subject_ty = subject.get_type();
-        let mut setup_buffer = String::new();
         let (subject_var, declaration) =
-            self.emit_match_subject_var(&mut setup_buffer, subject, arms, fx);
-        if !setup_buffer.is_empty() {
-            statements.push(LoweredStatement::RawGo(setup_buffer));
-        }
+            self.lower_match_subject_var(&mut statements, subject, arms, fx);
 
         let block = self.lower_match_tree(arms, subject_var.clone(), subject_ty, place, fx);
         let used = block.references_var(&subject_var);
@@ -96,37 +87,30 @@ impl Planner<'_> {
 
     /// Fuse the lift+match into one `if err == nil { ... } else { ... }`
     /// when the scrutinee is a lowered call with simple `Ok`/`Err` arms.
-    fn try_emit_fused_lowered_match(
+    fn lower_fused_lowered_match(
         &mut self,
-        output: &mut String,
         subject: &Expression,
         arms: &[MatchArm],
         place: &PlacePlan,
         fx: &mut EmitEffects,
-    ) -> bool {
-        let Some(plan) = self.plan_call(subject) else {
-            return false;
-        };
+    ) -> Option<Vec<LoweredStatement>> {
+        let plan = self.plan_call(subject)?;
         let CallReturnShape::Lowered(shape) = plan.return_shape else {
-            return false;
+            return None;
         };
         // Match-fusion only handles `Result`'s binary `Ok`/`Err` arms;
         // Partial (3-way) and Option (Some/None) fall through to lift-then-match.
         if !matches!(shape, AbiShape::ResultTuple | AbiShape::BareError) {
-            return false;
+            return None;
         }
-        let Some((ok_arm, err_arm)) = classify_result_arms(arms) else {
-            return false;
-        };
+        let (ok_arm, err_arm) = classify_result_arms(arms)?;
 
         // Err always carries a payload; Ok may not under BareError.
         let ok_binding = simple_payload_binding(ok_arm);
         let err_binding = simple_payload_binding(err_arm);
-        if err_binding.is_none() {
-            return false;
-        }
+        err_binding?;
         if ok_binding.is_none() && !ok_arm_payload_is_omitted(ok_arm, &shape) {
-            return false;
+            return None;
         }
         let ok_name = ok_binding.filter(|n| *n != "_");
         let err_name = err_binding.filter(|n| *n != "_");
@@ -140,47 +124,54 @@ impl Planner<'_> {
         };
         let err_var = self.fresh_var(Some("ret"));
         self.declare(&err_var);
-        let call_str = self.emit_call(output, subject, None, ExpressionContext::value(), fx);
-        match &val_var {
-            Some(v) => write_line!(output, "{}, {} := {}", v, err_var, call_str),
+
+        let (mut statements, call_str) =
+            self.lower_call(subject, None, ExpressionContext::value(), fx);
+        let bind_line = match &val_var {
+            Some(v) => format!("{}, {} := {}\n", v, err_var, call_str),
             None => match shape {
-                AbiShape::ResultTuple => write_line!(output, "_, {} := {}", err_var, call_str),
-                AbiShape::BareError => write_line!(output, "{} := {}", err_var, call_str),
+                AbiShape::ResultTuple => format!("_, {} := {}\n", err_var, call_str),
+                AbiShape::BareError => format!("{} := {}\n", err_var, call_str),
                 AbiShape::PartialTuple
                 | AbiShape::CommaOk
                 | AbiShape::NullableReturn
                 | AbiShape::Tuple { .. } => unreachable!("rejected above"),
             },
-        }
+        };
+        statements.push(LoweredStatement::RawGo(bind_line));
 
-        write_line!(output, "if {} == nil {{", err_var);
-        self.emit_fused_arm(
-            output,
+        let then_body = self.lower_fused_arm(
             ok_name.zip(val_var.as_deref()),
             &ok_arm.expression,
             place,
             fx,
         );
-        output.push_str("} else {\n");
-        self.emit_fused_arm(
-            output,
+        let else_body = self.lower_fused_arm(
             err_name.map(|n| (n, err_var.as_str())),
             &err_arm.expression,
             place,
             fx,
         );
-        output.push_str("}\n");
-        true
+        statements.push(LoweredStatement::If(IfPlan {
+            directive: String::new(),
+            condition_setup: String::new(),
+            condition: format!("{} == nil", err_var),
+            then_body,
+            else_arm: ElseArm::Else {
+                body: else_body,
+                inline: false,
+            },
+        }));
+        Some(statements)
     }
 
-    fn emit_fused_arm(
+    fn lower_fused_arm(
         &mut self,
-        output: &mut String,
         binding: Option<(&str, &str)>,
         body: &Expression,
         place: &PlacePlan,
         fx: &mut EmitEffects,
-    ) {
+    ) -> LoweredBlock {
         self.scope.push_binding_frame();
         let bound = binding.map(|(name, value)| {
             let go_name = self.scope.bind(name, name);
@@ -188,19 +179,24 @@ impl Planner<'_> {
             (go_name, value.to_string())
         });
         let body_block = self.lower_block_to_place(body, place, fx);
+        let mut statements = Vec::new();
         if let Some((go_name, value)) = &bound {
-            write_line!(output, "{} := {}", go_name, value);
+            statements.push(LoweredStatement::TempBind {
+                name: go_name.clone(),
+                value: value.clone(),
+            });
             if !body_block.references_var(go_name) {
-                write_line!(output, "_ = {}", go_name);
+                statements.push(LoweredStatement::RawGo(format!("_ = {}\n", go_name)));
             }
         }
-        Renderer.render_lowered_block(output, &body_block);
+        statements.extend(body_block.statements);
         self.scope.pop_binding_frame();
+        LoweredBlock { statements }
     }
 
-    fn emit_match_subject_var(
+    fn lower_match_subject_var(
         &mut self,
-        output: &mut String,
+        setup: &mut Vec<LoweredStatement>,
         subject: &Expression,
         arms: &[MatchArm],
         fx: &mut EmitEffects,
@@ -223,17 +219,17 @@ impl Planner<'_> {
             }
         }
         if matches!(subject, Expression::Literal { .. }) {
-            return (
-                self.emit_operand(output, subject, ExpressionContext::value(), fx),
-                SubjectDeclaration::None,
-            );
+            let staged = self.stage_operand(subject, ExpressionContext::value(), fx);
+            setup.extend(staged.setup);
+            return (staged.value, SubjectDeclaration::None);
         }
         let var = self.fresh_var(Some("subject"));
         self.declare(&var);
-        let expression = self.emit_composite_value(output, subject, ExpressionContext::value(), fx);
+        let staged = self.stage_composite(subject, ExpressionContext::value(), fx);
+        setup.extend(staged.setup);
         let declaration = SubjectDeclaration::Deferred {
             var: var.clone(),
-            expression,
+            expression: staged.value,
         };
         (var, declaration)
     }

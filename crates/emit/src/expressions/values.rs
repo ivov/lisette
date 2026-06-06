@@ -43,43 +43,38 @@ impl Planner<'_> {
         ctx: ExpressionContext<'_>,
         fx: &mut EmitEffects,
     ) -> String {
-        if let Some(strategy) = self.classify_go_fn_value(expression) {
-            if self.go_fn_matches_lowered_slot(expression, &strategy, ctx) {
-                return self.emit_operand(output, expression, ctx, fx);
-            }
-            if self.go_fn_needs_lowered_tuple_adapter(expression, ctx) {
-                return self.emit_go_fn_lowered_tuple_adapter(output, expression, fx);
-            }
-            return self.emit_go_fn_wrapper(output, expression, &strategy, fx);
-        }
-
-        if self.is_go_array_return_value(expression) {
-            return self.emit_array_return_wrapper(output, expression, fx);
-        }
-
-        self.emit_operand(output, expression, ctx, fx)
+        let (setup, value) = self.lower_value(expression, ctx, fx);
+        output.push_str(&Renderer.render_setup(&setup));
+        value
     }
 
-    /// Typed counterpart of `emit_value`.
     pub(crate) fn lower_value(
         &mut self,
         expression: &Expression,
         ctx: ExpressionContext<'_>,
         fx: &mut EmitEffects,
     ) -> (Vec<LoweredStatement>, String) {
-        if self.classify_go_fn_value(expression).is_some()
-            || self.is_go_array_return_value(expression)
-        {
+        if let Some(strategy) = self.classify_go_fn_value(expression) {
+            if !self.go_fn_matches_lowered_slot(expression, &strategy, ctx) {
+                let mut buffer = String::new();
+                let value = if self.go_fn_needs_lowered_tuple_adapter(expression, ctx) {
+                    self.emit_go_fn_lowered_tuple_adapter(&mut buffer, expression, fx)
+                } else {
+                    self.emit_go_fn_wrapper(&mut buffer, expression, &strategy, fx)
+                };
+                return (setup_from_string(buffer), value);
+            }
+        } else if self.is_go_array_return_value(expression) {
             let mut buffer = String::new();
-            let value = self.emit_value(&mut buffer, expression, ctx, fx);
+            let value = self.emit_array_return_wrapper(&mut buffer, expression, fx);
             return (setup_from_string(buffer), value);
         }
+
         let plan = self.plan_operand(expression, ctx, fx);
         let staged = StagedExpression::from_plan(plan, expression);
         (staged.setup, staged.value)
     }
 
-    /// Typed counterpart of `emit_composite_value`.
     pub(crate) fn lower_composite_value(
         &mut self,
         expression: &Expression,
@@ -204,130 +199,84 @@ impl Planner<'_> {
         Renderer.render_value(output, &plan)
     }
 
-    /// String-emit body for expression kinds not yet lowered to a
-    /// structured `ValuePlan`.
-    pub(crate) fn emit_operand_raw(
+    /// Plan a value-position leaf expression (one `plan_operand` does not lower
+    /// structurally) into a `ValuePlan`.
+    pub(crate) fn plan_operand_leaf(
         &mut self,
-        output: &mut String,
         expression: &Expression,
         ctx: ExpressionContext<'_>,
         fx: &mut EmitEffects,
-    ) -> String {
+    ) -> ValuePlan {
         match expression {
-            Expression::Literal { literal, ty, .. } => self.emit_literal(output, literal, ty, fx),
+            Expression::Literal { literal, ty, .. } => {
+                let mut buffer = String::new();
+                let value = self.emit_literal(&mut buffer, literal, ty, fx);
+                value_plan_from_statements(setup_from_string(buffer), value)
+            }
             Expression::Identifier { value, ty, .. } => {
+                let mut buffer = String::new();
                 let raw = self.emit_identifier(value, ty, ctx, fx);
-                self.maybe_lower_tagged_fn_ref(output, expression, ty, raw, ctx, fx)
+                let value =
+                    self.maybe_lower_tagged_fn_ref(&mut buffer, expression, ty, raw, ctx, fx);
+                value_plan_from_statements(setup_from_string(buffer), value)
             }
-            Expression::Binary { .. } => {
-                unreachable!("Binary is handled structurally by plan_operand")
+            Expression::Call { ty, .. } => {
+                let mut buffer = String::new();
+                let value = match self.classify_call(expression) {
+                    CallBoundary::GoWrapped(strategy) => {
+                        self.emit_go_wrapped_call(&mut buffer, expression, &strategy, ty, fx)
+                    }
+                    CallBoundary::LoweredCallee(shape) => {
+                        fx.require_stdlib();
+                        let call_str = self.emit_call(&mut buffer, expression, Some(ty), ctx, fx);
+                        emit_callee_abi_wrapping(self, &mut buffer, &shape, &call_str, ty, fx)
+                    }
+                    CallBoundary::Plain => {
+                        self.emit_call(&mut buffer, expression, Some(ty), ctx, fx)
+                    }
+                };
+                value_plan_from_statements(setup_from_string(buffer), value)
             }
-            Expression::Unary { .. } => {
-                unreachable!("Unary is handled structurally by plan_operand")
-            }
-            Expression::Call { ty, .. } => match self.classify_call(expression) {
-                CallBoundary::GoWrapped(strategy) => {
-                    self.emit_go_wrapped_call(output, expression, &strategy, ty, fx)
-                }
-                CallBoundary::LoweredCallee(shape) => {
-                    fx.require_stdlib();
-                    let call_str = self.emit_call(output, expression, Some(ty), ctx, fx);
-                    emit_callee_abi_wrapping(self, output, &shape, &call_str, ty, fx)
-                }
-                CallBoundary::Plain => self.emit_call(output, expression, Some(ty), ctx, fx),
-            },
-            Expression::DotAccess { .. } => {
-                unreachable!("DotAccess is handled structurally by plan_operand")
-            }
-            Expression::IndexedAccess { .. } => {
-                unreachable!("IndexedAccess is handled structurally by plan_operand")
-            }
-            Expression::StructCall { .. } => {
-                unreachable!("StructCall is handled structurally by plan_operand")
-            }
-            Expression::Paren { .. } => {
-                unreachable!("Paren is handled structurally by plan_operand")
-            }
-            Expression::Reference { .. } => {
-                unreachable!("Reference is handled structurally by plan_operand")
-            }
-            Expression::Task { .. } => {
-                unreachable!("Task is handled structurally by plan_operand")
-            }
-            Expression::Defer { .. } => {
-                unreachable!("Defer is handled structurally by plan_operand")
-            }
-            Expression::RawGo { text } => text.clone(),
-            Expression::Unit { .. } => "struct{}{}".to_string(),
-            Expression::NoOp => String::new(),
+            Expression::RawGo { text } => ValuePlan::Operand(text.clone()),
+            Expression::Unit { .. } => ValuePlan::Operand("struct{}{}".to_string()),
+            Expression::NoOp => ValuePlan::Operand(String::new()),
             Expression::Lambda {
                 params, body, ty, ..
-            } => self.emit_lambda(params, body, ty, ctx, fx),
-            Expression::Function {
+            }
+            | Expression::Function {
                 params, body, ty, ..
-            } => self.emit_lambda(params, body, ty, ctx, fx),
-            Expression::Propagate { expression, .. } => {
-                self.emit_propagate(output, expression, None, fx)
-            }
-            Expression::TryBlock { .. } => {
-                unreachable!("TryBlock is handled structurally by plan_operand")
-            }
-            Expression::RecoverBlock { .. } => {
-                unreachable!("RecoverBlock is handled structurally by plan_operand")
-            }
-            Expression::Tuple { .. } => {
-                unreachable!("Tuple is handled structurally by plan_operand")
-            }
-            Expression::If { .. } => {
-                unreachable!("If is handled structurally by plan_operand")
-            }
-            Expression::Loop { .. } => {
-                unreachable!("Loop is handled structurally by plan_operand")
-            }
-            Expression::Match { ty, .. } | Expression::Select { ty, .. } if !ty.is_never() => {
-                unreachable!("non-never Match/Select is handled structurally by plan_operand")
-            }
+            } => ValuePlan::Operand(self.emit_lambda(params, body, ty, ctx, fx)),
             Expression::Match { ty, .. }
             | Expression::Select { ty, .. }
-            | Expression::Block { ty, .. } => self.emit_to_operand_temp(output, expression, ty, fx),
-            Expression::IfLet { .. } => {
-                unreachable!("IfLet should be desugared to Match before emit")
+            | Expression::Block { ty, .. } => {
+                let mut buffer = String::new();
+                let value = self.emit_to_operand_temp(&mut buffer, expression, ty, fx);
+                value_plan_from_statements(setup_from_string(buffer), value)
             }
             Expression::Return {
                 expression: return_expression,
                 ..
             } => {
-                self.emit_return(output, return_expression, fx);
-                String::new()
-            }
-            Expression::Range { .. } => {
-                unreachable!("Range is handled structurally by plan_operand")
-            }
-            Expression::Cast { .. } => {
-                unreachable!("Cast is handled structurally by plan_operand")
+                let plan = self.build_return_plan(return_expression, String::new(), fx);
+                value_plan_from_statements(vec![LoweredStatement::Return(plan)], String::new())
             }
             Expression::Assignment { target, value, .. } => {
-                self.emit_assignment_operand(output, target, value, fx);
-                "struct{}{}".to_string()
+                let mut buffer = String::new();
+                self.emit_assignment_operand(&mut buffer, target, value, fx);
+                value_plan_from_statements(setup_from_string(buffer), "struct{}{}".to_string())
             }
-            _ => unreachable!("unexpected expression in emit: {:?}", expression),
+            Expression::IfLet { .. } => {
+                unreachable!("IfLet should be desugared to Match before emit")
+            }
+            _ => unreachable!(
+                "unexpected leaf expression in plan_operand: {:?}",
+                expression
+            ),
         }
     }
 
     /// Emit a Go tuple literal. `in_tail` widens slot types to the declared
     /// return slots so per-element coercion matches the return site.
-    pub(crate) fn emit_tuple_value(
-        &mut self,
-        output: &mut String,
-        elements: &[Expression],
-        ty: &Type,
-        in_tail: bool,
-        fx: &mut EmitEffects,
-    ) -> String {
-        let plan = self.plan_tuple_value(elements, ty, in_tail, fx);
-        Renderer.render_value(output, &plan)
-    }
-
     /// Plan a tuple literal as `lisette.MakeTupleN(...)`.
     pub(crate) fn plan_tuple_value(
         &mut self,
@@ -462,15 +411,7 @@ impl Planner<'_> {
             return value_plan_from_statements(setup, format!("&{}", tmp));
         }
 
-        let (mut setup, emitted) =
-            if self.classify_go_fn_value(inner).is_some() || self.is_go_array_return_value(inner) {
-                let mut buffer = String::new();
-                let value = self.emit_value(&mut buffer, inner, ExpressionContext::value(), fx);
-                (setup_from_string(buffer), value)
-            } else {
-                let staged = self.stage_operand(inner, ExpressionContext::value(), fx);
-                (staged.setup, staged.value)
-            };
+        let (mut setup, emitted) = self.lower_value(inner, ExpressionContext::value(), fx);
 
         let value = if inner.get_type() == *ty {
             emitted

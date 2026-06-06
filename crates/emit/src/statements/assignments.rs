@@ -1,6 +1,5 @@
 use crate::EmitEffects;
 use crate::Planner;
-use crate::Renderer;
 use crate::abi::coercion::{Coercion, CoercionDirection};
 use crate::context::expression::ExpressionContext;
 use crate::is_order_sensitive;
@@ -14,20 +13,6 @@ use syntax::parse::TUPLE_FIELDS;
 use syntax::types::Type;
 
 impl Planner<'_> {
-    /// String-context bridge over `lower_statement`.
-    pub(crate) fn emit_statement(
-        &mut self,
-        output: &mut String,
-        expression: &Expression,
-        fx: &mut EmitEffects,
-    ) {
-        let statement = self.lower_statement(expression, fx);
-        let block = LoweredBlock {
-            statements: vec![statement],
-        };
-        Renderer.render_lowered_block(output, &block);
-    }
-
     /// Build an `AssignPlan`, dispatching on shape: never-typed, compound,
     /// discard, Go-nullable-field clear, or simple `target = value`.
     pub(crate) fn build_assignment_plan(
@@ -48,12 +33,10 @@ impl Planner<'_> {
         };
 
         if value.get_type().is_never() {
-            let mut buffer = String::new();
-            self.emit_statement(&mut buffer, value, fx);
             return AssignPlan {
                 directive,
                 form: AssignForm::NeverTyped {
-                    body: raw_body(vec![LoweredStatement::RawGo(buffer)]),
+                    body: raw_body(vec![self.lower_statement(value, fx)]),
                 },
             };
         }
@@ -96,12 +79,10 @@ impl Planner<'_> {
         }
 
         if self.target_binds_to_discard(target) {
-            let mut buffer = String::new();
-            self.emit_discard(&mut buffer, value, fx);
             return AssignPlan {
                 directive,
                 form: AssignForm::Discard {
-                    body: raw_body(vec![LoweredStatement::RawGo(buffer)]),
+                    body: raw_body(self.lower_discard_value(value, fx)),
                 },
             };
         }

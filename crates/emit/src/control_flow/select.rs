@@ -10,7 +10,7 @@ use crate::patterns::sites::{
 use crate::plan::bodies::{
     ElseArm, IfPlan, LoweredBlock, LoweredStatement, PlacePlan, SelectArmPlan, SelectStatementPlan,
 };
-use crate::plan::placement::emit_unreachable_panic_if_needed;
+use crate::plan::placement::unreachable_panic_if_needed;
 use crate::utils::contains_call;
 use syntax::ast::{Expression, MatchArm, Pattern, SelectArm, SelectArmPattern, TypedPattern};
 use syntax::types::unqualified_name;
@@ -49,11 +49,7 @@ impl Planner<'_> {
         });
 
         let mut setup: Vec<LoweredStatement> = Vec::new();
-        let mut setup_buffer = String::new();
-        let prep = self.preprocess_select_arms(&mut setup_buffer, arms, needs_retry_loop, fx);
-        if !setup_buffer.is_empty() {
-            setup.push(LoweredStatement::RawGo(setup_buffer));
-        }
+        let prep = self.preprocess_select_arms(&mut setup, arms, needs_retry_loop, fx);
 
         self.enter_scope();
         let arm_plans = self.lower_select_arms(arms, &prep, place, fx);
@@ -66,10 +62,8 @@ impl Planner<'_> {
             !arm_plans.is_empty() && arm_plans.iter().all(|arm| arm.body().ends_with_diverge());
         let exhaustive = all_arms_diverge || if needs_retry_loop { false } else { has_default };
         let mut postlude: Vec<LoweredStatement> = Vec::new();
-        let mut panic_buffer = String::new();
-        emit_unreachable_panic_if_needed(&mut panic_buffer, place, exhaustive);
-        if !panic_buffer.is_empty() {
-            postlude.push(LoweredStatement::RawGo(panic_buffer));
+        if let Some(panic) = unreachable_panic_if_needed(place, exhaustive) {
+            postlude.push(panic);
         }
 
         SelectStatementPlan {
@@ -147,7 +141,7 @@ impl Planner<'_> {
     /// in source order, not on each retry.
     fn preprocess_select_arms(
         &mut self,
-        output: &mut String,
+        setup: &mut Vec<LoweredStatement>,
         arms: &[SelectArm],
         needs_retry_loop: bool,
         fx: &mut EmitEffects,
@@ -161,8 +155,7 @@ impl Planner<'_> {
                 SelectArmPattern::Send {
                     send_expression, ..
                 } => {
-                    let parts =
-                        self.prepare_send_arm(output, send_expression, needs_retry_loop, fx);
+                    let parts = self.prepare_send_arm(setup, send_expression, needs_retry_loop, fx);
                     send_parts.push(Some(parts));
                     channel_operands.push(None);
                     channel_shadows.push(None);
@@ -173,14 +166,14 @@ impl Planner<'_> {
                     ..
                 } => {
                     let channel_has_call = channel_expression_has_call(receive_expression);
-                    let ch = self.emit_channel_operand(output, receive_expression, fx);
+                    let ch = self.lower_channel_operand(setup, receive_expression, fx);
                     if is_some_pattern(binding) && needs_retry_loop {
-                        let shadow = self.hoist_tmp_value(output, "ch", &ch);
+                        let shadow = self.hoist_tmp_value_statement(setup, "ch", &ch);
                         channel_operands.push(Some(ch));
                         channel_shadows.push(Some(shadow));
                     } else {
                         let ch = if needs_retry_loop && channel_has_call {
-                            self.hoist_tmp_value(output, "ch", &ch)
+                            self.hoist_tmp_value_statement(setup, "ch", &ch)
                         } else {
                             ch
                         };
@@ -193,9 +186,9 @@ impl Planner<'_> {
                     receive_expression, ..
                 } => {
                     let channel_has_call = channel_expression_has_call(receive_expression);
-                    let ch = self.emit_channel_operand(output, receive_expression, fx);
+                    let ch = self.lower_channel_operand(setup, receive_expression, fx);
                     let ch = if needs_retry_loop && channel_has_call {
-                        self.hoist_tmp_value(output, "ch", &ch)
+                        self.hoist_tmp_value_statement(setup, "ch", &ch)
                     } else {
                         ch
                     };
@@ -218,22 +211,25 @@ impl Planner<'_> {
         }
     }
 
-    fn emit_channel_operand(
+    fn lower_channel_operand(
         &mut self,
-        output: &mut String,
+        setup: &mut Vec<LoweredStatement>,
         receive_expression: &Expression,
         fx: &mut EmitEffects,
     ) -> String {
         let unwrapped = receive_expression.unwrap_parens();
         if let Some((channel, "receive", _)) = extract_channel_op(unwrapped) {
-            let ch = self.emit_value(output, channel, ExpressionContext::value(), fx);
+            let (op_setup, ch) = self.lower_value(channel, ExpressionContext::value(), fx);
+            setup.extend(op_setup);
             return if channel.get_type().is_ref() {
                 cancel_deref_of_address(ch)
             } else {
                 ch
             };
         }
-        self.emit_value(output, receive_expression, ExpressionContext::value(), fx)
+        let (op_setup, ch) = self.lower_value(receive_expression, ExpressionContext::value(), fx);
+        setup.extend(op_setup);
+        ch
     }
 
     fn fresh_ok_var(&mut self) -> String {
@@ -475,7 +471,7 @@ impl Planner<'_> {
 
     fn prepare_send_arm(
         &mut self,
-        output: &mut String,
+        setup: &mut Vec<LoweredStatement>,
         send_expression: &Expression,
         needs_hoist: bool,
         fx: &mut EmitEffects,
@@ -483,20 +479,22 @@ impl Planner<'_> {
         let unwrapped = send_expression.unwrap_parens();
         if let Some((channel, member, args)) = extract_channel_op(unwrapped) {
             let ch_has_call = needs_hoist && contains_call(channel);
-            let mut ch = self.emit_value(output, channel, ExpressionContext::value(), fx);
+            let (op_setup, mut ch) = self.lower_value(channel, ExpressionContext::value(), fx);
+            setup.extend(op_setup);
             if channel.get_type().is_ref() {
                 ch = cancel_deref_of_address(ch);
             }
             if ch_has_call {
-                ch = self.hoist_tmp_value(output, "ch", &ch);
+                ch = self.hoist_tmp_value_statement(setup, "ch", &ch);
             }
             match member {
                 "send" if !args.is_empty() => {
                     let val_has_call = needs_hoist && contains_call(&args[0]);
-                    let mut val =
-                        self.emit_composite_value(output, &args[0], ExpressionContext::value(), fx);
+                    let (val_setup, mut val) =
+                        self.lower_composite_value(&args[0], ExpressionContext::value(), fx);
+                    setup.extend(val_setup);
                     if val_has_call {
-                        val = self.hoist_tmp_value(output, "send_val", &val);
+                        val = self.hoist_tmp_value_statement(setup, "send_val", &val);
                     }
                     SendArmParts::Send(ch, val)
                 }
@@ -505,12 +503,14 @@ impl Planner<'_> {
             }
         } else {
             let expression_has_call = needs_hoist && contains_call(send_expression);
-            let mut ch = self.emit_value(output, send_expression, ExpressionContext::value(), fx);
+            let (op_setup, mut ch) =
+                self.lower_value(send_expression, ExpressionContext::value(), fx);
+            setup.extend(op_setup);
             if send_expression.get_type().is_ref() {
                 ch = cancel_deref_of_address(ch);
             }
             if expression_has_call {
-                ch = self.hoist_tmp_value(output, "ch", &ch);
+                ch = self.hoist_tmp_value_statement(setup, "ch", &ch);
             }
             SendArmParts::Receive(ch)
         }

@@ -79,9 +79,7 @@ impl Planner<'_> {
         if last.diverges().is_some() || last.get_type().is_never() {
             let mut statements = vec![self.lower_statement(last, fx)];
             if !is_go_never(last) {
-                statements.push(LoweredStatement::RawGo(
-                    "panic(\"unreachable\")\n".to_string(),
-                ));
+                statements.push(LoweredStatement::UnreachablePanic);
             }
             return statements;
         }
@@ -103,12 +101,8 @@ impl Planner<'_> {
             ];
         }
 
-        let mut statements = Vec::new();
-        let mut buffer = String::new();
-        let final_expression = self.emit_value(&mut buffer, last, ExpressionContext::value(), fx);
-        if !buffer.is_empty() {
-            statements.push(LoweredStatement::RawGo(buffer));
-        }
+        let (mut statements, final_expression) =
+            self.lower_value(last, ExpressionContext::value(), fx);
         if final_expression.is_empty() {
             statements.push(self.lower_try_unit_return(fallible, fx));
         } else {
@@ -184,10 +178,7 @@ impl Planner<'_> {
             } else {
                 transition::lowered_none_values(self, &shape, &return_ty, fx)
             };
-            statements.push(LoweredStatement::RawGo(format!(
-                "return {}\n",
-                values.join(", ")
-            )));
+            statements.push(plain_return(values.join(", ")));
         } else {
             fx.require_stdlib();
             let err_return = {
@@ -265,9 +256,7 @@ impl Planner<'_> {
         if item_ty.is_never() {
             let mut statements = vec![self.lower_statement(last, fx)];
             if !is_go_never(last) {
-                statements.push(LoweredStatement::RawGo(
-                    "panic(\"unreachable\")\n".to_string(),
-                ));
+                statements.push(LoweredStatement::UnreachablePanic);
             }
             return statements;
         }
@@ -277,12 +266,7 @@ impl Planner<'_> {
                 self.lower_zero_return(fallible.ok_ty(), fx),
             ];
         }
-        let mut statements = Vec::new();
-        let mut buffer = String::new();
-        let expression = self.emit_value(&mut buffer, last, ExpressionContext::value(), fx);
-        if !buffer.is_empty() {
-            statements.push(LoweredStatement::RawGo(buffer));
-        }
+        let (mut statements, expression) = self.lower_value(last, ExpressionContext::value(), fx);
         statements.push(plain_return(expression));
         statements
     }

@@ -11,7 +11,6 @@ use crate::plan::bodies::{
 };
 use crate::plan::placement::{requires_temp_var, try_elide_tail_let};
 use crate::plan::values::setup_from_string;
-use crate::write_line;
 use syntax::ast::{Expression, Literal};
 use syntax::types::Type;
 
@@ -372,19 +371,17 @@ impl Planner<'_> {
                 },
             }
         } else {
-            let mut rendered = String::new();
-            self.emit_discard(&mut rendered, unwrapped, fx);
             ExpressionStatementForm::Discard {
                 body: LoweredBlock {
-                    statements: vec![LoweredStatement::RawGo(rendered)],
+                    statements: self.lower_discard_value(unwrapped, fx),
                 },
             }
         };
         LoweredStatement::Expression(ExpressionStatementPlan { directive, form })
     }
 
-    /// Lower `while let P = scrutinee { body }` via the `emit_while_let` string
-    /// bridge, wrapped as a `WhileLet` statement.
+    /// Lower `while let P = scrutinee { body }`, wrapped as a `WhileLet`
+    /// statement.
     fn lower_while_let_statement(
         &mut self,
         expression: &Expression,
@@ -402,10 +399,8 @@ impl Planner<'_> {
             unreachable!("lower_while_let_statement requires a WhileLet expression");
         };
         let directive = self.maybe_line_directive(&expression.get_span());
-        let mut buffer = String::new();
         self.push_loop("_");
-        self.emit_while_let(
-            &mut buffer,
+        let body = self.lower_while_let(
             pattern,
             typed_pattern.as_ref(),
             scrutinee,
@@ -414,9 +409,6 @@ impl Planner<'_> {
             fx,
         );
         self.pop_loop();
-        let body = LoweredBlock {
-            statements: vec![LoweredStatement::RawGo(buffer)],
-        };
         LoweredStatement::WhileLet(WhileLetPlan { directive, body })
     }
 
@@ -434,6 +426,21 @@ impl Planner<'_> {
         plan
     }
 
+    fn lower_condition(
+        &mut self,
+        condition: &Expression,
+        fx: &mut EmitEffects,
+    ) -> (String, String) {
+        let mut setup = String::new();
+        let value = self.emit_operand(
+            &mut setup,
+            condition,
+            ExpressionContext::value().condition(),
+            fx,
+        );
+        (setup, value)
+    }
+
     fn lower_while(
         &mut self,
         directive: String,
@@ -443,14 +450,7 @@ impl Planner<'_> {
         fx: &mut EmitEffects,
     ) -> LoopPlan {
         self.push_loop("_");
-        let (setup, rendered) = self.capture_emission(&mut String::new(), |this, buffer| {
-            this.emit_operand(
-                buffer,
-                condition,
-                ExpressionContext::value().condition(),
-                fx,
-            )
-        });
+        let (setup, rendered) = self.lower_condition(condition, fx);
         let header = if !setup.is_empty() {
             // Condition produced setup statements (temps); they must re-run each
             // iteration, so move everything inside the loop.
@@ -696,9 +696,7 @@ impl Planner<'_> {
         let mut statements = setup_from_string(self.maybe_line_directive(return_span));
         statements.push(self.lower_statement(last, fx));
         if !is_go_never(last) {
-            statements.push(LoweredStatement::RawGo(
-                "panic(\"unreachable\")\n".to_string(),
-            ));
+            statements.push(LoweredStatement::UnreachablePanic);
         }
         statements
     }
@@ -710,21 +708,30 @@ impl Planner<'_> {
         last: &Expression,
         fx: &mut EmitEffects,
     ) -> Vec<LoweredStatement> {
-        let mut buffer = String::new();
         if requires_temp_var(last) {
-            let expression_string =
-                self.emit_operand(&mut buffer, last, ExpressionContext::value(), fx);
-            if !expression_string.is_empty() {
-                write_line!(buffer, "return {}", expression_string);
+            let staged = self.stage_operand(last, ExpressionContext::value(), fx);
+            let mut statements = staged.setup;
+            if !staged.value.is_empty() {
+                statements.push(plain_return(staged.value));
             }
+            statements
         } else {
-            let expression_string = self.emit_tail_value(&mut buffer, last, fx);
+            let (mut statements, expression_string) = self.lower_tail_value(last, fx);
             let return_ctx = self.return_ctx();
-            let expression_string =
-                self.apply_type_coercion(&mut buffer, return_ctx.ty(), last, expression_string, fx);
-            write_line!(buffer, "return {}", expression_string);
+            let mut coercion = String::new();
+            let expression_string = self.apply_type_coercion(
+                &mut coercion,
+                return_ctx.ty(),
+                last,
+                expression_string,
+                fx,
+            );
+            if !coercion.is_empty() {
+                statements.push(LoweredStatement::RawGo(coercion));
+            }
+            statements.push(plain_return(expression_string));
+            statements
         }
-        vec![LoweredStatement::RawGo(buffer)]
     }
 
     pub(crate) fn lower_if(
@@ -736,15 +743,7 @@ impl Planner<'_> {
         place: &PlacePlan,
         fx: &mut EmitEffects,
     ) -> IfPlan {
-        let (condition_setup, condition_string) =
-            self.capture_emission(&mut String::new(), |this, buffer| {
-                this.emit_operand(
-                    buffer,
-                    condition,
-                    ExpressionContext::value().condition(),
-                    fx,
-                )
-            });
+        let (condition_setup, condition_string) = self.lower_condition(condition, fx);
         let condition = wrap_if_struct_literal(condition_string);
 
         self.enter_scope();
@@ -786,15 +785,7 @@ impl Planner<'_> {
             ..
         } = alternative
         {
-            let (condition_setup, condition_string) =
-                self.capture_emission(&mut String::new(), |this, buffer| {
-                    this.emit_operand(
-                        buffer,
-                        condition,
-                        ExpressionContext::value().condition(),
-                        fx,
-                    )
-                });
+            let (condition_setup, condition_string) = self.lower_condition(condition, fx);
             let condition = wrap_if_struct_literal(condition_string);
 
             // With-setup else-if renders as a nested block (`} else { setup; if
