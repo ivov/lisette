@@ -808,11 +808,28 @@ func (c *Converter) getOriginalLiteral(constObj *types.Const) string {
 		})
 
 		if literal != "" {
-			return literal
+			return normalizeLegacyOctal(literal)
 		}
 	}
 
 	return ""
+}
+
+func normalizeLegacyOctal(literal string) string {
+	sign := ""
+	digits := literal
+	if strings.HasPrefix(digits, "-") {
+		sign = "-"
+		digits = digits[1:]
+	}
+	if len(digits) < 2 || digits[0] != '0' {
+		return literal
+	}
+	switch digits[1] {
+	case 'x', 'X', 'o', 'O', 'b', 'B':
+		return literal
+	}
+	return sign + "0o" + digits[1:]
 }
 
 func isBasicType(t types.Type) bool {

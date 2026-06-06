@@ -44,7 +44,7 @@ let binary = 0b1010_0001
 
 Digit separators (`_`) improve readability. They cannot be leading, trailing, or consecutive: `1_000` is valid; `1__000`, `1000_`, and `_1000` are not.
 
-Hex, octal, and binary literals use prefixes `0x`, `0o`, and `0b` (case-insensitive). Legacy octal syntax with a leading zero (`0755`) is also accepted.
+Hex, octal, and binary literals use prefixes `0x`, `0o`, and `0b` (case-insensitive). Legacy leading-zero octal (`0755`) is not allowed; use the `0o` prefix (`0o755`) instead.
 
 ### Float literals
 

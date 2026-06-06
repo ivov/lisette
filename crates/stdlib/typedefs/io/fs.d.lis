@@ -291,7 +291,7 @@ pub const ModeIrregular: FileMode = 524288
 
 pub const ModeNamedPipe: FileMode = 33554432
 
-pub const ModePerm: FileMode = 0777
+pub const ModePerm: FileMode = 0o777
 
 pub const ModeSetgid: FileMode = 4194304
 

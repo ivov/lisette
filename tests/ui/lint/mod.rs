@@ -8390,19 +8390,6 @@ fn main() {
 }
 
 #[test]
-fn decimal_file_mode_legacy_octal_no_warning() {
-    assert_no_lint_warnings!(
-        r#"
-import "go:os"
-
-fn main() {
-  let _ = os.Chmod("/tmp/foo", 0755)
-}
-"#
-    );
-}
-
-#[test]
 fn decimal_file_mode_below_perm_mask_no_warning() {
     assert_no_lint_warnings!(
         r#"

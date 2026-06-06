@@ -883,6 +883,18 @@ impl<'source> Parser<'source> {
         self.errors.push(error);
     }
 
+    fn error_leading_zero(&mut self) {
+        let span = self.span_from_token(self.current_token());
+        let error = ParseError::new(
+            "Invalid number literal",
+            span,
+            "leading zero in integer literal",
+        )
+        .with_parse_code("number_leading_zero")
+        .with_help("Prefix with `0o` for octal (e.g. `0o644`) or remove the leading zero");
+        self.errors.push(error);
+    }
+
     pub(crate) fn parse_integer_text(&mut self, text: &str) -> ast::Literal {
         self.parse_integer_text_with(text, false)
     }
@@ -925,18 +937,9 @@ impl<'source> Parser<'source> {
                 0
             });
             (value, false)
-        } else if clean.len() > 1
-            && clean.starts_with('0')
-            && clean.chars().skip(1).all(|c| c.is_ascii_digit())
-        {
-            let value = u64::from_str_radix(&clean[1..], 8).unwrap_or_else(|_| {
-                self.track_error(
-                    format!("octal literal '{text}' is too large"),
-                    "Maximum value is `01777777777777777777777`.",
-                );
-                0
-            });
-            (value, false)
+        } else if clean.len() > 1 && clean.starts_with('0') {
+            self.error_leading_zero();
+            (clean.parse().unwrap_or(0), false)
         } else {
             let value = clean.parse().unwrap_or_else(|_| {
                 self.track_error(

@@ -56,6 +56,9 @@ pub const IntConst = 42
 /// Various typed constants
 pub const KB = 1024
 
+/// Numeric notation (hex, octal, binary)
+pub const LeadingZeroOctal = 0o644
+
 /// Various typed constants
 pub const MB = 1048576
 
@@ -77,9 +80,6 @@ pub const Monday = 3
 
 /// Numeric notation (hex, octal, binary)
 pub const OctalConst = 0o755
-
-/// Numeric notation (hex, octal, binary)
-pub const OctalLegacy = 0644
 
 /// Various typed constants
 pub const Pi = 3.14159265358979

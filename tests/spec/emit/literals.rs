@@ -251,16 +251,6 @@ fn test() -> int {
 }
 
 #[test]
-fn octal_legacy() {
-    let input = r#"
-fn test() -> int {
-  0755
-}
-"#;
-    assert_emit_snapshot!(input);
-}
-
-#[test]
 fn binary_literal() {
     let input = r#"
 fn test() -> int {

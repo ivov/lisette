@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Invalid number literal
+   ╭─[test.lis:3:11]
+ 2 │ fn test() {
+ 3 │   let x = 0644
+   ·           ──┬─
+   ·             ╰── leading zero in integer literal
+ 4 │ }
+   ╰────
+  help: Prefix with `0o` for octal (e.g. `0o644`) or remove the leading zero · code: [parse.number_leading_zero]

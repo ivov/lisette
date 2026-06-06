@@ -399,10 +399,7 @@ impl<'source> Lexer<'source> {
                     self.next(); // consume 'b'
                     return self.lex_binary_number(start_offset);
                 }
-                b'0'..=b'7' => {
-                    return self.lex_legacy_octal_number(start_offset);
-                }
-                _ => {} // decimal zero or float
+                _ => {} // decimal zero, leading-zero literal, or float
             }
         }
 
@@ -599,52 +596,6 @@ impl<'source> Lexer<'source> {
 
         if self.current_byte() == b'i' && !self.peek_byte().is_ascii_alphanumeric() {
             self.next(); // consume 'i'
-            let end_offset = self.current_offset;
-            self.error_non_decimal_imaginary("octal", start_offset, end_offset - start_offset);
-            return Token {
-                kind: TokenKind::Imaginary,
-                text: &self.input[start_offset..end_offset],
-                byte_offset: start_offset as u32,
-                byte_length: (end_offset - start_offset) as u32,
-            };
-        }
-
-        let end_offset = self.current_offset;
-        Token {
-            kind: TokenKind::Integer,
-            text: &self.input[start_offset..end_offset],
-            byte_offset: start_offset as u32,
-            byte_length: (end_offset - start_offset) as u32,
-        }
-    }
-
-    fn lex_legacy_octal_number(&mut self, start_offset: usize) -> Token<'source> {
-        self.next();
-
-        while !self.at_eof() {
-            let byte = self.current_byte();
-            if (b'0'..=b'7').contains(&byte) || byte == b'_' {
-                if byte == b'_' && self.previous_char() == '_' {
-                    let underscore_start = self.current_offset - 1;
-                    self.error_consecutive_underscores(underscore_start);
-                }
-                self.next();
-            } else if byte == b'8' || byte == b'9' {
-                self.error_invalid_octal_digit(self.current_offset);
-                self.next();
-            } else {
-                break;
-            }
-        }
-
-        if self.previous_char() == '_' {
-            self.error_number_trailing_underscore(
-                self.current_offset - self.previous_char().len_utf8(),
-            );
-        }
-
-        if self.current_byte() == b'i' && !self.peek_byte().is_ascii_alphanumeric() {
-            self.next();
             let end_offset = self.current_offset;
             self.error_non_decimal_imaginary("octal", start_offset, end_offset - start_offset);
             return Token {

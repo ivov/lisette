@@ -423,6 +423,26 @@ fn lex_octal_invalid_digit() {
 }
 
 #[test]
+fn parse_legacy_octal_leading_zero() {
+    let input = r#"
+fn test() {
+  let x = 0644
+}
+"#;
+    assert_parse_error_snapshot!(input);
+}
+
+#[test]
+fn parse_leading_zero_non_octal_digit() {
+    let input = r#"
+fn test() {
+  let x = 08
+}
+"#;
+    assert_parse_error_snapshot!(input);
+}
+
+#[test]
 fn lex_binary_missing_digits() {
     let input = r#"let x = 0b"#;
     assert_lex_error_snapshot!(input);

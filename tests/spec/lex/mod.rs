@@ -700,18 +700,6 @@ fn octal_with_underscores() {
 }
 
 #[test]
-fn octal_legacy() {
-    let input = "0755";
-    assert_lex_snapshot!(input);
-}
-
-#[test]
-fn octal_legacy_with_underscores() {
-    let input = "0644_755";
-    assert_lex_snapshot!(input);
-}
-
-#[test]
 fn binary_basic() {
     let input = "0b1010";
     assert_lex_snapshot!(input);
