@@ -2,7 +2,7 @@ use crate::passes::walk::NodeCtx;
 use syntax::ast::{Expression, MatchArm, MatchOrigin, Pattern, Span};
 use syntax::types::unqualified_name;
 
-use super::helpers::{has_escaping_control_flow, is_side_effect_free};
+use super::helpers::{has_escaping_control_flow, is_eager_safe};
 
 pub fn check_manual_unwrap_or(expression: &Expression, ctx: &NodeCtx) {
     let Expression::Match {
@@ -49,15 +49,15 @@ pub fn check_manual_unwrap_or(expression: &Expression, ctx: &NodeCtx) {
         return;
     }
 
-    let default_has_effects = !is_side_effect_free(default);
-    if default_has_effects && has_escaping_control_flow(default) {
+    let lazy_default = !is_eager_safe(default);
+    if lazy_default && has_escaping_control_flow(default) {
         return;
     }
 
     let match_keyword_span = Span::new(span.file_id, span.byte_offset, 5);
     ctx.sink.push(diagnostics::lint::manual_unwrap_or(
         &match_keyword_span,
-        default_has_effects,
+        lazy_default,
     ));
 }
 

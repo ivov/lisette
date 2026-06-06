@@ -1,4 +1,4 @@
-use syntax::ast::{BinaryOperator, Expression, Literal, Pattern};
+use syntax::ast::{BinaryOperator, Expression, FormatStringPart, Literal, Pattern};
 use syntax::types::unqualified_name;
 
 use crate::passes::walk::visit_ast;
@@ -63,6 +63,27 @@ pub(super) fn is_side_effect_free(expression: &Expression) -> bool {
             expression: inner, ..
         } => is_side_effect_free(inner),
         _ => false,
+    }
+}
+
+pub(super) fn is_eager_safe(expression: &Expression) -> bool {
+    match expression.unwrap_parens() {
+        Expression::Identifier { .. } => true,
+        Expression::Literal { literal, .. } => literal_is_eager_safe(literal),
+        Expression::DotAccess {
+            expression: inner, ..
+        } => is_eager_safe(inner),
+        _ => false,
+    }
+}
+
+fn literal_is_eager_safe(literal: &Literal) -> bool {
+    match literal {
+        Literal::Slice(elements) => elements.iter().all(is_eager_safe),
+        Literal::FormatString(parts) => parts
+            .iter()
+            .all(|part| matches!(part, FormatStringPart::Text(_))),
+        _ => true,
     }
 }
 

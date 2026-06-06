@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [info] Manual `unwrap_or`
+   ╭─[test.lis:8:3]
+ 7 │   let o: Option<Slice<int>> = Some([1])
+ 8 │   match o {
+   ·   ──┬──
+   ·     ╰── can be simpler
+ 9 │     Some(v) => v,
+   ╰────
+  help: Replace this `match` with `.unwrap_or_else(...)` · code: [lint.manual_unwrap_or]

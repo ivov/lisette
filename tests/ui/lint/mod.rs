@@ -4113,9 +4113,9 @@ struct Container {
 
 fn main() {
   let c = Container { value: Some(42) };
-  let _ = match c.value {
-    Some(n) => n + 1,
-    None => 0,
+  match c.value {
+    Some(n) => { let _ = n + 1; },
+    None => { let _ = 0; },
   }
 }
 "#
@@ -6005,14 +6005,56 @@ fn main() {
 }
 
 #[test]
+fn manual_unwrap_or_panicking_default() {
+    assert_lint_snapshot!(
+        r#"
+fn run(denom: int) -> int {
+  let o: Option<int> = Some(1)
+  match o {
+    Some(v) => v,
+    None => 1 / denom,
+  }
+}
+
+fn main() {
+  let _ = run(2)
+}
+"#
+    );
+}
+
+#[test]
+fn manual_unwrap_or_composite_literal_default() {
+    assert_lint_snapshot!(
+        r#"
+fn fallback() -> int {
+  0
+}
+
+fn run() -> Slice<int> {
+  let o: Option<Slice<int>> = Some([1])
+  match o {
+    Some(v) => v,
+    None => [fallback()],
+  }
+}
+
+fn main() {
+  let _ = run()
+}
+"#
+    );
+}
+
+#[test]
 fn manual_unwrap_or_transformed_body_no_warning() {
     assert_no_lint_warnings!(
         r#"
 fn main() {
   let o: Option<int> = Some(1)
-  let _ = match o {
-    Some(v) => v + 1,
-    None => 0,
+  match o {
+    Some(v) => { let _ = v + 1; },
+    None => { let _ = 0; },
   }
 }
 "#
@@ -6260,6 +6302,283 @@ fn main() {
   let _: MyResult<int, string> = match r {
     Ok(v) => MyResult.Ok(v + 1),
     Err(e) => MyResult.Err(e),
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn manual_map_or_option() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let o: Option<int> = Some(1)
+  let _ = match o {
+    Some(v) => v + 1,
+    None => 0,
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn manual_map_or_result() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let r: Result<int, string> = Ok(1)
+  let _ = match r {
+    Ok(v) => v * 2,
+    Err(_) => 0,
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn manual_map_or_reversed_arms() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let o: Option<int> = Some(1)
+  let _ = match o {
+    None => 0,
+    Some(v) => v + 1,
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn manual_map_or_effectful_default_option() {
+    assert_lint_snapshot!(
+        r#"
+fn fallback() -> int {
+  0
+}
+
+fn main() {
+  let o: Option<int> = Some(1)
+  let _ = match o {
+    Some(v) => v + 1,
+    None => fallback(),
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn manual_map_or_effectful_default_result() {
+    assert_lint_snapshot!(
+        r#"
+fn fallback() -> int {
+  0
+}
+
+fn main() {
+  let r: Result<int, string> = Ok(1)
+  let _ = match r {
+    Ok(v) => v + 1,
+    Err(_) => fallback(),
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn manual_map_or_panicking_default_lazy() {
+    assert_lint_snapshot!(
+        r#"
+fn run(denom: int) -> int {
+  let o: Option<int> = Some(1)
+  match o {
+    Some(v) => v + 1,
+    None => 1 / denom,
+  }
+}
+
+fn main() {
+  let _ = run(2)
+}
+"#
+    );
+}
+
+#[test]
+fn manual_map_or_composite_literal_default_lazy() {
+    assert_lint_snapshot!(
+        r#"
+fn fallback() -> int {
+  0
+}
+
+fn run() -> Slice<int> {
+  let o: Option<int> = Some(1)
+  match o {
+    Some(v) => [v],
+    None => [fallback()],
+  }
+}
+
+fn main() {
+  let _ = run()
+}
+"#
+    );
+}
+
+#[test]
+fn manual_map_or_interpolated_string_default_lazy() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let x = 5
+  let o: Option<string> = Some("a")
+  let _ = match o {
+    Some(v) => f"got {v}",
+    None => f"x is {x}",
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn manual_map_or_unused_binding_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let o: Option<int> = Some(1)
+  let _ = match o {
+    Some(v) => 42,
+    None => 0,
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn manual_map_or_block_identity_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let o: Option<int> = Some(1)
+  let _ = match o {
+    Some(v) => { v },
+    None => 0,
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn manual_map_or_shadowed_binding_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn compute() -> int {
+  7
+}
+
+fn main() {
+  let o: Option<int> = Some(1)
+  let _ = match o {
+    Some(v) => {
+      let v = compute()
+      v + 1
+    },
+    None => 0,
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn manual_map_or_bound_error_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let r: Result<int, string> = Ok(1)
+  let _ = match r {
+    Ok(v) => v + 1,
+    Err(e) => e.length(),
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn manual_map_or_diverging_default_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let o: Option<int> = Some(1)
+  let _ = match o {
+    Some(v) => v + 1,
+    None => return (),
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn manual_map_or_propagating_body_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn run(o: Option<Option<int>>) -> Option<int> {
+  let r = match o {
+    Some(v) => v?,
+    None => 0,
+  }
+  Some(r)
+}
+
+fn main() {
+  let _ = run(Some(Some(1)))
+}
+"#
+    );
+}
+
+#[test]
+fn manual_map_or_cross_wrapper_result_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn run(o: Option<int>) -> Result<int, string> {
+  match o {
+    Some(v) => Ok(v + 1),
+    None => Ok(0),
+  }
+}
+
+fn main() {
+  let _ = run(Some(1))
+}
+"#
+    );
+}
+
+#[test]
+fn manual_map_or_custom_enum_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+enum Maybe { Yes(int), Nope }
+
+fn main() {
+  let m = Maybe.Yes(1)
+  let _ = match m {
+    Maybe.Yes(v) => v + 1,
+    Maybe.Nope => 0,
   }
 }
 "#
@@ -6666,9 +6985,10 @@ struct Node {
 }
 
 fn sum_list(node: Option<Ref<Node>>) -> int {
-  match node {
-    None => 0,
-    Some(n) => n.value + sum_list(n.next),
+  if let Some(n) = node {
+    n.value + sum_list(n.next)
+  } else {
+    0
   }
 }
 
@@ -7718,7 +8038,7 @@ fn verbose_failure_propagation_option_value_default_no_warning() {
 fn main() {
   let x: Option<int> = Some(1)
   let _ = match x {
-    Some(v) => v + 1,
+    Some(_) => 99,
     None => 0,
   }
 }

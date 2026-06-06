@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [info] Manual `map_or`
+   ╭─[test.lis:5:11]
+ 4 │   let o: Option<string> = Some("a")
+ 5 │   let _ = match o {
+   ·           ──┬──
+   ·             ╰── can be simpler
+ 6 │     Some(v) => f"got {v}",
+   ╰────
+  help: Replace this `match` with `.map_or_else(...)` · code: [lint.manual_map_or]

@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [info] Manual `map_or`
+   ╭─[test.lis:8:11]
+ 7 │   let r: Result<int, string> = Ok(1)
+ 8 │   let _ = match r {
+   ·           ──┬──
+   ·             ╰── can be simpler
+ 9 │     Ok(v) => v + 1,
+   ╰────
+  help: Replace this `match` with `.map_or_else(...)` · code: [lint.manual_map_or]

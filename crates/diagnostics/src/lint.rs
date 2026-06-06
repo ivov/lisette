@@ -448,8 +448,8 @@ pub fn manual_map(span: &Span) -> LisetteDiagnostic {
         .with_help("Replace this `match` with `.map(...)`")
 }
 
-pub fn manual_unwrap_or(span: &Span, default_has_effects: bool) -> LisetteDiagnostic {
-    let method = if default_has_effects {
+pub fn manual_unwrap_or(span: &Span, lazy_default: bool) -> LisetteDiagnostic {
+    let method = if lazy_default {
         "unwrap_or_else"
     } else {
         "unwrap_or"
@@ -458,6 +458,18 @@ pub fn manual_unwrap_or(span: &Span, default_has_effects: bool) -> LisetteDiagno
         .with_lint_code("manual_unwrap_or")
         .with_span_label(span, "can be simpler")
         .with_help(format!("Replace this `match` with `.{method}(...)`"))
+}
+
+pub fn manual_map_or(span: &Span, lazy_default: bool) -> LisetteDiagnostic {
+    let replacement = if lazy_default {
+        ".map_or_else(...)"
+    } else {
+        ".map_or(...)"
+    };
+    LisetteDiagnostic::info("Manual `map_or`")
+        .with_lint_code("manual_map_or")
+        .with_span_label(span, "can be simpler")
+        .with_help(format!("Replace this `match` with `{replacement}`"))
 }
 
 pub fn redundant_closure(span: &Span, callee: &str) -> LisetteDiagnostic {
