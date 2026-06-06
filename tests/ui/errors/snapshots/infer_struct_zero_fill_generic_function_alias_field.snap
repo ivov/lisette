@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Field has no zero value
+   ╭─[test.lis:6:16]
+ 5 │ fn test() {
+ 6 │   let _a = A { .. };
+   ·                ─┬
+   ·                 ╰── no zero available
+ 7 │ }
+   ╰────
+  help: Field `g` of type `fn (int) -> int` has no zero value. Provide an explicit value, or wrap the field type in `Option<T>` · code: [infer.field_no_zero]

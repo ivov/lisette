@@ -692,6 +692,7 @@ fn has_zero_nominal(
                 Type::Forall { body, .. } => body.as_ref().clone(),
                 other => other.clone(),
             };
+            let underlying = store.peel_alias(&underlying);
             let map = build_substitution(alias_ty, params);
             let resolved = if map.is_empty() {
                 underlying

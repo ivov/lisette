@@ -1736,6 +1736,32 @@ fn test() {
 }
 
 #[test]
+fn infer_struct_zero_fill_function_alias_field() {
+    let input = r#"
+type F = fn() -> int
+struct A { g: F, x: int }
+
+fn test() {
+  let _a = A { .. };
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_struct_zero_fill_generic_function_alias_field() {
+    let input = r#"
+type F<T> = fn(T) -> T
+struct A { g: F<int>, x: int }
+
+fn test() {
+  let _a = A { .. };
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
 fn infer_enum_struct_variant_zero_fill_no_zero_for_field() {
     let input = r#"
 enum Action {
