@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [info] Redundant slice bounds
+   ╭─[test.lis:5:13]
+ 4 │   let b = 3
+ 5 │   let _ = xs[0..=b]
+   ·             ───┬───
+   ·                ╰── can be simpler
+ 6 │ }
+   ╰────
+  help: Simplify to `xs[..=b]` · code: [lint.redundant_slice_bounds]

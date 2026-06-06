@@ -9872,3 +9872,166 @@ fn main() {
 "#
     );
 }
+
+#[test]
+fn redundant_slice_bounds_upper() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let xs = [1, 2, 3, 4, 5]
+  let a = 2
+  let _ = xs[a..xs.length()]
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_slice_bounds_lower() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let xs = [1, 2, 3, 4, 5]
+  let b = 3
+  let _ = xs[0..b]
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_slice_bounds_lower_inclusive() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let xs = [1, 2, 3, 4, 5]
+  let b = 3
+  let _ = xs[0..=b]
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_slice_bounds_full_reslice_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let xs = [1, 2, 3, 4, 5]
+  let _ = xs[..]
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_slice_bounds_open_lower_zero_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let xs = [1, 2, 3, 4, 5]
+  let _ = xs[0..]
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_slice_bounds_open_upper_length_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let xs = [1, 2, 3, 4, 5]
+  let _ = xs[..xs.length()]
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_slice_bounds_both_default_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let xs = [1, 2, 3, 4, 5]
+  let _ = xs[0..xs.length()]
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_slice_bounds_meaningful_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let xs = [1, 2, 3, 4, 5]
+  let a = 2
+  let b = 3
+  let _ = xs[a..b]
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_slice_bounds_different_receiver_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let xs = [1, 2, 3, 4, 5]
+  let ys = [9, 8, 7]
+  let a = 2
+  let _ = xs[a..ys.length()]
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_slice_bounds_inclusive_length_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let xs = [1, 2, 3, 4, 5]
+  let a = 2
+  let _ = xs[a..=xs.length()]
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_slice_bounds_side_effecting_receiver_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn get_slice() -> Slice<int> {
+  [1, 2, 3]
+}
+
+fn main() {
+  let a = 1
+  let _ = get_slice()[a..get_slice().length()]
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_slice_bounds_side_effecting_start_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:fmt"
+
+fn noisy() -> int {
+  fmt.Println("start")
+  1
+}
+
+fn main() {
+  let xs = [1, 2, 3, 4, 5]
+  let _ = xs[noisy()..xs.length()]
+}
+"#
+    );
+}

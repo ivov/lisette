@@ -361,6 +361,13 @@ pub fn manual_is_empty(span: &Span, replacement: &str) -> LisetteDiagnostic {
         .with_help(format!("Simplify to `{replacement}`"))
 }
 
+pub fn redundant_slice_bounds(span: &Span, replacement: &str) -> LisetteDiagnostic {
+    LisetteDiagnostic::info("Redundant slice bounds")
+        .with_lint_code("redundant_slice_bounds")
+        .with_span_label(span, "can be simpler")
+        .with_help(format!("Simplify to `{replacement}`"))
+}
+
 pub fn duplicate_logical_operand(span: &Span, operand_text: &str) -> LisetteDiagnostic {
     LisetteDiagnostic::warn("Duplicate logical operand")
         .with_lint_code("duplicate_logical_operand")
