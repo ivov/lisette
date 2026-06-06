@@ -405,6 +405,13 @@ pub fn identical_if_branches(span: &Span) -> LisetteDiagnostic {
         .with_help("Remove the `if` and keep a single copy of the branch body")
 }
 
+pub fn collapsible_if(span: &Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::info("Collapsible `if`")
+        .with_lint_code("collapsible_if")
+        .with_span_label(span, "can be merged into the outer `if`")
+        .with_help("Merge this nested `if` into the outer condition with `&&`")
+}
+
 pub fn identical_match_arms(span: &Span) -> LisetteDiagnostic {
     LisetteDiagnostic::warn("Identical match arms")
         .with_lint_code("identical_match_arms")

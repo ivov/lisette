@@ -1,4 +1,5 @@
 mod bool_literal_comparison;
+mod collapsible_if;
 mod double_negation;
 mod dup_arg;
 mod duplicate_cutset;
@@ -51,6 +52,7 @@ mod verbose_failure_propagation;
 mod waitgroup_add_in_task;
 
 pub use bool_literal_comparison::check_bool_literal_comparison;
+pub use collapsible_if::check_collapsible_if;
 pub use double_negation::check_double_negation;
 pub use dup_arg::check_dup_arg;
 pub use duplicate_cutset::check_duplicate_cutset;

@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [info] Collapsible `if`
+   ╭─[test.lis:5:5]
+ 4 │   if a {
+ 5 │     if b {
+   ·     ─┬
+   ·      ╰── can be merged into the outer `if`
+ 6 │       count += 1
+   ╰────
+  help: Merge this nested `if` into the outer condition with `&&` · code: [lint.collapsible_if]

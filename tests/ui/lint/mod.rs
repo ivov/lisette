@@ -2833,6 +2833,115 @@ fn main() {
 }
 
 #[test]
+fn collapsible_if() {
+    assert_lint_snapshot!(
+        r#"
+pub fn check(a: bool, b: bool) {
+  let mut count = 0
+  if a {
+    if b {
+      count += 1
+    }
+  }
+  let _ = count
+}
+"#
+    );
+}
+
+#[test]
+fn collapsible_if_outer_else_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+pub fn check(a: bool, b: bool) {
+  let mut count = 0
+  if a {
+    if b {
+      count += 1
+    }
+  } else {
+    count += 2
+  }
+  let _ = count
+}
+"#
+    );
+}
+
+#[test]
+fn collapsible_if_inner_else_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+pub fn check(a: bool, b: bool) {
+  let mut count = 0
+  if a {
+    if b {
+      count += 1
+    } else {
+      count += 2
+    }
+  }
+  let _ = count
+}
+"#
+    );
+}
+
+#[test]
+fn collapsible_if_extra_statement_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+pub fn check(a: bool, b: bool) {
+  let mut count = 0
+  if a {
+    count += 5
+    if b {
+      count += 1
+    }
+  }
+  let _ = count
+}
+"#
+    );
+}
+
+#[test]
+fn collapsible_if_inner_if_let_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+pub fn check(a: bool, x: Option<int>) {
+  let mut count = 0
+  if a {
+    if let Some(v) = x {
+      count += v
+    }
+  }
+  let _ = count
+}
+"#
+    );
+}
+
+#[test]
+fn collapsible_if_named_bool_condition_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+pub struct Flag(bool)
+
+pub fn check(a: Flag, b: bool) {
+  let mut count = 0
+  if a {
+    if b {
+      count += 1
+    }
+  }
+  let _ = count
+}
+"#
+    );
+}
+
+#[test]
 fn identical_match_arms_literals() {
     assert_lint_snapshot!(
         r#"
