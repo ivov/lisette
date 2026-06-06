@@ -2,6 +2,41 @@
 
 Lisette is under active development. Any version before 1.0.0 may include breaking changes.
 
+## [0.3.1](https://github.com/ivov/lisette/compare/lisette-v0.3.0...lisette-v0.3.1) - 2026-06-06
+
+- feat: add map_or_else to Result [#633](https://github.com/ivov/lisette/pull/633) [`d5939f7`](https://github.com/ivov/lisette/commit/d5939f7ecfe7321a90ed017f9d0f95a693c75d74)
+- feat: add manual map_or simplification lint [#632](https://github.com/ivov/lisette/pull/632) [`fc4e772`](https://github.com/ivov/lisette/commit/fc4e772e3a85623d773222d2014c7280fb984289)
+- fix: exclude `#[display]` struct fields from the unused-field lint [#631](https://github.com/ivov/lisette/pull/631) [`100d37d`](https://github.com/ivov/lisette/commit/100d37d2a19011c62236d6c5dcfa4c5504cec7c2)
+- fix: stop `lis doc` mangling third-party module paths [#630](https://github.com/ivov/lisette/pull/630) [`f376290`](https://github.com/ivov/lisette/commit/f3762909242c7c0ab95138efee5117952bb2ec19)
+- fix: suggest `cmp.Ordered` bound when comparing unbounded generics [#629](https://github.com/ivov/lisette/pull/629) [`a17a67a`](https://github.com/ivov/lisette/commit/a17a67a8cf13452b8062376c522a3fd940102b6a)
+- refactor: continue collapsing emit layer into IR [#628](https://github.com/ivov/lisette/pull/628) [`ae8ca07`](https://github.com/ivov/lisette/commit/ae8ca07654fe01d7188514559530b4f0bb3d7e4d)
+- fix: resolve shadowed builtin types in type position [#627](https://github.com/ivov/lisette/pull/627) [`3109a37`](https://github.com/ivov/lisette/commit/3109a376efe5dceec9d3c66f36e25a23ac0a495b)
+- fix: stack overflow when zero-filling a function-alias field [#626](https://github.com/ivov/lisette/pull/626) [`127d4e1`](https://github.com/ivov/lisette/commit/127d4e1e79f1bf6f25ce06211eae7c0925c509e4)
+- feat: add collapsible if lint [#625](https://github.com/ivov/lisette/pull/625) [`fc77943`](https://github.com/ivov/lisette/commit/fc77943b875b76ce8f087933e2b8a2e461e79ad7)
+- feat: reject legacy octal integer literals [#624](https://github.com/ivov/lisette/pull/624) [`94c1747`](https://github.com/ivov/lisette/commit/94c17471f433c8c96787d2584a174037137fb2f7)
+- feat: add single-arm select lint [#622](https://github.com/ivov/lisette/pull/622) [`80e1837`](https://github.com/ivov/lisette/commit/80e183784dcb98257517070fe0cc90c2bb909c72)
+- feat: add manual `strings.ReplaceAll` lint [#621](https://github.com/ivov/lisette/pull/621) [`2a88406`](https://github.com/ivov/lisette/commit/2a88406db09d5663ed3b1199f89d0ce6a37f0cfd)
+- feat: add redundant slice bounds lint [#620](https://github.com/ivov/lisette/pull/620) [`eb6f3f4`](https://github.com/ivov/lisette/commit/eb6f3f40a796fc1574ed13ca1ba641d5919bb2e4)
+- feat: add redundant `Sprintf` lint [#619](https://github.com/ivov/lisette/pull/619) [`e515873`](https://github.com/ivov/lisette/commit/e515873756b2820e66f455acd9df9f0b1c6e2000)
+- refactor: dedupe emit coercion, call, and abi helpers [#618](https://github.com/ivov/lisette/pull/618) [`f3db058`](https://github.com/ivov/lisette/commit/f3db058646de9fba61392c13a86efc98f2b074fa)
+- feat: add manual `bytes.Equal` lint [#616](https://github.com/ivov/lisette/pull/616) [`d909ca0`](https://github.com/ivov/lisette/commit/d909ca089fc681dd872bd3bf80a1ae234e03b9cd)
+- docs: clarify interop directions [#617](https://github.com/ivov/lisette/pull/617) [`6b78dba`](https://github.com/ivov/lisette/commit/6b78dba579be5358c676a796b7ca24dbecfe0613)
+- feat: add manual `time.Until` lint [#615](https://github.com/ivov/lisette/pull/615) [`1d8000d`](https://github.com/ivov/lisette/commit/1d8000d78bbac70679cf9bd96fc8bd603572cb47)
+- feat: add manual `time.Since` lint [#614](https://github.com/ivov/lisette/pull/614) [`375a226`](https://github.com/ivov/lisette/commit/375a2266950de3696cb4f69457232e2f0a974fb5)
+- feat: offer lsp attribute completions on `#[` [#613](https://github.com/ivov/lisette/pull/613) [`9f28fff`](https://github.com/ivov/lisette/commit/9f28fff98c1dc0b0b09a371b39c3c75e57daba12)
+- refactor: make the scope stack the single source for return context [#611](https://github.com/ivov/lisette/pull/611) [`244a089`](https://github.com/ivov/lisette/commit/244a089b9568af2f014645597d1841465208a595)
+- perf: share function signatures via Arc instead of deep-cloning [#610](https://github.com/ivov/lisette/pull/610) [`3687940`](https://github.com/ivov/lisette/commit/368794037ce152df9884964799c210ecad427fbd)
+- feat: add inefficient comparison lint [#609](https://github.com/ivov/lisette/pull/609) [`d67fda2`](https://github.com/ivov/lisette/commit/d67fda275d412b64b73ed5ddf4d4492e4eba578c)
+- fix: pin generic impl type params during interface satisfaction [#608](https://github.com/ivov/lisette/pull/608) [`f7b8201`](https://github.com/ivov/lisette/commit/f7b8201e242a9a141bb9c77faf15dd813a386ba9)
+- perf: cache module field projections, skip redundant type resolves [#607](https://github.com/ivov/lisette/pull/607) [`267f64f`](https://github.com/ivov/lisette/commit/267f64f7c09e0c6e98567941a4bb4a8f5ebd759b)
+- fix: enforce pointer-receiver rule through generic bounds [#606](https://github.com/ivov/lisette/pull/606) [`8c46015`](https://github.com/ivov/lisette/commit/8c46015a7f7bccc20dbb6ca1e1d21e05f779d04e)
+- refactor: add misplaced attribute diagnostic [#605](https://github.com/ivov/lisette/pull/605) [`ae95f55`](https://github.com/ivov/lisette/commit/ae95f55bf300c8682f15772a309f5fc78926c8d9)
+- perf: stop cloning function and lambda signatures twice [#604](https://github.com/ivov/lisette/pull/604) [`63987ec`](https://github.com/ivov/lisette/commit/63987ec10814beb5d4a021c801bc06ab0a56b0f3)
+- refactor: rebuild tree-sitter parser if stale in nvim [#603](https://github.com/ivov/lisette/pull/603) [`84b56f6`](https://github.com/ivov/lisette/commit/84b56f61afbbd2f99c32a517106504af0a2bda87)
+- feat: add goos/goarch unknown-value comparison lint [#602](https://github.com/ivov/lisette/pull/602) [`9e7a38f`](https://github.com/ivov/lisette/commit/9e7a38ff65211613bd3cb1a902f3ea7ba9e70c90)
+- perf: cut allocations in semantic analysis hot paths [#601](https://github.com/ivov/lisette/pull/601) [`cdfa21c`](https://github.com/ivov/lisette/commit/cdfa21c49623f8459cd9cf59e63f3e0b51531ff2)
+- feat: add integer division to zero lint [#599](https://github.com/ivov/lisette/pull/599) [`814bbb3`](https://github.com/ivov/lisette/commit/814bbb316d116806a169b8d479d07a0814d0d043)
+
 ## [0.3.0](https://github.com/ivov/lisette/compare/lisette-v0.2.17...lisette-v0.3.0) - 2026-06-04
 
 - refactor: stop threading store through inference signatures [#597](https://github.com/ivov/lisette/pull/597) [`4890ad5`](https://github.com/ivov/lisette/commit/4890ad5be004222b4dfaf7f6ebe7ef8367e7874e)
