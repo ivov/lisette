@@ -81,6 +81,28 @@ func TestResultMap(t *testing.T) {
 	}
 }
 
+func TestResultMapOr(t *testing.T) {
+	ok := MakeResultOk[int, string](21)
+	err := MakeResultErr[int, string]("fail")
+	if ResultMapOr(ok, -1, func(v int) int { return v * 2 }) != 42 {
+		t.Fatal("expected 42")
+	}
+	if ResultMapOr(err, -1, func(v int) int { return v * 2 }) != -1 {
+		t.Fatal("expected -1")
+	}
+}
+
+func TestResultMapOrElse(t *testing.T) {
+	ok := MakeResultOk[int, string](21)
+	err := MakeResultErr[int, string]("fail")
+	if ResultMapOrElse(ok, func(e string) int { return len(e) }, func(v int) int { return v * 2 }) != 42 {
+		t.Fatal("expected 42")
+	}
+	if ResultMapOrElse(err, func(e string) int { return len(e) }, func(v int) int { return v * 2 }) != 4 {
+		t.Fatal("expected 4")
+	}
+}
+
 func TestResultMapErr(t *testing.T) {
 	err := MakeResultErr[int, string]("fail")
 	mapped := ResultMapErr(err, func(e string) int { return len(e) })

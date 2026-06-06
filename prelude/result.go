@@ -87,6 +87,13 @@ func ResultMapOr[T any, U any, E any](res Result[T, E], def U, f func(T) U) U {
 	return def
 }
 
+func ResultMapOrElse[T any, U any, E any](res Result[T, E], def func(E) U, f func(T) U) U {
+	if res.Tag == ResultOk {
+		return f(res.OkVal)
+	}
+	return def(res.ErrVal)
+}
+
 func ResultAndThen[T any, U any, E any](res Result[T, E], f func(T) Result[U, E]) Result[U, E] {
 	if res.Tag == ResultOk {
 		return f(res.OkVal)

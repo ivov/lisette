@@ -3006,6 +3006,12 @@ fn test_result_map_or() -> int {
   result
 }
 
+fn test_result_map_or_else() -> int {
+  let res: Result<int, string> = Err("error")
+  let result = res.map_or_else(|e| e.length() * 20, |x| x * 2)
+  result
+}
+
 // Non-UFCS to UFCS method chaining (filter returns Option, then map is UFCS)
 fn test_option_filter_then_map() -> int {
   let opt = Some(10)
@@ -4019,6 +4025,7 @@ fn main() {
   report("result_map", test_result_map(), 100)
   report("result_and_then", test_result_and_then(), 100)
   report("result_map_or", test_result_map_or(), 100)
+  report("result_map_or_else", test_result_map_or_else(), 100)
 
   section("non-ufcs to ufcs chaining")
   report("option_filter_then_map", test_option_filter_then_map(), 100)

@@ -210,6 +210,9 @@ impl<T, E> Result<T, E> {
   /// Returns `default` if `Err`, otherwise applies `f` to the `Ok` value.
   fn map_or<U>(self, default: U, f: fn(T) -> U) -> U
 
+  /// Applies `default` to the `Err` value, or `f` to the `Ok` value.
+  fn map_or_else<U>(self, default: fn(E) -> U, f: fn(T) -> U) -> U
+
   /// Calls `f` with the `Ok` value, leaving `Err` unchanged.
   fn and_then<U>(self, f: fn(T) -> Result<U, E>) -> Result<U, E>
 

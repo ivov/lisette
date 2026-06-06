@@ -513,6 +513,7 @@ option_flatten: PASS
 result_map: PASS
 result_and_then: PASS
 result_map_or: PASS
+result_map_or_else: PASS
 
 // non-ufcs to ufcs chaining
 
