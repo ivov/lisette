@@ -4049,6 +4049,23 @@ fn main() {
 }
 
 #[test]
+fn display_struct_fields_not_unused() {
+    assert_no_lint_warnings!(
+        r#"
+#[display]
+struct Point {
+  x: int,
+  y: int,
+}
+
+fn main() {
+  let _p = Point { x: 1, y: 2 }
+}
+"#
+    );
+}
+
+#[test]
 fn field_with_tag_attribute_not_unused() {
     assert_no_lint_warnings!(
         r#"

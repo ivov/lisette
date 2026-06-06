@@ -280,6 +280,8 @@ fn collect_items(
                         false
                     });
 
+                    let has_display_attr = attributes.iter().any(|a| a.name == "display");
+
                     for struct_field in fields {
                         let field_id = StructFieldId::new(name, &struct_field.name);
                         let has_tag_attribute =
@@ -291,6 +293,7 @@ fn collect_items(
                                 is_public: struct_field.visibility == Visibility::Public,
                                 parent_is_public: is_public,
                                 parent_has_serialization_attr: has_serialization_attr,
+                                parent_has_display_attr: has_display_attr,
                                 has_tag_attribute,
                             },
                         );

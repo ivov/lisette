@@ -35,6 +35,7 @@ pub struct StructFieldInfo {
     pub is_public: bool,
     pub parent_is_public: bool,
     pub parent_has_serialization_attr: bool,
+    pub parent_has_display_attr: bool,
     pub has_tag_attribute: bool,
 }
 
@@ -162,6 +163,7 @@ impl ReferenceGraph {
                 !info.is_public
                     && !info.parent_is_public
                     && !info.parent_has_serialization_attr
+                    && !info.parent_has_display_attr
                     && !info.has_tag_attribute
                     && !self.used_struct_fields.contains(*id)
                     && !id.field_name.starts_with('_')
