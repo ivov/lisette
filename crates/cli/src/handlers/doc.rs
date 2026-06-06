@@ -1234,6 +1234,18 @@ fn doc_go_package(query: &str) -> i32 {
         return 0;
     }
 
+    if without_prefix.contains('/') && deps::is_third_party(without_prefix) {
+        cli_error!(
+            format!(
+                "`go:{}` is a third-party module, not a Go stdlib package",
+                without_prefix
+            ),
+            "`lis doc` browses only the Lisette prelude and the Go stdlib",
+            "You can browse generated typedefs for a third-party module under `target/.lisette/typedefs/`"
+        );
+        return 1;
+    }
+
     let parts: Vec<&str> = without_prefix.splitn(2, '.').collect();
     let package = parts[0];
     let item_name = parts.get(1).copied();
