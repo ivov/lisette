@@ -14,6 +14,7 @@ mod invisible_in_string;
 mod let_and_return;
 mod loop_runs_once;
 mod lost_query_mutation;
+mod manual_bytes_equal;
 mod manual_compound_assignment;
 mod manual_equal_fold;
 mod manual_is_empty;
@@ -61,6 +62,7 @@ pub use invisible_in_string::{
 pub use let_and_return::check_let_and_return;
 pub use loop_runs_once::check_loop_runs_once;
 pub use lost_query_mutation::check_lost_query_mutation;
+pub use manual_bytes_equal::check_manual_bytes_equal;
 pub use manual_compound_assignment::check_manual_compound_assignment;
 pub use manual_equal_fold::check_manual_equal_fold;
 pub use manual_is_empty::check_manual_is_empty;

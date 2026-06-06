@@ -753,6 +753,124 @@ fn main() {
 }
 
 #[test]
+fn manual_bytes_equal() {
+    assert_lint_snapshot!(
+        r#"
+import "go:bytes"
+
+fn main() {
+  let a = "hello" as Slice<byte>
+  let b = "world" as Slice<byte>
+  let _ = bytes.Compare(a, b) == 0
+}
+"#
+    );
+}
+
+#[test]
+fn manual_bytes_equal_not_equal() {
+    assert_lint_snapshot!(
+        r#"
+import "go:bytes"
+
+fn main() {
+  let a = "hello" as Slice<byte>
+  let b = "world" as Slice<byte>
+  let _ = bytes.Compare(a, b) != 0
+}
+"#
+    );
+}
+
+#[test]
+fn manual_bytes_equal_yoda() {
+    assert_lint_snapshot!(
+        r#"
+import "go:bytes"
+
+fn main() {
+  let a = "hello" as Slice<byte>
+  let b = "world" as Slice<byte>
+  let _ = 0 == bytes.Compare(a, b)
+}
+"#
+    );
+}
+
+#[test]
+fn manual_bytes_equal_parenthesized() {
+    assert_lint_snapshot!(
+        r#"
+import "go:bytes"
+
+fn main() {
+  let a = "hello" as Slice<byte>
+  let b = "world" as Slice<byte>
+  let _ = (bytes.Compare(a, b)) == 0
+}
+"#
+    );
+}
+
+#[test]
+fn manual_bytes_equal_aliased_import() {
+    assert_lint_snapshot!(
+        r#"
+import mybytes "go:bytes"
+
+fn main() {
+  let a = "hello" as Slice<byte>
+  let b = "world" as Slice<byte>
+  let _ = mybytes.Compare(a, b) == 0
+}
+"#
+    );
+}
+
+#[test]
+fn manual_bytes_equal_ordering_comparison_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:bytes"
+
+fn main() {
+  let a = "hello" as Slice<byte>
+  let b = "world" as Slice<byte>
+  let _ = bytes.Compare(a, b) < 0
+}
+"#
+    );
+}
+
+#[test]
+fn manual_bytes_equal_nonzero_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:bytes"
+
+fn main() {
+  let a = "hello" as Slice<byte>
+  let b = "world" as Slice<byte>
+  let _ = bytes.Compare(a, b) == 1
+}
+"#
+    );
+}
+
+#[test]
+fn manual_bytes_equal_strings_compare_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:strings"
+
+fn main() {
+  let _ = strings.Compare("a", "b") == 0
+}
+"#
+    );
+}
+
+#[test]
 fn manual_equal_fold_to_lower() {
     assert_lint_snapshot!(
         r#"

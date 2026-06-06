@@ -720,6 +720,22 @@ pub fn manual_equal_fold(
         ))
 }
 
+pub fn manual_bytes_equal(
+    span: &Span,
+    negated: bool,
+    namespace: &str,
+    left_arg: &str,
+    right_arg: &str,
+) -> LisetteDiagnostic {
+    let prefix = if negated { "!" } else { "" };
+    LisetteDiagnostic::info("Manual `bytes.Equal`")
+        .with_lint_code("manual_bytes_equal")
+        .with_span_label(span, "can use `bytes.Equal`")
+        .with_help(format!(
+            "Use `{prefix}{namespace}.Equal({left_arg}, {right_arg})` to compare byte slices directly"
+        ))
+}
+
 pub fn manual_time_since(span: &Span, namespace: &str, arg: &str) -> LisetteDiagnostic {
     LisetteDiagnostic::info("Manual `time.Since`")
         .with_lint_code("manual_time_since")

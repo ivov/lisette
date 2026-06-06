@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [info] Manual `bytes.Equal`
+   ╭─[test.lis:7:11]
+ 6 │   let b = "world" as Slice<byte>
+ 7 │   let _ = bytes.Compare(a, b) != 0
+   ·           ────────────┬───────────
+   ·                       ╰── can use `bytes.Equal`
+ 8 │ }
+   ╰────
+  help: Use `!bytes.Equal(a, b)` to compare byte slices directly · code: [lint.manual_bytes_equal]
