@@ -496,6 +496,15 @@ pub fn single_arm_match(span: &Span, pattern_suggestion: &str) -> LisetteDiagnos
         ))
 }
 
+pub fn single_arm_select(span: &Span, receive: &str) -> LisetteDiagnostic {
+    LisetteDiagnostic::info("Single-arm `select`")
+        .with_lint_code("single_arm_select")
+        .with_span_label(span, "waits on a single operation")
+        .with_help(format!(
+            "A `select` with one arm makes no choice between channel operations. Use `match {receive} {{ ... }}` directly"
+        ))
+}
+
 pub fn match_on_bool(span: &Span) -> LisetteDiagnostic {
     LisetteDiagnostic::info("Match on boolean")
         .with_lint_code("match_on_bool")

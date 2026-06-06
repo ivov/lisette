@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [info] Single-arm `select`
+   ╭─[test.lis:6:16]
+ 5 │   let ch = Channel.new<int>()
+ 6 │   let result = select {
+   ·                ───┬──
+   ·                   ╰── waits on a single operation
+ 7 │     match ch.receive() {
+   ╰────
+  help: A `select` with one arm makes no choice between channel operations. Use `match ch.receive() { ... }` directly · code: [lint.single_arm_select]

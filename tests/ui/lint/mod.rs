@@ -8234,6 +8234,123 @@ fn main() {
 }
 
 #[test]
+fn single_arm_select_value_position() {
+    assert_lint_snapshot!(
+        r#"
+import "go:fmt"
+
+fn main() {
+  let ch = Channel.new<int>()
+  let result = select {
+    match ch.receive() {
+      Some(v) => v,
+      None => 0,
+    },
+  }
+  fmt.Println(result)
+}
+"#
+    );
+}
+
+#[test]
+fn single_arm_select_statement_position() {
+    assert_lint_snapshot!(
+        r#"
+import "go:fmt"
+
+fn main() {
+  let ch = Channel.new<int>()
+  select {
+    match ch.receive() {
+      Some(v) => fmt.Println(v),
+      None => {},
+    },
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn single_arm_select_two_arms_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:fmt"
+
+fn main() {
+  let a = Channel.new<int>()
+  let b = Channel.new<int>()
+  let result = select {
+    match a.receive() {
+      Some(v) => v,
+      None => 0,
+    },
+    match b.receive() {
+      Some(v) => v * 2,
+      None => 1,
+    },
+  }
+  fmt.Println(result)
+}
+"#
+    );
+}
+
+#[test]
+fn single_arm_select_with_default_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:fmt"
+
+fn main() {
+  let ch = Channel.new<int>()
+  let result = select {
+    match ch.receive() {
+      Some(v) => v,
+      None => 0,
+    },
+    _ => -1,
+  }
+  fmt.Println(result)
+}
+"#
+    );
+}
+
+#[test]
+fn single_arm_select_send_arm_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:fmt"
+
+fn main() {
+  let ch = Channel.new<int>()
+  select {
+    ch.send(42) => fmt.Println("sent"),
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn single_arm_select_shorthand_receive_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:fmt"
+
+fn main() {
+  let ch = Channel.new<int>()
+  select {
+    let Some(v) = ch.receive() => fmt.Println(v),
+  }
+}
+"#
+    );
+}
+
+#[test]
 fn decimal_file_mode_chmod() {
     assert_lint_snapshot!(
         r#"
