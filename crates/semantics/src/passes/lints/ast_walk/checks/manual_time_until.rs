@@ -2,7 +2,7 @@ use super::helpers::{is_side_effect_free, span_text};
 use crate::passes::walk::NodeCtx;
 use syntax::ast::Expression;
 
-pub fn check_manual_time_since(expression: &Expression, ctx: &NodeCtx) {
+pub fn check_manual_time_until(expression: &Expression, ctx: &NodeCtx) {
     let Expression::Call {
         expression: callee,
         args,
@@ -30,24 +30,31 @@ pub fn check_manual_time_since(expression: &Expression, ctx: &NodeCtx) {
         return;
     }
 
-    let Some(namespace) = time_now_namespace(receiver) else {
+    let Some(namespace) = time_now_namespace(arg) else {
         return;
     };
 
-    if !is_side_effect_free(arg) {
+    // No strip_refs: a `Ref<time.Time>` receiver reaches `Sub` via auto-deref, but
+    // `time.Until` takes a `Time`, so `time.Until(x)` would not type-check.
+    if receiver.get_type().get_qualified_id() != Some("go:time.Time") {
         return;
     }
 
-    let (Some(namespace_text), Some(arg_text)) =
-        (span_text(ctx.source, namespace), span_text(ctx.source, arg))
-    else {
+    if !is_side_effect_free(receiver) {
+        return;
+    }
+
+    let (Some(namespace_text), Some(receiver_text)) = (
+        span_text(ctx.source, namespace),
+        span_text(ctx.source, receiver),
+    ) else {
         return;
     };
 
-    ctx.sink.push(diagnostics::lint::manual_time_since(
+    ctx.sink.push(diagnostics::lint::manual_time_until(
         span,
         namespace_text,
-        arg_text,
+        receiver_text,
     ));
 }
 

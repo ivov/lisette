@@ -66,6 +66,11 @@ pub(super) fn is_side_effect_free(expression: &Expression) -> bool {
     }
 }
 
+pub(super) fn span_text<'a>(source: &'a str, expression: &Expression) -> Option<&'a str> {
+    let span = expression.get_span();
+    source.get(span.byte_offset as usize..span.end() as usize)
+}
+
 // The single identifier bound by a one-field enum-variant pattern such as
 // `Some(v)` or `Err(e)`, if the variant name matches.
 pub(super) fn enum_variant_binding<'a>(pattern: &'a Pattern, variant: &str) -> Option<&'a str> {

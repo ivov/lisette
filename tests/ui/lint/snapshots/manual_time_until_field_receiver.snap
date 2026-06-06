@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [info] Manual `time.Until`
+    ╭─[test.lis:9:3]
+  8 │ fn remaining(timer: Timer) -> time.Duration {
+  9 │   timer.deadline.Sub(time.Now())
+    ·   ───────────────┬──────────────
+    ·                  ╰── can use `time.Until`
+ 10 │ }
+    ╰────
+  help: `time.Until(timer.deadline)` is shorthand for `timer.deadline.Sub(time.Now())` · code: [lint.manual_time_until]
