@@ -1,6 +1,11 @@
 # Go Interop
 
-Lisette can import from the Go stdlib and from [third-party modules](#third-party-go-dependencies).
+Go interop has two directions:
+
+- **Inbound** is Lisette consuming Go, e.g. importing the Go stdlib and Go third-party modules.
+- **Outbound** is Go consuming Lisette-emitted Go, e.g. embedding Lisette in a Go project.
+
+This page describes inbound interop. Outbound interop is upcoming work.
 
 ## Importing Go packages
 
