@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [info] Redundant `Sprintf`
+    ╭─[test.lis:9:11]
+  8 │ fn main() {
+  9 │   let _ = fmt.Sprintf("%s", greet())
+    ·           ─────────────┬────────────
+    ·                        ╰── returns its argument unchanged
+ 10 │ }
+    ╰────
+  help: `fmt.Sprintf("%s", greet())` formats a string as itself. Use `greet()` directly · code: [lint.redundant_sprintf]

@@ -871,6 +871,135 @@ fn main() {
 }
 
 #[test]
+fn redundant_sprintf() {
+    assert_lint_snapshot!(
+        r#"
+import "go:fmt"
+
+fn main() {
+  let s = "hello"
+  let _ = fmt.Sprintf("%s", s)
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_sprintf_aliased_import() {
+    assert_lint_snapshot!(
+        r#"
+import myfmt "go:fmt"
+
+fn main() {
+  let s = "hello"
+  let _ = myfmt.Sprintf("%s", s)
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_sprintf_call_argument() {
+    assert_lint_snapshot!(
+        r#"
+import "go:fmt"
+
+fn greet() -> string {
+  "hi"
+}
+
+fn main() {
+  let _ = fmt.Sprintf("%s", greet())
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_sprintf_non_string_argument_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:fmt"
+
+fn main() {
+  let n = 42
+  let _ = fmt.Sprintf("%s", n)
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_sprintf_byte_slice_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:fmt"
+
+fn main() {
+  let b = "hi" as Slice<byte>
+  let _ = fmt.Sprintf("%s", b)
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_sprintf_quote_verb_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:fmt"
+
+fn main() {
+  let s = "hello"
+  let _ = fmt.Sprintf("%q", s)
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_sprintf_prefixed_format_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:fmt"
+
+fn main() {
+  let s = "hello"
+  let _ = fmt.Sprintf("value: %s", s)
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_sprintf_multiple_arguments_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:fmt"
+
+fn main() {
+  let s = "hello"
+  let _ = fmt.Sprintf("%s %s", s, s)
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_sprintf_sprint_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:fmt"
+
+fn main() {
+  let s = "hello"
+  let _ = fmt.Sprint(s)
+}
+"#
+    );
+}
+
+#[test]
 fn manual_equal_fold_to_lower() {
     assert_lint_snapshot!(
         r#"

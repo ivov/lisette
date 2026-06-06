@@ -736,6 +736,15 @@ pub fn manual_bytes_equal(
         ))
 }
 
+pub fn redundant_sprintf(span: &Span, namespace: &str, value: &str) -> LisetteDiagnostic {
+    LisetteDiagnostic::info("Redundant `Sprintf`")
+        .with_lint_code("redundant_sprintf")
+        .with_span_label(span, "returns its argument unchanged")
+        .with_help(format!(
+            "`{namespace}.Sprintf(\"%s\", {value})` formats a string as itself. Use `{value}` directly"
+        ))
+}
+
 pub fn manual_time_since(span: &Span, namespace: &str, arg: &str) -> LisetteDiagnostic {
     LisetteDiagnostic::info("Manual `time.Since`")
         .with_lint_code("manual_time_since")
