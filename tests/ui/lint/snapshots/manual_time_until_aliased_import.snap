@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [info] Manual `time.Until`
+   ╭─[test.lis:6:11]
+ 5 │   let deadline = clock.Now()
+ 6 │   let _ = deadline.Sub(clock.Now())
+   ·           ────────────┬────────────
+   ·                       ╰── can use `time.Until`
+ 7 │ }
+   ╰────
+  help: `clock.Until(deadline)` is shorthand for `deadline.Sub(clock.Now())` · code: [lint.manual_time_until]

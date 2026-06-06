@@ -1,3 +1,4 @@
+use super::helpers::span_text;
 use crate::passes::walk::NodeCtx;
 use syntax::ast::{BinaryOperator, Expression};
 
@@ -80,9 +81,4 @@ fn case_conversion(expression: &Expression) -> Option<(&str, &Expression, &Expre
     }
 
     Some((member.as_str(), namespace, arg))
-}
-
-fn span_text<'a>(source: &'a str, expression: &Expression) -> Option<&'a str> {
-    let span = expression.get_span();
-    source.get(span.byte_offset as usize..span.end() as usize)
 }

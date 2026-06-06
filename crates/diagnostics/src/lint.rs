@@ -729,6 +729,15 @@ pub fn manual_time_since(span: &Span, namespace: &str, arg: &str) -> LisetteDiag
         ))
 }
 
+pub fn manual_time_until(span: &Span, namespace: &str, receiver: &str) -> LisetteDiagnostic {
+    LisetteDiagnostic::info("Manual `time.Until`")
+        .with_lint_code("manual_time_until")
+        .with_span_label(span, "can use `time.Until`")
+        .with_help(format!(
+            "`{namespace}.Until({receiver})` is shorthand for `{receiver}.Sub({namespace}.Now())`"
+        ))
+}
+
 pub fn lost_query_mutation(span: &Span, method: &str) -> LisetteDiagnostic {
     LisetteDiagnostic::warn("Lost query mutation")
         .with_lint_code("lost_query_mutation")

@@ -1013,6 +1013,161 @@ fn main() {
 }
 
 #[test]
+fn manual_time_until() {
+    assert_lint_snapshot!(
+        r#"
+import "go:time"
+
+fn main() {
+  let deadline = time.Now()
+  let _ = deadline.Sub(time.Now())
+}
+"#
+    );
+}
+
+#[test]
+fn manual_time_until_aliased_import() {
+    assert_lint_snapshot!(
+        r#"
+import clock "go:time"
+
+fn main() {
+  let deadline = clock.Now()
+  let _ = deadline.Sub(clock.Now())
+}
+"#
+    );
+}
+
+#[test]
+fn manual_time_until_parenthesized() {
+    assert_lint_snapshot!(
+        r#"
+import "go:time"
+
+fn main() {
+  let deadline = time.Now()
+  let _ = deadline.Sub((time.Now()))
+}
+"#
+    );
+}
+
+#[test]
+fn manual_time_until_field_receiver() {
+    assert_lint_snapshot!(
+        r#"
+import "go:time"
+
+struct Timer {
+  deadline: time.Time
+}
+
+fn remaining(timer: Timer) -> time.Duration {
+  timer.deadline.Sub(time.Now())
+}
+"#
+    );
+}
+
+#[test]
+fn manual_time_until_variable_argument_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:time"
+
+fn main() {
+  let deadline = time.Now()
+  let now = time.Now()
+  let _ = deadline.Sub(now)
+}
+"#
+    );
+}
+
+#[test]
+fn manual_time_until_effectful_receiver_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:time"
+
+fn deadline() -> time.Time {
+  time.Now()
+}
+
+fn main() {
+  let _ = deadline().Sub(time.Now())
+}
+"#
+    );
+}
+
+#[test]
+fn manual_time_until_user_type_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+struct Clock {
+  ticks: int
+}
+
+impl Clock {
+  fn Now(self) -> Clock {
+    self
+  }
+  fn Sub(self, other: Clock) -> int {
+    self.ticks - other.ticks
+  }
+}
+
+fn main() {
+  let c = Clock { ticks: 0 }
+  let _ = c.Sub(c.Now())
+}
+"#
+    );
+}
+
+#[test]
+fn manual_time_until_non_time_receiver_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:time"
+
+struct Marker {
+  id: int
+}
+
+impl Marker {
+  fn Sub(self, _t: time.Time) -> int {
+    self.id
+  }
+}
+
+fn main() {
+  let m = Marker { id: 1 }
+  let _ = m.Sub(time.Now())
+}
+"#
+    );
+}
+
+#[test]
+fn manual_time_until_ref_receiver_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:time"
+
+fn main() {
+  let deadline = time.Now()
+  let r = &deadline
+  let _ = r.Sub(time.Now())
+}
+"#
+    );
+}
+
+#[test]
 fn self_comparison_equal() {
     assert_lint_snapshot!(
         r#"
