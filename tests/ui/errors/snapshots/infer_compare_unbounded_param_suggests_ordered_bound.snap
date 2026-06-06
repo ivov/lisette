@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Type mismatch
+   ╭─[test.lis:3:6]
+ 2 │ fn largest<T>(a: T, b: T) -> T {
+ 3 │   if a > b { a } else { b }
+   ·      ┬
+   ·      ╰── expected orderable, found `T`
+ 4 │ }
+   ╰────
+  help: `T` is an unconstrained type parameter. Add a `cmp.Ordered` bound to compare it, e.g. `<T: cmp.Ordered>` and add `import "go:cmp"` at the top · code: [infer.type_mismatch]

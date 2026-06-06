@@ -1022,6 +1022,16 @@ pub fn not_orderable(ty: &Type, span: Span) -> LisetteDiagnostic {
         .with_help("Use comparison operators only with numeric, string, or boolean types")
 }
 
+pub fn param_needs_ordered_bound(param: &str, span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Type mismatch")
+        .with_infer_code("type_mismatch")
+        .with_span_label(&span, format!("expected orderable, found `{}`", param))
+        .with_help(format!(
+            "`{param}` is an unconstrained type parameter. Add a `cmp.Ordered` bound to compare it, \
+             e.g. `<{param}: cmp.Ordered>` and add `import \"go:cmp\"` at the top"
+        ))
+}
+
 pub fn not_comparable(ty: &Type, reason: &str, span: Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Type mismatch")
         .with_infer_code("type_mismatch")

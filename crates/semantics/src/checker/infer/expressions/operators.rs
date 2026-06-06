@@ -668,9 +668,11 @@ impl InferCtx<'_, '_> {
             return;
         }
 
-        if let Type::Parameter(name) = &resolved_ty
-            && self.parameter_satisfies_bound(name, super::super::unify::BuiltinBound::Ordered)
-        {
+        if let Type::Parameter(name) = &resolved_ty {
+            if !self.parameter_satisfies_bound(name, super::super::unify::BuiltinBound::Ordered) {
+                self.sink
+                    .push(diagnostics::infer::param_needs_ordered_bound(name, *span));
+            }
             return;
         }
 

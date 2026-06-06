@@ -1459,6 +1459,16 @@ fn test(a: complex64, b: complex64) -> bool {
 }
 
 #[test]
+fn infer_compare_unbounded_param_suggests_ordered_bound() {
+    let input = r#"
+fn largest<T>(a: T, b: T) -> T {
+  if a > b { a } else { b }
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
 fn infer_unindexable_type() {
     let input = r#"
 fn test() {
