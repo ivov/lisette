@@ -1,5 +1,6 @@
 use crate::EmitEffects;
 use crate::Planner;
+use crate::Renderer;
 use crate::abi::coercion::{Coercion, CoercionDirection};
 use crate::calls::go_interop::{GoCallStrategy, WrapperTarget};
 use crate::context::expression::ExpressionContext;
@@ -306,7 +307,8 @@ impl Planner<'_> {
             binding_ty,
             CoercionDirection::Internal,
         );
-        let value_expression = coercion.apply(self, output, value_expression, fx);
+        let (coercion_setup, value_expression) = coercion.lower(self, value_expression, fx);
+        output.push_str(&Renderer.render_setup(&coercion_setup));
         let value_expression = maybe_clone_subslice(self, value, mutable, value_expression, fx);
 
         let go_identifier = self.scope.bind(identifier, raw_go_name);

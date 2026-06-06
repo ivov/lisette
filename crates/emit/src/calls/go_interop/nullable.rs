@@ -322,28 +322,6 @@ impl Planner<'_> {
     }
 
     /// Wrap a Go `*T` (T value-typed) into Lisette `Option<T>`.
-    pub(crate) fn emit_pointer_to_option_wrap(
-        &mut self,
-        output: &mut String,
-        ptr_value: &str,
-        option_ty: &Type,
-        fx: &mut EmitEffects,
-    ) -> String {
-        fx.require_stdlib();
-        let inner_ty_str = self.go_type_string(&option_ty.ok_type(), fx);
-        let option_var = self.fresh_var(Some("option"));
-        self.declare(&option_var);
-        write_line!(
-            output,
-            "{} := lisette.OptionFromPointer[{}]({})",
-            option_var,
-            inner_ty_str,
-            ptr_value
-        );
-        option_var
-    }
-
-    /// Typed counterpart of `emit_pointer_to_option_wrap`.
     pub(crate) fn plan_pointer_to_option_wrap(
         &mut self,
         statements: &mut Vec<LoweredStatement>,
@@ -372,86 +350,6 @@ impl Planner<'_> {
         outcome.expect("FreshSlot produces a slot")
     }
 
-    pub(crate) fn emit_collection_nullable_wrap(
-        &mut self,
-        output: &mut String,
-        raw_value: &str,
-        collection_ty: &Type,
-        shape: &NullableCollectionShape,
-        fx: &mut EmitEffects,
-    ) -> String {
-        fx.require_stdlib();
-
-        let lisette_collection_ty = self.go_type_string(collection_ty, fx);
-        let src_var = self.fresh_var(Some("src"));
-        self.declare(&src_var);
-        let wrapped_var = self.fresh_var(Some("wrapped"));
-        self.declare(&wrapped_var);
-        let index_var = self.fresh_var(Some("i"));
-        self.declare(&index_var);
-        let val_var = self.fresh_var(Some("v"));
-        self.declare(&val_var);
-
-        write_line!(output, "{} := {}", src_var, raw_value);
-        write_line!(
-            output,
-            "{} := make({}, len({}))",
-            wrapped_var,
-            lisette_collection_ty,
-            src_var
-        );
-
-        write_line!(
-            output,
-            "for {}, {} := range {} {{",
-            index_var,
-            val_var,
-            src_var
-        );
-
-        match &shape.element {
-            NullableCollectionElement::Option(opt_ty) => {
-                let fallible = Fallible::from_type(opt_ty).expect("Option type expected");
-                let is_pointer_bridged = self.is_non_nilable_option(opt_ty);
-                let is_interface = self.is_interface_option(opt_ty);
-                if is_interface {
-                    write_line!(output, "if !lisette.IsNilInterface({}) {{", val_var);
-                } else {
-                    write_line!(output, "if {} != nil {{", val_var);
-                }
-                let some_input = if is_pointer_bridged {
-                    format!("*{}", val_var)
-                } else {
-                    val_var.clone()
-                };
-                let mut fe = FalliblePlanner::new(self, &fallible, fx);
-                let some_wrapper = fe.emit_success(&some_input);
-                write_line!(output, "{}[{}] = {}", wrapped_var, index_var, some_wrapper);
-                output.push_str("} else {\n");
-                let mut fe = FalliblePlanner::new(self, &fallible, fx);
-                let none_wrapper = fe.emit_failure(None);
-                write_line!(output, "{}[{}] = {}", wrapped_var, index_var, none_wrapper);
-                output.push_str("}\n");
-            }
-            NullableCollectionElement::Nested(inner_shape) => {
-                let inner_lisette_ty = self.collection_element_ty(collection_ty, shape);
-                let inner_var = self.emit_collection_nullable_wrap(
-                    output,
-                    &val_var,
-                    &inner_lisette_ty,
-                    inner_shape,
-                    fx,
-                );
-                write_line!(output, "{}[{}] = {}", wrapped_var, index_var, inner_var);
-            }
-        }
-
-        output.push_str("}\n");
-
-        wrapped_var
-    }
-
-    /// Typed counterpart of `emit_collection_nullable_wrap`.
     pub(crate) fn plan_collection_nullable_wrap(
         &mut self,
         statements: &mut Vec<LoweredStatement>,
@@ -554,85 +452,6 @@ impl Planner<'_> {
         wrapped_var
     }
 
-    pub(crate) fn emit_collection_nullable_unwrap(
-        &mut self,
-        output: &mut String,
-        lisette_value: &str,
-        collection_ty: &Type,
-        shape: &NullableCollectionShape,
-        fx: &mut EmitEffects,
-    ) -> String {
-        fx.require_stdlib();
-        let raw_collection_ty = self.shape_raw_collection_ty(shape, fx);
-
-        let src_var = self.fresh_var(Some("src"));
-        self.declare(&src_var);
-        let unwrapped_var = self.fresh_var(Some("unwrapped"));
-        self.declare(&unwrapped_var);
-        let index_var = self.fresh_var(Some("i"));
-        self.declare(&index_var);
-        let val_var = self.fresh_var(Some("v"));
-        self.declare(&val_var);
-
-        write_line!(output, "{} := {}", src_var, lisette_value);
-        write_line!(
-            output,
-            "{} := make({}, len({}))",
-            unwrapped_var,
-            raw_collection_ty,
-            src_var
-        );
-
-        write_line!(
-            output,
-            "for {}, {} := range {} {{",
-            index_var,
-            val_var,
-            src_var
-        );
-
-        match &shape.element {
-            NullableCollectionElement::Option(opt_ty) => {
-                let is_pointer_bridged = self.is_non_nilable_option(opt_ty);
-                let is_map = matches!(shape.kind, CollectionKind::Map);
-                let emit_nil_else = is_map || is_pointer_bridged;
-                let some_assignment = if is_pointer_bridged {
-                    format!("&{}.SomeVal", val_var)
-                } else {
-                    format!("{}.SomeVal", val_var)
-                };
-                write_line!(output, "if {}.Tag == {} {{", val_var, OPTION_SOME_TAG);
-                write_line!(
-                    output,
-                    "{}[{}] = {}",
-                    unwrapped_var,
-                    index_var,
-                    some_assignment
-                );
-                if emit_nil_else {
-                    output.push_str("} else {\n");
-                    write_line!(output, "{}[{}] = nil", unwrapped_var, index_var);
-                }
-                output.push_str("}\n");
-            }
-            NullableCollectionElement::Nested(inner_shape) => {
-                let inner_lisette_ty = self.collection_element_ty(collection_ty, shape);
-                let inner_var = self.emit_collection_nullable_unwrap(
-                    output,
-                    &val_var,
-                    &inner_lisette_ty,
-                    inner_shape,
-                    fx,
-                );
-                write_line!(output, "{}[{}] = {}", unwrapped_var, index_var, inner_var);
-            }
-        }
-        output.push_str("}\n");
-
-        unwrapped_var
-    }
-
-    /// Typed counterpart of `emit_collection_nullable_unwrap`.
     pub(crate) fn plan_collection_nullable_unwrap(
         &mut self,
         statements: &mut Vec<LoweredStatement>,

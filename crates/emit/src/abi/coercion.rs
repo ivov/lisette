@@ -3,7 +3,7 @@ use syntax::types::Type;
 
 use crate::EmitEffects;
 use crate::Planner;
-use crate::calls::go_interop::WrapperTarget;
+use crate::Renderer;
 use crate::definitions::interface_adapter::AdapterPlan;
 use crate::plan::bodies::LoweredStatement;
 use crate::types::shape::NullableCollectionShape;
@@ -63,50 +63,6 @@ impl Coercion {
         Self { kind }
     }
 
-    pub(crate) fn apply(
-        self,
-        planner: &mut Planner,
-        output: &mut String,
-        value: String,
-        fx: &mut EmitEffects,
-    ) -> String {
-        match self.kind {
-            CoercionKind::Identity => value,
-            CoercionKind::WrapAsInterface(plan) => {
-                let adapter_name = planner.ensure_adapter_type(plan, fx);
-                format!("{}{{inner: {}}}", adapter_name, value)
-            }
-            CoercionKind::WrapNewtype { ty } => {
-                let type_name = planner.go_type_string(&ty, fx);
-                format!("{}({})", type_name, value)
-            }
-            CoercionKind::UnwrapNullableOption { ty } => {
-                let inner = planner.go_type_string(&ty.ok_type(), fx);
-                planner.emit_option_projection(output, &value, "unwrap", &inner, false, fx)
-            }
-            CoercionKind::UnwrapPointerOption { ty } => {
-                let ptr = format!("*{}", planner.go_type_string(&ty.ok_type(), fx));
-                planner.emit_option_projection(output, &value, "ptr", &ptr, true, fx)
-            }
-            CoercionKind::UnwrapNullableCollection { ty, shape } => {
-                planner.emit_collection_nullable_unwrap(output, &value, &ty, &shape, fx)
-            }
-            CoercionKind::UnwrapOptionToAny => {
-                planner.emit_option_projection(output, &value, "unwrap", "any", false, fx)
-            }
-            CoercionKind::WrapNullableOption { ty } => planner
-                .emit_nil_check_option_wrap(output, &value, &ty, WrapperTarget::FreshSlot, fx)
-                .expect("wrapper produced no slot"),
-            CoercionKind::WrapPointerOption { ty } => {
-                planner.emit_pointer_to_option_wrap(output, &value, &ty, fx)
-            }
-            CoercionKind::WrapNullableCollection { ty, shape } => {
-                planner.emit_collection_nullable_wrap(output, &value, &ty, &shape, fx)
-            }
-        }
-    }
-
-    /// Typed counterpart of `apply`.
     pub(crate) fn lower(
         self,
         planner: &mut Planner,
@@ -170,7 +126,9 @@ impl Planner<'_> {
             target,
             CoercionDirection::Internal,
         );
-        coercion.apply(self, output, emitted, fx)
+        let (setup, value) = coercion.lower(self, emitted, fx);
+        output.push_str(&Renderer.render_setup(&setup));
+        value
     }
 }
 

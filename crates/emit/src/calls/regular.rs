@@ -6,6 +6,7 @@ use rustc_hash::FxHashSet as HashSet;
 use crate::EmitEffects;
 use crate::Planner;
 use crate::Renderer;
+use crate::abi::AbiShape;
 use crate::abi::coercion::{Coercion, CoercionDirection, OptionShape, classify_option_shape};
 use crate::abi::transition::{emit_fn_arg_shape_adapter, emit_lisette_callback_wrapper};
 use crate::context::expression::ExpressionContext;
@@ -534,15 +535,11 @@ impl<'a> Planner<'a> {
 
     /// Detect whether `arg`'s fn-shape disagrees with the callee's generic
     /// param shape (Lisette callback adapter trigger). Pure detection.
-    pub(crate) fn detect_lowered_fn_arg_shape(
+    fn fn_arg_shapes(
         &self,
         arg: &Expression,
-        generic_param_ty: Option<&Type>,
-    ) -> Option<()> {
-        if is_tagged_shape_fn_value(arg) {
-            return None;
-        }
-        let raw_param_ty = generic_param_ty?;
+        raw_param_ty: &Type,
+    ) -> Option<(Option<AbiShape>, Type, AbiShape)> {
         let variadic_inner = (raw_param_ty.get_name() == Some("VarArgs"))
             .then(|| raw_param_ty.inner())
             .flatten();
@@ -560,6 +557,19 @@ impl<'a> Planner<'a> {
         let arg_ret = arg_fn.get_function_ret()?;
         let arg_shape = self.classify_direct_emission(arg_ret)?;
 
+        Some((param_shape, arg_fn, arg_shape))
+    }
+
+    pub(crate) fn detect_lowered_fn_arg_shape(
+        &self,
+        arg: &Expression,
+        generic_param_ty: Option<&Type>,
+    ) -> Option<()> {
+        if is_tagged_shape_fn_value(arg) {
+            return None;
+        }
+        let raw_param_ty = generic_param_ty?;
+        let (param_shape, _arg_fn, arg_shape) = self.fn_arg_shapes(arg, raw_param_ty)?;
         if param_shape.as_ref() == Some(&arg_shape) {
             return None;
         }
@@ -572,24 +582,7 @@ impl<'a> Planner<'a> {
         generic_param_ty: &Type,
         fx: &mut EmitEffects,
     ) -> Option<(Vec<LoweredStatement>, String)> {
-        let raw_param_ty = generic_param_ty;
-        let variadic_inner = (raw_param_ty.get_name() == Some("VarArgs"))
-            .then(|| raw_param_ty.inner())
-            .flatten();
-        let param_ty = variadic_inner.as_ref().unwrap_or(raw_param_ty);
-        let param_fn = self
-            .facts
-            .resolve_to_function_type(param_ty.unwrap_forall())?;
-        let param_ret = param_fn.get_function_ret()?;
-        let param_shape = self.classify_direct_emission(param_ret);
-
-        let arg_ty = arg.get_type();
-        let arg_fn = self
-            .facts
-            .resolve_to_function_type(arg_ty.unwrap_forall())?;
-        let arg_ret = arg_fn.get_function_ret()?;
-        let arg_shape = self.classify_direct_emission(arg_ret)?;
-
+        let (param_shape, arg_fn, arg_shape) = self.fn_arg_shapes(arg, generic_param_ty)?;
         let (mut setup, value) = self.lower_value(arg, ExpressionContext::value(), fx);
         let mut buffer = String::new();
         let adapted = emit_fn_arg_shape_adapter(
@@ -804,11 +797,7 @@ impl<'a> Planner<'a> {
     ) -> Option<NullableCoerceKind> {
         let param_ty = effective_param_ty?;
         let arg_ty = arg.get_type();
-        let check_ty = if param_ty.get_name() == Some("VarArgs") {
-            param_ty.inner().unwrap_or_else(|| param_ty.clone())
-        } else {
-            param_ty.clone()
-        };
+        let check_ty = varargs_inner_or_self(param_ty);
 
         if arg_ty.is_option() && check_ty.resolves_to_unknown() {
             return Some(NullableCoerceKind::OptionToUnknown);
@@ -839,13 +828,7 @@ impl<'a> Planner<'a> {
         let arg_ty = arg.get_type();
         match kind {
             NullableCoerceKind::OptionToUnknown => {
-                let check_ty = if effective_param_ty.get_name() == Some("VarArgs") {
-                    effective_param_ty
-                        .inner()
-                        .unwrap_or_else(|| effective_param_ty.clone())
-                } else {
-                    effective_param_ty.clone()
-                };
+                let check_ty = varargs_inner_or_self(effective_param_ty);
                 if arg.is_none_literal() {
                     return (Vec::new(), "nil".to_string());
                 }
@@ -876,6 +859,15 @@ impl<'a> Planner<'a> {
         let (coercion_setup, coerced) = coercion.lower(self, value, fx);
         setup.extend(coercion_setup);
         (setup, coerced)
+    }
+}
+
+/// The element type of a `VarArgs<T>`, or the type itself when not variadic.
+fn varargs_inner_or_self(ty: &Type) -> Type {
+    if ty.get_name() == Some("VarArgs") {
+        ty.inner().unwrap_or_else(|| ty.clone())
+    } else {
+        ty.clone()
     }
 }
 

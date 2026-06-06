@@ -645,6 +645,30 @@ pub(crate) fn render_lowered_tail_return(
     }
 }
 
+fn lowered_tail_fallback(
+    planner: &mut Planner,
+    expression: &syntax::ast::Expression,
+    return_ty: &Type,
+    shape: &AbiShape,
+    hoist_hint: Option<&str>,
+    fx: &mut EmitEffects,
+) -> Vec<LoweredStatement> {
+    let mut setup = String::new();
+    let value = planner.emit_value(&mut setup, expression, ExpressionContext::value(), fx);
+    let value = match hoist_hint {
+        Some(hint) => planner.hoist_tmp_value(&mut setup, hint, &value),
+        None => value,
+    };
+    let mut statements = Vec::new();
+    if !setup.is_empty() {
+        statements.push(LoweredStatement::RawGo(setup));
+    }
+    statements.extend(emit_lowered_result_return(
+        planner, &value, return_ty, shape, fx,
+    ));
+    statements
+}
+
 fn emit_lowered_tuple_tail(
     planner: &mut Planner,
     expression: &syntax::ast::Expression,
@@ -679,21 +703,14 @@ fn emit_lowered_tuple_tail(
     }
 
     let return_ty = planner.return_ctx().expect_ty();
-    let mut setup = String::new();
-    let value = planner.emit_value(&mut setup, expression, ExpressionContext::value(), fx);
-    let temp = planner.hoist_tmp_value(&mut setup, "tup", &value);
-    let mut statements = Vec::new();
-    if !setup.is_empty() {
-        statements.push(LoweredStatement::RawGo(setup));
-    }
-    statements.extend(emit_lowered_result_return(
+    lowered_tail_fallback(
         planner,
-        &temp,
+        expression,
         &return_ty,
         &AbiShape::Tuple { arity },
+        Some("tup"),
         fx,
-    ));
-    statements
+    )
 }
 
 fn emit_lowered_partial_tail(
@@ -758,20 +775,14 @@ fn emit_lowered_partial_tail(
         return statements;
     }
 
-    let mut setup = String::new();
-    let value = planner.emit_value(&mut setup, expression, ExpressionContext::value(), fx);
-    let mut statements = Vec::new();
-    if !setup.is_empty() {
-        statements.push(LoweredStatement::RawGo(setup));
-    }
-    statements.extend(emit_lowered_result_return(
+    lowered_tail_fallback(
         planner,
-        &value,
+        expression,
         &return_ty,
         &AbiShape::PartialTuple,
+        None,
         fx,
-    ));
-    statements
+    )
 }
 
 /// `Some(x)`/`None` collapse to `x`/`nil`; other Option expressions

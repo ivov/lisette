@@ -527,7 +527,8 @@ impl Planner<'_> {
         {
             let coercion =
                 Coercion::resolve(self, &value.get_type(), ty, CoercionDirection::ToGoBoundary);
-            let unwrapped = coercion.apply(self, output, rhs_staged.value, fx);
+            let (coercion_setup, unwrapped) = coercion.lower(self, rhs_staged.value, fx);
+            output.push_str(&Renderer.render_setup(&coercion_setup));
             write_line!(output, "{} = {}", target_str, unwrapped);
         } else {
             write_line!(output, "{} = {}", target_str, rhs_staged.value);

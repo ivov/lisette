@@ -80,7 +80,9 @@ impl Planner<'_> {
                         &element_lisette_ty,
                         CoercionDirection::Internal,
                     );
-                    wrapped.push(coercion.apply(self, output, emitted, fx));
+                    let (coercion_setup, coerced) = coercion.lower(self, emitted, fx);
+                    output.push_str(&Renderer.render_setup(&coercion_setup));
+                    wrapped.push(coerced);
                 }
                 let elements = wrapped;
 
