@@ -327,6 +327,23 @@ impl<'s> TaskState<'s> {
         store: &Store,
         type_name: &str,
     ) -> Option<EcoString> {
+        self.lookup_qualified_name_in_scope(store, type_name, false)
+    }
+
+    fn lookup_qualified_name_in_type_position(
+        &self,
+        store: &Store,
+        type_name: &str,
+    ) -> Option<EcoString> {
+        self.lookup_qualified_name_in_scope(store, type_name, true)
+    }
+
+    fn lookup_qualified_name_in_scope(
+        &self,
+        store: &Store,
+        type_name: &str,
+        prefer_type: bool,
+    ) -> Option<EcoString> {
         if let Some((prefix, simple_name)) = type_name.split_once('.')
             && let Some(module_id) = self.imports.prefix_to_module.get(prefix)
             && let Some(imported_module) = store.get_module(module_id)
@@ -336,26 +353,29 @@ impl<'s> TaskState<'s> {
             return Some(qualified_name.into());
         }
 
-        let module = store.get_module(&self.cursor.module_id)?;
-        let qualified_name = Symbol::from_parts(&module.id, type_name);
+        let module_ids = std::iter::once(self.cursor.module_id.as_str())
+            .chain(self.imports.unprefixed_imports.iter().map(String::as_str));
 
-        if module.definitions.contains_key(qualified_name.as_str()) {
-            return Some(qualified_name.as_eco().clone());
-        }
+        let mut value_fallback: Option<EcoString> = None;
+        for module_id in module_ids {
+            let Some(module) = store.get_module(module_id) else {
+                continue;
+            };
+            let qualified_name = Symbol::from_parts(module_id, type_name);
+            let Some(definition) = module.definitions.get(qualified_name.as_str()) else {
+                continue;
+            };
 
-        for imported_module_id in &self.imports.unprefixed_imports {
-            if let Some(imported_module) = store.get_module(imported_module_id) {
-                let qualified_name = Symbol::from_parts(imported_module_id, type_name);
-                if imported_module
-                    .definitions
-                    .contains_key(qualified_name.as_str())
-                {
-                    return Some(qualified_name.as_eco().clone());
+            if prefer_type && definition.is_value(qualified_name.as_str()) {
+                if value_fallback.is_none() {
+                    value_fallback = Some(qualified_name.as_eco().clone());
                 }
+            } else {
+                return Some(qualified_name.as_eco().clone());
             }
         }
 
-        None
+        value_fallback
     }
 
     pub(crate) fn get_definition_name_span(
@@ -495,7 +515,7 @@ impl<'s> TaskState<'s> {
             return None;
         }
 
-        let qualified_name = self.lookup_qualified_name(store, type_name)?;
+        let qualified_name = self.lookup_qualified_name_in_type_position(store, type_name)?;
         let ty = store.get_type(&qualified_name)?.clone();
 
         Some((qualified_name.to_string(), ty))

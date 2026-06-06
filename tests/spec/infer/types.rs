@@ -5814,3 +5814,77 @@ fn guarded(f: Flag, x: int) -> int {
     )
     .assert_no_errors();
 }
+
+#[test]
+fn go_const_named_unknown_does_not_shadow_builtin_unknown_type() {
+    let typedef = r#"
+pub struct Locale(int)
+
+pub const Unknown: Locale = 0
+
+pub var Marshal: fn(Unknown) -> Result<Slice<byte>, error>
+pub var Logger: fn(int, int, string, VarArgs<Unknown>) -> ()
+"#;
+    let input = r#"
+import "go:example.com/discord"
+
+fn main() {}
+"#;
+    infer_with_go_typedefs(input, &[("go:example.com/discord", typedef)]).assert_no_errors();
+}
+
+#[test]
+fn go_const_named_never_does_not_shadow_builtin_never_type() {
+    let typedef = r#"
+pub struct Status(int)
+
+pub const Never: Status = 0
+
+pub var Abort: fn() -> Never
+"#;
+    let input = r#"
+import "go:example.com/api"
+
+fn main() {}
+"#;
+    infer_with_go_typedefs(input, &[("go:example.com/api", typedef)]).assert_no_errors();
+}
+
+#[test]
+fn go_value_in_type_position_without_shadowed_type_still_errors() {
+    let typedef = r#"
+pub struct Status(int)
+
+pub const Pending: Status = 0
+
+pub var Read: fn() -> Pending
+"#;
+    let input = r#"
+import "go:example.com/api"
+
+fn main() {}
+"#;
+    infer_with_go_typedefs(input, &[("go:example.com/api", typedef)])
+        .assert_resolve_code("value_in_type_position");
+}
+
+#[test]
+fn go_local_type_shadowing_prelude_unknown_resolves_locally_before_its_definition() {
+    let typedef = r#"
+pub struct Holder {
+  pub value: Unknown
+}
+
+pub struct Unknown {
+  pub id: int
+}
+"#;
+    let input = r#"
+import "go:example.com/api"
+
+fn read_id(holder: api.Holder) -> int {
+  holder.value.id
+}
+"#;
+    infer_with_go_typedefs(input, &[("go:example.com/api", typedef)]).assert_no_errors();
+}

@@ -165,6 +165,11 @@ impl Definition {
     pub fn is_type_alias(&self) -> bool {
         matches!(self.body, DefinitionBody::TypeAlias { .. })
     }
+
+    pub fn is_value(&self, qualified_name: &str) -> bool {
+        matches!(self.body, DefinitionBody::Value { .. })
+            && self.ty.unwrap_forall().get_qualified_id() != Some(qualified_name)
+    }
 }
 
 pub type MethodSignatures = HashMap<EcoString, Type>;

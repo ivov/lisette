@@ -239,17 +239,10 @@ impl TaskState<'_> {
         type_name: &str,
     ) -> Option<(&'static str, Option<String>)> {
         let definition = store.get_definition(qualified_name)?;
-        if !matches!(definition.body, DefinitionBody::Value { .. }) {
+        if !definition.is_value(qualified_name) {
             return None;
         }
         let body = definition.ty.unwrap_forall();
-
-        if body
-            .get_qualified_id()
-            .is_some_and(|id| id == qualified_name)
-        {
-            return None;
-        }
 
         let is_function = matches!(body, Type::Function(_));
         let enum_id = match body {
