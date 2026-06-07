@@ -210,3 +210,57 @@ fn scan_source_imports(src_dir: &Path) -> Result<ScannedImports, SourceScanError
 
     Ok(ScannedImports { all, non_blank })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn project_src(files: &[(&str, &str)]) -> tempfile::TempDir {
+        let dir = tempfile::tempdir().unwrap();
+        let src = dir.path().join("src");
+        std::fs::create_dir_all(&src).unwrap();
+        for (name, body) in files {
+            std::fs::write(src.join(name), body).unwrap();
+        }
+        dir
+    }
+
+    #[test]
+    fn scan_reports_parse_error_naming_the_file() {
+        let project = project_src(&[("main.lis", "fn broken( {\n")]);
+
+        let Err(SourceScanError::Parse { path, .. }) =
+            scan_source_imports(&project.path().join("src"))
+        else {
+            panic!("expected a parse error");
+        };
+        assert!(
+            path.ends_with("main.lis"),
+            "error must name the failing file, got {}",
+            path.display()
+        );
+    }
+
+    #[test]
+    fn scan_collects_third_party_imports_and_separates_blank_and_stdlib() {
+        let source = r#"import "go:github.com/gorilla/mux"
+import _ "go:github.com/gorilla/context"
+import "go:fmt"
+
+fn main() {}
+"#;
+        let project = project_src(&[("main.lis", source)]);
+
+        let Ok(scanned) = scan_source_imports(&project.path().join("src")) else {
+            panic!("scan must succeed on valid sources");
+        };
+
+        assert_eq!(scanned.non_blank, vec!["github.com/gorilla/mux"]);
+        let mut all = scanned.all;
+        all.sort();
+        assert_eq!(
+            all,
+            vec!["github.com/gorilla/context", "github.com/gorilla/mux"]
+        );
+    }
+}

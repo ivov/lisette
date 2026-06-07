@@ -394,3 +394,184 @@ fn ensure_go_deps_table(
         .as_table_mut()
         .ok_or_else(|| "Invalid `lisette.toml`: `dependencies.go` is not a table".to_string())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::TempDir;
+
+    fn project_with(manifest: &str) -> TempDir {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("lisette.toml"), manifest).unwrap();
+        dir
+    }
+
+    fn manifest_text(dir: &TempDir) -> String {
+        std::fs::read_to_string(dir.path().join("lisette.toml")).unwrap()
+    }
+
+    #[test]
+    fn promotes_transitive_still_imported() {
+        let dir = project_with(
+            r#"[project]
+name = "demo"
+version = "0.1.0"
+
+[dependencies.go]
+"github.com/gorilla/context" = { version = "v1.1.1", via = ["github.com/gorilla/mux"] }
+"#,
+        );
+
+        trim_dead_via_parents(dir.path()).unwrap();
+        let report =
+            resolve_empty_via(dir.path(), &["github.com/gorilla/context".to_string()]).unwrap();
+
+        assert_eq!(report.promoted, vec!["github.com/gorilla/context"]);
+        let after = manifest_text(&dir);
+        assert!(after.contains(r#""github.com/gorilla/context" = "v1.1.1""#));
+        assert!(!after.contains("via"));
+    }
+
+    #[test]
+    fn removes_transitive_no_longer_imported() {
+        let dir = project_with(
+            r#"[project]
+name = "demo"
+version = "0.1.0"
+
+[dependencies.go]
+"github.com/gorilla/context" = { version = "v1.1.1", via = ["github.com/gorilla/mux"] }
+"#,
+        );
+
+        trim_dead_via_parents(dir.path()).unwrap();
+        let report = resolve_empty_via(dir.path(), &[]).unwrap();
+
+        assert_eq!(report.removed, vec!["github.com/gorilla/context"]);
+        assert!(!manifest_text(&dir).contains("gorilla/context"));
+    }
+
+    #[test]
+    fn keeps_transitive_with_remaining_parents() {
+        let dir = project_with(
+            r#"[project]
+name = "demo"
+version = "0.1.0"
+
+[dependencies.go]
+"github.com/gorilla/mux" = "v1.8.0"
+"github.com/gorilla/context" = { version = "v1.1.1", via = ["github.com/gorilla/mux", "github.com/old/dead"] }
+"#,
+        );
+
+        trim_dead_via_parents(dir.path()).unwrap();
+        resolve_empty_via(dir.path(), &[]).unwrap();
+
+        let after = manifest_text(&dir);
+        assert!(after.contains("gorilla/context"));
+        assert!(after.contains("gorilla/mux"));
+        assert!(!after.contains("old/dead"));
+    }
+
+    #[test]
+    fn promotes_subpackage_via_longest_prefix() {
+        let dir = project_with(
+            r#"[project]
+name = "demo"
+version = "0.1.0"
+
+[dependencies.go]
+"k8s.io/api" = { version = "v0.30.0", via = ["k8s.io/client-go"] }
+"#,
+        );
+
+        trim_dead_via_parents(dir.path()).unwrap();
+        let report = resolve_empty_via(dir.path(), &["k8s.io/api/core/v1".to_string()]).unwrap();
+
+        assert_eq!(report.promoted, vec!["k8s.io/api"]);
+        assert!(manifest_text(&dir).contains(r#""k8s.io/api" = "v0.30.0""#));
+    }
+
+    #[test]
+    fn no_op_on_clean_manifest_is_byte_identical() {
+        let dir = project_with(
+            r#"[project]
+name = "demo"
+version = "0.1.0"
+
+[dependencies.go]
+"github.com/gorilla/mux" = "v1.8.0"
+"#,
+        );
+        let before = manifest_text(&dir);
+
+        let trimmed = trim_dead_via_parents(dir.path()).unwrap();
+        let report =
+            resolve_empty_via(dir.path(), &["github.com/gorilla/mux".to_string()]).unwrap();
+
+        assert!(trimmed.is_empty());
+        assert!(report.promoted.is_empty());
+        assert!(report.removed.is_empty());
+        assert_eq!(before, manifest_text(&dir));
+    }
+
+    #[test]
+    fn find_module_for_pkg_picks_longest_declared_prefix() {
+        let mut deps = BTreeMap::new();
+        deps.insert(
+            "k8s.io".to_string(),
+            GoDependency {
+                version: "v0.0.0".to_string(),
+                via: None,
+            },
+        );
+        deps.insert(
+            "k8s.io/api".to_string(),
+            GoDependency {
+                version: "v0.30.0".to_string(),
+                via: None,
+            },
+        );
+
+        let (module, _) = find_module_for_pkg(&deps, "k8s.io/api/core/v1").unwrap();
+        assert_eq!(module, "k8s.io/api");
+        assert!(find_module_for_pkg(&deps, "example.com/other").is_none());
+    }
+
+    #[test]
+    fn rejects_subpackage_dependency_with_clear_message() {
+        let dir = project_with(
+            r#"[project]
+name = "demo"
+version = "0.1.0"
+
+[dependencies.go]
+"github.com/gorilla/mux" = "v1.8.0"
+"github.com/gorilla/mux/middleware" = "v1.8.0"
+"#,
+        );
+        let manifest = parse_manifest(dir.path()).unwrap();
+
+        let error = check_no_subpackage_deps(&manifest).unwrap_err();
+        assert!(error.contains("`github.com/gorilla/mux/middleware`"));
+        assert!(error.contains("subpackage of `github.com/gorilla/mux`"));
+    }
+
+    #[test]
+    fn accepts_multi_module_monorepo_siblings() {
+        let dir = project_with(
+            r#"[project]
+name = "demo"
+version = "0.1.0"
+
+[dependencies.go]
+"go.opentelemetry.io/otel" = { version = "v1.37.0", via = ["go.opentelemetry.io/contrib"] }
+"go.opentelemetry.io/otel/sdk" = { version = "v1.37.0", via = ["go.opentelemetry.io/contrib"] }
+"go.opentelemetry.io/otel/sdk/metric" = { version = "v1.36.0", via = ["go.opentelemetry.io/otel/sdk"] }
+"#,
+        );
+        let manifest = parse_manifest(dir.path()).unwrap();
+
+        assert!(check_no_subpackage_deps(&manifest).is_ok());
+    }
+}

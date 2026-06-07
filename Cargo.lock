@@ -716,6 +716,7 @@ version = "0.3.0"
 dependencies = [
  "lisette-stdlib",
  "serde",
+ "tempfile",
  "toml",
  "toml_edit",
 ]
