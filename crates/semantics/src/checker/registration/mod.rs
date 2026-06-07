@@ -60,6 +60,12 @@ pub(super) fn has_closed_domain_attribute(attributes: &[Attribute]) -> bool {
         .any(|flag| flag == "closed_domain")
 }
 
+pub(super) fn has_anon_struct_attribute(attributes: &[Attribute]) -> bool {
+    extract_attribute_flags(attributes, "go")
+        .iter()
+        .any(|flag| flag == "anon_struct")
+}
+
 fn canonical_const_literal(expression: &Expression) -> Option<syntax::ast::Literal> {
     use syntax::ast::{Literal, UnaryOperator};
     match expression.unwrap_parens() {
@@ -581,6 +587,7 @@ impl TaskState<'_> {
                     doc,
                     has_display_attribute(attributes),
                     has_closed_domain_attribute(attributes),
+                    has_anon_struct_attribute(attributes),
                 ),
                 Expression::Interface {
                     name,

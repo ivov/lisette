@@ -186,6 +186,10 @@ func generateFromPackage(pkg *packages.Package, displayPath, lisetteVersion, goV
 
 	emitter.EmitImports(converter.ExternalPkgs())
 
+	for _, synth := range converter.SyntheticStructs() {
+		emitter.EmitExport(synth)
+	}
+
 	for _, group := range constGroups {
 		if typeResult, ok := groupTypeResult[group.TypeName]; ok {
 			emitter.EmitExport(typeResult)

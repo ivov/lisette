@@ -38,6 +38,8 @@ pub enum DefinitionBody {
         constructor: Option<Type>,
         display: bool,
         closed_domain: bool,
+        /// `#[go(anon_struct)]`: emit renders this as inline `struct{...}`.
+        anon_struct: bool,
     },
     Interface {
         definition: Interface,
@@ -148,6 +150,16 @@ impl Definition {
             &self.body,
             DefinitionBody::Struct {
                 closed_domain: true,
+                ..
+            }
+        )
+    }
+
+    pub fn is_anon_struct(&self) -> bool {
+        matches!(
+            &self.body,
+            DefinitionBody::Struct {
+                anon_struct: true,
                 ..
             }
         )

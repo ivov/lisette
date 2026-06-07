@@ -42,17 +42,17 @@ type Fetcher struct {
 	Fetch func(url string) ([]byte, error)
 }
 
-// Function type returning skipped type with error - tests analyzeReturns skip in Result path
+// Function type returning an anonymous struct with error - synthesized into the Result path
 type BadResultFn struct {
 	Run func() (struct{ X int }, error)
 }
 
-// Function type returning skipped type with ok - tests analyzeReturns skip in Option path
+// Function type returning an anonymous struct with ok - synthesized into the Option path
 type BadOptionFn struct {
 	Check func() (v struct{ X int }, ok bool)
 }
 
-// Function type returning multiple skipped types - tests collectReturnTypes skip in tuple path
+// Function type returning two anonymous structs - synthesized into the tuple path
 type TupleSkip struct {
 	GetPair func() (struct{ A int }, struct{ B int })
 }

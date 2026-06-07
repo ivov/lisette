@@ -1,9 +1,11 @@
 use crate::EmitEffects;
 use crate::Planner;
+use crate::definitions::structs::struct_field_go_name;
 use crate::names::go_name;
 use crate::types::native::NativeGoType;
 use crate::types::prelude::PreludeType;
 use syntax::ast::Annotation;
+use syntax::program::DefinitionBody;
 use syntax::types::Type;
 
 #[derive(Debug, Clone, Default)]
@@ -151,6 +153,10 @@ impl Planner<'_> {
     }
 
     fn emit_constructor(&self, qualified_name: &str, params: &[Type], ty: &Type) -> GoType {
+        if let Some(go) = self.anon_struct_go_type(qualified_name) {
+            return go;
+        }
+
         let name = self.unqualify_name(qualified_name);
 
         if ty.is_unit() {
@@ -463,6 +469,10 @@ impl Planner<'_> {
 
     /// Lower a non-unit `Annotation::Constructor` into its Go equivalent.
     fn constructor_annotation_to_go(&self, name: &str, params: &[Annotation]) -> GoType {
+        if let Some(go) = self.anon_struct_go_type(name) {
+            return go;
+        }
+
         let base_name = self.unqualify_name(name);
 
         if let Some(native_type) = NativeGoType::from_name(&base_name) {
@@ -502,6 +512,33 @@ impl Planner<'_> {
         };
         result.merge_all(&param_types);
         result
+    }
+
+    /// Render a `#[go(anon_struct)]` stand-in as inline `struct{...}`: its name
+    /// has no Go counterpart, so `pkg.Name` would not compile.
+    pub(crate) fn anon_struct_go_type(&self, id: &str) -> Option<GoType> {
+        let definition = self.facts.definition(id)?;
+        if !definition.is_anon_struct() {
+            return None;
+        }
+        let DefinitionBody::Struct { fields, .. } = &definition.body else {
+            return None;
+        };
+        let mut result = GoType::default();
+        let rendered: Vec<String> = fields
+            .iter()
+            .map(|f| {
+                let field_ty = self.go_type(&f.ty);
+                result.merge(&field_ty);
+                format!("{} {}", struct_field_go_name(f, &[]), field_ty.code)
+            })
+            .collect();
+        result.code = if rendered.is_empty() {
+            "struct{}".to_string()
+        } else {
+            format!("struct {{ {} }}", rendered.join("; "))
+        };
+        Some(result)
     }
 
     fn annotation_go_import(&self, name: &str) -> Option<String> {

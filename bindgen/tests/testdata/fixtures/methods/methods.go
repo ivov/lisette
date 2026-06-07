@@ -16,7 +16,7 @@ func (c *Counter) Log(format string, args ...any) {}
 // Method with unnamed params - tests convertMethod unnamed param path
 func (c *Counter) Process(string, int) {}
 
-// Type with anonymous struct field - methods should skip due to receiver type
+// Type with an anonymous-struct field - bindgen synthesizes a named type for it
 type BadReceiver struct {
 	Data struct{ X int }
 }

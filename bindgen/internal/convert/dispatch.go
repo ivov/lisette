@@ -39,9 +39,9 @@ type ConvertResult struct {
 	SentinelInt *int
 	// BuilderMethod suppresses unused_value on fluent-chain returns the caller typically discards.
 	BuilderMethod bool
-	// SyntheticType holds a typedef bindgen mints to give an otherwise-skipped
-	// var a referenceable type.
-	SyntheticType *ConvertResult
+	// AnonStruct emits `#[go(anon_struct)]` so the compiler renders the type as
+	// the underlying Go `struct{...}` rather than `pkg.Name`.
+	AnonStruct bool
 }
 
 // HasReturn reports whether this function/method has a non-unit return type
@@ -122,6 +122,11 @@ type Converter struct {
 	shallowUnderlyingCache   map[token.Pos]types.Type     // lazily built; spec-level wrapped type by Named.Obj().Pos(). nil sentinels cached.
 	// Set per-function-conversion: maps `S` to `Slice<E>` for the `S ~[]E` shape.
 	typeParamSubstitutions map[string]string
+	// Stand-ins for Go anonymous struct types, in first-seen order.
+	synth          []syntheticStruct
+	synthByShape   map[string]int  // shape key -> index into synth
+	synthTaken     map[string]bool // names reserved against collision
+	reservedSeeded bool
 }
 
 func NewConverter(pkgPath string, pkg *packages.Package, cfg *config.Config) *Converter {
@@ -130,6 +135,8 @@ func NewConverter(pkgPath string, pkg *packages.Package, cfg *config.Config) *Co
 		externalPkgs:   make(ExternalPkgs),
 		pkg:            pkg,
 		cfg:            cfg,
+		synthByShape:   make(map[string]int),
+		synthTaken:     make(map[string]bool),
 	}
 }
 
@@ -219,6 +226,8 @@ func (c *Converter) Convert(symbolExport extract.SymbolExport) ConvertResult {
 		Doc:  symbolExport.Doc,
 	}
 
+	synthCheckpoint := c.synthMark()
+
 	switch symbolExport.Kind {
 	case extract.ExportFunction:
 		c.convertFunction(&result, symbolExport)
@@ -230,6 +239,10 @@ func (c *Converter) Convert(symbolExport extract.SymbolExport) ConvertResult {
 		c.convertConstant(&result, symbolExport)
 	case extract.ExportVariable:
 		c.convertVariable(&result, symbolExport)
+	}
+
+	if result.SkipReason != nil {
+		c.rollbackSynth(synthCheckpoint)
 	}
 
 	return result

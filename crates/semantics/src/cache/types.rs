@@ -352,6 +352,7 @@ pub enum CachedDefinitionBody {
         constructor: Option<Type>,
         display: bool,
         closed_domain: bool,
+        anon_struct: bool,
     },
     Interface {
         definition: CachedInterface,
@@ -414,6 +415,7 @@ impl CachedDefinition {
                 constructor,
                 display,
                 closed_domain,
+                anon_struct,
             } => CachedDefinitionBody::Struct {
                 generics: generics
                     .iter()
@@ -428,6 +430,7 @@ impl CachedDefinition {
                 constructor: constructor.clone(),
                 display: *display,
                 closed_domain: *closed_domain,
+                anon_struct: *anon_struct,
             },
             DefinitionBody::Interface { definition } => CachedDefinitionBody::Interface {
                 definition: CachedInterface::from_interface(definition, file_id_to_index),
@@ -503,6 +506,7 @@ impl CachedDefinition {
                 constructor,
                 display,
                 closed_domain,
+                anon_struct,
             } => DefinitionBody::Struct {
                 generics: generics.iter().map(|g| g.to_generic(file_ids)).collect(),
                 fields: fields.iter().map(|f| f.to_field(file_ids)).collect(),
@@ -511,6 +515,7 @@ impl CachedDefinition {
                 constructor: constructor.clone(),
                 display: *display,
                 closed_domain: *closed_domain,
+                anon_struct: *anon_struct,
             },
             CachedDefinitionBody::Interface { definition } => DefinitionBody::Interface {
                 definition: definition.to_interface(file_ids),

@@ -3,6 +3,24 @@
 // Go: 0.0.0
 // Lisette: 0.0.0
 
+/// Synthesized from a Go anonymous struct type.
+#[go(anon_struct)]
+pub struct AnonA {
+  pub A: int,
+}
+
+/// Synthesized from a Go anonymous struct type.
+#[go(anon_struct)]
+pub struct AnonB {
+  pub B: int,
+}
+
+/// Synthesized from a Go anonymous struct type.
+#[go(anon_struct)]
+pub struct AnonX {
+  pub X: int,
+}
+
 /// Function with unnamed params - tests convertFunc unnamed param path
 pub fn Callback(n: int, s: string) -> bool
 
@@ -24,13 +42,15 @@ pub struct BadHandler {
   pub Process: Option<fn(Unknown) -> int>,
 }
 
-/// Function type returning skipped type with ok - tests analyzeReturns skip in Option path
-// SKIPPED field "Check": anonymous-struct — anonymous struct types are not supported
-pub type BadOptionFn
+/// Function type returning an anonymous struct with ok - synthesized into the Option path
+pub struct BadOptionFn {
+  pub Check: Option<fn() -> Option<AnonX>>,
+}
 
-/// Function type returning skipped type with error - tests analyzeReturns skip in Result path
-// SKIPPED field "Run": anonymous-struct — anonymous struct types are not supported
-pub type BadResultFn
+/// Function type returning an anonymous struct with error - synthesized into the Result path
+pub struct BadResultFn {
+  pub Run: Option<fn() -> Result<AnonX, error>>,
+}
 
 /// Function type with just error return - tests single error path
 pub struct ErrorOnly {
@@ -60,9 +80,10 @@ pub struct Node {
 
 pub type SimpleCallback = fn() -> ()
 
-/// Function type returning multiple skipped types - tests collectReturnTypes skip in tuple path
-// SKIPPED field "GetPair": anonymous-struct — anonymous struct types are not supported
-pub type TupleSkip
+/// Function type returning two anonymous structs - synthesized into the tuple path
+pub struct TupleSkip {
+  pub GetPair: Option<fn() -> (AnonA, AnonB)>,
+}
 
 pub type Variadic = fn(string, VarArgs<int>) -> Result<(), error>
 

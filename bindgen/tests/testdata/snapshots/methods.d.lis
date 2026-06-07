@@ -3,15 +3,22 @@
 // Go: 0.0.0
 // Lisette: 0.0.0
 
+/// Synthesized from a Go anonymous struct type.
+#[go(anon_struct)]
+pub struct AnonX {
+  pub X: int,
+}
+
 pub fn GetValue() -> string
 
 pub type A
 
 pub type B
 
-/// Type with anonymous struct field - methods should skip due to receiver type
-// SKIPPED field "Data": anonymous-struct — anonymous struct types are not supported
-pub type BadReceiver
+/// Type with an anonymous-struct field - bindgen synthesizes a named type for it
+pub struct BadReceiver {
+  pub Data: AnonX,
+}
 
 pub struct Counter {
   pub Value: int,

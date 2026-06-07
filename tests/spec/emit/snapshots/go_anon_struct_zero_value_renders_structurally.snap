@@ -1,0 +1,11 @@
+---
+source: tests/spec/emit/types.rs
+description: "input: \nimport anon \"go:example.com/anon\"\n\nfn zero() {\n  anon.TakesAnon(anon.AnonX { .. })\n}\n"
+---
+package main
+
+import "example.com/anon"
+
+func zero() {
+	anon.TakesAnon(struct{ X int }{})
+}

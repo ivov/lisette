@@ -3,19 +3,6 @@
 // Go: 0.0.0
 // Lisette: 0.0.0
 
-// SKIPPED returns-with: anonymous-struct
-// anonymous struct types are not supported
-/// Skip in Option return - tests analyzeReturns Option skip path
-pub fn BadOptionReturn() -> Option<Unknown>
-
-// SKIPPED: BadParam - anonymous-struct
-// anonymous struct types are not supported
-
-// SKIPPED returns-with: anonymous-struct
-// anonymous struct types are not supported
-/// Skip in Result return - tests analyzeReturns Result skip path
-pub fn BadResultReturn() -> Result<Unknown, error>
-
 pub fn BadUnsafeFunc(p: Unknown)
 
 pub fn MakeOpaqueFunc() -> OpaqueFunc
@@ -72,15 +59,6 @@ pub type ArrayParamHolder
 pub struct HasUnsafe {
   pub Ptr: Unknown,
 }
-
-/// Nested anonymous structs - tests skip propagation in toLisetteInner
-// SKIPPED field "SliceAnon": anonymous-struct — anonymous struct types are not supported
-// SKIPPED field "ArrayAnon": anonymous-struct — anonymous struct types are not supported
-// SKIPPED field "MapKeyAnon": anonymous-struct — anonymous struct types are not supported
-// SKIPPED field "MapValAnon": anonymous-struct — anonymous struct types are not supported
-// SKIPPED field "PtrAnon": anonymous-struct — anonymous struct types are not supported
-// SKIPPED field "ChanAnon": anonymous-struct — anonymous struct types are not supported
-pub type NestedAnon
 
 // SKIPPED: OpaqueFunc - opaque-unexported-struct
 // underlying type "hasPrivate" is unexported

@@ -3366,3 +3366,63 @@ fn main() {
 "#;
     assert_emit_snapshot!(input);
 }
+
+const ANON_STRUCT_TYPEDEF: &str = r#"
+#[go(anon_struct)]
+pub struct AnonX {
+  pub X: int,
+}
+
+pub fn PlainReturn() -> AnonX
+pub fn TakesAnon(p: AnonX)
+"#;
+
+#[test]
+fn go_anon_struct_read_renders_structurally() {
+    let input = r#"
+import anon "go:example.com/anon"
+
+fn read() -> int {
+  let r = anon.PlainReturn()
+  r.X
+}
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/anon", ANON_STRUCT_TYPEDEF)]);
+}
+
+#[test]
+fn go_anon_struct_construction_renders_structurally() {
+    let input = r#"
+import anon "go:example.com/anon"
+
+fn build() {
+  anon.TakesAnon(anon.AnonX { X: 1 })
+}
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/anon", ANON_STRUCT_TYPEDEF)]);
+}
+
+#[test]
+fn go_anon_struct_annotation_renders_structurally() {
+    let input = r#"
+import anon "go:example.com/anon"
+
+fn annotated() -> int {
+  let x: anon.AnonX = anon.PlainReturn()
+  x.X
+}
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/anon", ANON_STRUCT_TYPEDEF)]);
+}
+
+#[test]
+fn go_anon_struct_zero_value_renders_structurally() {
+    let input = r#"
+import anon "go:example.com/anon"
+
+fn zero() {
+  anon.TakesAnon(anon.AnonX { .. })
+}
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/anon", ANON_STRUCT_TYPEDEF)]);
+}

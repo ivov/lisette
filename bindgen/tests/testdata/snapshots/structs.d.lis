@@ -5,12 +5,28 @@
 
 import "go:io"
 
+/// Synthesized from a Go anonymous struct type.
+#[go(anon_struct)]
+pub struct AnonNested {
+  pub Nested: AnonY,
+}
+
+/// Synthesized from a Go anonymous struct type.
+#[go(anon_struct)]
+pub struct AnonX {
+  pub X: int,
+}
+
+/// Synthesized from a Go anonymous struct type.
+#[go(anon_struct)]
+pub struct AnonY {
+  pub Y: string,
+}
+
 /// Function that returns a function
 pub fn MakeAdder(x: int) -> Option<fn(int) -> int>
 
-// SKIPPED returns-with: anonymous-struct
-// anonymous struct types are not supported
-pub fn ReturnsAnon() -> Unknown
+pub fn ReturnsAnon() -> AnonX
 
 /// Function that takes a callback
 pub fn WithCallback(cb: fn(int) -> bool)
@@ -99,10 +115,7 @@ pub struct Wrapper {
   pub Label: string,
 }
 
-// SKIPPED field "Nested": anonymous-struct — anonymous struct types are not supported
-pub type AnonField_struct
-
-pub var AnonField: AnonField_struct
+pub var AnonField: AnonNested
 
 impl Base {
   /// GetID returns the ID
