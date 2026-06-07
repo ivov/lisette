@@ -336,15 +336,26 @@ impl Planner<'_> {
                 if go_name::is_go_import(id.as_str()) {
                     return self.go_imported_zero(ty, id.as_str(), fx);
                 }
+
+                if let Some(underlying) = self.get_newtype_underlying(ty) {
+                    let go_ty = self.go_type_string(ty, fx);
+                    let inner = self.lisette_zero(&underlying, fx);
+                    return format!("{}({})", go_ty, inner);
+                }
+
                 if let Some(fields) =
                     self.lookup_unspecified_fields(ty, "", None, &HashSet::default())
                 {
                     let go_ty = self.go_type_string(ty, fx);
+                    let is_tuple = self.is_tuple_struct_type(ty);
                     let pairs: Vec<(String, String)> = fields
                         .into_iter()
-                        .filter(|(_, field_ty)| !field_ty.is_slice())
-                        .map(|(name, field_ty)| {
-                            let go_name = if self.field_is_public(ty, &name) {
+                        .enumerate()
+                        .filter(|(_, (_, field_ty))| !field_ty.is_slice())
+                        .map(|(index, (name, field_ty))| {
+                            let go_name = if is_tuple {
+                                format!("F{}", index)
+                            } else if self.field_is_public(ty, &name) {
                                 go_name::make_exported(&name)
                             } else {
                                 go_name::escape_keyword(&name).into_owned()
@@ -360,10 +371,15 @@ impl Planner<'_> {
                 format!("{}{{}}", self.go_type_string(ty, fx))
             }
             Type::Tuple(elements) => {
-                let go_ty = self.go_type_string(ty, fx);
                 let parts: Vec<String> =
                     elements.iter().map(|e| self.lisette_zero(e, fx)).collect();
-                format!("{}{{{}}}", go_ty, parts.join(", "))
+                fx.require_stdlib();
+                format!(
+                    "{}.MakeTuple{}({})",
+                    go_name::GO_STDLIB_PKG,
+                    parts.len(),
+                    parts.join(", ")
+                )
             }
             _ => format!("{}{{}}", self.go_type_string(ty, fx)),
         }

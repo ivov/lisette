@@ -1,0 +1,31 @@
+---
+source: tests/spec/emit/types.rs
+description: "input: \nstruct GameModeParam(string)\n\nstruct Inner { pub x: int }\nstruct Wrapper(Inner)\n\nstruct Name(string)\nstruct DoubleName(Name)\n\nstruct Command {\n  pub gamemode: GameModeParam,\n  pub wrapper: Wrapper,\n  pub double: DoubleName,\n}\n\nfn register() -> Command {\n  Command { .. }\n}\n"
+---
+package main
+
+type GameModeParam string
+
+type Inner struct {
+	X int
+}
+
+type Wrapper Inner
+
+type Name string
+
+type DoubleName Name
+
+type Command struct {
+	Gamemode GameModeParam
+	Wrapper  Wrapper
+	Double   DoubleName
+}
+
+func register() Command {
+	return Command{
+		Gamemode: GameModeParam(""),
+		Wrapper:  Wrapper(Inner{X: 0}),
+		Double:   DoubleName(Name("")),
+	}
+}

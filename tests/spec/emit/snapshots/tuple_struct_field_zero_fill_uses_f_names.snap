@@ -1,0 +1,21 @@
+---
+source: tests/spec/emit/types.rs
+description: "input: \nstruct MP(int, string)\n\nstruct Holder {\n  pub p: MP,\n}\n\nfn make() -> Holder {\n  Holder { .. }\n}\n"
+---
+package main
+
+type MP struct {
+	F0 int
+	F1 string
+}
+
+type Holder struct {
+	P MP
+}
+
+func make_() Holder {
+	return Holder{P: MP{
+		F0: 0,
+		F1: "",
+	}}
+}

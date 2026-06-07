@@ -1022,6 +1022,61 @@ fn test(id: UserId) -> int {
 }
 
 #[test]
+fn newtype_field_zero_fill_casts() {
+    let input = r#"
+struct GameModeParam(string)
+
+struct Inner { pub x: int }
+struct Wrapper(Inner)
+
+struct Name(string)
+struct DoubleName(Name)
+
+struct Command {
+  pub gamemode: GameModeParam,
+  pub wrapper: Wrapper,
+  pub double: DoubleName,
+}
+
+fn register() -> Command {
+  Command { .. }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn tuple_struct_field_zero_fill_uses_f_names() {
+    let input = r#"
+struct MP(int, string)
+
+struct Holder {
+  pub p: MP,
+}
+
+fn make() -> Holder {
+  Holder { .. }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn tuple_field_zero_fill_uses_constructor() {
+    let input = r#"
+struct Probe {
+  pub pair: (int, string),
+  pub nested: (Option<int>, (int, int)),
+}
+
+fn make() -> Probe {
+  Probe { .. }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn tuple_struct_multi_field_def() {
     let input = r#"
 struct Point(int, int)

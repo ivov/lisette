@@ -1,0 +1,19 @@
+---
+source: tests/spec/emit/types.rs
+description: "input: \nstruct Probe {\n  pub pair: (int, string),\n  pub nested: (Option<int>, (int, int)),\n}\n\nfn make() -> Probe {\n  Probe { .. }\n}\n"
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type Probe struct {
+	Pair   lisette.Tuple2[int, string]
+	Nested lisette.Tuple2[lisette.Option[int], lisette.Tuple2[int, int]]
+}
+
+func make_() Probe {
+	return Probe{
+		Pair:   lisette.MakeTuple2(0, ""),
+		Nested: lisette.MakeTuple2(lisette.MakeOptionNone[int](), lisette.MakeTuple2(0, 0)),
+	}
+}
