@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] `match` is not exhaustive
+   ╭─[test.lis:5:3]
+ 4 │ fn test(p: MP) -> int {
+ 5 │   match p {
+   ·   ───┬───
+   ·      ╰── not all patterns covered
+ 6 │     MP(0, _) => 1,
+   ╰────
+  help: Handle the missing case `MP(_, _)`, e.g. `MP(_, _) => { ... }` · code: [infer.non_exhaustive]

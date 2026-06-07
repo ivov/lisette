@@ -1,4 +1,4 @@
-use crate::spec::infer::infer;
+use crate::spec::infer::{infer, infer_with_go_typedefs};
 
 #[test]
 fn test_exhaustive_enum_all_variants() {
@@ -1786,6 +1786,143 @@ fn classify(s: string) -> int {
 }
 "#;
     infer(input).assert_redundancy_error();
+}
+
+#[test]
+fn test_tuple_struct_refutable_field_non_exhaustive() {
+    let input = r#"
+struct MP(int, string)
+
+fn test(p: MP) -> int {
+  match p {
+    MP(0, _) => 1,
+  }
+}
+"#;
+    infer(input).assert_exhaustiveness_error();
+}
+
+#[test]
+fn test_tuple_struct_refutable_field_arm_reachable() {
+    let input = r#"
+struct MP(int, string)
+
+fn test(p: MP) -> int {
+  match p {
+    MP(0, _) => 1,
+    MP(n, _) => n,
+  }
+}
+"#;
+    infer(input).assert_no_errors();
+}
+
+#[test]
+fn test_tuple_struct_refutable_field_exhaustive_with_wildcard() {
+    let input = r#"
+struct MP(int, string)
+
+fn test(p: MP) -> int {
+  match p {
+    MP(0, _) => 1,
+    MP(_, _) => 2,
+  }
+}
+"#;
+    infer(input).assert_no_errors();
+}
+
+#[test]
+fn test_newtype_refutable_field_non_exhaustive() {
+    let input = r#"
+struct N(int)
+
+fn test(n: N) -> int {
+  match n {
+    N(0) => 1,
+  }
+}
+"#;
+    infer(input).assert_exhaustiveness_error();
+}
+
+#[test]
+fn test_newtype_refutable_field_arm_reachable() {
+    let input = r#"
+struct N(int)
+
+fn test(n: N) -> int {
+  match n {
+    N(0) => 1,
+    N(x) => x,
+  }
+}
+"#;
+    infer(input).assert_no_errors();
+}
+
+#[test]
+fn test_generic_struct_interface_field_keeps_catchall_reachable() {
+    let input = r#"
+import "go:example.com/events"
+
+struct Wrapper<T> { value: T }
+
+fn describe(w: Wrapper<events.Event>) -> int {
+  match w {
+    Wrapper { value: events.Token(s) } => s.length(),
+    _ => 0,
+  }
+}
+"#;
+    let typedef = r#"
+pub interface Event {}
+pub struct Token(string)
+"#;
+    infer_with_go_typedefs(input, &[("go:example.com/events", typedef)]).assert_no_errors();
+}
+
+#[test]
+fn test_generic_struct_variant_interface_field_keeps_catchall_reachable() {
+    let input = r#"
+import "go:example.com/events"
+
+enum Holder<T> {
+  Wrap { item: T },
+}
+
+fn describe(h: Holder<events.Event>) -> int {
+  match h {
+    Holder.Wrap { item: events.Token(s) } => s.length(),
+    _ => 0,
+  }
+}
+"#;
+    let typedef = r#"
+pub interface Event {}
+pub struct Token(string)
+"#;
+    infer_with_go_typedefs(input, &[("go:example.com/events", typedef)]).assert_no_errors();
+}
+
+#[test]
+fn test_slice_of_interface_element_keeps_catchall_reachable() {
+    let input = r#"
+import "go:example.com/events"
+
+fn describe(es: Slice<events.Event>) -> int {
+  match es {
+    [] => 0,
+    [events.Token(s), ..] => s.length(),
+    _ => 1,
+  }
+}
+"#;
+    let typedef = r#"
+pub interface Event {}
+pub struct Token(string)
+"#;
+    infer_with_go_typedefs(input, &[("go:example.com/events", typedef)]).assert_no_errors();
 }
 
 #[test]

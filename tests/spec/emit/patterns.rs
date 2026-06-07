@@ -16,6 +16,21 @@ fn test(p: Pair) -> int {
 }
 
 #[test]
+fn tuple_struct_refutable_field_pattern_keeps_literal_test() {
+    let input = r#"
+struct MP(int, string)
+
+fn test(p: MP) -> int {
+  match p {
+    MP(0, _) => 1,
+    MP(n, _) => n,
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn generic_tuple_struct_pattern() {
     let input = r#"
 struct Box<T>(T)

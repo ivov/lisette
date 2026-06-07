@@ -1,0 +1,17 @@
+---
+source: tests/spec/emit/patterns.rs
+description: "input: \nstruct MP(int, string)\n\nfn test(p: MP) -> int {\n  match p {\n    MP(0, _) => 1,\n    MP(n, _) => n,\n  }\n}\n"
+---
+package main
+
+type MP struct {
+	F0 int
+	F1 string
+}
+
+func test(p MP) int {
+	if p.F0 == 0 {
+		return 1
+	}
+	return p.F0
+}

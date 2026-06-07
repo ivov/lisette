@@ -1,7 +1,7 @@
 use crate::store::Store;
 use syntax::ast::{Literal, MatchArm, TypedPattern};
 use syntax::program::{Definition, DefinitionBody};
-use syntax::types::{Type, unqualified_name};
+use syntax::types::{SubstitutionMap, Type, build_substitution_map, substitute, unqualified_name};
 
 use super::NormalizedPattern::Wildcard;
 use super::inhabitance::{InhabitanceCache, is_inhabited, is_variant_inhabited};
@@ -21,10 +21,38 @@ fn make_type_key(name: &str, type_args: &[Type]) -> String {
     }
 }
 
+/// Map a definition's generics to a pattern's type args, so a field declared
+/// `T` resolves to its concrete type at this position. Empty for non-generics.
+fn field_substitution_map(
+    ctx: &NormalizationContext,
+    type_name: &str,
+    type_args: &[Type],
+) -> SubstitutionMap {
+    let generics = match ctx.store.get_definition(type_name).map(|d| &d.body) {
+        Some(DefinitionBody::Struct { generics, .. } | DefinitionBody::Enum { generics, .. }) => {
+            generics.as_slice()
+        }
+        _ => &[],
+    };
+    build_substitution_map(generics, type_args)
+}
+
 pub struct NormalizationContext<'a> {
     pub store: &'a Store,
     pub cache: &'a InhabitanceCache,
     pub scrutinee_type: Option<Type>,
+}
+
+impl<'a> NormalizationContext<'a> {
+    /// Child context for a nested field/element, carrying that position's type
+    /// as the scrutinee so the interface-implementer path can fire there.
+    fn at_position(&self, scrutinee_type: Option<Type>) -> NormalizationContext<'a> {
+        NormalizationContext {
+            store: self.store,
+            cache: self.cache,
+            scrutinee_type,
+        }
+    }
 }
 
 fn try_normalize_interface_implementer(
@@ -139,11 +167,16 @@ pub fn normalize_typed_pattern(
             variant_name,
             fields,
             type_args,
+            field_types,
             ..
         } => {
             let patterns: Vec<NormalizedPattern> = fields
                 .iter()
-                .map(|f| normalize_typed_pattern(f, unions, ctx))
+                .enumerate()
+                .map(|(i, f)| {
+                    let child = ctx.at_position(field_types.get(i).cloned());
+                    normalize_typed_pattern(f, unions, &child)
+                })
                 .collect();
 
             let enum_def = ctx.store.get_definition(enum_name);
@@ -170,9 +203,19 @@ pub fn normalize_typed_pattern(
             }
 
             let type_name = make_type_key(enum_name, type_args);
+            let enum_body = enum_def.map(|d| &d.body);
+
+            // Tuple struct / newtype tags are the bare type name (like record
+            // structs); enum variants are `Type.Variant`.
+            let is_struct_def = matches!(enum_body, Some(DefinitionBody::Struct { .. }));
+            let tag = if is_struct_def {
+                enum_name.to_string()
+            } else {
+                format!("{}.{}", enum_name, unqualified_name(variant_name))
+            };
 
             if unions.get(&type_name).is_none() {
-                let alternatives = match enum_def.map(|d| &d.body) {
+                let alternatives = match enum_body {
                     Some(DefinitionBody::Enum {
                         variants, generics, ..
                     }) => variants
@@ -185,14 +228,28 @@ pub fn normalize_typed_pattern(
                             arity: v.fields.len(),
                         })
                         .collect(),
+                    Some(DefinitionBody::Struct {
+                        fields: struct_fields,
+                        generics,
+                        ..
+                    }) if super::inhabitance::is_struct_inhabited(
+                        struct_fields,
+                        type_args,
+                        generics,
+                        ctx.store,
+                        ctx.cache,
+                    ) =>
+                    {
+                        vec![Constructor {
+                            tag_id: tag.clone(),
+                            arity: struct_fields.len(),
+                        }]
+                    }
                     _ => vec![],
                 };
 
                 unions.insert(type_name.clone(), alternatives);
             }
-
-            let variant_name = unqualified_name(variant_name);
-            let tag = format!("{}.{}", enum_name, variant_name);
 
             NormalizedPattern::Constructor {
                 type_name,
@@ -208,6 +265,7 @@ pub fn normalize_typed_pattern(
             pattern_fields,
             type_args,
         } => {
+            let substitution = field_substitution_map(ctx, enum_name, type_args);
             let patterns = variant_fields
                 .iter()
                 .map(|f| {
@@ -215,7 +273,8 @@ pub fn normalize_typed_pattern(
                         .iter()
                         .find_map(|(name, pattern)| {
                             if *name == f.name {
-                                Some(normalize_typed_pattern(pattern, unions, ctx))
+                                let child = ctx.at_position(Some(substitute(&f.ty, &substitution)));
+                                Some(normalize_typed_pattern(pattern, unions, &child))
                             } else {
                                 None
                             }
@@ -262,6 +321,7 @@ pub fn normalize_typed_pattern(
             pattern_fields,
             type_args,
         } => {
+            let substitution = field_substitution_map(ctx, struct_name, type_args);
             let patterns: Vec<NormalizedPattern> = struct_fields
                 .iter()
                 .map(|f| {
@@ -269,7 +329,8 @@ pub fn normalize_typed_pattern(
                         .iter()
                         .find_map(|(name, pattern)| {
                             if *name == f.name {
-                                Some(normalize_typed_pattern(pattern, unions, ctx))
+                                let child = ctx.at_position(Some(substitute(&f.ty, &substitution)));
+                                Some(normalize_typed_pattern(pattern, unions, &child))
                             } else {
                                 None
                             }
@@ -396,9 +457,10 @@ fn normalize_slice(
         }
     };
 
+    let element_ctx = ctx.at_position(Some(element_type.clone()));
     let mut result = tail;
     for element in prefix.iter().rev() {
-        let head = normalize_typed_pattern(element, unions, ctx);
+        let head = normalize_typed_pattern(element, unions, &element_ctx);
         result = NormalizedPattern::Constructor {
             type_name: type_name.clone(),
             tag: "NonEmptySlice".to_string(),
@@ -425,9 +487,18 @@ fn normalize_tuple(
         unions.insert(type_name.clone(), vec![constructor]);
     }
 
+    let element_types = match ctx.scrutinee_type.as_ref().map(|t| ctx.store.peel_alias(t)) {
+        Some(Type::Tuple(types)) => Some(types),
+        _ => None,
+    };
+
     let patterns = elements
         .iter()
-        .map(|e| normalize_typed_pattern(e, unions, ctx))
+        .enumerate()
+        .map(|(i, e)| {
+            let child = ctx.at_position(element_types.as_ref().and_then(|ts| ts.get(i).cloned()));
+            normalize_typed_pattern(e, unions, &child)
+        })
         .collect();
 
     NormalizedPattern::Constructor {

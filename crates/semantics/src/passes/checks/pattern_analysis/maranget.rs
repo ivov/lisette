@@ -48,6 +48,13 @@ fn column_count(rows: &[Row]) -> usize {
     rows.first().map(|r| r.len()).unwrap_or(0)
 }
 
+fn pad_columns(mut witness: Row, width: usize) -> Row {
+    if witness.len() < width {
+        witness.resize(width, Wildcard);
+    }
+    witness
+}
+
 fn classify_case(rows: &[Row], unions: &UnionTable) -> AlgorithmCase {
     let columns = column_count(rows);
 
@@ -100,10 +107,12 @@ fn find_witnesses(rows: &[Row], unions: &UnionTable) -> Vec<Row> {
         }
 
         AlgorithmCase::OnlyWildcardsOrLiterals => {
+            let remaining = column_count(rows).saturating_sub(1);
             let specialized = specialize_by_wildcard(rows);
             find_witnesses(&specialized, unions)
                 .into_iter()
-                .map(|mut witness| {
+                .map(|witness| {
+                    let mut witness = pad_columns(witness, remaining);
                     witness.insert(0, Wildcard);
                     witness
                 })
@@ -115,8 +124,12 @@ fn find_witnesses(rows: &[Row], unions: &UnionTable) -> Vec<Row> {
             union,
             seen_tags,
         } => {
+            let remaining = column_count(rows).saturating_sub(1);
             let specialized = specialize_by_wildcard(rows);
-            let rest = find_witnesses(&specialized, unions);
+            let rest: Vec<Row> = find_witnesses(&specialized, unions)
+                .into_iter()
+                .map(|witness| pad_columns(witness, remaining))
+                .collect();
 
             if rest.is_empty() {
                 return vec![];

@@ -2464,6 +2464,20 @@ fn test() {
 }
 
 #[test]
+fn match_non_exhaustive_tuple_struct_field_literal() {
+    let input = r#"
+struct MP(int, string)
+
+fn test(p: MP) -> int {
+  match p {
+    MP(0, _) => 1,
+  }
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
 fn infer_uninferred_binding_type() {
     let input = r#"
 fn test() {
