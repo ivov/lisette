@@ -1,0 +1,12 @@
+---
+source: tests/spec/emit/types.rs
+description: "input: \nimport anon \"go:example.com/anon\"\n\nfn read() -> int {\n  let r = anon.PlainReturn()\n  r.X\n}\n"
+---
+package main
+
+import "example.com/anon"
+
+func read() int {
+	r := anon.PlainReturn()
+	return r.X
+}

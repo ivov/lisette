@@ -18,15 +18,6 @@ type Ordered interface {
 
 func SkippedMin[T Ordered](a, b T) T { return a }
 
-// Skip in param - tests convertFunc param skip path
-func BadParam(x struct{ Y int }) {}
-
-// Skip in Result return - tests analyzeReturns Result skip path
-func BadResultReturn() (struct{ Y int }, error) { return struct{ Y int }{}, nil }
-
-// Skip in Option return - tests analyzeReturns Option skip path
-func BadOptionReturn() (v struct{ Y int }, ok bool) { return struct{ Y int }{}, true }
-
 // Should skip: function with unsafe.Pointer param
 func UnsafeParam(p unsafe.Pointer) int { return 0 }
 
@@ -54,16 +45,6 @@ func BadUnsafeFunc(p unsafe.Pointer) {}
 
 type HasUnsafe struct {
 	Ptr unsafe.Pointer
-}
-
-// Nested anonymous structs - tests skip propagation in toLisetteInner
-type NestedAnon struct {
-	SliceAnon  []struct{ X int }       // Slice with skipped elem
-	ArrayAnon  [4]struct{ X int }      // Array with skipped elem
-	MapKeyAnon map[struct{ X int }]int // Map with skipped key
-	MapValAnon map[int]struct{ X int } // Map with skipped value
-	PtrAnon    *struct{ X int }        // Pointer to skipped type
-	ChanAnon   chan struct{ X int }    // Chan with skipped elem
 }
 
 // Named function type referencing an unrepresentable type; must emit as an

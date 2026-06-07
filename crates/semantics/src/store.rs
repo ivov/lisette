@@ -659,6 +659,7 @@ mod closed_domain_tests {
                 constructor: None,
                 display: false,
                 closed_domain,
+                anon_struct: false,
             },
         }
     }

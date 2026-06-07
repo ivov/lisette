@@ -699,11 +699,6 @@ func (c *Converter) convertConstant(result *ConvertResult, exp extract.SymbolExp
 }
 
 func (c *Converter) convertVariable(result *ConvertResult, exp extract.SymbolExport) {
-	if anon, ok := exp.GoType.(*types.Struct); ok {
-		c.synthesizeAnonStructVar(result, anon)
-		return
-	}
-
 	t := ToLisette(exp.GoType, c)
 	if t.SkipReason != nil && t.SkipReason.Code != "internal-package-ref" {
 		result.SkipReason = t.SkipReason
@@ -723,18 +718,6 @@ func (c *Converter) convertVariable(result *ConvertResult, exp extract.SymbolExp
 	}
 	if isNilable && !forceNonNilable {
 		result.LisetteType = fmt.Sprintf("Option<%s>", result.LisetteType)
-	}
-}
-
-const anonStructSuffix = "_struct"
-
-func (c *Converter) synthesizeAnonStructVar(result *ConvertResult, anon *types.Struct) {
-	typeName := result.Name + anonStructSuffix
-	result.LisetteType = typeName
-	result.SyntheticType = &ConvertResult{
-		Name:   typeName,
-		Kind:   extract.ExportType,
-		Fields: convertStructFields(anon, c),
 	}
 }
 

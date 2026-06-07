@@ -185,9 +185,6 @@ func sanitizeIdent(s string) string {
 }
 
 func (e *Emitter) EmitExport(result convert.ConvertResult) {
-	if result.SyntheticType != nil {
-		e.EmitExport(*result.SyntheticType)
-	}
 	switch result.Kind {
 	case extract.ExportFunction:
 		e.emitFunction(result)
@@ -532,6 +529,9 @@ func (e *Emitter) emitType(result convert.ConvertResult) {
 		}
 
 		var sig strings.Builder
+		if result.AnonStruct {
+			sig.WriteString("#[go(anon_struct)]\n")
+		}
 		sig.WriteString("pub struct ")
 		sig.WriteString(typeName)
 		sig.WriteString(result.TypeParams.DeclBlock())

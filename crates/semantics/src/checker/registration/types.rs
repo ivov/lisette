@@ -297,6 +297,7 @@ impl TaskState<'_> {
         doc: &Option<String>,
         display: bool,
         closed_domain: bool,
+        anon_struct: bool,
     ) {
         let qualified_name = self.qualify_name(name);
         let struct_ty = store
@@ -367,6 +368,7 @@ impl TaskState<'_> {
                     constructor: None,
                     display,
                     closed_domain,
+                    anon_struct,
                 },
             },
         );

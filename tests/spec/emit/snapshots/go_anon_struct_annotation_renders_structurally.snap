@@ -1,0 +1,12 @@
+---
+source: tests/spec/emit/types.rs
+description: "input: \nimport anon \"go:example.com/anon\"\n\nfn annotated() -> int {\n  let x: anon.AnonX = anon.PlainReturn()\n  x.X\n}\n"
+---
+package main
+
+import "example.com/anon"
+
+func annotated() int {
+	x := anon.PlainReturn()
+	return x.X
+}

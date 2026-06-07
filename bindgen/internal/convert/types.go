@@ -79,7 +79,12 @@ func toLisetteRecursive(t types.Type, seen map[types.Type]bool, conv *Converter)
 		return TypeResult{LisetteType: fmt.Sprintf("Slice<%s>", elem.LisetteType)}
 
 	case *types.Array:
-		if elem := toLisetteRecursive(t.Elem(), seen, conv); elem.SkipReason != nil {
+		// Arrays are unrepresentable regardless of element; probe only to surface
+		// a more specific skip, discarding any stand-in minted along the way.
+		mark := conv.synthMark()
+		elem := toLisetteRecursive(t.Elem(), seen, conv)
+		conv.rollbackSynth(mark)
+		if elem.SkipReason != nil {
 			return elem
 		}
 		return TypeResult{SkipReason: arrayUnrepresentable()}
@@ -144,10 +149,10 @@ func toLisetteRecursive(t types.Type, seen map[types.Type]bool, conv *Converter)
 		if t.NumFields() == 0 {
 			return TypeResult{LisetteType: "()"}
 		}
-		return TypeResult{SkipReason: &SkipReason{
-			Code:    "anonymous-struct",
-			Message: "anonymous struct types are not supported",
-		}}
+		if conv == nil {
+			return TypeResult{SkipReason: anonStructSkip()}
+		}
+		return conv.internAnonStruct(t)
 
 	case *types.Alias:
 		return toLisetteRecursive(t.Rhs(), seen, conv)
@@ -369,7 +374,10 @@ func toLisetteNilableRecursive(t types.Type, seen map[types.Type]bool, conv *Con
 		return TypeResult{LisetteType: fmt.Sprintf("Slice<%s>", elem.LisetteType)}
 
 	case *types.Array:
-		if elem := toLisetteNilableRecursive(t.Elem(), seen, conv); elem.SkipReason != nil {
+		mark := conv.synthMark()
+		elem := toLisetteNilableRecursive(t.Elem(), seen, conv)
+		conv.rollbackSynth(mark)
+		if elem.SkipReason != nil {
 			return elem
 		}
 		return TypeResult{SkipReason: arrayUnrepresentable()}

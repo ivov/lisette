@@ -751,7 +751,7 @@ pub struct MemStats {
   pub GCCPUFraction: float64,
   pub EnableGC: bool,
   pub DebugGC: bool,
-  // SKIPPED field "BySize": anonymous-struct — anonymous struct types are not supported
+  // SKIPPED field "BySize": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
 }
 
 /// A PanicNilError happens when code calls panic(nil).

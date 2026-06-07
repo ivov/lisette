@@ -444,6 +444,13 @@ impl Planner<'_> {
         is_enum: bool,
         fx: &mut EmitEffects,
     ) -> String {
+        if let Type::Nominal { id, .. } = ty
+            && let Some(go) = self.anon_struct_go_type(id)
+        {
+            fx.merge_from_go_type(&go);
+            return go.code;
+        }
+
         // For cross-module struct calls (including type aliases), use the original name
         // to preserve the alias. E.g., "api.PublicSecret" should emit as "api.PublicSecret"
         // not as the underlying "internal.Secret".
