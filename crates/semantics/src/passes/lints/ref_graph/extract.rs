@@ -4,7 +4,7 @@ use syntax::ast::{
     Annotation, Expression, ImportAlias, Pattern, SelectArm, SelectArmPattern, StructSpread,
 };
 use syntax::program::File;
-use syntax::program::{DefinitionBody, Module};
+use syntax::program::{DefinitionBody, DotAccessKind, Module};
 use syntax::types::{Symbol, Type, unqualified_name};
 
 use super::reference_graph::{EnumVariantId, ModuleItemId, ReferenceGraph, StructFieldId};
@@ -37,6 +37,10 @@ impl AliasMap {
             return Some(ModuleItemId::new(name));
         }
         self.aliases.get(name).cloned()
+    }
+
+    fn is_import_alias(&self, name: &str) -> bool {
+        self.aliases.contains_key(name)
     }
 }
 
@@ -83,18 +87,20 @@ fn walk_expression(
         }
 
         Expression::DotAccess {
-            expression, member, ..
+            expression,
+            member,
+            dot_access_kind,
+            ..
         } => {
             walk_expression(module, expression, graph, alias_map, ctx);
             if let Some(ty_name) = type_name(&expression.get_type()) {
                 graph.mark_struct_field_used(StructFieldId::new(&ty_name, member));
             }
-            // Also track method references: when calling Type.method() or instance.method(),
-            // add a reference to the method if it exists in the module.
-            // The add_reference is a no-op if the target doesn't exist.
-            if let Some(from) = ctx {
-                let method_id = ModuleItemId::new(member);
-                graph.add_reference(from, method_id);
+            if let Some(from) = ctx
+                && is_method_access(dot_access_kind)
+                && credits_local_method(&expression.get_type(), module)
+            {
+                graph.add_reference(from, ModuleItemId::new(member));
             }
         }
 
@@ -513,19 +519,7 @@ fn walk_pattern(
             ty,
             ..
         } => {
-            let variant_name = unqualified_name(identifier);
-
-            let enum_name = type_name(ty).or_else(|| {
-                let mut segments = identifier.split('.');
-                let first = segments.next().unwrap_or("");
-                segments.next().is_some().then(|| first.to_string())
-            });
-
-            if let Some(ref enum_name) = enum_name {
-                add_ref(graph, ctx, alias_map, module, enum_name);
-                graph.mark_enum_variant_used(EnumVariantId::new(enum_name, variant_name));
-            }
-
+            mark_constructor_pattern(module, identifier, ty, graph, alias_map, ctx);
             for f in fields {
                 walk_pattern(module, f, graph, alias_map, ctx);
             }
@@ -536,17 +530,7 @@ fn walk_pattern(
             ty,
             ..
         } => {
-            add_ref(graph, ctx, alias_map, module, identifier);
-            // Mark enum variant as used for struct variant patterns (e.g., Enum.Variant { ... })
-            let variant_name = unqualified_name(identifier);
-            let enum_name = type_name(ty).or_else(|| {
-                let mut segments = identifier.split('.');
-                let first = segments.next().unwrap_or("");
-                segments.next().is_some().then(|| first.to_string())
-            });
-            if let Some(ref enum_name) = enum_name {
-                graph.mark_enum_variant_used(EnumVariantId::new(enum_name, variant_name));
-            }
+            mark_constructor_pattern(module, identifier, ty, graph, alias_map, ctx);
             for f in fields {
                 walk_pattern(module, &f.value, graph, alias_map, ctx);
                 graph.mark_struct_field_used(StructFieldId::new(identifier, &f.name));
@@ -690,6 +674,58 @@ fn add_ref(
         && let Some(to) = alias_map.resolve(module, name)
     {
         graph.add_reference(from, to);
+    }
+}
+
+fn mark_constructor_pattern(
+    module: &Module,
+    identifier: &str,
+    ty: &Type,
+    graph: &mut ReferenceGraph,
+    alias_map: &AliasMap,
+    ctx: Option<&ModuleItemId>,
+) {
+    if let Some((alias, _)) = identifier.split_once('.')
+        && alias_map.is_import_alias(alias)
+    {
+        add_ref(graph, ctx, alias_map, module, alias);
+        return;
+    }
+
+    let enum_name = type_name(ty).or_else(|| {
+        identifier
+            .split_once('.')
+            .map(|(first, _)| first.to_string())
+    });
+    if let Some(enum_name) = enum_name {
+        add_ref(graph, ctx, alias_map, module, &enum_name);
+        graph.mark_enum_variant_used(EnumVariantId::new(&enum_name, unqualified_name(identifier)));
+    }
+}
+
+fn is_method_access(kind: &Option<DotAccessKind>) -> bool {
+    matches!(
+        kind,
+        Some(
+            DotAccessKind::InstanceMethod { .. }
+                | DotAccessKind::InstanceMethodValue { .. }
+                | DotAccessKind::StaticMethod { .. }
+        )
+    )
+}
+
+fn credits_local_method(receiver_ty: &Type, module: &Module) -> bool {
+    let mut current = receiver_ty.strip_refs();
+    while let Some(next) = current.get_underlying().cloned() {
+        current = next;
+    }
+    current = match current {
+        Type::Function(f) => (*f.return_type).clone(),
+        other => other,
+    };
+    match current {
+        Type::Nominal { id, .. } => id.as_str().starts_with(&format!("{}.", module.id)),
+        _ => false,
     }
 }
 

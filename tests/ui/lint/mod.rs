@@ -1,4 +1,7 @@
+use crate::_harness::build::compile_check;
+use crate::_harness::filesystem::MockFileSystem;
 use crate::{assert_lint_snapshot, assert_no_lint_warnings};
+use semantics::store::ENTRY_MODULE_ID;
 
 #[test]
 fn unused_variable() {
@@ -5377,6 +5380,10 @@ impl Foo {
 
 pub fn squiggle<A: Cloner<B>, B>(a: A) -> B {
   a.clone()
+}
+
+fn main() {
+  let _ = squiggle(Foo{})
 }
 "#
     );
@@ -11066,5 +11073,611 @@ fn main() {
   let _ = animals.filter(|x| x == target).get(0)
 }
 "#
+    );
+}
+
+#[test]
+fn qualified_tuple_variant_pattern_marks_import_used() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "players",
+        "lib.lis",
+        r#"
+pub enum LoadDecision {
+  Created(int),
+  Existing(int),
+}
+"#,
+    );
+    fs.add_file(
+        "service",
+        "lib.lis",
+        r#"
+import "players"
+
+pub fn load() -> players.LoadDecision {
+  players.LoadDecision.Created(1)
+}
+"#,
+    );
+    let source = r#"
+import "players"
+import "service"
+
+fn main() {
+  match service.load() {
+    players.LoadDecision.Created(n) => { let _ = n },
+    players.LoadDecision.Existing(n) => { let _ = n },
+  }
+}
+"#;
+    fs.add_file(ENTRY_MODULE_ID, "main.lis", source);
+
+    let result = compile_check(fs);
+    assert!(
+        result.errors.is_empty(),
+        "unexpected errors: {:?}",
+        result.errors
+    );
+    assert!(
+        result.lints.is_empty(),
+        "import used only in a qualified tuple-variant pattern should produce no lints: {:?}",
+        result.lints
+    );
+}
+
+#[test]
+fn qualified_struct_variant_pattern_marks_import_used() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "players",
+        "lib.lis",
+        r#"
+pub enum LoadDecision {
+  Created { player: int },
+  Existing { id: int },
+}
+"#,
+    );
+    fs.add_file(
+        "service",
+        "lib.lis",
+        r#"
+import "players"
+
+pub fn load() -> players.LoadDecision {
+  players.LoadDecision.Created { player: 1 }
+}
+"#,
+    );
+    let source = r#"
+import "players"
+import "service"
+
+fn main() {
+  match service.load() {
+    players.LoadDecision.Created { player } => { let _ = player },
+    players.LoadDecision.Existing { id } => { let _ = id },
+  }
+}
+"#;
+    fs.add_file(ENTRY_MODULE_ID, "main.lis", source);
+
+    let result = compile_check(fs);
+    assert!(
+        result.errors.is_empty(),
+        "unexpected errors: {:?}",
+        result.errors
+    );
+    assert!(
+        result.lints.is_empty(),
+        "import used only in a qualified struct-variant pattern should produce no lints: {:?}",
+        result.lints
+    );
+}
+
+#[test]
+fn qualified_struct_pattern_marks_import_used() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "models",
+        "lib.lis",
+        r#"
+pub struct Point {
+  pub x: int,
+  pub y: int,
+}
+"#,
+    );
+    fs.add_file(
+        "service",
+        "lib.lis",
+        r#"
+import "models"
+
+pub fn origin() -> models.Point {
+  models.Point { x: 0, y: 0 }
+}
+"#,
+    );
+    let source = r#"
+import "models"
+import "service"
+
+fn main() {
+  match service.origin() {
+    models.Point { x, y } => { let _ = x + y },
+  }
+}
+"#;
+    fs.add_file(ENTRY_MODULE_ID, "main.lis", source);
+
+    let result = compile_check(fs);
+    assert!(
+        result.errors.is_empty(),
+        "unexpected errors: {:?}",
+        result.errors
+    );
+    assert!(
+        result.lints.is_empty(),
+        "import used only in a qualified struct pattern should produce no lints: {:?}",
+        result.lints
+    );
+}
+
+#[test]
+fn qualified_imported_pattern_does_not_suppress_local_collisions() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "models",
+        "lib.lis",
+        r#"
+pub struct Model {
+  pub value: int,
+}
+"#,
+    );
+    let source = r#"
+import "models"
+
+enum Model {
+  Model,
+  Other,
+}
+
+fn describe(m: models.Model) {
+  match m {
+    models.Model { value } => { let _ = value },
+  }
+}
+
+fn main() {
+  describe(models.Model { value: 1 })
+}
+"#;
+    fs.add_file(ENTRY_MODULE_ID, "main.lis", source);
+
+    let result = compile_check(fs);
+    assert!(
+        result.errors.is_empty(),
+        "unexpected errors: {:?}",
+        result.errors
+    );
+    let codes: Vec<&str> = result.lints.iter().filter_map(|l| l.code_str()).collect();
+    assert!(
+        !codes.contains(&"lint.unused_import"),
+        "models import is used in the pattern and must not be flagged: {codes:?}"
+    );
+    assert!(
+        codes.contains(&"lint.unused_type"),
+        "local enum Model is unused and must still be flagged: {codes:?}"
+    );
+    assert_eq!(
+        codes
+            .iter()
+            .filter(|c| **c == "lint.unused_enum_variant")
+            .count(),
+        2,
+        "both local variants Model and Other are unused and must still be flagged: {codes:?}"
+    );
+}
+
+#[test]
+fn imported_enum_construction_does_not_suppress_same_named_local_type() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "tvcall",
+        "lib.lis",
+        r#"
+pub enum Tv {
+  A(int),
+  B,
+}
+"#,
+    );
+    let source = r#"
+import "tvcall"
+
+enum Tv {
+  A(int),
+  B,
+}
+
+fn main() {
+  let _a = tvcall.Tv.A(1)
+}
+"#;
+    fs.add_file(ENTRY_MODULE_ID, "main.lis", source);
+
+    let result = compile_check(fs);
+    assert!(
+        result.errors.is_empty(),
+        "unexpected errors: {:?}",
+        result.errors
+    );
+    let codes: Vec<&str> = result.lints.iter().filter_map(|l| l.code_str()).collect();
+    assert!(
+        !codes.contains(&"lint.unused_import"),
+        "tvcall import is used and must not be flagged: {codes:?}"
+    );
+    assert!(
+        codes.contains(&"lint.unused_type"),
+        "local enum Tv is unused and must still be flagged: {codes:?}"
+    );
+    assert_eq!(
+        codes
+            .iter()
+            .filter(|c| **c == "lint.unused_enum_variant")
+            .count(),
+        2,
+        "both local variants A and B are unused and must still be flagged: {codes:?}"
+    );
+}
+
+#[test]
+fn imported_enum_variant_construction_does_not_suppress_same_named_local_const() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "tvcall",
+        "lib.lis",
+        r#"
+pub enum Tv {
+  A(int),
+  B,
+}
+"#,
+    );
+    let source = r#"
+import "tvcall"
+
+const A: int = 1
+
+fn main() {
+  let _a = tvcall.Tv.A(1)
+}
+"#;
+    fs.add_file(ENTRY_MODULE_ID, "main.lis", source);
+
+    let result = compile_check(fs);
+    assert!(
+        result.errors.is_empty(),
+        "unexpected errors: {:?}",
+        result.errors
+    );
+    let codes: Vec<&str> = result.lints.iter().filter_map(|l| l.code_str()).collect();
+    assert!(
+        !codes.contains(&"lint.unused_import"),
+        "tvcall import is used and must not be flagged: {codes:?}"
+    );
+    assert!(
+        codes.contains(&"lint.unused_constant"),
+        "local const A is unused and must still be flagged: {codes:?}"
+    );
+}
+
+#[test]
+fn imported_const_access_does_not_suppress_local_collision() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "limits",
+        "lib.lis",
+        r#"
+pub const MAX: int = 100
+"#,
+    );
+    let source = r#"
+import "limits"
+
+const MAX: int = 1
+
+fn main() {
+  let _m = limits.MAX
+}
+"#;
+    fs.add_file(ENTRY_MODULE_ID, "main.lis", source);
+
+    let result = compile_check(fs);
+    assert!(
+        result.errors.is_empty(),
+        "unexpected errors: {:?}",
+        result.errors
+    );
+    let codes: Vec<&str> = result.lints.iter().filter_map(|l| l.code_str()).collect();
+    assert!(
+        !codes.contains(&"lint.unused_import"),
+        "limits import is used and must not be flagged: {codes:?}"
+    );
+    assert!(
+        codes.contains(&"lint.unused_constant"),
+        "local const MAX is unused and must still be flagged: {codes:?}"
+    );
+}
+
+#[test]
+fn imported_method_call_does_not_suppress_same_named_local_function() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "foreign",
+        "lib.lis",
+        r#"
+pub struct T {
+  pub n: int,
+}
+
+impl T {
+  pub fn m(self: T) -> int {
+    self.n
+  }
+  pub fn mk() -> T {
+    T { n: 1 }
+  }
+}
+
+pub fn make() -> T {
+  T { n: 2 }
+}
+"#,
+    );
+    let source = r#"
+import "foreign"
+
+fn m() -> int {
+  0
+}
+
+fn mk() -> int {
+  0
+}
+
+fn main() {
+  let _a = foreign.make().m()
+  let _b = foreign.T.mk()
+}
+"#;
+    fs.add_file(ENTRY_MODULE_ID, "main.lis", source);
+
+    let result = compile_check(fs);
+    assert!(
+        result.errors.is_empty(),
+        "unexpected errors: {:?}",
+        result.errors
+    );
+    let codes: Vec<&str> = result.lints.iter().filter_map(|l| l.code_str()).collect();
+    assert!(
+        !codes.contains(&"lint.unused_import"),
+        "foreign import is used and must not be flagged: {codes:?}"
+    );
+    assert_eq!(
+        codes
+            .iter()
+            .filter(|c| **c == "lint.unused_function")
+            .count(),
+        2,
+        "local fns m and mk are unused and must still be flagged: {codes:?}"
+    );
+}
+
+#[test]
+fn local_method_call_is_still_credited() {
+    let source = r#"
+struct Counter {
+  value: int,
+}
+
+impl Counter {
+  fn get(self: Counter) -> int {
+    self.value
+  }
+}
+
+fn main() {
+  let c = Counter { value: 1 };
+  let _ = c.get()
+}
+"#;
+    assert_no_lint_warnings!(source);
+}
+
+#[test]
+fn imported_tuple_struct_static_method_does_not_suppress_same_named_local_function() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "foreign",
+        "lib.lis",
+        r#"
+pub struct T(int)
+
+impl T {
+  pub fn mk() -> T {
+    T(1)
+  }
+}
+"#,
+    );
+    let source = r#"
+import "foreign"
+
+fn mk() -> int {
+  2
+}
+
+fn main() {
+  let _b = foreign.T.mk()
+}
+"#;
+    fs.add_file(ENTRY_MODULE_ID, "main.lis", source);
+
+    let result = compile_check(fs);
+    assert!(
+        result.errors.is_empty(),
+        "unexpected errors: {:?}",
+        result.errors
+    );
+    let codes: Vec<&str> = result.lints.iter().filter_map(|l| l.code_str()).collect();
+    assert!(
+        !codes.contains(&"lint.unused_import"),
+        "foreign import is used and must not be flagged: {codes:?}"
+    );
+    assert!(
+        codes.contains(&"lint.unused_function"),
+        "local fn mk is unused and must still be flagged: {codes:?}"
+    );
+}
+
+#[test]
+fn local_tuple_struct_static_method_is_still_credited() {
+    let source = r#"
+struct Wrap(int)
+
+impl Wrap {
+  fn make() -> Wrap {
+    Wrap(1)
+  }
+}
+
+fn main() {
+  let _w = Wrap.make()
+}
+"#;
+    assert_no_lint_warnings!(source);
+}
+
+#[test]
+fn builtin_method_call_does_not_suppress_same_named_local_function() {
+    let source = r#"
+fn contains() -> int {
+  0
+}
+
+fn main() {
+  let s = "hello";
+  let _ = s.contains("e")
+}
+"#;
+    let warnings = crate::_harness::lint::lint(source);
+    let codes: Vec<&str> = warnings.iter().filter_map(|w| w.code_str()).collect();
+    assert!(
+        codes.contains(&"lint.unused_function"),
+        "local fn contains is unused and must still be flagged: {codes:?}"
+    );
+}
+
+#[test]
+fn generic_call_with_imported_interface_bound_does_not_suppress_local_function() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "shapes",
+        "lib.lis",
+        r#"
+pub interface Area {
+  fn area(self) -> int
+}
+"#,
+    );
+    let source = r#"
+import "shapes"
+
+fn area() -> int {
+  0
+}
+
+pub fn total<T: shapes.Area>(x: T) -> int {
+  x.area()
+}
+
+fn main() {
+  ()
+}
+"#;
+    fs.add_file(ENTRY_MODULE_ID, "main.lis", source);
+
+    let result = compile_check(fs);
+    assert!(
+        result.errors.is_empty(),
+        "unexpected errors: {:?}",
+        result.errors
+    );
+    let codes: Vec<&str> = result.lints.iter().filter_map(|l| l.code_str()).collect();
+    assert!(
+        !codes.contains(&"lint.unused_import"),
+        "shapes import is used in the bound and must not be flagged: {codes:?}"
+    );
+    assert!(
+        codes.contains(&"lint.unused_function"),
+        "local fn area is unused and must still be flagged: {codes:?}"
+    );
+}
+
+#[test]
+fn imported_bound_with_same_named_local_interface_does_not_suppress_local_function() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "shapes",
+        "lib.lis",
+        r#"
+pub interface Area {
+  fn area(self) -> int
+}
+"#,
+    );
+    let source = r#"
+import "shapes"
+
+interface LocalArea {
+  fn area(self) -> int
+}
+
+fn area() -> int {
+  0
+}
+
+pub fn total<T: shapes.Area>(x: T) -> int {
+  x.area()
+}
+
+fn main() {
+  ()
+}
+"#;
+    fs.add_file(ENTRY_MODULE_ID, "main.lis", source);
+
+    let result = compile_check(fs);
+    assert!(
+        result.errors.is_empty(),
+        "unexpected errors: {:?}",
+        result.errors
+    );
+    let codes: Vec<&str> = result.lints.iter().filter_map(|l| l.code_str()).collect();
+    assert!(
+        !codes.contains(&"lint.unused_import"),
+        "shapes import is used in the bound and must not be flagged: {codes:?}"
+    );
+    assert!(
+        codes.contains(&"lint.unused_function"),
+        "local fn area is unused and must still be flagged even though local LocalArea declares area: {codes:?}"
+    );
+    assert!(
+        codes.contains(&"lint.unused_type"),
+        "local interface LocalArea is unused and must still be flagged: {codes:?}"
     );
 }
