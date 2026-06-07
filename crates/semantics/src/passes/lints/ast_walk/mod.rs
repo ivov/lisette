@@ -24,7 +24,7 @@ use checks::{
     check_manual_time_since, check_manual_time_until, check_manual_unwrap_or,
     check_match_literal_collection, check_match_on_bool, check_match_single_binding,
     check_negated_equality, check_non_negative_comparison, check_out_of_domain_value,
-    check_pattern_naming, check_redundant_closure, check_redundant_operation,
+    check_pattern_naming, check_redundant_closure, check_redundant_else, check_redundant_operation,
     check_redundant_pattern_matching, check_redundant_slice_bounds, check_redundant_sprintf,
     check_replaceable_with_zero_fill, check_rest_only_slice_pattern, check_self_assignment,
     check_self_comparison, check_single_arm_match, check_single_arm_select,
@@ -89,6 +89,7 @@ const EXPRESSION_CHECKS: &[NodeCheck] = &[
     check_replaceable_with_zero_fill,
     check_lost_query_mutation,
     check_redundant_closure,
+    check_redundant_else,
     check_out_of_domain_value,
 ];
 

@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [info] Redundant `else`
+   ╭─[test.lis:7:7]
+ 6 │       continue
+ 7 │     } else {
+   ·       ──┬─
+   ·         ╰── unnecessary
+ 8 │       total += x
+   ╰────
+  help: The `if` branch always exits, so the `else` only adds nesting. Drop `else` and move its body to follow the `if` · code: [lint.redundant_else]

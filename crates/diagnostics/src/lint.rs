@@ -421,6 +421,15 @@ pub fn collapsible_if(span: &Span) -> LisetteDiagnostic {
         .with_help("Merge this nested `if` into the outer condition with `&&`")
 }
 
+pub fn redundant_else(span: &Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::info("Redundant `else`")
+        .with_lint_code("redundant_else")
+        .with_span_label(span, "unnecessary")
+        .with_help(
+            "The `if` branch always exits, so the `else` only adds nesting. Drop `else` and move its body to follow the `if`",
+        )
+}
+
 pub fn identical_match_arms(span: &Span) -> LisetteDiagnostic {
     LisetteDiagnostic::warn("Identical match arms")
         .with_lint_code("identical_match_arms")

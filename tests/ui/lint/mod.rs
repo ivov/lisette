@@ -2942,6 +2942,158 @@ pub fn check(a: Flag, b: bool) {
 }
 
 #[test]
+fn redundant_else() {
+    assert_lint_snapshot!(
+        r#"
+pub fn check(c: bool) -> int {
+  let mut count = 0
+  if c {
+    return 0
+  } else {
+    count += 1
+  }
+  count
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_else_chain() {
+    assert_lint_snapshot!(
+        r#"
+pub fn classify(c: bool, d: bool) -> int {
+  let mut count = 0
+  if c {
+    return 0
+  } else if d {
+    count += 1
+  }
+  count
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_else_continue() {
+    assert_lint_snapshot!(
+        r#"
+pub fn scan(xs: Slice<int>) -> int {
+  let mut total = 0
+  for x in xs {
+    if x < 0 {
+      continue
+    } else {
+      total += x
+    }
+    total += 1
+  }
+  total
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_else_no_else_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+pub fn check(c: bool) -> int {
+  let mut count = 0
+  if c {
+    return 0
+  }
+  count += 1
+  count
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_else_non_diverging_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+pub fn check(c: bool) -> int {
+  let mut count = 0
+  if c {
+    count += 1
+  } else {
+    count += 2
+  }
+  count
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_else_value_position_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+pub fn check(c: bool) -> int {
+  let x = if c { return 0 } else { 5 }
+  x + 1
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_else_empty_else_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+pub fn check(c: bool) -> int {
+  let mut count = 0
+  if c {
+    return 0
+  } else {
+  }
+  count += 1
+  count
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_else_tail_position_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+pub fn check(xs: Slice<int>) -> int {
+  let mut total = 0
+  for x in xs {
+    if x < 0 {
+      break
+    } else {
+      total += x
+    }
+  }
+  total
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_else_if_let_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+pub fn check(opt: Option<int>) -> int {
+  let mut count = 0
+  if let Some(v) = opt {
+    return v
+  } else {
+    count += 1
+  }
+  count
+}
+"#
+    );
+}
+
+#[test]
 fn identical_match_arms_literals() {
     assert_lint_snapshot!(
         r#"
