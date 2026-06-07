@@ -311,8 +311,14 @@ impl TaskState<'_> {
             .iter()
             .map(|f| {
                 let field_ty = self.convert_to_type(&*store, &f.annotation, span);
+                let visibility = if f.embedded {
+                    embed_field_visibility(&*store, &field_ty)
+                } else {
+                    f.visibility
+                };
                 StructFieldDefinition {
                     ty: field_ty,
+                    visibility,
                     ..f.clone()
                 }
             })
@@ -370,6 +376,92 @@ impl TaskState<'_> {
         );
 
         self.check_recursive_type(&*store, &qualified_name, name, name_span);
+    }
+
+    pub(super) fn validate_module_embeds(&mut self, store: &Store, module_id: &str) {
+        let Some(module) = store.get_module(module_id) else {
+            return;
+        };
+        for definition in module.definitions.values() {
+            let DefinitionBody::Struct { fields, .. } = &definition.body else {
+                continue;
+            };
+            for field in fields.iter().filter(|f| f.embedded) {
+                self.validate_embed_target(store, &field.ty, field.name_span);
+            }
+        }
+    }
+
+    fn validate_embed_target(&mut self, store: &Store, ty: &Type, span: Span) {
+        let display = ty.to_string();
+        let resolved = store.deep_resolve_alias(ty);
+
+        // Check the declared type too: alias substitution erases a generic alias's arguments.
+        if is_generic_instantiation(ty) || is_generic_instantiation(&resolved) {
+            self.sink.push(diagnostics::embed::generic(&display, span));
+            return;
+        }
+
+        if resolved.is_option() {
+            self.sink.push(diagnostics::embed::option_target(span));
+            return;
+        }
+
+        if is_imported_nominal(&embed_promotion_target(store, &resolved)) {
+            self.sink
+                .push(diagnostics::embed::imported_target(&display, span));
+            return;
+        }
+
+        if resolved.is_ref() {
+            match resolved
+                .inner()
+                .map(|inner| store.deep_resolve_alias(&inner))
+            {
+                Some(inner) if inner.is_ref() => {
+                    self.sink
+                        .push(diagnostics::embed::nested_ref(&display, span));
+                }
+                Some(inner) if store.is_interface(&inner) => {
+                    self.sink
+                        .push(diagnostics::embed::pointer_to_interface(&display, span));
+                }
+                Some(inner) if is_pointer_backed_newtype(store, &inner) => {
+                    self.sink
+                        .push(diagnostics::embed::pointer_backed_newtype(&display, span));
+                }
+                Some(inner) if is_generic_instantiation(&inner) => {
+                    self.sink.push(diagnostics::embed::generic(&display, span));
+                }
+                Some(inner) if is_deferred_local_target(store, &inner) => {
+                    self.sink
+                        .push(diagnostics::embed::defined_type(&display, span));
+                }
+                Some(inner)
+                    if is_embeddable_nominal(&inner) && has_selector_surface(store, &inner) => {}
+                _ => self
+                    .sink
+                    .push(diagnostics::embed::no_surface(&display, span)),
+            }
+            return;
+        }
+
+        if is_pointer_backed_newtype(store, &resolved) {
+            self.sink
+                .push(diagnostics::embed::pointer_backed_newtype(&display, span));
+            return;
+        }
+
+        if is_deferred_local_target(store, &resolved) {
+            self.sink
+                .push(diagnostics::embed::defined_type(&display, span));
+            return;
+        }
+
+        if !is_embeddable_nominal(&resolved) || !has_selector_surface(store, &resolved) {
+            self.sink
+                .push(diagnostics::embed::no_surface(&display, span));
+        }
     }
 
     /// Check whether a type is recursive without Ref indirection.
@@ -694,5 +786,94 @@ impl TaskState<'_> {
         for c in ty.children() {
             Self::collect_type_refs(c, refs);
         }
+    }
+}
+
+fn is_embeddable_nominal(ty: &Type) -> bool {
+    matches!(ty, Type::Nominal { .. }) && !ty.is_option()
+}
+
+fn is_imported_nominal(ty: &Type) -> bool {
+    matches!(ty, Type::Nominal { id, .. } if id.as_str().starts_with(syntax::types::GO_IMPORT_PREFIX))
+}
+
+fn embed_promotion_target(store: &Store, ty: &Type) -> Type {
+    let mut target = ty.clone();
+    while target.is_option() || target.is_ref() {
+        let Some(inner) = target.inner() else { break };
+        target = store.deep_resolve_alias(&inner);
+    }
+    target
+}
+
+fn is_generic_instantiation(ty: &Type) -> bool {
+    let mut target = ty.clone();
+    while target.is_option() || target.is_ref() {
+        let Some(inner) = target.inner() else { break };
+        target = inner;
+    }
+    matches!(target, Type::Nominal { params, .. } if !params.is_empty())
+}
+
+// A local tuple struct, newtype, or enum: needs the resolver, so hard-errored for now.
+fn is_deferred_local_target(store: &Store, ty: &Type) -> bool {
+    let Type::Nominal { id, .. } = ty else {
+        return false;
+    };
+    let id = id.as_str();
+    if id.starts_with(syntax::types::GO_IMPORT_PREFIX) {
+        return false;
+    }
+    match store.get_definition(id).map(|definition| &definition.body) {
+        Some(
+            DefinitionBody::Struct {
+                kind: StructKind::Record,
+                ..
+            }
+            | DefinitionBody::Interface { .. },
+        ) => false,
+        Some(_) => true,
+        None => false,
+    }
+}
+
+fn has_selector_surface(store: &Store, ty: &Type) -> bool {
+    if !store
+        .get_all_methods(ty, &rustc_hash::FxHashMap::default())
+        .is_empty()
+    {
+        return true;
+    }
+    let Type::Nominal { id, .. } = ty else {
+        return false;
+    };
+    let id = id.as_str();
+    let is_newtype = store.get_definition(id).is_some_and(Definition::is_newtype);
+    !is_newtype && store.fields_of(id).is_some_and(|fields| !fields.is_empty())
+}
+
+fn is_pointer_backed_newtype(store: &Store, ty: &Type) -> bool {
+    let Type::Nominal { id, .. } = ty else {
+        return false;
+    };
+    store
+        .get_type(id.as_str())
+        .and_then(Type::get_underlying)
+        .is_some_and(|underlying| store.deep_resolve_alias(underlying).is_ref())
+}
+
+// Mirror the written type's own visibility: peel storage (`Option`/`Ref`), not aliases.
+fn embed_field_visibility(store: &Store, field_ty: &Type) -> syntax::ast::Visibility {
+    let mut target = field_ty.clone();
+    while target.is_option() || target.is_ref() {
+        let Some(inner) = target.inner() else { break };
+        target = inner;
+    }
+    let public = matches!(&target, Type::Nominal { id, .. }
+        if store.get_definition(id.as_str()).is_some_and(|d| d.visibility().is_public()));
+    if public {
+        syntax::ast::Visibility::Public
+    } else {
+        syntax::ast::Visibility::Private
     }
 }

@@ -46,6 +46,7 @@ description: "input: \nstruct Container(Slice<int>, Map<string, bool>)\n"
                 ty: Var {
                     id: uninferred,
                 },
+                embedded: false,
             },
             StructFieldDefinition {
                 doc: None,
@@ -88,6 +89,7 @@ description: "input: \nstruct Container(Slice<int>, Map<string, bool>)\n"
                 ty: Var {
                     id: uninferred,
                 },
+                embedded: false,
             },
         ],
         kind: Tuple,

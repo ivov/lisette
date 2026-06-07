@@ -46,6 +46,7 @@ description: "input: \nstruct Request<Body> {\n  method: string,\n  headers: Map
                 ty: Var {
                     id: uninferred,
                 },
+                embedded: false,
             },
             StructFieldDefinition {
                 doc: None,
@@ -88,6 +89,7 @@ description: "input: \nstruct Request<Body> {\n  method: string,\n  headers: Map
                 ty: Var {
                     id: uninferred,
                 },
+                embedded: false,
             },
             StructFieldDefinition {
                 doc: None,
@@ -121,6 +123,7 @@ description: "input: \nstruct Request<Body> {\n  method: string,\n  headers: Map
                 ty: Var {
                     id: uninferred,
                 },
+                embedded: false,
             },
         ],
         kind: Record,

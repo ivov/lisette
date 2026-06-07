@@ -36,6 +36,7 @@ description: "input: \nstruct Point(int, int)\n"
                 ty: Var {
                     id: uninferred,
                 },
+                embedded: false,
             },
             StructFieldDefinition {
                 doc: None,
@@ -59,6 +60,7 @@ description: "input: \nstruct Point(int, int)\n"
                 ty: Var {
                     id: uninferred,
                 },
+                embedded: false,
             },
         ],
         kind: Tuple,

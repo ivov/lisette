@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Syntax error
+   ╭─[test.lis:4:3]
+ 3 │ struct S {
+ 4 │   #[json("base")] embed Base,
+   ·   ───────┬───────
+   ·          ╰── embedded field cannot have attributes
+ 5 │ }
+   ╰────
+  help: An embedded field takes no attributes; its serialization follows Go's anonymous-field inlining · code: [parse.syntax_error]

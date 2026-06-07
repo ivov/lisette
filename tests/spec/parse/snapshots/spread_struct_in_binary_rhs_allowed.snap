@@ -36,6 +36,7 @@ description: "input: \nstruct Bar { x: int }\nfn test(base: Bar) {\n  let foo = 
                 ty: Var {
                     id: uninferred,
                 },
+                embedded: false,
             },
         ],
         kind: Record,

@@ -10,6 +10,89 @@ struct Point { x: int, y: int }
 }
 
 #[test]
+fn embedded_struct_field_emits_anonymously() {
+    let input = r#"
+pub struct Base { pub id: int }
+
+struct Outer {
+  embed Base,
+  extra: int,
+}
+
+fn make() -> Outer {
+  Outer { Base: Base { id: 1 }, extra: 2 }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn embedded_pointer_field_emits_star_type() {
+    let input = r#"
+pub struct Base { pub id: int }
+
+struct Outer {
+  embed Ref<Base>,
+}
+
+fn make(b: Ref<Base>) -> Outer {
+  Outer { Base: b }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn embedded_unexported_field_key_matches_type() {
+    let input = r#"
+struct inner { x: int }
+
+struct Outer {
+  embed inner,
+}
+
+fn make() -> Outer {
+  Outer { inner: inner { x: 1 } }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn embedded_lowercase_alias_field_keeps_case() {
+    let input = r#"
+pub struct Base { pub id: int }
+type p = Base
+
+struct Outer {
+  embed p,
+}
+
+fn read(o: Outer) -> int {
+  o.p.id
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn embedded_field_untagged_under_struct_json() {
+    let input = r#"
+struct inner { x: int }
+
+#[json]
+struct Outer {
+  embed inner,
+}
+
+fn read(o: Outer) -> int {
+  o.inner.x
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn iterate_enum_variants() {
     let input = r#"
 #[iterate]

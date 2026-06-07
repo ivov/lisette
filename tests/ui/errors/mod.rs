@@ -443,6 +443,27 @@ fn test() {
 }
 
 #[test]
+fn parse_embed_bare_function_target() {
+    let input = r#"
+struct S {
+  embed fn() -> int,
+}
+"#;
+    assert_parse_error_snapshot!(input);
+}
+
+#[test]
+fn parse_embed_field_with_attribute() {
+    let input = r#"
+#[json]
+struct S {
+  #[json("base")] embed Base,
+}
+"#;
+    assert_parse_error_snapshot!(input);
+}
+
+#[test]
 fn lex_binary_missing_digits() {
     let input = r#"let x = 0b"#;
     assert_lex_error_snapshot!(input);

@@ -34,6 +34,20 @@ impl Planner<'_> {
         }
     }
 
+    pub(crate) fn field_is_embedded(&self, struct_ty: &Type, field_name: &str) -> bool {
+        let resolved = self.facts.peel_alias(&struct_ty.strip_refs());
+        let Type::Nominal { id, .. } = &resolved else {
+            return false;
+        };
+        matches!(
+            self.facts.definition(id.as_str()),
+            Some(Definition {
+                body: DefinitionBody::Struct { fields, .. },
+                ..
+            }) if fields.iter().any(|f| f.name == field_name && f.embedded)
+        )
+    }
+
     pub(crate) fn field_is_public(&self, struct_ty: &Type, field_name: &str) -> bool {
         let resolved = self.facts.peel_alias(&struct_ty.strip_refs());
 

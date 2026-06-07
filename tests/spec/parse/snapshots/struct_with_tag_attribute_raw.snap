@@ -60,6 +60,7 @@ description: "input: \n#[tag]\nstruct User {\n  #[tag(`json:\"name,omitempty\" v
                 ty: Var {
                     id: uninferred,
                 },
+                embedded: false,
             },
         ],
         kind: Record,

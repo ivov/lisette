@@ -5888,3 +5888,463 @@ fn read_id(holder: api.Holder) -> int {
 "#;
     infer_with_go_typedefs(input, &[("go:example.com/api", typedef)]).assert_no_errors();
 }
+
+#[test]
+fn embed_bare_builtin_rejected() {
+    infer(
+        r#"
+struct S { embed int }
+fn main() {}
+"#,
+    )
+    .assert_infer_code("embed_no_surface");
+}
+
+#[test]
+fn embed_alias_to_builtin_rejected() {
+    infer(
+        r#"
+type N = int
+struct S { embed N }
+fn main() {}
+"#,
+    )
+    .assert_infer_code("embed_no_surface");
+}
+
+#[test]
+fn embed_pointer_to_interface_rejected() {
+    infer(
+        r#"
+interface Greeter { fn hello(self) -> string }
+struct S { embed Ref<Greeter> }
+fn main() {}
+"#,
+    )
+    .assert_infer_code("embed_pointer_to_interface");
+}
+
+#[test]
+fn embed_nested_ref_rejected() {
+    infer(
+        r#"
+pub struct Base { pub id: int }
+struct S { embed Ref<Ref<Base>> }
+fn main() {}
+"#,
+    )
+    .assert_infer_code("embed_nested_ref");
+}
+
+#[test]
+fn embed_pointer_backed_newtype_rejected() {
+    infer(
+        r#"
+pub struct Base { pub id: int }
+struct P(Ref<Base>)
+struct S { embed P }
+fn main() {}
+"#,
+    )
+    .assert_infer_code("embed_pointer_backed_newtype");
+}
+
+#[test]
+fn embed_option_target_rejected() {
+    infer(
+        r#"
+pub struct Base { pub id: int }
+struct S { embed Option<Base> }
+fn main() {}
+"#,
+    )
+    .assert_infer_code("embed_option_target");
+}
+
+#[test]
+fn embed_slice_rejected() {
+    infer(
+        r#"
+struct S { embed Slice<int> }
+fn main() {}
+"#,
+    )
+    .assert_infer_code("embed_no_surface");
+}
+
+#[test]
+fn embed_map_rejected() {
+    infer(
+        r#"
+struct S { embed Map<string, int> }
+fn main() {}
+"#,
+    )
+    .assert_infer_code("embed_no_surface");
+}
+
+#[test]
+fn embed_pointer_to_compound_rejected() {
+    infer(
+        r#"
+struct S { embed Ref<Slice<int>> }
+fn main() {}
+"#,
+    )
+    .assert_infer_code("embed_no_surface");
+}
+
+#[test]
+fn embed_ref_to_pointer_backed_newtype_rejected() {
+    infer(
+        r#"
+pub struct Base { pub id: int }
+struct P(Ref<Base>)
+struct S { embed Ref<P> }
+fn main() {}
+"#,
+    )
+    .assert_infer_code("embed_pointer_backed_newtype");
+}
+
+#[test]
+fn embed_empty_struct_rejected() {
+    infer(
+        r#"
+struct Empty {}
+struct S { embed Empty }
+fn main() {}
+"#,
+    )
+    .assert_infer_code("embed_no_surface");
+}
+
+#[test]
+fn embed_empty_interface_rejected() {
+    infer(
+        r#"
+interface EmptyI {}
+struct S { embed EmptyI }
+fn main() {}
+"#,
+    )
+    .assert_infer_code("embed_no_surface");
+}
+
+#[test]
+fn embed_local_newtype_rejected() {
+    infer(
+        r#"
+struct Age(int)
+impl Age { pub fn bump(self) -> int { 1 } }
+struct S { embed Age }
+fn main() {}
+"#,
+    )
+    .assert_infer_code("embed_defined_type");
+}
+
+#[test]
+fn embed_marker_with_only_methods_accepted() {
+    infer(
+        r#"
+struct Marker {}
+impl Marker { pub fn mark(self) -> int { 1 } }
+struct S { embed Marker }
+fn main() {}
+"#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn embed_interface_empty_through_parent_rejected() {
+    infer(
+        r#"
+interface Empty {}
+interface AlsoEmpty { embed Empty }
+struct S { embed AlsoEmpty }
+fn main() {}
+"#,
+    )
+    .assert_infer_code("embed_no_surface");
+}
+
+#[test]
+fn embed_multi_field_tuple_struct_rejected() {
+    infer(
+        r#"
+struct Pair(int, int)
+struct S { embed Pair }
+fn main() {}
+"#,
+    )
+    .assert_infer_code("embed_defined_type");
+}
+
+#[test]
+fn embed_generic_instantiation_rejected() {
+    infer(
+        r#"
+struct Wrapper<T> { value: T }
+struct S { embed Wrapper<int> }
+fn main() {}
+"#,
+    )
+    .assert_infer_code("embed_generic");
+}
+
+#[test]
+fn embed_generic_alias_to_storage_rejected() {
+    infer(
+        r#"
+pub struct Base { pub id: int }
+type P<T> = Ref<T>
+struct S { embed P<Base> }
+fn main() {}
+"#,
+    )
+    .assert_infer_code("embed_generic");
+}
+
+#[test]
+fn embed_generic_alias_under_ref_rejected() {
+    infer(
+        r#"
+pub struct Base { pub id: int }
+type P<T> = T
+struct S { embed Ref<P<Base>> }
+fn main() {}
+"#,
+    )
+    .assert_infer_code("embed_generic");
+}
+
+#[test]
+fn embed_imported_generic_named_ref_not_confused_with_wrapper() {
+    let typedef = r#"
+pub struct Base { pub id: int }
+pub struct Ref<T> { pub value: T }
+"#;
+    let input = r#"
+import "go:example.com/ref"
+struct S { embed ref.Ref<ref.Base> }
+fn main() {}
+"#;
+    infer_with_go_typedefs(input, &[("go:example.com/ref", typedef)])
+        .assert_infer_code("embed_generic");
+}
+
+#[test]
+fn embed_imported_struct_deferred() {
+    let typedef = r#"
+pub struct NopHandler {}
+impl NopHandler { pub fn Handle(self: NopHandler) -> int }
+"#;
+    let input = r#"
+import "go:example.com/handler"
+struct Mine { embed handler.NopHandler }
+fn main() {}
+"#;
+    infer_with_go_typedefs(input, &[("go:example.com/handler", typedef)])
+        .assert_infer_code("embed_imported_target");
+}
+
+#[test]
+fn embed_imported_type_named_ref_deferred() {
+    let typedef = r#"
+pub struct Ref { pub id: int }
+impl Ref { pub fn Get(self: Ref) -> int }
+"#;
+    let input = r#"
+import "go:example.com/ref"
+struct UsesRef { embed ref.Ref }
+fn main() {}
+"#;
+    infer_with_go_typedefs(input, &[("go:example.com/ref", typedef)])
+        .assert_infer_code("embed_imported_target");
+}
+
+#[test]
+fn embed_local_enum_rejected() {
+    infer(
+        r#"
+enum E { A }
+impl E { pub fn mark(self) -> int { 1 } }
+struct S { embed E }
+fn main() {}
+"#,
+    )
+    .assert_infer_code("embed_defined_type");
+}
+
+#[test]
+fn embed_defined_type_over_struct_rejected() {
+    infer(
+        r#"
+struct Base { x: int }
+struct P(Base)
+struct S { embed P }
+fn main() {}
+"#,
+    )
+    .assert_infer_code("embed_defined_type");
+}
+
+#[test]
+fn embed_defined_type_over_interface_rejected() {
+    infer(
+        r#"
+interface I { fn m(self) -> int }
+struct P(I)
+struct S { embed P }
+fn main() {}
+"#,
+    )
+    .assert_infer_code("embed_defined_type");
+}
+
+#[test]
+fn embed_recursive_newtype_rejected() {
+    infer(
+        r#"
+struct A(B)
+struct B(A)
+struct S { embed A }
+fn main() {}
+"#,
+    )
+    .assert_infer_code("embed_defined_type");
+}
+
+#[test]
+fn embed_qualified_prelude_ref_names_target() {
+    infer(
+        r#"
+pub struct Base { pub id: int }
+struct S { embed prelude.Ref<Base> }
+fn read(s: S) -> Ref<Base> { s.Base }
+fn main() {}
+"#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn embed_display_only_type_accepted() {
+    infer(
+        r#"
+#[display]
+struct Marker {}
+struct S { embed Marker }
+fn main() {}
+"#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn embed_of_public_type_is_accessible_across_modules() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "types",
+        "lib.lis",
+        r#"
+pub struct Base { pub id: int }
+pub struct Outer { embed Base }
+"#,
+    );
+    fs.add_file(
+        "main",
+        "main.lis",
+        r#"
+import "types"
+fn main() {
+  let o = types.Outer { Base: types.Base { id: 1 } }
+  let _ = o.Base
+}
+"#,
+    );
+    infer_module("main", fs).assert_no_errors();
+}
+
+#[test]
+fn embed_of_private_type_not_accessible_across_modules() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "types",
+        "lib.lis",
+        r#"
+struct Base { pub id: int }
+pub struct Outer { embed Base }
+pub fn make() -> Outer { Outer { Base: Base { id: 1 } } }
+"#,
+    );
+    fs.add_file(
+        "main",
+        "main.lis",
+        r#"
+import "types"
+fn main() {
+  let o = types.make()
+  let _ = o.Base
+}
+"#,
+    );
+    infer_module("main", fs).assert_resolve_code("private_field_access");
+}
+
+#[test]
+fn embed_value_struct_accepted() {
+    infer(
+        r#"
+pub struct Base { pub id: int }
+struct S { embed Base }
+fn main() {}
+"#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn embed_transparent_alias_to_ref_accepted() {
+    infer(
+        r#"
+pub struct Base { pub id: int }
+type P = Ref<Base>
+struct S { embed P }
+fn main() {}
+"#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn embed_field_named_embed_still_parses() {
+    infer(
+        r#"
+struct S { embed: int }
+fn main() {
+  let _ = S { embed: 1 }
+}
+"#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn interface_embed_keyword_alias_satisfies() {
+    infer(
+        r#"
+interface Reader { fn read(self) -> int }
+interface ReadWriter { embed Reader }
+struct File { name: string }
+impl File { pub fn read(self) -> int { 0 } }
+fn use_rw(rw: ReadWriter) -> int { rw.read() }
+fn main() {
+  let _ = use_rw(File { name: "x" })
+}
+"#,
+    )
+    .assert_no_errors();
+}

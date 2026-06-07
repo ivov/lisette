@@ -500,6 +500,7 @@ pub struct StructFieldDefinition {
     pub annotation: Annotation,
     pub visibility: Visibility,
     pub ty: Type,
+    pub embedded: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]

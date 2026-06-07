@@ -36,6 +36,7 @@ description: "input: \nstruct Point { x: int }\nfn test(other: Point) {\n  let x
                 ty: Var {
                     id: uninferred,
                 },
+                embedded: false,
             },
         ],
         kind: Record,

@@ -175,7 +175,9 @@ impl<'a> Formatter<'a> {
                 .comments
                 .take_comments_before(field.name_span.byte_offset);
 
-            let field_definition = if field.visibility.is_public() {
+            let field_definition = if field.embedded {
+                Document::str("embed ").append(Self::annotation(&field.annotation))
+            } else if field.visibility.is_public() {
                 Document::str("pub ")
                     .append(Document::string(field.name.to_string()))
                     .append(": ")

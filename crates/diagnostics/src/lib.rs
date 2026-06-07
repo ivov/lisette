@@ -3,6 +3,7 @@ mod result;
 mod sink;
 
 pub mod attribute;
+pub mod embed;
 pub mod emit;
 pub mod infer;
 pub mod lint;

@@ -55,6 +55,7 @@ description: "input: \nstruct Pair<K, V> {\n  key: K,\n  value: V,\n}\n"
                 ty: Var {
                     id: uninferred,
                 },
+                embedded: false,
             },
             StructFieldDefinition {
                 doc: None,
@@ -78,6 +79,7 @@ description: "input: \nstruct Pair<K, V> {\n  key: K,\n  value: V,\n}\n"
                 ty: Var {
                     id: uninferred,
                 },
+                embedded: false,
             },
         ],
         kind: Record,

@@ -1,0 +1,17 @@
+---
+source: tests/spec/emit/types.rs
+description: "input: \npub struct Base { pub id: int }\n\nstruct Outer {\n  embed Ref<Base>,\n}\n\nfn make(b: Ref<Base>) -> Outer {\n  Outer { Base: b }\n}\n"
+---
+package main
+
+type Base struct {
+	Id int
+}
+
+type Outer struct {
+	*Base
+}
+
+func make_(b *Base) Outer {
+	return Outer{Base: b}
+}

@@ -46,6 +46,7 @@ description: "input: \nstruct Container<T> { value: T }\nfn test() {\n  let x = 
                 ty: Var {
                     id: uninferred,
                 },
+                embedded: false,
             },
         ],
         kind: Record,

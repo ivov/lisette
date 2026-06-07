@@ -1,0 +1,19 @@
+---
+source: tests/spec/emit/types.rs
+description: "input: \npub struct Base { pub id: int }\ntype p = Base\n\nstruct Outer {\n  embed p,\n}\n\nfn read(o: Outer) -> int {\n  o.p.id\n}\n"
+---
+package main
+
+type Base struct {
+	Id int
+}
+
+type p = Base
+
+type Outer struct {
+	p
+}
+
+func read(o Outer) int {
+	return o.p.Id
+}

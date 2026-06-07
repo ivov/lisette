@@ -552,6 +552,8 @@ impl Planner<'_> {
         if let Some(ref enum_ctx) = ctx.enum_ctx {
             self.enum_struct_field_name(&enum_ctx.enum_id, &enum_ctx.variant_name, field_name)
                 .unwrap_or_else(|| go_name::make_exported(field_name))
+        } else if self.field_is_embedded(ty, field_name) {
+            go_name::escape_keyword(field_name).into_owned()
         } else if ctx.is_prelude || self.field_is_public(ty, field_name) {
             go_name::make_exported(field_name)
         } else {

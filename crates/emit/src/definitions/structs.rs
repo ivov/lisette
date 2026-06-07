@@ -121,6 +121,16 @@ impl Planner<'_> {
         struct_attrs: &[Attribute],
         fx: &mut EmitEffects,
     ) -> (String, StringerField) {
+        if f.embedded {
+            let field_with_doc = format!("{}{}", emit_doc(&f.doc), self.go_type_string(&f.ty, fx));
+            let stringer_field = StringerField {
+                source_name: f.name.to_string(),
+                go_name: struct_field_go_name(f, struct_attrs),
+                is_function: is_raw_function_type(&f.ty),
+            };
+            return (field_with_doc, stringer_field);
+        }
+
         let tag_configs = interpret_field_attributes(f, struct_attrs);
         let needs_omitzero = is_option_type(&f.ty);
         let tag_string = format_tag_string(&f.name, &tag_configs, needs_omitzero);
@@ -274,6 +284,9 @@ pub(crate) fn struct_field_go_name(
     field: &StructFieldDefinition,
     struct_attrs: &[Attribute],
 ) -> String {
+    if field.embedded {
+        return go_name::escape_keyword(&field.name).into_owned();
+    }
     let needs_export =
         field.visibility.is_public() || !interpret_field_attributes(field, struct_attrs).is_empty();
     if needs_export {

@@ -25,7 +25,7 @@ pub fn check_expression_naming(expression: &Expression, ctx: &NodeCtx) {
             }
 
             if !is_d_lis {
-                for field in fields {
+                for field in fields.iter().filter(|f| !f.embedded) {
                     check_snake_case(
                         &field.name,
                         &field.name_span,

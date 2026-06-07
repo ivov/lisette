@@ -1799,3 +1799,8 @@ fn comment_same_line_trailing_between_call_args() {
 fn comment_same_line_trailing_before_inlinable_last_arg() {
     assert_format_snapshot!("fn f() {\n  foo(a, b, // trailing\n  |x| { x + 1 })\n}");
 }
+
+#[test]
+fn struct_embedded_field() {
+    assert_format_snapshot!("struct Outer {\n  embed Base,\n  embed Ref<Other>,\n  extra: int,\n}");
+}

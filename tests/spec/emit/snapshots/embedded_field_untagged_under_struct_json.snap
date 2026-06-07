@@ -1,0 +1,17 @@
+---
+source: tests/spec/emit/types.rs
+description: "input: \nstruct inner { x: int }\n\n#[json]\nstruct Outer {\n  embed inner,\n}\n\nfn read(o: Outer) -> int {\n  o.inner.x\n}\n"
+---
+package main
+
+type inner struct {
+	x int
+}
+
+type Outer struct {
+	inner
+}
+
+func read(o Outer) int {
+	return o.inner.x
+}

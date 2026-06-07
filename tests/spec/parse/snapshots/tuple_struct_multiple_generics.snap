@@ -55,6 +55,7 @@ description: "input: \nstruct Pair<A, B>(A, B)\n"
                 ty: Var {
                     id: uninferred,
                 },
+                embedded: false,
             },
             StructFieldDefinition {
                 doc: None,
@@ -78,6 +79,7 @@ description: "input: \nstruct Pair<A, B>(A, B)\n"
                 ty: Var {
                     id: uninferred,
                 },
+                embedded: false,
             },
         ],
         kind: Tuple,

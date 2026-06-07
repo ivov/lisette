@@ -64,6 +64,7 @@ description: "input: \n#[json(omitempty)]\nstruct User {\n  #[json(!omitempty)]\
                 ty: Var {
                     id: uninferred,
                 },
+                embedded: false,
             },
         ],
         kind: Record,

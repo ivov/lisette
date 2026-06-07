@@ -155,6 +155,7 @@ pub struct CachedStructField {
     pub visibility: FieldVisibility,
     pub attributes: Vec<CachedAttribute>,
     pub doc: Option<String>,
+    pub embedded: bool,
 }
 
 impl CachedStructField {
@@ -173,6 +174,7 @@ impl CachedStructField {
                 .map(CachedAttribute::from_attribute)
                 .collect(),
             doc: field.doc.clone(),
+            embedded: field.embedded,
         }
     }
 
@@ -185,6 +187,7 @@ impl CachedStructField {
             visibility: self.visibility,
             attributes: self.attributes.iter().map(|a| a.to_attribute()).collect(),
             annotation: Annotation::Unknown,
+            embedded: self.embedded,
         }
     }
 }

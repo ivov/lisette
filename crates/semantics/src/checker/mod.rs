@@ -773,6 +773,7 @@ impl<'s> TaskState<'s> {
                     name_span: Span::dummy(),
                     annotation: Annotation::Unknown,
                     ty,
+                    embedded: false,
                 }
             })
             .collect();

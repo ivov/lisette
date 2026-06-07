@@ -37,6 +37,7 @@ pub struct StructFieldInfo {
     pub parent_has_serialization_attr: bool,
     pub parent_has_display_attr: bool,
     pub has_tag_attribute: bool,
+    pub embedded: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -165,6 +166,7 @@ impl ReferenceGraph {
                     && !info.parent_has_serialization_attr
                     && !info.parent_has_display_attr
                     && !info.has_tag_attribute
+                    && !info.embedded
                     && !self.used_struct_fields.contains(*id)
                     && !id.field_name.starts_with('_')
             })

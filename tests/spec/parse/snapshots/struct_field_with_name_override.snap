@@ -60,6 +60,7 @@ description: "input: \n#[json]\nstruct User {\n  #[json(\"userName\")]\n  name: 
                 ty: Var {
                     id: uninferred,
                 },
+                embedded: false,
             },
         ],
         kind: Record,

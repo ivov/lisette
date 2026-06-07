@@ -450,6 +450,7 @@ impl<'source> Parser<'source> {
                 annotation,
                 visibility: Visibility::Private,
                 ty: Type::uninferred(),
+                embedded: false,
             });
 
             index += 1;
@@ -490,6 +491,20 @@ impl<'source> Parser<'source> {
             self.next();
         }
 
+        // `embed T`, but not a field named `embed` (`embed: T`).
+        if self.is(Identifier)
+            && self.current_token().text == "embed"
+            && self.stream.peek_ahead(1).kind != Colon
+        {
+            if visibility.is_public() {
+                self.track_error(
+                    "embedded field cannot be `pub`",
+                    "An embedded field takes no `pub`; its visibility derives from the embedded type.",
+                );
+            }
+            return self.parse_embedded_field(doc, attributes);
+        }
+
         if self.is_not(Identifier) {
             self.track_error("expected field name", "Field names must be identifiers.");
             return None;
@@ -509,7 +524,63 @@ impl<'source> Parser<'source> {
             name_span,
             annotation: self.parse_annotation(),
             ty: Type::uninferred(),
+            embedded: false,
         })
+    }
+
+    fn parse_embedded_field(
+        &mut self,
+        doc: Option<std::string::String>,
+        attributes: Vec<Attribute>,
+    ) -> Option<StructFieldDefinition> {
+        let start = self.current_token();
+        self.ensure(Identifier);
+
+        let annotation = self.parse_annotation();
+        let span = self.span_from_tokens(start);
+
+        let Some(name) = Self::embedded_field_name(&annotation) else {
+            self.track_error_at(
+                span,
+                "expected a named type after `embed`",
+                "`embed` requires a named type; a function or tuple type cannot be embedded.",
+            );
+            return None;
+        };
+
+        if let Some(attribute) = attributes.first() {
+            self.track_error_at(
+                attribute.span,
+                "embedded field cannot have attributes",
+                "An embedded field takes no attributes; its serialization follows Go's anonymous-field inlining.",
+            );
+        }
+
+        Some(StructFieldDefinition {
+            doc,
+            attributes: vec![],
+            visibility: Visibility::Private,
+            name,
+            name_span: span,
+            annotation,
+            ty: Type::uninferred(),
+            embedded: true,
+        })
+    }
+
+    fn embedded_field_name(annotation: &Annotation) -> Option<EcoString> {
+        let mut current = annotation;
+        loop {
+            let Annotation::Constructor { name, params, .. } = current else {
+                return None;
+            };
+            let segment = name.rsplit('.').next().unwrap_or(name);
+            if (segment == "Option" || segment == "Ref") && params.len() == 1 {
+                current = &params[0];
+                continue;
+            }
+            return Some(segment.into());
+        }
     }
 
     pub fn parse_const_definition(&mut self, doc: Option<std::string::String>) -> Expression {
@@ -696,31 +767,13 @@ impl<'source> Parser<'source> {
                 }
 
                 Impl => {
-                    if let Some((_, span)) = item_doc {
-                        self.error_detached_doc_comment(span);
-                    }
                     self.ensure(Impl);
+                    self.parse_interface_parent(item_doc, &mut seen_parents, &mut parents);
+                }
 
-                    let parent_start = self.current_token();
-                    let annotation = self.parse_annotation();
-                    let parent_span = self.span_from_tokens(parent_start);
-
-                    if let Annotation::Constructor { name, .. } = &annotation {
-                        if let Some((_, first_span)) =
-                            seen_parents.iter().find(|(n, _)| n == name.as_str())
-                        {
-                            self.error_duplicate_impl_parent(*first_span, parent_span);
-                        } else {
-                            seen_parents.push((name.clone(), parent_span));
-                        }
-                    }
-
-                    parents.push(ParentInterface {
-                        annotation,
-                        ty: Type::uninferred(),
-                        span: parent_span,
-                    });
-                    self.advance_if(Semicolon);
+                Identifier if self.current_token().text == "embed" => {
+                    self.next();
+                    self.parse_interface_parent(item_doc, &mut seen_parents, &mut parents);
                 }
 
                 _ => {
@@ -748,5 +801,35 @@ impl<'source> Parser<'source> {
             visibility: Visibility::Private,
             span: self.span_from_tokens(start),
         }
+    }
+
+    fn parse_interface_parent(
+        &mut self,
+        item_doc: Option<(std::string::String, Span)>,
+        seen_parents: &mut Vec<(EcoString, Span)>,
+        parents: &mut Vec<ParentInterface>,
+    ) {
+        if let Some((_, span)) = item_doc {
+            self.error_detached_doc_comment(span);
+        }
+
+        let parent_start = self.current_token();
+        let annotation = self.parse_annotation();
+        let parent_span = self.span_from_tokens(parent_start);
+
+        if let Annotation::Constructor { name, .. } = &annotation {
+            if let Some((_, first_span)) = seen_parents.iter().find(|(n, _)| n == name.as_str()) {
+                self.error_duplicate_impl_parent(*first_span, parent_span);
+            } else {
+                seen_parents.push((name.clone(), parent_span));
+            }
+        }
+
+        parents.push(ParentInterface {
+            annotation,
+            ty: Type::uninferred(),
+            span: parent_span,
+        });
+        self.advance_if(Semicolon);
     }
 }

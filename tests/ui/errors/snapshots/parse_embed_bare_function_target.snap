@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Syntax error
+   ╭─[test.lis:3:3]
+ 2 │ struct S {
+ 3 │   embed fn() -> int,
+   ·   ────────┬────────
+   ·           ╰── expected a named type after `embed`
+ 4 │ }
+   ╰────
+  help: `embed` requires a named type; a function or tuple type cannot be embedded · code: [parse.syntax_error]

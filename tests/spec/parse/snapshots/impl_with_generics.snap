@@ -46,6 +46,7 @@ description: "input: \nstruct Container<T> {\n  value: T,\n}\n\nimpl<T> Containe
                 ty: Var {
                     id: uninferred,
                 },
+                embedded: false,
             },
         ],
         kind: Record,

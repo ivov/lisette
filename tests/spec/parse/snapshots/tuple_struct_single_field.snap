@@ -36,6 +36,7 @@ description: "input: \nstruct UserId(int)\n"
                 ty: Var {
                     id: uninferred,
                 },
+                embedded: false,
             },
         ],
         kind: Tuple,

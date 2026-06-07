@@ -398,6 +398,10 @@ impl Store {
         }
     }
 
+    pub fn is_interface(&self, ty: &Type) -> bool {
+        matches!(ty, Type::Nominal { id, .. } if self.get_interface(id.as_str()).is_some())
+    }
+
     pub fn is_nilable_go_type(&self, ty: &Type) -> bool {
         if ty.is_ref() || matches!(ty, Type::Function(_)) {
             return true;

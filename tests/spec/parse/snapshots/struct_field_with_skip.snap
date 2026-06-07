@@ -60,6 +60,7 @@ description: "input: \n#[json]\nstruct User {\n  #[json(skip)]\n  password: stri
                 ty: Var {
                     id: uninferred,
                 },
+                embedded: false,
             },
         ],
         kind: Record,

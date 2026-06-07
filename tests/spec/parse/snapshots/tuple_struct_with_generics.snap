@@ -46,6 +46,7 @@ description: "input: \nstruct Wrapper<T>(T)\n"
                 ty: Var {
                     id: uninferred,
                 },
+                embedded: false,
             },
         ],
         kind: Tuple,

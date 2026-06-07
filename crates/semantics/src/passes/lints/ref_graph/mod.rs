@@ -295,6 +295,7 @@ fn collect_items(
                                 parent_has_serialization_attr: has_serialization_attr,
                                 parent_has_display_attr: has_display_attr,
                                 has_tag_attribute,
+                                embedded: struct_field.embedded,
                             },
                         );
                     }
