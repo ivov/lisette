@@ -1,0 +1,15 @@
+---
+source: tests/spec/emit/types.rs
+description: "input: \nfn use_ref(r: Ref<int>) -> Ref<int> {\n  r\n}\n\nstruct Holder {\n  r: Ref<int>,\n  s: Slice<int>,\n  m: Map<string, int>,\n}\n"
+---
+package main
+
+func use_ref(r *int) *int {
+	return r
+}
+
+type Holder struct {
+	r *int
+	s []int
+	m map[string]int
+}

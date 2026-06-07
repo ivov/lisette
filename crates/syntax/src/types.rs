@@ -614,6 +614,10 @@ impl CompoundKind {
             _ => return None,
         })
     }
+
+    pub fn from_qualified_id(id: &str) -> Option<CompoundKind> {
+        Self::from_name(id.strip_prefix("prelude.")?)
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -838,7 +842,7 @@ impl Type {
         match self {
             Type::Compound { kind, args } => Some((*kind, args.as_slice())),
             Type::Nominal { id, params, .. } => {
-                CompoundKind::from_name(id.last_segment()).map(|k| (k, params.as_slice()))
+                CompoundKind::from_qualified_id(id.as_str()).map(|k| (k, params.as_slice()))
             }
             _ => None,
         }
@@ -1154,11 +1158,10 @@ impl Type {
                 _ => Some(kind.leaf_name()),
             },
             Type::Nominal { id, params, .. } => {
-                let name = id.last_segment();
-                if CompoundKind::from_name(name) == Some(CompoundKind::Ref) {
+                if CompoundKind::from_qualified_id(id.as_str()) == Some(CompoundKind::Ref) {
                     return params.first().and_then(|inner| inner.get_name());
                 }
-                Some(name)
+                Some(id.last_segment())
             }
             Type::ImportNamespace(module_id) => {
                 let path = module_id.strip_prefix("go:").unwrap_or(module_id);

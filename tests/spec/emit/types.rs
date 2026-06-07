@@ -3421,3 +3421,67 @@ fn main() {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn imported_types_named_like_prelude_wrappers_are_not_confused() {
+    let input = r#"
+import "go:example.com/box"
+
+fn use_ref(r: box.Ref<int>) -> int {
+  r.inner
+}
+
+fn use_slice(s: box.Slice<int>) -> int {
+  s.value
+}
+
+fn use_map(m: box.Map<string, int>) -> int {
+  m.val
+}
+
+fn make_ref() -> box.Ref<int> {
+  box.Ref { inner: 1 }
+}
+
+fn maybe_ref(r: box.Ref<int>) -> Option<box.Ref<int>> {
+  Some(r)
+}
+
+struct Holder {
+  r: box.Ref<int>,
+  s: box.Slice<int>,
+  m: box.Map<string, int>,
+}
+"#;
+    let typedef = r#"
+pub struct Ref<T> {
+  pub inner: T,
+}
+
+pub struct Slice<T> {
+  pub value: T,
+}
+
+pub struct Map<K, V> {
+  pub key: K,
+  pub val: V,
+}
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/box", typedef)]);
+}
+
+#[test]
+fn prelude_wrappers_still_lower_to_native_go_forms() {
+    let input = r#"
+fn use_ref(r: Ref<int>) -> Ref<int> {
+  r
+}
+
+struct Holder {
+  r: Ref<int>,
+  s: Slice<int>,
+  m: Map<string, int>,
+}
+"#;
+    assert_emit_snapshot!(input);
+}

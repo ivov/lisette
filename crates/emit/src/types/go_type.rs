@@ -157,7 +157,7 @@ impl Planner<'_> {
             return GoType::new("struct{}");
         }
 
-        if (name == "Ref" || name.ends_with(".Ref"))
+        if qualified_name == "prelude.Ref"
             && let Some(inner) = params.first()
         {
             let inner_type = self.go_type(inner);
@@ -472,7 +472,7 @@ impl Planner<'_> {
             return result;
         }
 
-        if base_name == "Ref" && params.len() == 1 {
+        if (name == "Ref" || name == "prelude.Ref") && params.len() == 1 {
             let inner = self.go_type_from_annotation(&params[0]);
             let mut result = GoType::new(format!("*{}", inner.code));
             result.merge(&inner);

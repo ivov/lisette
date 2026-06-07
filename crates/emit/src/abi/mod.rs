@@ -275,8 +275,7 @@ impl Planner<'_> {
         match annotation {
             Annotation::Function { .. } => true,
             Annotation::Constructor { name, .. } => {
-                let leaf = unqualified_name(name);
-                if leaf == "Ref" {
+                if name == "Ref" || name == "prelude.Ref" {
                     return true;
                 }
                 let resolved = self.peel_alias_id(name);
