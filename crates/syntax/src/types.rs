@@ -1048,6 +1048,11 @@ impl Type {
         self.as_simple().is_some_and(SimpleKind::is_unsigned_int)
     }
 
+    pub fn underlying_is_unsigned_int(&self) -> bool {
+        self.underlying_simple_kind()
+            .is_some_and(SimpleKind::is_unsigned_int)
+    }
+
     pub fn is_never(&self) -> bool {
         matches!(self, Type::Never)
     }

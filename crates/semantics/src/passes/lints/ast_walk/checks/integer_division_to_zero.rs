@@ -1,5 +1,7 @@
 use crate::passes::walk::NodeCtx;
-use syntax::ast::{BinaryOperator, Expression, UnaryOperator};
+use syntax::ast::{BinaryOperator, Expression};
+
+use super::helpers::signed_integer_literal;
 
 pub fn check_integer_division_to_zero(expression: &Expression, ctx: &NodeCtx) {
     let Expression::Binary {
@@ -24,19 +26,4 @@ pub fn check_integer_division_to_zero(expression: &Expression, ctx: &NodeCtx) {
         ctx.sink
             .push(diagnostics::lint::integer_division_to_zero(span));
     }
-}
-
-fn signed_integer_literal(expression: &Expression) -> Option<i128> {
-    if let Some(value) = expression.as_integer() {
-        return Some(value as i128);
-    }
-    if let Expression::Unary {
-        operator: UnaryOperator::Negative,
-        expression,
-        ..
-    } = expression
-    {
-        return expression.as_integer().map(|value| -(value as i128));
-    }
-    None
 }

@@ -28,16 +28,17 @@ use checks::{
     check_redundant_pattern_matching, check_redundant_slice_bounds, check_redundant_sprintf,
     check_replaceable_with_zero_fill, check_rest_only_slice_pattern, check_self_assignment,
     check_self_comparison, check_single_arm_match, check_single_arm_select,
-    check_uninterpolated_fstring, check_unnecessary_bool, check_unnecessary_range_loop,
-    check_unnecessary_raw_string_expression, check_unnecessary_raw_string_pattern,
-    check_unnecessary_return, check_unsigned_comparison, check_verbose_failure_propagation,
-    check_waitgroup_add_in_task,
+    check_type_limit_comparison, check_uninterpolated_fstring, check_unnecessary_bool,
+    check_unnecessary_range_loop, check_unnecessary_raw_string_expression,
+    check_unnecessary_raw_string_pattern, check_unnecessary_return, check_unsigned_comparison,
+    check_verbose_failure_propagation, check_waitgroup_add_in_task,
 };
 
 const EXPRESSION_CHECKS: &[NodeCheck] = &[
     check_double_negation,
     check_self_comparison,
     check_unsigned_comparison,
+    check_type_limit_comparison,
     check_non_negative_comparison,
     check_goos_goarch_comparison,
     check_redundant_operation,

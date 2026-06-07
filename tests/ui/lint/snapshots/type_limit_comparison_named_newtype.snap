@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [warning] Comparison is always true
+   ╭─[test.lis:6:11]
+ 5 │   let s = Small(5)
+ 6 │   let _ = s <= 255
+   ·           ────┬───
+   ·               ╰── always `true`
+ 7 │ }
+   ╰────
+  help: This compares against the limit of the value's type, so this comparison is always `true`. Did you mean to compare against a different value? · code: [lint.type_limit_comparison]

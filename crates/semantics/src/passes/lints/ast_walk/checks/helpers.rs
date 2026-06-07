@@ -1,4 +1,4 @@
-use syntax::ast::{BinaryOperator, Expression, FormatStringPart, Literal, Pattern};
+use syntax::ast::{BinaryOperator, Expression, FormatStringPart, Literal, Pattern, UnaryOperator};
 use syntax::types::unqualified_name;
 
 use crate::passes::walk::visit_ast;
@@ -21,6 +21,21 @@ pub(super) fn is_one_literal(expression: &Expression) -> bool {
             ..
         }
     )
+}
+
+pub(super) fn signed_integer_literal(expression: &Expression) -> Option<i128> {
+    if let Some(value) = expression.as_integer() {
+        return Some(value as i128);
+    }
+    if let Expression::Unary {
+        operator: UnaryOperator::Negative,
+        expression,
+        ..
+    } = expression
+    {
+        return expression.as_integer().map(|value| -(value as i128));
+    }
+    None
 }
 
 pub(super) fn flip_comparison(operator: BinaryOperator) -> BinaryOperator {

@@ -283,6 +283,17 @@ pub fn unsigned_comparison(span: &Span, always_true: bool) -> LisetteDiagnostic 
         )
 }
 
+pub fn type_limit_comparison(span: &Span, always_true: bool) -> LisetteDiagnostic {
+    let result = if always_true { "true" } else { "false" };
+
+    LisetteDiagnostic::warn(format!("Comparison is always {result}"))
+        .with_lint_code("type_limit_comparison")
+        .with_span_label(span, format!("always `{result}`"))
+        .with_help(format!(
+            "This compares against the limit of the value's type, so this comparison is always `{result}`. Did you mean to compare against a different value?"
+        ))
+}
+
 pub fn non_negative_comparison(span: &Span, always_true: bool) -> LisetteDiagnostic {
     let result = if always_true { "true" } else { "false" };
 

@@ -1675,6 +1675,20 @@ fn main() {
 }
 
 #[test]
+fn unsigned_comparison_named_newtype() {
+    assert_lint_snapshot!(
+        r#"
+struct Counter(uint8)
+
+fn main() {
+  let c = Counter(5)
+  let _ = c < 0
+}
+"#
+    );
+}
+
+#[test]
 fn non_negative_comparison_less_than_zero() {
     assert_lint_snapshot!(
         r#"
@@ -1848,6 +1862,192 @@ fn non_negative_comparison_nonzero_no_warning() {
 fn main() {
   let xs = [1, 2, 3]
   let _ = xs.length() < 5
+}
+"#
+    );
+}
+
+#[test]
+fn type_limit_comparison_uint8_le_max() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let a: uint8 = 5
+  let _ = a <= 255
+}
+"#
+    );
+}
+
+#[test]
+fn type_limit_comparison_uint8_gt_max() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let a: uint8 = 5
+  let _ = a > 255
+}
+"#
+    );
+}
+
+#[test]
+fn type_limit_comparison_int32_gt_max() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let b: int32 = 5
+  let _ = b > 2147483647
+}
+"#
+    );
+}
+
+#[test]
+fn type_limit_comparison_int8_lt_min() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let c: int8 = 5
+  let _ = c < -128
+}
+"#
+    );
+}
+
+#[test]
+fn type_limit_comparison_int8_ge_min() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let c: int8 = 5
+  let _ = c >= -128
+}
+"#
+    );
+}
+
+#[test]
+fn type_limit_comparison_literal_on_left() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let a: uint8 = 5
+  let _ = 255 < a
+}
+"#
+    );
+}
+
+#[test]
+fn type_limit_comparison_byte_max() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let b: byte = 5
+  let _ = b > 255
+}
+"#
+    );
+}
+
+#[test]
+fn type_limit_comparison_below_max_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let a: uint8 = 5
+  let _ = a <= 254
+}
+"#
+    );
+}
+
+#[test]
+fn type_limit_comparison_lt_max_not_constant_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let a: uint8 = 5
+  let _ = a < 255
+}
+"#
+    );
+}
+
+#[test]
+fn type_limit_comparison_ge_max_not_constant_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let a: uint8 = 5
+  let _ = a >= 255
+}
+"#
+    );
+}
+
+#[test]
+fn type_limit_comparison_equality_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let a: uint8 = 5
+  let _ = a == 255
+}
+"#
+    );
+}
+
+#[test]
+fn type_limit_comparison_platform_width_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let n: int = 5
+  let _ = n <= 100
+  let m: uint = 5
+  let _ = m <= 100
+}
+"#
+    );
+}
+
+#[test]
+fn type_limit_comparison_rune_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let r: rune = 'x'
+  let _ = r <= 2147483647
+}
+"#
+    );
+}
+
+#[test]
+fn type_limit_comparison_named_newtype() {
+    assert_lint_snapshot!(
+        r#"
+struct Small(uint8)
+
+fn main() {
+  let s = Small(5)
+  let _ = s <= 255
+}
+"#
+    );
+}
+
+#[test]
+fn type_limit_comparison_alias() {
+    assert_lint_snapshot!(
+        r#"
+type Big = uint16
+
+fn main() {
+  let b: Big = 5
+  let _ = b > 65535
 }
 "#
     );

@@ -27,8 +27,10 @@ pub fn check_unsigned_comparison(expression: &Expression, ctx: &NodeCtx) {
         is_zero_literal(left.unwrap_parens()),
         is_zero_literal(right.unwrap_parens()),
     ) {
-        (true, false) if right.get_type().is_unsigned_int() => flip_comparison(*operator),
-        (false, true) if left.get_type().is_unsigned_int() => *operator,
+        (true, false) if right.get_type().underlying_is_unsigned_int() => {
+            flip_comparison(*operator)
+        }
+        (false, true) if left.get_type().underlying_is_unsigned_int() => *operator,
         _ => return,
     };
 
