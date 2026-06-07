@@ -2,6 +2,20 @@
 
 Lisette is under active development. Any version before 1.0.0 may include breaking changes.
 
+## [0.3.2](https://github.com/ivov/lisette/compare/lisette-v0.3.1...lisette-v0.3.2) - 2026-06-07
+
+- fix: cross-module reference tracking in unused lints [#651](https://github.com/ivov/lisette/pull/651) [`64b9dc7`](https://github.com/ivov/lisette/commit/64b9dc7568da079be41bd55e30fa6bfcec6689a2)
+- refactor: introduce `embed` keyword [#650](https://github.com/ivov/lisette/pull/650) [`cd78bfb`](https://github.com/ivov/lisette/commit/cd78bfb99d3cced87bbc8a5608056bf42d40730b)
+- feat: lint for type limit comparison [#648](https://github.com/ivov/lisette/pull/648) [`f8757f5`](https://github.com/ivov/lisette/commit/f8757f544fe3ee4e2c6feb47ac0571b38d621799)
+- fix: classify compound wrappers by qualified id [#646](https://github.com/ivov/lisette/pull/646) [`192df75`](https://github.com/ivov/lisette/commit/192df7584e18dfd9d2a5b6dc99c50b9415a8e357)
+- refactor: store type attributes as a map [#647](https://github.com/ivov/lisette/pull/647) [`7063de2`](https://github.com/ivov/lisette/commit/7063de2914f225f5d5dcfbc88b55ee673b8d22d3)
+- feat: bind go anonymous struct types [#644](https://github.com/ivov/lisette/pull/644) [`3a44617`](https://github.com/ivov/lisette/commit/3a44617f42e92ef9f78f30f68242b82ecd4f9a49)
+- feat: add redundant else lint [#643](https://github.com/ivov/lisette/pull/643) [`8f8b584`](https://github.com/ivov/lisette/commit/8f8b584ccc306e5e97a3e02712c2fcf30a2cc62e)
+- feat: add manual find simplification lint [#642](https://github.com/ivov/lisette/pull/642) [`6e44a27`](https://github.com/ivov/lisette/commit/6e44a2756a23130fc3425cb390b60e84bfe522ab)
+- fix: tuple-struct and newtype pattern exhaustiveness [#641](https://github.com/ivov/lisette/pull/641) [`1fd5350`](https://github.com/ivov/lisette/commit/1fd5350668096e4b5db576fa2350fef326393fc0)
+- test: move sync tests in-process [#640](https://github.com/ivov/lisette/pull/640) [`85d8c44`](https://github.com/ivov/lisette/commit/85d8c443f23f4269e0297043226637ad38351795)
+- fix: zero-fill emit for newtype and tuple-struct fields [#637](https://github.com/ivov/lisette/pull/637) [`8b68e65`](https://github.com/ivov/lisette/commit/8b68e65e20fd477c0b3b879f929cac2700c638fe)
+
 ## [0.3.1](https://github.com/ivov/lisette/compare/lisette-v0.3.0...lisette-v0.3.1) - 2026-06-06
 
 - feat: add map_or_else to Result [#633](https://github.com/ivov/lisette/pull/633) [`d5939f7`](https://github.com/ivov/lisette/commit/d5939f7ecfe7321a90ed017f9d0f95a693c75d74)
