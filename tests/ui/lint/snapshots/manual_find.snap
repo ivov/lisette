@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [info] Manual `find`
+   ╭─[test.lis:4:11]
+ 3 │   let xs = [1, 2, 3, 4]
+ 4 │   let _ = xs.filter(|x| x > 2).get(0)
+   ·           ─────────────┬─────────────
+   ·                        ╰── can use `find`
+ 5 │ }
+   ╰────
+  help: `filter(...).get(0)` builds the whole filtered slice. Use `xs.find(|x| x > 2)` to return the first match directly · code: [lint.manual_find]

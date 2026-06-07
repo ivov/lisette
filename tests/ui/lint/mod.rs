@@ -10689,3 +10689,230 @@ fn main() {
 "#
     );
 }
+
+#[test]
+fn manual_find() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let xs = [1, 2, 3, 4]
+  let _ = xs.filter(|x| x > 2).get(0)
+}
+"#
+    );
+}
+
+#[test]
+fn manual_find_equality_predicate() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let xs = [1, 2, 3, 4]
+  let _ = xs.filter(|x| x == 2).get(0)
+}
+"#
+    );
+}
+
+#[test]
+fn manual_find_field_access_predicate() {
+    assert_lint_snapshot!(
+        r#"
+struct User {
+  age: int
+}
+
+fn main() {
+  let users = [User { age: 17 }, User { age: 21 }]
+  let _ = users.filter(|u| u.age > 18).get(0)
+}
+"#
+    );
+}
+
+#[test]
+fn manual_find_bare_function_predicate_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn is_pos(x: int) -> bool {
+  x > 0
+}
+
+fn main() {
+  let xs = [1, 2, 3, 4]
+  let _ = xs.filter(is_pos).get(0)
+}
+"#
+    );
+}
+
+#[test]
+fn manual_find_index_not_zero_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let xs = [1, 2, 3, 4]
+  let _ = xs.filter(|x| x > 2).get(1)
+}
+"#
+    );
+}
+
+#[test]
+fn manual_find_plain_get_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let xs = [1, 2, 3, 4]
+  let _ = xs.get(0)
+}
+"#
+    );
+}
+
+#[test]
+fn manual_find_map_not_filter_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let xs = [1, 2, 3, 4]
+  let _ = xs.map(|x| x * 2).get(0)
+}
+"#
+    );
+}
+
+#[test]
+fn manual_find_user_type_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+struct Bag {
+  items: Slice<int>
+}
+
+impl Bag {
+  fn filter(self, p: fn(int) -> bool) -> Bag {
+    Bag { items: self.items.filter(p) }
+  }
+
+  fn get(self, index: int) -> Option<int> {
+    self.items.get(index)
+  }
+}
+
+fn main() {
+  let b = Bag { items: [1, 2, 3] }
+  let _ = b.filter(|x| x > 1).get(0)
+}
+"#
+    );
+}
+
+#[test]
+fn manual_find_already_using_find_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let xs = [1, 2, 3, 4]
+  let _ = xs.find(|x| x > 2)
+}
+"#
+    );
+}
+
+#[test]
+fn manual_find_effectful_predicate_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:fmt"
+
+fn main() {
+  let xs = [1, 2, 3, 4]
+  let _ = xs.filter(|x| {
+    fmt.Println(x)
+    x > 2
+  }).get(0)
+}
+"#
+    );
+}
+
+#[test]
+fn manual_find_dividing_predicate_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let xs = [1, 2, 3, 4]
+  let _ = xs.filter(|x| 10 % x == 0).get(0)
+}
+"#
+    );
+}
+
+#[test]
+fn manual_find_interpolated_fstring_predicate_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let xs = [1, 2, 3, 4]
+  let _ = xs.filter(|x| f"{x}" == "1").get(0)
+}
+"#
+    );
+}
+
+#[test]
+fn manual_find_shifting_predicate_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let xs = [1, 2, 3, 4]
+  let _ = xs.filter(|x| (1 << x) > 0).get(0)
+}
+"#
+    );
+}
+
+#[test]
+fn manual_find_ref_element_predicate_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+struct User {
+  age: int
+}
+
+fn main() {
+  let a = User { age: 17 }
+  let b = User { age: 21 }
+  let refs = [&a, &b]
+  let _ = refs.filter(|u| u.age > 18).get(0)
+}
+"#
+    );
+}
+
+#[test]
+fn manual_find_interface_equality_predicate_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+interface Animal {
+  fn sound(self) -> string
+}
+
+struct Dog {}
+
+impl Dog {
+  fn sound(self) -> string {
+    "woof"
+  }
+}
+
+fn main() {
+  let d1 = Dog {}
+  let animals: Slice<Animal> = [d1]
+  let target: Animal = d1
+  let _ = animals.filter(|x| x == target).get(0)
+}
+"#
+    );
+}

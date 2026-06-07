@@ -361,6 +361,15 @@ pub fn manual_is_empty(span: &Span, replacement: &str) -> LisetteDiagnostic {
         .with_help(format!("Simplify to `{replacement}`"))
 }
 
+pub fn manual_find(span: &Span, receiver: &str, predicate: &str) -> LisetteDiagnostic {
+    LisetteDiagnostic::info("Manual `find`")
+        .with_lint_code("manual_find")
+        .with_span_label(span, "can use `find`")
+        .with_help(format!(
+            "`filter(...).get(0)` builds the whole filtered slice. Use `{receiver}.find({predicate})` to return the first match directly"
+        ))
+}
+
 pub fn redundant_slice_bounds(span: &Span, replacement: &str) -> LisetteDiagnostic {
     LisetteDiagnostic::info("Redundant slice bounds")
         .with_lint_code("redundant_slice_bounds")
