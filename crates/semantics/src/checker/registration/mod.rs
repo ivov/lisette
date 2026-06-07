@@ -14,7 +14,9 @@ use syntax::ast::{
     Annotation, Attribute, AttributeArg, Binding, EnumVariant, Expression, Generic, Span,
     StructKind, Visibility as SyntacticVisibility,
 };
-use syntax::program::{Definition, DefinitionBody, File, FileImport, Visibility};
+use syntax::program::{
+    Attributes, Definition, DefinitionBody, File, FileImport, TypeAttribute, Visibility,
+};
 use syntax::types::{Symbol, Type};
 
 use super::{FileContextKind, TaskState};
@@ -64,6 +66,28 @@ pub(super) fn has_anon_struct_attribute(attributes: &[Attribute]) -> bool {
     extract_attribute_flags(attributes, "go")
         .iter()
         .any(|flag| flag == "anon_struct")
+}
+
+pub(super) fn collect_enum_attributes(attributes: &[Attribute]) -> Attributes {
+    let mut map = Attributes::default();
+    if has_display_attribute(attributes) {
+        map.insert(TypeAttribute::Display, ());
+    }
+    map
+}
+
+pub(super) fn collect_struct_attributes(attributes: &[Attribute]) -> Attributes {
+    let mut map = Attributes::default();
+    if has_display_attribute(attributes) {
+        map.insert(TypeAttribute::Display, ());
+    }
+    if has_closed_domain_attribute(attributes) {
+        map.insert(TypeAttribute::ClosedDomain, ());
+    }
+    if has_anon_struct_attribute(attributes) {
+        map.insert(TypeAttribute::AnonStruct, ());
+    }
+    map
 }
 
 fn canonical_const_literal(expression: &Expression) -> Option<syntax::ast::Literal> {
@@ -564,7 +588,7 @@ impl TaskState<'_> {
                     variants,
                     span,
                     doc,
-                    has_display_attribute(attributes),
+                    collect_enum_attributes(attributes),
                 ),
                 Expression::Struct {
                     name,
@@ -585,9 +609,7 @@ impl TaskState<'_> {
                     *kind,
                     span,
                     doc,
-                    has_display_attribute(attributes),
-                    has_closed_domain_attribute(attributes),
-                    has_anon_struct_attribute(attributes),
+                    collect_struct_attributes(attributes),
                 ),
                 Expression::Interface {
                     name,

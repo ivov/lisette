@@ -3,7 +3,7 @@ use syntax::ast::{
     Annotation, EnumFieldDefinition, EnumVariant, Generic, Span, StructFieldDefinition, StructKind,
     VariantFields,
 };
-use syntax::program::{Definition, DefinitionBody, MethodSignatures, Visibility};
+use syntax::program::{Attributes, Definition, DefinitionBody, MethodSignatures, Visibility};
 use syntax::types::Type;
 
 use super::enum_variant_constructor_type;
@@ -21,7 +21,7 @@ impl TaskState<'_> {
         variants: &[EnumVariant],
         span: &Span,
         doc: &Option<String>,
-        display: bool,
+        attributes: Attributes,
     ) {
         let qualified_name = self.qualify_name(name);
         let enum_ty = store
@@ -122,7 +122,7 @@ impl TaskState<'_> {
                     generics: generics.to_vec(),
                     variants: new_variants,
                     methods: MethodSignatures::default(),
-                    display,
+                    attributes,
                 },
             },
         );
@@ -295,9 +295,7 @@ impl TaskState<'_> {
         kind: StructKind,
         span: &Span,
         doc: &Option<String>,
-        display: bool,
-        closed_domain: bool,
-        anon_struct: bool,
+        attributes: Attributes,
     ) {
         let qualified_name = self.qualify_name(name);
         let struct_ty = store
@@ -366,9 +364,7 @@ impl TaskState<'_> {
                     kind,
                     methods: Default::default(),
                     constructor: None,
-                    display,
-                    closed_domain,
-                    anon_struct,
+                    attributes,
                 },
             },
         );

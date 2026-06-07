@@ -634,7 +634,7 @@ fn method_lookup_key(ty: &Type) -> Option<Symbol> {
 mod closed_domain_tests {
     use super::*;
     use syntax::ast::StructKind;
-    use syntax::program::Visibility;
+    use syntax::program::{Attributes, TypeAttribute, Visibility};
 
     fn nominal_int(id: &str) -> Type {
         Type::Nominal {
@@ -645,6 +645,10 @@ mod closed_domain_tests {
     }
 
     fn struct_def(ty: Type, closed_domain: bool) -> Definition {
+        let mut attributes = Attributes::default();
+        if closed_domain {
+            attributes.insert(TypeAttribute::ClosedDomain, ());
+        }
         Definition {
             visibility: Visibility::Public,
             ty,
@@ -657,9 +661,7 @@ mod closed_domain_tests {
                 kind: StructKind::Tuple,
                 methods: Default::default(),
                 constructor: None,
-                display: false,
-                closed_domain,
-                anon_struct: false,
+                attributes,
             },
         }
     }

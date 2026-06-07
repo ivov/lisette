@@ -5,7 +5,9 @@ use serde::{Deserialize, Serialize};
 use syntax::ast::{
     Annotation, AttributeArg, Generic, Span, StructKind, Visibility as FieldVisibility,
 };
-use syntax::program::{Definition, DefinitionBody, Interface, MethodSignatures, Visibility};
+use syntax::program::{
+    Attributes, Definition, DefinitionBody, Interface, MethodSignatures, Visibility,
+};
 use syntax::types::Type;
 
 /// Span stored as file index + byte offsets.
@@ -342,7 +344,7 @@ pub enum CachedDefinitionBody {
         generics: Vec<CachedGeneric>,
         variants: Vec<CachedEnumVariant>,
         methods: HashMap<String, Type>,
-        display: bool,
+        attributes: Attributes,
     },
     Struct {
         generics: Vec<CachedGeneric>,
@@ -350,9 +352,7 @@ pub enum CachedDefinitionBody {
         kind: StructKind,
         methods: HashMap<String, Type>,
         constructor: Option<Type>,
-        display: bool,
-        closed_domain: bool,
-        anon_struct: bool,
+        attributes: Attributes,
     },
     Interface {
         definition: CachedInterface,
@@ -394,7 +394,7 @@ impl CachedDefinition {
                 generics,
                 variants,
                 methods,
-                display,
+                attributes,
             } => CachedDefinitionBody::Enum {
                 generics: generics
                     .iter()
@@ -405,7 +405,7 @@ impl CachedDefinition {
                     .map(|v| CachedEnumVariant::from_variant(v, file_id_to_index))
                     .collect(),
                 methods: Self::convert_methods(methods),
-                display: *display,
+                attributes: attributes.clone(),
             },
             DefinitionBody::Struct {
                 generics,
@@ -413,9 +413,7 @@ impl CachedDefinition {
                 kind,
                 methods,
                 constructor,
-                display,
-                closed_domain,
-                anon_struct,
+                attributes,
             } => CachedDefinitionBody::Struct {
                 generics: generics
                     .iter()
@@ -428,9 +426,7 @@ impl CachedDefinition {
                 kind: *kind,
                 methods: Self::convert_methods(methods),
                 constructor: constructor.clone(),
-                display: *display,
-                closed_domain: *closed_domain,
-                anon_struct: *anon_struct,
+                attributes: attributes.clone(),
             },
             DefinitionBody::Interface { definition } => CachedDefinitionBody::Interface {
                 definition: CachedInterface::from_interface(definition, file_id_to_index),
@@ -491,12 +487,12 @@ impl CachedDefinition {
                 generics,
                 variants,
                 methods,
-                display,
+                attributes,
             } => DefinitionBody::Enum {
                 generics: generics.iter().map(|g| g.to_generic(file_ids)).collect(),
                 variants: variants.iter().map(|v| v.to_variant(file_ids)).collect(),
                 methods: Self::restore_methods(methods),
-                display: *display,
+                attributes: attributes.clone(),
             },
             CachedDefinitionBody::Struct {
                 generics,
@@ -504,18 +500,14 @@ impl CachedDefinition {
                 kind,
                 methods,
                 constructor,
-                display,
-                closed_domain,
-                anon_struct,
+                attributes,
             } => DefinitionBody::Struct {
                 generics: generics.iter().map(|g| g.to_generic(file_ids)).collect(),
                 fields: fields.iter().map(|f| f.to_field(file_ids)).collect(),
                 kind: *kind,
                 methods: Self::restore_methods(methods),
                 constructor: constructor.clone(),
-                display: *display,
-                closed_domain: *closed_domain,
-                anon_struct: *anon_struct,
+                attributes: attributes.clone(),
             },
             CachedDefinitionBody::Interface { definition } => DefinitionBody::Interface {
                 definition: definition.to_interface(file_ids),

@@ -17,6 +17,16 @@ pub struct Definition {
     pub body: DefinitionBody,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum TypeAttribute {
+    Display,
+    ClosedDomain,
+    AnonStruct,
+}
+
+pub type Attributes = HashMap<TypeAttribute, ()>;
+
 #[derive(Debug, Clone)]
 pub enum DefinitionBody {
     TypeAlias {
@@ -28,7 +38,7 @@ pub enum DefinitionBody {
         generics: Vec<Generic>,
         variants: Vec<EnumVariant>,
         methods: MethodSignatures,
-        display: bool,
+        attributes: Attributes,
     },
     Struct {
         generics: Vec<Generic>,
@@ -36,10 +46,7 @@ pub enum DefinitionBody {
         kind: StructKind,
         methods: MethodSignatures,
         constructor: Option<Type>,
-        display: bool,
-        closed_domain: bool,
-        /// `#[go(anon_struct)]`: emit renders this as inline `struct{...}`.
-        anon_struct: bool,
+        attributes: Attributes,
     },
     Interface {
         definition: Interface,
@@ -137,32 +144,28 @@ impl Definition {
         }
     }
 
+    pub fn attributes(&self) -> Option<&Attributes> {
+        match &self.body {
+            DefinitionBody::Struct { attributes, .. } | DefinitionBody::Enum { attributes, .. } => {
+                Some(attributes)
+            }
+            _ => None,
+        }
+    }
+
     pub fn is_display(&self) -> bool {
-        matches!(
-            &self.body,
-            DefinitionBody::Struct { display: true, .. }
-                | DefinitionBody::Enum { display: true, .. }
-        )
+        self.attributes()
+            .is_some_and(|a| a.contains_key(&TypeAttribute::Display))
     }
 
     pub fn is_closed_domain(&self) -> bool {
-        matches!(
-            &self.body,
-            DefinitionBody::Struct {
-                closed_domain: true,
-                ..
-            }
-        )
+        self.attributes()
+            .is_some_and(|a| a.contains_key(&TypeAttribute::ClosedDomain))
     }
 
     pub fn is_anon_struct(&self) -> bool {
-        matches!(
-            &self.body,
-            DefinitionBody::Struct {
-                anon_struct: true,
-                ..
-            }
-        )
+        self.attributes()
+            .is_some_and(|a| a.contains_key(&TypeAttribute::AnonStruct))
     }
 
     pub fn is_type_definition(&self) -> bool {
