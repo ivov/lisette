@@ -378,9 +378,9 @@ pub interface Valuer {
   fn Value() -> Result<Value, error>
 }
 
-pub var Bool: ()
+pub var Bool: ValueConverter
 
-pub var DefaultParameterConverter: ()
+pub var DefaultParameterConverter: ValueConverter
 
 /// ErrBadConn should be returned by a driver to signal to the [database/sql]
 /// package that a driver.[Conn] is in a bad state (such as the server
@@ -409,11 +409,11 @@ pub var ErrRemoveArgument: error
 /// documented.
 pub var ErrSkip: error
 
-pub var Int32: ()
+pub var Int32: ValueConverter
 
-pub var ResultNoRows: ()
+pub var ResultNoRows: Result
 
-pub var String: ()
+pub var String: ValueConverter
 
 impl NotNull {
   fn ConvertValue(self, v: Unknown) -> Result<Value, error>

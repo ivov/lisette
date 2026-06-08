@@ -288,6 +288,11 @@ func namedToLisette(t *types.Named, seen map[types.Type]bool, conv *Converter) T
 		if namedImplementsError(t) {
 			return TypeResult{LisetteType: "error"}
 		}
+		if conv != nil {
+			if iface := conv.bestImplementedInterface(t); iface != nil {
+				return toLisetteRecursive(iface, seen, conv)
+			}
+		}
 		if s, ok := t.Underlying().(*types.Struct); ok && s.NumFields() > 0 {
 			return TypeResult{SkipReason: &SkipReason{
 				Code:    "opaque-unexported-struct",

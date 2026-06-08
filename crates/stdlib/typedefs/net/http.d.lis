@@ -1524,7 +1524,7 @@ pub var ErrWriteAfterFlush: error
 /// and Close always returns nil. It can be used in an outgoing client
 /// request to explicitly signal that a request has zero bytes.
 /// An alternative, however, is to simply set [Request.Body] to nil.
-pub var NoBody: ()
+pub var NoBody: io.ReadCloser
 
 // SKIPPED: ServerContextKey - opaque-unexported-struct
 // underlying type "contextKey" is unexported

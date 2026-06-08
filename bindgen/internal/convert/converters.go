@@ -6,6 +6,7 @@ import (
 	"go/constant"
 	"go/token"
 	"go/types"
+	"maps"
 	"slices"
 	"strings"
 
@@ -1345,6 +1346,115 @@ func (c *Converter) analyzeMajorityPointerTypes() {
 			}
 		}
 	}
+}
+
+// bestImplementedInterface returns the most specific interface (largest method
+// set; ties prefer same-package, then smaller qualified name) that the unexported
+// value type `t` satisfies, or nil for none.
+func (c *Converter) bestImplementedInterface(t *types.Named) *types.Named {
+	if t.TypeParams().Len() > 0 {
+		return nil
+	}
+	var best *types.Named
+	for _, candidate := range c.collectInterfaceCandidates() {
+		if !types.Implements(t, candidate.Underlying().(*types.Interface)) {
+			continue
+		}
+		if !c.interfaceRepresentable(candidate) {
+			continue
+		}
+		if best == nil || c.moreSpecificInterface(candidate, best) {
+			best = candidate
+		}
+	}
+	return best
+}
+
+// interfaceRepresentable reports whether bindgen can emit `named` as a Lisette
+// interface, so a marker var is never typed by one that would dangle or be
+// skipped.
+func (c *Converter) interfaceRepresentable(named *types.Named) bool {
+	if c.ifaceRepresentable == nil {
+		c.ifaceRepresentable = make(map[*types.Named]bool)
+		c.ifaceProbing = make(map[*types.Named]bool)
+	}
+	if verdict, ok := c.ifaceRepresentable[named]; ok {
+		return verdict
+	}
+	if c.ifaceProbing[named] {
+		return true
+	}
+	c.ifaceProbing[named] = true
+	defer delete(c.ifaceProbing, named)
+
+	iface := named.Underlying().(*types.Interface)
+	synthMark := c.synthMark()
+	savedPkgs := make(ExternalPkgs, len(c.externalPkgs))
+	maps.Copy(savedPkgs, c.externalPkgs)
+	_, representable := c.extractInterfaceMethods(iface, named.Obj().Name())
+	c.rollbackSynth(synthMark)
+	c.externalPkgs = savedPkgs
+	c.ifaceRepresentable[named] = representable
+	return representable
+}
+
+func (c *Converter) moreSpecificInterface(a, b *types.Named) bool {
+	am := a.Underlying().(*types.Interface).NumMethods()
+	bm := b.Underlying().(*types.Interface).NumMethods()
+	if am != bm {
+		return am > bm
+	}
+	aSame := a.Obj().Pkg().Path() == c.currentPkgPath
+	bSame := b.Obj().Pkg().Path() == c.currentPkgPath
+	if aSame != bSame {
+		return aSame
+	}
+	return qualifiedName(a) < qualifiedName(b)
+}
+
+func qualifiedName(named *types.Named) string {
+	return named.Obj().Pkg().Path() + "." + named.Obj().Name()
+}
+
+func (c *Converter) collectInterfaceCandidates() []*types.Named {
+	if c.ifaceCandidates != nil {
+		return c.ifaceCandidates
+	}
+	candidates := []*types.Named{}
+
+	collect := func(scope *types.Scope) {
+		for _, name := range scope.Names() {
+			typeName, ok := scope.Lookup(name).(*types.TypeName)
+			if !ok || !typeName.Exported() || typeName.Pkg() == nil {
+				continue
+			}
+			if isInternalPackagePath(typeName.Pkg().Path()) {
+				continue
+			}
+			named, ok := typeName.Type().(*types.Named)
+			if !ok || named.TypeParams().Len() > 0 {
+				continue
+			}
+			// IsMethodSet excludes constraint interfaces (unions, `~T` terms).
+			iface, ok := named.Underlying().(*types.Interface)
+			if !ok || iface.NumMethods() == 0 || !iface.IsMethodSet() {
+				continue
+			}
+			candidates = append(candidates, named)
+		}
+	}
+
+	if c.pkg != nil && c.pkg.Types != nil {
+		collect(c.pkg.Types.Scope())
+		for _, imported := range c.pkg.Imports {
+			if imported != nil && imported.Types != nil {
+				collect(imported.Types.Scope())
+			}
+		}
+	}
+
+	c.ifaceCandidates = candidates
+	return c.ifaceCandidates
 }
 
 // hasReachableUnexportedType reports whether any exported declaration in the

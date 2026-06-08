@@ -119,6 +119,9 @@ type Converter struct {
 	crossPkgConverters       map[string]*Converter        // lazily built; cached converters for imported packages
 	noCrossPkg               bool                         // when true, skip cross-package transitive analysis
 	reachableUnexportedTypes map[string]bool              // lazily computed; unexported type names reachable from an exported decl. nil = uncomputed
+	ifaceCandidates          []*types.Named               // lazily computed; candidate named interfaces in scope (current pkg + direct imports). nil = uncomputed
+	ifaceRepresentable       map[*types.Named]bool        // memoized per-interface "bindgen can emit this" verdicts
+	ifaceProbing             map[*types.Named]bool        // interfaces with an in-flight representability probe, to break self-referential cycles
 	shallowUnderlyingCache   map[token.Pos]types.Type     // lazily built; spec-level wrapped type by Named.Obj().Pos(). nil sentinels cached.
 	// Set per-function-conversion: maps `S` to `Slice<E>` for the `S ~[]E` shape.
 	typeParamSubstitutions map[string]string
