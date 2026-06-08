@@ -13,5 +13,5 @@ doctest = false
 test = false
 
 [dependencies]
-syntax = { package = "lisette-syntax", version = "0.3.2", path = "../syntax" }
+syntax = { package = "lisette-syntax", version = "0.3.3", path = "../syntax" }
 unicode-segmentation = "1.11"
