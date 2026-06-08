@@ -1,0 +1,19 @@
+---
+source: tests/_embed_harness/render_go.rs
+---
+package main
+
+import "fmt"
+
+type N0 struct {
+}
+func (r N0) M() string {
+	return "N0.M"
+}
+
+func main() {
+	{
+		var r N0
+		fmt.Println(r.M())
+	}
+}

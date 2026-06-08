@@ -211,6 +211,18 @@ jobs:
           go: 'true'
       - run: just test-e2e-suite
 
+  embed-diff:
+    name: Embed differential
+    if: ${{ !startsWith(github.head_ref, 'release-plz-') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # ratchet:actions/checkout@v6
+      - uses: ./.github/actions/setup-rust
+        with:
+          just: 'true'
+          go: 'true'
+      - run: just test-embed-diff
+
   prelude-go:
     name: Prelude tests
     if: ${{ !startsWith(github.head_ref, 'release-plz-') }}

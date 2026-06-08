@@ -44,6 +44,9 @@ test-e2e-smoke:
 test-e2e-suite:
     cargo test -p tests --test e2e_suite -- --nocapture
 
+test-embed-diff:
+    cargo test -p tests --test embed_diff -- --nocapture
+
 test-cov:
     cargo llvm-cov -p tests -p lisette-lsp --test suite --test lsp --html --open
 

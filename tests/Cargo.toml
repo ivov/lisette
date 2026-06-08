@@ -16,6 +16,8 @@ deps = { package = "lisette-deps", path = "../crates/deps" }
 rustc-hash.workspace = true
 insta.workspace = true
 miette.workspace = true
+serde.workspace = true
+serde_json.workspace = true
 tempfile = "3"
 
 [[test]]
@@ -33,3 +35,7 @@ path = "e2e_learn.rs"
 [[test]]
 name = "e2e_suite"
 path = "e2e_suite.rs"
+
+[[test]]
+name = "embed_diff"
+path = "embed_diff.rs"

@@ -1,0 +1,23 @@
+---
+source: tests/_embed_harness/render_go.rs
+---
+package p
+
+type N0 struct {
+}
+func (r N0) M() string {
+	return "N0.M"
+}
+
+type N1 struct {
+	N0
+}
+
+type N2 struct {
+	N0
+}
+
+type N3 struct {
+	N1
+	N2
+}
