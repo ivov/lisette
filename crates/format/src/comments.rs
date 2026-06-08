@@ -237,6 +237,12 @@ impl<'a> Comments<'a> {
             .is_some_and(|c| c.start < position)
     }
 
+    pub(crate) fn source_slice(&self, offset: u32, length: u32) -> &'a str {
+        let start = (offset as usize).min(self.source.len());
+        let end = (start + length as usize).min(self.source.len());
+        &self.source[start..end]
+    }
+
     /// Source-scans for `needle needle` (e.g. `..`) in `[start, before)`, skipping comment text.
     pub(crate) fn next_pair_at(&self, needle: u8, start: u32, before: u32) -> Option<u32> {
         let bytes = self.source.as_bytes();

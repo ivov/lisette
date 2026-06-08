@@ -1,0 +1,7 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: fn test() { let msg = f\"result {compute(first_argument, second_argument, third_argument, fourth_argument)}\" }"
+---
+fn test() {
+  let msg = f"result {compute(first_argument, second_argument, third_argument, fourth_argument)}"
+}

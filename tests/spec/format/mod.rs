@@ -1457,6 +1457,42 @@ fn format_multiline_string_in_call_forces_arg_wrap() {
 }
 
 #[test]
+fn format_fstring_long_interpolation_stays_single_line() {
+    assert_format_snapshot!(
+        "fn test() { let msg = f\"You cannot use another ender pearl for {shared.format_duration(remaining)}.\" }"
+    );
+}
+
+#[test]
+fn format_fstring_interpolation_many_args_stays_single_line() {
+    assert_format_snapshot!(
+        "fn test() { let msg = f\"result {compute(first_argument, second_argument, third_argument, fourth_argument)}\" }"
+    );
+}
+
+#[test]
+fn format_fstring_struct_call_interpolation_stays_single_line() {
+    assert_format_snapshot!(
+        "fn test() { let msg = f\"point {Point { x: some_long_value_here, y: another_long_value_here, z: third_value }}\" }"
+    );
+}
+
+#[test]
+fn format_fstring_match_interpolation_stays_single_line() {
+    assert_format_snapshot!("fn test() { let m = f\"v {match x { 1 => \"a\", _ => \"b\" }}\" }");
+}
+
+#[test]
+fn format_fstring_block_interpolation_stays_single_line() {
+    assert_format_snapshot!("fn test() { let b = f\"v { { let a = 1; a } }\" }");
+}
+
+#[test]
+fn format_fstring_empty_block_interpolation_stays_single_line() {
+    assert_format_snapshot!("fn test() { let e = f\"v { {} }\" }");
+}
+
+#[test]
 fn comment_inside_or_pattern() {
     assert_format_snapshot!(
         "fn f(x: int) -> int {\n  match x {\n    1 |\n    // standalone comment\n    2 |\n    3 => 1,\n    _ => 0,\n  }\n}"

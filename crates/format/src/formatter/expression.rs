@@ -237,8 +237,20 @@ impl<'a> Formatter<'a> {
                 }
                 FormatStringPart::Text(s) => docs.push(Document::string(s.clone())),
                 FormatStringPart::Expression(e) => {
+                    let rendered = self.expression(e).to_pretty_string(isize::MAX);
+                    let mut content = if rendered.contains('\n') {
+                        let span = e.get_span();
+                        self.comments
+                            .source_slice(span.byte_offset, span.byte_length)
+                            .to_string()
+                    } else {
+                        rendered
+                    };
+                    if content.starts_with('{') {
+                        content.insert(0, ' ');
+                    }
                     docs.push(Document::str("{"));
-                    docs.push(self.expression(e));
+                    docs.push(Document::string(content));
                     docs.push(Document::str("}"));
                 }
             }

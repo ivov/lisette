@@ -1,0 +1,7 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: fn test() { let msg = f\"point {Point { x: some_long_value_here, y: another_long_value_here, z: third_value }}\" }"
+---
+fn test() {
+  let msg = f"point {Point { x: some_long_value_here, y: another_long_value_here, z: third_value }}"
+}
