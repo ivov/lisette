@@ -2,6 +2,17 @@
 
 Lisette is under active development. Any version before 1.0.0 may include breaking changes.
 
+## [0.3.3](https://github.com/ivov/lisette/compare/lisette-v0.3.2...lisette-v0.3.3) - 2026-06-08
+
+- feat: support embedding in native structs [#666](https://github.com/ivov/lisette/pull/666) [`eec2ea2`](https://github.com/ivov/lisette/commit/eec2ea2e9154af0209afefe183f9522eb7c4e2aa)
+- refactor: replace `impl` with `embed` for interface embedding [#664](https://github.com/ivov/lisette/pull/664) [`18d7902`](https://github.com/ivov/lisette/commit/18d79026991e050a0cd5374446afe516e96faabf)
+- test: differential harness for struct and interface embedding [#663](https://github.com/ivov/lisette/pull/663) [`b580f92`](https://github.com/ivov/lisette/commit/b580f923dd102c51add906243c1f33ed22770e76)
+- fix: skip `manual_map_or` lint on side-effecting match arms [#662](https://github.com/ivov/lisette/pull/662) [`ecb5ed8`](https://github.com/ivov/lisette/commit/ecb5ed88879a4df169d36771bdc4787898e4a66f)
+- fix: type unexported singleton vars by their implemented interface [#661](https://github.com/ivov/lisette/pull/661) [`be8e0f2`](https://github.com/ivov/lisette/commit/be8e0f25064fd1c7b4c8d396ab1f6557929f3718)
+- fix: prevent go types from shadowing prelude generics [#660](https://github.com/ivov/lisette/pull/660) [`e0f036b`](https://github.com/ivov/lisette/commit/e0f036b24ae7720562e957c6f58d39b16abc14d6)
+- feat: add `Result.wrap_err` to attach context to errors [#658](https://github.com/ivov/lisette/pull/658) [`668cab7`](https://github.com/ivov/lisette/commit/668cab75790dec794d65bbd90c50d5216f4cf0f0)
+- fix: keep f-string interpolations single-line [#657](https://github.com/ivov/lisette/pull/657) [`ee4f66a`](https://github.com/ivov/lisette/commit/ee4f66a18635437ec5dc7013332ee675d8d4fa9e)
+
 ## [0.3.2](https://github.com/ivov/lisette/compare/lisette-v0.3.1...lisette-v0.3.2) - 2026-06-07
 
 - fix: cross-module reference tracking in unused lints [#651](https://github.com/ivov/lisette/pull/651) [`64b9dc7`](https://github.com/ivov/lisette/commit/64b9dc7568da079be41bd55e30fa6bfcec6689a2)
