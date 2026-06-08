@@ -37,16 +37,20 @@ pub fn check_manual_map_or(expression: &Expression, ctx: &NodeCtx) {
         return;
     };
 
-    let default = if is_mapped_success_arm(&arms[0], success_variant) {
-        failure_default(&arms[1], failure_variant)
+    let (success_arm, default) = if is_mapped_success_arm(&arms[0], success_variant) {
+        (&arms[0], failure_default(&arms[1], failure_variant))
     } else if is_mapped_success_arm(&arms[1], success_variant) {
-        failure_default(&arms[0], failure_variant)
+        (&arms[1], failure_default(&arms[0], failure_variant))
     } else {
         return;
     };
     let Some(default) = default else {
         return;
     };
+
+    if produces_no_value(&success_arm.expression) || produces_no_value(default) {
+        return;
+    }
 
     if default.diverges().is_some() {
         return;
@@ -63,6 +67,11 @@ pub fn check_manual_map_or(expression: &Expression, ctx: &NodeCtx) {
         &match_keyword_span,
         lazy_default,
     ));
+}
+
+fn produces_no_value(expression: &Expression) -> bool {
+    let ty = expression.get_type();
+    ty.is_unit() || ty.is_ignored()
 }
 
 // A `Some(v)`/`Ok(v)` arm whose body transforms the bound value, rather than

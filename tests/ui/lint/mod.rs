@@ -6962,6 +6962,21 @@ fn main() {
 }
 
 #[test]
+fn manual_map_or_side_effecting_arms_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let mut counts: Map<string, int> = Map.new<string, int>()
+  match counts.get("a") {
+    Some(existing) => counts["a"] = existing + 1,
+    None => counts["a"] = 1,
+  }
+}
+"#
+    );
+}
+
+#[test]
 fn redundant_if_let_else() {
     assert_lint_snapshot!(
         r#"
