@@ -5049,6 +5049,25 @@ interface HasName {
 }
 
 pub interface Person {
+  embed HasName
+}
+
+fn main() {
+  ()
+}
+"#
+    );
+}
+
+#[test]
+fn interface_impl_embed_suggests_embed() {
+    assert_lint_snapshot!(
+        r#"
+interface HasName {
+  fn name(self) -> string
+}
+
+pub interface Person {
   impl HasName
 }
 

@@ -881,3 +881,10 @@ pub fn out_of_domain_value(
             "`{type_display}` has a closed domain (`{valid_display}`) that excludes this value"
         ))
 }
+
+pub fn embed_over_impl(span: &Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::info("Interface embedding uses `embed`")
+        .with_lint_code("embed_over_impl")
+        .with_span_label(span, "write `embed` here")
+        .with_help("Interfaces embed other interfaces with `embed`. Replace `impl` with `embed`")
+}

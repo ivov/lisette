@@ -1937,6 +1937,7 @@ pub struct ParentInterface {
     pub annotation: Annotation,
     pub ty: Type,
     pub span: Span,
+    pub impl_keyword_span: Option<Span>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]

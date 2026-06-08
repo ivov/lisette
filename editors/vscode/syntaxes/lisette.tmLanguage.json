@@ -163,7 +163,7 @@
         },
         {
           "name": "storage.type.lisette",
-          "match": "\\b(fn|struct|enum|interface|impl|type|const|var)\\b"
+          "match": "\\b(fn|struct|enum|interface|impl|embed|type|const|var)\\b"
         },
         {
           "name": "storage.modifier.lisette",

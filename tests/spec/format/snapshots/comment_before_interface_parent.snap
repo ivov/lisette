@@ -4,6 +4,6 @@ description: "input: interface I {\n  // before parent\n  impl A\n  fn first()\n
 ---
 interface I {
   // before parent
-  impl A
+  embed A
   fn first()
 }

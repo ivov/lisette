@@ -355,7 +355,7 @@ impl<'a> Formatter<'a> {
 
         for parent in parents {
             self.push_sibling_entry(&mut entries, parent.span.byte_offset, |_| {
-                Document::str("impl ").append(Self::annotation(&parent.annotation))
+                Document::str("embed ").append(Self::annotation(&parent.annotation))
             });
         }
 

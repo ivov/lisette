@@ -3399,6 +3399,10 @@
     "named": false
   },
   {
+    "type": "embed",
+    "named": false
+  },
+  {
     "type": "enum",
     "named": false
   },

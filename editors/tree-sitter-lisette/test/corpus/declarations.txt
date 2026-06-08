@@ -197,6 +197,28 @@ interface Reader { fn read(self) -> int; }
         return_type: (type_identifier)))))
 
 ================================================================================
+Interface embedding
+================================================================================
+
+interface ReadWriter { embed Reader; impl Writer; fn flush(self) -> int; }
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (interface_item
+    name: (type_identifier)
+    body: (interface_body
+      (interface_embedding
+        interface: (type_identifier))
+      (interface_embedding
+        interface: (type_identifier))
+      (function_signature_item
+        name: (identifier)
+        parameters: (parameters
+          (self_parameter))
+        return_type: (type_identifier)))))
+
+================================================================================
 Impl block
 ================================================================================
 

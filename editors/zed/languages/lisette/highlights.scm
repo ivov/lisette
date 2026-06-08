@@ -6,6 +6,7 @@
   "continue"
   "defer"
   "else"
+  "embed"
   "enum"
   "fn"
   "for"

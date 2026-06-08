@@ -220,8 +220,8 @@ interface Reader {
 }
 
 interface ReadWriter {
-  impl Reader
-  impl Writer
+  embed Reader
+  embed Writer
 }
 ```
 

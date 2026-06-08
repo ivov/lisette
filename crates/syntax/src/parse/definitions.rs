@@ -767,13 +767,21 @@ impl<'source> Parser<'source> {
                 }
 
                 Impl => {
+                    let keyword = self.current_token();
+                    let keyword_span =
+                        Span::new(self.file_id, keyword.byte_offset, keyword.byte_length);
                     self.ensure(Impl);
-                    self.parse_interface_parent(item_doc, &mut seen_parents, &mut parents);
+                    self.parse_interface_parent(
+                        item_doc,
+                        Some(keyword_span),
+                        &mut seen_parents,
+                        &mut parents,
+                    );
                 }
 
                 Identifier if self.current_token().text == "embed" => {
                     self.next();
-                    self.parse_interface_parent(item_doc, &mut seen_parents, &mut parents);
+                    self.parse_interface_parent(item_doc, None, &mut seen_parents, &mut parents);
                 }
 
                 _ => {
@@ -781,8 +789,8 @@ impl<'source> Parser<'source> {
                         self.error_detached_doc_comment(span);
                     }
                     self.track_error(
-                        "expected `fn` or `impl`",
-                        "Only functions and `impl` blocks are allowed in interfaces.",
+                        "expected `fn` or `embed`",
+                        "Only method signatures (`fn`) and embeddings (`embed`) are allowed in interfaces.",
                     );
                     self.next();
                 }
@@ -806,6 +814,7 @@ impl<'source> Parser<'source> {
     fn parse_interface_parent(
         &mut self,
         item_doc: Option<(std::string::String, Span)>,
+        impl_keyword_span: Option<Span>,
         seen_parents: &mut Vec<(EcoString, Span)>,
         parents: &mut Vec<ParentInterface>,
     ) {
@@ -829,6 +838,7 @@ impl<'source> Parser<'source> {
             annotation,
             ty: Type::uninferred(),
             span: parent_span,
+            impl_keyword_span,
         });
         self.advance_if(Semicolon);
     }
