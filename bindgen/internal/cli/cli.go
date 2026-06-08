@@ -181,10 +181,17 @@ func generateFromPackage(pkg *packages.Package, displayPath, lisetteVersion, goV
 		}
 	}
 
-	emitter := emit.NewEmitter(cfg, pkg.PkgPath, bitFlagSetTypeNames, closedDomainTypeNames)
+	emitter := emit.NewEmitter(cfg, pkg.PkgPath, pkg.Name, bitFlagSetTypeNames, closedDomainTypeNames)
 	emitter.EmitHeader(displayPath, pkg.Name, lisetteVersion, goVersion)
 
-	emitter.EmitImports(converter.ExternalPkgs())
+	selfQualifies := false
+	for _, result := range results {
+		if result.Kind == extract.ExportType && convert.CollidesWithPreludeGeneric(result.Name, len(result.TypeParams)) {
+			selfQualifies = true
+			break
+		}
+	}
+	emitter.EmitImports(converter.ExternalPkgs(), selfQualifies)
 
 	for _, synth := range converter.SyntheticStructs() {
 		emitter.EmitExport(synth)

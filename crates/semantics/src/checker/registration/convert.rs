@@ -293,6 +293,14 @@ impl TaskState<'_> {
             _ => 0,
         };
 
+        if !type_name.contains('.')
+            && is_reserved_prelude_generic(type_name)
+            && let Some((pname, pty)) = self.resolve_type_from_prelude(store, type_name)
+            && arity_of(&pty) == expected_arity
+        {
+            return Some((pname, pty));
+        }
+
         if let Some((qname, ty)) = self.resolve_type_name(store, type_name) {
             if arity_of(&ty) == expected_arity {
                 return Some((qname, ty));
@@ -414,4 +422,8 @@ impl TaskState<'_> {
             &resolved, reason, span,
         ));
     }
+}
+
+fn is_reserved_prelude_generic(name: &str) -> bool {
+    matches!(name, "Option" | "Result" | "Partial")
 }

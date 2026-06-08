@@ -34,16 +34,18 @@ type Emitter struct {
 	methods           map[string][]convert.ConvertResult // receiver type name -> methods
 	cfg               *config.Config
 	pkgPath           string
+	pkgName           string            // package name, used to self-qualify prelude-colliding types
 	pkgAliases        map[string]string // package path -> local prefix used in references
 	bitFlagSetTypes   map[string]bool   // type names emitted as #[go(bit_flag_set)] newtypes
 	closedDomainTypes map[string]bool   // type names emitted as #[go(closed_domain)] newtypes
 }
 
-func NewEmitter(cfg *config.Config, pkgPath string, bitFlagSetTypes, closedDomainTypes map[string]bool) *Emitter {
+func NewEmitter(cfg *config.Config, pkgPath, pkgName string, bitFlagSetTypes, closedDomainTypes map[string]bool) *Emitter {
 	return &Emitter{
 		methods:           make(map[string][]convert.ConvertResult),
 		cfg:               cfg,
 		pkgPath:           pkgPath,
+		pkgName:           pkgName,
 		bitFlagSetTypes:   bitFlagSetTypes,
 		closedDomainTypes: closedDomainTypes,
 	}
@@ -81,12 +83,19 @@ func packageSourceType(pkg string) string {
 	return "Go stdlib"
 }
 
-func (e *Emitter) EmitImports(externalPkgs convert.ExternalPkgs) {
+// EmitImports renders the import block. reserveSelfName is set when the package
+// declares a prelude-colliding type, so a same-named import cannot claim the
+// bare prefix that the self-qualified references rely on.
+func (e *Emitter) EmitImports(externalPkgs convert.ExternalPkgs, reserveSelfName bool) {
 	if len(externalPkgs) == 0 {
 		return
 	}
 
-	e.pkgAliases = computePkgAliases(externalPkgs)
+	selfName := ""
+	if reserveSelfName {
+		selfName = e.pkgName
+	}
+	e.pkgAliases = computePkgAliases(externalPkgs, selfName)
 
 	paths := make([]string, 0, len(externalPkgs))
 	for path := range externalPkgs {
@@ -110,8 +119,10 @@ func (e *Emitter) EmitImports(externalPkgs convert.ExternalPkgs) {
 // name collision (e.g. `html/template` vs `text/template`) the path with
 // the fewest segments keeps the bare name (lex tiebreaker); the rest get a
 // synthesized alias by widening the trailing-segment window until unique
-// against bare names and previously-synthesized aliases.
-func computePkgAliases(externalPkgs convert.ExternalPkgs) map[string]string {
+// against bare names and previously-synthesized aliases. selfName is reserved
+// so an import sharing the current package's name cannot claim the bare prefix,
+// which self-qualified references (`pkg.Type`) rely on.
+func computePkgAliases(externalPkgs convert.ExternalPkgs, selfName string) map[string]string {
 	byName := make(map[string][]string)
 	for path, name := range externalPkgs {
 		byName[name] = append(byName[name], path)
@@ -119,10 +130,17 @@ func computePkgAliases(externalPkgs convert.ExternalPkgs) map[string]string {
 
 	aliases := make(map[string]string, len(externalPkgs))
 	taken := make(map[string]bool)
+	if selfName != "" {
+		taken[selfName] = true
+	}
 	pending := make([]string, 0, len(externalPkgs)-len(byName))
 
 	for name, paths := range byName {
 		slices.SortFunc(paths, compareByDepth)
+		if taken[name] {
+			pending = append(pending, paths...)
+			continue
+		}
 		aliases[paths[0]] = name
 		taken[name] = true
 		pending = append(pending, paths[1:]...)
@@ -147,16 +165,22 @@ func compareByDepth(a, b string) int {
 
 func aliasForPath(path string, taken map[string]bool) string {
 	parts := strings.Split(path, "/")
-	if len(parts) < 2 {
-		return sanitizeIdent(path)
-	}
-	for n := 2; n < len(parts); n++ {
+	for n := 2; n <= len(parts); n++ {
 		candidate := joinAndSanitize(parts[len(parts)-n:])
 		if !taken[candidate] {
 			return candidate
 		}
 	}
-	return joinAndSanitize(parts)
+	base := joinAndSanitize(parts)
+	if !taken[base] {
+		return base
+	}
+	for i := 2; ; i++ {
+		candidate := fmt.Sprintf("%s_%d", base, i)
+		if !taken[candidate] {
+			return candidate
+		}
+	}
 }
 
 func joinAndSanitize(parts []string) string {
@@ -273,13 +297,14 @@ func (e *Emitter) EmitImplBlocks() {
 			typeParams = methods[0].Receiver.TypeParams
 		}
 
+		implName := convert.SelfQualify(e.pkgName, typeName, len(typeParams))
 		if len(typeParams) > 0 {
-			fmt.Fprintf(&e.buf, "impl<%s> %s<%s> {\n", typeParams.FormatDecl(), typeName, typeParams.FormatUse())
+			fmt.Fprintf(&e.buf, "impl<%s> %s<%s> {\n", typeParams.FormatDecl(), implName, typeParams.FormatUse())
 		} else {
-			fmt.Fprintf(&e.buf, "impl %s {\n", typeName)
+			fmt.Fprintf(&e.buf, "impl %s {\n", implName)
 		}
 		for _, method := range methods {
-			e.emitMethodInImpl(method)
+			e.emitMethodInImpl(method, implName)
 		}
 
 		e.buf.WriteString("}\n\n")
@@ -388,7 +413,7 @@ func (e *Emitter) shouldAllowUnusedResult(qualifiedName, methodName string, resu
 	return false
 }
 
-func (e *Emitter) emitMethodInImpl(result convert.ConvertResult) {
+func (e *Emitter) emitMethodInImpl(result convert.ConvertResult, recvName string) {
 	if result.SkipReason != nil {
 		fmt.Fprintf(&e.buf, "  // SKIPPED method %q: %s — %s\n", result.Name, result.SkipReason.Code, result.SkipReason.Message)
 		return
@@ -431,7 +456,7 @@ func (e *Emitter) emitMethodInImpl(result convert.ConvertResult) {
 	methodSignature.WriteString("(")
 	var params []string
 	if result.Receiver != nil && result.Receiver.IsPointer {
-		typeName := result.Receiver.BaseTypeName + result.Receiver.TypeParams.UseBlock()
+		typeName := recvName + result.Receiver.TypeParams.UseBlock()
 		params = append(params, fmt.Sprintf("self: Ref<%s>", typeName))
 	} else {
 		params = append(params, "self")

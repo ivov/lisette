@@ -311,6 +311,8 @@ func namedToLisette(t *types.Named, seen map[types.Type]bool, conv *Converter) T
 		}
 		if isExternal {
 			typeName = pkgPrefix + "." + obj.Name()
+		} else if pkg != nil {
+			typeName = SelfQualify(pkg.Name(), obj.Name(), t.Origin().TypeParams().Len())
 		}
 		return TypeResult{LisetteType: fmt.Sprintf("%s<%s>", typeName, strings.Join(args, ", "))}
 	}
@@ -324,6 +326,25 @@ func namedToLisette(t *types.Named, seen map[types.Type]bool, conv *Converter) T
 	}
 
 	return TypeResult{LisetteType: typeName}
+}
+
+var preludeGenericArity = map[string]int{"Option": 1, "Result": 2, "Partial": 2}
+
+// CollidesWithPreludeGeneric reports whether a Go type's name and arity match a
+// prelude generic, meaning references to it must be package-qualified.
+func CollidesWithPreludeGeneric(typeName string, arity int) bool {
+	a, ok := preludeGenericArity[typeName]
+	return ok && a == arity
+}
+
+// SelfQualify returns `pkgName.typeName` when a package's own type collides with
+// a prelude generic by name and arity (e.g. huh's `Option<T>`), so the reference
+// stays distinct from the prelude. The declaration itself stays bare.
+func SelfQualify(pkgName, typeName string, arity int) string {
+	if CollidesWithPreludeGeneric(typeName, arity) {
+		return pkgName + "." + typeName
+	}
+	return typeName
 }
 
 // wrapOption wraps a converted type in `Option<...>`, propagating SkipReason.

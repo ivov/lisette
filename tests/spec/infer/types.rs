@@ -6348,3 +6348,96 @@ fn main() {
     )
     .assert_no_errors();
 }
+
+#[test]
+fn go_prelude_named_type_does_not_shadow_prelude() {
+    let typedef = r#"
+pub fn TakeField(f: VarArgs<Field>)
+
+pub interface Field {
+  fn Update() -> Result<(), error>
+  fn WithWidth(n: int) -> Option<Field>
+}
+
+pub type Input
+
+impl Input {
+  fn Update(self: Ref<Input>) -> Result<(), error>
+  fn WithWidth(self: Ref<Input>, w: int) -> Field
+}
+
+pub struct Option<T: Comparable> { pub Key: string, pub Value: T }
+
+pub fn NewOption<T: Comparable>(key: string, value: T) -> sample.Option<T>
+
+impl<T: Comparable> sample.Option<T> {
+  fn Selected(self, selected: bool) -> sample.Option<T>
+}
+"#;
+    let input = r#"
+import "go:example.com/sample"
+
+fn main() {
+  let input = sample.Input {}
+  sample.TakeField(&input)
+
+  let opt = sample.NewOption("k", 1)
+  let _ = opt.Selected(true)
+}
+"#;
+    infer_with_go_typedefs(input, &[("go:example.com/sample", typedef)]).assert_no_errors();
+}
+
+#[test]
+fn go_qualified_imported_option_resolves_to_import() {
+    let optlib = r#"
+pub struct Option<T> { pub held: T }
+
+pub fn wrap<T>(value: T) -> optlib.Option<T>
+"#;
+    let input = r#"
+import "go:example.com/optlib"
+
+fn main() {
+  let imported = optlib.wrap(1)
+  let _ = imported.held
+
+  let native: Option<int> = Some(2)
+  let _ = native.unwrap_or(0)
+}
+"#;
+    infer_with_go_typedefs(input, &[("go:example.com/optlib", optlib)]).assert_no_errors();
+}
+
+#[test]
+fn go_self_qualified_option_coexists_with_import() {
+    let dep = r#"
+pub struct Thing { pub n: int }
+"#;
+    let app = r#"
+import "go:example.com/dep"
+
+pub struct Option<T> { pub held: T }
+
+pub fn keep<T>(value: T) -> app.Option<T>
+
+pub fn maybe() -> Option<dep.Thing>
+"#;
+    let input = r#"
+import "go:example.com/app"
+
+fn main() {
+  let local = app.keep(1)
+  let _ = local.held
+
+  if let Some(thing) = app.maybe() {
+    let _ = thing.n
+  }
+}
+"#;
+    infer_with_go_typedefs(
+        input,
+        &[("go:example.com/dep", dep), ("go:example.com/app", app)],
+    )
+    .assert_no_errors();
+}

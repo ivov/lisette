@@ -645,6 +645,14 @@ impl<'s> TaskState<'s> {
             }
             FileContextKind::ImportedTypedef => {
                 self.put_prelude_in_scope(store);
+                let self_alias = store
+                    .go_package_names
+                    .get(module_id)
+                    .cloned()
+                    .unwrap_or_else(|| go_module_last_segment(module_id).to_string());
+                self.imports
+                    .prefix_to_module
+                    .insert(self_alias, module_id.into());
             }
             FileContextKind::Prelude => {
                 self.put_unprefixed_module_in_scope(store, module_id);
@@ -827,6 +835,15 @@ impl<'s> TaskState<'s> {
         self.env.end_speculation(spec, result.is_err());
         result
     }
+}
+
+fn go_module_last_segment(module_id: &str) -> &str {
+    module_id
+        .strip_prefix("go:")
+        .unwrap_or(module_id)
+        .rsplit('/')
+        .next()
+        .unwrap_or(module_id)
 }
 
 /// Returns `true` if the given name is reserved and cannot be used as an import alias.
