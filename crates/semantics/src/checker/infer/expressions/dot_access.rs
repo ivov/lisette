@@ -9,6 +9,7 @@ use syntax::types::{Symbol, Type, substitute, unqualified_name};
 use super::super::addressability::check_is_non_addressable;
 use super::primitives::contains_deref;
 use crate::checker::infer::InferCtx;
+use crate::promotion::{self, MemberKind, Resolution};
 
 impl InferCtx<'_, '_> {
     pub(super) fn infer_dot_access_or_qualified_path(
@@ -239,6 +240,7 @@ impl InferCtx<'_, '_> {
 
         let resolved = self
             .as_struct_field(&args)
+            .or_else(|| self.as_promoted_field(&args))
             .or_else(|| self.as_tuple_element(&args))
             .or_else(|| self.as_module_member(&args))
             .or_else(|| self.as_enum_variant(&args))
@@ -266,6 +268,24 @@ impl InferCtx<'_, '_> {
                 ));
             }
             return expression;
+        }
+
+        if promotion::has_direct_embed(self.store, &args.deref_ty)
+            && let Resolution::Ambiguous { sources } =
+                promotion::resolve_selector(self.store, &args.deref_ty, &member)
+        {
+            let names: Vec<String> = sources
+                .iter()
+                .map(|s| s.last_segment().to_string())
+                .collect();
+            self.sink.push(diagnostics::infer::ambiguous_selector(
+                &args.deref_ty,
+                &member,
+                &names,
+                span,
+            ));
+            self.unify(expected_ty, &Type::Error, &span);
+            return args.build_dot_access(Type::Error, None, None);
         }
 
         let available_members = self.get_available_member_names(&resolved_expression_ty);
@@ -479,6 +499,57 @@ impl InferCtx<'_, '_> {
         Some((args.build_dot_access(field_ty, Some(kind), None), kind))
     }
 
+    fn as_promoted_field(
+        &mut self,
+        args: &DotAccessResolutionArgs,
+    ) -> Option<(Expression, DotAccessKind)> {
+        let store = self.store;
+        if !matches!(args.deref_ty, Type::Nominal { .. })
+            || !promotion::has_direct_embed(store, &args.deref_ty)
+        {
+            return None;
+        }
+
+        let Resolution::Found(member) =
+            promotion::resolve_selector(store, &args.deref_ty, args.member_name)
+        else {
+            return None;
+        };
+        let MemberKind::Field {
+            ty: field_ty,
+            visibility,
+        } = member.kind
+        else {
+            return None;
+        };
+
+        if let Some(field) = store
+            .fields_of(member.declaring_type.as_str())
+            .and_then(|fields| fields.iter().find(|f| f.name == args.member_name))
+        {
+            self.facts.add_usage(*args.span, field.name_span);
+        }
+
+        let declaring_module = store
+            .module_for_qualified_name(member.declaring_type.as_str())
+            .unwrap_or_else(|| member.declaring_type.as_str());
+        let is_cross_module = declaring_module != self.cursor.module_id;
+        if is_cross_module && !visibility.is_public() {
+            self.sink.push(diagnostics::infer::private_field_access(
+                args.member_name,
+                args.deref_ty.get_qualified_name().as_str(),
+                *args.span,
+            ));
+        }
+
+        self.unify(args.expected_ty, &field_ty, args.span);
+
+        let kind = DotAccessKind::StructField {
+            is_exported: visibility.is_public() || is_cross_module,
+        };
+        Some((args.build_dot_access(field_ty, Some(kind), None), kind))
+    }
+
     fn as_tuple_element(
         &mut self,
         args: &DotAccessResolutionArgs,
@@ -674,21 +745,34 @@ impl InferCtx<'_, '_> {
     ) {
         let store = self.store;
         if let Type::Nominal { .. } = deref_ty {
-            let qualified_name = deref_ty.get_qualified_name();
-            let method_key = qualified_name.with_segment(args.member_name);
+            let outer = deref_ty.get_qualified_name();
+            let direct_key = outer.with_segment(args.member_name);
+
+            let declaring = if store.get_definition(&direct_key).is_some()
+                || !promotion::has_direct_embed(store, deref_ty)
+            {
+                outer
+            } else if let Resolution::Found(member) =
+                promotion::resolve_selector(store, deref_ty, args.member_name)
+            {
+                member.declaring_type
+            } else {
+                outer
+            };
+            let method_key = declaring.with_segment(args.member_name);
 
             if let Some(definition_span) = self.get_definition_name_span(store, &method_key) {
                 self.facts.add_usage(*args.span, definition_span);
             }
 
-            if self.is_foreign_type(&qualified_name)
+            if self.is_foreign_type(&declaring)
                 && let Some(def) = store.get_definition(&method_key)
                 && matches!(def.body, DefinitionBody::Value { .. })
                 && !def.visibility.is_public()
             {
                 self.sink.push(diagnostics::infer::private_method_access(
                     args.member_name,
-                    &qualified_name,
+                    &declaring,
                     *args.span,
                 ));
             }

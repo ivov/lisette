@@ -28,6 +28,10 @@ impl Outcome {
     pub fn has_code(&self, code: &str) -> bool {
         matches!(self, Outcome::Rejects { codes } if codes.iter().any(|c| c == code))
     }
+
+    pub fn is_ambiguous(&self) -> bool {
+        self.has_code("infer.ambiguous_selector")
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -223,20 +227,20 @@ mod tests {
     }
 
     #[test]
-    fn promoted_method_is_rejected_today() {
-        let outcome = selector_outcome(&fixtures::value_embed_method());
-        assert!(
-            outcome.has_code("infer.member_not_found"),
-            "expected member_not_found, got {outcome:?}"
+    fn promoted_method_resolves() {
+        assert_eq!(
+            selector_outcome(&fixtures::value_embed_method()),
+            Outcome::Resolves,
+            "a value-embedded method must promote"
         );
     }
 
     #[test]
-    fn diamond_selector_is_rejected_today() {
+    fn diamond_selector_is_ambiguous() {
         let outcome = selector_outcome(&fixtures::diamond());
         assert!(
-            !outcome.resolves(),
-            "diamond promotion must not resolve yet"
+            outcome.is_ambiguous(),
+            "diamond promotion must report ambiguity, got {outcome:?}"
         );
     }
 
@@ -249,11 +253,11 @@ mod tests {
     }
 
     #[test]
-    fn promoted_satisfaction_is_rejected_today() {
-        let outcome = satisfies_value(&fixtures::interface_promoted_satisfaction());
-        assert!(
-            outcome.has_code("infer.interface_not_implemented"),
-            "expected interface_not_implemented, got {outcome:?}"
+    fn promoted_satisfaction_resolves() {
+        assert_eq!(
+            satisfies_value(&fixtures::interface_promoted_satisfaction()),
+            Outcome::Resolves,
+            "a value embedding the declarer must satisfy the interface"
         );
     }
 

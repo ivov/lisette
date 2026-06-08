@@ -100,13 +100,18 @@ pub fn compare(scenario: &Scenario, go: &GoAnswers, lisette: &LisetteAnswers) ->
 }
 
 fn compare_selector(go: &GoAnswer, lisette: &Outcome) -> Verdict {
-    match (go.resolves, go.ambiguous, lisette.resolves()) {
-        (true, _, true) => Verdict::Match,
-        (true, _, false) => Verdict::Incomplete,
-        (false, false, false) => Verdict::Match,
-        (false, false, true) => Verdict::OverAccept(OverAcceptKind::ResolvesButGoRejects),
-        (false, true, false) => Verdict::Incomplete,
-        (false, true, true) => Verdict::OverAccept(OverAcceptKind::PickedOneWhereGoAmbiguous),
+    match (go.resolves, go.ambiguous) {
+        (true, _) if lisette.resolves() => Verdict::Match,
+        (true, _) => Verdict::Incomplete,
+        (false, false) if lisette.resolves() => {
+            Verdict::OverAccept(OverAcceptKind::ResolvesButGoRejects)
+        }
+        (false, false) => Verdict::Match,
+        (false, true) if lisette.resolves() => {
+            Verdict::OverAccept(OverAcceptKind::PickedOneWhereGoAmbiguous)
+        }
+        (false, true) if lisette.is_ambiguous() => Verdict::Match,
+        (false, true) => Verdict::Incomplete,
     }
 }
 
@@ -180,22 +185,22 @@ mod tests {
     }
 
     #[test]
-    fn promoted_method_is_incomplete() {
+    fn promoted_method_matches() {
         let Some(answerer) = answerer_or_skip() else {
             return;
         };
         assert_eq!(
             only(&fixtures::value_embed_method(), &answerer),
-            Verdict::Incomplete
+            Verdict::Match
         );
     }
 
     #[test]
-    fn diamond_is_incomplete_not_over_accept() {
+    fn diamond_matches_go_ambiguity() {
         let Some(answerer) = answerer_or_skip() else {
             return;
         };
-        assert_eq!(only(&fixtures::diamond(), &answerer), Verdict::Incomplete);
+        assert_eq!(only(&fixtures::diamond(), &answerer), Verdict::Match);
     }
 
     #[test]
@@ -210,13 +215,13 @@ mod tests {
     }
 
     #[test]
-    fn promoted_satisfaction_is_incomplete() {
+    fn promoted_satisfaction_matches() {
         let Some(answerer) = answerer_or_skip() else {
             return;
         };
         assert_eq!(
             only(&fixtures::interface_promoted_satisfaction(), &answerer),
-            Verdict::Incomplete
+            Verdict::Match
         );
     }
 

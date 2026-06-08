@@ -10,6 +10,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use crate::facts::{BindingIdAllocator, Facts};
+use crate::promotion;
 use crate::store::Store;
 use diagnostics::LocalSink;
 use ecow::EcoString;
@@ -555,18 +556,25 @@ impl<'s> TaskState<'s> {
             return Rc::new(store.get_all_methods(&peeled, &empty));
         }
 
-        if let Some(cached) = self.method_cache.borrow().get(cache_key.as_str()) {
+        let is_embedder = promotion::has_direct_embed(store, &resolved);
+        let is_generic = matches!(&resolved, Type::Nominal { params, .. } if !params.is_empty());
+        let cacheable = !(is_embedder && is_generic);
+
+        if cacheable && let Some(cached) = self.method_cache.borrow().get(cache_key.as_str()) {
             return cached.clone();
         }
 
-        let empty = HashMap::default();
-        // Pass the env-resolved type so the store's env-less `resolve()` stays
-        // identity-safe: `Type::Var` chains are chased once here rather than
-        // silently returning empty methods in the store.
-        let methods = Rc::new(store.get_all_methods(&resolved, &empty));
-        self.method_cache
-            .borrow_mut()
-            .insert(cache_key, methods.clone());
+        let methods = if is_embedder {
+            Rc::new(promotion::promoted_method_set(store, &resolved))
+        } else {
+            let empty = HashMap::default();
+            Rc::new(store.get_all_methods(&resolved, &empty))
+        };
+        if cacheable {
+            self.method_cache
+                .borrow_mut()
+                .insert(cache_key, methods.clone());
+        }
         methods
     }
 

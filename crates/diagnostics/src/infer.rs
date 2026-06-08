@@ -938,6 +938,26 @@ pub fn member_not_found(
     diagnostic
 }
 
+pub fn ambiguous_selector(
+    ty: &Type,
+    member: &str,
+    sources: &[String],
+    span: Span,
+) -> LisetteDiagnostic {
+    let from = sources.join("` and `");
+    LisetteDiagnostic::error("Ambiguous member")
+        .with_infer_code("ambiguous_selector")
+        .with_span_label(
+            &span,
+            format!("`{}` is promoted from more than one embed", member),
+        )
+        .with_help(format!(
+            "`{}` is promoted into `{}` from `{}`, so the selection is ambiguous. \
+             Reach it through the embedded field that declares the one you want.",
+            member, ty, from
+        ))
+}
+
 #[derive(Debug, Clone, Copy)]
 pub enum UnwrapWrapper {
     Option,

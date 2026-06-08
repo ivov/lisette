@@ -4,7 +4,7 @@ use syntax::ast::{
     Visibility as SyntacticVisibility,
 };
 use syntax::program::{Definition, DefinitionBody, Interface, Visibility};
-use syntax::types::{Symbol, Type, unqualified_name};
+use syntax::types::{Symbol, Type, build_substitution_map, substitute, unqualified_name};
 
 use super::{extract_attribute_flags, has_recursive_instantiation, wrap_with_impl_generics};
 use crate::checker::TaskState;
@@ -482,21 +482,27 @@ impl TaskState<'_> {
         let mut method_visited = rustc_hash::FxHashSet::default();
 
         for parent_ty in &interface.parents {
-            if let Some(parent_id) = parent_ty.get_qualified_id() {
-                let parent_name = unqualified_name(parent_id);
-                self.collect_interface_methods(
-                    store,
-                    parent_id,
-                    parent_name,
-                    &mut inherited_methods,
-                    &mut method_visited,
-                );
-            }
+            let parent_name = parent_ty
+                .get_qualified_id()
+                .map(unqualified_name)
+                .unwrap_or_default();
+            self.collect_interface_methods(
+                store,
+                parent_ty,
+                parent_name,
+                &mut inherited_methods,
+                &mut method_visited,
+            );
         }
 
-        // Check for conflicts: same method name with different types from different sources
         let mut seen: rustc_hash::FxHashMap<String, (Type, String)> =
             rustc_hash::FxHashMap::default();
+        for (method_name, method_ty) in &interface.methods {
+            seen.insert(
+                method_name.to_string(),
+                (method_ty.clone(), interface_name.to_string()),
+            );
+        }
         for (method_name, method_ty, source) in &inherited_methods {
             if let Some((existing_ty, existing_source)) = seen.get(method_name) {
                 if existing_ty != method_ty {
@@ -555,36 +561,45 @@ impl TaskState<'_> {
     fn collect_interface_methods(
         &self,
         store: &Store,
-        interface_id: &str,
+        interface_ty: &Type,
         source_name: &str,
         methods: &mut Vec<(String, Type, String)>,
         visited: &mut rustc_hash::FxHashSet<String>,
     ) {
-        if !visited.insert(interface_id.to_string()) {
+        let Some(interface_id) = interface_ty.get_qualified_id() else {
+            return;
+        };
+        let type_args = interface_ty.get_type_params().unwrap_or_default();
+
+        let key = if type_args.is_empty() {
+            interface_id.to_string()
+        } else {
+            let args: Vec<String> = type_args.iter().map(Type::to_string).collect();
+            format!("{interface_id}<{}>", args.join(","))
+        };
+        if !visited.insert(key) {
             return;
         }
 
-        if let Some(interface) = store.get_interface(interface_id) {
-            for (method_name, method_ty) in &interface.methods {
-                methods.push((
-                    method_name.to_string(),
-                    method_ty.clone(),
-                    source_name.to_string(),
-                ));
-            }
+        let Some(interface) = store.get_interface(interface_id) else {
+            return;
+        };
+        let map = build_substitution_map(&interface.generics, type_args);
+        for (method_name, method_ty) in &interface.methods {
+            methods.push((
+                method_name.to_string(),
+                substitute(method_ty, &map),
+                source_name.to_string(),
+            ));
+        }
 
-            for parent_ty in &interface.parents {
-                if let Some(parent_id) = parent_ty.get_qualified_id() {
-                    let parent_simple = unqualified_name(parent_id);
-                    self.collect_interface_methods(
-                        store,
-                        parent_id,
-                        parent_simple,
-                        methods,
-                        visited,
-                    );
-                }
-            }
+        for parent_ty in &interface.parents {
+            let instantiated = substitute(parent_ty, &map);
+            let parent_name = instantiated
+                .get_qualified_id()
+                .map(unqualified_name)
+                .unwrap_or(source_name);
+            self.collect_interface_methods(store, &instantiated, parent_name, methods, visited);
         }
     }
 

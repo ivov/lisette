@@ -244,6 +244,10 @@ mod tests {
             "fixtures not clean: {:?}",
             summary.over_accepts
         );
-        assert!(summary.matches > 0 && summary.incompletes > 0);
+        assert!(summary.matches > 0);
+        assert_eq!(
+            summary.incompletes, 0,
+            "a base fixture regressed to incomplete"
+        );
     }
 }

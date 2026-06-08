@@ -11,6 +11,7 @@ pub mod module_graph;
 pub mod passes;
 pub mod path;
 pub mod prelude;
+pub mod promotion;
 pub mod store;
 
 use syntax::ast::Expression;

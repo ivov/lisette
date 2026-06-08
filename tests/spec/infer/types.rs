@@ -4252,7 +4252,7 @@ fn take(c: C) {}
 fn main() { take(S {}) }
 "#,
     );
-    infer_module("main", fs).assert_infer_code("interface_not_implemented");
+    infer_module("main", fs).assert_infer_code("interface_method_conflict");
 }
 
 #[test]
@@ -6295,6 +6295,34 @@ fn main() {
 }
 
 #[test]
+fn promoted_member_resolves_across_modules() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "types",
+        "lib.lis",
+        r#"
+pub struct Base { pub id: int }
+impl Base { pub fn describe(self) -> string { "b" } }
+pub struct Outer { embed Base }
+pub fn make() -> Outer { Outer { Base: Base { id: 1 } } }
+"#,
+    );
+    fs.add_file(
+        "main",
+        "main.lis",
+        r#"
+import "types"
+fn main() {
+  let o = types.make()
+  let _ = o.describe()
+  let _ = o.id
+}
+"#,
+    );
+    infer_module("main", fs).assert_no_errors();
+}
+
+#[test]
 fn embed_value_struct_accepted() {
     infer(
         r#"
@@ -6347,6 +6375,289 @@ fn main() {
 "#,
     )
     .assert_no_errors();
+}
+
+#[test]
+fn promoted_method_resolves_through_value_embed() {
+    infer(
+        r#"
+struct Base { pub id: int }
+impl Base { fn describe(self) -> string { "b" } }
+struct Outer { embed Base }
+fn use_it(o: Outer) -> string { o.describe() }
+fn main() {}
+"#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn promoted_field_resolves_through_value_embed() {
+    infer(
+        r#"
+struct Base { pub id: int }
+struct Outer { embed Base, pub tag: string }
+fn read_id(o: Outer) -> int { o.id }
+fn main() {}
+"#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn promoted_member_resolves_two_levels_deep() {
+    infer(
+        r#"
+struct Leaf { pub value: int }
+impl Leaf { fn shout(self) -> string { "x" } }
+struct Mid { embed Leaf }
+struct Top { embed Mid }
+fn use_it(t: Top) -> string { t.shout() }
+fn read(t: Top) -> int { t.value }
+fn main() {}
+"#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn own_method_shadows_promoted() {
+    infer(
+        r#"
+struct Base { pub id: int }
+impl Base { fn name(self) -> string { "base" } }
+struct Outer { embed Base }
+impl Outer { fn name(self) -> string { "outer" } }
+fn use_it(o: Outer) -> string { o.name() }
+fn main() {}
+"#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn diamond_promotion_is_ambiguous() {
+    infer(
+        r#"
+struct A { pub x: int }
+impl A { fn m(self) -> string { "a" } }
+struct B { embed A }
+struct C { embed A }
+struct D { embed B, embed C }
+fn use_it(d: D) -> string { d.m() }
+fn main() {}
+"#,
+    )
+    .assert_infer_code("ambiguous_selector");
+}
+
+#[test]
+fn ambiguous_field_and_method_collision() {
+    infer(
+        r#"
+struct A { pub x: int }
+struct B {}
+impl B { fn x(self) -> string { "b" } }
+struct Outer { embed A, embed B }
+fn use_it(o: Outer) -> int { o.x }
+fn main() {}
+"#,
+    )
+    .assert_infer_code("ambiguous_selector");
+}
+
+#[test]
+fn value_embed_satisfies_interface_via_promotion() {
+    infer(
+        r#"
+pub interface Speaker { fn speak(self) -> string }
+struct Base {}
+impl Base { pub fn speak(self) -> string { "hi" } }
+struct Outer { embed Base }
+fn take(s: Speaker) -> string { s.speak() }
+fn main() {
+  let _ = take(Outer { Base: Base {} })
+}
+"#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn pointer_embed_promotes_pointer_receiver_method_as_value_callable() {
+    infer(
+        r#"
+pub interface Bumper { fn bump(self) -> int }
+struct Counter { pub n: int }
+impl Counter { pub fn bump(self: Ref<Counter>) -> int { self.n } }
+struct Holder { embed Ref<Counter> }
+fn take(b: Bumper) -> int { b.bump() }
+fn main() {
+  let _ = take(Holder { Counter: &Counter { n: 0 } })
+}
+"#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn promoted_method_through_alias_to_ref_embed() {
+    infer(
+        r#"
+pub struct Base { pub id: int }
+impl Base { pub fn describe(self) -> string { "b" } }
+type P = Ref<Base>
+struct S { embed P }
+fn use_it(s: S) -> string { s.describe() }
+fn main() {}
+"#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn interface_local_method_conflicts_with_parent() {
+    infer(
+        r#"
+interface P { fn m(self) -> string }
+interface Q {
+  embed P
+  fn m(self) -> int
+}
+fn main() {}
+"#,
+    )
+    .assert_infer_code("interface_method_conflict");
+}
+
+#[test]
+fn ambiguous_selector_through_ref_receiver() {
+    infer(
+        r#"
+struct A { pub x: int }
+impl A { fn m(self) -> string { "a" } }
+struct B { embed A }
+struct C { embed A }
+struct D { embed B, embed C }
+fn f(r: Ref<D>) -> string { r.m() }
+fn main() {}
+"#,
+    )
+    .assert_infer_code("ambiguous_selector");
+}
+
+#[test]
+fn generic_own_method_through_embedder_keeps_receiver_return_link() {
+    infer(
+        r#"
+struct Base { pub id: int }
+struct Outer<T> { embed Base, pub value: T }
+impl<T> Outer<T> { fn get(self) -> T { self.value } }
+fn f() -> int {
+  let o = Outer { Base: Base { id: 1 }, value: "s" }
+  o.get()
+}
+fn main() {}
+"#,
+    )
+    .assert_infer_code("type_mismatch");
+}
+
+#[test]
+fn promoted_method_on_distinct_generic_instantiations() {
+    infer(
+        r#"
+struct Base { pub id: int }
+impl Base { fn describe(self) -> string { "b" } }
+struct Outer<T> { embed Base, pub value: T }
+fn main() {
+  let oi = Outer { Base: Base { id: 1 }, value: 1 }
+  let os = Outer { Base: Base { id: 1 }, value: "s" }
+  let _ = oi.describe()
+  let _ = os.describe()
+}
+"#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn interface_diamond_matching_type_args_is_fine() {
+    infer(
+        r#"
+interface Base<T> { fn get(self) -> T }
+interface Left { embed Base<int> }
+interface Right { embed Base<int> }
+interface Q {
+  embed Left
+  embed Right
+}
+fn main() {}
+"#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn promoted_member_through_alias_to_embedder() {
+    infer(
+        r#"
+pub struct Base { pub id: int }
+impl Base { pub fn describe(self) -> string { "b" } }
+struct Outer { embed Base, pub tag: string }
+type A = Outer
+fn promoted_method(a: A) -> string { a.describe() }
+fn promoted_field(a: A) -> int { a.id }
+fn main() {}
+"#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn cross_module_promoted_private_method_is_rejected() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "types",
+        "lib.lis",
+        r#"
+struct Base { pub id: int }
+impl Base { fn secret(self) -> int { 1 } }
+pub struct Outer { embed Base }
+pub fn make() -> Outer { Outer { Base: Base { id: 1 } } }
+"#,
+    );
+    fs.add_file(
+        "main",
+        "main.lis",
+        r#"
+import "types"
+fn main() {
+  let o = types.make()
+  let _ = o.secret()
+}
+"#,
+    );
+    infer_module("main", fs).assert_resolve_code("private_method_access");
+}
+
+#[test]
+fn value_embed_of_pointer_receiver_method_does_not_satisfy_by_value() {
+    // The promoted `bump` keeps its pointer receiver, so a value `Holder` is not
+    // in the interface's value method set; only `Ref<Holder>` satisfies.
+    infer(
+        r#"
+pub interface Bumper { fn bump(self) -> int }
+struct Counter { pub n: int }
+impl Counter { pub fn bump(self: Ref<Counter>) -> int { self.n } }
+struct Holder { embed Counter }
+fn take(b: Bumper) -> int { b.bump() }
+fn main() {
+  let _ = take(Holder { Counter: Counter { n: 0 } })
+}
+"#,
+    )
+    .assert_infer_code("interface_not_implemented");
 }
 
 #[test]

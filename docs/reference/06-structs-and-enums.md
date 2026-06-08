@@ -99,6 +99,33 @@ Private fields can only be accessed within the same module. Use `pub struct` to 
 
 📚 See [`12-modules.md`](12-modules.md) and [`15-attributes.md`](15-attributes.md)
 
+### Embedding
+
+A struct can embed another struct. This makes the inner struct's methods and fields accessible directly on the outer struct:
+
+```rust
+struct Logger {
+  pub prefix: string,
+}
+
+impl Logger {
+  pub fn log(self) -> string { self.prefix }
+}
+
+struct Server {
+  embed Logger, // brings in `prefix` and `log`
+  pub port: int,
+}
+
+let l = Logger { prefix: "[api]" }
+let s = Server { Logger: l, port: 8080 }
+
+let _ = s.prefix // `Server` accesses `Logger` field directly
+let _ = s.log() // `Server` accesses `Logger` method directly
+```
+
+An embedded type must be a non-generic struct defined in Lisette. Embedding use cases will be expanded in future.
+
 ## Enums
 
 An enum defines a type with a fixed set of variants.
