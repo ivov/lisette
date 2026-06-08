@@ -15,5 +15,7 @@ func main() {
 	{
 		var r N0
 		fmt.Println(r.M())
+		f := r.M
+		fmt.Println(f())
 	}
 }

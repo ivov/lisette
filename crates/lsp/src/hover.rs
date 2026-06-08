@@ -533,8 +533,9 @@ pub(crate) fn get_hover_doc(
         Expression::DotAccess {
             expression: base,
             member,
+            span,
             ..
-        } => resolve_dot_access_definition(base, member, file, snapshot)
+        } => resolve_dot_access_definition(base, member, *span, file, snapshot)
             .and_then(|span| find_doc_at_definition_span(span, snapshot))
             .or_else(|| resolve_dot_access_doc(base, member, file, snapshot)),
 

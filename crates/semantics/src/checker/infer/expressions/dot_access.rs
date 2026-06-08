@@ -337,6 +337,16 @@ impl InferCtx<'_, '_> {
         }
     }
 
+    fn method_is_promoted(&self, deref_ty: &Type, member: &str) -> bool {
+        let Type::Nominal { id, .. } = deref_ty.strip_refs() else {
+            return false;
+        };
+        !self
+            .store
+            .get_own_methods(id.as_str())
+            .is_some_and(|methods| methods.contains_key(member))
+    }
+
     fn get_available_member_names(&self, ty: &Type) -> Vec<String> {
         let store = self.store;
         let deref_ty = ty.strip_refs();
@@ -690,6 +700,21 @@ impl InferCtx<'_, '_> {
             .get_all_methods(store, &args.deref_ty)
             .get(args.member_name)
             .cloned()?;
+
+        // Promoted method expressions (`Type.M`) are not lowered yet; reject
+        // cleanly rather than mis-resolve (own ones resolve via the qualified path).
+        if self.is_type_level_receiver(args.expression)
+            && self.method_is_promoted(&args.deref_ty, args.member_name)
+        {
+            self.sink
+                .push(diagnostics::infer::promoted_method_expression(
+                    args.member_name,
+                    *args.span,
+                ));
+            self.unify(args.expected_ty, &Type::Error, args.span);
+            let kind = DotAccessKind::InstanceMethod { is_exported: false };
+            return Some((args.build_dot_access(Type::Error, Some(kind), None), kind));
+        }
 
         self.check_instance_method_access(&args.deref_ty, &method_ty, args);
 

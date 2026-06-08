@@ -134,6 +134,8 @@ fn render_main(scenario: &Scenario, printed: &[PrintedQuestion], out: &mut Strin
         out.push_str("\t{\n");
         out.push_str(&format!("\t\tvar r {root}\n"));
         out.push_str(&format!("\t\tfmt.Println(r.{}())\n", question.member));
+        out.push_str(&format!("\t\tf := r.{}\n", question.member));
+        out.push_str("\t\tfmt.Println(f())\n");
         out.push_str("\t}\n");
     }
     out.push_str("}\n");

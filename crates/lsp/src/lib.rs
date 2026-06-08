@@ -307,8 +307,11 @@ impl LanguageServer for Backend {
             }
 
             syntax::ast::Expression::DotAccess {
-                expression, member, ..
-            } => resolve_dot_access_definition(expression, member, file, &snapshot),
+                expression,
+                member,
+                span,
+                ..
+            } => resolve_dot_access_definition(expression, member, *span, file, &snapshot),
 
             syntax::ast::Expression::StructCall {
                 name,
@@ -586,8 +589,11 @@ impl LanguageServer for Backend {
                     .and_then(|d| d.name_span()),
 
                 syntax::ast::Expression::DotAccess {
-                    expression, member, ..
-                } => resolve_dot_access_definition(expression, member, file, &snapshot),
+                    expression,
+                    member,
+                    span,
+                    ..
+                } => resolve_dot_access_definition(expression, member, *span, file, &snapshot),
 
                 syntax::ast::Expression::Match { arms, .. } => {
                     resolve_match_pattern_definition(arms, offset, file, &snapshot)
@@ -858,7 +864,8 @@ impl LanguageServer for Backend {
                 span,
                 ..
             } if !member.is_empty() => {
-                let resolved = resolve_dot_access_definition(expression, member, file, &snapshot);
+                let resolved =
+                    resolve_dot_access_definition(expression, member, *span, file, &snapshot);
                 if let Some(definition_span) = resolved
                     && !is_go_typedef_span(&snapshot, &definition_span)
                 {
@@ -974,8 +981,11 @@ impl LanguageServer for Backend {
                 }
 
                 syntax::ast::Expression::DotAccess {
-                    expression, member, ..
-                } => resolve_dot_access_definition(expression, member, file, &snapshot)
+                    expression,
+                    member,
+                    span,
+                    ..
+                } => resolve_dot_access_definition(expression, member, *span, file, &snapshot)
                     .filter(|s| !is_go_typedef_span(&snapshot, s)),
 
                 syntax::ast::Expression::Match { arms, .. } => {

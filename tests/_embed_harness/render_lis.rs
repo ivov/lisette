@@ -107,6 +107,8 @@ pub fn render_lis_run(scenario: &Scenario, printed: &[PrintedQuestion]) -> Strin
             lis_zero_construct(scenario, question.root)
         ));
         out.push_str(&format!("  fmt.Println(r{i}.{}())\n", question.member));
+        out.push_str(&format!("  let f{i} = r{i}.{}\n", question.member));
+        out.push_str(&format!("  fmt.Println(f{i}())\n"));
     }
     out.push_str("}\n");
     out

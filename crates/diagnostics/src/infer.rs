@@ -938,6 +938,17 @@ pub fn member_not_found(
     diagnostic
 }
 
+pub fn promoted_method_expression(member: &str, span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Unsupported method expression")
+        .with_infer_code("promoted_method_expression")
+        .with_span_label(&span, format!("`{}` is a promoted method", member))
+        .with_help(format!(
+            "A method expression on a promoted method is not supported. Call it on a \
+             value (`v.{}(...)`) or reach it through the embedded field.",
+            member
+        ))
+}
+
 pub fn ambiguous_selector(
     ty: &Type,
     member: &str,

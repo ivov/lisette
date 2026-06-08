@@ -153,6 +153,64 @@ async fn goto_definition_function_parameter() {
     client.shutdown().await;
 }
 
+const EMBED_SRC: &str = r#"struct Base {
+  pub id: int,
+}
+impl Base {
+  pub fn describe(self) -> string { "b" }
+}
+struct Wrapper {
+  embed Base,
+}
+fn use_method(w: Wrapper) -> string {
+  w.describe()
+}
+fn use_field(w: Wrapper) -> int {
+  w.id
+}"#;
+
+#[tokio::test]
+async fn goto_definition_promoted_method() {
+    let mut client = TestClient::new().await;
+    client.initialize().await;
+    client.open(TEST_URI, EMBED_SRC).await;
+
+    let response = client.goto_definition(TEST_URI, 10, 6).await;
+    let loc = definition_location(&response.expect("response")).expect("location");
+    assert_eq!(loc.range.start.line, 4);
+
+    client.shutdown().await;
+}
+
+#[tokio::test]
+async fn goto_definition_promoted_field() {
+    let mut client = TestClient::new().await;
+    client.initialize().await;
+    client.open(TEST_URI, EMBED_SRC).await;
+
+    let response = client.goto_definition(TEST_URI, 13, 4).await;
+    let loc = definition_location(&response.expect("response")).expect("location");
+    assert_eq!(loc.range.start.line, 1);
+
+    client.shutdown().await;
+}
+
+#[tokio::test]
+async fn hover_promoted_method_shows_type() {
+    let mut client = TestClient::new().await;
+    client.initialize().await;
+    client.open(TEST_URI, EMBED_SRC).await;
+
+    let hover = client.hover(TEST_URI, 10, 6).await.expect("hover");
+    assert!(
+        hover_content(&hover).contains("string"),
+        "hover content: {}",
+        hover_content(&hover)
+    );
+
+    client.shutdown().await;
+}
+
 #[tokio::test]
 async fn references_finds_all_usages() {
     let mut client = TestClient::new().await;

@@ -9,7 +9,7 @@ use semantics::loader::MemoryLoader;
 use semantics::store::ENTRY_MODULE_ID;
 
 use super::PrintedQuestion;
-use super::go_answerer::GoAnswers;
+use super::go_answerer::{GoAnswer, GoAnswers};
 use super::lisette_answer::{LisetteAnswer, LisetteAnswers};
 use super::render_go::{GoMode, render_go};
 use super::render_lis::render_lis_run;
@@ -68,10 +68,8 @@ pub fn run_check(scenario: &Scenario, go: &GoAnswers, lisette: &LisetteAnswers) 
     }
 }
 
-/// Selector questions safe to run now: a method both sides resolve, on a
-/// constructible root, at depth 0 (declared directly, so a zero value cannot
-/// nil-dereference through an embed). Promoted calls qualify once promotion is
-/// implemented and receivers can be constructed safely.
+/// Selector questions whose method both sides resolve and that are safe to call
+/// on a zero-valued receiver (see `safe_to_run`).
 fn runnable_questions(
     scenario: &Scenario,
     go: &GoAnswers,
@@ -86,8 +84,8 @@ fn runnable_questions(
         let lisette_resolves =
             matches!(&lisette.questions[i], LisetteAnswer::Selector(o) if o.resolves());
         if expected.resolves
-            && expected.depth == 0
             && expected.member_kind == "method"
+            && safe_to_run(scenario, expected)
             && lisette_resolves
             && is_zero_constructible(scenario, *root)
         {
@@ -98,6 +96,18 @@ fn runnable_questions(
         }
     }
     printed
+}
+
+/// A promoted (depth > 0) method runs only with no pointer indirection and a
+/// struct declaring type, so dispatch never hits a nil pointer or interface.
+fn safe_to_run(scenario: &Scenario, expected: &GoAnswer) -> bool {
+    if expected.depth == 0 {
+        return true;
+    }
+    !expected.indirect
+        && scenario.nodes.iter().any(|node| {
+            node.name == expected.declaring_type && matches!(node.kind, NodeKind::Struct { .. })
+        })
 }
 
 /// Whether this node be built as a zero value.
@@ -276,12 +286,27 @@ mod tests {
     }
 
     #[test]
-    fn promotion_scenarios_skip_today() {
+    fn promoted_value_method_runs_identically() {
         if !go_available() {
             return;
         }
         let answerer = GoAnswerer::build().expect("answerer builds");
         let scenario = fixtures::value_embed_method();
+        let go = answerer.answer(&scenario).unwrap();
+        let lisette = lisette_answers(&scenario);
+        match run_check(&scenario, &go, &lisette) {
+            RunOutcome::Match => {}
+            other => panic!("expected Match, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn pointer_embed_method_skips() {
+        if !go_available() {
+            return;
+        }
+        let answerer = GoAnswerer::build().expect("answerer builds");
+        let scenario = fixtures::pointer_embed_method();
         let go = answerer.answer(&scenario).unwrap();
         let lisette = lisette_answers(&scenario);
         assert!(matches!(

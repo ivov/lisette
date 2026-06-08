@@ -69,6 +69,7 @@ pub(crate) fn resolve_struct_call_field(
 pub(crate) fn resolve_dot_access_definition(
     expression: &Expression,
     member: &str,
+    dot_access_span: Span,
     file: &syntax::program::File,
     snapshot: &AnalysisSnapshot,
 ) -> Option<syntax::ast::Span> {
@@ -159,7 +160,14 @@ pub(crate) fn resolve_dot_access_definition(
         None
     };
 
-    result.or_else(resolve_by_type)
+    result.or_else(resolve_by_type).or_else(|| {
+        snapshot
+            .facts()
+            .usages
+            .iter()
+            .find(|usage| usage.usage_span == dot_access_span)
+            .map(|usage| usage.definition_span)
+    })
 }
 
 /// True when the span points into a generated `go:` typedef file. Used by rename

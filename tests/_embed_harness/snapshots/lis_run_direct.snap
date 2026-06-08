@@ -13,4 +13,6 @@ impl N0 {
 fn main() {
   let r0 = N0 { .. }
   fmt.Println(r0.M())
+  let f0 = r0.M
+  fmt.Println(f0())
 }

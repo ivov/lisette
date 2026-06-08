@@ -6392,6 +6392,38 @@ fn main() {}
 }
 
 #[test]
+fn promoted_method_expression_is_rejected() {
+    infer(
+        r#"
+struct Base { pub id: int }
+impl Base { fn describe(self) -> string { "b" } }
+struct Outer { embed Base }
+fn use_it() {
+  let _ = Outer.describe
+}
+fn main() {}
+"#,
+    )
+    .assert_infer_code("promoted_method_expression");
+}
+
+#[test]
+fn own_method_expression_still_resolves() {
+    infer(
+        r#"
+pub struct Base { pub id: int }
+impl Base { pub fn describe(self) -> string { "b" } }
+fn use_it(b: Base) -> string {
+  let f = Base.describe
+  f(b)
+}
+fn main() {}
+"#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
 fn promoted_field_resolves_through_value_embed() {
     infer(
         r#"
