@@ -1,0 +1,16 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: "input: \nfn load(r: Result<int, error>) -> Result<int, error> {\n  let n = r.wrap_err(\"loading config\")?\n  Ok(n)\n}\n"
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func load(r lisette.Result[int, error]) (int, error) {
+	check_1 := lisette.ResultWrapErr(r, "loading config")
+	if check_1.Tag != lisette.ResultOk {
+		return *new(int), check_1.ErrVal
+	}
+	n := check_1.OkVal
+	return n, nil
+}

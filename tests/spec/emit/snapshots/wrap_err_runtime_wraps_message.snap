@@ -1,0 +1,21 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: "input: \nimport \"go:errors\"\n\nfn test() {\n  let r: Result<int, error> = Err(errors.New(\"boom\"))\n  match r.wrap_err(\"loading config\") {\n    Ok(_) => panic(\"expected error\"),\n    Err(e) => {\n      if e.Error() != \"loading config: boom\" {\n        panic(\"wrong wrapped message\")\n      }\n    },\n  }\n}\n"
+---
+package main
+
+import (
+	"errors"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func test() {
+	r := lisette.MakeResultErr[int, error](errors.New("boom"))
+	subject_1 := lisette.ResultWrapErr(r, "loading config")
+	if subject_1.Tag == lisette.ResultOk {
+		panic("expected error")
+	}
+	if subject_1.ErrVal.Error() != "loading config: boom" {
+		panic("wrong wrapped message")
+	}
+}

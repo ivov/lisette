@@ -80,6 +80,13 @@ func ResultMapErr[T any, E any, F any](res Result[T, E], f func(E) F) Result[T, 
 	return Result[T, F]{Tag: ResultOk, OkVal: res.OkVal}
 }
 
+func ResultWrapErr[T any](res Result[T, error], msg string) Result[T, error] {
+	if res.Tag == ResultErr {
+		return Result[T, error]{Tag: ResultErr, ErrVal: fmt.Errorf("%s: %w", msg, res.ErrVal)}
+	}
+	return Result[T, error]{Tag: ResultOk, OkVal: res.OkVal}
+}
+
 func ResultMapOr[T any, U any, E any](res Result[T, E], def U, f func(T) U) U {
 	if res.Tag == ResultOk {
 		return f(res.OkVal)

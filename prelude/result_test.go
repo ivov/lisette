@@ -1,6 +1,9 @@
 package lisette
 
-import "testing"
+import (
+	"errors"
+	"testing"
+)
 
 func TestResultOk(t *testing.T) {
 	res := MakeResultOk[int, string](42)
@@ -108,6 +111,34 @@ func TestResultMapErr(t *testing.T) {
 	mapped := ResultMapErr(err, func(e string) int { return len(e) })
 	if mapped.Err().UnwrapOr(0) != 4 {
 		t.Fatal("expected 4")
+	}
+}
+
+func TestResultWrapErr(t *testing.T) {
+	sentinel := errors.New("disk full")
+	err := MakeResultErr[int, error](sentinel)
+	wrapped := ResultWrapErr(err, "saving file")
+	if wrapped.ErrVal.Error() != "saving file: disk full" {
+		t.Fatalf("expected wrapped message, got %q", wrapped.ErrVal.Error())
+	}
+	if !errors.Is(wrapped.ErrVal, sentinel) {
+		t.Fatal("expected wrapped error to unwrap to sentinel")
+	}
+}
+
+func TestResultWrapErrPassesThroughOk(t *testing.T) {
+	ok := MakeResultOk[int, error](42)
+	wrapped := ResultWrapErr(ok, "saving file")
+	if wrapped.UnwrapOr(0) != 42 {
+		t.Fatal("expected 42")
+	}
+}
+
+func TestResultWrapErrEscapesPercentInMessage(t *testing.T) {
+	err := MakeResultErr[int, error](errors.New("boom"))
+	wrapped := ResultWrapErr(err, "100% failure")
+	if wrapped.ErrVal.Error() != "100% failure: boom" {
+		t.Fatalf("expected literal percent preserved, got %q", wrapped.ErrVal.Error())
 	}
 }
 

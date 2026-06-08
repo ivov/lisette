@@ -220,6 +220,11 @@ impl<T, E> Result<T, E> {
   fn or_else<F>(self, f: fn(E) -> Result<T, F>) -> Result<T, F>
 }
 
+impl<T> Result<T, error> {
+  /// Wraps the `Err` value with `msg` and the original error, leaving `Ok` unchanged.
+  fn wrap_err(self, msg: string) -> Result<T, error>
+}
+
 /// A result from an operation where both a value and an error may be
 /// simultaneously meaningful. Used for Go functions like `io.Reader.Read`
 /// where `(n > 0, io.EOF)` means "n bytes were read and the stream ended."

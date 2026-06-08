@@ -884,3 +884,55 @@ fn paren_break_in_match_arm_rejected() {
     )
     .assert_infer_code("control_flow_in_expression");
 }
+
+#[test]
+fn wrap_err_on_error_result_propagates() {
+    infer(
+        r#"
+    struct MyErr { msg: string }
+
+    impl MyErr {
+      fn Error(self) -> string { self.msg }
+    }
+
+    fn run() -> Result<int, error> {
+      let r: Result<int, error> = Err(MyErr { msg: "boom" })
+      let n = r.wrap_err("context")?
+      Ok(n)
+    }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn wrap_err_returns_result_of_error() {
+    infer(
+        r#"
+    struct MyErr { msg: string }
+
+    impl MyErr {
+      fn Error(self) -> string { self.msg }
+    }
+
+    fn run() -> Result<int, error> {
+      let r: Result<int, error> = Err(MyErr { msg: "boom" })
+      r.wrap_err("context")
+    }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn wrap_err_unavailable_on_non_error_result() {
+    infer(
+        r#"
+    fn run() {
+      let r: Result<int, string> = Err("boom")
+      let _ = r.wrap_err("context")
+    }
+        "#,
+    )
+    .assert_type_mismatch();
+}

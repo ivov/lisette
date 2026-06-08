@@ -1497,3 +1497,34 @@ fn main() {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn wrap_err_propagation() {
+    let input = r#"
+fn load(r: Result<int, error>) -> Result<int, error> {
+  let n = r.wrap_err("loading config")?
+  Ok(n)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn wrap_err_runtime_wraps_message() {
+    let input = r#"
+import "go:errors"
+
+fn test() {
+  let r: Result<int, error> = Err(errors.New("boom"))
+  match r.wrap_err("loading config") {
+    Ok(_) => panic("expected error"),
+    Err(e) => {
+      if e.Error() != "loading config: boom" {
+        panic("wrong wrapped message")
+      }
+    },
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}

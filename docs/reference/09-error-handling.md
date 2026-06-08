@@ -53,6 +53,20 @@ fn get_name(id: int) -> Option<string> {
 }
 ```
 
+## Adding context to errors
+
+`?` propagates an error unchanged. To record where it passed through, `wrap_err` prepends a message to the error while keeping the original as the cause:
+
+```rs
+fn read_config(path: string) -> Result<Config, error> {
+  let file = os.Open(path).wrap_err("opening config file")?
+  let bytes = io.ReadAll(file).wrap_err("reading config file")?
+  parse_config(bytes)
+}
+```
+
+If `os.Open` fails, the propagated error reads `opening config file: open /etc/app.conf: no such file or directory`. The original error is preserved underneath, so `errors.Is` and `errors.As` still match against it.
+
 ## `try` blocks
 
 The `?` operator only works in functions that return `Result` or `Option`. 
