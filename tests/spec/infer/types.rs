@@ -6206,6 +6206,8 @@ fn main() {}
     .assert_no_errors();
 }
 
+// Imported embeds stay deferred until bindgen emits a faithful embed representation.
+
 #[test]
 fn embed_imported_struct_deferred() {
     let typedef = r#"
@@ -6234,6 +6236,49 @@ fn main() {}
 "#;
     infer_with_go_typedefs(input, &[("go:example.com/ref", typedef)])
         .assert_infer_code("embed_imported_target");
+}
+
+#[test]
+fn embed_imported_interface_deferred() {
+    let typedef = r#"
+pub interface Reader {
+  fn Read(self) -> int
+}
+"#;
+    let input = r#"
+import "go:example.com/io"
+struct Mine { embed io.Reader }
+fn main() {}
+"#;
+    infer_with_go_typedefs(input, &[("go:example.com/io", typedef)])
+        .assert_infer_code("embed_imported_target");
+}
+
+#[test]
+fn embed_imported_newtype_deferred() {
+    let typedef = r#"
+pub struct Count(int)
+impl Count { pub fn Value(self: Count) -> int }
+"#;
+    let input = r#"
+import "go:example.com/metric"
+struct Mine { embed metric.Count }
+fn main() {}
+"#;
+    infer_with_go_typedefs(input, &[("go:example.com/metric", typedef)])
+        .assert_infer_code("embed_imported_target");
+}
+
+#[test]
+fn embed_stdlib_struct_deferred() {
+    infer(
+        r#"
+import "go:image"
+struct Marker { embed image.Point }
+fn main() {}
+"#,
+    )
+    .assert_infer_code("embed_imported_target");
 }
 
 #[test]

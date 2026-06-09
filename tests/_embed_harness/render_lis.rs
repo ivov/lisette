@@ -115,8 +115,27 @@ pub fn render_lis_run(scenario: &Scenario, printed: &[PrintedQuestion]) -> Strin
 }
 
 fn push_declarations(scenario: &Scenario, out: &mut String) {
+    emit_lis_imports(scenario, out);
     for node in &scenario.nodes {
         render_node(scenario, node, out);
+        out.push('\n');
+    }
+}
+
+/// Renders only the `import "go:<pkg>"`; the stdlib typedef is auto-loaded.
+fn emit_lis_imports(scenario: &Scenario, out: &mut String) {
+    let mut pkgs: Vec<&str> = Vec::new();
+    for node in &scenario.nodes {
+        if let Some(pkg) = node.origin.pkg()
+            && !pkgs.contains(&pkg)
+        {
+            pkgs.push(pkg);
+        }
+    }
+    for pkg in &pkgs {
+        out.push_str(&format!("import \"go:{pkg}\"\n"));
+    }
+    if !pkgs.is_empty() {
         out.push('\n');
     }
 }
@@ -130,6 +149,9 @@ fn lis_generics(node: &Node) -> String {
 }
 
 fn render_node(scenario: &Scenario, node: &Node, out: &mut String) {
+    if node.origin.pkg().is_some() {
+        return; // imported nodes are referenced, not defined
+    }
     let generics = lis_generics(node);
     match &node.kind {
         NodeKind::Struct {
@@ -246,9 +268,9 @@ fn embed_type(scenario: &Scenario, embed: &Embed) -> String {
 
 /// A node reference with optional type arguments: `Box` or `Box<int>`.
 fn lis_node_ref(scenario: &Scenario, target: NodeId, type_args: &[MemberType]) -> String {
-    let name = scenario.node_name(target);
+    let name = scenario.node_ref(target);
     if type_args.is_empty() {
-        return name.to_string();
+        return name;
     }
     let args: Vec<String> = type_args.iter().map(|a| lis_type(scenario, a)).collect();
     format!("{name}<{}>", args.join(", "))
@@ -257,7 +279,7 @@ fn lis_node_ref(scenario: &Scenario, target: NodeId, type_args: &[MemberType]) -
 pub fn lis_type(scenario: &Scenario, member_type: &MemberType) -> String {
     match member_type {
         MemberType::Basic(basic) => basic.lisette().to_string(),
-        MemberType::Node(id) => scenario.node_name(*id).to_string(),
+        MemberType::Node(id) => scenario.node_ref(*id),
         MemberType::Ref(inner) => format!("Ref<{}>", lis_type(scenario, inner)),
         MemberType::Slice(inner) => format!("Slice<{}>", lis_type(scenario, inner)),
         MemberType::Option(inner) => format!("Option<{}>", lis_type(scenario, inner)),
@@ -438,6 +460,30 @@ mod tests {
         assert!(go.contains("type N0[T any] struct"), "go header:\n{go}");
         assert!(go.contains("func (r N0[T]) Tag()"), "go receiver:\n{go}");
         assert!(go.contains("N0[int]"), "go embed:\n{go}");
+    }
+
+    #[test]
+    fn imported_node_renders_as_package_reference() {
+        let scenario = crate::_embed_harness::corpus::imported_struct_embed();
+
+        let lis = render_lis_declarations(&scenario);
+        assert!(
+            lis.contains("import \"go:image\""),
+            "lisette import:\n{lis}"
+        );
+        assert!(lis.contains("embed image.Point"), "lisette embed:\n{lis}");
+        assert!(
+            !lis.contains("struct Point"),
+            "imported Point must not be defined:\n{lis}"
+        );
+
+        let go = render_go(&scenario, GoMode::TypeDefs);
+        assert!(go.contains("import \"image\""), "go import:\n{go}");
+        assert!(go.contains("\timage.Point\n"), "go anonymous field:\n{go}");
+        assert!(
+            !go.contains("type Point struct"),
+            "imported Point must not be defined:\n{go}"
+        );
     }
 
     #[test]

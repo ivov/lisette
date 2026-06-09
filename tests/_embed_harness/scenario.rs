@@ -138,12 +138,25 @@ pub enum Visibility {
     Private,
 }
 
-/// Every node is `Native` today. `Imported` is an unused seam for bindgen-derived
-/// nodes, where only the renderer leaf case and node factory change.
+/// A node declared in the generated source, or a reference to a real Go package type.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum Origin {
     Native,
     Imported { pkg: String },
+}
+
+impl Origin {
+    pub fn pkg(&self) -> Option<&str> {
+        match self {
+            Origin::Native => None,
+            Origin::Imported { pkg } => Some(pkg),
+        }
+    }
+
+    /// The reference qualifier: the last path segment (`net/url` -> `url`).
+    pub fn alias(&self) -> Option<&str> {
+        self.pkg().map(|pkg| pkg.rsplit('/').next().unwrap_or(pkg))
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -176,11 +189,28 @@ impl Scenario {
         &self.nodes[id].name
     }
 
+    /// How a node is referenced in source: `Name`, or `alias.Name` if imported.
+    pub fn node_ref(&self, id: NodeId) -> String {
+        let node = &self.nodes[id];
+        match node.origin.alias() {
+            Some(alias) => format!("{alias}.{}", node.name),
+            None => node.name.clone(),
+        }
+    }
+
     /// Invariants the renderers rely on; a failure is a generator/corpus bug.
     pub fn validate(&self) -> Result<(), String> {
         for (index, node) in self.nodes.iter().enumerate() {
             if node.id != index {
                 return Err(format!("node {} has id {}", index, node.id));
+            }
+            if let Some(pkg) = node.origin.pkg()
+                && pkg.starts_with("go:")
+            {
+                return Err(format!(
+                    "imported node `{}` has Lisette-prefixed pkg `{pkg}`; use the raw Go path",
+                    node.name
+                ));
             }
             for embed in node.kind.embeds() {
                 self.check_node_ref(embed.target, "embed target")?;
@@ -404,9 +434,7 @@ mod tests {
                 }],
                 embeds: vec![],
             },
-            origin: Origin::Imported {
-                pkg: "go:fmt".into(),
-            },
+            origin: Origin::Imported { pkg: "fmt".into() },
         };
 
         let outer = Node {
@@ -509,6 +537,15 @@ mod tests {
     fn validate_rejects_bad_id() {
         let mut scenario = kitchen_sink();
         scenario.nodes[1].id = 99;
+        assert!(scenario.validate().is_err());
+    }
+
+    #[test]
+    fn validate_rejects_go_prefixed_imported_pkg() {
+        let mut scenario = kitchen_sink();
+        scenario.nodes[1].origin = Origin::Imported {
+            pkg: "go:fmt".into(),
+        };
         assert!(scenario.validate().is_err());
     }
 

@@ -178,6 +178,62 @@ pub fn generic_embed_satisfies() -> Scenario {
     }
 }
 
+/// `image.Point` as an imported node: a flat stdlib struct (`X`/`Y`, value `String`).
+fn image_point() -> Node {
+    Node {
+        id: 0,
+        name: "Point".into(),
+        type_params: vec![],
+        kind: NodeKind::Struct {
+            fields: vec![
+                Field {
+                    name: "X".into(),
+                    member_type: MemberType::Basic(BasicType::Int),
+                    visibility: Visibility::Public,
+                },
+                Field {
+                    name: "Y".into(),
+                    member_type: MemberType::Basic(BasicType::Int),
+                    visibility: Visibility::Public,
+                },
+            ],
+            embeds: vec![],
+            methods: vec![Method {
+                name: "String".into(),
+                receiver: Receiver::Value,
+                signature: Signature {
+                    parameters: vec![],
+                    return_type: MemberType::Basic(BasicType::String),
+                },
+                visibility: Visibility::Public,
+            }],
+        },
+        origin: Origin::Imported {
+            pkg: "image".into(),
+        },
+    }
+}
+
+/// Fixture for the `Origin::Imported` renderer test; not yet in the differential.
+pub fn imported_struct_embed() -> Scenario {
+    Scenario {
+        name: "imported_struct_embed".into(),
+        seed: 0,
+        nodes: vec![
+            image_point(),
+            struct_node(1, vec![vembed(0)], vec![], vec![]),
+        ],
+        questions: vec![
+            Question::Selector {
+                root: 1,
+                member: "X".into(),
+                kind: SelKind::Field,
+            },
+            sel(1, "String"),
+        ],
+    }
+}
+
 /// Every scenario that goes through the full differential.
 pub fn differential_scenarios() -> Vec<Scenario> {
     let mut scenarios = super::fixtures::all();

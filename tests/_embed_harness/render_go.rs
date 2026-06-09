@@ -14,8 +14,9 @@ pub fn render_go(scenario: &Scenario, mode: GoMode) -> String {
     let mut out = String::new();
     match mode {
         GoMode::TypeDefs => out.push_str("package p\n\n"),
-        GoMode::RunMain(_) => out.push_str("package main\n\nimport \"fmt\"\n\n"),
+        GoMode::RunMain(_) => out.push_str("package main\n\n"),
     }
+    emit_go_imports(scenario, &mode, &mut out);
 
     for node in &scenario.nodes {
         render_node(scenario, node, &mut out);
@@ -26,6 +27,31 @@ pub fn render_go(scenario: &Scenario, mode: GoMode) -> String {
         render_main(scenario, printed, &mut out);
     }
     out
+}
+
+fn emit_go_imports(scenario: &Scenario, mode: &GoMode, out: &mut String) {
+    let mut paths: Vec<&str> = Vec::new();
+    if matches!(mode, GoMode::RunMain(_)) {
+        paths.push("fmt");
+    }
+    for node in &scenario.nodes {
+        if let Some(pkg) = node.origin.pkg()
+            && !paths.contains(&pkg)
+        {
+            paths.push(pkg);
+        }
+    }
+    match paths.as_slice() {
+        [] => {}
+        [one] => out.push_str(&format!("import \"{one}\"\n\n")),
+        many => {
+            out.push_str("import (\n");
+            for path in many {
+                out.push_str(&format!("\t\"{path}\"\n"));
+            }
+            out.push_str(")\n\n");
+        }
+    }
 }
 
 fn go_generics(node: &Node) -> String {
@@ -42,15 +68,18 @@ fn go_generics(node: &Node) -> String {
 
 /// A node reference with optional type arguments: `Box` or `Box[int]`.
 fn go_node_ref(scenario: &Scenario, target: NodeId, type_args: &[MemberType]) -> String {
-    let name = scenario.node_name(target);
+    let name = scenario.node_ref(target);
     if type_args.is_empty() {
-        return name.to_string();
+        return name;
     }
     let args: Vec<String> = type_args.iter().map(|a| go_type(scenario, a)).collect();
     format!("{name}[{}]", args.join(", "))
 }
 
 fn render_node(scenario: &Scenario, node: &Node, out: &mut String) {
+    if node.origin.pkg().is_some() {
+        return; // imported nodes are referenced, not defined
+    }
     let generics = go_generics(node);
     match &node.kind {
         NodeKind::Struct {
@@ -156,7 +185,7 @@ pub fn go_type(scenario: &Scenario, member_type: &MemberType) -> String {
     match member_type {
         MemberType::Basic(basic) => basic.go().to_string(),
         MemberType::TypeParam(name) => name.clone(),
-        MemberType::Node(id) => scenario.node_name(*id).to_string(),
+        MemberType::Node(id) => scenario.node_ref(*id),
         MemberType::Ref(inner) | MemberType::Option(inner) => {
             format!("*{}", go_type(scenario, inner))
         }
