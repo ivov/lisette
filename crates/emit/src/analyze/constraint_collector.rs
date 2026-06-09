@@ -11,19 +11,22 @@ use syntax::types::{CompoundKind, Symbol, Type, unqualified_name};
 
 impl Planner<'_> {
     pub(crate) fn collect_generic_constraints(&mut self, files: &[&File], fx: &mut EmitEffects) {
-        let mut table = GenericConstraintTable::default();
+        let base_cell = self.facts.generic_base();
+        let base = base_cell.get_or_init(|| {
+            let mut t = GenericConstraintTable::default();
+            self.seed_global_definitions(&mut t);
+            self.for_each_definition_type(|key, names, ty| {
+                collect_demands_from_type(ty, key, names, &mut t);
+            });
+            self.propagate_constraints(&mut t);
+            t
+        });
+        let mut table = base.clone();
 
-        self.seed_global_definitions(&mut table);
         self.seed_local_functions(files, &mut table);
         self.seed_local_impl_blocks(files, &mut table, fx);
-
-        self.for_each_definition_type(|key, names, ty| {
-            collect_demands_from_type(ty, key, names, &mut table);
-        });
         self.collect_demands_from_local_functions(files, &mut table);
         self.collect_demands_from_local_impl_blocks(files, &mut table);
-
-        self.propagate_constraints(&mut table);
 
         self.module.set_generic_constraints(table);
     }

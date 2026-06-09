@@ -1,3 +1,6 @@
+use std::cell::RefCell;
+use std::rc::Rc;
+
 use rustc_hash::FxHashMap as HashMap;
 use rustc_hash::FxHashSet as HashSet;
 
@@ -6,7 +9,7 @@ use crate::names::constraints::{GenericConstraintTable, ParamConstraintSet};
 
 #[derive(Default)]
 pub(crate) struct ModuleState {
-    enum_layouts: HashMap<String, EnumLayout>,
+    enum_layouts: RefCell<HashMap<String, Rc<EnumLayout>>>,
     tag_exported_fields: HashSet<String>,
     exported_method_names: HashSet<String>,
     user_to_string_types: HashSet<String>,
@@ -17,16 +20,18 @@ pub(crate) struct ModuleState {
 }
 
 impl ModuleState {
-    pub(crate) fn record_enum_layout(&mut self, enum_id: String, layout: EnumLayout) {
-        self.enum_layouts.insert(enum_id, layout);
+    pub(crate) fn record_enum_layout(&self, enum_id: String, layout: EnumLayout) {
+        self.enum_layouts
+            .borrow_mut()
+            .insert(enum_id, Rc::new(layout));
     }
 
-    pub(crate) fn enum_layout(&self, enum_id: &str) -> Option<&EnumLayout> {
-        self.enum_layouts.get(enum_id)
+    pub(crate) fn enum_layout(&self, enum_id: &str) -> Option<Rc<EnumLayout>> {
+        self.enum_layouts.borrow().get(enum_id).cloned()
     }
 
     pub(crate) fn has_enum_layout(&self, enum_id: &str) -> bool {
-        self.enum_layouts.contains_key(enum_id)
+        self.enum_layouts.borrow().contains_key(enum_id)
     }
 
     pub(crate) fn record_tag_exported_field(&mut self, key: String) {

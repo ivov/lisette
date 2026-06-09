@@ -52,7 +52,7 @@ impl Planner<'_> {
         let emit_string = synthesize && !has_user_string;
         let emit_go_string = synthesize && !has_user_go_string;
         let needs_fmt = emit_string || emit_go_string || has_json;
-        let layout = self.module.enum_layout(&enum_id).unwrap();
+        let layout = self.enum_layout(&enum_id).unwrap();
         let mut result = layout.emit_definition(&generics_string);
         if emit_string {
             result.push_str("\n\n");

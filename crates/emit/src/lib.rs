@@ -36,8 +36,10 @@ pub use output::imports;
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use std::rc::Rc;
 use std::sync::Arc;
+use std::sync::OnceLock;
 
 use analyze::facts::{EmitFactsConfig, is_nullable_option};
+use names::constraints::GenericConstraintTable;
 use output::imports::ImportBuilder;
 use plan::ModulePlan;
 use plan::bodies::{LoweredBlock, LoweredStatement};
@@ -236,7 +238,12 @@ impl<'a> Planner<'a> {
             HashMap::default()
         });
 
-        let globals = Arc::new(GlobalEmitData::compute(&analysis.definitions));
+        let shared = SharedEmitContext {
+            options,
+            line_indexes,
+            globals: Arc::new(GlobalEmitData::compute(&analysis.definitions)),
+            generic_base: Arc::new(OnceLock::new()),
+        };
 
         let mut work: Vec<(&ModuleId, &syntax::program::ModuleInfo)> = analysis
             .modules
@@ -248,15 +255,7 @@ impl<'a> Planner<'a> {
         const PARALLEL_THRESHOLD: usize = 4;
 
         let emit_one = |&(module_id, module_info): &(&ModuleId, &syntax::program::ModuleInfo)| {
-            emit_module(
-                analysis,
-                go_module,
-                &options,
-                &line_indexes,
-                &globals,
-                module_id,
-                module_info,
-            )
+            emit_module(analysis, go_module, &shared, module_id, module_info)
         };
 
         let mut output: Vec<OutputFile> = if work.len() < PARALLEL_THRESHOLD {
@@ -294,6 +293,7 @@ impl<'a> Planner<'a> {
             options: EmitOptions { debug },
             line_indexes,
             globals,
+            generic_base: Arc::new(OnceLock::new()),
             current_module: config.module_id.to_string(),
         });
         Self::new(facts)
@@ -524,12 +524,19 @@ impl<'a> Planner<'a> {
     }
 }
 
+/// Emit state built once in [`Planner::emit`] and shared (by `&`) across every
+/// module worker: options plus the three computed-once `Arc`s.
+struct SharedEmitContext {
+    options: EmitOptions,
+    line_indexes: Arc<HashMap<u32, LineIndex>>,
+    globals: Arc<GlobalEmitData>,
+    generic_base: Arc<OnceLock<GenericConstraintTable>>,
+}
+
 fn emit_module<'a>(
     analysis: &'a EmitInput,
     go_module: &str,
-    options: &EmitOptions,
-    line_indexes: &Arc<HashMap<u32, LineIndex>>,
-    globals: &Arc<GlobalEmitData>,
+    shared_emit_ctx: &SharedEmitContext,
     module_id: &str,
     module_info: &syntax::program::ModuleInfo,
 ) -> Vec<OutputFile> {
@@ -542,9 +549,10 @@ fn emit_module<'a>(
         go_module_ids: &analysis.go_module_ids,
         entry_module: analysis.entry_module_id.to_string(),
         go_module: go_module.to_string(),
-        options: options.clone(),
-        line_indexes: line_indexes.clone(),
-        globals: globals.clone(),
+        options: shared_emit_ctx.options.clone(),
+        line_indexes: shared_emit_ctx.line_indexes.clone(),
+        globals: shared_emit_ctx.globals.clone(),
+        generic_base: shared_emit_ctx.generic_base.clone(),
         current_module: module_id.to_string(),
     });
     let mut planner: Planner<'a> = Planner::new(facts);

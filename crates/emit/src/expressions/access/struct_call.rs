@@ -500,7 +500,7 @@ impl Planner<'_> {
 
         let tag_constant = self.resolve_variant(name, enum_id, fx);
 
-        let pointer_fields = if let Some(layout) = self.module.enum_layout(enum_id) {
+        let pointer_fields = if let Some(layout) = self.enum_layout(enum_id) {
             if let Some(variant) = layout.get_variant(&variant_name) {
                 variant
                     .fields

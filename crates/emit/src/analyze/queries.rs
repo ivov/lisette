@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use rustc_hash::FxHashMap as HashMap;
 
 use crate::Planner;
@@ -224,56 +226,53 @@ impl Planner<'_> {
 }
 
 impl Planner<'_> {
-    /// Pre-compute enum layouts for all known enum definitions.
-    pub(crate) fn collect_enum_layouts(&mut self) {
-        let enum_definitions: Vec<_> = self
-            .facts
-            .iter_definitions()
-            .filter_map(|(id, definition)| {
-                if let Definition {
-                    name: Some(name),
-                    body:
-                        DefinitionBody::Enum {
-                            generics, variants, ..
-                        },
-                    ..
-                } = definition
-                {
-                    if name == "Option" || name == "Result" || name == "Partial" {
-                        return None;
-                    }
-                    Some((id.to_string(), generics.clone(), variants.clone()))
-                } else {
-                    None
-                }
-            })
-            .collect();
-
-        for (enum_id, generics, variants) in enum_definitions {
-            let mut field_types = FieldTypeMap::default();
-            for (vi, variant) in variants.iter().enumerate() {
-                for (fi, field) in variant.fields.iter().enumerate() {
-                    let mut go_type = self.go_type(&field.ty).code;
-                    let recursive = is_recursive_type(&field.ty, &enum_id);
-
-                    if recursive {
-                        go_type = format!("*{}", go_type);
-                    }
-
-                    let is_function = !recursive && is_raw_function_type(&field.ty);
-                    field_types.insert(
-                        (vi, fi),
-                        FieldTypeInfo {
-                            go_type,
-                            is_function,
-                        },
-                    );
-                }
-            }
-
-            let layout = EnumLayout::new(&enum_id, &generics, &variants, &field_types);
-            self.module.record_enum_layout(enum_id, layout);
+    pub(crate) fn enum_layout(&self, enum_id: &str) -> Option<Rc<EnumLayout>> {
+        if let Some(layout) = self.module.enum_layout(enum_id) {
+            return Some(layout);
         }
+        let layout = self.compute_enum_layout(enum_id)?;
+        self.module.record_enum_layout(enum_id.to_string(), layout);
+        self.module.enum_layout(enum_id)
+    }
+
+    fn compute_enum_layout(&self, enum_id: &str) -> Option<EnumLayout> {
+        let Definition {
+            name: Some(name),
+            body: DefinitionBody::Enum {
+                generics, variants, ..
+            },
+            ..
+        } = self.facts.definition(enum_id)?
+        else {
+            return None;
+        };
+
+        if name == "Option" || name == "Result" || name == "Partial" {
+            return None;
+        }
+
+        let mut field_types = FieldTypeMap::default();
+        for (vi, variant) in variants.iter().enumerate() {
+            for (fi, field) in variant.fields.iter().enumerate() {
+                let mut go_type = self.go_type(&field.ty).code;
+                let recursive = is_recursive_type(&field.ty, enum_id);
+
+                if recursive {
+                    go_type = format!("*{}", go_type);
+                }
+
+                let is_function = !recursive && is_raw_function_type(&field.ty);
+                field_types.insert(
+                    (vi, fi),
+                    FieldTypeInfo {
+                        go_type,
+                        is_function,
+                    },
+                );
+            }
+        }
+
+        Some(EnumLayout::new(enum_id, generics, variants, &field_types))
     }
 
     pub(crate) fn enum_struct_field_name(
@@ -282,8 +281,7 @@ impl Planner<'_> {
         variant_name: &str,
         field_name: &str,
     ) -> Option<String> {
-        self.module
-            .enum_layout(enum_id)?
+        self.enum_layout(enum_id)?
             .struct_field_name(variant_name, field_name)
     }
 
@@ -293,8 +291,7 @@ impl Planner<'_> {
         variant_name: &str,
         field_index: usize,
     ) -> Option<String> {
-        self.module
-            .enum_layout(enum_id)?
+        self.enum_layout(enum_id)?
             .tuple_field_name(variant_name, field_index)
     }
 
@@ -344,7 +341,7 @@ impl Planner<'_> {
 
     pub(crate) fn is_enum_field_pointer(&self, ty: &Type, variant: &str, index: usize) -> bool {
         if let Type::Nominal { id, .. } = ty
-            && let Some(layout) = self.module.enum_layout(id.as_ref())
+            && let Some(layout) = self.enum_layout(id.as_ref())
             && let Some(variant_layout) = layout.get_variant(variant)
             && let Some(field) = variant_layout.fields.get(index)
         {

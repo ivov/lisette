@@ -223,7 +223,7 @@ impl Planner<'_> {
                 // name is recorded once (coalescing is intentional, not a
                 // collision); per-variant duplicates are out of scope here.
                 let qualified = self.facts.qualified_current(name);
-                if let Some(layout) = self.module.enum_layout(&qualified) {
+                if let Some(layout) = self.enum_layout(&qualified) {
                     let mut seen: HashSet<&str> = HashSet::default();
                     for (variant, layout_variant) in variants.iter().zip(&layout.variants) {
                         for field in &layout_variant.fields {

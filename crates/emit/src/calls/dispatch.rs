@@ -418,7 +418,7 @@ impl Planner<'_> {
             return HashSet::default();
         };
 
-        let Some(layout) = self.module.enum_layout(&enum_id) else {
+        let Some(layout) = self.enum_layout(&enum_id) else {
             return HashSet::default();
         };
 
@@ -458,7 +458,7 @@ impl Planner<'_> {
                     for key in self.facts.make_function_keys() {
                         if let Some((e_name, v_name)) = key.split_once('.')
                             && e_name == enum_name
-                            && let Some(layout) = self.module.enum_layout(&enum_id)
+                            && let Some(layout) = self.enum_layout(&enum_id)
                             && let Some(v) = layout.get_variant(v_name)
                             && v.fields.len() == f.params.len()
                         {
