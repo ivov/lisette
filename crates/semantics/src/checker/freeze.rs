@@ -6,13 +6,10 @@
 //! therefore do not need access to the checker's `TypeEnv` — the emitter maps
 //! any remaining unbound `Type::Var` to Go's `any`.
 
-use std::convert::Infallible;
-
 use syntax::ast::{
-    Binding, EnumFieldDefinition, Expression, MatchArm, Pattern, SelectArm, SelectArmPattern,
-    StructFieldDefinition, TypedPattern, VariantFields,
+    Binding, EnumFieldDefinition, Expression, FormatStringPart, Literal, Pattern, SelectArm,
+    SelectArmPattern, StructFieldDefinition, StructSpread, TypedPattern, VariantFields,
 };
-use syntax::ast_folder::AstFolder;
 use syntax::types::Type;
 
 use crate::checker::type_env::TypeEnv;
@@ -26,14 +23,275 @@ impl<'a> FreezeFolder<'a> {
         Self { env }
     }
 
-    pub fn freeze_items(&mut self, items: Vec<Expression>) -> Vec<Expression> {
+    pub fn freeze_items(&mut self, mut items: Vec<Expression>) -> Vec<Expression> {
+        for item in &mut items {
+            self.freeze_expr(item);
+        }
         items
-            .into_iter()
-            .map(|item| {
-                let Ok(folded) = self.fold_expression(item);
-                folded
-            })
-            .collect()
+    }
+
+    fn freeze_expr(&mut self, expression: &mut Expression) {
+        if let Expression::Binary { .. } = expression {
+            let mut current = expression;
+            loop {
+                match current {
+                    Expression::Binary {
+                        left, right, ty, ..
+                    } => {
+                        self.freeze_ty(ty);
+                        self.freeze_expr(right.as_mut());
+                        current = left.as_mut();
+                    }
+                    leaf => {
+                        self.freeze_expr(leaf);
+                        break;
+                    }
+                }
+            }
+            return;
+        }
+
+        self.recurse_children(expression);
+        self.freeze_outer(expression);
+    }
+
+    fn recurse_children(&mut self, expression: &mut Expression) {
+        match expression {
+            Expression::Block { items, .. }
+            | Expression::TryBlock { items, .. }
+            | Expression::RecoverBlock { items, .. }
+            | Expression::Tuple {
+                elements: items, ..
+            } => {
+                for item in items {
+                    self.freeze_expr(item);
+                }
+            }
+
+            Expression::ImplBlock { methods, .. } => {
+                for method in methods {
+                    self.freeze_expr(method);
+                }
+            }
+
+            Expression::Call {
+                expression,
+                args,
+                spread,
+                ..
+            } => {
+                self.freeze_expr(expression.as_mut());
+                for arg in args {
+                    self.freeze_expr(arg);
+                }
+                if let Some(spread) = spread.as_mut() {
+                    self.freeze_expr(spread);
+                }
+            }
+
+            Expression::If {
+                condition,
+                consequence,
+                alternative,
+                ..
+            } => {
+                self.freeze_expr(condition.as_mut());
+                self.freeze_expr(consequence.as_mut());
+                self.freeze_expr(alternative.as_mut());
+            }
+
+            Expression::IfLet {
+                scrutinee,
+                consequence,
+                alternative,
+                ..
+            } => {
+                self.freeze_expr(scrutinee.as_mut());
+                self.freeze_expr(consequence.as_mut());
+                self.freeze_expr(alternative.as_mut());
+            }
+
+            Expression::Match { subject, arms, .. } => {
+                self.freeze_expr(subject.as_mut());
+                for arm in arms {
+                    self.freeze_pattern(&mut arm.pattern);
+                    if let Some(tp) = &mut arm.typed_pattern {
+                        self.freeze_typed_pattern(tp);
+                    }
+                    self.freeze_expr(arm.expression.as_mut());
+                    if let Some(guard) = &mut arm.guard {
+                        self.freeze_expr(guard.as_mut());
+                    }
+                }
+            }
+
+            Expression::Let {
+                value, else_block, ..
+            } => {
+                self.freeze_expr(value.as_mut());
+                if let Some(else_block) = else_block {
+                    self.freeze_expr(else_block.as_mut());
+                }
+            }
+
+            Expression::Return { expression, .. }
+            | Expression::Propagate { expression, .. }
+            | Expression::Unary { expression, .. }
+            | Expression::Paren { expression, .. }
+            | Expression::DotAccess { expression, .. }
+            | Expression::Reference { expression, .. }
+            | Expression::Task { expression, .. }
+            | Expression::Defer { expression, .. }
+            | Expression::Cast { expression, .. }
+            | Expression::Const { expression, .. } => {
+                self.freeze_expr(expression.as_mut());
+            }
+
+            Expression::IndexedAccess {
+                expression, index, ..
+            } => {
+                self.freeze_expr(expression.as_mut());
+                self.freeze_expr(index.as_mut());
+            }
+
+            Expression::Assignment { target, value, .. } => {
+                self.freeze_expr(target.as_mut());
+                self.freeze_expr(value.as_mut());
+            }
+
+            Expression::StructCall {
+                field_assignments,
+                spread,
+                ..
+            } => {
+                for assignment in field_assignments {
+                    self.freeze_expr(assignment.value.as_mut());
+                }
+                if let StructSpread::From(spread) = spread {
+                    self.freeze_expr(spread.as_mut());
+                }
+            }
+
+            Expression::Function { body, .. }
+            | Expression::Lambda { body, .. }
+            | Expression::Loop { body, .. } => {
+                self.freeze_expr(body.as_mut());
+            }
+
+            Expression::For { iterable, body, .. } => {
+                self.freeze_expr(iterable.as_mut());
+                self.freeze_expr(body.as_mut());
+            }
+
+            Expression::While {
+                condition, body, ..
+            } => {
+                self.freeze_expr(condition.as_mut());
+                self.freeze_expr(body.as_mut());
+            }
+
+            Expression::WhileLet {
+                scrutinee, body, ..
+            } => {
+                self.freeze_expr(scrutinee.as_mut());
+                self.freeze_expr(body.as_mut());
+            }
+
+            Expression::Select { arms, .. } => {
+                for arm in arms {
+                    self.recurse_select_arm(arm);
+                }
+            }
+
+            Expression::Break {
+                value: Some(value), ..
+            } => {
+                self.freeze_expr(value.as_mut());
+            }
+
+            Expression::Range { start, end, .. } => {
+                if let Some(start) = start {
+                    self.freeze_expr(start.as_mut());
+                }
+                if let Some(end) = end {
+                    self.freeze_expr(end.as_mut());
+                }
+            }
+
+            Expression::Literal { literal, .. } => match literal {
+                Literal::Slice(elements) => {
+                    for element in elements {
+                        self.freeze_expr(element);
+                    }
+                }
+                Literal::FormatString(parts) => {
+                    for part in parts {
+                        if let FormatStringPart::Expression(expression) = part {
+                            self.freeze_expr(expression.as_mut());
+                        }
+                    }
+                }
+                _ => {}
+            },
+
+            Expression::Binary { .. }
+            | Expression::Interface { .. }
+            | Expression::Identifier { .. }
+            | Expression::Enum { .. }
+            | Expression::Struct { .. }
+            | Expression::TypeAlias { .. }
+            | Expression::VariableDeclaration { .. }
+            | Expression::ModuleImport { .. }
+            | Expression::Break { value: None, .. }
+            | Expression::Continue { .. }
+            | Expression::Unit { .. }
+            | Expression::RawGo { .. }
+            | Expression::NoOp => {}
+        }
+    }
+
+    fn recurse_select_arm(&mut self, arm: &mut SelectArm) {
+        match &mut arm.pattern {
+            SelectArmPattern::Receive {
+                binding,
+                typed_pattern,
+                receive_expression,
+                body,
+            } => {
+                self.freeze_pattern(binding);
+                if let Some(tp) = typed_pattern {
+                    self.freeze_typed_pattern(tp);
+                }
+                self.freeze_expr(receive_expression.as_mut());
+                self.freeze_expr(body.as_mut());
+            }
+            SelectArmPattern::Send {
+                send_expression,
+                body,
+            } => {
+                self.freeze_expr(send_expression.as_mut());
+                self.freeze_expr(body.as_mut());
+            }
+            SelectArmPattern::MatchReceive {
+                receive_expression,
+                arms,
+            } => {
+                self.freeze_expr(receive_expression.as_mut());
+                for arm in arms {
+                    self.freeze_pattern(&mut arm.pattern);
+                    if let Some(tp) = &mut arm.typed_pattern {
+                        self.freeze_typed_pattern(tp);
+                    }
+                    self.freeze_expr(arm.expression.as_mut());
+                    if let Some(guard) = &mut arm.guard {
+                        self.freeze_expr(guard.as_mut());
+                    }
+                }
+            }
+            SelectArmPattern::WildCard { body } => {
+                self.freeze_expr(body.as_mut());
+            }
+        }
     }
 
     pub fn freeze_facts(&self, facts: &mut crate::facts::Facts) {
@@ -196,56 +454,9 @@ impl<'a> FreezeFolder<'a> {
         }
     }
 
-    /// Fold a left-associative Binary chain iteratively. Unrolls the left
-    /// spine into a stack, folds each non-Binary leaf via `fold_expression`
-    /// (short recursion), then rebuilds bottom-up freezing each Binary as it
-    /// goes.
-    fn fold_binary_chain(&mut self, expression: Expression) -> Expression {
-        let mut stack: Vec<(
-            syntax::ast::BinaryOperator,
-            Box<Expression>,
-            Type,
-            syntax::ast::Span,
-        )> = Vec::new();
-        let mut current = expression;
-        loop {
-            match current {
-                Expression::Binary {
-                    operator,
-                    left,
-                    right,
-                    ty,
-                    span,
-                } => {
-                    stack.push((operator, right, ty, span));
-                    current = *left;
-                }
-                other => {
-                    current = other;
-                    break;
-                }
-            }
-        }
-        // Fold the leaf (non-Binary) and each right operand, which may or
-        // may not be Binary themselves — `fold_expression` handles that.
-        let Ok(mut acc) = self.fold_expression(current);
-        while let Some((operator, right, mut ty, span)) = stack.pop() {
-            let Ok(right_folded) = self.fold_expression(*right);
-            self.freeze_ty(&mut ty);
-            acc = Expression::Binary {
-                operator,
-                left: Box::new(acc),
-                right: Box::new(right_folded),
-                ty,
-                span,
-            };
-        }
-        acc
-    }
-
     /// Freeze all `Type` fields on the outer expression and on any nested
     /// structural nodes (bindings, patterns, variant fields, interface
-    /// methods) that the `AstFolder` default does not walk.
+    /// methods) that `recurse_children` does not walk.
     fn freeze_outer(&mut self, expression: &mut Expression) {
         match expression {
             Expression::Literal { ty, .. }
@@ -360,14 +571,9 @@ impl<'a> FreezeFolder<'a> {
                 for parent in parents {
                     self.freeze_ty(&mut parent.ty);
                 }
-                let sigs = std::mem::take(method_signatures);
-                *method_signatures = sigs
-                    .into_iter()
-                    .map(|s| {
-                        let Ok(folded) = self.fold_expression(s);
-                        folded
-                    })
-                    .collect();
+                for signature in method_signatures {
+                    self.freeze_expr(signature);
+                }
             }
 
             Expression::Assignment { .. }
@@ -378,78 +584,5 @@ impl<'a> FreezeFolder<'a> {
             | Expression::RawGo { .. }
             | Expression::NoOp => {}
         }
-    }
-}
-
-impl<'a> AstFolder for FreezeFolder<'a> {
-    type Error = Infallible;
-
-    fn fold_expression(&mut self, expression: Expression) -> Result<Expression, Self::Error> {
-        // Left-associative binary chains (`a + b + c + ...`) are left-deep
-        // in the AST, so a naive recursive fold blows the stack on stress
-        // inputs (500+ operators). Unroll them into an explicit stack and
-        // rebuild bottom-up to keep recursion shallow.
-        if let Expression::Binary { .. } = &expression {
-            return Ok(self.fold_binary_chain(expression));
-        }
-        let mut expression = self.fold_expression_default(expression)?;
-        self.freeze_outer(&mut expression);
-        Ok(expression)
-    }
-
-    fn fold_match_arm(&mut self, mut arm: MatchArm) -> Result<MatchArm, Self::Error> {
-        arm.expression = Box::new(self.fold_expression(*arm.expression)?);
-        arm.guard = arm
-            .guard
-            .map(|g| self.fold_expression(*g).map(Box::new))
-            .transpose()?;
-        self.freeze_pattern(&mut arm.pattern);
-        if let Some(tp) = &mut arm.typed_pattern {
-            self.freeze_typed_pattern(tp);
-        }
-        Ok(arm)
-    }
-
-    fn fold_select_arm(&mut self, arm: SelectArm) -> Result<SelectArm, Self::Error> {
-        let pattern = match arm.pattern {
-            SelectArmPattern::Receive {
-                mut binding,
-                mut typed_pattern,
-                receive_expression,
-                body,
-            } => {
-                self.freeze_pattern(&mut binding);
-                if let Some(tp) = &mut typed_pattern {
-                    self.freeze_typed_pattern(tp);
-                }
-                SelectArmPattern::Receive {
-                    binding,
-                    typed_pattern,
-                    receive_expression: Box::new(self.fold_expression(*receive_expression)?),
-                    body: Box::new(self.fold_expression(*body)?),
-                }
-            }
-            SelectArmPattern::Send {
-                send_expression,
-                body,
-            } => SelectArmPattern::Send {
-                send_expression: Box::new(self.fold_expression(*send_expression)?),
-                body: Box::new(self.fold_expression(*body)?),
-            },
-            SelectArmPattern::MatchReceive {
-                receive_expression,
-                arms,
-            } => SelectArmPattern::MatchReceive {
-                receive_expression: Box::new(self.fold_expression(*receive_expression)?),
-                arms: arms
-                    .into_iter()
-                    .map(|arm| self.fold_match_arm(arm))
-                    .collect::<Result<_, _>>()?,
-            },
-            SelectArmPattern::WildCard { body } => SelectArmPattern::WildCard {
-                body: Box::new(self.fold_expression(*body)?),
-            },
-        };
-        Ok(SelectArm { pattern })
     }
 }
