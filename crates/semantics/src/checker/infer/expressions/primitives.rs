@@ -277,6 +277,13 @@ impl InferCtx<'_, '_> {
             }
         };
 
+        if ty.as_import_namespace().is_some() && !self.scopes.is_dot_access_base() {
+            self.sink
+                .push(diagnostics::infer::module_namespace_used_as_value(
+                    &value, span,
+                ));
+        }
+
         let (identifier_ty, _) = self.instantiate(&ty);
 
         self.unify(expected_ty, &identifier_ty, &span);

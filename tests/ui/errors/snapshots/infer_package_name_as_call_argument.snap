@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Cannot use a module namespace as a value
+   ╭─[test.lis:5:15]
+ 4 │ fn main() {
+ 5 │   fmt.Println(fmt)
+   ·               ─┬─
+   ·                ╰── module namespaces are not runtime values
+ 6 │ }
+   ╰────
+  help: Access a member instead, e.g. `fmt.Member` · code: [infer.module_namespace_used_as_value]

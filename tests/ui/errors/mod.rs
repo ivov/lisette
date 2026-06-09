@@ -8270,3 +8270,27 @@ fn main() {
 "#;
     assert_infer_error_snapshot!(input);
 }
+
+#[test]
+fn infer_package_name_as_call_argument() {
+    let input = r#"
+import "go:fmt"
+
+fn main() {
+  fmt.Println(fmt)
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_package_name_as_bare_expression() {
+    let input = r#"
+import "go:fmt"
+
+fn main() {
+  fmt
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}

@@ -163,16 +163,8 @@ impl InferCtx<'_, '_> {
             ));
         }
 
-        // Reject module namespace bindings: `let u = utils`
-        if let Some(module_id) = new_value.get_type().as_import_namespace() {
-            self.sink
-                .push(diagnostics::infer::let_binding_module_namespace(
-                    module_id,
-                    new_value.get_span(),
-                ));
-        }
         // Reject enum type bindings: `let c = utils.Color`
-        else if let Expression::DotAccess {
+        if let Expression::DotAccess {
             expression: inner,
             member,
             ..

@@ -2877,13 +2877,11 @@ pub fn namespace_alias_used_as_value(span: Span) -> LisetteDiagnostic {
         .with_help("Access a member instead, e.g. `alias.VariantName`")
 }
 
-pub fn let_binding_module_namespace(module_name: &str, span: Span) -> LisetteDiagnostic {
-    LisetteDiagnostic::error("Cannot bind a module namespace to a variable")
-        .with_infer_code("let_binding_module_namespace")
+pub fn module_namespace_used_as_value(name: &str, span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Cannot use a module namespace as a value")
+        .with_infer_code("module_namespace_used_as_value")
         .with_span_label(&span, "module namespaces are not runtime values")
-        .with_help(format!(
-            "Use an import alias instead: `import alias \"{module_name}\"`"
-        ))
+        .with_help(format!("Access a member instead, e.g. `{name}.Member`"))
 }
 
 pub fn let_binding_enum_type(type_name: &str, span: Span) -> LisetteDiagnostic {
