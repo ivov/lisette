@@ -6083,19 +6083,20 @@ fn main() {}
 }
 
 #[test]
-fn embed_generic_instantiation_rejected() {
+fn embed_generic_instantiation_promotes() {
     infer(
         r#"
-struct Wrapper<T> { value: T }
+pub struct Wrapper<T> { pub value: T }
 struct S { embed Wrapper<int> }
+fn read(s: S) -> int { s.value }
 fn main() {}
 "#,
     )
-    .assert_infer_code("embed_generic");
+    .assert_no_errors();
 }
 
 #[test]
-fn embed_generic_alias_to_storage_rejected() {
+fn embed_generic_alias_to_storage_accepted() {
     infer(
         r#"
 pub struct Base { pub id: int }
@@ -6104,11 +6105,11 @@ struct S { embed P<Base> }
 fn main() {}
 "#,
     )
-    .assert_infer_code("embed_generic");
+    .assert_no_errors();
 }
 
 #[test]
-fn embed_generic_alias_under_ref_rejected() {
+fn embed_generic_alias_under_ref_accepted() {
     infer(
         r#"
 pub struct Base { pub id: int }
@@ -6117,7 +6118,7 @@ struct S { embed Ref<P<Base>> }
 fn main() {}
 "#,
     )
-    .assert_infer_code("embed_generic");
+    .assert_no_errors();
 }
 
 #[test]
@@ -6132,7 +6133,77 @@ struct S { embed ref.Ref<ref.Base> }
 fn main() {}
 "#;
     infer_with_go_typedefs(input, &[("go:example.com/ref", typedef)])
-        .assert_infer_code("embed_generic");
+        .assert_infer_code("embed_imported_target");
+}
+
+#[test]
+fn generic_embed_promotes_method_to_instantiated_return() {
+    infer(
+        r#"
+pub struct Box<T> { pub value: T }
+impl<T> Box<T> { pub fn get(self) -> T { self.value } }
+struct Outer { embed Box<string> }
+fn use_it(o: Outer) -> string { o.get() }
+fn main() {}
+"#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn generic_embed_method_return_is_the_instantiated_type() {
+    infer(
+        r#"
+pub struct Box<T> { pub value: T }
+impl<T> Box<T> { pub fn get(self) -> T { self.value } }
+struct Outer { embed Box<int> }
+fn use_it(o: Outer) -> string { o.get() }
+fn main() {}
+"#,
+    )
+    .assert_infer_code("type_mismatch");
+}
+
+#[test]
+fn generic_embedder_promotes_with_flowed_param() {
+    infer(
+        r#"
+pub struct Box<T> { pub value: T }
+impl<T> Box<T> { pub fn get(self) -> T { self.value } }
+struct Outer<U> { embed Box<U> }
+fn use_it(o: Outer<int>) -> int { o.get() }
+fn main() {}
+"#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn specialized_impl_method_not_promoted_onto_other_instantiation() {
+    infer(
+        r#"
+pub struct Box<T> { pub value: T }
+impl Box<int> { pub fn only_int(self) -> int { 0 } }
+struct Outer { embed Box<string> }
+fn use_it(o: Outer) -> int { o.only_int() }
+fn main() {}
+"#,
+    )
+    .assert_infer_code("member_not_found");
+}
+
+#[test]
+fn specialized_impl_method_promoted_onto_matching_instantiation() {
+    infer(
+        r#"
+pub struct Box<T> { pub value: T }
+impl Box<int> { pub fn only_int(self) -> int { 0 } }
+struct Outer { embed Box<int> }
+fn use_it(o: Outer) -> int { o.only_int() }
+fn main() {}
+"#,
+    )
+    .assert_no_errors();
 }
 
 #[test]

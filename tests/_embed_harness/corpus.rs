@@ -3,7 +3,7 @@
 //! `embed_*` error. Some rejections are expected to be lifted later, and their
 //! tests will start passing when that happens.
 
-use super::fixtures::{iface_node, smethod, struct_node, vembed};
+use super::fixtures::{iface_node, imethod, smethod, struct_node, vembed};
 use super::scenario::*;
 
 fn pembed(target: NodeId) -> Embed {
@@ -11,6 +11,7 @@ fn pembed(target: NodeId) -> Embed {
         target,
         edge: EdgeKind::Pointer,
         storage: Storage::Plain,
+        type_args: vec![],
     }
 }
 
@@ -71,6 +72,112 @@ pub fn mixed_embedding() -> Scenario {
     }
 }
 
+/// `struct Box<T> { Value: T }` with `fn Tag(self) -> string`: a generic base
+/// whose field is the parameter and whose method is monomorphic. The random
+/// generator stays monomorphic, so generic shapes are written here.
+fn generic_box(id: NodeId) -> Node {
+    Node {
+        id,
+        name: format!("N{id}"),
+        type_params: vec!["T".into()],
+        kind: NodeKind::Struct {
+            fields: vec![Field {
+                name: cased("value", Visibility::Public),
+                member_type: MemberType::TypeParam("T".into()),
+                visibility: Visibility::Public,
+            }],
+            embeds: vec![],
+            methods: vec![smethod("tag")],
+        },
+        origin: Origin::Native,
+    }
+}
+
+fn vembed_arg(target: NodeId, arg: MemberType) -> Embed {
+    Embed {
+        target,
+        edge: EdgeKind::Value,
+        storage: Storage::Plain,
+        type_args: vec![arg],
+    }
+}
+
+fn pembed_arg(target: NodeId, arg: MemberType) -> Embed {
+    Embed {
+        target,
+        edge: EdgeKind::Pointer,
+        storage: Storage::Plain,
+        type_args: vec![arg],
+    }
+}
+
+/// `N1` embeds `Box<int>` by value. Go promotes the method `Tag` and the field
+/// `Value` (instantiated to `int`) at depth 1; Lisette must agree.
+pub fn generic_embed_promotes() -> Scenario {
+    Scenario {
+        name: "generic_embed_promotes".into(),
+        seed: 0,
+        nodes: vec![
+            generic_box(0),
+            struct_node(
+                1,
+                vec![vembed_arg(0, MemberType::Basic(BasicType::Int))],
+                vec![],
+                vec![],
+            ),
+        ],
+        questions: vec![
+            sel(1, "Tag"),
+            Question::Selector {
+                root: 1,
+                member: "Value".into(),
+                kind: SelKind::Field,
+            },
+        ],
+    }
+}
+
+/// `N1` embeds `*Box<int>`. The method still promotes through the pointer edge.
+pub fn generic_embed_pointer() -> Scenario {
+    Scenario {
+        name: "generic_embed_pointer".into(),
+        seed: 0,
+        nodes: vec![
+            generic_box(0),
+            struct_node(
+                1,
+                vec![pembed_arg(0, MemberType::Basic(BasicType::Int))],
+                vec![],
+                vec![],
+            ),
+        ],
+        questions: vec![sel(1, "Tag")],
+    }
+}
+
+/// `N2` embeds `Box<int>` and satisfies interface `N0` through the promoted
+/// `Tag`.
+pub fn generic_embed_satisfies() -> Scenario {
+    Scenario {
+        name: "generic_embed_satisfies".into(),
+        seed: 0,
+        nodes: vec![
+            iface_node(0, vec![], vec![imethod("tag", BasicType::String)]),
+            generic_box(1),
+            struct_node(
+                2,
+                vec![vembed_arg(1, MemberType::Basic(BasicType::Int))],
+                vec![],
+                vec![],
+            ),
+        ],
+        questions: vec![Question::Satisfies {
+            type_id: 2,
+            interface: 0,
+        }],
+    }
+}
+
 /// Every scenario that goes through the full differential.
 pub fn differential_scenarios() -> Vec<Scenario> {
     let mut scenarios = super::fixtures::all();
@@ -78,6 +185,9 @@ pub fn differential_scenarios() -> Vec<Scenario> {
     scenarios.push(pointer_cycle());
     scenarios.push(pointer_diamond());
     scenarios.push(mixed_embedding());
+    scenarios.push(generic_embed_promotes());
+    scenarios.push(generic_embed_pointer());
+    scenarios.push(generic_embed_satisfies());
     scenarios
 }
 
@@ -113,12 +223,6 @@ pub fn reject_cases() -> Vec<RejectCase> {
             name: "defined_type",
             source: "struct MyInt(int)\nstruct Outer {\n  embed MyInt,\n}\n",
             code: "infer.embed_defined_type",
-            permanent: false,
-        },
-        RejectCase {
-            name: "generic",
-            source: "struct Box<T> {\n  pub value: T,\n}\nstruct Outer {\n  embed Box<int>,\n}\n",
-            code: "infer.embed_generic",
             permanent: false,
         },
         RejectCase {

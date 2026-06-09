@@ -2,9 +2,9 @@ use ecow::EcoString;
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use std::collections::BTreeMap;
 
-use syntax::ast::Visibility;
-use syntax::program::MethodSignatures;
-use syntax::types::{CompoundKind, Symbol, Type};
+use syntax::ast::{Generic, Visibility};
+use syntax::program::{DefinitionBody, MethodSignatures};
+use syntax::types::{CompoundKind, Symbol, Type, build_substitution_map, substitute};
 
 use crate::store::Store;
 
@@ -116,8 +116,8 @@ fn walk(store: &Store, outer: &Type) -> Vec<Entry> {
                 if !field.embedded {
                     continue;
                 }
-                // Resolve aliases first so an alias to `Ref<T>` peels as a pointer edge.
-                let resolved_field = store.deep_resolve_alias(&field.ty);
+                let field_ty = instantiate_field(store, &entry.ty, &field.ty);
+                let resolved_field = store.deep_resolve_alias(&field_ty);
                 let (target, is_pointer) = deref_once(&resolved_field);
                 let mut path = entry.embed_path.clone();
                 path.push(field.name.clone());
@@ -201,7 +201,7 @@ fn entry_candidate(store: &Store, ty: &Type, name: &str) -> Option<Candidate> {
         return Some(Candidate {
             declaring_type: Symbol::from_raw(id),
             detail: CandidateDetail::Method {
-                ty: method_ty.clone(),
+                ty: instantiate_method(store, ty, method_ty)?,
             },
         });
     }
@@ -213,7 +213,7 @@ fn entry_candidate(store: &Store, ty: &Type, name: &str) -> Option<Candidate> {
         return Some(Candidate {
             declaring_type: Symbol::from_raw(id),
             detail: CandidateDetail::Field {
-                ty: field.ty.clone(),
+                ty: instantiate_field(store, ty, &field.ty),
                 visibility: field.visibility,
             },
         });
@@ -352,6 +352,102 @@ fn ref_of(ty: &Type) -> Type {
     }
 }
 
+fn declaring_generics<'a>(store: &'a Store, id: &str) -> &'a [Generic] {
+    match store.get_definition(id).map(|d| &d.body) {
+        Some(
+            DefinitionBody::Struct { generics, .. }
+            | DefinitionBody::Enum { generics, .. }
+            | DefinitionBody::TypeAlias { generics, .. },
+        ) => generics,
+        Some(DefinitionBody::Interface { definition }) => &definition.generics,
+        _ => &[],
+    }
+}
+
+fn instantiate_field(store: &Store, container: &Type, member_ty: &Type) -> Type {
+    let Some(id) = container.get_qualified_id() else {
+        return member_ty.clone();
+    };
+    let args = container.get_type_params().unwrap_or_default();
+    if args.is_empty() {
+        return member_ty.clone();
+    }
+    substitute(
+        member_ty,
+        &build_substitution_map(declaring_generics(store, id), args),
+    )
+}
+
+fn instantiate_method(store: &Store, container: &Type, method_ty: &Type) -> Option<Type> {
+    let Some(id) = container.get_qualified_id() else {
+        return Some(method_ty.clone());
+    };
+    let args = container.get_type_params().unwrap_or_default();
+    let arity = declaring_generics(store, id).len();
+    if args.is_empty() || arity == 0 {
+        return Some(method_ty.clone());
+    }
+    if let Type::Forall { vars, body } = method_ty
+        && args.len() == arity
+        && vars.len() >= arity
+    {
+        let (impl_vars, method_vars) = vars.split_at(arity);
+        if receiver_is_simple(body, id, impl_vars) {
+            let map: HashMap<EcoString, Type> = impl_vars
+                .iter()
+                .cloned()
+                .zip(args.iter().cloned())
+                .collect();
+            let new_body = substitute(body, &map);
+            return Some(if method_vars.is_empty() {
+                new_body
+            } else {
+                Type::Forall {
+                    vars: method_vars.to_vec(),
+                    body: Box::new(new_body),
+                }
+            });
+        }
+    }
+    // Anything else is a specialized impl (`impl Container<int>`): it promotes
+    // only when its concrete receiver is exactly this instantiation, so a method
+    // declared for one instantiation never leaks onto another through promotion.
+    let receiver = method_receiver(method_ty)?;
+    (receiver.strip_refs() == *container).then(|| method_ty.clone())
+}
+
+/// The receiver (first parameter) of a method type, peeling any `Forall`.
+fn method_receiver(method_ty: &Type) -> Option<&Type> {
+    let body = match method_ty {
+        Type::Forall { body, .. } => body.as_ref(),
+        other => other,
+    };
+    match body {
+        Type::Function(f) => f.params.first(),
+        _ => None,
+    }
+}
+
+/// The method's receiver is `Container<v0, .., vk>` with the impl vars bare and
+/// in order, i.e. an unspecialized `impl<v..> Container<v..>`.
+fn receiver_is_simple(body: &Type, container_id: &str, impl_vars: &[EcoString]) -> bool {
+    let Type::Function(f) = body else {
+        return false;
+    };
+    let Some(receiver) = f.params.first() else {
+        return false;
+    };
+    let Type::Nominal { id, params, .. } = receiver.strip_refs() else {
+        return false;
+    };
+    id.as_str() == container_id
+        && params.len() == impl_vars.len()
+        && params
+            .iter()
+            .zip(impl_vars)
+            .all(|(p, v)| matches!(p, Type::Parameter(name) if name == v))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -456,6 +552,37 @@ mod tests {
             )
         }
 
+        fn generic_struct(
+            &mut self,
+            name: &str,
+            generics: Vec<&str>,
+            fields: Vec<StructFieldDefinition>,
+            methods: Vec<(&str, Type)>,
+        ) -> &mut Self {
+            let mut method_map = MethodSignatures::default();
+            for (n, t) in methods {
+                method_map.insert(n.into(), t);
+            }
+            self.insert(
+                name,
+                DefinitionBody::Struct {
+                    generics: generics
+                        .into_iter()
+                        .map(|g| Generic {
+                            name: g.into(),
+                            bounds: vec![],
+                            span: Span::dummy(),
+                        })
+                        .collect(),
+                    fields,
+                    kind: StructKind::Record,
+                    methods: method_map,
+                    constructor: None,
+                    attributes: Attributes::default(),
+                },
+            )
+        }
+
         fn interface(&mut self, name: &str, methods: Vec<&str>, parents: Vec<&str>) -> &mut Self {
             let mut method_map = MethodSignatures::default();
             for n in methods {
@@ -481,6 +608,30 @@ mod tests {
 
     fn pembed(target: &str) -> StructFieldDefinition {
         field(target, ref_of(&nominal(target)), true)
+    }
+
+    fn param(name: &str) -> Type {
+        Type::Parameter(name.into())
+    }
+
+    fn generic_nominal(name: &str, args: Vec<Type>) -> Type {
+        Type::Nominal {
+            id: Symbol::from_parts(MODULE, name),
+            params: args,
+            underlying_ty: None,
+        }
+    }
+
+    fn generic_value_method(owner: &str, impl_var: &str, ret: Type) -> Type {
+        Type::Forall {
+            vars: vec![impl_var.into()],
+            body: Box::new(Type::function(
+                vec![generic_nominal(owner, vec![param(impl_var)])],
+                vec![false],
+                vec![],
+                Box::new(ret),
+            )),
+        }
     }
 
     fn found(resolution: Resolution) -> ResolvedMember {
@@ -684,5 +835,197 @@ mod tests {
         assert!(!has_direct_embed(&b.store, &nominal("N0")));
         assert!(has_direct_embed(&b.store, &nominal("N1")));
         assert!(has_direct_embed(&b.store, &ref_of(&nominal("N1"))));
+    }
+
+    fn method_return(member: &ResolvedMember) -> Type {
+        match &member.kind {
+            MemberKind::Method { ty } => ty.get_function_ret().unwrap().clone(),
+            other => panic!("expected a method, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn generic_embed_promotes_field_at_instantiation() {
+        let mut b = Builder::new();
+        b.generic_struct(
+            "Box",
+            vec!["T"],
+            vec![field("value", param("T"), false)],
+            vec![],
+        );
+        b.struct_(
+            "Outer",
+            vec![field(
+                "Box",
+                generic_nominal("Box", vec![Type::int()]),
+                true,
+            )],
+            vec![],
+        );
+        let member = found(resolve_selector(&b.store, &nominal("Outer"), "value"));
+        match member.kind {
+            MemberKind::Field { ty, .. } => assert_eq!(ty, Type::int()),
+            other => panic!("expected a field, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn generic_embed_promotes_method_at_instantiation() {
+        let mut b = Builder::new();
+        b.generic_struct(
+            "Box",
+            vec!["T"],
+            vec![],
+            vec![("get", generic_value_method("Box", "T", param("T")))],
+        );
+        b.struct_(
+            "Outer",
+            vec![field(
+                "Box",
+                generic_nominal("Box", vec![Type::string()]),
+                true,
+            )],
+            vec![],
+        );
+        let member = found(resolve_selector(&b.store, &nominal("Outer"), "get"));
+        assert_eq!(method_return(&member), Type::string());
+    }
+
+    #[test]
+    fn generic_embedder_flows_its_param_into_the_target() {
+        let mut b = Builder::new();
+        b.generic_struct(
+            "Box",
+            vec!["T"],
+            vec![],
+            vec![("get", generic_value_method("Box", "T", param("T")))],
+        );
+        b.generic_struct(
+            "Outer",
+            vec!["U"],
+            vec![field("Box", generic_nominal("Box", vec![param("U")]), true)],
+            vec![],
+        );
+        let member = found(resolve_selector(
+            &b.store,
+            &generic_nominal("Outer", vec![Type::int()]),
+            "get",
+        ));
+        assert_eq!(method_return(&member), Type::int());
+    }
+
+    #[test]
+    fn renamed_impl_param_is_captured() {
+        // struct param is `T`, but the method's impl var is `V` (`impl<V> Box<V>`).
+        let mut b = Builder::new();
+        b.generic_struct(
+            "Box",
+            vec!["T"],
+            vec![],
+            vec![("get", generic_value_method("Box", "V", param("V")))],
+        );
+        b.struct_(
+            "Outer",
+            vec![field(
+                "Box",
+                generic_nominal("Box", vec![Type::int()]),
+                true,
+            )],
+            vec![],
+        );
+        let member = found(resolve_selector(&b.store, &nominal("Outer"), "get"));
+        assert_eq!(method_return(&member), Type::int());
+    }
+
+    #[test]
+    fn specialized_impl_method_is_skipped() {
+        let specialized = Type::Forall {
+            vars: vec!["V".into()],
+            body: Box::new(Type::function(
+                vec![generic_nominal(
+                    "Box",
+                    vec![Type::Compound {
+                        kind: CompoundKind::Slice,
+                        args: vec![param("V")],
+                    }],
+                )],
+                vec![false],
+                vec![],
+                Box::new(param("V")),
+            )),
+        };
+        let mut b = Builder::new();
+        b.generic_struct("Box", vec!["T"], vec![], vec![("weird", specialized)]);
+        b.struct_(
+            "Outer",
+            vec![field(
+                "Box",
+                generic_nominal("Box", vec![Type::int()]),
+                true,
+            )],
+            vec![],
+        );
+        assert!(matches!(
+            resolve_selector(&b.store, &nominal("Outer"), "weird"),
+            Resolution::NotFound
+        ));
+    }
+
+    /// A concrete `impl Box<int> { fn only_int(self: Box<int>) -> int }`, stored
+    /// without a `Forall` because it binds no type variables.
+    fn concrete_int_method() -> Type {
+        Type::function(
+            vec![generic_nominal("Box", vec![Type::int()])],
+            vec![false],
+            vec![],
+            Box::new(Type::int()),
+        )
+    }
+
+    #[test]
+    fn specialized_impl_does_not_promote_onto_other_instantiation() {
+        let mut b = Builder::new();
+        b.generic_struct(
+            "Box",
+            vec!["T"],
+            vec![],
+            vec![("only_int", concrete_int_method())],
+        );
+        b.struct_(
+            "Outer",
+            vec![field(
+                "Box",
+                generic_nominal("Box", vec![Type::string()]),
+                true,
+            )],
+            vec![],
+        );
+        assert!(matches!(
+            resolve_selector(&b.store, &nominal("Outer"), "only_int"),
+            Resolution::NotFound
+        ));
+    }
+
+    #[test]
+    fn specialized_impl_promotes_onto_matching_instantiation() {
+        let mut b = Builder::new();
+        b.generic_struct(
+            "Box",
+            vec!["T"],
+            vec![],
+            vec![("only_int", concrete_int_method())],
+        );
+        b.struct_(
+            "Outer",
+            vec![field(
+                "Box",
+                generic_nominal("Box", vec![Type::int()]),
+                true,
+            )],
+            vec![],
+        );
+        let member = found(resolve_selector(&b.store, &nominal("Outer"), "only_int"));
+        assert_eq!(member.depth, 1);
+        assert_eq!(method_return(&member), Type::int());
     }
 }

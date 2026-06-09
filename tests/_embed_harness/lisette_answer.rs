@@ -280,6 +280,7 @@ mod tests {
                 nodes: vec![Node {
                     id: 0,
                     name: "N0".into(),
+                    type_params: vec![],
                     kind: NodeKind::NamedBasic {
                         underlying: basic,
                         methods: vec![Method {

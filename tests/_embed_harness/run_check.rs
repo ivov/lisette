@@ -130,7 +130,7 @@ fn is_zero_constructible(scenario: &Scenario, id: NodeId) -> bool {
 
 fn zeroable(member_type: &MemberType) -> bool {
     match member_type {
-        MemberType::Ref(_) | MemberType::Node(_) => false,
+        MemberType::Ref(_) | MemberType::Node(_) | MemberType::TypeParam(_) => false,
         MemberType::Basic(_) | MemberType::Slice(_) | MemberType::Option(_) => true,
     }
 }

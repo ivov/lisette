@@ -12,17 +12,6 @@ pub fn defined_type(target: &str, span: Span) -> LisetteDiagnostic {
         ))
 }
 
-pub fn generic(target: &str, span: Span) -> LisetteDiagnostic {
-    LisetteDiagnostic::error("Cannot embed a generic type")
-        .with_infer_code("embed_generic")
-        .with_span_label(&span, "generic type")
-        .with_help(format!(
-            "Embedding `{}` is not supported in this version. Embed a non-generic struct, \
-             interface, or pointer.",
-            target
-        ))
-}
-
 pub fn imported_target(target: &str, span: Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Cannot embed an imported type yet")
         .with_infer_code("embed_imported_target")

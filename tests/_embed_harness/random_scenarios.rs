@@ -53,6 +53,7 @@ pub fn generate(seed: u64) -> Scenario {
         nodes.push(Node {
             id,
             name: format!("N{id}"),
+            type_params: vec![],
             kind,
             origin: Origin::Native,
         });
@@ -117,6 +118,7 @@ fn generate_struct_embeds(random: &mut Random, id: usize, existing: &[Node]) -> 
             target,
             edge,
             storage: Storage::Plain,
+            type_args: vec![],
         });
     }
     embeds
@@ -141,6 +143,7 @@ fn generate_interface_embeds(random: &mut Random, id: usize, existing: &[Node]) 
             target,
             edge: EdgeKind::Value,
             storage: Storage::Plain,
+            type_args: vec![],
         });
     }
     embeds

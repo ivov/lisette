@@ -35,6 +35,7 @@ pub fn vembed(target: NodeId) -> Embed {
         target,
         edge: EdgeKind::Value,
         storage: Storage::Plain,
+        type_args: vec![],
     }
 }
 
@@ -43,6 +44,7 @@ pub fn pembed(target: NodeId) -> Embed {
         target,
         edge: EdgeKind::Pointer,
         storage: Storage::Plain,
+        type_args: vec![],
     }
 }
 
@@ -55,6 +57,7 @@ pub fn struct_node(
     Node {
         id,
         name: format!("N{id}"),
+        type_params: vec![],
         kind: NodeKind::Struct {
             fields,
             embeds,
@@ -68,6 +71,7 @@ pub fn iface_node(id: NodeId, embeds: Vec<Embed>, methods: Vec<Method>) -> Node 
     Node {
         id,
         name: format!("N{id}"),
+        type_params: vec![],
         kind: NodeKind::Interface { methods, embeds },
         origin: Origin::Native,
     }

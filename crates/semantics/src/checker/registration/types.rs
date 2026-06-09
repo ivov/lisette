@@ -396,12 +396,6 @@ impl TaskState<'_> {
         let display = ty.to_string();
         let resolved = store.deep_resolve_alias(ty);
 
-        // Check the declared type too: alias substitution erases a generic alias's arguments.
-        if is_generic_instantiation(ty) || is_generic_instantiation(&resolved) {
-            self.sink.push(diagnostics::embed::generic(&display, span));
-            return;
-        }
-
         if resolved.is_option() {
             self.sink.push(diagnostics::embed::option_target(span));
             return;
@@ -429,9 +423,6 @@ impl TaskState<'_> {
                 Some(inner) if is_pointer_backed_newtype(store, &inner) => {
                     self.sink
                         .push(diagnostics::embed::pointer_backed_newtype(&display, span));
-                }
-                Some(inner) if is_generic_instantiation(&inner) => {
-                    self.sink.push(diagnostics::embed::generic(&display, span));
                 }
                 Some(inner) if is_deferred_local_target(store, &inner) => {
                     self.sink
@@ -804,15 +795,6 @@ fn embed_promotion_target(store: &Store, ty: &Type) -> Type {
         target = store.deep_resolve_alias(&inner);
     }
     target
-}
-
-fn is_generic_instantiation(ty: &Type) -> bool {
-    let mut target = ty.clone();
-    while target.is_option() || target.is_ref() {
-        let Some(inner) = target.inner() else { break };
-        target = inner;
-    }
-    matches!(target, Type::Nominal { params, .. } if !params.is_empty())
 }
 
 // A local tuple struct, newtype, or enum: needs the resolver, so hard-errored for now.

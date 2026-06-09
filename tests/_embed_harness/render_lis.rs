@@ -121,7 +121,16 @@ fn push_declarations(scenario: &Scenario, out: &mut String) {
     }
 }
 
+fn lis_generics(node: &Node) -> String {
+    if node.type_params.is_empty() {
+        String::new()
+    } else {
+        format!("<{}>", node.type_params.join(", "))
+    }
+}
+
 fn render_node(scenario: &Scenario, node: &Node, out: &mut String) {
+    let generics = lis_generics(node);
     match &node.kind {
         NodeKind::Struct {
             fields,
@@ -129,9 +138,9 @@ fn render_node(scenario: &Scenario, node: &Node, out: &mut String) {
             methods,
         } => {
             if embeds.is_empty() && fields.is_empty() {
-                out.push_str(&format!("struct {} {{}}\n", node.name));
+                out.push_str(&format!("struct {}{generics} {{}}\n", node.name));
             } else {
-                out.push_str(&format!("struct {} {{\n", node.name));
+                out.push_str(&format!("struct {}{generics} {{\n", node.name));
                 for embed in embeds {
                     out.push_str(&format!("  embed {},\n", embed_type(scenario, embed)));
                 }
@@ -148,15 +157,18 @@ fn render_node(scenario: &Scenario, node: &Node, out: &mut String) {
                 }
                 out.push_str("}\n");
             }
-            render_impl(scenario, &node.name, methods, out);
+            render_impl(scenario, node, methods, out);
         }
         NodeKind::Interface { methods, embeds } => {
             if embeds.is_empty() && methods.is_empty() {
-                out.push_str(&format!("interface {} {{}}\n", node.name));
+                out.push_str(&format!("interface {}{generics} {{}}\n", node.name));
             } else {
-                out.push_str(&format!("interface {} {{\n", node.name));
+                out.push_str(&format!("interface {}{generics} {{\n", node.name));
                 for embed in embeds {
-                    out.push_str(&format!("  impl {}\n", scenario.node_name(embed.target)));
+                    out.push_str(&format!(
+                        "  embed {}\n",
+                        lis_node_ref(scenario, embed.target, &embed.type_args)
+                    ));
                 }
                 for method in methods {
                     out.push_str(&format!(
@@ -175,20 +187,22 @@ fn render_node(scenario: &Scenario, node: &Node, out: &mut String) {
         } => {
             // A tuple struct, not `type N = T`: an alias cannot carry methods.
             out.push_str(&format!("struct {}({})\n", node.name, underlying.lisette()));
-            render_impl(scenario, &node.name, methods, out);
+            render_impl(scenario, node, methods, out);
         }
     }
 }
 
-fn render_impl(scenario: &Scenario, owner: &str, methods: &[Method], out: &mut String) {
+fn render_impl(scenario: &Scenario, node: &Node, methods: &[Method], out: &mut String) {
     if methods.is_empty() {
         return;
     }
-    out.push_str(&format!("impl {owner} {{\n"));
+    let owner = &node.name;
+    let generics = lis_generics(node);
+    out.push_str(&format!("impl{generics} {owner}{generics} {{\n"));
     for method in methods {
         let receiver = match method.receiver {
             Receiver::Value => "self".to_string(),
-            Receiver::Pointer => format!("self: Ref<{owner}>"),
+            Receiver::Pointer => format!("self: Ref<{owner}{generics}>"),
         };
         let extra = lis_parameters(scenario, &method.signature.parameters);
         match &method.signature.return_type {
@@ -220,14 +234,24 @@ fn lis_parameters(scenario: &Scenario, parameters: &[MemberType]) -> String {
 }
 
 fn embed_type(scenario: &Scenario, embed: &Embed) -> String {
-    let target = scenario.node_name(embed.target);
+    let target = lis_node_ref(scenario, embed.target, &embed.type_args);
     match (embed.edge, embed.storage) {
-        (EdgeKind::Value, Storage::Plain) => target.to_string(),
+        (EdgeKind::Value, Storage::Plain) => target,
         (EdgeKind::Pointer, Storage::Plain) => format!("Ref<{target}>"),
         (EdgeKind::Value, Storage::Option) => format!("Option<{target}>"),
         (EdgeKind::Pointer, Storage::OptionPointer) => format!("Option<Ref<{target}>>"),
         (edge, storage) => panic!("invalid embed edge/storage pairing: {edge:?}/{storage:?}"),
     }
+}
+
+/// A node reference with optional type arguments: `Box` or `Box<int>`.
+fn lis_node_ref(scenario: &Scenario, target: NodeId, type_args: &[MemberType]) -> String {
+    let name = scenario.node_name(target);
+    if type_args.is_empty() {
+        return name.to_string();
+    }
+    let args: Vec<String> = type_args.iter().map(|a| lis_type(scenario, a)).collect();
+    format!("{name}<{}>", args.join(", "))
 }
 
 pub fn lis_type(scenario: &Scenario, member_type: &MemberType) -> String {
@@ -237,6 +261,7 @@ pub fn lis_type(scenario: &Scenario, member_type: &MemberType) -> String {
         MemberType::Ref(inner) => format!("Ref<{}>", lis_type(scenario, inner)),
         MemberType::Slice(inner) => format!("Slice<{}>", lis_type(scenario, inner)),
         MemberType::Option(inner) => format!("Option<{}>", lis_type(scenario, inner)),
+        MemberType::TypeParam(name) => name.clone(),
     }
 }
 
@@ -391,13 +416,78 @@ mod tests {
     #[test]
     fn multi_member_interface_parses() {
         let src = "interface N1 {\n  fn C(self) -> bool\n}\n\n\
-                   interface N0 {\n  impl N1\n  fn A(self) -> int\n  fn B(self) -> string\n}\n";
+                   interface N0 {\n  embed N1\n  fn A(self) -> int\n  fn B(self) -> string\n}\n";
         let result = syntax::build_ast(src, 0);
         assert!(
             !result.failed(),
             "multi-member interface parse: {:?}",
             result.errors
         );
+    }
+
+    #[test]
+    fn generic_node_renders_in_both_languages() {
+        let scenario = crate::_embed_harness::corpus::generic_embed_promotes();
+
+        let lis = render_lis_declarations(&scenario);
+        assert!(lis.contains("struct N0<T>"), "lisette header:\n{lis}");
+        assert!(lis.contains("impl<T> N0<T>"), "lisette impl:\n{lis}");
+        assert!(lis.contains("embed N0<int>"), "lisette embed:\n{lis}");
+
+        let go = render_go(&scenario, GoMode::TypeDefs);
+        assert!(go.contains("type N0[T any] struct"), "go header:\n{go}");
+        assert!(go.contains("func (r N0[T]) Tag()"), "go receiver:\n{go}");
+        assert!(go.contains("N0[int]"), "go embed:\n{go}");
+    }
+
+    #[test]
+    fn generic_interface_parent_renders_type_args_in_both_languages() {
+        let parent = Node {
+            id: 0,
+            name: "N0".into(),
+            type_params: vec!["T".into()],
+            kind: NodeKind::Interface {
+                methods: vec![Method {
+                    name: "Get".into(),
+                    receiver: Receiver::Value,
+                    signature: Signature {
+                        parameters: vec![],
+                        return_type: MemberType::TypeParam("T".into()),
+                    },
+                    visibility: Visibility::Public,
+                }],
+                embeds: vec![],
+            },
+            origin: Origin::Native,
+        };
+        let child = Node {
+            id: 1,
+            name: "N1".into(),
+            type_params: vec![],
+            kind: NodeKind::Interface {
+                methods: vec![],
+                embeds: vec![Embed {
+                    target: 0,
+                    edge: EdgeKind::Value,
+                    storage: Storage::Plain,
+                    type_args: vec![MemberType::Basic(BasicType::Int)],
+                }],
+            },
+            origin: Origin::Native,
+        };
+        let scenario = Scenario {
+            name: "generic_iface_parent".into(),
+            seed: 0,
+            nodes: vec![parent, child],
+            questions: vec![],
+        };
+        scenario.validate().unwrap();
+
+        let lis = render_lis_declarations(&scenario);
+        assert!(lis.contains("embed N0<int>"), "lisette embed:\n{lis}");
+
+        let go = render_go(&scenario, GoMode::TypeDefs);
+        assert!(go.contains("N0[int]"), "go embed:\n{go}");
     }
 
     #[test]

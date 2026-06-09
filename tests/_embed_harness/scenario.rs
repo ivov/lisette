@@ -18,6 +18,10 @@ pub struct Node {
     pub id: NodeId,
     /// `N{id}`; unique within the scenario by construction.
     pub name: String,
+    /// Generic parameter names (e.g. `["A"]`); empty for a monomorphic node.
+    /// A member may reference one via `MemberType::TypeParam`.
+    #[serde(default)]
+    pub type_params: Vec<String>,
     pub kind: NodeKind,
     pub origin: Origin,
 }
@@ -55,6 +59,10 @@ pub struct Embed {
     pub edge: EdgeKind,
     /// Pairs with `edge`: `Option` with `Value`, `OptionPointer` with `Pointer`.
     pub storage: Storage,
+    /// Type arguments when the target is generic (e.g. `[Basic(Int)]` for
+    /// `embed Box<int>`); length matches the target's `type_params`.
+    #[serde(default)]
+    pub type_args: Vec<MemberType>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -110,6 +118,8 @@ pub enum MemberType {
     Ref(Box<MemberType>),
     Slice(Box<MemberType>),
     Option(Box<MemberType>),
+    /// A reference to an enclosing node's generic parameter (e.g. `T`).
+    TypeParam(String),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -192,17 +202,29 @@ impl Scenario {
                         self.node_name(embed.target)
                     ));
                 }
+                if embed.type_args.len() != self.nodes[embed.target].type_params.len() {
+                    return Err(format!(
+                        "embed on `{}` gives {} type args for target `{}` with {} params",
+                        node.name,
+                        embed.type_args.len(),
+                        self.node_name(embed.target),
+                        self.nodes[embed.target].type_params.len()
+                    ));
+                }
+                for arg in &embed.type_args {
+                    self.check_member_type(arg, &node.type_params)?;
+                }
             }
             for field in node.kind.fields() {
                 check_casing(&field.name, field.visibility, &node.name)?;
-                self.check_member_type(&field.member_type)?;
+                self.check_member_type(&field.member_type, &node.type_params)?;
             }
             for method in node.kind.methods() {
                 check_casing(&method.name, method.visibility, &node.name)?;
                 for param in &method.signature.parameters {
-                    self.check_member_type(param)?;
+                    self.check_member_type(param, &node.type_params)?;
                 }
-                self.check_member_type(&method.signature.return_type)?;
+                self.check_member_type(&method.signature.return_type, &node.type_params)?;
             }
         }
         for question in &self.questions {
@@ -230,12 +252,19 @@ impl Scenario {
         Ok(())
     }
 
-    fn check_member_type(&self, member_type: &MemberType) -> Result<(), String> {
+    fn check_member_type(&self, member_type: &MemberType, scope: &[String]) -> Result<(), String> {
         match member_type {
             MemberType::Basic(_) => Ok(()),
+            MemberType::TypeParam(name) => {
+                if scope.iter().any(|param| param == name) {
+                    Ok(())
+                } else {
+                    Err(format!("type param `{name}` is not in scope"))
+                }
+            }
             MemberType::Node(id) => self.check_node_ref(*id, "member type"),
             MemberType::Ref(inner) | MemberType::Slice(inner) | MemberType::Option(inner) => {
-                self.check_member_type(inner)
+                self.check_member_type(inner, scope)
             }
         }
     }
@@ -343,6 +372,7 @@ mod tests {
         let leaf = Node {
             id: 0,
             name: "N0".into(),
+            type_params: vec![],
             kind: NodeKind::NamedBasic {
                 underlying: BasicType::Float,
                 methods: vec![Method {
@@ -361,6 +391,7 @@ mod tests {
         let interface = Node {
             id: 1,
             name: "N1".into(),
+            type_params: vec![],
             kind: NodeKind::Interface {
                 methods: vec![Method {
                     name: cased("speak", Visibility::Public),
@@ -381,6 +412,7 @@ mod tests {
         let outer = Node {
             id: 2,
             name: "N2".into(),
+            type_params: vec![],
             kind: NodeKind::Struct {
                 fields: vec![
                     Field {
@@ -401,11 +433,13 @@ mod tests {
                         target: 0,
                         edge: EdgeKind::Value,
                         storage: Storage::Plain,
+                        type_args: vec![],
                     },
                     Embed {
                         target: 1,
                         edge: EdgeKind::Value,
                         storage: Storage::Option,
+                        type_args: vec![],
                     },
                 ],
                 methods: vec![Method {
@@ -424,12 +458,14 @@ mod tests {
         let pointer_embedder = Node {
             id: 3,
             name: "N3".into(),
+            type_params: vec![],
             kind: NodeKind::Struct {
                 fields: vec![],
                 embeds: vec![Embed {
                     target: 2,
                     edge: EdgeKind::Pointer,
                     storage: Storage::OptionPointer,
+                    type_args: vec![],
                 }],
                 methods: vec![],
             },
@@ -494,7 +530,17 @@ mod tests {
                 target: 2,
                 edge: EdgeKind::Value,
                 storage: Storage::Plain,
+                type_args: vec![],
             });
+        }
+        assert!(scenario.validate().is_err());
+    }
+
+    #[test]
+    fn validate_rejects_out_of_scope_type_param() {
+        let mut scenario = kitchen_sink();
+        if let NodeKind::Struct { fields, .. } = &mut scenario.nodes[2].kind {
+            fields[0].member_type = MemberType::TypeParam("Z".into());
         }
         assert!(scenario.validate().is_err());
     }

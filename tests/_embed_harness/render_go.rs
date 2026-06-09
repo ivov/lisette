@@ -28,16 +28,39 @@ pub fn render_go(scenario: &Scenario, mode: GoMode) -> String {
     out
 }
 
+fn go_generics(node: &Node) -> String {
+    if node.type_params.is_empty() {
+        return String::new();
+    }
+    let params: Vec<String> = node
+        .type_params
+        .iter()
+        .map(|p| format!("{p} any"))
+        .collect();
+    format!("[{}]", params.join(", "))
+}
+
+/// A node reference with optional type arguments: `Box` or `Box[int]`.
+fn go_node_ref(scenario: &Scenario, target: NodeId, type_args: &[MemberType]) -> String {
+    let name = scenario.node_name(target);
+    if type_args.is_empty() {
+        return name.to_string();
+    }
+    let args: Vec<String> = type_args.iter().map(|a| go_type(scenario, a)).collect();
+    format!("{name}[{}]", args.join(", "))
+}
+
 fn render_node(scenario: &Scenario, node: &Node, out: &mut String) {
+    let generics = go_generics(node);
     match &node.kind {
         NodeKind::Struct {
             fields,
             embeds,
             methods,
         } => {
-            out.push_str(&format!("type {} struct {{\n", node.name));
+            out.push_str(&format!("type {}{generics} struct {{\n", node.name));
             for embed in embeds {
-                let target = scenario.node_name(embed.target);
+                let target = go_node_ref(scenario, embed.target, &embed.type_args);
                 match embed.edge {
                     EdgeKind::Value => out.push_str(&format!("\t{target}\n")),
                     EdgeKind::Pointer => out.push_str(&format!("\t*{target}\n")),
@@ -52,13 +75,16 @@ fn render_node(scenario: &Scenario, node: &Node, out: &mut String) {
             }
             out.push_str("}\n");
             for method in methods {
-                render_method(scenario, &node.name, method, out);
+                render_method(scenario, node, method, out);
             }
         }
         NodeKind::Interface { methods, embeds } => {
-            out.push_str(&format!("type {} interface {{\n", node.name));
+            out.push_str(&format!("type {}{generics} interface {{\n", node.name));
             for embed in embeds {
-                out.push_str(&format!("\t{}\n", scenario.node_name(embed.target)));
+                out.push_str(&format!(
+                    "\t{}\n",
+                    go_node_ref(scenario, embed.target, &embed.type_args)
+                ));
             }
             for method in methods {
                 out.push_str(&format!(
@@ -76,16 +102,27 @@ fn render_node(scenario: &Scenario, node: &Node, out: &mut String) {
         } => {
             out.push_str(&format!("type {} {}\n", node.name, underlying.go()));
             for method in methods {
-                render_method(scenario, &node.name, method, out);
+                render_method(scenario, node, method, out);
             }
         }
     }
 }
 
-fn render_method(scenario: &Scenario, owner: &str, method: &Method, out: &mut String) {
+/// The receiver's type parameters without constraints: `[T]` or empty. Go names
+/// the params on a generic receiver but omits the `any` bound there.
+fn go_receiver_params(node: &Node) -> String {
+    if node.type_params.is_empty() {
+        return String::new();
+    }
+    format!("[{}]", node.type_params.join(", "))
+}
+
+fn render_method(scenario: &Scenario, node: &Node, method: &Method, out: &mut String) {
+    let owner = &node.name;
+    let recv_params = go_receiver_params(node);
     let receiver = match method.receiver {
-        Receiver::Value => format!("r {owner}"),
-        Receiver::Pointer => format!("r *{owner}"),
+        Receiver::Value => format!("r {owner}{recv_params}"),
+        Receiver::Pointer => format!("r *{owner}{recv_params}"),
     };
     out.push_str(&format!(
         "func ({}) {}({}) {} {{\n",
@@ -118,6 +155,7 @@ fn go_params(scenario: &Scenario, parameters: &[MemberType]) -> String {
 pub fn go_type(scenario: &Scenario, member_type: &MemberType) -> String {
     match member_type {
         MemberType::Basic(basic) => basic.go().to_string(),
+        MemberType::TypeParam(name) => name.clone(),
         MemberType::Node(id) => scenario.node_name(*id).to_string(),
         MemberType::Ref(inner) | MemberType::Option(inner) => {
             format!("*{}", go_type(scenario, inner))
