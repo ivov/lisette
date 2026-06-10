@@ -81,8 +81,19 @@ impl Planner<'_> {
         ctx: ExpressionContext<'_>,
         fx: &mut EmitEffects,
     ) -> (Vec<LoweredStatement>, String) {
-        let staged = self.stage_composite(expression, ctx, fx);
-        (staged.setup, staged.value)
+        if expression.get_type().is_unit()
+            && matches!(
+                expression.unwrap_parens(),
+                Expression::Call { .. } | Expression::Block { .. }
+            )
+        {
+            let (mut setup, call_str) = self.lower_value(expression, ctx, fx);
+            if !call_str.is_empty() {
+                setup.push(LoweredStatement::RawGo(format!("{call_str}\n")));
+            }
+            return (setup, "struct{}{}".to_string());
+        }
+        self.lower_value(expression, ctx, fx)
     }
 
     /// Wrap a captured tagged-shape prelude fn ref into a lowered-ABI closure
@@ -172,19 +183,9 @@ impl Planner<'_> {
         ctx: ExpressionContext<'_>,
         fx: &mut EmitEffects,
     ) -> String {
-        if expression.get_type().is_unit()
-            && matches!(
-                expression.unwrap_parens(),
-                Expression::Call { .. } | Expression::Block { .. }
-            )
-        {
-            let call_str = self.emit_value(output, expression, ctx, fx);
-            if !call_str.is_empty() {
-                write_line!(output, "{call_str}");
-            }
-            return "struct{}{}".to_string();
-        }
-        self.emit_value(output, expression, ctx, fx)
+        let (setup, value) = self.lower_composite_value(expression, ctx, fx);
+        output.push_str(&Renderer.render_setup(&setup));
+        value
     }
 
     /// Emit a value-position expression: plan, then render.

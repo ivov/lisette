@@ -3,15 +3,26 @@ use rustc_hash::FxHashMap as HashMap;
 use crate::escape_reserved;
 
 #[derive(Clone, Debug)]
-pub(crate) struct InlineExpr(String);
+pub(crate) struct InlineExpr {
+    text: String,
+    /// Emitter vars the text references, recorded as uses on substitution.
+    refs: Vec<String>,
+}
 
 impl InlineExpr {
-    pub(crate) fn new(text: impl Into<String>) -> Self {
-        Self(text.into())
+    pub(crate) fn with_refs(text: impl Into<String>, refs: Vec<String>) -> Self {
+        Self {
+            text: text.into(),
+            refs,
+        }
     }
 
     pub(crate) fn as_str(&self) -> &str {
-        &self.0
+        &self.text
+    }
+
+    pub(crate) fn refs(&self) -> &[String] {
+        &self.refs
     }
 }
 

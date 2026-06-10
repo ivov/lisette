@@ -308,6 +308,7 @@ impl Planner<'_> {
             key_var, value_var, iter_expression
         );
 
+        self.scope.enter_use_region();
         let mut bindings = String::new();
         self.emit_irrefutable_pattern_site(
             &mut bindings,
@@ -317,6 +318,10 @@ impl Planner<'_> {
             first_ty,
             fx,
         );
+        if !bindings.is_empty() {
+            self.scope.record_go_use(&key_var);
+        }
+        let after_key = bindings.len();
         self.emit_irrefutable_pattern_site(
             &mut bindings,
             PatternSubject::for_value(value_var.clone()),
@@ -325,18 +330,25 @@ impl Planner<'_> {
             second_ty,
             fx,
         );
+        if bindings.len() > after_key {
+            self.scope.record_go_use(&value_var);
+        }
         let lowered_body = self.lower_block_as_body(body, fx);
+        let used = self.scope.exit_use_region();
 
         let mut inner = vec![LoweredStatement::RawGo(bindings)];
         inner.extend(lowered_body.statements);
         let body_block = LoweredBlock { statements: inner };
 
+        let references_value = used.contains(&value_var);
+        let references_key = used.contains(&key_var);
+
         // Discard guards: value first, then key (insertion order matters).
         let mut statements = Vec::new();
-        if !body_block.references_var(&value_var) {
+        if !references_value {
             statements.push(LoweredStatement::RawGo(format!("_ = {}\n", value_var)));
         }
-        if !body_block.references_var(&key_var) {
+        if !references_key {
             statements.push(LoweredStatement::RawGo(format!("_ = {}\n", key_var)));
         }
         statements.extend(body_block.statements);
@@ -366,6 +378,7 @@ impl Planner<'_> {
             } else {
                 format!("for _, {} := range {} {{\n", item_var, iter_expression)
             };
+            self.scope.enter_use_region();
             let mut bindings = String::new();
             self.emit_irrefutable_pattern_site(
                 &mut bindings,
@@ -375,14 +388,20 @@ impl Planner<'_> {
                 &binding.ty,
                 fx,
             );
+            if !bindings.is_empty() {
+                self.scope.record_go_use(&item_var);
+            }
             let lowered_body = self.lower_block_as_body(body, fx);
+            let used = self.scope.exit_use_region();
 
             let mut inner = vec![LoweredStatement::RawGo(bindings)];
             inner.extend(lowered_body.statements);
             let body_block = LoweredBlock { statements: inner };
 
+            let references_item = used.contains(&item_var);
+
             let mut statements = Vec::new();
-            if !body_block.references_var(&item_var) {
+            if !references_item {
                 statements.push(LoweredStatement::RawGo(format!("_ = {}\n", item_var)));
             }
             statements.extend(body_block.statements);

@@ -47,8 +47,10 @@ impl Planner<'_> {
         let (subject_var, declaration) =
             self.lower_match_subject_var(&mut statements, subject, arms, fx);
 
+        self.scope.enter_use_region();
         let block = self.lower_match_tree(arms, subject_var.clone(), subject_ty, place, fx);
-        let used = block.references_var(&subject_var);
+        let used_set = self.scope.exit_use_region();
+        let used = used_set.contains(&subject_var);
 
         match declaration {
             SubjectDeclaration::PlainDiscard { var } => {
@@ -178,14 +180,17 @@ impl Planner<'_> {
             self.declare(&go_name);
             (go_name, value.to_string())
         });
+        self.scope.enter_use_region();
         let body_block = self.lower_block_to_place(body, place, fx);
+        let used = self.scope.exit_use_region();
         let mut statements = Vec::new();
         if let Some((go_name, value)) = &bound {
             statements.push(LoweredStatement::TempBind {
                 name: go_name.clone(),
                 value: value.clone(),
             });
-            if !body_block.references_var(go_name) {
+            let references = used.contains(go_name);
+            if !references {
                 statements.push(LoweredStatement::RawGo(format!("_ = {}\n", go_name)));
             }
         }

@@ -91,22 +91,8 @@ impl Planner<'_> {
         ctx: ExpressionContext<'_>,
         fx: &mut EmitEffects,
     ) -> StagedExpression {
-        let needs_string_bridge = (expression.get_type().is_unit()
-            && matches!(
-                expression.unwrap_parens(),
-                Expression::Call { .. } | Expression::Block { .. }
-            ))
-            || self.classify_go_fn_value(expression).is_some()
-            || self.is_go_array_return_value(expression);
-
-        if needs_string_bridge {
-            let mut setup = String::new();
-            let value = self.emit_composite_value(&mut setup, expression, ctx, fx);
-            return StagedExpression::new(setup, value, expression);
-        }
-
-        let plan = self.plan_operand(expression, ctx, fx);
-        StagedExpression::from_plan(plan, expression)
+        let (setup, value) = self.lower_composite_value(expression, ctx, fx);
+        StagedExpression::from_typed_setup(setup, value, expression)
     }
 
     /// Suppresses the Go-fn identity short-circuit when the formal param

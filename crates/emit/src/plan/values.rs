@@ -3,7 +3,6 @@ use crate::Planner;
 use crate::calls::CallBoundary;
 use crate::context::expression::ExpressionContext;
 use crate::plan::bodies::LoweredStatement;
-use crate::utils::output_references_var;
 use syntax::ast::Expression;
 
 pub(crate) enum ValuePlan {
@@ -56,23 +55,6 @@ impl ValuePlan {
         match self {
             ValuePlan::Operand(value) | ValuePlan::Composite { value, .. } => Some(value),
             ValuePlan::Paren(_) | ValuePlan::Cast { .. } | ValuePlan::Unary { .. } => None,
-        }
-    }
-
-    /// Whether `var` appears as a standalone identifier in the value text or
-    /// any setup statement.
-    pub(crate) fn references_var(&self, var: &str) -> bool {
-        match self {
-            ValuePlan::Operand(value) => output_references_var(value, var),
-            ValuePlan::Composite { setup, value } => {
-                output_references_var(value, var)
-                    || setup.iter().any(|statement| statement.references_var(var))
-            }
-            ValuePlan::Paren(inner) => inner.references_var(var),
-            ValuePlan::Cast { go_type, inner } => {
-                output_references_var(go_type, var) || inner.references_var(var)
-            }
-            ValuePlan::Unary { inner, .. } => inner.references_var(var),
         }
     }
 }

@@ -14,6 +14,7 @@ pub(crate) struct EmitBinding {
     pub go_name: Option<String>,
     pub rendered_access: String,
     pub composable_access: String,
+    pub subject: String,
 }
 
 #[derive(Debug)]
@@ -62,6 +63,8 @@ pub(crate) enum EmitDecision {
     },
     IfElse {
         condition: String,
+        /// Subject the condition reads, for liveness recording.
+        subject: Option<String>,
         then_branch: Box<EmitDecision>,
         else_branch: Option<Box<EmitDecision>>,
     },
@@ -71,11 +74,15 @@ pub(crate) enum EmitDecision {
     },
     Switch {
         expr: String,
+        /// Subject the switch projects from, for liveness recording.
+        subject: String,
         cases: Vec<EmitCase>,
         default: Option<Box<EmitDecision>>,
     },
     TypeSwitch {
         base: String,
+        /// Subject the switch projects from, for liveness recording.
+        subject: String,
         cases: Vec<EmitCase>,
         default: Option<Box<EmitDecision>>,
     },
@@ -91,6 +98,8 @@ pub(crate) enum EmitDecision {
 pub(crate) struct EmitChainTest {
     /// `None` marks a catchall test (empty `checks` in the source).
     pub condition: Option<String>,
+    /// Subject the condition reads (`None` for catchalls).
+    pub subject: Option<String>,
     pub decision: Box<EmitDecision>,
 }
 
@@ -269,14 +278,18 @@ pub(crate) fn lower_decision(ctx: &mut LoweringCtx, decision: &Decision) -> Emit
 }
 
 fn lower_chain_test(ctx: &mut LoweringCtx, test: &ChainTest) -> EmitChainTest {
-    let condition = if test.checks.is_empty() {
-        None
+    let (condition, subject) = if test.checks.is_empty() {
+        (None, None)
     } else {
-        Some(render_condition(&test.checks, &ctx.current_subject))
+        (
+            Some(render_condition(&test.checks, &ctx.current_subject)),
+            Some(ctx.current_subject.clone()),
+        )
     };
     let decision = Box::new(lower_decision(ctx, &test.decision));
     EmitChainTest {
         condition,
+        subject,
         decision,
     }
 }
@@ -289,6 +302,7 @@ fn lower_bindings(ctx: &mut LoweringCtx, bindings: &[PatternBinding]) -> Vec<Emi
             go_name: b.go_name.clone(),
             rendered_access: b.path.render(&ctx.current_subject),
             composable_access: b.path.render_composable(&ctx.current_subject),
+            subject: ctx.current_subject.clone(),
         })
         .collect()
 }
@@ -321,11 +335,13 @@ fn lower_type_switch(
     branches: &[SwitchBranch],
     fallback: &Option<Box<Decision>>,
 ) -> EmitDecision {
+    let subject = ctx.current_subject.clone();
     ctx.with_subject(base.clone(), |ctx| {
         let (cases, default) =
             lower_cases_with_default_lift(ctx, branches, fallback, /*lift=*/ true);
         EmitDecision::TypeSwitch {
             base,
+            subject,
             cases,
             default,
         }
@@ -349,6 +365,7 @@ fn lower_bool_switch(
         .expect("Bool shape requires a false-labeled branch");
     EmitDecision::IfElse {
         condition: wrap_if_struct_literal(rendered_path),
+        subject: Some(ctx.current_subject.clone()),
         then_branch: Box::new(lower_decision(ctx, &true_branch.decision)),
         else_branch: Some(Box::new(lower_decision(ctx, &false_branch.decision))),
     }
@@ -365,6 +382,7 @@ fn lower_binary_switch(
     let expr = render_switch_expression(rendered_path, kind);
     EmitDecision::IfElse {
         condition: format!("{} == {}", expr, first.case_label),
+        subject: Some(ctx.current_subject.clone()),
         then_branch: Box::new(lower_decision(ctx, &first.decision)),
         else_branch: Some(Box::new(lower_decision(ctx, &second.decision))),
     }
@@ -392,6 +410,7 @@ fn lower_single_arm_switch(
     };
     EmitDecision::IfElse {
         condition: format!("{} == {}", expr, branch.case_label),
+        subject: Some(ctx.current_subject.clone()),
         then_branch: Box::new(lower_decision(ctx, &branch.decision)),
         else_branch,
     }
@@ -409,6 +428,7 @@ fn lower_multi_switch(
         lower_cases_with_default_lift(ctx, branches, fallback, /*lift=*/ true);
     EmitDecision::Switch {
         expr,
+        subject: ctx.current_subject.clone(),
         cases,
         default,
     }

@@ -17,6 +17,8 @@ pub(crate) struct ScopeState {
     return_ctx_stack: Vec<Rc<ReturnContext>>,
     assign_targets: HashSet<String>,
     go_const_bindings: Vec<HashSet<String>>,
+    /// Go identifiers referenced during lowering, for structural liveness.
+    use_frames: Vec<HashSet<String>>,
 }
 
 pub(crate) struct BindingSnapshot {
@@ -39,6 +41,26 @@ impl ScopeState {
             return_ctx_stack: Vec::new(),
             assign_targets: HashSet::default(),
             go_const_bindings: vec![HashSet::default()],
+            use_frames: Vec::new(),
+        }
+    }
+
+    pub(crate) fn enter_use_region(&mut self) {
+        self.use_frames.push(HashSet::default());
+    }
+
+    /// Pop and return the region's uses, merging them into the enclosing region.
+    pub(crate) fn exit_use_region(&mut self) -> HashSet<String> {
+        let frame = self.use_frames.pop().unwrap_or_default();
+        if let Some(parent) = self.use_frames.last_mut() {
+            parent.extend(frame.iter().cloned());
+        }
+        frame
+    }
+
+    pub(crate) fn record_go_use(&mut self, go_name: &str) {
+        if let Some(frame) = self.use_frames.last_mut() {
+            frame.insert(go_name.to_string());
         }
     }
 

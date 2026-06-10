@@ -23,6 +23,7 @@ pub(crate) fn apply_root_assertion<'s>(
     let [go_type] = assertion.go_types.as_slice() else {
         unreachable!("multi-type root assertions only reach match destructure paths")
     };
+    planner.scope.record_go_use(subject);
     let expression = format!("{}.({})", subject, go_type);
     let var = planner.hoist_tmp_value(output, "asserted", &expression);
     std::borrow::Cow::Owned(var)
@@ -39,6 +40,7 @@ pub(crate) fn apply_refutable_root_assertion<'s>(
     let Some(assertion) = info.root_assertion.as_ref() else {
         return (std::borrow::Cow::Borrowed(subject), None);
     };
+    planner.scope.record_go_use(subject);
     let needs_asserted = info.requires_asserted_subject();
     match assertion.go_types.as_slice() {
         [go_type] => {
@@ -142,13 +144,15 @@ pub(crate) fn tree_binding_statements(
                 .resolve_identifier_binding(&binding.lisette_name)
                 .cloned();
             let safe_text = binding.path.render_composable(subject_var);
-            planner
-                .scope
-                .bind_inline_expr(&binding.lisette_name, InlineExpr::new(safe_text));
+            planner.scope.bind_inline_expr(
+                &binding.lisette_name,
+                InlineExpr::with_refs(safe_text, vec![subject_var.to_string()]),
+            );
             installed_inlines.push((binding.lisette_name.clone(), previous));
             continue;
         }
 
+        planner.scope.record_go_use(subject_var);
         let line = if planner.scope.has_binding_for_go_name(go_name) {
             let fresh = planner.fresh_var(Some(&binding.lisette_name));
             planner.scope.bind(&binding.lisette_name, &fresh);
@@ -207,6 +211,7 @@ pub(crate) fn tree_assignment_statements(
             continue;
         };
         let name = registered_name.to_string();
+        planner.scope.record_go_use(subject_var);
         let access_expression = binding.path.render(subject_var);
         statements.push(LoweredStatement::RawGo(format!(
             "{} = {}\n",

@@ -318,6 +318,7 @@ impl Planner<'_> {
     ) -> SelectArmPlan {
         let ok_var = self.fresh_ok_var();
         let receive_vars = format!("{}, {}", receiver_var, ok_var);
+        self.scope.enter_use_region();
         let body_statements = if let Some((pattern, typed)) = inner_pattern {
             self.lower_select_receive_pattern_site(
                 TypedSubject {
@@ -334,11 +335,13 @@ impl Planner<'_> {
             self.lower_block_to_place(ctx.body, ctx.place, fx)
                 .statements
         };
+        let used = self.scope.exit_use_region();
         let body_holder = LoweredBlock {
             statements: body_statements,
         };
         let mut then_statements: Vec<LoweredStatement> = Vec::new();
-        if !body_holder.references_var(receiver_var) {
+        let references_receiver = used.contains(receiver_var);
+        if !references_receiver {
             then_statements.push(LoweredStatement::RawGo(format!("_ = {}\n", receiver_var)));
         }
         then_statements.extend(body_holder.statements);
@@ -569,6 +572,7 @@ impl Planner<'_> {
 
         let ok_var = self.fresh_ok_var();
 
+        self.scope.enter_use_region();
         let some_block = self.lower_receive_some_arm(
             some_arm,
             match_arms,
@@ -582,11 +586,17 @@ impl Planner<'_> {
         let none_block = self
             .capture_scoped_block(|this| sites::lower_none_arm_body(this, match_arms, place, fx));
 
+        let arms_plan = build_receive_arms_plan(&ok_var, some_block, none_block);
+        if arms_plan.is_some() {
+            self.scope.record_go_use(&ok_var);
+        }
+        let used = self.scope.exit_use_region();
+
         // Compose the receive-arms body as a structured `if ok { ... } else
         // { ... }` plan so usage of `case_var` and `ok_var` can be checked
         // structurally before deciding whether to emit per-var discards.
         let body_block = LoweredBlock {
-            statements: match build_receive_arms_plan(&ok_var, some_block, none_block) {
+            statements: match arms_plan {
                 Some(plan) => vec![LoweredStatement::If(plan)],
                 None => Vec::new(),
             },
@@ -597,10 +607,12 @@ impl Planner<'_> {
         // Per-var discards (emitted when the body does not reference the var)
         // precede the structured body inside the `case x, ok := <-ch:` arm.
         let mut body_statements: Vec<LoweredStatement> = Vec::new();
-        if !body_block.references_var(&ok_var) {
+        let references_ok = used.contains(&ok_var);
+        if !references_ok {
             body_statements.push(LoweredStatement::RawGo(format!("_ = {}\n", ok_var)));
         }
-        if case_var != "_" && !body_block.references_var(&case_var) {
+        let references_case = used.contains(&case_var);
+        if case_var != "_" && !references_case {
             body_statements.push(LoweredStatement::RawGo(format!("_ = {}\n", case_var)));
         }
         body_statements.extend(body_block.statements);

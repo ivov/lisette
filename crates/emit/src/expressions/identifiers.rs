@@ -28,7 +28,19 @@ impl Planner<'_> {
         fx: &mut EmitEffects,
     ) -> String {
         if let Some(BindingValue::InlineExpr(expr)) = self.scope.resolve_identifier_binding(value) {
-            return expr.as_str().to_string();
+            let text = expr.as_str().to_string();
+            let refs = expr.refs().to_vec();
+            for go_name in &refs {
+                self.scope.record_go_use(go_name);
+            }
+            return text;
+        }
+        let bound_go_name = self
+            .scope
+            .resolve_binding_go_name(value)
+            .map(str::to_string);
+        if let Some(go_name) = &bound_go_name {
+            self.scope.record_go_use(go_name);
         }
         match self.classify_identifier(value, ty, ctx, fx) {
             IdentifierKind::UnitValue => "struct{}{}".to_string(),

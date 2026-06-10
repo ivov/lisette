@@ -103,9 +103,7 @@ impl Planner<'_> {
         if self.is_declared(var_name) {
             statements.push(simple_assign(var_name.to_string(), zero));
         } else {
-            // Kept as `RawGo`: a `var name ty = value` declaration reuse (`ConstPlan`)
-            // would drop `name`/`ty` from `references_var`, flipping queries on
-            // this dead-path binding.
+            // Declared so the dead-path binding stays in scope for later references.
             let go_ty = self.go_type_string(inner_ty, fx);
             statements.push(LoweredStatement::RawGo(format!(
                 "var {} {} = {}\n",

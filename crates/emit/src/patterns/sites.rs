@@ -77,9 +77,9 @@ impl ResolvedSubject {
         }
     }
 
-    fn emit_declaration(self, output: &mut String, body: &LoweredBlock) {
+    fn emit_declaration(self, output: &mut String, references: bool) {
         if let ResolvedSubject::Composite { var, expression } = self {
-            if body.references_var(&var) {
+            if references {
                 write_line!(output, "{} := {}", var, expression);
             } else {
                 write_line!(output, "_ = {}", expression);
@@ -146,15 +146,18 @@ impl Planner<'_> {
 
         let mut body = Vec::new();
         let mut assertion = String::new();
+        self.scope.enter_use_region();
         let effective = apply_root_assertion(self, &mut assertion, &info, resolved.var());
         if !assertion.is_empty() {
             body.push(LoweredStatement::RawGo(assertion));
         }
         tree_binding_statements(self, &mut body, &info.bindings, &effective, &[]);
+        let used = self.scope.exit_use_region();
         let body_block = LoweredBlock { statements: body };
 
+        let references = used.contains(resolved.var());
         let mut declaration = String::new();
-        resolved.emit_declaration(&mut declaration, &body_block);
+        resolved.emit_declaration(&mut declaration, references);
         if !declaration.is_empty() {
             statements.push(LoweredStatement::RawGo(declaration));
         }
@@ -197,15 +200,18 @@ impl Planner<'_> {
             ty: &value_ty,
         };
 
+        self.scope.enter_use_region();
         let body = if matches!(ap.pattern, Pattern::Or { .. }) {
             self.lower_let_else_or_pattern(ap, binding_ty, subject, else_block, fx)
         } else {
             self.lower_let_else_single_pattern(ap, subject, else_block, fx)
         };
+        let used = self.scope.exit_use_region();
         let body_block = LoweredBlock { statements: body };
 
+        let references = used.contains(resolved.var());
         let mut declaration = String::new();
-        resolved.emit_declaration(&mut declaration, &body_block);
+        resolved.emit_declaration(&mut declaration, references);
         if !declaration.is_empty() {
             statements.push(LoweredStatement::RawGo(declaration));
         }
@@ -381,6 +387,7 @@ impl Planner<'_> {
             guard_parts.push(format!("!{}", ok));
         }
         if !info.checks.is_empty() {
+            self.scope.record_go_use(effective_subject.as_ref());
             let negated = match info.checks.as_slice() {
                 [check] => check.render_negated(&effective_subject),
                 _ => format!("!({})", render_condition(&info.checks, &effective_subject)),
@@ -460,6 +467,9 @@ impl Planner<'_> {
         let mut pieces: Vec<(String, LoweredBlock)> = Vec::with_capacity(chain_len);
         for (i, info) in alts.collected.iter().take(chain_len).enumerate() {
             let (effective, ok_var) = &alts.hoisted[i];
+            if !info.checks.is_empty() {
+                self.scope.record_go_use(effective.as_ref());
+            }
             let condition = compose_refutable_condition(ok_var.as_deref(), &info.checks, effective);
             let mut assigns = Vec::new();
             tree_assignment_statements(self, &mut assigns, &info.bindings, effective);
@@ -647,6 +657,9 @@ impl Planner<'_> {
             return statements;
         }
 
+        if !info.checks.is_empty() {
+            self.scope.record_go_use(effective.as_ref());
+        }
         let condition = compose_refutable_condition(ok_var.as_deref(), &info.checks, &effective);
         let mut then_body = Vec::new();
         let overlays =

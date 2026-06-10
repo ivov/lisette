@@ -2,7 +2,6 @@
 //! consumes. `RawGo` is a transitional node holding pre-rendered Go.
 
 use crate::plan::values::ValuePlan;
-use crate::utils::output_references_var;
 use syntax::types::Type;
 
 /// Destination for a lowered block's tail. The enclosing function's return
@@ -285,35 +284,10 @@ pub(crate) struct SwitchCasePlan {
 }
 
 impl SwitchStatementPlan {
-    fn references_var(&self, var: &str) -> bool {
-        let kind_references = match &self.kind {
-            SwitchKind::Value { subject } => output_references_var(subject, var),
-            SwitchKind::Type { subject, binding } => {
-                output_references_var(subject, var)
-                    || binding
-                        .as_deref()
-                        .is_some_and(|binding| output_references_var(binding, var))
-            }
-        };
-        kind_references
-            || self.cases.iter().any(|case| case.references_var(var))
-            || self
-                .default
-                .as_ref()
-                .is_some_and(|body| body.references_var(var))
-            || self.postlude.iter().any(|s| s.references_var(var))
-    }
-
     fn ends_with_diverge(&self) -> bool {
         self.postlude
             .last()
             .is_some_and(LoweredStatement::ends_with_diverge)
-    }
-}
-
-impl SwitchCasePlan {
-    pub(crate) fn references_var(&self, var: &str) -> bool {
-        output_references_var(&self.labels, var) || self.body.references_var(var)
     }
 }
 
@@ -351,12 +325,6 @@ pub(crate) enum SelectArmPlan {
 }
 
 impl SelectStatementPlan {
-    fn references_var(&self, var: &str) -> bool {
-        self.setup.iter().any(|s| s.references_var(var))
-            || self.arms.iter().any(|arm| arm.references_var(var))
-            || self.postlude.iter().any(|s| s.references_var(var))
-    }
-
     fn ends_with_diverge(&self) -> bool {
         self.postlude
             .last()
@@ -376,24 +344,6 @@ impl SelectArmPlan {
             | SelectArmPlan::Send { body, .. }
             | SelectArmPlan::Default { body } => body,
         }
-    }
-
-    fn references_var(&self, var: &str) -> bool {
-        let header_references = match self {
-            SelectArmPlan::Receive {
-                receive_vars,
-                channel,
-                ..
-            } => {
-                receive_vars
-                    .as_deref()
-                    .is_some_and(|vars| output_references_var(vars, var))
-                    || output_references_var(channel, var)
-            }
-            SelectArmPlan::Send { operation, .. } => output_references_var(operation, var),
-            SelectArmPlan::Default { .. } => false,
-        };
-        header_references || self.body().references_var(var)
     }
 }
 
@@ -447,15 +397,6 @@ impl LoweredBlock {
     pub(crate) fn is_empty(&self) -> bool {
         self.statements.is_empty()
     }
-
-    /// Whether `var` appears as a standalone identifier in the rendered
-    /// block.
-    #[allow(dead_code)]
-    pub(crate) fn references_var(&self, var: &str) -> bool {
-        self.statements
-            .iter()
-            .any(|statement| statement.references_var(var))
-    }
 }
 
 impl LoweredStatement {
@@ -496,114 +437,6 @@ impl LoweredStatement {
     pub(crate) fn blocks_fallthrough(&self) -> bool {
         !matches!(self, LoweredStatement::WhileLet(_)) && self.ends_with_diverge()
     }
-
-    pub(crate) fn references_var(&self, var: &str) -> bool {
-        match self {
-            LoweredStatement::If(plan) => plan.references_var(var),
-            LoweredStatement::Loop(plan) => plan.references_var(var),
-            LoweredStatement::Block(body) => body.references_var(var),
-            LoweredStatement::Break { label, .. } | LoweredStatement::Continue { label, .. } => {
-                label.as_deref() == Some(var)
-            }
-            LoweredStatement::Const(plan) => plan.value.references_var(var),
-            LoweredStatement::Return(plan) => match &plan.form {
-                ReturnForm::Plain { value } => value.references_var(var),
-                ReturnForm::Unit { side_effect } => {
-                    side_effect.as_ref().is_some_and(|b| b.references_var(var))
-                }
-                ReturnForm::Multi { values } => {
-                    values.iter().any(|v| output_references_var(v, var))
-                }
-                ReturnForm::LoweredAbi { body } | ReturnForm::Wrapped { body } => {
-                    body.references_var(var)
-                }
-            },
-            LoweredStatement::BreakValue(plan) => {
-                if plan.value.references_var(var) {
-                    return true;
-                }
-                match &plan.disposition {
-                    BreakValueDisposition::UnitCallIntoResult { result_var }
-                    | BreakValueDisposition::AssignToResult { result_var } => result_var == var,
-                    BreakValueDisposition::Diverged | BreakValueDisposition::Discard => false,
-                }
-            }
-            LoweredStatement::Let(plan) => {
-                let declaration_ref = match &plan.form {
-                    LetForm::Never { declaration, .. } => declaration
-                        .as_ref()
-                        .is_some_and(|s| output_references_var(s, var)),
-                    _ => false,
-                };
-                declaration_ref || plan.form.body().references_var(var)
-            }
-            LoweredStatement::Assign(plan) => match &plan.form {
-                AssignForm::Compound {
-                    target_capture,
-                    target_str,
-                    kind,
-                } => {
-                    if target_capture.iter().any(|s| s.references_var(var)) {
-                        return true;
-                    }
-                    if output_references_var(target_str, var) {
-                        return true;
-                    }
-                    match kind {
-                        CompoundKind::Increment | CompoundKind::Decrement => false,
-                        CompoundKind::OpAssign { rhs, .. } => rhs.references_var(var),
-                    }
-                }
-                AssignForm::Simple {
-                    target_capture,
-                    target_str,
-                    value,
-                } => {
-                    target_capture.iter().any(|s| s.references_var(var))
-                        || output_references_var(target_str, var)
-                        || value.references_var(var)
-                }
-                AssignForm::NilClear {
-                    target_capture,
-                    target_str,
-                } => {
-                    target_capture.iter().any(|s| s.references_var(var))
-                        || output_references_var(target_str, var)
-                }
-                AssignForm::Discard { body } | AssignForm::NeverTyped { body } => {
-                    body.references_var(var)
-                }
-            },
-            LoweredStatement::Expression(plan) => match &plan.form {
-                ExpressionStatementForm::Async { value } => value.references_var(var),
-                ExpressionStatementForm::AsyncBlock { body, .. } => body.references_var(var),
-                ExpressionStatementForm::Propagate { body }
-                | ExpressionStatementForm::Discard { body } => body.references_var(var),
-            },
-            LoweredStatement::Match(plan) => plan.body.references_var(var),
-            LoweredStatement::Select(plan) => plan.references_var(var),
-            LoweredStatement::Switch(plan) => plan.references_var(var),
-            LoweredStatement::WhileLet(plan) => plan.body.references_var(var),
-            LoweredStatement::TempBind { name, value } => {
-                output_references_var(name, var) || output_references_var(value, var)
-            }
-            LoweredStatement::ClosureBind {
-                name,
-                closure_open,
-                body,
-                closure_close,
-            } => {
-                output_references_var(name, var)
-                    || output_references_var(closure_open, var)
-                    || body.references_var(var)
-                    || output_references_var(closure_close, var)
-            }
-            LoweredStatement::RawGo(code) | LoweredStatement::DivergingRawGo(code) => {
-                output_references_var(code, var)
-            }
-            LoweredStatement::UnreachablePanic => false,
-        }
-    }
 }
 
 impl IfPlan {
@@ -617,26 +450,5 @@ impl IfPlan {
             ElseArm::ElseIf(_) => false,
             ElseArm::Else { body, .. } => body.ends_with_diverge(),
         }
-    }
-
-    #[allow(dead_code)]
-    fn references_var(&self, var: &str) -> bool {
-        output_references_var(&self.condition_setup, var)
-            || output_references_var(&self.condition, var)
-            || self.then_body.references_var(var)
-            || match &self.else_arm {
-                ElseArm::None => false,
-                ElseArm::ElseIf(plan) => plan.references_var(var),
-                ElseArm::Else { body, .. } => body.references_var(var),
-            }
-    }
-}
-
-impl LoopPlan {
-    #[allow(dead_code)]
-    fn references_var(&self, var: &str) -> bool {
-        output_references_var(&self.prologue, var)
-            || output_references_var(&self.header, var)
-            || self.body.references_var(var)
     }
 }

@@ -1,4 +1,3 @@
-use std::borrow::Cow;
 use syntax::ast::{Expression, FormatStringPart, Literal, UnaryOperator};
 use syntax::program::DotAccessKind;
 
@@ -20,73 +19,6 @@ pub(crate) fn receiver_name(type_name: &str) -> String {
         .unwrap_or('x')
         .to_lowercase()
         .to_string()
-}
-
-/// Whether `var` appears as a standalone identifier in emitted Go,
-/// ignoring string-literal contents.
-pub(crate) fn output_references_var(output: &str, var: &str) -> bool {
-    let masked = mask_go_string_literals(output);
-    let bytes = masked.as_bytes();
-    masked
-        .match_indices(var)
-        .any(|(abs, _)| is_at_token_boundary(bytes, abs, var.len()))
-}
-
-fn is_at_token_boundary(bytes: &[u8], pos: usize, token_len: usize) -> bool {
-    let before_ok = pos == 0 || {
-        let c = bytes[pos - 1];
-        !c.is_ascii_alphanumeric() && c != b'_'
-    };
-    let after = pos + token_len;
-    let after_ok = after >= bytes.len() || {
-        let c = bytes[after];
-        !c.is_ascii_alphanumeric() && c != b'_'
-    };
-    before_ok && after_ok
-}
-
-/// Replace Go string/rune/raw-string contents with spaces, preserving byte
-/// positions. Borrows when no quote is present.
-pub(crate) fn mask_go_string_literals(go_text: &str) -> Cow<'_, str> {
-    if !go_text.bytes().any(|b| matches!(b, b'"' | b'\'' | b'`')) {
-        return Cow::Borrowed(go_text);
-    }
-    let bytes = go_text.as_bytes();
-    let mut out = String::with_capacity(bytes.len());
-    let mut i = 0;
-    while i < bytes.len() {
-        match bytes[i] {
-            quote @ (b'"' | b'\'') => i = mask_literal(bytes, i, quote, true, &mut out),
-            b'`' => i = mask_literal(bytes, i, b'`', false, &mut out),
-            _ => {
-                let start = i;
-                while i < bytes.len() && !matches!(bytes[i], b'"' | b'\'' | b'`') {
-                    i += 1;
-                }
-                out.push_str(&go_text[start..i]);
-            }
-        }
-    }
-    Cow::Owned(out)
-}
-
-fn mask_literal(bytes: &[u8], start: usize, quote: u8, escapes: bool, out: &mut String) -> usize {
-    out.push(quote as char);
-    let mut i = start + 1;
-    while i < bytes.len() {
-        let b = bytes[i];
-        if escapes && b == b'\\' && i + 1 < bytes.len() {
-            out.push_str("  ");
-            i += 2;
-        } else if b == quote {
-            out.push(quote as char);
-            return i + 1;
-        } else {
-            out.push(' ');
-            i += 1;
-        }
-    }
-    i
 }
 
 /// Group consecutive parameters with the same Go type: `a int, b int` → `a, b int`.

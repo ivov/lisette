@@ -240,6 +240,9 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         let mut branches: Vec<ChainBranch> = Vec::with_capacity(regular.len());
         let mut last_diverges = false;
         for test in regular {
+            if let Some(subject) = &test.subject {
+                self.planner.scope.record_go_use(subject);
+            }
             let condition = test.condition.as_deref().unwrap_or("true").to_string();
             let walk_ctx = if matches!(test.decision.as_ref(), EmitDecision::Guard { .. }) {
                 &guard_ctx
@@ -356,9 +359,13 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
             } => self.walk_guard(statements, *arm_index, bindings, success, failure, ctx),
             EmitDecision::IfElse {
                 condition,
+                subject,
                 then_branch,
                 else_branch,
             } => {
+                if let Some(subject) = subject {
+                    self.planner.scope.record_go_use(subject);
+                }
                 let plan =
                     self.lower_if_else_block(condition, then_branch, else_branch.as_deref(), ctx);
                 let body_diverges = capture_diverge(vec![LoweredStatement::If(plan)], statements);
@@ -373,10 +380,11 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
             }
             EmitDecision::Switch {
                 expr,
+                subject,
                 cases,
                 default,
-                ..
             } => {
+                self.planner.scope.record_go_use(subject);
                 let plan = self.lower_value_switch(expr, cases, default.as_deref(), ctx.arm_place);
                 let body_diverges =
                     capture_diverge(vec![LoweredStatement::Switch(plan)], statements);
@@ -384,9 +392,11 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
             }
             EmitDecision::TypeSwitch {
                 base,
+                subject,
                 cases,
                 default,
             } => {
+                self.planner.scope.record_go_use(subject);
                 let plan = self.lower_type_switch(base, cases, default.as_deref(), ctx.arm_place);
                 let body_diverges =
                     capture_diverge(vec![LoweredStatement::Switch(plan)], statements);
@@ -568,15 +578,14 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         default: Option<&EmitDecision>,
         place: &PlacePlan,
     ) -> SwitchStatementPlan {
+        self.planner.scope.enter_use_region();
         let case_plans = self.lower_switch_cases(cases, place);
         let default_block = self.lower_switch_default(default, place);
+        let used = self.planner.scope.exit_use_region();
 
         // Keep the `base :=` type-switch binding only when a case references it;
         // Go rejects an unused `:= base` assignment otherwise.
-        let references_base = case_plans.iter().any(|case| case.references_var(base))
-            || default_block
-                .as_ref()
-                .is_some_and(|body| body.references_var(base));
+        let references_base = used.contains(base);
         let binding = references_base.then(|| base.to_string());
 
         SwitchStatementPlan {
@@ -670,6 +679,9 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         self.planner.exit_scope();
 
         let body = LoweredBlock { statements: body };
+        if let Some(subject) = &first.subject {
+            self.planner.scope.record_go_use(subject);
+        }
         match &first.condition {
             Some(condition) => statements.push(LoweredStatement::If(IfPlan {
                 directive: String::new(),
@@ -820,6 +832,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
             if self.try_inline_binding(
                 &binding.lisette_name,
                 &binding.composable_access,
+                &binding.subject,
                 consumers,
                 &failure_trees,
             ) {
@@ -827,6 +840,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
                 continue;
             }
 
+            self.planner.scope.record_go_use(&binding.subject);
             if self.planner.scope.has_binding_for_go_name(go_name) {
                 let fresh = self.planner.fresh_var(Some(&binding.lisette_name));
                 self.planner.scope.bind(&binding.lisette_name, &fresh);
@@ -867,6 +881,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         &mut self,
         lisette_name: &str,
         composable_access: &str,
+        subject: &str,
         consumers: &[&Expression],
         failure_trees: &[&Expression],
     ) -> bool {
@@ -881,9 +896,10 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         {
             return false;
         }
-        self.planner
-            .scope
-            .bind_inline_expr(lisette_name, InlineExpr::new(composable_access));
+        self.planner.scope.bind_inline_expr(
+            lisette_name,
+            InlineExpr::with_refs(composable_access, vec![subject.to_string()]),
+        );
         true
     }
 
