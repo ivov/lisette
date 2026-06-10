@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [info] `match` reducible to `if let`
+   ╭─[test.lis:3:3]
+ 2 │ pub fn test(res: Result<int, string>) {
+ 3 │   match res {
+   ·   ──┬──
+   ·     ╰── can be simpler
+ 4 │     Ok(x) => { let _ = x; },
+   ╰────
+  help: Replace this `match` with `if let Ok(x) = value { ... }` · code: [lint.match_as_if_let]

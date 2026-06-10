@@ -534,12 +534,12 @@ pub fn match_on_literal(span: &Span) -> LisetteDiagnostic {
         )
 }
 
-pub fn single_arm_match(span: &Span, pattern_suggestion: &str) -> LisetteDiagnostic {
-    LisetteDiagnostic::info("Ineffective match")
-        .with_lint_code("single_arm_match")
-        .with_span_label(span, "should be `if let`")
+pub fn match_as_if_let(span: &Span, pattern_suggestion: &str) -> LisetteDiagnostic {
+    LisetteDiagnostic::info("`match` reducible to `if let`")
+        .with_lint_code("match_as_if_let")
+        .with_span_label(span, "can be simpler")
         .with_help(format!(
-            "A match with a single meaningful arm is ineffective. Use `if let {} = value {{ ... }}` instead.",
+            "Replace this `match` with `if let {} = value {{ ... }}`",
             pattern_suggestion
         ))
 }

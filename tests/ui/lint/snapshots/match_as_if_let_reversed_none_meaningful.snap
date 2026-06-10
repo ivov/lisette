@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [info] `match` reducible to `if let`
+   ╭─[test.lis:3:3]
+ 2 │ pub fn test(opt: Option<int>) {
+ 3 │   match opt {
+   ·   ──┬──
+   ·     ╰── can be simpler
+ 4 │     Some(_) => (),
+   ╰────
+  help: Replace this `match` with `if let None = value { ... }` · code: [lint.match_as_if_let]

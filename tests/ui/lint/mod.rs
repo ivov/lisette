@@ -5979,7 +5979,7 @@ fn main() { test(Some(1)); }
 }
 
 #[test]
-fn single_arm_match_option() {
+fn match_as_if_let_option() {
     assert_lint_snapshot!(
         r#"
 pub fn test(opt: Option<int>) {
@@ -5993,13 +5993,41 @@ pub fn test(opt: Option<int>) {
 }
 
 #[test]
-fn single_arm_match_result() {
+fn match_as_if_let_result() {
     assert_lint_snapshot!(
         r#"
 pub fn test(res: Result<int, string>) {
   match res {
     Ok(x) => { let _ = x; },
     _ => (),
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn match_as_if_let_option_none() {
+    assert_lint_snapshot!(
+        r#"
+pub fn test(opt: Option<int>) {
+  match opt {
+    Some(x) => { let _ = x; },
+    None => (),
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn match_as_if_let_result_err() {
+    assert_lint_snapshot!(
+        r#"
+pub fn test(res: Result<int, string>) {
+  match res {
+    Ok(x) => { let _ = x; },
+    Err(_) => (),
   }
 }
 "#
@@ -6018,6 +6046,94 @@ fn test(opt: Option<int>) {
 }
 
 fn main() { test(Some(1)); }
+"#
+    );
+}
+
+#[test]
+fn match_as_if_let_meaningful_second_arm() {
+    assert_lint_snapshot!(
+        r#"
+pub fn test(opt: Option<int>) {
+  match opt {
+    None => (),
+    Some(x) => { let _ = x; },
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn match_as_if_let_reversed_none_meaningful() {
+    assert_lint_snapshot!(
+        r#"
+pub fn test(opt: Option<int>) {
+  match opt {
+    Some(_) => (),
+    None => { let _ = 0; },
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn match_as_if_let_preserves_literal_payload() {
+    assert_lint_snapshot!(
+        r#"
+pub fn test(opt: Option<int>) {
+  match opt {
+    Some(0) => { let _ = 1 },
+    _ => (),
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn match_as_if_let_preserves_binding_name() {
+    assert_lint_snapshot!(
+        r#"
+pub fn test(opt: Option<int>) {
+  match opt {
+    Some(inner) => { let _ = inner },
+    None => (),
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn match_as_if_let_two_variant_enum() {
+    assert_lint_snapshot!(
+        r#"
+pub enum Switch { On, Off }
+
+pub fn test(s: Switch) {
+  match s {
+    Switch.On => { let _ = 1 },
+    Switch.Off => (),
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn match_as_if_let_multi_variant_wildcard() {
+    assert_lint_snapshot!(
+        r#"
+pub enum Signal { Red, Yellow, Green }
+
+pub fn test(s: Signal) {
+  match s {
+    Signal.Red => { let _ = 1 },
+    _ => (),
+  }
+}
 "#
     );
 }

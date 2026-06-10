@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [info] `match` reducible to `if let`
+   ╭─[test.lis:5:3]
+ 4 │ pub fn test(s: Switch) {
+ 5 │   match s {
+   ·   ──┬──
+   ·     ╰── can be simpler
+ 6 │     Switch.On => { let _ = 1 },
+   ╰────
+  help: Replace this `match` with `if let Switch.On = value { ... }` · code: [lint.match_as_if_let]
