@@ -1073,6 +1073,16 @@ pub fn not_comparable(ty: &Type, reason: &str, span: Span) -> LisetteDiagnostic 
         ))
 }
 
+pub fn not_comparable_interface(ty: &Type, span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Type mismatch")
+        .with_infer_code("type_mismatch")
+        .with_span_label(&span, format!("`{}` cannot be compared with `==`", ty))
+        .with_help(
+            "An interface value's comparability depends on its runtime type, so `==` and `!=` \
+             are not allowed here. Compare the concrete values instead",
+        )
+}
+
 pub fn not_orderable_bound(span: Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Bound not satisfied")
         .with_infer_code("not_orderable_bound")

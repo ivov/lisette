@@ -5998,6 +5998,136 @@ fn test() {
 }
 
 #[test]
+fn infer_not_comparable_interface() {
+    let input = r#"
+interface Shape {
+  fn area(self) -> float64
+}
+
+fn test(a: Shape, b: Shape) {
+  let result = a == b;
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_not_comparable_unknown() {
+    let input = r#"
+fn test(a: Unknown, b: Unknown) {
+  let result = a == b;
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_not_comparable_struct_with_interface_field() {
+    let input = r#"
+interface Shape {
+  fn area(self) -> float64
+}
+
+struct Holder {
+  shape: Shape,
+}
+
+fn test(a: Holder, b: Holder) {
+  let result = a == b;
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_not_comparable_concrete_against_interface() {
+    let input = r#"
+interface Shape {
+  fn area(self) -> float64
+}
+
+struct Circle { r: int }
+
+impl Circle {
+  fn area(self) -> float64 { 0.0 }
+}
+
+fn test(c: Circle, s: Shape) {
+  let result = c == s;
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_not_comparable_interface_through_alias() {
+    let input = r#"
+interface Shape {
+  fn area(self) -> float64
+}
+
+type ShapeAlias = Shape
+
+fn test(a: ShapeAlias, b: ShapeAlias) {
+  let result = a == b;
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_not_comparable_unknown_through_alias() {
+    let input = r#"
+type Any = Unknown
+
+fn test(a: Any, b: Any) {
+  let result = a == b;
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_not_comparable_slice_through_alias() {
+    let input = r#"
+type Bytes = Slice<int>
+
+fn test(a: Bytes, b: Bytes) {
+  let result = a == b;
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_not_comparable_function_through_alias() {
+    let input = r#"
+type Callback = fn() -> int
+
+fn test(a: Callback, b: Callback) {
+  let result = a == b;
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_not_comparable_struct_with_function_alias_field() {
+    let input = r#"
+type Callback = fn() -> int
+
+struct Holder {
+  on_done: Callback,
+}
+
+fn test(a: Holder, b: Holder) {
+  let result = a == b;
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
 fn infer_comparable_bound_rejects_slice() {
     let input = r#"
 fn requires_comparable<T: Comparable>(_x: T) {}

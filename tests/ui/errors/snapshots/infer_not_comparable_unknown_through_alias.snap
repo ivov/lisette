@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Type mismatch
+   ╭─[test.lis:5:16]
+ 4 │ fn test(a: Any, b: Any) {
+ 5 │   let result = a == b;
+   ·                ┬
+   ·                ╰── `Any` cannot be compared with `==`
+ 6 │ }
+   ╰────
+  help: An interface value's comparability depends on its runtime type, so `==` and `!=` are not allowed here. Compare the concrete values instead · code: [infer.type_mismatch]

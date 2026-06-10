@@ -16,6 +16,9 @@ pub(crate) fn check_not_comparable(
     store: &Store,
     ty: &Type,
 ) -> Option<&'static str> {
+    let resolved = store.deep_resolve_alias(ty);
+    let ty = &resolved;
+
     if matches!(ty, Type::Function(_)) {
         return Some("functions");
     }
@@ -33,6 +36,14 @@ pub(crate) fn check_not_comparable(
 
     if matches!(ty, Type::Var { .. }) {
         return None;
+    }
+
+    if ty.is_unknown() {
+        return Some("interface values");
+    }
+
+    if let Some(underlying) = ty.get_underlying() {
+        return check_not_comparable(env, store, underlying);
     }
 
     if matches!(ty, Type::Parameter(_)) {
@@ -74,6 +85,7 @@ pub(crate) fn check_not_comparable(
                     }
                 }
             }
+            DefinitionBody::Interface { .. } => return Some("interface values"),
             _ => {}
         }
     }
@@ -433,7 +445,9 @@ impl InferCtx<'_, '_> {
                         );
                     }
                 }
-                self.ensure_comparable(left_operand_ty, left_span);
+                if self.ensure_comparable(left_operand_ty, left_span) {
+                    self.ensure_comparable(right_operand_ty, right_span);
+                }
                 self.type_bool()
             }
 
@@ -683,21 +697,29 @@ impl InferCtx<'_, '_> {
         }
     }
 
-    fn ensure_comparable(&mut self, ty: &Type, span: &Span) {
+    fn ensure_comparable(&mut self, ty: &Type, span: &Span) -> bool {
         let store = self.store;
         let resolved = ty.resolve_in(&self.env);
         if resolved.is_error() {
-            return;
+            return true;
         }
         if let Type::Parameter(name) = &resolved
             && self.parameter_satisfies_bound(name, super::super::unify::BuiltinBound::Comparable)
         {
-            return;
+            return true;
         }
-        if let Some(reason) = check_not_comparable(&self.env, store, &resolved) {
+        let Some(reason) = check_not_comparable(&self.env, store, &resolved) else {
+            return true;
+        };
+        if is_interface_or_unknown(store, &resolved) {
+            self.sink.push(diagnostics::infer::not_comparable_interface(
+                &resolved, *span,
+            ));
+        } else {
             self.sink
                 .push(diagnostics::infer::not_comparable(&resolved, reason, *span));
         }
+        false
     }
 
     fn unify_binary_operands(
@@ -1053,6 +1075,11 @@ fn literal_can_adapt_to(kind: &LiteralKind, target: &Type) -> bool {
         LiteralKind::Boolean => named_backed_by(SimpleKind::Bool),
         LiteralKind::None => false,
     }
+}
+
+fn is_interface_or_unknown(store: &Store, ty: &Type) -> bool {
+    let resolved = store.deep_resolve_alias(ty);
+    resolved.is_unknown() || store.is_interface(&resolved)
 }
 
 fn is_nominal_defined_type(ty: &Type, store: &Store) -> bool {
