@@ -25,3 +25,21 @@ type Host3 struct {
 }
 
 func (h *Host3) Direct() int { return h.Value }
+
+type hidden struct{}
+
+func (hidden) Secret() int    { return 1 }
+func (h *hidden) Tweak(n int) {}
+
+// Unexported embed (mirrors net.IPConn { conn }): its promoted methods stay
+// flattened on Host4 rather than be dropped.
+type Host4 struct {
+	hidden
+}
+
+// Unexported embed plus an exported field (mirrors testing.B { common; N int }):
+// a visible Record that must stay unembeddable (marked), not mistaken for flat.
+type Host5 struct {
+	hidden
+	X int
+}

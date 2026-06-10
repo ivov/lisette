@@ -383,6 +383,12 @@ impl TaskState<'_> {
             return;
         };
         for definition in module.definitions.values() {
+            if definition
+                .name_span
+                .is_some_and(|span| module.typedefs.contains_key(&span.file_id))
+            {
+                continue;
+            }
             let DefinitionBody::Struct { fields, .. } = &definition.body else {
                 continue;
             };
@@ -401,7 +407,10 @@ impl TaskState<'_> {
             return;
         }
 
-        if is_imported_nominal(&embed_promotion_target(store, &resolved)) {
+        let promotion_target = embed_promotion_target(store, &resolved);
+        if is_imported_nominal(&promotion_target)
+            && !is_flat_imported_struct(store, &promotion_target)
+        {
             self.sink
                 .push(diagnostics::embed::imported_target(&display, span));
             return;
@@ -786,6 +795,32 @@ fn is_embeddable_nominal(ty: &Type) -> bool {
 
 fn is_imported_nominal(ty: &Type) -> bool {
     matches!(ty, Type::Nominal { id, .. } if id.as_str().starts_with(syntax::types::GO_IMPORT_PREFIX))
+}
+
+/// A non-generic imported Go struct with no embedded fields of its own: the flat
+/// shape promotion handles. With faithful bindgen output a nested imported struct
+/// carries `embed` fields, so this rejects it; interfaces, non-record types, and
+/// generic instantiations stay deferred.
+fn is_flat_imported_struct(store: &Store, ty: &Type) -> bool {
+    let Type::Nominal { id, .. } = ty else {
+        return false;
+    };
+    if !id.as_str().starts_with(syntax::types::GO_IMPORT_PREFIX) {
+        return false;
+    }
+    let Some(definition) = store.get_definition(id.as_str()) else {
+        return false;
+    };
+    // Marked `#[go(hidden_embed)]`: looks flat but hides an embed bindgen could
+    // not emit (e.g. testing.B through `common`), so it is not a flat leaf.
+    if definition.has_hidden_embed() {
+        return false;
+    }
+    matches!(
+        &definition.body,
+        DefinitionBody::Struct { fields, kind: StructKind::Record, generics, .. }
+            if generics.is_empty() && fields.iter().all(|field| !field.embedded)
+    )
 }
 
 fn embed_promotion_target(store: &Store, ty: &Type) -> Type {

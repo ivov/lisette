@@ -24,7 +24,7 @@ pub struct Coord {
 }
 
 pub struct Engine {
-  pub Inner: Inner,
+  embed Inner,
 }
 
 /// Pointer receiver returning a *different* concrete type — must not be marked.
@@ -87,14 +87,6 @@ impl Config {
 
 impl Coord {
   fn Translate(self, dx: int, dy: int) -> Coord
-}
-
-impl Engine {
-  #[allow(unused_value)]
-  fn Get(self: Ref<Engine>, path: string) -> Router
-  fn NewGroup(self: Ref<Engine>) -> Ref<Group>
-  #[allow(unused_value)]
-  fn Post(self: Ref<Engine>, path: string) -> Router
 }
 
 impl Inner {

@@ -25,7 +25,7 @@ pub type DecodingError
 /// A Func collects information about a single function.
 pub struct Func {
   pub Entry: uint64,
-  pub Sym: Option<Ref<Sym>>,
+  embed Ref<Sym>,
   pub End: uint64,
   pub Params: Slice<Option<Ref<Sym>>>,
   pub Locals: Slice<Option<Ref<Sym>>>,
@@ -102,23 +102,6 @@ pub struct UnknownLineError {
 
 impl DecodingError {
   fn Error(self: Ref<DecodingError>) -> string
-}
-
-impl Func {
-  /// BaseName returns the symbol name without the package or receiver name.
-  fn BaseName(self: Ref<Func>) -> string
-
-  /// PackageName returns the package part of the symbol name,
-  /// or the empty string if there is none.
-  fn PackageName(self: Ref<Func>) -> string
-
-  /// ReceiverName returns the receiver type name of this symbol,
-  /// or the empty string if there is none.  A receiver name is only detected in
-  /// the case that s.Name is fully-specified with a package name.
-  fn ReceiverName(self: Ref<Func>) -> string
-
-  /// Static reports whether this symbol is static (not visible outside its file).
-  fn Static(self: Ref<Func>) -> bool
 }
 
 impl LineTable {

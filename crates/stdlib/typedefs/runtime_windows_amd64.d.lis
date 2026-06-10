@@ -669,7 +669,7 @@ pub fn Version() -> string
 pub struct BlockProfileRecord {
   pub Count: int64,
   pub Cycles: int64,
-  pub StackRecord: StackRecord,
+  embed StackRecord,
 }
 
 /// Cleanup is a handle to a cleanup call for a specific object.
@@ -804,12 +804,6 @@ pub const GOOS = "windows"
 /// possible in the execution of the program (for example,
 /// at the beginning of main).
 pub var MemProfileRate: int
-
-impl BlockProfileRecord {
-  /// Stack returns the stack trace associated with the record,
-  /// a prefix of r.Stack0.
-  fn Stack(self: Ref<BlockProfileRecord>) -> Slice<uint>
-}
 
 impl Cleanup {
   /// Stop cancels the cleanup call. Stop will have no effect if the cleanup call

@@ -46,7 +46,7 @@ pub struct DataDirectory {
 
 /// A File represents an open PE file.
 pub struct File {
-  pub FileHeader: FileHeader,
+  embed FileHeader,
   pub OptionalHeader: Unknown,
   pub Sections: Slice<Option<Ref<Section>>>,
   pub Symbols: Slice<Option<Ref<Symbol>>>,
@@ -152,8 +152,9 @@ pub struct Reloc {
 }
 
 /// Section provides access to PE COFF section.
+#[go(hidden_embed)]
 pub struct Section {
-  pub SectionHeader: SectionHeader,
+  embed SectionHeader,
   pub Relocs: Slice<Reloc>,
   pub ReaderAt: Option<io.ReaderAt>,
 }

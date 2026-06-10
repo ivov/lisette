@@ -153,6 +153,7 @@ pub fn Open(name: string) -> Result<Ref<File>, error>
 pub fn OpenFat(name: string) -> Result<Ref<FatFile>, error>
 
 /// A Dylib represents a Mach-O load dynamic library command.
+#[go(hidden_embed)]
 pub struct Dylib {
   pub LoadBytes: LoadBytes,
   pub Name: string,
@@ -172,9 +173,10 @@ pub struct DylibCmd {
 }
 
 /// A Dysymtab represents a Mach-O dynamic symbol table command.
+#[go(hidden_embed)]
 pub struct Dysymtab {
   pub LoadBytes: LoadBytes,
-  pub DysymtabCmd: DysymtabCmd,
+  embed DysymtabCmd,
   pub IndirectSyms: Slice<uint32>,
 }
 
@@ -204,8 +206,8 @@ pub struct DysymtabCmd {
 
 /// A FatArch is a Mach-O File inside a FatFile.
 pub struct FatArch {
-  pub FatArchHeader: FatArchHeader,
-  pub File: Option<Ref<File>>,
+  embed FatArchHeader,
+  embed Ref<File>,
 }
 
 /// A FatArchHeader represents a fat header for a specific image architecture.
@@ -225,7 +227,7 @@ pub struct FatFile {
 
 /// A File represents an open Mach-O file.
 pub struct File {
-  pub FileHeader: FileHeader,
+  embed FileHeader,
   pub ByteOrder: Option<binary.ByteOrder>,
   pub Loads: Slice<Option<Load>>,
   pub Sections: Slice<Option<Ref<Section>>>,
@@ -331,6 +333,7 @@ pub struct Reloc {
 }
 
 /// A Rpath represents a Mach-O rpath command.
+#[go(hidden_embed)]
 pub struct Rpath {
   pub LoadBytes: LoadBytes,
   pub Path: string,
@@ -343,8 +346,9 @@ pub struct RpathCmd {
   pub Path: uint32,
 }
 
+#[go(hidden_embed)]
 pub struct Section {
-  pub SectionHeader: SectionHeader,
+  embed SectionHeader,
   pub Relocs: Slice<Reloc>,
   pub ReaderAt: Option<io.ReaderAt>,
 }
@@ -393,9 +397,10 @@ pub struct SectionHeader {
 }
 
 /// A Segment represents a Mach-O 32-bit or 64-bit load segment command.
+#[go(hidden_embed)]
 pub struct Segment {
   pub LoadBytes: LoadBytes,
-  pub SegmentHeader: SegmentHeader,
+  embed SegmentHeader,
   pub ReaderAt: Option<io.ReaderAt>,
 }
 
@@ -454,9 +459,10 @@ pub struct Symbol {
 }
 
 /// A Symtab represents a Mach-O symbol table command.
+#[go(hidden_embed)]
 pub struct Symtab {
   pub LoadBytes: LoadBytes,
-  pub SymtabCmd: SymtabCmd,
+  embed SymtabCmd,
   pub Syms: Slice<Symbol>,
 }
 
@@ -552,34 +558,6 @@ impl Dylib {
 
 impl Dysymtab {
   fn Raw(self) -> Slice<byte>
-}
-
-impl FatArch {
-  /// Close closes the [File].
-  /// If the [File] was created using [NewFile] directly instead of [Open],
-  /// Close has no effect.
-  #[allow(unused_result)]
-  fn Close(self: Ref<FatArch>) -> Result<(), error>
-
-  /// DWARF returns the DWARF debug information for the Mach-O file.
-  fn DWARF(self: Ref<FatArch>) -> Result<Ref<dwarf.Data>, error>
-
-  /// ImportedLibraries returns the paths of all libraries
-  /// referred to by the binary f that are expected to be
-  /// linked with the binary at dynamic link time.
-  fn ImportedLibraries(self: Ref<FatArch>) -> Result<Slice<string>, error>
-
-  /// ImportedSymbols returns the names of all symbols
-  /// referred to by the binary f that are expected to be
-  /// satisfied by other libraries at dynamic load time.
-  fn ImportedSymbols(self: Ref<FatArch>) -> Result<Slice<string>, error>
-
-  /// Section returns the first section with the given name, or nil if no such
-  /// section exists.
-  fn Section(self: Ref<FatArch>, name: string) -> Option<Ref<Section>>
-
-  /// Segment returns the first Segment with the given name, or nil if no such segment exists.
-  fn Segment(self: Ref<FatArch>, name: string) -> Option<Ref<Segment>>
 }
 
 impl FatFile {

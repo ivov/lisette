@@ -123,6 +123,7 @@ pub fn Verbose() -> bool
 /// and dumped to standard output when done. Unlike in tests, benchmark logs
 /// are always printed, so as not to hide output whose existence may be
 /// affecting benchmark results.
+#[go(hidden_embed)]
 pub struct B {
   pub N: int,
 }

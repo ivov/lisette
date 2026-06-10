@@ -2,4 +2,8 @@
 source: tests/spec/format/mod.rs
 description: "input: struct Outer {\n  embed Base,\n  embed Ref<Other>,\n  extra: int,\n}"
 ---
-struct Outer { embed Base, embed Ref<Other>, extra: int }
+struct Outer {
+  embed Base,
+  embed Ref<Other>,
+  extra: int,
+}

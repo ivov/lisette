@@ -468,12 +468,12 @@ pub fn New(
 
 /// An AddrType represents a machine address type.
 pub struct AddrType {
-  pub BasicType: BasicType,
+  embed BasicType,
 }
 
 /// An ArrayType represents a fixed size array type.
 pub struct ArrayType {
-  pub CommonType: CommonType,
+  embed CommonType,
   pub Type: Option<Type>,
   pub StrideBitSize: int64,
   pub Count: int64,
@@ -484,7 +484,7 @@ pub struct ArrayType {
 /// See the documentation for [StructField] for more info on the interpretation of
 /// the BitSize/BitOffset/DataBitOffset fields.
 pub struct BasicType {
-  pub CommonType: CommonType,
+  embed CommonType,
   pub BitSize: int64,
   pub BitOffset: int64,
   pub DataBitOffset: int64,
@@ -492,12 +492,12 @@ pub struct BasicType {
 
 /// A BoolType represents a boolean type.
 pub struct BoolType {
-  pub BasicType: BasicType,
+  embed BasicType,
 }
 
 /// A CharType represents a signed character type.
 pub struct CharType {
-  pub BasicType: BasicType,
+  embed BasicType,
 }
 
 /// A CommonType holds fields common to multiple types.
@@ -510,7 +510,7 @@ pub struct CommonType {
 
 /// A ComplexType represents a complex floating point type.
 pub struct ComplexType {
-  pub BasicType: BasicType,
+  embed BasicType,
 }
 
 /// Data represents the DWARF debugging information
@@ -525,7 +525,7 @@ pub struct DecodeError {
 
 /// A DotDotDotType represents the variadic ... function parameter.
 pub struct DotDotDotType {
-  pub CommonType: CommonType,
+  embed CommonType,
 }
 
 /// An entry is a sequence of attribute/value pairs.
@@ -540,7 +540,7 @@ pub struct Entry {
 /// The only indication of its native integer type is its ByteSize
 /// (inside [CommonType]).
 pub struct EnumType {
-  pub CommonType: CommonType,
+  embed CommonType,
   pub EnumName: string,
   pub Val: Slice<Option<Ref<EnumValue>>>,
 }
@@ -582,19 +582,19 @@ pub struct Field {
 
 /// A FloatType represents a floating point type.
 pub struct FloatType {
-  pub BasicType: BasicType,
+  embed BasicType,
 }
 
 /// A FuncType represents a function type.
 pub struct FuncType {
-  pub CommonType: CommonType,
+  embed CommonType,
   pub ReturnType: Option<Type>,
   pub ParamType: Slice<Option<Type>>,
 }
 
 /// An IntType represents a signed integer type.
 pub struct IntType {
-  pub BasicType: BasicType,
+  embed BasicType,
 }
 
 /// A LineEntry is a row in a DWARF line table.
@@ -636,13 +636,13 @@ pub struct Offset(uint32)
 
 /// A PtrType represents a pointer type.
 pub struct PtrType {
-  pub CommonType: CommonType,
+  embed CommonType,
   pub Type: Option<Type>,
 }
 
 /// A QualType represents a type that has the C/C++ "const", "restrict", or "volatile" qualifier.
 pub struct QualType {
-  pub CommonType: CommonType,
+  embed CommonType,
   pub Qual: string,
   pub Type: Option<Type>,
 }
@@ -739,7 +739,7 @@ pub struct StructField {
 
 /// A StructType represents a struct, union, or C++ class type.
 pub struct StructType {
-  pub CommonType: CommonType,
+  embed CommonType,
   pub StructName: string,
   pub Kind: string,
   pub Field: Slice<Option<Ref<StructField>>>,
@@ -756,54 +756,42 @@ pub interface Type {
 
 /// A TypedefType represents a named type.
 pub struct TypedefType {
-  pub CommonType: CommonType,
+  embed CommonType,
   pub Type: Option<Type>,
 }
 
 /// A UcharType represents an unsigned character type.
 pub struct UcharType {
-  pub BasicType: BasicType,
+  embed BasicType,
 }
 
 /// A UintType represents an unsigned integer type.
 pub struct UintType {
-  pub BasicType: BasicType,
+  embed BasicType,
 }
 
 /// An UnspecifiedType represents an implicit, unknown, ambiguous or nonexistent type.
 pub struct UnspecifiedType {
-  pub BasicType: BasicType,
+  embed BasicType,
 }
 
 /// An UnsupportedType is a placeholder returned in situations where we
 /// encounter a type that isn't supported.
 pub struct UnsupportedType {
-  pub CommonType: CommonType,
+  embed CommonType,
   pub Tag: Tag,
 }
 
 /// A VoidType represents the C void type.
 pub struct VoidType {
-  pub CommonType: CommonType,
+  embed CommonType,
 }
 
 /// ErrUnknownPC is the error returned by LineReader.ScanPC when the
 /// seek PC is not covered by any entry in the line table.
 pub var ErrUnknownPC: error
 
-impl AddrType {
-  fn Basic(self: Ref<AddrType>) -> Ref<BasicType>
-
-  fn Common(self: Ref<AddrType>) -> Ref<CommonType>
-
-  fn Size(self: Ref<AddrType>) -> int64
-
-  fn String(self: Ref<AddrType>) -> string
-}
-
 impl ArrayType {
-  fn Common(self: Ref<ArrayType>) -> Ref<CommonType>
-
   fn Size(self: Ref<ArrayType>) -> int64
 
   fn String(self: Ref<ArrayType>) -> string
@@ -818,31 +806,7 @@ impl Attr {
 impl BasicType {
   fn Basic(self: Ref<BasicType>) -> Ref<BasicType>
 
-  fn Common(self: Ref<BasicType>) -> Ref<CommonType>
-
-  fn Size(self: Ref<BasicType>) -> int64
-
   fn String(self: Ref<BasicType>) -> string
-}
-
-impl BoolType {
-  fn Basic(self: Ref<BoolType>) -> Ref<BasicType>
-
-  fn Common(self: Ref<BoolType>) -> Ref<CommonType>
-
-  fn Size(self: Ref<BoolType>) -> int64
-
-  fn String(self: Ref<BoolType>) -> string
-}
-
-impl CharType {
-  fn Basic(self: Ref<CharType>) -> Ref<BasicType>
-
-  fn Common(self: Ref<CharType>) -> Ref<CommonType>
-
-  fn Size(self: Ref<CharType>) -> int64
-
-  fn String(self: Ref<CharType>) -> string
 }
 
 impl Class {
@@ -855,16 +819,6 @@ impl CommonType {
   fn Common(self: Ref<CommonType>) -> Ref<CommonType>
 
   fn Size(self: Ref<CommonType>) -> int64
-}
-
-impl ComplexType {
-  fn Basic(self: Ref<ComplexType>) -> Ref<BasicType>
-
-  fn Common(self: Ref<ComplexType>) -> Ref<CommonType>
-
-  fn Size(self: Ref<ComplexType>) -> int64
-
-  fn String(self: Ref<ComplexType>) -> string
 }
 
 impl Data {
@@ -906,10 +860,6 @@ impl DecodeError {
 }
 
 impl DotDotDotType {
-  fn Common(self: Ref<DotDotDotType>) -> Ref<CommonType>
-
-  fn Size(self: Ref<DotDotDotType>) -> int64
-
   fn String(self: Ref<DotDotDotType>) -> string
 }
 
@@ -929,39 +879,11 @@ impl Entry {
 }
 
 impl EnumType {
-  fn Common(self: Ref<EnumType>) -> Ref<CommonType>
-
-  fn Size(self: Ref<EnumType>) -> int64
-
   fn String(self: Ref<EnumType>) -> string
 }
 
-impl FloatType {
-  fn Basic(self: Ref<FloatType>) -> Ref<BasicType>
-
-  fn Common(self: Ref<FloatType>) -> Ref<CommonType>
-
-  fn Size(self: Ref<FloatType>) -> int64
-
-  fn String(self: Ref<FloatType>) -> string
-}
-
 impl FuncType {
-  fn Common(self: Ref<FuncType>) -> Ref<CommonType>
-
-  fn Size(self: Ref<FuncType>) -> int64
-
   fn String(self: Ref<FuncType>) -> string
-}
-
-impl IntType {
-  fn Basic(self: Ref<IntType>) -> Ref<BasicType>
-
-  fn Common(self: Ref<IntType>) -> Ref<CommonType>
-
-  fn Size(self: Ref<IntType>) -> int64
-
-  fn String(self: Ref<IntType>) -> string
 }
 
 impl LineReader {
@@ -1016,16 +938,10 @@ impl LineReader {
 }
 
 impl PtrType {
-  fn Common(self: Ref<PtrType>) -> Ref<CommonType>
-
-  fn Size(self: Ref<PtrType>) -> int64
-
   fn String(self: Ref<PtrType>) -> string
 }
 
 impl QualType {
-  fn Common(self: Ref<QualType>) -> Ref<CommonType>
-
   fn Size(self: Ref<QualType>) -> int64
 
   fn String(self: Ref<QualType>) -> string
@@ -1070,11 +986,7 @@ impl Reader {
 }
 
 impl StructType {
-  fn Common(self: Ref<StructType>) -> Ref<CommonType>
-
   fn Defn(self: Ref<StructType>) -> string
-
-  fn Size(self: Ref<StructType>) -> int64
 
   fn String(self: Ref<StructType>) -> string
 }
@@ -1086,55 +998,15 @@ impl Tag {
 }
 
 impl TypedefType {
-  fn Common(self: Ref<TypedefType>) -> Ref<CommonType>
-
   fn Size(self: Ref<TypedefType>) -> int64
 
   fn String(self: Ref<TypedefType>) -> string
 }
 
-impl UcharType {
-  fn Basic(self: Ref<UcharType>) -> Ref<BasicType>
-
-  fn Common(self: Ref<UcharType>) -> Ref<CommonType>
-
-  fn Size(self: Ref<UcharType>) -> int64
-
-  fn String(self: Ref<UcharType>) -> string
-}
-
-impl UintType {
-  fn Basic(self: Ref<UintType>) -> Ref<BasicType>
-
-  fn Common(self: Ref<UintType>) -> Ref<CommonType>
-
-  fn Size(self: Ref<UintType>) -> int64
-
-  fn String(self: Ref<UintType>) -> string
-}
-
-impl UnspecifiedType {
-  fn Basic(self: Ref<UnspecifiedType>) -> Ref<BasicType>
-
-  fn Common(self: Ref<UnspecifiedType>) -> Ref<CommonType>
-
-  fn Size(self: Ref<UnspecifiedType>) -> int64
-
-  fn String(self: Ref<UnspecifiedType>) -> string
-}
-
 impl UnsupportedType {
-  fn Common(self: Ref<UnsupportedType>) -> Ref<CommonType>
-
-  fn Size(self: Ref<UnsupportedType>) -> int64
-
   fn String(self: Ref<UnsupportedType>) -> string
 }
 
 impl VoidType {
-  fn Common(self: Ref<VoidType>) -> Ref<CommonType>
-
-  fn Size(self: Ref<VoidType>) -> int64
-
   fn String(self: Ref<VoidType>) -> string
 }

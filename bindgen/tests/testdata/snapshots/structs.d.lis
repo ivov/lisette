@@ -47,7 +47,7 @@ pub struct Documented {
 pub type Empty
 
 pub struct Extended {
-  pub Base: Base,
+  embed Base,
   pub Extra: string,
 }
 
@@ -96,7 +96,7 @@ pub interface ReadWriteCloser {
 
 /// Shadowing: Shadower declares its own GetID, so Base.GetID should not be promoted
 pub struct Shadower {
-  pub Base: Base,
+  embed Base,
 }
 
 pub struct Tree {
@@ -110,6 +110,7 @@ pub struct Tree {
 pub type Validator = fn(string) -> Result<(), error>
 
 /// Struct embedding interface
+#[go(hidden_embed)]
 pub struct Wrapper {
   pub Reader: Option<io.Reader>,
   pub Label: string,
@@ -124,18 +125,9 @@ impl Base {
   fn SetName(self: Ref<Base>, name: string)
 }
 
-impl Extended {
-  /// GetID returns the ID
-  fn GetID(self) -> int
-  /// SetName sets the name
-  fn SetName(self: Ref<Extended>, name: string)
-}
-
 impl Shadower {
   /// GetID overrides the promoted method from Base
   fn GetID(self) -> string
-  /// SetName sets the name
-  fn SetName(self: Ref<Shadower>, name: string)
 }
 
 impl Wrapper {

@@ -66,13 +66,13 @@ pub struct Parameters {
 
 /// PrivateKey represents a DSA private key.
 pub struct PrivateKey {
-  pub PublicKey: PublicKey,
+  embed PublicKey,
   pub X: Option<Ref<big.Int>>,
 }
 
 /// PublicKey represents a DSA public key.
 pub struct PublicKey {
-  pub Parameters: Parameters,
+  embed Parameters,
   pub Y: Option<Ref<big.Int>>,
 }
 

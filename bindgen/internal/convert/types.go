@@ -5,6 +5,8 @@ import (
 	"go/types"
 	"slices"
 	"strings"
+
+	"github.com/ivov/lisette/bindgen/internal/extract"
 )
 
 type SkipReason struct {
@@ -269,7 +271,7 @@ func namedToLisette(t *types.Named, seen map[types.Type]bool, conv *Converter) T
 	isExternal := false
 	pkgPrefix := ""
 	if pkg != nil && conv != nil && pkg.Path() != conv.currentPkgPath {
-		if isInternalPackagePath(pkg.Path()) {
+		if extract.IsInternalPackagePath(pkg.Path()) {
 			return TypeResult{SkipReason: &SkipReason{
 				Code:    "internal-package-ref",
 				Message: fmt.Sprintf("references type from internal package %q", pkg.Path()),
@@ -471,20 +473,6 @@ func arrayElementToLisette(t types.Type, seen map[types.Type]bool, conv *Convert
 		return arraySliceTypeResult(inner, seen, conv)
 	}
 	return toLisetteRecursive(t, seen, conv)
-}
-
-func isInternalPackagePath(path string) bool {
-	if path == "internal" {
-		return true
-	}
-	if strings.HasPrefix(path, "internal/") {
-		return true
-	}
-	if strings.HasSuffix(path, "/internal") {
-		return true
-	}
-
-	return strings.Contains(path, "/internal/")
 }
 
 func namedImplementsError(t *types.Named) bool {

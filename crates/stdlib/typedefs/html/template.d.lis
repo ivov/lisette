@@ -187,6 +187,7 @@ pub struct Srcset(string)
 
 /// Template is a specialized Template from "text/template" that produces a safe
 /// HTML document fragment.
+#[go(hidden_embed)]
 pub struct Template {
   pub Tree: Option<Ref<parse.Tree>>,
 }

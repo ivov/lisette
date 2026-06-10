@@ -14,7 +14,7 @@ pub fn Open(name: string) -> Result<Ref<File>, error>
 
 /// A File represents an open Plan 9 a.out file.
 pub struct File {
-  pub FileHeader: FileHeader,
+  embed FileHeader,
   pub Sections: Slice<Option<Ref<Section>>>,
 }
 
@@ -29,8 +29,9 @@ pub struct FileHeader {
 }
 
 /// A Section represents a single section in a Plan 9 a.out file.
+#[go(hidden_embed)]
 pub struct Section {
-  pub SectionHeader: SectionHeader,
+  embed SectionHeader,
   pub ReaderAt: Option<io.ReaderAt>,
 }
 

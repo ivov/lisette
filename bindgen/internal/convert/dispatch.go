@@ -42,6 +42,9 @@ type ConvertResult struct {
 	// AnonStruct emits `#[go(anon_struct)]` so the compiler renders the type as
 	// the underlying Go `struct{...}` rather than `pkg.Name`.
 	AnonStruct bool
+	// HasHiddenEmbed emits `#[go(hidden_embed)]` for a struct that looks flat but
+	// has an embed bindgen could not emit, so the resolver must refuse to embed it.
+	HasHiddenEmbed bool
 }
 
 // HasReturn reports whether this function/method has a non-unit return type
@@ -69,6 +72,7 @@ type StructField struct {
 	Type       string
 	Doc        string
 	SkipReason *SkipReason
+	IsEmbedded bool
 }
 
 type InterfaceMethod struct {

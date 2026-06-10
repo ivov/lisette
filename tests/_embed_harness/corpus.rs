@@ -214,7 +214,8 @@ fn image_point() -> Node {
     }
 }
 
-/// Fixture for the `Origin::Imported` renderer test; not yet in the differential.
+/// A native struct embedding the flat imported `image.Point` by value; Go and
+/// Lisette must agree on the promoted field `X` and method `String`.
 pub fn imported_struct_embed() -> Scenario {
     Scenario {
         name: "imported_struct_embed".into(),
@@ -222,6 +223,26 @@ pub fn imported_struct_embed() -> Scenario {
         nodes: vec![
             image_point(),
             struct_node(1, vec![vembed(0)], vec![], vec![]),
+        ],
+        questions: vec![
+            Question::Selector {
+                root: 1,
+                member: "X".into(),
+                kind: SelKind::Field,
+            },
+            sel(1, "String"),
+        ],
+    }
+}
+
+/// The same imported struct behind a pointer edge: `*image.Point`.
+pub fn imported_struct_embed_pointer() -> Scenario {
+    Scenario {
+        name: "imported_struct_embed_pointer".into(),
+        seed: 0,
+        nodes: vec![
+            image_point(),
+            struct_node(1, vec![pembed(0)], vec![], vec![]),
         ],
         questions: vec![
             Question::Selector {
@@ -244,6 +265,8 @@ pub fn differential_scenarios() -> Vec<Scenario> {
     scenarios.push(generic_embed_promotes());
     scenarios.push(generic_embed_pointer());
     scenarios.push(generic_embed_satisfies());
+    scenarios.push(imported_struct_embed());
+    scenarios.push(imported_struct_embed_pointer());
     scenarios
 }
 

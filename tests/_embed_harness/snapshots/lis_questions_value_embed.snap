@@ -12,6 +12,6 @@ struct N1 {
   embed N0,
 }
 
-fn __sel_0(r: N1) {
+fn __sel_0(r: Ref<N1>) {
   let _ = r.M()
 }

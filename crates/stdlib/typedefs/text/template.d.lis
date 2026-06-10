@@ -101,8 +101,9 @@ pub struct FuncMap(Map<string, Unknown>)
 /// Template is the representation of a parsed template. The *parse.Tree
 /// field is exported only for use by [html/template] and should be treated
 /// as unexported by all other clients.
+#[go(hidden_embed)]
 pub struct Template {
-  pub Tree: Option<Ref<parse.Tree>>,
+  embed Ref<parse.Tree>,
 }
 
 impl ExecError {
@@ -126,9 +127,6 @@ impl Template {
   /// by adding the variants after the clone is made.
   fn Clone(self: Ref<Template>) -> Result<Ref<Template>, error>
 
-  /// Copy returns a copy of the [Tree]. Any parsing state is discarded.
-  fn Copy(self: Ref<Template>) -> Ref<parse.Tree>
-
   /// DefinedTemplates returns a string listing the defined templates,
   /// prefixed by the string "; defined templates are: ". If there are none,
   /// it returns the empty string. For generating an error message here
@@ -142,11 +140,6 @@ impl Template {
   /// The return value is the template, so calls can be chained.
   #[allow(unused_value)]
   fn Delims(self: Ref<Template>, left: string, right: string) -> Ref<Template>
-
-  /// ErrorContext returns a textual representation of the location of the node in the input text.
-  /// The receiver is only used when the node does not have a pointer to the tree inside,
-  /// which can occur in old code.
-  fn ErrorContext(self: Ref<Template>, n: parse.Node) -> (string, string)
 
   /// Execute applies a parsed template to the specified data object,
   /// and writes the output to wr.

@@ -6206,10 +6206,8 @@ fn main() {}
     .assert_no_errors();
 }
 
-// Imported embeds stay deferred until bindgen emits a faithful embed representation.
-
 #[test]
-fn embed_imported_struct_deferred() {
+fn embed_imported_flat_struct_promotes_method() {
     let typedef = r#"
 pub struct NopHandler {}
 impl NopHandler { pub fn Handle(self: NopHandler) -> int }
@@ -6217,14 +6215,14 @@ impl NopHandler { pub fn Handle(self: NopHandler) -> int }
     let input = r#"
 import "go:example.com/handler"
 struct Mine { embed handler.NopHandler }
+fn use_it(m: Mine) -> int { m.Handle() }
 fn main() {}
 "#;
-    infer_with_go_typedefs(input, &[("go:example.com/handler", typedef)])
-        .assert_infer_code("embed_imported_target");
+    infer_with_go_typedefs(input, &[("go:example.com/handler", typedef)]).assert_no_errors();
 }
 
 #[test]
-fn embed_imported_type_named_ref_deferred() {
+fn embed_imported_flat_struct_promotes_field() {
     let typedef = r#"
 pub struct Ref { pub id: int }
 impl Ref { pub fn Get(self: Ref) -> int }
@@ -6232,9 +6230,182 @@ impl Ref { pub fn Get(self: Ref) -> int }
     let input = r#"
 import "go:example.com/ref"
 struct UsesRef { embed ref.Ref }
+fn id_of(u: UsesRef) -> int { u.id }
 fn main() {}
 "#;
-    infer_with_go_typedefs(input, &[("go:example.com/ref", typedef)])
+    infer_with_go_typedefs(input, &[("go:example.com/ref", typedef)]).assert_no_errors();
+}
+
+#[test]
+fn embed_stdlib_struct_promotes() {
+    infer(
+        r#"
+import "go:image"
+struct Marker { embed image.Point }
+fn x_of(m: Marker) -> int { m.X }
+fn label_of(m: Marker) -> string { m.String() }
+fn main() {}
+"#,
+    )
+    .assert_no_errors();
+}
+
+// A marked struct hides promotions at an unfaithful depth, so embedding it is rejected.
+#[test]
+fn embed_imported_hidden_embed_struct_rejected() {
+    let typedef = r#"
+#[go(hidden_embed)]
+pub struct Host { pub X: int }
+
+impl Host {
+  fn Secret(self) -> int
+}
+"#;
+    let input = r#"
+import "go:example.com/lib"
+struct Mine { embed lib.Host }
+fn main() {}
+"#;
+    infer_with_go_typedefs(input, &[("go:example.com/lib", typedef)])
+        .assert_infer_code("embed_imported_target");
+}
+
+// The marker gates only embedding; direct access is preserved.
+#[test]
+fn hidden_embed_struct_direct_access_preserved() {
+    let typedef = r#"
+#[go(hidden_embed)]
+pub struct Host { pub X: int }
+
+impl Host {
+  fn Secret(self) -> int
+}
+"#;
+    let input = r#"
+import "go:example.com/lib"
+fn read(h: lib.Host) -> int { h.X }
+fn call(h: lib.Host) -> int { h.Secret() }
+fn main() {}
+"#;
+    infer_with_go_typedefs(input, &[("go:example.com/lib", typedef)]).assert_no_errors();
+}
+
+// Same marker for an embed bindgen could not represent; embedding still refused.
+#[test]
+fn embed_imported_skipped_exported_embed_rejected() {
+    let typedef = r#"
+#[go(hidden_embed)]
+pub struct Widget {
+  // SKIPPED field "Engine": internal-package-ref
+  pub X: int,
+}
+"#;
+    let input = r#"
+import "go:example.com/lib"
+struct Mine { embed lib.Widget }
+fn main() {}
+"#;
+    infer_with_go_typedefs(input, &[("go:example.com/lib", typedef)])
+        .assert_infer_code("embed_imported_target");
+}
+
+// An embedded type alias keeps the alias spelling, so h.Alias and its promoted members resolve.
+#[test]
+fn embed_imported_alias_keeps_alias_name() {
+    let typedef = r#"
+pub struct Base { pub X: int }
+impl Base { pub fn M(self: Base) -> int }
+pub type Alias = Base
+pub struct Host {
+  embed Alias,
+}
+"#;
+    let input = r#"
+import "go:example.com/lib"
+fn use_x(h: lib.Host) -> int { h.X }
+fn use_m(h: lib.Host) -> int { h.M() }
+fn use_a(h: lib.Host) -> lib.Alias { h.Alias }
+fn main() {}
+"#;
+    infer_with_go_typedefs(input, &[("go:example.com/lib", typedef)]).assert_no_errors();
+}
+
+// The RHS name is not a field, matching Go: only h.Alias exists, not h.Base.
+#[test]
+fn embed_imported_alias_rejects_rhs_name() {
+    let typedef = r#"
+pub struct Base { pub X: int }
+pub type Alias = Base
+pub struct Host {
+  embed Alias,
+}
+"#;
+    let input = r#"
+import "go:example.com/lib"
+fn bad(h: lib.Host) -> int { h.Base.X }
+fn main() {}
+"#;
+    infer_with_go_typedefs(input, &[("go:example.com/lib", typedef)])
+        .assert_infer_code("member_not_found");
+}
+
+// A faithful imported typedef carries `embed` fields; direct member access
+// reconstructs the promotion, so existing calls survive de-flattening.
+#[test]
+fn imported_typedef_embed_promotes_on_direct_access() {
+    let typedef = r#"
+pub struct Inner { pub id: int }
+impl Inner { pub fn Get(self: Inner) -> int }
+pub struct Wrapper {
+  embed Inner,
+}
+"#;
+    let input = r#"
+import "go:example.com/wrap"
+fn get_id(w: wrap.Wrapper) -> int { w.id }
+fn get_via(w: wrap.Wrapper) -> int { w.Get() }
+fn main() {}
+"#;
+    infer_with_go_typedefs(input, &[("go:example.com/wrap", typedef)]).assert_no_errors();
+}
+
+// A Go pointer embed (`*Inner`) is rendered `embed Ref<Inner>`; promotion still
+// reconstructs on direct access (the nilable `Option<Ref<T>>` form is PR13).
+#[test]
+fn imported_typedef_pointer_embed_promotes_on_direct_access() {
+    let typedef = r#"
+pub struct Inner { pub id: int }
+impl Inner { pub fn Get(self: Inner) -> int }
+pub struct Wrapper {
+  embed Ref<Inner>,
+}
+"#;
+    let input = r#"
+import "go:example.com/wrap"
+fn get_id(w: wrap.Wrapper) -> int { w.id }
+fn get_via(w: wrap.Wrapper) -> int { w.Get() }
+fn main() {}
+"#;
+    infer_with_go_typedefs(input, &[("go:example.com/wrap", typedef)]).assert_no_errors();
+}
+
+// Embedding a nested imported struct stays deferred: with faithful representation
+// it carries an `embed` field, so `is_flat_imported_struct` rejects it (PR10).
+#[test]
+fn embed_imported_nested_struct_deferred() {
+    let typedef = r#"
+pub struct Inner { pub id: int }
+impl Inner { pub fn Get(self: Inner) -> int }
+pub struct Wrapper {
+  embed Inner,
+}
+"#;
+    let input = r#"
+import "go:example.com/wrap"
+struct Mine { embed wrap.Wrapper }
+fn main() {}
+"#;
+    infer_with_go_typedefs(input, &[("go:example.com/wrap", typedef)])
         .assert_infer_code("embed_imported_target");
 }
 
@@ -6267,18 +6438,6 @@ fn main() {}
 "#;
     infer_with_go_typedefs(input, &[("go:example.com/metric", typedef)])
         .assert_infer_code("embed_imported_target");
-}
-
-#[test]
-fn embed_stdlib_struct_deferred() {
-    infer(
-        r#"
-import "go:image"
-struct Marker { embed image.Point }
-fn main() {}
-"#,
-    )
-    .assert_infer_code("embed_imported_target");
 }
 
 #[test]

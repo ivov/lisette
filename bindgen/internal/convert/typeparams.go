@@ -3,6 +3,8 @@ package convert
 import (
 	"go/types"
 	"strings"
+
+	"github.com/ivov/lisette/bindgen/internal/extract"
 )
 
 type TypeParamSpec struct {
@@ -108,6 +110,9 @@ func recognizeBound(constraint types.Type, conv *Converter) (boundExpr string, o
 		case *types.Named:
 			return qualifyTypeNameBound(t.Obj(), t.TypeArgs(), conv)
 		case *types.Alias:
+			if isGenericAlias(t) {
+				return "", false
+			}
 			return qualifyTypeNameBound(t.Obj(), t.TypeArgs(), conv)
 		}
 	}
@@ -150,7 +155,7 @@ func isOrderedBasicKind(kind types.BasicKind) bool {
 // current package render unqualified to avoid a self-import.
 func qualifyTypeNameBound(obj *types.TypeName, typeArgs *types.TypeList, conv *Converter) (string, bool) {
 	pkg := obj.Pkg()
-	if pkg == nil || isInternalPackagePath(pkg.Path()) {
+	if pkg == nil || extract.IsInternalPackagePath(pkg.Path()) {
 		return "", false
 	}
 	name := obj.Name()

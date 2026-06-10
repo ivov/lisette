@@ -263,7 +263,7 @@ pub struct PrecomputedValues {
 
 /// A PrivateKey represents an RSA key
 pub struct PrivateKey {
-  pub PublicKey: PublicKey,
+  embed PublicKey,
   pub D: Option<Ref<big.Int>>,
   pub Primes: Slice<Option<Ref<big.Int>>>,
   pub Precomputed: PrecomputedValues,
@@ -336,10 +336,6 @@ impl PrivateKey {
     digest: Slice<byte>,
     opts: crypto.SignerOpts,
   ) -> Result<Slice<byte>, error>
-
-  /// Size returns the modulus size in bytes. Raw signatures and ciphertexts
-  /// for or by this public key will have the same size.
-  fn Size(self: Ref<PrivateKey>) -> int
 
   /// Validate performs basic sanity checks on the key.
   /// It returns nil if the key is valid, or else an error describing a problem.

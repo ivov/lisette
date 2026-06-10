@@ -61,13 +61,13 @@ pub struct Header {
 /// returned by [Reader.Read] as tentative until they receive the [io.EOF]
 /// marking the end of the data.
 pub struct Reader {
-  pub Header: Header,
+  embed Header,
 }
 
 /// A Writer is an [io.WriteCloser].
 /// Writes to a Writer are compressed and written to w.
 pub struct Writer {
-  pub Header: Header,
+  embed Header,
 }
 
 /// These constants are copied from the [flate] package, so that code that imports

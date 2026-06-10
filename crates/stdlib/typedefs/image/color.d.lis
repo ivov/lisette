@@ -81,7 +81,7 @@ pub struct NRGBA64 {
 /// NYCbCrA represents a non-alpha-premultiplied Y'CbCr-with-alpha color, having
 /// 8 bits each for one luma, two chroma and one alpha component.
 pub struct NYCbCrA {
-  pub YCbCr: YCbCr,
+  embed YCbCr,
   pub A: uint8,
 }
 

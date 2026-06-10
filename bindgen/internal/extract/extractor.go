@@ -121,7 +121,7 @@ func LoadPackagesAll(paths []string) ([]*packages.Package, error) {
 	return packages.Load(currentLoadConfig(), paths...)
 }
 
-func ExtractExports(pkg *packages.Package) []SymbolExport {
+func ExtractExports(pkg *packages.Package, embedFaithful func(*types.Var) bool) []SymbolExport {
 	if pkg == nil || pkg.Types == nil {
 		return nil
 	}
@@ -161,7 +161,7 @@ func ExtractExports(pkg *packages.Package) []SymbolExport {
 			})
 
 			if named, ok := o.Type().(*types.Named); ok {
-				methodExports := extractMethods(named, pkg, docPkg)
+				methodExports := extractMethods(named, pkg, docPkg, embedFaithful)
 				exports = append(exports, methodExports...)
 			}
 
@@ -195,13 +195,8 @@ func ExtractExports(pkg *packages.Package) []SymbolExport {
 	return exports
 }
 
-func extractMethods(named *types.Named, pkg *packages.Package, docPkg *doc.Package) []SymbolExport {
+func extractMethods(named *types.Named, pkg *packages.Package, docPkg *doc.Package, embedFaithful func(*types.Var) bool) []SymbolExport {
 	var exports []SymbolExport
-
-	declaredMethods := make(map[string]bool)
-	for method := range named.Methods() {
-		declaredMethods[method.Name()] = true
-	}
 
 	ptrMethodSet := types.NewMethodSet(types.NewPointer(named))
 
@@ -219,7 +214,13 @@ func extractMethods(named *types.Named, pkg *packages.Package, docPkg *doc.Packa
 			continue
 		}
 
-		isPromoted := !declaredMethods[methodObj.Name()]
+		index := sel.Index()
+		isPromoted := len(index) > 1
+		if isPromoted {
+			if st, ok := named.Underlying().(*types.Struct); ok && embedFaithful(st.Field(index[0])) {
+				continue
+			}
+		}
 
 		sig := fn.Type().(*types.Signature)
 		recv := sig.Recv()
@@ -261,6 +262,20 @@ func extractMethods(named *types.Named, pkg *packages.Package, docPkg *doc.Packa
 	}
 
 	return exports
+}
+
+// IsInternalPackagePath reports whether path is a Go internal package.
+func IsInternalPackagePath(path string) bool {
+	if path == "internal" {
+		return true
+	}
+	if strings.HasPrefix(path, "internal/") {
+		return true
+	}
+	if strings.HasSuffix(path, "/internal") {
+		return true
+	}
+	return strings.Contains(path, "/internal/")
 }
 
 func resolveDocPkg(cache map[string]*doc.Package, pkg *packages.Package, path string) *doc.Package {

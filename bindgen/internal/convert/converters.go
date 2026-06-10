@@ -571,6 +571,13 @@ func isFluentMethod(fn *ast.FuncDecl, recvName string) bool {
 
 func (c *Converter) convertType(result *ConvertResult, exp extract.SymbolExport) {
 	if alias, ok := exp.GoType.(*types.Alias); ok {
+		if isGenericAlias(alias) {
+			result.SkipReason = &SkipReason{
+				Code:    "generic-alias",
+				Message: "generic type aliases are not yet representable",
+			}
+			return
+		}
 		rhs := alias.Rhs()
 		t := ToLisette(rhs, c)
 		if t.SkipReason != nil {
@@ -614,6 +621,7 @@ func (c *Converter) convertType(result *ConvertResult, exp extract.SymbolExport)
 	switch u := underlying.(type) {
 	case *types.Struct:
 		result.Fields = convertStructFields(u, c)
+		result.HasHiddenEmbed = structHasHiddenEmbed(u, result.Fields)
 
 	case *types.Interface:
 		if isErrorInterface(u) {
@@ -728,6 +736,10 @@ func convertStructFields(s *types.Struct, c *Converter) []StructField {
 		if !field.Exported() {
 			continue
 		}
+		if field.Embedded() {
+			fields = append(fields, embeddedStructField(field, c))
+			continue
+		}
 		fieldType := ToLisetteNilable(field.Type(), c)
 		if fieldType.SkipReason != nil {
 			fields = append(fields, StructField{
@@ -742,6 +754,94 @@ func convertStructFields(s *types.Struct, c *Converter) []StructField {
 		})
 	}
 	return fields
+}
+
+// EmbedIsFaithful reports whether bindgen emits field as an `embed`.
+func (c *Converter) EmbedIsFaithful(field *types.Var) bool {
+	if !field.Exported() {
+		return false
+	}
+	// Probe runs before the owner's Convert checkpoint; snapshot/restore so its synth structs and imports do not leak.
+	synthMark := c.synthMark()
+	savedPkgs := make(ExternalPkgs, len(c.externalPkgs))
+	maps.Copy(savedPkgs, c.externalPkgs)
+	faithful := embeddedStructField(field, c).IsEmbedded
+	c.rollbackSynth(synthMark)
+	c.externalPkgs = savedPkgs
+	return faithful
+}
+
+func embeddedStructField(field *types.Var, c *Converter) StructField {
+	target := field.Type()
+	isPointer := false
+	if ptr, ok := target.(*types.Pointer); ok {
+		target = ptr.Elem()
+		isPointer = true
+	}
+	// Generic type aliases are not yet representable, so do not embed one.
+	if isGenericAlias(target) {
+		return StructField{Name: field.Name(), SkipReason: &SkipReason{
+			Code:    "generic-alias-embed",
+			Message: "generic type alias embedding is not yet representable",
+		}}
+	}
+	elem := ToLisetteNilable(target, c)
+	if elem.SkipReason != nil {
+		return StructField{Name: field.Name(), SkipReason: elem.SkipReason}
+	}
+	_, isStruct := target.Underlying().(*types.Struct)
+	bare := elem.LisetteType
+	// Keep the alias spelling as the embed target (h.Alias, not its RHS h.Base).
+	if isStruct {
+		if alias, ok := target.(*types.Alias); ok {
+			bare = aliasEmbedTarget(alias, c)
+		}
+	}
+	ref := bare
+	if isPointer {
+		ref = fmt.Sprintf("Ref<%s>", ref)
+	}
+	// `embed` only for a nominal struct; nilable (interface) embeds stay named fields (PR13).
+	if !isStruct {
+		return StructField{Name: field.Name(), Type: ref}
+	}
+	return StructField{Name: field.Name(), Type: ref, IsEmbedded: true}
+}
+
+// aliasEmbedTarget returns the alias's own name (qualified when external), not its RHS.
+func aliasEmbedTarget(alias *types.Alias, c *Converter) string {
+	obj := alias.Obj()
+	if pkg := obj.Pkg(); pkg != nil && pkg.Path() != c.currentPkgPath {
+		c.trackExternalPkg(pkg.Path(), pkg.Name())
+		return fmt.Sprintf("%s.%s", PkgRef(pkg.Path()), obj.Name())
+	}
+	return obj.Name()
+}
+
+// isGenericAlias reports whether t is a generic type alias (or an instantiation of one).
+func isGenericAlias(t types.Type) bool {
+	alias, ok := t.(*types.Alias)
+	if !ok {
+		return false
+	}
+	return alias.TypeParams().Len() > 0 || alias.TypeArgs().Len() > 0
+}
+
+// structHasHiddenEmbed reports whether s has an embed bindgen did not emit, so it looks flat but is not.
+func structHasHiddenEmbed(s *types.Struct, emitted []StructField) bool {
+	goEmbeds := 0
+	for field := range s.Fields() {
+		if field.Embedded() {
+			goEmbeds++
+		}
+	}
+	faithful := 0
+	for _, f := range emitted {
+		if f.IsEmbedded {
+			faithful++
+		}
+	}
+	return goEmbeds > faithful
 }
 
 func (c *Converter) getOriginalLiteral(constObj *types.Const) string {
@@ -1428,7 +1528,7 @@ func (c *Converter) collectInterfaceCandidates() []*types.Named {
 			if !ok || !typeName.Exported() || typeName.Pkg() == nil {
 				continue
 			}
-			if isInternalPackagePath(typeName.Pkg().Path()) {
+			if extract.IsInternalPackagePath(typeName.Pkg().Path()) {
 				continue
 			}
 			named, ok := typeName.Type().(*types.Named)

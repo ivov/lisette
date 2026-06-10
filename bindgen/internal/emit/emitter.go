@@ -557,6 +557,9 @@ func (e *Emitter) emitType(result convert.ConvertResult) {
 		if result.AnonStruct {
 			sig.WriteString("#[go(anon_struct)]\n")
 		}
+		if result.HasHiddenEmbed {
+			sig.WriteString("#[go(hidden_embed)]\n")
+		}
 		sig.WriteString("pub struct ")
 		sig.WriteString(typeName)
 		sig.WriteString(result.TypeParams.DeclBlock())
@@ -573,6 +576,12 @@ func (e *Emitter) emitType(result convert.ConvertResult) {
 					sig.WriteString(line)
 					sig.WriteString("\n")
 				}
+			}
+			if f.IsEmbedded {
+				sig.WriteString("  embed ")
+				sig.WriteString(f.Type)
+				sig.WriteString(",\n")
+				continue
 			}
 			sig.WriteString("  pub ")
 			sig.WriteString(f.Name)

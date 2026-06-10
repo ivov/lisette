@@ -68,7 +68,7 @@ pub type Decompressor = fn(io.Reader) -> io.ReadCloser
 /// The file information is in the embedded [FileHeader].
 /// The file content can be accessed by calling [File.Open].
 pub struct File {
-  pub FileHeader: FileHeader,
+  embed FileHeader,
 }
 
 /// FileHeader describes a file within a ZIP file.
@@ -97,7 +97,7 @@ pub struct FileHeader {
 
 /// A ReadCloser is a [Reader] that must be closed when no longer needed.
 pub struct ReadCloser {
-  pub Reader: Reader,
+  embed Reader,
 }
 
 /// A Reader serves content from a ZIP archive.
@@ -131,18 +131,6 @@ impl File {
   /// decompresses data and verifies checksums.
   fn DataOffset(self: Ref<File>) -> Result<int64, error>
 
-  /// FileInfo returns an fs.FileInfo for the [FileHeader].
-  fn FileInfo(self: Ref<File>) -> fs.FileInfo
-
-  /// ModTime returns the modification time in UTC using the legacy
-  /// [ModifiedDate] and [ModifiedTime] fields.
-  /// 
-  /// Deprecated: Use [Modified] instead.
-  fn ModTime(self: Ref<File>) -> time.Time
-
-  /// Mode returns the permission and mode bits for the [FileHeader].
-  fn Mode(self: Ref<File>) -> fs.FileMode
-
   /// Open returns a [ReadCloser] that provides access to the [File]'s contents.
   /// Multiple files may be read concurrently.
   fn Open(self: Ref<File>) -> Result<io.ReadCloser, error>
@@ -150,15 +138,6 @@ impl File {
   /// OpenRaw returns a [Reader] that provides access to the [File]'s contents without
   /// decompression.
   fn OpenRaw(self: Ref<File>) -> Result<io.Reader, error>
-
-  /// SetModTime sets the [Modified], [ModifiedTime], and [ModifiedDate] fields
-  /// to the given time in UTC.
-  /// 
-  /// Deprecated: Use [Modified] instead.
-  fn SetModTime(self: Ref<File>, t: time.Time)
-
-  /// SetMode changes the permission and mode bits for the [FileHeader].
-  fn SetMode(self: Ref<File>, mode: fs.FileMode)
 }
 
 impl FileHeader {
@@ -188,21 +167,6 @@ impl ReadCloser {
   /// Close closes the Zip file, rendering it unusable for I/O.
   #[allow(unused_result)]
   fn Close(self: Ref<ReadCloser>) -> Result<(), error>
-
-  /// Open opens the named file in the ZIP archive,
-  /// using the semantics of fs.FS.Open:
-  /// paths are always slash separated, with no
-  /// leading / or ../ elements.
-  fn Open(self: Ref<ReadCloser>, name: string) -> Result<fs.File, error>
-
-  /// RegisterDecompressor registers or overrides a custom decompressor for a
-  /// specific method ID. If a decompressor for a given method is not found,
-  /// [Reader] will default to looking up the decompressor at the package level.
-  fn RegisterDecompressor(
-    self: Ref<ReadCloser>,
-    method: uint16,
-    dcomp: Decompressor,
-  )
 }
 
 impl Reader {

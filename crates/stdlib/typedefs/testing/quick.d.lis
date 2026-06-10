@@ -36,7 +36,7 @@ pub fn Value(t: reflect.Type, rand: Ref<rand.Rand>) -> Option<reflect.Value>
 
 /// A CheckEqualError is the result [CheckEqual] finding an error.
 pub struct CheckEqualError {
-  pub CheckError: CheckError,
+  embed CheckError,
   pub Out1: Slice<Unknown>,
   pub Out2: Slice<Unknown>,
 }

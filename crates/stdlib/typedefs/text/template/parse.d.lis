@@ -72,6 +72,7 @@ pub fn Parse(
 /// ActionNode holds an action (something bounded by delimiters).
 /// Control actions have their own nodes; ActionNode represents simple
 /// ones such as field evaluations and parenthesized pipelines.
+#[go(hidden_embed)]
 pub struct ActionNode {
   pub NodeType: NodeType,
   pub Pos: Pos,
@@ -80,6 +81,7 @@ pub struct ActionNode {
 }
 
 /// BoolNode holds a boolean constant.
+#[go(hidden_embed)]
 pub struct BoolNode {
   pub NodeType: NodeType,
   pub Pos: Pos,
@@ -87,6 +89,7 @@ pub struct BoolNode {
 }
 
 /// BranchNode is the common representation of if, range, and with.
+#[go(hidden_embed)]
 pub struct BranchNode {
   pub NodeType: NodeType,
   pub Pos: Pos,
@@ -97,6 +100,7 @@ pub struct BranchNode {
 }
 
 /// BreakNode represents a {{break}} action.
+#[go(hidden_embed)]
 pub struct BreakNode {
   pub NodeType: NodeType,
   pub Pos: Pos,
@@ -106,6 +110,7 @@ pub struct BreakNode {
 /// ChainNode holds a term followed by a chain of field accesses (identifier starting with '.').
 /// The names may be chained ('.x.y').
 /// The periods are dropped from each ident.
+#[go(hidden_embed)]
 pub struct ChainNode {
   pub NodeType: NodeType,
   pub Pos: Pos,
@@ -114,6 +119,7 @@ pub struct ChainNode {
 }
 
 /// CommandNode holds a command (a pipeline inside an evaluating action).
+#[go(hidden_embed)]
 pub struct CommandNode {
   pub NodeType: NodeType,
   pub Pos: Pos,
@@ -121,6 +127,7 @@ pub struct CommandNode {
 }
 
 /// CommentNode holds a comment.
+#[go(hidden_embed)]
 pub struct CommentNode {
   pub NodeType: NodeType,
   pub Pos: Pos,
@@ -128,6 +135,7 @@ pub struct CommentNode {
 }
 
 /// ContinueNode represents a {{continue}} action.
+#[go(hidden_embed)]
 pub struct ContinueNode {
   pub NodeType: NodeType,
   pub Pos: Pos,
@@ -135,6 +143,7 @@ pub struct ContinueNode {
 }
 
 /// DotNode holds the special identifier '.'.
+#[go(hidden_embed)]
 pub struct DotNode {
   pub NodeType: NodeType,
   pub Pos: Pos,
@@ -143,6 +152,7 @@ pub struct DotNode {
 /// FieldNode holds a field (identifier starting with '.').
 /// The names may be chained ('.x.y').
 /// The period is dropped from each ident.
+#[go(hidden_embed)]
 pub struct FieldNode {
   pub NodeType: NodeType,
   pub Pos: Pos,
@@ -150,6 +160,7 @@ pub struct FieldNode {
 }
 
 /// IdentifierNode holds an identifier.
+#[go(hidden_embed)]
 pub struct IdentifierNode {
   pub NodeType: NodeType,
   pub Pos: Pos,
@@ -158,10 +169,11 @@ pub struct IdentifierNode {
 
 /// IfNode represents an {{if}} action and its commands.
 pub struct IfNode {
-  pub BranchNode: BranchNode,
+  embed BranchNode,
 }
 
 /// ListNode holds a sequence of nodes.
+#[go(hidden_embed)]
 pub struct ListNode {
   pub NodeType: NodeType,
   pub Pos: Pos,
@@ -173,6 +185,7 @@ pub struct ListNode {
 pub struct Mode(uint)
 
 /// NilNode holds the special identifier 'nil' representing an untyped nil constant.
+#[go(hidden_embed)]
 pub struct NilNode {
   pub NodeType: NodeType,
   pub Pos: Pos,
@@ -191,6 +204,7 @@ pub interface Node {
 /// NumberNode holds a number: signed or unsigned integer, float, or complex.
 /// The value is parsed and stored under all the types that can represent the value.
 /// This simulates in a small amount of code the behavior of Go's ideal constants.
+#[go(hidden_embed)]
 pub struct NumberNode {
   pub NodeType: NodeType,
   pub Pos: Pos,
@@ -206,6 +220,7 @@ pub struct NumberNode {
 }
 
 /// PipeNode holds a pipeline with optional declaration
+#[go(hidden_embed)]
 pub struct PipeNode {
   pub NodeType: NodeType,
   pub Pos: Pos,
@@ -221,10 +236,11 @@ pub struct Pos(int)
 
 /// RangeNode represents a {{range}} action and its commands.
 pub struct RangeNode {
-  pub BranchNode: BranchNode,
+  embed BranchNode,
 }
 
 /// StringNode holds a string constant. The value has been "unquoted".
+#[go(hidden_embed)]
 pub struct StringNode {
   pub NodeType: NodeType,
   pub Pos: Pos,
@@ -233,6 +249,7 @@ pub struct StringNode {
 }
 
 /// TemplateNode represents a {{template}} action.
+#[go(hidden_embed)]
 pub struct TemplateNode {
   pub NodeType: NodeType,
   pub Pos: Pos,
@@ -242,6 +259,7 @@ pub struct TemplateNode {
 }
 
 /// TextNode holds plain text.
+#[go(hidden_embed)]
 pub struct TextNode {
   pub NodeType: NodeType,
   pub Pos: Pos,
@@ -258,6 +276,7 @@ pub struct Tree {
 
 /// VariableNode holds a list of variable names, possibly with chained field
 /// accesses. The dollar sign is part of the (first) name.
+#[go(hidden_embed)]
 pub struct VariableNode {
   pub NodeType: NodeType,
   pub Pos: Pos,
@@ -266,7 +285,7 @@ pub struct VariableNode {
 
 /// WithNode represents a {{with}} action and its commands.
 pub struct WithNode {
-  pub BranchNode: BranchNode,
+  embed BranchNode,
 }
 
 pub const ParseComments: Mode = 1
@@ -420,14 +439,6 @@ impl IdentifierNode {
 
 impl IfNode {
   fn Copy(self: Ref<IfNode>) -> Node
-
-  fn Position(self) -> Pos
-
-  fn String(self: Ref<IfNode>) -> string
-
-  /// Type returns itself and provides an easy default implementation
-  /// for embedding in a Node. Embedded in all non-trivial Nodes.
-  fn Type(self) -> NodeType
 }
 
 impl ListNode {
@@ -492,14 +503,6 @@ impl Pos {
 
 impl RangeNode {
   fn Copy(self: Ref<RangeNode>) -> Node
-
-  fn Position(self) -> Pos
-
-  fn String(self: Ref<RangeNode>) -> string
-
-  /// Type returns itself and provides an easy default implementation
-  /// for embedding in a Node. Embedded in all non-trivial Nodes.
-  fn Type(self) -> NodeType
 }
 
 impl StringNode {
@@ -575,12 +578,4 @@ impl VariableNode {
 
 impl WithNode {
   fn Copy(self: Ref<WithNode>) -> Node
-
-  fn Position(self) -> Pos
-
-  fn String(self: Ref<WithNode>) -> string
-
-  /// Type returns itself and provides an easy default implementation
-  /// for embedding in a Node. Embedded in all non-trivial Nodes.
-  fn Type(self) -> NodeType
 }

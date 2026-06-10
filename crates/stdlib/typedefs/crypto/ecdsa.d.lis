@@ -87,11 +87,12 @@ pub fn VerifyASN1(pub_: Ref<PublicKey>, hash: Slice<byte>, sig: Slice<byte>) -> 
 
 /// PrivateKey represents an ECDSA private key.
 pub struct PrivateKey {
-  pub PublicKey: PublicKey,
+  embed PublicKey,
   pub D: Option<Ref<big.Int>>,
 }
 
 /// PublicKey represents an ECDSA public key.
+#[go(hidden_embed)]
 pub struct PublicKey {
   pub Curve: Option<elliptic.Curve>,
   pub X: Option<Ref<big.Int>>,
@@ -99,17 +100,6 @@ pub struct PublicKey {
 }
 
 impl PrivateKey {
-  /// Add returns the sum of (x1,y1) and (x2,y2).
-  /// 
-  /// Deprecated: this is a low-level unsafe API.
-  fn Add(
-    self,
-    x1: Ref<big.Int>,
-    y1: Ref<big.Int>,
-    x2: Ref<big.Int>,
-    y2: Ref<big.Int>,
-  ) -> (Ref<big.Int>, Ref<big.Int>)
-
   /// Bytes encodes the private key as a fixed-length big-endian integer according
   /// to SEC 1, Version 2.0, Section 2.3.6 (sometimes referred to as the raw
   /// format). It returns an error if the private key is invalid.
@@ -124,11 +114,6 @@ impl PrivateKey {
   /// [crypto/x509.MarshalPKCS8PrivateKey] (and [encoding/pem]).
   fn Bytes(self: Ref<PrivateKey>) -> Result<Slice<byte>, error>
 
-  /// Double returns 2*(x,y).
-  /// 
-  /// Deprecated: this is a low-level unsafe API.
-  fn Double(self, x1: Ref<big.Int>, y1: Ref<big.Int>) -> (Ref<big.Int>, Ref<big.Int>)
-
   /// ECDH returns k as a [ecdh.PrivateKey]. It returns an error if the key is
   /// invalid according to the definition of [ecdh.Curve.NewPrivateKey], or if the
   /// Curve is not supported by [crypto/ecdh].
@@ -139,33 +124,8 @@ impl PrivateKey {
   /// See [PublicKey.Equal] for details on how Curve is compared.
   fn Equal(self: Ref<PrivateKey>, x: crypto.PrivateKey) -> bool
 
-  /// IsOnCurve reports whether the given (x,y) lies on the curve.
-  /// 
-  /// Deprecated: this is a low-level unsafe API. For ECDH, use the crypto/ecdh
-  /// package. The NewPublicKey methods of NIST curves in crypto/ecdh accept
-  /// the same encoding as the Unmarshal function, and perform on-curve checks.
-  fn IsOnCurve(self, x: Ref<big.Int>, y: Ref<big.Int>) -> bool
-
-  /// Params returns the parameters for the curve.
-  fn Params(self) -> Ref<elliptic.CurveParams>
-
   /// Public returns the public key corresponding to priv.
   fn Public(self: Ref<PrivateKey>) -> crypto.PublicKey
-
-  /// ScalarBaseMult returns k*G, where G is the base point of the group
-  /// and k is an integer in big-endian form.
-  /// 
-  /// Deprecated: this is a low-level unsafe API. For ECDH, use the crypto/ecdh
-  /// package. Most uses of ScalarBaseMult can be replaced by a call to the
-  /// PrivateKey.PublicKey method in crypto/ecdh.
-  fn ScalarBaseMult(self, k: Slice<byte>) -> (Ref<big.Int>, Ref<big.Int>)
-
-  /// ScalarMult returns k*(x,y) where k is an integer in big-endian form.
-  /// 
-  /// Deprecated: this is a low-level unsafe API. For ECDH, use the crypto/ecdh
-  /// package. Most uses of ScalarMult can be replaced by a call to the ECDH
-  /// methods of NIST curves in crypto/ecdh.
-  fn ScalarMult(self, x1: Ref<big.Int>, y1: Ref<big.Int>, k: Slice<byte>) -> (Ref<big.Int>, Ref<big.Int>)
 
   /// Sign signs a hash (which should be the result of hashing a larger message
   /// with opts.HashFunc()) using the private key, priv. If the hash is longer than

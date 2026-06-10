@@ -148,9 +148,8 @@ func resolveTargets(flagValue string) ([]Target, error) {
 }
 
 func generateFromPackage(pkg *packages.Package, displayPath, lisetteVersion, goVersion string, cfg *config.Config) GeneratePkgResult {
-	exports := extract.ExtractExports(pkg)
-
 	converter := convert.NewConverter(pkg.PkgPath, pkg, cfg)
+	exports := extract.ExtractExports(pkg, converter.EmbedIsFaithful)
 	var results []convert.ConvertResult
 	for _, exp := range exports {
 		results = append(results, converter.Convert(exp))

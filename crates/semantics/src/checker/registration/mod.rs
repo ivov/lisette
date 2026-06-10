@@ -68,6 +68,12 @@ pub(super) fn has_anon_struct_attribute(attributes: &[Attribute]) -> bool {
         .any(|flag| flag == "anon_struct")
 }
 
+pub(super) fn has_hidden_embed_attribute(attributes: &[Attribute]) -> bool {
+    extract_attribute_flags(attributes, "go")
+        .iter()
+        .any(|flag| flag == "hidden_embed")
+}
+
 pub(super) fn collect_enum_attributes(attributes: &[Attribute]) -> Attributes {
     let mut map = Attributes::default();
     if has_display_attribute(attributes) {
@@ -86,6 +92,9 @@ pub(super) fn collect_struct_attributes(attributes: &[Attribute]) -> Attributes 
     }
     if has_anon_struct_attribute(attributes) {
         map.insert(TypeAttribute::AnonStruct, ());
+    }
+    if has_hidden_embed_attribute(attributes) {
+        map.insert(TypeAttribute::HiddenEmbed, ());
     }
     map
 }

@@ -675,8 +675,9 @@ pub type Chan
 
 /// A Checker maintains the state of the type checker.
 /// It must be created with [NewChecker].
+#[go(hidden_embed)]
 pub struct Checker {
-  pub Info: Option<Ref<Info>>,
+  embed Ref<Info>,
 }
 
 /// A Config specifies the configuration for type checking.
@@ -1101,27 +1102,6 @@ impl Chan {
 impl Checker {
   /// Files checks the provided files as part of the checker's package.
   fn Files(self: Ref<Checker>, files: Slice<Ref<ast.File>>) -> Result<(), error>
-
-  /// ObjectOf returns the object denoted by the specified id,
-  /// or nil if not found.
-  /// 
-  /// If id is an embedded struct field, [Info.ObjectOf] returns the field (*[Var])
-  /// it defines, not the type (*[TypeName]) it uses.
-  /// 
-  /// Precondition: the Uses and Defs maps are populated.
-  fn ObjectOf(self: Ref<Checker>, id: Ref<ast.Ident>) -> Option<Object>
-
-  /// PkgNameOf returns the local package name defined by the import,
-  /// or nil if not found.
-  /// 
-  /// For dot-imports, the package name is ".".
-  /// 
-  /// Precondition: the Defs and Implicts maps are populated.
-  fn PkgNameOf(self: Ref<Checker>, imp: Ref<ast.ImportSpec>) -> Option<Ref<PkgName>>
-
-  /// TypeOf returns the type of expression e, or nil if not found.
-  /// Precondition: the Types, Uses and Defs maps are populated.
-  fn TypeOf(self: Ref<Checker>, e: ast.Expr) -> Option<Type>
 }
 
 impl Config {

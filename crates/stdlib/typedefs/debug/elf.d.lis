@@ -3005,7 +3005,7 @@ pub struct DynamicVersionNeed {
 
 /// A File represents an open ELF file.
 pub struct File {
-  pub FileHeader: FileHeader,
+  embed FileHeader,
   pub Sections: Slice<Option<Ref<Section>>>,
   pub Progs: Slice<Option<Ref<Prog>>>,
 }
@@ -3068,8 +3068,9 @@ pub struct ImportedSymbol {
 }
 
 /// A Prog represents a single ELF program header in an ELF binary.
+#[go(hidden_embed)]
 pub struct Prog {
-  pub ProgHeader: ProgHeader,
+  embed ProgHeader,
   pub ReaderAt: Option<io.ReaderAt>,
 }
 
@@ -3140,8 +3141,9 @@ pub struct Rela64 {
 }
 
 /// A Section represents a single section in an ELF file.
+#[go(hidden_embed)]
 pub struct Section {
-  pub SectionHeader: SectionHeader,
+  embed SectionHeader,
   pub ReaderAt: Option<io.ReaderAt>,
 }
 

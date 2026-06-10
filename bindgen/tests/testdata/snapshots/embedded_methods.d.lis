@@ -5,37 +5,46 @@
 
 /// Pointer embed.
 pub struct Host1 {
-  pub Inner: Option<Ref<Inner>>,
+  embed Ref<Inner>,
 }
 
 /// Value embed.
 pub struct Host2 {
-  pub Inner: Inner,
+  embed Inner,
 }
 
 /// Pointer embed plus a directly-declared *Host3 method.
 pub struct Host3 {
-  pub Inner: Option<Ref<Inner>>,
+  embed Ref<Inner>,
+}
+
+/// Unexported embed (mirrors net.IPConn { conn }): its promoted methods stay
+/// flattened on Host4 rather than be dropped.
+pub type Host4
+
+/// Unexported embed plus an exported field (mirrors testing.B { common; N int }):
+/// a visible Record that must stay unembeddable (marked), not mistaken for flat.
+#[go(hidden_embed)]
+pub struct Host5 {
+  pub X: int,
 }
 
 pub struct Inner {
   pub Value: int,
 }
 
-impl Host1 {
-  fn Mutate(self: Ref<Host1>, n: int)
-  fn Read(self) -> int
-}
-
-impl Host2 {
-  fn Mutate(self: Ref<Host2>, n: int)
-  fn Read(self) -> int
-}
-
 impl Host3 {
   fn Direct(self: Ref<Host3>) -> int
-  fn Mutate(self: Ref<Host3>, n: int)
-  fn Read(self) -> int
+}
+
+impl Host4 {
+  fn Secret(self) -> int
+  fn Tweak(self: Ref<Host4>, n: int)
+}
+
+impl Host5 {
+  fn Secret(self) -> int
+  fn Tweak(self: Ref<Host5>, n: int)
 }
 
 impl Inner {

@@ -60,7 +60,7 @@ pub fn render_lis_questions(scenario: &Scenario) -> RenderedQuestions {
                 };
                 let start = out.len();
                 out.push_str(&format!(
-                    "fn __sel_{i}(r: {}) {{\n  let _ = {access}\n}}\n\n",
+                    "fn __sel_{i}(r: Ref<{}>) {{\n  let _ = {access}\n}}\n\n",
                     scenario.node_name(*root),
                 ));
                 let end = out.len();

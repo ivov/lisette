@@ -83,6 +83,7 @@ impl<'a> Formatter<'a> {
 
         let with_field_attrs = fields.iter().any(|f| !f.attributes.is_empty());
         let with_pub_fields = fields.iter().any(|f| f.visibility.is_public());
+        let with_embeds = fields.iter().any(|f| f.embedded);
 
         if fields.is_empty() {
             return self.empty_struct_body(header, struct_end);
@@ -91,7 +92,7 @@ impl<'a> Formatter<'a> {
         let (field_entries, trailing, with_comments) =
             self.struct_fields_with_comments(fields, struct_end);
 
-        if with_comments || with_field_attrs || with_pub_fields {
+        if with_comments || with_field_attrs || with_pub_fields || with_embeds {
             let mut body = Document::Sequence(vec![]);
             for (i, entry) in field_entries.into_iter().enumerate() {
                 if i > 0 {

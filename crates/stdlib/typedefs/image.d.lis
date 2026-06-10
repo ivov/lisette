@@ -164,7 +164,7 @@ pub struct NRGBA64 {
 /// colors. A and AStride are analogous to the Y and YStride fields of the
 /// embedded YCbCr.
 pub struct NYCbCrA {
-  pub YCbCr: YCbCr,
+  embed YCbCr,
   pub A: Slice<uint8>,
   pub AStride: int,
 }
@@ -486,12 +486,6 @@ impl NYCbCrA {
 
   fn At(self: Ref<NYCbCrA>, x: int, y: int) -> color.Color
 
-  fn Bounds(self: Ref<NYCbCrA>) -> Rectangle
-
-  /// COffset returns the index of the first element of Cb or Cr that corresponds
-  /// to the pixel at (x, y).
-  fn COffset(self: Ref<NYCbCrA>, x: int, y: int) -> int
-
   fn ColorModel(self: Ref<NYCbCrA>) -> color.Model
 
   fn NYCbCrAAt(self: Ref<NYCbCrA>, x: int, y: int) -> color.NYCbCrA
@@ -504,12 +498,6 @@ impl NYCbCrA {
   /// SubImage returns an image representing the portion of the image p visible
   /// through r. The returned value shares pixels with the original image.
   fn SubImage(self: Ref<NYCbCrA>, r: Rectangle) -> Image
-
-  fn YCbCrAt(self: Ref<NYCbCrA>, x: int, y: int) -> color.YCbCr
-
-  /// YOffset returns the index of the first element of Y that corresponds to
-  /// the pixel at (x, y).
-  fn YOffset(self: Ref<NYCbCrA>, x: int, y: int) -> int
 }
 
 impl Paletted {
