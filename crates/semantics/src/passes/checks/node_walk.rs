@@ -1,6 +1,9 @@
-use syntax::ast::Expression;
+use std::sync::LazyLock;
 
-use crate::passes::walk::{NodeCheck, NodeCtx, walk_nodes};
+use syntax::ast::Expression;
+use syntax::ast::ExpressionKind::*;
+
+use crate::passes::walk::{CheckTable, NodeCtx, walk_nodes};
 
 use super::{
     const_naming, decimal_file_mode, duplicate_bindings, empty_infinite_loop, empty_range,
@@ -9,27 +12,59 @@ use super::{
     stringer_signature, temp_producing, unchanging_loop_condition,
 };
 
-const NODE_CHECKS: &[NodeCheck] = &[
-    nan_comparison::check,
-    empty_range::check,
-    empty_infinite_loop::check,
-    oversized_shift::check,
-    repeated_if_condition::check,
-    index_out_of_bounds::check,
-    decimal_file_mode::check,
-    duplicate_bindings::check,
-    irrefutable_patterns::check,
-    receivers::check,
-    stringer_signature::check,
-    predeclared_shadowing::check,
-    pub_type_export::check,
-    temp_producing::check,
-    newtype::check,
-    enum_variant_value::check,
-    unchanging_loop_condition::check,
-    const_naming::check,
-];
+static NODE_CHECKS: LazyLock<CheckTable> = LazyLock::new(|| {
+    CheckTable::new(
+        &[
+            (nan_comparison::check, &[Binary]),
+            (empty_range::check, &[Range]),
+            (empty_infinite_loop::check, &[Loop]),
+            (oversized_shift::check, &[Binary]),
+            (repeated_if_condition::check, &[If]),
+            (index_out_of_bounds::check, &[IndexedAccess]),
+            (decimal_file_mode::check, &[Literal]),
+            (
+                duplicate_bindings::check,
+                &[Let, For, IfLet, WhileLet, Match, Select, Function, Lambda],
+            ),
+            (
+                irrefutable_patterns::check,
+                &[Let, For, Function, Lambda, Select],
+            ),
+            (receivers::check, &[ImplBlock]),
+            (stringer_signature::check, &[ImplBlock]),
+            (
+                predeclared_shadowing::check,
+                &[Enum, Struct, TypeAlias, Interface, Function, ImplBlock],
+            ),
+            (
+                pub_type_export::check,
+                &[Struct, Enum, TypeAlias, Interface],
+            ),
+            (
+                temp_producing::check,
+                &[
+                    Call,
+                    StructCall,
+                    Binary,
+                    Unary,
+                    Reference,
+                    Cast,
+                    If,
+                    While,
+                    IndexedAccess,
+                    Range,
+                    Literal,
+                ],
+            ),
+            (newtype::check, &[Assignment, Reference]),
+            (enum_variant_value::check, &[Identifier, DotAccess]),
+            (unchanging_loop_condition::check, &[While]),
+            (const_naming::check, &[Const]),
+        ],
+        &[],
+    )
+});
 
 pub(crate) fn run(items: &[Expression], ctx: &NodeCtx) {
-    walk_nodes(items, ctx, NODE_CHECKS, &[]);
+    walk_nodes(items, ctx, &NODE_CHECKS);
 }

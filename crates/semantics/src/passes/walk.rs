@@ -3,8 +3,8 @@ use std::cell::RefCell;
 use diagnostics::LocalSink;
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use syntax::ast::{
-    Expression, FormatStringPart, Literal, MatchArm, Pattern, RestPattern, SelectArm,
-    SelectArmPattern, Span,
+    Expression, ExpressionKind, FormatStringPart, Literal, MatchArm, Pattern, PatternKind,
+    RestPattern, SelectArm, SelectArmPattern, Span,
 };
 use syntax::program::File;
 
@@ -27,21 +27,47 @@ pub(crate) struct NodeCtx<'a> {
 pub(crate) type NodeCheck = fn(&Expression, &NodeCtx);
 pub(crate) type PatternCheck = fn(&Pattern, &NodeCtx);
 
-pub(crate) fn walk_nodes(
-    ast: &[Expression],
-    ctx: &NodeCtx,
-    expr_checks: &[NodeCheck],
-    pattern_checks: &[PatternCheck],
-) {
+pub(crate) struct CheckTable {
+    expression_buckets: [Vec<NodeCheck>; ExpressionKind::COUNT],
+    pattern_buckets: [Vec<PatternCheck>; PatternKind::COUNT],
+}
+
+impl CheckTable {
+    pub(crate) fn new(
+        expression_checks: &[(NodeCheck, &[ExpressionKind])],
+        pattern_checks: &[(PatternCheck, &[PatternKind])],
+    ) -> Self {
+        let mut expression_buckets: [Vec<NodeCheck>; ExpressionKind::COUNT] =
+            std::array::from_fn(|_| Vec::new());
+        for (check, kinds) in expression_checks {
+            for kind in *kinds {
+                expression_buckets[*kind as usize].push(*check);
+            }
+        }
+        let mut pattern_buckets: [Vec<PatternCheck>; PatternKind::COUNT] =
+            std::array::from_fn(|_| Vec::new());
+        for (check, kinds) in pattern_checks {
+            for kind in *kinds {
+                pattern_buckets[*kind as usize].push(*check);
+            }
+        }
+        Self {
+            expression_buckets,
+            pattern_buckets,
+        }
+    }
+}
+
+pub(crate) fn walk_nodes(ast: &[Expression], ctx: &NodeCtx, checks: &CheckTable) {
     visit_ast(
         ast,
         &mut |expression| {
-            for check in expr_checks {
+            for check in &checks.expression_buckets[expression.kind() as usize] {
                 check(expression, ctx);
             }
         },
         &mut |pattern| {
-            for check in pattern_checks {
+            for check in &checks.pattern_buckets[pattern.kind() as usize] {
                 check(pattern, ctx);
             }
         },

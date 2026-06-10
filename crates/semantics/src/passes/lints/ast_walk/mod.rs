@@ -2,10 +2,12 @@ pub(crate) mod attributes;
 pub(crate) mod casing;
 mod checks;
 
+use std::sync::LazyLock;
+
 use crate::context::AnalysisContext;
 use crate::facts::Facts;
 use crate::passes::PARALLEL_THRESHOLD;
-use crate::passes::walk::{NodeCheck, NodeCtx, PatternCheck, walk_nodes};
+use crate::passes::walk::{CheckTable, NodeCtx, walk_nodes};
 use crate::store::Store;
 use diagnostics::LocalSink;
 use rayon::prelude::*;
@@ -35,73 +37,88 @@ use checks::{
     check_verbose_failure_propagation, check_waitgroup_add_in_task,
 };
 
-const EXPRESSION_CHECKS: &[NodeCheck] = &[
-    check_double_negation,
-    check_self_comparison,
-    check_unsigned_comparison,
-    check_type_limit_comparison,
-    check_non_negative_comparison,
-    check_goos_goarch_comparison,
-    check_redundant_operation,
-    check_integer_division_to_zero,
-    check_self_assignment,
-    check_manual_compound_assignment,
-    check_manual_bytes_equal,
-    check_manual_replace_all,
-    check_redundant_sprintf,
-    check_manual_equal_fold,
-    check_manual_find,
-    check_manual_is_empty,
-    check_bool_literal_comparison,
-    check_identical_if_branches,
-    check_collapsible_if,
-    check_identical_match_arms,
-    check_loop_runs_once,
-    check_empty_match_arm,
-    check_excess_parens_on_condition,
-    check_match_literal_collection,
-    check_match_on_bool,
-    check_match_single_binding,
-    check_negated_equality,
-    check_let_and_return,
-    check_unnecessary_bool,
-    check_unnecessary_range_loop,
-    check_unnecessary_return,
-    check_single_arm_match,
-    check_single_arm_select,
-    check_redundant_slice_bounds,
-    check_redundant_pattern_matching,
-    check_manual_map,
-    check_manual_map_or,
-    check_manual_time_since,
-    check_manual_time_until,
-    check_manual_unwrap_or,
-    check_uninterpolated_fstring,
-    check_unnecessary_raw_string_expression,
-    check_invisible_in_string_expression,
-    check_verbose_failure_propagation,
-    check_dup_arg,
-    check_duplicate_cutset,
-    check_waitgroup_add_in_task,
-    check_struct_attributes,
-    check_attributes,
-    check_enum_attributes,
-    check_duplicate_logical_operand,
-    check_expression_naming,
-    check_replaceable_with_zero_fill,
-    check_lost_query_mutation,
-    check_redundant_closure,
-    check_redundant_else,
-    check_out_of_domain_value,
-    check_embed_over_impl,
-];
+static LINT_CHECKS: LazyLock<CheckTable> = LazyLock::new(|| {
+    use syntax::ast::ExpressionKind::*;
+    use syntax::ast::PatternKind;
 
-const PATTERN_CHECKS: &[PatternCheck] = &[
-    check_rest_only_slice_pattern,
-    check_unnecessary_raw_string_pattern,
-    check_invisible_in_string_pattern,
-    check_pattern_naming,
-];
+    CheckTable::new(
+        &[
+            (check_double_negation, &[Unary]),
+            (check_self_comparison, &[Binary]),
+            (check_unsigned_comparison, &[Binary]),
+            (check_type_limit_comparison, &[Binary]),
+            (check_non_negative_comparison, &[Binary]),
+            (check_goos_goarch_comparison, &[Binary]),
+            (check_redundant_operation, &[Binary]),
+            (check_integer_division_to_zero, &[Binary]),
+            (check_self_assignment, &[Assignment]),
+            (check_manual_compound_assignment, &[Assignment]),
+            (check_manual_bytes_equal, &[Binary]),
+            (check_manual_replace_all, &[Call]),
+            (check_redundant_sprintf, &[Call]),
+            (check_manual_equal_fold, &[Binary]),
+            (check_manual_find, &[Call]),
+            (check_manual_is_empty, &[Binary]),
+            (check_bool_literal_comparison, &[Binary]),
+            (check_identical_if_branches, &[If]),
+            (check_collapsible_if, &[If]),
+            (check_identical_match_arms, &[Match]),
+            (check_loop_runs_once, &[Loop, While, WhileLet, For]),
+            (check_empty_match_arm, &[Match]),
+            (check_excess_parens_on_condition, &[If, While, Match]),
+            (check_match_literal_collection, &[Match]),
+            (check_match_on_bool, &[Match]),
+            (check_match_single_binding, &[Match]),
+            (check_negated_equality, &[Unary]),
+            (check_let_and_return, &[Block]),
+            (check_unnecessary_bool, &[If]),
+            (check_unnecessary_range_loop, &[For]),
+            (check_unnecessary_return, &[Function]),
+            (check_single_arm_match, &[Match]),
+            (check_single_arm_select, &[Select]),
+            (check_redundant_slice_bounds, &[IndexedAccess]),
+            (check_redundant_pattern_matching, &[Match]),
+            (check_manual_map, &[Match]),
+            (check_manual_map_or, &[Match]),
+            (check_manual_time_since, &[Call]),
+            (check_manual_time_until, &[Call]),
+            (check_manual_unwrap_or, &[Match]),
+            (check_uninterpolated_fstring, &[Literal]),
+            (check_unnecessary_raw_string_expression, &[Literal]),
+            (check_invisible_in_string_expression, &[Literal]),
+            (check_verbose_failure_propagation, &[Match]),
+            (check_dup_arg, &[Call]),
+            (check_duplicate_cutset, &[Call]),
+            (check_waitgroup_add_in_task, &[Function, Lambda]),
+            (check_struct_attributes, &[Struct]),
+            (check_attributes, &[Function]),
+            (check_enum_attributes, &[Enum]),
+            (check_duplicate_logical_operand, &[Binary]),
+            (
+                check_expression_naming,
+                &[Struct, Enum, TypeAlias, Interface, Function],
+            ),
+            (check_replaceable_with_zero_fill, &[StructCall]),
+            (check_lost_query_mutation, &[Call]),
+            (check_redundant_closure, &[Lambda]),
+            (check_redundant_else, &[Block]),
+            (check_out_of_domain_value, &[Literal, Unary, Call]),
+            (check_embed_over_impl, &[Interface]),
+        ],
+        &[
+            (
+                check_rest_only_slice_pattern,
+                &[PatternKind::Slice, PatternKind::Or],
+            ),
+            (
+                check_unnecessary_raw_string_pattern,
+                &[PatternKind::Literal],
+            ),
+            (check_invisible_in_string_pattern, &[PatternKind::Literal]),
+            (check_pattern_naming, &[PatternKind::Identifier]),
+        ],
+    )
+});
 
 pub(crate) fn run(analysis: &AnalysisContext, facts: &Facts, sink: &LocalSink) {
     let store = analysis.store;
@@ -143,6 +160,6 @@ fn run_module(module: &Module, store: &Store, facts: &Facts, sink: &LocalSink) {
             sink,
             claimed_spans: Default::default(),
         };
-        walk_nodes(&file.items, &ctx, EXPRESSION_CHECKS, PATTERN_CHECKS);
+        walk_nodes(&file.items, &ctx, &LINT_CHECKS);
     }
 }

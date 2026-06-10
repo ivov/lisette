@@ -296,7 +296,42 @@ pub enum Pattern {
     },
 }
 
+/// Dataless variant index of [`Pattern`], usable as an array index.
+#[derive(Clone, Copy)]
+pub enum PatternKind {
+    Literal,
+    Unit,
+    EnumVariant,
+    Struct,
+    Tuple,
+    WildCard,
+    Identifier,
+    Slice,
+    Or,
+    AsBinding,
+}
+
+impl PatternKind {
+    // Relies on `AsBinding` staying the last variant.
+    pub const COUNT: usize = PatternKind::AsBinding as usize + 1;
+}
+
 impl Pattern {
+    pub fn kind(&self) -> PatternKind {
+        match self {
+            Pattern::Literal { .. } => PatternKind::Literal,
+            Pattern::Unit { .. } => PatternKind::Unit,
+            Pattern::EnumVariant { .. } => PatternKind::EnumVariant,
+            Pattern::Struct { .. } => PatternKind::Struct,
+            Pattern::Tuple { .. } => PatternKind::Tuple,
+            Pattern::WildCard { .. } => PatternKind::WildCard,
+            Pattern::Identifier { .. } => PatternKind::Identifier,
+            Pattern::Slice { .. } => PatternKind::Slice,
+            Pattern::Or { .. } => PatternKind::Or,
+            Pattern::AsBinding { .. } => PatternKind::AsBinding,
+        }
+    }
+
     pub fn get_span(&self) -> Span {
         match self {
             Pattern::Identifier { span, .. } => *span,
@@ -963,7 +998,112 @@ pub enum Expression {
     NoOp,
 }
 
+/// Dataless variant index of [`Expression`], usable as an array index.
+#[derive(Clone, Copy)]
+pub enum ExpressionKind {
+    Literal,
+    Function,
+    Lambda,
+    Block,
+    Let,
+    Identifier,
+    Call,
+    If,
+    IfLet,
+    Match,
+    Tuple,
+    StructCall,
+    DotAccess,
+    Assignment,
+    Return,
+    Propagate,
+    TryBlock,
+    RecoverBlock,
+    ImplBlock,
+    Binary,
+    Unary,
+    Paren,
+    Const,
+    VariableDeclaration,
+    RawGo,
+    Loop,
+    While,
+    WhileLet,
+    For,
+    Break,
+    Continue,
+    Enum,
+    Struct,
+    TypeAlias,
+    ModuleImport,
+    Reference,
+    Interface,
+    IndexedAccess,
+    Task,
+    Defer,
+    Select,
+    Unit,
+    Range,
+    Cast,
+    NoOp,
+}
+
+impl ExpressionKind {
+    // Relies on `NoOp` staying the last variant.
+    pub const COUNT: usize = ExpressionKind::NoOp as usize + 1;
+}
+
 impl Expression {
+    pub fn kind(&self) -> ExpressionKind {
+        match self {
+            Expression::Literal { .. } => ExpressionKind::Literal,
+            Expression::Function { .. } => ExpressionKind::Function,
+            Expression::Lambda { .. } => ExpressionKind::Lambda,
+            Expression::Block { .. } => ExpressionKind::Block,
+            Expression::Let { .. } => ExpressionKind::Let,
+            Expression::Identifier { .. } => ExpressionKind::Identifier,
+            Expression::Call { .. } => ExpressionKind::Call,
+            Expression::If { .. } => ExpressionKind::If,
+            Expression::IfLet { .. } => ExpressionKind::IfLet,
+            Expression::Match { .. } => ExpressionKind::Match,
+            Expression::Tuple { .. } => ExpressionKind::Tuple,
+            Expression::StructCall { .. } => ExpressionKind::StructCall,
+            Expression::DotAccess { .. } => ExpressionKind::DotAccess,
+            Expression::Assignment { .. } => ExpressionKind::Assignment,
+            Expression::Return { .. } => ExpressionKind::Return,
+            Expression::Propagate { .. } => ExpressionKind::Propagate,
+            Expression::TryBlock { .. } => ExpressionKind::TryBlock,
+            Expression::RecoverBlock { .. } => ExpressionKind::RecoverBlock,
+            Expression::ImplBlock { .. } => ExpressionKind::ImplBlock,
+            Expression::Binary { .. } => ExpressionKind::Binary,
+            Expression::Unary { .. } => ExpressionKind::Unary,
+            Expression::Paren { .. } => ExpressionKind::Paren,
+            Expression::Const { .. } => ExpressionKind::Const,
+            Expression::VariableDeclaration { .. } => ExpressionKind::VariableDeclaration,
+            Expression::RawGo { .. } => ExpressionKind::RawGo,
+            Expression::Loop { .. } => ExpressionKind::Loop,
+            Expression::While { .. } => ExpressionKind::While,
+            Expression::WhileLet { .. } => ExpressionKind::WhileLet,
+            Expression::For { .. } => ExpressionKind::For,
+            Expression::Break { .. } => ExpressionKind::Break,
+            Expression::Continue { .. } => ExpressionKind::Continue,
+            Expression::Enum { .. } => ExpressionKind::Enum,
+            Expression::Struct { .. } => ExpressionKind::Struct,
+            Expression::TypeAlias { .. } => ExpressionKind::TypeAlias,
+            Expression::ModuleImport { .. } => ExpressionKind::ModuleImport,
+            Expression::Reference { .. } => ExpressionKind::Reference,
+            Expression::Interface { .. } => ExpressionKind::Interface,
+            Expression::IndexedAccess { .. } => ExpressionKind::IndexedAccess,
+            Expression::Task { .. } => ExpressionKind::Task,
+            Expression::Defer { .. } => ExpressionKind::Defer,
+            Expression::Select { .. } => ExpressionKind::Select,
+            Expression::Unit { .. } => ExpressionKind::Unit,
+            Expression::Range { .. } => ExpressionKind::Range,
+            Expression::Cast { .. } => ExpressionKind::Cast,
+            Expression::NoOp => ExpressionKind::NoOp,
+        }
+    }
+
     pub fn is_noop(&self) -> bool {
         matches!(self, Expression::NoOp)
     }
