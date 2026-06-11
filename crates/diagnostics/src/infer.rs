@@ -1798,6 +1798,26 @@ pub struct InterfaceViolation {
     pub incompatible: Vec<(String, Type, Type)>,
 }
 
+pub fn sealed_interface_not_satisfiable(
+    interface_name: &str,
+    type_name: &str,
+    span: Span,
+) -> LisetteDiagnostic {
+    LisetteDiagnostic::error(format!(
+        "`{type_name}` cannot implement the sealed interface `{interface_name}`"
+    ))
+    .with_infer_code("sealed_interface")
+    .with_span_label(
+        &span,
+        format!("`{interface_name}` is sealed and cannot be implemented here"),
+    )
+    .with_help(format!(
+        "`{interface_name}` has an unexported method, so Go only lets types in its own package \
+         implement it. A Lisette type can satisfy `{interface_name}` only by embedding it (or by \
+         embedding an imported type that already implements it)."
+    ))
+}
+
 pub fn interface_not_implemented(
     interface_name: &str,
     type_name: &str,

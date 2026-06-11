@@ -2827,6 +2827,26 @@ fn main() {}
 }
 
 #[test]
+fn infer_sealed_interface_not_satisfiable() {
+    let typedef = r#"
+pub interface Sealed {
+  fn Do() -> int
+  #[go(unexported)]
+  fn private()
+}
+"#;
+    let input = r#"import "go:example.com/seal"
+struct Mine {}
+impl Mine {
+  fn Do(self: Mine) -> int { 0 }
+}
+fn as_sealed(m: Mine) -> seal.Sealed { m }
+fn main() {}
+"#;
+    assert_infer_error_snapshot!(input, &[("go:example.com/seal", typedef)]);
+}
+
+#[test]
 fn builtin_generic_type_satisfies_interface_bound() {
     let input = r#"
 interface HasLength {

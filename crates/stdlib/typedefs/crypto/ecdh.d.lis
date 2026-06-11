@@ -38,6 +38,8 @@ pub interface Curve {
   fn GenerateKey(rand: io.Reader) -> Result<Ref<PrivateKey>, error>
   fn NewPrivateKey(key: Slice<byte>) -> Result<Ref<PrivateKey>, error>
   fn NewPublicKey(key: Slice<byte>) -> Result<Ref<PublicKey>, error>
+  #[go(unexported, "crypto/ecdh.ecdh(*crypto/ecdh.PrivateKey,*crypto/ecdh.PublicKey) []byte,error")]
+  fn ecdh()
 }
 
 /// PrivateKey is an ECDH private key, usually kept secret.

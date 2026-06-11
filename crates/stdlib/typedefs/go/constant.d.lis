@@ -188,6 +188,8 @@ pub interface Value {
   fn ExactString() -> string
   fn Kind() -> Kind
   fn String() -> string
+  #[go(unexported, "go/constant.implementsValue()")]
+  fn implementsValue()
 }
 
 impl Kind {

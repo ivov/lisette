@@ -143,6 +143,7 @@ impl TaskState<'_> {
         };
         let receiver_qualified_name = receiver_ty.get_qualified_name();
         let module_id = self.cursor.module_id.clone();
+        let is_d_lis = self.is_d_lis(&*store);
 
         if let Some(type_module) = store.module_for_qualified_name(&receiver_qualified_name)
             && type_module != module_id
@@ -226,6 +227,14 @@ impl TaskState<'_> {
 
             let method_ty = wrap_with_impl_generics(&fn_ty, generics, &impl_bounds);
 
+            let go_hints = extract_attribute_flags(fn_attrs, "go");
+            let method_key: EcoString =
+                if is_instance_method && go_hints.iter().any(|h| h == "unexported") {
+                    super::seal_method_key(is_d_lis, fn_attrs, &module_id, &fn_sig.name)
+                } else {
+                    fn_sig.name.clone()
+                };
+
             if !generics.is_empty()
                 && self.impl_has_simple_type_params(&receiver_ty, generics)
                 && has_recursive_instantiation(&receiver_qualified_name, &fn_ty)
@@ -243,7 +252,7 @@ impl TaskState<'_> {
                     &module_id,
                     &receiver_qualified_name,
                     type_name,
-                    &fn_sig.name,
+                    &method_key,
                     fn_sig.name_span,
                     &method_ty,
                 ) {
@@ -276,7 +285,7 @@ impl TaskState<'_> {
                     doc: None,
                     body: DefinitionBody::Value {
                         allowed_lints: extract_attribute_flags(fn_attrs, "allow"),
-                        go_hints: extract_attribute_flags(fn_attrs, "go"),
+                        go_hints,
                         go_name: None,
                         const_value: None,
                     },
@@ -313,6 +322,8 @@ impl TaskState<'_> {
             .map(|s| self.convert_to_type(&*store, &s.annotation, &s.span))
             .collect();
 
+        let module_id = self.cursor.module_id.clone();
+        let is_d_lis = self.is_d_lis(&*store);
         let mut method_defs: Vec<(EcoString, Type, Vec<String>, Vec<String>)> = Vec::new();
         let methods = fn_expressions
             .iter()
@@ -364,13 +375,21 @@ impl TaskState<'_> {
                     fn_ty
                 };
 
-                method_defs.push((
-                    method_sig.name.clone(),
-                    fn_ty.clone(),
-                    extract_attribute_flags(fn_attrs, "go"),
-                    extract_attribute_flags(fn_attrs, "allow"),
-                ));
-                (method_sig.name, fn_ty)
+                let go_hints = extract_attribute_flags(fn_attrs, "go");
+                if go_hints.iter().any(|h| h == "unexported") {
+                    (
+                        super::seal_method_key(is_d_lis, fn_attrs, &module_id, &method_sig.name),
+                        fn_ty,
+                    )
+                } else {
+                    method_defs.push((
+                        method_sig.name.clone(),
+                        fn_ty.clone(),
+                        go_hints,
+                        extract_attribute_flags(fn_attrs, "allow"),
+                    ));
+                    (method_sig.name, fn_ty)
+                }
             })
             .collect();
 
@@ -415,7 +434,6 @@ impl TaskState<'_> {
         // Register interface methods as Definition::Value entries so the emitter
         // can look up their go_hints (e.g., comma_ok) by qualified name.
         // Methods inherit the interface's visibility — a `pub interface`'s methods are implicitly public.
-        let module_id = self.cursor.module_id.clone();
         for (method_name, method_ty, go_hints, allowed_lints) in method_defs {
             let method_qualified_name = format!("{}.{}.{}", module_id, interface_name, method_name);
             module.definitions.insert(

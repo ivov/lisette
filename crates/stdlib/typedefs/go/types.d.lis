@@ -828,6 +828,24 @@ pub interface Object {
   fn Pos() -> token.Pos
   fn String() -> string
   fn Type() -> Option<Type>
+  #[go(unexported, "go/types.color() go/types.color")]
+  fn color()
+  #[go(unexported, "go/types.order() uint32")]
+  fn order()
+  #[go(unexported, "go/types.sameId(*go/types.Package,string,bool) bool")]
+  fn sameId()
+  #[go(unexported, "go/types.scopePos() go/token.Pos")]
+  fn scopePos()
+  #[go(unexported, "go/types.setColor(go/types.color)")]
+  fn setColor()
+  #[go(unexported, "go/types.setOrder(uint32)")]
+  fn setOrder()
+  #[go(unexported, "go/types.setParent(*go/types.Scope)")]
+  fn setParent()
+  #[go(unexported, "go/types.setScopePos(go/token.Pos)")]
+  fn setScopePos()
+  #[go(unexported, "go/types.setType(go/types.Type)")]
+  fn setType()
 }
 
 /// A Package describes a Go package.

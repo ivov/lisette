@@ -12,6 +12,7 @@ pub mod passes;
 pub mod path;
 pub mod prelude;
 pub mod promotion;
+pub mod sealing;
 pub mod store;
 
 use syntax::ast::Expression;

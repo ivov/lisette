@@ -1845,7 +1845,10 @@ pub struct Servent {
   pub Port: uint16,
 }
 
-pub interface Sockaddr {}
+pub interface Sockaddr {
+  #[go(unexported, "syscall.sockaddr() unsafe.Pointer,int32,error")]
+  fn sockaddr()
+}
 
 pub struct SockaddrGen(Slice<byte>)
 
@@ -3179,6 +3182,21 @@ impl Signal {
   fn Signal(self)
 
   fn String(self) -> string
+}
+
+impl SockaddrInet4 {
+  #[go(unexported, "syscall.sockaddr() unsafe.Pointer,int32,error")]
+  fn sockaddr(self: Ref<SockaddrInet4>)
+}
+
+impl SockaddrInet6 {
+  #[go(unexported, "syscall.sockaddr() unsafe.Pointer,int32,error")]
+  fn sockaddr(self: Ref<SockaddrInet6>)
+}
+
+impl SockaddrUnix {
+  #[go(unexported, "syscall.sockaddr() unsafe.Pointer,int32,error")]
+  fn sockaddr(self: Ref<SockaddrUnix>)
 }
 
 impl Timespec {

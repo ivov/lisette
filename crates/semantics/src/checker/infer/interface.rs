@@ -76,6 +76,20 @@ impl InferCtx<'_, '_> {
         if violations.is_empty() {
             Ok(())
         } else {
+            if let Some(sealed) = violations.iter().find(|v| {
+                v.missing
+                    .iter()
+                    .any(|(name, _)| crate::sealing::is_unexported_key(name))
+            }) {
+                let type_name = ty.get_name().map_or_else(|| ty.to_string(), str::to_owned);
+                self.sink
+                    .push(diagnostics::infer::sealed_interface_not_satisfiable(
+                        &sealed.interface_name,
+                        &type_name,
+                        *span,
+                    ));
+                return Err(violations);
+            }
             let resolved = ty.resolve_in(&self.env);
             let wrapper = if resolved.is_result() {
                 Some(diagnostics::infer::WrapperKind::Result)

@@ -14,6 +14,12 @@ func writeSkippedFieldComment(w *strings.Builder, indent string, f convert.Struc
 	fmt.Fprintf(w, "%s// SKIPPED field %q: %s — %s\n", indent, f.Name, f.SkipReason.Code, f.SkipReason.Message)
 }
 
+func escapeSealId(id string) string {
+	id = strings.ReplaceAll(id, `\`, `\\`)
+	id = strings.ReplaceAll(id, `"`, `\"`)
+	return id
+}
+
 func writeSkipNote(w *strings.Builder, indent, label string, reason *convert.SkipReason) {
 	fmt.Fprintf(w, "%s// SKIPPED %s: %s\n", indent, label, reason.Code)
 	fmt.Fprintf(w, "%s// %s\n", indent, reason.Message)
@@ -447,6 +453,9 @@ func (e *Emitter) emitMethodInImpl(result convert.ConvertResult, recvName string
 	if allowUnusedValue {
 		e.buf.WriteString("  #[allow(unused_value)]\n")
 	}
+	if result.SealId != "" {
+		fmt.Fprintf(&e.buf, "  #[go(unexported, \"%s\")]\n", escapeSealId(result.SealId))
+	}
 
 	var methodSignature strings.Builder
 	methodSignature.WriteString("  fn ")
@@ -498,6 +507,9 @@ func (e *Emitter) emitType(result convert.ConvertResult) {
 		} else {
 			signature.WriteString(" {\n")
 			for _, m := range result.InterfaceMethods {
+				if m.SealId != "" {
+					fmt.Fprintf(&signature, "  #[go(unexported, \"%s\")]\n", escapeSealId(m.SealId))
+				}
 				if m.CommaOk {
 					signature.WriteString("  #[go(comma_ok)]\n")
 				}

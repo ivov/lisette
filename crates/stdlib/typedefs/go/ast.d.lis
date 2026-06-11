@@ -379,6 +379,8 @@ pub struct CompositeLit {
 pub interface Decl {
   fn End() -> token.Pos
   fn Pos() -> token.Pos
+  #[go(unexported, "go/ast.declNode()")]
+  fn declNode()
 }
 
 /// A DeclStmt node represents a declaration in a statement list.
@@ -411,6 +413,8 @@ pub struct EmptyStmt {
 pub interface Expr {
   fn End() -> token.Pos
   fn Pos() -> token.Pos
+  #[go(unexported, "go/ast.exprNode()")]
+  fn exprNode()
 }
 
 /// An ExprStmt node represents a (stand-alone) expression
@@ -750,6 +754,8 @@ pub struct SliceExpr {
 pub interface Spec {
   fn End() -> token.Pos
   fn Pos() -> token.Pos
+  #[go(unexported, "go/ast.specNode()")]
+  fn specNode()
 }
 
 /// A StarExpr node represents an expression of the form "*" Expression.
@@ -763,6 +769,8 @@ pub struct StarExpr {
 pub interface Stmt {
   fn End() -> token.Pos
   fn Pos() -> token.Pos
+  #[go(unexported, "go/ast.stmtNode()")]
+  fn stmtNode()
 }
 
 /// A StructType node represents a struct type.
@@ -846,78 +854,117 @@ impl ArrayType {
   fn End(self: Ref<ArrayType>) -> token.Pos
 
   fn Pos(self: Ref<ArrayType>) -> token.Pos
+
+  #[go(unexported, "go/ast.exprNode()")]
+  fn exprNode(self: Ref<ArrayType>)
 }
 
 impl AssignStmt {
   fn End(self: Ref<AssignStmt>) -> token.Pos
 
   fn Pos(self: Ref<AssignStmt>) -> token.Pos
+
+  #[go(unexported, "go/ast.stmtNode()")]
+  fn stmtNode(self: Ref<AssignStmt>)
 }
 
 impl BadDecl {
   fn End(self: Ref<BadDecl>) -> token.Pos
 
   fn Pos(self: Ref<BadDecl>) -> token.Pos
+
+  #[go(unexported, "go/ast.declNode()")]
+  fn declNode(self: Ref<BadDecl>)
 }
 
 impl BadExpr {
   fn End(self: Ref<BadExpr>) -> token.Pos
 
   fn Pos(self: Ref<BadExpr>) -> token.Pos
+
+  #[go(unexported, "go/ast.exprNode()")]
+  fn exprNode(self: Ref<BadExpr>)
 }
 
 impl BadStmt {
   fn End(self: Ref<BadStmt>) -> token.Pos
 
   fn Pos(self: Ref<BadStmt>) -> token.Pos
+
+  #[go(unexported, "go/ast.stmtNode()")]
+  fn stmtNode(self: Ref<BadStmt>)
 }
 
 impl BasicLit {
   fn End(self: Ref<BasicLit>) -> token.Pos
 
   fn Pos(self: Ref<BasicLit>) -> token.Pos
+
+  #[go(unexported, "go/ast.exprNode()")]
+  fn exprNode(self: Ref<BasicLit>)
 }
 
 impl BinaryExpr {
   fn End(self: Ref<BinaryExpr>) -> token.Pos
 
   fn Pos(self: Ref<BinaryExpr>) -> token.Pos
+
+  #[go(unexported, "go/ast.exprNode()")]
+  fn exprNode(self: Ref<BinaryExpr>)
 }
 
 impl BlockStmt {
   fn End(self: Ref<BlockStmt>) -> token.Pos
 
   fn Pos(self: Ref<BlockStmt>) -> token.Pos
+
+  #[go(unexported, "go/ast.stmtNode()")]
+  fn stmtNode(self: Ref<BlockStmt>)
 }
 
 impl BranchStmt {
   fn End(self: Ref<BranchStmt>) -> token.Pos
 
   fn Pos(self: Ref<BranchStmt>) -> token.Pos
+
+  #[go(unexported, "go/ast.stmtNode()")]
+  fn stmtNode(self: Ref<BranchStmt>)
 }
 
 impl CallExpr {
   fn End(self: Ref<CallExpr>) -> token.Pos
 
   fn Pos(self: Ref<CallExpr>) -> token.Pos
+
+  #[go(unexported, "go/ast.exprNode()")]
+  fn exprNode(self: Ref<CallExpr>)
 }
 
 impl CaseClause {
   fn End(self: Ref<CaseClause>) -> token.Pos
 
   fn Pos(self: Ref<CaseClause>) -> token.Pos
+
+  #[go(unexported, "go/ast.stmtNode()")]
+  fn stmtNode(self: Ref<CaseClause>)
 }
 
 impl ChanType {
   fn End(self: Ref<ChanType>) -> token.Pos
 
   fn Pos(self: Ref<ChanType>) -> token.Pos
+
+  #[go(unexported, "go/ast.exprNode()")]
+  fn exprNode(self: Ref<ChanType>)
 }
 
 impl CommClause {
   fn End(self: Ref<CommClause>) -> token.Pos
 
   fn Pos(self: Ref<CommClause>) -> token.Pos
+
+  #[go(unexported, "go/ast.stmtNode()")]
+  fn stmtNode(self: Ref<CommClause>)
 }
 
 impl Comment {
@@ -962,36 +1009,54 @@ impl CompositeLit {
   fn End(self: Ref<CompositeLit>) -> token.Pos
 
   fn Pos(self: Ref<CompositeLit>) -> token.Pos
+
+  #[go(unexported, "go/ast.exprNode()")]
+  fn exprNode(self: Ref<CompositeLit>)
 }
 
 impl DeclStmt {
   fn End(self: Ref<DeclStmt>) -> token.Pos
 
   fn Pos(self: Ref<DeclStmt>) -> token.Pos
+
+  #[go(unexported, "go/ast.stmtNode()")]
+  fn stmtNode(self: Ref<DeclStmt>)
 }
 
 impl DeferStmt {
   fn End(self: Ref<DeferStmt>) -> token.Pos
 
   fn Pos(self: Ref<DeferStmt>) -> token.Pos
+
+  #[go(unexported, "go/ast.stmtNode()")]
+  fn stmtNode(self: Ref<DeferStmt>)
 }
 
 impl Ellipsis {
   fn End(self: Ref<Ellipsis>) -> token.Pos
 
   fn Pos(self: Ref<Ellipsis>) -> token.Pos
+
+  #[go(unexported, "go/ast.exprNode()")]
+  fn exprNode(self: Ref<Ellipsis>)
 }
 
 impl EmptyStmt {
   fn End(self: Ref<EmptyStmt>) -> token.Pos
 
   fn Pos(self: Ref<EmptyStmt>) -> token.Pos
+
+  #[go(unexported, "go/ast.stmtNode()")]
+  fn stmtNode(self: Ref<EmptyStmt>)
 }
 
 impl ExprStmt {
   fn End(self: Ref<ExprStmt>) -> token.Pos
 
   fn Pos(self: Ref<ExprStmt>) -> token.Pos
+
+  #[go(unexported, "go/ast.stmtNode()")]
+  fn stmtNode(self: Ref<ExprStmt>)
 }
 
 impl Field {
@@ -1027,36 +1092,54 @@ impl ForStmt {
   fn End(self: Ref<ForStmt>) -> token.Pos
 
   fn Pos(self: Ref<ForStmt>) -> token.Pos
+
+  #[go(unexported, "go/ast.stmtNode()")]
+  fn stmtNode(self: Ref<ForStmt>)
 }
 
 impl FuncDecl {
   fn End(self: Ref<FuncDecl>) -> token.Pos
 
   fn Pos(self: Ref<FuncDecl>) -> token.Pos
+
+  #[go(unexported, "go/ast.declNode()")]
+  fn declNode(self: Ref<FuncDecl>)
 }
 
 impl FuncLit {
   fn End(self: Ref<FuncLit>) -> token.Pos
 
   fn Pos(self: Ref<FuncLit>) -> token.Pos
+
+  #[go(unexported, "go/ast.exprNode()")]
+  fn exprNode(self: Ref<FuncLit>)
 }
 
 impl FuncType {
   fn End(self: Ref<FuncType>) -> token.Pos
 
   fn Pos(self: Ref<FuncType>) -> token.Pos
+
+  #[go(unexported, "go/ast.exprNode()")]
+  fn exprNode(self: Ref<FuncType>)
 }
 
 impl GenDecl {
   fn End(self: Ref<GenDecl>) -> token.Pos
 
   fn Pos(self: Ref<GenDecl>) -> token.Pos
+
+  #[go(unexported, "go/ast.declNode()")]
+  fn declNode(self: Ref<GenDecl>)
 }
 
 impl GoStmt {
   fn End(self: Ref<GoStmt>) -> token.Pos
 
   fn Pos(self: Ref<GoStmt>) -> token.Pos
+
+  #[go(unexported, "go/ast.stmtNode()")]
+  fn stmtNode(self: Ref<GoStmt>)
 }
 
 impl Ident {
@@ -1068,60 +1151,90 @@ impl Ident {
   fn Pos(self: Ref<Ident>) -> token.Pos
 
   fn String(self: Ref<Ident>) -> string
+
+  #[go(unexported, "go/ast.exprNode()")]
+  fn exprNode(self: Ref<Ident>)
 }
 
 impl IfStmt {
   fn End(self: Ref<IfStmt>) -> token.Pos
 
   fn Pos(self: Ref<IfStmt>) -> token.Pos
+
+  #[go(unexported, "go/ast.stmtNode()")]
+  fn stmtNode(self: Ref<IfStmt>)
 }
 
 impl ImportSpec {
   fn End(self: Ref<ImportSpec>) -> token.Pos
 
   fn Pos(self: Ref<ImportSpec>) -> token.Pos
+
+  #[go(unexported, "go/ast.specNode()")]
+  fn specNode(self: Ref<ImportSpec>)
 }
 
 impl IncDecStmt {
   fn End(self: Ref<IncDecStmt>) -> token.Pos
 
   fn Pos(self: Ref<IncDecStmt>) -> token.Pos
+
+  #[go(unexported, "go/ast.stmtNode()")]
+  fn stmtNode(self: Ref<IncDecStmt>)
 }
 
 impl IndexExpr {
   fn End(self: Ref<IndexExpr>) -> token.Pos
 
   fn Pos(self: Ref<IndexExpr>) -> token.Pos
+
+  #[go(unexported, "go/ast.exprNode()")]
+  fn exprNode(self: Ref<IndexExpr>)
 }
 
 impl IndexListExpr {
   fn End(self: Ref<IndexListExpr>) -> token.Pos
 
   fn Pos(self: Ref<IndexListExpr>) -> token.Pos
+
+  #[go(unexported, "go/ast.exprNode()")]
+  fn exprNode(self: Ref<IndexListExpr>)
 }
 
 impl InterfaceType {
   fn End(self: Ref<InterfaceType>) -> token.Pos
 
   fn Pos(self: Ref<InterfaceType>) -> token.Pos
+
+  #[go(unexported, "go/ast.exprNode()")]
+  fn exprNode(self: Ref<InterfaceType>)
 }
 
 impl KeyValueExpr {
   fn End(self: Ref<KeyValueExpr>) -> token.Pos
 
   fn Pos(self: Ref<KeyValueExpr>) -> token.Pos
+
+  #[go(unexported, "go/ast.exprNode()")]
+  fn exprNode(self: Ref<KeyValueExpr>)
 }
 
 impl LabeledStmt {
   fn End(self: Ref<LabeledStmt>) -> token.Pos
 
   fn Pos(self: Ref<LabeledStmt>) -> token.Pos
+
+  #[go(unexported, "go/ast.stmtNode()")]
+  fn stmtNode(self: Ref<LabeledStmt>)
 }
 
 impl MapType {
   fn End(self: Ref<MapType>) -> token.Pos
 
   fn Pos(self: Ref<MapType>) -> token.Pos
+
+  #[go(unexported, "go/ast.exprNode()")]
+  fn exprNode(self: Ref<MapType>)
 }
 
 impl ObjKind {
@@ -1145,18 +1258,27 @@ impl ParenExpr {
   fn End(self: Ref<ParenExpr>) -> token.Pos
 
   fn Pos(self: Ref<ParenExpr>) -> token.Pos
+
+  #[go(unexported, "go/ast.exprNode()")]
+  fn exprNode(self: Ref<ParenExpr>)
 }
 
 impl RangeStmt {
   fn End(self: Ref<RangeStmt>) -> token.Pos
 
   fn Pos(self: Ref<RangeStmt>) -> token.Pos
+
+  #[go(unexported, "go/ast.stmtNode()")]
+  fn stmtNode(self: Ref<RangeStmt>)
 }
 
 impl ReturnStmt {
   fn End(self: Ref<ReturnStmt>) -> token.Pos
 
   fn Pos(self: Ref<ReturnStmt>) -> token.Pos
+
+  #[go(unexported, "go/ast.stmtNode()")]
+  fn stmtNode(self: Ref<ReturnStmt>)
 }
 
 impl Scope {
@@ -1179,70 +1301,106 @@ impl SelectStmt {
   fn End(self: Ref<SelectStmt>) -> token.Pos
 
   fn Pos(self: Ref<SelectStmt>) -> token.Pos
+
+  #[go(unexported, "go/ast.stmtNode()")]
+  fn stmtNode(self: Ref<SelectStmt>)
 }
 
 impl SelectorExpr {
   fn End(self: Ref<SelectorExpr>) -> token.Pos
 
   fn Pos(self: Ref<SelectorExpr>) -> token.Pos
+
+  #[go(unexported, "go/ast.exprNode()")]
+  fn exprNode(self: Ref<SelectorExpr>)
 }
 
 impl SendStmt {
   fn End(self: Ref<SendStmt>) -> token.Pos
 
   fn Pos(self: Ref<SendStmt>) -> token.Pos
+
+  #[go(unexported, "go/ast.stmtNode()")]
+  fn stmtNode(self: Ref<SendStmt>)
 }
 
 impl SliceExpr {
   fn End(self: Ref<SliceExpr>) -> token.Pos
 
   fn Pos(self: Ref<SliceExpr>) -> token.Pos
+
+  #[go(unexported, "go/ast.exprNode()")]
+  fn exprNode(self: Ref<SliceExpr>)
 }
 
 impl StarExpr {
   fn End(self: Ref<StarExpr>) -> token.Pos
 
   fn Pos(self: Ref<StarExpr>) -> token.Pos
+
+  #[go(unexported, "go/ast.exprNode()")]
+  fn exprNode(self: Ref<StarExpr>)
 }
 
 impl StructType {
   fn End(self: Ref<StructType>) -> token.Pos
 
   fn Pos(self: Ref<StructType>) -> token.Pos
+
+  #[go(unexported, "go/ast.exprNode()")]
+  fn exprNode(self: Ref<StructType>)
 }
 
 impl SwitchStmt {
   fn End(self: Ref<SwitchStmt>) -> token.Pos
 
   fn Pos(self: Ref<SwitchStmt>) -> token.Pos
+
+  #[go(unexported, "go/ast.stmtNode()")]
+  fn stmtNode(self: Ref<SwitchStmt>)
 }
 
 impl TypeAssertExpr {
   fn End(self: Ref<TypeAssertExpr>) -> token.Pos
 
   fn Pos(self: Ref<TypeAssertExpr>) -> token.Pos
+
+  #[go(unexported, "go/ast.exprNode()")]
+  fn exprNode(self: Ref<TypeAssertExpr>)
 }
 
 impl TypeSpec {
   fn End(self: Ref<TypeSpec>) -> token.Pos
 
   fn Pos(self: Ref<TypeSpec>) -> token.Pos
+
+  #[go(unexported, "go/ast.specNode()")]
+  fn specNode(self: Ref<TypeSpec>)
 }
 
 impl TypeSwitchStmt {
   fn End(self: Ref<TypeSwitchStmt>) -> token.Pos
 
   fn Pos(self: Ref<TypeSwitchStmt>) -> token.Pos
+
+  #[go(unexported, "go/ast.stmtNode()")]
+  fn stmtNode(self: Ref<TypeSwitchStmt>)
 }
 
 impl UnaryExpr {
   fn End(self: Ref<UnaryExpr>) -> token.Pos
 
   fn Pos(self: Ref<UnaryExpr>) -> token.Pos
+
+  #[go(unexported, "go/ast.exprNode()")]
+  fn exprNode(self: Ref<UnaryExpr>)
 }
 
 impl ValueSpec {
   fn End(self: Ref<ValueSpec>) -> token.Pos
 
   fn Pos(self: Ref<ValueSpec>) -> token.Pos
+
+  #[go(unexported, "go/ast.specNode()")]
+  fn specNode(self: Ref<ValueSpec>)
 }

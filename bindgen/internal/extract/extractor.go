@@ -32,6 +32,7 @@ type SymbolExport struct {
 	IsPromoted       bool         // true if promoted from an embedded field
 	OriginalTypeName string       // for promoted methods: declaring type name
 	OriginalPkgPath  string       // for promoted methods: declaring type's package path
+	Unexported       bool         // a directly-declared unexported method, recorded as a seal
 }
 
 func currentLoadConfig() *packages.Config {
@@ -132,6 +133,7 @@ func ExtractExports(pkg *packages.Package, embedFaithful func(*types.Var) bool) 
 
 	pkgScope := pkg.Types.Scope()
 	pkgNames := pkgScope.Names()
+	sealNames := sealMethodNames(pkgScope)
 
 	for _, name := range pkgNames {
 		obj := pkgScope.Lookup(name)
@@ -161,7 +163,7 @@ func ExtractExports(pkg *packages.Package, embedFaithful func(*types.Var) bool) 
 			})
 
 			if named, ok := o.Type().(*types.Named); ok {
-				methodExports := extractMethods(named, pkg, docPkg, embedFaithful)
+				methodExports := extractMethods(named, pkg, docPkg, sealNames, embedFaithful)
 				exports = append(exports, methodExports...)
 			}
 
@@ -195,7 +197,30 @@ func ExtractExports(pkg *packages.Package, embedFaithful func(*types.Var) bool) 
 	return exports
 }
 
-func extractMethods(named *types.Named, pkg *packages.Package, docPkg *doc.Package, embedFaithful func(*types.Var) bool) []SymbolExport {
+// sealMethodNames collects the unexported method names that seal some exported
+// interface in the package. Only these are recorded on concrete types (so an
+// embedder can satisfy the seal). Other unexported helpers stay out.
+func sealMethodNames(scope *types.Scope) map[string]bool {
+	seal := map[string]bool{}
+	for _, name := range scope.Names() {
+		tn, ok := scope.Lookup(name).(*types.TypeName)
+		if !ok || !tn.Exported() {
+			continue
+		}
+		iface, ok := tn.Type().Underlying().(*types.Interface)
+		if !ok || !iface.IsMethodSet() {
+			continue
+		}
+		for m := range iface.Methods() {
+			if !m.Exported() {
+				seal[m.Name()] = true
+			}
+		}
+	}
+	return seal
+}
+
+func extractMethods(named *types.Named, pkg *packages.Package, docPkg *doc.Package, sealNames map[string]bool, embedFaithful func(*types.Var) bool) []SymbolExport {
 	var exports []SymbolExport
 
 	ptrMethodSet := types.NewMethodSet(types.NewPointer(named))
@@ -205,10 +230,6 @@ func extractMethods(named *types.Named, pkg *packages.Package, docPkg *doc.Packa
 	for sel := range ptrMethodSet.Methods() {
 		methodObj := sel.Obj()
 
-		if !methodObj.Exported() {
-			continue
-		}
-
 		fn, ok := methodObj.(*types.Func)
 		if !ok {
 			continue
@@ -216,6 +237,26 @@ func extractMethods(named *types.Named, pkg *packages.Package, docPkg *doc.Packa
 
 		index := sel.Index()
 		isPromoted := len(index) > 1
+
+		if !methodObj.Exported() {
+			// Record a directly-declared unexported method only when it seals an
+			// exported interface here. Helpers and promoted ones (slice 5) are skipped.
+			if isPromoted || !sealNames[methodObj.Name()] {
+				continue
+			}
+			sig := fn.Type().(*types.Signature)
+			exports = append(exports, SymbolExport{
+				Name:             methodObj.Name(),
+				Kind:             ExportMethod,
+				GoType:           fn.Type(),
+				Obj:              fn,
+				ReceiverVariable: sig.Recv(),
+				BaseType:         named,
+				Unexported:       true,
+			})
+			continue
+		}
+
 		if isPromoted {
 			if st, ok := named.Underlying().(*types.Struct); ok && embedFaithful(st.Field(index[0])) {
 				continue

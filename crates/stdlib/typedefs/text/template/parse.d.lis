@@ -199,6 +199,10 @@ pub interface Node {
   fn Position() -> Pos
   fn String() -> string
   fn Type() -> NodeType
+  #[go(unexported, "text/template/parse.tree() *text/template/parse.Tree")]
+  fn tree()
+  #[go(unexported, "text/template/parse.writeTo(*strings.Builder)")]
+  fn writeTo()
 }
 
 /// NumberNode holds a number: signed or unsigned integer, float, or complex.
@@ -302,6 +306,12 @@ impl ActionNode {
   /// Type returns itself and provides an easy default implementation
   /// for embedding in a Node. Embedded in all non-trivial Nodes.
   fn Type(self) -> NodeType
+
+  #[go(unexported, "text/template/parse.tree() *text/template/parse.Tree")]
+  fn tree(self: Ref<ActionNode>)
+
+  #[go(unexported, "text/template/parse.writeTo(*strings.Builder)")]
+  fn writeTo(self: Ref<ActionNode>)
 }
 
 impl BoolNode {
@@ -314,6 +324,12 @@ impl BoolNode {
   /// Type returns itself and provides an easy default implementation
   /// for embedding in a Node. Embedded in all non-trivial Nodes.
   fn Type(self) -> NodeType
+
+  #[go(unexported, "text/template/parse.tree() *text/template/parse.Tree")]
+  fn tree(self: Ref<BoolNode>)
+
+  #[go(unexported, "text/template/parse.writeTo(*strings.Builder)")]
+  fn writeTo(self: Ref<BoolNode>)
 }
 
 impl BranchNode {
@@ -326,6 +342,12 @@ impl BranchNode {
   /// Type returns itself and provides an easy default implementation
   /// for embedding in a Node. Embedded in all non-trivial Nodes.
   fn Type(self) -> NodeType
+
+  #[go(unexported, "text/template/parse.tree() *text/template/parse.Tree")]
+  fn tree(self: Ref<BranchNode>)
+
+  #[go(unexported, "text/template/parse.writeTo(*strings.Builder)")]
+  fn writeTo(self: Ref<BranchNode>)
 }
 
 impl BreakNode {
@@ -338,6 +360,12 @@ impl BreakNode {
   /// Type returns itself and provides an easy default implementation
   /// for embedding in a Node. Embedded in all non-trivial Nodes.
   fn Type(self) -> NodeType
+
+  #[go(unexported, "text/template/parse.tree() *text/template/parse.Tree")]
+  fn tree(self: Ref<BreakNode>)
+
+  #[go(unexported, "text/template/parse.writeTo(*strings.Builder)")]
+  fn writeTo(self: Ref<BreakNode>)
 }
 
 impl ChainNode {
@@ -353,6 +381,12 @@ impl ChainNode {
   /// Type returns itself and provides an easy default implementation
   /// for embedding in a Node. Embedded in all non-trivial Nodes.
   fn Type(self) -> NodeType
+
+  #[go(unexported, "text/template/parse.tree() *text/template/parse.Tree")]
+  fn tree(self: Ref<ChainNode>)
+
+  #[go(unexported, "text/template/parse.writeTo(*strings.Builder)")]
+  fn writeTo(self: Ref<ChainNode>)
 }
 
 impl CommandNode {
@@ -365,6 +399,12 @@ impl CommandNode {
   /// Type returns itself and provides an easy default implementation
   /// for embedding in a Node. Embedded in all non-trivial Nodes.
   fn Type(self) -> NodeType
+
+  #[go(unexported, "text/template/parse.tree() *text/template/parse.Tree")]
+  fn tree(self: Ref<CommandNode>)
+
+  #[go(unexported, "text/template/parse.writeTo(*strings.Builder)")]
+  fn writeTo(self: Ref<CommandNode>)
 }
 
 impl CommentNode {
@@ -377,6 +417,12 @@ impl CommentNode {
   /// Type returns itself and provides an easy default implementation
   /// for embedding in a Node. Embedded in all non-trivial Nodes.
   fn Type(self) -> NodeType
+
+  #[go(unexported, "text/template/parse.tree() *text/template/parse.Tree")]
+  fn tree(self: Ref<CommentNode>)
+
+  #[go(unexported, "text/template/parse.writeTo(*strings.Builder)")]
+  fn writeTo(self: Ref<CommentNode>)
 }
 
 impl ContinueNode {
@@ -389,6 +435,12 @@ impl ContinueNode {
   /// Type returns itself and provides an easy default implementation
   /// for embedding in a Node. Embedded in all non-trivial Nodes.
   fn Type(self) -> NodeType
+
+  #[go(unexported, "text/template/parse.tree() *text/template/parse.Tree")]
+  fn tree(self: Ref<ContinueNode>)
+
+  #[go(unexported, "text/template/parse.writeTo(*strings.Builder)")]
+  fn writeTo(self: Ref<ContinueNode>)
 }
 
 impl DotNode {
@@ -399,6 +451,12 @@ impl DotNode {
   fn String(self: Ref<DotNode>) -> string
 
   fn Type(self: Ref<DotNode>) -> NodeType
+
+  #[go(unexported, "text/template/parse.tree() *text/template/parse.Tree")]
+  fn tree(self: Ref<DotNode>)
+
+  #[go(unexported, "text/template/parse.writeTo(*strings.Builder)")]
+  fn writeTo(self: Ref<DotNode>)
 }
 
 impl FieldNode {
@@ -411,6 +469,12 @@ impl FieldNode {
   /// Type returns itself and provides an easy default implementation
   /// for embedding in a Node. Embedded in all non-trivial Nodes.
   fn Type(self) -> NodeType
+
+  #[go(unexported, "text/template/parse.tree() *text/template/parse.Tree")]
+  fn tree(self: Ref<FieldNode>)
+
+  #[go(unexported, "text/template/parse.writeTo(*strings.Builder)")]
+  fn writeTo(self: Ref<FieldNode>)
 }
 
 impl IdentifierNode {
@@ -435,6 +499,12 @@ impl IdentifierNode {
   /// Type returns itself and provides an easy default implementation
   /// for embedding in a Node. Embedded in all non-trivial Nodes.
   fn Type(self) -> NodeType
+
+  #[go(unexported, "text/template/parse.tree() *text/template/parse.Tree")]
+  fn tree(self: Ref<IdentifierNode>)
+
+  #[go(unexported, "text/template/parse.writeTo(*strings.Builder)")]
+  fn writeTo(self: Ref<IdentifierNode>)
 }
 
 impl IfNode {
@@ -453,6 +523,12 @@ impl ListNode {
   /// Type returns itself and provides an easy default implementation
   /// for embedding in a Node. Embedded in all non-trivial Nodes.
   fn Type(self) -> NodeType
+
+  #[go(unexported, "text/template/parse.tree() *text/template/parse.Tree")]
+  fn tree(self: Ref<ListNode>)
+
+  #[go(unexported, "text/template/parse.writeTo(*strings.Builder)")]
+  fn writeTo(self: Ref<ListNode>)
 }
 
 impl NilNode {
@@ -463,6 +539,12 @@ impl NilNode {
   fn String(self: Ref<NilNode>) -> string
 
   fn Type(self: Ref<NilNode>) -> NodeType
+
+  #[go(unexported, "text/template/parse.tree() *text/template/parse.Tree")]
+  fn tree(self: Ref<NilNode>)
+
+  #[go(unexported, "text/template/parse.writeTo(*strings.Builder)")]
+  fn writeTo(self: Ref<NilNode>)
 }
 
 impl NodeType {
@@ -481,6 +563,12 @@ impl NumberNode {
   /// Type returns itself and provides an easy default implementation
   /// for embedding in a Node. Embedded in all non-trivial Nodes.
   fn Type(self) -> NodeType
+
+  #[go(unexported, "text/template/parse.tree() *text/template/parse.Tree")]
+  fn tree(self: Ref<NumberNode>)
+
+  #[go(unexported, "text/template/parse.writeTo(*strings.Builder)")]
+  fn writeTo(self: Ref<NumberNode>)
 }
 
 impl PipeNode {
@@ -495,6 +583,12 @@ impl PipeNode {
   /// Type returns itself and provides an easy default implementation
   /// for embedding in a Node. Embedded in all non-trivial Nodes.
   fn Type(self) -> NodeType
+
+  #[go(unexported, "text/template/parse.tree() *text/template/parse.Tree")]
+  fn tree(self: Ref<PipeNode>)
+
+  #[go(unexported, "text/template/parse.writeTo(*strings.Builder)")]
+  fn writeTo(self: Ref<PipeNode>)
 }
 
 impl Pos {
@@ -515,6 +609,12 @@ impl StringNode {
   /// Type returns itself and provides an easy default implementation
   /// for embedding in a Node. Embedded in all non-trivial Nodes.
   fn Type(self) -> NodeType
+
+  #[go(unexported, "text/template/parse.tree() *text/template/parse.Tree")]
+  fn tree(self: Ref<StringNode>)
+
+  #[go(unexported, "text/template/parse.writeTo(*strings.Builder)")]
+  fn writeTo(self: Ref<StringNode>)
 }
 
 impl TemplateNode {
@@ -527,6 +627,12 @@ impl TemplateNode {
   /// Type returns itself and provides an easy default implementation
   /// for embedding in a Node. Embedded in all non-trivial Nodes.
   fn Type(self) -> NodeType
+
+  #[go(unexported, "text/template/parse.tree() *text/template/parse.Tree")]
+  fn tree(self: Ref<TemplateNode>)
+
+  #[go(unexported, "text/template/parse.writeTo(*strings.Builder)")]
+  fn writeTo(self: Ref<TemplateNode>)
 }
 
 impl TextNode {
@@ -539,6 +645,12 @@ impl TextNode {
   /// Type returns itself and provides an easy default implementation
   /// for embedding in a Node. Embedded in all non-trivial Nodes.
   fn Type(self) -> NodeType
+
+  #[go(unexported, "text/template/parse.tree() *text/template/parse.Tree")]
+  fn tree(self: Ref<TextNode>)
+
+  #[go(unexported, "text/template/parse.writeTo(*strings.Builder)")]
+  fn writeTo(self: Ref<TextNode>)
 }
 
 impl Tree {
@@ -574,6 +686,12 @@ impl VariableNode {
   /// Type returns itself and provides an easy default implementation
   /// for embedding in a Node. Embedded in all non-trivial Nodes.
   fn Type(self) -> NodeType
+
+  #[go(unexported, "text/template/parse.tree() *text/template/parse.Tree")]
+  fn tree(self: Ref<VariableNode>)
+
+  #[go(unexported, "text/template/parse.writeTo(*strings.Builder)")]
+  fn writeTo(self: Ref<VariableNode>)
 }
 
 impl WithNode {

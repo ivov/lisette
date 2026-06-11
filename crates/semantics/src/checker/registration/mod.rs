@@ -154,6 +154,29 @@ pub(super) fn extract_attribute_flags(attributes: &[Attribute], name: &str) -> V
         .collect()
 }
 
+pub(super) fn extract_attribute_string(attributes: &[Attribute], name: &str) -> Option<String> {
+    attributes.iter().filter(|a| a.name == name).find_map(|a| {
+        a.args.iter().find_map(|arg| match arg {
+            AttributeArg::String(s) => Some(s.clone()),
+            _ => None,
+        })
+    })
+}
+
+pub(super) fn seal_method_key(
+    is_d_lis: bool,
+    attributes: &[Attribute],
+    module_id: &str,
+    name: &str,
+) -> ecow::EcoString {
+    let id = if is_d_lis {
+        extract_attribute_string(attributes, "go").unwrap_or_else(|| format!("{module_id}.{name}"))
+    } else {
+        format!("{module_id}.{name}")
+    };
+    crate::sealing::unexported_key(&id)
+}
+
 impl TaskState<'_> {
     fn definition_exists(&self, store: &Store, qualified_name: &str) -> bool {
         self.current_module(store)

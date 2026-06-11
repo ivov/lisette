@@ -447,6 +447,10 @@ pub interface Type {
   fn PkgPath() -> string
   fn Size() -> uint
   fn String() -> string
+  #[go(unexported, "reflect.common() *internal/abi.Type")]
+  fn common()
+  #[go(unexported, "reflect.uncommon() *reflect.uncommonType")]
+  fn uncommon()
 }
 
 /// Value is the reflection interface to a Go value.

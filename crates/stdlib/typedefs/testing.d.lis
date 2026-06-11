@@ -250,6 +250,8 @@ pub interface TB {
   fn Skipf(format: string, args: VarArgs<Unknown>)
   fn Skipped() -> bool
   fn TempDir() -> string
+  #[go(unexported, "testing.private()")]
+  fn private()
 }
 
 impl B {

@@ -275,6 +275,17 @@ func (c *Converter) convertMethod(result *ConvertResult, symbolExport extract.Sy
 		}
 	}
 
+	// A seal is recorded by identity and receiver only; its params and return are
+	// unused and may be unrepresentable.
+	if symbolExport.Unexported {
+		pkgPath := ""
+		if symbolExport.Obj != nil && symbolExport.Obj.Pkg() != nil {
+			pkgPath = symbolExport.Obj.Pkg().Path()
+		}
+		result.SealId = sealIdentity(pkgPath, result.Name, signature)
+		return
+	}
+
 	qualifiedName := result.Name
 	if result.Receiver != nil && result.Receiver.BaseTypeName != "" {
 		qualifiedName = result.Receiver.BaseTypeName + "." + result.Name
@@ -1637,13 +1648,52 @@ func (c *Converter) markUnexportedNamesIn(t types.Type, seen map[types.Type]bool
 	}
 }
 
-// extractInterfaceMethods walks a Go interface's exported methods and converts
-// each to a Lisette InterfaceMethod. The second return value reports whether
-// the interface is representable at all: false when an embedded union or an
-// unrepresentable param/return type is encountered, true otherwise. A true
-// return with an empty slice means the interface has no exported methods
-// (e.g. empty interface or all methods unexported) and should be emitted as
-// `pub interface Name {}`.
+func sealQualifier(p *types.Package) string {
+	if p == nil {
+		return ""
+	}
+	return p.Path()
+}
+
+// sealIdentity is an unexported method's package-qualified identity: declaring
+// package, name, and signature (receiver excluded). A seal and a method that
+// implements it share it; a different signature or package does not.
+func sealIdentity(pkgPath, name string, sig *types.Signature) string {
+	var b strings.Builder
+	b.WriteString(pkgPath)
+	b.WriteString(".")
+	b.WriteString(name)
+	b.WriteString("(")
+	if sig != nil {
+		params := sig.Params()
+		for i := 0; i < params.Len(); i++ {
+			if i > 0 {
+				b.WriteString(",")
+			}
+			if sig.Variadic() && i == params.Len()-1 {
+				b.WriteString("...")
+			}
+			b.WriteString(types.TypeString(params.At(i).Type(), sealQualifier))
+		}
+	}
+	b.WriteString(")")
+	if sig != nil && sig.Results().Len() > 0 {
+		b.WriteString(" ")
+		results := sig.Results()
+		for i := 0; i < results.Len(); i++ {
+			if i > 0 {
+				b.WriteString(",")
+			}
+			b.WriteString(types.TypeString(results.At(i).Type(), sealQualifier))
+		}
+	}
+	return b.String()
+}
+
+// extractInterfaceMethods walks a Go interface's method set and converts each to
+// a Lisette InterfaceMethod. The second return value is false when an embedded
+// union or an unrepresentable exported param/return type is encountered.
+// Unexported methods are recorded by their seal identity only.
 func (c *Converter) extractInterfaceMethods(_interface *types.Interface, typeName string) ([]InterfaceMethod, bool) {
 	if _interface.NumEmbeddeds() > 0 {
 		for embedded := range _interface.EmbeddedTypes() {
@@ -1657,6 +1707,11 @@ func (c *Converter) extractInterfaceMethods(_interface *types.Interface, typeNam
 
 	for method := range _interface.Methods() {
 		if !method.Exported() {
+			sig, _ := method.Type().(*types.Signature)
+			methods = append(methods, InterfaceMethod{
+				Name:   method.Name(),
+				SealId: sealIdentity(method.Pkg().Path(), method.Name(), sig),
+			})
 			continue
 		}
 

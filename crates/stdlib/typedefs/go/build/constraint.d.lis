@@ -50,6 +50,8 @@ pub struct AndExpr {
 pub interface Expr {
   fn Eval(ok: fn(string) -> bool) -> bool
   fn String() -> string
+  #[go(unexported, "go/build/constraint.isExpr()")]
+  fn isExpr()
 }
 
 /// A NotExpr represents the expression !X (the negation of X).
@@ -78,18 +80,27 @@ impl AndExpr {
   fn Eval(self: Ref<AndExpr>, ok: fn(string) -> bool) -> bool
 
   fn String(self: Ref<AndExpr>) -> string
+
+  #[go(unexported, "go/build/constraint.isExpr()")]
+  fn isExpr(self: Ref<AndExpr>)
 }
 
 impl NotExpr {
   fn Eval(self: Ref<NotExpr>, ok: fn(string) -> bool) -> bool
 
   fn String(self: Ref<NotExpr>) -> string
+
+  #[go(unexported, "go/build/constraint.isExpr()")]
+  fn isExpr(self: Ref<NotExpr>)
 }
 
 impl OrExpr {
   fn Eval(self: Ref<OrExpr>, ok: fn(string) -> bool) -> bool
 
   fn String(self: Ref<OrExpr>) -> string
+
+  #[go(unexported, "go/build/constraint.isExpr()")]
+  fn isExpr(self: Ref<OrExpr>)
 }
 
 impl SyntaxError {
@@ -100,4 +111,7 @@ impl TagExpr {
   fn Eval(self: Ref<TagExpr>, ok: fn(string) -> bool) -> bool
 
   fn String(self: Ref<TagExpr>) -> string
+
+  #[go(unexported, "go/build/constraint.isExpr()")]
+  fn isExpr(self: Ref<TagExpr>)
 }

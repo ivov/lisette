@@ -1468,7 +1468,10 @@ pub struct SockFprog {
   pub Filter: Option<Ref<SockFilter>>,
 }
 
-pub interface Sockaddr {}
+pub interface Sockaddr {
+  #[go(unexported, "syscall.sockaddr() unsafe.Pointer,syscall._Socklen,error")]
+  fn sockaddr()
+}
 
 pub struct SockaddrInet4 {
   pub Port: int,
@@ -5282,6 +5285,31 @@ impl Signal {
   fn Signal(self)
 
   fn String(self) -> string
+}
+
+impl SockaddrInet4 {
+  #[go(unexported, "syscall.sockaddr() unsafe.Pointer,syscall._Socklen,error")]
+  fn sockaddr(self: Ref<SockaddrInet4>)
+}
+
+impl SockaddrInet6 {
+  #[go(unexported, "syscall.sockaddr() unsafe.Pointer,syscall._Socklen,error")]
+  fn sockaddr(self: Ref<SockaddrInet6>)
+}
+
+impl SockaddrLinklayer {
+  #[go(unexported, "syscall.sockaddr() unsafe.Pointer,syscall._Socklen,error")]
+  fn sockaddr(self: Ref<SockaddrLinklayer>)
+}
+
+impl SockaddrNetlink {
+  #[go(unexported, "syscall.sockaddr() unsafe.Pointer,syscall._Socklen,error")]
+  fn sockaddr(self: Ref<SockaddrNetlink>)
+}
+
+impl SockaddrUnix {
+  #[go(unexported, "syscall.sockaddr() unsafe.Pointer,syscall._Socklen,error")]
+  fn sockaddr(self: Ref<SockaddrUnix>)
 }
 
 impl Timespec {

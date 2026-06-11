@@ -1297,7 +1297,10 @@ pub struct RouteMessage {
 /// RoutingMessage represents a routing message.
 /// 
 /// Deprecated: Use golang.org/x/net/route instead.
-pub interface RoutingMessage {}
+pub interface RoutingMessage {
+  #[go(unexported, "syscall.sockaddr() []syscall.Sockaddr,error")]
+  fn sockaddr()
+}
 
 pub struct RtMetrics {
   pub Locks: uint32,
@@ -1348,7 +1351,10 @@ pub struct Rusage {
   pub Nivcsw: int64,
 }
 
-pub interface Sockaddr {}
+pub interface Sockaddr {
+  #[go(unexported, "syscall.sockaddr() unsafe.Pointer,syscall._Socklen,error")]
+  fn sockaddr()
+}
 
 pub struct SockaddrDatalink {
   pub Len: uint8,
@@ -4543,6 +4549,21 @@ impl Errno {
   fn Timeout(self) -> bool
 }
 
+impl InterfaceAddrMessage {
+  #[go(unexported, "syscall.sockaddr() []syscall.Sockaddr,error")]
+  fn sockaddr(self: Ref<InterfaceAddrMessage>)
+}
+
+impl InterfaceMessage {
+  #[go(unexported, "syscall.sockaddr() []syscall.Sockaddr,error")]
+  fn sockaddr(self: Ref<InterfaceMessage>)
+}
+
+impl InterfaceMulticastAddrMessage {
+  #[go(unexported, "syscall.sockaddr() []syscall.Sockaddr,error")]
+  fn sockaddr(self: Ref<InterfaceMulticastAddrMessage>)
+}
+
 impl Iovec {
   fn SetLen(self: Ref<Iovec>, length: int)
 }
@@ -4551,10 +4572,35 @@ impl Msghdr {
   fn SetControllen(self: Ref<Msghdr>, length: int)
 }
 
+impl RouteMessage {
+  #[go(unexported, "syscall.sockaddr() []syscall.Sockaddr,error")]
+  fn sockaddr(self: Ref<RouteMessage>)
+}
+
 impl Signal {
   fn Signal(self)
 
   fn String(self) -> string
+}
+
+impl SockaddrDatalink {
+  #[go(unexported, "syscall.sockaddr() unsafe.Pointer,syscall._Socklen,error")]
+  fn sockaddr(self: Ref<SockaddrDatalink>)
+}
+
+impl SockaddrInet4 {
+  #[go(unexported, "syscall.sockaddr() unsafe.Pointer,syscall._Socklen,error")]
+  fn sockaddr(self: Ref<SockaddrInet4>)
+}
+
+impl SockaddrInet6 {
+  #[go(unexported, "syscall.sockaddr() unsafe.Pointer,syscall._Socklen,error")]
+  fn sockaddr(self: Ref<SockaddrInet6>)
+}
+
+impl SockaddrUnix {
+  #[go(unexported, "syscall.sockaddr() unsafe.Pointer,syscall._Socklen,error")]
+  fn sockaddr(self: Ref<SockaddrUnix>)
 }
 
 impl Timespec {

@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] `Mine` cannot implement the sealed interface `Sealed`
+   ╭─[test.lis:6:40]
+ 5 │ }
+ 6 │ fn as_sealed(m: Mine) -> seal.Sealed { m }
+   ·                                        ┬
+   ·                                        ╰── `Sealed` is sealed and cannot be implemented here
+ 7 │ fn main() {}
+   ╰────
+  help: `Sealed` has an unexported method, so Go only lets types in its own package implement it. A Lisette type can satisfy `Sealed` only by embedding it (or by embedding an imported type that already implements it) · code: [infer.sealed_interface]

@@ -6678,6 +6678,122 @@ fn main() {}
 }
 
 #[test]
+fn satisfy_sealed_interface_via_plain_impl_rejected() {
+    let typedef = r#"
+pub interface Sealed {
+  fn Do() -> int
+  #[go(unexported)]
+  fn private()
+}
+"#;
+    let input = r#"
+import "go:example.com/lib"
+struct Mine {}
+impl Mine {
+  fn Do(self: Mine) -> int { 0 }
+}
+fn as_sealed(m: Mine) -> lib.Sealed { m }
+fn main() {}
+"#;
+    infer_with_go_typedefs(input, &[("go:example.com/lib", typedef)])
+        .assert_infer_code("sealed_interface");
+}
+
+#[test]
+fn satisfy_sealed_interface_via_embed_ok() {
+    let typedef = r#"
+pub interface Sealed {
+  fn Do() -> int
+  #[go(unexported)]
+  fn private()
+}
+"#;
+    let input = r#"
+import "go:example.com/lib"
+struct Mine { embed lib.Sealed }
+fn as_sealed(m: Mine) -> lib.Sealed { m }
+fn main() {}
+"#;
+    infer_with_go_typedefs(input, &[("go:example.com/lib", typedef)]).assert_no_errors();
+}
+
+#[test]
+fn satisfy_sealed_interface_via_embedded_implementer_ok() {
+    let typedef = r#"
+pub interface Sealed {
+  fn Do() -> int
+  #[go(unexported)]
+  fn private()
+}
+
+pub type SealedImpl
+impl SealedImpl {
+  fn Do(self) -> int
+  #[go(unexported)]
+  fn private(self)
+}
+"#;
+    let input = r#"
+import "go:example.com/lib"
+struct Mine { embed lib.SealedImpl }
+fn as_sealed(m: Mine) -> lib.Sealed { m }
+fn main() {}
+"#;
+    infer_with_go_typedefs(input, &[("go:example.com/lib", typedef)]).assert_no_errors();
+}
+
+#[test]
+fn satisfy_sealed_interface_via_matching_identity_ok() {
+    let typedef = r#"
+pub interface Sealed {
+  fn Do() -> int
+  #[go(unexported, "lib.private(int)")]
+  fn private()
+}
+
+pub type Impl
+impl Impl {
+  fn Do(self) -> int
+  #[go(unexported, "lib.private(int)")]
+  fn private(self)
+}
+"#;
+    let input = r#"
+import "go:example.com/lib"
+struct Mine { embed lib.Impl }
+fn as_sealed(m: Mine) -> lib.Sealed { m }
+fn main() {}
+"#;
+    infer_with_go_typedefs(input, &[("go:example.com/lib", typedef)]).assert_no_errors();
+}
+
+#[test]
+fn satisfy_sealed_interface_via_mismatched_signature_rejected() {
+    let typedef = r#"
+pub interface Sealed {
+  fn Do() -> int
+  #[go(unexported, "lib.private(int)")]
+  fn private()
+}
+
+pub type Impl
+impl Impl {
+  fn Do(self) -> int
+  #[go(unexported, "lib.private()")]
+  fn private(self)
+}
+"#;
+    let input = r#"
+import "go:example.com/lib"
+struct Mine { embed lib.Impl }
+fn as_sealed(m: Mine) -> lib.Sealed { m }
+fn main() {}
+"#;
+    infer_with_go_typedefs(input, &[("go:example.com/lib", typedef)])
+        .assert_infer_code("sealed_interface");
+}
+
+#[test]
 fn embed_local_enum_rejected() {
     infer(
         r#"

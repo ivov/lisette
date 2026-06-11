@@ -15,7 +15,10 @@ pub fn DefaultLookupPackage(name: string) -> Option<string>
 
 /// A Block is block-level content in a doc comment,
 /// one of [*Code], [*Heading], [*List], or [*Paragraph].
-pub interface Block {}
+pub interface Block {
+  #[go(unexported, "go/doc/comment.block()")]
+  fn block()
+}
 
 /// A Code is a preformatted code block.
 pub struct Code {
@@ -107,7 +110,15 @@ pub struct Printer {
 
 /// A Text is text-level content in a doc comment,
 /// one of [Plain], [Italic], [*Link], or [*DocLink].
-pub interface Text {}
+pub interface Text {
+  #[go(unexported, "go/doc/comment.text()")]
+  fn text()
+}
+
+impl Code {
+  #[go(unexported, "go/doc/comment.block()")]
+  fn block(self: Ref<Code>)
+}
 
 impl DocLink {
   /// DefaultURL constructs and returns the documentation URL for l,
@@ -129,6 +140,9 @@ impl DocLink {
   /// 	"/"     → "/math/#Sqrt"
   /// 	""      → "/math#Sqrt"
   fn DefaultURL(self: Ref<DocLink>, baseURL: string) -> string
+
+  #[go(unexported, "go/doc/comment.text()")]
+  fn text(self: Ref<DocLink>)
 }
 
 impl Heading {
@@ -140,6 +154,19 @@ impl Heading {
   /// For example, if the heading text is “Go Doc Comments”,
   /// the default ID is “hdr-Go_Doc_Comments”.
   fn DefaultID(self: Ref<Heading>) -> string
+
+  #[go(unexported, "go/doc/comment.block()")]
+  fn block(self: Ref<Heading>)
+}
+
+impl Italic {
+  #[go(unexported, "go/doc/comment.text()")]
+  fn text(self)
+}
+
+impl Link {
+  #[go(unexported, "go/doc/comment.text()")]
+  fn text(self: Ref<Link>)
 }
 
 impl List {
@@ -159,12 +186,25 @@ impl List {
   /// then list items must themselves be separated by blank lines.
   /// Blank line separators can be forced by setting [List].ForceBlankBetween.
   fn BlankBetween(self: Ref<List>) -> bool
+
+  #[go(unexported, "go/doc/comment.block()")]
+  fn block(self: Ref<List>)
+}
+
+impl Paragraph {
+  #[go(unexported, "go/doc/comment.block()")]
+  fn block(self: Ref<Paragraph>)
 }
 
 impl Parser {
   /// Parse parses the doc comment text and returns the *[Doc] form.
   /// Comment markers (/* // and */) in the text must have already been removed.
   fn Parse(self: Ref<Parser>, text: string) -> Ref<Doc>
+}
+
+impl Plain {
+  #[go(unexported, "go/doc/comment.text()")]
+  fn text(self)
 }
 
 impl Printer {
