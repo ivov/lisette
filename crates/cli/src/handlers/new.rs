@@ -95,8 +95,7 @@ fn main() {
         r#"# {}
 
 ```bash
-lis build
-go run -C target .
+lis run
 ```
 "#,
         project_name

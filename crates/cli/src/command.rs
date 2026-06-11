@@ -13,6 +13,7 @@ pub enum Command {
         target: Option<String>,
         args: Vec<String>,
         debug: bool,
+        go_flags: Vec<String>,
     },
     Format {
         path: Option<String>,
@@ -65,6 +66,26 @@ pub enum ParseError {
         reason: String,
         hint: String,
     },
+}
+
+fn extend_go_flags(go_flags: &mut Vec<String>, raw: &str) -> Result<(), ParseError> {
+    match crate::shell_words::split(raw) {
+        Ok(tokens) => {
+            go_flags.extend(tokens);
+            Ok(())
+        }
+        Err(crate::shell_words::SplitError::UnterminatedQuote(quote)) => {
+            Err(ParseError::UnexpectedArgument {
+                message: format!("unterminated {} quote in `--go-flags`", quote),
+                reason: "the value passed to `--go-flags` has an unbalanced quote".to_string(),
+                hint: "Balance the quotes, e.g. `--go-flags \"-ldflags='-s -w'\"`".to_string(),
+            })
+        }
+    }
+}
+
+fn is_go_output_flag(token: &str) -> bool {
+    token == "-o" || token.starts_with("-o=")
 }
 
 fn parse_format(value: &str) -> Result<OutputFormat, ParseError> {
@@ -122,24 +143,48 @@ impl Command {
                 let mut target = None;
                 let mut args = Vec::new();
                 let mut debug = false;
+                let mut go_flags = Vec::new();
                 let mut found_separator = false;
 
-                for arg in arguments {
+                while let Some(arg) = arguments.next() {
                     if found_separator {
                         args.push(arg);
                     } else if arg == "--" {
                         found_separator = true;
                     } else if arg == "--debug" {
                         debug = true;
+                    } else if arg == "--go-flags" {
+                        let Some(value) = arguments.next() else {
+                            return Err(ParseError::MissingArgument {
+                                command: "run",
+                                argument: "--go-flags <flags>",
+                            });
+                        };
+                        extend_go_flags(&mut go_flags, &value)?;
+                    } else if let Some(value) = arg.strip_prefix("--go-flags=") {
+                        extend_go_flags(&mut go_flags, value)?;
+                    } else if arg.starts_with('-') {
+                        return Err(ParseError::UnknownFlag(arg));
                     } else {
                         target = Some(arg);
                     }
+                }
+
+                if let Some(flag) = go_flags.iter().find(|f| is_go_output_flag(f)) {
+                    return Err(ParseError::UnexpectedArgument {
+                        message: format!("`{}` cannot be passed to `lis run` via `--go-flags`", flag),
+                        reason: "`run` executes the binary it links at an internal path, so it owns `-o`"
+                            .to_string(),
+                        hint: "Use `lis build --go-flags \"-o <path>\"` to choose the output location"
+                            .to_string(),
+                    });
                 }
 
                 Ok(Command::Run {
                     target,
                     args,
                     debug,
+                    go_flags,
                 })
             }
 
@@ -392,6 +437,105 @@ mod tests {
     fn check_rejects_both_filter_flags() {
         assert!(matches!(
             parse(&["lis", "check", "--errors-only", "--warnings-only"]),
+            Err(ParseError::UnexpectedArgument { .. })
+        ));
+    }
+
+    fn run_parts(parts: &[&str]) -> (Option<String>, Vec<String>, Vec<String>) {
+        let Ok(Command::Run {
+            target,
+            args,
+            go_flags,
+            ..
+        }) = parse(parts)
+        else {
+            panic!("expected Run command");
+        };
+        (target, args, go_flags)
+    }
+
+    #[test]
+    fn run_target_only() {
+        let (target, args, go_flags) = run_parts(&["lis", "run", "."]);
+        assert_eq!(target.as_deref(), Some("."));
+        assert!(args.is_empty());
+        assert!(go_flags.is_empty());
+    }
+
+    #[test]
+    fn run_go_flags_before_target() {
+        let (target, _, go_flags) = run_parts(&["lis", "run", "--go-flags", "-race", "."]);
+        assert_eq!(target.as_deref(), Some("."));
+        assert_eq!(go_flags, vec!["-race"]);
+    }
+
+    #[test]
+    fn run_go_flags_after_target() {
+        let (target, _, go_flags) = run_parts(&["lis", "run", ".", "--go-flags", "-race"]);
+        assert_eq!(target.as_deref(), Some("."));
+        assert_eq!(go_flags, vec!["-race"]);
+    }
+
+    #[test]
+    fn run_go_flags_equals_form() {
+        let (_, _, go_flags) = run_parts(&["lis", "run", "--go-flags=-trimpath"]);
+        assert_eq!(go_flags, vec!["-trimpath"]);
+    }
+
+    #[test]
+    fn run_go_flags_inner_quoted_value_stays_one_token() {
+        let (_, _, go_flags) =
+            run_parts(&["lis", "run", "--go-flags", "-trimpath -ldflags='-s -w'"]);
+        assert_eq!(go_flags, vec!["-trimpath", "-ldflags=-s -w"]);
+    }
+
+    #[test]
+    fn run_separator_routes_remaining_tokens_to_program_args() {
+        let (target, args, go_flags) = run_parts(&["lis", "run", ".", "--", "--go-flags", "-race"]);
+        assert_eq!(target.as_deref(), Some("."));
+        assert_eq!(args, vec!["--go-flags", "-race"]);
+        assert!(go_flags.is_empty());
+    }
+
+    #[test]
+    fn run_rejects_output_flag_separated_form() {
+        assert!(matches!(
+            parse(&["lis", "run", "--go-flags", "-o /tmp/x"]),
+            Err(ParseError::UnexpectedArgument { .. })
+        ));
+    }
+
+    #[test]
+    fn run_rejects_output_flag_joined_form() {
+        assert!(matches!(
+            parse(&["lis", "run", "--go-flags", "-o=/tmp/x"]),
+            Err(ParseError::UnexpectedArgument { .. })
+        ));
+    }
+
+    #[test]
+    fn run_rejects_unknown_flag() {
+        assert!(matches!(
+            parse(&["lis", "run", "--bogus"]),
+            Err(ParseError::UnknownFlag(_))
+        ));
+    }
+
+    #[test]
+    fn run_go_flags_requires_value() {
+        assert!(matches!(
+            parse(&["lis", "run", "--go-flags"]),
+            Err(ParseError::MissingArgument {
+                command: "run",
+                argument: "--go-flags <flags>",
+            })
+        ));
+    }
+
+    #[test]
+    fn run_go_flags_rejects_unterminated_quote() {
+        assert!(matches!(
+            parse(&["lis", "run", "--go-flags", "-ldflags='-s"]),
             Err(ParseError::UnexpectedArgument { .. })
         ));
     }

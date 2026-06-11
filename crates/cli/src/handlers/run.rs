@@ -2,9 +2,6 @@ use std::collections::hash_map::DefaultHasher;
 use std::fs;
 use std::hash::{Hash, Hasher};
 use std::path::Path;
-#[cfg(not(unix))]
-use std::path::PathBuf;
-#[cfg(not(unix))]
 use std::process::Command;
 
 use crate::cli_error;
@@ -13,136 +10,20 @@ use diagnostics::render::{self, Filter};
 use lisette::pipeline::{CompileConfig, CompilePhase, compile};
 use semantics::loader::MemoryLoader;
 
-fn run_with_invocation_cwd(
+fn build_and_exec(
     build_dir: &Path,
+    output_path: &Path,
     args: &[String],
+    go_flags: &[String],
     heading: &str,
     target: stdlib::Target,
 ) -> i32 {
-    #[cfg(unix)]
-    {
-        run_via_exec_wrapper(build_dir, args, heading, target)
-    }
-    #[cfg(not(unix))]
-    {
-        build_then_exec(build_dir, args, heading, target)
-    }
-}
-
-#[cfg(unix)]
-fn run_via_exec_wrapper(
-    build_dir: &Path,
-    args: &[String],
-    heading: &str,
-    target: stdlib::Target,
-) -> i32 {
-    let cwd = match std::env::current_dir() {
-        Ok(p) => p,
-        Err(e) => {
-            cli_error!(
-                heading,
-                format!("Failed to read current directory: {}", e),
-                "Check directory permissions"
-            );
-            return 1;
-        }
-    };
-    let cwd_str = cwd.to_string_lossy();
-    let quoted_cwd = match quote_for_go_exec(&cwd_str) {
-        Ok(q) => q,
-        Err(e) => {
-            cli_error!(
-                heading,
-                e,
-                "Run from a directory whose path does not contain both `'` and `\"`"
-            );
-            return 1;
-        }
-    };
-
-    let mut cmd = go_cli::go_command(target);
-    cmd.arg("-C")
-        .arg(build_dir)
-        .arg("run")
-        .arg(format!("-exec=env -C {}", quoted_cwd))
-        .arg(".")
-        .args(args);
-
-    match cmd.status() {
-        Ok(status) => status.code().unwrap_or(1),
-        Err(e) => {
-            cli_error!(
-                heading,
-                format!("Failed to execute `go run`: {}", e),
-                "Check Go installation with `go version`"
-            );
-            1
-        }
-    }
-}
-
-#[cfg(unix)]
-fn quote_for_go_exec(path: &str) -> Result<String, String> {
-    let has_single = path.contains('\'');
-    let has_double = path.contains('"');
-    match (has_single, has_double) {
-        (true, true) => Err(format!(
-            "Cannot pass cwd `{}` through `go run -exec`: contains both `'` and `\"`",
-            path
-        )),
-        (true, false) => Ok(format!("\"{}\"", path)),
-        _ => Ok(format!("'{}'", path)),
-    }
-}
-
-#[cfg(not(unix))]
-const RUN_BIN_NAME: &str = "lis-run.exe";
-
-#[cfg(not(unix))]
-fn build_then_exec(
-    build_dir: &Path,
-    args: &[String],
-    heading: &str,
-    target: stdlib::Target,
-) -> i32 {
-    let abs_build_dir = match build_dir.canonicalize() {
-        Ok(p) => p,
-        Err(e) => {
-            cli_error!(
-                heading,
-                format!("Failed to resolve `{}`: {}", build_dir.display(), e),
-                "Check that the directory exists"
-            );
-            return 1;
-        }
-    };
-    let binary_path: PathBuf = abs_build_dir.join(RUN_BIN_NAME);
-
-    let mut build_cmd = go_cli::go_command(target);
-    build_cmd
-        .arg("build")
-        .arg("-o")
-        .arg(&binary_path)
-        .arg(".")
-        .current_dir(&abs_build_dir);
-
-    match build_cmd.status() {
-        Ok(s) if s.success() => {}
-        Ok(s) => return s.code().unwrap_or(1),
-        Err(e) => {
-            cli_error!(
-                heading,
-                format!("Failed to execute `go build`: {}", e),
-                "Check Go installation with `go version`"
-            );
-            return 1;
-        }
+    if let Err(e) = go_cli::build_binary(build_dir, output_path, target, go_flags) {
+        cli_error!(heading, e.message, e.hint);
+        return 1;
     }
 
-    let mut cmd = Command::new(&binary_path);
-    cmd.args(args);
-
-    match cmd.status() {
+    match Command::new(output_path).args(args).status() {
         Ok(status) => status.code().unwrap_or(1),
         Err(e) => {
             cli_error!(
@@ -155,7 +36,7 @@ fn build_then_exec(
     }
 }
 
-pub fn run(target: Option<String>, args: Vec<String>, debug: bool) -> i32 {
+pub fn run(target: Option<String>, args: Vec<String>, debug: bool, go_flags: Vec<String>) -> i32 {
     if let Err(code) = crate::go_cli::require_go() {
         return code;
     }
@@ -163,13 +44,13 @@ pub fn run(target: Option<String>, args: Vec<String>, debug: bool) -> i32 {
     let target = target.unwrap_or_else(|| ".".to_string());
 
     if target.ends_with(".lis") {
-        run_standalone(&target, args, debug)
+        run_standalone(&target, args, debug, &go_flags)
     } else {
-        run_project(&target, args, debug)
+        run_project(&target, args, debug, &go_flags)
     }
 }
 
-fn run_project(path: &str, args: Vec<String>, debug: bool) -> i32 {
+fn run_project(path: &str, args: Vec<String>, debug: bool, go_flags: &[String]) -> i32 {
     let project_path = Path::new(path);
 
     let prep = match super::build::prepare_project_build(project_path) {
@@ -177,28 +58,39 @@ fn run_project(path: &str, args: Vec<String>, debug: bool) -> i32 {
         Err(code) => return code,
     };
 
-    // Held across the user program's lifetime so a concurrent `lis check`/
-    // `build`/`sync`/LSP cannot rewrite `target/` mid-`go run` compile.
+    // Held through the child's execution too: releasing sooner would let a concurrent
+    // `lis build`/`sync`/LSP relink `target/` under the running program.
     let _target_lock = match crate::lock::acquire_target_lock(&prep.target_dir) {
         Ok(f) => f,
         Err(code) => return code,
     };
 
-    let target_dir = prep.target_dir.clone();
+    let heading = "Failed to run project";
+    let target = stdlib::Target::host();
+    let binary_name = go_cli::binary_name(&prep.manifest.project.name, target);
+
     let build_result = super::build::build_locked(&prep, debug, true);
     if build_result != 0 {
         return build_result;
     }
 
-    run_with_invocation_cwd(
-        &target_dir,
-        &args,
-        "Failed to run project",
-        stdlib::Target::host(),
-    )
+    let build_dir = match prep.target_dir.canonicalize() {
+        Ok(p) => p,
+        Err(e) => {
+            cli_error!(
+                heading,
+                format!("Failed to resolve `{}`: {}", prep.target_dir.display(), e),
+                "Check that the directory exists"
+            );
+            return 1;
+        }
+    };
+    let output_path = build_dir.join("bin").join(&binary_name);
+
+    build_and_exec(&build_dir, &output_path, &args, go_flags, heading, target)
 }
 
-fn run_standalone(file: &str, args: Vec<String>, debug: bool) -> i32 {
+fn run_standalone(file: &str, args: Vec<String>, debug: bool, go_flags: &[String]) -> i32 {
     let file_path = Path::new(file);
 
     if !file_path.exists() {
@@ -238,6 +130,19 @@ fn run_standalone(file: &str, args: Vec<String>, debug: bool) -> i32 {
         );
         return 1;
     }
+
+    // Absolute path required: a relative `TMPDIR` would break the `-o`/exec contract.
+    let temp_dir = match temp_dir.canonicalize() {
+        Ok(p) => p,
+        Err(e) => {
+            cli_error!(
+                "Failed to run standalone file",
+                format!("Failed to resolve temporary directory: {}", e),
+                "Check permissions on temp directory"
+            );
+            return 1;
+        }
+    };
 
     let compile_config = CompileConfig {
         target_phase: CompilePhase::Emit,
@@ -314,5 +219,6 @@ fn run_standalone(file: &str, args: Vec<String>, debug: bool) -> i32 {
 
     go_cli::write_emit_manifest(&temp_dir, &emit.new_manifest);
 
-    run_with_invocation_cwd(&temp_dir, &args, "Failed to run standalone file", target)
+    let output_path = temp_dir.join(go_cli::run_binary_name(target));
+    build_and_exec(&temp_dir, &output_path, &args, go_flags, heading, target)
 }

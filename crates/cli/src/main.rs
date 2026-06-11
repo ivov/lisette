@@ -5,6 +5,7 @@ mod handlers;
 mod lock;
 mod output;
 mod panic;
+mod shell_words;
 mod typedef_regen;
 mod workspace;
 
@@ -62,7 +63,8 @@ fn main() {
             target,
             args,
             debug,
-        } => handlers::run(target, args, debug),
+            go_flags,
+        } => handlers::run(target, args, debug, go_flags),
         Command::Format { path, check } => handlers::format(path, check),
         Command::Check {
             path,

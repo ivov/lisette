@@ -414,3 +414,168 @@ fn go_mod_tidy(path: &Path, target: Target) -> Result<(), String> {
 
     Ok(())
 }
+
+pub fn binary_name(go_module_name: &str, target: Target) -> String {
+    let stem = go_module_name.rsplit('/').next().unwrap_or(go_module_name);
+    with_exe_suffix(sanitize_binary_stem(stem), target)
+}
+
+pub fn run_binary_name(target: Target) -> String {
+    with_exe_suffix("lis-run".to_string(), target)
+}
+
+fn with_exe_suffix(stem: String, target: Target) -> String {
+    if target.goos == "windows" {
+        format!("{stem}.exe")
+    } else {
+        stem
+    }
+}
+
+/// Stem that keeps `target/bin/` invisible to Go tooling and is a usable
+/// filename on every host.
+pub fn sanitize_binary_stem(name: &str) -> String {
+    let mut stem: String = name
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '.' {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect();
+
+    stem = stem.trim_start_matches(['.', '_']).to_string();
+
+    while stem.ends_with(".go") {
+        stem.truncate(stem.len() - ".go".len());
+    }
+
+    if stem.is_empty() || stem == "testdata" || stem == "vendor" || is_windows_reserved_name(&stem)
+    {
+        return "app".to_string();
+    }
+
+    stem
+}
+
+/// Reserved on Windows regardless of extension, keyed on the pre-dot segment
+/// (`con.txt` too); checked on every host so the name is host-independent.
+fn is_windows_reserved_name(stem: &str) -> bool {
+    let base = stem.split('.').next().unwrap_or(stem);
+    let lower = base.to_ascii_lowercase();
+    if matches!(lower.as_str(), "con" | "prn" | "aux" | "nul") {
+        return true;
+    }
+    let bytes = lower.as_bytes();
+    (lower.starts_with("com") || lower.starts_with("lpt"))
+        && bytes.len() == 4
+        && (b'1'..=b'9').contains(&bytes[3])
+}
+
+/// `go_flags` follow the default `-o` so a caller `-o` wins. `output_path` must
+/// be absolute, since `go build` runs with `build_dir` as cwd.
+pub fn build_binary(
+    build_dir: &Path,
+    output_path: &Path,
+    target: Target,
+    go_flags: &[String],
+) -> Result<(), GoCliError> {
+    if let Some(parent) = output_path.parent() {
+        fs::create_dir_all(parent).map_err(|e| GoCliError {
+            message: format!("Failed to create `{}`: {}", parent.display(), e),
+            hint: "Check directory permissions",
+        })?;
+    }
+
+    let mut cmd = go_command(target);
+    cmd.arg("build").arg("-o").arg(output_path);
+    for flag in go_flags {
+        cmd.arg(flag);
+    }
+    cmd.arg(".").current_dir(build_dir);
+
+    match cmd.status() {
+        Ok(status) if status.success() => Ok(()),
+        Ok(_) => Err(GoCliError {
+            message: "`go build` failed".to_string(),
+            hint: "Review the Go compiler output above",
+        }),
+        Err(e) => Err(GoCliError {
+            message: format!("Failed to execute `go build`: {}", e),
+            hint: "Check Go installation with `go version`",
+        }),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn linux() -> Target {
+        Target::new("linux", "amd64")
+    }
+
+    fn windows() -> Target {
+        Target::new("windows", "amd64")
+    }
+
+    #[test]
+    fn binary_name_uses_last_module_segment() {
+        assert_eq!(binary_name("myproj", linux()), "myproj");
+        assert_eq!(binary_name("github.com/u/myproj", linux()), "myproj");
+    }
+
+    #[test]
+    fn binary_name_appends_exe_on_windows() {
+        assert_eq!(binary_name("myproj", windows()), "myproj.exe");
+        assert_eq!(run_binary_name(windows()), "lis-run.exe");
+        assert_eq!(run_binary_name(linux()), "lis-run");
+    }
+
+    #[test]
+    fn sanitize_replaces_illegal_chars() {
+        assert_eq!(sanitize_binary_stem("weird name!"), "weird_name_");
+    }
+
+    #[test]
+    fn sanitize_never_ends_in_go() {
+        assert_eq!(sanitize_binary_stem("foo.go"), "foo");
+        assert_eq!(sanitize_binary_stem("foo.go.go"), "foo");
+    }
+
+    #[test]
+    fn sanitize_strips_leading_reserved_prefixes() {
+        assert_eq!(sanitize_binary_stem(".hidden"), "hidden");
+        assert_eq!(sanitize_binary_stem("_x"), "x");
+    }
+
+    #[test]
+    fn sanitize_falls_back_for_empty_or_reserved() {
+        assert_eq!(sanitize_binary_stem("___"), "app");
+        assert_eq!(sanitize_binary_stem("testdata"), "app");
+        assert_eq!(sanitize_binary_stem("vendor"), "app");
+    }
+
+    #[test]
+    fn sanitize_avoids_windows_reserved_device_names() {
+        assert_eq!(sanitize_binary_stem("con"), "app");
+        assert_eq!(sanitize_binary_stem("CON"), "app");
+        assert_eq!(sanitize_binary_stem("NuL"), "app");
+        assert_eq!(sanitize_binary_stem("com1"), "app");
+        assert_eq!(sanitize_binary_stem("LPT9"), "app");
+        assert_eq!(sanitize_binary_stem("com0"), "com0");
+        assert_eq!(sanitize_binary_stem("com10"), "com10");
+        assert_eq!(sanitize_binary_stem("console"), "console");
+    }
+
+    #[test]
+    fn sanitize_avoids_dotted_windows_reserved_names() {
+        assert_eq!(sanitize_binary_stem("con.txt"), "app");
+        assert_eq!(sanitize_binary_stem("NUL.anything"), "app");
+        assert_eq!(sanitize_binary_stem("com1.foo"), "app");
+        assert_eq!(sanitize_binary_stem("foo.con"), "foo.con");
+        assert_eq!(sanitize_binary_stem("console.txt"), "console.txt");
+    }
+}

@@ -48,7 +48,7 @@ fn bash_completions() -> &'static str {
             return 0
             ;;
         run)
-            COMPREPLY=( $(compgen -W "--debug" -- "$cur") )
+            COMPREPLY=( $(compgen -W "--debug --go-flags" -- "$cur") )
             return 0
             ;;
         format)
@@ -116,7 +116,9 @@ _lis() {
                     _arguments '--debug[Include line directives for stack traces]'
                     ;;
                 run)
-                    _arguments '--debug[Include line directives for stack traces]'
+                    _arguments \
+                        '--debug[Include line directives for stack traces]' \
+                        '--go-flags[Flags passed through to go build]:flags'
                     ;;
                 format)
                     _arguments '--check[Check formatting without modifying]'
@@ -164,6 +166,7 @@ complete -c lis -n __fish_use_subcommand -a version -d 'Print version informatio
 
 complete -c lis -n '__fish_seen_subcommand_from build' -l debug -d 'Include line directives for stack traces'
 complete -c lis -n '__fish_seen_subcommand_from run' -l debug -d 'Include line directives for stack traces'
+complete -c lis -n '__fish_seen_subcommand_from run' -l go-flags -r -d 'Flags passed through to go build'
 complete -c lis -n '__fish_seen_subcommand_from format' -l check -d 'Check formatting without modifying'
 complete -c lis -n '__fish_seen_subcommand_from check' -l errors-only -d 'Show only errors'
 complete -c lis -n '__fish_seen_subcommand_from check' -l warnings-only -d 'Show only warnings'
