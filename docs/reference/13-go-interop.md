@@ -248,6 +248,27 @@ pub fn Ints(mut x: Slice<int>)
 
 📚 See [`05-functions.md`](../reference/05-functions.md#mutable-parameters)
 
+## Embedding imported Go types
+
+A Lisette struct can embed an imported Go type the same way it embeds a Lisette struct. The embedded type's exported methods and fields promote onto the outer struct:
+
+```rs
+import "go:sync"
+
+struct Counter {
+  embed sync.Mutex, // promotes Lock and Unlock
+  pub n: int,
+}
+
+fn incr(c: Ref<Counter>) {
+  c.Lock()
+  c.n = c.n + 1
+  c.Unlock()
+}
+```
+
+Imported structs, interfaces, and method-bearing named types can all be embedded. This includes types such as `net.IPConn`, `testing.B`, and `os.File`, which embed an unexported Go type internally; their promoted methods resolve at the depth Go gives them.
+
 ## Typed `nil` at the boundary
 
 Go interfaces have three states, not two:

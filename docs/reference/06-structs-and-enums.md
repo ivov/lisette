@@ -124,7 +124,13 @@ let _ = s.prefix // `Server` accesses `Logger` field directly
 let _ = s.log() // `Server` accesses `Logger` method directly
 ```
 
-An embedded type must be a non-generic struct defined in Lisette. Embedding use cases will be expanded in future.
+An embedded type can be:
+
+- a struct (defined in Lisette or imported from Go), including generic structs
+- an imported Go interface
+- an imported Go named type with methods
+
+📚 See [`13-go-interop.md`](13-go-interop.md)
 
 ## Enums
 
