@@ -1,0 +1,11 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Invalid variable declaration
+   ╭─[test.lis:2:1]
+ 1 │ 
+ 2 │ var count: int
+   · ───────┬──────
+   ·        ╰── `var` is not allowed here
+   ╰────
+  help: Use `const` for a primitive, or a function that returns the value e.g. `fn origin() -> Point { ... }` for a composite · code: [infer.variable_declaration_outside_typedef]

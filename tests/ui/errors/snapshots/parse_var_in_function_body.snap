@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Syntax error
+   ╭─[test.lis:3:3]
+ 2 │ fn test() {
+ 3 │   var x = 1
+   ·   ─┬─
+   ·    ╰── expected `let`
+ 4 │ }
+   ╰────
+  help: Use `let` to declare a variable: `let x = 0` · code: [parse.expected_let]

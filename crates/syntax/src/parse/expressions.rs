@@ -1590,9 +1590,15 @@ impl<'source> Parser<'source> {
         let token = self.current_token();
         let keyword = token.text.to_string();
         let span = self.span_from_token(token);
-        let error = ParseError::new("Reserved keyword", span, "reserved keyword")
-            .with_parse_code("keyword_as_identifier")
-            .with_help(format!("Rename `{}`", keyword));
+        let error = if token.kind == Var {
+            ParseError::new("Syntax error", span, "expected `let`")
+                .with_parse_code("expected_let")
+                .with_help("Use `let` to declare a variable: `let x = 0`")
+        } else {
+            ParseError::new("Reserved keyword", span, "reserved keyword")
+                .with_parse_code("keyword_as_identifier")
+                .with_help(format!("Rename `{}`", keyword))
+        };
         self.errors.push(error);
         self.next();
         Expression::Identifier {

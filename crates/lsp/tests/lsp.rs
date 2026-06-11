@@ -6852,7 +6852,7 @@ enum MyEnum { A, B }
 interface MyInterface { fn method(self: Self) -> int }
 type MyAlias = int
 const MY_CONST: int = 42
-var my_var: int = 0
+var my_var: int
 fn my_function() -> int { 1 }
 fn main() { 1 }",
         )

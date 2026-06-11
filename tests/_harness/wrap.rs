@@ -79,6 +79,7 @@ fn needs_wrapping(source: &str) -> bool {
         "struct ",
         "enum ",
         "const ",
+        "var ",
         "impl ",
         "import ",
         "type ",

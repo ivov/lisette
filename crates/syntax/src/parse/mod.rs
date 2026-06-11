@@ -656,6 +656,19 @@ impl<'source> Parser<'source> {
         self.errors.push(error);
     }
 
+    fn error_var_initializer(&mut self, span: ast::Span) {
+        if self.too_many_errors() {
+            return;
+        }
+        let error = ParseError::new("Syntax error", span, "not allowed")
+            .with_parse_code("var_not_allowed")
+            .with_help(
+                "Use `const` for a primitive, or a function that returns the value e.g. `fn origin() -> Point { ... }` for a composite",
+            );
+
+        self.errors.push(error);
+    }
+
     fn error_import_alias_after_path(&mut self, span: ast::Span, alias: &str, path: &str) {
         if self.too_many_errors() {
             return;
@@ -999,10 +1012,15 @@ impl<'source> Parser<'source> {
                 "use_unsupported",
                 "Use `import` instead of `use` for imports: `import \"module/path\"`",
             ),
+            "top_item" if token.kind == Let => (
+                "`let` is not allowed at the top level".to_string(),
+                "top_level_let",
+                "Use `const` for a primitive, or a function that returns the value e.g. `fn origin() -> Point { ... }` for a composite",
+            ),
             "top_item" => (
                 "expected declaration".to_string(),
                 "expected_declaration",
-                "At the top level of a file, Lisette expects `fn`, `struct`, `enum`, `interface`, `import`, or `type`.",
+                "At the top level of a file, Lisette expects `fn`, `struct`, `enum`, `interface`, `impl`, `const`, `import`, or `type`.",
             ),
             _ => (
                 format!("unexpected {}", token_descriptor),

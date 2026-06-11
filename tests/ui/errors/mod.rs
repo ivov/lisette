@@ -3184,6 +3184,14 @@ const MAX_SIZE: int
 }
 
 #[test]
+fn infer_variable_declaration_outside_typedef() {
+    let input = r#"
+var count: int
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
 fn infer_valueless_const_missing_annotation_in_typedef() {
     let mut fs = MockFileSystem::new();
     fs.add_file("types", "consts.d.lis", "const MAX_SIZE");
@@ -4918,6 +4926,63 @@ trait Displayable {
 fn parse_expected_declaration() {
     let input = r#"
 123
+"#;
+    assert_parse_error_snapshot!(input);
+}
+
+#[test]
+fn parse_top_level_var_with_initializer() {
+    let input = r#"
+struct Config {
+  gravity: float,
+  count: int,
+}
+
+var conf = Config {
+  gravity: 0.03,
+  count: 6,
+}
+"#;
+
+    let lex_result = syntax::lex::Lexer::new(input, 0).lex();
+    let parse_result = syntax::parse::Parser::new(lex_result.tokens, input).parse();
+
+    assert!(
+        parse_result.errors.len() == 1,
+        "Expected exactly 1 error for top-level var with initializer, got {}: {:?}",
+        parse_result.errors.len(),
+        parse_result
+            .errors
+            .iter()
+            .map(|e| &e.message)
+            .collect::<Vec<_>>()
+    );
+
+    assert_parse_error_snapshot!(input);
+}
+
+#[test]
+fn parse_top_level_var_annotated_with_initializer() {
+    let input = r#"
+var count: int = 6
+"#;
+    assert_parse_error_snapshot!(input);
+}
+
+#[test]
+fn parse_top_level_let() {
+    let input = r#"
+let x = 1
+"#;
+    assert_parse_error_snapshot!(input);
+}
+
+#[test]
+fn parse_var_in_function_body() {
+    let input = r#"
+fn test() {
+  var x = 1
+}
 "#;
     assert_parse_error_snapshot!(input);
 }

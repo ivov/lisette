@@ -250,7 +250,9 @@ pub fn const_disallows_composite(span: Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Composite value in `const`")
         .with_infer_code("const_disallows_composite")
         .with_span_label(&span, "not allowed")
-        .with_help("`const` only accepts primitive values: `bool`, `int`, `float`, and `string`")
+        .with_help(
+            "`const` only accepts primitive values: `bool`, `int`, `float`, and `string`. Use a function that returns the value instead",
+        )
 }
 
 pub fn const_cycle(cycle: &[String], span: Span) -> LisetteDiagnostic {
@@ -1998,8 +2000,9 @@ pub fn variable_declaration_outside_typedef(span: Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Invalid variable declaration")
         .with_infer_code("variable_declaration_outside_typedef")
         .with_span_label(&span, "`var` is not allowed here")
-        .with_help("Use `let` to declare a variable: `let x: int = 0`.")
-        .with_note("`var` declarations are only allowed in `.d.lis` files.")
+        .with_help(
+            "Use `const` for a primitive, or a function that returns the value e.g. `fn origin() -> Point { ... }` for a composite",
+        )
 }
 
 pub fn range_full_not_valid_expression(span: Span) -> LisetteDiagnostic {

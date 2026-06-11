@@ -628,8 +628,16 @@ impl<'source> Parser<'source> {
         let name_span = Span::new(self.file_id, name_token.byte_offset, name_token.byte_length);
         let name = self.read_identifier();
 
+        if self.advance_if(Equal) {
+            return self.recover_var_initializer(start);
+        }
+
         self.ensure(Colon);
         let annotation = self.parse_annotation();
+
+        if self.advance_if(Equal) {
+            return self.recover_var_initializer(start);
+        }
 
         Expression::VariableDeclaration {
             doc,
@@ -637,6 +645,16 @@ impl<'source> Parser<'source> {
             name_span,
             annotation,
             visibility: Visibility::Private,
+            ty: Type::uninferred(),
+            span: self.span_from_tokens(start),
+        }
+    }
+
+    fn recover_var_initializer(&mut self, start: Token<'source>) -> Expression {
+        self.parse_expression();
+        self.error_var_initializer(self.span_from_token(start));
+
+        Expression::Unit {
             ty: Type::uninferred(),
             span: self.span_from_tokens(start),
         }
