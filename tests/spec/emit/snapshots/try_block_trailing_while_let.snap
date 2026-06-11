@@ -1,6 +1,16 @@
 ---
 source: tests/spec/emit/result_option_patterns.rs
-description: "input: \nfn test() -> Result<(), string> {\n  try {\n    let _ = Ok(1)?\n    let o = Some(1)\n    while let Some(_v) = o {\n      break\n    }\n  }\n}\n"
+description: |
+  
+  fn test() -> Result<(), string> {
+    try {
+      let _ = Ok(1)?
+      let o = Some(1)
+      while let Some(_v) = o {
+        break
+      }
+    }
+  }
 ---
 package main
 

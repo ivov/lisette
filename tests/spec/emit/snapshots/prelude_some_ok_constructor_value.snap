@@ -1,6 +1,12 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \nfn main() {\n  let f = Some\n  let x = f(42)\n  let _ = x\n}\n"
+description: |
+  
+  fn main() {
+    let f = Some
+    let x = f(42)
+    let _ = x
+  }
 ---
 package main
 

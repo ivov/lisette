@@ -1,6 +1,13 @@
 ---
 source: tests/spec/emit/functions.rs
-description: "input: \nfn test() -> float64 {\n  let a: int = 3;\n  let b: int = 4;\n  let c: int = 2;\n  ((a + b) as float64) / (c as float64)\n}\n"
+description: |
+  
+  fn test() -> float64 {
+    let a: int = 3;
+    let b: int = 4;
+    let c: int = 2;
+    ((a + b) as float64) / (c as float64)
+  }
 ---
 package main
 

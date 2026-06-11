@@ -1,6 +1,17 @@
 ---
 source: tests/spec/emit/interop_matrix.rs
-description: "input: \nimport \"go:flag\"\n\nfn main() {\n  let arr: Slice<fn(string) -> Option<Ref<flag.Flag>>> = [flag.Lookup]\n  let r = arr[0](\"verbose\")\n  match r {\n    Some(v) => { let _ = v },\n    None => {},\n  }\n}\n"
+description: |
+  
+  import "go:flag"
+  
+  fn main() {
+    let arr: Slice<fn(string) -> Option<Ref<flag.Flag>>> = [flag.Lookup]
+    let r = arr[0]("verbose")
+    match r {
+      Some(v) => { let _ = v },
+      None => {},
+    }
+  }
 ---
 package main
 

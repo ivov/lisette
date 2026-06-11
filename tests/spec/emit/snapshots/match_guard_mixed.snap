@@ -1,6 +1,14 @@
 ---
 source: tests/spec/emit/control_flow.rs
-description: "input: \nfn test(opt: Option<int>) -> string {\n  match opt {\n    Some(x) if x > 0 => \"positive\",\n    Some(_) => \"non-positive\",\n    None => \"none\",\n  }\n}\n"
+description: |
+  
+  fn test(opt: Option<int>) -> string {
+    match opt {
+      Some(x) if x > 0 => "positive",
+      Some(_) => "non-positive",
+      None => "none",
+    }
+  }
 ---
 package main
 

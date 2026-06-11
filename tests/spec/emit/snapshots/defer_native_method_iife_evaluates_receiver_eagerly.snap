@@ -1,6 +1,14 @@
 ---
 source: tests/spec/emit/concurrency.rs
-description: "input: \nfn get_items() -> Slice<int> {\n  [1]\n}\n\nfn test() {\n  defer get_items().length()\n}\n"
+description: |
+  
+  fn get_items() -> Slice<int> {
+    [1]
+  }
+  
+  fn test() {
+    defer get_items().length()
+  }
 ---
 package main
 

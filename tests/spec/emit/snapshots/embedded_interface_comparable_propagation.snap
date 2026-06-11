@@ -1,6 +1,16 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \ninterface A<K> {\n  fn get(self, m: Map<K, int>) -> int\n}\n\ninterface B<K> {\n  impl A<K>\n}\n\nfn main() { let _ = 0 }\n"
+description: |
+  
+  interface A<K> {
+    fn get(self, m: Map<K, int>) -> int
+  }
+  
+  interface B<K> {
+    impl A<K>
+  }
+  
+  fn main() { let _ = 0 }
 ---
 package main
 

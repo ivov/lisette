@@ -1,6 +1,19 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \nstruct Wrapper<T>(T)\n\nimpl<T> Wrapper<T> {\n  fn unwrap(self: Wrapper<T>) -> T {\n    self.0\n  }\n}\n\nfn test() -> int {\n  let w = Wrapper(42);\n  w.unwrap()\n}\n"
+description: |
+  
+  struct Wrapper<T>(T)
+  
+  impl<T> Wrapper<T> {
+    fn unwrap(self: Wrapper<T>) -> T {
+      self.0
+    }
+  }
+  
+  fn test() -> int {
+    let w = Wrapper(42);
+    w.unwrap()
+  }
 ---
 package main
 

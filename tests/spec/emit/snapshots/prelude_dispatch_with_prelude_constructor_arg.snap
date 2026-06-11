@@ -1,6 +1,12 @@
 ---
 source: tests/spec/emit/prelude.rs
-description: "input: \nfn main() {\n  let opt: Option<int> = Some(1)\n  let r = opt.and_then(Some)\n  let _ = r\n}\n"
+description: |
+  
+  fn main() {
+    let opt: Option<int> = Some(1)
+    let r = opt.and_then(Some)
+    let _ = r
+  }
 ---
 package main
 

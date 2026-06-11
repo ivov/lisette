@@ -1,6 +1,15 @@
 ---
 source: tests/spec/emit/control_flow.rs
-description: "input: \nstruct W<T>(T)\n\nfn test() {\n  let mut i = 0\n  while W(1).0 == 1 && i < 1 {\n    i = i + 1\n  }\n}\n"
+description: |
+  
+  struct W<T>(T)
+  
+  fn test() {
+    let mut i = 0
+    while W(1).0 == 1 && i < 1 {
+      i = i + 1
+    }
+  }
 ---
 package main
 

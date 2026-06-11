@@ -1,6 +1,12 @@
 ---
 source: tests/spec/lex/mod.rs
-description: "input: \nimpl<T> Container<T> {\n  fn get(self: Container<T>) -> T {\n    return self.value;\n  }\n}\n"
+description: |
+  
+  impl<T> Container<T> {
+    fn get(self: Container<T>) -> T {
+      return self.value;
+    }
+  }
 ---
 LexResult {
     tokens: [

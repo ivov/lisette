@@ -1,6 +1,10 @@
 ---
 source: tests/spec/format/mod.rs
-description: "input: fn f() -> int {\n  let x = 1\n  // trailing in block\n}"
+description: |-
+  fn f() -> int {
+    let x = 1
+    // trailing in block
+  }
 ---
 fn f() -> int {
   let x = 1

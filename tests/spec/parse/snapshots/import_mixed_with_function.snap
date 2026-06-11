@@ -1,6 +1,15 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nimport \"go:io\"\nimport \"network\"\n\nfn process() {\n  // function body\n}\n\nimport \"logging\"\n"
+description: |
+  
+  import "go:io"
+  import "network"
+  
+  fn process() {
+    // function body
+  }
+  
+  import "logging"
 ---
 [
     ModuleImport {

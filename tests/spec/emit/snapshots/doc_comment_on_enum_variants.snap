@@ -1,6 +1,16 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \n/// Result of a network operation.\nenum NetworkResult {\n  /// The operation succeeded.\n  Success,\n  /// The operation timed out.\n  Timeout,\n  /// The operation failed with an error code.\n  Error(int),\n}\n"
+description: |
+  
+  /// Result of a network operation.
+  enum NetworkResult {
+    /// The operation succeeded.
+    Success,
+    /// The operation timed out.
+    Timeout,
+    /// The operation failed with an error code.
+    Error(int),
+  }
 ---
 package main
 

@@ -1,6 +1,5 @@
 ---
 source: tests/ui/errors/mod.rs
-assertion_line: 5645
 ---
   [error] Use of `Self` type
    ╭─[test.lis:6:29]

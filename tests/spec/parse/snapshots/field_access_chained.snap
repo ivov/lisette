@@ -1,6 +1,10 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nfn test(cfg: Config) {\n  let username = cfg.auth.user.name;\n}\n"
+description: |
+  
+  fn test(cfg: Config) {
+    let username = cfg.auth.user.name;
+  }
 ---
 [
     Function {

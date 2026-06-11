@@ -1,6 +1,13 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nfn get_items() -> Slice<int> { [1, 2, 3] }\n\nfn main() {\n  let mut items = [0, 0, 0]\n  items[get_items()[0]] = if true { 42 } else { 0 }\n}\n"
+description: |
+  
+  fn get_items() -> Slice<int> { [1, 2, 3] }
+  
+  fn main() {
+    let mut items = [0, 0, 0]
+    items[get_items()[0]] = if true { 42 } else { 0 }
+  }
 ---
 package main
 

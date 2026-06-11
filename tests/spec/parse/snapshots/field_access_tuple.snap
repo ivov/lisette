@@ -1,6 +1,11 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nfn test(pair: (int, string)) {\n  let first_item = pair.0;\n  let second_item = pair.1;\n}\n"
+description: |
+  
+  fn test(pair: (int, string)) {
+    let first_item = pair.0;
+    let second_item = pair.1;
+  }
 ---
 [
     Function {

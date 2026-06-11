@@ -1,6 +1,14 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nfn make_int() -> int { 1 }\nfn read_ref(r: Ref<int>) -> int { r.* }\nfn side_effect() -> int { 1 }\n\nfn test() -> int {\n  side_effect() + read_ref(&make_int())\n}\n"
+description: |
+  
+  fn make_int() -> int { 1 }
+  fn read_ref(r: Ref<int>) -> int { r.* }
+  fn side_effect() -> int { 1 }
+  
+  fn test() -> int {
+    side_effect() + read_ref(&make_int())
+  }
 ---
 package main
 

@@ -1,6 +1,6 @@
 ---
 source: tests/spec/desugar/mod.rs
-description: "input: fn test() { x |> clamp(0, 100); }"
+description: "fn test() { x |> clamp(0, 100); }"
 ---
 [
     Function {

@@ -1,7 +1,14 @@
 ---
 source: tests/spec/emit/types.rs
-assertion_line: 342
-description: "input: \nfn foo<T>(args: T) -> T {\n  args\n}\n\nfn test() {\n  let result = foo<Unknown>(\"Lilian\")\n}\n"
+description: |
+  
+  fn foo<T>(args: T) -> T {
+    args
+  }
+  
+  fn test() {
+    let result = foo<Unknown>("Lilian")
+  }
 ---
 package main
 

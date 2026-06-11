@@ -1,6 +1,23 @@
 ---
 source: tests/spec/emit/interop_matrix.rs
-description: "input: \nimport \"go:bufio\"\nimport \"go:fmt\"\nimport \"go:io\"\nimport \"go:os\"\n\nfn main() {\n  let reader = bufio.NewReader(os.Stdin)\n  while true {\n    let r = match reader.ReadRune() {\n      Ok((r, _)) => r,\n      Err(io.EOF) => break,\n      Err(_) => panic(\"error\"),\n    }\n    fmt.Printf(\"%c\", r)\n  }\n}\n"
+description: |
+  
+  import "go:bufio"
+  import "go:fmt"
+  import "go:io"
+  import "go:os"
+  
+  fn main() {
+    let reader = bufio.NewReader(os.Stdin)
+    while true {
+      let r = match reader.ReadRune() {
+        Ok((r, _)) => r,
+        Err(io.EOF) => break,
+        Err(_) => panic("error"),
+      }
+      fmt.Printf("%c", r)
+    }
+  }
 ---
 package main
 

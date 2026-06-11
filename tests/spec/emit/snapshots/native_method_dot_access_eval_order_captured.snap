@@ -1,6 +1,18 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nfn bump(i: Ref<int>) -> int {\n  i.* = 1\n  10\n}\n\nfn main() {\n  let mut i = 0\n  let items = [10, 20, 30]\n  let v = items.contains(bump(&i))\n  let _ = v\n}\n"
+description: |
+  
+  fn bump(i: Ref<int>) -> int {
+    i.* = 1
+    10
+  }
+  
+  fn main() {
+    let mut i = 0
+    let items = [10, 20, 30]
+    let v = items.contains(bump(&i))
+    let _ = v
+  }
 ---
 package main
 

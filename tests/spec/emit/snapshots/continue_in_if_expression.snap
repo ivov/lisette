@@ -1,6 +1,19 @@
 ---
 source: tests/spec/emit/control_flow.rs
-description: "input: \nfn test() -> int {\n  let mut sum = 0;\n  for i in [1, 2, 3, 4, 5] {\n    let v = if i % 2 == 0 {\n      continue\n    } else {\n      i\n    };\n    sum += v;\n  }\n  sum\n}\n"
+description: |
+  
+  fn test() -> int {
+    let mut sum = 0;
+    for i in [1, 2, 3, 4, 5] {
+      let v = if i % 2 == 0 {
+        continue
+      } else {
+        i
+      };
+      sum += v;
+    }
+    sum
+  }
 ---
 package main
 

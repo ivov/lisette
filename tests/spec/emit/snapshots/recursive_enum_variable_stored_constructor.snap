@@ -1,6 +1,17 @@
 ---
 source: tests/spec/emit/functions.rs
-description: "input: \nenum List {\n  Nil,\n  Cons(int, List),\n}\n\nfn main() {\n  let make = List.Cons\n  let xs = make(1, List.Nil)\n  let _ = xs\n}\n"
+description: |
+  
+  enum List {
+    Nil,
+    Cons(int, List),
+  }
+  
+  fn main() {
+    let make = List.Cons
+    let xs = make(1, List.Nil)
+    let _ = xs
+  }
 ---
 package main
 

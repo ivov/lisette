@@ -1,6 +1,9 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \n#[display]\nstruct Point { x: int, y: int }\n"
+description: |
+  
+  #[display]
+  struct Point { x: int, y: int }
 ---
 package main
 

@@ -1,6 +1,8 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nfn test(a: int, b: int, c: int) { let result = (a + b) * c; }\n"
+description: |
+  
+  fn test(a: int, b: int, c: int) { let result = (a + b) * c; }
 ---
 [
     Function {

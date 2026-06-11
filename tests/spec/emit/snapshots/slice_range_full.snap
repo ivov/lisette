@@ -1,6 +1,10 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \nfn test(arr: Slice<int>) -> Slice<int> {\n  arr[..]\n}\n"
+description: |
+  
+  fn test(arr: Slice<int>) -> Slice<int> {
+    arr[..]
+  }
 ---
 package main
 

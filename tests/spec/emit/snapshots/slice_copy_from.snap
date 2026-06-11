@@ -1,6 +1,10 @@
 ---
 source: tests/spec/emit/prelude.rs
-description: "input: \nfn test(dst: Slice<int>, src: Slice<int>) -> int {\n  dst.copy_from(src)\n}\n"
+description: |
+  
+  fn test(dst: Slice<int>, src: Slice<int>) -> int {
+    dst.copy_from(src)
+  }
 ---
 package main
 

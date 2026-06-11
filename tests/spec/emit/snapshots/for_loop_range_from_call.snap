@@ -1,6 +1,16 @@
 ---
 source: tests/spec/emit/control_flow.rs
-description: "input: \nfn get_range() -> Range<int> { 0..5 }\n\nfn test() -> int {\n  let mut sum = 0;\n  for i in get_range() {\n    sum = sum + i;\n  };\n  sum\n}\n"
+description: |
+  
+  fn get_range() -> Range<int> { 0..5 }
+  
+  fn test() -> int {
+    let mut sum = 0;
+    for i in get_range() {
+      sum = sum + i;
+    };
+    sum
+  }
 ---
 package main
 

@@ -1,6 +1,10 @@
 ---
 source: tests/spec/emit/prelude.rs
-description: "input: \nfn test(ch: Channel<int>) -> bool {\n  ch.is_empty()\n}\n"
+description: |
+  
+  fn test(ch: Channel<int>) -> bool {
+    ch.is_empty()
+  }
 ---
 package main
 

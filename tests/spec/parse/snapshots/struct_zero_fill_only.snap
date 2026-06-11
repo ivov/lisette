@@ -1,6 +1,8 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nfn test() { let p = Point { .. }; }\n"
+description: |
+  
+  fn test() { let p = Point { .. }; }
 ---
 [
     Function {

@@ -1,6 +1,13 @@
 ---
 source: tests/spec/emit/prelude.rs
-description: "input: \nimport \"go:fmt\"\nfn test(s: string) {\n  for b in s.bytes() {\n    fmt.Println(b)\n  }\n}\n"
+description: |
+  
+  import "go:fmt"
+  fn test(s: string) {
+    for b in s.bytes() {
+      fmt.Println(b)
+    }
+  }
 ---
 package main
 

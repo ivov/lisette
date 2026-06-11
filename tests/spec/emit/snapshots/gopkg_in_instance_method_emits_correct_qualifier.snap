@@ -1,6 +1,13 @@
 ---
 source: tests/spec/emit/imports.rs
-description: "input: \nimport \"go:gopkg.in/yaml.v3\"\n\nfn test() {\n  let mut d = yaml.Decoder{}\n  d.KnownFields(true)\n}\n"
+description: |
+  
+  import "go:gopkg.in/yaml.v3"
+  
+  fn test() {
+    let mut d = yaml.Decoder{}
+    d.KnownFields(true)
+  }
 ---
 package main
 

@@ -1,6 +1,23 @@
 ---
 source: tests/spec/emit/go_interface_adapter.rs
-description: "input: \nimport \"go:io\"\n\nstruct Doubler {}\n\nimpl Doubler {\n  fn Read(self, mut p: Slice<uint8>) -> Partial<int, error> {\n    Partial.Ok(0)\n  }\n}\n\nfn main() {\n  let mut m = Map.new<string, io.Reader>()\n  let d = Doubler {}\n  m[\"src\"] = d\n  let _ = m\n}\n"
+description: |
+  
+  import "go:io"
+  
+  struct Doubler {}
+  
+  impl Doubler {
+    fn Read(self, mut p: Slice<uint8>) -> Partial<int, error> {
+      Partial.Ok(0)
+    }
+  }
+  
+  fn main() {
+    let mut m = Map.new<string, io.Reader>()
+    let d = Doubler {}
+    m["src"] = d
+    let _ = m
+  }
 ---
 package main
 

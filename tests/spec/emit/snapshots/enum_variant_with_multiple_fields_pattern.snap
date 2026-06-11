@@ -1,6 +1,15 @@
 ---
 source: tests/spec/emit/control_flow.rs
-description: "input: \nenum Pair<A, B> { Both(A, B), Neither }\n\nfn test(p: Pair<int, string>) -> int {\n  match p {\n    Both(n, s) => n,\n    Neither => 0,\n  }\n}\n"
+description: |
+  
+  enum Pair<A, B> { Both(A, B), Neither }
+  
+  fn test(p: Pair<int, string>) -> int {
+    match p {
+      Both(n, s) => n,
+      Neither => 0,
+    }
+  }
 ---
 package main
 

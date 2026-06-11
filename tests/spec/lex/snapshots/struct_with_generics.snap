@@ -1,6 +1,10 @@
 ---
 source: tests/spec/lex/mod.rs
-description: "input: \nstruct Container<T> {\n  value: T,\n}\n"
+description: |
+  
+  struct Container<T> {
+    value: T,
+  }
 ---
 LexResult {
     tokens: [

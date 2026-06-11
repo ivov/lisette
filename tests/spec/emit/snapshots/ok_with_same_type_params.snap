@@ -1,6 +1,10 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \nfn test() -> Result<string, string> {\n  Ok(\"hello\")\n}\n"
+description: |
+  
+  fn test() -> Result<string, string> {
+    Ok("hello")
+  }
 ---
 package main
 

@@ -1,6 +1,6 @@
 ---
 source: tests/spec/format/mod.rs
-description: "input: fn test() { &value }"
+description: "fn test() { &value }"
 ---
 fn test() {
   &value

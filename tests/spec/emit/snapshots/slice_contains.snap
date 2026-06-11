@@ -1,6 +1,10 @@
 ---
 source: tests/spec/emit/prelude.rs
-description: "input: \nfn test(s: Slice<int>, v: int) -> bool {\n  s.contains(v)\n}\n"
+description: |
+  
+  fn test(s: Slice<int>, v: int) -> bool {
+    s.contains(v)
+  }
 ---
 package main
 

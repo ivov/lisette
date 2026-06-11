@@ -1,6 +1,10 @@
 ---
 source: tests/spec/emit/functions.rs
-description: "input: \nstruct Cache<K, V> {\n  data: Map<K, V>,\n}\n"
+description: |
+  
+  struct Cache<K, V> {
+    data: Map<K, V>,
+  }
 ---
 package main
 

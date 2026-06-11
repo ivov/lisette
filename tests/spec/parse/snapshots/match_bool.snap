@@ -1,6 +1,13 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nfn test(active: bool) {\n  match active {\n    true  => start_service(),\n    false => stop_service(),\n  }\n}\n"
+description: |
+  
+  fn test(active: bool) {
+    match active {
+      true  => start_service(),
+      false => stop_service(),
+    }
+  }
 ---
 [
     Function {

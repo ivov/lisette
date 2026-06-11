@@ -1,6 +1,14 @@
 ---
 source: tests/spec/emit/result_option_patterns.rs
-description: "input: \nfn test(flag: bool) -> Result<int, string> {\n  if flag {\n    Ok(42)\n  } else {\n    Err(\"error\")\n  }\n}\n"
+description: |
+  
+  fn test(flag: bool) -> Result<int, string> {
+    if flag {
+      Ok(42)
+    } else {
+      Err("error")
+    }
+  }
 ---
 package main
 

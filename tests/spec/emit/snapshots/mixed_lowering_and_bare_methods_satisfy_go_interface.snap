@@ -1,6 +1,28 @@
 ---
 source: tests/spec/emit/go_interface_adapter.rs
-description: "input: \nimport \"go:example.com/mixed\"\n\nstruct Svc {}\n\nimpl Svc {\n  fn Load(self, key: string) -> Result<int, error> {\n    Ok(1)\n  }\n  fn Name(self) -> string {\n    \"svc\"\n  }\n}\n\nfn run(s: mixed.Service) -> string {\n  s.Name()\n}\n\nfn main() {\n  let s = Svc {}\n  let _ = run(s as mixed.Service)\n}\n"
+description: |
+  
+  import "go:example.com/mixed"
+  
+  struct Svc {}
+  
+  impl Svc {
+    fn Load(self, key: string) -> Result<int, error> {
+      Ok(1)
+    }
+    fn Name(self) -> string {
+      "svc"
+    }
+  }
+  
+  fn run(s: mixed.Service) -> string {
+    s.Name()
+  }
+  
+  fn main() {
+    let s = Svc {}
+    let _ = run(s as mixed.Service)
+  }
 ---
 package main
 

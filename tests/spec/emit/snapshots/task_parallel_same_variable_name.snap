@@ -1,6 +1,20 @@
 ---
 source: tests/spec/emit/concurrency.rs
-description: "input: \nfn test() {\n  let ch = Channel.new<int>()\n  task {\n    let mut found = 0\n    found = 1\n    ch.send(found)\n  }\n  task {\n    let mut found = 0\n    found = 2\n    ch.send(found)\n  }\n}\n"
+description: |
+  
+  fn test() {
+    let ch = Channel.new<int>()
+    task {
+      let mut found = 0
+      found = 1
+      ch.send(found)
+    }
+    task {
+      let mut found = 0
+      found = 2
+      ch.send(found)
+    }
+  }
 ---
 package main
 

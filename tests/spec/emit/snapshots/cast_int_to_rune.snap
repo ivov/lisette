@@ -1,6 +1,10 @@
 ---
 source: tests/spec/emit/functions.rs
-description: "input: \nfn test() -> rune {\n  65 as rune\n}\n"
+description: |
+  
+  fn test() -> rune {
+    65 as rune
+  }
 ---
 package main
 

@@ -1,6 +1,18 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \nenum List {\n  Cons(int, List),\n  Nil,\n}\n\nfn list_sum(l: List) -> int {\n  match l {\n    List.Cons(head, tail) => head + list_sum(tail),\n    List.Nil => 0,\n  }\n}\n"
+description: |
+  
+  enum List {
+    Cons(int, List),
+    Nil,
+  }
+  
+  fn list_sum(l: List) -> int {
+    match l {
+      List.Cons(head, tail) => head + list_sum(tail),
+      List.Nil => 0,
+    }
+  }
 ---
 package main
 

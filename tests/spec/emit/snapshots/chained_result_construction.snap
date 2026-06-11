@@ -1,6 +1,15 @@
 ---
 source: tests/spec/emit/result_option_patterns.rs
-description: "input: \nfn get_value() -> Result<int, string> {\n  Ok(42)\n}\n\nfn test() -> Result<int, string> {\n  let x = get_value();\n  x\n}\n"
+description: |
+  
+  fn get_value() -> Result<int, string> {
+    Ok(42)
+  }
+  
+  fn test() -> Result<int, string> {
+    let x = get_value();
+    x
+  }
 ---
 package main
 

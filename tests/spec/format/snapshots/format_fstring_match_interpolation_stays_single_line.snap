@@ -1,6 +1,6 @@
 ---
 source: tests/spec/format/mod.rs
-description: "input: fn test() { let m = f\"v {match x { 1 => \"a\", _ => \"b\" }}\" }"
+description: "fn test() { let m = f\"v {match x { 1 => \"a\", _ => \"b\" }}\" }"
 ---
 fn test() {
   let m = f"v {match x { 1 => "a", _ => "b" }}"

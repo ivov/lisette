@@ -1,6 +1,10 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nfn test(p: Point) {\n  let negation_x = -p.x;\n}\n"
+description: |
+  
+  fn test(p: Point) {
+    let negation_x = -p.x;
+  }
 ---
 [
     Function {

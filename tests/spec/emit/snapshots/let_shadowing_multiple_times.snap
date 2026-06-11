@@ -1,6 +1,13 @@
 ---
 source: tests/spec/emit/patterns.rs
-description: "input: \nfn test(cond1: bool, cond2: bool) -> int {\n  let x = 1;\n  let x = if cond1 { 2 } else { 3 };\n  let x = if cond2 { x * 10 } else { x * 20 };\n  x\n}\n"
+description: |
+  
+  fn test(cond1: bool, cond2: bool) -> int {
+    let x = 1;
+    let x = if cond1 { 2 } else { 3 };
+    let x = if cond2 { x * 10 } else { x * 20 };
+    x
+  }
 ---
 package main
 

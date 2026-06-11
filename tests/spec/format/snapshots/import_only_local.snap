@@ -1,6 +1,9 @@
 ---
 source: tests/spec/format/mod.rs
-description: "input: import \"display\"\nimport \"commands\"\nimport \"store\""
+description: |-
+  import "display"
+  import "commands"
+  import "store"
 ---
 import "commands"
 import "display"

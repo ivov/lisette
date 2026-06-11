@@ -1,6 +1,16 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nstruct Holder { slc: Slice<int> }\nfn bump(i: Ref<int>) -> int { i.* = 1; 99 }\n\nfn run() -> int {\n  let hs = [Holder { slc: [10] }, Holder { slc: [20] }]\n  let mut i = 0\n  let ys = hs[i].slc.append(bump(&i))\n  ys[0]\n}\n"
+description: |
+  
+  struct Holder { slc: Slice<int> }
+  fn bump(i: Ref<int>) -> int { i.* = 1; 99 }
+  
+  fn run() -> int {
+    let hs = [Holder { slc: [10] }, Holder { slc: [20] }]
+    let mut i = 0
+    let ys = hs[i].slc.append(bump(&i))
+    ys[0]
+  }
 ---
 package main
 

@@ -1,6 +1,24 @@
 ---
 source: tests/spec/emit/concurrency.rs
-description: "input: \nfn mark(log: Channel<int>, tag: int) -> int {\n  log.send(tag)\n  tag\n}\n\nfn main() {\n  let log = Channel.buffered<int>(8)\n  let closed = Channel.new<int>()\n  closed.close()\n  let out_ch = Channel.new<int>()\n\n  let _ = select {\n    let Some(v) = closed.receive() => v,\n    out_ch.send(mark(log, 1)) => 0,\n    _ => -1,\n  }\n}\n"
+description: |
+  
+  fn mark(log: Channel<int>, tag: int) -> int {
+    log.send(tag)
+    tag
+  }
+  
+  fn main() {
+    let log = Channel.buffered<int>(8)
+    let closed = Channel.new<int>()
+    closed.close()
+    let out_ch = Channel.new<int>()
+  
+    let _ = select {
+      let Some(v) = closed.receive() => v,
+      out_ch.send(mark(log, 1)) => 0,
+      _ => -1,
+    }
+  }
 ---
 package main
 

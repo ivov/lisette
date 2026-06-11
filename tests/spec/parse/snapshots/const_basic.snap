@@ -1,6 +1,8 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nconst MAX_RETRIES = 5;\n"
+description: |
+  
+  const MAX_RETRIES = 5;
 ---
 [
     Const {

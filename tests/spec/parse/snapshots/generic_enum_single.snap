@@ -1,6 +1,11 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nenum Option<T> {\n  Some(T),\n  None,\n}\n"
+description: |
+  
+  enum Option<T> {
+    Some(T),
+    None,
+  }
 ---
 [
     Enum {

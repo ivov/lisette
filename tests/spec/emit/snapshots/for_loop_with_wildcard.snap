@@ -1,6 +1,14 @@
 ---
 source: tests/spec/emit/control_flow.rs
-description: "input: \nfn test(items: Slice<int>) -> int {\n  let mut count = 0;\n  for _ in items {\n    count = count + 1;\n  };\n  count\n}\n"
+description: |
+  
+  fn test(items: Slice<int>) -> int {
+    let mut count = 0;
+    for _ in items {
+      count = count + 1;
+    };
+    count
+  }
 ---
 package main
 

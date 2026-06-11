@@ -1,6 +1,10 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nfn display<T: Display>(value: T) -> string {\n  return \"displayed\";\n}\n"
+description: |
+  
+  fn display<T: Display>(value: T) -> string {
+    return "displayed";
+  }
 ---
 [
     Function {

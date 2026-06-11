@@ -1,6 +1,14 @@
 ---
 source: tests/spec/emit/control_flow.rs
-description: "input: \nstruct P { v: int }\nfn test() {\n  let p = P { v: 1 }\n  if let P { v } = p {\n    ()\n  }\n}\n"
+description: |
+  
+  struct P { v: int }
+  fn test() {
+    let p = P { v: 1 }
+    if let P { v } = p {
+      ()
+    }
+  }
 ---
 package main
 

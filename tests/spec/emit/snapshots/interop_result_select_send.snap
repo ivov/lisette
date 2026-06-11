@@ -1,6 +1,16 @@
 ---
 source: tests/spec/emit/interop_matrix.rs
-description: "input: \nimport \"go:strconv\"\n\nfn main() {\n  let ch = Channel.new<fn(string) -> Result<int, error>>()\n  select {\n    ch.send(strconv.Atoi) => { let _ = 0 },\n    _ => { let _ = 1 },\n  }\n}\n"
+description: |
+  
+  import "go:strconv"
+  
+  fn main() {
+    let ch = Channel.new<fn(string) -> Result<int, error>>()
+    select {
+      ch.send(strconv.Atoi) => { let _ = 0 },
+      _ => { let _ = 1 },
+    }
+  }
 ---
 package main
 

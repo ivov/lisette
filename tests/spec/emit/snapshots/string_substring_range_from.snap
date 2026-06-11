@@ -1,6 +1,10 @@
 ---
 source: tests/spec/emit/prelude.rs
-description: "input: \nfn test(s: string) -> string {\n  s.substring(6..)\n}\n"
+description: |
+  
+  fn test(s: string) -> string {
+    s.substring(6..)
+  }
 ---
 package main
 

@@ -1,6 +1,13 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nfn test(items: Slice<int>) {\n  match items {\n    [] => print(\"empty\"),\n    _ => print(\"not empty\"),\n  }\n}\n"
+description: |
+  
+  fn test(items: Slice<int>) {
+    match items {
+      [] => print("empty"),
+      _ => print("not empty"),
+    }
+  }
 ---
 [
     Function {

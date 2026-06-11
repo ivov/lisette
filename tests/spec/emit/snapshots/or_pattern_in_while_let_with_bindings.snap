@@ -1,6 +1,18 @@
 ---
 source: tests/spec/emit/control_flow.rs
-description: "input: \nenum E { A(int), B(int) }\n\nfn test() -> int {\n  let mut current: Option<E> = Some(E.A(5));\n  let mut sum = 0;\n  while let Some(A(x)) | Some(B(x)) = current {\n    sum = sum + x;\n    current = None;\n  }\n  sum\n}\n"
+description: |
+  
+  enum E { A(int), B(int) }
+  
+  fn test() -> int {
+    let mut current: Option<E> = Some(E.A(5));
+    let mut sum = 0;
+    while let Some(A(x)) | Some(B(x)) = current {
+      sum = sum + x;
+      current = None;
+    }
+    sum
+  }
 ---
 package main
 

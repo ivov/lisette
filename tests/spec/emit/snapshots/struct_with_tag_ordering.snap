@@ -1,6 +1,18 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \n#[yaml]\n#[json]\n#[xml]\n#[db]\nstruct User {\n  #[yaml(\"user\")]\n  #[json(\"user\")]\n  #[xml(\"user\")]\n  #[db(\"user\")]\n  name: string,\n}\n"
+description: |
+  
+  #[yaml]
+  #[json]
+  #[xml]
+  #[db]
+  struct User {
+    #[yaml("user")]
+    #[json("user")]
+    #[xml("user")]
+    #[db("user")]
+    name: string,
+  }
 ---
 package main
 

@@ -1,6 +1,28 @@
 ---
 source: tests/spec/emit/go_interface_adapter.rs
-description: "input: \nimport \"go:example.com/svc\"\n\nstruct Loader {}\n\nimpl Loader {\n  fn Load(self, key: string) -> Result<int, error> {\n    Ok(1)\n  }\n}\n\nfn run(s: svc.Alias) -> int {\n  match s.Load(\"k\") {\n    Ok(n) => n,\n    Err(_) => 0,\n  }\n}\n\nfn main() {\n  let l = Loader {}\n  let _ = run(l as svc.Alias)\n}\n"
+description: |
+  
+  import "go:example.com/svc"
+  
+  struct Loader {}
+  
+  impl Loader {
+    fn Load(self, key: string) -> Result<int, error> {
+      Ok(1)
+    }
+  }
+  
+  fn run(s: svc.Alias) -> int {
+    match s.Load("k") {
+      Ok(n) => n,
+      Err(_) => 0,
+    }
+  }
+  
+  fn main() {
+    let l = Loader {}
+    let _ = run(l as svc.Alias)
+  }
 ---
 package main
 

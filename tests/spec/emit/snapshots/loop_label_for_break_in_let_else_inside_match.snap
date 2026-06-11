@@ -1,6 +1,26 @@
 ---
 source: tests/spec/emit/control_flow.rs
-description: "input: \nfn maybe(flag: bool) -> Option<int> {\n  if flag { Some(42) } else { None }\n}\n\nfn test() -> int {\n  let mut count = 0\n  loop {\n    count = count + 1\n    if count > 5 { break }\n    match count {\n      1 => {\n        let Some(v) = maybe(true) else { break }\n        let _ = v\n      },\n      _ => {},\n    }\n  }\n  count\n}\n"
+description: |
+  
+  fn maybe(flag: bool) -> Option<int> {
+    if flag { Some(42) } else { None }
+  }
+  
+  fn test() -> int {
+    let mut count = 0
+    loop {
+      count = count + 1
+      if count > 5 { break }
+      match count {
+        1 => {
+          let Some(v) = maybe(true) else { break }
+          let _ = v
+        },
+        _ => {},
+      }
+    }
+    count
+  }
 ---
 package main
 

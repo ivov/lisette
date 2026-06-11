@@ -1,6 +1,8 @@
 ---
 source: tests/spec/lex/mod.rs
-description: "input: if x { 1 }\n    else { 2 }"
+description: |-
+  if x { 1 }
+      else { 2 }
 ---
 LexResult {
     tokens: [

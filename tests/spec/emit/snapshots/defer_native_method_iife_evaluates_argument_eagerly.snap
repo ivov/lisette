@@ -1,6 +1,15 @@
 ---
 source: tests/spec/emit/concurrency.rs
-description: "input: \nfn mark() -> int {\n  2\n}\n\nfn test() {\n  let mut xs = [1]\n  defer xs.append(mark())\n}\n"
+description: |
+  
+  fn mark() -> int {
+    2
+  }
+  
+  fn test() {
+    let mut xs = [1]
+    defer xs.append(mark())
+  }
 ---
 package main
 

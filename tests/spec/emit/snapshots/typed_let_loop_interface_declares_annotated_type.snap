@@ -1,6 +1,24 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \ninterface Printable {\n  fn text(self) -> string\n}\n\nstruct A {}\nstruct B {}\n\nimpl A { fn text(self) -> string { \"a\" } }\nimpl B { fn text(self) -> string { \"b\" } }\n\nfn test() {\n  let mut p: Printable = loop {\n    break A {}\n  }\n  p = B {}\n  let _ = p\n}\n"
+description: |
+  
+  interface Printable {
+    fn text(self) -> string
+  }
+  
+  struct A {}
+  struct B {}
+  
+  impl A { fn text(self) -> string { "a" } }
+  impl B { fn text(self) -> string { "b" } }
+  
+  fn test() {
+    let mut p: Printable = loop {
+      break A {}
+    }
+    p = B {}
+    let _ = p
+  }
 ---
 package main
 

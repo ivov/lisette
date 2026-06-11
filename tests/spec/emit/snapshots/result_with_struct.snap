@@ -1,6 +1,12 @@
 ---
 source: tests/spec/emit/result_option_patterns.rs
-description: "input: \nstruct Point { x: int, y: int }\n\nfn test() -> Result<Point, string> {\n  Ok(Point { x: 10, y: 20 })\n}\n"
+description: |
+  
+  struct Point { x: int, y: int }
+  
+  fn test() -> Result<Point, string> {
+    Ok(Point { x: 10, y: 20 })
+  }
 ---
 package main
 

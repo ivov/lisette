@@ -1,6 +1,11 @@
 ---
 source: tests/spec/format/mod.rs
-description: "input: enum E {\n  // before A\n  A,\n  B,\n}"
+description: |-
+  enum E {
+    // before A
+    A,
+    B,
+  }
 ---
 enum E {
   // before A

@@ -1,6 +1,12 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nfn id<T>(x: T) -> T { x }\n\nfn test() -> int {\n  (id)(1)\n}\n"
+description: |
+  
+  fn id<T>(x: T) -> T { x }
+  
+  fn test() -> int {
+    (id)(1)
+  }
 ---
 package main
 

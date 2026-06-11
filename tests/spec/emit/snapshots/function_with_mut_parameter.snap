@@ -1,6 +1,10 @@
 ---
 source: tests/spec/emit/functions.rs
-description: "input: \nfn process(mut items: Slice<int>) {\n  items = [1, 2, 3]\n}\n"
+description: |
+  
+  fn process(mut items: Slice<int>) {
+    items = [1, 2, 3]
+  }
 ---
 package main
 

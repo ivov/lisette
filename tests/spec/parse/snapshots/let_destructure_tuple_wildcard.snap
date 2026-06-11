@@ -1,6 +1,10 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nfn test() {\n  let (_, status_code): (string, int) = http_request();\n}\n"
+description: |
+  
+  fn test() {
+    let (_, status_code): (string, int) = http_request();
+  }
 ---
 [
     Function {

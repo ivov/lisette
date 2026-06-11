@@ -1,6 +1,18 @@
 ---
 source: tests/spec/emit/patterns.rs
-description: "input: \nenum List<T> {\n  Cons(T, Ref<List<T>>),\n  Nil,\n}\n\nfn list_len<T>(list: List<T>) -> int {\n  match list {\n    List.Nil => 0,\n    List.Cons(_, rest) => 1 + list_len(rest.*),\n  }\n}\n"
+description: |
+  
+  enum List<T> {
+    Cons(T, Ref<List<T>>),
+    Nil,
+  }
+  
+  fn list_len<T>(list: List<T>) -> int {
+    match list {
+      List.Nil => 0,
+      List.Cons(_, rest) => 1 + list_len(rest.*),
+    }
+  }
 ---
 package main
 

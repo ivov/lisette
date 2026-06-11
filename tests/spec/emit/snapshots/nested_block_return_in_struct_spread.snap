@@ -1,6 +1,12 @@
 ---
 source: tests/spec/emit/control_flow.rs
-description: "input: \nstruct S { a: int }\nfn test() -> int {\n  let _ = S { a: 1, ..{ { return 1 } } }.a\n  2\n}\n"
+description: |
+  
+  struct S { a: int }
+  fn test() -> int {
+    let _ = S { a: 1, ..{ { return 1 } } }.a
+    2
+  }
 ---
 package main
 

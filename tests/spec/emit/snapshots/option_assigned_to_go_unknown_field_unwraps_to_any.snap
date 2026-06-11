@@ -1,6 +1,14 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \nimport \"go:example.com/dyn\"\n\nfn main() {\n  let mut obj = dyn.Bag { Decl: \"\", Data: None }\n  obj.Decl = None\n  let _ = obj\n}\n"
+description: |
+  
+  import "go:example.com/dyn"
+  
+  fn main() {
+    let mut obj = dyn.Bag { Decl: "", Data: None }
+    obj.Decl = None
+    let _ = obj
+  }
 ---
 package main
 

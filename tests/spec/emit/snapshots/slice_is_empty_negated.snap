@@ -1,6 +1,10 @@
 ---
 source: tests/spec/emit/prelude.rs
-description: "input: \nfn test(s: Slice<int>) -> bool {\n  !s.is_empty()\n}\n"
+description: |
+  
+  fn test(s: Slice<int>) -> bool {
+    !s.is_empty()
+  }
 ---
 package main
 

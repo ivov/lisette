@@ -1,6 +1,12 @@
 ---
 source: tests/spec/emit/functions.rs
-description: "input: \nfn test() {\n  let mut count = 0;\n  let inc = || { count = count + 1; };\n  inc();\n}\n"
+description: |
+  
+  fn test() {
+    let mut count = 0;
+    let inc = || { count = count + 1; };
+    inc();
+  }
 ---
 package main
 

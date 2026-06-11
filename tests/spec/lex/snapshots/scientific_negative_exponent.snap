@@ -1,6 +1,6 @@
 ---
 source: tests/spec/lex/mod.rs
-description: "input: 1.5e-10"
+description: "1.5e-10"
 ---
 LexResult {
     tokens: [

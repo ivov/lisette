@@ -1,6 +1,23 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nstruct Carrier { p: Ref<int> }\n\nfn bump(c: Carrier) -> int {\n  c.p.* = 1\n  9\n}\n\nfn first(a: int, _b: int) -> int { a }\n\nfn main() {\n  let mut i = 0\n  let m = [[10], [20]]\n  let c = Carrier { p: &i }\n  let x = first(m[i][0], [bump(c)][0])\n  let _ = x\n}\n"
+description: |
+  
+  struct Carrier { p: Ref<int> }
+  
+  fn bump(c: Carrier) -> int {
+    c.p.* = 1
+    9
+  }
+  
+  fn first(a: int, _b: int) -> int { a }
+  
+  fn main() {
+    let mut i = 0
+    let m = [[10], [20]]
+    let c = Carrier { p: &i }
+    let x = first(m[i][0], [bump(c)][0])
+    let _ = x
+  }
 ---
 package main
 

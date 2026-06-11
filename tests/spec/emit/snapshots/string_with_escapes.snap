@@ -1,6 +1,10 @@
 ---
 source: tests/spec/emit/literals.rs
-description: "input: \nfn test() {\n  \"hello\\nworld\"\n}\n"
+description: |
+  
+  fn test() {
+    "hello\nworld"
+  }
 ---
 package main
 

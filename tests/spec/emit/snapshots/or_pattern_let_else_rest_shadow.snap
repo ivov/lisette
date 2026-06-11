@@ -1,6 +1,17 @@
 ---
 source: tests/spec/emit/patterns.rs
-description: "input: \nimport \"go:fmt\"\n\nfn main() {\n  let rest = [99]\n  fmt.Println(rest[0])\n  let [x, ..rest] | [x, ..rest] = [1, 2] else {\n    return\n  }\n  fmt.Println(x, rest[0])\n}\n"
+description: |
+  
+  import "go:fmt"
+  
+  fn main() {
+    let rest = [99]
+    fmt.Println(rest[0])
+    let [x, ..rest] | [x, ..rest] = [1, 2] else {
+      return
+    }
+    fmt.Println(x, rest[0])
+  }
 ---
 package main
 

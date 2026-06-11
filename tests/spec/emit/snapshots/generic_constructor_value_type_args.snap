@@ -1,6 +1,14 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \nenum Wrap<T> { W(T) }\n\nfn main() {\n  let f = Wrap.W\n  let w = f(1)\n  let _ = w\n}\n"
+description: |
+  
+  enum Wrap<T> { W(T) }
+  
+  fn main() {
+    let f = Wrap.W
+    let w = f(1)
+    let _ = w
+  }
 ---
 package main
 

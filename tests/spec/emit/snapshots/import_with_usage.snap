@@ -1,6 +1,14 @@
 ---
 source: tests/spec/emit/imports.rs
-description: "input: \nimport \"go:io\"\nimport \"go:fmt\"\n\nfn test() {\n  let x = \"hello\";\n  fmt.Print(x)\n}\n"
+description: |
+  
+  import "go:io"
+  import "go:fmt"
+  
+  fn test() {
+    let x = "hello";
+    fmt.Print(x)
+  }
 ---
 package main
 

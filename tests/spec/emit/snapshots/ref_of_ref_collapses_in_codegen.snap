@@ -1,6 +1,13 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \nfn test() {\n  let mut x = 42\n  let r1 = &x\n  let r2 = &r1\n  let val = r2.*\n}\n"
+description: |
+  
+  fn test() {
+    let mut x = 42
+    let r1 = &x
+    let r2 = &r1
+    let val = r2.*
+  }
 ---
 package main
 

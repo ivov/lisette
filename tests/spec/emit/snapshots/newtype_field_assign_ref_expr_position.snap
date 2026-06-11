@@ -1,6 +1,15 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nstruct Wrap(int)\n\nfn main() {\n  let mut w = Wrap(0)\n  let r = &w\n  let _ = { r.* = Wrap(1) }\n  let _ = w.0\n}\n"
+description: |
+  
+  struct Wrap(int)
+  
+  fn main() {
+    let mut w = Wrap(0)
+    let r = &w
+    let _ = { r.* = Wrap(1) }
+    let _ = w.0
+  }
 ---
 package main
 

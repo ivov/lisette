@@ -1,6 +1,20 @@
 ---
 source: tests/spec/emit/concurrency.rs
-description: "input: \nfn main() {\n  let ch1 = Channel.buffered<int>(1)\n  let ch2 = Channel.buffered<int>(1)\n  ch1.send(1)\n  ch2.send(2)\n  let flag = true\n  let ch = if flag { ch1 } else { ch2 }\n  select {\n    let Some(v) = ch.receive() => {\n      let _ = v\n    },\n  }\n}\n"
+description: |
+  
+  fn main() {
+    let ch1 = Channel.buffered<int>(1)
+    let ch2 = Channel.buffered<int>(1)
+    ch1.send(1)
+    ch2.send(2)
+    let flag = true
+    let ch = if flag { ch1 } else { ch2 }
+    select {
+      let Some(v) = ch.receive() => {
+        let _ = v
+      },
+    }
+  }
 ---
 package main
 

@@ -1,6 +1,13 @@
 ---
 source: tests/spec/emit/interop_matrix.rs
-description: "input: \nimport \"go:debug/dwarf\"\n\nfn main() {\n  let t = dwarf.TagArrayType\n  let _ = t\n}\n"
+description: |
+  
+  import "go:debug/dwarf"
+  
+  fn main() {
+    let t = dwarf.TagArrayType
+    let _ = t
+  }
 ---
 package main
 

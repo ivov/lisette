@@ -1,6 +1,19 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \nenum Transform<T> {\n  Identity,\n  Apply(fn(T) -> T),\n}\n\nfn test() -> int {\n  let t = Transform.Apply(|x: int| x + 1);\n  match t {\n    Transform.Identity => 0,\n    Transform.Apply(f) => f(41),\n  }\n}\n"
+description: |
+  
+  enum Transform<T> {
+    Identity,
+    Apply(fn(T) -> T),
+  }
+  
+  fn test() -> int {
+    let t = Transform.Apply(|x: int| x + 1);
+    match t {
+      Transform.Identity => 0,
+      Transform.Apply(f) => f(41),
+    }
+  }
 ---
 package main
 

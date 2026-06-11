@@ -1,6 +1,12 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \n#[json]\nenum Shape {\n  Rectangle(float64, float64),\n  Point,\n}\n"
+description: |
+  
+  #[json]
+  enum Shape {
+    Rectangle(float64, float64),
+    Point,
+  }
 ---
 package main
 

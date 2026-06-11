@@ -1,6 +1,12 @@
 ---
 source: tests/spec/format/mod.rs
-description: "input: fn test() {\n    match x {\n        Some(a) => a,\n        None => 0,\n    }\n}"
+description: |-
+  fn test() {
+      match x {
+          Some(a) => a,
+          None => 0,
+      }
+  }
 ---
 fn test() {
   match x {

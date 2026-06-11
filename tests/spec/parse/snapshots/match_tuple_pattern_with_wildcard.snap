@@ -1,6 +1,14 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nfn test(triple: (string, int, bool)) {\n  match triple {\n    (\"status\", code, _) => print(\"Status code:\", code),\n    (_, _, true)        => print(\"Active\"),\n    _                   => print(\"Other\"),\n  }\n}\n"
+description: |
+  
+  fn test(triple: (string, int, bool)) {
+    match triple {
+      ("status", code, _) => print("Status code:", code),
+      (_, _, true)        => print("Active"),
+      _                   => print("Other"),
+    }
+  }
 ---
 [
     Function {

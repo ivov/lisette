@@ -1,6 +1,14 @@
 ---
 source: tests/spec/emit/control_flow.rs
-description: "input: \nfn test(m: Map<string, int>) -> int {\n  let mut sum = 0;\n  for (_, value) in m {\n    sum = sum + value;\n  };\n  sum\n}\n"
+description: |
+  
+  fn test(m: Map<string, int>) -> int {
+    let mut sum = 0;
+    for (_, value) in m {
+      sum = sum + value;
+    };
+    sum
+  }
 ---
 package main
 

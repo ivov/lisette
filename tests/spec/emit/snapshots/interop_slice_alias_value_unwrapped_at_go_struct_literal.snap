@@ -1,6 +1,25 @@
 ---
 source: tests/spec/emit/interop_matrix.rs
-description: "input: \nimport \"go:crypto/x509\"\nimport \"go:net/url\"\n\ntype URLs = Slice<Option<Ref<url.URL>>>\n\nfn main() {\n  let u = url.URL {\n    Scheme: \"https\",\n    Host: \"example.com\",\n    ..,\n  }\n  let urls: URLs = [Some(&u), None]\n  let cert = x509.Certificate {\n    URIs: urls,\n    ..,\n  }\n  let _ = cert\n}\n"
+description: |
+  
+  import "go:crypto/x509"
+  import "go:net/url"
+  
+  type URLs = Slice<Option<Ref<url.URL>>>
+  
+  fn main() {
+    let u = url.URL {
+      Scheme: "https",
+      Host: "example.com",
+      ..,
+    }
+    let urls: URLs = [Some(&u), None]
+    let cert = x509.Certificate {
+      URIs: urls,
+      ..,
+    }
+    let _ = cert
+  }
 ---
 package main
 

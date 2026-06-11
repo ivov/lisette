@@ -1,6 +1,12 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \nenum Either<L, R> { Left(L), Right(R) }\n\nfn test() -> Either<int, string> {\n  Left(42)\n}\n"
+description: |
+  
+  enum Either<L, R> { Left(L), Right(R) }
+  
+  fn test() -> Either<int, string> {
+    Left(42)
+  }
 ---
 package main
 

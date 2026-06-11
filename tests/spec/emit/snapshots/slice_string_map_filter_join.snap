@@ -1,6 +1,13 @@
 ---
 source: tests/spec/emit/prelude.rs
-description: "input: \nfn test(items: Slice<string>) -> string {\n  items\n    .map(|s| s + \"!\")\n    .filter(|s| s.length() > 2)\n    .join(\", \")\n}\n"
+description: |
+  
+  fn test(items: Slice<string>) -> string {
+    items
+      .map(|s| s + "!")
+      .filter(|s| s.length() > 2)
+      .join(", ")
+  }
 ---
 package main
 

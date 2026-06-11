@@ -1,6 +1,14 @@
 ---
 source: tests/spec/emit/control_flow.rs
-description: "input: \nfn test(opt: Option<(int, int)>) {\n  let mut current = opt;\n  while let Some((a, b)) = current {\n    current = None;\n    let _ = a + b;\n  }\n}\n"
+description: |
+  
+  fn test(opt: Option<(int, int)>) {
+    let mut current = opt;
+    while let Some((a, b)) = current {
+      current = None;
+      let _ = a + b;
+    }
+  }
 ---
 package main
 

@@ -1,6 +1,13 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nenum Color { Red, Blue }\nfn test(c: Color) -> int {\n  match c {\n    (Red | Blue) => 1,\n  }\n}\n"
+description: |
+  
+  enum Color { Red, Blue }
+  fn test(c: Color) -> int {
+    match c {
+      (Red | Blue) => 1,
+    }
+  }
 ---
 [
     Enum {

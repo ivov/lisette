@@ -1,6 +1,12 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nimport \"go:fmt\"\n\nfn test() {\n  fmt.Println(fmt.Sprint(\"a\", \"b\"))\n}\n"
+description: |
+  
+  import "go:fmt"
+  
+  fn test() {
+    fmt.Println(fmt.Sprint("a", "b"))
+  }
 ---
 package main
 

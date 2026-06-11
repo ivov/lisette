@@ -1,6 +1,20 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nfn first() -> Result<int, string> {\n  Ok(10)\n}\n\nfn second() -> Result<int, string> {\n  Ok(20)\n}\n\nfn test() -> Result<int, string> {\n  let x = first()?;\n  let y = second()?;\n  Ok(x + y)\n}\n"
+description: |
+  
+  fn first() -> Result<int, string> {
+    Ok(10)
+  }
+  
+  fn second() -> Result<int, string> {
+    Ok(20)
+  }
+  
+  fn test() -> Result<int, string> {
+    let x = first()?;
+    let y = second()?;
+    Ok(x + y)
+  }
 ---
 package main
 

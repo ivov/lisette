@@ -1,6 +1,14 @@
 ---
 source: tests/spec/emit/interop_matrix.rs
-description: "input: \nimport \"go:example.com/aws\"\n\nfn main() {\n  let input = aws.ListInput { .. }\n  let n = input.MaxItems\n  let _ = n\n}\n"
+description: |
+  
+  import "go:example.com/aws"
+  
+  fn main() {
+    let input = aws.ListInput { .. }
+    let n = input.MaxItems
+    let _ = n
+  }
 ---
 package main
 

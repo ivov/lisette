@@ -1,6 +1,11 @@
 ---
 source: tests/spec/emit/control_flow.rs
-description: "input: \nfn test() -> () {\n  let x = 42;\n  return ()\n}\n"
+description: |
+  
+  fn test() -> () {
+    let x = 42;
+    return ()
+  }
 ---
 package main
 

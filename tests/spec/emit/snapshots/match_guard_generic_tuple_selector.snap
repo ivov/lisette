@@ -1,6 +1,15 @@
 ---
 source: tests/spec/emit/control_flow.rs
-description: "input: \nstruct W<T>(T)\n\nfn test() -> int {\n  match 1 {\n    n if W(1).0 == 1 => n,\n    _ => 0,\n  }\n}\n"
+description: |
+  
+  struct W<T>(T)
+  
+  fn test() -> int {
+    match 1 {
+      n if W(1).0 == 1 => n,
+      _ => 0,
+    }
+  }
 ---
 package main
 

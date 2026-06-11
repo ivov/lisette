@@ -1,6 +1,16 @@
 ---
 source: tests/spec/emit/functions.rs
-description: "input: \nimport \"go:mime\"\n\nfn use_fn(f: fn(string) -> Partial<(string, Map<string, string>), error>) {\n  let _ = f(\"text/plain\")\n}\n\nfn main() {\n  use_fn(mime.ParseMediaType)\n}\n"
+description: |
+  
+  import "go:mime"
+  
+  fn use_fn(f: fn(string) -> Partial<(string, Map<string, string>), error>) {
+    let _ = f("text/plain")
+  }
+  
+  fn main() {
+    use_fn(mime.ParseMediaType)
+  }
 ---
 package main
 

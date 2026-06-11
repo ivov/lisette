@@ -1,6 +1,12 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \n#[json]\nenum Message {\n  Move { x: int, y: int },\n  Quit,\n}\n"
+description: |
+  
+  #[json]
+  enum Message {
+    Move { x: int, y: int },
+    Quit,
+  }
 ---
 package main
 

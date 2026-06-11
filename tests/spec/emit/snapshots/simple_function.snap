@@ -1,6 +1,10 @@
 ---
 source: tests/spec/emit/functions.rs
-description: "input: \nfn foo() {\n  let x = 42;\n}\n"
+description: |
+  
+  fn foo() {
+    let x = 42;
+  }
 ---
 package main
 

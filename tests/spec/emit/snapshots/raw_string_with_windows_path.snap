@@ -1,6 +1,10 @@
 ---
 source: tests/spec/emit/literals.rs
-description: "input: \nfn test() -> string {\n  r\"C:\\Users\"\n}\n"
+description: |
+  
+  fn test() -> string {
+    r"C:\Users"
+  }
 ---
 package main
 

@@ -2,6 +2,7 @@
 source: tests/e2e_smoke.rs
 expression: stdout
 ---
+
 // pattern matching - tuples
 
 tuple_literal: PASS

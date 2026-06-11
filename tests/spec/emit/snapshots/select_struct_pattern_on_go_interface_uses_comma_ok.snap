@@ -1,6 +1,15 @@
 ---
 source: tests/spec/emit/patterns.rs
-description: "input: \nimport \"go:example.com/shapes\"\n\nfn drain(ch: Receiver<shapes.Shape>) -> int {\n  select {\n    let Some(shapes.Rect { W: w, H: h }) = ch.receive() => w * h,\n    _ => 0,\n  }\n}\n"
+description: |
+  
+  import "go:example.com/shapes"
+  
+  fn drain(ch: Receiver<shapes.Shape>) -> int {
+    select {
+      let Some(shapes.Rect { W: w, H: h }) = ch.receive() => w * h,
+      _ => 0,
+    }
+  }
 ---
 package main
 

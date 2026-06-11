@@ -188,19 +188,41 @@ fn parse_snap_body(snap: &str) -> Option<String> {
 
 fn parse_description_input(snap: &str) -> Option<String> {
     let header = snap.split("---").nth(1)?;
-    for line in header.lines() {
+    let mut lines = header.lines();
+    while let Some(line) = lines.next() {
         let trimmed = line.trim();
         let Some(rest) = trimmed.strip_prefix("description:") else {
             continue;
         };
         let rest = rest.trim();
-        let rest = rest.strip_prefix('"')?;
-        let rest = rest.strip_suffix('"')?;
-        let unescaped = unescape_yaml(rest);
-        let input = unescaped.strip_prefix("input: ")?;
-        return Some(input.to_string());
+        let description = if let Some(indicator) = rest.strip_prefix('|') {
+            parse_literal_block(indicator, &mut lines)
+        } else if let Some(quoted) = rest.strip_prefix('"') {
+            unescape_yaml(quoted.strip_suffix('"')?)
+        } else {
+            rest.to_string()
+        };
+        return Some(description);
     }
     None
+}
+
+fn parse_literal_block(indicator: &str, lines: &mut std::str::Lines) -> String {
+    let mut content = String::new();
+    for line in lines {
+        if let Some(stripped) = line.strip_prefix("  ") {
+            content.push_str(stripped);
+            content.push('\n');
+        } else if line.trim().is_empty() {
+            content.push('\n');
+        } else {
+            break;
+        }
+    }
+    match indicator {
+        "-" => content.trim_end_matches('\n').to_string(),
+        _ => content,
+    }
 }
 
 fn unescape_yaml(s: &str) -> String {

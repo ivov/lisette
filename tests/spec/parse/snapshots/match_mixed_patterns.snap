@@ -1,6 +1,19 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nenum Data { Int(int), Pair((int, int)), Text(string), Nothing }\nfn test(data: Data) {\n  match data {\n    Data.Int(0)      => print(\"Zero\"),\n    Data.Int(n)      => print(\"Number\", n),\n    Data.Pair((0, y))=> print(\"Pair on Y axis\", y),\n    Data.Pair(_)     => print(\"Some pair\"),\n    Data.Text(\"end\") => print(\"End marker\"),\n    Data.Text(_)     => print(\"Some text\"),\n    Data.Nothing     => print(\"Nothing\"),\n  }\n}\n"
+description: |
+  
+  enum Data { Int(int), Pair((int, int)), Text(string), Nothing }
+  fn test(data: Data) {
+    match data {
+      Data.Int(0)      => print("Zero"),
+      Data.Int(n)      => print("Number", n),
+      Data.Pair((0, y))=> print("Pair on Y axis", y),
+      Data.Pair(_)     => print("Some pair"),
+      Data.Text("end") => print("End marker"),
+      Data.Text(_)     => print("Some text"),
+      Data.Nothing     => print("Nothing"),
+    }
+  }
 ---
 [
     Enum {

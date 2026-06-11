@@ -1,6 +1,10 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nfn test() {\n  let multiply = |a: int, b: int| a * b;\n}\n"
+description: |
+  
+  fn test() {
+    let multiply = |a: int, b: int| a * b;
+  }
 ---
 [
     Function {

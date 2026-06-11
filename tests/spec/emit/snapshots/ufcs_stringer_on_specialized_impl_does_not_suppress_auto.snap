@@ -1,6 +1,18 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \nstruct Box<T> { v: T }\n\nimpl Box<int> {\n  fn String(self) -> string {\n    \"int_box\"\n  }\n}\n\nfn main() {\n  let _ = Box { v: 42 }\n}\n"
+description: |
+  
+  struct Box<T> { v: T }
+  
+  impl Box<int> {
+    fn String(self) -> string {
+      "int_box"
+    }
+  }
+  
+  fn main() {
+    let _ = Box { v: 42 }
+  }
 ---
 package main
 

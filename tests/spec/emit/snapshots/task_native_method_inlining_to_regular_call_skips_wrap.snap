@@ -1,6 +1,11 @@
 ---
 source: tests/spec/emit/concurrency.rs
-description: "input: \nfn test() {\n  let xs = [1, 2, 3]\n  task xs.contains(2)\n}\n"
+description: |
+  
+  fn test() {
+    let xs = [1, 2, 3]
+    task xs.contains(2)
+  }
 ---
 package main
 

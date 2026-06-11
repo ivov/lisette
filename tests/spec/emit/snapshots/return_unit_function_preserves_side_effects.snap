@@ -1,6 +1,14 @@
 ---
 source: tests/spec/emit/functions.rs
-description: "input: \nfn foo() {\n  let _ = 1\n}\n\nfn main() {\n  return foo()\n}\n"
+description: |
+  
+  fn foo() {
+    let _ = 1
+  }
+  
+  fn main() {
+    return foo()
+  }
 ---
 package main
 

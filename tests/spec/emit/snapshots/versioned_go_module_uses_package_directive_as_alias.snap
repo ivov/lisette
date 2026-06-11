@@ -1,6 +1,12 @@
 ---
 source: tests/spec/emit/imports.rs
-description: "input: \nimport \"go:example.com/bubbletea/v2\"\n\nfn make() -> Ref<tea.Program> {\n  &tea.Program{}\n}\n"
+description: |
+  
+  import "go:example.com/bubbletea/v2"
+  
+  fn make() -> Ref<tea.Program> {
+    &tea.Program{}
+  }
 ---
 package main
 

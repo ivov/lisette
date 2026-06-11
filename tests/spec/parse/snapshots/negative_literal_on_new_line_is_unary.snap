@@ -1,6 +1,14 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nfn test() -> int {\n  let x = {\n    foo()\n    -1\n  };\n  x\n}\n"
+description: |
+  
+  fn test() -> int {
+    let x = {
+      foo()
+      -1
+    };
+    x
+  }
 ---
 [
     Function {

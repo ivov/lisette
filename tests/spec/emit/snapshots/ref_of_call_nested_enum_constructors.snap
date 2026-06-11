@@ -1,6 +1,15 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nenum Expr {\n  Num(int),\n  Add(Ref<Expr>, Ref<Expr>),\n}\n\nfn test() -> Expr {\n  Expr.Add(&Expr.Num(1), &Expr.Num(2))\n}\n"
+description: |
+  
+  enum Expr {
+    Num(int),
+    Add(Ref<Expr>, Ref<Expr>),
+  }
+  
+  fn test() -> Expr {
+    Expr.Add(&Expr.Num(1), &Expr.Num(2))
+  }
 ---
 package main
 

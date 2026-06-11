@@ -1,6 +1,15 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \nimport \"go:fmt\"\n\ntype MyString = string\n\nfn main() {\n  let n = MyString.length(\"hi\")\n  fmt.Println(n)\n}\n"
+description: |
+  
+  import "go:fmt"
+  
+  type MyString = string
+  
+  fn main() {
+    let n = MyString.length("hi")
+    fmt.Println(n)
+  }
 ---
 package main
 

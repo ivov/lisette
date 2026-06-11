@@ -1,6 +1,18 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nfn bump(i: Ref<int>) -> int {\n  i.* = 1\n  99\n}\n\nfn test() -> int {\n  let xss = [[10], [20]]\n  let mut i = 0\n  let ys = xss[i].append(bump(&i))\n  ys[0]\n}\n"
+description: |
+  
+  fn bump(i: Ref<int>) -> int {
+    i.* = 1
+    99
+  }
+  
+  fn test() -> int {
+    let xss = [[10], [20]]
+    let mut i = 0
+    let ys = xss[i].append(bump(&i))
+    ys[0]
+  }
 ---
 package main
 

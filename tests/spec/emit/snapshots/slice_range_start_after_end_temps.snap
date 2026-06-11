@@ -1,6 +1,15 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nfn start() -> int { 0 }\nfn items() -> Slice<int> { [1, 2, 3] }\n\nfn main() {\n  let end = if true { 2 } else { 3 }\n  let s = items()[start()..end]\n  let _ = s\n}\n"
+description: |
+  
+  fn start() -> int { 0 }
+  fn items() -> Slice<int> { [1, 2, 3] }
+  
+  fn main() {
+    let end = if true { 2 } else { 3 }
+    let s = items()[start()..end]
+    let _ = s
+  }
 ---
 package main
 

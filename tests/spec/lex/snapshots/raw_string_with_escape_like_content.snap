@@ -1,6 +1,6 @@
 ---
 source: tests/spec/lex/mod.rs
-description: "input: r\"\\n\\t\\u{1234}\""
+description: "r\"\\n\\t\\u{1234}\""
 ---
 LexResult {
     tokens: [

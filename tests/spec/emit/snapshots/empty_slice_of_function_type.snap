@@ -1,6 +1,10 @@
 ---
 source: tests/spec/emit/literals.rs
-description: "input: \nfn test() {\n  let x: Slice<fn(int) -> int> = [];\n}\n"
+description: |
+  
+  fn test() {
+    let x: Slice<fn(int) -> int> = [];
+  }
 ---
 package main
 

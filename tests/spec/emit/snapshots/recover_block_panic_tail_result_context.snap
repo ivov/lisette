@@ -1,6 +1,10 @@
 ---
 source: tests/spec/emit/result_option_patterns.rs
-description: "input: \nfn test() -> Result<int, PanicValue> {\n  recover { panic(\"fatal\") }\n}\n"
+description: |
+  
+  fn test() -> Result<int, PanicValue> {
+    recover { panic("fatal") }
+  }
 ---
 package main
 

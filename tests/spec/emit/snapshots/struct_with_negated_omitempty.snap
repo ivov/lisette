@@ -1,6 +1,13 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \n#[json(omitempty)]\nstruct User {\n  #[json(!omitempty)]\n  id: int,\n  name: string,\n}\n"
+description: |
+  
+  #[json(omitempty)]
+  struct User {
+    #[json(!omitempty)]
+    id: int,
+    name: string,
+  }
 ---
 package main
 

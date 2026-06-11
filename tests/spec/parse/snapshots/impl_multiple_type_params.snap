@@ -1,6 +1,21 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nstruct Pair<K, V> {\n  key: K,\n  value: V,\n}\n\nimpl<K, V> Pair<K, V> {\n  fn get_key(self: Pair<K, V>) -> K {\n    return self.key;\n  }\n\n  fn get_value(self: Pair<K, V>) -> V {\n    return self.value;\n  }\n}\n"
+description: |
+  
+  struct Pair<K, V> {
+    key: K,
+    value: V,
+  }
+  
+  impl<K, V> Pair<K, V> {
+    fn get_key(self: Pair<K, V>) -> K {
+      return self.key;
+    }
+  
+    fn get_value(self: Pair<K, V>) -> V {
+      return self.value;
+    }
+  }
 ---
 [
     Struct {

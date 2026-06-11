@@ -1,6 +1,18 @@
 ---
 source: tests/spec/emit/control_flow.rs
-description: "input: \nimport \"go:fmt\"\n\nstruct Point { x: int }\n\nfn main() {\n  let result = match Point { x: 1 }.x {\n    1 => 10,\n    _ => 0,\n  }\n  fmt.Println(result)\n}\n"
+description: |
+  
+  import "go:fmt"
+  
+  struct Point { x: int }
+  
+  fn main() {
+    let result = match Point { x: 1 }.x {
+      1 => 10,
+      _ => 0,
+    }
+    fmt.Println(result)
+  }
 ---
 package main
 

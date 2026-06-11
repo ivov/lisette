@@ -1,6 +1,13 @@
 ---
 source: tests/spec/emit/control_flow.rs
-description: "input: \nstruct W<T>(T)\n\nfn test() -> int {\n  let w = W(1)\n  if w == W(2) { 0 } else { 1 }\n}\n"
+description: |
+  
+  struct W<T>(T)
+  
+  fn test() -> int {
+    let w = W(1)
+    if w == W(2) { 0 } else { 1 }
+  }
 ---
 package main
 

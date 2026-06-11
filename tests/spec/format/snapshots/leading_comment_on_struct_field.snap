@@ -1,6 +1,12 @@
 ---
 source: tests/spec/format/mod.rs
-description: "input: struct Point {\n  // documentation for x\n  x: int,\n  // documentation for y\n  y: int,\n}"
+description: |-
+  struct Point {
+    // documentation for x
+    x: int,
+    // documentation for y
+    y: int,
+  }
 ---
 struct Point {
   // documentation for x

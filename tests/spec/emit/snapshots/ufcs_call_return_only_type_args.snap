@@ -1,6 +1,18 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nstruct Box<T> { value: T }\n\nimpl<T> Box<T> {\n  fn make<U>(self) -> U { panic(\"boom\") }\n}\n\nfn main() {\n  let b = Box { value: 1 };\n  let x: string = b.make();\n  let _ = x;\n}\n"
+description: |
+  
+  struct Box<T> { value: T }
+  
+  impl<T> Box<T> {
+    fn make<U>(self) -> U { panic("boom") }
+  }
+  
+  fn main() {
+    let b = Box { value: 1 };
+    let x: string = b.make();
+    let _ = x;
+  }
 ---
 package main
 

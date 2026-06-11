@@ -1,6 +1,16 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nstruct Container<T> {\n  value: T,\n}\n\nimpl<T> Container<T> {\n  fn get(self: Container<T>) -> T {\n    return self.value;\n  }\n}\n"
+description: |
+  
+  struct Container<T> {
+    value: T,
+  }
+  
+  impl<T> Container<T> {
+    fn get(self: Container<T>) -> T {
+      return self.value;
+    }
+  }
 ---
 [
     Struct {

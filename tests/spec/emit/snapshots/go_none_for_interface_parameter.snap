@@ -1,6 +1,14 @@
 ---
 source: tests/spec/emit/functions.rs
-description: "input: \nimport \"go:net/http\"\nimport \"go:fmt\"\n\nfn main() {\n  let req = http.NewRequest(\"GET\", \"https://example.com\", None)\n  fmt.Println(req)\n}\n"
+description: |
+  
+  import "go:net/http"
+  import "go:fmt"
+  
+  fn main() {
+    let req = http.NewRequest("GET", "https://example.com", None)
+    fmt.Println(req)
+  }
 ---
 package main
 

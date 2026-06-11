@@ -1,6 +1,22 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nimport \"go:fmt\"\n\nstruct S { x: int }\n\nfn get() -> Ref<S> {\n  let _ = fmt.Println(\"get\")\n  let mut s = S { x: 1 }\n  &s\n}\n\nfn arg() -> int { let _ = fmt.Println(\"arg\"); 2 }\n\nfn main() {\n  get().x = if arg() > 0 { 3 } else { 4 }\n}\n"
+description: |
+  
+  import "go:fmt"
+  
+  struct S { x: int }
+  
+  fn get() -> Ref<S> {
+    let _ = fmt.Println("get")
+    let mut s = S { x: 1 }
+    &s
+  }
+  
+  fn arg() -> int { let _ = fmt.Println("arg"); 2 }
+  
+  fn main() {
+    get().x = if arg() > 0 { 3 } else { 4 }
+  }
 ---
 package main
 

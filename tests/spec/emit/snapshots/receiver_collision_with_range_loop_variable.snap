@@ -1,6 +1,31 @@
 ---
 source: tests/spec/emit/functions.rs
-description: "input: \nimport \"go:fmt\"\n\nstruct IntList {\n  items: Slice<int>,\n}\n\nimpl IntList {\n  fn display(self) -> string {\n    let mut s = \"[\"\n    for i in 0..self.items.length() {\n      if i > 0 {\n        s = s + \", \"\n      }\n      let item = self.items[i]\n      s = s + f\"{item}\"\n    }\n    s + \"]\"\n  }\n}\n\nfn main() {\n  let list = IntList { items: [1, 2, 3] }\n  fmt.Println(list.display())\n}\n"
+description: |
+  
+  import "go:fmt"
+  
+  struct IntList {
+    items: Slice<int>,
+  }
+  
+  impl IntList {
+    fn display(self) -> string {
+      let mut s = "["
+      for i in 0..self.items.length() {
+        if i > 0 {
+          s = s + ", "
+        }
+        let item = self.items[i]
+        s = s + f"{item}"
+      }
+      s + "]"
+    }
+  }
+  
+  fn main() {
+    let list = IntList { items: [1, 2, 3] }
+    fmt.Println(list.display())
+  }
 ---
 package main
 

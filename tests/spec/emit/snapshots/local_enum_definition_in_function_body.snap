@@ -1,6 +1,17 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nenum Color { Red, Green, Blue }\n\nfn main() {\n  let c = Color.Red\n  let _ = match c {\n    Color.Red => 1,\n    Color.Green => 2,\n    Color.Blue => 3,\n  }\n}\n"
+description: |
+  
+  enum Color { Red, Green, Blue }
+  
+  fn main() {
+    let c = Color.Red
+    let _ = match c {
+      Color.Red => 1,
+      Color.Green => 2,
+      Color.Blue => 3,
+    }
+  }
 ---
 package main
 

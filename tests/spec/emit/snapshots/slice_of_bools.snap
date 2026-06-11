@@ -1,6 +1,10 @@
 ---
 source: tests/spec/emit/literals.rs
-description: "input: \nfn test() -> Slice<bool> {\n  [true, false, true]\n}\n"
+description: |
+  
+  fn test() -> Slice<bool> {
+    [true, false, true]
+  }
 ---
 package main
 

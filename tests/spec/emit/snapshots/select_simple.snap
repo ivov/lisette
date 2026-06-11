@@ -1,6 +1,23 @@
 ---
 source: tests/spec/emit/concurrency.rs
-description: "input: \nfn test() -> int {\n  let ch1 = Channel.new<int>();\n  let ch2 = Channel.new<int>();\n\n  select {\n    match ch1.receive() {\n      Some(val) => val + 10,\n      None => 0,\n    },\n    match ch2.receive() {\n      Some(val) => val + 20,\n      None => 0,\n    },\n    _ => 0,\n  }\n}\n"
+description: |
+  
+  fn test() -> int {
+    let ch1 = Channel.new<int>();
+    let ch2 = Channel.new<int>();
+  
+    select {
+      match ch1.receive() {
+        Some(val) => val + 10,
+        None => 0,
+      },
+      match ch2.receive() {
+        Some(val) => val + 20,
+        None => 0,
+      },
+      _ => 0,
+    }
+  }
 ---
 package main
 

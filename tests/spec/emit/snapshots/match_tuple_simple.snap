@@ -1,6 +1,15 @@
 ---
 source: tests/spec/emit/control_flow.rs
-description: "input: \nfn test() -> int {\n  let pair = (1, 2);\n  match pair {\n    (0, 0) => 0,\n    (1, 2) => 3,\n    (x, y) => x + y,\n  }\n}\n"
+description: |
+  
+  fn test() -> int {
+    let pair = (1, 2);
+    match pair {
+      (0, 0) => 0,
+      (1, 2) => 3,
+      (x, y) => x + y,
+    }
+  }
 ---
 package main
 

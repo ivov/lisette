@@ -1,6 +1,10 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nfn pair<T, U>(x: T, y: U) -> (T, U) {\n  return (x, y);\n}\n"
+description: |
+  
+  fn pair<T, U>(x: T, y: U) -> (T, U) {
+    return (x, y);
+  }
 ---
 [
     Function {

@@ -1,7 +1,8 @@
 ---
 source: tests/spec/parse/mod.rs
-assertion_line: 3569
-description: "input: \nfn test() { func(xs...,); }\n"
+description: |
+  
+  fn test() { func(xs...,); }
 ---
 [
     Function {

@@ -1,6 +1,20 @@
 ---
 source: tests/spec/emit/patterns.rs
-description: "input: \nenum Shape {\n  Circle(int),\n  Rectangle { width: int, height: int },\n}\n\nimpl Shape {\n  fn area(self) -> int {\n    match self {\n      Shape.Circle(r) => r * r * 3,\n      Shape.Rectangle { width, height } => width * height,\n    }\n  }\n}\n"
+description: |
+  
+  enum Shape {
+    Circle(int),
+    Rectangle { width: int, height: int },
+  }
+  
+  impl Shape {
+    fn area(self) -> int {
+      match self {
+        Shape.Circle(r) => r * r * 3,
+        Shape.Rectangle { width, height } => width * height,
+      }
+    }
+  }
 ---
 package main
 

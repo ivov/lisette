@@ -1,6 +1,20 @@
 ---
 source: tests/spec/emit/concurrency.rs
-description: "input: \nimport \"go:fmt\"\n\nfn inner() {\n  fmt.Print(f\"Nested task\");\n}\n\nfn outer() {\n  task inner()\n}\n\nfn test() {\n  task outer()\n}\n"
+description: |
+  
+  import "go:fmt"
+  
+  fn inner() {
+    fmt.Print(f"Nested task");
+  }
+  
+  fn outer() {
+    task inner()
+  }
+  
+  fn test() {
+    task outer()
+  }
 ---
 package main
 

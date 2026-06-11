@@ -1,6 +1,22 @@
 ---
 source: tests/spec/emit/result_option_patterns.rs
-description: "input: \nfn pair<A, B>(a: A, b: B) -> Result<(A, B), error> {\n  Ok((a, b))\n}\n\nfn test() {\n  match pair<int, string>(1, \"x\") {\n    Ok((first, second)) => {\n      let _ = first\n      let _ = second\n    },\n    Err(e) => {\n      let _ = e\n    },\n  }\n}\n"
+description: |
+  
+  fn pair<A, B>(a: A, b: B) -> Result<(A, B), error> {
+    Ok((a, b))
+  }
+  
+  fn test() {
+    match pair<int, string>(1, "x") {
+      Ok((first, second)) => {
+        let _ = first
+        let _ = second
+      },
+      Err(e) => {
+        let _ = e
+      },
+    }
+  }
 ---
 package main
 

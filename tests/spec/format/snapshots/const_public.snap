@@ -1,5 +1,5 @@
 ---
 source: tests/spec/format/mod.rs
-description: "input: pub const MAX: int = 100"
+description: "pub const MAX: int = 100"
 ---
 pub const MAX: int = 100

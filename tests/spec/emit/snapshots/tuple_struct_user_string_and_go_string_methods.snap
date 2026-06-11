@@ -1,6 +1,23 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \nstruct UserId(int)\n\nimpl UserId {\n  pub fn string(self) -> string {\n    \"custom display\"\n  }\n\n  pub fn goString(self) -> string {\n    \"custom debug\"\n  }\n}\n\nfn main() {\n  let u = UserId(1)\n  let _ = u\n}\n"
+description: |
+  
+  struct UserId(int)
+  
+  impl UserId {
+    pub fn string(self) -> string {
+      "custom display"
+    }
+  
+    pub fn goString(self) -> string {
+      "custom debug"
+    }
+  }
+  
+  fn main() {
+    let u = UserId(1)
+    let _ = u
+  }
 ---
 package main
 

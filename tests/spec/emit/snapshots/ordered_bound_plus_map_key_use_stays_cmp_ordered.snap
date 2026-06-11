@@ -1,6 +1,16 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \nfn count<T: Ordered>(x: T) -> int {\n  let mut m: Map<T, int> = Map.new()\n  m[x] = 1\n  m.length()\n}\n\nfn main() {\n  let _ = count(1)\n}\n"
+description: |
+  
+  fn count<T: Ordered>(x: T) -> int {
+    let mut m: Map<T, int> = Map.new()
+    m[x] = 1
+    m.length()
+  }
+  
+  fn main() {
+    let _ = count(1)
+  }
 ---
 package main
 

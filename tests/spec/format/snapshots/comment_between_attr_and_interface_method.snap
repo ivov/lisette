@@ -1,6 +1,11 @@
 ---
 source: tests/spec/format/mod.rs
-description: "input: interface I {\n  #[a]\n  // between attr and method\n  fn first()\n}"
+description: |-
+  interface I {
+    #[a]
+    // between attr and method
+    fn first()
+  }
 ---
 interface I {
   #[a]

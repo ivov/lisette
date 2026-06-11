@@ -1,6 +1,16 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \ntype Transform<T> = fn(T) -> T\n\nfn apply_transform<T>(val: T, f: Transform<T>) -> T {\n  f(val)\n}\n\nfn test() -> int {\n  apply_transform(42, |x| x + 1)\n}\n"
+description: |
+  
+  type Transform<T> = fn(T) -> T
+  
+  fn apply_transform<T>(val: T, f: Transform<T>) -> T {
+    f(val)
+  }
+  
+  fn test() -> int {
+    apply_transform(42, |x| x + 1)
+  }
 ---
 package main
 

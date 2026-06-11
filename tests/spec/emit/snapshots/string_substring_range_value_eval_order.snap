@@ -1,6 +1,22 @@
 ---
 source: tests/spec/emit/prelude.rs
-description: "input: \nimport \"go:fmt\"\n\nfn make_s() -> string {\n  fmt.Println(\"receiver\")\n  \"hello\"\n}\n\nfn make_range() -> Range<int> {\n  fmt.Println(\"range\")\n  1..4\n}\n\nfn main() {\n  fmt.Println(make_s().substring(make_range()))\n}\n"
+description: |
+  
+  import "go:fmt"
+  
+  fn make_s() -> string {
+    fmt.Println("receiver")
+    "hello"
+  }
+  
+  fn make_range() -> Range<int> {
+    fmt.Println("range")
+    1..4
+  }
+  
+  fn main() {
+    fmt.Println(make_s().substring(make_range()))
+  }
 ---
 package main
 

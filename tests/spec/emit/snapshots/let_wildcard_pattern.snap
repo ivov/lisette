@@ -1,6 +1,12 @@
 ---
 source: tests/spec/emit/control_flow.rs
-description: "input: \nfn compute() -> int { 42 }\n\nfn test() {\n  let _ = compute();\n}\n"
+description: |
+  
+  fn compute() -> int { 42 }
+  
+  fn test() {
+    let _ = compute();
+  }
 ---
 package main
 

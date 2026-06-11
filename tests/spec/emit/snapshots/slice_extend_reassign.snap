@@ -1,6 +1,11 @@
 ---
 source: tests/spec/emit/prelude.rs
-description: "input: \nfn test(items: Slice<int>, b: Slice<int>) {\n  let mut a = items\n  a = a.extend(b)\n}\n"
+description: |
+  
+  fn test(items: Slice<int>, b: Slice<int>) {
+    let mut a = items
+    a = a.extend(b)
+  }
 ---
 package main
 

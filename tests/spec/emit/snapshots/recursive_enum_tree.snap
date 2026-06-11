@@ -1,6 +1,15 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \nenum Tree {\n  Leaf(int),\n  Node(Tree, Tree),\n}\n\nfn test() -> Tree {\n  Tree.Node(Tree.Leaf(1), Tree.Leaf(2))\n}\n"
+description: |
+  
+  enum Tree {
+    Leaf(int),
+    Node(Tree, Tree),
+  }
+  
+  fn test() -> Tree {
+    Tree.Node(Tree.Leaf(1), Tree.Leaf(2))
+  }
 ---
 package main
 

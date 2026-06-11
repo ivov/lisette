@@ -1,6 +1,12 @@
 ---
 source: tests/spec/lex/mod.rs
-description: "input: \nimpl Counter {\n  fn new() -> Counter {\n    return Counter { value: 0 };\n  }\n}\n"
+description: |
+  
+  impl Counter {
+    fn new() -> Counter {
+      return Counter { value: 0 };
+    }
+  }
 ---
 LexResult {
     tokens: [

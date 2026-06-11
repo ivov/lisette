@@ -1,6 +1,16 @@
 ---
 source: tests/spec/emit/interop_matrix.rs
-description: "input: \nimport \"go:example.com/aws\"\n\nfn main() {\n  let bucket = aws.Bucket { .. }\n  match bucket.Name {\n    Some(name) => { let _ = name },\n    None => {},\n  }\n}\n"
+description: |
+  
+  import "go:example.com/aws"
+  
+  fn main() {
+    let bucket = aws.Bucket { .. }
+    match bucket.Name {
+      Some(name) => { let _ = name },
+      None => {},
+    }
+  }
 ---
 package main
 

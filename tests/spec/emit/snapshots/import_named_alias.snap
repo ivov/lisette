@@ -1,6 +1,13 @@
 ---
 source: tests/spec/emit/imports.rs
-description: "input: \nimport router \"go:github.com/gorilla/mux\"\nimport \"go:fmt\"\n\nfn test() {\n  fmt.Print(\"Named alias import\")\n}\n"
+description: |
+  
+  import router "go:github.com/gorilla/mux"
+  import "go:fmt"
+  
+  fn test() {
+    fmt.Print("Named alias import")
+  }
 ---
 package main
 

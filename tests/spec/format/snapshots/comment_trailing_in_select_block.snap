@@ -1,6 +1,16 @@
 ---
 source: tests/spec/format/mod.rs
-description: "input: fn f(c: Channel<int>) -> int {\n  select {\n    match c.receive() {\n      Some(v) => v,\n      None => 0,\n    },\n    _ => 1,\n    // trailing\n  }\n}"
+description: |-
+  fn f(c: Channel<int>) -> int {
+    select {
+      match c.receive() {
+        Some(v) => v,
+        None => 0,
+      },
+      _ => 1,
+      // trailing
+    }
+  }
 ---
 fn f(c: Channel<int>) -> int {
   select {

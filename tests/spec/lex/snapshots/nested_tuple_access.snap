@@ -1,6 +1,6 @@
 ---
 source: tests/spec/lex/mod.rs
-description: "input: nested.0.0"
+description: nested.0.0
 ---
 LexResult {
     tokens: [

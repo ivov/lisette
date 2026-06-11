@@ -1,6 +1,12 @@
 ---
 source: tests/spec/emit/functions.rs
-description: "input: \nfn put_in_map<K, V>(key: K, value: V) -> Map<K, V> {\n  let mut m: Map<K, V> = Map.new()\n  m[key] = value\n  m\n}\n"
+description: |
+  
+  fn put_in_map<K, V>(key: K, value: V) -> Map<K, V> {
+    let mut m: Map<K, V> = Map.new()
+    m[key] = value
+    m
+  }
 ---
 package main
 

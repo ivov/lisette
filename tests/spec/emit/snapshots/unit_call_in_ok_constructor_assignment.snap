@@ -1,6 +1,13 @@
 ---
 source: tests/spec/emit/result_option_patterns.rs
-description: "input: \nfn noop() {}\n\nfn test() -> Result<(), string> {\n  let r: Result<(), string> = if true { Ok(noop()) } else { Ok(()) }\n  r\n}\n"
+description: |
+  
+  fn noop() {}
+  
+  fn test() -> Result<(), string> {
+    let r: Result<(), string> = if true { Ok(noop()) } else { Ok(()) }
+    r
+  }
 ---
 package main
 

@@ -1,6 +1,8 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nstruct UserId(int)\n"
+description: |
+  
+  struct UserId(int)
 ---
 [
     Struct {

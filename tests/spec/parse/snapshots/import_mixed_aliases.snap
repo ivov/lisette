@@ -1,6 +1,10 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nimport router \"go:github.com/gorilla/mux\"\nimport _ \"go:database/sql\"\nimport \"go:fmt\"\n"
+description: |
+  
+  import router "go:github.com/gorilla/mux"
+  import _ "go:database/sql"
+  import "go:fmt"
 ---
 [
     ModuleImport {

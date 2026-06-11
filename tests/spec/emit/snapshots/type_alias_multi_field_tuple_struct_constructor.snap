@@ -1,6 +1,13 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nstruct Point2D(int, int)\ntype P = Point2D\n\nfn test() -> P {\n  P(1, 2)\n}\n"
+description: |
+  
+  struct Point2D(int, int)
+  type P = Point2D
+  
+  fn test() -> P {
+    P(1, 2)
+  }
 ---
 package main
 

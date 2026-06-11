@@ -1,6 +1,9 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \n#[json]\nenum Status { Active, Inactive, Suspended }\n"
+description: |
+  
+  #[json]
+  enum Status { Active, Inactive, Suspended }
 ---
 package main
 

@@ -1,6 +1,11 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nfn test() {\n  let tuple = (42, \"hello\");\n  tuple.0\n}\n"
+description: |
+  
+  fn test() {
+    let tuple = (42, "hello");
+    tuple.0
+  }
 ---
 package main
 

@@ -1,6 +1,18 @@
 ---
 source: tests/spec/emit/patterns.rs
-description: "input: \nstruct Point { x: int }\n\nfn make() -> Point {\n  Point { x: 1 }\n}\n\nfn test() -> string {\n  match make() {\n    _ => \"subject_1\",\n  }\n}\n"
+description: |
+  
+  struct Point { x: int }
+  
+  fn make() -> Point {
+    Point { x: 1 }
+  }
+  
+  fn test() -> string {
+    match make() {
+      _ => "subject_1",
+    }
+  }
 ---
 package main
 

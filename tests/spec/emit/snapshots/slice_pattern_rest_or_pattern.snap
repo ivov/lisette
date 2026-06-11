@@ -1,6 +1,13 @@
 ---
 source: tests/spec/emit/patterns.rs
-description: "input: \nenum E { A(Slice<int>), B(Slice<int>) }\n\nfn test(e: E) -> int {\n  let A([first, ..rest]) | B([first, ..rest]) = e else { return 0; };\n  first\n}\n"
+description: |
+  
+  enum E { A(Slice<int>), B(Slice<int>) }
+  
+  fn test(e: E) -> int {
+    let A([first, ..rest]) | B([first, ..rest]) = e else { return 0; };
+    first
+  }
 ---
 package main
 

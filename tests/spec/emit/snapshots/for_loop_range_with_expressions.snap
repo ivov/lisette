@@ -1,6 +1,14 @@
 ---
 source: tests/spec/emit/control_flow.rs
-description: "input: \nfn test(start: int, end: int) -> int {\n  let mut sum = 0;\n  for i in start..end {\n    sum = sum + i;\n  };\n  sum\n}\n"
+description: |
+  
+  fn test(start: int, end: int) -> int {
+    let mut sum = 0;
+    for i in start..end {
+      sum = sum + i;
+    };
+    sum
+  }
 ---
 package main
 

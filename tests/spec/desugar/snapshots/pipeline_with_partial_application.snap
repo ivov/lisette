@@ -1,6 +1,6 @@
 ---
 source: tests/spec/desugar/mod.rs
-description: "input: fn test() { x |> add(5); }"
+description: "fn test() { x |> add(5); }"
 ---
 [
     Function {

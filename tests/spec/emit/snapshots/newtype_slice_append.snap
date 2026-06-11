@@ -1,6 +1,13 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \nstruct Wrap(Slice<int>)\n\nfn main() {\n  let mut w = Wrap([1])\n  w = Wrap(w.0.append(2))\n}\n"
+description: |
+  
+  struct Wrap(Slice<int>)
+  
+  fn main() {
+    let mut w = Wrap([1])
+    w = Wrap(w.0.append(2))
+  }
 ---
 package main
 

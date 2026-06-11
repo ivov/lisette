@@ -1,6 +1,17 @@
 ---
 source: tests/spec/emit/functions.rs
-description: "input: \ntype Handler = fn(int) -> string\n\nfn my_handler(x: int) -> string {\n  \"ok\"\n}\n\nfn test() -> fn(int) -> string {\n  let h = my_handler as Handler\n  h as fn(int) -> string\n}\n"
+description: |
+  
+  type Handler = fn(int) -> string
+  
+  fn my_handler(x: int) -> string {
+    "ok"
+  }
+  
+  fn test() -> fn(int) -> string {
+    let h = my_handler as Handler
+    h as fn(int) -> string
+  }
 ---
 package main
 

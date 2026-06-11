@@ -1,6 +1,10 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \nfn test(s: Ref<Slice<int>>) {\n  let _ = s\n}\n"
+description: |
+  
+  fn test(s: Ref<Slice<int>>) {
+    let _ = s
+  }
 ---
 package main
 

@@ -1,6 +1,11 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nfn main() {\n  let x = 1\n  x as float64\n}\n"
+description: |
+  
+  fn main() {
+    let x = 1
+    x as float64
+  }
 ---
 package main
 

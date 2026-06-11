@@ -1,6 +1,11 @@
 ---
 source: tests/spec/format/mod.rs
-description: "input: interface I {\n  impl A // trailing parent\n  impl B\n  fn first()\n}"
+description: |-
+  interface I {
+    impl A // trailing parent
+    impl B
+    fn first()
+  }
 ---
 interface I {
   embed A // trailing parent

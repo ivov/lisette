@@ -1,6 +1,10 @@
 ---
 source: tests/spec/emit/literals.rs
-description: "input: \nfn test() -> rune {\n  '\\033'\n}\n"
+description: |
+  
+  fn test() -> rune {
+    '\033'
+  }
 ---
 package main
 

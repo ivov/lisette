@@ -1,6 +1,12 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nconst MAX_SIZE = 100\n\nfn test() -> int {\n  MAX_SIZE\n}\n"
+description: |
+  
+  const MAX_SIZE = 100
+  
+  fn test() -> int {
+    MAX_SIZE
+  }
 ---
 package main
 

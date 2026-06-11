@@ -1,6 +1,10 @@
 ---
 source: tests/spec/emit/prelude.rs
-description: "input: \nfn test(s: Slice<int>) -> Option<(int, int)> {\n  s.enumerate().find(|(_, v)| v > 10)\n}\n"
+description: |
+  
+  fn test(s: Slice<int>) -> Option<(int, int)> {
+    s.enumerate().find(|(_, v)| v > 10)
+  }
 ---
 package main
 

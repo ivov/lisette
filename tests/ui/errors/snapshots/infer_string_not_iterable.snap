@@ -1,6 +1,5 @@
 ---
 source: tests/ui/errors/mod.rs
-assertion_line: 1537
 ---
   [error] Cannot iterate over `string`
    ╭─[test.lis:3:13]

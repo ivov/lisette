@@ -1,6 +1,16 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nfn side() -> int { 1 }\n\nfn get_y() -> Result<int, error> { Ok(2) }\n\nfn add(_a: int, _b: int) -> int { 0 }\n\nfn run() -> Result<int, error> {\n  Ok(add(side(), get_y()?))\n}\n"
+description: |
+  
+  fn side() -> int { 1 }
+  
+  fn get_y() -> Result<int, error> { Ok(2) }
+  
+  fn add(_a: int, _b: int) -> int { 0 }
+  
+  fn run() -> Result<int, error> {
+    Ok(add(side(), get_y()?))
+  }
 ---
 package main
 

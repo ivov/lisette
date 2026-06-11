@@ -1,6 +1,19 @@
 ---
 source: tests/spec/emit/result_option_patterns.rs
-description: "input: \nimport \"go:errors\"\n\nfn fallible(ok: bool) -> Result<int, error> {\n  if ok { Ok(1) } else { Err(errors.New(\"nope\")) }\n}\n\nfn test() {\n  match fallible(true) {\n    Ok(_) => {},\n    Err(e) => { let _ = e },\n  }\n}\n"
+description: |
+  
+  import "go:errors"
+  
+  fn fallible(ok: bool) -> Result<int, error> {
+    if ok { Ok(1) } else { Err(errors.New("nope")) }
+  }
+  
+  fn test() {
+    match fallible(true) {
+      Ok(_) => {},
+      Err(e) => { let _ = e },
+    }
+  }
 ---
 package main
 

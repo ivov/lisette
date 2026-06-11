@@ -1,6 +1,12 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \n fn foo<T>(x: T) -> int {\n    match x {\n      1 => 1;\n    }\n  }\n"
+description: |
+  
+   fn foo<T>(x: T) -> int {
+      match x {
+        1 => 1;
+      }
+    }
 ---
 [
     Function {

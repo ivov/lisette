@@ -1,6 +1,8 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nfn test() { f(r\"C:\\Users\\me\"); }\n"
+description: |
+  
+  fn test() { f(r"C:\Users\me"); }
 ---
 [
     Function {

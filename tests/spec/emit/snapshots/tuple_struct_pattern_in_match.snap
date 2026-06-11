@@ -1,6 +1,14 @@
 ---
 source: tests/spec/emit/patterns.rs
-description: "input: \nstruct Pair(int, int)\n\nfn test(p: Pair) -> int {\n  match p {\n    Pair(a, b) => a + b,\n  }\n}\n"
+description: |
+  
+  struct Pair(int, int)
+  
+  fn test(p: Pair) -> int {
+    match p {
+      Pair(a, b) => a + b,
+    }
+  }
 ---
 package main
 

@@ -1,6 +1,18 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nstruct Foo { value: int }\n\nimpl Foo {\n  fn increment(self: Ref<Foo>) {\n    self.value = self.value + 1\n  }\n}\n\nfn test() {\n  Foo { value: 42 }.increment()\n}\n"
+description: |
+  
+  struct Foo { value: int }
+  
+  impl Foo {
+    fn increment(self: Ref<Foo>) {
+      self.value = self.value + 1
+    }
+  }
+  
+  fn test() {
+    Foo { value: 42 }.increment()
+  }
 ---
 package main
 

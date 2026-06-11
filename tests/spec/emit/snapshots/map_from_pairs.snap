@@ -1,6 +1,10 @@
 ---
 source: tests/spec/emit/prelude.rs
-description: "input: \nfn test() -> Map<string, int> {\n  Map.from([(\"alice\", 95), (\"bob\", 82)])\n}\n"
+description: |
+  
+  fn test() -> Map<string, int> {
+    Map.from([("alice", 95), ("bob", 82)])
+  }
 ---
 package main
 

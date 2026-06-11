@@ -1,6 +1,16 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \nenum List {\n  Cons(int, Ref<List>),\n  Nil,\n}\n\nfn test() -> List {\n  let nil = List.Nil;\n  List.Cons(3, &nil)\n}\n"
+description: |
+  
+  enum List {
+    Cons(int, Ref<List>),
+    Nil,
+  }
+  
+  fn test() -> List {
+    let nil = List.Nil;
+    List.Cons(3, &nil)
+  }
 ---
 package main
 

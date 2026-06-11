@@ -1,6 +1,16 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \nfn main() {\n  let ch = Channel.buffered<int>(1)\n  ch.send(42)\n  let r = &ch\n  let _ = select {\n    let Some(v) = r.receive() => v,\n    _ => 0,\n  }\n}\n"
+description: |
+  
+  fn main() {
+    let ch = Channel.buffered<int>(1)
+    ch.send(42)
+    let r = &ch
+    let _ = select {
+      let Some(v) = r.receive() => v,
+      _ => 0,
+    }
+  }
 ---
 package main
 

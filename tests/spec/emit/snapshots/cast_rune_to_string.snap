@@ -1,6 +1,10 @@
 ---
 source: tests/spec/emit/functions.rs
-description: "input: \nfn test() -> string {\n  'A' as string\n}\n"
+description: |
+  
+  fn test() -> string {
+    'A' as string
+  }
 ---
 package main
 

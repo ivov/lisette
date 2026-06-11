@@ -1,6 +1,19 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \nstruct A { a: string }\n\nimpl A {\n  fn String(self) -> string {\n    self.a + \"asdf\"\n  }\n}\n\nfn main() {\n  let a = A { a: \"text\" }\n  let _ = a\n}\n"
+description: |
+  
+  struct A { a: string }
+  
+  impl A {
+    fn String(self) -> string {
+      self.a + "asdf"
+    }
+  }
+  
+  fn main() {
+    let a = A { a: "text" }
+    let _ = a
+  }
 ---
 package main
 

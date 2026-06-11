@@ -1,6 +1,6 @@
 ---
 source: tests/spec/desugar/mod.rs
-description: "input: fn test() { x |> add(multiply(2, 3)) |> subtract(1); }"
+description: "fn test() { x |> add(multiply(2, 3)) |> subtract(1); }"
 ---
 [
     Function {

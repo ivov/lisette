@@ -1,6 +1,18 @@
 ---
 source: tests/spec/emit/patterns.rs
-description: "input: \nenum Color { Red, Green, Blue }\n\ntype Palette = Color\n\nfn describe(p: Palette) -> string {\n  match p {\n    Color.Red => \"r\",\n    Color.Green => \"g\",\n    Color.Blue => \"b\",\n  }\n}\n"
+description: |
+  
+  enum Color { Red, Green, Blue }
+  
+  type Palette = Color
+  
+  fn describe(p: Palette) -> string {
+    match p {
+      Color.Red => "r",
+      Color.Green => "g",
+      Color.Blue => "b",
+    }
+  }
 ---
 package main
 

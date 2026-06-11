@@ -1,6 +1,17 @@
 ---
 source: tests/spec/emit/control_flow.rs
-description: "input: \nimport \"go:fmt\"\n\nfn test() {\n  let result: Result<int, string> = Ok(42);\n  match result {\n    Ok(n) => fmt.Print(f\"success: {n}\\n\"),\n    Err(e) => fmt.Print(f\"error: {e}\\n\"),\n  }\n  fmt.Print(\"done\\n\");\n}\n"
+description: |
+  
+  import "go:fmt"
+  
+  fn test() {
+    let result: Result<int, string> = Ok(42);
+    match result {
+      Ok(n) => fmt.Print(f"success: {n}\n"),
+      Err(e) => fmt.Print(f"error: {e}\n"),
+    }
+    fmt.Print("done\n");
+  }
 ---
 package main
 

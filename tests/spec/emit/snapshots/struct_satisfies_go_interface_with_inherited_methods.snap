@@ -1,6 +1,28 @@
 ---
 source: tests/spec/emit/go_interface_adapter.rs
-description: "input: \nimport \"go:example.com/rw\"\n\nstruct Dev {}\n\nimpl Dev {\n  fn Read(self, mut p: Slice<uint8>) -> Partial<int, error> {\n    Partial.Ok(0)\n  }\n  fn Write(self, p: Slice<uint8>) -> Partial<int, error> {\n    Partial.Ok(0)\n  }\n}\n\nfn use_rw(rw: rw.ReadWriter) {\n  let _ = rw\n}\n\nfn main() {\n  let d = Dev {}\n  use_rw(d as rw.ReadWriter)\n}\n"
+description: |
+  
+  import "go:example.com/rw"
+  
+  struct Dev {}
+  
+  impl Dev {
+    fn Read(self, mut p: Slice<uint8>) -> Partial<int, error> {
+      Partial.Ok(0)
+    }
+    fn Write(self, p: Slice<uint8>) -> Partial<int, error> {
+      Partial.Ok(0)
+    }
+  }
+  
+  fn use_rw(rw: rw.ReadWriter) {
+    let _ = rw
+  }
+  
+  fn main() {
+    let d = Dev {}
+    use_rw(d as rw.ReadWriter)
+  }
 ---
 package main
 

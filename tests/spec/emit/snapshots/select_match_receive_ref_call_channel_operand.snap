@@ -1,6 +1,20 @@
 ---
 source: tests/spec/emit/control_flow.rs
-description: "input: \nfn get_channel(ch: Ref<Channel<int>>) -> Ref<Channel<int>> {\n  ch\n}\n\nfn test(ch: Ref<Channel<int>>) {\n  select {\n    match get_channel(ch).receive() {\n      Some(v) => { let _ = v },\n      None => {},\n    },\n    _ => {},\n  }\n}\n"
+description: |
+  
+  fn get_channel(ch: Ref<Channel<int>>) -> Ref<Channel<int>> {
+    ch
+  }
+  
+  fn test(ch: Ref<Channel<int>>) {
+    select {
+      match get_channel(ch).receive() {
+        Some(v) => { let _ = v },
+        None => {},
+      },
+      _ => {},
+    }
+  }
 ---
 package main
 

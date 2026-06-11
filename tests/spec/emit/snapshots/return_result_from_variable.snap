@@ -1,6 +1,11 @@
 ---
 source: tests/spec/emit/result_option_patterns.rs
-description: "input: \nfn test(flag: bool) -> Result<int, string> {\n  let result = if flag { Ok(42) } else { Err(\"nope\") };\n  result\n}\n"
+description: |
+  
+  fn test(flag: bool) -> Result<int, string> {
+    let result = if flag { Ok(42) } else { Err("nope") };
+    result
+  }
 ---
 package main
 

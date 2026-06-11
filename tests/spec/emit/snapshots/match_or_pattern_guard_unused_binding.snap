@@ -1,6 +1,15 @@
 ---
 source: tests/spec/emit/control_flow.rs
-description: "input: \nenum E { A(int), B(int), C }\nfn test() {\n  let e = E.C\n  match e {\n    E.A(x) | E.B(x) if false => (),\n    _ => (),\n  }\n}\n"
+description: |
+  
+  enum E { A(int), B(int), C }
+  fn test() {
+    let e = E.C
+    match e {
+      E.A(x) | E.B(x) if false => (),
+      _ => (),
+    }
+  }
 ---
 package main
 

@@ -1,6 +1,18 @@
 ---
 source: tests/spec/emit/interop_matrix.rs
-description: "input: \nimport \"go:example.com/cli\"\n\nfn main() {\n  let f1 = &cli.Flag { Name: \"a\", .. }\n  let f2 = &cli.Flag { Name: \"b\", .. }\n  let g = cli.Group {\n    Flags: [[Some(f1), Some(f2)]],\n    ..,\n  }\n  let _ = g\n}\n"
+description: |
+  
+  import "go:example.com/cli"
+  
+  fn main() {
+    let f1 = &cli.Flag { Name: "a", .. }
+    let f2 = &cli.Flag { Name: "b", .. }
+    let g = cli.Group {
+      Flags: [[Some(f1), Some(f2)]],
+      ..,
+    }
+    let _ = g
+  }
 ---
 package main
 

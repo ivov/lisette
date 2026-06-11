@@ -1,6 +1,12 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \n#[json]\nstruct User {\n  name: string,\n  age: int,\n}\n"
+description: |
+  
+  #[json]
+  struct User {
+    name: string,
+    age: int,
+  }
 ---
 package main
 

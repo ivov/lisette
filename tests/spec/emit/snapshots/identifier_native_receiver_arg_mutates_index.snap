@@ -1,6 +1,15 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nfn bump(i: Ref<int>) -> int { i.* = 1; 99 }\n\nfn run() -> int {\n  let xss = [[10], [20]]\n  let mut i = 0\n  let ys = Slice.append(xss[i], bump(&i))\n  ys[0]\n}\n"
+description: |
+  
+  fn bump(i: Ref<int>) -> int { i.* = 1; 99 }
+  
+  fn run() -> int {
+    let xss = [[10], [20]]
+    let mut i = 0
+    let ys = Slice.append(xss[i], bump(&i))
+    ys[0]
+  }
 ---
 package main
 

@@ -1,6 +1,20 @@
 ---
 source: tests/spec/emit/control_flow.rs
-description: "input: \nfn test() -> int {\n  let pair = (10, 20);\n  let first = match pair {\n    (a, b) => a + b,\n  };\n\n  let nested = ((1, 2), (3, 4));\n  let second = match nested {\n    ((a, b), (c, d)) => a + b + c + d,\n  };\n\n  first + second\n}\n"
+description: |
+  
+  fn test() -> int {
+    let pair = (10, 20);
+    let first = match pair {
+      (a, b) => a + b,
+    };
+  
+    let nested = ((1, 2), (3, 4));
+    let second = match nested {
+      ((a, b), (c, d)) => a + b + c + d,
+    };
+  
+    first + second
+  }
 ---
 package main
 

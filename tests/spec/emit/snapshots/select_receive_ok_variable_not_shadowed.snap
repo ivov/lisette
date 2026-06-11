@@ -1,6 +1,23 @@
 ---
 source: tests/spec/emit/concurrency.rs
-description: "input: \nimport \"go:fmt\"\n\nfn test() {\n  let ok = \"everything is fine\"\n  let ch = Channel.buffered<int>(1)\n  ch.send(42)\n  select {\n    match ch.receive() {\n      Some(val) => {\n        fmt.Println(f\"received: {val}\")\n        fmt.Println(f\"ok is: {ok}\")\n      },\n      None => fmt.Println(\"closed\"),\n    },\n  }\n}\n"
+description: |
+  
+  import "go:fmt"
+  
+  fn test() {
+    let ok = "everything is fine"
+    let ch = Channel.buffered<int>(1)
+    ch.send(42)
+    select {
+      match ch.receive() {
+        Some(val) => {
+          fmt.Println(f"received: {val}")
+          fmt.Println(f"ok is: {ok}")
+        },
+        None => fmt.Println("closed"),
+      },
+    }
+  }
 ---
 package main
 

@@ -1,6 +1,6 @@
 ---
 source: tests/spec/lex/mod.rs
-description: "input: f\"literal {{ and }} braces\""
+description: "f\"literal {{ and }} braces\""
 ---
 LexResult {
     tokens: [

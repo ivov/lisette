@@ -1,6 +1,12 @@
 ---
 source: tests/spec/emit/functions.rs
-description: "input: \nfn double(x: int) -> Option<int> { Some(x + x) }\n\nfn run() -> Option<int> {\n  Option.and_then(Some(2), double)\n}\n"
+description: |
+  
+  fn double(x: int) -> Option<int> { Some(x + x) }
+  
+  fn run() -> Option<int> {
+    Option.and_then(Some(2), double)
+  }
 ---
 package main
 

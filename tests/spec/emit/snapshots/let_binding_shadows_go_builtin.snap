@@ -1,6 +1,11 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nfn test(items: Slice<int>) -> int {\n  let len = items.length();\n  len\n}\n"
+description: |
+  
+  fn test(items: Slice<int>) -> int {
+    let len = items.length();
+    len
+  }
 ---
 package main
 

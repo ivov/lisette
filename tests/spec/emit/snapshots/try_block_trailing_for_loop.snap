@@ -1,6 +1,20 @@
 ---
 source: tests/spec/emit/result_option_patterns.rs
-description: "input: \nfn f() -> Result<(), string> {\n  try {\n    let _ = Ok(1)?\n    for i in [1, 2] {\n      let _ = i\n      break\n    }\n  }\n}\n\nfn test() -> Result<(), string> {\n  f()\n}\n"
+description: |
+  
+  fn f() -> Result<(), string> {
+    try {
+      let _ = Ok(1)?
+      for i in [1, 2] {
+        let _ = i
+        break
+      }
+    }
+  }
+  
+  fn test() -> Result<(), string> {
+    f()
+  }
 ---
 package main
 

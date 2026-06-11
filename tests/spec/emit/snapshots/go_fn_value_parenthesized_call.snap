@@ -1,6 +1,14 @@
 ---
 source: tests/spec/emit/functions.rs
-description: "input: \nimport \"go:fmt\"\nimport \"go:strconv\"\n\nfn main() {\n  let r = (strconv.Atoi)(\"42\")\n  fmt.Println(r)\n}\n"
+description: |
+  
+  import "go:fmt"
+  import "go:strconv"
+  
+  fn main() {
+    let r = (strconv.Atoi)("42")
+    fmt.Println(r)
+  }
 ---
 package main
 

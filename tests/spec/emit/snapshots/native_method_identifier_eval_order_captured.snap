@@ -1,6 +1,18 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nfn bump(i: Ref<int>) -> string {\n  i.* = 1\n  \",\"\n}\n\nfn main() {\n  let mut i = 0\n  let items = [\"a\", \"b\", \"c\"]\n  let joined = items.join(bump(&i))\n  let _ = joined\n}\n"
+description: |
+  
+  fn bump(i: Ref<int>) -> string {
+    i.* = 1
+    ","
+  }
+  
+  fn main() {
+    let mut i = 0
+    let items = ["a", "b", "c"]
+    let joined = items.join(bump(&i))
+    let _ = joined
+  }
 ---
 package main
 

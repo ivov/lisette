@@ -1,6 +1,13 @@
 ---
 source: tests/spec/emit/concurrency.rs
-description: "input: \nfn noop() {}\n\nfn test() {\n  let ch = Channel.buffered<()>(1)\n  ch.send(noop())\n}\n"
+description: |
+  
+  fn noop() {}
+  
+  fn test() {
+    let ch = Channel.buffered<()>(1)
+    ch.send(noop())
+  }
 ---
 package main
 

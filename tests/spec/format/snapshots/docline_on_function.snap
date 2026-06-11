@@ -1,6 +1,8 @@
 ---
 source: tests/spec/format/mod.rs
-description: "input: /// This is a docline\nfn foo() {}"
+description: |-
+  /// This is a docline
+  fn foo() {}
 ---
 /// This is a docline
 fn foo() {}

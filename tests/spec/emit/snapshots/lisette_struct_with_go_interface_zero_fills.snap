@@ -1,6 +1,14 @@
 ---
 source: tests/spec/emit/imports.rs
-description: "input: \nimport \"go:context\"\n\nstruct Wrapper { ctx: context.Context }\n\nfn test() -> Wrapper {\n  Wrapper { .. }\n}\n"
+description: |
+  
+  import "go:context"
+  
+  struct Wrapper { ctx: context.Context }
+  
+  fn test() -> Wrapper {
+    Wrapper { .. }
+  }
 ---
 package main
 

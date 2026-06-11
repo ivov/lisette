@@ -1,6 +1,16 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nenum State { Running(int), Stopped, Error(string, Option<int>) }\nfn test(state: State) {\n  match state {\n    State.Running(_)      => print(\"Running\"),\n    State.Stopped         => print(\"Stopped\"),\n    State.Error(_, None)  => print(\"Error without code\"),\n    State.Error(msg, Some(code)) => print(\"Error with code\", msg, code),\n  }\n}\n"
+description: |
+  
+  enum State { Running(int), Stopped, Error(string, Option<int>) }
+  fn test(state: State) {
+    match state {
+      State.Running(_)      => print("Running"),
+      State.Stopped         => print("Stopped"),
+      State.Error(_, None)  => print("Error without code"),
+      State.Error(msg, Some(code)) => print("Error with code", msg, code),
+    }
+  }
 ---
 [
     Enum {

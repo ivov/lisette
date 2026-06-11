@@ -1,6 +1,6 @@
 ---
 source: tests/spec/format/mod.rs
-description: "input: fn process(mut items: Slice<int>, count: int) -> Slice<int> { items }"
+description: "fn process(mut items: Slice<int>, count: int) -> Slice<int> { items }"
 ---
 fn process(mut items: Slice<int>, count: int) -> Slice<int> {
   items

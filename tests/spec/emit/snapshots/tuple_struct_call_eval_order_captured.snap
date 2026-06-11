@@ -1,6 +1,19 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nstruct Pair(int, int)\n\nfn bump(i: Ref<int>) -> int {\n  i.* = 1\n  10\n}\n\nfn main() {\n  let mut i = 0\n  let p = Pair(i, bump(&i))\n  let _ = p\n}\n"
+description: |
+  
+  struct Pair(int, int)
+  
+  fn bump(i: Ref<int>) -> int {
+    i.* = 1
+    10
+  }
+  
+  fn main() {
+    let mut i = 0
+    let p = Pair(i, bump(&i))
+    let _ = p
+  }
 ---
 package main
 

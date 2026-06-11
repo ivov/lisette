@@ -1,6 +1,15 @@
 ---
 source: tests/spec/emit/patterns.rs
-description: "input: \nenum Status { Good(int), Bad(string) }\n\nfn test(s: Status) -> int {\n  match s {\n    Good(n) as g => n,\n    Bad(_) => -1,\n  }\n}\n"
+description: |
+  
+  enum Status { Good(int), Bad(string) }
+  
+  fn test(s: Status) -> int {
+    match s {
+      Good(n) as g => n,
+      Bad(_) => -1,
+    }
+  }
 ---
 package main
 

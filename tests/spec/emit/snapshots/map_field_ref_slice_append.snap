@@ -1,6 +1,16 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nstruct Outer { items: Ref<Slice<int>> }\n\nfn main() {\n  let mut items = [1]\n  let mut m = Map.new<string, Outer>()\n  m[\"a\"] = Outer { items: &items }\n  m[\"a\"].items.* = m[\"a\"].items.*.append(2)\n  let _ = items\n}\n"
+description: |
+  
+  struct Outer { items: Ref<Slice<int>> }
+  
+  fn main() {
+    let mut items = [1]
+    let mut m = Map.new<string, Outer>()
+    m["a"] = Outer { items: &items }
+    m["a"].items.* = m["a"].items.*.append(2)
+    let _ = items
+  }
 ---
 package main
 

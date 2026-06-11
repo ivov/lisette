@@ -1,6 +1,19 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nfn bump(i: Ref<int>) -> int {\n  i.* = 1\n  10\n}\n\nfn sum(a: int, b: int) -> int { a + b }\n\nfn main() {\n  let mut i = 0\n  let z = sum(i, bump(&i))\n  let _ = z\n}\n"
+description: |
+  
+  fn bump(i: Ref<int>) -> int {
+    i.* = 1
+    10
+  }
+  
+  fn sum(a: int, b: int) -> int { a + b }
+  
+  fn main() {
+    let mut i = 0
+    let z = sum(i, bump(&i))
+    let _ = z
+  }
 ---
 package main
 

@@ -1,6 +1,13 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nfn test() {\n  let foo = 1;\n  let Bar = 2;\n  let x = 3;\n  if foo < Bar { x } else { 0 }\n}\n"
+description: |
+  
+  fn test() {
+    let foo = 1;
+    let Bar = 2;
+    let x = 3;
+    if foo < Bar { x } else { 0 }
+  }
 ---
 [
     Function {

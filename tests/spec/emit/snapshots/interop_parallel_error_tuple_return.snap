@@ -1,6 +1,21 @@
 ---
 source: tests/spec/emit/interop_matrix.rs
-description: "input: \nimport \"go:fmt\"\nimport \"go:example.com/migrate\"\n\nfn main() {\n  let (src, db) = migrate.Close()\n  match src {\n    Some(e) => fmt.Println(\"source:\", e),\n    None => {},\n  }\n  match db {\n    Some(e) => fmt.Println(\"db:\", e),\n    None => {},\n  }\n}\n"
+description: |
+  
+  import "go:fmt"
+  import "go:example.com/migrate"
+  
+  fn main() {
+    let (src, db) = migrate.Close()
+    match src {
+      Some(e) => fmt.Println("source:", e),
+      None => {},
+    }
+    match db {
+      Some(e) => fmt.Println("db:", e),
+      None => {},
+    }
+  }
 ---
 package main
 

@@ -1,6 +1,14 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nfn test() {\n  let _ = {\n    for x in [1, 2, 3] {\n      let _ = x\n    }\n  }\n}\n"
+description: |
+  
+  fn test() {
+    let _ = {
+      for x in [1, 2, 3] {
+        let _ = x
+      }
+    }
+  }
 ---
 package main
 

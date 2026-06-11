@@ -1,6 +1,13 @@
 ---
 source: tests/spec/emit/control_flow.rs
-description: "input: \nfn main() {\n  match 0 {\n    _ if true => {return},\n    _ => {panic(\"\")}\n  }\n}\n"
+description: |
+  
+  fn main() {
+    match 0 {
+      _ if true => {return},
+      _ => {panic("")}
+    }
+  }
 ---
 package main
 

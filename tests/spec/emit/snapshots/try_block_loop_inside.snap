@@ -1,6 +1,26 @@
 ---
 source: tests/spec/emit/control_flow.rs
-description: "input: \nfn get_items() -> Result<Slice<int>, string> { Ok([1, 2, 3]) }\n\nfn test() -> int {\n  let result = try {\n    let items = get_items()?;\n    let mut sum = 0;\n    for item in items {\n      if item > 10 {\n        break;\n      }\n      sum = sum + item;\n    };\n    sum\n  };\n  match result {\n    Ok(s) => s,\n    Err(_) => 0,\n  }\n}\n"
+description: |
+  
+  fn get_items() -> Result<Slice<int>, string> { Ok([1, 2, 3]) }
+  
+  fn test() -> int {
+    let result = try {
+      let items = get_items()?;
+      let mut sum = 0;
+      for item in items {
+        if item > 10 {
+          break;
+        }
+        sum = sum + item;
+      };
+      sum
+    };
+    match result {
+      Ok(s) => s,
+      Err(_) => 0,
+    }
+  }
 ---
 package main
 

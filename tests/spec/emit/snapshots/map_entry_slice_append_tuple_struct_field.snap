@@ -1,6 +1,16 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nstruct Wrap(Slice<int>, int)\n\nfn main() {\n  let mut m = Map.new<string, Wrap>()\n  m[\"a\"] = Wrap([], 0)\n  let mut entry = m[\"a\"]\n  entry.0 = entry.0.append(2)\n  m[\"a\"] = entry\n}\n"
+description: |
+  
+  struct Wrap(Slice<int>, int)
+  
+  fn main() {
+    let mut m = Map.new<string, Wrap>()
+    m["a"] = Wrap([], 0)
+    let mut entry = m["a"]
+    entry.0 = entry.0.append(2)
+    m["a"] = entry
+  }
 ---
 package main
 

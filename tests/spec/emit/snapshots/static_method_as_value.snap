@@ -1,6 +1,17 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nstruct Box { x: int }\n\nimpl Box {\n  fn new(x: int) -> Box { Box { x } }\n}\n\nfn main() {\n  let f = Box.new\n  let _ = f(1)\n}\n"
+description: |
+  
+  struct Box { x: int }
+  
+  impl Box {
+    fn new(x: int) -> Box { Box { x } }
+  }
+  
+  fn main() {
+    let f = Box.new
+    let _ = f(1)
+  }
 ---
 package main
 

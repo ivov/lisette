@@ -1,6 +1,8 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nconst PI: float64 = 3.14159;\n"
+description: |
+  
+  const PI: float64 = 3.14159;
 ---
 [
     Const {

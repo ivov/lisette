@@ -1,6 +1,10 @@
 ---
 source: tests/spec/emit/prelude.rs
-description: "input: \nfn test() -> Channel<int> {\n  Channel.new<int>()\n}\n"
+description: |
+  
+  fn test() -> Channel<int> {
+    Channel.new<int>()
+  }
 ---
 package main
 

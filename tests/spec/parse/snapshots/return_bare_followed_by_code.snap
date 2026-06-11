@@ -1,6 +1,11 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nfn test() {\n  return;\n  let x = 5;\n}\n"
+description: |
+  
+  fn test() {
+    return;
+    let x = 5;
+  }
 ---
 [
     Function {

@@ -1,6 +1,11 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nfn test() -> Option<int> {\n  let items = ([1, 2, 3], [4, 5, 6])\n  items.0.get(0)\n}\n"
+description: |
+  
+  fn test() -> Option<int> {
+    let items = ([1, 2, 3], [4, 5, 6])
+    items.0.get(0)
+  }
 ---
 package main
 

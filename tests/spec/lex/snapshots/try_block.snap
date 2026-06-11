@@ -1,6 +1,10 @@
 ---
 source: tests/spec/lex/mod.rs
-description: "input: \nlet result = try {\n  risky()?\n};\n"
+description: |
+  
+  let result = try {
+    risky()?
+  };
 ---
 LexResult {
     tokens: [

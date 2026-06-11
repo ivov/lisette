@@ -1,6 +1,12 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \nfn make_pair() -> (fn() -> int, fn()) {\n  let get = || -> int { 42 };\n  let inc = || { };\n  (get, inc)\n}\n"
+description: |
+  
+  fn make_pair() -> (fn() -> int, fn()) {
+    let get = || -> int { 42 };
+    let inc = || { };
+    (get, inc)
+  }
 ---
 package main
 

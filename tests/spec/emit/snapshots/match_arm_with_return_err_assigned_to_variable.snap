@@ -1,6 +1,18 @@
 ---
 source: tests/spec/emit/control_flow.rs
-description: "input: \nfn safe_divide(a: float64, b: float64) -> Option<float64> {\n  if b == 0.0 { None } else { Some(a / b) }\n}\n\nfn parse_and_divide(a: float64, b: float64) -> Result<string, string> {\n  let result = match safe_divide(a, b) {\n    Some(v) => v,\n    None => return Err(\"division by zero\"),\n  };\n  Ok(f\"{result}\")\n}\n"
+description: |
+  
+  fn safe_divide(a: float64, b: float64) -> Option<float64> {
+    if b == 0.0 { None } else { Some(a / b) }
+  }
+  
+  fn parse_and_divide(a: float64, b: float64) -> Result<string, string> {
+    let result = match safe_divide(a, b) {
+      Some(v) => v,
+      None => return Err("division by zero"),
+    };
+    Ok(f"{result}")
+  }
 ---
 package main
 

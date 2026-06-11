@@ -1,6 +1,13 @@
 ---
 source: tests/spec/emit/functions.rs
-description: "input: \nimport \"go:html/template\"\n\nfn main() {\n  let t = template.New(\"x\")\n  t.Lookup(\"y\")\n}\n"
+description: |
+  
+  import "go:html/template"
+  
+  fn main() {
+    let t = template.New("x")
+    t.Lookup("y")
+  }
 ---
 package main
 

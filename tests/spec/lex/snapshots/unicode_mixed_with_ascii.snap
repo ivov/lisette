@@ -1,6 +1,6 @@
 ---
 source: tests/spec/lex/mod.rs
-description: "input: fn polar(r: float64, θ: float64) -> complex128"
+description: "fn polar(r: float64, θ: float64) -> complex128"
 ---
 LexResult {
     tokens: [

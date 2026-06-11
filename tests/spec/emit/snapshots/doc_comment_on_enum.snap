@@ -1,6 +1,9 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \n/// Represents the status of a task.\nenum Status { Pending, Running, Complete }\n"
+description: |
+  
+  /// Represents the status of a task.
+  enum Status { Pending, Running, Complete }
 ---
 package main
 

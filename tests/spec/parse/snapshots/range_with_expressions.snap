@@ -1,6 +1,8 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nfn test(start: int, end: int) { let r = start..end; }\n"
+description: |
+  
+  fn test(start: int, end: int) { let r = start..end; }
 ---
 [
     Function {

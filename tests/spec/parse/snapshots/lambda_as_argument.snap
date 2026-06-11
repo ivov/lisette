@@ -1,6 +1,10 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nfn test(numbers: Slice<int>) {\n  let result = map(numbers, |n| n * 2);\n}\n"
+description: |
+  
+  fn test(numbers: Slice<int>) {
+    let result = map(numbers, |n| n * 2);
+  }
 ---
 [
     Function {

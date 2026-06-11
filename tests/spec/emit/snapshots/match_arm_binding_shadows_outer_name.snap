@@ -1,6 +1,18 @@
 ---
 source: tests/spec/emit/patterns.rs
-description: "input: \nimport \"go:fmt\"\n\nstruct Point { x: int, y: int }\n\nfn test(p: Point) -> int {\n  let result = match p {\n    Point { x, .. } as fmt => fmt.x + x,\n  }\n  fmt.Println(result)\n  result\n}\n"
+description: |
+  
+  import "go:fmt"
+  
+  struct Point { x: int, y: int }
+  
+  fn test(p: Point) -> int {
+    let result = match p {
+      Point { x, .. } as fmt => fmt.x + x,
+    }
+    fmt.Println(result)
+    result
+  }
 ---
 package main
 

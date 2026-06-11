@@ -1,6 +1,6 @@
 ---
 source: tests/spec/lex/mod.rs
-description: "input: f\"val: {c == '}'}\""
+description: "f\"val: {c == '}'}\""
 ---
 LexResult {
     tokens: [

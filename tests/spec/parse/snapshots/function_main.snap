@@ -1,6 +1,18 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nfn main() {\n   let total = 7 + 5;\n   let is_active = true;\n   let pi = 3.14;\n   let name = \"Lisette\";\n   let initial = 'L';\n   match total {\n       12 => print(\"Correct!\"),\n       _  => print(\"Incorrect!\"),\n   }\n}\n"
+description: |
+  
+  fn main() {
+     let total = 7 + 5;
+     let is_active = true;
+     let pi = 3.14;
+     let name = "Lisette";
+     let initial = 'L';
+     match total {
+         12 => print("Correct!"),
+         _  => print("Incorrect!"),
+     }
+  }
 ---
 [
     Function {

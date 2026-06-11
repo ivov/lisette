@@ -1,6 +1,17 @@
 ---
 source: tests/spec/emit/concurrency.rs
-description: "input: \nfn do_work() {}\n\nfn test() {\n  let ch = Channel.new<int>();\n\n  select {\n    ch.receive() => do_work(),\n    _ => {},\n  }\n}\n"
+description: |
+  
+  fn do_work() {}
+  
+  fn test() {
+    let ch = Channel.new<int>();
+  
+    select {
+      ch.receive() => do_work(),
+      _ => {},
+    }
+  }
 ---
 package main
 

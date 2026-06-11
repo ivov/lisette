@@ -1,6 +1,12 @@
 ---
 source: tests/spec/format/mod.rs
-description: "input: interface I {\n  fn first()\n  // about second\n\n  fn second()\n}"
+description: |-
+  interface I {
+    fn first()
+    // about second
+  
+    fn second()
+  }
 ---
 interface I {
   fn first()

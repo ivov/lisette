@@ -1,6 +1,15 @@
 ---
 source: tests/spec/emit/control_flow.rs
-description: "input: \nenum Color { Red, Green, Blue }\n\nfn test(color: Color) -> int {\n  match color {\n    Red => 1,\n    _ => 0,\n  }\n}\n"
+description: |
+  
+  enum Color { Red, Green, Blue }
+  
+  fn test(color: Color) -> int {
+    match color {
+      Red => 1,
+      _ => 0,
+    }
+  }
 ---
 package main
 

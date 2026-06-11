@@ -1,6 +1,10 @@
 ---
 source: tests/spec/emit/prelude.rs
-description: "input: \nfn test() -> Map<string, fn()> {\n  Map.new()\n}\n"
+description: |
+  
+  fn test() -> Map<string, fn()> {
+    Map.new()
+  }
 ---
 package main
 

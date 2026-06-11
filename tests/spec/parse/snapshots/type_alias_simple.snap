@@ -1,6 +1,8 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \ntype UserID = int;\n"
+description: |
+  
+  type UserID = int;
 ---
 [
     TypeAlias {

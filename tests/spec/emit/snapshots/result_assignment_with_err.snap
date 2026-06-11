@@ -1,6 +1,11 @@
 ---
 source: tests/spec/emit/result_option_patterns.rs
-description: "input: \nfn test() {\n  let mut res: Result<int, string> = Ok(1);\n  res = Err(\"error\");\n}\n"
+description: |
+  
+  fn test() {
+    let mut res: Result<int, string> = Ok(1);
+    res = Err("error");
+  }
 ---
 package main
 

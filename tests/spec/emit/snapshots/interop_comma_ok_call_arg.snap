@@ -1,6 +1,20 @@
 ---
 source: tests/spec/emit/interop_matrix.rs
-description: "input: \nimport \"go:os\"\n\nfn apply(f: fn(string) -> Option<string>, key: string) -> string {\n  match f(key) {\n    Some(v) => v,\n    None => \"unset\",\n  }\n}\n\nfn main() {\n  let r = apply(os.LookupEnv, \"HOME\")\n  let _ = r\n}\n"
+description: |
+  
+  import "go:os"
+  
+  fn apply(f: fn(string) -> Option<string>, key: string) -> string {
+    match f(key) {
+      Some(v) => v,
+      None => "unset",
+    }
+  }
+  
+  fn main() {
+    let r = apply(os.LookupEnv, "HOME")
+    let _ = r
+  }
 ---
 package main
 

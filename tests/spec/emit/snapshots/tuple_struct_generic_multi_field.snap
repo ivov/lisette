@@ -1,6 +1,12 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \nstruct Pair<A, B>(A, B)\n\nfn test() -> Pair<int, string> {\n  Pair(42, \"hello\")\n}\n"
+description: |
+  
+  struct Pair<A, B>(A, B)
+  
+  fn test() -> Pair<int, string> {
+    Pair(42, "hello")
+  }
 ---
 package main
 

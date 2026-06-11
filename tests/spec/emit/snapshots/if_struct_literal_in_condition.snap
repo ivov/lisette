@@ -1,6 +1,20 @@
 ---
 source: tests/spec/emit/control_flow.rs
-description: "input: \nstruct Point { x: int, y: int }\n\nimpl Point {\n  fn sum(self) -> int { self.x + self.y }\n}\n\nfn test() -> int {\n  if Point { x: 1, y: 2 }.sum() > 0 {\n    1\n  } else {\n    0\n  }\n}\n"
+description: |
+  
+  struct Point { x: int, y: int }
+  
+  impl Point {
+    fn sum(self) -> int { self.x + self.y }
+  }
+  
+  fn test() -> int {
+    if Point { x: 1, y: 2 }.sum() > 0 {
+      1
+    } else {
+      0
+    }
+  }
 ---
 package main
 

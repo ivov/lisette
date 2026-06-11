@@ -1,6 +1,10 @@
 ---
 source: tests/spec/emit/literals.rs
-description: "input: \nfn test() -> int {\n  -9223372036854775808\n}\n"
+description: |
+  
+  fn test() -> int {
+    -9223372036854775808
+  }
 ---
 package main
 

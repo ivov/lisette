@@ -1,6 +1,22 @@
 ---
 source: tests/spec/emit/interop_matrix.rs
-description: "input: \nimport \"go:fmt\"\n\nstruct Counter {\n  count: int,\n}\n\nimpl Counter {\n  fn String(self) -> string {\n    f\"{self.count}\"\n  }\n}\n\nfn make_pair(c: Counter) -> (fmt.Stringer, int) {\n  (c, c.count)\n}\n"
+description: |
+  
+  import "go:fmt"
+  
+  struct Counter {
+    count: int,
+  }
+  
+  impl Counter {
+    fn String(self) -> string {
+      f"{self.count}"
+    }
+  }
+  
+  fn make_pair(c: Counter) -> (fmt.Stringer, int) {
+    (c, c.count)
+  }
 ---
 package main
 

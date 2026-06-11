@@ -1,6 +1,8 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nfn test() { func<Map<string, int>>(); }\n"
+description: |
+  
+  fn test() { func<Map<string, int>>(); }
 ---
 [
     Function {

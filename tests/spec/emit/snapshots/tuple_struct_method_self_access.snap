@@ -1,6 +1,23 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \nstruct Point(int, int)\n\nimpl Point {\n  fn x(self: Point) -> int {\n    self.0\n  }\n\n  fn sum(self: Point) -> int {\n    self.0 + self.1\n  }\n}\n\nfn test() -> int {\n  let p = Point(10, 20);\n  p.sum()\n}\n"
+description: |
+  
+  struct Point(int, int)
+  
+  impl Point {
+    fn x(self: Point) -> int {
+      self.0
+    }
+  
+    fn sum(self: Point) -> int {
+      self.0 + self.1
+    }
+  }
+  
+  fn test() -> int {
+    let p = Point(10, 20);
+    p.sum()
+  }
 ---
 package main
 

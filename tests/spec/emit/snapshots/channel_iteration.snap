@@ -1,6 +1,15 @@
 ---
 source: tests/spec/emit/concurrency.rs
-description: "input: \nfn process(v: int) {}\n\nfn test() {\n  let ch = Channel.new<int>();\n  for v in ch {\n    process(v);\n  }\n}\n"
+description: |
+  
+  fn process(v: int) {}
+  
+  fn test() {
+    let ch = Channel.new<int>();
+    for v in ch {
+      process(v);
+    }
+  }
 ---
 package main
 

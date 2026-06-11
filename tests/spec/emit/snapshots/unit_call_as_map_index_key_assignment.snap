@@ -1,6 +1,13 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nfn noop() {}\n\nfn main() {\n  let mut m = Map.new<(), int>()\n  m[noop()] = 7\n}\n"
+description: |
+  
+  fn noop() {}
+  
+  fn main() {
+    let mut m = Map.new<(), int>()
+    m[noop()] = 7
+  }
 ---
 package main
 

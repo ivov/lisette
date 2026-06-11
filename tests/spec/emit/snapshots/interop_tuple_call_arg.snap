@@ -1,6 +1,18 @@
 ---
 source: tests/spec/emit/interop_matrix.rs
-description: "input: \nimport \"go:path\"\n\nfn use_split(f: fn(string) -> (string, string), p: string) -> string {\n  let (dir, file) = f(p)\n  f\"{dir}/{file}\"\n}\n\nfn main() {\n  let r = use_split(path.Split, \"/foo/bar.txt\")\n  let _ = r\n}\n"
+description: |
+  
+  import "go:path"
+  
+  fn use_split(f: fn(string) -> (string, string), p: string) -> string {
+    let (dir, file) = f(p)
+    f"{dir}/{file}"
+  }
+  
+  fn main() {
+    let r = use_split(path.Split, "/foo/bar.txt")
+    let _ = r
+  }
 ---
 package main
 

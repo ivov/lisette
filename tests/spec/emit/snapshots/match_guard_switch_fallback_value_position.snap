@@ -1,6 +1,16 @@
 ---
 source: tests/spec/emit/control_flow.rs
-description: "input: \nenum Dir { North, South }\n\nfn check(d: Dir, urgent: bool) -> string {\n  match d {\n    Dir.North if urgent => \"NORTH!\",\n    Dir.North => \"north\",\n    Dir.South => \"south\",\n  }\n}\n"
+description: |
+  
+  enum Dir { North, South }
+  
+  fn check(d: Dir, urgent: bool) -> string {
+    match d {
+      Dir.North if urgent => "NORTH!",
+      Dir.North => "north",
+      Dir.South => "south",
+    }
+  }
 ---
 package main
 

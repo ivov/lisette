@@ -1,6 +1,15 @@
 ---
 source: tests/spec/emit/patterns.rs
-description: "input: \nimport \"go:example.com/events\"\n\nfn describe(pair: (events.Event, int)) -> int {\n  match pair {\n    (events.Token(s), _) => s.length(),\n    _ => 0,\n  }\n}\n"
+description: |
+  
+  import "go:example.com/events"
+  
+  fn describe(pair: (events.Event, int)) -> int {
+    match pair {
+      (events.Token(s), _) => s.length(),
+      _ => 0,
+    }
+  }
 ---
 package main
 

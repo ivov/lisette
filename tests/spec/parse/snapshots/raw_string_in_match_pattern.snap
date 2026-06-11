@@ -1,6 +1,14 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nfn test() {\n  match s {\n    r\"\\d+\" => 1,\n    \"plain\" => 2,\n    _ => 0,\n  }\n}\n"
+description: |
+  
+  fn test() {
+    match s {
+      r"\d+" => 1,
+      "plain" => 2,
+      _ => 0,
+    }
+  }
 ---
 [
     Function {

@@ -1,6 +1,24 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nstruct Counter {\n  value: int,\n}\n\nimpl Counter {\n  fn private_helper(self: Counter) -> int {\n    return self.value * 2;\n  }\n\n  pub fn get(self: Counter) -> int {\n    return self.private_helper();\n  }\n\n  pub fn set(self: Counter, new_value: int) -> Counter {\n    return Counter { value: new_value };\n  }\n}\n"
+description: |
+  
+  struct Counter {
+    value: int,
+  }
+  
+  impl Counter {
+    fn private_helper(self: Counter) -> int {
+      return self.value * 2;
+    }
+  
+    pub fn get(self: Counter) -> int {
+      return self.private_helper();
+    }
+  
+    pub fn set(self: Counter, new_value: int) -> Counter {
+      return Counter { value: new_value };
+    }
+  }
 ---
 [
     Struct {

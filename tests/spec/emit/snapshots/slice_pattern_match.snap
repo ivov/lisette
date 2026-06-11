@@ -1,6 +1,14 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nfn test() -> int {\n  let arr = [1, 2, 3];\n  match arr {\n    [a, b, c] => a + b + c,\n    _ => 0,\n  }\n}\n"
+description: |
+  
+  fn test() -> int {
+    let arr = [1, 2, 3];
+    match arr {
+      [a, b, c] => a + b + c,
+      _ => 0,
+    }
+  }
 ---
 package main
 

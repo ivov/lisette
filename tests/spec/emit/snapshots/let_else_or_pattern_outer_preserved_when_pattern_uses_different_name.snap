@@ -1,6 +1,21 @@
 ---
 source: tests/spec/emit/control_flow.rs
-description: "input: \nenum E {\n  A(int),\n  B(int),\n  C,\n}\nfn test() {\n  let x = 5\n  let e = E.A(9)\n  let E.A(y) | E.B(y) = e else {\n    return\n  }\n  if y != 9 { panic(\"pattern\") }\n  if x != 5 { panic(\"outer\") }\n}\n"
+description: |
+  
+  enum E {
+    A(int),
+    B(int),
+    C,
+  }
+  fn test() {
+    let x = 5
+    let e = E.A(9)
+    let E.A(y) | E.B(y) = e else {
+      return
+    }
+    if y != 9 { panic("pattern") }
+    if x != 5 { panic("outer") }
+  }
 ---
 package main
 

@@ -1,6 +1,25 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \ninterface Printable {\n  fn text(self) -> string\n}\n\nstruct A {}\nstruct B {}\n\nimpl A { fn text(self) -> string { \"a\" } }\nimpl B { fn text(self) -> string { \"b\" } }\n\nfn make_a() -> Result<A, string> { Ok(A {}) }\n\nfn run() -> Result<(), string> {\n  let mut p: Printable = make_a()?\n  p = B {}\n  let _ = p\n  Ok(())\n}\n"
+description: |
+  
+  interface Printable {
+    fn text(self) -> string
+  }
+  
+  struct A {}
+  struct B {}
+  
+  impl A { fn text(self) -> string { "a" } }
+  impl B { fn text(self) -> string { "b" } }
+  
+  fn make_a() -> Result<A, string> { Ok(A {}) }
+  
+  fn run() -> Result<(), string> {
+    let mut p: Printable = make_a()?
+    p = B {}
+    let _ = p
+    Ok(())
+  }
 ---
 package main
 

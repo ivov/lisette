@@ -1,6 +1,12 @@
 ---
 source: tests/spec/emit/control_flow.rs
-description: "input: \nfn test() -> int {\n  let mut xs = [1, 2, 3];\n  xs[0] = 100;\n  xs[0]\n}\n"
+description: |
+  
+  fn test() -> int {
+    let mut xs = [1, 2, 3];
+    xs[0] = 100;
+    xs[0]
+  }
 ---
 package main
 

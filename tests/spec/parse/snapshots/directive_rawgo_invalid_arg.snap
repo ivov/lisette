@@ -1,6 +1,8 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nfn test() { @rawgo(123); }\n"
+description: |
+  
+  fn test() { @rawgo(123); }
 ---
 [
     Function {

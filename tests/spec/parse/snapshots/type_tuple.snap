@@ -1,6 +1,9 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \ntype Pair = (int, string);\ntype Unit = ();\n"
+description: |
+  
+  type Pair = (int, string);
+  type Unit = ();
 ---
 [
     TypeAlias {

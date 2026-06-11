@@ -1,6 +1,6 @@
 ---
 source: tests/spec/format/mod.rs
-description: "input: fn test() { let msg = f\"You cannot use another ender pearl for {shared.format_duration(remaining)}.\" }"
+description: "fn test() { let msg = f\"You cannot use another ender pearl for {shared.format_duration(remaining)}.\" }"
 ---
 fn test() {
   let msg = f"You cannot use another ender pearl for {shared.format_duration(remaining)}."

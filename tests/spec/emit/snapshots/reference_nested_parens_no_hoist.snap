@@ -1,6 +1,18 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nstruct S { x: int }\n\nimpl S {\n  fn inc(self: Ref<S>) { self.x = self.x + 1 }\n}\n\nfn main() {\n  let mut s = S { x: 1 }\n  let r = &((s))\n  r.inc()\n}\n"
+description: |
+  
+  struct S { x: int }
+  
+  impl S {
+    fn inc(self: Ref<S>) { self.x = self.x + 1 }
+  }
+  
+  fn main() {
+    let mut s = S { x: 1 }
+    let r = &((s))
+    r.inc()
+  }
 ---
 package main
 

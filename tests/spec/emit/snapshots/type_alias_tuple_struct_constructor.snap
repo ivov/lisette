@@ -1,6 +1,16 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \nimport \"go:fmt\"\n\nstruct Wrap(int)\ntype Alias = Wrap\n\nfn main() {\n  let v = Alias(1)\n  fmt.Println(v)\n}\n"
+description: |
+  
+  import "go:fmt"
+  
+  struct Wrap(int)
+  type Alias = Wrap
+  
+  fn main() {
+    let v = Alias(1)
+    fmt.Println(v)
+  }
 ---
 package main
 

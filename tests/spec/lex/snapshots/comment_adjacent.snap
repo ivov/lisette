@@ -1,6 +1,8 @@
 ---
 source: tests/spec/lex/mod.rs
-description: "input: // first line\n// second line"
+description: |-
+  // first line
+  // second line
 ---
 LexResult {
     tokens: [

@@ -1,6 +1,17 @@
 ---
 source: tests/spec/emit/functions.rs
-description: "input: \nstruct Config {\n  range: int,\n  default: string,\n}\n\nfn main() {\n  let mut c = Config { range: 10, default: \"hello\" }\n  c.range = 20\n  c.default = \"world\"\n}\n"
+description: |
+  
+  struct Config {
+    range: int,
+    default: string,
+  }
+  
+  fn main() {
+    let mut c = Config { range: 10, default: "hello" }
+    c.range = 20
+    c.default = "world"
+  }
 ---
 package main
 

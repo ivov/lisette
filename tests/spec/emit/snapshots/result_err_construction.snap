@@ -1,6 +1,10 @@
 ---
 source: tests/spec/emit/result_option_patterns.rs
-description: "input: \nfn test() -> Result<int, string> {\n  Err(\"error\")\n}\n"
+description: |
+  
+  fn test() -> Result<int, string> {
+    Err("error")
+  }
 ---
 package main
 

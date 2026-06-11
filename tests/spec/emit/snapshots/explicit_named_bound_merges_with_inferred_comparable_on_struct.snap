@@ -1,6 +1,31 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \ninterface Named {\n  fn name(self) -> string\n}\n\nstruct Person {\n  value: string,\n}\n\nimpl Person {\n  fn name(self) -> string {\n    self.value\n  }\n}\n\nstruct Box<T: Named> {\n  table: Map<T, int>,\n}\n\nfn main() {\n  let p = Person { value: \"Ada\" }\n  let _ = p.name()\n  let b: Box<Person> = Box { table: Map.new() }\n  let _ = b\n}\n"
+description: |
+  
+  interface Named {
+    fn name(self) -> string
+  }
+  
+  struct Person {
+    value: string,
+  }
+  
+  impl Person {
+    fn name(self) -> string {
+      self.value
+    }
+  }
+  
+  struct Box<T: Named> {
+    table: Map<T, int>,
+  }
+  
+  fn main() {
+    let p = Person { value: "Ada" }
+    let _ = p.name()
+    let b: Box<Person> = Box { table: Map.new() }
+    let _ = b
+  }
 ---
 package main
 

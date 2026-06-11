@@ -1,6 +1,15 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nfn test(x: int) -> string {\n  match x {\n    -5 => \"negative five\",\n    -1 => \"negative one\",\n    0 => \"zero\",\n    _ => \"other\",\n  }\n}\n"
+description: |
+  
+  fn test(x: int) -> string {
+    match x {
+      -5 => "negative five",
+      -1 => "negative one",
+      0 => "zero",
+      _ => "other",
+    }
+  }
 ---
 [
     Function {

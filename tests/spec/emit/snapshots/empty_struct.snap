@@ -1,6 +1,8 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \nstruct Blank {}\n"
+description: |
+  
+  struct Blank {}
 ---
 package main
 

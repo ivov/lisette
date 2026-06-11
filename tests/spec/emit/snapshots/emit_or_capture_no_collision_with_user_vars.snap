@@ -1,6 +1,16 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nimport \"go:fmt\"\n\nfn main() {\n  let _bound_0 = 10\n  for i in 0..(1 + 2) {\n    fmt.Println(i)\n  }\n  fmt.Println(_bound_0)\n}\n"
+description: |
+  
+  import "go:fmt"
+  
+  fn main() {
+    let _bound_0 = 10
+    for i in 0..(1 + 2) {
+      fmt.Println(i)
+    }
+    fmt.Println(_bound_0)
+  }
 ---
 package main
 

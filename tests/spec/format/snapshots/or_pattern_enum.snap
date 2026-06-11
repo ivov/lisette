@@ -1,6 +1,6 @@
 ---
 source: tests/spec/format/mod.rs
-description: "input: fn test() { match color { Red | Green => \"warm\", Blue => \"cool\" } }"
+description: "fn test() { match color { Red | Green => \"warm\", Blue => \"cool\" } }"
 ---
 fn test() {
   match color {

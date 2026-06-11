@@ -1,6 +1,12 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nfn test() -> int {\n  let mut pair = (10, 20);\n  pair.0 = 99;\n  pair.0\n}\n"
+description: |
+  
+  fn test() -> int {
+    let mut pair = (10, 20);
+    pair.0 = 99;
+    pair.0
+  }
 ---
 package main
 

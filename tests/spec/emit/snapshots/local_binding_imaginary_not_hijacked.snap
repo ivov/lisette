@@ -1,6 +1,13 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nfn id(x: int) -> int { x }\n\nfn test() -> int {\n  let imaginary = id\n  imaginary(1)\n}\n"
+description: |
+  
+  fn id(x: int) -> int { x }
+  
+  fn test() -> int {
+    let imaginary = id
+    imaginary(1)
+  }
 ---
 package main
 

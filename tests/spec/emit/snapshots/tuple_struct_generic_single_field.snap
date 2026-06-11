@@ -1,6 +1,12 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \nstruct Wrapper<T>(T)\n\nfn test() -> Wrapper<int> {\n  Wrapper(42)\n}\n"
+description: |
+  
+  struct Wrapper<T>(T)
+  
+  fn test() -> Wrapper<int> {
+    Wrapper(42)
+  }
 ---
 package main
 

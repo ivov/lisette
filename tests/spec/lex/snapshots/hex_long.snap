@@ -1,6 +1,6 @@
 ---
 source: tests/spec/lex/mod.rs
-description: "input: 0xC96C5795D7870F42"
+description: "0xC96C5795D7870F42"
 ---
 LexResult {
     tokens: [

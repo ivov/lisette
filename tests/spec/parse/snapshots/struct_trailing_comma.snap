@@ -1,6 +1,11 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nstruct Config {\n  timeout: int,\n  retries: int,\n}\n"
+description: |
+  
+  struct Config {
+    timeout: int,
+    retries: int,
+  }
 ---
 [
     Struct {

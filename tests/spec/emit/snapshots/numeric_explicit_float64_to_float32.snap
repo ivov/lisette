@@ -1,6 +1,14 @@
 ---
 source: tests/spec/emit/functions.rs
-description: "input: \nfn get_float64() -> float64 {\n  3.14\n}\n\nfn test() -> float32 {\n  get_float64() as float32\n}\n"
+description: |
+  
+  fn get_float64() -> float64 {
+    3.14
+  }
+  
+  fn test() -> float32 {
+    get_float64() as float32
+  }
 ---
 package main
 

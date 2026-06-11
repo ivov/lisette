@@ -1,6 +1,21 @@
 ---
 source: tests/spec/emit/interop_matrix.rs
-description: "input: \nimport \"go:os\"\n\nfn make_lookup() -> fn(string) -> Option<string> {\n  os.LookupEnv\n}\n\nfn main() {\n  let f = make_lookup()\n  let r = f(\"HOME\")\n  match r {\n    Some(v) => { let _ = v },\n    None => { let _ = \"\" },\n  }\n}\n"
+description: |
+  
+  import "go:os"
+  
+  fn make_lookup() -> fn(string) -> Option<string> {
+    os.LookupEnv
+  }
+  
+  fn main() {
+    let f = make_lookup()
+    let r = f("HOME")
+    match r {
+      Some(v) => { let _ = v },
+      None => { let _ = "" },
+    }
+  }
 ---
 package main
 

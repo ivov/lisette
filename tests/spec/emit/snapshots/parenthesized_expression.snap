@@ -1,6 +1,10 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nfn test() -> int {\n  (1 + 2) * 3\n}\n"
+description: |
+  
+  fn test() -> int {
+    (1 + 2) * 3
+  }
 ---
 package main
 

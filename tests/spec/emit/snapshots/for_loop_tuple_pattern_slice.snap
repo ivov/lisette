@@ -1,6 +1,14 @@
 ---
 source: tests/spec/emit/control_flow.rs
-description: "input: \nimport \"go:fmt\"\n\nfn test(pairs: Slice<(int, string)>) {\n  for (a, b) in pairs {\n    fmt.Println(a, b)\n  }\n}\n"
+description: |
+  
+  import "go:fmt"
+  
+  fn test(pairs: Slice<(int, string)>) {
+    for (a, b) in pairs {
+      fmt.Println(a, b)
+    }
+  }
 ---
 package main
 

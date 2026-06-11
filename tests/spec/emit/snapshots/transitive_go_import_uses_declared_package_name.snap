@@ -1,6 +1,16 @@
 ---
 source: tests/spec/emit/imports.rs
-description: "input: \nimport \"go:example.com/bubbletea\"\n\nstruct Model {}\n\nimpl Model {\n  fn Init(self: Model) -> tea.Cmd {\n    || ()\n  }\n}\n"
+description: |
+  
+  import "go:example.com/bubbletea"
+  
+  struct Model {}
+  
+  impl Model {
+    fn Init(self: Model) -> tea.Cmd {
+      || ()
+    }
+  }
 ---
 package main
 

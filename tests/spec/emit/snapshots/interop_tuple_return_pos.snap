@@ -1,6 +1,18 @@
 ---
 source: tests/spec/emit/interop_matrix.rs
-description: "input: \nimport \"go:path\"\n\nfn make_splitter() -> fn(string) -> (string, string) {\n  path.Split\n}\n\nfn main() {\n  let f = make_splitter()\n  let r = f(\"/foo/bar.txt\")\n  let _ = r\n}\n"
+description: |
+  
+  import "go:path"
+  
+  fn make_splitter() -> fn(string) -> (string, string) {
+    path.Split
+  }
+  
+  fn main() {
+    let f = make_splitter()
+    let r = f("/foo/bar.txt")
+    let _ = r
+  }
 ---
 package main
 

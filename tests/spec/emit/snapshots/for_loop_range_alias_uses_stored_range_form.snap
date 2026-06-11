@@ -1,6 +1,16 @@
 ---
 source: tests/spec/emit/control_flow.rs
-description: "input: \ntype Span = Range<int>\n\nfn sum(r: Span) -> int {\n  let mut total = 0\n  for i in r {\n    total = total + i\n  }\n  total\n}\n"
+description: |
+  
+  type Span = Range<int>
+  
+  fn sum(r: Span) -> int {
+    let mut total = 0
+    for i in r {
+      total = total + i
+    }
+    total
+  }
 ---
 package main
 

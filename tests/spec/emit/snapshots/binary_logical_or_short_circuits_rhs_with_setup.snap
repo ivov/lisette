@@ -1,6 +1,22 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nfn track(flag: Ref<bool>) -> Result<int, error> {\n  flag.* = true\n  Ok(1)\n}\n\nfn test() {\n  let mut ran = false\n  if true || track(&ran).is_ok() {\n    if ran {\n      panic(\"rhs evaluated despite short-circuit\")\n    }\n    return\n  }\n  panic(\"if-body should run\")\n}\n"
+description: |
+  
+  fn track(flag: Ref<bool>) -> Result<int, error> {
+    flag.* = true
+    Ok(1)
+  }
+  
+  fn test() {
+    let mut ran = false
+    if true || track(&ran).is_ok() {
+      if ran {
+        panic("rhs evaluated despite short-circuit")
+      }
+      return
+    }
+    panic("if-body should run")
+  }
 ---
 package main
 

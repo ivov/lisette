@@ -1,6 +1,14 @@
 ---
 source: tests/spec/emit/patterns.rs
-description: "input: \nenum Message {\n  Move { x: int, y: int },\n}\n\nfn make_move() -> Message {\n  Move { x: 10, y: 20 }\n}\n"
+description: |
+  
+  enum Message {
+    Move { x: int, y: int },
+  }
+  
+  fn make_move() -> Message {
+    Move { x: 10, y: 20 }
+  }
 ---
 package main
 

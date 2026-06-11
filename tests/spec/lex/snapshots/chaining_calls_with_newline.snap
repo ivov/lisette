@@ -1,6 +1,8 @@
 ---
 source: tests/spec/lex/mod.rs
-description: "input: method1()\n            .method2()"
+description: |-
+  method1()
+              .method2()
 ---
 LexResult {
     tokens: [

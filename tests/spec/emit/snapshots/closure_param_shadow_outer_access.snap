@@ -1,6 +1,16 @@
 ---
 source: tests/spec/emit/functions.rs
-description: "input: \nfn test() -> string {\n  let x = \"outer\"\n  let f = |x: int| -> string {\n    let x = x * 2\n    f\"doubled: {x}\"\n  }\n  let result = f(5)\n  f\"{result} and {x}\"\n}\n"
+description: |
+  
+  fn test() -> string {
+    let x = "outer"
+    let f = |x: int| -> string {
+      let x = x * 2
+      f"doubled: {x}"
+    }
+    let result = f(5)
+    f"{result} and {x}"
+  }
 ---
 package main
 

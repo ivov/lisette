@@ -1,6 +1,10 @@
 ---
 source: tests/spec/emit/functions.rs
-description: "input: \nfn run(x: int, y: Option<Ref<int>>) -> (int, Option<Ref<int>>) {\n  (x, y)\n}\n"
+description: |
+  
+  fn run(x: int, y: Option<Ref<int>>) -> (int, Option<Ref<int>>) {
+    (x, y)
+  }
 ---
 package main
 

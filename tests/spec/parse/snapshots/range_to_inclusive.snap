@@ -1,6 +1,8 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nfn test(arr: Slice<int>) { let head = arr[..=3]; }\n"
+description: |
+  
+  fn test(arr: Slice<int>) { let head = arr[..=3]; }
 ---
 [
     Function {

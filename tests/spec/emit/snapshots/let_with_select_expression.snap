@@ -1,6 +1,15 @@
 ---
 source: tests/spec/emit/control_flow.rs
-description: "input: \nfn test() -> int {\n  let ch = Channel.new<int>();\n  let result = select {\n    let Some(v) = ch.receive() => v,\n    _ => 0,\n  };\n  result\n}\n"
+description: |
+  
+  fn test() -> int {
+    let ch = Channel.new<int>();
+    let result = select {
+      let Some(v) = ch.receive() => v,
+      _ => 0,
+    };
+    result
+  }
 ---
 package main
 

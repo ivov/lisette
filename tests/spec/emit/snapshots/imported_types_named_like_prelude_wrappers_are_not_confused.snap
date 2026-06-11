@@ -1,6 +1,34 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \nimport \"go:example.com/box\"\n\nfn use_ref(r: box.Ref<int>) -> int {\n  r.inner\n}\n\nfn use_slice(s: box.Slice<int>) -> int {\n  s.value\n}\n\nfn use_map(m: box.Map<string, int>) -> int {\n  m.val\n}\n\nfn make_ref() -> box.Ref<int> {\n  box.Ref { inner: 1 }\n}\n\nfn maybe_ref(r: box.Ref<int>) -> Option<box.Ref<int>> {\n  Some(r)\n}\n\nstruct Holder {\n  r: box.Ref<int>,\n  s: box.Slice<int>,\n  m: box.Map<string, int>,\n}\n"
+description: |
+  
+  import "go:example.com/box"
+  
+  fn use_ref(r: box.Ref<int>) -> int {
+    r.inner
+  }
+  
+  fn use_slice(s: box.Slice<int>) -> int {
+    s.value
+  }
+  
+  fn use_map(m: box.Map<string, int>) -> int {
+    m.val
+  }
+  
+  fn make_ref() -> box.Ref<int> {
+    box.Ref { inner: 1 }
+  }
+  
+  fn maybe_ref(r: box.Ref<int>) -> Option<box.Ref<int>> {
+    Some(r)
+  }
+  
+  struct Holder {
+    r: box.Ref<int>,
+    s: box.Slice<int>,
+    m: box.Map<string, int>,
+  }
 ---
 package main
 

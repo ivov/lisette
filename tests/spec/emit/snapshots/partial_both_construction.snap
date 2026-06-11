@@ -1,6 +1,10 @@
 ---
 source: tests/spec/emit/partial.rs
-description: "input: \nfn test() -> Partial<int, string> {\n  Partial.Both(42, \"eof\")\n}\n"
+description: |
+  
+  fn test() -> Partial<int, string> {
+    Partial.Both(42, "eof")
+  }
 ---
 package main
 

@@ -1,6 +1,11 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \nfn test() -> int {\n  let r: Range<int> = Range{ start: 0, end: 10 };\n  r.start + r.end\n}\n"
+description: |
+  
+  fn test() -> int {
+    let r: Range<int> = Range{ start: 0, end: 10 };
+    r.start + r.end
+  }
 ---
 package main
 

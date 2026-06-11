@@ -1,6 +1,14 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \nstruct Point { pub x: int, pub y: int }\n\ntype Location = Point\n\nfn get_x(loc: Location) -> int {\n  loc.x\n}\n"
+description: |
+  
+  struct Point { pub x: int, pub y: int }
+  
+  type Location = Point
+  
+  fn get_x(loc: Location) -> int {
+    loc.x
+  }
 ---
 package main
 

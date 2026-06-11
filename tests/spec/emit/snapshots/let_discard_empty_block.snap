@@ -1,6 +1,10 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nfn test() {\n  let _ = {}\n}\n"
+description: |
+  
+  fn test() {
+    let _ = {}
+  }
 ---
 package main
 

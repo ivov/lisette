@@ -1,6 +1,18 @@
 ---
 source: tests/spec/emit/result_option_patterns.rs
-description: "input: \nfn maybe_int(b: bool) -> Option<int> {\n  if b { Some(42) } else { None }\n}\n\nfn unwrap_or(o: Option<int>, fallback: int) -> int {\n  match o { Some(v) => v, None => fallback }\n}\n\nfn test() -> int {\n  unwrap_or(maybe_int(true), 0)\n}\n"
+description: |
+  
+  fn maybe_int(b: bool) -> Option<int> {
+    if b { Some(42) } else { None }
+  }
+  
+  fn unwrap_or(o: Option<int>, fallback: int) -> int {
+    match o { Some(v) => v, None => fallback }
+  }
+  
+  fn test() -> int {
+    unwrap_or(maybe_int(true), 0)
+  }
 ---
 package main
 

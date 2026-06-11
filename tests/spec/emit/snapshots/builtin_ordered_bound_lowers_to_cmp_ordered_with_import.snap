@@ -1,6 +1,14 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \nfn id<T: Ordered>(x: T) -> T {\n  x\n}\n\nfn main() {\n  let _ = id(1)\n}\n"
+description: |
+  
+  fn id<T: Ordered>(x: T) -> T {
+    x
+  }
+  
+  fn main() {
+    let _ = id(1)
+  }
 ---
 package main
 

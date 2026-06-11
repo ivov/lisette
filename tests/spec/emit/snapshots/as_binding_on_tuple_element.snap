@@ -1,6 +1,14 @@
 ---
 source: tests/spec/emit/patterns.rs
-description: "input: \nstruct Point { x: int, y: int }\n\nfn test(pair: (Point, int)) -> int {\n  match pair {\n    (Point { x, .. } as p, z) => p.x + z,\n  }\n}\n"
+description: |
+  
+  struct Point { x: int, y: int }
+  
+  fn test(pair: (Point, int)) -> int {
+    match pair {
+      (Point { x, .. } as p, z) => p.x + z,
+    }
+  }
 ---
 package main
 

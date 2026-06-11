@@ -1,6 +1,10 @@
 ---
 source: tests/spec/emit/literals.rs
-description: "input: \nfn test() -> string {\n  \"\\377\"\n}\n"
+description: |
+  
+  fn test() -> string {
+    "\377"
+  }
 ---
 package main
 

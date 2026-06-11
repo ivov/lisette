@@ -1,6 +1,11 @@
 ---
 source: tests/spec/emit/interop_matrix.rs
-description: "input: \nfn main() {\n  let xs: Slice<Option<int>> = []\n  let _ = xs\n}\n"
+description: |
+  
+  fn main() {
+    let xs: Slice<Option<int>> = []
+    let _ = xs
+  }
 ---
 package main
 

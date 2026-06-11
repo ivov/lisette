@@ -1,6 +1,8 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \nfn run(callback: fn() -> Unknown) {}\n"
+description: |
+  
+  fn run(callback: fn() -> Unknown) {}
 ---
 package main
 

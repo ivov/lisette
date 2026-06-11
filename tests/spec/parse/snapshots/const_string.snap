@@ -1,6 +1,8 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nconst GREETING: string = \"Hello\";\n"
+description: |
+  
+  const GREETING: string = "Hello";
 ---
 [
     Const {

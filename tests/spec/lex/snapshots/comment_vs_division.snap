@@ -1,6 +1,6 @@
 ---
 source: tests/spec/lex/mod.rs
-description: "input: 10 / 2; // division before comment"
+description: 10 / 2; // division before comment
 ---
 LexResult {
     tokens: [

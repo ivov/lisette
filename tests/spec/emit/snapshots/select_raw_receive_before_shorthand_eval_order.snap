@@ -1,6 +1,23 @@
 ---
 source: tests/spec/emit/concurrency.rs
-description: "input: \nfn choose(tag: int, ch: Channel<int>) -> Channel<int> {\n  ch\n}\n\nfn main() {\n  let ch1 = Channel.buffered<int>(1)\n  let ch2 = Channel.buffered<int>(1)\n  ch1.send(10)\n  ch2.send(20)\n\n  let _ = select {\n    choose(1, ch1).receive() => 0,\n    let Some(v) = choose(2, ch2).receive() => v,\n    _ => -2,\n  }\n}\n"
+description: |
+  
+  fn choose(tag: int, ch: Channel<int>) -> Channel<int> {
+    ch
+  }
+  
+  fn main() {
+    let ch1 = Channel.buffered<int>(1)
+    let ch2 = Channel.buffered<int>(1)
+    ch1.send(10)
+    ch2.send(20)
+  
+    let _ = select {
+      choose(1, ch1).receive() => 0,
+      let Some(v) = choose(2, ch2).receive() => v,
+      _ => -2,
+    }
+  }
 ---
 package main
 

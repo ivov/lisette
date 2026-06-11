@@ -1,6 +1,21 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \npub struct Calc {}\nimpl Calc {\n  pub fn wider(self) -> uint64 {\n    let mut total: uint64 = 0\n    total += 1\n    total\n  }\n\n  pub fn narrower(self) -> uint32 {\n    let mut total: uint32 = 0\n    total += 1\n    total\n  }\n}\n"
+description: |
+  
+  pub struct Calc {}
+  impl Calc {
+    pub fn wider(self) -> uint64 {
+      let mut total: uint64 = 0
+      total += 1
+      total
+    }
+  
+    pub fn narrower(self) -> uint32 {
+      let mut total: uint32 = 0
+      total += 1
+      total
+    }
+  }
 ---
 package main
 

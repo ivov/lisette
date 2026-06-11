@@ -1,6 +1,6 @@
 ---
 source: tests/spec/lex/mod.rs
-description: "input: // comment with symbols: !@#$%^&*()_+-=[]{}|;:'\",.<>/?"
+description: "// comment with symbols: !@#$%^&*()_+-=[]{}|;:'\",.<>/?"
 ---
 LexResult {
     tokens: [

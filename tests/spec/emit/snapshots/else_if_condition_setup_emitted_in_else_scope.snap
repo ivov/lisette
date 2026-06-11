@@ -1,6 +1,22 @@
 ---
 source: tests/spec/emit/control_flow.rs
-description: "input: \nfn track(flag: Ref<bool>) -> Result<int, error> {\n  flag.* = true\n  Ok(1)\n}\n\nfn test() {\n  let mut ran = false\n  if true {\n    let _ = 1\n  } else if track(&ran).is_ok() {\n    let _ = 2\n  } else {\n    let _ = 3\n  }\n}\n"
+description: |
+  
+  fn track(flag: Ref<bool>) -> Result<int, error> {
+    flag.* = true
+    Ok(1)
+  }
+  
+  fn test() {
+    let mut ran = false
+    if true {
+      let _ = 1
+    } else if track(&ran).is_ok() {
+      let _ = 2
+    } else {
+      let _ = 3
+    }
+  }
 ---
 package main
 

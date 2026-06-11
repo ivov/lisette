@@ -1,6 +1,6 @@
 ---
 source: tests/spec/desugar/mod.rs
-description: "input: fn test() { let result = x |> func; }"
+description: "fn test() { let result = x |> func; }"
 ---
 [
     Function {

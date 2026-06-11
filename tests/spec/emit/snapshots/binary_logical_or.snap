@@ -1,6 +1,10 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nfn test() -> bool {\n  true || false\n}\n"
+description: |
+  
+  fn test() -> bool {
+    true || false
+  }
 ---
 package main
 

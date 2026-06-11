@@ -1,6 +1,8 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nfn test() { let result = &1 + 2; }\n"
+description: |
+  
+  fn test() { let result = &1 + 2; }
 ---
 [
     Function {

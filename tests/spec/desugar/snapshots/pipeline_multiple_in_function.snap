@@ -1,6 +1,12 @@
 ---
 source: tests/spec/desugar/mod.rs
-description: "input: \nfn test() {\n  let a = x |> double;\n  let b = y |> triple;\n  a + b\n}\n"
+description: |
+  
+  fn test() {
+    let a = x |> double;
+    let b = y |> triple;
+    a + b
+  }
 ---
 [
     Function {

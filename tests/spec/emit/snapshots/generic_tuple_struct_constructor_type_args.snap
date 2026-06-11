@@ -1,6 +1,14 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \nstruct Wrapper<T>(T)\n\nfn main() {\n  let w = Wrapper<int>(1)\n  let z = w.0 + 1\n  let _ = z\n}\n"
+description: |
+  
+  struct Wrapper<T>(T)
+  
+  fn main() {
+    let w = Wrapper<int>(1)
+    let z = w.0 + 1
+    let _ = z
+  }
 ---
 package main
 

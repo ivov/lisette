@@ -1,6 +1,8 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \ntype IntRef = Ref<int>;\n"
+description: |
+  
+  type IntRef = Ref<int>;
 ---
 [
     TypeAlias {

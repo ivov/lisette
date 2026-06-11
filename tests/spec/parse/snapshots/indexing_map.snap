@@ -1,6 +1,10 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nfn test(data: Map<string, bool>) {\n  let active = data[\"user_status\"];\n}\n"
+description: |
+  
+  fn test(data: Map<string, bool>) {
+    let active = data["user_status"];
+  }
 ---
 [
     Function {

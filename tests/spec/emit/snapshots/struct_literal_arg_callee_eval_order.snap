@@ -1,6 +1,18 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nstruct Box { v: int }\nfn f0(b: Box) -> int { b.v }\nfn f1(b: Box) -> int { b.v }\n\nfn run() -> int {\n  let fs = [f0, f1]\n  let mut i = 0\n  let bump = || -> int { i = 1; 7 }\n  let y = fs[i](Box { v: bump() })\n  y\n}\n"
+description: |
+  
+  struct Box { v: int }
+  fn f0(b: Box) -> int { b.v }
+  fn f1(b: Box) -> int { b.v }
+  
+  fn run() -> int {
+    let fs = [f0, f1]
+    let mut i = 0
+    let bump = || -> int { i = 1; 7 }
+    let y = fs[i](Box { v: bump() })
+    y
+  }
 ---
 package main
 

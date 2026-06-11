@@ -1,6 +1,17 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nimport \"go:strconv\"\n\nfn parse(s: string) -> Result<int, error> {\n  let error = \"context\"\n  let result = strconv.Atoi(s)\n  match result {\n    Ok(n) => Ok(n),\n    Err(e) => Err(e),\n  }\n}\n"
+description: |
+  
+  import "go:strconv"
+  
+  fn parse(s: string) -> Result<int, error> {
+    let error = "context"
+    let result = strconv.Atoi(s)
+    match result {
+      Ok(n) => Ok(n),
+      Err(e) => Err(e),
+    }
+  }
 ---
 package main
 

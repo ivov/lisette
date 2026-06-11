@@ -1,6 +1,10 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nfn test(matrix: Slice<Slice<int>>, row: int, col: int) {\n  let cell = matrix[row][col];\n}\n"
+description: |
+  
+  fn test(matrix: Slice<Slice<int>>, row: int, col: int) {
+    let cell = matrix[row][col];
+  }
 ---
 [
     Function {

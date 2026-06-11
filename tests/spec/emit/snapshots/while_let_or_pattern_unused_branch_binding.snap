@@ -1,6 +1,16 @@
 ---
 source: tests/spec/emit/control_flow.rs
-description: "input: \nenum E { A(int), B(int), C }\nfn test() {\n  let x = 5\n  let e = E.C\n  while let E.A(x) | E.B(x) = e {\n    panic(\"unexpected\")\n  }\n  if x != 5 { panic(\"shadow\") }\n}\n"
+description: |
+  
+  enum E { A(int), B(int), C }
+  fn test() {
+    let x = 5
+    let e = E.C
+    while let E.A(x) | E.B(x) = e {
+      panic("unexpected")
+    }
+    if x != 5 { panic("shadow") }
+  }
 ---
 package main
 

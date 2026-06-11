@@ -1,6 +1,18 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \ntype B<T> = Map<T, int>\ntype A<T> = B<T>\n\nstruct Box<T> {\n  table: A<T>,\n}\n\nfn main() {\n  let b = Box { table: Map.new<string, int>() }\n  let _ = b\n}\n"
+description: |
+  
+  type B<T> = Map<T, int>
+  type A<T> = B<T>
+  
+  struct Box<T> {
+    table: A<T>,
+  }
+  
+  fn main() {
+    let b = Box { table: Map.new<string, int>() }
+    let _ = b
+  }
 ---
 package main
 

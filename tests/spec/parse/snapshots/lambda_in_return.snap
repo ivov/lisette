@@ -1,6 +1,10 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nfn test() {\n  return |x| x * 2;\n}\n"
+description: |
+  
+  fn test() {
+    return |x| x * 2;
+  }
 ---
 [
     Function {

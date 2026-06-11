@@ -1,6 +1,16 @@
 ---
 source: tests/spec/emit/control_flow.rs
-description: "input: \nstruct Point { x: int, y: int }\n\nfn test(points: Slice<Point>) -> int {\n  let mut sum = 0;\n  for Point { x, y } in points {\n    sum = sum + x + y;\n  };\n  sum\n}\n"
+description: |
+  
+  struct Point { x: int, y: int }
+  
+  fn test(points: Slice<Point>) -> int {
+    let mut sum = 0;
+    for Point { x, y } in points {
+      sum = sum + x + y;
+    };
+    sum
+  }
 ---
 package main
 

@@ -12,6 +12,7 @@ pub mod wrap;
 pub use builders::*;
 pub use emit::emit_with_debug_info;
 pub use filesystem::MockFileSystem;
+pub use formatting::snapshot_description;
 pub use infer::{InferResult, infer, infer_module, infer_with_go_typedefs};
 
 pub const TEST_MODULE_ID: &str = "test";

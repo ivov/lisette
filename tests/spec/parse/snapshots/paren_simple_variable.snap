@@ -1,6 +1,8 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nfn test(y: int) { let x = (y); }\n"
+description: |
+  
+  fn test(y: int) { let x = (y); }
 ---
 [
     Function {

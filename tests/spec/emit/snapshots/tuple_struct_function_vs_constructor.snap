@@ -1,6 +1,20 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \nstruct Point(int, int)\n\nfn add_points(a: Point, b: Point) -> Point {\n  let Point(x1, y1) = a;\n  let Point(x2, y2) = b;\n  Point(x1 + x2, y1 + y2)\n}\n\nfn test() -> Point {\n  let p1 = Point(1, 2);\n  let p2 = Point(3, 4);\n  add_points(p1, p2)\n}\n"
+description: |
+  
+  struct Point(int, int)
+  
+  fn add_points(a: Point, b: Point) -> Point {
+    let Point(x1, y1) = a;
+    let Point(x2, y2) = b;
+    Point(x1 + x2, y1 + y2)
+  }
+  
+  fn test() -> Point {
+    let p1 = Point(1, 2);
+    let p2 = Point(3, 4);
+    add_points(p1, p2)
+  }
 ---
 package main
 

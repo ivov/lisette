@@ -1,6 +1,21 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \nstruct Wrapper<T> {\n  value: T,\n}\n\nimpl Wrapper<string> {\n  fn greet(self) -> string {\n    \"hello\"\n  }\n}\n\nfn test() -> string {\n  let w = Wrapper { value: \"world\" };\n  w.greet()\n}\n"
+description: |
+  
+  struct Wrapper<T> {
+    value: T,
+  }
+  
+  impl Wrapper<string> {
+    fn greet(self) -> string {
+      "hello"
+    }
+  }
+  
+  fn test() -> string {
+    let w = Wrapper { value: "world" };
+    w.greet()
+  }
 ---
 package main
 

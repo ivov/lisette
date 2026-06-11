@@ -1,6 +1,8 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nenum Nothing {}\n"
+description: |
+  
+  enum Nothing {}
 ---
 [
     Enum {

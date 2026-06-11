@@ -1,6 +1,18 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \nfn score<T>() -> int {\n  if Map.new<T, int>().is_empty() {\n    1\n  } else {\n    0\n  }\n}\n\nfn main() {\n  let _ = score<int>()\n}\n"
+description: |
+  
+  fn score<T>() -> int {
+    if Map.new<T, int>().is_empty() {
+      1
+    } else {
+      0
+    }
+  }
+  
+  fn main() {
+    let _ = score<int>()
+  }
 ---
 package main
 

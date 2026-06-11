@@ -1,6 +1,11 @@
 ---
 source: tests/spec/emit/functions.rs
-description: "input: \nfn test(mut s: Slice<int>, more: Slice<int>) -> Slice<int> {\n  s = s.append(more...)\n  s\n}\n"
+description: |
+  
+  fn test(mut s: Slice<int>, more: Slice<int>) -> Slice<int> {
+    s = s.append(more...)
+    s
+  }
 ---
 package main
 

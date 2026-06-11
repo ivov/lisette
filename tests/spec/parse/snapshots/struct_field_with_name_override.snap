@@ -1,6 +1,12 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \n#[json]\nstruct User {\n  #[json(\"userName\")]\n  name: string,\n}\n"
+description: |
+  
+  #[json]
+  struct User {
+    #[json("userName")]
+    name: string,
+  }
 ---
 [
     Struct {

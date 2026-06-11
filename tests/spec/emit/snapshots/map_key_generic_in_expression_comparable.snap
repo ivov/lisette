@@ -1,6 +1,13 @@
 ---
 source: tests/spec/emit/functions.rs
-description: "input: \nfn foo<U>(u: U) {}\n\nfn make_map<T>(t: T) -> int {\n  foo(Map.new<T, int>())\n  0\n}\n"
+description: |
+  
+  fn foo<U>(u: U) {}
+  
+  fn make_map<T>(t: T) -> int {
+    foo(Map.new<T, int>())
+    0
+  }
 ---
 package main
 

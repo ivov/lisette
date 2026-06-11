@@ -1,6 +1,18 @@
 ---
 source: tests/spec/emit/patterns.rs
-description: "input: \nfn test() -> int {\n  let val = Some(42)\n  let result = match val {\n    Some(x) => {\n      let x = x * 2\n      x\n    },\n    None => 0,\n  }\n  result\n}\n"
+description: |
+  
+  fn test() -> int {
+    let val = Some(42)
+    let result = match val {
+      Some(x) => {
+        let x = x * 2
+        x
+      },
+      None => 0,
+    }
+    result
+  }
 ---
 package main
 

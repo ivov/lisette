@@ -1,6 +1,19 @@
 ---
 source: tests/spec/emit/patterns.rs
-description: "input: \nstruct Point { x: int, y: int }\n\nimpl Point {\n  fn describe(self) -> string {\n    match self {\n      Point { x: 0, y: 0 } => \"origin\",\n      Point { x: 0, y: _ } => \"y-axis\",\n      Point { x: _, y: 0 } => \"x-axis\",\n      _ => \"other\",\n    }\n  }\n}\n"
+description: |
+  
+  struct Point { x: int, y: int }
+  
+  impl Point {
+    fn describe(self) -> string {
+      match self {
+        Point { x: 0, y: 0 } => "origin",
+        Point { x: 0, y: _ } => "y-axis",
+        Point { x: _, y: 0 } => "x-axis",
+        _ => "other",
+      }
+    }
+  }
 ---
 package main
 

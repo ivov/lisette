@@ -1,6 +1,9 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \n#[display]\nstruct Box<T> { value: T }\n"
+description: |
+  
+  #[display]
+  struct Box<T> { value: T }
 ---
 package main
 

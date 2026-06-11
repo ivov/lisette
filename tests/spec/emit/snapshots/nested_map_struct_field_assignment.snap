@@ -1,6 +1,24 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nstruct Inner {\n  value: int,\n}\n\nstruct Outer {\n  inner: Inner,\n  name: string,\n}\n\nfn test() {\n    let mut m = Map.new<string, Outer>()\n    m[\"test\"] = Outer { inner: Inner { value: 0 }, name: \"test\" }\n    let mut entry = m[\"test\"]\n    entry.name = \"updated\"\n    entry.inner.value = 42\n    m[\"test\"] = entry\n}\n"
+description: |
+  
+  struct Inner {
+    value: int,
+  }
+  
+  struct Outer {
+    inner: Inner,
+    name: string,
+  }
+  
+  fn test() {
+      let mut m = Map.new<string, Outer>()
+      m["test"] = Outer { inner: Inner { value: 0 }, name: "test" }
+      let mut entry = m["test"]
+      entry.name = "updated"
+      entry.inner.value = 42
+      m["test"] = entry
+  }
 ---
 package main
 

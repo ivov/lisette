@@ -1,6 +1,14 @@
 ---
 source: tests/spec/emit/patterns.rs
-description: "input: \nstruct Wrap(Ref<int>)\n\nfn test(w: Wrap) -> int {\n  match w {\n    Wrap(r) => r.*,\n  }\n}\n"
+description: |
+  
+  struct Wrap(Ref<int>)
+  
+  fn test(w: Wrap) -> int {
+    match w {
+      Wrap(r) => r.*,
+    }
+  }
 ---
 package main
 

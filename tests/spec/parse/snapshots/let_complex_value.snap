@@ -1,6 +1,10 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nfn test() {\n  let result = (10 + 5) * 2 / calculate_something();\n}\n"
+description: |
+  
+  fn test() {
+    let result = (10 + 5) * 2 / calculate_something();
+  }
 ---
 [
     Function {

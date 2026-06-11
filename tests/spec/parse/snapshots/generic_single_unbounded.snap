@@ -1,6 +1,10 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nfn identity<T>(x: T) -> T {\n  return x;\n}\n"
+description: |
+  
+  fn identity<T>(x: T) -> T {
+    return x;
+  }
 ---
 [
     Function {

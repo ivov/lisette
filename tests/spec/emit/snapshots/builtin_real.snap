@@ -1,6 +1,10 @@
 ---
 source: tests/spec/emit/prelude.rs
-description: "input: \nfn test(c: complex128) -> float64 {\n  real(c)\n}\n"
+description: |
+  
+  fn test(c: complex128) -> float64 {
+    real(c)
+  }
 ---
 package main
 

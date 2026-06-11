@@ -1,6 +1,13 @@
 ---
 source: tests/spec/emit/recover.rs
-description: "input: \nfn main() {\n  let result = recover { 1 };\n  let recoverResult_1 = 7;\n  let _ = recoverResult_1;\n  let _ = result;\n}\n"
+description: |
+  
+  fn main() {
+    let result = recover { 1 };
+    let recoverResult_1 = 7;
+    let _ = recoverResult_1;
+    let _ = result;
+  }
 ---
 package main
 

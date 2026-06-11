@@ -1,6 +1,18 @@
 ---
 source: tests/spec/emit/control_flow.rs
-description: "input: \nimport \"go:fmt\"\n\nfn try_parse(s: string) -> Result<int, string> {\n  if s == \"42\" { Ok(42) } else { Err(\"not 42\") }\n}\n\nfn test() {\n  if let Ok(x) = try_parse(\"42\") {\n    let _ = fmt.Print(f\"Parsed: {x}\\n\");\n  }\n}\n"
+description: |
+  
+  import "go:fmt"
+  
+  fn try_parse(s: string) -> Result<int, string> {
+    if s == "42" { Ok(42) } else { Err("not 42") }
+  }
+  
+  fn test() {
+    if let Ok(x) = try_parse("42") {
+      let _ = fmt.Print(f"Parsed: {x}\n");
+    }
+  }
 ---
 package main
 

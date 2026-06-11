@@ -1,6 +1,6 @@
 ---
 source: tests/spec/lex/mod.rs
-description: "input: f\"name: {person.name}\""
+description: "f\"name: {person.name}\""
 ---
 LexResult {
     tokens: [

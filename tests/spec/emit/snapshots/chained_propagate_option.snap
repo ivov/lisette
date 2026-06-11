@@ -1,6 +1,12 @@
 ---
 source: tests/spec/emit/result_option_patterns.rs
-description: "input: \nfn get_nested(outer: Option<Option<int>>) -> Option<int> {\n  let inner = outer?;\n  let val = inner?;\n  Some(val)\n}\n"
+description: |
+  
+  fn get_nested(outer: Option<Option<int>>) -> Option<int> {
+    let inner = outer?;
+    let val = inner?;
+    Some(val)
+  }
 ---
 package main
 

@@ -1,6 +1,20 @@
 ---
 source: tests/spec/emit/interop_matrix.rs
-description: "input: \nimport \"go:strconv\"\n\nfn fallback(s: string) -> Result<int, error> { Ok(0) }\n\nfn main() {\n  let mut f = fallback\n  f = strconv.Atoi\n  let r = f(\"42\")\n  match r {\n    Ok(v) => { let _ = v },\n    Err(_) => { let _ = 0 },\n  }\n}\n"
+description: |
+  
+  import "go:strconv"
+  
+  fn fallback(s: string) -> Result<int, error> { Ok(0) }
+  
+  fn main() {
+    let mut f = fallback
+    f = strconv.Atoi
+    let r = f("42")
+    match r {
+      Ok(v) => { let _ = v },
+      Err(_) => { let _ = 0 },
+    }
+  }
 ---
 package main
 

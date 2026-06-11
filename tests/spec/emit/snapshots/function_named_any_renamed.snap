@@ -1,6 +1,17 @@
 ---
 source: tests/spec/emit/functions.rs
-description: "input: \nfn any<T>(items: Slice<T>, pred: fn(T) -> bool) -> bool {\n  for item in items {\n    if pred(item) { return true }\n  }\n  false\n}\n\nfn test() -> bool {\n  any([1, 2, 3], |x| x > 2)\n}\n"
+description: |
+  
+  fn any<T>(items: Slice<T>, pred: fn(T) -> bool) -> bool {
+    for item in items {
+      if pred(item) { return true }
+    }
+    false
+  }
+  
+  fn test() -> bool {
+    any([1, 2, 3], |x| x > 2)
+  }
 ---
 package main
 

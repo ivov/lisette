@@ -1,6 +1,18 @@
 ---
 source: tests/spec/emit/control_flow.rs
-description: "input: \nfn test() -> int {\n  let r = 0..;\n  let mut sum = 0;\n  for i in r {\n    if i >= 5 {\n      break;\n    }\n    sum = sum + i;\n  };\n  sum\n}\n"
+description: |
+  
+  fn test() -> int {
+    let r = 0..;
+    let mut sum = 0;
+    for i in r {
+      if i >= 5 {
+        break;
+      }
+      sum = sum + i;
+    };
+    sum
+  }
 ---
 package main
 

@@ -1,6 +1,12 @@
 ---
 source: tests/spec/emit/functions.rs
-description: "input: \nfn fail(msg: string) -> Never { panic(msg) }\n\nfn test() -> string {\n  fail(\"boom\")\n}\n"
+description: |
+  
+  fn fail(msg: string) -> Never { panic(msg) }
+  
+  fn test() -> string {
+    fail("boom")
+  }
 ---
 package main
 

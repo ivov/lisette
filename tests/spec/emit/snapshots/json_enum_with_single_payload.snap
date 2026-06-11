@@ -1,6 +1,13 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \n#[json]\nenum Shape {\n  Circle(float64),\n  Square(float64),\n  Unknown,\n}\n"
+description: |
+  
+  #[json]
+  enum Shape {
+    Circle(float64),
+    Square(float64),
+    Unknown,
+  }
 ---
 package main
 

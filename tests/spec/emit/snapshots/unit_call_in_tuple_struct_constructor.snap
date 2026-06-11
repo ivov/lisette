@@ -1,6 +1,13 @@
 ---
 source: tests/spec/emit/functions.rs
-description: "input: \nfn noop() {}\nstruct P((), int)\n\nfn test() -> P {\n  P(noop(), 1)\n}\n"
+description: |
+  
+  fn noop() {}
+  struct P((), int)
+  
+  fn test() -> P {
+    P(noop(), 1)
+  }
 ---
 package main
 

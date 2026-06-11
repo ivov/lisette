@@ -1,6 +1,10 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nfn test() -> bool {\n  7 > 2\n}\n"
+description: |
+  
+  fn test() -> bool {
+    7 > 2
+  }
 ---
 package main
 

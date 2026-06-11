@@ -1,6 +1,29 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \ninterface Mutable {\n  fn mutate(self, val: string)\n}\n\nstruct Box {\n  content: string,\n}\n\nimpl Box {\n  fn mutate(self: Ref<Box>, val: string) {\n    self.content = val\n  }\n}\n\nfn apply_mutation<T: Mutable>(item: Ref<T>, val: string) {\n  item.mutate(val)\n}\n\nfn test() {\n  let mut b = Box { content: \"original\" }\n  apply_mutation(&b, \"changed\")\n}\n"
+description: |
+  
+  interface Mutable {
+    fn mutate(self, val: string)
+  }
+  
+  struct Box {
+    content: string,
+  }
+  
+  impl Box {
+    fn mutate(self: Ref<Box>, val: string) {
+      self.content = val
+    }
+  }
+  
+  fn apply_mutation<T: Mutable>(item: Ref<T>, val: string) {
+    item.mutate(val)
+  }
+  
+  fn test() {
+    let mut b = Box { content: "original" }
+    apply_mutation(&b, "changed")
+  }
 ---
 package main
 

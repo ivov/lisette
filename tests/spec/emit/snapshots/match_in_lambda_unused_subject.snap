@@ -1,6 +1,22 @@
 ---
 source: tests/spec/emit/control_flow.rs
-description: "input: \nstruct P { v: int }\nfn test() -> int {\n  let opt = Some(1)\n  let result = opt.map(|x| {\n    let p = P { v: x }\n    match p {\n      P { v } => (),\n    }\n    1\n  })\n  match result {\n    Some(x) => x,\n    None => 0,\n  }\n}\n"
+description: |
+  
+  struct P { v: int }
+  fn test() -> int {
+    let opt = Some(1)
+    let result = opt.map(|x| {
+      let p = P { v: x }
+      match p {
+        P { v } => (),
+      }
+      1
+    })
+    match result {
+      Some(x) => x,
+      None => 0,
+    }
+  }
 ---
 package main
 

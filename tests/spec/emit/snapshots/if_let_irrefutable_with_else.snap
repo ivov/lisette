@@ -1,6 +1,14 @@
 ---
 source: tests/spec/emit/control_flow.rs
-description: "input: \nfn test(x: int) -> int {\n  if let y = x {\n    y * 2\n  } else {\n    0\n  }\n}\n"
+description: |
+  
+  fn test(x: int) -> int {
+    if let y = x {
+      y * 2
+    } else {
+      0
+    }
+  }
 ---
 package main
 

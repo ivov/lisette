@@ -1,6 +1,17 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \nimport \"go:fmt\"\n\nstruct Point { x: int, y: int }\n\nfn make_x() -> int { fmt.Println(\"x\"); 1 }\nfn make_base() -> Point { fmt.Println(\"base\"); Point { x: 0, y: 0 } }\n\nfn main() {\n  let _ = Point { x: make_x(), ..make_base() }\n}\n"
+description: |
+  
+  import "go:fmt"
+  
+  struct Point { x: int, y: int }
+  
+  fn make_x() -> int { fmt.Println("x"); 1 }
+  fn make_base() -> Point { fmt.Println("base"); Point { x: 0, y: 0 } }
+  
+  fn main() {
+    let _ = Point { x: make_x(), ..make_base() }
+  }
 ---
 package main
 

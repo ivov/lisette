@@ -1,6 +1,21 @@
 ---
 source: tests/spec/emit/interop_matrix.rs
-description: "input: \nimport \"go:strconv\"\n\nfn main() {\n  let f: fn(string) -> Result<int, error> = if true {\n    strconv.Atoi\n  } else {\n    strconv.Atoi\n  }\n  let r = f(\"1\")\n  match r {\n    Ok(v) => { let _ = v },\n    Err(_) => { let _ = 0 },\n  }\n}\n"
+description: |
+  
+  import "go:strconv"
+  
+  fn main() {
+    let f: fn(string) -> Result<int, error> = if true {
+      strconv.Atoi
+    } else {
+      strconv.Atoi
+    }
+    let r = f("1")
+    match r {
+      Ok(v) => { let _ = v },
+      Err(_) => { let _ = 0 },
+    }
+  }
 ---
 package main
 

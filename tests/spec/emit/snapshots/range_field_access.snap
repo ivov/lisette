@@ -1,6 +1,11 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \nfn test() -> int {\n  let r = 0..10;\n  r.start + r.end\n}\n"
+description: |
+  
+  fn test() -> int {
+    let r = 0..10;
+    r.start + r.end
+  }
 ---
 package main
 

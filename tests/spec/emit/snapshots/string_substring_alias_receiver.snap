@@ -1,6 +1,12 @@
 ---
 source: tests/spec/emit/prelude.rs
-description: "input: \ntype MyString = string\n\nfn test(s: MyString, r: RangeTo<int>) -> string {\n  s.substring(r)\n}\n"
+description: |
+  
+  type MyString = string
+  
+  fn test(s: MyString, r: RangeTo<int>) -> string {
+    s.substring(r)
+  }
 ---
 package main
 

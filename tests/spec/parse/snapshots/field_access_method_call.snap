@@ -1,6 +1,10 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nfn test(user: User) {\n  let name = user.get_name();\n}\n"
+description: |
+  
+  fn test(user: User) {
+    let name = user.get_name();
+  }
 ---
 [
     Function {

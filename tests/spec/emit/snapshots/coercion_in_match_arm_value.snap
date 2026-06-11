@@ -1,6 +1,34 @@
 ---
 source: tests/spec/emit/go_interface_adapter.rs
-description: "input: \nimport \"go:io\"\n\nstruct A {}\nstruct B {}\n\nimpl A {\n  fn Read(self, mut p: Slice<uint8>) -> Partial<int, error> {\n    Partial.Ok(0)\n  }\n}\n\nimpl B {\n  fn Read(self, mut p: Slice<uint8>) -> Partial<int, error> {\n    Partial.Ok(0)\n  }\n}\n\nfn pick(flag: bool) -> io.Reader {\n  match flag {\n    true => A {},\n    false => B {},\n  }\n}\n\nfn main() {\n  let _ = pick(true)\n}\n"
+description: |
+  
+  import "go:io"
+  
+  struct A {}
+  struct B {}
+  
+  impl A {
+    fn Read(self, mut p: Slice<uint8>) -> Partial<int, error> {
+      Partial.Ok(0)
+    }
+  }
+  
+  impl B {
+    fn Read(self, mut p: Slice<uint8>) -> Partial<int, error> {
+      Partial.Ok(0)
+    }
+  }
+  
+  fn pick(flag: bool) -> io.Reader {
+    match flag {
+      true => A {},
+      false => B {},
+    }
+  }
+  
+  fn main() {
+    let _ = pick(true)
+  }
 ---
 package main
 

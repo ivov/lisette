@@ -1,6 +1,14 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \ntype KeyVal<K, V> = Map<K, V>\n\nfn test() -> KeyVal<string, int> {\n  let mut m = Map.new<string, int>()\n  m[\"a\"] = 1\n  m\n}\n"
+description: |
+  
+  type KeyVal<K, V> = Map<K, V>
+  
+  fn test() -> KeyVal<string, int> {
+    let mut m = Map.new<string, int>()
+    m["a"] = 1
+    m
+  }
 ---
 package main
 

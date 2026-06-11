@@ -1,6 +1,21 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nfn make_f(i: Ref<int>) -> fn(int) -> int {\n  |x: int| -> int { x }\n}\n\nfn get(i: Ref<int>) -> Result<int, string> {\n  i.* = 1\n  Ok(7)\n}\n\nfn run() -> Result<int, string> {\n  let mut i = 0\n  let y = make_f(&i)(get(&i)?)\n  Ok(y)\n}\n"
+description: |
+  
+  fn make_f(i: Ref<int>) -> fn(int) -> int {
+    |x: int| -> int { x }
+  }
+  
+  fn get(i: Ref<int>) -> Result<int, string> {
+    i.* = 1
+    Ok(7)
+  }
+  
+  fn run() -> Result<int, string> {
+    let mut i = 0
+    let y = make_f(&i)(get(&i)?)
+    Ok(y)
+  }
 ---
 package main
 

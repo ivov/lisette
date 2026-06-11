@@ -1,6 +1,22 @@
 ---
 source: tests/spec/emit/concurrency.rs
-description: "input: \nfn get(ch: Channel<int>) -> Channel<int> {\n  ch\n}\n\nfn main() {\n  let ch = Channel.buffered<int>(1)\n\n  select {\n    (&get(ch)).send(1) => { let _ = 0 },\n    _ => { let _ = 1 },\n  }\n\n  let ref_1 = 2\n  let _ = ref_1\n}\n"
+description: |
+  
+  fn get(ch: Channel<int>) -> Channel<int> {
+    ch
+  }
+  
+  fn main() {
+    let ch = Channel.buffered<int>(1)
+  
+    select {
+      (&get(ch)).send(1) => { let _ = 0 },
+      _ => { let _ = 1 },
+    }
+  
+    let ref_1 = 2
+    let _ = ref_1
+  }
 ---
 package main
 

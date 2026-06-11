@@ -1,6 +1,10 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \nfn test(m: Ref<Map<string, int>>) {\n  let _ = m\n}\n"
+description: |
+  
+  fn test(m: Ref<Map<string, int>>) {
+    let _ = m
+  }
 ---
 package main
 

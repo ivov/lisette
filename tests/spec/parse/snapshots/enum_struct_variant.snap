@@ -1,6 +1,10 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nenum Message {\n  Move { x: int, y: int },\n}\n"
+description: |
+  
+  enum Message {
+    Move { x: int, y: int },
+  }
 ---
 [
     Enum {

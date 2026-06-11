@@ -1,6 +1,6 @@
 ---
 source: tests/spec/lex/mod.rs
-description: "input: r\"C:\\Users\\me\""
+description: "r\"C:\\Users\\me\""
 ---
 LexResult {
     tokens: [

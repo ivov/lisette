@@ -1,6 +1,18 @@
 ---
 source: tests/spec/emit/control_flow.rs
-description: "input: \nimport \"go:fmt\"\n\nfn main() {\n  for i in 0..10 {\n    match i {\n      d if d < 5 => fmt.Println(\"low\"),\n      5 =>          fmt.Println(\"five\"),\n      d =>          fmt.Println(\"high\"),\n    }\n  }\n}\n"
+description: |
+  
+  import "go:fmt"
+  
+  fn main() {
+    for i in 0..10 {
+      match i {
+        d if d < 5 => fmt.Println("low"),
+        5 =>          fmt.Println("five"),
+        d =>          fmt.Println("high"),
+      }
+    }
+  }
 ---
 package main
 

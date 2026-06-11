@@ -1,6 +1,8 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nstruct Pair<A, B>(A, B)\n"
+description: |
+  
+  struct Pair<A, B>(A, B)
 ---
 [
     Struct {

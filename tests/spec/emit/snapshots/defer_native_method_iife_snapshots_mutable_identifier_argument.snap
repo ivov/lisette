@@ -1,6 +1,13 @@
 ---
 source: tests/spec/emit/concurrency.rs
-description: "input: \nfn run() {\n  let mut dst = [0, 0, 0]\n  let mut src = [1, 2, 3]\n  defer dst.copy_from(src)\n  src = [9, 9, 9]\n}\n"
+description: |
+  
+  fn run() {
+    let mut dst = [0, 0, 0]
+    let mut src = [1, 2, 3]
+    defer dst.copy_from(src)
+    src = [9, 9, 9]
+  }
 ---
 package main
 

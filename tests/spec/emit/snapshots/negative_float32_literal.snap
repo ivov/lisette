@@ -1,6 +1,11 @@
 ---
 source: tests/spec/emit/literals.rs
-description: "input: \nfn test() -> float32 {\n  let f: float32 = -1.5;\n  f\n}\n"
+description: |
+  
+  fn test() -> float32 {
+    let f: float32 = -1.5;
+    f
+  }
 ---
 package main
 

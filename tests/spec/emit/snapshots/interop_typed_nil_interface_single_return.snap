@@ -1,6 +1,17 @@
 ---
 source: tests/spec/emit/interop_matrix.rs
-description: "input: \nimport \"go:context\"\nimport \"go:fmt\"\n\nfn main() {\n  let ctx = context.Background()\n  match ctx.Err() {\n    Some(e) => fmt.Println(e.Error()),\n    None => fmt.Println(\"no error\"),\n  }\n}\n"
+description: |
+  
+  import "go:context"
+  import "go:fmt"
+  
+  fn main() {
+    let ctx = context.Background()
+    match ctx.Err() {
+      Some(e) => fmt.Println(e.Error()),
+      None => fmt.Println("no error"),
+    }
+  }
 ---
 package main
 

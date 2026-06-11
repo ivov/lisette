@@ -1,6 +1,19 @@
 ---
 source: tests/spec/emit/interop_matrix.rs
-description: "input: \nimport \"go:flag\"\n\ntype MyFlag = flag.Flag\n\nfn main() {\n  let f: MyFlag = flag.Flag { .. }\n  let v = f.Value\n  match v {\n    Some(x) => { let _ = x },\n    None => { let _ = 0 },\n  }\n}\n"
+description: |
+  
+  import "go:flag"
+  
+  type MyFlag = flag.Flag
+  
+  fn main() {
+    let f: MyFlag = flag.Flag { .. }
+    let v = f.Value
+    match v {
+      Some(x) => { let _ = x },
+      None => { let _ = 0 },
+    }
+  }
 ---
 package main
 

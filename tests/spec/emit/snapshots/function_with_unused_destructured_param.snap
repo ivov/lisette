@@ -1,6 +1,10 @@
 ---
 source: tests/spec/emit/functions.rs
-description: "input: \nfn foo((a, b): (int, int)) -> int {\n  1\n}\n"
+description: |
+  
+  fn foo((a, b): (int, int)) -> int {
+    1
+  }
 ---
 package main
 

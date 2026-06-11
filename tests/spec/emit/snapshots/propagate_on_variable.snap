@@ -1,6 +1,12 @@
 ---
 source: tests/spec/emit/result_option_patterns.rs
-description: "input: \nfn test() -> Option<int> {\n  let x: Option<int> = Some(42);\n  let y = x?;\n  Some(y + 1)\n}\n"
+description: |
+  
+  fn test() -> Option<int> {
+    let x: Option<int> = Some(42);
+    let y = x?;
+    Some(y + 1)
+  }
 ---
 package main
 

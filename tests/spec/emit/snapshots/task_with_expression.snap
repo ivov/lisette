@@ -1,6 +1,18 @@
 ---
 source: tests/spec/emit/concurrency.rs
-description: "input: \nimport \"go:fmt\"\n\nfn background() {\n  fmt.Print(f\"Running in background\");\n}\n\nfn test() -> int {\n  let x = 42;\n  task background();\n  x\n}\n"
+description: |
+  
+  import "go:fmt"
+  
+  fn background() {
+    fmt.Print(f"Running in background");
+  }
+  
+  fn test() -> int {
+    let x = 42;
+    task background();
+    x
+  }
 ---
 package main
 

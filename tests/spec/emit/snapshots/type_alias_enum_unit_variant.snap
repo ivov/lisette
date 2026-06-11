@@ -1,6 +1,18 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \nenum Color {\n  Red,\n  Green,\n  Blue,\n}\n\ntype MyColor = Color\n\nfn test() -> MyColor {\n  MyColor.Red\n}\n"
+description: |
+  
+  enum Color {
+    Red,
+    Green,
+    Blue,
+  }
+  
+  type MyColor = Color
+  
+  fn test() -> MyColor {
+    MyColor.Red
+  }
 ---
 package main
 

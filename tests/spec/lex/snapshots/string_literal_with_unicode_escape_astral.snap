@@ -1,6 +1,6 @@
 ---
 source: tests/spec/lex/mod.rs
-description: "input: \"emoji \\u{1F600} here\""
+description: "\"emoji \\u{1F600} here\""
 ---
 LexResult {
     tokens: [

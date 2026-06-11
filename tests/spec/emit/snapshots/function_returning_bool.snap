@@ -1,6 +1,10 @@
 ---
 source: tests/spec/emit/functions.rs
-description: "input: \nfn is_positive(x: int) -> bool {\n  x > 0\n}\n"
+description: |
+  
+  fn is_positive(x: int) -> bool {
+    x > 0
+  }
 ---
 package main
 

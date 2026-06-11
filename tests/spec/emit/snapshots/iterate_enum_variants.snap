@@ -1,6 +1,21 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \n#[iterate]\npub enum BuildPhase {\n  Validate,\n  Parse,\n  Codegen,\n}\n\nfn count() -> int {\n  let mut total = 0\n  for _phase in BuildPhase.variants() {\n    total = total + 1\n  }\n  total\n}\n"
+description: |
+  
+  #[iterate]
+  pub enum BuildPhase {
+    Validate,
+    Parse,
+    Codegen,
+  }
+  
+  fn count() -> int {
+    let mut total = 0
+    for _phase in BuildPhase.variants() {
+      total = total + 1
+    }
+    total
+  }
 ---
 package main
 

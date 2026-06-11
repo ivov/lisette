@@ -1,6 +1,17 @@
 ---
 source: tests/spec/emit/result_option_patterns.rs
-description: "input: \nfn foo() -> Result<int, string> {\n  let y = Ok(1)? + 1\n  let result_2 = 7\n  let _ = result_2\n  Ok(y)\n}\n\nfn main() {\n  let _ = foo()\n}\n"
+description: |
+  
+  fn foo() -> Result<int, string> {
+    let y = Ok(1)? + 1
+    let result_2 = 7
+    let _ = result_2
+    Ok(y)
+  }
+  
+  fn main() {
+    let _ = foo()
+  }
 ---
 package main
 

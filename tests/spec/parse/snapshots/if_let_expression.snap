@@ -1,6 +1,15 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nfn test(opt: Option<int>) -> int {\n  let result = if let Some(x) = opt {\n    x * 2\n  } else {\n    0\n  };\n  result\n}\n"
+description: |
+  
+  fn test(opt: Option<int>) -> int {
+    let result = if let Some(x) = opt {
+      x * 2
+    } else {
+      0
+    };
+    result
+  }
 ---
 [
     Function {

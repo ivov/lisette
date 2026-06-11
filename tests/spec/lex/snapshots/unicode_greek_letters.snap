@@ -1,6 +1,6 @@
 ---
 source: tests/spec/lex/mod.rs
-description: "input: θ α β λ π"
+description: θ α β λ π
 ---
 LexResult {
     tokens: [

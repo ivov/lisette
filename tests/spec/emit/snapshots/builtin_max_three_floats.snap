@@ -1,6 +1,10 @@
 ---
 source: tests/spec/emit/prelude.rs
-description: "input: \nfn test() -> float64 {\n  max(1.0, 2.0, 3.0)\n}\n"
+description: |
+  
+  fn test() -> float64 {
+    max(1.0, 2.0, 3.0)
+  }
 ---
 package main
 

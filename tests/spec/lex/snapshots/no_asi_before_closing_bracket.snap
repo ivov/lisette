@@ -1,6 +1,9 @@
 ---
 source: tests/spec/lex/mod.rs
-description: "input: arr[\n    0\n]"
+description: |-
+  arr[
+      0
+  ]
 ---
 LexResult {
     tokens: [

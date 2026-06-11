@@ -1,6 +1,13 @@
 ---
 source: tests/spec/emit/patterns.rs
-description: "input: \nimport \"go:example.com/shapes\"\n\nfn area_or_neg(s: shapes.Shape) -> int {\n  let shapes.Rect { W: w, H: h } | shapes.Box { width: w, height: h } = s else { return -1 }\n  w * h\n}\n"
+description: |
+  
+  import "go:example.com/shapes"
+  
+  fn area_or_neg(s: shapes.Shape) -> int {
+    let shapes.Rect { W: w, H: h } | shapes.Box { width: w, height: h } = s else { return -1 }
+    w * h
+  }
 ---
 package main
 

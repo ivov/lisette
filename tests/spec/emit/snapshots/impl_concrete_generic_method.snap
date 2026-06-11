@@ -1,6 +1,25 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \nimport \"go:fmt\"\n\ntype MyInt = int\ntype MyString = string\n\nenum Either<L, R> {\n  Left(L),\n  Right(R),\n}\n\nimpl Either<MyInt, MyString> {\n  fn describe(self) -> MyString {\n    match self {\n      Either.Left(n) => fmt.Sprintf(\"int(%d)\", n),\n      Either.Right(s) => fmt.Sprintf(\"str(%s)\", s),\n    }\n  }\n}\n"
+description: |
+  
+  import "go:fmt"
+  
+  type MyInt = int
+  type MyString = string
+  
+  enum Either<L, R> {
+    Left(L),
+    Right(R),
+  }
+  
+  impl Either<MyInt, MyString> {
+    fn describe(self) -> MyString {
+      match self {
+        Either.Left(n) => fmt.Sprintf("int(%d)", n),
+        Either.Right(s) => fmt.Sprintf("str(%s)", s),
+      }
+    }
+  }
 ---
 package main
 

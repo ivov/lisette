@@ -1,6 +1,10 @@
 ---
 source: tests/spec/emit/literals.rs
-description: "input: \nfn test() -> complex128 {\n  10 - 2i\n}\n"
+description: |
+  
+  fn test() -> complex128 {
+    10 - 2i
+  }
 ---
 package main
 

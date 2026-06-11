@@ -1,6 +1,15 @@
 ---
 source: tests/spec/emit/result_option_patterns.rs
-description: "input: \nfn fallible() -> Result<int, string> {\n  Err(\"something went wrong\")\n}\n\nfn process() -> Result<int, string> {\n  let x = fallible()?;\n  Ok(x)\n}\n"
+description: |
+  
+  fn fallible() -> Result<int, string> {
+    Err("something went wrong")
+  }
+  
+  fn process() -> Result<int, string> {
+    let x = fallible()?;
+    Ok(x)
+  }
 ---
 package main
 

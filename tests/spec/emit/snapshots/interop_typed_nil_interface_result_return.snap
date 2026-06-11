@@ -1,6 +1,17 @@
 ---
 source: tests/spec/emit/interop_matrix.rs
-description: "input: \nimport \"go:fmt\"\nimport \"go:os\"\n\nfn main() {\n  let info = os.Stat(\"/tmp\")\n  match info {\n    Ok(i) => fmt.Println(i.Size()),\n    Err(e) => fmt.Println(e),\n  }\n}\n"
+description: |
+  
+  import "go:fmt"
+  import "go:os"
+  
+  fn main() {
+    let info = os.Stat("/tmp")
+    match info {
+      Ok(i) => fmt.Println(i.Size()),
+      Err(e) => fmt.Println(e),
+    }
+  }
 ---
 package main
 

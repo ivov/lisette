@@ -1,6 +1,18 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nfn f0(x: int) -> int { x + 10 }\nfn f1(x: int) -> int { x + 20 }\nstruct Handler { f: fn(int) -> int }\n\nfn run() -> Result<int, string> {\n  let hs = [Handler { f: f0 }, Handler { f: f1 }]\n  let mut i = 0\n  let get = || -> Result<int, string> { i = 1; Ok(7) }\n  let y = hs[i].f(get()?)\n  Ok(y)\n}\n"
+description: |
+  
+  fn f0(x: int) -> int { x + 10 }
+  fn f1(x: int) -> int { x + 20 }
+  struct Handler { f: fn(int) -> int }
+  
+  fn run() -> Result<int, string> {
+    let hs = [Handler { f: f0 }, Handler { f: f1 }]
+    let mut i = 0
+    let get = || -> Result<int, string> { i = 1; Ok(7) }
+    let y = hs[i].f(get()?)
+    Ok(y)
+  }
 ---
 package main
 

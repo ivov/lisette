@@ -1,6 +1,14 @@
 ---
 source: tests/spec/emit/result_option_patterns.rs
-description: "input: \nfn get_value() -> Option<int> {\n  Some(99)\n}\n\nfn test(flag: bool) -> Option<int> {\n  if flag { Some(42) } else { get_value() }\n}\n"
+description: |
+  
+  fn get_value() -> Option<int> {
+    Some(99)
+  }
+  
+  fn test(flag: bool) -> Option<int> {
+    if flag { Some(42) } else { get_value() }
+  }
 ---
 package main
 

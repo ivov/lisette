@@ -1,6 +1,13 @@
 ---
 source: tests/spec/emit/interop_matrix.rs
-description: "input: \nimport \"go:path\"\n\nfn main() {\n  let r = path.Split(\"/foo/bar.txt\")\n  let _ = r\n}\n"
+description: |
+  
+  import "go:path"
+  
+  fn main() {
+    let r = path.Split("/foo/bar.txt")
+    let _ = r
+  }
 ---
 package main
 

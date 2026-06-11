@@ -1,6 +1,10 @@
 ---
 source: tests/spec/emit/literals.rs
-description: "input: \nfn test() {\n  3.14\n}\n"
+description: |
+  
+  fn test() {
+    3.14
+  }
 ---
 package main
 

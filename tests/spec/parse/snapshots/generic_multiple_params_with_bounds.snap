@@ -1,6 +1,10 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nfn compare<T: Display, U: Debug>(x: T, y: U) -> bool {\n  return true;\n}\n"
+description: |
+  
+  fn compare<T: Display, U: Debug>(x: T, y: U) -> bool {
+    return true;
+  }
 ---
 [
     Function {

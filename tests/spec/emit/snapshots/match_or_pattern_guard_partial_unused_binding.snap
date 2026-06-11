@@ -1,6 +1,17 @@
 ---
 source: tests/spec/emit/control_flow.rs
-description: "input: \nenum E { A((int, int)), B((int, int)), C }\nfn eval(e: E) -> int {\n  match e {\n    E.A((x, y)) | E.B((x, y)) if x > 0 => x,\n    _ => 0,\n  }\n}\nfn test() {\n  if eval(E.B((4, 9))) != 4 { panic(\"bad\") }\n}\n"
+description: |
+  
+  enum E { A((int, int)), B((int, int)), C }
+  fn eval(e: E) -> int {
+    match e {
+      E.A((x, y)) | E.B((x, y)) if x > 0 => x,
+      _ => 0,
+    }
+  }
+  fn test() {
+    if eval(E.B((4, 9))) != 4 { panic("bad") }
+  }
 ---
 package main
 

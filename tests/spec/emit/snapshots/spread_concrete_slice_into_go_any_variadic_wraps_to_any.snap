@@ -1,6 +1,13 @@
 ---
 source: tests/spec/emit/functions.rs
-description: "input: \nimport \"go:fmt\"\n\nfn main() {\n  let xs = [\"a\", \"b\", \"c\"]\n  fmt.Println(xs...)\n}\n"
+description: |
+  
+  import "go:fmt"
+  
+  fn main() {
+    let xs = ["a", "b", "c"]
+    fmt.Println(xs...)
+  }
 ---
 package main
 

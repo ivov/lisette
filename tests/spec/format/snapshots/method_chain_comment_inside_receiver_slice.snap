@@ -1,6 +1,9 @@
 ---
 source: tests/spec/format/mod.rs
-description: "input: fn test() { [\"Lilian\", // comment\n\"Lisette\", // comment\n\"Lisa\"].length() }"
+description: |-
+  fn test() { ["Lilian", // comment
+  "Lisette", // comment
+  "Lisa"].length() }
 ---
 fn test() {
   [

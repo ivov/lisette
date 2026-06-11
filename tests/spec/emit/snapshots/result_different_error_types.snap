@@ -1,6 +1,14 @@
 ---
 source: tests/spec/emit/result_option_patterns.rs
-description: "input: \nfn test_string_error() -> Result<int, string> {\n  Ok(42)\n}\n\nfn test_int_error() -> Result<string, int> {\n  Ok(\"hello\")\n}\n"
+description: |
+  
+  fn test_string_error() -> Result<int, string> {
+    Ok(42)
+  }
+  
+  fn test_int_error() -> Result<string, int> {
+    Ok("hello")
+  }
 ---
 package main
 

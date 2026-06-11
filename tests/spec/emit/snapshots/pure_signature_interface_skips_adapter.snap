@@ -1,6 +1,25 @@
 ---
 source: tests/spec/emit/go_interface_adapter.rs
-description: "input: \nimport \"go:example.com/simple\"\n\nstruct Greeter {}\n\nimpl Greeter {\n  fn Greet(self, name: string) -> string {\n    name\n  }\n}\n\nfn call(g: simple.Greeter) -> string {\n  g.Greet(\"world\")\n}\n\nfn main() {\n  let g = Greeter {}\n  let _ = call(g as simple.Greeter)\n}\n"
+description: |
+  
+  import "go:example.com/simple"
+  
+  struct Greeter {}
+  
+  impl Greeter {
+    fn Greet(self, name: string) -> string {
+      name
+    }
+  }
+  
+  fn call(g: simple.Greeter) -> string {
+    g.Greet("world")
+  }
+  
+  fn main() {
+    let g = Greeter {}
+    let _ = call(g as simple.Greeter)
+  }
 ---
 package main
 

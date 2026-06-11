@@ -1,6 +1,12 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nstruct Bar { x: int }\nfn test(base: Bar) {\n  let foo = 1;\n  if foo < Bar { ..base } { true } else { false }\n}\n"
+description: |
+  
+  struct Bar { x: int }
+  fn test(base: Bar) {
+    let foo = 1;
+    if foo < Bar { ..base } { true } else { false }
+  }
 ---
 [
     Struct {

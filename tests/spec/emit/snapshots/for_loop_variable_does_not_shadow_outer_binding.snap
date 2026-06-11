@@ -1,6 +1,14 @@
 ---
 source: tests/spec/emit/control_flow.rs
-description: "input: \nfn test() -> int {\n  let i = 100\n  for i in 0..3 {\n    let _ = i\n  }\n  i\n}\n"
+description: |
+  
+  fn test() -> int {
+    let i = 100
+    for i in 0..3 {
+      let _ = i
+    }
+    i
+  }
 ---
 package main
 

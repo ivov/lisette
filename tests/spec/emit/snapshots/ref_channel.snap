@@ -1,6 +1,10 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \nfn test(c: Ref<Channel<string>>) {\n  let _ = c\n}\n"
+description: |
+  
+  fn test(c: Ref<Channel<string>>) {
+    let _ = c
+  }
 ---
 package main
 

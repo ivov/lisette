@@ -1,6 +1,18 @@
 ---
 source: tests/spec/emit/control_flow.rs
-description: "input: \nfn risky() -> Result<int, string> { Ok(1) }\nfn do_something() { }\n\nfn test() {\n  let r = try {\n    let x = risky()?;\n    task { do_something() };\n    x\n  };\n  let _ = r;\n}\n"
+description: |
+  
+  fn risky() -> Result<int, string> { Ok(1) }
+  fn do_something() { }
+  
+  fn test() {
+    let r = try {
+      let x = risky()?;
+      task { do_something() };
+      x
+    };
+    let _ = r;
+  }
 ---
 package main
 

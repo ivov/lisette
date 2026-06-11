@@ -1,6 +1,20 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nimport \"go:fmt\"\n\nfn get() -> Ref<Slice<int>> {\n  let _ = fmt.Println(\"get\")\n  let mut s = [1]\n  &s\n}\n\nfn arg() -> int { let _ = fmt.Println(\"arg\"); 2 }\n\nfn main() {\n  get().*.append(arg())\n}\n"
+description: |
+  
+  import "go:fmt"
+  
+  fn get() -> Ref<Slice<int>> {
+    let _ = fmt.Println("get")
+    let mut s = [1]
+    &s
+  }
+  
+  fn arg() -> int { let _ = fmt.Println("arg"); 2 }
+  
+  fn main() {
+    get().*.append(arg())
+  }
 ---
 package main
 

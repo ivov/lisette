@@ -1,6 +1,6 @@
 ---
 source: tests/spec/lex/mod.rs
-description: "input: /// This is a doc comment"
+description: /// This is a doc comment
 ---
 LexResult {
     tokens: [

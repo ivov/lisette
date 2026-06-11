@@ -1,6 +1,12 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \ntype Maybe<T> = Option<T>\n\nfn test() -> Maybe<int> {\n  Some(42)\n}\n"
+description: |
+  
+  type Maybe<T> = Option<T>
+  
+  fn test() -> Maybe<int> {
+    Some(42)
+  }
 ---
 package main
 

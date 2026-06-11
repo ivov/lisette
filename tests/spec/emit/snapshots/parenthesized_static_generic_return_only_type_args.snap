@@ -1,6 +1,18 @@
 ---
 source: tests/spec/emit/functions.rs
-description: "input: \npub struct Factory {}\n\nimpl Factory {\n  pub fn make<T>() -> Slice<T> {\n    Slice.new<T>()\n  }\n}\n\nfn test() -> Slice<int> {\n  (Factory.make)()\n}\n"
+description: |
+  
+  pub struct Factory {}
+  
+  impl Factory {
+    pub fn make<T>() -> Slice<T> {
+      Slice.new<T>()
+    }
+  }
+  
+  fn test() -> Slice<int> {
+    (Factory.make)()
+  }
 ---
 package main
 

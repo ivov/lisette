@@ -1,6 +1,14 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nfn calculate(a: int, b: int) -> int {\n  let result = a + b; // this is a comment\n  if result > 10 {\n    print(\"Large!\\n\");\n  }\n  return result;\n}\n"
+description: |
+  
+  fn calculate(a: int, b: int) -> int {
+    let result = a + b; // this is a comment
+    if result > 10 {
+      print("Large!\n");
+    }
+    return result;
+  }
 ---
 [
     Function {

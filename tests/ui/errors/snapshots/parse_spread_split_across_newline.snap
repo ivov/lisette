@@ -1,6 +1,5 @@
 ---
 source: tests/ui/errors/mod.rs
-assertion_line: 6881
 ---
   [error] Syntax error
    ╭─[test.lis:2:33]

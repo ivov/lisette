@@ -1,6 +1,15 @@
 ---
 source: tests/spec/emit/imports.rs
-description: "input: \nimport \"services/billing\"\nimport \"services/auth\"\nimport \"services/notifications\"\nimport \"go:fmt\"\n\nfn test() {\n  fmt.Print(\"Import order test\")\n}\n"
+description: |
+  
+  import "services/billing"
+  import "services/auth"
+  import "services/notifications"
+  import "go:fmt"
+  
+  fn test() {
+    fmt.Print("Import order test")
+  }
 ---
 package main
 

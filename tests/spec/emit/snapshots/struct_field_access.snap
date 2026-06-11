@@ -1,6 +1,12 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nstruct Point { x: int, y: int }\n\nfn test(p: Point) {\n  p.x\n}\n"
+description: |
+  
+  struct Point { x: int, y: int }
+  
+  fn test(p: Point) {
+    p.x
+  }
 ---
 package main
 

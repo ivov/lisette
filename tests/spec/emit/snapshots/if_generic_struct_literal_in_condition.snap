@@ -1,6 +1,17 @@
 ---
 source: tests/spec/emit/control_flow.rs
-description: "input: \nstruct Box<T> { v: T }\n\nfn test() -> int {\n  let b = Box { v: 1 }\n  if b == Box { v: 2 } {\n    1\n  } else {\n    0\n  }\n}\n"
+description: |
+  
+  struct Box<T> { v: T }
+  
+  fn test() -> int {
+    let b = Box { v: 1 }
+    if b == Box { v: 2 } {
+      1
+    } else {
+      0
+    }
+  }
 ---
 package main
 

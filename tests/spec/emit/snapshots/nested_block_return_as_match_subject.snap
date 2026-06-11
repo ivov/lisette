@@ -1,6 +1,14 @@
 ---
 source: tests/spec/emit/control_flow.rs
-description: "input: \nfn test() -> int {\n  let _ = match { { return 1 } } {\n    1 => 1,\n    _ => 2,\n  }\n  3\n}\n"
+description: |
+  
+  fn test() -> int {
+    let _ = match { { return 1 } } {
+      1 => 1,
+      _ => 2,
+    }
+    3
+  }
 ---
 package main
 

@@ -1,6 +1,15 @@
 ---
 source: tests/spec/emit/control_flow.rs
-description: "input: \nfn get_value(s: string) -> Option<int> {\n  if s == \"ok\" { Some(42) } else { None }\n}\n\nfn test() -> int {\n  let Some(x) = get_value(\"ok\") else { return 0; };\n  x\n}\n"
+description: |
+  
+  fn get_value(s: string) -> Option<int> {
+    if s == "ok" { Some(42) } else { None }
+  }
+  
+  fn test() -> int {
+    let Some(x) = get_value("ok") else { return 0; };
+    x
+  }
 ---
 package main
 

@@ -1,6 +1,14 @@
 ---
 source: tests/spec/emit/result_option_patterns.rs
-description: "input: \nfn external() -> Result<int, string> {\n  Ok(1)\n}\n\nfn test() -> Result<int, string> {\n  external()\n}\n"
+description: |
+  
+  fn external() -> Result<int, string> {
+    Ok(1)
+  }
+  
+  fn test() -> Result<int, string> {
+    external()
+  }
 ---
 package main
 

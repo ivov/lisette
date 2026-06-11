@@ -1,6 +1,21 @@
 ---
 source: tests/spec/emit/control_flow.rs
-description: "input: \nfn get_a() -> Result<int, string> { Ok(10) }\nfn get_b() -> Result<int, string> { Ok(20) }\n\nfn test() -> int {\n  let result = try {\n    let a = get_a()?;\n    let b = get_b()?;\n    a + b\n  };\n  match result {\n    Ok(sum) => sum,\n    Err(_) => 0,\n  }\n}\n"
+description: |
+  
+  fn get_a() -> Result<int, string> { Ok(10) }
+  fn get_b() -> Result<int, string> { Ok(20) }
+  
+  fn test() -> int {
+    let result = try {
+      let a = get_a()?;
+      let b = get_b()?;
+      a + b
+    };
+    match result {
+      Ok(sum) => sum,
+      Err(_) => 0,
+    }
+  }
 ---
 package main
 

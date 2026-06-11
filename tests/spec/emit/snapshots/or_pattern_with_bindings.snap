@@ -1,6 +1,14 @@
 ---
 source: tests/spec/emit/control_flow.rs
-description: "input: \nenum E { A(int), B(int) }\n\nfn test(e: E) -> int {\n  match e {\n    A(x) | B(x) => x,\n  }\n}\n"
+description: |
+  
+  enum E { A(int), B(int) }
+  
+  fn test(e: E) -> int {
+    match e {
+      A(x) | B(x) => x,
+    }
+  }
 ---
 package main
 

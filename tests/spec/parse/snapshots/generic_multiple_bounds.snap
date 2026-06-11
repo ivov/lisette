@@ -1,6 +1,10 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nfn process<T: Display + Clone>(value: T) -> T {\n  return value;\n}\n"
+description: |
+  
+  fn process<T: Display + Clone>(value: T) -> T {
+    return value;
+  }
 ---
 [
     Function {

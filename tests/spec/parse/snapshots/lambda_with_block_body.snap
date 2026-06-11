@@ -1,6 +1,13 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nfn test() {\n  let process = |x| {\n    let doubled = x * 2;\n    doubled + 1\n  };\n}\n"
+description: |
+  
+  fn test() {
+    let process = |x| {
+      let doubled = x * 2;
+      doubled + 1
+    };
+  }
 ---
 [
     Function {

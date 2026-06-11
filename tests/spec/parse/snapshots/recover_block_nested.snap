@@ -1,6 +1,15 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nfn test() {\n  let outer = recover {\n    let inner = recover {\n      inner_risky()\n    };\n    outer_risky()\n  };\n}\n"
+description: |
+  
+  fn test() {
+    let outer = recover {
+      let inner = recover {
+        inner_risky()
+      };
+      outer_risky()
+    };
+  }
 ---
 [
     Function {

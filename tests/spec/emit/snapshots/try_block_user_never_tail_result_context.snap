@@ -1,6 +1,15 @@
 ---
 source: tests/spec/emit/result_option_patterns.rs
-description: "input: \nfn die() -> Never { panic(\"dead\") }\n\nfn test() -> Result<int, string> {\n  try {\n    let _ = Ok(1)?;\n    die()\n  }\n}\n"
+description: |
+  
+  fn die() -> Never { panic("dead") }
+  
+  fn test() -> Result<int, string> {
+    try {
+      let _ = Ok(1)?;
+      die()
+    }
+  }
 ---
 package main
 

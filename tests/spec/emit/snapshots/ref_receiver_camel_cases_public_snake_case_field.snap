@@ -1,6 +1,21 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \nstruct Foo {\n  pub bar_baz: string,\n}\n\nimpl Foo {\n  fn show(self: Ref<Foo>) -> string {\n    self.bar_baz\n  }\n}\n\nfn test() {\n  let mut foo = Foo { bar_baz: \"quux\" }\n  let _ = foo.show()\n}\n"
+description: |
+  
+  struct Foo {
+    pub bar_baz: string,
+  }
+  
+  impl Foo {
+    fn show(self: Ref<Foo>) -> string {
+      self.bar_baz
+    }
+  }
+  
+  fn test() {
+    let mut foo = Foo { bar_baz: "quux" }
+    let _ = foo.show()
+  }
 ---
 package main
 

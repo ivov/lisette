@@ -1,6 +1,17 @@
 ---
 source: tests/spec/emit/control_flow.rs
-description: "input: \nfn test() -> string {\n  let result = \"final\"\n  let mut i = 0\n  while i < 3 {\n    let result = i * 10\n    let _ = result\n    i += 1\n  }\n  result\n}\n"
+description: |
+  
+  fn test() -> string {
+    let result = "final"
+    let mut i = 0
+    while i < 3 {
+      let result = i * 10
+      let _ = result
+      i += 1
+    }
+    result
+  }
 ---
 package main
 

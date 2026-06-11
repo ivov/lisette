@@ -1,6 +1,11 @@
 ---
 source: tests/spec/emit/control_flow.rs
-description: "input: \nfn test(res: Result<int, string>) -> int {\n  let Ok(value) = res else { return -1; };\n  value\n}\n"
+description: |
+  
+  fn test(res: Result<int, string>) -> int {
+    let Ok(value) = res else { return -1; };
+    value
+  }
 ---
 package main
 

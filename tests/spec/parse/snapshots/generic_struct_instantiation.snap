@@ -1,6 +1,12 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nstruct Container<T> { value: T }\nfn test() {\n  let x = 42;\n  let c: Container<int> = Container { value: x };\n}\n"
+description: |
+  
+  struct Container<T> { value: T }
+  fn test() {
+    let x = 42;
+    let c: Container<int> = Container { value: x };
+  }
 ---
 [
     Struct {

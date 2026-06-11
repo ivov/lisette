@@ -1,6 +1,19 @@
 ---
 source: tests/spec/emit/concurrency.rs
-description: "input: \nimport \"go:sync\"\n\nfn test() {\n  let mut wg = sync.WaitGroup{};\n  for _ in 0..5 {\n    wg.Add(1);\n    task {\n      defer wg.Done()\n    }\n  }\n  wg.Wait()\n}\n"
+description: |
+  
+  import "go:sync"
+  
+  fn test() {
+    let mut wg = sync.WaitGroup{};
+    for _ in 0..5 {
+      wg.Add(1);
+      task {
+        defer wg.Done()
+      }
+    }
+    wg.Wait()
+  }
 ---
 package main
 

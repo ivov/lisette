@@ -1,6 +1,14 @@
 ---
 source: tests/spec/emit/imports.rs
-description: "input: \nimport \"go:fmt\"\nimport \"go:example.com/lib\"\n\nfn test() {\n  let s: lib.IntSlice = [1]\n  fmt.Println(\"lib.\", s[0])\n}\n"
+description: |
+  
+  import "go:fmt"
+  import "go:example.com/lib"
+  
+  fn test() {
+    let s: lib.IntSlice = [1]
+    fmt.Println("lib.", s[0])
+  }
 ---
 package main
 

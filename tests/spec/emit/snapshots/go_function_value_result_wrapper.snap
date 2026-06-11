@@ -1,6 +1,21 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nimport \"go:fmt\"\nimport \"go:strconv\"\n\nfn parse_with(f: fn(string) -> Result<int, error>, s: string) -> int {\n  match f(s) {\n    Ok(n) => n,\n    Err(_) => 0,\n  }\n}\n\nfn main() {\n  let n = parse_with(strconv.Atoi, \"42\")\n  fmt.Println(n)\n}\n"
+description: |
+  
+  import "go:fmt"
+  import "go:strconv"
+  
+  fn parse_with(f: fn(string) -> Result<int, error>, s: string) -> int {
+    match f(s) {
+      Ok(n) => n,
+      Err(_) => 0,
+    }
+  }
+  
+  fn main() {
+    let n = parse_with(strconv.Atoi, "42")
+    fmt.Println(n)
+  }
 ---
 package main
 

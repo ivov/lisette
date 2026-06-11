@@ -1,6 +1,13 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \nimport \"go:example.com/dyn\"\n\nfn main() {\n  let _ = dyn.Store(\"k\", None)\n  let _ = dyn.Store(\"k\", Some(1))\n}\n"
+description: |
+  
+  import "go:example.com/dyn"
+  
+  fn main() {
+    let _ = dyn.Store("k", None)
+    let _ = dyn.Store("k", Some(1))
+  }
 ---
 package main
 

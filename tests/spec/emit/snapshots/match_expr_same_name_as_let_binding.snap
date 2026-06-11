@@ -1,6 +1,14 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nfn extract(opt: Option<int>) -> int {\n  let x = match opt {\n    Some(x) => x,\n    None => 0,\n  }\n  x\n}\n"
+description: |
+  
+  fn extract(opt: Option<int>) -> int {
+    let x = match opt {
+      Some(x) => x,
+      None => 0,
+    }
+    x
+  }
 ---
 package main
 

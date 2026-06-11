@@ -1,6 +1,13 @@
 ---
 source: tests/spec/emit/control_flow.rs
-description: "input: \nfn test() -> int {\n  let mut x = 0\n  x = { { return 1 } }\n  let _ = x\n  2\n}\n"
+description: |
+  
+  fn test() -> int {
+    let mut x = 0
+    x = { { return 1 } }
+    let _ = x
+    2
+  }
 ---
 package main
 

@@ -1,6 +1,6 @@
 ---
 source: tests/spec/lex/mod.rs
-description: "input: \"hello!@#$%^&*()_+{}|:<>?~`-=[]\\;',./\""
+description: "\"hello!@#$%^&*()_+{}|:<>?~`-=[]\\;',./\""
 ---
 LexResult {
     tokens: [

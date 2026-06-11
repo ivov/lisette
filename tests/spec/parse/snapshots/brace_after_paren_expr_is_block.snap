@@ -1,6 +1,12 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nfn test() {\n  let foo = 1;\n  let x = 2;\n  (foo) { x }\n}\n"
+description: |
+  
+  fn test() {
+    let foo = 1;
+    let x = 2;
+    (foo) { x }
+  }
 ---
 [
     Function {

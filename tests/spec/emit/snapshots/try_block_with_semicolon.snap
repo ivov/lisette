@@ -1,6 +1,15 @@
 ---
 source: tests/spec/emit/control_flow.rs
-description: "input: \nfn do_thing() -> Result<int, string> { Ok(1) }\n\nfn test() {\n  let result: Result<int, string> = try {\n    do_thing()?\n  };\n  let _ = result;\n}\n"
+description: |
+  
+  fn do_thing() -> Result<int, string> { Ok(1) }
+  
+  fn test() {
+    let result: Result<int, string> = try {
+      do_thing()?
+    };
+    let _ = result;
+  }
 ---
 package main
 

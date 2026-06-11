@@ -1,6 +1,16 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nfn mutate(r: Ref<int>) {\n  r.* = 99\n}\n\nfn test() -> int {\n  let mut x = 1;\n  mutate(&x);\n  x\n}\n"
+description: |
+  
+  fn mutate(r: Ref<int>) {
+    r.* = 99
+  }
+  
+  fn test() -> int {
+    let mut x = 1;
+    mutate(&x);
+    x
+  }
 ---
 package main
 

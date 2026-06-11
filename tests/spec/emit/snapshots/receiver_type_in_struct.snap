@@ -1,6 +1,12 @@
 ---
 source: tests/spec/emit/concurrency.rs
-description: "input: \nstruct Consumer { input: Receiver<int> }\n\nfn test(c: Consumer) -> Receiver<int> {\n  c.input\n}\n"
+description: |
+  
+  struct Consumer { input: Receiver<int> }
+  
+  fn test(c: Consumer) -> Receiver<int> {
+    c.input
+  }
 ---
 package main
 

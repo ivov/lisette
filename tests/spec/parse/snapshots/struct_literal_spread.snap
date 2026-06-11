@@ -1,6 +1,10 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nfn test(defaults: Config) {\n  let cfg = Config { enabled: true, ..defaults };\n}\n"
+description: |
+  
+  fn test(defaults: Config) {
+    let cfg = Config { enabled: true, ..defaults };
+  }
 ---
 [
     Function {

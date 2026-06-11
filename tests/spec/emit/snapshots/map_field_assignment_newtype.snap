@@ -1,6 +1,14 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nstruct New(int)\n\nfn main() {\n  let mut m: Map<string, New> = Map.new()\n  m[\"a\"] = New(0)\n  m[\"a\"] = New(5)\n}\n"
+description: |
+  
+  struct New(int)
+  
+  fn main() {
+    let mut m: Map<string, New> = Map.new()
+    m["a"] = New(0)
+    m["a"] = New(5)
+  }
 ---
 package main
 

@@ -1,6 +1,8 @@
 ---
 source: tests/spec/lex/mod.rs
-description: "input: expr?\n(a, b)"
+description: |-
+  expr?
+  (a, b)
 ---
 LexResult {
     tokens: [

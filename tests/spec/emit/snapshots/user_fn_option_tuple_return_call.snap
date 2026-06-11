@@ -1,6 +1,14 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \nfn maybe_pair(n: int) -> Option<(int, int)> {\n  if n > 0 { Some((n, n + 1)) } else { None }\n}\nfn main() {\n  let r = maybe_pair(5)\n  let _ = r\n}\n"
+description: |
+  
+  fn maybe_pair(n: int) -> Option<(int, int)> {
+    if n > 0 { Some((n, n + 1)) } else { None }
+  }
+  fn main() {
+    let r = maybe_pair(5)
+    let _ = r
+  }
 ---
 package main
 

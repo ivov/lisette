@@ -1,6 +1,12 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nfn test() -> Slice<string> {\n  let name = \"test\"\n  let msg = f\"items for {name}\"\n  [msg, msg + \"2\"]\n}\n"
+description: |
+  
+  fn test() -> Slice<string> {
+    let name = "test"
+    let msg = f"items for {name}"
+    [msg, msg + "2"]
+  }
 ---
 [
     Function {

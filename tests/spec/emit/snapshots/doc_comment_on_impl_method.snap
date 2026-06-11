@@ -1,6 +1,15 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \nstruct Counter { count: int }\n\nimpl Counter {\n  /// Creates a new counter starting at zero.\n  fn new() -> Counter {\n    Counter { count: 0 }\n  }\n}\n"
+description: |
+  
+  struct Counter { count: int }
+  
+  impl Counter {
+    /// Creates a new counter starting at zero.
+    fn new() -> Counter {
+      Counter { count: 0 }
+    }
+  }
 ---
 package main
 

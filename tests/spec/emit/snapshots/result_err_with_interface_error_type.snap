@@ -1,6 +1,16 @@
 ---
 source: tests/spec/emit/result_option_patterns.rs
-description: "input: \nstruct MyError { msg: string }\n\nimpl MyError {\n  fn Error(self) -> string { self.msg }\n}\n\nfn might_fail() -> Result<int, error> {\n  Err(MyError { msg: \"oops\" })\n}\n"
+description: |
+  
+  struct MyError { msg: string }
+  
+  impl MyError {
+    fn Error(self) -> string { self.msg }
+  }
+  
+  fn might_fail() -> Result<int, error> {
+    Err(MyError { msg: "oops" })
+  }
 ---
 package main
 

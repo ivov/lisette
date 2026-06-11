@@ -1,6 +1,18 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nstruct Wrap(Slice<int>)\n\nfn get() -> Ref<Wrap> {\n  let mut w = Wrap([1])\n  &w\n}\n\nfn main() {\n  let x = { get().0.append(2) }\n  let _ = x[0]\n}\n"
+description: |
+  
+  struct Wrap(Slice<int>)
+  
+  fn get() -> Ref<Wrap> {
+    let mut w = Wrap([1])
+    &w
+  }
+  
+  fn main() {
+    let x = { get().0.append(2) }
+    let _ = x[0]
+  }
 ---
 package main
 

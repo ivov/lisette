@@ -1,6 +1,10 @@
 ---
 source: tests/spec/emit/literals.rs
-description: "input: \nfn test() -> string {\n  \"\\u{1F600}\"\n}\n"
+description: |
+  
+  fn test() -> string {
+    "\u{1F600}"
+  }
 ---
 package main
 

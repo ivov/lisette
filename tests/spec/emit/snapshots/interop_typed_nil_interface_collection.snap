@@ -1,6 +1,27 @@
 ---
 source: tests/spec/emit/interop_matrix.rs
-description: "input: \nimport \"go:fmt\"\nimport \"go:go/ast\"\nimport \"go:go/token\"\n\nfn main() {\n  let lit = ast.CompositeLit {\n    Type: None,\n    Lbrace: 0 as token.Pos,\n    Elts: [],\n    Rbrace: 0 as token.Pos,\n    Incomplete: false,\n  }\n  let elts = lit.Elts\n  for elt in elts {\n    match elt {\n      Some(e) => fmt.Println(e.Pos()),\n      None => fmt.Println(\"nil\"),\n    }\n  }\n}\n"
+description: |
+  
+  import "go:fmt"
+  import "go:go/ast"
+  import "go:go/token"
+  
+  fn main() {
+    let lit = ast.CompositeLit {
+      Type: None,
+      Lbrace: 0 as token.Pos,
+      Elts: [],
+      Rbrace: 0 as token.Pos,
+      Incomplete: false,
+    }
+    let elts = lit.Elts
+    for elt in elts {
+      match elt {
+        Some(e) => fmt.Println(e.Pos()),
+        None => fmt.Println("nil"),
+      }
+    }
+  }
 ---
 package main
 

@@ -1,6 +1,14 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \nstruct UserId(int)\n\nfn main() {\n  let mut id = UserId(1)\n  let r = &id\n  r.* = UserId(2)\n}\n"
+description: |
+  
+  struct UserId(int)
+  
+  fn main() {
+    let mut id = UserId(1)
+    let r = &id
+    r.* = UserId(2)
+  }
 ---
 package main
 

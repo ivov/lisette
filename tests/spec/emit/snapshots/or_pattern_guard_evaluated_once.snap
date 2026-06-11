@@ -1,6 +1,15 @@
 ---
 source: tests/spec/emit/control_flow.rs
-description: "input: \nenum Res { Ok(int), Err(int) }\n\nfn test(r: Res, threshold: int) -> int {\n  match r {\n    Ok(x) | Err(x) if x > threshold => 100,\n    _ => 0,\n  }\n}\n"
+description: |
+  
+  enum Res { Ok(int), Err(int) }
+  
+  fn test(r: Res, threshold: int) -> int {
+    match r {
+      Ok(x) | Err(x) if x > threshold => 100,
+      _ => 0,
+    }
+  }
 ---
 package main
 

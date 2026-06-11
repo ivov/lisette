@@ -1,6 +1,13 @@
 ---
 source: tests/spec/emit/functions.rs
-description: "input: \nstruct Wrapper(int)\n\nfn test() -> Wrapper {\n  let n = 42\n  n as Wrapper\n}\n"
+description: |
+  
+  struct Wrapper(int)
+  
+  fn test() -> Wrapper {
+    let n = 42
+    n as Wrapper
+  }
 ---
 package main
 

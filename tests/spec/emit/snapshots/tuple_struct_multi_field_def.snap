@@ -1,6 +1,8 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \nstruct Point(int, int)\n"
+description: |
+  
+  struct Point(int, int)
 ---
 package main
 

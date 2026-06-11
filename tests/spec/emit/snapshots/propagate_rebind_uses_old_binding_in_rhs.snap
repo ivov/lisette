@@ -1,6 +1,18 @@
 ---
 source: tests/spec/emit/result_option_patterns.rs
-description: "input: \nimport \"go:strconv\"\n\nfn parse(s: string) -> Result<int, error> {\n  strconv.Atoi(s)\n}\n\nfn process() -> Result<int, error> {\n  let x = 42\n  let x = parse(f\"{x}\")?\n  Ok(x + 1)\n}\n"
+description: |
+  
+  import "go:strconv"
+  
+  fn parse(s: string) -> Result<int, error> {
+    strconv.Atoi(s)
+  }
+  
+  fn process() -> Result<int, error> {
+    let x = 42
+    let x = parse(f"{x}")?
+    Ok(x + 1)
+  }
 ---
 package main
 

@@ -1,6 +1,10 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nfn test(x: int, base: Point) {\n  let p = Point { x, y: 10, ..base };\n}\n"
+description: |
+  
+  fn test(x: int, base: Point) {
+    let p = Point { x, y: 10, ..base };
+  }
 ---
 [
     Function {

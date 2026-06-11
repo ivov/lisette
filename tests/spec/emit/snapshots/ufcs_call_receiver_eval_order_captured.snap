@@ -1,6 +1,25 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nstruct Counter { n: int }\n\nimpl Counter {\n  fn get(self) -> int { self.n }\n}\n\nfn bump_and_get(c: Ref<Counter>) -> int {\n  c.*.n = c.*.n + 1\n  c.*.n\n}\n\nfn sum(a: int, b: int) -> int { a + b }\n\nfn main() {\n  let mut c = Counter { n: 0 }\n  let v = sum(c.get(), bump_and_get(&c))\n  let _ = v\n}\n"
+description: |
+  
+  struct Counter { n: int }
+  
+  impl Counter {
+    fn get(self) -> int { self.n }
+  }
+  
+  fn bump_and_get(c: Ref<Counter>) -> int {
+    c.*.n = c.*.n + 1
+    c.*.n
+  }
+  
+  fn sum(a: int, b: int) -> int { a + b }
+  
+  fn main() {
+    let mut c = Counter { n: 0 }
+    let v = sum(c.get(), bump_and_get(&c))
+    let _ = v
+  }
 ---
 package main
 

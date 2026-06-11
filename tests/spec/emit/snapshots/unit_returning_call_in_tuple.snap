@@ -1,6 +1,13 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nfn do_nothing() {}\n\nfn main() {\n  let t = (42, do_nothing())\n  let _ = t.0\n}\n"
+description: |
+  
+  fn do_nothing() {}
+  
+  fn main() {
+    let t = (42, do_nothing())
+    let _ = t.0
+  }
 ---
 package main
 

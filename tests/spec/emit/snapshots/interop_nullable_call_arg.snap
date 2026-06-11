@@ -1,6 +1,20 @@
 ---
 source: tests/spec/emit/interop_matrix.rs
-description: "input: \nimport \"go:flag\"\n\nfn apply(f: fn(string) -> Option<Ref<flag.Flag>>, name: string) -> bool {\n  match f(name) {\n    Some(_) => true,\n    None => false,\n  }\n}\n\nfn main() {\n  let r = apply(flag.Lookup, \"verbose\")\n  let _ = r\n}\n"
+description: |
+  
+  import "go:flag"
+  
+  fn apply(f: fn(string) -> Option<Ref<flag.Flag>>, name: string) -> bool {
+    match f(name) {
+      Some(_) => true,
+      None => false,
+    }
+  }
+  
+  fn main() {
+    let r = apply(flag.Lookup, "verbose")
+    let _ = r
+  }
 ---
 package main
 

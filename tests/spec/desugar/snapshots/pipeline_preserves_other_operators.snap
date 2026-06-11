@@ -1,6 +1,6 @@
 ---
 source: tests/spec/desugar/mod.rs
-description: "input: fn test() { let a = 1 + 2; let b = a |> double; }"
+description: "fn test() { let a = 1 + 2; let b = a |> double; }"
 ---
 [
     Function {

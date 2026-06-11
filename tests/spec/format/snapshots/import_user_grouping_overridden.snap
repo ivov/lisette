@@ -1,6 +1,13 @@
 ---
 source: tests/spec/format/mod.rs
-description: "input: import \"go:fmt\"\n\nimport \"commands\"\n\nimport \"go:os\"\n\nimport \"display\""
+description: |-
+  import "go:fmt"
+  
+  import "commands"
+  
+  import "go:os"
+  
+  import "display"
 ---
 import "go:fmt"
 import "go:os"

@@ -1,6 +1,14 @@
 ---
 source: tests/spec/emit/functions.rs
-description: "input: \nfn test() -> int {\n  let x = Some(42);\n  match x {\n    Some(map) => map,\n    None => 0,\n  }\n}\n"
+description: |
+  
+  fn test() -> int {
+    let x = Some(42);
+    match x {
+      Some(map) => map,
+      None => 0,
+    }
+  }
 ---
 package main
 

@@ -1,6 +1,21 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nstruct Foo { value: int }\n\nfn make_foo() -> Foo {\n  Foo { value: 42 }\n}\n\nfn takes_ref(f: Ref<Foo>) -> int {\n  f.value\n}\n\nfn test() -> int {\n  let tmp = make_foo()\n  takes_ref(&tmp)\n}\n"
+description: |
+  
+  struct Foo { value: int }
+  
+  fn make_foo() -> Foo {
+    Foo { value: 42 }
+  }
+  
+  fn takes_ref(f: Ref<Foo>) -> int {
+    f.value
+  }
+  
+  fn test() -> int {
+    let tmp = make_foo()
+    takes_ref(&tmp)
+  }
 ---
 package main
 

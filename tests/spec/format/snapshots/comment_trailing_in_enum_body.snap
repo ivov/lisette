@@ -1,6 +1,11 @@
 ---
 source: tests/spec/format/mod.rs
-description: "input: enum E {\n  A,\n  B,\n  // trailing\n}"
+description: |-
+  enum E {
+    A,
+    B,
+    // trailing
+  }
 ---
 enum E {
   A,

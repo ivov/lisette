@@ -1,6 +1,19 @@
 ---
 source: tests/spec/emit/result_option_patterns.rs
-description: "input: \nfn noop() {}\n\nfn maybe(b: bool) -> Option<int> {\n  if b { Some(42) } else { None }\n}\n\nfn test() {\n  match maybe(true) {\n    Some(_) => noop(),\n    None => noop(),\n  }\n}\n"
+description: |
+  
+  fn noop() {}
+  
+  fn maybe(b: bool) -> Option<int> {
+    if b { Some(42) } else { None }
+  }
+  
+  fn test() {
+    match maybe(true) {
+      Some(_) => noop(),
+      None => noop(),
+    }
+  }
 ---
 package main
 

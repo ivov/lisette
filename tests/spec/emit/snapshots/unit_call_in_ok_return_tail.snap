@@ -1,6 +1,14 @@
 ---
 source: tests/spec/emit/result_option_patterns.rs
-description: "input: \nfn noop() {}\n\nfn f() -> Result<(), string> {\n  Ok(noop())\n}\n\nfn main() { let _ = f() }\n"
+description: |
+  
+  fn noop() {}
+  
+  fn f() -> Result<(), string> {
+    Ok(noop())
+  }
+  
+  fn main() { let _ = f() }
 ---
 package main
 

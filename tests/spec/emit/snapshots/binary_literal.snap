@@ -1,6 +1,10 @@
 ---
 source: tests/spec/emit/literals.rs
-description: "input: \nfn test() -> int {\n  0b1010\n}\n"
+description: |
+  
+  fn test() -> int {
+    0b1010
+  }
 ---
 package main
 

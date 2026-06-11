@@ -1,6 +1,8 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \nstruct User { name: string, age: int, active: bool }\n"
+description: |
+  
+  struct User { name: string, age: int, active: bool }
 ---
 package main
 

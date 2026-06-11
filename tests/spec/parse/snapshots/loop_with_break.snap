@@ -1,6 +1,14 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nfn test() {\n  loop {\n    if should_stop() {\n      break;\n    }\n  }\n}\n"
+description: |
+  
+  fn test() {
+    loop {
+      if should_stop() {
+        break;
+      }
+    }
+  }
 ---
 [
     Function {

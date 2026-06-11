@@ -1,6 +1,12 @@
 ---
 source: tests/spec/emit/result_option_patterns.rs
-description: "input: \nfn test() -> Result<int, string> {\n  let r: Result<int, string> = Ok(42);\n  let x = r?;\n  Ok(x + 1)\n}\n"
+description: |
+  
+  fn test() -> Result<int, string> {
+    let r: Result<int, string> = Ok(42);
+    let x = r?;
+    Ok(x + 1)
+  }
 ---
 package main
 

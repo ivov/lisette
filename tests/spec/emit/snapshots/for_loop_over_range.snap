@@ -1,6 +1,15 @@
 ---
 source: tests/spec/emit/concurrency.rs
-description: "input: \nfn test() -> int {\n  let xs = [1, 2, 3, 4, 5];\n  let mut sum = 0;\n  for x in xs {\n    sum = sum + x;\n  };\n  sum\n}\n"
+description: |
+  
+  fn test() -> int {
+    let xs = [1, 2, 3, 4, 5];
+    let mut sum = 0;
+    for x in xs {
+      sum = sum + x;
+    };
+    sum
+  }
 ---
 package main
 

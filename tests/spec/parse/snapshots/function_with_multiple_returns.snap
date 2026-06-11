@@ -1,6 +1,13 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nfn abs(x: int) -> int {\n  if x < 0 {\n    return -x;\n  }\n  return x;\n}\n"
+description: |
+  
+  fn abs(x: int) -> int {
+    if x < 0 {
+      return -x;
+    }
+    return x;
+  }
 ---
 [
     Function {

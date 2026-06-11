@@ -1,6 +1,12 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nfn h() -> Result<Result<int, string>, string> { Ok(Ok(1)) }\n\nfn f() -> Result<int, string> {\n  Ok(h()??)\n}\n"
+description: |
+  
+  fn h() -> Result<Result<int, string>, string> { Ok(Ok(1)) }
+  
+  fn f() -> Result<int, string> {
+    Ok(h()??)
+  }
 ---
 package main
 

@@ -1,6 +1,19 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \nstruct Container<T> { value: T }\n\nimpl<T> Container<T> {\n  fn get(self) -> T {\n    self.value\n  }\n}\n\nfn main() {\n  let c = Container { value: 42 };\n  let v = c.get();\n}\n"
+description: |
+  
+  struct Container<T> { value: T }
+  
+  impl<T> Container<T> {
+    fn get(self) -> T {
+      self.value
+    }
+  }
+  
+  fn main() {
+    let c = Container { value: 42 };
+    let v = c.get();
+  }
 ---
 package main
 

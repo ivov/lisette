@@ -1,6 +1,20 @@
 ---
 source: tests/spec/emit/result_option_patterns.rs
-description: "input: \nimport \"go:fmt\"\n\nfn next_item(counter: int) -> Option<int> {\n  if counter < 5 { Some(counter) } else { None }\n}\n\nfn test() {\n  let mut i = 0;\n  while let Some(x) = next_item(i) {\n    fmt.Print(f\"Got: {x}\\n\");\n    i = i + 1;\n  }\n}\n"
+description: |
+  
+  import "go:fmt"
+  
+  fn next_item(counter: int) -> Option<int> {
+    if counter < 5 { Some(counter) } else { None }
+  }
+  
+  fn test() {
+    let mut i = 0;
+    while let Some(x) = next_item(i) {
+      fmt.Print(f"Got: {x}\n");
+      i = i + 1;
+    }
+  }
 ---
 package main
 

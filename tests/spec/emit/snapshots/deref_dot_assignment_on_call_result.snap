@@ -1,6 +1,14 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nstruct Box { x: int }\n\nfn main() {\n  let mut b = Box { x: 1 }\n  let get = || &b\n  get().*.x = 2\n}\n"
+description: |
+  
+  struct Box { x: int }
+  
+  fn main() {
+    let mut b = Box { x: 1 }
+    let get = || &b
+    get().*.x = 2
+  }
 ---
 package main
 

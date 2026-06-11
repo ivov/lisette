@@ -1,6 +1,11 @@
 ---
 source: tests/spec/emit/concurrency.rs
-description: "input: \nfn test() {\n  let xs = [1]\n  task xs.is_empty()\n}\n"
+description: |
+  
+  fn test() {
+    let xs = [1]
+    task xs.is_empty()
+  }
 ---
 package main
 

@@ -1,6 +1,10 @@
 ---
 source: tests/spec/emit/prelude.rs
-description: "input: \nfn test(r: Receiver<int>) -> int {\n  r.length()\n}\n"
+description: |
+  
+  fn test(r: Receiver<int>) -> int {
+    r.length()
+  }
 ---
 package main
 

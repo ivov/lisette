@@ -1,6 +1,17 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \nimport \"go:fmt\"\n\nstruct Point { x: int, y: int }\n\nfn main() {\n  let p1 = Point { x: 1, y: 2 }\n  let p2 = Point { x: 3, ..p1 }\n  let copy_1 = 7\n  fmt.Println(p2.x, copy_1)\n}\n"
+description: |
+  
+  import "go:fmt"
+  
+  struct Point { x: int, y: int }
+  
+  fn main() {
+    let p1 = Point { x: 1, y: 2 }
+    let p2 = Point { x: 3, ..p1 }
+    let copy_1 = 7
+    fmt.Println(p2.x, copy_1)
+  }
 ---
 package main
 

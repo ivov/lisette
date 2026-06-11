@@ -1,6 +1,11 @@
 ---
 source: tests/spec/emit/functions.rs
-description: "input: \nfn test() -> int {\n  let f = 3.14\n  f as int\n}\n"
+description: |
+  
+  fn test() -> int {
+    let f = 3.14
+    f as int
+  }
 ---
 package main
 

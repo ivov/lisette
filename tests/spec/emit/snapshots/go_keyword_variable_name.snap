@@ -1,6 +1,12 @@
 ---
 source: tests/spec/emit/functions.rs
-description: "input: \nfn test() -> int {\n  let map = 42;\n  let range = 10;\n  map + range\n}\n"
+description: |
+  
+  fn test() -> int {
+    let map = 42;
+    let range = 10;
+    map + range
+  }
 ---
 package main
 

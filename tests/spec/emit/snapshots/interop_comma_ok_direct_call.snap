@@ -1,6 +1,16 @@
 ---
 source: tests/spec/emit/interop_matrix.rs
-description: "input: \nimport \"go:os\"\n\nfn main() {\n  let r = os.LookupEnv(\"HOME\")\n  match r {\n    Some(v) => { let _ = v },\n    None => { let _ = \"\" },\n  }\n}\n"
+description: |
+  
+  import "go:os"
+  
+  fn main() {
+    let r = os.LookupEnv("HOME")
+    match r {
+      Some(v) => { let _ = v },
+      None => { let _ = "" },
+    }
+  }
 ---
 package main
 

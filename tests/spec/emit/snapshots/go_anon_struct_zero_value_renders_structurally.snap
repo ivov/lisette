@@ -1,6 +1,12 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \nimport anon \"go:example.com/anon\"\n\nfn zero() {\n  anon.TakesAnon(anon.AnonX { .. })\n}\n"
+description: |
+  
+  import anon "go:example.com/anon"
+  
+  fn zero() {
+    anon.TakesAnon(anon.AnonX { .. })
+  }
 ---
 package main
 

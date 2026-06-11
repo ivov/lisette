@@ -1,6 +1,12 @@
 ---
 source: tests/spec/emit/prelude.rs
-description: "input: \nfn main() {\n  let f = Option.and_then\n  let x = f(Some(1), |v| Some(v * 2))\n  let _ = x\n}\n"
+description: |
+  
+  fn main() {
+    let f = Option.and_then
+    let x = f(Some(1), |v| Some(v * 2))
+    let _ = x
+  }
 ---
 package main
 

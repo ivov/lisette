@@ -1,6 +1,6 @@
 ---
 source: tests/spec/format/mod.rs
-description: "input: fn test(opt: Option<int>) -> int { if let Some(x) = opt { x } else { 0 } }"
+description: "fn test(opt: Option<int>) -> int { if let Some(x) = opt { x } else { 0 } }"
 ---
 fn test(opt: Option<int>) -> int {
   if let Some(x) = opt { x } else { 0 }

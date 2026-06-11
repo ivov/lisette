@@ -1,6 +1,16 @@
 ---
 source: tests/spec/emit/control_flow.rs
-description: "input: \nstruct Point { x: int, y: int }\n\nfn test(p: Point) -> string {\n  match p {\n    Point { x, y } if x == y => \"diagonal\",\n    Point { x, y } if x > y => \"above\",\n    Point { x, y } => \"below\",\n  }\n}\n"
+description: |
+  
+  struct Point { x: int, y: int }
+  
+  fn test(p: Point) -> string {
+    match p {
+      Point { x, y } if x == y => "diagonal",
+      Point { x, y } if x > y => "above",
+      Point { x, y } => "below",
+    }
+  }
 ---
 package main
 

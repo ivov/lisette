@@ -1,6 +1,10 @@
 ---
 source: tests/spec/format/mod.rs
-description: "input: import \"go:os\"\nimport \"go:fmt\"\n\nfn main() { fmt.Println(\"hello\") }"
+description: |-
+  import "go:os"
+  import "go:fmt"
+  
+  fn main() { fmt.Println("hello") }
 ---
 import "go:fmt"
 import "go:os"

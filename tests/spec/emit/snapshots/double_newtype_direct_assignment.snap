@@ -1,6 +1,14 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \nstruct A(int)\nstruct B(A)\n\nfn main() {\n  let mut w = B(A(1))\n  w = B(A(2))\n}\n"
+description: |
+  
+  struct A(int)
+  struct B(A)
+  
+  fn main() {
+    let mut w = B(A(1))
+    w = B(A(2))
+  }
 ---
 package main
 

@@ -1,6 +1,15 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nenum List {\n  Cons(int, Ref<List>),\n  Nil,\n}\n\nfn test() -> List {\n  List.Cons(42, &List.Nil)\n}\n"
+description: |
+  
+  enum List {
+    Cons(int, Ref<List>),
+    Nil,
+  }
+  
+  fn test() -> List {
+    List.Cons(42, &List.Nil)
+  }
 ---
 package main
 

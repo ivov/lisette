@@ -1,6 +1,18 @@
 ---
 source: tests/spec/emit/patterns.rs
-description: "input: \nenum Message {\n  Move { x: int, y: int },\n  Quit,\n}\n\nfn handle(m: Message) -> int {\n  match m {\n    Move { x, y } => x + y,\n    Quit => 0,\n  }\n}\n"
+description: |
+  
+  enum Message {
+    Move { x: int, y: int },
+    Quit,
+  }
+  
+  fn handle(m: Message) -> int {
+    match m {
+      Move { x, y } => x + y,
+      Quit => 0,
+    }
+  }
 ---
 package main
 

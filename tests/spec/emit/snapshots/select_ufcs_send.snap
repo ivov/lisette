@@ -1,6 +1,14 @@
 ---
 source: tests/spec/emit/concurrency.rs
-description: "input: \nfn main() {\n  let ch = Channel.new<int>()\n  select {\n    Channel.send(ch, 1) => { let _ = 0 },\n    _ => { let _ = 1 },\n  }\n}\n"
+description: |
+  
+  fn main() {
+    let ch = Channel.new<int>()
+    select {
+      Channel.send(ch, 1) => { let _ = 0 },
+      _ => { let _ = 1 },
+    }
+  }
 ---
 package main
 

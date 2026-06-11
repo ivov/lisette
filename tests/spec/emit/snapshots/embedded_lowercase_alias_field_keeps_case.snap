@@ -1,6 +1,17 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \npub struct Base { pub id: int }\ntype p = Base\n\nstruct Outer {\n  embed p,\n}\n\nfn read(o: Outer) -> int {\n  o.p.id\n}\n"
+description: |
+  
+  pub struct Base { pub id: int }
+  type p = Base
+  
+  struct Outer {
+    embed p,
+  }
+  
+  fn read(o: Outer) -> int {
+    o.p.id
+  }
 ---
 package main
 

@@ -1,6 +1,30 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \nstruct Span {\n  start: int,\n  end: int,\n}\n\nimpl Span {\n  fn new(start: int, end: int) -> Span {\n    Span { start: start, end: end }\n  }\n\n  fn contains(self: Span, val: int) -> bool {\n    val >= self.start && val < self.end\n  }\n\n  fn len(self: Span) -> int {\n    self.end - self.start\n  }\n}\n\nfn test() -> int {\n  let r = Span.new(0, 10);\n  r.len()\n}\n"
+description: |
+  
+  struct Span {
+    start: int,
+    end: int,
+  }
+  
+  impl Span {
+    fn new(start: int, end: int) -> Span {
+      Span { start: start, end: end }
+    }
+  
+    fn contains(self: Span, val: int) -> bool {
+      val >= self.start && val < self.end
+    }
+  
+    fn len(self: Span) -> int {
+      self.end - self.start
+    }
+  }
+  
+  fn test() -> int {
+    let r = Span.new(0, 10);
+    r.len()
+  }
 ---
 package main
 

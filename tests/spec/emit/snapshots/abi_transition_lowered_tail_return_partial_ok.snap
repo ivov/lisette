@@ -1,6 +1,10 @@
 ---
 source: tests/spec/emit/functions.rs
-description: "input: \nfn run(x: int) -> Partial<int, error> {\n  Partial.Ok(x)\n}\n"
+description: |
+  
+  fn run(x: int) -> Partial<int, error> {
+    Partial.Ok(x)
+  }
 ---
 package main
 

@@ -1,6 +1,10 @@
 ---
 source: tests/spec/emit/partial.rs
-description: "input: \nfn test() -> Partial<int, string> {\n  Partial.Ok(42)\n}\n"
+description: |
+  
+  fn test() -> Partial<int, string> {
+    Partial.Ok(42)
+  }
 ---
 package main
 

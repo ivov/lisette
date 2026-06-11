@@ -1,6 +1,8 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nfn test() { let xs = [r\"\\d\", r\"\\s\", \"plain\"]; }\n"
+description: |
+  
+  fn test() { let xs = [r"\d", r"\s", "plain"]; }
 ---
 [
     Function {

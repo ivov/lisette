@@ -1,6 +1,26 @@
 ---
 source: tests/spec/emit/control_flow.rs
-description: "input: \nfn risky_a() -> Result<int, string> { Ok(1) }\nfn risky_b() -> Result<int, string> { Ok(2) }\n\nfn test() -> int {\n  let outer = try {\n    let inner: Result<int, string> = try {\n      risky_a()?\n    };\n    let inner_val = match inner {\n      Ok(x) => x,\n      Err(_) => 0,\n    };\n    inner_val + risky_b()?\n  };\n  match outer {\n    Ok(x) => x,\n    Err(_) => -1,\n  }\n}\n"
+description: |
+  
+  fn risky_a() -> Result<int, string> { Ok(1) }
+  fn risky_b() -> Result<int, string> { Ok(2) }
+  
+  fn test() -> int {
+    let outer = try {
+      let inner: Result<int, string> = try {
+        risky_a()?
+      };
+      let inner_val = match inner {
+        Ok(x) => x,
+        Err(_) => 0,
+      };
+      inner_val + risky_b()?
+    };
+    match outer {
+      Ok(x) => x,
+      Err(_) => -1,
+    }
+  }
 ---
 package main
 

@@ -1,6 +1,13 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nfn classify(x: int) -> string {\n  match x {\n    -9223372036854775808 => \"min\",\n    _ => \"other\",\n  }\n}\n"
+description: |
+  
+  fn classify(x: int) -> string {
+    match x {
+      -9223372036854775808 => "min",
+      _ => "other",
+    }
+  }
 ---
 [
     Function {

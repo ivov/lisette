@@ -1,6 +1,21 @@
 ---
 source: tests/spec/emit/concurrency.rs
-description: "input: \nimport \"go:fmt\"\n\nfn main() {\n  let ch1 = Channel.buffered<int>(1)\n  let ch2 = Channel.buffered<int>(1)\n\n  let ch = if true { ch1 } else { ch2 }\n  let result = select {\n    ch.send(1) => 0,\n    _ => 1,\n  }\n\n  fmt.Println(result)\n}\n"
+description: |
+  
+  import "go:fmt"
+  
+  fn main() {
+    let ch1 = Channel.buffered<int>(1)
+    let ch2 = Channel.buffered<int>(1)
+  
+    let ch = if true { ch1 } else { ch2 }
+    let result = select {
+      ch.send(1) => 0,
+      _ => 1,
+    }
+  
+    fmt.Println(result)
+  }
 ---
 package main
 

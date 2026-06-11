@@ -1,6 +1,12 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \nenum MyResult<T> { Success(T), Failure }\n\nfn test() -> MyResult<int> {\n  Success(42)\n}\n"
+description: |
+  
+  enum MyResult<T> { Success(T), Failure }
+  
+  fn test() -> MyResult<int> {
+    Success(42)
+  }
 ---
 package main
 

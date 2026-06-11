@@ -1,6 +1,11 @@
 ---
 source: tests/spec/emit/literals.rs
-description: "input: \nfn test() -> int8 {\n  let x: int8 = -1;\n  x\n}\n"
+description: |
+  
+  fn test() -> int8 {
+    let x: int8 = -1;
+    x
+  }
 ---
 package main
 

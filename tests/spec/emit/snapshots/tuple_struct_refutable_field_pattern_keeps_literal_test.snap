@@ -1,6 +1,15 @@
 ---
 source: tests/spec/emit/patterns.rs
-description: "input: \nstruct MP(int, string)\n\nfn test(p: MP) -> int {\n  match p {\n    MP(0, _) => 1,\n    MP(n, _) => n,\n  }\n}\n"
+description: |
+  
+  struct MP(int, string)
+  
+  fn test(p: MP) -> int {
+    match p {
+      MP(0, _) => 1,
+      MP(n, _) => n,
+    }
+  }
 ---
 package main
 

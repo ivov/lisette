@@ -1,6 +1,16 @@
 ---
 source: tests/spec/emit/interop_matrix.rs
-description: "input: \nimport \"go:flag\"\n\nfn main() {\n  let r = flag.Lookup(\"verbose\")\n  match r {\n    Some(f) => { let _ = f },\n    None => {},\n  }\n}\n"
+description: |
+  
+  import "go:flag"
+  
+  fn main() {
+    let r = flag.Lookup("verbose")
+    match r {
+      Some(f) => { let _ = f },
+      None => {},
+    }
+  }
 ---
 package main
 

@@ -1,6 +1,16 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \ntype Numbers = Slice<int>\n\nfn sum(nums: Numbers) -> int {\n  let mut total = 0\n  for n in nums {\n    total += n\n  }\n  total\n}\n"
+description: |
+  
+  type Numbers = Slice<int>
+  
+  fn sum(nums: Numbers) -> int {
+    let mut total = 0
+    for n in nums {
+      total += n
+    }
+    total
+  }
 ---
 package main
 

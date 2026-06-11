@@ -1,6 +1,16 @@
 ---
 source: tests/spec/emit/interop_matrix.rs
-description: "input: \nimport t \"go:time\"\n\nfn describe(d: t.Duration) -> string {\n  match d {\n    t.Second => \"one second\",\n    t.Minute => \"one minute\",\n    _ => \"other\",\n  }\n}\n"
+description: |
+  
+  import t "go:time"
+  
+  fn describe(d: t.Duration) -> string {
+    match d {
+      t.Second => "one second",
+      t.Minute => "one minute",
+      _ => "other",
+    }
+  }
 ---
 package main
 

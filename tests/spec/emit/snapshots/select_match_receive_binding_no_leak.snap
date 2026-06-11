@@ -1,6 +1,30 @@
 ---
 source: tests/spec/emit/concurrency.rs
-description: "input: \nimport \"go:fmt\"\n\nfn main() {\n  let x = 1\n  fmt.Println(x)\n  let x = 2\n  let ch = Channel.new<int>()\n  task { ch.send(1) }\n\n  select {\n    match ch.receive() {\n      Some(x) => {\n        fmt.Println(x)\n        0\n      },\n      None => 0,\n    },\n    _ => {\n      fmt.Println(x)\n      0\n    },\n  }\n}\n"
+description: |
+  
+  import "go:fmt"
+  
+  fn main() {
+    let x = 1
+    fmt.Println(x)
+    let x = 2
+    let ch = Channel.new<int>()
+    task { ch.send(1) }
+  
+    select {
+      match ch.receive() {
+        Some(x) => {
+          fmt.Println(x)
+          0
+        },
+        None => 0,
+      },
+      _ => {
+        fmt.Println(x)
+        0
+      },
+    }
+  }
 ---
 package main
 

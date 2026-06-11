@@ -1,6 +1,14 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \nfn is_empty<T>() -> bool {\n  Map.new<T, int>().is_empty()\n}\n\nfn main() {\n  let _ = is_empty<int>()\n}\n"
+description: |
+  
+  fn is_empty<T>() -> bool {
+    Map.new<T, int>().is_empty()
+  }
+  
+  fn main() {
+    let _ = is_empty<int>()
+  }
 ---
 package main
 

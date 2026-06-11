@@ -1,6 +1,26 @@
 ---
 source: tests/spec/emit/interop_matrix.rs
-description: "input: \nimport \"go:strconv\"\n\nfn make() -> Result<fn(string) -> Result<int, error>, error> {\n  Ok(strconv.Atoi)\n}\n\nfn main() {\n  let r = make()\n  match r {\n    Ok(f) => {\n      let r2 = f(\"1\")\n      match r2 {\n        Ok(v) => { let _ = v },\n        Err(_) => { let _ = 0 },\n      }\n    },\n    Err(_) => { let _ = 0 },\n  }\n}\n"
+description: |
+  
+  import "go:strconv"
+  
+  fn make() -> Result<fn(string) -> Result<int, error>, error> {
+    Ok(strconv.Atoi)
+  }
+  
+  fn main() {
+    let r = make()
+    match r {
+      Ok(f) => {
+        let r2 = f("1")
+        match r2 {
+          Ok(v) => { let _ = v },
+          Err(_) => { let _ = 0 },
+        }
+      },
+      Err(_) => { let _ = 0 },
+    }
+  }
 ---
 package main
 

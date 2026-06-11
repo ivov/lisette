@@ -1,6 +1,14 @@
 ---
 source: tests/spec/emit/recover.rs
-description: "input: \nfn test() -> string {\n  let result = recover { panic(\"oh no!\") };\n  match result {\n    Ok(_) => \"ok\",\n    Err(pv) => \"caught panic\",\n  }\n}\n"
+description: |
+  
+  fn test() -> string {
+    let result = recover { panic("oh no!") };
+    match result {
+      Ok(_) => "ok",
+      Err(pv) => "caught panic",
+    }
+  }
 ---
 package main
 

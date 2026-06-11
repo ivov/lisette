@@ -1,6 +1,10 @@
 ---
 source: tests/spec/emit/prelude.rs
-description: "input: \nfn test(r: Ref<string>, range: Range<int>) -> string {\n  r.substring(range)\n}\n"
+description: |
+  
+  fn test(r: Ref<string>, range: Range<int>) -> string {
+    r.substring(range)
+  }
 ---
 package main
 

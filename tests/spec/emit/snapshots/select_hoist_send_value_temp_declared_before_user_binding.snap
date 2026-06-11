@@ -1,6 +1,28 @@
 ---
 source: tests/spec/emit/concurrency.rs
-description: "input: \nimport \"go:fmt\"\n\nfn mark(log: Channel<int>, tag: int) -> int {\n  log.send(tag)\n  tag\n}\n\nfn test() {\n  let log = Channel.buffered<int>(8)\n  let closed = Channel.new<int>()\n  closed.close()\n  let out_ch = Channel.new<int>()\n\n  let result = select {\n    let Some(v) = closed.receive() => v,\n    out_ch.send(mark(log, 1)) => 0,\n    _ => -1,\n  }\n  let send_val_2 = result + 1\n  fmt.Println(send_val_2)\n}\n"
+description: |
+  
+  import "go:fmt"
+  
+  fn mark(log: Channel<int>, tag: int) -> int {
+    log.send(tag)
+    tag
+  }
+  
+  fn test() {
+    let log = Channel.buffered<int>(8)
+    let closed = Channel.new<int>()
+    closed.close()
+    let out_ch = Channel.new<int>()
+  
+    let result = select {
+      let Some(v) = closed.receive() => v,
+      out_ch.send(mark(log, 1)) => 0,
+      _ => -1,
+    }
+    let send_val_2 = result + 1
+    fmt.Println(send_val_2)
+  }
 ---
 package main
 

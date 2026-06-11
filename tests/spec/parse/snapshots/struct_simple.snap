@@ -1,6 +1,11 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nstruct Point {\n  x: int,\n  y: int,\n}\n"
+description: |
+  
+  struct Point {
+    x: int,
+    y: int,
+  }
 ---
 [
     Struct {

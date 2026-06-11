@@ -1,6 +1,8 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nfn test() { let result = Point { x: 1, y: 2 }.distance(); }\n"
+description: |
+  
+  fn test() { let result = Point { x: 1, y: 2 }.distance(); }
 ---
 [
     Function {

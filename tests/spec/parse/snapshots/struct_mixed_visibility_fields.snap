@@ -1,6 +1,12 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nstruct Config {\n  pub name: string,\n  secret: string,\n  pub enabled: bool,\n}\n"
+description: |
+  
+  struct Config {
+    pub name: string,
+    secret: string,
+    pub enabled: bool,
+  }
 ---
 [
     Struct {

@@ -1,6 +1,8 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \ntype StringMap<V> = Map<string, V>;\n"
+description: |
+  
+  type StringMap<V> = Map<string, V>;
 ---
 [
     TypeAlias {

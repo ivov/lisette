@@ -1,6 +1,15 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nfn g() -> Result<int, string> { Ok(1) }\n\nfn f() -> Result<int, string> {\n  match g()? {\n    0 => Ok(10),\n    x => Ok(x),\n  }\n}\n"
+description: |
+  
+  fn g() -> Result<int, string> { Ok(1) }
+  
+  fn f() -> Result<int, string> {
+    match g()? {
+      0 => Ok(10),
+      x => Ok(x),
+    }
+  }
 ---
 package main
 

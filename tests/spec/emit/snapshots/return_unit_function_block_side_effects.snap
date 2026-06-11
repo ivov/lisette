@@ -1,6 +1,17 @@
 ---
 source: tests/spec/emit/functions.rs
-description: "input: \nimport \"go:fmt\"\n\nfn side() -> int { fmt.Println(\"side\"); 1 }\n\nfn main() {\n  return {\n    let _ = side()\n    ()\n  }\n}\n"
+description: |
+  
+  import "go:fmt"
+  
+  fn side() -> int { fmt.Println("side"); 1 }
+  
+  fn main() {
+    return {
+      let _ = side()
+      ()
+    }
+  }
 ---
 package main
 

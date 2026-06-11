@@ -1,6 +1,10 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nstruct Empty {}\n\nimpl Empty {}\n"
+description: |
+  
+  struct Empty {}
+  
+  impl Empty {}
 ---
 [
     Struct {

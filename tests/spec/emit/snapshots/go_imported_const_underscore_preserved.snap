@@ -1,6 +1,12 @@
 ---
 source: tests/spec/emit/imports.rs
-description: "input: \nimport \"go:example.com/grpc_health_v1\"\n\nfn main() {\n  let _ = grpc_health_v1.HealthCheckResponse_SERVING\n}\n"
+description: |
+  
+  import "go:example.com/grpc_health_v1"
+  
+  fn main() {
+    let _ = grpc_health_v1.HealthCheckResponse_SERVING
+  }
 ---
 package main
 

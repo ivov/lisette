@@ -1,6 +1,14 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nstruct Point { x: int }\nfn test() -> int {\n  let x = 42;\n  match Point { x } {\n    Point { x: val } => val,\n  }\n}\n"
+description: |
+  
+  struct Point { x: int }
+  fn test() -> int {
+    let x = 42;
+    match Point { x } {
+      Point { x: val } => val,
+    }
+  }
 ---
 [
     Struct {

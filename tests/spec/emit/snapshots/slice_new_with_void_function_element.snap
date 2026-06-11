@@ -1,6 +1,10 @@
 ---
 source: tests/spec/emit/prelude.rs
-description: "input: \nfn test() -> Slice<fn(int)> {\n  Slice.new<fn(int)>()\n}\n"
+description: |
+  
+  fn test() -> Slice<fn(int)> {
+    Slice.new<fn(int)>()
+  }
 ---
 package main
 

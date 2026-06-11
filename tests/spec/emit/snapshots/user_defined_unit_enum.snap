@@ -1,6 +1,14 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \nenum Tag { A, B, C }\n\nfn test() -> bool {\n  let u1 = Tag.A\n  let u2 = Tag.B\n  u1 == u2\n}\n"
+description: |
+  
+  enum Tag { A, B, C }
+  
+  fn test() -> bool {
+    let u1 = Tag.A
+    let u2 = Tag.B
+    u1 == u2
+  }
 ---
 package main
 

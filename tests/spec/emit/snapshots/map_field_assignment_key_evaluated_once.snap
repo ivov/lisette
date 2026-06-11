@@ -1,6 +1,24 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nimport \"go:fmt\"\n\nstruct C { value: int }\n\nfn make_key() -> string {\n  fmt.Println(\"key\")\n  \"a\"\n}\n\nfn main() {\n  let mut m: Map<string, C> = Map.new()\n  m[\"a\"] = C { value: 1 }\n  let key = make_key()\n  let mut entry = m[key]\n  entry.value = 2\n  m[key] = entry\n}\n"
+description: |
+  
+  import "go:fmt"
+  
+  struct C { value: int }
+  
+  fn make_key() -> string {
+    fmt.Println("key")
+    "a"
+  }
+  
+  fn main() {
+    let mut m: Map<string, C> = Map.new()
+    m["a"] = C { value: 1 }
+    let key = make_key()
+    let mut entry = m[key]
+    entry.value = 2
+    m[key] = entry
+  }
 ---
 package main
 

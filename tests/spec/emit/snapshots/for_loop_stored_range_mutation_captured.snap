@@ -1,6 +1,17 @@
 ---
 source: tests/spec/emit/control_flow.rs
-description: "input: \nfn main() {\n  let mut r = 0..3\n  let mut n = 0\n  for i in r {\n    n += 1\n    r = 0..0\n    let _ = i\n  }\n  let _ = n\n}\n"
+description: |
+  
+  fn main() {
+    let mut r = 0..3
+    let mut n = 0
+    for i in r {
+      n += 1
+      r = 0..0
+      let _ = i
+    }
+    let _ = n
+  }
 ---
 package main
 

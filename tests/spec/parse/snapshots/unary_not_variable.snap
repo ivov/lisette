@@ -1,6 +1,10 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nfn test(is_active: bool) {\n  let is_inactive = !is_active;\n}\n"
+description: |
+  
+  fn test(is_active: bool) {
+    let is_inactive = !is_active;
+  }
 ---
 [
     Function {

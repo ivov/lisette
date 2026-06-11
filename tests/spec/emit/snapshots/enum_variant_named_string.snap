@@ -1,6 +1,20 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \nenum ASTNode {\n  Number(int),\n  String(string),\n  Null,\n}\n\nfn visit(node: ASTNode) -> string {\n  match node {\n    ASTNode.Number(n) => f\"number:{n}\",\n    ASTNode.String(s) => f\"string:{s}\",\n    ASTNode.Null => \"null\",\n  }\n}\n"
+description: |
+  
+  enum ASTNode {
+    Number(int),
+    String(string),
+    Null,
+  }
+  
+  fn visit(node: ASTNode) -> string {
+    match node {
+      ASTNode.Number(n) => f"number:{n}",
+      ASTNode.String(s) => f"string:{s}",
+      ASTNode.Null => "null",
+    }
+  }
 ---
 package main
 

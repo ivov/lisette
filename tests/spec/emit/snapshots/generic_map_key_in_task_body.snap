@@ -1,6 +1,13 @@
 ---
 source: tests/spec/emit/functions.rs
-description: "input: \nfn use_map_in_task<K, V>(key: K, value: V) {\n  task {\n    let mut m: Map<K, V> = Map.new()\n    m[key] = value\n  }\n}\n"
+description: |
+  
+  fn use_map_in_task<K, V>(key: K, value: V) {
+    task {
+      let mut m: Map<K, V> = Map.new()
+      m[key] = value
+    }
+  }
 ---
 package main
 

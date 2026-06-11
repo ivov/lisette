@@ -1,6 +1,17 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \nstruct Inner { x: int }\nstruct A(Inner)\nstruct B(A)\n\nfn main() {\n  let mut w = B(A(Inner { x: 1 }))\n  let mut inner = w.0.0\n  inner.x = 2\n  w = B(A(inner))\n}\n"
+description: |
+  
+  struct Inner { x: int }
+  struct A(Inner)
+  struct B(A)
+  
+  fn main() {
+    let mut w = B(A(Inner { x: 1 }))
+    let mut inner = w.0.0
+    inner.x = 2
+    w = B(A(inner))
+  }
 ---
 package main
 

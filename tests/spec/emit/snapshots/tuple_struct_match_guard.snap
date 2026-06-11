@@ -1,6 +1,15 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \nstruct Point(int, int)\n\nfn test(p: Point) -> int {\n  match p {\n    Point(x, y) if x > 0 => x + y,\n    Point(_, y) => y,\n  }\n}\n"
+description: |
+  
+  struct Point(int, int)
+  
+  fn test(p: Point) -> int {
+    match p {
+      Point(x, y) if x > 0 => x + y,
+      Point(_, y) => y,
+    }
+  }
 ---
 package main
 

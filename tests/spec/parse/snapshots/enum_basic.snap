@@ -1,6 +1,13 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nenum Status {\n  Pending,\n  Processing,\n  Complete,\n  Failed,\n}\n"
+description: |
+  
+  enum Status {
+    Pending,
+    Processing,
+    Complete,
+    Failed,
+  }
 ---
 [
     Enum {

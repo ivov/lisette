@@ -1,6 +1,17 @@
 ---
 source: tests/spec/emit/patterns.rs
-description: "input: \nenum Side { Left, Right }\nstruct Pair { a: Side, b: Side }\n\nfn classify(p: Pair) -> int {\n  match p {\n    Pair { a: Side.Left, b: Side.Left } => 1,\n    Pair { a: Side.Right, b: Side.Right } => 2,\n    _ => 0,\n  }\n}\n"
+description: |
+  
+  enum Side { Left, Right }
+  struct Pair { a: Side, b: Side }
+  
+  fn classify(p: Pair) -> int {
+    match p {
+      Pair { a: Side.Left, b: Side.Left } => 1,
+      Pair { a: Side.Right, b: Side.Right } => 2,
+      _ => 0,
+    }
+  }
 ---
 package main
 

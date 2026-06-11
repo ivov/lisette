@@ -1,6 +1,15 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nfn test(p: Point) {\n  match p {\n    Point { x: 0, y: 0 } => print(\"Origin\"),\n    Point { x, y: 0 }    => print(\"On X axis\", x),\n    Point { x: 0, y }    => print(\"On Y axis\", y),\n    Point { x, y }       => print(\"Somewhere else\", x, y),\n  }\n}\n"
+description: |
+  
+  fn test(p: Point) {
+    match p {
+      Point { x: 0, y: 0 } => print("Origin"),
+      Point { x, y: 0 }    => print("On X axis", x),
+      Point { x: 0, y }    => print("On Y axis", y),
+      Point { x, y }       => print("Somewhere else", x, y),
+    }
+  }
 ---
 [
     Function {

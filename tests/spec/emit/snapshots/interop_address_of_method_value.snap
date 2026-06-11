@@ -1,6 +1,18 @@
 ---
 source: tests/spec/emit/interop_matrix.rs
-description: "input: \nstruct S {}\n\nimpl S {\n  fn inc(self) -> int { 1 }\n}\n\nfn main() {\n  let s = S {}\n  let r = &s.inc\n  let _ = r\n}\n"
+description: |
+  
+  struct S {}
+  
+  impl S {
+    fn inc(self) -> int { 1 }
+  }
+  
+  fn main() {
+    let s = S {}
+    let r = &s.inc
+    let _ = r
+  }
 ---
 package main
 

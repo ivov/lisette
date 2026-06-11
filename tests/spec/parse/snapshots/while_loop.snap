@@ -1,6 +1,14 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nfn test() {\n  let mut count = 0;\n  while count < 10 {\n    print(count);\n    count = count + 1;\n  }\n}\n"
+description: |
+  
+  fn test() {
+    let mut count = 0;
+    while count < 10 {
+      print(count);
+      count = count + 1;
+    }
+  }
 ---
 [
     Function {

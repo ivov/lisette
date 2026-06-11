@@ -1,6 +1,16 @@
 ---
 source: tests/spec/emit/go_interface_adapter.rs
-description: "input: \nimport \"go:example.com/info\"\n\nfn build_info() -> Option<Ref<info.BuildInfo>> {\n  info.Read()\n}\n\nfn main() {\n  let _ = build_info()\n}\n"
+description: |
+  
+  import "go:example.com/info"
+  
+  fn build_info() -> Option<Ref<info.BuildInfo>> {
+    info.Read()
+  }
+  
+  fn main() {
+    let _ = build_info()
+  }
 ---
 package main
 

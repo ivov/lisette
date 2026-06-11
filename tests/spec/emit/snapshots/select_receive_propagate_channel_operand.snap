@@ -1,6 +1,20 @@
 ---
 source: tests/spec/emit/control_flow.rs
-description: "input: \nfn g() -> Result<int, string> { Ok(0) }\n\nfn f() -> Result<int, string> {\n  let chans = [Channel.buffered<int>(1)]\n  chans[0].send(7)\n  let x = select {\n    let Some(v) = chans[g()?].receive() => v,\n    _ => 0,\n  }\n  Ok(x)\n}\n\nfn main() { let _ = f() }\n"
+description: |
+  
+  fn g() -> Result<int, string> { Ok(0) }
+  
+  fn f() -> Result<int, string> {
+    let chans = [Channel.buffered<int>(1)]
+    chans[0].send(7)
+    let x = select {
+      let Some(v) = chans[g()?].receive() => v,
+      _ => 0,
+    }
+    Ok(x)
+  }
+  
+  fn main() { let _ = f() }
 ---
 package main
 

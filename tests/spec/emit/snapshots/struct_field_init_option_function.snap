@@ -1,6 +1,18 @@
 ---
 source: tests/spec/emit/result_option_patterns.rs
-description: "input: \nstruct Wrapper {\n  opt: Option<int>,\n}\n\nfn get_opt(b: bool) -> Option<int> {\n  if b { Some(42) } else { None }\n}\n\nfn test() {\n  let w = Wrapper { opt: get_opt(true) };\n}\n"
+description: |
+  
+  struct Wrapper {
+    opt: Option<int>,
+  }
+  
+  fn get_opt(b: bool) -> Option<int> {
+    if b { Some(42) } else { None }
+  }
+  
+  fn test() {
+    let w = Wrapper { opt: get_opt(true) };
+  }
 ---
 package main
 

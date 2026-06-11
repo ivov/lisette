@@ -1,6 +1,19 @@
 ---
 source: tests/spec/emit/functions.rs
-description: "input: \nstruct Box { x: int }\n\nimpl Box {\n  fn range(self) -> int { self.x }\n  fn chan(self) -> int { self.x }\n}\n\nfn main() {\n  let b = Box { x: 1 }\n  let _ = Box.range(b)\n  let _ = Box.chan(b)\n}\n"
+description: |
+  
+  struct Box { x: int }
+  
+  impl Box {
+    fn range(self) -> int { self.x }
+    fn chan(self) -> int { self.x }
+  }
+  
+  fn main() {
+    let b = Box { x: 1 }
+    let _ = Box.range(b)
+    let _ = Box.chan(b)
+  }
 ---
 package main
 

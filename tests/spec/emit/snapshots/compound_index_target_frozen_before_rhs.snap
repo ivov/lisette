@@ -1,6 +1,17 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nfn run() -> Result<(), string> {\n  let mut xs = [10, 20]\n  let mut i = 0\n  let bump = || -> Result<int, string> {\n    i = 1\n    Ok(5)\n  }\n  xs[i] += bump()?\n  Ok(())\n}\n"
+description: |
+  
+  fn run() -> Result<(), string> {
+    let mut xs = [10, 20]
+    let mut i = 0
+    let bump = || -> Result<int, string> {
+      i = 1
+      Ok(5)
+    }
+    xs[i] += bump()?
+    Ok(())
+  }
 ---
 package main
 

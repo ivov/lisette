@@ -1,6 +1,23 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nstruct Holder { p: Ref<int> }\nstruct Carrier { h: Ref<Holder>, np: Ref<int> }\n\nfn retarget(mut c: Carrier) -> int {\n  c.h.p = c.np\n  9\n}\n\nfn main() {\n  let mut a = 1\n  let mut b = 2\n  let mut h = Holder { p: &a }\n  let mut c = Carrier { h: &h, np: &b }\n  h.p.* = retarget(c)\n  let _ = a\n}\n"
+description: |
+  
+  struct Holder { p: Ref<int> }
+  struct Carrier { h: Ref<Holder>, np: Ref<int> }
+  
+  fn retarget(mut c: Carrier) -> int {
+    c.h.p = c.np
+    9
+  }
+  
+  fn main() {
+    let mut a = 1
+    let mut b = 2
+    let mut h = Holder { p: &a }
+    let mut c = Carrier { h: &h, np: &b }
+    h.p.* = retarget(c)
+    let _ = a
+  }
 ---
 package main
 

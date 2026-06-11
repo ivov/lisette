@@ -1,6 +1,12 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nfn add3(_a: int, _b: int, _c: int) -> int { 0 }\n\nfn run() -> int {\n  add3(1, 2, 3)\n}\n"
+description: |
+  
+  fn add3(_a: int, _b: int, _c: int) -> int { 0 }
+  
+  fn run() -> int {
+    add3(1, 2, 3)
+  }
 ---
 package main
 

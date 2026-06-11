@@ -1,6 +1,16 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nstruct Box { x: int }\n\nfn main() {\n  let mut m = Map.from([(\"k\", Box { x: 0 })])\n  let r = &m\n  let mut entry = r.*[\"k\"]\n  entry.x = 1\n  r.*[\"k\"] = entry\n}\n"
+description: |
+  
+  struct Box { x: int }
+  
+  fn main() {
+    let mut m = Map.from([("k", Box { x: 0 })])
+    let r = &m
+    let mut entry = r.*["k"]
+    entry.x = 1
+    r.*["k"] = entry
+  }
 ---
 package main
 

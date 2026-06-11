@@ -1,6 +1,15 @@
 ---
 source: tests/spec/emit/functions.rs
-description: "input: \nfn test() -> string {\n  let f = || -> string {\n    let x = 1\n    let x = f\"was {x}\"\n    x\n  }\n  f()\n}\n"
+description: |
+  
+  fn test() -> string {
+    let f = || -> string {
+      let x = 1
+      let x = f"was {x}"
+      x
+    }
+    f()
+  }
 ---
 package main
 

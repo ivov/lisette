@@ -1,6 +1,15 @@
 ---
 source: tests/spec/emit/result_option_patterns.rs
-description: "input: \nfn get_value() -> Result<int, string> {\n  Ok(42)\n}\n\nfn test() {\n  let mut res: Result<int, string> = Err(\"initial\");\n  res = get_value();\n}\n"
+description: |
+  
+  fn get_value() -> Result<int, string> {
+    Ok(42)
+  }
+  
+  fn test() {
+    let mut res: Result<int, string> = Err("initial");
+    res = get_value();
+  }
 ---
 package main
 

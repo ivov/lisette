@@ -1,6 +1,22 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \nstruct Box<T> {\n  value: T,\n}\n\nimpl<T> Box<T> {\n  fn count(self) -> int {\n    let m = Map.new<T, int>()\n    m.length()\n  }\n}\n\nfn main() {\n  let b = Box { value: \"a\" }\n  let _ = b.count()\n}\n"
+description: |
+  
+  struct Box<T> {
+    value: T,
+  }
+  
+  impl<T> Box<T> {
+    fn count(self) -> int {
+      let m = Map.new<T, int>()
+      m.length()
+    }
+  }
+  
+  fn main() {
+    let b = Box { value: "a" }
+    let _ = b.count()
+  }
 ---
 package main
 

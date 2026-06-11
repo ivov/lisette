@@ -1,6 +1,13 @@
 ---
 source: tests/spec/emit/concurrency.rs
-description: "input: \nimport \"go:html/template\"\n\nfn main() {\n  let t = template.New(\"x\")\n  task t.Lookup(\"x\")\n}\n"
+description: |
+  
+  import "go:html/template"
+  
+  fn main() {
+    let t = template.New("x")
+    task t.Lookup("x")
+  }
 ---
 package main
 

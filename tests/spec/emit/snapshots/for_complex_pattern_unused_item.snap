@@ -1,6 +1,13 @@
 ---
 source: tests/spec/emit/control_flow.rs
-description: "input: \nstruct P { v: int }\nfn test() {\n  for P { v } in [P { v: 1 }] {\n    ()\n  }\n}\n"
+description: |
+  
+  struct P { v: int }
+  fn test() {
+    for P { v } in [P { v: 1 }] {
+      ()
+    }
+  }
 ---
 package main
 

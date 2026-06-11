@@ -1,6 +1,12 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nfn test(a: int, b: bool) {\n  if (a * 2 > 50) && b || is_special(a) {\n    // complex condition\n  }\n}\n"
+description: |
+  
+  fn test(a: int, b: bool) {
+    if (a * 2 > 50) && b || is_special(a) {
+      // complex condition
+    }
+  }
 ---
 [
     Function {

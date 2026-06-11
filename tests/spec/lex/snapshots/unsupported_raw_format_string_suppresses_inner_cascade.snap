@@ -1,6 +1,6 @@
 ---
 source: tests/spec/lex/mod.rs
-description: "input: fr\"\\d+\""
+description: "fr\"\\d+\""
 ---
 LexResult {
     tokens: [

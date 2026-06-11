@@ -1,6 +1,12 @@
 ---
 source: tests/spec/emit/result_option_patterns.rs
-description: "input: \nfn test() {\n  let x = Some(42);\n  let mut opt: Option<int> = None;\n  opt = x;\n}\n"
+description: |
+  
+  fn test() {
+    let x = Some(42);
+    let mut opt: Option<int> = None;
+    opt = x;
+  }
 ---
 package main
 

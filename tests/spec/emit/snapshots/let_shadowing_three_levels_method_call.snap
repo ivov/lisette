@@ -1,6 +1,13 @@
 ---
 source: tests/spec/emit/patterns.rs
-description: "input: \nfn test() -> int {\n  let x = 10;\n  let x = \"now a string\";\n  let x = x.length();\n  x\n}\n"
+description: |
+  
+  fn test() -> int {
+    let x = 10;
+    let x = "now a string";
+    let x = x.length();
+    x
+  }
 ---
 package main
 

@@ -1,6 +1,13 @@
 ---
 source: tests/spec/emit/control_flow.rs
-description: "input: \nfn test(a: bool, b: bool) -> string {\n  match (a, b) {\n    (true, true) | (false, false) => \"same\",\n    (true, false) | (false, true) => \"different\",\n  }\n}\n"
+description: |
+  
+  fn test(a: bool, b: bool) -> string {
+    match (a, b) {
+      (true, true) | (false, false) => "same",
+      (true, false) | (false, true) => "different",
+    }
+  }
 ---
 package main
 

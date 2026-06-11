@@ -11,6 +11,7 @@ alias l := lint
 alias lf := lintfix
 alias cov := test-cov
 
+export INSTA_YAML_BLOCK_STYLE := "1"
 
 build:
     cargo build --release

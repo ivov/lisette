@@ -1,6 +1,14 @@
 ---
 source: tests/spec/emit/imports.rs
-description: "input: \nimport \"go:time\"\n\nstruct Wrapper { d: time.Duration }\n\nfn test() -> Wrapper {\n  Wrapper { .. }\n}\n"
+description: |
+  
+  import "go:time"
+  
+  struct Wrapper { d: time.Duration }
+  
+  fn test() -> Wrapper {
+    Wrapper { .. }
+  }
 ---
 package main
 

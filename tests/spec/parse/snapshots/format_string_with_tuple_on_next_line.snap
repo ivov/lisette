@@ -1,6 +1,12 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nfn test1() -> (int, string) {\n  let a = 10\n  let b = f\"hello {a}\"\n  (a, b)\n}\n"
+description: |
+  
+  fn test1() -> (int, string) {
+    let a = 10
+    let b = f"hello {a}"
+    (a, b)
+  }
 ---
 [
     Function {

@@ -1,6 +1,10 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nimport \"go:fmt\"\nimport \"app/services\"\nimport \"third/party/utils\"\n"
+description: |
+  
+  import "go:fmt"
+  import "app/services"
+  import "third/party/utils"
 ---
 [
     ModuleImport {

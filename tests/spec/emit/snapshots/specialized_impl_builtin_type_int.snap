@@ -1,6 +1,21 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \nstruct Box<T> {\n  item: T,\n}\n\nimpl Box<int> {\n  fn unwrap(self) -> int {\n    self.item\n  }\n}\n\nfn test() -> int {\n  let b = Box { item: 42 };\n  b.unwrap()\n}\n"
+description: |
+  
+  struct Box<T> {
+    item: T,
+  }
+  
+  impl Box<int> {
+    fn unwrap(self) -> int {
+      self.item
+    }
+  }
+  
+  fn test() -> int {
+    let b = Box { item: 42 };
+    b.unwrap()
+  }
 ---
 package main
 

@@ -1,6 +1,6 @@
 ---
 source: tests/spec/lex/mod.rs
-description: "input: f\"result: {map[\"key\"]}\""
+description: "f\"result: {map[\"key\"]}\""
 ---
 LexResult {
     tokens: [

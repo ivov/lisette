@@ -1,6 +1,26 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nstruct H { ptr: Ref<int> }\n\nimpl H {\n  fn repoint(self: Ref<H>, q: Ref<int>) -> int {\n    self.ptr = q\n    9\n  }\n}\n\nfn main() {\n  let mut a = 1\n  let mut b = 2\n  let mut h = H { ptr: &a }\n\n  h.ptr.* = h.repoint(&b)\n\n  let _ = a\n  let _ = b\n}\n"
+description: |
+  
+  struct H { ptr: Ref<int> }
+  
+  impl H {
+    fn repoint(self: Ref<H>, q: Ref<int>) -> int {
+      self.ptr = q
+      9
+    }
+  }
+  
+  fn main() {
+    let mut a = 1
+    let mut b = 2
+    let mut h = H { ptr: &a }
+  
+    h.ptr.* = h.repoint(&b)
+  
+    let _ = a
+    let _ = b
+  }
 ---
 package main
 

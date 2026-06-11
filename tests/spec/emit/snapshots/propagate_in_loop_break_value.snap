@@ -1,6 +1,13 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nfn g() -> Result<int, string> { Ok(5) }\n\nfn f() -> Result<int, string> {\n  let x = loop { break g()? }\n  Ok(x)\n}\n"
+description: |
+  
+  fn g() -> Result<int, string> { Ok(5) }
+  
+  fn f() -> Result<int, string> {
+    let x = loop { break g()? }
+    Ok(x)
+  }
 ---
 package main
 

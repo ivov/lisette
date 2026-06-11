@@ -1,6 +1,10 @@
 ---
 source: tests/spec/emit/functions.rs
-description: "input: \nfn test() -> Slice<byte> {\n  \"hello\" as Slice<byte>\n}\n"
+description: |
+  
+  fn test() -> Slice<byte> {
+    "hello" as Slice<byte>
+  }
 ---
 package main
 

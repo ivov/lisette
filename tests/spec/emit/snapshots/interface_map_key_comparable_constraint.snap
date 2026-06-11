@@ -1,6 +1,10 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \ninterface Store<K, V> {\n  fn entries(self) -> Map<K, V>\n}\n"
+description: |
+  
+  interface Store<K, V> {
+    fn entries(self) -> Map<K, V>
+  }
 ---
 package main
 

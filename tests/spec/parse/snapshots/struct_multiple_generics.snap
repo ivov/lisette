@@ -1,6 +1,11 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nstruct Pair<K, V> {\n  key: K,\n  value: V,\n}\n"
+description: |
+  
+  struct Pair<K, V> {
+    key: K,
+    value: V,
+  }
 ---
 [
     Struct {

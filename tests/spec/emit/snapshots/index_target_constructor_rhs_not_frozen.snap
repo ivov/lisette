@@ -1,6 +1,15 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nstruct Wrap(int)\n\nfn run() -> int {\n  let mut xs = [Wrap(0), Wrap(0)]\n  let i = 0\n  xs[i] = Wrap(5)\n  xs[0].0\n}\n"
+description: |
+  
+  struct Wrap(int)
+  
+  fn run() -> int {
+    let mut xs = [Wrap(0), Wrap(0)]
+    let i = 0
+    xs[i] = Wrap(5)
+    xs[0].0
+  }
 ---
 package main
 

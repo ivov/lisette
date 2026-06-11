@@ -1,6 +1,37 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \ninterface Displayable {\n  fn display(self) -> string\n}\n\nenum Either<L, R> {\n  Left(L),\n  Right(R),\n}\n\nimpl<L: Displayable, R: Displayable> Either<L, R> {\n  fn display(self) -> string {\n    match self {\n      Either.Left(l) => {\n        let s = l.display()\n        f\"Left({s})\"\n      },\n      Either.Right(r) => {\n        let s = r.display()\n        f\"Right({s})\"\n      },\n    }\n  }\n}\n\nstruct Name { value: string }\nimpl Name { fn display(self) -> string { self.value } }\n\nfn test() -> Either<Name, Name> {\n  Either.Left(Name { value: \"hello\" })\n}\n"
+description: |
+  
+  interface Displayable {
+    fn display(self) -> string
+  }
+  
+  enum Either<L, R> {
+    Left(L),
+    Right(R),
+  }
+  
+  impl<L: Displayable, R: Displayable> Either<L, R> {
+    fn display(self) -> string {
+      match self {
+        Either.Left(l) => {
+          let s = l.display()
+          f"Left({s})"
+        },
+        Either.Right(r) => {
+          let s = r.display()
+          f"Right({s})"
+        },
+      }
+    }
+  }
+  
+  struct Name { value: string }
+  impl Name { fn display(self) -> string { self.value } }
+  
+  fn test() -> Either<Name, Name> {
+    Either.Left(Name { value: "hello" })
+  }
 ---
 package main
 

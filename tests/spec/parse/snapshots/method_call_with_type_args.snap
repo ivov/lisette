@@ -1,6 +1,8 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nfn test() { obj.method<int>(arg); }\n"
+description: |
+  
+  fn test() { obj.method<int>(arg); }
 ---
 [
     Function {

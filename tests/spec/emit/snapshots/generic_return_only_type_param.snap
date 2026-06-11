@@ -1,6 +1,14 @@
 ---
 source: tests/spec/emit/functions.rs
-description: "input: \nfn default_value<T>() -> Option<T> {\n  None\n}\n\nfn test() -> Option<int> {\n  default_value()\n}\n"
+description: |
+  
+  fn default_value<T>() -> Option<T> {
+    None
+  }
+  
+  fn test() -> Option<int> {
+    default_value()
+  }
 ---
 package main
 

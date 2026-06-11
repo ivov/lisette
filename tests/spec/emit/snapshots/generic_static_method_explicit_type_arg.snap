@@ -1,6 +1,19 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \nstruct Box<T> { value: T }\n\nimpl<T> Box<T> {\n  fn new(value: T) -> Box<T> {\n    Box { value: value }\n  }\n}\n\nfn main() -> int {\n  let b = Box.new<int>(42);\n  b.value\n}\n"
+description: |
+  
+  struct Box<T> { value: T }
+  
+  impl<T> Box<T> {
+    fn new(value: T) -> Box<T> {
+      Box { value: value }
+    }
+  }
+  
+  fn main() -> int {
+    let b = Box.new<int>(42);
+    b.value
+  }
 ---
 package main
 

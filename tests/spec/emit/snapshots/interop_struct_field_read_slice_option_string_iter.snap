@@ -1,6 +1,18 @@
 ---
 source: tests/spec/emit/interop_matrix.rs
-description: "input: \nimport \"go:example.com/aws\"\n\nfn main() {\n  let b = aws.Bucket { .. }\n  for tag in b.Tags {\n    match tag {\n      Some(v) => { let _ = v },\n      None => {},\n    }\n  }\n}\n"
+description: |
+  
+  import "go:example.com/aws"
+  
+  fn main() {
+    let b = aws.Bucket { .. }
+    for tag in b.Tags {
+      match tag {
+        Some(v) => { let _ = v },
+        None => {},
+      }
+    }
+  }
 ---
 package main
 

@@ -1,6 +1,14 @@
 ---
 source: tests/spec/emit/control_flow.rs
-description: "input: \nfn test(c: rune) -> int {\n  match c {\n    'a' => 1,\n    'b' => 2,\n    _ => 0,\n  }\n}\n"
+description: |
+  
+  fn test(c: rune) -> int {
+    match c {
+      'a' => 1,
+      'b' => 2,
+      _ => 0,
+    }
+  }
 ---
 package main
 

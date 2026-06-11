@@ -1,6 +1,19 @@
 ---
 source: tests/spec/emit/patterns.rs
-description: "input: \nimport \"go:example.com/events\"\n\nstruct Box {\n  e: events.Event,\n}\n\nfn describe(b: Box) -> int {\n  match b {\n    Box { e: events.Token(s) } => s.length(),\n    _ => 0,\n  }\n}\n"
+description: |
+  
+  import "go:example.com/events"
+  
+  struct Box {
+    e: events.Event,
+  }
+  
+  fn describe(b: Box) -> int {
+    match b {
+      Box { e: events.Token(s) } => s.length(),
+      _ => 0,
+    }
+  }
 ---
 package main
 

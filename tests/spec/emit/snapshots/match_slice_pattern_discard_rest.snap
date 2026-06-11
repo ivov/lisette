@@ -1,6 +1,13 @@
 ---
 source: tests/spec/emit/control_flow.rs
-description: "input: \nfn test(items: Slice<int>) -> int {\n  match items {\n    [] => 0,\n    [first, ..] => first,\n  }\n}\n"
+description: |
+  
+  fn test(items: Slice<int>) -> int {
+    match items {
+      [] => 0,
+      [first, ..] => first,
+    }
+  }
 ---
 package main
 

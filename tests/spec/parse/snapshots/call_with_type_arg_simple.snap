@@ -1,6 +1,8 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nfn test() { func<int>(x); }\n"
+description: |
+  
+  fn test() { func<int>(x); }
 ---
 [
     Function {

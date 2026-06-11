@@ -1,6 +1,10 @@
 ---
 source: tests/spec/emit/prelude.rs
-description: "input: \nfn test(s: Slice<int>) -> int {\n  s.enumerate().fold(0, |acc, (i, v)| acc + i * v)\n}\n"
+description: |
+  
+  fn test(s: Slice<int>) -> int {
+    s.enumerate().fold(0, |acc, (i, v)| acc + i * v)
+  }
 ---
 package main
 

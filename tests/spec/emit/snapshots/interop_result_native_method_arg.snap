@@ -1,6 +1,17 @@
 ---
 source: tests/spec/emit/interop_matrix.rs
-description: "input: \nimport \"go:strconv\"\n\nfn main() {\n  let xs: Slice<string> = [\"1\"]\n  let ys = xs.map(strconv.Atoi)\n  match ys[0] {\n    Ok(v) => { let _ = v },\n    Err(_) => { let _ = 0 },\n  }\n}\n"
+description: |
+  
+  import "go:strconv"
+  
+  fn main() {
+    let xs: Slice<string> = ["1"]
+    let ys = xs.map(strconv.Atoi)
+    match ys[0] {
+      Ok(v) => { let _ = v },
+      Err(_) => { let _ = 0 },
+    }
+  }
 ---
 package main
 

@@ -1,6 +1,10 @@
 ---
 source: tests/spec/emit/literals.rs
-description: "input: \nfn test() -> bool {\n  false\n}\n"
+description: |
+  
+  fn test() -> bool {
+    false
+  }
 ---
 package main
 

@@ -1,6 +1,16 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \nenum Status {\n  Ready,\n}\n\nimpl Status {\n  fn MarshalJSON(self) -> Result<Slice<byte>, error> {\n    Ok([])\n  }\n}\n"
+description: |
+  
+  enum Status {
+    Ready,
+  }
+  
+  impl Status {
+    fn MarshalJSON(self) -> Result<Slice<byte>, error> {
+      Ok([])
+    }
+  }
 ---
 package main
 

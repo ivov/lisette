@@ -1,6 +1,18 @@
 ---
 source: tests/spec/emit/control_flow.rs
-description: "input: \nimport \"go:fmt\"\n\nfn divide(a: int, b: int) -> Option<int> {\n  if b == 0 { None } else { Some(a / b) }\n}\n\nfn test() {\n  if let Some(x) = divide(100, 10) {\n    let _ = fmt.Print(f\"Result: {x}\\n\");\n  }\n}\n"
+description: |
+  
+  import "go:fmt"
+  
+  fn divide(a: int, b: int) -> Option<int> {
+    if b == 0 { None } else { Some(a / b) }
+  }
+  
+  fn test() {
+    if let Some(x) = divide(100, 10) {
+      let _ = fmt.Print(f"Result: {x}\n");
+    }
+  }
 ---
 package main
 

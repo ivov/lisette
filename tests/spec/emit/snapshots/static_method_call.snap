@@ -1,6 +1,19 @@
 ---
 source: tests/spec/emit/functions.rs
-description: "input: \nstruct Point { x: int, y: int }\n\nimpl Point {\n  fn new(x: int, y: int) -> Point {\n    Point { x: x, y: y }\n  }\n}\n\nfn main() -> int {\n  let p = Point.new(1, 2);\n  p.x\n}\n"
+description: |
+  
+  struct Point { x: int, y: int }
+  
+  impl Point {
+    fn new(x: int, y: int) -> Point {
+      Point { x: x, y: y }
+    }
+  }
+  
+  fn main() -> int {
+    let p = Point.new(1, 2);
+    p.x
+  }
 ---
 package main
 

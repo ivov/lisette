@@ -1,6 +1,19 @@
 ---
 source: tests/spec/emit/interop_matrix.rs
-description: "input: \nimport \"go:strconv\"\n\nstruct Parser { parse: fn(string) -> Result<int, error> }\n\nfn main() {\n  let p = Parser { parse: strconv.Atoi }\n  let r = p.parse(\"42\")\n  match r {\n    Ok(v) => { let _ = v },\n    Err(_) => { let _ = 0 },\n  }\n}\n"
+description: |
+  
+  import "go:strconv"
+  
+  struct Parser { parse: fn(string) -> Result<int, error> }
+  
+  fn main() {
+    let p = Parser { parse: strconv.Atoi }
+    let r = p.parse("42")
+    match r {
+      Ok(v) => { let _ = v },
+      Err(_) => { let _ = 0 },
+    }
+  }
 ---
 package main
 

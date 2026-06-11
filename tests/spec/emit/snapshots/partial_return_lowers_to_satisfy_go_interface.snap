@@ -1,6 +1,25 @@
 ---
 source: tests/spec/emit/go_interface_adapter.rs
-description: "input: \nimport \"go:io\"\n\nstruct Doubler {}\n\nimpl Doubler {\n  fn Read(self, mut p: Slice<uint8>) -> Partial<int, error> {\n    Partial.Ok(0)\n  }\n}\n\nfn consume(r: io.Reader) {\n  let _ = r\n}\n\nfn main() {\n  let d = Doubler {}\n  consume(d as io.Reader)\n}\n"
+description: |
+  
+  import "go:io"
+  
+  struct Doubler {}
+  
+  impl Doubler {
+    fn Read(self, mut p: Slice<uint8>) -> Partial<int, error> {
+      Partial.Ok(0)
+    }
+  }
+  
+  fn consume(r: io.Reader) {
+    let _ = r
+  }
+  
+  fn main() {
+    let d = Doubler {}
+    consume(d as io.Reader)
+  }
 ---
 package main
 

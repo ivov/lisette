@@ -1,6 +1,10 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \nfn get_start(r: Ref<Range<int>>) -> int {\n  r.start\n}\n"
+description: |
+  
+  fn get_start(r: Ref<Range<int>>) -> int {
+    r.start
+  }
 ---
 package main
 

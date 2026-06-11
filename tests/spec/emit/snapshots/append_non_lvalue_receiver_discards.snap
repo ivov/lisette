@@ -1,6 +1,14 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nstruct Items { items: Slice<int> }\n\nfn get() -> Items { Items { items: [1] } }\n\nfn main() {\n  get().items.append(2)\n}\n"
+description: |
+  
+  struct Items { items: Slice<int> }
+  
+  fn get() -> Items { Items { items: [1] } }
+  
+  fn main() {
+    get().items.append(2)
+  }
 ---
 package main
 

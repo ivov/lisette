@@ -1,6 +1,14 @@
 ---
 source: tests/spec/emit/functions.rs
-description: "input: \nimport \"go:flag\"\n\nfn main() {\n  flag.Func(\"verbose\", \"enable verbose\", |_val: string| -> Result<(), error> {\n    Ok(())\n  })\n}\n"
+description: |
+  
+  import "go:flag"
+  
+  fn main() {
+    flag.Func("verbose", "enable verbose", |_val: string| -> Result<(), error> {
+      Ok(())
+    })
+  }
 ---
 package main
 

@@ -1,6 +1,14 @@
 ---
 source: tests/spec/emit/control_flow.rs
-description: "input: \nfn test(pair: (int, int)) -> string {\n  match pair {\n    (x, y) if x == y => \"equal\",\n    (x, y) if x > y => \"greater\",\n    _ => \"less\",\n  }\n}\n"
+description: |
+  
+  fn test(pair: (int, int)) -> string {
+    match pair {
+      (x, y) if x == y => "equal",
+      (x, y) if x > y => "greater",
+      _ => "less",
+    }
+  }
 ---
 package main
 

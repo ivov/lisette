@@ -1,6 +1,9 @@
 ---
 source: tests/spec/format/mod.rs
-description: "input: fn test() { let s = f\"hello\n{name}\nworld\" }"
+description: |-
+  fn test() { let s = f"hello
+  {name}
+  world" }
 ---
 fn test() {
   let s = f"hello

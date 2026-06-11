@@ -1,6 +1,12 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \n#[tag]\nstruct User {\n  #[tag(`json:\"name,omitempty\" validate:\"required\"`)]\n  name: string,\n}\n"
+description: |
+  
+  #[tag]
+  struct User {
+    #[tag(`json:"name,omitempty" validate:"required"`)]
+    name: string,
+  }
 ---
 [
     Struct {

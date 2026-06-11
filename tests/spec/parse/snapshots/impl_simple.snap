@@ -1,6 +1,16 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nstruct Counter {\n  value: int,\n}\n\nimpl Counter {\n  fn get(self: Counter) -> int {\n    return self.value;\n  }\n}\n"
+description: |
+  
+  struct Counter {
+    value: int,
+  }
+  
+  impl Counter {
+    fn get(self: Counter) -> int {
+      return self.value;
+    }
+  }
 ---
 [
     Struct {

@@ -1,6 +1,6 @@
 ---
 source: tests/spec/format/mod.rs
-description: "input: fn test() { let mut counter = 0 }"
+description: "fn test() { let mut counter = 0 }"
 ---
 fn test() {
   let mut counter = 0

@@ -1,6 +1,8 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nimport \"my_module\"\n"
+description: |
+  
+  import "my_module"
 ---
 [
     ModuleImport {

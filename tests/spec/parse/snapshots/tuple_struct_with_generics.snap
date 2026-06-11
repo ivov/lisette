@@ -1,6 +1,8 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nstruct Wrapper<T>(T)\n"
+description: |
+  
+  struct Wrapper<T>(T)
 ---
 [
     Struct {

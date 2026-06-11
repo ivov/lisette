@@ -1,6 +1,22 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \nenum Color { Red, Green, Blue }\n\nimpl Color {\n  fn name(self) -> string {\n    match self {\n      Color.Red => \"red\",\n      Color.Green => \"green\",\n      Color.Blue => \"blue\",\n    }\n  }\n}\n\nfn test() -> string {\n  Color.Red.name()\n}\n"
+description: |
+  
+  enum Color { Red, Green, Blue }
+  
+  impl Color {
+    fn name(self) -> string {
+      match self {
+        Color.Red => "red",
+        Color.Green => "green",
+        Color.Blue => "blue",
+      }
+    }
+  }
+  
+  fn test() -> string {
+    Color.Red.name()
+  }
 ---
 package main
 

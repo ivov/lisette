@@ -1,6 +1,10 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nenum Event {\n  Click { x: int },\n}\n"
+description: |
+  
+  enum Event {
+    Click { x: int },
+  }
 ---
 [
     Enum {

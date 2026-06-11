@@ -1,6 +1,11 @@
 ---
 source: tests/spec/lex/mod.rs
-description: "input: let s = f\"result: {\n  match n {\n    0 => \"zero\",\n  }\n}\""
+description: |-
+  let s = f"result: {
+    match n {
+      0 => "zero",
+    }
+  }"
 ---
 LexResult {
     tokens: [

@@ -1,6 +1,15 @@
 ---
 source: tests/spec/emit/patterns.rs
-description: "input: \nfn maybe() -> Option<int> { Some(1) }\n\nfn main() {\n  let Some(x) | Some(x) = maybe() else { return };\n  let _ = x;\n  let x = 2;\n  let _ = x;\n}\n"
+description: |
+  
+  fn maybe() -> Option<int> { Some(1) }
+  
+  fn main() {
+    let Some(x) | Some(x) = maybe() else { return };
+    let _ = x;
+    let x = 2;
+    let _ = x;
+  }
 ---
 package main
 

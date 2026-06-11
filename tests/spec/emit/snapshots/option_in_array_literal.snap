@@ -1,6 +1,14 @@
 ---
 source: tests/spec/emit/result_option_patterns.rs
-description: "input: \nfn maybe(x: int) -> Option<int> {\n  if x > 0 { Some(x) } else { None }\n}\n\nfn test() {\n  let arr = [maybe(1), maybe(0), maybe(3), maybe(-1)];\n}\n"
+description: |
+  
+  fn maybe(x: int) -> Option<int> {
+    if x > 0 { Some(x) } else { None }
+  }
+  
+  fn test() {
+    let arr = [maybe(1), maybe(0), maybe(3), maybe(-1)];
+  }
 ---
 package main
 

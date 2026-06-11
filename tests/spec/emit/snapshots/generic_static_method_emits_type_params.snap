@@ -1,6 +1,18 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \nstruct Stack<T> { items: Slice<T> }\n\nimpl<T> Stack<T> {\n  fn new() -> Stack<T> {\n    Stack { items: [] }\n  }\n}\n\nfn test() {\n  let s: Stack<int> = Stack.new();\n}\n"
+description: |
+  
+  struct Stack<T> { items: Slice<T> }
+  
+  impl<T> Stack<T> {
+    fn new() -> Stack<T> {
+      Stack { items: [] }
+    }
+  }
+  
+  fn test() {
+    let s: Stack<int> = Stack.new();
+  }
 ---
 package main
 

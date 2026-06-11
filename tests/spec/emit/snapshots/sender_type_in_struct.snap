@@ -1,6 +1,12 @@
 ---
 source: tests/spec/emit/concurrency.rs
-description: "input: \nstruct Producer { output: Sender<int> }\n\nfn test(p: Producer) -> Sender<int> {\n  p.output\n}\n"
+description: |
+  
+  struct Producer { output: Sender<int> }
+  
+  fn test(p: Producer) -> Sender<int> {
+    p.output
+  }
 ---
 package main
 

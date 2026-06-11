@@ -1,6 +1,12 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nstruct Conf { name: string, count: int, on: bool }\n\nfn test() -> Conf {\n  Conf { name: \"x\", .. }\n}\n"
+description: |
+  
+  struct Conf { name: string, count: int, on: bool }
+  
+  fn test() -> Conf {
+    Conf { name: "x", .. }
+  }
 ---
 package main
 

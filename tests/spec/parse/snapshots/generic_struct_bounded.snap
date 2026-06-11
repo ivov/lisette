@@ -1,6 +1,10 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nstruct Container<T: Clone> {\n  item: T,\n}\n"
+description: |
+  
+  struct Container<T: Clone> {
+    item: T,
+  }
 ---
 [
     Struct {

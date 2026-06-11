@@ -1,6 +1,14 @@
 ---
 source: tests/spec/emit/patterns.rs
-description: "input: \nstruct Pair<T> { coords: (T, T) }\nenum E { A(Pair<int>), B(Pair<int>) }\n\nfn test(e: E) -> int {\n  let A(Pair { coords: (x, y) }) | B(Pair { coords: (x, y) }) = e else { return 0; };\n  x + y\n}\n"
+description: |
+  
+  struct Pair<T> { coords: (T, T) }
+  enum E { A(Pair<int>), B(Pair<int>) }
+  
+  fn test(e: E) -> int {
+    let A(Pair { coords: (x, y) }) | B(Pair { coords: (x, y) }) = e else { return 0; };
+    x + y
+  }
 ---
 package main
 

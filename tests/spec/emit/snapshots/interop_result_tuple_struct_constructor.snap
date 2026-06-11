@@ -1,6 +1,20 @@
 ---
 source: tests/spec/emit/interop_matrix.rs
-description: "input: \nimport \"go:strconv\"\n\ntype F = fn(string) -> Result<int, error>\nstruct Pair(F, int)\n\nfn main() {\n  let p = Pair(strconv.Atoi, 1)\n  let r = p.0(\"1\")\n  match r {\n    Ok(v) => { let _ = v },\n    Err(_) => { let _ = 0 },\n  }\n}\n"
+description: |
+  
+  import "go:strconv"
+  
+  type F = fn(string) -> Result<int, error>
+  struct Pair(F, int)
+  
+  fn main() {
+    let p = Pair(strconv.Atoi, 1)
+    let r = p.0("1")
+    match r {
+      Ok(v) => { let _ = v },
+      Err(_) => { let _ = 0 },
+    }
+  }
 ---
 package main
 

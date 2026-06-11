@@ -1,6 +1,10 @@
 ---
 source: tests/spec/emit/functions.rs
-description: "input: \nfn panicky() -> int {\n  panic(\"oh no!\")\n}\n"
+description: |
+  
+  fn panicky() -> int {
+    panic("oh no!")
+  }
 ---
 package main
 

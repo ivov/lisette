@@ -1,6 +1,6 @@
 ---
 source: tests/spec/format/mod.rs
-description: "input: fn test() { obj.method<int>(arg) }"
+description: "fn test() { obj.method<int>(arg) }"
 ---
 fn test() {
   obj.method<int>(arg)

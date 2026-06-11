@@ -1,6 +1,16 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \nstruct Point(int, int)\n\nfn test(p: Option<Point>) -> int {\n  if let Some(Point(x, y)) = p {\n    x + y\n  } else {\n    0\n  }\n}\n"
+description: |
+  
+  struct Point(int, int)
+  
+  fn test(p: Option<Point>) -> int {
+    if let Some(Point(x, y)) = p {
+      x + y
+    } else {
+      0
+    }
+  }
 ---
 package main
 

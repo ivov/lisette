@@ -1,6 +1,17 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \ntype Table<T> = Map<T, int>\n\nenum Holder<T> {\n  Some(Table<T>),\n}\n\nfn main() {\n  let h = Holder.Some(Map.new<string, int>())\n  let _ = h\n}\n"
+description: |
+  
+  type Table<T> = Map<T, int>
+  
+  enum Holder<T> {
+    Some(Table<T>),
+  }
+  
+  fn main() {
+    let h = Holder.Some(Map.new<string, int>())
+    let _ = h
+  }
 ---
 package main
 

@@ -1,6 +1,19 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nimport \"go:fmt\"\n\nstruct Box { x: int }\n\nfn main() {\n  let mut m = Map.from([(\"a\", Box { x: 1 })])\n  let mut entry = m[\"a\"]\n  entry.x = 2\n  m[\"a\"] = entry\n  let entry_1 = 3\n  fmt.Println(entry_1)\n}\n"
+description: |
+  
+  import "go:fmt"
+  
+  struct Box { x: int }
+  
+  fn main() {
+    let mut m = Map.from([("a", Box { x: 1 })])
+    let mut entry = m["a"]
+    entry.x = 2
+    m["a"] = entry
+    let entry_1 = 3
+    fmt.Println(entry_1)
+  }
 ---
 package main
 

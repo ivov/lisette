@@ -1,6 +1,23 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \nstruct Point { x: int, y: int }\n\nimpl Point {\n  pub fn string(self) -> string {\n    \"custom display\"\n  }\n\n  pub fn goString(self) -> string {\n    \"custom debug\"\n  }\n}\n\nfn main() {\n  let p = Point { x: 1, y: 2 }\n  let _ = p\n}\n"
+description: |
+  
+  struct Point { x: int, y: int }
+  
+  impl Point {
+    pub fn string(self) -> string {
+      "custom display"
+    }
+  
+    pub fn goString(self) -> string {
+      "custom debug"
+    }
+  }
+  
+  fn main() {
+    let p = Point { x: 1, y: 2 }
+    let _ = p
+  }
 ---
 package main
 

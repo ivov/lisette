@@ -1,6 +1,12 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \n#[json]\nstruct User {\n  #[json(skip)]\n  password: string,\n}\n"
+description: |
+  
+  #[json]
+  struct User {
+    #[json(skip)]
+    password: string,
+  }
 ---
 [
     Struct {

@@ -1,6 +1,8 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nimport router \"go:github.com/gorilla/mux\"\n"
+description: |
+  
+  import router "go:github.com/gorilla/mux"
 ---
 [
     ModuleImport {

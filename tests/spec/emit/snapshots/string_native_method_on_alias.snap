@@ -1,6 +1,12 @@
 ---
 source: tests/spec/emit/prelude.rs
-description: "input: \ntype MyString = string\n\nfn test(s: MyString) -> bool {\n  s.contains(\"foo\")\n}\n"
+description: |
+  
+  type MyString = string
+  
+  fn test(s: MyString) -> bool {
+    s.contains("foo")
+  }
 ---
 package main
 

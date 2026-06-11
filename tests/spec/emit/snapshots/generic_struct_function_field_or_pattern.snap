@@ -1,6 +1,14 @@
 ---
 source: tests/spec/emit/patterns.rs
-description: "input: \nstruct Handler<T> { callback: fn(T) -> int }\nenum E { A(Handler<string>), B(Handler<string>) }\n\nfn test(e: E) -> int {\n  let A(Handler { callback }) | B(Handler { callback }) = e else { return 0; };\n  callback(\"test\")\n}\n"
+description: |
+  
+  struct Handler<T> { callback: fn(T) -> int }
+  enum E { A(Handler<string>), B(Handler<string>) }
+  
+  fn test(e: E) -> int {
+    let A(Handler { callback }) | B(Handler { callback }) = e else { return 0; };
+    callback("test")
+  }
 ---
 package main
 

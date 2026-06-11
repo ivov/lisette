@@ -1,7 +1,11 @@
 ---
 source: tests/spec/emit/prelude.rs
-assertion_line: 136
-description: "input: \nfn test() {\n  let mut s = Slice.new<Unknown>()\n  s = s.append(\"Lilian\")\n}\n"
+description: |
+  
+  fn test() {
+    let mut s = Slice.new<Unknown>()
+    s = s.append("Lilian")
+  }
 ---
 package main
 

@@ -1,6 +1,12 @@
 ---
 source: tests/spec/emit/prelude.rs
-description: "input: \nfn main() {\n  let f = Option.map\n  let x = f(Some(1), |v| v + 1)\n  let _ = x\n}\n"
+description: |
+  
+  fn main() {
+    let f = Option.map
+    let x = f(Some(1), |v| v + 1)
+    let _ = x
+  }
 ---
 package main
 

@@ -1,6 +1,21 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \ninterface Display {\n  fn to_string(self) -> string\n}\n\n#[display]\nstruct Point { x: int, y: int }\n\nfn render(d: Display) -> string {\n  d.to_string()\n}\n\nfn use_it() -> string {\n  render(Point { x: 1, y: 2 })\n}\n"
+description: |
+  
+  interface Display {
+    fn to_string(self) -> string
+  }
+  
+  #[display]
+  struct Point { x: int, y: int }
+  
+  fn render(d: Display) -> string {
+    d.to_string()
+  }
+  
+  fn use_it() -> string {
+    render(Point { x: 1, y: 2 })
+  }
 ---
 package main
 

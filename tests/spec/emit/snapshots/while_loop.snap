@@ -1,6 +1,13 @@
 ---
 source: tests/spec/emit/control_flow.rs
-description: "input: \nfn test(x: int) {\n  let mut count = x;\n  while count > 0 {\n    count = count - 1;\n  };\n}\n"
+description: |
+  
+  fn test(x: int) {
+    let mut count = x;
+    while count > 0 {
+      count = count - 1;
+    };
+  }
 ---
 package main
 

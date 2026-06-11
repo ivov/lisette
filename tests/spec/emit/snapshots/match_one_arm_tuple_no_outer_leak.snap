@@ -1,6 +1,16 @@
 ---
 source: tests/spec/emit/patterns.rs
-description: "input: \nfn test() -> string {\n  let n = 50;\n  let s = \"original\";\n  let pair = (100, \"replaced\");\n  let r = match pair {\n    (n, s) => f\"{n}-{s}\",\n  };\n  f\"{n} {s} {r}\"\n}\n"
+description: |
+  
+  fn test() -> string {
+    let n = 50;
+    let s = "original";
+    let pair = (100, "replaced");
+    let r = match pair {
+      (n, s) => f"{n}-{s}",
+    };
+    f"{n} {s} {r}"
+  }
 ---
 package main
 

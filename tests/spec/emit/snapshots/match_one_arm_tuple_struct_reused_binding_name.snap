@@ -1,6 +1,23 @@
 ---
 source: tests/spec/emit/patterns.rs
-description: "input: \nstruct Pair(int, int)\nstruct Name(string)\n\nfn test() -> string {\n  let p = Pair(1, 2);\n  let a = match p {\n    Pair(x, y) => x + y,\n  };\n\n  let n = Name(\"hello\");\n  let b = match n {\n    Name(x) => x,\n  };\n\n  b\n}\n"
+description: |
+  
+  struct Pair(int, int)
+  struct Name(string)
+  
+  fn test() -> string {
+    let p = Pair(1, 2);
+    let a = match p {
+      Pair(x, y) => x + y,
+    };
+  
+    let n = Name("hello");
+    let b = match n {
+      Name(x) => x,
+    };
+  
+    b
+  }
 ---
 package main
 

@@ -1,6 +1,10 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nstruct Box<T> {\n  value: T,\n}\n"
+description: |
+  
+  struct Box<T> {
+    value: T,
+  }
 ---
 [
     Struct {

@@ -1,6 +1,12 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nfn g() -> Result<Option<int>, string> { Ok(Some(1)) }\n\nfn f() -> Result<int, string> {\n  if let Some(n) = g()? { Ok(n) } else { Ok(0) }\n}\n"
+description: |
+  
+  fn g() -> Result<Option<int>, string> { Ok(Some(1)) }
+  
+  fn f() -> Result<int, string> {
+    if let Some(n) = g()? { Ok(n) } else { Ok(0) }
+  }
 ---
 package main
 

@@ -1,6 +1,29 @@
 ---
 source: tests/spec/emit/go_interface_adapter.rs
-description: "input: \nimport \"go:example.com/tea\"\n\nstruct Model {}\n\nimpl Model {\n  fn Init(self) -> Option<tea.Cmd> {\n    None\n  }\n  fn Update(self, msg: tea.Msg) -> (tea.Model, Option<tea.Cmd>) {\n    let result = match msg {\n      _ => (self, Some(tea.Quit)),\n    }\n    result\n  }\n  fn View(self) -> string {\n    \"\"\n  }\n}\n\nfn main() {\n  let _ = tea.NewProgram(Model {} as tea.Model)\n}\n"
+description: |
+  
+  import "go:example.com/tea"
+  
+  struct Model {}
+  
+  impl Model {
+    fn Init(self) -> Option<tea.Cmd> {
+      None
+    }
+    fn Update(self, msg: tea.Msg) -> (tea.Model, Option<tea.Cmd>) {
+      let result = match msg {
+        _ => (self, Some(tea.Quit)),
+      }
+      result
+    }
+    fn View(self) -> string {
+      ""
+    }
+  }
+  
+  fn main() {
+    let _ = tea.NewProgram(Model {} as tea.Model)
+  }
 ---
 package main
 

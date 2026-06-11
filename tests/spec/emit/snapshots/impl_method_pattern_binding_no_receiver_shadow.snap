@@ -1,6 +1,25 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \nstruct Node {\n  pub value: int,\n  pub next: Option<int>,\n}\n\nimpl Node {\n  fn sum(self) -> int {\n    match self.next {\n      Some(n) => self.value + n,\n      None => self.value,\n    }\n  }\n}\n\nfn test() -> int {\n  let node = Node { value: 10, next: Some(5) }\n  node.sum()\n}\n"
+description: |
+  
+  struct Node {
+    pub value: int,
+    pub next: Option<int>,
+  }
+  
+  impl Node {
+    fn sum(self) -> int {
+      match self.next {
+        Some(n) => self.value + n,
+        None => self.value,
+      }
+    }
+  }
+  
+  fn test() -> int {
+    let node = Node { value: 10, next: Some(5) }
+    node.sum()
+  }
 ---
 package main
 

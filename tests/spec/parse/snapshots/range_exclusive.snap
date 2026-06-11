@@ -1,6 +1,8 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nfn test() { let r = 0..10; }\n"
+description: |
+  
+  fn test() { let r = 0..10; }
 ---
 [
     Function {

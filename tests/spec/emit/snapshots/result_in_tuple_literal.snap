@@ -1,6 +1,14 @@
 ---
 source: tests/spec/emit/result_option_patterns.rs
-description: "input: \nfn try_int(x: int) -> Result<int, string> {\n  if x > 0 { Ok(x) } else { Err(\"negative\") }\n}\n\nfn test() {\n  let pair = (try_int(5), try_int(10));\n}\n"
+description: |
+  
+  fn try_int(x: int) -> Result<int, string> {
+    if x > 0 { Ok(x) } else { Err("negative") }
+  }
+  
+  fn test() {
+    let pair = (try_int(5), try_int(10));
+  }
 ---
 package main
 

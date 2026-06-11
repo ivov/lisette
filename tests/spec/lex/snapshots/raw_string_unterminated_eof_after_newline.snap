@@ -1,6 +1,8 @@
 ---
 source: tests/spec/lex/mod.rs
-description: "input: r\"abc\nlet x = 1"
+description: |-
+  r"abc
+  let x = 1
 ---
 LexResult {
     tokens: [

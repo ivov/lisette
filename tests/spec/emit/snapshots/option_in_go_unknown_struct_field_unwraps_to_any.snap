@@ -1,6 +1,15 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \nimport \"go:example.com/dyn\"\n\nfn main() {\n  let _ = dyn.Bag {\n    Decl: Some(\"decl\"),\n    Data: None,\n  }\n}\n"
+description: |
+  
+  import "go:example.com/dyn"
+  
+  fn main() {
+    let _ = dyn.Bag {
+      Decl: Some("decl"),
+      Data: None,
+    }
+  }
 ---
 package main
 

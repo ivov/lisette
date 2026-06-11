@@ -1,6 +1,16 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nfn lo() -> int { 0 }\n\nfn run() -> int {\n  let mut rs = [0..0, 0..0]\n  let mut i = 0\n  let bump = || -> int { i = 1; 5 }\n  rs[i] = lo()..bump()\n  rs[0].end\n}\n"
+description: |
+  
+  fn lo() -> int { 0 }
+  
+  fn run() -> int {
+    let mut rs = [0..0, 0..0]
+    let mut i = 0
+    let bump = || -> int { i = 1; 5 }
+    rs[i] = lo()..bump()
+    rs[0].end
+  }
 ---
 package main
 

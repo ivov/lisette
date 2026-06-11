@@ -1,6 +1,14 @@
 ---
 source: tests/spec/emit/control_flow.rs
-description: "input: \nfn get_result() -> Result<int, string> {\n  Ok(42)\n}\n\nfn test() {\n  let _unused = get_result();\n}\n"
+description: |
+  
+  fn get_result() -> Result<int, string> {
+    Ok(42)
+  }
+  
+  fn test() {
+    let _unused = get_result();
+  }
 ---
 package main
 

@@ -1,6 +1,10 @@
 ---
 source: tests/spec/emit/result_option_patterns.rs
-description: "input: \nfn test() -> Option<Slice<int>> {\n  Some([1, 2, 3])\n}\n"
+description: |
+  
+  fn test() -> Option<Slice<int>> {
+    Some([1, 2, 3])
+  }
 ---
 package main
 

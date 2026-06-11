@@ -1,6 +1,16 @@
 ---
 source: tests/spec/emit/functions.rs
-description: "input: \nimport \"go:net/http\"\nimport \"go:strings\"\nimport \"go:fmt\"\n\nfn main() {\n  let body = strings.NewReader(\"hello\")\n  let req = http.NewRequest(\"POST\", \"https://example.com\", Some(body))\n  fmt.Println(req)\n}\n"
+description: |
+  
+  import "go:net/http"
+  import "go:strings"
+  import "go:fmt"
+  
+  fn main() {
+    let body = strings.NewReader("hello")
+    let req = http.NewRequest("POST", "https://example.com", Some(body))
+    fmt.Println(req)
+  }
 ---
 package main
 

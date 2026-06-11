@@ -1,6 +1,15 @@
 ---
 source: tests/spec/emit/result_option_patterns.rs
-description: "input: \nfn missing() -> Option<int> {\n  None?\n  Some(1)\n}\n\nfn main() {\n  let _ = missing()\n}\n"
+description: |
+  
+  fn missing() -> Option<int> {
+    None?
+    Some(1)
+  }
+  
+  fn main() {
+    let _ = missing()
+  }
 ---
 package main
 

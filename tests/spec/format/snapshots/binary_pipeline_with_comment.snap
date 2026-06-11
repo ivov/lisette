@@ -1,6 +1,12 @@
 ---
 source: tests/spec/format/mod.rs
-description: "input: fn test() {\n  x\n  |> foo()\n  // comment before bar\n  |> bar()\n}"
+description: |-
+  fn test() {
+    x
+    |> foo()
+    // comment before bar
+    |> bar()
+  }
 ---
 fn test() {
   x

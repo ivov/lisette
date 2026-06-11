@@ -1,6 +1,11 @@
 ---
 source: tests/spec/emit/functions.rs
-description: "input: \n/// Adds two integers together.\nfn add(a: int, b: int) -> int {\n  a + b\n}\n"
+description: |
+  
+  /// Adds two integers together.
+  fn add(a: int, b: int) -> int {
+    a + b
+  }
 ---
 package main
 

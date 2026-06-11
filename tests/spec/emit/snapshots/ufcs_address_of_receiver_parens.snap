@@ -1,6 +1,20 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nstruct Counter { x: int }\n\nimpl Counter {\n  fn inc(self: Ref<Counter>) -> int {\n    self.x = self.x + 1\n    self.x\n  }\n}\n\nfn main() {\n  let c = Counter { x: 0 }\n  let _ = Counter.inc(&c)\n}\n"
+description: |
+  
+  struct Counter { x: int }
+  
+  impl Counter {
+    fn inc(self: Ref<Counter>) -> int {
+      self.x = self.x + 1
+      self.x
+    }
+  }
+  
+  fn main() {
+    let c = Counter { x: 0 }
+    let _ = Counter.inc(&c)
+  }
 ---
 package main
 

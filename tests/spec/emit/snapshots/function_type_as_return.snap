@@ -1,6 +1,15 @@
 ---
 source: tests/spec/emit/functions.rs
-description: "input: \nfn make_adder(n: int) -> fn(int) -> int {\n  |x: int| x + n\n}\n\nfn test() -> int {\n  let add5 = make_adder(5);\n  add5(10)\n}\n"
+description: |
+  
+  fn make_adder(n: int) -> fn(int) -> int {
+    |x: int| x + n
+  }
+  
+  fn test() -> int {
+    let add5 = make_adder(5);
+    add5(10)
+  }
 ---
 package main
 

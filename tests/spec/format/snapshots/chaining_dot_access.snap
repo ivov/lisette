@@ -1,6 +1,6 @@
 ---
 source: tests/spec/format/mod.rs
-description: "input: fn test() { obj.field.nested.value }"
+description: "fn test() { obj.field.nested.value }"
 ---
 fn test() {
   obj.field.nested.value

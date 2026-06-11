@@ -1,6 +1,8 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nimport _ \"go:database/sql\"\n"
+description: |
+  
+  import _ "go:database/sql"
 ---
 [
     ModuleImport {

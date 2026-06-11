@@ -1,6 +1,13 @@
 ---
 source: tests/spec/emit/control_flow.rs
-description: "input: \nstruct Point { x: Option<int>, y: Option<int> }\n\nfn test(p: Point) -> int {\n  let Point { x: Some(a), y: Some(b) } | Point { x: Some(b), y: Some(a) } = p else { return 0; };\n  a + b\n}\n"
+description: |
+  
+  struct Point { x: Option<int>, y: Option<int> }
+  
+  fn test(p: Point) -> int {
+    let Point { x: Some(a), y: Some(b) } | Point { x: Some(b), y: Some(a) } = p else { return 0; };
+    a + b
+  }
 ---
 package main
 

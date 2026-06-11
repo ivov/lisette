@@ -1,6 +1,12 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nenum Message {\n  Quit,\n  Move { x: int, y: int },\n  Write(string),\n}\n"
+description: |
+  
+  enum Message {
+    Quit,
+    Move { x: int, y: int },
+    Write(string),
+  }
 ---
 [
     Enum {

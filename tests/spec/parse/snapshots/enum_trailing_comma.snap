@@ -1,6 +1,12 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nenum Color {\n  Red,\n  Green,\n  Blue,\n}\n"
+description: |
+  
+  enum Color {
+    Red,
+    Green,
+    Blue,
+  }
 ---
 [
     Enum {

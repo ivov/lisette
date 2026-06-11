@@ -1,6 +1,6 @@
 ---
 source: tests/spec/format/mod.rs
-description: "input: fn test() { let f = |x| { let y = x + 1; y * 2 }; }"
+description: "fn test() { let f = |x| { let y = x + 1; y * 2 }; }"
 ---
 fn test() {
   let f = |x| {

@@ -1,6 +1,17 @@
 ---
 source: tests/spec/emit/control_flow.rs
-description: "input: \nfn test(x: int) -> string {\n  let result = match x {\n    n if n < 10 => {\n      let result = n * n\n      f\"small({result})\"\n    },\n    _ => \"other\",\n  }\n  result\n}\n"
+description: |
+  
+  fn test(x: int) -> string {
+    let result = match x {
+      n if n < 10 => {
+        let result = n * n
+        f"small({result})"
+      },
+      _ => "other",
+    }
+    result
+  }
 ---
 package main
 

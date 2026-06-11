@@ -1,6 +1,11 @@
 ---
 source: tests/spec/emit/concurrency.rs
-description: "input: \nfn test() {\n  let items = [1, 2, 3]\n  defer Slice.length(items)\n}\n"
+description: |
+  
+  fn test() {
+    let items = [1, 2, 3]
+    defer Slice.length(items)
+  }
 ---
 package main
 

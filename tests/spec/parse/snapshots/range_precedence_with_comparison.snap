@@ -1,6 +1,8 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nfn test(other: bool) { let r = 0..5 == other; }\n"
+description: |
+  
+  fn test(other: bool) { let r = 0..5 == other; }
 ---
 [
     Function {

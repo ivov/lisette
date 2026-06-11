@@ -1,6 +1,10 @@
 ---
 source: tests/spec/format/mod.rs
-description: "input: fn f(args: Slice<int>) {\n  foo(1, // trailing\n  args...)\n}"
+description: |-
+  fn f(args: Slice<int>) {
+    foo(1, // trailing
+    args...)
+  }
 ---
 fn f(args: Slice<int>) {
   foo(

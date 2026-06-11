@@ -1,6 +1,6 @@
 ---
 source: tests/spec/format/mod.rs
-description: "input: enum Status { Pending, Complete }"
+description: "enum Status { Pending, Complete }"
 ---
 enum Status {
   Pending,

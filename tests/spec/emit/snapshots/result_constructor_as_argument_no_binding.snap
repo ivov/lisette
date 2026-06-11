@@ -1,6 +1,14 @@
 ---
 source: tests/spec/emit/result_option_patterns.rs
-description: "input: \nfn describe(r: Result<int, string>) -> string {\n  match r { Ok(v) => f\"{v}\", Err(e) => e }\n}\n\nfn test() -> string {\n  describe(Ok(42))\n}\n"
+description: |
+  
+  fn describe(r: Result<int, string>) -> string {
+    match r { Ok(v) => f"{v}", Err(e) => e }
+  }
+  
+  fn test() -> string {
+    describe(Ok(42))
+  }
 ---
 package main
 

@@ -1,6 +1,16 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \nstruct inner { x: int }\n\nstruct Outer {\n  embed inner,\n}\n\nfn make() -> Outer {\n  Outer { inner: inner { x: 1 } }\n}\n"
+description: |
+  
+  struct inner { x: int }
+  
+  struct Outer {
+    embed inner,
+  }
+  
+  fn make() -> Outer {
+    Outer { inner: inner { x: 1 } }
+  }
 ---
 package main
 

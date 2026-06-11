@@ -1,6 +1,11 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nfn test() {\n  let mut p = Point { x: 1, y: 1};\n  p.x = 10;\n}\n"
+description: |
+  
+  fn test() {
+    let mut p = Point { x: 1, y: 1};
+    p.x = 10;
+  }
 ---
 [
     Function {

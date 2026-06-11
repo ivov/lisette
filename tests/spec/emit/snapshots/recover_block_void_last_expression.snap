@@ -1,6 +1,14 @@
 ---
 source: tests/spec/emit/recover.rs
-description: "input: \nfn risky() {\n  panic(\"oops\");\n}\n\nfn test() {\n  let result = recover { risky() };\n}\n"
+description: |
+  
+  fn risky() {
+    panic("oops");
+  }
+  
+  fn test() {
+    let result = recover { risky() };
+  }
 ---
 package main
 

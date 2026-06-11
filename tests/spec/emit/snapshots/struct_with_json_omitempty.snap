@@ -1,6 +1,12 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \n#[json]\nstruct User {\n  #[json(omitempty)]\n  name: string,\n}\n"
+description: |
+  
+  #[json]
+  struct User {
+    #[json(omitempty)]
+    name: string,
+  }
 ---
 package main
 

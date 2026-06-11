@@ -1,6 +1,15 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nfn test() {\n  loop {\n    if skip_this() {\n      continue;\n    }\n    process();\n  }\n}\n"
+description: |
+  
+  fn test() {
+    loop {
+      if skip_this() {
+        continue;
+      }
+      process();
+    }
+  }
 ---
 [
     Function {

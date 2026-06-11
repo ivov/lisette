@@ -1,6 +1,16 @@
 ---
 source: tests/spec/emit/patterns.rs
-description: "input: \nimport \"go:example.com/shapes\"\n\nfn sum_areas(items: Map<string, shapes.Shape>) -> int {\n  let mut total = 0\n  for (_, shapes.Rect { W: w, H: h }) in items {\n    total = total + w * h\n  }\n  total\n}\n"
+description: |
+  
+  import "go:example.com/shapes"
+  
+  fn sum_areas(items: Map<string, shapes.Shape>) -> int {
+    let mut total = 0
+    for (_, shapes.Rect { W: w, H: h }) in items {
+      total = total + w * h
+    }
+    total
+  }
 ---
 package main
 

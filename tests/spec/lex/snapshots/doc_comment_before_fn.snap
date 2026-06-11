@@ -1,6 +1,8 @@
 ---
 source: tests/spec/lex/mod.rs
-description: "input: /// Adds two numbers\nfn add(a, b) { a + b }"
+description: |-
+  /// Adds two numbers
+  fn add(a, b) { a + b }
 ---
 LexResult {
     tokens: [

@@ -1,6 +1,10 @@
 ---
 source: tests/spec/lex/mod.rs
-description: "input: 42;\n// first comment\n84;\n// second comment"
+description: |-
+  42;
+  // first comment
+  84;
+  // second comment
 ---
 LexResult {
     tokens: [

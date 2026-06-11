@@ -1,6 +1,21 @@
 ---
 source: tests/spec/emit/control_flow.rs
-description: "input: \nfn maybe_get() -> Option<int> {\n  Some(42)\n}\n\nfn test() -> int {\n  let opt: Option<int> = try {\n    let x = maybe_get()?;\n    x + 1\n  };\n  match opt {\n    Some(v) => v,\n    None => 0,\n  }\n}\n"
+description: |
+  
+  fn maybe_get() -> Option<int> {
+    Some(42)
+  }
+  
+  fn test() -> int {
+    let opt: Option<int> = try {
+      let x = maybe_get()?;
+      x + 1
+    };
+    match opt {
+      Some(v) => v,
+      None => 0,
+    }
+  }
 ---
 package main
 

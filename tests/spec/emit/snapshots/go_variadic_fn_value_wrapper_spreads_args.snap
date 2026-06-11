@@ -1,6 +1,14 @@
 ---
 source: tests/spec/emit/functions.rs
-description: "input: \nimport fmt \"go:fmt\"\nimport os \"go:os\"\n\nfn main() {\n  let f = fmt.Fprintf\n  let _ = f(os.Stdout, \"hi %d\", 3)\n}\n"
+description: |
+  
+  import fmt "go:fmt"
+  import os "go:os"
+  
+  fn main() {
+    let f = fmt.Fprintf
+    let _ = f(os.Stdout, "hi %d", 3)
+  }
 ---
 package main
 

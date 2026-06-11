@@ -1,6 +1,18 @@
 ---
 source: tests/spec/emit/patterns.rs
-description: "input: \nenum Tree<T> {\n  Leaf(T),\n  Node { left: Tree<T>, right: Tree<T> },\n}\n\nfn count_leaves<T>(tree: Tree<T>) -> int {\n  match tree {\n    Tree.Leaf(_) => 1,\n    Tree.Node { left, right } => count_leaves(left) + count_leaves(right),\n  }\n}\n"
+description: |
+  
+  enum Tree<T> {
+    Leaf(T),
+    Node { left: Tree<T>, right: Tree<T> },
+  }
+  
+  fn count_leaves<T>(tree: Tree<T>) -> int {
+    match tree {
+      Tree.Leaf(_) => 1,
+      Tree.Node { left, right } => count_leaves(left) + count_leaves(right),
+    }
+  }
 ---
 package main
 

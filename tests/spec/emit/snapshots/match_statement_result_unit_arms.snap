@@ -1,6 +1,19 @@
 ---
 source: tests/spec/emit/result_option_patterns.rs
-description: "input: \nfn noop() {}\n\nfn divide(a: int, b: int) -> Result<int, string> {\n  if b == 0 { Err(\"err\") } else { Ok(a / b) }\n}\n\nfn test() {\n  match divide(10, 2) {\n    Ok(_) => noop(),\n    Err(_) => noop(),\n  }\n}\n"
+description: |
+  
+  fn noop() {}
+  
+  fn divide(a: int, b: int) -> Result<int, string> {
+    if b == 0 { Err("err") } else { Ok(a / b) }
+  }
+  
+  fn test() {
+    match divide(10, 2) {
+      Ok(_) => noop(),
+      Err(_) => noop(),
+    }
+  }
 ---
 package main
 

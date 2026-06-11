@@ -1,6 +1,15 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \nstruct Point { pub x: int, pub y: int }\n\ntype Location = Point\ntype GeoPoint = Location\n\nfn origin() -> GeoPoint {\n  Point { x: 0, y: 0 }\n}\n"
+description: |
+  
+  struct Point { pub x: int, pub y: int }
+  
+  type Location = Point
+  type GeoPoint = Location
+  
+  fn origin() -> GeoPoint {
+    Point { x: 0, y: 0 }
+  }
 ---
 package main
 

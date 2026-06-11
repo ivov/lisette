@@ -1,6 +1,18 @@
 ---
 source: tests/spec/emit/result_option_patterns.rs
-description: "input: \nfn divide(a: int, b: int) -> Result<int, string> {\n  if b == 0 { Err(\"division by zero\") } else { Ok(a / b) }\n}\n\nfn describe(r: Result<int, string>) -> string {\n  match r { Ok(v) => f\"{v}\", Err(e) => e }\n}\n\nfn test() -> string {\n  describe(divide(10, 2))\n}\n"
+description: |
+  
+  fn divide(a: int, b: int) -> Result<int, string> {
+    if b == 0 { Err("division by zero") } else { Ok(a / b) }
+  }
+  
+  fn describe(r: Result<int, string>) -> string {
+    match r { Ok(v) => f"{v}", Err(e) => e }
+  }
+  
+  fn test() -> string {
+    describe(divide(10, 2))
+  }
 ---
 package main
 

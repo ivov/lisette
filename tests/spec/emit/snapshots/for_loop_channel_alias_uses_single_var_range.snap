@@ -1,6 +1,16 @@
 ---
 source: tests/spec/emit/control_flow.rs
-description: "input: \ntype Inbox = Channel<int>\n\nfn drain(ch: Inbox) -> int {\n  let mut total = 0\n  for value in ch {\n    total = total + value\n  }\n  total\n}\n"
+description: |
+  
+  type Inbox = Channel<int>
+  
+  fn drain(ch: Inbox) -> int {
+    let mut total = 0
+    for value in ch {
+      total = total + value
+    }
+    total
+  }
 ---
 package main
 

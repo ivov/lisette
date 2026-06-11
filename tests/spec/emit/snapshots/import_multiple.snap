@@ -1,6 +1,15 @@
 ---
 source: tests/spec/emit/imports.rs
-description: "input: \nimport \"go:io\"\nimport \"go:os\"\nimport \"go:fs\"\nimport \"go:fmt\"\n\nfn test() {\n  fmt.Print(\"Multiple imports\")\n}\n"
+description: |
+  
+  import "go:io"
+  import "go:os"
+  import "go:fs"
+  import "go:fmt"
+  
+  fn test() {
+    fmt.Print("Multiple imports")
+  }
 ---
 package main
 

@@ -1,6 +1,19 @@
 ---
 source: tests/spec/emit/result_option_patterns.rs
-description: "input: \nfn use_value(x: int) {}\n\nfn divide(a: int, b: int) -> Result<int, string> {\n  if b == 0 { Err(\"err\") } else { Ok(a / b) }\n}\n\nfn test() {\n  match divide(10, 2) {\n    Ok(v) => use_value(v),\n    Err(_) => use_value(0),\n  }\n}\n"
+description: |
+  
+  fn use_value(x: int) {}
+  
+  fn divide(a: int, b: int) -> Result<int, string> {
+    if b == 0 { Err("err") } else { Ok(a / b) }
+  }
+  
+  fn test() {
+    match divide(10, 2) {
+      Ok(v) => use_value(v),
+      Err(_) => use_value(0),
+    }
+  }
 ---
 package main
 

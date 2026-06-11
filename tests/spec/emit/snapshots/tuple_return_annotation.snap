@@ -1,6 +1,14 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \nfn get_pair() -> (int, string) {\n  (42, \"hello\")\n}\n\nfn test() {\n  let (x, y) = get_pair();\n}\n"
+description: |
+  
+  fn get_pair() -> (int, string) {
+    (42, "hello")
+  }
+  
+  fn test() {
+    let (x, y) = get_pair();
+  }
 ---
 package main
 

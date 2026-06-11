@@ -1,6 +1,10 @@
 ---
 source: tests/spec/lex/mod.rs
-description: "input: fn test()\n{\n    1\n}"
+description: |-
+  fn test()
+  {
+      1
+  }
 ---
 LexResult {
     tokens: [

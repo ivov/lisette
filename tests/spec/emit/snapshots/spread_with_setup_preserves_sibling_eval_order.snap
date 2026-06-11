@@ -1,6 +1,16 @@
 ---
 source: tests/spec/emit/functions.rs
-description: "input: \nfn side_a() -> int { 1 }\n\nfn get_xs() -> Result<Slice<int>, error> { Ok([1, 2, 3]) }\n\nfn variadic(_first: int, _rest: VarArgs<int>) -> int { 0 }\n\nfn run() -> Result<int, error> {\n  Ok(variadic(side_a(), get_xs()?...))\n}\n"
+description: |
+  
+  fn side_a() -> int { 1 }
+  
+  fn get_xs() -> Result<Slice<int>, error> { Ok([1, 2, 3]) }
+  
+  fn variadic(_first: int, _rest: VarArgs<int>) -> int { 0 }
+  
+  fn run() -> Result<int, error> {
+    Ok(variadic(side_a(), get_xs()?...))
+  }
 ---
 package main
 

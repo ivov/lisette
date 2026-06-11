@@ -1,6 +1,12 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nfn test() {\n  select {\n    _ => print(\"default\"),\n  }\n}\n"
+description: |
+  
+  fn test() {
+    select {
+      _ => print("default"),
+    }
+  }
 ---
 [
     Function {

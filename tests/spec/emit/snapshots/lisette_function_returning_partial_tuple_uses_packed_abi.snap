@@ -1,6 +1,27 @@
 ---
 source: tests/spec/emit/partial.rs
-description: "input: \nfn pair<A, B>(a: A, b: B) -> Partial<(A, B), error> {\n  Partial.Ok((a, b))\n}\n\nfn test() {\n  match pair<int, string>(1, \"x\") {\n    Partial.Ok((first, second)) => {\n      let _ = first\n      let _ = second\n    },\n    Partial.Err(e) => {\n      let _ = e\n    },\n    Partial.Both((first, second), e) => {\n      let _ = first\n      let _ = second\n      let _ = e\n    },\n  }\n}\n"
+description: |
+  
+  fn pair<A, B>(a: A, b: B) -> Partial<(A, B), error> {
+    Partial.Ok((a, b))
+  }
+  
+  fn test() {
+    match pair<int, string>(1, "x") {
+      Partial.Ok((first, second)) => {
+        let _ = first
+        let _ = second
+      },
+      Partial.Err(e) => {
+        let _ = e
+      },
+      Partial.Both((first, second), e) => {
+        let _ = first
+        let _ = second
+        let _ = e
+      },
+    }
+  }
 ---
 package main
 

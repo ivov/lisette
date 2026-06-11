@@ -1,6 +1,14 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \nstruct Box<T> { value: T }\n\nimpl<T> Box<T> {\n  fn new(value: T) -> Box<T> {\n    Box { value: value }\n  }\n}\n"
+description: |
+  
+  struct Box<T> { value: T }
+  
+  impl<T> Box<T> {
+    fn new(value: T) -> Box<T> {
+      Box { value: value }
+    }
+  }
 ---
 package main
 

@@ -1,6 +1,11 @@
 ---
 source: tests/spec/emit/functions.rs
-description: "input: \nfn test() -> int {\n  let f = |map: int, range: int| map + range;\n  f(10, 20)\n}\n"
+description: |
+  
+  fn test() -> int {
+    let f = |map: int, range: int| map + range;
+    f(10, 20)
+  }
 ---
 package main
 

@@ -1,6 +1,14 @@
 ---
 source: tests/spec/emit/interop_matrix.rs
-description: "input: \nimport \"go:example.com/scheduler\"\n\nfn main() {\n  let n = 42\n  let cmd: Option<scheduler.Cmd> = Some(|| n)\n  let _ = cmd\n}\n"
+description: |
+  
+  import "go:example.com/scheduler"
+  
+  fn main() {
+    let n = 42
+    let cmd: Option<scheduler.Cmd> = Some(|| n)
+    let _ = cmd
+  }
 ---
 package main
 

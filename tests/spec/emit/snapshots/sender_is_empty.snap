@@ -1,6 +1,10 @@
 ---
 source: tests/spec/emit/prelude.rs
-description: "input: \nfn test(s: Sender<int>) -> bool {\n  s.is_empty()\n}\n"
+description: |
+  
+  fn test(s: Sender<int>) -> bool {
+    s.is_empty()
+  }
 ---
 package main
 

@@ -1,6 +1,13 @@
 ---
 source: tests/spec/emit/concurrency.rs
-description: "input: \nimport \"go:fmt\"\n\nfn test() -> int {\n  defer fmt.Print(\"cleanup\");\n  42\n}\n"
+description: |
+  
+  import "go:fmt"
+  
+  fn test() -> int {
+    defer fmt.Print("cleanup");
+    42
+  }
 ---
 package main
 

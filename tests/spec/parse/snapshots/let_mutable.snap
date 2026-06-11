@@ -1,6 +1,10 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nfn test() {\n  let mut counter = 0;\n}\n"
+description: |
+  
+  fn test() {
+    let mut counter = 0;
+  }
 ---
 [
     Function {

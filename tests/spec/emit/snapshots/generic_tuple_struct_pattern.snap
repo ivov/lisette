@@ -1,6 +1,14 @@
 ---
 source: tests/spec/emit/patterns.rs
-description: "input: \nstruct Box<T>(T)\n\nfn test(b: Box<int>) -> int {\n  match b {\n    Box(x) => x,\n  }\n}\n"
+description: |
+  
+  struct Box<T>(T)
+  
+  fn test(b: Box<int>) -> int {
+    match b {
+      Box(x) => x,
+    }
+  }
 ---
 package main
 

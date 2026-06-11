@@ -1,6 +1,14 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nenum Shape { Triangle(int, int, int), Circle(float) }\nfn test(s: Shape) {\n  match s {\n    Shape.Triangle(..) => print(\"triangle\"),\n    Shape.Circle(..) => print(\"circle\"),\n  }\n}\n"
+description: |
+  
+  enum Shape { Triangle(int, int, int), Circle(float) }
+  fn test(s: Shape) {
+    match s {
+      Shape.Triangle(..) => print("triangle"),
+      Shape.Circle(..) => print("circle"),
+    }
+  }
 ---
 [
     Enum {

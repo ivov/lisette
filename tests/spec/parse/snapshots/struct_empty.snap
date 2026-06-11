@@ -1,6 +1,8 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nstruct Empty {}\n"
+description: |
+  
+  struct Empty {}
 ---
 [
     Struct {

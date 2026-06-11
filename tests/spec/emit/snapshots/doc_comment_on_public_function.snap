@@ -1,6 +1,11 @@
 ---
 source: tests/spec/emit/functions.rs
-description: "input: \n/// A publicly exported function.\npub fn greet(name: string) -> string {\n  f\"Hello, {name}!\"\n}\n"
+description: |
+  
+  /// A publicly exported function.
+  pub fn greet(name: string) -> string {
+    f"Hello, {name}!"
+  }
 ---
 package main
 

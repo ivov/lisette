@@ -1,6 +1,14 @@
 ---
 source: tests/spec/emit/control_flow.rs
-description: "input: \nfn test(x: int) -> string {\n  match x {\n    1 | 2 | 3 => \"small\",\n    4 | 5 | 6 => \"medium\",\n    _ => \"large\",\n  }\n}\n"
+description: |
+  
+  fn test(x: int) -> string {
+    match x {
+      1 | 2 | 3 => "small",
+      4 | 5 | 6 => "medium",
+      _ => "large",
+    }
+  }
 ---
 package main
 

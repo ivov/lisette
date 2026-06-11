@@ -1,6 +1,19 @@
 ---
 source: tests/spec/emit/interop_matrix.rs
-description: "input: \nimport \"go:crypto/sha256\"\n\nfn main() {\n  let f: fn(Slice<uint8>) -> Slice<uint8> = if true {\n    sha256.Sum256\n  } else {\n    sha256.Sum224\n  }\n  let data: Slice<uint8> = []\n  let out = f(data)\n  let _ = out\n}\n"
+description: |
+  
+  import "go:crypto/sha256"
+  
+  fn main() {
+    let f: fn(Slice<uint8>) -> Slice<uint8> = if true {
+      sha256.Sum256
+    } else {
+      sha256.Sum224
+    }
+    let data: Slice<uint8> = []
+    let out = f(data)
+    let _ = out
+  }
 ---
 package main
 

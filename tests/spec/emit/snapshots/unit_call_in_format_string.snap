@@ -1,6 +1,12 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nfn noop() {}\n\nfn test() -> string {\n  f\"x:{noop()}\"\n}\n"
+description: |
+  
+  fn noop() {}
+  
+  fn test() -> string {
+    f"x:{noop()}"
+  }
 ---
 package main
 

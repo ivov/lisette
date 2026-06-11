@@ -1,6 +1,21 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nstruct User {\n  id: int,\n  name: string,\n}\n\nfn get_id() -> Result<int, string> { Ok(1) }\nfn get_name() -> Result<string, string> { Ok(\"Ada\") }\n\nfn make_user() -> Result<User, string> {\n  Ok(User {\n    id: get_id()?,\n    name: get_name()?,\n  })\n}\n"
+description: |
+  
+  struct User {
+    id: int,
+    name: string,
+  }
+  
+  fn get_id() -> Result<int, string> { Ok(1) }
+  fn get_name() -> Result<string, string> { Ok("Ada") }
+  
+  fn make_user() -> Result<User, string> {
+    Ok(User {
+      id: get_id()?,
+      name: get_name()?,
+    })
+  }
 ---
 package main
 

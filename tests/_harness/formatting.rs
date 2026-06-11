@@ -32,6 +32,11 @@ pub fn format_diagnostic_for_snapshot(
     output
 }
 
+/// Escapes carriage returns, which insta's YAML literal blocks cannot round-trip.
+pub fn snapshot_description(input: &str) -> String {
+    input.replace('\r', "\\r")
+}
+
 pub fn format_parse_error_for_snapshot(error: &ParseError, source: &str, filename: &str) -> String {
     let diagnostic: LisetteDiagnostic = error.clone().into();
     format_diagnostic_for_snapshot(&diagnostic, source, filename)

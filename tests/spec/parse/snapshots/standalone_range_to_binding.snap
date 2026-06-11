@@ -1,7 +1,8 @@
 ---
 source: tests/spec/parse/mod.rs
-assertion_line: 3609
-description: "input: \nfn test() { let r: RangeTo<int> = ..5; }\n"
+description: |
+  
+  fn test() { let r: RangeTo<int> = ..5; }
 ---
 [
     Function {

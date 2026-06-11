@@ -1,6 +1,14 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nfn test(x: int) -> string {\n  match x {\n    0 | 1 => \"binary\",\n    2 | 3 | 5 | 7 => \"small prime\",\n    _ => \"other\",\n  }\n}\n"
+description: |
+  
+  fn test(x: int) -> string {
+    match x {
+      0 | 1 => "binary",
+      2 | 3 | 5 | 7 => "small prime",
+      _ => "other",
+    }
+  }
 ---
 [
     Function {

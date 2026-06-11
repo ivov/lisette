@@ -1,6 +1,10 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nfn test(len: int) -> int {\n  len + 1\n}\n"
+description: |
+  
+  fn test(len: int) -> int {
+    len + 1
+  }
 ---
 package main
 

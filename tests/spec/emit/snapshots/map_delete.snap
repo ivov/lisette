@@ -1,6 +1,10 @@
 ---
 source: tests/spec/emit/prelude.rs
-description: "input: \nfn test(mut m: Map<string, int>, key: string) {\n  m.delete(key)\n}\n"
+description: |
+  
+  fn test(mut m: Map<string, int>, key: string) {
+    m.delete(key)
+  }
 ---
 package main
 

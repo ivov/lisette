@@ -1,6 +1,19 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \npub interface IFoo {\n  fn foo(self) -> int\n}\n\nstruct S {\n  foo: int,\n}\n\nfn main() {\n  let s = S { foo: 1 }\n  let _ = s.foo\n}\n"
+description: |
+  
+  pub interface IFoo {
+    fn foo(self) -> int
+  }
+  
+  struct S {
+    foo: int,
+  }
+  
+  fn main() {
+    let s = S { foo: 1 }
+    let _ = s.foo
+  }
 ---
 package main
 

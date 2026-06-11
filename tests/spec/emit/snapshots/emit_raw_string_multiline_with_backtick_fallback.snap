@@ -1,6 +1,12 @@
 ---
 source: tests/spec/emit/literals.rs
-description: "input: \nfn test() -> string {\n  let s = r\"first `tick\nsecond\"\n  s\n}\n"
+description: |
+  
+  fn test() -> string {
+    let s = r"first `tick
+  second"
+    s
+  }
 ---
 package main
 

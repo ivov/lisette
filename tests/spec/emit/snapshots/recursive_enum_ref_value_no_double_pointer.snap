@@ -1,6 +1,21 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \nenum Tree {\n  Leaf(int),\n  Node(Ref<Tree>, Ref<Tree>),\n}\n\nfn leaf(n: int) -> Ref<Tree> {\n  let t = Tree.Leaf(n);\n  &t\n}\n\nfn node(l: Ref<Tree>, r: Ref<Tree>) -> Ref<Tree> {\n  let t = Tree.Node(l, r);\n  &t\n}\n"
+description: |
+  
+  enum Tree {
+    Leaf(int),
+    Node(Ref<Tree>, Ref<Tree>),
+  }
+  
+  fn leaf(n: int) -> Ref<Tree> {
+    let t = Tree.Leaf(n);
+    &t
+  }
+  
+  fn node(l: Ref<Tree>, r: Ref<Tree>) -> Ref<Tree> {
+    let t = Tree.Node(l, r);
+    &t
+  }
 ---
 package main
 

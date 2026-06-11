@@ -1,6 +1,14 @@
 ---
 source: tests/spec/emit/imports.rs
-description: "input: \nimport \"go:net/http\"\n\nstruct Wrapper { srv: http.Server }\n\nfn test() -> Wrapper {\n  Wrapper { .. }\n}\n"
+description: |
+  
+  import "go:net/http"
+  
+  struct Wrapper { srv: http.Server }
+  
+  fn test() -> Wrapper {
+    Wrapper { .. }
+  }
 ---
 package main
 

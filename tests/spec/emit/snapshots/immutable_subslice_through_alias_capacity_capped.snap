@@ -1,6 +1,16 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \ntype Numbers = Slice<int>\n\nfn test() {\n  let xs: Numbers = [1, 2, 3]\n  let view = xs[0..2]\n  let grown = view.append(9)\n  let _ = grown\n  let _ = xs\n}\n"
+description: |
+  
+  type Numbers = Slice<int>
+  
+  fn test() {
+    let xs: Numbers = [1, 2, 3]
+    let view = xs[0..2]
+    let grown = view.append(9)
+    let _ = grown
+    let _ = xs
+  }
 ---
 package main
 

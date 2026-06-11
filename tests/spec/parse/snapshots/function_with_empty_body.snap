@@ -1,6 +1,10 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nfn noop() {\n  // does nothing\n}\n"
+description: |
+  
+  fn noop() {
+    // does nothing
+  }
 ---
 [
     Function {

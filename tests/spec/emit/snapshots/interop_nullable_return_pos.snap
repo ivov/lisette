@@ -1,6 +1,21 @@
 ---
 source: tests/spec/emit/interop_matrix.rs
-description: "input: \nimport \"go:flag\"\n\nfn make_lookup() -> fn(string) -> Option<Ref<flag.Flag>> {\n  flag.Lookup\n}\n\nfn main() {\n  let f = make_lookup()\n  let r = f(\"verbose\")\n  match r {\n    Some(v) => { let _ = v },\n    None => {},\n  }\n}\n"
+description: |
+  
+  import "go:flag"
+  
+  fn make_lookup() -> fn(string) -> Option<Ref<flag.Flag>> {
+    flag.Lookup
+  }
+  
+  fn main() {
+    let f = make_lookup()
+    let r = f("verbose")
+    match r {
+      Some(v) => { let _ = v },
+      None => {},
+    }
+  }
 ---
 package main
 

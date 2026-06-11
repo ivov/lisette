@@ -1,6 +1,30 @@
 ---
 source: tests/spec/emit/result_option_patterns.rs
-description: "input: \nimport \"go:fmt\"\n\nfn parse(s: string) -> Result<int, string> {\n  if s == \"42\" { Ok(42) } else { Err(\"bad\") }\n}\n\nfn main() {\n  let x = 100\n  fmt.Println(x)\n  let x = 200\n\n  let result = try {\n    let x = parse(\"42\")?\n    x + 1\n  }\n\n  match result {\n    Ok(v) => fmt.Println(v),\n    Err(e) => fmt.Println(e),\n  }\n\n  fmt.Println(x)\n}\n"
+description: |
+  
+  import "go:fmt"
+  
+  fn parse(s: string) -> Result<int, string> {
+    if s == "42" { Ok(42) } else { Err("bad") }
+  }
+  
+  fn main() {
+    let x = 100
+    fmt.Println(x)
+    let x = 200
+  
+    let result = try {
+      let x = parse("42")?
+      x + 1
+    }
+  
+    match result {
+      Ok(v) => fmt.Println(v),
+      Err(e) => fmt.Println(e),
+    }
+  
+    fmt.Println(x)
+  }
 ---
 package main
 

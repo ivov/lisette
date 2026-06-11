@@ -1,6 +1,14 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nfn g() -> Result<int, string> { Ok(0) }\n\nfn f() -> Result<int, string> {\n  let mut s = 0\n  for i in g()?..5 { s = s + i }\n  Ok(s)\n}\n"
+description: |
+  
+  fn g() -> Result<int, string> { Ok(0) }
+  
+  fn f() -> Result<int, string> {
+    let mut s = 0
+    for i in g()?..5 { s = s + i }
+    Ok(s)
+  }
 ---
 package main
 

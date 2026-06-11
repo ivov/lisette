@@ -1,6 +1,6 @@
 ---
 source: tests/spec/lex/mod.rs
-description: "input: r\"([a-zA-Z])(\\d)\""
+description: "r\"([a-zA-Z])(\\d)\""
 ---
 LexResult {
     tokens: [

@@ -1,6 +1,8 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \npub struct Point { x: int, y: int }\n"
+description: |
+  
+  pub struct Point { x: int, y: int }
 ---
 [
     Struct {

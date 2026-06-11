@@ -1,6 +1,12 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nstruct Conf { items: Slice<int>, lookup: Map<string, int> }\n\nfn test() -> Conf {\n  Conf { .. }\n}\n"
+description: |
+  
+  struct Conf { items: Slice<int>, lookup: Map<string, int> }
+  
+  fn test() -> Conf {
+    Conf { .. }
+  }
 ---
 package main
 

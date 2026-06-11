@@ -1,6 +1,13 @@
 ---
 source: tests/spec/emit/recover.rs
-description: "input: \nfn test() {\n  let outer = recover {\n    let inner = recover { 1 };\n    2\n  };\n}\n"
+description: |
+  
+  fn test() {
+    let outer = recover {
+      let inner = recover { 1 };
+      2
+    };
+  }
 ---
 package main
 

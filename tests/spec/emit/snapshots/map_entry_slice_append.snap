@@ -1,6 +1,18 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nstruct Box {\n  items: Slice<int>,\n}\n\nfn main() {\n  let mut m = Map.new<string, Box>()\n  m[\"a\"] = Box { items: [] }\n  let mut entry = m[\"a\"]\n  entry.items = entry.items.append(1)\n  m[\"a\"] = entry\n}\n"
+description: |
+  
+  struct Box {
+    items: Slice<int>,
+  }
+  
+  fn main() {
+    let mut m = Map.new<string, Box>()
+    m["a"] = Box { items: [] }
+    let mut entry = m["a"]
+    entry.items = entry.items.append(1)
+    m["a"] = entry
+  }
 ---
 package main
 

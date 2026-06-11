@@ -1,6 +1,21 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \nstruct Box<T> {\n  value: T,\n}\n\nimpl<T> Box<T> {\n  fn make_map(self) -> Map<T, int> {\n    Map.new<T, int>()\n  }\n}\n\nfn main() {\n  let b = Box { value: \"a\" }\n  let _ = b.make_map()\n}\n"
+description: |
+  
+  struct Box<T> {
+    value: T,
+  }
+  
+  impl<T> Box<T> {
+    fn make_map(self) -> Map<T, int> {
+      Map.new<T, int>()
+    }
+  }
+  
+  fn main() {
+    let b = Box { value: "a" }
+    let _ = b.make_map()
+  }
 ---
 package main
 

@@ -1,6 +1,12 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nimpl<T> Box<T> {\n  fn new(value: T) -> Box<T> {\n    return Box { value };\n  }\n}\n"
+description: |
+  
+  impl<T> Box<T> {
+    fn new(value: T) -> Box<T> {
+      return Box { value };
+    }
+  }
 ---
 [
     ImplBlock {

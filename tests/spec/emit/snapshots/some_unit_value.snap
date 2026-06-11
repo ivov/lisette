@@ -1,6 +1,10 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nfn test() -> Option<()> {\n  Some(())\n}\n"
+description: |
+  
+  fn test() -> Option<()> {
+    Some(())
+  }
 ---
 package main
 

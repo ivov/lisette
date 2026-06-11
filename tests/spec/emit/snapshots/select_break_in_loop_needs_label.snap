@@ -1,6 +1,23 @@
 ---
 source: tests/spec/emit/concurrency.rs
-description: "input: \nimport \"go:fmt\"\n\nfn main() {\n  let ch = Channel.buffered<string>(1)\n  ch.send(\"hello\")\n\n  loop {\n    select {\n      let Some(msg) = ch.receive() => {\n        fmt.Println(msg)\n        break\n      },\n      _ => break,\n    }\n  }\n}\n"
+description: |
+  
+  import "go:fmt"
+  
+  fn main() {
+    let ch = Channel.buffered<string>(1)
+    ch.send("hello")
+  
+    loop {
+      select {
+        let Some(msg) = ch.receive() => {
+          fmt.Println(msg)
+          break
+        },
+        _ => break,
+      }
+    }
+  }
 ---
 package main
 

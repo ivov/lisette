@@ -1,6 +1,16 @@
 ---
 source: tests/spec/emit/functions.rs
-description: "input: \nimport \"go:flag\"\n\nfn get(name: string) -> Option<Ref<flag.Flag>> {\n  flag.Lookup(name)\n}\n\nfn main() {\n  let _ = get(\"x\");\n}\n"
+description: |
+  
+  import "go:flag"
+  
+  fn get(name: string) -> Option<Ref<flag.Flag>> {
+    flag.Lookup(name)
+  }
+  
+  fn main() {
+    let _ = get("x");
+  }
 ---
 package main
 

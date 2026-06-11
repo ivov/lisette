@@ -1,6 +1,10 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \nstruct Bag {\n  pub callback: fn() -> Unknown,\n}\n"
+description: |
+  
+  struct Bag {
+    pub callback: fn() -> Unknown,
+  }
 ---
 package main
 

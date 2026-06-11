@@ -1,6 +1,25 @@
 ---
 source: tests/spec/emit/interop_matrix.rs
-description: "input: \nimport \"go:strconv\"\n\nstruct Box {}\n\nimpl Box {\n  fn apply(self, f: fn(string) -> Result<int, error>) -> Result<int, error> {\n    f(\"1\")\n  }\n}\n\nfn main() {\n  let b = Box {}\n  let r = Box.apply(b, strconv.Atoi)\n  match r {\n    Ok(v) => { let _ = v },\n    Err(_) => { let _ = 0 },\n  }\n}\n"
+description: |
+  
+  import "go:strconv"
+  
+  struct Box {}
+  
+  impl Box {
+    fn apply(self, f: fn(string) -> Result<int, error>) -> Result<int, error> {
+      f("1")
+    }
+  }
+  
+  fn main() {
+    let b = Box {}
+    let r = Box.apply(b, strconv.Atoi)
+    match r {
+      Ok(v) => { let _ = v },
+      Err(_) => { let _ = 0 },
+    }
+  }
 ---
 package main
 

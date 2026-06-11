@@ -1,6 +1,22 @@
 ---
 source: tests/spec/emit/result_option_patterns.rs
-description: "input: \nimport \"go:net\"\n\nfn main() {\n  match net.SplitHostPort(\"localhost:8080\") {\n    Ok((host, port)) => {\n      let _ = host\n      let _ = port\n      ()\n    },\n    Err(e) => {\n      let _ = e\n      ()\n    },\n  }\n}\n"
+description: |
+  
+  import "go:net"
+  
+  fn main() {
+    match net.SplitHostPort("localhost:8080") {
+      Ok((host, port)) => {
+        let _ = host
+        let _ = port
+        ()
+      },
+      Err(e) => {
+        let _ = e
+        ()
+      },
+    }
+  }
 ---
 package main
 

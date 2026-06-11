@@ -1,6 +1,15 @@
 ---
 source: tests/spec/format/mod.rs
-description: "input: enum E { Pair(int, int), Other }\n\nfn f(e: E) -> int {\n  match e {\n    Pair(a, // trailing variant payload\n    b) => a + b,\n    Other => 0,\n  }\n}"
+description: |-
+  enum E { Pair(int, int), Other }
+  
+  fn f(e: E) -> int {
+    match e {
+      Pair(a, // trailing variant payload
+      b) => a + b,
+      Other => 0,
+    }
+  }
 ---
 enum E {
   Pair(int, int),

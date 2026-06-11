@@ -1,6 +1,6 @@
 ---
 source: tests/spec/lex/mod.rs
-description: "input: 42; // meaning of life"
+description: 42; // meaning of life
 ---
 LexResult {
     tokens: [

@@ -1,6 +1,17 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nimport \"go:fmt\"\n\nfn idx() -> int { let _ = fmt.Println(\"idx\"); 0 }\nfn cond() -> bool { let _ = fmt.Println(\"cond\"); true }\n\nfn main() {\n  let mut s = [1]\n  let _ = { s[idx()] = if cond() { 2 } else { 3 } }\n  let _ = fmt.Println(s[0])\n}\n"
+description: |
+  
+  import "go:fmt"
+  
+  fn idx() -> int { let _ = fmt.Println("idx"); 0 }
+  fn cond() -> bool { let _ = fmt.Println("cond"); true }
+  
+  fn main() {
+    let mut s = [1]
+    let _ = { s[idx()] = if cond() { 2 } else { 3 } }
+    let _ = fmt.Println(s[0])
+  }
 ---
 package main
 

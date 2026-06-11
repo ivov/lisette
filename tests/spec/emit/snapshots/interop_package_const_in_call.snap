@@ -1,6 +1,13 @@
 ---
 source: tests/spec/emit/interop_matrix.rs
-description: "input: \nimport \"go:time\"\nimport \"go:fmt\"\n\nfn function() {\n  fmt.Println(\"march\", time.March)\n}\n"
+description: |
+  
+  import "go:time"
+  import "go:fmt"
+  
+  fn function() {
+    fmt.Println("march", time.March)
+  }
 ---
 package main
 

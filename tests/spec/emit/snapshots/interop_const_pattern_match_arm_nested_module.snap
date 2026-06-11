@@ -1,6 +1,16 @@
 ---
 source: tests/spec/emit/interop_matrix.rs
-description: "input: \nimport \"go:debug/dwarf\"\n\nfn describe(a: dwarf.Attr) -> string {\n  match a {\n    dwarf.AttrArtificial => \"artificial\",\n    dwarf.AttrByteSize   => \"byte size\",\n    _ => \"other\",\n  }\n}\n"
+description: |
+  
+  import "go:debug/dwarf"
+  
+  fn describe(a: dwarf.Attr) -> string {
+    match a {
+      dwarf.AttrArtificial => "artificial",
+      dwarf.AttrByteSize   => "byte size",
+      _ => "other",
+    }
+  }
 ---
 package main
 

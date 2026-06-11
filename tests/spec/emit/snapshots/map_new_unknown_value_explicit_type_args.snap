@@ -1,7 +1,11 @@
 ---
 source: tests/spec/emit/prelude.rs
-assertion_line: 436
-description: "input: \nfn test() {\n  let mut m = Map.new<string, Unknown>()\n  m[\"key\"] = \"value\"\n}\n"
+description: |
+  
+  fn test() {
+    let mut m = Map.new<string, Unknown>()
+    m["key"] = "value"
+  }
 ---
 package main
 

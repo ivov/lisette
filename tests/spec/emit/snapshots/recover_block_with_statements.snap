@@ -1,6 +1,14 @@
 ---
 source: tests/spec/emit/recover.rs
-description: "input: \nfn test() {\n  let result = recover {\n    let x = 1;\n    let y = 2;\n    x + y\n  };\n}\n"
+description: |
+  
+  fn test() {
+    let result = recover {
+      let x = 1;
+      let y = 2;
+      x + y
+    };
+  }
 ---
 package main
 

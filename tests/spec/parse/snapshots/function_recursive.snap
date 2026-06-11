@@ -1,6 +1,13 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nfn factorial(n: int) -> int {\n  if n <= 1 {\n    return 1;\n  }\n  return n * factorial(n - 1);\n}\n"
+description: |
+  
+  fn factorial(n: int) -> int {
+    if n <= 1 {
+      return 1;
+    }
+    return n * factorial(n - 1);
+  }
 ---
 [
     Function {

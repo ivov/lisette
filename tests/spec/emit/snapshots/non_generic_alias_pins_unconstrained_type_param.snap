@@ -1,6 +1,14 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \nstruct Phantom<T, P> { pub value: T }\n\ntype IntPhantom = Phantom<int, string>\n\nfn make() -> IntPhantom {\n  IntPhantom { value: 7, .. }\n}\n"
+description: |
+  
+  struct Phantom<T, P> { pub value: T }
+  
+  type IntPhantom = Phantom<int, string>
+  
+  fn make() -> IntPhantom {
+    IntPhantom { value: 7, .. }
+  }
 ---
 package main
 

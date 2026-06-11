@@ -1,6 +1,11 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \n#[tag(\"bson\", snake_case)]\nstruct User {\n  userName: string,\n}\n"
+description: |
+  
+  #[tag("bson", snake_case)]
+  struct User {
+    userName: string,
+  }
 ---
 package main
 

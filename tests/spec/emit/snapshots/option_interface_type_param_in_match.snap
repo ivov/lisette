@@ -1,6 +1,28 @@
 ---
 source: tests/spec/emit/functions.rs
-description: "input: \ninterface Printable {\n  fn to_string(self) -> string\n}\n\nstruct Box { label: string }\nimpl Box {\n  pub fn to_string(self) -> string { self.label }\n}\n\nstruct Circle { radius: int }\nimpl Circle {\n  pub fn to_string(self) -> string { \"circle\" }\n}\n\nfn find_it(n: int) -> Option<Printable> {\n  match n {\n    1 => Some(Box { label: \"found\" }),\n    2 => Some(Circle { radius: 10 }),\n    _ => None,\n  }\n}\n"
+description: |
+  
+  interface Printable {
+    fn to_string(self) -> string
+  }
+  
+  struct Box { label: string }
+  impl Box {
+    pub fn to_string(self) -> string { self.label }
+  }
+  
+  struct Circle { radius: int }
+  impl Circle {
+    pub fn to_string(self) -> string { "circle" }
+  }
+  
+  fn find_it(n: int) -> Option<Printable> {
+    match n {
+      1 => Some(Box { label: "found" }),
+      2 => Some(Circle { radius: 10 }),
+      _ => None,
+    }
+  }
 ---
 package main
 

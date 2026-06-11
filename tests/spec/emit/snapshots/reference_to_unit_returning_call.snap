@@ -1,6 +1,12 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nfn noop() {}\n\nfn main() {\n  let _ = &noop()\n}\n"
+description: |
+  
+  fn noop() {}
+  
+  fn main() {
+    let _ = &noop()
+  }
 ---
 package main
 

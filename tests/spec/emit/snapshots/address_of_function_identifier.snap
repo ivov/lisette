@@ -1,6 +1,13 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nfn add1(x: int) -> int { x + 1 }\n\nfn main() {\n  let f = &add1\n  let _ = f\n}\n"
+description: |
+  
+  fn add1(x: int) -> int { x + 1 }
+  
+  fn main() {
+    let f = &add1
+    let _ = f
+  }
 ---
 package main
 

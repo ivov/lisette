@@ -1,6 +1,20 @@
 ---
 source: tests/spec/emit/concurrency.rs
-description: "input: \nfn record(acc: Ref<int>, digit: int) {\n  acc.* = acc.* * 10 + digit\n}\n\nfn test() -> int {\n  let mut acc = 0;\n  {\n    defer record(&acc, 1);\n    record(&acc, 2)\n  };\n  record(&acc, 3);\n  acc\n}\n"
+description: |
+  
+  fn record(acc: Ref<int>, digit: int) {
+    acc.* = acc.* * 10 + digit
+  }
+  
+  fn test() -> int {
+    let mut acc = 0;
+    {
+      defer record(&acc, 1);
+      record(&acc, 2)
+    };
+    record(&acc, 3);
+    acc
+  }
 ---
 package main
 

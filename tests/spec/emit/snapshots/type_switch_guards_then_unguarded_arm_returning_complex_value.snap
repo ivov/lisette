@@ -1,6 +1,17 @@
 ---
 source: tests/spec/emit/patterns.rs
-description: "input: \nimport \"go:example.com/events\"\n\nfn handle(e: events.Event) -> Option<int> {\n  match e {\n    events.Click { x } if x > 100 => Some(x * 10),\n    events.Click { x } if x > 0 => Some(x),\n    events.Click { x } => Some(-x),\n    _ => None,\n  }\n}\n"
+description: |
+  
+  import "go:example.com/events"
+  
+  fn handle(e: events.Event) -> Option<int> {
+    match e {
+      events.Click { x } if x > 100 => Some(x * 10),
+      events.Click { x } if x > 0 => Some(x),
+      events.Click { x } => Some(-x),
+      _ => None,
+    }
+  }
 ---
 package main
 

@@ -1,6 +1,11 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nstruct Foo {}\nfn test() {\n  let result = Foo {};\n}\n"
+description: |
+  
+  struct Foo {}
+  fn test() {
+    let result = Foo {};
+  }
 ---
 [
     Struct {

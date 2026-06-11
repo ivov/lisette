@@ -1,6 +1,10 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nfn test(a: int, b: int) {\n  let result = -a * b;\n}\n"
+description: |
+  
+  fn test(a: int, b: int) {
+    let result = -a * b;
+  }
 ---
 [
     Function {

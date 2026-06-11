@@ -1,6 +1,10 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nenum Token {\n  Eof {},\n}\n"
+description: |
+  
+  enum Token {
+    Eof {},
+  }
 ---
 [
     Enum {

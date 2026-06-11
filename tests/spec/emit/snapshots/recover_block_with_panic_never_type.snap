@@ -1,6 +1,15 @@
 ---
 source: tests/spec/emit/recover.rs
-description: "input: \nfn panicky() -> int {\n  let arr: Slice<int> = [];\n  arr[0]\n}\n\nfn test() {\n  let result = recover { panicky() };\n}\n"
+description: |
+  
+  fn panicky() -> int {
+    let arr: Slice<int> = [];
+    arr[0]
+  }
+  
+  fn test() {
+    let result = recover { panicky() };
+  }
 ---
 package main
 

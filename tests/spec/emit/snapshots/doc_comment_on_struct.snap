@@ -1,6 +1,9 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \n/// A 2D point with x and y coordinates.\nstruct Point { x: int, y: int }\n"
+description: |
+  
+  /// A 2D point with x and y coordinates.
+  struct Point { x: int, y: int }
 ---
 package main
 

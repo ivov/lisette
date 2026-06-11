@@ -1,6 +1,13 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nstruct Inner { opt: Option<int>, items: Slice<int> }\nstruct Outer { inner: Inner }\n\nfn test() -> Outer {\n  Outer { .. }\n}\n"
+description: |
+  
+  struct Inner { opt: Option<int>, items: Slice<int> }
+  struct Outer { inner: Inner }
+  
+  fn test() -> Outer {
+    Outer { .. }
+  }
 ---
 package main
 

@@ -1,6 +1,13 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nfn test() {\n  loop {\n    let Some(item) = iter.next() else { break; };\n    process(item);\n  }\n}\n"
+description: |
+  
+  fn test() {
+    loop {
+      let Some(item) = iter.next() else { break; };
+      process(item);
+    }
+  }
 ---
 [
     Function {

@@ -1,6 +1,26 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nimport \"go:fmt\"\n\nstruct Box { x: int }\n\nfn make_i() -> int {\n  fmt.Println(\"i\")\n  0\n}\n\nfn main() {\n  let mut maps: Map<int, Map<string, Box>> = Map.new()\n  let mut inner = Map.new<string, Box>()\n  inner[\"k\"] = Box { x: 0 }\n  maps[0] = inner\n  let i = make_i()\n  let mut entry = maps[i][\"k\"]\n  entry.x = 1\n  maps[i][\"k\"] = entry\n}\n"
+description: |
+  
+  import "go:fmt"
+  
+  struct Box { x: int }
+  
+  fn make_i() -> int {
+    fmt.Println("i")
+    0
+  }
+  
+  fn main() {
+    let mut maps: Map<int, Map<string, Box>> = Map.new()
+    let mut inner = Map.new<string, Box>()
+    inner["k"] = Box { x: 0 }
+    maps[0] = inner
+    let i = make_i()
+    let mut entry = maps[i]["k"]
+    entry.x = 1
+    maps[i]["k"] = entry
+  }
 ---
 package main
 

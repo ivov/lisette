@@ -1,6 +1,14 @@
 ---
 source: tests/spec/emit/functions.rs
-description: "input: \nimport \"go:math\"\n\nfn main() {\n  let x = 1.25\n  let (x, y) = math.Modf(x)\n  let _ = (x, y)\n}\n"
+description: |
+  
+  import "go:math"
+  
+  fn main() {
+    let x = 1.25
+    let (x, y) = math.Modf(x)
+    let _ = (x, y)
+  }
 ---
 package main
 

@@ -1,6 +1,12 @@
 ---
 source: tests/spec/lex/mod.rs
-description: "input: let a = 1\n\nlet s = \"x\ny\"\n\nlet b = 2"
+description: |-
+  let a = 1
+  
+  let s = "x
+  y"
+  
+  let b = 2
 ---
 LexResult {
     tokens: [

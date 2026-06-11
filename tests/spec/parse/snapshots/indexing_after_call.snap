@@ -1,6 +1,10 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nfn test(key: string) {\n  let value = get_map()[key];\n}\n"
+description: |
+  
+  fn test(key: string) {
+    let value = get_map()[key];
+  }
 ---
 [
     Function {

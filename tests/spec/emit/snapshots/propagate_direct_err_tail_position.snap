@@ -1,6 +1,14 @@
 ---
 source: tests/spec/emit/result_option_patterns.rs
-description: "input: \nfn f() -> Result<int, string> {\n  Err(\"e\")?\n}\n\nfn test() -> Result<int, string> {\n  f()\n}\n"
+description: |
+  
+  fn f() -> Result<int, string> {
+    Err("e")?
+  }
+  
+  fn test() -> Result<int, string> {
+    f()
+  }
 ---
 package main
 

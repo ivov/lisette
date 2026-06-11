@@ -1,6 +1,16 @@
 ---
 source: tests/spec/emit/functions.rs
-description: "input: \nstruct Logger {}\n\nimpl Logger {\n  pub fn push(self, entries: VarArgs<string>) {}\n}\n\nfn test(l: Logger, parts: Slice<string>) {\n  Logger.push(l, parts...)\n}\n"
+description: |
+  
+  struct Logger {}
+  
+  impl Logger {
+    pub fn push(self, entries: VarArgs<string>) {}
+  }
+  
+  fn test(l: Logger, parts: Slice<string>) {
+    Logger.push(l, parts...)
+  }
 ---
 package main
 

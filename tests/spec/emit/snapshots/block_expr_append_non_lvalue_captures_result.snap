@@ -1,6 +1,14 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nfn get() -> Slice<int> { [1] }\nfn arg() -> int { 2 }\n\nfn main() {\n  let x = { get().append(arg()) }\n  let _ = x[1]\n}\n"
+description: |
+  
+  fn get() -> Slice<int> { [1] }
+  fn arg() -> int { 2 }
+  
+  fn main() {
+    let x = { get().append(arg()) }
+    let _ = x[1]
+  }
 ---
 package main
 

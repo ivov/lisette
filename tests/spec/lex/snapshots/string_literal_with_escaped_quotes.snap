@@ -1,6 +1,6 @@
 ---
 source: tests/spec/lex/mod.rs
-description: "input: \"She said \\\"hello\\\"\""
+description: "\"She said \\\"hello\\\"\""
 ---
 LexResult {
     tokens: [

@@ -1,6 +1,14 @@
 ---
 source: tests/spec/emit/result_option_patterns.rs
-description: "input: \nimport \"go:fmt\"\n\nfn main() {\n  let imag_part = 4.0\n  let c = 3.0 + imag_part * 1.0i\n  fmt.Println(f\"complex: {c}\")\n}\n"
+description: |
+  
+  import "go:fmt"
+  
+  fn main() {
+    let imag_part = 4.0
+    let c = 3.0 + imag_part * 1.0i
+    fmt.Println(f"complex: {c}")
+  }
 ---
 package main
 

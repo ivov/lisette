@@ -1,6 +1,17 @@
 ---
 source: tests/spec/emit/concurrency.rs
-description: "input: \nfn test() -> int {\n  let closed = Channel.new<int>()\n  closed.close()\n  let sink = Channel.buffered<int>(1)\n  select {\n    let Some(_x) = closed.receive() => 10,\n    sink.send(5) => 20,\n    _ => 30,\n  }\n}\n"
+description: |
+  
+  fn test() -> int {
+    let closed = Channel.new<int>()
+    closed.close()
+    let sink = Channel.buffered<int>(1)
+    select {
+      let Some(_x) = closed.receive() => 10,
+      sink.send(5) => 20,
+      _ => 30,
+    }
+  }
 ---
 package main
 

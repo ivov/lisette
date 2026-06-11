@@ -1,6 +1,15 @@
 ---
 source: tests/spec/emit/control_flow.rs
-description: "input: \nenum Status { Pending, Running, Complete, Failed }\n\nfn test(s: Status) -> string {\n  match s {\n    Pending | Running => \"in progress\",\n    Complete | Failed => \"finished\",\n  }\n}\n"
+description: |
+  
+  enum Status { Pending, Running, Complete, Failed }
+  
+  fn test(s: Status) -> string {
+    match s {
+      Pending | Running => "in progress",
+      Complete | Failed => "finished",
+    }
+  }
 ---
 package main
 

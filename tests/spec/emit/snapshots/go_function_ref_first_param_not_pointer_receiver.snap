@@ -1,6 +1,17 @@
 ---
 source: tests/spec/emit/functions.rs
-description: "input: \nimport \"go:flag\"\n\nfn main() {\n  let f = flag.UnquoteUsage\n  let fl = flag.Lookup(\"verbose\")\n  match fl {\n    Some(v) => { let _ = f(v) },\n    None => {},\n  }\n}\n"
+description: |
+  
+  import "go:flag"
+  
+  fn main() {
+    let f = flag.UnquoteUsage
+    let fl = flag.Lookup("verbose")
+    match fl {
+      Some(v) => { let _ = f(v) },
+      None => {},
+    }
+  }
 ---
 package main
 

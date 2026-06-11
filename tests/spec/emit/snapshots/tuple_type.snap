@@ -1,6 +1,10 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \nfn test() {\n  (42, \"hello\")\n}\n"
+description: |
+  
+  fn test() {
+    (42, "hello")
+  }
 ---
 package main
 

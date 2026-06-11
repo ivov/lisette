@@ -1,6 +1,6 @@
 ---
 source: tests/spec/format/mod.rs
-description: "input: fn test() { match p { Empty {} => \"empty\" } }"
+description: "fn test() { match p { Empty {} => \"empty\" } }"
 ---
 fn test() {
   match p {

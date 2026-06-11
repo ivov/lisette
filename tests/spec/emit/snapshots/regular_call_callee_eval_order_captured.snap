@@ -1,6 +1,21 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nfn f0(x: int) -> int { x + 10 }\nfn f1(x: int) -> int { x + 20 }\n\nfn bump(i: Ref<int>) -> int {\n  i.* = 1\n  0\n}\n\nfn main() {\n  let mut i = 0\n  let fs = [f0, f1]\n  let r = fs[i](bump(&i))\n  let _ = r\n}\n"
+description: |
+  
+  fn f0(x: int) -> int { x + 10 }
+  fn f1(x: int) -> int { x + 20 }
+  
+  fn bump(i: Ref<int>) -> int {
+    i.* = 1
+    0
+  }
+  
+  fn main() {
+    let mut i = 0
+    let fs = [f0, f1]
+    let r = fs[i](bump(&i))
+    let _ = r
+  }
 ---
 package main
 

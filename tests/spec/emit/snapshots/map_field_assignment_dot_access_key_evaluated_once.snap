@@ -1,6 +1,26 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nimport \"go:fmt\"\n\nstruct Key { k: string }\nstruct Box { x: int }\n\nfn make_key(counter: Ref<int>) -> Key {\n  counter.* = counter.* + 1\n  Key { k: \"a\" }\n}\n\nfn main() {\n  let mut counter = 0\n  let mut m = Map.from([(\"a\", Box { x: 1 })])\n  let key = make_key(&counter).k\n  let mut entry = m[key]\n  entry.x = 2\n  m[key] = entry\n  fmt.Println(counter)\n}\n"
+description: |
+  
+  import "go:fmt"
+  
+  struct Key { k: string }
+  struct Box { x: int }
+  
+  fn make_key(counter: Ref<int>) -> Key {
+    counter.* = counter.* + 1
+    Key { k: "a" }
+  }
+  
+  fn main() {
+    let mut counter = 0
+    let mut m = Map.from([("a", Box { x: 1 })])
+    let key = make_key(&counter).k
+    let mut entry = m[key]
+    entry.x = 2
+    m[key] = entry
+    fmt.Println(counter)
+  }
 ---
 package main
 

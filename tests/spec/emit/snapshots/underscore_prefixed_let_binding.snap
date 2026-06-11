@@ -1,6 +1,14 @@
 ---
 source: tests/spec/emit/control_flow.rs
-description: "input: \nimport \"go:fmt\"\n\nfn test() {\n  let s = \"hello, world\";\n  let _unused = s;\n  fmt.Print(\"Done\\n\");\n}\n"
+description: |
+  
+  import "go:fmt"
+  
+  fn test() {
+    let s = "hello, world";
+    let _unused = s;
+    fmt.Print("Done\n");
+  }
 ---
 package main
 

@@ -1,6 +1,13 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \nfn test(arr: Slice<int>) {\n  let view = arr[1..4]\n  let mut owned = arr[1..4]\n  owned[0] = 99\n  let _ = view\n}\n"
+description: |
+  
+  fn test(arr: Slice<int>) {
+    let view = arr[1..4]
+    let mut owned = arr[1..4]
+    owned[0] = 99
+    let _ = view
+  }
 ---
 package main
 

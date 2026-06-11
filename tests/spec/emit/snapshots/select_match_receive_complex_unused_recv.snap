@@ -1,6 +1,19 @@
 ---
 source: tests/spec/emit/concurrency.rs
-description: "input: \nstruct P { v: int }\nfn test() {\n  let ch = Channel.buffered<P>(1)\n  ch.send(P { v: 1 })\n  select {\n    match ch.receive() {\n      Some(P { v }) => (),\n      None => (),\n    },\n    _ => (),\n  }\n}\n"
+description: |
+  
+  struct P { v: int }
+  fn test() {
+    let ch = Channel.buffered<P>(1)
+    ch.send(P { v: 1 })
+    select {
+      match ch.receive() {
+        Some(P { v }) => (),
+        None => (),
+      },
+      _ => (),
+    }
+  }
 ---
 package main
 

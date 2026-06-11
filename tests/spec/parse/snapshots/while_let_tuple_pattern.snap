@@ -1,6 +1,14 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nfn test(pairs: Slice<Option<(int, int)>>) {\n  let mut i = 0;\n  while let Some((a, b)) = pairs[i] {\n    print(a + b);\n    i = i + 1;\n  }\n}\n"
+description: |
+  
+  fn test(pairs: Slice<Option<(int, int)>>) {
+    let mut i = 0;
+    while let Some((a, b)) = pairs[i] {
+      print(a + b);
+      i = i + 1;
+    }
+  }
 ---
 [
     Function {

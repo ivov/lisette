@@ -1,6 +1,8 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \nstruct Handle(Ref<int>)\n"
+description: |
+  
+  struct Handle(Ref<int>)
 ---
 package main
 

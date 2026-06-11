@@ -1,6 +1,10 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \npub interface Describable {\n  fn describe(self) -> string\n}\n"
+description: |
+  
+  pub interface Describable {
+    fn describe(self) -> string
+  }
 ---
 package main
 

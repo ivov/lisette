@@ -1,6 +1,13 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nfn make_items() -> Slice<int> { [10, 20, 30] }\n\nfn test() -> int {\n  let ys = make_items()[1..]\n  ys.length()\n}\n"
+description: |
+  
+  fn make_items() -> Slice<int> { [10, 20, 30] }
+  
+  fn test() -> int {
+    let ys = make_items()[1..]
+    ys.length()
+  }
 ---
 package main
 

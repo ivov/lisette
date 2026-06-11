@@ -1,6 +1,6 @@
 ---
 source: tests/spec/lex/mod.rs
-description: "input: // if else while true false 42"
+description: // if else while true false 42
 ---
 LexResult {
     tokens: [

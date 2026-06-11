@@ -1,6 +1,17 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nfn test() {\n  let result = try {\n    for i in items {\n      if i > 10 {\n        break;\n      }\n    };\n    get_value()?\n  };\n}\n"
+description: |
+  
+  fn test() {
+    let result = try {
+      for i in items {
+        if i > 10 {
+          break;
+        }
+      };
+      get_value()?
+    };
+  }
 ---
 [
     Function {

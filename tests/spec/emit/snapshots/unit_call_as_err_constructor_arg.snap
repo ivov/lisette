@@ -1,6 +1,12 @@
 ---
 source: tests/spec/emit/result_option_patterns.rs
-description: "input: \nfn noop() {}\n\nfn test() -> Result<int, ()> {\n  Err(noop())\n}\n"
+description: |
+  
+  fn noop() {}
+  
+  fn test() -> Result<int, ()> {
+    Err(noop())
+  }
 ---
 package main
 

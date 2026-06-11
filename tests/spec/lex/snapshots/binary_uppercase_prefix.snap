@@ -1,6 +1,6 @@
 ---
 source: tests/spec/lex/mod.rs
-description: "input: 0B1010"
+description: 0B1010
 ---
 LexResult {
     tokens: [

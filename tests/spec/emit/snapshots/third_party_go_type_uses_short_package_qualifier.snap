@@ -1,6 +1,12 @@
 ---
 source: tests/spec/emit/imports.rs
-description: "input: \nimport \"go:github.com/bwmarrin/discordgo\"\n\nfn make() -> Ref<discordgo.Session> {\n  &discordgo.Session{}\n}\n"
+description: |
+  
+  import "go:github.com/bwmarrin/discordgo"
+  
+  fn make() -> Ref<discordgo.Session> {
+    &discordgo.Session{}
+  }
 ---
 package main
 

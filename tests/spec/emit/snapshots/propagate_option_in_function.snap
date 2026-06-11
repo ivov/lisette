@@ -1,6 +1,15 @@
 ---
 source: tests/spec/emit/result_option_patterns.rs
-description: "input: \nfn maybe_get() -> Option<int> {\n  None\n}\n\nfn process() -> Option<int> {\n  let x = maybe_get()?;\n  Some(x + 1)\n}\n"
+description: |
+  
+  fn maybe_get() -> Option<int> {
+    None
+  }
+  
+  fn process() -> Option<int> {
+    let x = maybe_get()?;
+    Some(x + 1)
+  }
 ---
 package main
 

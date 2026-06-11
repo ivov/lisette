@@ -1,6 +1,19 @@
 ---
 source: tests/spec/emit/concurrency.rs
-description: "input: \nimport \"go:fmt\"\n\nfn main() {\n  let x = 1\n  fmt.Println(x)\n  task {\n    let x = 2\n    fmt.Println(x)\n    let x = 3\n    fmt.Println(x)\n  }\n}\n"
+description: |
+  
+  import "go:fmt"
+  
+  fn main() {
+    let x = 1
+    fmt.Println(x)
+    task {
+      let x = 2
+      fmt.Println(x)
+      let x = 3
+      fmt.Println(x)
+    }
+  }
 ---
 package main
 

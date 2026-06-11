@@ -1,6 +1,21 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \ninterface Displayable {\n  fn display(self) -> string\n}\n\nstruct Labeled<T> {\n  label: string,\n  value: T,\n}\n\nimpl<T: Displayable> Labeled<T> {\n  fn show(self) -> string {\n    self.label\n  }\n}\n"
+description: |
+  
+  interface Displayable {
+    fn display(self) -> string
+  }
+  
+  struct Labeled<T> {
+    label: string,
+    value: T,
+  }
+  
+  impl<T: Displayable> Labeled<T> {
+    fn show(self) -> string {
+      self.label
+    }
+  }
 ---
 package main
 

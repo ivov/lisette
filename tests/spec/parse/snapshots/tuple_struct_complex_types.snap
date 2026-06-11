@@ -1,6 +1,8 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nstruct Container(Slice<int>, Map<string, bool>)\n"
+description: |
+  
+  struct Container(Slice<int>, Map<string, bool>)
 ---
 [
     Struct {

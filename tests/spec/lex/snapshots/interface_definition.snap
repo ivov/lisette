@@ -1,6 +1,10 @@
 ---
 source: tests/spec/lex/mod.rs
-description: "input: \ninterface Display {\n  fn fmt() -> string;\n}\n"
+description: |
+  
+  interface Display {
+    fn fmt() -> string;
+  }
 ---
 LexResult {
     tokens: [

@@ -1,6 +1,10 @@
 ---
 source: tests/spec/emit/prelude.rs
-description: "input: \nfn test(r: Ref<string>) -> string {\n  r.substring(1..4)\n}\n"
+description: |
+  
+  fn test(r: Ref<string>) -> string {
+    r.substring(1..4)
+  }
 ---
 package main
 

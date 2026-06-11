@@ -1,6 +1,8 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \ntype Callback = fn(int, string) -> bool;\n"
+description: |
+  
+  type Callback = fn(int, string) -> bool;
 ---
 [
     TypeAlias {

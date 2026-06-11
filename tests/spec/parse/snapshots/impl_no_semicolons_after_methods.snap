@@ -1,6 +1,20 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nstruct Point {\n  x: int,\n  y: int,\n}\n\nimpl Point {\n  fn new(x: int, y: int) -> Point {\n    return Point { x, y };\n  }\n  fn get_x(self: Point) -> int {\n    return self.x;\n  }\n}\n"
+description: |
+  
+  struct Point {
+    x: int,
+    y: int,
+  }
+  
+  impl Point {
+    fn new(x: int, y: int) -> Point {
+      return Point { x, y };
+    }
+    fn get_x(self: Point) -> int {
+      return self.x;
+    }
+  }
 ---
 [
     Struct {

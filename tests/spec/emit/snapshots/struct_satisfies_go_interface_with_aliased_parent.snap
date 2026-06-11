@@ -1,6 +1,28 @@
 ---
 source: tests/spec/emit/go_interface_adapter.rs
-description: "input: \nimport \"go:example.com/shapes\"\n\nstruct Square {}\n\nimpl Square {\n  fn Area(self) -> Result<int, error> {\n    Ok(4)\n  }\n  fn Name(self) -> string {\n    \"sq\"\n  }\n}\n\nfn describe(s: shapes.Shape) -> string {\n  s.Name()\n}\n\nfn main() {\n  let s = Square {}\n  let _ = describe(s as shapes.Shape)\n}\n"
+description: |
+  
+  import "go:example.com/shapes"
+  
+  struct Square {}
+  
+  impl Square {
+    fn Area(self) -> Result<int, error> {
+      Ok(4)
+    }
+    fn Name(self) -> string {
+      "sq"
+    }
+  }
+  
+  fn describe(s: shapes.Shape) -> string {
+    s.Name()
+  }
+  
+  fn main() {
+    let s = Square {}
+    let _ = describe(s as shapes.Shape)
+  }
 ---
 package main
 

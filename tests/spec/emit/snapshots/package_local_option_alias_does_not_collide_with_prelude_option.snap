@@ -1,6 +1,12 @@
 ---
 source: tests/spec/emit/imports.rs
-description: "input: \nimport \"go:example.com/validator\"\n\nfn test() {\n  let _ = validator.WithOption()\n}\n"
+description: |
+  
+  import "go:example.com/validator"
+  
+  fn test() {
+    let _ = validator.WithOption()
+  }
 ---
 package main
 

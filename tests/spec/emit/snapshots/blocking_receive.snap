@@ -1,6 +1,11 @@
 ---
 source: tests/spec/emit/concurrency.rs
-description: "input: \nfn test() -> Option<int> {\n  let ch = Channel.new<int>();\n  ch.receive()\n}\n"
+description: |
+  
+  fn test() -> Option<int> {
+    let ch = Channel.new<int>();
+    ch.receive()
+  }
 ---
 package main
 

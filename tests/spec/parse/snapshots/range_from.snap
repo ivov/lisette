@@ -1,6 +1,8 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nfn test() { for i in 0.. { break; } }\n"
+description: |
+  
+  fn test() { for i in 0.. { break; } }
 ---
 [
     Function {

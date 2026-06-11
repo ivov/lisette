@@ -1,6 +1,26 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nstruct Box { x: int }\n\nimpl Box {\n  fn inc(self: Ref<Box>) -> int {\n    self.*.x = self.*.x + 1\n    self.*.x\n  }\n}\n\nfn make_box() -> Box {\n  Box { x: 1 }\n}\n\nfn main() {\n  let v = make_box().inc()\n  let ref_1 = 7\n  let _ = v\n  let _ = ref_1\n}\n"
+description: |
+  
+  struct Box { x: int }
+  
+  impl Box {
+    fn inc(self: Ref<Box>) -> int {
+      self.*.x = self.*.x + 1
+      self.*.x
+    }
+  }
+  
+  fn make_box() -> Box {
+    Box { x: 1 }
+  }
+  
+  fn main() {
+    let v = make_box().inc()
+    let ref_1 = 7
+    let _ = v
+    let _ = ref_1
+  }
 ---
 package main
 

@@ -1,6 +1,15 @@
 ---
 source: tests/spec/emit/patterns.rs
-description: "input: \nimport \"go:example.com/events\"\n\nfn describe(e: events.Event) -> int {\n  match e {\n    events.Token(s) => s.length(),\n    _ => 0,\n  }\n}\n"
+description: |
+  
+  import "go:example.com/events"
+  
+  fn describe(e: events.Event) -> int {
+    match e {
+      events.Token(s) => s.length(),
+      _ => 0,
+    }
+  }
 ---
 package main
 

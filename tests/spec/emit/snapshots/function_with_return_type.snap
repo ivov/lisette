@@ -1,6 +1,10 @@
 ---
 source: tests/spec/emit/functions.rs
-description: "input: \nfn get_value() -> int {\n  42\n}\n"
+description: |
+  
+  fn get_value() -> int {
+    42
+  }
 ---
 package main
 

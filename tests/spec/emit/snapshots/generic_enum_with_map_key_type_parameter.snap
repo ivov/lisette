@@ -1,6 +1,18 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \nenum Container<K, V> {\n  Empty,\n  Indexed(Map<K, V>),\n}\n\nfn test() {\n  let mut m = Map.new<string, int>()\n  m[\"hello\"] = 1\n  let c = Container.Indexed<string, int>(m)\n  c\n}\n"
+description: |
+  
+  enum Container<K, V> {
+    Empty,
+    Indexed(Map<K, V>),
+  }
+  
+  fn test() {
+    let mut m = Map.new<string, int>()
+    m["hello"] = 1
+    let c = Container.Indexed<string, int>(m)
+    c
+  }
 ---
 package main
 

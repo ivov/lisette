@@ -1,6 +1,20 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nimport \"go:fmt\"\n\nstruct Box { x: int }\n\nfn make_box() -> Box {\n  Box { x: 1 }\n}\n\nfn main() {\n  let r = &make_box()\n  let ref_1 = 3\n  fmt.Println(r.*.x, ref_1)\n}\n"
+description: |
+  
+  import "go:fmt"
+  
+  struct Box { x: int }
+  
+  fn make_box() -> Box {
+    Box { x: 1 }
+  }
+  
+  fn main() {
+    let r = &make_box()
+    let ref_1 = 3
+    fmt.Println(r.*.x, ref_1)
+  }
 ---
 package main
 

@@ -1,6 +1,14 @@
 ---
 source: tests/spec/emit/functions.rs
-description: "input: \nimport \"go:bytes\"\n\nfn main() {\n  let f = bytes.Buffer.ReadString\n  let mut buf = bytes.Buffer {}\n  let _ = f(&buf, 10)\n}\n"
+description: |
+  
+  import "go:bytes"
+  
+  fn main() {
+    let f = bytes.Buffer.ReadString
+    let mut buf = bytes.Buffer {}
+    let _ = f(&buf, 10)
+  }
 ---
 package main
 

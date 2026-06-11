@@ -1,6 +1,13 @@
 ---
 source: tests/spec/emit/imports.rs
-description: "input: \nimport \"go:io\"\nimport \"go:fmt\"\n\nfn test() {\n  fmt.Print(\"Using imports\")\n}\n"
+description: |
+  
+  import "go:io"
+  import "go:fmt"
+  
+  fn test() {
+    fmt.Print("Using imports")
+  }
 ---
 package main
 

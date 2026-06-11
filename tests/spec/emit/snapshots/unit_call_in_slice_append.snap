@@ -1,6 +1,13 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nfn noop() {}\n\nfn test() {\n  let mut xs: Slice<()> = []\n  xs.append(noop())\n}\n"
+description: |
+  
+  fn noop() {}
+  
+  fn test() {
+    let mut xs: Slice<()> = []
+    xs.append(noop())
+  }
 ---
 package main
 

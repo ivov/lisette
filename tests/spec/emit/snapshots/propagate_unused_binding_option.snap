@@ -1,6 +1,13 @@
 ---
 source: tests/spec/emit/result_option_patterns.rs
-description: "input: \nfn maybe() -> Option<int> { Some(1) }\n\nfn test() -> Option<()> {\n  let _x = maybe()?\n  Some(())\n}\n"
+description: |
+  
+  fn maybe() -> Option<int> { Some(1) }
+  
+  fn test() -> Option<()> {
+    let _x = maybe()?
+    Some(())
+  }
 ---
 package main
 

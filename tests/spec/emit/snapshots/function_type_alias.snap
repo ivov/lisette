@@ -1,6 +1,16 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \ntype IntPredicate = fn(int) -> bool\n\nfn apply(f: IntPredicate, x: int) -> bool {\n  f(x)\n}\n\nfn test() -> bool {\n  apply(|x| x > 0, 42)\n}\n"
+description: |
+  
+  type IntPredicate = fn(int) -> bool
+  
+  fn apply(f: IntPredicate, x: int) -> bool {
+    f(x)
+  }
+  
+  fn test() -> bool {
+    apply(|x| x > 0, 42)
+  }
 ---
 package main
 

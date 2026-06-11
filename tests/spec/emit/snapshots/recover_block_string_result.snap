@@ -1,6 +1,10 @@
 ---
 source: tests/spec/emit/recover.rs
-description: "input: \nfn test() {\n  let result = recover { \"hello\" };\n}\n"
+description: |
+  
+  fn test() {
+    let result = recover { "hello" };
+  }
 ---
 package main
 

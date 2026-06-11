@@ -1,6 +1,20 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \ntype Transformer = fn(int) -> int\n\nfn apply(t: Transformer, val: int) -> int {\n  t(val)\n}\n\nfn double(x: int) -> int {\n  x * 2\n}\n\nfn test() -> int {\n  apply(double, 21)\n}\n"
+description: |
+  
+  type Transformer = fn(int) -> int
+  
+  fn apply(t: Transformer, val: int) -> int {
+    t(val)
+  }
+  
+  fn double(x: int) -> int {
+    x * 2
+  }
+  
+  fn test() -> int {
+    apply(double, 21)
+  }
 ---
 package main
 

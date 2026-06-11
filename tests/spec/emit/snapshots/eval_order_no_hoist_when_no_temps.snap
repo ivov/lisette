@@ -1,6 +1,13 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nfn a() -> int { 1 }\nfn b() -> int { 2 }\n\nfn main() {\n  let x = a() + b()\n}\n"
+description: |
+  
+  fn a() -> int { 1 }
+  fn b() -> int { 2 }
+  
+  fn main() {
+    let x = a() + b()
+  }
 ---
 package main
 

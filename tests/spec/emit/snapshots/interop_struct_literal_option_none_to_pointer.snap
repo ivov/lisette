@@ -1,6 +1,14 @@
 ---
 source: tests/spec/emit/interop_matrix.rs
-description: "input: \nimport \"go:example.com/cb\"\n\nfn main() {\n  let _ = cb.Options {\n    Direction: None,\n  }\n}\n"
+description: |
+  
+  import "go:example.com/cb"
+  
+  fn main() {
+    let _ = cb.Options {
+      Direction: None,
+    }
+  }
 ---
 package main
 

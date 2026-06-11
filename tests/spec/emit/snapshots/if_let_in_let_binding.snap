@@ -1,6 +1,11 @@
 ---
 source: tests/spec/emit/control_flow.rs
-description: "input: \nfn test(opt: Option<int>) -> int {\n  let result = if let Some(x) = opt { x } else { 0 };\n  result\n}\n"
+description: |
+  
+  fn test(opt: Option<int>) -> int {
+    let result = if let Some(x) = opt { x } else { 0 };
+    result
+  }
 ---
 package main
 

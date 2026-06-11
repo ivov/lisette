@@ -1,6 +1,12 @@
 ---
 source: tests/spec/emit/concurrency.rs
-description: "input: \nfn test() {\n  let ch = Channel.new<int>();\n  let (tx, rx) = ch.split();\n  tx.send(42);\n}\n"
+description: |
+  
+  fn test() {
+    let ch = Channel.new<int>();
+    let (tx, rx) = ch.split();
+    tx.send(42);
+  }
 ---
 package main
 

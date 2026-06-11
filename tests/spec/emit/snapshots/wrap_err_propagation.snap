@@ -1,6 +1,11 @@
 ---
 source: tests/spec/emit/result_option_patterns.rs
-description: "input: \nfn load(r: Result<int, error>) -> Result<int, error> {\n  let n = r.wrap_err(\"loading config\")?\n  Ok(n)\n}\n"
+description: |
+  
+  fn load(r: Result<int, error>) -> Result<int, error> {
+    let n = r.wrap_err("loading config")?
+    Ok(n)
+  }
 ---
 package main
 

@@ -1,6 +1,10 @@
 ---
 source: tests/spec/emit/functions.rs
-description: "input: \nfn test() {\n  \"test\".length()\n}\n"
+description: |
+  
+  fn test() {
+    "test".length()
+  }
 ---
 package main
 

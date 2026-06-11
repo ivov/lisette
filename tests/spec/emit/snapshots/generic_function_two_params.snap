@@ -1,6 +1,14 @@
 ---
 source: tests/spec/emit/functions.rs
-description: "input: \nfn first<A, B>(a: A, b: B) -> A {\n  a\n}\n\nfn test() -> int {\n  first(10, true)\n}\n"
+description: |
+  
+  fn first<A, B>(a: A, b: B) -> A {
+    a
+  }
+  
+  fn test() -> int {
+    first(10, true)
+  }
 ---
 package main
 

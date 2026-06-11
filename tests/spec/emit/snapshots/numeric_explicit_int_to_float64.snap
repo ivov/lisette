@@ -1,6 +1,18 @@
 ---
 source: tests/spec/emit/functions.rs
-description: "input: \nfn get_int() -> int {\n  42\n}\n\nfn accept_float(x: float64) -> float64 {\n  x\n}\n\nfn test() -> float64 {\n  accept_float(get_int() as float64)\n}\n"
+description: |
+  
+  fn get_int() -> int {
+    42
+  }
+  
+  fn accept_float(x: float64) -> float64 {
+    x
+  }
+  
+  fn test() -> float64 {
+    accept_float(get_int() as float64)
+  }
 ---
 package main
 

@@ -1,6 +1,12 @@
 ---
 source: tests/spec/emit/recover.rs
-description: "input: \nfn may_panic() -> int { 42 }\n\nfn test() -> Result<int, PanicValue> {\n  recover { may_panic() }\n}\n"
+description: |
+  
+  fn may_panic() -> int { 42 }
+  
+  fn test() -> Result<int, PanicValue> {
+    recover { may_panic() }
+  }
 ---
 package main
 

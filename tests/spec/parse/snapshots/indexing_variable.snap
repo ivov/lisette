@@ -1,6 +1,10 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nfn test(arr: Slice<int>, i: int) {\n  let val = arr[i];\n}\n"
+description: |
+  
+  fn test(arr: Slice<int>, i: int) {
+    let val = arr[i];
+  }
 ---
 [
     Function {

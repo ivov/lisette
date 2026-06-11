@@ -1,6 +1,10 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nfn test(w: int, x: int, y: int, z: int) {\n  let result = (w + (x * (y - z)));\n}\n"
+description: |
+  
+  fn test(w: int, x: int, y: int, z: int) {
+    let result = (w + (x * (y - z)));
+  }
 ---
 [
     Function {

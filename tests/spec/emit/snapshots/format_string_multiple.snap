@@ -1,6 +1,14 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nimport \"go:fmt\"\n\nfn test() {\n  let x = 10;\n  let y = 20;\n  fmt.Print(f\"x = {x}, y = {y}\")\n}\n"
+description: |
+  
+  import "go:fmt"
+  
+  fn test() {
+    let x = 10;
+    let y = 20;
+    fmt.Print(f"x = {x}, y = {y}")
+  }
 ---
 package main
 

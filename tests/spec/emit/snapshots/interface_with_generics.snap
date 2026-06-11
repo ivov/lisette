@@ -1,6 +1,17 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \nimport \"go:fmt\"\n\ninterface Container<T> {\n  fn get() -> T;\n  fn set(value: T);\n}\n\nfn test() {\n  fmt.Print(\"Generic interface\")\n}\n"
+description: |
+  
+  import "go:fmt"
+  
+  interface Container<T> {
+    fn get() -> T;
+    fn set(value: T);
+  }
+  
+  fn test() {
+    fmt.Print("Generic interface")
+  }
 ---
 package main
 

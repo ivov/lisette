@@ -1,6 +1,14 @@
 ---
 source: tests/spec/emit/control_flow.rs
-description: "input: \nstruct Point { x: int, y: int }\n\nfn test() -> int {\n  let mut p = Point { x: 1, y: 2 };\n  p.x = 100;\n  p.x\n}\n"
+description: |
+  
+  struct Point { x: int, y: int }
+  
+  fn test() -> int {
+    let mut p = Point { x: 1, y: 2 };
+    p.x = 100;
+    p.x
+  }
 ---
 package main
 

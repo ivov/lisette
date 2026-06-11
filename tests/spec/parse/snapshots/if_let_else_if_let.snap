@@ -1,6 +1,16 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nfn test(a: Option<int>, b: Option<int>) {\n  if let Some(x) = a {\n    print(x);\n  } else if let Some(y) = b {\n    print(y);\n  } else {\n    print(\"both none\");\n  }\n}\n"
+description: |
+  
+  fn test(a: Option<int>, b: Option<int>) {
+    if let Some(x) = a {
+      print(x);
+    } else if let Some(y) = b {
+      print(y);
+    } else {
+      print("both none");
+    }
+  }
 ---
 [
     Function {

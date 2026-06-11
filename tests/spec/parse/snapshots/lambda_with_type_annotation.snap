@@ -1,6 +1,10 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nfn test() {\n  let square = |x: int| -> int x * x;\n}\n"
+description: |
+  
+  fn test() {
+    let square = |x: int| -> int x * x;
+  }
 ---
 [
     Function {

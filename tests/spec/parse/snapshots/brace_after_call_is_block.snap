@@ -1,6 +1,12 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nfn get_value() -> int { 1 }\nfn test() {\n  let x = 1;\n  get_value() { x }\n}\n"
+description: |
+  
+  fn get_value() -> int { 1 }
+  fn test() {
+    let x = 1;
+    get_value() { x }
+  }
 ---
 [
     Function {

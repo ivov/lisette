@@ -1,6 +1,11 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \n#[json(snake_case)]\nstruct Auth {\n  OAuth2Token: string,\n}\n"
+description: |
+  
+  #[json(snake_case)]
+  struct Auth {
+    OAuth2Token: string,
+  }
 ---
 package main
 

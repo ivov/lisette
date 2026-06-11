@@ -1,6 +1,18 @@
 ---
 source: tests/spec/emit/result_option_patterns.rs
-description: "input: \nfn maybe_int(x: int) -> Option<int> {\n  if x > 0 { Some(x) } else { None }\n}\n\nfn maybe_string(s: string) -> Option<string> {\n  if s != \"\" { Some(s) } else { None }\n}\n\nfn test() {\n  let pair = (maybe_int(5), maybe_string(\"hello\"));\n}\n"
+description: |
+  
+  fn maybe_int(x: int) -> Option<int> {
+    if x > 0 { Some(x) } else { None }
+  }
+  
+  fn maybe_string(s: string) -> Option<string> {
+    if s != "" { Some(s) } else { None }
+  }
+  
+  fn test() {
+    let pair = (maybe_int(5), maybe_string("hello"));
+  }
 ---
 package main
 

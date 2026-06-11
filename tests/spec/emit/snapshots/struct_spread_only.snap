@@ -1,6 +1,13 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \nstruct Point { x: int, y: int }\n\nfn test() -> Point {\n  let base = Point { x: 1, y: 2 };\n  Point { ..base }\n}\n"
+description: |
+  
+  struct Point { x: int, y: int }
+  
+  fn test() -> Point {
+    let base = Point { x: 1, y: 2 };
+    Point { ..base }
+  }
 ---
 package main
 

@@ -1,6 +1,6 @@
 ---
 source: tests/spec/lex/mod.rs
-description: "input: impl"
+description: impl
 ---
 LexResult {
     tokens: [

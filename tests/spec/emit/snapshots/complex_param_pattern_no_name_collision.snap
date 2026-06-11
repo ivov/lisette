@@ -1,6 +1,8 @@
 ---
 source: tests/spec/emit/functions.rs
-description: "input: \nfn f(arg_1: int, (x, y): (int, int)) -> int { arg_1 + x + y }\n"
+description: |
+  
+  fn f(arg_1: int, (x, y): (int, int)) -> int { arg_1 + x + y }
 ---
 package main
 

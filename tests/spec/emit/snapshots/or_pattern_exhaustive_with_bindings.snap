@@ -1,6 +1,18 @@
 ---
 source: tests/spec/emit/control_flow.rs
-description: "input: \nenum Shape {\n  Circle(int),\n  Square(int),\n  Triangle(int),\n}\n\nfn shape_size(s: Shape) -> int {\n  match s {\n    Shape.Circle(r) | Shape.Square(r) | Shape.Triangle(r) => r,\n  }\n}\n"
+description: |
+  
+  enum Shape {
+    Circle(int),
+    Square(int),
+    Triangle(int),
+  }
+  
+  fn shape_size(s: Shape) -> int {
+    match s {
+      Shape.Circle(r) | Shape.Square(r) | Shape.Triangle(r) => r,
+    }
+  }
 ---
 package main
 

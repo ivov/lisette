@@ -1,6 +1,26 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \nenum Color {\n  Red,\n  Blue,\n}\n\nimpl Color {\n  pub fn string(self) -> string {\n    \"custom display\"\n  }\n\n  pub fn goString(self) -> string {\n    \"custom debug\"\n  }\n}\n\nfn main() {\n  let c = Color.Red\n  let _ = c\n}\n"
+description: |
+  
+  enum Color {
+    Red,
+    Blue,
+  }
+  
+  impl Color {
+    pub fn string(self) -> string {
+      "custom display"
+    }
+  
+    pub fn goString(self) -> string {
+      "custom debug"
+    }
+  }
+  
+  fn main() {
+    let c = Color.Red
+    let _ = c
+  }
 ---
 package main
 

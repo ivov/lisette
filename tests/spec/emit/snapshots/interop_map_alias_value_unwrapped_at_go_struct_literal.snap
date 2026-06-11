@@ -1,6 +1,28 @@
 ---
 source: tests/spec/emit/interop_matrix.rs
-description: "input: \nimport \"go:go/ast\"\n\ntype Objects = Map<string, Option<Ref<ast.Object>>>\n\nfn main() {\n  let obj = ast.Object {\n    Kind: ast.Bad,\n    Name: \"x\",\n    Decl: None,\n    Data: None,\n    Type: None,\n  }\n  let mut objects: Objects = Map.new<string, Option<Ref<ast.Object>>>()\n  objects[\"present\"] = Some(&obj)\n  objects[\"absent\"] = None\n  let scope = ast.Scope {\n    Outer: None,\n    Objects: objects,\n  }\n  let _ = scope\n}\n"
+description: |
+  
+  import "go:go/ast"
+  
+  type Objects = Map<string, Option<Ref<ast.Object>>>
+  
+  fn main() {
+    let obj = ast.Object {
+      Kind: ast.Bad,
+      Name: "x",
+      Decl: None,
+      Data: None,
+      Type: None,
+    }
+    let mut objects: Objects = Map.new<string, Option<Ref<ast.Object>>>()
+    objects["present"] = Some(&obj)
+    objects["absent"] = None
+    let scope = ast.Scope {
+      Outer: None,
+      Objects: objects,
+    }
+    let _ = scope
+  }
 ---
 package main
 

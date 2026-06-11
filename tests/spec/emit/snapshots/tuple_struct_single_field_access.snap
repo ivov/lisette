@@ -1,6 +1,12 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \nstruct UserId(int)\n\nfn test(id: UserId) -> int {\n  id.0\n}\n"
+description: |
+  
+  struct UserId(int)
+  
+  fn test(id: UserId) -> int {
+    id.0
+  }
 ---
 package main
 

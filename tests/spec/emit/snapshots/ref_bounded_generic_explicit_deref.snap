@@ -1,6 +1,25 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \ninterface Greetable {\n  fn greet(self) -> string\n}\n\nstruct Person { name: string }\n\nimpl Person {\n  fn greet(self) -> string { f\"Hello, {self.name}\" }\n}\n\nfn greet_ref<T: Greetable>(item: Ref<T>) -> string {\n  item.*.greet()\n}\n\nfn test() {\n  let p = Person { name: \"Alice\" }\n  greet_ref(&p)\n}\n"
+description: |
+  
+  interface Greetable {
+    fn greet(self) -> string
+  }
+  
+  struct Person { name: string }
+  
+  impl Person {
+    fn greet(self) -> string { f"Hello, {self.name}" }
+  }
+  
+  fn greet_ref<T: Greetable>(item: Ref<T>) -> string {
+    item.*.greet()
+  }
+  
+  fn test() {
+    let p = Person { name: "Alice" }
+    greet_ref(&p)
+  }
 ---
 package main
 

@@ -1,6 +1,10 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \nfn sum((x, y): (int, int)) -> int {\n  x + y\n}\n"
+description: |
+  
+  fn sum((x, y): (int, int)) -> int {
+    x + y
+  }
 ---
 package main
 

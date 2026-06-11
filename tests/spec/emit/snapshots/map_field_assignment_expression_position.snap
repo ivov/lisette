@@ -1,6 +1,23 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nimport \"go:fmt\"\n\nstruct Config {\n  value: int,\n}\n\nfn main() {\n  let mut m: Map<string, Config> = Map.new()\n  m[\"a\"] = Config { value: 1 }\n  let _ = {\n    let mut entry = m[\"a\"]\n    entry.value = 2\n    m[\"a\"] = entry\n  }\n  fmt.Println(m[\"a\"].value)\n}\n"
+description: |
+  
+  import "go:fmt"
+  
+  struct Config {
+    value: int,
+  }
+  
+  fn main() {
+    let mut m: Map<string, Config> = Map.new()
+    m["a"] = Config { value: 1 }
+    let _ = {
+      let mut entry = m["a"]
+      entry.value = 2
+      m["a"] = entry
+    }
+    fmt.Println(m["a"].value)
+  }
 ---
 package main
 

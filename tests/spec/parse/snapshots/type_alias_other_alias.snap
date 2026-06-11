@@ -1,6 +1,9 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \ntype ID = int;\ntype ProductID = ID;\n"
+description: |
+  
+  type ID = int;
+  type ProductID = ID;
 ---
 [
     TypeAlias {

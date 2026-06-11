@@ -1,6 +1,6 @@
 ---
 source: tests/spec/format/mod.rs
-description: "input: fn test() { 'a' }"
+description: "fn test() { 'a' }"
 ---
 fn test() {
   'a'

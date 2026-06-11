@@ -1,6 +1,17 @@
 ---
 source: tests/spec/emit/control_flow.rs
-description: "input: \nfn test(items: Slice<int>) -> int {\n  let mut sum = 0;\n  for item in items {\n    if item < 0 {\n      continue;\n    };\n    sum = sum + item;\n  };\n  sum\n}\n"
+description: |
+  
+  fn test(items: Slice<int>) -> int {
+    let mut sum = 0;
+    for item in items {
+      if item < 0 {
+        continue;
+      };
+      sum = sum + item;
+    };
+    sum
+  }
 ---
 package main
 

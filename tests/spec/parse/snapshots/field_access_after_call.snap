@@ -1,6 +1,10 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nfn test() {\n  let x_coord = get_point().x;\n}\n"
+description: |
+  
+  fn test() {
+    let x_coord = get_point().x;
+  }
 ---
 [
     Function {

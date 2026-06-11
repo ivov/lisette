@@ -1,7 +1,19 @@
 ---
 source: tests/spec/emit/imports.rs
-assertion_line: 420
-description: "input: \nimport \"go:fmt\"\nimport \"go:example.com/lib\"\n\n/// Doesn't do much.\npub fn first() {\n  fmt.Println(lib.Value)\n}\n\n/// Doesn't do much either.\npub fn second() {\n  fmt.Println(\"done\")\n}\n"
+description: |
+  
+  import "go:fmt"
+  import "go:example.com/lib"
+  
+  /// Doesn't do much.
+  pub fn first() {
+    fmt.Println(lib.Value)
+  }
+  
+  /// Doesn't do much either.
+  pub fn second() {
+    fmt.Println("done")
+  }
 ---
 package main
 

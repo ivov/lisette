@@ -1,6 +1,14 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \ntype MyInt = int\n\nstruct Box<T> { val: T }\n\nimpl Box<MyInt> {\n  fn doubled(self) -> MyInt { self.val * 2 }\n}\n"
+description: |
+  
+  type MyInt = int
+  
+  struct Box<T> { val: T }
+  
+  impl Box<MyInt> {
+    fn doubled(self) -> MyInt { self.val * 2 }
+  }
 ---
 package main
 

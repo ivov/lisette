@@ -1,6 +1,24 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nstruct Pair { x: int }\n\nfn set_key(k: Ref<string>) -> int {\n  k.* = \"b\"\n  1\n}\n\nfn main() {\n  let mut m = Map.new<string, Pair>()\n  m[\"a\"] = Pair { x: 0 }\n  let mut k = \"a\"\n  let captured_key = k\n  let mut entry = m[captured_key]\n  entry.x = set_key(&k)\n  m[captured_key] = entry\n  let _ = m\n}\n"
+description: |
+  
+  struct Pair { x: int }
+  
+  fn set_key(k: Ref<string>) -> int {
+    k.* = "b"
+    1
+  }
+  
+  fn main() {
+    let mut m = Map.new<string, Pair>()
+    m["a"] = Pair { x: 0 }
+    let mut k = "a"
+    let captured_key = k
+    let mut entry = m[captured_key]
+    entry.x = set_key(&k)
+    m[captured_key] = entry
+    let _ = m
+  }
 ---
 package main
 

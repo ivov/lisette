@@ -1,6 +1,8 @@
 ---
 source: tests/spec/format/mod.rs
-description: "input: fn test() { let s = \"a\nb\"; foo(s) }"
+description: |-
+  fn test() { let s = "a
+  b"; foo(s) }
 ---
 fn test() {
   let s = "a

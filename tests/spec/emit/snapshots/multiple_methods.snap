@@ -1,6 +1,18 @@
 ---
 source: tests/spec/emit/functions.rs
-description: "input: \nstruct Point { x: int, y: int }\n\nimpl Point {\n  fn new(x: int, y: int) -> Point {\n    Point { x: x, y: y }\n  }\n\n  fn get_x(self: Point) -> int {\n    self.x\n  }\n}\n"
+description: |
+  
+  struct Point { x: int, y: int }
+  
+  impl Point {
+    fn new(x: int, y: int) -> Point {
+      Point { x: x, y: y }
+    }
+  
+    fn get_x(self: Point) -> int {
+      self.x
+    }
+  }
 ---
 package main
 

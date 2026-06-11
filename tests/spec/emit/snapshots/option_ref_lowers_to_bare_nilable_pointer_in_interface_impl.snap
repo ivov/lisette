@@ -1,6 +1,25 @@
 ---
 source: tests/spec/emit/go_interface_adapter.rs
-description: "input: \nimport \"go:example.com/store\"\n\nstruct Store {}\n\nimpl Store {\n  fn Find(self, key: string) -> Option<Ref<store.Entry>> {\n    None\n  }\n}\n\nfn use_store(s: store.Storage) {\n  let _ = s\n}\n\nfn main() {\n  let s = Store {}\n  use_store(s as store.Storage)\n}\n"
+description: |
+  
+  import "go:example.com/store"
+  
+  struct Store {}
+  
+  impl Store {
+    fn Find(self, key: string) -> Option<Ref<store.Entry>> {
+      None
+    }
+  }
+  
+  fn use_store(s: store.Storage) {
+    let _ = s
+  }
+  
+  fn main() {
+    let s = Store {}
+    use_store(s as store.Storage)
+  }
 ---
 package main
 

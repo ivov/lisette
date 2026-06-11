@@ -1,6 +1,16 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \nimport \"go:fmt\"\n\ninterface Drawable {\n  fn draw();\n}\n\nfn test() {\n  fmt.Print(\"Interfaces work\")\n}\n"
+description: |
+  
+  import "go:fmt"
+  
+  interface Drawable {
+    fn draw();
+  }
+  
+  fn test() {
+    fmt.Print("Interfaces work")
+  }
 ---
 package main
 

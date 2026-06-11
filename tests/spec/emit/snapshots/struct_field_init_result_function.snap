@@ -1,6 +1,18 @@
 ---
 source: tests/spec/emit/result_option_patterns.rs
-description: "input: \nstruct Container {\n  res: Result<int, string>,\n}\n\nfn get_res(b: bool) -> Result<int, string> {\n  if b { Ok(42) } else { Err(\"failed\") }\n}\n\nfn test() {\n  let c = Container { res: get_res(true) };\n}\n"
+description: |
+  
+  struct Container {
+    res: Result<int, string>,
+  }
+  
+  fn get_res(b: bool) -> Result<int, string> {
+    if b { Ok(42) } else { Err("failed") }
+  }
+  
+  fn test() {
+    let c = Container { res: get_res(true) };
+  }
 ---
 package main
 

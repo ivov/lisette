@@ -1,6 +1,22 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \nstruct Container<T> {\n  items: Slice<T>,\n  label: string,\n}\n\nimpl<T> Container<T> {\n  fn new(label: string) -> Container<T> {\n    Container { items: Slice.new<T>(), label }\n  }\n}\n\nfn test() -> string {\n  let c = Container.new<int>(\"numbers\")\n  c.label\n}\n"
+description: |
+  
+  struct Container<T> {
+    items: Slice<T>,
+    label: string,
+  }
+  
+  impl<T> Container<T> {
+    fn new(label: string) -> Container<T> {
+      Container { items: Slice.new<T>(), label }
+    }
+  }
+  
+  fn test() -> string {
+    let c = Container.new<int>("numbers")
+    c.label
+  }
 ---
 package main
 

@@ -1,6 +1,6 @@
 ---
 source: tests/spec/lex/mod.rs
-description: "input: f\"point: {Point { x: 1, y: 2 }}\""
+description: "f\"point: {Point { x: 1, y: 2 }}\""
 ---
 LexResult {
     tokens: [

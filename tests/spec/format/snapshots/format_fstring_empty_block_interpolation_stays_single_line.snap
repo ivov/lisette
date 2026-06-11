@@ -1,6 +1,6 @@
 ---
 source: tests/spec/format/mod.rs
-description: "input: fn test() { let e = f\"v { {} }\" }"
+description: "fn test() { let e = f\"v { {} }\" }"
 ---
 fn test() {
   let e = f"v { {}}"

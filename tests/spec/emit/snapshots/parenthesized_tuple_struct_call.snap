@@ -1,6 +1,12 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nstruct Point(int, int)\n\nfn test() -> Point {\n  (Point)(1, 2)\n}\n"
+description: |
+  
+  struct Point(int, int)
+  
+  fn test() -> Point {
+    (Point)(1, 2)
+  }
 ---
 package main
 

@@ -1,6 +1,12 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nfn test(opt: Option<int>) {\n  if let Some(x) = opt {\n    print(x);\n  }\n}\n"
+description: |
+  
+  fn test(opt: Option<int>) {
+    if let Some(x) = opt {
+      print(x);
+    }
+  }
 ---
 [
     Function {

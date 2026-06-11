@@ -1,6 +1,24 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \npub interface Printable {\n  fn display(self) -> string\n}\n\nstruct Box {\n  value: string,\n}\n\nimpl Box {\n  fn display(self) -> string {\n    self.value\n  }\n}\n\nfn describe(p: Printable) -> string {\n  p.display()\n}\n"
+description: |
+  
+  pub interface Printable {
+    fn display(self) -> string
+  }
+  
+  struct Box {
+    value: string,
+  }
+  
+  impl Box {
+    fn display(self) -> string {
+      self.value
+    }
+  }
+  
+  fn describe(p: Printable) -> string {
+    p.display()
+  }
 ---
 package main
 

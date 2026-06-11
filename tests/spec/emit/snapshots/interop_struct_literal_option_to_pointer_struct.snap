@@ -1,6 +1,15 @@
 ---
 source: tests/spec/emit/interop_matrix.rs
-description: "input: \nimport \"go:example.com/cb\"\n\nfn main() {\n  let inner = cb.Inner { Tag: \"x\" }\n  let _ = cb.Outer {\n    Slot: Some(&inner),\n  }\n}\n"
+description: |
+  
+  import "go:example.com/cb"
+  
+  fn main() {
+    let inner = cb.Inner { Tag: "x" }
+    let _ = cb.Outer {
+      Slot: Some(&inner),
+    }
+  }
 ---
 package main
 

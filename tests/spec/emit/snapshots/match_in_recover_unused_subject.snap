@@ -1,6 +1,15 @@
 ---
 source: tests/spec/emit/control_flow.rs
-description: "input: \nstruct P { v: int }\nfn test() {\n  let out = recover {\n    let p = P { v: 1 }\n    match p { P { v } => () }\n  }\n  let _ = out\n}\n"
+description: |
+  
+  struct P { v: int }
+  fn test() {
+    let out = recover {
+      let p = P { v: 1 }
+      match p { P { v } => () }
+    }
+    let _ = out
+  }
 ---
 package main
 

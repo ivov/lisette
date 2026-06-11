@@ -1,6 +1,19 @@
 ---
 source: tests/spec/emit/functions.rs
-description: "input: \nstruct Box<T> { value: T }\n\nimpl<T> Box<T> {\n  fn map(self: Box<T>, f: fn(T) -> T) -> Box<T> {\n    Box { value: f(self.value) }\n  }\n}\n\nfn test() -> int {\n  let b = Box { value: 10 };\n  b.map(|x: int| x * 2).value\n}\n"
+description: |
+  
+  struct Box<T> { value: T }
+  
+  impl<T> Box<T> {
+    fn map(self: Box<T>, f: fn(T) -> T) -> Box<T> {
+      Box { value: f(self.value) }
+    }
+  }
+  
+  fn test() -> int {
+    let b = Box { value: 10 };
+    b.map(|x: int| x * 2).value
+  }
 ---
 package main
 

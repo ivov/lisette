@@ -1,6 +1,14 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nfn outer() {\n  fn inner(x: int) -> int {\n    return x * 2;\n  };\n\n  inner(5);\n}\n"
+description: |
+  
+  fn outer() {
+    fn inner(x: int) -> int {
+      return x * 2;
+    };
+  
+    inner(5);
+  }
 ---
 [
     Function {

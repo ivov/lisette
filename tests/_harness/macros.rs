@@ -4,7 +4,7 @@ macro_rules! assert_lex_snapshot {
         let lex_result = syntax::lex::Lexer::new($input, 0).lex();
 
         insta::with_settings!({
-            description => format!("input: {}", $input),
+            description => $crate::_harness::snapshot_description($input),
             prepend_module_to_snapshot => false,
             omit_expression => true,
         }, {
@@ -20,7 +20,7 @@ macro_rules! assert_parse_snapshot {
         let parse_result = syntax::parse::Parser::new(lex_result.tokens, $input).parse();
 
         insta::with_settings!({
-            description => format!("input: {}", $input),
+            description => $crate::_harness::snapshot_description($input),
             prepend_module_to_snapshot => false,
             omit_expression => true,
         }, {
@@ -54,7 +54,7 @@ macro_rules! assert_desugar_snapshot {
         );
 
         insta::with_settings!({
-            description => format!("input: {}", $input),
+            description => $crate::_harness::snapshot_description($input),
             prepend_module_to_snapshot => false,
             omit_expression => true,
         }, {
@@ -213,7 +213,7 @@ macro_rules! assert_emit_snapshot {
         let go_code = emit_result.go_code();
 
         insta::with_settings!({
-            description => format!("input: {}", $input),
+            description => $crate::_harness::snapshot_description($input),
             prepend_module_to_snapshot => false,
             omit_expression => true,
         }, {
@@ -229,7 +229,7 @@ macro_rules! assert_emit_snapshot_with_go_typedefs {
         let go_code = emit_result.go_code();
 
         insta::with_settings!({
-            description => format!("input: {}", $input),
+            description => $crate::_harness::snapshot_description($input),
             prepend_module_to_snapshot => false,
             omit_expression => true,
         }, {
@@ -305,7 +305,7 @@ macro_rules! assert_format_snapshot {
         );
 
         insta::with_settings!({
-            description => format!("input: {}", $input),
+            description => $crate::_harness::snapshot_description($input),
             prepend_module_to_snapshot => false,
             omit_expression => true,
         }, {

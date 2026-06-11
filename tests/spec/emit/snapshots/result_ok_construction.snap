@@ -1,6 +1,10 @@
 ---
 source: tests/spec/emit/result_option_patterns.rs
-description: "input: \nfn test() -> Result<int, string> {\n  Ok(42)\n}\n"
+description: |
+  
+  fn test() -> Result<int, string> {
+    Ok(42)
+  }
 ---
 package main
 

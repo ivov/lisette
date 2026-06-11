@@ -1,6 +1,6 @@
 ---
 source: tests/spec/lex/mod.rs
-description: "input: // comment with // multiple slashes"
+description: // comment with // multiple slashes
 ---
 LexResult {
     tokens: [

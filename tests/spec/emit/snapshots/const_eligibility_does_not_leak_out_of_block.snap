@@ -1,6 +1,22 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nimport \"go:fmt\"\n\nfn make() -> int {\n  2\n}\n\nfn main() {\n  {\n    const X = 1\n    fmt.Println(X)\n  }\n  let x = make()\n  const Y = x\n  fmt.Println(Y)\n}\n"
+description: |
+  
+  import "go:fmt"
+  
+  fn make() -> int {
+    2
+  }
+  
+  fn main() {
+    {
+      const X = 1
+      fmt.Println(X)
+    }
+    let x = make()
+    const Y = x
+    fmt.Println(Y)
+  }
 ---
 package main
 

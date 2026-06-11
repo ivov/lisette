@@ -1,6 +1,15 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \npub struct Counter {\n  pub value: int,\n}\n\nfn test() {\n  let mut c = Counter { value: 0 };\n  c.value = 10\n}\n"
+description: |
+  
+  pub struct Counter {
+    pub value: int,
+  }
+  
+  fn test() {
+    let mut c = Counter { value: 0 };
+    c.value = 10
+  }
 ---
 package main
 

@@ -1,6 +1,10 @@
 ---
 source: tests/spec/emit/prelude.rs
-description: "input: \nfn test(s: string) -> Slice<rune> {\n  s.runes()\n}\n"
+description: |
+  
+  fn test(s: string) -> Slice<rune> {
+    s.runes()
+  }
 ---
 package main
 

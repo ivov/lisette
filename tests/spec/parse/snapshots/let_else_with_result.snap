@@ -1,6 +1,11 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nfn test() -> int {\n  let Ok(value) = get_result() else { return -1; };\n  value\n}\n"
+description: |
+  
+  fn test() -> int {
+    let Ok(value) = get_result() else { return -1; };
+    value
+  }
 ---
 [
     Function {

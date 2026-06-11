@@ -1,6 +1,15 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \nimport \"go:errors\"\n\nfn might_fail(n: int) -> Result<int, error> {\n  if n < 0 {\n    return Err(errors.New(\"negative\"))\n  }\n  Ok(n)\n}\n"
+description: |
+  
+  import "go:errors"
+  
+  fn might_fail(n: int) -> Result<int, error> {
+    if n < 0 {
+      return Err(errors.New("negative"))
+    }
+    Ok(n)
+  }
 ---
 package main
 

@@ -1,6 +1,14 @@
 ---
 source: tests/spec/emit/control_flow.rs
-description: "input: \nfn noop() {}\n\nfn test() {\n  let _ = loop {\n    break noop()\n  }\n}\n"
+description: |
+  
+  fn noop() {}
+  
+  fn test() {
+    let _ = loop {
+      break noop()
+    }
+  }
 ---
 package main
 

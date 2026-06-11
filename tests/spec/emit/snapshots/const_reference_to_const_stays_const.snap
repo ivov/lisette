@@ -1,6 +1,15 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nimport \"go:fmt\"\n\nconst X = 10\nconst Y = X + 5\n\nfn main() {\n  fmt.Println(Y)\n}\n"
+description: |
+  
+  import "go:fmt"
+  
+  const X = 10
+  const Y = X + 5
+  
+  fn main() {
+    fmt.Println(Y)
+  }
 ---
 package main
 

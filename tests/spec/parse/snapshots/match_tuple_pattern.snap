@@ -1,6 +1,15 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nfn test(pair: (int, int)) {\n  match pair {\n    (0, 0) => print(\"Origin\"),\n    (x, 0) => print(\"On X axis\", x),\n    (0, y) => print(\"On Y axis\", y),\n    (x, y) => print(\"Coords\", x, y),\n  }\n}\n"
+description: |
+  
+  fn test(pair: (int, int)) {
+    match pair {
+      (0, 0) => print("Origin"),
+      (x, 0) => print("On X axis", x),
+      (0, y) => print("On Y axis", y),
+      (x, y) => print("Coords", x, y),
+    }
+  }
 ---
 [
     Function {

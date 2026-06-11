@@ -1,6 +1,27 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \nenum Validated<T> { Valid(T), Invalid(string) }\n\nstruct ValidationResult<T> {\n  value: Validated<T>,\n  field_name: string,\n}\n\nimpl<T> ValidationResult<T> {\n  fn new_invalid(field: string, msg: string) -> ValidationResult<T> {\n    ValidationResult { value: Validated.Invalid(msg), field_name: field }\n  }\n}\n\nfn validate_positive(field: string, val: int) -> ValidationResult<int> {\n  ValidationResult.new_invalid(field, \"must be positive\")\n}\n\nfn validate_non_empty(field: string, val: string) -> ValidationResult<string> {\n  ValidationResult.new_invalid(field, \"must not be empty\")\n}\n"
+description: |
+  
+  enum Validated<T> { Valid(T), Invalid(string) }
+  
+  struct ValidationResult<T> {
+    value: Validated<T>,
+    field_name: string,
+  }
+  
+  impl<T> ValidationResult<T> {
+    fn new_invalid(field: string, msg: string) -> ValidationResult<T> {
+      ValidationResult { value: Validated.Invalid(msg), field_name: field }
+    }
+  }
+  
+  fn validate_positive(field: string, val: int) -> ValidationResult<int> {
+    ValidationResult.new_invalid(field, "must be positive")
+  }
+  
+  fn validate_non_empty(field: string, val: string) -> ValidationResult<string> {
+    ValidationResult.new_invalid(field, "must not be empty")
+  }
 ---
 package main
 

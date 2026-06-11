@@ -1,6 +1,11 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nfn test() {\n  let mut m: Map<string, fn(int) -> int> = Map.new()\n  m[\"square\"] = |x| x * x\n}\n"
+description: |
+  
+  fn test() {
+    let mut m: Map<string, fn(int) -> int> = Map.new()
+    m["square"] = |x| x * x
+  }
 ---
 package main
 

@@ -1,6 +1,15 @@
 ---
 source: tests/spec/emit/control_flow.rs
-description: "input: \nenum Color { Red, Green, Blue }\n\nfn test(c: Color) -> string {\n  match c {\n    Red | Green => \"warm\",\n    Blue => \"cool\",\n  }\n}\n"
+description: |
+  
+  enum Color { Red, Green, Blue }
+  
+  fn test(c: Color) -> string {
+    match c {
+      Red | Green => "warm",
+      Blue => "cool",
+    }
+  }
 ---
 package main
 

@@ -1,6 +1,15 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nstruct Item { x: int }\n\nfn main() {\n  let mut v = Item { x: 0 }\n  let r = &v\n  r.*.x = 1\n  let _ = v.x\n}\n"
+description: |
+  
+  struct Item { x: int }
+  
+  fn main() {
+    let mut v = Item { x: 0 }
+    let r = &v
+    r.*.x = 1
+    let _ = v.x
+  }
 ---
 package main
 

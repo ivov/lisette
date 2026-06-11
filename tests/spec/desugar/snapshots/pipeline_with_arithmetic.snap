@@ -1,6 +1,6 @@
 ---
 source: tests/spec/desugar/mod.rs
-description: "input: fn test() { (1 + 2) |> double; }"
+description: "fn test() { (1 + 2) |> double; }"
 ---
 [
     Function {

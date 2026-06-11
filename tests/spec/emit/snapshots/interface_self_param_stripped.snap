@@ -1,6 +1,12 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \ninterface Greetable {\n  fn greet(self) -> string;\n  fn name(self) -> string;\n  fn reset(self);\n}\n"
+description: |
+  
+  interface Greetable {
+    fn greet(self) -> string;
+    fn name(self) -> string;
+    fn reset(self);
+  }
 ---
 package main
 

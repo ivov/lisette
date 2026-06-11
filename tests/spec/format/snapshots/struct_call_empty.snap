@@ -1,6 +1,6 @@
 ---
 source: tests/spec/format/mod.rs
-description: "input: fn test() { Empty {} }"
+description: "fn test() { Empty {} }"
 ---
 fn test() {
   Empty {}

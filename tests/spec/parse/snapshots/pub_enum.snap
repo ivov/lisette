@@ -1,6 +1,8 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \npub enum Status { Active, Inactive }\n"
+description: |
+  
+  pub enum Status { Active, Inactive }
 ---
 [
     Enum {

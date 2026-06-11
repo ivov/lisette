@@ -1,6 +1,22 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \nenum Holder<T> {\n  Empty,\n}\n\nimpl<T> Holder<T> {\n  fn count(self) -> int {\n    let m = Map.new<T, int>()\n    m.length()\n  }\n}\n\nfn main() {\n  let h: Holder<string> = Holder.Empty\n  let _ = h.count()\n}\n"
+description: |
+  
+  enum Holder<T> {
+    Empty,
+  }
+  
+  impl<T> Holder<T> {
+    fn count(self) -> int {
+      let m = Map.new<T, int>()
+      m.length()
+    }
+  }
+  
+  fn main() {
+    let h: Holder<string> = Holder.Empty
+    let _ = h.count()
+  }
 ---
 package main
 

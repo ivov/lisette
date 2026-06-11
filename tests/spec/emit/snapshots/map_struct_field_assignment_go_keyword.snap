@@ -1,6 +1,19 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nstruct Config {\n  range: int,\n  name: string,\n}\n\nfn test() {\n    let mut m = Map.new<string, Config>()\n    m[\"a\"] = Config { range: 10, name: \"first\" }\n    let mut entry = m[\"a\"]\n    entry.range = 20\n    m[\"a\"] = entry\n}\n"
+description: |
+  
+  struct Config {
+    range: int,
+    name: string,
+  }
+  
+  fn test() {
+      let mut m = Map.new<string, Config>()
+      m["a"] = Config { range: 10, name: "first" }
+      let mut entry = m["a"]
+      entry.range = 20
+      m["a"] = entry
+  }
 ---
 package main
 

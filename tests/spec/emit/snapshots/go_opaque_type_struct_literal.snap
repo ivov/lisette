@@ -1,6 +1,14 @@
 ---
 source: tests/spec/emit/imports.rs
-description: "input: \nimport \"go:sync\"\n\nfn test() {\n  let mut wg = sync.WaitGroup{}\n  wg.Add(1)\n  wg.Wait()\n}\n"
+description: |
+  
+  import "go:sync"
+  
+  fn test() {
+    let mut wg = sync.WaitGroup{}
+    wg.Add(1)
+    wg.Wait()
+  }
 ---
 package main
 

@@ -1,6 +1,9 @@
 ---
 source: tests/spec/lex/mod.rs
-description: "input: struct Box<T> {\n    value: T\n}"
+description: |-
+  struct Box<T> {
+      value: T
+  }
 ---
 LexResult {
     tokens: [

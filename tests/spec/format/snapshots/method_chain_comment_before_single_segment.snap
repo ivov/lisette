@@ -1,6 +1,9 @@
 ---
 source: tests/spec/format/mod.rs
-description: "input: fn test() { let foo = [5, 5, 5] // .map(|x| x * 2)\n// .filter(|x| x % 2 == 0)\n.fold(0, |acc, x| acc + x) }"
+description: |-
+  fn test() { let foo = [5, 5, 5] // .map(|x| x * 2)
+  // .filter(|x| x % 2 == 0)
+  .fold(0, |acc, x| acc + x) }
 ---
 fn test() {
   let foo = [5, 5, 5]

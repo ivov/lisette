@@ -1,6 +1,13 @@
 ---
 source: tests/spec/emit/concurrency.rs
-description: "input: \ntype MyString = string\n\nfn test() {\n  let s = \"hi\"\n  defer MyString.length(s)\n}\n"
+description: |
+  
+  type MyString = string
+  
+  fn test() {
+    let s = "hi"
+    defer MyString.length(s)
+  }
 ---
 package main
 

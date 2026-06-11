@@ -1,6 +1,19 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \nstruct Box { v: int }\n\nimpl Box {\n  fn new(v: int) -> Box { Box { v } }\n}\n\ntype Alias = Box\n\nfn main() {\n  let b = Alias.new(1)\n  let _ = b\n}\n"
+description: |
+  
+  struct Box { v: int }
+  
+  impl Box {
+    fn new(v: int) -> Box { Box { v } }
+  }
+  
+  type Alias = Box
+  
+  fn main() {
+    let b = Alias.new(1)
+    let _ = b
+  }
 ---
 package main
 

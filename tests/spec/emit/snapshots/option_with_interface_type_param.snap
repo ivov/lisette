@@ -1,6 +1,20 @@
 ---
 source: tests/spec/emit/result_option_patterns.rs
-description: "input: \ninterface Printable {\n  fn to_string(self) -> string\n}\n\nstruct Text { content: string }\n\nimpl Text {\n  fn to_string(self) -> string { self.content }\n}\n\nfn test() {\n  let a: Option<Printable> = Some(Text { content: \"hello\" })\n}\n"
+description: |
+  
+  interface Printable {
+    fn to_string(self) -> string
+  }
+  
+  struct Text { content: string }
+  
+  impl Text {
+    fn to_string(self) -> string { self.content }
+  }
+  
+  fn test() {
+    let a: Option<Printable> = Some(Text { content: "hello" })
+  }
 ---
 package main
 

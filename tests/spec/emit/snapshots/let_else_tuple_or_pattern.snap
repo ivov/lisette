@@ -1,6 +1,11 @@
 ---
 source: tests/spec/emit/control_flow.rs
-description: "input: \nfn test(pair: (Option<int>, Option<int>)) -> int {\n  let (Some(x), Some(y)) | (Some(y), Some(x)) = pair else { return 0; };\n  x + y\n}\n"
+description: |
+  
+  fn test(pair: (Option<int>, Option<int>)) -> int {
+    let (Some(x), Some(y)) | (Some(y), Some(x)) = pair else { return 0; };
+    x + y
+  }
 ---
 package main
 

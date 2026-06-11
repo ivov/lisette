@@ -1,6 +1,29 @@
 ---
 source: tests/spec/emit/interop_matrix.rs
-description: "input: \nimport \"go:crypto/x509\"\nimport \"go:net/url\"\n\ntype Cert = x509.Certificate\n\nfn main() {\n  let u = url.URL {\n    Scheme: \"https\",\n    Host: \"example.com\",\n    ..,\n  }\n  let cert: Cert = x509.Certificate {\n    URIs: [Some(&u)],\n    ..,\n  }\n  let urls = cert.URIs\n  let first = urls[0]\n  match first {\n    Some(value) => { let _ = value },\n    None => { let _ = 0 },\n  }\n}\n"
+description: |
+  
+  import "go:crypto/x509"
+  import "go:net/url"
+  
+  type Cert = x509.Certificate
+  
+  fn main() {
+    let u = url.URL {
+      Scheme: "https",
+      Host: "example.com",
+      ..,
+    }
+    let cert: Cert = x509.Certificate {
+      URIs: [Some(&u)],
+      ..,
+    }
+    let urls = cert.URIs
+    let first = urls[0]
+    match first {
+      Some(value) => { let _ = value },
+      None => { let _ = 0 },
+    }
+  }
 ---
 package main
 

@@ -1,6 +1,14 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nfn test(ch1: Receiver<int>, ch2: Sender<string>) {\n  select {\n    let x = ch1 => process(x),\n    ch2.send(\"hello\") => print(\"sent\"),\n    _ => print(\"default\"),\n  }\n}\n"
+description: |
+  
+  fn test(ch1: Receiver<int>, ch2: Sender<string>) {
+    select {
+      let x = ch1 => process(x),
+      ch2.send("hello") => print("sent"),
+      _ => print("default"),
+    }
+  }
 ---
 [
     Function {

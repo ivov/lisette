@@ -1,6 +1,15 @@
 ---
 source: tests/spec/emit/control_flow.rs
-description: "input: \nfn test() -> string {\n  let x = \"outer\"\n  {\n    let x = \"inner\"\n    let _ = x\n  }\n  x\n}\n"
+description: |
+  
+  fn test() -> string {
+    let x = "outer"
+    {
+      let x = "inner"
+      let _ = x
+    }
+    x
+  }
 ---
 package main
 

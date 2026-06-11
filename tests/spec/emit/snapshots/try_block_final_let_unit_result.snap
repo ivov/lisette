@@ -1,6 +1,16 @@
 ---
 source: tests/spec/emit/result_option_patterns.rs
-description: "input: \nfn f() -> Result<(), string> {\n  try {\n    let x = Ok(1)?\n  }\n}\n\nfn test() -> Result<(), string> {\n  f()\n}\n"
+description: |
+  
+  fn f() -> Result<(), string> {
+    try {
+      let x = Ok(1)?
+    }
+  }
+  
+  fn test() -> Result<(), string> {
+    f()
+  }
 ---
 package main
 

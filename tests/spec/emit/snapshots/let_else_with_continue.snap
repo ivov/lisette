@@ -1,6 +1,13 @@
 ---
 source: tests/spec/emit/control_flow.rs
-description: "input: \nfn test(items: Slice<Option<int>>) {\n  for item in items {\n    let Some(x) = item else { continue; };\n    let _ = x;\n  }\n}\n"
+description: |
+  
+  fn test(items: Slice<Option<int>>) {
+    for item in items {
+      let Some(x) = item else { continue; };
+      let _ = x;
+    }
+  }
 ---
 package main
 

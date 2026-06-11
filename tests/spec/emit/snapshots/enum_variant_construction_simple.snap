@@ -1,6 +1,12 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \nenum Color { Red, Green, Blue }\n\nfn test() -> Color {\n  Red\n}\n"
+description: |
+  
+  enum Color { Red, Green, Blue }
+  
+  fn test() -> Color {
+    Red
+  }
 ---
 package main
 

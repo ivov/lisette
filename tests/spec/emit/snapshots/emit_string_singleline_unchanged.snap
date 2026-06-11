@@ -1,6 +1,11 @@
 ---
 source: tests/spec/emit/literals.rs
-description: "input: \nfn test() -> string {\n  let s = \"x\"\n  s\n}\n"
+description: |
+  
+  fn test() -> string {
+    let s = "x"
+    s
+  }
 ---
 package main
 

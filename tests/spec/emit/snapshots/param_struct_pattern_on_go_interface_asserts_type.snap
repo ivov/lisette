@@ -1,6 +1,12 @@
 ---
 source: tests/spec/emit/patterns.rs
-description: "input: \nimport \"go:example.com/shapes\"\n\nfn area(shapes.Rect { W: w, H: h }: shapes.Shape) -> int {\n  w * h\n}\n"
+description: |
+  
+  import "go:example.com/shapes"
+  
+  fn area(shapes.Rect { W: w, H: h }: shapes.Shape) -> int {
+    w * h
+  }
 ---
 package main
 

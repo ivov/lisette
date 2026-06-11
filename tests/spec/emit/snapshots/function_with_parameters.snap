@@ -1,6 +1,10 @@
 ---
 source: tests/spec/emit/functions.rs
-description: "input: \nfn add(a: int, b: int) {\n  let sum = a + b;\n}\n"
+description: |
+  
+  fn add(a: int, b: int) {
+    let sum = a + b;
+  }
 ---
 package main
 

@@ -1,6 +1,18 @@
 ---
 source: tests/spec/emit/control_flow.rs
-description: "input: \nstruct Point { x: int, y: int }\n\nfn make_point() -> Point {\n  Point { x: 1, y: 2 }\n}\n\nfn test() -> int {\n  match make_point() {\n    Point { .. } => 1,\n  }\n}\n"
+description: |
+  
+  struct Point { x: int, y: int }
+  
+  fn make_point() -> Point {
+    Point { x: 1, y: 2 }
+  }
+  
+  fn test() -> int {
+    match make_point() {
+      Point { .. } => 1,
+    }
+  }
 ---
 package main
 

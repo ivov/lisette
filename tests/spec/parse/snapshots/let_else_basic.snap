@@ -1,6 +1,11 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nfn test() -> Option<int> {\n  let Some(x) = opt else { return None; };\n  Some(x)\n}\n"
+description: |
+  
+  fn test() -> Option<int> {
+    let Some(x) = opt else { return None; };
+    Some(x)
+  }
 ---
 [
     Function {

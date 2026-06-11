@@ -1,6 +1,10 @@
 ---
 source: tests/spec/emit/concurrency.rs
-description: "input: \nfn test() -> Channel<string> {\n  Channel.buffered(5)\n}\n"
+description: |
+  
+  fn test() -> Channel<string> {
+    Channel.buffered(5)
+  }
 ---
 package main
 

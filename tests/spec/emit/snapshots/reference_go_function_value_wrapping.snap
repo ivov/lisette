@@ -1,6 +1,13 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nimport \"go:strconv\"\n\nfn main() {\n  let r: Ref<fn(string) -> Result<int, error>> = &strconv.Atoi\n  let _ = r\n}\n"
+description: |
+  
+  import "go:strconv"
+  
+  fn main() {
+    let r: Ref<fn(string) -> Result<int, error>> = &strconv.Atoi
+    let _ = r
+  }
 ---
 package main
 

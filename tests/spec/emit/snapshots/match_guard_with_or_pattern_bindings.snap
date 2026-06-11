@@ -1,6 +1,15 @@
 ---
 source: tests/spec/emit/control_flow.rs
-description: "input: \nenum E { A(int), B(int), C(int) }\n\nfn test(e: E) -> int {\n  match e {\n    C(x) if x > 0 => x * 100,\n    A(x) | B(x) | C(x) => x,\n  }\n}\n"
+description: |
+  
+  enum E { A(int), B(int), C(int) }
+  
+  fn test(e: E) -> int {
+    match e {
+      C(x) if x > 0 => x * 100,
+      A(x) | B(x) | C(x) => x,
+    }
+  }
 ---
 package main
 

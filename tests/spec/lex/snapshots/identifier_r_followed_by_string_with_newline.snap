@@ -1,6 +1,8 @@
 ---
 source: tests/spec/lex/mod.rs
-description: "input: r\n\"hello\""
+description: |-
+  r
+  "hello"
 ---
 LexResult {
     tokens: [

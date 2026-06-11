@@ -1,6 +1,10 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nfn rest(items: Ref<Slice<int>>) -> Slice<int> {\n  items.*[1..]\n}\n"
+description: |
+  
+  fn rest(items: Ref<Slice<int>>) -> Slice<int> {
+    items.*[1..]
+  }
 ---
 package main
 

@@ -1,6 +1,35 @@
 ---
 source: tests/spec/emit/patterns.rs
-description: "input: \npub enum Hand {\n  Left,\n  Right,\n}\n\nimpl Hand {\n  pub fn left_right(self, other: Hand) -> bool {\n    match (self, other) {\n      (Hand.Left, Hand.Right) => true,\n      _ => false,\n    }\n  }\n\n  pub fn left_left(self, other: Hand) -> bool {\n    match (self, other) {\n      (Hand.Left, Hand.Left) => true,\n      _ => false,\n    }\n  }\n\n  pub fn eq(self, other: Hand) -> bool {\n    match (self, other) {\n      (Hand.Left, Hand.Left) => true,\n      (Hand.Right, Hand.Right) => true,\n      _ => false,\n    }\n  }\n}\n"
+description: |
+  
+  pub enum Hand {
+    Left,
+    Right,
+  }
+  
+  impl Hand {
+    pub fn left_right(self, other: Hand) -> bool {
+      match (self, other) {
+        (Hand.Left, Hand.Right) => true,
+        _ => false,
+      }
+    }
+  
+    pub fn left_left(self, other: Hand) -> bool {
+      match (self, other) {
+        (Hand.Left, Hand.Left) => true,
+        _ => false,
+      }
+    }
+  
+    pub fn eq(self, other: Hand) -> bool {
+      match (self, other) {
+        (Hand.Left, Hand.Left) => true,
+        (Hand.Right, Hand.Right) => true,
+        _ => false,
+      }
+    }
+  }
 ---
 package main
 

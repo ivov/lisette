@@ -1,6 +1,10 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \ntype IntBox = Box<int>\n\nstruct Box<T> { value: T }\n"
+description: |
+  
+  type IntBox = Box<int>
+  
+  struct Box<T> { value: T }
 ---
 package main
 

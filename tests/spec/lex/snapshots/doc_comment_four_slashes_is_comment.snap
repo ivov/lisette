@@ -1,6 +1,6 @@
 ---
 source: tests/spec/lex/mod.rs
-description: "input: //// This is a divider, not a doc comment"
+description: "//// This is a divider, not a doc comment"
 ---
 LexResult {
     tokens: [

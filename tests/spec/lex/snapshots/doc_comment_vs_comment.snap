@@ -1,6 +1,8 @@
 ---
 source: tests/spec/lex/mod.rs
-description: "input: // regular comment\n/// doc comment"
+description: |-
+  // regular comment
+  /// doc comment
 ---
 LexResult {
     tokens: [

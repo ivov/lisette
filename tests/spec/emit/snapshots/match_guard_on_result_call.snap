@@ -1,6 +1,16 @@
 ---
 source: tests/spec/emit/control_flow.rs
-description: "input: \nfn get_value() -> Result<int, string> { Ok(42) }\n\nfn test() -> int {\n  match get_value() {\n    Ok(x) if x > 0 => x,\n    Ok(_) => 0,\n    Err(_) => -1,\n  }\n}\n"
+description: |
+  
+  fn get_value() -> Result<int, string> { Ok(42) }
+  
+  fn test() -> int {
+    match get_value() {
+      Ok(x) if x > 0 => x,
+      Ok(_) => 0,
+      Err(_) => -1,
+    }
+  }
 ---
 package main
 

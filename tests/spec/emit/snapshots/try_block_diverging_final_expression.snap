@@ -1,6 +1,16 @@
 ---
 source: tests/spec/emit/control_flow.rs
-description: "input: \nfn risky() -> Result<int, string> { Ok(1) }\n\nfn test() {\n  let result: Result<int, string> = try {\n    let _ = risky()?;\n    loop { panic(\"unreachable\") }\n  };\n  let _ = result;\n}\n"
+description: |
+  
+  fn risky() -> Result<int, string> { Ok(1) }
+  
+  fn test() {
+    let result: Result<int, string> = try {
+      let _ = risky()?;
+      loop { panic("unreachable") }
+    };
+    let _ = result;
+  }
 ---
 package main
 

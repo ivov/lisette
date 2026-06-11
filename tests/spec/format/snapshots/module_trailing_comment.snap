@@ -1,6 +1,9 @@
 ---
 source: tests/spec/format/mod.rs
-description: "input: fn main() {}\n\n// end of file"
+description: |-
+  fn main() {}
+  
+  // end of file
 ---
 fn main() {}
 

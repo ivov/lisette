@@ -1,6 +1,21 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \nstruct Thing {\n  name: string,\n}\n\nimpl Thing {\n  fn maybe_create(name: string) -> Option<Thing> {\n    if name.length() > 0 { Some(Thing { name: name }) }\n    else { None }\n  }\n}\n\nfn test() -> Option<Thing> {\n  Thing.maybe_create(\"hello\")\n}\n"
+description: |
+  
+  struct Thing {
+    name: string,
+  }
+  
+  impl Thing {
+    fn maybe_create(name: string) -> Option<Thing> {
+      if name.length() > 0 { Some(Thing { name: name }) }
+      else { None }
+    }
+  }
+  
+  fn test() -> Option<Thing> {
+    Thing.maybe_create("hello")
+  }
 ---
 package main
 

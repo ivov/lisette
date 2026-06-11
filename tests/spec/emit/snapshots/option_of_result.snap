@@ -1,6 +1,10 @@
 ---
 source: tests/spec/emit/result_option_patterns.rs
-description: "input: \nfn test() -> Option<Result<int, string>> {\n  Some(Ok(42))\n}\n"
+description: |
+  
+  fn test() -> Option<Result<int, string>> {
+    Some(Ok(42))
+  }
 ---
 package main
 

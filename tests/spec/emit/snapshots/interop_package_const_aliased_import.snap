@@ -1,6 +1,13 @@
 ---
 source: tests/spec/emit/interop_matrix.rs
-description: "input: \nimport t \"go:time\"\n\nfn main() {\n  let d = t.Second\n  let _ = d\n}\n"
+description: |
+  
+  import t "go:time"
+  
+  fn main() {
+    let d = t.Second
+    let _ = d
+  }
 ---
 package main
 

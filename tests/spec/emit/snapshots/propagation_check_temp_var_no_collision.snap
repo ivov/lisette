@@ -1,6 +1,19 @@
 ---
 source: tests/spec/emit/result_option_patterns.rs
-description: "input: \nimport \"go:fmt\"\n\nfn foo() -> Result<int, string> {\n  let x = Ok(1)?\n  let check_1 = 7\n  fmt.Println(check_1)\n  Ok(x)\n}\n\nfn main() {\n  let _ = foo()\n}\n"
+description: |
+  
+  import "go:fmt"
+  
+  fn foo() -> Result<int, string> {
+    let x = Ok(1)?
+    let check_1 = 7
+    fmt.Println(check_1)
+    Ok(x)
+  }
+  
+  fn main() {
+    let _ = foo()
+  }
 ---
 package main
 

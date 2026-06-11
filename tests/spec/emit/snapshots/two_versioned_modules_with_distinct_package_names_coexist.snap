@@ -1,6 +1,14 @@
 ---
 source: tests/spec/emit/imports.rs
-description: "input: \nimport \"go:example.com/bubbletea/v2\"\nimport \"go:example.com/lipgloss/v2\"\n\nfn make() -> Ref<tea.Program> {\n  let _ = lipgloss.Style{}\n  &tea.Program{}\n}\n"
+description: |
+  
+  import "go:example.com/bubbletea/v2"
+  import "go:example.com/lipgloss/v2"
+  
+  fn make() -> Ref<tea.Program> {
+    let _ = lipgloss.Style{}
+    &tea.Program{}
+  }
 ---
 package main
 

@@ -1,6 +1,17 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \ntype Table<T> = Map<T, int>\n\nfn id<T>(table: Table<T>) -> Table<T> {\n  table\n}\n\nfn main() {\n  let t = Map.new<string, int>()\n  let _ = id(t)\n}\n"
+description: |
+  
+  type Table<T> = Map<T, int>
+  
+  fn id<T>(table: Table<T>) -> Table<T> {
+    table
+  }
+  
+  fn main() {
+    let t = Map.new<string, int>()
+    let _ = id(t)
+  }
 ---
 package main
 

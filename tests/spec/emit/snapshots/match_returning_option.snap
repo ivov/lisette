@@ -1,6 +1,13 @@
 ---
 source: tests/spec/emit/result_option_patterns.rs
-description: "input: \nfn test(flag: bool) -> Option<int> {\n  match flag {\n    true => Some(42),\n    false => None,\n  }\n}\n"
+description: |
+  
+  fn test(flag: bool) -> Option<int> {
+    match flag {
+      true => Some(42),
+      false => None,
+    }
+  }
 ---
 package main
 

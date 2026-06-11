@@ -1,6 +1,10 @@
 ---
 source: tests/spec/emit/prelude.rs
-description: "input: \nfn test(m: Map<string, int>) -> bool {\n  !m.is_empty()\n}\n"
+description: |
+  
+  fn test(m: Map<string, int>) -> bool {
+    !m.is_empty()
+  }
 ---
 package main
 

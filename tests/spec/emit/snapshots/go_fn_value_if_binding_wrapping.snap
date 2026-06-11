@@ -1,6 +1,16 @@
 ---
 source: tests/spec/emit/functions.rs
-description: "input: \nimport \"go:fmt\"\nimport \"go:strconv\"\n\nfn main() {\n  let cond = true\n  let f = if cond { strconv.Atoi } else { strconv.Atoi }\n  let r = f(\"99\")\n  fmt.Println(r)\n}\n"
+description: |
+  
+  import "go:fmt"
+  import "go:strconv"
+  
+  fn main() {
+    let cond = true
+    let f = if cond { strconv.Atoi } else { strconv.Atoi }
+    let r = f("99")
+    fmt.Println(r)
+  }
 ---
 package main
 

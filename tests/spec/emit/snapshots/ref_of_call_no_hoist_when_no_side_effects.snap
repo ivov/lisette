@@ -1,6 +1,13 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nfn takes_two(a: int, b: Ref<int>) -> int { a + b.* }\nfn make_int() -> int { 2 }\n\nfn test() -> int {\n  takes_two(1, &make_int())\n}\n"
+description: |
+  
+  fn takes_two(a: int, b: Ref<int>) -> int { a + b.* }
+  fn make_int() -> int { 2 }
+  
+  fn test() -> int {
+    takes_two(1, &make_int())
+  }
 ---
 package main
 

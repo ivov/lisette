@@ -1,6 +1,10 @@
 ---
 source: tests/spec/emit/literals.rs
-description: "input: \nfn test() -> float64 {\n  1.5e10\n}\n"
+description: |
+  
+  fn test() -> float64 {
+    1.5e10
+  }
 ---
 package main
 

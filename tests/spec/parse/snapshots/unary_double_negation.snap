@@ -1,6 +1,10 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nfn test(a: int) {\n  let still_a = --a;\n}\n"
+description: |
+  
+  fn test(a: int) {
+    let still_a = --a;
+  }
 ---
 [
     Function {

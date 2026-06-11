@@ -1,6 +1,17 @@
 ---
 source: tests/spec/emit/control_flow.rs
-description: "input: \nfn risky() -> Result<int, string> { Ok(1) }\nfn nested() -> Result<int, string> { Ok(1) }\n\nfn test() -> Result<Result<int, string>, string> {\n  let r = try {\n    let _ = risky()?;\n    nested()\n  };\n  r\n}\n"
+description: |
+  
+  fn risky() -> Result<int, string> { Ok(1) }
+  fn nested() -> Result<int, string> { Ok(1) }
+  
+  fn test() -> Result<Result<int, string>, string> {
+    let r = try {
+      let _ = risky()?;
+      nested()
+    };
+    r
+  }
 ---
 package main
 

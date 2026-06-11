@@ -1,6 +1,12 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \n#[json(omitempty)]\nstruct User {\n  #[json(!omitempty)]\n  name: string,\n}\n"
+description: |
+  
+  #[json(omitempty)]
+  struct User {
+    #[json(!omitempty)]
+    name: string,
+  }
 ---
 [
     Struct {

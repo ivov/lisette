@@ -1,6 +1,14 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \n#[tag(\"validate\")]\n#[tag(\"custom\")]\nstruct User {\n  #[tag(`validate:\"required\"`)]\n  #[tag(`custom:\"foo\"`)]\n  name: string,\n}\n"
+description: |
+  
+  #[tag("validate")]
+  #[tag("custom")]
+  struct User {
+    #[tag(`validate:"required"`)]
+    #[tag(`custom:"foo"`)]
+    name: string,
+  }
 ---
 package main
 

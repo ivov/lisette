@@ -1,6 +1,14 @@
 ---
 source: tests/spec/emit/control_flow.rs
-description: "input: \nfn do_work() {}\n\nfn test() {\n  for _ in 0..3 {\n    do_work();\n  }\n}\n"
+description: |
+  
+  fn do_work() {}
+  
+  fn test() {
+    for _ in 0..3 {
+      do_work();
+    }
+  }
 ---
 package main
 

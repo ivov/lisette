@@ -1,6 +1,11 @@
 ---
 source: tests/spec/emit/imports.rs
-description: "input: \nimport \"go:example.com/ultraviolet\"\n\nfn handle(_msg: uv.Event) {\n}\n"
+description: |
+  
+  import "go:example.com/ultraviolet"
+  
+  fn handle(_msg: uv.Event) {
+  }
 ---
 package main
 

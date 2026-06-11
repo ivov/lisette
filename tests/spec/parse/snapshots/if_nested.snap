@@ -1,6 +1,16 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nfn test(a: int, b: int) {\n  if a > 0 {\n    if b > 0 {\n      print(\"both positive\");\n    } else {\n      print(\"a positive, b non-positive\");\n    }\n  }\n}\n"
+description: |
+  
+  fn test(a: int, b: int) {
+    if a > 0 {
+      if b > 0 {
+        print("both positive");
+      } else {
+        print("a positive, b non-positive");
+      }
+    }
+  }
 ---
 [
     Function {

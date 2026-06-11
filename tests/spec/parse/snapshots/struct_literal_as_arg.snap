@@ -1,6 +1,10 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nfn test(x_val: int) {\n  process(Point { x: x_val, y: 0 });\n}\n"
+description: |
+  
+  fn test(x_val: int) {
+    process(Point { x: x_val, y: 0 });
+  }
 ---
 [
     Function {

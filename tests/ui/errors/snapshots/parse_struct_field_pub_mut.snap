@@ -1,6 +1,5 @@
 ---
 source: tests/ui/errors/mod.rs
-assertion_line: 579
 ---
   [error] Syntax error
    ╭─[test.lis:3:7]

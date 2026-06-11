@@ -1,6 +1,13 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nstruct UserId(int)\nstruct Box { v: UserId }\n\nfn test(i: int) -> Box {\n  Box { v: i as UserId }\n}\n"
+description: |
+  
+  struct UserId(int)
+  struct Box { v: UserId }
+  
+  fn test(i: int) -> Box {
+    Box { v: i as UserId }
+  }
 ---
 package main
 

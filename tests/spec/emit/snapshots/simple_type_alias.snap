@@ -1,6 +1,8 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \ntype UserId = int\n"
+description: |
+  
+  type UserId = int
 ---
 package main
 

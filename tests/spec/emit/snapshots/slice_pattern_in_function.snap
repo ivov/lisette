@@ -1,6 +1,17 @@
 ---
 source: tests/spec/emit/functions.rs
-description: "input: \nfn sum_pair(pair: Slice<int>) -> int {\n  match pair {\n    [a, b] => a + b,\n    _ => 0,\n  }\n}\n\nfn test() -> int {\n  sum_pair([10, 20])\n}\n"
+description: |
+  
+  fn sum_pair(pair: Slice<int>) -> int {
+    match pair {
+      [a, b] => a + b,
+      _ => 0,
+    }
+  }
+  
+  fn test() -> int {
+    sum_pair([10, 20])
+  }
 ---
 package main
 

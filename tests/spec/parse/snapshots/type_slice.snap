@@ -1,6 +1,8 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \ntype IntSlice = Slice<int>;\n"
+description: |
+  
+  type IntSlice = Slice<int>;
 ---
 [
     TypeAlias {

@@ -1,6 +1,15 @@
 ---
 source: tests/spec/emit/interop_matrix.rs
-description: "input: \nimport \"go:flag\"\n\ntype MyFlag = flag.Flag\n\nfn main() {\n  let mut f: MyFlag = flag.Flag { .. }\n  f.Value = None\n}\n"
+description: |
+  
+  import "go:flag"
+  
+  type MyFlag = flag.Flag
+  
+  fn main() {
+    let mut f: MyFlag = flag.Flag { .. }
+    f.Value = None
+  }
 ---
 package main
 

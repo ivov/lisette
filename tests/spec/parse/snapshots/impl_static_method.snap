@@ -1,6 +1,14 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nstruct Math {}\n\nimpl Math {\n  fn add(a: int, b: int) -> int {\n    return a + b;\n  }\n}\n"
+description: |
+  
+  struct Math {}
+  
+  impl Math {
+    fn add(a: int, b: int) -> int {
+      return a + b;
+    }
+  }
 ---
 [
     Struct {

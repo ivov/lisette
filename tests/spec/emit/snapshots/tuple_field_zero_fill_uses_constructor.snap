@@ -1,6 +1,15 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \nstruct Probe {\n  pub pair: (int, string),\n  pub nested: (Option<int>, (int, int)),\n}\n\nfn make() -> Probe {\n  Probe { .. }\n}\n"
+description: |
+  
+  struct Probe {
+    pub pair: (int, string),
+    pub nested: (Option<int>, (int, int)),
+  }
+  
+  fn make() -> Probe {
+    Probe { .. }
+  }
 ---
 package main
 

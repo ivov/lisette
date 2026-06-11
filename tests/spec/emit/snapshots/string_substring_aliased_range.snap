@@ -1,6 +1,11 @@
 ---
 source: tests/spec/emit/prelude.rs
-description: "input: \ntype Prefix = RangeTo<int>\nfn test(s: string, r: Prefix) -> string {\n  s.substring(r)\n}\n"
+description: |
+  
+  type Prefix = RangeTo<int>
+  fn test(s: string, r: Prefix) -> string {
+    s.substring(r)
+  }
 ---
 package main
 

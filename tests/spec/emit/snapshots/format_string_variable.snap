@@ -1,6 +1,13 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nimport \"go:fmt\"\n\nfn test() {\n  let result = 15;\n  fmt.Print(f\"Result: {result}\")\n}\n"
+description: |
+  
+  import "go:fmt"
+  
+  fn test() {
+    let result = 15;
+    fmt.Print(f"Result: {result}")
+  }
 ---
 package main
 

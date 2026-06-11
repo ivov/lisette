@@ -1,6 +1,8 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \nstruct UserId(int)\n"
+description: |
+  
+  struct UserId(int)
 ---
 package main
 

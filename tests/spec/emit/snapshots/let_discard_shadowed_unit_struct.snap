@@ -1,6 +1,12 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nstruct Blank {}\n\nfn test() {\n  let _ = Blank {}\n}\n"
+description: |
+  
+  struct Blank {}
+  
+  fn test() {
+    let _ = Blank {}
+  }
 ---
 package main
 

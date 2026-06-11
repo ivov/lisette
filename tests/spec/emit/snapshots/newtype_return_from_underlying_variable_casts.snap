@@ -1,6 +1,12 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nstruct UserId(int)\n\nfn make(i: int) -> UserId {\n  i as UserId\n}\n"
+description: |
+  
+  struct UserId(int)
+  
+  fn make(i: int) -> UserId {
+    i as UserId
+  }
 ---
 package main
 

@@ -1,6 +1,18 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nstruct Counter { count: int }\n\nimpl Counter {\n  fn increment(self: Ref<Counter>) {\n    self.*.count += 1\n  }\n}\n\nfn test(m: Map<string, Ref<Counter>>) {\n  m[\"a\"].*.increment()\n}\n"
+description: |
+  
+  struct Counter { count: int }
+  
+  impl Counter {
+    fn increment(self: Ref<Counter>) {
+      self.*.count += 1
+    }
+  }
+  
+  fn test(m: Map<string, Ref<Counter>>) {
+    m["a"].*.increment()
+  }
 ---
 package main
 

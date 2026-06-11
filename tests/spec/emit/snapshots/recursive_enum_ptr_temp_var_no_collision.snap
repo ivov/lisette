@@ -1,6 +1,20 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nimport \"go:fmt\"\n\nenum Node {\n  Leaf { value: int },\n  Branch { left: Node, right: Node },\n}\n\nfn main() {\n  let n = Node.Branch { left: Node.Leaf { value: 1 }, right: Node.Leaf { value: 2 } }\n  let ptr_1 = 3\n  fmt.Println(n)\n  fmt.Println(ptr_1)\n}\n"
+description: |
+  
+  import "go:fmt"
+  
+  enum Node {
+    Leaf { value: int },
+    Branch { left: Node, right: Node },
+  }
+  
+  fn main() {
+    let n = Node.Branch { left: Node.Leaf { value: 1 }, right: Node.Leaf { value: 2 } }
+    let ptr_1 = 3
+    fmt.Println(n)
+    fmt.Println(ptr_1)
+  }
 ---
 package main
 

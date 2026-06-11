@@ -1,6 +1,13 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nfn test(items: Slice<int>) {\n  match items {\n    [x] => print(\"single\", x),\n    _ => print(\"other\"),\n  }\n}\n"
+description: |
+  
+  fn test(items: Slice<int>) {
+    match items {
+      [x] => print("single", x),
+      _ => print("other"),
+    }
+  }
 ---
 [
     Function {

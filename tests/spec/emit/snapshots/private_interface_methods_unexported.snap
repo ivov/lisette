@@ -1,6 +1,10 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \ninterface Describable {\n  fn describe(self) -> string\n}\n"
+description: |
+  
+  interface Describable {
+    fn describe(self) -> string
+  }
 ---
 package main
 

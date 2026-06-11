@@ -1,6 +1,13 @@
 ---
 source: tests/spec/emit/control_flow.rs
-description: "input: \nfn len(items: Slice<int>) -> int {\n  match items {\n    [] => 0,\n    [first, ..rest] => 1 + len(rest),\n  }\n}\n"
+description: |
+  
+  fn len(items: Slice<int>) -> int {
+    match items {
+      [] => 0,
+      [first, ..rest] => 1 + len(rest),
+    }
+  }
 ---
 package main
 

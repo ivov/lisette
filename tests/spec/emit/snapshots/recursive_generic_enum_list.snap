@@ -1,6 +1,15 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \nenum List<T> {\n  Nil,\n  Cons(T, List<T>)\n}\n\nfn test() -> List<int> {\n  List.Cons(1, List.Cons(2, List.Nil))\n}\n"
+description: |
+  
+  enum List<T> {
+    Nil,
+    Cons(T, List<T>)
+  }
+  
+  fn test() -> List<int> {
+    List.Cons(1, List.Cons(2, List.Nil))
+  }
 ---
 package main
 

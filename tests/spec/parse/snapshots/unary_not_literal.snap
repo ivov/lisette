@@ -1,6 +1,10 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nfn test() {\n  let is_not_true = !true;\n}\n"
+description: |
+  
+  fn test() {
+    let is_not_true = !true;
+  }
 ---
 [
     Function {

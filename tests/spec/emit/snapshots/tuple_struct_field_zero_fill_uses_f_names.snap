@@ -1,6 +1,16 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \nstruct MP(int, string)\n\nstruct Holder {\n  pub p: MP,\n}\n\nfn make() -> Holder {\n  Holder { .. }\n}\n"
+description: |
+  
+  struct MP(int, string)
+  
+  struct Holder {
+    pub p: MP,
+  }
+  
+  fn make() -> Holder {
+    Holder { .. }
+  }
 ---
 package main
 

@@ -1,6 +1,12 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \nfn main() {\n  let s = [1, 2, 3]\n  let r = &s\n  let _ = r.length()\n}\n"
+description: |
+  
+  fn main() {
+    let s = [1, 2, 3]
+    let r = &s
+    let _ = r.length()
+  }
 ---
 package main
 

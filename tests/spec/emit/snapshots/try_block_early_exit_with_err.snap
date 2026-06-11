@@ -1,6 +1,19 @@
 ---
 source: tests/spec/emit/control_flow.rs
-description: "input: \nfn test(bad: bool) -> int {\n  let result: Result<int, string> = try {\n    if bad {\n      Err(\"failed\")?\n    }\n    42\n  };\n  match result {\n    Ok(x) => x,\n    Err(_) => -1,\n  }\n}\n"
+description: |
+  
+  fn test(bad: bool) -> int {
+    let result: Result<int, string> = try {
+      if bad {
+        Err("failed")?
+      }
+      42
+    };
+    match result {
+      Ok(x) => x,
+      Err(_) => -1,
+    }
+  }
 ---
 package main
 

@@ -1,6 +1,16 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \nenum E {\n  Tag { x: int },\n  Other { x: int },\n}\n\nfn main() {\n  let e = E.Tag { x: 1 }\n  let _ = e\n}\n"
+description: |
+  
+  enum E {
+    Tag { x: int },
+    Other { x: int },
+  }
+  
+  fn main() {
+    let e = E.Tag { x: 1 }
+    let _ = e
+  }
 ---
 package main
 

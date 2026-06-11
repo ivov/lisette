@@ -1,6 +1,8 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nfn test() { @unknown; }\n"
+description: |
+  
+  fn test() { @unknown; }
 ---
 [
     Function {

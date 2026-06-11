@@ -1,6 +1,14 @@
 ---
 source: tests/spec/emit/imports.rs
-description: "input: \nimport s \"go:sync\"\n\nstruct Wrapper {\n  mu: s.Mutex,\n}\n\nfn main() {}\n"
+description: |
+  
+  import s "go:sync"
+  
+  struct Wrapper {
+    mu: s.Mutex,
+  }
+  
+  fn main() {}
 ---
 package main
 

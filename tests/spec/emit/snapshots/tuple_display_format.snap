@@ -1,6 +1,14 @@
 ---
 source: tests/spec/emit/literals.rs
-description: "input: \nimport \"go:fmt\"\n\nfn main() {\n  let t = (1, \"hello\")\n  fmt.Println(t)\n  fmt.Println(f\"tuple: {t}\")\n}\n"
+description: |
+  
+  import "go:fmt"
+  
+  fn main() {
+    let t = (1, "hello")
+    fmt.Println(t)
+    fmt.Println(f"tuple: {t}")
+  }
 ---
 package main
 

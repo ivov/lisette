@@ -1,6 +1,10 @@
 ---
 source: tests/spec/emit/prelude.rs
-description: "input: \nfn test(ch: Channel<int>) {\n  ch.close()\n}\n"
+description: |
+  
+  fn test(ch: Channel<int>) {
+    ch.close()
+  }
 ---
 package main
 

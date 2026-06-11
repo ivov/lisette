@@ -1,6 +1,9 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \n/// A unique identifier for a user.\ntype UserId = int\n"
+description: |
+  
+  /// A unique identifier for a user.
+  type UserId = int
 ---
 package main
 

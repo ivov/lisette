@@ -1,6 +1,8 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nstruct Marker()\n"
+description: |
+  
+  struct Marker()
 ---
 [
     Struct {

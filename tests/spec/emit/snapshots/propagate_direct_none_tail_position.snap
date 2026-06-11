@@ -1,6 +1,14 @@
 ---
 source: tests/spec/emit/result_option_patterns.rs
-description: "input: \nfn f() -> Option<int> {\n  None?\n}\n\nfn test() -> Option<int> {\n  f()\n}\n"
+description: |
+  
+  fn f() -> Option<int> {
+    None?
+  }
+  
+  fn test() -> Option<int> {
+    f()
+  }
 ---
 package main
 

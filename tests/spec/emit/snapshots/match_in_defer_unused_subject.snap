@@ -1,6 +1,14 @@
 ---
 source: tests/spec/emit/control_flow.rs
-description: "input: \nstruct P { v: int }\nfn test() {\n  defer {\n    let p = P { v: 1 }\n    match p { P { v } => () }\n  }\n}\n"
+description: |
+  
+  struct P { v: int }
+  fn test() {
+    defer {
+      let p = P { v: 1 }
+      match p { P { v } => () }
+    }
+  }
 ---
 package main
 

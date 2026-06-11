@@ -1,6 +1,10 @@
 ---
 source: tests/spec/emit/literals.rs
-description: "input: \nfn test() -> string {\n  r\"has `tick\"\n}\n"
+description: |
+  
+  fn test() -> string {
+    r"has `tick"
+  }
 ---
 package main
 

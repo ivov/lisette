@@ -1,6 +1,10 @@
 ---
 source: tests/spec/emit/prelude.rs
-description: "input: \nfn test() -> string {\n  min(\"a\", \"b\")\n}\n"
+description: |
+  
+  fn test() -> string {
+    min("a", "b")
+  }
 ---
 package main
 

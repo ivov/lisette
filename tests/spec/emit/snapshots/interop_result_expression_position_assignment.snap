@@ -1,6 +1,17 @@
 ---
 source: tests/spec/emit/interop_matrix.rs
-description: "input: \nimport \"go:strconv\"\n\ntype F = fn(string) -> Result<int, error>\n\nfn main() {\n  let mut f: F = |s| Ok(0)\n  let u = { f = strconv.Atoi }\n  let _ = u\n  let _ = f(\"1\")\n}\n"
+description: |
+  
+  import "go:strconv"
+  
+  type F = fn(string) -> Result<int, error>
+  
+  fn main() {
+    let mut f: F = |s| Ok(0)
+    let u = { f = strconv.Atoi }
+    let _ = u
+    let _ = f("1")
+  }
 ---
 package main
 

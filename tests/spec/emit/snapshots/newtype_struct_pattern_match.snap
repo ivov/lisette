@@ -1,6 +1,14 @@
 ---
 source: tests/spec/emit/patterns.rs
-description: "input: \nstruct UserId(int)\n\nfn test(uid: UserId) -> int {\n  match uid {\n    UserId(id) => id,\n  }\n}\n"
+description: |
+  
+  struct UserId(int)
+  
+  fn test(uid: UserId) -> int {
+    match uid {
+      UserId(id) => id,
+    }
+  }
 ---
 package main
 

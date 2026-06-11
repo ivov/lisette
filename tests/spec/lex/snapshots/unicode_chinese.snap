@@ -1,6 +1,6 @@
 ---
 source: tests/spec/lex/mod.rs
-description: "input: let 北京 = \"Beijing\""
+description: "let 北京 = \"Beijing\""
 ---
 LexResult {
     tokens: [

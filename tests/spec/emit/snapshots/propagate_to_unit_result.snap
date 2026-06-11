@@ -1,6 +1,15 @@
 ---
 source: tests/spec/emit/result_option_patterns.rs
-description: "input: \nfn returns_int() -> Result<int, string> {\n  Ok(42)\n}\n\nfn returns_unit() -> Result<(), string> {\n  let _ = returns_int()?;\n  Ok(())\n}\n"
+description: |
+  
+  fn returns_int() -> Result<int, string> {
+    Ok(42)
+  }
+  
+  fn returns_unit() -> Result<(), string> {
+    let _ = returns_int()?;
+    Ok(())
+  }
 ---
 package main
 

@@ -1,6 +1,23 @@
 ---
 source: tests/spec/emit/interop_matrix.rs
-description: "input: \nimport \"go:strconv\"\n\nstruct Holder { f: fn(string) -> Result<int, error> }\n\nfn main() {\n  let mut m = Map.new<string, Holder>()\n  m[\"a\"] = Holder { f: strconv.Atoi }\n  let mut entry = m[\"a\"]\n  entry.f = strconv.Atoi\n  m[\"a\"] = entry\n  let r = m[\"a\"].f(\"1\")\n  match r {\n    Ok(v) => { let _ = v },\n    Err(_) => { let _ = 0 },\n  }\n}\n"
+description: |
+  
+  import "go:strconv"
+  
+  struct Holder { f: fn(string) -> Result<int, error> }
+  
+  fn main() {
+    let mut m = Map.new<string, Holder>()
+    m["a"] = Holder { f: strconv.Atoi }
+    let mut entry = m["a"]
+    entry.f = strconv.Atoi
+    m["a"] = entry
+    let r = m["a"].f("1")
+    match r {
+      Ok(v) => { let _ = v },
+      Err(_) => { let _ = 0 },
+    }
+  }
 ---
 package main
 

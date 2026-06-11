@@ -1,6 +1,30 @@
 ---
 source: tests/spec/emit/go_interface_adapter.rs
-description: "input: \nstruct Entry { name: string }\n\npub interface Cache {\n  #[go(comma_ok)]\n  fn Get(key: string) -> Option<Ref<Entry>>\n}\n\nstruct MyCache {}\n\nimpl MyCache {\n  fn Get(self, _key: string) -> Option<Ref<Entry>> {\n    None\n  }\n}\n\nstruct Wrapper<T> {\n  cache: T,\n}\n\nfn main() {\n  let c = MyCache {}\n  let _: Wrapper<Cache> = Wrapper { cache: c }\n}\n"
+description: |
+  
+  struct Entry { name: string }
+  
+  pub interface Cache {
+    #[go(comma_ok)]
+    fn Get(key: string) -> Option<Ref<Entry>>
+  }
+  
+  struct MyCache {}
+  
+  impl MyCache {
+    fn Get(self, _key: string) -> Option<Ref<Entry>> {
+      None
+    }
+  }
+  
+  struct Wrapper<T> {
+    cache: T,
+  }
+  
+  fn main() {
+    let c = MyCache {}
+    let _: Wrapper<Cache> = Wrapper { cache: c }
+  }
 ---
 package main
 

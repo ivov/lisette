@@ -1,6 +1,14 @@
 ---
 source: tests/spec/emit/functions.rs
-description: "input: \nstruct Counter { count: int }\n\nimpl Counter {\n  fn get_count(self: Ref<Counter>) -> int {\n    self.count\n  }\n}\n"
+description: |
+  
+  struct Counter { count: int }
+  
+  impl Counter {
+    fn get_count(self: Ref<Counter>) -> int {
+      self.count
+    }
+  }
 ---
 package main
 

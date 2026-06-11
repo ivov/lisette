@@ -1,6 +1,14 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nfn make_counter() -> fn() -> int {\n  let mut n = 0\n  || -> int {\n    n = n + 1\n    n\n  }\n}\n"
+description: |
+  
+  fn make_counter() -> fn() -> int {
+    let mut n = 0
+    || -> int {
+      n = n + 1
+      n
+    }
+  }
 ---
 [
     Function {

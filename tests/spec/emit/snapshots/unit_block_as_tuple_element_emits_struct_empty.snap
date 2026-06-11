@@ -1,6 +1,17 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nimport \"go:fmt\"\n\nfn side() {\n  fmt.Println(\"side\")\n}\n\nfn test() -> int {\n  let t = ({ side() }, 1)\n  t.1\n}\n"
+description: |
+  
+  import "go:fmt"
+  
+  fn side() {
+    fmt.Println("side")
+  }
+  
+  fn test() -> int {
+    let t = ({ side() }, 1)
+    t.1
+  }
 ---
 package main
 

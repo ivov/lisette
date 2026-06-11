@@ -1,6 +1,16 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nfn test(a: int) {\n  if a > 100 {\n    print(\"very large\");\n  } else if a > 10 {\n    print(\"large\");\n  } else {\n    print(\"small or medium\");\n  }\n}\n"
+description: |
+  
+  fn test(a: int) {
+    if a > 100 {
+      print("very large");
+    } else if a > 10 {
+      print("large");
+    } else {
+      print("small or medium");
+    }
+  }
 ---
 [
     Function {

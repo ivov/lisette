@@ -1,6 +1,6 @@
 ---
 source: tests/spec/lex/mod.rs
-description: "input: f\"outer: {f\"inner: {x}\"}\""
+description: "f\"outer: {f\"inner: {x}\"}\""
 ---
 LexResult {
     tokens: [

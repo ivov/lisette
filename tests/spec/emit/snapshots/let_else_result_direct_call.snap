@@ -1,6 +1,15 @@
 ---
 source: tests/spec/emit/control_flow.rs
-description: "input: \nfn parse(s: string) -> Result<int, string> {\n  if s == \"42\" { Ok(42) } else { Err(\"bad\") }\n}\n\nfn test() -> int {\n  let Ok(x) = parse(\"42\") else { return -1; };\n  x\n}\n"
+description: |
+  
+  fn parse(s: string) -> Result<int, string> {
+    if s == "42" { Ok(42) } else { Err("bad") }
+  }
+  
+  fn test() -> int {
+    let Ok(x) = parse("42") else { return -1; };
+    x
+  }
 ---
 package main
 

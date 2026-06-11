@@ -1,6 +1,6 @@
 ---
 source: tests/spec/lex/mod.rs
-description: "input: let a = 123;"
+description: let a = 123;
 ---
 LexResult {
     tokens: [

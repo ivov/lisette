@@ -1,6 +1,14 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \nenum Marker {\n  Value,\n}\n\nfn test() -> Marker {\n  Marker.Value\n}\n"
+description: |
+  
+  enum Marker {
+    Value,
+  }
+  
+  fn test() -> Marker {
+    Marker.Value
+  }
 ---
 package main
 

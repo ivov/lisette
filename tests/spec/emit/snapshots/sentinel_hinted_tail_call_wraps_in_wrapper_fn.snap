@@ -1,6 +1,16 @@
 ---
 source: tests/spec/emit/go_interface_adapter.rs
-description: "input: \nimport \"go:example.com/idx\"\n\nfn find(haystack: string, needle: string) -> Option<int> {\n  idx.Find(haystack, needle)\n}\n\nfn main() {\n  let _ = find(\"hello\", \"z\")\n}\n"
+description: |
+  
+  import "go:example.com/idx"
+  
+  fn find(haystack: string, needle: string) -> Option<int> {
+    idx.Find(haystack, needle)
+  }
+  
+  fn main() {
+    let _ = find("hello", "z")
+  }
 ---
 package main
 

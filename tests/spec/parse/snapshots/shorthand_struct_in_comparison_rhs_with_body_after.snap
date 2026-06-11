@@ -1,6 +1,12 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nstruct Point { x: int }\nfn test(other: Point) {\n  let x = 1;\n  if other == Point { x } { true } else { false }\n}\n"
+description: |
+  
+  struct Point { x: int }
+  fn test(other: Point) {
+    let x = 1;
+    if other == Point { x } { true } else { false }
+  }
 ---
 [
     Struct {

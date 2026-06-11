@@ -1,6 +1,18 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nstruct Box { x: int }\n\nimpl Box {\n  fn add(self, y: int) -> int { self.x + y }\n}\n\nfn make_ref() -> Ref<Box> { &Box { x: 1 } }\n\nfn main() {\n  let _ = Box.add(make_ref().*, 1);\n}\n"
+description: |
+  
+  struct Box { x: int }
+  
+  impl Box {
+    fn add(self, y: int) -> int { self.x + y }
+  }
+  
+  fn make_ref() -> Ref<Box> { &Box { x: 1 } }
+  
+  fn main() {
+    let _ = Box.add(make_ref().*, 1);
+  }
 ---
 package main
 

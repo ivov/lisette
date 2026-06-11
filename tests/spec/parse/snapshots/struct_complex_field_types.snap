@@ -1,6 +1,12 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nstruct Request<Body> {\n  method: string,\n  headers: Map<string, string>,\n  body: Option<Body>,\n}\n"
+description: |
+  
+  struct Request<Body> {
+    method: string,
+    headers: Map<string, string>,
+    body: Option<Body>,
+  }
 ---
 [
     Struct {

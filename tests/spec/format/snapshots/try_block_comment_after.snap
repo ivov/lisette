@@ -1,6 +1,10 @@
 ---
 source: tests/spec/format/mod.rs
-description: "input: fn foo() {\n  try {}\n  // comment\n}"
+description: |-
+  fn foo() {
+    try {}
+    // comment
+  }
 ---
 fn foo() {
   try {}

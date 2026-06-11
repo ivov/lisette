@@ -1,6 +1,11 @@
 ---
 source: tests/spec/emit/prelude.rs
-description: "input: \ntype Prefix = RangeTo<int>\nfn test(xs: Slice<int>, r: Prefix) -> Slice<int> {\n  xs[r]\n}\n"
+description: |
+  
+  type Prefix = RangeTo<int>
+  fn test(xs: Slice<int>, r: Prefix) -> Slice<int> {
+    xs[r]
+  }
 ---
 package main
 

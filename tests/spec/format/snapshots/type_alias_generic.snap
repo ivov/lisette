@@ -1,5 +1,5 @@
 ---
 source: tests/spec/format/mod.rs
-description: "input: type Result<T> = Option<T>"
+description: type Result<T> = Option<T>
 ---
 type Result<T> = Option<T>

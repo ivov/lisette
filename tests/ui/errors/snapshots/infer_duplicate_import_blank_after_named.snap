@@ -1,6 +1,5 @@
 ---
 source: tests/ui/errors/mod.rs
-assertion_line: 3887
 ---
   [error] Invalid import
    ╭─[main.lis:3:8]

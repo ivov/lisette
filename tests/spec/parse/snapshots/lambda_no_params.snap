@@ -1,6 +1,10 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nfn test() {\n  let f = || 42;\n}\n"
+description: |
+  
+  fn test() {
+    let f = || 42;
+  }
 ---
 [
     Function {

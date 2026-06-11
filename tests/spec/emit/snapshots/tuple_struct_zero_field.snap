@@ -1,6 +1,12 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \nstruct Marker()\n\nfn test() -> Marker {\n  Marker()\n}\n"
+description: |
+  
+  struct Marker()
+  
+  fn test() -> Marker {
+    Marker()
+  }
 ---
 package main
 

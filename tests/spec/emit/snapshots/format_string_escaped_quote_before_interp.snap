@@ -1,6 +1,13 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nimport \"go:fmt\"\n\nfn test() {\n  let x = 7;\n  fmt.Println(f\"prefix \\\", {x}\")\n}\n"
+description: |
+  
+  import "go:fmt"
+  
+  fn test() {
+    let x = 7;
+    fmt.Println(f"prefix \", {x}")
+  }
 ---
 package main
 

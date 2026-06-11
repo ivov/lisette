@@ -1,6 +1,26 @@
 ---
 source: tests/spec/emit/result_option_patterns.rs
-description: "input: \nstruct MultiWrapper {\n  first: Option<int>,\n  second: Option<string>,\n}\n\nfn get_int(x: int) -> Option<int> {\n  if x > 0 { Some(x) } else { None }\n}\n\nfn get_string(s: string) -> Option<string> {\n  if s != \"\" { Some(s) } else { None }\n}\n\nfn test() {\n  let w = MultiWrapper {\n    first: get_int(5),\n    second: get_string(\"hello\")\n  };\n}\n"
+description: |
+  
+  struct MultiWrapper {
+    first: Option<int>,
+    second: Option<string>,
+  }
+  
+  fn get_int(x: int) -> Option<int> {
+    if x > 0 { Some(x) } else { None }
+  }
+  
+  fn get_string(s: string) -> Option<string> {
+    if s != "" { Some(s) } else { None }
+  }
+  
+  fn test() {
+    let w = MultiWrapper {
+      first: get_int(5),
+      second: get_string("hello")
+    };
+  }
 ---
 package main
 

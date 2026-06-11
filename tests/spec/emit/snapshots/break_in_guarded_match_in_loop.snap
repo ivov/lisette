@@ -1,6 +1,17 @@
 ---
 source: tests/spec/emit/control_flow.rs
-description: "input: \nfn find_first_negative(items: Slice<int>) -> int {\n  let mut result = 0\n  for item in items {\n    match item {\n      n if n < 0 => { result = n; break },\n      _ => (),\n    }\n  }\n  result\n}\n"
+description: |
+  
+  fn find_first_negative(items: Slice<int>) -> int {
+    let mut result = 0
+    for item in items {
+      match item {
+        n if n < 0 => { result = n; break },
+        _ => (),
+      }
+    }
+    result
+  }
 ---
 package main
 

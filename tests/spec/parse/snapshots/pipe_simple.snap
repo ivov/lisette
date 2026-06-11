@@ -1,6 +1,8 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nfn test() { let result = x |> func; }\n"
+description: |
+  
+  fn test() { let result = x |> func; }
 ---
 [
     Function {

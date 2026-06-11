@@ -1,6 +1,18 @@
 ---
 source: tests/spec/emit/control_flow.rs
-description: "input: \nfn checked_sqrt(n: int) -> Result<int, string> {\n  if n < 0 {\n    Err(\"negative input\")\n  } else {\n    let mut x = n;\n    while x * x > n {\n      x = x - 1;\n    }\n    Ok(x)\n  }\n}\n"
+description: |
+  
+  fn checked_sqrt(n: int) -> Result<int, string> {
+    if n < 0 {
+      Err("negative input")
+    } else {
+      let mut x = n;
+      while x * x > n {
+        x = x - 1;
+      }
+      Ok(x)
+    }
+  }
 ---
 package main
 

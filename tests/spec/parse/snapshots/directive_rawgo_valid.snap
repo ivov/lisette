@@ -1,6 +1,8 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nfn test() { @rawgo(\"fmt.Println(\\\"Hello\\\")\"); }\n"
+description: |
+  
+  fn test() { @rawgo("fmt.Println(\"Hello\")"); }
 ---
 [
     Function {

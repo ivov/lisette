@@ -1,6 +1,14 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nfn do_something() {\n  // unit return\n}\n\nfn test() {\n  let _ = do_something();\n}\n"
+description: |
+  
+  fn do_something() {
+    // unit return
+  }
+  
+  fn test() {
+    let _ = do_something();
+  }
 ---
 package main
 

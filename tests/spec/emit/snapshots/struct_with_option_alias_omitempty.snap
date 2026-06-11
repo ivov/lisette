@@ -1,6 +1,14 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \ntype Maybe<T> = Option<T>\n\n#[json(omitempty)]\nstruct User {\n  name: Maybe<string>,\n  email: Option<string>,\n}\n"
+description: |
+  
+  type Maybe<T> = Option<T>
+  
+  #[json(omitempty)]
+  struct User {
+    name: Maybe<string>,
+    email: Option<string>,
+  }
 ---
 package main
 

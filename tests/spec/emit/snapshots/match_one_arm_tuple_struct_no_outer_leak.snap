@@ -1,6 +1,18 @@
 ---
 source: tests/spec/emit/patterns.rs
-description: "input: \nstruct Pair(int, int)\n\nfn test() -> int {\n  let a = 100;\n  let b = 200;\n  let p = Pair(1, 2);\n  let sum = match p {\n    Pair(a, b) => a + b,\n  };\n  a + b + sum\n}\n"
+description: |
+  
+  struct Pair(int, int)
+  
+  fn test() -> int {
+    let a = 100;
+    let b = 200;
+    let p = Pair(1, 2);
+    let sum = match p {
+      Pair(a, b) => a + b,
+    };
+    a + b + sum
+  }
 ---
 package main
 

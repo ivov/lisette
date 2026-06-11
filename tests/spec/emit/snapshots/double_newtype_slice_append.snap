@@ -1,6 +1,14 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \nstruct A(Slice<int>)\nstruct B(A)\n\nfn main() {\n  let mut w = B(A([]))\n  w = B(A(w.0.0.append(1)))\n}\n"
+description: |
+  
+  struct A(Slice<int>)
+  struct B(A)
+  
+  fn main() {
+    let mut w = B(A([]))
+    w = B(A(w.0.0.append(1)))
+  }
 ---
 package main
 

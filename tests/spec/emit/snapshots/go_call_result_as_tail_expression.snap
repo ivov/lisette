@@ -1,6 +1,12 @@
 ---
 source: tests/spec/emit/result_option_patterns.rs
-description: "input: \nimport \"go:fmt\"\n\nfn print_hello() -> Result<int, error> {\n  fmt.Println(\"hello\")\n}\n"
+description: |
+  
+  import "go:fmt"
+  
+  fn print_hello() -> Result<int, error> {
+    fmt.Println("hello")
+  }
 ---
 package main
 

@@ -1,6 +1,16 @@
 ---
 source: tests/spec/emit/patterns.rs
-description: "input: \nenum Shape {\n  Rectangle { x: int, y: int, width: int, height: int },\n}\n\nfn area(s: Shape) -> int {\n  match s {\n    Rectangle { width, height, .. } => width * height,\n  }\n}\n"
+description: |
+  
+  enum Shape {
+    Rectangle { x: int, y: int, width: int, height: int },
+  }
+  
+  fn area(s: Shape) -> int {
+    match s {
+      Rectangle { width, height, .. } => width * height,
+    }
+  }
 ---
 package main
 

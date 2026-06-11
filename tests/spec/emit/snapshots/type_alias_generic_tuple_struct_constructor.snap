@@ -1,6 +1,13 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nstruct Wrapper<T>(T)\ntype W<T> = Wrapper<T>\n\nfn test() -> W<int> {\n  W(5)\n}\n"
+description: |
+  
+  struct Wrapper<T>(T)
+  type W<T> = Wrapper<T>
+  
+  fn test() -> W<int> {
+    W(5)
+  }
 ---
 package main
 

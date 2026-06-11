@@ -1,6 +1,13 @@
 ---
 source: tests/spec/emit/control_flow.rs
-description: "input: \nenum E { A(int), B(int), C }\n\nfn test(e: E) -> int {\n  let A(x) | B(x) = e else { return 0; };\n  x\n}\n"
+description: |
+  
+  enum E { A(int), B(int), C }
+  
+  fn test(e: E) -> int {
+    let A(x) | B(x) = e else { return 0; };
+    x
+  }
 ---
 package main
 

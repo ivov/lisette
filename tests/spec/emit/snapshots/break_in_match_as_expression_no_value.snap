@@ -1,6 +1,18 @@
 ---
 source: tests/spec/emit/control_flow.rs
-description: "input: \nfn test() {\n  let mut i = 0;\n  while i < 100 {\n    let v = match i >= 5 {\n      true => break,\n      false => i,\n    };\n    let _ = v;\n    i += 1;\n  }\n}\n"
+description: |
+  
+  fn test() {
+    let mut i = 0;
+    while i < 100 {
+      let v = match i >= 5 {
+        true => break,
+        false => i,
+      };
+      let _ = v;
+      i += 1;
+    }
+  }
 ---
 package main
 

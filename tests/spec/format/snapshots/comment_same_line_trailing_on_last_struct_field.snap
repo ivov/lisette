@@ -1,6 +1,10 @@
 ---
 source: tests/spec/format/mod.rs
-description: "input: struct S {\n  a: int,\n  b: int, // trailing\n}"
+description: |-
+  struct S {
+    a: int,
+    b: int, // trailing
+  }
 ---
 struct S {
   a: int,

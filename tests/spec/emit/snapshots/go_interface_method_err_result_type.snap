@@ -1,6 +1,15 @@
 ---
 source: tests/spec/emit/functions.rs
-description: "input: \nimport \"go:context\"\nimport \"go:fmt\"\n\nfn main() {\n  let ctx = context.Background()\n  let err = ctx.Err()\n  fmt.Println(f\"err={err}\")\n}\n"
+description: |
+  
+  import "go:context"
+  import "go:fmt"
+  
+  fn main() {
+    let ctx = context.Background()
+    let err = ctx.Err()
+    fmt.Println(f"err={err}")
+  }
 ---
 package main
 

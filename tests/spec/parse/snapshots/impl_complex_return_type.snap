@@ -1,6 +1,16 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nstruct Container<T> {\n  items: Vec<T>,\n}\n\nimpl<T> Container<T> {\n  fn get_all(self: Container<T>) -> Vec<T> {\n    return self.items;\n  }\n}\n"
+description: |
+  
+  struct Container<T> {
+    items: Vec<T>,
+  }
+  
+  impl<T> Container<T> {
+    fn get_all(self: Container<T>) -> Vec<T> {
+      return self.items;
+    }
+  }
 ---
 [
     Struct {

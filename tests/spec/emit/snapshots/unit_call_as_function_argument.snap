@@ -1,6 +1,13 @@
 ---
 source: tests/spec/emit/functions.rs
-description: "input: \nfn noop() {}\nfn take(_x: ()) {}\n\nfn test() {\n  take(noop())\n}\n"
+description: |
+  
+  fn noop() {}
+  fn take(_x: ()) {}
+  
+  fn test() {
+    take(noop())
+  }
 ---
 package main
 

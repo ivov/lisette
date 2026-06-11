@@ -1,6 +1,18 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nstruct Foo { ch: Channel<int> }\n\nimpl Foo {\n  fn new() -> Channel<int> {\n    Channel.new<int>()\n  }\n}\n\nfn test() -> Channel<int> {\n  Foo.new()\n}\n"
+description: |
+  
+  struct Foo { ch: Channel<int> }
+  
+  impl Foo {
+    fn new() -> Channel<int> {
+      Channel.new<int>()
+    }
+  }
+  
+  fn test() -> Channel<int> {
+    Foo.new()
+  }
 ---
 package main
 

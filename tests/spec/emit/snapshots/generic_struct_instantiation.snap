@@ -1,6 +1,12 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \nstruct Box<T> { value: T }\n\nfn test() -> Box<int> {\n  Box { value: 42 }\n}\n"
+description: |
+  
+  struct Box<T> { value: T }
+  
+  fn test() -> Box<int> {
+    Box { value: 42 }
+  }
 ---
 package main
 

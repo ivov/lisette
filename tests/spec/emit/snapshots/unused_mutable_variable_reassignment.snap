@@ -1,6 +1,11 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nfn test() {\n  let mut x = 0\n  x = 1\n}\n"
+description: |
+  
+  fn test() {
+    let mut x = 0
+    x = 1
+  }
 ---
 package main
 
