@@ -245,12 +245,6 @@ func (c *Converter) convertMethod(result *ConvertResult, symbolExport extract.Sy
 				TypeParams:   typeParams,
 			}
 		} else {
-			recvType := ToLisette(symbolExport.ReceiverVariable.Type(), c)
-			if recvType.SkipReason != nil {
-				result.SkipReason = recvType.SkipReason
-				return
-			}
-
 			isPointerReceiver := false
 			typeName := ""
 			var typeParams TypeParamSpecs
@@ -265,9 +259,26 @@ func (c *Converter) convertMethod(result *ConvertResult, symbolExport extract.Sy
 				typeParams = extractReceiverTypeParams(named, c)
 			}
 
+			// An unexported same-package struct receiver renders by its bare name;
+			// ToLisette has no name for it, so bypass it.
+			var recvLisetteType string
+			if _, ok := unexportedSamePkgStruct(symbolExport.ReceiverVariable.Type(), c); ok {
+				recvLisetteType = typeName
+				if isPointerReceiver {
+					recvLisetteType = fmt.Sprintf("Ref<%s>", typeName)
+				}
+			} else {
+				recvType := ToLisette(symbolExport.ReceiverVariable.Type(), c)
+				if recvType.SkipReason != nil {
+					result.SkipReason = recvType.SkipReason
+					return
+				}
+				recvLisetteType = recvType.LisetteType
+			}
+
 			result.Receiver = &Receiver{
 				Name:         symbolExport.ReceiverVariable.Name(),
-				Type:         recvType.LisetteType,
+				Type:         recvLisetteType,
 				IsPointer:    isPointerReceiver,
 				BaseTypeName: typeName,
 				TypeParams:   typeParams,
@@ -626,6 +637,7 @@ func (c *Converter) convertType(result *ConvertResult, exp extract.SymbolExport)
 		return
 	}
 	result.TypeParams = typeParams
+	result.UnexportedType = exp.Unexported
 
 	underlying := named.Underlying()
 
@@ -745,6 +757,9 @@ func convertStructFields(s *types.Struct, c *Converter) []StructField {
 	var fields []StructField
 	for field := range s.Fields() {
 		if !field.Exported() {
+			if field.Embedded() && c.EmbedIsFaithful(field) {
+				fields = append(fields, embeddedStructField(field, c))
+			}
 			continue
 		}
 		if field.Embedded() {
@@ -770,7 +785,17 @@ func convertStructFields(s *types.Struct, c *Converter) []StructField {
 // EmbedIsFaithful reports whether bindgen emits field as an `embed`.
 func (c *Converter) EmbedIsFaithful(field *types.Var) bool {
 	if !field.Exported() {
-		return false
+		named, ok := unexportedSamePkgStruct(field.Type(), c)
+		if !ok {
+			return false
+		}
+		st := named.Underlying().(*types.Struct)
+		for embed := range st.Fields() {
+			if embed.Embedded() && !c.EmbedIsFaithful(embed) {
+				return false
+			}
+		}
+		return true
 	}
 	// Probe runs before the owner's Convert checkpoint; snapshot/restore so its synth structs and imports do not leak.
 	synthMark := c.synthMark()
@@ -782,12 +807,43 @@ func (c *Converter) EmbedIsFaithful(field *types.Var) bool {
 	return faithful
 }
 
+// unexportedSamePkgStruct returns the named type behind t (peeling one pointer)
+// when it is an unexported struct declared in the package being generated, which
+// is emitted as an opaque `#[go(unexported)]` type the outer struct can embed.
+func unexportedSamePkgStruct(t types.Type, c *Converter) (*types.Named, bool) {
+	if ptr, ok := t.(*types.Pointer); ok {
+		t = ptr.Elem()
+	}
+	named, ok := t.(*types.Named)
+	if !ok {
+		return nil, false
+	}
+	obj := named.Obj()
+	if obj.Exported() || obj.Pkg() == nil || obj.Pkg().Path() != c.currentPkgPath {
+		return nil, false
+	}
+	if _, ok := named.Underlying().(*types.Struct); !ok {
+		return nil, false
+	}
+	if named.TypeParams().Len() > 0 || named.TypeArgs().Len() > 0 {
+		return nil, false
+	}
+	return named, true
+}
+
 func embeddedStructField(field *types.Var, c *Converter) StructField {
 	target := field.Type()
 	isPointer := false
 	if ptr, ok := target.(*types.Pointer); ok {
 		target = ptr.Elem()
 		isPointer = true
+	}
+	if named, ok := unexportedSamePkgStruct(target, c); ok {
+		ref := named.Obj().Name()
+		if isPointer {
+			ref = fmt.Sprintf("Ref<%s>", ref)
+		}
+		return StructField{Name: field.Name(), Type: ref, IsEmbedded: true}
 	}
 	// Generic type aliases are not yet representable, so do not embed one.
 	if isGenericAlias(target) {
@@ -812,7 +868,6 @@ func embeddedStructField(field *types.Var, c *Converter) StructField {
 	if isPointer {
 		ref = fmt.Sprintf("Ref<%s>", ref)
 	}
-	// `embed` only for a nominal struct; nilable (interface) embeds stay named fields (PR13).
 	if !isStruct {
 		return StructField{Name: field.Name(), Type: ref}
 	}

@@ -123,8 +123,8 @@ pub fn Verbose() -> bool
 /// and dumped to standard output when done. Unlike in tests, benchmark logs
 /// are always printed, so as not to hide output whose existence may be
 /// affecting benchmark results.
-#[go(hidden_embed)]
 pub struct B {
+  embed common,
   pub N: int,
 }
 
@@ -177,8 +177,9 @@ pub struct CoverBlock {
 /// *F methods can only be called before [F.Fuzz]. Once the test is
 /// executing the fuzz target, only [*T] methods can be used. The only *F methods
 /// that are allowed in the [F.Fuzz] function are [F.Failed] and [F.Name].
-#[go(hidden_embed)]
-pub type F
+pub struct F {
+  embed common,
+}
 
 /// InternalBenchmark is an internal type but exported because it is cross-package;
 /// it is part of the implementation of the "go test" command.
@@ -223,8 +224,9 @@ pub type PB
 /// 
 /// The other reporting methods, such as the variations of [T.Log] and [T.Error],
 /// may be called simultaneously from multiple goroutines.
-#[go(hidden_embed)]
-pub type T
+pub struct T {
+  embed common,
+}
 
 /// TB is the interface common to [T], [B], and [F].
 pub interface TB {
@@ -254,91 +256,16 @@ pub interface TB {
   fn private()
 }
 
+/// common holds the elements common between T and B and
+/// captures common methods such as Errorf.
+#[go(unexported)]
+pub type common
+
 impl B {
-  /// Attr emits a test attribute associated with this test.
-  /// 
-  /// The key must not contain whitespace.
-  /// The value must not contain newlines or carriage returns.
-  /// 
-  /// The meaning of different attribute keys is left up to
-  /// continuous integration systems and test frameworks.
-  /// 
-  /// Test attributes are emitted immediately in the test log,
-  /// but they are intended to be treated as unordered.
-  fn Attr(self: Ref<B>, key: string, value: string)
-
-  /// Chdir calls [os.Chdir] and uses Cleanup to restore the current
-  /// working directory to its original value after the test. On Unix, it
-  /// also sets PWD environment variable for the duration of the test.
-  /// 
-  /// Because Chdir affects the whole process, it cannot be used
-  /// in parallel tests or tests with parallel ancestors.
-  fn Chdir(self: Ref<B>, dir: string)
-
-  /// Cleanup registers a function to be called when the test (or subtest) and all its
-  /// subtests complete. Cleanup functions will be called in last added,
-  /// first called order.
-  fn Cleanup(self: Ref<B>, f: fn() -> ())
-
-  /// Context returns a context that is canceled just before
-  /// Cleanup-registered functions are called.
-  /// 
-  /// Cleanup functions can wait for any resources
-  /// that shut down on [context.Context.Done] before the test or benchmark completes.
-  fn Context(self: Ref<B>) -> context.Context
-
   /// Elapsed returns the measured elapsed time of the benchmark.
   /// The duration reported by Elapsed matches the one measured by
   /// [B.StartTimer], [B.StopTimer], and [B.ResetTimer].
   fn Elapsed(self: Ref<B>) -> time.Duration
-
-  /// Error is equivalent to Log followed by Fail.
-  fn Error(self: Ref<B>, args: VarArgs<Unknown>)
-
-  /// Errorf is equivalent to Logf followed by Fail.
-  fn Errorf(self: Ref<B>, format: string, args: VarArgs<Unknown>)
-
-  /// Fail marks the function as having failed but continues execution.
-  fn Fail(self: Ref<B>)
-
-  /// FailNow marks the function as having failed and stops its execution
-  /// by calling [runtime.Goexit] (which then runs all deferred calls in the
-  /// current goroutine).
-  /// Execution will continue at the next test or benchmark.
-  /// FailNow must be called from the goroutine running the
-  /// test or benchmark function, not from other goroutines
-  /// created during the test. Calling FailNow does not stop
-  /// those other goroutines.
-  fn FailNow(self: Ref<B>)
-
-  /// Failed reports whether the function has failed.
-  fn Failed(self: Ref<B>) -> bool
-
-  /// Fatal is equivalent to Log followed by FailNow.
-  fn Fatal(self: Ref<B>, args: VarArgs<Unknown>)
-
-  /// Fatalf is equivalent to Logf followed by FailNow.
-  fn Fatalf(self: Ref<B>, format: string, args: VarArgs<Unknown>)
-
-  /// Helper marks the calling function as a test helper function.
-  /// When printing file and line information, that function will be skipped.
-  /// Helper may be called simultaneously from multiple goroutines.
-  fn Helper(self: Ref<B>)
-
-  /// Log formats its arguments using default formatting, analogous to [fmt.Println],
-  /// and records the text in the error log. For tests, the text will be printed only if
-  /// the test fails or the -test.v flag is set. For benchmarks, the text is always
-  /// printed to avoid having performance depend on the value of the -test.v flag.
-  /// It is an error to call Log after a test or benchmark returns.
-  fn Log(self: Ref<B>, args: VarArgs<Unknown>)
-
-  /// Logf formats its arguments according to the format, analogous to [fmt.Printf], and
-  /// records the text in the error log. A final newline is added if not provided. For
-  /// tests, the text will be printed only if the test fails or the -test.v flag is
-  /// set. For benchmarks, the text is always printed to avoid having performance
-  /// depend on the value of the -test.v flag.
-  /// It is an error to call Logf after a test or benchmark returns.
-  fn Logf(self: Ref<B>, format: string, args: VarArgs<Unknown>)
 
   /// Loop returns true as long as the benchmark should continue running.
   /// 
@@ -375,21 +302,6 @@ impl B {
   /// whereas b.N-based benchmarks must run the benchmark function (and any
   /// associated setup and cleanup) several times.
   fn Loop(self: Ref<B>) -> bool
-
-  /// Name returns the name of the running (sub-) test or benchmark.
-  /// 
-  /// The name will include the name of the test along with the names of
-  /// any nested sub-tests. If two sibling sub-tests have the same name,
-  /// Name will append a suffix to guarantee the returned name is unique.
-  fn Name(self: Ref<B>) -> string
-
-  /// Output returns a Writer that writes to the same test output stream as TB.Log.
-  /// The output is indented like TB.Log lines, but Output does not
-  /// add source locations or newlines. The output is internally line
-  /// buffered, and a call to TB.Log or the end of the test will implicitly
-  /// flush the buffer, followed by a newline. After a test function and all its
-  /// parents return, neither Output nor the Write method may be called.
-  fn Output(self: Ref<B>) -> io.Writer
 
   /// ReportAllocs enables malloc statistics for this benchmark.
   /// It is equivalent to setting -test.benchmem, but it only affects the
@@ -443,33 +355,6 @@ impl B {
   /// If p is less than 1, this call will have no effect.
   fn SetParallelism(self: Ref<B>, p: int)
 
-  /// Setenv calls [os.Setenv] and uses Cleanup to
-  /// restore the environment variable to its original value
-  /// after the test.
-  /// 
-  /// Because Setenv affects the whole process, it cannot be used
-  /// in parallel tests or tests with parallel ancestors.
-  fn Setenv(self: Ref<B>, key: string, value: string)
-
-  /// Skip is equivalent to Log followed by SkipNow.
-  fn Skip(self: Ref<B>, args: VarArgs<Unknown>)
-
-  /// SkipNow marks the test as having been skipped and stops its execution
-  /// by calling [runtime.Goexit].
-  /// If a test fails (see Error, Errorf, Fail) and is then skipped,
-  /// it is still considered to have failed.
-  /// Execution will continue at the next test or benchmark. See also FailNow.
-  /// SkipNow must be called from the goroutine running the test, not from
-  /// other goroutines created during the test. Calling SkipNow does not stop
-  /// those other goroutines.
-  fn SkipNow(self: Ref<B>)
-
-  /// Skipf is equivalent to Logf followed by SkipNow.
-  fn Skipf(self: Ref<B>, format: string, args: VarArgs<Unknown>)
-
-  /// Skipped reports whether the test was skipped.
-  fn Skipped(self: Ref<B>) -> bool
-
   /// StartTimer starts timing a test. This function is called automatically
   /// before a benchmark starts, but it can also be used to resume timing after
   /// a call to [B.StopTimer].
@@ -478,13 +363,6 @@ impl B {
   /// StopTimer stops timing a test. This can be used to pause the timer
   /// while performing steps that you don't want to measure.
   fn StopTimer(self: Ref<B>)
-
-  /// TempDir returns a temporary directory for the test to use.
-  /// The directory is automatically removed when the test and
-  /// all its subtests complete.
-  /// Each subsequent call to TempDir returns a unique directory;
-  /// if the directory creation fails, TempDir terminates the test by calling Fatal.
-  fn TempDir(self: Ref<B>) -> string
 }
 
 impl BenchmarkResult {
@@ -518,65 +396,8 @@ impl F {
   /// arguments for the fuzz target.
   fn Add(self: Ref<F>, args: VarArgs<Unknown>)
 
-  /// Attr emits a test attribute associated with this test.
-  /// 
-  /// The key must not contain whitespace.
-  /// The value must not contain newlines or carriage returns.
-  /// 
-  /// The meaning of different attribute keys is left up to
-  /// continuous integration systems and test frameworks.
-  /// 
-  /// Test attributes are emitted immediately in the test log,
-  /// but they are intended to be treated as unordered.
-  fn Attr(self: Ref<F>, key: string, value: string)
-
-  /// Chdir calls [os.Chdir] and uses Cleanup to restore the current
-  /// working directory to its original value after the test. On Unix, it
-  /// also sets PWD environment variable for the duration of the test.
-  /// 
-  /// Because Chdir affects the whole process, it cannot be used
-  /// in parallel tests or tests with parallel ancestors.
-  fn Chdir(self: Ref<F>, dir: string)
-
-  /// Cleanup registers a function to be called when the test (or subtest) and all its
-  /// subtests complete. Cleanup functions will be called in last added,
-  /// first called order.
-  fn Cleanup(self: Ref<F>, f: fn() -> ())
-
-  /// Context returns a context that is canceled just before
-  /// Cleanup-registered functions are called.
-  /// 
-  /// Cleanup functions can wait for any resources
-  /// that shut down on [context.Context.Done] before the test or benchmark completes.
-  fn Context(self: Ref<F>) -> context.Context
-
-  /// Error is equivalent to Log followed by Fail.
-  fn Error(self: Ref<F>, args: VarArgs<Unknown>)
-
-  /// Errorf is equivalent to Logf followed by Fail.
-  fn Errorf(self: Ref<F>, format: string, args: VarArgs<Unknown>)
-
   /// Fail marks the function as having failed but continues execution.
   fn Fail(self: Ref<F>)
-
-  /// FailNow marks the function as having failed and stops its execution
-  /// by calling [runtime.Goexit] (which then runs all deferred calls in the
-  /// current goroutine).
-  /// Execution will continue at the next test or benchmark.
-  /// FailNow must be called from the goroutine running the
-  /// test or benchmark function, not from other goroutines
-  /// created during the test. Calling FailNow does not stop
-  /// those other goroutines.
-  fn FailNow(self: Ref<F>)
-
-  /// Failed reports whether the function has failed.
-  fn Failed(self: Ref<F>) -> bool
-
-  /// Fatal is equivalent to Log followed by FailNow.
-  fn Fatal(self: Ref<F>, args: VarArgs<Unknown>)
-
-  /// Fatalf is equivalent to Logf followed by FailNow.
-  fn Fatalf(self: Ref<F>, format: string, args: VarArgs<Unknown>)
 
   /// Fuzz runs the fuzz function, ff, for fuzz testing. If ff fails for a set of
   /// arguments, those arguments will be added to the seed corpus.
@@ -611,69 +432,8 @@ impl F {
   /// Helper may be called simultaneously from multiple goroutines.
   fn Helper(self: Ref<F>)
 
-  /// Log formats its arguments using default formatting, analogous to [fmt.Println],
-  /// and records the text in the error log. For tests, the text will be printed only if
-  /// the test fails or the -test.v flag is set. For benchmarks, the text is always
-  /// printed to avoid having performance depend on the value of the -test.v flag.
-  /// It is an error to call Log after a test or benchmark returns.
-  fn Log(self: Ref<F>, args: VarArgs<Unknown>)
-
-  /// Logf formats its arguments according to the format, analogous to [fmt.Printf], and
-  /// records the text in the error log. A final newline is added if not provided. For
-  /// tests, the text will be printed only if the test fails or the -test.v flag is
-  /// set. For benchmarks, the text is always printed to avoid having performance
-  /// depend on the value of the -test.v flag.
-  /// It is an error to call Logf after a test or benchmark returns.
-  fn Logf(self: Ref<F>, format: string, args: VarArgs<Unknown>)
-
-  /// Name returns the name of the running (sub-) test or benchmark.
-  /// 
-  /// The name will include the name of the test along with the names of
-  /// any nested sub-tests. If two sibling sub-tests have the same name,
-  /// Name will append a suffix to guarantee the returned name is unique.
-  fn Name(self: Ref<F>) -> string
-
-  /// Output returns a Writer that writes to the same test output stream as TB.Log.
-  /// The output is indented like TB.Log lines, but Output does not
-  /// add source locations or newlines. The output is internally line
-  /// buffered, and a call to TB.Log or the end of the test will implicitly
-  /// flush the buffer, followed by a newline. After a test function and all its
-  /// parents return, neither Output nor the Write method may be called.
-  fn Output(self: Ref<F>) -> io.Writer
-
-  /// Setenv calls [os.Setenv] and uses Cleanup to
-  /// restore the environment variable to its original value
-  /// after the test.
-  /// 
-  /// Because Setenv affects the whole process, it cannot be used
-  /// in parallel tests or tests with parallel ancestors.
-  fn Setenv(self: Ref<F>, key: string, value: string)
-
-  /// Skip is equivalent to Log followed by SkipNow.
-  fn Skip(self: Ref<F>, args: VarArgs<Unknown>)
-
-  /// SkipNow marks the test as having been skipped and stops its execution
-  /// by calling [runtime.Goexit].
-  /// If a test fails (see Error, Errorf, Fail) and is then skipped,
-  /// it is still considered to have failed.
-  /// Execution will continue at the next test or benchmark. See also FailNow.
-  /// SkipNow must be called from the goroutine running the test, not from
-  /// other goroutines created during the test. Calling SkipNow does not stop
-  /// those other goroutines.
-  fn SkipNow(self: Ref<F>)
-
-  /// Skipf is equivalent to Logf followed by SkipNow.
-  fn Skipf(self: Ref<F>, format: string, args: VarArgs<Unknown>)
-
   /// Skipped reports whether the test was skipped.
   fn Skipped(self: Ref<F>) -> bool
-
-  /// TempDir returns a temporary directory for the test to use.
-  /// The directory is automatically removed when the test and
-  /// all its subtests complete.
-  /// Each subsequent call to TempDir returns a unique directory;
-  /// if the directory creation fails, TempDir terminates the test by calling Fatal.
-  fn TempDir(self: Ref<F>) -> string
 }
 
 impl M {
@@ -690,18 +450,6 @@ impl PB {
 }
 
 impl T {
-  /// Attr emits a test attribute associated with this test.
-  /// 
-  /// The key must not contain whitespace.
-  /// The value must not contain newlines or carriage returns.
-  /// 
-  /// The meaning of different attribute keys is left up to
-  /// continuous integration systems and test frameworks.
-  /// 
-  /// Test attributes are emitted immediately in the test log,
-  /// but they are intended to be treated as unordered.
-  fn Attr(self: Ref<T>, key: string, value: string)
-
   /// Chdir calls [os.Chdir] and uses Cleanup to restore the current
   /// working directory to its original value after the test. On Unix, it
   /// also sets PWD environment variable for the duration of the test.
@@ -710,86 +458,11 @@ impl T {
   /// in parallel tests or tests with parallel ancestors.
   fn Chdir(self: Ref<T>, dir: string)
 
-  /// Cleanup registers a function to be called when the test (or subtest) and all its
-  /// subtests complete. Cleanup functions will be called in last added,
-  /// first called order.
-  fn Cleanup(self: Ref<T>, f: fn() -> ())
-
-  /// Context returns a context that is canceled just before
-  /// Cleanup-registered functions are called.
-  /// 
-  /// Cleanup functions can wait for any resources
-  /// that shut down on [context.Context.Done] before the test or benchmark completes.
-  fn Context(self: Ref<T>) -> context.Context
-
   /// Deadline reports the time at which the test binary will have
   /// exceeded the timeout specified by the -timeout flag.
   /// 
   /// The ok result is false if the -timeout flag indicates “no timeout” (0).
   fn Deadline(self: Ref<T>) -> Option<time.Time>
-
-  /// Error is equivalent to Log followed by Fail.
-  fn Error(self: Ref<T>, args: VarArgs<Unknown>)
-
-  /// Errorf is equivalent to Logf followed by Fail.
-  fn Errorf(self: Ref<T>, format: string, args: VarArgs<Unknown>)
-
-  /// Fail marks the function as having failed but continues execution.
-  fn Fail(self: Ref<T>)
-
-  /// FailNow marks the function as having failed and stops its execution
-  /// by calling [runtime.Goexit] (which then runs all deferred calls in the
-  /// current goroutine).
-  /// Execution will continue at the next test or benchmark.
-  /// FailNow must be called from the goroutine running the
-  /// test or benchmark function, not from other goroutines
-  /// created during the test. Calling FailNow does not stop
-  /// those other goroutines.
-  fn FailNow(self: Ref<T>)
-
-  /// Failed reports whether the function has failed.
-  fn Failed(self: Ref<T>) -> bool
-
-  /// Fatal is equivalent to Log followed by FailNow.
-  fn Fatal(self: Ref<T>, args: VarArgs<Unknown>)
-
-  /// Fatalf is equivalent to Logf followed by FailNow.
-  fn Fatalf(self: Ref<T>, format: string, args: VarArgs<Unknown>)
-
-  /// Helper marks the calling function as a test helper function.
-  /// When printing file and line information, that function will be skipped.
-  /// Helper may be called simultaneously from multiple goroutines.
-  fn Helper(self: Ref<T>)
-
-  /// Log formats its arguments using default formatting, analogous to [fmt.Println],
-  /// and records the text in the error log. For tests, the text will be printed only if
-  /// the test fails or the -test.v flag is set. For benchmarks, the text is always
-  /// printed to avoid having performance depend on the value of the -test.v flag.
-  /// It is an error to call Log after a test or benchmark returns.
-  fn Log(self: Ref<T>, args: VarArgs<Unknown>)
-
-  /// Logf formats its arguments according to the format, analogous to [fmt.Printf], and
-  /// records the text in the error log. A final newline is added if not provided. For
-  /// tests, the text will be printed only if the test fails or the -test.v flag is
-  /// set. For benchmarks, the text is always printed to avoid having performance
-  /// depend on the value of the -test.v flag.
-  /// It is an error to call Logf after a test or benchmark returns.
-  fn Logf(self: Ref<T>, format: string, args: VarArgs<Unknown>)
-
-  /// Name returns the name of the running (sub-) test or benchmark.
-  /// 
-  /// The name will include the name of the test along with the names of
-  /// any nested sub-tests. If two sibling sub-tests have the same name,
-  /// Name will append a suffix to guarantee the returned name is unique.
-  fn Name(self: Ref<T>) -> string
-
-  /// Output returns a Writer that writes to the same test output stream as TB.Log.
-  /// The output is indented like TB.Log lines, but Output does not
-  /// add source locations or newlines. The output is internally line
-  /// buffered, and a call to TB.Log or the end of the test will implicitly
-  /// flush the buffer, followed by a newline. After a test function and all its
-  /// parents return, neither Output nor the Write method may be called.
-  fn Output(self: Ref<T>) -> io.Writer
 
   /// Parallel signals that this test is to be run in parallel with (and only with)
   /// other parallel tests. When a test is run multiple times due to use of
@@ -812,9 +485,114 @@ impl T {
   /// Because Setenv affects the whole process, it cannot be used
   /// in parallel tests or tests with parallel ancestors.
   fn Setenv(self: Ref<T>, key: string, value: string)
+}
+
+impl common {
+  /// Attr emits a test attribute associated with this test.
+  /// 
+  /// The key must not contain whitespace.
+  /// The value must not contain newlines or carriage returns.
+  /// 
+  /// The meaning of different attribute keys is left up to
+  /// continuous integration systems and test frameworks.
+  /// 
+  /// Test attributes are emitted immediately in the test log,
+  /// but they are intended to be treated as unordered.
+  fn Attr(self: Ref<common>, key: string, value: string)
+
+  /// Chdir calls [os.Chdir] and uses Cleanup to restore the current
+  /// working directory to its original value after the test. On Unix, it
+  /// also sets PWD environment variable for the duration of the test.
+  /// 
+  /// Because Chdir affects the whole process, it cannot be used
+  /// in parallel tests or tests with parallel ancestors.
+  fn Chdir(self: Ref<common>, dir: string)
+
+  /// Cleanup registers a function to be called when the test (or subtest) and all its
+  /// subtests complete. Cleanup functions will be called in last added,
+  /// first called order.
+  fn Cleanup(self: Ref<common>, f: fn() -> ())
+
+  /// Context returns a context that is canceled just before
+  /// Cleanup-registered functions are called.
+  /// 
+  /// Cleanup functions can wait for any resources
+  /// that shut down on [context.Context.Done] before the test or benchmark completes.
+  fn Context(self: Ref<common>) -> context.Context
+
+  /// Error is equivalent to Log followed by Fail.
+  fn Error(self: Ref<common>, args: VarArgs<Unknown>)
+
+  /// Errorf is equivalent to Logf followed by Fail.
+  fn Errorf(self: Ref<common>, format: string, args: VarArgs<Unknown>)
+
+  /// Fail marks the function as having failed but continues execution.
+  fn Fail(self: Ref<common>)
+
+  /// FailNow marks the function as having failed and stops its execution
+  /// by calling [runtime.Goexit] (which then runs all deferred calls in the
+  /// current goroutine).
+  /// Execution will continue at the next test or benchmark.
+  /// FailNow must be called from the goroutine running the
+  /// test or benchmark function, not from other goroutines
+  /// created during the test. Calling FailNow does not stop
+  /// those other goroutines.
+  fn FailNow(self: Ref<common>)
+
+  /// Failed reports whether the function has failed.
+  fn Failed(self: Ref<common>) -> bool
+
+  /// Fatal is equivalent to Log followed by FailNow.
+  fn Fatal(self: Ref<common>, args: VarArgs<Unknown>)
+
+  /// Fatalf is equivalent to Logf followed by FailNow.
+  fn Fatalf(self: Ref<common>, format: string, args: VarArgs<Unknown>)
+
+  /// Helper marks the calling function as a test helper function.
+  /// When printing file and line information, that function will be skipped.
+  /// Helper may be called simultaneously from multiple goroutines.
+  fn Helper(self: Ref<common>)
+
+  /// Log formats its arguments using default formatting, analogous to [fmt.Println],
+  /// and records the text in the error log. For tests, the text will be printed only if
+  /// the test fails or the -test.v flag is set. For benchmarks, the text is always
+  /// printed to avoid having performance depend on the value of the -test.v flag.
+  /// It is an error to call Log after a test or benchmark returns.
+  fn Log(self: Ref<common>, args: VarArgs<Unknown>)
+
+  /// Logf formats its arguments according to the format, analogous to [fmt.Printf], and
+  /// records the text in the error log. A final newline is added if not provided. For
+  /// tests, the text will be printed only if the test fails or the -test.v flag is
+  /// set. For benchmarks, the text is always printed to avoid having performance
+  /// depend on the value of the -test.v flag.
+  /// It is an error to call Logf after a test or benchmark returns.
+  fn Logf(self: Ref<common>, format: string, args: VarArgs<Unknown>)
+
+  /// Name returns the name of the running (sub-) test or benchmark.
+  /// 
+  /// The name will include the name of the test along with the names of
+  /// any nested sub-tests. If two sibling sub-tests have the same name,
+  /// Name will append a suffix to guarantee the returned name is unique.
+  fn Name(self: Ref<common>) -> string
+
+  /// Output returns a Writer that writes to the same test output stream as TB.Log.
+  /// The output is indented like TB.Log lines, but Output does not
+  /// add source locations or newlines. The output is internally line
+  /// buffered, and a call to TB.Log or the end of the test will implicitly
+  /// flush the buffer, followed by a newline. After a test function and all its
+  /// parents return, neither Output nor the Write method may be called.
+  fn Output(self: Ref<common>) -> io.Writer
+
+  /// Setenv calls [os.Setenv] and uses Cleanup to
+  /// restore the environment variable to its original value
+  /// after the test.
+  /// 
+  /// Because Setenv affects the whole process, it cannot be used
+  /// in parallel tests or tests with parallel ancestors.
+  fn Setenv(self: Ref<common>, key: string, value: string)
 
   /// Skip is equivalent to Log followed by SkipNow.
-  fn Skip(self: Ref<T>, args: VarArgs<Unknown>)
+  fn Skip(self: Ref<common>, args: VarArgs<Unknown>)
 
   /// SkipNow marks the test as having been skipped and stops its execution
   /// by calling [runtime.Goexit].
@@ -824,18 +602,21 @@ impl T {
   /// SkipNow must be called from the goroutine running the test, not from
   /// other goroutines created during the test. Calling SkipNow does not stop
   /// those other goroutines.
-  fn SkipNow(self: Ref<T>)
+  fn SkipNow(self: Ref<common>)
 
   /// Skipf is equivalent to Logf followed by SkipNow.
-  fn Skipf(self: Ref<T>, format: string, args: VarArgs<Unknown>)
+  fn Skipf(self: Ref<common>, format: string, args: VarArgs<Unknown>)
 
   /// Skipped reports whether the test was skipped.
-  fn Skipped(self: Ref<T>) -> bool
+  fn Skipped(self: Ref<common>) -> bool
 
   /// TempDir returns a temporary directory for the test to use.
   /// The directory is automatically removed when the test and
   /// all its subtests complete.
   /// Each subsequent call to TempDir returns a unique directory;
   /// if the directory creation fails, TempDir terminates the test by calling Fatal.
-  fn TempDir(self: Ref<T>) -> string
+  fn TempDir(self: Ref<common>) -> string
+
+  #[go(unexported, "testing.private()")]
+  fn private(self: Ref<common>)
 }

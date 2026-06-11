@@ -46,6 +46,7 @@ type ConvertResult struct {
 	// has an embed bindgen could not emit, so the resolver must refuse to embed it.
 	HasHiddenEmbed bool
 	SealId         string // non-empty for an unexported seal method: its seal identity
+	UnexportedType bool   // a Go unexported type emitted only as a faithful embed target
 }
 
 // HasReturn reports whether this function/method has a non-unit return type

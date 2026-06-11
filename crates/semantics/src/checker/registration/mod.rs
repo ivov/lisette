@@ -74,6 +74,12 @@ pub(super) fn has_hidden_embed_attribute(attributes: &[Attribute]) -> bool {
         .any(|flag| flag == "hidden_embed")
 }
 
+pub(super) fn has_unexported_attribute(attributes: &[Attribute]) -> bool {
+    extract_attribute_flags(attributes, "go")
+        .iter()
+        .any(|flag| flag == "unexported")
+}
+
 pub(super) fn collect_enum_attributes(attributes: &[Attribute]) -> Attributes {
     let mut map = Attributes::default();
     if has_display_attribute(attributes) {
@@ -486,33 +492,37 @@ impl TaskState<'_> {
         let mut entries = Vec::new();
 
         for item in items {
-            let (name, generics, syntactic_visibility) = match item {
-                Expression::Enum {
-                    name,
-                    generics,
-                    visibility,
-                    ..
-                } => (name, generics, *visibility),
-                Expression::Struct {
-                    name,
-                    generics,
-                    visibility,
-                    ..
-                } => (name, generics, *visibility),
-                Expression::Interface {
-                    name,
-                    generics,
-                    visibility,
-                    ..
-                } => (name, generics, *visibility),
-                Expression::TypeAlias {
-                    name,
-                    generics,
-                    visibility,
-                    ..
-                } => (name, generics, *visibility),
-                _ => continue,
-            };
+            let (name, generics, syntactic_visibility, attributes): (_, _, _, &[Attribute]) =
+                match item {
+                    Expression::Enum {
+                        name,
+                        generics,
+                        visibility,
+                        attributes,
+                        ..
+                    } => (name, generics, *visibility, attributes),
+                    Expression::Struct {
+                        name,
+                        generics,
+                        visibility,
+                        attributes,
+                        ..
+                    } => (name, generics, *visibility, attributes),
+                    Expression::Interface {
+                        name,
+                        generics,
+                        visibility,
+                        ..
+                    } => (name, generics, *visibility, &[]),
+                    Expression::TypeAlias {
+                        name,
+                        generics,
+                        visibility,
+                        attributes,
+                        ..
+                    } => (name, generics, *visibility, attributes),
+                    _ => continue,
+                };
 
             let qualified_name = self.qualify_name(name);
             let args: Vec<Type> = generics
@@ -558,6 +568,9 @@ impl TaskState<'_> {
 
             let item_visibility = match visibility {
                 Visibility::Local => Visibility::Local,
+                // A Go unexported type stays module-private even in a typedef,
+                // mirroring Go's lexical export rule.
+                _ if has_unexported_attribute(attributes) => Visibility::Private,
                 _ => {
                     if syntactic_visibility == SyntacticVisibility::Public || is_typedef {
                         Visibility::Public

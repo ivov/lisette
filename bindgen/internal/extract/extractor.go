@@ -187,6 +187,19 @@ func ExtractExports(pkg *packages.Package, embedFaithful func(*types.Var) bool) 
 		}
 	}
 
+	for _, named := range unexportedEmbedTargets(pkg, embedFaithful) {
+		obj := named.Obj()
+		exports = append(exports, SymbolExport{
+			Name:       obj.Name(),
+			Kind:       ExportType,
+			Doc:        getDocForObject(docPkg, obj.Name()),
+			GoType:     named,
+			Obj:        obj,
+			Unexported: true,
+		})
+		exports = append(exports, extractMethods(named, pkg, docPkg, sealNames, embedFaithful)...)
+	}
+
 	sort.Slice(exports, func(i, j int) bool {
 		if exports[i].Kind != exports[j].Kind {
 			return exports[i].Kind < exports[j].Kind
@@ -195,6 +208,66 @@ func ExtractExports(pkg *packages.Package, embedFaithful func(*types.Var) bool) 
 	})
 
 	return exports
+}
+
+// unexportedEmbedTargets returns the same-package unexported struct types reached
+// as faithful embed targets from exported types, in deterministic name order.
+func unexportedEmbedTargets(pkg *packages.Package, embedFaithful func(*types.Var) bool) []*types.Named {
+	recorded := map[string]*types.Named{}
+	visited := map[string]bool{}
+
+	var visit func(named *types.Named)
+	visit = func(named *types.Named) {
+		st, ok := named.Underlying().(*types.Struct)
+		if !ok {
+			return
+		}
+		if visited[named.Obj().Name()] {
+			return
+		}
+		visited[named.Obj().Name()] = true
+		for field := range st.Fields() {
+			if !field.Embedded() {
+				continue
+			}
+			t := field.Type()
+			if ptr, ok := t.(*types.Pointer); ok {
+				t = ptr.Elem()
+			}
+			embedded, ok := t.(*types.Named)
+			if !ok {
+				continue
+			}
+			obj := embedded.Obj()
+			if obj.Pkg() == nil || obj.Pkg().Path() != pkg.PkgPath {
+				continue
+			}
+			if !obj.Exported() && embedFaithful(field) {
+				recorded[obj.Name()] = embedded
+			}
+			visit(embedded)
+		}
+	}
+
+	scope := pkg.Types.Scope()
+	for _, name := range scope.Names() {
+		if tn, ok := scope.Lookup(name).(*types.TypeName); ok && tn.Exported() {
+			if named, ok := tn.Type().(*types.Named); ok {
+				visit(named)
+			}
+		}
+	}
+
+	names := make([]string, 0, len(recorded))
+	for name := range recorded {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	out := make([]*types.Named, 0, len(names))
+	for _, name := range names {
+		out = append(out, recorded[name])
+	}
+	return out
 }
 
 // sealMethodNames collects the unexported method names that seal some exported

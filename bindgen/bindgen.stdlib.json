@@ -433,19 +433,15 @@
         "go/types": [
           "Alias.Obj", "Alias.Origin", "Alias.Rhs", "Alias.Underlying",
           "Array.Elem",
-          "Builtin.Type",
           "Chan.Elem",
-          "Const.Type",
           "Default",
-          "Func.Origin", "Func.Signature", "Func.Type",
+          "Func.Origin", "Func.Signature",
           "Interface.EmbeddedType", "Interface.ExplicitMethod", "Interface.Method",
-          "Label.Type",
           "Map.Elem", "Map.Key",
           "MethodSet.At",
           "Named.Method", "Named.Obj", "Named.Origin", "Named.Underlying",
-          "Nil.Type",
           "Package.Scope",
-          "PkgName.Imported", "PkgName.Type",
+          "PkgName.Imported",
           "Pointer.Elem",
           "Scope.Child",
           "Selection.Obj", "Selection.Recv", "Selection.Type",
@@ -454,11 +450,11 @@
           "Term.Type",
           "Tuple.At",
           "TypeList.At",
-          "TypeName.Type",
           "TypeParam.Constraint", "TypeParam.Obj", "TypeParam.Underlying", "TypeParamList.At",
           "Unalias",
           "Union.Term",
-          "Var.Origin", "Var.Type"
+          "Var.Origin",
+          "object.Type"
         ],
         "hash/crc32": ["IEEETable", "MakeTable"],
         "html/template": ["Must"],
@@ -476,11 +472,8 @@
         "log": ["Default", "Logger.Writer", "Writer"],
         "log/slog": ["Default", "Logger.Handler", "Value.LogValuer"],
         "net": [
-          "IPConn.LocalAddr", "IPConn.RemoteAddr",
-          "TCPConn.LocalAddr", "TCPConn.RemoteAddr",
+          "conn.LocalAddr", "conn.RemoteAddr",
           "TCPListener.Addr",
-          "UDPConn.LocalAddr", "UDPConn.RemoteAddr",
-          "UnixConn.LocalAddr", "UnixConn.RemoteAddr",
           "UnixListener.Addr"
         ],
         "net/http": [
@@ -508,11 +501,7 @@
         "runtime/trace": ["StartRegion"],
         "sync": ["OnceFunc", "OnceValue", "OnceValues"],
         "syscall": ["MustLoadDLL", "DLL.MustFindProc"],
-        "testing": [
-          "B.Context", "B.Output",
-          "F.Context", "F.Output",
-          "T.Context", "T.Output"
-        ],
+        "testing": ["common.Context", "common.Output"],
         "text/template": ["Must"],
         "time": ["AfterFunc", "FixedZone", "NewTicker", "NewTimer", "Time.Location"]
       },

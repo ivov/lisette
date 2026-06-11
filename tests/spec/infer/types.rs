@@ -6289,6 +6289,99 @@ fn main() {}
 }
 
 #[test]
+fn promote_method_through_unexported_embed() {
+    let typedef = r#"
+#[go(unexported)]
+pub type conn
+impl conn {
+  fn Read(self) -> int
+}
+
+pub struct IPConn { embed conn }
+"#;
+    let input = r#"
+import "go:example.com/lib"
+fn read(c: lib.IPConn) -> int { c.Read() }
+fn main() {}
+"#;
+    infer_with_go_typedefs(input, &[("go:example.com/lib", typedef)]).assert_no_errors();
+}
+
+#[test]
+fn embed_imported_type_with_unexported_embed_promotes() {
+    let typedef = r#"
+#[go(unexported)]
+pub type conn
+impl conn {
+  fn Read(self) -> int
+}
+
+pub struct IPConn { embed conn }
+"#;
+    let input = r#"
+import "go:example.com/lib"
+struct Mine { embed lib.IPConn }
+fn read(m: Mine) -> int { m.Read() }
+fn main() {}
+"#;
+    infer_with_go_typedefs(input, &[("go:example.com/lib", typedef)]).assert_no_errors();
+}
+
+#[test]
+fn name_unexported_imported_type_rejected() {
+    let typedef = r#"
+#[go(unexported)]
+pub type conn
+impl conn {
+  fn Read(self) -> int
+}
+
+pub struct IPConn { embed conn }
+"#;
+    let input = r#"
+import "go:example.com/lib"
+fn use_conn(c: lib.conn) -> int { c.Read() }
+fn main() {}
+"#;
+    infer_with_go_typedefs(input, &[("go:example.com/lib", typedef)])
+        .assert_resolve_code("type_not_found");
+}
+
+// A method promoted through an unexported embed sits at its true depth (2 from
+// User), so it ties with an equally-deep faithful competitor and gc rejects
+// `u.M()` as ambiguous, rather than the unexported one wrongly winning at depth 1.
+#[test]
+fn promotion_through_unexported_embed_keeps_faithful_depth() {
+    let typedef = r#"
+#[go(unexported)]
+pub type conn
+impl conn {
+  fn M(self) -> int
+}
+
+pub struct IPConn { embed conn }
+
+pub struct Inner {}
+impl Inner {
+  fn M(self) -> int
+}
+
+pub struct Mid { embed Inner }
+"#;
+    let input = r#"
+import "go:example.com/lib"
+struct User {
+  embed lib.IPConn,
+  embed lib.Mid,
+}
+fn use_m(u: User) -> int { u.M() }
+fn main() {}
+"#;
+    infer_with_go_typedefs(input, &[("go:example.com/lib", typedef)])
+        .assert_infer_code("ambiguous_selector");
+}
+
+#[test]
 fn embed_imported_skipped_exported_embed_rejected() {
     let typedef = r#"
 #[go(hidden_embed)]
@@ -6523,7 +6616,7 @@ fn main() {}
 }
 
 #[test]
-fn embed_stdlib_opaque_mixin_admitted_hidden_rejected() {
+fn embed_stdlib_opaque_mixin_and_unexported_embed_admitted() {
     infer(
         r#"
 import "go:strings"
@@ -6536,7 +6629,16 @@ fn main() {}
     infer(
         r#"
 import "go:net"
-struct BadEmbed { embed net.IPConn }
+struct WithConn { embed net.IPConn }
+fn main() {}
+"#,
+    )
+    .assert_no_errors();
+
+    infer(
+        r#"
+import "go:reflect"
+struct BadEmbed { embed reflect.Value }
 fn main() {}
 "#,
     )

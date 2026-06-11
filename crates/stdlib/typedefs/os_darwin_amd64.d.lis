@@ -501,8 +501,9 @@ pub type DirEntry = fs.DirEntry
 /// File represents an open file descriptor.
 /// 
 /// The methods of File are safe for concurrent use.
-#[go(hidden_embed)]
-pub type File
+pub struct File {
+  embed Ref<file>,
+}
 
 /// A FileInfo describes a file and is returned by [Stat] and [Lstat].
 pub type FileInfo = fs.FileInfo
@@ -592,6 +593,13 @@ pub struct SyscallError {
   pub Syscall: string,
   pub Err: error,
 }
+
+/// file is the real representation of *File.
+/// The extra level of indirection ensures that no clients of os
+/// can overwrite this data, which could cause the finalizer
+/// to close the wrong file descriptor.
+#[go(unexported)]
+pub type file
 
 /// DevNull is the name of the operating system's “null device.”
 /// On Unix-like systems, it is "/dev/null"; on Windows, "NUL".

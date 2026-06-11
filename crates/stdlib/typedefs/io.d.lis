@@ -173,8 +173,9 @@ pub struct LimitedReader {
 pub type OffsetWriter
 
 /// A PipeReader is the read half of a pipe.
-#[go(hidden_embed)]
-pub type PipeReader
+pub struct PipeReader {
+  embed pipe,
+}
 
 /// A PipeWriter is the write half of a pipe.
 pub type PipeWriter
@@ -399,6 +400,10 @@ pub interface WriterAt {
 pub interface WriterTo {
   fn WriteTo(w: Writer) -> Partial<int64, error>
 }
+
+/// A pipe is the shared pipe structure underlying PipeReader and PipeWriter.
+#[go(unexported)]
+pub type pipe
 
 /// Seek whence values.
 pub const SeekCurrent = 1

@@ -18,37 +18,43 @@ pub struct Host3 {
   embed Ref<Inner>,
 }
 
-/// Unexported embed (mirrors net.IPConn { conn }): its promoted methods stay
-/// flattened on Host4 rather than be dropped.
-#[go(hidden_embed)]
-pub type Host4
+/// Unexported embed (mirrors net.IPConn { conn }): emitted faithfully as
+/// `embed hidden`, with hidden's methods promoting at the correct depth.
+pub struct Host4 {
+  embed hidden,
+}
 
 /// Unexported embed plus an exported field (mirrors testing.B { common; N int }):
-/// a visible Record that must stay unembeddable (marked), not mistaken for flat.
-#[go(hidden_embed)]
+/// the embed is faithful and the exported field is kept alongside it.
 pub struct Host5 {
+  embed hidden,
   pub X: int,
 }
+
+#[go(hidden_embed)]
+pub type Host6
 
 pub struct Inner {
   pub Value: int,
 }
 
+#[go(unexported)]
+pub type hidden
+
 impl Host3 {
   fn Direct(self: Ref<Host3>) -> int
 }
 
-impl Host4 {
-  fn Secret(self) -> int
-  fn Tweak(self: Ref<Host4>, n: int)
-}
-
-impl Host5 {
-  fn Secret(self) -> int
-  fn Tweak(self: Ref<Host5>, n: int)
+impl Host6 {
+  fn Len(self) -> int
 }
 
 impl Inner {
   fn Mutate(self: Ref<Inner>, n: int)
   fn Read(self) -> int
+}
+
+impl hidden {
+  fn Secret(self) -> int
+  fn Tweak(self: Ref<hidden>, n: int)
 }

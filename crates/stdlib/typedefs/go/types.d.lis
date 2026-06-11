@@ -668,17 +668,18 @@ pub struct BasicInfo(int)
 
 /// A Builtin represents a built-in function.
 /// Builtins don't have a valid type.
-#[go(hidden_embed)]
-pub type Builtin
+pub struct Builtin {
+  embed object,
+}
 
 /// A Chan represents a channel type.
 pub type Chan
 
 /// A Checker maintains the state of the type checker.
 /// It must be created with [NewChecker].
-#[go(hidden_embed)]
 pub struct Checker {
   embed Ref<Info>,
+  embed environment,
 }
 
 /// A Config specifies the configuration for type checking.
@@ -695,8 +696,9 @@ pub struct Config {
 }
 
 /// A Const represents a declared constant.
-#[go(hidden_embed)]
-pub type Const
+pub struct Const {
+  embed object,
+}
 
 /// A Context is an opaque type checking context. It may be used to share
 /// identical type instances across type-checked packages or calls to
@@ -720,8 +722,9 @@ pub struct Error {
 /// A Func represents a declared function, concrete method, or abstract
 /// (interface) method. Its Type() is always a *Signature.
 /// An abstract method may belong to many interfaces due to embedding.
-#[go(hidden_embed)]
-pub type Func
+pub struct Func {
+  embed object,
+}
 
 /// ImportMode is reserved for future use.
 pub struct ImportMode(int)
@@ -781,8 +784,9 @@ pub type Interface
 
 /// A Label represents a declared label.
 /// Labels don't have a type.
-#[go(hidden_embed)]
-pub type Label
+pub struct Label {
+  embed object,
+}
 
 /// A Map represents a map type.
 pub type Map
@@ -807,8 +811,9 @@ pub type MethodSet
 pub type Named
 
 /// Nil represents the predeclared value nil.
-#[go(hidden_embed)]
-pub type Nil
+pub struct Nil {
+  embed object,
+}
 
 /// An Object is a named language entity.
 /// An Object may be a constant ([Const]), type name ([TypeName]),
@@ -853,8 +858,9 @@ pub type Package
 
 /// A PkgName represents an imported Go package.
 /// PkgNames don't have a type.
-#[go(hidden_embed)]
-pub type PkgName
+pub struct PkgName {
+  embed object,
+}
 
 /// A Pointer represents a pointer type.
 pub type Pointer
@@ -964,8 +970,9 @@ pub type TypeList
 /// an alias type ([Alias]),
 /// a type parameter ([TypeParam]),
 /// or a predeclared type such as int or error.
-#[go(hidden_embed)]
-pub type TypeName
+pub struct TypeName {
+  embed object,
+}
 
 /// A TypeParam represents the type of a type parameter in a generic declaration.
 /// 
@@ -980,8 +987,18 @@ pub type TypeParamList
 pub type Union
 
 /// A Variable represents a declared variable (including function parameters and results, and struct fields).
-#[go(hidden_embed)]
-pub type Var
+pub struct Var {
+  embed object,
+}
+
+/// An environment represents the environment within which an object is
+/// type-checked.
+#[go(unexported)]
+pub type environment
+
+/// An object implements the common parts of an Object.
+#[go(unexported)]
+pub type object
 
 pub const IsBoolean: BasicInfo = 1
 
@@ -1085,32 +1102,7 @@ impl Basic {
 }
 
 impl Builtin {
-  /// Exported reports whether the object is exported (starts with a capital letter).
-  /// It doesn't take into account whether the object is in a local (function) scope
-  /// or not.
-  fn Exported(self: Ref<Builtin>) -> bool
-
-  /// Id is a wrapper for Id(obj.Pkg(), obj.Name()).
-  fn Id(self: Ref<Builtin>) -> string
-
-  /// Name returns the object's (package-local, unqualified) name.
-  fn Name(self: Ref<Builtin>) -> string
-
-  /// Parent returns the scope in which the object is declared.
-  /// The result is nil for methods and struct fields.
-  fn Parent(self: Ref<Builtin>) -> Option<Ref<Scope>>
-
-  /// Pkg returns the package to which the object belongs.
-  /// The result is nil for labels and objects in the Universe scope.
-  fn Pkg(self: Ref<Builtin>) -> Option<Ref<Package>>
-
-  /// Pos returns the declaration position of the object's identifier.
-  fn Pos(self: Ref<Builtin>) -> token.Pos
-
   fn String(self: Ref<Builtin>) -> string
-
-  /// Type returns the object's type.
-  fn Type(self: Ref<Builtin>) -> Type
 }
 
 impl Chan {
@@ -1152,32 +1144,7 @@ impl Config {
 }
 
 impl Const {
-  /// Exported reports whether the object is exported (starts with a capital letter).
-  /// It doesn't take into account whether the object is in a local (function) scope
-  /// or not.
-  fn Exported(self: Ref<Const>) -> bool
-
-  /// Id is a wrapper for Id(obj.Pkg(), obj.Name()).
-  fn Id(self: Ref<Const>) -> string
-
-  /// Name returns the object's (package-local, unqualified) name.
-  fn Name(self: Ref<Const>) -> string
-
-  /// Parent returns the scope in which the object is declared.
-  /// The result is nil for methods and struct fields.
-  fn Parent(self: Ref<Const>) -> Option<Ref<Scope>>
-
-  /// Pkg returns the package to which the object belongs.
-  /// The result is nil for labels and objects in the Universe scope.
-  fn Pkg(self: Ref<Const>) -> Option<Ref<Package>>
-
-  /// Pos returns the declaration position of the object's identifier.
-  fn Pos(self: Ref<Const>) -> token.Pos
-
   fn String(self: Ref<Const>) -> string
-
-  /// Type returns the object's type.
-  fn Type(self: Ref<Const>) -> Type
 
   /// Val returns the constant's value.
   fn Val(self: Ref<Const>) -> Option<constant.Value>
@@ -1190,20 +1157,9 @@ impl Error {
 }
 
 impl Func {
-  /// Exported reports whether the object is exported (starts with a capital letter).
-  /// It doesn't take into account whether the object is in a local (function) scope
-  /// or not.
-  fn Exported(self: Ref<Func>) -> bool
-
   /// FullName returns the package- or receiver-type-qualified name of
   /// function or method obj.
   fn FullName(self: Ref<Func>) -> string
-
-  /// Id is a wrapper for Id(obj.Pkg(), obj.Name()).
-  fn Id(self: Ref<Func>) -> string
-
-  /// Name returns the object's (package-local, unqualified) name.
-  fn Name(self: Ref<Func>) -> string
 
   /// Origin returns the canonical Func for its receiver, i.e. the Func object
   /// recorded in Info.Defs.
@@ -1214,18 +1170,11 @@ impl Func {
   /// For all other Funcs Origin returns the receiver.
   fn Origin(self: Ref<Func>) -> Ref<Func>
 
-  /// Parent returns the scope in which the object is declared.
-  /// The result is nil for methods and struct fields.
-  fn Parent(self: Ref<Func>) -> Option<Ref<Scope>>
-
   /// Pkg returns the package to which the function belongs.
   /// 
   /// The result is nil for methods of types in the Universe scope,
   /// like method Error of the error built-in interface type.
   fn Pkg(self: Ref<Func>) -> Option<Ref<Package>>
-
-  /// Pos returns the declaration position of the object's identifier.
-  fn Pos(self: Ref<Func>) -> token.Pos
 
   /// Scope returns the scope of the function's body block.
   /// The result is nil for imported or instantiated functions and methods
@@ -1236,9 +1185,6 @@ impl Func {
   fn Signature(self: Ref<Func>) -> Ref<Signature>
 
   fn String(self: Ref<Func>) -> string
-
-  /// Type returns the object's type.
-  fn Type(self: Ref<Func>) -> Type
 }
 
 impl Info {
@@ -1347,32 +1293,7 @@ impl Interface {
 }
 
 impl Label {
-  /// Exported reports whether the object is exported (starts with a capital letter).
-  /// It doesn't take into account whether the object is in a local (function) scope
-  /// or not.
-  fn Exported(self: Ref<Label>) -> bool
-
-  /// Id is a wrapper for Id(obj.Pkg(), obj.Name()).
-  fn Id(self: Ref<Label>) -> string
-
-  /// Name returns the object's (package-local, unqualified) name.
-  fn Name(self: Ref<Label>) -> string
-
-  /// Parent returns the scope in which the object is declared.
-  /// The result is nil for methods and struct fields.
-  fn Parent(self: Ref<Label>) -> Option<Ref<Scope>>
-
-  /// Pkg returns the package to which the object belongs.
-  /// The result is nil for labels and objects in the Universe scope.
-  fn Pkg(self: Ref<Label>) -> Option<Ref<Package>>
-
-  /// Pos returns the declaration position of the object's identifier.
-  fn Pos(self: Ref<Label>) -> token.Pos
-
   fn String(self: Ref<Label>) -> string
-
-  /// Type returns the object's type.
-  fn Type(self: Ref<Label>) -> Type
 }
 
 impl Map {
@@ -1466,32 +1387,7 @@ impl Named {
 }
 
 impl Nil {
-  /// Exported reports whether the object is exported (starts with a capital letter).
-  /// It doesn't take into account whether the object is in a local (function) scope
-  /// or not.
-  fn Exported(self: Ref<Nil>) -> bool
-
-  /// Id is a wrapper for Id(obj.Pkg(), obj.Name()).
-  fn Id(self: Ref<Nil>) -> string
-
-  /// Name returns the object's (package-local, unqualified) name.
-  fn Name(self: Ref<Nil>) -> string
-
-  /// Parent returns the scope in which the object is declared.
-  /// The result is nil for methods and struct fields.
-  fn Parent(self: Ref<Nil>) -> Option<Ref<Scope>>
-
-  /// Pkg returns the package to which the object belongs.
-  /// The result is nil for labels and objects in the Universe scope.
-  fn Pkg(self: Ref<Nil>) -> Option<Ref<Package>>
-
-  /// Pos returns the declaration position of the object's identifier.
-  fn Pos(self: Ref<Nil>) -> token.Pos
-
   fn String(self: Ref<Nil>) -> string
-
-  /// Type returns the object's type.
-  fn Type(self: Ref<Nil>) -> Type
 }
 
 impl Package {
@@ -1542,36 +1438,11 @@ impl Package {
 }
 
 impl PkgName {
-  /// Exported reports whether the object is exported (starts with a capital letter).
-  /// It doesn't take into account whether the object is in a local (function) scope
-  /// or not.
-  fn Exported(self: Ref<PkgName>) -> bool
-
-  /// Id is a wrapper for Id(obj.Pkg(), obj.Name()).
-  fn Id(self: Ref<PkgName>) -> string
-
   /// Imported returns the package that was imported.
   /// It is distinct from Pkg(), which is the package containing the import statement.
   fn Imported(self: Ref<PkgName>) -> Ref<Package>
 
-  /// Name returns the object's (package-local, unqualified) name.
-  fn Name(self: Ref<PkgName>) -> string
-
-  /// Parent returns the scope in which the object is declared.
-  /// The result is nil for methods and struct fields.
-  fn Parent(self: Ref<PkgName>) -> Option<Ref<Scope>>
-
-  /// Pkg returns the package to which the object belongs.
-  /// The result is nil for labels and objects in the Universe scope.
-  fn Pkg(self: Ref<PkgName>) -> Option<Ref<Package>>
-
-  /// Pos returns the declaration position of the object's identifier.
-  fn Pos(self: Ref<PkgName>) -> token.Pos
-
   fn String(self: Ref<PkgName>) -> string
-
-  /// Type returns the object's type.
-  fn Type(self: Ref<PkgName>) -> Type
 }
 
 impl Pointer {
@@ -1839,35 +1710,10 @@ impl TypeList {
 }
 
 impl TypeName {
-  /// Exported reports whether the object is exported (starts with a capital letter).
-  /// It doesn't take into account whether the object is in a local (function) scope
-  /// or not.
-  fn Exported(self: Ref<TypeName>) -> bool
-
-  /// Id is a wrapper for Id(obj.Pkg(), obj.Name()).
-  fn Id(self: Ref<TypeName>) -> string
-
   /// IsAlias reports whether obj is an alias name for a type.
   fn IsAlias(self: Ref<TypeName>) -> bool
 
-  /// Name returns the object's (package-local, unqualified) name.
-  fn Name(self: Ref<TypeName>) -> string
-
-  /// Parent returns the scope in which the object is declared.
-  /// The result is nil for methods and struct fields.
-  fn Parent(self: Ref<TypeName>) -> Option<Ref<Scope>>
-
-  /// Pkg returns the package to which the object belongs.
-  /// The result is nil for labels and objects in the Universe scope.
-  fn Pkg(self: Ref<TypeName>) -> Option<Ref<Package>>
-
-  /// Pos returns the declaration position of the object's identifier.
-  fn Pos(self: Ref<TypeName>) -> token.Pos
-
   fn String(self: Ref<TypeName>) -> string
-
-  /// Type returns the object's type.
-  fn Type(self: Ref<TypeName>) -> Type
 }
 
 impl TypeParam {
@@ -1935,22 +1781,11 @@ impl Var {
   /// Embedded reports whether the variable is an embedded field.
   fn Embedded(self: Ref<Var>) -> bool
 
-  /// Exported reports whether the object is exported (starts with a capital letter).
-  /// It doesn't take into account whether the object is in a local (function) scope
-  /// or not.
-  fn Exported(self: Ref<Var>) -> bool
-
-  /// Id is a wrapper for Id(obj.Pkg(), obj.Name()).
-  fn Id(self: Ref<Var>) -> string
-
   /// IsField reports whether the variable is a struct field.
   fn IsField(self: Ref<Var>) -> bool
 
   /// Kind reports what kind of variable v is.
   fn Kind(self: Ref<Var>) -> VarKind
-
-  /// Name returns the object's (package-local, unqualified) name.
-  fn Name(self: Ref<Var>) -> string
 
   /// Origin returns the canonical Var for its receiver, i.e. the Var object
   /// recorded in Info.Defs.
@@ -1961,27 +1796,69 @@ impl Var {
   /// Origin returns the receiver.
   fn Origin(self: Ref<Var>) -> Ref<Var>
 
-  /// Parent returns the scope in which the object is declared.
-  /// The result is nil for methods and struct fields.
-  fn Parent(self: Ref<Var>) -> Option<Ref<Scope>>
-
-  /// Pkg returns the package to which the object belongs.
-  /// The result is nil for labels and objects in the Universe scope.
-  fn Pkg(self: Ref<Var>) -> Option<Ref<Package>>
-
-  /// Pos returns the declaration position of the object's identifier.
-  fn Pos(self: Ref<Var>) -> token.Pos
-
   /// SetKind sets the kind of the variable.
   /// It should be used only immediately after [NewVar] or [NewParam].
   fn SetKind(self: Ref<Var>, kind: VarKind)
 
   fn String(self: Ref<Var>) -> string
-
-  /// Type returns the object's type.
-  fn Type(self: Ref<Var>) -> Type
 }
 
 impl VarKind {
   fn String(self) -> string
+}
+
+impl object {
+  /// Exported reports whether the object is exported (starts with a capital letter).
+  /// It doesn't take into account whether the object is in a local (function) scope
+  /// or not.
+  fn Exported(self: Ref<object>) -> bool
+
+  /// Id is a wrapper for Id(obj.Pkg(), obj.Name()).
+  fn Id(self: Ref<object>) -> string
+
+  /// Name returns the object's (package-local, unqualified) name.
+  fn Name(self: Ref<object>) -> string
+
+  /// Parent returns the scope in which the object is declared.
+  /// The result is nil for methods and struct fields.
+  fn Parent(self: Ref<object>) -> Option<Ref<Scope>>
+
+  /// Pkg returns the package to which the object belongs.
+  /// The result is nil for labels and objects in the Universe scope.
+  fn Pkg(self: Ref<object>) -> Option<Ref<Package>>
+
+  /// Pos returns the declaration position of the object's identifier.
+  fn Pos(self: Ref<object>) -> token.Pos
+
+  fn String(self: Ref<object>) -> string
+
+  /// Type returns the object's type.
+  fn Type(self: Ref<object>) -> Type
+
+  #[go(unexported, "go/types.color() go/types.color")]
+  fn color(self: Ref<object>)
+
+  #[go(unexported, "go/types.order() uint32")]
+  fn order(self: Ref<object>)
+
+  #[go(unexported, "go/types.sameId(*go/types.Package,string,bool) bool")]
+  fn sameId(self: Ref<object>)
+
+  #[go(unexported, "go/types.scopePos() go/token.Pos")]
+  fn scopePos(self: Ref<object>)
+
+  #[go(unexported, "go/types.setColor(go/types.color)")]
+  fn setColor(self: Ref<object>)
+
+  #[go(unexported, "go/types.setOrder(uint32)")]
+  fn setOrder(self: Ref<object>)
+
+  #[go(unexported, "go/types.setParent(*go/types.Scope)")]
+  fn setParent(self: Ref<object>)
+
+  #[go(unexported, "go/types.setScopePos(go/token.Pos)")]
+  fn setScopePos(self: Ref<object>)
+
+  #[go(unexported, "go/types.setType(go/types.Type)")]
+  fn setType(self: Ref<object>)
 }

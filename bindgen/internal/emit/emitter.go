@@ -561,6 +561,9 @@ func (e *Emitter) emitType(result convert.ConvertResult) {
 			for _, f := range result.Fields {
 				writeSkippedFieldComment(&e.buf, "", f)
 			}
+			if result.UnexportedType {
+				e.buf.WriteString("#[go(unexported)]\n")
+			}
 			if result.HasHiddenEmbed {
 				e.buf.WriteString("#[go(hidden_embed)]\n")
 			}
@@ -571,6 +574,9 @@ func (e *Emitter) emitType(result convert.ConvertResult) {
 		var sig strings.Builder
 		if result.AnonStruct {
 			sig.WriteString("#[go(anon_struct)]\n")
+		}
+		if result.UnexportedType {
+			sig.WriteString("#[go(unexported)]\n")
 		}
 		if result.HasHiddenEmbed {
 			sig.WriteString("#[go(hidden_embed)]\n")
@@ -651,6 +657,9 @@ func (e *Emitter) emitType(result convert.ConvertResult) {
 	}
 
 	var signature strings.Builder
+	if result.UnexportedType {
+		signature.WriteString("#[go(unexported)]\n")
+	}
 	if result.HasHiddenEmbed {
 		signature.WriteString("#[go(hidden_embed)]\n")
 	}

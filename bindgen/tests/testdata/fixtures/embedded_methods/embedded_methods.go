@@ -31,15 +31,26 @@ type hidden struct{}
 func (hidden) Secret() int    { return 1 }
 func (h *hidden) Tweak(n int) {}
 
-// Unexported embed (mirrors net.IPConn { conn }): its promoted methods stay
-// flattened on Host4 rather than be dropped.
+// Unexported embed (mirrors net.IPConn { conn }): emitted faithfully as
+// `embed hidden`, with hidden's methods promoting at the correct depth.
 type Host4 struct {
 	hidden
 }
 
 // Unexported embed plus an exported field (mirrors testing.B { common; N int }):
-// a visible Record that must stay unembeddable (marked), not mistaken for flat.
+// the embed is faithful and the exported field is kept alongside it.
 type Host5 struct {
 	hidden
 	X int
+}
+
+// raw is an unexported NON-struct type, so embedding it is not representable as
+// a faithful `embed`; Host6 stays `#[go(hidden_embed)]` (mirrors a debug/macho
+// struct embedding LoadBytes, which is `[]byte`).
+type raw []byte
+
+func (raw) Len() int { return 0 }
+
+type Host6 struct {
+	raw
 }

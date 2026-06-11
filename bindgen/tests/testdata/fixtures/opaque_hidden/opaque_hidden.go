@@ -4,8 +4,9 @@ type secret struct{ x int }
 
 func (secret) Whisper() int { return secret{}.x }
 
-// Box has no exported fields, so it renders as an opaque `pub type`; it hides the
-// unexported embed `secret`, so it must carry `#[go(hidden_embed)]`.
+// Box has no exported fields, only the unexported embed `secret`; the embed is
+// emitted faithfully as `embed secret` (an opaque `#[go(unexported)]` type) so
+// Whisper promotes through it at the correct depth.
 type Box struct {
 	secret
 }

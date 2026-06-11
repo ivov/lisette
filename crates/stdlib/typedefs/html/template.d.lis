@@ -187,9 +187,9 @@ pub struct Srcset(string)
 
 /// Template is a specialized Template from "text/template" that produces a safe
 /// HTML document fragment.
-#[go(hidden_embed)]
 pub struct Template {
   pub Tree: Option<Ref<parse.Tree>>,
+  embed Ref<nameSpace>,
 }
 
 /// URL encapsulates a known safe URL or URL substring (see RFC 3986).
@@ -202,6 +202,10 @@ pub struct Template {
 /// the encapsulated content should come from a trusted source,
 /// as it will be included verbatim in the template output.
 pub struct URL(string)
+
+/// nameSpace is the data structure shared by all templates in an association.
+#[go(unexported)]
+pub type nameSpace
 
 impl Error {
   fn Error(self: Ref<Error>) -> string

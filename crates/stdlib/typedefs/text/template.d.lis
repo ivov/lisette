@@ -101,10 +101,14 @@ pub struct FuncMap(Map<string, Unknown>)
 /// Template is the representation of a parsed template. The *parse.Tree
 /// field is exported only for use by [html/template] and should be treated
 /// as unexported by all other clients.
-#[go(hidden_embed)]
 pub struct Template {
   embed Ref<parse.Tree>,
+  embed Ref<common>,
 }
+
+/// common holds the information shared by related templates.
+#[go(unexported)]
+pub type common
 
 impl ExecError {
   fn Error(self) -> string
