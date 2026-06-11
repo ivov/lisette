@@ -12,7 +12,7 @@ repository.workspace = true
 doctest = false
 
 [dependencies]
-syntax = { package = "lisette-syntax", version = "0.3.3", path = "../syntax" }
+syntax = { package = "lisette-syntax", version = "0.3.4", path = "../syntax" }
 miette.workspace = true
 owo-colors.workspace = true
 rustc-hash.workspace = true
