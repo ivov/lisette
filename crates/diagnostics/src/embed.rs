@@ -23,6 +23,20 @@ pub fn imported_target(target: &str, span: Span) -> LisetteDiagnostic {
         ))
 }
 
+pub fn comma_ok_abi_mismatch(interface: &str, method: &str, span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error(format!(
+        "`{method}` returns its optional value in a way `{interface}` does not accept"
+    ))
+    .with_infer_code("comma_ok_abi_mismatch")
+    .with_span_label(&span, format!("cannot be used as `{interface}` here"))
+    .with_help(format!(
+        "In Go, `{interface}.{method}` and the matching method on this value return their \
+         optional result differently: one as a `(value, ok)` pair, the other as a single \
+         value. Both look like `Option` in Lisette, but Go treats them as different method \
+         signatures, so this value does not satisfy `{interface}`."
+    ))
+}
+
 pub fn no_surface(target: &str, span: Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Type cannot be embedded")
         .with_infer_code("embed_no_surface")

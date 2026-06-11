@@ -14,6 +14,7 @@ pub struct Box<T> {
 }
 
 // SKIPPED field "Alias": generic-alias-embed — generic type alias embedding is not yet representable
+#[go(hidden_embed)]
 pub type Host
 
 pub interface Reader<T> {

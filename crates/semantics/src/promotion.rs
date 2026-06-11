@@ -700,6 +700,45 @@ mod tests {
     }
 
     #[test]
+    fn three_value_edges_keep_pointer_method_pointer_only() {
+        let mut b = Builder::new();
+        b.struct_("N0", vec![], vec![("pm", pointer_method("N0"))]);
+        b.struct_("N1", vec![vembed("N0")], vec![]);
+        b.struct_("N2", vec![vembed("N1")], vec![]);
+        b.struct_("N3", vec![vembed("N2")], vec![]);
+        let member = found(resolve_selector(&b.store, &nominal("N3"), "pm"));
+        assert_eq!(member.depth, 3);
+        assert!(!member.indirect);
+        assert!(is_pointer_receiver(&member));
+    }
+
+    #[test]
+    fn pointer_edge_mid_three_level_path_puts_pointer_method_in_value_set() {
+        let mut b = Builder::new();
+        b.struct_("N0", vec![], vec![("pm", pointer_method("N0"))]);
+        b.struct_("N1", vec![vembed("N0")], vec![]);
+        b.struct_("N2", vec![pembed("N1")], vec![]);
+        b.struct_("N3", vec![vembed("N2")], vec![]);
+        let member = found(resolve_selector(&b.store, &nominal("N3"), "pm"));
+        assert_eq!(member.depth, 3);
+        assert!(member.indirect);
+        assert!(!is_pointer_receiver(&member));
+    }
+
+    #[test]
+    fn value_method_promotes_through_three_value_edges() {
+        let mut b = Builder::new();
+        b.struct_("N0", vec![], vec![("m", value_method("N0"))]);
+        b.struct_("N1", vec![vembed("N0")], vec![]);
+        b.struct_("N2", vec![vembed("N1")], vec![]);
+        b.struct_("N3", vec![vembed("N2")], vec![]);
+        let member = found(resolve_selector(&b.store, &nominal("N3"), "m"));
+        assert_eq!(member.depth, 3);
+        assert!(!member.indirect);
+        assert!(!is_pointer_receiver(&member));
+    }
+
+    #[test]
     fn diamond_is_ambiguous() {
         let mut b = Builder::new();
         b.struct_("N0", vec![], vec![("m", value_method("N0"))]);

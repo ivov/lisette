@@ -6250,7 +6250,6 @@ fn main() {}
     .assert_no_errors();
 }
 
-// A marked struct hides promotions at an unfaithful depth, so embedding it is rejected.
 #[test]
 fn embed_imported_hidden_embed_struct_rejected() {
     let typedef = r#"
@@ -6270,7 +6269,6 @@ fn main() {}
         .assert_infer_code("embed_imported_target");
 }
 
-// The marker gates only embedding; direct access is preserved.
 #[test]
 fn hidden_embed_struct_direct_access_preserved() {
     let typedef = r#"
@@ -6290,7 +6288,6 @@ fn main() {}
     infer_with_go_typedefs(input, &[("go:example.com/lib", typedef)]).assert_no_errors();
 }
 
-// Same marker for an embed bindgen could not represent; embedding still refused.
 #[test]
 fn embed_imported_skipped_exported_embed_rejected() {
     let typedef = r#"
@@ -6309,7 +6306,6 @@ fn main() {}
         .assert_infer_code("embed_imported_target");
 }
 
-// An embedded type alias keeps the alias spelling, so h.Alias and its promoted members resolve.
 #[test]
 fn embed_imported_alias_keeps_alias_name() {
     let typedef = r#"
@@ -6330,7 +6326,6 @@ fn main() {}
     infer_with_go_typedefs(input, &[("go:example.com/lib", typedef)]).assert_no_errors();
 }
 
-// The RHS name is not a field, matching Go: only h.Alias exists, not h.Base.
 #[test]
 fn embed_imported_alias_rejects_rhs_name() {
     let typedef = r#"
@@ -6349,8 +6344,6 @@ fn main() {}
         .assert_infer_code("member_not_found");
 }
 
-// A faithful imported typedef carries `embed` fields; direct member access
-// reconstructs the promotion, so existing calls survive de-flattening.
 #[test]
 fn imported_typedef_embed_promotes_on_direct_access() {
     let typedef = r#"
@@ -6369,8 +6362,6 @@ fn main() {}
     infer_with_go_typedefs(input, &[("go:example.com/wrap", typedef)]).assert_no_errors();
 }
 
-// A Go pointer embed (`*Inner`) is rendered `embed Ref<Inner>`; promotion still
-// reconstructs on direct access (the nilable `Option<Ref<T>>` form is PR13).
 #[test]
 fn imported_typedef_pointer_embed_promotes_on_direct_access() {
     let typedef = r#"
@@ -6389,13 +6380,31 @@ fn main() {}
     infer_with_go_typedefs(input, &[("go:example.com/wrap", typedef)]).assert_no_errors();
 }
 
-// Embedding a nested imported struct stays deferred: with faithful representation
-// it carries an `embed` field, so `is_flat_imported_struct` rejects it (PR10).
 #[test]
-fn embed_imported_nested_struct_deferred() {
+fn embed_imported_nested_faithful_struct_promotes() {
     let typedef = r#"
 pub struct Inner { pub id: int }
 impl Inner { pub fn Get(self: Inner) -> int }
+pub struct Wrapper {
+  embed Inner,
+}
+"#;
+    let input = r#"
+import "go:example.com/wrap"
+struct Mine { embed wrap.Wrapper }
+fn use_id(m: Mine) -> int { m.id }
+fn use_get(m: Mine) -> int { m.Get() }
+fn main() {}
+"#;
+    infer_with_go_typedefs(input, &[("go:example.com/wrap", typedef)]).assert_no_errors();
+}
+
+#[test]
+fn embed_imported_nested_hidden_embed_in_graph_rejected() {
+    let typedef = r#"
+#[go(hidden_embed)]
+pub struct Inner { pub id: int }
+impl Inner { pub fn Secret(self) -> int }
 pub struct Wrapper {
   embed Inner,
 }
@@ -6410,7 +6419,7 @@ fn main() {}
 }
 
 #[test]
-fn embed_imported_interface_deferred() {
+fn embed_imported_interface_promotes() {
     let typedef = r#"
 pub interface Reader {
   fn Read(self) -> int
@@ -6419,14 +6428,14 @@ pub interface Reader {
     let input = r#"
 import "go:example.com/io"
 struct Mine { embed io.Reader }
+fn read_it(m: Mine) -> int { m.Read() }
 fn main() {}
 "#;
-    infer_with_go_typedefs(input, &[("go:example.com/io", typedef)])
-        .assert_infer_code("embed_imported_target");
+    infer_with_go_typedefs(input, &[("go:example.com/io", typedef)]).assert_no_errors();
 }
 
 #[test]
-fn embed_imported_newtype_deferred() {
+fn embed_imported_newtype_promotes() {
     let typedef = r#"
 pub struct Count(int)
 impl Count { pub fn Value(self: Count) -> int }
@@ -6434,10 +6443,238 @@ impl Count { pub fn Value(self: Count) -> int }
     let input = r#"
 import "go:example.com/metric"
 struct Mine { embed metric.Count }
+fn value_of(m: Mine) -> int { m.Value() }
+fn main() {}
+"#;
+    infer_with_go_typedefs(input, &[("go:example.com/metric", typedef)]).assert_no_errors();
+}
+
+#[test]
+fn embed_imported_newtype_without_methods_rejected() {
+    let typedef = r#"
+pub struct Empty(int)
+"#;
+    let input = r#"
+import "go:example.com/metric"
+struct Mine { embed metric.Empty }
 fn main() {}
 "#;
     infer_with_go_typedefs(input, &[("go:example.com/metric", typedef)])
         .assert_infer_code("embed_imported_target");
+}
+
+#[test]
+fn embed_imported_opaque_method_bearing_admitted() {
+    let typedef = r#"
+pub type Mutex
+
+impl Mutex {
+  fn Lock(self: Ref<Mutex>) -> int
+}
+"#;
+    let input = r#"
+import "go:example.com/sync"
+struct Guarded { embed sync.Mutex }
+fn lock_it(g: Ref<Guarded>) -> int { g.Lock() }
+fn main() {}
+"#;
+    infer_with_go_typedefs(input, &[("go:example.com/sync", typedef)]).assert_no_errors();
+}
+
+#[test]
+fn embed_imported_opaque_hidden_embed_rejected() {
+    let typedef = r#"
+#[go(hidden_embed)]
+pub type IPConn
+
+impl IPConn {
+  fn Read(self: Ref<IPConn>) -> int
+}
+"#;
+    let input = r#"
+import "go:example.com/net"
+struct Mine { embed net.IPConn }
+fn main() {}
+"#;
+    infer_with_go_typedefs(input, &[("go:example.com/net", typedef)])
+        .assert_infer_code("embed_imported_target");
+}
+
+#[test]
+fn embed_imported_nested_through_opaque_leaf_admitted() {
+    let typedef = r#"
+pub type Leaf
+
+impl Leaf {
+  fn Ping(self: Ref<Leaf>) -> int
+}
+
+pub struct Wrapper {
+  embed Leaf,
+}
+"#;
+    let input = r#"
+import "go:example.com/wrap"
+struct Mine { embed wrap.Wrapper }
+fn use_ping(m: Ref<Mine>) -> int { m.Ping() }
+fn main() {}
+"#;
+    infer_with_go_typedefs(input, &[("go:example.com/wrap", typedef)]).assert_no_errors();
+}
+
+#[test]
+fn embed_stdlib_opaque_mixin_admitted_hidden_rejected() {
+    infer(
+        r#"
+import "go:strings"
+struct WithBuilder { embed strings.Builder }
+fn main() {}
+"#,
+    )
+    .assert_no_errors();
+
+    infer(
+        r#"
+import "go:net"
+struct BadEmbed { embed net.IPConn }
+fn main() {}
+"#,
+    )
+    .assert_infer_code("embed_imported_target");
+}
+
+#[test]
+fn satisfy_comma_ok_interface_via_promoted_method_rejected() {
+    let typedef = r#"
+pub interface Lookup {
+  #[go(comma_ok)]
+  fn Get(self) -> Option<int>
+}
+
+pub struct Base {
+  pub X: int,
+}
+impl Base {
+  fn Get(self: Base) -> Option<int>
+}
+"#;
+    let input = r#"
+import "go:example.com/lib"
+struct Mine { embed lib.Base }
+fn as_lookup(m: Mine) -> lib.Lookup { m }
+fn main() {}
+"#;
+    infer_with_go_typedefs(input, &[("go:example.com/lib", typedef)])
+        .assert_infer_code("comma_ok_abi_mismatch");
+}
+
+#[test]
+fn satisfy_comma_ok_interface_via_declared_method_ok() {
+    let typedef = r#"
+pub interface Lookup {
+  #[go(comma_ok)]
+  fn Get(self) -> Option<int>
+}
+"#;
+    let input = r#"
+import "go:example.com/lib"
+struct Mine { pub x: int }
+impl Mine { fn Get(self: Mine) -> Option<int> { Some(self.x) } }
+fn as_lookup(m: Mine) -> lib.Lookup { m }
+fn main() {}
+"#;
+    infer_with_go_typedefs(input, &[("go:example.com/lib", typedef)]).assert_no_errors();
+}
+
+#[test]
+fn satisfy_comma_ok_interface_via_promoted_comma_ok_method_ok() {
+    let typedef = r#"
+pub interface Lookup {
+  #[go(comma_ok)]
+  fn Get(self) -> Option<int>
+}
+
+pub struct Base {}
+impl Base {
+  #[go(comma_ok)]
+  fn Get(self: Base) -> Option<int>
+}
+"#;
+    let input = r#"
+import "go:example.com/lib"
+struct Mine { embed lib.Base }
+fn as_lookup(m: Mine) -> lib.Lookup { m }
+fn main() {}
+"#;
+    infer_with_go_typedefs(input, &[("go:example.com/lib", typedef)]).assert_no_errors();
+}
+
+#[test]
+fn satisfy_comma_ok_interface_via_imported_declared_method_rejected() {
+    let typedef = r#"
+pub interface Lookup {
+  #[go(comma_ok)]
+  fn Get(self) -> Option<int>
+}
+
+pub struct Base {}
+impl Base {
+  fn Get(self: Base) -> Option<int>
+}
+"#;
+    let input = r#"
+import "go:example.com/lib"
+fn as_lookup(b: lib.Base) -> lib.Lookup { b }
+fn main() {}
+"#;
+    infer_with_go_typedefs(input, &[("go:example.com/lib", typedef)])
+        .assert_infer_code("comma_ok_abi_mismatch");
+}
+
+#[test]
+fn satisfy_comma_ok_interface_inverse_plain_target_rejected() {
+    let typedef = r#"
+pub interface Lookup {
+  fn Get(self) -> Option<int>
+}
+
+pub struct Base {}
+impl Base {
+  #[go(comma_ok)]
+  fn Get(self: Base) -> Option<int>
+}
+"#;
+    let input = r#"
+import "go:example.com/lib"
+fn as_lookup(b: lib.Base) -> lib.Lookup { b }
+fn main() {}
+"#;
+    infer_with_go_typedefs(input, &[("go:example.com/lib", typedef)])
+        .assert_infer_code("comma_ok_abi_mismatch");
+}
+
+#[test]
+fn satisfy_comma_ok_interface_via_promoted_inherited_method_ok() {
+    let typedef = r#"
+pub interface Parent {
+  #[go(comma_ok)]
+  fn Get(self) -> Option<int>
+}
+
+pub interface Child { embed Parent }
+
+pub interface Target {
+  #[go(comma_ok)]
+  fn Get(self) -> Option<int>
+}
+"#;
+    let input = r#"
+import "go:example.com/lib"
+struct Mine { embed lib.Child }
+fn as_target(m: Mine) -> lib.Target { m }
+fn main() {}
+"#;
+    infer_with_go_typedefs(input, &[("go:example.com/lib", typedef)]).assert_no_errors();
 }
 
 #[test]

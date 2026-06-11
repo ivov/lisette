@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] `Get` returns its optional value in a way `Lookup` does not accept
+   ╭─[test.lis:2:43]
+ 1 │ import "go:example.com/lib"
+ 2 │ fn as_lookup(b: lib.Base) -> lib.Lookup { b }
+   ·                                           ┬
+   ·                                           ╰── cannot be used as `Lookup` here
+ 3 │ fn main() {}
+   ╰────
+  help: In Go, `Lookup.Get` and the matching method on this value return their optional result differently: one as a `(value, ok)` pair, the other as a single value. Both look like `Option` in Lisette, but Go treats them as different method signatures, so this value does not satisfy `Lookup` · code: [infer.comma_ok_abi_mismatch]

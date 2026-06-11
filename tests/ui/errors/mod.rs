@@ -2807,6 +2807,26 @@ fn test() {
 }
 
 #[test]
+fn infer_comma_ok_abi_mismatch() {
+    let typedef = r#"
+pub interface Lookup {
+  #[go(comma_ok)]
+  fn Get(self) -> Option<int>
+}
+
+pub struct Base {}
+impl Base {
+  fn Get(self: Base) -> Option<int>
+}
+"#;
+    let input = r#"import "go:example.com/lib"
+fn as_lookup(b: lib.Base) -> lib.Lookup { b }
+fn main() {}
+"#;
+    assert_infer_error_snapshot!(input, &[("go:example.com/lib", typedef)]);
+}
+
+#[test]
 fn builtin_generic_type_satisfies_interface_bound() {
     let input = r#"
 interface HasLength {

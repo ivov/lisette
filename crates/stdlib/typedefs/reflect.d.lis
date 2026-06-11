@@ -470,6 +470,7 @@ pub interface Type {
 /// To compare two Values, compare the results of the Interface method.
 /// Using == on two Values does not compare the underlying values
 /// they represent.
+#[go(hidden_embed)]
 pub type Value
 
 /// A ValueError occurs when a Value method is invoked on

@@ -7,6 +7,34 @@ use syntax::types::{GO_IMPORT_PREFIX, SubstitutionMap, Type, substitute};
 
 use crate::checker::infer::InferCtx;
 
+fn method_comma_ok(store: &Store, type_id: &str, method: &str) -> bool {
+    fn walk(
+        store: &Store,
+        type_id: &str,
+        method: &str,
+        seen: &mut rustc_hash::FxHashSet<String>,
+    ) -> bool {
+        if let Some(def) = store.get_definition(&format!("{type_id}.{method}")) {
+            return def.go_hints().iter().any(|h| h == "comma_ok");
+        }
+        if !seen.insert(type_id.to_string()) {
+            return false;
+        }
+        store.get_interface(type_id).is_some_and(|iface| {
+            iface
+                .parents
+                .iter()
+                .any(|parent| walk(store, parent.get_qualified_name().as_str(), method, seen))
+        })
+    }
+    walk(
+        store,
+        type_id,
+        method,
+        &mut rustc_hash::FxHashSet::default(),
+    )
+}
+
 impl InferCtx<'_, '_> {
     pub(super) fn satisfies_interface(
         &mut self,
@@ -296,6 +324,36 @@ impl InferCtx<'_, '_> {
                 result
             });
             self.scopes.decrement_type_param_depth();
+
+            if receiver_pinned
+                && sig_match.is_ok()
+                && interface_qualified_id.starts_with(GO_IMPORT_PREFIX)
+            {
+                let resolved_ty = ty.strip_refs().resolve_in(&self.env);
+                if let Some(ty_id) = resolved_ty.get_qualified_id()
+                    && let crate::promotion::Resolution::Found(member) =
+                        crate::promotion::resolve_selector(
+                            store,
+                            &resolved_ty,
+                            method_name.as_str(),
+                        )
+                {
+                    let interface_comma_ok =
+                        method_comma_ok(store, interface_qualified_id, method_name);
+                    let selected_comma_ok =
+                        method_comma_ok(store, member.declaring_type.as_str(), method_name);
+                    let native_direct = member.depth == 0 && !ty_id.starts_with(GO_IMPORT_PREFIX);
+                    let adapter_reconciles =
+                        native_direct && interface_comma_ok && !selected_comma_ok;
+                    if interface_comma_ok != selected_comma_ok && !adapter_reconciles {
+                        self.sink.push(diagnostics::embed::comma_ok_abi_mismatch(
+                            &interface.name,
+                            method_name,
+                            *span,
+                        ));
+                    }
+                }
+            }
 
             if !receiver_pinned {
                 missing.push((method_name.to_string(), method_ty.clone()));

@@ -5,6 +5,7 @@ description: "input: \ntype StringMap<V> = Map<string, V>;\n"
 [
     TypeAlias {
         doc: None,
+        attributes: [],
         name: "StringMap",
         name_span: Span {
             file_id: 0,

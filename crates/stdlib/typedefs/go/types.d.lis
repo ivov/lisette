@@ -668,6 +668,7 @@ pub struct BasicInfo(int)
 
 /// A Builtin represents a built-in function.
 /// Builtins don't have a valid type.
+#[go(hidden_embed)]
 pub type Builtin
 
 /// A Chan represents a channel type.
@@ -694,6 +695,7 @@ pub struct Config {
 }
 
 /// A Const represents a declared constant.
+#[go(hidden_embed)]
 pub type Const
 
 /// A Context is an opaque type checking context. It may be used to share
@@ -718,6 +720,7 @@ pub struct Error {
 /// A Func represents a declared function, concrete method, or abstract
 /// (interface) method. Its Type() is always a *Signature.
 /// An abstract method may belong to many interfaces due to embedding.
+#[go(hidden_embed)]
 pub type Func
 
 /// ImportMode is reserved for future use.
@@ -778,6 +781,7 @@ pub type Interface
 
 /// A Label represents a declared label.
 /// Labels don't have a type.
+#[go(hidden_embed)]
 pub type Label
 
 /// A Map represents a map type.
@@ -803,6 +807,7 @@ pub type MethodSet
 pub type Named
 
 /// Nil represents the predeclared value nil.
+#[go(hidden_embed)]
 pub type Nil
 
 /// An Object is a named language entity.
@@ -830,6 +835,7 @@ pub type Package
 
 /// A PkgName represents an imported Go package.
 /// PkgNames don't have a type.
+#[go(hidden_embed)]
 pub type PkgName
 
 /// A Pointer represents a pointer type.
@@ -940,6 +946,7 @@ pub type TypeList
 /// an alias type ([Alias]),
 /// a type parameter ([TypeParam]),
 /// or a predeclared type such as int or error.
+#[go(hidden_embed)]
 pub type TypeName
 
 /// A TypeParam represents the type of a type parameter in a generic declaration.
@@ -955,6 +962,7 @@ pub type TypeParamList
 pub type Union
 
 /// A Variable represents a declared variable (including function parameters and results, and struct fields).
+#[go(hidden_embed)]
 pub type Var
 
 pub const IsBoolean: BasicInfo = 1

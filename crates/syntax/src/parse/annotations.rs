@@ -1,5 +1,5 @@
 use super::{MAX_TUPLE_ARITY, Parser};
-use crate::ast::{Annotation, Expression, Generic, Span, Visibility};
+use crate::ast::{Annotation, Attribute, Expression, Generic, Span, Visibility};
 use crate::lex::TokenKind::*;
 use crate::types::Type;
 
@@ -270,7 +270,11 @@ impl<'source> Parser<'source> {
         }
     }
 
-    pub fn parse_type_alias_with_doc(&mut self, doc: Option<std::string::String>) -> Expression {
+    pub fn parse_type_alias_with_doc(
+        &mut self,
+        doc: Option<std::string::String>,
+        attributes: Vec<Attribute>,
+    ) -> Expression {
         let start = self.current_token();
 
         self.ensure(Type);
@@ -290,6 +294,7 @@ impl<'source> Parser<'source> {
 
         Expression::TypeAlias {
             doc,
+            attributes,
             name,
             name_span,
             generics,

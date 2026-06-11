@@ -152,7 +152,7 @@ impl<'source> Parser<'source> {
 
         let doc = doc_with_span.map(|(text, _)| text);
 
-        if !matches!(self.current_token().kind, Enum | Struct | Function)
+        if !matches!(self.current_token().kind, Enum | Struct | Function | Type)
             && let Some(attribute) = attributes.first()
         {
             self.error_misplaced_attribute(attribute.span);
@@ -167,7 +167,7 @@ impl<'source> Parser<'source> {
             Const => self.parse_const_definition(doc),
             Var => self.parse_var_declaration(doc),
             Import => self.parse_import(),
-            Type => self.parse_type_alias_with_doc(doc),
+            Type => self.parse_type_alias_with_doc(doc, attributes),
             Comment => {
                 let start = self.current_token();
                 self.skip_comments();
@@ -207,7 +207,7 @@ impl<'source> Parser<'source> {
                     "misplaced",
                     "Move this type alias to the top level of the file.",
                 );
-                self.parse_type_alias_with_doc(None)
+                self.parse_type_alias_with_doc(None, vec![])
             }
             Import => {
                 self.track_error(

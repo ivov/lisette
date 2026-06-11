@@ -764,6 +764,7 @@ pub type PanicNilError
 /// A Pinner is a set of Go objects each pinned to a fixed location in memory. The
 /// [Pinner.Pin] method pins one object, while [Pinner.Unpin] unpins all pinned
 /// objects. See their comments for more information.
+#[go(hidden_embed)]
 pub type Pinner
 
 // SKIPPED field "Stack0": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette

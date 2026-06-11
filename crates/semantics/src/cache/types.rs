@@ -342,6 +342,7 @@ pub enum CachedDefinitionBody {
         generics: Vec<CachedGeneric>,
         methods: HashMap<String, Type>,
         is_opaque: bool,
+        attributes: Attributes,
     },
     Enum {
         generics: Vec<CachedGeneric>,
@@ -385,6 +386,7 @@ impl CachedDefinition {
                 generics,
                 annotation,
                 methods,
+                attributes,
             } => CachedDefinitionBody::TypeAlias {
                 generics: generics
                     .iter()
@@ -392,6 +394,7 @@ impl CachedDefinition {
                     .collect(),
                 methods: Self::convert_methods(methods),
                 is_opaque: annotation.is_opaque(),
+                attributes: attributes.clone(),
             },
             DefinitionBody::Enum {
                 generics,
@@ -475,6 +478,7 @@ impl CachedDefinition {
                 generics,
                 methods,
                 is_opaque,
+                attributes,
             } => DefinitionBody::TypeAlias {
                 generics: generics.iter().map(|g| g.to_generic(file_ids)).collect(),
                 annotation: if *is_opaque {
@@ -485,6 +489,7 @@ impl CachedDefinition {
                     Annotation::Unknown
                 },
                 methods: Self::restore_methods(methods),
+                attributes: attributes.clone(),
             },
             CachedDefinitionBody::Enum {
                 generics,

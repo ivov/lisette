@@ -173,6 +173,7 @@ pub struct LimitedReader {
 pub type OffsetWriter
 
 /// A PipeReader is the read half of a pipe.
+#[go(hidden_embed)]
 pub type PipeReader
 
 /// A PipeWriter is the write half of a pipe.

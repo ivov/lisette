@@ -177,6 +177,7 @@ pub struct CoverBlock {
 /// *F methods can only be called before [F.Fuzz]. Once the test is
 /// executing the fuzz target, only [*T] methods can be used. The only *F methods
 /// that are allowed in the [F.Fuzz] function are [F.Failed] and [F.Name].
+#[go(hidden_embed)]
 pub type F
 
 /// InternalBenchmark is an internal type but exported because it is cross-package;
@@ -222,6 +223,7 @@ pub type PB
 /// 
 /// The other reporting methods, such as the variations of [T.Log] and [T.Error],
 /// may be called simultaneously from multiple goroutines.
+#[go(hidden_embed)]
 pub type T
 
 /// TB is the interface common to [T], [B], and [F].

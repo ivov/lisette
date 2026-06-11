@@ -20,6 +20,7 @@ pub struct Host3 {
 
 /// Unexported embed (mirrors net.IPConn { conn }): its promoted methods stay
 /// flattened on Host4 rather than be dropped.
+#[go(hidden_embed)]
 pub type Host4
 
 /// Unexported embed plus an exported field (mirrors testing.B { common; N int }):

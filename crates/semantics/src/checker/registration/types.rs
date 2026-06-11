@@ -1,7 +1,7 @@
 use crate::checker::EnvResolve;
 use syntax::ast::{
-    Annotation, EnumFieldDefinition, EnumVariant, Generic, Span, StructFieldDefinition, StructKind,
-    VariantFields,
+    Annotation, Attribute, EnumFieldDefinition, EnumVariant, Generic, Span, StructFieldDefinition,
+    StructKind, VariantFields,
 };
 use syntax::program::{Attributes, Definition, DefinitionBody, MethodSignatures, Visibility};
 use syntax::types::Type;
@@ -409,7 +409,7 @@ impl TaskState<'_> {
 
         let promotion_target = embed_promotion_target(store, &resolved);
         if is_imported_nominal(&promotion_target)
-            && !is_flat_imported_struct(store, &promotion_target)
+            && !is_faithful_imported_embed_target(store, &promotion_target)
         {
             self.sink
                 .push(diagnostics::embed::imported_target(&display, span));
@@ -580,6 +580,7 @@ impl TaskState<'_> {
         name_span: &Span,
         generics: &[Generic],
         annotation: &Annotation,
+        attributes: &[Attribute],
         span: &Span,
         doc: &Option<String>,
     ) {
@@ -659,6 +660,7 @@ impl TaskState<'_> {
                         generics: generics.to_vec(),
                         annotation: annotation.clone(),
                         methods: Default::default(),
+                        attributes: super::collect_struct_attributes(attributes),
                     },
                 },
             );
@@ -731,6 +733,7 @@ impl TaskState<'_> {
                     generics: generics.to_vec(),
                     annotation: annotation.clone(),
                     methods: Default::default(),
+                    attributes: super::collect_struct_attributes(attributes),
                 },
             },
         );
@@ -797,30 +800,49 @@ fn is_imported_nominal(ty: &Type) -> bool {
     matches!(ty, Type::Nominal { id, .. } if id.as_str().starts_with(syntax::types::GO_IMPORT_PREFIX))
 }
 
-/// A non-generic imported Go struct with no embedded fields of its own: the flat
-/// shape promotion handles. With faithful bindgen output a nested imported struct
-/// carries `embed` fields, so this rejects it; interfaces, non-record types, and
-/// generic instantiations stay deferred.
-fn is_flat_imported_struct(store: &Store, ty: &Type) -> bool {
-    let Type::Nominal { id, .. } = ty else {
+fn is_faithful_imported_embed_target(store: &Store, ty: &Type) -> bool {
+    is_faithful_imported_graph(store, ty, &mut rustc_hash::FxHashSet::default())
+}
+
+fn is_faithful_imported_graph(
+    store: &Store,
+    ty: &Type,
+    seen: &mut rustc_hash::FxHashSet<String>,
+) -> bool {
+    let target = store.deep_resolve_alias(&embed_promotion_target(store, ty));
+    let Type::Nominal { id, .. } = &target else {
         return false;
     };
     if !id.as_str().starts_with(syntax::types::GO_IMPORT_PREFIX) {
         return false;
     }
+    if !seen.insert(id.to_string()) {
+        return true;
+    }
     let Some(definition) = store.get_definition(id.as_str()) else {
         return false;
     };
-    // Marked `#[go(hidden_embed)]`: looks flat but hides an embed bindgen could
-    // not emit (e.g. testing.B through `common`), so it is not a flat leaf.
+    // `#[go(hidden_embed)]` looks flat but hides an embed bindgen could not emit, so it is not faithful.
     if definition.has_hidden_embed() {
         return false;
     }
-    matches!(
-        &definition.body,
-        DefinitionBody::Struct { fields, kind: StructKind::Record, generics, .. }
-            if generics.is_empty() && fields.iter().all(|field| !field.embedded)
-    )
+    match &definition.body {
+        DefinitionBody::Struct {
+            fields,
+            kind: StructKind::Record,
+            generics,
+            ..
+        } if generics.is_empty() => fields
+            .iter()
+            .filter(|field| field.embedded)
+            .all(|field| is_faithful_imported_graph(store, &field.ty, seen)),
+        DefinitionBody::Struct { generics, .. } if generics.is_empty() => {
+            has_selector_surface(store, &target)
+        }
+        DefinitionBody::Interface { .. } => has_selector_surface(store, &target),
+        DefinitionBody::TypeAlias { .. } => has_selector_surface(store, &target),
+        _ => false,
+    }
 }
 
 fn embed_promotion_target(store: &Store, ty: &Type) -> Type {

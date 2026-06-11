@@ -36,6 +36,7 @@ pub enum DefinitionBody {
         generics: Vec<Generic>,
         annotation: Annotation,
         methods: MethodSignatures,
+        attributes: Attributes,
     },
     Enum {
         generics: Vec<Generic>,
@@ -149,9 +150,9 @@ impl Definition {
 
     pub fn attributes(&self) -> Option<&Attributes> {
         match &self.body {
-            DefinitionBody::Struct { attributes, .. } | DefinitionBody::Enum { attributes, .. } => {
-                Some(attributes)
-            }
+            DefinitionBody::Struct { attributes, .. }
+            | DefinitionBody::Enum { attributes, .. }
+            | DefinitionBody::TypeAlias { attributes, .. } => Some(attributes),
             _ => None,
         }
     }

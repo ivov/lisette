@@ -501,6 +501,7 @@ pub type DirEntry = fs.DirEntry
 /// File represents an open file descriptor.
 /// 
 /// The methods of File are safe for concurrent use.
+#[go(hidden_embed)]
 pub type File
 
 /// A FileInfo describes a file and is returned by [Stat] and [Lstat].

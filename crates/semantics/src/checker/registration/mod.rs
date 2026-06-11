@@ -572,12 +572,15 @@ impl TaskState<'_> {
                 name_span,
                 generics,
                 annotation,
+                attributes,
                 span,
                 doc,
                 ..
             } = item
             {
-                self.populate_type_alias(store, name, name_span, generics, annotation, span, doc);
+                self.populate_type_alias(
+                    store, name, name_span, generics, annotation, attributes, span, doc,
+                );
             }
         }
 

@@ -158,7 +158,8 @@ impl<'a> Formatter<'a> {
         let attrs = match expression {
             Expression::Function { attributes, .. }
             | Expression::Struct { attributes, .. }
-            | Expression::Enum { attributes, .. } => self.attributes(attributes),
+            | Expression::Enum { attributes, .. }
+            | Expression::TypeAlias { attributes, .. } => self.attributes(attributes),
             _ => Document::Sequence(vec![]),
         };
         let between_attrs_and_keyword = self.comments.take_comments_before(start);

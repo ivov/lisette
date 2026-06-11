@@ -156,7 +156,15 @@ macro_rules! assert_desugar_error_snapshot {
 #[macro_export]
 macro_rules! assert_infer_error_snapshot {
     ($source:expr) => {
-        let result = $crate::_harness::infer::infer($source);
+        $crate::assert_infer_error_snapshot!(@render
+            $crate::_harness::infer::infer($source), $source);
+    };
+    ($source:expr, $typedefs:expr) => {
+        $crate::assert_infer_error_snapshot!(@render
+            $crate::_harness::infer::infer_with_go_typedefs($source, $typedefs), $source);
+    };
+    (@render $result:expr, $source:expr) => {
+        let result = $result;
         if result.errors.is_empty() {
             panic!("Expected errors but inference succeeded");
         }

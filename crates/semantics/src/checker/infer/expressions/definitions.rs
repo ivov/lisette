@@ -74,6 +74,7 @@ impl InferCtx<'_, '_> {
         let store = self.store;
         let Expression::TypeAlias {
             doc,
+            attributes,
             name,
             name_span,
             generics,
@@ -101,6 +102,7 @@ impl InferCtx<'_, '_> {
         {
             Expression::TypeAlias {
                 doc,
+                attributes,
                 name: alias_name
                     .clone()
                     .expect("type alias definition has a name"),
@@ -114,6 +116,7 @@ impl InferCtx<'_, '_> {
         } else {
             Expression::TypeAlias {
                 doc,
+                attributes,
                 name,
                 name_span,
                 generics,

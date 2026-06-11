@@ -927,6 +927,7 @@ pub enum Expression {
     },
     TypeAlias {
         doc: Option<String>,
+        attributes: Vec<Attribute>,
         name: EcoString,
         name_span: Span,
         generics: Vec<Generic>,
@@ -1910,6 +1911,7 @@ impl Expression {
             },
             Expression::TypeAlias {
                 doc,
+                attributes,
                 name,
                 name_span,
                 generics,
@@ -1919,6 +1921,7 @@ impl Expression {
                 ..
             } => Expression::TypeAlias {
                 doc,
+                attributes,
                 name,
                 name_span,
                 generics,

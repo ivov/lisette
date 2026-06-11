@@ -549,6 +549,9 @@ func (e *Emitter) emitType(result convert.ConvertResult) {
 			for _, f := range result.Fields {
 				writeSkippedFieldComment(&e.buf, "", f)
 			}
+			if result.HasHiddenEmbed {
+				e.buf.WriteString("#[go(hidden_embed)]\n")
+			}
 			fmt.Fprintf(&e.buf, "pub type %s%s\n\n", typeName, result.TypeParams.DeclBlock())
 			return
 		}
@@ -636,6 +639,9 @@ func (e *Emitter) emitType(result convert.ConvertResult) {
 	}
 
 	var signature strings.Builder
+	if result.HasHiddenEmbed {
+		signature.WriteString("#[go(hidden_embed)]\n")
+	}
 	signature.WriteString("pub type ")
 	signature.WriteString(typeName)
 	signature.WriteString(result.TypeParams.DeclBlock())

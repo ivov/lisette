@@ -601,6 +601,7 @@ pub struct IPAddr {
 
 /// IPConn is the implementation of the [Conn] and [PacketConn] interfaces
 /// for IP network connections.
+#[go(hidden_embed)]
 pub type IPConn
 
 /// An IPMask is a bitmask that can be used to manipulate
@@ -734,6 +735,7 @@ pub struct TCPAddr {
 
 /// TCPConn is an implementation of the [Conn] interface for TCP network
 /// connections.
+#[go(hidden_embed)]
 pub type TCPConn
 
 /// TCPListener is a TCP network listener. Clients should typically
@@ -749,6 +751,7 @@ pub struct UDPAddr {
 
 /// UDPConn is the implementation of the [Conn] and [PacketConn] interfaces
 /// for UDP network connections.
+#[go(hidden_embed)]
 pub type UDPConn
 
 /// UnixAddr represents the address of a Unix domain socket end point.
@@ -759,6 +762,7 @@ pub struct UnixAddr {
 
 /// UnixConn is an implementation of the [Conn] interface for connections
 /// to Unix domain sockets.
+#[go(hidden_embed)]
 pub type UnixConn
 
 /// UnixListener is a Unix domain socket listener. Clients should

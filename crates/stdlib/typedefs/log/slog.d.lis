@@ -274,6 +274,7 @@ pub struct HandlerOptions {
 
 /// JSONHandler is a [Handler] that writes Records to an [io.Writer] as
 /// line-delimited JSON objects.
+#[go(hidden_embed)]
 pub type JSONHandler
 
 /// A LevelVar is a [Level] variable, to allow a [Handler] level to change
@@ -330,6 +331,7 @@ pub struct Source {
 
 /// TextHandler is a [Handler] that writes Records to an [io.Writer] as a
 /// sequence of key=value pairs separated by spaces and followed by a newline.
+#[go(hidden_embed)]
 pub type TextHandler
 
 /// A Value can represent any Go value, but unlike type any,
