@@ -11,7 +11,7 @@ use crate::patterns::sites::PatternSubject;
 use crate::types::native::NativeGoType;
 use crate::utils::{group_params, receiver_name};
 use syntax::ast::{
-    Annotation, Binding, Expression, FunctionDefinition, Generic, Pattern, Span, TypedPattern,
+    Annotation, Binding, Expression, FunctionDefinitionView, Generic, Pattern, Span, TypedPattern,
 };
 use syntax::types::Type;
 
@@ -218,12 +218,12 @@ impl Planner<'_> {
 
     pub(crate) fn emit_function(
         &mut self,
-        function_definition: &FunctionDefinition,
+        function_definition: FunctionDefinitionView<'_>,
         receiver: Option<(String, Type)>,
         is_public: bool,
         fx: &mut EmitEffects,
     ) -> String {
-        if matches!(*function_definition.body, Expression::NoOp) {
+        if matches!(function_definition.body, Expression::NoOp) {
             return String::new();
         }
 
@@ -231,10 +231,17 @@ impl Planner<'_> {
         let return_ctx = self.return_context_for_type(function_definition.return_type.clone());
         let return_shape = return_ctx.lowered_shape();
 
-        let (function_definition, receiver) =
-            change_go_builtin_methods(function_definition, receiver);
+        let (native_override, receiver) = change_go_builtin_methods(function_definition, receiver);
+        let function_definition = match &native_override {
+            Some((name, params)) => FunctionDefinitionView {
+                name,
+                params,
+                ..function_definition
+            },
+            None => function_definition,
+        };
         let (params_to_process, receiver_override) =
-            self.extract_receiver(&function_definition, receiver.is_some(), fx);
+            self.extract_receiver(function_definition, receiver.is_some(), fx);
 
         let mut parts = vec!["func".to_string()];
 
@@ -244,10 +251,10 @@ impl Planner<'_> {
             parts.push(part);
         }
 
-        parts.push(self.pick_go_function_name(&function_definition, receiver.is_some(), is_public));
+        parts.push(self.pick_go_function_name(function_definition, receiver.is_some(), is_public));
 
         let generics_str = self.build_generics_string(
-            &function_definition,
+            function_definition,
             params_to_process,
             receiver.as_ref(),
             fx,
@@ -259,11 +266,11 @@ impl Planner<'_> {
         let mut body = String::new();
         let signature = self.with_absorbed_ref_generics(
             params_to_process,
-            &function_definition.generics,
+            function_definition.generics,
             fx,
             |this, fx| {
                 let (params_string, return_ty, deferred_patterns) = this.build_signature_tail(
-                    &function_definition,
+                    function_definition,
                     params_to_process,
                     return_shape.as_ref(),
                     fx,
@@ -275,7 +282,7 @@ impl Planner<'_> {
                 let signature = parts.join(" ");
                 this.emit_function_body_with_deferred_patterns(
                     &mut body,
-                    &function_definition,
+                    function_definition,
                     deferred_patterns,
                     &return_ctx,
                     fx,
@@ -294,30 +301,30 @@ impl Planner<'_> {
 
     fn pick_go_function_name(
         &self,
-        function_definition: &FunctionDefinition,
+        function_definition: FunctionDefinitionView<'_>,
         has_receiver: bool,
         is_public: bool,
     ) -> String {
         if is_public {
-            go_name::snake_to_camel(&function_definition.name)
+            go_name::snake_to_camel(function_definition.name)
         } else if has_receiver {
-            go_name::escape_keyword(&function_definition.name).into_owned()
+            go_name::escape_keyword(function_definition.name).into_owned()
         } else if let Some(remapped) = self.module.escape_remap(function_definition.name.as_str()) {
             remapped.to_string()
         } else {
-            go_name::escape_reserved(&function_definition.name).into_owned()
+            go_name::escape_reserved(function_definition.name).into_owned()
         }
     }
 
     fn build_generics_string(
         &mut self,
-        function_definition: &FunctionDefinition,
+        function_definition: FunctionDefinitionView<'_>,
         _params_to_process: &[Binding],
         receiver: Option<&(String, Type)>,
         fx: &mut EmitEffects,
     ) -> String {
-        let symbol = self.symbol_for_function(&function_definition.name, receiver);
-        self.generics_to_string_for_symbol(&symbol, &function_definition.generics, fx)
+        let symbol = self.symbol_for_function(function_definition.name, receiver);
+        self.generics_to_string_for_symbol(&symbol, function_definition.generics, fx)
     }
 
     fn symbol_for_function(
@@ -339,7 +346,7 @@ impl Planner<'_> {
 
     fn build_signature_tail(
         &mut self,
-        function_definition: &FunctionDefinition,
+        function_definition: FunctionDefinitionView<'_>,
         params_to_process: &[Binding],
         return_shape: Option<&AbiShape>,
         fx: &mut EmitEffects,
@@ -349,9 +356,9 @@ impl Planner<'_> {
         let return_ty = if function_definition.return_type.is_unit() {
             String::new()
         } else if let Some(shape) = return_shape {
-            self.render_lowered_return_ty(shape, &function_definition.return_type, fx)
+            self.render_lowered_return_ty(shape, function_definition.return_type, fx)
         } else {
-            self.go_type_string(&function_definition.return_type, fx)
+            self.go_type_string(function_definition.return_type, fx)
         };
 
         (params_string, return_ty, deferred_patterns)
@@ -360,7 +367,7 @@ impl Planner<'_> {
     fn emit_function_body_with_deferred_patterns(
         &mut self,
         body: &mut String,
-        function_definition: &FunctionDefinition,
+        function_definition: FunctionDefinitionView<'_>,
         deferred_patterns: Vec<DeferredParamDestructure>,
         return_ctx: &ReturnContext,
         fx: &mut EmitEffects,
@@ -378,7 +385,7 @@ impl Planner<'_> {
         }
         self.emit_function_body(
             body,
-            &function_definition.body,
+            function_definition.body,
             should_return,
             return_ctx,
             fx,
@@ -507,11 +514,11 @@ impl Planner<'_> {
 
     fn extract_receiver<'a>(
         &mut self,
-        function_definition: &'a FunctionDefinition,
+        function_definition: FunctionDefinitionView<'a>,
         has_receiver: bool,
         fx: &mut EmitEffects,
     ) -> (&'a [Binding], Option<Type>) {
-        let default = (&function_definition.params[..], None);
+        let default = (function_definition.params, None);
 
         if !has_receiver || function_definition.params.is_empty() {
             return default;
@@ -542,28 +549,23 @@ pub(crate) fn is_go_never(expression: &Expression) -> bool {
     }
 }
 
-fn change_go_builtin_methods<'a>(
-    function_definition: &'a FunctionDefinition,
+/// Renamed definition parts for methods on native Go receiver types; the
+/// caller rebinds its view to borrow these.
+type NativeMethodOverride = (ecow::EcoString, Vec<Binding>);
+
+fn change_go_builtin_methods(
+    function_definition: FunctionDefinitionView<'_>,
     receiver: Option<(String, Type)>,
-) -> (
-    std::borrow::Cow<'a, FunctionDefinition>,
-    Option<(String, Type)>,
-) {
-    use std::borrow::Cow;
+) -> (Option<NativeMethodOverride>, Option<(String, Type)>) {
     let Some((receiver_name, receiver_type)) = receiver else {
-        return (Cow::Borrowed(function_definition), None);
+        return (None, None);
     };
 
     let Some(native) = NativeGoType::from_type(&receiver_type) else {
-        return (
-            Cow::Borrowed(function_definition),
-            Some((receiver_name, receiver_type)),
-        );
+        return (None, Some((receiver_name, receiver_type)));
     };
 
-    let mut new_function_definition = function_definition.clone();
-    new_function_definition.name =
-        format!("{}.{}", native.lisette_name(), function_definition.name).into();
+    let name = format!("{}.{}", native.lisette_name(), function_definition.name).into();
 
     let self_binding = Binding {
         pattern: Pattern::Identifier {
@@ -576,6 +578,8 @@ fn change_go_builtin_methods<'a>(
         mutable: false,
     };
 
-    new_function_definition.params.insert(0, self_binding);
-    (Cow::Owned(new_function_definition), None)
+    let mut params = Vec::with_capacity(function_definition.params.len() + 1);
+    params.push(self_binding);
+    params.extend(function_definition.params.iter().cloned());
+    (Some((name, params)), None)
 }

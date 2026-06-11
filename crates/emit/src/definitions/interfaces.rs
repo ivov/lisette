@@ -50,7 +50,7 @@ impl Planner<'_> {
         is_public: bool,
         fx: &mut EmitEffects,
     ) -> String {
-        let func = item.to_function_definition();
+        let func = item.function_definition_view();
         let ty = item.get_type();
         let all_args = ty
             .get_function_params()
@@ -70,16 +70,16 @@ impl Planner<'_> {
             .expect("interface method must have return type")
             .clone();
         let qualified_id = self.facts.qualified_current(interface_name);
-        let hints = self.go_interface_method_hints(&qualified_id, &func.name);
+        let hints = self.go_interface_method_hints(&qualified_id, func.name);
         let return_type = match self.classify_with_go_hints(&raw_return_ty, &hints) {
             Some(shape) => self.render_lowered_return_ty(&shape, &raw_return_ty, fx),
             None => self.go_type_string(&raw_return_ty, fx),
         };
 
-        let method_name = if is_public || self.method_needs_export(&func.name) {
-            go_name::snake_to_camel(&func.name)
+        let method_name = if is_public || self.method_needs_export(func.name) {
+            go_name::snake_to_camel(func.name)
         } else {
-            go_name::escape_keyword(&func.name).into_owned()
+            go_name::escape_keyword(func.name).into_owned()
         };
 
         if return_type == "struct{}" {

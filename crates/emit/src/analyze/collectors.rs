@@ -17,7 +17,7 @@ impl Planner<'_> {
                 } = item
                 {
                     for method in method_signatures {
-                        let func = method.to_function_definition();
+                        let func = method.function_definition_view();
                         self.module
                             .record_exported_method_name(func.name.to_string());
                     }
@@ -201,7 +201,7 @@ fn is_display_to_string(method: &Expression) -> bool {
     if !matches!(method, Expression::Function { .. }) {
         return false;
     }
-    let func = method.to_function_definition();
+    let func = method.function_definition_view();
     func.name.as_str() == "to_string"
         && func.params.len() == 1
         && matches!(

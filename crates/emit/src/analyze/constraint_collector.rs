@@ -146,6 +146,7 @@ impl Planner<'_> {
         let Expression::Function {
             name: method_name,
             generics: method_generics,
+            params,
             visibility,
             ..
         } = method
@@ -153,8 +154,7 @@ impl Planner<'_> {
             unreachable!("callers filter to Function expressions");
         };
 
-        let function = method.to_function_definition();
-        let has_self = function.params.first().is_some_and(|p| {
+        let has_self = params.first().is_some_and(|p| {
             matches!(p.pattern, Pattern::Identifier { ref identifier, .. } if identifier == "self")
         });
         let is_ufcs = self.facts.is_ufcs_method(receiver_key, method_name);

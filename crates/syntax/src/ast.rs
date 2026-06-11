@@ -440,6 +440,16 @@ pub struct FunctionDefinition {
     pub ty: Type,
 }
 
+#[derive(Clone, Copy)]
+pub struct FunctionDefinitionView<'a> {
+    pub name: &'a EcoString,
+    pub name_span: Span,
+    pub generics: &'a [Generic],
+    pub params: &'a [Binding],
+    pub body: &'a Expression,
+    pub return_type: &'a Type,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum VariantFields {
     Unit,
@@ -1188,29 +1198,25 @@ impl Expression {
         }
     }
 
-    pub fn to_function_definition(&self) -> FunctionDefinition {
+    pub fn function_definition_view(&self) -> FunctionDefinitionView<'_> {
         match self {
             Expression::Function {
                 name,
                 name_span,
                 generics,
                 params,
-                return_annotation,
                 return_type,
                 body,
-                ty,
                 ..
-            } => FunctionDefinition {
-                name: name.clone(),
+            } => FunctionDefinitionView {
+                name,
                 name_span: *name_span,
-                generics: generics.clone(),
-                params: params.clone(),
-                body: body.clone(),
-                return_type: return_type.clone(),
-                annotation: return_annotation.clone(),
-                ty: ty.clone(),
+                generics,
+                params,
+                body,
+                return_type,
             },
-            _ => panic!("to_function_definition called on non-Function expression"),
+            _ => panic!("function_definition_view called on non-Function expression"),
         }
     }
 

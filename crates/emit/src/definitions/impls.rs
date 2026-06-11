@@ -2,7 +2,7 @@ use crate::EmitEffects;
 use crate::Planner;
 use crate::expressions::top_items::emit_doc;
 use crate::names::go_name;
-use syntax::ast::{Expression, Generic, Pattern, Visibility};
+use syntax::ast::{Expression, FunctionDefinitionView, Generic, Pattern, Visibility};
 use syntax::types::Type;
 
 struct ImplContext<'a> {
@@ -57,7 +57,7 @@ impl Planner<'_> {
 
         self.scope.reset_for_top_level();
 
-        let function = method.to_function_definition();
+        let function = method.function_definition_view();
         let is_public = matches!(visibility, Visibility::Public);
 
         let has_self = function.params.first().is_some_and(|p| {
@@ -65,25 +65,28 @@ impl Planner<'_> {
         });
         let is_ufcs = self
             .facts
-            .is_ufcs_method(&ctx.qualified_type, &function.name);
-        let should_export = is_public || self.method_needs_export(&function.name);
+            .is_ufcs_method(&ctx.qualified_type, function.name);
+        let should_export = is_public || self.method_needs_export(function.name);
         let is_free_function = !has_self || is_ufcs;
 
         let code = if is_free_function {
-            let mut free_function = function.clone();
             let method_name = if should_export {
-                go_name::snake_to_camel(&function.name)
+                go_name::snake_to_camel(function.name)
             } else {
                 function.name.to_string()
             };
-            free_function.name = format!("{}_{}", ctx.receiver_name, method_name).into();
+            let free_name = format!("{}_{}", ctx.receiver_name, method_name).into();
             let mut combined_generics = ctx.generics.to_vec();
-            combined_generics.extend(free_function.generics.iter().cloned());
-            free_function.generics = combined_generics;
-            self.emit_function(&free_function, None, false, fx)
+            combined_generics.extend(function.generics.iter().cloned());
+            let free_function = FunctionDefinitionView {
+                name: &free_name,
+                generics: &combined_generics,
+                ..function
+            };
+            self.emit_function(free_function, None, false, fx)
         } else {
             self.emit_function(
-                &function,
+                function,
                 Some((ctx.receiver_name.to_string(), ctx.ty.clone())),
                 should_export,
                 fx,

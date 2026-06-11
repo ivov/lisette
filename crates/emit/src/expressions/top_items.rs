@@ -15,10 +15,10 @@ impl Planner<'_> {
                     return String::new();
                 }
                 let is_public = matches!(visibility, Visibility::Public);
-                let function = item.to_function_definition();
+                let function = item.function_definition_view();
                 let doc_comment = emit_doc(doc);
 
-                let code = self.emit_function(&function, None, is_public, fx);
+                let code = self.emit_function(function, None, is_public, fx);
                 format!("{}{}", doc_comment, code)
             }
             Expression::Struct {
