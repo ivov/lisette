@@ -2,6 +2,30 @@
 
 Lisette is under active development. Any version before 1.0.0 may include breaking changes.
 
+## [0.3.4](https://github.com/ivov/lisette/compare/lisette-v0.3.3...lisette-v0.3.4) - 2026-06-11
+
+- docs: document embedding imported Go types [#695](https://github.com/ivov/lisette/pull/695) [`d027dbd`](https://github.com/ivov/lisette/commit/d027dbd8ec971099ddf9961b01c36fc205c2c4de)
+- fix: adjust diagnostics for `var` [#694](https://github.com/ivov/lisette/pull/694) [`8617a15`](https://github.com/ivov/lisette/commit/8617a159bc39d8e924a95bad3fb675d655ee5e41)
+- feat: promote methods through unexported Go embeds [#693](https://github.com/ivov/lisette/pull/693) [`14e9316`](https://github.com/ivov/lisette/commit/14e9316e8671b9bff0dfa2bc73a2b2302d3a4570)
+- fix: enforce sealing of imported Go interfaces [#692](https://github.com/ivov/lisette/pull/692) [`b1db049`](https://github.com/ivov/lisette/commit/b1db049e9ea419202a1ce8e915fa06015891eb55)
+- test: render snapshot descriptions as yaml literal blocks [#691](https://github.com/ivov/lisette/pull/691) [`ff2c70a`](https://github.com/ivov/lisette/commit/ff2c70a8c33826036d1ceacfca74f8c127080a71)
+- feat: add `lis emit` to CLI [#689](https://github.com/ivov/lisette/pull/689) [`f130d63`](https://github.com/ivov/lisette/commit/f130d637e2e92effb117d373f0de530ae1faaa27)
+- refactor: reshape `lis run` onto build-then-exec [#688](https://github.com/ivov/lisette/pull/688) [`bd807f9`](https://github.com/ivov/lisette/commit/bd807f9c8feadc49745987782d37ce62ae90073d)
+- feat: broaden imported types accepted as embed targets [#687](https://github.com/ivov/lisette/pull/687) [`a3edafa`](https://github.com/ivov/lisette/commit/a3edafaee78dbcfb70a1b7e2bfd1f00c229d0b33)
+- chore: upgrade to `insta` 1.48.0 [#686](https://github.com/ivov/lisette/pull/686) [`eb77a81`](https://github.com/ivov/lisette/commit/eb77a815657c2c8322a183ee5fb99d0591f52c31)
+- perf: parallelize module registration [#685](https://github.com/ivov/lisette/pull/685) [`d197b78`](https://github.com/ivov/lisette/commit/d197b784586764656ab9370612084da6635c416f)
+- refactor: replace text-scanned liveness with structural tracking [#683](https://github.com/ivov/lisette/pull/683) [`35aa700`](https://github.com/ivov/lisette/commit/35aa700eddbb79300640c57501fc4e8fb372625d)
+- fix: reject non-comparable interface and unknown equality [#682](https://github.com/ivov/lisette/pull/682) [`ddd6bc0`](https://github.com/ivov/lisette/commit/ddd6bc0a77c406a3594b38ba87c1c8e855362a0f)
+- refactor: de-flatten imported struct embeds [#681](https://github.com/ivov/lisette/pull/681) [`1bd8dfc`](https://github.com/ivov/lisette/commit/1bd8dfc792cfc4cd08c6161c4cee5a4d7096f11c)
+- feat: broaden match-to-if-let lint coverage [#680](https://github.com/ivov/lisette/pull/680) [`244fe2a`](https://github.com/ivov/lisette/commit/244fe2a1d913a0984d43c06916a631413deca981)
+- perf: dispatch ast walk checks by expression kind [#679](https://github.com/ivov/lisette/pull/679) [`202244a`](https://github.com/ivov/lisette/commit/202244a7b4508d756c45a27dff094ba355997be0)
+- perf: memoize global enum layouts and generic constraints in emit [#677](https://github.com/ivov/lisette/pull/677) [`1827dc0`](https://github.com/ivov/lisette/commit/1827dc074299531db010307c295872ef8cb6e196)
+- test: add imported types to embed harness [#676](https://github.com/ivov/lisette/pull/676) [`aeeca19`](https://github.com/ivov/lisette/commit/aeeca1901c8f80b540d7d2ccad7447fab31911bd)
+- feat: embedding for generic structs [#674](https://github.com/ivov/lisette/pull/674) [`2fef804`](https://github.com/ivov/lisette/commit/2fef804c25897eb32ac48ed05d06fd21fa606a70)
+- perf: freeze types in place instead of rebuilding the ast [#673](https://github.com/ivov/lisette/pull/673) [`156652c`](https://github.com/ivov/lisette/commit/156652c8a3b90159ea8980d2fa8a158ac67c04d2)
+- fix: reject namespace used as a value [#671](https://github.com/ivov/lisette/pull/671) [`c9e1eec`](https://github.com/ivov/lisette/commit/c9e1eecd2a257d019dddbacd798c81999e9a981d)
+- feat: hover and go-to-definition on promoted members [#667](https://github.com/ivov/lisette/pull/667) [`f181b25`](https://github.com/ivov/lisette/commit/f181b25a1bd16f7978aa51cc77b1ec1123934a0c)
+
 ## [0.3.3](https://github.com/ivov/lisette/compare/lisette-v0.3.2...lisette-v0.3.3) - 2026-06-08
 
 - feat: support embedding in native structs [#666](https://github.com/ivov/lisette/pull/666) [`eec2ea2`](https://github.com/ivov/lisette/commit/eec2ea2e9154af0209afefe183f9522eb7c4e2aa)
