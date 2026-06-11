@@ -11,7 +11,15 @@ use diagnostics::render::{self, Filter};
 use lisette::fs::{LocalFileSystem, prune_orphan_go_files};
 use lisette::pipeline::{CompileConfig, CompilePhase, compile};
 
+pub fn emit(path: Option<String>, debug: bool) -> i32 {
+    compile_project(path, debug, false, "Emit")
+}
+
 pub fn build(path: Option<String>, debug: bool, quiet: bool) -> i32 {
+    compile_project(path, debug, quiet, "Build")
+}
+
+fn compile_project(path: Option<String>, debug: bool, quiet: bool, label: &str) -> i32 {
     let project_root = path.unwrap_or_else(|| ".".to_string());
     let project_path = Path::new(&project_root);
 
@@ -25,7 +33,7 @@ pub fn build(path: Option<String>, debug: bool, quiet: bool) -> i32 {
         Err(code) => return code,
     };
 
-    build_locked(&prep, debug, quiet)
+    build_locked(&prep, debug, quiet, label)
 }
 
 pub(super) fn prepare_project_build(project_path: &Path) -> Result<BuildPrep, i32> {
@@ -72,7 +80,7 @@ pub(super) struct BuildPrep {
     pub locator: deps::TypedefLocator,
 }
 
-pub(super) fn build_locked(prep: &BuildPrep, debug: bool, quiet: bool) -> i32 {
+pub(super) fn build_locked(prep: &BuildPrep, debug: bool, quiet: bool, label: &str) -> i32 {
     let start = Instant::now();
 
     if let Err(e) =
@@ -277,7 +285,8 @@ pub(super) fn build_locked(prep: &BuildPrep, debug: bool, quiet: bool) -> i32 {
 
     if !quiet {
         eprintln!(
-            "  ✓ Build completed {}",
+            "  ✓ {} completed {}",
+            label,
             crate::output::format_elapsed(start.elapsed())
         );
     }

@@ -14,7 +14,7 @@ mod sync;
 
 pub use add::add;
 pub use bindgen::bindgen;
-pub use build::build;
+pub use build::{build, emit};
 pub use check::check;
 pub use completions::completions;
 pub use doc::{doc, doc_search};

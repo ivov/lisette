@@ -9,6 +9,10 @@ pub enum Command {
         path: Option<String>,
         debug: bool,
     },
+    Emit {
+        path: Option<String>,
+        debug: bool,
+    },
     Run {
         target: Option<String>,
         args: Vec<String>,
@@ -68,6 +72,21 @@ pub enum ParseError {
     },
 }
 
+fn parse_path_and_debug(
+    arguments: impl Iterator<Item = String>,
+) -> Result<(Option<String>, bool), ParseError> {
+    let mut path = None;
+    let mut debug = false;
+    for arg in arguments {
+        match arg.as_str() {
+            "--debug" => debug = true,
+            s if s.starts_with('-') => return Err(ParseError::UnknownFlag(s.to_string())),
+            s => path = Some(s.to_string()),
+        }
+    }
+    Ok((path, debug))
+}
+
 fn extend_go_flags(go_flags: &mut Vec<String>, raw: &str) -> Result<(), ParseError> {
     match crate::shell_words::split(raw) {
         Ok(tokens) => {
@@ -123,20 +142,13 @@ impl Command {
             },
 
             "build" | "b" => {
-                let mut path = None;
-                let mut debug = false;
-
-                for arg in arguments {
-                    match arg.as_str() {
-                        "--debug" => debug = true,
-                        s if s.starts_with('-') => {
-                            return Err(ParseError::UnknownFlag(s.to_string()));
-                        }
-                        s => path = Some(s.to_string()),
-                    }
-                }
-
+                let (path, debug) = parse_path_and_debug(arguments)?;
                 Ok(Command::Build { path, debug })
+            }
+
+            "emit" | "e" => {
+                let (path, debug) = parse_path_and_debug(arguments)?;
+                Ok(Command::Emit { path, debug })
             }
 
             "run" | "r" => {
@@ -374,8 +386,8 @@ impl Command {
 
     pub fn suggest(typo: &str) -> Option<String> {
         const COMMANDS: &[&str] = &[
-            "new", "build", "run", "format", "check", "help", "version", "add", "sync", "learn",
-            "doc", "complete", "lsp", "bindgen",
+            "new", "build", "emit", "run", "format", "check", "help", "version", "add", "sync",
+            "learn", "doc", "complete", "lsp", "bindgen",
         ];
         let candidates: Vec<String> = COMMANDS.iter().map(|s| s.to_string()).collect();
         diagnostics::infer::find_similar_name(typo, &candidates)
@@ -537,6 +549,23 @@ mod tests {
         assert!(matches!(
             parse(&["lis", "run", "--go-flags", "-ldflags='-s"]),
             Err(ParseError::UnexpectedArgument { .. })
+        ));
+    }
+
+    #[test]
+    fn emit_parses_path_and_debug() {
+        let Ok(Command::Emit { path, debug }) = parse(&["lis", "emit", "src", "--debug"]) else {
+            panic!("expected Emit command");
+        };
+        assert_eq!(path.as_deref(), Some("src"));
+        assert!(debug);
+    }
+
+    #[test]
+    fn emit_rejects_unknown_flag() {
+        assert!(matches!(
+            parse(&["lis", "emit", "--bogus"]),
+            Err(ParseError::UnknownFlag(_))
         ));
     }
 

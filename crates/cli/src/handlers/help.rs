@@ -13,12 +13,13 @@ Usage:
 
 Commands:
     `new`        Create a new project
-    `build`, `b`   Compile a project to Go
     `run`, `r`     Compile and run a project
+    `build`, `b`   Compile a project to Go
+    `emit`, `e`    Emit Go code into `target/`
+    `check`, `c`   Lint and typecheck a project
     `format`, `f`  Format a project
-    `check`, `c`   Validate a project
     `add`        Add a third-party Go dependency
-    `sync`       Reconcile project manifest
+    `sync`       Tidy project manifest
 
 Extras:
     `version`    Print compiler version
@@ -40,7 +41,7 @@ Usage:
     `lis help` <command>
 
 Commands:
-    `new`, `build`, `run`, `format`, `check`, `add`, `sync`, `doc`
+    `new`, `build`, `emit`, `run`, `format`, `check`, `add`, `sync`, `doc`
 
 Extras:
     `version`, `help`, `learn`, `complete`, `lsp`",
@@ -73,7 +74,7 @@ Arguments:
 Compile a Lisette project.
 
 Arguments:
-    [path]    Path to project dir (default: current dir)
+    [path]     Path to project dir (default: current dir)
 
 Options:
     `--debug`    Include `//line` directives in generated Go code for stack traces
@@ -84,17 +85,34 @@ Examples:
     `lis build` {--debug:g}                  Build with source mapping directives",
         ),
 
+        "emit" | "e" => print_help(
+            "`lis emit` [path] [options]
+
+Generate Go code from a Lisette project into the `target/` dir.
+
+Arguments:
+    [path]     Path to project dir (default: current dir)
+
+Options:
+    `--debug`    Include `//line` directives in generated Go code for stack traces
+
+Examples:
+    `lis emit`                          Emit Go for project in current dir
+    `lis emit` {path/to/project/dir:g}      Emit Go for project in specific dir
+    `lis emit` {--debug:g}                  Emit with source mapping directives",
+        ),
+
         "run" | "r" => print_help(
             "`lis run` [target:g] [options] [-- args...]
 
 Compile and execute a Lisette file or project.
 
 Arguments:
-    [target:g]         Project dir or `.lis` file (default: current dir)
-    [args]           Arguments to pass to the program (after --)
+    [target:g]    Project dir or `.lis` file (default: current dir)
+    [args]      Arguments to pass to the program (after --)
 
 Options:
-    `--debug`    Include `//line` directives in generated Go code for stack traces
+    `--debug`     Include `//line` directives in generated Go code for stack traces
 
 Examples:
     `lis run`                            Run project in current dir
@@ -109,10 +127,10 @@ Examples:
 Format Lisette source files.
 
 Arguments:
-    [path]      Path to file or dir (default: current dir)
+    [path]       Path to file or dir (default: current dir)
 
 Options:
-    [--check]     Check if files are formatted without modifying them
+    [--check]    Check if files are formatted without modifying them
 
 Examples:
     `lis format`                   Format project in current dir
@@ -126,7 +144,7 @@ Examples:
 Find errors and warnings in Lisette source files.
 
 Arguments:
-    [path]    Path to file or dir (default: current dir)
+    [path]             Path to file or dir (default: current dir)
 
 Options:
     `--errors-only`      Show only errors
@@ -178,7 +196,7 @@ Start the Lisette language server over stdio, for use by editor extensions.",
 Generate `.d.lis` type definition bindings for a Go package.
 
 Arguments:
-    <package>    Go package path (e.g., `fmt`, `net/http`)
+    <package>              Go package path (e.g., `fmt`, `net/http`)
 
 Options:
     `-o`, `--output` <path>    Output file path (default: <package>`.d.lis`)
@@ -224,8 +242,8 @@ matching, error handling, closures, Go interop, and concurrency.",
 Browse symbols and packages.
 
 Arguments:
-    [query]              Symbol or package to look up (omit to list all in stdlib)
-    `-s`, `--search` <term>  Search across symbols and packages
+    [query]                Symbol or package to look up (omit to list all in stdlib)
+    `-s`, `--search` <term>    Search across symbols and packages
 
 Examples:
     `lis doc`                          List all prelude types and functions

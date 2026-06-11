@@ -69,7 +69,7 @@ fn run_project(path: &str, args: Vec<String>, debug: bool, go_flags: &[String]) 
     let target = stdlib::Target::host();
     let binary_name = go_cli::binary_name(&prep.manifest.project.name, target);
 
-    let build_result = super::build::build_locked(&prep, debug, true);
+    let build_result = super::build::build_locked(&prep, debug, true, "Build");
     if build_result != 0 {
         return build_result;
     }

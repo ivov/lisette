@@ -36,7 +36,7 @@ fn bash_completions() -> &'static str {
     cur="${COMP_WORDS[COMP_CWORD]}"
     prev="${COMP_WORDS[COMP_CWORD-1]}"
 
-    commands="new build run format check add sync learn doc help complete version"
+    commands="new run build emit check format add sync version help doc learn complete lsp"
 
     case "$prev" in
         lis)
@@ -44,6 +44,10 @@ fn bash_completions() -> &'static str {
             return 0
             ;;
         build)
+            COMPREPLY=( $(compgen -W "--debug" -- "$cur") )
+            return 0
+            ;;
+        emit)
             COMPREPLY=( $(compgen -W "--debug" -- "$cur") )
             return 0
             ;;
@@ -89,17 +93,19 @@ _lis() {
     local -a commands
     commands=(
         'new:Create a new project'
-        'build:Compile a project'
         'run:Compile and run a project'
-        'format:Format a file or project'
-        'check:Validate a file or project'
+        'build:Compile a project to Go'
+        'emit:Emit Go code into target/'
+        'check:Lint and typecheck a project'
+        'format:Format a project'
         'add:Add a third-party Go dependency'
-        'sync:Reconcile project manifest with imports'
-        'learn:Generate a sample project'
-        'doc:Explore prelude and Go stdlib'
-        'help:Print help message'
-        'complete:Generate shell completions'
-        'version:Print version information'
+        'sync:Tidy project manifest'
+        'version:Print compiler version'
+        'help:Show help for a command'
+        'doc:Browse symbols and packages'
+        'learn:Create a new sample project'
+        'complete:Shell completion scripts'
+        'lsp:Start the language server'
     )
 
     _arguments -C \
@@ -113,6 +119,9 @@ _lis() {
         args)
             case "$words[1]" in
                 build)
+                    _arguments '--debug[Include line directives for stack traces]'
+                    ;;
+                emit)
                     _arguments '--debug[Include line directives for stack traces]'
                     ;;
                 run)
@@ -152,19 +161,22 @@ fn fish_completions() -> &'static str {
 complete -c lis -f
 
 complete -c lis -n __fish_use_subcommand -a new -d 'Create a new project'
-complete -c lis -n __fish_use_subcommand -a build -d 'Compile a project'
 complete -c lis -n __fish_use_subcommand -a run -d 'Compile and run a project'
-complete -c lis -n __fish_use_subcommand -a format -d 'Format a file or project'
-complete -c lis -n __fish_use_subcommand -a check -d 'Validate a file or project'
+complete -c lis -n __fish_use_subcommand -a build -d 'Compile a project to Go'
+complete -c lis -n __fish_use_subcommand -a emit -d 'Emit Go code into target/'
+complete -c lis -n __fish_use_subcommand -a check -d 'Lint and typecheck a project'
+complete -c lis -n __fish_use_subcommand -a format -d 'Format a project'
 complete -c lis -n __fish_use_subcommand -a add -d 'Add a third-party Go dependency'
-complete -c lis -n __fish_use_subcommand -a sync -d 'Reconcile project manifest with imports'
-complete -c lis -n __fish_use_subcommand -a learn -d 'Generate a sample project'
-complete -c lis -n __fish_use_subcommand -a doc -d 'Explore prelude and Go stdlib'
-complete -c lis -n __fish_use_subcommand -a help -d 'Print help message'
-complete -c lis -n __fish_use_subcommand -a complete -d 'Generate shell completions'
-complete -c lis -n __fish_use_subcommand -a version -d 'Print version information'
+complete -c lis -n __fish_use_subcommand -a sync -d 'Tidy project manifest'
+complete -c lis -n __fish_use_subcommand -a version -d 'Print compiler version'
+complete -c lis -n __fish_use_subcommand -a help -d 'Show help for a command'
+complete -c lis -n __fish_use_subcommand -a doc -d 'Browse symbols and packages'
+complete -c lis -n __fish_use_subcommand -a learn -d 'Create a new sample project'
+complete -c lis -n __fish_use_subcommand -a complete -d 'Shell completion scripts'
+complete -c lis -n __fish_use_subcommand -a lsp -d 'Start the language server'
 
 complete -c lis -n '__fish_seen_subcommand_from build' -l debug -d 'Include line directives for stack traces'
+complete -c lis -n '__fish_seen_subcommand_from emit' -l debug -d 'Include line directives for stack traces'
 complete -c lis -n '__fish_seen_subcommand_from run' -l debug -d 'Include line directives for stack traces'
 complete -c lis -n '__fish_seen_subcommand_from run' -l go-flags -r -d 'Flags passed through to go build'
 complete -c lis -n '__fish_seen_subcommand_from format' -l check -d 'Check formatting without modifying'
@@ -173,6 +185,6 @@ complete -c lis -n '__fish_seen_subcommand_from check' -l warnings-only -d 'Show
 complete -c lis -n '__fish_seen_subcommand_from check' -l output -r -a unix -d 'Machine-readable output'
 complete -c lis -n '__fish_seen_subcommand_from doc' -s s -l search -d 'Search across prelude and Go stdlib'
 complete -c lis -n '__fish_seen_subcommand_from complete' -a 'bash zsh fish' -d 'Shell type'
-complete -c lis -n '__fish_seen_subcommand_from help' -a 'new build run format check add sync learn doc help complete version' -d 'Command'
+complete -c lis -n '__fish_seen_subcommand_from help' -a 'new run build emit check format add sync version help doc learn complete lsp' -d 'Command'
 "#
 }

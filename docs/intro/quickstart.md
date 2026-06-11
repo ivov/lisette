@@ -155,12 +155,13 @@ Usage:
 
 Commands:
     new        Create a new project
-    build, b   Compile a project to Go
     run, r     Compile and run a project
+    build, b   Compile a project to Go
+    emit, e    Emit Go code into target/
+    check, c   Lint and typecheck a project
     format, f  Format a project
-    check, c   Validate a project
     add        Add a third-party Go dependency
-    sync       Reconcile project manifest
+    sync       Tidy project manifest
 
 Extras:
     version    Print compiler version
