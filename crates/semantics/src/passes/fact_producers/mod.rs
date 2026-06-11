@@ -2,6 +2,7 @@ pub(crate) mod generics;
 pub(crate) mod unused_expressions;
 
 use rayon::prelude::*;
+use std::sync::Arc;
 use syntax::program::{File, Module};
 
 use crate::context::AnalysisContext;
@@ -15,6 +16,7 @@ pub(crate) fn run_all(analysis: &AnalysisContext, facts: &mut Facts) {
     let mut work: Vec<(&Module, &File)> = store
         .modules
         .values()
+        .map(Arc::as_ref)
         .flat_map(|m| m.files.values().map(move |f| (m, f)))
         .collect();
     work.sort_unstable_by(|a, b| {

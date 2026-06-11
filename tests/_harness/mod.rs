@@ -30,8 +30,7 @@ pub fn init_prelude(store: &mut Store) {
 
 pub fn register_test_builtins(store: &mut Store, _checker: &mut TaskState) {
     let module = store
-        .modules
-        .get_mut("prelude")
+        .get_module_mut("prelude")
         .expect("prelude module must exist");
 
     let mut define = |name: &str, params: Vec<Type>, return_type: Type| {

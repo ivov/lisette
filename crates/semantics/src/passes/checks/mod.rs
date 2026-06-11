@@ -30,6 +30,7 @@ pub(crate) mod visibility;
 use diagnostics::{LocalSink, PatternIssue};
 use rayon::prelude::*;
 use rustc_hash::FxHashSet as HashSet;
+use std::sync::Arc;
 use syntax::program::{File, Module};
 
 use crate::context::AnalysisContext;
@@ -52,6 +53,7 @@ pub(crate) fn run_all(analysis: &AnalysisContext, facts: &mut Facts, sink: &Loca
     let mut work: Vec<(&Module, &File)> = store
         .modules
         .values()
+        .map(Arc::as_ref)
         .flat_map(|m| m.files.values().map(move |f| (m, f)))
         .collect();
     work.sort_unstable_by(|a, b| {

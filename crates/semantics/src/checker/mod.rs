@@ -806,6 +806,14 @@ impl<'s> TaskState<'s> {
         self.module_fields_cache.borrow().clone()
     }
 
+    /// Adopt projections built by registration workers so later phases reuse them.
+    pub fn merge_module_fields(
+        &mut self,
+        fields: HashMap<EcoString, Arc<[StructFieldDefinition]>>,
+    ) {
+        self.module_fields_cache.borrow_mut().extend(fields);
+    }
+
     pub fn put_module_in_scope(&mut self, store: &Store, module_id: &str, prefix: Option<String>) {
         let Some(prefix) = prefix else {
             self.imports

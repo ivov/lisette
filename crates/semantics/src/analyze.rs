@@ -4,8 +4,9 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use diagnostics::{LocalSink, SemanticResult};
-use syntax::ast::Expression;
-use syntax::program::{File, ModuleInfo, MutationInfo, UnusedInfo};
+use ecow::EcoString;
+use syntax::ast::{Expression, StructFieldDefinition};
+use syntax::program::{File, Module, ModuleInfo, MutationInfo, UnusedInfo};
 
 use deps::TypedefLocator;
 
@@ -67,6 +68,32 @@ pub struct AnalyzeOutput {
     pub result: SemanticResult,
     pub facts: Facts,
     pub emit_stamps: Vec<EmitStamp>,
+}
+
+/// Groups topologically ordered modules into dependency waves, so a wave only
+/// reads modules registered in earlier waves.
+fn registration_waves(
+    modules: &[String],
+    edges: &HashMap<String, HashSet<String>>,
+) -> Vec<Vec<String>> {
+    let mut wave_of: HashMap<&str, usize> = HashMap::default();
+    let mut waves: Vec<Vec<String>> = Vec::new();
+    for module_id in modules {
+        let wave = edges
+            .get(module_id)
+            .into_iter()
+            .flatten()
+            .filter_map(|dep| wave_of.get(dep.as_str()))
+            .map(|dep_wave| dep_wave + 1)
+            .max()
+            .unwrap_or(0);
+        wave_of.insert(module_id, wave);
+        if waves.len() == wave {
+            waves.push(Vec::new());
+        }
+        waves[wave].push(module_id.clone());
+    }
+    waves
 }
 
 pub fn analyze(input: AnalyzeInput) -> AnalyzeOutput {
@@ -156,11 +183,10 @@ pub fn analyze(input: AnalyzeInput) -> AnalyzeOutput {
         let order = std::mem::take(&mut graph_result.order);
         let edges = &graph_result.edges;
 
-        let go_cache = if cache_disabled {
-            None
-        } else {
-            go_stdlib::try_load_go_stdlib_cache(input.locator.target())
-        };
+        // Outer `None` = not attempted: the deserialize costs milliseconds,
+        // which a project without stdlib imports should not pay.
+        let mut go_cache: Option<Option<go_stdlib::GoStdlibCache>> =
+            if cache_disabled { Some(None) } else { None };
 
         let mut to_infer: Vec<String> = Vec::new();
 
@@ -171,7 +197,9 @@ pub fn analyze(input: AnalyzeInput) -> AnalyzeOutput {
                 }
 
                 if deps::is_stdlib(go_pkg)
-                    && let Some(ref cache) = go_cache
+                    && let Some(ref cache) = *go_cache.get_or_insert_with(|| {
+                        go_stdlib::try_load_go_stdlib_cache(input.locator.target())
+                    })
                 {
                     load_cached_go_module(&mut store, &module_id, cache, input.locator.target());
                     if store.is_visited(&module_id) {
@@ -241,7 +269,6 @@ pub fn analyze(input: AnalyzeInput) -> AnalyzeOutput {
             }
 
             store.store_module(&module_id, files);
-            checker.register_module(&mut store, &module_id);
 
             if !is_entry {
                 compiled_modules.push(CompiledModule {
@@ -254,6 +281,102 @@ pub fn analyze(input: AnalyzeInput) -> AnalyzeOutput {
             to_infer.push(module_id);
         }
 
+        // Single-file or tiny multi-module projects stay serial to avoid rayon
+        // overhead. This threshold is a conservative starting point, not a
+        // measured inflection point. To be tuned in future.
+        const PARALLEL_THRESHOLD: usize = 4;
+
+        // Same-wave modules never read each other, so each worker mutates
+        // only its own detached module and reads the rest through a snapshot.
+        if to_infer.len() < PARALLEL_THRESHOLD {
+            for module_id in &to_infer {
+                checker.register_module(&mut store, module_id);
+            }
+        } else {
+            for wave in registration_waves(&to_infer, edges) {
+                if wave.len() == 1 {
+                    checker.register_module(&mut store, &wave[0]);
+                    continue;
+                }
+
+                let detached: Vec<(String, Arc<Module>)> = wave
+                    .into_iter()
+                    .map(|module_id| {
+                        let module = store
+                            .modules
+                            .remove(&module_id)
+                            .expect("fresh module must be stored before registration");
+                        (module_id, module)
+                    })
+                    .collect();
+
+                // One worker per thread-sized chunk: the store view and the
+                // `TaskState` caches are too expensive to rebuild per module.
+                let chunk_size = detached.len().div_ceil(rayon::current_num_threads()).max(1);
+                let mut chunks: Vec<Vec<(String, Arc<Module>)>> = Vec::new();
+                let mut remaining = detached.into_iter();
+                loop {
+                    let chunk: Vec<_> = remaining.by_ref().take(chunk_size).collect();
+                    if chunk.is_empty() {
+                        break;
+                    }
+                    chunks.push(chunk);
+                }
+
+                let allocator = binding_ids.clone();
+                let store_ref: &Store = &store;
+                let fields_shared = Arc::new(checker.module_fields_snapshot());
+
+                type RegisterOutput = (
+                    Vec<(String, Arc<Module>)>,
+                    HashSet<(String, String)>,
+                    HashMap<EcoString, Arc<[StructFieldDefinition]>>,
+                    Facts,
+                    LocalSink,
+                );
+                let outputs: Vec<RegisterOutput> = chunks
+                    .into_par_iter()
+                    .map(|chunk| {
+                        let local_sink = LocalSink::new();
+                        let mut worker = TaskState::new(&local_sink, allocator.clone());
+                        worker.module_fields_shared = Some(fields_shared.clone());
+                        let mut view = store_ref.registration_view();
+                        let mut registered = Vec::with_capacity(chunk.len());
+                        for (module_id, module) in chunk {
+                            view.modules.insert(module_id.clone(), module);
+                            worker.register_module(&mut view, &module_id);
+                            let module = view
+                                .modules
+                                .remove(&module_id)
+                                .expect("registered module must remain in view");
+                            registered.push((module_id, module));
+                        }
+                        let facts =
+                            std::mem::replace(&mut worker.facts, Facts::new(allocator.clone()));
+                        (
+                            registered,
+                            std::mem::take(&mut worker.ufcs_methods),
+                            worker.module_fields_snapshot(),
+                            facts,
+                            local_sink,
+                        )
+                    })
+                    .collect();
+
+                let mut worker_sinks: Vec<LocalSink> = Vec::with_capacity(outputs.len());
+                for (registered, ufcs_methods, module_fields, facts, sink_local) in outputs {
+                    for (module_id, module) in registered {
+                        store.modules.insert(module_id, module);
+                    }
+                    checker.ufcs_methods.extend(ufcs_methods);
+                    checker.merge_module_fields(module_fields);
+                    checker.facts.merge(facts);
+                    worker_sinks.push(sink_local);
+                }
+                sink.extend(LocalSink::merge(worker_sinks));
+            }
+        }
+
         let module_files: Vec<(String, Vec<File>)> = to_infer
             .iter()
             .map(|module_id| {
@@ -261,11 +384,6 @@ pub fn analyze(input: AnalyzeInput) -> AnalyzeOutput {
                 (module_id.clone(), files)
             })
             .collect();
-
-        // Single-file or tiny multi-module projects stay serial to avoid rayon
-        // overhead. This threshold is a conservative starting point, not a
-        // measured inflection point. To be tuned in future.
-        const PARALLEL_THRESHOLD: usize = 4;
 
         if module_files.len() < PARALLEL_THRESHOLD {
             for (module_id, files) in module_files {
@@ -317,8 +435,9 @@ pub fn analyze(input: AnalyzeInput) -> AnalyzeOutput {
                 .filter(|id| id.strip_prefix("go:").is_some_and(deps::is_stdlib))
                 .cloned()
                 .collect();
+            // A non-empty list implies the lazy cache load was attempted.
             let needs_save = !all_go_modules.is_empty()
-                && go_cache.as_ref().is_none_or(|c| {
+                && go_cache.as_ref().and_then(Option::as_ref).is_none_or(|c| {
                     all_go_modules.len() != c.modules.len()
                         || all_go_modules.iter().any(|id| !c.modules.contains_key(id))
                 });
@@ -414,6 +533,8 @@ pub fn analyze(input: AnalyzeInput) -> AnalyzeOutput {
         .collect();
 
     for (mod_id, module) in store.modules {
+        // Worker views are gone by now, so this unwraps without cloning.
+        let module = Arc::try_unwrap(module).unwrap_or_else(|shared| (*shared).clone());
         let is_internal = module.is_internal();
 
         definitions.extend(module.definitions);

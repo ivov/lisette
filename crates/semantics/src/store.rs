@@ -1,4 +1,5 @@
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
 
 use ecow::EcoString;
@@ -96,7 +97,9 @@ fn char_codepoint(text: &str) -> Option<u64> {
 }
 
 pub struct Store {
-    pub modules: HashMap<String, Module>,
+    /// `Arc` so registration workers share a read view; [`Arc::make_mut`]
+    /// writes stay zero-copy while a module has a single owner.
+    pub modules: HashMap<String, Arc<Module>>,
     pub module_ids: Vec<ModuleId>,
     /// file ID -> module ID
     pub files: HashMap<u32, String>,
@@ -126,8 +129,8 @@ impl Store {
         let nominal_module = Module::nominal();
 
         let modules = vec![
-            (prelude_module.id.clone(), prelude_module),
-            (nominal_module.id.clone(), nominal_module),
+            (prelude_module.id.clone(), Arc::new(prelude_module)),
+            (nominal_module.id.clone(), Arc::new(nominal_module)),
         ]
         .into_iter()
         .collect();
@@ -219,7 +222,7 @@ impl Store {
 
     pub fn get_file_mut(&mut self, file_id: u32) -> Option<&mut File> {
         let module_id = self.files.get(&file_id)?.clone();
-        let module = self.modules.get_mut(&module_id)?;
+        let module = Arc::make_mut(self.modules.get_mut(&module_id)?);
         module
             .files
             .get_mut(&file_id)
@@ -227,7 +230,7 @@ impl Store {
     }
 
     pub fn get_module(&self, module_id: &str) -> Option<&Module> {
-        self.modules.get(module_id)
+        self.modules.get(module_id).map(Arc::as_ref)
     }
 
     pub fn has(&self, module_id: &str) -> bool {
@@ -240,12 +243,27 @@ impl Store {
         }
 
         self.modules
-            .insert(module_id.to_string(), Module::new(module_id));
+            .insert(module_id.to_string(), Arc::new(Module::new(module_id)));
         self.module_ids.push(module_id.to_string());
     }
 
     pub fn get_module_mut(&mut self, module_id: &str) -> Option<&mut Module> {
-        self.modules.get_mut(module_id)
+        self.modules.get_mut(module_id).map(Arc::make_mut)
+    }
+
+    /// `Arc`-bump snapshot for a registration worker, which inserts its own
+    /// detached module before use.
+    pub(crate) fn registration_view(&self) -> Store {
+        Store {
+            modules: self.modules.clone(),
+            module_ids: self.module_ids.clone(),
+            files: self.files.clone(),
+            go_package_names: self.go_package_names.clone(),
+            typedef_paths: HashMap::default(),
+            visited_modules: HashSet::default(),
+            next_file_id: AtomicU32::new(self.next_file_id.load(Ordering::Relaxed)),
+            closed_domains: HashMap::default(),
+        }
     }
 
     pub fn is_visited(&self, module_id: &str) -> bool {

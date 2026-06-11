@@ -4,6 +4,7 @@ mod visibility_constraints;
 
 use rayon::prelude::*;
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
+use std::sync::Arc;
 
 use crate::context::AnalysisContext;
 use crate::facts::Facts;
@@ -44,6 +45,7 @@ pub(crate) fn run(
     let mut modules: Vec<&Module> = store
         .modules
         .values()
+        .map(Arc::as_ref)
         .filter(|m| !m.is_internal())
         .collect();
     modules.sort_unstable_by(|a, b| a.id.cmp(&b.id));

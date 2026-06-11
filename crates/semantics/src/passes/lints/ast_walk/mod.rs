@@ -2,7 +2,7 @@ pub(crate) mod attributes;
 pub(crate) mod casing;
 mod checks;
 
-use std::sync::LazyLock;
+use std::sync::{Arc, LazyLock};
 
 use crate::context::AnalysisContext;
 use crate::facts::Facts;
@@ -126,6 +126,7 @@ pub(crate) fn run(analysis: &AnalysisContext, facts: &Facts, sink: &LocalSink) {
     let mut modules: Vec<&Module> = store
         .modules
         .values()
+        .map(Arc::as_ref)
         .filter(|m| !m.is_internal())
         .collect();
     modules.sort_unstable_by(|a, b| a.id.cmp(&b.id));
