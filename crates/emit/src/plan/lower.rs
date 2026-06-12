@@ -25,9 +25,13 @@ impl Planner<'_> {
         fx: &mut EmitEffects,
     ) -> (String, LoweredStatement) {
         let result_var = self.fresh_var(None);
-        let declaration = format!("var {} {}\n", result_var, self.go_type_string(ty, fx));
+        let declaration = LoweredStatement::VarDecl {
+            name: result_var.clone(),
+            go_type: self.go_type_string(ty, fx),
+            value: None,
+        };
         self.declare(&result_var);
-        (result_var, LoweredStatement::RawGo(declaration))
+        (result_var, declaration)
     }
 
     /// Plan a value-position `if` as a fresh operand-temp variable: a `var V T`
@@ -470,7 +474,7 @@ impl Planner<'_> {
 
     /// Shared loop lowering once the header is known: set the label, lower
     /// the body in a fresh scope. Caller owns `push_loop`/`pop_loop`.
-    fn lower_loop_with_header(
+    pub(crate) fn lower_loop_with_header(
         &mut self,
         directive: String,
         header: String,

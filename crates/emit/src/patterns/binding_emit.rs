@@ -1,16 +1,16 @@
 use crate::Planner;
-use crate::Renderer;
 use crate::analyze::inline_uses::{InlineDecision, analyze_inline_candidate};
 use crate::patterns::decision_tree::{Check, PatternBinding, PatternInfo, render_condition};
-use crate::plan::bodies::{LoweredBlock, LoweredStatement};
+use crate::plan::bodies::LoweredStatement;
+use crate::plan::placement::simple_assign;
+use crate::plan::values::ValuePlan;
 use crate::state::bindings::{BindingValue, InlineExpr};
-use crate::write_line;
 
 /// Hoist a root type assertion as `asserted := subject.(T)` for irrefutable
 /// destructure paths (the pattern compiler has already verified the type).
 pub(crate) fn apply_root_assertion<'s>(
     planner: &mut Planner,
-    output: &mut String,
+    statements: &mut Vec<LoweredStatement>,
     info: &PatternInfo,
     subject: &'s str,
 ) -> std::borrow::Cow<'s, str> {
@@ -25,7 +25,7 @@ pub(crate) fn apply_root_assertion<'s>(
     };
     planner.scope.record_go_use(subject);
     let expression = format!("{}.({})", subject, go_type);
-    let var = planner.hoist_tmp_value(output, "asserted", &expression);
+    let var = planner.hoist_tmp_value_statement(statements, "asserted", &expression);
     std::borrow::Cow::Owned(var)
 }
 
@@ -33,7 +33,7 @@ pub(crate) fn apply_root_assertion<'s>(
 /// select arms, or-pattern let-else). Returns `(effective_subject, ok_var)`.
 pub(crate) fn apply_refutable_root_assertion<'s>(
     planner: &mut Planner,
-    output: &mut String,
+    statements: &mut Vec<LoweredStatement>,
     info: &PatternInfo,
     subject: &'s str,
 ) -> (std::borrow::Cow<'s, str>, Option<String>) {
@@ -53,14 +53,10 @@ pub(crate) fn apply_refutable_root_assertion<'s>(
             };
             let ok = planner.fresh_var(Some("ok"));
             planner.declare(&ok);
-            write_line!(
-                output,
-                "{}, {} := {}.({})",
-                asserted_lhs,
-                ok,
-                subject,
-                go_type
-            );
+            statements.push(LoweredStatement::RawGo(format!(
+                "{}, {} := {}.({})\n",
+                asserted_lhs, ok, subject, go_type
+            )));
             let effective = if needs_asserted {
                 std::borrow::Cow::Owned(asserted_lhs)
             } else {
@@ -76,7 +72,10 @@ pub(crate) fn apply_refutable_root_assertion<'s>(
                 .map(|t| {
                     let ok = planner.fresh_var(Some("ok"));
                     planner.declare(&ok);
-                    write_line!(output, "_, {} := {}.({})", ok, subject, t);
+                    statements.push(LoweredStatement::RawGo(format!(
+                        "_, {} := {}.({})\n",
+                        ok, subject, t
+                    )));
                     ok
                 })
                 .collect();
@@ -101,21 +100,6 @@ pub(crate) fn compose_refutable_condition(
         Some(ok) if condition == "true" => ok.to_string(),
         Some(ok) => format!("{} && {}", ok, condition),
     }
-}
-
-pub(crate) fn emit_tree_bindings_with_consumers(
-    planner: &mut Planner,
-    output: &mut String,
-    bindings: &[PatternBinding],
-    subject_var: &str,
-    consumers: &[&syntax::ast::Expression],
-) -> Vec<(String, Option<BindingValue>)> {
-    let mut statements = Vec::new();
-    let installed_inlines =
-        tree_binding_statements(planner, &mut statements, bindings, subject_var, consumers);
-    let block = LoweredBlock { statements };
-    Renderer.render_lowered_block(output, &block);
-    installed_inlines
 }
 
 /// Push one `name := subject.path` per binding. Inlined bindings produce no
@@ -153,23 +137,26 @@ pub(crate) fn tree_binding_statements(
         }
 
         planner.scope.record_go_use(subject_var);
-        let line = if planner.scope.has_binding_for_go_name(go_name) {
+        let name = if planner.scope.has_binding_for_go_name(go_name) {
             let fresh = planner.fresh_var(Some(&binding.lisette_name));
             planner.scope.bind(&binding.lisette_name, &fresh);
             planner.try_declare(&fresh);
-            format!("{} := {}\n", fresh, access_expression)
+            fresh
         } else {
             let name = planner.scope.bind(&binding.lisette_name, go_name.clone());
             if planner.try_declare(&name) {
-                format!("{} := {}\n", name, access_expression)
+                name
             } else {
                 let fresh = planner.fresh_var(Some(&binding.lisette_name));
                 planner.scope.bind(&binding.lisette_name, &fresh);
                 planner.try_declare(&fresh);
-                format!("{} := {}\n", fresh, access_expression)
+                fresh
             }
         };
-        statements.push(LoweredStatement::RawGo(line));
+        statements.push(LoweredStatement::TempBind {
+            name,
+            value: access_expression,
+        });
     }
     installed_inlines
 }
@@ -213,9 +200,6 @@ pub(crate) fn tree_assignment_statements(
         let name = registered_name.to_string();
         planner.scope.record_go_use(subject_var);
         let access_expression = binding.path.render(subject_var);
-        statements.push(LoweredStatement::RawGo(format!(
-            "{} = {}\n",
-            name, access_expression
-        )));
+        statements.push(simple_assign(&name, ValuePlan::Operand(access_expression)));
     }
 }

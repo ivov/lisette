@@ -222,10 +222,11 @@ impl Planner<'_> {
         let opt_var = self.hoist_tmp_value_statement(statements, "opt", option_value);
         let slot_var = self.fresh_var(Some(slot_hint));
         self.declare(&slot_var);
-        statements.push(LoweredStatement::RawGo(format!(
-            "var {} {}\n",
-            slot_var, slot_ty
-        )));
+        statements.push(LoweredStatement::VarDecl {
+            name: slot_var.clone(),
+            go_type: slot_ty.to_string(),
+            value: None,
+        });
 
         fx.require_stdlib();
         let amp = if address { "&" } else { "" };

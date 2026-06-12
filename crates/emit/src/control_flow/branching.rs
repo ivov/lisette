@@ -56,27 +56,6 @@ impl Planner<'_> {
     }
 }
 
-impl Planner<'_> {
-    pub(crate) fn emit_labeled_loop(
-        &mut self,
-        output: &mut String,
-        header: &str,
-        body: &Expression,
-        needs_label: bool,
-        fx: &mut EmitEffects,
-    ) {
-        self.set_current_loop_label_if_needed(needs_label);
-        if let Some(label) = self.current_loop_label() {
-            write_line!(output, "{}:", label);
-        }
-        output.push_str(header);
-        self.enter_scope();
-        self.emit_block(output, body, fx);
-        self.exit_scope();
-        output.push_str("}\n");
-    }
-}
-
 pub(crate) fn wrap_if_struct_literal(condition: String) -> String {
     if condition.contains('{') {
         format!("({})", condition)

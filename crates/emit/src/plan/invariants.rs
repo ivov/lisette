@@ -27,6 +27,7 @@ fn walk_statement(statement: &LoweredStatement, issues: &mut Vec<String>, path: 
         | LoweredStatement::Assign(_)
         | LoweredStatement::Expression(_)
         | LoweredStatement::TempBind { .. }
+        | LoweredStatement::VarDecl { .. }
         | LoweredStatement::RawGo(_)
         | LoweredStatement::DivergingRawGo(_)
         | LoweredStatement::UnreachablePanic => {}

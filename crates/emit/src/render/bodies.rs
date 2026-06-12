@@ -185,6 +185,14 @@ impl Renderer {
             LoweredStatement::TempBind { name, value } => {
                 write_line!(output, "{} := {}", name, value);
             }
+            LoweredStatement::VarDecl {
+                name,
+                go_type,
+                value,
+            } => match value {
+                Some(value) => write_line!(output, "var {} {} = {}", name, go_type, value),
+                None => write_line!(output, "var {} {}", name, go_type),
+            },
             LoweredStatement::ClosureBind {
                 name,
                 closure_open,
@@ -236,14 +244,14 @@ impl Renderer {
     }
 
     /// Render a `LetPlan`. The `Never` form emits the optional `var X T`
-    /// declaration line first; every form then renders its body block.
+    /// declaration leaf first; every form then renders its body block.
     pub(crate) fn render_let_statement(&self, output: &mut String, plan: &LetPlan) {
         if let LetForm::Never {
             declaration: Some(declaration),
             ..
         } = &plan.form
         {
-            output.push_str(declaration);
+            self.render_statement(output, declaration);
         }
         self.render_lowered_block(output, plan.form.body());
     }

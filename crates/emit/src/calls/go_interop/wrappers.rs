@@ -82,17 +82,19 @@ impl Planner<'_> {
             WrapperTarget::FreshSlot => {
                 let var = self.fresh_var(Some(name_hint));
                 self.declare(&var);
-                statements.push(LoweredStatement::RawGo(format!(
-                    "var {} {}\n",
-                    var, type_str
-                )));
+                statements.push(LoweredStatement::VarDecl {
+                    name: var.clone(),
+                    go_type: type_str.to_string(),
+                    value: None,
+                });
                 (ResolvedSink::Slot(var.clone()), Some(var))
             }
             WrapperTarget::Slot(name) => {
-                statements.push(LoweredStatement::RawGo(format!(
-                    "var {} {}\n",
-                    name, type_str
-                )));
+                statements.push(LoweredStatement::VarDecl {
+                    name: name.to_string(),
+                    go_type: type_str.to_string(),
+                    value: None,
+                });
                 self.declare(name);
                 let owned = name.to_string();
                 (ResolvedSink::Slot(owned.clone()), Some(owned))

@@ -13,8 +13,7 @@ use crate::names::go_name;
 use crate::patterns::binding_decls::pattern_binds_name;
 use crate::patterns::binding_emit::{
     apply_refutable_root_assertion, apply_root_assertion, compose_refutable_condition,
-    drop_inline_overlays, emit_tree_bindings_with_consumers, tree_assignment_statements,
-    tree_binding_statements,
+    drop_inline_overlays, tree_assignment_statements, tree_binding_statements,
 };
 use crate::patterns::decision_tree::{self, PatternInfo, render_condition};
 use crate::plan::bodies::{ElseArm, IfPlan, LoopPlan, LoweredBlock, LoweredStatement, PlacePlan};
@@ -145,12 +144,8 @@ impl Planner<'_> {
         fx.extend(&info.effects);
 
         let mut body = Vec::new();
-        let mut assertion = String::new();
         self.scope.enter_use_region();
-        let effective = apply_root_assertion(self, &mut assertion, &info, resolved.var());
-        if !assertion.is_empty() {
-            body.push(LoweredStatement::RawGo(assertion));
-        }
+        let effective = apply_root_assertion(self, &mut body, &info, resolved.var());
         tree_binding_statements(self, &mut body, &info.bindings, &effective, &[]);
         let used = self.scope.exit_use_region();
         let body_block = LoweredBlock { statements: body };
@@ -276,28 +271,14 @@ impl Planner<'_> {
         let info = decision_tree::collect_pattern_info(self, pattern, typed, &scrutinee_ty);
         fx.extend(&info.effects);
         let mut loop_body = subject_setup;
-        let mut assertion = String::new();
         let (effective, ok_var) =
-            apply_refutable_root_assertion(self, &mut assertion, &info, &subject_var);
-        if !assertion.is_empty() {
-            loop_body.push(LoweredStatement::RawGo(assertion));
-        }
+            apply_refutable_root_assertion(self, &mut loop_body, &info, &subject_var);
         let condition = compose_refutable_condition(ok_var.as_deref(), &info.checks, &effective);
 
         self.enter_scope();
         let mut then_body: Vec<LoweredStatement> = Vec::new();
         if !matches!(pattern, Pattern::Or { .. }) {
-            let mut bindings = String::new();
-            emit_tree_bindings_with_consumers(
-                self,
-                &mut bindings,
-                &info.bindings,
-                &effective,
-                &[body],
-            );
-            if !bindings.is_empty() {
-                then_body.push(LoweredStatement::RawGo(bindings));
-            }
+            tree_binding_statements(self, &mut then_body, &info.bindings, &effective, &[body]);
         }
         then_body.extend(self.lower_block_as_body(body, fx).statements);
         self.exit_scope();
@@ -349,12 +330,8 @@ impl Planner<'_> {
         fx.extend(&info.effects);
 
         let mut statements = Vec::new();
-        let mut assert_buffer = String::new();
         let (effective_subject, assert_ok_var) =
-            apply_refutable_root_assertion(self, &mut assert_buffer, &info, subject_var);
-        if !assert_buffer.is_empty() {
-            statements.push(LoweredStatement::RawGo(assert_buffer));
-        }
+            apply_refutable_root_assertion(self, &mut statements, &info, subject_var);
 
         if info.checks.is_empty() && assert_ok_var.is_none() {
             tree_binding_statements(
@@ -420,7 +397,7 @@ impl Planner<'_> {
         self.emit_binding_declarations_with_type(&mut declarations, pattern, binding_ty, typed, fx);
         let post_declaration_snapshot = self.scope.binding_snapshot();
 
-        let mut asserts = String::new();
+        let mut asserts = Vec::new();
         let alts =
             self.collect_let_else_alternatives(&mut asserts, patterns, subject_ty, subject_var, fx);
 
@@ -428,9 +405,7 @@ impl Planner<'_> {
         if !declarations.is_empty() {
             statements.push(LoweredStatement::RawGo(declarations));
         }
-        if !asserts.is_empty() {
-            statements.push(LoweredStatement::RawGo(asserts));
-        }
+        statements.extend(asserts);
 
         let chain_len = alts.irrefutable_index.unwrap_or(alts.collected.len());
 
@@ -497,7 +472,7 @@ impl Planner<'_> {
 
     fn collect_let_else_alternatives<'s>(
         &mut self,
-        output: &mut String,
+        statements: &mut Vec<LoweredStatement>,
         patterns: &[Pattern],
         subject_ty: &Type,
         subject_var: &'s str,
@@ -512,7 +487,7 @@ impl Planner<'_> {
         }
         let hoisted: Vec<(Cow<'s, str>, Option<String>)> = collected
             .iter()
-            .map(|info| apply_refutable_root_assertion(self, output, info, subject_var))
+            .map(|info| apply_refutable_root_assertion(self, statements, info, subject_var))
             .collect();
         let irrefutable_index = collected
             .iter()
@@ -559,10 +534,19 @@ impl Planner<'_> {
             }
         }
 
+        let mut assert_statements = Vec::new();
         let hoisted: Vec<_> = alternatives
             .iter()
-            .map(|info| apply_refutable_root_assertion(self, output, info, subject_var))
+            .map(|info| {
+                apply_refutable_root_assertion(self, &mut assert_statements, info, subject_var)
+            })
             .collect();
+        Renderer.render_lowered_block(
+            output,
+            &LoweredBlock {
+                statements: assert_statements,
+            },
+        );
 
         for (i, info) in alternatives.iter().enumerate() {
             let (effective, ok_var) = &hoisted[i];
@@ -570,8 +554,20 @@ impl Planner<'_> {
 
             self.emit_branch_header(output, &condition, false, i == 0);
 
-            let overlays =
-                emit_tree_bindings_with_consumers(self, output, &info.bindings, effective, &[body]);
+            let mut binding_statements = Vec::new();
+            let overlays = tree_binding_statements(
+                self,
+                &mut binding_statements,
+                &info.bindings,
+                effective,
+                &[body],
+            );
+            Renderer.render_lowered_block(
+                output,
+                &LoweredBlock {
+                    statements: binding_statements,
+                },
+            );
             let block = self.lower_block_as_body(body, fx);
             Renderer.render_lowered_block(output, &block);
             drop_inline_overlays(self, &overlays);
@@ -628,12 +624,8 @@ impl Planner<'_> {
         let info = decision_tree::collect_pattern_info(self, pattern, typed, subject_ty);
         fx.extend(&info.effects);
         let mut statements = Vec::new();
-        let mut asserts = String::new();
         let (effective, ok_var) =
-            apply_refutable_root_assertion(self, &mut asserts, &info, subject_var);
-        if !asserts.is_empty() {
-            statements.push(LoweredStatement::RawGo(asserts));
-        }
+            apply_refutable_root_assertion(self, &mut statements, &info, subject_var);
 
         if info.checks.is_empty() && ok_var.is_none() {
             tree_binding_statements(self, &mut statements, &info.bindings, &effective, &[body]);

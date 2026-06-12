@@ -53,6 +53,12 @@ pub(crate) enum LoweredStatement {
         name: String,
         value: String,
     },
+    /// `var name go_type` (with `= value` when `value` is set).
+    VarDecl {
+        name: String,
+        go_type: String,
+        value: Option<String>,
+    },
     /// `name := <closure_open><body><closure_close>` (try-block IIFE,
     /// recover-block closure). `closure_open`/`close` are opaque Go text.
     ClosureBind {
@@ -145,10 +151,10 @@ pub(crate) struct LetPlan {
 }
 
 pub(crate) enum LetForm {
-    /// `!`-typed value. `declaration` is the optional `var X T` line so dead code
+    /// `!`-typed value. `declaration` is the optional `var X T` leaf so dead code
     /// can still reference the binding.
     Never {
-        declaration: Option<String>,
+        declaration: Option<Box<LoweredStatement>>,
         body: LoweredBlock,
     },
     /// `let x = value` (single identifier), including `let x = expr?`.
@@ -428,7 +434,9 @@ impl LoweredStatement {
             LoweredStatement::Select(plan) => plan.ends_with_diverge(),
             LoweredStatement::Switch(plan) => plan.ends_with_diverge(),
             LoweredStatement::WhileLet(plan) => plan.body.ends_with_diverge(),
-            LoweredStatement::TempBind { .. } | LoweredStatement::ClosureBind { .. } => false,
+            LoweredStatement::TempBind { .. }
+            | LoweredStatement::VarDecl { .. }
+            | LoweredStatement::ClosureBind { .. } => false,
             LoweredStatement::RawGo(_) => false,
             LoweredStatement::DivergingRawGo(_) | LoweredStatement::UnreachablePanic => true,
         }

@@ -7,7 +7,8 @@ use crate::control_flow::fallible::{ConstructorKind, Fallible, FalliblePlanner};
 use crate::definitions::functions::is_go_never;
 use crate::expressions::emission::StagedExpression;
 use crate::plan::bodies::{
-    AssignForm, AssignPlan, BreakValueDisposition, BreakValuePlan, LoweredStatement, PlacePlan,
+    AssignForm, AssignPlan, BreakValueDisposition, BreakValuePlan, LoweredBlock, LoweredStatement,
+    PlacePlan,
 };
 use crate::plan::calls::plan_variadic_spread;
 use crate::plan::values::{ValuePlan, setup_from_string, value_plan_from_statements};
@@ -51,7 +52,7 @@ pub(crate) fn is_unit_call(expression: &Expression) -> bool {
 }
 
 /// A `target = value` assignment with no lvalue capture.
-fn simple_assign(target_var: &str, value: ValuePlan) -> LoweredStatement {
+pub(crate) fn simple_assign(target_var: &str, value: ValuePlan) -> LoweredStatement {
     LoweredStatement::Assign(AssignPlan {
         directive: String::new(),
         form: AssignForm::Simple {
@@ -252,20 +253,17 @@ impl Planner<'_> {
         statements
     }
 
-    pub(crate) fn emit_assign(
+    pub(crate) fn lower_assign(
         &mut self,
-        output: &mut String,
         expression: &Expression,
         var: &str,
         target_ty: Option<&Type>,
         fx: &mut EmitEffects,
-    ) {
+    ) -> Vec<LoweredStatement> {
         let ty = expression.get_type();
         let is_fallible = ty.is_result() || ty.is_option();
         if is_fallible {
-            let statements = self.lower_option_result_assignment(var, target_ty, expression, fx);
-            output.push_str(&Renderer.render_setup(&statements));
-            return;
+            return self.lower_option_result_assignment(var, target_ty, expression, fx);
         }
 
         if let Expression::Loop {
@@ -273,23 +271,25 @@ impl Planner<'_> {
         } = expression
         {
             self.push_loop(var);
-            self.emit_labeled_loop(output, "for {\n", body, *needs_label, fx);
+            let plan = self.lower_loop_with_header(
+                String::new(),
+                "for {\n".to_string(),
+                body,
+                *needs_label,
+                fx,
+            );
             self.pop_loop();
-            return;
+            return vec![LoweredStatement::Loop(plan)];
         }
 
         if let Expression::Block { items, .. } = expression
             && items.len() > 1
         {
-            output.push_str("{\n");
             let statements = self.lower_block_to_var(expression, var, target_ty, true, fx);
-            output.push_str(&Renderer.render_setup(&statements));
-            output.push_str("}\n");
-            return;
+            return vec![LoweredStatement::Block(LoweredBlock { statements })];
         }
 
-        let statements = self.lower_block_to_var(expression, var, target_ty, false, fx);
-        output.push_str(&Renderer.render_setup(&statements));
+        self.lower_block_to_var(expression, var, target_ty, false, fx)
     }
 
     fn lower_plain_assign(
@@ -644,18 +644,14 @@ impl Planner<'_> {
             }
             return result_var;
         }
-        if let Expression::Loop {
-            body, needs_label, ..
-        } = expression
-        {
-            let result_var = self.declare_result_var(output, ty, fx);
-            self.push_loop(result_var.clone());
-            self.emit_labeled_loop(output, "for {\n", body, *needs_label, fx);
-            self.pop_loop();
+        if let Expression::Loop { .. } = expression {
+            let (setup, result_var) = self.plan_loop_as_operand_temp(expression, ty, fx);
+            output.push_str(&Renderer.render_setup(&setup));
             return result_var;
         }
         let result_var = self.declare_result_var(output, ty, fx);
-        self.emit_assign(output, expression, &result_var, Some(ty), fx);
+        let statements = self.lower_assign(expression, &result_var, Some(ty), fx);
+        output.push_str(&Renderer.render_setup(&statements));
         result_var
     }
 
