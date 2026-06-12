@@ -789,17 +789,13 @@ impl<'source> Parser<'source> {
                     let keyword_span =
                         Span::new(self.file_id, keyword.byte_offset, keyword.byte_length);
                     self.ensure(Impl);
-                    self.parse_interface_parent(
-                        item_doc,
-                        Some(keyword_span),
-                        &mut seen_parents,
-                        &mut parents,
-                    );
+                    self.error_impl_interface_embed(keyword_span);
+                    self.parse_interface_parent(item_doc, &mut seen_parents, &mut parents);
                 }
 
                 Identifier if self.current_token().text == "embed" => {
                     self.next();
-                    self.parse_interface_parent(item_doc, None, &mut seen_parents, &mut parents);
+                    self.parse_interface_parent(item_doc, &mut seen_parents, &mut parents);
                 }
 
                 _ => {
@@ -832,7 +828,6 @@ impl<'source> Parser<'source> {
     fn parse_interface_parent(
         &mut self,
         item_doc: Option<(std::string::String, Span)>,
-        impl_keyword_span: Option<Span>,
         seen_parents: &mut Vec<(EcoString, Span)>,
         parents: &mut Vec<ParentInterface>,
     ) {
@@ -846,7 +841,7 @@ impl<'source> Parser<'source> {
 
         if let Annotation::Constructor { name, .. } = &annotation {
             if let Some((_, first_span)) = seen_parents.iter().find(|(n, _)| n == name.as_str()) {
-                self.error_duplicate_impl_parent(*first_span, parent_span);
+                self.error_duplicate_embed_parent(*first_span, parent_span);
             } else {
                 seen_parents.push((name.clone(), parent_span));
             }
@@ -856,7 +851,6 @@ impl<'source> Parser<'source> {
             annotation,
             ty: Type::uninferred(),
             span: parent_span,
-            impl_keyword_span,
         });
         self.advance_if(Semicolon);
     }

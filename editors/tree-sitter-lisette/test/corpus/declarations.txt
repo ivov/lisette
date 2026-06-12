@@ -200,7 +200,7 @@ interface Reader { fn read(self) -> int; }
 Interface embedding
 ================================================================================
 
-interface ReadWriter { embed Reader; impl Writer; fn flush(self) -> int; }
+interface ReadWriter { embed Reader; embed Writer; fn flush(self) -> int; }
 
 --------------------------------------------------------------------------------
 

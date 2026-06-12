@@ -1,0 +1,15 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Duplicate embed
+   ╭─[test.lis:4:9]
+ 3 │ interface I {
+ 4 │   embed A;
+   ·         ┬
+   ·         ╰── first use
+ 5 │   embed A;
+   ·         ┬
+   ·         ╰── used again
+ 6 │ }
+   ╰────
+  help: Remove the duplicate parent · code: [parse.duplicate_embed_parent]

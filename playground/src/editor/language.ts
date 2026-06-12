@@ -8,7 +8,7 @@ export const LISETTE_KEYWORDS = [
   "as", "break", "continue", "else", "for", "if", "in", "loop",
   "match", "return", "while",
   // storage
-  "const", "enum", "fn", "impl", "interface", "struct", "type", "var",
+  "const", "embed", "enum", "fn", "impl", "interface", "struct", "type", "var",
   // modifiers
   "pub", "mut",
   // others

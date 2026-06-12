@@ -4105,7 +4105,7 @@ fn interface_self_embedding_rejected() {
     infer(
         r#"
     interface Z {
-      impl Z
+      embed Z
       fn z_method(self) -> string
     }
 
@@ -4120,12 +4120,12 @@ fn interface_mutual_cycle_rejected() {
     infer(
         r#"
     interface P {
-      impl Q
+      embed Q
       fn p_method(self) -> string
     }
 
     interface Q {
-      impl P
+      embed P
       fn q_method(self) -> string
     }
 
@@ -4140,17 +4140,17 @@ fn interface_three_way_cycle_rejected() {
     infer(
         r#"
     interface R {
-      impl S
+      embed S
       fn r_method(self) -> string
     }
 
     interface S {
-      impl T
+      embed T
       fn s_method(self) -> string
     }
 
     interface T {
-      impl R
+      embed R
       fn t_method(self) -> string
     }
 
@@ -4168,12 +4168,12 @@ fn interface_cycle_with_dot_access_does_not_crash() {
         "main.lis",
         r#"
 interface P {
-  impl Q
+  embed Q
   fn foo(self) -> int
 }
 
 interface Q {
-  impl P
+  embed P
   fn bar(self) -> int
 }
 
@@ -4193,12 +4193,12 @@ fn interface_cycle_with_satisfaction_does_not_crash() {
         "main.lis",
         r#"
 interface P {
-  impl Q
+  embed Q
   fn foo(self) -> int
 }
 
 interface Q {
-  impl P
+  embed P
   fn bar(self) -> int
 }
 
@@ -4229,16 +4229,16 @@ interface Base<T> {
 }
 
 interface A {
-  impl Base<int>
+  embed Base<int>
 }
 
 interface B {
-  impl Base<string>
+  embed Base<string>
 }
 
 interface C {
-  impl A
-  impl B
+  embed A
+  embed B
 }
 
 struct S {}
@@ -4274,7 +4274,7 @@ pub interface Worker {
 import "shapes"
 
 interface Worker {
-  impl shapes.Worker
+  embed shapes.Worker
   fn name(self) -> string
 }
 
@@ -4306,8 +4306,8 @@ fn interface_method_conflict_rejected() {
     }
 
     interface Both {
-      impl HasName
-      impl HasNameInt
+      embed HasName
+      embed HasNameInt
     }
 
     fn main() {}
@@ -4329,8 +4329,8 @@ fn interface_embedding_no_conflict() {
     }
 
     interface Person {
-      impl HasName
-      impl HasAge
+      embed HasName
+      embed HasAge
     }
 
     fn main() {}

@@ -2201,7 +2201,7 @@ fn interface_inheritance_simple() {
     }
 
     interface Logger {
-      impl Display;
+      embed Display;
       fn log() -> ();
     }
 
@@ -2242,7 +2242,7 @@ fn interface_inheritance_methods_available() {
     }
 
     interface Logger {
-      impl Display;
+      embed Display;
       fn log() -> ();
     }
 
@@ -2283,7 +2283,7 @@ fn interface_inheritance_with_type_parameters() {
     }
 
     interface Logger<T> {
-      impl Display<T>;
+      embed Display<T>;
       fn log() -> ();
     }
 
@@ -2324,7 +2324,7 @@ fn interface_inheritance_missing_parent_method_produces_error() {
     }
 
     interface Logger {
-      impl Display;
+      embed Display;
       fn log() -> ();
     }
 

@@ -801,11 +801,23 @@ impl<'source> Parser<'source> {
         self.errors.push(error);
     }
 
-    fn error_duplicate_impl_parent(&mut self, first_span: Span, second_span: Span) {
-        let error = ParseError::new("Duplicate impl", first_span, "first use")
+    fn error_duplicate_embed_parent(&mut self, first_span: Span, second_span: Span) {
+        let error = ParseError::new("Duplicate embed", first_span, "first use")
             .with_span_label(second_span, "used again")
-            .with_parse_code("duplicate_impl_parent")
+            .with_parse_code("duplicate_embed_parent")
             .with_help("Remove the duplicate parent");
+
+        self.errors.push(error);
+    }
+
+    fn error_impl_interface_embed(&mut self, keyword_span: Span) {
+        let error = ParseError::new(
+            "Interface embedding uses `embed`",
+            keyword_span,
+            "write `embed` here",
+        )
+        .with_parse_code("impl_interface_embed")
+        .with_help("Interfaces embed other interfaces with `embed`. Replace `impl` with `embed`");
 
         self.errors.push(error);
     }

@@ -359,8 +359,8 @@ pub interface Writer {
 }
 
 pub interface ReadWriter {
-  impl Reader
-  impl Writer
+  embed Reader
+  embed Writer
 }
 "#;
     assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/rw", typedef)]);
@@ -618,7 +618,7 @@ pub interface Sized {
 }
 pub type SizedAlias = Sized
 pub interface Shape {
-  impl SizedAlias
+  embed SizedAlias
   fn Name() -> string
 }
 "#;

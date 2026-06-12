@@ -7,6 +7,6 @@ source: tests/ui/errors/mod.rs
  7 │   #[iterate]
    ·   ─────┬────
    ·        ╰── not supported on target
- 8 │   impl Parent
+ 8 │   embed Parent
    ╰────
   help: Remove the attribute, or move it onto an enum, struct, or function · code: [parse.misplaced_attribute]

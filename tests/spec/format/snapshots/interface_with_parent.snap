@@ -2,7 +2,7 @@
 source: tests/spec/format/mod.rs
 description: |-
   interface Reader {
-    impl Closable;
+    embed Closable;
     fn read() -> string;
   }
 ---

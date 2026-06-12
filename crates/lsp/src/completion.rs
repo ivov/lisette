@@ -493,7 +493,7 @@ fn enclosing_context(before: &[Token]) -> EnclosingContext {
 
 enum FollowingItem {
     Target(AttributeTarget),
-    /// A declaration that rejects attributes (`interface`, `impl`, `const`, ...).
+    /// A declaration that rejects attributes (`interface`, `impl`, `embed`, `const`, ...).
     Invalid,
     Unknown,
 }
@@ -511,7 +511,8 @@ fn following_item(after: &[Token]) -> Following {
     let mut i = 0;
 
     // Skip the rest of the current attribute: optional name, `( ... )`, and `]`.
-    if kind(i) == Some(Tk::Identifier) {
+    // `embed` is never an attribute name; it starts a following embedding item.
+    if kind(i) == Some(Tk::Identifier) && after.get(i).is_none_or(|t| t.text != "embed") {
         i += 1;
     }
     if kind(i) == Some(Tk::LeftParen) {
@@ -543,6 +544,11 @@ fn following_item(after: &[Token]) -> Following {
             Some(Tk::Enum) => FollowingItem::Target(AttributeTarget::Enum),
             Some(Tk::Function) => FollowingItem::Target(AttributeTarget::Function),
             Some(Tk::Interface | Tk::Impl | Tk::Const | Tk::Var | Tk::Import | Tk::Type) => {
+                FollowingItem::Invalid
+            }
+            // `embed` is a contextual keyword lexed as an identifier; an interface
+            // embedding or embedded field takes no attribute.
+            Some(Tk::Identifier) if after.get(i).is_some_and(|t| t.text == "embed") => {
                 FollowingItem::Invalid
             }
             _ => FollowingItem::Unknown,
@@ -638,8 +644,8 @@ mod attribute_completion_tests {
     }
 
     #[test]
-    fn interface_parent_impl_offers_nothing() {
-        let labels = labels_at("interface Child {\n  #[|\n  impl Parent\n}").unwrap();
+    fn interface_parent_embed_offers_nothing() {
+        let labels = labels_at("interface Child {\n  #[|\n  embed Parent\n}").unwrap();
         assert!(labels.is_empty());
     }
 

@@ -7,7 +7,7 @@ description: |
   }
   
   interface B<K> {
-    impl A<K>
+    embed A<K>
   }
   
   fn main() { let _ = 0 }

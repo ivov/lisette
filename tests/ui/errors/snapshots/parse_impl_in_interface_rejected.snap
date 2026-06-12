@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Interface embedding uses `embed`
+   ╭─[test.lis:6:3]
+ 5 │ interface ReadWriter {
+ 6 │   impl Reader
+   ·   ──┬─
+   ·     ╰── write `embed` here
+ 7 │   fn write(s: string);
+   ╰────
+  help: Interfaces embed other interfaces with `embed`. Replace `impl` with `embed` · code: [parse.impl_interface_embed]

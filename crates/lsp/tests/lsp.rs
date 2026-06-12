@@ -11533,7 +11533,7 @@ async fn completion_includes_inherited_interface_methods() {
     let source = "\
 interface Reader { fn read(self) -> string }
 interface ReadWriter {
-impl Reader
+embed Reader
 fn write(self) -> string
 }
 fn use_rw(rw: ReadWriter) { rw. }";

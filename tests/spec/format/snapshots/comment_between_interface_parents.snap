@@ -2,9 +2,9 @@
 source: tests/spec/format/mod.rs
 description: |-
   interface I {
-    impl A
+    embed A
     // between parents
-    impl B
+    embed B
     fn first()
   }
 ---

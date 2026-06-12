@@ -2980,8 +2980,8 @@ pub interface Filter {
 }
 
 pub interface Processor<T> {
-  impl Mapper<T>
-  impl Filter
+  embed Mapper<T>
+  embed Filter
 }
 
 pub struct Score {
@@ -5570,7 +5570,7 @@ pub interface BaseCache {
 }
 
 pub interface ExtendedCache {
-  impl BaseCache
+  embed BaseCache
   fn Touch()
 }
 

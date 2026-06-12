@@ -304,7 +304,7 @@ module.exports = grammar({
     ),
 
     interface_embedding: $ => seq(
-      choice('impl', 'embed'),
+      'embed',
       field('interface', $._type),
       $._semicolon,
     ),

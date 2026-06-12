@@ -133,7 +133,6 @@ impl InferCtx<'_, '_> {
                     annotation: parent.annotation,
                     span: parent.span,
                     ty: parent_ty,
-                    impl_keyword_span: parent.impl_keyword_span,
                 }
             })
             .collect();

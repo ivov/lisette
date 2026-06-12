@@ -579,7 +579,7 @@ interface Parent {
 
 interface Child {
   #[iterate]
-  impl Parent
+  embed Parent
 }
 "#;
     assert_parse_error_snapshot!(input);
@@ -2873,7 +2873,7 @@ interface Display {
 }
 
 interface Logger {
-  impl Display;
+  embed Display;
   fn log() -> ();
 }
 
@@ -4041,12 +4041,26 @@ fn test(ch: Receiver<int>) {
 }
 
 #[test]
-fn parse_duplicate_impl_parent() {
+fn parse_duplicate_embed_parent() {
     let input = r#"
 interface A {}
 interface I {
-  impl A;
-  impl A;
+  embed A;
+  embed A;
+}
+"#;
+    assert_parse_error_snapshot!(input);
+}
+
+#[test]
+fn parse_impl_in_interface_rejected() {
+    let input = r#"
+interface Reader {
+  fn read() -> string;
+}
+interface ReadWriter {
+  impl Reader
+  fn write(s: string);
 }
 "#;
     assert_parse_error_snapshot!(input);

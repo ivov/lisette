@@ -553,7 +553,7 @@ fn interface_method_with_attribute() {
 fn interface_with_parent() {
     assert_format_snapshot!(
         r#"interface Reader {
-  impl Closable;
+  embed Closable;
   fn read() -> string;
 }"#
     );
@@ -1630,13 +1630,13 @@ fn comment_blank_line_preserved_between_top_level_comments() {
 
 #[test]
 fn comment_before_interface_parent() {
-    assert_format_snapshot!("interface I {\n  // before parent\n  impl A\n  fn first()\n}");
+    assert_format_snapshot!("interface I {\n  // before parent\n  embed A\n  fn first()\n}");
 }
 
 #[test]
 fn comment_between_interface_parents() {
     assert_format_snapshot!(
-        "interface I {\n  impl A\n  // between parents\n  impl B\n  fn first()\n}"
+        "interface I {\n  embed A\n  // between parents\n  embed B\n  fn first()\n}"
     );
 }
 
@@ -1662,7 +1662,7 @@ fn comment_same_line_trailing_on_enum_variant() {
 #[test]
 fn comment_same_line_trailing_on_interface_parent() {
     assert_format_snapshot!(
-        "interface I {\n  impl A // trailing parent\n  impl B\n  fn first()\n}"
+        "interface I {\n  embed A // trailing parent\n  embed B\n  fn first()\n}"
     );
 }
 

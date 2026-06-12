@@ -5060,25 +5060,6 @@ fn main() {
 }
 
 #[test]
-fn interface_impl_embed_suggests_embed() {
-    assert_lint_snapshot!(
-        r#"
-interface HasName {
-  fn name(self) -> string
-}
-
-pub interface Person {
-  impl HasName
-}
-
-fn main() {
-  ()
-}
-"#
-    );
-}
-
-#[test]
 fn interface_self_param_no_unused_warning() {
     assert_no_lint_warnings!(
         r#"

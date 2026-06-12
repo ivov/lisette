@@ -2774,7 +2774,7 @@ interface A<K> {
 }
 
 interface B<K> {
-  impl A<K>
+  embed A<K>
 }
 
 fn main() { let _ = 0 }
@@ -2790,11 +2790,11 @@ interface A<K> {
 }
 
 interface B<K> {
-  impl A<K>
+  embed A<K>
 }
 
 interface C<K> {
-  impl B<K>
+  embed B<K>
 }
 
 fn main() { let _ = 0 }
