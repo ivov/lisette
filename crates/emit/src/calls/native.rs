@@ -396,6 +396,25 @@ impl Planner<'_> {
         )
     }
 
+    /// Pin the receiver stage to a temp when it reads a mutable operand,
+    /// carries no setup of its own, and a later argument (or the spread)
+    /// contains a call — so the receiver is captured before those args can
+    /// mutate it. A receiver that is itself a call already evaluates eagerly.
+    fn pin_receiver_if_mutated(
+        &mut self,
+        stage: &mut StagedExpression,
+        receiver: &Expression,
+        rest_has_call: bool,
+    ) {
+        if !matches!(receiver.unwrap_parens(), Expression::Call { .. })
+            && reads_mutable_operand(receiver)
+            && stage.setup.is_empty()
+            && rest_has_call
+        {
+            self.pin_staged(stage, "recv");
+        }
+    }
+
     fn stage_native_dot_access_call(
         &mut self,
         ctx: &NativeCallContext,
@@ -408,14 +427,9 @@ impl Planner<'_> {
         let mut all_stages: Vec<StagedExpression> =
             Vec::with_capacity(1 + ctx.args.len() + ctx.spread.is_some() as usize);
         let mut receiver_stage = self.stage_operand(expression, ExpressionContext::value(), fx);
-        let receiver_is_call = matches!(expression.unwrap_parens(), Expression::Call { .. });
-        if !receiver_is_call
-            && reads_mutable_operand(expression)
-            && receiver_stage.setup.is_empty()
-            && (ctx.args.iter().any(contains_call) || ctx.spread.is_some_and(contains_call))
-        {
-            self.pin_staged(&mut receiver_stage, "recv");
-        }
+        let rest_has_call =
+            ctx.args.iter().any(contains_call) || ctx.spread.is_some_and(contains_call);
+        self.pin_receiver_if_mutated(&mut receiver_stage, expression, rest_has_call);
         if expression.get_type().is_ref() {
             receiver_stage.value = format!("*{}", receiver_stage.value);
         }
@@ -490,13 +504,10 @@ impl Planner<'_> {
         fx: &mut EmitEffects,
     ) -> (Vec<LoweredStatement>, Vec<String>) {
         let mut stages = self.stage_native_method_args(ctx.function, ctx.args, fx);
-        if let Some(receiver) = ctx.args.first()
-            && !matches!(receiver.unwrap_parens(), Expression::Call { .. })
-            && reads_mutable_operand(receiver)
-            && stages[0].setup.is_empty()
-            && (ctx.args[1..].iter().any(contains_call) || ctx.spread.is_some_and(contains_call))
-        {
-            self.pin_staged(&mut stages[0], "recv");
+        if let Some(receiver) = ctx.args.first() {
+            let rest_has_call =
+                ctx.args[1..].iter().any(contains_call) || ctx.spread.is_some_and(contains_call);
+            self.pin_receiver_if_mutated(&mut stages[0], receiver, rest_has_call);
         }
         let combine = plan_variadic_spread(ctx.function, ctx.spread).map(|p| p.combine(0));
         self.sequence_with_spread_structured(stages, ctx.spread, false, "_arg", combine, fx)
