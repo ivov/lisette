@@ -1,5 +1,6 @@
 use crate::EmitEffects;
 use crate::Planner;
+use crate::Renderer;
 use crate::context::expression::ExpressionContext;
 use crate::is_order_sensitive;
 use crate::patterns::binding_decls::pattern_has_bindings;
@@ -90,7 +91,8 @@ impl Planner<'_> {
         self.enter_scope();
         let mut prologue = String::new();
         let range_var = if self.is_unmutated_identifier(iterable) {
-            self.emit_operand(&mut prologue, iterable, ExpressionContext::value(), fx)
+            let plan = self.plan_operand(iterable, ExpressionContext::value(), fx);
+            Renderer.render_value(&mut prologue, &plan)
         } else {
             self.emit_force_capture(&mut prologue, iterable, "_range", fx)
         };
@@ -127,8 +129,8 @@ impl Planner<'_> {
     ) -> (String, String, LoweredBlock) {
         self.enter_scope();
         let mut prologue = String::new();
-        let receiver_str =
-            self.emit_operand(&mut prologue, receiver, ExpressionContext::value(), fx);
+        let receiver_plan = self.plan_operand(receiver, ExpressionContext::value(), fx);
+        let receiver_str = Renderer.render_value(&mut prologue, &receiver_plan);
         let loop_var = self.bind_loop_pattern(&binding.pattern, None);
         let header = if loop_var == "_" {
             format!("for range {} {{\n", receiver_str)
@@ -151,7 +153,8 @@ impl Planner<'_> {
         self.enter_scope();
         let mut prologue = String::new();
         let receiver_var = if self.is_unmutated_identifier(receiver) {
-            self.emit_operand(&mut prologue, receiver, ExpressionContext::value(), fx)
+            let plan = self.plan_operand(receiver, ExpressionContext::value(), fx);
+            Renderer.render_value(&mut prologue, &plan)
         } else {
             self.emit_force_capture(&mut prologue, receiver, "_s", fx)
         };
@@ -180,7 +183,8 @@ impl Planner<'_> {
         fx: &mut EmitEffects,
     ) -> (String, String, bool) {
         let mut prologue = String::new();
-        let iter_raw = self.emit_operand(&mut prologue, iterable, ExpressionContext::value(), fx);
+        let iter_plan = self.plan_operand(iterable, ExpressionContext::value(), fx);
+        let iter_raw = Renderer.render_value(&mut prologue, &iter_plan);
         let iterable_ty = iterable.get_type();
         let iter_expression = if iterable_ty.is_ref() {
             format!("*{}", iter_raw)
@@ -310,25 +314,35 @@ impl Planner<'_> {
 
         self.scope.enter_use_region();
         let mut bindings = String::new();
-        self.emit_irrefutable_pattern_site(
-            &mut bindings,
+        let key_statements = self.lower_irrefutable_pattern_site(
             PatternSubject::for_value(key_var.clone()),
             first,
             None,
             first_ty,
             fx,
         );
+        Renderer.render_lowered_block(
+            &mut bindings,
+            &LoweredBlock {
+                statements: key_statements,
+            },
+        );
         if !bindings.is_empty() {
             self.scope.record_go_use(&key_var);
         }
         let after_key = bindings.len();
-        self.emit_irrefutable_pattern_site(
-            &mut bindings,
+        let value_statements = self.lower_irrefutable_pattern_site(
             PatternSubject::for_value(value_var.clone()),
             second,
             None,
             second_ty,
             fx,
+        );
+        Renderer.render_lowered_block(
+            &mut bindings,
+            &LoweredBlock {
+                statements: value_statements,
+            },
         );
         if bindings.len() > after_key {
             self.scope.record_go_use(&value_var);
@@ -380,13 +394,18 @@ impl Planner<'_> {
             };
             self.scope.enter_use_region();
             let mut bindings = String::new();
-            self.emit_irrefutable_pattern_site(
-                &mut bindings,
+            let binding_statements = self.lower_irrefutable_pattern_site(
                 PatternSubject::for_value(item_var.clone()),
                 &binding.pattern,
                 binding.typed_pattern.as_ref(),
                 &binding.ty,
                 fx,
+            );
+            Renderer.render_lowered_block(
+                &mut bindings,
+                &LoweredBlock {
+                    statements: binding_statements,
+                },
             );
             if !bindings.is_empty() {
                 self.scope.record_go_use(&item_var);
@@ -431,7 +450,10 @@ impl Planner<'_> {
 
         let mut prologue = String::new();
         let mut start_expression = match start {
-            Some(s) => self.emit_operand(&mut prologue, s, ExpressionContext::value(), fx),
+            Some(s) => {
+                let plan = self.plan_operand(s, ExpressionContext::value(), fx);
+                Renderer.render_value(&mut prologue, &plan)
+            }
             None => "0".to_string(),
         };
         let checkpoint = prologue.len();

@@ -3,6 +3,7 @@ use syntax::types::Type;
 
 use crate::EmitEffects;
 use crate::Planner;
+use crate::Renderer;
 use crate::analyze::inline_uses::{InlineDecision, analyze_inline_candidate, region_blocks_inline};
 use crate::context::expression::ExpressionContext;
 use crate::control_flow::branching::wrap_if_struct_literal;
@@ -921,12 +922,12 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
     fn lower_guard_condition(&mut self, arm_index: usize) -> Option<(String, String)> {
         let guard_expression = self.arms[arm_index].guard.as_deref()?;
         let mut condition_setup = String::new();
-        let guard_str = self.planner.emit_operand(
-            &mut condition_setup,
+        let plan = self.planner.plan_operand(
             guard_expression,
             ExpressionContext::value().condition(),
             self.fx,
         );
+        let guard_str = Renderer.render_value(&mut condition_setup, &plan);
         Some((condition_setup, wrap_if_struct_literal(guard_str)))
     }
 }

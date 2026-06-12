@@ -298,10 +298,7 @@ impl Planner<'_> {
         expression: &Expression,
         fx: &mut EmitEffects,
     ) -> Vec<LoweredStatement> {
-        let mut buffer = String::new();
-        let expression_string =
-            self.emit_operand(&mut buffer, expression, ExpressionContext::value(), fx);
-        let value = value_plan_from_statements(setup_from_string(buffer), expression_string);
+        let value = self.plan_operand(expression, ExpressionContext::value(), fx);
         vec![simple_assign(target_var, value)]
     }
 
@@ -354,19 +351,17 @@ impl Planner<'_> {
                 {
                     let (arg_setup, call_str) = {
                         let mut fe = FalliblePlanner::new(self, &fallible, fx);
-                        let mut arg_buffer = String::new();
-                        let arg = fe.planner.emit_composite_value(
-                            &mut arg_buffer,
+                        let (arg_setup, arg) = fe.planner.lower_composite_value(
                             &args[0],
                             ExpressionContext::value(),
                             fe.fx,
                         );
                         (
-                            arg_buffer,
+                            arg_setup,
                             fe.format_constructor_call(constructor_name, Some(&arg)),
                         )
                     };
-                    let value = value_plan_from_statements(setup_from_string(arg_setup), call_str);
+                    let value = value_plan_from_statements(arg_setup, call_str);
                     vec![simple_assign(target_var, value)]
                 } else {
                     let call_str = {

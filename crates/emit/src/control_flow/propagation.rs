@@ -492,12 +492,9 @@ impl Planner<'_> {
         if let Some(plan) = self.plan_call(expression)
             && let CalleePlan::GoInterop(strategy) = plan.callee
         {
-            let mut setup = String::new();
-            let result_var =
-                self.emit_go_wrapped_call(&mut setup, expression, &strategy, return_ty, fx);
-            if !setup.is_empty() {
-                statements.push(LoweredStatement::RawGo(setup));
-            }
+            let (setup, result_var) =
+                self.lower_go_wrapped_call(expression, &strategy, return_ty, fx);
+            statements.extend(setup);
             if let Some(shape) = lowered {
                 statements.extend(transition::emit_lowered_result_return(
                     self,

@@ -446,18 +446,13 @@ impl Planner<'_> {
             None
         } else {
             let receiver_var = self.fresh_var(Some("recv"));
-            let mut destructure = String::new();
-            self.emit_irrefutable_pattern_site(
-                &mut destructure,
+            body_statements.extend(self.lower_irrefutable_pattern_site(
                 PatternSubject::for_value(receiver_var.clone()),
                 effective_pattern,
                 inner_typed,
                 &ctx.element_ty,
                 fx,
-            );
-            if !destructure.is_empty() {
-                body_statements.push(LoweredStatement::RawGo(destructure));
-            }
+            ));
             Some(receiver_var)
         };
         let block = self.lower_block_to_place(ctx.body, ctx.place, fx);

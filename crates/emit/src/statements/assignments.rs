@@ -1,5 +1,6 @@
 use crate::EmitEffects;
 use crate::Planner;
+use crate::Renderer;
 use crate::abi::coercion::{Coercion, CoercionDirection};
 use crate::context::expression::ExpressionContext;
 use crate::is_order_sensitive;
@@ -266,9 +267,11 @@ impl Planner<'_> {
                 expression, member, ..
             } => {
                 let base_str = if let Some(inner) = expression.deref_inner() {
-                    self.emit_operand(output, inner, ExpressionContext::value(), fx)
+                    let plan = self.plan_operand(inner, ExpressionContext::value(), fx);
+                    Renderer.render_value(output, &plan)
                 } else {
-                    self.emit_operand(output, expression, ExpressionContext::value(), fx)
+                    let plan = self.plan_operand(expression, ExpressionContext::value(), fx);
+                    Renderer.render_value(output, &plan)
                 };
                 let expression_ty = expression.get_type();
                 self.format_dot_access_lvalue(&base_str, &expression_ty, member, fx)
@@ -277,13 +280,15 @@ impl Planner<'_> {
                 expression, index, ..
             } => {
                 let expression_string = if let Some(inner) = expression.deref_inner() {
-                    let inner_str =
-                        self.emit_operand(output, inner, ExpressionContext::value(), fx);
+                    let plan = self.plan_operand(inner, ExpressionContext::value(), fx);
+                    let inner_str = Renderer.render_value(output, &plan);
                     format!("(*{})", inner_str)
                 } else {
-                    self.emit_operand(output, expression, ExpressionContext::value(), fx)
+                    let plan = self.plan_operand(expression, ExpressionContext::value(), fx);
+                    Renderer.render_value(output, &plan)
                 };
-                let index_str = self.emit_operand(output, index, ExpressionContext::value(), fx);
+                let index_plan = self.plan_operand(index, ExpressionContext::value(), fx);
+                let index_str = Renderer.render_value(output, &index_plan);
                 format!("{}[{}]", expression_string, index_str)
             }
             Expression::Unary {
@@ -292,8 +297,8 @@ impl Planner<'_> {
                 ..
             } => self.emit_deref_lvalue(output, expression, false, fx),
             Expression::Call { .. } if expression.get_type().is_ref() => {
-                let call_str =
-                    self.emit_operand(output, expression, ExpressionContext::value(), fx);
+                let plan = self.plan_operand(expression, ExpressionContext::value(), fx);
+                let call_str = Renderer.render_value(output, &plan);
                 self.hoist_tmp_value(output, "ref", &call_str)
             }
             _ => "_".to_string(),
@@ -310,7 +315,8 @@ impl Planner<'_> {
         rhs_has_setup: bool,
         fx: &mut EmitEffects,
     ) -> String {
-        let pointee_string = self.emit_operand(output, pointee, ExpressionContext::value(), fx);
+        let pointee_plan = self.plan_operand(pointee, ExpressionContext::value(), fx);
+        let pointee_string = Renderer.render_value(output, &pointee_plan);
         let needs_capture = matches!(pointee.unwrap_parens(), Expression::Call { .. })
             || (rhs_has_setup && observable_after_mutation(pointee));
         if needs_capture {
@@ -377,7 +383,8 @@ impl Planner<'_> {
                     if rhs_has_setup {
                         self.emit_force_capture(output, inner, "ref", fx)
                     } else {
-                        self.emit_operand(output, inner, ExpressionContext::value(), fx)
+                        let plan = self.plan_operand(inner, ExpressionContext::value(), fx);
+                        Renderer.render_value(output, &plan)
                     }
                 } else if is_order_sensitive(base) {
                     self.emit_left_value_capturing(output, base, rhs_has_setup, fx)
@@ -426,7 +433,8 @@ impl Planner<'_> {
         if force_capture {
             self.emit_force_capture(output, expression, "base", fx)
         } else {
-            self.emit_operand(output, expression, ExpressionContext::value(), fx)
+            let plan = self.plan_operand(expression, ExpressionContext::value(), fx);
+            Renderer.render_value(output, &plan)
         }
     }
 
@@ -448,7 +456,8 @@ impl Planner<'_> {
         if needs_capture {
             self.emit_force_capture(output, index, "idx", fx)
         } else {
-            self.emit_operand(output, index, ExpressionContext::value(), fx)
+            let plan = self.plan_operand(index, ExpressionContext::value(), fx);
+            Renderer.render_value(output, &plan)
         }
     }
 }

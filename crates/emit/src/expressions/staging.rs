@@ -62,13 +62,15 @@ impl Planner<'_> {
         fx: &mut EmitEffects,
     ) -> String {
         if !observable_after_mutation(expression) {
-            return self.emit_operand(output, expression, ExpressionContext::value(), fx);
+            let plan = self.plan_operand(expression, ExpressionContext::value(), fx);
+            return Renderer.render_value(output, &plan);
         }
 
         let temp_var = self.fresh_var(Some(prefix));
         self.declare(&temp_var);
-        let expression_string =
-            self.emit_composite_value(output, expression, ExpressionContext::value(), fx);
+        let (setup, expression_string) =
+            self.lower_composite_value(expression, ExpressionContext::value(), fx);
+        output.push_str(&Renderer.render_setup(&setup));
         write_line!(output, "{} := {}", temp_var, expression_string);
         temp_var
     }

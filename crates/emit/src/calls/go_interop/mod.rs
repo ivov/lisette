@@ -7,7 +7,6 @@ use crate::EmitEffects;
 use crate::Planner;
 use crate::Renderer;
 use crate::calls::CallBoundary;
-use crate::calls::go_interop::wrappers::WrapperOutcome;
 use crate::context::expression::ExpressionContext;
 use crate::names::go_name;
 use crate::plan::bodies::LoweredStatement;
@@ -41,19 +40,6 @@ impl GoCallStrategy {
 }
 
 impl Planner<'_> {
-    pub(crate) fn emit_go_wrapped_call(
-        &mut self,
-        output: &mut String,
-        expression: &Expression,
-        strategy: &GoCallStrategy,
-        result_ty: &Type,
-        fx: &mut EmitEffects,
-    ) -> String {
-        let (statements, value) = self.lower_go_wrapped_call(expression, strategy, result_ty, fx);
-        output.push_str(&Renderer.render_setup(&statements));
-        value
-    }
-
     /// Lower a Go-imported callee through its ABI bridge.
     pub(crate) fn lower_go_wrapped_call(
         &mut self,
@@ -84,68 +70,66 @@ impl Planner<'_> {
         }
     }
 
-    /// `emit_go_wrapped_call` writing into `target`. `None` for `Tuple`.
-    pub(crate) fn emit_go_wrapped_call_to(
+    /// `lower_go_wrapped_call` writing into `target`. `None` for `Tuple`.
+    pub(crate) fn lower_go_wrapped_call_to(
         &mut self,
-        output: &mut String,
         expression: &Expression,
         strategy: &GoCallStrategy,
         result_ty: &Type,
         target: WrapperTarget<'_>,
         fx: &mut EmitEffects,
-    ) -> Option<WrapperOutcome> {
-        match strategy {
-            GoCallStrategy::Tuple { .. } => None,
+    ) -> Option<Vec<LoweredStatement>> {
+        if matches!(strategy, GoCallStrategy::Tuple { .. }) {
+            return None;
+        }
+        let (mut statements, call_str) =
+            self.lower_call(expression, None, ExpressionContext::value(), fx);
+        let wrap = match strategy {
+            GoCallStrategy::Tuple { .. } => unreachable!("handled above"),
             GoCallStrategy::Result => {
-                let call_str =
-                    self.emit_call(output, expression, None, ExpressionContext::value(), fx);
                 fx.require_stdlib();
-                Some(self.emit_result_wrapping(
-                    output,
+                self.lower_result_wrapping(
                     &call_str,
                     result_ty,
                     TupleReturnLayout::Flattened,
                     target,
                     fx,
-                ))
+                )
+                .0
             }
             GoCallStrategy::CommaOk => {
-                let call_str =
-                    self.emit_call(output, expression, None, ExpressionContext::value(), fx);
-                Some(self.emit_comma_ok_wrapping(
-                    output,
+                self.lower_comma_ok_wrapping(
                     &call_str,
                     result_ty,
                     TupleReturnLayout::Flattened,
                     target,
                     fx,
-                ))
+                )
+                .0
             }
             GoCallStrategy::NullableReturn => {
-                let call_str =
-                    self.emit_call(output, expression, None, ExpressionContext::value(), fx);
-                let raw_var = self.hoist_tmp_value(output, "raw", &call_str);
-                Some(self.emit_nil_check_option_wrap(output, &raw_var, result_ty, target, fx))
+                let raw_var = self.hoist_tmp_value_statement(&mut statements, "raw", &call_str);
+                self.lower_nil_check_option_wrap(&raw_var, result_ty, target, fx)
+                    .0
             }
             GoCallStrategy::Partial => {
                 fx.require_stdlib();
-                let call_str =
-                    self.emit_call(output, expression, None, ExpressionContext::value(), fx);
-                Some(self.emit_partial_wrapping(
-                    output,
+                self.lower_partial_wrapping(
                     &call_str,
                     result_ty,
                     TupleReturnLayout::Flattened,
                     target,
                     fx,
-                ))
+                )
+                .0
             }
             GoCallStrategy::Sentinel { value } => {
-                let call_str =
-                    self.emit_call(output, expression, None, ExpressionContext::value(), fx);
-                Some(self.emit_sentinel_wrapping(output, &call_str, result_ty, *value, target, fx))
+                self.lower_sentinel_wrapping(&call_str, result_ty, *value, target, fx)
+                    .0
             }
-        }
+        };
+        statements.extend(wrap);
+        Some(statements)
     }
 
     fn has_go_hint(&self, receiver_expression: &Expression, member: &str, hint: &str) -> bool {
@@ -202,7 +186,8 @@ impl Planner<'_> {
         if has_array_return {
             ctx = ctx.with_raw_go_array_return();
         }
-        let call_str = self.emit_call(output, call_expression, None, ctx, fx);
+        let (setup, call_str) = self.lower_call(call_expression, None, ctx, fx);
+        output.push_str(&Renderer.render_setup(&setup));
 
         Some(call_str)
     }
@@ -226,6 +211,18 @@ impl Planner<'_> {
     ) -> String {
         let constructor = build_tuple_literal(vars, tuple_ty, fx);
         self.hoist_tmp_value(output, "tup", &constructor)
+    }
+
+    /// Structured counterpart of `emit_tuple_from_vars`.
+    pub(crate) fn plan_tuple_from_vars(
+        &mut self,
+        statements: &mut Vec<LoweredStatement>,
+        vars: &[String],
+        tuple_ty: &Type,
+        fx: &mut EmitEffects,
+    ) -> String {
+        let constructor = build_tuple_literal(vars, tuple_ty, fx);
+        self.hoist_tmp_value_statement(statements, "tup", &constructor)
     }
 }
 

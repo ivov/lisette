@@ -5,7 +5,6 @@ use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use super::NativeCallContext;
 use crate::Planner;
-use crate::Renderer;
 use crate::abi::coercion::{Coercion, CoercionDirection};
 use crate::context::expression::ExpressionContext;
 use crate::expressions::emission::StagedExpression;
@@ -224,20 +223,7 @@ impl Planner<'_> {
         }
     }
 
-    pub(crate) fn emit_call(
-        &mut self,
-        output: &mut String,
-        call_expression: &Expression,
-        call_ty: Option<&Type>,
-        ctx: ExpressionContext<'_>,
-        fx: &mut EmitEffects,
-    ) -> String {
-        let (setup, value) = self.lower_call(call_expression, call_ty, ctx, fx);
-        output.push_str(&Renderer.render_setup(&setup));
-        value
-    }
-
-    /// Structured form of `emit_call`: typed setup plus the value text.
+    /// Lower a call expression to typed setup plus the value text.
     pub(crate) fn lower_call(
         &mut self,
         call_expression: &Expression,

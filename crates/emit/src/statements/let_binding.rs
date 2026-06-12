@@ -9,7 +9,6 @@ use crate::patterns::sites::{AnnotatedPattern, PatternSubject};
 use crate::plan::bodies::{LetForm, LetPlan, LoweredBlock, LoweredStatement};
 use crate::plan::calls::CalleePlan;
 use crate::plan::placement::{expression_contains_binding, is_unit_call, requires_temp_var};
-use crate::plan::values::setup_from_string;
 use crate::types::native::NativeGoType;
 use crate::write_line;
 use syntax::ast::{Binding, Expression, Literal, Pattern, UnaryOperator};
@@ -362,12 +361,11 @@ impl Planner<'_> {
             return None;
         }
         let target = WrapperTarget::Slot(&go_identifier);
-        let mut buffer = String::new();
-        self.emit_go_wrapped_call_to(&mut buffer, value, &strategy, binding_ty, target, fx)?;
-        // `open_wrapper_slot` / `emit_simple_wrapper_value` already declared
+        let statements = self.lower_go_wrapped_call_to(value, &strategy, binding_ty, target, fx)?;
+        // `push_wrapper_slot` / `push_simple_wrapper_value` already declared
         // `go_identifier`; only the binding from the user-name still needs setup.
         self.scope.bind(identifier, go_identifier.as_ref());
-        Some(setup_from_string(buffer))
+        Some(statements)
     }
 
     fn lower_let_temp(
@@ -651,10 +649,9 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
             })
             .collect();
 
-        let mut setup = String::new();
-        let call_str =
+        let (mut statements, call_str) =
             self.planner
-                .emit_call(&mut setup, self.value, None, ExpressionContext::value(), fx);
+                .lower_call(self.value, None, ExpressionContext::value(), fx);
 
         for (identifier, go_name) in planned.iter().flatten() {
             self.planner.scope.bind(*identifier, go_name);
@@ -662,10 +659,6 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
         }
 
         let op = if any_new { ":=" } else { "=" };
-        let mut statements = Vec::new();
-        if !setup.is_empty() {
-            statements.push(LoweredStatement::RawGo(setup));
-        }
         statements.push(LoweredStatement::RawGo(format!(
             "{} {} {}\n",
             go_vars.join(", "),

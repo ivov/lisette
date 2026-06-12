@@ -8,6 +8,7 @@ use crate::abi::AbiShape;
 use crate::context::expression::ExpressionContext;
 use crate::names::go_name;
 use crate::patterns::sites::PatternSubject;
+use crate::plan::bodies::LoweredBlock;
 use crate::types::native::NativeGoType;
 use crate::utils::{group_params, receiver_name};
 use syntax::ast::{
@@ -190,14 +191,14 @@ impl Planner<'_> {
     ) -> String {
         let mut body_string = String::new();
         for (temp_name, pattern, typed, param_ty) in destructure_bindings {
-            self.emit_irrefutable_pattern_site(
-                &mut body_string,
+            let statements = self.lower_irrefutable_pattern_site(
                 PatternSubject::for_value(temp_name.clone()),
                 pattern,
                 *typed,
                 param_ty,
                 fx,
             );
+            Renderer.render_lowered_block(&mut body_string, &LoweredBlock { statements });
         }
         self.emit_function_body(&mut body_string, body, should_return, return_ctx, fx);
         body_string
@@ -374,14 +375,14 @@ impl Planner<'_> {
     ) {
         let should_return = !function_definition.return_type.is_unit();
         for (var_name, pattern, typed, param_ty) in deferred_patterns {
-            self.emit_irrefutable_pattern_site(
-                body,
+            let statements = self.lower_irrefutable_pattern_site(
                 PatternSubject::for_value(var_name),
                 &pattern,
                 typed.as_ref(),
                 &param_ty,
                 fx,
             );
+            Renderer.render_lowered_block(body, &LoweredBlock { statements });
         }
         self.emit_function_body(
             body,

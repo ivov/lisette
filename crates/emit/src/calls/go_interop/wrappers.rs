@@ -191,21 +191,6 @@ impl Planner<'_> {
         (setup, outcome.expect("wrapper produced no slot"))
     }
 
-    pub(crate) fn emit_partial_wrapping(
-        &mut self,
-        output: &mut String,
-        call_str: &str,
-        partial_ty: &Type,
-        layout: TupleReturnLayout,
-        target: WrapperTarget<'_>,
-        fx: &mut EmitEffects,
-    ) -> WrapperOutcome {
-        let (statements, outcome) =
-            self.lower_partial_wrapping(call_str, partial_ty, layout, target, fx);
-        output.push_str(&Renderer.render_setup(&statements));
-        outcome
-    }
-
     /// Lower a `(T, error)` Go return into a tagged `Partial`.
     pub(crate) fn lower_partial_wrapping(
         &mut self,
@@ -309,21 +294,6 @@ impl Planner<'_> {
         );
         setup.extend(wrap_setup);
         (setup, outcome.expect("wrapper produced no slot"))
-    }
-
-    pub(crate) fn emit_result_wrapping(
-        &mut self,
-        output: &mut String,
-        call_str: &str,
-        result_ty: &Type,
-        layout: TupleReturnLayout,
-        target: WrapperTarget<'_>,
-        fx: &mut EmitEffects,
-    ) -> WrapperOutcome {
-        let (statements, outcome) =
-            self.lower_result_wrapping(call_str, result_ty, layout, target, fx);
-        output.push_str(&Renderer.render_setup(&statements));
-        outcome
     }
 
     /// Lower a `(T, error)` Go return into a tagged `Result`.
@@ -543,7 +513,8 @@ impl Planner<'_> {
         expression: &Expression,
         fx: &mut EmitEffects,
     ) -> String {
-        let go_fn_str = self.emit_operand(output, expression, ExpressionContext::value(), fx);
+        let plan = self.plan_operand(expression, ExpressionContext::value(), fx);
+        let go_fn_str = Renderer.render_value(output, &plan);
 
         let is_go_module_fn = matches!(
             expression.unwrap_parens(),
@@ -611,7 +582,8 @@ impl Planner<'_> {
         let Some((return_type, param_strs, call_str)) =
             self.wrapper_call_parts(output, expression, fx)
         else {
-            return self.emit_operand(output, expression, ExpressionContext::value(), fx);
+            let plan = self.plan_operand(expression, ExpressionContext::value(), fx);
+            return Renderer.render_value(output, &plan);
         };
 
         let ret_ty_str = self.go_type_string(&return_type, fx);
@@ -644,58 +616,75 @@ impl Planner<'_> {
 
         let ret_ty_str = self.go_type_string(&return_type, fx);
 
-        let mut body = String::new();
+        let mut statements = Vec::new();
         let outcome = match strategy {
-            GoCallStrategy::Result => self.emit_result_wrapping(
-                &mut body,
-                &call_str,
-                &return_type,
-                TupleReturnLayout::Flattened,
-                WrapperTarget::Return,
-                fx,
-            ),
-            GoCallStrategy::CommaOk => self.emit_comma_ok_wrapping(
-                &mut body,
-                &call_str,
-                &return_type,
-                TupleReturnLayout::Flattened,
-                WrapperTarget::Return,
-                fx,
-            ),
+            GoCallStrategy::Result => {
+                let (wrap, outcome) = self.lower_result_wrapping(
+                    &call_str,
+                    &return_type,
+                    TupleReturnLayout::Flattened,
+                    WrapperTarget::Return,
+                    fx,
+                );
+                statements.extend(wrap);
+                outcome
+            }
+            GoCallStrategy::CommaOk => {
+                let (wrap, outcome) = self.lower_comma_ok_wrapping(
+                    &call_str,
+                    &return_type,
+                    TupleReturnLayout::Flattened,
+                    WrapperTarget::Return,
+                    fx,
+                );
+                statements.extend(wrap);
+                outcome
+            }
             GoCallStrategy::NullableReturn => {
-                let raw_var = self.hoist_tmp_value(&mut body, "raw", &call_str);
-                self.emit_nil_check_option_wrap(
-                    &mut body,
+                let raw_var = self.hoist_tmp_value_statement(&mut statements, "raw", &call_str);
+                let (wrap, outcome) = self.lower_nil_check_option_wrap(
                     &raw_var,
                     &return_type,
                     WrapperTarget::Return,
                     fx,
-                )
+                );
+                statements.extend(wrap);
+                outcome
             }
             GoCallStrategy::Tuple { arity } => {
                 let temp_vars = self.create_temp_vars("ret", *arity);
-                write_line!(body, "{} := {}", temp_vars.join(", "), call_str);
-                let tuple_str = self.emit_tuple_from_vars(&mut body, &temp_vars, &return_type, fx);
-                Some(tuple_str)
+                statements.push(LoweredStatement::RawGo(format!(
+                    "{} := {}\n",
+                    temp_vars.join(", "),
+                    call_str
+                )));
+                Some(self.plan_tuple_from_vars(&mut statements, &temp_vars, &return_type, fx))
             }
-            GoCallStrategy::Partial => self.emit_partial_wrapping(
-                &mut body,
-                &call_str,
-                &return_type,
-                TupleReturnLayout::Flattened,
-                WrapperTarget::Return,
-                fx,
-            ),
-            GoCallStrategy::Sentinel { value } => self.emit_sentinel_wrapping(
-                &mut body,
-                &call_str,
-                &return_type,
-                *value,
-                WrapperTarget::Return,
-                fx,
-            ),
+            GoCallStrategy::Partial => {
+                let (wrap, outcome) = self.lower_partial_wrapping(
+                    &call_str,
+                    &return_type,
+                    TupleReturnLayout::Flattened,
+                    WrapperTarget::Return,
+                    fx,
+                );
+                statements.extend(wrap);
+                outcome
+            }
+            GoCallStrategy::Sentinel { value } => {
+                let (wrap, outcome) = self.lower_sentinel_wrapping(
+                    &call_str,
+                    &return_type,
+                    *value,
+                    WrapperTarget::Return,
+                    fx,
+                );
+                statements.extend(wrap);
+                outcome
+            }
         };
 
+        let mut body = Renderer.render_setup(&statements);
         if let Some(result_var) = outcome {
             write_line!(body, "return {}", result_var);
         }

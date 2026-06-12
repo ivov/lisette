@@ -165,21 +165,6 @@ impl Planner<'_> {
         statements
     }
 
-    pub(crate) fn emit_irrefutable_pattern_site(
-        &mut self,
-        output: &mut String,
-        subject: PatternSubject<'_>,
-        pattern: &Pattern,
-        typed: Option<&TypedPattern>,
-        subject_ty: &Type,
-        fx: &mut EmitEffects,
-    ) {
-        let statements =
-            self.lower_irrefutable_pattern_site(subject, pattern, typed, subject_ty, fx);
-        let block = LoweredBlock { statements };
-        Renderer.render_lowered_block(output, &block);
-    }
-
     pub(crate) fn lower_let_else_pattern_site(
         &mut self,
         ap: AnnotatedPattern,

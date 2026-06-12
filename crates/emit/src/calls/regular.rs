@@ -632,8 +632,8 @@ impl<'a> Planner<'a> {
             return None;
         }
 
-        let mut setup = String::new();
-        let src_value = self.emit_value(&mut setup, spread, ExpressionContext::value(), fx);
+        let (src_setup, src_value) = self.lower_value(spread, ExpressionContext::value(), fx);
+        let mut setup = Renderer.render_setup(&src_setup);
         let src_var = self.hoist_tmp_value(&mut setup, "src", &src_value);
 
         let target_element_ret = match param_shape.as_ref() {

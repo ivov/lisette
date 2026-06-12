@@ -8,7 +8,7 @@ use crate::Planner;
 use crate::Renderer;
 use crate::abi::AbiShape;
 use crate::abi::coercion::{Coercion, CoercionDirection};
-use crate::abi::transition::{emit_callee_abi_wrapping, emit_lisette_callback_wrapper};
+use crate::abi::transition::{emit_lisette_callback_wrapper, lower_callee_abi_wrapping};
 use crate::calls::CallBoundary;
 use crate::context::expression::ExpressionContext;
 use crate::expressions::emission::StagedExpression;
@@ -34,18 +34,6 @@ impl Planner<'_> {
         write_line!(output, "var {} {}", result_var, self.go_type_string(ty, fx));
         self.declare(&result_var);
         result_var
-    }
-
-    pub(crate) fn emit_value(
-        &mut self,
-        output: &mut String,
-        expression: &Expression,
-        ctx: ExpressionContext<'_>,
-        fx: &mut EmitEffects,
-    ) -> String {
-        let (setup, value) = self.lower_value(expression, ctx, fx);
-        output.push_str(&Renderer.render_setup(&setup));
-        value
     }
 
     pub(crate) fn lower_value(
@@ -176,30 +164,6 @@ impl Planner<'_> {
         self.fallible_tuple_return(&f.return_type)
     }
 
-    pub(crate) fn emit_composite_value(
-        &mut self,
-        output: &mut String,
-        expression: &Expression,
-        ctx: ExpressionContext<'_>,
-        fx: &mut EmitEffects,
-    ) -> String {
-        let (setup, value) = self.lower_composite_value(expression, ctx, fx);
-        output.push_str(&Renderer.render_setup(&setup));
-        value
-    }
-
-    /// Emit a value-position expression: plan, then render.
-    pub(crate) fn emit_operand(
-        &mut self,
-        output: &mut String,
-        expression: &Expression,
-        ctx: ExpressionContext<'_>,
-        fx: &mut EmitEffects,
-    ) -> String {
-        let plan = self.plan_operand(expression, ctx, fx);
-        Renderer.render_value(output, &plan)
-    }
-
     /// Plan a value-position leaf expression (one `plan_operand` does not lower
     /// structurally) into a `ValuePlan`.
     pub(crate) fn plan_operand_leaf(
@@ -221,23 +185,23 @@ impl Planner<'_> {
                     self.maybe_lower_tagged_fn_ref(&mut buffer, expression, ty, raw, ctx, fx);
                 value_plan_from_statements(setup_from_string(buffer), value)
             }
-            Expression::Call { ty, .. } => {
-                let mut buffer = String::new();
-                let value = match self.classify_call(expression) {
-                    CallBoundary::GoWrapped(strategy) => {
-                        self.emit_go_wrapped_call(&mut buffer, expression, &strategy, ty, fx)
-                    }
-                    CallBoundary::LoweredCallee(shape) => {
-                        fx.require_stdlib();
-                        let call_str = self.emit_call(&mut buffer, expression, Some(ty), ctx, fx);
-                        emit_callee_abi_wrapping(self, &mut buffer, &shape, &call_str, ty, fx)
-                    }
-                    CallBoundary::Plain => {
-                        self.emit_call(&mut buffer, expression, Some(ty), ctx, fx)
-                    }
-                };
-                value_plan_from_statements(setup_from_string(buffer), value)
-            }
+            Expression::Call { ty, .. } => match self.classify_call(expression) {
+                CallBoundary::GoWrapped(strategy) => {
+                    let (setup, value) = self.lower_go_wrapped_call(expression, &strategy, ty, fx);
+                    value_plan_from_statements(setup, value)
+                }
+                CallBoundary::LoweredCallee(shape) => {
+                    fx.require_stdlib();
+                    let (mut setup, call_str) = self.lower_call(expression, Some(ty), ctx, fx);
+                    let (wrap, value) = lower_callee_abi_wrapping(self, &shape, &call_str, ty, fx);
+                    setup.extend(wrap);
+                    value_plan_from_statements(setup, value)
+                }
+                CallBoundary::Plain => {
+                    let (setup, value) = self.lower_call(expression, Some(ty), ctx, fx);
+                    value_plan_from_statements(setup, value)
+                }
+            },
             Expression::RawGo { text } => ValuePlan::Operand(text.clone()),
             Expression::Unit { .. } => ValuePlan::Operand("struct{}{}".to_string()),
             Expression::NoOp => ValuePlan::Operand(String::new()),

@@ -199,7 +199,7 @@ fn emit_lowered_tuple_return(
             .collect();
         return vec![multi_value_return(fields)];
     }
-    let mut setup = String::new();
+    let mut statements = Vec::new();
     let fields: Vec<String> = (0..arity)
         .map(|i| {
             let raw = format!("{}.{}", result_value, TUPLE_FIELDS[i]);
@@ -208,75 +208,82 @@ fn emit_lowered_tuple_return(
                 .filter(|t| planner.facts.is_nullable_option(t))
                 .map(|t| {
                     let inner = planner.go_type_string(&t.ok_type(), fx);
-                    planner.emit_option_projection(&mut setup, &raw, "unwrap", &inner, false, fx)
+                    planner.plan_option_projection(
+                        &mut statements,
+                        &raw,
+                        "unwrap",
+                        &inner,
+                        false,
+                        fx,
+                    )
                 })
                 .unwrap_or(raw)
         })
         .collect();
-    let mut statements = Vec::new();
-    if !setup.is_empty() {
-        statements.push(LoweredStatement::RawGo(setup));
-    }
     statements.push(multi_value_return(fields));
     statements
 }
 
 /// Wrap a lowered-callee `call_str` (Go-shaped return) into the Lisette
 /// tagged shape declared by `result_ty`.
-pub(crate) fn emit_callee_abi_wrapping(
+pub(crate) fn lower_callee_abi_wrapping(
     planner: &mut Planner,
-    output: &mut String,
     shape: &AbiShape,
     call_str: &str,
     result_ty: &Type,
     fx: &mut EmitEffects,
-) -> String {
+) -> (Vec<LoweredStatement>, String) {
     match shape {
-        AbiShape::PartialTuple => planner
-            .emit_partial_wrapping(
-                output,
+        AbiShape::PartialTuple => {
+            let (statements, outcome) = planner.lower_partial_wrapping(
                 call_str,
                 result_ty,
                 TupleReturnLayout::Packed,
                 WrapperTarget::FreshSlot,
                 fx,
-            )
-            .expect("wrapper produced no slot"),
-        AbiShape::CommaOk => planner
-            .emit_comma_ok_wrapping(
-                output,
-                call_str,
-                result_ty,
-                TupleReturnLayout::Packed,
-                WrapperTarget::FreshSlot,
-                fx,
-            )
-            .expect("wrapper produced no slot"),
-        AbiShape::NullableReturn => {
-            let raw_var = planner.hoist_tmp_value(output, "raw", call_str);
-            planner
-                .emit_nil_check_option_wrap(
-                    output,
-                    &raw_var,
-                    result_ty,
-                    WrapperTarget::FreshSlot,
-                    fx,
-                )
-                .expect("wrapper produced no slot")
+            );
+            (statements, outcome.expect("wrapper produced no slot"))
         }
-        AbiShape::ResultTuple | AbiShape::BareError => planner
-            .emit_result_wrapping(
-                output,
+        AbiShape::CommaOk => {
+            let (statements, outcome) = planner.lower_comma_ok_wrapping(
                 call_str,
                 result_ty,
                 TupleReturnLayout::Packed,
                 WrapperTarget::FreshSlot,
                 fx,
-            )
-            .expect("wrapper produced no slot"),
+            );
+            (statements, outcome.expect("wrapper produced no slot"))
+        }
+        AbiShape::NullableReturn => {
+            let mut statements = Vec::new();
+            let raw_var = planner.hoist_tmp_value_statement(&mut statements, "raw", call_str);
+            let (wrap, outcome) = planner.lower_nil_check_option_wrap(
+                &raw_var,
+                result_ty,
+                WrapperTarget::FreshSlot,
+                fx,
+            );
+            statements.extend(wrap);
+            (statements, outcome.expect("wrapper produced no slot"))
+        }
+        AbiShape::ResultTuple | AbiShape::BareError => {
+            let (statements, outcome) = planner.lower_result_wrapping(
+                call_str,
+                result_ty,
+                TupleReturnLayout::Packed,
+                WrapperTarget::FreshSlot,
+                fx,
+            );
+            (statements, outcome.expect("wrapper produced no slot"))
+        }
         AbiShape::Tuple { arity } => {
+            let mut statements = Vec::new();
             let temps = planner.create_temp_vars("ret", *arity);
-            write_line!(output, "{} := {}", temps.join(", "), call_str);
+            statements.push(LoweredStatement::RawGo(format!(
+                "{} := {}\n",
+                temps.join(", "),
+                call_str
+            )));
             let slot_tys = tuple_element_types(&planner.facts.peel_alias(result_ty));
             let wrapped: Vec<String> = temps
                 .iter()
@@ -286,20 +293,13 @@ pub(crate) fn emit_callee_abi_wrapping(
                         .get(i)
                         .filter(|slot_ty| planner.facts.is_nullable_option(slot_ty))
                         .map(|slot_ty| {
-                            planner
-                                .emit_nil_check_option_wrap(
-                                    output,
-                                    v,
-                                    slot_ty,
-                                    WrapperTarget::FreshSlot,
-                                    fx,
-                                )
-                                .expect("wrapper produced no slot")
+                            planner.plan_nil_check_option_wrap(&mut statements, v, slot_ty, fx)
                         })
                         .unwrap_or_else(|| v.clone())
                 })
                 .collect();
-            planner.emit_tuple_from_vars(output, &wrapped, result_ty, fx)
+            let tuple = planner.plan_tuple_from_vars(&mut statements, &wrapped, result_ty, fx);
+            (statements, tuple)
         }
     }
 }
@@ -554,8 +554,9 @@ pub(crate) fn emit_fn_arg_shape_adapter(
         None => planner.go_type_string(arg_ret, fx),
     };
 
-    let mut body = String::new();
-    let tagged = emit_callee_abi_wrapping(planner, &mut body, arg_shape, &inner_call, arg_ret, fx);
+    let (wrap_statements, tagged) =
+        lower_callee_abi_wrapping(planner, arg_shape, &inner_call, arg_ret, fx);
+    let mut body = Renderer.render_setup(&wrap_statements);
     match target_shape {
         Some(shape) => {
             render_lowered_result_return(planner, &mut body, &tagged, arg_ret, shape, fx)
@@ -595,9 +596,9 @@ pub(crate) fn lower_arg_to_tagged(
     let inner_call = format!("{}({})", arg_name, inner_arg_names.join(", "));
     let tagged_ret = planner.go_type_string(inner_ret, fx);
 
-    let mut body = String::new();
-    let result_var =
-        emit_callee_abi_wrapping(planner, &mut body, &shape, &inner_call, inner_ret, fx);
+    let (wrap_statements, result_var) =
+        lower_callee_abi_wrapping(planner, &shape, &inner_call, inner_ret, fx);
+    let mut body = Renderer.render_setup(&wrap_statements);
     write_line!(body, "return {}", result_var);
 
     let tagged_var = planner.fresh_var(Some("tagged"));
@@ -763,7 +764,10 @@ fn emit_nullable_slot_value(
         return match kind {
             Ok(()) => {
                 debug_assert_eq!(args.len(), 1, "Some(...) takes exactly one arg");
-                planner.emit_composite_value(output, &args[0], ExpressionContext::value(), fx)
+                let (setup, value) =
+                    planner.lower_composite_value(&args[0], ExpressionContext::value(), fx);
+                output.push_str(&Renderer.render_setup(&setup));
+                value
             }
             Err(()) => "nil".to_string(),
         };
@@ -771,7 +775,12 @@ fn emit_nullable_slot_value(
     if expression.is_none_literal() {
         return "nil".to_string();
     }
-    let value = planner.emit_value(output, expression, ExpressionContext::value(), fx);
+    let (setup, value) = planner.lower_value(expression, ExpressionContext::value(), fx);
+    output.push_str(&Renderer.render_setup(&setup));
     let inner = planner.go_type_string(&slot_ty.ok_type(), fx);
-    planner.emit_option_projection(output, &value, "unwrap", &inner, false, fx)
+    let mut statements = Vec::new();
+    let slot_var =
+        planner.plan_option_projection(&mut statements, &value, "unwrap", &inner, false, fx);
+    output.push_str(&Renderer.render_setup(&statements));
+    slot_var
 }

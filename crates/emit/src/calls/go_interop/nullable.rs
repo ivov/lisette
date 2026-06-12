@@ -1,6 +1,5 @@
 use crate::EmitEffects;
 use crate::Planner;
-use crate::Renderer;
 use crate::calls::go_interop::build_tuple_literal;
 use crate::calls::go_interop::wrappers::{
     TupleReturnLayout, WrapperOutcome, WrapperTarget, leaf_block,
@@ -52,21 +51,6 @@ impl Planner<'_> {
         (setup, outcome.expect("wrapper produced no slot"))
     }
 
-    pub(crate) fn emit_sentinel_wrapping(
-        &mut self,
-        output: &mut String,
-        call_str: &str,
-        option_ty: &Type,
-        sentinel: i64,
-        target: WrapperTarget<'_>,
-        fx: &mut EmitEffects,
-    ) -> WrapperOutcome {
-        let (statements, outcome) =
-            self.lower_sentinel_wrapping(call_str, option_ty, sentinel, target, fx);
-        output.push_str(&Renderer.render_setup(&statements));
-        outcome
-    }
-
     /// Wrap a sentinel-call via `OptionFromCommaOk` with `raw != sentinel`.
     pub(crate) fn lower_sentinel_wrapping(
         &mut self,
@@ -87,21 +71,6 @@ impl Planner<'_> {
         let outcome =
             self.push_simple_wrapper_value(&mut statements, target, "option", &value_expr);
         (statements, outcome)
-    }
-
-    pub(crate) fn emit_comma_ok_wrapping(
-        &mut self,
-        output: &mut String,
-        call_str: &str,
-        option_ty: &Type,
-        layout: TupleReturnLayout,
-        target: WrapperTarget<'_>,
-        fx: &mut EmitEffects,
-    ) -> WrapperOutcome {
-        let (statements, outcome) =
-            self.lower_comma_ok_wrapping(call_str, option_ty, layout, target, fx);
-        output.push_str(&Renderer.render_setup(&statements));
-        outcome
     }
 
     /// Wrap a comma-ok-returning call into a tagged `Option`. A `Flattened`
@@ -200,20 +169,6 @@ impl Planner<'_> {
         (statements, outcome)
     }
 
-    pub(crate) fn emit_nil_check_option_wrap(
-        &mut self,
-        output: &mut String,
-        raw_value: &str,
-        option_ty: &Type,
-        target: WrapperTarget<'_>,
-        fx: &mut EmitEffects,
-    ) -> WrapperOutcome {
-        let (statements, outcome) =
-            self.lower_nil_check_option_wrap(raw_value, option_ty, target, fx);
-        output.push_str(&Renderer.render_setup(&statements));
-        outcome
-    }
-
     /// Wrap a nilable Go value into a tagged `Option` via `OptionFromNilable`.
     pub(crate) fn lower_nil_check_option_wrap(
         &mut self,
@@ -253,28 +208,6 @@ impl Planner<'_> {
             self.lower_nil_check_option_wrap(&raw_var, option_ty, WrapperTarget::FreshSlot, fx);
         setup.extend(wrap_setup);
         (setup, outcome.expect("wrapper produced no slot"))
-    }
-
-    pub(crate) fn emit_option_projection(
-        &mut self,
-        output: &mut String,
-        option_value: &str,
-        slot_hint: &str,
-        slot_ty: &str,
-        address: bool,
-        fx: &mut EmitEffects,
-    ) -> String {
-        let mut statements = Vec::new();
-        let slot_var = self.plan_option_projection(
-            &mut statements,
-            option_value,
-            slot_hint,
-            slot_ty,
-            address,
-            fx,
-        );
-        output.push_str(&Renderer.render_setup(&statements));
-        slot_var
     }
 
     pub(crate) fn plan_option_projection(

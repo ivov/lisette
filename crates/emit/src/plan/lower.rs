@@ -1,5 +1,6 @@
 use crate::EmitEffects;
 use crate::Planner;
+use crate::Renderer;
 use crate::abi::transition::try_emit_lowered_tail_return;
 use crate::context::expression::ExpressionContext;
 use crate::control_flow::branching::wrap_if_struct_literal;
@@ -432,12 +433,8 @@ impl Planner<'_> {
         fx: &mut EmitEffects,
     ) -> (String, String) {
         let mut setup = String::new();
-        let value = self.emit_operand(
-            &mut setup,
-            condition,
-            ExpressionContext::value().condition(),
-            fx,
-        );
+        let plan = self.plan_operand(condition, ExpressionContext::value().condition(), fx);
+        let value = Renderer.render_value(&mut setup, &plan);
         (setup, value)
     }
 
