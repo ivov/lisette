@@ -860,6 +860,15 @@ pub fn waitgroup_add_in_task(span: &Span) -> LisetteDiagnostic {
         )
 }
 
+pub fn exit_after_defer(span: &Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::warn("`os.Exit` skips `defer`")
+        .with_lint_code("exit_after_defer")
+        .with_span_label(span, "exits before the `defer` above can run")
+        .with_help(
+            "`os.Exit` will terminate the process without running deferred calls. Run the cleanup before exiting instead of deferring it",
+        )
+}
+
 pub fn unnecessary_range_loop(span: &Span, collection: &str) -> LisetteDiagnostic {
     LisetteDiagnostic::info("Unnecessary range loop")
         .with_lint_code("unnecessary_range_loop")

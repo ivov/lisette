@@ -9911,6 +9911,128 @@ fn main() {
 }
 
 #[test]
+fn exit_after_defer() {
+    assert_lint_snapshot!(
+        r#"
+import "go:os"
+
+fn cleanup() {}
+
+fn main() {
+  defer cleanup()
+  os.Exit(1)
+}
+"#
+    );
+}
+
+#[test]
+fn exit_after_defer_nested_in_branch() {
+    assert_lint_snapshot!(
+        r#"
+import "go:os"
+
+fn cleanup() {}
+
+fn main() {
+  defer cleanup()
+  if os.Getpid() > 0 {
+    os.Exit(1)
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn exit_after_defer_no_defer_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:os"
+
+fn main() {
+  os.Exit(1)
+}
+"#
+    );
+}
+
+#[test]
+fn exit_after_defer_without_exit_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:os"
+
+fn cleanup() {}
+
+fn main() {
+  defer cleanup()
+  let _ = os.Getpid()
+}
+"#
+    );
+}
+
+#[test]
+fn exit_after_defer_in_returning_guard_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:os"
+
+fn cleanup() {}
+
+fn run(ok: bool) {
+  if ok {
+    defer cleanup()
+    return
+  }
+  os.Exit(1)
+}
+
+fn main() {
+  run(true)
+}
+"#
+    );
+}
+
+#[test]
+fn exit_after_defer_exit_before_defer_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:os"
+
+fn cleanup() {}
+
+fn main() {
+  if os.Getpid() > 0 {
+    os.Exit(0)
+  }
+  defer cleanup()
+  let _ = os.Getpid()
+}
+"#
+    );
+}
+
+#[test]
+fn exit_after_defer_allow_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:os"
+
+fn cleanup() {}
+
+#[allow(exit_after_defer)]
+fn main() {
+  defer cleanup()
+  os.Exit(1)
+}
+"#
+    );
+}
+
+#[test]
 fn unnecessary_range_loop_read() {
     assert_lint_snapshot!(
         r#"
