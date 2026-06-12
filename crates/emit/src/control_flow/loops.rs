@@ -2,12 +2,14 @@ use crate::EmitEffects;
 use crate::Planner;
 use crate::Renderer;
 use crate::context::expression::ExpressionContext;
+use crate::expressions::emission::StagedExpression;
 use crate::is_order_sensitive;
 use crate::patterns::binding_decls::pattern_has_bindings;
 use crate::patterns::sites::PatternSubject;
 use crate::plan::bodies::{LoopPlan, LoweredBlock, LoweredStatement};
 use crate::types::native::NativeGoType;
 use crate::types::shape::RangeShape;
+use crate::utils::observable_after_mutation;
 use syntax::ast::{Binding, Expression, Pattern};
 use syntax::types::Type;
 
@@ -79,6 +81,43 @@ impl Planner<'_> {
         })
     }
 
+    /// Plan `expr` as an operand, pushing its setup into `prologue` and
+    /// returning the value text.
+    fn capture_operand_into(
+        &mut self,
+        prologue: &mut Vec<LoweredStatement>,
+        expr: &Expression,
+        fx: &mut EmitEffects,
+    ) -> String {
+        let plan = self.plan_operand(expr, ExpressionContext::value(), fx);
+        let staged = StagedExpression::from_plan(plan, expr);
+        prologue.extend(staged.setup);
+        staged.value
+    }
+
+    /// `capture_operand_into`, hoisting to a fresh temp when `expr` is
+    /// observable after a mutation (mirrors `emit_force_capture`).
+    fn force_capture_into(
+        &mut self,
+        prologue: &mut Vec<LoweredStatement>,
+        expr: &Expression,
+        prefix: &str,
+        fx: &mut EmitEffects,
+    ) -> String {
+        if !observable_after_mutation(expr) {
+            return self.capture_operand_into(prologue, expr, fx);
+        }
+        let temp_var = self.fresh_var(Some(prefix));
+        self.declare(&temp_var);
+        let (setup, value) = self.lower_composite_value(expr, ExpressionContext::value(), fx);
+        prologue.extend(setup);
+        prologue.push(LoweredStatement::TempBind {
+            name: temp_var.clone(),
+            value,
+        });
+        temp_var
+    }
+
     /// `for i in stored_range`.
     fn lower_stored_range_for(
         &mut self,
@@ -87,14 +126,13 @@ impl Planner<'_> {
         range_shape: RangeShape,
         body: &Expression,
         fx: &mut EmitEffects,
-    ) -> (String, String, LoweredBlock) {
+    ) -> (Vec<LoweredStatement>, String, LoweredBlock) {
         self.enter_scope();
-        let mut prologue = String::new();
+        let mut prologue = Vec::new();
         let range_var = if self.is_unmutated_identifier(iterable) {
-            let plan = self.plan_operand(iterable, ExpressionContext::value(), fx);
-            Renderer.render_value(&mut prologue, &plan)
+            self.capture_operand_into(&mut prologue, iterable, fx)
         } else {
-            self.emit_force_capture(&mut prologue, iterable, "_range", fx)
+            self.force_capture_into(&mut prologue, iterable, "_range", fx)
         };
         let loop_var = self.bind_loop_pattern(&binding.pattern, Some("_i"));
         let header = match range_shape {
@@ -126,11 +164,10 @@ impl Planner<'_> {
         receiver: &Expression,
         body: &Expression,
         fx: &mut EmitEffects,
-    ) -> (String, String, LoweredBlock) {
+    ) -> (Vec<LoweredStatement>, String, LoweredBlock) {
         self.enter_scope();
-        let mut prologue = String::new();
-        let receiver_plan = self.plan_operand(receiver, ExpressionContext::value(), fx);
-        let receiver_str = Renderer.render_value(&mut prologue, &receiver_plan);
+        let mut prologue = Vec::new();
+        let receiver_str = self.capture_operand_into(&mut prologue, receiver, fx);
         let loop_var = self.bind_loop_pattern(&binding.pattern, None);
         let header = if loop_var == "_" {
             format!("for range {} {{\n", receiver_str)
@@ -149,14 +186,13 @@ impl Planner<'_> {
         receiver: &Expression,
         body: &Expression,
         fx: &mut EmitEffects,
-    ) -> (String, String, LoweredBlock) {
+    ) -> (Vec<LoweredStatement>, String, LoweredBlock) {
         self.enter_scope();
-        let mut prologue = String::new();
+        let mut prologue = Vec::new();
         let receiver_var = if self.is_unmutated_identifier(receiver) {
-            let plan = self.plan_operand(receiver, ExpressionContext::value(), fx);
-            Renderer.render_value(&mut prologue, &plan)
+            self.capture_operand_into(&mut prologue, receiver, fx)
         } else {
-            self.emit_force_capture(&mut prologue, receiver, "_s", fx)
+            self.force_capture_into(&mut prologue, receiver, "_s", fx)
         };
         let index_var = self.fresh_var(Some("_i"));
         let loop_var = self.bind_loop_pattern(&binding.pattern, None);
@@ -181,10 +217,9 @@ impl Planner<'_> {
         &mut self,
         iterable: &Expression,
         fx: &mut EmitEffects,
-    ) -> (String, String, bool) {
-        let mut prologue = String::new();
-        let iter_plan = self.plan_operand(iterable, ExpressionContext::value(), fx);
-        let iter_raw = Renderer.render_value(&mut prologue, &iter_plan);
+    ) -> (Vec<LoweredStatement>, String, bool) {
+        let mut prologue = Vec::new();
+        let iter_raw = self.capture_operand_into(&mut prologue, iterable, fx);
         let iterable_ty = iterable.get_type();
         let iter_expression = if iterable_ty.is_ref() {
             format!("*{}", iter_raw)
@@ -204,7 +239,7 @@ impl Planner<'_> {
         iterable: &Expression,
         body: &Expression,
         fx: &mut EmitEffects,
-    ) -> (String, String, LoweredBlock) {
+    ) -> (Vec<LoweredStatement>, String, LoweredBlock) {
         let (prologue, iter_expression, is_channel) = self.capture_iterable_operand(iterable, fx);
 
         self.enter_scope();
@@ -230,7 +265,7 @@ impl Planner<'_> {
         iterable: &Expression,
         body: &Expression,
         fx: &mut EmitEffects,
-    ) -> (String, String, LoweredBlock) {
+    ) -> (Vec<LoweredStatement>, String, LoweredBlock) {
         let Pattern::Tuple { elements, .. } = &binding.pattern else {
             unreachable!("lower_map_tuple_for requires a tuple pattern");
         };
@@ -378,7 +413,7 @@ impl Planner<'_> {
         iterable: &Expression,
         body: &Expression,
         fx: &mut EmitEffects,
-    ) -> (String, String, LoweredBlock) {
+    ) -> (Vec<LoweredStatement>, String, LoweredBlock) {
         let (prologue, iter_expression, is_channel) = self.capture_iterable_operand(iterable, fx);
 
         self.enter_scope();
@@ -437,7 +472,7 @@ impl Planner<'_> {
         iterable: &Expression,
         body: &Expression,
         fx: &mut EmitEffects,
-    ) -> (String, String, LoweredBlock) {
+    ) -> (Vec<LoweredStatement>, String, LoweredBlock) {
         let Expression::Range {
             start,
             end,
@@ -448,23 +483,27 @@ impl Planner<'_> {
             unreachable!("lower_range_for requires a Range iterable");
         };
 
-        let mut prologue = String::new();
+        let mut prologue = Vec::new();
         let mut start_expression = match start {
-            Some(s) => {
-                let plan = self.plan_operand(s, ExpressionContext::value(), fx);
-                Renderer.render_value(&mut prologue, &plan)
-            }
+            Some(s) => self.capture_operand_into(&mut prologue, s, fx),
             None => "0".to_string(),
         };
         let checkpoint = prologue.len();
         let end_expression = end
             .as_ref()
-            .map(|e| self.emit_force_capture(&mut prologue, e, "_bound", fx));
+            .map(|e| self.force_capture_into(&mut prologue, e, "_bound", fx));
         if prologue.len() > checkpoint && start.as_ref().is_some_and(|s| is_order_sensitive(s)) {
+            // The end bound's capture inserted statements after the start value;
+            // hoist start into its own temp before them so it evaluates first.
             let var = self.fresh_var(Some("start"));
             self.declare(&var);
-            let statement = format!("{} := {}\n", var, start_expression);
-            prologue.insert_str(checkpoint, &statement);
+            prologue.insert(
+                checkpoint,
+                LoweredStatement::TempBind {
+                    name: var.clone(),
+                    value: start_expression,
+                },
+            );
             start_expression = var;
         }
 

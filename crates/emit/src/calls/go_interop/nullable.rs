@@ -368,7 +368,7 @@ impl Planner<'_> {
 
         statements.push(LoweredStatement::Loop(LoopPlan {
             directive: String::new(),
-            prologue: String::new(),
+            prologue: Vec::new(),
             label: None,
             header: format!("for {}, {} := range {} {{\n", index_var, val_var, src_var),
             body: loop_body,
@@ -461,7 +461,7 @@ impl Planner<'_> {
 
         statements.push(LoweredStatement::Loop(LoopPlan {
             directive: String::new(),
-            prologue: String::new(),
+            prologue: Vec::new(),
             label: None,
             header: format!("for {}, {} := range {} {{\n", index_var, val_var, src_var),
             body: loop_body,

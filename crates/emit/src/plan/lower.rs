@@ -490,7 +490,7 @@ impl Planner<'_> {
         self.exit_scope();
         LoopPlan {
             directive,
-            prologue: String::new(),
+            prologue: Vec::new(),
             label,
             header,
             body: lowered_body,

@@ -363,7 +363,7 @@ pub(crate) struct WhileLetPlan {
 /// opening brace; `label` is the optional break/continue label.
 pub(crate) struct LoopPlan {
     pub(crate) directive: String,
-    pub(crate) prologue: String,
+    pub(crate) prologue: Vec<LoweredStatement>,
     pub(crate) label: Option<String>,
     pub(crate) header: String,
     pub(crate) body: LoweredBlock,

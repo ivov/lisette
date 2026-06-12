@@ -261,7 +261,7 @@ impl Planner<'_> {
             return LoweredBlock {
                 statements: vec![LoweredStatement::Loop(LoopPlan {
                     directive: String::new(),
-                    prologue: String::new(),
+                    prologue: Vec::new(),
                     label,
                     header: "for {\n".to_string(),
                     body: LoweredBlock {
@@ -307,7 +307,7 @@ impl Planner<'_> {
         LoweredBlock {
             statements: vec![LoweredStatement::Loop(LoopPlan {
                 directive: String::new(),
-                prologue: String::new(),
+                prologue: Vec::new(),
                 label,
                 header: "for {\n".to_string(),
                 body: LoweredBlock {

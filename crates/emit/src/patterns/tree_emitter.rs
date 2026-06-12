@@ -314,7 +314,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         }
         statements.push(LoweredStatement::Loop(LoopPlan {
             directive: String::new(),
-            prologue: String::new(),
+            prologue: Vec::new(),
             label: Some(label),
             header: "for {\n".to_string(),
             body: LoweredBlock { statements: body },

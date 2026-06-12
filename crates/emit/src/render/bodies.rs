@@ -381,7 +381,7 @@ impl Renderer {
 
     fn render_loop(&self, output: &mut String, plan: &LoopPlan) {
         output.push_str(&plan.directive);
-        output.push_str(&plan.prologue);
+        output.push_str(&self.render_setup(&plan.prologue));
         if let Some(label) = &plan.label {
             write_line!(output, "{}:", label);
         }
