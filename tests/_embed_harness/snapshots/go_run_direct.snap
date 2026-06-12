@@ -17,5 +17,7 @@ func main() {
 		fmt.Println(r.M())
 		f := r.M
 		fmt.Println(f())
+		g := N0.M
+		fmt.Println(g(r))
 	}
 }

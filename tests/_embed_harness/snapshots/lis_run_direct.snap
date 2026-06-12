@@ -5,7 +5,7 @@ import "go:fmt"
 
 struct N0 {}
 impl N0 {
-  fn M(self) -> string {
+  pub fn M(self) -> string {
     "N0.M"
   }
 }
@@ -15,4 +15,6 @@ fn main() {
   fmt.Println(r0.M())
   let f0 = r0.M
   fmt.Println(f0())
+  let g0 = N0.M
+  fmt.Println(g0(r0))
 }

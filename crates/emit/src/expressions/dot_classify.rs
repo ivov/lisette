@@ -181,6 +181,23 @@ impl Planner<'_> {
         is_pointer_receiver: bool,
         fx: &mut EmitEffects,
     ) -> Option<String> {
+        if let Expression::Identifier { value, .. } = expression {
+            let go_method = if is_exported {
+                go_name::snake_to_camel(member)
+            } else {
+                go_name::escape_keyword(member).into_owned()
+            };
+            let type_name = self
+                .resolve_alias_type_name(value)
+                .unwrap_or_else(|| value.to_string());
+            let type_args = self.method_expression_type_args(result_ty, fx);
+            return Some(if is_pointer_receiver {
+                format!("(*{}{}).{}", type_name, type_args, go_method)
+            } else {
+                format!("{}{}.{}", type_name, type_args, go_method)
+            });
+        }
+
         let Expression::DotAccess {
             expression: inner_expression,
             member: type_name,
@@ -211,28 +228,7 @@ impl Planner<'_> {
 
         let pkg = self.require_module_import_fx(module_name, fx);
         let go_type_name = go_name::snake_to_camel(type_name);
-
-        // Extract type args from the receiver parameter
-        let type_args = if let Type::Function(f) = result_ty.unwrap_forall()
-            && let Some(first_param) = f.params.first()
-        {
-            let receiver_ty = first_param.strip_refs();
-            if let Type::Nominal {
-                params: receiver_params,
-                ..
-            } = receiver_ty
-            {
-                if receiver_params.is_empty() {
-                    String::new()
-                } else {
-                    self.format_type_args(&receiver_params, fx)
-                }
-            } else {
-                String::new()
-            }
-        } else {
-            String::new()
-        };
+        let type_args = self.method_expression_type_args(result_ty, fx);
 
         let method_expression = if is_pointer_receiver {
             format!("(*{}.{}{}).{}", pkg, go_type_name, type_args, go_method)
@@ -241,6 +237,27 @@ impl Planner<'_> {
         };
 
         Some(method_expression)
+    }
+
+    fn method_expression_type_args(&mut self, result_ty: &Type, fx: &mut EmitEffects) -> String {
+        let Type::Function(f) = result_ty.unwrap_forall() else {
+            return String::new();
+        };
+        let Some(first_param) = f.params.first() else {
+            return String::new();
+        };
+        let Type::Nominal {
+            params: receiver_params,
+            ..
+        } = first_param.strip_refs()
+        else {
+            return String::new();
+        };
+        if receiver_params.is_empty() {
+            String::new()
+        } else {
+            self.format_type_args(&receiver_params, fx)
+        }
     }
 
     /// Cross-module static method access (`shapes.Point.new` →

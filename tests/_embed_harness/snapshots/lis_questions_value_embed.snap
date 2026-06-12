@@ -3,7 +3,7 @@ source: tests/_embed_harness/render_lis.rs
 ---
 struct N0 {}
 impl N0 {
-  fn M(self) -> string {
+  pub fn M(self) -> string {
     "N0.M"
   }
 }

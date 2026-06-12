@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use crate::checker::EnvResolve;
 use ecow::EcoString;
 use syntax::ast::{Expression, Span, StructKind};
@@ -701,19 +703,10 @@ impl InferCtx<'_, '_> {
             .get(args.member_name)
             .cloned()?;
 
-        // Promoted method expressions (`Type.M`) are not lowered yet; reject
-        // cleanly rather than mis-resolve (own ones resolve via the qualified path).
         if self.is_type_level_receiver(args.expression)
             && self.method_is_promoted(&args.deref_ty, args.member_name)
         {
-            self.sink
-                .push(diagnostics::infer::promoted_method_expression(
-                    args.member_name,
-                    *args.span,
-                ));
-            self.unify(args.expected_ty, &Type::Error, args.span);
-            let kind = DotAccessKind::InstanceMethod { is_exported: false };
-            return Some((args.build_dot_access(Type::Error, Some(kind), None), kind));
+            return self.as_promoted_method_expression(args, &method_ty);
         }
 
         self.check_instance_method_access(&args.deref_ty, &method_ty, args);
@@ -737,7 +730,7 @@ impl InferCtx<'_, '_> {
             unreachable!();
         };
 
-        let f = std::sync::Arc::make_mut(f);
+        let f = Arc::make_mut(f);
         let receiver_ty = f.params.remove(0);
         if !f.param_mutability.is_empty() {
             f.param_mutability.remove(0);
@@ -758,6 +751,59 @@ impl InferCtx<'_, '_> {
             args.build_dot_access(method_ty, Some(kind), receiver_coercion),
             kind,
         ))
+    }
+
+    fn as_promoted_method_expression(
+        &mut self,
+        args: &DotAccessResolutionArgs,
+        method_ty: &Type,
+    ) -> Option<(Expression, DotAccessKind)> {
+        let Resolution::Found(member) =
+            promotion::resolve_selector(self.store, &args.deref_ty, args.member_name)
+        else {
+            return None;
+        };
+
+        self.check_instance_method_access(&args.deref_ty, method_ty, args);
+
+        let (method_ty, _) = self.instantiate(method_ty);
+        let Type::Function(f) = &method_ty else {
+            return None;
+        };
+        let is_pointer_receiver = f
+            .params
+            .first()
+            .is_some_and(|param| param.resolve_in(&self.env).is_ref());
+
+        let is_exported =
+            self.promoted_method_is_exported(&member.declaring_type, args.member_name);
+        if !is_exported {
+            self.sink
+                .push(diagnostics::infer::private_method_expression(*args.span));
+        }
+
+        let kind = DotAccessKind::InstanceMethodValue {
+            is_exported,
+            is_pointer_receiver,
+        };
+
+        self.unify(args.expected_ty, &method_ty, args.span);
+        Some((args.build_dot_access(method_ty, Some(kind), None), kind))
+    }
+
+    fn promoted_method_is_exported(&self, declaring_type: &Symbol, member_name: &str) -> bool {
+        let store = self.store;
+        let type_module = store
+            .module_for_qualified_name(declaring_type)
+            .unwrap_or(declaring_type.as_str());
+        if type_module != self.cursor.module_id {
+            return true;
+        }
+        let method_key = declaring_type.with_segment(member_name);
+        store
+            .get_definition(&method_key)
+            .map(|d| d.visibility().is_public())
+            .unwrap_or(false)
     }
 
     /// Check cross-module visibility, record usage for find-references,

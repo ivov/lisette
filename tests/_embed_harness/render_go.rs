@@ -203,6 +203,10 @@ fn render_main(scenario: &Scenario, printed: &[PrintedQuestion], out: &mut Strin
         out.push_str(&format!("\t\tfmt.Println(r.{}())\n", question.member));
         out.push_str(&format!("\t\tf := r.{}\n", question.member));
         out.push_str("\t\tfmt.Println(f())\n");
+        if question.method_expression {
+            out.push_str(&format!("\t\tg := {root}.{}\n", question.member));
+            out.push_str("\t\tfmt.Println(g(r))\n");
+        }
         out.push_str("\t}\n");
     }
     out.push_str("}\n");
@@ -244,6 +248,7 @@ mod tests {
         let printed = [PrintedQuestion {
             root: 0,
             member: "M".into(),
+            method_expression: true,
         }];
         assert_snap(
             "go_run_direct",

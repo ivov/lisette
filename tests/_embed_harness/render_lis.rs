@@ -109,6 +109,11 @@ pub fn render_lis_run(scenario: &Scenario, printed: &[PrintedQuestion]) -> Strin
         out.push_str(&format!("  fmt.Println(r{i}.{}())\n", question.member));
         out.push_str(&format!("  let f{i} = r{i}.{}\n", question.member));
         out.push_str(&format!("  fmt.Println(f{i}())\n"));
+        if question.method_expression {
+            let root = scenario.node_name(question.root);
+            out.push_str(&format!("  let g{i} = {root}.{}\n", question.member));
+            out.push_str(&format!("  fmt.Println(g{i}(r{i}))\n"));
+        }
     }
     out.push_str("}\n");
     out
@@ -182,10 +187,12 @@ fn render_node(scenario: &Scenario, node: &Node, out: &mut String) {
             render_impl(scenario, node, methods, out);
         }
         NodeKind::Interface { methods, embeds } => {
+            // Public so a public-method implementer does not trip the
+            // private-interface/public-impl visibility rule.
             if embeds.is_empty() && methods.is_empty() {
-                out.push_str(&format!("interface {}{generics} {{}}\n", node.name));
+                out.push_str(&format!("pub interface {}{generics} {{}}\n", node.name));
             } else {
-                out.push_str(&format!("interface {}{generics} {{\n", node.name));
+                out.push_str(&format!("pub interface {}{generics} {{\n", node.name));
                 for embed in embeds {
                     out.push_str(&format!(
                         "  embed {}\n",
@@ -226,11 +233,15 @@ fn render_impl(scenario: &Scenario, node: &Node, methods: &[Method], out: &mut S
             Receiver::Value => "self".to_string(),
             Receiver::Pointer => format!("self: Ref<{owner}{generics}>"),
         };
+        let visibility = match method.visibility {
+            Visibility::Public => "pub ",
+            Visibility::Private => "",
+        };
         let extra = lis_parameters(scenario, &method.signature.parameters);
         match &method.signature.return_type {
             MemberType::Basic(BasicType::String) => {
                 out.push_str(&format!(
-                    "  fn {}({receiver}{extra}) -> string {{\n    \"{}.{}\"\n  }}\n",
+                    "  {visibility}fn {}({receiver}{extra}) -> string {{\n    \"{}.{}\"\n  }}\n",
                     method.name, owner, method.name,
                 ));
             }
@@ -370,6 +381,7 @@ mod tests {
         let printed = [PrintedQuestion {
             root: 0,
             member: "M".into(),
+            method_expression: true,
         }];
         assert_snap("lis_run_direct", render_lis_run(&scenario, &printed));
     }
@@ -416,6 +428,7 @@ mod tests {
                     vec![PrintedQuestion {
                         root: n.id,
                         member: "M".into(),
+                        method_expression: false,
                     }]
                 })
                 .unwrap_or_default();

@@ -1,13 +1,13 @@
 ---
 source: tests/_embed_harness/render_lis.rs
 ---
-interface N0 {
+pub interface N0 {
   fn Speak(self) -> string
 }
 
 struct N1 {}
 impl N1 {
-  fn Speak(self) -> string {
+  pub fn Speak(self) -> string {
     "N1.Speak"
   }
 }

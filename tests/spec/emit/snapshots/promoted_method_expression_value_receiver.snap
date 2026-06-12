@@ -1,0 +1,26 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "\nstruct Base { pub id: int }\n\nimpl Base {\n  pub fn describe(self) -> string { \"base\" }\n}\n\nstruct Mid { embed Base }\nstruct Top { embed Mid }\n\nfn main() {\n  let f = Top.describe\n  let _ = f(Top { Mid: Mid { Base: Base { id: 1 } } })\n}\n"
+---
+package main
+
+type Base struct {
+	Id int
+}
+
+func (b Base) Describe() string {
+	return "base"
+}
+
+type Mid struct {
+	Base
+}
+
+type Top struct {
+	Mid
+}
+
+func main() {
+	f := Top.Describe
+	_ = f(Top{Mid: Mid{Base: Base{Id: 1}}})
+}

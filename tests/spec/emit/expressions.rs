@@ -2718,6 +2718,46 @@ fn main() {
 }
 
 #[test]
+fn promoted_method_expression_value_receiver() {
+    let input = r#"
+struct Base { pub id: int }
+
+impl Base {
+  pub fn describe(self) -> string { "base" }
+}
+
+struct Mid { embed Base }
+struct Top { embed Mid }
+
+fn main() {
+  let f = Top.describe
+  let _ = f(Top { Mid: Mid { Base: Base { id: 1 } } })
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn promoted_method_expression_pointer_receiver() {
+    let input = r#"
+struct Base { pub id: int }
+
+impl Base {
+  pub fn bump(self: Ref<Base>) { self.id += 1 }
+}
+
+struct Outer { embed Base }
+
+fn main() {
+  let g = Outer.bump
+  let mut o = Outer { Base: Base { id: 1 } }
+  g(&o)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn cast_in_statement_position_uses_discard() {
     let input = r#"
 fn main() {

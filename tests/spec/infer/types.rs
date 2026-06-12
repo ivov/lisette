@@ -7122,7 +7122,24 @@ fn main() {}
 }
 
 #[test]
-fn promoted_method_expression_is_rejected() {
+fn promoted_method_expression_resolves() {
+    infer(
+        r#"
+pub struct Base { pub id: int }
+impl Base { pub fn describe(self) -> string { "b" } }
+struct Outer { embed Base }
+fn use_it(o: Outer) -> string {
+  let f = Outer.describe
+  f(o)
+}
+fn main() {}
+"#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn promoted_private_method_expression_is_rejected() {
     infer(
         r#"
 struct Base { pub id: int }
@@ -7134,7 +7151,62 @@ fn use_it() {
 fn main() {}
 "#,
     )
-    .assert_infer_code("promoted_method_expression");
+    .assert_infer_code("private_method_expression");
+}
+
+#[test]
+fn cross_module_promoted_private_method_expression_is_rejected() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "lib",
+        "lib.lis",
+        r#"
+pub struct Base { pub id: int }
+impl Base { fn secret(self) -> string { "s" } }
+pub struct Outer { embed Base }
+"#,
+    );
+    fs.add_file(
+        "main",
+        "main.lis",
+        r#"
+import "lib"
+
+fn use_it() {
+  let _ = lib.Outer.secret
+}
+"#,
+    );
+
+    infer_module("main", fs).assert_resolve_code("private_method_access");
+}
+
+#[test]
+fn cross_module_promoted_public_method_expression_resolves() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "lib",
+        "lib.lis",
+        r#"
+pub struct Base { pub id: int }
+impl Base { pub fn describe(self) -> string { "b" } }
+pub struct Outer { embed Base }
+"#,
+    );
+    fs.add_file(
+        "main",
+        "main.lis",
+        r#"
+import "lib"
+
+fn use_it(o: lib.Outer) -> string {
+  let f = lib.Outer.describe
+  f(o)
+}
+"#,
+    );
+
+    infer_module("main", fs).assert_no_errors();
 }
 
 #[test]

@@ -13,7 +13,9 @@ use super::go_answerer::{GoAnswer, GoAnswers};
 use super::lisette_answer::{LisetteAnswer, LisetteAnswers};
 use super::render_go::{GoMode, render_go};
 use super::render_lis::render_lis_run;
-use super::scenario::{EdgeKind, MemberType, NodeId, NodeKind, Question, Scenario};
+use super::scenario::{
+    EdgeKind, MemberType, NodeId, NodeKind, Question, Receiver, Scenario, Visibility,
+};
 
 const ENTRY_FILE_ID: u32 = 0;
 const PRELUDE_IMPORT_PATH: &str = "github.com/ivov/lisette/prelude";
@@ -92,10 +94,35 @@ fn runnable_questions(
             printed.push(PrintedQuestion {
                 root: *root,
                 member: member.clone(),
+                method_expression: runs_as_method_expression(scenario, *root, expected, member),
             });
         }
     }
     printed
+}
+
+/// Whether the `Root.member` method-expression form is safe to render and run:
+/// a public value-receiver method whose root and declaring type are non-generic,
+/// so `Root.member` needs no type arguments and `g(r)` needs no addressing.
+fn runs_as_method_expression(
+    scenario: &Scenario,
+    root: NodeId,
+    expected: &GoAnswer,
+    member: &str,
+) -> bool {
+    if !scenario.node(root).type_params.is_empty() {
+        return false;
+    }
+    scenario.nodes.iter().any(|node| {
+        node.name == expected.declaring_type
+            && node.type_params.is_empty()
+            && matches!(&node.kind, NodeKind::Struct { methods, .. }
+            if methods.iter().any(|method| {
+                method.name == member
+                    && matches!(method.receiver, Receiver::Value)
+                    && matches!(method.visibility, Visibility::Public)
+            }))
+    })
 }
 
 /// A promoted (depth > 0) method runs only with no pointer indirection and a

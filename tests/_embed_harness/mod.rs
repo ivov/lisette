@@ -19,4 +19,8 @@ use scenario::NodeId;
 pub struct PrintedQuestion {
     pub root: NodeId,
     pub member: String,
+    /// Also exercise the `Root.member` method-expression form. Set only for a
+    /// public, value-receiver method on a non-generic root and declaring type,
+    /// where `Root.member` is valid and `g(r)` needs no addressing.
+    pub method_expression: bool,
 }

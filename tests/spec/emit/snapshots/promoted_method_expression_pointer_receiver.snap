@@ -1,0 +1,23 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "\nstruct Base { pub id: int }\n\nimpl Base {\n  pub fn bump(self: Ref<Base>) { self.id += 1 }\n}\n\nstruct Outer { embed Base }\n\nfn main() {\n  let g = Outer.bump\n  let mut o = Outer { Base: Base { id: 1 } }\n  g(&o)\n}\n"
+---
+package main
+
+type Base struct {
+	Id int
+}
+
+func (b *Base) Bump() {
+	b.Id++
+}
+
+type Outer struct {
+	Base
+}
+
+func main() {
+	g := (*Outer).Bump
+	o := Outer{Base: Base{Id: 1}}
+	g(&o)
+}
