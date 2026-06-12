@@ -9892,6 +9892,179 @@ fn main() {
 }
 
 #[test]
+fn deprecated_function() {
+    assert_lint_snapshot!(
+        r#"
+/// Deprecated: use the new API instead.
+fn legacy() -> int {
+  42
+}
+
+fn main() {
+  let _ = legacy()
+}
+"#
+    );
+}
+
+#[test]
+fn deprecated_method() {
+    assert_lint_snapshot!(
+        r#"
+struct Cache {}
+
+impl Cache {
+  /// Deprecated: use the new method instead.
+  fn warm(self) -> int {
+    1
+  }
+}
+
+fn main() {
+  let c = Cache {}
+  let _ = c.warm()
+}
+"#
+    );
+}
+
+#[test]
+fn deprecated_function_value() {
+    assert_lint_snapshot!(
+        r#"
+/// Deprecated: use the new API instead.
+fn legacy() -> int {
+  42
+}
+
+fn main() {
+  let f = legacy
+  let _ = f()
+}
+"#
+    );
+}
+
+#[test]
+fn deprecated_promoted_method() {
+    assert_lint_snapshot!(
+        r#"
+pub struct Logger {
+  pub prefix: string,
+}
+
+impl Logger {
+  /// Deprecated: use the new method instead.
+  pub fn old_log(self) -> string {
+    self.prefix
+  }
+}
+
+struct Server {
+  embed Logger,
+  pub port: int,
+}
+
+fn main() {
+  let s = Server { Logger: Logger { prefix: "[api]" }, port: 8080 }
+  let _ = s.old_log()
+}
+"#
+    );
+}
+
+#[test]
+fn deprecated_interface_method() {
+    assert_lint_snapshot!(
+        r#"
+interface Store {
+  /// Deprecated: use `fetch` instead.
+  fn old_get(self) -> int
+}
+
+struct Db {}
+
+impl Db {
+  fn old_get(self) -> int {
+    1
+  }
+}
+
+fn read(s: Store) -> int {
+  s.old_get()
+}
+
+fn main() {
+  let _ = read(Db {})
+}
+"#
+    );
+}
+
+#[test]
+fn deprecated_go_stdlib_function() {
+    assert_lint_snapshot!(
+        r#"
+import "go:strings"
+
+fn main() {
+  let _ = strings.Title("hello world")
+}
+"#
+    );
+}
+
+#[test]
+fn deprecated_type_use_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+/// Deprecated: use NewType instead.
+pub struct OldType {
+  pub x: int,
+}
+
+fn make() -> OldType {
+  OldType { x: 1 }
+}
+
+fn main() {
+  let _ = make()
+}
+"#
+    );
+}
+
+#[test]
+fn deprecated_non_deprecated_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:strings"
+
+fn main() {
+  let _ = strings.ToLower("HELLO")
+}
+"#
+    );
+}
+
+#[test]
+fn deprecated_allow_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+/// Deprecated: use the new API instead.
+fn legacy() -> int {
+  42
+}
+
+#[allow(deprecated)]
+fn main() {
+  let _ = legacy()
+}
+"#
+    );
+}
+
+#[test]
 fn exit_after_defer() {
     assert_lint_snapshot!(
         r#"

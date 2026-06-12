@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [warning] Use of deprecated API
+    ╭─[test.lis:13:11]
+ 12 │   let c = Cache {}
+ 13 │   let _ = c.warm()
+    ·           ───┬──
+    ·              ╰── deprecated
+ 14 │ }
+    ╰────
+  help: Use the new method instead · code: [lint.deprecated]

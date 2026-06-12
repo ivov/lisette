@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [warning] Use of deprecated API
+   ╭─[test.lis:8:11]
+ 7 │ fn main() {
+ 8 │   let f = legacy
+   ·           ───┬──
+   ·              ╰── deprecated
+ 9 │   let _ = f()
+   ╰────
+  help: Use the new API instead · code: [lint.deprecated]

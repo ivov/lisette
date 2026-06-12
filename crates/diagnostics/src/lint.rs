@@ -860,6 +860,13 @@ pub fn waitgroup_add_in_task(span: &Span) -> LisetteDiagnostic {
         )
 }
 
+pub fn deprecated_api(span: &Span, message: &str) -> LisetteDiagnostic {
+    LisetteDiagnostic::warn("Use of deprecated API")
+        .with_lint_code("deprecated")
+        .with_span_label(span, "deprecated")
+        .with_help(message)
+}
+
 pub fn exit_after_defer(span: &Span) -> LisetteDiagnostic {
     LisetteDiagnostic::warn("`os.Exit` skips `defer`")
         .with_lint_code("exit_after_defer")

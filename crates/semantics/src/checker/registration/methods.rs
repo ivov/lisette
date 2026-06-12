@@ -190,10 +190,13 @@ impl TaskState<'_> {
         let mut static_methods: Vec<(String, Type)> = Vec::new();
 
         for function in functions {
-            let fn_attrs = if let Expression::Function { attributes, .. } = function {
-                attributes.as_slice()
+            let (fn_attrs, fn_doc) = if let Expression::Function {
+                attributes, doc, ..
+            } = function
+            {
+                (attributes.as_slice(), doc.clone())
             } else {
-                &[]
+                (&[][..], None)
             };
             let fn_visibility = if let Expression::Function { visibility, .. } = function
                 && (*visibility == SyntacticVisibility::Public || self.is_d_lis(&*store))
@@ -282,7 +285,7 @@ impl TaskState<'_> {
                     ty: method_ty,
                     name: None,
                     name_span: Some(fn_sig.name_span),
-                    doc: None,
+                    doc: fn_doc,
                     body: DefinitionBody::Value {
                         allowed_lints: extract_attribute_flags(fn_attrs, "allow"),
                         go_hints,
@@ -324,14 +327,25 @@ impl TaskState<'_> {
 
         let module_id = self.cursor.module_id.clone();
         let is_d_lis = self.is_d_lis(&*store);
-        let mut method_defs: Vec<(EcoString, Type, Vec<String>, Vec<String>)> = Vec::new();
+        struct MethodDef {
+            name: EcoString,
+            ty: Type,
+            go_hints: Vec<String>,
+            allowed_lints: Vec<String>,
+            name_span: Span,
+            doc: Option<String>,
+        }
+        let mut method_defs: Vec<MethodDef> = Vec::new();
         let methods = fn_expressions
             .iter()
             .map(|fe| {
-                let fn_attrs = if let Expression::Function { attributes, .. } = fe {
-                    attributes.as_slice()
+                let (fn_attrs, fn_doc) = if let Expression::Function {
+                    attributes, doc, ..
+                } = fe
+                {
+                    (attributes.as_slice(), doc.clone())
                 } else {
-                    &[]
+                    (&[][..], None)
                 };
                 let method_sig = fe.to_function_signature();
                 let fn_ty = self.extract_signature_parts(
@@ -382,12 +396,14 @@ impl TaskState<'_> {
                         fn_ty,
                     )
                 } else {
-                    method_defs.push((
-                        method_sig.name.clone(),
-                        fn_ty.clone(),
+                    method_defs.push(MethodDef {
+                        name: method_sig.name.clone(),
+                        ty: fn_ty.clone(),
                         go_hints,
-                        extract_attribute_flags(fn_attrs, "allow"),
-                    ));
+                        allowed_lints: extract_attribute_flags(fn_attrs, "allow"),
+                        name_span: method_sig.name_span,
+                        doc: fn_doc,
+                    });
                     (method_sig.name, fn_ty)
                 }
             })
@@ -434,19 +450,19 @@ impl TaskState<'_> {
         // Register interface methods as Definition::Value entries so the emitter
         // can look up their go_hints (e.g., comma_ok) by qualified name.
         // Methods inherit the interface's visibility — a `pub interface`'s methods are implicitly public.
-        for (method_name, method_ty, go_hints, allowed_lints) in method_defs {
-            let method_qualified_name = format!("{}.{}.{}", module_id, interface_name, method_name);
+        for method in method_defs {
+            let method_qualified_name = format!("{}.{}.{}", module_id, interface_name, method.name);
             module.definitions.insert(
                 method_qualified_name.into(),
                 Definition {
                     visibility: visibility.clone(),
-                    ty: method_ty,
+                    ty: method.ty,
                     name: None,
-                    name_span: None, // Interface method signatures; span tracked in Interface definition
-                    doc: None,
+                    name_span: Some(method.name_span),
+                    doc: method.doc,
                     body: DefinitionBody::Value {
-                        allowed_lints,
-                        go_hints,
+                        allowed_lints: method.allowed_lints,
+                        go_hints: method.go_hints,
                         go_name: None,
                         const_value: None,
                     },

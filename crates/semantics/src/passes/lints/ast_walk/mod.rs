@@ -1,17 +1,20 @@
 pub(crate) mod attributes;
 pub(crate) mod casing;
 mod checks;
+mod deprecation;
 mod suppression;
 
 use std::sync::{Arc, LazyLock};
 
 use crate::context::AnalysisContext;
-use crate::facts::Facts;
+use crate::facts::{Facts, Usage};
 use crate::passes::PARALLEL_THRESHOLD;
 use crate::passes::walk::{CheckTable, NodeCtx, walk_nodes};
 use crate::store::Store;
 use diagnostics::{LisetteDiagnostic, LocalSink};
 use rayon::prelude::*;
+use rustc_hash::FxHashMap as HashMap;
+use syntax::ast::Span;
 use syntax::program::Module;
 
 use attributes::{check_attributes, check_enum_attributes, check_struct_attributes};
@@ -124,6 +127,17 @@ static LINT_CHECKS: LazyLock<CheckTable> = LazyLock::new(|| {
 pub(crate) fn run(analysis: &AnalysisContext, facts: &Facts) -> Vec<LisetteDiagnostic> {
     let store = analysis.store;
 
+    let deprecated = deprecation::build_index(store);
+    let mut usages_by_file: HashMap<u32, Vec<&Usage>> = HashMap::default();
+    if !deprecated.is_empty() {
+        for usage in &facts.usages {
+            usages_by_file
+                .entry(usage.usage_span.file_id)
+                .or_default()
+                .push(usage);
+        }
+    }
+
     let mut modules: Vec<&Module> = store
         .modules
         .values()
@@ -135,7 +149,7 @@ pub(crate) fn run(analysis: &AnalysisContext, facts: &Facts) -> Vec<LisetteDiagn
     if modules.len() < PARALLEL_THRESHOLD {
         let sink = LocalSink::new();
         for module in &modules {
-            run_module(module, store, facts, &sink);
+            run_module(module, store, facts, &sink, &deprecated, &usages_by_file);
         }
         return sink.take();
     }
@@ -144,15 +158,29 @@ pub(crate) fn run(analysis: &AnalysisContext, facts: &Facts) -> Vec<LisetteDiagn
         .par_iter()
         .map(|module| {
             let local_sink = LocalSink::new();
-            run_module(module, store, facts, &local_sink);
+            run_module(
+                module,
+                store,
+                facts,
+                &local_sink,
+                &deprecated,
+                &usages_by_file,
+            );
             local_sink
         })
         .collect();
     LocalSink::merge(worker_sinks)
 }
 
-fn run_module(module: &Module, store: &Store, facts: &Facts, sink: &LocalSink) {
-    for file in module.files.values() {
+fn run_module(
+    module: &Module,
+    store: &Store,
+    facts: &Facts,
+    sink: &LocalSink,
+    deprecated: &HashMap<Span, String>,
+    usages_by_file: &HashMap<u32, Vec<&Usage>>,
+) {
+    for (file_id, file) in &module.files {
         let file_sink = LocalSink::new();
         let ctx = NodeCtx {
             store,
@@ -165,6 +193,10 @@ fn run_module(module: &Module, store: &Store, facts: &Facts, sink: &LocalSink) {
             claimed_spans: Default::default(),
         };
         walk_nodes(&file.items, &ctx, &LINT_CHECKS);
+
+        if let Some(usages) = usages_by_file.get(file_id) {
+            deprecation::sweep(usages, deprecated, &file_sink);
+        }
 
         let produced = file_sink.take();
         if produced.is_empty() {
