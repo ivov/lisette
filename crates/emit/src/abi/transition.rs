@@ -28,7 +28,7 @@ pub(crate) fn multi_value_return(values: Vec<String>) -> LoweredStatement {
 pub(crate) fn tag_check(condition: String, then_values: Vec<String>) -> LoweredStatement {
     LoweredStatement::If(IfPlan {
         directive: String::new(),
-        condition_setup: String::new(),
+        condition_setup: Vec::new(),
         condition,
         then_body: LoweredBlock {
             statements: vec![multi_value_return(then_values)],

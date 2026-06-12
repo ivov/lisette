@@ -288,7 +288,7 @@ impl Planner<'_> {
 
         loop_body.push(LoweredStatement::If(IfPlan {
             directive: String::new(),
-            condition_setup: String::new(),
+            condition_setup: Vec::new(),
             condition,
             then_body: LoweredBlock {
                 statements: then_body,
@@ -363,7 +363,7 @@ impl Planner<'_> {
         let else_lowered = self.lower_block_as_body(else_block, fx);
         statements.push(LoweredStatement::If(IfPlan {
             directive: String::new(),
-            condition_setup: String::new(),
+            condition_setup: Vec::new(),
             condition: guard,
             then_body: else_lowered,
             else_arm: ElseArm::None,
@@ -644,7 +644,7 @@ impl Planner<'_> {
         };
         statements.push(LoweredStatement::If(IfPlan {
             directive: String::new(),
-            condition_setup: String::new(),
+            condition_setup: Vec::new(),
             condition,
             then_body: LoweredBlock {
                 statements: then_body,
@@ -760,7 +760,7 @@ fn assemble_if_else_chain(
         let (condition, then_body) = pieces.pop().expect("len > 1");
         else_arm = ElseArm::ElseIf(Box::new(IfPlan {
             directive: String::new(),
-            condition_setup: String::new(),
+            condition_setup: Vec::new(),
             condition,
             then_body,
             else_arm,
@@ -769,7 +769,7 @@ fn assemble_if_else_chain(
     let (condition, then_body) = pieces.pop().expect("pieces is non-empty");
     LoweredStatement::If(IfPlan {
         directive: String::new(),
-        condition_setup: String::new(),
+        condition_setup: Vec::new(),
         condition,
         then_body,
         else_arm,

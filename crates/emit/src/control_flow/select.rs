@@ -261,7 +261,7 @@ impl Planner<'_> {
         let plan = if body_empty {
             IfPlan {
                 directive: String::new(),
-                condition_setup: String::new(),
+                condition_setup: Vec::new(),
                 condition: format!("!{}", ok_var),
                 then_body: else_block.expect("body_empty && has_else"),
                 else_arm: ElseArm::None,
@@ -276,7 +276,7 @@ impl Planner<'_> {
             };
             IfPlan {
                 directive: String::new(),
-                condition_setup: String::new(),
+                condition_setup: Vec::new(),
                 condition: ok_var.to_string(),
                 then_body: body_block,
                 else_arm,
@@ -356,7 +356,7 @@ impl Planner<'_> {
         };
         let if_plan = IfPlan {
             directive: String::new(),
-            condition_setup: String::new(),
+            condition_setup: Vec::new(),
             condition: ok_var,
             then_body: LoweredBlock {
                 statements: then_statements,
@@ -690,7 +690,7 @@ fn build_receive_arms_plan(
     match (some, none) {
         (Some(some), Some(none)) => Some(IfPlan {
             directive: String::new(),
-            condition_setup: String::new(),
+            condition_setup: Vec::new(),
             condition: ok_var.to_string(),
             then_body: some,
             else_arm: ElseArm::Else {
@@ -700,14 +700,14 @@ fn build_receive_arms_plan(
         }),
         (Some(some), None) => Some(IfPlan {
             directive: String::new(),
-            condition_setup: String::new(),
+            condition_setup: Vec::new(),
             condition: ok_var.to_string(),
             then_body: some,
             else_arm: ElseArm::None,
         }),
         (None, Some(none)) => Some(IfPlan {
             directive: String::new(),
-            condition_setup: String::new(),
+            condition_setup: Vec::new(),
             condition: format!("!{}", ok_var),
             then_body: none,
             else_arm: ElseArm::None,

@@ -223,7 +223,7 @@ impl Planner<'_> {
         let then_body = if let Some(check) = &nil_check {
             let inner = IfPlan {
                 directive: String::new(),
-                condition_setup: String::new(),
+                condition_setup: Vec::new(),
                 condition: check.clone(),
                 then_body: leaf_block(
                     &sink,
@@ -251,7 +251,7 @@ impl Planner<'_> {
 
         statements.push(LoweredStatement::If(IfPlan {
             directive: String::new(),
-            condition_setup: String::new(),
+            condition_setup: Vec::new(),
             condition: format!("{} != nil", err_var),
             then_body,
             else_arm,
@@ -359,7 +359,7 @@ impl Planner<'_> {
             };
             ElseArm::ElseIf(Box::new(IfPlan {
                 directive: String::new(),
-                condition_setup: String::new(),
+                condition_setup: Vec::new(),
                 condition: nil_condition,
                 then_body: leaf_block(&sink, &nil_err),
                 else_arm: ElseArm::Else {
@@ -380,7 +380,7 @@ impl Planner<'_> {
 
         statements.push(LoweredStatement::If(IfPlan {
             directive: String::new(),
-            condition_setup: String::new(),
+            condition_setup: Vec::new(),
             condition: format!("{} != nil", err_var),
             then_body,
             else_arm,
@@ -423,7 +423,7 @@ impl Planner<'_> {
 
         statements.push(LoweredStatement::If(IfPlan {
             directive: String::new(),
-            condition_setup: String::new(),
+            condition_setup: Vec::new(),
             condition: format!("{} != nil", err_var),
             then_body,
             else_arm,

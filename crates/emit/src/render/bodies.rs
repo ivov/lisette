@@ -392,7 +392,7 @@ impl Renderer {
 
     fn render_if(&self, output: &mut String, plan: &IfPlan) {
         output.push_str(&plan.directive);
-        output.push_str(&plan.condition_setup);
+        output.push_str(&self.render_setup(&plan.condition_setup));
         write_line!(output, "if {} {{", plan.condition);
         self.render_lowered_block(output, &plan.then_body);
         self.render_else_arm(output, &plan.else_arm);
@@ -404,7 +404,7 @@ impl Renderer {
             ElseArm::ElseIf(plan) => {
                 if !plan.condition_setup.is_empty() {
                     output.push_str("} else {\n");
-                    output.push_str(&plan.condition_setup);
+                    output.push_str(&self.render_setup(&plan.condition_setup));
                     write_line!(output, "if {} {{", plan.condition);
                     self.render_lowered_block(output, &plan.then_body);
                     self.render_else_arm(output, &plan.else_arm);

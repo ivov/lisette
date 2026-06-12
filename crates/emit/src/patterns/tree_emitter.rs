@@ -3,10 +3,10 @@ use syntax::types::Type;
 
 use crate::EmitEffects;
 use crate::Planner;
-use crate::Renderer;
 use crate::analyze::inline_uses::{InlineDecision, analyze_inline_candidate, region_blocks_inline};
 use crate::context::expression::ExpressionContext;
 use crate::control_flow::branching::wrap_if_struct_literal;
+use crate::expressions::emission::StagedExpression;
 use crate::patterns::binding_emit::drop_inline_overlays;
 use crate::patterns::decision_tree::{Decision, compile_expanded_arms, expand_or_patterns};
 use crate::patterns::emit_plan::{
@@ -545,7 +545,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         };
         IfPlan {
             directive: String::new(),
-            condition_setup: String::new(),
+            condition_setup: Vec::new(),
             condition: condition.to_string(),
             then_body,
             else_arm,
@@ -686,7 +686,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         match &first.condition {
             Some(condition) => statements.push(LoweredStatement::If(IfPlan {
                 directive: String::new(),
-                condition_setup: String::new(),
+                condition_setup: Vec::new(),
                 condition: condition.clone(),
                 then_body: body,
                 else_arm: ElseArm::None,
@@ -919,16 +919,18 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
 
     /// Lower an arm's guard to `(condition_setup, condition)` for an `IfPlan`,
     /// or `None` when the arm has no guard. The caller owns the scope and body.
-    fn lower_guard_condition(&mut self, arm_index: usize) -> Option<(String, String)> {
+    fn lower_guard_condition(
+        &mut self,
+        arm_index: usize,
+    ) -> Option<(Vec<LoweredStatement>, String)> {
         let guard_expression = self.arms[arm_index].guard.as_deref()?;
-        let mut condition_setup = String::new();
         let plan = self.planner.plan_operand(
             guard_expression,
             ExpressionContext::value().condition(),
             self.fx,
         );
-        let guard_str = Renderer.render_value(&mut condition_setup, &plan);
-        Some((condition_setup, wrap_if_struct_literal(guard_str)))
+        let staged = StagedExpression::from_plan(plan, guard_expression);
+        Some((staged.setup, wrap_if_struct_literal(staged.value)))
     }
 }
 
@@ -1047,7 +1049,7 @@ fn build_chain_plan(branches: Vec<ChainBranch>, trailing: ElseArm) -> IfPlan {
     for branch in branches.into_iter().rev() {
         else_arm = ElseArm::ElseIf(Box::new(IfPlan {
             directive: String::new(),
-            condition_setup: String::new(),
+            condition_setup: Vec::new(),
             condition: branch.condition,
             then_body: branch.body,
             else_arm,
@@ -1055,7 +1057,7 @@ fn build_chain_plan(branches: Vec<ChainBranch>, trailing: ElseArm) -> IfPlan {
     }
     IfPlan {
         directive: String::new(),
-        condition_setup: String::new(),
+        condition_setup: Vec::new(),
         condition: head.condition,
         then_body: head.body,
         else_arm,

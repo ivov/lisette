@@ -6,6 +6,7 @@ use crate::context::expression::ExpressionContext;
 use crate::control_flow::branching::wrap_if_struct_literal;
 use crate::control_flow::propagation::plain_return;
 use crate::definitions::functions::is_go_never;
+use crate::expressions::emission::StagedExpression;
 use crate::plan::bodies::{
     ElseArm, ExpressionStatementForm, ExpressionStatementPlan, IfPlan, LoopPlan, LoweredBlock,
     LoweredStatement, MatchStatementPlan, PlacePlan, WhileLetPlan,
@@ -435,11 +436,10 @@ impl Planner<'_> {
         &mut self,
         condition: &Expression,
         fx: &mut EmitEffects,
-    ) -> (String, String) {
-        let mut setup = String::new();
+    ) -> (Vec<LoweredStatement>, String) {
         let plan = self.plan_operand(condition, ExpressionContext::value().condition(), fx);
-        let value = Renderer.render_value(&mut setup, &plan);
-        (setup, value)
+        let staged = StagedExpression::from_plan(plan, condition);
+        (staged.setup, staged.value)
     }
 
     fn lower_while(
@@ -455,7 +455,8 @@ impl Planner<'_> {
         let header = if !setup.is_empty() {
             // Condition produced setup statements (temps); they must re-run each
             // iteration, so move everything inside the loop.
-            format!("for {{\n{}if !({}) {{ break }}\n", setup, rendered)
+            let setup_text = Renderer.render_setup(&setup);
+            format!("for {{\n{}if !({}) {{ break }}\n", setup_text, rendered)
         } else if matches!(
             condition.unwrap_parens(),
             Expression::Literal {

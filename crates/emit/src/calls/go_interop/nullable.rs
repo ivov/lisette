@@ -158,7 +158,7 @@ impl Planner<'_> {
 
         statements.push(LoweredStatement::If(IfPlan {
             directive: String::new(),
-            condition_setup: String::new(),
+            condition_setup: Vec::new(),
             condition,
             then_body: leaf_block(&sink, &some_wrapper),
             else_arm: ElseArm::Else {
@@ -238,7 +238,7 @@ impl Planner<'_> {
         };
         statements.push(LoweredStatement::If(IfPlan {
             directive: String::new(),
-            condition_setup: String::new(),
+            condition_setup: Vec::new(),
             condition: format!("{}.Tag == {}", opt_var, OPTION_SOME_TAG),
             then_body: body,
             else_arm: ElseArm::None,
@@ -334,7 +334,7 @@ impl Planner<'_> {
                 };
                 let if_plan = IfPlan {
                     directive: String::new(),
-                    condition_setup: String::new(),
+                    condition_setup: Vec::new(),
                     condition,
                     then_body,
                     else_arm: ElseArm::Else {
@@ -430,7 +430,7 @@ impl Planner<'_> {
                 };
                 let if_plan = IfPlan {
                     directive: String::new(),
-                    condition_setup: String::new(),
+                    condition_setup: Vec::new(),
                     condition: format!("{}.Tag == {}", val_var, OPTION_SOME_TAG),
                     then_body,
                     else_arm,
