@@ -1,9 +1,9 @@
-use crate::_harness::emit_with_debug_info;
+use crate::_harness::emit_with_sourcemap;
 
 #[test]
 fn emits_line_directive_for_function_definition() {
     let input = "fn foo() -> int { 42 }";
-    let result = emit_with_debug_info(input);
+    let result = emit_with_sourcemap(input);
     let go_code = result.go_code();
     assert!(
         go_code.contains("//line src/test.lis:1"),
@@ -20,7 +20,7 @@ fn main() {
   let y = 2
 }
 "#;
-    let result = emit_with_debug_info(input);
+    let result = emit_with_sourcemap(input);
     let go_code = result.go_code();
     assert!(
         go_code.contains("//line src/test.lis:3"),
@@ -41,7 +41,7 @@ fn main() {
   let f = || 42
 }
 "#;
-    let result = emit_with_debug_info(input);
+    let result = emit_with_sourcemap(input);
     let go_code = result.go_code();
     assert!(
         go_code.contains("//line src/test.lis:3"),
@@ -53,7 +53,7 @@ fn main() {
 #[test]
 fn line_directive_includes_column() {
     let input = "fn main() { let x = 1 }";
-    let result = emit_with_debug_info(input);
+    let result = emit_with_sourcemap(input);
     let go_code = result.go_code();
     assert!(
         go_code.contains("//line src/test.lis:1:13"),

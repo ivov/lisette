@@ -3,7 +3,7 @@ use syntax::program::File;
 
 use super::pipeline::TestPipeline;
 
-pub fn emit_with_debug_info(raw_source: &str) -> EmitResult {
+pub fn emit_with_sourcemap(raw_source: &str) -> EmitResult {
     emit_inner(raw_source, Some(raw_source), &[])
 }
 
@@ -17,7 +17,7 @@ pub fn emit_with_go_typedefs(raw_source: &str, typedefs: &[(&str, &str)]) -> Emi
 
 fn emit_inner(
     raw_source: &str,
-    source_for_debug: Option<&str>,
+    source_for_sourcemap: Option<&str>,
     extra_go_typedefs: &[(&str, &str)],
 ) -> EmitResult {
     let mut pipeline = TestPipeline::new(raw_source).wrapped();
@@ -37,7 +37,7 @@ fn emit_inner(
         module_id: result.module_id.clone(),
         name: "test.lis".to_string(),
         display_path: "src/test.lis".to_string(),
-        source: source_for_debug.unwrap_or("").to_string(),
+        source: source_for_sourcemap.unwrap_or("").to_string(),
         items: result.ast,
     };
 
@@ -51,7 +51,7 @@ fn emit_inner(
         go_package_names: &result.go_package_names,
         go_module_ids: &result.go_module_ids,
     };
-    let mut emitter = Planner::new_for_tests(&config, source_for_debug);
+    let mut emitter = Planner::new_for_tests(&config, source_for_sourcemap);
     let emitted_files = emitter.emit_files(&[&file], &result.module_id);
 
     EmitResult {

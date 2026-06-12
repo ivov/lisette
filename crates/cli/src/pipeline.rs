@@ -25,7 +25,7 @@ pub struct CompileConfig {
     pub go_module: String,
     pub standalone_mode: bool,
     pub load_siblings: bool,
-    pub debug: bool,
+    pub sourcemap: bool,
     pub project_root: Option<PathBuf>,
     pub locator: TypedefLocator,
 }
@@ -70,7 +70,7 @@ pub fn compile(
         };
     }
 
-    let disable_cache = config.debug && config.target_phase == CompilePhase::Emit;
+    let disable_cache = config.sourcemap && config.target_phase == CompilePhase::Emit;
 
     let analyze_output = analyze(AnalyzeInput {
         config: SemanticConfig {
@@ -133,7 +133,7 @@ pub fn compile(
         &semantic_result.into_emit_input(),
         &config.go_module,
         EmitOptions {
-            debug: config.debug,
+            sourcemap: config.sourcemap,
         },
     );
 
@@ -180,7 +180,7 @@ mod tests {
             go_module: "test".to_string(),
             standalone_mode: false,
             load_siblings: true,
-            debug: false,
+            sourcemap: false,
             project_root: Some(project_dir.to_path_buf()),
             locator,
         };

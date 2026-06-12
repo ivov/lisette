@@ -58,7 +58,7 @@ pub struct AnalyzeInput<'a> {
     /// hash so a project rename invalidates Go outputs.
     pub go_module: String,
     /// When true, `analyze` skips both cache load and save. Set by the CLI for
-    /// `--debug` Emit so cwd-decorated Go files are not reused across cwds.
+    /// `--sourcemap` Emit so cwd-decorated Go files are not reused across cwds.
     pub disable_cache: bool,
 }
 

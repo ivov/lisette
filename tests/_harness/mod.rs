@@ -10,7 +10,7 @@ pub mod pipeline;
 pub mod wrap;
 
 pub use builders::*;
-pub use emit::emit_with_debug_info;
+pub use emit::emit_with_sourcemap;
 pub use filesystem::MockFileSystem;
 pub use formatting::snapshot_description;
 pub use infer::{InferResult, infer, infer_module, infer_with_go_typedefs};

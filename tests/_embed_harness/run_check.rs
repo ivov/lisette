@@ -189,7 +189,7 @@ fn emit_and_write(
     let files = Planner::emit(
         &result.into_emit_input(),
         &module,
-        EmitOptions { debug: false },
+        EmitOptions { sourcemap: false },
     );
     let dir = work.join("emitted");
     fs::create_dir_all(&dir).map_err(|e| e.to_string())?;

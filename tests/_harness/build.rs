@@ -94,7 +94,7 @@ pub fn locator_with_go_dep(module_path: &str, version: &str) -> deps::TypedefLoc
 pub fn compile_project_files(
     fs: MockFileSystem,
     go_module: &str,
-    debug: bool,
+    sourcemap: bool,
 ) -> Vec<emit::OutputFile> {
     let main_source = fs
         .scan_folder(ENTRY_MODULE_ID)
@@ -137,7 +137,7 @@ pub fn compile_project_files(
     Planner::emit(
         &analysis.into_emit_input(),
         go_module,
-        EmitOptions { debug },
+        EmitOptions { sourcemap },
     )
 }
 

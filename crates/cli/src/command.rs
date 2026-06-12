@@ -7,16 +7,16 @@ pub enum Command {
     },
     Build {
         path: Option<String>,
-        debug: bool,
+        sourcemap: bool,
     },
     Emit {
         path: Option<String>,
-        debug: bool,
+        sourcemap: bool,
     },
     Run {
         target: Option<String>,
         args: Vec<String>,
-        debug: bool,
+        sourcemap: bool,
         go_flags: Vec<String>,
     },
     Format {
@@ -72,19 +72,19 @@ pub enum ParseError {
     },
 }
 
-fn parse_path_and_debug(
+fn parse_path_and_sourcemap(
     arguments: impl Iterator<Item = String>,
 ) -> Result<(Option<String>, bool), ParseError> {
     let mut path = None;
-    let mut debug = false;
+    let mut sourcemap = false;
     for arg in arguments {
         match arg.as_str() {
-            "--debug" => debug = true,
+            "--sourcemap" => sourcemap = true,
             s if s.starts_with('-') => return Err(ParseError::UnknownFlag(s.to_string())),
             s => path = Some(s.to_string()),
         }
     }
-    Ok((path, debug))
+    Ok((path, sourcemap))
 }
 
 fn extend_go_flags(go_flags: &mut Vec<String>, raw: &str) -> Result<(), ParseError> {
@@ -142,19 +142,19 @@ impl Command {
             },
 
             "build" | "b" => {
-                let (path, debug) = parse_path_and_debug(arguments)?;
-                Ok(Command::Build { path, debug })
+                let (path, sourcemap) = parse_path_and_sourcemap(arguments)?;
+                Ok(Command::Build { path, sourcemap })
             }
 
             "emit" | "e" => {
-                let (path, debug) = parse_path_and_debug(arguments)?;
-                Ok(Command::Emit { path, debug })
+                let (path, sourcemap) = parse_path_and_sourcemap(arguments)?;
+                Ok(Command::Emit { path, sourcemap })
             }
 
             "run" | "r" => {
                 let mut target = None;
                 let mut args = Vec::new();
-                let mut debug = false;
+                let mut sourcemap = false;
                 let mut go_flags = Vec::new();
                 let mut found_separator = false;
 
@@ -163,8 +163,8 @@ impl Command {
                         args.push(arg);
                     } else if arg == "--" {
                         found_separator = true;
-                    } else if arg == "--debug" {
-                        debug = true;
+                    } else if arg == "--sourcemap" {
+                        sourcemap = true;
                     } else if arg == "--go-flags" {
                         let Some(value) = arguments.next() else {
                             return Err(ParseError::MissingArgument {
@@ -195,7 +195,7 @@ impl Command {
                 Ok(Command::Run {
                     target,
                     args,
-                    debug,
+                    sourcemap,
                     go_flags,
                 })
             }
@@ -553,12 +553,13 @@ mod tests {
     }
 
     #[test]
-    fn emit_parses_path_and_debug() {
-        let Ok(Command::Emit { path, debug }) = parse(&["lis", "emit", "src", "--debug"]) else {
+    fn emit_parses_path_and_sourcemap() {
+        let Ok(Command::Emit { path, sourcemap }) = parse(&["lis", "emit", "src", "--sourcemap"])
+        else {
             panic!("expected Emit command");
         };
         assert_eq!(path.as_deref(), Some("src"));
-        assert!(debug);
+        assert!(sourcemap);
     }
 
     #[test]

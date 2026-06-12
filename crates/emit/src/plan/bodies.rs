@@ -370,7 +370,7 @@ pub(crate) struct LoopPlan {
 }
 
 pub(crate) struct IfPlan {
-    /// Empty unless debug; set only on the leading `if`, never on nested
+    /// Empty unless sourcemap; set only on the leading `if`, never on nested
     /// `else if`s.
     pub(crate) directive: String,
     /// Side-effecting setup hoisted before the `if` condition (temps from a

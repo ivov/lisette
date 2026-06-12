@@ -77,12 +77,12 @@ Arguments:
     [path]     Path to project dir (default: current dir)
 
 Options:
-    `--debug`    Include `//line` directives in generated Go code for stack traces
+    `--sourcemap`    Include `//line` directives in generated Go code for stack traces
 
 Examples:
     `lis build`                          Build project in current dir
     `lis build` {path/to/project/dir:g}      Build project in specific dir
-    `lis build` {--debug:g}                  Build with source mapping directives",
+    `lis build` {--sourcemap:g}              Build with source mapping directives",
         ),
 
         "emit" | "e" => print_help(
@@ -94,12 +94,12 @@ Arguments:
     [path]     Path to project dir (default: current dir)
 
 Options:
-    `--debug`    Include `//line` directives in generated Go code for stack traces
+    `--sourcemap`    Include `//line` directives in generated Go code for stack traces
 
 Examples:
     `lis emit`                          Emit Go for project in current dir
     `lis emit` {path/to/project/dir:g}      Emit Go for project in specific dir
-    `lis emit` {--debug:g}                  Emit with source mapping directives",
+    `lis emit` {--sourcemap:g}              Emit with source mapping directives",
         ),
 
         "run" | "r" => print_help(
@@ -112,7 +112,7 @@ Arguments:
     [args]      Arguments to pass to the program (after --)
 
 Options:
-    `--debug`     Include `//line` directives in generated Go code for stack traces
+    `--sourcemap`    Include `//line` directives in generated Go code for stack traces
 
 Examples:
     `lis run`                            Run project in current dir

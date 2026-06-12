@@ -44,15 +44,15 @@ fn bash_completions() -> &'static str {
             return 0
             ;;
         build)
-            COMPREPLY=( $(compgen -W "--debug" -- "$cur") )
+            COMPREPLY=( $(compgen -W "--sourcemap" -- "$cur") )
             return 0
             ;;
         emit)
-            COMPREPLY=( $(compgen -W "--debug" -- "$cur") )
+            COMPREPLY=( $(compgen -W "--sourcemap" -- "$cur") )
             return 0
             ;;
         run)
-            COMPREPLY=( $(compgen -W "--debug --go-flags" -- "$cur") )
+            COMPREPLY=( $(compgen -W "--sourcemap --go-flags" -- "$cur") )
             return 0
             ;;
         format)
@@ -119,14 +119,14 @@ _lis() {
         args)
             case "$words[1]" in
                 build)
-                    _arguments '--debug[Include line directives for stack traces]'
+                    _arguments '--sourcemap[Include line directives for stack traces]'
                     ;;
                 emit)
-                    _arguments '--debug[Include line directives for stack traces]'
+                    _arguments '--sourcemap[Include line directives for stack traces]'
                     ;;
                 run)
                     _arguments \
-                        '--debug[Include line directives for stack traces]' \
+                        '--sourcemap[Include line directives for stack traces]' \
                         '--go-flags[Flags passed through to go build]:flags'
                     ;;
                 format)
@@ -175,9 +175,9 @@ complete -c lis -n __fish_use_subcommand -a learn -d 'Create a new sample projec
 complete -c lis -n __fish_use_subcommand -a complete -d 'Shell completion scripts'
 complete -c lis -n __fish_use_subcommand -a lsp -d 'Start the language server'
 
-complete -c lis -n '__fish_seen_subcommand_from build' -l debug -d 'Include line directives for stack traces'
-complete -c lis -n '__fish_seen_subcommand_from emit' -l debug -d 'Include line directives for stack traces'
-complete -c lis -n '__fish_seen_subcommand_from run' -l debug -d 'Include line directives for stack traces'
+complete -c lis -n '__fish_seen_subcommand_from build' -l sourcemap -d 'Include line directives for stack traces'
+complete -c lis -n '__fish_seen_subcommand_from emit' -l sourcemap -d 'Include line directives for stack traces'
+complete -c lis -n '__fish_seen_subcommand_from run' -l sourcemap -d 'Include line directives for stack traces'
 complete -c lis -n '__fish_seen_subcommand_from run' -l go-flags -r -d 'Flags passed through to go build'
 complete -c lis -n '__fish_seen_subcommand_from format' -l check -d 'Check formatting without modifying'
 complete -c lis -n '__fish_seen_subcommand_from check' -l errors-only -d 'Show only errors'

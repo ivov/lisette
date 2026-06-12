@@ -36,7 +36,12 @@ fn build_and_exec(
     }
 }
 
-pub fn run(target: Option<String>, args: Vec<String>, debug: bool, go_flags: Vec<String>) -> i32 {
+pub fn run(
+    target: Option<String>,
+    args: Vec<String>,
+    sourcemap: bool,
+    go_flags: Vec<String>,
+) -> i32 {
     if let Err(code) = crate::go_cli::require_go() {
         return code;
     }
@@ -44,13 +49,13 @@ pub fn run(target: Option<String>, args: Vec<String>, debug: bool, go_flags: Vec
     let target = target.unwrap_or_else(|| ".".to_string());
 
     if target.ends_with(".lis") {
-        run_standalone(&target, args, debug, &go_flags)
+        run_standalone(&target, args, sourcemap, &go_flags)
     } else {
-        run_project(&target, args, debug, &go_flags)
+        run_project(&target, args, sourcemap, &go_flags)
     }
 }
 
-fn run_project(path: &str, args: Vec<String>, debug: bool, go_flags: &[String]) -> i32 {
+fn run_project(path: &str, args: Vec<String>, sourcemap: bool, go_flags: &[String]) -> i32 {
     let project_path = Path::new(path);
 
     let prep = match super::build::prepare_project_build(project_path) {
@@ -69,7 +74,7 @@ fn run_project(path: &str, args: Vec<String>, debug: bool, go_flags: &[String]) 
     let target = stdlib::Target::host();
     let binary_name = go_cli::binary_name(&prep.manifest.project.name, target);
 
-    let build_result = super::build::build_locked(&prep, debug, true, "Build");
+    let build_result = super::build::build_locked(&prep, sourcemap, true, "Build");
     if build_result != 0 {
         return build_result;
     }
@@ -90,7 +95,7 @@ fn run_project(path: &str, args: Vec<String>, debug: bool, go_flags: &[String]) 
     build_and_exec(&build_dir, &output_path, &args, go_flags, heading, target)
 }
 
-fn run_standalone(file: &str, args: Vec<String>, debug: bool, go_flags: &[String]) -> i32 {
+fn run_standalone(file: &str, args: Vec<String>, sourcemap: bool, go_flags: &[String]) -> i32 {
     let file_path = Path::new(file);
 
     if !file_path.exists() {
@@ -149,7 +154,7 @@ fn run_standalone(file: &str, args: Vec<String>, debug: bool, go_flags: &[String
         go_module: "lis-standalone".to_string(),
         standalone_mode: true,
         load_siblings: false,
-        debug,
+        sourcemap,
         project_root: None,
         locator: deps::TypedefLocator::default(),
     };

@@ -12,7 +12,7 @@ pub struct File {
     /// Stable bare filename (e.g. `greet.lis`); identity key for caching and
     /// LSP path reconstruction.
     pub name: String,
-    /// Cwd-relative path for diagnostics and `--debug` directives; equals
+    /// Cwd-relative path for diagnostics and `--sourcemap` directives; equals
     /// `name` for synthetic/test loaders that have no notion of cwd.
     pub display_path: String,
     pub source: String,

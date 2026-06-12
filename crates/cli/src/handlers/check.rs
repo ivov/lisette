@@ -207,7 +207,7 @@ fn compile_single_file(
         go_module: "main".to_string(),
         standalone_mode: !load_siblings,
         load_siblings,
-        debug: false,
+        sourcemap: false,
         project_root: locator.project_root().map(|p| p.to_path_buf()),
         locator,
     };

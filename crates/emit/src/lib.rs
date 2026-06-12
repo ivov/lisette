@@ -54,7 +54,7 @@ use syntax::types::{Symbol, Type};
 
 #[derive(Clone, Debug, Default)]
 pub struct EmitOptions {
-    pub debug: bool,
+    pub sourcemap: bool,
 }
 
 #[derive(Default)]
@@ -223,7 +223,7 @@ impl<'a> Planner<'a> {
 
 impl<'a> Planner<'a> {
     pub fn emit(analysis: &'a EmitInput, go_module: &str, options: EmitOptions) -> Vec<OutputFile> {
-        let line_indexes: Arc<HashMap<u32, LineIndex>> = Arc::new(if options.debug {
+        let line_indexes: Arc<HashMap<u32, LineIndex>> = Arc::new(if options.sourcemap {
             analysis
                 .files
                 .iter()
@@ -270,7 +270,7 @@ impl<'a> Planner<'a> {
     }
 
     pub fn new_for_tests(config: &TestEmitConfig<'a>, source: Option<&str>) -> Self {
-        let (debug, line_indexes) = match source {
+        let (sourcemap, line_indexes) = match source {
             Some(src) => (
                 true,
                 Arc::new(HashMap::from_iter([(
@@ -290,7 +290,7 @@ impl<'a> Planner<'a> {
             go_module_ids: config.go_module_ids,
             entry_module: config.module_id.to_string(),
             go_module: config.go_module.to_string(),
-            options: EmitOptions { debug },
+            options: EmitOptions { sourcemap },
             line_indexes,
             globals,
             generic_base: Arc::new(OnceLock::new()),
@@ -454,7 +454,7 @@ impl<'a> Planner<'a> {
     }
 
     pub(crate) fn maybe_line_directive(&self, span: &Span) -> String {
-        if !self.facts.debug_enabled() || span.is_dummy() {
+        if !self.facts.sourcemap_enabled() || span.is_dummy() {
             return String::new();
         }
 

@@ -27,7 +27,7 @@ fn bench_small(c: &mut Criterion) {
             Planner::emit(
                 black_box(&emit_input),
                 black_box("bench"),
-                EmitOptions { debug: false },
+                EmitOptions { sourcemap: false },
             )
         });
     });
@@ -51,7 +51,7 @@ fn bench_stress(c: &mut Criterion, n_modules: usize) {
             Planner::emit(
                 black_box(&emit_input),
                 black_box("bench"),
-                EmitOptions { debug: false },
+                EmitOptions { sourcemap: false },
             )
         });
     });

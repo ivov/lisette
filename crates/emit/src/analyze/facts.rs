@@ -213,8 +213,8 @@ impl<'a> EmitFacts<'a> {
         self.globals.go_call_strategies.get(qualified_name)
     }
 
-    pub(crate) fn debug_enabled(&self) -> bool {
-        self.options.debug
+    pub(crate) fn sourcemap_enabled(&self) -> bool {
+        self.options.sourcemap
     }
 
     pub(crate) fn line_index(&self, file_id: u32) -> Option<&LineIndex> {

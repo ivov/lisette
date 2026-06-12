@@ -11,15 +11,15 @@ use diagnostics::render::{self, Filter};
 use lisette::fs::{LocalFileSystem, prune_orphan_go_files};
 use lisette::pipeline::{CompileConfig, CompilePhase, compile};
 
-pub fn emit(path: Option<String>, debug: bool) -> i32 {
-    compile_project(path, debug, false, "Emit")
+pub fn emit(path: Option<String>, sourcemap: bool) -> i32 {
+    compile_project(path, sourcemap, false, "Emit")
 }
 
-pub fn build(path: Option<String>, debug: bool, quiet: bool) -> i32 {
-    compile_project(path, debug, quiet, "Build")
+pub fn build(path: Option<String>, sourcemap: bool, quiet: bool) -> i32 {
+    compile_project(path, sourcemap, quiet, "Build")
 }
 
-fn compile_project(path: Option<String>, debug: bool, quiet: bool, label: &str) -> i32 {
+fn compile_project(path: Option<String>, sourcemap: bool, quiet: bool, label: &str) -> i32 {
     let project_root = path.unwrap_or_else(|| ".".to_string());
     let project_path = Path::new(&project_root);
 
@@ -33,7 +33,7 @@ fn compile_project(path: Option<String>, debug: bool, quiet: bool, label: &str) 
         Err(code) => return code,
     };
 
-    build_locked(&prep, debug, quiet, label)
+    build_locked(&prep, sourcemap, quiet, label)
 }
 
 pub(super) fn prepare_project_build(project_path: &Path) -> Result<BuildPrep, i32> {
@@ -80,7 +80,7 @@ pub(super) struct BuildPrep {
     pub locator: deps::TypedefLocator,
 }
 
-pub(super) fn build_locked(prep: &BuildPrep, debug: bool, quiet: bool, label: &str) -> i32 {
+pub(super) fn build_locked(prep: &BuildPrep, sourcemap: bool, quiet: bool, label: &str) -> i32 {
     let start = Instant::now();
 
     if let Err(e) =
@@ -147,7 +147,7 @@ pub(super) fn build_locked(prep: &BuildPrep, debug: bool, quiet: bool, label: &s
         go_module: go_module_name.to_string(),
         standalone_mode: false,
         load_siblings: true,
-        debug,
+        sourcemap,
         project_root: Some(prep.project_path.clone()),
         locator: locator.clone(),
     };
@@ -189,7 +189,7 @@ pub(super) fn build_locked(prep: &BuildPrep, debug: bool, quiet: bool, label: &s
 
     let heading = "Failed to compile Lisette project to Go";
 
-    if debug
+    if sourcemap
         && let Err(e) = semantics::cache::apply_emit_stamps(
             &prep.project_path,
             &result
@@ -201,7 +201,7 @@ pub(super) fn build_locked(prep: &BuildPrep, debug: bool, quiet: bool, label: &s
     {
         cli_error!(
             heading,
-            format!("Failed to invalidate emit stamps before debug write: {e}"),
+            format!("Failed to invalidate emit stamps before sourcemap write: {e}"),
             "Check file permissions on `target/cache`, or delete the directory and retry"
         );
         return 1;
@@ -267,7 +267,7 @@ pub(super) fn build_locked(prep: &BuildPrep, debug: bool, quiet: bool, label: &s
         return 1;
     }
 
-    if !debug
+    if !sourcemap
         && let Err(e) = semantics::cache::apply_emit_stamps(
             &prep.project_path,
             &result

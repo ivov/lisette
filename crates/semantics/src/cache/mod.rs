@@ -119,7 +119,7 @@ pub struct EmitStamp {
     pub artifact_hash: u64,
 }
 
-/// Hash over the non-debug Go-artifact inputs for one module.
+/// Hash over the non-sourcemap Go-artifact inputs for one module.
 pub fn compute_emit_artifact_hash(source_hash: u64, go_module: &str) -> u64 {
     let mut hasher = FnvHasher::new();
     source_hash.hash(&mut hasher);
@@ -392,7 +392,7 @@ fn cached_file_display_path(project_root: &Path, module_id: &str, bare_name: &st
 
 /// Set or clear the `emit_stamp` for each module's cache file. Missing files
 /// are skipped; undecodable (e.g. pre-bump) files are unlinked and skipped;
-/// other read errors propagate so the debug pre-write clear can hard-fail
+/// other read errors propagate so the sourcemap pre-write clear can hard-fail
 /// rather than leave a stale stamp over freshly-overwritten Go.
 pub fn apply_emit_stamps(
     project_root: &Path,
@@ -772,7 +772,7 @@ mod tests {
     }
 
     #[test]
-    fn try_load_cache_rejects_after_debug_invalidation() {
+    fn try_load_cache_rejects_after_sourcemap_invalidation() {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
         std::fs::create_dir_all(root.join("target").join("cache")).unwrap();

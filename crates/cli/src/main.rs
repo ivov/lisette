@@ -58,14 +58,14 @@ fn main() {
 
     let exit_code = match command {
         Command::New { name } => handlers::new_project(&name),
-        Command::Build { path, debug } => handlers::build(path, debug, false),
-        Command::Emit { path, debug } => handlers::emit(path, debug),
+        Command::Build { path, sourcemap } => handlers::build(path, sourcemap, false),
+        Command::Emit { path, sourcemap } => handlers::emit(path, sourcemap),
         Command::Run {
             target,
             args,
-            debug,
+            sourcemap,
             go_flags,
-        } => handlers::run(target, args, debug, go_flags),
+        } => handlers::run(target, args, sourcemap, go_flags),
         Command::Format { path, check } => handlers::format(path, check),
         Command::Check {
             path,
