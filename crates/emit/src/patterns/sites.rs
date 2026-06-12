@@ -6,7 +6,6 @@ use syntax::types::Type;
 
 use crate::EmitEffects;
 use crate::Planner;
-use crate::Renderer;
 use crate::context::expression::ExpressionContext;
 use crate::control_flow::branching::wrap_if_struct_literal;
 use crate::names::go_name;
@@ -247,24 +246,28 @@ impl Planner<'_> {
         if let Pattern::Or { patterns, .. } = pattern
             && pattern_has_bindings(pattern)
         {
-            let mut buffer = String::new();
-            if let Some(label) = &label {
-                write_line!(buffer, "{}:", label);
-            }
-            buffer.push_str("for {\n");
-            buffer.push_str(&Renderer.render_setup(&subject_setup));
-            self.emit_while_let_or_pattern(
-                &mut buffer,
+            let mut loop_body = subject_setup;
+            self.lower_while_let_or_pattern(
+                &mut loop_body,
                 patterns,
                 TypedSubject {
                     var: &subject_var,
                     ty: &scrutinee_ty,
                 },
                 body,
+                label.as_deref(),
                 fx,
             );
             return LoweredBlock {
-                statements: vec![LoweredStatement::RawGo(buffer)],
+                statements: vec![LoweredStatement::Loop(LoopPlan {
+                    directive: String::new(),
+                    prologue: String::new(),
+                    label,
+                    header: "for {\n".to_string(),
+                    body: LoweredBlock {
+                        statements: loop_body,
+                    },
+                })],
             };
         }
 
@@ -496,12 +499,16 @@ impl Planner<'_> {
         }
     }
 
-    fn emit_while_let_or_pattern(
+    /// Lower a binding or-pattern while-let body into `statements`: per-
+    /// alternative root assertions, then an `if/else if` chain whose terminal
+    /// `else` breaks the loop.
+    fn lower_while_let_or_pattern(
         &mut self,
-        output: &mut String,
+        statements: &mut Vec<LoweredStatement>,
         patterns: &[Pattern],
         subject: TypedSubject,
         body: &Expression,
+        label: Option<&str>,
         fx: &mut EmitEffects,
     ) {
         let TypedSubject {
@@ -530,46 +537,34 @@ impl Planner<'_> {
             }
         }
 
-        let mut assert_statements = Vec::new();
         let hoisted: Vec<_> = alternatives
             .iter()
-            .map(|info| {
-                apply_refutable_root_assertion(self, &mut assert_statements, info, subject_var)
-            })
+            .map(|info| apply_refutable_root_assertion(self, statements, info, subject_var))
             .collect();
-        Renderer.render_lowered_block(
-            output,
-            &LoweredBlock {
-                statements: assert_statements,
-            },
-        );
 
+        let mut pieces: Vec<(String, LoweredBlock)> = Vec::with_capacity(alternatives.len());
         for (i, info) in alternatives.iter().enumerate() {
             let (effective, ok_var) = &hoisted[i];
             let condition = compose_refutable_condition(ok_var.as_deref(), &info.checks, effective);
 
-            self.emit_branch_header(output, &condition, false, i == 0);
-
-            let mut binding_statements = Vec::new();
-            let overlays = tree_binding_statements(
-                self,
-                &mut binding_statements,
-                &info.bindings,
-                effective,
-                &[body],
-            );
-            Renderer.render_lowered_block(
-                output,
-                &LoweredBlock {
-                    statements: binding_statements,
-                },
-            );
-            let block = self.lower_block_as_body(body, fx);
-            Renderer.render_lowered_block(output, &block);
+            self.enter_scope();
+            let mut branch = Vec::new();
+            let overlays =
+                tree_binding_statements(self, &mut branch, &info.bindings, effective, &[body]);
+            branch.extend(self.lower_block_as_body(body, fx).statements);
             drop_inline_overlays(self, &overlays);
+            self.exit_scope();
+
+            pieces.push((condition, LoweredBlock { statements: branch }));
         }
 
-        self.emit_while_let_break_else(output);
+        let terminal = LoweredBlock {
+            statements: vec![LoweredStatement::Break {
+                directive: String::new(),
+                label: label.map(str::to_string),
+            }],
+        };
+        statements.push(assemble_if_else_chain(pieces, terminal));
     }
 
     pub(crate) fn lower_select_receive_pattern_site(
