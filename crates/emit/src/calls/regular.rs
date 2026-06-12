@@ -343,7 +343,7 @@ impl<'a> Planner<'a> {
         ctx: &CallArgsContext<'_>,
         fx: &mut EmitEffects,
     ) -> (Vec<LoweredStatement>, Vec<String>) {
-        let mut stages: Vec<StagedExpression> = args
+        let stages: Vec<StagedExpression> = args
             .iter()
             .enumerate()
             .map(|(i, arg)| {
@@ -352,29 +352,12 @@ impl<'a> Planner<'a> {
             })
             .collect();
 
-        if let Some(spread) = ctx.spread
-            && let Some(adapter_stage) =
-                self.try_emit_variadic_spread_adapter(spread, ctx.generic_fn_param_types, fx)
-        {
-            stages.push(adapter_stage);
-            let spread_index = stages.len() - 1;
-            let (setup, mut values) = self.sequence_structured(stages, "_arg");
-            self.finalize_spread_stage(
-                &mut values,
-                spread_index,
-                ctx.wrap_spread_to_any,
-                ctx.combine_variadic.as_ref().cloned(),
-                fx,
-            );
-            return (setup, values);
-        }
-
-        self.sequence_with_spread_structured(
+        self.sequence_args_with_spread_adapter(
             stages,
             ctx.spread,
+            ctx.generic_fn_param_types,
             ctx.wrap_spread_to_any,
-            "_arg",
-            ctx.combine_variadic.as_ref().cloned(),
+            ctx.combine_variadic.clone(),
             fx,
         )
     }

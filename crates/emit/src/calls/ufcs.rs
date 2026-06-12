@@ -151,18 +151,14 @@ impl Planner<'_> {
         }
         let combine = plan_variadic_spread(function, spread).map(|p| p.combine(1));
 
-        let (setup, all_values) = if let Some(spread) = spread
-            && let Some(adapter_stage) =
-                self.try_emit_variadic_spread_adapter(spread, declared_params, fx)
-        {
-            all_stages.push(adapter_stage);
-            let spread_index = all_stages.len() - 1;
-            let (setup, mut all_values) = self.sequence_structured(all_stages, "_arg");
-            self.finalize_spread_stage(&mut all_values, spread_index, false, combine, fx);
-            (setup, all_values)
-        } else {
-            self.sequence_with_spread_structured(all_stages, spread, false, "_arg", combine, fx)
-        };
+        let (setup, all_values) = self.sequence_args_with_spread_adapter(
+            all_stages,
+            spread,
+            declared_params,
+            false,
+            combine,
+            fx,
+        );
         let receiver_arg = all_values[0].clone();
         let emitted_args: Vec<String> = all_values[1..].to_vec();
         (setup, receiver_arg, emitted_args)

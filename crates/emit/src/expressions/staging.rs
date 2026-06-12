@@ -289,4 +289,31 @@ impl Planner<'_> {
         }
         (setup, values)
     }
+
+    /// Sequence pre-built argument stages, routing a fn-shape-mismatched
+    /// variadic spread through `try_emit_variadic_spread_adapter` (which stages
+    /// the adapter as a sibling) and otherwise through the plain spread path.
+    /// `adapter_params` are the callee's declared params used to detect the
+    /// shape mismatch.
+    pub(crate) fn sequence_args_with_spread_adapter(
+        &mut self,
+        mut stages: Vec<StagedExpression>,
+        spread: Option<&Expression>,
+        adapter_params: Option<&[Type]>,
+        wrap_to_any: bool,
+        combine: Option<VariadicCombine>,
+        fx: &mut EmitEffects,
+    ) -> (Vec<LoweredStatement>, Vec<String>) {
+        if let Some(spread) = spread
+            && let Some(adapter_stage) =
+                self.try_emit_variadic_spread_adapter(spread, adapter_params, fx)
+        {
+            stages.push(adapter_stage);
+            let spread_index = stages.len() - 1;
+            let (setup, mut values) = self.sequence_structured(stages, "_arg");
+            self.finalize_spread_stage(&mut values, spread_index, wrap_to_any, combine, fx);
+            return (setup, values);
+        }
+        self.sequence_with_spread_structured(stages, spread, wrap_to_any, "_arg", combine, fx)
+    }
 }
