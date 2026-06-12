@@ -1,6 +1,7 @@
 pub(crate) mod attributes;
 pub(crate) mod casing;
 mod checks;
+mod suppression;
 
 use std::sync::{Arc, LazyLock};
 
@@ -90,7 +91,7 @@ static LINT_CHECKS: LazyLock<CheckTable> = LazyLock::new(|| {
             (check_dup_arg, &[Call]),
             (check_duplicate_cutset, &[Call]),
             (check_waitgroup_add_in_task, &[Function, Lambda]),
-            (check_exit_after_defer, &[Function]),
+            (check_exit_after_defer, &[Function, Lambda]),
             (check_struct_attributes, &[Struct]),
             (check_attributes, &[Function]),
             (check_enum_attributes, &[Enum]),
@@ -153,6 +154,7 @@ pub(crate) fn run(analysis: &AnalysisContext, facts: &Facts) -> Vec<LisetteDiagn
 
 fn run_module(module: &Module, store: &Store, facts: &Facts, sink: &LocalSink) {
     for file in module.files.values() {
+        let file_sink = LocalSink::new();
         let ctx = NodeCtx {
             store,
             facts,
@@ -160,9 +162,16 @@ fn run_module(module: &Module, store: &Store, facts: &Facts, sink: &LocalSink) {
             module_id: &module.id,
             source: &file.source,
             is_d_lis: file.is_d_lis(),
-            sink,
+            sink: &file_sink,
             claimed_spans: Default::default(),
         };
         walk_nodes(&file.items, &ctx, &LINT_CHECKS);
+
+        let produced = file_sink.take();
+        if produced.is_empty() {
+            continue;
+        }
+        let allows = suppression::collect_declaration_allows(&file.items);
+        sink.extend(suppression::filter_allowed(produced, &allows));
     }
 }

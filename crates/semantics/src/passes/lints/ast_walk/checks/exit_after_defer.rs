@@ -1,19 +1,11 @@
 use crate::passes::walk::NodeCtx;
-use syntax::ast::{Attribute, AttributeArg, Expression};
-
-const LINT_NAME: &str = "exit_after_defer";
+use syntax::ast::Expression;
 
 pub fn check_exit_after_defer(expression: &Expression, ctx: &NodeCtx) {
-    let Expression::Function {
-        attributes, body, ..
-    } = expression
-    else {
-        return;
+    let body = match expression {
+        Expression::Function { body, .. } | Expression::Lambda { body, .. } => body,
+        _ => return,
     };
-
-    if is_allowed(attributes) {
-        return;
-    }
 
     scan(body, false, ctx);
 }
@@ -60,14 +52,4 @@ fn is_os_exit(callee: &Expression) -> bool {
         return false;
     };
     member.as_str() == "Exit" && receiver.get_type().as_import_namespace() == Some("go:os")
-}
-
-fn is_allowed(attributes: &[Attribute]) -> bool {
-    attributes.iter().any(|attribute| {
-        attribute.name == "allow"
-            && attribute
-                .args
-                .iter()
-                .any(|arg| matches!(arg, AttributeArg::Flag(flag) if flag == LINT_NAME))
-    })
 }

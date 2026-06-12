@@ -10033,6 +10033,86 @@ fn main() {
 }
 
 #[test]
+fn exit_after_defer_in_lambda() {
+    assert_lint_snapshot!(
+        r#"
+import "go:os"
+
+fn cleanup() {}
+
+fn main() {
+  let f = || {
+    defer cleanup()
+    os.Exit(1)
+  }
+  f()
+}
+"#
+    );
+}
+
+#[test]
+fn exit_after_defer_in_lambda_allow_on_enclosing_function_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:os"
+
+fn cleanup() {}
+
+#[allow(exit_after_defer)]
+fn main() {
+  let f = || {
+    defer cleanup()
+    os.Exit(1)
+  }
+  f()
+}
+"#
+    );
+}
+
+#[test]
+fn allow_suppresses_ast_walk_lint() {
+    assert_no_lint_warnings!(
+        r#"
+#[allow(self_comparison)]
+fn main() {
+  let x = 1
+  let _ = x == x
+}
+"#
+    );
+}
+
+#[test]
+fn allow_suppresses_nested_ast_walk_lint() {
+    assert_no_lint_warnings!(
+        r#"
+#[allow(self_comparison)]
+fn main() {
+  let x = 1
+  if x > 0 {
+    let _ = x == x
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn allow_is_lint_specific() {
+    assert_lint_snapshot!(
+        r#"
+#[allow(self_comparison)]
+fn main() {
+  let flag = true
+  let _ = !!flag
+}
+"#
+    );
+}
+
+#[test]
 fn unnecessary_range_loop_read() {
     assert_lint_snapshot!(
         r#"

@@ -438,6 +438,10 @@ impl LisetteDiagnostic {
         self.code.as_deref()
     }
 
+    pub fn lint_name(&self) -> Option<&str> {
+        self.code.as_deref()?.strip_prefix("lint.")
+    }
+
     pub fn primary_offset(&self) -> usize {
         self.labels.first().map(|l| l.offset()).unwrap_or(0)
     }

@@ -131,16 +131,33 @@ type User struct {
 
 ## Lint suppression
 
-Use `#[allow]` on a function to suppress an unused expression lint on its call sites. 
+`#[allow(lint)]` on a function silences that lint.
 
-Lint rules currently suppressible: `unused_result`, `unused_option`, `unused_literal`, `unused_value`.
+For most lints, place the attribute on the function whose code is flagged:
 
-```rust
+```rs
+#[allow(match_on_bool)]
+fn describe(ready: bool) -> string {
+  match ready {
+    true => "go",
+    false => "wait",
+  }
+}
+```
+
+For the unused-value of lints (namely `unused_result`, `unused_option`, `unused_literal`, and `unused_value`), place `#[allow]` on the function whose result is ignored, so every call to it stops warning.
+
+```rs
 import "go:os"
 
 #[allow(unused_result)]
-fn warm_cache(path: string) {
-  os.ReadFile(path)  // preload file, ignore contents
+fn warm_cache(path: string) -> Result<Slice<byte>, error> {
+  os.ReadFile(path)
+}
+
+fn main() {
+  warm_cache("/config")
+  warm_cache("/data")
 }
 ```
 
