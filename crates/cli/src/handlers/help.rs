@@ -71,18 +71,21 @@ Arguments:
         "build" | "b" => print_help(
             "`lis build` [path] [options]
 
-Compile a Lisette project.
+Compile a Lisette project to a binary at `target/bin/<project-name>`
 
 Arguments:
     [path]     Path to project dir (default: current dir)
 
 Options:
-    `--sourcemap`    Include `//line` directives in generated Go code for stack traces
+    `--sourcemap`           Include `//line` directives in generated Go code for stack traces
+    `--go-flags` <flags>    Flags passed through to `go build` (e.g. `-trimpath`, `-ldflags`)
 
 Examples:
-    `lis build`                          Build project in current dir
-    `lis build` {path/to/project/dir:g}      Build project in specific dir
-    `lis build` {--sourcemap:g}              Build with source mapping directives",
+    `lis build`                                  Build project in current dir
+    `lis build` {path/to/project/dir:g}              Build project in specific dir
+    `lis build` {--sourcemap:g}                      Build with source mapping directives
+    `lis build` {--go-flags \"-trimpath\":g}           Pass extra flags to the Go compiler
+    `lis build` {--go-flags \"-ldflags='-s -w'\":g}    Quote flag values that contain spaces",
         ),
 
         "emit" | "e" => print_help(
@@ -109,10 +112,11 @@ Compile and execute a Lisette file or project.
 
 Arguments:
     [target:g]    Project dir or `.lis` file (default: current dir)
-    [args]      Arguments to pass to the program (after --)
+    [args]      Arguments to pass to the program (after {--})
 
 Options:
-    `--sourcemap`    Include `//line` directives in generated Go code for stack traces
+    `--sourcemap`           Include `//line` directives in generated Go code for stack traces
+    `--go-flags` <flags>    Flags passed through to `go build` (e.g. `-race`, `-ldflags`)
 
 Examples:
     `lis run`                            Run project in current dir

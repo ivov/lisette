@@ -10,19 +10,7 @@ use diagnostics::render::{self, Filter};
 use lisette::pipeline::{CompileConfig, CompilePhase, compile};
 use semantics::loader::MemoryLoader;
 
-fn build_and_exec(
-    build_dir: &Path,
-    output_path: &Path,
-    args: &[String],
-    go_flags: &[String],
-    heading: &str,
-    target: stdlib::Target,
-) -> i32 {
-    if let Err(e) = go_cli::build_binary(build_dir, output_path, target, go_flags) {
-        cli_error!(heading, e.message, e.hint);
-        return 1;
-    }
-
+fn exec_binary(output_path: &Path, args: &[String], heading: &str) -> i32 {
     match Command::new(output_path).args(args).status() {
         Ok(status) => status.code().unwrap_or(1),
         Err(e) => {
@@ -72,27 +60,18 @@ fn run_project(path: &str, args: Vec<String>, sourcemap: bool, go_flags: &[Strin
 
     let heading = "Failed to run project";
     let target = stdlib::Target::host();
-    let binary_name = go_cli::binary_name(&prep.manifest.project.name, target);
 
     let build_result = super::build::build_locked(&prep, sourcemap, true, "Build");
     if build_result != 0 {
         return build_result;
     }
 
-    let build_dir = match prep.target_dir.canonicalize() {
+    let output_path = match super::build::link_project_binary(&prep, go_flags, target, heading) {
         Ok(p) => p,
-        Err(e) => {
-            cli_error!(
-                heading,
-                format!("Failed to resolve `{}`: {}", prep.target_dir.display(), e),
-                "Check that the directory exists"
-            );
-            return 1;
-        }
+        Err(code) => return code,
     };
-    let output_path = build_dir.join("bin").join(&binary_name);
 
-    build_and_exec(&build_dir, &output_path, &args, go_flags, heading, target)
+    exec_binary(&output_path, &args, heading)
 }
 
 fn run_standalone(file: &str, args: Vec<String>, sourcemap: bool, go_flags: &[String]) -> i32 {
@@ -225,5 +204,9 @@ fn run_standalone(file: &str, args: Vec<String>, sourcemap: bool, go_flags: &[St
     go_cli::write_emit_manifest(&temp_dir, &emit.new_manifest);
 
     let output_path = temp_dir.join(go_cli::run_binary_name(target));
-    build_and_exec(&temp_dir, &output_path, &args, go_flags, heading, target)
+    if let Err(e) = go_cli::build_binary(&temp_dir, &output_path, target, go_flags) {
+        cli_error!(heading, e.message, e.hint);
+        return 1;
+    }
+    exec_binary(&output_path, &args, heading)
 }

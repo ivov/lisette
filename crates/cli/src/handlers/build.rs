@@ -12,14 +12,42 @@ use lisette::fs::{LocalFileSystem, prune_orphan_go_files};
 use lisette::pipeline::{CompileConfig, CompilePhase, compile};
 
 pub fn emit(path: Option<String>, sourcemap: bool) -> i32 {
-    compile_project(path, sourcemap, false, "Emit")
+    with_locked_project(path, |prep| build_locked(prep, sourcemap, false, "Emit"))
 }
 
-pub fn build(path: Option<String>, sourcemap: bool, quiet: bool) -> i32 {
-    compile_project(path, sourcemap, quiet, "Build")
+pub fn build(path: Option<String>, sourcemap: bool, go_flags: Vec<String>) -> i32 {
+    with_locked_project(path, |prep| {
+        let emit_code = build_locked(prep, sourcemap, false, "Emit");
+        if emit_code != 0 {
+            return emit_code;
+        }
+
+        let target = stdlib::Target::host();
+        let output_path =
+            match link_project_binary(prep, &go_flags, target, "Failed to build project") {
+                Ok(p) => p,
+                Err(code) => return code,
+            };
+
+        let user_chose_output = go_flags.iter().any(|f| go_cli::is_go_output_flag(f));
+        if user_chose_output {
+            eprintln!("  ✓ Binary built");
+        } else {
+            let shown = lisette::fs::relative_to_cwd(&output_path)
+                .unwrap_or_else(|| output_path.display().to_string());
+            if crate::output::use_color() {
+                use owo_colors::OwoColorize;
+                eprintln!("  ✓ Binary at {}", shown.bright_magenta());
+            } else {
+                eprintln!("  ✓ Binary at `{}`", shown);
+            }
+        }
+
+        0
+    })
 }
 
-fn compile_project(path: Option<String>, sourcemap: bool, quiet: bool, label: &str) -> i32 {
+fn with_locked_project(path: Option<String>, f: impl FnOnce(&BuildPrep) -> i32) -> i32 {
     let project_root = path.unwrap_or_else(|| ".".to_string());
     let project_path = Path::new(&project_root);
 
@@ -33,7 +61,36 @@ fn compile_project(path: Option<String>, sourcemap: bool, quiet: bool, label: &s
         Err(code) => return code,
     };
 
-    build_locked(&prep, sourcemap, quiet, label)
+    f(&prep)
+}
+
+pub(super) fn link_project_binary(
+    prep: &BuildPrep,
+    go_flags: &[String],
+    target: stdlib::Target,
+    heading: &str,
+) -> Result<PathBuf, i32> {
+    let build_dir = match prep.target_dir.canonicalize() {
+        Ok(p) => p,
+        Err(e) => {
+            cli_error!(
+                heading,
+                format!("Failed to resolve `{}`: {}", prep.target_dir.display(), e),
+                "Check that the directory exists"
+            );
+            return Err(1);
+        }
+    };
+
+    let binary_name = go_cli::binary_name(&prep.manifest.project.name, target);
+    let output_path = build_dir.join("bin").join(&binary_name);
+
+    if let Err(e) = go_cli::build_binary(&build_dir, &output_path, target, go_flags) {
+        cli_error!(heading, e.message, e.hint);
+        return Err(1);
+    }
+
+    Ok(output_path)
 }
 
 pub(super) fn prepare_project_build(project_path: &Path) -> Result<BuildPrep, i32> {

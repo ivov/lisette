@@ -58,7 +58,11 @@ fn main() {
 
     let exit_code = match command {
         Command::New { name } => handlers::new_project(&name),
-        Command::Build { path, sourcemap } => handlers::build(path, sourcemap, false),
+        Command::Build {
+            path,
+            sourcemap,
+            go_flags,
+        } => handlers::build(path, sourcemap, go_flags),
         Command::Emit { path, sourcemap } => handlers::emit(path, sourcemap),
         Command::Run {
             target,

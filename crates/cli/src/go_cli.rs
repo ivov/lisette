@@ -474,6 +474,10 @@ fn is_windows_reserved_name(stem: &str) -> bool {
         && (b'1'..=b'9').contains(&bytes[3])
 }
 
+pub fn is_go_output_flag(token: &str) -> bool {
+    matches!(token, "-o" | "--o") || token.starts_with("-o=") || token.starts_with("--o=")
+}
+
 /// `go_flags` follow the default `-o` so a caller `-o` wins. `output_path` must
 /// be absolute, since `go build` runs with `build_dir` as cwd.
 pub fn build_binary(
@@ -525,6 +529,17 @@ mod tests {
     fn binary_name_uses_last_module_segment() {
         assert_eq!(binary_name("myproj", linux()), "myproj");
         assert_eq!(binary_name("github.com/u/myproj", linux()), "myproj");
+    }
+
+    #[test]
+    fn is_go_output_flag_catches_every_go_spelling() {
+        assert!(is_go_output_flag("-o"));
+        assert!(is_go_output_flag("--o"));
+        assert!(is_go_output_flag("-o=dist/app"));
+        assert!(is_go_output_flag("--o=dist/app"));
+        assert!(!is_go_output_flag("-trimpath"));
+        assert!(!is_go_output_flag("-ofoo"));
+        assert!(!is_go_output_flag("--output"));
     }
 
     #[test]

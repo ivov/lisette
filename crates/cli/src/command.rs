@@ -8,6 +8,7 @@ pub enum Command {
     Build {
         path: Option<String>,
         sourcemap: bool,
+        go_flags: Vec<String>,
     },
     Emit {
         path: Option<String>,
@@ -103,10 +104,6 @@ fn extend_go_flags(go_flags: &mut Vec<String>, raw: &str) -> Result<(), ParseErr
     }
 }
 
-fn is_go_output_flag(token: &str) -> bool {
-    token == "-o" || token.starts_with("-o=")
-}
-
 fn parse_format(value: &str) -> Result<OutputFormat, ParseError> {
     match value {
         "unix" => Ok(OutputFormat::Unix),
@@ -142,8 +139,35 @@ impl Command {
             },
 
             "build" | "b" => {
-                let (path, sourcemap) = parse_path_and_sourcemap(arguments)?;
-                Ok(Command::Build { path, sourcemap })
+                let mut path = None;
+                let mut sourcemap = false;
+                let mut go_flags = Vec::new();
+
+                while let Some(arg) = arguments.next() {
+                    if arg == "--sourcemap" {
+                        sourcemap = true;
+                    } else if arg == "--go-flags" {
+                        let Some(value) = arguments.next() else {
+                            return Err(ParseError::MissingArgument {
+                                command: "build",
+                                argument: "--go-flags <flags>",
+                            });
+                        };
+                        extend_go_flags(&mut go_flags, &value)?;
+                    } else if let Some(value) = arg.strip_prefix("--go-flags=") {
+                        extend_go_flags(&mut go_flags, value)?;
+                    } else if arg.starts_with('-') {
+                        return Err(ParseError::UnknownFlag(arg));
+                    } else {
+                        path = Some(arg);
+                    }
+                }
+
+                Ok(Command::Build {
+                    path,
+                    sourcemap,
+                    go_flags,
+                })
             }
 
             "emit" | "e" => {
@@ -182,7 +206,10 @@ impl Command {
                     }
                 }
 
-                if let Some(flag) = go_flags.iter().find(|f| is_go_output_flag(f)) {
+                if let Some(flag) = go_flags
+                    .iter()
+                    .find(|f| crate::go_cli::is_go_output_flag(f))
+                {
                     return Err(ParseError::UnexpectedArgument {
                         message: format!("`{}` cannot be passed to `lis run` via `--go-flags`", flag),
                         reason: "`run` executes the binary it links at an internal path, so it owns `-o`"
@@ -526,6 +553,22 @@ mod tests {
     }
 
     #[test]
+    fn run_rejects_output_flag_double_dash_separated_form() {
+        assert!(matches!(
+            parse(&["lis", "run", "--go-flags", "--o /tmp/x"]),
+            Err(ParseError::UnexpectedArgument { .. })
+        ));
+    }
+
+    #[test]
+    fn run_rejects_output_flag_double_dash_joined_form() {
+        assert!(matches!(
+            parse(&["lis", "run", "--go-flags", "--o=/tmp/x"]),
+            Err(ParseError::UnexpectedArgument { .. })
+        ));
+    }
+
+    #[test]
     fn run_rejects_unknown_flag() {
         assert!(matches!(
             parse(&["lis", "run", "--bogus"]),
@@ -567,6 +610,61 @@ mod tests {
         assert!(matches!(
             parse(&["lis", "emit", "--bogus"]),
             Err(ParseError::UnknownFlag(_))
+        ));
+    }
+
+    #[test]
+    fn build_parses_go_flags_before_target() {
+        let Ok(Command::Build { path, go_flags, .. }) =
+            parse(&["lis", "build", "--go-flags", "-trimpath", "."])
+        else {
+            panic!("expected Build command");
+        };
+        assert_eq!(path.as_deref(), Some("."));
+        assert_eq!(go_flags, vec!["-trimpath"]);
+    }
+
+    #[test]
+    fn build_parses_go_flags_equals_form() {
+        let Ok(Command::Build { go_flags, .. }) = parse(&["lis", "build", "--go-flags=-race"])
+        else {
+            panic!("expected Build command");
+        };
+        assert_eq!(go_flags, vec!["-race"]);
+    }
+
+    #[test]
+    fn build_allows_output_flag() {
+        let Ok(Command::Build { go_flags, .. }) =
+            parse(&["lis", "build", "--go-flags", "-o dist/app"])
+        else {
+            panic!("expected Build command");
+        };
+        assert_eq!(go_flags, vec!["-o", "dist/app"]);
+    }
+
+    #[test]
+    fn build_parses_sourcemap_and_go_flags() {
+        let Ok(Command::Build {
+            sourcemap,
+            go_flags,
+            ..
+        }) = parse(&["lis", "build", "--sourcemap", "--go-flags", "-trimpath"])
+        else {
+            panic!("expected Build command");
+        };
+        assert!(sourcemap);
+        assert_eq!(go_flags, vec!["-trimpath"]);
+    }
+
+    #[test]
+    fn build_go_flags_requires_value() {
+        assert!(matches!(
+            parse(&["lis", "build", "--go-flags"]),
+            Err(ParseError::MissingArgument {
+                command: "build",
+                argument: "--go-flags <flags>",
+            })
         ));
     }
 
