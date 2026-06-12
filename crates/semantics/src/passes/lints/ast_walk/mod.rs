@@ -9,7 +9,7 @@ use crate::facts::Facts;
 use crate::passes::PARALLEL_THRESHOLD;
 use crate::passes::walk::{CheckTable, NodeCtx, walk_nodes};
 use crate::store::Store;
-use diagnostics::LocalSink;
+use diagnostics::{LisetteDiagnostic, LocalSink};
 use rayon::prelude::*;
 use syntax::program::Module;
 
@@ -120,7 +120,7 @@ static LINT_CHECKS: LazyLock<CheckTable> = LazyLock::new(|| {
     )
 });
 
-pub(crate) fn run(analysis: &AnalysisContext, facts: &Facts, sink: &LocalSink) {
+pub(crate) fn run(analysis: &AnalysisContext, facts: &Facts) -> Vec<LisetteDiagnostic> {
     let store = analysis.store;
 
     let mut modules: Vec<&Module> = store
@@ -132,10 +132,11 @@ pub(crate) fn run(analysis: &AnalysisContext, facts: &Facts, sink: &LocalSink) {
     modules.sort_unstable_by(|a, b| a.id.cmp(&b.id));
 
     if modules.len() < PARALLEL_THRESHOLD {
+        let sink = LocalSink::new();
         for module in &modules {
-            run_module(module, store, facts, sink);
+            run_module(module, store, facts, &sink);
         }
-        return;
+        return sink.take();
     }
 
     let worker_sinks: Vec<LocalSink> = modules
@@ -146,7 +147,7 @@ pub(crate) fn run(analysis: &AnalysisContext, facts: &Facts, sink: &LocalSink) {
             local_sink
         })
         .collect();
-    sink.extend(LocalSink::merge(worker_sinks));
+    LocalSink::merge(worker_sinks)
 }
 
 fn run_module(module: &Module, store: &Store, facts: &Facts, sink: &LocalSink) {

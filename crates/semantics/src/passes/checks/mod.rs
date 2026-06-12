@@ -27,7 +27,7 @@ pub(crate) mod temp_producing;
 pub(crate) mod unchanging_loop_condition;
 pub(crate) mod visibility;
 
-use diagnostics::{LocalSink, PatternIssue};
+use diagnostics::{LisetteDiagnostic, LocalSink, PatternIssue};
 use rayon::prelude::*;
 use rustc_hash::FxHashSet as HashSet;
 use std::sync::Arc;
@@ -40,14 +40,18 @@ use crate::store::Store;
 
 use super::PARALLEL_THRESHOLD;
 
-pub(crate) fn run_all(analysis: &AnalysisContext, facts: &mut Facts, sink: &LocalSink) {
+pub(crate) fn run_all(
+    analysis: &AnalysisContext,
+    facts: &Facts,
+) -> (Vec<LisetteDiagnostic>, Vec<PatternIssue>) {
     let store = analysis.store;
+    let sink = LocalSink::new();
 
     let mut module_ids: Vec<&str> = store.modules.keys().map(String::as_str).collect();
     module_ids.sort_unstable();
     for module_id in &module_ids {
-        visibility::run_module(module_id, store, sink);
-        json_methods::run_module(module_id, store, sink);
+        visibility::run_module(module_id, store, &sink);
+        json_methods::run_module(module_id, store, &sink);
     }
 
     let mut work: Vec<(&Module, &File)> = store
@@ -63,8 +67,7 @@ pub(crate) fn run_all(analysis: &AnalysisContext, facts: &mut Facts, sink: &Loca
             .then_with(|| a.1.id.cmp(&b.1.id))
     });
 
-    let facts_ref: &Facts = &*facts;
-    let or_spans = &facts_ref.or_pattern_error_spans;
+    let or_spans = &facts.or_pattern_error_spans;
 
     let ufcs_methods = analysis.ufcs_methods;
 
@@ -75,14 +78,13 @@ pub(crate) fn run_all(analysis: &AnalysisContext, facts: &mut Facts, sink: &Loca
                 module,
                 file,
                 store,
-                facts_ref,
+                facts,
                 ufcs_methods,
-                sink,
+                &sink,
                 &pattern_ctx,
             );
         }
-        facts.pattern_issues = pattern_ctx.take_issues();
-        return;
+        return (sink.take(), pattern_ctx.take_issues());
     }
 
     type WorkerOutput = (LocalSink, Vec<PatternIssue>);
@@ -95,7 +97,7 @@ pub(crate) fn run_all(analysis: &AnalysisContext, facts: &mut Facts, sink: &Loca
                 module,
                 file,
                 store,
-                facts_ref,
+                facts,
                 ufcs_methods,
                 &local_sink,
                 &pattern_ctx,
@@ -110,8 +112,9 @@ pub(crate) fn run_all(analysis: &AnalysisContext, facts: &mut Facts, sink: &Loca
         worker_sinks.push(worker_sink);
         all_issues.extend(issues);
     }
-    sink.extend(LocalSink::merge(worker_sinks));
-    facts.pattern_issues = all_issues;
+    let mut diagnostics = sink.take();
+    diagnostics.extend(LocalSink::merge(worker_sinks));
+    (diagnostics, all_issues)
 }
 
 fn run_file_checks(

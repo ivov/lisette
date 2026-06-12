@@ -6,11 +6,11 @@ use std::sync::Arc;
 use syntax::program::{File, Module};
 
 use crate::context::AnalysisContext;
-use crate::facts::{Facts, LocalFacts};
+use crate::facts::LocalFacts;
 
 use super::PARALLEL_THRESHOLD;
 
-pub(crate) fn run_all(analysis: &AnalysisContext, facts: &mut Facts) {
+pub(crate) fn run_all(analysis: &AnalysisContext) -> LocalFacts {
     let store = analysis.store;
 
     let mut work: Vec<(&Module, &File)> = store
@@ -32,8 +32,7 @@ pub(crate) fn run_all(analysis: &AnalysisContext, facts: &mut Facts) {
             generics::run(&file.items, &mut local);
             unused_expressions::run(&file.items, &module.id, store, &mut local);
         }
-        facts.absorb_local_facts(local);
-        return;
+        return local;
     }
 
     let locals: Vec<LocalFacts> = work
@@ -46,7 +45,9 @@ pub(crate) fn run_all(analysis: &AnalysisContext, facts: &mut Facts) {
         })
         .collect();
 
+    let mut merged = LocalFacts::default();
     for local in locals {
-        facts.absorb_local_facts(local);
+        merged.merge(local);
     }
+    merged
 }

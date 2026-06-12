@@ -21,13 +21,35 @@ pub fn run(
     unused: &mut UnusedInfo,
     run_lints: bool,
 ) {
-    checks::run_all(analysis, facts, sink);
-    fact_producers::run_all(analysis, facts);
-    deferred::run(facts, sink);
+    let facts_ref: &Facts = facts;
+    let (((checks_diagnostics, pattern_issues), producer_facts), lint_outputs) = rayon::join(
+        || {
+            rayon::join(
+                || checks::run_all(analysis, facts_ref),
+                || fact_producers::run_all(analysis),
+            )
+        },
+        || {
+            run_lints.then(|| {
+                rayon::join(
+                    || lints::ast_walk::run(analysis, facts_ref),
+                    || lints::ref_graph::run(analysis, facts_ref),
+                )
+            })
+        },
+    );
 
+    facts.pattern_issues = pattern_issues;
+    facts.absorb_local_facts(producer_facts);
+
+    sink.extend(checks_diagnostics);
+    deferred::run(facts, sink);
     if run_lints {
         lints::from_facts::run(facts, unused, sink);
-        lints::ast_walk::run(analysis, facts, sink);
-        lints::ref_graph::run(analysis, facts, unused, sink);
+    }
+    if let Some((ast_walk_diagnostics, (ref_graph_diagnostics, ref_graph_unused))) = lint_outputs {
+        sink.extend(ast_walk_diagnostics);
+        sink.extend(ref_graph_diagnostics);
+        unused.merge(ref_graph_unused);
     }
 }

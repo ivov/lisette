@@ -35,9 +35,7 @@ struct RefLintResult {
 pub(crate) fn run(
     analysis: &AnalysisContext,
     facts: &Facts,
-    unused: &mut UnusedInfo,
-    sink: &LocalSink,
-) {
+) -> (Vec<LisetteDiagnostic>, UnusedInfo) {
     let store = analysis.store;
     let go_package_names = &store.go_package_names;
     let config = LintConfig::default();
@@ -50,11 +48,14 @@ pub(crate) fn run(
         .collect();
     modules.sort_unstable_by(|a, b| a.id.cmp(&b.id));
 
+    let mut unused = UnusedInfo::default();
+
     if modules.len() < PARALLEL_THRESHOLD {
+        let sink = LocalSink::new();
         for module in &modules {
-            apply_ref_lints(module, go_package_names, &config, facts, unused, sink);
+            apply_ref_lints(module, go_package_names, &config, facts, &mut unused, &sink);
         }
-        return;
+        return (sink.take(), unused);
     }
 
     type WorkerOutput = (LocalSink, UnusedInfo);
@@ -80,7 +81,7 @@ pub(crate) fn run(
         worker_sinks.push(worker_sink);
         unused.merge(worker_unused);
     }
-    sink.extend(LocalSink::merge(worker_sinks));
+    (LocalSink::merge(worker_sinks), unused)
 }
 
 fn apply_ref_lints(

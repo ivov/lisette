@@ -272,6 +272,21 @@ pub struct LocalFacts {
 }
 
 impl LocalFacts {
+    pub fn merge(&mut self, other: LocalFacts) {
+        let LocalFacts {
+            unused_expressions,
+            discarded_tail_expressions,
+            unused_type_params,
+            type_params_only_in_bound,
+        } = other;
+        self.unused_expressions.extend(unused_expressions);
+        self.discarded_tail_expressions
+            .extend(discarded_tail_expressions);
+        self.unused_type_params.extend(unused_type_params);
+        self.type_params_only_in_bound
+            .extend(type_params_only_in_bound);
+    }
+
     pub fn add_unused_expression(&mut self, span: Span, kind: UnusedExpressionKind) {
         self.unused_expressions
             .push(UnusedExpressionFact { span, kind });
