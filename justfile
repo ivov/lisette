@@ -19,6 +19,10 @@ build:
 build-debug:
     cargo build
 
+grammar:
+    npm --prefix editors/tree-sitter-lisette ci
+    npm --prefix editors/tree-sitter-lisette run build
+
 test:
     cargo test -p tests --test suite
     cargo test -p lisette-lsp --test lsp

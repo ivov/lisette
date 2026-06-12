@@ -32,3 +32,10 @@ pre-commit:
         [ "$EXPECTED" = "$BINDGEN" ] || { echo "Go version mismatch: go-version has $EXPECTED but bindgen/go.mod has $BINDGEN"; exit 1; }
         [ "$(cat go-version | tr -d '[:space:]')" = "$EMBEDDED" ] || { echo "Go version mismatch: go-version has $(cat go-version) but bindgen metadata has $EMBEDDED"; exit 1; }
         [ "$(cat go-version | tr -d '[:space:]')" = "$CLI" ] || { echo "Go version mismatch: go-version has $(cat go-version) but crates/cli/go-version has $CLI"; exit 1; }
+    tree-sitter-sync:
+      glob: "editors/tree-sitter-lisette/{grammar.js,queries/**/*,src/**/*}"
+      root: "editors/tree-sitter-lisette"
+      run: |
+        npm ci
+        npx tree-sitter generate
+        git diff --exit-code src || { echo "tree-sitter src/ is out of sync with the pinned CLI; run 'just grammar' and stage src/"; exit 1; }
