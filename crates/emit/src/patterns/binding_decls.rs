@@ -10,7 +10,7 @@ use crate::EmitEffects;
 use crate::Planner;
 use crate::expressions::literals::{convert_escape_sequences, emit_raw_string};
 use crate::names::generics;
-use crate::write_line;
+use crate::plan::bodies::LoweredStatement;
 
 /// Generic vars paired with their concrete instantiation arguments; inputs
 /// to field-type substitution.
@@ -157,9 +157,9 @@ impl Planner<'_> {
         }
     }
 
-    pub(crate) fn emit_binding_declarations_with_type(
+    pub(crate) fn lower_binding_declarations_with_type(
         &mut self,
-        output: &mut String,
+        statements: &mut Vec<LoweredStatement>,
         pattern: &Pattern,
         ty: &Type,
         typed: Option<&TypedPattern>,
@@ -167,15 +167,17 @@ impl Planner<'_> {
     ) {
         match pattern {
             Pattern::Identifier { identifier, .. } => {
-                self.declare_pattern_var(output, pattern, identifier, ty, fx);
+                self.declare_pattern_var(statements, pattern, identifier, ty, fx);
             }
             Pattern::Tuple { elements, .. } => {
-                self.emit_tuple_pattern_declarations(output, elements, ty, typed, fx);
+                self.lower_tuple_pattern_declarations(statements, elements, ty, typed, fx);
             }
             Pattern::Struct {
                 fields, identifier, ..
             } => {
-                self.emit_struct_pattern_declarations(output, fields, identifier, ty, typed, fx);
+                self.lower_struct_pattern_declarations(
+                    statements, fields, identifier, ty, typed, fx,
+                );
             }
             Pattern::EnumVariant {
                 fields,
@@ -183,12 +185,12 @@ impl Planner<'_> {
                 ty: pattern_ty,
                 ..
             } => {
-                self.emit_enum_variant_pattern_declarations(
-                    output, fields, identifier, pattern_ty, ty, typed, fx,
+                self.lower_enum_variant_pattern_declarations(
+                    statements, fields, identifier, pattern_ty, ty, typed, fx,
                 );
             }
             Pattern::Slice { prefix, rest, .. } => {
-                self.emit_slice_pattern_declarations(output, prefix, rest, ty, typed, fx);
+                self.lower_slice_pattern_declarations(statements, prefix, rest, ty, typed, fx);
             }
             Pattern::Or { patterns, .. } => {
                 let Some(first) = patterns.first() else {
@@ -198,15 +200,15 @@ impl Planner<'_> {
                     Some(TypedPattern::Or { alternatives }) => alternatives.first(),
                     _ => None,
                 };
-                self.emit_binding_declarations_with_type(output, first, ty, alt, fx);
+                self.lower_binding_declarations_with_type(statements, first, ty, alt, fx);
             }
             p @ Pattern::AsBinding {
                 pattern: inner,
                 name,
                 ..
             } => {
-                self.emit_binding_declarations_with_type(output, inner, ty, typed, fx);
-                self.declare_pattern_var(output, p, name, ty, fx);
+                self.lower_binding_declarations_with_type(statements, inner, ty, typed, fx);
+                self.declare_pattern_var(statements, p, name, ty, fx);
             }
             Pattern::WildCard { .. } | Pattern::Literal { .. } | Pattern::Unit { .. } => {}
         }
@@ -215,7 +217,7 @@ impl Planner<'_> {
     /// Declare a `var X T` for an identifier pattern; binds `_` when unused.
     fn declare_pattern_var(
         &mut self,
-        output: &mut String,
+        statements: &mut Vec<LoweredStatement>,
         pattern: &Pattern,
         lisette_name: &EcoString,
         resolved: &Type,
@@ -225,13 +227,13 @@ impl Planner<'_> {
             self.scope.bind(lisette_name, "_");
             return;
         };
-        self.declare_var_declaration(output, lisette_name, go_name, resolved, fx);
+        self.declare_var_declaration(statements, lisette_name, go_name, resolved, fx);
     }
 
     /// Freshen `go_name`, register the binding, emit `var X T`.
     fn declare_var_declaration(
         &mut self,
-        output: &mut String,
+        statements: &mut Vec<LoweredStatement>,
         lisette_name: &EcoString,
         go_name: String,
         resolved: &Type,
@@ -245,13 +247,17 @@ impl Planner<'_> {
         let go_name = self.scope.bind(lisette_name, go_name);
         self.declare(&go_name);
         let go_ty = self.go_type_string(resolved, fx);
-        write_line!(output, "var {} {}", go_name, go_ty);
+        statements.push(LoweredStatement::VarDecl {
+            name: go_name,
+            go_type: go_ty,
+            value: None,
+        });
     }
 
     /// Recurse into tuple-pattern elements paired with their slot types.
-    fn emit_tuple_pattern_declarations(
+    fn lower_tuple_pattern_declarations(
         &mut self,
-        output: &mut String,
+        statements: &mut Vec<LoweredStatement>,
         elements: &[Pattern],
         resolved: &Type,
         typed: Option<&TypedPattern>,
@@ -267,8 +273,8 @@ impl Planner<'_> {
             _ => return,
         };
         for (i, (element, element_ty)) in elements.iter().zip(types.iter()).enumerate() {
-            self.emit_binding_declarations_with_type(
-                output,
+            self.lower_binding_declarations_with_type(
+                statements,
                 element,
                 element_ty,
                 typed_elements.get(i),
@@ -279,9 +285,9 @@ impl Planner<'_> {
 
     /// Recurse into named struct-pattern fields (plain struct or enum's
     /// struct variant, resolved via the typed pattern or definitions table).
-    fn emit_struct_pattern_declarations(
+    fn lower_struct_pattern_declarations(
         &mut self,
-        output: &mut String,
+        statements: &mut Vec<LoweredStatement>,
         fields: &[StructFieldPattern],
         identifier: &EcoString,
         resolved: &Type,
@@ -306,7 +312,7 @@ impl Planner<'_> {
                     return;
                 };
                 self.recurse_named_fields(
-                    output,
+                    statements,
                     fields,
                     struct_fields,
                     GenericArgs { generics, params },
@@ -331,7 +337,7 @@ impl Planner<'_> {
                     return;
                 };
                 self.recurse_named_fields(
-                    output,
+                    statements,
                     fields,
                     variant_fields,
                     GenericArgs { generics, params },
@@ -339,14 +345,14 @@ impl Planner<'_> {
                     fx,
                 );
             }
-            _ => self.emit_struct_pattern_fallback(output, fields, identifier, resolved, fx),
+            _ => self.lower_struct_pattern_fallback(statements, fields, identifier, resolved, fx),
         }
     }
 
     /// Untyped struct-pattern fallback via the definitions table.
-    fn emit_struct_pattern_fallback(
+    fn lower_struct_pattern_fallback(
         &mut self,
-        output: &mut String,
+        statements: &mut Vec<LoweredStatement>,
         fields: &[StructFieldPattern],
         identifier: &EcoString,
         resolved: &Type,
@@ -362,7 +368,7 @@ impl Planner<'_> {
                 ..
             }) => {
                 self.recurse_named_fields(
-                    output,
+                    statements,
                     fields,
                     field_definitions,
                     GenericArgs { generics, params },
@@ -376,7 +382,7 @@ impl Planner<'_> {
                 let variant_name = unqualified_name(identifier);
                 if let Some(variant) = variants.iter().find(|v| v.name == variant_name) {
                     self.recurse_named_fields(
-                        output,
+                        statements,
                         fields,
                         variant_fields_slice(&variant.fields),
                         GenericArgs { generics, params },
@@ -392,9 +398,9 @@ impl Planner<'_> {
     /// Recurse into positional enum-variant fields (tuple-struct matches
     /// route through the struct definition).
     #[allow(clippy::too_many_arguments)]
-    fn emit_enum_variant_pattern_declarations(
+    fn lower_enum_variant_pattern_declarations(
         &mut self,
-        output: &mut String,
+        statements: &mut Vec<LoweredStatement>,
         fields: &[Pattern],
         identifier: &EcoString,
         pattern_ty: &Type,
@@ -403,7 +409,7 @@ impl Planner<'_> {
         fx: &mut EmitEffects,
     ) {
         if self.is_tuple_struct_type(pattern_ty) {
-            self.emit_tuple_struct_variant_declarations(output, fields, resolved, typed, fx);
+            self.lower_tuple_struct_variant_declarations(statements, fields, resolved, typed, fx);
             return;
         }
 
@@ -429,7 +435,7 @@ impl Planner<'_> {
                 return;
             };
             self.recurse_positional_fields(
-                output,
+                statements,
                 fields,
                 variant_fields,
                 GenericArgs { generics, params },
@@ -456,7 +462,7 @@ impl Planner<'_> {
             return;
         };
         self.recurse_positional_fields(
-            output,
+            statements,
             fields,
             variant_fields_slice(&variant.fields),
             GenericArgs { generics, params },
@@ -466,9 +472,9 @@ impl Planner<'_> {
     }
 
     /// Newtype-tuple-struct match via the struct's own positional fields.
-    fn emit_tuple_struct_variant_declarations(
+    fn lower_tuple_struct_variant_declarations(
         &mut self,
-        output: &mut String,
+        statements: &mut Vec<LoweredStatement>,
         fields: &[Pattern],
         resolved: &Type,
         typed: Option<&TypedPattern>,
@@ -495,7 +501,7 @@ impl Planner<'_> {
             _ => None,
         };
         self.recurse_positional_fields(
-            output,
+            statements,
             fields,
             field_definitions,
             GenericArgs { generics, params },
@@ -505,9 +511,9 @@ impl Planner<'_> {
     }
 
     /// Recurse into a slice pattern's prefix and bind any rest variable.
-    fn emit_slice_pattern_declarations(
+    fn lower_slice_pattern_declarations(
         &mut self,
-        output: &mut String,
+        statements: &mut Vec<LoweredStatement>,
         prefix: &[Pattern],
         rest: &RestPattern,
         resolved: &Type,
@@ -533,13 +539,19 @@ impl Planner<'_> {
 
         for (i, element) in prefix.iter().enumerate() {
             let typed_child = typed_prefix.and_then(|tp| tp.get(i));
-            self.emit_binding_declarations_with_type(output, element, &element_ty, typed_child, fx);
+            self.lower_binding_declarations_with_type(
+                statements,
+                element,
+                &element_ty,
+                typed_child,
+                fx,
+            );
         }
 
         if let RestPattern::Bind { name, .. } = rest
             && let Some(go_name) = self.go_name_for_rest_binding(rest)
         {
-            self.declare_var_declaration(output, name, go_name, resolved, fx);
+            self.declare_var_declaration(statements, name, go_name, resolved, fx);
         }
     }
 
@@ -547,7 +559,7 @@ impl Planner<'_> {
     /// and recurse with the matching typed child.
     fn recurse_named_fields<F: FieldDef>(
         &mut self,
-        output: &mut String,
+        statements: &mut Vec<LoweredStatement>,
         patterns: &[StructFieldPattern],
         definitions: &[F],
         generic_args: GenericArgs,
@@ -565,8 +577,8 @@ impl Planner<'_> {
                     .find(|(n, _)| n == &pattern.name)
                     .map(|(_, tp)| tp)
             });
-            self.emit_binding_declarations_with_type(
-                output,
+            self.lower_binding_declarations_with_type(
+                statements,
                 &pattern.value,
                 &field_ty,
                 typed_child,
@@ -578,7 +590,7 @@ impl Planner<'_> {
     /// Zip positional pattern slots with definition slots and recurse.
     fn recurse_positional_fields<F: FieldDef>(
         &mut self,
-        output: &mut String,
+        statements: &mut Vec<LoweredStatement>,
         patterns: &[Pattern],
         definitions: &[F],
         generic_args: GenericArgs,
@@ -589,7 +601,13 @@ impl Planner<'_> {
         for (i, (pattern, definition)) in patterns.iter().zip(definitions.iter()).enumerate() {
             let field_ty = generics::resolve_field_type(generics, params, definition.ty());
             let typed_child = typed_fields.and_then(|tf| tf.get(i));
-            self.emit_binding_declarations_with_type(output, pattern, &field_ty, typed_child, fx);
+            self.lower_binding_declarations_with_type(
+                statements,
+                pattern,
+                &field_ty,
+                typed_child,
+                fx,
+            );
         }
     }
 }

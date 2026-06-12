@@ -393,18 +393,14 @@ impl Planner<'_> {
             unreachable!("lower_let_else_or_pattern requires an Or pattern");
         };
         let pre_let_snapshot = self.scope.binding_snapshot();
-        let mut declarations = String::new();
-        self.emit_binding_declarations_with_type(&mut declarations, pattern, binding_ty, typed, fx);
+        let mut statements = Vec::new();
+        self.lower_binding_declarations_with_type(&mut statements, pattern, binding_ty, typed, fx);
         let post_declaration_snapshot = self.scope.binding_snapshot();
 
         let mut asserts = Vec::new();
         let alts =
             self.collect_let_else_alternatives(&mut asserts, patterns, subject_ty, subject_var, fx);
 
-        let mut statements = Vec::new();
-        if !declarations.is_empty() {
-            statements.push(LoweredStatement::RawGo(declarations));
-        }
         statements.extend(asserts);
 
         let chain_len = alts.irrefutable_index.unwrap_or(alts.collected.len());
