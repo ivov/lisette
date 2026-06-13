@@ -37,6 +37,17 @@ pub fn reserved_go_prefix(name: &str, prefix: &str, span: &Span) -> LisetteDiagn
         ))
 }
 
+pub fn reserved_go_qualifier(name: &str, span: &Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Reserved Go name")
+        .with_emit_code("reserved_go_qualifier")
+        .with_span_primary_label(span, "reserved for generated imports")
+        .with_help(format!(
+            "`{}` is the qualifier of a Go package that generated code may \
+             import implicitly. Rename the type.",
+            name
+        ))
+}
+
 pub fn go_import_collision(alias: &str, paths: &[String]) -> LisetteDiagnostic {
     let mut sorted = paths.to_vec();
     sorted.sort();

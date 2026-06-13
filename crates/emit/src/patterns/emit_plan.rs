@@ -444,7 +444,7 @@ fn render_switch_expression(rendered_path: &str, kind: &SwitchKind) -> String {
 
 fn propagate_stdlib(ctx: &mut LoweringCtx, branches: &[SwitchBranch]) {
     if branches.iter().any(|b| b.needs_stdlib) {
-        ctx.effects.needs_stdlib = true;
+        ctx.effects.require_stdlib();
     }
 }
 

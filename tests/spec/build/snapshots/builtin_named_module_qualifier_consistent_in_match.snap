@@ -1,0 +1,54 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import (
+	"fmt"
+	print_ "github.com/user/myproject/print"
+)
+
+func main() {
+	level := print_.Pick()
+	if level.Tag == print_.LevelLow {
+		fmt.Println("low")
+	} else {
+		fmt.Println("high")
+	}
+	x := 9
+	if x == print_.LIMIT {
+		fmt.Println("limit")
+	} else {
+		fmt.Println("other")
+	}
+}
+
+
+// === print/mod.go ===
+package print_
+
+func MakeLevelLow() Level {
+	return Level{Tag: LevelLow}
+}
+
+func MakeLevelHigh() Level {
+	return Level{Tag: LevelHigh}
+}
+
+type LevelTag int
+
+const (
+	LevelLow LevelTag = iota
+	LevelHigh
+)
+
+type Level struct {
+	Tag LevelTag
+}
+
+const LIMIT int = 9
+
+func Pick() Level {
+	return MakeLevelHigh()
+}

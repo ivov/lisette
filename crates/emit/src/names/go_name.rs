@@ -266,6 +266,63 @@ pub(crate) fn escape_keyword(name: &str) -> Cow<'_, str> {
 /// identifiers with these names, so the emitter need not escape them.
 const PRELUDE_BUILTIN_NAMES: &[&str] = &["complex", "max", "min", "panic", "real"];
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum GeneratedPackage {
+    Prelude,
+    Fmt,
+    Errors,
+    Slices,
+    Strings,
+    Maps,
+    Json,
+    Cmp,
+}
+
+impl GeneratedPackage {
+    pub(crate) const ALL: &'static [GeneratedPackage] = &[
+        GeneratedPackage::Prelude,
+        GeneratedPackage::Fmt,
+        GeneratedPackage::Errors,
+        GeneratedPackage::Slices,
+        GeneratedPackage::Strings,
+        GeneratedPackage::Maps,
+        GeneratedPackage::Json,
+        GeneratedPackage::Cmp,
+    ];
+
+    pub(crate) fn path(self) -> &'static str {
+        match self {
+            GeneratedPackage::Prelude => PRELUDE_IMPORT_PATH,
+            GeneratedPackage::Fmt => "fmt",
+            GeneratedPackage::Errors => "errors",
+            GeneratedPackage::Slices => "slices",
+            GeneratedPackage::Strings => "strings",
+            GeneratedPackage::Maps => "maps",
+            GeneratedPackage::Json => "encoding/json",
+            GeneratedPackage::Cmp => "cmp",
+        }
+    }
+
+    pub(crate) fn qualifier(self) -> &'static str {
+        match self {
+            GeneratedPackage::Prelude => GO_STDLIB_PKG,
+            GeneratedPackage::Fmt => "fmt",
+            GeneratedPackage::Errors => "errors",
+            GeneratedPackage::Slices => "slices",
+            GeneratedPackage::Strings => "strings",
+            GeneratedPackage::Maps => "maps",
+            GeneratedPackage::Json => "json",
+            GeneratedPackage::Cmp => "cmp",
+        }
+    }
+}
+
+pub(crate) fn is_generated_import_qualifier(name: &str) -> bool {
+    GeneratedPackage::ALL
+        .iter()
+        .any(|package| package.qualifier() == name)
+}
+
 fn is_reserved_package_name(name: &str) -> bool {
     GO_KEYWORDS.contains(&name) || GO_BUILTINS.contains(&name)
 }
@@ -273,6 +330,7 @@ fn is_reserved_package_name(name: &str) -> bool {
 fn is_reserved_identifier(name: &str) -> bool {
     GO_KEYWORDS.contains(&name)
         || (GO_BUILTINS.contains(&name) && !PRELUDE_BUILTIN_NAMES.contains(&name))
+        || is_generated_import_qualifier(name)
 }
 
 pub(crate) fn escape_reserved(name: &str) -> Cow<'_, str> {

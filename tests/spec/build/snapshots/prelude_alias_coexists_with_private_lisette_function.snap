@@ -1,0 +1,17 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func lisette_() int {
+	return 1
+}
+
+func main() {
+	x := lisette.MakeOptionSome(1)
+	_ = x
+	_ = lisette_()
+}

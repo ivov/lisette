@@ -1,0 +1,54 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import (
+	"encoding/json"
+	js "encoding/json"
+	"fmt"
+)
+
+func MakeStatusReady() Status {
+	return Status{Tag: StatusReady}
+}
+
+type StatusTag int
+
+const (
+	StatusReady StatusTag = iota
+)
+
+type Status struct {
+	Tag StatusTag
+}
+
+func (s Status) MarshalJSON() ([]byte, error) {
+	switch s.Tag {
+	case StatusReady:
+		return json.Marshal("Ready")
+	default:
+		return nil, fmt.Errorf("unknown Status tag: %d", s.Tag)
+	}
+}
+
+func (s *Status) UnmarshalJSON(data []byte) error {
+	var name string
+	if err := json.Unmarshal(data, &name); err != nil {
+		return fmt.Errorf("invalid Status JSON: expected string")
+	}
+	switch name {
+	case "Ready":
+		s.Tag = StatusReady
+		return nil
+	default:
+		return fmt.Errorf("unknown Status variant: %s", name)
+	}
+}
+
+func main() {
+	s := MakeStatusReady()
+	_ = js.Valid(([]byte)(nil))
+	_ = s
+}

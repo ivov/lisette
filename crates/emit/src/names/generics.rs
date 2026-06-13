@@ -107,7 +107,7 @@ impl Planner<'_> {
                     comparable_seen = true;
                 }
                 ConstraintAtom::Ordered => {
-                    fx.require_go_import("cmp");
+                    fx.require_cmp();
                     named_bounds.push("cmp.Ordered".to_string());
                 }
                 ConstraintAtom::Named(ann) => {

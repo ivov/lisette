@@ -1,7 +1,7 @@
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use diagnostics::{LisetteDiagnostic, emit as emit_diag};
-use syntax::ast::{Expression, ImportAlias, Pattern, Span, StructKind, Visibility};
+use syntax::ast::{Expression, ImportAlias, Pattern, Span, StructKind, VariantFields, Visibility};
 use syntax::program::File;
 
 use crate::Planner;
@@ -58,11 +58,13 @@ impl Planner<'_> {
                 name,
                 name_span,
                 visibility,
+                generics,
                 ..
             } => {
                 if self.facts.is_unused_definition(name_span) {
                     return;
                 }
+                self.check_reserved_qualifier_generics(generics, diagnostics);
                 let go = self.free_function_go_name(name, visibility);
                 self.check_reserved_prefix(&go, name_span, diagnostics);
                 package_block.entry(go).or_default().push(*name_span);
@@ -77,10 +79,15 @@ impl Planner<'_> {
                 package_block.entry(go).or_default().push(*identifier_span);
             }
             Expression::TypeAlias {
-                name, name_span, ..
+                name,
+                name_span,
+                generics,
+                ..
             } => {
                 let go = go_name::escape_keyword(name).into_owned();
                 self.check_reserved_prefix(&go, name_span, diagnostics);
+                self.check_reserved_qualifier(&go, name_span, diagnostics);
+                self.check_reserved_qualifier_generics(generics, diagnostics);
                 package_block.entry(go).or_default().push(*name_span);
             }
             Expression::Struct {
@@ -94,6 +101,8 @@ impl Planner<'_> {
             } => {
                 let type_go = go_name::escape_keyword(name).into_owned();
                 self.check_reserved_prefix(&type_go, name_span, diagnostics);
+                self.check_reserved_qualifier(&type_go, name_span, diagnostics);
+                self.check_reserved_qualifier_generics(generics, diagnostics);
                 package_block
                     .entry(type_go.clone())
                     .or_default()
@@ -140,10 +149,13 @@ impl Planner<'_> {
                 variants,
                 attributes,
                 visibility,
+                generics,
                 ..
             } => {
                 let type_go = go_name::escape_keyword(name).into_owned();
                 self.check_reserved_prefix(&type_go, name_span, diagnostics);
+                self.check_reserved_qualifier(&type_go, name_span, diagnostics);
+                self.check_reserved_qualifier_generics(generics, diagnostics);
 
                 if attributes
                     .iter()
@@ -221,7 +233,9 @@ impl Planner<'_> {
                 // Enum payload fields share the type's selector namespace. They
                 // are coalesced by Go name across variants, so each distinct
                 // name is recorded once (coalescing is intentional, not a
-                // collision); per-variant duplicates are out of scope here.
+                // collision). Within one variant, two fields landing on the
+                // same Go name would assign one struct field twice, so each
+                // struct variant's fields are also grouped on their own.
                 let qualified = self.facts.qualified_current(name);
                 if let Some(layout) = self.enum_layout(&qualified) {
                     let mut seen: HashSet<&str> = HashSet::default();
@@ -234,6 +248,16 @@ impl Planner<'_> {
                                     .push(variant.name_span);
                             }
                         }
+                        if let VariantFields::Struct(fields) = &variant.fields {
+                            let mut variant_fields: SpanMap = HashMap::default();
+                            for (field, layout_field) in fields.iter().zip(&layout_variant.fields) {
+                                variant_fields
+                                    .entry(layout_field.go_name.clone())
+                                    .or_default()
+                                    .push(field.name_span);
+                            }
+                            report_collisions(variant_fields, diagnostics);
+                        }
                     }
                 }
             }
@@ -242,10 +266,13 @@ impl Planner<'_> {
                 name_span,
                 method_signatures,
                 visibility,
+                generics,
                 ..
             } => {
                 let type_go = go_name::escape_keyword(name).into_owned();
                 self.check_reserved_prefix(&type_go, name_span, diagnostics);
+                self.check_reserved_qualifier(&type_go, name_span, diagnostics);
+                self.check_reserved_qualifier_generics(generics, diagnostics);
                 package_block
                     .entry(type_go.clone())
                     .or_default()
@@ -257,9 +284,11 @@ impl Planner<'_> {
                     if let Expression::Function {
                         name: method_name,
                         name_span: method_span,
+                        generics: method_generics,
                         ..
                     } = signature
                     {
+                        self.check_reserved_qualifier_generics(method_generics, diagnostics);
                         let method_go = if is_public || self.method_needs_export(method_name) {
                             go_name::snake_to_camel(method_name)
                         } else {
@@ -272,8 +301,10 @@ impl Planner<'_> {
             Expression::ImplBlock {
                 receiver_name,
                 methods,
+                generics,
                 ..
             } => {
+                self.check_reserved_qualifier_generics(generics, diagnostics);
                 let type_go = go_name::escape_keyword(receiver_name).into_owned();
                 let qualified_type = self.facts.qualified_current(receiver_name);
                 for method in methods {
@@ -282,6 +313,7 @@ impl Planner<'_> {
                         name_span,
                         visibility,
                         params,
+                        generics: method_generics,
                         ..
                     } = method
                     else {
@@ -290,6 +322,7 @@ impl Planner<'_> {
                     if self.facts.is_unused_definition(name_span) {
                         continue;
                     }
+                    self.check_reserved_qualifier_generics(method_generics, diagnostics);
                     let has_self = params.first().is_some_and(|binding| {
                         matches!(&binding.pattern, Pattern::Identifier { identifier, .. } if identifier == "self")
                     });
@@ -379,6 +412,22 @@ impl Planner<'_> {
                 go_name::ADAPTER_TYPE_PREFIX,
                 span,
             ));
+        }
+    }
+
+    fn check_reserved_qualifier(&self, go: &str, span: &Span, out: &mut Vec<LisetteDiagnostic>) {
+        if go_name::is_generated_import_qualifier(go) {
+            out.push(emit_diag::reserved_go_qualifier(go, span));
+        }
+    }
+
+    fn check_reserved_qualifier_generics(
+        &self,
+        generics: &[syntax::ast::Generic],
+        out: &mut Vec<LisetteDiagnostic>,
+    ) {
+        for generic in generics {
+            self.check_reserved_qualifier(&generic.name, &generic.span, out);
         }
     }
 }

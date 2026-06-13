@@ -1,0 +1,28 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import "fmt"
+
+type Thing struct {
+	X int
+}
+
+func (t Thing) String() string {
+	return fmt.Sprintf("Thing { x: %v }", t.X)
+}
+
+func (t Thing) to_string() string {
+	return t.String()
+}
+
+func fmt_() int {
+	return 1
+}
+
+func main() {
+	_ = Thing{X: 1}
+	_ = fmt_()
+}

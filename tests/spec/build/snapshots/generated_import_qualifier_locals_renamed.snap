@@ -1,0 +1,22 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import (
+	"fmt"
+	"strings"
+)
+
+func show(fmt_ int) string {
+	return fmt.Sprint(fmt_)
+}
+
+func main() {
+	strings_ := 1
+	ok := strings.Contains("abc", "a")
+	_ = strings_
+	_ = ok
+	_ = show(2)
+}

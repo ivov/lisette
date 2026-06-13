@@ -1,0 +1,15 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import (
+	"strings"
+	s "strings"
+)
+
+func main() {
+	_ = s.ToUpper("abc")
+	_ = strings.Contains("abc", "a")
+}

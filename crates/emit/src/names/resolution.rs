@@ -86,10 +86,19 @@ impl Planner<'_> {
         }
     }
 
-    /// Record the module import into `fx` and return its Go package qualifier.
+    /// Record the module import into `fx` and return the package qualifier
+    /// exactly as the import renders it: `format_import` sanitizes default
+    /// package names and prints explicit aliases verbatim, so references
+    /// must follow the same rule.
     pub(crate) fn require_module_import_fx(&self, module: &str, fx: &mut EmitEffects) -> String {
-        fx.require_go_import(self.go_import_path_for_module(module));
-        self.go_pkg_qualifier(module)
+        let path = self.go_import_path_for_module(module);
+        fx.require_go_import(path.clone());
+        let qualifier = self.go_pkg_qualifier(module);
+        if qualifier == go_name::go_package_name(&path) {
+            go_name::sanitize_package_name(&qualifier).into_owned()
+        } else {
+            qualifier
+        }
     }
 
     pub(crate) fn go_import_path_for_module(&self, module: &str) -> String {

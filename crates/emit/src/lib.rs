@@ -444,15 +444,6 @@ impl<'a> Planner<'a> {
         self.scope.is_go_const_binding(go_identifier)
     }
 
-    pub(crate) fn module_alias_for_type(&self, ty: &Type) -> Option<String> {
-        if let Type::Nominal { id, .. } = ty {
-            let module = self.facts.module_for_qualified_name(id)?;
-            self.module.module_alias(module).map(str::to_string)
-        } else {
-            None
-        }
-    }
-
     pub(crate) fn maybe_line_directive(&self, span: &Span) -> String {
         if !self.facts.sourcemap_enabled() || span.is_dummy() {
             return String::new();

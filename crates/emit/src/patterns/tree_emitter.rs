@@ -126,9 +126,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
             &tree,
             single_catchall_has_collisions,
         );
-        if lowered.effects.needs_stdlib {
-            self.fx.require_stdlib();
-        }
+        self.fx.extend(&lowered.effects);
 
         let mut statements: Vec<LoweredStatement> = Vec::new();
         match lowered.plan {

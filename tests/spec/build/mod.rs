@@ -6538,3 +6538,337 @@ fn main() {
          parallel inference path; got:\n{go}"
     );
 }
+
+#[test]
+fn go_name_collision_enum_variant_fields_casing() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+enum Event {
+  Click { foo_bar: int, FooBar: int },
+}
+
+fn main() {
+  let _ = Event.Click { foo_bar: 1, FooBar: 2 }
+}
+"#,
+    );
+
+    let codes = emit_diagnostic_codes(fs);
+    assert!(
+        codes.iter().any(|code| code == "emit.go_name_collision"),
+        "same-variant fields coalescing to one Go field must be rejected; got: {codes:?}"
+    );
+}
+
+#[test]
+fn enum_payload_coalescing_across_variants_not_flagged() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+enum E {
+  A { x: int },
+  B { x: int, y: string },
+}
+
+fn main() {
+  let _ = E.A { x: 1 }
+  let _ = E.B { x: 2, y: "s" }
+}
+"#,
+    );
+
+    let codes = emit_diagnostic_codes(fs);
+    assert!(
+        !codes.iter().any(|code| code == "emit.go_name_collision"),
+        "cross-variant field coalescing is intentional; got: {codes:?}"
+    );
+}
+
+#[test]
+fn reserved_go_qualifier_rejects_type_named_after_generated_import() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+struct fmt {
+  x: int,
+}
+
+fn main() {
+  let _ = fmt { x: 1 }
+}
+"#,
+    );
+
+    let codes = emit_diagnostic_codes(fs);
+    assert!(
+        codes
+            .iter()
+            .any(|code| code == "emit.reserved_go_qualifier"),
+        "type named after a generated import qualifier must be rejected; got: {codes:?}"
+    );
+}
+
+#[test]
+fn reserved_go_qualifier_rejects_type_parameter() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+fn pick<fmt>(x: fmt) -> fmt {
+  x
+}
+
+fn main() {
+  let _ = pick(1)
+}
+"#,
+    );
+
+    let codes = emit_diagnostic_codes(fs);
+    assert!(
+        codes
+            .iter()
+            .any(|code| code == "emit.reserved_go_qualifier"),
+        "type parameter named after a generated import qualifier must be rejected; got: {codes:?}"
+    );
+}
+
+#[test]
+fn generated_fmt_import_coexists_with_private_fmt_function() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+#[display]
+struct Thing {
+  pub x: int,
+}
+
+fn fmt() -> int {
+  1
+}
+
+fn main() {
+  let _ = Thing { x: 1 }
+  let _ = fmt()
+}
+"#,
+    );
+
+    assert_build_snapshot!(fs, "github.com/user/myproject");
+}
+
+#[test]
+fn prelude_alias_coexists_with_private_lisette_function() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+fn lisette() -> int {
+  1
+}
+
+fn main() {
+  let x = Some(1)
+  let _ = x
+  let _ = lisette()
+}
+"#,
+    );
+
+    assert_build_snapshot!(fs, "github.com/user/myproject");
+}
+
+#[test]
+fn generated_import_qualifier_locals_renamed() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+fn show(fmt: int) -> string {
+  f"{fmt}"
+}
+
+fn main() {
+  let strings = 1
+  let ok = "abc".contains("a")
+  let _ = strings
+  let _ = ok
+  let _ = show(2)
+}
+"#,
+    );
+
+    assert_build_snapshot!(fs, "github.com/user/myproject");
+}
+
+#[test]
+fn json_enum_coexists_with_private_json_function() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+#[json]
+enum Status {
+  Ready,
+}
+
+fn json() -> int {
+  1
+}
+
+fn main() {
+  let _ = Status.Ready
+  let _ = json()
+}
+"#,
+    );
+
+    assert_build_snapshot!(fs, "github.com/user/myproject");
+}
+
+#[test]
+fn user_fmt_alias_preserved_alongside_generated_import() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+import f "go:fmt"
+
+#[display]
+struct Thing {
+  pub x: int,
+}
+
+fn main() {
+  let _ = Thing { x: 1 }
+  let _ = f.Sprintf("x=%d", 1)
+}
+"#,
+    );
+
+    assert_build_snapshot!(fs, "github.com/user/myproject");
+}
+
+#[test]
+fn user_json_alias_preserved_alongside_generated_import() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+import js "go:encoding/json"
+
+#[json]
+enum Status {
+  Ready,
+}
+
+fn main() {
+  let s = Status.Ready
+  let _ = js.Valid([])
+  let _ = s
+}
+"#,
+    );
+
+    assert_build_snapshot!(fs, "github.com/user/myproject");
+}
+
+#[test]
+fn user_strings_alias_preserved_alongside_generated_import() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+import s "go:strings"
+
+fn main() {
+  let _ = s.ToUpper("abc")
+  let _ = "abc".contains("a")
+}
+"#,
+    );
+
+    assert_build_snapshot!(fs, "github.com/user/myproject");
+}
+
+#[test]
+fn generated_fmt_requirement_reuses_unaliased_source_import() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+import "go:fmt"
+
+fn main() {
+  fmt.Println("direct")
+  let s = f"{1}"
+  let _ = s
+}
+"#,
+    );
+
+    assert_build_snapshot!(fs, "github.com/user/myproject");
+}
+
+#[test]
+fn builtin_named_module_qualifier_consistent_in_match() {
+    let mut fs = MockFileSystem::new();
+
+    fs.add_file(
+        "print",
+        "mod.lis",
+        r#"
+pub enum Level {
+  Low,
+  High,
+}
+
+pub const LIMIT = 9
+
+pub fn pick() -> Level {
+  Level.High
+}
+"#,
+    );
+
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+import "go:fmt"
+import "print"
+
+fn main() {
+  let level = print.pick()
+  match level {
+    Low => fmt.Println("low"),
+    High => fmt.Println("high"),
+  }
+  let x = 9
+  match x {
+    print.LIMIT => fmt.Println("limit"),
+    _ => fmt.Println("other"),
+  }
+}
+"#,
+    );
+
+    assert_build_snapshot!(fs, "github.com/user/myproject");
+}

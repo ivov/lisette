@@ -219,8 +219,9 @@ pub fn write_go_outputs(dir: &Path, files: &[OutputFile]) -> Result<EmitWriteRes
             });
         }
 
-        let mut imports: Vec<String> = file.imports.keys().cloned().collect();
+        let mut imports: Vec<String> = file.imports.iter().map(|(path, _)| path.clone()).collect();
         imports.sort();
+        imports.dedup();
         new_manifest.push(ManifestEntry {
             name: file.name.clone(),
             content_hash: hash,

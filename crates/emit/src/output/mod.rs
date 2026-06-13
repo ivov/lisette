@@ -1,6 +1,5 @@
 pub mod imports;
 
-use rustc_hash::FxHashMap as HashMap;
 use std::io::{self, Write};
 use std::process::{Command, Stdio};
 
@@ -12,7 +11,9 @@ use self::imports::format_import;
 pub struct OutputFile {
     pub name: String,
     pub source: String,
-    pub imports: HashMap<String, String>,
+    /// `(path, alias)` pairs; a path may appear twice when a generated
+    /// import coexists with a source alias of the same package.
+    pub imports: Vec<(String, String)>,
     pub package_name: String,
     pub diagnostics: Vec<LisetteDiagnostic>,
 }
@@ -32,19 +33,14 @@ impl OutputFile {
 
         output.collect(format!("package {}", self.package_name));
 
-        match self.imports.len() {
-            0 => {}
-            1 => {
-                let (path, alias) = self
-                    .imports
-                    .iter()
-                    .next()
-                    .expect("single-element collection must have first element");
+        match self.imports.as_slice() {
+            [] => {}
+            [(path, alias)] => {
                 output.collect(format!("import {}", format_import(path, alias)));
             }
-            _ => {
+            entries => {
                 output.collect("import (");
-                for (path, alias) in &self.imports {
+                for (path, alias) in entries {
                     output.collect(format_import(path, alias));
                 }
                 output.collect(")");

@@ -52,6 +52,9 @@ impl ImportPlan {
 pub struct ImportBuilder<'a> {
     go_package_names: &'a HashMap<String, String>,
     imports: HashMap<String, String>,
+    /// Generated imports of paths the source already imports under another
+    /// alias; emitted alongside (Go permits duplicate import paths).
+    generated_duplicates: Vec<(String, String)>,
     dropped_aliases: HashMap<String, String>,
     used_modules: HashSet<String>,
 }
@@ -61,6 +64,7 @@ impl<'a> ImportBuilder<'a> {
         Self {
             go_package_names,
             imports: HashMap::default(),
+            generated_duplicates: Vec::new(),
             dropped_aliases: HashMap::default(),
             used_modules: HashSet::default(),
         }
@@ -73,6 +77,7 @@ impl<'a> ImportBuilder<'a> {
         Self {
             go_package_names,
             imports: plan.imports.clone(),
+            generated_duplicates: Vec::new(),
             dropped_aliases: plan.dropped_aliases.clone(),
             used_modules: HashSet::default(),
         }
@@ -94,15 +99,26 @@ impl<'a> ImportBuilder<'a> {
         }
     }
 
-    pub fn require_stdlib(&mut self) {
-        let path = go_name::PRELUDE_IMPORT_PATH;
-        self.imports.insert(path.to_string(), "lisette".to_string());
+    /// Record a generated requirement. Generated code references the package
+    /// by its fixed canonical qualifier, so a source import of the same path
+    /// under another alias is preserved and a second, canonically named
+    /// import is added alongside it.
+    pub(crate) fn require_generated(&mut self, package: go_name::GeneratedPackage) {
+        let path = package.path();
+        let canonical = package.qualifier();
         self.used_modules.insert(path.to_string());
-    }
-
-    pub fn require_path(&mut self, path: &str) {
-        self.imports.insert(path.to_string(), path.to_string());
-        self.used_modules.insert(path.to_string());
+        match self.imports.get(path) {
+            Some(alias) if effective_package_name(path, alias) == canonical => {}
+            Some(_) => {
+                if !self.generated_duplicates.iter().any(|(p, _)| p == path) {
+                    self.generated_duplicates
+                        .push((path.to_string(), canonical.to_string()));
+                }
+            }
+            None => {
+                self.imports.insert(path.to_string(), canonical.to_string());
+            }
+        }
     }
 
     pub fn filter_unused_imports(&mut self) {
@@ -110,34 +126,38 @@ impl<'a> ImportBuilder<'a> {
             .retain(|path, alias| alias == "_" || self.used_modules.contains(path));
     }
 
-    pub fn build(self) -> (HashMap<String, String>, Vec<LisetteDiagnostic>) {
-        let diagnostics = self.detect_collisions();
-        (self.imports, diagnostics)
+    pub fn build(self) -> (Vec<(String, String)>, Vec<LisetteDiagnostic>) {
+        let mut entries: Vec<(String, String)> = self.imports.into_iter().collect();
+        entries.extend(self.generated_duplicates);
+        entries.sort();
+        entries.dedup();
+        let diagnostics = detect_collisions(&entries);
+        (entries, diagnostics)
     }
+}
 
-    fn detect_collisions(&self) -> Vec<LisetteDiagnostic> {
-        if self.imports.len() < 2 {
-            return Vec::new();
-        }
-        let mut groups: HashMap<String, Vec<&str>> = HashMap::default();
-        for (path, alias) in &self.imports {
-            if alias == "_" {
-                continue;
-            }
-            let effective = effective_package_name(path, alias);
-            let sanitized = go_name::sanitize_package_name(effective).into_owned();
-            groups.entry(sanitized).or_default().push(path.as_str());
-        }
-        let mut groups: Vec<_> = groups.into_iter().filter(|(_, p)| p.len() > 1).collect();
-        groups.sort_by(|a, b| a.0.cmp(&b.0));
-        groups
-            .into_iter()
-            .map(|(alias, paths)| {
-                let owned: Vec<String> = paths.into_iter().map(str::to_string).collect();
-                emit_diag::go_import_collision(&alias, &owned)
-            })
-            .collect()
+fn detect_collisions(entries: &[(String, String)]) -> Vec<LisetteDiagnostic> {
+    if entries.len() < 2 {
+        return Vec::new();
     }
+    let mut groups: HashMap<String, Vec<&str>> = HashMap::default();
+    for (path, alias) in entries {
+        if alias == "_" {
+            continue;
+        }
+        let effective = effective_package_name(path, alias);
+        let sanitized = go_name::sanitize_package_name(effective).into_owned();
+        groups.entry(sanitized).or_default().push(path.as_str());
+    }
+    let mut groups: Vec<_> = groups.into_iter().filter(|(_, p)| p.len() > 1).collect();
+    groups.sort_by(|a, b| a.0.cmp(&b.0));
+    groups
+        .into_iter()
+        .map(|(alias, paths)| {
+            let owned: Vec<String> = paths.into_iter().map(str::to_string).collect();
+            emit_diag::go_import_collision(&alias, &owned)
+        })
+        .collect()
 }
 
 fn effective_package_name<'a>(path: &'a str, alias: &'a str) -> &'a str {

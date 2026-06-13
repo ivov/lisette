@@ -1079,9 +1079,7 @@ fn collect_const_pattern_check(
             if qualifier.is_empty() || qualifier == planner.facts.current_module() {
                 const_name.to_string()
             } else {
-                collector
-                    .effects
-                    .require_go_import(planner.go_import_path_for_module(module));
+                let qualifier = planner.require_module_import_fx(module, &mut collector.effects);
                 format!("{}.{}", qualifier, const_name)
             }
         }
@@ -1187,8 +1185,12 @@ fn collect_tagged_enum_checks(
     variant: &EnumVariantData,
     collector: &mut PatternCollector,
 ) {
-    let alias = planner.module_alias_for_type(variant.ty);
     let enum_module = enum_module_of(planner, variant.ty);
+    let alias = if planner.facts.is_foreign_module(enum_module) {
+        Some(planner.require_module_import_fx(enum_module, &mut collector.effects))
+    } else {
+        None
+    };
     let resolved = go_name::variant(
         variant.identifier,
         variant.ty,
@@ -1197,7 +1199,7 @@ fn collect_tagged_enum_checks(
         alias.as_deref(),
     );
     if resolved.needs_stdlib {
-        collector.effects.needs_stdlib = true;
+        collector.effects.require_stdlib();
     }
     collector.checks.push(Check::EnumTag {
         path: path.clone(),
@@ -1341,8 +1343,12 @@ fn resolve_struct_child_path(
     }
     let enum_info = detect_enum_info(planner, ty, identifier, typed);
     if enum_info.is_some() {
-        let alias = planner.module_alias_for_type(ty);
         let enum_module = enum_module_of(planner, ty);
+        let alias = if planner.facts.is_foreign_module(enum_module) {
+            Some(planner.require_module_import_fx(enum_module, &mut collector.effects))
+        } else {
+            None
+        };
         let resolved = go_name::variant(
             identifier,
             ty,
@@ -1351,7 +1357,7 @@ fn resolve_struct_child_path(
             alias.as_deref(),
         );
         if resolved.needs_stdlib {
-            collector.effects.needs_stdlib = true;
+            collector.effects.require_stdlib();
         }
         collector.checks.push(Check::EnumTag {
             path: path.clone(),

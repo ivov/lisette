@@ -39,13 +39,14 @@ impl Planner<'_> {
             return ValuePlan::Operand(s);
         }
 
-        let (mut setup, expression_string) =
-            self.plan_coerced_expression(expression, receiver_coercion, ctx, fx);
         let expression_ty = expression.get_type();
 
-        if let Some(module) = expression_ty.as_import_namespace() {
-            self.require_module_import_fx(module, fx);
-        }
+        let (mut setup, expression_string) =
+            if let Some(module) = expression_ty.as_import_namespace() {
+                (Vec::new(), self.require_module_import_fx(module, fx))
+            } else {
+                self.plan_coerced_expression(expression, receiver_coercion, ctx, fx)
+            };
 
         if let Some(s) = self.try_emit_tuple_member_dot(
             &expression_string,

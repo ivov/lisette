@@ -1,0 +1,13 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import "fmt"
+
+func main() {
+	fmt.Println("direct")
+	s := fmt.Sprint(1)
+	_ = s
+}

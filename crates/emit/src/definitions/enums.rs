@@ -88,7 +88,7 @@ impl Planner<'_> {
             fx.require_fmt();
         }
         if has_json {
-            fx.require_go_import("encoding/json");
+            fx.require_json();
         }
 
         Some(result)
