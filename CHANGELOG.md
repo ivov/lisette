@@ -2,6 +2,24 @@
 
 Lisette is under active development. Any version before 1.0.0 may include breaking changes.
 
+## [0.4.0](https://github.com/ivov/lisette/compare/lisette-v0.3.4...lisette-v0.4.0) - 2026-06-13
+
+- feat: advise against recompiling a regexp in a loop [#710](https://github.com/ivov/lisette/pull/710) [`b88540d`](https://github.com/ivov/lisette/commit/b88540d712bc493d764484ca3f86f152a3889d23)
+- feat: go-to-definition for go stdlib symbols [#684](https://github.com/ivov/lisette/pull/684) [`5126fad`](https://github.com/ivov/lisette/commit/5126fadfdcc97f3dfa1fb1cf025b0f87950e68b9)
+- fix: stop generated imports from colliding with user names [#709](https://github.com/ivov/lisette/pull/709) [`d627ae1`](https://github.com/ivov/lisette/commit/d627ae1d6e4068ff0c2477990b0e6a9897e3f873)
+- feat: warn on leaked context from uncalled cancel func [#708](https://github.com/ivov/lisette/pull/708) [`b39bc39`](https://github.com/ivov/lisette/commit/b39bc390b4122f7e47a97dc236406369f3d28be4)
+- feat: support method expressions on promoted methods [#707](https://github.com/ivov/lisette/pull/707) [`6dc0e2c`](https://github.com/ivov/lisette/commit/6dc0e2cf007f69451c1a4f48940faa2b83430397)
+- feat!: make `lis build` produce a binary [#706](https://github.com/ivov/lisette/pull/706) [`6f0b0f5`](https://github.com/ivov/lisette/commit/6f0b0f5fd746e6503e3171a5c383a238840eee18)
+- feat: warn on use of deprecated Go APIs [#705](https://github.com/ivov/lisette/pull/705) [`252aade`](https://github.com/ivov/lisette/commit/252aade0b572b11e17e32a71ad765f5579a2fbb3)
+- chore: remove benchmark crate [#704](https://github.com/ivov/lisette/pull/704) [`9885735`](https://github.com/ivov/lisette/commit/98857359bd264731aeb194d50a6d970261679d0e)
+- refactor!: rename `--debug` to `--sourcemap` [#703](https://github.com/ivov/lisette/pull/703) [`c5245f4`](https://github.com/ivov/lisette/commit/c5245f4289ffc71382d872e4057e5f27dce8bc1c)
+- feat: allow suppressing more lints via `#[allow]` [#702](https://github.com/ivov/lisette/pull/702) [`ce4c0fa`](https://github.com/ivov/lisette/commit/ce4c0fa84b45e6990c612ac9e8278dbf79efe808)
+- refactor!: drop `impl` for interface embedding in favor of `embed` [#701](https://github.com/ivov/lisette/pull/701) [`15563f9`](https://github.com/ivov/lisette/commit/15563f95f28a84ab027e443450ac559192e1e8cb)
+- feat: warn when `os.Exit` skips a `defer` [#700](https://github.com/ivov/lisette/pull/700) [`2d22251`](https://github.com/ivov/lisette/commit/2d22251ae635473eaa8397837f4362d00f30588f)
+- refactor: finish migrating emit statements to structured IR [#699](https://github.com/ivov/lisette/pull/699) [`e3701db`](https://github.com/ivov/lisette/commit/e3701dbce1d8b05d5ad4976ece032bc74d2167cd)
+- perf: run independent pass groups concurrently [#698](https://github.com/ivov/lisette/pull/698) [`06a0aa2`](https://github.com/ivov/lisette/commit/06a0aa25f23be5c4d07db2f17ee623db06801777)
+- perf: stop cloning function bodies during emit [#696](https://github.com/ivov/lisette/pull/696) [`cbe4d70`](https://github.com/ivov/lisette/commit/cbe4d709585bbe5a13f0c863b964f329f7309971)
+
 ## [0.3.4](https://github.com/ivov/lisette/compare/lisette-v0.3.3...lisette-v0.3.4) - 2026-06-11
 
 - docs: document embedding imported Go types [#695](https://github.com/ivov/lisette/pull/695) [`d027dbd`](https://github.com/ivov/lisette/commit/d027dbd8ec971099ddf9961b01c36fc205c2c4de)
