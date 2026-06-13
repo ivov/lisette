@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [warning] Context leaking
+   ╭─[test.lis:5:13]
+ 4 │ fn main() {
+ 5 │   let (ctx, _) = context.WithCancelCause(context.Background())
+   ·             ┬
+   ·             ╰── never called
+ 6 │   let _ = ctx
+   ╰────
+  help: Call this cancel function (usually `defer cancel()`) to release the context, or it leaks until the parent is canceled · code: [lint.lost_cancel]

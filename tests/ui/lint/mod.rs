@@ -10065,6 +10065,223 @@ fn main() {
 }
 
 #[test]
+fn lost_cancel_discarded() {
+    assert_lint_snapshot!(
+        r#"
+import "go:context"
+
+fn main() {
+  let (ctx, _) = context.WithCancel(context.Background())
+  let _ = ctx
+}
+"#
+    );
+}
+
+#[test]
+fn lost_cancel_whole_result_discarded() {
+    assert_lint_snapshot!(
+        r#"
+import "go:context"
+
+fn main() {
+  let _ = context.WithCancel(context.Background())
+}
+"#
+    );
+}
+
+#[test]
+fn lost_cancel_through_type_alias() {
+    assert_lint_snapshot!(
+        r#"
+import "go:context"
+
+type MyCancel = context.CancelFunc
+
+fn make_cancel() -> MyCancel {
+  let (ctx, cancel) = context.WithCancel(context.Background())
+  let _ = ctx
+  cancel
+}
+
+fn main() {
+  let _ = make_cancel()
+}
+"#
+    );
+}
+
+#[test]
+fn lost_cancel_named_unused() {
+    let warnings = crate::_harness::lint::lint(
+        r#"
+import "go:context"
+
+fn main() {
+  let (ctx, cancel) = context.WithCancel(context.Background())
+  let _ = ctx
+}
+"#,
+    );
+    let flags_leak = warnings
+        .iter()
+        .any(|w| w.code_str() == Some("lint.lost_cancel"));
+    let flags_unused = warnings
+        .iter()
+        .any(|w| w.code_str() == Some("lint.unused_variable"));
+    assert!(
+        flags_leak && flags_unused,
+        "expected both lost_cancel and unused_variable on an unused named cancel, got: {:?}",
+        warnings
+    );
+}
+
+#[test]
+fn lost_cancel_aliased_copy_no_warning() {
+    let warnings = crate::_harness::lint::lint(
+        r#"
+import "go:context"
+
+fn main() {
+  let (ctx, cancel) = context.WithCancel(context.Background())
+  let cancel2 = cancel
+  defer cancel()
+  let _ = ctx
+}
+"#,
+    );
+    let flags_leak = warnings
+        .iter()
+        .any(|w| w.code_str() == Some("lint.lost_cancel"));
+    assert!(
+        !flags_leak,
+        "expected no lost_cancel on a copy of a called cancel, got: {:?}",
+        warnings
+    );
+}
+
+#[test]
+fn lost_cancel_cause_func_discarded() {
+    assert_lint_snapshot!(
+        r#"
+import "go:context"
+
+fn main() {
+  let (ctx, _) = context.WithCancelCause(context.Background())
+  let _ = ctx
+}
+"#
+    );
+}
+
+#[test]
+fn lost_cancel_tuple_projection() {
+    let warnings = crate::_harness::lint::lint(
+        r#"
+import "go:context"
+
+fn main() {
+  let cancel = context.WithCancel(context.Background()).1
+}
+"#,
+    );
+    let flags_leak = warnings
+        .iter()
+        .any(|w| w.code_str() == Some("lint.lost_cancel"));
+    assert!(
+        flags_leak,
+        "expected lost_cancel on a cancel projected out of a fresh call, got: {:?}",
+        warnings
+    );
+}
+
+#[test]
+fn lost_cancel_projection_of_binding_no_warning() {
+    let warnings = crate::_harness::lint::lint(
+        r#"
+import "go:context"
+
+fn main() {
+  let pair = context.WithCancel(context.Background())
+  let cancel = pair.1
+  defer cancel()
+  let _ = pair
+}
+"#,
+    );
+    let flags_leak = warnings
+        .iter()
+        .any(|w| w.code_str() == Some("lint.lost_cancel"));
+    assert!(
+        !flags_leak,
+        "expected no lost_cancel on a projection off an existing binding, got: {:?}",
+        warnings
+    );
+}
+
+#[test]
+fn lost_cancel_called_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:context"
+
+fn main() {
+  let (ctx, cancel) = context.WithCancel(context.Background())
+  defer cancel()
+  let _ = ctx
+}
+"#
+    );
+}
+
+#[test]
+fn lost_cancel_discarded_copy_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:context"
+
+fn main() {
+  let (ctx, cancel) = context.WithCancel(context.Background())
+  let _ = cancel
+  defer cancel()
+  let _ = ctx
+}
+"#
+    );
+}
+
+#[test]
+fn lost_cancel_with_timeout_discarded() {
+    assert_lint_snapshot!(
+        r#"
+import "go:context"
+import "go:time"
+
+fn main() {
+  let (ctx, _) = context.WithTimeout(context.Background(), time.Second)
+  let _ = ctx
+}
+"#
+    );
+}
+
+#[test]
+fn lost_cancel_allow_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:context"
+
+#[allow(lost_cancel)]
+fn main() {
+  let (ctx, _) = context.WithCancel(context.Background())
+  let _ = ctx
+}
+"#
+    );
+}
+
+#[test]
 fn exit_after_defer() {
     assert_lint_snapshot!(
         r#"

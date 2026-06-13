@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [warning] Context leaking
+   ╭─[test.lis:6:13]
+ 5 │ fn main() {
+ 6 │   let (ctx, _) = context.WithTimeout(context.Background(), time.Second)
+   ·             ┬
+   ·             ╰── never called
+ 7 │   let _ = ctx
+   ╰────
+  help: Call this cancel function (usually `defer cancel()`) to release the context, or it leaks until the parent is canceled · code: [lint.lost_cancel]

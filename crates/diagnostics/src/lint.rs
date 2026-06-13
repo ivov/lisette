@@ -867,6 +867,15 @@ pub fn deprecated_api(span: &Span, message: &str) -> LisetteDiagnostic {
         .with_help(message)
 }
 
+pub fn lost_cancel(span: &Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::warn("Context leaking")
+        .with_lint_code("lost_cancel")
+        .with_span_label(span, "never called")
+        .with_help(
+            "Call this cancel function (usually `defer cancel()`) to release the context, or it leaks until the parent is canceled",
+        )
+}
+
 pub fn exit_after_defer(span: &Span) -> LisetteDiagnostic {
     LisetteDiagnostic::warn("`os.Exit` skips `defer`")
         .with_lint_code("exit_after_defer")

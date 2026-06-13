@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [warning] Context leaking
+    ╭─[test.lis:13:7]
+ 12 │ fn main() {
+ 13 │   let _ = make_cancel()
+    ·       ┬
+    ·       ╰── never called
+ 14 │ }
+    ╰────
+  help: Call this cancel function (usually `defer cancel()`) to release the context, or it leaks until the parent is canceled · code: [lint.lost_cancel]
