@@ -290,7 +290,7 @@ fn run_pipeline(
     let go_files = lisette_emit::Planner::emit(
         &emit_input,
         "lisette_playground",
-        lisette_emit::EmitOptions { debug: false },
+        lisette_emit::EmitOptions { sourcemap: false },
     );
 
     (go_files, diagnostics)
@@ -415,7 +415,6 @@ fn child_containing_offset<'a>(expression: &'a Expression, offset: u32) -> Optio
         | Expression::VariableDeclaration { .. }
         | Expression::RawGo { .. }
         | Expression::Enum { .. }
-        | Expression::ValueEnum { .. }
         | Expression::Struct { .. }
         | Expression::TypeAlias { .. }
         | Expression::ModuleImport { .. }
@@ -561,7 +560,7 @@ fn get_module_prefix<'a>(source: &'a str, offset: usize) -> Option<&'a str> {
 fn definition_to_completion_kind(def: &Definition) -> &'static str {
     match &def.body {
         DefinitionBody::Struct { .. } => "type",
-        DefinitionBody::Enum { .. } | DefinitionBody::ValueEnum { .. } => "enum",
+        DefinitionBody::Enum { .. } => "enum",
         DefinitionBody::Interface { .. } => "type",
         DefinitionBody::TypeAlias { .. } => "type",
         DefinitionBody::Value { .. } => {
