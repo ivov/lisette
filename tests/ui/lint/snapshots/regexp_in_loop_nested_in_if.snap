@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [info] Regexp recompiled on every iteration
+   ╭─[test.lis:7:34]
+ 6 │     if s != "" {
+ 7 │       let _ = regexp.MatchString("a", s)
+   ·                                  ─┬─
+   ·                                   ╰── compiled each time through the loop
+ 8 │     }
+   ╰────
+  help: Compile the pattern once outside the loop and reuse it: `regexp.MustCompile` for a known-valid pattern, or `regexp.Compile` to keep handling the error · code: [lint.regexp_in_loop]

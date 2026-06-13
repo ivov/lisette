@@ -3815,6 +3815,158 @@ fn main() {
 }
 
 #[test]
+fn regexp_in_loop_for() {
+    assert_lint_snapshot!(
+        r#"
+import "go:regexp"
+
+fn main() {
+  for s in ["a"] {
+    let _ = regexp.MatchString("[0-9]+", s)
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn regexp_in_loop_nested_in_if() {
+    assert_lint_snapshot!(
+        r#"
+import "go:regexp"
+
+fn main() {
+  for s in ["a"] {
+    if s != "" {
+      let _ = regexp.MatchString("a", s)
+    }
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn regexp_in_loop_while_condition() {
+    assert_lint_snapshot!(
+        r#"
+import "go:regexp"
+
+fn main() {
+  let s = "abc"
+  while regexp.MatchString("[0-9]+", s).unwrap_or(false) {
+    let _ = 1
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn regexp_in_loop_nested_for_iterable() {
+    let warnings = crate::_harness::lint::lint(
+        r#"
+import "go:regexp"
+
+fn pick(b: bool) -> Slice<string> {
+  if b { ["x"] } else { [] }
+}
+
+fn main() {
+  for o in ["a"] {
+    for y in pick(regexp.MatchString("[0-9]+", o).unwrap_or(false)) {
+      let _ = y
+    }
+  }
+}
+"#,
+    );
+    let fires = warnings
+        .iter()
+        .any(|w| w.code_str() == Some("lint.regexp_in_loop"));
+    assert!(
+        fires,
+        "expected regexp_in_loop on a pattern compiled in a nested for iterable, got: {:?}",
+        warnings
+    );
+}
+
+#[test]
+fn regexp_in_loop_top_level_for_iterable_no_warning() {
+    let warnings = crate::_harness::lint::lint(
+        r#"
+import "go:regexp"
+
+fn pick(b: bool) -> Slice<string> {
+  if b { ["x"] } else { [] }
+}
+
+fn main() {
+  for y in pick(regexp.MatchString("[0-9]+", "abc").unwrap_or(false)) {
+    let _ = y
+  }
+}
+"#,
+    );
+    let fires = warnings
+        .iter()
+        .any(|w| w.code_str() == Some("lint.regexp_in_loop"));
+    assert!(
+        !fires,
+        "a for iterable runs once on entry, so a top-level for iterable must not warn, got: {:?}",
+        warnings
+    );
+}
+
+#[test]
+fn regexp_in_loop_non_literal_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:regexp"
+
+fn main() {
+  let pat = "[0-9]+"
+  for s in ["a"] {
+    let _ = regexp.MatchString(pat, s)
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn regexp_in_loop_hoisted_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:regexp"
+
+fn main() {
+  let _ = regexp.MatchString("[0-9]+", "seed")
+  for s in ["a"] {
+    let _ = s
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn regexp_in_loop_allow_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:regexp"
+
+#[allow(regexp_in_loop)]
+fn main() {
+  for s in ["a"] {
+    let _ = regexp.MatchString("[0-9]+", s)
+  }
+}
+"#
+    );
+}
+
+#[test]
 fn loop_runs_once_if_else_both_exit() {
     assert_lint_snapshot!(
         r#"

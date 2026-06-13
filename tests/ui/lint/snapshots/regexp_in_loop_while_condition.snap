@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [info] Regexp recompiled on every iteration
+   ╭─[test.lis:6:28]
+ 5 │   let s = "abc"
+ 6 │   while regexp.MatchString("[0-9]+", s).unwrap_or(false) {
+   ·                            ────┬───
+   ·                                ╰── compiled each time through the loop
+ 7 │     let _ = 1
+   ╰────
+  help: Compile the pattern once outside the loop and reuse it: `regexp.MustCompile` for a known-valid pattern, or `regexp.Compile` to keep handling the error · code: [lint.regexp_in_loop]

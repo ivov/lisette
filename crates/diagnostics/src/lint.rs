@@ -365,6 +365,15 @@ pub fn manual_compound_assignment(span: &Span, symbol: &str) -> LisetteDiagnosti
         .with_help(format!("Use the `{symbol}` compound assignment operator"))
 }
 
+pub fn regexp_in_loop(span: &Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::info("Regexp recompiled on every iteration")
+        .with_lint_code("regexp_in_loop")
+        .with_span_label(span, "compiled each time through the loop")
+        .with_help(
+            "Compile the pattern once outside the loop and reuse it: `regexp.MustCompile` for a known-valid pattern, or `regexp.Compile` to keep handling the error",
+        )
+}
+
 pub fn manual_is_empty(span: &Span, replacement: &str) -> LisetteDiagnostic {
     LisetteDiagnostic::info("Length comparison can use `is_empty()`")
         .with_lint_code("manual_is_empty")
