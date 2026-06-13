@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [info] Redundant comparison
+   ╭─[test.lis:4:11]
+ 3 │   let x = 5;
+ 4 │   let _ = x < 5 || x < 10
+   ·           ──┬──
+   ·             ╰── redundant
+ 5 │ }
+   ╰────
+  help: This comparison is already implied by the other, so the expression is equivalent to the other side alone · code: [lint.redundant_comparison]

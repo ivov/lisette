@@ -6,6 +6,7 @@ pub(crate) mod empty_range;
 pub(crate) mod empty_select_default;
 pub(crate) mod enum_variant_value;
 pub(crate) mod generics;
+pub(crate) mod impossible_comparison;
 pub(crate) mod index_out_of_bounds;
 pub(crate) mod interpolation_stringer;
 pub(crate) mod irrefutable_patterns;

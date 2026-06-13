@@ -294,6 +294,24 @@ pub fn type_limit_comparison(span: &Span, always_true: bool) -> LisetteDiagnosti
         ))
 }
 
+pub fn redundant_comparison(span: &Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::info("Redundant comparison")
+        .with_lint_code("redundant_comparison")
+        .with_span_label(span, "redundant")
+        .with_help(
+            "This comparison is already implied by the other, so the expression is equivalent to the other side alone",
+        )
+}
+
+pub fn double_comparison(span: &Span, combined: &str) -> LisetteDiagnostic {
+    LisetteDiagnostic::info("Comparisons can be combined")
+        .with_lint_code("double_comparison")
+        .with_span_label(span, format!("simplify to `{combined}`"))
+        .with_help(format!(
+            "These two comparisons cover the same operands, so they are equivalent to a single `{combined}`."
+        ))
+}
+
 pub fn non_negative_comparison(span: &Span, always_true: bool) -> LisetteDiagnostic {
     let result = if always_true { "true" } else { "false" };
 

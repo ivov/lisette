@@ -2357,6 +2357,15 @@ pub fn oversized_shift(
         ))
 }
 
+pub fn impossible_comparison(span: &Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Impossible comparison")
+        .with_infer_code("impossible_comparison")
+        .with_span_label(span, "always `false`")
+        .with_help(
+            "No value satisfies both sides, so this `&&` is always `false`. Check the bounds, or did you mean `||`?",
+        )
+}
+
 pub fn nan_comparison(span: &Span, always_true: bool) -> LisetteDiagnostic {
     let result = if always_true { "true" } else { "false" };
 

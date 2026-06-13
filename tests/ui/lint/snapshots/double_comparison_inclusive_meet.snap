@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [info] Comparisons can be combined
+   ╭─[test.lis:4:11]
+ 3 │   let x = 5;
+ 4 │   let _ = x <= 5 && x >= 5
+   ·           ────────┬───────
+   ·                   ╰── simplify to `==`
+ 5 │ }
+   ╰────
+  help: These two comparisons cover the same operands, so they are equivalent to a single `==` · code: [lint.double_comparison]

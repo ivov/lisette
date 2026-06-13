@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [error] Impossible comparison
+   ╭─[test.lis:4:11]
+ 3 │   let x = 5;
+ 4 │   let _ = x == 5 && x != 5
+   ·           ────────┬───────
+   ·                   ╰── always `false`
+ 5 │ }
+   ╰────
+  help: No value satisfies both sides, so this `&&` is always `false`. Check the bounds, or did you mean `||`? · code: [infer.impossible_comparison]

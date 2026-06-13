@@ -492,7 +492,10 @@ impl InferCtx<'_, '_> {
                 let different_but_compatible = resolved_left_operand != resolved_right_operand
                     && resolved_left_operand.is_numeric_compatible_with(&resolved_right_operand);
 
-                if same_aliased_numeric || different_but_compatible {
+                if (same_aliased_numeric || different_but_compatible)
+                    && resolved_left_operand.is_orderable()
+                    && resolved_right_operand.is_orderable()
+                {
                     self.type_bool()
                 } else {
                     self.ensure_orderable(left_operand_ty, left_span);
@@ -690,8 +693,7 @@ impl InferCtx<'_, '_> {
             return;
         }
 
-        let is_string_backed = resolved_ty.underlying_simple_kind() == Some(SimpleKind::String);
-        if !resolved_ty.is_ordered() && !is_string_backed && !resolved_ty.is_boolean() {
+        if !resolved_ty.is_orderable() {
             self.sink
                 .push(diagnostics::infer::not_orderable(&resolved_ty, *span));
         }

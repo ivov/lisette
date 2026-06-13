@@ -708,6 +708,21 @@ impl SimpleKind {
         self.is_arithmetic() && !matches!(self, SimpleKind::Complex64 | SimpleKind::Complex128)
     }
 
+    pub fn integer_range(self) -> Option<(i128, i128)> {
+        use SimpleKind::*;
+        Some(match self {
+            Int8 => (i8::MIN as i128, i8::MAX as i128),
+            Int16 => (i16::MIN as i128, i16::MAX as i128),
+            Int32 | Rune => (i32::MIN as i128, i32::MAX as i128),
+            Int | Int64 => (i64::MIN as i128, i64::MAX as i128),
+            Uint8 | Byte => (0, u8::MAX as i128),
+            Uint16 => (0, u16::MAX as i128),
+            Uint32 => (0, u32::MAX as i128),
+            Uint | Uint64 | Uintptr => (0, u64::MAX as i128),
+            _ => return None,
+        })
+    }
+
     pub fn is_unsigned_int(self) -> bool {
         matches!(
             self,
@@ -1010,6 +1025,15 @@ impl Type {
 
     pub fn is_ordered(&self) -> bool {
         self.as_simple().is_some_and(SimpleKind::is_ordered)
+    }
+
+    /// Whether `<`/`<=`/`>`/`>=` accept this type: an ordered numeric, a
+    /// string-backed type (resolved through named types), or a plain boolean.
+    pub fn is_orderable(&self) -> bool {
+        matches!(
+            self.underlying_simple_kind(),
+            Some(kind) if kind.is_ordered() || kind == SimpleKind::String
+        ) || self.is_boolean()
     }
 
     /// True for Go's `cmp.Ordered` set: ints, floats, strings, and named aliases over them.

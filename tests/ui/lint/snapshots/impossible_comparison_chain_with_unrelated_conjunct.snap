@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [error] Impossible comparison
+   ╭─[test.lis:5:11]
+ 4 │   let flag = true;
+ 5 │   let _ = x < 5 && flag && x > 10
+   ·           ───────────┬───────────
+   ·                      ╰── always `false`
+ 6 │ }
+   ╰────
+  help: No value satisfies both sides, so this `&&` is always `false`. Check the bounds, or did you mean `||`? · code: [infer.impossible_comparison]

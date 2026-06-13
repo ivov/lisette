@@ -5,6 +5,7 @@ use crate::context::AnalysisContext;
 use crate::facts::Facts;
 
 pub(crate) mod checks;
+pub(crate) mod comparison;
 mod deferred;
 mod fact_producers;
 mod lints;

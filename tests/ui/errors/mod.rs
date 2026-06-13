@@ -1480,6 +1480,18 @@ fn test(a: complex64, b: complex64) -> bool {
 }
 
 #[test]
+fn infer_named_complex_not_orderable() {
+    let input = r#"
+struct Z(complex64)
+
+fn test(a: Z, b: Z) -> bool {
+  a < b
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
 fn infer_compare_unbounded_param_suggests_ordered_bound() {
     let input = r#"
 fn largest<T>(a: T, b: T) -> T {

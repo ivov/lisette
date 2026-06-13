@@ -19,8 +19,8 @@ pub(crate) struct NodeCtx<'a> {
     pub source: &'a str,
     pub is_d_lis: bool,
     pub sink: &'a LocalSink,
-    /// Per-walk scratch: literal spans already claimed by a parent node (e.g. a
-    /// negation's magnitude), so a check does not also judge them standalone.
+    /// Node spans already claimed by an enclosing node, so a check does not also
+    /// judge them standalone (e.g. the nested `&&` of an outer comparison chain).
     pub claimed_spans: RefCell<HashSet<Span>>,
 }
 

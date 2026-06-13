@@ -2801,6 +2801,1099 @@ fn main() {
 }
 
 #[test]
+fn impossible_comparison_contradictory_range() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let x = 5;
+  let _ = x < 5 && x > 10
+}
+"#
+    );
+}
+
+#[test]
+fn impossible_comparison_literal_on_left() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let x = 5;
+  let _ = 5 > x && 10 < x
+}
+"#
+    );
+}
+
+#[test]
+fn impossible_comparison_exclusive_boundary() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let x = 5;
+  let _ = x < 5 && x >= 5
+}
+"#
+    );
+}
+
+#[test]
+fn impossible_comparison_two_equalities() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let x = 3;
+  let _ = x == 3 && x == 4
+}
+"#
+    );
+}
+
+#[test]
+fn impossible_comparison_negative_bounds() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let x = 0;
+  let _ = x <= -3 && x >= 0
+}
+"#
+    );
+}
+
+#[test]
+fn impossible_comparison_float_operand_integer_literals() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let f: float64 = 1.0
+  let _ = f < 5 && f > 10
+}
+"#
+    );
+}
+
+#[test]
+fn impossible_comparison_disjunction_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let x = 5;
+  let _ = x < 5 || x > 10
+}
+"#
+    );
+}
+
+#[test]
+fn impossible_comparison_equality_inequality() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let x = 5;
+  let _ = x == 5 && x != 5
+}
+"#
+    );
+}
+
+#[test]
+fn impossible_comparison_overlapping_range_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let x = 5;
+  let _ = x < 10 && x > 5
+}
+"#
+    );
+}
+
+#[test]
+fn impossible_comparison_chain_with_unrelated_conjunct() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let x = 5;
+  let flag = true;
+  let _ = x < 5 && flag && x > 10
+}
+"#
+    );
+}
+
+#[test]
+fn impossible_comparison_chain_with_negated_conjunct() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let x = 5;
+  let flag = true;
+  let _ = x < 5 && !flag && x > 10
+}
+"#
+    );
+}
+
+#[test]
+fn impossible_comparison_distinct_operands_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let a = 1;
+  let b = 2;
+  let _ = a < 5 && b > 10
+}
+"#
+    );
+}
+
+#[test]
+fn impossible_comparison_side_effecting_operand_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn pick() -> int { 7 }
+
+fn main() {
+  let _ = pick() < 5 && pick() > 10
+}
+"#
+    );
+}
+
+#[test]
+fn impossible_comparison_side_effecting_conjunct_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn step() -> bool { true }
+
+fn main() {
+  let x = 0;
+  let _ = x < 5 && step() && x > 10
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_comparison_disjunction_narrower() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let x = 5;
+  let _ = x < 5 || x < 10
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_comparison_conjunction_wider() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let x = 5;
+  let _ = x < 5 && x < 10
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_comparison_greater_than() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let x = 5;
+  let _ = x > 5 || x > 3
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_comparison_float_operand_integer_literals() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let f: float64 = 1.0
+  let _ = f < 5 || f < 10
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_comparison_proper_overlap_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let x = 5;
+  let _ = x < 10 && x > 5
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_comparison_side_effecting_operand_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn pick() -> int { 7 }
+
+fn main() {
+  let _ = pick() < 5 || pick() < 10
+}
+"#
+    );
+}
+
+#[test]
+fn double_comparison_equal_or_less() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let x = 5;
+  let y = 3;
+  let _ = x == y || x < y
+}
+"#
+    );
+}
+
+#[test]
+fn double_comparison_less_or_greater() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let x = 5;
+  let y = 3;
+  let _ = x < y || x > y
+}
+"#
+    );
+}
+
+#[test]
+fn double_comparison_inclusive_meet() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let x = 5;
+  let _ = x <= 5 && x >= 5
+}
+"#
+    );
+}
+
+#[test]
+fn double_comparison_distinct_bounds_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let x = 5;
+  let _ = x < 5 || x == 6
+}
+"#
+    );
+}
+
+#[test]
+fn double_comparison_float_inequality_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let x: float64 = 1.0
+  let y: float64 = 2.0
+  let _ = x < y || x > y
+}
+"#
+    );
+}
+
+#[test]
+fn double_comparison_float_equal_or_less() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let x: float64 = 1.0
+  let y: float64 = 2.0
+  let _ = x == y || x < y
+}
+"#
+    );
+}
+
+#[test]
+fn double_comparison_float_inclusive_meet() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let x: float64 = 1.0
+  let y: float64 = 2.0
+  let _ = x <= y && x >= y
+}
+"#
+    );
+}
+
+#[test]
+fn double_comparison_generic_ordered_inequality_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:cmp"
+
+fn different<T: cmp.Ordered>(x: T, y: T) -> bool {
+  x < y || x > y
+}
+
+fn main() {
+  let _ = different(1, 2)
+}
+"#
+    );
+}
+
+#[test]
+fn impossible_comparison_skips_type_invalid_operand() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+fn main() {
+  let x = "a";
+  let _ = x < 5 && x > 10
+}
+"#,
+    );
+    let result = compile_check(fs);
+    assert!(
+        result
+            .errors
+            .iter()
+            .any(|d| d.plain_message().contains("Type mismatch")),
+        "expected the type mismatch to still be reported: {:?}",
+        result.errors
+    );
+    assert!(
+        !result
+            .errors
+            .iter()
+            .any(|d| d.plain_message() == "Impossible comparison"),
+        "must not flag a type-invalid comparison as impossible: {:?}",
+        result.errors
+    );
+}
+
+#[test]
+fn impossible_comparison_non_boolean_conjunct_no_diagnostic() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+fn main() {
+  let x = 0
+  let _ = x < 5 && 3 && x > 10
+}
+"#,
+    );
+    let result = compile_check(fs);
+    assert!(
+        result
+            .errors
+            .iter()
+            .any(|d| d.plain_message().contains("Type mismatch")),
+        "expected the non-boolean conjunct type error to still be reported: {:?}",
+        result.errors
+    );
+    assert!(
+        !result
+            .errors
+            .iter()
+            .any(|d| d.plain_message() == "Impossible comparison"),
+        "must not reason across a non-boolean conjunct in a type-invalid chain: {:?}",
+        result.errors
+    );
+}
+
+#[test]
+fn impossible_comparison_invalid_comparison_conjunct_no_diagnostic() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+fn main() {
+  let x = 0
+  let s = "a"
+  let _ = x < 5 && s < 5 && x > 10
+}
+"#,
+    );
+    let result = compile_check(fs);
+    assert!(
+        result
+            .errors
+            .iter()
+            .any(|d| d.plain_message().contains("Type mismatch")),
+        "expected the invalid-comparison type error to still be reported: {:?}",
+        result.errors
+    );
+    assert!(
+        !result
+            .errors
+            .iter()
+            .any(|d| d.plain_message() == "Impossible comparison"),
+        "must not reason across an out-of-scope or invalid comparison conjunct: {:?}",
+        result.errors
+    );
+}
+
+#[test]
+fn impossible_comparison_invalid_comparison_inside_or_no_diagnostic() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+fn main() {
+  let x = 0
+  let flag = true
+  let s = "a"
+  let _ = x < 5 && (s < 5 || flag) && x > 10
+}
+"#,
+    );
+    let result = compile_check(fs);
+    assert!(
+        result
+            .errors
+            .iter()
+            .any(|d| d.plain_message().contains("Type mismatch")),
+        "expected the invalid comparison inside the disjunction to still be reported: {:?}",
+        result.errors
+    );
+    assert!(
+        !result
+            .errors
+            .iter()
+            .any(|d| d.plain_message() == "Impossible comparison"),
+        "must not reason across a disjunction hiding an invalid comparison: {:?}",
+        result.errors
+    );
+}
+
+#[test]
+fn redundant_comparison_skips_type_invalid_operand() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+fn main() {
+  let x = "a";
+  let _ = x < 5 || x < 10
+}
+"#,
+    );
+    let result = compile_check(fs);
+    assert!(
+        result
+            .errors
+            .iter()
+            .any(|d| d.plain_message().contains("Type mismatch")),
+        "expected the type mismatch to still be reported: {:?}",
+        result.errors
+    );
+    assert!(
+        !result
+            .lints
+            .iter()
+            .any(|d| d.plain_message() == "Redundant comparison"),
+        "must not flag a type-invalid comparison as redundant: {:?}",
+        result.lints
+    );
+}
+
+#[test]
+fn double_comparison_skips_type_invalid_operand() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+fn main() {
+  let x = "a";
+  let _ = x < 5 || x > 5
+}
+"#,
+    );
+    let result = compile_check(fs);
+    assert!(
+        result
+            .errors
+            .iter()
+            .any(|d| d.plain_message().contains("Type mismatch")),
+        "expected the type mismatch to still be reported: {:?}",
+        result.errors
+    );
+    assert!(
+        !result
+            .lints
+            .iter()
+            .any(|d| d.plain_message() == "Comparisons can be combined"),
+        "must not flag a type-invalid comparison as combinable: {:?}",
+        result.lints
+    );
+}
+
+// Cases the checker accepts but the comparison lints deliberately leave out of scope.
+
+#[test]
+fn comparison_named_integer_type_out_of_scope() {
+    assert_no_lint_warnings!(
+        r#"
+struct Celsius(int)
+
+fn main() {
+  let t = Celsius(5)
+  let _ = t < 5 && t > 10
+}
+"#
+    );
+}
+
+#[test]
+fn comparison_named_uintptr_out_of_scope() {
+    assert_no_lint_warnings!(
+        r#"
+struct Handle(uintptr)
+
+fn main() {
+  let h: Handle = 5
+  let _ = h == 5 && h != 5
+}
+"#
+    );
+}
+
+#[test]
+fn comparison_named_string_out_of_scope() {
+    assert_no_lint_warnings!(
+        r#"
+struct Name(string)
+
+fn main() {
+  let x: Name = "b"
+  let _ = x == "a" || x < "a"
+}
+"#
+    );
+}
+
+#[test]
+fn comparison_complex_out_of_scope() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let c: complex64 = 1
+  let _ = c == 1 && c != 1
+}
+"#
+    );
+}
+
+#[test]
+fn comparison_float_literal_out_of_scope() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let x: float64 = 1.0
+  let _ = x == 1.0 && x != 1.0
+}
+"#
+    );
+}
+
+#[test]
+fn comparison_float_ordering_and_mixing_out_of_scope() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let x: float64 = 1.0
+  let _ = x < 1.0 && x > 2.0
+  let _ = x == 1 && x != 1.0
+  let _ = x < 1.0 || x < 2.0
+}
+"#
+    );
+}
+
+#[test]
+fn comparison_string_out_of_scope() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let s = "a"
+  let _ = s == "a" && s != "a"
+}
+"#
+    );
+}
+
+#[test]
+fn impossible_comparison_string_satisfiable_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let s = "a"
+  let _ = s == "a" && s != "b"
+}
+"#
+    );
+}
+
+#[test]
+fn comparison_boolean_operands_out_of_scope() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let x = true
+  let y = false
+  let _ = x == y || x < y
+}
+"#
+    );
+}
+
+#[test]
+fn double_comparison_distinct_named_string_types_no_diagnostic() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+struct A(string)
+struct B(string)
+
+fn main() {
+  let a = A("a")
+  let b = B("b")
+  let _ = a < b || a > b
+}
+"#,
+    );
+    let result = compile_check(fs);
+    assert!(
+        result
+            .errors
+            .iter()
+            .any(|d| d.plain_message().contains("Type mismatch")),
+        "expected the named-type boundary error to still be reported: {:?}",
+        result.errors
+    );
+    assert!(
+        !result
+            .lints
+            .iter()
+            .any(|d| d.plain_message() == "Comparisons can be combined"),
+        "must not combine comparisons across a named-type boundary: {:?}",
+        result.lints
+    );
+}
+
+#[test]
+fn double_comparison_named_vs_plain_string_no_diagnostic() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+struct A(string)
+
+fn main() {
+  let a = A("a")
+  let s = "x"
+  let _ = a < s || a > s
+}
+"#,
+    );
+    let result = compile_check(fs);
+    assert!(
+        result
+            .errors
+            .iter()
+            .any(|d| d.plain_message().contains("Type mismatch")),
+        "expected the named-vs-plain-string error to still be reported: {:?}",
+        result.errors
+    );
+    assert!(
+        !result
+            .lints
+            .iter()
+            .any(|d| d.plain_message() == "Comparisons can be combined"),
+        "must not combine comparisons of a named type against a plain primitive: {:?}",
+        result.lints
+    );
+}
+
+#[test]
+fn impossible_comparison_integer_range_not_flagged() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let x = 0
+  let _ = x > 0 && x < 1
+}
+"#
+    );
+}
+
+#[test]
+fn double_comparison_generic_ordered_le_not_flagged() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:cmp"
+
+fn at_most<T: cmp.Ordered>(x: T, y: T) -> bool {
+  x == y || x < y
+}
+
+fn main() {
+  let _ = at_most(1, 2)
+}
+"#
+    );
+}
+
+#[test]
+fn impossible_comparison_unsigned_negative_literal_no_diagnostic() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+fn main() {
+  let x: uint = 1
+  let _ = x > -1 && x < -2
+}
+"#,
+    );
+    let result = compile_check(fs);
+    assert!(
+        result
+            .errors
+            .iter()
+            .any(|d| d.plain_message().contains("negate")),
+        "expected the unsigned-negation error to still be reported: {:?}",
+        result.errors
+    );
+    assert!(
+        !result
+            .errors
+            .iter()
+            .any(|d| d.plain_message() == "Impossible comparison"),
+        "must not flag a comparison against an invalid unsigned negation: {:?}",
+        result.errors
+    );
+}
+
+#[test]
+fn redundant_comparison_unsigned_negative_literal_no_diagnostic() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+fn main() {
+  let x: uint = 1
+  let _ = x < -1 || x < -2
+}
+"#,
+    );
+    let result = compile_check(fs);
+    assert!(
+        result
+            .errors
+            .iter()
+            .any(|d| d.plain_message().contains("negate")),
+        "expected the unsigned-negation error to still be reported: {:?}",
+        result.errors
+    );
+    assert!(
+        !result
+            .lints
+            .iter()
+            .any(|d| d.plain_message() == "Redundant comparison"),
+        "must not flag a comparison against an invalid unsigned negation: {:?}",
+        result.lints
+    );
+}
+
+#[test]
+fn double_comparison_unsigned_negative_literal_no_diagnostic() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+fn main() {
+  let x: uint = 1
+  let _ = x == -1 || x < -1
+}
+"#,
+    );
+    let result = compile_check(fs);
+    assert!(
+        result
+            .errors
+            .iter()
+            .any(|d| d.plain_message().contains("negate")),
+        "expected the unsigned-negation error to still be reported: {:?}",
+        result.errors
+    );
+    assert!(
+        !result
+            .lints
+            .iter()
+            .any(|d| d.plain_message() == "Comparisons can be combined"),
+        "must not flag a comparison against an invalid unsigned negation: {:?}",
+        result.lints
+    );
+}
+
+#[test]
+fn impossible_comparison_overflow_literal_no_diagnostic() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+fn main() {
+  let x: uint8 = 1
+  let _ = x > 300 && x < 200
+}
+"#,
+    );
+    let result = compile_check(fs);
+    assert!(
+        result
+            .errors
+            .iter()
+            .any(|d| d.plain_message().contains("overflow")),
+        "expected the literal-overflow error to still be reported: {:?}",
+        result.errors
+    );
+    assert!(
+        !result
+            .errors
+            .iter()
+            .any(|d| d.plain_message() == "Impossible comparison"),
+        "must not flag a comparison against an overflowing literal: {:?}",
+        result.errors
+    );
+}
+
+#[test]
+fn redundant_comparison_overflow_literal_no_diagnostic() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+fn main() {
+  let x: uint8 = 1
+  let _ = x < 300 || x < 400
+}
+"#,
+    );
+    let result = compile_check(fs);
+    assert!(
+        result
+            .errors
+            .iter()
+            .any(|d| d.plain_message().contains("overflow")),
+        "expected the literal-overflow error to still be reported: {:?}",
+        result.errors
+    );
+    assert!(
+        !result
+            .lints
+            .iter()
+            .any(|d| d.plain_message() == "Redundant comparison"),
+        "must not flag a comparison against an overflowing literal: {:?}",
+        result.lints
+    );
+}
+
+#[test]
+fn double_comparison_int_overflow_literal_no_diagnostic() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+fn main() {
+  let x: int8 = 1
+  let _ = x == -200 || x < -200
+}
+"#,
+    );
+    let result = compile_check(fs);
+    assert!(
+        result
+            .errors
+            .iter()
+            .any(|d| d.plain_message().contains("overflow")),
+        "expected the literal-overflow error to still be reported: {:?}",
+        result.errors
+    );
+    assert!(
+        !result
+            .lints
+            .iter()
+            .any(|d| d.plain_message() == "Comparisons can be combined"),
+        "must not flag a comparison against an overflowing literal: {:?}",
+        result.lints
+    );
+}
+
+#[test]
+fn double_comparison_float_overflow_literal_no_diagnostic() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+fn main() {
+  let x: float32 = 1.0
+  let _ = x == 1e100 || x < 1e100
+}
+"#,
+    );
+    let result = compile_check(fs);
+    assert!(
+        result
+            .errors
+            .iter()
+            .any(|d| d.plain_message().contains("overflow")),
+        "expected the float-overflow error to still be reported: {:?}",
+        result.errors
+    );
+    assert!(
+        !result
+            .lints
+            .iter()
+            .any(|d| d.plain_message() == "Comparisons can be combined"),
+        "must not flag a comparison against an overflowing float literal: {:?}",
+        result.lints
+    );
+}
+
+#[test]
+fn impossible_comparison_uintptr_operand_no_diagnostic() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+fn get() -> uintptr { panic("x") }
+
+fn main() {
+  let x = get()
+  let _ = x < 5 && x > 10
+}
+"#,
+    );
+    let result = compile_check(fs);
+    assert!(
+        result
+            .errors
+            .iter()
+            .any(|d| d.plain_message().contains("Type mismatch")),
+        "expected the orderability type error to still be reported: {:?}",
+        result.errors
+    );
+    assert!(
+        !result
+            .errors
+            .iter()
+            .any(|d| d.plain_message() == "Impossible comparison"),
+        "must not flag a comparison on a non-orderable `uintptr`: {:?}",
+        result.errors
+    );
+}
+
+#[test]
+fn redundant_comparison_uintptr_operand_no_diagnostic() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+fn get() -> uintptr { panic("x") }
+
+fn main() {
+  let x = get()
+  let _ = x < 5 || x < 10
+}
+"#,
+    );
+    let result = compile_check(fs);
+    assert!(
+        result
+            .errors
+            .iter()
+            .any(|d| d.plain_message().contains("Type mismatch")),
+        "expected the orderability type error to still be reported: {:?}",
+        result.errors
+    );
+    assert!(
+        !result
+            .lints
+            .iter()
+            .any(|d| d.plain_message() == "Redundant comparison"),
+        "must not flag a comparison on a non-orderable `uintptr`: {:?}",
+        result.lints
+    );
+}
+
+#[test]
+fn double_comparison_uintptr_operand_no_diagnostic() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+fn get() -> uintptr { panic("x") }
+
+fn main() {
+  let x = get()
+  let _ = x == 5 || x < 5
+}
+"#,
+    );
+    let result = compile_check(fs);
+    assert!(
+        result
+            .errors
+            .iter()
+            .any(|d| d.plain_message().contains("Type mismatch")),
+        "expected the orderability type error to still be reported: {:?}",
+        result.errors
+    );
+    assert!(
+        !result
+            .lints
+            .iter()
+            .any(|d| d.plain_message() == "Comparisons can be combined"),
+        "must not flag a comparison on a non-orderable `uintptr`: {:?}",
+        result.lints
+    );
+}
+
+#[test]
 fn goos_comparison_invalid_equal() {
     assert_lint_snapshot!(
         r#"
