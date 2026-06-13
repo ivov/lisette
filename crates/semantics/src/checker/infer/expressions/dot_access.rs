@@ -256,6 +256,9 @@ impl InferCtx<'_, '_> {
             {
                 self.sink.push(diagnostics::infer::ref_slice_append(span));
             }
+            if member.as_str() == "equals" && self.scopes.is_callee_context() {
+                self.gate_container_equals(&args.deref_ty, args.expression.get_span());
+            }
             if !self.scopes.is_callee_context()
                 && matches!(
                     expression.get_type().resolve_in(&self.env),

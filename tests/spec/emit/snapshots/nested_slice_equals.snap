@@ -1,0 +1,11 @@
+---
+source: tests/spec/emit/prelude.rs
+description: "\nfn test(a: Slice<Slice<int>>, b: Slice<Slice<int>>) -> bool {\n  a.equals(b)\n}\n"
+---
+package main
+
+import "slices"
+
+func test(a, b [][]int) bool {
+	return slices.EqualFunc(a, b, func(a_1 []int, b_2 []int) bool { return slices.Equal(a_1, b_2) })
+}

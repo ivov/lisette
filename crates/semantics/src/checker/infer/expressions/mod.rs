@@ -1,4 +1,5 @@
 pub mod bindings;
+pub mod comparison;
 pub mod control_flow;
 pub mod definitions;
 pub mod dot_access;

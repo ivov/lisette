@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Invalid comparison
+   ╭─[test.lis:7:16]
+ 6 │ fn test(a: Slice<Holder>, b: Slice<Holder>) {
+ 7 │   let result = a.equals(b);
+   ·                ┬
+   ·                ╰── cannot be compared
+ 8 │ }
+   ╰────
+  help: `Slice<Holder>` cannot be compared because a struct containing non-comparable fields cannot be compared · code: [infer.not_equatable]

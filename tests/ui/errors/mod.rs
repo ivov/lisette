@@ -6072,6 +6072,123 @@ fn test() {
 }
 
 #[test]
+fn infer_not_comparable_map() {
+    let input = r#"
+fn test(a: Map<string, int>, b: Map<string, int>) {
+  let result = a == b;
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_not_comparable_slice_of_functions() {
+    let input = r#"
+fn test(a: Slice<fn() -> int>, b: Slice<fn() -> int>) -> bool {
+  a == b
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_not_comparable_map_of_functions() {
+    let input = r#"
+fn test(a: Map<string, fn() -> int>, b: Map<string, fn() -> int>) -> bool {
+  a == b
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_not_comparable_slice_of_noncomparable_structs() {
+    let input = r#"
+struct Holder {
+  items: Slice<int>,
+}
+
+fn test(a: Slice<Holder>, b: Slice<Holder>) -> bool {
+  a == b
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_equals_container_fails_interface_bound() {
+    let input = r#"
+interface Equatable<T> {
+  fn equals(self, other: T) -> bool
+}
+
+fn same<T: Equatable<T>>(x: T, y: T) -> bool {
+  x.equals(y)
+}
+
+fn main() {
+  let x = [1, 2]
+  let _ = same(x, x)
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_equals_rejects_function_element() {
+    let input = r#"
+fn test(a: Slice<fn() -> int>, b: Slice<fn() -> int>) {
+  let result = a.equals(b);
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_equals_rejects_noncomparable_struct_element() {
+    let input = r#"
+struct Holder {
+  items: Slice<int>,
+}
+
+fn test(a: Slice<Holder>, b: Slice<Holder>) {
+  let result = a.equals(b);
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_equals_rejects_unbounded_generic_element() {
+    let input = r#"
+fn compare<T>(a: Slice<T>, b: Slice<T>) -> bool {
+  a.equals(b)
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_equals_rejects_map_function_value() {
+    let input = r#"
+fn test(a: Map<string, fn() -> int>, b: Map<string, fn() -> int>) {
+  let result = a.equals(b);
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_equals_ufcs_rejects_function_element() {
+    let input = r#"
+fn test(a: Slice<fn() -> int>, b: Slice<fn() -> int>) {
+  let result = Slice.equals(a, b);
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
 fn infer_not_comparable_function() {
     let input = r#"
 fn test() {

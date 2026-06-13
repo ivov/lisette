@@ -1,105 +1,12 @@
 use crate::checker::EnvResolve;
-use crate::checker::TypeEnv;
 use crate::store::Store;
 use syntax::ast::{BinaryOperator, Expression, Literal, Span, UnaryOperator};
-use syntax::program::DefinitionBody;
-use syntax::types::{SimpleKind, Type, substitute};
+use syntax::types::{SimpleKind, Type};
 
 use BinaryOperator::*;
 use UnaryOperator::*;
 
 use crate::checker::infer::InferCtx;
-
-/// Returns the first non-comparable shape per Go's `comparable` rules, or `None` if comparable.
-pub(crate) fn check_not_comparable(
-    env: &TypeEnv,
-    store: &Store,
-    ty: &Type,
-) -> Option<&'static str> {
-    let resolved = store.deep_resolve_alias(ty);
-    let ty = &resolved;
-
-    if matches!(ty, Type::Function(_)) {
-        return Some("functions");
-    }
-
-    if ty.has_name("Slice") {
-        return Some("slices");
-    }
-    if ty.has_name("Map") {
-        return Some("maps");
-    }
-
-    if ty.has_name("Ref") || ty.has_name("Channel") {
-        return None;
-    }
-
-    if matches!(ty, Type::Var { .. }) {
-        return None;
-    }
-
-    if ty.is_unknown() {
-        return Some("interface values");
-    }
-
-    if let Some(underlying) = ty.get_underlying() {
-        return check_not_comparable(env, store, underlying);
-    }
-
-    if matches!(ty, Type::Parameter(_)) {
-        return Some("type parameters (Go requires the `comparable` constraint)");
-    }
-
-    if let Some(name) = ty.get_qualified_id()
-        && let Some(definition) = store.get_definition(name)
-    {
-        let type_args = ty.get_type_params().unwrap_or_default();
-        let generics = match &definition.body {
-            DefinitionBody::Struct { generics, .. } | DefinitionBody::Enum { generics, .. } => {
-                generics.as_slice()
-            }
-            _ => &[],
-        };
-        let sub_map = generics
-            .iter()
-            .map(|g| g.name.clone())
-            .zip(type_args.iter().cloned())
-            .collect();
-
-        match &definition.body {
-            DefinitionBody::Struct { fields, .. } => {
-                for f in fields {
-                    let field_ty = substitute(&f.ty.resolve_in(env), &sub_map);
-                    if check_not_comparable(env, store, &field_ty).is_some() {
-                        return Some("a struct containing non-comparable fields");
-                    }
-                }
-            }
-            DefinitionBody::Enum { variants, .. } => {
-                for v in variants {
-                    for f in v.fields.iter() {
-                        let field_ty = substitute(&f.ty.resolve_in(env), &sub_map);
-                        if check_not_comparable(env, store, &field_ty).is_some() {
-                            return Some("an enum containing non-comparable fields");
-                        }
-                    }
-                }
-            }
-            DefinitionBody::Interface { .. } => return Some("interface values"),
-            _ => {}
-        }
-    }
-
-    if let Type::Tuple(elems) = ty {
-        for e in elems {
-            if check_not_comparable(env, store, &e.resolve_in(env)).is_some() {
-                return Some("a tuple containing non-comparable elements");
-            }
-        }
-    }
-
-    None
-}
 
 impl InferCtx<'_, '_> {
     pub(super) fn infer_unary(
@@ -445,8 +352,10 @@ impl InferCtx<'_, '_> {
                         );
                     }
                 }
-                if self.ensure_comparable(left_operand_ty, left_span) {
-                    self.ensure_comparable(right_operand_ty, right_span);
+                let operands_match =
+                    left_operand_ty.resolve_in(&self.env) == right_operand_ty.resolve_in(&self.env);
+                if self.ensure_comparable(left_operand_ty, left_span, operands_match) {
+                    self.ensure_comparable(right_operand_ty, right_span, operands_match);
                 }
                 self.type_bool()
             }
@@ -695,31 +604,6 @@ impl InferCtx<'_, '_> {
             self.sink
                 .push(diagnostics::infer::not_orderable(&resolved_ty, *span));
         }
-    }
-
-    fn ensure_comparable(&mut self, ty: &Type, span: &Span) -> bool {
-        let store = self.store;
-        let resolved = ty.resolve_in(&self.env);
-        if resolved.is_error() {
-            return true;
-        }
-        if let Type::Parameter(name) = &resolved
-            && self.parameter_satisfies_bound(name, super::super::unify::BuiltinBound::Comparable)
-        {
-            return true;
-        }
-        let Some(reason) = check_not_comparable(&self.env, store, &resolved) else {
-            return true;
-        };
-        if is_interface_or_unknown(store, &resolved) {
-            self.sink.push(diagnostics::infer::not_comparable_interface(
-                &resolved, *span,
-            ));
-        } else {
-            self.sink
-                .push(diagnostics::infer::not_comparable(&resolved, reason, *span));
-        }
-        false
     }
 
     fn unify_binary_operands(
@@ -1075,11 +959,6 @@ fn literal_can_adapt_to(kind: &LiteralKind, target: &Type) -> bool {
         LiteralKind::Boolean => named_backed_by(SimpleKind::Bool),
         LiteralKind::None => false,
     }
-}
-
-fn is_interface_or_unknown(store: &Store, ty: &Type) -> bool {
-    let resolved = store.deep_resolve_alias(ty);
-    resolved.is_unknown() || store.is_interface(&resolved)
 }
 
 fn is_nominal_defined_type(ty: &Type, store: &Store) -> bool {

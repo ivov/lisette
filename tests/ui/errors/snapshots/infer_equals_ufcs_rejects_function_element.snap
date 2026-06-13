@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Invalid comparison
+   ╭─[test.lis:3:29]
+ 2 │ fn test(a: Slice<fn() -> int>, b: Slice<fn() -> int>) {
+ 3 │   let result = Slice.equals(a, b);
+   ·                             ┬
+   ·                             ╰── cannot be compared
+ 4 │ }
+   ╰────
+  help: `Slice<fn () -> int>` cannot be compared because functions cannot be compared · code: [infer.not_equatable]

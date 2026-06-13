@@ -628,7 +628,7 @@ impl InferCtx<'_, '_> {
                     .push(diagnostics::infer::not_orderable_bound(*span));
             }
             BuiltinBound::Comparable => {
-                if super::expressions::operators::check_not_comparable(
+                if super::expressions::comparison::check_not_comparable(
                     &self.env,
                     store,
                     resolved_generic,

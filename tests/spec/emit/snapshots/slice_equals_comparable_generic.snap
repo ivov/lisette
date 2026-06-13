@@ -1,0 +1,11 @@
+---
+source: tests/spec/emit/prelude.rs
+description: "\nfn test<T: Comparable>(a: Slice<T>, b: Slice<T>) -> bool {\n  a.equals(b)\n}\n"
+---
+package main
+
+import "slices"
+
+func test[T comparable](a, b []T) bool {
+	return slices.Equal(a, b)
+}

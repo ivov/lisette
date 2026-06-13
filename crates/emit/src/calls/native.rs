@@ -11,7 +11,7 @@ use crate::plan::calls::plan_variadic_spread;
 use crate::types::native::NativeGoType;
 use crate::utils::{contains_call, reads_mutable_operand};
 use syntax::ast::Expression;
-use syntax::types::peel_to_range_type;
+use syntax::types::{Type, peel_to_range_type};
 
 #[derive(Clone, Copy)]
 pub(super) enum InlineImport {
@@ -338,6 +338,18 @@ impl Planner<'_> {
             return self.lower_string_substring(expression, ctx.args, fx);
         }
 
+        if ctx.method == "equals"
+            && matches!(ctx.native_type, NativeGoType::Slice | NativeGoType::Map)
+        {
+            let receiver_ty = self.facts.peel_alias(&expression.get_type().strip_refs());
+            if receiver_ty.is_slice() || receiver_ty.is_map() {
+                let (setup, receiver, emitted_args) = self.stage_native_dot_access_call(ctx, fx);
+                let body =
+                    self.render_container_equality(&receiver, &emitted_args[0], &receiver_ty, fx);
+                return (setup, body);
+            }
+        }
+
         let (setup, receiver, emitted_args) = self.stage_native_dot_access_call(ctx, fx);
 
         if let Some(inlined) = apply_inline_lookup(
@@ -455,6 +467,27 @@ impl Planner<'_> {
             && ctx.args.len() >= 2
         {
             return self.lower_string_substring(&ctx.args[0], &ctx.args[1..], fx);
+        }
+
+        if ctx.method == "equals"
+            && matches!(ctx.native_type, NativeGoType::Slice | NativeGoType::Map)
+            && let Some(receiver_expr) = ctx.args.first()
+        {
+            let receiver_ty = self
+                .facts
+                .peel_alias(&receiver_expr.get_type().strip_refs());
+            if receiver_ty.is_slice() || receiver_ty.is_map() {
+                let (setup, emitted_args) = self.stage_native_identifier_args(ctx, fx);
+                if emitted_args.len() >= 2 {
+                    let body = self.render_container_equality(
+                        &emitted_args[0],
+                        &emitted_args[1],
+                        &receiver_ty,
+                        fx,
+                    );
+                    return (setup, body);
+                }
+            }
         }
 
         let (setup, emitted_args) = self.stage_native_identifier_args(ctx, fx);
@@ -578,6 +611,53 @@ impl Planner<'_> {
             setup,
             format_substring_call(&deref(&values[0]), start.as_deref(), end.as_deref()),
         )
+    }
+
+    fn render_container_equality(
+        &mut self,
+        lhs: &str,
+        rhs: &str,
+        ty: &Type,
+        fx: &mut EmitEffects,
+    ) -> String {
+        let peeled = self.facts.peel_alias(&ty.strip_refs());
+        if peeled.is_slice() {
+            fx.require_slices();
+            return match peeled.inner() {
+                Some(elem) if self.is_container(&elem) => {
+                    let eq = self.container_equality_closure(&elem, fx);
+                    format!("slices.EqualFunc({lhs}, {rhs}, {eq})")
+                }
+                _ => format!("slices.Equal({lhs}, {rhs})"),
+            };
+        }
+        if peeled.is_map() {
+            fx.require_maps();
+            let value = peeled
+                .as_compound()
+                .and_then(|(_, args)| args.get(1).cloned());
+            return match value {
+                Some(value) if self.is_container(&value) => {
+                    let eq = self.container_equality_closure(&value, fx);
+                    format!("maps.EqualFunc({lhs}, {rhs}, {eq})")
+                }
+                _ => format!("maps.Equal({lhs}, {rhs})"),
+            };
+        }
+        unreachable!("`.equals()` gate guarantees a slice or map receiver")
+    }
+
+    fn container_equality_closure(&mut self, ty: &Type, fx: &mut EmitEffects) -> String {
+        let go_ty = self.go_type_string(ty, fx);
+        let a = self.fresh_var(Some("a"));
+        let b = self.fresh_var(Some("b"));
+        let body = self.render_container_equality(&a, &b, ty, fx);
+        format!("func({a} {go_ty}, {b} {go_ty}) bool {{ return {body} }}")
+    }
+
+    fn is_container(&self, ty: &Type) -> bool {
+        let peeled = self.facts.peel_alias(&ty.strip_refs());
+        peeled.is_slice() || peeled.is_map()
     }
 }
 

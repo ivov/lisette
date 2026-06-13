@@ -248,6 +248,10 @@ impl InferCtx<'_, '_> {
             };
 
         for (method_name, method_ty) in &interface.methods {
+            if method_name.as_str() == "equals" && self.is_native_container(ty) {
+                missing.push((method_name.to_string(), method_ty.clone()));
+                continue;
+            }
             let Some(symbol_method) = symbol_methods.get(method_name.as_str()) else {
                 missing.push((method_name.to_string(), method_ty.clone()));
                 continue;

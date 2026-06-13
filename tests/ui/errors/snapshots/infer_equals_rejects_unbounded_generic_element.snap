@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Invalid comparison
+   ╭─[test.lis:3:3]
+ 2 │ fn compare<T>(a: Slice<T>, b: Slice<T>) -> bool {
+ 3 │   a.equals(b)
+   ·   ┬
+   ·   ╰── cannot be compared
+ 4 │ }
+   ╰────
+  help: `Slice<T>` cannot be compared because type parameters cannot be compared · code: [infer.not_equatable]

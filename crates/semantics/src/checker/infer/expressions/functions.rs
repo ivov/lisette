@@ -429,6 +429,7 @@ impl InferCtx<'_, '_> {
             resolved.is_unit() || resolved.is_ignored() || expected_was_variable
         };
         self.check_native_mutating_call(&callee_expression, result_unused, &span);
+        self.check_native_equals_ufcs(&callee_expression, &new_args);
 
         if self.is_generic_callee(&callee_expression)
             && type_args.is_empty()

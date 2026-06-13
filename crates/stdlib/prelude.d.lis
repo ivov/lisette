@@ -310,6 +310,9 @@ impl<T> Slice<T> {
   /// Returns `true` if the slice contains `value`.
   fn contains(self, value: T) -> bool
 
+  /// Returns `true` if this slice is element-wise equal to `other`.
+  fn equals(self, other: Slice<T>) -> bool
+
   /// Reduces the slice to a single value by applying `f` to each element
   /// with an accumulator, starting from `accumulator`.
   fn fold<U>(self, accumulator: U, f: fn(U, T) -> U) -> U
@@ -378,6 +381,9 @@ impl<K, V> Map<K, V> {
 
   /// Returns a shallow copy of the map.
   fn clone(self) -> Map<K, V>
+
+  /// Returns `true` if this map has the same keys and values as `other`.
+  fn equals(self, other: Map<K, V>) -> bool
 }
 
 /// A reference (pointer) to a value of type `T`. Equivalent to Go's `*T`.

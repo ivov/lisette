@@ -1,0 +1,14 @@
+---
+source: tests/spec/emit/prelude.rs
+description: "\nfn test(a: Map<string, Slice<int>>, b: Map<string, Slice<int>>) -> bool {\n  a.equals(b)\n}\n"
+---
+package main
+
+import (
+	"maps"
+	"slices"
+)
+
+func test(a, b map[string][]int) bool {
+	return maps.EqualFunc(a, b, func(a_1 []int, b_2 []int) bool { return slices.Equal(a_1, b_2) })
+}

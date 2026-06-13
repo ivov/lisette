@@ -1059,8 +1059,23 @@ pub fn not_comparable(ty: &Type, reason: &str, span: Span) -> LisetteDiagnostic 
         .with_infer_code("type_mismatch")
         .with_span_label(&span, format!("`{}` cannot be compared with `==`", ty))
         .with_help(format!(
-            "The `==` and `!=` operators cannot be used on {} because they are not comparable in Go",
-            reason
+            "The `==` and `!=` operators cannot be used on {reason} because they are not comparable in Go"
+        ))
+}
+
+pub fn not_comparable_use_equals(ty: &Type, reason: &str, span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Invalid comparison")
+        .with_infer_code("type_mismatch")
+        .with_span_label(&span, format!("`{}` cannot be compared with `==`", ty))
+        .with_help(format!("Use `.equals()` to compare {reason}"))
+}
+
+pub fn not_comparable_no_equals(ty: &Type, reason: &str, span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Invalid comparison")
+        .with_infer_code("type_mismatch")
+        .with_span_label(&span, format!("`{}` cannot be compared with `==`", ty))
+        .with_help(format!(
+            "`.equals()` will not help either, because {reason} cannot be compared"
         ))
 }
 
@@ -1072,6 +1087,15 @@ pub fn not_comparable_interface(ty: &Type, span: Span) -> LisetteDiagnostic {
             "An interface value's comparability depends on its runtime type, so `==` and `!=` \
              are not allowed here. Compare the concrete values instead",
         )
+}
+
+pub fn not_equatable(ty: &Type, reason: &str, span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Invalid comparison")
+        .with_infer_code("not_equatable")
+        .with_span_label(&span, "cannot be compared")
+        .with_help(format!(
+            "`{ty}` cannot be compared because {reason} cannot be compared"
+        ))
 }
 
 pub fn not_orderable_bound(span: Span) -> LisetteDiagnostic {

@@ -334,6 +334,86 @@ fn test(s: Slice<int>, v: int) -> bool {
 }
 
 #[test]
+fn slice_equals() {
+    let input = r#"
+fn test(a: Slice<int>, b: Slice<int>) -> bool {
+  a.equals(b)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn slice_equals_negated() {
+    let input = r#"
+fn test(a: Slice<int>, b: Slice<int>) -> bool {
+  !a.equals(b)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn nested_slice_equals() {
+    let input = r#"
+fn test(a: Slice<Slice<int>>, b: Slice<Slice<int>>) -> bool {
+  a.equals(b)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn slice_equals_comparable_generic() {
+    let input = r#"
+fn test<T: Comparable>(a: Slice<T>, b: Slice<T>) -> bool {
+  a.equals(b)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn slice_equals_ufcs() {
+    let input = r#"
+fn test(a: Slice<int>, b: Slice<int>) -> bool {
+  Slice.equals(a, b)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn map_equals() {
+    let input = r#"
+fn test(a: Map<string, int>, b: Map<string, int>) -> bool {
+  a.equals(b)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn map_of_slice_equals() {
+    let input = r#"
+fn test(a: Map<string, Slice<int>>, b: Map<string, Slice<int>>) -> bool {
+  a.equals(b)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn slice_of_map_equals() {
+    let input = r#"
+fn test(a: Slice<Map<string, int>>, b: Slice<Map<string, int>>) -> bool {
+  a.equals(b)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn slice_fold() {
     let input = r#"
 fn test(s: Slice<int>) -> int {
