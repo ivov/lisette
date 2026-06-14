@@ -2,6 +2,20 @@
 
 Lisette is under active development. Any version before 1.0.0 may include breaking changes.
 
+## [0.4.1](https://github.com/ivov/lisette/compare/lisette-v0.4.0...lisette-v0.4.1) - 2026-06-14
+
+- test: render remaining emit snapshot descriptions as yaml blocks [#725](https://github.com/ivov/lisette/pull/725) [`414e81b`](https://github.com/ivov/lisette/commit/414e81ba162c568c06cb660b7549c9ba2fe4acc9)
+- fix: correct UFCS lowering and generic type args [#724](https://github.com/ivov/lisette/pull/724) [`2ce2570`](https://github.com/ivov/lisette/commit/2ce25702968f5046418715ffb9848521fdc2d472)
+- feat: lint for float comparison hazards and NaN casts [#723](https://github.com/ivov/lisette/pull/723) [`6a316fe`](https://github.com/ivov/lisette/commit/6a316fe2181eef8e00b9446d2b20325785e79482)
+- feat: add LSP inlay type hints for `let` bindings [#722](https://github.com/ivov/lisette/pull/722) [`c61d141`](https://github.com/ivov/lisette/commit/c61d141660f0070cba0c35b8d31654d94c255b7b)
+- feat: lint for faulty bit masks and equal operands [#721](https://github.com/ivov/lisette/pull/721) [`b23d692`](https://github.com/ivov/lisette/commit/b23d692127e85ae24071e468ff549ff8f3e6eca6)
+- refactor: tighten bindgen for maintainability [#720](https://github.com/ivov/lisette/pull/720) [`efde06b`](https://github.com/ivov/lisette/commit/efde06b5b8731acc923f493fa2af0204c8cffcfb)
+- ci: stop requiring zed extension version bump on grammar change [#718](https://github.com/ivov/lisette/pull/718) [`13a3231`](https://github.com/ivov/lisette/commit/13a3231cd245c3e1c531b8bc3dc077c69261829d)
+- refactor: rework cli styling [#717](https://github.com/ivov/lisette/pull/717) [`27d427e`](https://github.com/ivov/lisette/commit/27d427ea21c5885c956460d41e5e31ede0673528)
+- chore: rebuild playground [#716](https://github.com/ivov/lisette/pull/716) [`66677a1`](https://github.com/ivov/lisette/commit/66677a1d4fd88d9a20a0dc816b628d83b8abafda)
+- feat: add `equals` method for slices and maps [#715](https://github.com/ivov/lisette/pull/715) [`2c69536`](https://github.com/ivov/lisette/commit/2c69536dafdd22f9514133edf5983bdaff080e33)
+- feat: flag impossible, redundant, and combinable comparisons [#712](https://github.com/ivov/lisette/pull/712) [`8fbcb7f`](https://github.com/ivov/lisette/commit/8fbcb7fd50677637ca3558cb07ed691d3c77ff2a)
+
 ## [0.4.0](https://github.com/ivov/lisette/compare/lisette-v0.3.4...lisette-v0.4.0) - 2026-06-13
 
 - feat: advise against recompiling a regexp in a loop [#710](https://github.com/ivov/lisette/pull/710) [`b88540d`](https://github.com/ivov/lisette/commit/b88540d712bc493d764484ca3f86f152a3889d23)
