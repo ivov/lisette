@@ -147,6 +147,25 @@ func resolveTargets(flagValue string) ([]Target, error) {
 	return nil, fmt.Errorf("no targets specified: pass -targets or set BINDGEN_TARGETS (e.g. linux/amd64,darwin/arm64)")
 }
 
+func ParseTargets(s string) ([]Target, error) {
+	if s == "" {
+		return nil, fmt.Errorf("empty target list")
+	}
+	var targets []Target
+	for _, part := range strings.Split(s, ",") {
+		part = strings.TrimSpace(part)
+		slash := strings.Index(part, "/")
+		if slash < 0 {
+			return nil, fmt.Errorf("target %q: expected GOOS/GOARCH", part)
+		}
+		targets = append(targets, Target{
+			GOOS:   part[:slash],
+			GOARCH: part[slash+1:],
+		})
+	}
+	return targets, nil
+}
+
 func generateFromPackage(pkg *packages.Package, displayPath, lisetteVersion, goVersion string, cfg *config.Config) GeneratePkgResult {
 	converter := convert.NewConverter(pkg.PkgPath, pkg, cfg)
 	exports := extract.ExtractExports(pkg, converter.EmbedIsFaithful)
