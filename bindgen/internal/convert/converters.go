@@ -118,54 +118,14 @@ func (c *Converter) convertFunction(result *ConvertResult, symbolExport extract.
 	liftedSpecs, paramOverrides := c.liftReflectionDecodeParams(signature, result.Name, result.TypeParams)
 	result.TypeParams = liftedSpecs
 
-	mutParams := c.cfg.MutatingParams(c.currentPkgPath, result.Name)
-	nilableParams := c.cfg.NilableParams(c.currentPkgPath, result.Name)
-
-	params := signature.Params()
-	usedNames := collectNamedParams(params)
-	for i := 0; i < params.Len(); i++ {
-		param := params.At(i)
-		name := param.Name()
-		if name == "" {
-			isVariadic := signature.Variadic() && i == params.Len()-1
-			name = deriveParamName(param.Type(), i, isVariadic, usedNames)
-		} else {
-			name = sanitizeParamName(name)
-		}
-
-		paramType := convertParamType(param.Type(), name, nilableParams, c)
-		if paramType.SkipReason != nil {
-			result.SkipReason = paramType.SkipReason
-			return
-		}
-
-		typeStr := paramType.LisetteType
-		if signature.Variadic() && i == params.Len()-1 {
-			typeStr = sliceToVarArgs(typeStr)
-		}
-		if override, ok := paramOverrides[i]; ok {
-			typeStr = override
-		}
-
-		result.Params = append(result.Params, FunctionParameter{
-			Name:    name,
-			Type:    typeStr,
-			Mutable: isMutableParam(mutParams, name, typeStr, result.Name),
-		})
+	params, skip := c.convertParams(signature, result.Name, result.Name, paramOverrides)
+	if skip != nil {
+		result.SkipReason = skip
+		return
 	}
+	result.Params = params
 
-	returnType := ReturnsToLisette(signature, c, result.Name)
-	if returnType.LisetteType != "" {
-		result.ReturnType = returnType.LisetteType
-	} else if returnType.SkipReason != nil {
-		result.ReturnType = "Unknown"
-	}
-	if returnType.SkipReason != nil {
-		result.SkipNote = returnType.SkipReason
-	}
-	result.CommaOk = returnType.CommaOk
-	result.ArrayReturn = returnType.ArrayReturn
-	c.applySentinelInt(result, result.Name)
+	returnType := c.applyReturnType(result, signature, result.Name)
 
 	isSingleNilableReturn := isSingleNilableResult(signature)
 	if isSingleNilableReturn && returnType.IsDirectError {
@@ -217,6 +177,68 @@ func (c *Converter) applySentinelInt(result *ConvertResult, qualifiedName string
 	}
 	result.ReturnType = "Option<int>"
 	result.SentinelInt = &value
+}
+
+// convertParams converts a signature's parameters to Lisette parameters.
+// lookupName keys the mutating- and nilable-param config; methodName is the
+// bare name passed to isMutableParam. paramOverrides replaces a converted type
+// at a given index (used by reflection-decode lifting); pass nil when none.
+func (c *Converter) convertParams(sig *types.Signature, lookupName, methodName string, paramOverrides map[int]string) ([]FunctionParameter, *SkipReason) {
+	mutParams := c.cfg.MutatingParams(c.currentPkgPath, lookupName)
+	nilableParams := c.cfg.NilableParams(c.currentPkgPath, lookupName)
+
+	params := sig.Params()
+	usedNames := collectNamedParams(params)
+	var out []FunctionParameter
+	for i := 0; i < params.Len(); i++ {
+		param := params.At(i)
+		name := param.Name()
+		if name == "" {
+			isVariadic := sig.Variadic() && i == params.Len()-1
+			name = deriveParamName(param.Type(), i, isVariadic, usedNames)
+		} else {
+			name = sanitizeParamName(name)
+		}
+
+		paramType := convertParamType(param.Type(), name, nilableParams, c)
+		if paramType.SkipReason != nil {
+			return nil, paramType.SkipReason
+		}
+
+		typeStr := paramType.LisetteType
+		if sig.Variadic() && i == params.Len()-1 {
+			typeStr = sliceToVarArgs(typeStr)
+		}
+		if override, ok := paramOverrides[i]; ok {
+			typeStr = override
+		}
+
+		out = append(out, FunctionParameter{
+			Name:    name,
+			Type:    typeStr,
+			Mutable: isMutableParam(mutParams, name, typeStr, methodName),
+		})
+	}
+	return out, nil
+}
+
+// applyReturnType converts the signature's results, records the resulting shape
+// on result, and returns the TypeResult so the caller can run the nilability
+// decision. lookupName keys the return-shape config overrides.
+func (c *Converter) applyReturnType(result *ConvertResult, sig *types.Signature, lookupName string) TypeResult {
+	returnType := ReturnsToLisette(sig, c, lookupName)
+	if returnType.LisetteType != "" {
+		result.ReturnType = returnType.LisetteType
+	} else if returnType.SkipReason != nil {
+		result.ReturnType = "Unknown"
+	}
+	if returnType.SkipReason != nil {
+		result.SkipNote = returnType.SkipReason
+	}
+	result.CommaOk = returnType.CommaOk
+	result.ArrayReturn = returnType.ArrayReturn
+	c.applySentinelInt(result, lookupName)
+	return returnType
 }
 
 func (c *Converter) convertMethod(result *ConvertResult, symbolExport extract.SymbolExport) {
@@ -309,54 +331,14 @@ func (c *Converter) convertMethod(result *ConvertResult, symbolExport extract.Sy
 	}
 	liftedSpecs, paramOverrides := c.liftReflectionDecodeParams(signature, qualifiedName, methodSpecs)
 
-	mutParams := c.cfg.MutatingParams(c.currentPkgPath, qualifiedName)
-	nilableParams := c.cfg.NilableParams(c.currentPkgPath, qualifiedName)
-
-	params := signature.Params()
-	usedNames := collectNamedParams(params)
-	for i := 0; i < params.Len(); i++ {
-		param := params.At(i)
-		name := param.Name()
-		if name == "" {
-			isVariadic := signature.Variadic() && i == params.Len()-1
-			name = deriveParamName(param.Type(), i, isVariadic, usedNames)
-		} else {
-			name = sanitizeParamName(name)
-		}
-
-		paramType := convertParamType(param.Type(), name, nilableParams, c)
-		if paramType.SkipReason != nil {
-			result.SkipReason = paramType.SkipReason
-			return
-		}
-
-		typeStr := paramType.LisetteType
-		if signature.Variadic() && i == params.Len()-1 {
-			typeStr = sliceToVarArgs(typeStr)
-		}
-		if override, ok := paramOverrides[i]; ok {
-			typeStr = override
-		}
-
-		result.Params = append(result.Params, FunctionParameter{
-			Name:    name,
-			Type:    typeStr,
-			Mutable: isMutableParam(mutParams, name, typeStr, result.Name),
-		})
+	params, skip := c.convertParams(signature, qualifiedName, result.Name, paramOverrides)
+	if skip != nil {
+		result.SkipReason = skip
+		return
 	}
+	result.Params = params
 
-	returnType := ReturnsToLisette(signature, c, qualifiedName)
-	if returnType.LisetteType != "" {
-		result.ReturnType = returnType.LisetteType
-	} else if returnType.SkipReason != nil {
-		result.ReturnType = "Unknown"
-	}
-	if returnType.SkipReason != nil {
-		result.SkipNote = returnType.SkipReason
-	}
-	result.CommaOk = returnType.CommaOk
-	result.ArrayReturn = returnType.ArrayReturn
-	c.applySentinelInt(result, qualifiedName)
+	returnType := c.applyReturnType(result, signature, qualifiedName)
 
 	isSingleNilableReturn := isSingleNilableResult(signature)
 	if isSingleNilableReturn && returnType.IsDirectError {
@@ -1776,37 +1758,9 @@ func (c *Converter) extractInterfaceMethods(_interface *types.Interface, typeNam
 		}
 
 		qualifiedName := typeName + "." + method.Name()
-		mutParams := c.cfg.MutatingParams(c.currentPkgPath, qualifiedName)
-		nilableParams := c.cfg.NilableParams(c.currentPkgPath, qualifiedName)
-
-		var params []FunctionParameter
-		sigParams := signature.Params()
-		usedNames := collectNamedParams(sigParams)
-		for j := 0; j < sigParams.Len(); j++ {
-			param := sigParams.At(j)
-			name := param.Name()
-			if name == "" {
-				isVariadic := signature.Variadic() && j == sigParams.Len()-1
-				name = deriveParamName(param.Type(), j, isVariadic, usedNames)
-			} else {
-				name = sanitizeParamName(name)
-			}
-
-			paramType := convertParamType(param.Type(), name, nilableParams, c)
-			if paramType.SkipReason != nil {
-				return nil, false
-			}
-
-			typeStr := paramType.LisetteType
-			if signature.Variadic() && j == sigParams.Len()-1 {
-				typeStr = sliceToVarArgs(typeStr)
-			}
-
-			params = append(params, FunctionParameter{
-				Name:    name,
-				Type:    typeStr,
-				Mutable: isMutableParam(mutParams, name, typeStr, method.Name()),
-			})
+		params, skip := c.convertParams(signature, qualifiedName, method.Name(), nil)
+		if skip != nil {
+			return nil, false
 		}
 
 		returnType := ReturnsToLisette(signature, c, qualifiedName)

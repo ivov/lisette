@@ -341,6 +341,36 @@ func (e *Emitter) String() string {
 	return strings.TrimRight(raw, "\n") + "\n"
 }
 
+// formatParams renders each parameter as `name: type` (or `mut name: type`).
+func formatParams(params []convert.FunctionParameter) []string {
+	out := make([]string, 0, len(params))
+	for _, p := range params {
+		if p.Mutable {
+			out = append(out, fmt.Sprintf("mut %s: %s", p.Name, p.Type))
+		} else {
+			out = append(out, fmt.Sprintf("%s: %s", p.Name, p.Type))
+		}
+	}
+	return out
+}
+
+// formatSignature assembles a `<keyword>Name<decl>(params) -> ret` line. keyword
+// carries any leading indent and trailing space (e.g. "pub fn ", "  fn ").
+func formatSignature(keyword, name, declBlock string, params []string, hasReturn bool, returnType string) string {
+	var b strings.Builder
+	b.WriteString(keyword)
+	b.WriteString(name)
+	b.WriteString(declBlock)
+	b.WriteString("(")
+	b.WriteString(strings.Join(params, ", "))
+	b.WriteString(")")
+	if hasReturn {
+		b.WriteString(" -> ")
+		b.WriteString(returnType)
+	}
+	return b.String()
+}
+
 func (e *Emitter) emitFunction(result convert.ConvertResult) {
 	if result.SkipNote != nil {
 		writeSkipNote(&e.buf, "", "returns-with", result.SkipNote)
@@ -363,29 +393,8 @@ func (e *Emitter) emitFunction(result convert.ConvertResult) {
 		e.buf.WriteString("#[allow(unused_value)]\n")
 	}
 
-	var functionSignature strings.Builder
-	functionSignature.WriteString("pub fn ")
-	functionSignature.WriteString(result.Name)
-
-	functionSignature.WriteString(result.TypeParams.DeclBlock())
-	functionSignature.WriteString("(")
-	var params []string
-	for _, p := range result.Params {
-		if p.Mutable {
-			params = append(params, fmt.Sprintf("mut %s: %s", p.Name, p.Type))
-		} else {
-			params = append(params, fmt.Sprintf("%s: %s", p.Name, p.Type))
-		}
-	}
-	functionSignature.WriteString(strings.Join(params, ", "))
-	functionSignature.WriteString(")")
-
-	if result.HasReturn() {
-		functionSignature.WriteString(" -> ")
-		functionSignature.WriteString(result.ReturnType)
-	}
-
-	e.buf.WriteString(functionSignature.String())
+	e.buf.WriteString(formatSignature("pub fn ", result.Name, result.TypeParams.DeclBlock(),
+		formatParams(result.Params), result.HasReturn(), result.ReturnType))
 	e.buf.WriteString("\n\n")
 }
 
@@ -457,12 +466,6 @@ func (e *Emitter) emitMethodInImpl(result convert.ConvertResult, recvName string
 		fmt.Fprintf(&e.buf, "  #[go(unexported, \"%s\")]\n", escapeSealId(result.SealId))
 	}
 
-	var methodSignature strings.Builder
-	methodSignature.WriteString("  fn ")
-	methodSignature.WriteString(result.Name)
-
-	methodSignature.WriteString(result.TypeParams.DeclBlock())
-	methodSignature.WriteString("(")
 	var params []string
 	if result.Receiver != nil && result.Receiver.IsPointer {
 		typeName := recvName + result.Receiver.TypeParams.UseBlock()
@@ -470,192 +473,172 @@ func (e *Emitter) emitMethodInImpl(result convert.ConvertResult, recvName string
 	} else {
 		params = append(params, "self")
 	}
+	params = append(params, formatParams(result.Params)...)
 
-	for _, p := range result.Params {
-		if p.Mutable {
-			params = append(params, fmt.Sprintf("mut %s: %s", p.Name, p.Type))
-		} else {
-			params = append(params, fmt.Sprintf("%s: %s", p.Name, p.Type))
-		}
-	}
-
-	methodSignature.WriteString(strings.Join(params, ", "))
-	methodSignature.WriteString(")")
-
-	if result.HasReturn() {
-		methodSignature.WriteString(" -> ")
-		methodSignature.WriteString(result.ReturnType)
-	}
-
-	e.buf.WriteString(methodSignature.String())
+	e.buf.WriteString(formatSignature("  fn ", result.Name, result.TypeParams.DeclBlock(),
+		params, result.HasReturn(), result.ReturnType))
 	e.buf.WriteString("\n")
 }
 
 func (e *Emitter) emitType(result convert.ConvertResult) {
 	e.emitDocWithIndent(result.Doc, "")
 
+	switch {
+	case result.IsInterface:
+		e.emitInterface(result)
+	case len(result.Fields) > 0:
+		e.emitStruct(result)
+	case result.LisetteType != "":
+		e.emitNewtypeOrAlias(result)
+	default:
+		e.emitOpaqueType(result)
+	}
+}
+
+func (e *Emitter) emitInterface(result convert.ConvertResult) {
+	var signature strings.Builder
+	signature.WriteString("pub interface ")
+	signature.WriteString(result.Name)
+	signature.WriteString(result.TypeParams.DeclBlock())
+
+	if len(result.InterfaceMethods) == 0 {
+		signature.WriteString(" {}")
+	} else {
+		signature.WriteString(" {\n")
+		for _, m := range result.InterfaceMethods {
+			if m.SealId != "" {
+				fmt.Fprintf(&signature, "  #[go(unexported, \"%s\")]\n", escapeSealId(m.SealId))
+			}
+			if m.CommaOk {
+				signature.WriteString("  #[go(comma_ok)]\n")
+			}
+			if m.ArrayReturn {
+				signature.WriteString("  #[go(array_return)]\n")
+			}
+			if m.BuilderMethod {
+				signature.WriteString("  #[allow(unused_value)]\n")
+			}
+			signature.WriteString(formatSignature("  fn ", m.Name, "",
+				formatParams(m.Params), m.HasReturn(), m.ReturnType))
+			signature.WriteString("\n")
+		}
+		signature.WriteString("}")
+	}
+
+	e.buf.WriteString(signature.String())
+	e.buf.WriteString("\n\n")
+}
+
+func (e *Emitter) emitStruct(result convert.ConvertResult) {
 	typeName := result.Name
 
-	if result.IsInterface {
-		var signature strings.Builder
-		signature.WriteString("pub interface ")
-		signature.WriteString(typeName)
-		signature.WriteString(result.TypeParams.DeclBlock())
-
-		if len(result.InterfaceMethods) == 0 {
-			signature.WriteString(" {}")
-		} else {
-			signature.WriteString(" {\n")
-			for _, m := range result.InterfaceMethods {
-				if m.SealId != "" {
-					fmt.Fprintf(&signature, "  #[go(unexported, \"%s\")]\n", escapeSealId(m.SealId))
-				}
-				if m.CommaOk {
-					signature.WriteString("  #[go(comma_ok)]\n")
-				}
-				if m.ArrayReturn {
-					signature.WriteString("  #[go(array_return)]\n")
-				}
-				if m.BuilderMethod {
-					signature.WriteString("  #[allow(unused_value)]\n")
-				}
-				signature.WriteString("  fn ")
-				signature.WriteString(m.Name)
-				signature.WriteString("(")
-
-				var params []string
-				for _, p := range m.Params {
-					if p.Mutable {
-						params = append(params, fmt.Sprintf("mut %s: %s", p.Name, p.Type))
-					} else {
-						params = append(params, fmt.Sprintf("%s: %s", p.Name, p.Type))
-					}
-				}
-				signature.WriteString(strings.Join(params, ", "))
-				signature.WriteString(")")
-
-				if m.HasReturn() {
-					signature.WriteString(" -> ")
-					signature.WriteString(m.ReturnType)
-				}
-				signature.WriteString("\n")
-			}
-			signature.WriteString("}")
+	allSkipped := true
+	for _, f := range result.Fields {
+		if f.SkipReason == nil {
+			allSkipped = false
+			break
 		}
+	}
 
-		e.buf.WriteString(signature.String())
-		e.buf.WriteString("\n\n")
+	if allSkipped {
+		for _, f := range result.Fields {
+			writeSkippedFieldComment(&e.buf, "", f)
+		}
+		if result.UnexportedType {
+			e.buf.WriteString("#[go(unexported)]\n")
+		}
+		if result.HasHiddenEmbed {
+			e.buf.WriteString("#[go(hidden_embed)]\n")
+		}
+		fmt.Fprintf(&e.buf, "pub type %s%s\n\n", typeName, result.TypeParams.DeclBlock())
 		return
 	}
 
-	if len(result.Fields) > 0 {
-		allSkipped := true
-		for _, f := range result.Fields {
-			if f.SkipReason == nil {
-				allSkipped = false
-				break
-			}
-		}
+	var sig strings.Builder
+	if result.AnonStruct {
+		sig.WriteString("#[go(anon_struct)]\n")
+	}
+	if result.UnexportedType {
+		sig.WriteString("#[go(unexported)]\n")
+	}
+	if result.HasHiddenEmbed {
+		sig.WriteString("#[go(hidden_embed)]\n")
+	}
+	sig.WriteString("pub struct ")
+	sig.WriteString(typeName)
+	sig.WriteString(result.TypeParams.DeclBlock())
 
-		if allSkipped {
-			for _, f := range result.Fields {
-				writeSkippedFieldComment(&e.buf, "", f)
-			}
-			if result.UnexportedType {
-				e.buf.WriteString("#[go(unexported)]\n")
-			}
-			if result.HasHiddenEmbed {
-				e.buf.WriteString("#[go(hidden_embed)]\n")
-			}
-			fmt.Fprintf(&e.buf, "pub type %s%s\n\n", typeName, result.TypeParams.DeclBlock())
-			return
+	sig.WriteString(" {\n")
+	for _, f := range result.Fields {
+		if f.SkipReason != nil {
+			writeSkippedFieldComment(&sig, "  ", f)
+			continue
 		}
+		if f.Doc != "" {
+			for line := range strings.SplitSeq(f.Doc, "\n") {
+				sig.WriteString("  /// ")
+				sig.WriteString(line)
+				sig.WriteString("\n")
+			}
+		}
+		if f.IsEmbedded {
+			sig.WriteString("  embed ")
+			sig.WriteString(f.Type)
+			sig.WriteString(",\n")
+			continue
+		}
+		sig.WriteString("  pub ")
+		sig.WriteString(f.Name)
+		sig.WriteString(": ")
+		sig.WriteString(f.Type)
+		sig.WriteString(",\n")
+	}
+	sig.WriteString("}")
 
-		var sig strings.Builder
-		if result.AnonStruct {
-			sig.WriteString("#[go(anon_struct)]\n")
+	e.buf.WriteString(sig.String())
+	e.buf.WriteString("\n\n")
+}
+
+func (e *Emitter) emitNewtypeOrAlias(result convert.ConvertResult) {
+	typeName := result.Name
+	var sig strings.Builder
+
+	// Lisette rejects self-referential type aliases, so a Go function-type
+	// like `type Filter func([]Filter)` falls back to an opaque type;
+	// downstream signatures referencing it still resolve.
+	isFnType := strings.HasPrefix(result.LisetteType, "fn(")
+	isRecursiveFnAlias := isFnType && containsIdent(result.LisetteType, typeName)
+
+	if isRecursiveFnAlias {
+		sig.WriteString("pub type ")
+		sig.WriteString(typeName)
+		sig.WriteString(result.TypeParams.DeclBlock())
+	} else if isFnType || result.IsTypeAlias {
+		sig.WriteString("pub type ")
+		sig.WriteString(typeName)
+		sig.WriteString(result.TypeParams.DeclBlock())
+		sig.WriteString(" = ")
+		sig.WriteString(result.LisetteType)
+	} else {
+		if e.bitFlagSetTypes[typeName] {
+			sig.WriteString("#[go(bit_flag_set)]\n")
 		}
-		if result.UnexportedType {
-			sig.WriteString("#[go(unexported)]\n")
-		}
-		if result.HasHiddenEmbed {
-			sig.WriteString("#[go(hidden_embed)]\n")
+		if e.closedDomainTypes[typeName] {
+			sig.WriteString("#[go(closed_domain)]\n")
 		}
 		sig.WriteString("pub struct ")
 		sig.WriteString(typeName)
 		sig.WriteString(result.TypeParams.DeclBlock())
-
-		sig.WriteString(" {\n")
-		for _, f := range result.Fields {
-			if f.SkipReason != nil {
-				writeSkippedFieldComment(&sig, "  ", f)
-				continue
-			}
-			if f.Doc != "" {
-				for line := range strings.SplitSeq(f.Doc, "\n") {
-					sig.WriteString("  /// ")
-					sig.WriteString(line)
-					sig.WriteString("\n")
-				}
-			}
-			if f.IsEmbedded {
-				sig.WriteString("  embed ")
-				sig.WriteString(f.Type)
-				sig.WriteString(",\n")
-				continue
-			}
-			sig.WriteString("  pub ")
-			sig.WriteString(f.Name)
-			sig.WriteString(": ")
-			sig.WriteString(f.Type)
-			sig.WriteString(",\n")
-		}
-		sig.WriteString("}")
-
-		e.buf.WriteString(sig.String())
-		e.buf.WriteString("\n\n")
-		return
+		sig.WriteString("(")
+		sig.WriteString(result.LisetteType)
+		sig.WriteString(")")
 	}
 
-	if result.LisetteType != "" {
-		var sig strings.Builder
+	e.buf.WriteString(sig.String())
+	e.buf.WriteString("\n\n")
+}
 
-		// Lisette rejects self-referential type aliases, so a Go function-type
-		// like `type Filter func([]Filter)` falls back to an opaque type;
-		// downstream signatures referencing it still resolve.
-		isFnType := strings.HasPrefix(result.LisetteType, "fn(")
-		isRecursiveFnAlias := isFnType && containsIdent(result.LisetteType, typeName)
-
-		if isRecursiveFnAlias {
-			sig.WriteString("pub type ")
-			sig.WriteString(typeName)
-			sig.WriteString(result.TypeParams.DeclBlock())
-		} else if isFnType || result.IsTypeAlias {
-			sig.WriteString("pub type ")
-			sig.WriteString(typeName)
-			sig.WriteString(result.TypeParams.DeclBlock())
-			sig.WriteString(" = ")
-			sig.WriteString(result.LisetteType)
-		} else {
-			if e.bitFlagSetTypes[typeName] {
-				sig.WriteString("#[go(bit_flag_set)]\n")
-			}
-			if e.closedDomainTypes[typeName] {
-				sig.WriteString("#[go(closed_domain)]\n")
-			}
-			sig.WriteString("pub struct ")
-			sig.WriteString(typeName)
-			sig.WriteString(result.TypeParams.DeclBlock())
-			sig.WriteString("(")
-			sig.WriteString(result.LisetteType)
-			sig.WriteString(")")
-		}
-
-		e.buf.WriteString(sig.String())
-		e.buf.WriteString("\n\n")
-		return
-	}
-
+func (e *Emitter) emitOpaqueType(result convert.ConvertResult) {
 	var signature strings.Builder
 	if result.UnexportedType {
 		signature.WriteString("#[go(unexported)]\n")
@@ -664,7 +647,7 @@ func (e *Emitter) emitType(result convert.ConvertResult) {
 		signature.WriteString("#[go(hidden_embed)]\n")
 	}
 	signature.WriteString("pub type ")
-	signature.WriteString(typeName)
+	signature.WriteString(result.Name)
 	signature.WriteString(result.TypeParams.DeclBlock())
 
 	e.buf.WriteString(signature.String())
