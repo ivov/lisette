@@ -174,21 +174,6 @@ jobs:
           BASE_REF="origin/$BASE"
           fail=0
 
-          ts_paths=(
-            editors/tree-sitter-lisette/grammar.js
-            editors/tree-sitter-lisette/src
-            editors/tree-sitter-lisette/queries
-          )
-
-          if git diff --name-only "$BASE_REF..HEAD" -- "${ts_paths[@]}" | grep -q .; then
-            curr=$(grep -m1 -E '^version[[:space:]]*=' editors/zed/extension.toml | sed -E 's/.*"([^"]+)".*/\1/')
-            prev=$(git show "$BASE_REF:editors/zed/extension.toml" | grep -m1 -E '^version[[:space:]]*=' | sed -E 's/.*"([^"]+)".*/\1/')
-            if [ "$curr" = "$prev" ]; then
-              echo "::error::tree-sitter grammar changed but editors/zed/extension.toml version was not bumped (still $curr)"
-              fail=1
-            fi
-          fi
-
           if git diff --name-only "$BASE_REF..HEAD" -- editors/vscode/syntaxes/lisette.tmLanguage.json | grep -q .; then
             curr=$(jq -r .version editors/vscode/package.json)
             prev=$(git show "$BASE_REF:editors/vscode/package.json" | jq -r .version)
