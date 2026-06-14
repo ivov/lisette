@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [error] Cast of `NaN` to integer
+   ╭─[test.lis:4:11]
+ 3 │ fn main() {
+ 4 │   let _ = math.NaN() as int
+   ·           ────────┬────────
+   ·                   ╰── `NaN` has no `int` value
+ 5 │ }
+   ╰────
+  help: In Go, casting `NaN` to an integer produces an arbitrary, implementation-specific value rather than a meaningful one. Guard with `math.IsNaN(...)` before casting, or keep the value as a float · code: [infer.cast_nan_to_int]

@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [warning] Float equality without `abs`
+   ╭─[test.lis:7:11]
+ 6 │   let b: B = 2.0
+ 7 │   let _ = (a - b) < 0.01
+   ·           ───────┬──────
+   ·                  ╰── difference is not wrapped in `math.Abs`
+ 8 │ }
+   ╰────
+  help: Because `a - b` is signed, this is also `true` whenever `a` is far below `b`, not only when `a` and `b` are close, so it wrongly accepts values that are nowhere near equal. Compare the magnitude instead: `math.Abs(a - b) < c` · code: [lint.float_equality_without_abs]

@@ -1,11 +1,28 @@
 use syntax::ast::{Expression, FormatStringPart, Literal, Pattern};
-use syntax::types::unqualified_name;
+use syntax::types::{SimpleKind, Type, unqualified_name};
 
 use crate::passes::walk::visit_ast;
+use crate::store::Store;
 
 pub(super) use crate::passes::comparison::{
     expressions_equivalent, flip_comparison, is_side_effect_free, signed_integer_literal,
 };
+
+pub(super) fn is_float_operand(store: &Store, expression: &Expression) -> bool {
+    let resolved = store.deep_resolve_alias(&expression.get_type());
+    if let Some(kind) = resolved.underlying_simple_kind() {
+        return kind.is_float();
+    }
+    if let Type::Nominal { id, .. } = &resolved
+        && let Some(definition) = store.get_definition(id.as_str())
+    {
+        return definition
+            .ty()
+            .underlying_simple_kind()
+            .is_some_and(SimpleKind::is_float);
+    }
+    false
+}
 
 pub(super) fn is_zero_literal(expression: &Expression) -> bool {
     matches!(

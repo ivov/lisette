@@ -267,7 +267,7 @@ pub fn tautological_comparison(span: &Span, always_true: bool) -> LisetteDiagnos
         .with_lint_code("self_comparison")
         .with_span_label(span, "comparing to itself")
         .with_help(format!(
-            "This condition is always {}. Did you mean to compare different values?",
+            "This condition is always `{}`. Did you mean to compare different values?",
             result
         ))
 }
@@ -348,6 +348,26 @@ pub fn equal_operands(span: &Span, note: &str) -> LisetteDiagnostic {
         .with_help(format!(
             "Both operands are identical so the result {note}. Did you mean to use different operands?"
         ))
+}
+
+pub fn float_cmp(span: &Span, is_equal: bool) -> LisetteDiagnostic {
+    let operator = if is_equal { "==" } else { "!=" };
+
+    LisetteDiagnostic::warn("Exact float comparison")
+        .with_lint_code("float_cmp")
+        .with_span_label(span, format!("floats compared with `{operator}`"))
+        .with_help(
+            "Floating-point results are rarely bit-exact, so `==` and `!=` may not behave as intended. Compare within a tolerance instead, e.g. `math.Abs(a - b) < c`.",
+        )
+}
+
+pub fn float_equality_without_abs(span: &Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::warn("Float equality without `abs`")
+        .with_lint_code("float_equality_without_abs")
+        .with_span_label(span, "difference is not wrapped in `math.Abs`")
+        .with_help(
+            "Because `a - b` is signed, this is also `true` whenever `a` is far below `b`, not only when `a` and `b` are close, so it wrongly accepts values that are nowhere near equal. Compare the magnitude instead: `math.Abs(a - b) < c`.",
+        )
 }
 
 pub fn non_negative_comparison(span: &Span, always_true: bool) -> LisetteDiagnostic {

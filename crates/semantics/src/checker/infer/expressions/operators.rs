@@ -201,6 +201,7 @@ impl InferCtx<'_, '_> {
         let left_span = left_inferred.get_span();
         let right_span = new_right_operand.get_span();
 
+        let errors_before = self.sink.len();
         let expression_ty = self.resolve_binary_type(
             &operator,
             &left_operand_ty,
@@ -209,6 +210,9 @@ impl InferCtx<'_, '_> {
             &right_span,
             span,
         );
+        if self.sink.len() != errors_before {
+            self.facts.type_error_spans.insert(span);
+        }
 
         self.unify(expected_ty, &expression_ty, &span);
 
@@ -295,6 +299,7 @@ impl InferCtx<'_, '_> {
         let left_span = new_left_operand.get_span();
         let right_span = new_right_operand.get_span();
 
+        let errors_before = self.sink.len();
         let expression_ty = self.resolve_binary_type(
             &operator,
             &left_operand_ty,
@@ -303,6 +308,9 @@ impl InferCtx<'_, '_> {
             &right_span,
             span,
         );
+        if self.sink.len() != errors_before {
+            self.facts.type_error_spans.insert(span);
+        }
 
         self.unify(expected_ty, &expression_ty, &span);
 

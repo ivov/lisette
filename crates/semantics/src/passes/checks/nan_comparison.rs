@@ -25,6 +25,6 @@ pub(crate) fn check(expression: &Expression, ctx: &NodeCtx) {
     }
 }
 
-fn is_math_nan_call(expression: &Expression) -> bool {
+pub(super) fn is_math_nan_call(expression: &Expression) -> bool {
     resolve_call(expression).is_some_and(|target| target.is("go:math", "NaN"))
 }

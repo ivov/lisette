@@ -1,3 +1,4 @@
+pub(crate) mod cast_nan_to_int;
 pub(crate) mod const_naming;
 pub(crate) mod decimal_file_mode;
 pub(crate) mod duplicate_bindings;

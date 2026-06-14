@@ -1570,6 +1570,45 @@ fn main() {
 }
 
 #[test]
+fn self_comparison_float_alias_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+type Score = float64
+fn main() {
+  let s: Score = 0.0
+  let _ = s != s
+}
+"#
+    );
+}
+
+#[test]
+fn self_comparison_float_newtype_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+struct Distance(float64)
+fn main() {
+  let d = Distance(0.0)
+  let _ = d != d
+}
+"#
+    );
+}
+
+#[test]
+fn self_comparison_int_alias_warns() {
+    assert_lint_snapshot!(
+        r#"
+type Id = int
+fn main() {
+  let n: Id = 3
+  let _ = n == n
+}
+"#
+    );
+}
+
+#[test]
 fn unsigned_comparison_less_than_zero() {
     assert_lint_snapshot!(
         r#"
@@ -2773,20 +2812,25 @@ fn main() {
 
 #[test]
 fn nan_comparison_other_math_function_no_warning() {
-    assert_no_lint_warnings!(
+    let diagnostics = crate::_harness::lint::lint(
         r#"
 import "go:math"
 fn main() {
   let x: float64 = 1.0
   let _ = x == math.Pi
 }
-"#
+"#,
+    );
+    let codes: Vec<&str> = diagnostics.iter().filter_map(|d| d.code_str()).collect();
+    assert!(
+        !codes.contains(&"infer.nan_comparison"),
+        "nan_comparison must fire only on `math.NaN()`, not other math values: {codes:?}"
     );
 }
 
 #[test]
 fn nan_comparison_user_defined_function_no_warning() {
-    assert_no_lint_warnings!(
+    let diagnostics = crate::_harness::lint::lint(
         r#"
 fn nan() -> float64 {
   0.0
@@ -2796,7 +2840,12 @@ fn main() {
   let x: float64 = 1.0
   let _ = x == nan()
 }
-"#
+"#,
+    );
+    let codes: Vec<&str> = diagnostics.iter().filter_map(|d| d.code_str()).collect();
+    assert!(
+        !codes.contains(&"infer.nan_comparison"),
+        "nan_comparison must fire only on `go:math.NaN`, not a user `nan`: {codes:?}"
     );
 }
 
@@ -3406,19 +3455,19 @@ fn main() {
 
 #[test]
 fn comparison_float_literal_out_of_scope() {
-    assert_no_lint_warnings!(
+    assert_no_chain_comparison_lints(
         r#"
 fn main() {
   let x: float64 = 1.0
   let _ = x == 1.0 && x != 1.0
 }
-"#
+"#,
     );
 }
 
 #[test]
 fn comparison_float_ordering_and_mixing_out_of_scope() {
-    assert_no_lint_warnings!(
+    assert_no_chain_comparison_lints(
         r#"
 fn main() {
   let x: float64 = 1.0
@@ -3426,8 +3475,25 @@ fn main() {
   let _ = x == 1 && x != 1.0
   let _ = x < 1.0 || x < 2.0
 }
-"#
+"#,
     );
+}
+
+/// Float operands are out of scope for the comparison-chain lints (PR 1), even
+/// though `float_cmp` legitimately flags the `==`/`!=` operands on its own.
+fn assert_no_chain_comparison_lints(source: &str) {
+    let diagnostics = crate::_harness::lint::lint(source);
+    let codes: Vec<&str> = diagnostics.iter().filter_map(|d| d.code_str()).collect();
+    for code in [
+        "infer.impossible_comparison",
+        "lint.redundant_comparison",
+        "lint.double_comparison",
+    ] {
+        assert!(
+            !codes.contains(&code),
+            "chain lints must not analyze float operands, found {code}: {codes:?}"
+        );
+    }
 }
 
 #[test]
@@ -14416,5 +14482,603 @@ fn main() {
     assert!(
         codes.contains(&"lint.unused_type"),
         "local interface LocalArea is unused and must still be flagged: {codes:?}"
+    );
+}
+
+#[test]
+fn float_cmp_equal() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let f: float64 = 1.0
+  let g: float64 = 2.0
+  let _ = f == g
+}
+"#
+    );
+}
+
+#[test]
+fn float_cmp_not_equal() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let f: float64 = 1.0
+  let g: float64 = 2.0
+  let _ = f != g
+}
+"#
+    );
+}
+
+#[test]
+fn float_cmp_literal() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let f: float64 = 1.0
+  let _ = f == 1.5
+}
+"#
+    );
+}
+
+#[test]
+fn float_cmp_float32() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let f: float32 = 1.0
+  let g: float32 = 2.0
+  let _ = f == g
+}
+"#
+    );
+}
+
+#[test]
+fn float_cmp_zero_no_diagnostic() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let f: float64 = 1.0
+  let _ = f == 0.0
+}
+"#
+    );
+}
+
+#[test]
+fn float_cmp_integer_zero_no_diagnostic() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let f: float64 = 1.0
+  let _ = f == 0
+}
+"#
+    );
+}
+
+#[test]
+fn float_cmp_infinity_no_diagnostic() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:math"
+fn main() {
+  let f: float64 = 1.0
+  let _ = f == math.Inf(1)
+}
+"#
+    );
+}
+
+#[test]
+fn float_cmp_self_no_diagnostic() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let f: float64 = 1.0
+  let _ = f != f
+}
+"#
+    );
+}
+
+#[test]
+fn float_cmp_integer_no_diagnostic() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let n: int = 3
+  let m: int = 4
+  let _ = n == m
+}
+"#
+    );
+}
+
+#[test]
+fn float_cmp_defers_nan_to_nan_comparison() {
+    let diagnostics = crate::_harness::lint::lint(
+        r#"
+import "go:math"
+fn main() {
+  let f: float64 = 1.0
+  let _ = f == math.NaN()
+}
+"#,
+    );
+    let codes: Vec<&str> = diagnostics.iter().filter_map(|d| d.code_str()).collect();
+    assert!(
+        codes.contains(&"infer.nan_comparison"),
+        "nan_comparison must own the NaN comparison: {codes:?}"
+    );
+    assert!(
+        !codes.contains(&"lint.float_cmp"),
+        "float_cmp must not double-report on a NaN comparison: {codes:?}"
+    );
+}
+
+#[test]
+fn float_equality_without_abs_less_than() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let f: float64 = 1.0
+  let g: float64 = 2.0
+  let _ = (f - g) < 0.0001
+}
+"#
+    );
+}
+
+#[test]
+fn float_equality_without_abs_margin_on_left() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let f: float64 = 1.0
+  let g: float64 = 2.0
+  let _ = 0.5 > (f - g)
+}
+"#
+    );
+}
+
+#[test]
+fn float_equality_without_abs_difference_large_no_diagnostic() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let f: float64 = 1.0
+  let g: float64 = 2.0
+  let _ = (f - g) > 0.0001
+}
+"#
+    );
+}
+
+#[test]
+fn float_equality_without_abs_variable_margin_no_diagnostic() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let f: float64 = 1.0
+  let g: float64 = 2.0
+  let _ = (f - g) < g
+}
+"#
+    );
+}
+
+#[test]
+fn float_equality_without_abs_integer_no_diagnostic() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let n: int = 3
+  let m: int = 4
+  let _ = (n - m) < 5
+}
+"#
+    );
+}
+
+#[test]
+fn cast_nan_to_int_signed() {
+    assert_lint_snapshot!(
+        r#"
+import "go:math"
+fn main() {
+  let _ = math.NaN() as int
+}
+"#
+    );
+}
+
+#[test]
+fn cast_nan_to_int_unsigned() {
+    assert_lint_snapshot!(
+        r#"
+import "go:math"
+fn main() {
+  let _ = math.NaN() as uint8
+}
+"#
+    );
+}
+
+#[test]
+fn cast_nan_to_int_float_target_no_diagnostic() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:math"
+fn main() {
+  let _ = math.NaN() as float32
+}
+"#
+    );
+}
+
+#[test]
+fn cast_nan_to_int_other_value_no_diagnostic() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let f: float64 = 1.5
+  let _ = f as int
+}
+"#
+    );
+}
+
+#[test]
+fn float_cmp_repeated_call() {
+    assert_lint_snapshot!(
+        r#"
+fn value() -> float64 { 1.0 }
+fn main() {
+  let _ = value() == value()
+}
+"#
+    );
+}
+
+#[test]
+fn float_cmp_alias() {
+    assert_lint_snapshot!(
+        r#"
+type Score = float64
+fn main() {
+  let a: Score = 1.0
+  let b: Score = 2.0
+  let _ = a == b
+}
+"#
+    );
+}
+
+#[test]
+fn float_cmp_newtype() {
+    assert_lint_snapshot!(
+        r#"
+struct Distance(float64)
+fn main() {
+  let x = Distance(1.0)
+  let y = Distance(2.0)
+  let _ = x == y
+}
+"#
+    );
+}
+
+#[test]
+fn float_cmp_negative_zero_no_diagnostic() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let f: float64 = 1.0
+  let _ = f == -0.0
+  let _ = f == (-0)
+}
+"#
+    );
+}
+
+#[test]
+fn float_cmp_distinct_newtypes_no_diagnostic() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+struct Distance(float64)
+struct Speed(float64)
+fn main() {
+  let d = Distance(1.0)
+  let s = Speed(2.0)
+  let _ = d == s
+}
+"#,
+    );
+    let result = compile_check(fs);
+    assert!(
+        !result
+            .lints
+            .iter()
+            .any(|d| d.plain_message() == "Exact float comparison"),
+        "float_cmp must not fire on a checker-rejected newtype comparison: {:?}",
+        result.lints
+    );
+}
+
+#[test]
+fn float_equality_without_abs_less_than_or_equal() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let f: float64 = 1.0
+  let g: float64 = 2.0
+  let _ = (f - g) <= 0.0001
+}
+"#
+    );
+}
+
+#[test]
+fn float_equality_without_abs_greater_than_or_equal() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let f: float64 = 1.0
+  let g: float64 = 2.0
+  let _ = 0.0001 >= (f - g)
+}
+"#
+    );
+}
+
+#[test]
+fn float_equality_without_abs_integer_margin() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let f: float64 = 1.0
+  let g: float64 = 2.0
+  let _ = (f - g) < 1
+}
+"#
+    );
+}
+
+#[test]
+fn float_equality_without_abs_alias() {
+    assert_lint_snapshot!(
+        r#"
+type Score = float64
+fn main() {
+  let a: Score = 1.0
+  let b: Score = 2.0
+  let _ = (a - b) < 0.001
+}
+"#
+    );
+}
+
+#[test]
+fn cast_nan_to_int_alias() {
+    assert_lint_snapshot!(
+        r#"
+import "go:math"
+type Count = int
+fn main() {
+  let _ = math.NaN() as Count
+}
+"#
+    );
+}
+
+#[test]
+fn cast_nan_to_int_uintptr() {
+    assert_lint_snapshot!(
+        r#"
+import "go:math"
+fn main() {
+  let _ = math.NaN() as uintptr
+}
+"#
+    );
+}
+
+#[test]
+fn cast_nan_to_int_newtype() {
+    assert_lint_snapshot!(
+        r#"
+import "go:math"
+struct CountNew(int)
+fn main() {
+  let _ = math.NaN() as CountNew
+}
+"#
+    );
+}
+
+#[test]
+fn float_cmp_distinct_aliases() {
+    assert_lint_snapshot!(
+        r#"
+type A = float64
+type B = float64
+fn main() {
+  let a: A = 1.0
+  let b: B = 2.0
+  let _ = a == b
+}
+"#
+    );
+}
+
+#[test]
+fn float_cmp_alias_chain() {
+    assert_lint_snapshot!(
+        r#"
+type A = float64
+type B = A
+fn main() {
+  let a: A = 1.0
+  let b: B = 2.0
+  let _ = a == b
+}
+"#
+    );
+}
+
+#[test]
+fn float_equality_without_abs_distinct_aliases() {
+    assert_lint_snapshot!(
+        r#"
+type A = float64
+type B = float64
+fn main() {
+  let a: A = 1.0
+  let b: B = 2.0
+  let _ = (a - b) < 0.01
+}
+"#
+    );
+}
+
+#[test]
+fn float_equality_without_abs_alias_chain() {
+    assert_lint_snapshot!(
+        r#"
+type A = float64
+type B = A
+fn main() {
+  let a: A = 1.0
+  let b: B = 2.0
+  let _ = (a - b) < 0.01
+}
+"#
+    );
+}
+
+#[test]
+fn float_equality_without_abs_distinct_newtypes_no_diagnostic() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+struct Distance(float64)
+struct Speed(float64)
+fn main() {
+  let d = Distance(1.0)
+  let s = Speed(2.0)
+  let _ = (d - s) < 0.01
+}
+"#,
+    );
+    let result = compile_check(fs);
+    assert!(
+        !result
+            .lints
+            .iter()
+            .any(|d| d.plain_message() == "Float equality without `abs`"),
+        "must not fire on a checker-rejected newtype subtraction: {:?}",
+        result.lints
+    );
+}
+
+#[test]
+fn float_cmp_alias_to_newtype() {
+    assert_lint_snapshot!(
+        r#"
+type A = float64
+struct Distance(float64)
+fn main() {
+  let a: A = 1.0
+  let d = Distance(2.0)
+  let _ = a == d
+}
+"#
+    );
+}
+
+#[test]
+fn float_cmp_newtype_alias_symmetric() {
+    let diagnostics = crate::_harness::lint::lint(
+        r#"
+struct Distance(float64)
+type DA = Distance
+fn main() {
+  let d = Distance(1.0)
+  let da: DA = Distance(2.0)
+  let _ = d == da
+  let _ = da == d
+}
+"#,
+    );
+    let count = diagnostics
+        .iter()
+        .filter(|d| d.code_str() == Some("lint.float_cmp"))
+        .count();
+    assert_eq!(
+        count, 2,
+        "both newtype/alias orderings are accepted by the checker and must fire: {diagnostics:?}"
+    );
+}
+
+#[test]
+fn float_cmp_plain_vs_newtype_no_diagnostic() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+struct Distance(float64)
+fn main() {
+  let f: float64 = 1.0
+  let d = Distance(2.0)
+  let _ = f == d
+}
+"#,
+    );
+    let result = compile_check(fs);
+    assert!(
+        !result
+            .lints
+            .iter()
+            .any(|d| d.plain_message() == "Exact float comparison"),
+        "must not fire on a checker-rejected plain-vs-newtype comparison: {:?}",
+        result.lints
+    );
+}
+
+#[test]
+fn float_equality_without_abs_rejected_newtype_subtraction_no_diagnostic() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+struct Distance(float64)
+type DA = Distance
+fn main() {
+  let d = Distance(1.0)
+  let da: DA = Distance(2.0)
+  let _ = (d - da) < 0.01
+}
+"#,
+    );
+    let result = compile_check(fs);
+    assert!(
+        !result
+            .lints
+            .iter()
+            .any(|d| d.plain_message() == "Float equality without `abs`"),
+        "must not fire when the checker rejected the subtraction: {:?}",
+        result.lints
     );
 }

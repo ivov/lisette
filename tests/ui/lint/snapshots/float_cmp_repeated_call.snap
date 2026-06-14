@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [warning] Exact float comparison
+   ╭─[test.lis:4:11]
+ 3 │ fn main() {
+ 4 │   let _ = value() == value()
+   ·           ─────────┬────────
+   ·                    ╰── floats compared with `==`
+ 5 │ }
+   ╰────
+  help: Floating-point results are rarely bit-exact, so `==` and `!=` may not behave as intended. Compare within a tolerance instead, e.g. `math.Abs(a - b) < c` · code: [lint.float_cmp]

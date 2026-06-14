@@ -54,6 +54,9 @@ pub struct Facts {
 
     /// Suppresses contradictory lints from or-patterns whose binding sets disagree.
     pub or_pattern_error_spans: HashSet<Span>,
+
+    /// Spans of binary expressions the checker rejected, so lints can skip them.
+    pub type_error_spans: HashSet<Span>,
 }
 
 #[derive(Debug, Clone)]
@@ -93,6 +96,7 @@ impl Facts {
             empty_collection_checks: Vec::new(),
             statement_tail_checks: Vec::new(),
             or_pattern_error_spans: HashSet::default(),
+            type_error_spans: HashSet::default(),
             usages: Vec::new(),
             usage_set: HashSet::default(),
             interface_satisfied_methods: HashMap::default(),
@@ -220,6 +224,7 @@ impl Facts {
             empty_collection_checks,
             statement_tail_checks,
             or_pattern_error_spans,
+            type_error_spans,
             usages,
             usage_set: _,
             interface_satisfied_methods,
@@ -243,6 +248,7 @@ impl Facts {
         self.empty_collection_checks.extend(empty_collection_checks);
         self.statement_tail_checks.extend(statement_tail_checks);
         self.or_pattern_error_spans.extend(or_pattern_error_spans);
+        self.type_error_spans.extend(type_error_spans);
 
         self.usages.reserve(usages.len());
         self.usage_set.reserve(usages.len());

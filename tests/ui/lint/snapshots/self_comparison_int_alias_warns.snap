@@ -2,11 +2,11 @@
 source: tests/ui/lint/mod.rs
 ---
   [warning] Tautological comparison
-   ╭─[test.lis:4:11]
- 3 │   let x = 5;
- 4 │   let _ = x == x
+   ╭─[test.lis:5:11]
+ 4 │   let n: Id = 3
+ 5 │   let _ = n == n
    ·           ───┬──
    ·              ╰── comparing to itself
- 5 │ }
+ 6 │ }
    ╰────
   help: This condition is always `true`. Did you mean to compare different values? · code: [lint.self_comparison]

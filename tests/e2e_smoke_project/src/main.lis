@@ -3274,6 +3274,7 @@ fn test_recover_nested() -> int {
 
 // as cast syntax
 
+#[allow(float_cmp)]
 fn test_cast_int_to_float64() -> int {
   let x: int = 42
   let y: float64 = x as float64
@@ -3330,6 +3331,7 @@ fn test_cast_rune_slice_to_string() -> int {
   if s == "hi" { 100 } else { 0 }
 }
 
+#[allow(float_cmp)]
 fn test_cast_in_expression() -> int {
   let a: int = 7
   let b: int = 2
@@ -3343,6 +3345,7 @@ fn test_cast_int_to_int8() -> int {
   if y == 127 { 100 } else { 0 }
 }
 
+#[allow(float_cmp)]
 fn test_cast_float32_to_float64() -> int {
   let x: float32 = 1.5
   let y: float64 = x as float64

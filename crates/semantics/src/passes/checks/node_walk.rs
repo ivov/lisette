@@ -6,16 +6,18 @@ use syntax::ast::ExpressionKind::*;
 use crate::passes::walk::{CheckTable, NodeCtx, walk_nodes};
 
 use super::{
-    const_naming, decimal_file_mode, duplicate_bindings, empty_infinite_loop, empty_range,
-    enum_variant_value, impossible_comparison, index_out_of_bounds, irrefutable_patterns,
-    nan_comparison, newtype, oversized_shift, predeclared_shadowing, pub_type_export, receivers,
-    repeated_if_condition, stringer_signature, temp_producing, unchanging_loop_condition,
+    cast_nan_to_int, const_naming, decimal_file_mode, duplicate_bindings, empty_infinite_loop,
+    empty_range, enum_variant_value, impossible_comparison, index_out_of_bounds,
+    irrefutable_patterns, nan_comparison, newtype, oversized_shift, predeclared_shadowing,
+    pub_type_export, receivers, repeated_if_condition, stringer_signature, temp_producing,
+    unchanging_loop_condition,
 };
 
 static NODE_CHECKS: LazyLock<CheckTable> = LazyLock::new(|| {
     CheckTable::new(
         &[
             (nan_comparison::check, &[Binary]),
+            (cast_nan_to_int::check, &[Cast]),
             (impossible_comparison::check, &[Binary]),
             (empty_range::check, &[Range]),
             (empty_infinite_loop::check, &[Loop]),

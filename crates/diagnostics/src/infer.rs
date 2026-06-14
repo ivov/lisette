@@ -2401,6 +2401,15 @@ pub fn nan_comparison(span: &Span, always_true: bool) -> LisetteDiagnostic {
         )
 }
 
+pub fn cast_nan_to_int(span: &Span, target: &str) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Cast of `NaN` to integer")
+        .with_infer_code("cast_nan_to_int")
+        .with_span_label(span, format!("`NaN` has no `{target}` value"))
+        .with_help(
+            "In Go, casting `NaN` to an integer produces an arbitrary, implementation-specific value rather than a meaningful one. Guard with `math.IsNaN(...)` before casting, or keep the value as a float.",
+        )
+}
+
 pub fn deferred_lock(span: Span, locked: &str, unlock: &str) -> LisetteDiagnostic {
     LisetteDiagnostic::error(format!("Deferred `{locked}` instead of `{unlock}`"))
         .with_infer_code("deferred_lock")

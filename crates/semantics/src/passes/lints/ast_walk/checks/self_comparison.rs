@@ -1,6 +1,8 @@
 use crate::passes::walk::NodeCtx;
 use syntax::ast::{BinaryOperator, Expression};
 
+use super::helpers::is_float_operand;
+
 pub fn check_self_comparison(expression: &Expression, ctx: &NodeCtx) {
     let Expression::Binary {
         operator,
@@ -38,7 +40,7 @@ pub fn check_self_comparison(expression: &Expression, ctx: &NodeCtx) {
     }
 
     // NaN == NaN is false per IEEE 754, so skip floats.
-    if left.get_type().is_float() {
+    if is_float_operand(ctx.store, left) {
         return;
     }
 
