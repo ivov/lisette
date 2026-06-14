@@ -35,7 +35,7 @@ type SymbolExport struct {
 	Unexported       bool         // a directly-declared unexported method, recorded as a seal
 }
 
-func currentLoadConfig() *packages.Config {
+func currentLoadConfig(targetGOOS, targetGOARCH string) *packages.Config {
 	return &packages.Config{
 		Mode: packages.NeedName |
 			packages.NeedTypes |
@@ -43,14 +43,13 @@ func currentLoadConfig() *packages.Config {
 			packages.NeedSyntax |
 			packages.NeedDeps |
 			packages.NeedImports,
-		Env: buildLoaderEnv(),
+		Env: buildLoaderEnv(targetGOOS, targetGOARCH),
 	}
 }
 
-func buildLoaderEnv() []string {
-	targetGOOS := os.Getenv("BINDGEN_TARGET_GOOS")
-	targetGOARCH := os.Getenv("BINDGEN_TARGET_GOARCH")
-
+// buildLoaderEnv builds the loader environment, cross-compiling for the given
+// target when targetGOOS/targetGOARCH are non-empty (empty means host default).
+func buildLoaderEnv(targetGOOS, targetGOARCH string) []string {
 	env := os.Environ()
 	if targetGOOS != "" || targetGOARCH != "" {
 		filtered := make([]string, 0, len(env))
@@ -74,7 +73,7 @@ func buildLoaderEnv() []string {
 }
 
 func LoadPackage(path string) (*packages.Package, error) {
-	pkgs, err := packages.Load(currentLoadConfig(), path)
+	pkgs, err := packages.Load(currentLoadConfig("", ""), path)
 	if err != nil {
 		return nil, err
 	}
@@ -98,8 +97,8 @@ func LoadPackage(path string) (*packages.Package, error) {
 	return pkg, nil
 }
 
-func LoadPackages(paths []string) ([]*packages.Package, error) {
-	pkgs, err := packages.Load(currentLoadConfig(), paths...)
+func LoadPackages(paths []string, targetGOOS, targetGOARCH string) ([]*packages.Package, error) {
+	pkgs, err := packages.Load(currentLoadConfig(targetGOOS, targetGOARCH), paths...)
 	if err != nil {
 		return nil, err
 	}
@@ -119,7 +118,7 @@ func LoadPackages(paths []string) ([]*packages.Package, error) {
 
 // Like LoadPackages but keeps errored packages so the caller can classify them.
 func LoadPackagesAll(paths []string) ([]*packages.Package, error) {
-	return packages.Load(currentLoadConfig(), paths...)
+	return packages.Load(currentLoadConfig("", ""), paths...)
 }
 
 func ExtractExports(pkg *packages.Package, embedFaithful func(*types.Var) bool) []SymbolExport {

@@ -43,24 +43,10 @@ func GenerateStd(ctx context.Context, outDir, lisetteVersion, goVersion string, 
 		return GenerateStdResult{}, fmt.Errorf("at least two targets are required: a single-target regen cannot distinguish platform-conditional packages from common ones")
 	}
 
-	prevGOOS, hadGOOS := os.LookupEnv("BINDGEN_TARGET_GOOS")
-	prevGOARCH, hadGOARCH := os.LookupEnv("BINDGEN_TARGET_GOARCH")
-	defer func() {
-		restoreEnv("BINDGEN_TARGET_GOOS", prevGOOS, hadGOOS)
-		restoreEnv("BINDGEN_TARGET_GOARCH", prevGOARCH, hadGOARCH)
-	}()
-
 	captured := make(map[Target]map[string]string)
 
 	for _, target := range targets {
 		fmt.Fprintf(os.Stderr, "\n=== Target %s ===\n", target)
-
-		if err := os.Setenv("BINDGEN_TARGET_GOOS", target.GOOS); err != nil {
-			return GenerateStdResult{}, fmt.Errorf("setenv BINDGEN_TARGET_GOOS: %w", err)
-		}
-		if err := os.Setenv("BINDGEN_TARGET_GOARCH", target.GOARCH); err != nil {
-			return GenerateStdResult{}, fmt.Errorf("setenv BINDGEN_TARGET_GOARCH: %w", err)
-		}
 
 		pkgPaths, err := listStdlibPackages(target)
 		if err != nil {
@@ -68,7 +54,7 @@ func GenerateStd(ctx context.Context, outDir, lisetteVersion, goVersion string, 
 		}
 
 		loadStart := time.Now()
-		pkgs, err := extract.LoadPackages(pkgPaths)
+		pkgs, err := extract.LoadPackages(pkgPaths, target.GOOS, target.GOARCH)
 		if err != nil {
 			return GenerateStdResult{}, fmt.Errorf("target %s: failed to load packages: %w", target, err)
 		}
@@ -130,14 +116,6 @@ func GenerateStd(ctx context.Context, outDir, lisetteVersion, goVersion string, 
 		Generated: totalGenerated,
 		Duration:  time.Since(start),
 	}, nil
-}
-
-func restoreEnv(key, prev string, had bool) {
-	if had {
-		_ = os.Setenv(key, prev)
-	} else {
-		_ = os.Unsetenv(key)
-	}
 }
 
 // listStdlibPackages runs `go list std` per target so the list reflects
