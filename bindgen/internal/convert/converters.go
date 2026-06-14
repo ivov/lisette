@@ -37,7 +37,7 @@ func sanitizeParamName(name string) string {
 }
 
 func isReferenceType(typeStr string) bool {
-	return strings.HasPrefix(typeStr, "Slice<") || strings.HasPrefix(typeStr, "Map<")
+	return isSliceType(typeStr) || isMapType(typeStr)
 }
 
 // liftReflectionDecodeParams returns (specs, nil) when not whitelisted or no
@@ -79,7 +79,7 @@ func (c *Converter) liftReflectionDecodeParams(
 		if overrides == nil {
 			overrides = make(map[int]string)
 		}
-		overrides[i] = fmt.Sprintf("Ref<%s>", name)
+		overrides[i] = refOf(name)
 	}
 	return specs, overrides
 }
@@ -267,7 +267,7 @@ func (c *Converter) resolveNilability(result *ConvertResult, sig *types.Signatur
 		forceNonNilable = d.extraForceNonNilable
 	}
 	if (isSingleNilableReturn && !forceNonNilable) || (d.forceNilable && !returnType.NilableReturnApplied) {
-		result.ReturnType = fmt.Sprintf("Option<%s>", result.ReturnType)
+		result.ReturnType = optionOf(result.ReturnType)
 	}
 }
 
@@ -286,7 +286,7 @@ func (c *Converter) convertMethod(result *ConvertResult, symbolExport extract.Sy
 
 			recvLisetteType := typeName
 			if isPointerReceiver {
-				recvLisetteType = fmt.Sprintf("Ref<%s>", typeName)
+				recvLisetteType = refOf(typeName)
 			}
 
 			result.Receiver = &Receiver{
@@ -317,7 +317,7 @@ func (c *Converter) convertMethod(result *ConvertResult, symbolExport extract.Sy
 			if _, ok := unexportedSamePkgStruct(symbolExport.ReceiverVariable.Type(), c); ok {
 				recvLisetteType = typeName
 				if isPointerReceiver {
-					recvLisetteType = fmt.Sprintf("Ref<%s>", typeName)
+					recvLisetteType = refOf(typeName)
 				}
 			} else {
 				recvType := ToLisette(symbolExport.ReceiverVariable.Type(), c)
@@ -751,7 +751,7 @@ func (c *Converter) convertVariable(result *ConvertResult, exp extract.SymbolExp
 		forceNonNilable = c.isProvenNonNilVar(exp.Obj)
 	}
 	if isNilable && !forceNonNilable {
-		result.LisetteType = fmt.Sprintf("Option<%s>", result.LisetteType)
+		result.LisetteType = optionOf(result.LisetteType)
 	}
 }
 
@@ -843,7 +843,7 @@ func embeddedStructField(field *types.Var, c *Converter) StructField {
 	if named, ok := unexportedSamePkgStruct(target, c); ok {
 		ref := named.Obj().Name()
 		if isPointer {
-			ref = fmt.Sprintf("Ref<%s>", ref)
+			ref = refOf(ref)
 		}
 		return StructField{Name: field.Name(), Type: ref, IsEmbedded: true}
 	}
@@ -868,7 +868,7 @@ func embeddedStructField(field *types.Var, c *Converter) StructField {
 	}
 	ref := bare
 	if isPointer {
-		ref = fmt.Sprintf("Ref<%s>", ref)
+		ref = refOf(ref)
 	}
 	if !isStruct {
 		return StructField{Name: field.Name(), Type: ref}
@@ -1054,9 +1054,8 @@ func isSingleNilableResult(sig *types.Signature) bool {
 }
 
 func sliceToVarArgs(typeStr string) string {
-	if strings.HasPrefix(typeStr, "Slice<") && strings.HasSuffix(typeStr, ">") {
-		elemType := typeStr[6 : len(typeStr)-1]
-		return fmt.Sprintf("VarArgs<%s>", elemType)
+	if elem, ok := unwrapSlice(typeStr); ok {
+		return varArgsOf(elem)
 	}
 	return typeStr
 }
@@ -1110,7 +1109,7 @@ func collectTypeParams(
 			if substitutions == nil {
 				substitutions = make(map[string]string)
 			}
-			substitutions[name] = fmt.Sprintf("Slice<%s>", elemName)
+			substitutions[name] = sliceOf(elemName)
 			continue
 		}
 
@@ -1118,7 +1117,7 @@ func collectTypeParams(
 			if substitutions == nil {
 				substitutions = make(map[string]string)
 			}
-			substitutions[name] = fmt.Sprintf("Map<%s, %s>", keyName, valName)
+			substitutions[name] = mapOf(keyName, valName)
 			continue
 		}
 
@@ -1798,7 +1797,7 @@ func (c *Converter) extractInterfaceMethods(_interface *types.Interface, typeNam
 		// Interface methods are contracts; any nilable return permits nil.
 		if isSingleNilableResult(signature) && !returnType.IsDirectError &&
 			(c.cfg == nil || !c.cfg.IsNonNilableReturn(c.currentPkgPath, qualifiedName)) {
-			returnType.LisetteType = fmt.Sprintf("Option<%s>", returnType.LisetteType)
+			returnType.LisetteType = optionOf(returnType.LisetteType)
 		}
 
 		methods = append(methods, InterfaceMethod{

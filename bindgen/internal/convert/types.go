@@ -78,7 +78,7 @@ func toLisetteRecursive(t types.Type, seen map[types.Type]bool, conv *Converter)
 		if elem.SkipReason != nil {
 			return elem
 		}
-		return TypeResult{LisetteType: fmt.Sprintf("Slice<%s>", elem.LisetteType)}
+		return TypeResult{LisetteType: sliceOf(elem.LisetteType)}
 
 	case *types.Array:
 		// Arrays are unrepresentable regardless of element; probe only to surface
@@ -100,14 +100,14 @@ func toLisetteRecursive(t types.Type, seen map[types.Type]bool, conv *Converter)
 		if val.SkipReason != nil {
 			return val
 		}
-		return TypeResult{LisetteType: fmt.Sprintf("Map<%s, %s>", key.LisetteType, val.LisetteType)}
+		return TypeResult{LisetteType: mapOf(key.LisetteType, val.LisetteType)}
 
 	case *types.Pointer:
 		elem := toLisetteRecursive(t.Elem(), seen, conv)
 		if elem.SkipReason != nil {
 			return elem
 		}
-		return TypeResult{LisetteType: fmt.Sprintf("Ref<%s>", elem.LisetteType)}
+		return TypeResult{LisetteType: refOf(elem.LisetteType)}
 
 	case *types.Chan:
 		elem := toLisetteRecursive(t.Elem(), seen, conv)
@@ -116,11 +116,11 @@ func toLisetteRecursive(t types.Type, seen map[types.Type]bool, conv *Converter)
 		}
 		switch t.Dir() {
 		case types.SendRecv:
-			return TypeResult{LisetteType: fmt.Sprintf("Channel<%s>", elem.LisetteType)}
+			return TypeResult{LisetteType: channelOf(elem.LisetteType)}
 		case types.RecvOnly:
-			return TypeResult{LisetteType: fmt.Sprintf("Receiver<%s>", elem.LisetteType)}
+			return TypeResult{LisetteType: receiverOf(elem.LisetteType)}
 		default: // types.SendOnly
-			return TypeResult{LisetteType: fmt.Sprintf("Sender<%s>", elem.LisetteType)}
+			return TypeResult{LisetteType: senderOf(elem.LisetteType)}
 		}
 
 	case *types.Signature:
@@ -359,7 +359,7 @@ func wrapOption(r TypeResult) TypeResult {
 	if r.SkipReason != nil {
 		return r
 	}
-	return TypeResult{LisetteType: fmt.Sprintf("Option<%s>", r.LisetteType)}
+	return TypeResult{LisetteType: optionOf(r.LisetteType)}
 }
 
 // toLisetteNilableRecursive converts a Go type to Lisette in a nilable context.
@@ -376,9 +376,9 @@ func toLisetteNilableRecursive(t types.Type, seen map[types.Type]bool, conv *Con
 			return elem
 		}
 		if isScalarType(t.Elem()) {
-			return TypeResult{LisetteType: fmt.Sprintf("Option<%s>", elem.LisetteType)}
+			return TypeResult{LisetteType: optionOf(elem.LisetteType)}
 		}
-		return TypeResult{LisetteType: fmt.Sprintf("Option<Ref<%s>>", elem.LisetteType)}
+		return TypeResult{LisetteType: optionOf(refOf(elem.LisetteType))}
 
 	case *types.Signature:
 		return wrapOption(toLisetteRecursive(t, seen, conv))
@@ -399,7 +399,7 @@ func toLisetteNilableRecursive(t types.Type, seen map[types.Type]bool, conv *Con
 		if elem.SkipReason != nil {
 			return elem
 		}
-		return TypeResult{LisetteType: fmt.Sprintf("Slice<%s>", elem.LisetteType)}
+		return TypeResult{LisetteType: sliceOf(elem.LisetteType)}
 
 	case *types.Array:
 		mark := conv.synthMark()
@@ -419,7 +419,7 @@ func toLisetteNilableRecursive(t types.Type, seen map[types.Type]bool, conv *Con
 		if val.SkipReason != nil {
 			return val
 		}
-		return TypeResult{LisetteType: fmt.Sprintf("Map<%s, %s>", key.LisetteType, val.LisetteType)}
+		return TypeResult{LisetteType: mapOf(key.LisetteType, val.LisetteType)}
 
 	case *types.Alias:
 		return toLisetteNilableRecursive(t.Rhs(), seen, conv)
@@ -455,7 +455,7 @@ func arrayReturnTypeResult(arr *types.Array, seen map[types.Type]bool, conv *Con
 		return elem
 	}
 	return TypeResult{
-		LisetteType: fmt.Sprintf("Slice<%s>", elem.LisetteType),
+		LisetteType: sliceOf(elem.LisetteType),
 		ArrayReturn: true,
 	}
 }
@@ -465,7 +465,7 @@ func arraySliceTypeResult(arr *types.Array, seen map[types.Type]bool, conv *Conv
 	if elem.SkipReason != nil {
 		return elem
 	}
-	return TypeResult{LisetteType: fmt.Sprintf("Slice<%s>", elem.LisetteType)}
+	return TypeResult{LisetteType: sliceOf(elem.LisetteType)}
 }
 
 func arrayElementToLisette(t types.Type, seen map[types.Type]bool, conv *Converter) TypeResult {
