@@ -690,12 +690,35 @@ fn build_go_package_index(source: &str, package: &str) -> GoPackageIndex {
 }
 
 fn format_method_name(s: &str) -> String {
-    if use_color() {
-        use owo_colors::OwoColorize;
-        s.bright_magenta().to_string()
-    } else {
-        s.to_string()
+    if !use_color() {
+        return s.to_string();
     }
+    use owo_colors::OwoColorize;
+    let mut out = String::new();
+    let mut buf = String::new();
+    let mut chars = s.chars();
+    while let Some(c) = chars.next() {
+        if c == '<' {
+            if !buf.is_empty() {
+                out.push_str(&buf.bright_magenta().to_string());
+                buf.clear();
+            }
+            let mut inner = String::from("<");
+            for ic in chars.by_ref() {
+                inner.push(ic);
+                if ic == '>' {
+                    break;
+                }
+            }
+            out.push_str(&inner.green().to_string());
+        } else {
+            buf.push(c);
+        }
+    }
+    if !buf.is_empty() {
+        out.push_str(&buf.bright_magenta().to_string());
+    }
+    out
 }
 
 fn colorize_definition(definition: &str) -> String {

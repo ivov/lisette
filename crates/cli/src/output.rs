@@ -67,105 +67,78 @@ pub fn format_backticks(text: &str, use_color: bool) -> String {
 }
 
 fn format_help_text(text: &str, use_color: bool) -> String {
-    if !use_color {
-        let mut result = text.to_string();
-        result = result.replace(":g]", "]");
-        result = result.replace(":b]", "]");
-        let mut out = String::new();
-        let mut chars = result.chars().peekable();
-        while let Some(ch) = chars.next() {
-            if ch == '{' {
-                let mut content = String::new();
-                for inner in chars.by_ref() {
-                    if inner == '}' {
-                        break;
-                    }
-                    content.push(inner);
+    let mut out = String::new();
+    let mut chars = text.chars();
+
+    while let Some(ch) = chars.next() {
+        match ch {
+            '`' => {
+                let (content, closed) = take_until(&mut chars, '`');
+                if !closed {
+                    out.push('`');
+                    out.push_str(&content);
+                } else if use_color {
+                    out.push_str(&format!("{}", content.bright_magenta()));
+                } else {
+                    out.push_str(&content);
                 }
-                let clean = content
-                    .strip_suffix(":g")
-                    .or_else(|| content.strip_suffix(":b"))
-                    .unwrap_or(&content);
-                out.push_str(clean);
-            } else if ch == '`' {
-                for inner in chars.by_ref() {
-                    if inner == '`' {
-                        break;
-                    }
-                    out.push(inner);
-                }
-            } else {
-                out.push(ch);
             }
-        }
-        return out;
-    }
-
-    let mut result = String::new();
-    let mut chars = text.char_indices().peekable();
-    let mut segment_start = 0;
-
-    while let Some((i, ch)) = chars.next() {
-        let close = match ch {
-            '`' => '`',
-            '[' => ']',
-            '<' => '>',
-            '{' => '}',
-            _ => continue,
-        };
-
-        if i > segment_start {
-            result.push_str(&text[segment_start..i]);
-        }
-
-        let mut found_closing = false;
-        for (j, inner_ch) in chars.by_ref() {
-            if inner_ch == close {
-                let content = &text[i + 1..j];
-                let formatted = match ch {
-                    '`' => format!("{}", content.bright_magenta()),
-                    '[' => {
-                        if let Some(name) = content.strip_suffix(":g") {
-                            format!("{}", format!("[{}]", name).green())
-                        } else if let Some(name) = content.strip_suffix(":b") {
-                            format!("{}", format!("[{}]", name).blue())
-                        } else {
-                            format!("{}", format!("[{}]", content).blue())
-                        }
-                    }
-                    '<' => format!("{}", format!("<{}>", content).green()),
-                    '{' => {
-                        if let Some(name) = content.strip_suffix(":g") {
-                            format!("{}", name.green())
-                        } else if let Some(name) = content.strip_suffix(":b") {
-                            format!("{}", name.blue())
-                        } else {
-                            format!("{}", content.blue())
-                        }
-                    }
-                    _ => unreachable!(),
+            '<' => {
+                let (content, closed) = take_until(&mut chars, '>');
+                if !closed {
+                    out.push('<');
+                    out.push_str(&content);
+                } else if use_color {
+                    out.push_str(&format!("{}", format!("<{}>", content).green()));
+                } else {
+                    out.push('<');
+                    out.push_str(&content);
+                    out.push('>');
+                }
+            }
+            '{' => {
+                let (content, closed) = take_until(&mut chars, '}');
+                if !closed {
+                    out.push('{');
+                    out.push_str(&content);
+                    continue;
+                }
+                let (inner, style) = if let Some(rest) = content.strip_suffix(":b") {
+                    (rest, 'b')
+                } else if let Some(rest) = content.strip_suffix(":g") {
+                    (rest, 'g')
+                } else if let Some(rest) = content.strip_suffix(":d") {
+                    (rest, 'd')
+                } else {
+                    (content.as_str(), 'g')
                 };
-                result.push_str(&formatted);
-                segment_start = j + 1;
-                found_closing = true;
-                break;
+                if use_color {
+                    let painted = match style {
+                        'b' => format!("{}", inner.blue()),
+                        'd' => format!("{}", inner.dimmed()),
+                        _ => format!("{}", inner.green()),
+                    };
+                    out.push_str(&painted);
+                } else {
+                    out.push_str(inner);
+                }
             }
-            if inner_ch == '\n' || inner_ch == ch {
-                break;
-            }
-        }
-
-        if !found_closing {
-            result.push_str(&text[i..i + 1]);
-            segment_start = i + 1;
+            _ => out.push(ch),
         }
     }
 
-    if segment_start < text.len() {
-        result.push_str(&text[segment_start..]);
-    }
+    out
+}
 
-    result
+fn take_until(chars: &mut std::str::Chars<'_>, close: char) -> (String, bool) {
+    let mut content = String::new();
+    for c in chars.by_ref() {
+        if c == close {
+            return (content, true);
+        }
+        content.push(c);
+    }
+    (content, false)
 }
 
 pub fn capitalize_first(s: &str) -> String {
