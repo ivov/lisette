@@ -19,11 +19,12 @@ use syntax::program::Module;
 
 use attributes::{check_attributes, check_enum_attributes, check_struct_attributes};
 use checks::{
-    check_bool_literal_comparison, check_collapsible_if, check_double_comparison,
-    check_double_negation, check_dup_arg, check_duplicate_cutset, check_duplicate_logical_operand,
-    check_empty_match_arm, check_excess_parens_on_condition, check_exit_after_defer,
-    check_expression_naming, check_goos_goarch_comparison, check_identical_if_branches,
-    check_identical_match_arms, check_integer_division_to_zero,
+    check_bad_bit_mask, check_bool_literal_comparison, check_collapsible_if,
+    check_double_comparison, check_double_negation, check_dup_arg, check_duplicate_cutset,
+    check_duplicate_logical_operand, check_empty_match_arm, check_equal_operands,
+    check_excess_parens_on_condition, check_exit_after_defer, check_expression_naming,
+    check_goos_goarch_comparison, check_identical_if_branches, check_identical_match_arms,
+    check_ineffective_bit_mask, check_integer_division_to_zero,
     check_invisible_in_string_expression, check_invisible_in_string_pattern, check_let_and_return,
     check_loop_runs_once, check_lost_cancel, check_lost_query_mutation, check_manual_bytes_equal,
     check_manual_compound_assignment, check_manual_equal_fold, check_manual_find,
@@ -52,6 +53,9 @@ static LINT_CHECKS: LazyLock<CheckTable> = LazyLock::new(|| {
             (check_self_comparison, &[Binary]),
             (check_redundant_comparison, &[Binary]),
             (check_double_comparison, &[Binary]),
+            (check_bad_bit_mask, &[Binary]),
+            (check_ineffective_bit_mask, &[Binary]),
+            (check_equal_operands, &[Binary]),
             (check_unsigned_comparison, &[Binary]),
             (check_type_limit_comparison, &[Binary]),
             (check_non_negative_comparison, &[Binary]),

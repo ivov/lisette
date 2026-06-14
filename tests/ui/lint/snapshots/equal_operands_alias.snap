@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [warning] Equal operands
+   ╭─[test.lis:6:11]
+ 5 │   let a: MyInt = 5
+ 6 │   let _ = a - a
+   ·           ──┬──
+   ·             ╰── identical operands
+ 7 │ }
+   ╰────
+  help: Both operands are identical so the result is always `0`. Did you mean to use different operands? · code: [lint.equal_operands]

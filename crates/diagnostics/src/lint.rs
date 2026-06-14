@@ -312,6 +312,44 @@ pub fn double_comparison(span: &Span, combined: &str) -> LisetteDiagnostic {
         ))
 }
 
+pub fn bad_bit_mask(span: &Span, always_true: bool) -> LisetteDiagnostic {
+    let (result, clause) = if always_true {
+        ("true", "always satisfy")
+    } else {
+        ("false", "unable to satisfy")
+    };
+
+    LisetteDiagnostic::warn("Incompatible bit mask")
+        .with_lint_code("bad_bit_mask")
+        .with_span_label(span, format!("always `{result}`"))
+        .with_help(format!(
+            "The mask makes this value {clause} the comparison, so it is always `{result}`. Check the mask or the constant."
+        ))
+}
+
+pub fn ineffective_bit_mask(
+    span: &Span,
+    mask_operator: &str,
+    mask: i128,
+    constant: i128,
+) -> LisetteDiagnostic {
+    LisetteDiagnostic::warn("Ineffective bit mask")
+        .with_lint_code("ineffective_bit_mask")
+        .with_span_label(span, "mask has no effect")
+        .with_help(format!(
+            "`{mask_operator} {mask}` does not change the result of comparing with `{constant}`, so the mask can be removed."
+        ))
+}
+
+pub fn equal_operands(span: &Span, note: &str) -> LisetteDiagnostic {
+    LisetteDiagnostic::warn("Equal operands")
+        .with_lint_code("equal_operands")
+        .with_span_label(span, "identical operands")
+        .with_help(format!(
+            "Both operands are identical so the result {note}. Did you mean to use different operands?"
+        ))
+}
+
 pub fn non_negative_comparison(span: &Span, always_true: bool) -> LisetteDiagnostic {
     let result = if always_true { "true" } else { "false" };
 

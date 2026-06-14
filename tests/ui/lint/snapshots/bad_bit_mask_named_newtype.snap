@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [warning] Incompatible bit mask
+   ╭─[test.lis:6:11]
+ 5 │   let m = Mask(5)
+ 6 │   let _ = m & 1 == 2
+   ·           ─────┬────
+   ·                ╰── always `false`
+ 7 │ }
+   ╰────
+  help: The mask makes this value unable to satisfy the comparison, so it is always `false`. Check the mask or the constant · code: [lint.bad_bit_mask]

@@ -1,7 +1,95 @@
 use syntax::ast::{BinaryOperator, Expression, UnaryOperator};
+use syntax::types::SimpleKind;
 
 /// A value bound: `(value, inclusive)`, or `None` for an open side.
 pub(crate) type Bound = Option<(i128, bool)>;
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum MaskOp {
+    And,
+    Or,
+}
+
+/// A masked integer comparison, `operator` flipped so the masked side is left.
+pub(crate) struct MaskComparison {
+    pub(crate) mask_op: MaskOp,
+    pub(crate) mask: i128,
+    pub(crate) operator: BinaryOperator,
+    pub(crate) constant: i128,
+    pub(crate) kind: SimpleKind,
+}
+
+/// Decomposes a masked integer comparison; `None` unless `m` and `c` are in-range
+/// integer literals and `m != 0` (zero masks belong to `redundant_operation`).
+/// A negative `m` is valid only for the equality reasoning.
+pub(crate) fn mask_comparison(expression: &Expression) -> Option<MaskComparison> {
+    use BinaryOperator::*;
+    let Expression::Binary {
+        operator,
+        left,
+        right,
+        ..
+    } = expression
+    else {
+        return None;
+    };
+    if !matches!(
+        operator,
+        Equal | NotEqual | LessThan | LessThanOrEqual | GreaterThan | GreaterThanOrEqual
+    ) {
+        return None;
+    }
+
+    let left = left.unwrap_parens();
+    let right = right.unwrap_parens();
+    let (mask_expr, operator, constant) =
+        match (signed_integer_literal(left), signed_integer_literal(right)) {
+            (None, Some(constant)) => (left, *operator, constant),
+            (Some(constant), None) => (right, flip_comparison(*operator), constant),
+            _ => return None,
+        };
+
+    let Expression::Binary {
+        operator: bit_operator,
+        left: bit_left,
+        right: bit_right,
+        ..
+    } = mask_expr
+    else {
+        return None;
+    };
+    let mask_op = match bit_operator {
+        BitwiseAnd => MaskOp::And,
+        BitwiseOr => MaskOp::Or,
+        _ => return None,
+    };
+    let bit_left = bit_left.unwrap_parens();
+    let bit_right = bit_right.unwrap_parens();
+    let mask = match (
+        signed_integer_literal(bit_left),
+        signed_integer_literal(bit_right),
+    ) {
+        (None, Some(mask)) | (Some(mask), None) => mask,
+        _ => return None,
+    };
+
+    let kind = mask_expr.get_type().underlying_simple_kind()?;
+    if !kind.is_ordered() {
+        return None;
+    }
+    let (min, max) = kind.integer_range()?;
+    if mask == 0 || mask < min || mask > max || constant < min || constant > max {
+        return None;
+    }
+
+    Some(MaskComparison {
+        mask_op,
+        mask,
+        operator,
+        constant,
+        kind,
+    })
+}
 
 pub(crate) fn in_scope_comparison(a: &Expression, b: &Expression) -> bool {
     match (signed_integer_literal(a), signed_integer_literal(b)) {

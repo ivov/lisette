@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [warning] Ineffective bit mask
+   ╭─[test.lis:4:11]
+ 3 │   let x = 5
+ 4 │   let _ = x | 1 >= 8
+   ·           ─────┬────
+   ·                ╰── mask has no effect
+ 5 │ }
+   ╰────
+  help: `| 1` does not change the result of comparing with `8`, so the mask can be removed · code: [lint.ineffective_bit_mask]

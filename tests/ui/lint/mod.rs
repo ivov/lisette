@@ -3894,6 +3894,575 @@ fn main() {
 }
 
 #[test]
+fn bad_bit_mask_and_equality_impossible() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let x = 5
+  let _ = x & 1 == 2
+}
+"#
+    );
+}
+
+#[test]
+fn bad_bit_mask_or_equality_impossible() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let x = 5
+  let _ = x | 1 == 0
+}
+"#
+    );
+}
+
+#[test]
+fn bad_bit_mask_literal_on_left() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let x = 5
+  let _ = 2 == x & 1
+}
+"#
+    );
+}
+
+#[test]
+fn bad_bit_mask_or_relational_always_true() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let x: uint = 5
+  let _ = x | 1 > 0
+}
+"#
+    );
+}
+
+#[test]
+fn bad_bit_mask_and_relational_always_false() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let x = 5
+  let _ = x & 7 > 100
+}
+"#
+    );
+}
+
+#[test]
+fn bad_bit_mask_satisfiable_equality_no_diagnostic() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let x = 5
+  let _ = x & 1 == 1
+}
+"#
+    );
+}
+
+#[test]
+fn bad_bit_mask_mask_does_not_constrain_no_diagnostic() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let x = 5
+  let _ = x & 7 < 4
+}
+"#
+    );
+}
+
+#[test]
+fn bad_bit_mask_signed_or_relational_no_diagnostic() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let x = 5
+  let _ = x | 1 > 0
+}
+"#
+    );
+}
+
+#[test]
+fn bad_bit_mask_defers_relational_to_unsigned_comparison() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+fn main() {
+  let x: uint = 5
+  let _ = x | 1 >= 0
+}
+"#,
+    );
+    let result = compile_check(fs);
+    assert!(
+        !result
+            .lints
+            .iter()
+            .any(|d| d.plain_message() == "Incompatible bit mask"),
+        "must leave the type-bound case to unsigned_comparison: {:?}",
+        result.lints
+    );
+    assert!(
+        result
+            .lints
+            .iter()
+            .any(|d| d.plain_message() == "Comparison is always true"),
+        "expected unsigned_comparison to own this comparison: {:?}",
+        result.lints
+    );
+}
+
+#[test]
+fn ineffective_bit_mask_less_than() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let x = 5
+  let _ = x | 1 < 8
+}
+"#
+    );
+}
+
+#[test]
+fn ineffective_bit_mask_greater_than() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let x = 5
+  let _ = x | 3 > 7
+}
+"#
+    );
+}
+
+#[test]
+fn ineffective_bit_mask_non_power_of_two_no_diagnostic() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let x = 5
+  let _ = x | 1 < 7
+}
+"#
+    );
+}
+
+#[test]
+fn equal_operands_bitand() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let x = 5
+  let _ = x & x
+}
+"#
+    );
+}
+
+#[test]
+fn equal_operands_xor() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let x = 5
+  let _ = x ^ x
+}
+"#
+    );
+}
+
+#[test]
+fn equal_operands_subtraction() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let x = 5
+  let _ = x - x
+}
+"#
+    );
+}
+
+#[test]
+fn equal_operands_division() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let x = 5
+  let _ = x / x
+}
+"#
+    );
+}
+
+#[test]
+fn equal_operands_float_no_diagnostic() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let x = 1.5
+  let _ = x - x
+}
+"#
+    );
+}
+
+#[test]
+fn equal_operands_distinct_no_diagnostic() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let a = 5
+  let b = 6
+  let _ = a - b
+}
+"#
+    );
+}
+
+#[test]
+fn equal_operands_side_effecting_no_diagnostic() {
+    assert_no_lint_warnings!(
+        r#"
+fn f() -> int { 1 }
+
+fn main() {
+  let _ = f() - f()
+}
+"#
+    );
+}
+
+#[test]
+fn bad_bit_mask_inequality_always_true() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let x = 5
+  let _ = x & 1 != 2
+}
+"#
+    );
+}
+
+#[test]
+fn bad_bit_mask_alias() {
+    assert_lint_snapshot!(
+        r#"
+type Flags = int
+
+fn main() {
+  let a: Flags = 5
+  let _ = a & 1 == 2
+}
+"#
+    );
+}
+
+#[test]
+fn bad_bit_mask_named_newtype() {
+    assert_lint_snapshot!(
+        r#"
+struct Mask(int)
+
+fn main() {
+  let m = Mask(5)
+  let _ = m & 1 == 2
+}
+"#
+    );
+}
+
+#[test]
+fn bad_bit_mask_negative_mask() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let x = 5
+  let _ = x & -2 == 1
+}
+"#
+    );
+}
+
+#[test]
+fn bad_bit_mask_negative_mask_relational_no_diagnostic() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let x = 5
+  let _ = x & -2 < 5
+}
+"#
+    );
+}
+
+#[test]
+fn bad_bit_mask_suppressed_by_allow() {
+    assert_no_lint_warnings!(
+        r#"
+#[allow(bad_bit_mask)]
+fn main() {
+  let x = 5
+  let _ = x & 1 == 2
+}
+"#
+    );
+}
+
+#[test]
+fn bad_bit_mask_uintptr_operand_no_diagnostic() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+fn main() {
+  let p: uintptr = 5 as uintptr
+  let _ = p & 7 > 100
+}
+"#,
+    );
+    let result = compile_check(fs);
+    assert!(
+        result
+            .errors
+            .iter()
+            .any(|d| d.plain_message().contains("Type mismatch")),
+        "expected the uintptr bitwise/orderability type error to still be reported: {:?}",
+        result.errors
+    );
+    assert!(
+        !result
+            .lints
+            .iter()
+            .any(|d| d.plain_message() == "Incompatible bit mask"),
+        "must not flag a masked comparison on a non-orderable `uintptr`: {:?}",
+        result.lints
+    );
+}
+
+#[test]
+fn ineffective_bit_mask_less_than_or_equal() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let x = 5
+  let _ = x | 3 <= 7
+}
+"#
+    );
+}
+
+#[test]
+fn ineffective_bit_mask_greater_than_or_equal() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let x = 5
+  let _ = x | 1 >= 8
+}
+"#
+    );
+}
+
+#[test]
+fn ineffective_bit_mask_literal_on_left() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let x = 5
+  let _ = 8 > x | 1
+}
+"#
+    );
+}
+
+#[test]
+fn equal_operands_bitor() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let x = 5
+  let _ = x | x
+}
+"#
+    );
+}
+
+#[test]
+fn equal_operands_bitand_not() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let x = 5
+  let _ = x &^ x
+}
+"#
+    );
+}
+
+#[test]
+fn equal_operands_remainder() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let x = 5
+  let _ = x % x
+}
+"#
+    );
+}
+
+#[test]
+fn equal_operands_alias() {
+    assert_lint_snapshot!(
+        r#"
+type MyInt = int
+
+fn main() {
+  let a: MyInt = 5
+  let _ = a - a
+}
+"#
+    );
+}
+
+#[test]
+fn equal_operands_uintptr_bitand() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let p: uintptr = 5 as uintptr
+  let _ = p & p
+}
+"#
+    );
+}
+
+#[test]
+fn equal_operands_uintptr_xor() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let p: uintptr = 5 as uintptr
+  let _ = p ^ p
+}
+"#
+    );
+}
+
+#[test]
+fn equal_operands_uintptr_arithmetic_no_diagnostic() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+fn main() {
+  let p: uintptr = 5 as uintptr
+  let _ = p - p
+}
+"#,
+    );
+    let result = compile_check(fs);
+    assert!(
+        result
+            .errors
+            .iter()
+            .any(|d| d.plain_message().contains("Type mismatch")),
+        "expected the uintptr arithmetic type error to still be reported: {:?}",
+        result.errors
+    );
+    assert!(
+        !result
+            .lints
+            .iter()
+            .any(|d| d.plain_message() == "Equal operands"),
+        "must not flag arithmetic equal operands on a non-arithmetic `uintptr`: {:?}",
+        result.lints
+    );
+}
+
+#[test]
+fn equal_operands_uintptr_alias_bitwise_no_diagnostic() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+type Handle = uintptr
+
+fn main() {
+  let h: Handle = 5 as Handle
+  let _ = h & h
+}
+"#,
+    );
+    let result = compile_check(fs);
+    assert!(
+        result
+            .errors
+            .iter()
+            .any(|d| d.plain_message().contains("Type mismatch")),
+        "expected the uintptr-alias bitwise type error to still be reported: {:?}",
+        result.errors
+    );
+    assert!(
+        !result
+            .lints
+            .iter()
+            .any(|d| d.plain_message() == "Equal operands"),
+        "must not flag bitwise equal operands on a `uintptr`-backed alias: {:?}",
+        result.lints
+    );
+}
+
+#[test]
+fn equal_operands_uintptr_newtype_bitwise_no_diagnostic() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+struct Wrapped(uintptr)
+
+fn main() {
+  let w = Wrapped(5 as uintptr)
+  let _ = w & w
+}
+"#,
+    );
+    let result = compile_check(fs);
+    assert!(
+        result
+            .errors
+            .iter()
+            .any(|d| d.plain_message().contains("Type mismatch")),
+        "expected the uintptr-newtype bitwise type error to still be reported: {:?}",
+        result.errors
+    );
+    assert!(
+        !result
+            .lints
+            .iter()
+            .any(|d| d.plain_message() == "Equal operands"),
+        "must not flag bitwise equal operands on a `uintptr`-backed newtype: {:?}",
+        result.lints
+    );
+}
+
+#[test]
 fn goos_comparison_invalid_equal() {
     assert_lint_snapshot!(
         r#"

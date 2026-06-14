@@ -1,3 +1,4 @@
+mod bad_bit_mask;
 mod bool_literal_comparison;
 mod collapsible_if;
 mod double_comparison;
@@ -6,12 +7,14 @@ mod dup_arg;
 mod duplicate_cutset;
 mod duplicate_logical_operand;
 mod empty_match_arm;
+mod equal_operands;
 mod excess_parens_on_condition;
 mod exit_after_defer;
 mod goos_goarch_comparison;
 mod helpers;
 mod identical_if_branches;
 mod identical_match_arms;
+mod ineffective_bit_mask;
 mod integer_division_to_zero;
 mod invisible_in_string;
 mod let_and_return;
@@ -60,6 +63,7 @@ mod unsigned_comparison;
 mod verbose_failure_propagation;
 mod waitgroup_add_in_task;
 
+pub use bad_bit_mask::check_bad_bit_mask;
 pub use bool_literal_comparison::check_bool_literal_comparison;
 pub use collapsible_if::check_collapsible_if;
 pub use double_comparison::check_double_comparison;
@@ -68,11 +72,13 @@ pub use dup_arg::check_dup_arg;
 pub use duplicate_cutset::check_duplicate_cutset;
 pub use duplicate_logical_operand::check_duplicate_logical_operand;
 pub use empty_match_arm::check_empty_match_arm;
+pub use equal_operands::check_equal_operands;
 pub use excess_parens_on_condition::check_excess_parens_on_condition;
 pub use exit_after_defer::check_exit_after_defer;
 pub use goos_goarch_comparison::check_goos_goarch_comparison;
 pub use identical_if_branches::check_identical_if_branches;
 pub use identical_match_arms::check_identical_match_arms;
+pub use ineffective_bit_mask::check_ineffective_bit_mask;
 pub use integer_division_to_zero::check_integer_division_to_zero;
 pub use invisible_in_string::{
     check_invisible_in_string_expression, check_invisible_in_string_pattern,
