@@ -81,6 +81,42 @@ func LoadConfig(configPath string, defaultData []byte) (Config, error) {
 	return cfg, nil
 }
 
+// matchKind selects how a configured name list is matched against a query name.
+type matchKind int
+
+const (
+	matchExact    matchKind = iota // exact name only
+	matchStar                      // exact name or bare "*"
+	matchWildcard                  // exact, bare "*", or "*.Method"
+)
+
+// matchField looks up the package's configured names (honoring "/**" globs) and
+// reports whether name matches under the requested strategy.
+func matchField(m map[string][]string, pkg, name string, kind matchKind) bool {
+	names, ok := lookupWithGlob(m, pkg)
+	if !ok {
+		return false
+	}
+	switch kind {
+	case matchWildcard:
+		return matchesWildcard(names, name)
+	case matchStar:
+		return slices.Contains(names, "*") || slices.Contains(names, name)
+	default:
+		return slices.Contains(names, name)
+	}
+}
+
+// nestedParams returns the configured parameter-name list for the given function
+// from a nested (per-package, per-function) override map.
+func nestedParams(m map[string]map[string][]string, pkg, name string) []string {
+	funcs, ok := lookupWithGlobNested(m, pkg)
+	if !ok {
+		return nil
+	}
+	return funcs[name]
+}
+
 // ShouldAllowUnusedResult returns true if the given function in the given
 // package should be annotated with #[allow(unused_result)].
 //
@@ -88,11 +124,10 @@ func LoadConfig(configPath string, defaultData []byte) (Config, error) {
 //   - "*" matches all functions and methods in the package
 //   - "*.Method" matches Method on any type (e.g., "*.Write" for all Writer types)
 func (c *Config) ShouldAllowUnusedResult(pkg, funcName string) bool {
-	funcs, ok := lookupWithGlob(c.Overrides.Lints.AllowUnusedResult, pkg)
-	if !ok {
+	if c == nil {
 		return false
 	}
-	return matchesWildcard(funcs, funcName)
+	return matchField(c.Overrides.Lints.AllowUnusedResult, pkg, funcName, matchWildcard)
 }
 
 // ShouldAllowUnusedValue returns true if the given package-level function in
@@ -105,11 +140,7 @@ func (c *Config) ShouldAllowUnusedValue(pkg, funcName string) bool {
 	if c == nil {
 		return false
 	}
-	funcs, ok := lookupWithGlob(c.Overrides.Lints.AllowUnusedValue, pkg)
-	if !ok {
-		return false
-	}
-	return matchesWildcard(funcs, funcName)
+	return matchField(c.Overrides.Lints.AllowUnusedValue, pkg, funcName, matchWildcard)
 }
 
 // ShouldDenyUnusedValue forces the AST fluent-method heuristic off for curated methods that match its shape but semantically return new values.
@@ -117,22 +148,17 @@ func (c *Config) ShouldDenyUnusedValue(pkg, name string) bool {
 	if c == nil {
 		return false
 	}
-	names, ok := lookupWithGlob(c.Overrides.Lints.DenyUnusedValue, pkg)
-	if !ok {
-		return false
-	}
-	return matchesWildcard(names, name)
+	return matchField(c.Overrides.Lints.DenyUnusedValue, pkg, name, matchWildcard)
 }
 
 // ShouldWrapNilableReturn returns true if the given function or method in the given
 // package should be wrapped in Option<> because it can return nil.
 // Uses "Type.Method" dot notation for methods.
 func (c *Config) ShouldWrapNilableReturn(pkg, name string) bool {
-	names, ok := lookupWithGlob(c.Overrides.Types.NilableReturn, pkg)
-	if !ok {
+	if c == nil {
 		return false
 	}
-	return slices.Contains(names, name)
+	return matchField(c.Overrides.Types.NilableReturn, pkg, name, matchExact)
 }
 
 // IsNonNilableReturnreturns true if the given function or method in the given
@@ -143,32 +169,29 @@ func (c *Config) ShouldWrapNilableReturn(pkg, name string) bool {
 //   - "*" matches all functions and methods in the package
 //   - "*.Method" matches Method on any type (e.g., "*.Header" for all RR types)
 func (c *Config) IsNonNilableReturn(pkg, name string) bool {
-	names, ok := lookupWithGlob(c.Overrides.Types.NonNilableReturn, pkg)
-	if !ok {
+	if c == nil {
 		return false
 	}
-	return matchesWildcard(names, name)
+	return matchField(c.Overrides.Types.NonNilableReturn, pkg, name, matchWildcard)
 }
 
 // IsNonNilableVar returns true if the given package-level variable in the given
 // package is known to always be initialized, suppressing automatic Option<> wrapping.
 func (c *Config) IsNonNilableVar(pkg, varName string) bool {
-	names, ok := lookupWithGlob(c.Overrides.Types.NonNilableVar, pkg)
-	if !ok {
+	if c == nil {
 		return false
 	}
-	return slices.Contains(names, "*") || slices.Contains(names, varName)
+	return matchField(c.Overrides.Types.NonNilableVar, pkg, varName, matchStar)
 }
 
 // HasBoolAsFlag returns true if the given function or method returns (T, bool)
 // where the bool is a flag (not presence), so it should NOT be converted to Option<T>.
 // Uses "Type.Method" dot notation for methods.
 func (c *Config) HasBoolAsFlag(pkg, name string) bool {
-	names, ok := lookupWithGlob(c.Overrides.Types.BoolAsFlag, pkg)
-	if !ok {
+	if c == nil {
 		return false
 	}
-	return slices.Contains(names, name)
+	return matchField(c.Overrides.Types.BoolAsFlag, pkg, name, matchExact)
 }
 
 // MutatingParams returns the list of parameter names that are mutated by the
@@ -177,11 +200,7 @@ func (c *Config) MutatingParams(pkg, name string) []string {
 	if c == nil {
 		return nil
 	}
-	funcs, ok := lookupWithGlobNested(c.Overrides.Types.MutatesParam, pkg)
-	if !ok {
-		return nil
-	}
-	return funcs[name] // nil if not found
+	return nestedParams(c.Overrides.Types.MutatesParam, pkg, name)
 }
 
 // NilableParams returns the list of parameter names that should be wrapped in
@@ -190,44 +209,37 @@ func (c *Config) NilableParams(pkg, name string) []string {
 	if c == nil {
 		return nil
 	}
-	funcs, ok := lookupWithGlobNested(c.Overrides.Types.NilableParam, pkg)
-	if !ok {
-		return nil
-	}
-	return funcs[name]
+	return nestedParams(c.Overrides.Types.NilableParam, pkg, name)
 }
 
 // IsPartialResult returns true if the given function or method in the given
 // package returns (T, error) where both values may be simultaneously meaningful,
 // so the return type should be Partial<T, error> instead of Result<T, error>.
 func (c *Config) IsPartialResult(pkg, name string) bool {
-	names, ok := lookupWithGlob(c.Overrides.Types.PartialResult, pkg)
-	if !ok {
+	if c == nil {
 		return false
 	}
-	return matchesWildcard(names, name)
+	return matchField(c.Overrides.Types.PartialResult, pkg, name, matchWildcard)
 }
 
 // HasDirectError returns true if the given function returns error as a value
 // (e.g., errors.New), not as a fallible indicator. These should return `error`
 // directly instead of `Result<(), error>`.
 func (c *Config) HasDirectError(pkg, name string) bool {
-	names, ok := lookupWithGlob(c.Overrides.Types.DirectError, pkg)
-	if !ok {
+	if c == nil {
 		return false
 	}
-	return slices.Contains(names, name)
+	return matchField(c.Overrides.Types.DirectError, pkg, name, matchExact)
 }
 
 // HasNilableError returns true if the given function returns error as an
 // optional value (e.g., errors.Unwrap), where nil means "absent" rather than
 // "success". These should return `Option<error>` instead of `Result<(), error>`.
 func (c *Config) HasNilableError(pkg, name string) bool {
-	names, ok := lookupWithGlob(c.Overrides.Types.NilableError, pkg)
-	if !ok {
+	if c == nil {
 		return false
 	}
-	return slices.Contains(names, name)
+	return matchField(c.Overrides.Types.NilableError, pkg, name, matchExact)
 }
 
 // SentinelInt returns (value, true) when the given function signals
@@ -236,7 +248,7 @@ func (c *Config) SentinelInt(pkg, name string) (int, bool) {
 	if c == nil {
 		return 0, false
 	}
-	if names, ok := lookupWithGlob(c.Overrides.Types.SentinelMinusOne, pkg); ok && matchesWildcard(names, name) {
+	if matchField(c.Overrides.Types.SentinelMinusOne, pkg, name, matchWildcard) {
 		return -1, true
 	}
 	return 0, false
@@ -249,32 +261,23 @@ func (c *Config) IsReflectionDecode(pkg, name string) bool {
 	if c == nil {
 		return false
 	}
-	names, ok := lookupWithGlob(c.Overrides.Types.ReflectionDecode, pkg)
-	if !ok {
-		return false
-	}
-	return matchesWildcard(names, name)
+	return matchField(c.Overrides.Types.ReflectionDecode, pkg, name, matchWildcard)
 }
 
 // IsNeverReturn returns true if the given function or method in the given
 // package never returns normally (e.g., os.Exit, log.Fatal).
 func (c *Config) IsNeverReturn(pkg, name string) bool {
-	names, ok := lookupWithGlob(c.Overrides.Types.NeverReturn, pkg)
-	if !ok {
+	if c == nil {
 		return false
 	}
-	return matchesWildcard(names, name)
+	return matchField(c.Overrides.Types.NeverReturn, pkg, name, matchWildcard)
 }
 
 func (c *Config) ShouldTreatAsBitFlagSet(pkg, typeName string) bool {
 	if c == nil {
 		return false
 	}
-	names, ok := lookupWithGlob(c.Overrides.Types.BitFlagSet, pkg)
-	if !ok {
-		return false
-	}
-	return slices.Contains(names, typeName)
+	return matchField(c.Overrides.Types.BitFlagSet, pkg, typeName, matchExact)
 }
 
 // IsClosedDomain reports whether the given named type is curated as a closed
@@ -283,11 +286,7 @@ func (c *Config) IsClosedDomain(pkg, typeName string) bool {
 	if c == nil {
 		return false
 	}
-	names, ok := lookupWithGlob(c.Overrides.Types.ClosedDomain, pkg)
-	if !ok {
-		return false
-	}
-	return slices.Contains(names, typeName)
+	return matchField(c.Overrides.Types.ClosedDomain, pkg, typeName, matchExact)
 }
 
 // lookupWithGlob returns all matching names for a package from a map,

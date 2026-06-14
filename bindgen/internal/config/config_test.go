@@ -40,3 +40,56 @@ func TestShouldTreatAsBitFlagSet_NilConfig(t *testing.T) {
 		t.Error("nil config should return false")
 	}
 }
+
+func TestNilConfigAccessorsDoNotPanic(t *testing.T) {
+	var cfg *Config
+
+	if cfg.ShouldAllowUnusedResult("io", "Foo") {
+		t.Error("ShouldAllowUnusedResult")
+	}
+	if cfg.ShouldAllowUnusedValue("io", "Foo") {
+		t.Error("ShouldAllowUnusedValue")
+	}
+	if cfg.ShouldDenyUnusedValue("io", "Foo") {
+		t.Error("ShouldDenyUnusedValue")
+	}
+	if cfg.ShouldWrapNilableReturn("io", "Foo") {
+		t.Error("ShouldWrapNilableReturn")
+	}
+	if cfg.IsNonNilableReturn("io", "Foo") {
+		t.Error("IsNonNilableReturn")
+	}
+	if cfg.IsNonNilableVar("io", "Foo") {
+		t.Error("IsNonNilableVar")
+	}
+	if cfg.HasBoolAsFlag("io", "Foo") {
+		t.Error("HasBoolAsFlag")
+	}
+	if cfg.MutatingParams("io", "Foo") != nil {
+		t.Error("MutatingParams")
+	}
+	if cfg.NilableParams("io", "Foo") != nil {
+		t.Error("NilableParams")
+	}
+	if cfg.IsPartialResult("io", "Foo") {
+		t.Error("IsPartialResult")
+	}
+	if cfg.HasDirectError("io", "Foo") {
+		t.Error("HasDirectError")
+	}
+	if cfg.HasNilableError("io", "Foo") {
+		t.Error("HasNilableError")
+	}
+	if _, ok := cfg.SentinelInt("io", "Foo"); ok {
+		t.Error("SentinelInt")
+	}
+	if cfg.IsReflectionDecode("io", "Foo") {
+		t.Error("IsReflectionDecode")
+	}
+	if cfg.IsNeverReturn("io", "Foo") {
+		t.Error("IsNeverReturn")
+	}
+	if cfg.IsClosedDomain("io", "Foo") {
+		t.Error("IsClosedDomain")
+	}
+}
