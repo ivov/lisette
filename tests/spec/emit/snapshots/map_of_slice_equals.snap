@@ -1,6 +1,10 @@
 ---
 source: tests/spec/emit/prelude.rs
-description: "\nfn test(a: Map<string, Slice<int>>, b: Map<string, Slice<int>>) -> bool {\n  a.equals(b)\n}\n"
+description: |
+  
+  fn test(a: Map<string, Slice<int>>, b: Map<string, Slice<int>>) -> bool {
+    a.equals(b)
+  }
 ---
 package main
 

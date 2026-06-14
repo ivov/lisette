@@ -1,6 +1,10 @@
 ---
 source: tests/spec/emit/prelude.rs
-description: "\nfn test<T: Comparable>(a: Slice<T>, b: Slice<T>) -> bool {\n  a.equals(b)\n}\n"
+description: |
+  
+  fn test<T: Comparable>(a: Slice<T>, b: Slice<T>) -> bool {
+    a.equals(b)
+  }
 ---
 package main
 
