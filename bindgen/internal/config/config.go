@@ -90,8 +90,7 @@ const (
 	matchWildcard                  // exact, bare "*", or "*.Method"
 )
 
-// matchField looks up the package's configured names (honoring "/**" globs) and
-// reports whether name matches under the requested strategy.
+// matchField reports whether name matches the package's configured names under the given strategy.
 func matchField(m map[string][]string, pkg, name string, kind matchKind) bool {
 	names, ok := lookupWithGlob(m, pkg)
 	if !ok {
@@ -107,8 +106,7 @@ func matchField(m map[string][]string, pkg, name string, kind matchKind) bool {
 	}
 }
 
-// nestedParams returns the configured parameter-name list for the given function
-// from a nested (per-package, per-function) override map.
+// nestedParams returns the configured parameter names for the given function.
 func nestedParams(m map[string]map[string][]string, pkg, name string) []string {
 	funcs, ok := lookupWithGlobNested(m, pkg)
 	if !ok {

@@ -2,9 +2,7 @@ package convert
 
 import "strings"
 
-// Lisette types are represented as plain strings. These constructors and
-// predicates keep the generic vocabulary (the prefixes, separators, and the
-// trailing `, error`) in one place instead of being spelled out at each call.
+// Constructors and predicates for the string-based Lisette type vocabulary.
 
 func sliceOf(elem string) string    { return "Slice<" + elem + ">" }
 func optionOf(elem string) string   { return "Option<" + elem + ">" }
@@ -20,7 +18,6 @@ func partialOf(ok string) string    { return "Partial<" + ok + ", error>" }
 func isSliceType(s string) bool { return strings.HasPrefix(s, "Slice<") }
 func isMapType(s string) bool   { return strings.HasPrefix(s, "Map<") }
 
-// unwrapSlice returns the element type of a `Slice<...>` string.
 func unwrapSlice(s string) (string, bool) {
 	if strings.HasPrefix(s, "Slice<") && strings.HasSuffix(s, ">") {
 		return s[len("Slice<") : len(s)-1], true

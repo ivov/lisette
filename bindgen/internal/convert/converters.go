@@ -128,9 +128,8 @@ func (c *Converter) convertFunction(result *ConvertResult, symbolExport extract.
 	returnType := c.applyReturnType(result, signature, result.Name)
 
 	c.resolveNilability(result, signature, returnType, nilabilityDecision{
-		obj:          symbolExport.Obj,
-		lookupName:   result.Name,
-		forceNilable: c.cfg != nil && c.cfg.ShouldWrapNilableReturn(c.currentPkgPath, result.Name),
+		obj:     symbolExport.Obj,
+		lookups: []configKey{{c.currentPkgPath, result.Name}},
 		heuristicNonNil: func(isSinglePointerReturn bool) bool {
 			if looksLikeConstructor(result.Name) {
 				return true
@@ -166,10 +165,6 @@ func (c *Converter) applySentinelInt(result *ConvertResult, qualifiedName string
 	result.SentinelInt = &value
 }
 
-// convertParams converts a signature's parameters to Lisette parameters.
-// lookupName keys the mutating- and nilable-param config; methodName is the
-// bare name passed to isMutableParam. paramOverrides replaces a converted type
-// at a given index (used by reflection-decode lifting); pass nil when none.
 func (c *Converter) convertParams(sig *types.Signature, lookupName, methodName string, paramOverrides map[int]string) ([]FunctionParameter, *SkipReason) {
 	mutParams := c.cfg.MutatingParams(c.currentPkgPath, lookupName)
 	nilableParams := c.cfg.NilableParams(c.currentPkgPath, lookupName)
@@ -209,9 +204,6 @@ func (c *Converter) convertParams(sig *types.Signature, lookupName, methodName s
 	return out, nil
 }
 
-// applyReturnType converts the signature's results, records the resulting shape
-// on result, and returns the TypeResult so the caller can run the nilability
-// decision. lookupName keys the return-shape config overrides.
 func (c *Converter) applyReturnType(result *ConvertResult, sig *types.Signature, lookupName string) TypeResult {
 	returnType := ReturnsToLisette(sig, c, lookupName)
 	if returnType.LisetteType != "" {
@@ -228,22 +220,21 @@ func (c *Converter) applyReturnType(result *ConvertResult, sig *types.Signature,
 	return returnType
 }
 
-// nilabilityDecision carries the inputs to resolveNilability that differ
-// between functions and methods.
+type configKey struct {
+	pkgPath string
+	name    string
+}
+
 type nilabilityDecision struct {
-	obj          types.Object
-	lookupName   string // keys the return-shape config overrides
-	forceNilable bool   // config pins the single nilable return as Option<>
-	// extraForceNonNilable is a promotion-config override pinning the return
-	// non-nilable; applied only when no earlier rule already did so.
-	extraForceNonNilable bool
-	// heuristicNonNil supplies the kind-specific name and shape rules used only
-	// when no function body is available to prove non-nilability.
+	obj types.Object
+	// lookups: config keys consulted in order, first match wins.
+	lookups []configKey
+	// heuristicNonNil: kind-specific rules, used only when no body proves non-nilability.
 	heuristicNonNil func(isSinglePointerReturn bool) bool
 }
 
-// resolveNilability decides whether result.ReturnType is wrapped in Option<>.
-// Body proof outranks name heuristics, which outrank config overrides.
+// resolveNilability wraps the return in Option<> unless body proof, a name
+// heuristic, or config pins it non-nilable (in that precedence).
 func (c *Converter) resolveNilability(result *ConvertResult, sig *types.Signature, returnType TypeResult, d nilabilityDecision) {
 	isSingleNilableReturn := isSingleNilableResult(sig)
 	if isSingleNilableReturn && returnType.IsDirectError {
@@ -260,13 +251,22 @@ func (c *Converter) resolveNilability(result *ConvertResult, sig *types.Signatur
 			forceNonNilable = d.heuristicNonNil(isSinglePointerReturn)
 		}
 	}
-	if !forceNonNilable {
-		forceNonNilable = c.cfg != nil && c.cfg.IsNonNilableReturn(c.currentPkgPath, d.lookupName)
+	for _, k := range d.lookups {
+		if forceNonNilable {
+			break
+		}
+		forceNonNilable = c.cfg.IsNonNilableReturn(k.pkgPath, k.name)
 	}
-	if !forceNonNilable {
-		forceNonNilable = d.extraForceNonNilable
+
+	forceNilable := false
+	for _, k := range d.lookups {
+		if forceNilable {
+			break
+		}
+		forceNilable = c.cfg.ShouldWrapNilableReturn(k.pkgPath, k.name)
 	}
-	if (isSingleNilableReturn && !forceNonNilable) || (d.forceNilable && !returnType.NilableReturnApplied) {
+
+	if (isSingleNilableReturn && !forceNonNilable) || (forceNilable && !returnType.NilableReturnApplied) {
 		result.ReturnType = optionOf(result.ReturnType)
 	}
 }
@@ -370,20 +370,13 @@ func (c *Converter) convertMethod(result *ConvertResult, symbolExport extract.Sy
 
 	returnType := c.applyReturnType(result, signature, qualifiedName)
 
-	forceNilable := c.cfg != nil && c.cfg.ShouldWrapNilableReturn(c.currentPkgPath, qualifiedName)
-	extraForceNonNilable := false
+	lookups := []configKey{{c.currentPkgPath, qualifiedName}}
 	if symbolExport.IsPromoted && symbolExport.OriginalTypeName != "" {
-		originalQualified := symbolExport.OriginalTypeName + "." + result.Name
-		extraForceNonNilable = c.cfg != nil && c.cfg.IsNonNilableReturn(symbolExport.OriginalPkgPath, originalQualified)
-		if !forceNilable {
-			forceNilable = c.cfg != nil && c.cfg.ShouldWrapNilableReturn(symbolExport.OriginalPkgPath, originalQualified)
-		}
+		lookups = append(lookups, configKey{symbolExport.OriginalPkgPath, symbolExport.OriginalTypeName + "." + result.Name})
 	}
 	c.resolveNilability(result, signature, returnType, nilabilityDecision{
-		obj:                  symbolExport.Obj,
-		lookupName:           qualifiedName,
-		forceNilable:         forceNilable,
-		extraForceNonNilable: extraForceNonNilable,
+		obj:     symbolExport.Obj,
+		lookups: lookups,
 		heuristicNonNil: func(isSinglePointerReturn bool) bool {
 			if looksLikeConstructor(result.Name) {
 				return true

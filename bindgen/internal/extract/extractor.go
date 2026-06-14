@@ -47,8 +47,7 @@ func currentLoadConfig(targetGOOS, targetGOARCH string) *packages.Config {
 	}
 }
 
-// buildLoaderEnv builds the loader environment, cross-compiling for the given
-// target when targetGOOS/targetGOARCH are non-empty (empty means host default).
+// buildLoaderEnv cross-compiles when targetGOOS/targetGOARCH are set (empty = host default).
 func buildLoaderEnv(targetGOOS, targetGOARCH string) []string {
 	env := os.Environ()
 	if targetGOOS != "" || targetGOARCH != "" {

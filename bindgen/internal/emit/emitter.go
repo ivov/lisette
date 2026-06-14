@@ -341,7 +341,6 @@ func (e *Emitter) String() string {
 	return strings.TrimRight(raw, "\n") + "\n"
 }
 
-// formatParams renders each parameter as `name: type` (or `mut name: type`).
 func formatParams(params []convert.FunctionParameter) []string {
 	out := make([]string, 0, len(params))
 	for _, p := range params {
@@ -354,8 +353,7 @@ func formatParams(params []convert.FunctionParameter) []string {
 	return out
 }
 
-// formatSignature assembles a `<keyword>Name<decl>(params) -> ret` line. keyword
-// carries any leading indent and trailing space (e.g. "pub fn ", "  fn ").
+// formatSignature builds a signature line; keyword carries any indent and trailing space (e.g. "  fn ").
 func formatSignature(keyword, name, declBlock string, params []string, hasReturn bool, returnType string) string {
 	var b strings.Builder
 	b.WriteString(keyword)
