@@ -275,6 +275,25 @@ impl TestClient {
         .await
     }
 
+    pub async fn inlay_hint(
+        &mut self,
+        uri: &str,
+        start: (u32, u32),
+        end: (u32, u32),
+    ) -> Option<Vec<InlayHint>> {
+        self.request(
+            "textDocument/inlayHint",
+            json!({
+                "textDocument": {"uri": uri},
+                "range": {
+                    "start": {"line": start.0, "character": start.1},
+                    "end": {"line": end.0, "character": end.1}
+                }
+            }),
+        )
+        .await
+    }
+
     pub async fn prepare_rename(
         &mut self,
         uri: &str,
@@ -380,6 +399,28 @@ pub fn completion_labels(response: &CompletionResponse) -> Vec<String> {
         CompletionResponse::Array(items) => items.iter().map(|i| i.label.clone()).collect(),
         CompletionResponse::List(list) => list.items.iter().map(|i| i.label.clone()).collect(),
     }
+}
+
+pub fn doc_end(content: &str) -> (u32, u32) {
+    let line = content.matches('\n').count() as u32;
+    let last_line = content.rsplit('\n').next().unwrap_or("");
+    let character = last_line.chars().map(|c| c.len_utf16() as u32).sum();
+    (line, character)
+}
+
+pub fn inlay_hint_triples(hints: &[InlayHint]) -> Vec<(u32, u32, String)> {
+    hints
+        .iter()
+        .map(|h| {
+            let label = match &h.label {
+                InlayHintLabel::String(s) => s.clone(),
+                InlayHintLabel::LabelParts(parts) => {
+                    parts.iter().map(|p| p.value.clone()).collect()
+                }
+            };
+            (h.position.line, h.position.character, label)
+        })
+        .collect()
 }
 
 pub fn symbol_names(response: &DocumentSymbolResponse) -> Vec<String> {

@@ -3,6 +3,7 @@ mod completion;
 mod definition;
 mod document;
 mod hover;
+mod inlay_hints;
 mod loader;
 mod paths;
 mod position;
@@ -73,6 +74,7 @@ impl LanguageServer for Backend {
                 )),
                 document_formatting_provider: Some(OneOf::Left(true)),
                 hover_provider: Some(HoverProviderCapability::Simple(true)),
+                inlay_hint_provider: Some(OneOf::Left(true)),
                 definition_provider: Some(OneOf::Left(true)),
                 document_symbol_provider: Some(OneOf::Left(true)),
                 references_provider: Some(OneOf::Left(true)),
@@ -235,6 +237,37 @@ impl LanguageServer for Backend {
             }),
             range: Some(line_index.span_to_range(span)),
         }))
+    }
+
+    async fn inlay_hint(&self, params: InlayHintParams) -> Result<Option<Vec<InlayHint>>> {
+        let uri = &params.text_document.uri;
+
+        let Some(snapshot) = self.get_snapshot(uri).await else {
+            return Ok(None);
+        };
+        let Some(file_id) = snapshot.get_file_id(uri) else {
+            return Ok(None);
+        };
+        let Some(file) = snapshot.files().get(&file_id) else {
+            return Ok(None);
+        };
+        let Some(line_index) = snapshot.get_line_index(file_id) else {
+            return Ok(None);
+        };
+
+        let eof = file.source.len() as u32;
+        let start = line_index
+            .position_to_offset(params.range.start)
+            .unwrap_or(eof);
+        let end = line_index
+            .position_to_offset(params.range.end)
+            .unwrap_or(eof);
+
+        Ok(Some(inlay_hints::collect(
+            &file.items,
+            (start, end),
+            line_index,
+        )))
     }
 
     async fn goto_definition(

@@ -1,8 +1,8 @@
 mod lsp_harness;
 
 use lsp_harness::{
-    TestClient, completion_labels, definition_location, definition_target_text, hover_content,
-    symbol_names,
+    TestClient, completion_labels, definition_location, definition_target_text, doc_end,
+    hover_content, inlay_hint_triples, symbol_names,
 };
 use tower_lsp::lsp_types::*;
 
@@ -21,6 +21,7 @@ async fn initialize_returns_capabilities() {
     assert!(result.capabilities.rename_provider.is_some());
     assert!(result.capabilities.document_formatting_provider.is_some());
     assert!(result.capabilities.document_symbol_provider.is_some());
+    assert!(result.capabilities.inlay_hint_provider.is_some());
 
     client.shutdown().await;
 }
@@ -1993,6 +1994,7 @@ async fn stress_test_input(source: &str) -> bool {
     let _sig = client.signature_help(TEST_URI, 0, 0).await;
     let _fmt = client.formatting(TEST_URI).await;
     let _sym = client.document_symbol(TEST_URI).await;
+    let _inlay = client.inlay_hint(TEST_URI, (0, 0), doc_end(source)).await;
 
     client.change(TEST_URI, "fn main() { 1 }", 2).await;
     let hover = client.hover(TEST_URI, 0, 4).await;
@@ -3698,6 +3700,9 @@ async fn stress_test_all_positions(source: &str) -> bool {
             let _sig = client.signature_help(TEST_URI, line, col).await;
             let _refs = client.references(TEST_URI, line, col, true).await;
             let _rename = client.prepare_rename(TEST_URI, line, col).await;
+            let _inlay = client
+                .inlay_hint(TEST_URI, (line, col), doc_end(source))
+                .await;
         }
     }
 
@@ -6034,9 +6039,11 @@ async fn stress_all_handlers_at_eof() {
     let _sig = client.signature_help(TEST_URI, 0, eof_col).await;
     let _refs = client.references(TEST_URI, 0, eof_col, true).await;
     let _rename = client.prepare_rename(TEST_URI, 0, eof_col).await;
+    let _inlay = client.inlay_hint(TEST_URI, (0, 0), (0, eof_col)).await;
 
     let _hover_past = client.hover(TEST_URI, 0, eof_col + 10).await;
     let _hover_line_past = client.hover(TEST_URI, 5, 0).await;
+    let _inlay_past = client.inlay_hint(TEST_URI, (5, 0), (6, 0)).await;
 
     client.shutdown().await;
 }
@@ -7053,6 +7060,7 @@ async fn stress_all_handlers_past_end_of_source() {
     let _ = client.signature_help(TEST_URI, 999, 999).await;
     let _ = client.prepare_rename(TEST_URI, 999, 999).await;
     let _ = client.rename(TEST_URI, 999, 999, "foo").await;
+    let _ = client.inlay_hint(TEST_URI, (999, 999), (1000, 0)).await;
 
     // Still alive
     let hover = client.hover(TEST_URI, 0, 4).await;
@@ -8313,6 +8321,16 @@ fn main() {
 
     let syms = client.document_symbol(TEST_URI).await;
     assert!(syms.is_some(), "document symbols should work via fallback");
+
+    let inlay = client.inlay_hint(TEST_URI, (0, 0), (5, 1)).await;
+    assert!(
+        inlay.is_some(),
+        "inlay hints should work via last_valid_snapshot during lex error"
+    );
+    assert!(
+        inlay_hint_triples(&inlay.unwrap()).contains(&(3, 7, ": Point".to_string())),
+        "fallback inlay hints should reflect the last valid snapshot"
+    );
 
     let _ = client.formatting(TEST_URI).await;
 
@@ -11567,6 +11585,147 @@ fn use_rw(rw: ReadWriter) { rw. }";
     assert!(
         labels.iter().any(|l| l == "read"),
         "should include inherited method 'read', got: {labels:?}"
+    );
+
+    client.shutdown().await;
+}
+
+#[tokio::test]
+async fn inlay_hint_shows_let_type() {
+    let mut client = TestClient::new().await;
+    client.initialize().await;
+    let source = "fn main() { let x = 42; x }";
+    client.open(TEST_URI, source).await;
+
+    let hints = client
+        .inlay_hint(TEST_URI, (0, 0), doc_end(source))
+        .await
+        .unwrap();
+
+    assert_eq!(
+        inlay_hint_triples(&hints),
+        vec![(0, 17, ": int".to_string())]
+    );
+
+    client.shutdown().await;
+}
+
+#[tokio::test]
+async fn inlay_hint_renders_collection_type() {
+    let mut client = TestClient::new().await;
+    client.initialize().await;
+    let source = "fn main() { let xs = [1, 2, 3]; xs.length() }";
+    client.open(TEST_URI, source).await;
+
+    let hints = client
+        .inlay_hint(TEST_URI, (0, 0), doc_end(source))
+        .await
+        .unwrap();
+
+    assert_eq!(
+        inlay_hint_triples(&hints),
+        vec![(0, 18, ": Slice<int>".to_string())]
+    );
+
+    client.shutdown().await;
+}
+
+#[tokio::test]
+async fn inlay_hint_skips_annotated_let() {
+    let mut client = TestClient::new().await;
+    client.initialize().await;
+    let source = "fn main() { let x: int = 42; x }";
+    client.open(TEST_URI, source).await;
+
+    let hints = client
+        .inlay_hint(TEST_URI, (0, 0), doc_end(source))
+        .await
+        .unwrap();
+
+    assert!(
+        hints.is_empty(),
+        "annotated let should have no hint: {hints:?}"
+    );
+
+    client.shutdown().await;
+}
+
+#[tokio::test]
+async fn inlay_hint_skips_destructuring_let() {
+    let mut client = TestClient::new().await;
+    client.initialize().await;
+    let source = "fn main() { let (a, b) = (1, 2); a + b }";
+    client.open(TEST_URI, source).await;
+
+    let hints = client
+        .inlay_hint(TEST_URI, (0, 0), doc_end(source))
+        .await
+        .unwrap();
+
+    assert!(
+        hints.is_empty(),
+        "destructuring let is out of v1 scope: {hints:?}"
+    );
+
+    client.shutdown().await;
+}
+
+#[tokio::test]
+async fn inlay_hint_respects_requested_range() {
+    let mut client = TestClient::new().await;
+    client.initialize().await;
+    client
+        .open(
+            TEST_URI,
+            "fn main() {\n    let a = 1\n    let b = 2\n    a + b\n}",
+        )
+        .await;
+
+    let hints = client.inlay_hint(TEST_URI, (2, 0), (3, 0)).await.unwrap();
+
+    assert_eq!(
+        inlay_hint_triples(&hints),
+        vec![(2, 9, ": int".to_string())]
+    );
+
+    client.shutdown().await;
+}
+
+#[tokio::test]
+async fn inlay_hint_range_end_is_exclusive() {
+    let mut client = TestClient::new().await;
+    client.initialize().await;
+    client.open(TEST_URI, "fn main() { let x = 42; x }").await;
+
+    let at_boundary = client.inlay_hint(TEST_URI, (0, 0), (0, 17)).await.unwrap();
+    assert!(
+        at_boundary.is_empty(),
+        "insertion point at the exclusive range end must not be returned: {at_boundary:?}"
+    );
+
+    let past_boundary = client.inlay_hint(TEST_URI, (0, 0), (0, 18)).await.unwrap();
+    assert_eq!(
+        inlay_hint_triples(&past_boundary),
+        vec![(0, 17, ": int".to_string())]
+    );
+
+    client.shutdown().await;
+}
+
+#[tokio::test]
+async fn inlay_hint_range_past_eof_is_empty() {
+    let mut client = TestClient::new().await;
+    client.initialize().await;
+    client.open(TEST_URI, "fn main() { let x = 42; x }").await;
+
+    let hints = client
+        .inlay_hint(TEST_URI, (999, 999), (1000, 0))
+        .await
+        .unwrap();
+
+    assert!(
+        hints.is_empty(),
+        "a range entirely past EOF must not scan the whole file: {hints:?}"
     );
 
     client.shutdown().await;
