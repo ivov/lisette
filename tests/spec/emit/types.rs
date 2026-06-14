@@ -2552,6 +2552,287 @@ fn test() -> int {
 }
 
 #[test]
+fn partial_impl_repeated_type_var_uses_ufcs() {
+    let input = r#"
+struct Pair<A, B> {
+  a: A,
+  b: B,
+}
+
+impl<T> Pair<T, T> {
+  fn first(self) -> T {
+    self.a
+  }
+}
+
+fn test() -> int {
+  let p = Pair { a: 1, b: 2 };
+  p.first()
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn partial_impl_primitive_arg_uses_ufcs() {
+    let input = r#"
+struct Pair<A, B> {
+  a: A,
+  b: B,
+}
+
+impl<B> Pair<int, B> {
+  fn left(self) -> int {
+    self.a
+  }
+}
+
+fn test() -> int {
+  let p = Pair { a: 1, b: "x" };
+  p.left()
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn partial_impl_nominal_arg_uses_ufcs() {
+    let input = r#"
+struct User {
+  name: string,
+}
+
+struct Pair<A, B> {
+  a: A,
+  b: B,
+}
+
+impl<B> Pair<User, B> {
+  fn left(self) -> User {
+    self.a
+  }
+}
+
+fn test() -> string {
+  let p = Pair { a: User { name: "x" }, b: 1 };
+  p.left().name
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn specialized_impl_explicit_type_args() {
+    let input = r#"
+struct Box<T> { value: T }
+
+impl Box<int> {
+  fn keep<U>(self, x: U) -> U { x }
+}
+
+fn test() -> string {
+  let b = Box { value: 1 };
+  b.keep<string>("ok")
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn partial_impl_repeated_explicit_type_args() {
+    let input = r#"
+struct Pair<A, B> { a: A, b: B }
+
+impl<T> Pair<T, T> {
+  fn keep<U>(self, x: U) -> U { x }
+}
+
+fn test() -> string {
+  let p = Pair { a: 1, b: 2 };
+  p.keep<int, string>("ok")
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn specialized_impl_return_only_type_args() {
+    let input = r#"
+struct Box<T> { value: T }
+
+impl Box<int> {
+  fn make<U>(self) -> U { panic("boom") }
+}
+
+fn test() {
+  let b = Box { value: 1 };
+  let x: string = b.make();
+  let _ = x;
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn partial_impl_repeated_return_only_type_args() {
+    let input = r#"
+struct Pair<A, B> { a: A, b: B }
+
+impl<T> Pair<T, T> {
+  fn make<U>(self) -> U { panic("boom") }
+}
+
+fn test() {
+  let p = Pair { a: 1, b: 2 };
+  let x: string = p.make();
+  let _ = x;
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn partial_impl_primitive_receiver_return_only_type_args() {
+    let input = r#"
+struct Pair<A, B> { a: A, b: B }
+
+impl<B> Pair<int, B> {
+  fn make<U>(self) -> U { panic("boom") }
+}
+
+fn test() {
+  let p: Pair<int, bool> = Pair { a: 1, b: true };
+  let x: string = p.make();
+  let _ = x;
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn alias_partial_impl_ufcs_call() {
+    let input = r#"
+struct Pair<A, B> { a: A, b: B }
+
+impl<T> Pair<T, T> {
+  fn first(self) -> T { self.a }
+}
+
+type IntPair = Pair<int, int>
+
+fn test() -> int {
+  let p: IntPair = Pair { a: 1, b: 2 };
+  p.first()
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn alias_specialized_impl_ufcs_call() {
+    let input = r#"
+struct Box<T> { value: T }
+
+impl Box<int> {
+  fn only_int(self) -> int { self.value }
+}
+
+type IntBox = Box<int>
+
+fn test() -> int {
+  let b: IntBox = Box { value: 7 };
+  b.only_int()
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn specialized_impl_phantom_type_arg() {
+    let input = r#"
+struct Box<T> { value: T }
+
+impl Box<int> {
+  fn tag<U>(self) -> int { 1 }
+}
+
+fn test() -> int {
+  let b = Box { value: 1 };
+  b.tag<string>()
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn partial_impl_phantom_type_arg() {
+    let input = r#"
+struct Pair<A, B> { a: A, b: B }
+
+impl<T> Pair<T, T> {
+  fn tag<U>(self) -> int { 1 }
+}
+
+fn test() -> int {
+  let p = Pair { a: 1, b: 2 };
+  p.tag<string>()
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn partial_impl_method_only_explicit_type_arg() {
+    let input = r#"
+struct Pair<A, B> { a: A, b: B }
+
+impl<T> Pair<T, T> {
+  fn keep<U>(self, x: U) -> U { x }
+}
+
+fn test() -> string {
+  let p = Pair { a: 1, b: 2 };
+  p.keep<string>("ok")
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn full_arity_type_args_with_nonreceiver_impl_generic() {
+    let input = r#"
+struct Pair<A, B> { a: A, b: B }
+
+impl<X, T> Pair<T, T> {
+  fn pick(self, x: X) -> X { x }
+}
+
+fn test() -> bool {
+  let p = Pair { a: 1, b: 2 };
+  p.pick<bool, int>(true)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn multi_impl_generic_method_only_type_arg() {
+    let input = r#"
+struct Pair<A, B> { a: A, b: B }
+
+impl<A, B> Pair<A, B> {
+  fn snd<U>(self, u: U) -> U { u }
+}
+
+fn test() -> bool {
+  let p: Pair<int, string> = Pair { a: 1, b: "x" };
+  p.snd<bool>(true)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn enum_variant_named_string() {
     let input = r#"
 enum ASTNode {

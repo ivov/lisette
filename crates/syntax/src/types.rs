@@ -202,6 +202,17 @@ pub fn build_substitution_map(generics: &[Generic], type_args: &[Type]) -> Subst
         .collect()
 }
 
+pub fn type_args_match_params<'a>(
+    args: &[Type],
+    params: impl ExactSizeIterator<Item = &'a EcoString>,
+) -> bool {
+    args.len() == params.len()
+        && args
+            .iter()
+            .zip(params)
+            .all(|(arg, param)| matches!(arg, Type::Parameter(name) if name == param))
+}
+
 pub fn substitute(ty: &Type, map: &HashMap<EcoString, Type>) -> Type {
     if map.is_empty() {
         return ty.clone();

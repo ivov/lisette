@@ -1703,7 +1703,7 @@ fn main() {
 }
 
 #[test]
-fn constrained_generic_impl_receiver_match_accepted() {
+fn partial_impl_receiver_cannot_satisfy_interface() {
     infer(
         r#"
 interface Same { fn same(self) -> int }
@@ -1716,7 +1716,110 @@ fn main() {
 }
 "#,
     )
-    .assert_no_errors();
+    .assert_infer_code("specialized_impl_cannot_satisfy_interface");
+}
+
+#[test]
+fn partial_impl_on_enum_cannot_satisfy_interface() {
+    infer(
+        r#"
+interface Same { fn same(self) -> int }
+enum Pair<A, B> { Both(A, B) }
+impl<T> Pair<T, T> { fn same(self) -> int { 1 } }
+fn want(s: Same) -> int { s.same() }
+fn main() {
+  let p: Pair<int, int> = Pair.Both(1, 2)
+  let _ = want(p)
+}
+"#,
+    )
+    .assert_infer_code("specialized_impl_cannot_satisfy_interface");
+}
+
+#[test]
+fn generic_method_on_nongeneric_receiver_cannot_satisfy_interface() {
+    infer(
+        r#"
+interface IntId { fn id(self, x: int) -> int }
+struct S {}
+impl S { fn id<T>(self, x: T) -> T { x } }
+fn want(i: IntId) -> int { i.id(1) }
+fn main() {
+  let _ = want(S {})
+}
+"#,
+    )
+    .assert_infer_code("interface_not_implemented");
+}
+
+#[test]
+fn alias_partial_impl_method_value_rejected() {
+    infer(
+        r#"
+struct Pair<A, B> { a: A, b: B }
+impl<T> Pair<T, T> { fn first(self) -> T { self.a } }
+type IntPair = Pair<int, int>
+fn main() {
+  let p: IntPair = Pair { a: 1, b: 2 }
+  let f = p.first
+  let _ = f()
+}
+"#,
+    )
+    .assert_infer_code("taking_value_of_ufcs_method");
+}
+
+#[test]
+fn alias_specialized_impl_method_value_rejected() {
+    infer(
+        r#"
+struct Box<T> { value: T }
+impl Box<int> { fn only_int(self) -> int { self.value } }
+type IntBox = Box<int>
+fn main() {
+  let b: IntBox = Box { value: 1 }
+  let f = b.only_int
+  let _ = f()
+}
+"#,
+    )
+    .assert_infer_code("taking_value_of_ufcs_method");
+}
+
+#[test]
+fn alias_partial_impl_cannot_satisfy_interface() {
+    infer(
+        r#"
+interface Same { fn same(self) -> int }
+struct Pair<A, B> { a: A, b: B }
+impl<T> Pair<T, T> { fn same(self) -> int { 1 } }
+type IntPair = Pair<int, int>
+fn want(s: Same) -> int { s.same() }
+fn main() {
+  let p: IntPair = Pair { a: 1, b: 2 }
+  let _ = want(p)
+}
+"#,
+    )
+    .assert_infer_code("specialized_impl_cannot_satisfy_interface");
+}
+
+#[test]
+fn alias_specialized_impl_cannot_satisfy_interface() {
+    infer(
+        r#"
+interface OnlyInt { fn only_int(self) -> int }
+struct Box<T> { value: T }
+impl Box<int> { fn only_int(self) -> int { self.value } }
+type IntBox = Box<int>
+fn want(x: OnlyInt) -> int { x.only_int() }
+fn main() {
+  let b: IntBox = Box { value: 1 }
+  let _ = want(b)
+}
+"#,
+    )
+    .assert_infer_code("specialized_impl_cannot_satisfy_interface");
 }
 
 #[test]
@@ -3589,6 +3692,78 @@ fn ufcs_method_with_method_only_type_args() {
         "#,
     )
     .assert_no_errors();
+}
+
+#[test]
+fn partial_impl_method_only_type_args_accepted() {
+    infer(
+        r#"
+struct Pair<A, B> { a: A, b: B }
+impl<T> Pair<T, T> { fn keep<U>(self, x: U) -> U { x } }
+fn main() {
+  let p = Pair { a: 1, b: 2 }
+  let _ = p.keep<string>("ok")
+}
+"#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn phantom_type_param_method_call_without_type_args_rejected() {
+    infer(
+        r#"
+struct Box<T> { value: T }
+impl Box<int> { fn tag<U>(self) -> int { 1 } }
+fn main() {
+  let b = Box { value: 1 }
+  let _ = b.tag()
+}
+"#,
+    )
+    .assert_infer_code("missing_type_argument");
+}
+
+#[test]
+fn partial_impl_phantom_type_param_method_call_without_type_args_rejected() {
+    infer(
+        r#"
+struct Pair<A, B> { a: A, b: B }
+impl<T> Pair<T, T> { fn tag<U>(self) -> int { 1 } }
+fn main() {
+  let p = Pair { a: 1, b: 2 }
+  let _ = p.tag()
+}
+"#,
+    )
+    .assert_infer_code("missing_type_argument");
+}
+
+#[test]
+fn phantom_type_param_function_call_without_type_args_rejected() {
+    infer(
+        r#"
+fn weird<T>() -> int { 1 }
+fn main() {
+  let _ = weird()
+}
+"#,
+    )
+    .assert_infer_code("missing_type_argument");
+}
+
+#[test]
+fn phantom_type_param_static_method_call_without_type_args_rejected() {
+    infer(
+        r#"
+struct Box {}
+impl Box { fn weird<T>() -> int { 1 } }
+fn main() {
+  let _ = Box.weird()
+}
+"#,
+    )
+    .assert_infer_code("missing_type_argument");
 }
 
 #[test]
@@ -6193,7 +6368,7 @@ fn main() {}
 }
 
 #[test]
-fn specialized_impl_method_promoted_onto_matching_instantiation() {
+fn specialized_impl_method_not_promoted_onto_matching_instantiation() {
     infer(
         r#"
 pub struct Box<T> { pub value: T }
@@ -6203,7 +6378,53 @@ fn use_it(o: Outer) -> int { o.only_int() }
 fn main() {}
 "#,
     )
-    .assert_no_errors();
+    .assert_infer_code("member_not_found");
+}
+
+#[test]
+fn embedded_specialized_impl_method_cannot_satisfy_interface() {
+    infer(
+        r#"
+interface OnlyInt { fn only_int(self) -> int }
+pub struct Box<T> { pub value: T }
+impl Box<int> { pub fn only_int(self) -> int { self.value } }
+struct Outer { embed Box<int> }
+fn want(x: OnlyInt) -> int { x.only_int() }
+fn main() {
+  let o = Outer { Box: Box { value: 1 } }
+  let _ = want(o)
+}
+"#,
+    )
+    .assert_infer_code("interface_not_implemented");
+}
+
+#[test]
+fn generic_method_with_extra_type_params_not_promoted() {
+    infer(
+        r#"
+struct Box<T> { value: T }
+impl<T> Box<T> { fn mapped<U>(self, f: fn(T) -> U) -> U { f(self.value) } }
+struct Outer { embed Box<int> }
+fn use_it(o: Outer) -> int { o.mapped(|x| x + 1) }
+fn main() {}
+"#,
+    )
+    .assert_infer_code("member_not_found");
+}
+
+#[test]
+fn generic_method_on_nongeneric_embedded_receiver_not_promoted() {
+    infer(
+        r#"
+struct S {}
+impl S { fn id<T>(self, x: T) -> T { x } }
+struct Outer { embed S }
+fn use_it(o: Outer) -> int { o.id(1) }
+fn main() {}
+"#,
+    )
+    .assert_infer_code("member_not_found");
 }
 
 #[test]

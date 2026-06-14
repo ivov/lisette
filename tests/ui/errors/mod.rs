@@ -1040,6 +1040,84 @@ fn main() {
 }
 
 #[test]
+fn infer_phantom_type_param_imported_function_call_rejected() {
+    let mut fs = MockFileSystem::new();
+
+    fs.add_file(
+        "util",
+        "util.lis",
+        r#"
+pub fn weird<T>() -> int { 1 }
+"#,
+    );
+
+    let source = r#"
+import "util"
+
+fn main() {
+  let _ = util.weird()
+}
+"#;
+    fs.add_file("main", "main.lis", source);
+
+    let result = infer_module("main", fs);
+    assert_multimodule_infer_error_snapshot!(result, source);
+}
+
+#[test]
+fn infer_imported_function_shortened_type_args_rejected() {
+    let mut fs = MockFileSystem::new();
+
+    fs.add_file(
+        "util",
+        "util.lis",
+        r#"
+pub fn choose<T, U>(x: T) -> U { panic("boom") }
+"#,
+    );
+
+    let source = r#"
+import "util"
+
+fn main() {
+  let y: string = util.choose<string>(1)
+  let _ = y
+}
+"#;
+    fs.add_file("main", "main.lis", source);
+
+    let result = infer_module("main", fs);
+    assert_multimodule_infer_error_snapshot!(result, source);
+}
+
+#[test]
+fn infer_cross_module_static_method_shortened_type_args_rejected() {
+    let mut fs = MockFileSystem::new();
+
+    fs.add_file(
+        "util",
+        "util.lis",
+        r#"
+pub struct Box {}
+impl Box { pub fn choose<T, U>(x: T) -> U { panic("boom") } }
+"#,
+    );
+
+    let source = r#"
+import "util"
+
+fn main() {
+  let y: string = util.Box.choose<string>(1)
+  let _ = y
+}
+"#;
+    fs.add_file("main", "main.lis", source);
+
+    let result = infer_module("main", fs);
+    assert_multimodule_infer_error_snapshot!(result, source);
+}
+
+#[test]
 fn infer_struct_enum_variant_as_bare_value_cross_module() {
     let mut fs = MockFileSystem::new();
 
@@ -5239,6 +5317,23 @@ fn infer_taking_value_of_ufcs_method() {
 fn test() {
   let opt: Option<int> = Some(42);
   let f = opt.map;
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_taking_value_of_partial_impl_method() {
+    let input = r#"
+struct Pair<A, B> { a: A, b: B }
+
+impl<T> Pair<T, T> {
+  fn first(self) -> T { self.a }
+}
+
+fn test() {
+  let p: Pair<int, int> = Pair { a: 1, b: 2 };
+  let f = p.first;
 }
 "#;
     assert_infer_error_snapshot!(input);

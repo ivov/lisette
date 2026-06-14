@@ -233,19 +233,23 @@ impl InferCtx<'_, '_> {
         let mut missing: Vec<(String, Type)> = Vec::new();
         let mut incompatible: Vec<(String, Type, Type)> = Vec::new();
 
-        let struct_generics: Option<Vec<String>> =
-            if let Type::Nominal { id, .. } = ty.strip_refs().resolve_in(&self.env) {
-                store
-                    .get_definition(&id)
-                    .and_then(|definition| match &definition.body {
-                        DefinitionBody::Struct { generics, .. } if !generics.is_empty() => {
-                            Some(generics.iter().map(|g| g.name.to_string()).collect())
-                        }
-                        _ => None,
-                    })
-            } else {
-                None
-            };
+        let resolved_receiver = store.deep_resolve_alias(&ty.strip_refs().resolve_in(&self.env));
+        let receiver_id = match &resolved_receiver {
+            Type::Nominal { id, .. } => Some(id.clone()),
+            _ => None,
+        };
+        let receiver_generics: Vec<String> = receiver_id
+            .as_ref()
+            .and_then(|id| {
+                let generics = match &store.get_definition(id)?.body {
+                    DefinitionBody::Struct { generics, .. }
+                    | DefinitionBody::Enum { generics, .. }
+                    | DefinitionBody::TypeAlias { generics, .. } => generics,
+                    _ => return None,
+                };
+                Some(generics.iter().map(|g| g.name.to_string()).collect())
+            })
+            .unwrap_or_default();
 
         for (method_name, method_ty) in &interface.methods {
             if method_name.as_str() == "equals" && self.is_native_container(ty) {
@@ -257,23 +261,23 @@ impl InferCtx<'_, '_> {
                 continue;
             };
 
-            // A method on a generic struct that is NOT wrapped in Forall came from a
-            // specialized impl block. The emitter emits these as UFCS (standalone functions)
-            // because Go's receiver syntax shadows type parameter names. UFCS methods cannot
-            // satisfy Go interfaces, so reject them here.
-            if let Some(ref generics) = struct_generics
-                && !matches!(symbol_method, Type::Forall { .. })
+            if let Some(ref id) = receiver_id
+                && self.is_ufcs_method(id.as_str(), method_name.as_str())
             {
-                let type_name = ty.get_name().map_or_else(|| ty.to_string(), str::to_owned);
-                self.sink.push(
-                    diagnostics::infer::specialized_impl_cannot_satisfy_interface(
-                        &type_name,
-                        &interface.name,
-                        method_name,
-                        generics,
-                        *span,
-                    ),
-                );
+                if !receiver_generics.is_empty() {
+                    let type_name = resolved_receiver
+                        .get_name()
+                        .map_or_else(|| resolved_receiver.to_string(), str::to_owned);
+                    self.sink.push(
+                        diagnostics::infer::specialized_impl_cannot_satisfy_interface(
+                            &type_name,
+                            &interface.name,
+                            method_name,
+                            &receiver_generics,
+                            *span,
+                        ),
+                    );
+                }
                 missing.push((method_name.to_string(), method_ty.clone()));
                 continue;
             }

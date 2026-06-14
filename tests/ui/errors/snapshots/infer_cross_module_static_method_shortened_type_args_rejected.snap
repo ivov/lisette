@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Wrong type argument count
+   ╭─[main.lis:5:34]
+ 4 │ fn main() {
+ 5 │   let y: string = util.Box.choose<string>(1)
+   ·                                  ────┬───
+   ·                                      ╰── expected `<T, U>`, found `<string>`
+ 6 │   let _ = y
+   ╰────
+  help: This type expects 2 type parameters but received 1 type parameter · code: [infer.type_arg_count_mismatch]

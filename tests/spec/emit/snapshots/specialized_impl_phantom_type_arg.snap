@@ -1,0 +1,18 @@
+---
+source: tests/spec/emit/types.rs
+description: "\nstruct Box<T> { value: T }\n\nimpl Box<int> {\n  fn tag<U>(self) -> int { 1 }\n}\n\nfn test() -> int {\n  let b = Box { value: 1 };\n  b.tag<string>()\n}\n"
+---
+package main
+
+type Box[T any] struct {
+	value T
+}
+
+func Box_tag[U any](_ Box[int]) int {
+	return 1
+}
+
+func test() int {
+	b := Box[int]{value: 1}
+	return Box_tag[string](b)
+}

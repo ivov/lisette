@@ -1,3 +1,4 @@
+use ecow::EcoString;
 use rustc_hash::FxHashMap as HashMap;
 
 use crate::checker::EnvResolve;
@@ -443,6 +444,11 @@ impl InferCtx<'_, '_> {
                 });
         }
 
+        if type_args.is_empty() && self.callee_has_phantom_type_param(&callee_expression) {
+            self.sink
+                .push(diagnostics::infer::cannot_infer_type_argument(span));
+        }
+
         // Use expected_ty for generic containers (Option, Result) when it has
         // interface type parameters. This ensures coercion like `Option<Printable>`
         // from `Some(Text{...})` gets the correct type for codegen.
@@ -474,11 +480,14 @@ impl InferCtx<'_, '_> {
         expression: &Expression,
         type_args: &[Annotation],
     ) -> Type {
-        let store = self.store;
         if type_args.is_empty() {
             return expression.get_type();
         }
+        self.declared_callee_type(expression)
+    }
 
+    fn declared_callee_type(&self, expression: &Expression) -> Type {
+        let store = self.store;
         match expression {
             Expression::Identifier { value, .. } => self
                 .lookup_type(store, value)
@@ -520,25 +529,23 @@ impl InferCtx<'_, '_> {
     }
 
     fn is_generic_callee(&self, expression: &Expression) -> bool {
-        let store = self.store;
-        match expression {
-            Expression::Identifier { value, .. } => self
-                .lookup_type(store, value)
-                .map(|ty| matches!(ty, Type::Forall { .. }))
-                .unwrap_or(false),
-            Expression::DotAccess {
-                expression: receiver,
-                member,
-                ..
-            } => {
-                let receiver_ty = receiver.get_type().resolve_in(&self.env);
-                self.get_all_methods(store, &receiver_ty.strip_refs())
-                    .get(member)
-                    .map(|ty| matches!(ty, Type::Forall { .. }))
-                    .unwrap_or(false)
-            }
-            _ => false,
-        }
+        matches!(self.declared_callee_type(expression), Type::Forall { .. })
+    }
+
+    fn callee_has_phantom_type_param(&self, expression: &Expression) -> bool {
+        let Type::Forall { vars, body } = self.declared_callee_type(expression) else {
+            return false;
+        };
+        let Type::Function(f) = body.as_ref() else {
+            return false;
+        };
+        vars.iter().any(|var| {
+            let param = Type::Parameter(var.clone());
+            let in_signature = f.params.iter().any(|pt| pt.contains_type(&param))
+                || f.return_type.contains_type(&param);
+            let is_bounded = f.bounds.iter().any(|bound| bound.param_name == *var);
+            !in_signature && !is_bounded
+        })
     }
 
     fn instantiate_callee_type(
@@ -565,19 +572,17 @@ impl InferCtx<'_, '_> {
             return (instantiated.resolve_in(&self.env), vec![]);
         }
 
-        // For DotAccess method calls, accept type args that provide only the
-        // method-own generics (excluding receiver/impl generics).
-        let receiver_generics_count =
-            if let Expression::DotAccess { expression, .. } = callee_expression {
-                let receiver_ty = expression
-                    .get_type()
-                    .resolve_in(&self.env)
-                    .strip_refs()
-                    .clone();
-                self.get_receiver_generics_count(&receiver_ty)
-            } else {
-                0
-            };
+        let declared_param_count = match body.as_ref() {
+            Type::Function(f) => f.params.len(),
+            _ => 0,
+        };
+        let is_receiver_method = matches!(callee_expression, Expression::DotAccess { .. })
+            && declared_param_count > callee_expression.get_type().param_count();
+        let receiver_generics_count = if is_receiver_method {
+            receiver_inferred_prefix_count(body, vars)
+        } else {
+            0
+        };
 
         let method_only_count = vars.len().saturating_sub(receiver_generics_count);
         let is_full_arity = type_args.len() == vars.len();
@@ -1113,18 +1118,18 @@ impl InferCtx<'_, '_> {
                 ..
             } => {
                 let receiver_ty = receiver.get_type().resolve_in(&self.env).strip_refs();
+                let peeled = store.deep_resolve_alias(&receiver_ty);
 
-                // UFCS method: receiver.method() where method is a free function
-                if let Type::Nominal { id, .. } = &receiver_ty
-                    && self
-                        .effective_ufcs_methods()
-                        .contains(&(id.to_string(), member.to_string()))
-                {
+                let ufcs_methods = self.effective_ufcs_methods();
+                let is_ufcs_member = |ty: &Type| {
+                    matches!(ty, Type::Nominal { id, .. }
+                        if ufcs_methods.contains(&(id.to_string(), member.to_string())))
+                };
+                if is_ufcs_member(&receiver_ty) || is_ufcs_member(&peeled) {
                     return CallKind::UfcsMethod;
                 }
 
                 // Native method: receiver.method() on Slice/Map/Channel/etc.
-                let peeled = store.deep_resolve_alias(&receiver_ty);
                 if let Some(kind) = NativeTypeKind::from_type(&peeled) {
                     return CallKind::NativeMethod(kind);
                 }
@@ -1476,6 +1481,19 @@ impl InferCtx<'_, '_> {
                 .is_some_and(|n| n == "Range")
         })
     }
+}
+
+fn receiver_inferred_prefix_count(body: &Type, vars: &[EcoString]) -> usize {
+    let Type::Function(f) = body else {
+        return 0;
+    };
+    let Some(self_param) = f.params.first() else {
+        return 0;
+    };
+    let self_ty = self_param.strip_refs();
+    vars.iter()
+        .take_while(|var| self_ty.contains_type(&Type::Parameter((*var).clone())))
+        .count()
 }
 
 fn callee_label(expr: &Expression) -> String {

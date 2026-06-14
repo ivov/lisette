@@ -1,0 +1,19 @@
+---
+source: tests/spec/emit/types.rs
+description: "\nstruct Box<T> { value: T }\n\nimpl Box<int> {\n  fn make<U>(self) -> U { panic(\"boom\") }\n}\n\nfn test() {\n  let b = Box { value: 1 };\n  let x: string = b.make();\n  let _ = x;\n}\n"
+---
+package main
+
+type Box[T any] struct {
+	value T
+}
+
+func Box_make[U any](_ Box[int]) U {
+	panic("boom")
+}
+
+func test() {
+	b := Box[int]{value: 1}
+	x := Box_make[string](b)
+	_ = x
+}

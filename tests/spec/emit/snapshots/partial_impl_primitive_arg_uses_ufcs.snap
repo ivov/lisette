@@ -1,0 +1,22 @@
+---
+source: tests/spec/emit/types.rs
+description: "\nstruct Pair<A, B> {\n  a: A,\n  b: B,\n}\n\nimpl<B> Pair<int, B> {\n  fn left(self) -> int {\n    self.a\n  }\n}\n\nfn test() -> int {\n  let p = Pair { a: 1, b: \"x\" };\n  p.left()\n}\n"
+---
+package main
+
+type Pair[A any, B any] struct {
+	a A
+	b B
+}
+
+func Pair_left[B any](self Pair[int, B]) int {
+	return self.a
+}
+
+func test() int {
+	p := Pair[int, string]{
+		a: 1,
+		b: "x",
+	}
+	return Pair_left(p)
+}

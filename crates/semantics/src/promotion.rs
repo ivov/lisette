@@ -6,6 +6,7 @@ use syntax::ast::{Generic, Visibility};
 use syntax::program::{DefinitionBody, MethodSignatures};
 use syntax::types::{CompoundKind, Symbol, Type, build_substitution_map, substitute};
 
+use crate::call_classification::is_ufcs_method_type;
 use crate::store::Store;
 
 #[derive(Clone, Debug)]
@@ -382,70 +383,19 @@ fn instantiate_method(store: &Store, container: &Type, method_ty: &Type) -> Opti
     let Some(id) = container.get_qualified_id() else {
         return Some(method_ty.clone());
     };
-    let args = container.get_type_params().unwrap_or_default();
     let arity = declaring_generics(store, id).len();
+    if is_ufcs_method_type(method_ty, arity) {
+        return None;
+    }
+    let args = container.get_type_params().unwrap_or_default();
     if args.is_empty() || arity == 0 {
         return Some(method_ty.clone());
     }
-    if let Type::Forall { vars, body } = method_ty
-        && args.len() == arity
-        && vars.len() >= arity
-    {
-        let (impl_vars, method_vars) = vars.split_at(arity);
-        if receiver_is_simple(body, id, impl_vars) {
-            let map: HashMap<EcoString, Type> = impl_vars
-                .iter()
-                .cloned()
-                .zip(args.iter().cloned())
-                .collect();
-            let new_body = substitute(body, &map);
-            return Some(if method_vars.is_empty() {
-                new_body
-            } else {
-                Type::Forall {
-                    vars: method_vars.to_vec(),
-                    body: Box::new(new_body),
-                }
-            });
-        }
-    }
-    // Anything else is a specialized impl (`impl Container<int>`): it promotes
-    // only when its concrete receiver is exactly this instantiation, so a method
-    // declared for one instantiation never leaks onto another through promotion.
-    let receiver = method_receiver(method_ty)?;
-    (receiver.strip_refs() == *container).then(|| method_ty.clone())
-}
-
-/// The receiver (first parameter) of a method type, peeling any `Forall`.
-fn method_receiver(method_ty: &Type) -> Option<&Type> {
-    let body = match method_ty {
-        Type::Forall { body, .. } => body.as_ref(),
-        other => other,
+    let Type::Forall { vars, body } = method_ty else {
+        return Some(method_ty.clone());
     };
-    match body {
-        Type::Function(f) => f.params.first(),
-        _ => None,
-    }
-}
-
-/// The method's receiver is `Container<v0, .., vk>` with the impl vars bare and
-/// in order, i.e. an unspecialized `impl<v..> Container<v..>`.
-fn receiver_is_simple(body: &Type, container_id: &str, impl_vars: &[EcoString]) -> bool {
-    let Type::Function(f) = body else {
-        return false;
-    };
-    let Some(receiver) = f.params.first() else {
-        return false;
-    };
-    let Type::Nominal { id, params, .. } = receiver.strip_refs() else {
-        return false;
-    };
-    id.as_str() == container_id
-        && params.len() == impl_vars.len()
-        && params
-            .iter()
-            .zip(impl_vars)
-            .all(|(p, v)| matches!(p, Type::Parameter(name) if name == v))
+    let map: HashMap<EcoString, Type> = vars.iter().cloned().zip(args.iter().cloned()).collect();
+    Some(substitute(body, &map))
 }
 
 #[cfg(test)]
@@ -1046,7 +996,7 @@ mod tests {
     }
 
     #[test]
-    fn specialized_impl_promotes_onto_matching_instantiation() {
+    fn specialized_impl_method_not_promoted_onto_matching_instantiation() {
         let mut b = Builder::new();
         b.generic_struct(
             "Box",
@@ -1063,8 +1013,9 @@ mod tests {
             )],
             vec![],
         );
-        let member = found(resolve_selector(&b.store, &nominal("Outer"), "only_int"));
-        assert_eq!(member.depth, 1);
-        assert_eq!(method_return(&member), Type::int());
+        assert!(matches!(
+            resolve_selector(&b.store, &nominal("Outer"), "only_int"),
+            Resolution::NotFound
+        ));
     }
 }

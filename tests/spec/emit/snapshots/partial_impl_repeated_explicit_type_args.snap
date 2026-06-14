@@ -1,0 +1,22 @@
+---
+source: tests/spec/emit/types.rs
+description: "\nstruct Pair<A, B> { a: A, b: B }\n\nimpl<T> Pair<T, T> {\n  fn keep<U>(self, x: U) -> U { x }\n}\n\nfn test() -> string {\n  let p = Pair { a: 1, b: 2 };\n  p.keep<int, string>(\"ok\")\n}\n"
+---
+package main
+
+type Pair[A any, B any] struct {
+	a A
+	b B
+}
+
+func Pair_keep[T any, U any](_ Pair[T, T], x U) U {
+	return x
+}
+
+func test() string {
+	p := Pair[int, int]{
+		a: 1,
+		b: 2,
+	}
+	return Pair_keep[int, string](p, "ok")
+}

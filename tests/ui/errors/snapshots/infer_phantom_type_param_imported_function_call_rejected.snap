@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Missing type argument
+   ╭─[main.lis:5:11]
+ 4 │ fn main() {
+ 5 │   let _ = util.weird()
+   ·           ──────┬─────
+   ·                 ╰── expected type argument
+ 6 │ }
+   ╰────
+  help: Supply a type argument for the call, e.g. `Channel.new<int>()` · code: [infer.missing_type_argument]

@@ -1,0 +1,22 @@
+---
+source: tests/spec/emit/types.rs
+description: "\nstruct Pair<A, B> {\n  a: A,\n  b: B,\n}\n\nimpl<T> Pair<T, T> {\n  fn first(self) -> T {\n    self.a\n  }\n}\n\nfn test() -> int {\n  let p = Pair { a: 1, b: 2 };\n  p.first()\n}\n"
+---
+package main
+
+type Pair[A any, B any] struct {
+	a A
+	b B
+}
+
+func Pair_first[T any](self Pair[T, T]) T {
+	return self.a
+}
+
+func test() int {
+	p := Pair[int, int]{
+		a: 1,
+		b: 2,
+	}
+	return Pair_first(p)
+}

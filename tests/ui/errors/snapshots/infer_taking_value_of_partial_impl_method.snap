@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Invalid method value
+    ╭─[test.lis:10:11]
+  9 │   let p: Pair<int, int> = Pair { a: 1, b: 2 };
+ 10 │   let f = p.first;
+    ·           ───┬───
+    ·              ╰── taking value not allowed
+ 11 │ }
+    ╰────
+  help: This method cannot be taken as a value. Call the method directly: `obj.method(...)` · code: [infer.taking_value_of_ufcs_method]

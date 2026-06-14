@@ -1,0 +1,26 @@
+---
+source: tests/spec/emit/types.rs
+description: "\nstruct User {\n  name: string,\n}\n\nstruct Pair<A, B> {\n  a: A,\n  b: B,\n}\n\nimpl<B> Pair<User, B> {\n  fn left(self) -> User {\n    self.a\n  }\n}\n\nfn test() -> string {\n  let p = Pair { a: User { name: \"x\" }, b: 1 };\n  p.left().name\n}\n"
+---
+package main
+
+type User struct {
+	name string
+}
+
+type Pair[A any, B any] struct {
+	a A
+	b B
+}
+
+func Pair_left[B any](self Pair[User, B]) User {
+	return self.a
+}
+
+func test() string {
+	p := Pair[User, int]{
+		a: User{name: "x"},
+		b: 1,
+	}
+	return Pair_left(p).name
+}

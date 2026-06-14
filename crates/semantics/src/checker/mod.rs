@@ -156,6 +156,11 @@ impl<'s> TaskState<'s> {
         self.ufcs_shared.as_deref().unwrap_or(&self.ufcs_methods)
     }
 
+    fn is_ufcs_method(&self, type_id: &str, method: &str) -> bool {
+        self.effective_ufcs_methods()
+            .contains(&(type_id.to_string(), method.to_string()))
+    }
+
     pub fn new_type_var(&mut self) -> Type {
         let id = self.env.fresh(None);
         Type::Var { id, hint: None }

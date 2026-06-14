@@ -853,8 +853,12 @@ impl InferCtx<'_, '_> {
         }
 
         if !self.scopes.is_callee_context()
-            && let Type::Forall { vars, .. } = method_ty
-            && vars.len() > self.get_receiver_generics_count(deref_ty)
+            && (matches!(deref_ty, Type::Nominal { id, .. }
+                    if self.is_ufcs_method(id.as_str(), args.member_name))
+                || matches!(store.deep_resolve_alias(deref_ty), Type::Nominal { id, .. }
+                    if self.is_ufcs_method(id.as_str(), args.member_name))
+                || matches!(method_ty, Type::Forall { vars, .. }
+                    if vars.len() > self.get_receiver_generics_count(deref_ty)))
         {
             self.sink
                 .push(diagnostics::infer::taking_value_of_ufcs_method(*args.span));

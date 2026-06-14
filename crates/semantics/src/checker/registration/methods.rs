@@ -4,7 +4,9 @@ use syntax::ast::{
     Visibility as SyntacticVisibility,
 };
 use syntax::program::{Definition, DefinitionBody, Interface, Visibility};
-use syntax::types::{Symbol, Type, build_substitution_map, substitute, unqualified_name};
+use syntax::types::{
+    Symbol, Type, build_substitution_map, substitute, type_args_match_params, unqualified_name,
+};
 
 use super::{extract_attribute_flags, has_recursive_instantiation, wrap_with_impl_generics};
 use crate::checker::TaskState;
@@ -646,13 +648,6 @@ impl TaskState<'_> {
             _ => return false,
         };
 
-        if params.len() != generics.len() {
-            return false;
-        }
-
-        params
-            .iter()
-            .zip(generics.iter())
-            .all(|(param, generic)| matches!(param, Type::Parameter(name) if *name == generic.name))
+        type_args_match_params(params, generics.iter().map(|generic| &generic.name))
     }
 }

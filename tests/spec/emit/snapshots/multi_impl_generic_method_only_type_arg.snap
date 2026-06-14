@@ -1,0 +1,22 @@
+---
+source: tests/spec/emit/types.rs
+description: "\nstruct Pair<A, B> { a: A, b: B }\n\nimpl<A, B> Pair<A, B> {\n  fn snd<U>(self, u: U) -> U { u }\n}\n\nfn test() -> bool {\n  let p: Pair<int, string> = Pair { a: 1, b: \"x\" };\n  p.snd<bool>(true)\n}\n"
+---
+package main
+
+type Pair[A any, B any] struct {
+	a A
+	b B
+}
+
+func Pair_snd[A any, B any, U any](_ Pair[A, B], u U) U {
+	return u
+}
+
+func test() bool {
+	p := Pair[int, string]{
+		a: 1,
+		b: "x",
+	}
+	return Pair_snd[int, string, bool](p, true)
+}

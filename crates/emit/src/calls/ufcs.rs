@@ -16,61 +16,75 @@ use syntax::program::ReceiverCoercion;
 use syntax::types::Type;
 
 impl Planner<'_> {
-    fn infer_ufcs_return_only_type_args(
+    fn ufcs_type_args(
         &mut self,
         function: &Expression,
         qualified_name: &str,
         member: &str,
         receiver_ty: &Type,
+        type_args: &[Annotation],
         fx: &mut EmitEffects,
     ) -> Option<String> {
         let method_key = format!("{}.{}", qualified_name, member);
         let definition_ty = self.facts.definition(method_key.as_str())?.ty().clone();
 
+        // A method with no type parameters lowers to a non-generic free function.
         let Type::Forall { vars, body } = &definition_ty else {
             return None;
         };
         let Type::Function(f) = body.as_ref() else {
             return None;
         };
-        let generic_params = &f.params;
+
+        let mut receiver_mapping: HashMap<String, Type> = HashMap::default();
+        if let Some(self_param) = f.params.first() {
+            extract_type_mapping(&self_param.strip_refs(), receiver_ty, &mut receiver_mapping);
+        }
+
+        if !type_args.is_empty() {
+            let impl_count = vars.len().saturating_sub(type_args.len());
+            let mut go_type_strs = Vec::with_capacity(vars.len());
+            for (index, var) in vars.iter().enumerate() {
+                let go_type = if index < impl_count {
+                    self.go_type_string(receiver_mapping.get(var.as_str())?, fx)
+                } else {
+                    self.annotation_to_go_type(type_args.get(index - impl_count)?, fx)
+                };
+                go_type_strs.push(go_type);
+            }
+            return (!go_type_strs.is_empty()).then(|| format!("[{}]", go_type_strs.join(", ")));
+        }
 
         let all_inferable = vars.iter().all(|var| {
             let param_ty = Type::Parameter(var.clone());
-            generic_params.iter().any(|pt| pt.contains_type(&param_ty))
+            f.params.iter().any(|pt| pt.contains_type(&param_ty))
         });
         if all_inferable {
             return None;
         }
 
-        let instantiated_ty = function.get_type();
-        let mut mapping: HashMap<String, Type> = HashMap::default();
-        extract_type_mapping(body, &instantiated_ty, &mut mapping);
-
-        let mut go_type_strs = Vec::new();
-        if let Type::Nominal { params, .. } = receiver_ty {
-            for param in params {
-                go_type_strs.push(self.go_type_string(param, fx));
-            }
-        }
-        let base_generics_count = if let Type::Nominal { params, .. } = receiver_ty {
-            params.len()
-        } else {
-            0
-        };
-        for var in vars.iter().skip(base_generics_count) {
-            if let Some(resolved) = mapping.get(var.as_str()) {
-                go_type_strs.push(self.go_type_string(resolved, fx));
+        let mut inferred_mapping: HashMap<String, Type> = HashMap::default();
+        if let Type::Function(inst) = function.get_type() {
+            let self_curried = inst.params.len() + 1 == f.params.len();
+            let declared = if self_curried {
+                &f.params[1..]
             } else {
-                return None;
+                &f.params[..]
+            };
+            for (decl, conc) in declared.iter().zip(inst.params.iter()) {
+                extract_type_mapping(decl, conc, &mut inferred_mapping);
             }
+            extract_type_mapping(&f.return_type, &inst.return_type, &mut inferred_mapping);
         }
 
-        if go_type_strs.is_empty() {
-            return None;
+        let mut go_type_strs = Vec::with_capacity(vars.len());
+        for var in vars {
+            let resolved = receiver_mapping
+                .get(var.as_str())
+                .or_else(|| inferred_mapping.get(var.as_str()))?;
+            go_type_strs.push(self.go_type_string(resolved, fx));
         }
-
-        Some(format!("[{}]", go_type_strs.join(", ")))
+        (!go_type_strs.is_empty()).then(|| format!("[{}]", go_type_strs.join(", ")))
     }
 
     pub(super) fn lower_ufcs_call(
@@ -91,7 +105,7 @@ impl Planner<'_> {
             unreachable!("lower_ufcs_call called on non-DotAccess");
         };
 
-        let receiver_ty = receiver.get_type().strip_refs().clone();
+        let receiver_ty = self.facts.peel_alias(&receiver.get_type().strip_refs());
         let Type::Nominal {
             id: qualified_name, ..
         } = &receiver_ty
@@ -115,10 +129,10 @@ impl Planner<'_> {
 
         let fn_name = self.build_ufcs_qualified_call(
             function,
-            type_args,
             &receiver_ty,
             qualified_name,
             member,
+            type_args,
             fx,
         );
         (setup, format!("{}({})", fn_name, new_args.join(", ")))
@@ -186,18 +200,15 @@ impl Planner<'_> {
     fn build_ufcs_qualified_call(
         &mut self,
         function: &Expression,
-        type_args: &[Annotation],
         receiver_ty: &Type,
         qualified_name: &str,
         member: &str,
+        type_args: &[Annotation],
         fx: &mut EmitEffects,
     ) -> String {
-        let type_args_string = if !type_args.is_empty() {
-            self.format_type_args_with_receiver(receiver_ty, type_args, fx)
-        } else {
-            self.infer_ufcs_return_only_type_args(function, qualified_name, member, receiver_ty, fx)
-                .unwrap_or_default()
-        };
+        let type_args_string = self
+            .ufcs_type_args(function, qualified_name, member, receiver_ty, type_args, fx)
+            .unwrap_or_default();
 
         let method_key = format!("{}.{}", qualified_name, member);
         let is_public = self

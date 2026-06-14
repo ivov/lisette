@@ -2,14 +2,8 @@ use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use syntax::ast::Expression;
 use syntax::program::{DefinitionBody, Module};
-use syntax::types::{Symbol, Type};
+use syntax::types::{Symbol, Type, type_args_match_params};
 
-/// Determines if a method type requires UFCS emission based on its signature.
-///
-/// A method is UFCS when:
-/// - It has extra type parameters beyond the base type's generics (e.g., `Option<T>.map<U>`)
-/// - It has no Forall but the base type is generic (specialized impl block)
-/// - Its receiver has concrete type constructor parameters (e.g., `impl Option<int>`)
 pub fn is_ufcs_method_type(method_ty: &Type, base_generics_count: usize) -> bool {
     let Type::Forall { vars, body } = method_ty else {
         return base_generics_count > 0;
@@ -25,12 +19,9 @@ pub fn is_ufcs_method_type(method_ty: &Type, base_generics_count: usize) -> bool
             params: receiver_params,
             ..
         } = receiver_param.strip_refs()
+        && !type_args_match_params(&receiver_params, vars.iter())
     {
-        for param in receiver_params {
-            if matches!(param, Type::Nominal { .. }) {
-                return true;
-            }
-        }
+        return true;
     }
 
     false
@@ -40,7 +31,7 @@ pub fn is_ufcs_method_type(method_ty: &Type, base_generics_count: usize) -> bool
 ///
 /// Three conditions (any one suffices):
 /// 1. Extra type params: method's Forall vars exceed base type's generics count
-/// 2. Specialized receiver: receiver's type constructor params contain concrete types
+/// 2. Partial receiver: receiver is not the impl's own type parameters in order
 /// 3. Mixed impl blocks: type has both bounded and unbounded impl blocks
 pub fn compute_module_ufcs(module: &Module, module_id: &str) -> Vec<(String, String)> {
     let mut ufcs = Vec::new();

@@ -1,0 +1,18 @@
+---
+source: tests/spec/emit/types.rs
+description: "\nstruct Box<T> { value: T }\n\nimpl Box<int> {\n  fn keep<U>(self, x: U) -> U { x }\n}\n\nfn test() -> string {\n  let b = Box { value: 1 };\n  b.keep<string>(\"ok\")\n}\n"
+---
+package main
+
+type Box[T any] struct {
+	value T
+}
+
+func Box_keep[U any](_ Box[int], x U) U {
+	return x
+}
+
+func test() string {
+	b := Box[int]{value: 1}
+	return Box_keep[string](b, "ok")
+}
