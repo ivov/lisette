@@ -800,6 +800,57 @@ impl Type {
         )
     }
 
+    pub fn is_equals_signature(&self) -> bool {
+        let func = match self {
+            Type::Forall { body, .. } => body.as_ref(),
+            other => other,
+        };
+        matches!(
+            func,
+            Type::Function(f)
+                if f.params.len() == 2
+                    && matches!(f.return_type.as_ref(), Type::Simple(SimpleKind::Bool))
+                    && f.params[0] == f.params[1]
+                    && !f.params[0].is_ref()
+        )
+    }
+
+    pub fn equals_receiver_vars(&self, owner_id: &str, arity: usize) -> Option<Vec<EcoString>> {
+        if !self.is_equals_signature() {
+            return None;
+        }
+        let (quantified, func): (&[EcoString], &Type) = match self {
+            Type::Forall { vars, body } => (vars, body.as_ref()),
+            other => (&[], other),
+        };
+        if quantified.len() != arity {
+            return None;
+        }
+        let Type::Function(f) = func else {
+            return None;
+        };
+        let Type::Nominal { id, params, .. } = &f.params[0] else {
+            return None;
+        };
+        if id.as_str() != owner_id || params.len() != arity {
+            return None;
+        }
+        let mut vars = Vec::with_capacity(arity);
+        for param in params {
+            let Type::Parameter(name) = param else {
+                return None;
+            };
+            if vars.contains(name) {
+                return None;
+            }
+            vars.push(name.clone());
+        }
+        if !quantified.iter().all(|v| vars.contains(v)) {
+            return None;
+        }
+        Some(vars)
+    }
+
     pub fn has_name(&self, name: &str) -> bool {
         match self {
             Type::Nominal { id, .. } => id.last_segment() == name,

@@ -101,21 +101,58 @@ fn is_interface_or_unknown(store: &Store, ty: &Type) -> bool {
     resolved.is_unknown() || store.is_interface(&resolved)
 }
 
-pub(crate) fn bounds_conflict(store: &Store, type_bounds: &[Type], impl_bound: &Type) -> bool {
-    let impl_bound = store.deep_resolve_alias(impl_bound);
-    let Some(impl_base) = impl_bound.get_qualified_id().map(str::to_string) else {
+pub(crate) fn type_has_usable_equals(store: &Store, ty: &Type, current_module: &str) -> bool {
+    let resolved = store.deep_resolve_alias(ty);
+    let Some(qualified) = resolved.get_qualified_id() else {
         return false;
     };
-    type_bounds
-        .iter()
-        .any(|tb| closure_conflicts(store, tb, &impl_base, &impl_bound))
+    store.usable_equals.usable_from(qualified, current_module)
 }
 
-fn closure_conflicts(store: &Store, start: &Type, target_base: &str, target: &Type) -> bool {
+fn type_has_callable_bound_mismatched_equals(
+    store: &Store,
+    ty: &Type,
+    current_module: &str,
+) -> bool {
+    let Some(id) = ty.get_qualified_id() else {
+        return false;
+    };
+    if !store.equals_bound_mismatch.contains(id) {
+        return false;
+    }
+    let method_key = format!("{id}.equals");
+    store.get_definition(&method_key).is_some_and(|method| {
+        method.visibility.is_public() || store.module_for_qualified_name(id) == Some(current_module)
+    })
+}
+
+pub(crate) fn bound_implied(store: &Store, type_bounds: &[Type], method_bound: &Type) -> bool {
+    use super::super::unify::BuiltinBound;
+    let builtin = |ty: &Type| {
+        ty.get_qualified_id()
+            .and_then(BuiltinBound::from_qualified_id)
+    };
+    if let Some(method) = builtin(method_bound)
+        && type_bounds
+            .iter()
+            .any(|tb| builtin(tb).is_some_and(|tb| tb.satisfies(method)))
+    {
+        return true;
+    }
+    type_bounds
+        .iter()
+        .any(|tb| bound_satisfies(store, tb, method_bound))
+}
+
+fn interface_closure_any(
+    store: &Store,
+    start: &Type,
+    mut predicate: impl FnMut(&Type) -> bool,
+) -> bool {
     let mut stack = vec![store.deep_resolve_alias(start)];
     let mut seen: Vec<Type> = Vec::new();
     while let Some(current) = stack.pop() {
-        if current.get_qualified_id() == Some(target_base) && current != *target {
+        if predicate(&current) {
             return true;
         }
         if seen.contains(&current) {
@@ -137,6 +174,27 @@ fn closure_conflicts(store: &Store, start: &Type, target_base: &str, target: &Ty
         }
     }
     false
+}
+
+fn bound_satisfies(store: &Store, start: &Type, target: &Type) -> bool {
+    let target = store.deep_resolve_alias(target);
+    interface_closure_any(store, start, |current| current == &target)
+}
+
+pub(crate) fn bounds_conflict(store: &Store, type_bounds: &[Type], impl_bound: &Type) -> bool {
+    let impl_bound = store.deep_resolve_alias(impl_bound);
+    let Some(impl_base) = impl_bound.get_qualified_id().map(str::to_string) else {
+        return false;
+    };
+    type_bounds
+        .iter()
+        .any(|tb| closure_conflicts(store, tb, &impl_base, &impl_bound))
+}
+
+fn closure_conflicts(store: &Store, start: &Type, target_base: &str, target: &Type) -> bool {
+    interface_closure_any(store, start, |current| {
+        current.get_qualified_id() == Some(target_base) && current != target
+    })
 }
 
 impl InferCtx<'_, '_> {
@@ -183,32 +241,54 @@ impl InferCtx<'_, '_> {
 
     pub(super) fn not_equatable_reason(&self, ty: &Type) -> Option<&'static str> {
         let resolved = self.store.deep_resolve_alias(&ty.resolve_in(&self.env));
+        let current_module = self.cursor.module_id.as_str();
 
         if let Type::Parameter(name) = &resolved
             && self.parameter_satisfies_bound(name, super::super::unify::BuiltinBound::Comparable)
         {
             return None;
         }
-        // `?` returns `None` (equatable) when the type is comparable.
-        let reason = check_not_comparable(&self.env, self.store, &resolved)?;
+        if type_has_usable_equals(self.store, &resolved, current_module) {
+            return None;
+        }
+
+        let Some(reason) = check_not_comparable(&self.env, self.store, &resolved) else {
+            return type_has_callable_bound_mismatched_equals(
+                self.store,
+                &resolved,
+                current_module,
+            )
+            .then_some("a type whose `equals` requires stricter bounds");
+        };
 
         match resolved.as_compound() {
             Some((CompoundKind::Slice, args)) => self.not_equatable_reason(args.first()?),
-            Some((CompoundKind::Map, args)) => self.not_equatable_reason(args.get(1)?),
+            Some((CompoundKind::Map, args)) => {
+                if self.map_key_not_comparable(args.first()?) {
+                    return Some("a map with a non-comparable key");
+                }
+                self.not_equatable_reason(args.get(1)?)
+            }
             _ => Some(reason),
         }
     }
 
+    fn map_key_not_comparable(&self, key: &Type) -> bool {
+        let resolved = self.store.deep_resolve_alias(&key.resolve_in(&self.env));
+        if let Type::Parameter(name) = &resolved
+            && self.parameter_satisfies_bound(name, super::super::unify::BuiltinBound::Comparable)
+        {
+            return false;
+        }
+        check_not_comparable(&self.env, self.store, &resolved).is_some()
+    }
+
     pub(super) fn gate_container_equals(&mut self, receiver_ty: &Type, span: Span) {
         let receiver = self.store.deep_resolve_alias(receiver_ty);
-        let element = match receiver.as_compound() {
-            Some((CompoundKind::Slice, args)) => args.first().cloned(),
-            Some((CompoundKind::Map, args)) => args.get(1).cloned(),
-            _ => return,
-        };
-        if let Some(element) = element
-            && let Some(reason) = self.not_equatable_reason(&element)
-        {
+        if !receiver.is_slice() && !receiver.is_map() {
+            return;
+        }
+        if let Some(reason) = self.not_equatable_reason(&receiver) {
             self.sink
                 .push(diagnostics::infer::not_equatable(&receiver, reason, span));
         }

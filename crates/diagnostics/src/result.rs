@@ -3,7 +3,9 @@ use std::path::PathBuf;
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use syntax::ParseError;
-use syntax::program::{Definition, EmitInput, File, ModuleInfo, MutationInfo, UnusedInfo};
+use syntax::program::{
+    Definition, EmitInput, File, ModuleInfo, MutationInfo, UnusedInfo, UsableEquals,
+};
 use syntax::types::Symbol;
 
 use crate::LisetteDiagnostic;
@@ -19,6 +21,7 @@ pub struct SemanticResult {
     pub mutations: MutationInfo,
     pub cached_modules: HashSet<String>,
     pub ufcs_methods: HashSet<(String, String)>,
+    pub usable_equals: UsableEquals,
     /// File ID -> on-disk path of the `.d.lis` typedef. Populated for third-party
     /// go: typedefs read from `target/.lisette/typedefs/...`; absent for embedded
     /// stdlib typedefs.
@@ -40,6 +43,7 @@ impl SemanticResult {
             mutations: MutationInfo::default(),
             cached_modules: HashSet::default(),
             ufcs_methods: HashSet::default(),
+            usable_equals: UsableEquals::default(),
             typedef_paths: HashMap::default(),
             go_package_names: HashMap::default(),
             go_module_ids: HashSet::default(),
@@ -60,6 +64,7 @@ impl SemanticResult {
             mutations: self.mutations,
             cached_modules: self.cached_modules,
             ufcs_methods: self.ufcs_methods,
+            usable_equals: self.usable_equals,
             go_package_names: self.go_package_names,
             go_module_ids: self.go_module_ids,
         }

@@ -2,6 +2,7 @@ use ecow::EcoString;
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use syntax::ast::Span;
+use syntax::types::Type;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ModuleItemId {
@@ -85,6 +86,9 @@ pub struct ReferenceGraph {
     used_struct_fields: HashSet<StructFieldId>,
     enum_variants: HashMap<EnumVariantId, EnumVariantInfo>,
     used_enum_variants: HashSet<EnumVariantId>,
+    /// Container `.equals()` receivers whose element `equals` is credited after the walk,
+    /// once the usable-equality verdict can filter them.
+    pending_equals_dispatch: Vec<(ModuleItemId, Type)>,
 }
 
 impl ReferenceGraph {
@@ -113,6 +117,14 @@ impl ReferenceGraph {
 
     pub fn add_reference(&mut self, from: &ModuleItemId, to: ModuleItemId) {
         self.edges.entry(from.clone()).or_default().insert(to);
+    }
+
+    pub fn record_equals_dispatch(&mut self, from: ModuleItemId, receiver_ty: Type) {
+        self.pending_equals_dispatch.push((from, receiver_ty));
+    }
+
+    pub fn take_equals_dispatch(&mut self) -> Vec<(ModuleItemId, Type)> {
+        std::mem::take(&mut self.pending_equals_dispatch)
     }
 
     /// Mark an item as used by adding it to entrypoints.

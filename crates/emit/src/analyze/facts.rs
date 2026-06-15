@@ -5,7 +5,9 @@ use ecow::EcoString;
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use syntax::ast::{BindingId, Pattern, RestPattern, Span};
-use syntax::program::{Definition, DefinitionBody, ModuleId, MutationInfo, UnusedInfo};
+use syntax::program::{
+    Definition, DefinitionBody, ModuleId, MutationInfo, UnusedInfo, UsableEquals,
+};
 use syntax::types::{Symbol, Type};
 
 use crate::classify_go_return_type;
@@ -19,6 +21,7 @@ pub(crate) struct EmitFactsConfig<'a> {
     pub(crate) unused: &'a UnusedInfo,
     pub(crate) mutations: &'a MutationInfo,
     pub(crate) ufcs_methods: &'a HashSet<(String, String)>,
+    pub(crate) usable_equals: &'a UsableEquals,
     pub(crate) go_package_names: &'a HashMap<String, String>,
     pub(crate) go_module_ids: &'a HashSet<String>,
     pub(crate) entry_module: ModuleId,
@@ -35,6 +38,7 @@ pub(crate) struct EmitFacts<'a> {
     unused: &'a UnusedInfo,
     mutations: &'a MutationInfo,
     ufcs_methods: &'a HashSet<(String, String)>,
+    usable_equals: &'a UsableEquals,
     go_package_names: &'a HashMap<String, String>,
     go_module_ids: &'a HashSet<String>,
     entry_module: ModuleId,
@@ -53,6 +57,7 @@ impl<'a> EmitFacts<'a> {
             unused: config.unused,
             mutations: config.mutations,
             ufcs_methods: config.ufcs_methods,
+            usable_equals: config.usable_equals,
             go_package_names: config.go_package_names,
             go_module_ids: config.go_module_ids,
             entry_module: config.entry_module,
@@ -144,6 +149,10 @@ impl<'a> EmitFacts<'a> {
     pub(crate) fn is_ufcs_method(&self, qualified_type: &str, method: &str) -> bool {
         self.ufcs_methods
             .contains(&(qualified_type.to_string(), method.to_string()))
+    }
+
+    pub(crate) fn usable_equals_from(&self, id: &str) -> bool {
+        self.usable_equals.usable_from(id, &self.current_module)
     }
 
     pub(crate) fn current_module(&self) -> &str {

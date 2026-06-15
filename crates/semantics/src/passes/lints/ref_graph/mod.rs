@@ -14,11 +14,12 @@ use diagnostics::LocalSink;
 use syntax::ast::{AttributeArg, Expression, ImportAlias, Span, Visibility};
 use syntax::program::Module;
 use syntax::program::UnusedInfo;
+use syntax::program::UsableEquals;
 use syntax::program::{File, FileImport};
 
 use super::Lint as LintEnum;
 use super::from_facts::LintConfig;
-use extract::{AliasMap, extract_references, is_upper};
+use extract::{AliasMap, equals_targets, extract_references, is_upper};
 use reference_graph::{
     EnumVariantId, EnumVariantInfo, ItemKind, ModuleItemId, ReferenceGraph, StructFieldId,
     StructFieldInfo,
@@ -38,6 +39,7 @@ pub(crate) fn run(
 ) -> (Vec<LisetteDiagnostic>, UnusedInfo) {
     let store = analysis.store;
     let go_package_names = &store.go_package_names;
+    let usable_equals = &store.usable_equals;
     let config = LintConfig::default();
 
     let mut modules: Vec<&Module> = store
@@ -53,7 +55,15 @@ pub(crate) fn run(
     if modules.len() < PARALLEL_THRESHOLD {
         let sink = LocalSink::new();
         for module in &modules {
-            apply_ref_lints(module, go_package_names, &config, facts, &mut unused, &sink);
+            apply_ref_lints(
+                module,
+                go_package_names,
+                usable_equals,
+                &config,
+                facts,
+                &mut unused,
+                &sink,
+            );
         }
         return (sink.take(), unused);
     }
@@ -67,6 +77,7 @@ pub(crate) fn run(
             apply_ref_lints(
                 module,
                 go_package_names,
+                usable_equals,
                 &config,
                 facts,
                 &mut local_unused,
@@ -87,12 +98,20 @@ pub(crate) fn run(
 fn apply_ref_lints(
     module: &Module,
     go_package_names: &HashMap<String, String>,
+    usable_equals: &UsableEquals,
     config: &LintConfig,
     facts: &Facts,
     unused: &mut UnusedInfo,
     sink: &LocalSink,
 ) {
-    let result = run_ref_lints(module, &module.files, go_package_names, config, facts);
+    let result = run_ref_lints(
+        module,
+        &module.files,
+        go_package_names,
+        usable_equals,
+        config,
+        facts,
+    );
     if !result.unused_import_aliases.is_empty() {
         unused.imports_by_module.insert(
             module.id.clone().into(),
@@ -115,6 +134,7 @@ fn run_ref_lints(
     module: &Module,
     files: &HashMap<u32, File>,
     go_package_names: &HashMap<String, String>,
+    usable_equals: &UsableEquals,
     config: &LintConfig,
     facts: &Facts,
 ) -> RefLintResult {
@@ -129,6 +149,14 @@ fn run_ref_lints(
     for file in files.values() {
         for item in &file.items {
             extract_references(module, item, &mut graph, &alias_map);
+        }
+    }
+
+    for (from, receiver_ty) in graph.take_equals_dispatch() {
+        let mut targets = Vec::new();
+        equals_targets(&receiver_ty, module, usable_equals, &mut targets);
+        for to in targets {
+            graph.add_reference(&from, to);
         }
     }
 

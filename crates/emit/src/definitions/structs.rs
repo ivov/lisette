@@ -235,10 +235,18 @@ impl Planner<'_> {
     }
 
     pub(crate) fn to_string_method_go_name(&self) -> String {
-        if self.method_needs_export("to_string") {
-            go_name::snake_to_camel("to_string")
+        self.method_go_name("to_string")
+    }
+
+    pub(crate) fn equals_method_go_name(&self) -> String {
+        self.method_go_name("equals")
+    }
+
+    fn method_go_name(&self, method: &str) -> String {
+        if self.method_needs_export(method) {
+            go_name::snake_to_camel(method)
         } else {
-            go_name::escape_keyword("to_string").into_owned()
+            go_name::escape_keyword(method).into_owned()
         }
     }
 

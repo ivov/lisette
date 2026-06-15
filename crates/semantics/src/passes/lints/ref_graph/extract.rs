@@ -5,8 +5,8 @@ use syntax::ast::{
     StructSpread,
 };
 use syntax::program::File;
-use syntax::program::{DefinitionBody, DotAccessKind, Module};
-use syntax::types::{Symbol, Type, unqualified_name};
+use syntax::program::{DefinitionBody, DotAccessKind, Module, UsableEquals};
+use syntax::types::{CompoundKind, Symbol, Type, unqualified_name};
 
 use super::reference_graph::{EnumVariantId, ModuleItemId, ReferenceGraph, StructFieldId};
 
@@ -103,6 +103,12 @@ fn walk_expression(
             {
                 let to = method_node(member, &expression.get_type());
                 graph.add_reference(from, to);
+            }
+            if let Some(from) = ctx
+                && member == "equals"
+                && is_container_receiver(&expression.get_type())
+            {
+                graph.record_equals_dispatch(from.clone(), expression.get_type());
             }
         }
 
@@ -390,6 +396,13 @@ fn walk_call(
                 let method_name = value.rsplit('.').next().unwrap_or("");
                 graph.add_reference(from, ModuleItemId::method(method_name, first));
             }
+        }
+        if let Some(from) = ctx
+            && (value.as_str() == "Slice.equals" || value.as_str() == "Map.equals")
+            && let Some(receiver) = args.first()
+            && is_container_receiver(&receiver.get_type())
+        {
+            graph.record_equals_dispatch(from.clone(), receiver.get_type());
         }
     }
     walk_expression(module, callee, graph, alias_map, ctx);
@@ -783,6 +796,52 @@ fn credits_local_method(receiver_ty: &Type, module: &Module) -> bool {
         Type::Nominal { id, .. } => id.as_str().starts_with(&format!("{}.", module.id)),
         _ => false,
     }
+}
+
+pub(super) fn equals_targets(
+    ty: &Type,
+    module: &Module,
+    usable: &UsableEquals,
+    out: &mut Vec<ModuleItemId>,
+) {
+    let mut current = ty.clone();
+    while let Some(next) = current.get_underlying().cloned() {
+        current = next;
+    }
+    match &current {
+        Type::Compound {
+            kind: CompoundKind::Slice,
+            args,
+        } => {
+            if let Some(element) = args.first() {
+                equals_targets(element, module, usable, out);
+            }
+        }
+        Type::Compound {
+            kind: CompoundKind::Map,
+            args,
+        } => {
+            if let Some(value) = args.get(1) {
+                equals_targets(value, module, usable, out);
+            }
+        }
+        Type::Nominal { id, .. } => {
+            if id.as_str().starts_with(&format!("{}.", module.id))
+                && usable.usable_from(id.as_str(), &module.id)
+            {
+                out.push(ModuleItemId::equals_method(unqualified_name(id)));
+            }
+        }
+        _ => {}
+    }
+}
+
+fn is_container_receiver(receiver_ty: &Type) -> bool {
+    let mut current = receiver_ty.strip_refs();
+    while let Some(next) = current.get_underlying().cloned() {
+        current = next;
+    }
+    current.is_slice() || current.is_map()
 }
 
 fn type_name(ty: &Type) -> Option<String> {

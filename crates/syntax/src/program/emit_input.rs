@@ -67,6 +67,29 @@ impl UnusedInfo {
 }
 
 #[derive(Debug, Clone, Default)]
+pub struct UsableEquals {
+    by_id: HashMap<String, Option<String>>,
+}
+
+impl UsableEquals {
+    pub fn insert(&mut self, id: String, private_to_module: Option<String>) {
+        self.by_id.insert(id, private_to_module);
+    }
+
+    pub fn usable_from(&self, id: &str, current_module: &str) -> bool {
+        Self::entry_usable_from(self.by_id.get(id), current_module)
+    }
+
+    pub fn entry_usable_from(entry: Option<&Option<String>>, current_module: &str) -> bool {
+        match entry {
+            Some(None) => true,
+            Some(Some(module)) => module == current_module,
+            None => false,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Default)]
 pub struct MutationInfo {
     bindings: HashSet<AstBindingId>,
 }
@@ -90,6 +113,7 @@ pub struct EmitInput {
     pub mutations: MutationInfo,
     pub cached_modules: HashSet<String>,
     pub ufcs_methods: HashSet<(String, String)>,
+    pub usable_equals: UsableEquals,
     pub go_package_names: HashMap<String, String>,
     pub go_module_ids: HashSet<String>,
 }

@@ -1,0 +1,31 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  struct Point { x: int }
+  
+  impl Point {
+    fn equals(self, other: Point) -> bool {
+      self.x == other.x
+    }
+  }
+  
+  fn test(a: Map<string, Point>, b: Map<string, Point>) -> bool {
+    a.equals(b)
+  }
+---
+package main
+
+import "maps"
+
+type Point struct {
+	x int
+}
+
+func (p Point) equals(other Point) bool {
+	return p.x == other.x
+}
+
+func test(a, b map[string]Point) bool {
+	return maps.EqualFunc(a, b, func(a_1 Point, b_2 Point) bool { return a_1.equals(b_2) })
+}

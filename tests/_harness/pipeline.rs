@@ -8,7 +8,7 @@ use syntax::{
     desugar,
     lex::Lexer,
     parse::Parser,
-    program::{Definition, File, FileImport, MutationInfo, UnusedInfo, Visibility},
+    program::{Definition, File, FileImport, MutationInfo, UnusedInfo, UsableEquals, Visibility},
     types::Symbol,
 };
 
@@ -104,6 +104,7 @@ impl CompiledTest {
             unused,
             mutations,
             ufcs_methods,
+            usable_equals,
             go_package_names,
             go_module_ids,
         ) = {
@@ -177,6 +178,8 @@ impl CompiledTest {
                     semantics::call_classification::compute_module_ufcs(module, TEST_MODULE_ID);
                 checker.ufcs_methods.extend(ufcs_entries);
             }
+
+            checker.record_usable_equals(&mut store);
 
             let mut typed_ast = vec![];
 
@@ -267,6 +270,7 @@ impl CompiledTest {
             }
 
             let ufcs_methods = std::mem::take(&mut checker.ufcs_methods);
+            let usable_equals = std::mem::take(&mut store.usable_equals);
             let go_package_names = store.go_package_names.clone();
             let go_module_ids: HashSet<String> = store
                 .modules
@@ -281,6 +285,7 @@ impl CompiledTest {
                 unused,
                 mutations,
                 ufcs_methods,
+                usable_equals,
                 go_package_names,
                 go_module_ids,
             )
@@ -294,6 +299,7 @@ impl CompiledTest {
             unused,
             mutations,
             ufcs_methods,
+            usable_equals,
             go_package_names,
             go_module_ids,
         }
@@ -308,6 +314,7 @@ pub struct InferenceResult {
     pub unused: UnusedInfo,
     pub mutations: MutationInfo,
     pub ufcs_methods: HashSet<(String, String)>,
+    pub usable_equals: UsableEquals,
     pub go_package_names: HashMap<String, String>,
     pub go_module_ids: HashSet<String>,
 }

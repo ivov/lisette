@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Invalid comparison
+   ╭─[test.lis:5:3]
+ 4 │ fn test(a: Map<Key, int>, b: Map<Key, int>) -> bool {
+ 5 │   a.equals(b)
+   ·   ┬
+   ·   ╰── cannot be compared
+ 6 │ }
+   ╰────
+  help: `Map<Key, int>` cannot be compared because a map with a non-comparable key cannot be compared · code: [infer.not_equatable]

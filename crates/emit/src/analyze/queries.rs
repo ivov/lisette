@@ -106,6 +106,14 @@ impl Planner<'_> {
             || matches!(method_name, "string" | "goString" | "error")
     }
 
+    pub(crate) fn type_has_equals(&self, ty: &Type) -> bool {
+        let peeled = self.facts.peel_alias(ty);
+        let Some(id) = peeled.get_qualified_id() else {
+            return false;
+        };
+        self.facts.usable_equals_from(id)
+    }
+
     pub(crate) fn has_field(&self, struct_ty: &Type, field_name: &str) -> bool {
         let Type::Nominal { id, .. } = struct_ty.strip_refs() else {
             return false;

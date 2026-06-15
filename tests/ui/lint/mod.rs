@@ -15541,6 +15541,146 @@ fn main() {
 }
 
 #[test]
+fn container_equals_keeps_usable_element_equals_alive() {
+    let mut fs = MockFileSystem::new();
+    let source = r#"
+struct Point { x: int }
+
+impl Point {
+  fn equals(self, other: Point) -> bool {
+    self.x == other.x
+  }
+}
+
+fn main() {
+  let a: Slice<Point> = []
+  let b: Slice<Point> = []
+  let _ = a.equals(b)
+}
+"#;
+    fs.add_file(ENTRY_MODULE_ID, "main.lis", source);
+
+    let result = compile_check(fs);
+    assert!(
+        result.errors.is_empty(),
+        "unexpected errors: {:?}",
+        result.errors
+    );
+    let codes: Vec<&str> = result.lints.iter().filter_map(|l| l.code_str()).collect();
+    assert!(
+        !codes.contains(&"lint.unused_function"),
+        "Slice<Point>.equals dispatches to Point.equals, which must be kept alive: {codes:?}"
+    );
+}
+
+#[test]
+fn container_equals_does_not_keep_wrong_signature_equals_alive() {
+    let mut fs = MockFileSystem::new();
+    let source = r#"
+struct Point { x: int, y: int }
+
+impl Point {
+  fn equals(self) -> bool {
+    self.x == self.y
+  }
+}
+
+fn main() {
+  let a: Slice<Point> = []
+  let b: Slice<Point> = []
+  let _ = a.equals(b)
+}
+"#;
+    fs.add_file(ENTRY_MODULE_ID, "main.lis", source);
+
+    let result = compile_check(fs);
+    assert!(
+        result.errors.is_empty(),
+        "unexpected errors: {:?}",
+        result.errors
+    );
+    let codes: Vec<&str> = result.lints.iter().filter_map(|l| l.code_str()).collect();
+    assert!(
+        codes.contains(&"lint.unused_function"),
+        "Point.equals has the wrong signature, so Slice<Point>.equals never calls it: {codes:?}"
+    );
+}
+
+#[test]
+fn ufcs_container_equals_keeps_element_equals_alive() {
+    let mut fs = MockFileSystem::new();
+    let source = r#"
+struct Point { x: int }
+
+impl Point {
+  fn equals(self, other: Point) -> bool {
+    self.x == other.x
+  }
+}
+
+fn main() {
+  let a: Slice<Point> = []
+  let b: Slice<Point> = []
+  let _ = Slice.equals(a, b)
+}
+"#;
+    fs.add_file(ENTRY_MODULE_ID, "main.lis", source);
+
+    let result = compile_check(fs);
+    assert!(
+        result.errors.is_empty(),
+        "unexpected errors: {:?}",
+        result.errors
+    );
+    let codes: Vec<&str> = result.lints.iter().filter_map(|l| l.code_str()).collect();
+    assert!(
+        !codes.contains(&"lint.unused_function"),
+        "Slice.equals(a, b) dispatches to Point.equals, which must be kept alive: {codes:?}"
+    );
+}
+
+#[test]
+fn container_equals_does_not_credit_nested_type_argument_equals() {
+    let mut fs = MockFileSystem::new();
+    let source = r#"
+struct Point { x: int }
+
+impl Point {
+  fn equals(self, other: Point) -> bool {
+    self.x == other.x
+  }
+}
+
+struct Box<T> { value: T }
+
+impl<T> Box<T> {
+  fn equals(self, other: Box<T>) -> bool {
+    true
+  }
+}
+
+fn main() {
+  let a: Slice<Box<Point>> = []
+  let b: Slice<Box<Point>> = []
+  let _ = a.equals(b)
+}
+"#;
+    fs.add_file(ENTRY_MODULE_ID, "main.lis", source);
+
+    let result = compile_check(fs);
+    assert!(
+        result.errors.is_empty(),
+        "unexpected errors: {:?}",
+        result.errors
+    );
+    let codes: Vec<&str> = result.lints.iter().filter_map(|l| l.code_str()).collect();
+    assert!(
+        codes.contains(&"lint.unused_function"),
+        "Box.equals does not call Point.equals, so Point.equals is unused: {codes:?}"
+    );
+}
+
+#[test]
 fn equals_method_satisfying_interface_is_kept() {
     let mut fs = MockFileSystem::new();
     let source = r#"

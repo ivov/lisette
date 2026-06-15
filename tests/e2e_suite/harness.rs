@@ -61,6 +61,7 @@ pub fn compile_e2e_suite_test(input: &str, package_name: &str) -> Result<Emitted
         unused: &result.unused,
         mutations: &result.mutations,
         ufcs_methods: &result.ufcs_methods,
+        usable_equals: &result.usable_equals,
         go_package_names: &result.go_package_names,
         go_module_ids: &result.go_module_ids,
     };

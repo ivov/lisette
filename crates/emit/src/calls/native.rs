@@ -344,8 +344,7 @@ impl Planner<'_> {
             let receiver_ty = self.facts.peel_alias(&expression.get_type().strip_refs());
             if receiver_ty.is_slice() || receiver_ty.is_map() {
                 let (setup, receiver, emitted_args) = self.stage_native_dot_access_call(ctx, fx);
-                let body =
-                    self.render_container_equality(&receiver, &emitted_args[0], &receiver_ty, fx);
+                let body = self.render_equality(&receiver, &emitted_args[0], &receiver_ty, fx);
                 return (setup, body);
             }
         }
@@ -479,12 +478,8 @@ impl Planner<'_> {
             if receiver_ty.is_slice() || receiver_ty.is_map() {
                 let (setup, emitted_args) = self.stage_native_identifier_args(ctx, fx);
                 if emitted_args.len() >= 2 {
-                    let body = self.render_container_equality(
-                        &emitted_args[0],
-                        &emitted_args[1],
-                        &receiver_ty,
-                        fx,
-                    );
+                    let body =
+                        self.render_equality(&emitted_args[0], &emitted_args[1], &receiver_ty, fx);
                     return (setup, body);
                 }
             }
@@ -613,19 +608,22 @@ impl Planner<'_> {
         )
     }
 
-    fn render_container_equality(
+    pub(crate) fn render_equality(
         &mut self,
         lhs: &str,
         rhs: &str,
         ty: &Type,
         fx: &mut EmitEffects,
     ) -> String {
-        let peeled = self.facts.peel_alias(&ty.strip_refs());
+        let peeled = self.facts.peel_alias(ty);
+        if peeled.is_ref() {
+            return format!("{lhs} == {rhs}");
+        }
         if peeled.is_slice() {
             fx.require_slices();
             return match peeled.inner() {
-                Some(elem) if self.is_container(&elem) => {
-                    let eq = self.container_equality_closure(&elem, fx);
+                Some(elem) if self.needs_custom_equality(&elem) => {
+                    let eq = self.equality_closure(&elem, fx);
                     format!("slices.EqualFunc({lhs}, {rhs}, {eq})")
                 }
                 _ => format!("slices.Equal({lhs}, {rhs})"),
@@ -637,26 +635,33 @@ impl Planner<'_> {
                 .as_compound()
                 .and_then(|(_, args)| args.get(1).cloned());
             return match value {
-                Some(value) if self.is_container(&value) => {
-                    let eq = self.container_equality_closure(&value, fx);
+                Some(value) if self.needs_custom_equality(&value) => {
+                    let eq = self.equality_closure(&value, fx);
                     format!("maps.EqualFunc({lhs}, {rhs}, {eq})")
                 }
                 _ => format!("maps.Equal({lhs}, {rhs})"),
             };
         }
-        unreachable!("`.equals()` gate guarantees a slice or map receiver")
+        if self.type_has_equals(&peeled) {
+            return format!("{lhs}.{}({rhs})", self.equals_method_go_name());
+        }
+        format!("{lhs} == {rhs}")
     }
 
-    fn container_equality_closure(&mut self, ty: &Type, fx: &mut EmitEffects) -> String {
+    fn equality_closure(&mut self, ty: &Type, fx: &mut EmitEffects) -> String {
         let go_ty = self.go_type_string(ty, fx);
         let a = self.fresh_var(Some("a"));
         let b = self.fresh_var(Some("b"));
-        let body = self.render_container_equality(&a, &b, ty, fx);
+        let body = self.render_equality(&a, &b, ty, fx);
         format!("func({a} {go_ty}, {b} {go_ty}) bool {{ return {body} }}")
     }
 
+    fn needs_custom_equality(&self, ty: &Type) -> bool {
+        self.is_container(ty) || self.type_has_equals(ty)
+    }
+
     fn is_container(&self, ty: &Type) -> bool {
-        let peeled = self.facts.peel_alias(&ty.strip_refs());
+        let peeled = self.facts.peel_alias(ty);
         peeled.is_slice() || peeled.is_map()
     }
 }

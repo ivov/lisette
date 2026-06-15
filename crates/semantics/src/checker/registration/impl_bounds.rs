@@ -195,7 +195,7 @@ impl TaskState<'_> {
 
     /// Resolve a type generic's bound annotation to a type, type arguments preserved so
     /// `Parent<string>` and `Parent<int>` stay distinct.
-    fn resolve_type_bound(
+    pub(super) fn resolve_type_bound(
         &mut self,
         store: &Store,
         bound: &Annotation,

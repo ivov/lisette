@@ -6296,6 +6296,36 @@ fn test(a: Slice<fn() -> int>, b: Slice<fn() -> int>) {
 }
 
 #[test]
+fn container_equals_map_non_comparable_key_rejected() {
+    let input = r#"
+struct Key { tags: Slice<int> }
+
+fn test(a: Map<Key, int>, b: Map<Key, int>) -> bool {
+  a.equals(b)
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn container_equals_element_with_bound_mismatched_equals_rejected() {
+    let input = r#"
+struct Box<T> { value: T }
+
+impl<T: Comparable> Box<T> {
+  fn equals(self, other: Box<T>) -> bool {
+    self.value == other.value
+  }
+}
+
+fn test(a: Slice<Box<Slice<int>>>, b: Slice<Box<Slice<int>>>) -> bool {
+  a.equals(b)
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
 fn infer_not_comparable_function() {
     let input = r#"
 fn test() {

@@ -3929,3 +3929,39 @@ fn main() {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn slice_equals_dispatches_to_element_equals() {
+    let input = r#"
+struct Point { x: int }
+
+impl Point {
+  fn equals(self, other: Point) -> bool {
+    self.x == other.x
+  }
+}
+
+fn test(a: Slice<Point>, b: Slice<Point>) -> bool {
+  a.equals(b)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn map_equals_dispatches_to_value_equals() {
+    let input = r#"
+struct Point { x: int }
+
+impl Point {
+  fn equals(self, other: Point) -> bool {
+    self.x == other.x
+  }
+}
+
+fn test(a: Map<string, Point>, b: Map<string, Point>) -> bool {
+  a.equals(b)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
