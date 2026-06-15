@@ -8767,3 +8767,111 @@ fn main() {
 "#;
     assert_infer_error_snapshot!(input);
 }
+
+#[test]
+fn impl_conflicting_bound_rejected() {
+    let input = r#"
+interface Parent<T> { fn p(self) -> T }
+
+struct Box<T: Parent<string>> { value: T }
+
+impl<T: Parent<int>> Box<T> {
+  fn less(self, _other: Box<T>) -> bool {
+    true
+  }
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn impl_conflicting_inherited_bound_rejected() {
+    let input = r#"
+interface Parent<T> { fn p(self) -> T }
+
+interface Child<T> {
+  embed Parent<T>
+  fn c(self)
+}
+
+struct Box<T: Child<string>> { value: T }
+
+impl<T: Parent<int>> Box<T> {
+  fn less(self, _other: Box<T>) -> bool {
+    true
+  }
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn impl_conflicting_type_variable_bound_rejected() {
+    let input = r#"
+interface Parent<T> { fn p(self) -> T }
+
+struct Box<T: Parent<T>> { value: T }
+
+impl<T: Parent<string>> Box<T> {
+  fn label(self) -> string {
+    self.value.p()
+  }
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn impl_conflicting_cross_impl_interface_instantiations_rejected() {
+    let input = r#"
+interface Parent<T> { fn p(self) -> T }
+
+struct Box<T> { value: T }
+
+impl<T: Parent<int>> Box<T> {
+  fn as_int(self) -> int { self.value.p() }
+}
+
+impl<T: Parent<string>> Box<T> {
+  fn as_string(self) -> string { self.value.p() }
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn impl_conflicting_cross_impl_renamed_params_rejected() {
+    let input = r#"
+interface Parent<T> { fn p(self) -> T }
+
+struct Box<T> { value: T }
+
+impl<U: Parent<int>> Box<U> {
+  fn as_int(self) -> int { self.value.p() }
+}
+
+impl<V: Parent<string>> Box<V> {
+  fn as_string(self) -> string { self.value.p() }
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn impl_redundant_same_interface_instantiation_accepted() {
+    let input = r#"
+interface Parent<T> { fn p(self) -> T }
+
+struct Box<T> { value: T }
+
+impl<T: Parent<int>> Box<T> {
+  fn as_int(self) -> int { self.value.p() }
+}
+
+impl<T: Parent<int>> Box<T> {
+  fn as_int_again(self) -> int { self.value.p() }
+}
+"#;
+    let result = crate::_harness::infer::infer(input);
+    result.assert_no_errors();
+}

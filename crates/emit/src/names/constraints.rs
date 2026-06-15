@@ -29,6 +29,14 @@ impl ParamConstraintSet {
         if self.explicit.contains(&atom) {
             return false;
         }
+        if let ConstraintAtom::Named(new_ann) = &atom
+            && self.explicit.iter().any(|existing| {
+                matches!(existing, ConstraintAtom::Named(existing_ann)
+                    if annotations_equivalent(existing_ann, new_ann))
+            })
+        {
+            return false;
+        }
         self.explicit.push(atom);
         true
     }
@@ -115,6 +123,55 @@ pub(crate) fn classify_builtin_name(name: &str) -> Option<ConstraintAtom> {
     }
 }
 
+fn annotations_equivalent(a: &Annotation, b: &Annotation) -> bool {
+    match (a, b) {
+        (
+            Annotation::Constructor {
+                name: a_name,
+                params: a_params,
+                ..
+            },
+            Annotation::Constructor {
+                name: b_name,
+                params: b_params,
+                ..
+            },
+        ) => a_name == b_name && annotation_lists_equivalent(a_params, b_params),
+        (
+            Annotation::Function {
+                params: a_params,
+                return_type: a_return,
+                ..
+            },
+            Annotation::Function {
+                params: b_params,
+                return_type: b_return,
+                ..
+            },
+        ) => {
+            annotation_lists_equivalent(a_params, b_params)
+                && annotations_equivalent(a_return, b_return)
+        }
+        (
+            Annotation::Tuple {
+                elements: a_elements,
+                ..
+            },
+            Annotation::Tuple {
+                elements: b_elements,
+                ..
+            },
+        ) => annotation_lists_equivalent(a_elements, b_elements),
+        (Annotation::Unknown, Annotation::Unknown) => true,
+        (Annotation::Opaque { .. }, Annotation::Opaque { .. }) => true,
+        _ => false,
+    }
+}
+
+fn annotation_lists_equivalent(a: &[Annotation], b: &[Annotation]) -> bool {
+    a.len() == b.len() && a.iter().zip(b).all(|(x, y)| annotations_equivalent(x, y))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -174,6 +231,40 @@ mod tests {
         let mut s = set("T");
         assert!(s.add_explicit(ConstraintAtom::Comparable));
         assert!(!s.add_explicit(ConstraintAtom::Comparable));
+    }
+
+    #[test]
+    fn add_explicit_keeps_distinct_named_instantiations() {
+        let parent = |arg: &str| {
+            ConstraintAtom::Named(Annotation::Constructor {
+                name: "Parent".into(),
+                params: vec![ctor(arg)],
+                span: Span::dummy(),
+            })
+        };
+        let mut s = set("T");
+        assert!(s.add_explicit(parent("int")));
+        assert!(s.add_explicit(parent("string")));
+        assert_eq!(s.explicit.len(), 2);
+    }
+
+    #[test]
+    fn add_explicit_collapses_same_named_instantiation_across_spans() {
+        let parent_int = |span| {
+            ConstraintAtom::Named(Annotation::Constructor {
+                name: "Parent".into(),
+                params: vec![Annotation::Constructor {
+                    name: "int".into(),
+                    params: vec![],
+                    span,
+                }],
+                span,
+            })
+        };
+        let mut s = set("T");
+        assert!(s.add_explicit(parent_int(Span::new(0, 0, 1))));
+        assert!(!s.add_explicit(parent_int(Span::new(0, 5, 1))));
+        assert_eq!(s.explicit.len(), 1);
     }
 
     #[test]

@@ -1,0 +1,35 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  struct Box<T> { value: T }
+  
+  impl<U: Ordered> Box<U> {
+    fn less(self, other: Box<U>) -> bool {
+      self.value < other.value
+    }
+  }
+  
+  fn main() {
+    let a = Box { value: 1 }
+    let b = Box { value: 2 }
+    let _ = a.less(b)
+  }
+---
+package main
+
+import "cmp"
+
+type Box[T cmp.Ordered] struct {
+	value T
+}
+
+func (b Box[U]) less(other Box[U]) bool {
+	return b.value < other.value
+}
+
+func main() {
+	a := Box[int]{value: 1}
+	b := Box[int]{value: 2}
+	_ = a.less(b)
+}

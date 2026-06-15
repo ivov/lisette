@@ -1,0 +1,18 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Conflicting interface bounds
+    ╭─[test.lis:6:9]
+  5 │ 
+  6 │ impl<T: Parent<int>> Box<T> {
+    ·         ─────┬─────
+    ·              ╰── one impl instantiates it here
+  7 │   fn as_int(self) -> int { self.value.p() }
+  8 │ }
+  9 │ 
+ 10 │ impl<T: Parent<string>> Box<T> {
+    ·         ───────┬──────
+    ·                ╰── one impl instantiates it differently here
+ 11 │   fn as_string(self) -> string { self.value.p() }
+    ╰────
+  help: Two impls instantiate `Parent` differently for the same parameter of `Box`. A receiver method folds its bound onto the type, so Go would embed `Parent` twice. Use one instantiation, or split `Box` into separate types · code: [infer.conflicting_impl_interface_instantiations]
