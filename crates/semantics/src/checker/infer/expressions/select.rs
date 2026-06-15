@@ -3,7 +3,6 @@ use syntax::ast::{Expression, MatchArm, Pattern, SelectArm, SelectArmPattern, Sp
 use syntax::types::{Type, unqualified_name};
 
 use crate::checker::infer::InferCtx;
-use crate::passes::checks::temp_producing::is_temp_producing;
 
 impl InferCtx<'_, '_> {
     pub(super) fn infer_select(
@@ -476,7 +475,7 @@ impl InferCtx<'_, '_> {
 
     fn check_complex_select_expression(&mut self, expression: &Expression) {
         if let Some(channel) = Self::extract_channel_expression(expression)
-            && is_temp_producing(channel)
+            && channel.is_temp_producing()
         {
             self.sink
                 .push(diagnostics::infer::complex_select_expression(
@@ -484,7 +483,7 @@ impl InferCtx<'_, '_> {
                 ));
         }
         if let Some(value) = Self::extract_send_value(expression)
-            && is_temp_producing(value)
+            && value.is_temp_producing()
         {
             self.sink
                 .push(diagnostics::infer::complex_select_expression(

@@ -6,7 +6,7 @@ mod pattern_matrix;
 mod types;
 mod witness;
 
-use crate::is_trivial_expression;
+use crate::passes::is_trivial_expression;
 
 pub use inhabitance::InhabitanceCache;
 pub use inhabitance::is_inhabited;

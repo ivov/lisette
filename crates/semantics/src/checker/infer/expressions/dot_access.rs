@@ -11,7 +11,7 @@ use syntax::types::{Symbol, Type, substitute, unqualified_name};
 use super::super::addressability::check_is_non_addressable;
 use super::primitives::contains_deref;
 use crate::checker::infer::InferCtx;
-use crate::promotion::{self, MemberKind, Resolution};
+use crate::checker::promotion::{self, MemberKind, Resolution};
 
 impl InferCtx<'_, '_> {
     pub(super) fn infer_dot_access_or_qualified_path(

@@ -1,7 +1,9 @@
 pub mod freeze;
 pub mod infer;
+pub mod promotion;
 pub(crate) mod registration;
 pub mod scopes;
+pub mod sealing;
 pub mod type_env;
 
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
@@ -10,7 +12,6 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use crate::facts::{BindingIdAllocator, Facts};
-use crate::promotion;
 use crate::store::Store;
 use diagnostics::LocalSink;
 use ecow::EcoString;

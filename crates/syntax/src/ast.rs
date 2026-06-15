@@ -1152,6 +1152,20 @@ impl Expression {
         )
     }
 
+    pub fn is_temp_producing(&self) -> bool {
+        matches!(
+            self.unwrap_parens(),
+            Expression::If { .. }
+                | Expression::IfLet { .. }
+                | Expression::Match { .. }
+                | Expression::Block { .. }
+                | Expression::Loop { .. }
+                | Expression::Select { .. }
+                | Expression::TryBlock { .. }
+                | Expression::RecoverBlock { .. }
+        )
+    }
+
     pub fn callee_name(&self) -> Option<String> {
         let Expression::Call { expression, .. } = self else {
             return None;

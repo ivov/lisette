@@ -68,25 +68,11 @@ pub(crate) fn check(expression: &Expression, ctx: &NodeCtx) {
 }
 
 fn flag_sub_expression(expression: &Expression, sink: &LocalSink) {
-    if is_temp_producing(expression) || has_auto_address_on_call(expression) {
+    if expression.is_temp_producing() || has_auto_address_on_call(expression) {
         sink.push(diagnostics::infer::complex_sub_expression(
             expression.get_span(),
         ));
     }
-}
-
-pub(crate) fn is_temp_producing(expression: &Expression) -> bool {
-    matches!(
-        expression.unwrap_parens(),
-        Expression::If { .. }
-            | Expression::IfLet { .. }
-            | Expression::Match { .. }
-            | Expression::Block { .. }
-            | Expression::Loop { .. }
-            | Expression::Select { .. }
-            | Expression::TryBlock { .. }
-            | Expression::RecoverBlock { .. }
-    )
 }
 
 fn has_auto_address_on_call(expression: &Expression) -> bool {

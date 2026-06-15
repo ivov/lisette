@@ -180,7 +180,7 @@ pub(super) fn seal_method_key(
     } else {
         format!("{module_id}.{name}")
     };
-    crate::sealing::unexported_key(&id)
+    crate::checker::sealing::unexported_key(&id)
 }
 
 impl TaskState<'_> {

@@ -2,7 +2,7 @@ use crate::passes::walk::NodeCtx;
 use syntax::ast::{Expression, MatchArm, MatchOrigin, Pattern, Span};
 use syntax::types::{Type, unqualified_name};
 
-use crate::is_trivial_expression;
+use crate::passes::is_trivial_expression;
 use crate::store::Store;
 
 pub fn check_match_as_if_let(expression: &Expression, ctx: &NodeCtx) {

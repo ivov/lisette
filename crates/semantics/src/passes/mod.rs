@@ -1,4 +1,5 @@
 use diagnostics::LocalSink;
+use syntax::ast::Expression;
 use syntax::program::UnusedInfo;
 
 use crate::context::AnalysisContext;
@@ -14,6 +15,17 @@ pub(crate) mod walk;
 pub use lints::Lint;
 
 pub(crate) const PARALLEL_THRESHOLD: usize = 4;
+
+pub(crate) fn is_trivial_expression(expression: &Expression) -> bool {
+    match expression {
+        Expression::Unit { .. } => true,
+        Expression::Block { items, .. } => {
+            items.is_empty() || (items.len() == 1 && matches!(items[0], Expression::Unit { .. }))
+        }
+        Expression::Tuple { elements, .. } => elements.is_empty(),
+        _ => false,
+    }
+}
 
 pub fn run(
     analysis: &AnalysisContext,

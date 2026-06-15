@@ -79,7 +79,7 @@ impl InferCtx<'_, '_> {
             if let Some(sealed) = violations.iter().find(|v| {
                 v.missing
                     .iter()
-                    .any(|(name, _)| crate::sealing::is_unexported_key(name))
+                    .any(|(name, _)| crate::checker::sealing::is_unexported_key(name))
             }) {
                 let type_name = ty.get_name().map_or_else(|| ty.to_string(), str::to_owned);
                 self.sink
@@ -353,8 +353,8 @@ impl InferCtx<'_, '_> {
             {
                 let resolved_ty = ty.strip_refs().resolve_in(&self.env);
                 if let Some(ty_id) = resolved_ty.get_qualified_id()
-                    && let crate::promotion::Resolution::Found(member) =
-                        crate::promotion::resolve_selector(
+                    && let crate::checker::promotion::Resolution::Found(member) =
+                        crate::checker::promotion::resolve_selector(
                             store,
                             &resolved_ty,
                             method_name.as_str(),
