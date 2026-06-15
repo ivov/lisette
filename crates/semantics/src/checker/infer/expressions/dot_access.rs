@@ -734,10 +734,7 @@ impl InferCtx<'_, '_> {
         };
 
         let f = Arc::make_mut(f);
-        let receiver_ty = f.params.remove(0);
-        if !f.param_mutability.is_empty() {
-            f.param_mutability.remove(0);
-        }
+        let receiver_ty = f.remove_receiver();
         let actual_ty = args.expression_ty;
 
         let receiver_coercion = self.unify_receiver_with_coercion(

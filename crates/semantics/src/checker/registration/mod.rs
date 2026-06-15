@@ -1043,7 +1043,13 @@ impl TaskState<'_> {
 
         let param_mutability: Vec<bool> = params.iter().map(|b| b.mutable).collect();
 
-        let base_fn_ty = Type::function(param_types, param_mutability, bounds, return_ty.into());
+        let base_fn_ty = Type::function_with_names(
+            param_types,
+            params.iter().map(|b| b.pattern.get_identifier()).collect(),
+            param_mutability,
+            bounds,
+            return_ty.into(),
+        );
 
         if generics.is_empty() {
             base_fn_ty
@@ -1136,9 +1142,8 @@ pub(super) fn wrap_with_impl_generics(
     match fn_ty {
         Type::Forall { vars, body } => {
             let new_body = match body.as_ref() {
-                Type::Function(f) => Type::function(
+                Type::Function(f) => f.rebuild(
                     f.params.clone(),
-                    f.param_mutability.clone(),
                     add_impl_bounds(&f.bounds),
                     f.return_type.clone(),
                 ),
@@ -1151,9 +1156,8 @@ pub(super) fn wrap_with_impl_generics(
         }
         Type::Function(f) => Type::Forall {
             vars: impl_vars,
-            body: Box::new(Type::function(
+            body: Box::new(f.rebuild(
                 f.params.clone(),
-                f.param_mutability.clone(),
                 add_impl_bounds(&f.bounds),
                 f.return_type.clone(),
             )),

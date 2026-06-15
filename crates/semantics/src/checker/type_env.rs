@@ -153,9 +153,8 @@ impl TypeEnv {
                 if new_params.is_none() && new_return.is_none() && new_bounds.is_none() {
                     return None;
                 }
-                Some(Type::function(
+                Some(f.rebuild(
                     new_params.unwrap_or_else(|| f.params.clone()),
-                    f.param_mutability.clone(),
                     new_bounds.unwrap_or_else(|| f.bounds.clone()),
                     new_return.unwrap_or_else(|| f.return_type.clone()),
                 ))

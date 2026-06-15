@@ -499,13 +499,9 @@ impl Store {
                 underlying_ty,
             },
             Type::Function(f) => {
-                let f = std::sync::Arc::try_unwrap(f).unwrap_or_else(|arc| (*arc).clone());
-                Type::function(
-                    f.params.iter().map(|p| self.peel_alias_deep(p)).collect(),
-                    f.param_mutability,
-                    f.bounds,
-                    Box::new(self.peel_alias_deep(&f.return_type)),
-                )
+                let new_params = f.params.iter().map(|p| self.peel_alias_deep(p)).collect();
+                let new_return = Box::new(self.peel_alias_deep(&f.return_type));
+                f.rebuild(new_params, f.bounds.clone(), new_return)
             }
             other => other,
         }

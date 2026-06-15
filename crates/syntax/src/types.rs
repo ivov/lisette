@@ -228,9 +228,8 @@ pub fn substitute(ty: &Type, map: &HashMap<EcoString, Type>) -> Type {
             params: params.iter().map(|p| substitute(p, map)).collect(),
             underlying_ty: underlying.as_ref().map(|u| Box::new(substitute(u, map))),
         },
-        Type::Function(f) => Type::function(
+        Type::Function(f) => f.rebuild(
             f.params.iter().map(|p| substitute(p, map)).collect(),
-            f.param_mutability.clone(),
             f.bounds
                 .iter()
                 .map(|b| Bound {
@@ -278,13 +277,63 @@ pub struct Bound {
     pub ty: Type,
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct FunctionType {
     pub params: Vec<Type>,
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub param_names: Vec<Option<EcoString>>,
     pub param_mutability: Vec<bool>,
     pub bounds: Vec<Bound>,
     pub return_type: Box<Type>,
+}
+
+impl PartialEq for FunctionType {
+    fn eq(&self, other: &Self) -> bool {
+        self.params == other.params
+            && self.param_mutability == other.param_mutability
+            && self.bounds == other.bounds
+            && self.return_type == other.return_type
+    }
+}
+
+impl FunctionType {
+    pub fn remove_receiver(&mut self) -> Type {
+        let receiver = self.params.remove(0);
+        if !self.param_mutability.is_empty() {
+            self.param_mutability.remove(0);
+        }
+        if !self.param_names.is_empty() {
+            self.param_names.remove(0);
+        }
+        receiver
+    }
+
+    pub fn without_receiver(&self) -> Type {
+        let mut stripped = self.clone();
+        if !stripped.params.is_empty() {
+            stripped.remove_receiver();
+        }
+        Type::Function(Arc::new(stripped))
+    }
+
+    pub fn rebuild(&self, params: Vec<Type>, bounds: Vec<Bound>, return_type: Box<Type>) -> Type {
+        debug_assert!(
+            self.param_names.is_empty() || self.param_names.len() == params.len(),
+            "rebuild changed arity: param_names would misalign with params"
+        );
+        debug_assert!(
+            self.param_mutability.is_empty() || self.param_mutability.len() == params.len(),
+            "rebuild changed arity: param_mutability would misalign with params"
+        );
+        Type::function_with_names(
+            params,
+            self.param_names.clone(),
+            self.param_mutability.clone(),
+            bounds,
+            return_type,
+        )
+    }
 }
 
 /// A unique handle identifying a type variable. The binding state (Unbound /
@@ -485,8 +534,19 @@ impl Type {
         bounds: Vec<Bound>,
         return_type: Box<Type>,
     ) -> Type {
+        Self::function_with_names(params, Vec::new(), param_mutability, bounds, return_type)
+    }
+
+    pub fn function_with_names(
+        params: Vec<Type>,
+        param_names: Vec<Option<EcoString>>,
+        param_mutability: Vec<bool>,
+        bounds: Vec<Bound>,
+        return_type: Box<Type>,
+    ) -> Type {
         Type::Function(Arc::new(FunctionType {
             params,
+            param_names,
             param_mutability,
             bounds,
             return_type,
@@ -1303,12 +1363,7 @@ impl Type {
                 }
                 let mut new_params = f.params.clone();
                 new_params[0] = new_first.clone();
-                Type::function(
-                    new_params,
-                    f.param_mutability.clone(),
-                    f.bounds.clone(),
-                    f.return_type.clone(),
-                )
+                f.rebuild(new_params, f.bounds.clone(), f.return_type.clone())
             }
             Type::Forall { vars, body } => Type::Forall {
                 vars: vars.clone(),
@@ -1432,7 +1487,21 @@ impl Type {
                 let mut new_mutability = vec![false];
                 new_mutability.extend(f.param_mutability);
 
-                Type::function(new_params, new_mutability, f.bounds, f.return_type)
+                let new_param_names = if f.param_names.is_empty() {
+                    Vec::new()
+                } else {
+                    let mut names = vec![None];
+                    names.extend(f.param_names);
+                    names
+                };
+
+                Type::function_with_names(
+                    new_params,
+                    new_param_names,
+                    new_mutability,
+                    f.bounds,
+                    f.return_type,
+                )
             }
             _ => unreachable!(
                 "with_receiver_placeholder called on non-function type: {:?}",
@@ -1652,6 +1721,33 @@ fn alpha_index(idx: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn function_equality_ignores_param_names() {
+        let named = Type::function_with_names(
+            vec![Type::int()],
+            vec![Some("width".into())],
+            vec![false],
+            vec![],
+            Box::new(Type::bool()),
+        );
+        let differently_named = Type::function_with_names(
+            vec![Type::int()],
+            vec![Some("height".into())],
+            vec![false],
+            vec![],
+            Box::new(Type::bool()),
+        );
+        let unnamed = Type::function(
+            vec![Type::int()],
+            vec![false],
+            vec![],
+            Box::new(Type::bool()),
+        );
+
+        assert_eq!(named, differently_named);
+        assert_eq!(named, unnamed);
+    }
 
     #[test]
     fn alpha_index_single() {

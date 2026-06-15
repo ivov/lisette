@@ -171,8 +171,12 @@ impl InferCtx<'_, '_> {
 
         self.scopes.current_mut().fn_return_type = Some(return_ty.clone());
 
-        let base_fn_ty = Type::function(
+        let base_fn_ty = Type::function_with_names(
             new_params.iter().map(|p| p.ty.clone()).collect(),
+            new_params
+                .iter()
+                .map(|p| p.pattern.get_identifier())
+                .collect(),
             new_params.iter().map(|p| p.mutable).collect(),
             bounds,
             return_ty.clone().into(),
@@ -245,8 +249,12 @@ impl InferCtx<'_, '_> {
 
         self.scopes.current_mut().fn_return_type = Some(return_ty.clone());
 
-        let base_fn_ty = Type::function(
+        let base_fn_ty = Type::function_with_names(
             new_params.iter().map(|p| p.ty.clone()).collect(),
+            new_params
+                .iter()
+                .map(|p| p.pattern.get_identifier())
+                .collect(),
             vec![false; new_params.len()],
             vec![],
             return_ty.clone().into(),
@@ -635,10 +643,7 @@ impl InferCtx<'_, '_> {
                 && !f.params.is_empty()
             {
                 let f = std::sync::Arc::make_mut(f);
-                let receiver_param = f.params.remove(0);
-                if !f.param_mutability.is_empty() {
-                    f.param_mutability.remove(0);
-                }
+                let receiver_param = f.remove_receiver();
                 let receiver_ty_stripped = receiver_ty.strip_refs();
                 if receiver_param.is_ref() && !receiver_ty.is_ref() {
                     if let Some(inner) = receiver_param.inner() {

@@ -304,12 +304,7 @@ impl InferCtx<'_, '_> {
 
             // Strip bounds before comparing - bounds are checked separately via bounds_equivalent
             let strip_bounds = |ty: &Type| match ty {
-                Type::Function(f) => Type::function(
-                    f.params.clone(),
-                    f.param_mutability.clone(),
-                    vec![],
-                    f.return_type.clone(),
-                ),
+                Type::Function(f) => f.rebuild(f.params.clone(), vec![], f.return_type.clone()),
                 other => other.clone(),
             };
 
@@ -436,24 +431,7 @@ impl InferCtx<'_, '_> {
 
     fn remove_first_param(ty: &Type) -> Type {
         match ty {
-            Type::Function(f) => {
-                let new_params = if f.params.is_empty() {
-                    vec![]
-                } else {
-                    f.params[1..].to_vec()
-                };
-                let new_mutability = if f.param_mutability.is_empty() {
-                    vec![]
-                } else {
-                    f.param_mutability[1..].to_vec()
-                };
-                Type::function(
-                    new_params,
-                    new_mutability,
-                    f.bounds.clone(),
-                    f.return_type.clone(),
-                )
-            }
+            Type::Function(f) => f.without_receiver(),
             _ => ty.clone(),
         }
     }
@@ -501,9 +479,8 @@ fn covariant_return_adjustment(
         return None;
     }
 
-    Some(Type::function(
+    Some(impl_f.rebuild(
         impl_f.params.clone(),
-        impl_f.param_mutability.clone(),
         impl_f.bounds.clone(),
         iface_ret.clone(),
     ))

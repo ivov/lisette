@@ -380,6 +380,115 @@ async fn signature_help_shows_function_params() {
 }
 
 #[tokio::test]
+async fn signature_help_shows_param_names() {
+    let mut client = TestClient::new().await;
+    client.initialize().await;
+    client
+        .open(
+            TEST_URI,
+            "fn add(x: int, y: int) -> int { x + y }\nfn main() { add(1, 2) }",
+        )
+        .await;
+
+    let help = client.signature_help(TEST_URI, 1, 17).await;
+    let sig = &help.unwrap().signatures[0];
+    assert!(sig.label.contains("x: int"), "label was {}", sig.label);
+    assert!(sig.label.contains("y: int"), "label was {}", sig.label);
+
+    client.shutdown().await;
+}
+
+#[tokio::test]
+async fn signature_help_method_strips_receiver_name() {
+    let mut client = TestClient::new().await;
+    client.initialize().await;
+    let source = "\
+struct Point { x: int, y: int }
+impl Point {
+  pub fn translate(self, dx: int, dy: int) -> int { self.x + dx + dy }
+}
+fn main() {
+  let p = Point { x: 1, y: 2 }
+  p.translate(1, 2)
+}";
+    client.open(TEST_URI, source).await;
+
+    let help = client.signature_help(TEST_URI, 6, 14).await;
+    let sig = &help.unwrap().signatures[0];
+    assert!(sig.label.contains("dx: int"), "label was {}", sig.label);
+    assert!(sig.label.contains("dy: int"), "label was {}", sig.label);
+    assert!(
+        !sig.label.contains("self"),
+        "receiver name leaked into label: {}",
+        sig.label
+    );
+
+    client.shutdown().await;
+}
+
+#[tokio::test]
+async fn signature_help_generic_function_shows_param_names() {
+    let mut client = TestClient::new().await;
+    client.initialize().await;
+    let source = "\
+fn pick<T>(first: T, second: T) -> T { first }
+fn main() {
+  let _ = pick(1, 2)
+}";
+    client.open(TEST_URI, source).await;
+
+    let help = client.signature_help(TEST_URI, 2, 15).await;
+    let sig = &help.unwrap().signatures[0];
+    assert!(sig.label.contains("first:"), "label was {}", sig.label);
+    assert!(sig.label.contains("second:"), "label was {}", sig.label);
+
+    client.shutdown().await;
+}
+
+#[tokio::test]
+async fn signature_help_interface_method_shows_param_names() {
+    let mut client = TestClient::new().await;
+    client.initialize().await;
+    let source = "\
+interface Account {
+  fn withdraw(self, amount: int) -> int
+}
+fn process(a: Account) -> int {
+  a.withdraw(50)
+}";
+    client.open(TEST_URI, source).await;
+
+    let help = client.signature_help(TEST_URI, 4, 13).await;
+    let sig = &help.unwrap().signatures[0];
+    assert!(sig.label.contains("amount: int"), "label was {}", sig.label);
+    assert!(
+        !sig.label.contains("self"),
+        "receiver name leaked into label: {}",
+        sig.label
+    );
+
+    client.shutdown().await;
+}
+
+#[tokio::test]
+async fn signature_help_inferred_closure_param_keeps_name() {
+    let mut client = TestClient::new().await;
+    client.initialize().await;
+    let source = "\
+fn main() {
+  let inc = |x| -> int { x + 1 }
+  let _ = inc(5)
+}";
+    client.open(TEST_URI, source).await;
+
+    let help = client.signature_help(TEST_URI, 2, 14).await;
+    let sig = &help.unwrap().signatures[0];
+    assert!(sig.label.contains("x: int"), "label was {}", sig.label);
+
+    client.shutdown().await;
+}
+
+#[tokio::test]
 async fn signature_help_active_parameter() {
     let mut client = TestClient::new().await;
     client.initialize().await;
