@@ -203,7 +203,20 @@ jobs:
         with:
           just: 'true'
           go: 'true'
+          go-cache: 'false'
+      - uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # ratchet:actions/cache@v4
+        id: go-build-cache
+        with:
+          path: ~/.cache/go-build
+          key: go-build-e2e-suite-${{ runner.os }}-${{ hashFiles('go-version', 'Cargo.lock', 'crates/**', 'tests/**', 'prelude/**') }}
+          restore-keys: |
+            go-build-e2e-suite-${{ runner.os }}-
       - run: just test-e2e-suite
+      - if: github.ref == 'refs/heads/main' && steps.go-build-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # ratchet:actions/cache@v4
+        with:
+          path: ~/.cache/go-build
+          key: ${{ steps.go-build-cache.outputs.cache-primary-key }}
 
   embed-diff:
     name: Embed differential
