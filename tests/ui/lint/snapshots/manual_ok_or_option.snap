@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [info] Manual `ok_or`
+   ╭─[test.lis:4:11]
+ 3 │   let o: Option<int> = Some(1)
+ 4 │   let _ = match o {
+   ·           ──┬──
+   ·             ╰── can be simpler
+ 5 │     Some(x) => Ok(x),
+   ╰────
+  help: Replace this `match` with `.ok_or(...)` · code: [lint.manual_ok_or]

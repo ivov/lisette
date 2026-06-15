@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [info] Needless `match`
+   ╭─[test.lis:4:11]
+ 3 │   let r: Result<int, string> = Ok(1)
+ 4 │   let _ = match r {
+   ·           ──┬──
+   ·             ╰── unnecessary
+ 5 │     Ok(x) => Ok(x),
+   ╰────
+  help: Every arm rebuilds the subject unchanged. Replace this `match` with `r` · code: [lint.needless_match]

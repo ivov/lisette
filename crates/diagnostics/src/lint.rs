@@ -604,6 +604,37 @@ pub fn manual_map_or(span: &Span, lazy_default: bool) -> LisetteDiagnostic {
         .with_help(format!("Replace this `match` with `{replacement}`"))
 }
 
+pub fn manual_filter(span: &Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::info("Manual `filter`")
+        .with_lint_code("manual_filter")
+        .with_span_label(span, "can be simpler")
+        .with_help("Replace this `match` with `.filter(...)`")
+}
+
+pub fn manual_ok_or(span: &Span, lazy: bool) -> LisetteDiagnostic {
+    let method = if lazy { "ok_or_else" } else { "ok_or" };
+    LisetteDiagnostic::info("Manual `ok_or`")
+        .with_lint_code("manual_ok_or")
+        .with_span_label(span, "can be simpler")
+        .with_help(format!("Replace this `match` with `.{method}(...)`"))
+}
+
+pub fn manual_ok_err(span: &Span, method: &str) -> LisetteDiagnostic {
+    LisetteDiagnostic::info(format!("Manual `{method}`"))
+        .with_lint_code("manual_ok_err")
+        .with_span_label(span, "can be simpler")
+        .with_help(format!("Replace this `match` with `.{method}()`"))
+}
+
+pub fn needless_match(span: &Span, subject: &str) -> LisetteDiagnostic {
+    LisetteDiagnostic::info("Needless `match`")
+        .with_lint_code("needless_match")
+        .with_span_label(span, "unnecessary")
+        .with_help(format!(
+            "Every arm rebuilds the subject unchanged. Replace this `match` with `{subject}`"
+        ))
+}
+
 pub fn redundant_closure(span: &Span, callee: &str) -> LisetteDiagnostic {
     LisetteDiagnostic::info("Redundant closure")
         .with_lint_code("redundant_closure")

@@ -110,6 +110,44 @@ pub(super) fn enum_variant_binding<'a>(pattern: &'a Pattern, variant: &str) -> O
     Some(name.as_str())
 }
 
+pub(super) fn wrapped_single_arg<'a>(
+    expression: &'a Expression,
+    variant: &str,
+) -> Option<&'a Expression> {
+    let Expression::Call {
+        expression: callee,
+        args,
+        ..
+    } = expression.unwrap_parens()
+    else {
+        return None;
+    };
+    if args.len() != 1 {
+        return None;
+    }
+    let Expression::Identifier { value, .. } = callee.unwrap_parens() else {
+        return None;
+    };
+    if unqualified_name(value) != variant {
+        return None;
+    }
+    Some(&args[0])
+}
+
+pub(super) fn is_bare_identifier(expression: &Expression, name: &str) -> bool {
+    matches!(expression.unwrap_parens(), Expression::Identifier { value, .. }
+        if value.as_str() == name)
+}
+
+pub(super) fn wraps_binding(body: &Expression, variant: &str, binding: &str) -> bool {
+    wrapped_single_arg(body, variant).is_some_and(|arg| is_bare_identifier(arg, binding))
+}
+
+pub(super) fn is_none_pattern(pattern: &Pattern) -> bool {
+    matches!(pattern, Pattern::EnumVariant { identifier, fields, rest, .. }
+        if unqualified_name(identifier) == "None" && fields.is_empty() && !*rest)
+}
+
 // `?`, `return`, `break`, and `continue` target a scope outside a synthesized
 // closure, so a body containing them cannot be moved into one.
 pub(super) fn has_escaping_control_flow(body: &Expression) -> bool {

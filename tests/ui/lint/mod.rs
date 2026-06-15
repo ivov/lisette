@@ -8584,21 +8584,6 @@ fn main() {
 }
 
 #[test]
-fn manual_map_identity_no_warning() {
-    assert_no_lint_warnings!(
-        r#"
-fn main() {
-  let o: Option<int> = Some(1)
-  let _ = match o {
-    Some(v) => Some(v),
-    None => None,
-  }
-}
-"#
-    );
-}
-
-#[test]
 fn manual_map_non_bare_none_no_warning() {
     assert_no_lint_warnings!(
         r#"
@@ -15483,6 +15468,237 @@ fn unnecessary_min_or_max_shadowed_no_warning() {
 fn main() {
   let min = |a: int, b: int| a + b
   let _ = min(7, 7)
+}
+"#
+    );
+}
+
+#[test]
+fn manual_filter_option() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let o: Option<int> = Some(1)
+  let _ = match o {
+    Some(x) if x > 0 => Some(x),
+    _ => None,
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn manual_filter_with_map_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let o: Option<int> = Some(1)
+  let _ = match o {
+    Some(x) if x > 0 => Some(x * 2),
+    _ => None,
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn manual_filter_non_none_default_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let o: Option<int> = Some(1)
+  let _ = match o {
+    Some(x) if x > 0 => Some(x),
+    _ => Some(0),
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn manual_ok_or_option() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let o: Option<int> = Some(1)
+  let _ = match o {
+    Some(x) => Ok(x),
+    None => Err("missing"),
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn manual_ok_or_else_lazy() {
+    assert_lint_snapshot!(
+        r#"
+fn make_err() -> string {
+  "boom"
+}
+
+fn main() {
+  let o: Option<int> = Some(1)
+  let _ = match o {
+    Some(x) => Ok(x),
+    None => Err(make_err()),
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn manual_ok_or_reversed_arms() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let o: Option<int> = Some(1)
+  let _ = match o {
+    None => Err("missing"),
+    Some(x) => Ok(x),
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn manual_ok_or_mapped_ok_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let o: Option<int> = Some(1)
+  let _ = match o {
+    Some(x) => Ok(x * 2),
+    None => Err("e"),
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn manual_ok_err_ok() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let r: Result<int, string> = Ok(1)
+  let _ = match r {
+    Ok(x) => Some(x),
+    Err(_) => None,
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn manual_ok_err_err() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let r: Result<int, string> = Ok(1)
+  let _ = match r {
+    Ok(_) => None,
+    Err(e) => Some(e),
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn manual_ok_err_mapped_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let r: Result<int, string> = Ok(1)
+  let _ = match r {
+    Ok(x) => Some(x * 2),
+    Err(_) => None,
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn needless_match_option() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let o: Option<int> = Some(1)
+  let _ = match o {
+    Some(x) => Some(x),
+    None => None,
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn needless_match_result() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let r: Result<int, string> = Ok(1)
+  let _ = match r {
+    Ok(x) => Ok(x),
+    Err(e) => Err(e),
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn needless_match_reversed_arms() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let o: Option<int> = Some(1)
+  let _ = match o {
+    None => None,
+    Some(x) => Some(x),
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn needless_match_custom_enum_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+enum Maybe { Yes(int), Nope }
+
+fn main() {
+  let m = Maybe.Yes(1)
+  let _ = match m {
+    Maybe.Yes(v) => Maybe.Yes(v),
+    Maybe.Nope => Maybe.Nope,
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn needless_match_partial_reconstruction_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let o: Option<int> = Some(1)
+  let _ = match o {
+    Some(x) => Some(x),
+    None => Some(0),
+  }
 }
 "#
     );

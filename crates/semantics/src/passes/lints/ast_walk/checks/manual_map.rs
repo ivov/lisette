@@ -1,8 +1,10 @@
 use crate::passes::walk::NodeCtx;
-use syntax::ast::{Expression, MatchArm, MatchOrigin, Pattern, Span};
-use syntax::types::unqualified_name;
+use syntax::ast::{Expression, MatchArm, MatchOrigin, Span};
 
-use super::helpers::{enum_variant_binding, has_escaping_control_flow};
+use super::helpers::{
+    enum_variant_binding, has_escaping_control_flow, is_bare_identifier, is_none_pattern,
+    wrapped_single_arg, wraps_binding,
+};
 
 pub fn check_manual_map(expression: &Expression, ctx: &NodeCtx) {
     let Expression::Match {
@@ -52,7 +54,7 @@ fn check_option_map(arm_a: &MatchArm, arm_b: &MatchArm) -> bool {
             return false;
         };
         is_none_pattern(&none_arm.pattern)
-            && is_bare_none(&none_arm.expression)
+            && is_bare_identifier(&none_arm.expression, "None")
             && is_mapped(&some_arm.expression, "Some", binding)
     };
     try_pair(arm_a, arm_b) || try_pair(arm_b, arm_a)
@@ -66,60 +68,19 @@ fn check_result_map(arm_a: &MatchArm, arm_b: &MatchArm) -> bool {
         let Some(err_binding) = enum_variant_binding(&err_arm.pattern, "Err") else {
             return false;
         };
-        is_err_passthrough(&err_arm.expression, err_binding)
+        wraps_binding(&err_arm.expression, "Err", err_binding)
             && is_mapped(&ok_arm.expression, "Ok", ok_binding)
     };
     try_pair(arm_a, arm_b) || try_pair(arm_b, arm_a)
 }
 
 fn is_mapped(expression: &Expression, variant: &str, binding: &str) -> bool {
-    let Some(inner) = wrapped_argument(expression, variant) else {
+    let Some(inner) = wrapped_single_arg(expression, variant) else {
         return false;
     };
     // `Some(v) => Some(v)` is the identity map, which is just the subject itself.
-    if let Expression::Identifier { value, .. } = inner.unwrap_parens()
-        && value.as_str() == binding
-    {
+    if is_bare_identifier(inner, binding) {
         return false;
     }
     !has_escaping_control_flow(inner)
-}
-
-fn is_err_passthrough(expression: &Expression, binding: &str) -> bool {
-    let Some(inner) = wrapped_argument(expression, "Err") else {
-        return false;
-    };
-    matches!(inner.unwrap_parens(), Expression::Identifier { value, .. }
-        if value.as_str() == binding)
-}
-
-fn wrapped_argument<'a>(expression: &'a Expression, variant: &str) -> Option<&'a Expression> {
-    let Expression::Call {
-        expression: callee,
-        args,
-        ..
-    } = expression.unwrap_parens()
-    else {
-        return None;
-    };
-    if args.len() != 1 {
-        return None;
-    }
-    let Expression::Identifier { value, .. } = callee.unwrap_parens() else {
-        return None;
-    };
-    if unqualified_name(value) != variant {
-        return None;
-    }
-    Some(&args[0])
-}
-
-fn is_none_pattern(pattern: &Pattern) -> bool {
-    matches!(pattern, Pattern::EnumVariant { identifier, fields, rest, .. }
-        if unqualified_name(identifier) == "None" && fields.is_empty() && !*rest)
-}
-
-fn is_bare_none(expression: &Expression) -> bool {
-    matches!(expression.unwrap_parens(), Expression::Identifier { value, .. }
-        if value.as_str() == "None")
 }
