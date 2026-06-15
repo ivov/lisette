@@ -47,7 +47,7 @@ debug = true
 
 [profile.bindgen]
 inherits = "release"
-opt-level = 1
+opt-level = 0
 codegen-units = 256
 
 [profile.dist]
