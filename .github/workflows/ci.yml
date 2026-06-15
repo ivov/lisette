@@ -85,16 +85,22 @@ jobs:
       - run: cd bindgen && golangci-lint run
       - run: cd prelude && golangci-lint run
 
-  test:
-    name: Test
+  test-suite:
+    name: Test suite
     if: ${{ !startsWith(github.head_ref, 'release-plz-') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # ratchet:actions/checkout@v6
       - uses: ./.github/actions/setup-rust
-        with:
-          go: 'true'
       - run: cargo test -p tests --test suite --locked -- --format terse
+
+  test-unit:
+    name: Unit tests
+    if: ${{ !startsWith(github.head_ref, 'release-plz-') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # ratchet:actions/checkout@v6
+      - uses: ./.github/actions/setup-rust
       - run: cargo test --workspace --lib --bins --locked -- --format terse
 
   lsp-test:
