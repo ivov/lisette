@@ -1,3 +1,4 @@
+mod almost_swapped;
 mod bad_bit_mask;
 mod bool_literal_comparison;
 mod collapsible_if;
@@ -66,6 +67,7 @@ mod unsigned_comparison;
 mod verbose_failure_propagation;
 mod waitgroup_add_in_task;
 
+pub use almost_swapped::check_almost_swapped;
 pub use bad_bit_mask::check_bad_bit_mask;
 pub use bool_literal_comparison::check_bool_literal_comparison;
 pub use collapsible_if::check_collapsible_if;

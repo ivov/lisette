@@ -15205,6 +15205,157 @@ fn main() {
 }
 
 #[test]
+fn almost_swapped() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let mut a = 1
+  let mut b = 2
+  a = b
+  b = a
+  let _ = a + b
+}
+"#
+    );
+}
+
+#[test]
+fn almost_swapped_mutable_params() {
+    assert_lint_snapshot!(
+        r#"
+fn swap(mut a: int, mut b: int) -> int {
+  a = b
+  b = a
+  a + b
+}
+
+fn main() {
+  let _ = swap(1, 2)
+}
+"#
+    );
+}
+
+#[test]
+fn almost_swapped_suppressed_by_allow() {
+    assert_no_lint_warnings!(
+        r#"
+#[allow(almost_swapped)]
+fn main() {
+  let mut a = 1
+  let mut b = 2
+  a = b
+  b = a
+  let _ = a + b
+}
+"#
+    );
+}
+
+#[test]
+fn almost_swapped_in_try_block() {
+    assert_lint_snapshot!(
+        r#"
+fn risky() -> Result<int, string> {
+  Ok(1)
+}
+
+fn compute() -> Result<int, string> {
+  try {
+    let mut a = risky()?
+    let mut b = risky()?
+    a = b
+    b = a
+    a + b
+  }
+}
+
+fn main() {
+  let _ = compute()
+}
+"#
+    );
+}
+
+#[test]
+fn almost_swapped_third_variable_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let mut a = 1
+  let mut b = 2
+  let c = 3
+  a = b
+  b = c
+  let _ = a + b
+}
+"#
+    );
+}
+
+#[test]
+fn almost_swapped_repeated_copy_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let mut a = 1
+  let b = 2
+  a = b
+  a = b
+  let _ = a + b
+}
+"#
+    );
+}
+
+#[test]
+fn almost_swapped_compound_assignment_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let mut a = 1
+  let mut b = 2
+  a += b
+  b += a
+  let _ = a + b
+}
+"#
+    );
+}
+
+#[test]
+fn almost_swapped_non_adjacent_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let mut a = 1
+  let mut b = 2
+  a = b
+  let _ = a
+  b = a
+  let _ = b
+}
+"#
+    );
+}
+
+#[test]
+fn almost_swapped_field_access_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+struct Point { x: int, y: int }
+
+fn main() {
+  let mut p = Point { x: 1, y: 2 }
+  p.x = p.y
+  p.y = p.x
+  let _ = p.x + p.y
+}
+"#
+    );
+}
+
+#[test]
 fn unnecessary_min_or_max_identical_min() {
     assert_lint_snapshot!(
         r#"

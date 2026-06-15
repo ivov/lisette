@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [warning] Variables are not swapped
+   ╭─[test.lis:5:3]
+ 4 │       let mut b = 2
+ 5 │ ╭─▶   a = b
+ 6 │ ├─▶   b = a
+   · ╰──── does not swap the values
+ 7 │       let _ = a + b
+   ╰────
+  help: `a = b` overwrites `a`, so the following `b = a` writes `b`'s own value back and the original `a` is lost. To swap them, save one value in a temporary variable first · code: [lint.almost_swapped]

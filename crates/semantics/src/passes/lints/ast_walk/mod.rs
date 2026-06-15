@@ -19,7 +19,7 @@ use syntax::program::Module;
 
 use attributes::{check_attributes, check_enum_attributes, check_struct_attributes};
 use checks::{
-    check_bad_bit_mask, check_bool_literal_comparison, check_collapsible_if,
+    check_almost_swapped, check_bad_bit_mask, check_bool_literal_comparison, check_collapsible_if,
     check_double_comparison, check_double_negation, check_dup_arg, check_duplicate_cutset,
     check_duplicate_logical_operand, check_empty_match_arm, check_equal_operands,
     check_excess_parens_on_condition, check_exit_after_defer, check_expression_naming,
@@ -88,6 +88,7 @@ static LINT_CHECKS: LazyLock<CheckTable> = LazyLock::new(|| {
             (check_match_single_binding, &[Match]),
             (check_negated_equality, &[Unary]),
             (check_let_and_return, &[Block]),
+            (check_almost_swapped, &[Block, TryBlock, RecoverBlock]),
             (check_unnecessary_bool, &[If]),
             (check_unnecessary_range_loop, &[For]),
             (check_unnecessary_return, &[Function]),

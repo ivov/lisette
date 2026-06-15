@@ -436,6 +436,15 @@ pub fn verbose_failure_propagation(span: &Span) -> LisetteDiagnostic {
         .with_help("Use `?` to propagate the failure concisely")
 }
 
+pub fn almost_swapped(span: &Span, first: &str, second: &str) -> LisetteDiagnostic {
+    LisetteDiagnostic::warn("Variables are not swapped")
+        .with_lint_code("almost_swapped")
+        .with_span_label(span, "does not swap the values")
+        .with_help(format!(
+            "`{first} = {second}` overwrites `{first}`, so the following `{second} = {first}` writes `{second}`'s own value back and the original `{first}` is lost. To swap them, save one value in a temporary variable first."
+        ))
+}
+
 pub fn self_assignment(span: &Span) -> LisetteDiagnostic {
     LisetteDiagnostic::warn("Self-assignment")
         .with_lint_code("self_assignment")
