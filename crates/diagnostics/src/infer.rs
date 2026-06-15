@@ -2777,6 +2777,34 @@ pub fn impl_on_foreign_type(type_name: &str, module_name: &str, span: Span) -> L
         ))
 }
 
+pub fn impl_bound_conflicts_with_type(
+    interface: &str,
+    type_name: &str,
+    span: Span,
+) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Conflicting impl bound")
+        .with_infer_code("impl_bound_conflicts_with_type")
+        .with_span_label(&span, "this bound cannot strengthen the receiver type")
+        .with_help(format!(
+            "`{type_name}` already bounds this parameter with a different `{interface}` instantiation. A receiver method would embed `{interface}` twice, and no type argument satisfies both. Match the type's bound, or relax the type's declaration."
+        ))
+}
+
+pub fn conflicting_impl_interface_instantiations(
+    interface: &str,
+    type_name: &str,
+    span: Span,
+    earlier: Span,
+) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Conflicting interface bounds")
+        .with_infer_code("conflicting_impl_interface_instantiations")
+        .with_span_label(&span, "one impl instantiates it differently here")
+        .with_span_label(&earlier, "one impl instantiates it here")
+        .with_help(format!(
+            "Two impls instantiate `{interface}` differently for the same parameter of `{type_name}`. A receiver method folds its bound onto the type, so Go would embed `{interface}` twice. Use one instantiation, or split `{type_name}` into separate types."
+        ))
+}
+
 pub fn impl_on_type_alias(_type_name: &str, span: Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Cannot implement methods on type alias")
         .with_infer_code("impl_on_type_alias")

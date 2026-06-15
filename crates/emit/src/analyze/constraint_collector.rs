@@ -88,6 +88,7 @@ impl Planner<'_> {
         for file in files {
             for item in &file.items {
                 let Expression::ImplBlock {
+                    annotation,
                     receiver_name,
                     generics: impl_generics,
                     methods,
@@ -100,6 +101,7 @@ impl Planner<'_> {
                 for method in methods {
                     let Expression::Function {
                         generics: method_generics,
+                        name_span: method_name_span,
                         ..
                     } = method
                     else {
@@ -113,14 +115,13 @@ impl Planner<'_> {
                     );
                     match layout {
                         ImplMethodLayout::Receiver { method_key } => {
-                            for impl_g in impl_generics {
-                                for bound in &impl_g.bounds {
-                                    table.add_explicit(
-                                        &receiver_key,
-                                        impl_g.name.as_str(),
-                                        classify_bound_annotation(bound),
-                                    );
-                                }
+                            if !self.facts.is_unused_definition(method_name_span) {
+                                self.hoist_impl_bounds_onto_receiver(
+                                    &receiver_key,
+                                    annotation,
+                                    impl_generics,
+                                    table,
+                                );
                             }
                             table.ensure_seeded(&method_key, method_generics);
                         }
@@ -132,6 +133,47 @@ impl Planner<'_> {
                         }
                     }
                 }
+            }
+        }
+    }
+
+    fn hoist_impl_bounds_onto_receiver(
+        &self,
+        receiver_key: &str,
+        receiver_annotation: &Annotation,
+        impl_generics: &[Generic],
+        table: &mut GenericConstraintTable,
+    ) {
+        if impl_generics.is_empty() {
+            return;
+        }
+        let type_generics = match self.facts.definition(receiver_key).map(|d| &d.body) {
+            Some(
+                DefinitionBody::Struct { generics, .. } | DefinitionBody::Enum { generics, .. },
+            ) => generics,
+            _ => return,
+        };
+        let Annotation::Constructor {
+            params: receiver_args,
+            ..
+        } = receiver_annotation
+        else {
+            return;
+        };
+        for impl_g in impl_generics {
+            let position = receiver_args.iter().position(|arg| {
+                matches!(arg, Annotation::Constructor { name, params, .. }
+                    if params.is_empty() && name == &impl_g.name)
+            });
+            let Some(type_param) = position.and_then(|p| type_generics.get(p)) else {
+                continue;
+            };
+            for bound in &impl_g.bounds {
+                table.add_explicit(
+                    receiver_key,
+                    type_param.name.as_str(),
+                    classify_bound_annotation(bound),
+                );
             }
         }
     }

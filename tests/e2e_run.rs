@@ -104,3 +104,55 @@ fn run_forwards_go_flags() {
         "program output unexpected with --go-flags:\nstdout: {stdout}\nstderr: {stderr}"
     );
 }
+
+#[test]
+fn run_unused_stronger_bound_does_not_constrain_type() {
+    if !go_available() {
+        eprintln!("skipping run_unused_stronger_bound_does_not_constrain_type: `go` not found");
+        return;
+    }
+
+    let scratch = tempfile::tempdir().expect("create temp dir");
+    let project = scratch.path().join("proj");
+    let invocation = scratch.path().join("invocation");
+    fs::create_dir_all(project.join("src")).unwrap();
+    fs::create_dir_all(&invocation).unwrap();
+
+    fs::write(
+        project.join("lisette.toml"),
+        "[project]\nname = \"unusedstronger\"\nversion = \"0.1.0\"\n",
+    )
+    .unwrap();
+    fs::write(
+        project.join("src/main.lis"),
+        r#"import "go:fmt"
+
+struct Point { x: int }
+
+struct Box<T: Comparable> { value: T }
+
+impl<T: Ordered> Box<T> {
+  fn less(self, _other: Box<T>) -> bool { true }
+}
+
+fn main() {
+  let _ = Box { value: Point { x: 1 } }
+  fmt.Println("ok")
+}
+"#,
+    )
+    .unwrap();
+
+    let output = lis_run(&project, &invocation, &[]);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    assert!(
+        output.status.success(),
+        "lis run failed (unused stronger bound likely hoisted into the type):\nstdout: {stdout}\nstderr: {stderr}"
+    );
+    assert!(
+        stdout.contains("ok"),
+        "program did not run:\nstdout: {stdout}\nstderr: {stderr}"
+    );
+}

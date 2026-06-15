@@ -45,7 +45,7 @@ pub struct Facts {
     pub type_params_only_in_bound: Vec<TypeParamOnlyInBoundFact>,
     pub always_failing_try_blocks: Vec<Span>,
     pub expression_only_fstrings: Vec<Span>,
-    pub interface_satisfied_methods: HashMap<(String, String), Vec<Span>>,
+    pub interface_satisfied_methods: HashMap<(String, String), Vec<String>>,
 
     // Drained by passes::deferred via mem::take.
     pub generic_call_checks: Vec<GenericCallCheck>,
@@ -179,12 +179,12 @@ impl Facts {
         &mut self,
         module_id: String,
         method_name: String,
-        usage_span: Span,
+        impl_type_name: String,
     ) {
         self.interface_satisfied_methods
             .entry((module_id, method_name))
             .or_default()
-            .push(usage_span);
+            .push(impl_type_name);
     }
 
     pub fn absorb_local_facts(&mut self, local: LocalFacts) {
@@ -260,11 +260,11 @@ impl Facts {
             self.add_usage(usage_span, definition_span);
         }
 
-        for (key, spans) in interface_satisfied_methods {
+        for (key, impl_types) in interface_satisfied_methods {
             self.interface_satisfied_methods
                 .entry(key)
                 .or_default()
-                .extend(spans);
+                .extend(impl_types);
         }
     }
 }
@@ -485,14 +485,14 @@ mod tests {
     }
 
     #[test]
-    fn merge_concatenates_interface_method_spans() {
+    fn merge_concatenates_interface_method_impl_types() {
         let allocator = Arc::new(BindingIdAllocator::new());
         let mut a = Facts::new(allocator.clone());
         let mut b = Facts::new(allocator);
 
-        a.mark_method_used_for_interface("m".into(), "f".into(), span(0));
-        b.mark_method_used_for_interface("m".into(), "f".into(), span(1));
-        b.mark_method_used_for_interface("m".into(), "g".into(), span(2));
+        a.mark_method_used_for_interface("m".into(), "f".into(), "A".into());
+        b.mark_method_used_for_interface("m".into(), "f".into(), "B".into());
+        b.mark_method_used_for_interface("m".into(), "g".into(), "C".into());
 
         a.merge(b);
         assert_eq!(a.interface_satisfied_methods.len(), 2);

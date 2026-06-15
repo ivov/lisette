@@ -3909,3 +3909,23 @@ fn zero() {
 "#;
     assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/anon", ANON_STRUCT_TYPEDEF)]);
 }
+
+#[test]
+fn conditional_impl_renamed_param_keeps_receiver_bound() {
+    let input = r#"
+struct Box<T> { value: T }
+
+impl<U: Ordered> Box<U> {
+  fn less(self, other: Box<U>) -> bool {
+    self.value < other.value
+  }
+}
+
+fn main() {
+  let a = Box { value: 1 }
+  let b = Box { value: 2 }
+  let _ = a.less(b)
+}
+"#;
+    assert_emit_snapshot!(input);
+}

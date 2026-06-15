@@ -12,6 +12,20 @@ impl ModuleItemId {
     pub fn new(name: &str) -> Self {
         Self { name: name.into() }
     }
+
+    pub fn equals_method(type_name: &str) -> Self {
+        Self {
+            name: format!("{type_name}#equals").into(),
+        }
+    }
+
+    pub fn method(method: &str, receiver: &str) -> Self {
+        if method == "equals" {
+            Self::equals_method(receiver)
+        } else {
+            Self::new(method)
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

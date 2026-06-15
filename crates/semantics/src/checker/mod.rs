@@ -126,6 +126,10 @@ pub struct TaskState<'s> {
     /// Lets `convert_to_type` admit bound-only markers (e.g. `Comparable`)
     /// without flagging them as misuse in value positions.
     pub bound_position_depth: u32,
+    /// Interface bounds seen per receiver type parameter, keyed by (receiver qualified name,
+    /// parameter position), so `check_conflicting_cross_impl_bounds` can reject two impls
+    /// that instantiate one interface differently on the same parameter.
+    pub impl_param_interface_bounds: HashMap<(EcoString, usize), Vec<(Type, Span)>>,
 }
 
 impl<'s> TaskState<'s> {
@@ -146,6 +150,7 @@ impl<'s> TaskState<'s> {
             ufcs_shared: None,
             typed_files: Vec::new(),
             bound_position_depth: 0,
+            impl_param_interface_bounds: HashMap::default(),
         }
     }
 

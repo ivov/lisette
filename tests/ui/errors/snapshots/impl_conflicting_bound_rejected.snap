@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Conflicting impl bound
+   ╭─[test.lis:6:9]
+ 5 │ 
+ 6 │ impl<T: Parent<int>> Box<T> {
+   ·         ─────┬─────
+   ·              ╰── this bound cannot strengthen the receiver type
+ 7 │   fn less(self, _other: Box<T>) -> bool {
+   ╰────
+  help: `Box` already bounds this parameter with a different `Parent` instantiation. A receiver method would embed `Parent` twice, and no type argument satisfies both. Match the type's bound, or relax the type's declaration · code: [infer.impl_bound_conflicts_with_type]

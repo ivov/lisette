@@ -177,6 +177,14 @@ impl TaskState<'_> {
             return;
         }
 
+        self.check_conflicting_impl_bounds(&*store, annotation, &receiver_qualified_name, generics);
+        self.check_conflicting_cross_impl_bounds(
+            &*store,
+            annotation,
+            &receiver_qualified_name,
+            generics,
+        );
+
         let mut impl_bounds: Vec<syntax::types::Bound> = Vec::new();
         for g in generics {
             for b in &g.bounds {

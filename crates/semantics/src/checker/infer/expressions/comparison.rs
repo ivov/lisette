@@ -4,7 +4,7 @@ use crate::checker::infer::InferCtx;
 use crate::store::Store;
 use syntax::ast::{Expression, Span};
 use syntax::program::DefinitionBody;
-use syntax::types::{CompoundKind, Type, substitute};
+use syntax::types::{CompoundKind, Type, build_substitution_map, substitute};
 
 pub(crate) fn check_not_comparable(
     env: &TypeEnv,
@@ -99,6 +99,44 @@ pub(crate) fn check_not_comparable(
 fn is_interface_or_unknown(store: &Store, ty: &Type) -> bool {
     let resolved = store.deep_resolve_alias(ty);
     resolved.is_unknown() || store.is_interface(&resolved)
+}
+
+pub(crate) fn bounds_conflict(store: &Store, type_bounds: &[Type], impl_bound: &Type) -> bool {
+    let impl_bound = store.deep_resolve_alias(impl_bound);
+    let Some(impl_base) = impl_bound.get_qualified_id().map(str::to_string) else {
+        return false;
+    };
+    type_bounds
+        .iter()
+        .any(|tb| closure_conflicts(store, tb, &impl_base, &impl_bound))
+}
+
+fn closure_conflicts(store: &Store, start: &Type, target_base: &str, target: &Type) -> bool {
+    let mut stack = vec![store.deep_resolve_alias(start)];
+    let mut seen: Vec<Type> = Vec::new();
+    while let Some(current) = stack.pop() {
+        if current.get_qualified_id() == Some(target_base) && current != *target {
+            return true;
+        }
+        if seen.contains(&current) {
+            continue;
+        }
+        seen.push(current.clone());
+        let Some(id) = current.get_qualified_id() else {
+            continue;
+        };
+        let Some(interface) = store.get_interface(id) else {
+            continue;
+        };
+        let map = build_substitution_map(
+            &interface.generics,
+            current.get_type_params().unwrap_or_default(),
+        );
+        for parent in &interface.parents {
+            stack.push(store.deep_resolve_alias(&substitute(parent, &map)));
+        }
+    }
+    false
 }
 
 impl InferCtx<'_, '_> {
