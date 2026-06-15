@@ -4,9 +4,11 @@ on:
   pull_request:
     types: [opened, synchronize, reopened]
     branches: [main]
+  push:
+    branches: [main]
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.head_ref }}
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
   cancel-in-progress: false
 
 permissions:
@@ -20,7 +22,7 @@ env:
 jobs:
   pr-title:
     name: PR title
-    if: ${{ !startsWith(github.head_ref, 'release-plz-') }}
+    if: ${{ github.event_name == 'pull_request' && !startsWith(github.head_ref, 'release-plz-') }}
     runs-on: ubuntu-latest
     steps:
       - name: Check PR title
@@ -165,7 +167,7 @@ jobs:
 
   ide-extension-version-check:
     name: IDE extension version check
-    if: ${{ !startsWith(github.head_ref, 'release-plz-') }}
+    if: ${{ github.event_name == 'pull_request' && !startsWith(github.head_ref, 'release-plz-') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # ratchet:actions/checkout@v6
