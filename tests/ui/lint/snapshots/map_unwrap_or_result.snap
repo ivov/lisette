@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [info] Manual `map_or`
+   ╭─[test.lis:4:11]
+ 3 │   let r: Result<int, string> = Ok(1)
+ 4 │   let _ = r.map(|x| x * 2).unwrap_or(0)
+   ·           ──────────────┬──────────────
+   ·                         ╰── can be simpler
+ 5 │ }
+   ╰────
+  help: Replace `.map(f).unwrap_or(d)` with `.map_or(d, f)` · code: [lint.map_unwrap_or]

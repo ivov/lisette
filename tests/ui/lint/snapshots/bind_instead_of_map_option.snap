@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [info] Manual `map`
+   ╭─[test.lis:4:11]
+ 3 │   let o: Option<int> = Some(1)
+ 4 │   let _ = o.and_then(|x| Some(x + 1))
+   ·           ─────────────┬─────────────
+   ·                        ╰── can be simpler
+ 5 │ }
+   ╰────
+  help: Replace `.and_then(|x| Some(y))` with `.map(|x| y)` · code: [lint.bind_instead_of_map]

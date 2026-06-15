@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [info] Manual `and_then`
+   ╭─[test.lis:4:11]
+ 3 │   let o: Option<int> = Some(1)
+ 4 │   let _ = o.map(|x| Some(x + 1)).flatten()
+   ·           ────────────────┬───────────────
+   ·                           ╰── can be simpler
+ 5 │ }
+   ╰────
+  help: Replace `.map(f).flatten()` with `.and_then(f)` · code: [lint.map_flatten]

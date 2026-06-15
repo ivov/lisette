@@ -635,6 +635,61 @@ pub fn needless_match(span: &Span, subject: &str) -> LisetteDiagnostic {
         ))
 }
 
+pub fn map_unwrap_or(span: &Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::info("Manual `map_or`")
+        .with_lint_code("map_unwrap_or")
+        .with_span_label(span, "can be simpler")
+        .with_help("Replace `.map(f).unwrap_or(d)` with `.map_or(d, f)`")
+}
+
+pub fn bind_instead_of_map(span: &Span, wrapper: &str) -> LisetteDiagnostic {
+    LisetteDiagnostic::info("Manual `map`")
+        .with_lint_code("bind_instead_of_map")
+        .with_span_label(span, "can be simpler")
+        .with_help(format!(
+            "Replace `.and_then(|x| {wrapper}(y))` with `.map(|x| y)`"
+        ))
+}
+
+pub fn map_flatten(span: &Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::info("Manual `and_then`")
+        .with_lint_code("map_flatten")
+        .with_span_label(span, "can be simpler")
+        .with_help("Replace `.map(f).flatten()` with `.and_then(f)`")
+}
+
+pub fn map_identity(span: &Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::info("Redundant `map`")
+        .with_lint_code("map_identity")
+        .with_span_label(span, "does nothing")
+        .with_help("Remove `.map(|x| x)`, which returns its input unchanged")
+}
+
+pub fn unnecessary_map_on_constructor(
+    span: &Span,
+    variant: &str,
+    method: &str,
+) -> LisetteDiagnostic {
+    LisetteDiagnostic::info(format!("Unnecessary `{method}`"))
+        .with_lint_code("unnecessary_map_on_constructor")
+        .with_span_label(span, "can be simpler")
+        .with_help(format!(
+            "Replace `{variant}(x).{method}(f)` with `{variant}(f(x))`"
+        ))
+}
+
+pub fn map_or_none(span: &Span, replacement: &str) -> LisetteDiagnostic {
+    let help = if replacement == "ok" {
+        "Replace `.map_or(None, Some)` with `.ok()`".to_string()
+    } else {
+        format!("Replace `.map_or(None, f)` with `.{replacement}(f)`")
+    };
+    LisetteDiagnostic::info(format!("Manual `{replacement}`"))
+        .with_lint_code("map_or_none")
+        .with_span_label(span, "can be simpler")
+        .with_help(help)
+}
+
 pub fn redundant_closure(span: &Span, callee: &str) -> LisetteDiagnostic {
     LisetteDiagnostic::info("Redundant closure")
         .with_lint_code("redundant_closure")

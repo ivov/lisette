@@ -15705,6 +15705,400 @@ fn main() {
 }
 
 #[test]
+fn map_unwrap_or_option() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let o: Option<int> = Some(1)
+  let _ = o.map(|x| x * 2).unwrap_or(0)
+}
+"#
+    );
+}
+
+#[test]
+fn map_unwrap_or_result() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let r: Result<int, string> = Ok(1)
+  let _ = r.map(|x| x * 2).unwrap_or(0)
+}
+"#
+    );
+}
+
+#[test]
+fn map_unwrap_or_partial_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let p: Partial<int, string> = Ok(1)
+  let _ = p.map(|x| x * 2).unwrap_or(0)
+}
+"#
+    );
+}
+
+#[test]
+fn map_unwrap_or_side_effecting_default_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn make_default() -> int {
+  0
+}
+
+fn main() {
+  let o: Option<int> = Some(1)
+  let _ = o.map(|x| x * 2).unwrap_or(make_default())
+}
+"#
+    );
+}
+
+#[test]
+fn map_unwrap_or_effectful_mapper_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn make_mapper() -> fn(int) -> int {
+  |x| x * 2
+}
+
+fn main() {
+  let o: Option<int> = Some(1)
+  let _ = o.map(make_mapper()).unwrap_or(0)
+}
+"#
+    );
+}
+
+#[test]
+fn bind_instead_of_map_option() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let o: Option<int> = Some(1)
+  let _ = o.and_then(|x| Some(x + 1))
+}
+"#
+    );
+}
+
+#[test]
+fn bind_instead_of_map_result() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let r: Result<int, string> = Ok(1)
+  let _ = r.and_then(|x| Ok(x + 1))
+}
+"#
+    );
+}
+
+#[test]
+fn bind_instead_of_map_conditional_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let o: Option<int> = Some(1)
+  let _ = o.and_then(|x| if x > 0 { Some(x) } else { None })
+}
+"#
+    );
+}
+
+#[test]
+fn bind_instead_of_map_propagating_wrapped_value_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn fallible(x: int) -> Option<int> {
+  Some(x)
+}
+
+fn main() {
+  let o: Option<int> = Some(1)
+  let _ = o.and_then(|x| Some(fallible(x)?))
+}
+"#
+    );
+}
+
+#[test]
+fn map_flatten_option() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let o: Option<int> = Some(1)
+  let _ = o.map(|x| Some(x + 1)).flatten()
+}
+"#
+    );
+}
+
+#[test]
+fn map_flatten_without_map_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let oo: Option<Option<int>> = Some(Some(1))
+  let _ = oo.flatten()
+}
+"#
+    );
+}
+
+#[test]
+fn map_identity_option() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let o: Option<int> = Some(1)
+  let _ = o.map(|x| x)
+}
+"#
+    );
+}
+
+#[test]
+fn map_identity_result() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let r: Result<int, string> = Ok(1)
+  let _ = r.map(|x| x)
+}
+"#
+    );
+}
+
+#[test]
+fn map_identity_slice_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let s: Slice<int> = [1, 2, 3]
+  let _ = s.map(|x| x)
+}
+"#
+    );
+}
+
+#[test]
+fn map_identity_option_upcast_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+interface Printable {
+  fn print(self) -> string
+}
+
+struct Text {
+  content: string
+}
+
+impl Text {
+  fn print(self) -> string {
+    self.content
+  }
+}
+
+fn main() {
+  let t = Some(Text { content: "hello" })
+  let _: Option<Printable> = t.map(|x| x)
+}
+"#
+    );
+}
+
+#[test]
+fn map_identity_result_upcast_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+interface Printable {
+  fn print(self) -> string
+}
+
+struct Text {
+  content: string
+}
+
+impl Text {
+  fn print(self) -> string {
+    self.content
+  }
+}
+
+fn main() {
+  let r: Result<Text, string> = Ok(Text { content: "hello" })
+  let _: Result<Printable, string> = r.map(|x| x)
+}
+"#
+    );
+}
+
+#[test]
+fn unnecessary_map_on_some() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let _ = Some(1).map(|x| x + 1)
+}
+"#
+    );
+}
+
+#[test]
+fn unnecessary_map_on_ok() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let _: Result<int, string> = Ok(1).map(|x| x + 1)
+}
+"#
+    );
+}
+
+#[test]
+fn unnecessary_map_err_on_err() {
+    assert_lint_snapshot!(
+        r#"
+fn f() -> Result<int, string> {
+  Err("oops").map_err(|e| e + "!")
+}
+
+fn main() {
+  let _ = f()
+}
+"#
+    );
+}
+
+#[test]
+fn unnecessary_map_on_variable_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let o: Option<int> = Some(1)
+  let _ = o.map(|x| x + 1)
+}
+"#
+    );
+}
+
+#[test]
+fn unnecessary_map_on_constructor_effectful_mapper_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn pick() -> fn(int) -> int {
+  |x| x + 1
+}
+
+fn main() {
+  let _ = Some(1).map(pick())
+}
+"#
+    );
+}
+
+#[test]
+fn unnecessary_map_on_constructor_effectful_payload_lambda_warns() {
+    assert_lint_snapshot!(
+        r#"
+fn compute() -> int {
+  5
+}
+
+fn main() {
+  let _ = Some(compute()).map(|x| x + 1)
+}
+"#
+    );
+}
+
+#[test]
+fn map_or_none_option() {
+    assert_lint_snapshot!(
+        r#"
+fn maybe(x: int) -> Option<int> {
+  Some(x + 1)
+}
+
+fn main() {
+  let o: Option<int> = Some(1)
+  let _ = o.map_or(None, maybe)
+}
+"#
+    );
+}
+
+#[test]
+fn map_or_into_option_result() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let r: Result<int, string> = Ok(1)
+  let _ = r.map_or(None, Some)
+}
+"#
+    );
+}
+
+#[test]
+fn map_or_some_default_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let o: Option<int> = Some(1)
+  let _ = o.map_or(0, |x| x + 1)
+}
+"#
+    );
+}
+
+#[test]
+fn map_or_into_option_upcast_no_map_or_none() {
+    let mut fs = MockFileSystem::new();
+    let source = r#"
+interface Printable {
+  fn print(self) -> string
+}
+
+struct Text {
+  content: string
+}
+
+impl Text {
+  fn print(self) -> string {
+    self.content
+  }
+}
+
+fn main() {
+  let r: Result<Text, string> = Ok(Text { content: "hello" })
+  let _: Option<Printable> = r.map_or(None, |x| Some(x))
+}
+"#;
+    fs.add_file(ENTRY_MODULE_ID, "main.lis", source);
+
+    let result = compile_check(fs);
+    let map_or_none = result
+        .lints
+        .iter()
+        .filter(|l| l.code_str() == Some("lint.map_or_none"))
+        .count();
+    assert_eq!(
+        map_or_none,
+        0,
+        "`.ok()` would discard the upcast to `Option<Printable>`: {:?}",
+        result
+            .lints
+            .iter()
+            .filter_map(|l| l.code_str())
+            .collect::<Vec<_>>()
+    );
+}
+
+#[test]
 fn equals_methods_are_tracked_per_receiver_type() {
     let mut fs = MockFileSystem::new();
     let source = r#"

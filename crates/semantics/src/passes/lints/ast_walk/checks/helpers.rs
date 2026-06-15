@@ -1,4 +1,4 @@
-use syntax::ast::{Expression, FormatStringPart, Literal, Pattern};
+use syntax::ast::{Expression, FormatStringPart, Literal, Pattern, Span};
 use syntax::types::{SimpleKind, Type, unqualified_name};
 
 use crate::passes::walk::visit_ast;
@@ -71,6 +71,10 @@ pub(super) fn is_eager_safe(expression: &Expression) -> bool {
     }
 }
 
+pub(super) fn is_pure_mapper(expression: &Expression) -> bool {
+    matches!(expression.unwrap_parens(), Expression::Lambda { .. }) || is_eager_safe(expression)
+}
+
 fn literal_is_eager_safe(literal: &Literal) -> bool {
     match literal {
         Literal::Slice(elements) => elements.iter().all(is_eager_safe),
@@ -137,6 +141,54 @@ pub(super) fn wrapped_single_arg<'a>(
 pub(super) fn is_bare_identifier(expression: &Expression, name: &str) -> bool {
     matches!(expression.unwrap_parens(), Expression::Identifier { value, .. }
         if value.as_str() == name)
+}
+
+pub(super) fn method_call<'a>(
+    expression: &'a Expression,
+    name: &str,
+) -> Option<(&'a Expression, &'a [Expression], &'a Span)> {
+    let Expression::Call {
+        expression: callee,
+        args,
+        span,
+        ..
+    } = expression
+    else {
+        return None;
+    };
+    let Expression::DotAccess {
+        expression: receiver,
+        member,
+        ..
+    } = callee.unwrap_parens()
+    else {
+        return None;
+    };
+    (member.as_str() == name).then_some((receiver.as_ref(), args.as_slice(), span))
+}
+
+pub(super) fn unary_lambda(expression: &Expression) -> Option<(&str, &Expression)> {
+    let Expression::Lambda { params, body, .. } = expression.unwrap_parens() else {
+        return None;
+    };
+    let [param] = params.as_slice() else {
+        return None;
+    };
+    let Pattern::Identifier { identifier, .. } = &param.pattern else {
+        return None;
+    };
+    Some((identifier.as_str(), unwrap_block(body)))
+}
+
+fn unwrap_block(expression: &Expression) -> &Expression {
+    match expression.unwrap_parens() {
+        Expression::Block { items, .. } if items.len() == 1 => unwrap_block(&items[0]),
+        other => other,
+    }
+}
+
+pub(super) fn is_identity_lambda(expression: &Expression) -> bool {
+    unary_lambda(expression).is_some_and(|(param, body)| is_bare_identifier(body, param))
 }
 
 pub(super) fn wraps_binding(body: &Expression, variant: &str, binding: &str) -> bool {

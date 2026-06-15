@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [info] Unnecessary `map_err`
+   ╭─[test.lis:3:3]
+ 2 │ fn f() -> Result<int, string> {
+ 3 │   Err("oops").map_err(|e| e + "!")
+   ·   ────────────────┬───────────────
+   ·                   ╰── can be simpler
+ 4 │ }
+   ╰────
+  help: Replace `Err(x).map_err(f)` with `Err(f(x))` · code: [lint.unnecessary_map_on_constructor]

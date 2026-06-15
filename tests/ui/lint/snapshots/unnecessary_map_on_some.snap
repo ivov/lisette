@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [info] Unnecessary `map`
+   ╭─[test.lis:3:11]
+ 2 │ fn main() {
+ 3 │   let _ = Some(1).map(|x| x + 1)
+   ·           ───────────┬──────────
+   ·                      ╰── can be simpler
+ 4 │ }
+   ╰────
+  help: Replace `Some(x).map(f)` with `Some(f(x))` · code: [lint.unnecessary_map_on_constructor]

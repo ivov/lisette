@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [info] Manual `ok`
+   ╭─[test.lis:4:11]
+ 3 │   let r: Result<int, string> = Ok(1)
+ 4 │   let _ = r.map_or(None, Some)
+   ·           ──────────┬─────────
+   ·                     ╰── can be simpler
+ 5 │ }
+   ╰────
+  help: Replace `.map_or(None, Some)` with `.ok()` · code: [lint.map_or_none]
