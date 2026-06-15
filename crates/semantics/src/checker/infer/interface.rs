@@ -387,15 +387,13 @@ impl InferCtx<'_, '_> {
                 ));
             } else if let Type::Nominal { id, .. } = ty.strip_refs().resolve_in(&self.env)
                 && let Some(module) = store.module_for_qualified_name(id.as_str())
-                && id
-                    .as_str()
-                    .get(module.len() + 1..)
-                    .is_some_and(|rest| !rest.contains('.'))
+                && let Some(type_name) = id.as_str().get(module.len() + 1..)
+                && !type_name.contains('.')
             {
                 self.facts.mark_method_used_for_interface(
                     module.to_string(),
                     method_name.to_string(),
-                    Span::dummy(),
+                    type_name.to_string(),
                 );
             }
         }

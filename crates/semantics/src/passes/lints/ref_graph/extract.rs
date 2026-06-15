@@ -1,7 +1,8 @@
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use syntax::ast::{
-    Annotation, Expression, ImportAlias, Pattern, SelectArm, SelectArmPattern, StructSpread,
+    Annotation, Binding, Expression, Generic, ImportAlias, Pattern, SelectArm, SelectArmPattern,
+    StructSpread,
 };
 use syntax::program::File;
 use syntax::program::{DefinitionBody, DotAccessKind, Module};
@@ -100,7 +101,8 @@ fn walk_expression(
                 && is_method_access(dot_access_kind)
                 && credits_local_method(&expression.get_type(), module)
             {
-                graph.add_reference(from, ModuleItemId::new(member));
+                let to = method_node(member, &expression.get_type());
+                graph.add_reference(from, to);
             }
         }
 
@@ -113,24 +115,16 @@ fn walk_expression(
             ..
         } => {
             let fn_ctx = ModuleItemId::new(name);
-            for g in generics {
-                for bound in &g.bounds {
-                    walk_annotation(module, bound, graph, alias_map, &fn_ctx);
-                }
-            }
-            for p in params {
-                walk_pattern(module, &p.pattern, graph, alias_map, Some(&fn_ctx));
-                walk_type_or_annotation(
-                    module,
-                    &p.ty,
-                    p.annotation.as_ref(),
-                    graph,
-                    alias_map,
-                    &fn_ctx,
-                );
-            }
-            walk_annotation(module, return_annotation, graph, alias_map, &fn_ctx);
-            walk_expression(module, body, graph, alias_map, Some(&fn_ctx));
+            walk_callable_body(
+                module,
+                generics,
+                params,
+                return_annotation,
+                body,
+                graph,
+                alias_map,
+                &fn_ctx,
+            );
         }
 
         Expression::Const {
@@ -252,7 +246,29 @@ fn walk_expression(
                 }
             }
             for m in methods {
-                walk_expression(module, m, graph, alias_map, ctx);
+                if let Expression::Function {
+                    name,
+                    generics,
+                    params,
+                    return_annotation,
+                    body,
+                    ..
+                } = m
+                {
+                    let method_ctx = ModuleItemId::method(name, receiver_name);
+                    walk_callable_body(
+                        module,
+                        generics,
+                        params,
+                        return_annotation,
+                        body,
+                        graph,
+                        alias_map,
+                        &method_ctx,
+                    );
+                } else {
+                    walk_expression(module, m, graph, alias_map, ctx);
+                }
             }
         }
 
@@ -349,7 +365,7 @@ fn walk_identifier(
         add_ref(graph, ctx, alias_map, module, first);
         if let Some(from) = ctx {
             let method_name = value.rsplit('.').next().unwrap_or("");
-            graph.add_reference(from, ModuleItemId::new(method_name));
+            graph.add_reference(from, ModuleItemId::method(method_name, first));
         }
     }
 }
@@ -372,7 +388,7 @@ fn walk_call(
             add_ref(graph, ctx, alias_map, module, first);
             if let Some(from) = ctx {
                 let method_name = value.rsplit('.').next().unwrap_or("");
-                graph.add_reference(from, ModuleItemId::new(method_name));
+                graph.add_reference(from, ModuleItemId::method(method_name, first));
             }
         }
     }
@@ -712,6 +728,46 @@ fn is_method_access(kind: &Option<DotAccessKind>) -> bool {
                 | DotAccessKind::StaticMethod { .. }
         )
     )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn walk_callable_body(
+    module: &Module,
+    generics: &[Generic],
+    params: &[Binding],
+    return_annotation: &Annotation,
+    body: &Expression,
+    graph: &mut ReferenceGraph,
+    alias_map: &AliasMap,
+    fn_ctx: &ModuleItemId,
+) {
+    for g in generics {
+        for bound in &g.bounds {
+            walk_annotation(module, bound, graph, alias_map, fn_ctx);
+        }
+    }
+    for p in params {
+        walk_pattern(module, &p.pattern, graph, alias_map, Some(fn_ctx));
+        walk_type_or_annotation(
+            module,
+            &p.ty,
+            p.annotation.as_ref(),
+            graph,
+            alias_map,
+            fn_ctx,
+        );
+    }
+    walk_annotation(module, return_annotation, graph, alias_map, fn_ctx);
+    walk_expression(module, body, graph, alias_map, Some(fn_ctx));
+}
+
+/// The graph node for a `member` method call on `receiver_ty`, resolving the receiver to
+/// its unqualified type name so `equals` is keyed per receiver type.
+fn method_node(member: &str, receiver_ty: &Type) -> ModuleItemId {
+    match type_name(receiver_ty) {
+        Some(name) => ModuleItemId::method(member, &name),
+        None => ModuleItemId::new(member),
+    }
 }
 
 fn credits_local_method(receiver_ty: &Type, module: &Module) -> bool {

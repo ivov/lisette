@@ -15487,3 +15487,141 @@ fn main() {
 "#
     );
 }
+
+#[test]
+fn equals_methods_are_tracked_per_receiver_type() {
+    let mut fs = MockFileSystem::new();
+    let source = r#"
+struct Inner { v: int }
+
+impl Inner {
+  fn equals(self, other: Inner) -> bool {
+    self.v == other.v
+  }
+}
+
+struct Other { v: int }
+
+impl Other {
+  fn equals(self, other: Other) -> bool {
+    self.v == other.v
+  }
+}
+
+fn main() {
+  let a = Inner { v: 1 }
+  let b = Inner { v: 2 }
+  let _ = a.equals(b)
+  let _o = Other { v: 3 }
+}
+"#;
+    fs.add_file(ENTRY_MODULE_ID, "main.lis", source);
+
+    let result = compile_check(fs);
+    assert!(
+        result.errors.is_empty(),
+        "unexpected errors: {:?}",
+        result.errors
+    );
+    let unused_fns = result
+        .lints
+        .iter()
+        .filter(|l| l.code_str() == Some("lint.unused_function"))
+        .count();
+    assert_eq!(
+        unused_fns,
+        1,
+        "only the uncalled Other.equals should be flagged: {:?}",
+        result
+            .lints
+            .iter()
+            .filter_map(|l| l.code_str())
+            .collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn equals_method_satisfying_interface_is_kept() {
+    let mut fs = MockFileSystem::new();
+    let source = r#"
+interface Eq<T> {
+  fn equals(self, other: T) -> bool
+}
+
+struct Point { x: int }
+
+impl Point {
+  fn equals(self, other: Point) -> bool {
+    self.x == other.x
+  }
+}
+
+fn check(_a: Eq<Point>) -> bool {
+  true
+}
+
+fn main() {
+  let p = Point { x: 1 }
+  let _ = check(p)
+}
+"#;
+    fs.add_file(ENTRY_MODULE_ID, "main.lis", source);
+
+    let result = compile_check(fs);
+    assert!(
+        result.errors.is_empty(),
+        "unexpected errors: {:?}",
+        result.errors
+    );
+    let codes: Vec<&str> = result.lints.iter().filter_map(|l| l.code_str()).collect();
+    assert!(
+        !codes.contains(&"lint.unused_function"),
+        "Point.equals satisfies Eq and must not be flagged unused: {codes:?}"
+    );
+}
+
+#[test]
+fn equals_on_imported_type_does_not_keep_same_named_local_equals() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "models",
+        "models.lis",
+        r#"
+pub struct Inner { pub x: int }
+
+impl Inner {
+  pub fn equals(self, _other: Inner) -> bool { true }
+}
+"#,
+    );
+    let source = r#"
+import "models"
+
+struct Inner { x: int }
+
+impl Inner {
+  fn equals(self, _other: Inner) -> bool { true }
+}
+
+fn main() {
+  let a = models.Inner { x: 1 }
+  let b = models.Inner { x: 2 }
+  let _ = a.equals(b)
+  let _ = Inner { x: 3 }
+}
+"#;
+    fs.add_file(ENTRY_MODULE_ID, "main.lis", source);
+
+    let result = compile_check(fs);
+    assert!(
+        result.errors.is_empty(),
+        "unexpected errors: {:?}",
+        result.errors
+    );
+    let codes: Vec<&str> = result.lints.iter().filter_map(|l| l.code_str()).collect();
+    assert!(
+        codes.contains(&"lint.unused_function"),
+        "the local Inner.equals is unused: `a.equals(b)` dispatches to the imported \
+         models.Inner.equals, not the same-named local method: {codes:?}"
+    );
+}

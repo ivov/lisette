@@ -132,10 +132,16 @@ fn run_ref_lints(
         }
     }
 
-    for (method_module_id, method_name) in facts.interface_satisfied_methods.keys() {
-        if method_module_id == &module.id {
-            let method_id = ModuleItemId::new(method_name);
-            graph.mark_as_used(method_id);
+    for ((method_module_id, method_name), impl_types) in &facts.interface_satisfied_methods {
+        if method_module_id != &module.id {
+            continue;
+        }
+        if method_name == "equals" {
+            for type_name in impl_types {
+                graph.mark_as_used(ModuleItemId::equals_method(type_name));
+            }
+        } else {
+            graph.mark_as_used(ModuleItemId::new(method_name));
         }
     }
 
@@ -331,7 +337,11 @@ fn collect_items(
                         *visibility == Visibility::Public,
                     );
                 }
-                Expression::ImplBlock { methods, .. } => {
+                Expression::ImplBlock {
+                    methods,
+                    receiver_name,
+                    ..
+                } => {
                     for method in methods {
                         if let Expression::Function {
                             name,
@@ -340,7 +350,7 @@ fn collect_items(
                             ..
                         } = method
                         {
-                            let id = ModuleItemId::new(name);
+                            let id = ModuleItemId::method(name, receiver_name);
                             let is_entry = *visibility == Visibility::Public
                                 || is_upper(name)
                                 || matches!(name.as_str(), "string" | "goString" | "error");
