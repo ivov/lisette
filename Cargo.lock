@@ -509,7 +509,7 @@ checksum = "df1d3c3b53da64cf5760482273a98e575c651a67eec7f77df96b5b642de8f039"
 
 [[package]]
 name = "lisette"
-version = "0.4.1"
+version = "0.4.2"
 dependencies = [
  "fs2",
  "lisette-deps",
@@ -531,7 +531,7 @@ dependencies = [
 
 [[package]]
 name = "lisette-deps"
-version = "0.4.1"
+version = "0.4.2"
 dependencies = [
  "lisette-stdlib",
  "serde",
@@ -542,7 +542,7 @@ dependencies = [
 
 [[package]]
 name = "lisette-diagnostics"
-version = "0.4.1"
+version = "0.4.2"
 dependencies = [
  "lisette-syntax",
  "miette",
@@ -552,7 +552,7 @@ dependencies = [
 
 [[package]]
 name = "lisette-emit"
-version = "0.4.1"
+version = "0.4.2"
 dependencies = [
  "ecow",
  "lisette-diagnostics",
@@ -563,7 +563,7 @@ dependencies = [
 
 [[package]]
 name = "lisette-format"
-version = "0.4.1"
+version = "0.4.2"
 dependencies = [
  "lisette-syntax",
  "unicode-segmentation",
@@ -571,7 +571,7 @@ dependencies = [
 
 [[package]]
 name = "lisette-lsp"
-version = "0.4.1"
+version = "0.4.2"
 dependencies = [
  "bytes",
  "dashmap 6.1.0",
@@ -594,7 +594,7 @@ dependencies = [
 
 [[package]]
 name = "lisette-semantics"
-version = "0.4.1"
+version = "0.4.2"
 dependencies = [
  "bincode",
  "ecow",
@@ -610,11 +610,11 @@ dependencies = [
 
 [[package]]
 name = "lisette-stdlib"
-version = "0.4.1"
+version = "0.4.2"
 
 [[package]]
 name = "lisette-syntax"
-version = "0.4.1"
+version = "0.4.2"
 dependencies = [
  "ecow",
  "rustc-hash",
@@ -1046,7 +1046,7 @@ dependencies = [
 
 [[package]]
 name = "tests"
-version = "0.4.1"
+version = "0.4.2"
 dependencies = [
  "insta",
  "lisette-deps",
