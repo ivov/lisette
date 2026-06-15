@@ -11720,6 +11720,95 @@ async fn inlay_hint_shows_let_type() {
 }
 
 #[tokio::test]
+async fn inlay_hint_shows_parameter_names() {
+    let mut client = TestClient::new().await;
+    client.initialize().await;
+    let source = "fn add(x: int, y: int) -> int { x + y }\nfn main() { add(1, 2) }";
+    client.open(TEST_URI, source).await;
+
+    let hints = client
+        .inlay_hint(TEST_URI, (0, 0), doc_end(source))
+        .await
+        .unwrap();
+
+    assert_eq!(
+        inlay_hint_triples(&hints),
+        vec![(1, 16, "x:".to_string()), (1, 19, "y:".to_string())]
+    );
+
+    client.shutdown().await;
+}
+
+#[tokio::test]
+async fn inlay_hint_suppresses_matching_argument_name() {
+    let mut client = TestClient::new().await;
+    client.initialize().await;
+    let source =
+        "fn add(x: int, y: int) -> int { x + y }\nfn wrap(x: int, y: int) -> int { add(x, y) }";
+    client.open(TEST_URI, source).await;
+
+    let hints = client
+        .inlay_hint(TEST_URI, (0, 0), doc_end(source))
+        .await
+        .unwrap();
+
+    assert_eq!(inlay_hint_triples(&hints), vec![]);
+
+    client.shutdown().await;
+}
+
+#[tokio::test]
+async fn inlay_hint_method_call_omits_receiver() {
+    let mut client = TestClient::new().await;
+    client.initialize().await;
+    let source = "\
+struct Point { x: int, y: int }
+impl Point {
+  fn translate(self, dx: int, dy: int) -> int { self.x + dx + dy }
+}
+fn run(p: Point) -> int {
+  p.translate(10, 20)
+}";
+    client.open(TEST_URI, source).await;
+
+    let hints = client
+        .inlay_hint(TEST_URI, (0, 0), doc_end(source))
+        .await
+        .unwrap();
+
+    assert_eq!(
+        inlay_hint_triples(&hints),
+        vec![(5, 14, "dx:".to_string()), (5, 18, "dy:".to_string())]
+    );
+
+    client.shutdown().await;
+}
+
+#[tokio::test]
+async fn inlay_hint_variadic_only_labels_fixed_params() {
+    let mut client = TestClient::new().await;
+    client.initialize().await;
+    let source = "\
+fn log_all(prefix: string, vals: VarArgs<int>) -> int { prefix.length() }
+fn main() {
+  let _ = log_all(\"tag\", 1, 2, 3)
+}";
+    client.open(TEST_URI, source).await;
+
+    let hints = client
+        .inlay_hint(TEST_URI, (0, 0), doc_end(source))
+        .await
+        .unwrap();
+
+    assert_eq!(
+        inlay_hint_triples(&hints),
+        vec![(2, 18, "prefix:".to_string())]
+    );
+
+    client.shutdown().await;
+}
+
+#[tokio::test]
 async fn inlay_hint_renders_collection_type() {
     let mut client = TestClient::new().await;
     client.initialize().await;
