@@ -2,6 +2,24 @@
 
 Lisette is under active development. Any version before 1.0.0 may include breaking changes.
 
+## [0.4.2](https://github.com/ivov/lisette/compare/lisette-v0.4.1...lisette-v0.4.2) - 2026-06-15
+
+- refactor: rename info summary count label to advisories [#741](https://github.com/ivov/lisette/pull/741) [`410b75e`](https://github.com/ivov/lisette/commit/410b75e059082b98833dcca537dee16f94688e06)
+- feat: inlay hints for parameter names at call sites [#740](https://github.com/ivov/lisette/pull/740) [`70fb4a1`](https://github.com/ivov/lisette/commit/70fb4a13c3994e41019caf283526f2c2a6f761d8)
+- ci: build bindgen unoptimized to speed up stdlib check [#739](https://github.com/ivov/lisette/pull/739) [`4d8d558`](https://github.com/ivov/lisette/commit/4d8d55822568651aac5aaa2bffdb7f3add9ae5e6)
+- feat: show parameter names in LSP signature help [#738](https://github.com/ivov/lisette/pull/738) [`0bc93c7`](https://github.com/ivov/lisette/commit/0bc93c72bafbfd970ca441233e7ee147f6e3651e)
+- feat: lints for option/result combinator simplifications [#737](https://github.com/ivov/lisette/pull/737) [`63807bf`](https://github.com/ivov/lisette/commit/63807bf08c74b17c59fcda2220f43af029800192)
+- ci: cache the go build output for e2e suite [#736](https://github.com/ivov/lisette/pull/736) [`6a004df`](https://github.com/ivov/lisette/commit/6a004df2dfec091daa8f18d4787cae8fbec7d8ab)
+- feat: deep equality for slices and maps of equatable types [#735](https://github.com/ivov/lisette/pull/735) [`f331d8f`](https://github.com/ivov/lisette/commit/f331d8ffe86e6c97382b39c47e5b8e1899281d99)
+- ci: run on main to warm the pull request cache [#734](https://github.com/ivov/lisette/pull/734) [`7b727d1`](https://github.com/ivov/lisette/commit/7b727d1a98decc8c583ec0f62164b72e0cd1ca5e)
+- feat: lints for option/result match simplifications [#733](https://github.com/ivov/lisette/pull/733) [`6fccf25`](https://github.com/ivov/lisette/commit/6fccf256b39489d61fec13a62c5e97a449f96bd3)
+- ci: split unit tests from main suite [#732](https://github.com/ivov/lisette/pull/732) [`559b60c`](https://github.com/ivov/lisette/commit/559b60c53b1d1d1c66302173092ce32cc9c3aada)
+- fix: track equals liveness per receiver type [#731](https://github.com/ivov/lisette/pull/731) [`edb638c`](https://github.com/ivov/lisette/commit/edb638c72c04af59312515a06053a668f9fe1931)
+- fix: reject unrepresentable receiver method bounds [#730](https://github.com/ivov/lisette/pull/730) [`8a18611`](https://github.com/ivov/lisette/commit/8a186110a50d4564ef18587c1031d301859b3eb7)
+- refactor: prep for semantics crate split [#729](https://github.com/ivov/lisette/pull/729) [`bc16ce7`](https://github.com/ivov/lisette/commit/bc16ce7584a2253dcf4828083ab689ccad10444a)
+- feat: lint for botched variable swaps [#728](https://github.com/ivov/lisette/pull/728) [`c5a4cc6`](https://github.com/ivov/lisette/commit/c5a4cc66096736a5bfdf2cfd219621c6959e9ce5)
+- feat: lint for min/max clamp mistakes [#726](https://github.com/ivov/lisette/pull/726) [`4b54e8a`](https://github.com/ivov/lisette/commit/4b54e8ad23be9fe8c0263ce70e1e64258d1d4026)
+
 ## [0.4.1](https://github.com/ivov/lisette/compare/lisette-v0.4.0...lisette-v0.4.1) - 2026-06-14
 
 - test: render remaining emit snapshot descriptions as yaml blocks [#725](https://github.com/ivov/lisette/pull/725) [`414e81b`](https://github.com/ivov/lisette/commit/414e81ba162c568c06cb660b7549c9ba2fe4acc9)
