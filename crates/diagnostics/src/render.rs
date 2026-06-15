@@ -76,7 +76,11 @@ pub fn print_summary(file_count: usize, elapsed: Duration, errors: i32, warnings
             });
         }
         if info > 0 {
-            parts.push(format!("{} info", info));
+            parts.push(if info == 1 {
+                "1 advisory".to_string()
+            } else {
+                format!("{} advisories", info)
+            });
         }
         let findings = format!("Found {}", parts.join(", "));
         let findings_display = if use_color {
