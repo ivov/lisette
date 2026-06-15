@@ -39,9 +39,10 @@ use checks::{
     check_regexp_in_loop, check_replaceable_with_zero_fill, check_rest_only_slice_pattern,
     check_self_assignment, check_self_comparison, check_single_arm_select,
     check_type_limit_comparison, check_uninterpolated_fstring, check_unnecessary_bool,
-    check_unnecessary_range_loop, check_unnecessary_raw_string_expression,
-    check_unnecessary_raw_string_pattern, check_unnecessary_return, check_unsigned_comparison,
-    check_verbose_failure_propagation, check_waitgroup_add_in_task,
+    check_unnecessary_min_or_max, check_unnecessary_range_loop,
+    check_unnecessary_raw_string_expression, check_unnecessary_raw_string_pattern,
+    check_unnecessary_return, check_unsigned_comparison, check_verbose_failure_propagation,
+    check_waitgroup_add_in_task,
 };
 
 static LINT_CHECKS: LazyLock<CheckTable> = LazyLock::new(|| {
@@ -72,6 +73,7 @@ static LINT_CHECKS: LazyLock<CheckTable> = LazyLock::new(|| {
             (check_redundant_sprintf, &[Call]),
             (check_manual_equal_fold, &[Binary]),
             (check_manual_find, &[Call]),
+            (check_unnecessary_min_or_max, &[Call]),
             (check_manual_is_empty, &[Binary]),
             (check_bool_literal_comparison, &[Binary]),
             (check_identical_if_branches, &[If]),

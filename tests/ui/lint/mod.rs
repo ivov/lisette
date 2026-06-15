@@ -15082,3 +15082,257 @@ fn main() {
         result.lints
     );
 }
+
+#[test]
+fn min_max_min_over_max() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let x: int = 3
+  let _ = min(max(x, 5), 1)
+}
+"#
+    );
+}
+
+#[test]
+fn min_max_max_over_min() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let x: int = 3
+  let _ = max(min(x, 1), 5)
+}
+"#
+    );
+}
+
+#[test]
+fn min_max_equal_bounds() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let x: int = 3
+  let _ = min(max(x, 5), 5)
+}
+"#
+    );
+}
+
+#[test]
+fn min_max_float_integer_literals_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let g: float64 = 1.5
+  let _ = min(max(g, 5), 1)
+}
+"#
+    );
+}
+
+#[test]
+fn min_max_literal_on_left() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let x: int = 3
+  let _ = min(1, max(5, x))
+}
+"#
+    );
+}
+
+#[test]
+fn min_max_valid_clamp_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let x: int = 3
+  let _ = max(min(x, 5), 1)
+}
+"#
+    );
+}
+
+#[test]
+fn min_max_inner_clamp_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let x: int = 3
+  let _ = min(max(x, 1), 5)
+}
+"#
+    );
+}
+
+#[test]
+fn min_max_same_op_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let x: int = 3
+  let _ = min(min(x, 5), 1)
+}
+"#
+    );
+}
+
+#[test]
+fn min_max_float_literal_bounds_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let g: float64 = 1.5
+  let _ = min(max(g, 5.0), 1.0)
+}
+"#
+    );
+}
+
+#[test]
+fn min_max_shadowed_min_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let min = |a: int, b: int| a + b
+  let x: int = 3
+  let _ = min(max(x, 5), 1)
+}
+"#
+    );
+}
+
+#[test]
+fn unnecessary_min_or_max_identical_min() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let x: int = 3
+  let _ = min(x, x)
+}
+"#
+    );
+}
+
+#[test]
+fn unnecessary_min_or_max_identical_max() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let x: int = 3
+  let _ = max(x, x)
+}
+"#
+    );
+}
+
+#[test]
+fn unnecessary_min_or_max_uint8_floor() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let b: uint8 = 5
+  let _ = max(b, 0)
+}
+"#
+    );
+}
+
+#[test]
+fn unnecessary_min_or_max_uint8_ceil() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let b: uint8 = 5
+  let _ = min(b, 255)
+}
+"#
+    );
+}
+
+#[test]
+fn unnecessary_min_or_max_int8_floor() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let c: int8 = 5
+  let _ = max(c, -128)
+}
+"#
+    );
+}
+
+#[test]
+fn unnecessary_min_or_max_identical_string() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let s: string = "a"
+  let _ = min(s, s)
+}
+"#
+    );
+}
+
+#[test]
+fn unnecessary_min_or_max_side_effect_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn f() -> int { 3 }
+fn main() {
+  let _ = min(f(), f())
+}
+"#
+    );
+}
+
+#[test]
+fn unnecessary_min_or_max_distinct_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let a: int = 1
+  let b: int = 2
+  let _ = min(a, b)
+}
+"#
+    );
+}
+
+#[test]
+fn unnecessary_min_or_max_signed_floor_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let a: int = 1
+  let _ = max(a, 0)
+}
+"#
+    );
+}
+
+#[test]
+fn unnecessary_min_or_max_below_ceil_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let b: uint8 = 5
+  let _ = min(b, 254)
+}
+"#
+    );
+}
+
+#[test]
+fn unnecessary_min_or_max_shadowed_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let min = |a: int, b: int| a + b
+  let _ = min(7, 7)
+}
+"#
+    );
+}

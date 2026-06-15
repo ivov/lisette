@@ -58,6 +58,7 @@ mod single_arm_select;
 mod type_limit_comparison;
 mod uninterpolated_fstring;
 mod unnecessary_bool;
+mod unnecessary_min_or_max;
 mod unnecessary_range_loop;
 mod unnecessary_raw_string;
 mod unnecessary_return;
@@ -126,6 +127,7 @@ pub use single_arm_select::check_single_arm_select;
 pub use type_limit_comparison::check_type_limit_comparison;
 pub use uninterpolated_fstring::check_uninterpolated_fstring;
 pub use unnecessary_bool::check_unnecessary_bool;
+pub use unnecessary_min_or_max::check_unnecessary_min_or_max;
 pub use unnecessary_range_loop::check_unnecessary_range_loop;
 pub use unnecessary_raw_string::{
     check_unnecessary_raw_string_expression, check_unnecessary_raw_string_pattern,

@@ -411,6 +411,15 @@ pub fn redundant_operation(span: &Span, always: Option<&str>) -> LisetteDiagnost
     }
 }
 
+pub fn unnecessary_min_or_max(span: &Span, op: &str) -> LisetteDiagnostic {
+    LisetteDiagnostic::info(format!("Unnecessary `{op}` call"))
+        .with_lint_code("unnecessary_min_or_max")
+        .with_span_label(span, "always returns the same operand")
+        .with_help(format!(
+            "This `{op}` always evaluates to one of its operands, so it has no effect. Simplify it to that operand."
+        ))
+}
+
 pub fn integer_division_to_zero(span: &Span) -> LisetteDiagnostic {
     LisetteDiagnostic::warn("Integer division is always `0`")
         .with_lint_code("integer_division_to_zero")

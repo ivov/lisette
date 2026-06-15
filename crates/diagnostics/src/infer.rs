@@ -2410,6 +2410,15 @@ pub fn cast_nan_to_int(span: &Span, target: &str) -> LisetteDiagnostic {
         )
 }
 
+pub fn min_max(span: &Span, constant: i128) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Clamp always returns a constant")
+        .with_infer_code("min_max")
+        .with_span_label(span, format!("always `{constant}`"))
+        .with_help(format!(
+            "This clamp always returns `{constant}` regardless of its variable operand. Did you swap `min` and `max`?"
+        ))
+}
+
 pub fn deferred_lock(span: Span, locked: &str, unlock: &str) -> LisetteDiagnostic {
     LisetteDiagnostic::error(format!("Deferred `{locked}` instead of `{unlock}`"))
         .with_infer_code("deferred_lock")

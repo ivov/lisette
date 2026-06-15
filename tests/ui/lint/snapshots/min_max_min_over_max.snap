@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [error] Clamp always returns a constant
+   ╭─[test.lis:4:11]
+ 3 │   let x: int = 3
+ 4 │   let _ = min(max(x, 5), 1)
+   ·           ────────┬────────
+   ·                   ╰── always `1`
+ 5 │ }
+   ╰────
+  help: This clamp always returns `1` regardless of its variable operand. Did you swap `min` and `max`? · code: [infer.min_max]

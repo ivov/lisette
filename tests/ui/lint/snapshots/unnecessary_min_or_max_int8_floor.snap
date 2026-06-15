@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [info] Unnecessary `max` call
+   ╭─[test.lis:4:11]
+ 3 │   let c: int8 = 5
+ 4 │   let _ = max(c, -128)
+   ·           ──────┬─────
+   ·                 ╰── always returns the same operand
+ 5 │ }
+   ╰────
+  help: This `max` always evaluates to one of its operands, so it has no effect. Simplify it to that operand · code: [lint.unnecessary_min_or_max]

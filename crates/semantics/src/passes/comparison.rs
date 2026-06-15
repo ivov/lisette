@@ -245,6 +245,51 @@ pub(crate) fn expressions_equivalent(a: &Expression, b: &Expression) -> bool {
     }
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum MinMaxOp {
+    Min,
+    Max,
+}
+
+pub(crate) struct MinMaxCall<'a> {
+    pub(crate) op: MinMaxOp,
+    pub(crate) left: &'a Expression,
+    pub(crate) right: &'a Expression,
+}
+
+pub(crate) fn prelude_min_max(expression: &Expression) -> Option<MinMaxCall<'_>> {
+    let Expression::Call {
+        expression: callee,
+        args,
+        spread,
+        ..
+    } = expression
+    else {
+        return None;
+    };
+    if spread.is_some() || args.len() != 2 {
+        return None;
+    }
+    let Expression::Identifier {
+        binding_id: None,
+        qualified: Some(qualified),
+        ..
+    } = callee.unwrap_parens()
+    else {
+        return None;
+    };
+    let op = match qualified.as_str() {
+        "prelude.min" => MinMaxOp::Min,
+        "prelude.max" => MinMaxOp::Max,
+        _ => return None,
+    };
+    Some(MinMaxCall {
+        op,
+        left: &args[0],
+        right: &args[1],
+    })
+}
+
 /// The more restrictive of two bounds; `first_wins(a, b)` is true when `a`'s
 /// value is tighter. At equal values the bound stays inclusive only if both were.
 pub(crate) fn tighter(a: Bound, b: Bound, first_wins: impl Fn(i128, i128) -> bool) -> Bound {
