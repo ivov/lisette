@@ -137,7 +137,7 @@ checksum = "32a66949e030da00e8c7d4434b251670a91556f4144941d37452769c25d58a53"
 
 [[package]]
 name = "lisette-deps"
-version = "0.4.0"
+version = "0.4.2"
 dependencies = [
  "lisette-stdlib",
  "serde",
@@ -147,7 +147,7 @@ dependencies = [
 
 [[package]]
 name = "lisette-diagnostics"
-version = "0.4.0"
+version = "0.4.2"
 dependencies = [
  "lisette-syntax",
  "miette",
@@ -157,7 +157,7 @@ dependencies = [
 
 [[package]]
 name = "lisette-emit"
-version = "0.4.0"
+version = "0.4.2"
 dependencies = [
  "ecow",
  "lisette-diagnostics",
@@ -168,15 +168,27 @@ dependencies = [
 
 [[package]]
 name = "lisette-format"
-version = "0.4.0"
+version = "0.4.2"
 dependencies = [
  "lisette-syntax",
  "unicode-segmentation",
 ]
 
 [[package]]
+name = "lisette-passes"
+version = "0.4.2"
+dependencies = [
+ "ecow",
+ "lisette-diagnostics",
+ "lisette-semantics",
+ "lisette-syntax",
+ "rayon",
+ "rustc-hash",
+]
+
+[[package]]
 name = "lisette-semantics"
-version = "0.4.0"
+version = "0.4.2"
 dependencies = [
  "bincode",
  "ecow",
@@ -191,11 +203,11 @@ dependencies = [
 
 [[package]]
 name = "lisette-stdlib"
-version = "0.4.0"
+version = "0.4.2"
 
 [[package]]
 name = "lisette-syntax"
-version = "0.4.0"
+version = "0.4.2"
 dependencies = [
  "ecow",
  "rustc-hash",
@@ -212,6 +224,7 @@ dependencies = [
  "lisette-diagnostics",
  "lisette-emit",
  "lisette-format",
+ "lisette-passes",
  "lisette-semantics",
  "lisette-syntax",
  "serde",

@@ -1,5 +1,5 @@
 use diagnostics::{LisetteDiagnostic, LocalSink};
-use semantics::{checker::TaskState, checker::infer::InferCtx, passes, store::Store};
+use semantics::{checker::TaskState, checker::infer::InferCtx, store::Store};
 use stdlib::{Target, get_go_stdlib_typedef};
 use syntax::{
     ast::Expression,

@@ -1,7 +1,5 @@
-pub mod analyze;
 pub mod cache;
 pub mod call_classification;
-pub mod call_target;
 pub mod checker;
 pub mod context;
 pub mod diagnostics;
@@ -9,7 +7,7 @@ pub mod facts;
 pub mod inference;
 pub mod loader;
 pub mod module_graph;
-pub mod passes;
 pub mod path;
 pub mod prelude;
 pub mod store;
+pub mod zero;

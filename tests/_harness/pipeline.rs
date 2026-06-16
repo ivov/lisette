@@ -219,7 +219,7 @@ impl CompiledTest {
                 let analysis =
                     semantics::context::AnalysisContext::new(&store, &checker.ufcs_methods);
                 let mut harness_unused = UnusedInfo::default();
-                semantics::passes::run(
+                passes::run(
                     &analysis,
                     &mut checker.facts,
                     checker.sink,

@@ -4,7 +4,8 @@ use std::process::Command;
 
 use deps::TypedefLocator;
 use emit::{EmitOptions, Planner};
-use semantics::analyze::{AnalyzeInput, CompilePhase, SemanticConfig, analyze};
+use passes::analyze;
+use semantics::inference::{AnalyzeInput, CompilePhase, SemanticConfig};
 use semantics::loader::MemoryLoader;
 use semantics::store::ENTRY_MODULE_ID;
 

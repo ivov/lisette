@@ -3,6 +3,7 @@ resolver = "2"
 exclude = ["editors/zed", "playground/wasm"]
 members = [
     "crates/semantics",
+    "crates/passes",
     "crates/cli",
     "crates/syntax",
     "crates/diagnostics",

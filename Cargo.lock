@@ -517,6 +517,7 @@ dependencies = [
  "lisette-emit",
  "lisette-format",
  "lisette-lsp",
+ "lisette-passes",
  "lisette-semantics",
  "lisette-stdlib",
  "lisette-syntax",
@@ -579,6 +580,7 @@ dependencies = [
  "lisette-deps",
  "lisette-diagnostics",
  "lisette-format",
+ "lisette-passes",
  "lisette-semantics",
  "lisette-stdlib",
  "lisette-syntax",
@@ -590,6 +592,18 @@ dependencies = [
  "tokio",
  "tokio-util",
  "tower-lsp",
+]
+
+[[package]]
+name = "lisette-passes"
+version = "0.4.2"
+dependencies = [
+ "ecow",
+ "lisette-diagnostics",
+ "lisette-semantics",
+ "lisette-syntax",
+ "rayon",
+ "rustc-hash",
 ]
 
 [[package]]
@@ -1053,6 +1067,7 @@ dependencies = [
  "lisette-diagnostics",
  "lisette-emit",
  "lisette-format",
+ "lisette-passes",
  "lisette-semantics",
  "lisette-stdlib",
  "lisette-syntax",

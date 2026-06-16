@@ -296,6 +296,44 @@ pub enum Pattern {
     },
 }
 
+/// Binding names introduced by a pattern, paired with their spans, in source order.
+pub fn collect_pattern_bindings(pattern: &Pattern) -> Vec<(String, Span)> {
+    match pattern {
+        Pattern::Identifier { identifier, span } => vec![(identifier.to_string(), *span)],
+        Pattern::Tuple { elements, .. } => {
+            elements.iter().flat_map(collect_pattern_bindings).collect()
+        }
+        Pattern::EnumVariant { fields, .. } => {
+            fields.iter().flat_map(collect_pattern_bindings).collect()
+        }
+        Pattern::Struct { fields, .. } => fields
+            .iter()
+            .flat_map(|f| collect_pattern_bindings(&f.value))
+            .collect(),
+        Pattern::Slice { prefix, rest, .. } => {
+            let mut bindings: Vec<_> = prefix.iter().flat_map(collect_pattern_bindings).collect();
+            if let RestPattern::Bind { name, span } = rest {
+                bindings.push((name.to_string(), *span));
+            }
+            bindings
+        }
+        Pattern::Or { patterns, .. } => patterns
+            .first()
+            .map(collect_pattern_bindings)
+            .unwrap_or_default(),
+        Pattern::AsBinding {
+            pattern,
+            name,
+            span,
+        } => {
+            let mut bindings = collect_pattern_bindings(pattern);
+            bindings.push((name.to_string(), *span));
+            bindings
+        }
+        Pattern::WildCard { .. } | Pattern::Literal { .. } | Pattern::Unit { .. } => vec![],
+    }
+}
+
 /// Dataless variant index of [`Pattern`], usable as an array index.
 #[derive(Clone, Copy)]
 pub enum PatternKind {

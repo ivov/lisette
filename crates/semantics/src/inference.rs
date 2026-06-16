@@ -1,15 +1,15 @@
 use rayon::prelude::*;
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use diagnostics::LocalSink;
 use ecow::EcoString;
-use syntax::ast::StructFieldDefinition;
+use syntax::ast::{Expression, StructFieldDefinition};
 use syntax::program::{File, Module};
 
 use deps::TypedefLocator;
 
-use crate::analyze::{AnalyzeInput, CompilePhase};
 use crate::cache::{
     CompiledModule, compute_emit_artifact_hash, compute_module_hash, get_dependency_module_hashes,
     go_stdlib::{self, load_cached_go_module},
@@ -20,9 +20,45 @@ use crate::checker::TaskState;
 use crate::checker::infer::InferCtx;
 use crate::diagnostics::emit_for_locator_result;
 use crate::facts::{BindingIdAllocator, Facts};
+use crate::loader::Loader;
 use crate::module_graph::build_module_graph;
 use crate::prelude::parse_and_register_prelude;
 use crate::store::{ENTRY_MODULE_ID, Store};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum CompilePhase {
+    #[default]
+    Check,
+    Emit,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct SemanticConfig {
+    pub run_lints: bool,
+    pub standalone_mode: bool,
+    pub load_siblings: bool,
+}
+
+pub struct AnalyzeInput<'a> {
+    pub config: SemanticConfig,
+    pub loader: &'a dyn Loader,
+    pub source: String,
+    /// Bare identity name of the entry file (e.g. `main.lis`).
+    pub filename: String,
+    /// Cwd-relative display path for the entry file (e.g. `src/main.lis`);
+    /// equals `filename` when there is no separate display path.
+    pub display_path: String,
+    pub ast: Vec<Expression>,
+    pub project_root: Option<PathBuf>,
+    pub compile_phase: CompilePhase,
+    pub locator: TypedefLocator,
+    /// Go module path (from `lisette.toml`); folded into the cache emit-artifact
+    /// hash so a project rename invalidates Go outputs.
+    pub go_module: String,
+    /// When true, `analyze` skips both cache load and save. Set by the CLI for
+    /// `--sourcemap` Emit so cwd-decorated Go files are not reused across cwds.
+    pub disable_cache: bool,
+}
 
 // Tiny projects stay serial to avoid rayon overhead.
 const PARALLEL_THRESHOLD: usize = 4;

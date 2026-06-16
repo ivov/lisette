@@ -7,6 +7,7 @@ publish = false
 
 [dev-dependencies]
 semantics = { package = "lisette-semantics", path = "../crates/semantics" }
+passes = { package = "lisette-passes", path = "../crates/passes" }
 syntax = { package = "lisette-syntax", path = "../crates/syntax" }
 diagnostics = { package = "lisette-diagnostics", path = "../crates/diagnostics" }
 format = { package = "lisette-format", path = "../crates/format" }

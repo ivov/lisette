@@ -4,7 +4,7 @@ use ecow::EcoString;
 use syntax::ast::BindingKind;
 use syntax::ast::{
     EnumFieldDefinition, Expression, Literal, Pattern, RestPattern, Span, StructFieldPattern,
-    TypedPattern,
+    TypedPattern, collect_pattern_bindings,
 };
 use syntax::program::{Definition, DefinitionBody};
 use syntax::types::{Type, substitute, unqualified_name};
@@ -12,42 +12,6 @@ use syntax::types::{Type, substitute, unqualified_name};
 use crate::checker::EnvResolve;
 
 use crate::checker::infer::InferCtx;
-pub(crate) fn collect_pattern_bindings(pattern: &Pattern) -> Vec<(String, Span)> {
-    match pattern {
-        Pattern::Identifier { identifier, span } => vec![(identifier.to_string(), *span)],
-        Pattern::Tuple { elements, .. } => {
-            elements.iter().flat_map(collect_pattern_bindings).collect()
-        }
-        Pattern::EnumVariant { fields, .. } => {
-            fields.iter().flat_map(collect_pattern_bindings).collect()
-        }
-        Pattern::Struct { fields, .. } => fields
-            .iter()
-            .flat_map(|f| collect_pattern_bindings(&f.value))
-            .collect(),
-        Pattern::Slice { prefix, rest, .. } => {
-            let mut bindings: Vec<_> = prefix.iter().flat_map(collect_pattern_bindings).collect();
-            if let RestPattern::Bind { name, span } = rest {
-                bindings.push((name.to_string(), *span));
-            }
-            bindings
-        }
-        Pattern::Or { patterns, .. } => patterns
-            .first()
-            .map(collect_pattern_bindings)
-            .unwrap_or_default(),
-        Pattern::AsBinding {
-            pattern,
-            name,
-            span,
-        } => {
-            let mut bindings = collect_pattern_bindings(pattern);
-            bindings.push((name.to_string(), *span));
-            bindings
-        }
-        Pattern::WildCard { .. } | Pattern::Literal { .. } | Pattern::Unit { .. } => vec![],
-    }
-}
 
 impl InferCtx<'_, '_> {
     pub(super) fn infer_pattern(

@@ -21,6 +21,7 @@ path = "src/main.rs"
 
 [dependencies]
 semantics = { package = "lisette-semantics", version = "0.4.2", path = "../semantics" }
+passes = { package = "lisette-passes", version = "0.4.2", path = "../passes" }
 syntax = { package = "lisette-syntax", version = "0.4.2", path = "../syntax" }
 diagnostics = { package = "lisette-diagnostics", version = "0.4.2", path = "../diagnostics" }
 format = { package = "lisette-format", version = "0.4.2", path = "../format" }
