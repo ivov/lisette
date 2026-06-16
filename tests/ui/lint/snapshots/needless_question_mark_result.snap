@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [info] Needless `?` in `Ok`
+   ╭─[test.lis:4:3]
+ 3 │   let r: Result<int, string> = Ok(1)
+ 4 │   Ok(r?)
+   ·   ───┬──
+   ·      ╰── can be simpler
+ 5 │ }
+   ╰────
+  help: Replace `Ok(x?)` with `x` · code: [lint.needless_question_mark]

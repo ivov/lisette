@@ -690,6 +690,20 @@ pub fn map_or_none(span: &Span, replacement: &str) -> LisetteDiagnostic {
         .with_help(help)
 }
 
+pub fn manual_option_zip(span: &Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::info("Manual `zip`")
+        .with_lint_code("manual_option_zip")
+        .with_span_label(span, "can be simpler")
+        .with_help("Replace `a.and_then(|a| b.map(|b| (a, b)))` with `a.zip(b)`")
+}
+
+pub fn needless_question_mark(span: &Span, wrapper: &str) -> LisetteDiagnostic {
+    LisetteDiagnostic::info(format!("Needless `?` in `{wrapper}`"))
+        .with_lint_code("needless_question_mark")
+        .with_span_label(span, "can be simpler")
+        .with_help(format!("Replace `{wrapper}(x?)` with `x`"))
+}
+
 pub fn redundant_closure(span: &Span, callee: &str) -> LisetteDiagnostic {
     LisetteDiagnostic::info("Redundant closure")
         .with_lint_code("redundant_closure")

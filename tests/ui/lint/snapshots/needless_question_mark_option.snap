@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [info] Needless `?` in `Some`
+   ╭─[test.lis:4:3]
+ 3 │   let x: Option<int> = Some(1)
+ 4 │   Some(x?)
+   ·   ────┬───
+   ·       ╰── can be simpler
+ 5 │ }
+   ╰────
+  help: Replace `Some(x?)` with `x` · code: [lint.needless_question_mark]

@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [info] Manual `zip`
+   ╭─[test.lis:5:11]
+ 4 │   let b: Option<int> = Some(2)
+ 5 │   let _ = a.and_then(|a| b.map(|b| (a, b)))
+   ·           ────────────────┬────────────────
+   ·                           ╰── can be simpler
+ 6 │ }
+   ╰────
+  help: Replace `a.and_then(|a| b.map(|b| (a, b)))` with `a.zip(b)` · code: [lint.manual_option_zip]

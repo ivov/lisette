@@ -200,6 +200,20 @@ pub(super) fn is_none_pattern(pattern: &Pattern) -> bool {
         if unqualified_name(identifier) == "None" && fields.is_empty() && !*rest)
 }
 
+pub(super) fn mentions_identifier(expression: &Expression, name: &str) -> bool {
+    let mut found = false;
+    visit_ast(
+        std::slice::from_ref(expression),
+        &mut |node| {
+            if let Expression::Identifier { value, .. } = node {
+                found |= value.as_str() == name;
+            }
+        },
+        &mut |_| {},
+    );
+    found
+}
+
 // `?`, `return`, `break`, and `continue` target a scope outside a synthesized
 // closure, so a body containing them cannot be moved into one.
 pub(super) fn has_escaping_control_flow(body: &Expression) -> bool {

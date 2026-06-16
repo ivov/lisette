@@ -8604,7 +8604,7 @@ fn manual_map_propagating_body_no_warning() {
         r#"
 fn run(o: Option<Option<int>>) -> Option<int> {
   match o {
-    Some(v) => Some(v?),
+    Some(v) => Some(v? + 1),
     None => None,
   }
 }
@@ -16095,6 +16095,144 @@ fn main() {
             .iter()
             .filter_map(|l| l.code_str())
             .collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn needless_question_mark_option() {
+    assert_lint_snapshot!(
+        r#"
+fn consume() -> Option<int> {
+  let x: Option<int> = Some(1)
+  Some(x?)
+}
+
+fn main() {
+  let _ = consume()
+}
+"#
+    );
+}
+
+#[test]
+fn needless_question_mark_result() {
+    assert_lint_snapshot!(
+        r#"
+fn consume() -> Result<int, string> {
+  let r: Result<int, string> = Ok(1)
+  Ok(r?)
+}
+
+fn main() {
+  let _ = consume()
+}
+"#
+    );
+}
+
+#[test]
+fn needless_question_mark_return() {
+    assert_lint_snapshot!(
+        r#"
+fn consume(flag: bool) -> Option<int> {
+  let x: Option<int> = Some(1)
+  if flag {
+    return Some(x?)
+  }
+  None
+}
+
+fn main() {
+  let _ = consume(true)
+}
+"#
+    );
+}
+
+#[test]
+fn needless_question_mark_not_in_tail_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn consume() -> Option<int> {
+  let x: Option<int> = Some(1)
+  let y: Option<int> = Some(x?)
+  y.map(|v| v + 1)
+}
+
+fn main() {
+  let _ = consume()
+}
+"#
+    );
+}
+
+#[test]
+fn needless_question_mark_transformed_operand_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn consume() -> Option<int> {
+  let x: Option<int> = Some(1)
+  Some(x? + 1)
+}
+
+fn main() {
+  let _ = consume()
+}
+"#
+    );
+}
+
+#[test]
+fn manual_option_zip_fires() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let a: Option<int> = Some(1)
+  let b: Option<int> = Some(2)
+  let _ = a.and_then(|a| b.map(|b| (a, b)))
+}
+"#
+    );
+}
+
+#[test]
+fn manual_option_zip_reversed_arguments_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let a: Option<int> = Some(1)
+  let b: Option<int> = Some(2)
+  let _ = a.and_then(|a| b.map(|b| (b, a)))
+}
+"#
+    );
+}
+
+#[test]
+fn manual_option_zip_effectful_second_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn makeb() -> Option<int> {
+  Some(2)
+}
+
+fn main() {
+  let a: Option<int> = Some(1)
+  let _ = a.and_then(|a| makeb().map(|b| (a, b)))
+}
+"#
+    );
+}
+
+#[test]
+fn manual_option_zip_captured_second_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let a: Option<Option<int>> = Some(Some(1))
+  let _ = a.and_then(|a| a.map(|b| (a, b)))
+}
+"#
     );
 }
 

@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [info] Needless `?` in `Some`
+   ╭─[test.lis:5:12]
+ 4 │   if flag {
+ 5 │     return Some(x?)
+   ·            ────┬───
+   ·                ╰── can be simpler
+ 6 │   }
+   ╰────
+  help: Replace `Some(x?)` with `x` · code: [lint.needless_question_mark]
