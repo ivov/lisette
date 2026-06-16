@@ -27,6 +27,10 @@ pub fn parse_and_register_prelude(store: &mut Store, sink: &LocalSink) {
         },
     );
 
+    if let Some(path) = deps::prelude_typedef_path() {
+        store.typedef_paths.insert(PRELUDE_FILE_ID, path);
+    }
+
     let mut checker = TaskState::with_fresh_allocator(sink);
     let module = store
         .get_module(PRELUDE_MODULE_ID)
