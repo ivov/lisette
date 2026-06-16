@@ -189,6 +189,368 @@ impl Point {
 }
 
 #[test]
+fn equality_struct_comparable_fields() {
+    let input = r#"
+#[equality]
+struct Point { x: int, y: int }
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn equality_struct_synthesizes_equals() {
+    let input = r#"
+#[equality]
+struct Order { id: int, tags: Slice<string> }
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn equality_struct_ref_field_compares_by_identity() {
+    let input = r#"
+#[equality]
+struct Node { value: int, next: Ref<Node> }
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn equality_struct_map_field() {
+    let input = r#"
+#[equality]
+struct Counts { name: string, totals: Map<string, int> }
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn equality_struct_nested_equality_field() {
+    let input = r#"
+#[equality]
+struct Inner { items: Slice<int> }
+
+#[equality]
+struct Outer { name: string, inner: Inner }
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn equality_slice_of_equality_struct_dispatches_equals() {
+    let input = r#"
+#[equality]
+struct Order { id: int, tags: Slice<string> }
+
+fn test(a: Slice<Order>, b: Slice<Order>) -> bool {
+  a.equals(b)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn equality_map_of_equality_struct_dispatches_equals() {
+    let input = r#"
+#[equality]
+struct Order { id: int, tags: Slice<string> }
+
+fn test(a: Map<string, Order>, b: Map<string, Order>) -> bool {
+  a.equals(b)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn equality_empty_struct() {
+    let input = r#"
+#[equality]
+struct Blank {}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn equality_generic_struct_comparable() {
+    let input = r#"
+#[equality]
+struct Box<T: Comparable> { value: T }
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn equality_user_equals_suppresses_synthesis() {
+    let input = r#"
+#[equality]
+struct Caseless { value: string }
+
+impl Caseless {
+  fn equals(self, other: Caseless) -> bool {
+    self.value == other.value
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn equality_enum_unit_variants() {
+    let input = r#"
+#[equality]
+enum Color { Red, Green, Blue }
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn equality_enum_payload_variants() {
+    let input = r#"
+#[equality]
+enum Shape {
+  Circle(float64),
+  Rectangle(float64, float64),
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn equality_enum_mixed_variants() {
+    let input = r#"
+#[equality]
+enum Message {
+  Quit,
+  Move { x: int, y: int },
+  Write(string),
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn equality_enum_slice_payload() {
+    let input = r#"
+#[equality]
+enum Event {
+  Tags(Slice<string>),
+  Empty,
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn equality_user_equals_over_function_field() {
+    let input = r#"
+#[equality]
+struct Handler { run: fn(int) -> int }
+
+impl Handler {
+  fn equals(self, other: Handler) -> bool {
+    true
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn equality_matching_bound_generic_equals() {
+    let input = r#"
+#[equality]
+struct Box<T: Comparable> { value: T }
+
+impl<T: Comparable> Box<T> {
+  fn equals(self, other: Box<T>) -> bool {
+    self.value == other.value
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn equality_weaker_method_bound_is_usable() {
+    let input = r#"
+#[equality]
+struct Box<T: Ordered> { value: T }
+
+impl<T: Comparable> Box<T> {
+  fn equals(self, other: Box<T>) -> bool {
+    self.value == other.value
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn equality_weaker_interface_method_bound_is_usable() {
+    let input = r#"
+interface Parent {
+  fn p(self)
+}
+
+interface Child {
+  embed Parent
+
+  fn c(self)
+}
+
+#[equality]
+struct Box<T: Child> { value: T }
+
+impl<T: Parent> Box<T> {
+  fn equals(self, other: Box<T>) -> bool {
+    true
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn equality_field_private_cross_module_equals_uses_native() {
+    let input = r#"
+struct Foo { x: int }
+
+impl Foo {
+  fn equals(self, other: int) -> bool {
+    false
+  }
+}
+
+#[equality]
+struct Wrap { foo: Foo }
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn equality_slice_of_generic_synthesized_equality() {
+    let input = r#"
+#[equality]
+struct Box<T: Comparable> { items: Slice<T> }
+
+fn test(a: Slice<Box<int>>, b: Slice<Box<int>>) -> bool {
+  a.equals(b)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn equality_nested_generic_synthesized_equality() {
+    let input = r#"
+#[equality]
+struct Box<T: Comparable> { items: Slice<T> }
+
+#[equality]
+struct Wrap { box: Box<int> }
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn equality_enum_payload_generic_synthesized_equality() {
+    let input = r#"
+#[equality]
+struct Box<T: Comparable> { items: Slice<T> }
+
+#[equality]
+enum Wrap { Wrapped(Box<int>) }
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn equality_renamed_generic_param_equals() {
+    let input = r#"
+#[equality]
+struct Box<T: Comparable> { value: T }
+
+impl<U: Comparable> Box<U> {
+  fn equals(self, other: Box<U>) -> bool {
+    self.value == other.value
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn slice_equals_keeps_user_equals_live() {
+    let input = r#"
+struct Point { x: int }
+
+impl Point {
+  fn equals(self, other: Point) -> bool {
+    self.x == other.x
+  }
+}
+
+fn test(a: Slice<Point>, b: Slice<Point>) -> bool {
+  a.equals(b)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn map_equals_keeps_user_equals_live() {
+    let input = r#"
+struct Point { x: int }
+
+impl Point {
+  fn equals(self, other: Point) -> bool {
+    self.x == other.x
+  }
+}
+
+fn test(a: Map<string, Point>, b: Map<string, Point>) -> bool {
+  a.equals(b)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn equality_synthesized_keeps_nested_user_equals_live() {
+    let input = r#"
+struct Inner { x: int }
+
+impl Inner {
+  fn equals(self, other: Inner) -> bool {
+    self.x == other.x
+  }
+}
+
+#[equality]
+struct Outer { inner: Inner }
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn equality_synthesized_keeps_nested_slice_user_equals_live() {
+    let input = r#"
+struct Inner { x: int }
+
+impl Inner {
+  fn equals(self, other: Inner) -> bool {
+    self.x == other.x
+  }
+}
+
+#[equality]
+struct Outer { items: Slice<Inner> }
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn display_satisfies_display_interface() {
     let input = r#"
 interface Display {
@@ -3925,42 +4287,6 @@ fn main() {
   let a = Box { value: 1 }
   let b = Box { value: 2 }
   let _ = a.less(b)
-}
-"#;
-    assert_emit_snapshot!(input);
-}
-
-#[test]
-fn slice_equals_dispatches_to_element_equals() {
-    let input = r#"
-struct Point { x: int }
-
-impl Point {
-  fn equals(self, other: Point) -> bool {
-    self.x == other.x
-  }
-}
-
-fn test(a: Slice<Point>, b: Slice<Point>) -> bool {
-  a.equals(b)
-}
-"#;
-    assert_emit_snapshot!(input);
-}
-
-#[test]
-fn map_equals_dispatches_to_value_equals() {
-    let input = r#"
-struct Point { x: int }
-
-impl Point {
-  fn equals(self, other: Point) -> bool {
-    self.x == other.x
-  }
-}
-
-fn test(a: Map<string, Point>, b: Map<string, Point>) -> bool {
-  a.equals(b)
 }
 "#;
     assert_emit_snapshot!(input);

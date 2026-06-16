@@ -1,0 +1,23 @@
+---
+source: tests/spec/emit/types.rs
+description: "\nstruct Inner { x: int }\n\nimpl Inner {\n  fn equals(self, other: Inner) -> bool {\n    self.x == other.x\n  }\n}\n\n#[equality]\nstruct Outer { items: Slice<Inner> }\n"
+---
+package main
+
+import "slices"
+
+type Inner struct {
+	x int
+}
+
+func (i Inner) equals(other Inner) bool {
+	return i.x == other.x
+}
+
+type Outer struct {
+	items []Inner
+}
+
+func (o Outer) equals(other Outer) bool {
+	return slices.EqualFunc(o.items, other.items, func(a_1 Inner, b_2 Inner) bool { return a_1.equals(b_2) })
+}

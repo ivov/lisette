@@ -7,7 +7,7 @@ use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use syntax::ast::{EnumVariant, Expression, Literal, StructFieldDefinition};
 use syntax::program::{
-    Definition, DefinitionBody, File, Interface, MethodSignatures, Module, ModuleId, UsableEquals,
+    Definition, DefinitionBody, EqualityIndex, File, Interface, MethodSignatures, Module, ModuleId,
 };
 use syntax::types::{SimpleKind, SubstitutionMap, Symbol, Type, substitute};
 
@@ -110,14 +110,13 @@ pub struct Store {
     /// file IDs to the actual cache path so go-to-definition can navigate there.
     pub typedef_paths: HashMap<u32, PathBuf>,
     visited_modules: HashSet<String>,
-    /// Types whose `equals` carries bounds the type does not imply; excluded from `usable_equals`.
-    pub equals_bound_mismatch: HashSet<String>,
-    pub usable_equals: UsableEquals,
     /// File ID counter. Starts at 2 because 0 is reserved for entry, 1 for prelude.
     next_file_id: AtomicU32,
     /// Closed-domain index, keyed by the type's qualified name (the `id` in
     /// `Type::Nominal`). Built once after registration by `build_closed_domains`.
     pub closed_domains: HashMap<Symbol, ClosedDomain>,
+    pub bound_conflict_types: HashSet<String>,
+    pub equality_index: EqualityIndex,
 }
 
 impl Default for Store {
@@ -147,10 +146,10 @@ impl Store {
             go_package_names: Default::default(),
             typedef_paths: Default::default(),
             visited_modules: Default::default(),
-            equals_bound_mismatch: Default::default(),
-            usable_equals: Default::default(),
             next_file_id: AtomicU32::new(2), // 0 = entrypoint, 1 = prelude
             closed_domains: Default::default(),
+            bound_conflict_types: Default::default(),
+            equality_index: Default::default(),
         }
     }
 
@@ -266,10 +265,10 @@ impl Store {
             go_package_names: self.go_package_names.clone(),
             typedef_paths: HashMap::default(),
             visited_modules: HashSet::default(),
-            equals_bound_mismatch: HashSet::default(),
-            usable_equals: UsableEquals::default(),
             next_file_id: AtomicU32::new(self.next_file_id.load(Ordering::Relaxed)),
             closed_domains: HashMap::default(),
+            bound_conflict_types: HashSet::default(),
+            equality_index: EqualityIndex::default(),
         }
     }
 

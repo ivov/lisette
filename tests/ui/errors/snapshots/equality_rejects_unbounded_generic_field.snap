@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Cannot derive equality
+   ╭─[test.lis:4:3]
+ 3 │ struct Box<T> {
+ 4 │   value: T,
+   ·   ──┬──
+   ·     ╰── `value` cannot be compared
+ 5 │ }
+   ╰────
+  help: `#[equality]` cannot compare type parameters. Give `Box` a hand-written `equals` method, mark the field's type `#[equality]`, or remove the field · code: [attribute.cannot_derive_equality]

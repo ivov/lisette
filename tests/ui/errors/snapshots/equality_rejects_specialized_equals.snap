@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] `#[equality]` conflicts with a specialized `equals`
+   ╭─[test.lis:2:1]
+ 1 │ 
+ 2 │ #[equality]
+   · ─────┬─────
+   ·      ╰── would synthesize an `equals` of its own
+ 3 │ struct Box<T: Comparable> { value: T }
+   ╰────
+  help: `#[equality]` needs a plain `fn equals(self, other: Self) -> bool` over the whole type. An `equals` over a partial or concrete receiver (`impl Box<int>`, `impl<T> Pair<T, T>`), or one with extra type parameters (`fn equals<U>`, `impl<T, U> Box<T>`), is emitted as a free function and cannot satisfy `#[equality]`. Write `equals` in that form, or remove `#[equality]` · code: [attribute.equality_specialized_equals]

@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] `#[equality]` takes no arguments
+   ╭─[test.lis:2:1]
+ 1 │ 
+ 2 │ #[equality(foo)]
+   · ────────┬───────
+   ·         ╰── remove the arguments
+ 3 │ struct Point { x: int, y: int }
+   ╰────
+  help: Write `#[equality]` with no arguments · code: [attribute.equality_with_arguments]

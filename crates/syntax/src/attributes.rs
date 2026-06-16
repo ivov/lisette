@@ -99,6 +99,11 @@ pub const ATTRIBUTES: &[AttributeInfo] = &[
         detail: "derive `to_string`",
         targets: &[Struct, Enum],
     },
+    AttributeInfo {
+        name: "equality",
+        detail: "derive `equals`",
+        targets: &[Struct, Enum],
+    },
 ];
 
 /// `go` is accepted but absent from [`ATTRIBUTES`] (the Go-interop rail).

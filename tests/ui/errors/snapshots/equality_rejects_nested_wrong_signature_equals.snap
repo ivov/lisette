@@ -1,0 +1,11 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Cannot derive equality
+   ╭─[test.lis:9:16]
+ 8 │ #[equality]
+ 9 │ struct Outer { bad: Bad }
+   ·                ─┬─
+   ·                 ╰── `bad` cannot be compared
+   ╰────
+  help: `#[equality]` cannot compare a struct containing non-comparable fields. Give `Outer` a hand-written `equals` method, mark the field's type `#[equality]`, or remove the field · code: [attribute.cannot_derive_equality]

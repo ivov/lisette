@@ -605,6 +605,7 @@ mod attribute_completion_tests {
         let labels = labels_at("#[|\nstruct Point { x: int }").unwrap();
         assert!(labels.contains(&"json".to_string()));
         assert!(labels.contains(&"display".to_string()));
+        assert!(labels.contains(&"equality".to_string()));
         assert!(labels.contains(&"tag".to_string()));
         assert!(!labels.contains(&"iterate".to_string()));
         assert!(!labels.contains(&"allow".to_string()));
@@ -615,6 +616,7 @@ mod attribute_completion_tests {
         let labels = labels_at("#[|\nenum Direction { North, South }").unwrap();
         assert!(labels.contains(&"iterate".to_string()));
         assert!(labels.contains(&"display".to_string()));
+        assert!(labels.contains(&"equality".to_string()));
         assert!(labels.contains(&"json".to_string()));
         assert!(!labels.contains(&"xml".to_string()));
         assert!(!labels.contains(&"tag".to_string()));
@@ -627,6 +629,7 @@ mod attribute_completion_tests {
         assert!(labels.contains(&"json".to_string()));
         assert!(labels.contains(&"tag".to_string()));
         assert!(!labels.contains(&"display".to_string()));
+        assert!(!labels.contains(&"equality".to_string()));
         assert!(!labels.contains(&"iterate".to_string()));
         assert!(!labels.contains(&"allow".to_string()));
     }

@@ -1,11 +1,11 @@
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use syntax::ast::{
-    Annotation, Binding, Expression, Generic, ImportAlias, Pattern, SelectArm, SelectArmPattern,
-    StructSpread,
+    Annotation, Attribute, Binding, Expression, Generic, ImportAlias, Pattern, SelectArm,
+    SelectArmPattern, StructSpread,
 };
 use syntax::program::File;
-use syntax::program::{DefinitionBody, DotAccessKind, Module, UsableEquals};
+use syntax::program::{DefinitionBody, DotAccessKind, EqualityIndex, Module};
 use syntax::types::{CompoundKind, Symbol, Type, unqualified_name};
 
 use super::reference_graph::{EnumVariantId, ModuleItemId, ReferenceGraph, StructFieldId};
@@ -146,11 +146,21 @@ fn walk_expression(
             walk_expression(module, expression, graph, alias_map, Some(&const_ctx));
         }
 
-        Expression::Enum { name, variants, .. } => {
+        Expression::Enum {
+            name,
+            variants,
+            attributes,
+            ..
+        } => {
             let enum_ctx = ModuleItemId::new(name);
+            let owner = format!("{}.{}", module.id, name);
+            let has_equality = has_equality_attr(attributes);
             for v in variants {
                 for f in &v.fields {
                     walk_annotation(module, &f.annotation, graph, alias_map, &enum_ctx);
+                    if has_equality {
+                        graph.record_equals_root(owner.clone(), f.ty.clone());
+                    }
                 }
             }
         }
@@ -159,6 +169,7 @@ fn walk_expression(
             name,
             generics,
             fields,
+            attributes,
             ..
         } => {
             let struct_ctx = ModuleItemId::new(name);
@@ -167,8 +178,13 @@ fn walk_expression(
                     walk_annotation(module, bound, graph, alias_map, &struct_ctx);
                 }
             }
+            let owner = format!("{}.{}", module.id, name);
+            let has_equality = has_equality_attr(attributes);
             for f in fields {
                 walk_annotation(module, &f.annotation, graph, alias_map, &struct_ctx);
+                if has_equality {
+                    graph.record_equals_root(owner.clone(), f.ty.clone());
+                }
             }
         }
 
@@ -798,10 +814,14 @@ fn credits_local_method(receiver_ty: &Type, module: &Module) -> bool {
     }
 }
 
+fn has_equality_attr(attributes: &[Attribute]) -> bool {
+    attributes.iter().any(|a| a.name == "equality")
+}
+
 pub(super) fn equals_targets(
     ty: &Type,
     module: &Module,
-    usable: &UsableEquals,
+    index: &EqualityIndex,
     out: &mut Vec<ModuleItemId>,
 ) {
     let mut current = ty.clone();
@@ -814,7 +834,7 @@ pub(super) fn equals_targets(
             args,
         } => {
             if let Some(element) = args.first() {
-                equals_targets(element, module, usable, out);
+                equals_targets(element, module, index, out);
             }
         }
         Type::Compound {
@@ -822,12 +842,12 @@ pub(super) fn equals_targets(
             args,
         } => {
             if let Some(value) = args.get(1) {
-                equals_targets(value, module, usable, out);
+                equals_targets(value, module, index, out);
             }
         }
         Type::Nominal { id, .. } => {
             if id.as_str().starts_with(&format!("{}.", module.id))
-                && usable.usable_from(id.as_str(), &module.id)
+                && index.usable_from(id.as_str(), &module.id)
             {
                 out.push(ModuleItemId::equals_method(unqualified_name(id)));
             }

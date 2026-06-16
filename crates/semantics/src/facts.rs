@@ -46,6 +46,7 @@ pub struct Facts {
     pub always_failing_try_blocks: Vec<Span>,
     pub expression_only_fstrings: Vec<Span>,
     pub interface_satisfied_methods: HashMap<(String, String), Vec<String>>,
+    pub equality_derivations: Vec<String>,
 
     // Drained by passes::deferred via mem::take.
     pub generic_call_checks: Vec<GenericCallCheck>,
@@ -100,6 +101,7 @@ impl Facts {
             usages: Vec::new(),
             usage_set: HashSet::default(),
             interface_satisfied_methods: HashMap::default(),
+            equality_derivations: Vec::new(),
         }
     }
 
@@ -228,7 +230,9 @@ impl Facts {
             usages,
             usage_set: _,
             interface_satisfied_methods,
+            equality_derivations,
         } = other;
+        self.equality_derivations.extend(equality_derivations);
 
         self.bindings.extend(bindings);
         self.dead_code.extend(dead_code);

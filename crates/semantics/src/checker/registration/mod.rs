@@ -229,6 +229,8 @@ impl TaskState<'_> {
         let module = store.get_module(id).expect("module must exist");
         let ufcs_entries = crate::call_classification::compute_module_ufcs(module, id);
         self.ufcs_methods.extend(ufcs_entries);
+
+        self.register_module_equality(store, id);
     }
 
     /// Register a Go module (stdlib or third-party). Unlike regular modules,
@@ -335,6 +337,7 @@ impl TaskState<'_> {
                         .items,
                 );
                 this.register_types_and_values(store, &items, &Visibility::Public);
+                this.register_equality(store, &items);
             },
         );
     }

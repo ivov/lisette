@@ -15757,146 +15757,6 @@ fn main() {
 }
 
 #[test]
-fn container_equals_keeps_usable_element_equals_alive() {
-    let mut fs = MockFileSystem::new();
-    let source = r#"
-struct Point { x: int }
-
-impl Point {
-  fn equals(self, other: Point) -> bool {
-    self.x == other.x
-  }
-}
-
-fn main() {
-  let a: Slice<Point> = []
-  let b: Slice<Point> = []
-  let _ = a.equals(b)
-}
-"#;
-    fs.add_file(ENTRY_MODULE_ID, "main.lis", source);
-
-    let result = compile_check(fs);
-    assert!(
-        result.errors.is_empty(),
-        "unexpected errors: {:?}",
-        result.errors
-    );
-    let codes: Vec<&str> = result.lints.iter().filter_map(|l| l.code_str()).collect();
-    assert!(
-        !codes.contains(&"lint.unused_function"),
-        "Slice<Point>.equals dispatches to Point.equals, which must be kept alive: {codes:?}"
-    );
-}
-
-#[test]
-fn container_equals_does_not_keep_wrong_signature_equals_alive() {
-    let mut fs = MockFileSystem::new();
-    let source = r#"
-struct Point { x: int, y: int }
-
-impl Point {
-  fn equals(self) -> bool {
-    self.x == self.y
-  }
-}
-
-fn main() {
-  let a: Slice<Point> = []
-  let b: Slice<Point> = []
-  let _ = a.equals(b)
-}
-"#;
-    fs.add_file(ENTRY_MODULE_ID, "main.lis", source);
-
-    let result = compile_check(fs);
-    assert!(
-        result.errors.is_empty(),
-        "unexpected errors: {:?}",
-        result.errors
-    );
-    let codes: Vec<&str> = result.lints.iter().filter_map(|l| l.code_str()).collect();
-    assert!(
-        codes.contains(&"lint.unused_function"),
-        "Point.equals has the wrong signature, so Slice<Point>.equals never calls it: {codes:?}"
-    );
-}
-
-#[test]
-fn ufcs_container_equals_keeps_element_equals_alive() {
-    let mut fs = MockFileSystem::new();
-    let source = r#"
-struct Point { x: int }
-
-impl Point {
-  fn equals(self, other: Point) -> bool {
-    self.x == other.x
-  }
-}
-
-fn main() {
-  let a: Slice<Point> = []
-  let b: Slice<Point> = []
-  let _ = Slice.equals(a, b)
-}
-"#;
-    fs.add_file(ENTRY_MODULE_ID, "main.lis", source);
-
-    let result = compile_check(fs);
-    assert!(
-        result.errors.is_empty(),
-        "unexpected errors: {:?}",
-        result.errors
-    );
-    let codes: Vec<&str> = result.lints.iter().filter_map(|l| l.code_str()).collect();
-    assert!(
-        !codes.contains(&"lint.unused_function"),
-        "Slice.equals(a, b) dispatches to Point.equals, which must be kept alive: {codes:?}"
-    );
-}
-
-#[test]
-fn container_equals_does_not_credit_nested_type_argument_equals() {
-    let mut fs = MockFileSystem::new();
-    let source = r#"
-struct Point { x: int }
-
-impl Point {
-  fn equals(self, other: Point) -> bool {
-    self.x == other.x
-  }
-}
-
-struct Box<T> { value: T }
-
-impl<T> Box<T> {
-  fn equals(self, other: Box<T>) -> bool {
-    true
-  }
-}
-
-fn main() {
-  let a: Slice<Box<Point>> = []
-  let b: Slice<Box<Point>> = []
-  let _ = a.equals(b)
-}
-"#;
-    fs.add_file(ENTRY_MODULE_ID, "main.lis", source);
-
-    let result = compile_check(fs);
-    assert!(
-        result.errors.is_empty(),
-        "unexpected errors: {:?}",
-        result.errors
-    );
-    let codes: Vec<&str> = result.lints.iter().filter_map(|l| l.code_str()).collect();
-    assert!(
-        codes.contains(&"lint.unused_function"),
-        "Box.equals does not call Point.equals, so Point.equals is unused: {codes:?}"
-    );
-}
-
-#[test]
 fn equals_method_satisfying_interface_is_kept() {
     let mut fs = MockFileSystem::new();
     let source = r#"
@@ -15979,5 +15839,359 @@ fn main() {
         codes.contains(&"lint.unused_function"),
         "the local Inner.equals is unused: `a.equals(b)` dispatches to the imported \
          models.Inner.equals, not the same-named local method: {codes:?}"
+    );
+}
+
+#[test]
+fn equality_user_equals_does_not_root_field_equals() {
+    let mut fs = MockFileSystem::new();
+    let source = r#"
+struct Inner { v: int }
+
+impl Inner {
+  fn equals(self, other: Inner) -> bool {
+    self.v == other.v
+  }
+}
+
+#[equality]
+struct Outer { inner: Inner }
+
+impl Outer {
+  fn equals(self, other: Outer) -> bool {
+    true
+  }
+}
+
+fn main() {
+  let a = Outer { inner: Inner { v: 1 } }
+  let b = Outer { inner: Inner { v: 2 } }
+  let _eq = a.equals(b)
+}
+"#;
+    fs.add_file(ENTRY_MODULE_ID, "main.lis", source);
+
+    let result = compile_check(fs);
+    assert!(
+        result.errors.is_empty(),
+        "unexpected errors: {:?}",
+        result.errors
+    );
+    let unused_fns = result
+        .lints
+        .iter()
+        .filter(|l| l.code_str() == Some("lint.unused_function"))
+        .count();
+    assert_eq!(
+        unused_fns,
+        1,
+        "Outer's hand-written equals suppresses synthesis and never calls Inner.equals, so Inner.equals must be flagged rather than rooted off the bare attribute: {:?}",
+        result
+            .lints
+            .iter()
+            .filter_map(|l| l.code_str())
+            .collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn equality_keeps_field_equals_but_flags_unrelated_equals() {
+    let mut fs = MockFileSystem::new();
+    let source = r#"
+struct Inner { v: int }
+
+impl Inner {
+  fn equals(self, other: Inner) -> bool {
+    self.v == other.v
+  }
+}
+
+struct Other { v: int }
+
+impl Other {
+  fn equals(self, other: Other) -> bool {
+    self.v == other.v
+  }
+}
+
+#[equality]
+struct Wrap { inner: Inner }
+
+fn main() {
+  let _w = Wrap { inner: Inner { v: 1 } }
+  let _o = Other { v: 2 }
+}
+"#;
+    fs.add_file(ENTRY_MODULE_ID, "main.lis", source);
+
+    let result = compile_check(fs);
+    assert!(
+        result.errors.is_empty(),
+        "unexpected errors: {:?}",
+        result.errors
+    );
+    let unused_fns = result
+        .lints
+        .iter()
+        .filter(|l| l.code_str() == Some("lint.unused_function"))
+        .count();
+    assert_eq!(
+        unused_fns,
+        1,
+        "expected only the unrelated Other.equals flagged: {:?}",
+        result
+            .lints
+            .iter()
+            .filter_map(|l| l.code_str())
+            .collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn equality_field_rooting_does_not_credit_undispatched_nested_equals() {
+    let mut fs = MockFileSystem::new();
+    let source = r#"
+struct Leaf { v: int }
+
+impl Leaf {
+  fn equals(self, other: Leaf) -> bool {
+    self.v == other.v
+  }
+}
+
+struct Holder<T> { item: T }
+
+impl<T> Holder<T> {
+  fn equals(self, other: Holder<T>) -> bool {
+    true
+  }
+}
+
+#[equality]
+struct Wrap { holder: Holder<Leaf> }
+
+fn main() {
+  let _w = Wrap { holder: Holder { item: Leaf { v: 1 } } }
+}
+"#;
+    fs.add_file(ENTRY_MODULE_ID, "main.lis", source);
+
+    let result = compile_check(fs);
+    assert!(
+        result.errors.is_empty(),
+        "unexpected errors: {:?}",
+        result.errors
+    );
+    let unused_fns = result
+        .lints
+        .iter()
+        .filter(|l| l.code_str() == Some("lint.unused_function"))
+        .count();
+    assert_eq!(
+        unused_fns,
+        1,
+        "Wrap.equals dispatches to Holder.equals (kept), which never calls Leaf.equals; only Leaf.equals must be flagged, not rooted through Holder's type argument: {:?}",
+        result
+            .lints
+            .iter()
+            .filter_map(|l| l.code_str())
+            .collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn equality_method_satisfying_interface_is_kept() {
+    let mut fs = MockFileSystem::new();
+    let source = r#"
+interface Eq<T> {
+  fn equals(self, other: T) -> bool
+}
+
+struct Point { x: int }
+
+impl Point {
+  fn equals(self, other: Point) -> bool {
+    self.x == other.x
+  }
+}
+
+fn check(_a: Eq<Point>) -> bool {
+  true
+}
+
+fn main() {
+  let p = Point { x: 1 }
+  let _ = check(p)
+}
+"#;
+    fs.add_file(ENTRY_MODULE_ID, "main.lis", source);
+
+    let result = compile_check(fs);
+    assert!(
+        result.errors.is_empty(),
+        "unexpected errors: {:?}",
+        result.errors
+    );
+    let codes: Vec<&str> = result.lints.iter().filter_map(|l| l.code_str()).collect();
+    assert!(
+        !codes.contains(&"lint.unused_function"),
+        "Point.equals satisfies Eq and must not be flagged unused: {codes:?}"
+    );
+}
+
+#[test]
+fn equality_accepts_alpha_renamed_generic_bound() {
+    let mut fs = MockFileSystem::new();
+    let source = r#"
+interface Parent<T> {
+  fn p(self, value: T)
+}
+
+#[equality]
+struct Box<T: Parent<T>> { value: T }
+
+impl<U: Parent<U>> Box<U> {
+  fn equals(self, _other: Box<U>) -> bool {
+    true
+  }
+}
+
+fn main() {}
+"#;
+    fs.add_file(ENTRY_MODULE_ID, "main.lis", source);
+
+    let result = compile_check(fs);
+    let codes: Vec<&str> = result.lints.iter().filter_map(|l| l.code_str()).collect();
+    assert!(
+        result.errors.is_empty(),
+        "alpha-equivalent impl bound must be accepted: {:?} {codes:?}",
+        result.errors
+    );
+}
+
+#[test]
+fn equality_imported_field_does_not_root_local_equals() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "models",
+        "models.lis",
+        r#"
+pub struct Inner { pub x: int }
+
+impl Inner {
+  pub fn equals(self, _other: Inner) -> bool { true }
+}
+"#,
+    );
+    let source = r#"
+import "models"
+
+struct Inner { x: int }
+
+impl Inner {
+  fn equals(self, _other: Inner) -> bool { true }
+}
+
+#[equality]
+struct Wrap { item: models.Inner }
+
+fn main() {
+  let _ = Wrap { item: models.Inner { x: 1 } }
+  let _ = Inner { x: 2 }
+}
+"#;
+    fs.add_file(ENTRY_MODULE_ID, "main.lis", source);
+
+    let result = compile_check(fs);
+    assert!(
+        result.errors.is_empty(),
+        "unexpected errors: {:?}",
+        result.errors
+    );
+    let codes: Vec<&str> = result.lints.iter().filter_map(|l| l.code_str()).collect();
+    assert!(
+        codes.contains(&"lint.unused_function"),
+        "local Inner.equals is unused: Wrap dispatches to the imported models.Inner.equals, \
+         not the local one, so the local method must still be flagged: {codes:?}"
+    );
+}
+
+#[test]
+fn equality_generic_param_field_does_not_root_local_equals() {
+    let mut fs = MockFileSystem::new();
+    let source = r#"
+struct T { x: int }
+
+impl T {
+  fn equals(self, _other: T) -> bool { true }
+}
+
+#[equality]
+struct Box<T: Comparable> { value: T }
+
+fn main() {
+  let _ = Box { value: 1 }
+  let _ = T { x: 2 }
+}
+"#;
+    fs.add_file(ENTRY_MODULE_ID, "main.lis", source);
+
+    let result = compile_check(fs);
+    assert!(
+        result.errors.is_empty(),
+        "unexpected errors: {:?}",
+        result.errors
+    );
+    let codes: Vec<&str> = result.lints.iter().filter_map(|l| l.code_str()).collect();
+    assert!(
+        codes.contains(&"lint.unused_function"),
+        "the struct T's equals is unused: the field's `T` is a generic parameter, not the \
+         struct, so the method must still be flagged: {codes:?}"
+    );
+}
+
+#[test]
+fn container_equals_imported_element_does_not_root_local_equals() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "models",
+        "models.lis",
+        r#"
+pub struct Inner { pub x: int }
+
+impl Inner {
+  pub fn equals(self, _other: Inner) -> bool { true }
+}
+"#,
+    );
+    let source = r#"
+import "models"
+
+struct Inner { x: int }
+
+impl Inner {
+  fn equals(self, _other: Inner) -> bool { true }
+}
+
+fn main() {
+  let xs = [models.Inner { x: 1 }]
+  let ys = [models.Inner { x: 1 }]
+  let _ok = xs.equals(ys)
+  let _ = Inner { x: 2 }
+}
+"#;
+    fs.add_file(ENTRY_MODULE_ID, "main.lis", source);
+
+    let result = compile_check(fs);
+    assert!(
+        result.errors.is_empty(),
+        "unexpected errors: {:?}",
+        result.errors
+    );
+    let codes: Vec<&str> = result.lints.iter().filter_map(|l| l.code_str()).collect();
+    assert!(
+        codes.contains(&"lint.unused_function"),
+        "local Inner.equals is unused: the slice elements are imported models.Inner, so \
+         `xs.equals(ys)` dispatches to models.Inner.equals, not the local method: {codes:?}"
     );
 }

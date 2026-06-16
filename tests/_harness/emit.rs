@@ -48,7 +48,7 @@ fn emit_inner(
         unused: &result.unused,
         mutations: &result.mutations,
         ufcs_methods: &result.ufcs_methods,
-        usable_equals: &result.usable_equals,
+        equality_index: &result.equality_index,
         go_package_names: &result.go_package_names,
         go_module_ids: &result.go_module_ids,
     };

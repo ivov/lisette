@@ -1,0 +1,19 @@
+---
+source: tests/spec/emit/types.rs
+description: "\nstruct Point { x: int }\n\nimpl Point {\n  fn equals(self, other: Point) -> bool {\n    self.x == other.x\n  }\n}\n\nfn test(a: Slice<Point>, b: Slice<Point>) -> bool {\n  a.equals(b)\n}\n"
+---
+package main
+
+import "slices"
+
+type Point struct {
+	x int
+}
+
+func (p Point) equals(other Point) bool {
+	return p.x == other.x
+}
+
+func test(a, b []Point) bool {
+	return slices.EqualFunc(a, b, func(a_1 Point, b_2 Point) bool { return a_1.equals(b_2) })
+}

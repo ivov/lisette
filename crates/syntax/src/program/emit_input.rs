@@ -67,25 +67,96 @@ impl UnusedInfo {
 }
 
 #[derive(Debug, Clone, Default)]
-pub struct UsableEquals {
-    by_id: HashMap<String, Option<String>>,
+pub struct EqualityIndex {
+    by_id: HashMap<String, EqualityInfo>,
 }
 
-impl UsableEquals {
-    pub fn insert(&mut self, id: String, private_to_module: Option<String>) {
-        self.by_id.insert(id, private_to_module);
+#[derive(Debug, Clone)]
+pub enum EqualityInfo {
+    Method {
+        private_to_module: Option<String>,
+        synthesized: bool,
+    },
+    Unusable {
+        reason: EqualityUnusableReason,
+        private_to_module: Option<String>,
+    },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EqualityUnusableReason {
+    UfcsLowered,
+    BoundMismatch,
+}
+
+fn visible_from(private_to_module: &Option<String>, current_module: &str) -> bool {
+    match private_to_module {
+        None => true,
+        Some(module) => module == current_module,
+    }
+}
+
+impl EqualityIndex {
+    pub fn insert_method(
+        &mut self,
+        id: String,
+        private_to_module: Option<String>,
+        synthesized: bool,
+    ) {
+        self.by_id.insert(
+            id,
+            EqualityInfo::Method {
+                private_to_module,
+                synthesized,
+            },
+        );
+    }
+
+    pub fn insert_unusable(
+        &mut self,
+        id: String,
+        reason: EqualityUnusableReason,
+        private_to_module: Option<String>,
+    ) {
+        self.by_id.insert(
+            id,
+            EqualityInfo::Unusable {
+                reason,
+                private_to_module,
+            },
+        );
     }
 
     pub fn usable_from(&self, id: &str, current_module: &str) -> bool {
-        Self::entry_usable_from(self.by_id.get(id), current_module)
+        matches!(
+            self.by_id.get(id),
+            Some(EqualityInfo::Method { private_to_module, .. })
+                if visible_from(private_to_module, current_module)
+        )
     }
 
-    pub fn entry_usable_from(entry: Option<&Option<String>>, current_module: &str) -> bool {
-        match entry {
-            Some(None) => true,
-            Some(Some(module)) => module == current_module,
-            None => false,
+    pub fn unusable_reason_from(
+        &self,
+        id: &str,
+        current_module: &str,
+    ) -> Option<EqualityUnusableReason> {
+        match self.by_id.get(id) {
+            Some(EqualityInfo::Unusable {
+                reason,
+                private_to_module,
+            }) if visible_from(private_to_module, current_module) => Some(*reason),
+            _ => None,
         }
+    }
+
+    pub fn is_synthesized(&self, id: &str) -> bool {
+        matches!(
+            self.by_id.get(id),
+            Some(EqualityInfo::Method {
+                synthesized: true,
+                ..
+            })
+        )
     }
 }
 
@@ -113,7 +184,7 @@ pub struct EmitInput {
     pub mutations: MutationInfo,
     pub cached_modules: HashSet<String>,
     pub ufcs_methods: HashSet<(String, String)>,
-    pub usable_equals: UsableEquals,
+    pub equality_index: EqualityIndex,
     pub go_package_names: HashMap<String, String>,
     pub go_module_ids: HashSet<String>,
 }

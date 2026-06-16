@@ -1,0 +1,19 @@
+---
+source: tests/spec/emit/types.rs
+description: "\n#[equality]\nstruct Box<T: Comparable> { items: Slice<T> }\n\nfn test(a: Slice<Box<int>>, b: Slice<Box<int>>) -> bool {\n  a.equals(b)\n}\n"
+---
+package main
+
+import "slices"
+
+type Box[T comparable] struct {
+	items []T
+}
+
+func (b Box[T]) equals(other Box[T]) bool {
+	return slices.Equal(b.items, other.items)
+}
+
+func test(a, b []Box[int]) bool {
+	return slices.EqualFunc(a, b, func(a_1 Box[int], b_2 Box[int]) bool { return a_1.equals(b_2) })
+}

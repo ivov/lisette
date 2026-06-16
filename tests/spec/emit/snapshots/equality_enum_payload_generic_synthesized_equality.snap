@@ -1,0 +1,42 @@
+---
+source: tests/spec/emit/types.rs
+description: "\n#[equality]\nstruct Box<T: Comparable> { items: Slice<T> }\n\n#[equality]\nenum Wrap { Wrapped(Box<int>) }\n"
+---
+package main
+
+import "slices"
+
+func MakeWrapWrapped(arg0 Box[int]) Wrap {
+	return Wrap{Tag: WrapWrapped, Wrapped: arg0}
+}
+
+type Box[T comparable] struct {
+	items []T
+}
+
+func (b Box[T]) equals(other Box[T]) bool {
+	return slices.Equal(b.items, other.items)
+}
+
+type WrapTag int
+
+const (
+	WrapWrapped WrapTag = iota
+)
+
+type Wrap struct {
+	Tag     WrapTag
+	Wrapped Box[int]
+}
+
+func (w Wrap) equals(other Wrap) bool {
+	if w.Tag != other.Tag {
+		return false
+	}
+	switch w.Tag {
+	case WrapWrapped:
+		return w.Wrapped.equals(other.Wrapped)
+	default:
+		return true
+	}
+}

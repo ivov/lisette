@@ -1,0 +1,14 @@
+---
+source: tests/spec/emit/types.rs
+description: "\n#[equality]\nstruct Node { value: int, next: Ref<Node> }\n"
+---
+package main
+
+type Node struct {
+	value int
+	next  *Node
+}
+
+func (n Node) equals(other Node) bool {
+	return n.value == other.value && n.next == other.next
+}

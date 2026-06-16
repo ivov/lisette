@@ -68,6 +68,7 @@ pub fn infer_module(module_name: &str, fs: MockFileSystem) -> InferResult {
         checker.put_prelude_in_scope(&store);
 
         let order = std::mem::take(&mut graph_result.order);
+        let mut to_infer: Vec<String> = Vec::new();
         for module_id in order {
             if let Some(go_pkg) = module_id.strip_prefix("go:") {
                 if let Some(typedef) = get_go_stdlib_typedef(go_pkg, Target::host()) {
@@ -86,12 +87,20 @@ pub fn infer_module(module_name: &str, fs: MockFileSystem) -> InferResult {
 
             let prev_module_id = checker.cursor.module_id.clone();
             checker.cursor.module_id = module_id.to_string();
-
             store.store_module(&module_id, files);
             checker.register_module(&mut store, &module_id);
-            let module_files = checker.take_module_files(&mut store, &module_id);
-            InferCtx::new(&mut checker, &store).infer_module(&module_id, module_files);
+            checker.cursor.module_id = prev_module_id;
 
+            to_infer.push(module_id);
+        }
+
+        checker.finalize_equality(&mut store);
+
+        for module_id in &to_infer {
+            let prev_module_id = checker.cursor.module_id.clone();
+            checker.cursor.module_id = module_id.to_string();
+            let module_files = checker.take_module_files(&mut store, module_id);
+            InferCtx::new(&mut checker, &store).infer_module(module_id, module_files);
             checker.cursor.module_id = prev_module_id;
         }
 
@@ -258,6 +267,10 @@ impl InferResult {
 
     pub fn assert_infer_code(self, code: &str) -> Self {
         self.assert_code(&format!("infer.{}", code))
+    }
+
+    pub fn assert_attribute_code(self, code: &str) -> Self {
+        self.assert_code(&format!("attribute.{}", code))
     }
 
     fn assert_code(self, expected_code: &str) -> Self {

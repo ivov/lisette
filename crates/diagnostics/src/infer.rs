@@ -1098,6 +1098,22 @@ pub fn not_equatable(ty: &Type, reason: &str, span: Span) -> LisetteDiagnostic {
         ))
 }
 
+pub fn not_comparable_value_use_equals(ty: &Type, span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Invalid comparison")
+        .with_infer_code("type_mismatch")
+        .with_span_label(&span, format!("`{ty}` cannot be compared with `==`"))
+        .with_help(format!("Use `.equals()` to compare `{ty}`"))
+}
+
+pub fn not_comparable_derive_equality(ty: &Type, span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Invalid comparison")
+        .with_infer_code("type_mismatch")
+        .with_span_label(&span, format!("`{ty}` cannot be compared with `==`"))
+        .with_help(format!(
+            "Mark `{ty}` with `#[equality]` to compare it with `.equals()`"
+        ))
+}
+
 pub fn not_orderable_bound(span: Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Bound not satisfied")
         .with_infer_code("not_orderable_bound")

@@ -1,0 +1,11 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Cannot derive equality
+   ╭─[test.lis:6:16]
+ 5 │ #[equality]
+ 6 │ struct Index { values: Map<Key, int> }
+   ·                ───┬──
+   ·                   ╰── `values` cannot be compared
+   ╰────
+  help: `#[equality]` cannot compare a map with a non-comparable key. Give `Index` a hand-written `equals` method, mark the field's type `#[equality]`, or remove the field · code: [attribute.cannot_derive_equality]

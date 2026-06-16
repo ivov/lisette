@@ -8,7 +8,7 @@ use syntax::{
     desugar,
     lex::Lexer,
     parse::Parser,
-    program::{Definition, File, FileImport, MutationInfo, UnusedInfo, UsableEquals, Visibility},
+    program::{Definition, EqualityIndex, File, FileImport, MutationInfo, UnusedInfo, Visibility},
     types::Symbol,
 };
 
@@ -104,7 +104,7 @@ impl CompiledTest {
             unused,
             mutations,
             ufcs_methods,
-            usable_equals,
+            equality_index,
             go_package_names,
             go_module_ids,
         ) = {
@@ -157,7 +157,6 @@ impl CompiledTest {
             checker.register_types_and_values(&mut store, &self.ast, &Visibility::Local);
             InferCtx::new(&mut checker, &store).check_const_cycles(&[self.ast.as_slice()]);
 
-            // Store AST in module so compute_module_ufcs can scan impl blocks (condition 3)
             let test_file_id = store.new_file_id();
             store.store_file(
                 TEST_MODULE_ID,
@@ -179,7 +178,8 @@ impl CompiledTest {
                 checker.ufcs_methods.extend(ufcs_entries);
             }
 
-            checker.record_usable_equals(&mut store);
+            checker.register_equality(&mut store, &self.ast);
+            checker.finalize_equality(&mut store);
 
             let mut typed_ast = vec![];
 
@@ -270,7 +270,7 @@ impl CompiledTest {
             }
 
             let ufcs_methods = std::mem::take(&mut checker.ufcs_methods);
-            let usable_equals = std::mem::take(&mut store.usable_equals);
+            let equality_index = std::mem::take(&mut store.equality_index);
             let go_package_names = store.go_package_names.clone();
             let go_module_ids: HashSet<String> = store
                 .modules
@@ -285,7 +285,7 @@ impl CompiledTest {
                 unused,
                 mutations,
                 ufcs_methods,
-                usable_equals,
+                equality_index,
                 go_package_names,
                 go_module_ids,
             )
@@ -299,7 +299,7 @@ impl CompiledTest {
             unused,
             mutations,
             ufcs_methods,
-            usable_equals,
+            equality_index,
             go_package_names,
             go_module_ids,
         }
@@ -314,7 +314,7 @@ pub struct InferenceResult {
     pub unused: UnusedInfo,
     pub mutations: MutationInfo,
     pub ufcs_methods: HashSet<(String, String)>,
-    pub usable_equals: UsableEquals,
+    pub equality_index: EqualityIndex,
     pub go_package_names: HashMap<String, String>,
     pub go_module_ids: HashSet<String>,
 }

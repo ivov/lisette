@@ -72,6 +72,14 @@ impl Planner<'_> {
             definition
         };
         self.append_to_string_method(&mut result, name, &receiver_generics, struct_attrs);
+        self.append_equals_method(
+            &mut result,
+            name,
+            &receiver_generics,
+            fields,
+            struct_attrs,
+            fx,
+        );
         result
     }
 
@@ -221,6 +229,11 @@ impl Planner<'_> {
         attributes.iter().any(|a| a.name == "display") && !self.module.has_user_to_string(name)
     }
 
+    pub(crate) fn should_synthesize_equals(&self, name: &str) -> bool {
+        let qualified = self.facts.qualified_current(name);
+        self.facts.synthesizes_equals(qualified.as_str())
+    }
+
     pub(crate) fn is_pointer_backed_newtype(&self, name: &str) -> bool {
         let qualified = self.facts.qualified_current(name);
         self.facts
@@ -262,6 +275,42 @@ impl Planner<'_> {
             out.push_str("\n\n");
             out.push_str(&emit_to_string_method(name, receiver_generics, &go_method));
         }
+    }
+
+    pub(crate) fn append_equals_method(
+        &mut self,
+        out: &mut String,
+        name: &str,
+        receiver_generics: &str,
+        fields: &[StructFieldDefinition],
+        attributes: &[Attribute],
+        fx: &mut EmitEffects,
+    ) {
+        if !self.should_synthesize_equals(name) {
+            return;
+        }
+        let receiver = receiver_name(name);
+        let comparisons: Vec<String> = fields
+            .iter()
+            .map(|f| {
+                let go_field = struct_field_go_name(f, attributes);
+                let lhs = format!("{receiver}.{go_field}");
+                let rhs = format!("other.{go_field}");
+                self.render_equality(&lhs, &rhs, &f.ty, fx)
+            })
+            .collect();
+        let body = if comparisons.is_empty() {
+            "true".to_string()
+        } else {
+            comparisons.join(" && ")
+        };
+        let go_method = self.equals_method_go_name();
+        let go_type_name = go_name::escape_keyword(name);
+        let receiver_type = format!("{go_type_name}{receiver_generics}");
+        out.push_str("\n\n");
+        out.push_str(&format!(
+            "func ({receiver} {receiver_type}) {go_method}(other {receiver_type}) bool {{\nreturn {body}\n}}"
+        ));
     }
 
     /// Single stringer to synthesize for structs: `String` by default,

@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Cannot derive equality
+   ╭─[test.lis:8:3]
+ 7 │ struct Widget {
+ 8 │   shape: Drawable,
+   ·   ──┬──
+   ·     ╰── `shape` cannot be compared
+ 9 │ }
+   ╰────
+  help: `#[equality]` cannot compare interface values. Give `Widget` a hand-written `equals` method, mark the field's type `#[equality]`, or remove the field · code: [attribute.cannot_derive_equality]

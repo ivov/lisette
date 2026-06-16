@@ -54,10 +54,10 @@ impl Planner<'_> {
         if self.facts.is_unused_definition(name_span) {
             return None;
         }
+        let function = method.function_definition_view();
 
         self.scope.reset_for_top_level();
 
-        let function = method.function_definition_view();
         let is_public = matches!(visibility, Visibility::Public);
 
         let has_self = function.params.first().is_some_and(|p| {

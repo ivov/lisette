@@ -177,7 +177,17 @@ impl TaskState<'_> {
             return;
         }
 
-        self.check_conflicting_impl_bounds(&*store, annotation, &receiver_qualified_name, generics);
+        if self.check_conflicting_impl_bounds(
+            &*store,
+            annotation,
+            &receiver_qualified_name,
+            generics,
+        ) {
+            store
+                .bound_conflict_types
+                .insert(receiver_qualified_name.to_string());
+        }
+
         self.check_conflicting_cross_impl_bounds(
             &*store,
             annotation,

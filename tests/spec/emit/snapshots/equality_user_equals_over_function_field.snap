@@ -1,0 +1,13 @@
+---
+source: tests/spec/emit/types.rs
+description: "\n#[equality]\nstruct Handler { run: fn(int) -> int }\n\nimpl Handler {\n  fn equals(self, other: Handler) -> bool {\n    true\n  }\n}\n"
+---
+package main
+
+type Handler struct {
+	run func(int) int
+}
+
+func (h Handler) equals(_ Handler) bool {
+	return true
+}

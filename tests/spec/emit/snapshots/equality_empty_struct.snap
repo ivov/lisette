@@ -1,0 +1,11 @@
+---
+source: tests/spec/emit/types.rs
+description: "\n#[equality]\nstruct Blank {}\n"
+---
+package main
+
+type Blank struct{}
+
+func (b Blank) equals(other Blank) bool {
+	return true
+}

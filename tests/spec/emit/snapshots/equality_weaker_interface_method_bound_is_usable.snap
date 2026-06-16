@@ -1,0 +1,25 @@
+---
+source: tests/spec/emit/types.rs
+description: "\ninterface Parent {\n  fn p(self)\n}\n\ninterface Child {\n  embed Parent\n\n  fn c(self)\n}\n\n#[equality]\nstruct Box<T: Child> { value: T }\n\nimpl<T: Parent> Box<T> {\n  fn equals(self, other: Box<T>) -> bool {\n    true\n  }\n}\n"
+---
+package main
+
+type Parent interface {
+	p()
+}
+
+type Child interface {
+	Parent
+	c()
+}
+
+type Box[T interface {
+	Child
+	Parent
+}] struct {
+	value T
+}
+
+func (b Box[T]) equals(_ Box[T]) bool {
+	return true
+}

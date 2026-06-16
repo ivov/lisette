@@ -51,6 +51,7 @@ pub struct StructFieldInfo {
     pub parent_is_public: bool,
     pub parent_has_serialization_attr: bool,
     pub parent_has_display_attr: bool,
+    pub parent_synthesizes_equals: bool,
     pub has_tag_attribute: bool,
     pub embedded: bool,
 }
@@ -86,9 +87,8 @@ pub struct ReferenceGraph {
     used_struct_fields: HashSet<StructFieldId>,
     enum_variants: HashMap<EnumVariantId, EnumVariantInfo>,
     used_enum_variants: HashSet<EnumVariantId>,
-    /// Container `.equals()` receivers whose element `equals` is credited after the walk,
-    /// once the usable-equality verdict can filter them.
     pending_equals_dispatch: Vec<(ModuleItemId, Type)>,
+    pending_equals_roots: Vec<(String, Type)>,
 }
 
 impl ReferenceGraph {
@@ -125,6 +125,14 @@ impl ReferenceGraph {
 
     pub fn take_equals_dispatch(&mut self) -> Vec<(ModuleItemId, Type)> {
         std::mem::take(&mut self.pending_equals_dispatch)
+    }
+
+    pub fn record_equals_root(&mut self, owner: String, field_ty: Type) {
+        self.pending_equals_roots.push((owner, field_ty));
+    }
+
+    pub fn take_equals_roots(&mut self) -> Vec<(String, Type)> {
+        std::mem::take(&mut self.pending_equals_roots)
     }
 
     /// Mark an item as used by adding it to entrypoints.
@@ -191,6 +199,7 @@ impl ReferenceGraph {
                     && !info.parent_is_public
                     && !info.parent_has_serialization_attr
                     && !info.parent_has_display_attr
+                    && !info.parent_synthesizes_equals
                     && !info.has_tag_attribute
                     && !info.embedded
                     && !self.used_struct_fields.contains(*id)

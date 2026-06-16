@@ -6,7 +6,7 @@ use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use syntax::ast::{BindingId, Pattern, RestPattern, Span};
 use syntax::program::{
-    Definition, DefinitionBody, ModuleId, MutationInfo, UnusedInfo, UsableEquals,
+    Definition, DefinitionBody, EqualityIndex, ModuleId, MutationInfo, UnusedInfo,
 };
 use syntax::types::{Symbol, Type};
 
@@ -21,7 +21,7 @@ pub(crate) struct EmitFactsConfig<'a> {
     pub(crate) unused: &'a UnusedInfo,
     pub(crate) mutations: &'a MutationInfo,
     pub(crate) ufcs_methods: &'a HashSet<(String, String)>,
-    pub(crate) usable_equals: &'a UsableEquals,
+    pub(crate) equality_index: &'a EqualityIndex,
     pub(crate) go_package_names: &'a HashMap<String, String>,
     pub(crate) go_module_ids: &'a HashSet<String>,
     pub(crate) entry_module: ModuleId,
@@ -38,7 +38,7 @@ pub(crate) struct EmitFacts<'a> {
     unused: &'a UnusedInfo,
     mutations: &'a MutationInfo,
     ufcs_methods: &'a HashSet<(String, String)>,
-    usable_equals: &'a UsableEquals,
+    equality_index: &'a EqualityIndex,
     go_package_names: &'a HashMap<String, String>,
     go_module_ids: &'a HashSet<String>,
     entry_module: ModuleId,
@@ -57,7 +57,7 @@ impl<'a> EmitFacts<'a> {
             unused: config.unused,
             mutations: config.mutations,
             ufcs_methods: config.ufcs_methods,
-            usable_equals: config.usable_equals,
+            equality_index: config.equality_index,
             go_package_names: config.go_package_names,
             go_module_ids: config.go_module_ids,
             entry_module: config.entry_module,
@@ -152,7 +152,11 @@ impl<'a> EmitFacts<'a> {
     }
 
     pub(crate) fn usable_equals_from(&self, id: &str) -> bool {
-        self.usable_equals.usable_from(id, &self.current_module)
+        self.equality_index.usable_from(id, &self.current_module)
+    }
+
+    pub(crate) fn synthesizes_equals(&self, id: &str) -> bool {
+        self.equality_index.is_synthesized(id)
     }
 
     pub(crate) fn current_module(&self) -> &str {

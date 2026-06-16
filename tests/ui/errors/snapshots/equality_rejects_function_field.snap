@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Cannot derive equality
+   ╭─[test.lis:4:3]
+ 3 │ struct Handler {
+ 4 │   on_done: fn(int) -> int,
+   ·   ───┬───
+   ·      ╰── `on_done` cannot be compared
+ 5 │ }
+   ╰────
+  help: `#[equality]` cannot compare functions. Give `Handler` a hand-written `equals` method, mark the field's type `#[equality]`, or remove the field · code: [attribute.cannot_derive_equality]

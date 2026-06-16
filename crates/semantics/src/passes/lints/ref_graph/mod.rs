@@ -12,9 +12,9 @@ use crate::passes::PARALLEL_THRESHOLD;
 use diagnostics::LisetteDiagnostic;
 use diagnostics::LocalSink;
 use syntax::ast::{AttributeArg, Expression, ImportAlias, Span, Visibility};
+use syntax::program::EqualityIndex;
 use syntax::program::Module;
 use syntax::program::UnusedInfo;
-use syntax::program::UsableEquals;
 use syntax::program::{File, FileImport};
 
 use super::Lint as LintEnum;
@@ -39,7 +39,7 @@ pub(crate) fn run(
 ) -> (Vec<LisetteDiagnostic>, UnusedInfo) {
     let store = analysis.store;
     let go_package_names = &store.go_package_names;
-    let usable_equals = &store.usable_equals;
+    let equality_index = &store.equality_index;
     let config = LintConfig::default();
 
     let mut modules: Vec<&Module> = store
@@ -58,7 +58,7 @@ pub(crate) fn run(
             apply_ref_lints(
                 module,
                 go_package_names,
-                usable_equals,
+                equality_index,
                 &config,
                 facts,
                 &mut unused,
@@ -77,7 +77,7 @@ pub(crate) fn run(
             apply_ref_lints(
                 module,
                 go_package_names,
-                usable_equals,
+                equality_index,
                 &config,
                 facts,
                 &mut local_unused,
@@ -98,7 +98,7 @@ pub(crate) fn run(
 fn apply_ref_lints(
     module: &Module,
     go_package_names: &HashMap<String, String>,
-    usable_equals: &UsableEquals,
+    equality_index: &EqualityIndex,
     config: &LintConfig,
     facts: &Facts,
     unused: &mut UnusedInfo,
@@ -108,7 +108,7 @@ fn apply_ref_lints(
         module,
         &module.files,
         go_package_names,
-        usable_equals,
+        equality_index,
         config,
         facts,
     );
@@ -134,7 +134,7 @@ fn run_ref_lints(
     module: &Module,
     files: &HashMap<u32, File>,
     go_package_names: &HashMap<String, String>,
-    usable_equals: &UsableEquals,
+    equality_index: &EqualityIndex,
     config: &LintConfig,
     facts: &Facts,
 ) -> RefLintResult {
@@ -143,7 +143,13 @@ fn run_ref_lints(
     let mut unused_definition_spans = Vec::new();
     let mut graph = ReferenceGraph::new();
 
-    collect_items(files, go_package_names, &mut graph);
+    collect_items(
+        files,
+        &module.id,
+        go_package_names,
+        equality_index,
+        &mut graph,
+    );
 
     let alias_map = AliasMap::build(files, go_package_names);
     for file in files.values() {
@@ -154,9 +160,20 @@ fn run_ref_lints(
 
     for (from, receiver_ty) in graph.take_equals_dispatch() {
         let mut targets = Vec::new();
-        equals_targets(&receiver_ty, module, usable_equals, &mut targets);
+        equals_targets(&receiver_ty, module, equality_index, &mut targets);
         for to in targets {
             graph.add_reference(&from, to);
+        }
+    }
+
+    for (owner, field_ty) in graph.take_equals_roots() {
+        if !equality_index.is_synthesized(&owner) {
+            continue;
+        }
+        let mut targets = Vec::new();
+        equals_targets(&field_ty, module, equality_index, &mut targets);
+        for to in targets {
+            graph.mark_as_used(to);
         }
     }
 
@@ -212,7 +229,9 @@ fn run_ref_lints(
 
 fn collect_items(
     files: &HashMap<u32, File>,
+    module_id: &str,
     go_package_names: &HashMap<String, String>,
+    equality_index: &EqualityIndex,
     graph: &mut ReferenceGraph,
 ) {
     for file in files.values() {
@@ -318,6 +337,8 @@ fn collect_items(
                     });
 
                     let has_display_attr = attributes.iter().any(|a| a.name == "display");
+                    let synthesizes_equals =
+                        equality_index.is_synthesized(&format!("{module_id}.{name}"));
 
                     for struct_field in fields {
                         let field_id = StructFieldId::new(name, &struct_field.name);
@@ -331,6 +352,7 @@ fn collect_items(
                                 parent_is_public: is_public,
                                 parent_has_serialization_attr: has_serialization_attr,
                                 parent_has_display_attr: has_display_attr,
+                                parent_synthesizes_equals: synthesizes_equals,
                                 has_tag_attribute,
                                 embedded: struct_field.embedded,
                             },

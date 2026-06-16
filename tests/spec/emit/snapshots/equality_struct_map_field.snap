@@ -1,0 +1,16 @@
+---
+source: tests/spec/emit/types.rs
+description: "\n#[equality]\nstruct Counts { name: string, totals: Map<string, int> }\n"
+---
+package main
+
+import "maps"
+
+type Counts struct {
+	name   string
+	totals map[string]int
+}
+
+func (c Counts) equals(other Counts) bool {
+	return c.name == other.name && maps.Equal(c.totals, other.totals)
+}

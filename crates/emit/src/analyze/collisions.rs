@@ -142,6 +142,12 @@ impl Planner<'_> {
                         .or_default()
                         .push(*name_span);
                 }
+                if self.should_synthesize_equals(name) {
+                    members
+                        .entry(self.equals_method_go_name())
+                        .or_default()
+                        .push(*name_span);
+                }
             }
             Expression::Enum {
                 name,
@@ -217,6 +223,12 @@ impl Planner<'_> {
                 if self.should_synthesize_to_string(name, attributes) {
                     members
                         .entry(self.to_string_method_go_name())
+                        .or_default()
+                        .push(*name_span);
+                }
+                if self.should_synthesize_equals(name) {
+                    members
+                        .entry(self.equals_method_go_name())
                         .or_default()
                         .push(*name_span);
                 }

@@ -1,0 +1,13 @@
+---
+source: tests/spec/emit/types.rs
+description: "\n#[equality]\nstruct Caseless { value: string }\n\nimpl Caseless {\n  fn equals(self, other: Caseless) -> bool {\n    self.value == other.value\n  }\n}\n"
+---
+package main
+
+type Caseless struct {
+	value string
+}
+
+func (c Caseless) equals(other Caseless) bool {
+	return c.value == other.value
+}

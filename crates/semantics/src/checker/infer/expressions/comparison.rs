@@ -1,9 +1,10 @@
 use crate::checker::EnvResolve;
 use crate::checker::TypeEnv;
 use crate::checker::infer::InferCtx;
+use crate::checker::scopes::Scopes;
 use crate::store::Store;
 use syntax::ast::{Expression, Span};
-use syntax::program::DefinitionBody;
+use syntax::program::{DefinitionBody, EqualityUnusableReason};
 use syntax::types::{CompoundKind, Type, build_substitution_map, substitute};
 
 pub(crate) fn check_not_comparable(
@@ -106,24 +107,75 @@ pub(crate) fn type_has_usable_equals(store: &Store, ty: &Type, current_module: &
     let Some(qualified) = resolved.get_qualified_id() else {
         return false;
     };
-    store.usable_equals.usable_from(qualified, current_module)
+    store.equality_index.usable_from(qualified, current_module)
 }
 
-fn type_has_callable_bound_mismatched_equals(
+fn callable_unusable_equals_reason(
     store: &Store,
     ty: &Type,
     current_module: &str,
-) -> bool {
-    let Some(id) = ty.get_qualified_id() else {
-        return false;
+) -> Option<&'static str> {
+    let id = ty.get_qualified_id()?;
+    match store
+        .equality_index
+        .unusable_reason_from(id, current_module)?
+    {
+        EqualityUnusableReason::BoundMismatch => {
+            Some("a type whose `equals` requires stricter bounds")
+        }
+        EqualityUnusableReason::UfcsLowered => Some("a type whose `equals` is not a method"),
+    }
+}
+
+pub(crate) fn check_not_equatable(
+    env: &TypeEnv,
+    store: &Store,
+    ty: &Type,
+    current_module: &str,
+    comparable_param: &dyn Fn(&str) -> bool,
+) -> Option<&'static str> {
+    let resolved = store.deep_resolve_alias(&ty.resolve_in(env));
+
+    if let Type::Parameter(name) = &resolved
+        && comparable_param(name)
+    {
+        return None;
+    }
+    if type_has_usable_equals(store, &resolved, current_module) {
+        return None;
+    }
+
+    let Some(reason) = check_not_comparable(env, store, &resolved) else {
+        return callable_unusable_equals_reason(store, &resolved, current_module);
     };
-    if !store.equals_bound_mismatch.contains(id) {
+
+    match resolved.as_compound() {
+        Some((CompoundKind::Slice, args)) => {
+            check_not_equatable(env, store, args.first()?, current_module, comparable_param)
+        }
+        Some((CompoundKind::Map, args)) => {
+            if map_key_not_comparable(env, store, args.first()?, comparable_param) {
+                return Some("a map with a non-comparable key");
+            }
+            check_not_equatable(env, store, args.get(1)?, current_module, comparable_param)
+        }
+        _ => Some(reason),
+    }
+}
+
+fn map_key_not_comparable(
+    env: &TypeEnv,
+    store: &Store,
+    key: &Type,
+    comparable_param: &dyn Fn(&str) -> bool,
+) -> bool {
+    let resolved = store.deep_resolve_alias(&key.resolve_in(env));
+    if let Type::Parameter(name) = &resolved
+        && comparable_param(name)
+    {
         return false;
     }
-    let method_key = format!("{id}.equals");
-    store.get_definition(&method_key).is_some_and(|method| {
-        method.visibility.is_public() || store.module_for_qualified_name(id) == Some(current_module)
-    })
+    check_not_comparable(env, store, &resolved).is_some()
 }
 
 pub(crate) fn bound_implied(store: &Store, type_bounds: &[Type], method_bound: &Type) -> bool {
@@ -197,6 +249,24 @@ fn closure_conflicts(store: &Store, start: &Type, target_base: &str, target: &Ty
     })
 }
 
+pub(crate) fn param_is_comparable(scopes: &Scopes, env: &TypeEnv, param_name: &str) -> bool {
+    let mut found = false;
+    scopes.for_each_bound_on_param(param_name, |bound_ty| {
+        if found {
+            return;
+        }
+        if let Some(declared) = bound_ty
+            .resolve_in(env)
+            .get_qualified_id()
+            .and_then(super::super::unify::BuiltinBound::from_qualified_id)
+            && declared.satisfies(super::super::unify::BuiltinBound::Comparable)
+        {
+            found = true;
+        }
+    });
+    found
+}
+
 impl InferCtx<'_, '_> {
     pub(super) fn ensure_comparable(
         &mut self,
@@ -232,6 +302,21 @@ impl InferCtx<'_, '_> {
                         &resolved, reason, *span,
                     )),
             }
+        } else if operands_match
+            && type_has_usable_equals(store, &resolved, self.cursor.module_id.as_str())
+        {
+            self.sink
+                .push(diagnostics::infer::not_comparable_value_use_equals(
+                    &resolved, *span,
+                ));
+        } else if operands_match
+            && self.is_struct_or_enum(&resolved)
+            && self.is_equality_derivable(&resolved)
+        {
+            self.sink
+                .push(diagnostics::infer::not_comparable_derive_equality(
+                    &resolved, *span,
+                ));
         } else {
             self.sink
                 .push(diagnostics::infer::not_comparable(&resolved, reason, *span));
@@ -240,47 +325,78 @@ impl InferCtx<'_, '_> {
     }
 
     pub(super) fn not_equatable_reason(&self, ty: &Type) -> Option<&'static str> {
-        let resolved = self.store.deep_resolve_alias(&ty.resolve_in(&self.env));
-        let current_module = self.cursor.module_id.as_str();
-
-        if let Type::Parameter(name) = &resolved
-            && self.parameter_satisfies_bound(name, super::super::unify::BuiltinBound::Comparable)
-        {
-            return None;
-        }
-        if type_has_usable_equals(self.store, &resolved, current_module) {
-            return None;
-        }
-
-        let Some(reason) = check_not_comparable(&self.env, self.store, &resolved) else {
-            return type_has_callable_bound_mismatched_equals(
-                self.store,
-                &resolved,
-                current_module,
-            )
-            .then_some("a type whose `equals` requires stricter bounds");
-        };
-
-        match resolved.as_compound() {
-            Some((CompoundKind::Slice, args)) => self.not_equatable_reason(args.first()?),
-            Some((CompoundKind::Map, args)) => {
-                if self.map_key_not_comparable(args.first()?) {
-                    return Some("a map with a non-comparable key");
-                }
-                self.not_equatable_reason(args.get(1)?)
-            }
-            _ => Some(reason),
-        }
+        check_not_equatable(
+            &self.env,
+            self.store,
+            ty,
+            self.cursor.module_id.as_str(),
+            &|name| {
+                self.parameter_satisfies_bound(name, super::super::unify::BuiltinBound::Comparable)
+            },
+        )
     }
 
-    fn map_key_not_comparable(&self, key: &Type) -> bool {
-        let resolved = self.store.deep_resolve_alias(&key.resolve_in(&self.env));
-        if let Type::Parameter(name) = &resolved
-            && self.parameter_satisfies_bound(name, super::super::unify::BuiltinBound::Comparable)
-        {
+    fn is_struct_or_enum(&self, ty: &Type) -> bool {
+        let resolved = self.store.deep_resolve_alias(ty);
+        let Some(name) = resolved.get_qualified_id() else {
             return false;
-        }
-        check_not_comparable(&self.env, self.store, &resolved).is_some()
+        };
+        matches!(
+            self.store.get_definition(name).map(|d| &d.body),
+            Some(DefinitionBody::Struct { .. } | DefinitionBody::Enum { .. })
+        )
+    }
+
+    /// Whether the `==` diagnostic may suggest `#[equality]` for this struct or enum.
+    fn is_equality_derivable(&self, ty: &Type) -> bool {
+        let resolved = self.store.deep_resolve_alias(ty);
+        let Some(name) = resolved.get_qualified_id() else {
+            return false;
+        };
+        let Some(definition) = self.store.get_definition(name) else {
+            return false;
+        };
+        let type_args = resolved.get_type_params().unwrap_or_default();
+        let (generics, field_types): (&[syntax::ast::Generic], Vec<Type>) = match &definition.body {
+            DefinitionBody::Struct {
+                kind: syntax::ast::StructKind::Tuple,
+                ..
+            } => return false,
+            DefinitionBody::Struct {
+                generics, fields, ..
+            } => (generics, fields.iter().map(|f| f.ty.clone()).collect()),
+            DefinitionBody::Enum {
+                generics, variants, ..
+            } => (
+                generics,
+                variants
+                    .iter()
+                    .flat_map(|v| v.fields.iter().map(|f| f.ty.clone()))
+                    .collect(),
+            ),
+            _ => return false,
+        };
+        let sub_map = generics
+            .iter()
+            .map(|g| g.name.clone())
+            .zip(type_args.iter().cloned())
+            .collect();
+        field_types.iter().all(|field_ty| {
+            let substituted = substitute(&field_ty.resolve_in(&self.env), &sub_map);
+            check_not_equatable(
+                &self.env,
+                self.store,
+                &substituted,
+                self.cursor.module_id.as_str(),
+                &|name| {
+                    self.parameter_satisfies_bound(
+                        name,
+                        super::super::unify::BuiltinBound::Comparable,
+                    )
+                },
+            )
+            .is_none()
+        })
     }
 
     pub(super) fn gate_container_equals(&mut self, receiver_ty: &Type, span: Span) {

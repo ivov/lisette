@@ -57,6 +57,210 @@ fn lis_run(project: &Path, invocation: &Path, extra: &[&str]) -> std::process::O
     cmd.output().expect("failed to invoke lisette")
 }
 
+fn lis(project: &Path, subcommand: &str) -> std::process::Output {
+    let manifest = repo().join("Cargo.toml");
+    Command::new("cargo")
+        .args(["run", "--quiet", "--manifest-path"])
+        .arg(&manifest)
+        .args(["-p", "lisette", "--", subcommand])
+        .arg(project)
+        .env("NO_COLOR", "1")
+        .output()
+        .expect("failed to invoke lisette")
+}
+
+const BOUND_MISMATCHED_BOX: &str = r#"
+pub struct Box<T: Comparable> { pub items: Slice<T> }
+
+impl<T: Ordered> Box<T> {
+  pub fn equals(self, other: Box<T>) -> bool {
+    self.items.equals(other.items)
+  }
+}
+"#;
+
+const WRAP_OVER_BOX: &str = r#"
+import "box"
+
+#[equality]
+pub struct Wrap { pub box: box.Box<int> }
+"#;
+
+fn assert_rejected_at_check(output: &std::process::Output) {
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        !output.status.success(),
+        "expected a checker rejection:\nstdout: {stdout}\nstderr: {stderr}"
+    );
+    let combined = format!("{stdout}{stderr}");
+    assert!(
+        combined.contains("Cannot derive equality"),
+        "expected `Cannot derive equality` at check, got:\nstdout: {stdout}\nstderr: {stderr}"
+    );
+    assert!(
+        !combined.contains("invalid operation"),
+        "reached Go build instead of rejecting at check:\nstdout: {stdout}\nstderr: {stderr}"
+    );
+}
+
+#[test]
+fn parallel_equality_field_rejects_bound_mismatched_dependency() {
+    if !go_available() {
+        eprintln!(
+            "skipping parallel_equality_field_rejects_bound_mismatched_dependency: `go` not found"
+        );
+        return;
+    }
+
+    let scratch = tempfile::tempdir().expect("create temp dir");
+    let project = scratch.path().join("proj");
+    fs::create_dir_all(project.join("src/box")).unwrap();
+    fs::create_dir_all(project.join("src/wrap")).unwrap();
+    for pad in ["a", "b", "c"] {
+        fs::create_dir_all(project.join("src").join(pad)).unwrap();
+        fs::write(
+            project.join("src").join(pad).join(format!("{pad}.lis")),
+            "pub fn ping() -> int { 1 }\n",
+        )
+        .unwrap();
+    }
+    fs::write(
+        project.join("lisette.toml"),
+        "[project]\nname = \"github.com/user/eqpar\"\nversion = \"0.1.0\"\n",
+    )
+    .unwrap();
+    fs::write(project.join("src/box/box.lis"), BOUND_MISMATCHED_BOX).unwrap();
+    fs::write(project.join("src/wrap/wrap.lis"), WRAP_OVER_BOX).unwrap();
+    fs::write(
+        project.join("src/main.lis"),
+        r#"import "wrap"
+import "box"
+import "a"
+import "b"
+import "c"
+
+fn main() {
+  let _ = a.ping()
+  let _ = b.ping()
+  let _ = c.ping()
+  let x = wrap.Wrap { box: box.Box { items: [1] } }
+  let y = wrap.Wrap { box: box.Box { items: [1] } }
+  let _ok = x.equals(y)
+}
+"#,
+    )
+    .unwrap();
+
+    assert_rejected_at_check(&lis(&project, "check"));
+}
+
+#[test]
+fn cached_equality_field_rejects_bound_mismatched_dependency() {
+    if !go_available() {
+        eprintln!(
+            "skipping cached_equality_field_rejects_bound_mismatched_dependency: `go` not found"
+        );
+        return;
+    }
+
+    let scratch = tempfile::tempdir().expect("create temp dir");
+    let project = scratch.path().join("proj");
+    fs::create_dir_all(project.join("src/box")).unwrap();
+    fs::write(
+        project.join("lisette.toml"),
+        "[project]\nname = \"github.com/user/eqcache\"\nversion = \"0.1.0\"\n",
+    )
+    .unwrap();
+    fs::write(project.join("src/box/box.lis"), BOUND_MISMATCHED_BOX).unwrap();
+    fs::write(
+        project.join("src/main.lis"),
+        "import \"box\"\n\nfn main() {\n  let _b = box.Box { items: [1] }\n}\n",
+    )
+    .unwrap();
+
+    let first = lis(&project, "run");
+    assert!(
+        first.status.success(),
+        "first run should cache `box`:\nstderr: {}",
+        String::from_utf8_lossy(&first.stderr)
+    );
+
+    fs::create_dir_all(project.join("src/wrap")).unwrap();
+    fs::write(project.join("src/wrap/wrap.lis"), WRAP_OVER_BOX).unwrap();
+    fs::write(
+        project.join("src/main.lis"),
+        r#"import "box"
+import "wrap"
+
+fn main() {
+  let x = wrap.Wrap { box: box.Box { items: [1] } }
+  let y = wrap.Wrap { box: box.Box { items: [1] } }
+  let _ok = x.equals(y)
+}
+"#,
+    )
+    .unwrap();
+
+    assert_rejected_at_check(&lis(&project, "check"));
+}
+
+#[test]
+fn imported_weaker_interface_bound_equals_accepted() {
+    if !go_available() {
+        eprintln!("skipping imported_weaker_interface_bound_equals_accepted: `go` not found");
+        return;
+    }
+
+    let scratch = tempfile::tempdir().expect("create temp dir");
+    let project = scratch.path().join("proj");
+    fs::create_dir_all(project.join("src/iface")).unwrap();
+    fs::write(
+        project.join("lisette.toml"),
+        "[project]\nname = \"github.com/user/iface_bound\"\nversion = \"0.1.0\"\n",
+    )
+    .unwrap();
+    fs::write(
+        project.join("src/iface/iface.lis"),
+        r#"pub interface Parent {
+  fn p(self)
+}
+
+pub interface Child {
+  embed Parent
+
+  fn c(self)
+}
+"#,
+    )
+    .unwrap();
+    fs::write(
+        project.join("src/main.lis"),
+        r#"import "iface"
+
+#[equality]
+struct Box<T: iface.Child> { value: T }
+
+impl<T: iface.Parent> Box<T> {
+  fn equals(self, other: Box<T>) -> bool {
+    true
+  }
+}
+
+fn main() {}
+"#,
+    )
+    .unwrap();
+
+    let output = lis(&project, "check");
+    assert!(
+        output.status.success(),
+        "imported weaker interface bound should be accepted:\nstdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
 #[test]
 fn run_executes_binary_in_invocation_cwd() {
     if !go_available() {
@@ -102,6 +306,258 @@ fn run_forwards_go_flags() {
     assert!(
         stdout.contains("FOUND_MARKER"),
         "program output unexpected with --go-flags:\nstdout: {stdout}\nstderr: {stderr}"
+    );
+}
+
+#[test]
+fn run_unused_equality_type_keeps_nested_user_equals() {
+    if !go_available() {
+        eprintln!("skipping run_unused_equality_type_keeps_nested_user_equals: `go` not found");
+        return;
+    }
+
+    let scratch = tempfile::tempdir().expect("create temp dir");
+    let project = scratch.path().join("proj");
+    let invocation = scratch.path().join("invocation");
+    fs::create_dir_all(project.join("src")).unwrap();
+    fs::create_dir_all(&invocation).unwrap();
+
+    fs::write(
+        project.join("lisette.toml"),
+        "[project]\nname = \"eqprune\"\nversion = \"0.1.0\"\n",
+    )
+    .unwrap();
+    fs::write(
+        project.join("src/main.lis"),
+        r#"import "go:fmt"
+
+struct Inner { x: int }
+
+fn same(a: int, b: int) -> bool { a == b }
+
+impl Inner {
+  fn equals(self, other: Inner) -> bool {
+    same(self.x, other.x)
+  }
+}
+
+#[equality]
+struct Outer { inner: Inner }
+
+fn main() {
+  fmt.Println("OK")
+}
+"#,
+    )
+    .unwrap();
+
+    let output = lis_run(&project, &invocation, &[]);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    assert!(
+        output.status.success(),
+        "lis run failed (nested user equals or its helper likely pruned):\nstdout: {stdout}\nstderr: {stderr}"
+    );
+    assert!(
+        stdout.contains("OK"),
+        "program did not run:\nstdout: {stdout}\nstderr: {stderr}"
+    );
+}
+
+#[test]
+fn run_used_equality_dispatches_to_nested_equals_with_helper() {
+    if !go_available() {
+        eprintln!(
+            "skipping run_used_equality_dispatches_to_nested_equals_with_helper: `go` not found"
+        );
+        return;
+    }
+
+    let scratch = tempfile::tempdir().expect("create temp dir");
+    let project = scratch.path().join("proj");
+    let invocation = scratch.path().join("invocation");
+    fs::create_dir_all(project.join("src")).unwrap();
+    fs::create_dir_all(&invocation).unwrap();
+
+    fs::write(
+        project.join("lisette.toml"),
+        "[project]\nname = \"eqhelper\"\nversion = \"0.1.0\"\n",
+    )
+    .unwrap();
+    fs::write(
+        project.join("src/main.lis"),
+        r#"import "go:fmt"
+
+struct Inner { x: int }
+
+fn same(a: int, b: int) -> bool { a == b }
+
+impl Inner {
+  fn equals(self, other: Inner) -> bool {
+    same(self.x, other.x)
+  }
+}
+
+#[equality]
+struct Outer { inner: Inner }
+
+fn main() {
+  let a = Outer { inner: Inner { x: 1 } }
+  let b = Outer { inner: Inner { x: 1 } }
+  fmt.Println(a.equals(b))
+}
+"#,
+    )
+    .unwrap();
+
+    let output = lis_run(&project, &invocation, &[]);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    assert!(
+        output.status.success(),
+        "lis run failed:\nstdout: {stdout}\nstderr: {stderr}"
+    );
+    assert!(
+        stdout.contains("true"),
+        "expected `true`:\nstdout: {stdout}\nstderr: {stderr}"
+    );
+}
+
+#[test]
+fn run_equality_matching_parametrized_interface_bound_builds() {
+    if !go_available() {
+        eprintln!(
+            "skipping run_equality_matching_parametrized_interface_bound_builds: `go` not found"
+        );
+        return;
+    }
+
+    let scratch = tempfile::tempdir().expect("create temp dir");
+    let project = scratch.path().join("proj");
+    let invocation = scratch.path().join("invocation");
+    fs::create_dir_all(project.join("src")).unwrap();
+    fs::create_dir_all(&invocation).unwrap();
+
+    fs::write(
+        project.join("lisette.toml"),
+        "[project]\nname = \"eqparam\"\nversion = \"0.1.0\"\n",
+    )
+    .unwrap();
+    fs::write(
+        project.join("src/main.lis"),
+        r#"import "go:fmt"
+
+interface Parent<T> {
+  fn p(self) -> T
+}
+
+struct Holder { tag: string }
+
+impl Holder {
+  fn p(self) -> string {
+    self.tag
+  }
+}
+
+#[equality]
+struct Box<T: Parent<string>> { value: T }
+
+impl<T: Parent<string>> Box<T> {
+  fn equals(self, other: Box<T>) -> bool {
+    self.value.p() == other.value.p()
+  }
+}
+
+fn main() {
+  let a = Box { value: Holder { tag: "x" } }
+  let b = Box { value: Holder { tag: "y" } }
+  fmt.Println(a.equals(b))
+}
+"#,
+    )
+    .unwrap();
+
+    let output = lis_run(&project, &invocation, &[]);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    assert!(
+        output.status.success(),
+        "lis run failed:\nstdout: {stdout}\nstderr: {stderr}"
+    );
+    assert!(
+        stdout.contains("false"),
+        "expected `false`:\nstdout: {stdout}\nstderr: {stderr}"
+    );
+}
+
+#[test]
+fn run_equality_user_type_parametrized_bound_builds() {
+    if !go_available() {
+        eprintln!("skipping run_equality_user_type_parametrized_bound_builds: `go` not found");
+        return;
+    }
+
+    let scratch = tempfile::tempdir().expect("create temp dir");
+    let project = scratch.path().join("proj");
+    let invocation = scratch.path().join("invocation");
+    fs::create_dir_all(project.join("src")).unwrap();
+    fs::create_dir_all(&invocation).unwrap();
+
+    fs::write(
+        project.join("lisette.toml"),
+        "[project]\nname = \"equserarg\"\nversion = \"0.1.0\"\n",
+    )
+    .unwrap();
+    fs::write(
+        project.join("src/main.lis"),
+        r#"import "go:fmt"
+
+struct Key { v: int }
+
+interface Parent<T> {
+  fn p(self) -> T
+}
+
+struct Leaf { k: Key }
+
+impl Leaf {
+  fn p(self) -> Key {
+    self.k
+  }
+}
+
+#[equality]
+struct Box<T: Parent<Key>> { value: T }
+
+impl<T: Parent<Key>> Box<T> {
+  fn equals(self, other: Box<T>) -> bool {
+    self.value.p().v == other.value.p().v
+  }
+}
+
+fn main() {
+  let a = Box { value: Leaf { k: Key { v: 1 } } }
+  let b = Box { value: Leaf { k: Key { v: 2 } } }
+  fmt.Println(a.equals(b))
+}
+"#,
+    )
+    .unwrap();
+
+    let output = lis_run(&project, &invocation, &[]);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    assert!(
+        output.status.success(),
+        "lis run failed:\nstdout: {stdout}\nstderr: {stderr}"
+    );
+    assert!(
+        stdout.contains("false"),
+        "expected `false`:\nstdout: {stdout}\nstderr: {stderr}"
     );
 }
 

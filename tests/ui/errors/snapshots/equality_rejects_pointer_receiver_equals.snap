@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] `#[equality]` conflicts with your `equals`
+   ╭─[test.lis:2:1]
+ 1 │ 
+ 2 │ #[equality]
+   · ─────┬─────
+   ·      ╰── would synthesize an `equals` of its own
+ 3 │ struct Inner { x: int }
+   ╰────
+  help: `#[equality]` needs a plain `fn equals(self, other: Self) -> bool`. Write `equals` in that form, or remove `#[equality]` · code: [attribute.equality_conflicting_equals]

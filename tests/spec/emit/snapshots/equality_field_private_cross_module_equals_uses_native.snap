@@ -1,0 +1,21 @@
+---
+source: tests/spec/emit/types.rs
+description: "\nstruct Foo { x: int }\n\nimpl Foo {\n  fn equals(self, other: int) -> bool {\n    false\n  }\n}\n\n#[equality]\nstruct Wrap { foo: Foo }\n"
+---
+package main
+
+type Foo struct {
+	x int
+}
+
+func (f Foo) equals(_ int) bool {
+	return false
+}
+
+type Wrap struct {
+	foo Foo
+}
+
+func (w Wrap) equals(other Wrap) bool {
+	return w.foo == other.foo
+}

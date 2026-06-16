@@ -6296,36 +6296,6 @@ fn test(a: Slice<fn() -> int>, b: Slice<fn() -> int>) {
 }
 
 #[test]
-fn container_equals_map_non_comparable_key_rejected() {
-    let input = r#"
-struct Key { tags: Slice<int> }
-
-fn test(a: Map<Key, int>, b: Map<Key, int>) -> bool {
-  a.equals(b)
-}
-"#;
-    assert_infer_error_snapshot!(input);
-}
-
-#[test]
-fn container_equals_element_with_bound_mismatched_equals_rejected() {
-    let input = r#"
-struct Box<T> { value: T }
-
-impl<T: Comparable> Box<T> {
-  fn equals(self, other: Box<T>) -> bool {
-    self.value == other.value
-  }
-}
-
-fn test(a: Slice<Box<Slice<int>>>, b: Slice<Box<Slice<int>>>) -> bool {
-  a.equals(b)
-}
-"#;
-    assert_infer_error_snapshot!(input);
-}
-
-#[test]
 fn infer_not_comparable_function() {
     let input = r#"
 fn test() {
@@ -8150,6 +8120,1047 @@ impl Box<int> {
 }
 
 #[test]
+fn equality_rejects_function_field() {
+    let input = r#"
+#[equality]
+struct Handler {
+  on_done: fn(int) -> int,
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn equality_rejects_interface_field() {
+    let input = r#"
+interface Drawable {
+  fn draw(self)
+}
+
+#[equality]
+struct Widget {
+  shape: Drawable,
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn equality_rejects_unbounded_generic_field() {
+    let input = r#"
+#[equality]
+struct Box<T> {
+  value: T,
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn equality_rejects_nested_noncomparable_struct() {
+    let input = r#"
+struct Inner {
+  items: Slice<int>,
+}
+
+#[equality]
+struct Outer {
+  inner: Inner,
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn equality_enum_rejects_function_payload() {
+    let input = r#"
+#[equality]
+enum Action {
+  Run(fn(int) -> int),
+  Stop,
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn equality_on_function() {
+    let input = r#"
+#[equality]
+fn run() -> int {
+  0
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn equality_on_struct_field() {
+    let input = r#"
+struct Config {
+  #[equality]
+  value: int,
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn equality_on_tuple_struct() {
+    let input = r#"
+#[equality]
+struct Pair(int, int)
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn equality_with_arguments() {
+    let input = r#"
+#[equality(foo)]
+struct Point { x: int, y: int }
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn compare_noncomparable_struct_suggests_equality() {
+    let input = r#"
+struct Holder {
+  items: Slice<int>,
+}
+
+fn test(a: Holder, b: Holder) {
+  let result = a == b;
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn compare_equality_struct_suggests_equals() {
+    let input = r#"
+#[equality]
+struct Holder {
+  items: Slice<int>,
+}
+
+fn test(a: Holder, b: Holder) {
+  let result = a == b;
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn equality_rejects_nested_wrong_signature_equals() {
+    let input = r#"
+struct Bad { items: Slice<int> }
+
+impl Bad {
+  fn equals(self, other: int) -> bool { true }
+}
+
+#[equality]
+struct Outer { bad: Bad }
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn equality_conflicting_user_equals() {
+    let input = r#"
+type Flag = bool
+
+#[equality]
+struct Foo { value: int }
+
+impl Foo {
+  fn equals(self, other: Foo) -> Flag { true }
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn equality_conflicts_with_unexported_equals() {
+    let input = r#"
+#[equality]
+struct Point { x: int }
+
+impl Point {
+  #[go(unexported)]
+  fn equals(self, other: Point) -> bool { false }
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn equality_conflicts_with_unexported_wrong_signature_equals() {
+    let input = r#"
+#[equality]
+struct Point { x: int }
+
+impl Point {
+  #[go(unexported)]
+  fn equals(self, other: int) -> bool { false }
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn equality_on_type_alias() {
+    let input = r#"
+#[equality]
+type Foo = int
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn equality_in_typedef_rejected() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "shapes",
+        "shapes.d.lis",
+        "#[equality]\npub struct Point { pub x: int, pub y: int }",
+    );
+    let result = infer_module("shapes", fs);
+    assert!(
+        result
+            .errors
+            .iter()
+            .any(|e| e.code_str() == Some("attribute.equality_in_typedef")),
+        "expected `#[equality]` in a typedef to be rejected, got codes: {:?}",
+        result
+            .errors
+            .iter()
+            .filter_map(|e| e.code_str())
+            .collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn equality_rejects_cross_module_private_equals() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "models",
+        "item.lis",
+        r#"
+pub struct Item { pub tags: Slice<string> }
+
+impl Item {
+  fn equals(self, other: Item) -> bool {
+    self.tags.equals(other.tags)
+  }
+}
+"#,
+    );
+
+    let source = r#"
+import "models"
+
+#[equality]
+struct Holder { item: models.Item }
+"#;
+    fs.add_file("main", "main.lis", source);
+
+    let result = infer_module("main", fs);
+    assert_multimodule_infer_error_snapshot!(result, source);
+}
+
+#[test]
+fn equality_rejects_specialized_equals() {
+    let input = r#"
+#[equality]
+struct Box<T: Comparable> { value: T }
+
+impl Box<int> {
+  fn equals(self, other: Box<int>) -> bool {
+    self.value == other.value
+  }
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn equality_rejects_ufcs_lowered_equals_single_source() {
+    let input = r#"
+#[equality]
+struct Pair<T: Comparable> {
+  f: fn() -> T,
+  a: T,
+}
+
+impl<T: Comparable> Pair<T> {
+  fn equals(self, other: Pair<T>) -> bool {
+    self.a == other.a
+  }
+}
+
+impl Pair<int> {
+  fn get(self) -> int {
+    self.a
+  }
+}
+"#;
+    crate::_harness::infer::infer(input).assert_attribute_code("equality_specialized_equals");
+}
+
+#[test]
+fn equality_rejects_ufcs_lowered_equals() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "shapes",
+        "shapes.lis",
+        r#"
+#[equality]
+struct Pair<T: Comparable> {
+  f: fn() -> T,
+  a: T,
+}
+
+impl<T: Comparable> Pair<T> {
+  fn equals(self, other: Pair<T>) -> bool {
+    self.a == other.a
+  }
+}
+
+impl Pair<int> {
+  fn get(self) -> int {
+    self.a
+  }
+}
+"#,
+    );
+    let result = infer_module("shapes", fs);
+    assert!(
+        result
+            .errors
+            .iter()
+            .any(|e| e.code_str() == Some("attribute.equality_specialized_equals")),
+        "a UFCS-lowered `equals` is emitted as a free function and must be rejected so synthesis does not run over un-gated fields, got: {:?}",
+        result
+            .errors
+            .iter()
+            .filter_map(|e| e.code_str())
+            .collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn equality_rejects_field_whose_equals_is_ufcs_lowered() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "shapes",
+        "shapes.lis",
+        r#"
+struct Box<T: Comparable> {
+  value: T,
+}
+
+impl<T: Comparable> Box<T> {
+  fn equals(self, other: Box<T>) -> bool {
+    self.value == other.value
+  }
+}
+
+impl Box<int> {
+  fn get(self) -> int {
+    self.value
+  }
+}
+
+#[equality]
+struct Wrap {
+  b: Box<int>,
+}
+"#,
+    );
+    let result = infer_module("shapes", fs);
+    assert!(
+        result
+            .errors
+            .iter()
+            .any(|e| e.code_str() == Some("attribute.cannot_derive_equality")),
+        "Box's `equals` is UFCS-lowered (a free function), so a `#[equality]` type with a `Box<int>` field cannot derive equality and must be rejected rather than emitting `b.equals(..)` Go that fails to build, got: {:?}",
+        result
+            .errors
+            .iter()
+            .filter_map(|e| e.code_str())
+            .collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn container_equals_rejected_for_ufcs_lowered_element_equals() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "shapes",
+        "shapes.lis",
+        r#"
+struct Box<T: Comparable> {
+  value: T,
+}
+
+impl<T: Comparable> Box<T> {
+  fn equals(self, other: Box<T>) -> bool {
+    self.value == other.value
+  }
+}
+
+impl Box<int> {
+  fn get(self) -> int {
+    self.value
+  }
+}
+
+fn cmp(a: Slice<Box<int>>, b: Slice<Box<int>>) -> bool {
+  a.equals(b)
+}
+"#,
+    );
+    let result = infer_module("shapes", fs);
+    assert!(
+        result
+            .errors
+            .iter()
+            .any(|e| e.code_str() == Some("infer.not_equatable")),
+        "a slice of a type whose `equals` is UFCS-lowered cannot use `.equals()`, so it must be rejected rather than emitting Go that fails to build, got: {:?}",
+        result
+            .errors
+            .iter()
+            .filter_map(|e| e.code_str())
+            .collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn container_equals_allowed_for_ufcs_non_equality_method_named_equals() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "shapes",
+        "shapes.lis",
+        r#"
+struct Box<T: Comparable> {
+  value: T,
+}
+
+impl<T: Comparable> Box<T> {
+  fn equals(self) -> bool {
+    true
+  }
+}
+
+impl Box<int> {
+  fn get(self) -> int {
+    self.value
+  }
+}
+
+fn cmp(a: Slice<Box<int>>, b: Slice<Box<int>>) -> bool {
+  a.equals(b)
+}
+"#,
+    );
+    let result = infer_module("shapes", fs);
+    assert!(
+        result.errors.is_empty(),
+        "`fn equals(self) -> bool` is not custom equality, so a comparable `Box<int>` slice must fall back to `==`, not be rejected: {:?}",
+        result
+            .errors
+            .iter()
+            .filter_map(|e| e.code_str())
+            .collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn equality_rejects_enum_payload_whose_equals_is_ufcs_lowered() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "shapes",
+        "shapes.lis",
+        r#"
+struct Box<T: Comparable> {
+  value: T,
+}
+
+impl<T: Comparable> Box<T> {
+  fn equals(self, other: Box<T>) -> bool {
+    self.value == other.value
+  }
+}
+
+impl Box<int> {
+  fn get(self) -> int {
+    self.value
+  }
+}
+
+#[equality]
+enum E {
+  V(Box<int>),
+}
+"#,
+    );
+    let result = infer_module("shapes", fs);
+    assert!(
+        result
+            .errors
+            .iter()
+            .any(|e| e.code_str() == Some("attribute.cannot_derive_equality")),
+        "an enum payload whose `equals` is UFCS-lowered must be rejected like a struct field, got: {:?}",
+        result
+            .errors
+            .iter()
+            .filter_map(|e| e.code_str())
+            .collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn container_equals_rejected_for_ufcs_lowered_map_value() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "shapes",
+        "shapes.lis",
+        r#"
+struct Box<T: Comparable> {
+  value: T,
+}
+
+impl<T: Comparable> Box<T> {
+  fn equals(self, other: Box<T>) -> bool {
+    self.value == other.value
+  }
+}
+
+impl Box<int> {
+  fn get(self) -> int {
+    self.value
+  }
+}
+
+fn cmp(a: Map<int, Box<int>>, b: Map<int, Box<int>>) -> bool {
+  a.equals(b)
+}
+"#,
+    );
+    let result = infer_module("shapes", fs);
+    assert!(
+        result
+            .errors
+            .iter()
+            .any(|e| e.code_str() == Some("infer.not_equatable")),
+        "a map value whose `equals` is UFCS-lowered must be rejected like a slice element, got: {:?}",
+        result
+            .errors
+            .iter()
+            .filter_map(|e| e.code_str())
+            .collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn container_equals_allowed_for_ufcs_lowered_comparable_map_key() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "shapes",
+        "shapes.lis",
+        r#"
+struct Box<T: Comparable> {
+  value: T,
+}
+
+impl<T: Comparable> Box<T> {
+  fn equals(self, other: Box<T>) -> bool {
+    self.value == other.value
+  }
+}
+
+impl Box<int> {
+  fn get(self) -> int {
+    self.value
+  }
+}
+
+fn cmp(a: Map<Box<int>, int>, b: Map<Box<int>, int>) -> bool {
+  a.equals(b)
+}
+"#,
+    );
+    let result = infer_module("shapes", fs);
+    assert!(
+        result.errors.is_empty(),
+        "a map key is compared with `==`, so a comparable `Box<int>` key must be allowed even though its `equals` is UFCS-lowered, got: {:?}",
+        result
+            .errors
+            .iter()
+            .filter_map(|e| e.code_str())
+            .collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn equality_rejects_pointer_receiver_equals() {
+    let input = r#"
+#[equality]
+struct Inner { x: int }
+
+impl Inner {
+  fn equals(self: Ref<Inner>, other: Ref<Inner>) -> bool { true }
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn equality_rejects_public_type_private_equals_cross_module() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "models",
+        "item.lis",
+        r#"
+#[equality]
+pub struct Item { pub tags: Slice<string> }
+
+impl Item {
+  fn equals(self, other: Item) -> bool {
+    self.tags.equals(other.tags)
+  }
+}
+"#,
+    );
+
+    let source = r#"
+import "models"
+
+#[equality]
+struct Holder { item: models.Item }
+"#;
+    fs.add_file("main", "main.lis", source);
+
+    let result = infer_module("main", fs);
+    assert_multimodule_infer_error_snapshot!(result, source);
+}
+
+#[test]
+fn equality_rejects_bounded_equals() {
+    let input = r#"
+#[equality]
+struct Box<T: Comparable> { value: T }
+
+impl<T: Ordered> Box<T> {
+  fn equals(self, other: Box<T>) -> bool {
+    self.value < other.value
+  }
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn equality_rejects_stronger_interface_bound_equals() {
+    let input = r#"
+interface Parent {
+  fn p(self)
+}
+
+interface Child {
+  embed Parent
+
+  fn c(self)
+}
+
+#[equality]
+struct Box<T: Parent> { value: T }
+
+impl<T: Child> Box<T> {
+  fn equals(self, other: Box<T>) -> bool {
+    true
+  }
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn equality_rejects_mismatched_generic_interface_bound_equals() {
+    let input = r#"
+interface Parent<T> {
+  fn p(self) -> T
+}
+
+#[equality]
+struct Box<T: Parent<string>> { value: T }
+
+impl<T: Parent<int>> Box<T> {
+  fn equals(self, other: Box<T>) -> bool {
+    true
+  }
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn equality_rejects_mismatched_user_type_interface_bound_equals() {
+    let input = r#"
+struct Key { v: int }
+struct Other { v: int }
+
+interface Parent<T> {
+  fn p(self) -> T
+}
+
+#[equality]
+struct Box<T: Parent<Key>> { value: T }
+
+impl<T: Parent<Other>> Box<T> {
+  fn equals(self, other: Box<T>) -> bool {
+    true
+  }
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn equality_rejects_embedded_generic_parent_bound_equals() {
+    let input = r#"
+interface Parent<T> {
+  fn p(self) -> T
+}
+
+interface Child<T> {
+  embed Parent<T>
+
+  fn c(self)
+}
+
+#[equality]
+struct Box<T: Child<string>> { value: T }
+
+impl<T: Parent<int>> Box<T> {
+  fn equals(self, other: Box<T>) -> bool {
+    true
+  }
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn impl_conflicting_bound_rejected() {
+    let input = r#"
+interface Parent<T> { fn p(self) -> T }
+
+struct Box<T: Parent<string>> { value: T }
+
+impl<T: Parent<int>> Box<T> {
+  fn less(self, _other: Box<T>) -> bool {
+    true
+  }
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn impl_conflicting_inherited_bound_rejected() {
+    let input = r#"
+interface Parent<T> { fn p(self) -> T }
+
+interface Child<T> {
+  embed Parent<T>
+  fn c(self)
+}
+
+struct Box<T: Child<string>> { value: T }
+
+impl<T: Parent<int>> Box<T> {
+  fn less(self, _other: Box<T>) -> bool {
+    true
+  }
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn impl_conflicting_type_variable_bound_rejected() {
+    let input = r#"
+interface Parent<T> { fn p(self) -> T }
+
+struct Box<T: Parent<T>> { value: T }
+
+impl<T: Parent<string>> Box<T> {
+  fn label(self) -> string {
+    self.value.p()
+  }
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn impl_conflicting_cross_impl_interface_instantiations_rejected() {
+    let input = r#"
+interface Parent<T> { fn p(self) -> T }
+
+struct Box<T> { value: T }
+
+impl<T: Parent<int>> Box<T> {
+  fn as_int(self) -> int { self.value.p() }
+}
+
+impl<T: Parent<string>> Box<T> {
+  fn as_string(self) -> string { self.value.p() }
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn impl_conflicting_cross_impl_renamed_params_rejected() {
+    let input = r#"
+interface Parent<T> { fn p(self) -> T }
+
+struct Box<T> { value: T }
+
+impl<U: Parent<int>> Box<U> {
+  fn as_int(self) -> int { self.value.p() }
+}
+
+impl<V: Parent<string>> Box<V> {
+  fn as_string(self) -> string { self.value.p() }
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn impl_redundant_same_interface_instantiation_accepted() {
+    let input = r#"
+interface Parent<T> { fn p(self) -> T }
+
+struct Box<T> { value: T }
+
+impl<T: Parent<int>> Box<T> {
+  fn as_int(self) -> int { self.value.p() }
+}
+
+impl<T: Parent<int>> Box<T> {
+  fn as_int_again(self) -> int { self.value.p() }
+}
+"#;
+    let result = crate::_harness::infer::infer(input);
+    result.assert_no_errors();
+}
+
+#[test]
+fn container_equals_rejects_bound_mismatched_user_equals() {
+    let mut fs = MockFileSystem::new();
+    let source = r#"
+struct Box<T: Comparable> { value: T }
+
+impl<T: Ordered> Box<T> {
+  fn equals(self, other: Box<T>) -> bool {
+    self.value < other.value
+  }
+}
+
+fn test<T: Comparable>(a: Slice<Box<T>>, b: Slice<Box<T>>) -> bool {
+  a.equals(b)
+}
+"#;
+    fs.add_file("main", "main.lis", source);
+
+    let result = infer_module("main", fs);
+    assert_multimodule_infer_error_snapshot!(result, source);
+}
+
+#[test]
+fn equality_field_rejects_bound_mismatched_equals() {
+    let mut fs = MockFileSystem::new();
+    let source = r#"
+struct Box<T: Comparable> { items: Slice<T> }
+
+impl<T: Ordered> Box<T> {
+  fn equals(self, other: Box<T>) -> bool {
+    self.items.equals(other.items)
+  }
+}
+
+#[equality]
+struct Wrap { box: Box<int> }
+"#;
+    fs.add_file("main", "main.lis", source);
+
+    let result = infer_module("main", fs);
+    assert_multimodule_infer_error_snapshot!(result, source);
+}
+
+#[test]
+fn equality_enum_payload_rejects_bound_mismatched_equals() {
+    let mut fs = MockFileSystem::new();
+    let source = r#"
+struct Box<T: Comparable> { items: Slice<T> }
+
+impl<T: Ordered> Box<T> {
+  fn equals(self, other: Box<T>) -> bool {
+    self.items.equals(other.items)
+  }
+}
+
+#[equality]
+enum Wrap { Wrapped(Box<int>) }
+"#;
+    fs.add_file("main", "main.lis", source);
+
+    let result = infer_module("main", fs);
+    assert_multimodule_infer_error_snapshot!(result, source);
+}
+
+#[test]
+fn equality_field_comparable_with_bound_mismatched_equals_rejected() {
+    let input = r#"
+struct Box<T: Comparable> { value: T }
+
+impl<T: Ordered> Box<T> {
+  fn equals(self, other: Box<T>) -> bool {
+    self.value < other.value
+  }
+}
+
+#[equality]
+struct Wrap { box: Box<int> }
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn container_equals_rejects_bound_mismatched_comparable_element() {
+    let input = r#"
+struct Box<T: Comparable> { value: T }
+
+impl<T: Ordered> Box<T> {
+  fn equals(self, other: Box<T>) -> bool {
+    self.value < other.value
+  }
+}
+
+fn test(a: Slice<Box<int>>, b: Slice<Box<int>>) -> bool {
+  a.equals(b)
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn equality_map_non_comparable_key_rejected() {
+    let input = r#"
+#[equality]
+struct Key { tags: Slice<int> }
+
+#[equality]
+struct Index { values: Map<Key, int> }
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn container_equals_map_non_comparable_key_rejected() {
+    let input = r#"
+struct Key { tags: Slice<int> }
+
+fn test(a: Map<Key, int>, b: Map<Key, int>) -> bool {
+  a.equals(b)
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn equality_rejects_partial_generic_equals() {
+    let input = r#"
+#[equality]
+struct Pair<A, B> { a: A, b: B }
+
+impl<T> Pair<T, T> {
+  fn equals(self, other: Pair<T, T>) -> bool {
+    true
+  }
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn equality_rejects_method_with_extra_generic() {
+    let input = r#"
+#[equality]
+struct Handler { run: fn(int) -> int }
+
+impl Handler {
+  fn equals<U>(self, other: Handler) -> bool {
+    true
+  }
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn equality_rejects_impl_with_extra_generic() {
+    let input = r#"
+#[equality]
+struct Box<T: Comparable> { value: T }
+
+impl<T: Comparable, U> Box<T> {
+  fn equals(self, other: Box<T>) -> bool {
+    self.value == other.value
+  }
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn container_equals_rejected_for_extra_generic_equals() {
+    let input = r#"
+struct Handler { run: fn(int) -> int }
+
+impl Handler {
+  fn equals<U>(self, other: Handler) -> bool {
+    true
+  }
+}
+
+fn test(a: Slice<Handler>, b: Slice<Handler>) -> bool {
+  a.equals(b)
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn compare_tuple_struct_with_slice() {
+    let input = r#"
+struct Pair(Slice<int>)
+
+fn test(a: Pair, b: Pair) -> bool {
+  a == b
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
 fn interpolate_struct_without_stringer() {
     let input = r#"
 struct Point { x: int, y: int }
@@ -8796,112 +9807,4 @@ fn main() {
 }
 "#;
     assert_infer_error_snapshot!(input);
-}
-
-#[test]
-fn impl_conflicting_bound_rejected() {
-    let input = r#"
-interface Parent<T> { fn p(self) -> T }
-
-struct Box<T: Parent<string>> { value: T }
-
-impl<T: Parent<int>> Box<T> {
-  fn less(self, _other: Box<T>) -> bool {
-    true
-  }
-}
-"#;
-    assert_infer_error_snapshot!(input);
-}
-
-#[test]
-fn impl_conflicting_inherited_bound_rejected() {
-    let input = r#"
-interface Parent<T> { fn p(self) -> T }
-
-interface Child<T> {
-  embed Parent<T>
-  fn c(self)
-}
-
-struct Box<T: Child<string>> { value: T }
-
-impl<T: Parent<int>> Box<T> {
-  fn less(self, _other: Box<T>) -> bool {
-    true
-  }
-}
-"#;
-    assert_infer_error_snapshot!(input);
-}
-
-#[test]
-fn impl_conflicting_type_variable_bound_rejected() {
-    let input = r#"
-interface Parent<T> { fn p(self) -> T }
-
-struct Box<T: Parent<T>> { value: T }
-
-impl<T: Parent<string>> Box<T> {
-  fn label(self) -> string {
-    self.value.p()
-  }
-}
-"#;
-    assert_infer_error_snapshot!(input);
-}
-
-#[test]
-fn impl_conflicting_cross_impl_interface_instantiations_rejected() {
-    let input = r#"
-interface Parent<T> { fn p(self) -> T }
-
-struct Box<T> { value: T }
-
-impl<T: Parent<int>> Box<T> {
-  fn as_int(self) -> int { self.value.p() }
-}
-
-impl<T: Parent<string>> Box<T> {
-  fn as_string(self) -> string { self.value.p() }
-}
-"#;
-    assert_infer_error_snapshot!(input);
-}
-
-#[test]
-fn impl_conflicting_cross_impl_renamed_params_rejected() {
-    let input = r#"
-interface Parent<T> { fn p(self) -> T }
-
-struct Box<T> { value: T }
-
-impl<U: Parent<int>> Box<U> {
-  fn as_int(self) -> int { self.value.p() }
-}
-
-impl<V: Parent<string>> Box<V> {
-  fn as_string(self) -> string { self.value.p() }
-}
-"#;
-    assert_infer_error_snapshot!(input);
-}
-
-#[test]
-fn impl_redundant_same_interface_instantiation_accepted() {
-    let input = r#"
-interface Parent<T> { fn p(self) -> T }
-
-struct Box<T> { value: T }
-
-impl<T: Parent<int>> Box<T> {
-  fn as_int(self) -> int { self.value.p() }
-}
-
-impl<T: Parent<int>> Box<T> {
-  fn as_int_again(self) -> int { self.value.p() }
-}
-"#;
-    let result = crate::_harness::infer::infer(input);
-    result.assert_no_errors();
 }

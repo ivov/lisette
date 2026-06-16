@@ -1,0 +1,14 @@
+---
+source: tests/spec/emit/types.rs
+description: "\n#[equality]\nstruct Point { x: int, y: int }\n"
+---
+package main
+
+type Point struct {
+	x int
+	y int
+}
+
+func (p Point) equals(other Point) bool {
+	return p.x == other.x && p.y == other.y
+}

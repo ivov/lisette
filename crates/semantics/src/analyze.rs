@@ -377,7 +377,7 @@ pub fn analyze(input: AnalyzeInput) -> AnalyzeOutput {
             }
         }
 
-        checker.record_usable_equals(&mut store);
+        checker.finalize_equality(&mut store);
 
         let module_files: Vec<(String, Vec<File>)> = to_infer
             .iter()
@@ -574,7 +574,7 @@ pub fn analyze(input: AnalyzeInput) -> AnalyzeOutput {
         mutations,
         cached_modules,
         ufcs_methods,
-        usable_equals: store.usable_equals,
+        equality_index: store.equality_index,
         typedef_paths: store.typedef_paths,
         go_package_names: store.go_package_names,
         go_module_ids,

@@ -1,0 +1,11 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Cannot derive equality
+    ╭─[test.lis:11:15]
+ 10 │ #[equality]
+ 11 │ struct Wrap { box: Box<int> }
+    ·               ─┬─
+    ·                ╰── `box` cannot be compared
+    ╰────
+  help: `#[equality]` cannot compare a type whose `equals` requires stricter bounds. Give `Wrap` a hand-written `equals` method, mark the field's type `#[equality]`, or remove the field · code: [attribute.cannot_derive_equality]

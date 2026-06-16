@@ -218,6 +218,85 @@ fn render(value: Display) -> string {
 render(Point { x: 1, y: 2 }) // `Point` satisfies `Display`
 ```
 
+## Equality
+
+`==` and `!=` work on natively comparable types: primitives and any struct, enum, and tuple whose components are all comparable.
+
+```rs
+struct User {
+  name: string,
+  age: int,
+}
+
+let u1 = User { name: "Alice", age: 30 }
+let u2 = User { name: "Alice", age: 30 }
+
+u1 == u2 // true
+```
+
+Other types are not natively comparable: slice and map and any struct, enum, and tuple that contains a slice or map, plus any function and interface value.
+
+```rs
+struct Order {
+  id: int,
+  tags: Slice<string>, // not natively comparable
+}
+
+let o1 = Order { id: 1, tags: ["a"] }
+let o2 = Order { id: 1, tags: ["a"] }
+
+o1 == o2 // compile error: comparison of non-comparables
+```
+
+For maps and slices, use the built-in `equals()` method:
+
+```rs
+let a = [1, 2, 3]
+let b = [1, 2, 3]
+let ok = a.equals(b) // true, element-wise
+```
+
+To enable comparison on types that are not natively comparable and do not have a built-in `equals()` method, mark them with the `#[equality]` attribute. This will auto-generate an `equals()` method to compare the type structurally.
+
+```rs
+#[equality]
+struct Order {
+  id: int,
+  tags: Slice<string>,
+}
+
+let a = Order { id: 1, tags: ["a"] }
+let b = Order { id: 1, tags: ["a"] }
+
+a.equals(b) // true
+```
+
+The auto-generated `equals()` method compares by this rule: 
+
+- `==` for comparable fields
+- `.equals()` for slice and map fields
+- the field type's own `equals` for nested `#[equality]` types
+
+If you need a custom comparator, write an `equals` method yourself:
+
+```rs
+struct Fraction {
+  numerator: int,
+  denominator: int,
+}
+
+impl Fraction {
+  fn equals(self, other: Fraction) -> bool {
+    self.numerator * other.denominator == other.numerator * self.denominator
+  }
+}
+
+let a = Fraction { numerator: 1, denominator: 2 }
+let b = Fraction { numerator: 2, denominator: 4 }
+
+a.equals(b) // true
+```
+
 <br>
 
 <table><tr>

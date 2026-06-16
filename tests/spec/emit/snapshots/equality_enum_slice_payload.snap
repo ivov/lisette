@@ -1,0 +1,39 @@
+---
+source: tests/spec/emit/types.rs
+description: "\n#[equality]\nenum Event {\n  Tags(Slice<string>),\n  Empty,\n}\n"
+---
+package main
+
+import "slices"
+
+func MakeEventTags(arg0 []string) Event {
+	return Event{Tag: EventTags, Tags: arg0}
+}
+
+func MakeEventEmpty() Event {
+	return Event{Tag: EventEmpty}
+}
+
+type EventTag int
+
+const (
+	EventTags EventTag = iota
+	EventEmpty
+)
+
+type Event struct {
+	Tag  EventTag
+	Tags []string
+}
+
+func (e Event) equals(other Event) bool {
+	if e.Tag != other.Tag {
+		return false
+	}
+	switch e.Tag {
+	case EventTags:
+		return slices.Equal(e.Tags, other.Tags)
+	default:
+		return true
+	}
+}

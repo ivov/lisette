@@ -1,0 +1,20 @@
+---
+source: tests/spec/emit/types.rs
+description: "\n#[equality]\nstruct Order { id: int, tags: Slice<string> }\n\nfn test(a: Slice<Order>, b: Slice<Order>) -> bool {\n  a.equals(b)\n}\n"
+---
+package main
+
+import "slices"
+
+type Order struct {
+	id   int
+	tags []string
+}
+
+func (o Order) equals(other Order) bool {
+	return o.id == other.id && slices.Equal(o.tags, other.tags)
+}
+
+func test(a, b []Order) bool {
+	return slices.EqualFunc(a, b, func(a_1 Order, b_2 Order) bool { return a_1.equals(b_2) })
+}

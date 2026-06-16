@@ -4,6 +4,7 @@ use crate::definitions::enum_layout::{ENUM_GO_STRINGER_METHOD, ENUM_STRINGER_MET
 use crate::definitions::structs::should_synthesize_stringer;
 use crate::names::generics::receiver_generics_string;
 use crate::names::go_name;
+use crate::utils::receiver_name;
 use syntax::ast::{Attribute, Generic};
 use syntax::program::{Definition, DefinitionBody};
 use syntax::types::{Symbol, Type};
@@ -84,6 +85,7 @@ impl Planner<'_> {
             result.push_str(&layout.emit_variants_function(&fn_name));
         }
         self.append_to_string_method(&mut result, name, &receiver_generics, attributes);
+        self.append_enum_equals_method(&mut result, name, &enum_id, &receiver_generics, fx);
         if needs_fmt {
             fx.require_fmt();
         }
@@ -92,6 +94,76 @@ impl Planner<'_> {
         }
 
         Some(result)
+    }
+
+    fn append_enum_equals_method(
+        &mut self,
+        out: &mut String,
+        name: &str,
+        enum_id: &str,
+        receiver_generics: &str,
+        fx: &mut EmitEffects,
+    ) {
+        if !self.should_synthesize_equals(name) {
+            return;
+        }
+        let Some(Definition {
+            body:
+                DefinitionBody::Enum {
+                    variants: sem_variants,
+                    ..
+                },
+            ..
+        }) = self.facts.definition(enum_id)
+        else {
+            return;
+        };
+        let sem_variants = sem_variants.clone();
+        let layout = self.enum_layout(enum_id).expect("enum layout should exist");
+
+        let receiver = receiver_name(name);
+        let go_type_name = go_name::escape_keyword(name);
+        let receiver_type = format!("{go_type_name}{receiver_generics}");
+        let go_method = self.equals_method_go_name();
+
+        let mut cases: Vec<String> = Vec::new();
+        for (sem_variant, layout_variant) in sem_variants.iter().zip(layout.variants.iter()) {
+            if sem_variant.fields.is_empty() {
+                continue;
+            }
+            let comparisons: Vec<String> = sem_variant
+                .fields
+                .iter()
+                .zip(layout_variant.fields.iter())
+                .map(|(sem_field, layout_field)| {
+                    let lhs = format!("{receiver}.{}", layout_field.go_name);
+                    let rhs = format!("other.{}", layout_field.go_name);
+                    self.render_equality(&lhs, &rhs, &sem_field.ty, fx)
+                })
+                .collect();
+            cases.push(format!(
+                "case {}:\nreturn {}",
+                layout_variant.tag_constant,
+                comparisons.join(" && ")
+            ));
+        }
+
+        out.push_str("\n\n");
+        if cases.is_empty() {
+            out.push_str(&format!(
+                "func ({receiver} {receiver_type}) {go_method}(other {receiver_type}) bool {{\nreturn {receiver}.Tag == other.Tag\n}}"
+            ));
+            return;
+        }
+        let mut method = format!(
+            "func ({receiver} {receiver_type}) {go_method}(other {receiver_type}) bool {{\nif {receiver}.Tag != other.Tag {{\nreturn false\n}}\nswitch {receiver}.Tag {{\n"
+        );
+        for case in &cases {
+            method.push_str(case);
+            method.push('\n');
+        }
+        method.push_str("default:\nreturn true\n}\n}");
+        out.push_str(&method);
     }
 
     /// Export-aware Go name for an `#[iterate]` enum's synthesized `variants`

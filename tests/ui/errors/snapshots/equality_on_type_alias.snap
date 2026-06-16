@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] `#[equality]` not on a struct or enum
+   ╭─[test.lis:2:1]
+ 1 │ 
+ 2 │ #[equality]
+   · ─────┬─────
+   ·      ╰── not on a struct or enum
+ 3 │ type Foo = int
+   ╰────
+  help: Only a struct or enum can be marked `#[equality]` · code: [attribute.equality_not_a_struct_or_enum]

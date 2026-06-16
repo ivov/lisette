@@ -1,0 +1,46 @@
+---
+source: tests/spec/emit/types.rs
+description: "\n#[equality]\nenum Message {\n  Quit,\n  Move { x: int, y: int },\n  Write(string),\n}\n"
+---
+package main
+
+func MakeMessageQuit() Message {
+	return Message{Tag: MessageQuit}
+}
+
+func MakeMessageMove(arg0 int, arg1 int) Message {
+	return Message{Tag: MessageMove, X: arg0, Y: arg1}
+}
+
+func MakeMessageWrite(arg0 string) Message {
+	return Message{Tag: MessageWrite, Write: arg0}
+}
+
+type MessageTag int
+
+const (
+	MessageQuit MessageTag = iota
+	MessageMove
+	MessageWrite
+)
+
+type Message struct {
+	Tag   MessageTag
+	X     int
+	Y     int
+	Write string
+}
+
+func (m Message) equals(other Message) bool {
+	if m.Tag != other.Tag {
+		return false
+	}
+	switch m.Tag {
+	case MessageMove:
+		return m.X == other.X && m.Y == other.Y
+	case MessageWrite:
+		return m.Write == other.Write
+	default:
+		return true
+	}
+}

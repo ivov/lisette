@@ -1,0 +1,41 @@
+---
+source: tests/spec/emit/types.rs
+description: "\n#[equality]\nenum Shape {\n  Circle(float64),\n  Rectangle(float64, float64),\n}\n"
+---
+package main
+
+func MakeShapeCircle(arg0 float64) Shape {
+	return Shape{Tag: ShapeCircle, Circle: arg0}
+}
+
+func MakeShapeRectangle(arg0 float64, arg1 float64) Shape {
+	return Shape{Tag: ShapeRectangle, Rectangle0: arg0, Rectangle1: arg1}
+}
+
+type ShapeTag int
+
+const (
+	ShapeCircle ShapeTag = iota
+	ShapeRectangle
+)
+
+type Shape struct {
+	Tag        ShapeTag
+	Circle     float64
+	Rectangle0 float64
+	Rectangle1 float64
+}
+
+func (s Shape) equals(other Shape) bool {
+	if s.Tag != other.Tag {
+		return false
+	}
+	switch s.Tag {
+	case ShapeCircle:
+		return s.Circle == other.Circle
+	case ShapeRectangle:
+		return s.Rectangle0 == other.Rectangle0 && s.Rectangle1 == other.Rectangle1
+	default:
+		return true
+	}
+}

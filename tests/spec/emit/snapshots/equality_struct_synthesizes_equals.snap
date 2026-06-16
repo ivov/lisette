@@ -1,0 +1,16 @@
+---
+source: tests/spec/emit/types.rs
+description: "\n#[equality]\nstruct Order { id: int, tags: Slice<string> }\n"
+---
+package main
+
+import "slices"
+
+type Order struct {
+	id   int
+	tags []string
+}
+
+func (o Order) equals(other Order) bool {
+	return o.id == other.id && slices.Equal(o.tags, other.tags)
+}

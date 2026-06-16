@@ -1,0 +1,23 @@
+---
+source: tests/spec/emit/types.rs
+description: "\n#[equality]\nstruct Box<T: Comparable> { items: Slice<T> }\n\n#[equality]\nstruct Wrap { box: Box<int> }\n"
+---
+package main
+
+import "slices"
+
+type Box[T comparable] struct {
+	items []T
+}
+
+func (b Box[T]) equals(other Box[T]) bool {
+	return slices.Equal(b.items, other.items)
+}
+
+type Wrap struct {
+	box Box[int]
+}
+
+func (w Wrap) equals(other Wrap) bool {
+	return w.box.equals(other.box)
+}

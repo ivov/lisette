@@ -1,0 +1,18 @@
+---
+source: tests/spec/emit/types.rs
+description: "\n#[equality]\nstruct Box<T: Ordered> { value: T }\n\nimpl<T: Comparable> Box<T> {\n  fn equals(self, other: Box<T>) -> bool {\n    self.value == other.value\n  }\n}\n"
+---
+package main
+
+import "cmp"
+
+type Box[T interface {
+	cmp.Ordered
+	comparable
+}] struct {
+	value T
+}
+
+func (b Box[T]) equals(other Box[T]) bool {
+	return b.value == other.value
+}

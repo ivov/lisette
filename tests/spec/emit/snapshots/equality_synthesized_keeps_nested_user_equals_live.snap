@@ -1,0 +1,21 @@
+---
+source: tests/spec/emit/types.rs
+description: "\nstruct Inner { x: int }\n\nimpl Inner {\n  fn equals(self, other: Inner) -> bool {\n    self.x == other.x\n  }\n}\n\n#[equality]\nstruct Outer { inner: Inner }\n"
+---
+package main
+
+type Inner struct {
+	x int
+}
+
+func (i Inner) equals(other Inner) bool {
+	return i.x == other.x
+}
+
+type Outer struct {
+	inner Inner
+}
+
+func (o Outer) equals(other Outer) bool {
+	return o.inner.equals(other.inner)
+}

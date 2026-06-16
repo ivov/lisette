@@ -1,0 +1,13 @@
+---
+source: tests/spec/emit/types.rs
+description: "\n#[equality]\nstruct Box<T: Comparable> { value: T }\n\nimpl<U: Comparable> Box<U> {\n  fn equals(self, other: Box<U>) -> bool {\n    self.value == other.value\n  }\n}\n"
+---
+package main
+
+type Box[T comparable] struct {
+	value T
+}
+
+func (b Box[U]) equals(other Box[U]) bool {
+	return b.value == other.value
+}

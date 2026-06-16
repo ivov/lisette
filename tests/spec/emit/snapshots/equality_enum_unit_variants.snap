@@ -1,0 +1,33 @@
+---
+source: tests/spec/emit/types.rs
+description: "\n#[equality]\nenum Color { Red, Green, Blue }\n"
+---
+package main
+
+func MakeColorRed() Color {
+	return Color{Tag: ColorRed}
+}
+
+func MakeColorGreen() Color {
+	return Color{Tag: ColorGreen}
+}
+
+func MakeColorBlue() Color {
+	return Color{Tag: ColorBlue}
+}
+
+type ColorTag int
+
+const (
+	ColorRed ColorTag = iota
+	ColorGreen
+	ColorBlue
+)
+
+type Color struct {
+	Tag ColorTag
+}
+
+func (c Color) equals(other Color) bool {
+	return c.Tag == other.Tag
+}

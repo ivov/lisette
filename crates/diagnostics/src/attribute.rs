@@ -98,6 +98,78 @@ pub fn display_specialized_to_string(attribute_span: &Span) -> LisetteDiagnostic
         )
 }
 
+pub fn equality_not_a_struct_or_enum(attribute_span: &Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("`#[equality]` not on a struct or enum")
+        .with_attribute_code("equality_not_a_struct_or_enum")
+        .with_span_label(attribute_span, "not on a struct or enum")
+        .with_help("Only a struct or enum can be marked `#[equality]`")
+}
+
+pub fn equality_in_typedef(attribute_span: &Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("`#[equality]` in a typedef")
+        .with_attribute_code("equality_in_typedef")
+        .with_span_label(attribute_span, "disallowed in a `.d.lis` typedef")
+        .with_help("Only structs or enums in `.lis` source can be marked `#[equality]`")
+}
+
+pub fn equality_with_arguments(attribute_span: &Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("`#[equality]` takes no arguments")
+        .with_attribute_code("equality_with_arguments")
+        .with_span_label(attribute_span, "remove the arguments")
+        .with_help("Write `#[equality]` with no arguments")
+}
+
+pub fn equality_on_tuple_struct(attribute_span: &Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("`#[equality]` on a tuple struct")
+        .with_attribute_code("equality_on_tuple_struct")
+        .with_span_label(
+            attribute_span,
+            "tuple structs and newtypes are not supported",
+        )
+        .with_help("Give the type named fields, or hand-write an `equals` method")
+}
+
+pub fn equality_bounded_equals(attribute_span: &Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("`#[equality]` conflicts with a bounded `equals`")
+        .with_attribute_code("equality_bounded_equals")
+        .with_span_label(attribute_span, "would synthesize an `equals` of its own")
+        .with_help(
+            "A hand-written `equals` must carry the same generic bounds as the type, or it strengthens the type for every instantiation. Match the type's bounds, or remove `#[equality]`.",
+        )
+}
+
+pub fn equality_specialized_equals(attribute_span: &Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("`#[equality]` conflicts with a specialized `equals`")
+        .with_attribute_code("equality_specialized_equals")
+        .with_span_label(attribute_span, "would synthesize an `equals` of its own")
+        .with_help(
+            "`#[equality]` needs a plain `fn equals(self, other: Self) -> bool` over the whole type. An `equals` over a partial or concrete receiver (`impl Box<int>`, `impl<T> Pair<T, T>`), or one with extra type parameters (`fn equals<U>`, `impl<T, U> Box<T>`), is emitted as a free function and cannot satisfy `#[equality]`. Write `equals` in that form, or remove `#[equality]`.",
+        )
+}
+
+pub fn equality_conflicting_equals(attribute_span: &Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("`#[equality]` conflicts with your `equals`")
+        .with_attribute_code("equality_conflicting_equals")
+        .with_span_label(attribute_span, "would synthesize an `equals` of its own")
+        .with_help(
+            "`#[equality]` needs a plain `fn equals(self, other: Self) -> bool`. Write `equals` in that form, or remove `#[equality]`.",
+        )
+}
+
+pub fn cannot_derive_equality(
+    type_name: &str,
+    field_name: &str,
+    field_span: &Span,
+    reason: &str,
+) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Cannot derive equality")
+        .with_attribute_code("cannot_derive_equality")
+        .with_span_label(field_span, format!("`{field_name}` cannot be compared"))
+        .with_help(format!(
+            "`#[equality]` cannot compare {reason}. Give `{type_name}` a hand-written `equals` method, mark the field's type `#[equality]`, or remove the field"
+        ))
+}
+
 pub fn iterate_variants_conflict(
     attribute_span: &Span,
     existing_span: Option<&Span>,
