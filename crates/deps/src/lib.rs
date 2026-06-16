@@ -194,6 +194,15 @@ pub fn prelude_typedef_path() -> Option<PathBuf> {
     Some(prelude_typedef_version_dir()?.join("prelude.d.lis"))
 }
 
+pub fn is_generated_typedef_path(path: &Path) -> bool {
+    let Some(home) = typedef_home() else {
+        return false;
+    };
+    let cache = home.join(".lisette/cache");
+    path.starts_with(cache.join("prelude-typedefs"))
+        || path.starts_with(cache.join("stdlib-typedefs"))
+}
+
 pub fn ensure_prelude_extracted() {
     let Some(version_dir) = prelude_typedef_version_dir() else {
         return;
@@ -290,5 +299,24 @@ mod tests {
         assert!(!stale.exists(), "this target's stale temp is removed");
         assert!(completed.exists(), "the completed target dir is kept");
         assert!(other_target_tmp.exists(), "another target's temp is kept");
+    }
+
+    #[test]
+    fn is_generated_typedef_path_matches_only_cache_files() {
+        let Some(home) = typedef_home() else {
+            return;
+        };
+        let cache = home.join(".lisette/cache");
+
+        assert!(is_generated_typedef_path(
+            &cache.join("prelude-typedefs/lis@v1-abc/prelude.d.lis")
+        ));
+        assert!(is_generated_typedef_path(
+            &cache.join("stdlib-typedefs/lis@v1-abc/darwin_arm64/fmt.d.lis")
+        ));
+        assert!(!is_generated_typedef_path(
+            &home.join("project/src/main.lis")
+        ));
+        assert!(!is_generated_typedef_path(Path::new("/etc/passwd")));
     }
 }

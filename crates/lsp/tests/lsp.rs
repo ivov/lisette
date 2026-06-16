@@ -9767,6 +9767,25 @@ async fn goto_definition_on_prelude_type_navigates_to_typedef() {
 }
 
 #[tokio::test]
+async fn opening_prelude_typedef_publishes_no_diagnostics() {
+    let mut client = TestClient::new().await;
+    client.initialize().await;
+
+    let path = deps::prelude_typedef_path().expect("prelude typedef path");
+    let content = std::fs::read_to_string(&path).expect("prelude cache file should exist");
+    let uri = Url::from_file_path(&path).expect("path to uri").to_string();
+
+    client.open(&uri, &content).await;
+    let diagnostics = client.await_diagnostics().await;
+    assert!(
+        diagnostics.is_empty(),
+        "opening the generated prelude typedef must report no diagnostics, got: {diagnostics:?}"
+    );
+
+    client.shutdown().await;
+}
+
+#[tokio::test]
 async fn goto_definition_on_prelude_method_navigates_to_typedef() {
     let mut client = TestClient::new().await;
     client.initialize().await;

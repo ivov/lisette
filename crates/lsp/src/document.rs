@@ -52,6 +52,14 @@ impl SharedState {
     }
 
     pub(crate) async fn publish_diagnostics(&self, uri: Url) {
+        if uri
+            .to_file_path()
+            .is_ok_and(|p| deps::is_generated_typedef_path(&p))
+        {
+            self.client.publish_diagnostics(uri, vec![], None).await;
+            return;
+        }
+
         let version = self.documents.get(&uri).map(|d| d.version);
 
         let diagnostics = self.analyze_and_convert(&uri).await;
