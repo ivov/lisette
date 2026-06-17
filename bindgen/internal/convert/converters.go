@@ -128,8 +128,9 @@ func (c *Converter) convertFunction(result *ConvertResult, symbolExport extract.
 	returnType := c.applyReturnType(result, signature, result.Name)
 
 	c.resolveNilability(result, signature, returnType, nilabilityDecision{
-		obj:     symbolExport.Obj,
-		lookups: []configKey{{c.currentPkgPath, result.Name}},
+		obj:               symbolExport.Obj,
+		lookups:           []configKey{{c.currentPkgPath, result.Name}},
+		nameIsConstructor: looksLikeConstructor(result.Name),
 		heuristicNonNil: func(isSinglePointerReturn bool) bool {
 			if looksLikeConstructor(result.Name) {
 				return true
@@ -229,8 +230,11 @@ type nilabilityDecision struct {
 	obj types.Object
 	// lookups: config keys consulted in order, first match wins.
 	lookups []configKey
-	// heuristicNonNil: kind-specific rules, used only when no body proves non-nilability.
+	// heuristicNonNil: kind-specific rules, used only when there is no body to analyze.
 	heuristicNonNil func(isSinglePointerReturn bool) bool
+	// nameIsConstructor: the only heuristic trusted over an inconclusive body, since
+	// weaker shape heuristics misfire on real nil-returning delegators like big.Int.Exp.
+	nameIsConstructor bool
 }
 
 // resolveNilability wraps the return in Option<> unless body proof, a name
@@ -244,11 +248,16 @@ func (c *Converter) resolveNilability(result *ConvertResult, sig *types.Signatur
 
 	forceNonNilable := false
 	if isSingleNilableReturn {
-		// Body evidence outranks name heuristics.
-		if c.findFuncDecl(d.obj) != nil {
-			forceNonNilable = c.isProvenNonNilReturn(d.obj)
-		} else {
+		fn := c.findFuncDecl(d.obj)
+		if fn == nil {
 			forceNonNilable = d.heuristicNonNil(isSinglePointerReturn)
+		} else {
+			switch c.analyzeReturnNilability(fn) {
+			case returnNilabilityProvenNonNil:
+				forceNonNilable = true
+			case returnNilabilityInconclusive:
+				forceNonNilable = d.nameIsConstructor
+			}
 		}
 	}
 	for _, k := range d.lookups {
@@ -375,8 +384,9 @@ func (c *Converter) convertMethod(result *ConvertResult, symbolExport extract.Sy
 		lookups = append(lookups, configKey{symbolExport.OriginalPkgPath, symbolExport.OriginalTypeName + "." + result.Name})
 	}
 	c.resolveNilability(result, signature, returnType, nilabilityDecision{
-		obj:     symbolExport.Obj,
-		lookups: lookups,
+		obj:               symbolExport.Obj,
+		lookups:           lookups,
+		nameIsConstructor: looksLikeConstructor(result.Name),
 		heuristicNonNil: func(isSinglePointerReturn bool) bool {
 			if looksLikeConstructor(result.Name) {
 				return true

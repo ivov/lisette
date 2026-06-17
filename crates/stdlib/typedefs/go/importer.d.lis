@@ -15,7 +15,7 @@ import "go:io"
 /// [token.FileSet] from the caller; without it, all position
 /// information derived from the Importer will be incorrect and
 /// misleading. See also the package documentation.
-pub fn Default() -> Option<types.Importer>
+pub fn Default() -> types.Importer
 
 /// For calls [ForCompiler] with a new FileSet.
 /// 

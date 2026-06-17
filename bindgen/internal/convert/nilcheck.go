@@ -15,21 +15,13 @@ const (
 	nilCacheProven     nilCacheResult = 1  // analysis complete: proven non-nil
 )
 
-// isProvenNonNilReturn returns true if AST analysis of the function body proves
-// that the function never returns nil from its single pointer return position.
-// Called only when isSinglePointerResult is true and no other heuristic has fired.
-func (c *Converter) isProvenNonNilReturn(obj types.Object) bool {
-	if c.pkg == nil {
-		return false
-	}
+type returnNilability int
 
-	fn := c.findFuncDecl(obj)
-	if fn == nil || fn.Body == nil {
-		return false
-	}
-
-	return c.analyzeReturnNilability(fn)
-}
+const (
+	returnNilabilityInconclusive returnNilability = iota
+	returnNilabilityProvenNonNil
+	returnNilabilityDefiniteNil
+)
 
 // isProvenNonNilVar checks if a package-level variable is proven non-nil.
 func (c *Converter) isProvenNonNilVar(obj types.Object) bool {
@@ -111,11 +103,12 @@ func (c *Converter) findVarSpec(obj types.Object) *ast.ValueSpec {
 	return nil
 }
 
-// analyzeReturnNilability returns true if every return in the function body
-// is provably non-nil at the single pointer return position.
-func (c *Converter) analyzeReturnNilability(fn *ast.FuncDecl) bool {
+// analyzeReturnNilability classifies a function's single pointer return as
+// provably non-nil, a definite nil path, or inconclusive. Definite-nil
+// outranks inconclusive, which outranks proven.
+func (c *Converter) analyzeReturnNilability(fn *ast.FuncDecl) returnNilability {
 	if fn.Body == nil {
-		return false
+		return returnNilabilityInconclusive
 	}
 
 	receiverName := ncGetReceiverName(fn)
@@ -129,9 +122,9 @@ func (c *Converter) analyzeReturnNilability(fn *ast.FuncDecl) bool {
 		}
 	}
 
-	proven := true
+	result := returnNilabilityProvenNonNil
 	ast.Inspect(fn.Body, func(n ast.Node) bool {
-		if !proven {
+		if result == returnNilabilityDefiniteNil {
 			return false
 		}
 
@@ -147,7 +140,7 @@ func (c *Converter) analyzeReturnNilability(fn *ast.FuncDecl) bool {
 
 		if len(ret.Results) == 0 {
 			if hasNamedNilableResult {
-				proven = false
+				result = returnNilabilityDefiniteNil
 			}
 			return true
 		}
@@ -158,19 +151,18 @@ func (c *Converter) analyzeReturnNilability(fn *ast.FuncDecl) bool {
 			if receiverName != "" && ncIsInsideNilReceiverGuard(fn.Body, ret, receiverName) {
 				return true // nil-receiver guard: unreachable in Lisette
 			}
-			proven = false
+			result = returnNilabilityDefiniteNil
 			return false
 		}
 
-		if !c.isProvenNonNilExpr(expr, fn) {
-			proven = false
-			return false
+		if !c.isProvenNonNilExpr(expr, fn) && result == returnNilabilityProvenNonNil {
+			result = returnNilabilityInconclusive
 		}
 
 		return true
 	})
 
-	return proven
+	return result
 }
 
 // isProvenNonNilExpr checks whether an expression is provably non-nil.
@@ -491,7 +483,7 @@ func (c *Converter) isProvenNonNilFunc(obj types.Object) bool {
 		return false
 	}
 
-	if c.analyzeReturnNilability(fn) {
+	if c.analyzeReturnNilability(fn) == returnNilabilityProvenNonNil {
 		c.nonNilCache[pos] = nilCacheProven
 		return true
 	}
@@ -569,7 +561,7 @@ func (c *Converter) isProvenNonNilCrossPkgFunc(obj types.Object, pkgPath string)
 		return false
 	}
 
-	if tempConv.analyzeReturnNilability(fn) {
+	if tempConv.analyzeReturnNilability(fn) == returnNilabilityProvenNonNil {
 		c.nonNilCache[pos] = nilCacheProven
 		return true
 	}
