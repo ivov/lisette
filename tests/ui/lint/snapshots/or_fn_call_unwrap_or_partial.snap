@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [info] Unnecessary eager evaluation
+    ╭─[test.lis:12:23]
+ 11 │   let p: Partial<int, string> = get_partial()
+ 12 │   let _ = p.unwrap_or(make_default())
+    ·                       ───────┬──────
+    ·                              ╰── always evaluated
+ 13 │ }
+    ╰────
+  help: Replace `.unwrap_or(...)` with `.unwrap_or_else(...)` so the fallback runs only when needed · code: [lint.or_fn_call]

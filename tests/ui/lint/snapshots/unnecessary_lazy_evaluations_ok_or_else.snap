@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [info] Unnecessary lazy evaluation
+   ╭─[test.lis:4:24]
+ 3 │   let o: Option<int> = Some(1)
+ 4 │   let _ = o.ok_or_else(|| "x")
+   ·                        ───┬──
+   ·                           ╰── can be simpler
+ 5 │ }
+   ╰────
+  help: Replace `.ok_or_else(...)` with `.ok_or(...)` to pass the value directly · code: [lint.unnecessary_lazy_evaluations]

@@ -75,6 +75,45 @@ pub(super) fn is_pure_mapper(expression: &Expression) -> bool {
     matches!(expression.unwrap_parens(), Expression::Lambda { .. }) || is_eager_safe(expression)
 }
 
+// Unlike `is_eager_safe`, a slice literal is excluded: moving its allocation
+// onto the success path is not a free simplification.
+pub(super) fn is_cheap_constant(expression: &Expression) -> bool {
+    match expression.unwrap_parens() {
+        Expression::Identifier { .. } => true,
+        Expression::Literal { literal, .. } => {
+            !matches!(literal, Literal::Slice(_)) && literal_is_eager_safe(literal)
+        }
+        Expression::DotAccess {
+            expression: inner, ..
+        } => is_cheap_constant(inner),
+        _ => false,
+    }
+}
+
+// The body of a closure that is a cheap constant referencing none of the
+// closure's parameters, so it can move into the matching eager combinator.
+pub(super) fn constant_closure_value(argument: &Expression) -> Option<&Expression> {
+    let Expression::Lambda { params, body, .. } = argument.unwrap_parens() else {
+        return None;
+    };
+    let body = unwrap_block(body);
+    if !is_cheap_constant(body) {
+        return None;
+    }
+    for param in params {
+        match &param.pattern {
+            Pattern::WildCard { .. } => {}
+            Pattern::Identifier { identifier, .. } => {
+                if mentions_identifier(body, identifier.as_str()) {
+                    return None;
+                }
+            }
+            _ => return None,
+        }
+    }
+    Some(body)
+}
+
 fn literal_is_eager_safe(literal: &Literal) -> bool {
     match literal {
         Literal::Slice(elements) => elements.iter().all(is_eager_safe),

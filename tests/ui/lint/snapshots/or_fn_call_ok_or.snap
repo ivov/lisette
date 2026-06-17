@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [info] Unnecessary eager evaluation
+   ╭─[test.lis:8:19]
+ 7 │   let o: Option<int> = Some(1)
+ 8 │   let _ = o.ok_or(make_err())
+   ·                   ─────┬────
+   ·                        ╰── always evaluated
+ 9 │ }
+   ╰────
+  help: Replace `.ok_or(...)` with `.ok_or_else(...)` so the fallback runs only when needed · code: [lint.or_fn_call]
