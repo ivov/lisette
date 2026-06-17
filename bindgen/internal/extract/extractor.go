@@ -35,7 +35,7 @@ type SymbolExport struct {
 	Unexported       bool         // a directly-declared unexported method, recorded as a seal
 }
 
-func currentLoadConfig(targetGOOS, targetGOARCH string) *packages.Config {
+func currentLoadConfig(targetGOOS, targetGOARCH string, cgo bool) *packages.Config {
 	return &packages.Config{
 		Mode: packages.NeedName |
 			packages.NeedTypes |
@@ -43,12 +43,14 @@ func currentLoadConfig(targetGOOS, targetGOARCH string) *packages.Config {
 			packages.NeedSyntax |
 			packages.NeedDeps |
 			packages.NeedImports,
-		Env: buildLoaderEnv(targetGOOS, targetGOARCH),
+		Env: buildLoaderEnv(targetGOOS, targetGOARCH, cgo),
 	}
 }
 
-// buildLoaderEnv cross-compiles when targetGOOS/targetGOARCH are set (empty = host default).
-func buildLoaderEnv(targetGOOS, targetGOARCH string) []string {
+// buildLoaderEnv cross-compiles when targetGOOS/targetGOARCH are set (empty = host
+// default). cgo is enabled only for host loads of third-party packages. Stdlib
+// generation keeps it off so the cross-target builds need no C cross-toolchains.
+func buildLoaderEnv(targetGOOS, targetGOARCH string, cgo bool) []string {
 	env := os.Environ()
 	if targetGOOS != "" || targetGOARCH != "" {
 		filtered := make([]string, 0, len(env))
@@ -68,11 +70,15 @@ func buildLoaderEnv(targetGOOS, targetGOARCH string) []string {
 		}
 	}
 
-	return append(env, "CGO_ENABLED=0", "GOFLAGS=-mod=mod")
+	cgoEnabled := "CGO_ENABLED=0"
+	if cgo {
+		cgoEnabled = "CGO_ENABLED=1"
+	}
+	return append(env, cgoEnabled, "GOFLAGS=-mod=mod")
 }
 
 func LoadPackage(path string) (*packages.Package, error) {
-	pkgs, err := packages.Load(currentLoadConfig("", ""), path)
+	pkgs, err := packages.Load(currentLoadConfig("", "", true), path)
 	if err != nil {
 		return nil, err
 	}
@@ -97,7 +103,7 @@ func LoadPackage(path string) (*packages.Package, error) {
 }
 
 func LoadPackages(paths []string, targetGOOS, targetGOARCH string) ([]*packages.Package, error) {
-	pkgs, err := packages.Load(currentLoadConfig(targetGOOS, targetGOARCH), paths...)
+	pkgs, err := packages.Load(currentLoadConfig(targetGOOS, targetGOARCH, false), paths...)
 	if err != nil {
 		return nil, err
 	}
@@ -117,7 +123,7 @@ func LoadPackages(paths []string, targetGOOS, targetGOARCH string) ([]*packages.
 
 // Like LoadPackages but keeps errored packages so the caller can classify them.
 func LoadPackagesAll(paths []string) ([]*packages.Package, error) {
-	return packages.Load(currentLoadConfig("", ""), paths...)
+	return packages.Load(currentLoadConfig("", "", true), paths...)
 }
 
 func ExtractExports(pkg *packages.Package, embedFaithful func(*types.Var) bool) []SymbolExport {
