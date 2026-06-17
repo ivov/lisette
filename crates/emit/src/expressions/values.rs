@@ -5,7 +5,6 @@ use syntax::program::DefinitionBody;
 use crate::EmitEffects;
 use crate::GoCallStrategy;
 use crate::Planner;
-use crate::Renderer;
 use crate::abi::AbiShape;
 use crate::abi::coercion::{Coercion, CoercionDirection};
 use crate::abi::transition::{emit_lisette_callback_wrapper, lower_callee_abi_wrapping};
@@ -16,26 +15,13 @@ use crate::is_order_sensitive;
 use crate::plan::bodies::{
     ExpressionStatementForm, ExpressionStatementPlan, LoweredBlock, LoweredStatement,
 };
-use crate::plan::values::{ValuePlan, setup_from_string, value_plan_from_statements};
+use crate::plan::values::{ValuePlan, value_plan_from_statements};
 use crate::state::bindings::BindingValue;
-use crate::write_line;
 use syntax::ast::Expression;
 use syntax::program::CallKind;
 use syntax::types::Type;
 
 impl Planner<'_> {
-    pub(crate) fn declare_result_var(
-        &mut self,
-        output: &mut String,
-        ty: &Type,
-        fx: &mut EmitEffects,
-    ) -> String {
-        let result_var = self.fresh_var(None);
-        write_line!(output, "var {} {}", result_var, self.go_type_string(ty, fx));
-        self.declare(&result_var);
-        result_var
-    }
-
     pub(crate) fn lower_value(
         &mut self,
         expression: &Expression,
@@ -44,23 +30,22 @@ impl Planner<'_> {
     ) -> (Vec<LoweredStatement>, String) {
         if let Some(strategy) = self.classify_go_fn_value(expression) {
             if !self.go_fn_matches_lowered_slot(expression, &strategy, ctx) {
-                let mut buffer = String::new();
+                let mut setup = Vec::new();
                 let value = if self.go_fn_needs_lowered_tuple_adapter(expression, ctx) {
-                    self.emit_go_fn_lowered_tuple_adapter(&mut buffer, expression, fx)
+                    self.emit_go_fn_lowered_tuple_adapter(&mut setup, expression, fx)
                 } else {
-                    self.emit_go_fn_wrapper(&mut buffer, expression, &strategy, fx)
+                    self.emit_go_fn_wrapper(&mut setup, expression, &strategy, fx)
                 };
-                return (setup_from_string(buffer), value);
+                return (setup, value);
             }
         } else if self.is_go_array_return_value(expression) {
-            let mut buffer = String::new();
-            let value = self.emit_array_return_wrapper(&mut buffer, expression, fx);
-            return (setup_from_string(buffer), value);
+            let mut setup = Vec::new();
+            let value = self.emit_array_return_wrapper(&mut setup, expression, fx);
+            return (setup, value);
         }
 
         let plan = self.plan_operand(expression, ctx, fx);
-        let staged = StagedExpression::from_plan(plan, expression);
-        (staged.setup, staged.value)
+        plan.into_parts()
     }
 
     pub(crate) fn lower_composite_value(
@@ -88,7 +73,7 @@ impl Planner<'_> {
     /// so its Go type matches what the rest of the pipeline expects.
     fn maybe_lower_tagged_fn_ref(
         &mut self,
-        output: &mut String,
+        setup: &mut Vec<LoweredStatement>,
         expression: &Expression,
         ty: &Type,
         raw: String,
@@ -108,7 +93,7 @@ impl Planner<'_> {
         if self.classify_direct_emission(&f.return_type).is_none() {
             return raw;
         }
-        emit_lisette_callback_wrapper(self, output, &raw, fn_ty, fx)
+        emit_lisette_callback_wrapper(self, setup, &raw, fn_ty, fx)
     }
 
     /// True when a Go function value's natural ABI matches the slot's
@@ -174,16 +159,15 @@ impl Planner<'_> {
     ) -> ValuePlan {
         match expression {
             Expression::Literal { literal, ty, .. } => {
-                let mut buffer = String::new();
-                let value = self.emit_literal(&mut buffer, literal, ty, fx);
-                value_plan_from_statements(setup_from_string(buffer), value)
+                let (setup, value) = self.emit_literal(literal, ty, fx);
+                value_plan_from_statements(setup, value)
             }
             Expression::Identifier { value, ty, .. } => {
-                let mut buffer = String::new();
+                let mut setup: Vec<LoweredStatement> = Vec::new();
                 let raw = self.emit_identifier(value, ty, ctx, fx);
                 let value =
-                    self.maybe_lower_tagged_fn_ref(&mut buffer, expression, ty, raw, ctx, fx);
-                value_plan_from_statements(setup_from_string(buffer), value)
+                    self.maybe_lower_tagged_fn_ref(&mut setup, expression, ty, raw, ctx, fx);
+                value_plan_from_statements(setup, value)
             }
             Expression::Call { ty, .. } => match self.classify_call(expression) {
                 CallBoundary::GoWrapped(strategy) => {
@@ -214,9 +198,8 @@ impl Planner<'_> {
             Expression::Match { ty, .. }
             | Expression::Select { ty, .. }
             | Expression::Block { ty, .. } => {
-                let mut buffer = String::new();
-                let value = self.emit_to_operand_temp(&mut buffer, expression, ty, fx);
-                value_plan_from_statements(setup_from_string(buffer), value)
+                let (setup, value) = self.lower_to_operand_temp(expression, ty, fx);
+                value_plan_from_statements(setup, value)
             }
             Expression::Return {
                 expression: return_expression,
@@ -226,9 +209,8 @@ impl Planner<'_> {
                 value_plan_from_statements(vec![LoweredStatement::Return(plan)], String::new())
             }
             Expression::Assignment { target, value, .. } => {
-                let mut buffer = String::new();
-                self.emit_assignment_operand(&mut buffer, target, value, fx);
-                value_plan_from_statements(setup_from_string(buffer), "struct{}{}".to_string())
+                let setup = self.lower_assignment_operand(target, value, fx);
+                value_plan_from_statements(setup, "struct{}{}".to_string())
             }
             Expression::IfLet { .. } => {
                 unreachable!("IfLet should be desugared to Match before emit")
@@ -337,11 +319,10 @@ impl Planner<'_> {
                 Some(DefinitionBody::Interface { .. })
             )
         {
-            let staged = StagedExpression::from_plan(inner, expression);
-            let mut setup = staged.setup;
+            let (mut setup, value) = inner.into_parts();
             let source_ty = expression.get_type();
             let coercion = Coercion::resolve(self, &source_ty, ty, CoercionDirection::Internal);
-            let (coercion_setup, coerced) = coercion.lower(self, staged.value, fx);
+            let (coercion_setup, coerced) = coercion.lower(self, value, fx);
             setup.extend(coercion_setup);
             return value_plan_from_statements(setup, coerced);
         }
@@ -407,21 +388,21 @@ impl Planner<'_> {
         false
     }
 
-    fn emit_assignment_operand(
+    fn lower_assignment_operand(
         &mut self,
-        output: &mut String,
         target: &Expression,
         value: &Expression,
         fx: &mut EmitEffects,
-    ) {
+    ) -> Vec<LoweredStatement> {
         let rhs_staged = self.stage_composite(value, ExpressionContext::value(), fx);
 
+        let mut setup: Vec<LoweredStatement> = Vec::new();
         let target_str = if is_order_sensitive(target) {
-            self.emit_left_value_capturing(output, target, !rhs_staged.setup.is_empty(), fx)
+            self.emit_left_value_capturing(&mut setup, target, !rhs_staged.setup.is_empty(), fx)
         } else {
-            self.emit_left_value(output, target, fx)
+            self.emit_left_value(&mut setup, target, fx)
         };
-        output.push_str(&Renderer.render_setup(&rhs_staged.setup));
+        setup.extend(rhs_staged.setup);
 
         if let Expression::DotAccess {
             expression: receiver,
@@ -434,11 +415,18 @@ impl Planner<'_> {
             let coercion =
                 Coercion::resolve(self, &value.get_type(), ty, CoercionDirection::ToGoBoundary);
             let (coercion_setup, unwrapped) = coercion.lower(self, rhs_staged.value, fx);
-            output.push_str(&Renderer.render_setup(&coercion_setup));
-            write_line!(output, "{} = {}", target_str, unwrapped);
+            setup.extend(coercion_setup);
+            setup.push(LoweredStatement::RawGo(format!(
+                "{} = {}\n",
+                target_str, unwrapped
+            )));
         } else {
-            write_line!(output, "{} = {}", target_str, rhs_staged.value);
+            setup.push(LoweredStatement::RawGo(format!(
+                "{} = {}\n",
+                target_str, rhs_staged.value
+            )));
         }
+        setup
     }
 
     pub(crate) fn plan_range_value(
@@ -516,12 +504,9 @@ impl Planner<'_> {
             return value_plan_from_statements(setup, String::new());
         }
 
-        let mut buffer = String::new();
-        if let Some(call_str) = self.emit_go_call_discarded(&mut buffer, expression, fx) {
-            return value_plan_from_statements(
-                setup_from_string(buffer),
-                format!("{} {}", keyword, call_str),
-            );
+        let mut setup: Vec<LoweredStatement> = Vec::new();
+        if let Some(call_str) = self.emit_go_call_discarded(&mut setup, expression, fx) {
+            return value_plan_from_statements(setup, format!("{} {}", keyword, call_str));
         }
 
         let (setup, inner) = self.lower_value(expression, ExpressionContext::value(), fx);

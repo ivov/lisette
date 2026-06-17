@@ -188,11 +188,11 @@ impl Planner<'_> {
         let Some(declared) = declared_param else {
             return self.stage_prelude_arg(arg, formal_param, fx);
         };
-        let mut setup = String::new();
+        let mut setup: Vec<LoweredStatement> = Vec::new();
         if let Some(value) =
             self.try_adapt_lowered_fn_arg_shape(&mut setup, arg, Some(declared), fx)
         {
-            return StagedExpression::new(setup, value, arg);
+            return StagedExpression::from_typed_setup(setup, value, arg);
         }
         self.stage_composite(arg, ExpressionContext::value(), fx)
     }

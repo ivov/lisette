@@ -1,4 +1,3 @@
-pub(crate) mod branching;
 pub(crate) mod fallible;
 mod fallible_blocks;
 mod loops;

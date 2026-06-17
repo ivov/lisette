@@ -2,7 +2,6 @@ use crate::EmitEffects;
 use crate::Planner;
 use crate::Renderer;
 use crate::context::expression::ExpressionContext;
-use crate::expressions::emission::StagedExpression;
 use crate::is_order_sensitive;
 use crate::patterns::binding_decls::pattern_has_bindings;
 use crate::patterns::sites::PatternSubject;
@@ -83,16 +82,16 @@ impl Planner<'_> {
 
     /// Plan `expr` as an operand, pushing its setup into `prologue` and
     /// returning the value text.
-    fn capture_operand_into(
+    pub(crate) fn capture_operand_into(
         &mut self,
         prologue: &mut Vec<LoweredStatement>,
         expr: &Expression,
         fx: &mut EmitEffects,
     ) -> String {
         let plan = self.plan_operand(expr, ExpressionContext::value(), fx);
-        let staged = StagedExpression::from_plan(plan, expr);
-        prologue.extend(staged.setup);
-        staged.value
+        let (setup, value) = plan.into_parts();
+        prologue.extend(setup);
+        value
     }
 
     /// `capture_operand_into`, hoisting to a fresh temp when `expr` is

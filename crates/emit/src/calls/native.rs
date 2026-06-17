@@ -1,7 +1,6 @@
 use super::NativeCallContext;
 use crate::EmitEffects;
 use crate::Planner;
-use crate::Renderer;
 use crate::context::expression::ExpressionContext;
 use crate::expressions::access::index_access::range_var_bounds;
 use crate::expressions::emission::StagedExpression;
@@ -388,15 +387,15 @@ impl Planner<'_> {
     /// caller can fall back to `!expr` without having staged anything.
     pub(super) fn try_emit_negated_native_method_dot_access(
         &mut self,
-        output: &mut String,
+        setup: &mut Vec<LoweredStatement>,
         ctx: &NativeCallContext,
         fx: &mut EmitEffects,
     ) -> Option<String> {
         if !has_inline_negation(ctx.native_type, ctx.method, ctx.args.len()) {
             return None;
         }
-        let (setup, receiver, emitted_args) = self.stage_native_dot_access_call(ctx, fx);
-        output.push_str(&Renderer.render_setup(&setup));
+        let (stage_setup, receiver, emitted_args) = self.stage_native_dot_access_call(ctx, fx);
+        setup.extend(stage_setup);
         apply_inline_lookup(
             ctx.native_type,
             ctx.method,
@@ -513,7 +512,7 @@ impl Planner<'_> {
     /// Negated counterpart for identifier-form native method calls.
     pub(super) fn try_emit_negated_native_method_identifier(
         &mut self,
-        output: &mut String,
+        setup: &mut Vec<LoweredStatement>,
         ctx: &NativeCallContext,
         fx: &mut EmitEffects,
     ) -> Option<String> {
@@ -521,8 +520,8 @@ impl Planner<'_> {
         if !has_inline_negation(ctx.native_type, ctx.method, receiver_arity) {
             return None;
         }
-        let (setup, emitted_args) = self.stage_native_identifier_args(ctx, fx);
-        output.push_str(&Renderer.render_setup(&setup));
+        let (stage_setup, emitted_args) = self.stage_native_identifier_args(ctx, fx);
+        setup.extend(stage_setup);
         apply_inline_identifier_lookup(ctx, &emitted_args, true, fx)
     }
 

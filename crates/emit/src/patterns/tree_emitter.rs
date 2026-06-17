@@ -5,8 +5,6 @@ use crate::EmitEffects;
 use crate::Planner;
 use crate::analyze::inline_uses::{InlineDecision, analyze_inline_candidate, region_blocks_inline};
 use crate::context::expression::ExpressionContext;
-use crate::control_flow::branching::wrap_if_struct_literal;
-use crate::expressions::emission::StagedExpression;
 use crate::patterns::binding_emit::drop_inline_overlays;
 use crate::patterns::decision_tree::{Decision, compile_expanded_arms, expand_or_patterns};
 use crate::patterns::emit_plan::{
@@ -19,6 +17,7 @@ use crate::plan::bodies::{
 };
 use crate::plan::placement::unreachable_panic_if_needed;
 use crate::state::bindings::{BindingValue, InlineExpr};
+use crate::utils::wrap_if_struct_literal;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum WalkRole {
@@ -927,8 +926,8 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
             ExpressionContext::value().condition(),
             self.fx,
         );
-        let staged = StagedExpression::from_plan(plan, guard_expression);
-        Some((staged.setup, wrap_if_struct_literal(staged.value)))
+        let (setup, value) = plan.into_parts();
+        Some((setup, wrap_if_struct_literal(value)))
     }
 }
 

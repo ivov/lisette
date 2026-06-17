@@ -2,9 +2,8 @@ use crate::EmitEffects;
 use crate::Planner;
 use crate::Renderer;
 use crate::context::expression::ExpressionContext;
-use crate::expressions::emission::StagedExpression;
 use crate::plan::bodies::LoweredStatement;
-use crate::plan::values::{ValuePlan, setup_from_string, value_plan_from_statements};
+use crate::plan::values::{ValuePlan, value_plan_from_statements};
 use syntax::ast::{BinaryOperator, Expression, Literal, UnaryOperator};
 use syntax::types::Type;
 
@@ -201,13 +200,13 @@ impl Planner<'_> {
             && let Some(flipped) = flip_comparison(cmp)
         {
             let plan = self.plan_binary(&flipped, left, right, ctx, fx);
-            let staged = StagedExpression::from_plan(plan, target);
-            return (staged.setup, wrap(staged.value));
+            let (setup, value) = plan.into_parts();
+            return (setup, wrap(value));
         }
         if matches!(target, Expression::Call { .. }) {
-            let mut buffer = String::new();
-            if let Some(negated) = self.try_emit_negated_call(&mut buffer, target, fx) {
-                return (setup_from_string(buffer), wrap(negated));
+            let mut setup: Vec<LoweredStatement> = Vec::new();
+            if let Some(negated) = self.try_emit_negated_call(&mut setup, target, fx) {
+                return (setup, wrap(negated));
             }
         }
 

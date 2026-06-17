@@ -7,7 +7,6 @@ use syntax::types::Type;
 use crate::EmitEffects;
 use crate::Planner;
 use crate::context::expression::ExpressionContext;
-use crate::control_flow::branching::wrap_if_struct_literal;
 use crate::names::go_name;
 use crate::patterns::binding_decls::pattern_binds_name;
 use crate::patterns::binding_emit::{
@@ -17,6 +16,7 @@ use crate::patterns::binding_emit::{
 use crate::patterns::decision_tree::{self, PatternInfo, render_condition};
 use crate::plan::bodies::{ElseArm, IfPlan, LoopPlan, LoweredBlock, LoweredStatement, PlacePlan};
 use crate::state::bindings::BindingValue;
+use crate::utils::wrap_if_struct_literal;
 use crate::write_line;
 
 #[derive(Clone, Copy)]

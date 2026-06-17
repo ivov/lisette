@@ -38,16 +38,6 @@ pub(crate) fn value_plan_from_statements(setup: Vec<LoweredStatement>, value: St
     }
 }
 
-/// Wrap a captured setup buffer as `Vec<LoweredStatement>` (one `RawGo`
-/// statement, or empty).
-pub(crate) fn setup_from_string(setup: String) -> Vec<LoweredStatement> {
-    if setup.is_empty() {
-        Vec::new()
-    } else {
-        vec![LoweredStatement::RawGo(setup)]
-    }
-}
-
 impl ValuePlan {
     /// Pre-rendered value text for the bridge variants; `None` for structured
     /// variants whose text comes from `render_value`.
@@ -55,6 +45,25 @@ impl ValuePlan {
         match self {
             ValuePlan::Operand(value) | ValuePlan::Composite { value, .. } => Some(value),
             ValuePlan::Paren(_) | ValuePlan::Cast { .. } | ValuePlan::Unary { .. } => None,
+        }
+    }
+
+    pub(crate) fn into_parts(self) -> (Vec<LoweredStatement>, String) {
+        match self {
+            ValuePlan::Operand(value) => (Vec::new(), value),
+            ValuePlan::Composite { setup, value } => (setup, value),
+            ValuePlan::Paren(inner) => {
+                let (setup, value) = inner.into_parts();
+                (setup, format!("({value})"))
+            }
+            ValuePlan::Cast { go_type, inner } => {
+                let (setup, value) = inner.into_parts();
+                (setup, format!("{go_type}({value})"))
+            }
+            ValuePlan::Unary { op, inner } => {
+                let (setup, value) = inner.into_parts();
+                (setup, format!("{op}{value}"))
+            }
         }
     }
 }

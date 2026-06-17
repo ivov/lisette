@@ -8,6 +8,14 @@ macro_rules! write_line {
 }
 pub(crate) use write_line;
 
+pub(crate) fn wrap_if_struct_literal(condition: String) -> String {
+    if condition.contains('{') {
+        format!("({})", condition)
+    } else {
+        condition
+    }
+}
+
 pub(crate) fn receiver_name(type_name: &str) -> String {
     type_name
         .trim_start_matches('*')

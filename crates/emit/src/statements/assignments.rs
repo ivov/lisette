@@ -1,6 +1,5 @@
 use crate::EmitEffects;
 use crate::Planner;
-use crate::Renderer;
 use crate::abi::coercion::{Coercion, CoercionDirection};
 use crate::context::expression::ExpressionContext;
 use crate::is_order_sensitive;
@@ -25,13 +24,6 @@ impl Planner<'_> {
         fx: &mut EmitEffects,
     ) -> AssignPlan {
         let raw_body = |statements: Vec<LoweredStatement>| LoweredBlock { statements };
-        let capture_to_vec = |buffer: String| {
-            if buffer.is_empty() {
-                Vec::new()
-            } else {
-                vec![LoweredStatement::RawGo(buffer)]
-            }
-        };
 
         if value.get_type().is_never() {
             return AssignPlan {
@@ -62,13 +54,12 @@ impl Planner<'_> {
                 };
                 (kind, rhs_has_setup)
             };
-            let mut target_setup = String::new();
+            let mut target_capture: Vec<LoweredStatement> = Vec::new();
             let target_str = if is_order_sensitive(target) {
-                self.emit_left_value_capturing(&mut target_setup, target, rhs_has_setup, fx)
+                self.emit_left_value_capturing(&mut target_capture, target, rhs_has_setup, fx)
             } else {
-                self.emit_left_value(&mut target_setup, target, fx)
+                self.emit_left_value(&mut target_capture, target, fx)
             };
-            let target_capture = capture_to_vec(target_setup);
             return AssignPlan {
                 directive,
                 form: AssignForm::Compound {
@@ -102,16 +93,16 @@ impl Planner<'_> {
             && target_ty.resolves_to_unknown()
             && value.is_none_literal()
         {
-            let mut target_setup = String::new();
+            let mut target_capture: Vec<LoweredStatement> = Vec::new();
             let target_str = if is_order_sensitive(target) {
-                self.emit_left_value_capturing(&mut target_setup, target, false, fx)
+                self.emit_left_value_capturing(&mut target_capture, target, false, fx)
             } else {
-                self.emit_left_value(&mut target_setup, target, fx)
+                self.emit_left_value(&mut target_capture, target, fx)
             };
             return AssignPlan {
                 directive,
                 form: AssignForm::NilClear {
-                    target_capture: capture_to_vec(target_setup),
+                    target_capture,
                     target_str,
                 },
             };
@@ -122,11 +113,11 @@ impl Planner<'_> {
         // setup + coercion setup into the value plan in emission order.
         let rhs_staged = self.stage_composite(value, ExpressionContext::value(), fx);
         let rhs_has_setup = !rhs_staged.setup.is_empty() || self.rhs_contains_effectful_call(value);
-        let mut target_setup = String::new();
+        let mut target_capture: Vec<LoweredStatement> = Vec::new();
         let target_str = if is_order_sensitive(target) {
-            self.emit_left_value_capturing(&mut target_setup, target, rhs_has_setup, fx)
+            self.emit_left_value_capturing(&mut target_capture, target, rhs_has_setup, fx)
         } else {
-            self.emit_left_value(&mut target_setup, target, fx)
+            self.emit_left_value(&mut target_capture, target, fx)
         };
         let mut value_setup = rhs_staged.setup;
         let coercion = if let Some(target_ty) = go_field_ty {
@@ -149,7 +140,7 @@ impl Planner<'_> {
         AssignPlan {
             directive,
             form: AssignForm::Simple {
-                target_capture: capture_to_vec(target_setup),
+                target_capture,
                 target_str,
                 value: value_plan_from_statements(value_setup, final_value),
             },
@@ -252,7 +243,7 @@ impl Planner<'_> {
 
     pub(crate) fn emit_left_value(
         &mut self,
-        output: &mut String,
+        setup: &mut Vec<LoweredStatement>,
         expression: &Expression,
         fx: &mut EmitEffects,
     ) -> String {
@@ -266,13 +257,8 @@ impl Planner<'_> {
             Expression::DotAccess {
                 expression, member, ..
             } => {
-                let base_str = if let Some(inner) = expression.deref_inner() {
-                    let plan = self.plan_operand(inner, ExpressionContext::value(), fx);
-                    Renderer.render_value(output, &plan)
-                } else {
-                    let plan = self.plan_operand(expression, ExpressionContext::value(), fx);
-                    Renderer.render_value(output, &plan)
-                };
+                let base = expression.deref_inner().unwrap_or(expression);
+                let base_str = self.capture_operand_into(setup, base, fx);
                 let expression_ty = expression.get_type();
                 self.format_dot_access_lvalue(&base_str, &expression_ty, member, fx)
             }
@@ -280,26 +266,22 @@ impl Planner<'_> {
                 expression, index, ..
             } => {
                 let expression_string = if let Some(inner) = expression.deref_inner() {
-                    let plan = self.plan_operand(inner, ExpressionContext::value(), fx);
-                    let inner_str = Renderer.render_value(output, &plan);
+                    let inner_str = self.capture_operand_into(setup, inner, fx);
                     format!("(*{})", inner_str)
                 } else {
-                    let plan = self.plan_operand(expression, ExpressionContext::value(), fx);
-                    Renderer.render_value(output, &plan)
+                    self.capture_operand_into(setup, expression, fx)
                 };
-                let index_plan = self.plan_operand(index, ExpressionContext::value(), fx);
-                let index_str = Renderer.render_value(output, &index_plan);
+                let index_str = self.capture_operand_into(setup, index, fx);
                 format!("{}[{}]", expression_string, index_str)
             }
             Expression::Unary {
                 operator: UnaryOperator::Deref,
                 expression,
                 ..
-            } => self.emit_deref_lvalue(output, expression, false, fx),
+            } => self.emit_deref_lvalue(setup, expression, false, fx),
             Expression::Call { .. } if expression.get_type().is_ref() => {
-                let plan = self.plan_operand(expression, ExpressionContext::value(), fx);
-                let call_str = Renderer.render_value(output, &plan);
-                self.hoist_tmp_value(output, "ref", &call_str)
+                let call_str = self.capture_operand_into(setup, expression, fx);
+                self.hoist_tmp_value_statement(setup, "ref", &call_str)
             }
             _ => "_".to_string(),
         }
@@ -310,17 +292,16 @@ impl Planner<'_> {
     /// RHS setup could reassign the pointer before the write executes.
     fn emit_deref_lvalue(
         &mut self,
-        output: &mut String,
+        setup: &mut Vec<LoweredStatement>,
         pointee: &Expression,
         rhs_has_setup: bool,
         fx: &mut EmitEffects,
     ) -> String {
-        let pointee_plan = self.plan_operand(pointee, ExpressionContext::value(), fx);
-        let pointee_string = Renderer.render_value(output, &pointee_plan);
+        let pointee_string = self.capture_operand_into(setup, pointee, fx);
         let needs_capture = matches!(pointee.unwrap_parens(), Expression::Call { .. })
             || (rhs_has_setup && observable_after_mutation(pointee));
         if needs_capture {
-            let tmp = self.hoist_tmp_value(output, "ref", &pointee_string);
+            let tmp = self.hoist_tmp_value_statement(setup, "ref", &pointee_string);
             return format!("*{}", tmp);
         }
         format!("*{}", pointee_string)
@@ -358,7 +339,7 @@ impl Planner<'_> {
     /// structural lvalue intact (so assigning to it mutates the original).
     pub(crate) fn emit_left_value_capturing(
         &mut self,
-        output: &mut String,
+        setup: &mut Vec<LoweredStatement>,
         expression: &Expression,
         rhs_has_setup: bool,
         fx: &mut EmitEffects,
@@ -370,8 +351,8 @@ impl Planner<'_> {
                 index,
                 ..
             } => {
-                let base_str = self.emit_indexed_base_lvalue(output, base, fx);
-                let index_str = self.emit_index_lvalue(output, index, rhs_has_setup, fx);
+                let base_str = self.emit_indexed_base_lvalue(setup, base, fx);
+                let index_str = self.emit_index_lvalue(setup, index, rhs_has_setup, fx);
                 format!("{}[{}]", base_str, index_str)
             }
             Expression::DotAccess {
@@ -381,17 +362,16 @@ impl Planner<'_> {
             } => {
                 let base_str = if let Some(inner) = base.deref_inner() {
                     if rhs_has_setup {
-                        self.emit_force_capture(output, inner, "ref", fx)
+                        self.emit_force_capture(setup, inner, "ref", fx)
                     } else {
-                        let plan = self.plan_operand(inner, ExpressionContext::value(), fx);
-                        Renderer.render_value(output, &plan)
+                        self.capture_operand_into(setup, inner, fx)
                     }
                 } else if is_order_sensitive(base) {
-                    self.emit_left_value_capturing(output, base, rhs_has_setup, fx)
+                    self.emit_left_value_capturing(setup, base, rhs_has_setup, fx)
                 } else if rhs_has_setup && base.get_type().is_ref() {
-                    self.emit_force_capture(output, base, "ref", fx)
+                    self.emit_force_capture(setup, base, "ref", fx)
                 } else {
-                    self.emit_left_value(output, base, fx)
+                    self.emit_left_value(setup, base, fx)
                 };
                 let expression_ty = base.get_type();
                 self.format_dot_access_lvalue(&base_str, &expression_ty, member, fx)
@@ -400,8 +380,8 @@ impl Planner<'_> {
                 operator: UnaryOperator::Deref,
                 expression: inner,
                 ..
-            } => self.emit_deref_lvalue(output, inner, rhs_has_setup, fx),
-            _ => self.emit_left_value(output, expression, fx),
+            } => self.emit_deref_lvalue(setup, inner, rhs_has_setup, fx),
+            _ => self.emit_left_value(setup, expression, fx),
         }
     }
 
@@ -410,31 +390,30 @@ impl Planner<'_> {
     /// capturing the base to a temp when ordering matters.
     fn emit_indexed_base_lvalue(
         &mut self,
-        output: &mut String,
+        setup: &mut Vec<LoweredStatement>,
         base: &Expression,
         fx: &mut EmitEffects,
     ) -> String {
         let force = is_order_sensitive(base);
         if let Some(inner) = base.deref_inner() {
-            let inner_str = self.emit_base_operand(output, inner, force, fx);
+            let inner_str = self.emit_base_operand(setup, inner, force, fx);
             format!("(*{})", inner_str)
         } else {
-            self.emit_base_operand(output, base, force, fx)
+            self.emit_base_operand(setup, base, force, fx)
         }
     }
 
     fn emit_base_operand(
         &mut self,
-        output: &mut String,
+        setup: &mut Vec<LoweredStatement>,
         expression: &Expression,
         force_capture: bool,
         fx: &mut EmitEffects,
     ) -> String {
         if force_capture {
-            self.emit_force_capture(output, expression, "base", fx)
+            self.emit_force_capture(setup, expression, "base", fx)
         } else {
-            let plan = self.plan_operand(expression, ExpressionContext::value(), fx);
-            Renderer.render_value(output, &plan)
+            self.capture_operand_into(setup, expression, fx)
         }
     }
 
@@ -443,7 +422,7 @@ impl Planner<'_> {
     /// or when the index expression itself is order-sensitive.
     fn emit_index_lvalue(
         &mut self,
-        output: &mut String,
+        setup: &mut Vec<LoweredStatement>,
         index: &Expression,
         rhs_has_setup: bool,
         fx: &mut EmitEffects,
@@ -454,10 +433,9 @@ impl Planner<'_> {
             is_order_sensitive(index)
         };
         if needs_capture {
-            self.emit_force_capture(output, index, "idx", fx)
+            self.emit_force_capture(setup, index, "idx", fx)
         } else {
-            let plan = self.plan_operand(index, ExpressionContext::value(), fx);
-            Renderer.render_value(output, &plan)
+            self.capture_operand_into(setup, index, fx)
         }
     }
 }

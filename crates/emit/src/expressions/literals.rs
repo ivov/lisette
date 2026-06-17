@@ -2,22 +2,22 @@ use std::fmt::Write;
 
 use crate::EmitEffects;
 use crate::Planner;
-use crate::Renderer;
 use crate::abi::coercion::{Coercion, CoercionDirection};
 use crate::context::expression::ExpressionContext;
 use crate::expressions::emission::StagedExpression;
+use crate::plan::bodies::LoweredStatement;
 use syntax::ast::{FormatStringPart, Literal};
 use syntax::types::{SimpleKind, Type};
 
 impl Planner<'_> {
     pub(super) fn emit_literal(
         &mut self,
-        output: &mut String,
         literal: &Literal,
         ty: &Type,
         fx: &mut EmitEffects,
-    ) -> String {
-        match literal {
+    ) -> (Vec<LoweredStatement>, String) {
+        let mut setup: Vec<LoweredStatement> = Vec::new();
+        let value = match literal {
             Literal::Integer { value, text } => match text {
                 Some(original) => original.clone(),
                 None => value.to_string(),
@@ -48,7 +48,11 @@ impl Planner<'_> {
             Literal::Char(c) => {
                 format!("'{}'", convert_escape_sequences(c))
             }
-            Literal::FormatString(parts) => self.emit_format_string(output, parts, fx),
+            Literal::FormatString(parts) => {
+                let (fmt_setup, value) = self.emit_format_string(parts, fx);
+                setup = fmt_setup;
+                value
+            }
             Literal::Slice(elements) => {
                 let element_lisette_ty = ty
                     .get_type_params()
@@ -62,50 +66,50 @@ impl Planner<'_> {
                     // Parens around the slice type disambiguate the conversion when
                     // the element type itself ends in `)` (e.g. `func(int)`); Go
                     // otherwise parses `[]func(int)(nil)` as a call expression.
-                    return format!("([]{})(nil)", element_ty);
-                }
-
-                let stages: Vec<StagedExpression> = elements
-                    .iter()
-                    .map(|e| self.stage_composite(e, ExpressionContext::value(), fx))
-                    .collect();
-                let (setup, rendered) = self.sequence_structured(stages, "_v");
-                output.push_str(&Renderer.render_setup(&setup));
-
-                let mut wrapped: Vec<String> = Vec::with_capacity(rendered.len());
-                for (expr, emitted) in elements.iter().zip(rendered) {
-                    let coercion = Coercion::resolve(
-                        self,
-                        &expr.get_type(),
-                        &element_lisette_ty,
-                        CoercionDirection::Internal,
-                    );
-                    let (coercion_setup, coerced) = coercion.lower(self, emitted, fx);
-                    output.push_str(&Renderer.render_setup(&coercion_setup));
-                    wrapped.push(coerced);
-                }
-                let elements = wrapped;
-
-                if elements.len() > 1 && elements.iter().any(|e| e.len() > 30) {
-                    let indented = elements
-                        .iter()
-                        .map(|e| format!("\t{}", e))
-                        .collect::<Vec<_>>()
-                        .join(",\n");
-                    format!("[]{}{{\n{},\n}}", element_ty, indented)
+                    format!("([]{})(nil)", element_ty)
                 } else {
-                    format!("[]{}{{ {} }}", element_ty, elements.join(", "))
+                    let stages: Vec<StagedExpression> = elements
+                        .iter()
+                        .map(|e| self.stage_composite(e, ExpressionContext::value(), fx))
+                        .collect();
+                    let (slice_setup, rendered) = self.sequence_structured(stages, "_v");
+                    setup.extend(slice_setup);
+
+                    let mut wrapped: Vec<String> = Vec::with_capacity(rendered.len());
+                    for (expr, emitted) in elements.iter().zip(rendered) {
+                        let coercion = Coercion::resolve(
+                            self,
+                            &expr.get_type(),
+                            &element_lisette_ty,
+                            CoercionDirection::Internal,
+                        );
+                        let (coercion_setup, coerced) = coercion.lower(self, emitted, fx);
+                        setup.extend(coercion_setup);
+                        wrapped.push(coerced);
+                    }
+                    let elements = wrapped;
+
+                    if elements.len() > 1 && elements.iter().any(|e| e.len() > 30) {
+                        let indented = elements
+                            .iter()
+                            .map(|e| format!("\t{}", e))
+                            .collect::<Vec<_>>()
+                            .join(",\n");
+                        format!("[]{}{{\n{},\n}}", element_ty, indented)
+                    } else {
+                        format!("[]{}{{ {} }}", element_ty, elements.join(", "))
+                    }
                 }
             }
-        }
+        };
+        (setup, value)
     }
 
     fn emit_format_string(
         &mut self,
-        output: &mut String,
         parts: &[FormatStringPart],
         fx: &mut EmitEffects,
-    ) -> String {
+    ) -> (Vec<LoweredStatement>, String) {
         let has_interpolation = parts
             .iter()
             .any(|p| matches!(p, FormatStringPart::Expression(_)));
@@ -121,7 +125,6 @@ impl Planner<'_> {
             })
             .collect();
         let (setup, emitted) = self.sequence_structured(stages, "_fmtarg");
-        output.push_str(&Renderer.render_setup(&setup));
 
         let mut format_string = String::new();
         let mut args = Vec::with_capacity(emitted.len());
@@ -158,7 +161,7 @@ impl Planner<'_> {
         }
 
         if args.is_empty() {
-            return format!("\"{}\"", format_string);
+            return (setup, format!("\"{}\"", format_string));
         }
 
         fx.require_fmt();
@@ -169,9 +172,12 @@ impl Planner<'_> {
             && matches!(parts, [FormatStringPart::Expression(_)])
             && format_string != "%c"
         {
-            return format!("fmt.Sprint({})", args[0]);
+            return (setup, format!("fmt.Sprint({})", args[0]));
         }
-        format!("fmt.Sprintf(\"{}\", {})", format_string, args.join(", "))
+        (
+            setup,
+            format!("fmt.Sprintf(\"{}\", {})", format_string, args.join(", ")),
+        )
     }
 }
 

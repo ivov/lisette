@@ -511,12 +511,11 @@ impl Planner<'_> {
 
     fn hoist_go_fn_if_needed(
         &mut self,
-        output: &mut String,
+        setup: &mut Vec<LoweredStatement>,
         expression: &Expression,
         fx: &mut EmitEffects,
     ) -> String {
-        let plan = self.plan_operand(expression, ExpressionContext::value(), fx);
-        let go_fn_str = Renderer.render_value(output, &plan);
+        let go_fn_str = self.capture_operand_into(setup, expression, fx);
 
         let is_go_module_fn = matches!(
             expression.unwrap_parens(),
@@ -529,7 +528,7 @@ impl Planner<'_> {
         }
 
         if is_order_sensitive(expression) {
-            self.hoist_tmp_value(output, "fn", &go_fn_str)
+            self.hoist_tmp_value_statement(setup, "fn", &go_fn_str)
         } else {
             go_fn_str
         }
@@ -560,7 +559,7 @@ impl Planner<'_> {
     /// call_str)` for a go-fn expression, or `None` for non-function types.
     fn wrapper_call_parts(
         &mut self,
-        output: &mut String,
+        setup: &mut Vec<LoweredStatement>,
         expression: &Expression,
         fx: &mut EmitEffects,
     ) -> Option<(Type, Vec<String>, String)> {
@@ -569,7 +568,7 @@ impl Planner<'_> {
             Type::Function(f) => (f.params.clone(), (*f.return_type).clone()),
             _ => return None,
         };
-        let go_fn_str = self.hoist_go_fn_if_needed(output, expression, fx);
+        let go_fn_str = self.hoist_go_fn_if_needed(setup, expression, fx);
         let (param_strs, arg_names) = self.build_wrapper_params(&params, fx);
         let call_str = format!("{}({})", go_fn_str, arg_names.join(", "));
         Some((return_type, param_strs, call_str))
@@ -577,15 +576,14 @@ impl Planner<'_> {
 
     pub(crate) fn emit_array_return_wrapper(
         &mut self,
-        output: &mut String,
+        setup: &mut Vec<LoweredStatement>,
         expression: &Expression,
         fx: &mut EmitEffects,
     ) -> String {
         let Some((return_type, param_strs, call_str)) =
-            self.wrapper_call_parts(output, expression, fx)
+            self.wrapper_call_parts(setup, expression, fx)
         else {
-            let plan = self.plan_operand(expression, ExpressionContext::value(), fx);
-            return Renderer.render_value(output, &plan);
+            return self.capture_operand_into(setup, expression, fx);
         };
 
         let ret_ty_str = self.go_type_string(&return_type, fx);
@@ -605,7 +603,7 @@ impl Planner<'_> {
 
     pub(crate) fn emit_go_fn_wrapper(
         &mut self,
-        output: &mut String,
+        setup: &mut Vec<LoweredStatement>,
         expression: &Expression,
         strategy: &GoCallStrategy,
         fx: &mut EmitEffects,
@@ -613,7 +611,7 @@ impl Planner<'_> {
         fx.require_stdlib();
 
         let (return_type, param_strs, call_str) = self
-            .wrapper_call_parts(output, expression, fx)
+            .wrapper_call_parts(setup, expression, fx)
             .expect("expected function type");
 
         let ret_ty_str = self.go_type_string(&return_type, fx);
@@ -702,14 +700,14 @@ impl Planner<'_> {
     /// Closure that bundles a raw `(T1, T2, error)` return into the slot's `(Tuple, error)` shape.
     pub(crate) fn emit_go_fn_lowered_tuple_adapter(
         &mut self,
-        output: &mut String,
+        setup: &mut Vec<LoweredStatement>,
         expression: &Expression,
         fx: &mut EmitEffects,
     ) -> String {
         fx.require_stdlib();
 
         let (return_type, param_strs, call_str) = self
-            .wrapper_call_parts(output, expression, fx)
+            .wrapper_call_parts(setup, expression, fx)
             .expect("expected function type");
 
         let ok_ty = return_type.ok_type();

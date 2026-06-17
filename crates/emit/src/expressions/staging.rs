@@ -1,6 +1,5 @@
 use crate::EmitEffects;
 use crate::Planner;
-use crate::Renderer;
 use crate::abi::is_tagged_shape_fn_value;
 use crate::abi::transition::lower_arg_to_tagged;
 use crate::context::expression::ExpressionContext;
@@ -8,7 +7,6 @@ use crate::expressions::emission::{CapturePolicy, StagedExpression};
 use crate::names::go_name;
 use crate::plan::bodies::LoweredStatement;
 use crate::utils::observable_after_mutation;
-use crate::write_line;
 use syntax::ast::Expression;
 use syntax::types::Type;
 
@@ -56,23 +54,19 @@ impl Planner<'_> {
 
     pub(crate) fn emit_force_capture(
         &mut self,
-        output: &mut String,
+        setup: &mut Vec<LoweredStatement>,
         expression: &Expression,
         prefix: &str,
         fx: &mut EmitEffects,
     ) -> String {
         if !observable_after_mutation(expression) {
-            let plan = self.plan_operand(expression, ExpressionContext::value(), fx);
-            return Renderer.render_value(output, &plan);
+            return self.capture_operand_into(setup, expression, fx);
         }
 
-        let temp_var = self.fresh_var(Some(prefix));
-        self.declare(&temp_var);
-        let (setup, expression_string) =
+        let (composite_setup, expression_string) =
             self.lower_composite_value(expression, ExpressionContext::value(), fx);
-        output.push_str(&Renderer.render_setup(&setup));
-        write_line!(output, "{} := {}", temp_var, expression_string);
-        temp_var
+        setup.extend(composite_setup);
+        self.hoist_tmp_value_statement(setup, prefix, &expression_string)
     }
 
     /// Plan an expression and capture its typed setup and value.
@@ -111,15 +105,13 @@ impl Planner<'_> {
         let staged = self.stage_composite(expression, arg_ctx, fx);
 
         if suppress {
-            // `try_lower_arg_to_tagged` mutates a `String` setup; render the
-            // staged setup down for it, then re-wrap on the way out.
-            let mut setup = Renderer.render_setup(&staged.setup);
+            let mut setup = staged.setup;
             if let Some(tagged) =
                 self.try_lower_arg_to_tagged(&mut setup, expression, &staged.value, param_ty, fx)
             {
-                return StagedExpression::new(setup, tagged, expression);
+                return StagedExpression::from_typed_setup(setup, tagged, expression);
             }
-            return StagedExpression::new(setup, staged.value, expression);
+            return StagedExpression::from_typed_setup(setup, staged.value, expression);
         }
 
         staged
@@ -131,14 +123,14 @@ impl Planner<'_> {
     /// already has tagged shape, is a lambda literal, or is a Go fn value.
     pub(crate) fn try_lower_arg_to_tagged(
         &mut self,
-        output: &mut String,
+        setup: &mut Vec<LoweredStatement>,
         arg: &Expression,
         value: &str,
         param_ty: Option<&Type>,
         fx: &mut EmitEffects,
     ) -> Option<String> {
         self.detect_lower_arg_to_tagged(arg, param_ty)?;
-        Some(self.emit_lower_arg_to_tagged(output, value, param_ty.unwrap(), fx))
+        Some(self.emit_lower_arg_to_tagged(setup, value, param_ty.unwrap(), fx))
     }
 
     /// Detect whether a tagged-Go lowering applies. Pure: no emission.
@@ -166,13 +158,18 @@ impl Planner<'_> {
 
     pub(crate) fn emit_lower_arg_to_tagged(
         &mut self,
-        output: &mut String,
+        setup: &mut Vec<LoweredStatement>,
         value: &str,
         param_ty: &Type,
         fx: &mut EmitEffects,
     ) -> String {
-        let cb_var = self.hoist_tmp_value(output, "cb", value);
-        lower_arg_to_tagged(self, output, &cb_var, param_ty, fx)
+        let cb_var = self.hoist_tmp_value_statement(setup, "cb", value);
+        let mut buffer = String::new();
+        let tagged = lower_arg_to_tagged(self, &mut buffer, &cb_var, param_ty, fx);
+        if !buffer.is_empty() {
+            setup.push(LoweredStatement::RawGo(buffer));
+        }
+        tagged
     }
 
     pub(crate) fn stage_native_method_args(

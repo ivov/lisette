@@ -5,7 +5,6 @@ pub(crate) use wrappers::{TupleReturnLayout, WrapperTarget};
 
 use crate::EmitEffects;
 use crate::Planner;
-use crate::Renderer;
 use crate::calls::CallBoundary;
 use crate::context::expression::ExpressionContext;
 use crate::names::go_name;
@@ -153,7 +152,7 @@ impl Planner<'_> {
 
     pub(crate) fn emit_go_call_discarded(
         &mut self,
-        output: &mut String,
+        setup: &mut Vec<LoweredStatement>,
         call_expression: &Expression,
         fx: &mut EmitEffects,
     ) -> Option<String> {
@@ -186,8 +185,8 @@ impl Planner<'_> {
         if has_array_return {
             ctx = ctx.with_raw_go_array_return();
         }
-        let (setup, call_str) = self.lower_call(call_expression, None, ctx, fx);
-        output.push_str(&Renderer.render_setup(&setup));
+        let (call_setup, call_str) = self.lower_call(call_expression, None, ctx, fx);
+        setup.extend(call_setup);
 
         Some(call_str)
     }

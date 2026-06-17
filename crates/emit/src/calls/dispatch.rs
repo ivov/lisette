@@ -178,7 +178,7 @@ impl Planner<'_> {
     /// `!len(s) == 0` which Go parses as `(!len(s)) == 0`).
     pub(crate) fn try_emit_negated_call(
         &mut self,
-        output: &mut String,
+        setup: &mut Vec<LoweredStatement>,
         call_expression: &Expression,
         fx: &mut EmitEffects,
     ) -> Option<String> {
@@ -214,10 +214,10 @@ impl Planner<'_> {
         };
         match call_kind {
             CallKind::NativeMethod(_) => {
-                self.try_emit_negated_native_method_dot_access(output, &native_ctx, fx)
+                self.try_emit_negated_native_method_dot_access(setup, &native_ctx, fx)
             }
             CallKind::NativeMethodIdentifier(_) => {
-                self.try_emit_negated_native_method_identifier(output, &native_ctx, fx)
+                self.try_emit_negated_native_method_identifier(setup, &native_ctx, fx)
             }
             _ => unreachable!(),
         }

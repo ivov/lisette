@@ -486,7 +486,7 @@ fn emit_tuple_return_adapter(
 /// has no lowered shape.
 pub(crate) fn emit_lisette_callback_wrapper(
     planner: &mut Planner,
-    output: &mut String,
+    setup: &mut Vec<LoweredStatement>,
     fn_value: &str,
     fn_type: &Type,
     fx: &mut EmitEffects,
@@ -501,7 +501,7 @@ pub(crate) fn emit_lisette_callback_wrapper(
     let (param_strs, arg_names) = planner.build_wrapper_params(params, fx);
     let params_str = param_strs.join(", ");
 
-    let cb_var = planner.hoist_tmp_value(output, "cb", fn_value);
+    let cb_var = planner.hoist_tmp_value_statement(setup, "cb", fn_value);
 
     let mut prelude = String::new();
     let inner_args: Vec<String> = arg_names
@@ -665,9 +665,9 @@ fn emit_lowered_tuple_tail(
             .enumerate()
             .map(|(i, e)| match slot_tys.get(i) {
                 Some(slot_ty) if planner.facts.is_nullable_option(slot_ty) => {
-                    let mut setup = String::new();
-                    let value = emit_nullable_slot_value(planner, &mut setup, e, slot_ty, fx);
-                    StagedExpression::new(setup, value, e)
+                    let mut setup = Vec::new();
+                    let value = lower_nullable_slot_value(planner, &mut setup, e, slot_ty, fx);
+                    StagedExpression::from_typed_setup(setup, value, e)
                 }
                 _ => planner.stage_composite(e, ExpressionContext::value(), fx),
             })
@@ -746,9 +746,9 @@ fn emit_lowered_partial_tail(
 
 /// `Some(x)`/`None` collapse to `x`/`nil`; other Option expressions
 /// project at runtime.
-fn emit_nullable_slot_value(
+fn lower_nullable_slot_value(
     planner: &mut Planner,
-    output: &mut String,
+    setup: &mut Vec<LoweredStatement>,
     expression: &syntax::ast::Expression,
     slot_ty: &Type,
     fx: &mut EmitEffects,
@@ -764,9 +764,9 @@ fn emit_nullable_slot_value(
         return match kind {
             Ok(()) => {
                 debug_assert_eq!(args.len(), 1, "Some(...) takes exactly one arg");
-                let (setup, value) =
+                let (slot_setup, value) =
                     planner.lower_composite_value(&args[0], ExpressionContext::value(), fx);
-                output.push_str(&Renderer.render_setup(&setup));
+                setup.extend(slot_setup);
                 value
             }
             Err(()) => "nil".to_string(),
@@ -775,12 +775,8 @@ fn emit_nullable_slot_value(
     if expression.is_none_literal() {
         return "nil".to_string();
     }
-    let (setup, value) = planner.lower_value(expression, ExpressionContext::value(), fx);
-    output.push_str(&Renderer.render_setup(&setup));
+    let (value_setup, value) = planner.lower_value(expression, ExpressionContext::value(), fx);
+    setup.extend(value_setup);
     let inner = planner.go_type_string(&slot_ty.ok_type(), fx);
-    let mut statements = Vec::new();
-    let slot_var =
-        planner.plan_option_projection(&mut statements, &value, "unwrap", &inner, false, fx);
-    output.push_str(&Renderer.render_setup(&statements));
-    slot_var
+    planner.plan_option_projection(setup, &value, "unwrap", &inner, false, fx)
 }

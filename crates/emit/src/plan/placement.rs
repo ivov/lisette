@@ -1,6 +1,5 @@
 use crate::EmitEffects;
 use crate::Planner;
-use crate::Renderer;
 use crate::analyze::inline_uses::region_blocks_inline;
 use crate::context::expression::ExpressionContext;
 use crate::control_flow::fallible::{ConstructorKind, Fallible, FalliblePlanner};
@@ -11,7 +10,7 @@ use crate::plan::bodies::{
     PlacePlan,
 };
 use crate::plan::calls::plan_variadic_spread;
-use crate::plan::values::{ValuePlan, setup_from_string, value_plan_from_statements};
+use crate::plan::values::{ValuePlan, value_plan_from_statements};
 use crate::statements::assignments::is_lvalue_chain;
 use crate::types::native::NativeGoType;
 use crate::utils::contains_call;
@@ -220,9 +219,8 @@ impl Planner<'_> {
         }
 
         if let Expression::Call { .. } = unwrapped {
-            let mut buffer = String::new();
-            if let Some(raw) = self.emit_go_call_discarded(&mut buffer, unwrapped, fx) {
-                let mut statements = setup_from_string(buffer);
+            let mut statements: Vec<LoweredStatement> = Vec::new();
+            if let Some(raw) = self.emit_go_call_discarded(&mut statements, unwrapped, fx) {
                 statements.push(LoweredStatement::RawGo(format!("{}\n", raw)));
                 return statements;
             }
@@ -537,26 +535,16 @@ impl Planner<'_> {
             is_lvalue_chain(unwrapped) && !self.contains_newtype_access(unwrapped);
 
         let (value, mut statements) = if receiver_is_lvalue {
-            let mut buffer = String::new();
-            let mut args_buffer = String::new();
-            let args_str = self.emit_append_args(
-                &mut args_buffer,
-                func,
-                args,
-                (**spread).as_ref(),
-                is_extend,
-                fx,
-            );
-            let rhs_has_setup = !args_buffer.is_empty()
+            let (args_setup, args_str) =
+                self.lower_append_args(func, args, (**spread).as_ref(), is_extend, fx);
+            let rhs_has_setup = !args_setup.is_empty()
                 || args.iter().any(contains_call)
                 || (**spread).as_ref().is_some_and(contains_call);
+            let mut capture: Vec<LoweredStatement> = Vec::new();
             let receiver_lv =
-                self.emit_left_value_capturing(&mut buffer, unwrapped, rhs_has_setup, fx);
-            buffer.push_str(&args_buffer);
-            (
-                format!("append({}, {})", receiver_lv, args_str),
-                setup_from_string(buffer),
-            )
+                self.emit_left_value_capturing(&mut capture, unwrapped, rhs_has_setup, fx);
+            capture.extend(args_setup);
+            (format!("append({}, {})", receiver_lv, args_str), capture)
         } else {
             let (setup, value) = self.lower_value(last, ExpressionContext::value(), fx);
             (value, setup)
@@ -577,16 +565,14 @@ impl Planner<'_> {
         false
     }
 
-    #[allow(clippy::too_many_arguments)]
-    fn emit_append_args(
+    fn lower_append_args(
         &mut self,
-        output: &mut String,
         function: &Expression,
         args: &[Expression],
         spread: Option<&Expression>,
         is_extend: bool,
         fx: &mut EmitEffects,
-    ) -> String {
+    ) -> (Vec<LoweredStatement>, String) {
         let stages: Vec<StagedExpression> = args
             .iter()
             .map(|a| self.stage_composite(a, ExpressionContext::value(), fx))
@@ -594,10 +580,9 @@ impl Planner<'_> {
         let combine = plan_variadic_spread(function, spread).map(|p| p.combine(0));
         let (setup, emitted_args) =
             self.sequence_with_spread_structured(stages, spread, false, "_arg", combine, fx);
-        output.push_str(&Renderer.render_setup(&setup));
         let args_str = emitted_args.join(", ");
         let suffix = if is_extend { "..." } else { "" };
-        format!("{}{}", args_str, suffix)
+        (setup, format!("{}{}", args_str, suffix))
     }
 
     /// Lower `last` as a tail value. Tuple literals widen slot types to the
@@ -609,50 +594,44 @@ impl Planner<'_> {
     ) -> (Vec<LoweredStatement>, String) {
         if let Expression::Tuple { elements, ty, .. } = last {
             let plan = self.plan_tuple_value(elements, ty, true, fx);
-            let staged = StagedExpression::from_plan(plan, last);
-            (staged.setup, staged.value)
+            plan.into_parts()
         } else {
             self.lower_value(last, ExpressionContext::value(), fx)
         }
     }
 
-    pub(crate) fn emit_to_operand_temp(
+    pub(crate) fn lower_to_operand_temp(
         &mut self,
-        output: &mut String,
         expression: &Expression,
         ty: &Type,
         fx: &mut EmitEffects,
-    ) -> String {
-        let return_ctx = self.return_ctx();
-        let _return_ctx = return_ctx.as_ref();
+    ) -> (Vec<LoweredStatement>, String) {
         if let Expression::Block { items, .. } = expression {
             if ty.is_never() || ty.is_unit() || matches!(ty, Type::Var { .. } | Type::Forall { .. })
             {
-                self.emit_block(output, expression, fx);
-                return String::new();
+                return (
+                    self.lower_block_as_body(expression, fx).statements,
+                    String::new(),
+                );
             }
-            let result_var = self.declare_result_var(output, ty, fx);
+            let (result_var, declaration) = self.operand_temp_declaration(ty, fx);
             let needs_braces = items.len() > 1;
+            let body = self.lower_block_to_var(expression, &result_var, None, needs_braces, fx);
+            let mut statements = vec![declaration];
             if needs_braces {
-                output.push_str("{\n");
+                statements.push(LoweredStatement::Block(LoweredBlock { statements: body }));
+            } else {
+                statements.extend(body);
             }
-            let statements =
-                self.lower_block_to_var(expression, &result_var, None, needs_braces, fx);
-            output.push_str(&Renderer.render_setup(&statements));
-            if needs_braces {
-                output.push_str("}\n");
-            }
-            return result_var;
+            return (statements, result_var);
         }
         if let Expression::Loop { .. } = expression {
-            let (setup, result_var) = self.plan_loop_as_operand_temp(expression, ty, fx);
-            output.push_str(&Renderer.render_setup(&setup));
-            return result_var;
+            return self.plan_loop_as_operand_temp(expression, ty, fx);
         }
-        let result_var = self.declare_result_var(output, ty, fx);
-        let statements = self.lower_assign(expression, &result_var, Some(ty), fx);
-        output.push_str(&Renderer.render_setup(&statements));
-        result_var
+        let (result_var, declaration) = self.operand_temp_declaration(ty, fx);
+        let mut statements = vec![declaration];
+        statements.extend(self.lower_assign(expression, &result_var, Some(ty), fx));
+        (statements, result_var)
     }
 
     /// Build a `BreakValuePlan` for a `break value` statement.

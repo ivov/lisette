@@ -1,12 +1,12 @@
 use syntax::ast::MatchArm;
 
 use crate::EmitEffects;
-use crate::control_flow::branching::wrap_if_struct_literal;
 use crate::patterns::binding_decls::{is_catchall_pattern, is_unconditional_catchall};
 use crate::patterns::decision_tree::{
     AccessPath, ChainTest, Decision, PatternBinding, SwitchBranch, SwitchKind, SwitchShape,
     decision_is_exhaustive, render_condition, tree_has_unguarded_terminal,
 };
+use crate::utils::wrap_if_struct_literal;
 
 #[derive(Debug, Clone)]
 pub(crate) struct EmitBinding {

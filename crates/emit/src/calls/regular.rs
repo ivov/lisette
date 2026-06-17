@@ -5,7 +5,6 @@ use rustc_hash::FxHashSet as HashSet;
 
 use crate::EmitEffects;
 use crate::Planner;
-use crate::Renderer;
 use crate::abi::AbiShape;
 use crate::abi::coercion::{Coercion, CoercionDirection, OptionShape, classify_option_shape};
 use crate::abi::transition::{emit_fn_arg_shape_adapter, emit_lisette_callback_wrapper};
@@ -420,11 +419,7 @@ impl<'a> Planner<'a> {
                     effective_param_ty.expect("TaggedGoLowering requires effective_param_ty");
                 let arg_ctx = direct_arg_emit_ctx(ctx, Some(target), true);
                 let (mut setup, value) = self.lower_composite_value(arg, arg_ctx, fx);
-                let mut buffer = String::new();
-                let lowered = self.emit_lower_arg_to_tagged(&mut buffer, &value, target, fx);
-                if !buffer.is_empty() {
-                    setup.push(LoweredStatement::RawGo(buffer));
-                }
+                let lowered = self.emit_lower_arg_to_tagged(&mut setup, &value, target, fx);
                 (setup, lowered)
             }
             ArgumentPlan::Direct => self.lower_direct_arg(arg, ctx, effective_param_ty, fx),
@@ -504,15 +499,15 @@ impl<'a> Planner<'a> {
     /// callee's generic-param shape.
     pub(crate) fn try_adapt_lowered_fn_arg_shape(
         &mut self,
-        output: &mut String,
+        setup: &mut Vec<LoweredStatement>,
         arg: &Expression,
         generic_param_ty: Option<&Type>,
         fx: &mut EmitEffects,
     ) -> Option<String> {
         self.detect_lowered_fn_arg_shape(arg, generic_param_ty)?;
-        let (setup, value) =
+        let (adapt_setup, value) =
             self.lower_adapt_lowered_fn_arg_shape(arg, generic_param_ty.unwrap(), fx)?;
-        output.push_str(&Renderer.render_setup(&setup));
+        setup.extend(adapt_setup);
         Some(value)
     }
 
@@ -615,9 +610,8 @@ impl<'a> Planner<'a> {
             return None;
         }
 
-        let (src_setup, src_value) = self.lower_value(spread, ExpressionContext::value(), fx);
-        let mut setup = Renderer.render_setup(&src_setup);
-        let src_var = self.hoist_tmp_value(&mut setup, "src", &src_value);
+        let (mut setup, src_value) = self.lower_value(spread, ExpressionContext::value(), fx);
+        let src_var = self.hoist_tmp_value_statement(&mut setup, "src", &src_value);
 
         let target_element_ret = match param_shape.as_ref() {
             Some(shape) => self.render_lowered_return_ty(shape, arg_ret, fx),
@@ -650,22 +644,16 @@ impl<'a> Planner<'a> {
         )?;
         write_line!(body, "{}[i] = {}", adapted, closure);
 
-        write_line!(
-            setup,
-            "{} := make([]{}, len({}))",
-            adapted,
-            target_element_ty,
-            src_var
-        );
-        write_line!(
-            setup,
-            "for i, {} := range {} {{\n{}}}",
-            loop_cb,
-            src_var,
-            body
-        );
+        setup.push(LoweredStatement::RawGo(format!(
+            "{} := make([]{}, len({}))\n",
+            adapted, target_element_ty, src_var
+        )));
+        setup.push(LoweredStatement::RawGo(format!(
+            "for i, {} := range {} {{\n{}}}\n",
+            loop_cb, src_var, body
+        )));
 
-        Some(StagedExpression::new(setup, adapted, spread))
+        Some(StagedExpression::from_typed_setup(setup, adapted, spread))
     }
 
     /// Detect whether a Go-call argument needs a callback wrapper. Returns
@@ -719,13 +707,7 @@ impl<'a> Planner<'a> {
                     .facts
                     .resolve_to_function_type(effective_param_ty.unwrap_forall())
                     .expect("Wrap kind only reached when param resolves to a fn type");
-                let mut buffer = String::new();
-                let wrapped =
-                    emit_lisette_callback_wrapper(self, &mut buffer, &value, &param_fn_ty, fx);
-                if !buffer.is_empty() {
-                    setup.push(LoweredStatement::RawGo(buffer));
-                }
-                wrapped
+                emit_lisette_callback_wrapper(self, &mut setup, &value, &param_fn_ty, fx)
             }
         };
         (setup, result)

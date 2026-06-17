@@ -3,16 +3,14 @@ use crate::Planner;
 use crate::Renderer;
 use crate::abi::transition::try_emit_lowered_tail_return;
 use crate::context::expression::ExpressionContext;
-use crate::control_flow::branching::wrap_if_struct_literal;
 use crate::control_flow::propagation::plain_return;
 use crate::definitions::functions::is_go_never;
-use crate::expressions::emission::StagedExpression;
 use crate::plan::bodies::{
     ElseArm, ExpressionStatementForm, ExpressionStatementPlan, IfPlan, LoopPlan, LoweredBlock,
     LoweredStatement, MatchStatementPlan, PlacePlan, WhileLetPlan,
 };
 use crate::plan::placement::{requires_temp_var, try_elide_tail_let};
-use crate::plan::values::setup_from_string;
+use crate::utils::wrap_if_struct_literal;
 use syntax::ast::{Expression, Literal};
 use syntax::types::Type;
 
@@ -20,7 +18,7 @@ impl Planner<'_> {
     /// Allocate a fresh operand-temp result var and its `var V T` declaration
     /// as a typed setup leaf. The control-flow that assigns it follows as a
     /// typed `If`/`Loop`/`Match`/`Select` statement.
-    fn operand_temp_declaration(
+    pub(crate) fn operand_temp_declaration(
         &mut self,
         ty: &Type,
         fx: &mut EmitEffects,
@@ -70,7 +68,7 @@ impl Planner<'_> {
 
     /// Lower a value-position `match`/`select` to a fresh operand-temp
     /// variable. Only valid for non-never result types; never-typed branches
-    /// route through `emit_to_operand_temp` as a diverging statement.
+    /// route through `lower_to_operand_temp` as a diverging statement.
     pub(crate) fn plan_branching_as_operand_temp(
         &mut self,
         expression: &Expression,
@@ -438,8 +436,7 @@ impl Planner<'_> {
         fx: &mut EmitEffects,
     ) -> (Vec<LoweredStatement>, String) {
         let plan = self.plan_operand(condition, ExpressionContext::value().condition(), fx);
-        let staged = StagedExpression::from_plan(plan, condition);
-        (staged.setup, staged.value)
+        plan.into_parts()
     }
 
     fn lower_while(
@@ -497,8 +494,7 @@ impl Planner<'_> {
         }
     }
 
-    /// Lower a branch arm body in statement position (the `PlacePlan::Statement`
-    /// equivalent of `emit_block`).
+    /// Lower a branch arm body in statement position (`PlacePlan::Statement`).
     pub(crate) fn lower_block_as_body(
         &mut self,
         expression: &Expression,
@@ -695,7 +691,11 @@ impl Planner<'_> {
         return_span: &syntax::ast::Span,
         fx: &mut EmitEffects,
     ) -> Vec<LoweredStatement> {
-        let mut statements = setup_from_string(self.maybe_line_directive(return_span));
+        let directive = self.maybe_line_directive(return_span);
+        let mut statements: Vec<LoweredStatement> = Vec::new();
+        if !directive.is_empty() {
+            statements.push(LoweredStatement::RawGo(directive));
+        }
         statements.push(self.lower_statement(last, fx));
         if !is_go_never(last) {
             statements.push(LoweredStatement::UnreachablePanic);
