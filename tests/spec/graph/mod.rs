@@ -88,6 +88,44 @@ fn kahn_no_dependencies() {
 }
 
 #[test]
+fn test_only_imports_excluded_from_production_edges() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file("main", "main.lis", r#"import "math""#);
+    fs.add_file("math", "core.lis", "pub fn add() -> int { 1 }");
+    fs.add_file("math", "core.test.lis", r#"import "fixture""#);
+    fs.add_file("fixture", "fixture.lis", "pub fn sample() -> int { 2 }");
+
+    let mut store = Store::new();
+    store.module_ids.push("main".to_string());
+    store.module_ids.push("math".to_string());
+    store.module_ids.push("fixture".to_string());
+
+    let sink = LocalSink::new();
+    let result = build_module_graph(
+        &mut store,
+        Some(&fs),
+        "main",
+        &sink,
+        false,
+        &default_resolver(),
+        true,
+    );
+
+    assert!(
+        result.edges["math"].contains("fixture"),
+        "a test-file import must still be a graph edge for reachability"
+    );
+    assert!(
+        !result.production_edges["math"].contains("fixture"),
+        "a test-only import must not enter production edges that importers key on"
+    );
+    assert!(
+        !result.production_edges["main"].contains("fixture"),
+        "the test-only dependency must not propagate to production importers"
+    );
+}
+
+#[test]
 fn graph_simple_dependency() {
     let mut fs = MockFileSystem::new();
     fs.add_file("main", "main.lis", r#"import "lib""#);
@@ -105,6 +143,7 @@ fn graph_simple_dependency() {
         &sink,
         false,
         &default_resolver(),
+        true,
     );
 
     assert!(result.cycles.is_empty());
@@ -134,6 +173,7 @@ fn graph_missing_module() {
         &sink,
         false,
         &default_resolver(),
+        true,
     );
 
     assert!(sink.has_errors());
@@ -159,6 +199,7 @@ fn graph_cycle_detection() {
         &sink,
         false,
         &default_resolver(),
+        true,
     );
 
     assert!(!result.cycles.is_empty());
@@ -180,6 +221,7 @@ fn graph_standalone_third_party_go_import_uses_module_not_found() {
         &sink,
         true, // standalone mode
         &default_resolver(),
+        true,
     );
 
     assert!(sink.has_errors());
@@ -202,6 +244,7 @@ fn graph_project_third_party_go_import_undeclared() {
         &sink,
         false, // project mode
         &default_resolver(),
+        true,
     );
 
     assert!(sink.has_errors());
@@ -230,7 +273,7 @@ fn graph_declared_dep_missing_typedef() {
     let resolver = deps::TypedefLocator::new(go_deps, None, stdlib::Target::host());
 
     let sink = LocalSink::new();
-    let _result = build_module_graph(&mut store, Some(&fs), "main", &sink, false, &resolver);
+    let _result = build_module_graph(&mut store, Some(&fs), "main", &sink, false, &resolver, true);
 
     assert!(sink.has_errors());
 
@@ -271,7 +314,7 @@ fn graph_subpackage_missing_typedef_points_at_add() {
     let resolver = deps::TypedefLocator::new(go_deps, None, stdlib::Target::host());
 
     let sink = LocalSink::new();
-    let _result = build_module_graph(&mut store, Some(&fs), "main", &sink, false, &resolver);
+    let _result = build_module_graph(&mut store, Some(&fs), "main", &sink, false, &resolver, true);
 
     assert!(sink.has_errors());
 

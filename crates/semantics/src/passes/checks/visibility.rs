@@ -15,6 +15,7 @@ pub(crate) fn run_module(module_id: &str, store: &Store, sink: &LocalSink) {
         .definitions
         .iter()
         .filter(|(key, _)| key.starts_with(&module_prefix))
+        .filter(|(_, definition)| !store.is_test_definition(definition))
         .filter_map(|(_, definition)| {
             if let Definition {
                 visibility: Visibility::Private,
@@ -45,6 +46,7 @@ pub(crate) fn run_module(module_id: &str, store: &Store, sink: &LocalSink) {
         .definitions
         .iter()
         .filter(|(key, _)| key.starts_with(&module_prefix))
+        .filter(|(_, definition)| !store.is_test_definition(definition))
     {
         if let Definition {
             name: Some(name),

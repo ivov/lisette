@@ -109,11 +109,32 @@ pub fn analyze(input: AnalyzeInput) -> AnalyzeOutput {
 
     let sink = LocalSink::new();
 
+    let include_tests = input.compile_phase == CompilePhase::Check;
+
+    if input.filename.ends_with("_test.lis") {
+        sink.push(diagnostics::module_graph::wrong_test_file_suffix(
+            &input.display_path,
+        ));
+    } else if input.filename.ends_with(".test.lis") && !include_tests {
+        sink.push(diagnostics::module_graph::cannot_emit_test_file(
+            &input.display_path,
+        ));
+    }
+
     if input.config.load_siblings {
         for (filename, content) in input.loader.scan_folder(ENTRY_MODULE_ID) {
-            if filename == input.filename
-                || !filename.ends_with(".lis")
+            if filename == input.filename {
+                continue;
+            }
+            if filename.ends_with("_test.lis") {
+                sink.push(diagnostics::module_graph::wrong_test_file_suffix(
+                    &content.display_path,
+                ));
+                continue;
+            }
+            if !filename.ends_with(".lis")
                 || filename.ends_with(".d.lis")
+                || (filename.ends_with(".test.lis") && !include_tests)
             {
                 continue;
             }
@@ -142,6 +163,7 @@ pub fn analyze(input: AnalyzeInput) -> AnalyzeOutput {
         &sink,
         input.config.standalone_mode,
         &input.locator,
+        include_tests,
     );
 
     for cycle in &graph_result.cycles {
@@ -182,6 +204,7 @@ pub fn analyze(input: AnalyzeInput) -> AnalyzeOutput {
 
         let order = std::mem::take(&mut graph_result.order);
         let edges = &graph_result.edges;
+        let production_edges = &graph_result.production_edges;
 
         // Outer `None` = not attempted: the deserialize costs milliseconds,
         // which a project without stdlib imports should not pay.
@@ -237,23 +260,26 @@ pub fn analyze(input: AnalyzeInput) -> AnalyzeOutput {
             }
 
             let files = graph_result.files.remove(&module_id).unwrap_or_default();
-            let source_hash = hash_module_sources(&files);
+            let production_hash = hash_module_sources(files.iter().filter(|f| !f.is_test()));
+            let full_hash = hash_module_sources(&files);
 
             let dep_hashes = get_dependency_module_hashes(&module_id, edges, &module_hashes);
-            let module_hash = compute_module_hash(source_hash, &dep_hashes);
+            let production_dep_hashes =
+                get_dependency_module_hashes(&module_id, production_edges, &module_hashes);
+            let module_hash = compute_module_hash(production_hash, &production_dep_hashes);
             module_hashes.insert(module_id.clone(), module_hash);
 
             let is_entry = module_id == ENTRY_MODULE_ID;
 
-            let expected_artifact_hash =
-                check_go_files.then(|| compute_emit_artifact_hash(source_hash, &input.go_module));
+            let expected_artifact_hash = check_go_files
+                .then(|| compute_emit_artifact_hash(production_hash, &input.go_module));
 
             if cache_enabled
                 && !is_entry
                 && let Some(ref project_root) = input.project_root
                 && let Some(cached) = try_load_cache(
                     &module_id,
-                    source_hash,
+                    full_hash,
                     &dep_hashes,
                     expected_artifact_hash,
                     project_root,
@@ -273,13 +299,28 @@ pub fn analyze(input: AnalyzeInput) -> AnalyzeOutput {
             if !is_entry {
                 compiled_modules.push(CompiledModule {
                     module_id: module_id.clone(),
-                    source_hash,
+                    module_hash,
+                    production_hash,
+                    full_hash,
                     dep_hashes,
                 });
             }
 
             to_infer.push(module_id);
         }
+
+        let test_ids: Vec<u32> = to_infer
+            .iter()
+            .filter_map(|module_id| store.get_module(module_id))
+            .flat_map(|module| {
+                module
+                    .files
+                    .values()
+                    .filter(|file| file.is_test())
+                    .map(|file| file.id)
+            })
+            .collect();
+        store.test_file_ids.extend(test_ids);
 
         // Single-file or tiny multi-module projects stay serial to avoid rayon
         // overhead. This threshold is a conservative starting point, not a
@@ -492,7 +533,7 @@ pub fn analyze(input: AnalyzeInput) -> AnalyzeOutput {
         .iter()
         .map(|c| EmitStamp {
             module_id: c.module_id.clone(),
-            artifact_hash: compute_emit_artifact_hash(c.source_hash, &input.go_module),
+            artifact_hash: compute_emit_artifact_hash(c.production_hash, &input.go_module),
         })
         .collect();
 

@@ -3456,7 +3456,7 @@ fn main() {
 }
 
 #[test]
-fn module_graph_test_file_rejected() {
+fn underscore_test_file_rejected() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
         "_entry_",
@@ -3484,15 +3484,12 @@ fn main() {
     assert!(
         result.errors[0]
             .code_str()
-            .is_some_and(|c| c.contains("test_file_not_supported"))
+            .is_some_and(|c| c.contains("wrong_test_file_suffix"))
     );
 }
 
 #[test]
-fn test_file_not_supported_uses_display_path() {
-    use crate::_harness::MockFileSystem;
-    use crate::_harness::infer::infer_module;
-
+fn wrong_test_file_suffix_uses_display_path() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
         "_entry_",
@@ -3522,6 +3519,312 @@ fn main() {
     assert!(
         msg.contains("src/math/helpers_test.lis"),
         "diagnostic must use the loader's display_path, got: {msg}"
+    );
+    assert!(
+        msg.contains("src/math/helpers.test.lis"),
+        "diagnostic must suggest the `.test.lis` rename, got: {msg}"
+    );
+}
+
+#[test]
+fn dot_test_file_included_under_check() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "_entry_",
+        "main.lis",
+        r#"import "math"
+
+fn main() {
+  let _ = math.add(1, 2)
+}"#,
+    );
+    fs.add_file(
+        "math",
+        "core.lis",
+        "pub fn add(a: int, b: int) -> int { a + b }",
+    );
+    fs.add_file("math", "core.test.lis", "fn bad() -> int { true }");
+
+    let result = infer_module("_entry_", fs);
+
+    assert!(
+        result.errors.iter().any(|d| d.is_error()),
+        "a type error inside a `.test.lis` file must be reported under check"
+    );
+}
+
+#[test]
+fn production_import_of_test_only_module_rejected() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "_entry_",
+        "main.lis",
+        r#"import "fixture"
+
+fn main() {
+  let _ = fixture.sample()
+}"#,
+    );
+    fs.add_file(
+        "fixture",
+        "fixture.test.lis",
+        "pub fn sample() -> int { 1 }",
+    );
+
+    let result = infer_module("_entry_", fs);
+
+    assert!(
+        result
+            .errors
+            .iter()
+            .any(|d| d.code_str().is_some_and(|c| c.contains("module_not_found"))),
+        "a production import of a module with only test files must not resolve, got: {:?}",
+        result.errors
+    );
+}
+
+#[test]
+fn production_signature_cannot_reference_test_type() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "_entry_",
+        "main.lis",
+        r#"import "math"
+
+fn main() {
+  let _ = math.add(1, 2)
+}"#,
+    );
+    fs.add_file(
+        "math",
+        "core.lis",
+        "pub fn add(a: int, b: int) -> int { a + b }\n\npub fn first() -> Fixture { Fixture { value: 1 } }",
+    );
+    fs.add_file(
+        "math",
+        "core.test.lis",
+        "struct Fixture {\n  value: int,\n}",
+    );
+
+    let result = infer_module("_entry_", fs);
+
+    assert!(
+        result.errors.iter().any(|d| d.is_error()),
+        "a production signature must not resolve a type declared only in a test file, got: {:?}",
+        result.errors
+    );
+}
+
+#[test]
+fn test_file_impl_on_production_type_rejected() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "_entry_",
+        "main.lis",
+        r#"import "math"
+
+fn main() {
+  let _ = math.add(1, 2)
+}"#,
+    );
+    fs.add_file(
+        "math",
+        "core.lis",
+        "pub struct Counter {\n  pub value: int,\n}\n\npub fn add(a: int, b: int) -> int { a + b }",
+    );
+    fs.add_file(
+        "math",
+        "core.test.lis",
+        "impl Counter {\n  fn doubled(self) -> int { self.value + self.value }\n}",
+    );
+
+    let result = infer_module("_entry_", fs);
+
+    assert!(
+        result.errors.iter().any(|d| d
+            .code_str()
+            .is_some_and(|c| c.contains("test_impl_on_production_type"))),
+        "a test file must not add methods to a production type, got: {:?}",
+        result.errors
+    );
+}
+
+#[test]
+fn test_file_impl_on_test_type_allowed() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "_entry_",
+        "main.lis",
+        r#"import "math"
+
+fn main() {
+  let _ = math.add(1, 2)
+}"#,
+    );
+    fs.add_file(
+        "math",
+        "core.lis",
+        "pub fn add(a: int, b: int) -> int { a + b }",
+    );
+    fs.add_file(
+        "math",
+        "core.test.lis",
+        "struct Fixture {\n  value: int,\n}\n\nimpl Fixture {\n  fn doubled(self) -> int { self.value + self.value }\n}\n\nfn check() -> int {\n  let f = Fixture { value: 2 }\n  f.doubled()\n}",
+    );
+
+    let result = infer_module("_entry_", fs);
+
+    assert!(
+        !result.errors.iter().any(|d| d.is_error()),
+        "a test file must be able to impl a type it declares, got: {:?}",
+        result.errors
+    );
+}
+
+#[test]
+fn dot_test_file_sees_private_symbols() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "_entry_",
+        "main.lis",
+        r#"import "math"
+
+fn main() {
+  let _ = math.add(1, 2)
+}"#,
+    );
+    fs.add_file(
+        "math",
+        "core.lis",
+        "fn secret() -> int { 42 }\n\npub fn add(a: int, b: int) -> int { a + b }",
+    );
+    fs.add_file("math", "core.test.lis", "fn checks() -> int { secret() }");
+
+    let result = infer_module("_entry_", fs);
+
+    assert!(
+        !result.errors.iter().any(|d| d.is_error()),
+        "an internal `.test.lis` file must reach private symbols in its module, got: {:?}",
+        result.errors
+    );
+}
+
+#[test]
+fn production_file_cannot_see_test_definition() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "_entry_",
+        "main.lis",
+        r#"import "math"
+
+fn main() {
+  let _ = math.add(1, 2)
+}"#,
+    );
+    fs.add_file(
+        "math",
+        "core.lis",
+        "pub fn add(a: int, b: int) -> int { helper() }",
+    );
+    fs.add_file("math", "core.test.lis", "fn helper() -> int { 0 }");
+
+    let result = infer_module("_entry_", fs);
+
+    assert!(
+        result.errors.iter().any(|d| d.is_error()),
+        "a production file must not resolve a definition declared only in a test file"
+    );
+}
+
+#[test]
+fn test_file_sees_other_test_files_definition() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "_entry_",
+        "main.lis",
+        r#"import "math"
+
+fn main() {
+  let _ = math.add(1, 2)
+}"#,
+    );
+    fs.add_file(
+        "math",
+        "core.lis",
+        "pub fn add(a: int, b: int) -> int { a + b }",
+    );
+    fs.add_file("math", "helpers.test.lis", "fn helper() -> int { 1 }");
+    fs.add_file(
+        "math",
+        "feature.test.lis",
+        "fn checks() -> int { helper() }",
+    );
+
+    let result = infer_module("_entry_", fs);
+
+    assert!(
+        !result.errors.iter().any(|d| d.is_error()),
+        "a test file must resolve definitions from other test files in its module, got: {:?}",
+        result.errors
+    );
+}
+
+#[test]
+fn test_file_can_use_test_defined_type() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "_entry_",
+        "main.lis",
+        r#"import "math"
+
+fn main() {
+  let _ = math.add(1, 2)
+}"#,
+    );
+    fs.add_file(
+        "math",
+        "core.lis",
+        "pub fn add(a: int, b: int) -> int { a + b }",
+    );
+    fs.add_file(
+        "math",
+        "core.test.lis",
+        "struct Fixture {\n  value: int,\n}\n\nfn make() -> int {\n  let f = Fixture { value: 1 }\n  f.value\n}",
+    );
+
+    let result = infer_module("_entry_", fs);
+
+    assert!(
+        !result.errors.iter().any(|d| d.is_error()),
+        "a test file must be able to use a type it defines, got: {:?}",
+        result.errors
+    );
+}
+
+#[test]
+fn importer_cannot_see_exported_test_definition() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "_entry_",
+        "main.lis",
+        r#"import "math"
+
+fn main() {
+  let _ = math.helper()
+}"#,
+    );
+    fs.add_file(
+        "math",
+        "core.lis",
+        "pub fn add(a: int, b: int) -> int { a + b }",
+    );
+    fs.add_file("math", "core.test.lis", "pub fn helper() -> int { 1 }");
+
+    let result = infer_module("_entry_", fs);
+
+    assert!(
+        result.errors.iter().any(|d| d.is_error()),
+        "a `pub` definition in a test file must not be importable from another module"
     );
 }
 

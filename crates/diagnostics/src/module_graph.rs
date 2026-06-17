@@ -62,10 +62,30 @@ pub fn cannot_import_prelude(span: Span) -> LisetteDiagnostic {
         .with_help("Remove this import. Use e.g. `Option` or `prelude.Option` directly.")
 }
 
-pub fn test_file_not_supported(filename: &str) -> LisetteDiagnostic {
-    LisetteDiagnostic::error(format!("Test file `{}` is not yet supported", filename))
-        .with_resolve_code("test_file_not_supported")
-        .with_help("Files ending in `_test.lis` are reserved for future testing support. Rename this file to compile it.")
+pub fn wrong_test_file_suffix(display_path: &str) -> LisetteDiagnostic {
+    let help = match display_path.strip_suffix("_test.lis") {
+        Some(stem) => format!(
+            "Lisette test files use the `.test.lis` suffix. Rename this file to `{}.test.lis`.",
+            stem
+        ),
+        None => "Lisette test files use the `.test.lis` suffix.".to_string(),
+    };
+
+    LisetteDiagnostic::error(format!(
+        "Test file `{}` has an unsupported suffix",
+        display_path
+    ))
+    .with_resolve_code("wrong_test_file_suffix")
+    .with_help(help)
+}
+
+pub fn cannot_emit_test_file(display_path: &str) -> LisetteDiagnostic {
+    LisetteDiagnostic::error(format!(
+        "Test file `{}` cannot be built or run as a program",
+        display_path
+    ))
+    .with_resolve_code("cannot_emit_test_file")
+    .with_help("Test files are not entry points. Use `lis check` to type-check this file.")
 }
 
 pub fn go_stdlib_unavailable_on_target(

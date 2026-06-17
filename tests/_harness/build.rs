@@ -52,6 +52,42 @@ pub fn compile_check(fs: MockFileSystem) -> SemanticResult {
     )
 }
 
+pub fn compile_standalone_entry(
+    fs: MockFileSystem,
+    entry_name: &str,
+    phase: semantics::analyze::CompilePhase,
+) -> SemanticResult {
+    let source = fs
+        .scan_folder(ENTRY_MODULE_ID)
+        .get(entry_name)
+        .map(|c| c.source.clone())
+        .unwrap_or_else(|| panic!("entry file `{entry_name}` must exist"));
+
+    let build_result = syntax::build_ast(&source, ENTRY_FILE_ID);
+    if build_result.failed() {
+        return SemanticResult::with_parse_errors(build_result.errors, ENTRY_MODULE_ID);
+    }
+
+    analyze(AnalyzeInput {
+        config: SemanticConfig {
+            run_lints: true,
+            standalone_mode: true,
+            load_siblings: false,
+        },
+        loader: &fs,
+        source,
+        filename: entry_name.to_string(),
+        display_path: entry_name.to_string(),
+        ast: build_result.ast,
+        project_root: None,
+        locator: deps::TypedefLocator::default(),
+        compile_phase: phase,
+        go_module: String::new(),
+        disable_cache: true,
+    })
+    .result
+}
+
 pub fn compile_check_with_locator(
     fs: MockFileSystem,
     locator: deps::TypedefLocator,

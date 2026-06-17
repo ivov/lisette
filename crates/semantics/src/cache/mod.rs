@@ -77,11 +77,15 @@ pub struct ModuleInterface {
 
     pub stdlib_hash: u64,
 
-    /// This module's content hash: hash(source_hash + dependency module_hashes)
+    /// This module's content hash: hash(production_hash + dependency module_hashes)
     /// Used by downstream modules to detect transitive changes
     pub module_hash: u64,
 
-    pub source_hash: u64,
+    /// Hash of production files only; drives `module_hash` and the emit artifact.
+    pub production_hash: u64,
+
+    /// Hash of all files, tests included; this module's own validity key.
+    pub full_hash: u64,
 
     /// Module hash of each direct dependency.
     pub dependency_hashes: HashMap<String, u64>,
@@ -109,7 +113,10 @@ pub struct CachedFile {
 #[derive(Debug, Clone)]
 pub struct CompiledModule {
     pub module_id: String,
-    pub source_hash: u64,
+    /// Production-based hash propagated to dependents (production deps only).
+    pub module_hash: u64,
+    pub production_hash: u64,
+    pub full_hash: u64,
     pub dep_hashes: HashMap<String, u64>,
 }
 
@@ -120,17 +127,17 @@ pub struct EmitStamp {
 }
 
 /// Hash over the non-sourcemap Go-artifact inputs for one module.
-pub fn compute_emit_artifact_hash(source_hash: u64, go_module: &str) -> u64 {
+pub fn compute_emit_artifact_hash(production_hash: u64, go_module: &str) -> u64 {
     let mut hasher = FnvHasher::new();
-    source_hash.hash(&mut hasher);
+    production_hash.hash(&mut hasher);
     go_module.hash(&mut hasher);
     hasher.finish()
 }
 
-pub fn hash_module_sources(files: &[File]) -> u64 {
+pub fn hash_module_sources<'a>(files: impl IntoIterator<Item = &'a File>) -> u64 {
     let mut hasher = FnvHasher::new();
 
-    let mut sorted: Vec<_> = files.iter().collect();
+    let mut sorted: Vec<&File> = files.into_iter().collect();
     sorted.sort_by_key(|f| &f.name);
 
     for file in sorted {
@@ -141,12 +148,12 @@ pub fn hash_module_sources(files: &[File]) -> u64 {
     hasher.finish()
 }
 
-/// Compute a module's hash from its source hash and dependency hashes.
+/// Compute a module's hash from its production hash and dependency hashes.
 /// This ensures transitive invalidation: if C changes, B's module_hash changes
 /// (even though B's source didn't), which invalidates A's cache.
-pub fn compute_module_hash(source_hash: u64, dep_hashes: &HashMap<String, u64>) -> u64 {
+pub fn compute_module_hash(production_hash: u64, dep_hashes: &HashMap<String, u64>) -> u64 {
     let mut hasher = FnvHasher::new();
-    source_hash.hash(&mut hasher);
+    production_hash.hash(&mut hasher);
 
     let mut deps: Vec<_> = dep_hashes.iter().collect();
     deps.sort_by_key(|(k, _)| *k);
@@ -181,13 +188,13 @@ pub fn get_dependency_module_hashes(
 
 pub fn is_cache_valid(
     cache: &ModuleInterface,
-    current_source_hash: u64,
+    current_full_hash: u64,
     current_dep_hashes: &HashMap<String, u64>,
 ) -> bool {
     cache.version == CACHE_FORMAT_VERSION
         && cache.compiler_version == COMPILER_VERSION_HASH
         && cache.stdlib_hash == STDLIB_HASH
-        && cache.source_hash == current_source_hash
+        && cache.full_hash == current_full_hash
         && cache.dependency_hashes == *current_dep_hashes
 }
 
@@ -204,7 +211,7 @@ pub fn cache_file_name(module_id: &str) -> String {
 
 pub fn try_load_cache(
     module_id: &str,
-    expected_source_hash: u64,
+    expected_full_hash: u64,
     expected_dep_hashes: &HashMap<String, u64>,
     expected_artifact_hash: Option<u64>,
     project_root: &Path,
@@ -220,7 +227,7 @@ pub fn try_load_cache(
         }
     };
 
-    if !is_cache_valid(&interface, expected_source_hash, expected_dep_hashes) {
+    if !is_cache_valid(&interface, expected_full_hash, expected_dep_hashes) {
         let _ = fs::remove_file(&path);
         return None;
     }
@@ -245,7 +252,10 @@ fn all_go_outputs_exist(module_id: &str, cached_files: &[CachedFile], project_ro
     };
 
     for cached_file in cached_files {
-        if cached_file.name.ends_with(".lis") && !cached_file.name.ends_with(".d.lis") {
+        if cached_file.name.ends_with(".lis")
+            && !cached_file.name.ends_with(".d.lis")
+            && !cached_file.name.ends_with(".test.lis")
+        {
             let go_name = cached_file.name.replace(".lis", ".go");
             if !target_dir.join(&go_name).exists() {
                 return false;
@@ -262,7 +272,7 @@ pub fn save_module_cache(
     project_root: &Path,
     ufcs_methods: &HashSet<(String, String)>,
 ) -> io::Result<()> {
-    let module_hash = compute_module_hash(compiled.source_hash, &compiled.dep_hashes);
+    let module_hash = compiled.module_hash;
 
     let Some(module) = store.get_module(&compiled.module_id) else {
         return Err(io::Error::other("module not found in store"));
@@ -286,7 +296,8 @@ pub fn save_module_cache(
         compiler_version: COMPILER_VERSION_HASH,
         stdlib_hash: STDLIB_HASH,
         module_hash,
-        source_hash: compiled.source_hash,
+        production_hash: compiled.production_hash,
+        full_hash: compiled.full_hash,
         dependency_hashes: compiled.dep_hashes.clone(),
         files: all_files
             .iter()
@@ -334,6 +345,7 @@ fn extract_public_definitions(
         .definitions
         .iter()
         .filter(|(_, definition)| definition.visibility().is_public())
+        .filter(|(_, definition)| !store.is_test_definition(definition))
         .map(|(name, definition)| {
             (
                 name.to_string(),
@@ -476,6 +488,42 @@ mod tests {
     }
 
     #[test]
+    fn production_hash_ignores_test_edits_but_full_hash_does_not() {
+        let prod = File::new_cached("math", "core.lis", "core.lis", "pub fn add() {}", 1);
+        let test_a = File::new_cached("math", "core.test.lis", "core.test.lis", "fn t() {}", 2);
+        let test_b = File::new_cached(
+            "math",
+            "core.test.lis",
+            "core.test.lis",
+            "fn t() { add() }",
+            2,
+        );
+
+        let production_a =
+            hash_module_sources([&prod, &test_a].into_iter().filter(|f| !f.is_test()));
+        let production_b =
+            hash_module_sources([&prod, &test_b].into_iter().filter(|f| !f.is_test()));
+        assert_eq!(
+            production_a, production_b,
+            "editing a test file must not change the production hash"
+        );
+
+        let deps = HashMap::default();
+        assert_eq!(
+            compute_module_hash(production_a, &deps),
+            compute_module_hash(production_b, &deps),
+            "the hash propagated to dependents must be invariant to test edits"
+        );
+
+        let full_a = hash_module_sources([&prod, &test_a]);
+        let full_b = hash_module_sources([&prod, &test_b]);
+        assert_ne!(
+            full_a, full_b,
+            "editing a test file must change the module's own full hash"
+        );
+    }
+
+    #[test]
     fn test_compute_module_hash_includes_deps() {
         let source_hash = 12345u64;
         let mut deps1 = HashMap::default();
@@ -510,7 +558,8 @@ mod tests {
             compiler_version: COMPILER_VERSION_HASH,
             stdlib_hash: STDLIB_HASH,
             module_hash: 0,
-            source_hash: 100,
+            production_hash: 100,
+            full_hash: 100,
             dependency_hashes: HashMap::default(),
             files: vec![],
             definitions: HashMap::default(),
@@ -528,7 +577,8 @@ mod tests {
             compiler_version: COMPILER_VERSION_HASH + 1, // Wrong compiler
             stdlib_hash: STDLIB_HASH,
             module_hash: 0,
-            source_hash: 100,
+            production_hash: 100,
+            full_hash: 100,
             dependency_hashes: HashMap::default(),
             files: vec![],
             definitions: HashMap::default(),
@@ -540,13 +590,14 @@ mod tests {
     }
 
     #[test]
-    fn test_cache_validity_checks_source_hash() {
+    fn test_cache_validity_checks_full_hash() {
         let cache = ModuleInterface {
             version: CACHE_FORMAT_VERSION,
             compiler_version: COMPILER_VERSION_HASH,
             stdlib_hash: STDLIB_HASH,
             module_hash: 0,
-            source_hash: 100,
+            production_hash: 100,
+            full_hash: 100,
             dependency_hashes: HashMap::default(),
             files: vec![],
             definitions: HashMap::default(),
@@ -568,7 +619,8 @@ mod tests {
             compiler_version: COMPILER_VERSION_HASH,
             stdlib_hash: STDLIB_HASH,
             module_hash: 0,
-            source_hash: 100,
+            production_hash: 100,
+            full_hash: 100,
             dependency_hashes: cached_deps.clone(),
             files: vec![],
             definitions: HashMap::default(),
@@ -693,7 +745,8 @@ mod tests {
             compiler_version: COMPILER_VERSION_HASH,
             stdlib_hash: STDLIB_HASH,
             module_hash: 0,
-            source_hash: 100,
+            production_hash: 100,
+            full_hash: 100,
             dependency_hashes: HashMap::default(),
             files: vec![],
             definitions: HashMap::default(),
@@ -710,7 +763,7 @@ mod tests {
         apply_emit_stamps(root, &[(stamp.clone(), Some(999))]).unwrap();
         let reread: ModuleInterface = bincode::deserialize(&std::fs::read(&path).unwrap()).unwrap();
         assert_eq!(reread.emit_stamp, Some(999));
-        assert_eq!(reread.source_hash, 100);
+        assert_eq!(reread.full_hash, 100);
 
         apply_emit_stamps(root, &[(stamp, None)]).unwrap();
         let reread: ModuleInterface = bincode::deserialize(&std::fs::read(&path).unwrap()).unwrap();
@@ -741,7 +794,8 @@ mod tests {
             compiler_version: COMPILER_VERSION_HASH,
             stdlib_hash: STDLIB_HASH,
             module_hash: 0,
-            source_hash: 100,
+            production_hash: 100,
+            full_hash: 100,
             dependency_hashes: HashMap::default(),
             files: vec![CachedFile {
                 name: "greet.lis".to_string(),
@@ -786,7 +840,8 @@ mod tests {
             compiler_version: COMPILER_VERSION_HASH,
             stdlib_hash: STDLIB_HASH,
             module_hash: 0,
-            source_hash: 100,
+            production_hash: 100,
+            full_hash: 100,
             dependency_hashes: HashMap::default(),
             files: vec![CachedFile {
                 name: "greet.lis".to_string(),

@@ -300,6 +300,7 @@ impl<'s> TaskState<'s> {
     /// over nested when both share the same simple name.
     fn resolve_in_imported_module<'m>(
         &self,
+        store: &Store,
         module: &'m Module,
         simple_name: &str,
     ) -> Option<(String, &'m Definition)> {
@@ -309,6 +310,7 @@ impl<'s> TaskState<'s> {
         let direct = format!("{}{}", module_prefix, simple_name);
         if let Some(definition) = module.definitions.get(direct.as_str())
             && definition.visibility().is_public()
+            && !store.is_test_definition(definition)
         {
             return Some((direct, definition));
         }
@@ -322,6 +324,7 @@ impl<'s> TaskState<'s> {
             if qn.ends_with(suffix.as_str())
                 && qn.starts_with(module_prefix.as_str())
                 && definition.visibility().is_public()
+                && !store.is_test_definition(definition)
             {
                 let rest = &qn[module_prefix.len()..];
                 // Only match if it's nested (contains a dot) — direct was tried above
@@ -350,6 +353,25 @@ impl<'s> TaskState<'s> {
         self.lookup_qualified_name_in_scope(store, type_name, true)
     }
 
+    /// Whether the file being checked is a `.test.lis` file.
+    fn current_file_is_test(&self, store: &Store) -> bool {
+        self.cursor
+            .file_id
+            .is_some_and(|file_id| store.test_file_ids.contains(&file_id))
+    }
+
+    /// A test-file definition is visible only to test files of the same module.
+    fn test_definition_visible(
+        &self,
+        store: &Store,
+        definition: &Definition,
+        module_id: &str,
+        in_test_file: bool,
+    ) -> bool {
+        !store.is_test_definition(definition)
+            || (in_test_file && module_id == self.cursor.module_id)
+    }
+
     fn lookup_qualified_name_in_scope(
         &self,
         store: &Store,
@@ -360,11 +382,12 @@ impl<'s> TaskState<'s> {
             && let Some(module_id) = self.imports.prefix_to_module.get(prefix)
             && let Some(imported_module) = store.get_module(module_id)
             && let Some((qualified_name, _)) =
-                self.resolve_in_imported_module(imported_module, simple_name)
+                self.resolve_in_imported_module(store, imported_module, simple_name)
         {
             return Some(qualified_name.into());
         }
 
+        let in_test_file = self.current_file_is_test(store);
         let module_ids = std::iter::once(self.cursor.module_id.as_str())
             .chain(self.imports.unprefixed_imports.iter().map(String::as_str));
 
@@ -377,6 +400,9 @@ impl<'s> TaskState<'s> {
             let Some(definition) = module.definitions.get(qualified_name.as_str()) else {
                 continue;
             };
+            if !self.test_definition_visible(store, definition, module_id, in_test_file) {
+                continue;
+            }
 
             if prefer_type && definition.is_value(qualified_name.as_str()) {
                 if value_fallback.is_none() {
@@ -484,22 +510,28 @@ impl<'s> TaskState<'s> {
         if let Some((prefix, rest)) = value_name.split_once('.')
             && let Some(module_id) = self.imports.prefix_to_module.get(prefix)
             && let Some(imported_module) = store.get_module(module_id)
-            && let Some((_, definition)) = self.resolve_in_imported_module(imported_module, rest)
+            && let Some((_, definition)) =
+                self.resolve_in_imported_module(store, imported_module, rest)
         {
             return Some(self.resolve_definition_value_type(store, definition));
         }
 
+        let in_test_file = self.current_file_is_test(store);
         let module = store.get_module(&self.cursor.module_id)?;
         let qualified_name = Symbol::from_parts(&module.id, value_name);
 
-        if let Some(definition) = module.definitions.get(qualified_name.as_str()) {
+        if let Some(definition) = module.definitions.get(qualified_name.as_str())
+            && self.test_definition_visible(store, definition, &module.id, in_test_file)
+        {
             return Some(self.resolve_definition_value_type(store, definition));
         }
 
         for imported_module_id in &self.imports.unprefixed_imports {
             if let Some(imported_module) = store.get_module(imported_module_id) {
                 let qualified_name = Symbol::from_parts(imported_module_id, value_name);
-                if let Some(definition) = imported_module.definitions.get(qualified_name.as_str()) {
+                if let Some(definition) = imported_module.definitions.get(qualified_name.as_str())
+                    && !store.is_test_definition(definition)
+                {
                     return Some(self.resolve_definition_value_type(store, definition));
                 }
             }
@@ -760,7 +792,7 @@ impl<'s> TaskState<'s> {
         }
     }
 
-    fn module_struct_fields(&self, module: &Module) -> Arc<[StructFieldDefinition]> {
+    fn module_struct_fields(&self, store: &Store, module: &Module) -> Arc<[StructFieldDefinition]> {
         if let Some(shared) = &self.module_fields_shared
             && let Some(fields) = shared.get(module.id.as_str())
         {
@@ -775,6 +807,7 @@ impl<'s> TaskState<'s> {
             .definitions
             .iter()
             .filter(|(qn, _)| module.is_public(qn))
+            .filter(|(_, definition)| !store.is_test_definition(definition))
             .filter(|(qn, _)| {
                 qn.strip_prefix(&module_prefix)
                     .is_some_and(|rest| !rest.contains('.'))
@@ -839,7 +872,7 @@ impl<'s> TaskState<'s> {
 
         let imported_module_id = module.id.clone();
 
-        let module_struct_fields = self.module_struct_fields(module);
+        let module_struct_fields = self.module_struct_fields(store, module);
 
         let ty = Type::ImportNamespace(imported_module_id.clone().into());
 

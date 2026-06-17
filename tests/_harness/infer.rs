@@ -47,8 +47,15 @@ pub fn infer_module(module_name: &str, fs: MockFileSystem) -> InferResult {
     let sink = LocalSink::new();
 
     let locator = deps::TypedefLocator::default();
-    let mut graph_result =
-        build_module_graph(&mut store, Some(&fs), module_name, &sink, false, &locator);
+    let mut graph_result = build_module_graph(
+        &mut store,
+        Some(&fs),
+        module_name,
+        &sink,
+        false,
+        &locator,
+        true,
+    );
 
     if sink.has_errors() {
         return InferResult {
@@ -88,6 +95,18 @@ pub fn infer_module(module_name: &str, fs: MockFileSystem) -> InferResult {
             let prev_module_id = checker.cursor.module_id.clone();
             checker.cursor.module_id = module_id.to_string();
             store.store_module(&module_id, files);
+            let test_ids: Vec<u32> = store
+                .get_module(&module_id)
+                .map(|module| {
+                    module
+                        .files
+                        .values()
+                        .filter(|file| file.is_test())
+                        .map(|file| file.id)
+                        .collect()
+                })
+                .unwrap_or_default();
+            store.test_file_ids.extend(test_ids);
             checker.register_module(&mut store, &module_id);
             checker.cursor.module_id = prev_module_id;
 

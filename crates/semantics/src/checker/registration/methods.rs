@@ -159,6 +159,20 @@ impl TaskState<'_> {
             return;
         }
 
+        if self.current_file_is_test(store)
+            && let Some(module) = store.get_module(&module_id)
+            && let Some(definition) = module.definitions.get(&receiver_qualified_name)
+            && !store.is_test_definition(definition)
+        {
+            self.sink
+                .push(diagnostics::infer::test_impl_on_production_type(
+                    type_name,
+                    annotation.get_span(),
+                ));
+            self.scopes.pop();
+            return;
+        }
+
         if !self.is_d_lis(&*store)
             && let Some(module) = store.get_module(&module_id)
             && matches!(

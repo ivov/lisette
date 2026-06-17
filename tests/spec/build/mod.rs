@@ -1,10 +1,11 @@
 use crate::_harness::build::{
     compile_check, compile_check_standalone, compile_check_with_locator, compile_project_files,
-    locator_with_go_dep,
+    compile_standalone_entry, locator_with_go_dep,
 };
 use crate::_harness::filesystem::MockFileSystem;
 use crate::_harness::infer::infer;
 use crate::assert_build_snapshot;
+use semantics::analyze::CompilePhase;
 use semantics::store::ENTRY_MODULE_ID;
 
 #[test]
@@ -6871,4 +6872,173 @@ fn main() {
     );
 
     assert_build_snapshot!(fs, "github.com/user/myproject");
+}
+
+#[test]
+fn build_excludes_test_files_from_emit() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+import "math"
+
+fn main() {
+  let _ = math.add(1, 2)
+}
+"#,
+    );
+    fs.add_file(
+        "math",
+        "core.lis",
+        "pub fn add(a: int, b: int) -> int { a + b }",
+    );
+    fs.add_file("math", "core.test.lis", "fn checks() -> int { add(1, 2) }");
+
+    let outputs = compile_project_files(fs, "github.com/user/myproject", false);
+    let names: Vec<&str> = outputs.iter().map(|f| f.name.as_str()).collect();
+
+    assert!(
+        names.iter().any(|n| n.contains("core.go")),
+        "production file must be emitted, got: {names:?}"
+    );
+    assert!(
+        !names.iter().any(|n| n.contains("test")),
+        "no test file may be emitted into the binary, got: {names:?}"
+    );
+}
+
+#[test]
+fn test_impl_on_production_type_rejected_under_parallel_registration() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+import "math"
+import "f1"
+import "f2"
+import "f3"
+
+fn main() {
+  let _ = math.add(1, 2) + f1.one() + f2.two() + f3.three()
+}
+"#,
+    );
+    fs.add_file(
+        "math",
+        "core.lis",
+        "pub struct Counter {\n  pub value: int,\n}\n\npub fn add(a: int, b: int) -> int { a + b }",
+    );
+    fs.add_file(
+        "math",
+        "core.test.lis",
+        "impl Counter {\n  fn doubled(self) -> int { self.value + self.value }\n}",
+    );
+    fs.add_file("f1", "f1.lis", "pub fn one() -> int { 1 }");
+    fs.add_file("f2", "f2.lis", "pub fn two() -> int { 2 }");
+    fs.add_file("f3", "f3.lis", "pub fn three() -> int { 3 }");
+
+    let result = compile_check(fs);
+
+    assert!(
+        result.errors.iter().any(|d| d
+            .code_str()
+            .is_some_and(|c| c.contains("test_impl_on_production_type"))),
+        "the test-impl restriction must fire even when modules register in parallel, got: {:?}",
+        result.errors
+    );
+}
+
+#[test]
+fn private_test_interface_does_not_flag_production_method() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        "struct Circle {\n  radius: float64,\n}\n\nimpl Circle {\n  pub fn area(self) -> float64 { self.radius }\n}\n\nfn main() {}",
+    );
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "shapes.test.lis",
+        "interface Shape {\n  fn area(self) -> float64\n}",
+    );
+
+    let result = compile_check(fs);
+
+    assert!(
+        !result.errors.iter().any(|d| d
+            .code_str()
+            .is_some_and(|c| c.contains("non_pub_interface_pub_impl"))),
+        "a private interface in a test file must not flag a production public method, got: {:?}",
+        result
+            .errors
+            .iter()
+            .filter_map(|d| d.code_str().map(str::to_string))
+            .collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn underscore_test_suffix_rejected_as_entry_file() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "helpers_test.lis",
+        "fn helper() -> int { 1 }",
+    );
+
+    let result = compile_standalone_entry(fs, "helpers_test.lis", CompilePhase::Check);
+
+    assert!(
+        result.errors.iter().any(|d| d
+            .code_str()
+            .is_some_and(|c| c.contains("wrong_test_file_suffix"))),
+        "a `_test.lis` entry file must be rejected, got: {:?}",
+        result
+            .errors
+            .iter()
+            .filter_map(|d| d.code_str().map(str::to_string))
+            .collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn test_file_rejected_as_emit_entry() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(ENTRY_MODULE_ID, "demo.test.lis", "fn main() {}");
+
+    let result = compile_standalone_entry(fs, "demo.test.lis", CompilePhase::Emit);
+
+    assert!(
+        result.errors.iter().any(|d| d
+            .code_str()
+            .is_some_and(|c| c.contains("cannot_emit_test_file"))),
+        "a `.test.lis` entry must not be emitted as a program, got: {:?}",
+        result
+            .errors
+            .iter()
+            .filter_map(|d| d.code_str().map(str::to_string))
+            .collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn test_file_allowed_as_check_entry() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(ENTRY_MODULE_ID, "demo.test.lis", "fn helper() -> int { 1 }");
+
+    let result = compile_standalone_entry(fs, "demo.test.lis", CompilePhase::Check);
+
+    assert!(
+        !result.errors.iter().any(|d| d.code_str().is_some_and(|c| {
+            c.contains("wrong_test_file_suffix") || c.contains("cannot_emit_test_file")
+        })),
+        "checking a `.test.lis` file directly must be allowed, got: {:?}",
+        result
+            .errors
+            .iter()
+            .filter_map(|d| d.code_str().map(str::to_string))
+            .collect::<Vec<_>>()
+    );
 }

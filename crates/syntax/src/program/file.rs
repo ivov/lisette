@@ -97,6 +97,11 @@ impl File {
         !self.is_d_lis()
     }
 
+    /// A test file (`*.test.lis`).
+    pub fn is_test(&self) -> bool {
+        self.name.ends_with(".test.lis")
+    }
+
     pub fn imports(&self) -> Vec<FileImport> {
         self.items
             .iter()

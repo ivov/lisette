@@ -2831,6 +2831,19 @@ pub fn impl_on_type_alias(_type_name: &str, span: Span) -> LisetteDiagnostic {
         )
 }
 
+pub fn test_impl_on_production_type(type_name: &str, span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Cannot implement methods on a production type from a test file")
+        .with_infer_code("test_impl_on_production_type")
+        .with_span_label(
+            &span,
+            format!("`{}` is not declared in a test file", type_name),
+        )
+        .with_help(
+            "A test file may only add methods to types it declares. Move the method onto the \
+             production type, or define a test-only type to carry it",
+        )
+}
+
 pub fn prelude_type_shadowed(name: &str, span: Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Cannot shadow prelude type")
         .with_infer_code("prelude_type_shadowed")

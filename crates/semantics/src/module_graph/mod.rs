@@ -19,9 +19,13 @@ pub struct ModuleGraphResult {
     pub order: Vec<ModuleId>,
     pub cycles: Vec<Vec<ModuleId>>,
     pub files: HashMap<ModuleId, Vec<File>>,
-    /// Direct dependencies of each module (module_id -> set of dependency module_ids).
-    /// Used for transitive cache invalidation.
+    /// Direct dependencies of each module, test-file imports included. Drives
+    /// reachability, topological order, and a module's own cache validity.
     pub edges: HashMap<ModuleId, HashSet<ModuleId>>,
+    /// `edges` minus imports that appear only in `.test.lis` files. Drives the
+    /// `module_hash` propagated to dependents, so a test-only import never
+    /// invalidates production importers.
+    pub production_edges: HashMap<ModuleId, HashSet<ModuleId>>,
     /// `go:` modules that are only ever blank-imported in the visited file set.
     pub link_only_modules: HashSet<ModuleId>,
 }
@@ -33,8 +37,10 @@ pub fn build_module_graph(
     sink: &LocalSink,
     standalone_mode: bool,
     locator: &TypedefLocator,
+    include_tests: bool,
 ) -> ModuleGraphResult {
     let mut edges: HashMap<ModuleId, HashSet<ModuleId>> = HashMap::default();
+    let mut production_edges: HashMap<ModuleId, HashSet<ModuleId>> = HashMap::default();
     let mut to_visit = vec![entry_module.to_string()];
     let mut visited: HashSet<ModuleId> = HashSet::default();
     let mut files: HashMap<ModuleId, Vec<File>> = HashMap::default();
@@ -55,7 +61,7 @@ pub fn build_module_graph(
 
         batch.sort();
 
-        let mut parsed = batch_parse_modules(&batch, store, loader, sink);
+        let mut parsed = batch_parse_modules(&batch, store, loader, sink, include_tests);
 
         for module_id in &batch {
             let module_files = parsed.remove(module_id).unwrap_or_default();
@@ -66,6 +72,13 @@ pub fn build_module_graph(
             } else {
                 Vec::new()
             };
+            let has_parsed_files = !module_files.is_empty();
+            let production_import_names: HashSet<String> = module_files
+                .iter()
+                .filter(|f| !f.is_test())
+                .flat_map(|f| f.imports())
+                .map(|import| import.name.to_string())
+                .collect();
             let imports_with_spans = process_file_imports(
                 file_imports,
                 sink,
@@ -74,7 +87,8 @@ pub fn build_module_graph(
                 &mut blank_tracker,
             );
 
-            let module_exists = !module_files.is_empty()
+            let has_production_file = module_files.iter().any(|file| !file.is_test());
+            let module_exists = has_production_file
                 || store.has(module_id)
                 || module_id == entry_module
                 || module_id.starts_with("go:");
@@ -113,6 +127,16 @@ pub fn build_module_graph(
                 import_spans.entry(import).or_insert(span);
             }
 
+            let production_edge_set: HashSet<ModuleId> = if has_parsed_files {
+                imports
+                    .iter()
+                    .filter(|import| production_import_names.contains(import.as_str()))
+                    .cloned()
+                    .collect()
+            } else {
+                imports.clone()
+            };
+            production_edges.insert(module_id.clone(), production_edge_set);
             edges.insert(module_id.clone(), imports);
         }
     }
@@ -124,6 +148,7 @@ pub fn build_module_graph(
         cycles,
         files,
         edges,
+        production_edges,
         link_only_modules: blank_tracker.into_link_only_modules(),
     }
 }
@@ -168,6 +193,7 @@ fn batch_parse_modules(
     store: &Store,
     loader: Option<&dyn Loader>,
     sink: &LocalSink,
+    include_tests: bool,
 ) -> HashMap<ModuleId, Vec<File>> {
     let Some(fs) = loader else {
         return HashMap::default();
@@ -183,9 +209,12 @@ fn batch_parse_modules(
         entries.sort_by(|a, b| a.0.cmp(&b.0));
         for (filename, content) in entries {
             if filename.ends_with("_test.lis") {
-                sink.push(diagnostics::module_graph::test_file_not_supported(
+                sink.push(diagnostics::module_graph::wrong_test_file_suffix(
                     &content.display_path,
                 ));
+                continue;
+            }
+            if filename.ends_with(".test.lis") && !include_tests {
                 continue;
             }
             let file_id = store.new_file_id();

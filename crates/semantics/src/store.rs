@@ -117,6 +117,9 @@ pub struct Store {
     pub closed_domains: HashMap<Symbol, ClosedDomain>,
     pub bound_conflict_types: HashSet<String>,
     pub equality_index: EqualityIndex,
+    /// File IDs of `.test.lis` files, for detecting test-file context during
+    /// inference after a module's `files` have been taken out.
+    pub test_file_ids: HashSet<u32>,
 }
 
 impl Default for Store {
@@ -150,6 +153,7 @@ impl Store {
             closed_domains: Default::default(),
             bound_conflict_types: Default::default(),
             equality_index: Default::default(),
+            test_file_ids: Default::default(),
         }
     }
 
@@ -269,6 +273,7 @@ impl Store {
             closed_domains: HashMap::default(),
             bound_conflict_types: HashSet::default(),
             equality_index: EqualityIndex::default(),
+            test_file_ids: self.test_file_ids.clone(),
         }
     }
 
@@ -286,6 +291,14 @@ impl Store {
         self.get_module(module_name)?
             .definitions
             .get(qualified_name)
+    }
+
+    /// Whether a definition was declared in a `.test.lis` file. Production
+    /// contexts must not resolve such definitions.
+    pub fn is_test_definition(&self, definition: &Definition) -> bool {
+        definition
+            .name_span()
+            .is_some_and(|span| self.test_file_ids.contains(&span.file_id))
     }
 
     pub fn module_for_qualified_name<'a>(&'a self, qualified_name: &'a str) -> Option<&'a str> {
