@@ -484,6 +484,20 @@ pub fn manual_find(span: &Span, receiver: &str, predicate: &str) -> LisetteDiagn
         ))
 }
 
+pub fn manual_contains(span: &Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::info("Manual `contains`")
+        .with_lint_code("manual_contains")
+        .with_span_label(span, "can be simpler")
+        .with_help("Replace `.any(|x| x == value)` with `.contains(value)`")
+}
+
+pub fn unnecessary_first_then_check(span: &Span, replacement: &str) -> LisetteDiagnostic {
+    LisetteDiagnostic::info("First-element check can use `is_empty()`")
+        .with_lint_code("unnecessary_first_then_check")
+        .with_span_label(span, "can be simpler")
+        .with_help(format!("Simplify to `{replacement}`"))
+}
+
 pub fn redundant_slice_bounds(span: &Span, replacement: &str) -> LisetteDiagnostic {
     LisetteDiagnostic::info("Redundant slice bounds")
         .with_lint_code("redundant_slice_bounds")

@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [info] Manual `contains`
+    ╭─[test.lis:9:11]
+  8 │   let xs = [1, 2, 3, 4]
+  9 │   let _ = xs.any(|x| x == cfg.target)
+    ·           ─────────────┬─────────────
+    ·                        ╰── can be simpler
+ 10 │ }
+    ╰────
+  help: Replace `.any(|x| x == value)` with `.contains(value)` · code: [lint.manual_contains]

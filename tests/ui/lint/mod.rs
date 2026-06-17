@@ -13865,6 +13865,366 @@ fn main() {
 }
 
 #[test]
+fn manual_contains() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let xs = [1, 2, 3, 4]
+  let _ = xs.any(|x| x == 3)
+}
+"#
+    );
+}
+
+#[test]
+fn manual_contains_value_on_left() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let xs = [1, 2, 3, 4]
+  let _ = xs.any(|x| 3 == x)
+}
+"#
+    );
+}
+
+#[test]
+fn manual_contains_string_slice() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let names = ["a", "b"]
+  let _ = names.any(|s| s == "b")
+}
+"#
+    );
+}
+
+#[test]
+fn manual_contains_enum_slice() {
+    assert_lint_snapshot!(
+        r#"
+enum Color {
+  Red,
+  Green,
+  Blue,
+}
+
+fn main() {
+  let cs = [Color.Red, Color.Green]
+  let _ = cs.any(|c| c == Color.Blue)
+}
+"#
+    );
+}
+
+#[test]
+fn manual_contains_not_equal_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let xs = [1, 2, 3, 4]
+  let _ = xs.any(|x| x != 3)
+}
+"#
+    );
+}
+
+#[test]
+fn manual_contains_relational_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let xs = [1, 2, 3, 4]
+  let _ = xs.any(|x| x > 3)
+}
+"#
+    );
+}
+
+#[test]
+fn manual_contains_field_predicate_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+struct User {
+  age: int
+}
+
+fn main() {
+  let users = [User { age: 17 }, User { age: 21 }]
+  let _ = users.any(|u| u.age == 18)
+}
+"#
+    );
+}
+
+#[test]
+fn manual_contains_value_uses_element_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let xs = [1, 2, 3, 4]
+  let _ = xs.any(|x| x == x + 1)
+}
+"#
+    );
+}
+
+#[test]
+fn manual_contains_effectful_value_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn cost() -> int {
+  7
+}
+
+fn main() {
+  let xs = [1, 2, 3, 4]
+  let _ = xs.any(|x| x == cost())
+}
+"#
+    );
+}
+
+#[test]
+fn manual_contains_field_value() {
+    assert_lint_snapshot!(
+        r#"
+struct Config {
+  target: int
+}
+
+fn main() {
+  let cfg = Config { target: 3 }
+  let xs = [1, 2, 3, 4]
+  let _ = xs.any(|x| x == cfg.target)
+}
+"#
+    );
+}
+
+#[test]
+fn manual_contains_dividing_value_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let xs = [1, 2, 3, 4]
+  let denom = 2
+  let _ = xs.any(|x| x == 10 / denom)
+}
+"#
+    );
+}
+
+#[test]
+fn manual_contains_interpolated_fstring_value_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let names = ["a", "b"]
+  let n = 1
+  let _ = names.any(|s| s == f"{n}")
+}
+"#
+    );
+}
+
+#[test]
+fn manual_contains_mismatched_int_type_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let xs = [1, 2, 3, 4]
+  let small: int8 = 2
+  let _ = xs.any(|x| x == small)
+}
+"#
+    );
+}
+
+#[test]
+fn manual_contains_interface_equality_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+interface Animal {
+  fn sound(self) -> string
+}
+
+struct Dog {}
+
+impl Dog {
+  fn sound(self) -> string {
+    "woof"
+  }
+}
+
+fn main() {
+  let d = Dog {}
+  let animals: Slice<Animal> = [d]
+  let target: Animal = d
+  let _ = animals.any(|x| x == target)
+}
+"#
+    );
+}
+
+#[test]
+fn manual_contains_user_type_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+struct Bag {
+  items: Slice<int>
+}
+
+impl Bag {
+  fn any(self, p: fn(int) -> bool) -> bool {
+    self.items.any(p)
+  }
+}
+
+fn main() {
+  let b = Bag { items: [1, 2, 3] }
+  let _ = b.any(|x| x == 1)
+}
+"#
+    );
+}
+
+#[test]
+fn manual_contains_all_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let xs = [1, 2, 3, 4]
+  let _ = xs.all(|x| x == 3)
+}
+"#
+    );
+}
+
+#[test]
+fn manual_contains_already_contains_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let xs = [1, 2, 3, 4]
+  let _ = xs.contains(3)
+}
+"#
+    );
+}
+
+#[test]
+fn unnecessary_first_then_check_is_some() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let xs = [1, 2, 3, 4]
+  let _ = xs.get(0).is_some()
+}
+"#
+    );
+}
+
+#[test]
+fn unnecessary_first_then_check_is_none() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let xs = [1, 2, 3, 4]
+  let _ = xs.get(0).is_none()
+}
+"#
+    );
+}
+
+#[test]
+fn unnecessary_first_then_check_field_receiver() {
+    assert_lint_snapshot!(
+        r#"
+struct Holder {
+  items: Slice<int>
+}
+
+fn main() {
+  let h = Holder { items: [1, 2] }
+  let _ = h.items.get(0).is_some()
+}
+"#
+    );
+}
+
+#[test]
+fn unnecessary_first_then_check_index_not_zero_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let xs = [1, 2, 3, 4]
+  let _ = xs.get(1).is_some()
+}
+"#
+    );
+}
+
+#[test]
+fn unnecessary_first_then_check_map_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let m = Map.new<int, string>()
+  let _ = m.get(0).is_some()
+}
+"#
+    );
+}
+
+#[test]
+fn unnecessary_first_then_check_user_type_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+struct Bag {
+  items: Slice<int>
+}
+
+impl Bag {
+  fn get(self, i: int) -> Option<int> {
+    self.items.get(i)
+  }
+}
+
+fn main() {
+  let b = Bag { items: [1, 2, 3] }
+  let _ = b.get(0).is_some()
+}
+"#
+    );
+}
+
+#[test]
+fn unnecessary_first_then_check_plain_get_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let xs = [1, 2, 3, 4]
+  let _ = xs.get(0)
+}
+"#
+    );
+}
+
+#[test]
+fn unnecessary_first_then_check_already_is_empty_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let xs = [1, 2, 3, 4]
+  let _ = xs.is_empty()
+}
+"#
+    );
+}
+
+#[test]
 fn qualified_tuple_variant_pattern_marks_import_used() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
