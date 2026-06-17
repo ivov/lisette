@@ -5,6 +5,7 @@ mod equality;
 mod impl_bounds;
 mod iterate;
 mod methods;
+mod test_functions;
 mod types;
 
 use std::path::PathBuf;
@@ -231,6 +232,7 @@ impl TaskState<'_> {
         self.ufcs_methods.extend(ufcs_entries);
 
         self.register_module_equality(store, id);
+        self.register_module_tests(store, id);
     }
 
     /// Register a Go module (stdlib or third-party). Unlike regular modules,

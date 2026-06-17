@@ -248,4 +248,86 @@ mod tests {
             "leaky has warnings; cache must not write it"
         );
     }
+
+    fn test_index_names(project_dir: &std::path::Path) -> Vec<String> {
+        let (_, locator) = TypedefLocator::from_project_with_manifest(project_dir).unwrap();
+        let src_main = project_dir.join("src").join("main.lis");
+        let source = stdfs::read_to_string(&src_main).unwrap();
+        let working_dir = src_main
+            .parent()
+            .and_then(|p| p.to_str())
+            .expect("temp project path is valid utf-8");
+        let fs_loader = LocalFileSystem::new(working_dir);
+        let build_result = syntax::build_ast(&source, ENTRY_FILE_ID);
+        let output = analyze(AnalyzeInput {
+            config: SemanticConfig {
+                run_lints: true,
+                standalone_mode: false,
+                load_siblings: true,
+            },
+            loader: &fs_loader,
+            source,
+            filename: "main.lis".to_string(),
+            display_path: "src/main.lis".to_string(),
+            ast: build_result.ast,
+            project_root: Some(project_dir.to_path_buf()),
+            compile_phase: CompilePhase::Check,
+            locator,
+            go_module: "test".to_string(),
+            disable_cache: false,
+        });
+        let mut names: Vec<String> = output
+            .result
+            .test_index
+            .tests()
+            .iter()
+            .map(|t| t.qualified_name.clone())
+            .collect();
+        names.sort();
+        names
+    }
+
+    #[test]
+    fn test_index_retains_cached_module_tests_on_warm_build() {
+        let tmp = tempdir().unwrap();
+        let root = tmp.path();
+        stdfs::create_dir_all(root.join("src").join("math")).unwrap();
+        stdfs::write(
+            root.join("lisette.toml"),
+            "[project]\nname = \"github.com/test/tests\"\nversion = \"0.1.0\"\n",
+        )
+        .unwrap();
+        stdfs::write(
+            root.join("src").join("main.lis"),
+            "import \"math\"\n\nfn main() {\n  let _ = math.add(1, 2)\n}\n",
+        )
+        .unwrap();
+        stdfs::write(
+            root.join("src").join("math").join("math.lis"),
+            "pub fn add(a: int, b: int) -> int { a + b }\n",
+        )
+        .unwrap();
+        stdfs::write(
+            root.join("src").join("math").join("math.test.lis"),
+            "#[test]\npub fn alpha() {}\n",
+        )
+        .unwrap();
+
+        let cold = test_index_names(root);
+        assert!(
+            cold.contains(&"math.alpha".to_string()),
+            "cold run must record math.alpha, got: {cold:?}"
+        );
+
+        assert!(
+            root.join("target/cache/math.cache").exists(),
+            "math must be cached after the cold run for this test to be meaningful"
+        );
+
+        let warm = test_index_names(root);
+        assert_eq!(
+            cold, warm,
+            "tests in a cached module must survive a warm build"
+        );
+    }
 }

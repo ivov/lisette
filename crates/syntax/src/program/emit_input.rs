@@ -66,6 +66,38 @@ impl UnusedInfo {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct TestFunction {
+    pub module_id: String,
+    pub qualified_name: String,
+    pub title: Option<String>,
+    pub doc: Option<String>,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct TestIndex {
+    tests: Vec<TestFunction>,
+}
+
+impl TestIndex {
+    pub fn push(&mut self, test: TestFunction) {
+        self.tests.push(test);
+    }
+
+    pub fn tests(&self) -> &[TestFunction] {
+        &self.tests
+    }
+
+    pub fn len(&self) -> usize {
+        self.tests.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.tests.is_empty()
+    }
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct EqualityIndex {
     by_id: HashMap<String, EqualityInfo>,
@@ -185,6 +217,7 @@ pub struct EmitInput {
     pub cached_modules: HashSet<String>,
     pub ufcs_methods: HashSet<(String, String)>,
     pub equality_index: EqualityIndex,
+    pub test_index: TestIndex,
     pub go_package_names: HashMap<String, String>,
     pub go_module_ids: HashSet<String>,
 }

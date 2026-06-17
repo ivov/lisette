@@ -7042,3 +7042,81 @@ fn test_file_allowed_as_check_entry() {
             .collect::<Vec<_>>()
     );
 }
+
+#[test]
+fn test_index_records_test_functions() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        "import \"math\"\n\nfn main() {\n  let _ = math.add(1, 2)\n}",
+    );
+    fs.add_file(
+        "math",
+        "core.lis",
+        "pub fn add(a: int, b: int) -> int { a + b }",
+    );
+    fs.add_file(
+        "math",
+        "core.test.lis",
+        "#[test]\nfn alpha() {}\n\n/// Checks beta.\n#[test(\"beta title\")]\nfn beta() {}",
+    );
+
+    let result = compile_check(fs);
+
+    assert!(
+        !result.errors.iter().any(|d| d.is_error()),
+        "no errors expected, got: {:?}",
+        result.errors
+    );
+
+    let tests = result.test_index.tests();
+    assert_eq!(tests.len(), 2, "expected 2 tests, got: {tests:?}");
+
+    let alpha = tests
+        .iter()
+        .find(|t| t.qualified_name == "math.alpha")
+        .expect("alpha must be recorded");
+    assert_eq!(alpha.title, None);
+
+    let beta = tests
+        .iter()
+        .find(|t| t.qualified_name == "math.beta")
+        .expect("beta must be recorded");
+    assert_eq!(beta.title.as_deref(), Some("beta title"));
+    assert!(
+        beta.doc
+            .as_deref()
+            .is_some_and(|d| d.contains("Checks beta")),
+        "beta doc must be captured, got: {:?}",
+        beta.doc
+    );
+}
+
+#[test]
+fn test_index_complete_under_parallel_registration() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        "import \"m1\"\nimport \"m2\"\nimport \"m3\"\nimport \"m4\"\n\nfn main() {\n  let _ = m1.v() + m2.v() + m3.v() + m4.v()\n}",
+    );
+    for m in ["m1", "m2", "m3", "m4"] {
+        fs.add_file(m, "core.lis", "pub fn v() -> int { 1 }");
+        fs.add_file(m, "core.test.lis", "#[test]\nfn checks() {}");
+    }
+
+    let result = compile_check(fs);
+
+    assert!(
+        !result.errors.iter().any(|d| d.is_error()),
+        "no errors expected, got: {:?}",
+        result.errors
+    );
+    assert_eq!(
+        result.test_index.len(),
+        4,
+        "every module's test must be recorded under parallel registration, got: {:?}",
+        result.test_index.tests()
+    );
+}

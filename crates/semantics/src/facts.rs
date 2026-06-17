@@ -4,6 +4,7 @@ use std::sync::atomic::{AtomicU32, Ordering};
 
 use diagnostics::{PatternIssue, UnusedExpressionKind};
 use syntax::ast::{BindingId, BindingKind, DeadCodeCause, Span};
+use syntax::program::TestFunction;
 use syntax::types::Type;
 
 #[derive(Debug, Default)]
@@ -47,6 +48,7 @@ pub struct Facts {
     pub expression_only_fstrings: Vec<Span>,
     pub interface_satisfied_methods: HashMap<(String, String), Vec<String>>,
     pub equality_derivations: Vec<String>,
+    pub test_functions: Vec<TestFunction>,
 
     // Drained by passes::deferred via mem::take.
     pub generic_call_checks: Vec<GenericCallCheck>,
@@ -102,6 +104,7 @@ impl Facts {
             usage_set: HashSet::default(),
             interface_satisfied_methods: HashMap::default(),
             equality_derivations: Vec::new(),
+            test_functions: Vec::new(),
         }
     }
 
@@ -231,8 +234,10 @@ impl Facts {
             usage_set: _,
             interface_satisfied_methods,
             equality_derivations,
+            test_functions,
         } = other;
         self.equality_derivations.extend(equality_derivations);
+        self.test_functions.extend(test_functions);
 
         self.bindings.extend(bindings);
         self.dead_code.extend(dead_code);

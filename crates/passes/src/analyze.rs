@@ -146,6 +146,7 @@ pub fn analyze(input: AnalyzeInput) -> AnalyzeOutput {
         cached_modules,
         ufcs_methods,
         equality_index: store.equality_index,
+        test_index: store.test_index,
         typedef_paths: store.typedef_paths,
         go_package_names: store.go_package_names,
         go_module_ids,

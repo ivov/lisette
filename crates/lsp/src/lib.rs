@@ -1150,7 +1150,8 @@ impl LanguageServer for Backend {
         // An in-progress `#[ ... ]` is exclusive: when the cursor is in attribute
         // position, offer only the attributes relevant to the target it attaches
         // to, never the general keyword/identifier completions below.
-        if let Some(items) = attribute_completions(&file.source, offset as usize) {
+        let is_test_file = uri.path().ends_with(".test.lis");
+        if let Some(items) = attribute_completions(&file.source, offset as usize, is_test_file) {
             return Ok(Some(CompletionResponse::Array(items)));
         }
 

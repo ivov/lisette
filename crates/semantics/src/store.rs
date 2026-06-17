@@ -8,6 +8,7 @@ use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use syntax::ast::{EnumVariant, Expression, Literal, StructFieldDefinition};
 use syntax::program::{
     Definition, DefinitionBody, EqualityIndex, File, Interface, MethodSignatures, Module, ModuleId,
+    TestIndex,
 };
 use syntax::types::{SimpleKind, SubstitutionMap, Symbol, Type, substitute};
 
@@ -117,6 +118,7 @@ pub struct Store {
     pub closed_domains: HashMap<Symbol, ClosedDomain>,
     pub bound_conflict_types: HashSet<String>,
     pub equality_index: EqualityIndex,
+    pub test_index: TestIndex,
     /// File IDs of `.test.lis` files, for detecting test-file context during
     /// inference after a module's `files` have been taken out.
     pub test_file_ids: HashSet<u32>,
@@ -153,6 +155,7 @@ impl Store {
             closed_domains: Default::default(),
             bound_conflict_types: Default::default(),
             equality_index: Default::default(),
+            test_index: Default::default(),
             test_file_ids: Default::default(),
         }
     }
@@ -273,6 +276,7 @@ impl Store {
             closed_domains: HashMap::default(),
             bound_conflict_types: HashSet::default(),
             equality_index: EqualityIndex::default(),
+            test_index: TestIndex::default(),
             test_file_ids: self.test_file_ids.clone(),
         }
     }

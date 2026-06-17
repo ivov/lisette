@@ -6,8 +6,8 @@ pub enum AttributeTarget {
     Struct,
     StructField,
     Enum,
-    /// A function or an `impl`/`interface` method.
     Function,
+    Method,
 }
 
 pub struct AttributeInfo {
@@ -87,7 +87,7 @@ pub const ATTRIBUTES: &[AttributeInfo] = &[
     AttributeInfo {
         name: "allow",
         detail: "suppress a lint",
-        targets: &[Function],
+        targets: &[Function, Method],
     },
     AttributeInfo {
         name: "iterate",
@@ -103,6 +103,11 @@ pub const ATTRIBUTES: &[AttributeInfo] = &[
         name: "equality",
         detail: "derive `equals`",
         targets: &[Struct, Enum],
+    },
+    AttributeInfo {
+        name: "test",
+        detail: "mark a test function",
+        targets: &[Function],
     },
 ];
 

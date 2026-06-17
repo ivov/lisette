@@ -246,6 +246,7 @@ pub fn run_inference(input: AnalyzeInput) -> InferenceOutput {
                     .ufcs_methods
                     .extend(cached.ufcs_methods.iter().cloned());
                 register_cached_module(&mut store, &module_id, cached, project_root);
+                checker.collect_cached_module_tests(&store, &module_id);
                 cached_modules.insert(module_id.clone());
                 continue;
             }
@@ -481,6 +482,7 @@ fn infer_modules(
     binding_ids: &Arc<BindingIdAllocator>,
 ) {
     checker.finalize_equality(store);
+    checker.finalize_tests(store);
 
     let module_files: Vec<(String, Vec<File>)> = to_infer
         .iter()

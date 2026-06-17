@@ -373,7 +373,11 @@ fn is_instance_method(ty: &syntax::types::Type, type_id: &str) -> bool {
     }
 }
 
-pub(crate) fn attribute_completions(source: &str, offset: usize) -> Option<Vec<CompletionItem>> {
+pub(crate) fn attribute_completions(
+    source: &str,
+    offset: usize,
+    is_test_file: bool,
+) -> Option<Vec<CompletionItem>> {
     let tokens = Lexer::new(source, 0).lex().tokens;
     let split = tokens.partition_point(|t| (t.byte_offset as usize) < offset);
     let (before, after) = tokens.split_at(split);
@@ -382,14 +386,14 @@ pub(crate) fn attribute_completions(source: &str, offset: usize) -> Option<Vec<C
         return None;
     }
 
-    let items = match enclosing_context(before) {
+    let mut items = match enclosing_context(before) {
         EnclosingContext::Struct => collect(attributes_for(AttributeTarget::StructField)),
         EnclosingContext::Parenthesized | EnclosingContext::Enum | EnclosingContext::Function => {
             Vec::new()
         }
         EnclosingContext::Impl => match following_item(after).item {
             FollowingItem::Target(AttributeTarget::Function) | FollowingItem::Unknown => {
-                collect(attributes_for(AttributeTarget::Function))
+                collect(attributes_for(AttributeTarget::Method))
             }
             _ => Vec::new(),
         },
@@ -402,7 +406,7 @@ pub(crate) fn attribute_completions(source: &str, offset: usize) -> Option<Vec<C
             | Following {
                 item: FollowingItem::Unknown,
                 is_pub: false,
-            } => collect(attributes_for(AttributeTarget::Function)),
+            } => collect(attributes_for(AttributeTarget::Method)),
             _ => Vec::new(),
         },
         EnclosingContext::TopLevel => match following_item(after).item {
@@ -411,6 +415,10 @@ pub(crate) fn attribute_completions(source: &str, offset: usize) -> Option<Vec<C
             FollowingItem::Unknown => collect(top_level_attributes()),
         },
     };
+
+    if !is_test_file {
+        items.retain(|item| item.label != "test");
+    }
 
     Some(items)
 }
@@ -591,18 +599,18 @@ mod attribute_completion_tests {
     /// Runs `attribute_completions` with the cursor at the `|` marker (which is
     /// stripped before scanning) and returns the offered labels, or `None` when
     /// the cursor is not in attribute position.
-    fn labels_at(src_with_cursor: &str) -> Option<Vec<String>> {
+    fn labels_at(src_with_cursor: &str, is_test_file: bool) -> Option<Vec<String>> {
         let offset = src_with_cursor
             .find('|')
             .expect("test input needs a `|` cursor");
         let source = src_with_cursor.replacen('|', "", 1);
-        attribute_completions(&source, offset)
+        attribute_completions(&source, offset, is_test_file)
             .map(|items| items.into_iter().map(|i| i.label).collect())
     }
 
     #[test]
     fn top_level_struct_offers_serialization_tag_and_display() {
-        let labels = labels_at("#[|\nstruct Point { x: int }").unwrap();
+        let labels = labels_at("#[|\nstruct Point { x: int }", false).unwrap();
         assert!(labels.contains(&"json".to_string()));
         assert!(labels.contains(&"display".to_string()));
         assert!(labels.contains(&"equality".to_string()));
@@ -613,7 +621,7 @@ mod attribute_completion_tests {
 
     #[test]
     fn top_level_enum_offers_iterate_display_and_json() {
-        let labels = labels_at("#[|\nenum Direction { North, South }").unwrap();
+        let labels = labels_at("#[|\nenum Direction { North, South }", false).unwrap();
         assert!(labels.contains(&"iterate".to_string()));
         assert!(labels.contains(&"display".to_string()));
         assert!(labels.contains(&"equality".to_string()));
@@ -625,7 +633,7 @@ mod attribute_completion_tests {
 
     #[test]
     fn struct_field_offers_serialization_and_tag_not_display() {
-        let labels = labels_at("struct S {\n  #[|\n  x: int\n}").unwrap();
+        let labels = labels_at("struct S {\n  #[|\n  x: int\n}", false).unwrap();
         assert!(labels.contains(&"json".to_string()));
         assert!(labels.contains(&"tag".to_string()));
         assert!(!labels.contains(&"display".to_string()));
@@ -636,56 +644,70 @@ mod attribute_completion_tests {
 
     #[test]
     fn method_in_impl_offers_allow_only() {
-        let labels = labels_at("impl S {\n  #[|\n  fn run(self) {}\n}").unwrap();
+        let labels = labels_at("impl S {\n  #[|\n  fn run(self) {}\n}", false).unwrap();
         assert_eq!(labels, vec!["allow".to_string()]);
     }
 
     #[test]
     fn method_in_interface_offers_allow_only() {
-        let labels = labels_at("interface I {\n  #[|\n  fn run(self)\n}").unwrap();
+        let labels = labels_at("interface I {\n  #[|\n  fn run(self)\n}", false).unwrap();
         assert_eq!(labels, vec!["allow".to_string()]);
     }
 
     #[test]
+    fn top_level_fn_offers_allow_and_test() {
+        let labels = labels_at("#[|\nfn run() {}", true).unwrap();
+        assert!(labels.contains(&"allow".to_string()), "got: {labels:?}");
+        assert!(labels.contains(&"test".to_string()), "got: {labels:?}");
+    }
+
+    #[test]
+    fn top_level_fn_in_production_file_omits_test() {
+        let labels = labels_at("#[|\nfn run() {}", false).unwrap();
+        assert!(labels.contains(&"allow".to_string()), "got: {labels:?}");
+        assert!(!labels.contains(&"test".to_string()), "got: {labels:?}");
+    }
+
+    #[test]
     fn interface_parent_embed_offers_nothing() {
-        let labels = labels_at("interface Child {\n  #[|\n  embed Parent\n}").unwrap();
+        let labels = labels_at("interface Child {\n  #[|\n  embed Parent\n}", false).unwrap();
         assert!(labels.is_empty());
     }
 
     #[test]
     fn comment_between_attribute_and_enum_resolves_target() {
-        let labels = labels_at("#[|\n// note\nenum E { A }").unwrap();
+        let labels = labels_at("#[|\n// note\nenum E { A }", false).unwrap();
         assert!(labels.contains(&"iterate".to_string()));
         assert!(!labels.contains(&"allow".to_string()));
     }
 
     #[test]
     fn doc_comment_after_attribute_offers_nothing() {
-        let labels = labels_at("#[|\n/// doc\nstruct S {}").unwrap();
+        let labels = labels_at("#[|\n/// doc\nstruct S {}", false).unwrap();
         assert!(labels.is_empty());
     }
 
     #[test]
     fn interface_pub_fn_offers_nothing() {
-        let labels = labels_at("interface I {\n  #[|\n  pub fn run(self)\n}").unwrap();
+        let labels = labels_at("interface I {\n  #[|\n  pub fn run(self)\n}", false).unwrap();
         assert!(labels.is_empty());
     }
 
     #[test]
     fn impl_pub_fn_offers_allow() {
-        let labels = labels_at("impl S {\n  #[|\n  pub fn run(self) {}\n}").unwrap();
+        let labels = labels_at("impl S {\n  #[|\n  pub fn run(self) {}\n}", false).unwrap();
         assert_eq!(labels, vec!["allow".to_string()]);
     }
 
     #[test]
     fn interface_partial_pub_offers_nothing() {
-        let labels = labels_at("interface I {\n  #[|\n  pub\n}").unwrap();
+        let labels = labels_at("interface I {\n  #[|\n  pub\n}", false).unwrap();
         assert!(labels.is_empty());
     }
 
     #[test]
     fn attribute_arg_backtick_paren_resolves_target() {
-        let labels = labels_at("#[|tag(`json:\")\"`)]\nstruct S { x: int }").unwrap();
+        let labels = labels_at("#[|tag(`json:\")\"`)]\nstruct S { x: int }", false).unwrap();
         assert!(labels.contains(&"json".to_string()));
         assert!(!labels.contains(&"iterate".to_string()));
         assert!(!labels.contains(&"allow".to_string()));
@@ -693,7 +715,7 @@ mod attribute_completion_tests {
 
     #[test]
     fn stacked_attribute_string_bracket_resolves_target() {
-        let labels = labels_at("#[|\n#[json(\"x]\")]\nstruct S { x: int }").unwrap();
+        let labels = labels_at("#[|\n#[json(\"x]\")]\nstruct S { x: int }", false).unwrap();
         assert!(labels.contains(&"json".to_string()));
         assert!(!labels.contains(&"iterate".to_string()));
         assert!(!labels.contains(&"allow".to_string()));
@@ -701,43 +723,43 @@ mod attribute_completion_tests {
 
     #[test]
     fn function_params_offer_nothing() {
-        let labels = labels_at("fn f(#[| x: int) {}").unwrap();
+        let labels = labels_at("fn f(#[| x: int) {}", false).unwrap();
         assert!(labels.is_empty());
     }
 
     #[test]
     fn tuple_struct_field_offers_nothing() {
-        let labels = labels_at("struct S(#[| int)").unwrap();
+        let labels = labels_at("struct S(#[| int)", false).unwrap();
         assert!(labels.is_empty());
     }
 
     #[test]
     fn method_param_offers_nothing() {
-        let labels = labels_at("impl S {\n  fn m(#[| x: int) {}\n}").unwrap();
+        let labels = labels_at("impl S {\n  fn m(#[| x: int) {}\n}", false).unwrap();
         assert!(labels.is_empty());
     }
 
     #[test]
     fn enum_variant_position_offers_nothing() {
-        let labels = labels_at("enum E {\n  #[|\n  A\n}").unwrap();
+        let labels = labels_at("enum E {\n  #[|\n  A\n}", false).unwrap();
         assert!(labels.is_empty());
     }
 
     #[test]
     fn function_body_offers_nothing() {
-        let labels = labels_at("fn main() {\n  #[|\n}").unwrap();
+        let labels = labels_at("fn main() {\n  #[|\n}", false).unwrap();
         assert!(labels.is_empty());
     }
 
     #[test]
     fn function_body_inside_nested_block_offers_nothing() {
-        let labels = labels_at("fn main() {\n  if true {\n    #[|\n  }\n}").unwrap();
+        let labels = labels_at("fn main() {\n  if true {\n    #[|\n  }\n}", false).unwrap();
         assert!(labels.is_empty());
     }
 
     #[test]
     fn unknown_top_level_target_offers_full_union() {
-        let labels = labels_at("#[|").unwrap();
+        let labels = labels_at("#[|", false).unwrap();
         for expected in ["json", "display", "iterate", "allow", "tag"] {
             assert!(labels.contains(&expected.to_string()), "missing {expected}");
         }
@@ -746,7 +768,7 @@ mod attribute_completion_tests {
     #[test]
     fn before_attribute_rejecting_declaration_offers_nothing() {
         for decl in ["interface S {}", "impl S {}", "const X = 1", "type A = int"] {
-            let labels = labels_at(&format!("#[|\n{decl}")).unwrap();
+            let labels = labels_at(&format!("#[|\n{decl}"), false).unwrap();
             assert!(
                 labels.is_empty(),
                 "expected nothing before `{decl}`, got {labels:?}"
@@ -756,43 +778,43 @@ mod attribute_completion_tests {
 
     #[test]
     fn partial_name_still_resolves_target() {
-        let labels = labels_at("#[js|\nstruct Point { x: int }").unwrap();
+        let labels = labels_at("#[js|\nstruct Point { x: int }", false).unwrap();
         assert!(labels.contains(&"json".to_string()));
         assert!(!labels.contains(&"iterate".to_string()));
     }
 
     #[test]
     fn stacked_attributes_resolve_to_following_item() {
-        let labels = labels_at("#[display]\n#[|\nstruct Point { x: int }").unwrap();
+        let labels = labels_at("#[display]\n#[|\nstruct Point { x: int }", false).unwrap();
         assert!(labels.contains(&"json".to_string()));
         assert!(!labels.contains(&"iterate".to_string()));
     }
 
     #[test]
     fn pub_modifier_is_skipped() {
-        let labels = labels_at("#[|\npub struct Point { x: int }").unwrap();
+        let labels = labels_at("#[|\npub struct Point { x: int }", false).unwrap();
         assert!(labels.contains(&"json".to_string()));
         assert!(!labels.contains(&"iterate".to_string()));
     }
 
     #[test]
     fn not_in_attribute_position_yields_none() {
-        assert!(labels_at("let x = |5").is_none());
-        assert!(labels_at("fn main() { let y = |x }").is_none());
+        assert!(labels_at("let x = |5", false).is_none());
+        assert!(labels_at("fn main() { let y = |x }", false).is_none());
     }
 
     #[test]
     fn hash_inside_string_is_not_an_attribute() {
-        assert!(labels_at("fn main() { let s = \"#[|\" }").is_none());
+        assert!(labels_at("fn main() { let s = \"#[|\" }", false).is_none());
     }
 
     #[test]
     fn closed_attribute_is_not_in_name_position() {
-        assert!(labels_at("#[json]|\nstruct Point { x: int }").is_none());
+        assert!(labels_at("#[json]|\nstruct Point { x: int }", false).is_none());
     }
 
     #[test]
     fn cursor_in_argument_list_is_not_name_position() {
-        assert!(labels_at("struct S {\n  #[json(|\n  x: int\n}").is_none());
+        assert!(labels_at("struct S {\n  #[json(|\n  x: int\n}", false).is_none());
     }
 }

@@ -119,6 +119,27 @@ pub fn equality_with_arguments(attribute_span: &Span) -> LisetteDiagnostic {
         .with_help("Write `#[equality]` with no arguments")
 }
 
+pub fn test_not_on_function(attribute_span: &Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("`#[test]` not on a function")
+        .with_attribute_code("test_not_on_function")
+        .with_span_label(attribute_span, "not on a function")
+        .with_help("Only a free function can be marked `#[test]`")
+}
+
+pub fn test_outside_test_file(attribute_span: &Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("`#[test]` outside a test file")
+        .with_attribute_code("test_outside_test_file")
+        .with_span_label(attribute_span, "only allowed in a `.test.lis` file")
+        .with_help("Move this function into a `.test.lis` file")
+}
+
+pub fn test_invalid_argument(attribute_span: &Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("`#[test]` takes at most one string title")
+        .with_attribute_code("test_invalid_argument")
+        .with_span_label(attribute_span, "write `#[test]` or `#[test(\"title\")]`")
+        .with_help("Give a single string title, or no argument")
+}
+
 pub fn equality_on_tuple_struct(attribute_span: &Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("`#[equality]` on a tuple struct")
         .with_attribute_code("equality_on_tuple_struct")

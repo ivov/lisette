@@ -3681,6 +3681,95 @@ fn main() {
     );
 }
 
+fn has_code(result: &crate::_harness::infer::InferResult, code: &str) -> bool {
+    result
+        .errors
+        .iter()
+        .any(|d| d.code_str().is_some_and(|c| c.contains(code)))
+}
+
+fn test_attribute_fs(math_core: &str, math_test: &str) -> MockFileSystem {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "_entry_",
+        "main.lis",
+        "import \"math\"\n\nfn main() {\n  let _ = math.add(1, 2)\n}",
+    );
+    fs.add_file("math", "core.lis", math_core);
+    fs.add_file("math", "core.test.lis", math_test);
+    fs
+}
+
+#[test]
+fn test_attribute_on_struct_rejected() {
+    let fs = test_attribute_fs(
+        "pub fn add(a: int, b: int) -> int { a + b }",
+        "#[test]\nstruct Fixture {\n  value: int,\n}",
+    );
+    let result = infer_module("_entry_", fs);
+    assert!(
+        has_code(&result, "test_not_on_function"),
+        "`#[test]` on a struct must be rejected, got: {:?}",
+        result.errors
+    );
+}
+
+#[test]
+fn test_attribute_on_method_rejected() {
+    let fs = test_attribute_fs(
+        "pub fn add(a: int, b: int) -> int { a + b }",
+        "struct Fixture {\n  value: int,\n}\n\nimpl Fixture {\n  #[test]\n  fn check(self) {}\n}",
+    );
+    let result = infer_module("_entry_", fs);
+    assert!(
+        has_code(&result, "test_not_on_function"),
+        "`#[test]` on a method must be rejected, got: {:?}",
+        result.errors
+    );
+}
+
+#[test]
+fn test_attribute_in_production_file_rejected() {
+    let fs = test_attribute_fs(
+        "pub fn add(a: int, b: int) -> int { a + b }\n\n#[test]\nfn checks() {}",
+        "fn unused() {}",
+    );
+    let result = infer_module("_entry_", fs);
+    assert!(
+        has_code(&result, "test_outside_test_file"),
+        "`#[test]` in a production file must be rejected, got: {:?}",
+        result.errors
+    );
+}
+
+#[test]
+fn test_attribute_with_flag_argument_rejected() {
+    let fs = test_attribute_fs(
+        "pub fn add(a: int, b: int) -> int { a + b }",
+        "#[test(snake_case)]\nfn checks() {}",
+    );
+    let result = infer_module("_entry_", fs);
+    assert!(
+        has_code(&result, "test_invalid_argument"),
+        "`#[test]` with a flag argument must be rejected, got: {:?}",
+        result.errors
+    );
+}
+
+#[test]
+fn test_attribute_with_two_arguments_rejected() {
+    let fs = test_attribute_fs(
+        "pub fn add(a: int, b: int) -> int { a + b }",
+        "#[test(\"one\", \"two\")]\nfn checks() {}",
+    );
+    let result = infer_module("_entry_", fs);
+    assert!(
+        has_code(&result, "test_invalid_argument"),
+        "`#[test]` with two arguments must be rejected, got: {:?}",
+        result.errors
+    );
+}
+
 #[test]
 fn dot_test_file_sees_private_symbols() {
     let mut fs = MockFileSystem::new();
