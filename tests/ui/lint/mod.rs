@@ -4700,6 +4700,70 @@ fn main() {
 }
 
 #[test]
+fn negated_logical_operand_and() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let a = true;
+  let _ = a && !a
+}
+"#
+    );
+}
+
+#[test]
+fn negated_logical_operand_or() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let a = true;
+  let _ = a || !a
+}
+"#
+    );
+}
+
+#[test]
+fn negated_logical_operand_field_access() {
+    assert_lint_snapshot!(
+        r#"
+struct Flag { ready: bool }
+
+fn main() {
+  let f = Flag { ready: true };
+  let _ = f.ready && !f.ready
+}
+"#
+    );
+}
+
+#[test]
+fn negated_logical_operand_distinct_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let a = true;
+  let b = false;
+  let _ = a && !b
+}
+"#
+    );
+}
+
+#[test]
+fn negated_logical_operand_with_side_effects_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn side_effect() -> bool { true }
+
+fn main() {
+  let _ = side_effect() && !side_effect()
+}
+"#
+    );
+}
+
+#[test]
 fn bool_literal_comparison_eq_true() {
     assert_lint_snapshot!(
         r#"

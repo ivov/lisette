@@ -512,6 +512,29 @@ pub fn duplicate_logical_operand(span: &Span, operand_text: &str) -> LisetteDiag
         .with_help(format!("Simplify to `{operand_text}`"))
 }
 
+pub fn negated_logical_operand(span: &Span, always_true: bool) -> LisetteDiagnostic {
+    let (message, label, result, reason) = if always_true {
+        (
+            "Tautological logical operands",
+            "always `true`",
+            "true",
+            "an operand or its negation always holds",
+        )
+    } else {
+        (
+            "Contradictory logical operands",
+            "always `false`",
+            "false",
+            "an operand and its negation cannot both hold",
+        )
+    };
+
+    LisetteDiagnostic::warn(message)
+        .with_lint_code("negated_logical_operand")
+        .with_span_label(span, label)
+        .with_help(format!("Replace with `{result}`, since {reason}"))
+}
+
 pub fn bool_literal_comparison(span: &Span, replacement: &str) -> LisetteDiagnostic {
     LisetteDiagnostic::info("Redundant comparison to boolean literal")
         .with_lint_code("bool_literal_comparison")

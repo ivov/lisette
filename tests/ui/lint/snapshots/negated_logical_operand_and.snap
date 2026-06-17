@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [warning] Contradictory logical operands
+   ╭─[test.lis:4:11]
+ 3 │   let a = true;
+ 4 │   let _ = a && !a
+   ·           ───┬───
+   ·              ╰── always `false`
+ 5 │ }
+   ╰────
+  help: Replace with `false`, since an operand and its negation cannot both hold · code: [lint.negated_logical_operand]

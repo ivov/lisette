@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [warning] Contradictory logical operands
+   ╭─[test.lis:6:11]
+ 5 │   let f = Flag { ready: true };
+ 6 │   let _ = f.ready && !f.ready
+   ·           ─────────┬─────────
+   ·                    ╰── always `false`
+ 7 │ }
+   ╰────
+  help: Replace with `false`, since an operand and its negation cannot both hold · code: [lint.negated_logical_operand]
