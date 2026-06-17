@@ -2,6 +2,26 @@
 
 Lisette is under active development. Any version before 1.0.0 may include breaking changes.
 
+## [0.4.3](https://github.com/ivov/lisette/compare/lisette-v0.4.2...lisette-v0.4.3) - 2026-06-17
+
+- feat: enable cgo for third-party go packages [#760](https://github.com/ivov/lisette/pull/760) [`f097c20`](https://github.com/ivov/lisette/commit/f097c203034e6c872333b7f3b2472338c7710521)
+- fix: fall back to constructor heuristic on inconclusive nil analysis [#761](https://github.com/ivov/lisette/pull/761) [`50ab4e0`](https://github.com/ivov/lisette/commit/50ab4e0a9a8a161dbf0ff99d321a4af75b3dd951)
+- feat: lint for an operand and its own negation [#759](https://github.com/ivov/lisette/pull/759) [`c2d91fb`](https://github.com/ivov/lisette/commit/c2d91fb31fde359c903957f90de7912d8cbea3e0)
+- feat: recognize and validate `#[test]` functions [#758](https://github.com/ivov/lisette/pull/758) [`ad379b2`](https://github.com/ivov/lisette/commit/ad379b22b35066919b21a7ee3690eaf5ec68bd30)
+- fix: take recursive-enum constructor fields by value [#751](https://github.com/ivov/lisette/pull/751) [`1de2f4e`](https://github.com/ivov/lisette/commit/1de2f4e328ed9cadcb38870c2353f86812fb3b91)
+- refactor: drop the string-setup path from emit [#757](https://github.com/ivov/lisette/pull/757) [`d30936d`](https://github.com/ivov/lisette/commit/d30936d321d1e3a1c023746c2b26d903d8b2cc99)
+- feat: discover `.test.lis` files and isolate them from production [#756](https://github.com/ivov/lisette/pull/756) [`8d4390b`](https://github.com/ivov/lisette/commit/8d4390bda1213e97ce5c95ad7d88e6675c10bbdd)
+- feat: lints for slice membership and emptiness checks [#755](https://github.com/ivov/lisette/pull/755) [`519f424`](https://github.com/ivov/lisette/commit/519f4240462da8785f1e4debd9f424eb8f19105c)
+- feat: lints for unnecessary eager and lazy evaluation [#754](https://github.com/ivov/lisette/pull/754) [`0bd336e`](https://github.com/ivov/lisette/commit/0bd336e8b72538a3f26a48114817de5ee599c97b)
+- chore: update fuzz lockfile [#750](https://github.com/ivov/lisette/pull/750) [`33d6fbe`](https://github.com/ivov/lisette/commit/33d6fbed44e1f02f227ba19e96b9f94dc47851f8)
+- refactor: extract the post-inference passes into their own crate [#749](https://github.com/ivov/lisette/pull/749) [`4c41014`](https://github.com/ivov/lisette/commit/4c4101446e3b51e96bb33424f08f0718335acf70)
+- feat: go-to-definition for prelude symbols [#748](https://github.com/ivov/lisette/pull/748) [`a56fd02`](https://github.com/ivov/lisette/commit/a56fd02e688736ed5972c9028da1f98d7996e0e6)
+- refactor: decouple inference from the post-inference passes [#747](https://github.com/ivov/lisette/pull/747) [`ac3a457`](https://github.com/ivov/lisette/commit/ac3a45707a00990e71806ce3204c9b08f1f47f1a)
+- feat: inlay hint additons [#742](https://github.com/ivov/lisette/pull/742) [`ebd6ef2`](https://github.com/ivov/lisette/commit/ebd6ef22e5351ca4c01c687bfe67ca5b7bb8af36)
+- feat: introduce `#[equality]` attribute [#746](https://github.com/ivov/lisette/pull/746) [`3a273a3`](https://github.com/ivov/lisette/commit/3a273a38efaf2efb33d604718d53f6d31cea7447)
+- fix: reject VarArgs in non-last parameter position [#743](https://github.com/ivov/lisette/pull/743) [`ab535ad`](https://github.com/ivov/lisette/commit/ab535ad7d221f200c88856c4c7e0d843e75fab1e)
+- feat: lints for needless question mark and manual option zip [#744](https://github.com/ivov/lisette/pull/744) [`4a40051`](https://github.com/ivov/lisette/commit/4a400510c1c37ed9653aa886e537a55ddef453a7)
+
 ## [0.4.2](https://github.com/ivov/lisette/compare/lisette-v0.4.1...lisette-v0.4.2) - 2026-06-15
 
 - refactor: rename info summary count label to advisories [#741](https://github.com/ivov/lisette/pull/741) [`410b75e`](https://github.com/ivov/lisette/commit/410b75e059082b98833dcca537dee16f94688e06)
