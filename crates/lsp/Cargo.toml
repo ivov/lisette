@@ -14,6 +14,7 @@ doctest = false
 [dependencies]
 syntax = { package = "lisette-syntax", version = "0.4.2", path = "../syntax" }
 semantics = { package = "lisette-semantics", version = "0.4.2", path = "../semantics" }
+passes = { package = "lisette-passes", version = "0.4.2", path = "../passes" }
 diagnostics = { package = "lisette-diagnostics", version = "0.4.2", path = "../diagnostics" }
 deps = { package = "lisette-deps", version = "0.4.2", path = "../deps" }
 format = { package = "lisette-format", version = "0.4.2", path = "../format" }

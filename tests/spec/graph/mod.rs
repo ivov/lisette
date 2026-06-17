@@ -510,7 +510,8 @@ fn resolver_root_vs_subpackage_typedef_lookup() {
 /// qualified name, which broke on `go:github.com/gorilla/mux.Router`.
 #[test]
 fn third_party_go_struct_impl_methods_registered() {
-    use semantics::analyze::{AnalyzeInput, CompilePhase, SemanticConfig, analyze};
+    use passes::analyze;
+    use semantics::inference::{AnalyzeInput, CompilePhase, SemanticConfig};
     use semantics::loader::MemoryLoader;
 
     let tmp = tempfile::tempdir().unwrap();
@@ -602,7 +603,8 @@ fn main() {
 /// the resolver on subsequent runs.
 #[test]
 fn stdlib_cache_save_load_excludes_third_party() {
-    use semantics::analyze::{AnalyzeInput, CompilePhase, SemanticConfig, analyze};
+    use passes::analyze;
+    use semantics::inference::{AnalyzeInput, CompilePhase, SemanticConfig};
     use semantics::loader::MemoryLoader;
 
     let tmp = tempfile::tempdir().unwrap();

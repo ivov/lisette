@@ -13865,6 +13865,366 @@ fn main() {
 }
 
 #[test]
+fn manual_contains() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let xs = [1, 2, 3, 4]
+  let _ = xs.any(|x| x == 3)
+}
+"#
+    );
+}
+
+#[test]
+fn manual_contains_value_on_left() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let xs = [1, 2, 3, 4]
+  let _ = xs.any(|x| 3 == x)
+}
+"#
+    );
+}
+
+#[test]
+fn manual_contains_string_slice() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let names = ["a", "b"]
+  let _ = names.any(|s| s == "b")
+}
+"#
+    );
+}
+
+#[test]
+fn manual_contains_enum_slice() {
+    assert_lint_snapshot!(
+        r#"
+enum Color {
+  Red,
+  Green,
+  Blue,
+}
+
+fn main() {
+  let cs = [Color.Red, Color.Green]
+  let _ = cs.any(|c| c == Color.Blue)
+}
+"#
+    );
+}
+
+#[test]
+fn manual_contains_not_equal_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let xs = [1, 2, 3, 4]
+  let _ = xs.any(|x| x != 3)
+}
+"#
+    );
+}
+
+#[test]
+fn manual_contains_relational_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let xs = [1, 2, 3, 4]
+  let _ = xs.any(|x| x > 3)
+}
+"#
+    );
+}
+
+#[test]
+fn manual_contains_field_predicate_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+struct User {
+  age: int
+}
+
+fn main() {
+  let users = [User { age: 17 }, User { age: 21 }]
+  let _ = users.any(|u| u.age == 18)
+}
+"#
+    );
+}
+
+#[test]
+fn manual_contains_value_uses_element_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let xs = [1, 2, 3, 4]
+  let _ = xs.any(|x| x == x + 1)
+}
+"#
+    );
+}
+
+#[test]
+fn manual_contains_effectful_value_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn cost() -> int {
+  7
+}
+
+fn main() {
+  let xs = [1, 2, 3, 4]
+  let _ = xs.any(|x| x == cost())
+}
+"#
+    );
+}
+
+#[test]
+fn manual_contains_field_value() {
+    assert_lint_snapshot!(
+        r#"
+struct Config {
+  target: int
+}
+
+fn main() {
+  let cfg = Config { target: 3 }
+  let xs = [1, 2, 3, 4]
+  let _ = xs.any(|x| x == cfg.target)
+}
+"#
+    );
+}
+
+#[test]
+fn manual_contains_dividing_value_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let xs = [1, 2, 3, 4]
+  let denom = 2
+  let _ = xs.any(|x| x == 10 / denom)
+}
+"#
+    );
+}
+
+#[test]
+fn manual_contains_interpolated_fstring_value_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let names = ["a", "b"]
+  let n = 1
+  let _ = names.any(|s| s == f"{n}")
+}
+"#
+    );
+}
+
+#[test]
+fn manual_contains_mismatched_int_type_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let xs = [1, 2, 3, 4]
+  let small: int8 = 2
+  let _ = xs.any(|x| x == small)
+}
+"#
+    );
+}
+
+#[test]
+fn manual_contains_interface_equality_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+interface Animal {
+  fn sound(self) -> string
+}
+
+struct Dog {}
+
+impl Dog {
+  fn sound(self) -> string {
+    "woof"
+  }
+}
+
+fn main() {
+  let d = Dog {}
+  let animals: Slice<Animal> = [d]
+  let target: Animal = d
+  let _ = animals.any(|x| x == target)
+}
+"#
+    );
+}
+
+#[test]
+fn manual_contains_user_type_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+struct Bag {
+  items: Slice<int>
+}
+
+impl Bag {
+  fn any(self, p: fn(int) -> bool) -> bool {
+    self.items.any(p)
+  }
+}
+
+fn main() {
+  let b = Bag { items: [1, 2, 3] }
+  let _ = b.any(|x| x == 1)
+}
+"#
+    );
+}
+
+#[test]
+fn manual_contains_all_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let xs = [1, 2, 3, 4]
+  let _ = xs.all(|x| x == 3)
+}
+"#
+    );
+}
+
+#[test]
+fn manual_contains_already_contains_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let xs = [1, 2, 3, 4]
+  let _ = xs.contains(3)
+}
+"#
+    );
+}
+
+#[test]
+fn unnecessary_first_then_check_is_some() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let xs = [1, 2, 3, 4]
+  let _ = xs.get(0).is_some()
+}
+"#
+    );
+}
+
+#[test]
+fn unnecessary_first_then_check_is_none() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let xs = [1, 2, 3, 4]
+  let _ = xs.get(0).is_none()
+}
+"#
+    );
+}
+
+#[test]
+fn unnecessary_first_then_check_field_receiver() {
+    assert_lint_snapshot!(
+        r#"
+struct Holder {
+  items: Slice<int>
+}
+
+fn main() {
+  let h = Holder { items: [1, 2] }
+  let _ = h.items.get(0).is_some()
+}
+"#
+    );
+}
+
+#[test]
+fn unnecessary_first_then_check_index_not_zero_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let xs = [1, 2, 3, 4]
+  let _ = xs.get(1).is_some()
+}
+"#
+    );
+}
+
+#[test]
+fn unnecessary_first_then_check_map_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let m = Map.new<int, string>()
+  let _ = m.get(0).is_some()
+}
+"#
+    );
+}
+
+#[test]
+fn unnecessary_first_then_check_user_type_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+struct Bag {
+  items: Slice<int>
+}
+
+impl Bag {
+  fn get(self, i: int) -> Option<int> {
+    self.items.get(i)
+  }
+}
+
+fn main() {
+  let b = Bag { items: [1, 2, 3] }
+  let _ = b.get(0).is_some()
+}
+"#
+    );
+}
+
+#[test]
+fn unnecessary_first_then_check_plain_get_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let xs = [1, 2, 3, 4]
+  let _ = xs.get(0)
+}
+"#
+    );
+}
+
+#[test]
+fn unnecessary_first_then_check_already_is_empty_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let xs = [1, 2, 3, 4]
+  let _ = xs.is_empty()
+}
+"#
+    );
+}
+
+#[test]
 fn qualified_tuple_variant_pattern_marks_import_used() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
@@ -15741,9 +16101,9 @@ fn main() {
 }
 
 #[test]
-fn map_unwrap_or_side_effecting_default_no_warning() {
-    assert_no_lint_warnings!(
-        r#"
+fn map_unwrap_or_side_effecting_default_no_map_unwrap_or() {
+    let mut fs = MockFileSystem::new();
+    let source = r#"
 fn make_default() -> int {
   0
 }
@@ -15752,7 +16112,24 @@ fn main() {
   let o: Option<int> = Some(1)
   let _ = o.map(|x| x * 2).unwrap_or(make_default())
 }
-"#
+"#;
+    fs.add_file(ENTRY_MODULE_ID, "main.lis", source);
+
+    let result = compile_check(fs);
+    let map_unwrap_or = result
+        .lints
+        .iter()
+        .filter(|l| l.code_str() == Some("lint.map_unwrap_or"))
+        .count();
+    assert_eq!(
+        map_unwrap_or,
+        0,
+        "`map_or` reorders the default before the mapper, unsound when the default does work: {:?}",
+        result
+            .lints
+            .iter()
+            .filter_map(|l| l.code_str())
+            .collect::<Vec<_>>()
     );
 }
 
@@ -16095,6 +16472,339 @@ fn main() {
             .iter()
             .filter_map(|l| l.code_str())
             .collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn or_fn_call_unwrap_or_option() {
+    assert_lint_snapshot!(
+        r#"
+fn make_default() -> int {
+  42
+}
+
+fn main() {
+  let o: Option<int> = Some(1)
+  let _ = o.unwrap_or(make_default())
+}
+"#
+    );
+}
+
+#[test]
+fn or_fn_call_unwrap_or_result() {
+    assert_lint_snapshot!(
+        r#"
+fn make_default() -> int {
+  42
+}
+
+fn main() {
+  let r: Result<int, string> = Ok(1)
+  let _ = r.unwrap_or(make_default())
+}
+"#
+    );
+}
+
+#[test]
+fn or_fn_call_unwrap_or_partial() {
+    assert_lint_snapshot!(
+        r#"
+fn make_default() -> int {
+  42
+}
+
+fn get_partial() -> Partial<int, string> {
+  Partial.Ok(1)
+}
+
+fn main() {
+  let p: Partial<int, string> = get_partial()
+  let _ = p.unwrap_or(make_default())
+}
+"#
+    );
+}
+
+#[test]
+fn or_fn_call_map_or() {
+    assert_lint_snapshot!(
+        r#"
+fn make_default() -> int {
+  42
+}
+
+fn main() {
+  let o: Option<int> = Some(1)
+  let _ = o.map_or(make_default(), |x| x + 1)
+}
+"#
+    );
+}
+
+#[test]
+fn or_fn_call_ok_or() {
+    assert_lint_snapshot!(
+        r#"
+fn make_err() -> string {
+  "boom"
+}
+
+fn main() {
+  let o: Option<int> = Some(1)
+  let _ = o.ok_or(make_err())
+}
+"#
+    );
+}
+
+#[test]
+fn or_fn_call_literal_default_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let o: Option<int> = Some(1)
+  let _ = o.unwrap_or(0)
+}
+"#
+    );
+}
+
+#[test]
+fn or_fn_call_arithmetic_default_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let n = 5
+  let o: Option<int> = Some(1)
+  let _ = o.unwrap_or(n + 1)
+}
+"#
+    );
+}
+
+#[test]
+fn or_fn_call_closure_value_default_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn make_default() -> int {
+  42
+}
+
+fn main() {
+  let o: Option<fn() -> int> = Some(|| 1)
+  let _ = o.unwrap_or(|| make_default() + 1)
+}
+"#
+    );
+}
+
+#[test]
+fn or_fn_call_cheap_constructor_default_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let o: Option<Option<int>> = Some(None)
+  let _ = o.unwrap_or(Some(1))
+}
+"#
+    );
+}
+
+#[test]
+fn or_fn_call_constructor_wrapping_work() {
+    assert_lint_snapshot!(
+        r#"
+fn make_default() -> int {
+  42
+}
+
+fn main() {
+  let o: Option<Option<int>> = Some(None)
+  let _ = o.unwrap_or(Some(make_default()))
+}
+"#
+    );
+}
+
+#[test]
+fn or_fn_call_go_stdlib_call() {
+    assert_lint_snapshot!(
+        r#"
+import "go:errors"
+
+fn main() {
+  let o: Option<int> = Some(1)
+  let _ = o.ok_or(errors.New("boom"))
+}
+"#
+    );
+}
+
+#[test]
+fn or_fn_call_constructor_wrapping_buried_work() {
+    assert_lint_snapshot!(
+        r#"
+fn make_default() -> int {
+  42
+}
+
+fn main() {
+  let o: Option<Option<int>> = Some(None)
+  let _ = o.unwrap_or(Some(make_default() + 1))
+}
+"#
+    );
+}
+
+#[test]
+fn or_fn_call_native_constructor() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let o: Option<Map<string, int>> = Some(Map.new())
+  let _ = o.unwrap_or(Map.new())
+}
+"#
+    );
+}
+
+#[test]
+fn or_fn_call_native_method_identifier() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let s: Slice<int> = [1, 2, 3]
+  let o: Option<bool> = Some(true)
+  let _ = o.unwrap_or(Slice.contains(s, 2))
+}
+"#
+    );
+}
+
+#[test]
+fn or_fn_call_propagating_default_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn fallback() -> Option<int> {
+  Some(7)
+}
+
+fn produce() -> Option<int> {
+  let o: Option<int> = Some(1)
+  let _ = o.unwrap_or(fallback()?)
+  Some(3)
+}
+
+fn main() {
+  let _ = produce()
+}
+"#
+    );
+}
+
+#[test]
+fn unnecessary_lazy_evaluations_unwrap_or_else() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let o: Option<int> = Some(1)
+  let _ = o.unwrap_or_else(|| 0)
+}
+"#
+    );
+}
+
+#[test]
+fn unnecessary_lazy_evaluations_unwrap_or_else_result() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let r: Result<int, string> = Ok(1)
+  let _ = r.unwrap_or_else(|_| 0)
+}
+"#
+    );
+}
+
+#[test]
+fn unnecessary_lazy_evaluations_map_or_else() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let o: Option<int> = Some(1)
+  let _ = o.map_or_else(|| 0, |x| x + 1)
+}
+"#
+    );
+}
+
+#[test]
+fn unnecessary_lazy_evaluations_ok_or_else() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let o: Option<int> = Some(1)
+  let _ = o.ok_or_else(|| "x")
+}
+"#
+    );
+}
+
+#[test]
+fn unnecessary_lazy_evaluations_call_body_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn make_default() -> int {
+  42
+}
+
+fn main() {
+  let o: Option<int> = Some(1)
+  let _ = o.unwrap_or_else(|| make_default() + 1)
+}
+"#
+    );
+}
+
+#[test]
+fn unnecessary_lazy_evaluations_uses_param_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let r: Result<int, int> = Ok(1)
+  let _ = r.unwrap_or_else(|e| e)
+}
+"#
+    );
+}
+
+#[test]
+fn unnecessary_lazy_evaluations_slice_literal_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let o: Option<Slice<int>> = Some([0])
+  let _ = o.unwrap_or_else(|| [1, 2, 3])
+}
+"#
+    );
+}
+
+#[test]
+fn unnecessary_lazy_evaluations_function_ref_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn make_thunk() -> fn() -> int {
+  || 42
+}
+
+fn main() {
+  let o: Option<int> = Some(1)
+  let _ = o.unwrap_or_else(make_thunk())
+}
+"#
     );
 }
 

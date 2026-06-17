@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [info] Manual `contains`
+    ╭─[test.lis:10:11]
+  9 │   let cs = [Color.Red, Color.Green]
+ 10 │   let _ = cs.any(|c| c == Color.Blue)
+    ·           ─────────────┬─────────────
+    ·                        ╰── can be simpler
+ 11 │ }
+    ╰────
+  help: Replace `.any(|x| x == value)` with `.contains(value)` · code: [lint.manual_contains]

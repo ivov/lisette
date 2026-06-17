@@ -102,6 +102,13 @@ pub(crate) fn resolve_dot_access_definition(
                     }
                 })
             })
+            .or_else(|| {
+                let in_prelude = format!("prelude.{name}");
+                snapshot
+                    .definitions()
+                    .get(in_prelude.as_str())
+                    .and_then(|d| d.name_span())
+            })
     };
 
     let resolve_by_type = || {
@@ -170,13 +177,15 @@ pub(crate) fn resolve_dot_access_definition(
     })
 }
 
-/// True when the span points into a generated `go:` typedef file. Used by rename
-/// to refuse edits to typedefs, which would diverge from the regenerated content.
-pub(crate) fn is_go_typedef_span(snapshot: &AnalysisSnapshot, span: &syntax::ast::Span) -> bool {
+/// True when the span points into a generated typedef (`go:` or prelude), which rename must refuse.
+pub(crate) fn is_generated_typedef_span(
+    snapshot: &AnalysisSnapshot,
+    span: &syntax::ast::Span,
+) -> bool {
     snapshot
         .files()
         .get(&span.file_id)
-        .is_some_and(|f| f.module_id.starts_with("go:"))
+        .is_some_and(|f| f.module_id.starts_with("go:") || f.module_id == "prelude")
 }
 
 /// Resolve an import alias to the import statement's span.
@@ -282,6 +291,13 @@ pub(crate) fn lookup_definition_span(
         {
             return Some(span);
         }
+    }
+
+    let in_prelude = format!("prelude.{name}");
+    if let Some(definition) = snapshot.definitions().get(in_prelude.as_str())
+        && let Some(span) = definition.name_span()
+    {
+        return Some(span);
     }
 
     None

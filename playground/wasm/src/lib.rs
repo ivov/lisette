@@ -9,7 +9,8 @@ use wasm_bindgen::prelude::*;
 use std::sync::Arc;
 
 use lisette_semantics::loader::MemoryLoader;
-use lisette_semantics::analyze::{analyze, AnalyzeInput, CompilePhase, SemanticConfig};
+use lisette_passes::analyze;
+use lisette_semantics::inference::{AnalyzeInput, CompilePhase, SemanticConfig};
 use lisette_semantics::facts::{BindingIdAllocator, Facts};
 use lisette_syntax::ast::{Expression, Span, StructSpread};
 use lisette_syntax::program::{Definition, DefinitionBody};

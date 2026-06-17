@@ -5,7 +5,7 @@ use crate::_harness::build::{
 use crate::_harness::filesystem::MockFileSystem;
 use crate::_harness::infer::infer;
 use crate::assert_build_snapshot;
-use semantics::analyze::CompilePhase;
+use semantics::inference::CompilePhase;
 use semantics::store::ENTRY_MODULE_ID;
 
 #[test]

@@ -64,8 +64,8 @@ impl AnalysisSnapshot {
                     Ok(uri) => uri,
                     Err(_) => continue,
                 }
-            } else if file.module_id.starts_with("go:") {
-                // Stdlib go: typedef is embedded; nothing on disk to navigate to.
+            } else if file.module_id.starts_with("go:") || file.module_id == "prelude" {
+                // Embedded typedef with no recorded on-disk path; nothing to navigate to.
                 continue;
             } else {
                 let path = module_file_to_path(config, &file.module_id, &file.name);

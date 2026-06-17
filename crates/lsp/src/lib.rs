@@ -6,6 +6,7 @@ mod hover;
 mod inlay_hints;
 mod loader;
 mod paths;
+mod patterns;
 mod position;
 mod project;
 mod signature_help;
@@ -24,7 +25,7 @@ use crate::completion::{
     get_instance_completions, get_module_prefix, get_type_completions, resolve_variable_type,
 };
 use crate::definition::{
-    find_struct_field_span, is_go_typedef_span, lookup_definition_span,
+    find_struct_field_span, is_generated_typedef_span, lookup_definition_span,
     resolve_annotation_definition, resolve_definition_span, resolve_dot_access_definition,
     resolve_enum_in_pattern, resolve_import_span, resolve_match_pattern_definition,
     resolve_struct_call_field, resolve_word_at_offset, word_at_offset,
@@ -62,10 +63,12 @@ impl LanguageServer for Backend {
             *self.project_config.write().await = Some(config);
         }
 
-        // Materialize the stdlib typedefs so the editor can open them. Off the
-        // async executor since the first run for a version writes the full stdlib.
-        let _ = tokio::task::spawn_blocking(|| deps::ensure_stdlib_extracted(deps::Target::host()))
-            .await;
+        // Off the async executor: the first run for a version writes the full stdlib.
+        let _ = tokio::task::spawn_blocking(|| {
+            deps::ensure_stdlib_extracted(deps::Target::host());
+            deps::ensure_prelude_extracted();
+        })
+        .await;
 
         Ok(InitializeResult {
             capabilities: ServerCapabilities {
@@ -912,7 +915,7 @@ impl LanguageServer for Backend {
                 let resolved =
                     resolve_dot_access_definition(expression, member, *span, file, &snapshot);
                 if let Some(definition_span) = resolved
-                    && !is_go_typedef_span(&snapshot, &definition_span)
+                    && !is_generated_typedef_span(&snapshot, &definition_span)
                 {
                     let member_span = syntax::ast::Span::new(
                         span.file_id,
@@ -929,7 +932,9 @@ impl LanguageServer for Backend {
             }
 
             syntax::ast::Expression::Match { arms, .. } => {
-                if resolve_match_pattern_definition(arms, offset, file, &snapshot).is_some()
+                if let Some(def_span) =
+                    resolve_match_pattern_definition(arms, offset, file, &snapshot)
+                    && !is_generated_typedef_span(&snapshot, &def_span)
                     && let Some((word, start, end)) = word_at_offset(&file.source, offset)
                 {
                     let span = syntax::ast::Span::new(file_id, start as u32, (end - start) as u32);
@@ -951,8 +956,13 @@ impl LanguageServer for Backend {
                 typed_pattern,
                 ..
             } => {
-                if resolve_enum_in_pattern(pattern, typed_pattern.as_ref(), offset, file, &snapshot)
-                    .is_some()
+                if let Some(def_span) = resolve_enum_in_pattern(
+                    pattern,
+                    typed_pattern.as_ref(),
+                    offset,
+                    file,
+                    &snapshot,
+                ) && !is_generated_typedef_span(&snapshot, &def_span)
                     && let Some((word, start, end)) = word_at_offset(&file.source, offset)
                 {
                     let span = syntax::ast::Span::new(file_id, start as u32, (end - start) as u32);
@@ -966,7 +976,8 @@ impl LanguageServer for Backend {
 
             _ => {
                 if let Some((word, start, end)) = word_at_offset(&file.source, offset)
-                    && lookup_definition_span(word, file, &snapshot).is_some()
+                    && let Some(def_span) = lookup_definition_span(word, file, &snapshot)
+                    && !is_generated_typedef_span(&snapshot, &def_span)
                 {
                     let span = syntax::ast::Span::new(file_id, start as u32, (end - start) as u32);
                     Ok(Some(PrepareRenameResponse::RangeWithPlaceholder {
@@ -1030,8 +1041,7 @@ impl LanguageServer for Backend {
                     member,
                     span,
                     ..
-                } => resolve_dot_access_definition(expression, member, *span, file, &snapshot)
-                    .filter(|s| !is_go_typedef_span(&snapshot, s)),
+                } => resolve_dot_access_definition(expression, member, *span, file, &snapshot),
 
                 syntax::ast::Expression::Match { arms, .. } => {
                     resolve_match_pattern_definition(arms, offset, file, &snapshot)
@@ -1063,6 +1073,10 @@ impl LanguageServer for Backend {
         let Some(definition_span) = definition_span else {
             return Ok(None);
         };
+
+        if is_generated_typedef_span(&snapshot, &definition_span) {
+            return Ok(None);
+        }
 
         let Some(definition_uri) = snapshot.get_uri(definition_span.file_id).cloned() else {
             return Ok(None);

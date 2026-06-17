@@ -6,17 +6,27 @@ use std::sync::OnceLock;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 pub use stdlib::Target;
-use stdlib::{GO_STD_CONTENT_HASH, get_go_stdlib_packages, get_go_stdlib_typedef};
+use stdlib::{
+    GO_STD_CONTENT_HASH, LIS_PRELUDE_SOURCE, PRELUDE_CONTENT_HASH, get_go_stdlib_packages,
+    get_go_stdlib_typedef,
+};
 
-/// Disambiguates temp dirs so concurrent stdlib extractions do not share a path.
-static STDLIB_TEMP_COUNTER: AtomicU64 = AtomicU64::new(0);
+/// Disambiguates temp paths so concurrent typedef extractions do not collide.
+static TYPEDEF_TEMP_COUNTER: AtomicU64 = AtomicU64::new(0);
 
-/// Test-only override for the home dir stdlib typedefs extract under.
-static STDLIB_TYPEDEF_HOME: OnceLock<PathBuf> = OnceLock::new();
+/// Test-only override for the home dir typedefs extract under.
+static TYPEDEF_HOME: OnceLock<PathBuf> = OnceLock::new();
 
 #[doc(hidden)]
-pub fn set_stdlib_typedef_home(home: PathBuf) {
-    let _ = STDLIB_TYPEDEF_HOME.set(home);
+pub fn set_typedef_home(home: PathBuf) {
+    let _ = TYPEDEF_HOME.set(home);
+}
+
+fn typedef_home() -> Option<PathBuf> {
+    match TYPEDEF_HOME.get() {
+        Some(home) => Some(home.clone()),
+        None => Some(PathBuf::from(std::env::var_os("HOME")?)),
+    }
 }
 
 pub use project_manifest::{
@@ -51,15 +61,15 @@ pub fn typedef_cache_dir(project_root: &Path) -> PathBuf {
 /// existence proves the contents are current, and distinct versions or embedded
 /// stdlibs get distinct dirs.
 fn stdlib_typedef_version_dir() -> Option<PathBuf> {
-    let home = match STDLIB_TYPEDEF_HOME.get() {
-        Some(home) => home.clone(),
-        None => PathBuf::from(std::env::var_os("HOME")?),
-    };
-    Some(home.join(".lisette/cache/stdlib-typedefs").join(format!(
-        "lis@v{}-{:016x}",
-        env!("CARGO_PKG_VERSION"),
-        GO_STD_CONTENT_HASH
-    )))
+    Some(
+        typedef_home()?
+            .join(".lisette/cache/stdlib-typedefs")
+            .join(format!(
+                "lis@v{}-{:016x}",
+                env!("CARGO_PKG_VERSION"),
+                GO_STD_CONTENT_HASH
+            )),
+    )
 }
 
 /// Deterministic on-disk path for a stdlib package's typedef. Pure path
@@ -93,7 +103,7 @@ pub fn ensure_stdlib_extracted(target: Target) {
 
     // Build in a temp dir, then atomically rename into place. The temp name
     // carries the pid and a counter so concurrent extractions don't collide.
-    let counter = STDLIB_TEMP_COUNTER.fetch_add(1, Ordering::Relaxed);
+    let counter = TYPEDEF_TEMP_COUNTER.fetch_add(1, Ordering::Relaxed);
     let tmp = version_dir.join(format!(
         "{}.tmp.{}.{}",
         target.cache_segment(),
@@ -168,6 +178,55 @@ fn prune_stale_version_dirs(current: &Path) {
     }
 }
 
+fn prelude_typedef_version_dir() -> Option<PathBuf> {
+    Some(
+        typedef_home()?
+            .join(".lisette/cache/prelude-typedefs")
+            .join(format!(
+                "lis@v{}-{:016x}",
+                env!("CARGO_PKG_VERSION"),
+                PRELUDE_CONTENT_HASH
+            )),
+    )
+}
+
+pub fn prelude_typedef_path() -> Option<PathBuf> {
+    Some(prelude_typedef_version_dir()?.join("prelude.d.lis"))
+}
+
+pub fn is_generated_typedef_path(path: &Path) -> bool {
+    let Some(home) = typedef_home() else {
+        return false;
+    };
+    let cache = home.join(".lisette/cache");
+    path.starts_with(cache.join("prelude-typedefs"))
+        || path.starts_with(cache.join("stdlib-typedefs"))
+}
+
+pub fn ensure_prelude_extracted() {
+    let Some(version_dir) = prelude_typedef_version_dir() else {
+        return;
+    };
+    let path = version_dir.join("prelude.d.lis");
+    if path.exists() {
+        return;
+    }
+    if std::fs::create_dir_all(&version_dir).is_err() {
+        return;
+    }
+
+    let counter = TYPEDEF_TEMP_COUNTER.fetch_add(1, Ordering::Relaxed);
+    let tmp = version_dir.join(format!("prelude.tmp.{}.{}", std::process::id(), counter));
+    if std::fs::write(&tmp, LIS_PRELUDE_SOURCE).is_err() {
+        let _ = std::fs::remove_file(&tmp);
+        return;
+    }
+    if std::fs::rename(&tmp, &path).is_err() {
+        let _ = std::fs::remove_file(&tmp);
+    }
+    prune_stale_version_dirs(&version_dir);
+}
+
 #[derive(Clone, Copy)]
 pub struct GoModule<'a> {
     /// Module path, e.g. `github.com/gorilla/mux`.
@@ -240,5 +299,24 @@ mod tests {
         assert!(!stale.exists(), "this target's stale temp is removed");
         assert!(completed.exists(), "the completed target dir is kept");
         assert!(other_target_tmp.exists(), "another target's temp is kept");
+    }
+
+    #[test]
+    fn is_generated_typedef_path_matches_only_cache_files() {
+        let Some(home) = typedef_home() else {
+            return;
+        };
+        let cache = home.join(".lisette/cache");
+
+        assert!(is_generated_typedef_path(
+            &cache.join("prelude-typedefs/lis@v1-abc/prelude.d.lis")
+        ));
+        assert!(is_generated_typedef_path(
+            &cache.join("stdlib-typedefs/lis@v1-abc/darwin_arm64/fmt.d.lis")
+        ));
+        assert!(!is_generated_typedef_path(
+            &home.join("project/src/main.lis")
+        ));
+        assert!(!is_generated_typedef_path(Path::new("/etc/passwd")));
     }
 }

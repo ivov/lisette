@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [info] Unnecessary lazy evaluation
+   ╭─[test.lis:4:28]
+ 3 │   let r: Result<int, string> = Ok(1)
+ 4 │   let _ = r.unwrap_or_else(|_| 0)
+   ·                            ──┬──
+   ·                              ╰── can be simpler
+ 5 │ }
+   ╰────
+  help: Replace `.unwrap_or_else(...)` with `.unwrap_or(...)` to pass the value directly · code: [lint.unnecessary_lazy_evaluations]

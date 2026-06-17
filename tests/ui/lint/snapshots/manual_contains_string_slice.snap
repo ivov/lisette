@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [info] Manual `contains`
+   ╭─[test.lis:4:11]
+ 3 │   let names = ["a", "b"]
+ 4 │   let _ = names.any(|s| s == "b")
+   ·           ───────────┬───────────
+   ·                      ╰── can be simpler
+ 5 │ }
+   ╰────
+  help: Replace `.any(|x| x == value)` with `.contains(value)` · code: [lint.manual_contains]

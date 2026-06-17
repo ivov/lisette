@@ -484,6 +484,20 @@ pub fn manual_find(span: &Span, receiver: &str, predicate: &str) -> LisetteDiagn
         ))
 }
 
+pub fn manual_contains(span: &Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::info("Manual `contains`")
+        .with_lint_code("manual_contains")
+        .with_span_label(span, "can be simpler")
+        .with_help("Replace `.any(|x| x == value)` with `.contains(value)`")
+}
+
+pub fn unnecessary_first_then_check(span: &Span, replacement: &str) -> LisetteDiagnostic {
+    LisetteDiagnostic::info("First-element check can use `is_empty()`")
+        .with_lint_code("unnecessary_first_then_check")
+        .with_span_label(span, "can be simpler")
+        .with_help(format!("Simplify to `{replacement}`"))
+}
+
 pub fn redundant_slice_bounds(span: &Span, replacement: &str) -> LisetteDiagnostic {
     LisetteDiagnostic::info("Redundant slice bounds")
         .with_lint_code("redundant_slice_bounds")
@@ -695,6 +709,24 @@ pub fn manual_option_zip(span: &Span) -> LisetteDiagnostic {
         .with_lint_code("manual_option_zip")
         .with_span_label(span, "can be simpler")
         .with_help("Replace `a.and_then(|a| b.map(|b| (a, b)))` with `a.zip(b)`")
+}
+
+pub fn unnecessary_lazy_evaluations(span: &Span, lazy: &str, eager: &str) -> LisetteDiagnostic {
+    LisetteDiagnostic::info("Unnecessary lazy evaluation")
+        .with_lint_code("unnecessary_lazy_evaluations")
+        .with_span_label(span, "can be simpler")
+        .with_help(format!(
+            "Replace `.{lazy}(...)` with `.{eager}(...)` to pass the value directly"
+        ))
+}
+
+pub fn or_fn_call(span: &Span, eager: &str, lazy: &str) -> LisetteDiagnostic {
+    LisetteDiagnostic::info("Unnecessary eager evaluation")
+        .with_lint_code("or_fn_call")
+        .with_span_label(span, "always evaluated")
+        .with_help(format!(
+            "Replace `.{eager}(...)` with `.{lazy}(...)` so the fallback runs only when needed"
+        ))
 }
 
 pub fn needless_question_mark(span: &Span, wrapper: &str) -> LisetteDiagnostic {

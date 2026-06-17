@@ -1,6 +1,7 @@
 use diagnostics::SemanticResult;
 use emit::{EmitOptions, Planner};
-use semantics::analyze::{AnalyzeInput, SemanticConfig, analyze};
+use passes::analyze;
+use semantics::inference::{AnalyzeInput, SemanticConfig};
 use semantics::loader::Loader;
 use semantics::store::ENTRY_MODULE_ID;
 
@@ -33,7 +34,7 @@ fn compile_with(
         ast: build_result.ast,
         project_root: None,
         locator,
-        compile_phase: semantics::analyze::CompilePhase::Check,
+        compile_phase: semantics::inference::CompilePhase::Check,
         go_module: String::new(),
         disable_cache: false,
     })
@@ -55,7 +56,7 @@ pub fn compile_check(fs: MockFileSystem) -> SemanticResult {
 pub fn compile_standalone_entry(
     fs: MockFileSystem,
     entry_name: &str,
-    phase: semantics::analyze::CompilePhase,
+    phase: semantics::inference::CompilePhase,
 ) -> SemanticResult {
     let source = fs
         .scan_folder(ENTRY_MODULE_ID)
@@ -158,7 +159,7 @@ pub fn compile_project_files(
         ast: build_result.ast,
         project_root: None,
         locator: deps::TypedefLocator::default(),
-        compile_phase: semantics::analyze::CompilePhase::Emit,
+        compile_phase: semantics::inference::CompilePhase::Emit,
         go_module: go_module.to_string(),
         disable_cache: true,
     });

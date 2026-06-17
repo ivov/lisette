@@ -5,10 +5,11 @@ use deps::TypedefLocator;
 use diagnostics::LisetteDiagnostic;
 use emit::{EmitOptions, OutputFile, Planner};
 
-use semantics::analyze::{AnalyzeInput, SemanticConfig, analyze};
+use passes::analyze;
 use semantics::cache::EmitStamp;
+use semantics::inference::{AnalyzeInput, SemanticConfig};
 
-pub use semantics::analyze::CompilePhase;
+pub use semantics::inference::CompilePhase;
 use semantics::loader::Loader;
 
 const ENTRY_FILE_ID: u32 = 0;

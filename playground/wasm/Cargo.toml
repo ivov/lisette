@@ -19,6 +19,7 @@ ecow = "0.2"
 lisette-format      = { path = "../../crates/format" }
 lisette-syntax      = { path = "../../crates/syntax" }
 lisette-semantics   = { path = "../../crates/semantics" }
+lisette-passes      = { path = "../../crates/passes" }
 lisette-emit        = { path = "../../crates/emit" }
 lisette-diagnostics = { path = "../../crates/diagnostics" }
 lisette-deps        = { path = "../../crates/deps" }

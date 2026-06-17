@@ -6,7 +6,8 @@ use tower_lsp::lsp_types::*;
 
 use deps::TypedefLocator;
 use diagnostics::LisetteDiagnostic;
-use semantics::analyze::{AnalyzeInput, CompilePhase, SemanticConfig, analyze};
+use passes::analyze;
+use semantics::inference::{AnalyzeInput, CompilePhase, SemanticConfig};
 use syntax::desugar;
 use syntax::lex::Lexer;
 use syntax::parse::Parser;

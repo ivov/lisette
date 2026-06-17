@@ -9741,6 +9741,103 @@ async fn goto_definition_stdlib_member_navigates_to_typedef() {
 }
 
 #[tokio::test]
+async fn goto_definition_on_prelude_type_navigates_to_typedef() {
+    let mut client = TestClient::new().await;
+    client.initialize().await;
+
+    let source = "fn get() -> Option<int> {\n  none\n}\nfn main() {\n  let x = get()\n}";
+    client.open(TEST_URI, source).await;
+
+    let response = client.goto_definition(TEST_URI, 0, 13).await;
+    let location = definition_location(
+        &response.expect("go-to-definition on prelude type should return a location"),
+    )
+    .expect("response should contain a location");
+    let path = location.uri.path();
+    assert!(
+        path.contains("prelude-typedefs") && path.ends_with("prelude.d.lis"),
+        "should land in the extracted prelude typedef, got {path}"
+    );
+    assert!(
+        definition_target_text(&location).starts_with("Option"),
+        "should land on the `Option` definition"
+    );
+
+    client.shutdown().await;
+}
+
+#[tokio::test]
+async fn opening_prelude_typedef_publishes_no_diagnostics() {
+    let mut client = TestClient::new().await;
+    client.initialize().await;
+
+    let path = deps::prelude_typedef_path().expect("prelude typedef path");
+    let content = std::fs::read_to_string(&path).expect("prelude cache file should exist");
+    let uri = Url::from_file_path(&path).expect("path to uri").to_string();
+
+    client.open(&uri, &content).await;
+    let diagnostics = client.await_diagnostics().await;
+    assert!(
+        diagnostics.is_empty(),
+        "opening the generated prelude typedef must report no diagnostics, got: {diagnostics:?}"
+    );
+
+    client.shutdown().await;
+}
+
+#[tokio::test]
+async fn goto_definition_on_prelude_method_navigates_to_typedef() {
+    let mut client = TestClient::new().await;
+    client.initialize().await;
+
+    let source = "fn main() {\n  let s = \"hello\"\n  let n = s.length()\n}";
+    client.open(TEST_URI, source).await;
+
+    let response = client.goto_definition(TEST_URI, 2, 12).await;
+    let location = definition_location(
+        &response.expect("go-to-definition on prelude method should return a location"),
+    )
+    .expect("response should contain a location");
+    let path = location.uri.path();
+    assert!(
+        path.contains("prelude-typedefs") && path.ends_with("prelude.d.lis"),
+        "should land in the extracted prelude typedef, got {path}"
+    );
+    assert!(
+        definition_target_text(&location).starts_with("length"),
+        "should land on the `length` method definition"
+    );
+
+    client.shutdown().await;
+}
+
+#[tokio::test]
+async fn goto_definition_on_prelude_function_navigates_to_typedef() {
+    let mut client = TestClient::new().await;
+    client.initialize().await;
+
+    let source = "fn main() {\n  panic(\"boom\")\n}";
+    client.open(TEST_URI, source).await;
+
+    let response = client.goto_definition(TEST_URI, 1, 3).await;
+    let location = definition_location(
+        &response.expect("go-to-definition on prelude function should return a location"),
+    )
+    .expect("response should contain a location");
+    let path = location.uri.path();
+    assert!(
+        path.contains("prelude-typedefs") && path.ends_with("prelude.d.lis"),
+        "should land in the extracted prelude typedef, got {path}"
+    );
+    assert!(
+        definition_target_text(&location).starts_with("panic"),
+        "should land on the `panic` definition"
+    );
+
+    client.shutdown().await;
+}
+
+#[tokio::test]
 async fn goto_definition_through_propagate_operator() {
     let mut client = TestClient::new().await;
     client.initialize().await;
@@ -10657,6 +10754,46 @@ fn main() -> int {
     assert!(
         response.is_some(),
         "prepare_rename on method via dot access should return a result"
+    );
+
+    client.shutdown().await;
+}
+
+#[tokio::test]
+async fn prepare_rename_on_prelude_method_is_refused() {
+    let mut client = TestClient::new().await;
+    client.initialize().await;
+    client
+        .open(
+            TEST_URI,
+            "fn main() {\n  let s = \"hello\"\n  let n = s.length()\n}",
+        )
+        .await;
+
+    let response = client.prepare_rename(TEST_URI, 2, 12).await;
+    assert!(
+        response.is_none(),
+        "prepare_rename on a prelude method must be refused, got {response:?}"
+    );
+
+    client.shutdown().await;
+}
+
+#[tokio::test]
+async fn rename_on_prelude_method_is_refused() {
+    let mut client = TestClient::new().await;
+    client.initialize().await;
+    client
+        .open(
+            TEST_URI,
+            "fn main() {\n  let s = \"hello\"\n  let n = s.length()\n}",
+        )
+        .await;
+
+    let edit = client.rename(TEST_URI, 2, 12, "len").await;
+    assert!(
+        edit.is_none(),
+        "rename on a prelude method must be refused, got {edit:?}"
     );
 
     client.shutdown().await;
@@ -11785,7 +11922,7 @@ fn run(p: Point) -> int {
 }
 
 #[tokio::test]
-async fn inlay_hint_variadic_only_labels_fixed_params() {
+async fn inlay_hint_variadic_labels_first_arg_only() {
     let mut client = TestClient::new().await;
     client.initialize().await;
     let source = "\
@@ -11800,9 +11937,10 @@ fn main() {
         .await
         .unwrap();
 
+    // The fixed `prefix` is labeled, and the variadic `vals` labels only its first arg.
     assert_eq!(
         inlay_hint_triples(&hints),
-        vec![(2, 18, "prefix:".to_string())]
+        vec![(2, 18, "prefix:".to_string()), (2, 25, "vals:".to_string())]
     );
 
     client.shutdown().await;
@@ -11926,5 +12064,235 @@ async fn inlay_hint_range_past_eof_is_empty() {
         "a range entirely past EOF must not scan the whole file: {hints:?}"
     );
 
+    client.shutdown().await;
+}
+
+#[tokio::test]
+async fn inlay_hint_for_loop_variable() {
+    let mut client = TestClient::new().await;
+    client.initialize().await;
+    let source = "fn main() { for i in 0..3 { i } }";
+    client.open(TEST_URI, source).await;
+    let hints = client
+        .inlay_hint(TEST_URI, (0, 0), doc_end(source))
+        .await
+        .unwrap();
+    assert_eq!(
+        inlay_hint_triples(&hints),
+        vec![(0, 17, ": int".to_string())]
+    );
+    client.shutdown().await;
+}
+
+#[tokio::test]
+async fn inlay_hint_match_tuple_binding() {
+    let mut client = TestClient::new().await;
+    client.initialize().await;
+    let source = "fn pick(p: (int, string)) -> int { match p { (a, b) => a } }";
+    client.open(TEST_URI, source).await;
+    let hints = client
+        .inlay_hint(TEST_URI, (0, 0), doc_end(source))
+        .await
+        .unwrap();
+    assert_eq!(
+        inlay_hint_triples(&hints),
+        vec![
+            (0, 47, ": int".to_string()),
+            (0, 50, ": string".to_string())
+        ]
+    );
+    client.shutdown().await;
+}
+
+#[tokio::test]
+async fn inlay_hint_match_enum_payload() {
+    let mut client = TestClient::new().await;
+    client.initialize().await;
+    let source =
+        "fn m(o: Option<int>) -> int { match o { Option.Some(n) => n, Option.None => 0 } }";
+    client.open(TEST_URI, source).await;
+    let hints = client
+        .inlay_hint(TEST_URI, (0, 0), doc_end(source))
+        .await
+        .unwrap();
+    assert_eq!(
+        inlay_hint_triples(&hints),
+        vec![(0, 53, ": int".to_string())]
+    );
+    client.shutdown().await;
+}
+
+#[tokio::test]
+async fn inlay_hint_if_let_binding() {
+    let mut client = TestClient::new().await;
+    client.initialize().await;
+    let source = "fn u(o: Option<int>) -> int { if let Some(x) = o { x } else { 0 } }";
+    client.open(TEST_URI, source).await;
+    let hints = client
+        .inlay_hint(TEST_URI, (0, 0), doc_end(source))
+        .await
+        .unwrap();
+    assert_eq!(
+        inlay_hint_triples(&hints),
+        vec![(0, 43, ": int".to_string())]
+    );
+    client.shutdown().await;
+}
+
+#[tokio::test]
+async fn inlay_hint_while_let_binding() {
+    let mut client = TestClient::new().await;
+    client.initialize().await;
+    let source = "fn drain(o: Option<int>) -> int { let mut c: Option<int> = o; while let Some(x) = c { c = Option.None } 0 }";
+    client.open(TEST_URI, source).await;
+    let hints = client
+        .inlay_hint(TEST_URI, (0, 0), doc_end(source))
+        .await
+        .unwrap();
+    assert_eq!(
+        inlay_hint_triples(&hints),
+        vec![(0, 78, ": int".to_string())]
+    );
+    client.shutdown().await;
+}
+
+#[tokio::test]
+async fn inlay_hint_lambda_param_and_return() {
+    let mut client = TestClient::new().await;
+    client.initialize().await;
+    let source = "fn main() { (|x| x + 1)(5) }";
+    client.open(TEST_URI, source).await;
+    let hints = client
+        .inlay_hint(TEST_URI, (0, 0), doc_end(source))
+        .await
+        .unwrap();
+    assert_eq!(
+        inlay_hint_triples(&hints),
+        vec![
+            (0, 24, "x:".to_string()),
+            (0, 15, ": int".to_string()),
+            (0, 17, "-> int".to_string())
+        ]
+    );
+    client.shutdown().await;
+}
+
+#[tokio::test]
+async fn inlay_hint_lambda_skips_annotated_param() {
+    let mut client = TestClient::new().await;
+    client.initialize().await;
+    let source = "fn main() { (|x: int| x + 1)(5) }";
+    client.open(TEST_URI, source).await;
+    let hints = client
+        .inlay_hint(TEST_URI, (0, 0), doc_end(source))
+        .await
+        .unwrap();
+    assert_eq!(
+        inlay_hint_triples(&hints),
+        vec![(0, 29, "x:".to_string()), (0, 22, "-> int".to_string())]
+    );
+    client.shutdown().await;
+}
+
+#[tokio::test]
+async fn inlay_hint_curried_lambda_skips_outer_return() {
+    let mut client = TestClient::new().await;
+    client.initialize().await;
+    let source = "fn main() { ((|x| |y| x + y)(1))(2) }";
+    client.open(TEST_URI, source).await;
+    let hints = client
+        .inlay_hint(TEST_URI, (0, 0), doc_end(source))
+        .await
+        .unwrap();
+    assert_eq!(
+        inlay_hint_triples(&hints),
+        vec![
+            (0, 33, "y:".to_string()),
+            (0, 29, "x:".to_string()),
+            (0, 16, ": int".to_string()),
+            (0, 20, ": int".to_string()),
+            (0, 22, "-> int".to_string())
+        ]
+    );
+    client.shutdown().await;
+}
+
+#[tokio::test]
+async fn hover_match_tuple_binding_shows_element_type() {
+    let mut client = TestClient::new().await;
+    client.initialize().await;
+    // A tuple pattern in a match arm carries a typed pattern; `a` must resolve to its
+    // element type `int`, not the whole `(int, string)`.
+    let source = "fn pick(p: (int, string)) -> int { match p { (a, b) => a } }";
+    client.open(TEST_URI, source).await;
+
+    let hover = client.hover(TEST_URI, 0, 46).await;
+    let content = hover_content(&hover.unwrap());
+    assert!(content.contains("int"));
+    assert!(!content.contains("string"));
+
+    client.shutdown().await;
+}
+
+#[tokio::test]
+async fn inlay_hint_parameter_position_for_index_arg() {
+    let mut client = TestClient::new().await;
+    client.initialize().await;
+    // Regression: param-name hints anchor at the start of `items[..]`, not the `[`.
+    let source = "fn add(x: int, y: int) -> int { x + y }\nfn s(items: Slice<int>) -> int { add(items[0], items[1]) }";
+    client.open(TEST_URI, source).await;
+    let hints = client
+        .inlay_hint(TEST_URI, (0, 0), doc_end(source))
+        .await
+        .unwrap();
+    assert_eq!(
+        inlay_hint_triples(&hints),
+        vec![(1, 37, "x:".to_string()), (1, 47, "y:".to_string())]
+    );
+    client.shutdown().await;
+}
+
+#[tokio::test]
+async fn inlay_hint_match_slice_prefix_and_rest() {
+    let mut client = TestClient::new().await;
+    client.initialize().await;
+    let source =
+        "fn head(items: Slice<int>) -> int { match items { [] => 0, [first, ..rest] => first } }";
+    client.open(TEST_URI, source).await;
+    let hints = client
+        .inlay_hint(TEST_URI, (0, 0), doc_end(source))
+        .await
+        .unwrap();
+    // `first` binds the element type; `rest` binds the remaining slice.
+    assert_eq!(
+        inlay_hint_triples(&hints),
+        vec![
+            (0, 65, ": int".to_string()),
+            (0, 73, ": Slice<int>".to_string())
+        ]
+    );
+    client.shutdown().await;
+}
+
+#[tokio::test]
+async fn inlay_hint_lambda_return_over_index_body() {
+    let mut client = TestClient::new().await;
+    client.initialize().await;
+    // The `-> int` return hint anchors at the body's left edge (`ys`), not the `[`.
+    let source =
+        "fn ap(f: fn(Slice<int>) -> int) -> int { f([1, 2]) }\nfn d() -> int { ap(|ys| ys[0]) }";
+    client.open(TEST_URI, source).await;
+    let hints = client
+        .inlay_hint(TEST_URI, (0, 0), doc_end(source))
+        .await
+        .unwrap();
+    assert_eq!(
+        inlay_hint_triples(&hints),
+        vec![
+            (1, 19, "f:".to_string()),
+            (1, 22, ": Slice<int>".to_string()),
+            (1, 24, "-> int".to_string())
+        ]
+    );
     client.shutdown().await;
 }

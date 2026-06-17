@@ -5,7 +5,8 @@
 
 use deps::TypedefLocator;
 use diagnostics::LisetteDiagnostic;
-use semantics::analyze::{AnalyzeInput, CompilePhase, SemanticConfig, analyze};
+use passes::analyze;
+use semantics::inference::{AnalyzeInput, CompilePhase, SemanticConfig};
 use semantics::loader::MemoryLoader;
 use semantics::store::ENTRY_MODULE_ID;
 

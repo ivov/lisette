@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [info] First-element check can use `is_empty()`
+   ╭─[test.lis:8:11]
+ 7 │   let h = Holder { items: [1, 2] }
+ 8 │   let _ = h.items.get(0).is_some()
+   ·           ────────────┬───────────
+   ·                       ╰── can be simpler
+ 9 │ }
+   ╰────
+  help: Simplify to `!h.items.is_empty()` · code: [lint.unnecessary_first_then_check]

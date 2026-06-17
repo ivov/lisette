@@ -56,14 +56,14 @@ pub fn save_prelude_cache(store: &Store) {
         return;
     };
 
-    let empty_file_map = HashMap::default();
+    let file_id_to_index: HashMap<u32, u32> = [(PRELUDE_FILE_ID, 0)].into_iter().collect();
     let definitions: HashMap<String, CachedDefinition> = module
         .definitions
         .iter()
         .map(|(name, definition)| {
             (
                 name.to_string(),
-                CachedDefinition::from_definition(definition, &empty_file_map),
+                CachedDefinition::from_definition(definition, &file_id_to_index),
             )
         })
         .collect();
@@ -112,13 +112,17 @@ pub fn register_cached_prelude(store: &mut Store, cached: PreludeCache) {
         },
     );
 
-    let file_ids: &[u32] = &[];
+    let file_ids: &[u32] = &[PRELUDE_FILE_ID];
     let module = store
         .get_module_mut(PRELUDE_MODULE_ID)
         .expect("prelude module must be registered before loading cached definitions");
     for (qualified_name, cached_definition) in cached.definitions {
         let definition = cached_definition.to_definition(file_ids);
         module.definitions.insert(qualified_name.into(), definition);
+    }
+
+    if let Some(path) = deps::prelude_typedef_path() {
+        store.typedef_paths.insert(PRELUDE_FILE_ID, path);
     }
 }
 
