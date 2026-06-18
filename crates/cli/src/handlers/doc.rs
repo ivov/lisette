@@ -466,6 +466,17 @@ fn build_prelude_index() -> PreludeIndex {
         }
     }
 
+    types.push(TypeInfo {
+        name: "Unit".to_string(),
+        generics: Vec::new(),
+        definition: "type Unit".to_string(),
+        doc: Some(
+            "The type of `()`, returned when there is no meaningful value to produce.".to_string(),
+        ),
+        methods: Vec::new(),
+        kind: TypeKind::Primitive,
+    });
+
     PreludeIndex { types, functions }
 }
 
@@ -826,16 +837,89 @@ fn format_type_with_generics_plain(name: &str, generics: &[String]) -> String {
 
 fn print_all(index: &PreludeIndex) {
     println!();
-    println!(
-        "  Prelude types and functions. Use {} to learn more.",
-        format_method_name("lis doc <type[.method]>")
-    );
-    println!(
-        "  For Go stdlib packages, try e.g. {} or {}",
-        format_method_name("lis doc go:os"),
-        format_method_name("lis doc go:net/http")
-    );
+    println!("  Browse documentation on a symbol from the prelude or from the Go stdlib");
 
+    println!();
+    println!("  Examples:");
+    let examples = [
+        ("Slice", "Docs on Lisette's `Slice` type"),
+        (
+            "Slice.map",
+            "Docs on `map` method on Lisette's `Slice` type",
+        ),
+        ("prelude", "List all Lisette prelude symbols"),
+        ("go:", "List all Go stdlib packages"),
+        ("go:os", "Docs on Go stdlib `os` package contents"),
+        (
+            "go:os.File",
+            "Docs on `File` type in Go stdlib `os` package",
+        ),
+        ("-s append", "Search docs for `append`"),
+    ];
+    let arg_width = examples.iter().map(|(arg, _)| arg.len()).max().unwrap_or(0) + 4;
+    for (arg, description) in examples {
+        let padding = " ".repeat(arg_width - arg.len());
+        let description = format_backticks(description, use_color());
+        if use_color() {
+            use owo_colors::OwoColorize;
+            println!(
+                "    {} {}{}{}",
+                "lis doc".bright_magenta(),
+                format_doc_arg(arg),
+                padding,
+                description
+            );
+        } else {
+            println!("    lis doc {arg}{padding}{description}");
+        }
+    }
+
+    let label_width = print_prelude_section(index);
+
+    println!();
+    println!("  Go stdlib:");
+    print_go_stdlib_section(label_width);
+}
+
+fn print_prelude_section(index: &PreludeIndex) -> usize {
+    let categories = prelude_categories(index);
+    let label_width = categories
+        .iter()
+        .map(|(label, _)| label.len())
+        .max()
+        .unwrap_or(0)
+        + 3;
+    println!();
+    println!("  Prelude:");
+    for (label, leaves) in &categories {
+        print_prelude_category(label, label_width, leaves);
+    }
+    label_width
+}
+
+fn print_prelude(index: &PreludeIndex) {
+    println!();
+    println!("  Lisette's prelude");
+    println!();
+    println!(
+        "  Run {} to view a symbol",
+        format_method_name("lis doc <symbol>")
+    );
+    println!();
+
+    let categories = prelude_categories(index);
+    let label_width = categories
+        .iter()
+        .map(|(label, _)| label.len())
+        .max()
+        .unwrap_or(0)
+        + 3;
+    for (label, leaves) in &categories {
+        print_prelude_category(label, label_width, leaves);
+    }
+}
+
+fn prelude_categories(index: &PreludeIndex) -> Vec<(&'static str, Vec<String>)> {
     let primitives: Vec<&TypeInfo> = index
         .types
         .iter()
@@ -857,107 +941,166 @@ fn print_all(index: &PreludeIndex) {
         .filter(|t| matches!(t.kind, TypeKind::Enum))
         .collect();
 
-    println!();
-    println!("  Primitive types");
+    let pick_primitives = |predicate: &dyn Fn(&str) -> bool| -> Vec<String> {
+        primitives
+            .iter()
+            .filter(|t| predicate(&t.name))
+            .map(|t| t.name.clone())
+            .collect()
+    };
+    let mut primitive_leaves = pick_primitives(&|n| n.starts_with("int") || n == "rune");
+    primitive_leaves.extend(pick_primitives(&|n| {
+        n.starts_with("uint") || n == "uintptr" || n == "byte"
+    }));
+    primitive_leaves.extend(pick_primitives(&|n| {
+        n.starts_with("float") || n.starts_with("complex")
+    }));
+    primitive_leaves.extend(pick_primitives(&|n| n == "bool" || n == "string"));
 
-    let signed_types: Vec<&str> = primitives
-        .iter()
-        .filter(|t| t.name.starts_with("int") || t.name == "rune")
-        .map(|t| t.name.as_str())
-        .collect();
-    if !signed_types.is_empty() {
-        println!("    {}", format_dim(&signed_types.join(", ")));
-    }
-
-    let unsigned_types: Vec<&str> = primitives
-        .iter()
-        .filter(|t| t.name.starts_with("uint") || t.name == "uintptr" || t.name == "byte")
-        .map(|t| t.name.as_str())
-        .collect();
-    if !unsigned_types.is_empty() {
-        println!("    {}", format_dim(&unsigned_types.join(", ")));
-    }
-
-    let float_types: Vec<&str> = primitives
-        .iter()
-        .filter(|t| t.name.starts_with("float") || t.name.starts_with("complex"))
-        .map(|t| t.name.as_str())
-        .collect();
-    if !float_types.is_empty() {
-        println!("    {}", format_dim(&float_types.join(", ")));
-    }
-
-    let basic_types: Vec<&str> = primitives
-        .iter()
-        .filter(|t| matches!(t.name.as_str(), "bool" | "string"))
-        .map(|t| t.name.as_str())
-        .collect();
-    if !basic_types.is_empty() {
-        println!("    {}", format_dim(&basic_types.join(", ")));
-    }
-
-    println!();
-    println!("  Compound types");
-
-    let enums_formatted: Vec<String> = enums
+    let mut composite_leaves: Vec<String> = enums
         .iter()
         .map(|t| format_type_with_generics_plain(&t.name, &t.generics))
         .collect();
-    if !enums_formatted.is_empty() {
-        println!("    {}", format_dim(&enums_formatted.join(", ")));
-    }
-
-    let collections: Vec<String> = generic_primitives
-        .iter()
-        .filter(|t| matches!(t.name.as_str(), "Slice" | "Map"))
-        .map(|t| format_type_with_generics_plain(&t.name, &t.generics))
-        .collect();
-    if !collections.is_empty() {
-        println!("    {}", format_dim(&collections.join(", ")));
-    }
-
-    let refs: Vec<String> = generic_primitives
-        .iter()
-        .filter(|t| matches!(t.name.as_str(), "Ref"))
-        .map(|t| format_type_with_generics_plain(&t.name, &t.generics))
-        .collect();
-    if !refs.is_empty() {
-        println!("    {}", format_dim(&refs.join(", ")));
-    }
-
-    let channels: Vec<String> = generic_primitives
-        .iter()
-        .filter(|t| matches!(t.name.as_str(), "Channel" | "Sender" | "Receiver"))
-        .map(|t| format_type_with_generics_plain(&t.name, &t.generics))
-        .collect();
-    if !channels.is_empty() {
-        println!("    {}", format_dim(&channels.join(", ")));
-    }
-
-    let ranges: Vec<String> = structs
-        .iter()
-        .filter(|t| t.name.contains("Range"))
-        .map(|t| format_type_with_generics_plain(&t.name, &t.generics))
-        .collect();
-    if !ranges.is_empty() {
-        println!("    {}", format_dim(&ranges.join(", ")));
-    }
-
-    println!();
-    println!("  Special types");
-    println!(
-        "    {}",
-        format_dim("Unit, Unknown, Never, VarArgs<T>, PanicValue, error")
+    let pick_generic = |names: &[&str]| -> Vec<String> {
+        generic_primitives
+            .iter()
+            .filter(|t| names.contains(&t.name.as_str()))
+            .map(|t| format_type_with_generics_plain(&t.name, &t.generics))
+            .collect()
+    };
+    composite_leaves.extend(pick_generic(&["Slice", "Map"]));
+    composite_leaves.extend(pick_generic(&["Ref"]));
+    composite_leaves.extend(pick_generic(&["Channel", "Sender", "Receiver"]));
+    composite_leaves.extend(
+        structs
+            .iter()
+            .filter(|t| t.name.contains("Range"))
+            .map(|t| format_type_with_generics_plain(&t.name, &t.generics)),
     );
 
-    println!();
-    println!("  Functions");
-    let fn_names: Vec<String> = index
+    let function_leaves: Vec<String> = index
         .functions
         .iter()
         .map(|f| format!("{}()", f.name))
         .collect();
-    println!("    {}", format_dim(&fn_names.join(", ")));
+
+    let constraint_leaves: Vec<String> = ["Comparable", "Ordered"]
+        .iter()
+        .map(|s| s.to_string())
+        .collect();
+
+    let special_leaves: Vec<String> = [
+        "Unit",
+        "Unknown",
+        "Never",
+        "VarArgs<T>",
+        "PanicValue",
+        "error",
+    ]
+    .iter()
+    .map(|s| s.to_string())
+    .collect();
+
+    vec![
+        ("primitives", primitive_leaves),
+        ("composites", composite_leaves),
+        ("functions", function_leaves),
+        ("others", special_leaves),
+        ("constraints", constraint_leaves),
+    ]
+    .into_iter()
+    .filter(|(_, leaves)| !leaves.is_empty())
+    .collect()
+}
+
+const WRAP_WIDTH: usize = 78;
+
+fn wrap_into_lines(items: &[String], area: usize) -> Vec<Vec<&String>> {
+    let mut lines: Vec<Vec<&String>> = Vec::new();
+    let mut current: Vec<&String> = Vec::new();
+    let mut current_width = 0;
+    for item in items {
+        let item_width = item.chars().count();
+        let separator = if current.is_empty() { 0 } else { 3 };
+        if !current.is_empty() && current_width + separator + item_width > area {
+            lines.push(std::mem::take(&mut current));
+            current_width = 0;
+        }
+        current_width += if current.is_empty() {
+            item_width
+        } else {
+            3 + item_width
+        };
+        current.push(item);
+    }
+    if !current.is_empty() {
+        lines.push(current);
+    }
+    lines
+}
+
+fn print_prelude_category(label: &str, label_width: usize, leaves: &[String]) {
+    let area = WRAP_WIDTH.saturating_sub(4 + label_width).max(20);
+    let lines = wrap_into_lines(leaves, area);
+
+    for (line_index, line) in lines.iter().enumerate() {
+        let rendered = line
+            .iter()
+            .map(|leaf| format_magenta(leaf))
+            .collect::<Vec<_>>()
+            .join(" · ");
+        let trailing = if line_index + 1 < lines.len() {
+            " ·"
+        } else {
+            ""
+        };
+        if line_index == 0 {
+            let padded_label = format_dim(&format!("{label:<label_width$}"));
+            println!("    {padded_label}{rendered}{trailing}");
+        } else {
+            println!("    {}{rendered}{trailing}", " ".repeat(label_width));
+        }
+    }
+}
+
+fn print_go_stdlib_section(label_width: usize) {
+    let area = WRAP_WIDTH.saturating_sub(4 + label_width).max(20);
+    let label = "packages";
+
+    let mut items: Vec<String> = [
+        "fmt", "os", "io", "bufio", "bytes", "strings", "strconv", "slices", "maps", "errors",
+        "time", "context", "sync", "regexp",
+    ]
+    .iter()
+    .map(|s| s.to_string())
+    .collect();
+    items.push("etc".to_string());
+    let lines = wrap_into_lines(&items, area);
+
+    for (line_index, line) in lines.iter().enumerate() {
+        let rendered = line
+            .iter()
+            .map(|item| {
+                if item.as_str() == "etc" {
+                    format_white(item)
+                } else {
+                    format_magenta(item)
+                }
+            })
+            .collect::<Vec<_>>()
+            .join(" · ");
+        let trailing = if line_index + 1 < lines.len() {
+            " ·"
+        } else {
+            ""
+        };
+        if line_index == 0 {
+            let padded_label = format_dim(&format!("{label:<label_width$}"));
+            println!("    {padded_label}{rendered}{trailing}");
+        } else {
+            println!("    {}{rendered}{trailing}", " ".repeat(label_width));
+        }
+    }
 }
 
 fn format_dim(s: &str) -> String {
@@ -967,6 +1110,41 @@ fn format_dim(s: &str) -> String {
     } else {
         s.to_string()
     }
+}
+
+fn format_magenta(s: &str) -> String {
+    if use_color() {
+        use owo_colors::OwoColorize;
+        s.bright_magenta().to_string()
+    } else {
+        s.to_string()
+    }
+}
+
+fn format_white(s: &str) -> String {
+    if use_color() {
+        use owo_colors::OwoColorize;
+        s.white().to_string()
+    } else {
+        s.to_string()
+    }
+}
+
+fn format_doc_arg(arg: &str) -> String {
+    if !use_color() {
+        return arg.to_string();
+    }
+    use owo_colors::OwoColorize;
+    arg.split(' ')
+        .map(|token| {
+            if token.starts_with('-') {
+                token.blue().to_string()
+            } else {
+                token.green().to_string()
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 fn split_doc_and_example(doc: &str) -> (&str, Option<&str>) {
@@ -1090,83 +1268,41 @@ fn print_go_package_header(package: &str) {
 }
 
 fn print_go_package_all(index: &GoPackageIndex) {
-    print_go_package_header(&index.package);
     println!();
     println!(
-        "  Use {} to learn more about a specific item.",
+        "  Run {} to view an item",
         format_method_name(&format!("lis doc go:{}.<item>", index.package))
     );
 
-    if !index.types.is_empty() {
-        println!();
-        println!("  Types");
-        for ti in &index.types {
-            println!("    {}", format_dim(&ti.name));
-        }
-    }
+    let types: Vec<String> = index.types.iter().map(|t| t.name.clone()).collect();
+    let functions: Vec<String> = index
+        .functions
+        .iter()
+        .map(|f| format!("{}()", f.name))
+        .collect();
+    let constants: Vec<String> = index.constants.iter().map(|c| c.name.clone()).collect();
+    let variables: Vec<String> = index.variables.iter().map(|v| v.name.clone()).collect();
 
-    if !index.functions.is_empty() {
-        println!();
-        println!("  Functions");
-        let fn_names: Vec<String> = index
-            .functions
-            .iter()
-            .map(|f| format!("{}()", f.name))
-            .collect();
-        let mut line = String::from("    ");
-        for (i, name) in fn_names.iter().enumerate() {
-            if i > 0 {
-                line.push_str(", ");
-            }
-            if line.len() + name.len() > 80 {
-                println!("{}", format_dim(&line));
-                line = String::from("    ");
-            }
-            line.push_str(name);
-        }
-        if line.len() > 4 {
-            println!("{}", format_dim(&line));
-        }
-    }
+    let categories: Vec<(&str, Vec<String>)> = vec![
+        ("types", types),
+        ("functions", functions),
+        ("constants", constants),
+        ("variables", variables),
+    ]
+    .into_iter()
+    .filter(|(_, items)| !items.is_empty())
+    .collect();
 
-    if !index.constants.is_empty() {
-        println!();
-        println!("  Constants");
-        let const_names: Vec<&str> = index.constants.iter().map(|c| c.name.as_str()).collect();
-        let mut line = String::from("    ");
-        for (i, name) in const_names.iter().enumerate() {
-            if i > 0 {
-                line.push_str(", ");
-            }
-            if line.len() + name.len() > 80 {
-                println!("{}", format_dim(&line));
-                line = String::from("    ");
-            }
-            line.push_str(name);
-        }
-        if line.len() > 4 {
-            println!("{}", format_dim(&line));
-        }
-    }
+    let label_width = categories
+        .iter()
+        .map(|(label, _)| label.len())
+        .max()
+        .unwrap_or(0)
+        + 3;
 
-    if !index.variables.is_empty() {
-        println!();
-        println!("  Variables");
-        let var_names: Vec<&str> = index.variables.iter().map(|v| v.name.as_str()).collect();
-        let mut line = String::from("    ");
-        for (i, name) in var_names.iter().enumerate() {
-            if i > 0 {
-                line.push_str(", ");
-            }
-            if line.len() + name.len() > 80 {
-                println!("{}", format_dim(&line));
-                line = String::from("    ");
-            }
-            line.push_str(name);
-        }
-        if line.len() > 4 {
-            println!("{}", format_dim(&line));
-        }
+    println!();
+    for (label, items) in &categories {
+        print_prelude_category(label, label_width, items);
     }
 }
 
@@ -1222,8 +1358,10 @@ fn suggest_go_package(query: &str) -> Option<&'static str> {
 
 fn print_go_packages_list() {
     println!();
+    println!("  Go stdlib");
+    println!();
     println!(
-        "  Go stdlib packages. Use {} to learn more.",
+        "  Run {} to view a package",
         format_method_name("lis doc go:<package>")
     );
     println!();
@@ -1240,9 +1378,9 @@ fn print_go_packages_list() {
         for (i, pkg) in chunk.iter().enumerate() {
             if i < chunk.len() - 1 {
                 let padded = format!("{:width$}", pkg, width = col_width);
-                print!("{}", format_dim(&padded));
+                print!("{}", format_magenta(&padded));
             } else {
-                print!("{}", format_dim(pkg));
+                print!("{}", format_magenta(pkg));
             }
         }
         println!();
@@ -1588,7 +1726,7 @@ pub fn doc_search(query: &str) -> i32 {
     }
 
     println!();
-    println!("  Prelude");
+    println!("  Prelude:");
     if prelude_matches.is_empty() {
         println!("    {}", format_dim("(no matches)"));
     } else {
@@ -1598,7 +1736,7 @@ pub fn doc_search(query: &str) -> i32 {
     }
 
     println!();
-    println!("  Go stdlib");
+    println!("  Go stdlib:");
     if go_matches.is_empty() {
         println!("    {}", format_dim("(no matches)"));
     } else {
@@ -1646,6 +1784,11 @@ pub fn doc(query: Option<String>) -> i32 {
             0
         }
         Some(q) if q.starts_with("go:") => doc_go_package(&q),
+        Some(q) if q.eq_ignore_ascii_case("prelude") => {
+            let index = build_prelude_index();
+            print_prelude(&index);
+            0
+        }
         Some(q) => {
             let index = build_prelude_index();
             let parts: Vec<&str> = q.splitn(2, '.').collect();

@@ -25,7 +25,7 @@ Commands:
 Extras:
     `version`      Print compiler version
     `help`         Show help for a command
-    `doc`          Browse symbols and packages
+    `doc`          Browse documentation
     `learn`        Create a new sample project
     `complete`     Shell completion scripts
     `lsp`          Start the language server",
@@ -255,21 +255,25 @@ matching, error handling, closures, Go interop, and concurrency.",
         ),
 
         "doc" => print_help(
-            "`lis doc` <symbol>
+            "`lis doc` <symbol> {[--flags]:b}
 
-Browse symbols and packages.
+Browse documentation on a symbol from the prelude or from the Go stdlib
 
 Arguments:
-    <symbol>               Symbol or package to look up (omit to list all)
-    {-s:b}, {--search:b} <term>    Search across symbols and packages
+    {symbol:g} {(optional):d}      Symbol to look up (omit to list all)
+
+Flags:
+    {-s:b}, {--search:b} <term>    Search docs for term
 
 Examples:
-    `lis doc`                List all prelude types and functions
-    `lis doc` {Option:g}         Show {Option:g} definition and its methods
-    `lis doc` {Option.map:g}     Show the {Option.map:g} method
-    `lis doc` {Slice:g}          Show {Slice:g} definition and its methods
-    `lis doc` {go:strings:g}     Browse {strings:g} module in Go stdlib
-    `lis doc` {-s:b} {split:g}       Look up {split:g}",
+    `lis doc`                List prelude symbols and Go packages
+    `lis doc` {Slice:g}          Docs on Lisette's `Slice` type
+    `lis doc` {Slice.map:g}      Docs on `map` method on Lisette's `Slice` type
+    `lis doc` {prelude:g}        List all Lisette prelude symbols
+    `lis doc` {go::g}            List all Go stdlib packages
+    `lis doc` {go:os:g}          Docs on Go stdlib `os` package contents
+    `lis doc` {go:os.File:g}     Docs on `File` type in Go stdlib `os` package
+    `lis doc` {-s:b} {append:g}      Search docs for `append`",
         ),
 
         "complete" => print_help(
