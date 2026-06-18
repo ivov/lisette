@@ -1,7 +1,9 @@
 use std::fs;
-use std::io::{BufRead, BufReader, Write};
+use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+
+use serde::Deserialize;
 
 include!(concat!(env!("OUT_DIR"), "/go_version.rs"));
 
@@ -480,6 +482,12 @@ pub fn is_go_output_flag(token: &str) -> bool {
     matches!(token, "-o" | "--o") || token.starts_with("-o=") || token.starts_with("--o=")
 }
 
+pub fn is_go_json_flag(token: &str) -> bool {
+    matches!(token, "-json" | "--json")
+        || token.starts_with("-json=")
+        || token.starts_with("--json=")
+}
+
 /// `go_flags` follow the default `-o` so a caller `-o` wins. `output_path` must
 /// be absolute, since `go build` runs with `build_dir` as cwd.
 pub fn build_binary(
@@ -515,13 +523,32 @@ pub fn build_binary(
     }
 }
 
+/// One line of `go test -json` output (`elapsed` is in seconds).
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "PascalCase")]
+pub struct GoTestEvent {
+    pub action: String,
+    #[serde(default)]
+    pub package: String,
+    pub test: Option<String>,
+    pub elapsed: Option<f64>,
+    pub output: Option<String>,
+    /// `build-*` events name the package here, not in `package`.
+    pub import_path: Option<String>,
+}
+
+pub struct TestRun {
+    pub events: Vec<GoTestEvent>,
+    pub success: bool,
+}
+
 pub fn run_tests(
     build_dir: &Path,
     target: Target,
     go_flags: &[String],
-) -> Result<bool, GoCliError> {
+) -> Result<TestRun, GoCliError> {
     let mut cmd = go_command(target);
-    cmd.arg("test").arg("-count=1");
+    cmd.arg("test").arg("-json").arg("-count=1");
     for flag in go_flags {
         cmd.arg(flag);
     }
@@ -529,36 +556,28 @@ pub fn run_tests(
         .current_dir(build_dir)
         .stdout(Stdio::piped());
 
-    let mut child = match cmd.spawn() {
-        Ok(child) => child,
-        Err(e) => {
-            return Err(GoCliError {
-                message: format!("Failed to execute `go test`: {}", e),
-                hint: "Check Go installation with `go version`",
-            });
-        }
+    let spawn_error = || GoCliError {
+        message: "Failed to execute `go test`".to_string(),
+        hint: "Check Go installation with `go version`",
     };
 
+    let mut child = cmd.spawn().map_err(|_| spawn_error())?;
+
+    let mut events = Vec::new();
     if let Some(stdout) = child.stdout.take() {
-        let mut sink = std::io::stdout().lock();
         for line in BufReader::new(stdout).lines().map_while(Result::ok) {
-            if !is_go_test_pass_summary(&line) {
-                let _ = writeln!(sink, "{}", line);
+            if let Ok(event) = serde_json::from_str::<GoTestEvent>(&line) {
+                events.push(event);
             }
         }
     }
 
-    match child.wait() {
-        Ok(status) => Ok(status.success()),
-        Err(e) => Err(GoCliError {
-            message: format!("Failed to execute `go test`: {}", e),
-            hint: "Check Go installation with `go version`",
-        }),
-    }
-}
+    let status = child.wait().map_err(|_| spawn_error())?;
 
-fn is_go_test_pass_summary(line: &str) -> bool {
-    line.split('\t').next().map(str::trim) == Some("ok")
+    Ok(TestRun {
+        events,
+        success: status.success(),
+    })
 }
 
 #[cfg(test)]
@@ -577,17 +596,6 @@ mod tests {
     fn binary_name_uses_last_module_segment() {
         assert_eq!(binary_name("myproj", linux()), "myproj");
         assert_eq!(binary_name("github.com/u/myproj", linux()), "myproj");
-    }
-
-    #[test]
-    fn pass_summary_filter_hides_only_ok_lines() {
-        assert!(is_go_test_pass_summary("ok  \tlis-try\t0.119s"));
-        assert!(is_go_test_pass_summary("ok  \tlis-try\t(cached)"));
-        assert!(!is_go_test_pass_summary("FAIL\tlis-try\t0.123s"));
-        assert!(!is_go_test_pass_summary("?   \tlis-try\t[no test files]"));
-        assert!(!is_go_test_pass_summary(
-            "--- FAIL: TestAddsNumbers (0.00s)"
-        ));
     }
 
     #[test]

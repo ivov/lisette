@@ -23,7 +23,7 @@ impl Planner<'_> {
                 let code = self.emit_function(function, None, is_public, fx);
                 if self.facts.is_test(&self.facts.qualified_current(name)) {
                     let callee = self.pick_go_function_name(function, false, is_public);
-                    let test_name = format!("Test{}", go_name::snake_to_camel(name));
+                    let test_name = go_name::go_test_function_name(name);
                     fx.require_go_import("testing");
                     let wrapper = format!("func {test_name}(t *testing.T) {{\n\t{callee}()\n}}");
                     format!("{doc_comment}{code}\n\n{wrapper}")

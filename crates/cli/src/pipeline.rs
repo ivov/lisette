@@ -11,6 +11,7 @@ use semantics::inference::{AnalyzeInput, SemanticConfig};
 
 pub use semantics::inference::CompilePhase;
 use semantics::loader::Loader;
+pub use syntax::program::TestIndex;
 
 const ENTRY_FILE_ID: u32 = 0;
 
@@ -41,6 +42,7 @@ pub struct CompileResult {
     pub user_file_count: usize,
     pub live_modules: Vec<String>,
     pub emit_stamps: Vec<EmitStamp>,
+    pub test_index: TestIndex,
 }
 
 pub fn compile(
@@ -69,6 +71,7 @@ pub fn compile(
             user_file_count: 1,
             live_modules: vec![],
             emit_stamps: vec![],
+            test_index: TestIndex::default(),
         };
     }
 
@@ -120,6 +123,7 @@ pub fn compile(
     let mut errors = semantic_result.errors.clone();
     let lints = semantic_result.lints.clone();
     let live_modules: Vec<String> = semantic_result.modules.keys().cloned().collect();
+    let test_index = semantic_result.test_index.clone();
 
     if failed || config.target_phase == CompilePhase::Check {
         return CompileResult {
@@ -130,6 +134,7 @@ pub fn compile(
             user_file_count,
             live_modules,
             emit_stamps,
+            test_index,
         };
     }
 
@@ -154,6 +159,7 @@ pub fn compile(
             user_file_count,
             live_modules,
             emit_stamps,
+            test_index,
         };
     }
 
@@ -165,6 +171,7 @@ pub fn compile(
         user_file_count,
         live_modules,
         emit_stamps,
+        test_index,
     }
 }
 

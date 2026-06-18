@@ -30,6 +30,7 @@ pub(crate) use utils::is_order_sensitive;
 pub(crate) use utils::write_line;
 
 pub use names::go_name::PRELUDE_IMPORT_PATH;
+pub use names::go_name::go_test_function_name;
 pub use output::OutputFile;
 pub use output::imports;
 

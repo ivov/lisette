@@ -9,7 +9,7 @@ use crate::lock::acquire_target_lock;
 use crate::workspace::WorkspaceBindgen;
 use diagnostics::render::{self, Filter};
 use lisette::fs::{LocalFileSystem, prune_orphan_go_files};
-use lisette::pipeline::{CompileConfig, CompilePhase, compile};
+use lisette::pipeline::{CompileConfig, CompilePhase, TestIndex, compile};
 
 pub fn emit(path: Option<String>, sourcemap: bool) -> i32 {
     with_locked_project(path, |prep| {
@@ -22,6 +22,7 @@ pub fn emit(path: Option<String>, sourcemap: bool) -> i32 {
                 label: "Emit completed",
             },
         )
+        .code
     })
 }
 
@@ -35,7 +36,8 @@ pub fn build(path: Option<String>, sourcemap: bool, go_flags: Vec<String>) -> i3
                 emit_tests: false,
                 label: "Emit completed",
             },
-        );
+        )
+        .code;
         if emit_code != 0 {
             return emit_code;
         }
@@ -162,6 +164,20 @@ pub(super) struct BuildOptions {
     pub label: &'static str,
 }
 
+pub(super) struct BuildOutcome {
+    pub code: i32,
+    pub test_index: TestIndex,
+}
+
+impl BuildOutcome {
+    fn failed(code: i32) -> Self {
+        Self {
+            code,
+            test_index: TestIndex::default(),
+        }
+    }
+}
+
 fn remove_stale_test_outputs(
     target_dir: &Path,
     manifest: &mut Vec<go_cli::ManifestEntry>,
@@ -179,7 +195,7 @@ fn remove_stale_test_outputs(
     Ok(())
 }
 
-pub(super) fn build_locked(prep: &BuildPrep, options: BuildOptions) -> i32 {
+pub(super) fn build_locked(prep: &BuildPrep, options: BuildOptions) -> BuildOutcome {
     let BuildOptions {
         sourcemap,
         quiet,
@@ -196,7 +212,7 @@ pub(super) fn build_locked(prep: &BuildPrep, options: BuildOptions) -> i32 {
             e,
             "Check file permissions on `target/go.mod`"
         );
-        return 1;
+        return BuildOutcome::failed(1);
     }
 
     let typedef_cache_dir = deps::typedef_cache_dir(&prep.project_path);
@@ -219,7 +235,7 @@ pub(super) fn build_locked(prep: &BuildPrep, options: BuildOptions) -> i32 {
                 format!("Failed to read `{}`: {}", main_lis.display(), e),
                 "Check file permissions"
             );
-            return 1;
+            return BuildOutcome::failed(1);
         }
     };
 
@@ -290,7 +306,7 @@ pub(super) fn build_locked(prep: &BuildPrep, options: BuildOptions) -> i32 {
     );
 
     if counts.errors > 0 {
-        return 1;
+        return BuildOutcome::failed(1);
     }
 
     let heading = "Failed to compile Lisette project to Go";
@@ -310,14 +326,14 @@ pub(super) fn build_locked(prep: &BuildPrep, options: BuildOptions) -> i32 {
             format!("Failed to invalidate emit stamps before sourcemap write: {e}"),
             "Check file permissions on `target/cache`, or delete the directory and retry"
         );
-        return 1;
+        return BuildOutcome::failed(1);
     }
 
     let mut emit = match go_cli::write_go_outputs(&prep.target_dir, &result.output) {
         Ok(emit) => emit,
         Err(e) => {
             cli_error!(heading, e.message, e.hint);
-            return 1;
+            return BuildOutcome::failed(1);
         }
     };
 
@@ -339,7 +355,7 @@ pub(super) fn build_locked(prep: &BuildPrep, options: BuildOptions) -> i32 {
             format!("Failed to prune stale Go files: {}", e),
             "Check file permissions"
         );
-        return 1;
+        return BuildOutcome::failed(1);
     }
 
     if !emit_tests
@@ -350,7 +366,7 @@ pub(super) fn build_locked(prep: &BuildPrep, options: BuildOptions) -> i32 {
             format!("Failed to remove stale test file: {}", e),
             "Check file permissions"
         );
-        return 1;
+        return BuildOutcome::failed(1);
     }
 
     // Drop manifest entries whose files pruning removed, so the import-set hash
@@ -370,7 +386,7 @@ pub(super) fn build_locked(prep: &BuildPrep, options: BuildOptions) -> i32 {
             go_cli::write_go_mod(&prep.target_dir, &prep.manifest.project.name, &locator)
         {
             cli_error!(heading, e, "Check file permissions on `target/go.mod`");
-            return 1;
+            return BuildOutcome::failed(1);
         }
     }
 
@@ -381,7 +397,7 @@ pub(super) fn build_locked(prep: &BuildPrep, options: BuildOptions) -> i32 {
         import_set_hash,
     ) {
         cli_error!(heading, e.message, e.hint);
-        return 1;
+        return BuildOutcome::failed(1);
     }
 
     if !sourcemap
@@ -408,7 +424,10 @@ pub(super) fn build_locked(prep: &BuildPrep, options: BuildOptions) -> i32 {
         );
     }
 
-    0
+    BuildOutcome {
+        code: 0,
+        test_index: result.test_index,
+    }
 }
 
 fn validate_project(project_path: &Path) -> bool {

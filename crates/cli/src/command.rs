@@ -323,6 +323,18 @@ impl Command {
                     }
                 }
 
+                if let Some(flag) = go_flags.iter().find(|f| crate::go_cli::is_go_json_flag(f)) {
+                    return Err(ParseError::UnexpectedArgument {
+                        message: format!(
+                            "`{}` cannot be passed to `lis test` via `--go-flags`",
+                            flag
+                        ),
+                        reason: "`lis test` runs `go test -json` and parses that stream to render the report"
+                            .to_string(),
+                        hint: "Remove `-json`; `lis test` manages it".to_string(),
+                    });
+                }
+
                 Ok(Command::Test { path, go_flags })
             }
 
@@ -602,6 +614,28 @@ mod tests {
             parse(&["lis", "run", "--go-flags", "--o=/tmp/x"]),
             Err(ParseError::UnexpectedArgument { .. })
         ));
+    }
+
+    #[test]
+    fn test_rejects_json_flag_in_go_flags() {
+        assert!(matches!(
+            parse(&["lis", "test", "--go-flags", "-json=false"]),
+            Err(ParseError::UnexpectedArgument { .. })
+        ));
+        assert!(matches!(
+            parse(&["lis", "test", "--go-flags", "-json"]),
+            Err(ParseError::UnexpectedArgument { .. })
+        ));
+    }
+
+    #[test]
+    fn test_accepts_other_go_flags() {
+        let Ok(Command::Test { go_flags, .. }) =
+            parse(&["lis", "test", "--go-flags", "-run TestFoo"])
+        else {
+            panic!("expected Test command");
+        };
+        assert_eq!(go_flags, vec!["-run", "TestFoo"]);
     }
 
     #[test]

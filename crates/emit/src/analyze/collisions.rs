@@ -70,7 +70,7 @@ impl Planner<'_> {
                 self.check_reserved_prefix(&go, name_span, diagnostics);
                 package_block.entry(go).or_default().push(*name_span);
                 if syntax::attributes::has_test_attribute(attributes) {
-                    let wrapper = format!("Test{}", go_name::snake_to_camel(name));
+                    let wrapper = go_name::go_test_function_name(name);
                     package_block.entry(wrapper).or_default().push(*name_span);
                 }
             }

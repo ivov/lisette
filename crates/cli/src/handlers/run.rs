@@ -69,7 +69,8 @@ fn run_project(path: &str, args: Vec<String>, sourcemap: bool, go_flags: &[Strin
             emit_tests: false,
             label: "Build completed",
         },
-    );
+    )
+    .code;
     if build_result != 0 {
         return build_result;
     }

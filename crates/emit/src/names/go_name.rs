@@ -42,6 +42,10 @@ pub(crate) fn snake_to_camel(s: &str) -> String {
     s.split('_').map(capitalize_first).collect()
 }
 
+pub fn go_test_function_name(fn_name: &str) -> String {
+    format!("Test{}", snake_to_camel(fn_name))
+}
+
 pub(crate) fn iterate_variants_fn_name(enum_name: &str, exported: bool) -> String {
     let method_segment = if exported {
         snake_to_camel("variants")
