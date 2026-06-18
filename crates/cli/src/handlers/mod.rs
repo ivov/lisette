@@ -11,6 +11,7 @@ mod lsp;
 mod new;
 mod run;
 mod sync;
+mod test;
 
 pub use add::add;
 pub use bindgen::bindgen;
@@ -24,3 +25,4 @@ pub use lsp::lsp;
 pub use new::new_project;
 pub use run::run;
 pub use sync::sync;
+pub use test::test;

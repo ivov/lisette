@@ -59,6 +59,7 @@ impl Planner<'_> {
                 name_span,
                 visibility,
                 generics,
+                attributes,
                 ..
             } => {
                 if self.facts.is_unused_definition(name_span) {
@@ -68,6 +69,10 @@ impl Planner<'_> {
                 let go = self.free_function_go_name(name, visibility);
                 self.check_reserved_prefix(&go, name_span, diagnostics);
                 package_block.entry(go).or_default().push(*name_span);
+                if syntax::attributes::has_test_attribute(attributes) {
+                    let wrapper = format!("Test{}", go_name::snake_to_camel(name));
+                    package_block.entry(wrapper).or_default().push(*name_span);
+                }
             }
             Expression::Const {
                 identifier,

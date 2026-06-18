@@ -89,6 +89,12 @@ impl TestIndex {
         &self.tests
     }
 
+    pub fn contains_qualified(&self, qualified_name: &str) -> bool {
+        self.tests
+            .iter()
+            .any(|t| t.qualified_name == qualified_name)
+    }
+
     pub fn len(&self) -> usize {
         self.tests.len()
     }

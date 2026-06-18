@@ -167,6 +167,7 @@ fn check(source: &str) -> Checked {
         project_root: None,
         locator: TypedefLocator::default(),
         compile_phase: CompilePhase::Check,
+        emit_tests: false,
         go_module: String::new(),
         disable_cache: true,
     });

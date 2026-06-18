@@ -263,10 +263,12 @@ fn collect_items(
                     name,
                     name_span,
                     visibility,
+                    attributes,
                     ..
                 } => {
                     let id = ModuleItemId::new(name);
-                    let is_entry = *visibility == Visibility::Public || name == "main";
+                    let is_test = syntax::attributes::has_test_attribute(attributes);
+                    let is_entry = *visibility == Visibility::Public || name == "main" || is_test;
                     graph.add_item(id, *name_span, ItemKind::Function, is_entry);
                 }
                 Expression::Const {

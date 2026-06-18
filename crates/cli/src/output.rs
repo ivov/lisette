@@ -163,6 +163,18 @@ pub fn print_preview_notice() {
     eprintln!();
 }
 
+pub fn print_test_unfinished_notice() {
+    eprintln!();
+    if use_color() {
+        eprintln!(
+            "  ! Test runner under {}, not ready for use",
+            "active development".yellow().underline()
+        );
+    } else {
+        eprintln!("  ! Test runner under active development, not ready for use");
+    }
+}
+
 pub fn print_add_success(
     module_path: &str,
     version: &str,

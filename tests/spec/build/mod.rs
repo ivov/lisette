@@ -1,6 +1,6 @@
 use crate::_harness::build::{
     compile_check, compile_check_standalone, compile_check_with_locator, compile_project_files,
-    compile_standalone_entry, locator_with_go_dep,
+    compile_project_files_with_tests, compile_standalone_entry, locator_with_go_dep,
 };
 use crate::_harness::filesystem::MockFileSystem;
 use crate::_harness::infer::infer;
@@ -7118,5 +7118,92 @@ fn test_index_complete_under_parallel_registration() {
         4,
         "every module's test must be recorded under parallel registration, got: {:?}",
         result.test_index.tests()
+    );
+}
+
+fn math_test_project() -> MockFileSystem {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        "import \"math\"\n\nfn main() {\n  let _ = math.add(1, 2)\n}",
+    );
+    fs.add_file(
+        "math",
+        "core.lis",
+        "pub fn add(a: int, b: int) -> int { a + b }",
+    );
+    fs.add_file("math", "core.test.lis", "#[test]\nfn addition() {}");
+    fs
+}
+
+#[test]
+fn test_emit_produces_go_test_function() {
+    let outputs =
+        compile_project_files_with_tests(math_test_project(), "github.com/user/p", false, true);
+
+    let test_file = outputs
+        .iter()
+        .find(|f| f.name.ends_with("core_test.go"))
+        .unwrap_or_else(|| {
+            panic!(
+                "expected a core_test.go output, got: {:?}",
+                outputs.iter().map(|f| &f.name).collect::<Vec<_>>()
+            )
+        });
+
+    let go = test_file.to_go();
+    assert!(
+        go.contains("func TestAddition(t *testing.T)"),
+        "expected a Go test function, got:\n{go}"
+    );
+    assert!(
+        go.contains("\"testing\""),
+        "expected the testing import, got:\n{go}"
+    );
+}
+
+#[test]
+fn colliding_test_wrapper_names_are_reported() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        "import \"math\"\n\nfn main() {\n  let _ = math.add(1, 2)\n}",
+    );
+    fs.add_file(
+        "math",
+        "core.lis",
+        "pub fn add(a: int, b: int) -> int { a + b }",
+    );
+    fs.add_file(
+        "math",
+        "core.test.lis",
+        "#[test]\nfn foo_bar() {}\n\n#[test]\nfn foo__bar() {}",
+    );
+
+    let outputs = compile_project_files_with_tests(fs, "github.com/user/p", false, true);
+    let collided = outputs.iter().flat_map(|f| &f.diagnostics).any(|d| {
+        d.code_str()
+            .is_some_and(|c| c.contains("go_name_collision"))
+    });
+    assert!(
+        collided,
+        "two tests mapping to the same Go test name must be reported"
+    );
+}
+
+#[test]
+fn build_does_not_emit_test_functions() {
+    let outputs = compile_project_files(math_test_project(), "github.com/user/p", false);
+
+    assert!(
+        !outputs.iter().any(|f| f.name.contains("test")),
+        "build must not emit any test file, got: {:?}",
+        outputs.iter().map(|f| &f.name).collect::<Vec<_>>()
+    );
+    assert!(
+        !outputs.iter().any(|f| f.to_go().contains("testing")),
+        "build output must not reference testing"
     );
 }

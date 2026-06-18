@@ -35,6 +35,7 @@ fn compile_with(
         project_root: None,
         locator,
         compile_phase: semantics::inference::CompilePhase::Check,
+        emit_tests: false,
         go_module: String::new(),
         disable_cache: false,
     })
@@ -83,6 +84,7 @@ pub fn compile_standalone_entry(
         project_root: None,
         locator: deps::TypedefLocator::default(),
         compile_phase: phase,
+        emit_tests: false,
         go_module: String::new(),
         disable_cache: true,
     })
@@ -133,6 +135,15 @@ pub fn compile_project_files(
     go_module: &str,
     sourcemap: bool,
 ) -> Vec<emit::OutputFile> {
+    compile_project_files_with_tests(fs, go_module, sourcemap, false)
+}
+
+pub fn compile_project_files_with_tests(
+    fs: MockFileSystem,
+    go_module: &str,
+    sourcemap: bool,
+    emit_tests: bool,
+) -> Vec<emit::OutputFile> {
     let main_source = fs
         .scan_folder(ENTRY_MODULE_ID)
         .get("main.lis")
@@ -160,6 +171,7 @@ pub fn compile_project_files(
         project_root: None,
         locator: deps::TypedefLocator::default(),
         compile_phase: semantics::inference::CompilePhase::Emit,
+        emit_tests,
         go_module: go_module.to_string(),
         disable_cache: true,
     });

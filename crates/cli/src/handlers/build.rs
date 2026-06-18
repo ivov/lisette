@@ -12,12 +12,30 @@ use lisette::fs::{LocalFileSystem, prune_orphan_go_files};
 use lisette::pipeline::{CompileConfig, CompilePhase, compile};
 
 pub fn emit(path: Option<String>, sourcemap: bool) -> i32 {
-    with_locked_project(path, |prep| build_locked(prep, sourcemap, false, "Emit"))
+    with_locked_project(path, |prep| {
+        build_locked(
+            prep,
+            BuildOptions {
+                sourcemap,
+                quiet: false,
+                emit_tests: false,
+                label: "Emit completed",
+            },
+        )
+    })
 }
 
 pub fn build(path: Option<String>, sourcemap: bool, go_flags: Vec<String>) -> i32 {
     with_locked_project(path, |prep| {
-        let emit_code = build_locked(prep, sourcemap, false, "Emit");
+        let emit_code = build_locked(
+            prep,
+            BuildOptions {
+                sourcemap,
+                quiet: false,
+                emit_tests: false,
+                label: "Emit completed",
+            },
+        );
         if emit_code != 0 {
             return emit_code;
         }
@@ -47,7 +65,7 @@ pub fn build(path: Option<String>, sourcemap: bool, go_flags: Vec<String>) -> i3
     })
 }
 
-fn with_locked_project(path: Option<String>, f: impl FnOnce(&BuildPrep) -> i32) -> i32 {
+pub(super) fn with_locked_project(path: Option<String>, f: impl FnOnce(&BuildPrep) -> i32) -> i32 {
     let project_root = path.unwrap_or_else(|| ".".to_string());
     let project_path = Path::new(&project_root);
 
@@ -137,7 +155,37 @@ pub(super) struct BuildPrep {
     pub locator: deps::TypedefLocator,
 }
 
-pub(super) fn build_locked(prep: &BuildPrep, sourcemap: bool, quiet: bool, label: &str) -> i32 {
+pub(super) struct BuildOptions {
+    pub sourcemap: bool,
+    pub quiet: bool,
+    pub emit_tests: bool,
+    pub label: &'static str,
+}
+
+fn remove_stale_test_outputs(
+    target_dir: &Path,
+    manifest: &mut Vec<go_cli::ManifestEntry>,
+) -> std::io::Result<()> {
+    for entry in manifest.iter() {
+        if entry.name.ends_with("_test.go") {
+            match fs::remove_file(target_dir.join(&entry.name)) {
+                Ok(()) => {}
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+                Err(e) => return Err(e),
+            }
+        }
+    }
+    manifest.retain(|entry| !entry.name.ends_with("_test.go"));
+    Ok(())
+}
+
+pub(super) fn build_locked(prep: &BuildPrep, options: BuildOptions) -> i32 {
+    let BuildOptions {
+        sourcemap,
+        quiet,
+        emit_tests,
+        label,
+    } = options;
     let start = Instant::now();
 
     if let Err(e) =
@@ -205,6 +253,7 @@ pub(super) fn build_locked(prep: &BuildPrep, sourcemap: bool, quiet: bool, label
         standalone_mode: false,
         load_siblings: true,
         sourcemap,
+        emit_tests,
         project_root: Some(prep.project_path.clone()),
         locator: locator.clone(),
     };
@@ -293,8 +342,19 @@ pub(super) fn build_locked(prep: &BuildPrep, sourcemap: bool, quiet: bool, label
         return 1;
     }
 
-    // Drop manifest entries whose files pruning removed, so the import-set hash below
-    // reflects only surviving output.
+    if !emit_tests
+        && let Err(e) = remove_stale_test_outputs(&prep.target_dir, &mut emit.new_manifest)
+    {
+        cli_error!(
+            "Failed to compile Lisette project to Go",
+            format!("Failed to remove stale test file: {}", e),
+            "Check file permissions"
+        );
+        return 1;
+    }
+
+    // Drop manifest entries whose files pruning removed, so the import-set hash
+    // below reflects only surviving output.
     emit.new_manifest
         .retain(|entry| prep.target_dir.join(&entry.name).exists());
 
@@ -342,7 +402,7 @@ pub(super) fn build_locked(prep: &BuildPrep, sourcemap: bool, quiet: bool, label
 
     if !quiet {
         eprintln!(
-            "  ✓ {} completed {}",
+            "  ✓ {} {}",
             label,
             crate::output::format_elapsed(start.elapsed())
         );

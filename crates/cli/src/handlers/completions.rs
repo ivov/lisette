@@ -36,7 +36,7 @@ fn bash_completions() -> &'static str {
     cur="${COMP_WORDS[COMP_CWORD]}"
     prev="${COMP_WORDS[COMP_CWORD-1]}"
 
-    commands="new run build emit check format add sync version help doc learn complete lsp"
+    commands="new run build emit check format test add sync version help doc learn complete lsp"
 
     case "$prev" in
         lis)
@@ -53,6 +53,10 @@ fn bash_completions() -> &'static str {
             ;;
         run)
             COMPREPLY=( $(compgen -W "--sourcemap --go-flags" -- "$cur") )
+            return 0
+            ;;
+        test)
+            COMPREPLY=( $(compgen -W "--go-flags" -- "$cur") )
             return 0
             ;;
         format)
@@ -98,6 +102,7 @@ _lis() {
         'emit:Emit Go code into target/'
         'check:Lint and typecheck a project'
         'format:Format a project'
+        'test:Run a project'\''s tests'
         'add:Add a third-party Go dependency'
         'sync:Tidy project manifest'
         'version:Print compiler version'
@@ -130,6 +135,9 @@ _lis() {
                     _arguments \
                         '--sourcemap[Include line directives for stack traces]' \
                         '--go-flags[Flags passed through to go build]:flags'
+                    ;;
+                test)
+                    _arguments '--go-flags[Flags passed through to go test]:flags'
                     ;;
                 format)
                     _arguments '--check[Check formatting without modifying]'
@@ -168,6 +176,7 @@ complete -c lis -n __fish_use_subcommand -a build -d 'Compile a project to Go'
 complete -c lis -n __fish_use_subcommand -a emit -d 'Emit Go code into target/'
 complete -c lis -n __fish_use_subcommand -a check -d 'Lint and typecheck a project'
 complete -c lis -n __fish_use_subcommand -a format -d 'Format a project'
+complete -c lis -n __fish_use_subcommand -a test -d 'Run a project\'s tests'
 complete -c lis -n __fish_use_subcommand -a add -d 'Add a third-party Go dependency'
 complete -c lis -n __fish_use_subcommand -a sync -d 'Tidy project manifest'
 complete -c lis -n __fish_use_subcommand -a version -d 'Print compiler version'
@@ -182,12 +191,13 @@ complete -c lis -n '__fish_seen_subcommand_from build' -l go-flags -r -d 'Flags 
 complete -c lis -n '__fish_seen_subcommand_from emit' -l sourcemap -d 'Include line directives for stack traces'
 complete -c lis -n '__fish_seen_subcommand_from run' -l sourcemap -d 'Include line directives for stack traces'
 complete -c lis -n '__fish_seen_subcommand_from run' -l go-flags -r -d 'Flags passed through to go build'
+complete -c lis -n '__fish_seen_subcommand_from test' -l go-flags -r -d 'Flags passed through to go test'
 complete -c lis -n '__fish_seen_subcommand_from format' -l check -d 'Check formatting without modifying'
 complete -c lis -n '__fish_seen_subcommand_from check' -l errors-only -d 'Show only errors'
 complete -c lis -n '__fish_seen_subcommand_from check' -l warnings-only -d 'Show only warnings'
 complete -c lis -n '__fish_seen_subcommand_from check' -l output -r -a unix -d 'Machine-readable output'
 complete -c lis -n '__fish_seen_subcommand_from doc' -s s -l search -d 'Search across prelude and Go stdlib'
 complete -c lis -n '__fish_seen_subcommand_from complete' -a 'bash zsh fish' -d 'Shell type'
-complete -c lis -n '__fish_seen_subcommand_from help' -a 'new run build emit check format add sync version help doc learn complete lsp' -d 'Command'
+complete -c lis -n '__fish_seen_subcommand_from help' -a 'new run build emit check format test add sync version help doc learn complete lsp' -d 'Command'
 "#
 }

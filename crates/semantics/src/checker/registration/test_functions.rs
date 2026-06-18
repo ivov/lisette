@@ -1,5 +1,6 @@
 use diagnostics::LocalSink;
-use syntax::ast::{Attribute, AttributeArg, Expression};
+use syntax::ast::{Annotation, Attribute, AttributeArg, Expression};
+use syntax::attributes::test_attribute;
 use syntax::program::TestFunction;
 
 use super::TaskState;
@@ -45,10 +46,6 @@ impl TaskState<'_> {
     }
 }
 
-fn test_attribute(attributes: &[Attribute]) -> Option<&Attribute> {
-    attributes.iter().find(|a| a.name == "test")
-}
-
 fn flag_misplaced(attributes: &[Attribute], sink: &LocalSink) {
     if let Some(attribute) = test_attribute(attributes) {
         sink.push(diagnostics::attribute::test_not_on_function(
@@ -62,6 +59,14 @@ fn flag_misplaced_methods(methods: &[Expression], sink: &LocalSink) {
         if let Expression::Function { attributes, .. } = method {
             flag_misplaced(attributes, sink);
         }
+    }
+}
+
+fn is_unit_return(annotation: &Annotation) -> bool {
+    match annotation {
+        Annotation::Unknown => true,
+        Annotation::Tuple { elements, .. } => elements.is_empty(),
+        _ => false,
     }
 }
 
@@ -86,6 +91,9 @@ fn collect_test_candidates(
             name,
             name_span,
             doc,
+            generics,
+            params,
+            return_annotation,
             ..
         } => {
             let Some(attribute) = test_attribute(attributes) else {
@@ -103,6 +111,12 @@ fn collect_test_candidates(
                 ));
                 return;
             };
+            if !generics.is_empty() || !params.is_empty() || !is_unit_return(return_annotation) {
+                sink.push(diagnostics::attribute::test_unsupported_signature(
+                    name_span,
+                ));
+                return;
+            }
             records.push(TestFunction {
                 module_id: module_id.to_string(),
                 qualified_name: format!("{}.{}", module_id, name),

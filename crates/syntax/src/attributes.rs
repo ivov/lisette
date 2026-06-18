@@ -127,3 +127,11 @@ pub fn known_attribute_names() -> Vec<&'static str> {
 pub fn attributes_for(target: AttributeTarget) -> impl Iterator<Item = &'static AttributeInfo> {
     ATTRIBUTES.iter().filter(move |a| a.applies_to(target))
 }
+
+pub fn test_attribute(attributes: &[crate::ast::Attribute]) -> Option<&crate::ast::Attribute> {
+    attributes.iter().find(|a| a.name == "test")
+}
+
+pub fn has_test_attribute(attributes: &[crate::ast::Attribute]) -> bool {
+    test_attribute(attributes).is_some()
+}

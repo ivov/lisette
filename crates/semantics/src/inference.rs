@@ -51,6 +51,7 @@ pub struct AnalyzeInput<'a> {
     pub ast: Vec<Expression>,
     pub project_root: Option<PathBuf>,
     pub compile_phase: CompilePhase,
+    pub emit_tests: bool,
     pub locator: TypedefLocator,
     /// Go module path (from `lisette.toml`); folded into the cache emit-artifact
     /// hash so a project rename invalidates Go outputs.
@@ -89,7 +90,7 @@ pub fn run_inference(input: AnalyzeInput) -> InferenceOutput {
 
     let sink = LocalSink::new();
 
-    let include_tests = input.compile_phase == CompilePhase::Check;
+    let include_tests = input.compile_phase == CompilePhase::Check || input.emit_tests;
 
     if input.filename.ends_with("_test.lis") {
         sink.push(diagnostics::module_graph::wrong_test_file_suffix(

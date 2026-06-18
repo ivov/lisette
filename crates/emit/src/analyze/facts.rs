@@ -6,7 +6,7 @@ use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use syntax::ast::{BindingId, Pattern, RestPattern, Span};
 use syntax::program::{
-    Definition, DefinitionBody, EqualityIndex, ModuleId, MutationInfo, UnusedInfo,
+    Definition, DefinitionBody, EqualityIndex, ModuleId, MutationInfo, TestIndex, UnusedInfo,
 };
 use syntax::types::{Symbol, Type};
 
@@ -22,6 +22,7 @@ pub(crate) struct EmitFactsConfig<'a> {
     pub(crate) mutations: &'a MutationInfo,
     pub(crate) ufcs_methods: &'a HashSet<(String, String)>,
     pub(crate) equality_index: &'a EqualityIndex,
+    pub(crate) test_index: &'a TestIndex,
     pub(crate) go_package_names: &'a HashMap<String, String>,
     pub(crate) go_module_ids: &'a HashSet<String>,
     pub(crate) entry_module: ModuleId,
@@ -39,6 +40,7 @@ pub(crate) struct EmitFacts<'a> {
     mutations: &'a MutationInfo,
     ufcs_methods: &'a HashSet<(String, String)>,
     equality_index: &'a EqualityIndex,
+    test_index: &'a TestIndex,
     go_package_names: &'a HashMap<String, String>,
     go_module_ids: &'a HashSet<String>,
     entry_module: ModuleId,
@@ -58,6 +60,7 @@ impl<'a> EmitFacts<'a> {
             mutations: config.mutations,
             ufcs_methods: config.ufcs_methods,
             equality_index: config.equality_index,
+            test_index: config.test_index,
             go_package_names: config.go_package_names,
             go_module_ids: config.go_module_ids,
             entry_module: config.entry_module,
@@ -157,6 +160,10 @@ impl<'a> EmitFacts<'a> {
 
     pub(crate) fn synthesizes_equals(&self, id: &str) -> bool {
         self.equality_index.is_synthesized(id)
+    }
+
+    pub(crate) fn is_test(&self, qualified_name: &str) -> bool {
+        self.test_index.contains_qualified(qualified_name)
     }
 
     pub(crate) fn current_module(&self) -> &str {

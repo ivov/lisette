@@ -48,7 +48,8 @@ use state::module_state::{FunctionEmissionState, ModuleState};
 use state::scope::ScopeState;
 use syntax::ast::Span;
 use syntax::program::{
-    Definition, DefinitionBody, EmitInput, EqualityIndex, File, ModuleId, MutationInfo, UnusedInfo,
+    Definition, DefinitionBody, EmitInput, EqualityIndex, File, ModuleId, MutationInfo, TestIndex,
+    UnusedInfo,
 };
 use syntax::types::{Symbol, Type};
 
@@ -194,6 +195,7 @@ pub struct TestEmitConfig<'a> {
     pub mutations: &'a MutationInfo,
     pub ufcs_methods: &'a HashSet<(String, String)>,
     pub equality_index: &'a EqualityIndex,
+    pub test_index: &'a TestIndex,
     pub go_package_names: &'a HashMap<String, String>,
     pub go_module_ids: &'a HashSet<String>,
 }
@@ -288,6 +290,7 @@ impl<'a> Planner<'a> {
             mutations: config.mutations,
             ufcs_methods: config.ufcs_methods,
             equality_index: config.equality_index,
+            test_index: config.test_index,
             go_package_names: config.go_package_names,
             go_module_ids: config.go_module_ids,
             entry_module: config.module_id.to_string(),
@@ -539,6 +542,7 @@ fn emit_module<'a>(
         mutations: &analysis.mutations,
         ufcs_methods: &analysis.ufcs_methods,
         equality_index: &analysis.equality_index,
+        test_index: &analysis.test_index,
         go_package_names: &analysis.go_package_names,
         go_module_ids: &analysis.go_module_ids,
         entry_module: analysis.entry_module_id.to_string(),

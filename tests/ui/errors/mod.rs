@@ -3771,6 +3771,48 @@ fn test_attribute_with_two_arguments_rejected() {
 }
 
 #[test]
+fn test_attribute_with_parameter_rejected() {
+    let fs = test_attribute_fs(
+        "pub fn add(a: int, b: int) -> int { a + b }",
+        "#[test]\nfn checks(x: int) {}",
+    );
+    let result = infer_module("_entry_", fs);
+    assert!(
+        has_code(&result, "test_unsupported_signature"),
+        "a parameterized test must be rejected, got: {:?}",
+        result.errors
+    );
+}
+
+#[test]
+fn test_attribute_with_return_rejected() {
+    let fs = test_attribute_fs(
+        "pub fn add(a: int, b: int) -> int { a + b }",
+        "#[test]\nfn checks() -> bool { false }",
+    );
+    let result = infer_module("_entry_", fs);
+    assert!(
+        has_code(&result, "test_unsupported_signature"),
+        "a value-returning test must be rejected, got: {:?}",
+        result.errors
+    );
+}
+
+#[test]
+fn test_attribute_with_generics_rejected() {
+    let fs = test_attribute_fs(
+        "pub fn add(a: int, b: int) -> int { a + b }",
+        "#[test]\nfn checks<T>() {}",
+    );
+    let result = infer_module("_entry_", fs);
+    assert!(
+        has_code(&result, "test_unsupported_signature"),
+        "a generic test must be rejected, got: {:?}",
+        result.errors
+    );
+}
+
+#[test]
 fn dot_test_file_sees_private_symbols() {
     let mut fs = MockFileSystem::new();
     fs.add_file(

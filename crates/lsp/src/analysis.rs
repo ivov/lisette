@@ -142,6 +142,7 @@ impl SharedState {
                 Some(config.root.clone())
             },
             compile_phase: CompilePhase::Check,
+            emit_tests: false,
             locator,
             go_module: String::new(),
             disable_cache: false,

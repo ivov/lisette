@@ -123,6 +123,9 @@ impl File {
     }
 
     pub fn go_filename(&self) -> String {
+        if let Some(stem) = self.name.strip_suffix(".test.lis") {
+            return format!("{stem}_test.go");
+        }
         std::path::Path::new(&self.name)
             .with_extension("go")
             .display()

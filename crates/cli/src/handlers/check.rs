@@ -208,6 +208,7 @@ fn compile_single_file(
         standalone_mode: !load_siblings,
         load_siblings,
         sourcemap: false,
+        emit_tests: false,
         project_root: locator.project_root().map(|p| p.to_path_buf()),
         locator,
     };

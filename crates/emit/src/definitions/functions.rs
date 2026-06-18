@@ -300,7 +300,7 @@ impl Planner<'_> {
         }
     }
 
-    fn pick_go_function_name(
+    pub(crate) fn pick_go_function_name(
         &self,
         function_definition: FunctionDefinitionView<'_>,
         has_receiver: bool,

@@ -61,7 +61,15 @@ fn run_project(path: &str, args: Vec<String>, sourcemap: bool, go_flags: &[Strin
     let heading = "Failed to run project";
     let target = stdlib::Target::host();
 
-    let build_result = super::build::build_locked(&prep, sourcemap, true, "Build");
+    let build_result = super::build::build_locked(
+        &prep,
+        super::build::BuildOptions {
+            sourcemap,
+            quiet: true,
+            emit_tests: false,
+            label: "Build completed",
+        },
+    );
     if build_result != 0 {
         return build_result;
     }
@@ -134,6 +142,7 @@ fn run_standalone(file: &str, args: Vec<String>, sourcemap: bool, go_flags: &[St
         standalone_mode: true,
         load_siblings: false,
         sourcemap,
+        emit_tests: false,
         project_root: None,
         locator: deps::TypedefLocator::default(),
     };

@@ -18,6 +18,7 @@ Commands:
     `emit`, `e`      Emit Go code into `target` dir
     `check`, `c`     Lint and typecheck a project
     `format`, `f`    Format a project
+    `test`, `t`      Run a project's tests {(in development):d}
     `add`          Add a third-party Go dependency
     `sync`         Tidy up project manifest
 
@@ -41,7 +42,7 @@ Usage:
     `lis help` <command>
 
 Commands:
-    `new`, `run`, `build`, `emit`, `check`, `format`, `add`, `sync`
+    `new`, `run`, `build`, `emit`, `check`, `format`, `test`, `add`, `sync`
 
 Extras:
     `version`, `help`, `doc`, `learn`, `complete`, `lsp`",
@@ -83,7 +84,7 @@ Flags:
 Examples:
     `lis build`                           Build project in current dir
     `lis build` {~/projects/demo:g}           Build project in specific dir
-    `lis build` {--go-flags:b} {\"-trimpath\":g}    Pass flag to `go build`",
+    `lis build` {--go-flags:b} {\"-trimpath\":g}    Strip file paths from the binary",
         ),
 
         "emit" | "e" => print_help(
@@ -131,7 +132,7 @@ Arguments:
     {path:g} {(optional):d}               Path to file or dir (default: current dir)
 
 Flags:
-    {[--check]:b}                     Verify formatting without modifying files
+    {--check:b}                       Verify formatting without modifying files
 
 Examples:
     `lis format`                    Format project in current dir
@@ -158,6 +159,23 @@ Examples:
     `lis check` {~/projects/demo:g}    Check project in specific dir
     `lis check` {script.lis:g}         Check single file
     `lis check` {--output:b} {unix}      One diagnostic per line",
+        ),
+
+        "test" | "t" => print_help(
+            "`lis test` {[path]} {[--flags]:b}
+
+Run tests in a Lisette project.
+
+Arguments:
+    {path:g} {(optional):d}                    Path to dir (default: current dir)
+
+Flags:
+    {--go-flags:b} {\"<flags>\"}               Pass flags through to `go test`
+
+Examples:
+    `lis test`                           Run all tests in current dir
+    `lis test` {~/projects/demo:g}           Run tests in specific dir
+    `lis test` {--go-flags:b} {\"-failfast\"}    Stop at the first failing test",
         ),
 
         "add" => print_help(

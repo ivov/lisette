@@ -1,6 +1,7 @@
 use std::fs;
+use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Stdio};
 
 include!(concat!(env!("OUT_DIR"), "/go_version.rs"));
 
@@ -514,6 +515,52 @@ pub fn build_binary(
     }
 }
 
+pub fn run_tests(
+    build_dir: &Path,
+    target: Target,
+    go_flags: &[String],
+) -> Result<bool, GoCliError> {
+    let mut cmd = go_command(target);
+    cmd.arg("test").arg("-count=1");
+    for flag in go_flags {
+        cmd.arg(flag);
+    }
+    cmd.arg("./...")
+        .current_dir(build_dir)
+        .stdout(Stdio::piped());
+
+    let mut child = match cmd.spawn() {
+        Ok(child) => child,
+        Err(e) => {
+            return Err(GoCliError {
+                message: format!("Failed to execute `go test`: {}", e),
+                hint: "Check Go installation with `go version`",
+            });
+        }
+    };
+
+    if let Some(stdout) = child.stdout.take() {
+        let mut sink = std::io::stdout().lock();
+        for line in BufReader::new(stdout).lines().map_while(Result::ok) {
+            if !is_go_test_pass_summary(&line) {
+                let _ = writeln!(sink, "{}", line);
+            }
+        }
+    }
+
+    match child.wait() {
+        Ok(status) => Ok(status.success()),
+        Err(e) => Err(GoCliError {
+            message: format!("Failed to execute `go test`: {}", e),
+            hint: "Check Go installation with `go version`",
+        }),
+    }
+}
+
+fn is_go_test_pass_summary(line: &str) -> bool {
+    line.split('\t').next().map(str::trim) == Some("ok")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -530,6 +577,17 @@ mod tests {
     fn binary_name_uses_last_module_segment() {
         assert_eq!(binary_name("myproj", linux()), "myproj");
         assert_eq!(binary_name("github.com/u/myproj", linux()), "myproj");
+    }
+
+    #[test]
+    fn pass_summary_filter_hides_only_ok_lines() {
+        assert!(is_go_test_pass_summary("ok  \tlis-try\t0.119s"));
+        assert!(is_go_test_pass_summary("ok  \tlis-try\t(cached)"));
+        assert!(!is_go_test_pass_summary("FAIL\tlis-try\t0.123s"));
+        assert!(!is_go_test_pass_summary("?   \tlis-try\t[no test files]"));
+        assert!(!is_go_test_pass_summary(
+            "--- FAIL: TestAddsNumbers (0.00s)"
+        ));
     }
 
     #[test]

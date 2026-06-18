@@ -54,6 +54,7 @@ pub fn compile_e2e_suite_test(input: &str, package_name: &str) -> Result<Emitted
         items: result.ast,
     };
 
+    let test_index = syntax::program::TestIndex::default();
     let config = TestEmitConfig {
         definitions: &result.definitions,
         module_id: &result.module_id,
@@ -62,6 +63,7 @@ pub fn compile_e2e_suite_test(input: &str, package_name: &str) -> Result<Emitted
         mutations: &result.mutations,
         ufcs_methods: &result.ufcs_methods,
         equality_index: &result.equality_index,
+        test_index: &test_index,
         go_package_names: &result.go_package_names,
         go_module_ids: &result.go_module_ids,
     };

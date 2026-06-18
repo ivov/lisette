@@ -30,6 +30,10 @@ pub enum Command {
         warnings_only: bool,
         format: OutputFormat,
     },
+    Test {
+        path: Option<String>,
+        go_flags: Vec<String>,
+    },
     Overview,
     Help {
         command: Option<String>,
@@ -86,6 +90,29 @@ fn parse_path_and_sourcemap(
         }
     }
     Ok((path, sourcemap))
+}
+
+fn try_parse_go_flags(
+    arg: &str,
+    arguments: &mut impl Iterator<Item = String>,
+    go_flags: &mut Vec<String>,
+    command: &'static str,
+) -> Result<bool, ParseError> {
+    if arg == "--go-flags" {
+        let Some(value) = arguments.next() else {
+            return Err(ParseError::MissingArgument {
+                command,
+                argument: "--go-flags <flags>",
+            });
+        };
+        extend_go_flags(go_flags, &value)?;
+        Ok(true)
+    } else if let Some(value) = arg.strip_prefix("--go-flags=") {
+        extend_go_flags(go_flags, value)?;
+        Ok(true)
+    } else {
+        Ok(false)
+    }
 }
 
 fn extend_go_flags(go_flags: &mut Vec<String>, raw: &str) -> Result<(), ParseError> {
@@ -146,18 +173,10 @@ impl Command {
                 while let Some(arg) = arguments.next() {
                     if arg == "--sourcemap" {
                         sourcemap = true;
-                    } else if arg == "--go-flags" {
-                        let Some(value) = arguments.next() else {
-                            return Err(ParseError::MissingArgument {
-                                command: "build",
-                                argument: "--go-flags <flags>",
-                            });
-                        };
-                        extend_go_flags(&mut go_flags, &value)?;
-                    } else if let Some(value) = arg.strip_prefix("--go-flags=") {
-                        extend_go_flags(&mut go_flags, value)?;
                     } else if arg.starts_with('-') {
-                        return Err(ParseError::UnknownFlag(arg));
+                        if !try_parse_go_flags(&arg, &mut arguments, &mut go_flags, "build")? {
+                            return Err(ParseError::UnknownFlag(arg));
+                        }
                     } else {
                         path = Some(arg);
                     }
@@ -290,6 +309,23 @@ impl Command {
                 })
             }
 
+            "test" | "t" => {
+                let mut path = None;
+                let mut go_flags = Vec::new();
+
+                while let Some(arg) = arguments.next() {
+                    if arg.starts_with('-') {
+                        if !try_parse_go_flags(&arg, &mut arguments, &mut go_flags, "test")? {
+                            return Err(ParseError::UnknownFlag(arg));
+                        }
+                    } else {
+                        path = Some(arg);
+                    }
+                }
+
+                Ok(Command::Test { path, go_flags })
+            }
+
             "help" | "--help" => Ok(Command::Help {
                 command: arguments.next(),
             }),
@@ -413,8 +449,8 @@ impl Command {
 
     pub fn suggest(typo: &str) -> Option<String> {
         const COMMANDS: &[&str] = &[
-            "new", "build", "emit", "run", "format", "check", "help", "version", "add", "sync",
-            "learn", "doc", "complete", "lsp", "bindgen",
+            "new", "build", "emit", "run", "format", "check", "test", "help", "version", "add",
+            "sync", "learn", "doc", "complete", "lsp", "bindgen",
         ];
         let candidates: Vec<String> = COMMANDS.iter().map(|s| s.to_string()).collect();
         diagnostics::infer::find_similar_name(typo, &candidates)

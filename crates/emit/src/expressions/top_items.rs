@@ -1,5 +1,6 @@
 use crate::EmitEffects;
 use crate::Planner;
+use crate::names::go_name;
 use syntax::ast::{Expression, Visibility};
 
 impl Planner<'_> {
@@ -8,6 +9,7 @@ impl Planner<'_> {
             Expression::Function {
                 doc,
                 visibility,
+                name,
                 name_span,
                 ..
             } => {
@@ -19,7 +21,15 @@ impl Planner<'_> {
                 let doc_comment = emit_doc(doc);
 
                 let code = self.emit_function(function, None, is_public, fx);
-                format!("{}{}", doc_comment, code)
+                if self.facts.is_test(&self.facts.qualified_current(name)) {
+                    let callee = self.pick_go_function_name(function, false, is_public);
+                    let test_name = format!("Test{}", go_name::snake_to_camel(name));
+                    fx.require_go_import("testing");
+                    let wrapper = format!("func {test_name}(t *testing.T) {{\n\t{callee}()\n}}");
+                    format!("{doc_comment}{code}\n\n{wrapper}")
+                } else {
+                    format!("{}{}", doc_comment, code)
+                }
             }
             Expression::Struct {
                 doc,

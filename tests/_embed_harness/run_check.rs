@@ -201,6 +201,7 @@ fn emit_and_write(
         project_root: None,
         locator: TypedefLocator::default(),
         compile_phase: CompilePhase::Emit,
+        emit_tests: false,
         go_module: module.clone(),
         disable_cache: true,
     });
