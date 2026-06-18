@@ -4,6 +4,8 @@ mod native;
 mod regular;
 mod ufcs;
 
+pub(crate) use regular::effective_param_type;
+
 use crate::GoCallStrategy;
 use crate::Planner;
 use crate::abi::AbiShape;

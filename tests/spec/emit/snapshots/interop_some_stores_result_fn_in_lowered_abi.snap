@@ -1,0 +1,26 @@
+---
+source: tests/spec/emit/interop_matrix.rs
+description: |
+  
+  import ext "go:example.com/ext"
+  
+  fn configure(conf: Ref<ext.Config>) {
+    let mut wrapped: Slice<Option<fn(ext.Config) -> Result<ext.Listener, error>>> = []
+    for listener in ext.WrapListeners(conf.Listeners) {
+      wrapped = wrapped.append(Some(listener))
+    }
+  }
+---
+package main
+
+import (
+	"example.com/ext"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func configure(conf *ext.Config) {
+	wrapped := ([]lisette.Option[func(ext.Config) (ext.Listener, error)])(nil)
+	for _, listener := range ext.WrapListeners(conf.Listeners) {
+		wrapped = append(wrapped, lisette.MakeOptionSome(listener))
+	}
+}

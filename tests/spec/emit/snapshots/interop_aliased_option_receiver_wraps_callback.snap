@@ -1,0 +1,26 @@
+---
+source: tests/spec/emit/interop_matrix.rs
+description: |
+  
+  import "go:example.com/ext"
+  
+  type MyOpt = Option<int>
+  
+  fn use_it(o: MyOpt) {
+    let _ = o.and_then(ext.Lookup)
+  }
+---
+package main
+
+import (
+	"example.com/ext"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+type MyOpt = lisette.Option[int]
+
+func use_it(o MyOpt) {
+	lisette.OptionAndThen(o, func(arg0 int) lisette.Option[string] {
+		return lisette.OptionFromCommaOk[string](ext.Lookup(arg0))
+	})
+}

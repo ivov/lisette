@@ -156,12 +156,23 @@ impl Planner<'_> {
         };
         let declared_params =
             self.ufcs_declared_user_params(receiver, function, formal_params.len());
+        let suppress_declared = declared_params
+            .is_none()
+            .then(|| self.callee_declared_params(function, args.len()))
+            .flatten();
         let mut all_stages: Vec<StagedExpression> =
             Vec::with_capacity(1 + args.len() + spread.is_some() as usize);
         all_stages.push(self.stage_operand(receiver, ExpressionContext::value(), fx));
         for (i, arg) in args.iter().enumerate() {
             let declared = declared_params.and_then(|p| effective_param_type(i, p));
-            all_stages.push(self.stage_ufcs_arg(arg, declared, formal_params.get(i), fx));
+            let suppress_decl = suppress_declared.and_then(|p| effective_param_type(i, p));
+            all_stages.push(self.stage_ufcs_arg(
+                arg,
+                declared,
+                suppress_decl,
+                formal_params.get(i),
+                fx,
+            ));
         }
         let combine = plan_variadic_spread(function, spread).map(|p| p.combine(1));
 
@@ -182,11 +193,12 @@ impl Planner<'_> {
         &mut self,
         arg: &Expression,
         declared_param: Option<&Type>,
+        suppress_declared: Option<&Type>,
         formal_param: Option<&Type>,
         fx: &mut EmitEffects,
     ) -> StagedExpression {
         let Some(declared) = declared_param else {
-            return self.stage_prelude_arg(arg, formal_param, fx);
+            return self.stage_prelude_arg(arg, suppress_declared, formal_param, fx);
         };
         let mut setup: Vec<LoweredStatement> = Vec::new();
         if let Some(value) =

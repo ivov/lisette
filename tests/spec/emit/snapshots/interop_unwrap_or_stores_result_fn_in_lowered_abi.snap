@@ -1,0 +1,20 @@
+---
+source: tests/spec/emit/interop_matrix.rs
+description: |
+  
+  import "go:example.com/ext"
+  
+  fn pick(opt: Option<fn(int) -> Result<string, error>>) {
+    let _ = opt.unwrap_or(ext.MakeParser())
+  }
+---
+package main
+
+import (
+	"example.com/ext"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func pick(opt lisette.Option[func(int) (string, error)]) {
+	_ = opt.UnwrapOr(ext.MakeParser())
+}

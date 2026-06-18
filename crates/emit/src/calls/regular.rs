@@ -13,6 +13,7 @@ use crate::expressions::staging::VariadicCombine;
 use crate::names::go_name;
 use crate::plan::bodies::LoweredStatement;
 use crate::plan::calls::{ArgumentPlan, CallPlan, CallbackWrapperKind, NullableCoerceKind};
+use crate::types::native::NativeGoType;
 use crate::utils::{contains_call, reads_mutable_operand};
 use crate::write_line;
 use syntax::ast::{Annotation, Expression};
@@ -33,6 +34,7 @@ struct CallArgsContext<'a> {
     /// Suppresses the Go-fn identity short-circuit on fn-typed params
     /// dispatching into prelude generic helpers (e.g. `OptionAndThen`).
     is_prelude_dispatch: bool,
+    declared_param_types: Option<&'a [Type]>,
     spread: Option<&'a Expression>,
     wrap_spread_to_any: bool,
     combine_variadic: Option<VariadicCombine>,
@@ -170,11 +172,13 @@ impl<'a> Planner<'a> {
         );
 
         let analysis = self.analyze_callee(function);
+        let declared_param_types = self.callee_declared_params(function, args.len());
         let args_ctx = CallArgsContext {
             fn_param_types: &analysis.fn_param_types,
             generic_fn_param_types: analysis.generic_fn_param_types,
             is_go_call: analysis.is_go_call,
             is_prelude_dispatch: analysis.is_prelude_dispatch,
+            declared_param_types,
             spread,
             wrap_spread_to_any: spread_needs_any_wrap(function, spread),
             combine_variadic: call_plan.variadic_combine(0),
@@ -270,6 +274,41 @@ impl<'a> Planner<'a> {
             }
             _ => None,
         }
+    }
+
+    fn declared_callee_definition(&self, function: &Expression) -> Option<&'a Definition> {
+        if let Some(definition) = self.callee_definition(function) {
+            return Some(definition);
+        }
+        let Expression::DotAccess {
+            expression: receiver,
+            member,
+            ..
+        } = function.unwrap_parens()
+        else {
+            return None;
+        };
+        let peeled = self.facts.peel_alias(&receiver.get_type().strip_refs());
+        if let Some(native) = NativeGoType::from_type(&peeled) {
+            return self
+                .facts
+                .definition(&format!("prelude.{}.{}", native.lisette_name(), member));
+        }
+        match peeled {
+            Type::Nominal { id, .. } => self.facts.definition(&format!("{}.{}", id, member)),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn callee_declared_params(
+        &self,
+        function: &Expression,
+        num_args: usize,
+    ) -> Option<&'a [Type]> {
+        let definition = self.declared_callee_definition(function)?;
+        let params = definition.ty().unwrap_forall().get_function_params()?;
+        let self_offset = params.len().saturating_sub(num_args);
+        params.get(self_offset..)
     }
 
     /// Hoist a Go array-return call into a temp and reslice as `[]T`. Skipped
@@ -372,8 +411,17 @@ impl<'a> Planner<'a> {
         let generic_param_ty = ctx
             .generic_fn_param_types
             .and_then(|params| effective_param_type(index, params));
+        let declared_param_ty = ctx
+            .declared_param_types
+            .and_then(|params| effective_param_type(index, params));
 
-        let plan = self.plan_argument(arg, ctx, effective_param_ty, generic_param_ty);
+        let plan = self.plan_argument(
+            arg,
+            ctx,
+            effective_param_ty,
+            generic_param_ty,
+            declared_param_ty,
+        );
 
         match plan {
             ArgumentPlan::GoCallbackAdapter(kind) => self.lower_callback_wrapper(
@@ -408,7 +456,9 @@ impl<'a> Planner<'a> {
                 let lowered = self.emit_lower_arg_to_tagged(&mut setup, &value, target, fx);
                 (setup, lowered)
             }
-            ArgumentPlan::Direct => self.lower_direct_arg(arg, ctx, effective_param_ty, fx),
+            ArgumentPlan::Direct => {
+                self.lower_direct_arg(arg, ctx, effective_param_ty, declared_param_ty, fx)
+            }
         }
     }
 
@@ -421,6 +471,7 @@ impl<'a> Planner<'a> {
         ctx: &CallArgsContext<'_>,
         effective_param_ty: Option<&Type>,
         generic_param_ty: Option<&Type>,
+        declared_param_ty: Option<&Type>,
     ) -> ArgumentPlan {
         if ctx.is_go_call
             && let Some(kind) = self.detect_callback_wrapper(arg, effective_param_ty)
@@ -443,7 +494,7 @@ impl<'a> Planner<'a> {
         {
             return ArgumentPlan::GoPointerUnwrap;
         }
-        let suppress = would_suppress_tagged_go(ctx, effective_param_ty);
+        let suppress = would_suppress_tagged_go(ctx, declared_param_ty);
         if suppress
             && self
                 .detect_lower_arg_to_tagged(arg, effective_param_ty)
@@ -459,9 +510,10 @@ impl<'a> Planner<'a> {
         arg: &Expression,
         ctx: &CallArgsContext<'_>,
         effective_param_ty: Option<&Type>,
+        declared_param_ty: Option<&Type>,
         fx: &mut EmitEffects,
     ) -> (Vec<LoweredStatement>, String) {
-        let suppress = would_suppress_tagged_go(ctx, effective_param_ty);
+        let suppress = would_suppress_tagged_go(ctx, declared_param_ty);
         let arg_ctx = direct_arg_emit_ctx(ctx, effective_param_ty, suppress);
         let (mut setup, value) = self.lower_composite_value(arg, arg_ctx, fx);
         let final_value = match effective_param_ty {
@@ -834,11 +886,8 @@ fn spread_needs_any_wrap(function: &Expression, spread: Option<&Expression>) -> 
         .is_some_and(|t| !t.is_unknown())
 }
 
-/// True when a prelude-dispatch call's param is a function type — the
-/// condition that triggers `with_forced_tagged_go_function` and gates the
-/// tagged-Go lowering wrap.
-fn would_suppress_tagged_go(ctx: &CallArgsContext<'_>, effective_param_ty: Option<&Type>) -> bool {
-    let unwrapped = effective_param_ty.map(|p| p.unwrap_forall());
+fn would_suppress_tagged_go(ctx: &CallArgsContext<'_>, declared_param_ty: Option<&Type>) -> bool {
+    let unwrapped = declared_param_ty.map(|p| p.unwrap_forall());
     ctx.is_prelude_dispatch && unwrapped.is_some_and(|p| matches!(p, Type::Function(_)))
 }
 

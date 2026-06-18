@@ -2,6 +2,7 @@ use crate::EmitEffects;
 use crate::Planner;
 use crate::abi::is_tagged_shape_fn_value;
 use crate::abi::transition::lower_arg_to_tagged;
+use crate::calls::effective_param_type;
 use crate::context::expression::ExpressionContext;
 use crate::expressions::emission::{CapturePolicy, StagedExpression};
 use crate::names::go_name;
@@ -91,16 +92,15 @@ impl Planner<'_> {
         StagedExpression::from_typed_setup(setup, value, expression)
     }
 
-    /// Suppresses the Go-fn identity short-circuit when the formal param
-    /// is function-typed (prelude generic callbacks reject multi-return).
     pub(crate) fn stage_prelude_arg(
         &mut self,
         expression: &Expression,
+        declared_param: Option<&syntax::types::Type>,
         param_ty: Option<&syntax::types::Type>,
         fx: &mut EmitEffects,
     ) -> StagedExpression {
-        let suppress =
-            param_ty.is_some_and(|p| matches!(p.unwrap_forall(), syntax::types::Type::Function(_)));
+        let suppress = declared_param
+            .is_some_and(|p| matches!(p.unwrap_forall(), syntax::types::Type::Function(_)));
         let arg_ctx = ExpressionContext::value().with_forced_tagged_go_function(suppress);
         let staged = self.stage_composite(expression, arg_ctx, fx);
 
@@ -183,9 +183,13 @@ impl Planner<'_> {
             syntax::types::Type::Function(f) => &f.params,
             _ => &[],
         };
+        let declared_params = self.callee_declared_params(function, args.len());
         args.iter()
             .enumerate()
-            .map(|(i, arg)| self.stage_prelude_arg(arg, formal_params.get(i), fx))
+            .map(|(i, arg)| {
+                let declared = declared_params.and_then(|p| effective_param_type(i, p));
+                self.stage_prelude_arg(arg, declared, formal_params.get(i), fx)
+            })
             .collect()
     }
 

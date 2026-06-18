@@ -1603,3 +1603,106 @@ pub struct Group {
 "#;
     assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/cli", typedef)]);
 }
+
+#[test]
+fn interop_some_stores_result_fn_in_lowered_abi() {
+    let input = r#"
+import ext "go:example.com/ext"
+
+fn configure(conf: Ref<ext.Config>) {
+  let mut wrapped: Slice<Option<fn(ext.Config) -> Result<ext.Listener, error>>> = []
+  for listener in ext.WrapListeners(conf.Listeners) {
+    wrapped = wrapped.append(Some(listener))
+  }
+}
+"#;
+    let typedef = r#"
+pub struct Config {
+  pub Listeners: Slice<fn(Config) -> Result<Listener, error>>,
+}
+
+pub interface Listener {}
+
+pub fn WrapListeners(listeners: Slice<fn(Config) -> Result<Listener, error>>) -> Slice<fn(Config) -> Result<Listener, error>>
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/ext", typedef)]);
+}
+
+#[test]
+fn interop_channel_send_stores_result_fn_in_lowered_abi() {
+    let input = r#"
+import "go:example.com/ext"
+
+fn enqueue(ch: Channel<fn(int) -> Result<string, error>>) {
+  let _ = ch.send(ext.MakeParser())
+}
+"#;
+    let typedef = r#"
+pub fn MakeParser() -> fn(int) -> Result<string, error>
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/ext", typedef)]);
+}
+
+#[test]
+fn interop_unwrap_or_stores_result_fn_in_lowered_abi() {
+    let input = r#"
+import "go:example.com/ext"
+
+fn pick(opt: Option<fn(int) -> Result<string, error>>) {
+  let _ = opt.unwrap_or(ext.MakeParser())
+}
+"#;
+    let typedef = r#"
+pub fn MakeParser() -> fn(int) -> Result<string, error>
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/ext", typedef)]);
+}
+
+#[test]
+fn interop_slice_map_keeps_result_callback_tagged() {
+    let input = r#"
+import "go:example.com/ext"
+
+fn convert_all(xs: Slice<int>) {
+  let _ = xs.map(ext.Parse)
+}
+"#;
+    let typedef = r#"
+pub fn Parse(x: int) -> Result<string, error>
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/ext", typedef)]);
+}
+
+#[test]
+fn interop_aliased_native_receiver_wraps_result_callback() {
+    let input = r#"
+import "go:example.com/ext"
+
+type Ints = Slice<int>
+
+fn convert_all(xs: Ints) {
+  let _ = xs.map(ext.Parse)
+}
+"#;
+    let typedef = r#"
+pub fn Parse(x: int) -> Result<string, error>
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/ext", typedef)]);
+}
+
+#[test]
+fn interop_aliased_option_receiver_wraps_callback() {
+    let input = r#"
+import "go:example.com/ext"
+
+type MyOpt = Option<int>
+
+fn use_it(o: MyOpt) {
+  let _ = o.and_then(ext.Lookup)
+}
+"#;
+    let typedef = r#"
+pub fn Lookup(x: int) -> Option<string>
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/ext", typedef)]);
+}

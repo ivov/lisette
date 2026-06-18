@@ -1,0 +1,20 @@
+---
+source: tests/spec/emit/interop_matrix.rs
+description: |
+  
+  import "go:example.com/ext"
+  
+  fn enqueue(ch: Channel<fn(int) -> Result<string, error>>) {
+    let _ = ch.send(ext.MakeParser())
+  }
+---
+package main
+
+import (
+	"example.com/ext"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func enqueue(ch chan func(int) (string, error)) {
+	_ = lisette.ChannelSend(ch, ext.MakeParser())
+}

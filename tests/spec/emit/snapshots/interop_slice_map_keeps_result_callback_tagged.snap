@@ -1,0 +1,27 @@
+---
+source: tests/spec/emit/interop_matrix.rs
+description: |
+  
+  import "go:example.com/ext"
+  
+  fn convert_all(xs: Slice<int>) {
+    let _ = xs.map(ext.Parse)
+  }
+---
+package main
+
+import (
+	"example.com/ext"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func convert_all(xs []int) {
+	_ = lisette.SliceMap(xs, func(arg0 int) lisette.Result[string, error] {
+		ret_1, ret_2 := ext.Parse(arg0)
+		if ret_2 != nil {
+			return lisette.MakeResultErr[string, error](ret_2)
+		} else {
+			return lisette.MakeResultOk[string, error](ret_1)
+		}
+	})
+}
