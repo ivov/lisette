@@ -1,0 +1,51 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === a.go ===
+package main
+
+import s "github.com/user/myproject/iface_a"
+
+type BoxA[T s.Drawable] struct {
+	V T
+}
+
+func (b BoxA[T]) Show() string {
+	return b.V.Draw()
+}
+
+
+// === b.go ===
+package main
+
+import s "github.com/user/myproject/iface_b"
+
+type BoxB[T s.Renderable] struct {
+	V T
+}
+
+func (b BoxB[T]) Show() string {
+	return b.V.Render()
+}
+
+
+// === iface_a/lib.go ===
+package iface_a
+
+type Drawable interface {
+	Draw() string
+}
+
+
+// === iface_b/lib.go ===
+package iface_b
+
+type Renderable interface {
+	Render() string
+}
+
+
+// === main.go ===
+package main
+
+func main() {}

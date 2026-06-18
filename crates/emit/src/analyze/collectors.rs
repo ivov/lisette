@@ -116,38 +116,7 @@ impl Planner<'_> {
                     continue;
                 };
                 self.module
-                    .record_module_alias(import.name.to_string(), alias);
-            }
-        }
-    }
-
-    /// Register cross-module imports for any bound types referenced in these generics.
-    /// In-module, Go-imported, and prelude modules don't need explicit imports.
-    pub(crate) fn record_bound_imports(
-        &mut self,
-        generics: &[syntax::ast::Generic],
-        fx: &mut EmitEffects,
-    ) {
-        for generic in generics {
-            for bound in &generic.bounds {
-                let syntax::ast::Annotation::Constructor { name, .. } = bound else {
-                    continue;
-                };
-                let Some((module, _)) = name.split_once('.') else {
-                    continue;
-                };
-                if self.facts.is_current_module(module)
-                    || go_name::is_go_import(module)
-                    || module == go_name::PRELUDE_MODULE
-                {
-                    continue;
-                }
-                let canonical = self
-                    .module
-                    .module_for_alias(module)
-                    .unwrap_or(module)
-                    .to_string();
-                self.require_module_import_fx(&canonical, fx);
+                    .record_module_alias(file.id, import.name.to_string(), alias);
             }
         }
     }
@@ -187,6 +156,7 @@ impl Planner<'_> {
             .collect();
 
         for (key, variants, file_id) in local_enums {
+            self.module.set_active_file(file_id);
             for variant in &variants {
                 let fn_code = self.create_make_function_code(&key, &variant.name, fx);
                 code.entry(file_id).or_default().push(fn_code);

@@ -472,6 +472,7 @@ impl<'a> Planner<'a> {
         for (i, (file, file_plan)) in files.iter().zip(&plan.files).enumerate() {
             debug_assert_eq!(file.id, file_plan.file_id, "plan/file order mismatch");
 
+            self.module.set_active_file(file.id);
             let mut source = OutputCollector::new();
 
             for function in &file_plan.make_functions {

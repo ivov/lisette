@@ -6809,6 +6809,250 @@ fn main() {
 }
 
 #[test]
+fn cross_file_inferred_go_type_emits_matching_import() {
+    let mut fs = MockFileSystem::new();
+
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "helper.lis",
+        r#"
+import t "go:time"
+
+pub fn count(xs: Slice<t.Duration>) -> int {
+  0
+}
+"#,
+    );
+
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+import "go:fmt"
+
+fn main() {
+  fmt.Println(count([]))
+}
+"#,
+    );
+
+    assert_build_snapshot!(fs, "github.com/user/myproject");
+}
+
+#[test]
+fn cross_file_inferred_local_type_emits_matching_import() {
+    let mut fs = MockFileSystem::new();
+
+    fs.add_file(
+        "util",
+        "box.lis",
+        r#"
+pub struct Box<T> {
+  pub items: Slice<T>,
+}
+"#,
+    );
+
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "maker.lis",
+        r#"
+import u "util"
+
+pub fn count(xs: Slice<u.Box<string>>) -> int {
+  0
+}
+"#,
+    );
+
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+import "go:fmt"
+
+fn main() {
+  fmt.Println(count([]))
+}
+"#,
+    );
+
+    assert_build_snapshot!(fs, "github.com/user/myproject");
+}
+
+#[test]
+fn same_alias_in_impl_bounds_does_not_leak_imports() {
+    let mut fs = MockFileSystem::new();
+
+    fs.add_file(
+        "iface_a",
+        "lib.lis",
+        r#"
+pub interface Drawable {
+  fn draw(self) -> string
+}
+"#,
+    );
+
+    fs.add_file(
+        "iface_b",
+        "lib.lis",
+        r#"
+pub interface Renderable {
+  fn render(self) -> string
+}
+"#,
+    );
+
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "a.lis",
+        r#"
+import s "iface_a"
+
+pub struct BoxA<T> {
+  pub v: T,
+}
+
+impl<T: s.Drawable> BoxA<T> {
+  pub fn show(self) -> string {
+    self.v.draw()
+  }
+}
+"#,
+    );
+
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "b.lis",
+        r#"
+import s "iface_b"
+
+pub struct BoxB<T> {
+  pub v: T,
+}
+
+impl<T: s.Renderable> BoxB<T> {
+  pub fn show(self) -> string {
+    self.v.render()
+  }
+}
+"#,
+    );
+
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+fn main() {}
+"#,
+    );
+
+    assert_build_snapshot!(fs, "github.com/user/myproject");
+}
+
+#[test]
+fn same_alias_for_different_modules_resolves_per_file() {
+    let mut fs = MockFileSystem::new();
+
+    fs.add_file(
+        "pkg_a",
+        "typ.lis",
+        r#"
+pub struct Thing {
+  pub n: int,
+}
+"#,
+    );
+
+    fs.add_file(
+        "pkg_b",
+        "typ.lis",
+        r#"
+pub struct Gadget {
+  pub m: int,
+}
+"#,
+    );
+
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "a.lis",
+        r#"
+import p "pkg_a"
+
+pub fn make_thing() -> p.Thing {
+  p.Thing { n: 1 }
+}
+"#,
+    );
+
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "b.lis",
+        r#"
+import p "pkg_b"
+
+pub fn make_gadget() -> p.Gadget {
+  p.Gadget { m: 2 }
+}
+"#,
+    );
+
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+fn main() {
+  let _ = make_thing()
+  let _ = make_gadget()
+}
+"#,
+    );
+
+    assert_build_snapshot!(fs, "github.com/user/myproject");
+}
+
+#[test]
+fn same_go_path_keeps_each_files_own_alias() {
+    let mut fs = MockFileSystem::new();
+
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "a.lis",
+        r#"
+import x "go:time"
+
+pub fn from_a(d: x.Duration) -> x.Duration {
+  d
+}
+"#,
+    );
+
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "b.lis",
+        r#"
+import y "go:time"
+
+pub fn from_b(d: y.Duration) -> y.Duration {
+  d
+}
+"#,
+    );
+
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+fn main() {}
+"#,
+    );
+
+    assert_build_snapshot!(fs, "github.com/user/myproject");
+}
+
+#[test]
 fn generated_fmt_requirement_reuses_unaliased_source_import() {
     let mut fs = MockFileSystem::new();
     fs.add_file(

@@ -1,0 +1,46 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === a.go ===
+package main
+
+import p "github.com/user/myproject/pkg_a"
+
+func MakeThing() p.Thing {
+	return p.Thing{N: 1}
+}
+
+
+// === b.go ===
+package main
+
+import p "github.com/user/myproject/pkg_b"
+
+func MakeGadget() p.Gadget {
+	return p.Gadget{M: 2}
+}
+
+
+// === main.go ===
+package main
+
+func main() {
+	_ = MakeThing()
+	_ = MakeGadget()
+}
+
+
+// === pkg_a/typ.go ===
+package pkg_a
+
+type Thing struct {
+	N int
+}
+
+
+// === pkg_b/typ.go ===
+package pkg_b
+
+type Gadget struct {
+	M int
+}

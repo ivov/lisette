@@ -41,7 +41,7 @@ impl Planner<'_> {
         self.collect_module_aliases(files);
         self.collect_local_exported_method_names(files);
         self.collect_user_to_string_types(files);
-        self.collect_generic_constraints(files, &mut collection_effects);
+        self.collect_generic_constraints(files);
         self.collect_escape_remap(files);
         let collision_diagnostics = self.detect_name_collisions(files);
         let mut make_functions_by_file =

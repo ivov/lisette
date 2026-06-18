@@ -238,6 +238,11 @@ impl Planner<'_> {
         if let Some(layout) = self.module.enum_layout(enum_id) {
             return Some(layout);
         }
+        let _active = self
+            .facts
+            .definition(enum_id)
+            .and_then(|d| d.name_span)
+            .map(|span| self.module.with_active_file(span.file_id));
         let layout = self.compute_enum_layout(enum_id)?;
         self.module.record_enum_layout(enum_id.to_string(), layout);
         self.module.enum_layout(enum_id)

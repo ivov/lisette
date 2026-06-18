@@ -1,0 +1,27 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === a.go ===
+package main
+
+import x "time"
+
+func FromA(d x.Duration) x.Duration {
+	return d
+}
+
+
+// === b.go ===
+package main
+
+import y "time"
+
+func FromB(d y.Duration) y.Duration {
+	return d
+}
+
+
+// === main.go ===
+package main
+
+func main() {}

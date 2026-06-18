@@ -1,6 +1,5 @@
 use rustc_hash::FxHashSet as HashSet;
 
-use crate::EmitEffects;
 use crate::Planner;
 use crate::names::constraints::{GenericConstraintTable, classify_bound_annotation};
 use crate::names::go_name;
@@ -10,7 +9,7 @@ use syntax::program::{DefinitionBody, File, Interface};
 use syntax::types::{CompoundKind, Symbol, Type, unqualified_name};
 
 impl Planner<'_> {
-    pub(crate) fn collect_generic_constraints(&mut self, files: &[&File], fx: &mut EmitEffects) {
+    pub(crate) fn collect_generic_constraints(&mut self, files: &[&File]) {
         let base_cell = self.facts.generic_base();
         let base = base_cell.get_or_init(|| {
             let mut t = GenericConstraintTable::default();
@@ -24,7 +23,7 @@ impl Planner<'_> {
         let mut table = base.clone();
 
         self.seed_local_functions(files, &mut table);
-        self.seed_local_impl_blocks(files, &mut table, fx);
+        self.seed_local_impl_blocks(files, &mut table);
         self.collect_demands_from_local_functions(files, &mut table);
         self.collect_demands_from_local_impl_blocks(files, &mut table);
 
@@ -64,27 +63,7 @@ impl Planner<'_> {
         }
     }
 
-    fn seed_local_impl_blocks(
-        &mut self,
-        files: &[&File],
-        table: &mut GenericConstraintTable,
-        fx: &mut EmitEffects,
-    ) {
-        let impl_generics_lists: Vec<Vec<Generic>> = files
-            .iter()
-            .flat_map(|f| &f.items)
-            .filter_map(|item| match item {
-                Expression::ImplBlock {
-                    generics: impl_generics,
-                    ..
-                } => Some(impl_generics.clone()),
-                _ => None,
-            })
-            .collect();
-        for impl_generics in &impl_generics_lists {
-            self.record_bound_imports(impl_generics, fx);
-        }
-
+    fn seed_local_impl_blocks(&mut self, files: &[&File], table: &mut GenericConstraintTable) {
         for file in files {
             for item in &file.items {
                 let Expression::ImplBlock {

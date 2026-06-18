@@ -1,0 +1,24 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === helper.go ===
+package main
+
+import t "time"
+
+func Count(_ []t.Duration) int {
+	return 0
+}
+
+
+// === main.go ===
+package main
+
+import (
+	"fmt"
+	"time"
+)
+
+func main() {
+	fmt.Println(Count(([]time.Duration)(nil)))
+}
