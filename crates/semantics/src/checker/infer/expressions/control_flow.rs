@@ -277,6 +277,7 @@ impl InferCtx<'_, '_> {
             MatchOrigin::IfLet { .. } => BindingKind::IfLet,
             MatchOrigin::Explicit => BindingKind::MatchArm,
         };
+        let match_has_guard = arms.iter().any(|a| a.guard.is_some());
         let new_arms = arms
             .into_iter()
             .map(|a| {
@@ -298,9 +299,13 @@ impl InferCtx<'_, '_> {
                     &result_ty
                 };
                 let saved_in_match_arm = self.scopes.set_in_match_arm(true);
+                let saved_in_guarded = self.scopes.set_in_guarded_match_arm(
+                    self.scopes.is_in_guarded_match_arm() || match_has_guard,
+                );
                 // Arm body is a tail-like context where Never calls are valid.
                 self.scopes.set_in_subexpression(false);
                 let new_expression = self.infer_expression(*a.expression, arm_expected);
+                self.scopes.set_in_guarded_match_arm(saved_in_guarded);
                 self.scopes.set_in_match_arm(saved_in_match_arm);
 
                 self.scopes.pop();
@@ -783,7 +788,9 @@ impl InferCtx<'_, '_> {
         self.check_continue_in_recover_block(span);
         self.check_continue_in_defer_block(span);
 
-        self.mark_loop_needs_label_in_match_arm();
+        if self.scopes.is_in_guarded_match_arm() {
+            self.scopes.mark_current_loop_needs_label();
+        }
 
         Expression::Continue { span }
     }

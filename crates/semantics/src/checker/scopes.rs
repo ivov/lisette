@@ -119,12 +119,15 @@ impl Scope {
 
 pub struct Scopes {
     stack: Vec<Scope>,
-    /// True when inferring the body of a match/select arm. Consumed by
-    /// `infer_break`/`infer_continue` to decide whether the enclosing loop
-    /// needs a Go label (since Go switch cases do not fall through).
+    /// True when inferring a match/select arm body. Consumed by `infer_break`:
+    /// a Go `break` inside a switch case escapes only the switch.
     in_match_arm: Cell<bool>,
-    /// One entry per enclosing loop; set to `true` when a break/continue is
-    /// encountered inside a match arm. The top is popped by the loop's
+    /// True inside a guarded match arm, which lowers to an inner retry `for`
+    /// loop. Consumed by `infer_continue`: a `continue` there needs a label to
+    /// target the outer loop rather than the retry loop.
+    in_guarded_match_arm: Cell<bool>,
+    /// One entry per enclosing loop; set to `true` by a `break` in a match arm
+    /// or a `continue` in a guarded match arm. The top is popped by the loop's
     /// inference function and recorded on the Loop/While/For/WhileLet AST node.
     loop_needs_label_stack: std::cell::RefCell<Vec<bool>>,
     /// True when inferring inside a compound expression (call arg, binary
@@ -156,6 +159,7 @@ impl Scopes {
         Scopes {
             stack: vec![Scope::new()],
             in_match_arm: Cell::new(false),
+            in_guarded_match_arm: Cell::new(false),
             loop_needs_label_stack: std::cell::RefCell::new(Vec::new()),
             in_subexpression: Cell::new(false),
             dot_access_base: Cell::new(false),
@@ -196,6 +200,7 @@ impl Scopes {
         self.stack.clear();
         self.stack.push(Scope::new());
         self.in_match_arm.set(false);
+        self.in_guarded_match_arm.set(false);
         self.loop_needs_label_stack.borrow_mut().clear();
         self.in_subexpression.set(false);
         self.dot_access_base.set(false);
@@ -433,6 +438,14 @@ impl Scopes {
 
     pub fn set_in_match_arm(&self, value: bool) -> bool {
         self.in_match_arm.replace(value)
+    }
+
+    pub fn is_in_guarded_match_arm(&self) -> bool {
+        self.in_guarded_match_arm.get()
+    }
+
+    pub fn set_in_guarded_match_arm(&self, value: bool) -> bool {
+        self.in_guarded_match_arm.replace(value)
     }
 
     pub fn push_loop_needs_label(&self) {
