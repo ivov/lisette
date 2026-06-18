@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [info] Multiplication by `-1`
+   ╭─[test.lis:3:3]
+ 2 │ fn negate(x: int, y: int) -> int {
+ 3 │   (x + y) * -1
+   ·   ──────┬─────
+   ·         ╰── can be simpler
+ 4 │ }
+   ╰────
+  help: Use the negation `-(x + y)` instead · code: [lint.neg_multiply]

@@ -610,6 +610,228 @@ fn main() {
 }
 
 #[test]
+fn misrefactored_assign_op_addition() {
+    assert_lint_snapshot!(
+        r#"
+fn add(b: int) {
+  let mut a = 1
+  a += a + b
+  let _ = a
+}
+
+fn main() {
+  add(2)
+}
+"#
+    );
+}
+
+#[test]
+fn misrefactored_assign_op_multiplication() {
+    assert_lint_snapshot!(
+        r#"
+fn scale(b: int) {
+  let mut a = 2
+  a *= a * b
+  let _ = a
+}
+
+fn main() {
+  scale(2)
+}
+"#
+    );
+}
+
+#[test]
+fn misrefactored_assign_op_target_on_right() {
+    assert_lint_snapshot!(
+        r#"
+fn add(b: int) {
+  let mut a = 1
+  a += b + a
+  let _ = a
+}
+
+fn main() {
+  add(2)
+}
+"#
+    );
+}
+
+#[test]
+fn misrefactored_assign_op_field() {
+    assert_lint_snapshot!(
+        r#"
+struct Counter { count: int }
+
+fn main() {
+  let mut c = Counter { count: 0 }
+  c.count += c.count + 1
+  let _ = c.count
+}
+"#
+    );
+}
+
+#[test]
+fn misrefactored_assign_op_simple_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn add(b: int) {
+  let mut a = 1
+  a += b
+  let _ = a
+}
+
+fn main() {
+  add(2)
+}
+"#
+    );
+}
+
+#[test]
+fn misrefactored_assign_op_mixed_operator_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn add(b: int) {
+  let mut a = 1
+  a += b - a
+  let _ = a
+}
+
+fn main() {
+  add(2)
+}
+"#
+    );
+}
+
+#[test]
+fn misrefactored_assign_op_distinct_operands_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn add(b: int, c: int) {
+  let mut a = 1
+  a += b + c
+  let _ = a
+}
+
+fn main() {
+  add(2, 3)
+}
+"#
+    );
+}
+
+#[test]
+fn misrefactored_assign_op_noncommutative_target_on_right_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn sub(b: int) {
+  let mut a = 1
+  a -= b - a
+  let _ = a
+}
+
+fn main() {
+  sub(2)
+}
+"#
+    );
+}
+
+#[test]
+fn neg_multiply_literal_right() {
+    assert_lint_snapshot!(
+        r#"
+fn negate(x: int) -> int {
+  x * -1
+}
+
+fn main() {
+  let _ = negate(3)
+}
+"#
+    );
+}
+
+#[test]
+fn neg_multiply_literal_left() {
+    assert_lint_snapshot!(
+        r#"
+fn negate(x: int) -> int {
+  -1 * x
+}
+
+fn main() {
+  let _ = negate(3)
+}
+"#
+    );
+}
+
+#[test]
+fn neg_multiply_float() {
+    assert_lint_snapshot!(
+        r#"
+fn negate(f: float64) -> float64 {
+  f * -1
+}
+
+fn main() {
+  let _ = negate(3.0)
+}
+"#
+    );
+}
+
+#[test]
+fn neg_multiply_parenthesized() {
+    assert_lint_snapshot!(
+        r#"
+fn negate(x: int, y: int) -> int {
+  (x + y) * -1
+}
+
+fn main() {
+  let _ = negate(3, 4)
+}
+"#
+    );
+}
+
+#[test]
+fn neg_multiply_compound_assignment_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let mut a = 5
+  a *= -1
+  let _ = a
+}
+"#
+    );
+}
+
+#[test]
+fn neg_multiply_other_factor_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn scale(x: int) -> int {
+  x * -2
+}
+
+fn main() {
+  let _ = scale(3)
+}
+"#
+    );
+}
+
+#[test]
 fn manual_is_empty_equals_zero() {
     assert_lint_snapshot!(
         r#"

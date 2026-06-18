@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [warning] Compound assignment repeats `a`
+   ╭─[test.lis:4:3]
+ 3 │   let mut a = 2
+ 4 │   a *= a * b
+   ·   ─────┬────
+   ·        ╰── uses `a` twice
+ 5 │   let _ = a
+   ╰────
+  help: The `*=` operator already includes `a`, so naming `a` again on the right applies it twice. To apply `b` once, write `a *= b` · code: [lint.misrefactored_assign_op]

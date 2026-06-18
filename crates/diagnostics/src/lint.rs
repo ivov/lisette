@@ -459,6 +459,27 @@ pub fn manual_compound_assignment(span: &Span, symbol: &str) -> LisetteDiagnosti
         .with_help(format!("Use the `{symbol}` compound assignment operator"))
 }
 
+pub fn misrefactored_assign_op(
+    span: &Span,
+    target: &str,
+    compound: &str,
+    other: &str,
+) -> LisetteDiagnostic {
+    LisetteDiagnostic::warn(format!("Compound assignment repeats `{target}`"))
+        .with_lint_code("misrefactored_assign_op")
+        .with_span_label(span, format!("uses `{target}` twice"))
+        .with_help(format!(
+            "The `{compound}` operator already includes `{target}`, so naming `{target}` again on the right applies it twice. To apply `{other}` once, write `{target} {compound} {other}`."
+        ))
+}
+
+pub fn neg_multiply(span: &Span, operand: &str) -> LisetteDiagnostic {
+    LisetteDiagnostic::info("Multiplication by `-1`")
+        .with_lint_code("neg_multiply")
+        .with_span_label(span, "can be simpler")
+        .with_help(format!("Use the negation `-{operand}` instead"))
+}
+
 pub fn regexp_in_loop(span: &Span) -> LisetteDiagnostic {
     LisetteDiagnostic::info("Regexp recompiled on every iteration")
         .with_lint_code("regexp_in_loop")

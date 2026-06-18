@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [info] Multiplication by `-1`
+   ╭─[test.lis:3:3]
+ 2 │ fn negate(f: float64) -> float64 {
+ 3 │   f * -1
+   ·   ───┬──
+   ·      ╰── can be simpler
+ 4 │ }
+   ╰────
+  help: Use the negation `-f` instead · code: [lint.neg_multiply]
