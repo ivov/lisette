@@ -1,0 +1,17 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  import "go:math"
+  
+  fn scale(level: int) -> float64 {
+    (math.MaxInt8 << level) as float64
+  }
+---
+package main
+
+import "math"
+
+func scale(level int) float64 {
+	return float64(int((math.MaxInt8 << level)))
+}

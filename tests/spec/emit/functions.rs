@@ -432,6 +432,131 @@ fn test() -> float64 {
 }
 
 #[test]
+fn cast_shift_to_float_pins_integer_type() {
+    let input = r#"
+fn heal(level: int, potency: float64) -> float64 {
+  ((2 << level) as float64) * potency
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn cast_nested_shift_to_float_pins_integer_type() {
+    let input = r#"
+fn scale(level: int) -> float64 {
+  ((2 << level) + 3) as float64
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn cast_variable_shift_to_float_needs_no_pin() {
+    let input = r#"
+fn scale(base: int, level: int) -> float64 {
+  (base << level) as float64
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn cast_constant_shift_to_float_needs_no_pin() {
+    let input = r#"
+fn scale() -> float64 {
+  (2 << 3) as float64
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn cast_shift_with_constant_arithmetic_base_pins() {
+    let input = r#"
+fn scale(level: int) -> float64 {
+  ((1 + 1) << level) as float64
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn cast_constant_shift_with_arithmetic_count_needs_no_pin() {
+    let input = r#"
+fn scale() -> float64 {
+  (1 << (50 + 50)) as float64
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn cast_shift_with_const_count_needs_no_pin() {
+    let input = r#"
+const SHIFT = 60 + 8
+
+fn scale() -> float64 {
+  (1 << SHIFT) as float64
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn cast_shift_with_local_const_count_needs_no_pin() {
+    let input = r#"
+fn scale() -> float64 {
+  const SHIFT = 60 + 8
+  (1 << SHIFT) as float64
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn cast_shift_imported_const_shifted_operand_pins() {
+    let input = r#"
+import "go:math"
+
+fn scale(level: int) -> float64 {
+  (math.MaxInt8 << level) as float64
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn cast_shift_forward_alias_const_emitted_as_var_pins() {
+    let input = r#"
+const SHIFT = LATER
+const LATER = 60 + 8
+
+fn scale() -> float64 {
+  (1 << SHIFT) as float64
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn cast_shift_imported_const_count_no_pin_but_var_count_pins() {
+    let input = r#"
+import "go:math"
+import "go:runtime"
+
+fn const_count() -> float64 {
+  (1 << math.MaxInt8) as float64
+}
+
+fn var_count() -> float64 {
+  (1 << runtime.MemProfileRate) as float64
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn float32_parameter_and_return() {
     let input = r#"
 fn accept_float32(x: float32) -> float32 {

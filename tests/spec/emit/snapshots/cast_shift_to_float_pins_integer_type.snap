@@ -1,0 +1,13 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  fn heal(level: int, potency: float64) -> float64 {
+    ((2 << level) as float64) * potency
+  }
+---
+package main
+
+func heal(level int, potency float64) float64 {
+	return (float64(int((2 << level)))) * potency
+}

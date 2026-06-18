@@ -1,0 +1,20 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === config/config.go ===
+package config
+
+const SHIFT int = 60 + 8
+
+
+// === main.go ===
+package main
+
+import (
+	"fmt"
+	"github.com/user/myproject/config"
+)
+
+func main() {
+	fmt.Println(float64((1 << config.SHIFT)))
+}

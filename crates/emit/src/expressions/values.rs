@@ -328,10 +328,40 @@ impl Planner<'_> {
         }
 
         let go_type = self.annotation_to_go_type(target_type, fx);
+
+        if let Some(source_go_type) = self.shift_pin_go_type(expression, ty, fx) {
+            return ValuePlan::Cast {
+                go_type,
+                inner: Box::new(ValuePlan::Cast {
+                    go_type: source_go_type,
+                    inner: Box::new(inner),
+                }),
+            };
+        }
+
         ValuePlan::Cast {
             go_type,
             inner: Box::new(inner),
         }
+    }
+
+    fn shift_pin_go_type(
+        &self,
+        expression: &Expression,
+        target_ty: &Type,
+        fx: &mut EmitEffects,
+    ) -> Option<String> {
+        let target_is_float = target_ty
+            .underlying_simple_kind()
+            .is_some_and(|kind| kind.is_float());
+        if !target_is_float || !self.contains_untyped_constant_shift(expression) {
+            return None;
+        }
+        let source_ty = expression.get_type();
+        source_ty
+            .underlying_simple_kind()
+            .is_some_and(|kind| kind.integer_range().is_some())
+            .then(|| self.go_type_string(&source_ty, fx))
     }
 
     /// Plan a `&inner` reference, hoisting to a temp when the inner is

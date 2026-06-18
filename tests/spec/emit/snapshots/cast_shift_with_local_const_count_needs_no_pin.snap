@@ -1,0 +1,15 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  fn scale() -> float64 {
+    const SHIFT = 60 + 8
+    (1 << SHIFT) as float64
+  }
+---
+package main
+
+func scale() float64 {
+	const SHIFT int = 60 + 8
+	return float64((1 << SHIFT))
+}

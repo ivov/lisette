@@ -46,6 +46,34 @@ fn main() {
 }
 
 #[test]
+fn cast_shift_imported_module_const_count_needs_no_pin() {
+    let mut fs = MockFileSystem::new();
+
+    fs.add_file(
+        "config",
+        "config.lis",
+        r#"
+pub const SHIFT = 60 + 8
+"#,
+    );
+
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+import "go:fmt"
+import "config"
+
+fn main() {
+  fmt.Println((1 << config.SHIFT) as float64)
+}
+"#,
+    );
+
+    assert_build_snapshot!(fs, "github.com/user/myproject");
+}
+
+#[test]
 fn display_cross_module_to_string_exported() {
     let mut fs = MockFileSystem::new();
 

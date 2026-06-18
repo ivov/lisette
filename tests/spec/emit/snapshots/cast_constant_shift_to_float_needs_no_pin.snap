@@ -1,0 +1,13 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  fn scale() -> float64 {
+    (2 << 3) as float64
+  }
+---
+package main
+
+func scale() float64 {
+	return float64((2 << 3))
+}

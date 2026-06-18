@@ -1,0 +1,13 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  fn scale(level: int) -> float64 {
+    ((2 << level) + 3) as float64
+  }
+---
+package main
+
+func scale(level int) float64 {
+	return float64(int(((2 << level) + 3)))
+}

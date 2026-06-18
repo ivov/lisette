@@ -2,9 +2,11 @@ use crate::EmitEffects;
 use crate::Planner;
 use crate::Renderer;
 use crate::context::expression::ExpressionContext;
+use crate::names::go_name;
 use crate::plan::bodies::LoweredStatement;
 use crate::plan::values::{ValuePlan, value_plan_from_statements};
 use syntax::ast::{BinaryOperator, Expression, Literal, UnaryOperator};
+use syntax::program::DefinitionBody;
 use syntax::types::Type;
 
 struct NumericBinaryEmitInfo {
@@ -268,6 +270,113 @@ fn is_literal_expression(expression: &Expression) -> bool {
             ..
         } => is_literal_expression(expression),
         _ => false,
+    }
+}
+
+fn is_constant_binary_op(operator: &BinaryOperator) -> bool {
+    use BinaryOperator::*;
+    matches!(
+        operator,
+        Addition
+            | Subtraction
+            | Multiplication
+            | Division
+            | Remainder
+            | BitwiseAnd
+            | BitwiseOr
+            | BitwiseXor
+            | BitwiseAndNot
+            | ShiftLeft
+            | ShiftRight
+    )
+}
+
+impl Planner<'_> {
+    fn is_go_constant(&self, expression: &Expression) -> bool {
+        match expression {
+            Expression::Literal { literal, .. } => {
+                !matches!(literal, Literal::FormatString(_) | Literal::Slice(_))
+            }
+            Expression::Identifier { value, .. } => self.identifier_is_const(value),
+            Expression::DotAccess {
+                expression: package,
+                member,
+                ..
+            } => self.imported_member_is_const(package, member),
+            Expression::Paren { expression, .. } => self.is_go_constant(expression),
+            Expression::Unary {
+                operator: UnaryOperator::Negative | UnaryOperator::BitwiseNot,
+                expression,
+                ..
+            } => self.is_go_constant(expression),
+            Expression::Binary {
+                operator,
+                left,
+                right,
+                ..
+            } => {
+                is_constant_binary_op(operator)
+                    && self.is_go_constant(left)
+                    && self.is_go_constant(right)
+            }
+            _ => false,
+        }
+    }
+
+    fn identifier_is_const(&self, value: &str) -> bool {
+        match self.scope.resolve_identifier_binding(value) {
+            Some(binding) => binding
+                .as_go_name()
+                .is_some_and(|name| self.is_go_const_binding(name)),
+            None => self.is_go_const_binding(value),
+        }
+    }
+
+    fn imported_member_is_const(&self, package: &Expression, member: &str) -> bool {
+        let Expression::Identifier { value, .. } = package.unwrap_parens() else {
+            return false;
+        };
+        let module = self.module.module_for_alias(value).unwrap_or(value);
+        let body = self
+            .facts
+            .definition(&format!("{module}.{member}"))
+            .or_else(|| {
+                self.facts
+                    .definition(&self.facts.qualified_current_member(value, member))
+            })
+            .map(|definition| &definition.body);
+        match body {
+            Some(DefinitionBody::Value { const_value, .. })
+                if module.starts_with(go_name::GO_IMPORT_PREFIX) =>
+            {
+                const_value.is_some()
+            }
+            Some(DefinitionBody::Value { .. }) => true,
+            _ => false,
+        }
+    }
+
+    pub(crate) fn contains_untyped_constant_shift(&self, expression: &Expression) -> bool {
+        match expression {
+            Expression::Paren { expression, .. } | Expression::Unary { expression, .. } => {
+                self.contains_untyped_constant_shift(expression)
+            }
+            Expression::Binary {
+                operator,
+                left,
+                right,
+                ..
+            } => {
+                (matches!(
+                    operator,
+                    BinaryOperator::ShiftLeft | BinaryOperator::ShiftRight
+                ) && self.is_go_constant(left)
+                    && !self.is_go_constant(right))
+                    || self.contains_untyped_constant_shift(left)
+                    || self.contains_untyped_constant_shift(right)
+            }
+            _ => false,
+        }
     }
 }
 
