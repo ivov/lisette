@@ -8,6 +8,7 @@ use crate::control_flow::fallible::{ConstructorKind, Fallible, FalliblePlanner};
 use crate::definitions::functions::{is_breakless_loop, is_go_never};
 use crate::plan::bodies::{LoweredBlock, LoweredStatement};
 use crate::plan::placement::is_unit_call;
+use crate::plan::values::{ValuePlan, value_plan_from_statements};
 use syntax::ast::Expression;
 use syntax::types::Type;
 
@@ -19,7 +20,7 @@ impl Planner<'_> {
         items: &[Expression],
         ty: &Type,
         fx: &mut EmitEffects,
-    ) -> (Vec<LoweredStatement>, String) {
+    ) -> ValuePlan {
         fx.require_stdlib();
 
         let return_ctx = self.return_ctx();
@@ -45,7 +46,7 @@ impl Planner<'_> {
             body,
             closure_close: "}()\n".to_string(),
         }];
-        (setup, result_var)
+        value_plan_from_statements(setup, result_var)
     }
 
     fn lower_try_body(
@@ -101,8 +102,9 @@ impl Planner<'_> {
             ];
         }
 
-        let (mut statements, final_expression) =
-            self.lower_value(last, ExpressionContext::value(), fx);
+        let (mut statements, final_expression) = self
+            .lower_value(last, ExpressionContext::value(), fx)
+            .into_parts();
         if final_expression.is_empty() {
             statements.push(self.lower_try_unit_return(fallible, fx));
         } else {
@@ -153,7 +155,9 @@ impl Planner<'_> {
                     return None;
                 }
                 if !args.is_empty() {
-                    let (setup, value) = self.lower_value(&args[0], ExpressionContext::value(), fx);
+                    let (setup, value) = self
+                        .lower_value(&args[0], ExpressionContext::value(), fx)
+                        .into_parts();
                     statements.extend(setup);
                     Some(value)
                 } else {
@@ -197,7 +201,7 @@ impl Planner<'_> {
         items: &[Expression],
         ty: &Type,
         fx: &mut EmitEffects,
-    ) -> (Vec<LoweredStatement>, String) {
+    ) -> ValuePlan {
         fx.require_stdlib();
 
         let return_ctx = self.return_ctx();
@@ -221,7 +225,7 @@ impl Planner<'_> {
             body,
             closure_close: "})\n".to_string(),
         }];
-        (setup, result_var)
+        value_plan_from_statements(setup, result_var)
     }
 
     fn lower_recover_body_block(
@@ -266,7 +270,9 @@ impl Planner<'_> {
                 self.lower_zero_return(fallible.ok_ty(), fx),
             ];
         }
-        let (mut statements, expression) = self.lower_value(last, ExpressionContext::value(), fx);
+        let (mut statements, expression) = self
+            .lower_value(last, ExpressionContext::value(), fx)
+            .into_parts();
         statements.push(plain_return(expression));
         statements
     }

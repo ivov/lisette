@@ -19,7 +19,6 @@ use syntax::parse::TUPLE_FIELDS;
 /// A bare `return v0, v1, ...` statement leaf.
 pub(crate) fn multi_value_return(values: Vec<String>) -> LoweredStatement {
     LoweredStatement::Return(ReturnStatementPlan {
-        directive: String::new(),
         form: ReturnForm::Multi { values },
     })
 }
@@ -27,7 +26,6 @@ pub(crate) fn multi_value_return(values: Vec<String>) -> LoweredStatement {
 /// An `if <condition> { return <then_values...> }` tag-check leaf (no else).
 pub(crate) fn tag_check(condition: String, then_values: Vec<String>) -> LoweredStatement {
     LoweredStatement::If(IfPlan {
-        directive: String::new(),
         condition_setup: Vec::new(),
         condition,
         then_body: LoweredBlock {
@@ -645,7 +643,9 @@ fn lowered_tail_fallback(
     hoist_hint: Option<&str>,
     fx: &mut EmitEffects,
 ) -> Vec<LoweredStatement> {
-    let (mut statements, value) = planner.lower_value(expression, ExpressionContext::value(), fx);
+    let (mut statements, value) = planner
+        .lower_value(expression, ExpressionContext::value(), fx)
+        .into_parts();
     let value = match hoist_hint {
         Some(hint) => planner.hoist_tmp_value_statement(&mut statements, hint, &value),
         None => value,
@@ -714,24 +714,28 @@ fn emit_lowered_partial_tail(
         let mut statements = Vec::new();
         let ret = match variant {
             "Ok" => {
-                let (setup, v) =
-                    planner.lower_composite_value(&args[0], ExpressionContext::value(), fx);
+                let (setup, v) = planner
+                    .lower_composite_value(&args[0], ExpressionContext::value(), fx)
+                    .into_parts();
                 statements.extend(setup);
                 multi_value_return(vec![v, "nil".to_string()])
             }
             "Err" => {
-                let (setup, e) =
-                    planner.lower_composite_value(&args[0], ExpressionContext::value(), fx);
+                let (setup, e) = planner
+                    .lower_composite_value(&args[0], ExpressionContext::value(), fx)
+                    .into_parts();
                 statements.extend(setup);
                 let ok_ty = planner.facts.peel_alias(&return_ty).ok_type();
                 multi_value_return(vec![lowered_zero(planner, &ok_ty, fx), e])
             }
             "Both" => {
-                let (setup_v, v) =
-                    planner.lower_composite_value(&args[0], ExpressionContext::value(), fx);
+                let (setup_v, v) = planner
+                    .lower_composite_value(&args[0], ExpressionContext::value(), fx)
+                    .into_parts();
                 statements.extend(setup_v);
-                let (setup_e, e) =
-                    planner.lower_composite_value(&args[1], ExpressionContext::value(), fx);
+                let (setup_e, e) = planner
+                    .lower_composite_value(&args[1], ExpressionContext::value(), fx)
+                    .into_parts();
                 statements.extend(setup_e);
                 multi_value_return(vec![v, e])
             }
@@ -771,8 +775,9 @@ fn lower_nullable_slot_value(
         return match kind {
             Ok(()) => {
                 debug_assert_eq!(args.len(), 1, "Some(...) takes exactly one arg");
-                let (slot_setup, value) =
-                    planner.lower_composite_value(&args[0], ExpressionContext::value(), fx);
+                let (slot_setup, value) = planner
+                    .lower_composite_value(&args[0], ExpressionContext::value(), fx)
+                    .into_parts();
                 setup.extend(slot_setup);
                 value
             }
@@ -782,7 +787,9 @@ fn lower_nullable_slot_value(
     if expression.is_none_literal() {
         return "nil".to_string();
     }
-    let (value_setup, value) = planner.lower_value(expression, ExpressionContext::value(), fx);
+    let (value_setup, value) = planner
+        .lower_value(expression, ExpressionContext::value(), fx)
+        .into_parts();
     setup.extend(value_setup);
     let inner = planner.go_type_string(&slot_ty.ok_type(), fx);
     planner.plan_option_projection(setup, &value, "unwrap", &inner, false, fx)

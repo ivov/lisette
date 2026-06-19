@@ -174,7 +174,6 @@ impl Planner<'_> {
             fx,
         );
         statements.push(LoweredStatement::If(IfPlan {
-            directive: String::new(),
             condition_setup: Vec::new(),
             condition: format!("{} == nil", err_var),
             then_body,

@@ -250,8 +250,9 @@ impl Planner<'_> {
         value: &Expression,
         fx: &mut EmitEffects,
     ) -> Vec<LoweredStatement> {
-        let (mut statements, value_expression) =
-            self.lower_value(value, ExpressionContext::value(), fx);
+        let (mut statements, value_expression) = self
+            .lower_value(value, ExpressionContext::value(), fx)
+            .into_parts();
         statements.push(LoweredStatement::RawGo(format!("{}\n", value_expression)));
         let Some(raw_go_name) = raw_go_name else {
             return statements;
@@ -295,8 +296,9 @@ impl Planner<'_> {
             return statements;
         }
 
-        let (mut statements, value_expression) =
-            self.lower_value(value, ExpressionContext::value(), fx);
+        let (mut statements, value_expression) = self
+            .lower_value(value, ExpressionContext::value(), fx)
+            .into_parts();
         let coercion = Coercion::resolve(
             self,
             &value.get_type(),
@@ -704,10 +706,9 @@ impl Planner<'_> {
         value: &Expression,
         else_block: Option<&Expression>,
         mutable: bool,
-        directive: String,
         fx: &mut EmitEffects,
     ) -> LetPlan {
         let form = LetPlanner::new(self, binding, value, else_block, mutable).build_form(fx);
-        LetPlan { directive, form }
+        LetPlan { form }
     }
 }

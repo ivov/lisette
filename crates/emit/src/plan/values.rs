@@ -75,7 +75,7 @@ impl Planner<'_> {
         ctx: ExpressionContext<'_>,
         fx: &mut EmitEffects,
     ) -> ValuePlan {
-        let (setup, value) = self.lower_value(expression, ctx, fx);
+        let (setup, value) = self.lower_value(expression, ctx, fx).into_parts();
         value_plan_from_statements(setup, value)
     }
 
@@ -140,29 +140,16 @@ impl Planner<'_> {
             Expression::Defer {
                 expression: inner, ..
             } => self.plan_async_wrapper("defer", inner, fx),
-            Expression::TryBlock { items, ty, .. } => {
-                let (setup, value) = self.lower_try_block(items, ty, fx);
-                value_plan_from_statements(setup, value)
-            }
-            Expression::RecoverBlock { items, ty, .. } => {
-                let (setup, value) = self.lower_recover_block(items, ty, fx);
-                value_plan_from_statements(setup, value)
-            }
+            Expression::TryBlock { items, ty, .. } => self.lower_try_block(items, ty, fx),
+            Expression::RecoverBlock { items, ty, .. } => self.lower_recover_block(items, ty, fx),
             Expression::Propagate { expression, .. } => {
                 let (setup, value) = self.lower_propagate(expression, None, fx);
                 value_plan_from_statements(setup, value)
             }
-            Expression::If { ty, .. } => {
-                let (setup, value) = self.plan_if_as_operand_temp(expression, ty, fx);
-                value_plan_from_statements(setup, value)
-            }
-            Expression::Loop { ty, .. } => {
-                let (setup, value) = self.plan_loop_as_operand_temp(expression, ty, fx);
-                value_plan_from_statements(setup, value)
-            }
+            Expression::If { ty, .. } => self.plan_if_as_operand_temp(expression, ty, fx),
+            Expression::Loop { ty, .. } => self.plan_loop_as_operand_temp(expression, ty, fx),
             Expression::Match { ty, .. } | Expression::Select { ty, .. } if !ty.is_never() => {
-                let (setup, value) = self.plan_branching_as_operand_temp(expression, ty, fx);
-                value_plan_from_statements(setup, value)
+                self.plan_branching_as_operand_temp(expression, ty, fx)
             }
             Expression::Call { ty, .. } => match self.classify_call(expression) {
                 CallBoundary::Plain => {
@@ -170,8 +157,7 @@ impl Planner<'_> {
                     value_plan_from_statements(setup, value)
                 }
                 CallBoundary::GoWrapped(strategy) => {
-                    let (setup, value) = self.lower_go_wrapped_call(expression, &strategy, ty, fx);
-                    value_plan_from_statements(setup, value)
+                    self.lower_go_wrapped_call(expression, &strategy, ty, fx)
                 }
                 CallBoundary::LoweredCallee(_) => self.plan_operand_leaf(expression, ctx, fx),
             },

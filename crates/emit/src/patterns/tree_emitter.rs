@@ -305,12 +305,10 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         self.walk(&mut body, &plan.tree, &ctx);
         if !unguarded_exit {
             body.push(LoweredStatement::Break {
-                directive: String::new(),
                 label: Some(label.clone()),
             });
         }
         statements.push(LoweredStatement::Loop(LoopPlan {
-            directive: String::new(),
             prologue: Vec::new(),
             label: Some(label),
             header: "for {\n".to_string(),
@@ -467,7 +465,6 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
                 ElseArm::None
             };
             guard_statements.push(LoweredStatement::If(IfPlan {
-                directive: String::new(),
                 condition_setup,
                 condition,
                 then_body,
@@ -541,7 +538,6 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
             None => ElseArm::None,
         };
         IfPlan {
-            directive: String::new(),
             condition_setup: Vec::new(),
             condition: condition.to_string(),
             then_body,
@@ -559,7 +555,6 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         let case_plans = self.lower_switch_cases(cases, place);
         let default_block = self.lower_switch_default(default, place);
         SwitchStatementPlan {
-            directive: String::new(),
             kind: SwitchKind::Value {
                 subject: expr.to_string(),
             },
@@ -587,7 +582,6 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         let binding = references_base.then(|| base.to_string());
 
         SwitchStatementPlan {
-            directive: String::new(),
             kind: SwitchKind::Type {
                 subject: base.to_string(),
                 binding,
@@ -682,7 +676,6 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         }
         match &first.condition {
             Some(condition) => statements.push(LoweredStatement::If(IfPlan {
-                directive: String::new(),
                 condition_setup: Vec::new(),
                 condition: condition.clone(),
                 then_body: body,
@@ -747,7 +740,6 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
                         apply_leaf_terminator(&mut then_body, ctx, body_diverges);
                         self.planner.exit_scope();
                         statements.push(LoweredStatement::If(IfPlan {
-                            directive: String::new(),
                             condition_setup,
                             condition,
                             then_body: LoweredBlock {
@@ -1045,7 +1037,6 @@ fn build_chain_plan(branches: Vec<ChainBranch>, trailing: ElseArm) -> IfPlan {
     let mut else_arm = trailing;
     for branch in branches.into_iter().rev() {
         else_arm = ElseArm::ElseIf(Box::new(IfPlan {
-            directive: String::new(),
             condition_setup: Vec::new(),
             condition: branch.condition,
             then_body: branch.body,
@@ -1053,7 +1044,6 @@ fn build_chain_plan(branches: Vec<ChainBranch>, trailing: ElseArm) -> IfPlan {
         }));
     }
     IfPlan {
-        directive: String::new(),
         condition_setup: Vec::new(),
         condition: head.condition,
         then_body: head.body,
@@ -1091,7 +1081,6 @@ fn apply_leaf_terminator(
         && !body_diverges
     {
         statements.push(LoweredStatement::Break {
-            directive: String::new(),
             label: Some(label.to_string()),
         });
     }

@@ -7,6 +7,7 @@ use crate::calls::go_interop::wrappers::{
 use crate::context::expression::ExpressionContext;
 use crate::control_flow::fallible::{Fallible, FalliblePlanner, OPTION_SOME_TAG};
 use crate::plan::bodies::{ElseArm, IfPlan, LoopPlan, LoweredBlock, LoweredStatement};
+use crate::plan::values::{ValuePlan, value_plan_from_statements};
 use crate::types::shape::{CollectionKind, NullableCollectionElement, NullableCollectionShape};
 use syntax::ast::Expression;
 use syntax::types::Type;
@@ -17,7 +18,7 @@ impl Planner<'_> {
         call_expression: &Expression,
         option_ty: &Type,
         fx: &mut EmitEffects,
-    ) -> (Vec<LoweredStatement>, String) {
+    ) -> ValuePlan {
         let (mut setup, call_str) =
             self.lower_call(call_expression, None, ExpressionContext::value(), fx);
         let (wrap_setup, outcome) = self.lower_comma_ok_wrapping(
@@ -28,7 +29,7 @@ impl Planner<'_> {
             fx,
         );
         setup.extend(wrap_setup);
-        (setup, outcome.expect("wrapper produced no slot"))
+        value_plan_from_statements(setup, outcome.expect("wrapper produced no slot"))
     }
 
     pub(super) fn lower_go_sentinel_call_wrapped(
@@ -37,7 +38,7 @@ impl Planner<'_> {
         option_ty: &Type,
         sentinel: i64,
         fx: &mut EmitEffects,
-    ) -> (Vec<LoweredStatement>, String) {
+    ) -> ValuePlan {
         let (mut setup, call_str) =
             self.lower_call(call_expression, None, ExpressionContext::value(), fx);
         let (wrap_setup, outcome) = self.lower_sentinel_wrapping(
@@ -48,7 +49,7 @@ impl Planner<'_> {
             fx,
         );
         setup.extend(wrap_setup);
-        (setup, outcome.expect("wrapper produced no slot"))
+        value_plan_from_statements(setup, outcome.expect("wrapper produced no slot"))
     }
 
     /// Wrap a sentinel-call via `OptionFromCommaOk` with `raw != sentinel`.
@@ -157,7 +158,6 @@ impl Planner<'_> {
         };
 
         statements.push(LoweredStatement::If(IfPlan {
-            directive: String::new(),
             condition_setup: Vec::new(),
             condition,
             then_body: leaf_block(&sink, &some_wrapper),
@@ -200,14 +200,14 @@ impl Planner<'_> {
         call_expression: &Expression,
         option_ty: &Type,
         fx: &mut EmitEffects,
-    ) -> (Vec<LoweredStatement>, String) {
+    ) -> ValuePlan {
         let (mut setup, call_str) =
             self.lower_call(call_expression, None, ExpressionContext::value(), fx);
         let raw_var = self.hoist_tmp_value_statement(&mut setup, "raw", &call_str);
         let (wrap_setup, outcome) =
             self.lower_nil_check_option_wrap(&raw_var, option_ty, WrapperTarget::FreshSlot, fx);
         setup.extend(wrap_setup);
-        (setup, outcome.expect("wrapper produced no slot"))
+        value_plan_from_statements(setup, outcome.expect("wrapper produced no slot"))
     }
 
     pub(crate) fn plan_option_projection(
@@ -237,7 +237,6 @@ impl Planner<'_> {
             ))],
         };
         statements.push(LoweredStatement::If(IfPlan {
-            directive: String::new(),
             condition_setup: Vec::new(),
             condition: format!("{}.Tag == {}", opt_var, OPTION_SOME_TAG),
             then_body: body,
@@ -333,7 +332,6 @@ impl Planner<'_> {
                     ))],
                 };
                 let if_plan = IfPlan {
-                    directive: String::new(),
                     condition_setup: Vec::new(),
                     condition,
                     then_body,
@@ -367,7 +365,6 @@ impl Planner<'_> {
         };
 
         statements.push(LoweredStatement::Loop(LoopPlan {
-            directive: String::new(),
             prologue: Vec::new(),
             label: None,
             header: format!("for {}, {} := range {} {{\n", index_var, val_var, src_var),
@@ -429,7 +426,6 @@ impl Planner<'_> {
                     ElseArm::None
                 };
                 let if_plan = IfPlan {
-                    directive: String::new(),
                     condition_setup: Vec::new(),
                     condition: format!("{}.Tag == {}", val_var, OPTION_SOME_TAG),
                     then_body,
@@ -460,7 +456,6 @@ impl Planner<'_> {
         };
 
         statements.push(LoweredStatement::Loop(LoopPlan {
-            directive: String::new(),
             prologue: Vec::new(),
             label: None,
             header: format!("for {}, {} := range {} {{\n", index_var, val_var, src_var),

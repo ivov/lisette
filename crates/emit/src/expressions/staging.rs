@@ -64,8 +64,9 @@ impl Planner<'_> {
             return self.capture_operand_into(setup, expression, fx);
         }
 
-        let (composite_setup, expression_string) =
-            self.lower_composite_value(expression, ExpressionContext::value(), fx);
+        let (composite_setup, expression_string) = self
+            .lower_composite_value(expression, ExpressionContext::value(), fx)
+            .into_parts();
         setup.extend(composite_setup);
         self.hoist_tmp_value_statement(setup, prefix, &expression_string)
     }
@@ -88,8 +89,8 @@ impl Planner<'_> {
         ctx: ExpressionContext<'_>,
         fx: &mut EmitEffects,
     ) -> StagedExpression {
-        let (setup, value) = self.lower_composite_value(expression, ctx, fx);
-        StagedExpression::from_typed_setup(setup, value, expression)
+        let plan = self.lower_composite_value(expression, ctx, fx);
+        StagedExpression::from_plan(plan, expression)
     }
 
     pub(crate) fn stage_prelude_arg(

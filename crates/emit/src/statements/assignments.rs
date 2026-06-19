@@ -20,14 +20,12 @@ impl Planner<'_> {
         target: &Expression,
         value: &Expression,
         compound_operator: Option<&BinaryOperator>,
-        directive: String,
         fx: &mut EmitEffects,
     ) -> AssignPlan {
         let raw_body = |statements: Vec<LoweredStatement>| LoweredBlock { statements };
 
         if value.get_type().is_never() {
             return AssignPlan {
-                directive,
                 form: AssignForm::NeverTyped {
                     body: raw_body(vec![self.lower_statement(value, fx)]),
                 },
@@ -61,7 +59,6 @@ impl Planner<'_> {
                 self.emit_left_value(&mut target_capture, target, fx)
             };
             return AssignPlan {
-                directive,
                 form: AssignForm::Compound {
                     target_capture,
                     target_str,
@@ -72,7 +69,6 @@ impl Planner<'_> {
 
         if self.target_binds_to_discard(target) {
             return AssignPlan {
-                directive,
                 form: AssignForm::Discard {
                     body: raw_body(self.lower_discard_value(value, fx)),
                 },
@@ -100,7 +96,6 @@ impl Planner<'_> {
                 self.emit_left_value(&mut target_capture, target, fx)
             };
             return AssignPlan {
-                directive,
                 form: AssignForm::NilClear {
                     target_capture,
                     target_str,
@@ -138,7 +133,6 @@ impl Planner<'_> {
         let (coercion_setup, final_value) = coercion.lower(self, rhs_staged.value, fx);
         value_setup.extend(coercion_setup);
         AssignPlan {
-            directive,
             form: AssignForm::Simple {
                 target_capture,
                 target_str,

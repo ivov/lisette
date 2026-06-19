@@ -7,9 +7,10 @@ use crate::control_flow::propagation::plain_return;
 use crate::definitions::functions::{is_breakless_loop, is_go_never};
 use crate::plan::bodies::{
     ElseArm, ExpressionStatementForm, ExpressionStatementPlan, IfPlan, LoopPlan, LoweredBlock,
-    LoweredStatement, MatchStatementPlan, PlacePlan, WhileLetPlan,
+    LoweredStatement, MatchStatementPlan, PlacePlan, WhileLetPlan, directed,
 };
 use crate::plan::placement::{requires_temp_var, try_elide_tail_let};
+use crate::plan::values::{ValuePlan, value_plan_from_statements};
 use crate::utils::wrap_if_struct_literal;
 use syntax::ast::{Expression, Literal};
 use syntax::types::Type;
@@ -41,7 +42,7 @@ impl Planner<'_> {
         expression: &Expression,
         ty: &Type,
         fx: &mut EmitEffects,
-    ) -> (Vec<LoweredStatement>, String) {
+    ) -> ValuePlan {
         let Expression::If {
             condition,
             consequence,
@@ -53,7 +54,6 @@ impl Planner<'_> {
         };
         let (result_var, declaration) = self.operand_temp_declaration(ty, fx);
         let plan = self.lower_if(
-            String::new(),
             condition,
             consequence,
             alternative,
@@ -63,7 +63,7 @@ impl Planner<'_> {
             },
             fx,
         );
-        (vec![declaration, LoweredStatement::If(plan)], result_var)
+        value_plan_from_statements(vec![declaration, LoweredStatement::If(plan)], result_var)
     }
 
     /// Lower a value-position `match`/`select` to a fresh operand-temp
@@ -74,7 +74,7 @@ impl Planner<'_> {
         expression: &Expression,
         ty: &Type,
         fx: &mut EmitEffects,
-    ) -> (Vec<LoweredStatement>, String) {
+    ) -> ValuePlan {
         let (result_var, declaration) = self.operand_temp_declaration(ty, fx);
         let block = self.lower_branching_to_block(
             expression,
@@ -86,7 +86,7 @@ impl Planner<'_> {
         );
         let mut setup = vec![declaration];
         setup.extend(block.statements);
-        (setup, result_var)
+        value_plan_from_statements(setup, result_var)
     }
 
     /// Lower a value-position `loop` to a fresh operand-temp variable.
@@ -97,7 +97,7 @@ impl Planner<'_> {
         expression: &Expression,
         ty: &Type,
         fx: &mut EmitEffects,
-    ) -> (Vec<LoweredStatement>, String) {
+    ) -> ValuePlan {
         let Expression::Loop {
             body, needs_label, ..
         } = expression
@@ -106,15 +106,9 @@ impl Planner<'_> {
         };
         let (result_var, declaration) = self.operand_temp_declaration(ty, fx);
         self.push_loop(result_var.clone());
-        let plan = self.lower_loop_with_header(
-            String::new(),
-            "for {\n".to_string(),
-            body,
-            *needs_label,
-            fx,
-        );
+        let plan = self.lower_loop_with_header("for {\n".to_string(), body, *needs_label, fx);
         self.pop_loop();
-        (vec![declaration, LoweredStatement::Loop(plan)], result_var)
+        value_plan_from_statements(vec![declaration, LoweredStatement::Loop(plan)], result_var)
     }
 
     fn lower_body_until_diverge(
@@ -206,20 +200,22 @@ impl Planner<'_> {
             } => {
                 let directive = self.maybe_line_directive(&expression.get_span());
                 let plan = self.lower_if(
-                    directive,
                     condition,
                     consequence,
                     alternative,
                     &PlacePlan::Statement,
                     fx,
                 );
-                LoweredStatement::If(plan)
+                directed(directive, LoweredStatement::If(plan))
             }
             Expression::Loop {
                 body, needs_label, ..
             } => {
                 let directive = self.maybe_line_directive(&expression.get_span());
-                LoweredStatement::Loop(self.lower_infinite_loop(directive, body, *needs_label, fx))
+                directed(
+                    directive,
+                    LoweredStatement::Loop(self.lower_infinite_loop(body, *needs_label, fx)),
+                )
             }
             Expression::While {
                 condition,
@@ -228,13 +224,10 @@ impl Planner<'_> {
                 ..
             } => {
                 let directive = self.maybe_line_directive(&expression.get_span());
-                LoweredStatement::Loop(self.lower_while(
+                directed(
                     directive,
-                    condition,
-                    body,
-                    *needs_label,
-                    fx,
-                ))
+                    LoweredStatement::Loop(self.lower_while(condition, body, *needs_label, fx)),
+                )
             }
             Expression::Block { .. } => {
                 self.enter_scope();
@@ -245,24 +238,28 @@ impl Planner<'_> {
             Expression::For { .. } => self.lower_for_statement(expression, fx),
             Expression::Continue { .. } => {
                 let directive = self.maybe_line_directive(&expression.get_span());
-                LoweredStatement::Continue {
+                directed(
                     directive,
-                    label: self.current_loop_label().map(str::to_string),
-                }
+                    LoweredStatement::Continue {
+                        label: self.current_loop_label().map(str::to_string),
+                    },
+                )
             }
             Expression::Break { value: None, .. } => {
                 let directive = self.maybe_line_directive(&expression.get_span());
-                LoweredStatement::Break {
+                directed(
                     directive,
-                    label: self.current_loop_label().map(str::to_string),
-                }
+                    LoweredStatement::Break {
+                        label: self.current_loop_label().map(str::to_string),
+                    },
+                )
             }
             Expression::Break {
                 value: Some(value), ..
             } => {
                 let directive = self.maybe_line_directive(&expression.get_span());
-                let plan = self.build_break_value_plan(value, directive, fx);
-                LoweredStatement::BreakValue(plan)
+                let plan = self.build_break_value_plan(value, fx);
+                directed(directive, LoweredStatement::BreakValue(plan))
             }
             Expression::Const {
                 identifier,
@@ -271,15 +268,15 @@ impl Planner<'_> {
                 ..
             } => {
                 let directive = self.maybe_line_directive(&expression.get_span());
-                let plan = self.build_const_plan(identifier, value, ty, directive, fx);
-                LoweredStatement::Const(plan)
+                let plan = self.build_const_plan(identifier, value, ty, fx);
+                directed(directive, LoweredStatement::Const(plan))
             }
             Expression::Return {
                 expression: value, ..
             } => {
                 let directive = self.maybe_line_directive(&expression.get_span());
-                let plan = self.build_return_plan(value, directive, fx);
-                LoweredStatement::Return(plan)
+                let plan = self.build_return_plan(value, fx);
+                directed(directive, LoweredStatement::Return(plan))
             }
             Expression::Let {
                 binding,
@@ -289,15 +286,8 @@ impl Planner<'_> {
                 ..
             } => {
                 let directive = self.maybe_line_directive(&expression.get_span());
-                let plan = self.build_let_plan(
-                    binding,
-                    value,
-                    else_block.as_deref(),
-                    *mutable,
-                    directive,
-                    fx,
-                );
-                LoweredStatement::Let(plan)
+                let plan = self.build_let_plan(binding, value, else_block.as_deref(), *mutable, fx);
+                directed(directive, LoweredStatement::Let(plan))
             }
             Expression::Assignment {
                 target,
@@ -306,25 +296,22 @@ impl Planner<'_> {
                 ..
             } => {
                 let directive = self.maybe_line_directive(&expression.get_span());
-                let plan = self.build_assignment_plan(
-                    target,
-                    value,
-                    compound_operator.as_ref(),
-                    directive,
-                    fx,
-                );
-                LoweredStatement::Assign(plan)
+                let plan =
+                    self.build_assignment_plan(target, value, compound_operator.as_ref(), fx);
+                directed(directive, LoweredStatement::Assign(plan))
             }
             Expression::Match { subject, arms, .. } => {
                 let directive = self.maybe_line_directive(&expression.get_span());
                 let body = self.lower_match_to_block(subject, arms, &PlacePlan::Statement, fx);
-                LoweredStatement::Match(MatchStatementPlan { directive, body })
+                directed(
+                    directive,
+                    LoweredStatement::Match(MatchStatementPlan { body }),
+                )
             }
             Expression::Select { arms, .. } => {
                 let directive = self.maybe_line_directive(&expression.get_span());
-                let mut plan = self.lower_select(arms, &PlacePlan::Statement, fx);
-                plan.directive = directive;
-                LoweredStatement::Select(plan)
+                let plan = self.lower_select(arms, &PlacePlan::Statement, fx);
+                directed(directive, LoweredStatement::Select(plan))
             }
             Expression::WhileLet { .. } => self.lower_while_let_statement(expression, fx),
             // Top-level items (Struct/Enum/etc) shouldn't appear inside
@@ -381,7 +368,10 @@ impl Planner<'_> {
                 },
             }
         };
-        LoweredStatement::Expression(ExpressionStatementPlan { directive, form })
+        directed(
+            directive,
+            LoweredStatement::Expression(ExpressionStatementPlan { form }),
+        )
     }
 
     /// Lower `while let P = scrutinee { body }`, wrapped as a `WhileLet`
@@ -413,19 +403,17 @@ impl Planner<'_> {
             fx,
         );
         self.pop_loop();
-        LoweredStatement::WhileLet(WhileLetPlan { directive, body })
+        directed(directive, LoweredStatement::WhileLet(WhileLetPlan { body }))
     }
 
     fn lower_infinite_loop(
         &mut self,
-        directive: String,
         body: &Expression,
         needs_label: bool,
         fx: &mut EmitEffects,
     ) -> LoopPlan {
         self.push_loop("_");
-        let plan =
-            self.lower_loop_with_header(directive, "for {\n".to_string(), body, needs_label, fx);
+        let plan = self.lower_loop_with_header("for {\n".to_string(), body, needs_label, fx);
         self.pop_loop();
         plan
     }
@@ -441,7 +429,6 @@ impl Planner<'_> {
 
     fn lower_while(
         &mut self,
-        directive: String,
         condition: &Expression,
         body: &Expression,
         needs_label: bool,
@@ -465,7 +452,7 @@ impl Planner<'_> {
         } else {
             format!("for {} {{\n", wrap_if_struct_literal(rendered))
         };
-        let plan = self.lower_loop_with_header(directive, header, body, needs_label, fx);
+        let plan = self.lower_loop_with_header(header, body, needs_label, fx);
         self.pop_loop();
         plan
     }
@@ -474,7 +461,6 @@ impl Planner<'_> {
     /// the body in a fresh scope. Caller owns `push_loop`/`pop_loop`.
     pub(crate) fn lower_loop_with_header(
         &mut self,
-        directive: String,
         header: String,
         body: &Expression,
         needs_label: bool,
@@ -486,7 +472,6 @@ impl Planner<'_> {
         let lowered_body = self.lower_block_as_body(body, fx);
         self.exit_scope();
         LoopPlan {
-            directive,
             prologue: Vec::new(),
             label,
             header,
@@ -528,14 +513,7 @@ impl Planner<'_> {
                 alternative,
                 ..
             } => {
-                let plan = self.lower_if(
-                    String::new(),
-                    condition,
-                    consequence,
-                    alternative,
-                    place,
-                    fx,
-                );
+                let plan = self.lower_if(condition, consequence, alternative, place, fx);
                 LoweredBlock {
                     statements: vec![LoweredStatement::If(plan)],
                 }
@@ -646,15 +624,9 @@ impl Planner<'_> {
                 alternative,
                 ..
             } => {
-                let plan = self.lower_if(
-                    directive,
-                    condition,
-                    consequence,
-                    alternative,
-                    &PlacePlan::Return,
-                    fx,
-                );
-                statements.push(LoweredStatement::If(plan));
+                let plan =
+                    self.lower_if(condition, consequence, alternative, &PlacePlan::Return, fx);
+                statements.push(directed(directive, LoweredStatement::If(plan)));
             }
             Expression::Match { subject, arms, .. } => {
                 if !directive.is_empty() {
@@ -664,9 +636,8 @@ impl Planner<'_> {
                 statements.extend(block.statements);
             }
             Expression::Select { arms, .. } => {
-                let mut plan = self.lower_select(arms, &PlacePlan::Return, fx);
-                plan.directive = directive;
-                statements.push(LoweredStatement::Select(plan));
+                let plan = self.lower_select(arms, &PlacePlan::Return, fx);
+                statements.push(directed(directive, LoweredStatement::Select(plan)));
             }
             _ => {
                 if !directive.is_empty() {
@@ -738,7 +709,6 @@ impl Planner<'_> {
 
     pub(crate) fn lower_if(
         &mut self,
-        directive: String,
         condition: &Expression,
         consequence: &Expression,
         alternative: &Expression,
@@ -756,7 +726,6 @@ impl Planner<'_> {
         let else_arm = self.lower_else_chain(alternative, preceding_diverges, place, fx);
 
         IfPlan {
-            directive,
             condition_setup,
             condition,
             then_body,
@@ -807,7 +776,6 @@ impl Planner<'_> {
                 );
                 self.exit_scope();
                 ElseArm::ElseIf(Box::new(IfPlan {
-                    directive: String::new(),
                     condition_setup,
                     condition,
                     then_body,
@@ -824,7 +792,6 @@ impl Planner<'_> {
                     fx,
                 );
                 ElseArm::ElseIf(Box::new(IfPlan {
-                    directive: String::new(),
                     condition_setup,
                     condition,
                     then_body,

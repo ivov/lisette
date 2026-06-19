@@ -48,7 +48,6 @@ impl Renderer {
     /// Render a `select` statement: optional retry-loop framing around the
     /// `select { ... }`, its arms, and any trailing postlude.
     fn render_select(&self, output: &mut String, plan: &SelectStatementPlan) {
-        output.push_str(&plan.directive);
         for statement in &plan.setup {
             self.render_statement(output, statement);
         }
@@ -75,7 +74,6 @@ impl Renderer {
     /// Render a `switch` statement: the value/type-switch header, each
     /// `case`/`default:` plus body, the closing brace, and any postlude.
     fn render_switch(&self, output: &mut String, plan: &SwitchStatementPlan) {
-        output.push_str(&plan.directive);
         match &plan.kind {
             SwitchKind::Value { subject } => write_line!(output, "switch {} {{", subject),
             SwitchKind::Type {
@@ -134,52 +132,38 @@ impl Renderer {
                 self.render_lowered_block(output, body);
                 output.push_str("}\n");
             }
-            LoweredStatement::Break { directive, label } => {
-                output.push_str(directive);
-                match label {
-                    Some(label) => write_line!(output, "break {}", label),
-                    None => output.push_str("break\n"),
-                }
-            }
-            LoweredStatement::Continue { directive, label } => {
-                output.push_str(directive);
-                match label {
-                    Some(label) => write_line!(output, "continue {}", label),
-                    None => output.push_str("continue\n"),
-                }
-            }
+            LoweredStatement::Break { label } => match label {
+                Some(label) => write_line!(output, "break {}", label),
+                None => output.push_str("break\n"),
+            },
+            LoweredStatement::Continue { label } => match label {
+                Some(label) => write_line!(output, "continue {}", label),
+                None => output.push_str("continue\n"),
+            },
             LoweredStatement::Const(plan) => {
-                output.push_str(&plan.directive);
                 self.render_const_declaration(output, plan);
             }
             LoweredStatement::Return(plan) => {
-                output.push_str(&plan.directive);
                 self.render_return_statement(output, plan);
             }
             LoweredStatement::BreakValue(plan) => {
-                output.push_str(&plan.directive);
                 self.render_break_value(output, plan);
             }
             LoweredStatement::Let(plan) => {
-                output.push_str(&plan.directive);
                 self.render_let_statement(output, plan);
             }
             LoweredStatement::Assign(plan) => {
-                output.push_str(&plan.directive);
                 self.render_assign_statement(output, plan);
             }
             LoweredStatement::Expression(plan) => {
-                output.push_str(&plan.directive);
                 self.render_expression_statement(output, plan);
             }
             LoweredStatement::Match(plan) => {
-                output.push_str(&plan.directive);
                 self.render_lowered_block(output, &plan.body);
             }
             LoweredStatement::Select(plan) => self.render_select(output, plan),
             LoweredStatement::Switch(plan) => self.render_switch(output, plan),
             LoweredStatement::WhileLet(plan) => {
-                output.push_str(&plan.directive);
                 self.render_lowered_block(output, &plan.body);
             }
             LoweredStatement::TempBind { name, value } => {
@@ -207,6 +191,10 @@ impl Renderer {
                 );
                 self.render_lowered_block(output, body);
                 output.push_str(closure_close);
+            }
+            LoweredStatement::Directed { directive, inner } => {
+                output.push_str(directive);
+                self.render_statement(output, inner);
             }
             LoweredStatement::RawGo(code) | LoweredStatement::DivergingRawGo(code) => {
                 output.push_str(code)
@@ -380,7 +368,6 @@ impl Renderer {
     }
 
     fn render_loop(&self, output: &mut String, plan: &LoopPlan) {
-        output.push_str(&plan.directive);
         output.push_str(&self.render_setup(&plan.prologue));
         if let Some(label) = &plan.label {
             write_line!(output, "{}:", label);
@@ -391,7 +378,6 @@ impl Renderer {
     }
 
     fn render_if(&self, output: &mut String, plan: &IfPlan) {
-        output.push_str(&plan.directive);
         output.push_str(&self.render_setup(&plan.condition_setup));
         write_line!(output, "if {} {{", plan.condition);
         self.render_lowered_block(output, &plan.then_body);

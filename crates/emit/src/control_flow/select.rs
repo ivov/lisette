@@ -67,7 +67,6 @@ impl Planner<'_> {
         }
 
         SelectStatementPlan {
-            directive: String::new(),
             setup,
             retry_loop: needs_retry_loop,
             arms: arm_plans,
@@ -219,7 +218,9 @@ impl Planner<'_> {
     ) -> String {
         let unwrapped = receive_expression.unwrap_parens();
         if let Some((channel, "receive", _)) = extract_channel_op(unwrapped) {
-            let (op_setup, ch) = self.lower_value(channel, ExpressionContext::value(), fx);
+            let (op_setup, ch) = self
+                .lower_value(channel, ExpressionContext::value(), fx)
+                .into_parts();
             setup.extend(op_setup);
             return if channel.get_type().is_ref() {
                 cancel_deref_of_address(ch)
@@ -227,7 +228,9 @@ impl Planner<'_> {
                 ch
             };
         }
-        let (op_setup, ch) = self.lower_value(receive_expression, ExpressionContext::value(), fx);
+        let (op_setup, ch) = self
+            .lower_value(receive_expression, ExpressionContext::value(), fx)
+            .into_parts();
         setup.extend(op_setup);
         ch
     }
@@ -260,7 +263,6 @@ impl Planner<'_> {
 
         let plan = if body_empty {
             IfPlan {
-                directive: String::new(),
                 condition_setup: Vec::new(),
                 condition: format!("!{}", ok_var),
                 then_body: else_block.expect("body_empty && has_else"),
@@ -275,7 +277,6 @@ impl Planner<'_> {
                 None => ElseArm::None,
             };
             IfPlan {
-                directive: String::new(),
                 condition_setup: Vec::new(),
                 condition: ok_var.to_string(),
                 then_body: body_block,
@@ -296,10 +297,7 @@ impl Planner<'_> {
             return Some(LoweredBlock {
                 statements: vec![
                     LoweredStatement::RawGo(format!("{} = nil\n", retry_var)),
-                    LoweredStatement::Continue {
-                        directive: String::new(),
-                        label: None,
-                    },
+                    LoweredStatement::Continue { label: None },
                 ],
             });
         }
@@ -355,7 +353,6 @@ impl Planner<'_> {
             None => ElseArm::None,
         };
         let if_plan = IfPlan {
-            directive: String::new(),
             condition_setup: Vec::new(),
             condition: ok_var,
             then_body: LoweredBlock {
@@ -477,7 +474,9 @@ impl Planner<'_> {
         let unwrapped = send_expression.unwrap_parens();
         if let Some((channel, member, args)) = extract_channel_op(unwrapped) {
             let ch_has_call = needs_hoist && contains_call(channel);
-            let (op_setup, mut ch) = self.lower_value(channel, ExpressionContext::value(), fx);
+            let (op_setup, mut ch) = self
+                .lower_value(channel, ExpressionContext::value(), fx)
+                .into_parts();
             setup.extend(op_setup);
             if channel.get_type().is_ref() {
                 ch = cancel_deref_of_address(ch);
@@ -488,8 +487,9 @@ impl Planner<'_> {
             match member {
                 "send" if !args.is_empty() => {
                     let val_has_call = needs_hoist && contains_call(&args[0]);
-                    let (val_setup, mut val) =
-                        self.lower_composite_value(&args[0], ExpressionContext::value(), fx);
+                    let (val_setup, mut val) = self
+                        .lower_composite_value(&args[0], ExpressionContext::value(), fx)
+                        .into_parts();
                     setup.extend(val_setup);
                     if val_has_call {
                         val = self.hoist_tmp_value_statement(setup, "send_val", &val);
@@ -501,8 +501,9 @@ impl Planner<'_> {
             }
         } else {
             let expression_has_call = needs_hoist && contains_call(send_expression);
-            let (op_setup, mut ch) =
-                self.lower_value(send_expression, ExpressionContext::value(), fx);
+            let (op_setup, mut ch) = self
+                .lower_value(send_expression, ExpressionContext::value(), fx)
+                .into_parts();
             setup.extend(op_setup);
             if send_expression.get_type().is_ref() {
                 ch = cancel_deref_of_address(ch);
@@ -689,7 +690,6 @@ fn build_receive_arms_plan(
 ) -> Option<IfPlan> {
     match (some, none) {
         (Some(some), Some(none)) => Some(IfPlan {
-            directive: String::new(),
             condition_setup: Vec::new(),
             condition: ok_var.to_string(),
             then_body: some,
@@ -699,14 +699,12 @@ fn build_receive_arms_plan(
             },
         }),
         (Some(some), None) => Some(IfPlan {
-            directive: String::new(),
             condition_setup: Vec::new(),
             condition: ok_var.to_string(),
             then_body: some,
             else_arm: ElseArm::None,
         }),
         (None, Some(none)) => Some(IfPlan {
-            directive: String::new(),
             condition_setup: Vec::new(),
             condition: format!("!{}", ok_var),
             then_body: none,

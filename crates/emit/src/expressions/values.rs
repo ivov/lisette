@@ -27,7 +27,7 @@ impl Planner<'_> {
         expression: &Expression,
         ctx: ExpressionContext<'_>,
         fx: &mut EmitEffects,
-    ) -> (Vec<LoweredStatement>, String) {
+    ) -> ValuePlan {
         if let Some(strategy) = self.classify_go_fn_value(expression) {
             if !self.go_fn_matches_lowered_slot(expression, &strategy, ctx) {
                 let mut setup = Vec::new();
@@ -36,16 +36,15 @@ impl Planner<'_> {
                 } else {
                     self.emit_go_fn_wrapper(&mut setup, expression, &strategy, fx)
                 };
-                return (setup, value);
+                return value_plan_from_statements(setup, value);
             }
         } else if self.is_go_array_return_value(expression) {
             let mut setup = Vec::new();
             let value = self.emit_array_return_wrapper(&mut setup, expression, fx);
-            return (setup, value);
+            return value_plan_from_statements(setup, value);
         }
 
-        let plan = self.plan_operand(expression, ctx, fx);
-        plan.into_parts()
+        self.plan_operand(expression, ctx, fx)
     }
 
     pub(crate) fn lower_composite_value(
@@ -53,18 +52,18 @@ impl Planner<'_> {
         expression: &Expression,
         ctx: ExpressionContext<'_>,
         fx: &mut EmitEffects,
-    ) -> (Vec<LoweredStatement>, String) {
+    ) -> ValuePlan {
         if expression.get_type().is_unit()
             && matches!(
                 expression.unwrap_parens(),
                 Expression::Call { .. } | Expression::Block { .. }
             )
         {
-            let (mut setup, call_str) = self.lower_value(expression, ctx, fx);
+            let (mut setup, call_str) = self.lower_value(expression, ctx, fx).into_parts();
             if !call_str.is_empty() {
                 setup.push(LoweredStatement::RawGo(format!("{call_str}\n")));
             }
-            return (setup, "struct{}{}".to_string());
+            return value_plan_from_statements(setup, "struct{}{}".to_string());
         }
         self.lower_value(expression, ctx, fx)
     }
@@ -158,10 +157,7 @@ impl Planner<'_> {
         fx: &mut EmitEffects,
     ) -> ValuePlan {
         match expression {
-            Expression::Literal { literal, ty, .. } => {
-                let (setup, value) = self.emit_literal(literal, ty, fx);
-                value_plan_from_statements(setup, value)
-            }
+            Expression::Literal { literal, ty, .. } => self.emit_literal(literal, ty, fx),
             Expression::Identifier { value, ty, .. } => {
                 let mut setup: Vec<LoweredStatement> = Vec::new();
                 let raw = self.emit_identifier(value, ty, ctx, fx);
@@ -171,8 +167,7 @@ impl Planner<'_> {
             }
             Expression::Call { ty, .. } => match self.classify_call(expression) {
                 CallBoundary::GoWrapped(strategy) => {
-                    let (setup, value) = self.lower_go_wrapped_call(expression, &strategy, ty, fx);
-                    value_plan_from_statements(setup, value)
+                    self.lower_go_wrapped_call(expression, &strategy, ty, fx)
                 }
                 CallBoundary::LoweredCallee(shape) => {
                     fx.require_stdlib();
@@ -197,15 +192,12 @@ impl Planner<'_> {
             } => ValuePlan::Operand(self.emit_lambda(params, body, ty, ctx, fx)),
             Expression::Match { ty, .. }
             | Expression::Select { ty, .. }
-            | Expression::Block { ty, .. } => {
-                let (setup, value) = self.lower_to_operand_temp(expression, ty, fx);
-                value_plan_from_statements(setup, value)
-            }
+            | Expression::Block { ty, .. } => self.lower_to_operand_temp(expression, ty, fx),
             Expression::Return {
                 expression: return_expression,
                 ..
             } => {
-                let plan = self.build_return_plan(return_expression, String::new(), fx);
+                let plan = self.build_return_plan(return_expression, fx);
                 value_plan_from_statements(vec![LoweredStatement::Return(plan)], String::new())
             }
             Expression::Assignment { target, value, .. } => {
@@ -377,7 +369,6 @@ impl Planner<'_> {
             let mut setup = staged.setup;
             if !staged.value.is_empty() {
                 setup.push(LoweredStatement::Expression(ExpressionStatementPlan {
-                    directive: String::new(),
                     form: ExpressionStatementForm::Async {
                         value: ValuePlan::Operand(staged.value),
                     },
@@ -387,7 +378,9 @@ impl Planner<'_> {
             return value_plan_from_statements(setup, format!("&{}", tmp));
         }
 
-        let (mut setup, emitted) = self.lower_value(inner, ExpressionContext::value(), fx);
+        let (mut setup, emitted) = self
+            .lower_value(inner, ExpressionContext::value(), fx)
+            .into_parts();
 
         let value = if inner.get_type() == *ty {
             emitted
@@ -525,7 +518,6 @@ impl Planner<'_> {
         if let Expression::Block { .. } = expression {
             let body = self.with_fresh_scope(|planner| planner.lower_block_as_body(expression, fx));
             let setup = vec![LoweredStatement::Expression(ExpressionStatementPlan {
-                directive: String::new(),
                 form: ExpressionStatementForm::AsyncBlock {
                     keyword: keyword.to_string(),
                     body,
@@ -539,10 +531,14 @@ impl Planner<'_> {
             return value_plan_from_statements(setup, format!("{} {}", keyword, call_str));
         }
 
-        let (setup, inner) = self.lower_value(expression, ExpressionContext::value(), fx);
+        let (setup, inner) = self
+            .lower_value(expression, ExpressionContext::value(), fx)
+            .into_parts();
         if needs_iife_for_async(expression, &inner) {
             let (mut setup, inner) = self.with_eager_operand_capture(true, |planner| {
-                planner.lower_value(expression, ExpressionContext::value(), fx)
+                planner
+                    .lower_value(expression, ExpressionContext::value(), fx)
+                    .into_parts()
             });
             let mut body_statements = Vec::new();
             if !inner.is_empty() {
@@ -557,7 +553,6 @@ impl Planner<'_> {
                 statements: body_statements,
             };
             setup.push(LoweredStatement::Expression(ExpressionStatementPlan {
-                directive: String::new(),
                 form: ExpressionStatementForm::AsyncBlock {
                     keyword: keyword.to_string(),
                     body,

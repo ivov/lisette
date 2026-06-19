@@ -119,8 +119,9 @@ impl Planner<'_> {
                 }
                 let var = self.fresh_var(temp_hint);
                 self.declare(&var);
-                let (op_setup, expression) =
-                    self.lower_value(scrutinee, ExpressionContext::value(), fx);
+                let (op_setup, expression) = self
+                    .lower_value(scrutinee, ExpressionContext::value(), fx)
+                    .into_parts();
                 setup.extend(op_setup);
                 ResolvedSubject::Composite { var, expression }
             }
@@ -260,7 +261,6 @@ impl Planner<'_> {
             );
             return LoweredBlock {
                 statements: vec![LoweredStatement::Loop(LoopPlan {
-                    directive: String::new(),
                     prologue: Vec::new(),
                     label,
                     header: "for {\n".to_string(),
@@ -287,7 +287,6 @@ impl Planner<'_> {
         self.exit_scope();
 
         loop_body.push(LoweredStatement::If(IfPlan {
-            directive: String::new(),
             condition_setup: Vec::new(),
             condition,
             then_body: LoweredBlock {
@@ -296,7 +295,6 @@ impl Planner<'_> {
             else_arm: ElseArm::Else {
                 body: LoweredBlock {
                     statements: vec![LoweredStatement::Break {
-                        directive: String::new(),
                         label: label.clone(),
                     }],
                 },
@@ -306,7 +304,6 @@ impl Planner<'_> {
 
         LoweredBlock {
             statements: vec![LoweredStatement::Loop(LoopPlan {
-                directive: String::new(),
                 prologue: Vec::new(),
                 label,
                 header: "for {\n".to_string(),
@@ -362,7 +359,6 @@ impl Planner<'_> {
         let guard = guard_parts.join(" || ");
         let else_lowered = self.lower_block_as_body(else_block, fx);
         statements.push(LoweredStatement::If(IfPlan {
-            directive: String::new(),
             condition_setup: Vec::new(),
             condition: guard,
             then_body: else_lowered,
@@ -560,7 +556,6 @@ impl Planner<'_> {
 
         let terminal = LoweredBlock {
             statements: vec![LoweredStatement::Break {
-                directive: String::new(),
                 label: label.map(str::to_string),
             }],
         };
@@ -643,7 +638,6 @@ impl Planner<'_> {
             None => ElseArm::None,
         };
         statements.push(LoweredStatement::If(IfPlan {
-            directive: String::new(),
             condition_setup: Vec::new(),
             condition,
             then_body: LoweredBlock {
@@ -759,7 +753,6 @@ fn assemble_if_else_chain(
     while pieces.len() > 1 {
         let (condition, then_body) = pieces.pop().expect("len > 1");
         else_arm = ElseArm::ElseIf(Box::new(IfPlan {
-            directive: String::new(),
             condition_setup: Vec::new(),
             condition,
             then_body,
@@ -768,7 +761,6 @@ fn assemble_if_else_chain(
     }
     let (condition, then_body) = pieces.pop().expect("pieces is non-empty");
     LoweredStatement::If(IfPlan {
-        directive: String::new(),
         condition_setup: Vec::new(),
         condition,
         then_body,

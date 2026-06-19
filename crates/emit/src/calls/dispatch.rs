@@ -504,7 +504,9 @@ impl Planner<'_> {
             self.go_type_string(&param, fx)
         };
         let (setup, arg_expression) = match args.first() {
-            Some(a) => self.lower_composite_value(a, ExpressionContext::value(), fx),
+            Some(a) => self
+                .lower_composite_value(a, ExpressionContext::value(), fx)
+                .into_parts(),
             None => (Vec::new(), String::new()),
         };
         fx.require_stdlib();

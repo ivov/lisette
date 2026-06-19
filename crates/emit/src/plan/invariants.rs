@@ -20,6 +20,9 @@ fn walk_statement(statement: &LoweredStatement, issues: &mut Vec<String>, path: 
         LoweredStatement::Loop(plan) => walk_loop(plan, issues, &format!("{}/Loop", path)),
         LoweredStatement::Block(body) => walk_block(body, issues, &format!("{}/Block", path)),
         LoweredStatement::Break { .. } | LoweredStatement::Continue { .. } => {}
+        LoweredStatement::Directed { inner, .. } => {
+            walk_statement(inner, issues, &format!("{}/Directed", path))
+        }
         LoweredStatement::Const(_)
         | LoweredStatement::Return(_)
         | LoweredStatement::BreakValue(_)

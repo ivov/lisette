@@ -12,6 +12,7 @@ use crate::control_flow::propagation::plain_return;
 use crate::is_order_sensitive;
 use crate::names::go_name;
 use crate::plan::bodies::{ElseArm, IfPlan, LoweredBlock, LoweredStatement};
+use crate::plan::values::{ValuePlan, value_plan_from_statements};
 use crate::write_line;
 use syntax::ast::Expression;
 use syntax::types::Type;
@@ -153,7 +154,7 @@ impl Planner<'_> {
         call_expression: &Expression,
         arity: usize,
         fx: &mut EmitEffects,
-    ) -> (Vec<LoweredStatement>, String) {
+    ) -> ValuePlan {
         let Expression::Call { ty, .. } = call_expression else {
             unreachable!("lower_go_tuple_call_wrapped called with non-call expression");
         };
@@ -170,7 +171,7 @@ impl Planner<'_> {
 
         let constructor = build_tuple_literal(&temp_vars, ty, fx);
         let tuple = self.hoist_tmp_value_statement(&mut setup, "tup", &constructor);
-        (setup, tuple)
+        value_plan_from_statements(setup, tuple)
     }
 
     pub(super) fn lower_go_partial_call_wrapped(
@@ -178,7 +179,7 @@ impl Planner<'_> {
         call_expression: &Expression,
         partial_ty: &Type,
         fx: &mut EmitEffects,
-    ) -> (Vec<LoweredStatement>, String) {
+    ) -> ValuePlan {
         fx.require_stdlib();
         let (mut setup, call_str) =
             self.lower_call(call_expression, None, ExpressionContext::value(), fx);
@@ -190,7 +191,7 @@ impl Planner<'_> {
             fx,
         );
         setup.extend(wrap_setup);
-        (setup, outcome.expect("wrapper produced no slot"))
+        value_plan_from_statements(setup, outcome.expect("wrapper produced no slot"))
     }
 
     /// Lower a `(T, error)` Go return into a tagged `Partial`.
@@ -222,7 +223,6 @@ impl Planner<'_> {
 
         let then_body = if let Some(check) = &nil_check {
             let inner = IfPlan {
-                directive: String::new(),
                 condition_setup: Vec::new(),
                 condition: check.clone(),
                 then_body: leaf_block(
@@ -250,7 +250,6 @@ impl Planner<'_> {
         };
 
         statements.push(LoweredStatement::If(IfPlan {
-            directive: String::new(),
             condition_setup: Vec::new(),
             condition: format!("{} != nil", err_var),
             then_body,
@@ -283,7 +282,7 @@ impl Planner<'_> {
         call_expression: &Expression,
         result_ty: &Type,
         fx: &mut EmitEffects,
-    ) -> (Vec<LoweredStatement>, String) {
+    ) -> ValuePlan {
         fx.require_stdlib();
         let (mut setup, call_str) =
             self.lower_call(call_expression, None, ExpressionContext::value(), fx);
@@ -295,7 +294,7 @@ impl Planner<'_> {
             fx,
         );
         setup.extend(wrap_setup);
-        (setup, outcome.expect("wrapper produced no slot"))
+        value_plan_from_statements(setup, outcome.expect("wrapper produced no slot"))
     }
 
     pub(crate) fn go_result_needs_nil_guard(&self, ok_ty: &Type) -> bool {
@@ -363,7 +362,6 @@ impl Planner<'_> {
                 fe.emit_success(&ok_val)
             };
             ElseArm::ElseIf(Box::new(IfPlan {
-                directive: String::new(),
                 condition_setup: Vec::new(),
                 condition: nil_condition,
                 then_body: leaf_block(&sink, &nil_err),
@@ -384,7 +382,6 @@ impl Planner<'_> {
         };
 
         statements.push(LoweredStatement::If(IfPlan {
-            directive: String::new(),
             condition_setup: Vec::new(),
             condition: format!("{} != nil", err_var),
             then_body,
@@ -427,7 +424,6 @@ impl Planner<'_> {
         };
 
         statements.push(LoweredStatement::If(IfPlan {
-            directive: String::new(),
             condition_setup: Vec::new(),
             condition: format!("{} != nil", err_var),
             then_body,

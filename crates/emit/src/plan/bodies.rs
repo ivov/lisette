@@ -26,16 +26,25 @@ pub(crate) struct LoweredBlock {
     pub(crate) statements: Vec<LoweredStatement>,
 }
 
+pub(crate) fn directed(directive: String, stmt: LoweredStatement) -> LoweredStatement {
+    if directive.is_empty() {
+        stmt
+    } else {
+        LoweredStatement::Directed {
+            directive,
+            inner: Box::new(stmt),
+        }
+    }
+}
+
 pub(crate) enum LoweredStatement {
     If(IfPlan),
     Loop(LoopPlan),
     Block(LoweredBlock),
     Break {
-        directive: String,
         label: Option<String>,
     },
     Continue {
-        directive: String,
         label: Option<String>,
     },
     Const(ConstPlan),
@@ -67,6 +76,11 @@ pub(crate) enum LoweredStatement {
         body: LoweredBlock,
         closure_close: String,
     },
+    /// A statement preceded by a sourcemap `//line` directive.
+    Directed {
+        directive: String,
+        inner: Box<LoweredStatement>,
+    },
     RawGo(String),
     /// Raw Go whose tail diverges (a never-typed call such as `panic(...)`).
     /// Tracked separately from `RawGo` so divergence is structural rather than
@@ -79,7 +93,6 @@ pub(crate) enum LoweredStatement {
 
 /// A source `const` (or `var` when the value is not Go-const-eligible).
 pub(crate) struct ConstPlan {
-    pub(crate) directive: String,
     pub(crate) is_const: bool,
     pub(crate) name: String,
     pub(crate) ty_str: String,
@@ -88,7 +101,6 @@ pub(crate) struct ConstPlan {
 
 /// A source `return expr` statement, classified by `ReturnForm`.
 pub(crate) struct ReturnStatementPlan {
-    pub(crate) directive: String,
     pub(crate) form: ReturnForm,
 }
 
@@ -120,7 +132,6 @@ pub(crate) enum ReturnForm {
 /// reaches the loop-result slot (or is discarded); a trailing `break`
 /// terminates unless the value already diverged.
 pub(crate) struct BreakValuePlan {
-    pub(crate) directive: String,
     pub(crate) value: ValuePlan,
     pub(crate) disposition: BreakValueDisposition,
     pub(crate) label: Option<String>,
@@ -146,7 +157,6 @@ pub(crate) enum BreakValueDisposition {
 
 /// A `let` binding, classified by shape.
 pub(crate) struct LetPlan {
-    pub(crate) directive: String,
     pub(crate) form: LetForm,
 }
 
@@ -192,7 +202,6 @@ impl LetForm {
 
 /// An assignment statement, structured by shape.
 pub(crate) struct AssignPlan {
-    pub(crate) directive: String,
     pub(crate) form: AssignForm,
 }
 
@@ -232,7 +241,6 @@ pub(crate) enum CompoundKind {
 
 /// A bare expression statement.
 pub(crate) struct ExpressionStatementPlan {
-    pub(crate) directive: String,
     pub(crate) form: ExpressionStatementForm,
 }
 
@@ -257,14 +265,12 @@ pub(crate) enum ExpressionStatementForm {
 }
 
 pub(crate) struct MatchStatementPlan {
-    pub(crate) directive: String,
     pub(crate) body: LoweredBlock,
 }
 
 /// A `switch` statement (value or type switch). The renderer owns the
 /// `switch`/`case`/`default:` syntax.
 pub(crate) struct SwitchStatementPlan {
-    pub(crate) directive: String,
     pub(crate) kind: SwitchKind,
     pub(crate) cases: Vec<SwitchCasePlan>,
     pub(crate) default: Option<LoweredBlock>,
@@ -302,7 +308,6 @@ impl SwitchStatementPlan {
 /// unreachable panic). The renderer owns the `for`/`select`/`case`/`default:`
 /// syntax.
 pub(crate) struct SelectStatementPlan {
-    pub(crate) directive: String,
     /// Side-effecting setup hoisted before the `select` (channel/value temps).
     pub(crate) setup: Vec<LoweredStatement>,
     /// When set, the `select` is wrapped in `for { ... break }` for retry.
@@ -354,7 +359,6 @@ impl SelectArmPlan {
 }
 
 pub(crate) struct WhileLetPlan {
-    pub(crate) directive: String,
     pub(crate) body: LoweredBlock,
 }
 
@@ -362,7 +366,6 @@ pub(crate) struct WhileLetPlan {
 /// iterable capture); `header` is the rendered Go loop opener through the body's
 /// opening brace; `label` is the optional break/continue label.
 pub(crate) struct LoopPlan {
-    pub(crate) directive: String,
     pub(crate) prologue: Vec<LoweredStatement>,
     pub(crate) label: Option<String>,
     pub(crate) header: String,
@@ -370,9 +373,6 @@ pub(crate) struct LoopPlan {
 }
 
 pub(crate) struct IfPlan {
-    /// Empty unless sourcemap; set only on the leading `if`, never on nested
-    /// `else if`s.
-    pub(crate) directive: String,
     /// Side-effecting setup hoisted before the `if` condition (temps from a
     /// condition that lowered to statements).
     pub(crate) condition_setup: Vec<LoweredStatement>,
@@ -439,12 +439,16 @@ impl LoweredStatement {
             LoweredStatement::TempBind { .. }
             | LoweredStatement::VarDecl { .. }
             | LoweredStatement::ClosureBind { .. } => false,
+            LoweredStatement::Directed { inner, .. } => inner.ends_with_diverge(),
             LoweredStatement::RawGo(_) => false,
             LoweredStatement::DivergingRawGo(_) | LoweredStatement::UnreachablePanic => true,
         }
     }
 
     pub(crate) fn blocks_fallthrough(&self) -> bool {
+        if let LoweredStatement::Directed { inner, .. } = self {
+            return inner.blocks_fallthrough();
+        }
         !matches!(self, LoweredStatement::WhileLet(_)) && self.ends_with_diverge()
     }
 }

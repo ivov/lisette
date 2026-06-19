@@ -74,7 +74,6 @@ impl Planner<'_> {
         identifier: &str,
         expression: &Expression,
         ty: &Type,
-        directive: String,
         fx: &mut EmitEffects,
     ) -> ConstPlan {
         let target_name = self
@@ -107,7 +106,6 @@ impl Planner<'_> {
             self.record_go_const(go_identifier.clone());
         }
         ConstPlan {
-            directive,
             is_const,
             name: go_identifier,
             ty_str,
@@ -122,7 +120,7 @@ impl Planner<'_> {
         ty: &Type,
         fx: &mut EmitEffects,
     ) -> String {
-        let plan = self.build_const_plan(identifier, expression, ty, String::new(), fx);
+        let plan = self.build_const_plan(identifier, expression, ty, fx);
         let mut out = String::new();
         Renderer.render_const_declaration(&mut out, &plan);
         out.trim_end_matches('\n').to_string()

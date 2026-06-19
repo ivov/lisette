@@ -5,7 +5,7 @@ use crate::context::expression::ExpressionContext;
 use crate::is_order_sensitive;
 use crate::patterns::binding_decls::pattern_has_bindings;
 use crate::patterns::sites::PatternSubject;
-use crate::plan::bodies::{LoopPlan, LoweredBlock, LoweredStatement};
+use crate::plan::bodies::{LoopPlan, LoweredBlock, LoweredStatement, directed};
 use crate::types::native::NativeGoType;
 use crate::types::shape::RangeShape;
 use crate::utils::observable_after_mutation;
@@ -71,13 +71,15 @@ impl Planner<'_> {
 
         self.pop_loop();
 
-        LoweredStatement::Loop(LoopPlan {
+        directed(
             directive,
-            prologue,
-            label,
-            header,
-            body: lowered_body,
-        })
+            LoweredStatement::Loop(LoopPlan {
+                prologue,
+                label,
+                header,
+                body: lowered_body,
+            }),
+        )
     }
 
     /// Plan `expr` as an operand, pushing its setup into `prologue` and
@@ -108,7 +110,9 @@ impl Planner<'_> {
         }
         let temp_var = self.fresh_var(Some(prefix));
         self.declare(&temp_var);
-        let (setup, value) = self.lower_composite_value(expr, ExpressionContext::value(), fx);
+        let (setup, value) = self
+            .lower_composite_value(expr, ExpressionContext::value(), fx)
+            .into_parts();
         prologue.extend(setup);
         prologue.push(LoweredStatement::TempBind {
             name: temp_var.clone(),

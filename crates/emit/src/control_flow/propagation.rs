@@ -25,7 +25,6 @@ struct WrappedReturnInfo<'a> {
 
 pub(crate) fn plain_return(value: String) -> LoweredStatement {
     LoweredStatement::Return(ReturnStatementPlan {
-        directive: String::new(),
         form: ReturnForm::Plain {
             value: ValuePlan::Operand(value),
         },
@@ -34,7 +33,6 @@ pub(crate) fn plain_return(value: String) -> LoweredStatement {
 
 fn simple_assign(target: String, value: String) -> LoweredStatement {
     LoweredStatement::Assign(AssignPlan {
-        directive: String::new(),
         form: AssignForm::Simple {
             target_capture: Vec::new(),
             target_str: target,
@@ -256,7 +254,6 @@ impl Planner<'_> {
     pub(crate) fn build_return_plan(
         &mut self,
         expression: &Expression,
-        directive: String,
         fx: &mut EmitEffects,
     ) -> ReturnStatementPlan {
         let return_ctx = self.return_ctx();
@@ -279,14 +276,12 @@ impl Planner<'_> {
                 (!Renderer.renders_empty(&body)).then_some(body)
             };
             return ReturnStatementPlan {
-                directive,
                 form: ReturnForm::Unit { side_effect },
             };
         }
 
         if let Some(statements) = transition::try_emit_lowered_tail_return(self, expression, fx) {
             return ReturnStatementPlan {
-                directive,
                 form: ReturnForm::LoweredAbi {
                     body: LoweredBlock { statements },
                 },
@@ -295,14 +290,15 @@ impl Planner<'_> {
 
         if let Some(statements) = self.lower_wrapped_return(expression, fx) {
             return ReturnStatementPlan {
-                directive,
                 form: ReturnForm::Wrapped {
                     body: LoweredBlock { statements },
                 },
             };
         }
 
-        let (mut setup, raw_value) = self.lower_value(expression, ExpressionContext::value(), fx);
+        let (mut setup, raw_value) = self
+            .lower_value(expression, ExpressionContext::value(), fx)
+            .into_parts();
         let mut coercion_buffer = String::new();
         let final_value = self.apply_type_coercion(
             &mut coercion_buffer,
@@ -315,7 +311,6 @@ impl Planner<'_> {
             setup.push(LoweredStatement::RawGo(coercion_buffer));
         }
         ReturnStatementPlan {
-            directive,
             form: ReturnForm::Plain {
                 value: value_plan_from_statements(setup, final_value),
             },
@@ -401,7 +396,9 @@ impl Planner<'_> {
             return Some(statements);
         }
 
-        let (setup, value) = self.lower_value(expression, ExpressionContext::value(), fx);
+        let (setup, value) = self
+            .lower_value(expression, ExpressionContext::value(), fx)
+            .into_parts();
         statements.extend(setup);
         statements.extend(self.wrapped_value_return(value, &return_ty, lowered.as_ref(), fx));
         Some(statements)
@@ -471,16 +468,18 @@ impl Planner<'_> {
         if let Some(shape) = lowered {
             let ok_arg = if matches!(shape, AbiShape::BareError) {
                 if !args.is_empty() {
-                    let (setup, _) =
-                        self.lower_composite_value(&args[0], ExpressionContext::value(), fx);
+                    let (setup, _) = self
+                        .lower_composite_value(&args[0], ExpressionContext::value(), fx)
+                        .into_parts();
                     statements.extend(setup);
                 }
                 String::new()
             } else if args.is_empty() {
                 "struct{}{}".to_string()
             } else {
-                let (setup, value) =
-                    self.lower_composite_value(&args[0], ExpressionContext::value(), fx);
+                let (setup, value) = self
+                    .lower_composite_value(&args[0], ExpressionContext::value(), fx)
+                    .into_parts();
                 statements.extend(setup);
                 value
             };
@@ -488,7 +487,9 @@ impl Planner<'_> {
                 transition::lowered_ok_values(shape, &ok_arg),
             ));
         } else {
-            let (setup, arg) = self.lower_composite_value(&args[0], ExpressionContext::value(), fx);
+            let (setup, arg) = self
+                .lower_composite_value(&args[0], ExpressionContext::value(), fx)
+                .into_parts();
             let success = {
                 let mut fe = FalliblePlanner::new(self, fallible, fx);
                 fe.emit_success(&arg)
@@ -514,16 +515,18 @@ impl Planner<'_> {
                     transition::lowered_none_values(self, shape, return_ty, fx),
                 ));
             } else {
-                let (setup, err_expr) =
-                    self.lower_composite_value(&args[0], ExpressionContext::value(), fx);
+                let (setup, err_expr) = self
+                    .lower_composite_value(&args[0], ExpressionContext::value(), fx)
+                    .into_parts();
                 let values = transition::lowered_err_values(self, shape, return_ty, &err_expr, fx);
                 statements.extend(setup);
                 statements.push(transition::multi_value_return(values));
             }
         } else {
             let failure = if fallible.is_result() {
-                let (setup, arg) =
-                    self.lower_composite_value(&args[0], ExpressionContext::value(), fx);
+                let (setup, arg) = self
+                    .lower_composite_value(&args[0], ExpressionContext::value(), fx)
+                    .into_parts();
                 statements.extend(setup);
                 let mut fe = FalliblePlanner::new(self, fallible, fx);
                 fe.emit_failure(Some(&arg))
@@ -556,8 +559,9 @@ impl Planner<'_> {
         if let Some(plan) = self.plan_call(expression)
             && let CalleePlan::GoInterop(strategy) = plan.callee
         {
-            let (setup, result_var) =
-                self.lower_go_wrapped_call(expression, &strategy, return_ty, fx);
+            let (setup, result_var) = self
+                .lower_go_wrapped_call(expression, &strategy, return_ty, fx)
+                .into_parts();
             statements.extend(setup);
             if let Some(shape) = lowered {
                 statements.extend(transition::emit_lowered_result_return(
@@ -573,7 +577,9 @@ impl Planner<'_> {
             return statements;
         }
         if let Some(shape) = lowered {
-            let (setup, value) = self.lower_value(expression, ExpressionContext::value(), fx);
+            let (setup, value) = self
+                .lower_value(expression, ExpressionContext::value(), fx)
+                .into_parts();
             statements.extend(setup);
             let temp = self.hoist_tmp_value_statement(&mut statements, "v", &value);
             statements.extend(transition::emit_lowered_result_return(

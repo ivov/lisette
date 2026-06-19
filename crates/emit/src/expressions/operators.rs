@@ -44,7 +44,7 @@ impl Planner<'_> {
         };
 
         if let Some(emit_info) = is_casting_needed(operator, &left, &right) {
-            let (setup, value) = self.plan_numeric_binary_with_casts(
+            return self.plan_numeric_binary_with_casts(
                 operator,
                 left_expression,
                 right_expression,
@@ -52,7 +52,6 @@ impl Planner<'_> {
                 ctx,
                 fx,
             );
-            return value_plan_from_statements(setup, value);
         }
 
         let left_ty = &left.ty;
@@ -88,14 +87,13 @@ impl Planner<'_> {
         }
 
         if matches!(operator, BinaryOperator::And | BinaryOperator::Or) {
-            let (setup, value) = self.plan_short_circuit_binary(
+            return self.plan_short_circuit_binary(
                 operator,
                 left_expression,
                 right_expression,
                 ctx,
                 fx,
             );
-            return value_plan_from_statements(setup, value);
         }
 
         let stages = vec![
@@ -113,7 +111,7 @@ impl Planner<'_> {
         right_expression: &Expression,
         ctx: ExpressionContext<'_>,
         fx: &mut EmitEffects,
-    ) -> (Vec<LoweredStatement>, String) {
+    ) -> ValuePlan {
         let left_staged = self.stage_composite(left_expression, ctx, fx);
 
         // Wrap RHS setup in an IIFE so it runs only when control reaches the
@@ -129,7 +127,7 @@ impl Planner<'_> {
             )
         };
 
-        (
+        value_plan_from_statements(
             left_staged.setup,
             format!("{} {} {}", left_staged.value, operator, right_string),
         )
@@ -160,8 +158,7 @@ impl Planner<'_> {
         }
 
         if matches!(operator, UnaryOperator::Not) {
-            let (setup, value) = self.plan_unary_not(expression, ctx, fx);
-            return value_plan_from_statements(setup, value);
+            return self.plan_unary_not(expression, ctx, fx);
         }
 
         let op = match operator {
@@ -183,7 +180,7 @@ impl Planner<'_> {
         expression: &Expression,
         ctx: ExpressionContext<'_>,
         fx: &mut EmitEffects,
-    ) -> (Vec<LoweredStatement>, String) {
+    ) -> ValuePlan {
         let target = expression.unwrap_parens();
         let preserve_parens = matches!(expression, Expression::Paren { .. });
         let wrap = |s: String| {
@@ -203,17 +200,17 @@ impl Planner<'_> {
         {
             let plan = self.plan_binary(&flipped, left, right, ctx, fx);
             let (setup, value) = plan.into_parts();
-            return (setup, wrap(value));
+            return value_plan_from_statements(setup, wrap(value));
         }
         if matches!(target, Expression::Call { .. }) {
             let mut setup: Vec<LoweredStatement> = Vec::new();
             if let Some(negated) = self.try_emit_negated_call(&mut setup, target, fx) {
-                return (setup, wrap(negated));
+                return value_plan_from_statements(setup, wrap(negated));
             }
         }
 
         let staged = self.stage_operand(expression, ctx, fx);
-        (staged.setup, format!("!{}", staged.value))
+        value_plan_from_statements(staged.setup, format!("!{}", staged.value))
     }
 
     fn plan_numeric_binary_with_casts(
@@ -224,7 +221,7 @@ impl Planner<'_> {
         info: NumericBinaryEmitInfo,
         ctx: ExpressionContext<'_>,
         fx: &mut EmitEffects,
-    ) -> (Vec<LoweredStatement>, String) {
+    ) -> ValuePlan {
         let stages = vec![
             self.stage_operand(left_expression, ctx, fx),
             self.stage_operand(right_expression, ctx, fx),
@@ -244,7 +241,7 @@ impl Planner<'_> {
         };
 
         let result = format!("{} {} {}", left_string, operator, right_string);
-        (setup, result)
+        value_plan_from_statements(setup, result)
     }
 }
 

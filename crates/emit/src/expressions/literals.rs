@@ -6,6 +6,7 @@ use crate::abi::coercion::{Coercion, CoercionDirection};
 use crate::context::expression::ExpressionContext;
 use crate::expressions::emission::StagedExpression;
 use crate::plan::bodies::LoweredStatement;
+use crate::plan::values::{ValuePlan, value_plan_from_statements};
 use syntax::ast::{FormatStringPart, Literal};
 use syntax::types::{SimpleKind, Type};
 
@@ -15,7 +16,7 @@ impl Planner<'_> {
         literal: &Literal,
         ty: &Type,
         fx: &mut EmitEffects,
-    ) -> (Vec<LoweredStatement>, String) {
+    ) -> ValuePlan {
         let mut setup: Vec<LoweredStatement> = Vec::new();
         let value = match literal {
             Literal::Integer { value, text } => match text {
@@ -102,7 +103,7 @@ impl Planner<'_> {
                 }
             }
         };
-        (setup, value)
+        value_plan_from_statements(setup, value)
     }
 
     fn emit_format_string(

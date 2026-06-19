@@ -9,6 +9,7 @@ use crate::calls::CallBoundary;
 use crate::context::expression::ExpressionContext;
 use crate::names::go_name;
 use crate::plan::bodies::LoweredStatement;
+use crate::plan::values::ValuePlan;
 use syntax::ast::Expression;
 use syntax::types::Type;
 
@@ -46,7 +47,7 @@ impl Planner<'_> {
         strategy: &GoCallStrategy,
         result_ty: &Type,
         fx: &mut EmitEffects,
-    ) -> (Vec<LoweredStatement>, String) {
+    ) -> ValuePlan {
         match strategy {
             GoCallStrategy::Tuple { arity } => {
                 self.lower_go_tuple_call_wrapped(call_expression, *arity, fx)

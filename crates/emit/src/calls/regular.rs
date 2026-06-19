@@ -505,7 +505,7 @@ impl<'a> Planner<'a> {
                 let target =
                     effective_param_ty.expect("TaggedGoLowering requires effective_param_ty");
                 let arg_ctx = direct_arg_emit_ctx(ctx, Some(target), true);
-                let (mut setup, value) = self.lower_composite_value(arg, arg_ctx, fx);
+                let (mut setup, value) = self.lower_composite_value(arg, arg_ctx, fx).into_parts();
                 let lowered = self.emit_lower_arg_to_tagged(&mut setup, &value, target, fx);
                 (setup, lowered)
             }
@@ -568,7 +568,7 @@ impl<'a> Planner<'a> {
     ) -> (Vec<LoweredStatement>, String) {
         let suppress = would_suppress_tagged_go(ctx, declared_param_ty);
         let arg_ctx = direct_arg_emit_ctx(ctx, effective_param_ty, suppress);
-        let (mut setup, value) = self.lower_composite_value(arg, arg_ctx, fx);
+        let (mut setup, value) = self.lower_composite_value(arg, arg_ctx, fx).into_parts();
         let final_value = match effective_param_ty {
             Some(target) => {
                 let coercion =
@@ -648,7 +648,9 @@ impl<'a> Planner<'a> {
         fx: &mut EmitEffects,
     ) -> Option<(Vec<LoweredStatement>, String)> {
         let (param_shape, arg_fn, arg_shape) = self.fn_arg_shapes(arg, generic_param_ty)?;
-        let (mut setup, value) = self.lower_value(arg, ExpressionContext::value(), fx);
+        let (mut setup, value) = self
+            .lower_value(arg, ExpressionContext::value(), fx)
+            .into_parts();
         let mut buffer = String::new();
         let adapted = emit_fn_arg_shape_adapter(
             self,
@@ -697,7 +699,9 @@ impl<'a> Planner<'a> {
             return None;
         }
 
-        let (mut setup, src_value) = self.lower_value(spread, ExpressionContext::value(), fx);
+        let (mut setup, src_value) = self
+            .lower_value(spread, ExpressionContext::value(), fx)
+            .into_parts();
         let src_var = self.hoist_tmp_value_statement(&mut setup, "src", &src_value);
 
         let target_element_ret = match param_shape.as_ref() {
@@ -786,7 +790,9 @@ impl<'a> Planner<'a> {
         kind: CallbackWrapperKind,
         fx: &mut EmitEffects,
     ) -> (Vec<LoweredStatement>, String) {
-        let (mut setup, value) = self.lower_value(arg, ExpressionContext::value(), fx);
+        let (mut setup, value) = self
+            .lower_value(arg, ExpressionContext::value(), fx)
+            .into_parts();
         let result = match kind {
             CallbackWrapperKind::Identity => value,
             CallbackWrapperKind::Wrap => {
@@ -833,7 +839,9 @@ impl<'a> Planner<'a> {
             return (Vec::new(), "nil".to_string());
         }
         let arg_ty = arg.get_type();
-        let (mut setup, value) = self.lower_value(arg, ExpressionContext::value(), fx);
+        let (mut setup, value) = self
+            .lower_value(arg, ExpressionContext::value(), fx)
+            .into_parts();
         let coercion = Coercion::resolve(self, &arg_ty, param_ty, CoercionDirection::ToGoBoundary);
         let (coercion_setup, coerced) = coercion.lower(self, value, fx);
         setup.extend(coercion_setup);
@@ -884,7 +892,9 @@ impl<'a> Planner<'a> {
                 if arg.is_none_literal() {
                     return (Vec::new(), "nil".to_string());
                 }
-                let (mut setup, value) = self.lower_value(arg, ExpressionContext::value(), fx);
+                let (mut setup, value) = self
+                    .lower_value(arg, ExpressionContext::value(), fx)
+                    .into_parts();
                 let coercion =
                     Coercion::resolve(self, &arg_ty, &check_ty, CoercionDirection::ToGoBoundary);
                 let (coercion_setup, coerced) = coercion.lower(self, value, fx);
@@ -906,7 +916,9 @@ impl<'a> Planner<'a> {
         if arg.is_none_literal() {
             return (Vec::new(), "nil".to_string());
         }
-        let (mut setup, value) = self.lower_value(arg, ExpressionContext::value(), fx);
+        let (mut setup, value) = self
+            .lower_value(arg, ExpressionContext::value(), fx)
+            .into_parts();
         let coercion = Coercion::resolve(self, arg_ty, arg_ty, CoercionDirection::ToGoBoundary);
         let (coercion_setup, coerced) = coercion.lower(self, value, fx);
         setup.extend(coercion_setup);
