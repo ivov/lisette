@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [info] Duplicate match arm
+   ╭─[test.lis:8:5]
+ 7 │     Sig.B => 20,
+ 8 │     Sig.C => 10,
+   ·     ──┬──
+   ·       ╰── same body as an earlier arm
+ 9 │   }
+   ╰────
+  help: Merge this arm into the `Sig.A` arm with `|` · code: [lint.match_same_arms]

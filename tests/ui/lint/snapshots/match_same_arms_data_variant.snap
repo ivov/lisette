@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [info] Duplicate match arm
+   ╭─[test.lis:6:5]
+ 5 │     Some(1) => 6,
+ 6 │     Some(2) => 5,
+   ·     ───┬───
+   ·        ╰── same body as an earlier arm
+ 7 │     _ => 0,
+   ╰────
+  help: Merge this arm into the `Some(0)` arm with `|` · code: [lint.match_same_arms]

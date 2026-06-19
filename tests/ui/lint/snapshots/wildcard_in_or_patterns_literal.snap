@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [info] Wildcard in or-pattern
+   ╭─[test.lis:4:5]
+ 3 │   match n {
+ 4 │     0 | _ => 1,
+   ·     ──┬──
+   ·       ╰── can be just `_`
+ 5 │   }
+   ╰────
+  help: The `_` alternative already matches everything. Replace the whole pattern with `_` · code: [lint.wildcard_in_or_patterns]

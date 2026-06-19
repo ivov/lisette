@@ -627,6 +627,31 @@ pub fn identical_match_arms(span: &Span) -> LisetteDiagnostic {
         )
 }
 
+pub fn match_same_arms(span: &Span, earlier: &str) -> LisetteDiagnostic {
+    LisetteDiagnostic::info("Duplicate match arm")
+        .with_lint_code("match_same_arms")
+        .with_span_label(span, "same body as an earlier arm")
+        .with_help(format!("Merge this arm into the `{earlier}` arm with `|`"))
+}
+
+pub fn redundant_guards(span: &Span, binding: &str, literal: &str) -> LisetteDiagnostic {
+    LisetteDiagnostic::info("Redundant guard")
+        .with_lint_code("redundant_guards")
+        .with_span_label(span, "redundant guard")
+        .with_help(format!(
+            "Replace `{binding}` with `{literal}` in the pattern and drop the guard"
+        ))
+}
+
+pub fn wildcard_in_or_patterns(span: &Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::info("Wildcard in or-pattern")
+        .with_lint_code("wildcard_in_or_patterns")
+        .with_span_label(span, "can be just `_`")
+        .with_help(
+            "The `_` alternative already matches everything. Replace the whole pattern with `_`",
+        )
+}
+
 pub fn unnecessary_bool(span: &Span, consequence_is_true: bool) -> LisetteDiagnostic {
     let help = if consequence_is_true {
         "Replace this `if... else` with the condition itself"

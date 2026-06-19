@@ -17940,3 +17940,355 @@ fn main() {
          `xs.equals(ys)` dispatches to models.Inner.equals, not the local method: {codes:?}"
     );
 }
+
+#[test]
+fn redundant_guards_int() {
+    assert_lint_snapshot!(
+        r#"
+pub fn test(o: Option<int>) -> int {
+  match o {
+    Some(x) if x == 5 => 1,
+    _ => 0,
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_guards_string() {
+    assert_lint_snapshot!(
+        r#"
+pub fn test(o: Option<string>) -> int {
+  match o {
+    Some(x) if x == "hi" => 1,
+    _ => 0,
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_guards_reversed_operands() {
+    assert_lint_snapshot!(
+        r#"
+pub fn test(o: Option<int>) -> int {
+  match o {
+    Some(x) if 5 == x => 1,
+    _ => 0,
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_guards_top_level_binding() {
+    assert_lint_snapshot!(
+        r#"
+pub fn test(n: int) -> int {
+  match n {
+    x if x == 5 => 1,
+    _ => 0,
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_guards_non_literal_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+pub fn test(o: Option<int>, y: int) -> int {
+  match o {
+    Some(x) if x == y => 1,
+    _ => 0,
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_guards_binding_used_in_body_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+pub fn test(o: Option<int>) -> int {
+  match o {
+    Some(x) if x == 5 => x + 1,
+    _ => 0,
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_guards_inequality_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+pub fn test(o: Option<int>) -> int {
+  match o {
+    Some(x) if x > 5 => 1,
+    _ => 0,
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_guards_compound_guard_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+pub fn test(o: Option<int>, flag: bool) -> int {
+  match o {
+    Some(x) if x == 5 && flag => 1,
+    _ => 0,
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn wildcard_in_or_patterns_literal() {
+    assert_lint_snapshot!(
+        r#"
+pub fn test(n: int) -> int {
+  match n {
+    0 | _ => 1,
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn wildcard_in_or_patterns_variant() {
+    assert_lint_snapshot!(
+        r#"
+pub fn test(o: Option<int>) -> int {
+  match o {
+    Some(0) | _ => 1,
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn wildcard_in_or_patterns_no_wildcard_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+pub fn test(n: int) -> int {
+  match n {
+    0 | 1 => 1,
+    _ => 0,
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn match_same_arms_enum() {
+    assert_lint_snapshot!(
+        r#"
+pub enum Sig { A, B, C }
+
+pub fn test(s: Sig) -> int {
+  match s {
+    Sig.A => 10,
+    Sig.B => 20,
+    Sig.C => 10,
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn match_same_arms_literals() {
+    assert_lint_snapshot!(
+        r#"
+pub fn test(n: int) -> int {
+  match n {
+    0 => 10,
+    1 => 20,
+    2 => 10,
+    _ => 0,
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn match_same_arms_data_variant() {
+    assert_lint_snapshot!(
+        r#"
+pub fn test(o: Option<int>) -> int {
+  match o {
+    Some(0) => 5,
+    Some(1) => 6,
+    Some(2) => 5,
+    _ => 0,
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn match_same_arms_distinct_bodies_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+pub fn test(n: int) -> int {
+  match n {
+    0 => 1,
+    1 => 2,
+    _ => 3,
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn match_same_arms_binding_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+pub fn test(o: Option<int>) -> int {
+  let a = 5;
+  match o {
+    Some(x) => a,
+    None => a,
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn match_same_arms_guarded_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+pub fn test(n: int, flag: bool) -> int {
+  match n {
+    0 if flag => 7,
+    1 => 8,
+    2 if flag => 7,
+    _ => 0,
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn match_same_arms_guarded_intervening_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+pub fn test(n: int) -> int {
+  match n {
+    0 => 10,
+    k if k < 5 => 20,
+    1 => 10,
+    _ => 0,
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn match_same_arms_opaque_const_intervening_does_not_merge() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "codes",
+        "codes.lis",
+        r#"
+pub const BASE: int = 1
+pub const OTHER: int = 2
+pub const A: int = BASE
+pub const B: int = BASE
+pub const C: int = OTHER
+"#,
+    );
+    let source = r#"
+import "codes"
+
+pub fn f(c: int) -> int {
+  match c {
+    codes.C => 10,
+    codes.A => 20,
+    codes.B => 10,
+    _ => 0,
+  }
+}
+"#;
+    fs.add_file(ENTRY_MODULE_ID, "main.lis", source);
+
+    let result = compile_check(fs);
+    assert!(
+        result.errors.is_empty(),
+        "the checker keys opaque consts by name, so it accepts this match: {:?}",
+        result.errors
+    );
+    let codes: Vec<&str> = result.lints.iter().filter_map(|l| l.code_str()).collect();
+    assert!(
+        !codes.contains(&"lint.match_same_arms"),
+        "codes.A and codes.B share the value BASE, so merging codes.C | codes.B over \
+         codes.A would change c == BASE from 20 to 10: {codes:?}"
+    );
+}
+
+#[test]
+fn match_same_arms_qualified_and_bare_variant_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+pub enum Sig { A, B, C }
+
+pub fn f(s: Sig, flag: bool) -> int {
+  match s {
+    Sig.B => 10,
+    A if flag => 20,
+    Sig.A => 10,
+    Sig.C => 0,
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn match_same_arms_as_binding_arm_does_not_merge() {
+    let mut fs = MockFileSystem::new();
+    let source = r#"
+pub fn f(o: Option<int>) -> int {
+  match o {
+    Some(0) as x => 10,
+    Some(1) => 20,
+    Some(2) => 10,
+    _ => 0,
+  }
+}
+"#;
+    fs.add_file(ENTRY_MODULE_ID, "main.lis", source);
+
+    let result = compile_check(fs);
+    assert!(
+        result.errors.is_empty(),
+        "the `as` arm is valid: {:?}",
+        result.errors
+    );
+    let codes: Vec<&str> = result.lints.iter().filter_map(|l| l.code_str()).collect();
+    assert!(
+        !codes.contains(&"lint.match_same_arms"),
+        "merging `Some(2)` into the `Some(0) as x` arm would yield the malformed \
+         `Some(0) as x | Some(2)`: {codes:?}"
+    );
+}

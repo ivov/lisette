@@ -35,11 +35,12 @@ use checks::{
     check_manual_replace_all, check_manual_time_since, check_manual_time_until,
     check_manual_unwrap_or, check_map_flatten, check_map_identity, check_map_or_none,
     check_map_unwrap_or, check_match_as_if_let, check_match_literal_collection,
-    check_match_on_bool, check_match_single_binding, check_misrefactored_assign_op,
-    check_needless_match, check_needless_question_mark, check_neg_multiply, check_negated_equality,
-    check_negated_logical_operand, check_non_negative_comparison, check_or_fn_call,
-    check_out_of_domain_value, check_pattern_naming, check_redundant_closure,
-    check_redundant_comparison, check_redundant_else, check_redundant_operation,
+    check_match_on_bool, check_match_same_arms, check_match_single_binding,
+    check_misrefactored_assign_op, check_needless_match, check_needless_question_mark,
+    check_neg_multiply, check_negated_equality, check_negated_logical_operand,
+    check_non_negative_comparison, check_or_fn_call, check_out_of_domain_value,
+    check_pattern_naming, check_redundant_closure, check_redundant_comparison,
+    check_redundant_else, check_redundant_guards, check_redundant_operation,
     check_redundant_pattern_matching, check_redundant_slice_bounds, check_redundant_sprintf,
     check_regexp_in_loop, check_replaceable_with_zero_fill, check_rest_only_slice_pattern,
     check_self_assignment, check_self_comparison, check_single_arm_select,
@@ -48,7 +49,7 @@ use checks::{
     check_unnecessary_map_on_constructor, check_unnecessary_min_or_max,
     check_unnecessary_range_loop, check_unnecessary_raw_string_expression,
     check_unnecessary_raw_string_pattern, check_unnecessary_return, check_unsigned_comparison,
-    check_verbose_failure_propagation, check_waitgroup_add_in_task,
+    check_verbose_failure_propagation, check_waitgroup_add_in_task, check_wildcard_in_or_patterns,
 };
 
 static LINT_CHECKS: LazyLock<CheckTable> = LazyLock::new(|| {
@@ -93,6 +94,8 @@ static LINT_CHECKS: LazyLock<CheckTable> = LazyLock::new(|| {
             // and checks run in table order per node.
             (check_collapsible_match, &[Match]),
             (check_identical_match_arms, &[Match]),
+            (check_match_same_arms, &[Match]),
+            (check_redundant_guards, &[Match]),
             (check_loop_runs_once, &[Loop, While, WhileLet, For]),
             (check_regexp_in_loop, &[Loop, While, WhileLet, For]),
             (check_empty_match_arm, &[Match]),
@@ -158,6 +161,7 @@ static LINT_CHECKS: LazyLock<CheckTable> = LazyLock::new(|| {
                 check_rest_only_slice_pattern,
                 &[PatternKind::Slice, PatternKind::Or],
             ),
+            (check_wildcard_in_or_patterns, &[PatternKind::Or]),
             (
                 check_unnecessary_raw_string_pattern,
                 &[PatternKind::Literal],
