@@ -14,7 +14,7 @@ import lisette "github.com/ivov/lisette/prelude"
 func load(r lisette.Result[int, error]) (int, error) {
 	check_1 := lisette.ResultWrapErr(r, "loading config")
 	if check_1.Tag != lisette.ResultOk {
-		return *new(int), check_1.ErrVal
+		return 0, check_1.ErrVal
 	}
 	n := check_1.OkVal
 	return n, nil

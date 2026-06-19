@@ -3,7 +3,7 @@ use crate::Planner;
 use crate::analyze::inline_uses::region_blocks_inline;
 use crate::context::expression::ExpressionContext;
 use crate::control_flow::fallible::{ConstructorKind, Fallible, FalliblePlanner};
-use crate::definitions::functions::is_go_never;
+use crate::definitions::functions::{is_breakless_loop, is_go_never};
 use crate::expressions::emission::StagedExpression;
 use crate::plan::bodies::{
     AssignForm, AssignPlan, BreakValueDisposition, BreakValuePlan, LoweredBlock, LoweredStatement,
@@ -468,7 +468,7 @@ impl Planner<'_> {
         }
         if last.get_type().is_never() {
             let mut statements = vec![self.lower_statement(last, fx)];
-            if !is_go_never(last) {
+            if !is_go_never(last) && !is_breakless_loop(last) {
                 statements.push(LoweredStatement::UnreachablePanic);
             }
             return statements;

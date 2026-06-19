@@ -298,6 +298,15 @@ impl Planner<'_> {
         (setup, outcome.expect("wrapper produced no slot"))
     }
 
+    pub(crate) fn go_result_needs_nil_guard(&self, ok_ty: &Type) -> bool {
+        ok_ty.is_ref()
+            || self
+                .facts
+                .as_interface(ok_ty)
+                .as_deref()
+                .is_some_and(|id| id != go_name::PRELUDE_ERROR_ID)
+    }
+
     /// Lower a `(T, error)` Go return into a tagged `Result`.
     pub(crate) fn lower_result_wrapping(
         &mut self,
@@ -322,11 +331,7 @@ impl Planner<'_> {
             fe.full_type_string()
         };
 
-        let interface_id = self.facts.as_interface(ok_ty);
-        let needs_nil_guard = ok_ty.is_ref()
-            || interface_id
-                .as_deref()
-                .is_some_and(|id| id != go_name::PRELUDE_ERROR_ID);
+        let needs_nil_guard = self.go_result_needs_nil_guard(ok_ty);
 
         let (sink, outcome) =
             self.push_wrapper_slot(&mut statements, target, &result_ty_str, "result");

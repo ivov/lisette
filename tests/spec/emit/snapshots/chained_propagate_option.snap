@@ -14,11 +14,11 @@ import lisette "github.com/ivov/lisette/prelude"
 
 func get_nested(outer lisette.Option[lisette.Option[int]]) (int, bool) {
 	if outer.Tag != lisette.OptionSome {
-		return *new(int), false
+		return 0, false
 	}
 	inner := outer.SomeVal
 	if inner.Tag != lisette.OptionSome {
-		return *new(int), false
+		return 0, false
 	}
 	val := inner.SomeVal
 	return val, true

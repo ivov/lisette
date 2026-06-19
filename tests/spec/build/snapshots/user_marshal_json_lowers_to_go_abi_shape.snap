@@ -7,7 +7,6 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	lisette "github.com/ivov/lisette/prelude"
 )
 
 type Widget struct {
@@ -20,17 +19,12 @@ func (w Widget) MarshalJSON() ([]uint8, error) {
 
 func main() {
 	w := Widget{id: 7}
-	ret_2, ret_3 := json.Marshal(w)
-	var result_4 lisette.Result[[]byte, error]
-	if ret_3 != nil {
-		result_4 = lisette.MakeResultErr[[]byte, error](ret_3)
+	ret_1, ret_2 := json.Marshal(w)
+	if ret_2 == nil {
+		b := ret_1
+		fmt.Println(string(b))
 	} else {
-		result_4 = lisette.MakeResultOk[[]byte, error](ret_2)
-	}
-	subject_1 := result_4
-	if subject_1.Tag == lisette.ResultOk {
-		fmt.Println(string(subject_1.OkVal))
-	} else {
-		fmt.Println(subject_1.ErrVal)
+		e := ret_2
+		fmt.Println(e)
 	}
 }

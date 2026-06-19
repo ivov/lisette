@@ -13,22 +13,13 @@ description: |
 ---
 package main
 
-import (
-	"example.com/legacy"
-	lisette "github.com/ivov/lisette/prelude"
-)
+import "example.com/legacy"
 
 func main() {
-	ret_2, ret_3 := legacy.Close()
-	var result_4 lisette.Result[error, error]
-	if ret_3 != nil {
-		result_4 = lisette.MakeResultErr[error, error](ret_3)
-	} else {
-		result_4 = lisette.MakeResultOk[error, error](ret_2)
-	}
-	subject_1 := result_4
-	if subject_1.Tag == lisette.ResultOk {
-		_ = subject_1.OkVal
+	ret_1, ret_2 := legacy.Close()
+	if ret_2 == nil {
+		stored := ret_1
+		_ = stored
 	} else {
 	}
 }

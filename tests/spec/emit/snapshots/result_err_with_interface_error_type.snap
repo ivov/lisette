@@ -23,5 +23,5 @@ func (m MyError) Error() string {
 }
 
 func might_fail() (int, error) {
-	return *new(int), MyError{msg: "oops"}
+	return 0, MyError{msg: "oops"}
 }

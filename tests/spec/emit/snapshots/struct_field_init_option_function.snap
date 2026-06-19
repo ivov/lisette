@@ -26,7 +26,7 @@ func get_opt(b bool) (int, bool) {
 	if b {
 		return 42, true
 	}
-	return *new(int), false
+	return 0, false
 }
 
 func test() {

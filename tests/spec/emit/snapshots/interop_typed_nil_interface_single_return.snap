@@ -25,9 +25,8 @@ func main() {
 	ctx := context.Background()
 	raw_2 := ctx.Err()
 	option_3 := lisette.OptionFromNilable[error](raw_2, lisette.IsNilInterface(raw_2))
-	subject_1 := option_3
-	if subject_1.Tag == lisette.OptionSome {
-		fmt.Println(subject_1.SomeVal.Error())
+	if option_3.Tag == lisette.OptionSome {
+		fmt.Println(option_3.SomeVal.Error())
 	} else {
 		fmt.Println("no error")
 	}

@@ -18,7 +18,7 @@ package main
 import "errors"
 
 func fail() (int, error) {
-	return *new(int), errors.New("boom")
+	return 0, errors.New("boom")
 }
 
 func main() {

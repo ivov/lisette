@@ -5,7 +5,7 @@ use crate::ReturnContext;
 use crate::abi::transition;
 use crate::context::expression::ExpressionContext;
 use crate::control_flow::fallible::{ConstructorKind, Fallible, FalliblePlanner};
-use crate::definitions::functions::is_go_never;
+use crate::definitions::functions::{is_breakless_loop, is_go_never};
 use crate::plan::bodies::{LoweredBlock, LoweredStatement};
 use crate::plan::placement::is_unit_call;
 use syntax::ast::Expression;
@@ -78,7 +78,7 @@ impl Planner<'_> {
     ) -> Vec<LoweredStatement> {
         if last.diverges().is_some() || last.get_type().is_never() {
             let mut statements = vec![self.lower_statement(last, fx)];
-            if !is_go_never(last) {
+            if !is_go_never(last) && !is_breakless_loop(last) {
                 statements.push(LoweredStatement::UnreachablePanic);
             }
             return statements;
@@ -255,7 +255,7 @@ impl Planner<'_> {
         let item_ty = last.get_type();
         if item_ty.is_never() {
             let mut statements = vec![self.lower_statement(last, fx)];
-            if !is_go_never(last) {
+            if !is_go_never(last) && !is_breakless_loop(last) {
                 statements.push(LoweredStatement::UnreachablePanic);
             }
             return statements;

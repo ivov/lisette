@@ -30,7 +30,7 @@ func maybe(flag bool) (int, bool) {
 	if flag {
 		return 42, true
 	}
-	return *new(int), false
+	return 0, false
 }
 
 func test() int {

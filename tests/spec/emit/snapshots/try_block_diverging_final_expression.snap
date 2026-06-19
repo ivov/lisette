@@ -30,7 +30,6 @@ func test() {
 		for {
 			panic("unreachable")
 		}
-		panic("unreachable")
 	}()
 	result = tryResult_1
 	_ = result

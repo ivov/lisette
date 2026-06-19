@@ -550,6 +550,10 @@ pub(crate) fn is_go_never(expression: &Expression) -> bool {
     }
 }
 
+pub(crate) fn is_breakless_loop(expression: &Expression) -> bool {
+    matches!(expression, Expression::Loop { body, .. } if !body.contains_break())
+}
+
 /// Renamed definition parts for methods on native Go receiver types; the
 /// caller rebinds its view to borrow these.
 type NativeMethodOverride = (ecow::EcoString, Vec<Binding>);

@@ -27,7 +27,7 @@ func next_item(counter int) (int, bool) {
 	if counter < 5 {
 		return counter, true
 	}
-	return *new(int), false
+	return 0, false
 }
 
 func test() {

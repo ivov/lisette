@@ -25,9 +25,8 @@ import (
 
 func apply(f func(string) (string, bool), key string) string {
 	option_2 := lisette.OptionFromCommaOk[string](f(key))
-	subject_1 := option_2
-	if subject_1.Tag == lisette.OptionSome {
-		return subject_1.SomeVal
+	if option_2.Tag == lisette.OptionSome {
+		return option_2.SomeVal
 	}
 	return "unset"
 }

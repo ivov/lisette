@@ -34,11 +34,10 @@ func test() {
 	} else {
 		result_4 = lisette.MakeResultOk[lisette.Tuple2[int, string], error](ret_2)
 	}
-	subject_1 := result_4
-	if subject_1.Tag == lisette.ResultOk {
-		_ = subject_1.OkVal.First
-		_ = subject_1.OkVal.Second
+	if result_4.Tag == lisette.ResultOk {
+		_ = result_4.OkVal.First
+		_ = result_4.OkVal.Second
 	} else {
-		_ = subject_1.ErrVal
+		_ = result_4.ErrVal
 	}
 }

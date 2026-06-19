@@ -28,9 +28,8 @@ func main() {
 	for _, bucket := range buckets {
 		raw_2 := bucket.Name
 		option_3 := lisette.OptionFromPointer[string](raw_2)
-		subject_1 := option_3
-		if subject_1.Tag == lisette.OptionSome {
-			fmt.Println(subject_1.SomeVal)
+		if option_3.Tag == lisette.OptionSome {
+			fmt.Println(option_3.SomeVal)
 		}
 	}
 }

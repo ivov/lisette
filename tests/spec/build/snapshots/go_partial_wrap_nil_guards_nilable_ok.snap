@@ -23,8 +23,7 @@ func main() {
 	} else {
 		result_4 = lisette.MakePartialOk[ast.Expr, error](ret_2)
 	}
-	subject_1 := result_4
-	switch subject_1.Tag {
+	switch result_4.Tag {
 	case lisette.PartialOk:
 		fmt.Print("ok")
 	case lisette.PartialBoth:

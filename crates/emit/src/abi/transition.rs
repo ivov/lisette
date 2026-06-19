@@ -53,8 +53,15 @@ pub(crate) fn render_lowered_result_return(
     Renderer.render_lowered_block(output, &block);
 }
 
+/// Idiomatic Go zero (`0`, `""`, `nil`, ...) for a lowered failure slot.
+fn lowered_zero(planner: &mut Planner, ok_ty: &Type, fx: &mut EmitEffects) -> String {
+    let (zero, effects) = planner.zero_value(ok_ty);
+    fx.extend(&effects);
+    zero
+}
+
 /// The lowered Go-return values for an `Err`-with-payload failure, in the
-/// enclosing function's lowered shape (e.g. `["*new(T)", err]`).
+/// enclosing function's lowered shape (e.g. `[zero, err]`).
 pub(crate) fn lowered_err_values(
     planner: &mut Planner,
     shape: &AbiShape,
@@ -66,8 +73,7 @@ pub(crate) fn lowered_err_values(
         AbiShape::BareError => vec![err_expr.to_string()],
         AbiShape::ResultTuple => {
             let ok_ty = planner.facts.peel_alias(return_ty).ok_type();
-            let ok_ty_str = planner.go_type_string(&ok_ty, fx);
-            vec![format!("*new({})", ok_ty_str), err_expr.to_string()]
+            vec![lowered_zero(planner, &ok_ty, fx), err_expr.to_string()]
         }
         AbiShape::PartialTuple | AbiShape::Tuple { .. } => {
             unreachable!("not reached for shapes with their own emission paths")
@@ -93,7 +99,7 @@ pub(crate) fn lowered_ok_values(shape: &AbiShape, ok_expr: &str) -> Vec<String> 
 }
 
 /// The lowered Go-return values for a bare `None`, in an Option-shaped fn's
-/// lowered shape (e.g. `["*new(T)", "false"]`).
+/// lowered shape (e.g. `[zero, "false"]`).
 pub(crate) fn lowered_none_values(
     planner: &mut Planner,
     shape: &AbiShape,
@@ -103,8 +109,7 @@ pub(crate) fn lowered_none_values(
     match shape {
         AbiShape::CommaOk => {
             let inner = planner.facts.peel_alias(return_ty).ok_type();
-            let inner_str = planner.go_type_string(&inner, fx);
-            vec![format!("*new({})", inner_str), "false".to_string()]
+            vec![lowered_zero(planner, &inner, fx), "false".to_string()]
         }
         AbiShape::NullableReturn => vec!["nil".to_string()],
         _ => unreachable!("only Option's `None` lacks a payload"),
@@ -122,9 +127,9 @@ pub(crate) fn emit_lowered_result_return(
 ) -> Vec<LoweredStatement> {
     fx.require_stdlib();
     let p = result_value;
-    let ok_ty_str = |planner: &mut Planner, fx: &mut EmitEffects| {
+    let ok_zero = |planner: &mut Planner, fx: &mut EmitEffects| {
         let ok_ty = planner.facts.peel_alias(return_ty).ok_type();
-        planner.go_type_string(&ok_ty, fx)
+        lowered_zero(planner, &ok_ty, fx)
     };
     match shape {
         AbiShape::BareError => vec![
@@ -135,17 +140,17 @@ pub(crate) fn emit_lowered_result_return(
             multi_value_return(vec![format!("{p}.ErrVal")]),
         ],
         AbiShape::ResultTuple => {
-            let t = ok_ty_str(planner, fx);
+            let zero = ok_zero(planner, fx);
             vec![
                 tag_check(
                     format!("{p}.Tag == {RESULT_OK_TAG}"),
                     vec![format!("{p}.OkVal"), "nil".to_string()],
                 ),
-                multi_value_return(vec![format!("*new({t})"), format!("{p}.ErrVal")]),
+                multi_value_return(vec![zero, format!("{p}.ErrVal")]),
             ]
         }
         AbiShape::PartialTuple => {
-            let t = ok_ty_str(planner, fx);
+            let zero = ok_zero(planner, fx);
             vec![
                 tag_check(
                     format!("{p}.Tag == {PARTIAL_OK_TAG}"),
@@ -153,19 +158,19 @@ pub(crate) fn emit_lowered_result_return(
                 ),
                 tag_check(
                     format!("{p}.Tag == {PARTIAL_ERR_TAG}"),
-                    vec![format!("*new({t})"), format!("{p}.ErrVal")],
+                    vec![zero, format!("{p}.ErrVal")],
                 ),
                 multi_value_return(vec![format!("{p}.OkVal"), format!("{p}.ErrVal")]),
             ]
         }
         AbiShape::CommaOk => {
-            let t = ok_ty_str(planner, fx);
+            let zero = ok_zero(planner, fx);
             vec![
                 tag_check(
                     format!("{p}.Tag == {OPTION_SOME_TAG}"),
                     vec![format!("{p}.SomeVal"), "true".to_string()],
                 ),
-                multi_value_return(vec![format!("*new({t})"), "false".to_string()]),
+                multi_value_return(vec![zero, "false".to_string()]),
             ]
         }
         AbiShape::NullableReturn => vec![
@@ -371,10 +376,11 @@ fn emit_result_return_adapter(
         return (err_ty_str, b);
     }
     let ok_ty_str = planner.go_type_string(&ok_ty, fx);
+    let ok_zero = lowered_zero(planner, &ok_ty, fx);
     write_line!(
         b,
         "if {res}.Tag == {ok_tag} {{\nreturn {res}.OkVal, nil\n}}\n\
-         return *new({ok_ty_str}), {res}.ErrVal"
+         return {ok_zero}, {res}.ErrVal"
     );
     (format!("({ok_ty_str}, {err_ty_str})"), b)
 }
@@ -390,13 +396,14 @@ fn emit_partial_return_adapter(
     let err_ty = return_type.err_type();
     let ok_ty_str = planner.go_type_string(&ok_ty, fx);
     let err_ty_str = planner.go_type_string(&err_ty, fx);
+    let ok_zero = lowered_zero(planner, &ok_ty, fx);
     let res = planner.fresh_var(Some("res"));
     planner.declare(&res);
 
     let b = format!(
         "{res} := {inner_call}\n\
          if {res}.Tag == {PARTIAL_OK_TAG} {{\nreturn {res}.OkVal, nil\n}}\n\
-         if {res}.Tag == {PARTIAL_ERR_TAG} {{\nreturn *new({ok_ty_str}), {res}.ErrVal\n}}\n\
+         if {res}.Tag == {PARTIAL_ERR_TAG} {{\nreturn {ok_zero}, {res}.ErrVal\n}}\n\
          return {res}.OkVal, {res}.ErrVal\n"
     );
     (format!("({ok_ty_str}, {err_ty_str})"), b)
@@ -428,10 +435,11 @@ fn emit_option_return_adapter(
     }
 
     let inner_ty_str = planner.go_type_string(&inner, fx);
+    let inner_zero = lowered_zero(planner, &inner, fx);
     let b = format!(
         "{opt} := {inner_call}\n\
          if {opt}.Tag == {some_tag} {{\nreturn {opt}.SomeVal, true\n}}\n\
-         return *new({inner_ty_str}), false\n"
+         return {inner_zero}, false\n"
     );
     (format!("({inner_ty_str}, bool)"), b)
 }
@@ -716,8 +724,7 @@ fn emit_lowered_partial_tail(
                     planner.lower_composite_value(&args[0], ExpressionContext::value(), fx);
                 statements.extend(setup);
                 let ok_ty = planner.facts.peel_alias(&return_ty).ok_type();
-                let ok_ty_str = planner.go_type_string(&ok_ty, fx);
-                multi_value_return(vec![format!("*new({})", ok_ty_str), e])
+                multi_value_return(vec![lowered_zero(planner, &ok_ty, fx), e])
             }
             "Both" => {
                 let (setup_v, v) =

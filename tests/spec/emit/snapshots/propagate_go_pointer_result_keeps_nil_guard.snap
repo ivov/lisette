@@ -1,0 +1,35 @@
+---
+source: tests/spec/emit/interop_matrix.rs
+description: |
+  
+  import "go:os"
+  
+  fn open_first(path: string) -> Result<int, error> {
+    let _ = os.Open(path)?
+    Ok(0)
+  }
+---
+package main
+
+import (
+	"errors"
+	lisette "github.com/ivov/lisette/prelude"
+	"os"
+)
+
+func open_first(path string) (int, error) {
+	ret_1, ret_2 := os.Open(path)
+	var result_3 lisette.Result[*os.File, error]
+	if ret_2 != nil {
+		result_3 = lisette.MakeResultErr[*os.File, error](ret_2)
+	} else if ret_1 == nil {
+		result_3 = lisette.MakeResultErr[*os.File, error](errors.New("unexpected nil"))
+	} else {
+		result_3 = lisette.MakeResultOk[*os.File, error](ret_1)
+	}
+	check_4 := result_3
+	if check_4.Tag != lisette.ResultOk {
+		return 0, check_4.ErrVal
+	}
+	return 0, nil
+}

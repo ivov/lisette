@@ -2147,6 +2147,20 @@ fn test(items: Slice<int>) -> int {
 }
 
 #[test]
+fn breakless_loop_tail_omits_unreachable_panic() {
+    let input = r#"
+fn serve(n: int) -> int {
+  loop {
+    if n > 0 {
+      return n
+    }
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn continue_in_match_in_loop() {
     let input = r#"
 fn test(items: Slice<int>) -> int {

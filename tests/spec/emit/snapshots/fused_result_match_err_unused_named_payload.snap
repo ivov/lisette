@@ -23,7 +23,7 @@ func fallible(ok bool) (int, error) {
 	if ok {
 		return 1, nil
 	}
-	return *new(int), errors.New("nope")
+	return 0, errors.New("nope")
 }
 
 func test() {

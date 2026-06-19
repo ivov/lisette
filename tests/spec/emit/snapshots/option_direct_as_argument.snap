@@ -22,7 +22,7 @@ func maybe_int(b bool) (int, bool) {
 	if b {
 		return 42, true
 	}
-	return *new(int), false
+	return 0, false
 }
 
 func unwrap_or(o lisette.Option[int], fallback int) int {

@@ -20,7 +20,7 @@ func foo() (int, bool) {
 	if true {
 		return 1, true
 	}
-	return *new(int), false
+	return 0, false
 }
 
 func main() {

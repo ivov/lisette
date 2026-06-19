@@ -25,7 +25,7 @@ func find(haystack, needle string) (int, bool) {
 	if option_2.Tag == lisette.OptionSome {
 		return option_2.SomeVal, true
 	}
-	return *new(int), false
+	return 0, false
 }
 
 func main() {

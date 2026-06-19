@@ -42,11 +42,10 @@ loop_1:
 		} else {
 			result_8 = lisette.MakeResultOk[lisette.Tuple2[rune, int], error](tup_7)
 		}
-		subject_3 := result_8
-		if subject_3.Tag == lisette.ResultOk {
-			r_2 = subject_3.OkVal.First
+		if result_8.Tag == lisette.ResultOk {
+			r_2 = result_8.OkVal.First
 		} else {
-			if subject_3.ErrVal == io.EOF {
+			if result_8.ErrVal == io.EOF {
 				break loop_1
 			}
 			panic("error")

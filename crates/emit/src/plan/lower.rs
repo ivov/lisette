@@ -4,7 +4,7 @@ use crate::Renderer;
 use crate::abi::transition::try_emit_lowered_tail_return;
 use crate::context::expression::ExpressionContext;
 use crate::control_flow::propagation::plain_return;
-use crate::definitions::functions::is_go_never;
+use crate::definitions::functions::{is_breakless_loop, is_go_never};
 use crate::plan::bodies::{
     ElseArm, ExpressionStatementForm, ExpressionStatementPlan, IfPlan, LoopPlan, LoweredBlock,
     LoweredStatement, MatchStatementPlan, PlacePlan, WhileLetPlan,
@@ -697,7 +697,7 @@ impl Planner<'_> {
             statements.push(LoweredStatement::RawGo(directive));
         }
         statements.push(self.lower_statement(last, fx));
-        if !is_go_never(last) {
+        if !is_go_never(last) && !is_breakless_loop(last) {
             statements.push(LoweredStatement::UnreachablePanic);
         }
         statements

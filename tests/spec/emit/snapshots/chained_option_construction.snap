@@ -26,5 +26,5 @@ func test() (int, bool) {
 	if v_2.Tag == lisette.OptionSome {
 		return v_2.SomeVal, true
 	}
-	return *new(int), false
+	return 0, false
 }

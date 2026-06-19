@@ -26,10 +26,7 @@ description: |
 ---
 package main
 
-import (
-	"example.com/svc"
-	lisette "github.com/ivov/lisette/prelude"
-)
+import "example.com/svc"
 
 type Loader struct{}
 
@@ -38,18 +35,13 @@ func (l Loader) Load(_ string) (int, error) {
 }
 
 func run(s svc.Alias) int {
-	ret_2, ret_3 := s.Load("k")
-	var result_4 lisette.Result[int, error]
-	if ret_3 != nil {
-		result_4 = lisette.MakeResultErr[int, error](ret_3)
+	ret_1, ret_2 := s.Load("k")
+	if ret_2 == nil {
+		n := ret_1
+		return n
 	} else {
-		result_4 = lisette.MakeResultOk[int, error](ret_2)
+		return 0
 	}
-	subject_1 := result_4
-	if subject_1.Tag == lisette.ResultOk {
-		return subject_1.OkVal
-	}
-	return 0
 }
 
 func main() {

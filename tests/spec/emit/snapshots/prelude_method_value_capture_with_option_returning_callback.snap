@@ -23,7 +23,7 @@ func main() {
 		if opt_4.Tag == lisette.OptionSome {
 			return opt_4.SomeVal, true
 		}
-		return *new(int), false
+		return 0, false
 	}
 	option_5 := lisette.OptionFromCommaOk[int](f(lisette.MakeOptionSome(1), func(v int) (int, bool) {
 		return v * 2, true

@@ -31,5 +31,5 @@ func parse(s string) (int, error) {
 	if result.Tag == lisette.ResultOk {
 		return result.OkVal, nil
 	}
-	return *new(int), result.ErrVal
+	return 0, result.ErrVal
 }

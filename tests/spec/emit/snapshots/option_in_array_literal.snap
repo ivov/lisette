@@ -18,7 +18,7 @@ func maybe(x int) (int, bool) {
 	if x > 0 {
 		return x, true
 	}
-	return *new(int), false
+	return 0, false
 }
 
 func test() {

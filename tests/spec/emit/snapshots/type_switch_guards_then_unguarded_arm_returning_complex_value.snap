@@ -31,6 +31,6 @@ func handle(e events.Event) (int, bool) {
 		}
 		return -subject_1.X, true
 	default:
-		return *new(int), false
+		return 0, false
 	}
 }

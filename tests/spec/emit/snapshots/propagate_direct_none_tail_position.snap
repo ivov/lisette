@@ -17,13 +17,13 @@ import lisette "github.com/ivov/lisette/prelude"
 func f() (int, bool) {
 	check_1 := lisette.MakeOptionNone[lisette.Option[int]]()
 	if check_1.Tag != lisette.OptionSome {
-		return *new(int), false
+		return 0, false
 	}
 	v_2 := check_1.SomeVal
 	if v_2.Tag == lisette.OptionSome {
 		return v_2.SomeVal, true
 	}
-	return *new(int), false
+	return 0, false
 }
 
 func test() (int, bool) {

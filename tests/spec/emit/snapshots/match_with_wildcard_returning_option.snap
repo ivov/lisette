@@ -19,6 +19,6 @@ func test(n int) (int, bool) {
 	case 2:
 		return 20, true
 	default:
-		return *new(int), false
+		return 0, false
 	}
 }

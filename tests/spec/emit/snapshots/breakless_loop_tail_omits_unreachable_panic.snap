@@ -1,0 +1,21 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: |
+  
+  fn serve(n: int) -> int {
+    loop {
+      if n > 0 {
+        return n
+      }
+    }
+  }
+---
+package main
+
+func serve(n int) int {
+	for {
+		if n > 0 {
+			return n
+		}
+	}
+}

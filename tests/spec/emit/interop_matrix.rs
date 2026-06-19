@@ -1040,6 +1040,19 @@ pub fn Close() -> Result<error, error>
 }
 
 #[test]
+fn propagate_go_pointer_result_keeps_nil_guard() {
+    let input = r#"
+import "go:os"
+
+fn open_first(path: string) -> Result<int, error> {
+  let _ = os.Open(path)?
+  Ok(0)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn interop_parallel_error_tuple_return() {
     let input = r#"
 import "go:fmt"

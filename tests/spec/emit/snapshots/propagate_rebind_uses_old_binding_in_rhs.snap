@@ -37,7 +37,7 @@ func process() (int, error) {
 	}
 	check_5 := result_4
 	if check_5.Tag != lisette.ResultOk {
-		return *new(int), check_5.ErrVal
+		return 0, check_5.ErrVal
 	}
 	x_1 := check_5.OkVal
 	return x_1 + 1, nil

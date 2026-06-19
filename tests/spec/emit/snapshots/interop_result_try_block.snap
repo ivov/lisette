@@ -44,7 +44,7 @@ func make_() (func(string) (int, error), error) {
 	if v_3.Tag == lisette.ResultOk {
 		return v_3.OkVal, nil
 	}
-	return *new(func(string) (int, error)), v_3.ErrVal
+	return nil, v_3.ErrVal
 }
 
 func main() {

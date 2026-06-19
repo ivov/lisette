@@ -1,4 +1,5 @@
 use crate::EmitEffects;
+use crate::GoCallStrategy;
 use crate::Planner;
 use crate::Renderer;
 use crate::abi::AbiShape;
@@ -65,6 +66,10 @@ impl Planner<'_> {
             statements.extend(head);
             self.declare_zero_for_dead_path(&mut statements, var_name, &fallible, fx);
             return (statements, String::new());
+        }
+
+        if let Some(fused) = self.try_lower_fused_go_propagate(expression, result_var_name, fx) {
+            return fused;
         }
 
         fx.require_stdlib();
@@ -166,6 +171,64 @@ impl Planner<'_> {
         };
 
         transition::tag_check(format!("{}.Tag != {}", check_var, success_tag), values)
+    }
+
+    /// Fuse `go_call()?` into `v, err := call(); if err != nil { return ... }`,
+    /// skipping the `lisette.Result`.
+    fn try_lower_fused_go_propagate(
+        &mut self,
+        expression: &Expression,
+        result_var_name: Option<&str>,
+        fx: &mut EmitEffects,
+    ) -> Option<(Vec<LoweredStatement>, String)> {
+        let plan = self.plan_call(expression)?;
+        if !matches!(plan.callee, CalleePlan::GoInterop(GoCallStrategy::Result)) {
+            return None;
+        }
+        let ok_ty = self.facts.peel_alias(&expression.get_type()).ok_type();
+        if ok_ty.is_unit()
+            || matches!(self.facts.peel_alias(&ok_ty), Type::Tuple(_))
+            || self.go_result_needs_nil_guard(&ok_ty)
+        {
+            return None;
+        }
+        let return_ctx = self.return_ctx();
+        let shape = return_ctx.lowered_shape()?;
+        let return_ty = return_ctx.expect_ty();
+
+        let want_value = !matches!(result_var_name, Some("_"));
+        let val_var = want_value.then(|| {
+            let v = self.fresh_var(Some("ret"));
+            self.declare(&v);
+            v
+        });
+        let err_var = self.fresh_var(Some("ret"));
+        self.declare(&err_var);
+
+        let (mut statements, call_str) =
+            self.lower_call(expression, None, ExpressionContext::value(), fx);
+        let bind_line = match &val_var {
+            Some(v) => format!("{}, {} := {}\n", v, err_var, call_str),
+            None => format!("_, {} := {}\n", err_var, call_str),
+        };
+        statements.push(LoweredStatement::RawGo(bind_line));
+
+        let failure_values = transition::lowered_err_values(self, &shape, &return_ty, &err_var, fx);
+        statements.push(transition::tag_check(
+            format!("{} != nil", err_var),
+            failure_values,
+        ));
+
+        let value = match result_var_name {
+            None => val_var.expect("ok value requested when result_var_name is None"),
+            Some("_") => "_".to_string(),
+            Some(name) => {
+                let v = val_var.expect("ok value requested for a named binding");
+                statements.push(self.bind_propagate_ok(name, &v));
+                name.to_string()
+            }
+        };
+        Some((statements, value))
     }
 
     /// Statement-position `inner?` (discards the ok value).

@@ -14,7 +14,7 @@ import lisette "github.com/ivov/lisette/prelude"
 func test() (int, bool) {
 	x := lisette.MakeOptionSome(10)
 	if x.Tag != lisette.OptionSome {
-		return *new(int), false
+		return 0, false
 	}
 	return x.SomeVal + 1, true
 }

@@ -14,7 +14,7 @@ description: |
 package main
 
 func missing() (int, bool) {
-	return *new(int), false
+	return 0, false
 }
 
 func main() {

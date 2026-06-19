@@ -1,13 +1,15 @@
 use crate::EmitEffects;
+use crate::GoCallStrategy;
 use crate::Planner;
 use crate::abi::AbiShape;
 use crate::context::expression::ExpressionContext;
 use crate::patterns::binding_decls::pattern_binds_name;
 use crate::patterns::tree_emitter::TreePlanner;
 use crate::plan::bodies::{ElseArm, IfPlan, LoweredBlock, LoweredStatement, PlacePlan};
-use crate::plan::calls::CallReturnShape;
+use crate::plan::calls::{CallPlan, CallReturnShape, CalleePlan};
 use crate::state::bindings::BindingValue;
 use syntax::ast::{Expression, MatchArm, Pattern};
+use syntax::types::Type;
 
 /// How to render the subject declaration line, based on body usage.
 enum SubjectDeclaration {
@@ -87,6 +89,30 @@ impl Planner<'_> {
         tree_emitter.lower(place)
     }
 
+    /// The shape a match subject fuses against: lowered Lisette `Result` callees
+    /// and single-value Go `(T, error)` calls. `None` keeps the lift-then-match
+    /// path (Partial, Option, comma-ok, flattened multi-returns).
+    fn fusable_result_shape(&self, subject: &Expression, plan: &CallPlan) -> Option<AbiShape> {
+        let shape = match (&plan.callee, &plan.return_shape) {
+            (_, CallReturnShape::Lowered(shape)) => shape.clone(),
+            (CalleePlan::GoInterop(GoCallStrategy::Result), _) => {
+                let ok_ty = self.facts.peel_alias(&subject.get_type()).ok_type();
+                if matches!(self.facts.peel_alias(&ok_ty), Type::Tuple(_))
+                    || self.go_result_needs_nil_guard(&ok_ty)
+                {
+                    return None;
+                }
+                if ok_ty.is_unit() {
+                    AbiShape::BareError
+                } else {
+                    AbiShape::ResultTuple
+                }
+            }
+            _ => return None,
+        };
+        matches!(shape, AbiShape::ResultTuple | AbiShape::BareError).then_some(shape)
+    }
+
     /// Fuse the lift+match into one `if err == nil { ... } else { ... }`
     /// when the scrutinee is a lowered call with simple `Ok`/`Err` arms.
     fn lower_fused_lowered_match(
@@ -97,14 +123,7 @@ impl Planner<'_> {
         fx: &mut EmitEffects,
     ) -> Option<Vec<LoweredStatement>> {
         let plan = self.plan_call(subject)?;
-        let CallReturnShape::Lowered(shape) = plan.return_shape else {
-            return None;
-        };
-        // Match-fusion only handles `Result`'s binary `Ok`/`Err` arms;
-        // Partial (3-way) and Option (Some/None) fall through to lift-then-match.
-        if !matches!(shape, AbiShape::ResultTuple | AbiShape::BareError) {
-            return None;
-        }
+        let shape = self.fusable_result_shape(subject, &plan)?;
         let (ok_arm, err_arm) = classify_result_arms(arms)?;
 
         // Err always carries a payload; Ok may not under BareError.
@@ -232,12 +251,24 @@ impl Planner<'_> {
         self.declare(&var);
         let staged = self.stage_composite(subject, ExpressionContext::value(), fx);
         setup.extend(staged.setup);
+        if !any_guard && is_plain_go_identifier(&staged.value) {
+            return (staged.value, SubjectDeclaration::None);
+        }
         let declaration = SubjectDeclaration::Deferred {
             var: var.clone(),
             expression: staged.value,
         };
         (var, declaration)
     }
+}
+
+fn is_plain_go_identifier(value: &str) -> bool {
+    let mut chars = value.chars();
+    match chars.next() {
+        Some(c) if c.is_ascii_alphabetic() || c == '_' => {}
+        _ => return false,
+    }
+    chars.all(|c| c.is_ascii_alphanumeric() || c == '_')
 }
 
 /// Recognize `[Ok(<...>), Err(<...>)]` (in either order, no guards).

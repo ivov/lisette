@@ -9,5 +9,5 @@ description: |
 package main
 
 func test() (int, bool) {
-	return *new(int), false
+	return 0, false
 }

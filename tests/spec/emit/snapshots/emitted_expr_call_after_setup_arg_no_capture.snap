@@ -38,7 +38,7 @@ func run() (int, error) {
 	}
 	check_4 := result_3
 	if check_4.Tag != lisette.ResultOk {
-		return *new(int), check_4.ErrVal
+		return 0, check_4.ErrVal
 	}
 	return add(check_4.OkVal, side()), nil
 }

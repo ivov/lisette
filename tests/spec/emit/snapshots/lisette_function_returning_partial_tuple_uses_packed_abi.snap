@@ -39,16 +39,15 @@ func test() {
 	} else {
 		result_4 = lisette.MakePartialOk[lisette.Tuple2[int, string], error](ret_2)
 	}
-	subject_1 := result_4
-	switch subject_1.Tag {
+	switch result_4.Tag {
 	case lisette.PartialOk:
-		_ = subject_1.OkVal.First
-		_ = subject_1.OkVal.Second
+		_ = result_4.OkVal.First
+		_ = result_4.OkVal.Second
 	case lisette.PartialErr:
-		_ = subject_1.ErrVal
+		_ = result_4.ErrVal
 	default:
-		_ = subject_1.OkVal.First
-		_ = subject_1.OkVal.Second
-		_ = subject_1.ErrVal
+		_ = result_4.OkVal.First
+		_ = result_4.OkVal.Second
+		_ = result_4.ErrVal
 	}
 }

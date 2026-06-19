@@ -26,8 +26,7 @@ import (
 func apply(f func(string) *flag.Flag, name string) bool {
 	raw_2 := f(name)
 	option_3 := lisette.OptionFromNilable[*flag.Flag](raw_2, raw_2 == nil)
-	subject_1 := option_3
-	if subject_1.Tag == lisette.OptionSome {
+	if option_3.Tag == lisette.OptionSome {
 		return true
 	}
 	return false

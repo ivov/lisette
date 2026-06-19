@@ -20,7 +20,7 @@ func main() {
 		if opt_2.Tag == lisette.OptionSome {
 			return opt_2.SomeVal, true
 		}
-		return *new(int), false
+		return 0, false
 	}
 	opt := lisette.MakeOptionSome(1)
 	_arg_6 := opt

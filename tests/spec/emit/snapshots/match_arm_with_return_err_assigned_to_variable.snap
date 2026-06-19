@@ -23,7 +23,7 @@ import (
 
 func safe_divide(a, b float64) (float64, bool) {
 	if b == 0.0 {
-		return *new(float64), false
+		return 0.0, false
 	}
 	return a / b, true
 }
@@ -31,9 +31,8 @@ func safe_divide(a, b float64) (float64, bool) {
 func parse_and_divide(a, b float64) lisette.Result[string, string] {
 	var result float64
 	option_2 := lisette.OptionFromCommaOk[float64](safe_divide(a, b))
-	subject_1 := option_2
-	if subject_1.Tag == lisette.OptionSome {
-		result = subject_1.SomeVal
+	if option_2.Tag == lisette.OptionSome {
+		result = option_2.SomeVal
 	} else {
 		return lisette.MakeResultErr[string, string]("division by zero")
 	}

@@ -17,7 +17,7 @@ import "errors"
 
 func might_fail(n int) (int, error) {
 	if n < 0 {
-		return *new(int), errors.New("negative")
+		return 0, errors.New("negative")
 	}
 	return n, nil
 }
