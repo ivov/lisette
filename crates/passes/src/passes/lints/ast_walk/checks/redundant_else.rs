@@ -46,9 +46,8 @@ pub fn check_redundant_else(expression: &Expression, ctx: &NodeCtx) {
     }
 }
 
-/// Byte offset of the `else` keyword between the consequence and the alternative,
-/// skipping whitespace and the consequence's closing brace. Returns `None` when a
-/// comment intervenes, so the lint never mislocates the keyword.
+/// Offset of the `else` keyword between a consequence and its alternative, or
+/// `None` when a comment intervenes so the keyword cannot be located by trimming.
 fn else_keyword_offset(source: &str, start: u32, end: u32) -> Option<u32> {
     let gap = source.get(start as usize..end as usize)?;
     let trimmed = gap.trim_start_matches(|c: char| c.is_ascii_whitespace() || c == '}');

@@ -1,0 +1,15 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [info] Needless boolean assignment
+   ╭─[test.lis:4:3]
+ 3 │       let mut x = false
+ 4 │ ╭─▶   if a == b {
+ 5 │ │       x = true
+ 6 │ │     } else {
+ 7 │ │       x = false
+ 8 │ ├─▶   }
+   · ╰──── can be simpler
+ 9 │       x
+   ╰────
+  help: Replace the `if` with `x = a == b` · code: [lint.needless_bool_assign]

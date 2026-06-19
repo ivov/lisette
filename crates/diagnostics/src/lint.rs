@@ -618,6 +618,46 @@ pub fn redundant_else(span: &Span) -> LisetteDiagnostic {
         )
 }
 
+pub fn needless_bool_assign(
+    span: &Span,
+    target: &str,
+    condition: &str,
+    negate: bool,
+) -> LisetteDiagnostic {
+    let help = if negate {
+        format!("Replace the `if` with `{target} = !({condition})`")
+    } else {
+        format!("Replace the `if` with `{target} = {condition}`")
+    };
+    LisetteDiagnostic::info("Needless boolean assignment")
+        .with_lint_code("needless_bool_assign")
+        .with_span_label(span, "can be simpler")
+        .with_help(help)
+}
+
+pub fn redundant_closure_call(span: &Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::info("Redundant closure call")
+        .with_lint_code("redundant_closure_call")
+        .with_span_label(span, "called immediately")
+        .with_help("Drop the `(|| ...)()` wrapper and use its body directly")
+}
+
+pub fn single_element_loop(span: &Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::info("Loop over a single element")
+        .with_lint_code("single_element_loop")
+        .with_span_label(span, "only one element")
+        .with_help("The loop body runs once. Bind the element with `let` and remove the loop")
+}
+
+pub fn while_let_loop(span: &Span, pattern: &str, subject: &str) -> LisetteDiagnostic {
+    LisetteDiagnostic::info("Manual `while let`")
+        .with_lint_code("while_let_loop")
+        .with_span_label(span, "can be a `while let`")
+        .with_help(format!(
+            "Replace the `loop` and `match` with `while let {pattern} = {subject}`"
+        ))
+}
+
 pub fn identical_match_arms(span: &Span) -> LisetteDiagnostic {
     LisetteDiagnostic::warn("Identical match arms")
         .with_lint_code("identical_match_arms")

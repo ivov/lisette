@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [info] Loop over a single element
+   ╭─[test.lis:4:12]
+ 3 │   let mut total = 0
+ 4 │   for x in [7] {
+   ·            ─┬─
+   ·             ╰── only one element
+ 5 │     total += x
+   ╰────
+  help: The loop body runs once. Bind the element with `let` and remove the loop · code: [lint.single_element_loop]

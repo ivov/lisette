@@ -321,7 +321,8 @@ pub(super) fn mentions_identifier(expression: &Expression, name: &str) -> bool {
 }
 
 // `?`, `return`, `break`, and `continue` target a scope outside a synthesized
-// closure, so a body containing them cannot be moved into one.
+// closure, and `defer` schedules at the enclosing function's return, so a body
+// containing any of them cannot move across a closure boundary unchanged.
 pub(super) fn has_escaping_control_flow(body: &Expression) -> bool {
     let mut found = false;
     visit_ast(
@@ -333,9 +334,28 @@ pub(super) fn has_escaping_control_flow(body: &Expression) -> bool {
                     | Expression::Propagate { .. }
                     | Expression::Break { .. }
                     | Expression::Continue { .. }
+                    | Expression::Defer { .. }
             );
         },
         &mut |_| {},
     );
     found
+}
+
+pub(super) fn reaches_loop_jump(expression: &Expression, include_break: bool) -> bool {
+    match expression {
+        Expression::Continue { .. } => true,
+        Expression::Break { .. } if include_break => true,
+        Expression::For { iterable, .. } => reaches_loop_jump(iterable, include_break),
+        Expression::While { condition, .. } => reaches_loop_jump(condition, include_break),
+        Expression::WhileLet { scrutinee, .. } => reaches_loop_jump(scrutinee, include_break),
+        Expression::Loop { .. }
+        | Expression::Function { .. }
+        | Expression::Lambda { .. }
+        | Expression::Task { .. } => false,
+        _ => expression
+            .children()
+            .into_iter()
+            .any(|child| reaches_loop_jump(child, include_break)),
+    }
 }

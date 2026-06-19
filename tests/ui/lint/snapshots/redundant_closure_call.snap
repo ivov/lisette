@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [info] Redundant closure call
+   ╭─[test.lis:3:3]
+ 2 │ pub fn f() -> int {
+ 3 │   (|| 42)()
+   ·   ────┬────
+   ·       ╰── called immediately
+ 4 │ }
+   ╰────
+  help: Drop the `(|| ...)()` wrapper and use its body directly · code: [lint.redundant_closure_call]

@@ -5948,7 +5948,7 @@ fn regexp_in_loop_for() {
 import "go:regexp"
 
 fn main() {
-  for s in ["a"] {
+  for s in ["a", "b"] {
     let _ = regexp.MatchString("[0-9]+", s)
   }
 }
@@ -5963,7 +5963,7 @@ fn regexp_in_loop_nested_in_if() {
 import "go:regexp"
 
 fn main() {
-  for s in ["a"] {
+  for s in ["a", "b"] {
     if s != "" {
       let _ = regexp.MatchString("a", s)
     }
@@ -6053,7 +6053,7 @@ import "go:regexp"
 
 fn main() {
   let pat = "[0-9]+"
-  for s in ["a"] {
+  for s in ["a", "b"] {
     let _ = regexp.MatchString(pat, s)
   }
 }
@@ -6069,7 +6069,7 @@ import "go:regexp"
 
 fn main() {
   let _ = regexp.MatchString("[0-9]+", "seed")
-  for s in ["a"] {
+  for s in ["a", "b"] {
     let _ = s
   }
 }
@@ -6085,7 +6085,7 @@ import "go:regexp"
 
 #[allow(regexp_in_loop)]
 fn main() {
-  for s in ["a"] {
+  for s in ["a", "b"] {
     let _ = regexp.MatchString("[0-9]+", s)
   }
 }
@@ -18290,5 +18290,337 @@ pub fn f(o: Option<int>) -> int {
         !codes.contains(&"lint.match_same_arms"),
         "merging `Some(2)` into the `Some(0) as x` arm would yield the malformed \
          `Some(0) as x | Some(2)`: {codes:?}"
+    );
+}
+
+#[test]
+fn needless_bool_assign() {
+    assert_lint_snapshot!(
+        r#"
+pub fn f(c: bool) -> bool {
+  let mut x = false
+  if c {
+    x = true
+  } else {
+    x = false
+  }
+  x
+}
+"#
+    );
+}
+
+#[test]
+fn needless_bool_assign_negated() {
+    assert_lint_snapshot!(
+        r#"
+pub fn f(c: bool) -> bool {
+  let mut x = false
+  if c {
+    x = false
+  } else {
+    x = true
+  }
+  x
+}
+"#
+    );
+}
+
+#[test]
+fn needless_bool_assign_comparison_condition() {
+    assert_lint_snapshot!(
+        r#"
+pub fn f(a: bool, b: bool) -> bool {
+  let mut x = false
+  if a == b {
+    x = true
+  } else {
+    x = false
+  }
+  x
+}
+"#
+    );
+}
+
+#[test]
+fn needless_bool_assign_different_targets_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+pub fn f(c: bool) -> bool {
+  let mut x = false
+  let mut y = false
+  if c {
+    x = true
+  } else {
+    y = false
+  }
+  x || y
+}
+"#
+    );
+}
+
+#[test]
+fn needless_bool_assign_non_bool_values_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+pub fn f(c: bool) -> int {
+  let mut x = 0
+  if c {
+    x = 1
+  } else {
+    x = 2
+  }
+  x
+}
+"#
+    );
+}
+
+#[test]
+fn needless_bool_assign_field_target_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+pub struct Box {
+  flag: bool
+}
+
+pub fn f(o: Box, c: bool) -> bool {
+  let mut obj = o
+  if c {
+    obj.flag = true
+  } else {
+    obj.flag = false
+  }
+  obj.flag
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_closure_call() {
+    assert_lint_snapshot!(
+        r#"
+pub fn f() -> int {
+  (|| 42)()
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_closure_call_with_argument_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+pub fn f() -> int {
+  (|x: int| x + 1)(5)
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_closure_call_escaping_return_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+pub fn f() -> int {
+  (|| {
+    return 5
+  })()
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_closure_call_defer_body_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:fmt"
+
+fn cleanup() {
+  fmt.Println("done")
+}
+
+pub fn f() {
+  (|| {
+    defer cleanup()
+  })()
+}
+"#
+    );
+}
+
+#[test]
+fn single_element_loop() {
+    assert_lint_snapshot!(
+        r#"
+pub fn f() -> int {
+  let mut total = 0
+  for x in [7] {
+    total += x
+  }
+  total
+}
+"#
+    );
+}
+
+#[test]
+fn single_element_loop_multiple_elements_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+pub fn f() -> int {
+  let mut total = 0
+  for x in [1, 2] {
+    total += x
+  }
+  total
+}
+"#
+    );
+}
+
+#[test]
+fn single_element_loop_break_in_body_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+pub fn f() -> int {
+  let mut total = 0
+  for x in [7] {
+    if x > 0 {
+      break
+    }
+    total += x
+  }
+  total
+}
+"#
+    );
+}
+
+#[test]
+fn single_element_loop_variable_iterable_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+pub fn f(xs: Slice<int>) -> int {
+  let mut total = 0
+  for x in xs {
+    total += x
+  }
+  total
+}
+"#
+    );
+}
+
+#[test]
+fn while_let_loop() {
+    assert_lint_snapshot!(
+        r#"
+import "go:fmt"
+
+pub fn drain(xs: Slice<int>) {
+  let mut it = xs
+  loop {
+    match it.get(0) {
+      Some(v) => {
+        fmt.Println(v)
+        it = it[1..]
+      },
+      _ => break,
+    }
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn while_let_loop_guard_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:fmt"
+
+pub fn f(it: Option<int>) {
+  loop {
+    match it {
+      Some(v) if v > 0 => fmt.Println(v),
+      _ => break,
+    }
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn while_let_loop_non_break_dismissal_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:fmt"
+
+pub fn f(it: Option<int>) {
+  loop {
+    match it {
+      Some(v) => fmt.Println(v),
+      _ => continue,
+    }
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn while_let_loop_value_carrying_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+pub fn f(xs: Slice<int>) -> int {
+  let mut it = xs
+  loop {
+    match it.get(0) {
+      Some(v) => {
+        it = it[1..]
+        if v > 100 {
+          break v
+        }
+      },
+      _ => break 0,
+    }
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn while_let_loop_single_variant_enum_no_warning() {
+    let mut fs = MockFileSystem::new();
+    let source = r#"
+import "go:fmt"
+
+enum Single { Only(int) }
+
+pub fn f(s: Single) {
+  loop {
+    match s {
+      Only(v) => fmt.Println(v),
+      _ => break,
+    }
+  }
+}
+"#;
+    fs.add_file(ENTRY_MODULE_ID, "main.lis", source);
+
+    let result = compile_check(fs);
+    let codes: Vec<&str> = result.lints.iter().filter_map(|l| l.code_str()).collect();
+    assert!(
+        !codes.contains(&"lint.while_let_loop"),
+        "a single-variant enum makes the variant pattern irrefutable, so the \
+         `while let` rewrite would loop forever: {codes:?}"
     );
 }

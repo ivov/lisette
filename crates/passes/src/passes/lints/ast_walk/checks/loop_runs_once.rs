@@ -1,3 +1,4 @@
+use super::helpers::reaches_loop_jump;
 use crate::passes::walk::NodeCtx;
 use syntax::ast::{Expression, Span};
 
@@ -11,7 +12,7 @@ pub fn check_loop_runs_once(expression: &Expression, ctx: &NodeCtx) {
         _ => return,
     };
 
-    if always_exits(body) && !reenters_loop(body) {
+    if always_exits(body) && !reaches_loop_jump(body, false) {
         let keyword = Span::new(span.file_id, span.byte_offset, keyword_len);
         ctx.sink.push(diagnostics::lint::loop_runs_once(&keyword));
     }
@@ -62,20 +63,4 @@ fn block_exits(items: &[Expression]) -> bool {
         }
     }
     false
-}
-
-/// True when `expression` can reach a `continue` targeting this loop, including in
-/// a nested loop's header (iterable, condition, scrutinee) but not its body.
-fn reenters_loop(expression: &Expression) -> bool {
-    match expression {
-        Expression::Continue { .. } => true,
-        Expression::For { iterable, .. } => reenters_loop(iterable),
-        Expression::While { condition, .. } => reenters_loop(condition),
-        Expression::WhileLet { scrutinee, .. } => reenters_loop(scrutinee),
-        Expression::Loop { .. }
-        | Expression::Function { .. }
-        | Expression::Lambda { .. }
-        | Expression::Task { .. } => false,
-        _ => expression.children().into_iter().any(reenters_loop),
-    }
 }
