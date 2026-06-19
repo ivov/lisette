@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Type mismatch
+   ╭─[test.lis:4:3]
+ 3 │   let mut opt = Some(1)
+ 4 │   while let Some(_) = opt {
+   ·   ──┬──
+   ·     ╰── evaluates to `()`, but expected `int` here
+ 5 │     opt = None
+   ╰────
+  help: `while` loops are for side effects and always evaluate to `()`. Use `loop` with `break <value>` to produce a value during iteration · code: [infer.loop_produces_no_value]

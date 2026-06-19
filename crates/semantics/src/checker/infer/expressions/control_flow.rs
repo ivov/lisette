@@ -406,8 +406,7 @@ impl InferCtx<'_, '_> {
         span: Span,
         expected_ty: &Type,
     ) -> Expression {
-        let unit_ty = self.type_unit();
-        self.unify(expected_ty, &unit_ty, &span);
+        self.unify_statement_loop(expected_ty, &span, "while");
 
         let new_condition = self.infer_condition(*condition, &span);
         if let Some(span) = Self::find_propagate(&new_condition) {
@@ -440,8 +439,7 @@ impl InferCtx<'_, '_> {
         span: Span,
         expected_ty: &Type,
     ) -> Expression {
-        let unit_ty = self.type_unit();
-        self.unify(expected_ty, &unit_ty, &span);
+        self.unify_statement_loop(expected_ty, &span, "while");
 
         let scrutinee_ty = self.new_type_var();
         let new_scrutinee = self.infer_expression(*scrutinee, &scrutinee_ty);
@@ -488,8 +486,7 @@ impl InferCtx<'_, '_> {
         expected_ty: &Type,
     ) -> Expression {
         let store = self.store;
-        let unit_ty = self.type_unit();
-        self.unify(expected_ty, &unit_ty, &span);
+        self.unify_statement_loop(expected_ty, &span, "for");
 
         let iterable_ty = self.new_type_var();
         let new_iterable = self.infer_expression(*iterable, &iterable_ty);

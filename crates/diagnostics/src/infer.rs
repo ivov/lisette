@@ -2330,6 +2330,19 @@ pub fn break_value_in_non_loop(span: Span) -> LisetteDiagnostic {
         .with_help("`break` with a value is only meaningful in `loop` expressions, which can return the value. In `for` and `while` loops, use `break` without a value.")
 }
 
+pub fn loop_produces_no_value(span: &Span, keyword: &str, expected_ty: &str) -> LisetteDiagnostic {
+    let keyword_span = Span::new(span.file_id, span.byte_offset, keyword.len() as u32);
+    LisetteDiagnostic::error("Type mismatch")
+        .with_infer_code("loop_produces_no_value")
+        .with_span_label(
+            &keyword_span,
+            format!("evaluates to `()`, but expected `{expected_ty}` here"),
+        )
+        .with_help(format!(
+            "`{keyword}` loops are for side effects and always evaluate to `()`. Use `loop` with `break <value>` to produce a value during iteration."
+        ))
+}
+
 pub fn defer_in_loop(span: Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("`defer` inside loop")
         .with_infer_code("defer_in_loop")

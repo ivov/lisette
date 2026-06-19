@@ -68,6 +68,22 @@ impl InferCtx<'_, '_> {
         }
     }
 
+    pub(super) fn unify_statement_loop(&mut self, expected_ty: &Type, span: &Span, keyword: &str) {
+        let unit_ty = self.type_unit();
+        if let Err(unify_error) = self.try_unify(expected_ty, &unit_ty, span) {
+            if unify_error == UnifyError::AlreadyReported {
+                return;
+            }
+            let expected = expected_ty.resolve_in(&self.env);
+            let (types, _) = Type::remove_vars(&[&expected]);
+            self.sink.push(diagnostics::infer::loop_produces_no_value(
+                span,
+                keyword,
+                &types[0].to_string(),
+            ));
+        }
+    }
+
     pub(super) fn try_unify(
         &mut self,
         t1: &Type,

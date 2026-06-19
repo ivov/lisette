@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Type mismatch
+   ╭─[test.lis:3:3]
+ 2 │ fn returns_string() -> string {
+ 3 │   for i in 2.. {
+   ·   ─┬─
+   ·    ╰── evaluates to `()`, but expected `string` here
+ 4 │     let _ = i
+   ╰────
+  help: `for` loops are for side effects and always evaluate to `()`. Use `loop` with `break <value>` to produce a value during iteration · code: [infer.loop_produces_no_value]

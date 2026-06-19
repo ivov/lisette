@@ -1,10 +1,18 @@
 # Control Flow
 
-Lisette is expression-oriented: blocks, `if`/`else`, and `loop` produce values. `for` and `while` are statements, so they do not produce values. Branching with `match` is covered in [`08-pattern-matching.md`](08-pattern-matching.md).
+Lisette is expression-oriented, so its control flow constructs produce values:
+
+- block → value from last expression
+- `if... else` → value from branch
+- `loop` → value from `break` or `()` for bare `break`
+- `for` → always `()`
+- `while` → always `()`
+
+Branching with `match` is covered in [`08-pattern-matching.md`](08-pattern-matching.md).
 
 ## Blocks
 
-A block is a sequence of expressions in braces. The last expression is the block's value. Bindings inside are not visible outside.
+A block is a sequence of expressions inside braces. The last expression is the block's value. Bindings inside are not visible outside.
 
 ```rust
 let value = {
@@ -71,6 +79,8 @@ let value = if let Some(x) = opt {
 
 Iterates over a collection or range.
 
+A `for` loop runs for side effects and always evaluates to `()`. If you need a loop that evaluates to a value, use `loop` with `break <value>`.
+
 ```rust
 for item in items {
   process(item)
@@ -135,11 +145,11 @@ for i in 0.. {
 }
 ```
 
-`for` is a statement, so it does not produce a value.
-
 ## `while`
 
-Repeats while a condition is true.
+Repeats while a condition is true. 
+
+A `while` loop runs for its side effects and always evaluates to `()`. For a loop that evaluates to a value, use `loop` with `break <value>`.
 
 ```rust
 let mut count = 0
@@ -158,8 +168,6 @@ while let Some(item) = iter.next() {
 }
 ```
 
-`while` is a statement, so it does not produce a value.
-
 ## `loop`
 
 An infinite loop. Exit with `break`.
@@ -172,16 +180,18 @@ loop {
 }
 ```
 
-`break` can carry a value, making `loop` an expression. All `break` expressions in a loop must produce the same type. A bare `break` gives the loop type `()`.
+A `loop` has no exit other than `break`, which can carry a value, so a `loop` evaluates to the value carried by `break`. 
 
 ```rust
 let result = loop {
   let n = try_next()
-  if n > 0 {
+  if n > 5 {
     break n
   }
 }
 ```
+
+A bare `break` gives the loop type `()`.
 
 ## `break` / `continue`
 

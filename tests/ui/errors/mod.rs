@@ -8247,6 +8247,57 @@ fn test() {
 }
 
 #[test]
+fn infer_for_loop_in_tail_position() {
+    let input = r#"
+fn test() -> int {
+  let mut total = 0
+  for i in 0..10 {
+    total += i
+  }
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_for_open_ended_range_in_tail_position() {
+    let input = r#"
+fn returns_string() -> string {
+  for i in 2.. {
+    let _ = i
+  }
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_while_loop_in_tail_position() {
+    let input = r#"
+fn test() -> int {
+  let mut n = 0
+  while n < 10 {
+    n += 1
+  }
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_while_let_loop_in_tail_position() {
+    let input = r#"
+fn test() -> int {
+  let mut opt = Some(1)
+  while let Some(_) = opt {
+    opt = None
+  }
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
 fn infer_invalid_main_with_return_type() {
     let mut fs = MockFileSystem::new();
     let source = r#"
