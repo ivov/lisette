@@ -15,6 +15,7 @@ emit = { package = "lisette-emit", path = "../crates/emit" }
 stdlib = { package = "lisette-stdlib", path = "../crates/stdlib" }
 deps = { package = "lisette-deps", path = "../crates/deps" }
 rustc-hash.workspace = true
+rayon.workspace = true
 insta.workspace = true
 miette.workspace = true
 serde.workspace = true

@@ -6,6 +6,8 @@ mod harness;
 use std::fs;
 use std::process::Command;
 
+use rayon::prelude::*;
+
 use harness::{
     EmittedTest, HarvestedTest, compile_e2e_suite_test, harvest_snapshots, prelude_dir,
     read_go_version, read_skip_list, run_go_test, run_go_vet, skip_reason_for_imports,
@@ -38,40 +40,55 @@ fn e2e_suite() {
 
     let skip_list = read_skip_list();
 
+    enum Outcome {
+        Denylist(String),
+        SkippedImport(String, String),
+        EmitFailure(String, String),
+        Included(String),
+        BuildOnly(String),
+    }
+
+    let outcomes: Vec<Outcome> = harvested
+        .par_iter()
+        .map(
+            |HarvestedTest {
+                 name,
+                 input,
+                 snap_body,
+             }| {
+                if skip_list.contains(name) {
+                    return Outcome::Denylist(name.clone());
+                }
+                if let Some(reason) = skip_reason_for_imports(snap_body) {
+                    return Outcome::SkippedImport(name.clone(), reason);
+                }
+                let EmittedTest { go_code, entry } =
+                    match compile_e2e_suite_test(input, &format!("test_{name}")) {
+                        Ok(emitted) => emitted,
+                        Err(error) => return Outcome::EmitFailure(name.clone(), error),
+                    };
+                write_subpackage(&target, name, &go_code, entry).expect("write subpackage");
+                if entry.is_some() {
+                    Outcome::Included(name.clone())
+                } else {
+                    Outcome::BuildOnly(name.clone())
+                }
+            },
+        )
+        .collect();
+
     let mut emit_failures = Vec::new();
     let mut skipped_imports = Vec::new();
     let mut skipped_denylist = Vec::new();
     let mut build_only = Vec::new();
     let mut included = Vec::new();
-
-    for HarvestedTest {
-        name,
-        input,
-        snap_body,
-    } in &harvested
-    {
-        if skip_list.contains(name) {
-            skipped_denylist.push(name.clone());
-            continue;
-        }
-        if let Some(reason) = skip_reason_for_imports(snap_body) {
-            skipped_imports.push((name.clone(), reason));
-            continue;
-        }
-        let result = match compile_e2e_suite_test(input, &format!("test_{name}")) {
-            Ok(r) => r,
-            Err(e) => {
-                emit_failures.push((name.clone(), e));
-                continue;
-            }
-        };
-        let EmittedTest { go_code, entry } = result;
-
-        write_subpackage(&target, name, &go_code, entry).expect("write subpackage");
-        if entry.is_some() {
-            included.push(name.clone());
-        } else {
-            build_only.push(name.clone());
+    for outcome in outcomes {
+        match outcome {
+            Outcome::Denylist(name) => skipped_denylist.push(name),
+            Outcome::SkippedImport(name, reason) => skipped_imports.push((name, reason)),
+            Outcome::EmitFailure(name, error) => emit_failures.push((name, error)),
+            Outcome::Included(name) => included.push(name),
+            Outcome::BuildOnly(name) => build_only.push(name),
         }
     }
 
