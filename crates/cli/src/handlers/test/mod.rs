@@ -51,7 +51,10 @@ pub fn test(path: Option<String>, go_flags: Vec<String>) -> i32 {
             &run.events,
             &prep.manifest.project.name,
         );
-        eprint!("{}", render(&report, use_color(), started.elapsed()));
+        eprint!(
+            "{}",
+            render(&report, &outcome.sources, use_color(), started.elapsed())
+        );
 
         let build_error = report.build_output.trim();
         if !build_error.is_empty() {

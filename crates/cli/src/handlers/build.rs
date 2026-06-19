@@ -9,7 +9,7 @@ use crate::lock::acquire_target_lock;
 use crate::workspace::WorkspaceBindgen;
 use diagnostics::render::{self, Filter};
 use lisette::fs::{LocalFileSystem, prune_orphan_go_files};
-use lisette::pipeline::{CompileConfig, CompilePhase, TestIndex, compile};
+use lisette::pipeline::{CompileConfig, CompilePhase, Sources, TestIndex, compile};
 
 pub fn emit(path: Option<String>, sourcemap: bool) -> i32 {
     with_locked_project(path, |prep| {
@@ -167,6 +167,7 @@ pub(super) struct BuildOptions {
 pub(super) struct BuildOutcome {
     pub code: i32,
     pub test_index: TestIndex,
+    pub sources: Sources,
 }
 
 impl BuildOutcome {
@@ -174,6 +175,7 @@ impl BuildOutcome {
         Self {
             code,
             test_index: TestIndex::default(),
+            sources: Sources::default(),
         }
     }
 }
@@ -427,6 +429,7 @@ pub(super) fn build_locked(prep: &BuildPrep, options: BuildOptions) -> BuildOutc
     BuildOutcome {
         code: 0,
         test_index: result.test_index,
+        sources: result.sources,
     }
 }
 

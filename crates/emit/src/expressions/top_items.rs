@@ -24,18 +24,30 @@ impl Planner<'_> {
                 if self.facts.is_test(&self.facts.qualified_current(name)) {
                     let callee = self.pick_go_function_name(function, false, is_public);
                     let test_name = go_name::go_test_function_name(name);
+                    let test_kit = go_name::GeneratedPackage::TestKit.qualifier();
                     fx.require_testing();
                     let testing = go_name::GeneratedPackage::Testing.qualifier();
                     let call = if function.params.is_empty() {
                         format!("{callee}()")
                     } else {
                         fx.require_testkit();
-                        format!(
-                            "{callee}({}.New(t))",
-                            go_name::GeneratedPackage::TestKit.qualifier()
-                        )
+                        format!("{callee}({test_kit}.New(t))")
                     };
-                    let wrapper = format!("func {test_name}(t *{testing}.T) {{\n\t{call}\n}}");
+                    let body = if function.return_type.is_result() {
+                        fx.require_testkit();
+                        let span = function.name_span;
+                        let (file, lo, hi) = (
+                            span.file_id,
+                            span.byte_offset,
+                            span.byte_offset + span.byte_length,
+                        );
+                        format!(
+                            "if err := {call}; err != nil {{\n\t\t{test_kit}.Fail(t, {file}, {lo}, {hi}, \"result_err\", \"test returned Err\", {test_kit}.ErrOperand(err))\n\t}}"
+                        )
+                    } else {
+                        call
+                    };
+                    let wrapper = format!("func {test_name}(t *{testing}.T) {{\n\t{body}\n}}");
                     format!("{doc_comment}{code}\n\n{wrapper}")
                 } else {
                     format!("{}{}", doc_comment, code)

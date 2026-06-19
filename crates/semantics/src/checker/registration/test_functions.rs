@@ -78,12 +78,27 @@ fn flag_misplaced_methods(methods: &[Expression], sink: &LocalSink) {
     }
 }
 
-fn is_unit_return(annotation: &Annotation) -> bool {
+fn is_unit_annotation(annotation: &Annotation) -> bool {
     match annotation {
         Annotation::Unknown => true,
         Annotation::Tuple { elements, .. } => elements.is_empty(),
+        Annotation::Constructor { name, params, .. } => name == "Unit" && params.is_empty(),
         _ => false,
     }
+}
+
+fn is_supported_return(annotation: &Annotation) -> bool {
+    if is_unit_annotation(annotation) {
+        return true;
+    }
+    matches!(
+        annotation,
+        Annotation::Constructor { name, params, .. }
+            if name == "Result"
+                && params.len() == 2
+                && is_unit_annotation(&params[0])
+                && matches!(&params[1], Annotation::Constructor { name, .. } if name == "error")
+    )
 }
 
 fn module_shadows_test_context(store: &Store, module_id: &str) -> bool {
@@ -152,7 +167,7 @@ fn collect_test_candidates(
             };
             if !generics.is_empty()
                 || !params_supported(params, context_shadowed)
-                || !is_unit_return(return_annotation)
+                || !is_supported_return(return_annotation)
             {
                 sink.push(diagnostics::attribute::test_unsupported_signature(
                     name_span,

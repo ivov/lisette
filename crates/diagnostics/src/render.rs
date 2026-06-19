@@ -143,6 +143,26 @@ fn render(
     }
 }
 
+pub fn render_to_string(
+    diagnostic: &LisetteDiagnostic,
+    source: &str,
+    filename: &str,
+    use_color: bool,
+) -> String {
+    let handler = if use_color {
+        color_handler(Style::new().red())
+    } else {
+        nocolor_handler()
+    };
+    let report = diagnostic
+        .clone()
+        .with_color(use_color)
+        .with_source_code(IndexedSource::new(source), filename.to_string());
+    let mut output = String::new();
+    let _ = handler.render_report(&mut output, report.as_ref());
+    output
+}
+
 fn render_group<F: Fn(u32) -> Option<(String, String)>>(
     diagnostics: &[&LisetteDiagnostic],
     highlight: Style,

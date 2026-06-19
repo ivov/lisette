@@ -3875,6 +3875,48 @@ fn test_attribute_with_return_rejected() {
 }
 
 #[test]
+fn test_attribute_with_result_unit_error_return_accepted() {
+    let fs = test_attribute_fs(
+        "pub fn add(a: int, b: int) -> int { a + b }",
+        "import \"go:errors\"\n\n#[test]\nfn checks() -> Result<(), error> { Err(errors.New(\"x\")) }",
+    );
+    let result = infer_module("_entry_", fs);
+    assert!(
+        !has_code(&result, "test_unsupported_signature"),
+        "a `Result<(), error>` test must be accepted, got: {:?}",
+        result.errors
+    );
+}
+
+#[test]
+fn test_attribute_with_non_error_result_return_rejected() {
+    let fs = test_attribute_fs(
+        "pub fn add(a: int, b: int) -> int { a + b }",
+        "struct MyErr {}\n\n#[test]\nfn checks() -> Result<(), MyErr> { Err(MyErr {}) }",
+    );
+    let result = infer_module("_entry_", fs);
+    assert!(
+        has_code(&result, "test_unsupported_signature"),
+        "a non-`error` Result test is deferred and must be rejected, got: {:?}",
+        result.errors
+    );
+}
+
+#[test]
+fn local_error_type_shadow_rejected() {
+    let fs = test_attribute_fs(
+        "pub fn add(a: int, b: int) -> int { a + b }",
+        "interface error { fn code() -> int }\n\n#[test]\nfn checks() -> Result<(), error> { Ok(()) }",
+    );
+    let result = infer_module("_entry_", fs);
+    assert!(
+        has_code(&result, "prelude_type_shadowed"),
+        "shadowing the prelude `error` type must be rejected, got: {:?}",
+        result.errors
+    );
+}
+
+#[test]
 fn test_attribute_with_generics_rejected() {
     let fs = test_attribute_fs(
         "pub fn add(a: int, b: int) -> int { a + b }",

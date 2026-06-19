@@ -535,6 +535,9 @@ pub struct GoTestEvent {
     pub output: Option<String>,
     /// `build-*` events name the package here, not in `package`.
     pub import_path: Option<String>,
+    /// `attr` events carry a key/value.
+    pub key: Option<String>,
+    pub value: Option<String>,
 }
 
 pub struct TestRun {

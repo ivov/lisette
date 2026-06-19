@@ -21,6 +21,9 @@ pub struct SourceInfo {
     pub filename: String,
 }
 
+/// Per-file source, with key as file_id, for mapping diagnostics back to source text.
+pub type Sources = HashMap<u32, SourceInfo>;
+
 #[derive(Debug, Clone)]
 pub struct CompileConfig {
     pub target_phase: CompilePhase,
@@ -38,7 +41,7 @@ pub struct CompileResult {
     pub output: Vec<OutputFile>,
     pub errors: Vec<LisetteDiagnostic>,
     pub lints: Vec<LisetteDiagnostic>,
-    pub sources: HashMap<u32, SourceInfo>,
+    pub sources: Sources,
     pub user_file_count: usize,
     pub live_modules: Vec<String>,
     pub emit_stamps: Vec<EmitStamp>,

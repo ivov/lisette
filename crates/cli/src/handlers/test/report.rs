@@ -3,10 +3,18 @@ use std::time::Duration;
 
 use owo_colors::OwoColorize;
 use semantics::store::ENTRY_MODULE_ID;
+use serde::Deserialize;
+use syntax::ast::Span;
 
 use crate::go_cli::GoTestEvent;
 use crate::output::format_elapsed;
-use lisette::pipeline::TestIndex;
+use diagnostics::LisetteDiagnostic;
+use lisette::pipeline::{Sources, TestIndex};
+
+/// Per (package, test): expected chunk count `n` and the gathered `(index, hex)` chunks.
+type FailChunks = HashMap<(String, String), (usize, Vec<(usize, String)>)>;
+
+const FAIL_ATTR_KEY: &str = "lisette-fail";
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Status {
@@ -16,12 +24,37 @@ pub enum Status {
     NotRun,
 }
 
+/// One framed chunk of a failure record: `d` concatenated over `i in 0..n`.
+#[derive(Deserialize)]
+struct FailEnvelope {
+    i: usize,
+    n: usize,
+    d: String,
+}
+
+#[derive(Deserialize, Clone)]
+struct Operand {
+    label: String,
+    value: String,
+}
+
+#[derive(Deserialize, Clone)]
+pub struct FailureRecord {
+    file: u32,
+    lo: u32,
+    hi: u32,
+    message: String,
+    #[serde(default)]
+    operands: Vec<Operand>,
+}
+
 pub struct TestRow {
     pub package: String,
     pub name: String,
     pub status: Status,
     pub elapsed: Option<f64>,
     pub output: String,
+    pub failure: Option<FailureRecord>,
     pub children: Vec<TestRow>,
 }
 
@@ -41,8 +74,21 @@ pub fn build_report(index: &TestIndex, events: &[GoTestEvent], go_module: &str) 
     let mut package_output: HashMap<String, String> = HashMap::new();
     let mut failed_packages: HashSet<String> = HashSet::new();
     let mut build_failed_packages: HashSet<String> = HashSet::new();
+    let mut fail_chunks: FailChunks = HashMap::new();
 
     for event in events {
+        if event.action == "attr"
+            && event.key.as_deref() == Some(FAIL_ATTR_KEY)
+            && let (Some(test), Some(value)) = (&event.test, &event.value)
+            && let Ok(envelope) = serde_json::from_str::<FailEnvelope>(value)
+        {
+            let entry = fail_chunks
+                .entry((event.package.clone(), test.clone()))
+                .or_insert((envelope.n, Vec::new()));
+            entry.0 = envelope.n;
+            entry.1.push((envelope.i, envelope.d));
+            continue;
+        }
         let Some(test) = &event.test else {
             match event.action.as_str() {
                 "build-output" => {
@@ -93,6 +139,8 @@ pub fn build_report(index: &TestIndex, events: &[GoTestEvent], go_module: &str) 
         }
     }
 
+    let failures = reassemble_failures(fail_chunks);
+
     let mut rows = Vec::new();
     for test in index.tests() {
         let prefix = format!("{}.", test.module_id);
@@ -112,13 +160,15 @@ pub fn build_report(index: &TestIndex, events: &[GoTestEvent], go_module: &str) 
             None if started.contains(&key) => (Status::Aborted, None),
             None => (Status::NotRun, None),
         };
-        let children = collect_children(&package, &go_name, &terminal, &started, &outputs);
+        let children =
+            collect_children(&package, &go_name, &terminal, &started, &outputs, &failures);
         rows.push(TestRow {
             package,
             name: fn_name.to_string(),
             status,
             elapsed,
             output: outputs.get(&key).cloned().unwrap_or_default(),
+            failure: failures.get(&key).cloned(),
             children,
         });
     }
@@ -135,12 +185,53 @@ fn go_test_name(fn_name: &str) -> String {
     emit::go_test_function_name(fn_name)
 }
 
+/// Requires every index `0..n`; a missing chunk drops to raw output, not a truncated diagnostic.
+fn reassemble_failures(chunks: FailChunks) -> HashMap<(String, String), FailureRecord> {
+    chunks
+        .into_iter()
+        .filter_map(|(key, (n, parts))| reassemble_one(n, parts).map(|record| (key, record)))
+        .collect()
+}
+
+fn reassemble_one(n: usize, parts: Vec<(usize, String)>) -> Option<FailureRecord> {
+    if n == 0 {
+        return None;
+    }
+    let mut slots: Vec<Option<String>> = vec![None; n];
+    for (i, d) in parts {
+        *slots.get_mut(i)? = Some(d);
+    }
+    let mut joined = String::new();
+    for slot in slots {
+        joined.push_str(&slot?);
+    }
+    let bytes = decode_hex(&joined)?;
+    serde_json::from_slice::<FailureRecord>(&bytes).ok()
+}
+
+fn decode_hex(hex: &str) -> Option<Vec<u8>> {
+    if !hex.len().is_multiple_of(2) {
+        return None;
+    }
+    let nibble = |b: u8| match b {
+        b'0'..=b'9' => Some(b - b'0'),
+        b'a'..=b'f' => Some(b - b'a' + 10),
+        b'A'..=b'F' => Some(b - b'A' + 10),
+        _ => None,
+    };
+    hex.as_bytes()
+        .chunks_exact(2)
+        .map(|pair| Some((nibble(pair[0])? << 4) | nibble(pair[1])?))
+        .collect()
+}
+
 fn collect_children(
     package: &str,
     parent: &str,
     terminal: &HashMap<(String, String), (Status, Option<f64>)>,
     started: &HashSet<(String, String)>,
     outputs: &HashMap<(String, String), String>,
+    failures: &HashMap<(String, String), FailureRecord>,
 ) -> Vec<TestRow> {
     let prefix = format!("{parent}/");
     let mut direct: Vec<&String> = terminal
@@ -169,7 +260,8 @@ fn collect_children(
                 status,
                 elapsed,
                 output: outputs.get(&key).cloned().unwrap_or_default(),
-                children: collect_children(package, full, terminal, started, outputs),
+                failure: failures.get(&key).cloned(),
+                children: collect_children(package, full, terminal, started, outputs, failures),
             }
         })
         .collect()
@@ -182,7 +274,7 @@ fn package_of_import_path(import_path: &str) -> &str {
         .map_or(import_path, |(pkg, _)| pkg)
 }
 
-pub fn render(report: &Report, color: bool, total: Duration) -> String {
+pub fn render(report: &Report, sources: &Sources, color: bool, total: Duration) -> String {
     let mut out = String::from("\n");
 
     if report.rows.is_empty() {
@@ -198,7 +290,7 @@ pub fn render(report: &Report, color: bool, total: Duration) -> String {
     for (package, mut group) in by_package {
         group.sort_by(|a, b| a.name.cmp(&b.name));
         out.push_str(&format!("  {package}\n"));
-        render_rows(&mut out, &group, "    ", color);
+        render_rows(&mut out, &group, "    ", sources, color);
 
         // Crash before any test ran (init/`TestMain` panic): cause is package-level only.
         if !report.build_failed_packages.contains(package)
@@ -222,7 +314,7 @@ pub fn render(report: &Report, color: bool, total: Duration) -> String {
     out
 }
 
-fn render_rows(out: &mut String, rows: &[&TestRow], prefix: &str, color: bool) {
+fn render_rows(out: &mut String, rows: &[&TestRow], prefix: &str, sources: &Sources, color: bool) {
     for (i, row) in rows.iter().enumerate() {
         let last = i + 1 == rows.len();
         let branch = if last { "└── " } else { "├── " };
@@ -249,7 +341,15 @@ fn render_rows(out: &mut String, rows: &[&TestRow], prefix: &str, color: bool) {
 
         let child_prefix = format!("{prefix}{}", if last { "    " } else { "│   " });
 
-        if matches!(row.status, Status::Failed | Status::Aborted) {
+        if let Some(block) = row
+            .failure
+            .as_ref()
+            .and_then(|record| render_failure(record, sources, color))
+        {
+            for line in block.lines() {
+                out.push_str(&format!("{child_prefix}{line}\n"));
+            }
+        } else if matches!(row.status, Status::Failed | Status::Aborted) {
             for line in row.output.lines() {
                 let line = line.trim_end();
                 if line.is_empty() {
@@ -261,8 +361,29 @@ fn render_rows(out: &mut String, rows: &[&TestRow], prefix: &str, color: bool) {
         }
 
         let children: Vec<&TestRow> = row.children.iter().collect();
-        render_rows(out, &children, &child_prefix, color);
+        render_rows(out, &children, &child_prefix, sources, color);
     }
+}
+
+fn render_failure(record: &FailureRecord, sources: &Sources, color: bool) -> Option<String> {
+    let info = sources.get(&record.file)?;
+    let span = Span::new(record.file, record.lo, record.hi.saturating_sub(record.lo));
+    let label = record
+        .operands
+        .first()
+        .map(|operand| operand.value.clone())
+        .unwrap_or_else(|| record.message.clone());
+    let mut diagnostic =
+        LisetteDiagnostic::error(record.message.clone()).with_span_primary_label(&span, label);
+    for operand in record.operands.iter().skip(1) {
+        diagnostic = diagnostic.with_note(format!("{}: {}", operand.label, operand.value));
+    }
+    Some(diagnostics::render::render_to_string(
+        &diagnostic,
+        &info.source,
+        &info.filename,
+        color,
+    ))
 }
 
 fn summary(rows: &[TestRow], total: Duration) -> String {
@@ -319,6 +440,7 @@ fn dim(text: &str, color: bool) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use lisette::pipeline::SourceInfo;
     use syntax::ast::Span;
     use syntax::program::TestFunction;
 
@@ -348,6 +470,8 @@ mod tests {
             elapsed: Some(0.003),
             output: output.map(str::to_string),
             import_path: None,
+            key: None,
+            value: None,
         }
     }
 
@@ -359,7 +483,34 @@ mod tests {
             elapsed: None,
             output: Some(output.to_string()),
             import_path: Some(format!("{package} [{package}.test]")),
+            key: None,
+            value: None,
         }
+    }
+
+    fn attr_event(package: &str, test: &str, value: &str) -> GoTestEvent {
+        GoTestEvent {
+            action: "attr".to_string(),
+            package: package.to_string(),
+            test: Some(test.to_string()),
+            elapsed: None,
+            output: None,
+            import_path: None,
+            key: Some(FAIL_ATTR_KEY.to_string()),
+            value: Some(value.to_string()),
+        }
+    }
+
+    fn no_sources() -> Sources {
+        Sources::default()
+    }
+
+    fn hex_encode(s: &str) -> String {
+        s.bytes().map(|b| format!("{b:02x}")).collect()
+    }
+
+    fn fail_value(inner_json: &str) -> String {
+        format!(r#"{{"i":0,"n":1,"d":"{}"}}"#, hex_encode(inner_json))
     }
 
     #[test]
@@ -370,7 +521,7 @@ mod tests {
             event("pass", "demo/math", Some("TestAddsNumbers"), None),
         ];
         let report = build_report(&index, &events, "demo");
-        let text = render(&report, false, Duration::from_millis(7));
+        let text = render(&report, &no_sources(), false, Duration::from_millis(7));
 
         assert!(text.contains("  demo\n"));
         assert!(text.contains("✓ root_smoke"));
@@ -394,7 +545,7 @@ mod tests {
         assert_eq!(report.rows[0].children.len(), 1);
         assert_eq!(report.rows[0].children[0].name, "alpha");
 
-        let text = render(&report, false, Duration::from_millis(1));
+        let text = render(&report, &no_sources(), false, Duration::from_millis(1));
         let parent_line = text.lines().position(|l| l.contains("parent")).unwrap();
         let child_line = text.lines().position(|l| l.contains("alpha")).unwrap();
         assert!(child_line > parent_line, "subtest renders under its parent");
@@ -422,7 +573,7 @@ mod tests {
             event("fail", "demo", Some("TestParent"), None),
         ];
         let report = build_report(&index, &events, "demo");
-        let text = render(&report, false, Duration::from_millis(1));
+        let text = render(&report, &no_sources(), false, Duration::from_millis(1));
 
         assert!(
             !text.contains("✗ parent") && !text.contains("✓ parent"),
@@ -457,7 +608,7 @@ mod tests {
         assert_eq!(inner.name, "inner");
         assert_eq!(inner.status, Status::Failed);
 
-        let text = render(&report, false, Duration::from_millis(1));
+        let text = render(&report, &no_sources(), false, Duration::from_millis(1));
         assert!(text.contains("boom"));
         assert_eq!(exit_code(&report.rows, false), 1);
     }
@@ -470,7 +621,7 @@ mod tests {
             event("output", "demo", Some("TestBoom"), Some("panic: boom\n")),
         ];
         let report = build_report(&index, &events, "demo");
-        let text = render(&report, false, Duration::from_millis(2));
+        let text = render(&report, &no_sources(), false, Duration::from_millis(2));
 
         assert!(text.contains("✗ boom"));
         assert!(text.contains("panic: boom"));
@@ -482,7 +633,7 @@ mod tests {
     fn declared_test_with_no_event_is_not_run() {
         let index = index(&[(ENTRY_MODULE_ID, "ghost")]);
         let report = build_report(&index, &[], "demo");
-        let text = render(&report, false, Duration::from_millis(1));
+        let text = render(&report, &no_sources(), false, Duration::from_millis(1));
 
         assert!(text.contains("· ghost (not run)"));
         assert_eq!(exit_code(&report.rows, false), 1);
@@ -495,7 +646,7 @@ mod tests {
         let report = build_report(&index, &events, "demo");
 
         assert_eq!(exit_code(&report.rows, true), 0);
-        let text = render(&report, false, Duration::from_millis(1));
+        let text = render(&report, &no_sources(), false, Duration::from_millis(1));
         assert!(text.contains("· filtered (not run)"));
         assert!(text.contains("1 passed, 1 not run"));
     }
@@ -532,7 +683,7 @@ mod tests {
             event("fail", "demo/b", None, None),
         ];
         let report = build_report(&index, &events, "demo");
-        let text = render(&report, false, Duration::from_millis(1));
+        let text = render(&report, &no_sources(), false, Duration::from_millis(1));
 
         assert!(report.build_output.contains("undefined: foo"));
         assert!(text.contains("panic: boom in b"));
@@ -564,7 +715,7 @@ mod tests {
             ),
         ];
         let report = build_report(&index, &events, "demo");
-        let text = render(&report, false, Duration::from_millis(1));
+        let text = render(&report, &no_sources(), false, Duration::from_millis(1));
 
         assert!(text.contains("✗ hangs (aborted)"));
         assert!(text.contains("panic: test timed out"));
@@ -581,7 +732,7 @@ mod tests {
             event("fail", "demo", None, None),
         ];
         let report = build_report(&index, &events, "demo");
-        let text = render(&report, false, Duration::from_millis(1));
+        let text = render(&report, &no_sources(), false, Duration::from_millis(1));
 
         assert!(report.rows.iter().all(|r| r.status == Status::NotRun));
         assert!(text.contains("panic: init blew up"));
@@ -599,7 +750,7 @@ mod tests {
             event("fail", "demo/b", None, None),
         ];
         let report = build_report(&index, &events, "demo");
-        let text = render(&report, false, Duration::from_millis(1));
+        let text = render(&report, &no_sources(), false, Duration::from_millis(1));
 
         assert!(text.contains("panic: boom in b"));
     }
@@ -614,8 +765,94 @@ mod tests {
     #[test]
     fn empty_index_reports_no_tests() {
         let report = build_report(&TestIndex::default(), &[], "demo");
-        let text = render(&report, false, Duration::from_millis(0));
+        let text = render(&report, &no_sources(), false, Duration::from_millis(0));
         assert!(text.contains("No tests found"));
         assert_eq!(exit_code(&report.rows, true), 0);
+    }
+
+    #[test]
+    fn failure_record_reassembles_and_attaches() {
+        let index = index(&[(ENTRY_MODULE_ID, "parses")]);
+        let inner = r#"{"file":7,"lo":3,"hi":9,"message":"test returned Err","operands":[{"label":"error","value":"boom"}]}"#;
+        let events = vec![
+            event("run", "demo", Some("TestParses"), None),
+            attr_event("demo", "TestParses", &fail_value(inner)),
+            event("fail", "demo", Some("TestParses"), None),
+        ];
+        let report = build_report(&index, &events, "demo");
+        let record = report.rows[0]
+            .failure
+            .as_ref()
+            .expect("a lisette-fail record must attach to the failing test");
+        assert_eq!(record.file, 7);
+        assert_eq!((record.lo, record.hi), (3, 9));
+        assert_eq!(record.operands[0].value, "boom");
+        assert_eq!(exit_code(&report.rows, false), 1);
+    }
+
+    #[test]
+    fn failure_record_reassembles_from_out_of_order_chunks() {
+        let index = index(&[(ENTRY_MODULE_ID, "big")]);
+        let inner = r#"{"file":1,"lo":0,"hi":3,"message":"test returned Err","operands":[{"label":"error","value":"日本語"}]}"#;
+        let hex = hex_encode(inner);
+        let (first, second) = hex.split_at(hex.len() / 2);
+        let events = vec![
+            attr_event(
+                "demo",
+                "TestBig",
+                &format!(r#"{{"i":1,"n":2,"d":"{second}"}}"#),
+            ),
+            attr_event(
+                "demo",
+                "TestBig",
+                &format!(r#"{{"i":0,"n":2,"d":"{first}"}}"#),
+            ),
+            event("fail", "demo", Some("TestBig"), None),
+        ];
+        let report = build_report(&index, &events, "demo");
+        let record = report.rows[0]
+            .failure
+            .as_ref()
+            .expect("two chunks must reassemble into one record");
+        assert_eq!(record.operands[0].value, "日本語");
+    }
+
+    #[test]
+    fn missing_chunk_yields_no_record() {
+        let index = index(&[(ENTRY_MODULE_ID, "big")]);
+        let events = vec![
+            attr_event("demo", "TestBig", r#"{"i":0,"n":3,"d":"7b"}"#),
+            attr_event("demo", "TestBig", r#"{"i":2,"n":3,"d":"7d"}"#),
+            event("fail", "demo", Some("TestBig"), None),
+        ];
+        let report = build_report(&index, &events, "demo");
+        assert!(
+            report.rows[0].failure.is_none(),
+            "an incomplete record must not produce a (truncated) diagnostic"
+        );
+    }
+
+    #[test]
+    fn failure_renders_spanned_block_when_source_known() {
+        let index = index(&[(ENTRY_MODULE_ID, "parses")]);
+        let inner = r#"{"file":7,"lo":3,"hi":9,"message":"test returned Err","operands":[{"label":"error","value":"boom"}]}"#;
+        let events = vec![
+            attr_event("demo", "TestParses", &fail_value(inner)),
+            event("fail", "demo", Some("TestParses"), None),
+        ];
+        let report = build_report(&index, &events, "demo");
+
+        let mut sources = no_sources();
+        sources.insert(
+            7,
+            SourceInfo {
+                source: "fn parses() {}\n".to_string(),
+                filename: "x.test.lis".to_string(),
+            },
+        );
+        let text = render(&report, &sources, false, Duration::from_millis(1));
+        assert!(text.contains("test returned Err"), "got:\n{text}");
+        assert!(text.contains("boom"), "got:\n{text}");
+        assert!(text.contains("x.test.lis"), "got:\n{text}");
     }
 }
