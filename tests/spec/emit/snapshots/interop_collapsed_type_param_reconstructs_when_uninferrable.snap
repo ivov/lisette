@@ -1,0 +1,35 @@
+---
+source: tests/spec/emit/interop_matrix.rs
+description: |
+  
+  import "go:slices"
+  import "go:fmt"
+  
+  fn apply(f: fn(Slice<byte>) -> Slice<byte>, xs: Slice<byte>) -> Slice<byte> {
+    f(xs)
+  }
+  
+  fn main() {
+    let empty = slices.Concat<byte>()
+    let value: fn(Slice<byte>) -> Slice<byte> = slices.Clone
+    let out = apply(slices.Clone, empty)
+    fmt.Println(empty.length(), value(empty).length(), out.length())
+  }
+---
+package main
+
+import (
+	"fmt"
+	"slices"
+)
+
+func apply(f func([]byte) []byte, xs []byte) []byte {
+	return f(xs)
+}
+
+func main() {
+	empty := slices.Concat[[]byte, byte]()
+	value := slices.Clone[[]byte, byte]
+	out := apply(slices.Clone[[]byte, byte], empty)
+	fmt.Println(len(empty), len(value(empty)), len(out))
+}

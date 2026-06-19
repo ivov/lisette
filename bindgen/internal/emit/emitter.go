@@ -381,6 +381,9 @@ func (e *Emitter) emitFunction(result convert.ConvertResult) {
 	if result.ArrayReturn {
 		e.buf.WriteString("#[go(array_return)]\n")
 	}
+	if result.CollapsedTypeParamRecipe != "" {
+		fmt.Fprintf(&e.buf, "#[go(collapsed_type_params, %q)]\n", result.CollapsedTypeParamRecipe)
+	}
 	if result.SentinelInt != nil {
 		e.buf.WriteString(sentinelFlag(*result.SentinelInt) + "\n")
 	}

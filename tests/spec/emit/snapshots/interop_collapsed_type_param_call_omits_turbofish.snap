@@ -1,0 +1,29 @@
+---
+source: tests/spec/emit/interop_matrix.rs
+description: |
+  
+  import "go:slices"
+  import "go:fmt"
+  
+  fn main() {
+    let buffer = slices.Repeat([0 as byte], 1024)
+    let cloned = slices.Clone([1 as int32, 2])
+    let pinned = slices.Repeat<byte>([1], 4)
+    let largest = slices.Max([3 as byte, 1, 2])
+    fmt.Println(buffer.length(), cloned.length(), pinned.length(), largest)
+  }
+---
+package main
+
+import (
+	"fmt"
+	"slices"
+)
+
+func main() {
+	buffer := slices.Repeat([]byte{byte(0)}, 1024)
+	cloned := slices.Clone([]int32{int32(1), 2})
+	pinned := slices.Repeat([]byte{1}, 4)
+	largest := slices.Max([]byte{byte(3), 1, 2})
+	fmt.Println(len(buffer), len(cloned), len(pinned), largest)
+}

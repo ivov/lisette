@@ -1706,3 +1706,58 @@ pub fn Lookup(x: int) -> Option<string>
 "#;
     assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/ext", typedef)]);
 }
+
+#[test]
+fn interop_collapsed_type_param_call_omits_turbofish() {
+    let input = r#"
+import "go:slices"
+import "go:fmt"
+
+fn main() {
+  let buffer = slices.Repeat([0 as byte], 1024)
+  let cloned = slices.Clone([1 as int32, 2])
+  let pinned = slices.Repeat<byte>([1], 4)
+  let largest = slices.Max([3 as byte, 1, 2])
+  fmt.Println(buffer.length(), cloned.length(), pinned.length(), largest)
+}
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[]);
+}
+
+#[test]
+fn interop_collapsed_type_param_reconstructs_when_uninferrable() {
+    let input = r#"
+import "go:slices"
+import "go:fmt"
+
+fn apply(f: fn(Slice<byte>) -> Slice<byte>, xs: Slice<byte>) -> Slice<byte> {
+  f(xs)
+}
+
+fn main() {
+  let empty = slices.Concat<byte>()
+  let value: fn(Slice<byte>) -> Slice<byte> = slices.Clone
+  let out = apply(slices.Clone, empty)
+  fmt.Println(empty.length(), value(empty).length(), out.length())
+}
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[]);
+}
+
+#[test]
+fn interop_collapsed_type_param_reconstructs_return_only_param() {
+    let input = r#"
+import "go:example.com/pick"
+import "go:fmt"
+
+fn main() {
+  let out = pick.Pick<byte, string>([1])
+  fmt.Println(out)
+}
+"#;
+    let typedef = r#"
+#[go(collapsed_type_params, "Slice<E>, E, R")]
+pub fn Pick<E, R>(s: Slice<E>) -> R
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/pick", typedef)]);
+}

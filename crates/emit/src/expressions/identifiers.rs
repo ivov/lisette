@@ -175,6 +175,7 @@ impl Planner<'_> {
         &mut self,
         definition_ty: &Type,
         instantiated_ty: &Type,
+        collapsed_recipe: Option<&str>,
         fx: &mut EmitEffects,
     ) -> Option<String> {
         let Type::Forall { vars, body } = definition_ty else {
@@ -183,6 +184,10 @@ impl Planner<'_> {
 
         let mut mapping = rustc_hash::FxHashMap::default();
         extract_type_mapping(body, instantiated_ty, &mut mapping);
+
+        if let Some(recipe) = collapsed_recipe {
+            return self.reconstruct_collapsed_type_args(recipe, &mapping, fx);
+        }
 
         let args: Vec<String> = vars
             .iter()
@@ -211,16 +216,14 @@ impl Planner<'_> {
         fx: &mut EmitEffects,
     ) -> Option<String> {
         let qualified_name = self.facts.qualified_current(name);
-        let definition_ty = self
-            .facts
-            .definition(qualified_name.as_str())
-            .or_else(|| {
-                let prelude_name = format!("{}.{}", go_name::PRELUDE_MODULE, name);
-                self.facts.definition(prelude_name.as_str())
-            })?
-            .ty();
+        let definition = self.facts.definition(qualified_name.as_str()).or_else(|| {
+            let prelude_name = format!("{}.{}", go_name::PRELUDE_MODULE, name);
+            self.facts.definition(prelude_name.as_str())
+        })?;
+        let definition_ty = definition.ty().clone();
+        let recipe = definition.go_type_param_recipe().map(str::to_string);
 
-        self.format_type_args_from_forall(definition_ty, instantiated_ty, fx)
+        self.format_type_args_from_forall(&definition_ty, instantiated_ty, recipe.as_deref(), fx)
     }
 
     /// Like `format_generic_value_type_args` but takes a pre-qualified definition name
@@ -231,9 +234,11 @@ impl Planner<'_> {
         instantiated_ty: &Type,
         fx: &mut EmitEffects,
     ) -> Option<String> {
-        let definition_ty = self.facts.definition(qualified_name)?.ty().clone();
+        let definition = self.facts.definition(qualified_name)?;
+        let definition_ty = definition.ty().clone();
+        let recipe = definition.go_type_param_recipe().map(str::to_string);
 
-        self.format_type_args_from_forall(&definition_ty, instantiated_ty, fx)
+        self.format_type_args_from_forall(&definition_ty, instantiated_ty, recipe.as_deref(), fx)
     }
 
     /// Return Go method-expression syntax for a `Type.method` referring to an

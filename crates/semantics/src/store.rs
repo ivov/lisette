@@ -718,6 +718,7 @@ mod closed_domain_tests {
                 allowed_lints: vec![],
                 go_hints: vec![],
                 go_name: None,
+                go_type_param_recipe: None,
                 const_value: Some(Literal::Integer { value, text: None }),
             },
         }

@@ -18,15 +18,19 @@ pub fn GreetAll<T: Greeter>(xs: Slice<T>) -> string
 pub fn Identity<T>(x: T) -> T
 
 /// Map-shape rewrite: single map, V any.
+#[go(collapsed_type_params, "Map<K, V>, K, V")]
 pub fn MapClone<K: Comparable, V>(m: Map<K, V>) -> Map<K, V>
 
 /// Map-shape rewrite: two maps, shared V (V any).
+#[go(collapsed_type_params, "Map<K, V>, Map<K, V>, K, V")]
 pub fn MapCopy<K: Comparable, V>(mut dst: Map<K, V>, src: Map<K, V>)
 
 /// Map-shape rewrite: two maps, shared V (V comparable).
+#[go(collapsed_type_params, "Map<K, V>, Map<K, V>, K, V")]
 pub fn MapEqual<K: Comparable, V: Comparable>(m1: Map<K, V>, m2: Map<K, V>) -> bool
 
 /// Map-shape rewrite: two maps, distinct V.
+#[go(collapsed_type_params, "Map<K, V1>, Map<K, V2>, K, V1, V2")]
 pub fn MapEqualFunc<K: Comparable, V1, V2>(m1: Map<K, V1>, m2: Map<K, V2>, eq: fn(V1, V2) -> bool) -> bool
 
 /// Comparable constraint
@@ -51,6 +55,7 @@ pub fn SalutationsAll<T: Salutation>(xs: Slice<T>)
 pub fn Shout<T: fmt.Stringer>(x: T) -> string
 
 /// Slice-shape rewrite: S ~[]E with E: cmp.Ordered
+#[go(collapsed_type_params, "Slice<E>, E")]
 pub fn SortInts<E: cmp.Ordered>(x: Slice<E>) -> Slice<E>
 
 /// Multiple constraints

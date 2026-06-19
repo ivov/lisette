@@ -104,12 +104,15 @@ func (c *Converter) convertFunction(result *ConvertResult, symbolExport extract.
 	}
 
 	// Scan first: param/return processing must observe `S ~[]E` substitutions.
-	typeParams, substitutions, skip := collectTypeParams(signature.TypeParams(), false, c)
+	typeParams, substitutions, recipe, skip := collectTypeParams(signature.TypeParams(), false, c)
 	if skip != nil {
 		result.SkipReason = skip
 		return
 	}
 	result.TypeParams = typeParams
+	if len(substitutions) > 0 {
+		result.CollapsedTypeParamRecipe = strings.Join(recipe, ", ")
+	}
 
 	prevSubs := c.typeParamSubstitutions
 	c.typeParamSubstitutions = substitutions
@@ -363,7 +366,7 @@ func (c *Converter) convertMethod(result *ConvertResult, symbolExport extract.Sy
 		qualifiedName = result.Receiver.BaseTypeName + "." + result.Name
 	}
 
-	methodSpecs, _, skip := collectTypeParams(signature.TypeParams(), false, c)
+	methodSpecs, _, _, skip := collectTypeParams(signature.TypeParams(), false, c)
 	if skip != nil {
 		result.SkipReason = skip
 		return
@@ -411,7 +414,7 @@ func (c *Converter) convertMethod(result *ConvertResult, symbolExport extract.Sy
 	})
 
 	if symbolExport.BaseType != nil {
-		_, _, skip := collectTypeParams(symbolExport.BaseType.TypeParams(), false, c)
+		_, _, _, skip := collectTypeParams(symbolExport.BaseType.TypeParams(), false, c)
 		if skip != nil {
 			result.SkipReason = skip
 			return
@@ -635,7 +638,7 @@ func (c *Converter) convertType(result *ConvertResult, exp extract.SymbolExport)
 		return
 	}
 
-	typeParams, _, skip := collectTypeParams(named.TypeParams(), true, c)
+	typeParams, _, _, skip := collectTypeParams(named.TypeParams(), true, c)
 	if skip != nil {
 		result.TypeParams = bareTypeParamSpecs(named.TypeParams())
 		result.SkipReason = skip
@@ -1094,14 +1097,17 @@ func formatConstantValue(val constant.Value) string {
 
 // `S ~[]E` and `M ~map[K]V` shapes go into substitutions (caller rewrites `S`
 // to `Slice<E>` or `M` to `Map<K, V>`) rather than into specs. Recognized
-// bounds register their imports on conv.
+// bounds register their imports on conv. `recipe` is Go's full type-parameter
+// list in declaration order, each entry as a Lisette type (collapsed entries as
+// their shape, kept entries as the bare name), so emit can rebuild Go's type
+// arguments when inference cannot.
 func collectTypeParams(
 	typeParams *types.TypeParamList,
 	emitOpaque bool,
 	conv *Converter,
-) (specs TypeParamSpecs, substitutions map[string]string, skip *SkipReason) {
+) (specs TypeParamSpecs, substitutions map[string]string, recipe []string, skip *SkipReason) {
 	if typeParams == nil {
-		return nil, nil, nil
+		return nil, nil, nil, nil
 	}
 
 	for tp := range typeParams.TypeParams() {
@@ -1113,6 +1119,7 @@ func collectTypeParams(
 				substitutions = make(map[string]string)
 			}
 			substitutions[name] = sliceOf(elemName)
+			recipe = append(recipe, sliceOf(elemName))
 			continue
 		}
 
@@ -1121,27 +1128,30 @@ func collectTypeParams(
 				substitutions = make(map[string]string)
 			}
 			substitutions[name] = mapOf(keyName, valName)
+			recipe = append(recipe, mapOf(keyName, valName))
 			continue
 		}
 
 		if isAnyConstraint(constraint) {
 			specs = append(specs, TypeParamSpec{Name: name})
+			recipe = append(recipe, name)
 			continue
 		}
 
 		if boundExpr, ok := recognizeBound(constraint, conv); ok {
 			specs = append(specs, TypeParamSpec{Name: name, Bound: boundExpr})
+			recipe = append(recipe, name)
 			continue
 		}
 
 		iface, _ := constraint.Underlying().(*types.Interface)
-		return nil, nil, &SkipReason{
+		return nil, nil, nil, &SkipReason{
 			Code:           "constraint:" + describeConstraint(iface),
 			Message:        fmt.Sprintf("type constraint %s cannot be represented", name),
 			EmitOpaqueType: emitOpaque,
 		}
 	}
-	return specs, substitutions, nil
+	return specs, substitutions, recipe, nil
 }
 
 func extractReceiverTypeParams(named *types.Named, conv *Converter) TypeParamSpecs {
@@ -1151,7 +1161,7 @@ func extractReceiverTypeParams(named *types.Named, conv *Converter) TypeParamSpe
 		return nil
 	}
 
-	specs, _, skip := collectTypeParams(typeParams, false, conv)
+	specs, _, _, skip := collectTypeParams(typeParams, false, conv)
 	if skip != nil {
 		// Base type emits the skip; impl block falls back to bare names.
 		return bareTypeParamSpecs(typeParams)

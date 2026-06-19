@@ -365,6 +365,7 @@ pub enum CachedDefinitionBody {
         allowed_lints: Vec<String>,
         go_hints: Vec<String>,
         go_name: Option<String>,
+        go_type_param_recipe: Option<String>,
         const_value: Option<CachedLiteral>,
     },
 }
@@ -441,11 +442,13 @@ impl CachedDefinition {
                 allowed_lints,
                 go_hints,
                 go_name,
+                go_type_param_recipe,
                 const_value,
             } => CachedDefinitionBody::Value {
                 allowed_lints: allowed_lints.clone(),
                 go_hints: go_hints.clone(),
                 go_name: go_name.clone(),
+                go_type_param_recipe: go_type_param_recipe.clone(),
                 const_value: const_value.as_ref().map(CachedLiteral::from_literal),
             },
         };
@@ -524,11 +527,13 @@ impl CachedDefinition {
                 allowed_lints,
                 go_hints,
                 go_name,
+                go_type_param_recipe,
                 const_value,
             } => DefinitionBody::Value {
                 allowed_lints: allowed_lints.clone(),
                 go_hints: go_hints.clone(),
                 go_name: go_name.clone(),
+                go_type_param_recipe: go_type_param_recipe.clone(),
                 const_value: const_value.as_ref().map(CachedLiteral::to_literal),
             },
         };

@@ -59,6 +59,11 @@ pub enum DefinitionBody {
         allowed_lints: Vec<String>,
         go_hints: Vec<String>,
         go_name: Option<String>,
+        /// Go's full type-parameter list for a `#[go(collapsed_type_params)]`
+        /// function, in declaration order, each entry as a Lisette type (e.g.
+        /// `"Slice<E>, E"`). Lets emit rebuild Go's type arguments when the
+        /// collapsed Lisette list cannot be projected onto Go's positionally.
+        go_type_param_recipe: Option<String>,
         /// The known literal value when this definition is a case-eligible
         /// constant (usable as a Go `case` and as a const-pattern target).
         /// `None` for variables, functions, and non-literal constants.
@@ -128,6 +133,16 @@ impl Definition {
     pub fn go_name(&self) -> Option<&str> {
         match &self.body {
             DefinitionBody::Value { go_name, .. } => go_name.as_deref(),
+            _ => None,
+        }
+    }
+
+    pub fn go_type_param_recipe(&self) -> Option<&str> {
+        match &self.body {
+            DefinitionBody::Value {
+                go_type_param_recipe,
+                ..
+            } => go_type_param_recipe.as_deref(),
             _ => None,
         }
     }

@@ -134,6 +134,45 @@ impl Planner<'_> {
         format!("[{}]", args.join(", "))
     }
 
+    pub(crate) fn reconstruct_collapsed_type_args(
+        &mut self,
+        recipe: &str,
+        mapping: &rustc_hash::FxHashMap<String, Type>,
+        fx: &mut EmitEffects,
+    ) -> Option<String> {
+        let mut parts = Vec::new();
+        for entry in split_top_level_commas(recipe) {
+            parts.push(self.render_recipe_entry(entry.trim(), mapping, fx)?);
+        }
+        (!parts.is_empty()).then(|| format!("[{}]", parts.join(", ")))
+    }
+
+    fn render_recipe_entry(
+        &mut self,
+        entry: &str,
+        mapping: &rustc_hash::FxHashMap<String, Type>,
+        fx: &mut EmitEffects,
+    ) -> Option<String> {
+        if let Some(elem) = entry
+            .strip_prefix("Slice<")
+            .and_then(|s| s.strip_suffix('>'))
+        {
+            let ty = mapping.get(elem.trim())?;
+            return Some(format!("[]{}", self.go_type_string(ty, fx)));
+        }
+        if let Some(inner) = entry.strip_prefix("Map<").and_then(|s| s.strip_suffix('>')) {
+            let (key, value) = inner.split_once(',')?;
+            let key_ty = mapping.get(key.trim())?;
+            let value_ty = mapping.get(value.trim())?;
+            return Some(format!(
+                "map[{}]{}",
+                self.go_type_string(key_ty, fx),
+                self.go_type_string(value_ty, fx)
+            ));
+        }
+        Some(self.go_type_string(mapping.get(entry)?, fx))
+    }
+
     fn emit_tuple_type(&self, elements: &[Type]) -> GoType {
         let arity = elements.len();
         let element_types: Vec<GoType> = elements.iter().map(|e| self.go_type(e)).collect();
@@ -575,4 +614,25 @@ fn build_go_import_typed(code: String, go_path: String, param_types: &[GoType]) 
     let mut result = GoType::with_go_import(code, go_path);
     result.merge_all(param_types);
     result
+}
+
+/// Split a recipe like `Map<K, V>, K, V` on commas outside angle brackets, so a
+/// nested `Map<K, V>` stays one entry.
+fn split_top_level_commas(recipe: &str) -> Vec<&str> {
+    let mut entries = Vec::new();
+    let mut depth = 0i32;
+    let mut start = 0;
+    for (i, c) in recipe.char_indices() {
+        match c {
+            '<' => depth += 1,
+            '>' => depth -= 1,
+            ',' if depth == 0 => {
+                entries.push(&recipe[start..i]);
+                start = i + 1;
+            }
+            _ => {}
+        }
+    }
+    entries.push(&recipe[start..]);
+    entries
 }

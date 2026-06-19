@@ -45,13 +45,35 @@ pub(super) fn extract_go_name(attributes: &[Attribute]) -> Option<String> {
     attributes
         .iter()
         .filter(|a| a.name == "go")
-        .flat_map(|a| a.args.iter())
-        .find_map(|arg| {
-            if let AttributeArg::String(name) = arg {
-                Some(name.clone())
-            } else {
-                None
-            }
+        .filter(|a| {
+            !a.args
+                .iter()
+                .any(|arg| matches!(arg, AttributeArg::Flag(_)))
+        })
+        .find_map(|a| {
+            a.args.iter().find_map(|arg| match arg {
+                AttributeArg::String(name) => Some(name.clone()),
+                _ => None,
+            })
+        })
+}
+
+/// The recipe string from `#[go(collapsed_type_params, "...")]`. This is
+/// Go's full type-param in declaration order, each entry as a Lisette type.
+pub(super) fn extract_go_type_param_recipe(attributes: &[Attribute]) -> Option<String> {
+    attributes
+        .iter()
+        .filter(|a| a.name == "go")
+        .filter(|a| {
+            a.args
+                .iter()
+                .any(|arg| matches!(arg, AttributeArg::Flag(f) if f == "collapsed_type_params"))
+        })
+        .find_map(|a| {
+            a.args.iter().find_map(|arg| match arg {
+                AttributeArg::String(recipe) => Some(recipe.clone()),
+                _ => None,
+            })
         })
 }
 
@@ -599,6 +621,7 @@ impl TaskState<'_> {
                         allowed_lints: vec![],
                         go_hints: vec![],
                         go_name: None,
+                        go_type_param_recipe: None,
                         const_value: None,
                     },
                 },
@@ -806,6 +829,7 @@ impl TaskState<'_> {
                     allowed_lints: extract_attribute_flags(attributes, "allow"),
                     go_hints: extract_attribute_flags(attributes, "go"),
                     go_name: extract_go_name(attributes),
+                    go_type_param_recipe: extract_go_type_param_recipe(attributes),
                     const_value: None,
                 },
             },
@@ -884,6 +908,7 @@ impl TaskState<'_> {
                     allowed_lints: vec![],
                     go_hints: vec![],
                     go_name: None,
+                    go_type_param_recipe: None,
                     const_value,
                 },
             },
@@ -935,6 +960,7 @@ impl TaskState<'_> {
                     allowed_lints: vec![],
                     go_hints: vec![],
                     go_name: None,
+                    go_type_param_recipe: None,
                     const_value: None,
                 },
             },

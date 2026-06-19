@@ -1,0 +1,23 @@
+---
+source: tests/spec/emit/interop_matrix.rs
+description: |
+  
+  import "go:example.com/pick"
+  import "go:fmt"
+  
+  fn main() {
+    let out = pick.Pick<byte, string>([1])
+    fmt.Println(out)
+  }
+---
+package main
+
+import (
+	"example.com/pick"
+	"fmt"
+)
+
+func main() {
+	out := pick.Pick[[]byte, byte, string]([]byte{1})
+	fmt.Println(out)
+}
