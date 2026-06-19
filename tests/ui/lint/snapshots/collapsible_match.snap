@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [info] Collapsible `match`
+   ╭─[test.lis:4:16]
+ 3 │   match o {
+ 4 │     Some(n) => match n {
+   ·                ──┬──
+   ·                  ╰── can be merged into the outer arm
+ 5 │       Ok(x) => x,
+   ╰────
+  help: Move the inner pattern into the outer arm's pattern to remove a level of nesting · code: [lint.collapsible_match]

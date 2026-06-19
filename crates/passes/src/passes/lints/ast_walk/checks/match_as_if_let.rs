@@ -25,6 +25,11 @@ pub fn check_match_as_if_let(expression: &Expression, ctx: &NodeCtx) {
         return;
     }
 
+    let match_keyword_span = Span::new(span.file_id, span.byte_offset, 5);
+    if ctx.claimed_spans.borrow().contains(&match_keyword_span) {
+        return;
+    }
+
     let (first, second) = (&arms[0], &arms[1]);
 
     if first.has_guard() || second.has_guard() {
@@ -50,8 +55,6 @@ pub fn check_match_as_if_let(expression: &Expression, ctx: &NodeCtx) {
     else {
         return;
     };
-
-    let match_keyword_span = Span::new(span.file_id, span.byte_offset, 5);
 
     ctx.sink.push(diagnostics::lint::match_as_if_let(
         &match_keyword_span,

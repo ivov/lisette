@@ -286,7 +286,7 @@ pub(super) fn unary_lambda(expression: &Expression) -> Option<(&str, &Expression
     Some((identifier.as_str(), unwrap_block(body)))
 }
 
-fn unwrap_block(expression: &Expression) -> &Expression {
+pub(super) fn unwrap_block(expression: &Expression) -> &Expression {
     match expression.unwrap_parens() {
         Expression::Block { items, .. } if items.len() == 1 => unwrap_block(&items[0]),
         other => other,

@@ -593,6 +593,22 @@ pub fn collapsible_if(span: &Span) -> LisetteDiagnostic {
         .with_help("Merge this nested `if` into the outer condition with `&&`")
 }
 
+pub fn collapsible_match(span: &Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::info("Collapsible `match`")
+        .with_lint_code("collapsible_match")
+        .with_span_label(span, "can be merged into the outer arm")
+        .with_help(
+            "Move the inner pattern into the outer arm's pattern to remove a level of nesting",
+        )
+}
+
+pub fn collapsible_else_if(span: &Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::info("Collapsible `else if`")
+        .with_lint_code("collapsible_else_if")
+        .with_span_label(span, "can join the `else`")
+        .with_help("Remove the braces around this `if` and write it as `else if`")
+}
+
 pub fn redundant_else(span: &Span) -> LisetteDiagnostic {
     LisetteDiagnostic::info("Redundant `else`")
         .with_lint_code("redundant_else")

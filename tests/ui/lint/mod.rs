@@ -5311,6 +5311,119 @@ pub fn check(opt: Option<int>) -> int {
 }
 
 #[test]
+fn collapsible_else_if() {
+    assert_lint_snapshot!(
+        r#"
+pub fn check(c: bool, d: bool) -> int {
+  if c {
+    1
+  } else {
+    if d {
+      2
+    } else {
+      3
+    }
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn collapsible_else_if_no_inner_else() {
+    assert_lint_snapshot!(
+        r#"
+pub fn check(c: bool, d: bool) {
+  let mut count = 0
+  if c {
+    count += 1
+  } else {
+    if d {
+      count += 2
+    }
+  }
+  let _ = count
+}
+"#
+    );
+}
+
+#[test]
+fn collapsible_else_if_already_chained_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+pub fn check(c: bool, d: bool) -> int {
+  if c {
+    1
+  } else if d {
+    2
+  } else {
+    3
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn collapsible_else_if_extra_statement_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+pub fn check(c: bool, d: bool) {
+  let mut count = 0
+  if c {
+    count += 1
+  } else {
+    count += 9
+    if d {
+      count += 2
+    }
+  }
+  let _ = count
+}
+"#
+    );
+}
+
+#[test]
+fn collapsible_else_if_diverging_consequence_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+pub fn check(xs: Slice<int>, d: bool) {
+  for x in xs {
+    if x < 0 {
+      continue
+    } else {
+      if d {
+        let _ = x
+      }
+    }
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn collapsible_else_if_inner_if_let_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+pub fn check(c: bool, o: Option<int>) {
+  let mut count = 0
+  if c {
+    count += 1
+  } else {
+    if let Some(v) = o {
+      count += v
+    }
+  }
+  let _ = count
+}
+"#
+    );
+}
+
+#[test]
 fn identical_match_arms_literals() {
     assert_lint_snapshot!(
         r#"
@@ -8279,6 +8392,110 @@ pub fn test(s: Signal) {
   match s {
     Signal.Red => { let _ = 1 },
     _ => (),
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn collapsible_match() {
+    assert_lint_snapshot!(
+        r#"
+pub fn test(o: Option<Result<int, string>>) -> int {
+  match o {
+    Some(n) => match n {
+      Ok(x) => x,
+      _ => 0,
+    },
+    _ => 0,
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn collapsible_match_nested_if_let() {
+    assert_lint_snapshot!(
+        r#"
+pub fn use_int(x: int) -> int { x }
+
+pub fn test(opt: Option<Result<int, string>>) {
+  if let Some(n) = opt {
+    if let Ok(x) = n {
+      let _ = use_int(x)
+    }
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn collapsible_match_differing_dismissals_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+pub fn test(o: Option<Option<int>>) -> int {
+  match o {
+    Some(n) => match n {
+      Some(x) => x,
+      _ => 1,
+    },
+    _ => 0,
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn collapsible_match_outer_binding_used_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+pub fn depth(o: Option<int>) -> int { o.unwrap_or(0) }
+
+pub fn test(o: Option<Option<int>>) -> int {
+  match o {
+    Some(n) => match n {
+      Some(x) => depth(n) + x,
+      _ => 0,
+    },
+    _ => 0,
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn collapsible_match_inner_identifier_dismissal_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+pub fn test(o: Option<Option<int>>, fallback: Option<int>) -> Option<int> {
+  match o {
+    Some(n) => match n {
+      Some(v) => Some(v),
+      fallback => fallback,
+    },
+    _ => fallback,
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn collapsible_match_inner_specific_dismissal_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+pub fn test(o: Option<Result<int, string>>) -> int {
+  match o {
+    Some(n) => match n {
+      Ok(x) => x,
+      Err(e) => 0,
+    },
+    _ => 0,
   }
 }
 "#

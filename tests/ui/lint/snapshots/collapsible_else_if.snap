@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [info] Collapsible `else if`
+   ╭─[test.lis:6:5]
+ 5 │   } else {
+ 6 │     if d {
+   ·     ─┬
+   ·      ╰── can join the `else`
+ 7 │       2
+   ╰────
+  help: Remove the braces around this `if` and write it as `else if` · code: [lint.collapsible_else_if]
