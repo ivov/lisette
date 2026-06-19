@@ -1,0 +1,42 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: |
+  
+  import "go:slices"
+  import "go:fmt"
+  
+  struct Point {
+    x: int,
+    y: int,
+  }
+  
+  fn main() {
+    let points = [Point { x: 1, y: 2 }]
+    for Point { x, y } in slices.Values(points) {
+      fmt.Println(f"{x},{y}")
+    }
+  }
+---
+package main
+
+import (
+	"fmt"
+	"slices"
+)
+
+type Point struct {
+	x int
+	y int
+}
+
+func main() {
+	points := []Point{Point{
+		x: 1,
+		y: 2,
+	}}
+	for item_1 := range slices.Values(points) {
+		x := item_1.x
+		y := item_1.y
+		fmt.Printf("%d,%d\n", x, y)
+	}
+}

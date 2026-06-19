@@ -522,6 +522,77 @@ fn test(m: Map<string, int>) -> int {
 }
 
 #[test]
+fn for_loop_iter_seq_single_value() {
+    let input = r#"
+import "go:maps"
+import "go:fmt"
+
+fn main() {
+  let m = Map.from([("a", 1)])
+  for k in maps.Keys(m) {
+    fmt.Println(k)
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn for_loop_iter_seq2_key_value() {
+    let input = r#"
+import "go:maps"
+import "go:fmt"
+
+fn main() {
+  let m = Map.from([("a", 1)])
+  for (k, v) in maps.All(m) {
+    fmt.Println(f"{k}={v}")
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn for_loop_iter_seq_compound_pattern() {
+    let input = r#"
+import "go:slices"
+import "go:fmt"
+
+struct Point {
+  x: int,
+  y: int,
+}
+
+fn main() {
+  let points = [Point { x: 1, y: 2 }]
+  for Point { x, y } in slices.Values(points) {
+    fmt.Println(f"{x},{y}")
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn for_loop_iter_seq_break() {
+    let input = r#"
+import "go:slices"
+import "go:fmt"
+
+fn main() {
+  for n in slices.Values([1, 2, 3]) {
+    if n > 1 {
+      break
+    }
+    fmt.Println(f"{n}")
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn for_loop_map_both_wildcards() {
     let input = r#"
 fn test(m: Map<string, int>) -> int {

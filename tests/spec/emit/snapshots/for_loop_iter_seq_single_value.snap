@@ -1,0 +1,28 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: |
+  
+  import "go:maps"
+  import "go:fmt"
+  
+  fn main() {
+    let m = Map.from([("a", 1)])
+    for k in maps.Keys(m) {
+      fmt.Println(k)
+    }
+  }
+---
+package main
+
+import (
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+	"maps"
+)
+
+func main() {
+	m := lisette.MapFrom([]lisette.Tuple2[string, int]{lisette.MakeTuple2("a", 1)})
+	for k := range maps.Keys(m) {
+		fmt.Println(k)
+	}
+}

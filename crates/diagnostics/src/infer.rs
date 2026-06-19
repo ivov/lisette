@@ -1405,7 +1405,9 @@ pub fn tuple_literal_required_in_loop(span: Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Invalid loop pattern")
         .with_infer_code("invalid_pattern")
         .with_span_label(&span, "tuple literal required here")
-        .with_help("Use `(key, value)` destructuring pattern for map or enumerated iteration")
+        .with_help(
+            "Use a `(key, value)` destructuring pattern for map, enumerated, or paired-iterator iteration",
+        )
 }
 
 pub fn propagate_on_partial(span: Span) -> LisetteDiagnostic {

@@ -12,6 +12,23 @@ enum BranchReconciliation {
     Failed,
 }
 
+#[derive(Clone, Copy)]
+enum IterSeqKind {
+    Seq,
+    Seq2,
+}
+
+fn iter_seq_kind(ty: &Type) -> Option<IterSeqKind> {
+    let Type::Nominal { id, .. } = ty else {
+        return None;
+    };
+    match id.as_str() {
+        "go:iter.Seq" => Some(IterSeqKind::Seq),
+        "go:iter.Seq2" => Some(IterSeqKind::Seq2),
+        _ => None,
+    }
+}
+
 impl InferCtx<'_, '_> {
     pub(crate) fn reconcile_and_unify(
         &mut self,
@@ -477,7 +494,17 @@ impl InferCtx<'_, '_> {
         let iterable_ty = self.new_type_var();
         let new_iterable = self.infer_expression(*iterable, &iterable_ty);
 
-        let resolved_iterable_ty = store.peel_alias(&iterable_ty.resolve_in(&self.env));
+        let resolved_unpeeled = iterable_ty.resolve_in(&self.env);
+        let iter_seq = iter_seq_kind(&resolved_unpeeled);
+
+        // `iter.Seq<V>` / `iter.Seq2<K, V>` are Go range-over-func iterators
+        // stored as function aliases. Keep the nominal so its name and type args
+        // stay available; peeling expands it to an unnamed `fn(...)` shape.
+        let resolved_iterable_ty = if iter_seq.is_some() {
+            resolved_unpeeled
+        } else {
+            store.peel_alias(&resolved_unpeeled)
+        };
 
         let iterable_is_error = resolved_iterable_ty.is_error();
 
@@ -526,6 +553,14 @@ impl InferCtx<'_, '_> {
                 }
             }
             "Map" if iterable_ty_args.len() >= 2 => Type::Tuple(vec![
+                iterable_ty_args[0].clone(),
+                iterable_ty_args[1].clone(),
+            ]),
+
+            "Seq" if iter_seq.is_some() && !iterable_ty_args.is_empty() => {
+                iterable_ty_args[0].clone()
+            }
+            "Seq2" if iter_seq.is_some() && iterable_ty_args.len() >= 2 => Type::Tuple(vec![
                 iterable_ty_args[0].clone(),
                 iterable_ty_args[1].clone(),
             ]),
@@ -589,7 +624,8 @@ impl InferCtx<'_, '_> {
         // When iterating over types that yield multiple values (`Map`, `EnumeratedSlice`),
         // Go's `range` returns multiple values, so the binding must be a tuple literal.
         // This does NOT apply to `Slice<(A, B)>` where the element is already a tuple value.
-        let requires_tuple_destructuring = matches!(iterable_ty_name, "Map" | "EnumeratedSlice");
+        let requires_tuple_destructuring = matches!(iterable_ty_name, "Map" | "EnumeratedSlice")
+            || matches!(iter_seq, Some(IterSeqKind::Seq2));
         if requires_tuple_destructuring && element_ty.is_tuple() {
             match &new_binding.pattern {
                 Pattern::Tuple { .. } => (),

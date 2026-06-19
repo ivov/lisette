@@ -210,8 +210,9 @@ impl Planner<'_> {
         (prologue, header, lowered_body)
     }
 
-    /// Returns `(prologue, range_expression, is_channel)`. Refs are deref'd;
-    /// channels yield one value per iteration (not a pair).
+    /// Returns `(prologue, range_expression, single_var)`. Refs are deref'd;
+    /// `single_var` is set for iterables that yield one value per step (channels
+    /// and `iter.Seq<V>`), which use `for v := range` rather than `for _, v`.
     fn capture_iterable_operand(
         &mut self,
         iterable: &Expression,
@@ -228,7 +229,8 @@ impl Planner<'_> {
         let is_channel = self
             .native_shape(&iterable_ty)
             .is_some_and(|s| matches!(s.kind, NativeGoType::Channel | NativeGoType::Receiver));
-        (prologue, iter_expression, is_channel)
+        let single_var = is_channel || self.iter_seq_arity(&iterable_ty) == Some(1);
+        (prologue, iter_expression, single_var)
     }
 
     /// `for x in xs` over a non-specialized iterable.
@@ -239,13 +241,13 @@ impl Planner<'_> {
         body: &Expression,
         fx: &mut EmitEffects,
     ) -> (Vec<LoweredStatement>, String, LoweredBlock) {
-        let (prologue, iter_expression, is_channel) = self.capture_iterable_operand(iterable, fx);
+        let (prologue, iter_expression, single_var) = self.capture_iterable_operand(iterable, fx);
 
         self.enter_scope();
         let loop_var = self.bind_loop_pattern(&binding.pattern, None);
         let header = if loop_var == "_" {
             format!("for range {} {{\n", iter_expression)
-        } else if is_channel {
+        } else if single_var {
             format!("for {} := range {} {{\n", loop_var, iter_expression)
         } else {
             format!("for _, {} := range {} {{\n", loop_var, iter_expression)
@@ -413,7 +415,7 @@ impl Planner<'_> {
         body: &Expression,
         fx: &mut EmitEffects,
     ) -> (Vec<LoweredStatement>, String, LoweredBlock) {
-        let (prologue, iter_expression, is_channel) = self.capture_iterable_operand(iterable, fx);
+        let (prologue, iter_expression, single_var) = self.capture_iterable_operand(iterable, fx);
 
         self.enter_scope();
         let (header, body_block) = if !pattern_has_bindings(&binding.pattern) {
@@ -421,7 +423,7 @@ impl Planner<'_> {
             (header, self.lower_block_as_body(body, fx))
         } else {
             let item_var = self.fresh_var(Some("item"));
-            let header = if is_channel {
+            let header = if single_var {
                 format!("for {} := range {} {{\n", item_var, iter_expression)
             } else {
                 format!("for _, {} := range {} {{\n", item_var, iter_expression)
@@ -583,6 +585,18 @@ impl Planner<'_> {
     fn is_map_tuple_iterable(&self, iterable_ty: &Type) -> bool {
         self.native_shape(iterable_ty)
             .is_some_and(|s| matches!(s.kind, NativeGoType::Map | NativeGoType::EnumeratedSlice))
+            || self.iter_seq_arity(iterable_ty) == Some(2)
+    }
+
+    fn iter_seq_arity(&self, iterable_ty: &Type) -> Option<usize> {
+        let Type::Nominal { id, .. } = iterable_ty.strip_refs() else {
+            return None;
+        };
+        match id.as_str() {
+            "go:iter.Seq" => Some(1),
+            "go:iter.Seq2" => Some(2),
+            _ => None,
+        }
     }
 
     fn is_unmutated_identifier(&self, expression: &Expression) -> bool {
