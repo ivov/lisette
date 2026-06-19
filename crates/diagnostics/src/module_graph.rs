@@ -62,6 +62,13 @@ pub fn cannot_import_prelude(span: Span) -> LisetteDiagnostic {
         .with_help("Remove this import. Use e.g. `Option` or `prelude.Option` directly.")
 }
 
+pub fn reserved_module_import(span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Invalid import")
+        .with_resolve_code("reserved_module_import")
+        .with_span_label(&span, "the `**` prefix is reserved for the compiler")
+        .with_help("Rename the module so its import path does not begin with `**`.")
+}
+
 pub fn wrong_test_file_suffix(display_path: &str) -> LisetteDiagnostic {
     let help = match display_path.strip_suffix("_test.lis") {
         Some(stem) => format!(

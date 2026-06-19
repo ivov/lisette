@@ -16,6 +16,11 @@ fn main() {
     let prelude_source = fs::read_to_string(&prelude_dlis_path).expect("prelude.d.lis not found");
     prelude_contents.insert(("prelude.d.lis".to_string(), prelude_source));
 
+    let test_prelude_dlis_path = manifest_path.join("test_prelude.d.lis");
+    let test_prelude_source =
+        fs::read_to_string(&test_prelude_dlis_path).expect("test_prelude.d.lis not found");
+    prelude_contents.insert(("test_prelude.d.lis".to_string(), test_prelude_source));
+
     let mut go_std_contents: BTreeSet<(String, String)> = BTreeSet::new();
     let go_std_dir = manifest_path.join("typedefs");
     if go_std_dir.exists() {
@@ -32,7 +37,7 @@ fn main() {
     let mut file = fs::File::create(&dest_path).unwrap();
     writeln!(
         file,
-        "/// Hash of all stdlib content (prelude.d.lis + typedefs/*.d.lis)."
+        "/// Hash of all stdlib content (prelude.d.lis + test_prelude.d.lis + typedefs/*.d.lis)."
     )
     .unwrap();
     writeln!(
@@ -40,7 +45,11 @@ fn main() {
         "pub const STDLIB_CONTENT_HASH: u64 = {combined_hash};"
     )
     .unwrap();
-    writeln!(file, "/// Hash of prelude.d.lis content.").unwrap();
+    writeln!(
+        file,
+        "/// Hash of prelude content (prelude.d.lis + test_prelude.d.lis)."
+    )
+    .unwrap();
     writeln!(
         file,
         "pub const PRELUDE_CONTENT_HASH: u64 = {prelude_hash};"
@@ -54,6 +63,10 @@ fn main() {
     writeln!(file, "pub const GO_STD_CONTENT_HASH: u64 = {go_std_hash};").unwrap();
 
     println!("cargo:rerun-if-changed={}", prelude_dlis_path.display());
+    println!(
+        "cargo:rerun-if-changed={}",
+        test_prelude_dlis_path.display()
+    );
 }
 
 fn collect_dlis_files(dir: &Path, base: &Path, contents: &mut BTreeSet<(String, String)>) {

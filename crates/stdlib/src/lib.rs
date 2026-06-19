@@ -8,4 +8,6 @@ pub use target::{Target, format_targets};
 
 pub const LIS_PRELUDE_SOURCE: &str = include_str!("../prelude.d.lis");
 
+pub const LIS_TEST_PRELUDE_SOURCE: &str = include_str!("../test_prelude.d.lis");
+
 include!(concat!(env!("OUT_DIR"), "/stdlib_hash.rs"));

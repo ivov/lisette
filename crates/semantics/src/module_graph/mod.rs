@@ -276,6 +276,13 @@ fn process_file_imports(
             continue;
         }
 
+        if file_import.name.starts_with("**") {
+            sink.push(diagnostics::module_graph::reserved_module_import(
+                file_import.span,
+            ));
+            continue;
+        }
+
         if let Some(go_pkg) = file_import.name.strip_prefix("go:") {
             let is_blank = matches!(file_import.alias, Some(ImportAlias::Blank(_)));
 

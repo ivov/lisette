@@ -21,11 +21,12 @@ pub const CACHE_FORMAT_VERSION: u32 = 1;
 /// Compiler version hash. Caches from different compiler versions are invalid.
 pub const COMPILER_VERSION_HASH: u64 = const_fnv1a_hash(env!("CARGO_PKG_VERSION").as_bytes());
 
-/// Combined stdlib content hash. Changes to any stdlib file (prelude.d.lis
-/// or any typedefs/*.d.lis) will change this hash, invalidating all user module caches.
+/// Combined stdlib content hash. Changes to any stdlib file (prelude.d.lis,
+/// test_prelude.d.lis, or any typedefs/*.d.lis) will change this hash, invalidating
+/// all user module caches.
 pub const STDLIB_HASH: u64 = stdlib::STDLIB_CONTENT_HASH;
 
-/// Prelude-only content hash (prelude.d.lis).
+/// Prelude content hash (prelude.d.lis + test_prelude.d.lis).
 pub const PRELUDE_HASH: u64 = stdlib::PRELUDE_CONTENT_HASH;
 
 /// Go stdlib-only content hash (typedefs/*.d.lis).

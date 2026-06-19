@@ -7410,6 +7410,46 @@ fn math_test_project() -> MockFileSystem {
 }
 
 #[test]
+fn test_with_context_emits_testkit_wrapper() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        "import \"math\"\n\nfn main() {\n  let _ = math.add(1, 2)\n}",
+    );
+    fs.add_file(
+        "math",
+        "core.lis",
+        "pub fn add(a: int, b: int) -> int { a + b }",
+    );
+    fs.add_file(
+        "math",
+        "core.test.lis",
+        "#[test]\nfn parallel_check(t: TestContext) {\n  t.parallel()\n  let _ = t.run(\"sub\", |s| { s.parallel() })\n}",
+    );
+
+    let outputs = compile_project_files_with_tests(fs, "github.com/user/p", false, true);
+    let test_file = outputs
+        .iter()
+        .find(|f| f.name.ends_with("core_test.go"))
+        .expect("expected a core_test.go output");
+    let go = test_file.to_go();
+
+    assert!(
+        go.contains("testkit.New(t)"),
+        "wrapper must construct the context, got:\n{go}"
+    );
+    assert!(
+        go.contains("testkit.TestContext"),
+        "the context type must be package-qualified, got:\n{go}"
+    );
+    assert!(
+        go.contains("github.com/ivov/lisette/prelude/testkit"),
+        "the testkit package must be imported, got:\n{go}"
+    );
+}
+
+#[test]
 fn test_emit_produces_go_test_function() {
     let outputs =
         compile_project_files_with_tests(math_test_project(), "github.com/user/p", false, true);

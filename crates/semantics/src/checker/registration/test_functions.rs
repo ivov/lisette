@@ -1,5 +1,5 @@
 use diagnostics::LocalSink;
-use syntax::ast::{Annotation, Attribute, AttributeArg, Expression};
+use syntax::ast::{Annotation, Attribute, AttributeArg, Binding, Expression};
 use syntax::attributes::test_attribute;
 use syntax::program::TestFunction;
 
@@ -11,11 +11,19 @@ impl TaskState<'_> {
     /// (merge-safe, since this runs during parallel registration).
     pub(super) fn register_module_tests(&mut self, store: &Store, module_id: &str) {
         let module = store.get_module(module_id).expect("module must exist");
+        let context_shadowed = module_shadows_test_context(store, module_id);
         let mut records: Vec<TestFunction> = Vec::new();
         for file in module.files.values().chain(module.typedefs.values()) {
             let in_test_file = file.is_test();
             for item in &file.items {
-                collect_test_candidates(item, module_id, in_test_file, &mut records, self.sink);
+                collect_test_candidates(
+                    item,
+                    module_id,
+                    in_test_file,
+                    context_shadowed,
+                    &mut records,
+                    self.sink,
+                );
             }
         }
         self.facts.test_functions.extend(records);
@@ -25,6 +33,7 @@ impl TaskState<'_> {
         let Some(module) = store.get_module(module_id) else {
             return;
         };
+        let context_shadowed = module_shadows_test_context(store, module_id);
         let discard = LocalSink::new();
         let mut records: Vec<TestFunction> = Vec::new();
         for file in module.files.values() {
@@ -33,7 +42,14 @@ impl TaskState<'_> {
             }
             let parsed = syntax::build_ast(&file.source, file.id);
             for item in &parsed.ast {
-                collect_test_candidates(item, module_id, true, &mut records, &discard);
+                collect_test_candidates(
+                    item,
+                    module_id,
+                    true,
+                    context_shadowed,
+                    &mut records,
+                    &discard,
+                );
             }
         }
         self.facts.test_functions.extend(records);
@@ -70,6 +86,28 @@ fn is_unit_return(annotation: &Annotation) -> bool {
     }
 }
 
+fn module_shadows_test_context(store: &Store, module_id: &str) -> bool {
+    let qualified = format!("{module_id}.TestContext");
+    store
+        .get_definition(&qualified)
+        .is_some_and(|definition| !definition.is_value(&qualified))
+}
+
+fn params_supported(params: &[Binding], context_shadowed: bool) -> bool {
+    match params {
+        [] => true,
+        [param] => {
+            !context_shadowed
+                && matches!(
+                    &param.annotation,
+                    Some(Annotation::Constructor { name, params, .. })
+                        if name == "TestContext" && params.is_empty()
+                )
+        }
+        _ => false,
+    }
+}
+
 fn parse_title(args: &[AttributeArg]) -> Result<Option<String>, ()> {
     match args {
         [] => Ok(None),
@@ -82,6 +120,7 @@ fn collect_test_candidates(
     item: &Expression,
     module_id: &str,
     in_test_file: bool,
+    context_shadowed: bool,
     records: &mut Vec<TestFunction>,
     sink: &LocalSink,
 ) {
@@ -111,7 +150,10 @@ fn collect_test_candidates(
                 ));
                 return;
             };
-            if !generics.is_empty() || !params.is_empty() || !is_unit_return(return_annotation) {
+            if !generics.is_empty()
+                || !params_supported(params, context_shadowed)
+                || !is_unit_return(return_annotation)
+            {
                 sink.push(diagnostics::attribute::test_unsupported_signature(
                     name_span,
                 ));

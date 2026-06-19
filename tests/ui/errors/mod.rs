@@ -3688,6 +3688,35 @@ fn has_code(result: &crate::_harness::infer::InferResult, code: &str) -> bool {
         .any(|d| d.code_str().is_some_and(|c| c.contains(code)))
 }
 
+#[test]
+fn import_of_reserved_double_star_module_rejected() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file("main", "main.lis", "import \"**test_prelude\"");
+    let result = infer_module("main", fs);
+    assert!(
+        has_code(&result, "reserved_module_import"),
+        "a `**`-prefixed import must be rejected, got: {:?}",
+        result.errors
+    );
+}
+
+#[test]
+fn test_context_in_production_file_gives_test_only_hint() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file("main", "main.lis", "pub fn nope(t: TestContext) {}");
+    let result = infer_module("main", fs);
+    let diagnostic = result
+        .errors
+        .iter()
+        .find(|d| d.code_str() == Some("resolve.type_not_found"))
+        .expect("expected a type_not_found for TestContext in a production file");
+    let help = diagnostic.plain_help().unwrap_or_default();
+    assert!(
+        help.contains(".test.lis") && !help.contains("import"),
+        "the hint must point to test files, not encourage importing, got: {help:?}"
+    );
+}
+
 fn test_attribute_fs(math_core: &str, math_test: &str) -> MockFileSystem {
     let mut fs = MockFileSystem::new();
     fs.add_file(
@@ -3780,6 +3809,53 @@ fn test_attribute_with_parameter_rejected() {
     assert!(
         has_code(&result, "test_unsupported_signature"),
         "a parameterized test must be rejected, got: {:?}",
+        result.errors
+    );
+}
+
+#[test]
+fn test_attribute_with_test_context_accepted() {
+    let fs = test_attribute_fs(
+        "pub fn add(a: int, b: int) -> int { a + b }",
+        "#[test]\nfn checks(t: TestContext) { t.parallel() }",
+    );
+    let result = infer_module("_entry_", fs);
+    assert!(
+        !has_code(&result, "test_unsupported_signature"),
+        "a single TestContext parameter must be accepted, got: {:?}",
+        result.errors
+    );
+    assert!(
+        !has_code(&result, "type_not_found"),
+        "TestContext must resolve in a test file, got: {:?}",
+        result.errors
+    );
+}
+
+#[test]
+fn test_attribute_value_named_test_context_does_not_block_param() {
+    let fs = test_attribute_fs(
+        "pub fn add(a: int, b: int) -> int { a + b }",
+        "fn TestContext() {}\n\n#[test]\nfn checks(t: TestContext) { t.parallel() }",
+    );
+    let result = infer_module("_entry_", fs);
+    assert!(
+        !has_code(&result, "test_unsupported_signature"),
+        "a value named TestContext does not occupy the type position, got: {:?}",
+        result.errors
+    );
+}
+
+#[test]
+fn test_attribute_with_shadowed_test_context_rejected() {
+    let fs = test_attribute_fs(
+        "pub fn add(a: int, b: int) -> int { a + b }",
+        "struct TestContext { x: int }\n\n#[test]\nfn checks(t: TestContext) { let _ = t.x }",
+    );
+    let result = infer_module("_entry_", fs);
+    assert!(
+        has_code(&result, "test_unsupported_signature"),
+        "a locally shadowed TestContext must not be accepted as the context param, got: {:?}",
         result.errors
     );
 }

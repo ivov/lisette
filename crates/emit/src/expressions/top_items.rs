@@ -24,8 +24,18 @@ impl Planner<'_> {
                 if self.facts.is_test(&self.facts.qualified_current(name)) {
                     let callee = self.pick_go_function_name(function, false, is_public);
                     let test_name = go_name::go_test_function_name(name);
-                    fx.require_go_import("testing");
-                    let wrapper = format!("func {test_name}(t *testing.T) {{\n\t{callee}()\n}}");
+                    fx.require_testing();
+                    let testing = go_name::GeneratedPackage::Testing.qualifier();
+                    let call = if function.params.is_empty() {
+                        format!("{callee}()")
+                    } else {
+                        fx.require_testkit();
+                        format!(
+                            "{callee}({}.New(t))",
+                            go_name::GeneratedPackage::TestKit.qualifier()
+                        )
+                    };
+                    let wrapper = format!("func {test_name}(t *{testing}.T) {{\n\t{call}\n}}");
                     format!("{doc_comment}{code}\n\n{wrapper}")
                 } else {
                     format!("{}{}", doc_comment, code)

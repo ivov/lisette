@@ -85,6 +85,7 @@ pub(crate) enum FileContextKind {
     Standard,
     ImportedTypedef,
     Prelude,
+    TestPrelude,
 }
 
 struct SavedFileContext {
@@ -692,6 +693,12 @@ impl<'s> TaskState<'s> {
         match kind {
             FileContextKind::Standard => {
                 self.put_prelude_in_scope(store);
+                if self.current_file_is_test(store) {
+                    self.put_unprefixed_module_in_scope(
+                        store,
+                        crate::prelude::TEST_PRELUDE_MODULE_ID,
+                    );
+                }
                 self.put_unprefixed_module_in_scope(store, module_id);
             }
             FileContextKind::ImportedTypedef => {
@@ -706,6 +713,10 @@ impl<'s> TaskState<'s> {
                     .insert(self_alias, module_id.into());
             }
             FileContextKind::Prelude => {
+                self.put_unprefixed_module_in_scope(store, module_id);
+            }
+            FileContextKind::TestPrelude => {
+                self.put_prelude_in_scope(store);
                 self.put_unprefixed_module_in_scope(store, module_id);
             }
         }

@@ -19,7 +19,7 @@ pub const TEST_MODULE_ID: &str = "test";
 
 use diagnostics::LocalSink;
 use semantics::checker::TaskState;
-use semantics::prelude::parse_and_register_prelude;
+use semantics::prelude::{parse_and_register_prelude, parse_and_register_test_prelude};
 use semantics::store::Store;
 use syntax::program::{Definition, DefinitionBody, Visibility};
 use syntax::types::{CompoundKind, Type};
@@ -27,6 +27,7 @@ use syntax::types::{CompoundKind, Type};
 pub fn init_prelude(store: &mut Store) {
     let sink = LocalSink::new();
     parse_and_register_prelude(store, &sink);
+    parse_and_register_test_prelude(store, &sink);
 }
 
 pub fn register_test_builtins(store: &mut Store, _checker: &mut TaskState) {

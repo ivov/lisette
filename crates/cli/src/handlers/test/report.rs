@@ -8,7 +8,7 @@ use crate::go_cli::GoTestEvent;
 use crate::output::format_elapsed;
 use lisette::pipeline::TestIndex;
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Status {
     Passed,
     Failed,
@@ -22,6 +22,7 @@ pub struct TestRow {
     pub status: Status,
     pub elapsed: Option<f64>,
     pub output: String,
+    pub children: Vec<TestRow>,
 }
 
 pub struct Report {
@@ -104,18 +105,21 @@ pub fn build_report(index: &TestIndex, events: &[GoTestEvent], go_module: &str) 
         } else {
             format!("{}/{}", go_module, test.module_id)
         };
-        let key = (package.clone(), go_test_name(fn_name));
+        let go_name = go_test_name(fn_name);
+        let key = (package.clone(), go_name.clone());
         let (status, elapsed) = match terminal.get(&key).copied() {
             Some(found) => found,
             None if started.contains(&key) => (Status::Aborted, None),
             None => (Status::NotRun, None),
         };
+        let children = collect_children(&package, &go_name, &terminal, &started, &outputs);
         rows.push(TestRow {
             package,
             name: fn_name.to_string(),
             status,
             elapsed,
             output: outputs.get(&key).cloned().unwrap_or_default(),
+            children,
         });
     }
     Report {
@@ -129,6 +133,46 @@ pub fn build_report(index: &TestIndex, events: &[GoTestEvent], go_module: &str) 
 
 fn go_test_name(fn_name: &str) -> String {
     emit::go_test_function_name(fn_name)
+}
+
+fn collect_children(
+    package: &str,
+    parent: &str,
+    terminal: &HashMap<(String, String), (Status, Option<f64>)>,
+    started: &HashSet<(String, String)>,
+    outputs: &HashMap<(String, String), String>,
+) -> Vec<TestRow> {
+    let prefix = format!("{parent}/");
+    let mut direct: Vec<&String> = terminal
+        .keys()
+        .chain(started.iter())
+        .filter(|(pkg, name)| {
+            pkg == package && name.starts_with(&prefix) && !name[prefix.len()..].contains('/')
+        })
+        .map(|(_, name)| name)
+        .collect();
+    direct.sort();
+    direct.dedup();
+
+    direct
+        .into_iter()
+        .map(|full| {
+            let key = (package.to_string(), full.clone());
+            let (status, elapsed) = match terminal.get(&key).copied() {
+                Some(found) => found,
+                None if started.contains(&key) => (Status::Aborted, None),
+                None => (Status::NotRun, None),
+            };
+            TestRow {
+                package: package.to_string(),
+                name: full[prefix.len()..].to_string(),
+                status,
+                elapsed,
+                output: outputs.get(&key).cloned().unwrap_or_default(),
+                children: collect_children(package, full, terminal, started, outputs),
+            }
+        })
+        .collect()
 }
 
 /// `go test` names a build failure `pkg [pkg.test]`; strip the suffix to match package events.
@@ -154,37 +198,7 @@ pub fn render(report: &Report, color: bool, total: Duration) -> String {
     for (package, mut group) in by_package {
         group.sort_by(|a, b| a.name.cmp(&b.name));
         out.push_str(&format!("  {package}\n"));
-        for (i, row) in group.iter().enumerate() {
-            let last = i + 1 == group.len();
-            let branch = if last { "└── " } else { "├── " };
-            let timing = match row.elapsed {
-                Some(seconds) if seconds > 0.0 => {
-                    format!(" {}", format_elapsed(Duration::from_secs_f64(seconds)))
-                }
-                _ => String::new(),
-            };
-            let suffix = match row.status {
-                Status::NotRun => " (not run)",
-                Status::Aborted => " (aborted)",
-                _ => "",
-            };
-            out.push_str(&format!(
-                "    {branch}{} {}{suffix}{timing}\n",
-                mark(row.status, color),
-                row.name
-            ));
-            if matches!(row.status, Status::Failed | Status::Aborted) {
-                let cont = if last { "    " } else { "│   " };
-                for line in row.output.lines() {
-                    let line = line.trim_end();
-                    if line.is_empty() {
-                        continue;
-                    }
-                    out.push_str(&dim(&format!("    {cont}    {line}"), color));
-                    out.push('\n');
-                }
-            }
-        }
+        render_rows(&mut out, &group, "    ", color);
 
         // Crash before any test ran (init/`TestMain` panic): cause is package-level only.
         if !report.build_failed_packages.contains(package)
@@ -206,6 +220,49 @@ pub fn render(report: &Report, color: bool, total: Duration) -> String {
     out.push('\n');
     out.push_str(&summary(&report.rows, total));
     out
+}
+
+fn render_rows(out: &mut String, rows: &[&TestRow], prefix: &str, color: bool) {
+    for (i, row) in rows.iter().enumerate() {
+        let last = i + 1 == rows.len();
+        let branch = if last { "└── " } else { "├── " };
+        let timing = match row.elapsed {
+            Some(seconds) if seconds > 0.0 => {
+                format!(" {}", format_elapsed(Duration::from_secs_f64(seconds)))
+            }
+            _ => String::new(),
+        };
+        if row.children.is_empty() {
+            let suffix = match row.status {
+                Status::NotRun => " (not run)",
+                Status::Aborted => " (aborted)",
+                _ => "",
+            };
+            out.push_str(&format!(
+                "{prefix}{branch}{} {}{suffix}{timing}\n",
+                mark(row.status, color),
+                row.name
+            ));
+        } else {
+            out.push_str(&format!("{prefix}{branch}{}{timing}\n", row.name));
+        }
+
+        let child_prefix = format!("{prefix}{}", if last { "    " } else { "│   " });
+
+        if matches!(row.status, Status::Failed | Status::Aborted) {
+            for line in row.output.lines() {
+                let line = line.trim_end();
+                if line.is_empty() {
+                    continue;
+                }
+                out.push_str(&dim(&format!("{child_prefix}    {line}"), color));
+                out.push('\n');
+            }
+        }
+
+        let children: Vec<&TestRow> = row.children.iter().collect();
+        render_rows(out, &children, &child_prefix, color);
+    }
 }
 
 fn summary(rows: &[TestRow], total: Duration) -> String {
@@ -321,6 +378,88 @@ mod tests {
         assert!(text.contains("✓ adds_numbers"));
         assert!(text.contains("2 passed"));
         assert_eq!(exit_code(&report.rows, true), 0);
+    }
+
+    #[test]
+    fn subtests_nest_under_their_parent() {
+        let index = index(&[(ENTRY_MODULE_ID, "parent")]);
+        let events = vec![
+            event("run", "demo", Some("TestParent"), None),
+            event("run", "demo", Some("TestParent/alpha"), None),
+            event("pass", "demo", Some("TestParent/alpha"), None),
+            event("pass", "demo", Some("TestParent"), None),
+        ];
+        let report = build_report(&index, &events, "demo");
+        assert_eq!(report.rows.len(), 1);
+        assert_eq!(report.rows[0].children.len(), 1);
+        assert_eq!(report.rows[0].children[0].name, "alpha");
+
+        let text = render(&report, false, Duration::from_millis(1));
+        let parent_line = text.lines().position(|l| l.contains("parent")).unwrap();
+        let child_line = text.lines().position(|l| l.contains("alpha")).unwrap();
+        assert!(child_line > parent_line, "subtest renders under its parent");
+        assert!(text.contains("✓ alpha"), "leaf subtest keeps its mark");
+        assert!(
+            !text.contains("✓ parent"),
+            "a passing grouping has no redundant tick, got:\n{text}"
+        );
+        assert!(text.contains("1 passed"));
+    }
+
+    #[test]
+    fn parent_own_output_shows_even_with_subtests() {
+        let index = index(&[(ENTRY_MODULE_ID, "parent")]);
+        let events = vec![
+            event("run", "demo", Some("TestParent"), None),
+            event("run", "demo", Some("TestParent/child"), None),
+            event("pass", "demo", Some("TestParent/child"), None),
+            event(
+                "output",
+                "demo",
+                Some("TestParent"),
+                Some("parent panicked\n"),
+            ),
+            event("fail", "demo", Some("TestParent"), None),
+        ];
+        let report = build_report(&index, &events, "demo");
+        let text = render(&report, false, Duration::from_millis(1));
+
+        assert!(
+            !text.contains("✗ parent") && !text.contains("✓ parent"),
+            "a grouping carries no sigil, got:\n{text}"
+        );
+        assert!(text.contains("✓ child"));
+        assert!(
+            text.contains("parent panicked"),
+            "a failed parent's own output must show even with subtests, got:\n{text}"
+        );
+    }
+
+    #[test]
+    fn nested_subtest_failure_attaches_to_leaf() {
+        let index = index(&[(ENTRY_MODULE_ID, "parent")]);
+        let events = vec![
+            event("run", "demo", Some("TestParent"), None),
+            event("run", "demo", Some("TestParent/group"), None),
+            event("run", "demo", Some("TestParent/group/inner"), None),
+            event(
+                "output",
+                "demo",
+                Some("TestParent/group/inner"),
+                Some("boom\n"),
+            ),
+            event("fail", "demo", Some("TestParent/group/inner"), None),
+            event("fail", "demo", Some("TestParent/group"), None),
+            event("fail", "demo", Some("TestParent"), None),
+        ];
+        let report = build_report(&index, &events, "demo");
+        let inner = &report.rows[0].children[0].children[0];
+        assert_eq!(inner.name, "inner");
+        assert_eq!(inner.status, Status::Failed);
+
+        let text = render(&report, false, Duration::from_millis(1));
+        assert!(text.contains("boom"));
+        assert_eq!(exit_code(&report.rows, false), 1);
     }
 
     #[test]

@@ -199,6 +199,9 @@ impl<'a> EmitFacts<'a> {
     }
 
     pub(crate) fn go_import_path(&self, module: &str) -> String {
+        if module == go_name::TEST_PRELUDE_MODULE {
+            return go_name::TESTKIT_IMPORT_PATH.to_string();
+        }
         format!("{}/{}", self.go_module, module)
     }
 

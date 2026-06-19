@@ -149,6 +149,15 @@ pub fn type_not_found(type_name: &str, annotation_span: Span) -> LisetteDiagnost
         simple_name.len() as u32,
     );
 
+    if simple_name == "TestContext" {
+        return LisetteDiagnostic::error("Type not found")
+            .with_resolve_code("type_not_found")
+            .with_span_label(&name_span, "only available in test files")
+            .with_help(
+                "`TestContext` is given to `#[test]` functions in `.test.lis` files and is not available in production code",
+            );
+    }
+
     let looks_like_type_param = simple_name.len() == 1
         && simple_name.chars().next().is_some_and(|c| c.is_uppercase())
         || ["Key", "Value", "Item", "Error", "Elem", "In", "Out"].contains(&simple_name);

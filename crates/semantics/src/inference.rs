@@ -22,7 +22,7 @@ use crate::diagnostics::emit_for_locator_result;
 use crate::facts::{BindingIdAllocator, Facts};
 use crate::loader::Loader;
 use crate::module_graph::build_module_graph;
-use crate::prelude::parse_and_register_prelude;
+use crate::prelude::{parse_and_register_prelude, parse_and_register_test_prelude};
 use crate::store::{ENTRY_MODULE_ID, Store};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -167,6 +167,7 @@ pub fn run_inference(input: AnalyzeInput) -> InferenceOutput {
     if !prelude_cache_hit {
         parse_and_register_prelude(&mut store, &sink);
     }
+    parse_and_register_test_prelude(&mut store, &sink);
 
     let cache_enabled = input.project_root.is_some() && !cache_disabled && !input.disable_cache;
     let check_go_files = input.compile_phase == CompilePhase::Emit;

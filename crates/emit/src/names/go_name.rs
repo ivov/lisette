@@ -21,6 +21,10 @@ pub(crate) const ADAPTER_TYPE_PREFIX: &str = "_lisAdapter_";
 
 pub const PRELUDE_IMPORT_PATH: &str = "github.com/ivov/lisette/prelude";
 
+pub(crate) const TEST_PRELUDE_MODULE: &str = "**test_prelude";
+pub const TESTKIT_IMPORT_PATH: &str = "github.com/ivov/lisette/prelude/testkit";
+pub(crate) const TESTKIT_PKG: &str = "testkit";
+
 pub(crate) use syntax::types::unqualified_name;
 
 pub(crate) fn capitalize_first(s: &str) -> String {
@@ -280,6 +284,8 @@ pub(crate) enum GeneratedPackage {
     Maps,
     Json,
     Cmp,
+    TestKit,
+    Testing,
 }
 
 impl GeneratedPackage {
@@ -292,6 +298,8 @@ impl GeneratedPackage {
         GeneratedPackage::Maps,
         GeneratedPackage::Json,
         GeneratedPackage::Cmp,
+        GeneratedPackage::TestKit,
+        GeneratedPackage::Testing,
     ];
 
     pub(crate) fn path(self) -> &'static str {
@@ -304,6 +312,8 @@ impl GeneratedPackage {
             GeneratedPackage::Maps => "maps",
             GeneratedPackage::Json => "encoding/json",
             GeneratedPackage::Cmp => "cmp",
+            GeneratedPackage::TestKit => TESTKIT_IMPORT_PATH,
+            GeneratedPackage::Testing => "testing",
         }
     }
 
@@ -317,6 +327,8 @@ impl GeneratedPackage {
             GeneratedPackage::Maps => "maps",
             GeneratedPackage::Json => "json",
             GeneratedPackage::Cmp => "cmp",
+            GeneratedPackage::TestKit => TESTKIT_PKG,
+            GeneratedPackage::Testing => "testing",
         }
     }
 }

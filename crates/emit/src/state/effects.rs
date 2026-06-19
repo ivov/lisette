@@ -5,11 +5,11 @@ use crate::output::imports::ImportBuilder;
 use crate::types::go_type::GoType;
 
 #[derive(Debug, Clone, Copy, Default)]
-struct GeneratedImportSet(u8);
+struct GeneratedImportSet(u16);
 
 impl GeneratedImportSet {
     fn insert(&mut self, package: GeneratedPackage) {
-        self.0 |= 1 << package as u8;
+        self.0 |= 1 << package as u16;
     }
 
     fn union(&mut self, other: Self) {
@@ -20,7 +20,7 @@ impl GeneratedImportSet {
         GeneratedPackage::ALL
             .iter()
             .copied()
-            .filter(move |package| self.0 & (1 << *package as u8) != 0)
+            .filter(move |package| self.0 & (1 << *package as u16) != 0)
     }
 }
 
@@ -63,6 +63,14 @@ impl EmitEffects {
         self.generated.insert(GeneratedPackage::Cmp);
     }
 
+    pub(crate) fn require_testkit(&mut self) {
+        self.generated.insert(GeneratedPackage::TestKit);
+    }
+
+    pub(crate) fn require_testing(&mut self) {
+        self.generated.insert(GeneratedPackage::Testing);
+    }
+
     pub(crate) fn require_go_import(&mut self, path: impl Into<String>) {
         self.go_imports.push(path.into());
     }
@@ -80,9 +88,17 @@ impl EmitEffects {
     }
 
     pub(crate) fn drain_into(&self, builder: &mut ImportBuilder) {
-        let modules: HashSet<String> = self.go_imports.iter().cloned().collect();
+        let mut generated = self.generated;
+        let mut modules: HashSet<String> = HashSet::default();
+        for path in &self.go_imports {
+            if path == GeneratedPackage::TestKit.path() {
+                generated.insert(GeneratedPackage::TestKit);
+            } else {
+                modules.insert(path.clone());
+            }
+        }
         builder.extend_with_modules(&modules);
-        for package in self.generated.iter() {
+        for package in generated.iter() {
             builder.require_generated(package);
         }
     }

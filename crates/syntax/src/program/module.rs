@@ -75,7 +75,10 @@ impl Module {
     }
 
     pub fn is_internal(&self) -> bool {
-        self.id == "prelude" || self.id == "**nominal" || self.id.starts_with("go:")
+        self.id == "prelude"
+            || self.id == "**test_prelude"
+            || self.id == "**nominal"
+            || self.id.starts_with("go:")
     }
 
     pub fn is_empty_stub(&self) -> bool {

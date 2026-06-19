@@ -110,6 +110,9 @@ impl Planner<'_> {
     }
 
     pub(crate) fn go_pkg_qualifier(&self, module: &str) -> String {
+        if module == go_name::TEST_PRELUDE_MODULE {
+            return go_name::TESTKIT_PKG.to_string();
+        }
         if let Some(alias) = self.module.module_alias(module) {
             return alias.to_string();
         }
