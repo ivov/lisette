@@ -946,6 +946,15 @@ pub fn let_and_return(span: &Span) -> LisetteDiagnostic {
         .with_help("Return the value directly instead of binding it first")
 }
 
+pub fn redundant_rebinding(span: &Span, name: &str) -> LisetteDiagnostic {
+    LisetteDiagnostic::info("Redundant rebinding")
+        .with_lint_code("redundant_rebinding")
+        .with_span_label(span, format!("rebinds `{name}` to itself"))
+        .with_help(format!(
+            "Remove `let {name} = {name}`. The existing `{name}` already refers to this value, so rebinding it does nothing."
+        ))
+}
+
 pub fn uninterpolated_fstring(span: &Span) -> LisetteDiagnostic {
     LisetteDiagnostic::info("Uninterpolated f-string")
         .with_lint_code("uninterpolated_fstring")

@@ -18730,3 +18730,148 @@ pub fn f(s: Single) {
          `while let` rewrite would loop forever: {codes:?}"
     );
 }
+
+#[test]
+fn redundant_rebinding() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let a = 5;
+  let a = a;
+  let _ = a
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_rebinding_parameter() {
+    assert_lint_snapshot!(
+        r#"
+pub fn f(a: int) {
+  let a = a;
+  let _ = a
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_rebinding_parenthesized_rhs() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let a = 5;
+  let a = (a);
+  let _ = a
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_rebinding_mut_outer_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let mut a = 5;
+  a = 6;
+  let a = a;
+  let _ = a
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_rebinding_mut_binding_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let a = 5;
+  let mut a = a;
+  a = 6;
+  let _ = a
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_rebinding_annotation_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let a = 5;
+  let a: int = a;
+  let _ = a
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_rebinding_different_name_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let b = 5;
+  let a = b;
+  let _ = a
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_rebinding_referenced_outer_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let a = 1;
+  let r = &a;
+  let a = a;
+  let _ = r;
+  let _ = a
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_rebinding_referenced_new_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let a = 1;
+  let a = a;
+  let r = &a;
+  let _ = r
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_rebinding_unused_ceded_to_unused_variable() {
+    let mut fs = MockFileSystem::new();
+    let source = r#"
+fn main() {
+  let a = 5;
+  let a = a;
+}
+"#;
+    fs.add_file(ENTRY_MODULE_ID, "main.lis", source);
+
+    let result = compile_check(fs);
+    let codes: Vec<&str> = result.lints.iter().filter_map(|l| l.code_str()).collect();
+    assert!(
+        !codes.contains(&"lint.redundant_rebinding"),
+        "an unused rebinding is owned by `unused_variable`, which gives the same \
+         remove-the-line advice: {codes:?}"
+    );
+    assert!(
+        codes.contains(&"lint.unused_variable"),
+        "the unused rebinding should still draw an unused-variable warning: {codes:?}"
+    );
+}
