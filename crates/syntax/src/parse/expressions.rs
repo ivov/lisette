@@ -10,6 +10,13 @@ use crate::ast::{
 use crate::lex::TokenKind::{self, *};
 use crate::types::Type;
 
+#[derive(Clone, Copy)]
+enum GoMakeKind {
+    Slice,
+    Channel,
+    Map,
+}
+
 impl<'source> Parser<'source> {
     pub fn parse_expression(&mut self) -> Expression {
         if !self.enter_recursion() {
@@ -403,6 +410,14 @@ impl<'source> Parser<'source> {
         type_args: Vec<Annotation>,
     ) -> Expression {
         let start_offset = expression.get_span().byte_offset;
+
+        if type_args.is_empty()
+            && matches!(&expression, Expression::Identifier { value, qualified: None, .. } if value == "make")
+            && let Some(recovered) = self.try_go_make_shim(&expression)
+        {
+            return recovered;
+        }
+
         let (args, spread) = self.collect_call_args();
 
         Expression::Call {
@@ -413,6 +428,126 @@ impl<'source> Parser<'source> {
             type_args,
             span: self.span_from_offset(start_offset),
             call_kind: None,
+        }
+    }
+
+    fn try_go_make_shim(&mut self, callee: &Expression) -> Option<Expression> {
+        let kind = self.classify_go_make()?;
+        let help = match (kind, self.scan_go_make_args()) {
+            (GoMakeKind::Slice, 0) => "Use `Slice.new<T>()` for an empty slice.",
+            (GoMakeKind::Slice, 1) => {
+                "Use `slices.Repeat([value], n)` after importing `go:slices`."
+            }
+            (GoMakeKind::Slice, _) => {
+                "Use `slices.Grow(Slice.new<T>(), capacity)` after importing `go:slices`."
+            }
+            (GoMakeKind::Channel, 0) => "Use `Channel.new<T>()`.",
+            (GoMakeKind::Channel, _) => "Use `Channel.buffered<T>(n)`.",
+            (GoMakeKind::Map, _) => "Use `Map.new<K, V>()`.",
+        };
+
+        let span = callee.get_span();
+        if !self.too_many_errors() {
+            self.errors.push(
+                ParseError::new("Syntax error", span, "Lisette has no `make` builtin")
+                    .with_parse_code("go_make_builtin")
+                    .with_help(help),
+            );
+        }
+
+        self.consume_balanced_parens();
+
+        Some(Expression::Unit {
+            ty: Type::uninferred(),
+            span: self.span_from_offset(span.byte_offset),
+        })
+    }
+
+    fn classify_go_make(&self) -> Option<GoMakeKind> {
+        let first = self.stream.peek_ahead(1);
+        let second = self.stream.peek_ahead(2);
+
+        if first.kind == LeftSquareBracket
+            && second.kind == RightSquareBracket
+            && self.stream.peek_ahead(3).kind == Identifier
+        {
+            return Some(GoMakeKind::Slice);
+        }
+
+        if first.kind == Identifier && first.text == "chan" && second.kind == Identifier {
+            return Some(GoMakeKind::Channel);
+        }
+
+        if first.kind == Identifier
+            && first.text == "map"
+            && second.kind == LeftSquareBracket
+            && self.go_map_type_has_value()
+        {
+            return Some(GoMakeKind::Map);
+        }
+
+        None
+    }
+
+    fn go_map_type_has_value(&self) -> bool {
+        let mut offset = 2;
+        let mut depth = 0usize;
+        loop {
+            match self.stream.peek_ahead(offset).kind {
+                EOF => return false,
+                LeftSquareBracket => depth += 1,
+                RightSquareBracket => {
+                    depth -= 1;
+                    if depth == 0 {
+                        return self.stream.peek_ahead(offset + 1).kind == Identifier;
+                    }
+                }
+                _ => {}
+            }
+            offset += 1;
+        }
+    }
+
+    fn scan_go_make_args(&self) -> usize {
+        let mut offset = 1;
+        let mut paren = 1usize;
+        let mut bracket = 0usize;
+        let mut commas = 0usize;
+        loop {
+            match self.stream.peek_ahead(offset).kind {
+                EOF => break,
+                LeftParen => paren += 1,
+                RightParen => {
+                    paren -= 1;
+                    if paren == 0 {
+                        break;
+                    }
+                }
+                LeftSquareBracket => bracket += 1,
+                RightSquareBracket => bracket = bracket.saturating_sub(1),
+                Comma if paren == 1 && bracket == 0 => commas += 1,
+                _ => {}
+            }
+            offset += 1;
+        }
+        commas
+    }
+
+    fn consume_balanced_parens(&mut self) {
+        let mut depth = 0usize;
+        while !self.at_eof() {
+            let kind = self.current_token().kind;
+            self.next();
+            match kind {
+                LeftParen => depth += 1,
+                RightParen => {
+                    depth = depth.saturating_sub(1);
+                    if depth == 0 {
+                        break;
+                    }
+                }
+                _ => {}
+            }
         }
     }
 
