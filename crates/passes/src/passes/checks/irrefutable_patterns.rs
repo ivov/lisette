@@ -11,8 +11,9 @@
 //! - Or-patterns are rejected because they imply branching; an irrefutable
 //!   single arm cannot choose among alternatives.
 //!
-//! `let pat else { ... }` relaxes the or-pattern rule (the `else` arm handles
-//! the refutable case) but still rejects bare literal patterns.
+//! `let pat else { ... }` and `let assert pat = ...` relax the or-pattern rule
+//! (a refutable arm handles the non-matching case) but still reject bare literal
+//! patterns.
 
 use crate::passes::walk::NodeCtx;
 use diagnostics::LocalSink;
@@ -24,10 +25,11 @@ pub(crate) fn check(expression: &Expression, ctx: &NodeCtx) {
         Expression::Let {
             binding,
             else_block,
+            assert,
             ..
         } => {
             reject_as_binding(&binding.pattern, sink);
-            if else_block.is_none() {
+            if else_block.is_none() && !assert {
                 check_binding_pattern(&binding.pattern, sink);
             } else {
                 check_literal_only(&binding.pattern, sink);

@@ -845,6 +845,7 @@ module.exports = grammar({
 
     let_declaration: $ => seq(
       'let',
+      optional('assert'),
       optional($.mutable_specifier),
       field('pattern', $._pattern),
       optional(seq(':', field('type', $._type))),

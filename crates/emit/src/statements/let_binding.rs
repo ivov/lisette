@@ -435,7 +435,7 @@ enum LetKind {
     Discard,
     ComplexPattern,
     MultiValueCall,
-    LetElse,
+    Refutable,
 }
 
 pub(crate) struct LetPlanner<'a, 'e> {
@@ -444,6 +444,7 @@ pub(crate) struct LetPlanner<'a, 'e> {
     value: &'a Expression,
     else_block: Option<&'a Expression>,
     mutable: bool,
+    assert: bool,
 }
 
 impl<'a, 'e> LetPlanner<'a, 'e> {
@@ -453,6 +454,7 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
         value: &'a Expression,
         else_block: Option<&'a Expression>,
         mutable: bool,
+        assert: bool,
     ) -> Self {
         Self {
             planner,
@@ -460,6 +462,7 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
             value,
             else_block,
             mutable,
+            assert,
         }
     }
 
@@ -492,21 +495,33 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
         }
 
         match self.classify() {
-            LetKind::LetElse => {
-                let else_block = self
-                    .else_block
-                    .expect("LetKind::LetElse classified without else block");
-                let statements = self.planner.lower_let_else_pattern_site(
-                    AnnotatedPattern {
-                        pattern: &self.binding.pattern,
-                        typed: self.binding.typed_pattern.as_ref(),
-                    },
-                    &self.binding.ty,
-                    self.value,
-                    else_block,
-                    fx,
-                );
-                LetForm::LetElse {
+            LetKind::Refutable => {
+                let ap = AnnotatedPattern {
+                    pattern: &self.binding.pattern,
+                    typed: self.binding.typed_pattern.as_ref(),
+                };
+                let statements = if self.assert {
+                    let span = self.binding.pattern.get_span();
+                    self.planner.lower_let_assert_pattern_site(
+                        ap,
+                        &self.binding.ty,
+                        self.value,
+                        span,
+                        fx,
+                    )
+                } else {
+                    let else_block = self
+                        .else_block
+                        .expect("LetKind::Refutable without else block must be `let assert`");
+                    self.planner.lower_let_else_pattern_site(
+                        ap,
+                        &self.binding.ty,
+                        self.value,
+                        else_block,
+                        fx,
+                    )
+                };
+                LetForm::Refutable {
                     body: LoweredBlock { statements },
                 }
             }
@@ -536,8 +551,8 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
     }
 
     fn classify(&self) -> LetKind {
-        if self.else_block.is_some() {
-            return LetKind::LetElse;
+        if self.else_block.is_some() || self.assert {
+            return LetKind::Refutable;
         }
 
         match &self.binding.pattern {
@@ -706,9 +721,11 @@ impl Planner<'_> {
         value: &Expression,
         else_block: Option<&Expression>,
         mutable: bool,
+        assert: bool,
         fx: &mut EmitEffects,
     ) -> LetPlan {
-        let form = LetPlanner::new(self, binding, value, else_block, mutable).build_form(fx);
+        let form =
+            LetPlanner::new(self, binding, value, else_block, mutable, assert).build_form(fx);
         LetPlan { form }
     }
 }

@@ -777,6 +777,7 @@ pub enum Expression {
         mut_span: Option<Span>,
         else_block: Option<Box<Expression>>,
         else_span: Option<Span>,
+        assert: bool,
         typed_pattern: Option<TypedPattern>,
         ty: Type,
         span: Span,

@@ -1045,6 +1045,11 @@ impl<'source> Parser<'source> {
 
         self.ensure(Let);
 
+        let assert = self.is(Assert);
+        if assert {
+            self.next(); // consume `assert`
+        }
+
         let (mutable, mut_span) = if self.is(Mut) {
             let mut_token = self.current_token();
             let span = Span::new(self.file_id, mut_token.byte_offset, mut_token.byte_length);
@@ -1053,6 +1058,14 @@ impl<'source> Parser<'source> {
         } else {
             (false, None)
         };
+
+        if assert && let Some(span) = mut_span {
+            self.track_error_at(
+                span,
+                "`let assert` cannot be combined with `mut`",
+                "`let assert` binds a refutable pattern. Remove `mut`",
+            );
+        }
 
         let binding = self.parse_binding_allowing_or();
 
@@ -1072,6 +1085,7 @@ impl<'source> Parser<'source> {
                 mut_span,
                 else_block: None,
                 else_span: None,
+                assert,
                 typed_pattern: None,
                 ty: Type::uninferred(),
                 span: stub_span,
@@ -1091,6 +1105,14 @@ impl<'source> Parser<'source> {
             (None, None)
         };
 
+        if assert && else_block.is_some() {
+            self.track_error_at(
+                else_span.expect("else_block implies else_span"),
+                "`let assert` cannot have an `else` block",
+                "`let assert` already fails the test on mismatch. Remove the `else`",
+            );
+        }
+
         Expression::Let {
             binding: Box::new(binding),
             value: expression.into(),
@@ -1098,6 +1120,7 @@ impl<'source> Parser<'source> {
             mut_span,
             else_block,
             else_span,
+            assert,
             typed_pattern: None,
             ty: Type::uninferred(),
             span: self.span_from_tokens(start),

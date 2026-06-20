@@ -1,7 +1,7 @@
 use crate::patterns::binding_decls::pattern_has_bindings;
 use std::borrow::Cow;
 
-use syntax::ast::{Expression, MatchArm, Pattern, TypedPattern};
+use syntax::ast::{Expression, MatchArm, Pattern, Span, TypedPattern};
 use syntax::types::Type;
 
 use crate::EmitEffects;
@@ -29,6 +29,12 @@ pub(crate) struct AnnotatedPattern<'a> {
 pub(crate) struct TypedSubject<'a> {
     pub(crate) var: &'a str,
     pub(crate) ty: &'a Type,
+}
+
+#[derive(Clone, Copy)]
+enum RefutableFail<'a> {
+    ElseBlock(&'a Expression),
+    AssertFail(Span),
 }
 
 pub(crate) enum PatternSubject<'a> {
@@ -168,6 +174,40 @@ impl Planner<'_> {
         else_block: &Expression,
         fx: &mut EmitEffects,
     ) -> Vec<LoweredStatement> {
+        self.lower_refutable_let_site(
+            ap,
+            binding_ty,
+            scrutinee,
+            RefutableFail::ElseBlock(else_block),
+            fx,
+        )
+    }
+
+    pub(crate) fn lower_let_assert_pattern_site(
+        &mut self,
+        ap: AnnotatedPattern,
+        binding_ty: &Type,
+        scrutinee: &Expression,
+        pattern_span: Span,
+        fx: &mut EmitEffects,
+    ) -> Vec<LoweredStatement> {
+        self.lower_refutable_let_site(
+            ap,
+            binding_ty,
+            scrutinee,
+            RefutableFail::AssertFail(pattern_span),
+            fx,
+        )
+    }
+
+    fn lower_refutable_let_site(
+        &mut self,
+        ap: AnnotatedPattern,
+        binding_ty: &Type,
+        scrutinee: &Expression,
+        fail: RefutableFail,
+        fx: &mut EmitEffects,
+    ) -> Vec<LoweredStatement> {
         let value_ty = scrutinee.get_type();
         let mut statements = Vec::new();
         let resolved = self.resolve_pattern_subject(
@@ -182,9 +222,9 @@ impl Planner<'_> {
 
         self.scope.enter_use_region();
         let body = if matches!(ap.pattern, Pattern::Or { .. }) {
-            self.lower_let_else_or_pattern(ap, binding_ty, subject, else_block, fx)
+            self.lower_let_else_or_pattern(ap, binding_ty, subject, fail, fx)
         } else {
-            self.lower_let_else_single_pattern(ap, subject, else_block, fx)
+            self.lower_let_else_single_pattern(ap, subject, fail, fx)
         };
         let used = self.scope.exit_use_region();
         let body_block = LoweredBlock { statements: body };
@@ -314,11 +354,43 @@ impl Planner<'_> {
         }
     }
 
+    fn lower_refutable_fail(
+        &mut self,
+        fail: RefutableFail,
+        subject_var: &str,
+        fx: &mut EmitEffects,
+    ) -> LoweredBlock {
+        match fail {
+            RefutableFail::ElseBlock(else_block) => self.lower_block_as_body(else_block, fx),
+            RefutableFail::AssertFail(span) => {
+                let handle = self
+                    .current_test_handle()
+                    .expect("let assert without a test handle should be rejected by semantics");
+                fx.require_testkit();
+                fx.require_fmt();
+                let testkit = go_name::GeneratedPackage::TestKit.qualifier();
+                let fmt = go_name::GeneratedPackage::Fmt.qualifier();
+                self.scope.record_go_use(subject_var);
+                let (file, lo, hi) = (
+                    span.file_id,
+                    span.byte_offset,
+                    span.byte_offset + span.byte_length,
+                );
+                let call = format!(
+                    "{handle}.FailAssert({file}, {lo}, {hi}, \"let_assert\", \"pattern did not match\", {testkit}.Operand{{Value: {fmt}.Sprintf(\"%v\", {subject_var})}})\n"
+                );
+                LoweredBlock {
+                    statements: vec![LoweredStatement::RawGo(call)],
+                }
+            }
+        }
+    }
+
     fn lower_let_else_single_pattern(
         &mut self,
         ap: AnnotatedPattern,
         subject: TypedSubject,
-        else_block: &Expression,
+        fail: RefutableFail,
         fx: &mut EmitEffects,
     ) -> Vec<LoweredStatement> {
         let AnnotatedPattern { pattern, typed } = ap;
@@ -357,11 +429,11 @@ impl Planner<'_> {
             guard_parts.push(wrap_if_struct_literal(negated));
         }
         let guard = guard_parts.join(" || ");
-        let else_lowered = self.lower_block_as_body(else_block, fx);
+        let fail_body = self.lower_refutable_fail(fail, subject_var, fx);
         statements.push(LoweredStatement::If(IfPlan {
             condition_setup: Vec::new(),
             condition: guard,
-            then_body: else_lowered,
+            then_body: fail_body,
             else_arm: ElseArm::None,
         }));
 
@@ -380,7 +452,7 @@ impl Planner<'_> {
         ap: AnnotatedPattern,
         binding_ty: &Type,
         subject: TypedSubject,
-        else_block: &Expression,
+        fail: RefutableFail,
         fx: &mut EmitEffects,
     ) -> Vec<LoweredStatement> {
         let AnnotatedPattern { pattern, typed } = ap;
@@ -454,10 +526,10 @@ impl Planner<'_> {
             }
             None => {
                 self.scope.restore_binding_snapshot(pre_let_snapshot);
-                let else_lowered = self.lower_block_as_body(else_block, fx);
+                let fail_lowered = self.lower_refutable_fail(fail, subject_var, fx);
                 self.scope
                     .restore_binding_snapshot(post_declaration_snapshot);
-                else_lowered
+                fail_lowered
             }
         };
 

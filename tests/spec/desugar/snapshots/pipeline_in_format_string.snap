@@ -55,6 +55,7 @@ description: "fn test() { let x = 5; f\"result: {x |> double}\"; }"
                     mut_span: None,
                     else_block: None,
                     else_span: None,
+                    assert: false,
                     typed_pattern: None,
                     ty: Var {
                         id: uninferred,

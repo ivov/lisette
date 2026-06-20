@@ -11,6 +11,11 @@ fn assert_statement() {
 }
 
 #[test]
+fn let_assert_statement() {
+    assert_format_snapshot!("fn test() { let assert Ok(h) = parse(x) }");
+}
+
+#[test]
 fn binary_addition() {
     assert_format_snapshot!("fn test() { 1 + 2 }");
 }

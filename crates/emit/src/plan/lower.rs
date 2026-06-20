@@ -284,10 +284,18 @@ impl Planner<'_> {
                 value,
                 mutable,
                 else_block,
+                assert,
                 ..
             } => {
                 let directive = self.maybe_line_directive(&expression.get_span());
-                let plan = self.build_let_plan(binding, value, else_block.as_deref(), *mutable, fx);
+                let plan = self.build_let_plan(
+                    binding,
+                    value,
+                    else_block.as_deref(),
+                    *mutable,
+                    *assert,
+                    fx,
+                );
                 directed(directive, LoweredStatement::Let(plan))
             }
             Expression::Assignment {

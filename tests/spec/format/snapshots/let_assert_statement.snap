@@ -1,0 +1,7 @@
+---
+source: tests/spec/format/mod.rs
+description: "fn test() { let assert Ok(h) = parse(x) }"
+---
+fn test() {
+  let assert Ok(h) = parse(x)
+}

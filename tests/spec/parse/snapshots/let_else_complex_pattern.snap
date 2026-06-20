@@ -117,6 +117,7 @@ description: |
                             byte_length: 4,
                         },
                     ),
+                    assert: false,
                     typed_pattern: None,
                     ty: Var {
                         id: uninferred,

@@ -4075,6 +4075,48 @@ fn assert_in_test_context_helper_accepted() {
 }
 
 #[test]
+fn let_assert_refutable_pattern_accepted() {
+    let fs = test_attribute_fs(
+        "pub fn parse(n: int) -> Result<int, int> { Ok(n) }",
+        "#[test]\nfn checks() {\n  let assert Ok(h) = parse(1)\n  assert h == 1\n}",
+    );
+    let result = infer_module("_entry_", fs);
+    assert!(
+        !has_code(&result, "literal_in_binding") && !has_code(&result, "or_pattern_in_irrefutable"),
+        "`let assert` must permit a refutable pattern, got: {:?}",
+        result.errors
+    );
+}
+
+#[test]
+fn let_assert_outside_test_rejected() {
+    let fs = test_attribute_fs(
+        "pub fn parse(n: int) -> Result<int, int> { Ok(n) }",
+        "fn helper() {\n  let assert Ok(h) = parse(1)\n  let _ = h\n}",
+    );
+    let result = infer_module("_entry_", fs);
+    assert!(
+        has_code(&result, "assert_without_test_context"),
+        "`let assert` with no test handle in scope must be rejected, got: {:?}",
+        result.errors
+    );
+}
+
+#[test]
+fn let_assert_mut_rejected() {
+    let fs = test_attribute_fs(
+        "pub fn add(a: int, b: int) -> int { a + b }",
+        "#[test]\nfn checks() {\n  let assert mut x = 5\n  let _ = x\n}",
+    );
+    let result = infer_module("_entry_", fs);
+    assert!(
+        has_code(&result, "syntax_error"),
+        "`let assert mut` must be rejected, got: {:?}",
+        result.errors
+    );
+}
+
+#[test]
 fn test_attribute_with_generics_rejected() {
     let fs = test_attribute_fs(
         "pub fn add(a: int, b: int) -> int { a + b }",

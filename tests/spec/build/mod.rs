@@ -7715,6 +7715,41 @@ fn assert_in_discarded_subtest_targets_subtest_handle() {
 }
 
 #[test]
+fn let_assert_lowers_to_failure_on_mismatch() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        "import \"math\"\n\nfn main() {\n  let _ = math.add(1, 2)\n}",
+    );
+    fs.add_file(
+        "math",
+        "core.lis",
+        "pub fn add(a: int, b: int) -> int { a + b }\npub fn parse(n: int) -> Result<int, int> { Ok(n) }",
+    );
+    fs.add_file(
+        "math",
+        "core.test.lis",
+        "#[test]\nfn checks() {\n  let assert Ok(h) = parse(1)\n  let _ = h\n}",
+    );
+
+    let outputs = compile_project_files_with_tests(fs, "github.com/user/p", false, true);
+    let go = outputs
+        .iter()
+        .find(|f| f.name.ends_with("core_test.go"))
+        .expect("expected a core_test.go output")
+        .to_go();
+    assert!(
+        go.contains(".FailAssert(") && go.contains("\"let_assert\""),
+        "a `let assert` mismatch must report through the test channel, got:\n{go}"
+    );
+    assert!(
+        go.contains("fmt.Sprintf(\"%v\","),
+        "a `let assert` failure must include the actual value, got:\n{go}"
+    );
+}
+
+#[test]
 fn colliding_test_wrapper_names_are_reported() {
     let mut fs = MockFileSystem::new();
     fs.add_file(

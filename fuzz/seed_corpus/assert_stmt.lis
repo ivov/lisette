@@ -17,3 +17,8 @@ fn assert_labeled() {
 fn assert_parens() {
   assert (1 == 1);
 }
+
+fn let_assert_binding() {
+  let assert Ok(h) = parse(bytes);
+  let assert Some(x) = lookup(key);
+}

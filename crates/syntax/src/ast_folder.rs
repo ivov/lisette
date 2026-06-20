@@ -148,6 +148,7 @@ pub trait AstFolder {
                 mut_span,
                 else_block,
                 else_span,
+                assert,
                 typed_pattern,
                 ty,
                 span,
@@ -160,6 +161,7 @@ pub trait AstFolder {
                     .map(|e| self.fold_expression(*e).map(Box::new))
                     .transpose()?,
                 else_span,
+                assert,
                 typed_pattern,
                 ty,
                 span,

@@ -368,6 +368,16 @@ fn test() -> Option<int> {
 }
 
 #[test]
+fn let_assert_basic() {
+    let input = r#"
+fn test() {
+  let assert Ok(x) = result;
+}
+"#;
+    assert_parse_snapshot!(input);
+}
+
+#[test]
 fn let_else_with_result() {
     let input = r#"
 fn test() -> int {

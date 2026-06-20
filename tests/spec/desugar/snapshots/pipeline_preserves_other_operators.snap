@@ -80,6 +80,7 @@ description: "fn test() { let a = 1 + 2; let b = a |> double; }"
                     mut_span: None,
                     else_block: None,
                     else_span: None,
+                    assert: false,
                     typed_pattern: None,
                     ty: Var {
                         id: uninferred,
@@ -152,6 +153,7 @@ description: "fn test() { let a = 1 + 2; let b = a |> double; }"
                     mut_span: None,
                     else_block: None,
                     else_span: None,
+                    assert: false,
                     typed_pattern: None,
                     ty: Var {
                         id: uninferred,

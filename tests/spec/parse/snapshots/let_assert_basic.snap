@@ -2,7 +2,9 @@
 source: tests/spec/parse/mod.rs
 description: |
   
-  fn test() { let result = true || false; }
+  fn test() {
+    let assert Ok(x) = result;
+  }
 ---
 [
     Function {
@@ -25,12 +27,26 @@ description: |
             items: [
                 Let {
                     binding: Binding {
-                        pattern: Identifier {
-                            identifier: "result",
+                        pattern: EnumVariant {
+                            identifier: "Ok",
+                            fields: [
+                                Identifier {
+                                    identifier: "x",
+                                    span: Span {
+                                        file_id: 0,
+                                        byte_offset: 29,
+                                        byte_length: 1,
+                                    },
+                                },
+                            ],
+                            rest: false,
+                            ty: Var {
+                                id: uninferred,
+                            },
                             span: Span {
                                 file_id: 0,
-                                byte_offset: 17,
-                                byte_length: 6,
+                                byte_offset: 26,
+                                byte_length: 5,
                             },
                         },
                         annotation: None,
@@ -39,56 +55,32 @@ description: |
                             id: uninferred,
                         },
                     },
-                    value: Binary {
-                        operator: Or,
-                        left: Literal {
-                            literal: Boolean(
-                                true,
-                            ),
-                            ty: Var {
-                                id: uninferred,
-                            },
-                            span: Span {
-                                file_id: 0,
-                                byte_offset: 26,
-                                byte_length: 4,
-                            },
-                        },
-                        right: Literal {
-                            literal: Boolean(
-                                false,
-                            ),
-                            ty: Var {
-                                id: uninferred,
-                            },
-                            span: Span {
-                                file_id: 0,
-                                byte_offset: 34,
-                                byte_length: 5,
-                            },
-                        },
+                    value: Identifier {
+                        value: "result",
                         ty: Var {
                             id: uninferred,
                         },
                         span: Span {
                             file_id: 0,
-                            byte_offset: 26,
-                            byte_length: 13,
+                            byte_offset: 34,
+                            byte_length: 6,
                         },
+                        binding_id: None,
+                        qualified: None,
                     },
                     mutable: false,
                     mut_span: None,
                     else_block: None,
                     else_span: None,
-                    assert: false,
+                    assert: true,
                     typed_pattern: None,
                     ty: Var {
                         id: uninferred,
                     },
                     span: Span {
                         file_id: 0,
-                        byte_offset: 13,
-                        byte_length: 26,
+                        byte_offset: 15,
+                        byte_length: 25,
                     },
                 },
             ],
@@ -98,7 +90,7 @@ description: |
             span: Span {
                 file_id: 0,
                 byte_offset: 11,
-                byte_length: 31,
+                byte_length: 32,
             },
         },
         ty: Var {
@@ -107,7 +99,7 @@ description: |
         span: Span {
             file_id: 0,
             byte_offset: 1,
-            byte_length: 41,
+            byte_length: 42,
         },
     },
 ]

@@ -119,6 +119,7 @@ pub fn check(expression: &Expression, ctx: &PatternAnalysisContext, sink: &Local
             binding,
             value,
             else_block,
+            assert,
             typed_pattern,
             ..
         } => {
@@ -131,6 +132,12 @@ pub fn check(expression: &Expression, ctx: &PatternAnalysisContext, sink: &Local
                     && is_pattern_irrefutable(tp, ctx.store)
                 {
                     ctx.add_issue(binding.pattern.get_span(), IssueKind::RedundantLetElse);
+                }
+            } else if *assert {
+                if let Some(tp) = typed_pattern
+                    && is_pattern_irrefutable(tp, ctx.store)
+                {
+                    ctx.add_issue(binding.pattern.get_span(), IssueKind::RedundantLetAssert);
                 }
             } else if !check_refutability(&binding.pattern, typed_pattern.as_ref(), ctx, sink) {
             }

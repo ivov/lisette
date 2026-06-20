@@ -38,8 +38,9 @@ impl<'a> Formatter<'a> {
                 value,
                 mutable,
                 else_block,
+                assert,
                 ..
-            } => self.let_(binding, value, *mutable, else_block.as_deref()),
+            } => self.let_(binding, value, *mutable, else_block.as_deref(), *assert),
 
             Expression::Return { expression, .. } => self.return_(expression),
 
@@ -317,8 +318,14 @@ impl<'a> Formatter<'a> {
         value: &'a Expression,
         mutable: bool,
         else_block: Option<&'a Expression>,
+        assert: bool,
     ) -> Document<'a> {
-        let keyword = if mutable { "let mut " } else { "let " };
+        let keyword = match (assert, mutable) {
+            (true, true) => "let assert mut ",
+            (true, false) => "let assert ",
+            (false, true) => "let mut ",
+            (false, false) => "let ",
+        };
 
         let base = Document::str(keyword)
             .append(self.binding(binding))

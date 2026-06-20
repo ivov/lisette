@@ -4,6 +4,7 @@ use syntax::ast::{DeadCodeCause, Span};
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum IssueKind {
     RedundantLetElse,
+    RedundantLetAssert,
     RedundantIfLet,
     UnreachableIfLetElse,
     RedundantIfLetElse,
@@ -112,6 +113,12 @@ pub fn pattern_issue(span: &Span, kind: IssueKind) -> LisetteDiagnostic {
             "Redundant `else` in `let...else`",
             "always matches",
             "Remove the `else` block since the pattern cannot fail",
+        ),
+        IssueKind::RedundantLetAssert => (
+            "redundant_let_assert",
+            "Redundant `assert` in `let assert`",
+            "always matches",
+            "Use a plain `let` since the pattern cannot fail",
         ),
         IssueKind::RedundantIfLet => (
             "redundant_if_let",

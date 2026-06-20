@@ -98,12 +98,21 @@ impl InferCtx<'_, '_> {
         mut_span: Option<Span>,
         else_block: Option<Box<Expression>>,
         else_span: Option<Span>,
+        assert: bool,
         span: Span,
         expected_ty: &Type,
     ) -> Expression {
         let store = self.store;
         let has_annotation = binding.annotation.is_some();
         let binding_name = binding.pattern.get_identifier();
+        let pattern_span = binding.pattern.get_span();
+
+        if assert && !self.scopes.has_test_handle() {
+            self.sink
+                .push(diagnostics::infer::assert_without_test_context(
+                    pattern_span,
+                ));
+        }
 
         let ty = if let Some(annotation) = &binding.annotation {
             self.convert_to_type(store, annotation, &span)
@@ -196,6 +205,7 @@ impl InferCtx<'_, '_> {
             mut_span,
             else_block: new_else_block,
             else_span,
+            assert,
             typed_pattern: Some(typed_pattern),
             ty: self.type_unit(),
             span,

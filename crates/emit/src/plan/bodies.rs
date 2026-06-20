@@ -182,7 +182,8 @@ pub(crate) enum LetForm {
     MultiValueCall {
         body: LoweredBlock,
     },
-    LetElse {
+    /// `let ... else` or `let assert ...`.
+    Refutable {
         body: LoweredBlock,
     },
 }
@@ -195,7 +196,7 @@ impl LetForm {
             | LetForm::Discard { body }
             | LetForm::ComplexPattern { body }
             | LetForm::MultiValueCall { body }
-            | LetForm::LetElse { body } => body,
+            | LetForm::Refutable { body } => body,
         }
     }
 }
