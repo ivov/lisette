@@ -27,6 +27,7 @@ const KEYWORDS: &[&str] = &[
     "task",
     "try",
     "recover",
+    "assert",
     "as",
     "true",
     "false",

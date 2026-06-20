@@ -314,6 +314,7 @@ impl Planner<'_> {
                 directed(directive, LoweredStatement::Select(plan))
             }
             Expression::WhileLet { .. } => self.lower_while_let_statement(expression, fx),
+            Expression::Assert { .. } => self.lower_assert_statement(expression, fx),
             // Top-level items (Struct/Enum/etc) shouldn't appear inside
             // function bodies, but dispatch handles them defensively. They
             // carry their own directive (via `emit_top_item`) so the wrapper
@@ -372,6 +373,32 @@ impl Planner<'_> {
             directive,
             LoweredStatement::Expression(ExpressionStatementPlan { form }),
         )
+    }
+
+    /// Lower `assert <bool>` to a runtime panic on failure. Rich source-spanned
+    /// reporting over the test channel lands in a follow-up.
+    pub(crate) fn lower_assert_statement(
+        &mut self,
+        expression: &Expression,
+        fx: &mut EmitEffects,
+    ) -> LoweredStatement {
+        let Expression::Assert {
+            expression: operand,
+            ..
+        } = expression
+        else {
+            unreachable!("lower_assert_statement requires an Assert expression");
+        };
+        let operand = operand.unwrap_parens();
+        let (mut statements, condition) = self.lower_condition(operand, fx);
+        let directive = self.maybe_line_directive(&expression.get_span());
+        statements.push(directed(
+            directive,
+            LoweredStatement::RawGo(format!(
+                "if !({condition}) {{\npanic(\"assertion failed\")\n}}\n"
+            )),
+        ));
+        LoweredStatement::Block(LoweredBlock { statements })
     }
 
     /// Lower `while let P = scrutinee { body }`, wrapped as a `WhileLet`

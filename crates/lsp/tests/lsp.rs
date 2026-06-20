@@ -557,6 +557,9 @@ async fn rename_rejects_keywords() {
     let edit = client.rename(TEST_URI, 1, 6, "fn").await;
     assert!(edit.is_none());
 
+    let edit = client.rename(TEST_URI, 1, 6, "assert").await;
+    assert!(edit.is_none());
+
     client.shutdown().await;
 }
 

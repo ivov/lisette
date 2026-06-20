@@ -1,0 +1,19 @@
+fn assert_relation() {
+  assert 2 + 2 == 5;
+  assert a != b;
+  assert x < y;
+}
+
+fn assert_bare() {
+  assert is_ready();
+  assert a && b;
+  assert !done;
+}
+
+fn assert_labeled() {
+  assert xs.equals(ys);
+}
+
+fn assert_parens() {
+  assert (1 == 1);
+}

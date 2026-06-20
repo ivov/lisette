@@ -171,7 +171,7 @@
         },
         {
           "name": "keyword.other.lisette",
-          "match": "\\b(let|mut|import|defer|task|select|try|recover)\\b"
+          "match": "\\b(let|mut|import|defer|task|select|try|recover|assert)\\b"
         },
         {
           "name": "keyword.operator.as.lisette",

@@ -142,6 +142,7 @@ impl<'a> FreezeFolder<'a> {
             | Expression::Reference { expression, .. }
             | Expression::Task { expression, .. }
             | Expression::Defer { expression, .. }
+            | Expression::Assert { expression, .. }
             | Expression::Cast { expression, .. }
             | Expression::Const { expression, .. } => {
                 self.freeze_expr(expression.as_mut());
@@ -482,6 +483,7 @@ impl<'a> FreezeFolder<'a> {
             | Expression::IndexedAccess { ty, .. }
             | Expression::Task { ty, .. }
             | Expression::Defer { ty, .. }
+            | Expression::Assert { ty, .. }
             | Expression::Select { ty, .. }
             | Expression::Unit { ty, .. }
             | Expression::Range { ty, .. }

@@ -103,6 +103,7 @@ pub enum TokenKind {
     Task,
     Try,
     Recover,
+    Assert,
     As,
     Directive,
     EOF,
@@ -207,6 +208,7 @@ impl fmt::Display for TokenKind {
             Task => "`task`",
             Try => "`try`",
             Recover => "`recover`",
+            Assert => "`assert`",
             As => "`as`",
             Directive => "directive",
             EOF => "end of file",
@@ -249,6 +251,7 @@ impl TokenKind {
             "task" => Some(Task),
             "try" => Some(Try),
             "recover" => Some(Recover),
+            "assert" => Some(Assert),
             "as" => Some(As),
             _ => None,
         }
@@ -285,6 +288,7 @@ impl TokenKind {
                 | Task
                 | Try
                 | Recover
+                | Assert
                 | As
         )
     }

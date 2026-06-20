@@ -26,6 +26,7 @@
 "task"
 "try"
 "recover"
+"assert"
 "as"
 "true"
 "false"

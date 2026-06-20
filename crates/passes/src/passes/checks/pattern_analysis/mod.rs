@@ -306,6 +306,8 @@ pub fn check(expression: &Expression, ctx: &PatternAnalysisContext, sink: &Local
 
         Expression::Defer { expression, .. } => check(expression, ctx, sink),
 
+        Expression::Assert { expression, .. } => check(expression, ctx, sink),
+
         Expression::Select { arms, .. } => {
             for arm in arms {
                 match &arm.pattern {

@@ -135,6 +135,7 @@ impl<'a> Formatter<'a> {
 
             Expression::Task { expression, .. } => self.task(expression),
             Expression::Defer { expression, .. } => self.defer_(expression),
+            Expression::Assert { expression, .. } => self.assert_(expression),
             Expression::Select { arms, span, .. } => self.select(arms, span),
             Expression::Propagate { expression, .. } => self.propagate_(expression),
             Expression::Reference { expression, .. } => self.ref_(expression),
@@ -946,6 +947,10 @@ impl<'a> Formatter<'a> {
 
     pub(super) fn defer_(&mut self, expression: &'a Expression) -> Document<'a> {
         Document::str("defer ").append(self.expression(expression))
+    }
+
+    pub(super) fn assert_(&mut self, expression: &'a Expression) -> Document<'a> {
+        Document::str("assert ").append(self.expression(expression))
     }
 
     pub(super) fn try_block(&mut self, items: &'a [Expression], span: &Span) -> Document<'a> {

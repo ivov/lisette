@@ -1267,6 +1267,7 @@ impl LanguageServer for Backend {
             "task",
             "try",
             "recover",
+            "assert",
             "as",
             "true",
             "false",

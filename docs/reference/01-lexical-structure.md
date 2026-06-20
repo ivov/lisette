@@ -2,15 +2,15 @@
 
 ## Keywords
 
-These 28 words are reserved and cannot be used as identifiers:
+These 29 words are reserved and cannot be used as identifiers:
 
 ```
-as        break     const     continue    defer
-else      enum      fn        for         if
-impl      import    in        interface   let
-loop      match     mut       pub         recover
-return    select    struct    task        try
-type      while
+as        assert    break     const       continue
+defer     else      enum      fn          for
+if        impl      import    in          interface
+let       loop      match     mut         pub
+recover   return    select    struct      task
+try       type      var       while
 ```
 
 `true` and `false` are boolean literals, not keywords.

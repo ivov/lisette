@@ -1,0 +1,7 @@
+---
+source: tests/spec/format/mod.rs
+description: "fn test() { assert 2 + 2 == 5 }"
+---
+fn test() {
+  assert 2 + 2 == 5
+}

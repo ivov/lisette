@@ -760,6 +760,26 @@ impl InferCtx<'_, '_> {
         }
     }
 
+    pub(super) fn infer_assert(
+        &mut self,
+        expression: Box<Expression>,
+        span: Span,
+        expected_ty: &Type,
+    ) -> Expression {
+        let new_expression = self.infer_condition(*expression, &span);
+        if let Some(propagate_span) = Self::find_propagate(&new_expression) {
+            self.sink
+                .push(diagnostics::infer::propagate_in_assert(propagate_span));
+        }
+        let unit_ty = self.type_unit();
+        self.unify(expected_ty, &unit_ty, &span);
+        Expression::Assert {
+            expression: new_expression.into(),
+            ty: unit_ty,
+            span,
+        }
+    }
+
     pub(super) fn infer_break(
         &mut self,
         value: Option<Box<Expression>>,

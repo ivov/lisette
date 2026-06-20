@@ -4,6 +4,10 @@
     "named": true,
     "subtypes": [
       {
+        "type": "assert_statement",
+        "named": true
+      },
+      {
         "type": "attribute_item",
         "named": true
       },
@@ -410,6 +414,22 @@
         "types": [
           {
             "type": "_pattern",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "assert_statement",
+    "named": true,
+    "fields": {
+      "condition": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "_expression",
             "named": true
           }
         ]
@@ -3364,6 +3384,10 @@
   },
   {
     "type": "as",
+    "named": false
+  },
+  {
+    "type": "assert",
     "named": false
   },
   {

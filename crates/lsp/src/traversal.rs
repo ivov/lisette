@@ -95,6 +95,7 @@ fn child_containing_offset<'a>(expression: &'a Expression, offset: u32) -> Optio
         | Expression::Reference { expression, .. }
         | Expression::Task { expression, .. }
         | Expression::Defer { expression, .. }
+        | Expression::Assert { expression, .. }
         | Expression::Cast { expression, .. } => c(expression),
 
         Expression::Assignment { target, value, .. } => c(target).or_else(|| c(value)),

@@ -139,6 +139,7 @@ module.exports = grammar({
       $.import_declaration,
       $.defer_statement,
       $.task_statement,
+      $.assert_statement,
     ),
 
     // Attributes
@@ -737,6 +738,8 @@ module.exports = grammar({
       prec(1, seq('defer', $.block)),
       seq('defer', $._expression, $._semicolon),
     ),
+
+    assert_statement: $ => seq('assert', field('condition', $._expression), $._semicolon),
 
     select_expression: $ => seq(
       'select',

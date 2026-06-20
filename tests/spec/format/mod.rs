@@ -6,6 +6,11 @@ fn assignment_simple() {
 }
 
 #[test]
+fn assert_statement() {
+    assert_format_snapshot!("fn test() { assert 2 + 2 == 5 }");
+}
+
+#[test]
 fn binary_addition() {
     assert_format_snapshot!("fn test() { 1 + 2 }");
 }

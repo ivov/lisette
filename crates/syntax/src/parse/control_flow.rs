@@ -186,6 +186,20 @@ impl<'source> Parser<'source> {
         }
     }
 
+    pub(super) fn parse_assert(&mut self) -> Expression {
+        let start = self.current_token();
+
+        self.ensure(Assert);
+
+        let expression = self.parse_expression();
+
+        Expression::Assert {
+            expression: expression.into(),
+            ty: Type::uninferred(),
+            span: self.span_from_tokens(start),
+        }
+    }
+
     pub(super) fn parse_for(&mut self) -> Expression {
         let start = self.current_token();
 

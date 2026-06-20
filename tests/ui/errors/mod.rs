@@ -3832,6 +3832,20 @@ fn test_attribute_in_production_file_rejected() {
 }
 
 #[test]
+fn assert_non_bool_operand_rejected() {
+    let fs = test_attribute_fs(
+        "pub fn add(a: int, b: int) -> int { a + b }",
+        "#[test]\nfn checks() {\n  assert 42\n}",
+    );
+    let result = infer_module("_entry_", fs);
+    assert!(
+        has_code(&result, "type_mismatch"),
+        "a non-bool `assert` operand must be rejected, got: {:?}",
+        result.errors
+    );
+}
+
+#[test]
 fn test_attribute_with_flag_argument_rejected() {
     let fs = test_attribute_fs(
         "pub fn add(a: int, b: int) -> int { a + b }",
@@ -8139,6 +8153,23 @@ fn run() -> Result<(), string> {
   while check("x")? {
     let _ = 1
   }
+  Ok(())
+}
+
+fn main() { let _ = run() }
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_propagate_in_assert_condition() {
+    let input = r#"
+fn check(s: string) -> Result<bool, string> {
+  if s == "bad" { Err("bad") } else { Ok(true) }
+}
+
+fn run() -> Result<(), string> {
+  assert check("x")?
   Ok(())
 }
 

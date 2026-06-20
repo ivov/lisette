@@ -288,6 +288,8 @@ impl<'a> Walker<'a> {
                 self.barriers_seen += 1;
             }
 
+            Expression::Assert { expression, .. } => self.walk(expression),
+
             Expression::Select { arms, .. } => {
                 // Mark the barrier before walking arms so uses inside any arm
                 // see the select wait as preceding.

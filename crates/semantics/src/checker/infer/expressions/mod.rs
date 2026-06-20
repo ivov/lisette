@@ -302,6 +302,10 @@ impl InferCtx<'_, '_> {
                 self.infer_defer(expression, span, expected_ty)
             }
 
+            Expression::Assert {
+                expression, span, ..
+            } => self.infer_assert(expression, span, expected_ty),
+
             Expression::Select { arms, span, .. } => self.infer_select(arms, span, expected_ty),
 
             Expression::ModuleImport {

@@ -2475,6 +2475,13 @@ pub fn propagate_in_condition(span: Span) -> LisetteDiagnostic {
         .with_help("Bind the result first: `let val = expression?; if val { ... }`")
 }
 
+pub fn propagate_in_assert(span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("`?` cannot be used inside `assert`")
+        .with_infer_code("propagate_in_assert")
+        .with_span_label(&span, "`?` inside `assert`")
+        .with_help("Bind the result first: `let val = expression?; assert val`")
+}
+
 pub fn propagate_in_defer(span: Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Invalid `?` in `defer`")
         .with_infer_code("propagate_in_defer")

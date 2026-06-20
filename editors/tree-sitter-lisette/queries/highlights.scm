@@ -1,6 +1,7 @@
 ; Keywords
 [
   "as"
+  "assert"
   "break"
   "const"
   "continue"

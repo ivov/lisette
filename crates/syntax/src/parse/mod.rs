@@ -256,6 +256,7 @@ impl<'source> Parser<'source> {
             Break => self.parse_break(),
             Continue => self.parse_continue(),
             Defer => self.parse_defer(),
+            Assert => self.parse_assert(),
             Directive => self.parse_directive(),
             _ => self.parse_assignment(),
         }

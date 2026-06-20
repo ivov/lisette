@@ -362,3 +362,17 @@ let x = recover { dangerous() }
         (call_expression
           function: (identifier)
           arguments: (arguments))))))
+
+================================================================================
+Assert statement
+================================================================================
+
+assert x == y
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (assert_statement
+    condition: (binary_expression
+      left: (identifier)
+      right: (identifier))))

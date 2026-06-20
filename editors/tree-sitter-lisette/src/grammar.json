@@ -128,6 +128,10 @@
         {
           "type": "SYMBOL",
           "name": "task_statement"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "assert_statement"
         }
       ]
     },
@@ -3994,6 +3998,27 @@
               "name": "_semicolon"
             }
           ]
+        }
+      ]
+    },
+    "assert_statement": {
+      "type": "SEQ",
+      "members": [
+        {
+          "type": "STRING",
+          "value": "assert"
+        },
+        {
+          "type": "FIELD",
+          "name": "condition",
+          "content": {
+            "type": "SYMBOL",
+            "name": "_expression"
+          }
+        },
+        {
+          "type": "SYMBOL",
+          "name": "_semicolon"
         }
       ]
     },

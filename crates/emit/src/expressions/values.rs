@@ -204,6 +204,10 @@ impl Planner<'_> {
                 let setup = self.lower_assignment_operand(target, value, fx);
                 value_plan_from_statements(setup, "struct{}{}".to_string())
             }
+            Expression::Assert { .. } => value_plan_from_statements(
+                vec![self.lower_assert_statement(expression, fx)],
+                "struct{}{}".to_string(),
+            ),
             Expression::IfLet { .. } => {
                 unreachable!("IfLet should be desugared to Match before emit")
             }

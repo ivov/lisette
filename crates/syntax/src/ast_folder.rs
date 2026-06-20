@@ -407,6 +407,16 @@ pub trait AstFolder {
                 span,
             },
 
+            Assert {
+                expression,
+                ty,
+                span,
+            } => Assert {
+                expression: Box::new(self.fold_expression(*expression)?),
+                ty,
+                span,
+            },
+
             Select { arms, ty, span } => Select {
                 arms: arms
                     .into_iter()

@@ -1022,6 +1022,11 @@ pub enum Expression {
         ty: Type,
         span: Span,
     },
+    Assert {
+        expression: Box<Expression>,
+        ty: Type,
+        span: Span,
+    },
     Select {
         arms: Vec<SelectArm>,
         ty: Type,
@@ -1090,6 +1095,7 @@ pub enum ExpressionKind {
     IndexedAccess,
     Task,
     Defer,
+    Assert,
     Select,
     Unit,
     Range,
@@ -1145,6 +1151,7 @@ impl Expression {
             Expression::IndexedAccess { .. } => ExpressionKind::IndexedAccess,
             Expression::Task { .. } => ExpressionKind::Task,
             Expression::Defer { .. } => ExpressionKind::Defer,
+            Expression::Assert { .. } => ExpressionKind::Assert,
             Expression::Select { .. } => ExpressionKind::Select,
             Expression::Unit { .. } => ExpressionKind::Unit,
             Expression::Range { .. } => ExpressionKind::Range,
@@ -1341,6 +1348,7 @@ impl Expression {
             | Self::Const { ty, .. }
             | Self::VariableDeclaration { ty, .. }
             | Self::Defer { ty, .. }
+            | Self::Assert { ty, .. }
             | Self::Reference { ty, .. }
             | Self::IndexedAccess { ty, .. }
             | Self::Task { ty, .. }
@@ -1394,6 +1402,7 @@ impl Expression {
             | Self::Const { span, .. }
             | Self::VariableDeclaration { span, .. }
             | Self::Defer { span, .. }
+            | Self::Assert { span, .. }
             | Self::Reference { span, .. }
             | Self::IndexedAccess { span, .. }
             | Self::Task { span, .. }
@@ -1677,6 +1686,7 @@ impl Expression {
             } => children![expression, index],
             Expression::Task { expression, .. } => children![expression],
             Expression::Defer { expression, .. } => children![expression],
+            Expression::Assert { expression, .. } => children![expression],
             Expression::Select { arms, .. } => {
                 let mut c = Children::new();
                 for arm in arms {

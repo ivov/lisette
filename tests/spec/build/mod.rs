@@ -7450,6 +7450,72 @@ fn test_with_context_emits_testkit_wrapper() {
 }
 
 #[test]
+fn assert_lowers_to_panic() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        "import \"math\"\n\nfn main() {\n  let _ = math.add(1, 2)\n}",
+    );
+    fs.add_file(
+        "math",
+        "core.lis",
+        "pub fn add(a: int, b: int) -> int { a + b }",
+    );
+    fs.add_file(
+        "math",
+        "core.test.lis",
+        "#[test]\nfn checks() {\n  assert 2 + 2 == 5\n}",
+    );
+    let outputs = compile_project_files_with_tests(fs, "github.com/user/p", false, true);
+    let go = outputs
+        .iter()
+        .find(|f| f.name.ends_with("core_test.go"))
+        .expect("core_test.go")
+        .to_go();
+    assert!(
+        go.contains("panic(\"assertion failed\")"),
+        "assert must lower to a panic, got:\n{go}"
+    );
+}
+
+#[test]
+fn assert_as_try_block_tail_compiles() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        "fn g() -> Result<int, string> { Ok(1) }\n\nfn f() -> Result<(), string> {\n  try {\n    let _ = g()?\n    assert true\n  }\n}\n\nfn main() {\n  let _ = f()\n}",
+    );
+    let go: String = compile_project_files(fs, "github.com/user/p", false)
+        .iter()
+        .map(|file| file.to_go())
+        .collect();
+    assert!(
+        go.contains("panic(\"assertion failed\")"),
+        "assert as a try-block tail must lower to a panic check, got:\n{go}"
+    );
+}
+
+#[test]
+fn assert_as_if_value_branch_compiles() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        "fn main() {\n  let _ = if true { assert true } else { assert false }\n}",
+    );
+    let go: String = compile_project_files(fs, "github.com/user/p", false)
+        .iter()
+        .map(|file| file.to_go())
+        .collect();
+    assert!(
+        go.contains("panic(\"assertion failed\")"),
+        "assert in an if-as-value branch must lower to a panic check, got:\n{go}"
+    );
+}
+
+#[test]
 fn test_emit_produces_go_test_function() {
     let outputs =
         compile_project_files_with_tests(math_test_project(), "github.com/user/p", false, true);

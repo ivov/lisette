@@ -246,7 +246,8 @@ where
         | Expression::Paren { expression, .. }
         | Expression::Reference { expression, .. }
         | Expression::Task { expression, .. }
-        | Expression::Defer { expression, .. } => {
+        | Expression::Defer { expression, .. }
+        | Expression::Assert { expression, .. } => {
             visit_node(expression, expression_visitor, pattern_visitor);
         }
 
