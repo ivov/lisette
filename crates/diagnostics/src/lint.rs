@@ -904,6 +904,15 @@ pub fn match_as_if_let(span: &Span, pattern_suggestion: &str) -> LisetteDiagnost
         ))
 }
 
+pub fn equatable_if_let(span: &Span, pattern: &str, subject: &str) -> LisetteDiagnostic {
+    LisetteDiagnostic::info("`if let` used as an equality check")
+        .with_lint_code("equatable_if_let")
+        .with_span_label(span, "can be `==`")
+        .with_help(format!(
+            "The pattern binds nothing, so replace `if let {pattern} = {subject}` with `{subject} == {pattern}`",
+        ))
+}
+
 pub fn single_arm_select(span: &Span, receive: &str) -> LisetteDiagnostic {
     LisetteDiagnostic::info("Single-arm `select`")
         .with_lint_code("single_arm_select")

@@ -8399,6 +8399,112 @@ pub fn test(s: Signal) {
 }
 
 #[test]
+fn equatable_if_let_unit_variant() {
+    assert_lint_snapshot!(
+        r#"
+pub enum Sig { A, B }
+
+pub fn other() -> Sig { Sig.B }
+
+pub fn test(g: Sig) {
+  if let Sig.A = g { let _ = 1 }
+}
+"#
+    );
+}
+
+#[test]
+fn equatable_if_let_field_access_subject() {
+    assert_lint_snapshot!(
+        r#"
+pub enum Color { Red, Green }
+
+pub struct Holder { color: Color }
+
+pub fn other() -> Color { Color.Green }
+
+pub fn test(h: Holder) {
+  if let Color.Red = h.color { let _ = 1 }
+}
+"#
+    );
+}
+
+#[test]
+fn equatable_if_let_binding_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn test(x: Option<int>) { if let Some(n) = x { let _ = n } }
+
+fn main() { test(Some(1)); }
+"#
+    );
+}
+
+#[test]
+fn equatable_if_let_wildcard_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn test(x: Option<int>) { if let Some(_) = x { let _ = 1 } }
+
+fn main() { test(Some(1)); }
+"#
+    );
+}
+
+#[test]
+fn equatable_if_let_fielded_variant_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn test(x: Option<int>) { if let Some(5) = x { let _ = 1 } }
+
+fn main() { test(Some(1)); }
+"#
+    );
+}
+
+#[test]
+fn equatable_if_let_literal_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn test(s: string) { if let "foo" = s { let _ = 1 } }
+
+fn main() { test("foo"); }
+"#
+    );
+}
+
+#[test]
+fn equatable_if_let_non_comparable_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+enum Bag { A, B(Slice<int>) }
+
+fn make() -> Bag { Bag.B([1]) }
+
+fn test(e: Bag) { if let Bag.A = e { let _ = 1 } }
+
+fn main() { let _ = make(); test(Bag.A); }
+"#
+    );
+}
+
+#[test]
+fn equatable_if_let_call_subject_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+enum Color { Red, Green }
+
+fn current() -> Color { Color.Green }
+
+fn test() { if let Color.Red = current() { let _ = 1 } }
+
+fn main() { test(); }
+"#
+    );
+}
+
+#[test]
 fn collapsible_match() {
     assert_lint_snapshot!(
         r#"

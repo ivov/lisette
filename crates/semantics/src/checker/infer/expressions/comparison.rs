@@ -7,11 +7,7 @@ use syntax::ast::{Expression, Span};
 use syntax::program::{DefinitionBody, EqualityUnusableReason};
 use syntax::types::{CompoundKind, Type, build_substitution_map, substitute};
 
-pub(crate) fn check_not_comparable(
-    env: &TypeEnv,
-    store: &Store,
-    ty: &Type,
-) -> Option<&'static str> {
+pub fn check_not_comparable(env: &TypeEnv, store: &Store, ty: &Type) -> Option<&'static str> {
     let resolved = store.deep_resolve_alias(ty);
     let ty = &resolved;
 

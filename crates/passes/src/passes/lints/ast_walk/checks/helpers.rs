@@ -306,6 +306,11 @@ pub(super) fn is_none_pattern(pattern: &Pattern) -> bool {
         if unqualified_name(identifier) == "None" && fields.is_empty() && !*rest)
 }
 
+pub(super) fn enum_has_multiple_variants(ty: &Type, store: &Store) -> bool {
+    matches!(ty.strip_refs(), Type::Nominal { id, .. }
+        if store.variants_of(id.as_str()).is_some_and(|variants| variants.len() >= 2))
+}
+
 pub(super) fn mentions_identifier(expression: &Expression, name: &str) -> bool {
     let mut found = false;
     visit_ast(

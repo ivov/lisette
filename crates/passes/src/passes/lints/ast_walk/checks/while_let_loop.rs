@@ -1,9 +1,7 @@
 use crate::passes::walk::NodeCtx;
-use semantics::store::Store;
 use syntax::ast::{Expression, MatchArm, MatchOrigin, Pattern, Span};
-use syntax::types::Type;
 
-use super::helpers::{span_text, unwrap_block};
+use super::helpers::{enum_has_multiple_variants, span_text, unwrap_block};
 
 pub fn check_while_let_loop(expression: &Expression, ctx: &NodeCtx) {
     let Expression::Loop { body, ty, span, .. } = expression else {
@@ -70,9 +68,4 @@ pub fn check_while_let_loop(expression: &Expression, ctx: &NodeCtx) {
         pattern_text,
         subject_text,
     ));
-}
-
-fn enum_has_multiple_variants(subject_ty: &Type, store: &Store) -> bool {
-    matches!(subject_ty.strip_refs(), Type::Nominal { id, .. }
-        if store.variants_of(id.as_str()).is_some_and(|variants| variants.len() >= 2))
 }

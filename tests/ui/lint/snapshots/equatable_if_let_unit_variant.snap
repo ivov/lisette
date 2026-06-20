@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [info] `if let` used as an equality check
+   ╭─[test.lis:7:3]
+ 6 │ pub fn test(g: Sig) {
+ 7 │   if let Sig.A = g { let _ = 1 }
+   ·   ─┬
+   ·    ╰── can be `==`
+ 8 │ }
+   ╰────
+  help: The pattern binds nothing, so replace `if let Sig.A = g` with `g == Sig.A` · code: [lint.equatable_if_let]

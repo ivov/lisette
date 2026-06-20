@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [info] `if let` used as an equality check
+    ╭─[test.lis:9:3]
+  8 │ pub fn test(h: Holder) {
+  9 │   if let Color.Red = h.color { let _ = 1 }
+    ·   ─┬
+    ·    ╰── can be `==`
+ 10 │ }
+    ╰────
+  help: The pattern binds nothing, so replace `if let Color.Red = h.color` with `h.color == Color.Red` · code: [lint.equatable_if_let]
