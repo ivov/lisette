@@ -2,8 +2,9 @@ mod project_manifest;
 mod typedef_locator;
 
 use std::path::{Path, PathBuf};
-use std::sync::OnceLock;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Mutex, OnceLock};
+use std::time::Duration;
 
 pub use stdlib::Target;
 use stdlib::{
@@ -13,6 +14,8 @@ use stdlib::{
 
 /// Disambiguates temp paths so concurrent typedef extractions do not collide.
 static TYPEDEF_TEMP_COUNTER: AtomicU64 = AtomicU64::new(0);
+
+static STDLIB_EXTRACT_LOCK: Mutex<()> = Mutex::new(());
 
 /// Test-only override for the home dir typedefs extract under.
 static TYPEDEF_HOME: OnceLock<PathBuf> = OnceLock::new();
@@ -96,10 +99,18 @@ pub fn ensure_stdlib_extracted(target: Target) {
     if target_dir.exists() {
         return;
     }
+
+    let _guard = STDLIB_EXTRACT_LOCK
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    if target_dir.exists() {
+        return;
+    }
+
     if std::fs::create_dir_all(&version_dir).is_err() {
         return;
     }
-    clear_stale_temp_dirs(&version_dir, target);
+    clear_stale_temp_dirs(&version_dir, target, STALE_TEMP_AGE);
 
     // Build in a temp dir, then atomically rename into place. The temp name
     // carries the pid and a counter so concurrent extractions don't collide.
@@ -135,20 +146,31 @@ fn extract_all(target_tmp: &Path, target: Target) -> Option<()> {
     Some(())
 }
 
-fn clear_stale_temp_dirs(version_dir: &Path, target: Target) {
+const STALE_TEMP_AGE: Duration = Duration::from_secs(300);
+
+fn clear_stale_temp_dirs(version_dir: &Path, target: Target, min_age: Duration) {
     let prefix = format!("{}.tmp.", target.cache_segment());
     let Ok(entries) = std::fs::read_dir(version_dir) else {
         return;
     };
     for entry in entries.flatten() {
-        if entry
+        let name_matches = entry
             .file_name()
             .to_str()
-            .is_some_and(|name| name.starts_with(&prefix))
-        {
+            .is_some_and(|name| name.starts_with(&prefix));
+        if name_matches && temp_dir_is_stale(&entry, min_age) {
             let _ = std::fs::remove_dir_all(entry.path());
         }
     }
+}
+
+fn temp_dir_is_stale(entry: &std::fs::DirEntry, min_age: Duration) -> bool {
+    entry
+        .metadata()
+        .and_then(|m| m.modified())
+        .ok()
+        .and_then(|modified| modified.elapsed().ok())
+        .is_some_and(|age| age >= min_age)
 }
 
 /// Remove sibling `lis@v*` dirs from other compiler versions or embedded stdlibs.
@@ -282,21 +304,27 @@ mod tests {
     use super::*;
 
     #[test]
-    fn clear_stale_temp_dirs_removes_only_this_targets_temps() {
+    fn clear_stale_temp_dirs_removes_old_temps_but_keeps_fresh_and_other_targets() {
         let version_dir = tempfile::tempdir().unwrap();
         let root = version_dir.path();
+        let target = Target::new("darwin", "arm64");
 
-        let stale = root.join("darwin_arm64.tmp.999.0");
-        std::fs::create_dir_all(&stale).unwrap();
-        std::fs::write(stale.join("fmt.d.lis"), "x").unwrap();
+        let this_target = root.join("darwin_arm64.tmp.999.0");
+        std::fs::create_dir_all(&this_target).unwrap();
+        std::fs::write(this_target.join("fmt.d.lis"), "x").unwrap();
         let completed = root.join("darwin_arm64");
         std::fs::create_dir_all(&completed).unwrap();
         let other_target_tmp = root.join("linux_amd64.tmp.1.0");
         std::fs::create_dir_all(&other_target_tmp).unwrap();
 
-        clear_stale_temp_dirs(root, Target::new("darwin", "arm64"));
+        clear_stale_temp_dirs(root, target, STALE_TEMP_AGE);
+        assert!(this_target.exists(), "a fresh in-flight temp is kept");
 
-        assert!(!stale.exists(), "this target's stale temp is removed");
+        clear_stale_temp_dirs(root, target, Duration::ZERO);
+        assert!(
+            !this_target.exists(),
+            "a stale temp of this target is removed"
+        );
         assert!(completed.exists(), "the completed target dir is kept");
         assert!(other_target_tmp.exists(), "another target's temp is kept");
     }
