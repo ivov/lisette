@@ -1,5 +1,5 @@
 use super::Parser;
-use crate::ast::{Expression, MatchArm, MatchOrigin, Span};
+use crate::ast::{Expression, MatchArm, Span};
 use crate::lex::TokenKind::*;
 use crate::types::Type;
 
@@ -40,7 +40,6 @@ impl<'source> Parser<'source> {
             ty: Type::uninferred(),
             subject: subject.into(),
             arms,
-            origin: MatchOrigin::Explicit,
             span: self.span_from_tokens(start),
         }
     }
@@ -126,7 +125,6 @@ impl<'source> Parser<'source> {
     }
 
     fn parse_if_let_expression(&mut self, start: crate::lex::Token) -> Expression {
-        self.has_desugarables = true;
         self.ensure(Let);
 
         let pattern = self.parse_pattern_allowing_or();

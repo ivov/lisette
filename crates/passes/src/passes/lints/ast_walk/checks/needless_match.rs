@@ -1,5 +1,5 @@
 use crate::passes::walk::NodeCtx;
-use syntax::ast::{Expression, MatchArm, MatchOrigin, Span};
+use syntax::ast::{Expression, MatchArm, Span};
 
 use super::helpers::{
     enum_variant_binding, is_bare_identifier, is_none_pattern, span_text, wraps_binding,
@@ -9,17 +9,12 @@ pub fn check_needless_match(expression: &Expression, ctx: &NodeCtx) {
     let Expression::Match {
         subject,
         arms,
-        origin,
         span,
         ..
     } = expression
     else {
         return;
     };
-
-    if matches!(origin, MatchOrigin::IfLet { .. }) {
-        return;
-    }
 
     if arms.len() != 2 || arms.iter().any(MatchArm::has_guard) {
         return;

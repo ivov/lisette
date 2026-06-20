@@ -1,5 +1,5 @@
 use crate::passes::walk::NodeCtx;
-use syntax::ast::{Expression, MatchOrigin, Pattern, Span};
+use syntax::ast::{Expression, Pattern, Span};
 
 use super::helpers::{
     enum_variant_binding, has_escaping_control_flow, is_bare_identifier, wraps_binding,
@@ -9,17 +9,12 @@ pub fn check_manual_filter(expression: &Expression, ctx: &NodeCtx) {
     let Expression::Match {
         subject,
         arms,
-        origin,
         span,
         ..
     } = expression
     else {
         return;
     };
-
-    if matches!(origin, MatchOrigin::IfLet { .. }) {
-        return;
-    }
 
     if arms.len() != 2 {
         return;

@@ -143,7 +143,11 @@ impl Planner<'_> {
             }
             Expression::If { ty, .. } => self.plan_if_as_operand_temp(expression, ty, fx),
             Expression::Loop { ty, .. } => self.plan_loop_as_operand_temp(expression, ty, fx),
-            Expression::Match { ty, .. } | Expression::Select { ty, .. } if !ty.is_never() => {
+            Expression::IfLet { ty, .. }
+            | Expression::Match { ty, .. }
+            | Expression::Select { ty, .. }
+                if !ty.is_never() =>
+            {
                 self.plan_branching_as_operand_temp(expression, ty, fx)
             }
             Expression::Call { ty, .. } => match self.classify_call(expression) {

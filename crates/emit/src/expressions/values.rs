@@ -190,7 +190,8 @@ impl Planner<'_> {
             | Expression::Function {
                 params, body, ty, ..
             } => ValuePlan::Operand(self.emit_lambda(params, body, ty, ctx, fx)),
-            Expression::Match { ty, .. }
+            Expression::IfLet { ty, .. }
+            | Expression::Match { ty, .. }
             | Expression::Select { ty, .. }
             | Expression::Block { ty, .. } => self.lower_to_operand_temp(expression, ty, fx),
             Expression::Return {
@@ -208,9 +209,6 @@ impl Planner<'_> {
                 vec![self.lower_assert_statement(expression, fx)],
                 "struct{}{}".to_string(),
             ),
-            Expression::IfLet { .. } => {
-                unreachable!("IfLet should be desugared to Match before emit")
-            }
             _ => unreachable!(
                 "unexpected leaf expression in plan_operand: {:?}",
                 expression

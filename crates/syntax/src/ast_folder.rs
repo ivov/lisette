@@ -127,7 +127,6 @@ pub trait AstFolder {
             Match {
                 subject,
                 arms,
-                origin,
                 ty,
                 span,
             } => Match {
@@ -136,7 +135,6 @@ pub trait AstFolder {
                     .into_iter()
                     .map(|arm| self.fold_match_arm(arm))
                     .collect::<Result<_, _>>()?,
-                origin,
                 ty,
                 span,
             },

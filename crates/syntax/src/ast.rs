@@ -198,12 +198,6 @@ impl std::fmt::Debug for MatchArm {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum MatchOrigin {
-    Explicit,
-    IfLet { else_span: Option<Span> },
-}
-
 #[derive(Debug, Clone, PartialEq)]
 pub struct SelectArm {
     pub pattern: SelectArmPattern,
@@ -823,7 +817,6 @@ pub enum Expression {
     Match {
         subject: Box<Expression>,
         arms: Vec<MatchArm>,
-        origin: MatchOrigin,
         ty: Type,
         span: Span,
     },
@@ -1179,21 +1172,14 @@ impl Expression {
     }
 
     pub fn is_conditional(&self) -> bool {
-        matches!(
-            self,
-            Expression::If { .. }
-                | Expression::IfLet { .. }
-                | Expression::Match {
-                    origin: MatchOrigin::IfLet { .. },
-                    ..
-                }
-        )
+        matches!(self, Expression::If { .. } | Expression::IfLet { .. })
     }
 
     pub fn is_control_flow(&self) -> bool {
         matches!(
             self,
             Expression::If { .. }
+                | Expression::IfLet { .. }
                 | Expression::Match { .. }
                 | Expression::Select { .. }
                 | Expression::For { .. }

@@ -1,5 +1,5 @@
 use crate::passes::walk::NodeCtx;
-use syntax::ast::{BinaryOperator, Expression, MatchOrigin, Span};
+use syntax::ast::{BinaryOperator, Expression, Span};
 
 use syntax::ast::collect_pattern_bindings;
 
@@ -9,17 +9,12 @@ pub fn check_identical_match_arms(expression: &Expression, ctx: &NodeCtx) {
     let Expression::Match {
         subject,
         arms,
-        origin,
         span,
         ..
     } = expression
     else {
         return;
     };
-
-    if !matches!(origin, MatchOrigin::Explicit) {
-        return;
-    }
 
     if arms.len() < 2 {
         return;

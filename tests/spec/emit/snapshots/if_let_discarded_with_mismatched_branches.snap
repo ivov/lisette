@@ -1,0 +1,19 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: |
+  
+  fn test(opt: Option<int>) {
+    if let Some(x) = opt { x } else { "fallback" }
+    ()
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func test(opt lisette.Option[int]) {
+	if opt.Tag == lisette.OptionSome {
+		_ = opt.SomeVal
+	} else {
+	}
+}

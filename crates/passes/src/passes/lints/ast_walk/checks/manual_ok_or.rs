@@ -1,5 +1,5 @@
 use crate::passes::walk::NodeCtx;
-use syntax::ast::{Expression, MatchArm, MatchOrigin, Span};
+use syntax::ast::{Expression, MatchArm, Span};
 
 use super::helpers::{
     enum_variant_binding, has_escaping_control_flow, is_eager_safe, is_none_pattern,
@@ -10,17 +10,12 @@ pub fn check_manual_ok_or(expression: &Expression, ctx: &NodeCtx) {
     let Expression::Match {
         subject,
         arms,
-        origin,
         span,
         ..
     } = expression
     else {
         return;
     };
-
-    if matches!(origin, MatchOrigin::IfLet { .. }) {
-        return;
-    }
 
     if arms.len() != 2 || arms.iter().any(MatchArm::has_guard) {
         return;

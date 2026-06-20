@@ -23,9 +23,7 @@ use std::cell::RefCell;
 use diagnostics::{IssueKind, LocalSink, PatternIssue};
 use semantics::context::AnalysisContext;
 use semantics::store::Store;
-use syntax::ast::{
-    Expression, Literal, MatchOrigin, Pattern, SelectArmPattern, Span, TypedPattern,
-};
+use syntax::ast::{Expression, Literal, Pattern, SelectArmPattern, Span, TypedPattern};
 use syntax::types::Type;
 
 use maranget::is_useful;
@@ -164,14 +162,24 @@ pub fn check(expression: &Expression, ctx: &PatternAnalysisContext, sink: &Local
             check(alternative, ctx, sink);
         }
 
-        Expression::IfLet { .. } => {
-            unreachable!("IfLet should be desugared to Match before pattern analysis")
+        Expression::IfLet {
+            pattern,
+            scrutinee,
+            consequence,
+            alternative,
+            typed_pattern,
+            else_span,
+            ..
+        } => {
+            check(scrutinee, ctx, sink);
+            check_if_let(pattern, typed_pattern, alternative, *else_span, ctx);
+            check(consequence, ctx, sink);
+            check(alternative, ctx, sink);
         }
 
         Expression::Match {
             subject,
             arms,
-            origin,
             span,
             ..
         } => {
@@ -205,9 +213,7 @@ pub fn check(expression: &Expression, ctx: &PatternAnalysisContext, sink: &Local
                 return;
             }
 
-            if let MatchOrigin::IfLet { else_span } = origin {
-                check_desugared_if_let(arms, *else_span, ctx);
-            } else if !check_redundancy_with_guards(arms, &mut unions, &norm_ctx, sink) {
+            if !check_redundancy_with_guards(arms, &mut unions, &norm_ctx, sink) {
                 return;
             }
 
@@ -455,41 +461,33 @@ fn check_redundancy_with_guards(
     true
 }
 
-fn check_desugared_if_let(
-    arms: &[syntax::ast::MatchArm],
+fn check_if_let(
+    pattern: &Pattern,
+    typed_pattern: &Option<TypedPattern>,
+    alternative: &Expression,
     else_span: Option<Span>,
     ctx: &PatternAnalysisContext,
 ) {
-    if arms.len() != 2 {
-        return;
-    }
-
-    let first_arm = &arms[0];
-    let second_arm = &arms[1];
-
-    let Some(tp) = &first_arm.typed_pattern else {
+    let Some(tp) = typed_pattern else {
         return;
     };
 
     // Suppress lints for patterns that already have or-pattern binding errors.
-    if ctx
-        .or_pattern_error_spans
-        .contains(&first_arm.pattern.get_span())
-    {
+    if ctx.or_pattern_error_spans.contains(&pattern.get_span()) {
         return;
     }
 
     if is_pattern_irrefutable(tp, ctx.store) {
-        ctx.add_issue(first_arm.pattern.get_span(), IssueKind::RedundantIfLet);
+        ctx.add_issue(pattern.get_span(), IssueKind::RedundantIfLet);
 
         if let Some(else_span) = else_span
-            && !is_trivial_expression(&second_arm.expression)
+            && !is_trivial_expression(alternative)
         {
             ctx.add_issue(else_span, IssueKind::UnreachableIfLetElse);
         }
     } else if let Some(else_span) = else_span
-        && is_trivial_expression(&second_arm.expression)
-        && !second_arm.expression.is_conditional()
+        && is_trivial_expression(alternative)
+        && !alternative.is_conditional()
     {
         ctx.add_issue(else_span, IssueKind::RedundantIfLetElse);
     }

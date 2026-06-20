@@ -1,6 +1,6 @@
 use crate::checker::EnvResolve;
 use syntax::ast::BindingKind;
-use syntax::ast::{Binding, BindingId, Expression, MatchArm, MatchOrigin, Pattern, Span};
+use syntax::ast::{Binding, BindingId, Expression, MatchArm, Pattern, Span, TypedPattern};
 use syntax::types::{SimpleKind, Type};
 
 use crate::checker::infer::InferCtx;
@@ -259,10 +259,89 @@ impl InferCtx<'_, '_> {
         &mut self,
         subject: Box<Expression>,
         arms: Vec<MatchArm>,
-        origin: MatchOrigin,
         span: Span,
         expected_ty: &Type,
     ) -> Expression {
+        let (new_subject, new_arms, result_ty) = self.infer_match_arms(
+            subject,
+            arms,
+            BindingKind::MatchArm,
+            false,
+            span,
+            expected_ty,
+        );
+
+        Expression::Match {
+            subject: new_subject.into(),
+            arms: new_arms,
+            ty: result_ty,
+            span,
+        }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn infer_if_let(
+        &mut self,
+        pattern: Pattern,
+        scrutinee: Box<Expression>,
+        consequence: Box<Expression>,
+        alternative: Box<Expression>,
+        typed_pattern: Option<TypedPattern>,
+        else_span: Option<Span>,
+        span: Span,
+        expected_ty: &Type,
+    ) -> Expression {
+        let is_if_let_without_else = else_span.is_none();
+        let arms = vec![
+            MatchArm {
+                pattern,
+                guard: None,
+                typed_pattern,
+                expression: consequence,
+            },
+            MatchArm {
+                pattern: Pattern::WildCard {
+                    span: alternative.get_span(),
+                },
+                guard: None,
+                typed_pattern: None,
+                expression: alternative,
+            },
+        ];
+
+        let (new_scrutinee, mut new_arms, result_ty) = self.infer_match_arms(
+            scrutinee,
+            arms,
+            BindingKind::IfLet,
+            is_if_let_without_else,
+            span,
+            expected_ty,
+        );
+
+        let wildcard_arm = new_arms.pop().expect("if-let has an else arm");
+        let pattern_arm = new_arms.pop().expect("if-let has a pattern arm");
+
+        Expression::IfLet {
+            pattern: pattern_arm.pattern,
+            scrutinee: new_scrutinee.into(),
+            consequence: pattern_arm.expression,
+            alternative: wildcard_arm.expression,
+            typed_pattern: pattern_arm.typed_pattern,
+            else_span,
+            ty: result_ty,
+            span,
+        }
+    }
+
+    fn infer_match_arms(
+        &mut self,
+        subject: Box<Expression>,
+        arms: Vec<MatchArm>,
+        arm_kind: BindingKind,
+        is_if_let_without_else: bool,
+        span: Span,
+        expected_ty: &Type,
+    ) -> (Expression, Vec<MatchArm>, Type) {
         let result_ty = self.new_type_var();
         let subject_ty = self.new_type_var();
         let new_subject = self.infer_expression(*subject, &subject_ty);
@@ -271,7 +350,6 @@ impl InferCtx<'_, '_> {
         self.ensure_subject_matchable(&resolved_subject_ty, &new_subject.get_span());
 
         let is_statement = expected_ty.is_ignored();
-        let is_if_let_without_else = matches!(&origin, MatchOrigin::IfLet { else_span: None });
 
         // if-let without else always has type (), like if without else.
         // Arms don't need to agree since the result is always ().
@@ -290,10 +368,6 @@ impl InferCtx<'_, '_> {
         let needs_reconciliation =
             !arms_independent && result_ty.resolve_in(&self.env).is_variable();
 
-        let arm_kind = match origin {
-            MatchOrigin::IfLet { .. } => BindingKind::IfLet,
-            MatchOrigin::Explicit => BindingKind::MatchArm,
-        };
         let match_has_guard = arms.iter().any(|a| a.guard.is_some());
         let new_arms = arms
             .into_iter()
@@ -347,13 +421,7 @@ impl InferCtx<'_, '_> {
             let _ = self.try_unify(&result_ty, &first_ty, &span);
         }
 
-        Expression::Match {
-            subject: new_subject.into(),
-            arms: new_arms,
-            origin,
-            ty: result_ty,
-            span,
-        }
+        (new_subject, new_arms, result_ty)
     }
 
     pub(super) fn infer_loop(

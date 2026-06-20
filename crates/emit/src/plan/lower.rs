@@ -13,8 +13,32 @@ use crate::plan::bodies::{
 use crate::plan::placement::{requires_temp_var, try_elide_tail_let};
 use crate::plan::values::{ValuePlan, value_plan_from_statements};
 use crate::utils::wrap_if_struct_literal;
-use syntax::ast::{BinaryOperator, Expression, Literal};
+use syntax::ast::{BinaryOperator, Expression, Literal, MatchArm, Pattern, TypedPattern};
 use syntax::types::Type;
+
+fn if_let_match_arms(
+    pattern: &Pattern,
+    typed_pattern: &Option<TypedPattern>,
+    consequence: &Expression,
+    alternative: &Expression,
+) -> Vec<MatchArm> {
+    vec![
+        MatchArm {
+            pattern: pattern.clone(),
+            guard: None,
+            typed_pattern: typed_pattern.clone(),
+            expression: Box::new(consequence.clone()),
+        },
+        MatchArm {
+            pattern: Pattern::WildCard {
+                span: alternative.get_span(),
+            },
+            guard: None,
+            typed_pattern: None,
+            expression: Box::new(alternative.clone()),
+        },
+    ]
+}
 
 impl Planner<'_> {
     /// Allocate a fresh operand-temp result var and its `var V T` declaration
@@ -67,7 +91,7 @@ impl Planner<'_> {
         value_plan_from_statements(vec![declaration, LoweredStatement::If(plan)], result_var)
     }
 
-    /// Lower a value-position `match`/`select` to a fresh operand-temp
+    /// Lower a value-position `if let`/`match`/`select` to a fresh operand-temp
     /// variable. Only valid for non-never result types; never-typed branches
     /// route through `lower_to_operand_temp` as a diverging statement.
     pub(crate) fn plan_branching_as_operand_temp(
@@ -300,6 +324,22 @@ impl Planner<'_> {
                 let plan =
                     self.build_assignment_plan(target, value, compound_operator.as_ref(), fx);
                 directed(directive, LoweredStatement::Assign(plan))
+            }
+            Expression::IfLet {
+                pattern,
+                scrutinee,
+                consequence,
+                alternative,
+                typed_pattern,
+                ..
+            } => {
+                let directive = self.maybe_line_directive(&expression.get_span());
+                let arms = if_let_match_arms(pattern, typed_pattern, consequence, alternative);
+                let body = self.lower_match_to_block(scrutinee, &arms, &PlacePlan::Statement, fx);
+                directed(
+                    directive,
+                    LoweredStatement::Match(MatchStatementPlan { body }),
+                )
             }
             Expression::Match { subject, arms, .. } => {
                 let directive = self.maybe_line_directive(&expression.get_span());
@@ -693,7 +733,7 @@ impl Planner<'_> {
         LoweredBlock { statements }
     }
 
-    /// Lower a branching expression (`if`, `match`, `select`) into a
+    /// Lower a branching expression (`if`, `if let`, `match`, `select`) into a
     /// `LoweredBlock` targeting `place`. Centralises the dispatch shared by old
     /// emit paths that need to render a branching tail/assignment.
     pub(crate) fn lower_branching_to_block(
@@ -714,13 +754,24 @@ impl Planner<'_> {
                     statements: vec![LoweredStatement::If(plan)],
                 }
             }
+            Expression::IfLet {
+                pattern,
+                scrutinee,
+                consequence,
+                alternative,
+                typed_pattern,
+                ..
+            } => {
+                let arms = if_let_match_arms(pattern, typed_pattern, consequence, alternative);
+                self.lower_match_to_block(scrutinee, &arms, place, fx)
+            }
             Expression::Match { subject, arms, .. } => {
                 self.lower_match_to_block(subject, arms, place, fx)
             }
             Expression::Select { arms, .. } => LoweredBlock {
                 statements: vec![LoweredStatement::Select(self.lower_select(arms, place, fx))],
             },
-            _ => unreachable!("lower_branching_to_block: expected if/match/select"),
+            _ => unreachable!("lower_branching_to_block: expected if/if-let/match/select"),
         }
     }
 
@@ -787,7 +838,7 @@ impl Planner<'_> {
     /// Lower a single tail expression in return position to its return
     /// statements. Shared by branch-arm return lowering and function-body
     /// lowering; only leaf values and lowered-ABI returns become `RawGo`,
-    /// `if`/`match`/`select` tails recurse structurally with a `Return` place.
+    /// `if`/`if let`/`match`/`select` tails recurse structurally with a `Return` place.
     pub(crate) fn lower_return_tail(
         &mut self,
         last: &Expression,
@@ -823,6 +874,21 @@ impl Planner<'_> {
                 let plan =
                     self.lower_if(condition, consequence, alternative, &PlacePlan::Return, fx);
                 statements.push(directed(directive, LoweredStatement::If(plan)));
+            }
+            Expression::IfLet {
+                pattern,
+                scrutinee,
+                consequence,
+                alternative,
+                typed_pattern,
+                ..
+            } => {
+                if !directive.is_empty() {
+                    statements.push(LoweredStatement::RawGo(directive));
+                }
+                let arms = if_let_match_arms(pattern, typed_pattern, consequence, alternative);
+                let block = self.lower_match_to_block(scrutinee, &arms, &PlacePlan::Return, fx);
+                statements.extend(block.statements);
             }
             Expression::Match { subject, arms, .. } => {
                 if !directive.is_empty() {

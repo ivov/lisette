@@ -1,14 +1,13 @@
 use crate::passes::walk::NodeCtx;
 use semantics::checker::{TypeEnv, check_not_comparable};
-use syntax::ast::{Expression, MatchOrigin, Pattern, Span};
+use syntax::ast::{Expression, Pattern, Span};
 
 use super::helpers::{enum_has_multiple_variants, span_text};
 
 pub fn check_equatable_if_let(expression: &Expression, ctx: &NodeCtx) {
-    let Expression::Match {
-        subject,
-        arms,
-        origin,
+    let Expression::IfLet {
+        pattern,
+        scrutinee,
         span,
         ..
     } = expression
@@ -16,12 +15,7 @@ pub fn check_equatable_if_let(expression: &Expression, ctx: &NodeCtx) {
         return;
     };
 
-    if !matches!(origin, MatchOrigin::IfLet { .. }) || arms.len() != 2 {
-        return;
-    }
-
-    let meaningful = &arms[0];
-    if meaningful.has_guard() || !is_unit_variant_pattern(&meaningful.pattern) {
+    if !is_unit_variant_pattern(pattern) {
         return;
     }
 
@@ -29,19 +23,18 @@ pub fn check_equatable_if_let(expression: &Expression, ctx: &NodeCtx) {
     // expression: an identifier or field access never carries an operator looser
     // than `==`, but a call can (a pipeline `|>` desugars to one).
     if !matches!(
-        subject.unwrap_parens(),
+        scrutinee.unwrap_parens(),
         Expression::Identifier { .. } | Expression::DotAccess { .. }
     ) {
         return;
     }
 
-    let subject_ty = ctx.store.deep_resolve_alias(&subject.get_type());
+    let subject_ty = ctx.store.deep_resolve_alias(&scrutinee.get_type());
 
     // A fieldless variant has no inner value to coerce, so its resolved type equals
     // the subject's only when the if-let type-checks; this keeps a checker-rejected
     // pattern (wrong enum, missing variant) from being rewritten.
-    let pattern_ty = meaningful
-        .pattern
+    let pattern_ty = pattern
         .get_type()
         .map(|ty| ctx.store.deep_resolve_alias(&ty));
     if pattern_ty.as_ref() != Some(&subject_ty) {
@@ -57,11 +50,11 @@ pub fn check_equatable_if_let(expression: &Expression, ctx: &NodeCtx) {
         return;
     }
 
-    let pattern_span = meaningful.pattern.get_span();
+    let pattern_span = pattern.get_span();
     let (Some(pattern_text), Some(subject_text)) = (
         ctx.source
             .get(pattern_span.byte_offset as usize..pattern_span.end() as usize),
-        span_text(ctx.source, subject),
+        span_text(ctx.source, scrutinee),
     ) else {
         return;
     };

@@ -1,14 +1,8 @@
 use crate::passes::walk::NodeCtx;
-use syntax::ast::{Expression, MatchOrigin, Pattern, Span};
+use syntax::ast::{Expression, Pattern, Span};
 
 pub fn check_match_single_binding(expression: &Expression, ctx: &NodeCtx) {
-    let Expression::Match {
-        arms,
-        origin: MatchOrigin::Explicit,
-        span,
-        ..
-    } = expression
-    else {
+    let Expression::Match { arms, span, .. } = expression else {
         return;
     };
 

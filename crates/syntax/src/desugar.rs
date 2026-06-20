@@ -1,4 +1,4 @@
-use crate::ast::{BinaryOperator, Expression, MatchArm, MatchOrigin, Pattern, Span};
+use crate::ast::{BinaryOperator, Expression, Span};
 use crate::ast_folder::AstFolder;
 use crate::parse::ParseError;
 use crate::types::Type;
@@ -14,7 +14,6 @@ pub struct DesugarResult {
 /// Transforms:
 /// - `x |> func` into `func(x)`
 /// - `x |> func(a, b)` into `func(x, a, b)`
-/// - `if let P = S { C } else { A }` into `match S { P => C, _ => A }`
 pub fn desugar(expressions: Vec<Expression>) -> DesugarResult {
     let mut desugarer = Desugarer::new();
     let ast = desugarer.fold_module(expressions).unwrap(); // Infallible
@@ -57,8 +56,6 @@ impl Desugarer {
                 operator: BinaryOperator::Pipeline,
                 ..
             } => self.desugar_pipeline(pipeline),
-
-            if_let @ Expression::IfLet { .. } => self.desugar_if_let(if_let),
 
             other => other,
         }
@@ -187,47 +184,6 @@ impl Desugarer {
                     span,
                 }
             }
-        }
-    }
-
-    fn desugar_if_let(&mut self, if_let: Expression) -> Expression {
-        let Expression::IfLet {
-            pattern,
-            scrutinee,
-            consequence,
-            alternative,
-            typed_pattern,
-            else_span,
-            span,
-            ..
-        } = if_let
-        else {
-            unreachable!()
-        };
-
-        let arms = vec![
-            MatchArm {
-                pattern,
-                guard: None,
-                typed_pattern,
-                expression: consequence,
-            },
-            MatchArm {
-                pattern: Pattern::WildCard {
-                    span: alternative.get_span(),
-                },
-                guard: None,
-                typed_pattern: None,
-                expression: alternative,
-            },
-        ];
-
-        Expression::Match {
-            subject: scrutinee,
-            arms,
-            origin: MatchOrigin::IfLet { else_span },
-            ty: Type::uninferred(),
-            span,
         }
     }
 }

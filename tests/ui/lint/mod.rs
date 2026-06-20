@@ -18875,3 +18875,38 @@ fn main() {
         "the unused rebinding should still draw an unused-variable warning: {codes:?}"
     );
 }
+
+#[test]
+fn unused_result_in_if_let_branch() {
+    assert_lint_snapshot!(
+        r#"
+fn get_result() -> Result<int, string> {
+  Ok(42)
+}
+
+fn main() {
+  let opt = Some(1)
+  if let Some(_) = opt {
+    get_result()
+  } else {
+    ()
+  }
+  ()
+}
+"#
+    );
+}
+
+#[test]
+fn excess_parens_on_condition_if_let() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let x = Some(5)
+  if let Some(n) = (x) {
+    let _ = n
+  }
+}
+"#
+    );
+}

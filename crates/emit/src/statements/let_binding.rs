@@ -138,7 +138,10 @@ fn resolve_let_temp_declaration_ty(
     };
     let is_branching = matches!(
         value,
-        Expression::If { .. } | Expression::Match { .. } | Expression::Select { .. }
+        Expression::If { .. }
+            | Expression::IfLet { .. }
+            | Expression::Match { .. }
+            | Expression::Select { .. }
     );
     if is_branching && let Type::Tuple(slots) = &base {
         Type::Tuple(planner.resolve_tuple_slot_types(slots.clone(), false))

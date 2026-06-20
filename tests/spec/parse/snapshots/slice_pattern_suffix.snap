@@ -214,7 +214,6 @@ description: |
                             },
                         },
                     ],
-                    origin: Explicit,
                     ty: Var {
                         id: uninferred,
                     },

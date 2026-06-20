@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [info] Unnecessary parens
+   ╭─[test.lis:4:20]
+ 3 │   let x = Some(5)
+ 4 │   if let Some(n) = (x) {
+   ·                    ─┬─
+   ·                     ╰── remove parens
+ 5 │     let _ = n
+   ╰────
+  help: Lisette does not require parens around `if let` conditions · code: [lint.excess_parens_on_condition]

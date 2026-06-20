@@ -1,5 +1,5 @@
 use crate::passes::walk::{NodeCtx, visit_ast};
-use syntax::ast::{Expression, MatchArm, MatchOrigin, Pattern, RestPattern, Span};
+use syntax::ast::{Expression, MatchArm, Pattern, RestPattern, Span};
 use syntax::types::unqualified_name;
 
 use super::helpers::{enum_variant_binding, has_escaping_control_flow, is_eager_safe};
@@ -8,17 +8,12 @@ pub fn check_manual_map_or(expression: &Expression, ctx: &NodeCtx) {
     let Expression::Match {
         subject,
         arms,
-        origin,
         span,
         ..
     } = expression
     else {
         return;
     };
-
-    if matches!(origin, MatchOrigin::IfLet { .. }) {
-        return;
-    }
 
     if arms.len() != 2 || arms.iter().any(MatchArm::has_guard) {
         return;

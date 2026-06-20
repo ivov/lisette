@@ -380,7 +380,10 @@ impl Planner<'_> {
             return Some(statements);
         }
 
-        if matches!(expression, Expression::If { .. } | Expression::Match { .. }) {
+        if matches!(
+            expression,
+            Expression::If { .. } | Expression::IfLet { .. } | Expression::Match { .. }
+        ) {
             let block = self.lower_branching_to_block(expression, &PlacePlan::Return, fx);
             statements.extend(block.statements);
             return Some(statements);

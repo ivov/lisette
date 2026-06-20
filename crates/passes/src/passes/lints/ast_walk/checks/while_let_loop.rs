@@ -1,5 +1,5 @@
 use crate::passes::walk::NodeCtx;
-use syntax::ast::{Expression, MatchArm, MatchOrigin, Pattern, Span};
+use syntax::ast::{Expression, MatchArm, Pattern, Span};
 
 use super::helpers::{enum_has_multiple_variants, span_text, unwrap_block};
 
@@ -17,15 +17,7 @@ pub fn check_while_let_loop(expression: &Expression, ctx: &NodeCtx) {
     let Expression::Block { items, .. } = body.as_ref() else {
         return;
     };
-    let [
-        Expression::Match {
-            subject,
-            arms,
-            origin: MatchOrigin::Explicit,
-            ..
-        },
-    ] = items.as_slice()
-    else {
+    let [Expression::Match { subject, arms, .. }] = items.as_slice() else {
         return;
     };
 

@@ -108,12 +108,12 @@ pub(crate) fn try_elide_tail_let(items: &[Expression]) -> Option<(&Expression, &
     if identifier != tail_name {
         return None;
     }
-    // Only `If` and `Match` can be re-emitted at the surrounding place via
-    // branch lowering (`lower_branching_to_block`); other shapes still stage
+    // Only `If`, `IfLet`, and `Match` can be re-emitted at the surrounding place
+    // via branch lowering (`lower_branching_to_block`); other shapes still stage
     // through temps so eliding the let would not save anything.
     if !matches!(
         value.as_ref(),
-        Expression::If { .. } | Expression::Match { .. }
+        Expression::If { .. } | Expression::IfLet { .. } | Expression::Match { .. }
     ) {
         return None;
     }
@@ -152,6 +152,16 @@ pub(crate) fn expression_contains_binding(expression: &Expression, name: &str) -
         }
     }
     match expression {
+        Expression::IfLet {
+            pattern,
+            consequence,
+            alternative,
+            ..
+        } => {
+            pattern_contains_name(pattern, name)
+                || expression_contains_binding(consequence, name)
+                || expression_contains_binding(alternative, name)
+        }
         Expression::Match { arms, .. } => arms
             .iter()
             .any(|arm| pattern_contains_name(&arm.pattern, name)),
@@ -475,7 +485,10 @@ impl Planner<'_> {
         }
         if matches!(
             last,
-            Expression::If { .. } | Expression::Match { .. } | Expression::Select { .. }
+            Expression::If { .. }
+                | Expression::IfLet { .. }
+                | Expression::Match { .. }
+                | Expression::Select { .. }
         ) {
             let place = PlacePlan::Assign {
                 local: var,

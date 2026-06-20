@@ -1,5 +1,5 @@
 use crate::passes::walk::NodeCtx;
-use syntax::ast::{Expression, MatchArm, MatchOrigin, Pattern, Span};
+use syntax::ast::{Expression, MatchArm, Pattern, Span};
 use syntax::types::{Type, unqualified_name};
 
 use crate::passes::is_trivial_expression;
@@ -9,17 +9,12 @@ pub fn check_match_as_if_let(expression: &Expression, ctx: &NodeCtx) {
     let Expression::Match {
         subject,
         arms,
-        origin,
         span,
         ..
     } = expression
     else {
         return;
     };
-
-    if matches!(origin, MatchOrigin::IfLet { .. }) {
-        return;
-    }
 
     if arms.len() != 2 {
         return;

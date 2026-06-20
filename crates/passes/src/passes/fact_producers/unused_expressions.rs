@@ -159,6 +159,11 @@ fn descend_discarded(
             consequence,
             alternative,
             ..
+        }
+        | Expression::IfLet {
+            consequence,
+            alternative,
+            ..
         } => {
             descend_discarded(consequence, mode, module_id, store, facts);
             descend_discarded(alternative, mode, module_id, store, facts);

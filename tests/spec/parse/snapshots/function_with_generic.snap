@@ -2,11 +2,11 @@
 source: tests/spec/parse/mod.rs
 description: |
   
-   fn foo<T>(x: T) -> int {
-      match x {
-        1 => 1;
-      }
-    }
+  fn foo<T>(x: T) -> int {
+     match x {
+       1 => 1;
+     }
+   }
 ---
 [
     Function {
@@ -117,7 +117,6 @@ description: |
                             },
                         },
                     ],
-                    origin: Explicit,
                     ty: Var {
                         id: uninferred,
                     },

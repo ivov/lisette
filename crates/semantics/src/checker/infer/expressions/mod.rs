@@ -113,17 +113,32 @@ impl InferCtx<'_, '_> {
                 ..
             } => self.infer_if(condition, consequence, alternative, span, expected_ty),
 
-            Expression::IfLet { .. } => {
-                unreachable!("IfLet should be desugared to Match before type inference")
-            }
+            Expression::IfLet {
+                pattern,
+                scrutinee,
+                consequence,
+                alternative,
+                typed_pattern,
+                else_span,
+                span,
+                ..
+            } => self.infer_if_let(
+                pattern,
+                scrutinee,
+                consequence,
+                alternative,
+                typed_pattern,
+                else_span,
+                span,
+                expected_ty,
+            ),
 
             Expression::Match {
                 subject,
                 arms,
-                origin,
                 span,
                 ..
-            } => self.infer_match(subject, arms, origin, span, expected_ty),
+            } => self.infer_match(subject, arms, span, expected_ty),
 
             Expression::Tuple { elements, span, .. } => {
                 self.infer_tuple(elements, span, expected_ty)

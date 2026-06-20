@@ -1,39 +1,45 @@
 use crate::passes::walk::NodeCtx;
-use syntax::ast::{Expression, MatchArm, MatchOrigin, Pattern, Span};
+use syntax::ast::{Expression, MatchArm, Pattern, Span};
 use syntax::types::unqualified_name;
 
 use super::helpers::enum_variant_binding;
 
+type Arm<'a> = (&'a Pattern, &'a Expression);
+
 pub fn check_verbose_failure_propagation(expression: &Expression, ctx: &NodeCtx) {
-    let Expression::Match {
-        subject,
-        arms,
-        origin,
-        span,
-        ..
-    } = expression
-    else {
-        return;
-    };
-
-    if arms.len() != 2 || arms.iter().any(MatchArm::has_guard) {
-        return;
-    }
-
-    let subject_ty = subject.get_type();
-    let fires = if subject_ty.is_option() {
-        check_option_propagation(&arms[0], &arms[1])
-    } else if subject_ty.is_result() {
-        check_result_propagation(&arms[0], &arms[1])
-    } else {
-        false
+    let (fires, span, keyword_len) = match expression {
+        Expression::Match {
+            subject,
+            arms,
+            span,
+            ..
+        } => {
+            if arms.len() != 2 || arms.iter().any(MatchArm::has_guard) {
+                return;
+            }
+            let a = (&arms[0].pattern, arms[0].expression.as_ref());
+            let b = (&arms[1].pattern, arms[1].expression.as_ref());
+            (propagation_fires(subject, a, b), span, 5)
+        }
+        Expression::IfLet {
+            scrutinee,
+            pattern,
+            consequence,
+            alternative,
+            span,
+            ..
+        } => {
+            let wildcard = Pattern::WildCard {
+                span: alternative.get_span(),
+            };
+            let a = (pattern, consequence.as_ref());
+            let b = (&wildcard, alternative.as_ref());
+            (propagation_fires(scrutinee, a, b), span, 2)
+        }
+        _ => return,
     };
 
     if fires {
-        let keyword_len = match origin {
-            MatchOrigin::Explicit => 5,
-            MatchOrigin::IfLet { .. } => 2,
-        };
         let keyword_span = Span::new(span.file_id, span.byte_offset, keyword_len);
         ctx.sink
             .push(diagnostics::lint::verbose_failure_propagation(
@@ -42,28 +48,38 @@ pub fn check_verbose_failure_propagation(expression: &Expression, ctx: &NodeCtx)
     }
 }
 
-fn check_option_propagation(arm_a: &MatchArm, arm_b: &MatchArm) -> bool {
-    let try_pair = |some_arm: &MatchArm, fail_arm: &MatchArm| {
-        let Some(name) = enum_variant_binding(&some_arm.pattern, "Some") else {
+fn propagation_fires(subject: &Expression, a: Arm, b: Arm) -> bool {
+    let subject_ty = subject.get_type();
+    if subject_ty.is_option() {
+        check_option_propagation(a, b)
+    } else if subject_ty.is_result() {
+        check_result_propagation(a, b)
+    } else {
+        false
+    }
+}
+
+fn check_option_propagation(arm_a: Arm, arm_b: Arm) -> bool {
+    let try_pair = |some_arm: Arm, fail_arm: Arm| {
+        let Some(name) = enum_variant_binding(some_arm.0, "Some") else {
             return false;
         };
-        is_none_or_wildcard(&fail_arm.pattern)
-            && body_is_identifier(&some_arm.expression, name)
-            && body_is_return_none(&fail_arm.expression)
+        is_none_or_wildcard(fail_arm.0)
+            && body_is_identifier(some_arm.1, name)
+            && body_is_return_none(fail_arm.1)
     };
     try_pair(arm_a, arm_b) || try_pair(arm_b, arm_a)
 }
 
-fn check_result_propagation(arm_a: &MatchArm, arm_b: &MatchArm) -> bool {
-    let try_pair = |ok_arm: &MatchArm, err_arm: &MatchArm| {
-        let Some(ok_name) = enum_variant_binding(&ok_arm.pattern, "Ok") else {
+fn check_result_propagation(arm_a: Arm, arm_b: Arm) -> bool {
+    let try_pair = |ok_arm: Arm, err_arm: Arm| {
+        let Some(ok_name) = enum_variant_binding(ok_arm.0, "Ok") else {
             return false;
         };
-        let Some(err_name) = enum_variant_binding(&err_arm.pattern, "Err") else {
+        let Some(err_name) = enum_variant_binding(err_arm.0, "Err") else {
             return false;
         };
-        body_is_identifier(&ok_arm.expression, ok_name)
-            && body_is_return_err(&err_arm.expression, err_name)
+        body_is_identifier(ok_arm.1, ok_name) && body_is_return_err(err_arm.1, err_name)
     };
     try_pair(arm_a, arm_b) || try_pair(arm_b, arm_a)
 }

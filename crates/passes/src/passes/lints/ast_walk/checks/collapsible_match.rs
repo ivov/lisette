@@ -1,67 +1,100 @@
 use crate::passes::walk::NodeCtx;
-use syntax::ast::{Expression, MatchArm, MatchOrigin, Pattern, Span};
+use syntax::ast::{Expression, MatchArm, Pattern, Span};
 
 use super::helpers::{
     expressions_equivalent, is_bare_identifier, mentions_identifier, unwrap_block,
 };
 
+struct TwoArm<'a> {
+    subject: &'a Expression,
+    meaningful_pattern: &'a Pattern,
+    meaningful_expr: &'a Expression,
+    dismissal_is_wildcard: bool,
+    dismissal_expr: &'a Expression,
+    keyword_len: u32,
+    span: Span,
+}
+
+fn as_two_arm(expression: &Expression) -> Option<TwoArm<'_>> {
+    match expression {
+        Expression::Match {
+            subject,
+            arms,
+            span,
+            ..
+        } => {
+            if arms.len() != 2 || arms.iter().any(MatchArm::has_guard) {
+                return None;
+            }
+            Some(TwoArm {
+                subject: subject.as_ref(),
+                meaningful_pattern: &arms[0].pattern,
+                meaningful_expr: arms[0].expression.as_ref(),
+                dismissal_is_wildcard: matches!(arms[1].pattern, Pattern::WildCard { .. }),
+                dismissal_expr: arms[1].expression.as_ref(),
+                keyword_len: 5,
+                span: *span,
+            })
+        }
+        Expression::IfLet {
+            scrutinee,
+            pattern,
+            consequence,
+            alternative,
+            span,
+            ..
+        } => Some(TwoArm {
+            subject: scrutinee.as_ref(),
+            meaningful_pattern: pattern,
+            meaningful_expr: consequence.as_ref(),
+            dismissal_is_wildcard: true,
+            dismissal_expr: alternative.as_ref(),
+            keyword_len: 2,
+            span: *span,
+        }),
+        _ => None,
+    }
+}
+
 pub fn check_collapsible_match(expression: &Expression, ctx: &NodeCtx) {
-    let Expression::Match { arms, span, .. } = expression else {
+    let Some(outer) = as_two_arm(expression) else {
         return;
     };
-
-    if arms.len() != 2 || arms.iter().any(MatchArm::has_guard) {
-        return;
-    }
 
     // The collapsed form keeps the dismissal as `_ => ...`, so the outer one must
     // already be a trailing wildcard for the rewrite to stay exhaustive.
-    let (meaningful, dismissal) = (&arms[0], &arms[1]);
-    if !matches!(dismissal.pattern, Pattern::WildCard { .. }) {
+    if !outer.dismissal_is_wildcard {
         return;
     }
-    let Some(binding) = single_binding_variant(&meaningful.pattern) else {
+    let Some(binding) = single_binding_variant(outer.meaningful_pattern) else {
         return;
     };
 
-    let Expression::Match {
-        subject: inner_subject,
-        arms: inner_arms,
-        origin: inner_origin,
-        span: inner_span,
-        ..
-    } = unwrap_block(&meaningful.expression)
-    else {
+    let Some(inner) = as_two_arm(unwrap_block(outer.meaningful_expr)) else {
         return;
     };
 
-    if !is_bare_identifier(inner_subject, binding) {
-        return;
-    }
-    if inner_arms.len() != 2 || inner_arms.iter().any(MatchArm::has_guard) {
+    if !is_bare_identifier(inner.subject, binding) {
         return;
     }
 
     // The inner dismissal must be a bare wildcard, not an identifier catch-all: an
     // identifier binds the matched value and may return it (`other => other`), which
     // the collapsed outer `_` arm cannot reference.
-    let (inner_meaningful, inner_dismissal) = (&inner_arms[0], &inner_arms[1]);
-    if !matches!(inner_dismissal.pattern, Pattern::WildCard { .. })
-        || is_catch_all(&inner_meaningful.pattern)
-    {
+    if !inner.dismissal_is_wildcard || is_catch_all(inner.meaningful_pattern) {
         return;
     }
 
     if !dismissals_equivalent(
-        unwrap_block(&dismissal.expression),
-        unwrap_block(&inner_dismissal.expression),
+        unwrap_block(outer.dismissal_expr),
+        unwrap_block(inner.dismissal_expr),
     ) {
         return;
     }
 
     // Merging drops the outer binding, so nothing kept may still refer to it.
-    if mentions_identifier(&inner_meaningful.expression, binding)
-        || mentions_identifier(&inner_dismissal.expression, binding)
+    if mentions_identifier(inner.meaningful_expr, binding)
+        || mentions_identifier(inner.dismissal_expr, binding)
     {
         return;
     }
@@ -69,17 +102,21 @@ pub fn check_collapsible_match(expression: &Expression, ctx: &NodeCtx) {
     // Claim both nodes so `match_as_if_let` does not also advise on a node the
     // merge removes.
     let mut claimed = ctx.claimed_spans.borrow_mut();
-    claimed.insert(Span::new(span.file_id, span.byte_offset, 5));
-    claimed.insert(Span::new(inner_span.file_id, inner_span.byte_offset, 5));
+    claimed.insert(Span::new(
+        outer.span.file_id,
+        outer.span.byte_offset,
+        outer.keyword_len,
+    ));
+    claimed.insert(Span::new(
+        inner.span.file_id,
+        inner.span.byte_offset,
+        inner.keyword_len,
+    ));
 
-    let inner_keyword_len = match inner_origin {
-        MatchOrigin::Explicit => 5,
-        MatchOrigin::IfLet { .. } => 2,
-    };
     let inner_keyword_span = Span::new(
-        inner_span.file_id,
-        inner_span.byte_offset,
-        inner_keyword_len,
+        inner.span.file_id,
+        inner.span.byte_offset,
+        inner.keyword_len,
     );
     ctx.sink
         .push(diagnostics::lint::collapsible_match(&inner_keyword_span));

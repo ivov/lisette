@@ -1,16 +1,10 @@
 use crate::passes::walk::NodeCtx;
-use syntax::ast::{Expression, Literal, MatchOrigin, Pattern, Span};
+use syntax::ast::{Expression, Literal, Pattern, Span};
 
 use super::helpers::expressions_equivalent;
 
 pub fn check_match_on_bool(expression: &Expression, ctx: &NodeCtx) {
-    let Expression::Match {
-        arms,
-        origin: MatchOrigin::Explicit,
-        span,
-        ..
-    } = expression
-    else {
+    let Expression::Match { arms, span, .. } = expression else {
         return;
     };
 

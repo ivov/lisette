@@ -3490,3 +3490,14 @@ fn drain(ch: Inbox) -> int {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn if_let_discarded_with_mismatched_branches() {
+    let input = r#"
+fn test(opt: Option<int>) {
+  if let Some(x) = opt { x } else { "fallback" }
+  ()
+}
+"#;
+    assert_emit_snapshot!(input);
+}
