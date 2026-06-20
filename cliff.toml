@@ -6,6 +6,8 @@ Lisette is under active development. Any version before 1.0.0 may include breaki
 body = '''
 
 ## [{{ version | trim_start_matches(pat="lisette-v") }}](https://github.com/ivov/lisette/compare/{{ previous.version }}...{{ version }}) - {{ timestamp | date(format="%Y-%m-%d") }}
+{% for group, commits in commits | group_by(attribute="group") %}
+### {{ group | striptags | trim }}
 {% for commit in commits | sort(attribute="author.timestamp") | reverse %}
 {%- set subject = commit.raw_message | split(pat="\n") | first | trim -%}
 {%- set sha = commit.id | truncate(length=7, end="") -%}
@@ -17,6 +19,7 @@ body = '''
 - {{ subject }} [`{{ sha }}`](https://github.com/ivov/lisette/commit/{{ commit.id }})
 {%- endif %}
 {%- endfor %}
+{% endfor %}
 
 '''
 trim = true
@@ -30,7 +33,9 @@ commit_preprocessors = [
 commit_parsers = [
   { message = "^chore: bump stdlib typedefs", skip = true },
   { message = "^chore: release", skip = true },
-  { message = ".*", group = "all" },
+  { message = "^feat", group = "<!-- 0 -->Features" },
+  { message = "^fix", group = "<!-- 1 -->Fixes" },
+  { message = ".*", group = "<!-- 2 -->Internals" },
 ]
 include_paths = ["**"]
 tag_pattern = "lisette-v[0-9]*"
