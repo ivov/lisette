@@ -1,7 +1,9 @@
 use crate::EmitEffects;
 use crate::Planner;
+use crate::definitions::functions::is_test_context_ty;
 use crate::names::go_name;
-use syntax::ast::{Expression, Visibility};
+use syntax::ast::{Binding, Expression, FunctionDefinitionView, Pattern, Visibility};
+use syntax::types::{Symbol, Type};
 
 impl Planner<'_> {
     pub(crate) fn emit_top_item(&mut self, item: &Expression, fx: &mut EmitEffects) -> String {
@@ -20,36 +22,10 @@ impl Planner<'_> {
                 let function = item.function_definition_view();
                 let doc_comment = emit_doc(doc);
 
-                let code = self.emit_function(function, None, is_public, fx);
                 if self.facts.is_test(&self.facts.qualified_current(name)) {
-                    let callee = self.pick_go_function_name(function, false, is_public);
-                    let test_name = go_name::go_test_function_name(name);
-                    let test_kit = go_name::GeneratedPackage::TestKit.qualifier();
-                    fx.require_testing();
-                    let testing = go_name::GeneratedPackage::Testing.qualifier();
-                    let call = if function.params.is_empty() {
-                        format!("{callee}()")
-                    } else {
-                        fx.require_testkit();
-                        format!("{callee}({test_kit}.New(t))")
-                    };
-                    let body = if function.return_type.is_result() {
-                        fx.require_testkit();
-                        let span = function.name_span;
-                        let (file, lo, hi) = (
-                            span.file_id,
-                            span.byte_offset,
-                            span.byte_offset + span.byte_length,
-                        );
-                        format!(
-                            "if err := {call}; err != nil {{\n\t\t{test_kit}.Fail(t, {file}, {lo}, {hi}, \"result_err\", \"test returned Err\", {test_kit}.ErrOperand(err))\n\t}}"
-                        )
-                    } else {
-                        call
-                    };
-                    let wrapper = format!("func {test_name}(t *{testing}.T) {{\n\t{body}\n}}");
-                    format!("{doc_comment}{code}\n\n{wrapper}")
+                    self.emit_test_function(name, function, is_public, &doc_comment, fx)
                 } else {
+                    let code = self.emit_function(function, None, is_public, fx);
                     format!("{}{}", doc_comment, code)
                 }
             }
@@ -126,6 +102,71 @@ impl Planner<'_> {
             }
             _ => String::new(),
         }
+    }
+
+    fn emit_test_function(
+        &mut self,
+        name: &str,
+        function: FunctionDefinitionView<'_>,
+        is_public: bool,
+        doc_comment: &str,
+        fx: &mut EmitEffects,
+    ) -> String {
+        fx.require_testing();
+        fx.require_testkit();
+        let test_kit = go_name::GeneratedPackage::TestKit.qualifier();
+        let testing = go_name::GeneratedPackage::Testing.qualifier();
+
+        let injected = self.synthesized_test_handle_params(function);
+        let function = match &injected {
+            Some(params) => FunctionDefinitionView { params, ..function },
+            None => function,
+        };
+
+        let callee = self.pick_go_function_name(function, false, is_public);
+        let test_name = go_name::go_test_function_name(name);
+        let code = self.emit_function(function, None, is_public, fx);
+
+        let call = format!("{callee}({test_kit}.New(t))");
+        let body = if function.return_type.is_result() {
+            let span = function.name_span;
+            format!(
+                "if err := {call}; err != nil {{\n\t\t{test_kit}.Fail(t, {}, {}, {}, \"result_err\", \"test returned Err\", {test_kit}.ErrOperand(err))\n\t}}",
+                span.file_id,
+                span.byte_offset,
+                span.byte_offset + span.byte_length,
+            )
+        } else {
+            call
+        };
+        let wrapper = format!("func {test_name}(t *{testing}.T) {{\n\t{body}\n}}");
+        format!("{doc_comment}{code}\n\n{wrapper}")
+    }
+
+    fn synthesized_test_handle_params(
+        &self,
+        function: FunctionDefinitionView<'_>,
+    ) -> Option<Vec<Binding>> {
+        let has_usable_handle = function.params.iter().any(|param| {
+            is_test_context_ty(&param.ty) && self.go_name_for_binding(&param.pattern).is_some()
+        });
+        if has_usable_handle {
+            return None;
+        }
+        Some(vec![Binding {
+            pattern: Pattern::Identifier {
+                identifier: "lisetteTestCtx".into(),
+                span: function.name_span,
+            },
+            annotation: None,
+            typed_pattern: None,
+            ty: Type::Nominal {
+                id: Symbol::from_parts(go_name::TEST_PRELUDE_MODULE, "TestContext"),
+                params: vec![],
+                underlying_ty: None,
+            },
+            mutable: false,
+        }])
     }
 }
 

@@ -114,6 +114,7 @@ pub fn infer_module(module_name: &str, fs: MockFileSystem) -> InferResult {
         }
 
         checker.finalize_equality(&mut store);
+        checker.finalize_tests(&mut store);
 
         for module_id in &to_infer {
             let prev_module_id = checker.cursor.module_id.clone();

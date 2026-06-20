@@ -7450,72 +7450,6 @@ fn test_with_context_emits_testkit_wrapper() {
 }
 
 #[test]
-fn assert_lowers_to_panic() {
-    let mut fs = MockFileSystem::new();
-    fs.add_file(
-        ENTRY_MODULE_ID,
-        "main.lis",
-        "import \"math\"\n\nfn main() {\n  let _ = math.add(1, 2)\n}",
-    );
-    fs.add_file(
-        "math",
-        "core.lis",
-        "pub fn add(a: int, b: int) -> int { a + b }",
-    );
-    fs.add_file(
-        "math",
-        "core.test.lis",
-        "#[test]\nfn checks() {\n  assert 2 + 2 == 5\n}",
-    );
-    let outputs = compile_project_files_with_tests(fs, "github.com/user/p", false, true);
-    let go = outputs
-        .iter()
-        .find(|f| f.name.ends_with("core_test.go"))
-        .expect("core_test.go")
-        .to_go();
-    assert!(
-        go.contains("panic(\"assertion failed\")"),
-        "assert must lower to a panic, got:\n{go}"
-    );
-}
-
-#[test]
-fn assert_as_try_block_tail_compiles() {
-    let mut fs = MockFileSystem::new();
-    fs.add_file(
-        ENTRY_MODULE_ID,
-        "main.lis",
-        "fn g() -> Result<int, string> { Ok(1) }\n\nfn f() -> Result<(), string> {\n  try {\n    let _ = g()?\n    assert true\n  }\n}\n\nfn main() {\n  let _ = f()\n}",
-    );
-    let go: String = compile_project_files(fs, "github.com/user/p", false)
-        .iter()
-        .map(|file| file.to_go())
-        .collect();
-    assert!(
-        go.contains("panic(\"assertion failed\")"),
-        "assert as a try-block tail must lower to a panic check, got:\n{go}"
-    );
-}
-
-#[test]
-fn assert_as_if_value_branch_compiles() {
-    let mut fs = MockFileSystem::new();
-    fs.add_file(
-        ENTRY_MODULE_ID,
-        "main.lis",
-        "fn main() {\n  let _ = if true { assert true } else { assert false }\n}",
-    );
-    let go: String = compile_project_files(fs, "github.com/user/p", false)
-        .iter()
-        .map(|file| file.to_go())
-        .collect();
-    assert!(
-        go.contains("panic(\"assertion failed\")"),
-        "assert in an if-as-value branch must lower to a panic check, got:\n{go}"
-    );
-}
-
-#[test]
 fn test_emit_produces_go_test_function() {
     let outputs =
         compile_project_files_with_tests(math_test_project(), "github.com/user/p", false, true);
@@ -7538,6 +7472,245 @@ fn test_emit_produces_go_test_function() {
     assert!(
         go.contains("\"testing\""),
         "expected the testing import, got:\n{go}"
+    );
+}
+
+#[test]
+fn assert_lowers_to_decomposed_failure_call() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        "import \"math\"\n\nfn main() {\n  let _ = math.add(1, 2)\n}",
+    );
+    fs.add_file(
+        "math",
+        "core.lis",
+        "pub fn add(a: int, b: int) -> int { a + b }",
+    );
+    fs.add_file(
+        "math",
+        "core.test.lis",
+        "#[test]\nfn arithmetic() {\n  assert 2 + 2 == 5\n}\n\n#[test]\nfn truthy() {\n  assert true\n}",
+    );
+
+    let outputs = compile_project_files_with_tests(fs, "github.com/user/p", false, true);
+    let go = outputs
+        .iter()
+        .find(|f| f.name.ends_with("core_test.go"))
+        .expect("expected a core_test.go output")
+        .to_go();
+
+    assert!(
+        go.contains("testkit.TestContext") && go.contains("testkit.New(t)"),
+        "a no-arg test with `assert` must carry a test handle, got:\n{go}"
+    );
+    assert!(
+        go.contains(".FailAssert(") && go.contains("\"relation\""),
+        "a comparison `assert` must report a relation, got:\n{go}"
+    );
+    assert!(
+        go.contains("left: %v, right: %v"),
+        "a relation `assert` must format both operands, got:\n{go}"
+    );
+    assert!(
+        go.contains("\"bare\""),
+        "a non-comparison `assert` must report as bare, got:\n{go}"
+    );
+}
+
+#[test]
+fn assert_equals_lowers_to_labeled_failure() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        "import \"math\"\n\nfn main() {\n  let _ = math.add(1, 2)\n}",
+    );
+    fs.add_file(
+        "math",
+        "core.lis",
+        "pub fn add(a: int, b: int) -> int { a + b }",
+    );
+    fs.add_file(
+        "math",
+        "core.test.lis",
+        "#[test]\nfn slices_match() {\n  let xs = [1, 2]\n  let ys = [3, 4]\n  assert xs.equals(ys)\n}",
+    );
+
+    let outputs = compile_project_files_with_tests(fs, "github.com/user/p", false, true);
+    let go = outputs
+        .iter()
+        .find(|f| f.name.ends_with("core_test.go"))
+        .expect("expected a core_test.go output")
+        .to_go();
+
+    assert!(
+        go.contains("\"labeled\"") && go.contains("slices.Equal("),
+        "a `.equals()` assert must lower to a labeled record via `slices.Equal`, got:\n{go}"
+    );
+    assert!(
+        go.contains("Label: \"left\"") && go.contains("Label: \"right\""),
+        "a labeled record must carry both operands, got:\n{go}"
+    );
+    assert!(
+        go.contains("Lo:") && go.contains("Hi:"),
+        "labeled operands must carry source spans, got:\n{go}"
+    );
+}
+
+#[test]
+fn assert_in_test_context_helper_emits_without_panic() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        "import \"math\"\n\nfn main() {\n  let _ = math.add(1, 2)\n}",
+    );
+    fs.add_file(
+        "math",
+        "core.lis",
+        "pub fn add(a: int, b: int) -> int { a + b }",
+    );
+    fs.add_file(
+        "math",
+        "core.test.lis",
+        "fn check(t: TestContext, n: int) {\n  assert n > 0\n}\n\n#[test]\nfn uses(t: TestContext) {\n  check(t, 5)\n}",
+    );
+
+    let outputs = compile_project_files_with_tests(fs, "github.com/user/p", false, true);
+    let go = outputs
+        .iter()
+        .find(|f| f.name.ends_with("core_test.go"))
+        .expect("expected a core_test.go output")
+        .to_go();
+    assert!(
+        go.contains("func check(t testkit.TestContext") && go.contains("t.FailAssert("),
+        "an `assert` in a `TestContext` helper must report on its parameter, got:\n{go}"
+    );
+}
+
+#[test]
+fn assert_relation_applies_numeric_alias_cast() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        "import \"math\"\n\nfn main() {\n  let _ = math.add(1, 2)\n}",
+    );
+    fs.add_file(
+        "math",
+        "core.lis",
+        "pub type Score = int\n\npub fn add(a: int, b: int) -> int { a + b }",
+    );
+    fs.add_file(
+        "math",
+        "core.test.lis",
+        "#[test]\nfn cmp() {\n  let s: Score = 3\n  let n: int = 3\n  assert s == n\n}",
+    );
+
+    let outputs = compile_project_files_with_tests(fs, "github.com/user/p", false, true);
+    let go = outputs
+        .iter()
+        .find(|f| f.name.ends_with("core_test.go"))
+        .expect("expected a core_test.go output")
+        .to_go();
+    assert!(
+        go.contains("Score("),
+        "a numeric-alias comparison in `assert` must apply the cast, got:\n{go}"
+    );
+}
+
+#[test]
+fn assert_relation_types_untyped_literal_operand() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        "import \"math\"\n\nfn main() {\n  let _ = math.add(1, 2)\n}",
+    );
+    fs.add_file(
+        "math",
+        "core.lis",
+        "pub fn add(a: int, b: int) -> int { a + b }",
+    );
+    fs.add_file(
+        "math",
+        "core.test.lis",
+        "#[test]\nfn big() {\n  let x: uint64 = 1\n  assert x == 18446744073709551615\n}",
+    );
+
+    let outputs = compile_project_files_with_tests(fs, "github.com/user/p", false, true);
+    let go = outputs
+        .iter()
+        .find(|f| f.name.ends_with("core_test.go"))
+        .expect("expected a core_test.go output")
+        .to_go();
+    assert!(
+        go.contains("uint64 = 18446744073709551615"),
+        "an untyped literal operand must be typed, got:\n{go}"
+    );
+}
+
+#[test]
+fn assert_with_discarded_test_param_emits_synthesized_handle() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        "import \"math\"\n\nfn main() {\n  let _ = math.add(1, 2)\n}",
+    );
+    fs.add_file(
+        "math",
+        "core.lis",
+        "pub fn add(a: int, b: int) -> int { a + b }",
+    );
+    fs.add_file(
+        "math",
+        "core.test.lis",
+        "#[test]\nfn checks(_: TestContext) {\n  assert false\n}",
+    );
+
+    let outputs = compile_project_files_with_tests(fs, "github.com/user/p", false, true);
+    let go = outputs
+        .iter()
+        .find(|f| f.name.ends_with("core_test.go"))
+        .expect("expected a core_test.go output")
+        .to_go();
+    assert!(
+        go.contains("testkit.New(t)") && go.contains(".FailAssert("),
+        "a discarded test param must still yield a usable handle, got:\n{go}"
+    );
+}
+
+#[test]
+fn assert_in_discarded_subtest_targets_subtest_handle() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        "import \"math\"\n\nfn main() {\n  let _ = math.add(1, 2)\n}",
+    );
+    fs.add_file(
+        "math",
+        "core.lis",
+        "pub fn add(a: int, b: int) -> int { a + b }",
+    );
+    fs.add_file(
+        "math",
+        "core.test.lis",
+        "#[test]\nfn parent(t: TestContext) {\n  let _ = t.run(\"sub\", |_| {\n    assert false\n  })\n}",
+    );
+
+    let outputs = compile_project_files_with_tests(fs, "github.com/user/p", false, true);
+    let go = outputs
+        .iter()
+        .find(|f| f.name.ends_with("core_test.go"))
+        .expect("expected a core_test.go output")
+        .to_go();
+    assert!(
+        !go.contains("func(_ testkit.TestContext)"),
+        "a discarded subtest handle used by `assert` must be named, got:\n{go}"
     );
 }
 

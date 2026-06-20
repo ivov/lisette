@@ -32,9 +32,16 @@ func (c TestContext) Parallel() {
 	c.t.Parallel()
 }
 
+// FailAssert reports an `assert` failure over the same channel as Fail.
+func (c TestContext) FailAssert(file int, lo, hi uint32, kind, message string, operands ...Operand) {
+	Fail(c.t, file, lo, hi, kind, message, operands...)
+}
+
 type Operand struct {
 	Label string `json:"label"`
 	Value string `json:"value"`
+	Lo    uint32 `json:"lo,omitempty"`
+	Hi    uint32 `json:"hi,omitempty"`
 }
 
 func ErrOperand(value any) Operand {
@@ -47,7 +54,7 @@ type failRecord struct {
 	Hi       uint32    `json:"hi"`
 	Kind     string    `json:"kind"`
 	Message  string    `json:"message"`
-	Operands []Operand `json:"operands"`
+	Operands []Operand `json:"operands,omitempty"`
 }
 
 // failEnvelope frames one chunk; `lis` orders by I and concatenates D over 0..N.

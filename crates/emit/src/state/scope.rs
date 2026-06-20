@@ -15,6 +15,7 @@ pub(crate) struct ScopeState {
     scope_depth: usize,
     loop_stack: Vec<LoopContext>,
     return_ctx_stack: Vec<Rc<ReturnContext>>,
+    test_handle_stack: Vec<String>,
     assign_targets: HashSet<String>,
     go_const_bindings: Vec<HashSet<String>>,
     /// Go identifiers referenced during lowering, for structural liveness.
@@ -39,6 +40,7 @@ impl ScopeState {
             scope_depth: 0,
             loop_stack: Vec::new(),
             return_ctx_stack: Vec::new(),
+            test_handle_stack: Vec::new(),
             assign_targets: HashSet::default(),
             go_const_bindings: vec![HashSet::default()],
             use_frames: Vec::new(),
@@ -211,6 +213,18 @@ impl ScopeState {
 
     pub(crate) fn pop_return_ctx(&mut self) {
         self.return_ctx_stack.pop();
+    }
+
+    pub(crate) fn push_test_handle(&mut self, name: String) {
+        self.test_handle_stack.push(name);
+    }
+
+    pub(crate) fn pop_test_handle(&mut self) {
+        self.test_handle_stack.pop();
+    }
+
+    pub(crate) fn current_test_handle(&self) -> Option<&str> {
+        self.test_handle_stack.last().map(String::as_str)
     }
 
     pub(crate) fn current_return_ctx(&self) -> Option<Rc<ReturnContext>> {

@@ -771,8 +771,13 @@ impl InferCtx<'_, '_> {
             self.sink
                 .push(diagnostics::infer::propagate_in_assert(propagate_span));
         }
+        if !self.scopes.has_test_handle() {
+            self.sink
+                .push(diagnostics::infer::assert_without_test_context(span));
+        }
         let unit_ty = self.type_unit();
         self.unify(expected_ty, &unit_ty, &span);
+
         Expression::Assert {
             expression: new_expression.into(),
             ty: unit_ty,

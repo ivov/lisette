@@ -36,6 +36,10 @@ struct FailEnvelope {
 struct Operand {
     label: String,
     value: String,
+    #[serde(default)]
+    lo: u32,
+    #[serde(default)]
+    hi: u32,
 }
 
 #[derive(Deserialize, Clone)]
@@ -43,6 +47,8 @@ pub struct FailureRecord {
     file: u32,
     lo: u32,
     hi: u32,
+    #[serde(default)]
+    kind: String,
     message: String,
     #[serde(default)]
     operands: Vec<Operand>,
@@ -368,15 +374,39 @@ fn render_rows(out: &mut String, rows: &[&TestRow], prefix: &str, sources: &Sour
 fn render_failure(record: &FailureRecord, sources: &Sources, color: bool) -> Option<String> {
     let info = sources.get(&record.file)?;
     let span = Span::new(record.file, record.lo, record.hi.saturating_sub(record.lo));
-    let label = record
-        .operands
-        .first()
-        .map(|operand| operand.value.clone())
-        .unwrap_or_else(|| record.message.clone());
+
+    let (label, notes): (String, Vec<String>) = if record.kind == "labeled" {
+        let notes = record
+            .operands
+            .iter()
+            .map(|operand| {
+                let source = info
+                    .source
+                    .get(operand.lo as usize..operand.hi as usize)
+                    .unwrap_or(&operand.label);
+                format!("{}: `{}` is `{}`", operand.label, source, operand.value)
+            })
+            .collect();
+        (record.message.clone(), notes)
+    } else {
+        let label = record
+            .operands
+            .first()
+            .map(|operand| operand.value.clone())
+            .unwrap_or_else(|| record.message.clone());
+        let notes = record
+            .operands
+            .iter()
+            .skip(1)
+            .map(|operand| format!("{}: {}", operand.label, operand.value))
+            .collect();
+        (label, notes)
+    };
+
     let mut diagnostic =
         LisetteDiagnostic::error(record.message.clone()).with_span_primary_label(&span, label);
-    for operand in record.operands.iter().skip(1) {
-        diagnostic = diagnostic.with_note(format!("{}: {}", operand.label, operand.value));
+    if !notes.is_empty() {
+        diagnostic = diagnostic.with_note(notes.join("\n"));
     }
     Some(diagnostics::render::render_to_string(
         &diagnostic,

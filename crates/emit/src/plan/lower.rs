@@ -5,6 +5,7 @@ use crate::abi::transition::try_emit_lowered_tail_return;
 use crate::context::expression::ExpressionContext;
 use crate::control_flow::propagation::plain_return;
 use crate::definitions::functions::{is_breakless_loop, is_go_never};
+use crate::names::go_name;
 use crate::plan::bodies::{
     ElseArm, ExpressionStatementForm, ExpressionStatementPlan, IfPlan, LoopPlan, LoweredBlock,
     LoweredStatement, MatchStatementPlan, PlacePlan, WhileLetPlan, directed,
@@ -12,7 +13,7 @@ use crate::plan::bodies::{
 use crate::plan::placement::{requires_temp_var, try_elide_tail_let};
 use crate::plan::values::{ValuePlan, value_plan_from_statements};
 use crate::utils::wrap_if_struct_literal;
-use syntax::ast::{Expression, Literal};
+use syntax::ast::{BinaryOperator, Expression, Literal};
 use syntax::types::Type;
 
 impl Planner<'_> {
@@ -375,8 +376,6 @@ impl Planner<'_> {
         )
     }
 
-    /// Lower `assert <bool>` to a runtime panic on failure. Rich source-spanned
-    /// reporting over the test channel lands in a follow-up.
     pub(crate) fn lower_assert_statement(
         &mut self,
         expression: &Expression,
@@ -390,15 +389,185 @@ impl Planner<'_> {
             unreachable!("lower_assert_statement requires an Assert expression");
         };
         let operand = operand.unwrap_parens();
-        let (mut statements, condition) = self.lower_condition(operand, fx);
-        let directive = self.maybe_line_directive(&expression.get_span());
-        statements.push(directed(
-            directive,
-            LoweredStatement::RawGo(format!(
-                "if !({condition}) {{\npanic(\"assertion failed\")\n}}\n"
-            )),
-        ));
+        fx.require_testkit();
+
+        // Each shape stages its operands into `statements` and returns the
+        // condition, the record kind, and any operand arguments for the call.
+        let mut statements = Vec::new();
+        let shape = if let Expression::Binary {
+            operator,
+            left,
+            right,
+            ..
+        } = operand
+            && is_assert_relation(operator)
+        {
+            self.lower_relation_assert(operator, left, right, &mut statements, fx)
+        } else if let Some((recv, arg)) = self.as_equals_decomposition(operand) {
+            self.lower_labeled_assert(recv, arg, &mut statements, fx)
+        } else {
+            self.lower_bare_assert(operand, &mut statements, fx)
+        };
+
+        let AssertShape {
+            condition,
+            kind,
+            operands,
+        } = shape;
+        let handle = self
+            .current_test_handle()
+            .expect("assert without a test handle should be rejected by semantics");
+        let span = operand.get_span();
+        statements.push(LoweredStatement::RawGo(format!(
+            "if !({condition}) {{\n{handle}.FailAssert({}, {}, {}, \"{kind}\", \"assertion failed\"{operands})\n}}\n",
+            span.file_id,
+            span.byte_offset,
+            span.byte_offset + span.byte_length,
+        )));
         LoweredStatement::Block(LoweredBlock { statements })
+    }
+
+    /// `assert a <op> b`: compare the captured temps via the normal binary
+    /// lowering, reporting both as `left`/`right`.
+    fn lower_relation_assert(
+        &mut self,
+        operator: &BinaryOperator,
+        left: &Expression,
+        right: &Expression,
+        statements: &mut Vec<LoweredStatement>,
+        fx: &mut EmitEffects,
+    ) -> AssertShape {
+        fx.require_fmt();
+        let (test_kit, fmt) = (
+            go_name::GeneratedPackage::TestKit.qualifier(),
+            go_name::GeneratedPackage::Fmt.qualifier(),
+        );
+        let lhs = self.stage_assert_operand(left, "assertLeft", statements, fx);
+        let rhs = self.stage_assert_operand(right, "assertRight", statements, fx);
+        let left_ref = temp_identifier(&lhs, left);
+        let right_ref = temp_identifier(&rhs, right);
+        let (cond_setup, condition) = self
+            .plan_binary(
+                operator,
+                &left_ref,
+                &right_ref,
+                ExpressionContext::value(),
+                fx,
+            )
+            .into_parts();
+        statements.extend(cond_setup);
+        AssertShape {
+            condition,
+            kind: "relation",
+            operands: format!(
+                ", {test_kit}.Operand{{Value: {fmt}.Sprintf(\"left: %v, right: %v\", {lhs}, {rhs})}}"
+            ),
+        }
+    }
+
+    /// `assert recv.equals(arg)`: compare via the canonical equals lowering,
+    /// reporting each operand by its source text and value.
+    fn lower_labeled_assert(
+        &mut self,
+        recv: &Expression,
+        arg: &Expression,
+        statements: &mut Vec<LoweredStatement>,
+        fx: &mut EmitEffects,
+    ) -> AssertShape {
+        fx.require_fmt();
+        let (test_kit, fmt) = (
+            go_name::GeneratedPackage::TestKit.qualifier(),
+            go_name::GeneratedPackage::Fmt.qualifier(),
+        );
+        let recv_ty = recv.get_type();
+        let (recv_span, arg_span) = (recv.get_span(), arg.get_span());
+        let lhs = self.stage_assert_operand(recv, "assertLeft", statements, fx);
+        let rhs = self.stage_assert_operand(arg, "assertRight", statements, fx);
+        let condition = self.render_equality(&lhs, &rhs, &recv_ty, fx);
+        AssertShape {
+            condition,
+            kind: "labeled",
+            operands: format!(
+                ", {test_kit}.Operand{{Label: \"left\", Value: {fmt}.Sprintf(\"%v\", {lhs}), Lo: {}, Hi: {}}}, {test_kit}.Operand{{Label: \"right\", Value: {fmt}.Sprintf(\"%v\", {rhs}), Lo: {}, Hi: {}}}",
+                recv_span.byte_offset,
+                recv_span.byte_offset + recv_span.byte_length,
+                arg_span.byte_offset,
+                arg_span.byte_offset + arg_span.byte_length,
+            ),
+        }
+    }
+
+    /// `assert <expr>`: any other boolean, lowered as-is (no decomposition).
+    fn lower_bare_assert(
+        &mut self,
+        operand: &Expression,
+        statements: &mut Vec<LoweredStatement>,
+        fx: &mut EmitEffects,
+    ) -> AssertShape {
+        let (setup, condition) = self.lower_condition(operand, fx);
+        statements.extend(setup);
+        AssertShape {
+            condition,
+            kind: "bare",
+            operands: String::new(),
+        }
+    }
+
+    /// Capture an `assert` operand into a fresh temp, declared with its inferred
+    /// type so an untyped constant (e.g. a large `uint64` literal) keeps its type.
+    fn stage_assert_operand(
+        &mut self,
+        expression: &Expression,
+        hint: &str,
+        statements: &mut Vec<LoweredStatement>,
+        fx: &mut EmitEffects,
+    ) -> String {
+        let (setup, value) = self
+            .lower_value(expression, ExpressionContext::value(), fx)
+            .into_parts();
+        statements.extend(setup);
+        let name = self.fresh_var(Some(hint));
+        self.declare(&name);
+        // Bind the temp to itself so the relation shape's synthetic identifier resolves.
+        self.scope.bind(name.clone(), name.clone());
+        let go_type = self.go_type_string(&expression.get_type(), fx);
+        statements.push(LoweredStatement::VarDecl {
+            name: name.clone(),
+            go_type,
+            value: Some(value),
+        });
+        name
+    }
+
+    /// A `recv.equals(arg)` whose receiver has an `equals` the compiler can lower
+    /// (a slice, a map, or any type with a usable `equals` method), so the failure
+    /// can show both operands. Anything else falls back to the bare shape.
+    fn as_equals_decomposition<'a>(
+        &self,
+        operand: &'a Expression,
+    ) -> Option<(&'a Expression, &'a Expression)> {
+        let Expression::Call {
+            expression: callee,
+            args,
+            ..
+        } = operand
+        else {
+            return None;
+        };
+        let Expression::DotAccess {
+            expression: recv,
+            member,
+            ..
+        } = callee.unwrap_parens()
+        else {
+            return None;
+        };
+        if member != "equals" || args.len() != 1 {
+            return None;
+        }
+        let recv_ty = self.facts.peel_alias(&recv.get_type());
+        (recv_ty.is_slice() || recv_ty.is_map() || self.type_has_equals(&recv_ty))
+            .then(|| (recv.unwrap_parens(), &args[0]))
     }
 
     /// Lower `while let P = scrutinee { body }`, wrapped as a `WhileLet`
@@ -838,4 +1007,31 @@ impl Planner<'_> {
             }
         }
     }
+}
+
+/// The lowered pieces of an `assert`: the boolean condition, the record kind,
+/// and any `, Operand{...}` arguments appended to the failure call.
+struct AssertShape {
+    condition: String,
+    kind: &'static str,
+    operands: String,
+}
+
+/// A typed identifier for an already-bound temp, so the rebuilt comparison casts as usual.
+fn temp_identifier(name: &str, original: &Expression) -> Expression {
+    Expression::Identifier {
+        value: name.into(),
+        ty: original.get_type(),
+        span: original.get_span(),
+        binding_id: None,
+        qualified: None,
+    }
+}
+
+fn is_assert_relation(operator: &BinaryOperator) -> bool {
+    use BinaryOperator::*;
+    matches!(
+        operator,
+        Equal | NotEqual | LessThan | LessThanOrEqual | GreaterThan | GreaterThanOrEqual
+    )
 }

@@ -85,6 +85,7 @@ pub struct Scope {
     pub negation_depth: DepthCounter,
     pub type_param_depth: DepthCounter,
     pub use_context: Cell<UseContext>,
+    pub in_test_handle: bool,
     /// variable name -> binding ID (for linting)
     pub name_to_binding: HashMap<String, BindingId>,
 }
@@ -112,6 +113,7 @@ impl Scope {
             negation_depth: DepthCounter::new(),
             type_param_depth: DepthCounter::new(),
             use_context: Cell::new(UseContext::Statement),
+            in_test_handle: false,
             name_to_binding: HashMap::default(),
         }
     }
@@ -187,6 +189,7 @@ impl Scopes {
         scope.negation_depth = DepthCounter::with_value(current.negation_depth.get());
         scope.type_param_depth = DepthCounter::with_value(current.type_param_depth.get());
         scope.use_context = Cell::new(current.use_context.get());
+        scope.in_test_handle = current.in_test_handle;
         self.stack.push(scope);
     }
 
@@ -330,6 +333,14 @@ impl Scopes {
             }
             return;
         }
+    }
+
+    pub fn mark_test_handle(&mut self) {
+        self.current_mut().in_test_handle = true;
+    }
+
+    pub fn has_test_handle(&self) -> bool {
+        self.current().in_test_handle
     }
 
     pub fn increment_loop_depth(&self) {

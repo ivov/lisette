@@ -252,6 +252,12 @@ impl InferCtx<'_, '_> {
             if let Some(definition_span) = definition.name_span() {
                 self.facts.add_usage(span, definition_span);
             }
+            if store.is_test_definition(definition)
+                && store.test_index.contains_qualified(qname.as_str())
+            {
+                self.sink
+                    .push(diagnostics::infer::test_function_not_callable(span, &value));
+            }
             if let DefinitionBody::TypeAlias { .. } = &definition.body
                 && !self.scopes.is_callee_context()
                 && !self.scopes.is_dot_access_base()
@@ -460,12 +466,13 @@ impl InferCtx<'_, '_> {
                     | Expression::Assignment { .. }
                     | Expression::Task { .. }
                     | Expression::Defer { .. }
+                    | Expression::Assert { .. }
             );
 
             let suppress_unused_check = item.is_control_flow();
 
-            // Reject statement-only items (let, =, task, defer) as block tail
-            // when the block is expected to produce a non-unit value.
+            // Reject statement-only items (let, =, task, defer, assert) as block
+            // tail when the block is expected to produce a non-unit value.
             if is_last && is_statement_only {
                 let expected = self.env.resolve(&last_item_expected_ty);
                 if last_item_expected_ty.is_ignored() {

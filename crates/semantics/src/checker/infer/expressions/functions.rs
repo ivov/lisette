@@ -97,6 +97,30 @@ fn has_numeric_member_in_chain(expression: &Expression) -> bool {
 }
 
 impl InferCtx<'_, '_> {
+    pub(super) fn ty_is_test_context(&self, ty: &Type) -> bool {
+        let resolved = ty.resolve_in(&self.env).strip_refs();
+        resolved.get_qualified_id().is_some_and(|id| {
+            id.strip_suffix(".TestContext")
+                .is_some_and(|module| module == crate::prelude::TEST_PRELUDE_MODULE_ID)
+        })
+    }
+
+    fn param_provides_test_handle(&self, param: &Binding) -> bool {
+        matches!(&param.pattern, Pattern::Identifier { identifier, .. } if identifier != "_")
+            && self.ty_is_test_context(&param.ty)
+    }
+
+    fn mark_test_context_params_used(&mut self, params: &[Binding]) {
+        for param in params {
+            if let Pattern::Identifier { identifier, .. } = &param.pattern
+                && self.param_provides_test_handle(param)
+                && let Some(id) = self.scopes.lookup_binding_id(identifier)
+            {
+                self.facts.mark_used(id);
+            }
+        }
+    }
+
     pub(super) fn infer_function(
         &mut self,
         expression: Expression,
@@ -164,6 +188,16 @@ impl InferCtx<'_, '_> {
         let resolved_expected = expected_ty.resolve_in(&self.env);
         let expected_params = resolved_expected.get_function_params().unwrap_or_default();
         let new_params = self.infer_function_params(params, expected_params, true);
+
+        let is_test = attributes.iter().any(|a| a.name == "test");
+        if is_test
+            || new_params
+                .iter()
+                .any(|p| self.param_provides_test_handle(p))
+        {
+            self.scopes.mark_test_handle();
+        }
+        self.mark_test_context_params_used(&new_params);
 
         let unit_ty = self.type_unit();
         let return_ty =
@@ -238,6 +272,14 @@ impl InferCtx<'_, '_> {
         let resolved_expected = expected_ty.resolve_in(&self.env);
         let expected_params = resolved_expected.get_function_params().unwrap_or_default();
         let new_params = self.infer_function_params(params, expected_params, false);
+
+        if new_params
+            .iter()
+            .any(|p| self.param_provides_test_handle(p))
+        {
+            self.scopes.mark_test_handle();
+        }
+        self.mark_test_context_params_used(&new_params);
 
         let default_return = self.new_type_var();
         let return_ty = self.infer_return_type(

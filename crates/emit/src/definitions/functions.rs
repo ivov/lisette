@@ -19,6 +19,14 @@ use syntax::types::Type;
 /// Owned param-destructure record: temp var, pattern, typed pattern, param type.
 type DeferredParamDestructure = (String, Pattern, Option<TypedPattern>, Type);
 
+pub(crate) fn is_test_context_ty(ty: &Type) -> bool {
+    let stripped = ty.strip_refs();
+    stripped.get_qualified_id().is_some_and(|id| {
+        id.strip_suffix(".TestContext")
+            .is_some_and(|module| module == go_name::TEST_PRELUDE_MODULE)
+    })
+}
+
 fn receiver_type_name(ty: &Type) -> Option<&str> {
     if let Type::Nominal { id, .. } = ty.unwrap_forall() {
         Some(syntax::types::unqualified_name(id.as_str()))
@@ -74,7 +82,27 @@ impl Planner<'_> {
     ) -> String {
         let frame = self.scope.enter_isolated_function();
 
-        let (param_pairs, destructure_bindings) = self.build_lambda_param_pairs(params, fx);
+        let (mut param_pairs, destructure_bindings) = self.build_lambda_param_pairs(params, fx);
+
+        // A `t.run` subtest closure binds its own handle. Name a discarded `|_|`
+        // so `assert` targets the subtest, not the enclosing test.
+        let handle = params
+            .iter()
+            .position(|p| is_test_context_ty(&p.ty))
+            .map(|index| {
+                if param_pairs[index].0 == "_" {
+                    let name = self.fresh_var(Some("lisetteSub"));
+                    self.declare(&name);
+                    param_pairs[index].0 = name.clone();
+                    name
+                } else {
+                    param_pairs[index].0.clone()
+                }
+            });
+        if let Some(name) = handle.clone() {
+            self.push_test_handle(name);
+        }
+
         let return_info = self.lambda_return_info(ty, ctx, fx);
         let body_string = self.emit_lambda_body_with_deferred(
             body,
@@ -83,6 +111,10 @@ impl Planner<'_> {
             return_info.has_return,
             fx,
         );
+
+        if handle.is_some() {
+            self.pop_test_handle();
+        }
 
         self.scope.exit_isolated_function(frame);
 
@@ -281,6 +313,15 @@ impl Planner<'_> {
                     parts.push(return_ty);
                 }
                 let signature = parts.join(" ");
+
+                let test_handle = function_definition.params.iter().find_map(|param| {
+                    is_test_context_ty(&param.ty)
+                        .then(|| this.go_name_for_binding(&param.pattern))
+                        .flatten()
+                });
+                if let Some(name) = test_handle.clone() {
+                    this.push_test_handle(name);
+                }
                 this.emit_function_body_with_deferred_patterns(
                     &mut body,
                     function_definition,
@@ -288,6 +329,9 @@ impl Planner<'_> {
                     &return_ctx,
                     fx,
                 );
+                if test_handle.is_some() {
+                    this.pop_test_handle();
+                }
                 signature
             },
         );

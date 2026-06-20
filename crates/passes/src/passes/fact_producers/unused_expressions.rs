@@ -330,6 +330,7 @@ fn is_statement_only(expression: &Expression) -> bool {
             | Expression::Assignment { .. }
             | Expression::Defer { .. }
             | Expression::Task { .. }
+            | Expression::Assert { .. }
             | Expression::While { .. }
             | Expression::WhileLet { .. }
             | Expression::For { .. }

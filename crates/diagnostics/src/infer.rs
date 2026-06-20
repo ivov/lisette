@@ -1787,6 +1787,24 @@ pub fn colon_in_subscript(
         .with_help(help)
 }
 
+pub fn test_function_not_callable(span: Span, name: &str) -> LisetteDiagnostic {
+    LisetteDiagnostic::error(format!("`{name}` is a test, not a callable function"))
+        .with_infer_code("test_function_not_callable")
+        .with_span_label(&span, "a `#[test]` function cannot be called or used as a value")
+        .with_help(
+            "A `#[test]` function is an entry point run by `lis test`. Move shared logic into a separate function",
+        )
+}
+
+pub fn assert_without_test_context(span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("`assert` outside a test")
+        .with_infer_code("assert_without_test_context")
+        .with_span_label(&span, "no test context is in scope here")
+        .with_help(
+            "`assert` is only valid inside a `#[test]` function or a function that takes a `t: TestContext` parameter",
+        )
+}
+
 pub fn not_callable(
     ty: &Type,
     callee_name: Option<&str>,

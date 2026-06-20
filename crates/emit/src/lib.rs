@@ -347,6 +347,18 @@ impl<'a> Planner<'a> {
         self.scope.pop_return_ctx();
     }
 
+    pub(crate) fn push_test_handle(&mut self, name: String) {
+        self.scope.push_test_handle(name);
+    }
+
+    pub(crate) fn pop_test_handle(&mut self) {
+        self.scope.pop_test_handle();
+    }
+
+    pub(crate) fn current_test_handle(&self) -> Option<String> {
+        self.scope.current_test_handle().map(str::to_string)
+    }
+
     /// The enclosing function/lambda/try/recover return context, maintained on
     /// the scope stack and shared cheaply via `Rc`. Defaults to
     /// `ReturnContext::None` outside any function body (e.g. module-level

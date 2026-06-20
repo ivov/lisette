@@ -3991,6 +3991,90 @@ fn local_error_type_shadow_rejected() {
 }
 
 #[test]
+fn assert_without_test_context_rejected() {
+    let fs = test_attribute_fs(
+        "pub fn add(a: int, b: int) -> int { a + b }",
+        "fn helper() {\n  assert true\n}",
+    );
+    let result = infer_module("_entry_", fs);
+    assert!(
+        has_code(&result, "assert_without_test_context"),
+        "`assert` with no test handle in scope must be rejected, got: {:?}",
+        result.errors
+    );
+}
+
+#[test]
+fn calling_a_test_function_rejected() {
+    let fs = test_attribute_fs(
+        "pub fn add(a: int, b: int) -> int { a + b }",
+        "#[test]\nfn alpha() {}\n\n#[test]\nfn beta() {\n  alpha()\n}",
+    );
+    let result = infer_module("_entry_", fs);
+    assert!(
+        has_code(&result, "test_function_not_callable"),
+        "calling a `#[test]` function must be rejected, got: {:?}",
+        result.errors
+    );
+}
+
+#[test]
+fn calling_a_test_file_helper_accepted() {
+    let fs = test_attribute_fs(
+        "pub fn add(a: int, b: int) -> int { a + b }",
+        "fn helper() {}\n\n#[test]\nfn alpha() {\n  helper()\n}",
+    );
+    let result = infer_module("_entry_", fs);
+    assert!(
+        !has_code(&result, "test_function_not_callable"),
+        "calling a non-test helper must be accepted, got: {:?}",
+        result.errors
+    );
+}
+
+#[test]
+fn assert_in_wildcard_handle_helper_rejected() {
+    let fs = test_attribute_fs(
+        "pub fn add(a: int, b: int) -> int { a + b }",
+        "fn helper(_: TestContext) {\n  assert true\n}",
+    );
+    let result = infer_module("_entry_", fs);
+    assert!(
+        has_code(&result, "assert_without_test_context"),
+        "a discarded `_: TestContext` is not a usable handle, got: {:?}",
+        result.errors
+    );
+}
+
+#[test]
+fn local_test_context_type_is_not_the_handle() {
+    let fs = test_attribute_fs(
+        "pub fn add(a: int, b: int) -> int { a + b }",
+        "struct TestContext {}\n\nfn helper(t: TestContext) {\n  assert true\n}",
+    );
+    let result = infer_module("_entry_", fs);
+    assert!(
+        has_code(&result, "assert_without_test_context"),
+        "a local `TestContext` type must not be treated as the test handle, got: {:?}",
+        result.errors
+    );
+}
+
+#[test]
+fn assert_in_test_context_helper_accepted() {
+    let fs = test_attribute_fs(
+        "pub fn add(a: int, b: int) -> int { a + b }",
+        "fn helper(t: TestContext) {\n  assert true\n}\n\n#[test]\nfn checks(t: TestContext) {\n  helper(t)\n}",
+    );
+    let result = infer_module("_entry_", fs);
+    assert!(
+        !has_code(&result, "assert_without_test_context"),
+        "`assert` in a helper taking `t: TestContext` must be accepted, got: {:?}",
+        result.errors
+    );
+}
+
+#[test]
 fn test_attribute_with_generics_rejected() {
     let fs = test_attribute_fs(
         "pub fn add(a: int, b: int) -> int { a + b }",
