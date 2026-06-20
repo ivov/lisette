@@ -8399,6 +8399,112 @@ pub fn test(s: Signal) {
 }
 
 #[test]
+fn equatable_if_let_unit_variant() {
+    assert_lint_snapshot!(
+        r#"
+pub enum Sig { A, B }
+
+pub fn other() -> Sig { Sig.B }
+
+pub fn test(g: Sig) {
+  if let Sig.A = g { let _ = 1 }
+}
+"#
+    );
+}
+
+#[test]
+fn equatable_if_let_field_access_subject() {
+    assert_lint_snapshot!(
+        r#"
+pub enum Color { Red, Green }
+
+pub struct Holder { color: Color }
+
+pub fn other() -> Color { Color.Green }
+
+pub fn test(h: Holder) {
+  if let Color.Red = h.color { let _ = 1 }
+}
+"#
+    );
+}
+
+#[test]
+fn equatable_if_let_binding_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn test(x: Option<int>) { if let Some(n) = x { let _ = n } }
+
+fn main() { test(Some(1)); }
+"#
+    );
+}
+
+#[test]
+fn equatable_if_let_wildcard_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn test(x: Option<int>) { if let Some(_) = x { let _ = 1 } }
+
+fn main() { test(Some(1)); }
+"#
+    );
+}
+
+#[test]
+fn equatable_if_let_fielded_variant_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn test(x: Option<int>) { if let Some(5) = x { let _ = 1 } }
+
+fn main() { test(Some(1)); }
+"#
+    );
+}
+
+#[test]
+fn equatable_if_let_literal_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn test(s: string) { if let "foo" = s { let _ = 1 } }
+
+fn main() { test("foo"); }
+"#
+    );
+}
+
+#[test]
+fn equatable_if_let_non_comparable_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+enum Bag { A, B(Slice<int>) }
+
+fn make() -> Bag { Bag.B([1]) }
+
+fn test(e: Bag) { if let Bag.A = e { let _ = 1 } }
+
+fn main() { let _ = make(); test(Bag.A); }
+"#
+    );
+}
+
+#[test]
+fn equatable_if_let_call_subject_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+enum Color { Red, Green }
+
+fn current() -> Color { Color.Green }
+
+fn test() { if let Color.Red = current() { let _ = 1 } }
+
+fn main() { test(); }
+"#
+    );
+}
+
+#[test]
 fn collapsible_match() {
     assert_lint_snapshot!(
         r#"
@@ -18622,5 +18728,150 @@ pub fn f(s: Single) {
         !codes.contains(&"lint.while_let_loop"),
         "a single-variant enum makes the variant pattern irrefutable, so the \
          `while let` rewrite would loop forever: {codes:?}"
+    );
+}
+
+#[test]
+fn redundant_rebinding() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let a = 5;
+  let a = a;
+  let _ = a
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_rebinding_parameter() {
+    assert_lint_snapshot!(
+        r#"
+pub fn f(a: int) {
+  let a = a;
+  let _ = a
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_rebinding_parenthesized_rhs() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let a = 5;
+  let a = (a);
+  let _ = a
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_rebinding_mut_outer_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let mut a = 5;
+  a = 6;
+  let a = a;
+  let _ = a
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_rebinding_mut_binding_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let a = 5;
+  let mut a = a;
+  a = 6;
+  let _ = a
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_rebinding_annotation_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let a = 5;
+  let a: int = a;
+  let _ = a
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_rebinding_different_name_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let b = 5;
+  let a = b;
+  let _ = a
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_rebinding_referenced_outer_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let a = 1;
+  let r = &a;
+  let a = a;
+  let _ = r;
+  let _ = a
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_rebinding_referenced_new_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let a = 1;
+  let a = a;
+  let r = &a;
+  let _ = r
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_rebinding_unused_ceded_to_unused_variable() {
+    let mut fs = MockFileSystem::new();
+    let source = r#"
+fn main() {
+  let a = 5;
+  let a = a;
+}
+"#;
+    fs.add_file(ENTRY_MODULE_ID, "main.lis", source);
+
+    let result = compile_check(fs);
+    let codes: Vec<&str> = result.lints.iter().filter_map(|l| l.code_str()).collect();
+    assert!(
+        !codes.contains(&"lint.redundant_rebinding"),
+        "an unused rebinding is owned by `unused_variable`, which gives the same \
+         remove-the-line advice: {codes:?}"
+    );
+    assert!(
+        codes.contains(&"lint.unused_variable"),
+        "the unused rebinding should still draw an unused-variable warning: {codes:?}"
     );
 }

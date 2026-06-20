@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Syntax error
+   ╭─[test.lis:3:12]
+ 2 │ fn test() {
+ 3 │   let xs = make([]int)
+   ·            ──┬─
+   ·              ╰── Lisette has no `make` builtin
+ 4 │ }
+   ╰────
+  help: Use `Slice.new<T>()` for an empty slice · code: [parse.go_make_builtin]

@@ -2601,7 +2601,7 @@ fn go_builtin_hint(name: &str) -> Option<&'static str> {
             "Lisette has no `cap` builtin. Use the `.capacity()` method instead, e.g. `items.capacity()`.",
         ),
         "make" => Some(
-            "Lisette has no `make` builtin. Use constructor methods instead, e.g. `Channel.new<int>()`, `Slice.new<int>()`, `Map.new<K, V>()`.",
+            "Lisette has no `make` builtin. Use `Slice.new<T>()`, `Map.new<K, V>()`, or `Channel.new<T>()`.",
         ),
         "append" => Some(
             "Lisette has no `append` builtin. Use the `.append()` method instead, e.g. `items.append(1)`.",

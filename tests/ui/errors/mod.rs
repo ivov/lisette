@@ -71,6 +71,66 @@ fn test() {
 }
 
 #[test]
+fn parse_go_make_sized_slice() {
+    let input = r#"
+fn test() {
+  let buffer = make([]byte, 1024)
+}
+"#;
+    assert_parse_error_snapshot!(input);
+}
+
+#[test]
+fn parse_go_make_empty_slice() {
+    let input = r#"
+fn test() {
+  let xs = make([]int)
+}
+"#;
+    assert_parse_error_snapshot!(input);
+}
+
+#[test]
+fn parse_go_make_slice_with_capacity() {
+    let input = r#"
+fn test() {
+  let xs = make([]int, 0, 16)
+}
+"#;
+    assert_parse_error_snapshot!(input);
+}
+
+#[test]
+fn parse_go_make_unbuffered_channel() {
+    let input = r#"
+fn test() {
+  let ch = make(chan int)
+}
+"#;
+    assert_parse_error_snapshot!(input);
+}
+
+#[test]
+fn parse_go_make_buffered_channel() {
+    let input = r#"
+fn test() {
+  let ch = make(chan int, 5)
+}
+"#;
+    assert_parse_error_snapshot!(input);
+}
+
+#[test]
+fn parse_go_make_map() {
+    let input = r#"
+fn test() {
+  let m = make(map[string]int)
+}
+"#;
+    assert_parse_error_snapshot!(input);
+}
+
+#[test]
 fn infer_go_builtin_append() {
     let input = r#"
 fn test(items: Slice<int>) -> Slice<int> {

@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [info] Redundant rebinding
+   ╭─[test.lis:4:3]
+ 3 │   let a = 5;
+ 4 │   let a = a;
+   ·   ────┬────
+   ·       ╰── rebinds `a` to itself
+ 5 │   let _ = a
+   ╰────
+  help: Remove `let a = a`. The existing `a` already refers to this value, so rebinding it does nothing · code: [lint.redundant_rebinding]

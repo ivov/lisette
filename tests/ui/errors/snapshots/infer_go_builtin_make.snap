@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
    ·              ╰── name not found in scope
  4 │ }
    ╰────
-  help: Lisette has no `make` builtin. Use constructor methods instead, e.g. `Channel.new<int>()`, `Slice.new<int>()`, `Map.new<K, V>()` · code: [resolve.name_not_found]
+  help: Lisette has no `make` builtin. Use `Slice.new<T>()`, `Map.new<K, V>()`, or `Channel.new<T>()` · code: [resolve.name_not_found]

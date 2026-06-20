@@ -904,6 +904,15 @@ pub fn match_as_if_let(span: &Span, pattern_suggestion: &str) -> LisetteDiagnost
         ))
 }
 
+pub fn equatable_if_let(span: &Span, pattern: &str, subject: &str) -> LisetteDiagnostic {
+    LisetteDiagnostic::info("`if let` used as an equality check")
+        .with_lint_code("equatable_if_let")
+        .with_span_label(span, "can be `==`")
+        .with_help(format!(
+            "The pattern binds nothing, so replace `if let {pattern} = {subject}` with `{subject} == {pattern}`",
+        ))
+}
+
 pub fn single_arm_select(span: &Span, receive: &str) -> LisetteDiagnostic {
     LisetteDiagnostic::info("Single-arm `select`")
         .with_lint_code("single_arm_select")
@@ -935,6 +944,15 @@ pub fn let_and_return(span: &Span) -> LisetteDiagnostic {
         .with_lint_code("let_and_return")
         .with_span_label(span, "bound and immediately returned")
         .with_help("Return the value directly instead of binding it first")
+}
+
+pub fn redundant_rebinding(span: &Span, name: &str) -> LisetteDiagnostic {
+    LisetteDiagnostic::info("Redundant rebinding")
+        .with_lint_code("redundant_rebinding")
+        .with_span_label(span, format!("rebinds `{name}` to itself"))
+        .with_help(format!(
+            "Remove `let {name} = {name}`. The existing `{name}` already refers to this value, so rebinding it does nothing."
+        ))
 }
 
 pub fn uninterpolated_fstring(span: &Span) -> LisetteDiagnostic {

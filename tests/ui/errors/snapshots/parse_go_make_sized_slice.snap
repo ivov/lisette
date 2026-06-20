@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Syntax error
+   ╭─[test.lis:3:16]
+ 2 │ fn test() {
+ 3 │   let buffer = make([]byte, 1024)
+   ·                ──┬─
+   ·                  ╰── Lisette has no `make` builtin
+ 4 │ }
+   ╰────
+  help: Use `slices.Repeat([value], n)` after importing `go:slices` · code: [parse.go_make_builtin]
