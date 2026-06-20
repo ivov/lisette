@@ -22,9 +22,11 @@ impl TaskState<'_> {
         self.bound_position_depth += 1;
         let result = self.convert_to_type(store, annotation, span);
         self.bound_position_depth -= 1;
-        self.facts
-            .bound_types
-            .insert(annotation.get_span(), result.clone());
+        if !result.contains_error() {
+            self.facts
+                .bound_types
+                .insert(annotation.get_span(), result.clone());
+        }
         result
     }
 
