@@ -6,6 +6,7 @@ use crate::Planner;
 use crate::control_flow::fallible;
 use crate::definitions::enum_layout::{EnumLayout, FieldTypeInfo, FieldTypeMap};
 use crate::definitions::structs::is_raw_function_type;
+use crate::names::go_name;
 use syntax::ast::{Pattern, RestPattern, StructKind};
 use syntax::program::{Definition, DefinitionBody};
 use syntax::types::{Type, substitute};
@@ -37,31 +38,24 @@ impl Planner<'_> {
     }
 
     pub(crate) fn field_is_embedded(&self, struct_ty: &Type, field_name: &str) -> bool {
-        let resolved = self.facts.peel_alias(&struct_ty.strip_refs());
-        let Type::Nominal { id, .. } = &resolved else {
+        let Some(resolved) = self.resolve_nominal(struct_ty) else {
             return false;
         };
         matches!(
-            self.facts.definition(id.as_str()),
-            Some(Definition {
-                body: DefinitionBody::Struct { fields, .. },
-                ..
-            }) if fields.iter().any(|f| f.name == field_name && f.embedded)
+            &resolved.definition.body,
+            DefinitionBody::Struct { fields, .. }
+                if fields.iter().any(|f| f.name == field_name && f.embedded)
         )
     }
 
     pub(crate) fn field_is_public(&self, struct_ty: &Type, field_name: &str) -> bool {
-        let resolved = self.facts.peel_alias(&struct_ty.strip_refs());
-
-        let Type::Nominal { id, .. } = &resolved else {
+        let Some(resolved) = self.resolve_nominal(struct_ty) else {
             return false;
         };
+        let id = resolved.id.as_str();
 
-        match self.facts.definition(id.as_str()) {
-            Some(Definition {
-                body: DefinitionBody::Struct { fields, .. },
-                ..
-            }) => {
+        match &resolved.definition.body {
+            DefinitionBody::Struct { fields, .. } => {
                 if let Some(field) = fields.iter().find(|f| f.name == field_name) {
                     if field.visibility.is_public() {
                         return true;
@@ -76,25 +70,16 @@ impl Planner<'_> {
                     .map(|d| d.visibility().is_public())
                     .unwrap_or(false)
             }
-            Some(Definition {
-                body: DefinitionBody::Enum { .. },
-                ..
-            }) => {
+            DefinitionBody::Enum { .. } => {
                 let method_key = format!("{}.{}", id, field_name);
                 self.facts
                     .definition(method_key.as_str())
                     .map(|d| d.visibility().is_public())
                     .unwrap_or(false)
             }
-            Some(Definition {
-                visibility,
-                body: DefinitionBody::Interface { definition },
-                ..
-            }) => {
-                if visibility.is_public() && definition.methods.contains_key(field_name) {
-                    return true;
-                }
-                false
+            DefinitionBody::Interface { definition } => {
+                resolved.definition.visibility.is_public()
+                    && definition.methods.contains_key(field_name)
             }
             _ => false,
         }
@@ -106,6 +91,21 @@ impl Planner<'_> {
             || matches!(method_name, "string" | "goString" | "error")
     }
 
+    pub(crate) fn type_uses_exported_members(&self, ty: &Type) -> bool {
+        let Type::Nominal { id, .. } = ty.strip_refs() else {
+            return false;
+        };
+        id.starts_with(go_name::PRELUDE_PREFIX)
+            || self
+                .facts
+                .module_for_qualified_name(id.as_str())
+                .is_some_and(|m| self.facts.is_foreign_module(m))
+    }
+
+    pub(crate) fn struct_field_is_exported(&self, ty: &Type, field: &str) -> bool {
+        self.field_is_public(ty, field) || self.type_uses_exported_members(ty)
+    }
+
     pub(crate) fn type_has_equals(&self, ty: &Type) -> bool {
         let peeled = self.facts.peel_alias(ty);
         let Some(id) = peeled.get_qualified_id() else {
@@ -115,57 +115,47 @@ impl Planner<'_> {
     }
 
     pub(crate) fn has_field(&self, struct_ty: &Type, field_name: &str) -> bool {
-        let Type::Nominal { id, .. } = struct_ty.strip_refs() else {
+        let Some(resolved) = self.resolve_nominal(struct_ty) else {
             return false;
         };
         matches!(
-            self.facts.definition(id.as_str()).map(|d| &d.body),
-            Some(DefinitionBody::Struct { fields, .. })
+            &resolved.definition.body,
+            DefinitionBody::Struct { fields, .. }
                 if fields.iter().any(|f| f.name == field_name)
         )
     }
 
     pub(crate) fn is_tuple_struct_type(&self, ty: &Type) -> bool {
-        let Type::Nominal { id, .. } = ty.strip_refs() else {
-            return false;
-        };
-
-        matches!(
-            self.facts.definition(id.as_str()).map(|d| &d.body),
-            Some(DefinitionBody::Struct {
-                kind: StructKind::Tuple,
-                ..
-            })
-        )
+        self.resolve_nominal(ty).is_some_and(|resolved| {
+            matches!(
+                &resolved.definition.body,
+                DefinitionBody::Struct {
+                    kind: StructKind::Tuple,
+                    ..
+                }
+            )
+        })
     }
 
     pub(crate) fn is_newtype_struct(&self, ty: &Type) -> bool {
-        let Type::Nominal { id, params, .. } = ty.strip_refs() else {
+        let Type::Nominal { params, .. } = ty.strip_refs() else {
             return false;
         };
         if !params.is_empty() {
             return false;
         }
-        self.facts
-            .definition(id.as_str())
-            .is_some_and(|d| d.is_newtype())
+        self.resolve_nominal(ty)
+            .is_some_and(|resolved| resolved.definition.is_newtype())
     }
 
     pub(crate) fn get_newtype_underlying(&self, ty: &Type) -> Option<Type> {
-        let Type::Nominal { id, .. } = ty.strip_refs() else {
-            return None;
-        };
-
-        if let Some(Definition {
-            body:
-                DefinitionBody::Struct {
-                    kind: StructKind::Tuple,
-                    fields,
-                    generics,
-                    ..
-                },
+        let resolved = self.resolve_nominal(ty)?;
+        if let DefinitionBody::Struct {
+            kind: StructKind::Tuple,
+            fields,
+            generics,
             ..
-        }) = self.facts.definition(id.as_str())
+        } = &resolved.definition.body
             && fields.len() == 1
             && generics.is_empty()
         {
@@ -189,18 +179,9 @@ impl Planner<'_> {
     }
 
     pub(crate) fn as_enum(&self, ty: &Type) -> Option<String> {
-        let Type::Nominal { id, .. } = self.facts.peel_alias(ty) else {
-            return None;
-        };
-
-        if matches!(
-            self.facts.definition(id.as_str()).map(|d| &d.body),
-            Some(DefinitionBody::Enum { .. })
-        ) {
-            Some(id.to_string())
-        } else {
-            None
-        }
+        let resolved = self.resolve_nominal(ty)?;
+        matches!(&resolved.definition.body, DefinitionBody::Enum { .. })
+            .then(|| resolved.id.to_string())
     }
 
     /// `Option<T>` where T is a concrete non-nilable Go value type, bridged

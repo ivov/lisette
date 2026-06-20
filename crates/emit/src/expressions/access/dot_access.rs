@@ -165,7 +165,7 @@ impl Planner<'_> {
     ) -> bool {
         match dot_access_kind {
             Some(SemanticDotKind::StructField { is_exported }) => {
-                is_exported || self.field_is_public(expression_ty, member)
+                is_exported || self.struct_field_is_exported(expression_ty, member)
             }
             Some(SemanticDotKind::InstanceMethod { is_exported }) => {
                 is_exported || self.method_needs_export(member)
@@ -271,15 +271,7 @@ impl Planner<'_> {
             expression,
             Expression::Identifier { ty, .. } if ty.as_import_namespace().is_some()
         );
-        is_import_namespace_identifier
-            || is_from_prelude(expression_ty)
-            || if let Type::Nominal { id, .. } = expression_ty.strip_refs() {
-                self.facts
-                    .module_for_qualified_name(id.as_str())
-                    .is_some_and(|m| self.facts.is_foreign_module(m))
-            } else {
-                false
-            }
+        is_import_namespace_identifier || self.type_uses_exported_members(expression_ty)
     }
 
     /// Emit the base expression with receiver coercion applied.

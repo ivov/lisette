@@ -308,12 +308,7 @@ impl Planner<'_> {
     ) -> ValuePlan {
         let inner = self.plan_operand(expression, ctx, fx);
 
-        if let Type::Nominal { id, .. } = &self.facts.peel_alias(ty)
-            && matches!(
-                self.facts.definition(id.as_str()).map(|d| &d.body),
-                Some(DefinitionBody::Interface { .. })
-            )
-        {
+        if self.facts.is_interface(ty) {
             let (mut setup, value) = inner.into_parts();
             let source_ty = expression.get_type();
             let coercion = Coercion::resolve(self, &source_ty, ty, CoercionDirection::Internal);

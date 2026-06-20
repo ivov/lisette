@@ -951,7 +951,7 @@ fn compute_struct_field_path(
                     enum_id, variant_name, field.name
                 )
             })
-    } else if planner.field_is_public(ty, &field.name) {
+    } else if planner.struct_field_is_exported(ty, &field.name) {
         go_name::make_exported(&field.name)
     } else {
         go_name::escape_keyword(&field.name).into_owned()

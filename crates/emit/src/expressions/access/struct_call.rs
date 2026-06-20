@@ -19,7 +19,6 @@ use crate::utils::observable_after_mutation;
 struct StructCallContext {
     go_type: String,
     enum_ctx: Option<EnumCallContext>,
-    is_prelude: bool,
 }
 
 struct EnumCallContext {
@@ -355,7 +354,7 @@ impl Planner<'_> {
                         .map(|(index, (name, field_ty))| {
                             let go_name = if is_tuple {
                                 format!("F{}", index)
-                            } else if self.field_is_public(ty, &name) {
+                            } else if self.struct_field_is_exported(ty, &name) {
                                 go_name::make_exported(&name)
                             } else {
                                 go_name::escape_keyword(&name).into_owned()
@@ -425,11 +424,7 @@ impl Planner<'_> {
 
         let enum_ctx = enum_id.map(|id| self.compute_enum_call_context(name, &id, fx));
 
-        StructCallContext {
-            go_type,
-            enum_ctx,
-            is_prelude,
-        }
+        StructCallContext { go_type, enum_ctx }
     }
 
     /// Compute the Go type string for a struct call.
@@ -551,7 +546,7 @@ impl Planner<'_> {
                 .unwrap_or_else(|| go_name::make_exported(field_name))
         } else if self.field_is_embedded(ty, field_name) {
             go_name::escape_keyword(field_name).into_owned()
-        } else if ctx.is_prelude || self.field_is_public(ty, field_name) {
+        } else if self.struct_field_is_exported(ty, field_name) {
             go_name::make_exported(field_name)
         } else {
             go_name::escape_keyword(field_name).into_owned()

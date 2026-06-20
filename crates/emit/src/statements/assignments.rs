@@ -320,7 +320,7 @@ impl Planner<'_> {
             let field = TUPLE_FIELDS.get(index).expect("oversize tuple arity");
             return format!("{}.{}", base_str, field);
         }
-        let field = if self.field_is_public(expression_ty, member) {
+        let field = if self.struct_field_is_exported(expression_ty, member) {
             go_name::make_exported(member)
         } else {
             go_name::escape_keyword(member).into_owned()
