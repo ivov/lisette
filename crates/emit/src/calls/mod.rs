@@ -11,7 +11,7 @@ use crate::Planner;
 use crate::abi::AbiShape;
 use crate::plan::calls::{CallReturnShape, CalleePlan};
 use crate::types::native::NativeGoType;
-use syntax::ast::{Annotation, Expression};
+use syntax::ast::Expression;
 use syntax::types::Type;
 
 /// How a call's result must be adapted at the call site. The cases are mutually
@@ -46,7 +46,7 @@ pub(super) struct NativeCallContext<'a> {
     pub function: &'a Expression,
     pub args: &'a [Expression],
     pub spread: Option<&'a Expression>,
-    pub type_args: &'a [Annotation],
+    pub resolved_type_args: &'a [Type],
     pub call_ty: Option<&'a Type>,
     pub native_type: &'a NativeGoType,
     pub method: &'a str,

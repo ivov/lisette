@@ -8,7 +8,7 @@ pub fn check_redundant_closure_call(expression: &Expression, ctx: &NodeCtx) {
         expression: callee,
         args,
         spread,
-        type_args,
+        raw_type_args,
         span,
         ..
     } = expression
@@ -16,7 +16,7 @@ pub fn check_redundant_closure_call(expression: &Expression, ctx: &NodeCtx) {
         return;
     };
 
-    if !args.is_empty() || spread.is_some() || !type_args.is_empty() {
+    if !args.is_empty() || spread.is_some() || !raw_type_args.is_empty() {
         return;
     }
 

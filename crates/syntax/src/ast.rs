@@ -792,7 +792,13 @@ pub enum Expression {
         expression: Box<Expression>,
         args: Vec<Expression>,
         spread: Box<Option<Expression>>,
-        type_args: Vec<Annotation>,
+        /// Explicit turbofish type arguments as written. Surface form consumed
+        /// by the formatter. The checker resolves these into `resolved_type_args`.
+        raw_type_args: Vec<Annotation>,
+        /// Explicit type arguments resolved to types by the checker. Empty when
+        /// no turbofish was written. Emit renders these directly instead of
+        /// re-resolving `raw_type_args`.
+        resolved_type_args: Vec<Type>,
         ty: Type,
         span: Span,
         call_kind: Option<CallKind>,

@@ -22,7 +22,7 @@ pub fn check_redundant_closure(expression: &Expression, ctx: &NodeCtx) {
         expression: callee,
         args,
         spread,
-        type_args,
+        raw_type_args,
         call_kind,
         ..
     } = lambda_body(body)
@@ -32,7 +32,7 @@ pub fn check_redundant_closure(expression: &Expression, ctx: &NodeCtx) {
 
     if !matches!(call_kind, Some(CallKind::Regular))
         || spread.is_some()
-        || !type_args.is_empty()
+        || !raw_type_args.is_empty()
         || args.len() != params.len()
     {
         return;

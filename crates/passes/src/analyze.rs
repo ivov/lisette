@@ -150,6 +150,7 @@ pub fn analyze(input: AnalyzeInput) -> AnalyzeOutput {
         typedef_paths: store.typedef_paths,
         go_package_names: store.go_package_names,
         go_module_ids,
+        bound_types: std::mem::take(&mut facts.bound_types),
     };
 
     AnalyzeOutput {

@@ -85,7 +85,7 @@ impl InferCtx<'_, '_> {
                 expression,
                 args: call_args,
                 spread,
-                type_args,
+                raw_type_args,
                 span,
                 ..
             } => {
@@ -94,7 +94,7 @@ impl InferCtx<'_, '_> {
                     expression,
                     call_args,
                     spread,
-                    type_args,
+                    raw_type_args,
                     span,
                     expected_ty,
                 );

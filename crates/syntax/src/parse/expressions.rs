@@ -400,7 +400,7 @@ impl<'source> Parser<'source> {
     pub fn parse_function_call(
         &mut self,
         expression: Expression,
-        type_args: Vec<Annotation>,
+        raw_type_args: Vec<Annotation>,
     ) -> Expression {
         let start_offset = expression.get_span().byte_offset;
         let (args, spread) = self.collect_call_args();
@@ -410,7 +410,8 @@ impl<'source> Parser<'source> {
             expression: expression.into(),
             args,
             spread: spread.into(),
-            type_args,
+            raw_type_args,
+            resolved_type_args: Vec::new(),
             span: self.span_from_offset(start_offset),
             call_kind: None,
         }

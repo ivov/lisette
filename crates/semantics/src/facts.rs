@@ -60,6 +60,11 @@ pub struct Facts {
 
     /// Spans of binary expressions the checker rejected, so lints can skip them.
     pub type_error_spans: HashSet<Span>,
+
+    /// Resolved type for each generic-bound annotation, keyed by the
+    /// annotation's span. Lets emit render bounds from the resolved type
+    /// instead of re-resolving the annotation.
+    pub bound_types: HashMap<Span, Type>,
 }
 
 #[derive(Debug, Clone)]
@@ -105,6 +110,7 @@ impl Facts {
             interface_satisfied_methods: HashMap::default(),
             equality_derivations: Vec::new(),
             test_functions: Vec::new(),
+            bound_types: HashMap::default(),
         }
     }
 
@@ -235,9 +241,11 @@ impl Facts {
             interface_satisfied_methods,
             equality_derivations,
             test_functions,
+            bound_types,
         } = other;
         self.equality_derivations.extend(equality_derivations);
         self.test_functions.extend(test_functions);
+        self.bound_types.extend(bound_types);
 
         self.bindings.extend(bindings);
         self.dead_code.extend(dead_code);

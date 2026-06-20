@@ -111,7 +111,7 @@ impl Planner<'_> {
                     named_bounds.push("cmp.Ordered".to_string());
                 }
                 ConstraintAtom::Named(ann) => {
-                    named_bounds.push(self.annotation_to_go_type(ann, fx));
+                    named_bounds.push(self.named_bound_go_type(ann, fx));
                 }
             }
         }
@@ -125,6 +125,15 @@ impl Planner<'_> {
             [single] => single.clone(),
             multiple => format!("interface {{ {} }}", multiple.join("; ")),
         }
+    }
+
+    fn named_bound_go_type(&mut self, annotation: &Annotation, fx: &mut EmitEffects) -> String {
+        let resolved = self
+            .facts
+            .resolved_bound_type(annotation.get_span())
+            .cloned()
+            .expect("checker records a resolved type for every generic bound");
+        self.go_type_string(&resolved, fx)
     }
 }
 

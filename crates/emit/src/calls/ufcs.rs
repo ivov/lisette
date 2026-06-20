@@ -11,7 +11,7 @@ use crate::names::generics::extract_type_mapping;
 use crate::names::go_name;
 use crate::plan::bodies::LoweredStatement;
 use crate::types::native::NativeGoType;
-use syntax::ast::{Annotation, Expression, Literal};
+use syntax::ast::{Expression, Literal};
 use syntax::program::ReceiverCoercion;
 use syntax::types::Type;
 
@@ -22,7 +22,7 @@ impl Planner<'_> {
         qualified_name: &str,
         member: &str,
         receiver_ty: &Type,
-        type_args: &[Annotation],
+        type_args: &[Type],
         fx: &mut EmitEffects,
     ) -> Option<String> {
         let method_key = format!("{}.{}", qualified_name, member);
@@ -48,7 +48,7 @@ impl Planner<'_> {
                 let go_type = if index < impl_count {
                     self.go_type_string(receiver_mapping.get(var.as_str())?, fx)
                 } else {
-                    self.annotation_to_go_type(type_args.get(index - impl_count)?, fx)
+                    self.go_type_string(type_args.get(index - impl_count)?, fx)
                 };
                 go_type_strs.push(go_type);
             }
@@ -91,7 +91,7 @@ impl Planner<'_> {
         &mut self,
         function: &Expression,
         args: &[Expression],
-        type_args: &[Annotation],
+        type_args: &[Type],
         spread: Option<&Expression>,
         fx: &mut EmitEffects,
     ) -> (Vec<LoweredStatement>, String) {
@@ -215,7 +215,7 @@ impl Planner<'_> {
         receiver_ty: &Type,
         qualified_name: &str,
         member: &str,
-        type_args: &[Annotation],
+        type_args: &[Type],
         fx: &mut EmitEffects,
     ) -> String {
         let type_args_string = self
@@ -260,7 +260,7 @@ impl Planner<'_> {
         &mut self,
         function: &Expression,
         args: &[Expression],
-        type_args: &[Annotation],
+        type_args: &[Type],
         method: &str,
         is_public: bool,
         spread: Option<&Expression>,
@@ -284,7 +284,7 @@ impl Planner<'_> {
         let receiver = emitted_all[0].clone();
         let emitted_rest: Vec<String> = emitted_all[1..].to_vec();
 
-        let type_args_string = self.format_type_args_from_annotations(type_args, fx);
+        let type_args_string = self.format_type_args(type_args, fx);
 
         let receiver = if let Some(stripped) = receiver.strip_prefix('&') {
             if is_address_of_composite_literal(args.first()) {

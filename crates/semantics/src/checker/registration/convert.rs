@@ -22,6 +22,9 @@ impl TaskState<'_> {
         self.bound_position_depth += 1;
         let result = self.convert_to_type(store, annotation, span);
         self.bound_position_depth -= 1;
+        self.facts
+            .bound_types
+            .insert(annotation.get_span(), result.clone());
         result
     }
 
@@ -343,6 +346,9 @@ impl TaskState<'_> {
         self.resolve_type_from_prelude(store, type_name)
     }
 
+    /// Substitute the `body` with the resolved `type_args`, returning both the
+    /// substituted type and the resolved args (1:1 with `type_args`) so callers
+    /// can reuse them without re-resolving (which would re-emit diagnostics).
     pub fn instantiate_from_annotations(
         &mut self,
         store: &Store,
@@ -350,7 +356,7 @@ impl TaskState<'_> {
         body: &Type,
         type_args: &[Annotation],
         span: &Span,
-    ) -> Type {
+    ) -> (Type, Vec<Type>) {
         let args: Vec<Type> = type_args
             .iter()
             .map(|arg_ann| self.convert_to_type(store, arg_ann, span))
@@ -362,7 +368,7 @@ impl TaskState<'_> {
             .map(|(name, ty)| (name.clone(), ty.clone()))
             .collect();
 
-        substitute(body, &map)
+        (substitute(body, &map), args)
     }
 
     /// Check that a map key type is comparable.

@@ -12,7 +12,7 @@ use crate::names::go_name;
 use crate::plan::bodies::LoweredStatement;
 use crate::plan::calls::CalleePlan;
 use crate::types::native::NativeGoType;
-use syntax::ast::{Annotation, Expression, StructKind};
+use syntax::ast::{Expression, StructKind};
 use syntax::program::{CallKind, Definition, DefinitionBody};
 use syntax::types::{
     SimpleKind, SubstitutionMap, Symbol, Type, build_substitution_map, substitute,
@@ -80,12 +80,12 @@ impl Planner<'_> {
     fn resolve_element_type(
         &mut self,
         function: &Expression,
-        type_args: &[Annotation],
+        type_args: &[Type],
         call_ty: Option<&Type>,
         fx: &mut EmitEffects,
     ) -> String {
         if !type_args.is_empty() {
-            return self.annotation_to_go_type(&type_args[0], fx);
+            return self.go_type_string(&type_args[0], fx);
         }
         if let Some(call_result_ty) = call_ty
             && let Some(first) = call_result_ty
@@ -102,14 +102,14 @@ impl Planner<'_> {
     fn resolve_map_types(
         &mut self,
         function: &Expression,
-        type_args: &[Annotation],
+        type_args: &[Type],
         call_ty: Option<&Type>,
         fx: &mut EmitEffects,
     ) -> (String, String) {
         if type_args.len() >= 2 {
             return (
-                self.annotation_to_go_type(&type_args[0], fx),
-                self.annotation_to_go_type(&type_args[1], fx),
+                self.go_type_string(&type_args[0], fx),
+                self.go_type_string(&type_args[1], fx),
             );
         }
         if let Some(call_result_ty) = call_ty
@@ -142,13 +142,21 @@ impl Planner<'_> {
     ) -> Option<(Vec<LoweredStatement>, String)> {
         match (ctx.native_type, ctx.method) {
             (NativeGoType::Channel, "new") => {
-                let element =
-                    self.resolve_element_type(ctx.function, ctx.type_args, ctx.call_ty, fx);
+                let element = self.resolve_element_type(
+                    ctx.function,
+                    ctx.resolved_type_args,
+                    ctx.call_ty,
+                    fx,
+                );
                 Some((Vec::new(), format!("make(chan {})", element)))
             }
             (NativeGoType::Channel, "buffered") => {
-                let element =
-                    self.resolve_element_type(ctx.function, ctx.type_args, ctx.call_ty, fx);
+                let element = self.resolve_element_type(
+                    ctx.function,
+                    ctx.resolved_type_args,
+                    ctx.call_ty,
+                    fx,
+                );
                 let (setup, capacity) = match ctx.args.first() {
                     Some(a) => {
                         let staged = self.stage_operand(a, ExpressionContext::value(), fx);
@@ -160,12 +168,16 @@ impl Planner<'_> {
             }
             (NativeGoType::Map, "new") => {
                 let (key, val) =
-                    self.resolve_map_types(ctx.function, ctx.type_args, ctx.call_ty, fx);
+                    self.resolve_map_types(ctx.function, ctx.resolved_type_args, ctx.call_ty, fx);
                 Some((Vec::new(), format!("make(map[{}]{})", key, val)))
             }
             (NativeGoType::Slice, "new") => {
-                let element =
-                    self.resolve_element_type(ctx.function, ctx.type_args, ctx.call_ty, fx);
+                let element = self.resolve_element_type(
+                    ctx.function,
+                    ctx.resolved_type_args,
+                    ctx.call_ty,
+                    fx,
+                );
                 Some((Vec::new(), format!("[]{}{{}}", element)))
             }
             _ => None,
@@ -187,7 +199,7 @@ impl Planner<'_> {
             args,
             spread,
             call_kind,
-            type_args,
+            resolved_type_args,
             ..
         } = call_expression
         else {
@@ -207,7 +219,7 @@ impl Planner<'_> {
             function,
             args,
             spread,
-            type_args,
+            resolved_type_args,
             call_ty: None,
             native_type: &native_type,
             method,
@@ -234,7 +246,7 @@ impl Planner<'_> {
         let Expression::Call {
             expression: callee,
             args,
-            type_args,
+            resolved_type_args,
             spread,
             ..
         } = call_expression
@@ -257,10 +269,10 @@ impl Planner<'_> {
                 }
             }
             CalleePlan::AssertType => {
-                return self.lower_assert_type(function, args, type_args, fx);
+                return self.lower_assert_type(function, args, resolved_type_args, fx);
             }
             CalleePlan::UfcsMethod => {
-                return self.lower_ufcs_call(function, args, type_args, spread, fx);
+                return self.lower_ufcs_call(function, args, resolved_type_args, spread, fx);
             }
             CalleePlan::NativeConstructor(kind)
             | CalleePlan::NativeMethod(kind)
@@ -271,7 +283,7 @@ impl Planner<'_> {
                     function,
                     args,
                     spread,
-                    type_args,
+                    resolved_type_args,
                     call_ty,
                     native_type: &native_type,
                     method,
@@ -281,7 +293,13 @@ impl Planner<'_> {
             CalleePlan::ReceiverMethodUfcs { is_public } => {
                 let method = extract_receiver_ufcs_method(function);
                 return self.lower_receiver_method_ufcs(
-                    function, args, type_args, &method, *is_public, spread, fx,
+                    function,
+                    args,
+                    resolved_type_args,
+                    &method,
+                    *is_public,
+                    spread,
+                    fx,
                 );
             }
             CalleePlan::GoInterop(_) | CalleePlan::Regular => {}
@@ -493,11 +511,11 @@ impl Planner<'_> {
         &mut self,
         function: &Expression,
         args: &[Expression],
-        type_args: &[Annotation],
+        type_args: &[Type],
         fx: &mut EmitEffects,
     ) -> (Vec<LoweredStatement>, String) {
         let target_ty = if !type_args.is_empty() {
-            self.annotation_to_go_type(&type_args[0], fx)
+            self.go_type_string(&type_args[0], fx)
         } else {
             let param = extract_return_type_param(function)
                 .expect("AssertType must have constructor return type");

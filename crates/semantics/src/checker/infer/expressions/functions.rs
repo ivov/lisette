@@ -306,7 +306,7 @@ impl InferCtx<'_, '_> {
         self.scopes.restore_use_context(prev_context);
 
         let forall_ty = self.resolve_callee_forall_type(&callee_expression, &type_args);
-        let (callee_ty, new_type_args) =
+        let (callee_ty, raw_type_args, resolved_type_args) =
             self.instantiate_callee_type(&forall_ty, &type_args, &callee_expression, &span);
 
         if let Some(underlying_fn) = self.try_as_type_conversion(&callee_expression, &callee_ty) {
@@ -316,7 +316,8 @@ impl InferCtx<'_, '_> {
                 underlying_fn,
                 args,
                 spread,
-                new_type_args,
+                raw_type_args,
+                resolved_type_args,
                 span,
                 expected_ty,
             );
@@ -476,7 +477,8 @@ impl InferCtx<'_, '_> {
             expression: callee_expression.into(),
             args: new_args,
             spread: Box::new(new_spread),
-            type_args: new_type_args,
+            raw_type_args,
+            resolved_type_args,
             ty: call_ty,
             span,
             call_kind: Some(call_kind),
@@ -562,7 +564,7 @@ impl InferCtx<'_, '_> {
         type_args: &[Annotation],
         callee_expression: &Expression,
         span: &Span,
-    ) -> (Type, Vec<Annotation>) {
+    ) -> (Type, Vec<Annotation>, Vec<Type>) {
         let store = self.store;
         let Type::Forall { vars, body } = forall_ty else {
             if !type_args.is_empty() {
@@ -572,12 +574,12 @@ impl InferCtx<'_, '_> {
                 ));
             }
             let (instantiated, _) = self.instantiate(forall_ty);
-            return (instantiated.resolve_in(&self.env), vec![]);
+            return (instantiated.resolve_in(&self.env), vec![], vec![]);
         };
 
         if type_args.is_empty() {
             let (instantiated, _) = self.instantiate(forall_ty);
-            return (instantiated.resolve_in(&self.env), vec![]);
+            return (instantiated.resolve_in(&self.env), vec![], vec![]);
         }
 
         let declared_param_count = match body.as_ref() {
@@ -611,17 +613,23 @@ impl InferCtx<'_, '_> {
             ));
         }
 
+        let mut resolved_args: Vec<Type> = Vec::new();
         let mut instantiated = if is_method_only_arity {
             let mut map: SubstitutionMap = SubstitutionMap::default();
             for var in &vars[..receiver_generics_count] {
                 map.insert(var.clone(), self.new_type_var());
             }
             for (var, ann) in vars[receiver_generics_count..].iter().zip(type_args.iter()) {
-                map.insert(var.clone(), self.convert_to_type(store, ann, span));
+                let arg_ty = self.convert_to_type(store, ann, span);
+                resolved_args.push(arg_ty.clone());
+                map.insert(var.clone(), arg_ty);
             }
             substitute(body, &map)
         } else {
-            self.instantiate_from_annotations(store, vars, body, type_args, span)
+            let (instantiated, args) =
+                self.instantiate_from_annotations(store, vars, body, type_args, span);
+            resolved_args = args;
+            instantiated
         };
 
         if let Expression::DotAccess { expression, .. } = callee_expression {
@@ -656,7 +664,7 @@ impl InferCtx<'_, '_> {
             self.unify(&instantiated, &callee_expression.get_type(), span);
         }
 
-        (instantiated, type_args.to_vec())
+        (instantiated, type_args.to_vec(), resolved_args)
     }
 
     fn extract_call_signature(
@@ -826,7 +834,8 @@ impl InferCtx<'_, '_> {
         underlying_fn: Type,
         args: Vec<Expression>,
         spread: Box<Option<Expression>>,
-        type_args: Vec<Annotation>,
+        raw_type_args: Vec<Annotation>,
+        resolved_type_args: Vec<Type>,
         span: Span,
         expected_ty: &Type,
     ) -> Expression {
@@ -854,7 +863,8 @@ impl InferCtx<'_, '_> {
                 expression: callee_expression.into(),
                 args: new_args,
                 spread: Box::new(None),
-                type_args,
+                raw_type_args,
+                resolved_type_args,
                 ty: Type::Error,
                 span,
                 call_kind: Some(CallKind::Regular),
@@ -870,7 +880,8 @@ impl InferCtx<'_, '_> {
             expression: callee_expression.into(),
             args: vec![new_arg],
             spread: Box::new(None),
-            type_args,
+            raw_type_args,
+            resolved_type_args,
             ty: named_ty,
             span,
             call_kind: Some(CallKind::Regular),

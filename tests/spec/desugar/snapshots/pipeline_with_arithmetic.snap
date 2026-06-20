@@ -87,7 +87,8 @@ description: "fn test() { (1 + 2) |> double; }"
                         },
                     ],
                     spread: None,
-                    type_args: [],
+                    raw_type_args: [],
+                    resolved_type_args: [],
                     ty: Var {
                         id: uninferred,
                     },

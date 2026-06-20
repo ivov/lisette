@@ -199,6 +199,7 @@ pub struct TestEmitConfig<'a> {
     pub test_index: &'a TestIndex,
     pub go_package_names: &'a HashMap<String, String>,
     pub go_module_ids: &'a HashSet<String>,
+    pub bound_types: &'a HashMap<Span, Type>,
 }
 
 pub struct Planner<'a> {
@@ -294,6 +295,7 @@ impl<'a> Planner<'a> {
             test_index: config.test_index,
             go_package_names: config.go_package_names,
             go_module_ids: config.go_module_ids,
+            bound_types: config.bound_types,
             entry_module: config.module_id.to_string(),
             go_module: config.go_module.to_string(),
             options: EmitOptions { sourcemap },
@@ -547,6 +549,7 @@ fn emit_module<'a>(
         test_index: &analysis.test_index,
         go_package_names: &analysis.go_package_names,
         go_module_ids: &analysis.go_module_ids,
+        bound_types: &analysis.bound_types,
         entry_module: analysis.entry_module_id.to_string(),
         go_module: go_module.to_string(),
         options: shared_emit_ctx.options.clone(),

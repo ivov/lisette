@@ -75,11 +75,18 @@ fn walk_expression(
             expression: callee,
             args,
             spread,
-            type_args,
+            raw_type_args,
             ..
         } => {
             walk_call(
-                module, callee, args, spread, type_args, graph, alias_map, ctx,
+                module,
+                callee,
+                args,
+                spread,
+                raw_type_args,
+                graph,
+                alias_map,
+                ctx,
             );
         }
 

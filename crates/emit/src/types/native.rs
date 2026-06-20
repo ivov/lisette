@@ -29,10 +29,6 @@ impl NativeGoType {
         NativeTypeKind::from_type(ty).map(Self::from_kind)
     }
 
-    pub(crate) fn from_name(name: &str) -> Option<Self> {
-        NativeTypeKind::from_name(name).map(Self::from_kind)
-    }
-
     pub(crate) fn has_type_params(&self) -> bool {
         !matches!(self, Self::String)
     }

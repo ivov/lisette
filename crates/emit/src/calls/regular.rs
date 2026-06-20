@@ -17,7 +17,7 @@ use crate::plan::calls::{ArgumentPlan, CallPlan, CallbackWrapperKind, NullableCo
 use crate::types::native::NativeGoType;
 use crate::utils::{contains_call, reads_mutable_operand};
 use crate::write_line;
-use syntax::ast::{Annotation, Expression};
+use syntax::ast::Expression;
 use syntax::program::Definition;
 use syntax::types::Type;
 
@@ -128,7 +128,7 @@ impl<'a> Planner<'a> {
         let Expression::Call {
             expression: callee,
             args,
-            type_args,
+            resolved_type_args,
             spread,
             ..
         } = call_expression
@@ -165,7 +165,7 @@ impl<'a> Planner<'a> {
 
         let type_args_string = self.resolve_call_type_args(
             function,
-            type_args,
+            resolved_type_args,
             call_ty,
             !args.is_empty() || spread.is_some(),
             &mut function_string,
@@ -373,7 +373,7 @@ impl<'a> Planner<'a> {
     fn resolve_call_type_args(
         &mut self,
         function: &Expression,
-        type_args: &[Annotation],
+        type_args: &[Type],
         call_ty: Option<&Type>,
         has_value_args: bool,
         function_string: &mut String,
@@ -389,7 +389,7 @@ impl<'a> Planner<'a> {
                 .unwrap_or_default();
         }
 
-        let mut type_args_string = self.format_type_args_from_annotations(type_args, fx);
+        let mut type_args_string = self.format_type_args(type_args, fx);
 
         let slot_ty = ctx.expected_slot_type();
 

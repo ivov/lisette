@@ -3,10 +3,11 @@ use std::path::PathBuf;
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use syntax::ParseError;
+use syntax::ast::Span;
 use syntax::program::{
     Definition, EmitInput, EqualityIndex, File, ModuleInfo, MutationInfo, TestIndex, UnusedInfo,
 };
-use syntax::types::Symbol;
+use syntax::types::{Symbol, Type};
 
 use crate::LisetteDiagnostic;
 
@@ -29,6 +30,8 @@ pub struct SemanticResult {
     pub typedef_paths: HashMap<u32, PathBuf>,
     pub go_package_names: HashMap<String, String>,
     pub go_module_ids: HashSet<String>,
+    /// Resolved type for each generic-bound annotation, keyed by span.
+    pub bound_types: HashMap<Span, Type>,
 }
 
 impl SemanticResult {
@@ -49,6 +52,7 @@ impl SemanticResult {
             typedef_paths: HashMap::default(),
             go_package_names: HashMap::default(),
             go_module_ids: HashSet::default(),
+            bound_types: HashMap::default(),
         }
     }
 
@@ -70,6 +74,7 @@ impl SemanticResult {
             test_index: self.test_index,
             go_package_names: self.go_package_names,
             go_module_ids: self.go_module_ids,
+            bound_types: self.bound_types,
         }
     }
 }

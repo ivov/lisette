@@ -82,9 +82,9 @@ impl<'a> Formatter<'a> {
                 expression,
                 args,
                 spread,
-                type_args,
+                raw_type_args,
                 ..
-            } => self.call(expression, args, spread, type_args),
+            } => self.call(expression, args, spread, raw_type_args),
 
             Expression::DotAccess {
                 expression, member, ..
@@ -604,7 +604,7 @@ impl<'a> Formatter<'a> {
         callee: &'a Expression,
         args: &'a [Expression],
         spread: &'a Option<Expression>,
-        type_args: &'a [Annotation],
+        raw_type_args: &'a [Annotation],
     ) -> Document<'a> {
         if let Expression::DotAccess {
             expression: inner,
@@ -620,7 +620,7 @@ impl<'a> Formatter<'a> {
                 member_start,
                 args,
                 spread,
-                type_args,
+                raw_type_args,
             });
             if chain_segments.len() >= 2 {
                 return self.format_method_chain(root, &chain_segments);
@@ -641,7 +641,7 @@ impl<'a> Formatter<'a> {
 
         let head = self
             .expression(callee)
-            .append(Self::format_type_args(type_args));
+            .append(Self::format_type_args(raw_type_args));
         self.format_call_with_head(head, args, spread)
     }
 
@@ -764,7 +764,7 @@ impl<'a> Formatter<'a> {
                 let comments = self.comments.take_comments_before(seg.member_start);
                 let head = Document::str(".")
                     .append(seg.member)
-                    .append(Self::format_type_args(seg.type_args));
+                    .append(Self::format_type_args(seg.raw_type_args));
                 let call_doc = strict_break("", "")
                     .append(self.format_call_with_head(head, seg.args, seg.spread));
                 match comments {
@@ -1078,7 +1078,7 @@ struct MethodChainSegment<'a> {
     member_start: u32,
     args: &'a [Expression],
     spread: &'a Option<Expression>,
-    type_args: &'a [Annotation],
+    raw_type_args: &'a [Annotation],
 }
 
 fn collect_method_chain(expression: &Expression) -> (&Expression, Vec<MethodChainSegment<'_>>) {
@@ -1089,7 +1089,7 @@ fn collect_method_chain(expression: &Expression) -> (&Expression, Vec<MethodChai
         expression,
         args,
         spread,
-        type_args,
+        raw_type_args,
         ..
     } = current
     {
@@ -1108,7 +1108,7 @@ fn collect_method_chain(expression: &Expression) -> (&Expression, Vec<MethodChai
             member_start,
             args,
             spread,
-            type_args,
+            raw_type_args,
         });
         current = inner;
     }

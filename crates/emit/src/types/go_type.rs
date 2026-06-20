@@ -4,7 +4,6 @@ use crate::definitions::structs::struct_field_go_name;
 use crate::names::go_name;
 use crate::types::native::NativeGoType;
 use crate::types::prelude::PreludeType;
-use syntax::ast::Annotation;
 use syntax::program::DefinitionBody;
 use syntax::types::Type;
 
@@ -347,29 +346,12 @@ impl Planner<'_> {
         }
     }
 
-    pub(crate) fn format_type_args_from_annotations(
-        &mut self,
-        type_args: &[Annotation],
-        fx: &mut EmitEffects,
-    ) -> String {
-        if type_args.is_empty() {
-            return String::new();
-        }
-
-        let args: Vec<String> = type_args
-            .iter()
-            .map(|ta| self.annotation_to_go_type(ta, fx))
-            .collect();
-
-        format!("[{}]", args.join(", "))
-    }
-
     /// Prepend the receiver's generic params to the explicit type args (for
     /// native-method and UFCS call sites).
     pub(crate) fn format_type_args_with_receiver(
         &mut self,
         receiver_ty: &Type,
-        type_args: &[Annotation],
+        type_args: &[Type],
         fx: &mut EmitEffects,
     ) -> String {
         let mut go_type_strs = Vec::new();
@@ -380,10 +362,10 @@ impl Planner<'_> {
             }
         }
         for ta in type_args {
-            go_type_strs.push(self.annotation_to_go_type(ta, fx));
+            go_type_strs.push(self.go_type_string(ta, fx));
         }
         if go_type_strs.is_empty() {
-            self.format_type_args_from_annotations(type_args, fx)
+            self.format_type_args(type_args, fx)
         } else {
             format!("[{}]", go_type_strs.join(", "))
         }
@@ -420,139 +402,6 @@ impl Planner<'_> {
         (value, effects)
     }
 
-    pub(crate) fn annotation_to_go_type(
-        &mut self,
-        annotation: &Annotation,
-        fx: &mut EmitEffects,
-    ) -> String {
-        let result = self.go_type_from_annotation(annotation);
-        fx.merge_from_go_type(&result);
-        result.code
-    }
-
-    pub(crate) fn go_type_from_annotation(&self, annotation: &Annotation) -> GoType {
-        match annotation {
-            Annotation::Constructor { .. } if annotation.is_unit() => GoType::new("struct{}"),
-            Annotation::Constructor { name, params, .. } => {
-                self.constructor_annotation_to_go(name, params)
-            }
-            Annotation::Function {
-                params,
-                return_type,
-                ..
-            } => {
-                let param_types: Vec<GoType> = params
-                    .iter()
-                    .map(|p| self.go_type_from_annotation(p))
-                    .collect();
-
-                let lowered = self.classify_annotation_direct_emission(return_type);
-                let (return_go_type, is_void) = match &lowered {
-                    Some(shape) => (
-                        self.lowered_return_go_type_from_annotation(shape, return_type),
-                        false,
-                    ),
-                    None => {
-                        let is_omission = matches!(return_type.as_ref(), Annotation::Unknown);
-                        let return_go_type = self.go_type_from_annotation(return_type);
-                        let is_void = is_omission || return_go_type.code == "struct{}";
-                        (return_go_type, is_void)
-                    }
-                };
-
-                let args = param_types
-                    .iter()
-                    .map(|t| t.code.as_str())
-                    .collect::<Vec<_>>()
-                    .join(", ");
-
-                let code = if is_void {
-                    format!("func({})", args)
-                } else {
-                    format!("func({}) {}", args, return_go_type.code)
-                };
-
-                let mut result = GoType::new(code);
-                result.merge_all(&param_types);
-                if !is_void {
-                    result.merge(&return_go_type);
-                }
-                result
-            }
-            Annotation::Unknown => GoType::new("any"),
-            Annotation::Tuple { elements, .. } => {
-                let arity = elements.len();
-                let element_types: Vec<GoType> = elements
-                    .iter()
-                    .map(|e| self.go_type_from_annotation(e))
-                    .collect();
-
-                let mut result = GoType::stdlib(format!(
-                    "{}.Tuple{}[{}]",
-                    go_name::GO_STDLIB_PKG,
-                    arity,
-                    element_types
-                        .iter()
-                        .map(|t| t.code.as_str())
-                        .collect::<Vec<_>>()
-                        .join(", ")
-                ));
-                result.merge_all(&element_types);
-                result
-            }
-            Annotation::Opaque { .. } => {
-                unreachable!("Annotation::Opaque should not be emitted as a Go type")
-            }
-        }
-    }
-
-    /// Lower a non-unit `Annotation::Constructor` into its Go equivalent.
-    fn constructor_annotation_to_go(&self, name: &str, params: &[Annotation]) -> GoType {
-        if let Some(go) = self.anon_struct_go_type(name) {
-            return go;
-        }
-
-        let base_name = self.unqualify_name(name);
-
-        if let Some(native_type) = NativeGoType::from_name(&base_name) {
-            let (param_types, type_params) = self.lower_annotation_params(params);
-            let mut result = GoType::new(native_type.emit_type_syntax(&type_params));
-            result.merge_all(&param_types);
-            return result;
-        }
-
-        if (name == "Ref" || name == "prelude.Ref") && params.len() == 1 {
-            let inner = self.go_type_from_annotation(&params[0]);
-            let mut result = GoType::new(format!("*{}", inner.code));
-            result.merge(&inner);
-            return result;
-        }
-
-        if let Some(prelude) = PreludeType::from_name(&base_name) {
-            let (param_types, type_params) = self.lower_annotation_params(params);
-            let mut result = GoType::stdlib(prelude.emit_type(&type_params));
-            result.merge_all(&param_types);
-            return result;
-        }
-
-        let go_import = self.annotation_go_import(name);
-
-        if params.is_empty() {
-            return match go_import {
-                Some(path) => GoType::with_go_import(base_name, path),
-                None => GoType::new(base_name),
-            };
-        }
-        let (param_types, type_params) = self.lower_annotation_params(params);
-        let code = format!("{}[{}]", base_name, type_params.join(", "));
-        let mut result = match go_import {
-            Some(path) => GoType::with_go_import(code, path),
-            None => GoType::new(code),
-        };
-        result.merge_all(&param_types);
-        result
-    }
-
     /// Render a `#[go(anon_struct)]` stand-in as inline `struct{...}`: its name
     /// has no Go counterpart, so `pkg.Name` would not compile.
     pub(crate) fn anon_struct_go_type(&self, id: &str) -> Option<GoType> {
@@ -578,29 +427,6 @@ impl Planner<'_> {
             format!("struct {{ {} }}", rendered.join("; "))
         };
         Some(result)
-    }
-
-    fn annotation_go_import(&self, name: &str) -> Option<String> {
-        if let Some(rest) = name.strip_prefix(go_name::GO_IMPORT_PREFIX) {
-            return rest.rsplit_once('.').map(|(path, _)| path.to_string());
-        }
-        let module = self.facts.module_for_qualified_name(name)?;
-        if !self.facts.is_foreign_module(module) {
-            return None;
-        }
-        Some(self.go_import_path_for_module(module))
-    }
-
-    /// Lower each annotation param to a `GoType`, returning both the full
-    /// `GoType` values (needed for import merging) and their code strings
-    /// (needed for type-parameter formatting).
-    fn lower_annotation_params(&self, params: &[Annotation]) -> (Vec<GoType>, Vec<String>) {
-        let param_types: Vec<GoType> = params
-            .iter()
-            .map(|p| self.go_type_from_annotation(p))
-            .collect();
-        let type_params: Vec<String> = param_types.iter().map(|t| t.code.clone()).collect();
-        (param_types, type_params)
     }
 }
 

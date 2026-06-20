@@ -226,6 +226,7 @@ pub struct EmitInput {
     pub test_index: TestIndex,
     pub go_package_names: HashMap<String, String>,
     pub go_module_ids: HashSet<String>,
+    pub bound_types: HashMap<crate::ast::Span, crate::types::Type>,
 }
 
 #[cfg(test)]

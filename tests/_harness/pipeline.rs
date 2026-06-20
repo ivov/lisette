@@ -105,6 +105,7 @@ impl CompiledTest {
             mutations,
             ufcs_methods,
             equality_index,
+            bound_types,
             go_package_names,
             go_module_ids,
         ) = {
@@ -271,6 +272,7 @@ impl CompiledTest {
 
             let ufcs_methods = std::mem::take(&mut checker.ufcs_methods);
             let equality_index = std::mem::take(&mut store.equality_index);
+            let bound_types = std::mem::take(&mut checker.facts.bound_types);
             let go_package_names = store.go_package_names.clone();
             let go_module_ids: HashSet<String> = store
                 .modules
@@ -286,6 +288,7 @@ impl CompiledTest {
                 mutations,
                 ufcs_methods,
                 equality_index,
+                bound_types,
                 go_package_names,
                 go_module_ids,
             )
@@ -300,6 +303,7 @@ impl CompiledTest {
             mutations,
             ufcs_methods,
             equality_index,
+            bound_types,
             go_package_names,
             go_module_ids,
         }
@@ -315,6 +319,7 @@ pub struct InferenceResult {
     pub mutations: MutationInfo,
     pub ufcs_methods: HashSet<(String, String)>,
     pub equality_index: EqualityIndex,
+    pub bound_types: HashMap<syntax::ast::Span, syntax::types::Type>,
     pub go_package_names: HashMap<String, String>,
     pub go_module_ids: HashSet<String>,
 }

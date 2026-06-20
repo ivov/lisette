@@ -298,7 +298,6 @@ impl Planner<'_> {
     pub(crate) fn plan_cast(
         &mut self,
         expression: &Expression,
-        target_type: &syntax::ast::Annotation,
         ty: &Type,
         ctx: ExpressionContext<'_>,
         fx: &mut EmitEffects,
@@ -319,7 +318,7 @@ impl Planner<'_> {
             return value_plan_from_statements(setup, coerced);
         }
 
-        let go_type = self.annotation_to_go_type(target_type, fx);
+        let go_type = self.go_type_string(ty, fx);
 
         if let Some(source_go_type) = self.shift_pin_go_type(expression, ty, fx) {
             return ValuePlan::Cast {

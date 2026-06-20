@@ -91,12 +91,7 @@ impl Planner<'_> {
             Expression::Paren { expression, .. } => {
                 ValuePlan::Paren(Box::new(self.plan_operand(expression, ctx, fx)))
             }
-            Expression::Cast {
-                expression,
-                target_type,
-                ty,
-                ..
-            } => self.plan_cast(expression, target_type, ty, ctx, fx),
+            Expression::Cast { expression, ty, .. } => self.plan_cast(expression, ty, ctx, fx),
             Expression::IndexedAccess {
                 expression, index, ..
             } => self.plan_index_access(expression, index, fx),

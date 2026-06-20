@@ -109,7 +109,8 @@ description: "fn test() { x |> add(multiply(2, 3)) |> subtract(1); }"
                                         },
                                     ],
                                     spread: None,
-                                    type_args: [],
+                                    raw_type_args: [],
+                                    resolved_type_args: [],
                                     ty: Var {
                                         id: uninferred,
                                     },
@@ -122,7 +123,8 @@ description: "fn test() { x |> add(multiply(2, 3)) |> subtract(1); }"
                                 },
                             ],
                             spread: None,
-                            type_args: [],
+                            raw_type_args: [],
+                            resolved_type_args: [],
                             ty: Var {
                                 id: uninferred,
                             },
@@ -149,7 +151,8 @@ description: "fn test() { x |> add(multiply(2, 3)) |> subtract(1); }"
                         },
                     ],
                     spread: None,
-                    type_args: [],
+                    raw_type_args: [],
+                    resolved_type_args: [],
                     ty: Var {
                         id: uninferred,
                     },

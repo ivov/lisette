@@ -53,7 +53,7 @@ description: |
                         },
                     ],
                     spread: None,
-                    type_args: [
+                    raw_type_args: [
                         Constructor {
                             name: "int",
                             params: [],
@@ -64,6 +64,7 @@ description: |
                             },
                         },
                     ],
+                    resolved_type_args: [],
                     ty: Var {
                         id: uninferred,
                     },

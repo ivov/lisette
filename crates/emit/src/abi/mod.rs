@@ -6,8 +6,8 @@ use crate::GoCallStrategy;
 use crate::Planner;
 use crate::names::go_name::PRELUDE_ERROR_ID;
 use crate::types::go_type::GoType;
-use syntax::ast::{Annotation, Expression};
-use syntax::types::{Type, unqualified_name};
+use syntax::ast::Expression;
+use syntax::types::Type;
 
 /// Go ABI shape that a Lisette type lowers to at function-boundary
 /// positions.
@@ -165,144 +165,6 @@ impl Planner<'_> {
             }
         }
     }
-
-    /// Annotation-side mirror of `classify_direct_emission`.
-    pub(crate) fn classify_annotation_direct_emission(
-        &self,
-        annotation: &Annotation,
-    ) -> Option<AbiShape> {
-        if let Annotation::Tuple { elements, .. } = annotation
-            && elements.len() >= 2
-        {
-            return Some(AbiShape::Tuple {
-                arity: elements.len(),
-            });
-        }
-        let Annotation::Constructor { name, params, .. } = annotation else {
-            return None;
-        };
-        let leaf = unqualified_name(name);
-        match leaf {
-            "Result" if params.len() == 2 && annotation_is_go_error(&params[1]) => {
-                Some(if params[0].is_unit() {
-                    AbiShape::BareError
-                } else {
-                    AbiShape::ResultTuple
-                })
-            }
-            "Partial" if params.len() == 2 && annotation_is_go_error(&params[1]) => {
-                Some(AbiShape::PartialTuple)
-            }
-            "Option" if params.len() == 1 => {
-                Some(if self.annotation_inner_is_nilable(&params[0]) {
-                    AbiShape::NullableReturn
-                } else {
-                    AbiShape::CommaOk
-                })
-            }
-            _ => None,
-        }
-    }
-
-    /// Annotation-side mirror of `lowered_return_go_type`.
-    pub(crate) fn lowered_return_go_type_from_annotation(
-        &self,
-        shape: &AbiShape,
-        return_ann: &Annotation,
-    ) -> GoType {
-        let constructor_params = || match return_ann {
-            Annotation::Constructor { params, .. } => params,
-            _ => unreachable!("Result/Option/Partial imply Constructor annotation"),
-        };
-        match shape {
-            AbiShape::BareError => {
-                let params = constructor_params();
-                self.go_type_from_annotation(&params[1])
-            }
-            AbiShape::ResultTuple | AbiShape::PartialTuple => {
-                let params = constructor_params();
-                let ok_go = self.go_type_from_annotation(&params[0]);
-                let err_go = self.go_type_from_annotation(&params[1]);
-                let mut result = GoType::new(format!("({}, {})", ok_go.code, err_go.code));
-                result.merge(&ok_go);
-                result.merge(&err_go);
-                result
-            }
-            AbiShape::CommaOk => {
-                let params = constructor_params();
-                let inner_go = self.go_type_from_annotation(&params[0]);
-                let mut result = GoType::new(format!("({}, bool)", inner_go.code));
-                result.merge(&inner_go);
-                result
-            }
-            AbiShape::NullableReturn => {
-                let params = constructor_params();
-                self.go_type_from_annotation(&params[0])
-            }
-            AbiShape::Tuple { .. } => {
-                let elements = match return_ann {
-                    Annotation::Tuple { elements, .. } => elements,
-                    _ => unreachable!("Tuple shape implies Tuple annotation"),
-                };
-                let element_gos: Vec<GoType> = elements
-                    .iter()
-                    .map(|a| {
-                        if matches!(
-                            self.classify_annotation_direct_emission(a),
-                            Some(AbiShape::NullableReturn)
-                        ) {
-                            self.go_type_from_annotation(match a {
-                                Annotation::Constructor { params, .. } => &params[0],
-                                _ => a,
-                            })
-                        } else {
-                            self.go_type_from_annotation(a)
-                        }
-                    })
-                    .collect();
-                let parts: Vec<&str> = element_gos.iter().map(|g| g.code.as_str()).collect();
-                let mut result = GoType::new(format!("({})", parts.join(", ")));
-                for go in &element_gos {
-                    result.merge(go);
-                }
-                result
-            }
-        }
-    }
-
-    /// Annotation-side mirror of `is_nullable_option`'s inner check.
-    pub(crate) fn annotation_inner_is_nilable(&self, annotation: &Annotation) -> bool {
-        match annotation {
-            Annotation::Function { .. } => true,
-            Annotation::Constructor { name, .. } => {
-                if name == "Ref" || name == "prelude.Ref" {
-                    return true;
-                }
-                let resolved = self.peel_alias_id(name);
-                if let Some(definition) = self.facts.definition(resolved.as_str())
-                    && matches!(
-                        definition.body,
-                        syntax::program::DefinitionBody::TypeAlias { .. }
-                    )
-                    && self
-                        .facts
-                        .resolve_to_function_type(&definition.ty)
-                        .is_some()
-                {
-                    return true;
-                }
-                if let Some(definition) = self.facts.definition(resolved.as_str()) {
-                    matches!(
-                        definition.body,
-                        syntax::program::DefinitionBody::Interface { .. }
-                    )
-                } else {
-                    false
-                }
-            }
-            _ => false,
-        }
-    }
 }
 
 pub(crate) fn tuple_element_types(ty: &Type) -> Vec<Type> {
@@ -311,13 +173,6 @@ pub(crate) fn tuple_element_types(ty: &Type) -> Vec<Type> {
         Type::Nominal { params, .. } => params.clone(),
         _ => Vec::new(),
     }
-}
-
-fn annotation_is_go_error(annotation: &Annotation) -> bool {
-    let Annotation::Constructor { name, .. } = annotation else {
-        return false;
-    };
-    unqualified_name(name) == "error"
 }
 
 /// Prelude fn refs emit with tagged Go return (`Option[T]`); user fns

@@ -370,11 +370,11 @@ impl Planner<'_> {
             ctx.native_type.method_prefix(),
             go_name::snake_to_camel(ctx.method)
         );
-        let type_args_string = if !ctx.type_args.is_empty() && ctx.call_ty.is_some() {
+        let type_args_string = if !ctx.resolved_type_args.is_empty() && ctx.call_ty.is_some() {
             let receiver_ty = expression.get_type();
-            self.format_type_args_with_receiver(&receiver_ty, ctx.type_args, fx)
+            self.format_type_args_with_receiver(&receiver_ty, ctx.resolved_type_args, fx)
         } else {
-            self.format_type_args_from_annotations(ctx.type_args, fx)
+            self.format_type_args(ctx.resolved_type_args, fx)
         };
         (
             setup,
@@ -497,7 +497,7 @@ impl Planner<'_> {
             ctx.native_type.method_prefix(),
             go_name::snake_to_camel(ctx.method)
         );
-        let type_args_string = self.format_type_args_from_annotations(ctx.type_args, fx);
+        let type_args_string = self.format_type_args(ctx.resolved_type_args, fx);
         (
             setup,
             format!(

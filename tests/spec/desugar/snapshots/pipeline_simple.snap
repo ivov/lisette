@@ -51,7 +51,8 @@ description: "fn test() { x |> func; }"
                         },
                     ],
                     spread: None,
-                    type_args: [],
+                    raw_type_args: [],
+                    resolved_type_args: [],
                     ty: Var {
                         id: uninferred,
                     },
