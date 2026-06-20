@@ -6,10 +6,12 @@ use crate::output::use_color;
 
 use super::build::{BuildOptions, build_locked, with_locked_project};
 
-mod report;
-use report::{build_report, exit_code, render};
+use std::collections::BTreeMap;
 
-pub fn test(path: Option<String>, go_flags: Vec<String>) -> i32 {
+mod report;
+use report::{build_report_filtered, exit_code, matching_tests, render};
+
+pub fn test(path: Option<String>, go_flags: Vec<String>, filter: Option<String>) -> i32 {
     crate::output::print_test_unfinished_notice();
     with_locked_project(path, |prep| {
         let outcome = build_locked(
@@ -25,6 +27,28 @@ pub fn test(path: Option<String>, go_flags: Vec<String>) -> i32 {
             return outcome.code;
         }
 
+        let scopes = match filter.as_deref() {
+            Some(pattern) => {
+                let matched =
+                    matching_tests(&outcome.test_index, &prep.manifest.project.name, pattern);
+                if matched.is_empty() {
+                    eprintln!("\n  No tests match `{pattern}`\n");
+                    return 0;
+                }
+                let mut by_package: BTreeMap<String, Vec<String>> = BTreeMap::new();
+                for (package, go_name) in matched {
+                    by_package.entry(package).or_default().push(go_name);
+                }
+                Some(
+                    by_package
+                        .into_iter()
+                        .map(|(package, names)| (package, format!("^({})$", names.join("|"))))
+                        .collect::<Vec<_>>(),
+                )
+            }
+            None => None,
+        };
+
         let build_dir = match prep.target_dir.canonicalize() {
             Ok(p) => p,
             Err(e) => {
@@ -38,7 +62,12 @@ pub fn test(path: Option<String>, go_flags: Vec<String>) -> i32 {
         };
 
         let started = Instant::now();
-        let run = match go_cli::run_tests(&build_dir, stdlib::Target::host(), &go_flags) {
+        let run = match go_cli::run_tests(
+            &build_dir,
+            stdlib::Target::host(),
+            &go_flags,
+            scopes.as_deref(),
+        ) {
             Ok(run) => run,
             Err(e) => {
                 cli_error!("Failed to run tests", e.message, e.hint);
@@ -46,10 +75,11 @@ pub fn test(path: Option<String>, go_flags: Vec<String>) -> i32 {
             }
         };
 
-        let report = build_report(
+        let report = build_report_filtered(
             &outcome.test_index,
             &run.events,
             &prep.manifest.project.name,
+            filter.as_deref(),
         );
         eprint!(
             "{}",

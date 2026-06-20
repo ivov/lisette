@@ -57,6 +57,7 @@ pub struct FailureRecord {
 pub struct TestRow {
     pub package: String,
     pub name: String,
+    pub description: Option<String>,
     pub status: Status,
     pub elapsed: Option<f64>,
     pub output: String,
@@ -72,7 +73,44 @@ pub struct Report {
     build_failed_packages: HashSet<String>,
 }
 
+fn name_or_title_contains(fn_name: &str, title: Option<&str>, pattern: &str) -> bool {
+    fn_name.contains(pattern) || title.is_some_and(|t| t.contains(pattern))
+}
+
+pub fn matching_tests(index: &TestIndex, go_module: &str, filter: &str) -> Vec<(String, String)> {
+    index
+        .tests()
+        .iter()
+        .filter_map(|test| {
+            let prefix = format!("{}.", test.module_id);
+            let fn_name = test
+                .qualified_name
+                .strip_prefix(&prefix)
+                .unwrap_or(&test.qualified_name);
+            if !name_or_title_contains(fn_name, test.title.as_deref(), filter) {
+                return None;
+            }
+            let package = if test.module_id == ENTRY_MODULE_ID {
+                go_module.to_string()
+            } else {
+                format!("{}/{}", go_module, test.module_id)
+            };
+            Some((package, go_test_name(fn_name)))
+        })
+        .collect()
+}
+
+#[cfg(test)]
 pub fn build_report(index: &TestIndex, events: &[GoTestEvent], go_module: &str) -> Report {
+    build_report_filtered(index, events, go_module, None)
+}
+
+pub fn build_report_filtered(
+    index: &TestIndex,
+    events: &[GoTestEvent],
+    go_module: &str,
+    filter: Option<&str>,
+) -> Report {
     let mut terminal: HashMap<(String, String), (Status, Option<f64>)> = HashMap::new();
     let mut started: HashSet<(String, String)> = HashSet::new();
     let mut outputs: HashMap<(String, String), String> = HashMap::new();
@@ -154,6 +192,11 @@ pub fn build_report(index: &TestIndex, events: &[GoTestEvent], go_module: &str) 
             .qualified_name
             .strip_prefix(&prefix)
             .unwrap_or(&test.qualified_name);
+        if let Some(pattern) = filter
+            && !name_or_title_contains(fn_name, test.title.as_deref(), pattern)
+        {
+            continue;
+        }
         let package = if test.module_id == ENTRY_MODULE_ID {
             go_module.to_string()
         } else {
@@ -170,7 +213,8 @@ pub fn build_report(index: &TestIndex, events: &[GoTestEvent], go_module: &str) 
             collect_children(&package, &go_name, &terminal, &started, &outputs, &failures);
         rows.push(TestRow {
             package,
-            name: fn_name.to_string(),
+            name: test.title.clone().unwrap_or_else(|| fn_name.to_string()),
+            description: test.doc.clone(),
             status,
             elapsed,
             output: outputs.get(&key).cloned().unwrap_or_default(),
@@ -263,6 +307,7 @@ fn collect_children(
             TestRow {
                 package: package.to_string(),
                 name: full[prefix.len()..].to_string(),
+                description: None,
                 status,
                 elapsed,
                 output: outputs.get(&key).cloned().unwrap_or_default(),
@@ -346,6 +391,13 @@ fn render_rows(out: &mut String, rows: &[&TestRow], prefix: &str, sources: &Sour
         }
 
         let child_prefix = format!("{prefix}{}", if last { "    " } else { "│   " });
+
+        if let Some(description) = &row.description {
+            for line in description.lines() {
+                out.push_str(&dim(&format!("{child_prefix}  {line}"), color));
+                out.push('\n');
+            }
+        }
 
         if let Some(block) = row
             .failure
@@ -884,5 +936,73 @@ mod tests {
         assert!(text.contains("test returned Err"), "got:\n{text}");
         assert!(text.contains("boom"), "got:\n{text}");
         assert!(text.contains("x.test.lis"), "got:\n{text}");
+    }
+
+    fn titled_index() -> TestIndex {
+        let mut index = TestIndex::default();
+        index.push(TestFunction {
+            module_id: "csv".to_string(),
+            qualified_name: "csv.splits_csv".to_string(),
+            title: Some("splits and trims CSV fields".to_string()),
+            doc: Some("Trims surrounding whitespace before splitting.".to_string()),
+            span: span(),
+        });
+        index.push(TestFunction {
+            module_id: "csv".to_string(),
+            qualified_name: "csv.parses_number".to_string(),
+            title: None,
+            doc: None,
+            span: span(),
+        });
+        index
+    }
+
+    #[test]
+    fn title_replaces_name_and_doc_renders_as_description() {
+        let report = build_report(&titled_index(), &[], "demo");
+        let titled = report
+            .rows
+            .iter()
+            .find(|r| r.name == "splits and trims CSV fields")
+            .expect("title should replace the function name");
+        assert_eq!(
+            titled.description.as_deref(),
+            Some("Trims surrounding whitespace before splitting.")
+        );
+        let text = render(&report, &no_sources(), false, Duration::from_millis(1));
+        assert!(
+            text.contains("splits and trims CSV fields")
+                && text.contains("Trims surrounding whitespace"),
+            "got:\n{text}"
+        );
+    }
+
+    #[test]
+    fn filter_keeps_only_matching_rows_by_name_or_title() {
+        let by_title = build_report_filtered(&titled_index(), &[], "demo", Some("and trims"));
+        assert_eq!(by_title.rows.len(), 1);
+        assert_eq!(by_title.rows[0].name, "splits and trims CSV fields");
+
+        let by_name = build_report_filtered(&titled_index(), &[], "demo", Some("parses"));
+        assert_eq!(by_name.rows.len(), 1);
+        assert_eq!(by_name.rows[0].name, "parses_number");
+    }
+
+    #[test]
+    fn matching_tests_is_case_sensitive_over_name_and_title_with_package() {
+        let index = titled_index();
+        assert_eq!(
+            matching_tests(&index, "demo", "and trims"),
+            vec![("demo/csv".to_string(), "TestSplitsCsv".to_string())]
+        );
+        assert_eq!(
+            matching_tests(&index, "demo", "parses"),
+            vec![("demo/csv".to_string(), "TestParsesNumber".to_string())]
+        );
+        assert!(
+            matching_tests(&index, "demo", "Trims").is_empty(),
+            "case-sensitive: `Trims` must not match the lowercase title term"
+        );
+        assert!(matching_tests(&index, "demo", "zzz").is_empty());
     }
 }

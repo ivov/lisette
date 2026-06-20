@@ -488,6 +488,16 @@ pub fn is_go_json_flag(token: &str) -> bool {
         || token.starts_with("--json=")
 }
 
+pub fn is_go_selection_flag(token: &str) -> bool {
+    if !token.starts_with('-') {
+        return false;
+    }
+    let stripped = token.trim_start_matches('-');
+    let stripped = stripped.strip_prefix("test.").unwrap_or(stripped);
+    let base = stripped.split('=').next().unwrap_or(stripped);
+    matches!(base, "run" | "skip" | "list")
+}
+
 /// `go_flags` follow the default `-o` so a caller `-o` wins. `output_path` must
 /// be absolute, since `go build` runs with `build_dir` as cwd.
 pub fn build_binary(
@@ -545,17 +555,43 @@ pub struct TestRun {
     pub success: bool,
 }
 
+/// Run tests. `None` runs every package (`go test ./...`); `Some` runs each
+/// `(package, run_regex)` as its own `go test -run` invocation and aggregates.
 pub fn run_tests(
     build_dir: &Path,
     target: Target,
     go_flags: &[String],
+    scopes: Option<&[(String, String)]>,
+) -> Result<TestRun, GoCliError> {
+    let Some(scopes) = scopes else {
+        return run_go_test(build_dir, target, go_flags, "./...", None);
+    };
+    let mut events = Vec::new();
+    let mut success = true;
+    for (package, run_regex) in scopes {
+        let run = run_go_test(build_dir, target, go_flags, package, Some(run_regex))?;
+        events.extend(run.events);
+        success &= run.success;
+    }
+    Ok(TestRun { events, success })
+}
+
+fn run_go_test(
+    build_dir: &Path,
+    target: Target,
+    go_flags: &[String],
+    package: &str,
+    run_pattern: Option<&str>,
 ) -> Result<TestRun, GoCliError> {
     let mut cmd = go_command(target);
     cmd.arg("test").arg("-json").arg("-count=1");
+    if let Some(pattern) = run_pattern {
+        cmd.arg("-run").arg(pattern);
+    }
     for flag in go_flags {
         cmd.arg(flag);
     }
-    cmd.arg("./...")
+    cmd.arg(package)
         .current_dir(build_dir)
         .stdout(Stdio::piped());
 

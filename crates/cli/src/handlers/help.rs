@@ -170,11 +170,13 @@ Arguments:
     {path:g} {(optional):d}                    Path to dir (default: current dir)
 
 Flags:
+    {--filter, -f:b} {<pattern>:g}             Run only tests whose name contains pattern
     {--go-flags:b} {\"<flags>\"}               Pass flags through to `go test`
 
 Examples:
     `lis test`                           Run all tests in current dir
     `lis test` {~/projects/demo:g}           Run tests in specific dir
+    `lis test` {-f:b} {parse:g}                  Only tests whose name contains \"parse\"
     `lis test` {--go-flags:b} {\"-failfast\"}    Stop at the first failing test",
         ),
 

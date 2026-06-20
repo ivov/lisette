@@ -33,6 +33,7 @@ pub enum Command {
     Test {
         path: Option<String>,
         go_flags: Vec<String>,
+        filter: Option<String>,
     },
     Overview,
     Help {
@@ -312,9 +313,22 @@ impl Command {
             "test" | "t" => {
                 let mut path = None;
                 let mut go_flags = Vec::new();
+                let mut filter = None;
 
                 while let Some(arg) = arguments.next() {
-                    if arg.starts_with('-') {
+                    if arg == "-f" || arg == "--filter" {
+                        let Some(value) = arguments.next() else {
+                            return Err(ParseError::MissingArgument {
+                                command: "test",
+                                argument: "--filter <pattern>",
+                            });
+                        };
+                        filter = Some(value);
+                    } else if let Some(value) = arg.strip_prefix("--filter=") {
+                        filter = Some(value.to_string());
+                    } else if let Some(value) = arg.strip_prefix("-f=") {
+                        filter = Some(value.to_string());
+                    } else if arg.starts_with('-') {
                         if !try_parse_go_flags(&arg, &mut arguments, &mut go_flags, "test")? {
                             return Err(ParseError::UnknownFlag(arg));
                         }
@@ -335,7 +349,35 @@ impl Command {
                     });
                 }
 
-                Ok(Command::Test { path, go_flags })
+                if let Some(flag) = go_flags
+                    .iter()
+                    .find(|f| crate::go_cli::is_go_selection_flag(f))
+                {
+                    return Err(ParseError::UnexpectedArgument {
+                        message: format!(
+                            "`{}` cannot be passed to `lis test` via `--go-flags`",
+                            flag
+                        ),
+                        reason: "`lis test` selects which tests run and reconciles the report against them"
+                            .to_string(),
+                        hint: "Use `lis test --filter <pattern>` to select tests".to_string(),
+                    });
+                }
+
+                if filter.as_deref() == Some("") {
+                    return Err(ParseError::UnexpectedArgument {
+                        message: "`--filter` requires a non-empty pattern".to_string(),
+                        reason: "an empty pattern matches every test, the same as no filter"
+                            .to_string(),
+                        hint: "Pass a pattern, e.g. `lis test --filter parse`".to_string(),
+                    });
+                }
+
+                Ok(Command::Test {
+                    path,
+                    go_flags,
+                    filter,
+                })
             }
 
             "help" | "--help" => Ok(Command::Help {
@@ -631,11 +673,38 @@ mod tests {
     #[test]
     fn test_accepts_other_go_flags() {
         let Ok(Command::Test { go_flags, .. }) =
-            parse(&["lis", "test", "--go-flags", "-run TestFoo"])
+            parse(&["lis", "test", "--go-flags", "-failfast -tags run"])
         else {
             panic!("expected Test command");
         };
-        assert_eq!(go_flags, vec!["-run", "TestFoo"]);
+        assert_eq!(go_flags, vec!["-failfast", "-tags", "run"]);
+    }
+
+    #[test]
+    fn test_rejects_selection_flags_in_go_flags() {
+        for flag in ["-run", "-skip", "-list"] {
+            assert!(
+                matches!(
+                    parse(&["lis", "test", "--go-flags", flag]),
+                    Err(ParseError::UnexpectedArgument { .. })
+                ),
+                "expected `{flag}` to be rejected"
+            );
+        }
+    }
+
+    #[test]
+    fn test_rejects_empty_filter() {
+        for args in [
+            vec!["lis", "test", "-f", ""],
+            vec!["lis", "test", "--filter="],
+            vec!["lis", "test", "-f="],
+        ] {
+            assert!(
+                matches!(parse(&args), Err(ParseError::UnexpectedArgument { .. })),
+                "expected {args:?} to be rejected"
+            );
+        }
     }
 
     #[test]
