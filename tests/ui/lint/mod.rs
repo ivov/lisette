@@ -844,8 +844,8 @@ fn main() {
 }
 
 #[test]
-fn manual_is_empty_not_equals_zero() {
-    assert_lint_snapshot!(
+fn manual_is_empty_not_equals_zero_no_warning() {
+    assert_no_lint_warnings!(
         r#"
 fn main() {
   let xs = [1, 2, 3]
@@ -856,8 +856,8 @@ fn main() {
 }
 
 #[test]
-fn manual_is_empty_greater_than_zero() {
-    assert_lint_snapshot!(
+fn manual_is_empty_greater_than_zero_no_warning() {
+    assert_no_lint_warnings!(
         r#"
 fn main() {
   let xs = [1, 2, 3]
@@ -926,6 +926,30 @@ fn manual_is_empty_zero_greater_or_equal() {
 fn main() {
   let xs = [1, 2, 3]
   let _ = 0 >= xs.length()
+}
+"#
+    );
+}
+
+#[test]
+fn manual_is_empty_zero_less_than_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let xs = [1, 2, 3]
+  let _ = 0 < xs.length()
+}
+"#
+    );
+}
+
+#[test]
+fn manual_is_empty_zero_not_equals_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let xs = [1, 2, 3]
+  let _ = 0 != xs.length()
 }
 "#
     );
