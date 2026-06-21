@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [info] Needless `SplitN`
+   ╭─[test.lis:6:11]
+ 5 │   let s = "a,b,c"
+ 6 │   let _ = mystr.SplitN(s, ",", -1)
+   ·           ────────────┬───────────
+   ·                       ╰── splits with no limit
+ 7 │ }
+   ╰────
+  help: `mystr.SplitN(s, ",", -1)` splits with no limit. Use `mystr.Split(s, ",")` · code: [lint.needless_splitn]

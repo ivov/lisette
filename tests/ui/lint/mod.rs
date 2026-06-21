@@ -1353,6 +1353,96 @@ fn main() {
 }
 
 #[test]
+fn needless_splitn() {
+    assert_lint_snapshot!(
+        r#"
+import "go:strings"
+
+fn main() {
+  let s = "a,b,c"
+  let _ = strings.SplitN(s, ",", -1)
+}
+"#
+    );
+}
+
+#[test]
+fn needless_split_after_n() {
+    assert_lint_snapshot!(
+        r#"
+import "go:strings"
+
+fn main() {
+  let s = "a,b,c"
+  let _ = strings.SplitAfterN(s, ",", -1)
+}
+"#
+    );
+}
+
+#[test]
+fn needless_splitn_aliased_import() {
+    assert_lint_snapshot!(
+        r#"
+import mystr "go:strings"
+
+fn main() {
+  let s = "a,b,c"
+  let _ = mystr.SplitN(s, ",", -1)
+}
+"#
+    );
+}
+
+#[test]
+fn needless_splitn_positive_count_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:strings"
+
+fn main() {
+  let s = "a,b,c"
+  let _ = strings.SplitN(s, ",", 2)
+}
+"#
+    );
+}
+
+#[test]
+fn needless_splitn_zero_count_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:strings"
+
+fn main() {
+  let s = "a,b,c"
+  let _ = strings.SplitN(s, ",", 0)
+}
+"#
+    );
+}
+
+#[test]
+fn needless_splitn_user_type_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+struct Splitter {}
+
+impl Splitter {
+  fn SplitN(self, s: string, _sep: string, _n: int) -> Slice<string> {
+    s.split(_sep)
+  }
+}
+
+fn main() {
+  let sp = Splitter {}
+  let _ = sp.SplitN("a,b", ",", -1)
+}
+"#
+    );
+}
+
+#[test]
 fn manual_equal_fold_to_lower() {
     assert_lint_snapshot!(
         r#"
