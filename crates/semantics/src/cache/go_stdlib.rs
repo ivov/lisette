@@ -160,7 +160,6 @@ fn register_cached_go_module(
 
     if let Some(source) = source
         && let Some(pkg_name) = extract_package_directive(source)
-        && module_id.rsplit('/').next() != Some(pkg_name.as_str())
     {
         store
             .go_package_names

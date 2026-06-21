@@ -52,21 +52,20 @@ Extras:
 pub fn print_command_help(command: &str) {
     match command {
         "new" => print_help(
-            "`lis new` <name>
+            "`lis new` <project-name>
 
 Create a new Lisette project in the current directory.
 
-    .
-    └── {hello_world}/
-        ├── src/
-        │   └── main.lis
-        ├── lisette.toml
-        ├── README.md
-        ├── AGENTS.md
-        └── .gitignore
+    {hello-world}/
+    ├── src/
+    │   └── main.lis
+    ├── lisette.toml
+    ├── README.md
+    ├── AGENTS.md
+    └── .gitignore
 
 Arguments:
-    <name>    Name of the project, e.g. {hello_world}",
+    {project-name:g} {(required):d}    Name of the project, e.g. {hello-world}",
         ),
 
         "build" | "b" => print_help(
@@ -170,23 +169,23 @@ Arguments:
     {path:g} {(optional):d}                    Path to dir (default: current dir)
 
 Flags:
-    {--filter, -f:b} {<pattern>:g}             Run only tests whose name contains pattern
-    {--go-flags:b} {\"<flags>\"}               Pass flags through to `go test`
+    {-f:b}, {--filter:b} {<pattern>:g}             Run only tests whose name contains pattern
+    {--go-flags:b} {\"<flags>\":g}               Pass flags through to `go test`
 
 Examples:
     `lis test`                           Run all tests in current dir
     `lis test` {~/projects/demo:g}           Run tests in specific dir
     `lis test` {-f:b} {parse:g}                  Only tests whose name contains \"parse\"
-    `lis test` {--go-flags:b} {\"-failfast\"}    Stop at the first failing test",
+    `lis test` {--go-flags:b} {\"-failfast\":g}    Stop at the first failing test",
         ),
 
         "add" => print_help(
-            "`lis add` <module-name> {[@version]:b}
+            "`lis add` <dependency> {[@version]:b}
 
 Add a third-party Go module as a dependency to your Lisette project.
 
 Arguments:
-    <module-name>                  Go module name
+    {dependency:g} {(required):d}          Go module name
 
 Examples:
     `lis add` {google/uuid:g}            Latest version
@@ -216,7 +215,7 @@ Start the Lisette language server over stdio, for use by editor extensions.",
 Generate `.d.lis` type definition bindings for a Go package.
 
 Arguments:
-    <package>                             Go package path (e.g., {fmt}, {net/http})
+    {package:g} {(required):d}                    Go package path (e.g., {fmt}, {net/http})
 
 Flags:
     {-o:b}, {--output:b} <path>                   Output file path (default: <package>`.d.lis`)
@@ -234,30 +233,29 @@ Examples:
 
 Create a sample Lisette project in the current directory.
 
-    .
-    └── `learn-lisette`/
-        ├── src/
-        │   ├── main.lis
-        │   ├── models/
-        │   │   ├── props.lis
-        │   │   └── task.lis
-        │   ├── store/
-        │   │   └── store.lis
-        │   ├── commands/
-        │   │   └── commands.lis
-        │   └── display/
-        │       └── display.lis
-        ├── lisette.toml
-        ├── README.md
-        ├── AGENTS.md
-        └── .gitignore
+    `learn-lisette`/
+    ├── src/
+    │   ├── main.lis
+    │   ├── models/
+    │   │   ├── props.lis
+    │   │   └── task.lis
+    │   ├── store/
+    │   │   └── store.lis
+    │   ├── commands/
+    │   │   └── commands.lis
+    │   └── display/
+    │       └── display.lis
+    ├── lisette.toml
+    ├── README.md
+    ├── AGENTS.md
+    └── .gitignore
 
 The sample is a CLI task manager that demonstrates enums, structs, pattern
 matching, error handling, closures, Go interop, and concurrency.",
         ),
 
         "doc" => print_help(
-            "`lis doc` <symbol> {[--flags]:b}
+            "`lis doc` {[symbol]} {[--flags]:b}
 
 Browse documentation on a symbol from the prelude or from the Go stdlib
 
@@ -284,7 +282,7 @@ Examples:
 Generate shell completion scripts.
 
 Arguments:
-    <shell>    Shell to generate completions for ({bash}, {zsh}, or {fish})
+    {shell:g} {(required):d}    Shell to generate completions for ({bash}, {zsh}, or {fish})
 
 Examples:
     `lis complete` {bash} > ~/.local/share/bash-completion/completions/lis
@@ -302,7 +300,7 @@ Examples:
 Show help for a command.
 
 Arguments:
-    <command>    Command to get help for (e.g., `run`, `build`)",
+    {command:g} {(required):d}    Command to get help for (e.g., {run:g}, {build:g})",
         ),
 
         "version" => print_help(

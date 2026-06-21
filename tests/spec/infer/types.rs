@@ -7807,3 +7807,57 @@ fn main() {
     )
     .assert_no_errors();
 }
+
+#[test]
+fn versioned_go_modules_do_not_falsely_conflict_when_typedefs_missing() {
+    let webrtc = r#"// Package: webrtc
+
+import "go:example.com/sdp/v3"
+import "go:example.com/dtls/v3"
+
+pub struct PeerConnection {}
+"#;
+    let input = r#"
+import "go:example.com/webrtc/v4"
+
+fn main() {
+  let _ = webrtc.PeerConnection {}
+}
+"#;
+    let result = infer_with_go_typedefs(input, &[("go:example.com/webrtc/v4", webrtc)]);
+    assert!(
+        !result
+            .errors
+            .iter()
+            .any(|error| error.code_str() == Some("resolve.import_conflict")),
+        "expected no import conflict for distinct `/vN` modules, got: {:?}",
+        result.errors
+    );
+}
+
+#[test]
+fn versioned_go_modules_resolve_to_preceding_segment_without_directive() {
+    let sdp = r#"
+pub struct SessionDescription {}
+"#;
+    let dtls = r#"
+pub struct Config {}
+"#;
+    let input = r#"
+import "go:example.com/sdp/v3"
+import "go:example.com/dtls/v3"
+
+fn main() {
+  let _ = sdp.SessionDescription {}
+  let _ = dtls.Config {}
+}
+"#;
+    infer_with_go_typedefs(
+        input,
+        &[
+            ("go:example.com/sdp/v3", sdp),
+            ("go:example.com/dtls/v3", dtls),
+        ],
+    )
+    .assert_no_errors();
+}

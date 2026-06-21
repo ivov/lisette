@@ -1,6 +1,9 @@
+use ecow::EcoString;
+use rustc_hash::FxHashSet as HashSet;
 use syntax::ast::{
     BinaryOperator, Binding, Expression, FormatStringPart, Literal, Pattern, Span, UnaryOperator,
 };
+use syntax::program::DefinitionBody;
 use syntax::types::{SimpleKind, Type, unqualified_name};
 
 use crate::passes::walk::visit_ast;
@@ -14,6 +17,28 @@ pub(super) fn first_param_is_self(params: &[Binding]) -> bool {
     params.first().is_some_and(|param| {
         matches!(&param.pattern, Pattern::Identifier { identifier, .. } if identifier == "self")
     })
+}
+
+pub(super) fn struct_field_names(
+    store: &Store,
+    ty: &Type,
+    name: &str,
+) -> Option<HashSet<EcoString>> {
+    let Type::Nominal { id, .. } = ty.strip_refs() else {
+        return None;
+    };
+    let def = store.get_definition(id.as_str())?;
+    match &def.body {
+        DefinitionBody::Struct { fields, .. } => {
+            Some(fields.iter().map(|f| f.name.clone()).collect())
+        }
+        DefinitionBody::Enum { variants, .. } => {
+            let variant_name = unqualified_name(name);
+            let variant = variants.iter().find(|v| v.name == variant_name)?;
+            Some(variant.fields.iter().map(|f| f.name.clone()).collect())
+        }
+        _ => None,
+    }
 }
 
 pub(super) fn is_float_operand(store: &Store, expression: &Expression) -> bool {

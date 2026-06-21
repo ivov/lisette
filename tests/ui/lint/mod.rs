@@ -844,8 +844,8 @@ fn main() {
 }
 
 #[test]
-fn manual_is_empty_not_equals_zero() {
-    assert_lint_snapshot!(
+fn manual_is_empty_not_equals_zero_no_warning() {
+    assert_no_lint_warnings!(
         r#"
 fn main() {
   let xs = [1, 2, 3]
@@ -856,8 +856,8 @@ fn main() {
 }
 
 #[test]
-fn manual_is_empty_greater_than_zero() {
-    assert_lint_snapshot!(
+fn manual_is_empty_greater_than_zero_no_warning() {
+    assert_no_lint_warnings!(
         r#"
 fn main() {
   let xs = [1, 2, 3]
@@ -926,6 +926,30 @@ fn manual_is_empty_zero_greater_or_equal() {
 fn main() {
   let xs = [1, 2, 3]
   let _ = 0 >= xs.length()
+}
+"#
+    );
+}
+
+#[test]
+fn manual_is_empty_zero_less_than_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let xs = [1, 2, 3]
+  let _ = 0 < xs.length()
+}
+"#
+    );
+}
+
+#[test]
+fn manual_is_empty_zero_not_equals_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let xs = [1, 2, 3]
+  let _ = 0 != xs.length()
 }
 "#
     );
@@ -7554,7 +7578,7 @@ struct Vec2 { x: int, y: int }
 
 impl Vec2 {
   fn new(x: int, y: int) -> Vec2 {
-    Vec2 { x: x, y: y }
+    Vec2 { x, y }
   }
 
   fn length_squared(self: Vec2) -> int {
@@ -18906,6 +18930,208 @@ fn main() {
   if let Some(n) = (x) {
     let _ = n
   }
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_field_names() {
+    assert_lint_snapshot!(
+        r#"
+struct Point { x: int, y: int }
+
+fn read(p: Point) -> int { p.x + p.y }
+
+fn make(x: int) -> Point {
+  Point { x: x, y: 0 }
+}
+
+fn main() {
+  let _ = read(make(5))
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_field_names_enum_variant() {
+    assert_lint_snapshot!(
+        r#"
+enum Action {
+  Move { x: int, y: int },
+  Stop,
+}
+
+fn build(x: int) -> Action {
+  Action.Move { x: x, y: 0 }
+}
+
+fn main() {
+  let _ = match build(5) {
+    Action.Move { x, y } => x + y,
+    Action.Stop => 0,
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_field_names_shorthand_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+struct Point { x: int, y: int }
+
+fn read(p: Point) -> int { p.x + p.y }
+
+fn make(x: int, y: int) -> Point {
+  Point { x, y }
+}
+
+fn main() {
+  let _ = read(make(1, 2))
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_field_names_different_name_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+struct Point { x: int, y: int }
+
+fn read(p: Point) -> int { p.x + p.y }
+
+fn make(a: int, b: int) -> Point {
+  Point { x: a, y: b }
+}
+
+fn main() {
+  let _ = read(make(1, 2))
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_field_names_parenthesized_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+struct Point { x: int, y: int }
+
+fn read(p: Point) -> int { p.x + p.y }
+
+fn make(x: int) -> Point {
+  Point { x: (x), y: 0 }
+}
+
+fn main() {
+  let _ = read(make(5))
+}
+"#
+    );
+}
+
+#[test]
+fn needless_update() {
+    assert_lint_snapshot!(
+        r#"
+struct Config { debug: bool, port: int }
+
+fn read(c: Config) -> int { if c.debug { c.port } else { 0 } }
+
+fn rebuild(base: Config) -> Config {
+  Config { debug: true, port: 80, ..base }
+}
+
+fn main() {
+  let _ = read(rebuild(Config { debug: false, port: 1 }))
+}
+"#
+    );
+}
+
+#[test]
+fn needless_update_enum_variant() {
+    assert_lint_snapshot!(
+        r#"
+enum Shape {
+  Rect { w: int, h: int },
+  Dot,
+}
+
+fn resize(base: Shape) -> Shape {
+  Shape.Rect { w: 5, h: 6, ..base }
+}
+
+fn main() {
+  let _ = match resize(Shape.Rect { w: 1, h: 2 }) {
+    Shape.Rect { w, h } => w + h,
+    Shape.Dot => 0,
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn needless_update_partial_spread_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+struct Config { debug: bool, port: int }
+
+fn read(c: Config) -> int { if c.debug { c.port } else { 0 } }
+
+fn rebuild(base: Config) -> Config {
+  Config { debug: true, ..base }
+}
+
+fn main() {
+  let _ = read(rebuild(Config { debug: false, port: 1 }))
+}
+"#
+    );
+}
+
+#[test]
+fn needless_update_side_effecting_base_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+struct Config { debug: bool, port: int }
+
+fn read(c: Config) -> int { if c.debug { c.port } else { 0 } }
+
+fn fresh() -> Config {
+  Config { debug: false, port: 1 }
+}
+
+fn rebuild() -> Config {
+  Config { debug: true, port: 80, ..fresh() }
+}
+
+fn main() {
+  let _ = read(rebuild())
+}
+"#
+    );
+}
+
+#[test]
+fn needless_update_zero_fill_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+struct Config { debug: bool, port: int }
+
+fn read(c: Config) -> int { if c.debug { c.port } else { 0 } }
+
+fn rebuild() -> Config {
+  Config { debug: true, port: 80, .. }
+}
+
+fn main() {
+  let _ = read(rebuild())
 }
 "#
     );

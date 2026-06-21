@@ -39,21 +39,15 @@ pub fn check_manual_is_empty(expression: &Expression, ctx: &NodeCtx) {
         return;
     }
 
-    let negate = match operator {
-        Equal | LessThanOrEqual => false,
-        NotEqual | GreaterThan => true,
-        _ => return,
-    };
+    if !matches!(operator, Equal | LessThanOrEqual) {
+        return;
+    }
 
     let Some(receiver_text) = receiver.as_dotted_path() else {
         return;
     };
 
-    let replacement = if negate {
-        format!("!{receiver_text}.is_empty()")
-    } else {
-        format!("{receiver_text}.is_empty()")
-    };
+    let replacement = format!("{receiver_text}.is_empty()");
 
     ctx.sink
         .push(diagnostics::lint::manual_is_empty(span, &replacement));

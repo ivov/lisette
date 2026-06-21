@@ -119,10 +119,10 @@ impl Planner<'_> {
         if let Some(pkg_name) = self.facts.go_package_name(module) {
             return pkg_name.to_string();
         }
-        let path = module
-            .strip_prefix(go_name::GO_IMPORT_PREFIX)
-            .unwrap_or(module);
-        go_name::go_package_name(path).to_string()
+        match module.strip_prefix(go_name::GO_IMPORT_PREFIX) {
+            Some(go_path) => syntax::program::go_import_default_name(go_path).to_string(),
+            None => go_name::go_package_name(module).to_string(),
+        }
     }
 
     pub(crate) fn qualify_method_call(

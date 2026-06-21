@@ -11,6 +11,6 @@ pub use emit_input::{
     EmitInput, EqualityIndex, EqualityInfo, EqualityUnusableReason, MutationInfo, TestFunction,
     TestIndex, UnusedInfo,
 };
-pub use file::{File, FileImport};
+pub use file::{File, FileImport, go_import_default_name};
 pub use module::{Module, ModuleId, ModuleInfo};
 pub use resolution::{CallKind, DotAccessKind, NativeTypeKind, ReceiverCoercion};

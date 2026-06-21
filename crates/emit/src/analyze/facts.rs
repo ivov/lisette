@@ -216,6 +216,10 @@ impl<'a> EmitFacts<'a> {
         self.go_package_names
     }
 
+    pub(crate) fn go_module_ids(&self) -> &'a HashSet<String> {
+        self.go_module_ids
+    }
+
     pub(crate) fn has_global_exported_method_name(&self, method: &str) -> bool {
         self.globals.exported_method_names.contains(method)
     }
