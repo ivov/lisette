@@ -367,9 +367,9 @@ impl Planner<'_> {
                     .current_test_handle()
                     .expect("let assert without a test handle should be rejected by semantics");
                 fx.require_testkit();
-                fx.require_fmt();
+                fx.require_stdlib();
                 let testkit = go_name::GeneratedPackage::TestKit.qualifier();
-                let fmt = go_name::GeneratedPackage::Fmt.qualifier();
+                let prelude = go_name::GeneratedPackage::Prelude.qualifier();
                 self.scope.record_go_use(subject_var);
                 let (file, lo, hi) = (
                     span.file_id,
@@ -377,7 +377,7 @@ impl Planner<'_> {
                     span.byte_offset + span.byte_length,
                 );
                 let call = format!(
-                    "{handle}.FailAssert({file}, {lo}, {hi}, \"let_assert\", \"pattern did not match\", {testkit}.Operand{{Value: {fmt}.Sprintf(\"%v\", {subject_var})}})\n"
+                    "{handle}.FailAssert({file}, {lo}, {hi}, \"let_assert\", \"pattern did not match\", {testkit}.Operand{{Value: {prelude}.Debug({subject_var})}})\n"
                 );
                 LoweredBlock {
                     statements: vec![LoweredStatement::RawGo(call)],

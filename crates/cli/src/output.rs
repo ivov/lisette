@@ -149,29 +149,16 @@ pub fn capitalize_first(s: &str) -> String {
     }
 }
 
-pub fn print_preview_notice() {
+pub fn print_preview_notice(feature: &str, plural: bool) {
     eprintln!();
+    let verb = if plural { "are" } else { "is" };
     if use_color() {
         eprintln!(
-            "  ! Support for third-party Go dependencies is in {}",
+            "  ! {feature} {verb} in {} · Bug reports are welcome",
             "early preview".yellow().underline()
         );
     } else {
-        eprintln!("  ! Support for third-party Go dependencies is in early preview");
-    }
-    eprintln!("  ! Bug reports are welcome: https://github.com/ivov/lisette/issues");
-    eprintln!();
-}
-
-pub fn print_test_unfinished_notice() {
-    eprintln!();
-    if use_color() {
-        eprintln!(
-            "  ! Test runner under {}, not ready for use",
-            "active development".yellow().underline()
-        );
-    } else {
-        eprintln!("  ! Test runner under active development, not ready for use");
+        eprintln!("  ! {feature} {verb} in early preview · Bug reports are welcome");
     }
 }
 

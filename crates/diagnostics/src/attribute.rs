@@ -143,8 +143,10 @@ pub fn test_invalid_argument(attribute_span: &Span) -> LisetteDiagnostic {
 pub fn test_unsupported_signature(name_span: &Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Unsupported test function signature")
         .with_attribute_code("test_unsupported_signature")
-        .with_span_label(name_span, "must take no parameters and return nothing")
-        .with_help("Write the test as `fn name() { ... }`")
+        .with_span_label(name_span, "this test signature is not supported")
+        .with_help(
+            "A test is `fn name()` or `fn name(t: TestContext)`, optionally returning `Result<(), error>`.",
+        )
 }
 
 pub fn equality_on_tuple_struct(attribute_span: &Span) -> LisetteDiagnostic {

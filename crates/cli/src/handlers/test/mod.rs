@@ -1,4 +1,4 @@
-use std::time::Instant;
+use std::time::Duration;
 
 use crate::cli_error;
 use crate::go_cli;
@@ -12,7 +12,7 @@ mod report;
 use report::{build_report_filtered, exit_code, matching_tests, render};
 
 pub fn test(path: Option<String>, go_flags: Vec<String>, filter: Option<String>) -> i32 {
-    crate::output::print_test_unfinished_notice();
+    crate::output::print_preview_notice("Test runner", false);
     with_locked_project(path, |prep| {
         let outcome = build_locked(
             prep,
@@ -61,7 +61,6 @@ pub fn test(path: Option<String>, go_flags: Vec<String>, filter: Option<String>)
             }
         };
 
-        let started = Instant::now();
         let run = match go_cli::run_tests(
             &build_dir,
             stdlib::Target::host(),
@@ -83,7 +82,12 @@ pub fn test(path: Option<String>, go_flags: Vec<String>, filter: Option<String>)
         );
         eprint!(
             "{}",
-            render(&report, &outcome.sources, use_color(), started.elapsed())
+            render(
+                &report,
+                &outcome.sources,
+                use_color(),
+                Duration::from_secs_f64(report.test_elapsed),
+            )
         );
 
         let build_error = report.build_output.trim();

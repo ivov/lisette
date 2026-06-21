@@ -2,8 +2,8 @@
 pub type TestContext
 
 impl TestContext {
-    /// Run `body` as a named subtest. Returns whether it succeeded.
-    pub fn run(self, name: string, body: fn(TestContext) -> ()) -> bool
+    /// Run `body` as a named subtest.
+    pub fn run(self, name: string, body: fn(TestContext) -> ())
 
     /// Signal that this test may run in parallel with other parallel tests.
     pub fn parallel(self)

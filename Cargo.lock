@@ -526,6 +526,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tempfile",
+ "terminal_size",
  "tokio",
  "tower-lsp",
 ]

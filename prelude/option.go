@@ -104,6 +104,13 @@ func (opt Option[T]) String() string {
 	return "None"
 }
 
+func (opt Option[T]) DebugString() string {
+	if opt.Tag == OptionSome {
+		return fmt.Sprintf("Some(%s)", Debug(opt.SomeVal))
+	}
+	return "None"
+}
+
 func (opt Option[T]) IsZero() bool {
 	return opt.Tag == OptionNone
 }

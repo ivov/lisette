@@ -32,6 +32,7 @@ lsp = { package = "lisette-lsp", version = "0.4.3", path = "../lsp" }
 tokio = { version = "1", features = ["rt-multi-thread", "io-std"] }
 tower-lsp = "0.20"
 fs2 = "0.4"
+terminal_size = "0.4"
 owo-colors.workspace = true
 rustc-hash.workspace = true
 serde.workspace = true

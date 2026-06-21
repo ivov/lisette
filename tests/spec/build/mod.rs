@@ -7510,8 +7510,8 @@ fn assert_lowers_to_decomposed_failure_call() {
         "a comparison `assert` must report a relation, got:\n{go}"
     );
     assert!(
-        go.contains("left: %v, right: %v"),
-        "a relation `assert` must format both operands, got:\n{go}"
+        go.contains("left: %s · right: %s") && go.contains("lisette.Debug("),
+        "a relation `assert` must format both operands through Debug, got:\n{go}"
     );
     assert!(
         go.contains("\"bare\""),
@@ -7552,10 +7552,6 @@ fn assert_equals_lowers_to_labeled_failure() {
     assert!(
         go.contains("Label: \"left\"") && go.contains("Label: \"right\""),
         "a labeled record must carry both operands, got:\n{go}"
-    );
-    assert!(
-        go.contains("Lo:") && go.contains("Hi:"),
-        "labeled operands must carry source spans, got:\n{go}"
     );
 }
 
@@ -7744,7 +7740,7 @@ fn let_assert_lowers_to_failure_on_mismatch() {
         "a `let assert` mismatch must report through the test channel, got:\n{go}"
     );
     assert!(
-        go.contains("fmt.Sprintf(\"%v\","),
+        go.contains("lisette.Debug("),
         "a `let assert` failure must include the actual value, got:\n{go}"
     );
 }

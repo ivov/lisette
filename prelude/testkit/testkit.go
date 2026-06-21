@@ -21,8 +21,8 @@ func New(t *testing.T) TestContext {
 }
 
 // Run runs body as a named subtest, re-wrapping the subtest's *testing.T.
-func (c TestContext) Run(name string, body func(TestContext)) bool {
-	return c.t.Run(name, func(inner *testing.T) {
+func (c TestContext) Run(name string, body func(TestContext)) {
+	c.t.Run(name, func(inner *testing.T) {
 		body(TestContext{t: inner})
 	})
 }
@@ -30,6 +30,14 @@ func (c TestContext) Run(name string, body func(TestContext)) bool {
 // Parallel marks this test as eligible to run in parallel.
 func (c TestContext) Parallel() {
 	c.t.Parallel()
+}
+
+// Recover turns an uncaught panic into a Lisette failure anchored at the test, so it reports like an
+// assertion instead of dumping a Go stack. Test wrappers defer this.
+func Recover(t *testing.T, file int, lo, hi uint32) {
+	if r := recover(); r != nil {
+		Fail(t, file, lo, hi, "panic", fmt.Sprintf("panic: %v", r))
+	}
 }
 
 // FailAssert reports an `assert` failure over the same channel as Fail.

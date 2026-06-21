@@ -251,20 +251,6 @@ pub(super) fn build_locked(prep: &BuildPrep, options: BuildOptions) -> BuildOutc
 
     let project_name = go_module_name.rsplit('/').next().unwrap_or(go_module_name);
 
-    if !quiet {
-        eprintln!();
-        if crate::output::use_color() {
-            use owo_colors::OwoColorize;
-            eprintln!(
-                "  · Compiling {} v{}",
-                project_name.bright_magenta(),
-                version
-            );
-        } else {
-            eprintln!("  · Compiling `{}` v{}", project_name, version);
-        }
-    }
-
     let compile_config = CompileConfig {
         target_phase: CompilePhase::Emit,
         go_module: go_module_name.to_string(),
@@ -419,11 +405,25 @@ pub(super) fn build_locked(prep: &BuildPrep, options: BuildOptions) -> BuildOutc
     go_cli::write_emit_manifest(&prep.target_dir, &emit.new_manifest);
 
     if !quiet {
-        eprintln!(
-            "  ✓ {} {}",
-            label,
-            crate::output::format_elapsed(start.elapsed())
-        );
+        eprintln!();
+        if crate::output::use_color() {
+            use owo_colors::OwoColorize;
+            eprintln!(
+                "  ✓ {} {} v{} {}",
+                label,
+                project_name.bright_magenta(),
+                version,
+                crate::output::format_elapsed(start.elapsed())
+            );
+        } else {
+            eprintln!(
+                "  ✓ {} `{}` v{} {}",
+                label,
+                project_name,
+                version,
+                crate::output::format_elapsed(start.elapsed())
+            );
+        }
     }
 
     BuildOutcome {

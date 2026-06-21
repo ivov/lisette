@@ -127,9 +127,15 @@ impl Planner<'_> {
         let test_name = go_name::go_test_function_name(name);
         let code = self.emit_function(function, None, is_public, fx);
 
+        let span = function.name_span;
+        let recover = format!(
+            "defer {test_kit}.Recover(t, {}, {}, {})",
+            span.file_id,
+            span.byte_offset,
+            span.byte_offset + span.byte_length,
+        );
         let call = format!("{callee}({test_kit}.New(t))");
         let body = if function.return_type.is_result() {
-            let span = function.name_span;
             format!(
                 "if err := {call}; err != nil {{\n\t\t{test_kit}.Fail(t, {}, {}, {}, \"result_err\", \"test returned Err\", {test_kit}.ErrOperand(err))\n\t}}",
                 span.file_id,
@@ -139,7 +145,7 @@ impl Planner<'_> {
         } else {
             call
         };
-        let wrapper = format!("func {test_name}(t *{testing}.T) {{\n\t{body}\n}}");
+        let wrapper = format!("func {test_name}(t *{testing}.T) {{\n\t{recover}\n\t{body}\n}}");
         format!("{doc_comment}{code}\n\n{wrapper}")
     }
 

@@ -451,7 +451,7 @@ fn setup_project(
         return Err(1);
     }
 
-    print_preview_notice();
+    print_preview_notice("Third-party Go dependencies", true);
 
     let project_target_dir = project_root.join("target");
     if project_target_dir.is_file() {

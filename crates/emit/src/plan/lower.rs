@@ -486,9 +486,11 @@ impl Planner<'_> {
         fx: &mut EmitEffects,
     ) -> AssertShape {
         fx.require_fmt();
-        let (test_kit, fmt) = (
+        fx.require_stdlib();
+        let (test_kit, fmt, prelude) = (
             go_name::GeneratedPackage::TestKit.qualifier(),
             go_name::GeneratedPackage::Fmt.qualifier(),
+            go_name::GeneratedPackage::Prelude.qualifier(),
         );
         let lhs = self.stage_assert_operand(left, "assertLeft", statements, fx);
         let rhs = self.stage_assert_operand(right, "assertRight", statements, fx);
@@ -508,13 +510,12 @@ impl Planner<'_> {
             condition,
             kind: "relation",
             operands: format!(
-                ", {test_kit}.Operand{{Value: {fmt}.Sprintf(\"left: %v, right: %v\", {lhs}, {rhs})}}"
+                ", {test_kit}.Operand{{Value: {fmt}.Sprintf(\"left: %s · right: %s\", {prelude}.Debug({lhs}), {prelude}.Debug({rhs}))}}"
             ),
         }
     }
 
-    /// `assert recv.equals(arg)`: compare via the canonical equals lowering,
-    /// reporting each operand by its source text and value.
+    /// `assert recv.equals(arg)`: compare via the canonical equals lowering, reporting `left`/`right`.
     fn lower_labeled_assert(
         &mut self,
         recv: &Expression,
@@ -522,13 +523,12 @@ impl Planner<'_> {
         statements: &mut Vec<LoweredStatement>,
         fx: &mut EmitEffects,
     ) -> AssertShape {
-        fx.require_fmt();
-        let (test_kit, fmt) = (
+        fx.require_stdlib();
+        let (test_kit, prelude) = (
             go_name::GeneratedPackage::TestKit.qualifier(),
-            go_name::GeneratedPackage::Fmt.qualifier(),
+            go_name::GeneratedPackage::Prelude.qualifier(),
         );
         let recv_ty = recv.get_type();
-        let (recv_span, arg_span) = (recv.get_span(), arg.get_span());
         let lhs = self.stage_assert_operand(recv, "assertLeft", statements, fx);
         let rhs = self.stage_assert_operand(arg, "assertRight", statements, fx);
         let condition = self.render_equality(&lhs, &rhs, &recv_ty, fx);
@@ -536,11 +536,7 @@ impl Planner<'_> {
             condition,
             kind: "labeled",
             operands: format!(
-                ", {test_kit}.Operand{{Label: \"left\", Value: {fmt}.Sprintf(\"%v\", {lhs}), Lo: {}, Hi: {}}}, {test_kit}.Operand{{Label: \"right\", Value: {fmt}.Sprintf(\"%v\", {rhs}), Lo: {}, Hi: {}}}",
-                recv_span.byte_offset,
-                recv_span.byte_offset + recv_span.byte_length,
-                arg_span.byte_offset,
-                arg_span.byte_offset + arg_span.byte_length,
+                ", {test_kit}.Operand{{Label: \"left\", Value: {prelude}.Debug({lhs})}}, {test_kit}.Operand{{Label: \"right\", Value: {prelude}.Debug({rhs})}}"
             ),
         }
     }

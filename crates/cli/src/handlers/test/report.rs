@@ -7,7 +7,7 @@ use serde::Deserialize;
 use syntax::ast::Span;
 
 use crate::go_cli::GoTestEvent;
-use crate::output::format_elapsed;
+use crate::output::{format_backticks, format_elapsed};
 use diagnostics::LisetteDiagnostic;
 use lisette::pipeline::{Sources, TestIndex};
 
@@ -15,6 +15,10 @@ use lisette::pipeline::{Sources, TestIndex};
 type FailChunks = HashMap<(String, String), (usize, Vec<(usize, String)>)>;
 
 const FAIL_ATTR_KEY: &str = "lisette-fail";
+
+const DESC_MAX_WIDTH: usize = 100;
+const DESC_MIN_WIDTH: usize = 20;
+const DESC_MAX_LINES: usize = 3;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Status {
@@ -36,10 +40,6 @@ struct FailEnvelope {
 struct Operand {
     label: String,
     value: String,
-    #[serde(default)]
-    lo: u32,
-    #[serde(default)]
-    hi: u32,
 }
 
 #[derive(Deserialize, Clone)]
@@ -63,6 +63,7 @@ pub struct TestRow {
     pub output: String,
     pub failure: Option<FailureRecord>,
     pub children: Vec<TestRow>,
+    pub span: Span,
 }
 
 pub struct Report {
@@ -71,6 +72,8 @@ pub struct Report {
     package_output: HashMap<String, String>,
     failed_packages: HashSet<String>,
     build_failed_packages: HashSet<String>,
+    go_module: String,
+    pub test_elapsed: f64,
 }
 
 fn name_or_title_contains(fn_name: &str, title: Option<&str>, pattern: &str) -> bool {
@@ -119,6 +122,7 @@ pub fn build_report_filtered(
     let mut failed_packages: HashSet<String> = HashSet::new();
     let mut build_failed_packages: HashSet<String> = HashSet::new();
     let mut fail_chunks: FailChunks = HashMap::new();
+    let mut test_elapsed: f64 = 0.0;
 
     for event in events {
         if event.action == "attr"
@@ -156,8 +160,12 @@ pub fn build_report_filtered(
                             .push_str(text);
                     }
                 }
+                "pass" => {
+                    test_elapsed = test_elapsed.max(event.elapsed.unwrap_or(0.0));
+                }
                 "fail" => {
                     failed_packages.insert(event.package.clone());
+                    test_elapsed = test_elapsed.max(event.elapsed.unwrap_or(0.0));
                 }
                 _ => {}
             }
@@ -220,6 +228,7 @@ pub fn build_report_filtered(
             output: outputs.get(&key).cloned().unwrap_or_default(),
             failure: failures.get(&key).cloned(),
             children,
+            span: test.span,
         });
     }
     Report {
@@ -228,6 +237,8 @@ pub fn build_report_filtered(
         package_output,
         failed_packages,
         build_failed_packages,
+        go_module: go_module.to_string(),
+        test_elapsed,
     }
 }
 
@@ -284,20 +295,19 @@ fn collect_children(
     failures: &HashMap<(String, String), FailureRecord>,
 ) -> Vec<TestRow> {
     let prefix = format!("{parent}/");
-    let mut direct: Vec<&String> = terminal
+    let mut segments: Vec<&str> = terminal
         .keys()
         .chain(started.iter())
-        .filter(|(pkg, name)| {
-            pkg == package && name.starts_with(&prefix) && !name[prefix.len()..].contains('/')
-        })
-        .map(|(_, name)| name)
+        .filter(|(pkg, name)| pkg == package && name.starts_with(&prefix))
+        .map(|(_, name)| name[prefix.len()..].split('/').next().unwrap_or(""))
         .collect();
-    direct.sort();
-    direct.dedup();
+    segments.sort_unstable();
+    segments.dedup();
 
-    direct
+    segments
         .into_iter()
-        .map(|full| {
+        .map(|segment| {
+            let full = format!("{parent}/{segment}");
             let key = (package.to_string(), full.clone());
             let (status, elapsed) = match terminal.get(&key).copied() {
                 Some(found) => found,
@@ -306,13 +316,14 @@ fn collect_children(
             };
             TestRow {
                 package: package.to_string(),
-                name: full[prefix.len()..].to_string(),
+                name: segment.to_string(),
                 description: None,
                 status,
                 elapsed,
                 output: outputs.get(&key).cloned().unwrap_or_default(),
                 failure: failures.get(&key).cloned(),
-                children: collect_children(package, full, terminal, started, outputs, failures),
+                children: collect_children(package, &full, terminal, started, outputs, failures),
+                span: Span::new(0, 0, 0),
             }
         })
         .collect()
@@ -323,6 +334,19 @@ fn package_of_import_path(import_path: &str) -> &str {
     import_path
         .split_once(" [")
         .map_or(import_path, |(pkg, _)| pkg)
+}
+
+fn package_display<'a>(package: &'a str, go_module: &str) -> &'a str {
+    if package == go_module {
+        package.rsplit('/').next().unwrap_or(package)
+    } else if let Some(rel) = package
+        .strip_prefix(go_module)
+        .and_then(|rest| rest.strip_prefix('/'))
+    {
+        rel
+    } else {
+        package
+    }
 }
 
 pub fn render(report: &Report, sources: &Sources, color: bool, total: Duration) -> String {
@@ -338,10 +362,24 @@ pub fn render(report: &Report, sources: &Sources, color: bool, total: Duration) 
         by_package.entry(&row.package).or_default().push(row);
     }
 
-    for (package, mut group) in by_package {
-        group.sort_by(|a, b| a.name.cmp(&b.name));
-        out.push_str(&format!("  {package}\n"));
-        render_rows(&mut out, &group, "    ", sources, color);
+    let term_width = terminal_width();
+    for (index, (package, mut group)) in by_package.into_iter().enumerate() {
+        if index > 0 {
+            out.push('\n');
+        }
+        group.sort_by(|a, b| {
+            let file_a = sources.get(&a.span.file_id).map(|s| s.filename.as_str());
+            let file_b = sources.get(&b.span.file_id).map(|s| s.filename.as_str());
+            (file_a, a.span.byte_offset).cmp(&(file_b, b.span.byte_offset))
+        });
+        let header = package_display(package, &report.go_module);
+        let header = if color {
+            header.bright_magenta().to_string()
+        } else {
+            header.to_string()
+        };
+        out.push_str(&format!("  {header}\n"));
+        render_rows(&mut out, &group, "    ", color, term_width);
 
         // Crash before any test ran (init/`TestMain` panic): cause is package-level only.
         if !report.build_failed_packages.contains(package)
@@ -360,12 +398,15 @@ pub fn render(report: &Report, sources: &Sources, color: bool, total: Duration) 
         }
     }
 
+    render_failures(&mut out, &report.rows, &report.go_module, sources, color);
+
     out.push('\n');
-    out.push_str(&summary(&report.rows, total));
+    out.push_str(&summary(&report.rows, total, color));
     out
 }
 
-fn render_rows(out: &mut String, rows: &[&TestRow], prefix: &str, sources: &Sources, color: bool) {
+fn render_rows(out: &mut String, rows: &[&TestRow], prefix: &str, color: bool, term_width: usize) {
+    let any_described = rows.iter().any(|r| r.description.is_some());
     for (i, row) in rows.iter().enumerate() {
         let last = i + 1 == rows.len();
         let branch = if last { "└── " } else { "├── " };
@@ -376,70 +417,169 @@ fn render_rows(out: &mut String, rows: &[&TestRow], prefix: &str, sources: &Sour
             _ => String::new(),
         };
         if row.children.is_empty() {
+            let glyph = if row.status == Status::NotRun {
+                dim("⊘", color)
+            } else {
+                mark(row.status, color)
+            };
             let suffix = match row.status {
-                Status::NotRun => " (not run)",
-                Status::Aborted => " (aborted)",
-                _ => "",
+                Status::Aborted => dim(" (aborted)", color),
+                _ => String::new(),
             };
             out.push_str(&format!(
-                "{prefix}{branch}{} {}{suffix}{timing}\n",
-                mark(row.status, color),
-                row.name
+                "{prefix}{branch}{glyph} {}{suffix}{timing}\n",
+                format_backticks(&row.name, color)
             ));
         } else {
-            out.push_str(&format!("{prefix}{branch}{}{timing}\n", row.name));
+            out.push_str(&format!(
+                "{prefix}{branch}{}{timing}\n",
+                format_backticks(&row.name, color)
+            ));
         }
 
         let child_prefix = format!("{prefix}{}", if last { "    " } else { "│   " });
 
         if let Some(description) = &row.description {
-            for line in description.lines() {
-                out.push_str(&dim(&format!("{child_prefix}  {line}"), color));
-                out.push('\n');
-            }
-        }
-
-        if let Some(block) = row
-            .failure
-            .as_ref()
-            .and_then(|record| render_failure(record, sources, color))
-        {
-            for line in block.lines() {
-                out.push_str(&format!("{child_prefix}{line}\n"));
-            }
-        } else if matches!(row.status, Status::Failed | Status::Aborted) {
-            for line in row.output.lines() {
-                let line = line.trim_end();
-                if line.is_empty() {
-                    continue;
+            let line = description.split_whitespace().collect::<Vec<_>>().join(" ");
+            if !line.is_empty() {
+                let gutter = if row.children.is_empty() {
+                    "  "
+                } else {
+                    "│ "
+                };
+                let indent = child_prefix.chars().count() + gutter.chars().count();
+                let width = term_width
+                    .saturating_sub(indent)
+                    .clamp(DESC_MIN_WIDTH, DESC_MAX_WIDTH);
+                for wrapped in wrap_description(&line, width, DESC_MAX_LINES) {
+                    out.push_str(&format!(
+                        "{child_prefix}{gutter}{}\n",
+                        format_description(&wrapped, color)
+                    ));
                 }
-                out.push_str(&dim(&format!("{child_prefix}    {line}"), color));
-                out.push('\n');
             }
         }
 
         let children: Vec<&TestRow> = row.children.iter().collect();
-        render_rows(out, &children, &child_prefix, sources, color);
+        render_rows(out, &children, &child_prefix, color, term_width);
+
+        if any_described && !last {
+            out.push_str(&format!("{prefix}│\n"));
+        }
     }
 }
 
-fn render_failure(record: &FailureRecord, sources: &Sources, color: bool) -> Option<String> {
+fn render_failures(
+    out: &mut String,
+    rows: &[TestRow],
+    go_module: &str,
+    sources: &Sources,
+    color: bool,
+) {
+    // The flat Failures section loses the tree's package grouping, so prefix the package when the run
+    // spans more than one, to disambiguate same-named tests across packages.
+    let multi_package = rows
+        .iter()
+        .map(|r| &r.package)
+        .collect::<HashSet<_>>()
+        .len()
+        > 1;
+    let mut blocks: Vec<(String, Option<String>, String)> = Vec::new();
+    for row in rows {
+        let prefix = if multi_package {
+            package_display(&row.package, go_module).to_string()
+        } else {
+            String::new()
+        };
+        collect_failures(row, &prefix, sources, color, &mut blocks);
+    }
+    if blocks.is_empty() {
+        return;
+    }
+
+    out.push('\n');
+    let heading = if color {
+        "Failures".bold().to_string()
+    } else {
+        "Failures".to_string()
+    };
+    out.push_str(&format!("  {heading}\n"));
+    for (path, kind, body) in blocks {
+        out.push('\n');
+        let glyph = mark(Status::Failed, color);
+        let name = format_backticks(&path, color);
+        match kind {
+            Some(kind) => out.push_str(&format!("  {glyph} {name} · {kind}\n")),
+            None => out.push_str(&format!("  {glyph} {name}\n")),
+        }
+        for line in body.lines() {
+            out.push_str(&format!("    {line}\n"));
+        }
+    }
+}
+
+fn collect_failures(
+    row: &TestRow,
+    prefix: &str,
+    sources: &Sources,
+    color: bool,
+    blocks: &mut Vec<(String, Option<String>, String)>,
+) {
+    let path = if prefix.is_empty() {
+        row.name.clone()
+    } else {
+        format!("{prefix} › {}", row.name)
+    };
+
+    if matches!(row.status, Status::Failed | Status::Aborted) {
+        if let Some((kind, body)) = row
+            .failure
+            .as_ref()
+            .and_then(|record| render_failure(record, sources, color))
+        {
+            blocks.push((path.clone(), Some(kind), body));
+        } else if !has_failing_descendant(row) {
+            let text = row
+                .output
+                .lines()
+                .map(str::trim_end)
+                .filter(|line| !line.is_empty())
+                .map(|line| dim(line, color))
+                .collect::<Vec<_>>()
+                .join("\n");
+            if !text.is_empty() {
+                blocks.push((path.clone(), None, text));
+            }
+        }
+    }
+
+    for child in &row.children {
+        collect_failures(child, &path, sources, color, blocks);
+    }
+}
+
+fn has_failing_descendant(row: &TestRow) -> bool {
+    row.children.iter().any(|child| {
+        matches!(child.status, Status::Failed | Status::Aborted) || has_failing_descendant(child)
+    })
+}
+
+fn render_failure(
+    record: &FailureRecord,
+    sources: &Sources,
+    color: bool,
+) -> Option<(String, String)> {
     let info = sources.get(&record.file)?;
     let span = Span::new(record.file, record.lo, record.hi.saturating_sub(record.lo));
 
     let (label, notes): (String, Vec<String>) = if record.kind == "labeled" {
-        let notes = record
+        let label = record
             .operands
             .iter()
-            .map(|operand| {
-                let source = info
-                    .source
-                    .get(operand.lo as usize..operand.hi as usize)
-                    .unwrap_or(&operand.label);
-                format!("{}: `{}` is `{}`", operand.label, source, operand.value)
-            })
-            .collect();
-        (record.message.clone(), notes)
+            .map(|operand| format!("{}: {}", operand.label, operand.value))
+            .collect::<Vec<_>>()
+            .join(" · ");
+        (label, Vec::new())
     } else {
         let label = record
             .operands
@@ -460,31 +600,137 @@ fn render_failure(record: &FailureRecord, sources: &Sources, color: bool) -> Opt
     if !notes.is_empty() {
         diagnostic = diagnostic.with_note(notes.join("\n"));
     }
-    Some(diagnostics::render::render_to_string(
-        &diagnostic,
-        &info.source,
-        &info.filename,
-        color,
-    ))
+    let rendered =
+        diagnostics::render::render_to_string(&diagnostic, &info.source, &info.filename, color);
+    let body = rendered.lines().skip(1).collect::<Vec<_>>().join("\n");
+    Some((record.message.clone(), body))
 }
 
-fn summary(rows: &[TestRow], total: Duration) -> String {
+fn summary(rows: &[TestRow], total: Duration, color: bool) -> String {
     let passed = rows.iter().filter(|r| r.status == Status::Passed).count();
     let failed = rows.iter().filter(|r| r.status == Status::Failed).count();
     let aborted = rows.iter().filter(|r| r.status == Status::Aborted).count();
     let not_run = rows.iter().filter(|r| r.status == Status::NotRun).count();
 
-    let mut parts = vec![format!("{passed} passed")];
+    let any_failure = failed > 0 || aborted > 0;
+    let glyph = mark(
+        if any_failure {
+            Status::Failed
+        } else {
+            Status::Passed
+        },
+        color,
+    );
+
+    let mut parts = Vec::new();
     if failed > 0 {
-        parts.push(format!("{failed} failed"));
+        parts.push(red(&format!("{failed} failed"), color));
     }
     if aborted > 0 {
-        parts.push(format!("{aborted} aborted"));
+        parts.push(red(&format!("{aborted} aborted"), color));
     }
+    parts.push(green(&format!("{passed} passed"), color));
     if not_run > 0 {
         parts.push(format!("{not_run} not run"));
     }
-    format!("  {} {}\n", parts.join(", "), format_elapsed(total))
+
+    format!(
+        "  {glyph} {} {}\n",
+        parts.join(" · "),
+        format_elapsed(total)
+    )
+}
+
+fn green(text: &str, color: bool) -> String {
+    if color {
+        text.green().to_string()
+    } else {
+        text.to_string()
+    }
+}
+
+fn red(text: &str, color: bool) -> String {
+    if color {
+        text.red().to_string()
+    } else {
+        text.to_string()
+    }
+}
+
+fn format_description(text: &str, color: bool) -> String {
+    if !color {
+        return text.to_string();
+    }
+    let mut out = String::new();
+    let mut rest = text;
+    while let Some(open) = rest.find('`') {
+        let prose = &rest[..open];
+        if !prose.is_empty() {
+            out.push_str(&prose.dimmed().to_string());
+        }
+        let after = &rest[open + 1..];
+        match after.find('`') {
+            Some(close) => {
+                let code = &after[..close];
+                if !code.is_empty() {
+                    out.push_str(&code.bright_magenta().dimmed().to_string());
+                }
+                rest = &after[close + 1..];
+            }
+            None => {
+                out.push_str(&format!("`{after}").dimmed().to_string());
+                return out;
+            }
+        }
+    }
+    if !rest.is_empty() {
+        out.push_str(&rest.dimmed().to_string());
+    }
+    out
+}
+
+fn terminal_width() -> usize {
+    terminal_size::terminal_size_of(std::io::stderr())
+        .map(|(w, _)| w.0 as usize)
+        .unwrap_or(100)
+}
+
+fn wrap_description(text: &str, width: usize, max_lines: usize) -> Vec<String> {
+    let width = width.max(8);
+    let mut lines: Vec<String> = Vec::new();
+    let mut current = String::new();
+    for word in text.split_whitespace() {
+        if !current.is_empty() && current.chars().count() + 1 + word.chars().count() <= width {
+            current.push(' ');
+            current.push_str(word);
+            continue;
+        }
+        if !current.is_empty() {
+            lines.push(std::mem::take(&mut current));
+        }
+        let mut rest = word;
+        while rest.chars().count() > width {
+            let split = rest
+                .char_indices()
+                .nth(width)
+                .map(|(i, _)| i)
+                .unwrap_or(rest.len());
+            lines.push(rest[..split].to_string());
+            rest = &rest[split..];
+        }
+        current = rest.to_string();
+    }
+    if !current.is_empty() {
+        lines.push(current);
+    }
+    if lines.len() > max_lines {
+        lines.truncate(max_lines);
+        if let Some(last) = lines.last_mut() {
+            let head: String = last.chars().take(width.saturating_sub(1)).collect();
+            *last = format!("{}…", head.trim_end());
+        }
+    }
+    lines
 }
 
 /// A non-`Passed` row fails the run only when `go test` itself did; a filtered test must not.
@@ -499,7 +745,7 @@ fn mark(status: Status, color: bool) -> String {
     let symbol = match status {
         Status::Passed => "✓",
         Status::Failed | Status::Aborted => "✗",
-        Status::NotRun => "·",
+        Status::NotRun => "⊘",
     };
     if !color {
         return symbol.to_string();
@@ -596,6 +842,25 @@ mod tests {
     }
 
     #[test]
+    fn wrap_description_wraps_and_truncates() {
+        let text = "alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu";
+
+        let short = wrap_description("alpha beta", 40, 3);
+        assert_eq!(short, vec!["alpha beta"]);
+
+        let wrapped = wrap_description(text, 16, 3);
+        assert!(wrapped.len() <= 3);
+        assert!(wrapped.iter().all(|l| l.chars().count() <= 16));
+        assert!(
+            wrapped.last().unwrap().ends_with('…'),
+            "a too-long description truncates its last line, got: {wrapped:?}"
+        );
+
+        let long_word = wrap_description("supercalifragilisticexpialidocious", 10, 3);
+        assert!(long_word.iter().all(|l| l.chars().count() <= 10));
+    }
+
+    #[test]
     fn all_pass_groups_by_package() {
         let index = index(&[(ENTRY_MODULE_ID, "root_smoke"), ("math", "adds_numbers")]);
         let events = vec![
@@ -607,7 +872,7 @@ mod tests {
 
         assert!(text.contains("  demo\n"));
         assert!(text.contains("✓ root_smoke"));
-        assert!(text.contains("  demo/math\n"));
+        assert!(text.contains("  math\n"));
         assert!(text.contains("✓ adds_numbers"));
         assert!(text.contains("2 passed"));
         assert_eq!(exit_code(&report.rows, true), 0);
@@ -657,9 +922,10 @@ mod tests {
         let report = build_report(&index, &events, "demo");
         let text = render(&report, &no_sources(), false, Duration::from_millis(1));
 
+        let tree = text.split("Failures").next().unwrap_or(&text);
         assert!(
-            !text.contains("✗ parent") && !text.contains("✓ parent"),
-            "a grouping carries no sigil, got:\n{text}"
+            !tree.contains("✗ parent") && !tree.contains("✓ parent"),
+            "a grouping carries no sigil in the tree, got:\n{text}"
         );
         assert!(text.contains("✓ child"));
         assert!(
@@ -717,7 +983,7 @@ mod tests {
         let report = build_report(&index, &[], "demo");
         let text = render(&report, &no_sources(), false, Duration::from_millis(1));
 
-        assert!(text.contains("· ghost (not run)"));
+        assert!(text.contains("⊘ ghost"));
         assert_eq!(exit_code(&report.rows, false), 1);
     }
 
@@ -729,8 +995,8 @@ mod tests {
 
         assert_eq!(exit_code(&report.rows, true), 0);
         let text = render(&report, &no_sources(), false, Duration::from_millis(1));
-        assert!(text.contains("· filtered (not run)"));
-        assert!(text.contains("1 passed, 1 not run"));
+        assert!(text.contains("⊘ filtered"));
+        assert!(text.contains("1 passed · 1 not run"));
     }
 
     #[test]

@@ -66,6 +66,13 @@ func (res Result[T, E]) String() string {
 	return fmt.Sprintf("Err(%v)", res.ErrVal)
 }
 
+func (res Result[T, E]) DebugString() string {
+	if res.Tag == ResultOk {
+		return fmt.Sprintf("Ok(%s)", Debug(res.OkVal))
+	}
+	return fmt.Sprintf("Err(%s)", Debug(res.ErrVal))
+}
+
 func ResultMap[T any, U any, E any](res Result[T, E], f func(T) U) Result[U, E] {
 	if res.Tag == ResultOk {
 		return Result[U, E]{Tag: ResultOk, OkVal: f(res.OkVal)}
