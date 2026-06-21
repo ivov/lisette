@@ -463,11 +463,13 @@ impl<'a> Formatter<'a> {
             None => Document::Sequence(vec![]),
         };
 
-        Document::str("const ")
-            .append(name)
-            .append(type_doc)
-            .append(" = ")
-            .append(self.expression(value))
+        let declaration = Document::str("const ").append(name).append(type_doc);
+
+        if matches!(value, Expression::NoOp) {
+            declaration
+        } else {
+            declaration.append(" = ").append(self.expression(value))
+        }
     }
 
     pub(super) fn binding(&mut self, binding: &'a Binding) -> Document<'a> {

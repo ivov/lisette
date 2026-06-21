@@ -268,6 +268,11 @@ fn const_public() {
 }
 
 #[test]
+fn const_declaration_without_value() {
+    assert_format_snapshot!("pub const NoError: Unknown");
+}
+
+#[test]
 fn var_simple() {
     assert_format_snapshot!("var ErrNotFound: error");
 }
