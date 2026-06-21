@@ -1,4 +1,4 @@
-use super::{MAX_TUPLE_ARITY, Parser};
+use super::{MAX_TUPLE_ARITY, ParamMode, Parser};
 use crate::ast::{Annotation, Attribute, Expression, Generic, Span, Visibility};
 use crate::lex::TokenKind::*;
 use crate::types::Type;
@@ -260,7 +260,7 @@ impl<'source> Parser<'source> {
             name,
             name_span,
             generics: vec![],
-            params: self.parse_function_params(),
+            params: self.parse_function_params(ParamMode::Strict),
             return_annotation: self.parse_function_return_annotation(),
             return_type: Type::uninferred(),
             visibility: Visibility::Private,

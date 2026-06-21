@@ -2,9 +2,28 @@ use diagnostics::LocalSink;
 use syntax::ast::{Annotation, Attribute, AttributeArg, Binding, Expression};
 use syntax::attributes::test_attribute;
 use syntax::program::TestFunction;
+use syntax::types::{Symbol, Type};
 
 use super::TaskState;
 use crate::store::Store;
+
+pub(crate) fn test_context_type() -> Type {
+    Type::Nominal {
+        id: Symbol::from_parts(crate::prelude::TEST_PRELUDE_MODULE_ID, "TestContext"),
+        params: vec![],
+        underlying_ty: None,
+    }
+}
+
+pub(crate) fn normalize_test_params(mut params: Vec<Binding>, is_test: bool) -> Vec<Binding> {
+    if is_test
+        && let [param] = params.as_mut_slice()
+        && param.annotation.is_none()
+    {
+        param.ty = test_context_type();
+    }
+    params
+}
 
 impl TaskState<'_> {
     /// Collect and validate a module's `#[test]` functions into `facts`
@@ -111,14 +130,13 @@ fn module_shadows_test_context(store: &Store, module_id: &str) -> bool {
 fn params_supported(params: &[Binding], context_shadowed: bool) -> bool {
     match params {
         [] => true,
-        [param] => {
-            !context_shadowed
-                && matches!(
-                    &param.annotation,
-                    Some(Annotation::Constructor { name, params, .. })
-                        if name == "TestContext" && params.is_empty()
-                )
-        }
+        [param] => match &param.annotation {
+            None => true,
+            Some(Annotation::Constructor { name, params, .. }) => {
+                !context_shadowed && name == "TestContext" && params.is_empty()
+            }
+            _ => false,
+        },
         _ => false,
     }
 }

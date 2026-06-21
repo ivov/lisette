@@ -1,4 +1,5 @@
 use crate::ast::{self, Span};
+use crate::attributes::has_test_attribute;
 use crate::lex;
 use crate::lex::TokenKind::*;
 use crate::lex::{Token, TokenKind};
@@ -9,6 +10,12 @@ pub const TUPLE_FIELDS: &[&str] = &["First", "Second", "Third", "Fourth", "Fifth
 const MAX_DEPTH: u32 = 64;
 const MAX_ERRORS: usize = 50;
 const MAX_LOOKAHEAD: usize = 256;
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ParamMode {
+    Strict,
+    TestFunction,
+}
 
 mod annotations;
 mod control_flow;
@@ -162,7 +169,15 @@ impl<'source> Parser<'source> {
             Enum => self.parse_enum_definition(doc, attributes),
             Struct => self.parse_struct_definition(doc, attributes),
             Interface => self.parse_interface_definition(doc),
-            Function => self.parse_function(doc, attributes),
+            Function => {
+                // Only a top-level `#[test]` declaration may write a bare handle parameter.
+                let mode = if has_test_attribute(&attributes) {
+                    ParamMode::TestFunction
+                } else {
+                    ParamMode::Strict
+                };
+                self.parse_function(doc, attributes, mode)
+            }
             Impl => self.parse_impl_block(),
             Const => self.parse_const_definition(doc),
             Var => self.parse_var_declaration(doc),
@@ -230,7 +245,7 @@ impl<'source> Parser<'source> {
                 );
                 self.parse_interface_definition(None)
             }
-            Function => self.parse_function(None, vec![]),
+            Function => self.parse_function(None, vec![], ParamMode::Strict),
             Const => self.parse_const_definition(None),
 
             Hash => {

@@ -596,6 +596,16 @@ impl Type {
         }
     }
 
+    pub fn is_uninferred(&self) -> bool {
+        matches!(
+            self,
+            Self::Var {
+                id: TypeVarId::UNINFERRED,
+                ..
+            }
+        )
+    }
+
     pub fn ignored() -> Self {
         Self::Var {
             id: TypeVarId::IGNORED,

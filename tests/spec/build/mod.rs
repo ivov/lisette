@@ -7604,6 +7604,42 @@ fn assert_lowers_to_decomposed_failure_call() {
 }
 
 #[test]
+fn bare_test_handle_uses_param_as_handle() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        "import \"math\"\n\nfn main() {\n  let _ = math.add(1, 2)\n}",
+    );
+    fs.add_file(
+        "math",
+        "core.lis",
+        "pub fn add(a: int, b: int) -> int { a + b }",
+    );
+    fs.add_file(
+        "math",
+        "core.test.lis",
+        "#[test]\nfn cases(t) {\n  let _ = t.run(\"c\", |t| { assert true })\n}",
+    );
+
+    let outputs = compile_project_files_with_tests(fs, "github.com/user/p", false, true);
+    let go = outputs
+        .iter()
+        .find(|f| f.name.ends_with("core_test.go"))
+        .expect("expected a core_test.go output")
+        .to_go();
+
+    assert!(
+        go.contains("t testkit.TestContext") && go.contains(".Run("),
+        "a bare handle parameter must be typed `testkit.TestContext` and drive subtests, got:\n{go}"
+    );
+    assert!(
+        !go.contains("lisetteTestCtx"),
+        "the user's bare handle must be the handle, not a synthesized one, got:\n{go}"
+    );
+}
+
+#[test]
 fn assert_equals_lowers_to_labeled_failure() {
     let mut fs = MockFileSystem::new();
     fs.add_file(

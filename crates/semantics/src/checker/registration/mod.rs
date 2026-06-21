@@ -5,7 +5,7 @@ mod equality;
 mod impl_bounds;
 mod iterate;
 mod methods;
-mod test_functions;
+pub(crate) mod test_functions;
 mod types;
 
 use std::path::PathBuf;
@@ -801,6 +801,14 @@ impl TaskState<'_> {
         self.scopes.push();
         self.put_in_scope(generics);
 
+        let test_params;
+        let params: &[Binding] = if syntax::attributes::has_test_attribute(attributes) {
+            test_params = test_functions::normalize_test_params(params.clone(), true);
+            &test_params
+        } else {
+            params
+        };
+
         let fn_ty = self.extract_signature_parts(store, generics, params, return_annotation, span);
 
         self.scopes.pop();
@@ -1052,12 +1060,10 @@ impl TaskState<'_> {
 
         let param_types: Vec<Type> = params
             .iter()
-            .map(|binding| {
-                binding
-                    .annotation
-                    .as_ref()
-                    .map(|a| self.convert_to_type_inner(store, a, span, true))
-                    .unwrap_or_else(|| self.new_type_var())
+            .map(|binding| match &binding.annotation {
+                Some(a) => self.convert_to_type_inner(store, a, span, true),
+                None if !binding.ty.is_uninferred() => binding.ty.clone(),
+                None => self.new_type_var(),
             })
             .collect();
 

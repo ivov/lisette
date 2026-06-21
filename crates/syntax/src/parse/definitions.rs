@@ -1,6 +1,6 @@
 use ecow::EcoString;
 
-use super::Parser;
+use super::{ParamMode, Parser};
 use crate::ast::{
     Annotation, Attribute, AttributeArg, EnumFieldDefinition, EnumVariant, Expression, Generic,
     ParentInterface, Span, StructFieldDefinition, StructKind, VariantFields, Visibility,
@@ -701,7 +701,11 @@ impl<'source> Parser<'source> {
             let is_public = self.advance_if(Pub);
 
             if self.is(Function) {
-                let method = self.parse_function(method_doc.map(|(text, _)| text), method_attrs);
+                let method = self.parse_function(
+                    method_doc.map(|(text, _)| text),
+                    method_attrs,
+                    ParamMode::Strict,
+                );
                 let method = if is_public {
                     method.set_public()
                 } else {

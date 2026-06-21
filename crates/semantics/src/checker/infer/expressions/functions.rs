@@ -13,6 +13,7 @@ use super::super::carry_mut::can_carry_mutation_across_fn_boundary;
 use super::super::unify::Dispatched;
 use super::primitives::contains_deref;
 use crate::checker::infer::InferCtx;
+use crate::checker::registration::test_functions::normalize_test_params;
 use crate::checker::scopes::UseContext;
 use crate::store::ENTRY_MODULE_ID;
 
@@ -187,9 +188,10 @@ impl InferCtx<'_, '_> {
 
         let resolved_expected = expected_ty.resolve_in(&self.env);
         let expected_params = resolved_expected.get_function_params().unwrap_or_default();
+        let is_test = attributes.iter().any(|a| a.name == "test");
+        let params = normalize_test_params(params, is_test);
         let new_params = self.infer_function_params(params, expected_params, true);
 
-        let is_test = attributes.iter().any(|a| a.name == "test");
         if is_test
             || new_params
                 .iter()
@@ -1111,6 +1113,10 @@ impl InferCtx<'_, '_> {
             .enumerate()
             .map(|(index, binding)| {
                 let expected_param_ty = match binding.annotation {
+                    // A `#[test]` handle carries a resolved type with no
+                    // annotation. Honor it before falling back to the expected
+                    // function type.
+                    None if !binding.ty.is_uninferred() => Some(binding.ty.clone()),
                     None => expected_params.get(index).cloned(),
                     _ => None,
                 };

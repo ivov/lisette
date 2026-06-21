@@ -1,7 +1,7 @@
 use ecow::EcoString;
 
 use super::strings::cook_string_contents;
-use super::{MAX_TUPLE_ARITY, ParseError, Parser};
+use super::{MAX_TUPLE_ARITY, ParamMode, ParseError, Parser};
 use crate::ast::{Annotation, Binding, Literal, Pattern, RestPattern, Span, StructFieldPattern};
 use crate::lex::Token;
 use crate::lex::TokenKind::*;
@@ -624,7 +624,7 @@ impl<'source> Parser<'source> {
         }
     }
 
-    pub fn parse_binding_with_type(&mut self) -> Binding {
+    pub(crate) fn parse_binding_with_type(&mut self, mode: ParamMode) -> Binding {
         if self.is_current_uppercase() && self.stream.peek_ahead(1).kind == Colon {
             let start = self.current_token();
             let name = start.text.to_string();
@@ -687,6 +687,16 @@ impl<'source> Parser<'source> {
                 typed_pattern: None,
                 ty: Type::uninferred(),
                 mutable: false,
+            };
+        }
+
+        if mode == ParamMode::TestFunction && self.is_not(Colon) {
+            return Binding {
+                pattern,
+                annotation: None,
+                typed_pattern: None,
+                ty: Type::uninferred(),
+                mutable: is_mut,
             };
         }
 

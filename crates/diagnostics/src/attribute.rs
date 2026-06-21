@@ -145,7 +145,7 @@ pub fn test_unsupported_signature(name_span: &Span) -> LisetteDiagnostic {
         .with_attribute_code("test_unsupported_signature")
         .with_span_label(name_span, "this test signature is not supported")
         .with_help(
-            "A test is `fn name()` or `fn name(t: TestContext)`, optionally returning `Result<(), error>`.",
+            "A test is `fn name()`, `fn name(t)`, or `fn name(t: TestContext)`, optionally returning `Result<(), error>`.",
         )
 }
 

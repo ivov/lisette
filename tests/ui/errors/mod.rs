@@ -3907,6 +3907,67 @@ fn test_attribute_with_test_context_accepted() {
 }
 
 #[test]
+fn test_attribute_with_bare_handle_accepted() {
+    let fs = test_attribute_fs(
+        "pub fn add(a: int, b: int) -> int { a + b }",
+        "#[test]\nfn checks(t) { let _ = t.run(\"c\", |t| { assert true }) }",
+    );
+    let result = infer_module("_entry_", fs);
+    assert!(
+        !has_code(&result, "test_unsupported_signature"),
+        "a bare handle parameter must be accepted, got: {:?}",
+        result.errors
+    );
+    assert!(
+        result.errors.is_empty(),
+        "a bare handle test must type-check cleanly, got: {:?}",
+        result.errors
+    );
+}
+
+#[test]
+fn test_attribute_with_two_bare_params_rejected() {
+    let fs = test_attribute_fs(
+        "pub fn add(a: int, b: int) -> int { a + b }",
+        "#[test]\nfn checks(t, u) { assert true }",
+    );
+    let result = infer_module("_entry_", fs);
+    assert!(
+        has_code(&result, "test_unsupported_signature"),
+        "more than one parameter must be rejected, got: {:?}",
+        result.errors
+    );
+}
+
+#[test]
+fn test_attribute_on_impl_method_does_not_relax_params() {
+    let fs = test_attribute_fs(
+        "pub struct Foo { n: int }\n\nimpl Foo {\n  #[test]\n  fn check(x) { let _ = x }\n}",
+        "#[test]\nfn ok() { assert true }",
+    );
+    let result = infer_module("_entry_", fs);
+    assert!(
+        has_code(&result, "unexpected_token"),
+        "an impl method stays strict-typed even with `#[test]`, so a bare parameter is a parse error, got: {:?}",
+        result.errors
+    );
+}
+
+#[test]
+fn test_attribute_bare_handle_resolves_to_prelude_under_shadow() {
+    let fs = test_attribute_fs(
+        "pub fn add(a: int, b: int) -> int { a + b }",
+        "struct TestContext { x: int }\n\n#[test]\nfn checks(t) { let _ = t.run(\"c\", |t| { assert true }) }",
+    );
+    let result = infer_module("_entry_", fs);
+    assert!(
+        result.errors.is_empty(),
+        "a bare handle is positional and resolves to the prelude even when TestContext is shadowed, so `t.run` must resolve cleanly, got: {:?}",
+        result.errors
+    );
+}
+
+#[test]
 fn test_attribute_value_named_test_context_does_not_block_param() {
     let fs = test_attribute_fs(
         "pub fn add(a: int, b: int) -> int { a + b }",

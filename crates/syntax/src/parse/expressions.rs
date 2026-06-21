@@ -1,7 +1,7 @@
 use ecow::EcoString;
 
 use super::strings::cook_string_contents;
-use super::{MAX_TUPLE_ARITY, ParseError, Parser};
+use super::{MAX_TUPLE_ARITY, ParamMode, ParseError, Parser};
 use crate::ast::{
     Annotation, Attribute, BinaryOperator, Binding, Expression, FormatStringPart, ImportAlias,
     Literal, SelectArm, SelectArmPattern, Span, StructFieldAssignment, StructSpread, UnaryOperator,
@@ -49,7 +49,7 @@ impl<'source> Parser<'source> {
             Function if self.stream.peek_ahead(1).kind == LeftParen => {
                 self.parse_fn_as_lambda_recovery()
             }
-            Function => self.parse_function(None, vec![]),
+            Function => self.parse_function(None, vec![], ParamMode::Strict),
             Match => self.parse_match(),
             If => self.parse_if(),
             Pipe | PipeDouble => self.parse_lambda(),
@@ -607,7 +607,7 @@ impl<'source> Parser<'source> {
         self.track_fn_as_lambda_error();
 
         self.ensure(Function);
-        let params = self.parse_function_params();
+        let params = self.parse_function_params(ParamMode::Strict);
         let return_annotation = self.parse_function_return_annotation();
 
         let body = if self.is(LeftCurlyBrace) {
@@ -847,13 +847,13 @@ impl<'source> Parser<'source> {
         }
     }
 
-    pub fn parse_function_params(&mut self) -> Vec<Binding> {
+    pub(crate) fn parse_function_params(&mut self, mode: ParamMode) -> Vec<Binding> {
         self.ensure(LeftParen);
 
         let mut params = vec![];
 
         while self.is_not(RightParen) {
-            params.push(self.parse_binding_with_type());
+            params.push(self.parse_binding_with_type(mode));
             self.expect_comma_or(RightParen);
         }
 
@@ -877,10 +877,11 @@ impl<'source> Parser<'source> {
         params
     }
 
-    pub fn parse_function(
+    pub(crate) fn parse_function(
         &mut self,
         doc: Option<std::string::String>,
         attributes: Vec<Attribute>,
+        param_mode: ParamMode,
     ) -> Expression {
         let start = self.current_token();
 
@@ -894,7 +895,7 @@ impl<'source> Parser<'source> {
         let name_span = Span::new(name_span.file_id, name_span.byte_offset, name.len() as u32);
 
         let generics = self.parse_generics();
-        let params = self.parse_function_params();
+        let params = self.parse_function_params(param_mode);
         let return_annotation = self.parse_function_return_annotation();
 
         let body = if self.is(LeftCurlyBrace) {
