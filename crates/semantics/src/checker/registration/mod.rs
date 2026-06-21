@@ -276,9 +276,7 @@ impl TaskState<'_> {
         store.mark_visited(module_id);
         store.add_module(module_id);
 
-        if let Some(pkg_name) = extract_package_directive(source)
-            && module_id.rsplit('/').next() != Some(pkg_name.as_str())
-        {
+        if let Some(pkg_name) = extract_package_directive(source) {
             store
                 .go_package_names
                 .insert(module_id.to_string(), pkg_name);

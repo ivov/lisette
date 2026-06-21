@@ -297,6 +297,43 @@ pub struct Style {}
 }
 
 #[test]
+fn distinct_versioned_modules_do_not_falsely_collide() {
+    let sdp = r#"
+pub struct SessionDescription {}
+"#;
+    let dtls = r#"
+pub struct Config {}
+"#;
+    let input = r#"
+import "go:example.com/sdp/v3"
+import "go:example.com/dtls/v3"
+
+fn make() {
+  let _ = sdp.SessionDescription {}
+  let _ = dtls.Config {}
+}
+"#;
+    let result = crate::_harness::emit::emit_with_go_typedefs(
+        input,
+        &[
+            ("go:example.com/sdp/v3", sdp),
+            ("go:example.com/dtls/v3", dtls),
+        ],
+    );
+    let collisions: Vec<_> = result
+        .files
+        .iter()
+        .flat_map(|file| &file.diagnostics)
+        .filter(|diagnostic| diagnostic.code_str() == Some("emit.go_import_collision"))
+        .collect();
+    assert!(
+        collisions.is_empty(),
+        "distinct `/v3` modules must not collide, got: {:?}",
+        collisions
+    );
+}
+
+#[test]
 fn go_type_uses_declared_package_name_not_path_segment() {
     let input = r#"
 import "go:example.com/ultraviolet"

@@ -18,7 +18,9 @@ use ecow::EcoString;
 use scopes::Scopes;
 use syntax::ast::Visibility as AstVisibility;
 use syntax::ast::{Annotation, Expression, Generic, ImportAlias, Span, StructFieldDefinition};
-use syntax::program::{Definition, DefinitionBody, File, FileImport, MethodSignatures, Module};
+use syntax::program::{
+    Definition, DefinitionBody, File, FileImport, MethodSignatures, Module, go_import_default_name,
+};
 use syntax::types::{SubstitutionMap, Symbol, Type, substitute};
 
 pub use infer::expressions::comparison::check_not_comparable;
@@ -708,7 +710,7 @@ impl<'s> TaskState<'s> {
                     .go_package_names
                     .get(module_id)
                     .cloned()
-                    .unwrap_or_else(|| go_module_last_segment(module_id).to_string());
+                    .unwrap_or_else(|| go_import_default_name(module_id).to_string());
                 self.imports
                     .prefix_to_module
                     .insert(self_alias, module_id.into());
@@ -907,15 +909,6 @@ impl<'s> TaskState<'s> {
         self.env.end_speculation(spec, result.is_err());
         result
     }
-}
-
-fn go_module_last_segment(module_id: &str) -> &str {
-    module_id
-        .strip_prefix("go:")
-        .unwrap_or(module_id)
-        .rsplit('/')
-        .next()
-        .unwrap_or(module_id)
 }
 
 /// Returns `true` if the given name is reserved and cannot be used as an import alias.

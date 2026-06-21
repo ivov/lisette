@@ -39,18 +39,33 @@ impl FileImport {
                 if let Some(pkg_name) = go_package_names.get(self.name.as_str()) {
                     return Some(pkg_name.clone());
                 }
-                Some(
-                    self.name
-                        .strip_prefix("go:")
-                        .unwrap_or(&self.name)
-                        .split('/')
-                        .next_back()
-                        .unwrap_or(&self.name)
-                        .to_string(),
-                )
+                let default = match self.name.strip_prefix("go:") {
+                    Some(go_path) => go_import_default_name(go_path),
+                    None => self.name.rsplit('/').next().unwrap_or(&self.name),
+                };
+                Some(default.to_string())
             }
         }
     }
+}
+
+pub fn go_import_default_name(import_path: &str) -> &str {
+    let path = import_path.strip_prefix("go:").unwrap_or(import_path);
+    let mut segments = path.rsplit('/');
+    let last = segments.next().unwrap_or(path);
+    if is_major_version_segment(last)
+        && let Some(preceding) = segments.next()
+    {
+        return preceding;
+    }
+    last
+}
+
+fn is_major_version_segment(segment: &str) -> bool {
+    segment
+        .strip_prefix('v')
+        .and_then(|digits| digits.parse::<u32>().ok())
+        .is_some_and(|major| major >= 2)
 }
 
 impl File {
@@ -130,5 +145,59 @@ impl File {
             .with_extension("go")
             .display()
             .to_string()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::go_import_default_name;
+
+    #[test]
+    fn major_version_suffix_resolves_to_preceding_segment() {
+        assert_eq!(go_import_default_name("github.com/pion/sdp/v3"), "sdp");
+        assert_eq!(
+            go_import_default_name("go:github.com/pion/webrtc/v4"),
+            "webrtc"
+        );
+        assert_eq!(
+            go_import_default_name("go:github.com/pion/transport/v4"),
+            "transport"
+        );
+    }
+
+    #[test]
+    fn non_version_last_segment_is_kept() {
+        assert_eq!(go_import_default_name("go:strings"), "strings");
+        assert_eq!(
+            go_import_default_name("go:github.com/pion/datachannel"),
+            "datachannel"
+        );
+        assert_eq!(
+            go_import_default_name("go:github.com/pion/transport/v4/packetio"),
+            "packetio"
+        );
+    }
+
+    #[test]
+    fn v0_and_v1_are_ordinary_segments() {
+        assert_eq!(go_import_default_name("go:k8s.io/api/core/v1"), "v1");
+        assert_eq!(go_import_default_name("go:example.com/pkg/v0"), "v0");
+    }
+
+    #[test]
+    fn dotted_version_suffix_is_not_a_major_version_segment() {
+        assert_eq!(go_import_default_name("go:gopkg.in/yaml.v3"), "yaml.v3");
+    }
+
+    #[test]
+    fn version_like_segment_without_preceding_segment_is_kept() {
+        assert_eq!(go_import_default_name("v2"), "v2");
+        assert_eq!(go_import_default_name("go:v2"), "v2");
+    }
+
+    #[test]
+    fn bare_v_or_non_numeric_is_not_a_version() {
+        assert_eq!(go_import_default_name("go:example.com/foo/v"), "v");
+        assert_eq!(go_import_default_name("go:example.com/foo/vx"), "vx");
     }
 }

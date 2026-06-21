@@ -51,6 +51,7 @@ impl ImportPlan {
 
 pub struct ImportBuilder<'a> {
     go_package_names: &'a HashMap<String, String>,
+    go_module_ids: &'a HashSet<String>,
     imports: HashMap<String, String>,
     /// Generated imports of paths the source already imports under another
     /// alias; emitted alongside (Go permits duplicate import paths).
@@ -60,9 +61,13 @@ pub struct ImportBuilder<'a> {
 }
 
 impl<'a> ImportBuilder<'a> {
-    pub fn new(go_package_names: &'a HashMap<String, String>) -> Self {
+    pub fn new(
+        go_package_names: &'a HashMap<String, String>,
+        go_module_ids: &'a HashSet<String>,
+    ) -> Self {
         Self {
             go_package_names,
+            go_module_ids,
             imports: HashMap::default(),
             generated_duplicates: Vec::new(),
             dropped_aliases: HashMap::default(),
@@ -73,9 +78,11 @@ impl<'a> ImportBuilder<'a> {
     pub(crate) fn from_plan(
         plan: &ImportPlan,
         go_package_names: &'a HashMap<String, String>,
+        go_module_ids: &'a HashSet<String>,
     ) -> Self {
         Self {
             go_package_names,
+            go_module_ids,
             imports: plan.imports.clone(),
             generated_duplicates: Vec::new(),
             dropped_aliases: plan.dropped_aliases.clone(),
@@ -108,7 +115,8 @@ impl<'a> ImportBuilder<'a> {
         let canonical = package.qualifier();
         self.used_modules.insert(path.to_string());
         match self.imports.get(path) {
-            Some(alias) if effective_package_name(path, alias) == canonical => {}
+            Some(alias) if effective_package_name(path, alias, self.go_module_ids) == canonical => {
+            }
             Some(_) => {
                 if !self.generated_duplicates.iter().any(|(p, _)| p == path) {
                     self.generated_duplicates
@@ -131,12 +139,15 @@ impl<'a> ImportBuilder<'a> {
         entries.extend(self.generated_duplicates);
         entries.sort();
         entries.dedup();
-        let diagnostics = detect_collisions(&entries);
+        let diagnostics = detect_collisions(&entries, self.go_module_ids);
         (entries, diagnostics)
     }
 }
 
-fn detect_collisions(entries: &[(String, String)]) -> Vec<LisetteDiagnostic> {
+fn detect_collisions(
+    entries: &[(String, String)],
+    go_module_ids: &HashSet<String>,
+) -> Vec<LisetteDiagnostic> {
     if entries.len() < 2 {
         return Vec::new();
     }
@@ -145,7 +156,7 @@ fn detect_collisions(entries: &[(String, String)]) -> Vec<LisetteDiagnostic> {
         if alias == "_" {
             continue;
         }
-        let effective = effective_package_name(path, alias);
+        let effective = effective_package_name(path, alias, go_module_ids);
         let sanitized = go_name::sanitize_package_name(effective).into_owned();
         groups.entry(sanitized).or_default().push(path.as_str());
     }
@@ -160,11 +171,18 @@ fn detect_collisions(entries: &[(String, String)]) -> Vec<LisetteDiagnostic> {
         .collect()
 }
 
-fn effective_package_name<'a>(path: &'a str, alias: &'a str) -> &'a str {
-    if alias.is_empty() {
-        path.rsplit('/').next().unwrap_or(path)
+fn effective_package_name<'a>(
+    path: &'a str,
+    alias: &'a str,
+    go_module_ids: &HashSet<String>,
+) -> &'a str {
+    if !alias.is_empty() {
+        return alias;
+    }
+    if go_module_ids.contains(&format!("{}{path}", go_name::GO_IMPORT_PREFIX)) {
+        syntax::program::go_import_default_name(path)
     } else {
-        alias
+        path.rsplit('/').next().unwrap_or(path)
     }
 }
 

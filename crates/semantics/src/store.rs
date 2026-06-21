@@ -104,8 +104,7 @@ pub struct Store {
     pub module_ids: Vec<ModuleId>,
     /// file ID -> module ID
     pub files: HashMap<u32, String>,
-    /// Go module ID -> Go package name, from the typedef `// Package:` directive.
-    /// Present only when the package name differs from the final path segment.
+    /// Go module ID -> package name from the typedef `// Package:` directive.
     pub go_package_names: HashMap<String, String>,
     /// File ID -> on-disk path of the `.d.lis` typedef. Lets the LSP map go: typedef
     /// file IDs to the actual cache path so go-to-definition can navigate there.

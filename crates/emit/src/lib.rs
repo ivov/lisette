@@ -506,8 +506,11 @@ impl<'a> Planner<'a> {
                 }
             }
 
-            let mut import_builder =
-                ImportBuilder::from_plan(&file_plan.imports, self.facts.go_package_names());
+            let mut import_builder = ImportBuilder::from_plan(
+                &file_plan.imports,
+                self.facts.go_package_names(),
+                self.facts.go_module_ids(),
+            );
 
             self.drain_file_emission_into(&mut source);
             fx.drain_into(&mut import_builder);

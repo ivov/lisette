@@ -5790,7 +5790,12 @@ fn go_import_collision_flags_shared_last_segment() {
     use rustc_hash::FxHashMap as HashMap;
 
     let go_package_names: HashMap<String, String> = HashMap::default();
-    let mut builder = emit::imports::ImportBuilder::new(&go_package_names);
+    let go_module_ids: rustc_hash::FxHashSet<String> =
+        ["go:database/sql", "go:entgo.io/ent/dialect/sql"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
+    let mut builder = emit::imports::ImportBuilder::new(&go_package_names, &go_module_ids);
     builder.extend_with_modules(
         &["database/sql", "entgo.io/ent/dialect/sql"]
             .iter()
@@ -5818,8 +5823,13 @@ fn go_import_collision_silent_when_aliases_differ() {
         "go:entgo.io/ent/dialect/sql".to_string(),
         "entsql".to_string(),
     );
+    let go_module_ids: rustc_hash::FxHashSet<String> =
+        ["go:database/sql", "go:entgo.io/ent/dialect/sql"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
 
-    let mut builder = emit::imports::ImportBuilder::new(&go_package_names);
+    let mut builder = emit::imports::ImportBuilder::new(&go_package_names, &go_module_ids);
     builder.extend_with_modules(
         &["database/sql", "entgo.io/ent/dialect/sql"]
             .iter()
@@ -5831,6 +5841,80 @@ fn go_import_collision_silent_when_aliases_differ() {
     assert!(
         diagnostics.is_empty(),
         "expected no diagnostics when aliases differ, got: {:?}",
+        diagnostics.iter().map(|d| d.code_str()).collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn go_import_collision_silent_for_distinct_versioned_modules() {
+    use rustc_hash::FxHashMap as HashMap;
+
+    let go_package_names: HashMap<String, String> = HashMap::default();
+    let go_module_ids: rustc_hash::FxHashSet<String> =
+        ["go:github.com/pion/sdp/v3", "go:github.com/pion/dtls/v3"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
+    let mut builder = emit::imports::ImportBuilder::new(&go_package_names, &go_module_ids);
+    builder.extend_with_modules(
+        &["github.com/pion/sdp/v3", "github.com/pion/dtls/v3"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect(),
+    );
+
+    let (_imports, diagnostics) = builder.build();
+    assert!(
+        diagnostics.is_empty(),
+        "distinct `/v3` modules must not collide, got: {:?}",
+        diagnostics.iter().map(|d| d.code_str()).collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn go_import_collision_flags_local_modules_sharing_last_segment() {
+    use rustc_hash::FxHashMap as HashMap;
+
+    let go_package_names: HashMap<String, String> = HashMap::default();
+    let go_module_ids: rustc_hash::FxHashSet<String> = rustc_hash::FxHashSet::default();
+    let mut builder = emit::imports::ImportBuilder::new(&go_package_names, &go_module_ids);
+    builder.extend_with_modules(
+        &["myproject/api/v2", "myproject/admin/v2"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect(),
+    );
+
+    let (_imports, diagnostics) = builder.build();
+    assert_eq!(
+        diagnostics.len(),
+        1,
+        "local modules both packaging as `v2` must collide, got: {:?}",
+        diagnostics.iter().map(|d| d.code_str()).collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn go_import_under_project_module_resolves_by_package_not_version() {
+    use rustc_hash::FxHashMap as HashMap;
+
+    let go_package_names: HashMap<String, String> = HashMap::default();
+    let go_module_ids: rustc_hash::FxHashSet<String> = ["go:myproject/plugins/v2"]
+        .iter()
+        .map(|s| s.to_string())
+        .collect();
+    let mut builder = emit::imports::ImportBuilder::new(&go_package_names, &go_module_ids);
+    builder.extend_with_modules(
+        &["myproject/plugins/v2", "myproject/api/v2"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect(),
+    );
+
+    let (_imports, diagnostics) = builder.build();
+    assert!(
+        diagnostics.is_empty(),
+        "a go: import under the project module must resolve by package name, got: {:?}",
         diagnostics.iter().map(|d| d.code_str()).collect::<Vec<_>>()
     );
 }
