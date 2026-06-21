@@ -18910,3 +18910,226 @@ fn main() {
 "#
     );
 }
+
+#[test]
+fn enum_variant_names_prefix() {
+    assert_lint_snapshot!(
+        r#"
+enum Color { ColorRed, ColorGreen }
+
+fn describe(c: Color) -> int {
+  match c {
+    Color.ColorRed => 1,
+    Color.ColorGreen => 2,
+  }
+}
+
+fn main() {
+  let _ = describe(Color.ColorRed)
+}
+"#
+    );
+}
+
+#[test]
+fn enum_variant_names_suffix() {
+    assert_lint_snapshot!(
+        r#"
+enum MyError { ParseMyError, IoMyError }
+
+fn code(e: MyError) -> int {
+  match e {
+    MyError.ParseMyError => 1,
+    MyError.IoMyError => 2,
+  }
+}
+
+fn main() {
+  let _ = code(MyError.ParseMyError)
+}
+"#
+    );
+}
+
+#[test]
+fn enum_variant_names_no_warning_distinct_variants() {
+    assert_no_lint_warnings!(
+        r#"
+enum Color { Red, Green }
+
+fn pick(c: Color) -> int {
+  match c {
+    Color.Red => 1,
+    Color.Green => 2,
+  }
+}
+
+fn main() {
+  let _ = pick(Color.Red)
+}
+"#
+    );
+}
+
+#[test]
+fn enum_variant_names_no_warning_word_lookalike() {
+    assert_no_lint_warnings!(
+        r#"
+enum Color { Colorful, Colorize }
+
+fn pick(c: Color) -> int {
+  match c {
+    Color.Colorful => 1,
+    Color.Colorize => 2,
+  }
+}
+
+fn main() {
+  let _ = pick(Color.Colorful)
+}
+"#
+    );
+}
+
+#[test]
+fn enum_variant_names_no_warning_partial_share() {
+    assert_no_lint_warnings!(
+        r#"
+enum Mixed { MixedOne, Two }
+
+fn pick(m: Mixed) -> int {
+  match m {
+    Mixed.MixedOne => 1,
+    Mixed.Two => 2,
+  }
+}
+
+fn main() {
+  let _ = pick(Mixed.MixedOne)
+}
+"#
+    );
+}
+
+#[test]
+fn enum_variant_names_no_warning_single_variant() {
+    assert_no_lint_warnings!(
+        r#"
+enum Wrapper { WrapperInner }
+
+fn pick(w: Wrapper) -> int {
+  match w {
+    Wrapper.WrapperInner => 1,
+  }
+}
+
+fn main() {
+  let _ = pick(Wrapper.WrapperInner)
+}
+"#
+    );
+}
+
+#[test]
+fn enum_variant_names_no_warning_variant_equals_enum() {
+    assert_no_lint_warnings!(
+        r#"
+enum Exact { Exact, ExactMore }
+
+fn pick(e: Exact) -> int {
+  match e {
+    Exact.Exact => 1,
+    Exact.ExactMore => 2,
+  }
+}
+
+fn main() {
+  let _ = pick(Exact.Exact)
+}
+"#
+    );
+}
+
+#[test]
+fn self_named_constructors_fires() {
+    assert_lint_snapshot!(
+        r#"
+struct Point { x: int }
+
+impl Point {
+  fn point(x: int) -> Point {
+    Point { x }
+  }
+}
+
+fn main() {
+  let p = Point.point(1)
+  let _ = p.x
+}
+"#
+    );
+}
+
+#[test]
+fn self_named_constructors_no_warning_new() {
+    assert_no_lint_warnings!(
+        r#"
+struct Point { x: int }
+
+impl Point {
+  fn new(x: int) -> Point {
+    Point { x }
+  }
+}
+
+fn main() {
+  let p = Point.new(1)
+  let _ = p.x
+}
+"#
+    );
+}
+
+#[test]
+fn self_named_constructors_no_warning_instance_method() {
+    assert_no_lint_warnings!(
+        r#"
+struct Point { x: int }
+
+impl Point {
+  fn point(self) -> int {
+    self.x
+  }
+}
+
+fn main() {
+  let p = Point { x: 1 }
+  let _ = p.point()
+}
+"#
+    );
+}
+
+#[test]
+fn self_named_constructors_no_warning_returns_other_type() {
+    assert_no_lint_warnings!(
+        r#"
+struct Widget { id: int }
+
+impl Widget {
+  fn widget() -> int {
+    5
+  }
+  fn build(id: int) -> Widget {
+    Widget { id }
+  }
+}
+
+fn main() {
+  let _ = Widget.widget()
+  let w = Widget.build(1)
+  let _ = w.id
+}
+"#
+    );
+}

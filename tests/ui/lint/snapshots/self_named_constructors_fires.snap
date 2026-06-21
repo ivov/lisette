@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [info] Constructor named after its type
+   ╭─[test.lis:5:6]
+ 4 │ impl Point {
+ 5 │   fn point(x: int) -> Point {
+   ·      ──┬──
+   ·        ╰── repeats the type name
+ 6 │     Point { x }
+   ╰────
+  help: Calling this as `Point.point()` repeats the type name. Rename it to `new`, the conventional constructor name · code: [lint.self_named_constructors]

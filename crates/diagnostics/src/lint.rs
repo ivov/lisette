@@ -1036,6 +1036,35 @@ pub fn miscased_screaming_snake(span: &Span, suggested_name: &str) -> LisetteDia
         .with_help(format!("Rename to `{}`", suggested_name))
 }
 
+pub fn enum_variant_names(
+    span: &Span,
+    enum_name: &str,
+    is_prefix: bool,
+    example_old: &str,
+    example_new: &str,
+) -> LisetteDiagnostic {
+    let affix = if is_prefix { "prefix" } else { "suffix" };
+    LisetteDiagnostic::info("Variant names repeat the enum name")
+        .with_lint_code("enum_variant_names")
+        .with_span_label(span, "each variant repeats this name")
+        .with_help(format!(
+            "Drop the `{enum_name}` {affix} from each variant (`{example_old}` to `{example_new}`). A variant is already written as `{enum_name}.{example_new}`, so the {affix} repeats the enum name."
+        ))
+}
+
+pub fn self_named_constructors(
+    span: &Span,
+    type_name: &str,
+    method_name: &str,
+) -> LisetteDiagnostic {
+    LisetteDiagnostic::info("Constructor named after its type")
+        .with_lint_code("self_named_constructors")
+        .with_span_label(span, "repeats the type name")
+        .with_help(format!(
+            "Calling this as `{type_name}.{method_name}()` repeats the type name. Rename it to `new`, the conventional constructor name."
+        ))
+}
+
 pub fn unused_field(span: &Span) -> LisetteDiagnostic {
     LisetteDiagnostic::warn("Unused field")
         .with_lint_code("unused_struct_field")

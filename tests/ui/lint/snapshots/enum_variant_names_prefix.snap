@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [info] Variant names repeat the enum name
+   ╭─[test.lis:2:6]
+ 1 │ 
+ 2 │ enum Color { ColorRed, ColorGreen }
+   ·      ──┬──
+   ·        ╰── each variant repeats this name
+ 3 │ 
+   ╰────
+  help: Drop the `Color` prefix from each variant (`ColorRed` to `Red`). A variant is already written as `Color.Red`, so the prefix repeats the enum name · code: [lint.enum_variant_names]

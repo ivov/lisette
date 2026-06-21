@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [info] Variant names repeat the enum name
+   ╭─[test.lis:2:6]
+ 1 │ 
+ 2 │ enum MyError { ParseMyError, IoMyError }
+   ·      ───┬───
+   ·         ╰── each variant repeats this name
+ 3 │ 
+   ╰────
+  help: Drop the `MyError` suffix from each variant (`ParseMyError` to `Parse`). A variant is already written as `MyError.Parse`, so the suffix repeats the enum name · code: [lint.enum_variant_names]

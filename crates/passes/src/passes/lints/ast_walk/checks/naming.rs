@@ -4,6 +4,8 @@ use syntax::ast::{Expression, Generic, Pattern, Span};
 use crate::passes::lints::ast_walk::casing::{is_snake_case, to_pascal_case, to_snake_case};
 use crate::passes::walk::NodeCtx;
 
+use super::helpers::first_param_is_self;
+
 pub fn check_expression_naming(expression: &Expression, ctx: &NodeCtx) {
     let sink = ctx.sink;
     let is_d_lis = ctx.is_d_lis;
@@ -101,13 +103,8 @@ pub fn check_expression_naming(expression: &Expression, ctx: &NodeCtx) {
             params,
             ..
         } => {
-            if !is_d_lis {
-                let is_method = params.first().is_some_and(|p| {
-                    matches!(&p.pattern, Pattern::Identifier { identifier, .. } if identifier == "self")
-                });
-                if !is_method {
-                    check_snake_case(name, name_span, "non_snake_case_function", sink);
-                }
+            if !is_d_lis && !first_param_is_self(params) {
+                check_snake_case(name, name_span, "non_snake_case_function", sink);
             }
 
             for generic in generics {
