@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [info] Needless struct update
+   ╭─[test.lis:8:28]
+ 7 │ fn resize(base: Shape) -> Shape {
+ 8 │   Shape.Rect { w: 5, h: 6, ..base }
+   ·                            ───┬──
+   ·                               ╰── has no effect
+ 9 │ }
+   ╰────
+  help: Remove `..base` · code: [lint.needless_update]

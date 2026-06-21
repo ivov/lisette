@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [info] Redundant field name
+   ╭─[test.lis:7:11]
+ 6 │ fn make(x: int) -> Point {
+ 7 │   Point { x: x, y: 0 }
+   ·           ──┬─
+   ·             ╰── can be simpler
+ 8 │ }
+   ╰────
+  help: Replace `x: x` with `x` · code: [lint.redundant_field_names]

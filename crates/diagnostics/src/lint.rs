@@ -241,6 +241,20 @@ pub fn replaceable_with_zero_fill(span: &Span, kept: &str, struct_name: &str) ->
         ))
 }
 
+pub fn redundant_field_names(span: &Span, name: &str) -> LisetteDiagnostic {
+    LisetteDiagnostic::info("Redundant field name")
+        .with_lint_code("redundant_field_names")
+        .with_span_label(span, "can be simpler")
+        .with_help(format!("Replace `{name}: {name}` with `{name}`"))
+}
+
+pub fn needless_update(span: &Span, base: &str) -> LisetteDiagnostic {
+    LisetteDiagnostic::info("Needless struct update")
+        .with_lint_code("needless_update")
+        .with_span_label(span, "has no effect")
+        .with_help(format!("Remove `..{base}`"))
+}
+
 pub fn double_negation(span: &Span, is_bool: bool) -> LisetteDiagnostic {
     let (code, msg) = if is_bool {
         ("double_bool_negation", "Double boolean negation")

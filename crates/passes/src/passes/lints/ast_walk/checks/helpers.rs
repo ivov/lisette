@@ -1,6 +1,9 @@
+use ecow::EcoString;
+use rustc_hash::FxHashSet as HashSet;
 use syntax::ast::{
     BinaryOperator, Expression, FormatStringPart, Literal, Pattern, Span, UnaryOperator,
 };
+use syntax::program::DefinitionBody;
 use syntax::types::{SimpleKind, Type, unqualified_name};
 
 use crate::passes::walk::visit_ast;
@@ -9,6 +12,28 @@ use semantics::store::Store;
 pub(super) use crate::passes::comparison::{
     expressions_equivalent, flip_comparison, is_side_effect_free, signed_integer_literal,
 };
+
+pub(super) fn struct_field_names(
+    store: &Store,
+    ty: &Type,
+    name: &str,
+) -> Option<HashSet<EcoString>> {
+    let Type::Nominal { id, .. } = ty.strip_refs() else {
+        return None;
+    };
+    let def = store.get_definition(id.as_str())?;
+    match &def.body {
+        DefinitionBody::Struct { fields, .. } => {
+            Some(fields.iter().map(|f| f.name.clone()).collect())
+        }
+        DefinitionBody::Enum { variants, .. } => {
+            let variant_name = unqualified_name(name);
+            let variant = variants.iter().find(|v| v.name == variant_name)?;
+            Some(variant.fields.iter().map(|f| f.name.clone()).collect())
+        }
+        _ => None,
+    }
+}
 
 pub(super) fn is_float_operand(store: &Store, expression: &Expression) -> bool {
     let resolved = store.deep_resolve_alias(&expression.get_type());
