@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use serde::{Deserialize, Serialize};
-use syntax::program::File;
+use syntax::program::{File, Module};
 
 use crate::store::{ENTRY_MODULE_ID, Store};
 use types::CachedDefinition;
@@ -356,42 +356,55 @@ fn extract_public_definitions(
         .collect()
 }
 
-/// Register a cached module in the store.
-/// `display_path` for each cached file is recomputed from the project layout
-/// against the current cwd, so warm and cold builds render the same diagnostic
-/// paths even though the cache stores only bare names.
-pub fn register_cached_module(
-    store: &mut Store,
-    module_id: &str,
+pub(crate) struct CachedModuleBuild {
+    pub module_id: String,
+    pub module: Module,
+    /// `(file_id, module_id)` pairs for the store's file -> module index.
+    pub file_map: Vec<(u32, String)>,
+    pub ufcs_methods: Vec<(String, String)>,
+}
+
+pub(crate) fn build_cached_module(
+    module_id: String,
+    file_id_base: u32,
     cached: ModuleInterface,
     project_root: &Path,
-) {
-    store.add_module(module_id);
+) -> CachedModuleBuild {
+    let mut module = Module::new(&module_id);
+    let mut file_ids: Vec<u32> = Vec::with_capacity(cached.files.len());
+    let mut file_map: Vec<(u32, String)> = Vec::with_capacity(cached.files.len());
 
-    let mut file_ids: Vec<u32> = vec![];
-    for cached_file in &cached.files {
-        let file_id = store.new_file_id();
+    for (index, cached_file) in cached.files.iter().enumerate() {
+        let file_id = file_id_base + index as u32;
         file_ids.push(file_id);
+        file_map.push((file_id, module_id.clone()));
 
-        let display_path = cached_file_display_path(project_root, module_id, &cached_file.name);
+        let display_path = cached_file_display_path(project_root, &module_id, &cached_file.name);
         let file = File::new_cached(
-            module_id,
+            &module_id,
             &cached_file.name,
             &display_path,
             &cached_file.source,
             file_id,
         );
-
-        store.store_file(module_id, file);
+        if file.is_d_lis() {
+            module.typedefs.insert(file_id, file);
+        } else {
+            module.files.insert(file_id, file);
+        }
     }
 
-    let module = store.get_module_mut(module_id).unwrap();
     for (qualified_name, cached_definition) in cached.definitions {
         let definition = cached_definition.to_definition(&file_ids);
         module.definitions.insert(qualified_name.into(), definition);
     }
 
-    store.mark_visited(module_id);
+    CachedModuleBuild {
+        module_id,
+        module,
+        file_map,
+        ufcs_methods: cached.ufcs_methods,
+    }
 }
 
 fn cached_file_display_path(project_root: &Path, module_id: &str, bare_name: &str) -> String {

@@ -1,6 +1,6 @@
 use rayon::prelude::*;
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use diagnostics::LocalSink;
@@ -11,10 +11,10 @@ use syntax::program::{File, Module};
 use deps::TypedefLocator;
 
 use crate::cache::{
-    CompiledModule, compute_emit_artifact_hash, compute_module_hash, get_dependency_module_hashes,
+    CachedModuleBuild, CompiledModule, ModuleInterface, build_cached_module,
+    compute_emit_artifact_hash, compute_module_hash, get_dependency_module_hashes,
     go_stdlib::{self, load_cached_go_module},
-    hash_module_sources, is_cache_disabled, prelude as prelude_cache, register_cached_module,
-    try_load_cache,
+    hash_module_sources, is_cache_disabled, prelude as prelude_cache, try_load_cache,
 };
 use crate::checker::TaskState;
 use crate::checker::infer::InferCtx;
@@ -61,8 +61,24 @@ pub struct AnalyzeInput<'a> {
     pub disable_cache: bool,
 }
 
-// Tiny projects stay serial to avoid rayon overhead.
-const PARALLEL_THRESHOLD: usize = 4;
+pub const PARALLEL_THRESHOLD: usize = 4;
+
+struct CacheCandidate {
+    module_id: String,
+    topo_rank: usize,
+    files: Vec<File>,
+    full_hash: u64,
+    dep_hashes: HashMap<String, u64>,
+    expected_artifact_hash: Option<u64>,
+    module_hash: u64,
+    production_hash: u64,
+}
+
+struct CacheBuildJob {
+    module_id: String,
+    interface: ModuleInterface,
+    file_id_base: u32,
+}
 
 pub struct InferenceOutput {
     pub store: Store,
@@ -193,9 +209,10 @@ pub fn run_inference(input: AnalyzeInput) -> InferenceOutput {
         let mut go_cache: Option<Option<go_stdlib::GoStdlibCache>> =
             if cache_disabled { Some(None) } else { None };
 
-        let mut to_infer: Vec<String> = Vec::new();
+        let mut to_infer: Vec<(usize, String)> = Vec::new();
+        let mut candidates: Vec<CacheCandidate> = Vec::new();
 
-        for module_id in order {
+        for (topo_rank, module_id) in order.into_iter().enumerate() {
             if module_id.starts_with("go:") {
                 if graph_result.link_only_modules.contains(&module_id) {
                     continue;
@@ -232,29 +249,21 @@ pub fn run_inference(input: AnalyzeInput) -> InferenceOutput {
             let expected_artifact_hash = check_go_files
                 .then(|| compute_emit_artifact_hash(production_hash, &input.go_module));
 
-            if cache_enabled
-                && !is_entry
-                && let Some(ref project_root) = input.project_root
-                && let Some(cached) = try_load_cache(
-                    &module_id,
+            if cache_enabled && !is_entry {
+                candidates.push(CacheCandidate {
+                    module_id,
+                    topo_rank,
+                    files,
                     full_hash,
-                    &dep_hashes,
+                    dep_hashes,
                     expected_artifact_hash,
-                    project_root,
-                    check_go_files,
-                )
-            {
-                checker
-                    .ufcs_methods
-                    .extend(cached.ufcs_methods.iter().cloned());
-                register_cached_module(&mut store, &module_id, cached, project_root);
-                checker.collect_cached_module_tests(&store, &module_id);
-                cached_modules.insert(module_id.clone());
+                    module_hash,
+                    production_hash,
+                });
                 continue;
             }
 
             store.store_module(&module_id, files);
-
             if !is_entry {
                 compiled_modules.push(CompiledModule {
                     module_id: module_id.clone(),
@@ -264,9 +273,22 @@ pub fn run_inference(input: AnalyzeInput) -> InferenceOutput {
                     dep_hashes,
                 });
             }
-
-            to_infer.push(module_id);
+            to_infer.push((topo_rank, module_id));
         }
+
+        let cache_load = load_cache_candidates(
+            &mut checker,
+            &mut store,
+            candidates,
+            input.project_root.as_deref(),
+            check_go_files,
+        );
+        compiled_modules.extend(cache_load.compiled);
+        cached_modules.extend(cache_load.cached);
+        to_infer.extend(cache_load.to_infer);
+
+        to_infer.sort_by_key(|(topo_rank, _)| *topo_rank);
+        let to_infer: Vec<String> = to_infer.into_iter().map(|(_, id)| id).collect();
 
         let test_ids: Vec<u32> = to_infer
             .iter()
@@ -376,6 +398,85 @@ fn register_go_module(
             );
         }
     }
+}
+
+#[derive(Default)]
+struct CacheLoad {
+    compiled: Vec<CompiledModule>,
+    cached: Vec<String>,
+    to_infer: Vec<(usize, String)>,
+}
+
+/// Merges cache hits into the store and returns the misses to register.
+fn load_cache_candidates(
+    checker: &mut TaskState,
+    store: &mut Store,
+    candidates: Vec<CacheCandidate>,
+    project_root: Option<&Path>,
+    check_go_files: bool,
+) -> CacheLoad {
+    let load = |c: &CacheCandidate| {
+        project_root.and_then(|root| {
+            try_load_cache(
+                &c.module_id,
+                c.full_hash,
+                &c.dep_hashes,
+                c.expected_artifact_hash,
+                root,
+                check_go_files,
+            )
+        })
+    };
+    let loaded: Vec<Option<ModuleInterface>> = if candidates.len() < PARALLEL_THRESHOLD {
+        candidates.iter().map(load).collect()
+    } else {
+        candidates.par_iter().map(load).collect()
+    };
+
+    let mut result = CacheLoad::default();
+    let mut build_jobs: Vec<CacheBuildJob> = Vec::new();
+    for (candidate, interface) in candidates.into_iter().zip(loaded) {
+        let Some(interface) = interface else {
+            let module_id = candidate.module_id;
+            store.store_module(&module_id, candidate.files);
+            result.compiled.push(CompiledModule {
+                module_id: module_id.clone(),
+                module_hash: candidate.module_hash,
+                production_hash: candidate.production_hash,
+                full_hash: candidate.full_hash,
+                dep_hashes: candidate.dep_hashes,
+            });
+            result.to_infer.push((candidate.topo_rank, module_id));
+            continue;
+        };
+        let file_id_base = store.reserve_file_ids(interface.files.len() as u32);
+        build_jobs.push(CacheBuildJob {
+            module_id: candidate.module_id,
+            interface,
+            file_id_base,
+        });
+    }
+
+    let Some(root) = project_root else {
+        return result;
+    };
+    let build = |job: CacheBuildJob| {
+        build_cached_module(job.module_id, job.file_id_base, job.interface, root)
+    };
+    let built: Vec<CachedModuleBuild> = if build_jobs.len() < PARALLEL_THRESHOLD {
+        build_jobs.into_iter().map(build).collect()
+    } else {
+        build_jobs.into_par_iter().map(build).collect()
+    };
+    for build in built {
+        checker.ufcs_methods.extend(build.ufcs_methods);
+        let module_id = build.module_id;
+        store.insert_prebuilt_module(module_id.clone(), build.module, build.file_map);
+        checker.collect_cached_module_tests(store, &module_id);
+        result.cached.push(module_id);
+    }
+
+    result
 }
 
 fn register_modules(

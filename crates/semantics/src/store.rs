@@ -163,6 +163,10 @@ impl Store {
         self.next_file_id.fetch_add(1, Ordering::Relaxed)
     }
 
+    pub fn reserve_file_ids(&self, count: u32) -> u32 {
+        self.next_file_id.fetch_add(count, Ordering::Relaxed)
+    }
+
     pub fn register_file(&mut self, file_id: u32, module_id: &str) {
         self.files.insert(file_id, module_id.to_string());
     }
@@ -259,6 +263,21 @@ impl Store {
 
     pub fn get_module_mut(&mut self, module_id: &str) -> Option<&mut Module> {
         self.modules.get_mut(module_id).map(Arc::make_mut)
+    }
+
+    /// Inserts a worker-built module (e.g. cache-decoded) and indexes its files.
+    pub(crate) fn insert_prebuilt_module(
+        &mut self,
+        module_id: String,
+        module: Module,
+        file_map: Vec<(u32, String)>,
+    ) {
+        for (file_id, owner) in file_map {
+            self.files.insert(file_id, owner);
+        }
+        self.module_ids.push(module_id.clone());
+        self.modules.insert(module_id.clone(), Arc::new(module));
+        self.visited_modules.insert(module_id);
     }
 
     /// `Arc`-bump snapshot for a registration worker, which inserts its own

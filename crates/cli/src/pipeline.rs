@@ -182,6 +182,7 @@ pub fn compile(
 mod tests {
     use super::*;
     use crate::fs::LocalFileSystem;
+    use semantics::inference::PARALLEL_THRESHOLD;
     use std::fs as stdfs;
     use tempfile::tempdir;
 
@@ -260,6 +261,110 @@ mod tests {
         assert!(
             !root.join("target/cache/leaky.cache").exists(),
             "leaky has warnings; cache must not write it"
+        );
+    }
+
+    fn analyze_cache_state(
+        project_dir: &std::path::Path,
+    ) -> (Vec<String>, Vec<(bool, Option<String>)>) {
+        let (_, locator) = TypedefLocator::from_project_with_manifest(project_dir).unwrap();
+        let src_main = project_dir.join("src").join("main.lis");
+        let source = stdfs::read_to_string(&src_main).unwrap();
+        let working_dir = src_main
+            .parent()
+            .and_then(|p| p.to_str())
+            .expect("temp project path is valid utf-8");
+        let fs_loader = LocalFileSystem::new(working_dir);
+        let build_result = syntax::build_ast(&source, ENTRY_FILE_ID);
+        let result = analyze(AnalyzeInput {
+            config: SemanticConfig {
+                run_lints: true,
+                standalone_mode: false,
+                load_siblings: true,
+            },
+            loader: &fs_loader,
+            source,
+            filename: "main.lis".to_string(),
+            display_path: "src/main.lis".to_string(),
+            ast: build_result.ast,
+            project_root: Some(project_dir.to_path_buf()),
+            compile_phase: CompilePhase::Check,
+            emit_tests: false,
+            locator,
+            go_module: "test".to_string(),
+            disable_cache: false,
+        })
+        .result;
+
+        let mut cached: Vec<String> = result.cached_modules.iter().cloned().collect();
+        cached.sort();
+        let mut diags: Vec<(bool, Option<String>)> = result
+            .errors
+            .iter()
+            .chain(result.lints.iter())
+            .map(|d| (d.is_error(), d.code_str().map(|s| s.to_string())))
+            .collect();
+        diags.sort();
+        (cached, diags)
+    }
+
+    #[test]
+    fn warm_build_parallel_cache_load_matches_cold() {
+        const N: usize = PARALLEL_THRESHOLD + 1;
+        let tmp = tempdir().unwrap();
+        let root = tmp.path();
+        stdfs::write(
+            root.join("lisette.toml"),
+            "[project]\nname = \"github.com/test/parcache\"\nversion = \"0.1.0\"\n",
+        )
+        .unwrap();
+
+        let mut main = String::new();
+        for i in 0..N {
+            stdfs::create_dir_all(root.join("src").join(format!("m{i}"))).unwrap();
+            stdfs::write(
+                root.join("src")
+                    .join(format!("m{i}"))
+                    .join(format!("m{i}.lis")),
+                format!("pub fn val() -> int {{ {i} }}\n"),
+            )
+            .unwrap();
+            main.push_str(&format!("import \"m{i}\"\n"));
+        }
+        let sum = (0..N)
+            .map(|i| format!("m{i}.val()"))
+            .collect::<Vec<_>>()
+            .join(" + ");
+        main.push_str(&format!("\nfn main() {{\n  let _ = {sum}\n}}\n"));
+        stdfs::write(root.join("src").join("main.lis"), main).unwrap();
+
+        let mut expected: Vec<String> = (0..N).map(|i| format!("m{i}")).collect();
+        expected.sort();
+
+        let (cold_cached, cold_diags) = analyze_cache_state(root);
+        assert!(
+            cold_cached.is_empty(),
+            "cold run must load nothing from cache; got: {cold_cached:?}"
+        );
+        assert!(
+            cold_diags.is_empty(),
+            "fixture must be clean; got: {cold_diags:?}"
+        );
+        for i in 0..N {
+            assert!(
+                root.join(format!("target/cache/m{i}.cache")).exists(),
+                "m{i} must be cached after the cold run"
+            );
+        }
+
+        let (warm_cached, warm_diags) = analyze_cache_state(root);
+        assert_eq!(
+            warm_cached, expected,
+            "warm run must serve every module from cache via the parallel path"
+        );
+        assert_eq!(
+            warm_diags, cold_diags,
+            "warm cross-module resolution must match cold"
         );
     }
 
