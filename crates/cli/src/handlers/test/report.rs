@@ -536,32 +536,56 @@ fn render_rows(out: &mut String, rows: &[&TestRow], prefix: &str, color: bool, t
             }
             _ => String::new(),
         };
+        let child_prefix = format!("{prefix}{}", if last { "    " } else { "│   " });
+
         // A skip is the grouping's own act and is not carried by its children, so it still shows `#`.
         if row.children.is_empty() || row.status == Status::Skipped {
             let glyph = mark(row.status, color);
-            let suffix = match row.status {
-                Status::Skipped => match &row.skip_reason {
-                    Some(reason) => dim(&format!(" ({reason})"), color),
-                    None => String::new(),
-                },
-                Status::Crashed => match crash_summary(&row.output) {
-                    Some(summary) => dim(&format!(" ({summary})"), color),
-                    None => String::new(),
-                },
-                _ => String::new(),
+            let annotation = match row.status {
+                Status::Skipped => row.skip_reason.clone(),
+                Status::Crashed => crash_summary(&row.output),
+                _ => None,
+            };
+            let base_width = prefix.chars().count()
+                + branch.chars().count()
+                + 2
+                + row.name.chars().count()
+                + timing.chars().count();
+            let inline = annotation
+                .as_ref()
+                .filter(|reason| base_width + reason.chars().count() + 3 <= term_width);
+            let suffix = match inline {
+                Some(reason) => dim(&format!(" ({reason})"), color),
+                None => String::new(),
             };
             out.push_str(&format!(
                 "{prefix}{branch}{glyph} {}{suffix}{timing}\n",
                 format_backticks(&row.name, color)
             ));
+            if inline.is_none()
+                && let Some(reason) = &annotation
+            {
+                let gutter = if row.children.is_empty() {
+                    "  "
+                } else {
+                    "│ "
+                };
+                let indent = child_prefix.chars().count() + gutter.chars().count();
+                let width = term_width
+                    .saturating_sub(indent)
+                    .clamp(DESC_MIN_WIDTH, DESC_MAX_WIDTH);
+                let collapsed = reason.split_whitespace().collect::<Vec<_>>().join(" ");
+                for wrapped in wrap_description(&collapsed, width, DESC_MAX_LINES) {
+                    out.push_str(&dim(&format!("{child_prefix}{gutter}{wrapped}"), color));
+                    out.push('\n');
+                }
+            }
         } else {
             out.push_str(&format!(
                 "{prefix}{branch}{}{timing}\n",
                 format_backticks(&row.name, color)
             ));
         }
-
-        let child_prefix = format!("{prefix}{}", if last { "    " } else { "│   " });
 
         if let Some(description) = &row.description {
             let line = description.split_whitespace().collect::<Vec<_>>().join(" ");
@@ -1253,6 +1277,38 @@ mod tests {
         assert!(text.contains("# wip (not ready)"), "got:\n{text}");
         assert!(text.contains("1 skipped"));
         assert_eq!(exit_code(&report.rows, true), 0, "a skip is not a failure");
+    }
+
+    #[test]
+    fn long_skip_reason_wraps_instead_of_overflowing() {
+        let index = index(&[(ENTRY_MODULE_ID, "wip")]);
+        let reason = "this reason is far too long to sit inline on the row without \
+                      running well past the edge of any reasonable terminal width";
+        let events = vec![
+            event("run", "demo", Some("TestWip"), None),
+            skip_attr_event("demo", "TestWip", reason),
+            event("skip", "demo", Some("TestWip"), None),
+        ];
+        let report = build_report(&index, &events, "demo");
+        let text = render(&report, &no_sources(), false, Duration::from_millis(1));
+
+        let row_line = text
+            .lines()
+            .find(|line| line.contains("# wip"))
+            .expect("the skipped row must render");
+        assert!(
+            !row_line.contains("this reason"),
+            "a long reason must not sit inline, got: {row_line}"
+        );
+        assert!(
+            text.contains("this reason is far too long"),
+            "the wrapped reason must still appear, got:\n{text}"
+        );
+        assert!(
+            text.lines()
+                .all(|line| line.chars().count() <= DESC_MAX_WIDTH),
+            "no wrapped line may overflow, got:\n{text}"
+        );
     }
 
     #[test]
