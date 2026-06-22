@@ -499,7 +499,7 @@ pub fn render(report: &Report, sources: &Sources, color: bool, total: Duration) 
             header.to_string()
         };
         out.push_str(&format!("  {header}\n"));
-        render_rows(&mut out, &group, "    ", color, term_width);
+        render_package_rows(&mut out, &group, sources, color, term_width);
 
         // Crash before any test ran (init/`TestMain` panic): cause is package-level only.
         if !report.build_failed_packages.contains(package)
@@ -523,6 +523,32 @@ pub fn render(report: &Report, sources: &Sources, color: bool, total: Duration) 
     out.push('\n');
     out.push_str(&summary(&report.rows, total, color));
     out
+}
+
+fn render_package_rows(
+    out: &mut String,
+    rows: &[&TestRow],
+    sources: &Sources,
+    color: bool,
+    term_width: usize,
+) {
+    let file_of = |row: &TestRow| {
+        sources
+            .get(&row.span.file_id)
+            .map(|info| info.filename.as_str())
+            .unwrap_or("")
+    };
+
+    for chunk in rows.chunk_by(|&a, &b| file_of(a) == file_of(b)) {
+        let file = file_of(chunk[0]);
+        let basename = file.rsplit('/').next().unwrap_or(file);
+        if basename.is_empty() {
+            render_rows(out, chunk, "    ", color, term_width);
+        } else {
+            out.push_str(&format!("    {basename}\n"));
+            render_rows(out, chunk, "      ", color, term_width);
+        }
+    }
 }
 
 fn render_rows(out: &mut String, rows: &[&TestRow], prefix: &str, color: bool, term_width: usize) {
@@ -1233,6 +1259,68 @@ mod tests {
         assert!(text.contains("✓ adds_numbers"));
         assert!(text.contains("2 passed"));
         assert_eq!(exit_code(&report.rows, true), 0);
+    }
+
+    #[test]
+    fn every_module_groups_its_tests_under_filenames() {
+        let mut index = TestIndex::default();
+        for (name, file) in [("adds", 1u32), ("subtracts", 2u32)] {
+            index.push(TestFunction {
+                module_id: "math".to_string(),
+                qualified_name: format!("math.{name}"),
+                title: None,
+                doc: None,
+                span: Span::new(file, 0, 1),
+            });
+        }
+        index.push(TestFunction {
+            module_id: "io".to_string(),
+            qualified_name: "io.reads".to_string(),
+            title: None,
+            doc: None,
+            span: Span::new(3, 0, 1),
+        });
+        let events = vec![
+            event("pass", "demo/math", Some("TestAdds"), None),
+            event("pass", "demo/math", Some("TestSubtracts"), None),
+            event("pass", "demo/io", Some("TestReads"), None),
+        ];
+        let report = build_report(&index, &events, "demo");
+
+        let mut sources = no_sources();
+        for (id, path) in [
+            (1u32, "src/math/add.test.lis"),
+            (2, "src/math/sub.test.lis"),
+            (3, "src/io/io.test.lis"),
+        ] {
+            sources.insert(
+                id,
+                SourceInfo {
+                    source: String::new(),
+                    filename: path.to_string(),
+                },
+            );
+        }
+        let text = render(&report, &sources, false, Duration::from_millis(1));
+
+        assert!(
+            text.contains("add.test.lis") && text.contains("sub.test.lis"),
+            "a split module shows a header per file:\n{text}"
+        );
+        assert!(
+            text.contains("io.test.lis"),
+            "a single-file module also shows its file header:\n{text}"
+        );
+        assert!(
+            !text.contains("src/math/add.test.lis"),
+            "the file header is the basename, not the full path:\n{text}"
+        );
+        let io_header = text.lines().position(|l| l.contains("io.test.lis"));
+        let reads = text.lines().position(|l| l.contains("✓ reads"));
+        assert!(
+            io_header < reads,
+            "tests sit under their file header:\n{text}"
+        );
     }
 
     #[test]
