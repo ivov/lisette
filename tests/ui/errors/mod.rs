@@ -664,6 +664,15 @@ fn main() {
 }
 
 #[test]
+fn parse_attribute_non_string_argument_recovers() {
+    let input = r#"
+#[test(123)]
+fn bad_title_arg() { }
+"#;
+    assert_parse_error_snapshot!(input);
+}
+
+#[test]
 fn parse_missing_closing_brace() {
     let input = r#"
 fn main() {

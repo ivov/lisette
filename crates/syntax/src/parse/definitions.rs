@@ -68,9 +68,13 @@ impl<'source> Parser<'source> {
     fn parse_attribute_args(&mut self) -> Vec<AttributeArg> {
         let mut args = vec![];
 
-        while self.is_not(RightParen) && !self.at_eof() {
+        while self.is_not(RightParen) && self.is_not(RightSquareBracket) && !self.at_eof() {
             if let Some(arg) = self.parse_attribute_arg() {
                 args.push(arg);
+            } else {
+                while !self.at_sync_point() && !self.at_eof() {
+                    self.next();
+                }
             }
 
             if !self.advance_if(Comma) {
@@ -78,7 +82,9 @@ impl<'source> Parser<'source> {
             }
         }
 
-        self.ensure(RightParen);
+        if !self.advance_if(RightParen) {
+            self.track_error("expected `)`", "Add `)` to close the attribute arguments");
+        }
         args
     }
 
