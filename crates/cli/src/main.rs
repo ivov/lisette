@@ -81,7 +81,8 @@ fn main() {
             path,
             go_flags,
             filter,
-        } => handlers::test(path, go_flags, filter),
+            failed,
+        } => handlers::test(path, go_flags, filter, failed),
         Command::Overview => {
             handlers::help::print_main_help();
             0

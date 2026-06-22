@@ -56,7 +56,7 @@ fn bash_completions() -> &'static str {
             return 0
             ;;
         test)
-            COMPREPLY=( $(compgen -W "--filter --go-flags" -- "$cur") )
+            COMPREPLY=( $(compgen -W "--filter --failed --go-flags" -- "$cur") )
             return 0
             ;;
         format)
@@ -139,6 +139,7 @@ _lis() {
                 test)
                     _arguments \
                         '--filter[Run only tests whose name contains the pattern]:pattern' \
+                        '--failed[Rerun the tests that failed last time]' \
                         '--go-flags[Flags passed through to go test]:flags'
                     ;;
                 format)
@@ -194,6 +195,7 @@ complete -c lis -n '__fish_seen_subcommand_from emit' -l sourcemap -d 'Include l
 complete -c lis -n '__fish_seen_subcommand_from run' -l sourcemap -d 'Include line directives for stack traces'
 complete -c lis -n '__fish_seen_subcommand_from run' -l go-flags -r -d 'Flags passed through to go build'
 complete -c lis -n '__fish_seen_subcommand_from test' -s f -l filter -r -d 'Run only tests whose name contains the pattern'
+complete -c lis -n '__fish_seen_subcommand_from test' -l failed -d 'Rerun the tests that failed last time'
 complete -c lis -n '__fish_seen_subcommand_from test' -l go-flags -r -d 'Flags passed through to go test'
 complete -c lis -n '__fish_seen_subcommand_from format' -l check -d 'Check formatting without modifying'
 complete -c lis -n '__fish_seen_subcommand_from check' -l errors-only -d 'Show only errors'

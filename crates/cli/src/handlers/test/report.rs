@@ -66,6 +66,7 @@ pub struct FailureRecord {
 
 pub struct TestRow {
     pub package: String,
+    pub go_name: String,
     pub name: String,
     pub description: Option<String>,
     pub status: Status,
@@ -114,6 +115,26 @@ pub fn matching_tests(index: &TestIndex, go_module: &str, filter: &str) -> Vec<(
         .collect()
 }
 
+pub fn all_test_keys(index: &TestIndex, go_module: &str) -> HashSet<(String, String)> {
+    index
+        .tests()
+        .iter()
+        .map(|test| {
+            let prefix = format!("{}.", test.module_id);
+            let fn_name = test
+                .qualified_name
+                .strip_prefix(&prefix)
+                .unwrap_or(&test.qualified_name);
+            let package = if test.module_id == ENTRY_MODULE_ID {
+                go_module.to_string()
+            } else {
+                format!("{}/{}", go_module, test.module_id)
+            };
+            (package, go_test_name(fn_name))
+        })
+        .collect()
+}
+
 #[cfg(test)]
 pub fn build_report(index: &TestIndex, events: &[GoTestEvent], go_module: &str) -> Report {
     build_report_filtered(index, events, go_module, None)
@@ -123,7 +144,7 @@ pub fn build_report_filtered(
     index: &TestIndex,
     events: &[GoTestEvent],
     go_module: &str,
-    filter: Option<&str>,
+    selected: Option<&HashSet<(String, String)>>,
 ) -> Report {
     let mut terminal: HashMap<(String, String), (Status, Option<f64>)> = HashMap::new();
     let mut started: HashSet<(String, String)> = HashSet::new();
@@ -229,11 +250,6 @@ pub fn build_report_filtered(
             .qualified_name
             .strip_prefix(&prefix)
             .unwrap_or(&test.qualified_name);
-        if let Some(pattern) = filter
-            && !name_or_title_contains(fn_name, test.title.as_deref(), pattern)
-        {
-            continue;
-        }
         let package = if test.module_id == ENTRY_MODULE_ID {
             go_module.to_string()
         } else {
@@ -241,6 +257,11 @@ pub fn build_report_filtered(
         };
         let go_name = go_test_name(fn_name);
         let key = (package.clone(), go_name.clone());
+        if let Some(set) = selected
+            && !set.contains(&key)
+        {
+            continue;
+        }
         let (status, elapsed) = match tables.terminal.get(&key).copied() {
             Some(found) => found,
             None if tables.started.contains(&key) => (Status::Aborted, None),
@@ -249,6 +270,7 @@ pub fn build_report_filtered(
         let children = collect_children(&package, &go_name, &tables);
         rows.push(TestRow {
             package,
+            go_name: go_name.clone(),
             name: test.title.clone().unwrap_or_else(|| fn_name.to_string()),
             description: test.doc.clone(),
             status,
@@ -339,6 +361,7 @@ fn collect_children(package: &str, parent: &str, tables: &EventTables) -> Vec<Te
             };
             TestRow {
                 package: package.to_string(),
+                go_name: full.clone(),
                 name: segment.to_string(),
                 description: None,
                 status,
@@ -790,6 +813,13 @@ pub fn exit_code(rows: &[TestRow], run_success: bool) -> i32 {
         .iter()
         .any(|r| matches!(r.status, Status::Failed | Status::Aborted));
     if !run_success || any_failure { 1 } else { 0 }
+}
+
+pub fn failed_keys(rows: &[TestRow]) -> Vec<(String, String)> {
+    rows.iter()
+        .filter(|r| matches!(r.status, Status::Failed | Status::Aborted))
+        .map(|r| (r.package.clone(), r.go_name.clone()))
+        .collect()
 }
 
 fn mark(status: Status, color: bool) -> String {
@@ -1376,14 +1406,29 @@ mod tests {
     }
 
     #[test]
-    fn filter_keeps_only_matching_rows_by_name_or_title() {
-        let by_title = build_report_filtered(&titled_index(), &[], "demo", Some("and trims"));
-        assert_eq!(by_title.rows.len(), 1);
-        assert_eq!(by_title.rows[0].name, "splits and trims CSV fields");
+    fn selected_set_keeps_only_those_rows() {
+        let only_splits: HashSet<(String, String)> =
+            [("demo/csv".to_string(), "TestSplitsCsv".to_string())]
+                .into_iter()
+                .collect();
+        let report = build_report_filtered(&titled_index(), &[], "demo", Some(&only_splits));
+        assert_eq!(report.rows.len(), 1);
+        assert_eq!(report.rows[0].name, "splits and trims CSV fields");
+        assert_eq!(report.rows[0].go_name, "TestSplitsCsv");
+    }
 
-        let by_name = build_report_filtered(&titled_index(), &[], "demo", Some("parses"));
-        assert_eq!(by_name.rows.len(), 1);
-        assert_eq!(by_name.rows[0].name, "parses_number");
+    #[test]
+    fn failed_keys_collects_failed_top_level_tests() {
+        let index = index(&[(ENTRY_MODULE_ID, "good"), (ENTRY_MODULE_ID, "bad")]);
+        let events = vec![
+            event("pass", "demo", Some("TestGood"), None),
+            event("fail", "demo", Some("TestBad"), None),
+        ];
+        let report = build_report(&index, &events, "demo");
+        assert_eq!(
+            failed_keys(&report.rows),
+            vec![("demo".to_string(), "TestBad".to_string())]
+        );
     }
 
     #[test]

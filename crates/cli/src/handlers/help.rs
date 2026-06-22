@@ -170,6 +170,7 @@ Arguments:
 
 Flags:
     {-f:b}, {--filter:b} {<pattern>:g}             Run only tests whose name contains pattern
+    {--failed:b}                           Rerun the tests that failed last time
     {--go-flags:b} {\"<flags>\":g}               Pass flags through to `go test`
 
 Examples:
