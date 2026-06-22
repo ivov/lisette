@@ -46,6 +46,14 @@ func Recover(t *testing.T, file int, lo, hi uint32) {
 	}
 }
 
+// Recover is the subtest analogue of the package-level Recover, deferred on a
+// `t.run` handle. recover() must stay in this method to catch the subtest's panic.
+func (c TestContext) Recover(file int, lo, hi uint32) {
+	if r := recover(); r != nil {
+		Fail(c.t, file, lo, hi, "panic", fmt.Sprintf("panic: %v", r))
+	}
+}
+
 // FailAssert reports an `assert` failure over the same channel as Fail.
 func (c TestContext) FailAssert(file int, lo, hi uint32, kind, message string, operands ...Operand) {
 	Fail(c.t, file, lo, hi, kind, message, operands...)

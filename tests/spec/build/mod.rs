@@ -7863,6 +7863,74 @@ fn assert_in_discarded_subtest_targets_subtest_handle() {
 }
 
 #[test]
+fn subtest_closure_defers_recover_on_its_handle() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        "import \"math\"\n\nfn main() {\n  let _ = math.add(1, 2)\n}",
+    );
+    fs.add_file(
+        "math",
+        "core.lis",
+        "pub fn add(a: int, b: int) -> int { a + b }",
+    );
+    fs.add_file(
+        "math",
+        "core.test.lis",
+        "#[test]\nfn grouped(t) {\n  let _ = t.run(\"inner\", |s| { s.parallel() })\n}",
+    );
+
+    let outputs = compile_project_files_with_tests(fs, "github.com/user/p", false, true);
+    let go = outputs
+        .iter()
+        .find(|f| f.name.ends_with("core_test.go"))
+        .expect("expected a core_test.go output")
+        .to_go();
+
+    assert!(
+        go.contains("defer s.Recover("),
+        "a subtest closure must defer Recover on its own handle so an escaping panic renders a spanned frame, got:\n{go}"
+    );
+}
+
+#[test]
+fn discarded_subtest_handle_is_named_so_recover_can_target_it() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        "import \"math\"\n\nfn main() {\n  let _ = math.add(1, 2)\n}",
+    );
+    fs.add_file(
+        "math",
+        "core.lis",
+        "pub fn add(a: int, b: int) -> int { a + b }",
+    );
+    fs.add_file(
+        "math",
+        "core.test.lis",
+        "#[test]\nfn grouped(t) {\n  let _ = t.run(\"inner\", |_| { panic(\"boom\") })\n}",
+    );
+
+    let outputs = compile_project_files_with_tests(fs, "github.com/user/p", false, true);
+    let go = outputs
+        .iter()
+        .find(|f| f.name.ends_with("core_test.go"))
+        .expect("expected a core_test.go output")
+        .to_go();
+
+    assert!(
+        !go.contains("func(_ testkit.TestContext)"),
+        "a discarded subtest handle must be named so the deferred Recover has a receiver, got:\n{go}"
+    );
+    assert!(
+        go.contains("defer lisetteSub_") && go.contains(".Recover("),
+        "a subtest that only panics must still defer Recover on its synthesized handle, got:\n{go}"
+    );
+}
+
+#[test]
 fn let_assert_lowers_to_failure_on_mismatch() {
     let mut fs = MockFileSystem::new();
     fs.add_file(

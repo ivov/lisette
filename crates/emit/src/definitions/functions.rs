@@ -103,14 +103,28 @@ impl Planner<'_> {
             self.push_test_handle(name);
         }
 
+        let recover = handle.as_ref().map(|name| {
+            fx.require_testkit();
+            let span = body.get_span();
+            format!(
+                "defer {name}.Recover({}, {}, {})\n",
+                span.file_id,
+                span.byte_offset,
+                span.byte_offset + span.byte_length,
+            )
+        });
+
         let return_info = self.lambda_return_info(ty, ctx, fx);
-        let body_string = self.emit_lambda_body_with_deferred(
+        let mut body_string = self.emit_lambda_body_with_deferred(
             body,
             &destructure_bindings,
             &return_info.ctx,
             return_info.has_return,
             fx,
         );
+        if let Some(recover) = recover {
+            body_string.insert_str(0, &recover);
+        }
 
         if handle.is_some() {
             self.pop_test_handle();
