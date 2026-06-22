@@ -20,10 +20,12 @@ struct EventTables {
     outputs: HashMap<(String, String), String>,
     failures: HashMap<(String, String), FailureRecord>,
     skip_reasons: HashMap<(String, String), String>,
+    subtest_names: HashMap<(String, String), String>,
 }
 
 const FAIL_ATTR_KEY: &str = "lisette-fail";
 const SKIP_ATTR_KEY: &str = "lisette-skip";
+const SUBTEST_ATTR_KEY: &str = "lisette-subtest";
 
 const DESC_MAX_WIDTH: usize = 100;
 const DESC_MIN_WIDTH: usize = 20;
@@ -158,6 +160,7 @@ pub fn build_report_filtered(
     let mut build_failed_packages: HashSet<String> = HashSet::new();
     let mut fail_chunks: FailChunks = HashMap::new();
     let mut skip_reasons: HashMap<(String, String), String> = HashMap::new();
+    let mut subtest_names: HashMap<(String, String), String> = HashMap::new();
     let mut test_elapsed: f64 = 0.0;
 
     for event in events {
@@ -179,6 +182,14 @@ pub fn build_report_filtered(
             && let Some(reason) = decode_hex(value).and_then(|b| String::from_utf8(b).ok())
         {
             skip_reasons.insert((event.package.clone(), test.clone()), reason);
+            continue;
+        }
+        if event.action == "attr"
+            && event.key.as_deref() == Some(SUBTEST_ATTR_KEY)
+            && let (Some(test), Some(value)) = (&event.test, &event.value)
+            && let Some(name) = decode_hex(value).and_then(|b| String::from_utf8(b).ok())
+        {
+            subtest_names.insert((event.package.clone(), test.clone()), name);
             continue;
         }
         let Some(test) = &event.test else {
@@ -244,6 +255,7 @@ pub fn build_report_filtered(
         outputs,
         failures: reassemble_failures(fail_chunks),
         skip_reasons,
+        subtest_names,
     };
 
     let mut rows = Vec::new();
@@ -342,41 +354,99 @@ fn decode_hex(hex: &str) -> Option<Vec<u8>> {
 
 fn collect_children(package: &str, parent: &str, tables: &EventTables) -> Vec<TestRow> {
     let prefix = format!("{parent}/");
-    let mut segments: Vec<&str> = tables
+    let real: HashSet<&str> = tables
         .terminal
         .keys()
         .chain(tables.started.iter())
         .filter(|(pkg, name)| pkg == package && name.starts_with(&prefix))
-        .map(|(_, name)| name[prefix.len()..].split('/').next().unwrap_or(""))
+        .map(|(_, name)| name.as_str())
+        .chain(std::iter::once(parent))
         .collect();
-    segments.sort_unstable();
-    segments.dedup();
 
-    segments
+    let mut children_of: HashMap<&str, Vec<&str>> = HashMap::new();
+    for full in real.iter().copied().filter(|&full| full != parent) {
+        if let Some(mother) = subtest_parent(package, full, &real, tables) {
+            children_of.entry(mother).or_default().push(full);
+        }
+    }
+    subtest_rows(package, parent, &children_of, tables)
+}
+
+fn subtest_rows(
+    package: &str,
+    parent: &str,
+    children_of: &HashMap<&str, Vec<&str>>,
+    tables: &EventTables,
+) -> Vec<TestRow> {
+    let mut children = children_of.get(parent).cloned().unwrap_or_default();
+    children.sort_unstable();
+
+    children
         .into_iter()
-        .map(|segment| {
-            let full = format!("{parent}/{segment}");
-            let key = (package.to_string(), full.clone());
+        .map(|full| {
+            let key = (package.to_string(), full.to_string());
             let (status, elapsed) = match tables.terminal.get(&key).copied() {
                 Some(found) => found,
                 None if tables.started.contains(&key) => (Status::Crashed, None),
                 None => (Status::Unreached, None),
             };
+            let name = tables
+                .subtest_names
+                .get(&key)
+                .filter(|original| !original.is_empty())
+                .cloned()
+                .unwrap_or_else(|| full[parent.len() + 1..].to_string());
             TestRow {
                 package: package.to_string(),
-                go_name: full.clone(),
-                name: segment.to_string(),
+                go_name: full.to_string(),
+                name,
                 description: None,
                 status,
                 elapsed,
                 output: tables.outputs.get(&key).cloned().unwrap_or_default(),
                 failure: tables.failures.get(&key).cloned(),
                 skip_reason: tables.skip_reasons.get(&key).cloned(),
-                children: collect_children(package, &full, tables),
+                children: subtest_rows(package, full, children_of, tables),
                 span: Span::new(0, 0, 0),
             }
         })
         .collect()
+}
+
+fn subtest_parent<'a>(
+    package: &str,
+    full: &'a str,
+    real: &HashSet<&'a str>,
+    tables: &EventTables,
+) -> Option<&'a str> {
+    let key = (package.to_string(), full.to_string());
+    if let Some(original) = tables.subtest_names.get(&key) {
+        let own_segments = original.matches('/').count() + 1;
+        if let Some(parent) = strip_trailing_segments(full, own_segments)
+            && real.contains(parent)
+        {
+            return Some(parent);
+        }
+    }
+    longest_real_prefix(full, real)
+}
+
+fn strip_trailing_segments(full: &str, count: usize) -> Option<&str> {
+    let mut end = full.len();
+    for _ in 0..count {
+        end = full[..end].rfind('/')?;
+    }
+    Some(&full[..end])
+}
+
+fn longest_real_prefix<'a>(full: &'a str, real: &HashSet<&str>) -> Option<&'a str> {
+    let mut best = None;
+    for (i, ch) in full.char_indices() {
+        if ch == '/' && real.contains(&full[..i]) {
+            best = Some(&full[..i]);
+        }
+    }
+    best
 }
 
 /// `go test` names a build failure `pkg [pkg.test]`; strip the suffix to match package events.
@@ -995,6 +1065,19 @@ mod tests {
         }
     }
 
+    fn subtest_attr_event(package: &str, test: &str, name: &str) -> GoTestEvent {
+        GoTestEvent {
+            action: "attr".to_string(),
+            package: package.to_string(),
+            test: Some(test.to_string()),
+            elapsed: None,
+            output: None,
+            import_path: None,
+            key: Some(SUBTEST_ATTR_KEY.to_string()),
+            value: Some(hex_encode(name)),
+        }
+    }
+
     fn no_sources() -> Sources {
         Sources::default()
     }
@@ -1275,6 +1358,102 @@ mod tests {
         let text = render(&report, &no_sources(), false, Duration::from_millis(1));
         assert!(text.contains("boom"));
         assert_eq!(exit_code(&report.rows, false), 1);
+    }
+
+    #[test]
+    fn subtest_shows_source_name_not_go_munged_name() {
+        let index = index(&[(ENTRY_MODULE_ID, "names")]);
+        let events = vec![
+            event("run", "demo", Some("TestNames"), None),
+            event("run", "demo", Some("TestNames/hello_world_here"), None),
+            subtest_attr_event("demo", "TestNames/hello_world_here", "hello world here"),
+            event("fail", "demo", Some("TestNames/hello_world_here"), None),
+            event("fail", "demo", Some("TestNames"), None),
+        ];
+        let report = build_report(&index, &events, "demo");
+        assert_eq!(report.rows[0].children[0].name, "hello world here");
+    }
+
+    #[test]
+    fn subtest_name_with_slashes_stays_one_leaf() {
+        let index = index(&[(ENTRY_MODULE_ID, "names")]);
+        let events = vec![
+            event("run", "demo", Some("TestNames"), None),
+            event("run", "demo", Some("TestNames/path/to/thing"), None),
+            subtest_attr_event("demo", "TestNames/path/to/thing", "path/to/thing"),
+            event("fail", "demo", Some("TestNames/path/to/thing"), None),
+            event("fail", "demo", Some("TestNames"), None),
+        ];
+        let report = build_report(&index, &events, "demo");
+        let children = &report.rows[0].children;
+        assert_eq!(children.len(), 1);
+        assert_eq!(children[0].name, "path/to/thing");
+        assert!(children[0].children.is_empty());
+    }
+
+    #[test]
+    fn sibling_subtest_named_like_a_path_prefix_stays_a_sibling() {
+        let index = index(&[(ENTRY_MODULE_ID, "names")]);
+        let events = vec![
+            event("run", "demo", Some("TestNames"), None),
+            event("run", "demo", Some("TestNames/path"), None),
+            subtest_attr_event("demo", "TestNames/path", "path"),
+            event("fail", "demo", Some("TestNames/path"), None),
+            event("run", "demo", Some("TestNames/path/to"), None),
+            subtest_attr_event("demo", "TestNames/path/to", "path/to"),
+            event("fail", "demo", Some("TestNames/path/to"), None),
+            event("fail", "demo", Some("TestNames"), None),
+        ];
+        let report = build_report(&index, &events, "demo");
+        let names: Vec<&str> = report.rows[0]
+            .children
+            .iter()
+            .map(|c| c.name.as_str())
+            .collect();
+        assert_eq!(names, vec!["path", "path/to"]);
+        assert!(
+            report.rows[0]
+                .children
+                .iter()
+                .all(|c| c.children.is_empty()),
+            "a name that prefixes a sibling must not adopt it as a child"
+        );
+    }
+
+    #[test]
+    fn duplicate_subtest_names_both_show_the_source_name() {
+        let index = index(&[(ENTRY_MODULE_ID, "dupes")]);
+        let events = vec![
+            event("run", "demo", Some("TestDupes"), None),
+            event("run", "demo", Some("TestDupes/dup"), None),
+            subtest_attr_event("demo", "TestDupes/dup", "dup"),
+            event("pass", "demo", Some("TestDupes/dup"), None),
+            event("run", "demo", Some("TestDupes/dup#01"), None),
+            subtest_attr_event("demo", "TestDupes/dup#01", "dup"),
+            event("pass", "demo", Some("TestDupes/dup#01"), None),
+            event("pass", "demo", Some("TestDupes"), None),
+        ];
+        let report = build_report(&index, &events, "demo");
+        let names: Vec<&str> = report.rows[0]
+            .children
+            .iter()
+            .map(|c| c.name.as_str())
+            .collect();
+        assert_eq!(names, vec!["dup", "dup"]);
+    }
+
+    #[test]
+    fn subtest_without_source_name_falls_back_to_go_segment() {
+        let index = index(&[(ENTRY_MODULE_ID, "names")]);
+        let events = vec![
+            event("run", "demo", Some("TestNames"), None),
+            event("run", "demo", Some("TestNames/#00"), None),
+            subtest_attr_event("demo", "TestNames/#00", ""),
+            event("fail", "demo", Some("TestNames/#00"), None),
+            event("fail", "demo", Some("TestNames"), None),
+        ];
+        let report = build_report(&index, &events, "demo");
+        assert_eq!(report.rows[0].children[0].name, "#00");
     }
 
     #[test]

@@ -23,6 +23,7 @@ func New(t *testing.T) TestContext {
 // Run runs body as a named subtest, re-wrapping the subtest's *testing.T.
 func (c TestContext) Run(name string, body func(TestContext)) {
 	c.t.Run(name, func(inner *testing.T) {
+		inner.Attr("lisette-subtest", hex.EncodeToString([]byte(name)))
 		body(TestContext{t: inner})
 	})
 }
