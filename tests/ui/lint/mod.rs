@@ -1443,6 +1443,144 @@ fn main() {
 }
 
 #[test]
+fn manual_rotate() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let x: uint32 = 7
+  let _ = (x << 5) | (x >> 27)
+}
+"#
+    );
+}
+
+#[test]
+fn manual_rotate_right_shift_first() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let x: uint16 = 7
+  let _ = (x >> 4) | (x << 12)
+}
+"#
+    );
+}
+
+#[test]
+fn manual_rotate_byte() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let b: byte = 3
+  let _ = (b << 1) | (b >> 7)
+}
+"#
+    );
+}
+
+#[test]
+fn manual_rotate_signed_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let x: int32 = 7
+  let _ = (x << 5) | (x >> 27)
+}
+"#
+    );
+}
+
+#[test]
+fn manual_rotate_wrong_sum_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let x: uint32 = 7
+  let _ = (x << 5) | (x >> 20)
+}
+"#
+    );
+}
+
+#[test]
+fn manual_rotate_different_operands_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let x: uint32 = 7
+  let y: uint32 = 9
+  let _ = (x << 5) | (y >> 27)
+}
+"#
+    );
+}
+
+#[test]
+fn manual_rotate_same_direction_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let x: uint32 = 7
+  let _ = (x << 5) | (x << 27)
+}
+"#
+    );
+}
+
+#[test]
+fn manual_rotate_platform_uint_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let x: uint = 7
+  let _ = (x << 5) | (x >> 59)
+}
+"#
+    );
+}
+
+#[test]
+fn manual_rotate_named_type_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+type Word = uint32
+
+fn main() {
+  let x: Word = 7
+  let _ = (x << 5) | (x >> 27)
+}
+"#
+    );
+}
+
+#[test]
+fn manual_rotate_addition_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let x: uint32 = 7
+  let _ = (x << 5) + (x >> 27)
+}
+"#
+    );
+}
+
+#[test]
+fn manual_rotate_effectful_operand_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn gen() -> uint32 {
+  7
+}
+
+fn main() {
+  let _ = (gen() << 5) | (gen() >> 27)
+}
+"#
+    );
+}
+
+#[test]
 fn manual_equal_fold_to_lower() {
     assert_lint_snapshot!(
         r#"

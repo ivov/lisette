@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [info] Manual `bits.RotateLeft`
+   ╭─[test.lis:4:11]
+ 3 │   let b: byte = 3
+ 4 │   let _ = (b << 1) | (b >> 7)
+   ·           ─────────┬─────────
+   ·                    ╰── can use `bits.RotateLeft`
+ 5 │ }
+   ╰────
+  help: Use `bits.RotateLeft8` after `import "go:math/bits"` · code: [lint.manual_rotate]
