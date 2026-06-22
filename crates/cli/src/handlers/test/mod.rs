@@ -1,3 +1,4 @@
+use std::collections::{BTreeMap, HashSet};
 use std::time::Duration;
 
 use crate::cli_error;
@@ -6,12 +7,16 @@ use crate::output::use_color;
 
 use super::build::{BuildOptions, build_locked, with_locked_project};
 
-use std::collections::BTreeMap;
-
+mod failed;
 mod report;
-use report::{build_report_filtered, exit_code, matching_tests, render};
+use report::{all_test_keys, build_report_filtered, exit_code, matching_tests, render};
 
-pub fn test(path: Option<String>, go_flags: Vec<String>, filter: Option<String>) -> i32 {
+pub fn test(
+    path: Option<String>,
+    go_flags: Vec<String>,
+    filter: Option<String>,
+    failed: bool,
+) -> i32 {
     crate::output::print_preview_notice("Test runner", false);
     with_locked_project(path, |prep| {
         let outcome = build_locked(
@@ -27,27 +32,54 @@ pub fn test(path: Option<String>, go_flags: Vec<String>, filter: Option<String>)
             return outcome.code;
         }
 
-        let scopes = match filter.as_deref() {
-            Some(pattern) => {
-                let matched =
-                    matching_tests(&outcome.test_index, &prep.manifest.project.name, pattern);
-                if matched.is_empty() {
-                    eprintln!("\n  No tests match `{pattern}`\n");
-                    return 0;
-                }
-                let mut by_package: BTreeMap<String, Vec<String>> = BTreeMap::new();
-                for (package, go_name) in matched {
-                    by_package.entry(package).or_default().push(go_name);
-                }
-                Some(
-                    by_package
-                        .into_iter()
-                        .map(|(package, names)| (package, format!("^({})$", names.join("|"))))
-                        .collect::<Vec<_>>(),
-                )
+        let go_module = &prep.manifest.project.name;
+
+        let selected: Option<HashSet<(String, String)>> = if failed {
+            let live = all_test_keys(&outcome.test_index, go_module);
+            let set: HashSet<(String, String)> = failed::load(&prep.target_dir)
+                .into_iter()
+                .filter(|key| live.contains(key))
+                .collect();
+            if set.is_empty() {
+                let message = crate::output::format_backticks(
+                    "No failures to rerun. Run `lis test` first.",
+                    use_color(),
+                );
+                eprintln!("\n  {message}\n");
+                return 0;
             }
-            None => None,
+            Some(set)
+        } else if let Some(pattern) = filter.as_deref() {
+            let matched = matching_tests(&outcome.test_index, go_module, pattern);
+            if matched.is_empty() {
+                let message = crate::output::format_backticks(
+                    &format!("No tests match `{pattern}`"),
+                    use_color(),
+                );
+                eprintln!("\n  {message}\n");
+                return 0;
+            }
+            Some(matched.into_iter().collect())
+        } else {
+            None
         };
+
+        let scopes = selected.as_ref().map(|set| {
+            let mut by_package: BTreeMap<String, Vec<String>> = BTreeMap::new();
+            for (package, go_name) in set {
+                by_package
+                    .entry(package.clone())
+                    .or_default()
+                    .push(go_name.clone());
+            }
+            by_package
+                .into_iter()
+                .map(|(package, mut names)| {
+                    names.sort();
+                    (package, format!("^({})$", names.join("|")))
+                })
+                .collect::<Vec<_>>()
+        });
 
         let build_dir = match prep.target_dir.canonicalize() {
             Ok(p) => p,
@@ -77,8 +109,8 @@ pub fn test(path: Option<String>, go_flags: Vec<String>, filter: Option<String>)
         let report = build_report_filtered(
             &outcome.test_index,
             &run.events,
-            &prep.manifest.project.name,
-            filter.as_deref(),
+            go_module,
+            selected.as_ref(),
         );
         eprint!(
             "{}",
@@ -97,6 +129,8 @@ pub fn test(path: Option<String>, go_flags: Vec<String>, filter: Option<String>)
                 build_error.to_string(),
                 "The generated Go failed to build; run `lis check`"
             );
+        } else if filter.is_none() {
+            failed::save(&prep.target_dir, &report.rows);
         }
 
         exit_code(&report.rows, run.success)

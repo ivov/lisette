@@ -272,7 +272,10 @@ impl<'a> GoWorkspace<'a> {
         module: GoModule,
         package: &str,
     ) -> Result<Vec<String>, String> {
-        self.go_get(module)?;
+        self.go_get(GoModule {
+            path: package,
+            version: module.version,
+        })?;
 
         let manifest = self.run_bindgen_batch(&[package.to_string()])?;
         let outcome = self.apply_batch_manifest(&manifest, module);

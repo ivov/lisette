@@ -34,6 +34,7 @@ pub enum Command {
         path: Option<String>,
         go_flags: Vec<String>,
         filter: Option<String>,
+        failed: bool,
     },
     Overview,
     Help {
@@ -314,6 +315,7 @@ impl Command {
                 let mut path = None;
                 let mut go_flags = Vec::new();
                 let mut filter = None;
+                let mut failed = false;
 
                 while let Some(arg) = arguments.next() {
                     if arg == "-f" || arg == "--filter" {
@@ -328,6 +330,8 @@ impl Command {
                         filter = Some(value.to_string());
                     } else if let Some(value) = arg.strip_prefix("-f=") {
                         filter = Some(value.to_string());
+                    } else if arg == "--failed" {
+                        failed = true;
                     } else if arg.starts_with('-') {
                         if !try_parse_go_flags(&arg, &mut arguments, &mut go_flags, "test")? {
                             return Err(ParseError::UnknownFlag(arg));
@@ -373,10 +377,20 @@ impl Command {
                     });
                 }
 
+                if failed && filter.is_some() {
+                    return Err(ParseError::UnexpectedArgument {
+                        message: "`--failed` and `--filter` cannot be combined".to_string(),
+                        reason: "`--failed` reruns the previous run's failures, a fixed set"
+                            .to_string(),
+                        hint: "Use one or the other".to_string(),
+                    });
+                }
+
                 Ok(Command::Test {
                     path,
                     go_flags,
                     filter,
+                    failed,
                 })
             }
 
@@ -517,6 +531,20 @@ mod tests {
 
     fn parse(parts: &[&str]) -> Result<Command, ParseError> {
         Command::parse(parts.iter().map(|s| s.to_string()).collect())
+    }
+
+    #[test]
+    fn test_failed_flag_parses() {
+        let Ok(Command::Test { failed, filter, .. }) = parse(&["lis", "test", "--failed"]) else {
+            panic!("expected Test command");
+        };
+        assert!(failed);
+        assert!(filter.is_none());
+    }
+
+    #[test]
+    fn test_failed_and_filter_conflict() {
+        assert!(parse(&["lis", "test", "--failed", "-f", "parse"]).is_err());
     }
 
     #[test]

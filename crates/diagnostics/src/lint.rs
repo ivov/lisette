@@ -1287,6 +1287,15 @@ pub fn needless_splitn(
         ))
 }
 
+pub fn manual_rotate(span: &Span, width: u64) -> LisetteDiagnostic {
+    LisetteDiagnostic::info("Manual `bits.RotateLeft`")
+        .with_lint_code("manual_rotate")
+        .with_span_label(span, "can use `bits.RotateLeft`")
+        .with_help(format!(
+            "Use `bits.RotateLeft{width}` after `import \"go:math/bits\"`"
+        ))
+}
+
 pub fn manual_time_since(span: &Span, namespace: &str, arg: &str) -> LisetteDiagnostic {
     LisetteDiagnostic::info("Manual `time.Since`")
         .with_lint_code("manual_time_since")
