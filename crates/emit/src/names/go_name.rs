@@ -19,6 +19,21 @@ pub(crate) const GO_STDLIB_PKG: &str = "lisette";
 
 pub(crate) const ADAPTER_TYPE_PREFIX: &str = "_lisAdapter_";
 
+pub(crate) const TEST_HANDLE_PREFIX: &str = "_lisTest_";
+
+pub(crate) const TEST_T_PARAM: &str = "_lisTest_t";
+
+pub(crate) const TEST_CTX_PARAM: &str = "_lisTest_ctx";
+
+pub(crate) const RESERVED_GO_PREFIXES: &[&str] = &[ADAPTER_TYPE_PREFIX, TEST_HANDLE_PREFIX];
+
+pub(crate) fn reserved_prefix_of(go: &str) -> Option<&'static str> {
+    RESERVED_GO_PREFIXES
+        .iter()
+        .find(|&&prefix| go.starts_with(prefix))
+        .copied()
+}
+
 pub const PRELUDE_IMPORT_PATH: &str = "github.com/ivov/lisette/prelude";
 
 pub(crate) const TEST_PRELUDE_MODULE: &str = "**test_prelude";

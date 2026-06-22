@@ -6287,6 +6287,75 @@ fn main() {
 }
 
 #[test]
+fn reserved_go_prefix_rejects_test_handle_namespace() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+fn _lisTest_helper() -> int { 1 }
+
+fn main() {
+  let _ = _lisTest_helper()
+}
+"#,
+    );
+
+    let codes = emit_diagnostic_codes(fs);
+    assert!(
+        codes.iter().any(|code| code == "emit.reserved_go_prefix"),
+        "the _lisTest_ prefix is reserved; got: {codes:?}"
+    );
+}
+
+#[test]
+fn reserved_go_prefix_rejects_import_alias() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        "import _lisAdapter_fmt \"go:fmt\"\n\nfn main() {\n  _lisAdapter_fmt.Println(\"x\")\n}",
+    );
+
+    let codes = emit_diagnostic_codes(fs);
+    assert!(
+        codes.iter().any(|code| code == "emit.reserved_go_prefix"),
+        "a reserved-prefix import alias is a package-scope name and must be rejected; got: {codes:?}"
+    );
+}
+
+#[test]
+fn reserved_prefix_alias_cannot_shadow_synthesized_test_handle() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        "import \"math\"\n\nfn main() {\n  let _ = math.add(1, 2)\n}",
+    );
+    fs.add_file(
+        "math",
+        "core.lis",
+        "pub fn add(a: int, b: int) -> int { a + b }",
+    );
+    fs.add_file(
+        "math",
+        "core.test.lis",
+        "import _lisTest_ctx \"go:fmt\"\n\n#[test]\nfn checks() {\n  _lisTest_ctx.Println(\"x\")\n}",
+    );
+
+    let outputs = compile_project_files_with_tests(fs, "github.com/user/p", false, true);
+    let codes: Vec<_> = outputs
+        .iter()
+        .flat_map(|f| f.diagnostics.iter())
+        .filter_map(|d| d.code_str().map(str::to_string))
+        .collect();
+    assert!(
+        codes.iter().any(|c| c == "emit.reserved_go_prefix"),
+        "an alias in the test-handle namespace must be rejected before it can shadow the synthesized handle; got: {codes:?}"
+    );
+}
+
+#[test]
 fn go_name_collision_silent_for_unused_function() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
@@ -7520,7 +7589,7 @@ fn test_with_context_emits_testkit_wrapper() {
     let go = test_file.to_go();
 
     assert!(
-        go.contains("testkit.New(t)"),
+        go.contains("testkit.New(_lisTest_t)"),
         "wrapper must construct the context, got:\n{go}"
     );
     assert!(
@@ -7550,12 +7619,80 @@ fn test_emit_produces_go_test_function() {
 
     let go = test_file.to_go();
     assert!(
-        go.contains("func TestAddition(t *testing.T)"),
+        go.contains("func TestAddition(_lisTest_t *testing.T)"),
         "expected a Go test function, got:\n{go}"
     );
     assert!(
         go.contains("\"testing\""),
         "expected the testing import, got:\n{go}"
+    );
+}
+
+#[test]
+fn test_wrapper_handle_does_not_shadow_function_named_t() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        "import \"math\"\n\nfn main() {\n  let _ = math.add(1, 2)\n}",
+    );
+    fs.add_file(
+        "math",
+        "core.lis",
+        "pub fn add(a: int, b: int) -> int { a + b }",
+    );
+    fs.add_file("math", "core.test.lis", "#[test]\nfn t() {}");
+
+    let outputs = compile_project_files_with_tests(fs, "github.com/user/p", false, true);
+    let go = outputs
+        .iter()
+        .find(|f| f.name.ends_with("core_test.go"))
+        .expect("expected a core_test.go output")
+        .to_go();
+
+    assert!(
+        !go.contains("(t *testing.T)"),
+        "the wrapper's *testing.T handle must not be named `t`, or it shadows `func t`, got:\n{go}"
+    );
+    assert!(
+        go.contains("t(testkit.New(_lisTest_t))"),
+        "the wrapper must call the package function `t`, passing the reserved handle, got:\n{go}"
+    );
+}
+
+#[test]
+fn synthesized_test_handle_does_not_shadow_user_function() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        "import \"math\"\n\nfn main() {\n  let _ = math.add(1, 2)\n}",
+    );
+    fs.add_file(
+        "math",
+        "core.lis",
+        "pub fn add(a: int, b: int) -> int { a + b }",
+    );
+    fs.add_file(
+        "math",
+        "core.test.lis",
+        "fn lisetteTestCtx() -> int { 1 }\n\n#[test]\nfn checks() {\n  assert lisetteTestCtx() == 1\n}",
+    );
+
+    let outputs = compile_project_files_with_tests(fs, "github.com/user/p", false, true);
+    let go = outputs
+        .iter()
+        .find(|f| f.name.ends_with("core_test.go"))
+        .expect("expected a core_test.go output")
+        .to_go();
+
+    assert!(
+        go.contains("func checks(_lisTest_ctx testkit.TestContext)"),
+        "the synthesized handle must use a reserved name user code cannot produce, got:\n{go}"
+    );
+    assert!(
+        go.contains("= lisetteTestCtx()"),
+        "the test body must call the package function, not the synthesized handle, got:\n{go}"
     );
 }
 
@@ -7586,7 +7723,7 @@ fn assert_lowers_to_decomposed_failure_call() {
         .to_go();
 
     assert!(
-        go.contains("testkit.TestContext") && go.contains("testkit.New(t)"),
+        go.contains("testkit.TestContext") && go.contains("testkit.New(_lisTest_t)"),
         "a no-arg test with `assert` must carry a test handle, got:\n{go}"
     );
     assert!(
@@ -7826,7 +7963,7 @@ fn assert_with_discarded_test_param_emits_synthesized_handle() {
         .expect("expected a core_test.go output")
         .to_go();
     assert!(
-        go.contains("testkit.New(t)") && go.contains(".FailAssert("),
+        go.contains("testkit.New(_lisTest_t)") && go.contains(".FailAssert("),
         "a discarded test param must still yield a usable handle, got:\n{go}"
     );
 }

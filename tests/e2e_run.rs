@@ -262,6 +262,40 @@ fn main() {}
 }
 
 #[test]
+fn test_wrapper_for_function_named_t_builds_and_runs() {
+    if !go_available() {
+        eprintln!("skipping test_wrapper_for_function_named_t_builds_and_runs: `go` not found");
+        return;
+    }
+
+    let scratch = tempfile::tempdir().expect("create temp dir");
+    let project = scratch.path().join("proj");
+    fs::create_dir_all(project.join("src")).unwrap();
+
+    fs::write(
+        project.join("lisette.toml"),
+        "[project]\nname = \"github.com/user/tcollide\"\nversion = \"0.1.0\"\n",
+    )
+    .unwrap();
+    fs::write(project.join("src/main.lis"), "fn main() {}\n").unwrap();
+    fs::write(project.join("src/probe.test.lis"), "#[test]\nfn t() {}\n").unwrap();
+
+    let output = lis(&project, "test");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let combined = format!("{stdout}{stderr}");
+
+    assert!(
+        output.status.success(),
+        "a #[test] function named `t` must build and run:\nstdout: {stdout}\nstderr: {stderr}"
+    );
+    assert!(
+        !combined.contains("is not a function"),
+        "the wrapper's *testing.T handle must not shadow `func t`:\nstdout: {stdout}\nstderr: {stderr}"
+    );
+}
+
+#[test]
 fn run_executes_binary_in_invocation_cwd() {
     if !go_available() {
         eprintln!("skipping run_executes_binary_in_invocation_cwd: `go` not found");

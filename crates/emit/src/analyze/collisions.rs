@@ -32,7 +32,7 @@ impl Planner<'_> {
             }
         }
 
-        self.collect_import_aliases(files, &mut package_block);
+        self.collect_import_aliases(files, &mut package_block, &mut diagnostics);
 
         report_collisions(package_block, &mut diagnostics);
         for (_, members) in sort_by_key(selectors) {
@@ -382,7 +382,12 @@ impl Planner<'_> {
         }
     }
 
-    fn collect_import_aliases(&self, files: &[&File], package_block: &mut SpanMap) {
+    fn collect_import_aliases(
+        &self,
+        files: &[&File],
+        package_block: &mut SpanMap,
+        diagnostics: &mut Vec<LisetteDiagnostic>,
+    ) {
         let go_package_names = self.facts.go_package_names();
         let unused = self.facts.unused_imports_for_current_module();
         for file in files {
@@ -397,6 +402,11 @@ impl Planner<'_> {
                     continue;
                 }
                 let qualifier = go_name::sanitize_package_name(&alias);
+                let span = match &import.alias {
+                    Some(ImportAlias::Named(_, span)) => *span,
+                    _ => import.name_span,
+                };
+                self.check_reserved_prefix(qualifier.as_ref(), &span, diagnostics);
                 if let Some(spans) = package_block.get_mut(qualifier.as_ref()) {
                     spans.push(import.name_span);
                 }
@@ -423,12 +433,8 @@ impl Planner<'_> {
     }
 
     fn check_reserved_prefix(&self, go: &str, span: &Span, out: &mut Vec<LisetteDiagnostic>) {
-        if go.starts_with(go_name::ADAPTER_TYPE_PREFIX) {
-            out.push(emit_diag::reserved_go_prefix(
-                go,
-                go_name::ADAPTER_TYPE_PREFIX,
-                span,
-            ));
+        if let Some(prefix) = go_name::reserved_prefix_of(go) {
+            out.push(emit_diag::reserved_go_prefix(go, prefix, span));
         }
     }
 

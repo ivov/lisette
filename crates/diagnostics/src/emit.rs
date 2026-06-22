@@ -32,7 +32,7 @@ pub fn reserved_go_prefix(name: &str, prefix: &str, span: &Span) -> LisetteDiagn
         .with_span_primary_label(span, "uses a reserved prefix")
         .with_help(format!(
             "`{}` starts with `{}`, which is reserved for compiler-generated \
-             interface adapters. Rename the declaration.",
+             code. Rename the declaration.",
             name, prefix
         ))
 }
