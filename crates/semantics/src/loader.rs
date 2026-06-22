@@ -21,9 +21,17 @@ impl FileContent {
 
 pub type Files = HashMap<String, FileContent>;
 
+fn is_production_lis(name: &str) -> bool {
+    name.ends_with(".lis") && !name.ends_with(".test.lis")
+}
+
 pub trait Loader {
     /// Scans a folder and returns all `.lis` files keyed by bare filename.
     fn scan_folder(&self, folder: &str) -> Files;
+
+    fn test_module_ids(&self) -> Vec<String> {
+        Vec::new()
+    }
 }
 
 /// In-memory `Loader` keyed by folder. Use for tests, benches, the wasm
@@ -66,5 +74,16 @@ impl MemoryLoader {
 impl Loader for MemoryLoader {
     fn scan_folder(&self, folder: &str) -> Files {
         self.folders.get(folder).cloned().unwrap_or_default()
+    }
+
+    fn test_module_ids(&self) -> Vec<String> {
+        self.folders
+            .iter()
+            .filter(|(_, files)| {
+                files.keys().any(|name| name.ends_with(".test.lis"))
+                    && files.keys().any(|name| is_production_lis(name))
+            })
+            .map(|(folder, _)| folder.clone())
+            .collect()
     }
 }

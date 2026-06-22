@@ -30,6 +30,7 @@ pub struct ModuleGraphResult {
     pub link_only_modules: HashSet<ModuleId>,
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn build_module_graph(
     store: &mut Store,
     loader: Option<&dyn Loader>,
@@ -38,10 +39,17 @@ pub fn build_module_graph(
     standalone_mode: bool,
     locator: &TypedefLocator,
     include_tests: bool,
+    discover_test_modules: bool,
 ) -> ModuleGraphResult {
     let mut edges: HashMap<ModuleId, HashSet<ModuleId>> = HashMap::default();
     let mut production_edges: HashMap<ModuleId, HashSet<ModuleId>> = HashMap::default();
     let mut to_visit = vec![entry_module.to_string()];
+    if include_tests
+        && discover_test_modules
+        && let Some(loader) = loader
+    {
+        to_visit.extend(loader.test_module_ids());
+    }
     let mut visited: HashSet<ModuleId> = HashSet::default();
     let mut files: HashMap<ModuleId, Vec<File>> = HashMap::default();
     let mut import_spans: HashMap<ModuleId, Span> = HashMap::default();

@@ -302,6 +302,45 @@ impl Loader for LocalFileSystem {
 
         HashMap::default()
     }
+
+    fn test_module_ids(&self) -> Vec<String> {
+        let Some(root) = self.search_paths.first() else {
+            return Vec::new();
+        };
+        let mut with_test: HashSet<PathBuf> = HashSet::default();
+        let mut with_production: HashSet<PathBuf> = HashSet::default();
+        for path in collect_lis_filepaths_recursive(root) {
+            let Some(name) = path.file_name().and_then(|name| name.to_str()) else {
+                continue;
+            };
+            let Some(dir) = path.parent() else {
+                continue;
+            };
+            if name.ends_with(".test.lis") {
+                with_test.insert(dir.to_path_buf());
+            } else {
+                with_production.insert(dir.to_path_buf());
+            }
+        }
+        with_test
+            .iter()
+            .filter(|dir| with_production.contains(*dir))
+            .filter_map(|dir| dir.strip_prefix(root).ok())
+            .map(module_id_from_rel)
+            .collect()
+    }
+}
+
+fn module_id_from_rel(rel: &Path) -> String {
+    let joined: Vec<&str> = rel
+        .components()
+        .filter_map(|component| component.as_os_str().to_str())
+        .collect();
+    if joined.is_empty() {
+        ENTRY_MODULE_ID.to_string()
+    } else {
+        joined.join("/")
+    }
 }
 
 #[cfg(test)]

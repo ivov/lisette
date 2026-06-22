@@ -55,6 +55,7 @@ pub fn infer_module(module_name: &str, fs: MockFileSystem) -> InferResult {
         false,
         &locator,
         true,
+        true,
     );
 
     if sink.has_errors() {

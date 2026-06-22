@@ -3587,6 +3587,30 @@ fn main() {
 }
 
 #[test]
+fn unimported_module_test_file_checked() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "_entry_",
+        "main.lis",
+        r#"fn main() {
+}"#,
+    );
+    fs.add_file("orphan", "orphan.lis", "pub fn helper() -> int { 42 }");
+    fs.add_file(
+        "orphan",
+        "orphan.test.lis",
+        "#[test]\nfn bad() { let _: int = \"x\" }",
+    );
+
+    let result = infer_module("_entry_", fs);
+
+    assert!(
+        result.errors.iter().any(|d| d.is_error()),
+        "a type error in a test file of a module the entry never imports must still be reported"
+    );
+}
+
+#[test]
 fn dot_test_file_included_under_check() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
@@ -3639,6 +3663,36 @@ fn main() {
             .iter()
             .any(|d| d.code_str().is_some_and(|c| c.contains("module_not_found"))),
         "a production import of a module with only test files must not resolve, got: {:?}",
+        result.errors
+    );
+}
+
+#[test]
+fn unimported_production_import_of_test_only_module_rejected() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file("_entry_", "main.lis", "fn main() {\n}");
+    fs.add_file("aaa", "aaa.test.lis", "pub fn sample() -> int { 1 }");
+    fs.add_file(
+        "zzz",
+        "zzz.lis",
+        r#"import "aaa"
+
+pub fn use_it() -> int { aaa.sample() }"#,
+    );
+    fs.add_file(
+        "zzz",
+        "zzz.test.lis",
+        "#[test]\nfn z() { assert use_it() == 1 }",
+    );
+
+    let result = infer_module("_entry_", fs);
+
+    assert!(
+        result
+            .errors
+            .iter()
+            .any(|d| d.code_str().is_some_and(|c| c.contains("module_not_found"))),
+        "an orphan module's production import of a test-only module must be rejected regardless of seeding order, got: {:?}",
         result.errors
     );
 }

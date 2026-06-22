@@ -109,6 +109,7 @@ fn test_only_imports_excluded_from_production_edges() {
         false,
         &default_resolver(),
         true,
+        false,
     );
 
     assert!(
@@ -144,6 +145,7 @@ fn graph_simple_dependency() {
         false,
         &default_resolver(),
         true,
+        false,
     );
 
     assert!(result.cycles.is_empty());
@@ -174,6 +176,7 @@ fn graph_missing_module() {
         false,
         &default_resolver(),
         true,
+        false,
     );
 
     assert!(sink.has_errors());
@@ -200,6 +203,7 @@ fn graph_cycle_detection() {
         false,
         &default_resolver(),
         true,
+        false,
     );
 
     assert!(!result.cycles.is_empty());
@@ -222,6 +226,7 @@ fn graph_standalone_third_party_go_import_uses_module_not_found() {
         true, // standalone mode
         &default_resolver(),
         true,
+        false,
     );
 
     assert!(sink.has_errors());
@@ -245,6 +250,7 @@ fn graph_project_third_party_go_import_undeclared() {
         false, // project mode
         &default_resolver(),
         true,
+        false,
     );
 
     assert!(sink.has_errors());
@@ -273,7 +279,16 @@ fn graph_declared_dep_missing_typedef() {
     let resolver = deps::TypedefLocator::new(go_deps, None, stdlib::Target::host());
 
     let sink = LocalSink::new();
-    let _result = build_module_graph(&mut store, Some(&fs), "main", &sink, false, &resolver, true);
+    let _result = build_module_graph(
+        &mut store,
+        Some(&fs),
+        "main",
+        &sink,
+        false,
+        &resolver,
+        true,
+        false,
+    );
 
     assert!(sink.has_errors());
 
@@ -314,7 +329,16 @@ fn graph_subpackage_missing_typedef_points_at_add() {
     let resolver = deps::TypedefLocator::new(go_deps, None, stdlib::Target::host());
 
     let sink = LocalSink::new();
-    let _result = build_module_graph(&mut store, Some(&fs), "main", &sink, false, &resolver, true);
+    let _result = build_module_graph(
+        &mut store,
+        Some(&fs),
+        "main",
+        &sink,
+        false,
+        &resolver,
+        true,
+        false,
+    );
 
     assert!(sink.has_errors());
 

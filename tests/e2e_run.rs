@@ -612,3 +612,94 @@ fn main() {
         "program did not run:\nstdout: {stdout}\nstderr: {stderr}"
     );
 }
+
+#[test]
+fn orphan_module_tests_are_discovered() {
+    if !go_available() {
+        eprintln!("skipping orphan_module_tests_are_discovered: `go` not found");
+        return;
+    }
+
+    let scratch = tempfile::tempdir().expect("create temp dir");
+    let project = scratch.path().join("proj");
+    fs::create_dir_all(project.join("src/orphan")).unwrap();
+    fs::write(
+        project.join("lisette.toml"),
+        "[project]\nname = \"orphandemo\"\nversion = \"0.1.0\"\n",
+    )
+    .unwrap();
+    fs::write(project.join("src/main.lis"), "fn main() {\n}\n").unwrap();
+    fs::write(
+        project.join("src/orphan/orphan.lis"),
+        "pub fn helper() -> int { 42 }\n",
+    )
+    .unwrap();
+    fs::write(
+        project.join("src/orphan/orphan.test.lis"),
+        "#[test]\nfn orphan_pass() { assert helper() == 42 }\n\n#[test]\nfn orphan_fail() { assert helper() == 999 }\n",
+    )
+    .unwrap();
+
+    let output = lis(&project, "test");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let combined = format!("{stdout}{stderr}");
+
+    assert!(
+        combined.contains("orphan_pass") && combined.contains("orphan_fail"),
+        "tests in an unimported module must be discovered:\nstdout: {stdout}\nstderr: {stderr}"
+    );
+    assert!(
+        !output.status.success(),
+        "the failing orphan test must make the run fail:\nstdout: {stdout}\nstderr: {stderr}"
+    );
+}
+
+#[test]
+fn single_file_check_ignores_unrelated_test_modules() {
+    let scratch = tempfile::tempdir().expect("create temp dir");
+    let dir = scratch.path();
+    fs::create_dir_all(dir.join("sub")).unwrap();
+    fs::write(dir.join("standalone.lis"), "pub fn hi() -> int { 1 }\n").unwrap();
+    fs::write(
+        dir.join("sub/broken.test.lis"),
+        "#[test]\nfn bad() { let _: int = \"type error\" }\n",
+    )
+    .unwrap();
+
+    let output = lis(&dir.join("standalone.lis"), "check");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    assert!(
+        output.status.success(),
+        "a standalone single-file check must not pull in an unrelated test module:\nstdout: {stdout}\nstderr: {stderr}"
+    );
+}
+
+#[test]
+fn loose_dir_check_does_not_duplicate_child_diagnostics() {
+    let scratch = tempfile::tempdir().expect("create temp dir");
+    let dir = scratch.path();
+    fs::create_dir_all(dir.join("child")).unwrap();
+    fs::write(dir.join("top.lis"), "pub fn top() -> int { 1 }\n").unwrap();
+    fs::write(dir.join("child/child.lis"), "pub fn ch() -> int { 2 }\n").unwrap();
+    fs::write(
+        dir.join("child/child.test.lis"),
+        "#[test]\nfn child_bad() { let _: int = \"err\" }\n",
+    )
+    .unwrap();
+
+    let output = lis(dir, "check");
+    let combined = format!(
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let hits = combined.matches("child_bad").count();
+    assert_eq!(
+        hits, 1,
+        "a loose-directory check must report a child module's diagnostic once, not once per ancestor sweep:\n{combined}"
+    );
+}

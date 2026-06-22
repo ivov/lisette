@@ -153,6 +153,7 @@ pub fn run_inference(input: AnalyzeInput) -> InferenceOutput {
     }
 
     let entry_module = store.entry_module_id().to_string();
+    let discover_test_modules = input.project_root.is_some();
     let mut graph_result = build_module_graph(
         &mut store,
         Some(input.loader),
@@ -161,6 +162,7 @@ pub fn run_inference(input: AnalyzeInput) -> InferenceOutput {
         input.config.standalone_mode,
         &input.locator,
         include_tests,
+        discover_test_modules,
     );
 
     for cycle in &graph_result.cycles {
