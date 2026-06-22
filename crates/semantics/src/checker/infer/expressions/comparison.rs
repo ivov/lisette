@@ -3,13 +3,17 @@ use crate::checker::TypeEnv;
 use crate::checker::infer::InferCtx;
 use crate::checker::scopes::Scopes;
 use crate::store::Store;
-use syntax::ast::{Expression, Span};
-use syntax::program::{DefinitionBody, EqualityUnusableReason};
+use syntax::ast::{Annotation, Expression, Span};
+use syntax::program::{DefinitionBody, EqualityUnusableReason, Visibility};
 use syntax::types::{CompoundKind, Type, build_substitution_map, substitute};
 
 pub fn check_not_comparable(env: &TypeEnv, store: &Store, ty: &Type) -> Option<&'static str> {
     let resolved = store.deep_resolve_alias(ty);
     let ty = &resolved;
+
+    if is_opaque_go_handle(store, ty) {
+        return Some("opaque Go handles");
+    }
 
     if matches!(ty, Type::Function(_)) {
         return Some("functions");
@@ -91,6 +95,26 @@ pub fn check_not_comparable(env: &TypeEnv, store: &Store, ty: &Type) -> Option<&
     }
 
     None
+}
+
+pub(crate) fn is_opaque_go_handle(store: &Store, ty: &Type) -> bool {
+    let Some(id) = ty.get_qualified_id() else {
+        return false;
+    };
+    if !id.starts_with("go:") {
+        return false;
+    }
+    let Some(definition) = store.get_definition(id) else {
+        return false;
+    };
+    definition.visibility() == &Visibility::Private
+        && matches!(
+            &definition.body,
+            DefinitionBody::TypeAlias {
+                annotation: Annotation::Opaque { .. },
+                ..
+            }
+        )
 }
 
 fn is_interface_or_unknown(store: &Store, ty: &Type) -> bool {

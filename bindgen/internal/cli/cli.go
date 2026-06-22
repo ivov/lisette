@@ -215,6 +215,19 @@ func generateFromPackage(pkg *packages.Package, displayPath, lisetteVersion, goV
 		emitter.EmitExport(synth)
 	}
 
+	emittedTypeNames := make(map[string]bool)
+	for _, result := range results {
+		if result.Kind == extract.ExportType {
+			emittedTypeNames[result.Name] = true
+		}
+	}
+	for _, handle := range converter.OpaqueHandles() {
+		if emittedTypeNames[handle.Name] {
+			continue
+		}
+		emitter.EmitExport(handle)
+	}
+
 	for _, group := range constGroups {
 		if typeResult, ok := groupTypeResult[group.TypeName]; ok {
 			emitter.EmitExport(typeResult)

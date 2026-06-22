@@ -132,6 +132,7 @@ type Converter struct {
 	crossPkgConverters       map[string]*Converter        // lazily built; cached converters for imported packages
 	noCrossPkg               bool                         // when true, skip cross-package transitive analysis
 	reachableUnexportedTypes map[string]bool              // lazily computed; unexported type names reachable from an exported decl. nil = uncomputed
+	directProducers          map[string]bool              // lazily computed; names of unexported opaque-handle structs produced by a direct value-var. nil = uncomputed
 	ifaceCandidates          []*types.Named               // lazily computed; candidate named interfaces in scope (current pkg + direct imports). nil = uncomputed
 	ifaceRepresentable       map[*types.Named]bool        // memoized per-interface "bindgen can emit this" verdicts
 	ifaceProbing             map[*types.Named]bool        // interfaces with an in-flight representability probe, to break self-referential cycles

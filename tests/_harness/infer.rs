@@ -341,7 +341,7 @@ impl InferResult {
         self.assert_error_contains("redundant")
     }
 
-    fn assert_error_contains(self, needle: &str) -> Self {
+    pub fn assert_error_contains(self, needle: &str) -> Self {
         if self.errors.is_empty() {
             panic!("Expected errors, but inference succeeded");
         }

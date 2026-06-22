@@ -339,6 +339,17 @@ impl Planner<'_> {
         let escaped = go_name::escape_keyword(unqualified);
 
         if self.facts.is_foreign_module(module) {
+            // A non-exported foreign type name (first char not uppercase) is an
+            // opaque handle that reached a type position and cannot be spelled
+            // from another package. Backstop for any inferred misuse the checker
+            // did not reject.
+            assert!(
+                escaped.starts_with(char::is_uppercase),
+                "emit invariant violated: opaque Go handle `{id}` reached a type position. \
+                 A handle value may only flow by inference as a bare value or direct call \
+                 argument; it cannot be stored, returned, wrapped, or otherwise placed where \
+                 its unexported Go type must be spelled."
+            );
             let pkg = self.go_pkg_qualifier(module);
             format!("{}.{}", pkg, escaped)
         } else {

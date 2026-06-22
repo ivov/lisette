@@ -121,7 +121,7 @@ func (c *Converter) convertFunction(result *ConvertResult, symbolExport extract.
 	liftedSpecs, paramOverrides := c.liftReflectionDecodeParams(signature, result.Name, result.TypeParams)
 	result.TypeParams = liftedSpecs
 
-	params, skip := c.convertParams(signature, result.Name, result.Name, paramOverrides)
+	params, skip := c.convertParams(signature, result.Name, result.Name, paramOverrides, true)
 	if skip != nil {
 		result.SkipReason = skip
 		return
@@ -169,7 +169,7 @@ func (c *Converter) applySentinelInt(result *ConvertResult, qualifiedName string
 	result.SentinelInt = &value
 }
 
-func (c *Converter) convertParams(sig *types.Signature, lookupName, methodName string, paramOverrides map[int]string) ([]FunctionParameter, *SkipReason) {
+func (c *Converter) convertParams(sig *types.Signature, lookupName, methodName string, paramOverrides map[int]string, directEligible bool) ([]FunctionParameter, *SkipReason) {
 	mutParams := c.cfg.MutatingParams(c.currentPkgPath, lookupName)
 	nilableParams := c.cfg.NilableParams(c.currentPkgPath, lookupName)
 
@@ -186,7 +186,12 @@ func (c *Converter) convertParams(sig *types.Signature, lookupName, methodName s
 			name = sanitizeParamName(name)
 		}
 
-		paramType := convertParamType(param.Type(), name, nilableParams, c)
+		var paramType TypeResult
+		if named, ok := c.directHandleIfEligible(param.Type(), directEligible); ok {
+			paramType = TypeResult{LisetteType: named.Obj().Name()}
+		} else {
+			paramType = convertParamType(param.Type(), name, nilableParams, c)
+		}
 		if paramType.SkipReason != nil {
 			return nil, paramType.SkipReason
 		}
@@ -373,7 +378,7 @@ func (c *Converter) convertMethod(result *ConvertResult, symbolExport extract.Sy
 	}
 	liftedSpecs, paramOverrides := c.liftReflectionDecodeParams(signature, qualifiedName, methodSpecs)
 
-	params, skip := c.convertParams(signature, qualifiedName, result.Name, paramOverrides)
+	params, skip := c.convertParams(signature, qualifiedName, result.Name, paramOverrides, true)
 	if skip != nil {
 		result.SkipReason = skip
 		return
@@ -739,6 +744,11 @@ func (c *Converter) convertConstant(result *ConvertResult, exp extract.SymbolExp
 }
 
 func (c *Converter) convertVariable(result *ConvertResult, exp extract.SymbolExport) {
+	if named, ok := c.directHandle(exp.GoType); ok {
+		result.LisetteType = named.Obj().Name()
+		return
+	}
+
 	t := ToLisette(exp.GoType, c)
 	if t.SkipReason != nil && t.SkipReason.Code != "internal-package-ref" {
 		result.SkipReason = t.SkipReason
@@ -1689,6 +1699,96 @@ func (c *Converter) computeReachableUnexportedTypes() {
 	}
 }
 
+func (c *Converter) isOpaqueHandleStruct(named *types.Named) bool {
+	obj := named.Obj()
+	if obj == nil || obj.Exported() {
+		return false
+	}
+	if obj.Pkg() == nil || obj.Pkg().Path() != c.currentPkgPath {
+		return false
+	}
+	if named.TypeParams().Len() > 0 || named.TypeArgs().Len() > 0 {
+		return false
+	}
+	s, ok := named.Underlying().(*types.Struct)
+	if !ok || s.NumFields() == 0 {
+		return false
+	}
+	if namedImplementsError(named) {
+		return false
+	}
+	return c.bestImplementedInterface(named) == nil
+}
+
+func (c *Converter) computeDirectProducers() {
+	c.directProducers = make(map[string]bool)
+	if c.pkg == nil || c.pkg.Types == nil {
+		return
+	}
+	scope := c.pkg.Types.Scope()
+	for _, name := range scope.Names() {
+		obj := scope.Lookup(name)
+		if obj == nil || !obj.Exported() {
+			continue
+		}
+		v, ok := obj.(*types.Var)
+		if !ok {
+			continue
+		}
+		named, ok := types.Unalias(v.Type()).(*types.Named)
+		if !ok {
+			continue
+		}
+		if c.isOpaqueHandleStruct(named) {
+			c.directProducers[named.Obj().Name()] = true
+		}
+	}
+}
+
+// directHandle resolves t to an eligible opaque handle only when t is a bare
+// *types.Named, so nested occurrences (`[]chest`, `func(chest)`, `...chest`)
+// keep skipping through the normal conversion path.
+func (c *Converter) directHandle(t types.Type) (*types.Named, bool) {
+	if c.directProducers == nil {
+		c.computeDirectProducers()
+	}
+	named, ok := types.Unalias(t).(*types.Named)
+	if !ok {
+		return nil, false
+	}
+	obj := named.Obj()
+	if obj.Pkg() == nil || obj.Pkg().Path() != c.currentPkgPath {
+		return nil, false
+	}
+	if !c.directProducers[obj.Name()] {
+		return nil, false
+	}
+	return named, true
+}
+
+func (c *Converter) directHandleIfEligible(t types.Type, directEligible bool) (*types.Named, bool) {
+	if !directEligible {
+		return nil, false
+	}
+	return c.directHandle(t)
+}
+
+func (c *Converter) OpaqueHandles() []ConvertResult {
+	if c.directProducers == nil {
+		c.computeDirectProducers()
+	}
+	out := make([]ConvertResult, 0, len(c.directProducers))
+	for name := range c.directProducers {
+		out = append(out, ConvertResult{
+			Name:           name,
+			Kind:           extract.ExportType,
+			UnexportedType: true,
+		})
+	}
+	slices.SortFunc(out, func(a, b ConvertResult) int { return strings.Compare(a.Name, b.Name) })
+	return out
+}
+
 // markUnexportedNamesIn walks `t` and marks any unexported named types from
 // the current package as reachable. Recurses through wrapper types
 // (Pointer/Slice/Array/Map/Chan) and through Signature results — the latter
@@ -1797,7 +1897,7 @@ func (c *Converter) extractInterfaceMethods(_interface *types.Interface, typeNam
 		}
 
 		qualifiedName := typeName + "." + method.Name()
-		params, skip := c.convertParams(signature, qualifiedName, method.Name(), nil)
+		params, skip := c.convertParams(signature, qualifiedName, method.Name(), nil, false)
 		if skip != nil {
 			return nil, false
 		}
