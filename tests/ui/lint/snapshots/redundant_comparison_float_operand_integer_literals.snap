@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [info] Redundant comparison
+  ● Redundant comparison
    ╭─[test.lis:4:11]
  3 │   let f: float64 = 1.0
  4 │   let _ = f < 5 || f < 10

@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [error] Clamp always returns a constant
+  ✕ Clamp always returns a constant
    ╭─[test.lis:4:11]
  3 │   let x: int = 3
  4 │   let _ = min(1, max(5, x))

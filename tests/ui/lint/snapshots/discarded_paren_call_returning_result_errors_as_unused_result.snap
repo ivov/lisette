@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [error] Mismatch between return type and return value
+  ✕ Mismatch between return type and return value
    ╭─[test.lis:4:3]
  2 │ fn might_fail() -> Result<int, string> { Ok(1) }
  3 │ fn test() {

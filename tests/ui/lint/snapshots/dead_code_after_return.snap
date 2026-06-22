@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [warning] Unreachable code after return
+  ▲ Unreachable code after return
    ╭─[test.lis:4:3]
  3 │   return 42;
  4 │   let x = 1;

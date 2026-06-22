@@ -1,7 +1,7 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  [error] Invalid `as` binding
+  ✕ Invalid `as` binding
    ╭─[test.lis:5:7]
  4 │ fn test(p: Point) -> int {
  5 │   let Point { x, .. } as q = p;

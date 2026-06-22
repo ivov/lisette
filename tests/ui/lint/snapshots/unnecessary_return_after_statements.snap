@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [info] Unnecessary `return`
+  ● Unnecessary `return`
    ╭─[test.lis:4:3]
  3 │   let x = n * 2
  4 │   return x

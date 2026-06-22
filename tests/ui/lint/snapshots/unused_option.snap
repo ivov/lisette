@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [warning] Unused Option
+  ▲ Unused Option
    ╭─[test.lis:7:3]
  6 │ fn main() {
  7 │   get_option();

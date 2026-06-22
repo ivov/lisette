@@ -1,7 +1,7 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  [error] Unreachable pattern
+  ✕ Unreachable pattern
     ╭─[test.lis:9:5]
   8 │     Inactive => 2,
   9 │     Active => 3,

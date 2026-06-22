@@ -1,7 +1,7 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  [error] Invalid comparison
+  ✕ Invalid comparison
     ╭─[test.lis:9:16]
   8 │   let b = Foo { items: [3, 4] };
   9 │   let result = a == b;

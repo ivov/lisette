@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [info] Manual `time.Since`
+  ● Manual `time.Since`
     ╭─[test.lis:9:3]
   8 │ fn elapsed(timer: Timer) -> time.Duration {
   9 │   time.Now().Sub(timer.start)

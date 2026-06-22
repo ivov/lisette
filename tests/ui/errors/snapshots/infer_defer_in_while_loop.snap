@@ -1,7 +1,7 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  [error] `defer` inside loop
+  ✕ `defer` inside loop
    ╭─[test.lis:6:5]
  5 │   while i < 10 {
  6 │     defer cleanup();

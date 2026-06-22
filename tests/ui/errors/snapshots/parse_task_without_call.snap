@@ -1,7 +1,7 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  [error] Invalid `task`
+  ✕ Invalid `task`
    ╭─[test.lis:4:8]
  3 │ fn f() {
  4 │   task work

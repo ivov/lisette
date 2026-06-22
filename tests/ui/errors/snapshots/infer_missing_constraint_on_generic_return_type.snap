@@ -1,7 +1,7 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  [error] Missing constraint on generic return type
+  ✕ Missing constraint on generic return type
     ╭─[test.lis:16:28]
  15 │ 
  16 │ pub fn wrap<T>(item: T) -> Wrapper<T> {

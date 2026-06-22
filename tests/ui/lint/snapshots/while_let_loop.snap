@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [info] Manual `while let`
+  ● Manual `while let`
    ╭─[test.lis:6:3]
  5 │   let mut it = xs
  6 │   loop {

@@ -1,7 +1,7 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  [error] Cannot use native constructor as a value
+  ✕ Cannot use native constructor as a value
    ╭─[main.lis:5:11]
  4 │ fn main() {
  5 │   let f = util.W

@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [error] `if` condition repeated in `else if`
+  ✕ `if` condition repeated in `else if`
    ╭─[test.lis:4:34]
  3 │   let x = 5;
  4 │   let _ = if x > 0 { 1 } else if x > 0 { 2 } else { 3 }

@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [info] Single-arm `select`
+  ● Single-arm `select`
    ╭─[test.lis:6:16]
  5 │   let ch = Channel.new<int>()
  6 │   let result = select {

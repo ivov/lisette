@@ -1,7 +1,7 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  [error] Cannot use struct type as a value
+  ✕ Cannot use struct type as a value
    ╭─[test.lis:5:11]
  4 │ fn main() {
  5 │   let c = Coord

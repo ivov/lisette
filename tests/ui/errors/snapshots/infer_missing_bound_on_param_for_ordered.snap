@@ -1,7 +1,7 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  [error] Missing bound on type parameter
+  ✕ Missing bound on type parameter
    ╭─[test.lis:7:20]
  6 │ fn wrapper<T>(x: T) {
  7 │   requires_ordered(x)

@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [info] Redundant `else`
+  ● Redundant `else`
    ╭─[test.lis:6:5]
  5 │     return 0
  6 │   } else {

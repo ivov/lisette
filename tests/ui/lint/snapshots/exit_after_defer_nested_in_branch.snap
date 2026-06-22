@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [warning] `os.Exit` skips `defer`
+  ▲ `os.Exit` skips `defer`
     ╭─[test.lis:9:5]
   8 │   if os.Getpid() > 0 {
   9 │     os.Exit(1)

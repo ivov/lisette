@@ -1,7 +1,7 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  [error] Invalid octal literal
+  ✕ Invalid octal literal
    ╭─[test.lis:1:12]
  1 │ let x = 0o789
    ·            ┬

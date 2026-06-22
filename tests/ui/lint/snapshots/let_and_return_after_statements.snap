@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [info] Redundant binding before return
+  ● Redundant binding before return
    ╭─[test.lis:4:3]
  3 │   let doubled = n * 2
  4 │   let result = doubled + 1

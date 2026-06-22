@@ -1,7 +1,7 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  [error] Type mismatch
+  ✕ Type mismatch
    ╭─[main.lis:6:11]
  5 │   let n: int = 100;
  6 │   let x = n % time.Second;

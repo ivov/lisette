@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [info] Redundant comparison to boolean literal
+  ● Redundant comparison to boolean literal
    ╭─[test.lis:4:11]
  3 │   let x = true;
  4 │   let _ = x == false

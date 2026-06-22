@@ -1,7 +1,7 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  [error] Tuple arity mismatch
+  ✕ Tuple arity mismatch
    ╭─[test.lis:3:7]
  2 │ fn test() {
  3 │   let (a, b, c): (int, int) = (1, 2);

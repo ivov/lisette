@@ -1,7 +1,7 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  [error] Invalid binding name
+  ✕ Invalid binding name
    ╭─[test.lis:2:10]
  1 │ 
  2 │ fn scale(X: int, Y: int) -> int {

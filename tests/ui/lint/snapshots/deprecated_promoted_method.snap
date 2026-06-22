@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [warning] Use of deprecated API
+  ▲ Use of deprecated API
     ╭─[test.lis:20:11]
  19 │   let s = Server { Logger: Logger { prefix: "[api]" }, port: 8080 }
  20 │   let _ = s.old_log()

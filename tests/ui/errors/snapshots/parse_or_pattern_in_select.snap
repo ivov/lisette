@@ -1,7 +1,7 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  [error] Syntax error
+  ✕ Syntax error
    ╭─[test.lis:4:11]
  3 │   select {
  4 │     let x | y = <-ch => (),

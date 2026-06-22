@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [info] Constructor named after its type
+  ● Constructor named after its type
    ╭─[test.lis:5:6]
  4 │ impl Point {
  5 │   fn point(x: int) -> Point {

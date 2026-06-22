@@ -1,7 +1,7 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  [error] Name not found
+  ✕ Name not found
    ╭─[test.lis:3:3]
  2 │ fn test(name: string) {
  3 │   println(name)

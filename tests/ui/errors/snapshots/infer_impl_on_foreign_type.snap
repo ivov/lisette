@@ -1,7 +1,7 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  [error] Cannot implement methods on foreign type
+  ✕ Cannot implement methods on foreign type
    ╭─[main.lis:4:1]
  3 │     
  4 │ ╭─▶ impl ext.Widget {

@@ -1,7 +1,7 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  [error] Syntax error
+  ✕ Syntax error
    ╭─[test.lis:1:24]
  1 │ fn test() { let r = ..=; }
    ·                        ┬

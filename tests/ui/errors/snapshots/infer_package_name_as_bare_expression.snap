@@ -1,7 +1,7 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  [error] Cannot use a module namespace as a value
+  ✕ Cannot use a module namespace as a value
    ╭─[test.lis:5:3]
  4 │ fn main() {
  5 │   fmt

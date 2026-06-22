@@ -35,7 +35,7 @@ fn e2e_smoke() {
         build_output
     );
     assert!(
-        !build_output.contains("[warning]"),
+        !build_output.contains("▲"),
         "build produced warnings:\n{}",
         build_output
     );

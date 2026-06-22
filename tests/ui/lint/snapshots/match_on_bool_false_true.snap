@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [info] Match on boolean
+  ● Match on boolean
    ╭─[test.lis:3:3]
  2 │ pub fn test(b: bool) -> int {
  3 │   match b {

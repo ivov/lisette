@@ -1,7 +1,7 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  [error] Multi-line f-string interpolation
+  ✕ Multi-line f-string interpolation
    ╭─[test.lis:1:17]
  1 │ let s = f"hello {name
    ·                 ┬

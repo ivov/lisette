@@ -1,7 +1,7 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  [error] Redundant `as` binding
+  ✕ Redundant `as` binding
    ╭─[test.lis:4:5]
  3 │   match x {
  4 │     42 as m => m,

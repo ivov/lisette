@@ -1,7 +1,7 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  [error] Invalid comparison
+  ✕ Invalid comparison
    ╭─[test.lis:3:3]
  2 │ fn test(a: Map<string, fn() -> int>, b: Map<string, fn() -> int>) -> bool {
  3 │   a == b

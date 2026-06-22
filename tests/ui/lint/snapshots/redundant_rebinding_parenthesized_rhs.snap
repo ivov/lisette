@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [info] Redundant rebinding
+  ● Redundant rebinding
    ╭─[test.lis:4:3]
  3 │   let a = 5;
  4 │   let a = (a);

@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [info] Collapsible `match`
+  ● Collapsible `match`
    ╭─[test.lis:4:16]
  3 │   match o {
  4 │     Some(n) => match n {

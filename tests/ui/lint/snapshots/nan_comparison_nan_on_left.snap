@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [error] Comparison with NaN
+  ✕ Comparison with NaN
    ╭─[test.lis:5:11]
  4 │   let x: float64 = 1.0
  5 │   let _ = math.NaN() >= x

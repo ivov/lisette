@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [warning] Unused variable
+  ▲ Unused variable
    ╭─[test.lis:6:18]
  5 │   let p = Point { x: 1 };
  6 │   let Point { x: foo } = p;

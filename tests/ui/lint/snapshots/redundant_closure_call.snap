@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [info] Redundant closure call
+  ● Redundant closure call
    ╭─[test.lis:3:3]
  2 │ pub fn f() -> int {
  3 │   (|| 42)()

@@ -1,7 +1,7 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  [error] Type mismatch
+  ✕ Type mismatch
    ╭─[test.lis:5:16]
  4 │ fn test(a: Callback, b: Callback) {
  5 │   let result = a == b;

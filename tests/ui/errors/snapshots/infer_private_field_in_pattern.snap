@@ -1,7 +1,7 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  [error] Private field
+  ✕ Private field
    ╭─[main.lis:7:20]
  6 │   match p {
  7 │     shapes.Point { x, y } => x + y,

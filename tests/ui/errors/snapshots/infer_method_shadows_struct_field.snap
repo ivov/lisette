@@ -1,7 +1,7 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  [error] Method shadows struct field
+  ✕ Method shadows struct field
    ╭─[test.lis:7:6]
  6 │ impl Dog {
  7 │   fn name(self) -> string {

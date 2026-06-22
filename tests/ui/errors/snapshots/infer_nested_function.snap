@@ -1,7 +1,7 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  [error] Nested function declaration
+  ✕ Nested function declaration
    ╭─[test.lis:3:6]
  2 │ fn main() {
  3 │   fn nested() -> int {

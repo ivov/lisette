@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [info] Manual compound assignment
+  ● Manual compound assignment
    ╭─[test.lis:8:3]
  7 │   let mut c = Counter { count: 0 };
  8 │   c.count = c.count + 1;

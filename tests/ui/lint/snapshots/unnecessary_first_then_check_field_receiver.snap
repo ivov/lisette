@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [info] First-element check can use `is_empty()`
+  ● First-element check can use `is_empty()`
    ╭─[test.lis:8:11]
  7 │   let h = Holder { items: [1, 2] }
  8 │   let _ = h.items.get(0).is_some()

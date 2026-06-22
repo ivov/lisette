@@ -1,7 +1,7 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  [error] Cannot assign to newtype field
+  ✕ Cannot assign to newtype field
    ╭─[test.lis:6:3]
  5 │   let mut n = UserId(1)
  6 │   n.0 = 2

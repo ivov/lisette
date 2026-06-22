@@ -1,7 +1,7 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  [error] Format specifiers not supported
+  ✕ Format specifiers not supported
    ╭─[test.lis:4:20]
  3 │   let n = 255
  4 │   let s = f"hex: {n:02x}"

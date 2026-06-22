@@ -1,7 +1,7 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  [error] Invalid comparison
+  ✕ Invalid comparison
     ╭─[test.lis:10:16]
   9 │   let b = Bar.Empty;
  10 │   let result = a == b;

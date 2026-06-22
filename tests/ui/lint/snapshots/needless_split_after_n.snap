@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [info] Needless `SplitAfterN`
+  ● Needless `SplitAfterN`
    ╭─[test.lis:6:11]
  5 │   let s = "a,b,c"
  6 │   let _ = strings.SplitAfterN(s, ",", -1)

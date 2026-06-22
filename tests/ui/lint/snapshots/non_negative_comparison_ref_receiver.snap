@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [warning] Comparison is always false
+  ▲ Comparison is always false
    ╭─[test.lis:5:11]
  4 │   let r = &xs
  5 │   let _ = r.length() < 0

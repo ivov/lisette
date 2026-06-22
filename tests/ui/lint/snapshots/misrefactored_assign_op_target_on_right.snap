@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [warning] Compound assignment repeats `a`
+  ▲ Compound assignment repeats `a`
    ╭─[test.lis:4:3]
  3 │   let mut a = 1
  4 │   a += b + a

@@ -1,7 +1,7 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  [error] Cannot bind an enum type to a variable
+  ✕ Cannot bind an enum type to a variable
    ╭─[main.lis:5:11]
  4 │ fn main() {
  5 │   let c = utils.Color

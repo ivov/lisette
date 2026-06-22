@@ -1,7 +1,7 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  [error] `Get` returns its optional value in a way `Lookup` does not accept
+  ✕ `Get` returns its optional value in a way `Lookup` does not accept
    ╭─[test.lis:2:43]
  1 │ import "go:example.com/lib"
  2 │ fn as_lookup(b: lib.Base) -> lib.Lookup { b }

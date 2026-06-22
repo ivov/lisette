@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [info] Unnecessary eager evaluation
+  ● Unnecessary eager evaluation
    ╭─[test.lis:8:19]
  7 │   let o: Option<int> = Some(1)
  8 │   let _ = o.ok_or(make_err())

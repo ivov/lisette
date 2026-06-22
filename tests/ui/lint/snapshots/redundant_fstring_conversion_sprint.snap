@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [info] Redundant `Sprint`
+  ● Redundant `Sprint`
    ╭─[test.lis:6:20]
  5 │   let n = 42
  6 │   fmt.Print(f"n = {fmt.Sprint(n)}")

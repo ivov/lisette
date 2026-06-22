@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [info] Inefficient comparison
+  ● Inefficient comparison
    ╭─[test.lis:7:11]
  6 │   let b = "hELLO"
  7 │   let _ = (strings.ToLower(a)) == strings.ToLower(b)

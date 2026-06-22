@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [warning] `os.Exit` skips `defer`
+  ▲ `os.Exit` skips `defer`
    ╭─[test.lis:8:3]
  7 │   defer cleanup()
  8 │   os.Exit(1)

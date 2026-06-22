@@ -1,7 +1,7 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  [error] `match` is not exhaustive
+  ✕ `match` is not exhaustive
    ╭─[test.lis:3:3]
  2 │ fn test(p: Partial<int, string>) -> int {
  3 │   match p {

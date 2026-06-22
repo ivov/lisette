@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [info] Redundant binding before return
+  ● Redundant binding before return
    ╭─[test.lis:4:5]
  3 │   let total = {
  4 │     let inner = 5 + 1

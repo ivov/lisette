@@ -1,7 +1,7 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  [error] Invalid `task`
+  ✕ Invalid `task`
    ╭─[test.lis:5:13]
  4 │ fn f() {
  5 │   consume({ task work() });

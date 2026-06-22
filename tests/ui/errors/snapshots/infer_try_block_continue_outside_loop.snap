@@ -1,7 +1,7 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  [error] `continue` in `try` block
+  ✕ `continue` in `try` block
    ╭─[test.lis:5:7]
  4 │     if true {
  5 │       continue;

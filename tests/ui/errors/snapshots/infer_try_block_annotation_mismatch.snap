@@ -1,7 +1,7 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  [error] Type mismatch
+  ✕ Type mismatch
    ╭─[test.lis:5:40]
  4 │ fn test() {
  5 │   let result: Result<string, string> = try {

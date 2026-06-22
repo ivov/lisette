@@ -1,7 +1,7 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  [error] Value in type position
+  ✕ Value in type position
     ╭─[test.lis:9:32]
   8 │   PrimaryKey { name: string, kind: Kind },
   9 │   String { name: string, kind: Kind.String },

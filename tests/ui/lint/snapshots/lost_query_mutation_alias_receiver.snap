@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [warning] Lost query mutation
+  ▲ Lost query mutation
    ╭─[test.lis:8:3]
  7 │   let mut u: MyURL = url.URL { Scheme: "https", Host: "example.com", .. }
  8 │   u.Query().Set("b", "2")

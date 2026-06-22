@@ -14,7 +14,7 @@ m["key"] = 1 // panic: assignment to `nil` map
 Lisette defines `nil` out of existence and encodes absence as `Option<T>`:
 
 ```
-  [error] `nil` is not supported
+  ✕ `nil` is not supported
    ╭─[example.lis:2:11]
  1 │ fn main() {
  2 │   let x = nil
@@ -198,7 +198,7 @@ fn should_alert(s: Severity) -> bool {
 ```
 
 ```
-  [error] `match` is not exhaustive
+  ✕ `match` is not exhaustive
    ╭─[example.lis:4:3]
  3 │ fn should_alert(s: Severity) -> bool {
  4 │   match s {
@@ -234,7 +234,7 @@ func process(config Config) {
 Lisette's bindings are immutable by default, requiring `mut` to mutate:
 
 ```
-  [error] Immutable variable
+  ✕ Immutable variable
    ╭─[example.lis:3:3]
  2 │   let timeout = config.timeout
  3 │   timeout = 30
@@ -256,7 +256,7 @@ func (c Counter) Increment() {
 In Lisette, value receivers are immutable like any other binding:
 
 ```
-  [error] Immutable receiver
+  ✕ Immutable receiver
    ╭─[example.lis:7:5]
  5 │ impl Counter {
  6 │   fn increment(self) {
@@ -280,7 +280,7 @@ sort.Ints(nums) // silently mutates `nums`
 In Lisette, functions that mutate their parameters in a way observable to the caller must declare so with `mut`.
 
 ```
-  [error] Immutable argument passed to `mut` parameter
+  ✕ Immutable argument passed to `mut` parameter
    ╭─[example.lis:5:13]
  4 │   let nums = [3, 1, 2]
  5 │   sort.Ints(nums)
@@ -326,7 +326,7 @@ s.Logger.Print("ready")   // panic: `nil` pointer dereference
 In Lisette, all struct fields must be initialized:
 
 ```
-  [error] Struct `Server` is missing fields
+  ✕ Struct `Server` is missing fields
    ╭─[example.lis:8:11]
  7 │ fn main() {
  8 │   let s = Server { handler: mux }
@@ -387,7 +387,7 @@ for _, path := range files {
 Lisette rejects this and other misuses of `defer` at compile time:
 
 ```
-  [error] `defer` inside loop
+  ✕ `defer` inside loop
    ╭─[example.lis:7:5]
  5 │   for path in files {
  6 │     let f = os.Open(path)?

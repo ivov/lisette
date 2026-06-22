@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [info] Uninterpolated f-string
+  ● Uninterpolated f-string
    ╭─[test.lis:5:18]
  4 │ fn main() {
  5 │   fmt.Print(f"x {f"y"}")

@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [warning] Unknown tag option
+  ▲ Unknown tag option
    ╭─[test.lis:4:3]
  3 │ pub struct User {
  4 │   #[json(unknown_flag)]

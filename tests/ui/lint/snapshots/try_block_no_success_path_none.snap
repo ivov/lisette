@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [warning] Ineffective `try` block
+  ▲ Ineffective `try` block
    ╭─[test.lis:4:5]
  3 │   let result: Option<int> = try {
  4 │     None?

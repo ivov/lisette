@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [info] Nested f-string
+  ● Nested f-string
    ╭─[test.lis:6:20]
  5 │   let n = 1
  6 │   fmt.Print(f"n = {f"{n}"} done")

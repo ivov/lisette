@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [info] Redundant field name
+  ● Redundant field name
    ╭─[test.lis:8:17]
  7 │ fn build(x: int) -> Action {
  8 │   Action.Move { x: x, y: 0 }

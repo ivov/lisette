@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [error] Orphan field attribute
+  ✕ Orphan field attribute
    ╭─[test.lis:3:3]
  2 │ pub struct User {
  3 │   #[json(omitempty)]

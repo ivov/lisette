@@ -1,7 +1,7 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  [error] Cannot derive equality
+  ✕ Cannot derive equality
     ╭─[main.lis:11:15]
  10 │ #[equality]
  11 │ struct Wrap { box: Box<int> }

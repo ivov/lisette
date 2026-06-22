@@ -1,7 +1,7 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  [error] Public type is not exportable
+  ✕ Public type is not exportable
    ╭─[test.lis:2:12]
  1 │ 
  2 │ pub struct widget {

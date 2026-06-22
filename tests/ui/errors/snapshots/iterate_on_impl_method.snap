@@ -1,7 +1,7 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  [error] `#[iterate]` not on enum
+  ✕ `#[iterate]` not on enum
    ╭─[test.lis:5:3]
  4 │ impl Widget {
  5 │   #[iterate]

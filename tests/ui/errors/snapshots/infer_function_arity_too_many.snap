@@ -1,7 +1,7 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  [error] Wrong argument count
+  ✕ Wrong argument count
    ╭─[test.lis:4:3]
  3 │   let add = |x: int, y: int| -> int { x + y };
  4 │   add(5, 10, 15)

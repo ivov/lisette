@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [info] Redundant `if let` pattern
+  ● Redundant `if let` pattern
    ╭─[test.lis:3:10]
  2 │ pub fn test(x: int) {
  3 │   if let y = x {

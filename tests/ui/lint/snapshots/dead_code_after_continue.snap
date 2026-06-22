@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [warning] Unreachable code after continue
+  ▲ Unreachable code after continue
    ╭─[test.lis:5:5]
  4 │     continue;
  5 │     let x = 1;

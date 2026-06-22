@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [warning] Use of deprecated API
+  ▲ Use of deprecated API
     ╭─[test.lis:16:3]
  15 │ fn read(s: Store) -> int {
  16 │   s.old_get()

@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [info] Unnecessary range loop
+  ● Unnecessary range loop
    ╭─[test.lis:4:12]
  3 │   let xs = [10, 20, 30]
  4 │   for i in 0..xs.length() {

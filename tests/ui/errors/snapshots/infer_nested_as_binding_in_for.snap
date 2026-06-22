@@ -1,7 +1,7 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  [error] Invalid `as` binding
+  ✕ Invalid `as` binding
    ╭─[test.lis:5:8]
  4 │ fn test(pairs: Slice<(Point, int)>) {
  5 │   for (Point { x, .. } as p, _) in pairs {}

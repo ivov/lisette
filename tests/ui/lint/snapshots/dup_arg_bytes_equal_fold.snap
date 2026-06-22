@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [warning] Duplicate arguments
+  ▲ Duplicate arguments
    ╭─[test.lis:6:11]
  5 │   let bs: Slice<byte> = Slice.new<byte>()
  6 │   let _ = bytes.EqualFold(bs, bs)

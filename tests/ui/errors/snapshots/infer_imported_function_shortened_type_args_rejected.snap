@@ -1,7 +1,7 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  [error] Wrong type argument count
+  ✕ Wrong type argument count
    ╭─[main.lis:5:30]
  4 │ fn main() {
  5 │   let y: string = util.choose<string>(1)

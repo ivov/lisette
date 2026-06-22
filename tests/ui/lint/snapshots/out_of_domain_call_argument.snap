@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [warning] Out-of-domain value
+  ▲ Out-of-domain value
    ╭─[test.lis:7:18]
  6 │ fn main() {
  7 │   let _ = payday(7)

@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [info] Unnecessary `return`
+  ● Unnecessary `return`
    ╭─[test.lis:3:3]
  2 │ fn five() -> int {
  3 │   return 5

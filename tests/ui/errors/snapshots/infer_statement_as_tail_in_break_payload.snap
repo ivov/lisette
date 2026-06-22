@@ -1,7 +1,7 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  [error] Statement used as value
+  ✕ Statement used as value
    ╭─[test.lis:4:13]
  3 │   let r: int = loop {
  4 │     break { let _ = 1 }

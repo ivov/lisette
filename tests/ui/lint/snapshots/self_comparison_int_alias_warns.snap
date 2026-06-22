@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [warning] Tautological comparison
+  ▲ Tautological comparison
    ╭─[test.lis:5:11]
  4 │   let n: Id = 3
  5 │   let _ = n == n

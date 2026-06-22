@@ -1,7 +1,7 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  [error] `Comparable` is a bound, not a value type
+  ✕ `Comparable` is a bound, not a value type
    ╭─[test.lis:2:14]
  1 │ 
  2 │ fn takes(_x: Comparable) {}

@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [warning] Bidirectional character in string
+  ▲ Bidirectional character in string
    ╭─[test.lis:3:11]
  2 │ fn main() {
  3 │   let _ = "admin‮gnp.exe"

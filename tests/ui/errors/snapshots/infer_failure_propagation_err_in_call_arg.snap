@@ -1,7 +1,7 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  [error] Failure propagation in expression position
+  ✕ Failure propagation in expression position
    ╭─[test.lis:5:8]
  4 │ fn test() -> Result<int, string> {
  5 │   Ok(f(Err("e")?))

@@ -1,7 +1,7 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  [error] Invalid select match
+  ✕ Invalid select match
    ╭─[test.lis:8:7]
  7 │       None => 0,
  8 │       None => 1,

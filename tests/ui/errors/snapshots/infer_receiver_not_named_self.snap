@@ -1,7 +1,7 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  [error] Invalid receiver name
+  ✕ Invalid receiver name
    ╭─[test.lis:5:16]
  4 │ impl Counter {
  5 │   fn get_count(this: Counter) -> int {

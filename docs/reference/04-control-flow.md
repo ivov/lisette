@@ -250,7 +250,7 @@ defer {
 The compiler rejects `defer` in loops, `?` inside defer, and `return`, `break`, or `continue` inside defer.
 
 ```
-  [error] `defer` inside loop
+  ✕ `defer` inside loop
    ╭─[example.lis:2:3]
  1 │ for i in 0..10 {
  2 │   defer cleanup()

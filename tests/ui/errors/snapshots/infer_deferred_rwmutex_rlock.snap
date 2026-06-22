@@ -1,7 +1,7 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  [error] Deferred `RLock` instead of `RUnlock`
+  ✕ Deferred `RLock` instead of `RUnlock`
     ╭─[test.lis:11:11]
  10 │     self.rw.RLock()
  11 │     defer self.rw.RLock()

@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [warning] Out-of-domain value
+  ▲ Out-of-domain value
     ╭─[test.lis:11:14]
  10 │ fn main() {
  11 │   let _ = at(2)

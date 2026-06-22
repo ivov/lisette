@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [info] Unnecessary eager evaluation
+  ● Unnecessary eager evaluation
    ╭─[test.lis:4:23]
  3 │   let o: Option<Map<string, int>> = Some(Map.new())
  4 │   let _ = o.unwrap_or(Map.new())

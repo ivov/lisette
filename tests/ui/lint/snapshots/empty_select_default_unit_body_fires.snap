@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [error] Empty `select` default arm in a loop
+  ✕ Empty `select` default arm in a loop
     ╭─[test.lis:9:12]
   8 │       let Some(v) = ch.receive() => fmt.Println(v),
   9 │       _ => (),

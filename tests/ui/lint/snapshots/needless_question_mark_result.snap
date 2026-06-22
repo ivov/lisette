@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [info] Needless `?` in `Ok`
+  ● Needless `?` in `Ok`
    ╭─[test.lis:4:3]
  3 │   let r: Result<int, string> = Ok(1)
  4 │   Ok(r?)

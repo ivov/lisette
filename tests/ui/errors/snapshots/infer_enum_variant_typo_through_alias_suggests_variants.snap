@@ -1,7 +1,7 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  [error] Variant not found
+  ✕ Variant not found
     ╭─[test.lis:9:5]
   8 │     Green => 2,
   9 │     Bluu => 3,

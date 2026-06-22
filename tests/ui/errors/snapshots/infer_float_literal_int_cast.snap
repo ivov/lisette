@@ -1,7 +1,7 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  [error] Cannot cast float literal to integer directly
+  ✕ Cannot cast float literal to integer directly
    ╭─[test.lis:3:11]
  2 │ fn main() {
  3 │   let x = 3.14 as int

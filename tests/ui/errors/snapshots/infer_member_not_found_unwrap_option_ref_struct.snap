@@ -1,7 +1,7 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  [error] Member not found
+  ✕ Member not found
    ╭─[test.lis:5:3]
  4 │ fn test(u: Option<Ref<Url>>) -> string {
  5 │   u.Path

@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [warning] `Result` is silently discarded
+  ▲ `Result` is silently discarded
     ╭─[test.lis:9:5]
   8 │   if let Some(_) = opt {
   9 │     get_result()

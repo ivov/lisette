@@ -40,7 +40,7 @@ let c = a + b // error
 ```
 
 ```
-  [error] Type mismatch
+  ✕ Type mismatch
    ╭─[example.lis:3:9]
  3 │ let c = a + b
    ·         ──┬──
@@ -363,7 +363,7 @@ let back = bytes as string
 Casts between incompatible types are disallowed.
 
 ```
-  [error] Invalid cast
+  ✕ Invalid cast
    ╭─[example.lis:2:9]
  2 │ let n = b as int
    ·         ────┬───

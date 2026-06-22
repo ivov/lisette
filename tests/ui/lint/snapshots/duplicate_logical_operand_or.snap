@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [warning] Duplicate logical operand
+  ▲ Duplicate logical operand
    ╭─[test.lis:5:11]
  4 │   let b = 10;
  5 │   let _ = a == b || a == b

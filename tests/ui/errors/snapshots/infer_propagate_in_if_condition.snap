@@ -1,7 +1,7 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  [error] `?` cannot be used inside a condition
+  ✕ `?` cannot be used inside a condition
    ╭─[test.lis:7:6]
  6 │ fn run() -> Result<(), string> {
  7 │   if check("x")? {

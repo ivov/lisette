@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [info] Wildcard in or-pattern
+  ● Wildcard in or-pattern
    ╭─[test.lis:4:5]
  3 │   match n {
  4 │     0 | _ => 1,

@@ -1,7 +1,7 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  [error] Type mismatch
+  ✕ Type mismatch
    ╭─[test.lis:5:11]
  4 │   let opt = Option.Some(42);
  5 │   process(opt)

@@ -840,7 +840,7 @@
       <div class="diagnostics-grid">
         <div class="diag-block">
           <pre>
-  <span class="diag-err">🔴 <span class="diag-accent">match</span> is not exhaustive</span>
+  <span class="diag-err">✕ <span class="diag-accent">match</span> is not exhaustive</span>
    ╭─[example.lis:4:3]
  <span class="diag-dim">2</span> │ enum Severity { Low, High, Critical }
  <span class="diag-dim">3</span> │ fn should_alert(s: Severity) -> bool {
@@ -857,7 +857,7 @@
 
         <div class="diag-block">
           <pre>
-  <span class="diag-err">🔴 <span class="diag-accent">nil</span> is not supported</span>
+  <span class="diag-err">✕ <span class="diag-accent">nil</span> is not supported</span>
    ╭─[users.lis:3:12]
  <span class="diag-dim">1</span> │ fn find(name: string) -> Option&lt;User&gt; {
  <span class="diag-dim">2</span> │   if name.is_empty() {
@@ -874,7 +874,7 @@
 
         <div class="diag-block">
           <pre>
-  <span class="diag-warn">🟡 <span class="diag-accent">Result</span> is silently discarded</span>
+  <span class="diag-warn">▲ <span class="diag-accent">Result</span> is silently discarded</span>
    ╭─[files.lis:7:3]
  <span class="diag-dim">5</span> │ fn cleanup() -> Result&lt;(), error&gt; {
  <span class="diag-dim">6</span> │   os.RemoveAll("cache_dir")?
@@ -889,7 +889,7 @@
 
         <div class="diag-block">
           <pre>
-  <span class="diag-warn">🟡 Private type <span class="diag-accent">Config</span> in public API</span>
+  <span class="diag-warn">▲ Private type <span class="diag-accent">Config</span> in public API</span>
    ╭─[config.lis:6:24]
  <span class="diag-dim">5</span> │ struct Config { host: string, port: int }
  <span class="diag-dim">6</span> │ pub fn new_config() -> Config {
@@ -904,7 +904,7 @@
 
         <div class="diag-block">
           <pre>
-  <span class="diag-err">🔴 Immutable argument passed to <span class="diag-accent">mut</span> parameter</span>
+  <span class="diag-err">✕ Immutable argument passed to <span class="diag-accent">mut</span> parameter</span>
    ╭─[sort.lis:5:13]
  <span class="diag-dim">4</span> │   let nums = [3, 1, 2]
  <span class="diag-dim">5</span> │   sort.Ints(nums)
@@ -918,7 +918,7 @@
 
         <div class="diag-block">
           <pre>
-  <span class="diag-err">🔴 Struct <span class="diag-accent">Server</span> is missing fields</span>
+  <span class="diag-err">✕ Struct <span class="diag-accent">Server</span> is missing fields</span>
     ╭─[server.lis:10:11]
   <span class="diag-dim">9</span> │ fn start(mux: http.Handler) {
  <span class="diag-dim">10</span> │   let s = Server { handler: mux }

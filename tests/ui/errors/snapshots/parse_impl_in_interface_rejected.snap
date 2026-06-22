@@ -1,7 +1,7 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  [error] Interface embedding uses `embed`
+  ✕ Interface embedding uses `embed`
    ╭─[test.lis:6:3]
  5 │ interface ReadWriter {
  6 │   impl Reader

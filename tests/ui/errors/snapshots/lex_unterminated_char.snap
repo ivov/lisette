@@ -1,7 +1,7 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  [error] Unterminated rune literal
+  ✕ Unterminated rune literal
    ╭─[test.lis:1:9]
  1 │ let x = 'a
    ·         ─┬

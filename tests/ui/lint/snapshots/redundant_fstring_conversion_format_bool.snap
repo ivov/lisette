@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [info] Redundant `FormatBool`
+  ● Redundant `FormatBool`
    ╭─[test.lis:7:20]
  6 │   let ok = true
  7 │   fmt.Print(f"ok: {strconv.FormatBool(ok)}")

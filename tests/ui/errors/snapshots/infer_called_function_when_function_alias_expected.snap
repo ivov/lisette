@@ -1,7 +1,7 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  [error] Type mismatch
+  ✕ Type mismatch
    ╭─[test.lis:7:17]
  6 │ fn test() {
  7 │   let _x: Cmd = quit()

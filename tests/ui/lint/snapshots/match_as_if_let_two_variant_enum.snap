@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [info] `match` reducible to `if let`
+  ● `match` reducible to `if let`
    ╭─[test.lis:5:3]
  4 │ pub fn test(s: Switch) {
  5 │   match s {

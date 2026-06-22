@@ -1,7 +1,7 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  [error] Invalid method value
+  ✕ Invalid method value
     ╭─[test.lis:10:11]
   9 │   let p: Pair<int, int> = Pair { a: 1, b: 2 };
  10 │   let f = p.first;

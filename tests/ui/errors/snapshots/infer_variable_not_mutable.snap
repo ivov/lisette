@@ -1,7 +1,7 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  [error] Immutable variable
+  ✕ Immutable variable
    ╭─[test.lis:4:3]
  3 │   let x = 10;
  4 │   x = 20;

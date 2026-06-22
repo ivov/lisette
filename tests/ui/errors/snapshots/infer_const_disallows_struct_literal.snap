@@ -1,7 +1,7 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  [error] Composite value in `const`
+  ✕ Composite value in `const`
    ╭─[test.lis:4:16]
  3 │ 
  4 │ const ORIGIN = Point { x: 0, y: 0 }

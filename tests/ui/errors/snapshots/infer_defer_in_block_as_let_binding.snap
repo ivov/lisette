@@ -1,7 +1,7 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  [error] Invalid `defer`
+  ✕ Invalid `defer`
    ╭─[test.lis:4:13]
  3 │ fn f() {
  4 │   let x = { defer cleanup(); };

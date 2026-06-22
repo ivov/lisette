@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [info] Manual `contains`
+  ● Manual `contains`
     ╭─[test.lis:10:11]
   9 │   let cs = [Color.Red, Color.Green]
  10 │   let _ = cs.any(|c| c == Color.Blue)

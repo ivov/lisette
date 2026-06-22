@@ -1,7 +1,7 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  [error] `#[display]` conflicts with your `to_string`
+  ✕ `#[display]` conflicts with your `to_string`
    ╭─[test.lis:2:1]
  1 │ 
  2 │ #[display]

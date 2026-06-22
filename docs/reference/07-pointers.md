@@ -24,7 +24,7 @@ let first = &nums[0] // Ref<int>
 Some expressions cannot be referenced:
 
 ```
-  [error] Non-addressable expression
+  ✕ Non-addressable expression
    ╭─[example.lis:1:9]
  1 │ let r = &42
    ·          ─┬

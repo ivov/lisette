@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [warning] Ineffective bit mask
+  ▲ Ineffective bit mask
    ╭─[test.lis:4:11]
  3 │   let x = 5
  4 │   let _ = 8 > x | 1

@@ -1,7 +1,7 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  [error] Interface not implemented
+  ✕ Interface not implemented
     ╭─[test.lis:12:15]
  11 │   let tuple = (1, 2);
  12 │   print_value(tuple);

@@ -5,9 +5,9 @@ use syntax::ParseError;
 fn snapshot_theme() -> GraphicalTheme {
     GraphicalTheme {
         characters: ThemeCharacters {
-            error: "[error]".into(),
-            warning: "[warning]".into(),
-            advice: "[info]".into(),
+            error: "✕".into(),
+            warning: "▲".into(),
+            advice: "●".into(),
             ..ThemeCharacters::unicode()
         },
         styles: ThemeStyles::none(),

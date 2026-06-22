@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [warning] Misuse of `TrimRight`
+  ▲ Misuse of `TrimRight`
    ╭─[test.lis:6:32]
  5 │   let s = "value.."
  6 │   let _ = strings.TrimRight(s, "..")

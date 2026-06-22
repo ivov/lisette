@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [info] Ineffective pattern
+  ● Ineffective pattern
    ╭─[test.lis:3:7]
  2 │ pub fn test(slice: Slice<int>) {
  3 │   let [..] = slice;

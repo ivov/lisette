@@ -1,7 +1,7 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  [error] Invalid variable declaration
+  ✕ Invalid variable declaration
    ╭─[test.lis:2:1]
  1 │ 
  2 │ var count: int

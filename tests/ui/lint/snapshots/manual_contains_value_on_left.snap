@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [info] Manual `contains`
+  ● Manual `contains`
    ╭─[test.lis:4:11]
  3 │   let xs = [1, 2, 3, 4]
  4 │   let _ = xs.any(|x| 3 == x)

@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [info] Needless `?` in `Some`
+  ● Needless `?` in `Some`
    ╭─[test.lis:5:12]
  4 │   if flag {
  5 │     return Some(x?)

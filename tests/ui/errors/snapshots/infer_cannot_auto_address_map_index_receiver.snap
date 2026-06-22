@@ -1,7 +1,7 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  [error] Expression not modifiable
+  ✕ Expression not modifiable
     ╭─[test.lis:12:4]
  11 │   let m = Map.new<string, Foo>();
  12 │   m["key"].increment()

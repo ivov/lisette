@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [info] Needless struct update
+  ● Needless struct update
    ╭─[test.lis:7:35]
  6 │ fn rebuild(base: Config) -> Config {
  7 │   Config { debug: true, port: 80, ..base }

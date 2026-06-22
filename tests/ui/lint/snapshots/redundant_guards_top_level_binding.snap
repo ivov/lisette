@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [info] Redundant guard
+  ● Redundant guard
    ╭─[test.lis:4:10]
  3 │   match n {
  4 │     x if x == 5 => 1,

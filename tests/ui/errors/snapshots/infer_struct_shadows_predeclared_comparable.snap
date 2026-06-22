@@ -1,7 +1,7 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  [error] Cannot shadow Go predeclared identifier
+  ✕ Cannot shadow Go predeclared identifier
    ╭─[test.lis:2:8]
  1 │ 
  2 │ struct comparable {}

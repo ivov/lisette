@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [info] Needless boolean assignment
+  ● Needless boolean assignment
    ╭─[test.lis:4:3]
  3 │       let mut x = false
  4 │ ╭─▶   if c {

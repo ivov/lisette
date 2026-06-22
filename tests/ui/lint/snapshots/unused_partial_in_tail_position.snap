@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [error] Mismatch between return type and return value
+  ✕ Mismatch between return type and return value
    ╭─[test.lis:7:3]
  5 │ 
  6 │ fn main() {

@@ -231,7 +231,7 @@ match color {
 The compiler enforces exhaustiveness:
 
 ```
-  [error] Non-exhaustive match
+  ✕ Non-exhaustive match
    ╭─[example.lis:3:1]
  3 │ match color {
    · ───────┬───

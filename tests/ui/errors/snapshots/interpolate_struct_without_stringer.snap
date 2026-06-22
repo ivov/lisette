@@ -1,7 +1,7 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  [error] `Point` cannot be interpolated
+  ✕ `Point` cannot be interpolated
    ╭─[test.lis:6:6]
  5 │   let p = Point { x: 1, y: 2 }
  6 │   f"{p}"

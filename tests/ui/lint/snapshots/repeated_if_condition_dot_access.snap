@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [error] `if` condition repeated in `else if`
+  ✕ `if` condition repeated in `else if`
    ╭─[test.lis:6:38]
  5 │   let c = Config { enabled: true };
  6 │   let _ = if c.enabled { 1 } else if c.enabled { 2 } else { 3 }

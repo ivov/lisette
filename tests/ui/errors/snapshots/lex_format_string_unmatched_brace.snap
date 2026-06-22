@@ -1,7 +1,7 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  [error] Unmatched `}` in format string
+  ✕ Unmatched `}` in format string
    ╭─[test.lis:1:17]
  1 │ let x = f"hello }name}"
    ·                 ┬

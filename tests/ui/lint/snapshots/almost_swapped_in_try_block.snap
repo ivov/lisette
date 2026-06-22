@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [warning] Variables are not swapped
+  ▲ Variables are not swapped
     ╭─[test.lis:10:5]
   9 │         let mut b = risky()?
  10 │ ╭─▶     a = b

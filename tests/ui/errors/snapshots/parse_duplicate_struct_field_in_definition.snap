@@ -1,7 +1,7 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  [error] Duplicate field
+  ✕ Duplicate field
    ╭─[test.lis:2:12]
  1 │ 
  2 │ struct S { x: int, x: string }

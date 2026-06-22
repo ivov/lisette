@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [error] Cast of `NaN` to integer
+  ✕ Cast of `NaN` to integer
    ╭─[test.lis:5:11]
  4 │ fn main() {
  5 │   let _ = math.NaN() as Count

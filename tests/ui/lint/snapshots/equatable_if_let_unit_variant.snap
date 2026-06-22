@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [info] `if let` used as an equality check
+  ● `if let` used as an equality check
    ╭─[test.lis:7:3]
  6 │ pub fn test(g: Sig) {
  7 │   if let Sig.A = g { let _ = 1 }

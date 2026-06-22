@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [error] Conflicting case transforms
+  ✕ Conflicting case transforms
    ╭─[test.lis:2:1]
  1 │ 
  2 │ #[json(snake_case, camel_case)]

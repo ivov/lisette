@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [info] Redundant `Itoa`
+  ● Redundant `Itoa`
    ╭─[test.lis:7:23]
  6 │   let n = 42
  7 │   fmt.Print(f"count: {strconv.Itoa(n)}")

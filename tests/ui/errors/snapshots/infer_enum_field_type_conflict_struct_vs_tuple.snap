@@ -1,7 +1,7 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  [error] Conflicting field types across enum variants
+  ✕ Conflicting field types across enum variants
    ╭─[test.lis:4:19]
  3 │   Circle(string),
  4 │   Other { circle: int },

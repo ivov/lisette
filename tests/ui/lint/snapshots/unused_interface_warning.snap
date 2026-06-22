@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [warning] Unused type
+  ▲ Unused type
    ╭─[test.lis:2:11]
  1 │ 
  2 │ interface Processor {

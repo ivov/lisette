@@ -1,7 +1,7 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  [error] Invalid comparison
+  ✕ Invalid comparison
    ╭─[test.lis:8:16]
  7 │ fn test(a: Holder, b: Holder) {
  8 │   let result = a == b;

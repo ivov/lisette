@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [info] Unnecessary eager evaluation
+  ● Unnecessary eager evaluation
    ╭─[test.lis:5:23]
  4 │   let o: Option<bool> = Some(true)
  5 │   let _ = o.unwrap_or(Slice.contains(s, 2))

@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [warning] Double numeric negation
+  ▲ Double numeric negation
    ╭─[test.lis:4:11]
  3 │   let x = 5;
  4 │   let _ = --x

@@ -1,7 +1,7 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  [error] Invalid type argument
+  ✕ Invalid type argument
    ╭─[test.lis:2:15]
  1 │ 
  2 │ fn test<T>(x: T<int>) -> T {

@@ -404,7 +404,7 @@ let delay = time.Millisecond * (multiplier as time.Duration)
 In Go, unused variables and imports blocks compilation. In Lisette, they are warnings that allow compilation and can be cleaned up later.
 
 ```
-  [warning] Unused variable
+  ▲ Unused variable
    ╭─[example.lis:5:7]
  4 │ fn main() {
  5 │   let x = 42

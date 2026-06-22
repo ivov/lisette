@@ -1,7 +1,7 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  [error] Complex expression used as sub-expression
+  ✕ Complex expression used as sub-expression
     ╭─[test.lis:16:27]
  15 │ fn main() {
  16 │   let _ = side_effect() + make_box().get()

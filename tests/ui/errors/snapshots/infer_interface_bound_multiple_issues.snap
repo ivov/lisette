@@ -1,7 +1,7 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  [error] Interface not implemented
+  ✕ Interface not implemented
     ╭─[test.lis:20:10]
  19 │ fn test() {
  20 │   use_rw(File { path: "test.txt" })

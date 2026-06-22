@@ -1,7 +1,7 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  [error] Failure propagation in expression position
+  ✕ Failure propagation in expression position
    ╭─[test.lis:7:19]
  6 │ fn test() -> Option<int> {
  7 │   Some(maybe()? + None?)

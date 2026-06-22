@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [info] Collapsible `else if`
+  ● Collapsible `else if`
    ╭─[test.lis:6:5]
  5 │   } else {
  6 │     if d {

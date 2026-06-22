@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [info] Comparisons can be combined
+  ● Comparisons can be combined
    ╭─[test.lis:5:11]
  4 │   let y = 3;
  5 │   let _ = x == y || x < y

@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [info] Variant names repeat the enum name
+  ● Variant names repeat the enum name
    ╭─[test.lis:2:6]
  1 │ 
  2 │ enum Color { ColorRed, ColorGreen }

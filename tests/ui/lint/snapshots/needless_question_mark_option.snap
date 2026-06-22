@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [info] Needless `?` in `Some`
+  ● Needless `?` in `Some`
    ╭─[test.lis:4:3]
  3 │   let x: Option<int> = Some(1)
  4 │   Some(x?)

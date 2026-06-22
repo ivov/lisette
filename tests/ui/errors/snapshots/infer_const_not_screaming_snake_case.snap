@@ -1,7 +1,7 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  [error] Miscased name
+  ✕ Miscased name
    ╭─[test.lis:2:7]
  1 │ 
  2 │ const maxRetries = 3

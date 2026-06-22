@@ -1,7 +1,7 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  [error] Cannot use `?` on `Partial`
+  ✕ Cannot use `?` on `Partial`
    ╭─[test.lis:4:3]
  3 │   let p: Partial<int, string> = Partial.Ok(42)
  4 │   p?

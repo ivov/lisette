@@ -1,7 +1,7 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  [error] Invalid escape sequence
+  ✕ Invalid escape sequence
    ╭─[test.lis:3:17]
  2 │ fn main() {
  3 │   let s = "hello\!world"

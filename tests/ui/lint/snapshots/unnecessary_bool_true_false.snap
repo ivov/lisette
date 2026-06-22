@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [info] Unnecessary boolean if-else
+  ● Unnecessary boolean if-else
    ╭─[test.lis:5:11]
  4 │   let b = 10;
  5 │   let x = if a > b { true } else { false };

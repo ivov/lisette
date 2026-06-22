@@ -33,7 +33,7 @@ const DESC_MAX_LINES: usize = 3;
 pub enum Status {
     Passed,
     Failed,
-    Aborted,
+    Crashed,
     Skipped,
     Unreached,
 }
@@ -243,7 +243,7 @@ pub fn build_report_filtered(
         let key = (package.clone(), go_name.clone());
         let (status, elapsed) = match tables.terminal.get(&key).copied() {
             Some(found) => found,
-            None if tables.started.contains(&key) => (Status::Aborted, None),
+            None if tables.started.contains(&key) => (Status::Crashed, None),
             None => (Status::Unreached, None),
         };
         let children = collect_children(&package, &go_name, &tables);
@@ -334,7 +334,7 @@ fn collect_children(package: &str, parent: &str, tables: &EventTables) -> Vec<Te
             let key = (package.to_string(), full.clone());
             let (status, elapsed) = match tables.terminal.get(&key).copied() {
                 Some(found) => found,
-                None if tables.started.contains(&key) => (Status::Aborted, None),
+                None if tables.started.contains(&key) => (Status::Crashed, None),
                 None => (Status::Unreached, None),
             };
             TestRow {
@@ -440,17 +440,16 @@ fn render_rows(out: &mut String, rows: &[&TestRow], prefix: &str, color: bool, t
             }
             _ => String::new(),
         };
-        // A skip is the grouping's own act and is not carried by its children, so it still shows `~`.
+        // A skip is the grouping's own act and is not carried by its children, so it still shows `#`.
         if row.children.is_empty() || row.status == Status::Skipped {
-            let glyph = if row.status == Status::Unreached {
-                dim("⊘", color)
-            } else {
-                mark(row.status, color)
-            };
+            let glyph = mark(row.status, color);
             let suffix = match row.status {
-                Status::Aborted => dim(" (aborted)", color),
                 Status::Skipped => match &row.skip_reason {
                     Some(reason) => dim(&format!(" ({reason})"), color),
+                    None => String::new(),
+                },
+                Status::Crashed => match crash_summary(&row.output) {
+                    Some(summary) => dim(&format!(" ({summary})"), color),
                     None => String::new(),
                 },
                 _ => String::new(),
@@ -513,7 +512,7 @@ fn render_failures(
         .collect::<HashSet<_>>()
         .len()
         > 1;
-    let mut blocks: Vec<(String, Option<String>, String)> = Vec::new();
+    let mut blocks: Vec<(Status, String, Option<String>, String)> = Vec::new();
     for row in rows {
         let prefix = if multi_package {
             package_display(&row.package, go_module).to_string()
@@ -533,10 +532,14 @@ fn render_failures(
         "Failures".to_string()
     };
     out.push_str(&format!("  {heading}\n"));
-    for (path, kind, body) in blocks {
+    for (status, path, kind, body) in blocks {
         out.push('\n');
-        let glyph = mark(Status::Failed, color);
-        let name = red(&path.replace('`', ""), color);
+        let glyph = mark(status, color);
+        let bare = path.replace('`', "");
+        let name = match status {
+            Status::Crashed => yellow(&bare, color),
+            _ => red(&bare, color),
+        };
         match kind {
             Some(kind) => out.push_str(&format!("  {glyph} {name} · {kind}\n")),
             None => out.push_str(&format!("  {glyph} {name}\n")),
@@ -552,7 +555,7 @@ fn collect_failures(
     prefix: &str,
     sources: &Sources,
     color: bool,
-    blocks: &mut Vec<(String, Option<String>, String)>,
+    blocks: &mut Vec<(Status, String, Option<String>, String)>,
 ) {
     let path = if prefix.is_empty() {
         row.name.clone()
@@ -560,13 +563,13 @@ fn collect_failures(
         format!("{prefix} › {}", row.name)
     };
 
-    if matches!(row.status, Status::Failed | Status::Aborted) {
+    if matches!(row.status, Status::Failed | Status::Crashed) {
         if let Some((kind, body)) = row
             .failure
             .as_ref()
             .and_then(|record| render_failure(record, sources, color))
         {
-            blocks.push((path.clone(), Some(kind), body));
+            blocks.push((row.status, path.clone(), Some(kind), body));
         } else if !has_failing_descendant(row) {
             let text = row
                 .output
@@ -577,7 +580,7 @@ fn collect_failures(
                 .collect::<Vec<_>>()
                 .join("\n");
             if !text.is_empty() {
-                blocks.push((path.clone(), None, text));
+                blocks.push((row.status, path.clone(), None, text));
             }
         }
     }
@@ -589,7 +592,7 @@ fn collect_failures(
 
 fn has_failing_descendant(row: &TestRow) -> bool {
     row.children.iter().any(|child| {
-        matches!(child.status, Status::Failed | Status::Aborted) || has_failing_descendant(child)
+        matches!(child.status, Status::Failed | Status::Crashed) || has_failing_descendant(child)
     })
 }
 
@@ -644,7 +647,7 @@ fn count_skipped(rows: &[TestRow]) -> usize {
 fn summary(rows: &[TestRow], total: Duration, color: bool) -> String {
     let passed = rows.iter().filter(|r| r.status == Status::Passed).count();
     let failed = rows.iter().filter(|r| r.status == Status::Failed).count();
-    let aborted = rows.iter().filter(|r| r.status == Status::Aborted).count();
+    let crashed = rows.iter().filter(|r| r.status == Status::Crashed).count();
     // A skip does not propagate to the parent row (unlike pass/fail), so count skips at any depth.
     let skipped = count_skipped(rows);
     let unreached = rows
@@ -652,10 +655,11 @@ fn summary(rows: &[TestRow], total: Duration, color: bool) -> String {
         .filter(|r| r.status == Status::Unreached)
         .count();
 
-    let any_failure = failed > 0 || aborted > 0;
     let glyph = mark(
-        if any_failure {
+        if failed > 0 {
             Status::Failed
+        } else if crashed > 0 {
+            Status::Crashed
         } else {
             Status::Passed
         },
@@ -666,8 +670,8 @@ fn summary(rows: &[TestRow], total: Duration, color: bool) -> String {
     if failed > 0 {
         parts.push(red(&format!("{failed} failed"), color));
     }
-    if aborted > 0 {
-        parts.push(red(&format!("{aborted} aborted"), color));
+    if crashed > 0 {
+        parts.push(yellow(&format!("{crashed} crashed"), color));
     }
     parts.push(green(&format!("{passed} passed"), color));
     if skipped > 0 {
@@ -703,6 +707,14 @@ fn red(text: &str, color: bool) -> String {
 fn blue(text: &str, color: bool) -> String {
     if color {
         text.blue().to_string()
+    } else {
+        text.to_string()
+    }
+}
+
+fn yellow(text: &str, color: bool) -> String {
+    if color {
+        text.yellow().to_string()
     } else {
         text.to_string()
     }
@@ -788,15 +800,16 @@ fn wrap_description(text: &str, width: usize, max_lines: usize) -> Vec<String> {
 pub fn exit_code(rows: &[TestRow], run_success: bool) -> i32 {
     let any_failure = rows
         .iter()
-        .any(|r| matches!(r.status, Status::Failed | Status::Aborted));
+        .any(|r| matches!(r.status, Status::Failed | Status::Crashed));
     if !run_success || any_failure { 1 } else { 0 }
 }
 
 fn mark(status: Status, color: bool) -> String {
     let symbol = match status {
         Status::Passed => "✓",
-        Status::Failed | Status::Aborted => "✗",
-        Status::Skipped => "~",
+        Status::Failed => "✕",
+        Status::Crashed => "▲",
+        Status::Skipped => "#",
         Status::Unreached => "⊘",
     };
     if !color {
@@ -804,10 +817,20 @@ fn mark(status: Status, color: bool) -> String {
     }
     match status {
         Status::Passed => symbol.green().to_string(),
-        Status::Failed | Status::Aborted => symbol.red().to_string(),
+        Status::Failed => symbol.red().to_string(),
+        Status::Crashed => symbol.yellow().to_string(),
         Status::Skipped => symbol.blue().to_string(),
         Status::Unreached => symbol.to_string(),
     }
+}
+
+/// The `panic:` headline from a crashed test's raw `go test` output, if any.
+fn crash_summary(output: &str) -> Option<String> {
+    output
+        .lines()
+        .map(str::trim)
+        .find(|line| line.starts_with("panic:"))
+        .map(str::to_string)
 }
 
 fn dim(text: &str, color: bool) -> String {
@@ -983,7 +1006,7 @@ mod tests {
         assert_eq!(report.rows[0].skip_reason.as_deref(), Some("not ready"));
 
         let text = render(&report, &no_sources(), false, Duration::from_millis(1));
-        assert!(text.contains("~ wip (not ready)"), "got:\n{text}");
+        assert!(text.contains("# wip (not ready)"), "got:\n{text}");
         assert!(text.contains("1 skipped"));
         assert_eq!(exit_code(&report.rows, true), 0, "a skip is not a failure");
     }
@@ -1004,7 +1027,7 @@ mod tests {
         assert_eq!(child.skip_reason.as_deref(), Some("needs net"));
 
         let text = render(&report, &no_sources(), false, Duration::from_millis(1));
-        assert!(text.contains("~ child (needs net)"), "got:\n{text}");
+        assert!(text.contains("# child (needs net)"), "got:\n{text}");
         assert!(
             text.contains("1 skipped"),
             "a skipped subtest must count in the footer, got:\n{text}"
@@ -1027,7 +1050,7 @@ mod tests {
 
         let text = render(&report, &no_sources(), false, Duration::from_millis(1));
         assert!(
-            text.contains("~ parent (rest not ready)"),
+            text.contains("# parent (rest not ready)"),
             "a skipped grouping keeps its marker and reason, got:\n{text}"
         );
         assert!(
@@ -1056,7 +1079,7 @@ mod tests {
 
         let tree = text.split("Failures").next().unwrap_or(&text);
         assert!(
-            !tree.contains("✗ parent") && !tree.contains("✓ parent"),
+            !tree.contains("✕ parent") && !tree.contains("✓ parent"),
             "a grouping carries no sigil in the tree, got:\n{text}"
         );
         assert!(text.contains("✓ child"));
@@ -1103,7 +1126,7 @@ mod tests {
         let report = build_report(&index, &events, "demo");
         let text = render(&report, &no_sources(), false, Duration::from_millis(2));
 
-        assert!(text.contains("✗ boom"));
+        assert!(text.contains("✕ boom"));
         assert!(text.contains("panic: boom"));
         assert!(text.contains("1 failed"));
         assert_eq!(exit_code(&report.rows, false), 1);
@@ -1183,7 +1206,7 @@ mod tests {
     }
 
     #[test]
-    fn started_test_without_terminal_is_aborted_and_shows_output() {
+    fn started_test_without_terminal_is_crashed_and_shows_output() {
         let index = index(&[(ENTRY_MODULE_ID, "hangs")]);
         let events = vec![
             event("run", "demo", Some("TestHangs"), None),
@@ -1197,9 +1220,9 @@ mod tests {
         let report = build_report(&index, &events, "demo");
         let text = render(&report, &no_sources(), false, Duration::from_millis(1));
 
-        assert!(text.contains("✗ hangs (aborted)"));
+        assert!(text.contains("▲ hangs"));
         assert!(text.contains("panic: test timed out"));
-        assert!(text.contains("1 aborted"));
+        assert!(text.contains("1 crashed"));
         assert_eq!(exit_code(&report.rows, false), 1);
     }
 

@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [info] Loop over a single element
+  ● Loop over a single element
    ╭─[test.lis:4:12]
  3 │   let mut total = 0
  4 │   for x in [7] {

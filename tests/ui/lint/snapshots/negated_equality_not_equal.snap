@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [info] Negated equality comparison
+  ● Negated equality comparison
    ╭─[test.lis:5:11]
  4 │   let b = false;
  5 │   let _ = !(a != b)

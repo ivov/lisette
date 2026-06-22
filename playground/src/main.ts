@@ -117,7 +117,7 @@ function renderDiagnostics(diags: Diagnostic[]) {
     .map(
       (d) => `
       <div class="diagnostic-item diagnostic-${d.severity}" data-line="${d.line}" data-col="${d.col}">
-        <span class="diagnostic-icon">${d.severity === "error" ? "✖" : d.severity === "warning" ? "⚠" : "ℹ"}</span>
+        <span class="diagnostic-icon">${d.severity === "error" ? "✕" : d.severity === "warning" ? "▲" : "●"}</span>
         <div>
           <div>${escapeHtml(d.message)}</div>
           ${d.code ? `<div class="diagnostic-location">${escapeHtml(d.code)}</div>` : ""}

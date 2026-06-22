@@ -1,7 +1,7 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  [error] Unicode escape out of range
+  ✕ Unicode escape out of range
    ╭─[test.lis:1:10]
  1 │ let x = "\u{D800}"
    ·          ────┬───

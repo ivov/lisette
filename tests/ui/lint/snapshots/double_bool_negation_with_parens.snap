@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [warning] Double boolean negation
+  ▲ Double boolean negation
    ╭─[test.lis:4:11]
  3 │   let x = true;
  4 │   let _ = !(!x)

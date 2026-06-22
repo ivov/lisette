@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [info] Ineffective match
+  ● Ineffective match
    ╭─[test.lis:3:3]
  2 │ pub fn test(x: int) -> int {
  3 │   match x {

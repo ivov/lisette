@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [warning] Lost query mutation
+  ▲ Lost query mutation
    ╭─[test.lis:6:3]
  5 │   let Ok(u) = url.Parse("http://example.com?a=1") else { return }
  6 │   u.Query().Del("a")

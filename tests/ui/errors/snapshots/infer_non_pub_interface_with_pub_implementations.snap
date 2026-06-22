@@ -1,7 +1,7 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  [error] Visibility mismatch in interface implementation
+  ✕ Visibility mismatch in interface implementation
    ╭─[main.lis:7:8]
  6 │ 
  7 │ struct Circle {

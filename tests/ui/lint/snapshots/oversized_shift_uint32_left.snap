@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [error] Shift amount exceeds integer width
+  ✕ Shift amount exceeds integer width
    ╭─[test.lis:4:11]
  3 │   let x: uint32 = 1
  4 │   let _ = x << 40

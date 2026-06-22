@@ -1,7 +1,7 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  [error] Enum with underlying type
+  ✕ Enum with underlying type
    ╭─[test.lis:2:12]
  1 │ 
  2 │ enum Status: int {

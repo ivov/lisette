@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [info] Manual `strings.ReplaceAll`
+  ● Manual `strings.ReplaceAll`
    ╭─[test.lis:6:11]
  5 │   let s = "hello world"
  6 │   let _ = strings.Replace(s, "o", "0", -1)

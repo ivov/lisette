@@ -1,7 +1,7 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  [error] Conflicting impl bound
+  ✕ Conflicting impl bound
     ╭─[test.lis:9:9]
   8 │ 
   9 │ impl<T: Parent<int>> Box<T> {

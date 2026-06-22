@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [info] Regexp recompiled on every iteration
+  ● Regexp recompiled on every iteration
    ╭─[test.lis:6:28]
  5 │   let s = "abc"
  6 │   while regexp.MatchString("[0-9]+", s).unwrap_or(false) {

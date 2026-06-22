@@ -1,7 +1,7 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  [error] Invalid select case
+  ✕ Invalid select case
    ╭─[test.lis:5:9]
  4 │   select {
  5 │     let v = ch.receive() => v,

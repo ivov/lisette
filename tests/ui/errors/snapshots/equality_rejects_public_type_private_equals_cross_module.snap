@@ -1,7 +1,7 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  [error] Cannot derive equality
+  ✕ Cannot derive equality
    ╭─[main.lis:5:17]
  4 │ #[equality]
  5 │ struct Holder { item: models.Item }

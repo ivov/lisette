@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [info] Manual `bytes.Equal`
+  ● Manual `bytes.Equal`
    ╭─[test.lis:7:11]
  6 │   let b = "world" as Slice<byte>
  7 │   let _ = 0 == bytes.Compare(a, b)

@@ -1,7 +1,7 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  [error] `break` in `defer` block
+  ✕ `break` in `defer` block
    ╭─[test.lis:4:5]
  3 │   defer {
  4 │     break;

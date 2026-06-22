@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [error] Index out of bounds
+  ✕ Index out of bounds
    ╭─[test.lis:3:15]
  2 │ fn main() {
  3 │   let _ = [42][1]

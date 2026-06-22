@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [warning] Variables are not swapped
+  ▲ Variables are not swapped
    ╭─[test.lis:5:3]
  4 │       let mut b = 2
  5 │ ╭─▶   a = b

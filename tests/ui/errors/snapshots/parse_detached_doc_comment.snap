@@ -1,7 +1,7 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  [error] Unattached doc comment
+  ✕ Unattached doc comment
    ╭─[test.lis:2:1]
  1 │ 
  2 │ /// Provides utilities for working with strings.

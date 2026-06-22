@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [warning] Unused `mut`
+  ▲ Unused `mut`
    ╭─[test.lis:3:11]
  2 │ fn main() {
  3 │   let mut x = 5;

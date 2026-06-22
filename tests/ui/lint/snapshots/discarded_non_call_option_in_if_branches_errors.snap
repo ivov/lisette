@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [error] Mismatch between return type and return value
+  ✕ Mismatch between return type and return value
    ╭─[test.lis:6:10]
  2 │ fn get_option() -> Option<int> { Some(1) }
  3 │ fn test(c: bool) {

@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [info] Unnecessary `return`
+  ● Unnecessary `return`
    ╭─[test.lis:4:10]
  3 │   match n {
  4 │     0 => return "zero",

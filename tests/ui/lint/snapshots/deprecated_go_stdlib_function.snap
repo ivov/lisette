@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [warning] Use of deprecated API
+  ▲ Use of deprecated API
    ╭─[test.lis:5:11]
  4 │ fn main() {
  5 │   let _ = strings.Title("hello world")

@@ -1,7 +1,7 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  [error] Unattached doc comment
+  ✕ Unattached doc comment
    ╭─[test.lis:4:1]
  3 │ 
  4 │ /// Returns the current timestamp.

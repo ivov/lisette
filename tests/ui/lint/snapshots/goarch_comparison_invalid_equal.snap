@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [warning] Comparison is always false
+  ▲ Comparison is always false
    ╭─[test.lis:4:11]
  3 │ fn main() {
  4 │   let _ = runtime.GOARCH == "x86"

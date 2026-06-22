@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [warning] Compound assignment repeats `c.count`
+  ▲ Compound assignment repeats `c.count`
    ╭─[test.lis:6:3]
  5 │   let mut c = Counter { count: 0 }
  6 │   c.count += c.count + 1

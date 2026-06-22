@@ -1,7 +1,7 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  [error] Type mismatch
+  ✕ Type mismatch
    ╭─[test.lis:3:16]
  2 │ fn test(a: Unknown, b: Unknown) {
  3 │   let result = a == b;

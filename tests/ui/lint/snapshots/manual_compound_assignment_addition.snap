@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [info] Manual compound assignment
+  ● Manual compound assignment
    ╭─[test.lis:4:3]
  3 │   let mut x = 5;
  4 │   x = x + 1;

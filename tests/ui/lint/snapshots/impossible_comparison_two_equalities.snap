@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [error] Impossible comparison
+  ✕ Impossible comparison
    ╭─[test.lis:4:11]
  3 │   let x = 3;
  4 │   let _ = x == 3 && x == 4

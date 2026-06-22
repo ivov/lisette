@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [info] Manual `contains`
+  ● Manual `contains`
     ╭─[test.lis:9:11]
   8 │   let xs = [1, 2, 3, 4]
   9 │   let _ = xs.any(|x| x == cfg.target)

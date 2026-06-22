@@ -1,7 +1,7 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  [error] Immutable argument passed to `mut` parameter
+  ✕ Immutable argument passed to `mut` parameter
     ╭─[test.lis:10:9]
   9 │   let data = [xs, ys]
  10 │   touch(data...)

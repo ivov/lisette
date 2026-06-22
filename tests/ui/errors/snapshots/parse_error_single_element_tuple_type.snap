@@ -1,7 +1,7 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  [error] Invalid tuple
+  ✕ Invalid tuple
    ╭─[test.lis:2:11]
  1 │ 
  2 │ fn f() -> (int,) {}

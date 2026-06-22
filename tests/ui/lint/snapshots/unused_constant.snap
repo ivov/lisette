@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [warning] Unused constant
+  ▲ Unused constant
    ╭─[test.lis:2:7]
  1 │ 
  2 │ const UNUSED_VALUE = 42

@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [warning] Duplicate arguments
+  ▲ Duplicate arguments
    ╭─[test.lis:6:11]
  5 │   let s = "abc"
  6 │   let _ = strings.EqualFold(s, s)

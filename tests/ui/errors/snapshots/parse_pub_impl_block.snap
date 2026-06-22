@@ -1,7 +1,7 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  [error] Misplaced `pub`
+  ✕ Misplaced `pub`
    ╭─[test.lis:4:1]
  3 │ 
  4 │ pub impl Foo {

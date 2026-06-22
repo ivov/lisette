@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [info] Collapsible `match`
+  ● Collapsible `match`
    ╭─[test.lis:6:5]
  5 │   if let Some(n) = opt {
  6 │     if let Ok(x) = n {

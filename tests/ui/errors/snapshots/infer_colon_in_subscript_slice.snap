@@ -1,7 +1,7 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  [error] Invalid syntax for subslicing
+  ✕ Invalid syntax for subslicing
    ╭─[test.lis:3:11]
  2 │ fn test(items: Slice<int>) {
  3 │   let _ = items[1:3]

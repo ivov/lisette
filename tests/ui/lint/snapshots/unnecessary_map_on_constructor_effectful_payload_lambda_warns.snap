@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [info] Unnecessary `map`
+  ● Unnecessary `map`
    ╭─[test.lis:7:11]
  6 │ fn main() {
  7 │   let _ = Some(compute()).map(|x| x + 1)

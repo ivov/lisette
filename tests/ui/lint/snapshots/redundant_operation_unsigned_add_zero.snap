@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [info] Operation has no effect
+  ● Operation has no effect
    ╭─[test.lis:4:11]
  3 │   let u: uint = 5
  4 │   let _ = u + 0

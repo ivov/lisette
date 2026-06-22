@@ -1,7 +1,7 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  [error] Invalid comparison
+  ✕ Invalid comparison
     ╭─[test.lis:11:3]
  10 │ fn test(a: Slice<Handler>, b: Slice<Handler>) -> bool {
  11 │   a.equals(b)

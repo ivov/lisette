@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [warning] Integer division is always `0`
+  ▲ Integer division is always `0`
    ╭─[test.lis:3:11]
  2 │ fn main() {
  3 │   let _ = 5 / 10

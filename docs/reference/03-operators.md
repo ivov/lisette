@@ -33,7 +33,7 @@ a + b |> f         // f(a + b)
 Unary `-` negates a number. Disallowed for unsigned types:
 
 ```
-  [error] Cannot negate unsigned type
+  ✕ Cannot negate unsigned type
    ╭─[example.lis:1:16]
  1 │ let x: uint8 = -1
    ·                ─┬

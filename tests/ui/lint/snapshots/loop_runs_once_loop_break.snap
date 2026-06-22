@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [warning] Loop runs at most once
+  ▲ Loop runs at most once
    ╭─[test.lis:3:3]
  2 │ fn main() {
  3 │   loop {

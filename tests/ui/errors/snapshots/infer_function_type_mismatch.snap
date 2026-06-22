@@ -1,7 +1,7 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  [error] Type mismatch
+  ✕ Type mismatch
    ╭─[test.lis:6:9]
  5 │   let two_param_fn = |a: int, b: int| a + b;
  6 │   apply(two_param_fn, 5)

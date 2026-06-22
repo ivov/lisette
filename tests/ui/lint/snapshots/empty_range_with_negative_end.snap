@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [error] Empty range
+  ✕ Empty range
    ╭─[test.lis:4:12]
  3 │ fn main() {
  4 │   for i in 0..-5 {

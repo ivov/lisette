@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [info] Operation always evaluates to `false`
+  ● Operation always evaluates to `false`
    ╭─[test.lis:4:11]
  3 │   let b = true
  4 │   let _ = b && false

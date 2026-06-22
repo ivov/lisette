@@ -1,7 +1,7 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  [error] Variadic type not allowed here
+  ✕ Variadic type not allowed here
    ╭─[test.lis:3:10]
  2 │ struct Foo {
  3 │   items: VarArgs<int>

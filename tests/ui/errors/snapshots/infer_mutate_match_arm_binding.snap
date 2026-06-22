@@ -1,7 +1,7 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  [error] Immutable variable
+  ✕ Immutable variable
     ╭─[test.lis:12:5]
  11 │   if let Some(Counter { n, .. } as c) = opt {
  12 │     c.bump();

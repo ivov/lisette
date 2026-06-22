@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [info] Regexp recompiled on every iteration
+  ● Regexp recompiled on every iteration
    ╭─[test.lis:7:34]
  6 │     if s != "" {
  7 │       let _ = regexp.MatchString("a", s)

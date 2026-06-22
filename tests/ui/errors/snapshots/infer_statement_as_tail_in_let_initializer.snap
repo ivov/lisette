@@ -1,7 +1,7 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  [error] Statement used as value
+  ✕ Statement used as value
    ╭─[test.lis:3:23]
  2 │ fn test() {
  3 │   let i = if true { { let _ = 1 } } else { 1 }

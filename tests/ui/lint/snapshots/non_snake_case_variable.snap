@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [warning] Miscased name
+  ▲ Miscased name
    ╭─[test.lis:3:7]
  2 │ fn main() {
  3 │   let userId = 42;

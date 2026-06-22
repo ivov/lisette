@@ -1,7 +1,7 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  [error] Type not found
+  ✕ Type not found
    ╭─[test.lis:2:15]
  1 │ 
  2 │ struct Foo<T: Undefined> {}

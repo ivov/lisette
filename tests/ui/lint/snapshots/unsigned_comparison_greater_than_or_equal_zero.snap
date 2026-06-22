@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [warning] Comparison is always true
+  ▲ Comparison is always true
    ╭─[test.lis:4:11]
  3 │   let n: uint = 5;
  4 │   let _ = n >= 0

@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [info] Manual `time.Until`
+  ● Manual `time.Until`
    ╭─[test.lis:6:11]
  5 │   let deadline = clock.Now()
  6 │   let _ = deadline.Sub(clock.Now())

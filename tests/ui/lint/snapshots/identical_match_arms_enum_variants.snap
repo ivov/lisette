@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [warning] Identical match arms
+  ▲ Identical match arms
    ╭─[test.lis:6:3]
  5 │   let halt = 1;
  6 │   match s {

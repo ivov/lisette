@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [warning] Variables are not swapped
+  ▲ Variables are not swapped
    ╭─[test.lis:3:3]
  2 │     fn swap(mut a: int, mut b: int) -> int {
  3 │ ╭─▶   a = b

@@ -1,7 +1,7 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  [error] Invalid cast
+  ✕ Invalid cast
    ╭─[test.lis:6:3]
  5 │   let b: MyByte = 65;
  6 │   b as string

@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [warning] Exact float comparison
+  ▲ Exact float comparison
    ╭─[test.lis:6:11]
  5 │   let b: Score = 2.0
  6 │   let _ = a == b

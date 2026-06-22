@@ -1,7 +1,7 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  [error] Missing bound on type parameter
+  ✕ Missing bound on type parameter
     ╭─[test.lis:9:44]
   8 │ impl<T: cmp.Ordered> Box<T> {
   9 │   fn bad<T>(self, x: T) { requires_ordered(x) }

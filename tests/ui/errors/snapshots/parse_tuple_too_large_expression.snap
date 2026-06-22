@@ -1,7 +1,7 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  [error] Invalid tuple
+  ✕ Invalid tuple
    ╭─[test.lis:3:11]
  2 │ fn test() {
  3 │   let x = (1, 2, 3, 4, 5, 6);

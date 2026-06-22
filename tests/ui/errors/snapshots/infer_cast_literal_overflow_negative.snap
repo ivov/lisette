@@ -1,7 +1,7 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  [error] Integer literal overflow
+  ✕ Integer literal overflow
    ╭─[test.lis:3:11]
  2 │ fn test() {
  3 │   let x = (-129) as int8;

@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [info] Manual `time.Since`
+  ● Manual `time.Since`
    ╭─[test.lis:6:11]
  5 │   let t = clock.Now()
  6 │   let _ = clock.Now().Sub(t)

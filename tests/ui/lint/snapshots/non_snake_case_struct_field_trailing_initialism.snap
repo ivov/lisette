@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [warning] Miscased name
+  ▲ Miscased name
    ╭─[test.lis:2:15]
  1 │ 
  2 │ struct User { UserID: int }

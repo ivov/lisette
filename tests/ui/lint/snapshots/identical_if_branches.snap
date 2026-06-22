@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [warning] Identical if-else branches
+  ▲ Identical if-else branches
    ╭─[test.lis:5:11]
  4 │   let b = 10;
  5 │   let x = if a > b { 42 } else { 42 };

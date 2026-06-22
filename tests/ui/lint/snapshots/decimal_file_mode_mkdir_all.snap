@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [error] File permission written in decimal
+  ✕ File permission written in decimal
    ╭─[test.lis:5:35]
  4 │ fn main() {
  5 │   let _ = os.MkdirAll("/tmp/foo", 1000)

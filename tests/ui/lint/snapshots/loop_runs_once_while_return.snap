@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [warning] Loop runs at most once
+  ▲ Loop runs at most once
    ╭─[test.lis:4:3]
  3 │   let flag = true
  4 │   while flag {

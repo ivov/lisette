@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [error] Empty infinite loop
+  ✕ Empty infinite loop
    ╭─[test.lis:3:3]
  2 │ fn main() {
  3 │   loop {}

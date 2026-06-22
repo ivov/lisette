@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [warning] Identical match arms
+  ▲ Identical match arms
    ╭─[test.lis:5:3]
  4 │   let b = 2;
  5 │   match n {

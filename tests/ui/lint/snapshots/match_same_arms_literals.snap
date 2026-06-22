@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [info] Duplicate match arm
+  ● Duplicate match arm
    ╭─[test.lis:6:5]
  5 │     1 => 20,
  6 │     2 => 10,

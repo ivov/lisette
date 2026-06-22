@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [warning] Contradictory logical operands
+  ▲ Contradictory logical operands
    ╭─[test.lis:6:11]
  5 │   let f = Flag { ready: true };
  6 │   let _ = f.ready && !f.ready

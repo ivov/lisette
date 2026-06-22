@@ -1,7 +1,7 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  [error] Complex expression in `select` arm
+  ✕ Complex expression in `select` arm
    ╭─[test.lis:6:5]
  5 │   select {
  6 │     (if true { ch1 } else { ch2 }).send(1) => 0,

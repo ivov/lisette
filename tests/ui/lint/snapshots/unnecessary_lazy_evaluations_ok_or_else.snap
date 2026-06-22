@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [info] Unnecessary lazy evaluation
+  ● Unnecessary lazy evaluation
    ╭─[test.lis:4:24]
  3 │   let o: Option<int> = Some(1)
  4 │   let _ = o.ok_or_else(|| "x")

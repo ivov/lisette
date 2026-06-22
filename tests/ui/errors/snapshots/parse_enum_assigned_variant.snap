@@ -1,7 +1,7 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  [error] Assigned enum variant
+  ✕ Assigned enum variant
    ╭─[test.lis:3:10]
  2 │ enum Weekday {
  3 │   Sunday = 0,

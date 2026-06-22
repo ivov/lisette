@@ -1,7 +1,7 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  [error] Struct `Person` is missing fields
+  ✕ Struct `Person` is missing fields
     ╭─[test.lis:9:11]
   8 │ fn test() {
   9 │   let p = Person {

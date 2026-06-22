@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [warning] Context leaking
+  ▲ Context leaking
     ╭─[test.lis:13:7]
  12 │ fn main() {
  13 │   let _ = make_cancel()

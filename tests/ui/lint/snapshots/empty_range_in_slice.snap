@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [error] Empty range
+  ✕ Empty range
    ╭─[test.lis:4:14]
  3 │   let xs = [1, 2, 3, 4, 5]
  4 │   let _ = xs[3..1]

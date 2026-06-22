@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [info] Manual `ok_or`
+  ● Manual `ok_or`
    ╭─[test.lis:4:11]
  3 │   let o: Option<int> = Some(1)
  4 │   let _ = match o {

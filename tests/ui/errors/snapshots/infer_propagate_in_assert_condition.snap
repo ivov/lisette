@@ -1,7 +1,7 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  [error] `?` cannot be used inside `assert`
+  ✕ `?` cannot be used inside `assert`
    ╭─[test.lis:7:10]
  6 │ fn run() -> Result<(), string> {
  7 │   assert check("x")?

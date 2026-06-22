@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [info] Manual `find`
+  ● Manual `find`
    ╭─[test.lis:8:11]
  7 │   let users = [User { age: 17 }, User { age: 21 }]
  8 │   let _ = users.filter(|u| u.age > 18).get(0)

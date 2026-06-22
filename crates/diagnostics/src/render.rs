@@ -58,46 +58,63 @@ pub fn print_summary(file_count: usize, elapsed: Duration, errors: i32, warnings
     };
 
     if errors == 0 && warnings == 0 && info == 0 {
-        eprintln!("  ✓ No issues · {} {}", files_str, time_display);
+        let (mark, message) = if use_color {
+            (
+                "✓".green().to_string(),
+                "All checks passed".green().to_string(),
+            )
+        } else {
+            ("✓".to_string(), "All checks passed".to_string())
+        };
+        eprintln!("  {} {} · {} {}", mark, message, files_str, time_display);
     } else {
         let mut parts = Vec::new();
         if errors > 0 {
-            parts.push(if errors == 1 {
+            let count = if errors == 1 {
                 "1 error".to_string()
             } else {
                 format!("{} errors", errors)
+            };
+            parts.push(if use_color {
+                count.red().to_string()
+            } else {
+                count
             });
         }
         if warnings > 0 {
-            parts.push(if warnings == 1 {
+            let count = if warnings == 1 {
                 "1 warning".to_string()
             } else {
                 format!("{} warnings", warnings)
+            };
+            parts.push(if use_color {
+                count.yellow().to_string()
+            } else {
+                count
             });
         }
         if info > 0 {
-            parts.push(if info == 1 {
+            let count = if info == 1 {
                 "1 advisory".to_string()
             } else {
                 format!("{} advisories", info)
+            };
+            parts.push(if use_color {
+                count.blue().to_string()
+            } else {
+                count
             });
         }
-        let findings = format!("Found {}", parts.join(", "));
-        let findings_display = if use_color {
-            format!("{}", findings.bold())
-        } else {
-            findings
-        };
-        eprintln!("  ✖ {} · {} {}", findings_display, files_str, time_display);
+        eprintln!("  {} · {} {}", parts.join(" · "), files_str, time_display);
     }
 }
 
 fn color_handler(highlight: Style) -> GraphicalReportHandler {
     let theme = GraphicalTheme {
         characters: ThemeCharacters {
-            error: "🔴".into(),
-            warning: "🟡".into(),
-            advice: "🔵".into(),
+            error: "✕".into(),
+            warning: "▲".into(),
+            advice: "●".into(),
             ..ThemeCharacters::unicode()
         },
         styles: ThemeStyles {
@@ -116,9 +133,9 @@ fn color_handler(highlight: Style) -> GraphicalReportHandler {
 fn nocolor_handler() -> GraphicalReportHandler {
     let theme = GraphicalTheme {
         characters: ThemeCharacters {
-            error: "[error]".into(),
-            warning: "[warning]".into(),
-            advice: "[info]".into(),
+            error: "✕".into(),
+            warning: "▲".into(),
+            advice: "●".into(),
             ..ThemeCharacters::unicode()
         },
         styles: ThemeStyles::none(),

@@ -1,7 +1,7 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  [error] `Mine` cannot implement the sealed interface `Sealed`
+  ✕ `Mine` cannot implement the sealed interface `Sealed`
    ╭─[test.lis:6:40]
  5 │ }
  6 │ fn as_sealed(m: Mine) -> seal.Sealed { m }

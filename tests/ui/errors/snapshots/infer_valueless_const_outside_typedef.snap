@@ -1,7 +1,7 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  [error] Missing const value
+  ✕ Missing const value
    ╭─[test.lis:2:1]
  1 │ 
  2 │ const MAX_SIZE: int

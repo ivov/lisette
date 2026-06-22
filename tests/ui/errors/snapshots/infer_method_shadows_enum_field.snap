@@ -1,7 +1,7 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  [error] Method shadows struct field
+  ✕ Method shadows struct field
     ╭─[test.lis:9:6]
   8 │ impl<T> Event<T> {
   9 │   fn id(self) -> int {

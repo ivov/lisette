@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [info] Redundant type assertion
+  ● Redundant type assertion
    ╭─[test.lis:6:11]
  5 │   let p = Point { x: 1 }
  6 │   let _ = assert_type<Point>(p)

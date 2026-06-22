@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [info] Expression-only f-string
+  ● Expression-only f-string
    ╭─[test.lis:6:20]
  5 │   let s = "x"
  6 │   fmt.Print(f"s = {f"{s}"} done")

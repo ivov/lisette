@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [info] Redundant `Sprintf`
+  ● Redundant `Sprintf`
     ╭─[test.lis:9:11]
   8 │ fn main() {
   9 │   let _ = fmt.Sprintf("%s", greet())

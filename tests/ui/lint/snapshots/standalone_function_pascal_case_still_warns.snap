@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [warning] Miscased name
+  ▲ Miscased name
    ╭─[test.lis:2:4]
  1 │ 
  2 │ fn GetUserId() -> int { 42 }

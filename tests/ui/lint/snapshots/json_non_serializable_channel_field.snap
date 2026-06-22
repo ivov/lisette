@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [error] Non-serializable field in a `#[json]` type
+  ✕ Non-serializable field in a `#[json]` type
    ╭─[test.lis:5:7]
  4 │   id: int,
  5 │   ch: Channel<int>,

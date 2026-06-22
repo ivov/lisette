@@ -1,7 +1,7 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  [error] Type mismatch
+  ✕ Type mismatch
     ╭─[test.lis:13:21]
  12 │ fn test(c: Circle, s: Shape) {
  13 │   let result = c == s;

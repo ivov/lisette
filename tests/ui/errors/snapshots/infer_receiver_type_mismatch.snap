@@ -1,7 +1,7 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  [error] Type mismatch
+  ✕ Type mismatch
    ╭─[test.lis:6:18]
  5 │ impl Counter {
  6 │   fn wrong(self: Point) -> int {

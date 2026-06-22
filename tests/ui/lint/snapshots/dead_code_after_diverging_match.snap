@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [warning] Unreachable code after diverging match
+  ▲ Unreachable code after diverging match
    ╭─[test.lis:7:3]
  6 │   };
  7 │   let y = 2;

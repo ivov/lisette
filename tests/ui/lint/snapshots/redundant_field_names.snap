@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [info] Redundant field name
+  ● Redundant field name
    ╭─[test.lis:7:11]
  6 │ fn make(x: int) -> Point {
  7 │   Point { x: x, y: 0 }

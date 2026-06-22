@@ -1,7 +1,7 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  [error] Type mismatch
+  ✕ Type mismatch
    ╭─[test.lis:3:6]
  2 │ fn largest<T>(a: T, b: T) -> T {
  3 │   if a > b { a } else { b }

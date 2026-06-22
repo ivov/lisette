@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [info] Manual `time.Until`
+  ● Manual `time.Until`
     ╭─[test.lis:9:3]
   8 │ fn remaining(timer: Timer) -> time.Duration {
   9 │   timer.deadline.Sub(time.Now())
