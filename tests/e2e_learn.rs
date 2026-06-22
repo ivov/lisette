@@ -2,6 +2,10 @@ use std::process::Command;
 
 use tempfile::TempDir;
 
+fn go_available() -> bool {
+    Command::new("go").arg("version").output().is_ok()
+}
+
 #[test]
 fn e2e_learn() {
     let repo = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -62,5 +66,30 @@ fn e2e_learn() {
         "lis format --check reported unformatted files in the scaffolded learn project:\n{}{}",
         String::from_utf8_lossy(&format.stdout),
         String::from_utf8_lossy(&format.stderr)
+    );
+
+    if !go_available() {
+        eprintln!("skipping `lis test` step of e2e_learn: `go` not found");
+        return;
+    }
+
+    let test = Command::new(&lis)
+        .arg("test")
+        .arg(&project)
+        .env("NO_COLOR", "1")
+        .output()
+        .expect("failed to run lis test");
+    let test_output = format!(
+        "{}{}",
+        String::from_utf8_lossy(&test.stdout),
+        String::from_utf8_lossy(&test.stderr)
+    );
+    assert!(
+        test.status.success(),
+        "lis test failed on the scaffolded learn project:\n{test_output}"
+    );
+    assert!(
+        test_output.contains("passed") && !test_output.contains("No tests found"),
+        "lis test did not run the scaffolded tests:\n{test_output}"
     );
 }

@@ -15,6 +15,8 @@ lis run -- watch
 
 Tasks are saved to `tasks.json` in the working directory.
 
+Run the tests with `lis test`.
+
 ## Project structure
 
 ```bash
@@ -22,16 +24,19 @@ src/
   main.lis              # entry point
   models/
     props.lis           # `Priority` and `Status` enums
+    props.test.lis
     task.lis            # `Task` struct
+    task.test.lis
   store/
     store.lis           # JSON persistence
+    store.test.lis
   commands/
     commands.lis        # CLI commands
   display/
     display.lis         # output formatting
 ```
 
-Each directory under `src/` is a module, imported by its directory name (e.g. `import "models"`). Files within a module share the same namespace, so `props.lis` and `task.lis` both contribute to the `models` module.
+Each directory under `src/` is a module, imported by its directory name (e.g. `import "models"`). Files within a module share the same namespace, so `props.lis` and `task.lis` both contribute to the `models` module. A `.test.lis` file holds the tests for the module it sits in, so its tests can call the module's functions directly.
 
 Language features shown:
 
@@ -46,6 +51,7 @@ Language features shown:
 | Mutability (`let mut`, `&`)                       | `commands/commands.lis`                    |
 | Concurrency (`task`, channels)                    | `commands/commands.lis` (`watch`)          |
 | F-strings                                         | throughout                                 |
+| Tests (`#[test]`, `assert`, `let assert`)         | `*.test.lis` files                         |
 
 ## Next steps
 

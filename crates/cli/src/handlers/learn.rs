@@ -5,8 +5,11 @@ use crate::cli_error;
 
 const MAIN: &str = include_str!("learn/main.lis");
 const PROPS: &str = include_str!("learn/models/props.lis");
+const PROPS_TEST: &str = include_str!("learn/models/props.test.lis");
 const TASK: &str = include_str!("learn/models/task.lis");
+const TASK_TEST: &str = include_str!("learn/models/task.test.lis");
 const STORE: &str = include_str!("learn/store/store.lis");
+const STORE_TEST: &str = include_str!("learn/store/store.test.lis");
 const COMMANDS: &str = include_str!("learn/commands/commands.lis");
 const DISPLAY: &str = include_str!("learn/display/display.lis");
 const README: &str = include_str!("learn/README.md");
@@ -55,8 +58,11 @@ pub fn learn() -> i32 {
         ),
         ("src/main.lis", MAIN),
         ("src/models/props.lis", PROPS),
+        ("src/models/props.test.lis", PROPS_TEST),
         ("src/models/task.lis", TASK),
+        ("src/models/task.test.lis", TASK_TEST),
         ("src/store/store.lis", STORE),
+        ("src/store/store.test.lis", STORE_TEST),
         ("src/commands/commands.lis", COMMANDS),
         ("src/display/display.lis", DISPLAY),
         ("README.md", README),

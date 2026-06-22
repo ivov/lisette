@@ -1,0 +1,29 @@
+#[test]
+fn parse_priority_accepts_known_levels() {
+  let assert Ok(low) = parse_priority("low")
+  assert low.label() == "low"
+
+  let assert Ok(medium) = parse_priority("medium")
+  assert medium.label() == "medium"
+
+  let assert Ok(high) = parse_priority("high")
+  assert high.label() == "high"
+}
+
+#[test]
+fn parse_priority_rejects_unknown() {
+  let assert Err(message) = parse_priority("urgent")
+  assert message.contains("unknown priority")
+}
+
+#[test]
+fn cancelled_status_carries_its_reason() {
+  let status = Status.Cancelled("duplicate")
+  assert status.is_cancelled()
+  assert status.label() == "cancelled: duplicate"
+}
+
+#[test]
+fn pending_status_is_not_cancelled() {
+  assert !Status.Pending.is_cancelled()
+}

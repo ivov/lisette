@@ -1,0 +1,22 @@
+#[test]
+fn new_task_starts_pending() {
+  let item = Task.new(1, "write the docs", Priority.High, [])
+  assert item.id == 1
+  assert item.title == "write the docs"
+  assert item.status == Status.Pending
+}
+
+#[test]
+fn display_shows_id_priority_and_tags() {
+  let item = Task.new(7, "ship release", Priority.High, ["urgent", "release"])
+  let line = item.display()
+  assert line.contains("#7 ship release")
+  assert line.contains("!!")
+  assert line.contains("[urgent, release]")
+}
+
+#[test]
+fn display_omits_tags_when_empty() {
+  let item = Task.new(2, "tidy up", Priority.Low, [])
+  assert !item.display().contains("[")
+}
