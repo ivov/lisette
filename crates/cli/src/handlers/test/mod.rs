@@ -112,7 +112,7 @@ pub fn test(
             go_module,
             selected.as_ref(),
         );
-        eprint!(
+        print!(
             "{}",
             render(
                 &report,
