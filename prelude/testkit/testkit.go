@@ -32,6 +32,12 @@ func (c TestContext) Parallel() {
 	c.t.Parallel()
 }
 
+// Skip stops the test and reports the reason to lis.
+func (c TestContext) Skip(reason string) {
+	c.t.Attr("lisette-skip", hex.EncodeToString([]byte(reason)))
+	c.t.SkipNow()
+}
+
 // Recover turns an uncaught panic into a Lisette failure anchored at the test, so it reports like an
 // assertion instead of dumping a Go stack. Test wrappers defer this.
 func Recover(t *testing.T, file int, lo, hi uint32) {

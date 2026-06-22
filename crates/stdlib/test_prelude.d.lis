@@ -7,4 +7,7 @@ impl TestContext {
 
     /// Signal that this test may run in parallel with other parallel tests.
     pub fn parallel(self)
+
+    /// Skip this test at runtime with a reason.
+    pub fn skip(self, reason: string) -> Never
 }

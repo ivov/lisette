@@ -7640,6 +7640,38 @@ fn bare_test_handle_uses_param_as_handle() {
 }
 
 #[test]
+fn test_skip_lowers_to_testkit_skip() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        "import \"math\"\n\nfn main() {\n  let _ = math.add(1, 2)\n}",
+    );
+    fs.add_file(
+        "math",
+        "core.lis",
+        "pub fn add(a: int, b: int) -> int { a + b }",
+    );
+    fs.add_file(
+        "math",
+        "core.test.lis",
+        "#[test]\nfn wip(t) {\n  t.skip(\"later\")\n}",
+    );
+
+    let outputs = compile_project_files_with_tests(fs, "github.com/user/p", false, true);
+    let go = outputs
+        .iter()
+        .find(|f| f.name.ends_with("core_test.go"))
+        .expect("expected a core_test.go output")
+        .to_go();
+
+    assert!(
+        go.contains(".Skip(\"later\")"),
+        "a `t.skip(reason)` call must lower to the testkit handle's `Skip`, got:\n{go}"
+    );
+}
+
+#[test]
 fn assert_equals_lowers_to_labeled_failure() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
