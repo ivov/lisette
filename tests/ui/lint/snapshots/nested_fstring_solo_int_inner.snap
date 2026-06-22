@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [info] Nested f-string
+   ╭─[test.lis:6:20]
+ 5 │   let n = 1
+ 6 │   fmt.Print(f"n = {f"{n}"} done")
+   ·                    ───┬──
+   ·                       ╰── nested f-string
+ 7 │ }
+   ╰────
+  help: Move the inner f-string's text and interpolations into the surrounding f-string · code: [lint.nested_fstring]

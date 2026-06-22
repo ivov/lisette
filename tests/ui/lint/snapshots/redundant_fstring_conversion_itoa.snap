@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [info] Redundant `Itoa`
+   ╭─[test.lis:7:23]
+ 6 │   let n = 42
+ 7 │   fmt.Print(f"count: {strconv.Itoa(n)}")
+   ·                       ───────┬───────
+   ·                              ╰── converts to a string
+ 8 │ }
+   ╰────
+  help: Interpolate `n` directly. The f-string already formats it as a string · code: [lint.redundant_fstring_conversion]

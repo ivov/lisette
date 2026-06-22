@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [info] Redundant `FormatBool`
+   ╭─[test.lis:7:20]
+ 6 │   let ok = true
+ 7 │   fmt.Print(f"ok: {strconv.FormatBool(ok)}")
+   ·                    ───────────┬──────────
+   ·                               ╰── converts to a string
+ 8 │ }
+   ╰────
+  help: Interpolate `ok` directly. The f-string already formats it as a string · code: [lint.redundant_fstring_conversion]

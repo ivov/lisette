@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [info] Uninterpolated f-string
+   ╭─[test.lis:5:18]
+ 4 │ fn main() {
+ 5 │   fmt.Print(f"x {f"y"}")
+   ·                  ──┬─
+   ·                    ╰── zero interpolations
+ 6 │ }
+   ╰────
+  help: Remove the `f` prefix. A string without interpolations does not need to be a format string · code: [lint.uninterpolated_fstring]

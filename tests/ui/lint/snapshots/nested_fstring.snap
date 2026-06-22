@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [info] Nested f-string
+   ╭─[test.lis:7:24]
+ 6 │   let b = 2
+ 7 │   fmt.Print(f"result: {f"{a} of {b}"}")
+   ·                        ──────┬──────
+   ·                              ╰── nested f-string
+ 8 │ }
+   ╰────
+  help: Move the inner f-string's text and interpolations into the surrounding f-string · code: [lint.nested_fstring]

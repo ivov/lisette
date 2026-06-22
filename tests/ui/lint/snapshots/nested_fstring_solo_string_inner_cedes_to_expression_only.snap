@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [info] Expression-only f-string
+   ╭─[test.lis:6:20]
+ 5 │   let s = "x"
+ 6 │   fmt.Print(f"s = {f"{s}"} done")
+   ·                    ───┬──
+   ·                       ╰── the entire f-string is an expression
+ 7 │ }
+   ╰────
+  help: Use the expression directly. Wrapping it in an f-string adds no value · code: [lint.expression_only_fstring]

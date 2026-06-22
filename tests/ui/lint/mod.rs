@@ -19449,3 +19449,209 @@ fn main() {
 "#
     );
 }
+
+#[test]
+fn nested_fstring() {
+    assert_lint_snapshot!(
+        r#"
+import "go:fmt"
+
+fn main() {
+  let a = 1
+  let b = 2
+  fmt.Print(f"result: {f"{a} of {b}"}")
+}
+"#
+    );
+}
+
+#[test]
+fn nested_fstring_solo_int_inner() {
+    assert_lint_snapshot!(
+        r#"
+import "go:fmt"
+
+fn main() {
+  let n = 1
+  fmt.Print(f"n = {f"{n}"} done")
+}
+"#
+    );
+}
+
+#[test]
+fn nested_fstring_solo_string_inner_cedes_to_expression_only() {
+    assert_lint_snapshot!(
+        r#"
+import "go:fmt"
+
+fn main() {
+  let s = "x"
+  fmt.Print(f"s = {f"{s}"} done")
+}
+"#
+    );
+}
+
+#[test]
+fn nested_fstring_uninterpolated_inner_cedes_to_uninterpolated() {
+    assert_lint_snapshot!(
+        r#"
+import "go:fmt"
+
+fn main() {
+  fmt.Print(f"x {f"y"}")
+}
+"#
+    );
+}
+
+#[test]
+fn nested_fstring_separate_interpolations_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:fmt"
+
+fn main() {
+  let a = 1
+  let b = 2
+  fmt.Print(f"{a} and {b}")
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_fstring_conversion_itoa() {
+    assert_lint_snapshot!(
+        r#"
+import "go:fmt"
+import "go:strconv"
+
+fn main() {
+  let n = 42
+  fmt.Print(f"count: {strconv.Itoa(n)}")
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_fstring_conversion_format_bool() {
+    assert_lint_snapshot!(
+        r#"
+import "go:fmt"
+import "go:strconv"
+
+fn main() {
+  let ok = true
+  fmt.Print(f"ok: {strconv.FormatBool(ok)}")
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_fstring_conversion_sprint() {
+    assert_lint_snapshot!(
+        r#"
+import "go:fmt"
+
+fn main() {
+  let n = 42
+  fmt.Print(f"n = {fmt.Sprint(n)}")
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_fstring_conversion_sprint_rune_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:fmt"
+
+fn main() {
+  let c = 'a'
+  fmt.Print(f"c = {fmt.Sprint(c)}")
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_fstring_conversion_sprint_non_scalar_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:fmt"
+
+fn show(pair: (int, int)) -> string {
+  f"pair = {fmt.Sprint(pair)}"
+}
+
+fn main() {
+  fmt.Print(show((1, 2)))
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_fstring_conversion_user_method_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:fmt"
+
+struct Box { v: int }
+
+impl Box {
+  fn Sprint(self: Box) -> string {
+    f"box {self.v}"
+  }
+}
+
+fn show(b: Box) -> string {
+  f"b = {b.Sprint()}"
+}
+
+fn main() {
+  fmt.Print(show(Box { v: 1 }))
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_fstring_conversion_format_int_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:fmt"
+import "go:strconv"
+
+fn show(n: int64) -> string {
+  f"n = {strconv.FormatInt(n, 10)}"
+}
+
+fn main() {
+  fmt.Print(show(5))
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_fstring_conversion_plain_interpolation_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:fmt"
+
+fn show(n: int) -> string {
+  f"n = {n}"
+}
+
+fn main() {
+  fmt.Print(show(6))
+}
+"#
+    );
+}

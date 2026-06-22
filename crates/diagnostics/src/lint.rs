@@ -983,6 +983,24 @@ pub fn uninterpolated_fstring(span: &Span) -> LisetteDiagnostic {
         .with_help("Remove the `f` prefix. A string without interpolations does not need to be a format string")
 }
 
+pub fn nested_fstring(span: &Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::info("Nested f-string")
+        .with_lint_code("nested_fstring")
+        .with_span_label(span, "nested f-string")
+        .with_help(
+            "Move the inner f-string's text and interpolations into the surrounding f-string",
+        )
+}
+
+pub fn redundant_fstring_conversion(span: &Span, method: &str, value: &str) -> LisetteDiagnostic {
+    LisetteDiagnostic::info(format!("Redundant `{method}`"))
+        .with_lint_code("redundant_fstring_conversion")
+        .with_span_label(span, "converts to a string")
+        .with_help(format!(
+            "Interpolate `{value}` directly. The f-string already formats it as a string"
+        ))
+}
+
 pub fn unnecessary_raw_string(span: &Span) -> LisetteDiagnostic {
     LisetteDiagnostic::info("Unnecessary raw string")
         .with_lint_code("unnecessary_raw_string")

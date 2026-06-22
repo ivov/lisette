@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [info] Redundant `Sprint`
+   ╭─[test.lis:6:20]
+ 5 │   let n = 42
+ 6 │   fmt.Print(f"n = {fmt.Sprint(n)}")
+   ·                    ──────┬──────
+   ·                          ╰── converts to a string
+ 7 │ }
+   ╰────
+  help: Interpolate `n` directly. The f-string already formats it as a string · code: [lint.redundant_fstring_conversion]
