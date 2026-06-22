@@ -7731,8 +7731,9 @@ fn assert_lowers_to_decomposed_failure_call() {
         "a comparison `assert` must report a relation, got:\n{go}"
     );
     assert!(
-        go.contains("left: %s · right: %s") && go.contains("lisette.Debug("),
-        "a relation `assert` must format both operands through Debug, got:\n{go}"
+        go.contains("Operand{Label: \"left\", Value: lisette.Debug(")
+            && go.contains("Operand{Label: \"right\", Value: lisette.Debug("),
+        "a relation `assert` must report both operands labeled and through Debug, got:\n{go}"
     );
     assert!(
         go.contains("\"bare\""),

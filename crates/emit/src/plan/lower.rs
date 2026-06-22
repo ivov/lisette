@@ -485,13 +485,7 @@ impl Planner<'_> {
         statements: &mut Vec<LoweredStatement>,
         fx: &mut EmitEffects,
     ) -> AssertShape {
-        fx.require_fmt();
         fx.require_stdlib();
-        let (test_kit, fmt, prelude) = (
-            go_name::GeneratedPackage::TestKit.qualifier(),
-            go_name::GeneratedPackage::Fmt.qualifier(),
-            go_name::GeneratedPackage::Prelude.qualifier(),
-        );
         let lhs = self.stage_assert_operand(left, "assertLeft", statements, fx);
         let rhs = self.stage_assert_operand(right, "assertRight", statements, fx);
         let left_ref = temp_identifier(&lhs, left);
@@ -509,9 +503,7 @@ impl Planner<'_> {
         AssertShape {
             condition,
             kind: "relation",
-            operands: format!(
-                ", {test_kit}.Operand{{Value: {fmt}.Sprintf(\"left: %s · right: %s\", {prelude}.Debug({lhs}), {prelude}.Debug({rhs}))}}"
-            ),
+            operands: paired_operands(&lhs, &rhs),
         }
     }
 
@@ -524,10 +516,6 @@ impl Planner<'_> {
         fx: &mut EmitEffects,
     ) -> AssertShape {
         fx.require_stdlib();
-        let (test_kit, prelude) = (
-            go_name::GeneratedPackage::TestKit.qualifier(),
-            go_name::GeneratedPackage::Prelude.qualifier(),
-        );
         let recv_ty = recv.get_type();
         let lhs = self.stage_assert_operand(recv, "assertLeft", statements, fx);
         let rhs = self.stage_assert_operand(arg, "assertRight", statements, fx);
@@ -535,9 +523,7 @@ impl Planner<'_> {
         AssertShape {
             condition,
             kind: "labeled",
-            operands: format!(
-                ", {test_kit}.Operand{{Label: \"left\", Value: {prelude}.Debug({lhs})}}, {test_kit}.Operand{{Label: \"right\", Value: {prelude}.Debug({rhs})}}"
-            ),
+            operands: paired_operands(&lhs, &rhs),
         }
     }
 
@@ -1085,6 +1071,16 @@ struct AssertShape {
     condition: String,
     kind: &'static str,
     operands: String,
+}
+
+fn paired_operands(lhs: &str, rhs: &str) -> String {
+    let (test_kit, prelude) = (
+        go_name::GeneratedPackage::TestKit.qualifier(),
+        go_name::GeneratedPackage::Prelude.qualifier(),
+    );
+    format!(
+        ", {test_kit}.Operand{{Label: \"left\", Value: {prelude}.Debug({lhs})}}, {test_kit}.Operand{{Label: \"right\", Value: {prelude}.Debug({rhs})}}"
+    )
 }
 
 /// A typed identifier for an already-bound temp, so the rebuilt comparison casts as usual.

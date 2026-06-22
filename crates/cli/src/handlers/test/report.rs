@@ -29,6 +29,9 @@ const DESC_MAX_WIDTH: usize = 100;
 const DESC_MIN_WIDTH: usize = 20;
 const DESC_MAX_LINES: usize = 3;
 
+const OPERAND_MAX_CHARS: usize = 160;
+const OPERAND_MIN_CHARS: usize = 24;
+
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Status {
     Passed,
@@ -627,25 +630,38 @@ fn render_failure(
     let info = sources.get(&record.file)?;
     let span = Span::new(record.file, record.lo, record.hi.saturating_sub(record.lo));
 
-    let (label, notes): (String, Vec<String>) = if record.kind == "labeled" {
+    let budget = operand_budget(terminal_width(), record.operands.len());
+    let anchor = match record.operands.as_slice() {
+        [left, right] => first_divergence(&left.value, &right.value),
+        _ => 0,
+    };
+    let values: Vec<String> = record
+        .operands
+        .iter()
+        .map(|operand| truncate_operand(&operand.value, anchor, budget))
+        .collect();
+
+    let paired = matches!(record.kind.as_str(), "relation" | "labeled");
+    let (label, notes): (String, Vec<String>) = if paired {
         let label = record
             .operands
             .iter()
-            .map(|operand| format!("{}: {}", operand.label, operand.value))
+            .zip(&values)
+            .map(|(operand, value)| format!("{}: {}", operand.label, value))
             .collect::<Vec<_>>()
             .join(" · ");
         (label, Vec::new())
     } else {
-        let label = record
-            .operands
+        let label = values
             .first()
-            .map(|operand| operand.value.clone())
+            .cloned()
             .unwrap_or_else(|| record.message.clone());
         let notes = record
             .operands
             .iter()
+            .zip(&values)
             .skip(1)
-            .map(|operand| format!("{}: {}", operand.label, operand.value))
+            .map(|(operand, value)| format!("{}: {}", operand.label, value))
             .collect();
         (label, notes)
     };
@@ -779,6 +795,37 @@ fn terminal_width() -> usize {
     terminal_size::terminal_size_of(std::io::stderr())
         .map(|(w, _)| w.0 as usize)
         .unwrap_or(100)
+}
+
+fn operand_budget(term_width: usize, operands: usize) -> usize {
+    let operands = operands.max(1);
+    let reserved = 30 + 11 * operands;
+    (term_width.saturating_sub(reserved) / operands).clamp(OPERAND_MIN_CHARS, OPERAND_MAX_CHARS)
+}
+
+fn first_divergence(a: &str, b: &str) -> usize {
+    a.chars().zip(b.chars()).take_while(|(x, y)| x == y).count()
+}
+
+fn truncate_operand(value: &str, anchor: usize, budget: usize) -> String {
+    let chars: Vec<char> = value.chars().collect();
+    let total = chars.len();
+    if total <= budget {
+        return value.to_string();
+    }
+    let budget = budget.max(8);
+    let lead = budget / 3;
+    let start = anchor.saturating_sub(lead).min(total - budget);
+    let end = (start + budget).min(total);
+    let mut out = String::new();
+    if start > 0 {
+        out.push('…');
+    }
+    out.extend(&chars[start..end]);
+    if end < total {
+        out.push('…');
+    }
+    out
 }
 
 fn wrap_description(text: &str, width: usize, max_lines: usize) -> Vec<String> {
@@ -977,6 +1024,90 @@ mod tests {
 
         let long_word = wrap_description("supercalifragilisticexpialidocious", 10, 3);
         assert!(long_word.iter().all(|l| l.chars().count() <= 10));
+    }
+
+    #[test]
+    fn truncate_operand_leaves_short_values_untouched() {
+        assert_eq!(truncate_operand("\"hello\"", 0, 40), "\"hello\"");
+        let multibyte = "\"日本語\"";
+        assert_eq!(truncate_operand(multibyte, 0, 40), multibyte);
+    }
+
+    #[test]
+    fn truncate_operand_windows_around_the_anchor() {
+        let value = format!("\"{}\"", "A".repeat(5000));
+        let anchor = 5001;
+        let shown = truncate_operand(&value, anchor, 40);
+
+        assert!(
+            shown.chars().count() <= 42,
+            "got {} chars",
+            shown.chars().count()
+        );
+        assert!(shown.starts_with('…'), "a cut head is marked, got: {shown}");
+        assert!(
+            shown.ends_with('"'),
+            "the anchored tail stays visible, got: {shown}"
+        );
+    }
+
+    #[test]
+    fn first_divergence_finds_the_split_point() {
+        assert_eq!(first_divergence("\"abc\"", "\"abX\""), 3);
+        assert_eq!(first_divergence("\"abc\"", "\"abc\""), 5);
+        assert_eq!(first_divergence("\"ab\"", "\"abc\""), 3);
+    }
+
+    #[test]
+    fn large_operands_are_truncated_in_the_report() {
+        let index = index(&[(ENTRY_MODULE_ID, "huge")]);
+        let big = "A".repeat(20_000);
+        let inner = serde_json::json!({
+            "file": 7,
+            "lo": 3,
+            "hi": 9,
+            "kind": "relation",
+            "message": "assertion failed",
+            "operands": [
+                {"label": "left", "value": format!("\"{big}\"")},
+                {"label": "right", "value": format!("\"{big}X\"")},
+            ],
+        })
+        .to_string();
+        let events = vec![
+            attr_event("demo", "TestHuge", &fail_value(&inner)),
+            event("fail", "demo", Some("TestHuge"), None),
+        ];
+        let report = build_report(&index, &events, "demo");
+
+        let mut sources = no_sources();
+        sources.insert(
+            7,
+            SourceInfo {
+                source: "fn huge() {}\n".to_string(),
+                filename: "x.test.lis".to_string(),
+            },
+        );
+        let text = render(&report, &sources, false, Duration::from_millis(1));
+
+        assert!(
+            text.chars().count() < 2_000,
+            "a 40k-char comparison must not dump in full, got {} chars",
+            text.chars().count()
+        );
+        assert!(
+            text.lines().all(|line| line.chars().count() < 200),
+            "no rendered line may overflow the terminal"
+        );
+        assert!(text.contains('…'), "truncation is marked, got:\n{text}");
+        assert!(
+            text.contains("X\""),
+            "the trailing divergence stays visible, got:\n{text}"
+        );
+        assert!(
+            text.contains("left:") && text.contains("right:"),
+            "got:\n{text}"
+        );
     }
 
     #[test]
