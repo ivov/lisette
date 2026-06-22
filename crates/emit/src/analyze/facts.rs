@@ -31,7 +31,7 @@ pub(crate) struct EmitFactsConfig<'a> {
     pub(crate) options: EmitOptions,
     pub(crate) line_indexes: Arc<HashMap<u32, LineIndex>>,
     pub(crate) globals: Arc<GlobalEmitData>,
-    pub(crate) generic_base: Arc<OnceLock<GenericConstraintTable>>,
+    pub(crate) generic_base: Arc<OnceLock<Arc<GenericConstraintTable>>>,
     pub(crate) current_module: ModuleId,
 }
 
@@ -50,7 +50,7 @@ pub(crate) struct EmitFacts<'a> {
     options: EmitOptions,
     line_indexes: Arc<HashMap<u32, LineIndex>>,
     globals: Arc<GlobalEmitData>,
-    generic_base: Arc<OnceLock<GenericConstraintTable>>,
+    generic_base: Arc<OnceLock<Arc<GenericConstraintTable>>>,
     current_module: ModuleId,
 }
 
@@ -76,7 +76,7 @@ impl<'a> EmitFacts<'a> {
         }
     }
 
-    pub(crate) fn generic_base(&self) -> Arc<OnceLock<GenericConstraintTable>> {
+    pub(crate) fn generic_base(&self) -> Arc<OnceLock<Arc<GenericConstraintTable>>> {
         self.generic_base.clone()
     }
 

@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use rustc_hash::FxHashSet as HashSet;
 
 use crate::Planner;
@@ -18,9 +20,9 @@ impl Planner<'_> {
                 collect_demands_from_type(ty, key, names, &mut t);
             });
             self.propagate_constraints(&mut t);
-            t
+            Arc::new(t)
         });
-        let mut table = base.clone();
+        let mut table = GenericConstraintTable::with_base(base.clone());
 
         self.seed_local_functions(files, &mut table);
         self.seed_local_impl_blocks(files, &mut table);

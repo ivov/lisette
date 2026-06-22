@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use rustc_hash::FxHashMap as HashMap;
 
 use syntax::EcoString;
@@ -57,12 +59,32 @@ impl ParamConstraintSet {
 #[derive(Debug, Clone, Default)]
 pub(crate) struct GenericConstraintTable {
     by_symbol: HashMap<String, Vec<ParamConstraintSet>>,
+    base: Option<Arc<GenericConstraintTable>>,
 }
 
 impl GenericConstraintTable {
+    pub(crate) fn with_base(base: Arc<GenericConstraintTable>) -> Self {
+        Self {
+            by_symbol: HashMap::default(),
+            base: Some(base),
+        }
+    }
+
+    fn entry_mut(&mut self, symbol: &str) -> Option<&mut Vec<ParamConstraintSet>> {
+        if !self.by_symbol.contains_key(symbol) {
+            let from_base = self
+                .base
+                .as_deref()
+                .and_then(|b| b.get(symbol))
+                .map(<[ParamConstraintSet]>::to_vec)?;
+            self.by_symbol.insert(symbol.to_string(), from_base);
+        }
+        self.by_symbol.get_mut(symbol)
+    }
+
     /// Idempotent.
     pub(crate) fn ensure_seeded(&mut self, symbol: &str, generics: &[Generic]) {
-        if self.by_symbol.contains_key(symbol) {
+        if self.get(symbol).is_some() {
             return;
         }
         let mut sets = Vec::with_capacity(generics.len());
@@ -80,11 +102,14 @@ impl GenericConstraintTable {
     }
 
     pub(crate) fn get(&self, symbol: &str) -> Option<&[ParamConstraintSet]> {
-        self.by_symbol.get(symbol).map(Vec::as_slice)
+        self.by_symbol
+            .get(symbol)
+            .map(Vec::as_slice)
+            .or_else(|| self.base.as_deref().and_then(|b| b.get(symbol)))
     }
 
     pub(crate) fn add_explicit(&mut self, symbol: &str, param: &str, atom: ConstraintAtom) -> bool {
-        let Some(sets) = self.by_symbol.get_mut(symbol) else {
+        let Some(sets) = self.entry_mut(symbol) else {
             return false;
         };
         let Some(set) = sets.iter_mut().find(|s| s.name.as_str() == param) else {
@@ -94,7 +119,7 @@ impl GenericConstraintTable {
     }
 
     pub(crate) fn mark_inferred_comparable(&mut self, symbol: &str, param: &str) -> bool {
-        let Some(sets) = self.by_symbol.get_mut(symbol) else {
+        let Some(sets) = self.entry_mut(symbol) else {
             return false;
         };
         let Some(set) = sets.iter_mut().find(|s| s.name.as_str() == param) else {

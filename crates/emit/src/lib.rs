@@ -545,7 +545,7 @@ struct SharedEmitContext {
     options: EmitOptions,
     line_indexes: Arc<HashMap<u32, LineIndex>>,
     globals: Arc<GlobalEmitData>,
-    generic_base: Arc<OnceLock<GenericConstraintTable>>,
+    generic_base: Arc<OnceLock<Arc<GenericConstraintTable>>>,
 }
 
 fn emit_module<'a>(
