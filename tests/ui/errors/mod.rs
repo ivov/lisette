@@ -4084,6 +4084,25 @@ fn undeclared_t_outside_a_test_keeps_the_generic_hint() {
 }
 
 #[test]
+fn undeclared_handle_in_subtest_suppresses_tail_cascade() {
+    let fs = test_attribute_fs(
+        "pub fn add(a: int, b: int) -> int { a + b }",
+        "#[test]\nfn checks() {\n  t.run(\"sub\", |_| {\n    assert true\n  })\n}",
+    );
+    let result = infer_module("_entry_", fs);
+    assert!(
+        has_code(&result, "resolve.undeclared_test_handle"),
+        "the undeclared handle must still be reported, got: {:?}",
+        result.errors
+    );
+    assert!(
+        !has_code(&result, "statement_as_tail"),
+        "the assert-tail must not cascade once `t` is unresolved, got: {:?}",
+        result.errors
+    );
+}
+
+#[test]
 fn test_attribute_with_return_rejected() {
     let fs = test_attribute_fs(
         "pub fn add(a: int, b: int) -> int { a + b }",

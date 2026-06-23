@@ -484,7 +484,7 @@ impl InferCtx<'_, '_> {
                             expected_ty: last_item_expected_ty.clone(),
                             span: item_span,
                         });
-                } else if !expected.is_unit() {
+                } else if !expected.is_unit() && !expected.is_error() {
                     self.sink
                         .push(diagnostics::infer::statement_as_tail(item_span));
                 }

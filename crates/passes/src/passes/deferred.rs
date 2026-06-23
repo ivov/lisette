@@ -20,6 +20,7 @@ pub(crate) fn run(facts: &mut Facts, sink: &LocalSink) {
         if !check.expected_ty.is_unit()
             && !check.expected_ty.is_variable()
             && !check.expected_ty.is_ignored()
+            && !check.expected_ty.is_error()
         {
             sink.push(diagnostics::infer::statement_as_tail(check.span));
         }
