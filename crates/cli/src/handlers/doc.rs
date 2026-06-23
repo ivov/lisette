@@ -298,8 +298,7 @@ fn interface_definition(name: &str, gen_str: &str, method_signatures: &[Expressi
     )
 }
 
-fn build_prelude_index() -> PreludeIndex {
-    let source = stdlib::LIS_PRELUDE_SOURCE;
+fn build_index_from_source(source: &str) -> PreludeIndex {
     let parse_result = syntax::parse::Parser::lex_and_parse_file(source, 0);
 
     let mut types: Vec<TypeInfo> = Vec::new();
@@ -466,7 +465,12 @@ fn build_prelude_index() -> PreludeIndex {
         }
     }
 
-    types.push(TypeInfo {
+    PreludeIndex { types, functions }
+}
+
+fn build_prelude_index() -> PreludeIndex {
+    let mut index = build_index_from_source(stdlib::LIS_PRELUDE_SOURCE);
+    index.types.push(TypeInfo {
         name: "Unit".to_string(),
         generics: Vec::new(),
         definition: "type Unit".to_string(),
@@ -476,8 +480,11 @@ fn build_prelude_index() -> PreludeIndex {
         methods: Vec::new(),
         kind: TypeKind::Primitive,
     });
+    index
+}
 
-    PreludeIndex { types, functions }
+fn build_test_prelude_index() -> PreludeIndex {
+    build_index_from_source(stdlib::LIS_TEST_PRELUDE_SOURCE)
 }
 
 fn build_go_package_index(source: &str, package: &str) -> GoPackageIndex {
@@ -848,6 +855,7 @@ fn print_all(index: &PreludeIndex) {
             "Docs on `map` method on Lisette's `Slice` type",
         ),
         ("prelude", "List all Lisette prelude symbols"),
+        ("test", "How to write and run tests"),
         ("go:", "List all Go stdlib packages"),
         ("go:os", "Docs on Go stdlib `os` package contents"),
         (
@@ -917,6 +925,109 @@ fn print_prelude(index: &PreludeIndex) {
     for (label, leaves) in &categories {
         print_prelude_category(label, label_width, leaves);
     }
+}
+
+fn print_test_code(code: &str) {
+    let lines: Vec<&str> = code.lines().collect();
+    let min_indent = lines
+        .iter()
+        .filter(|l| !l.trim().is_empty())
+        .map(|l| l.len() - l.trim_start().len())
+        .min()
+        .unwrap_or(0);
+    println!();
+    for line in lines {
+        let stripped = if line.len() >= min_indent {
+            &line[min_indent..]
+        } else {
+            line.trim_start()
+        };
+        if use_color() {
+            use owo_colors::OwoColorize;
+            println!("      {}", stripped.dimmed().italic());
+        } else {
+            println!("      {stripped}");
+        }
+    }
+}
+
+fn print_test_topic() {
+    let paragraph = |text: &str| {
+        for line in text.lines() {
+            println!("  {}", format_backticks(line, use_color()));
+        }
+    };
+
+    println!();
+    paragraph("Write and run tests for a Lisette project.");
+    println!();
+    paragraph(
+        "Tests live in `.test.lis` files beside the code they cover. Mark a\n\
+         function with `#[test]` and check it with `assert`:",
+    );
+    print_test_code(
+        "        #[test]
+        fn adds_two_numbers() {
+          assert add(2, 3) == 5
+        }",
+    );
+    println!();
+    paragraph("Bind and check a pattern in one step with `let assert`:");
+    print_test_code(
+        "        #[test]
+        fn parses_a_port() {
+          let assert Some(port) = parse_port(\"8080\")
+          assert port == 8080
+        }",
+    );
+    println!();
+    paragraph("Give a test a readable title, and a doc comment for context:");
+    print_test_code(
+        "        /// A zero-length input is rejected before any work begins.
+        #[test(\"rejects empty input\")]
+        fn rejects_empty() {
+          let assert Err(message) = run(\"\")
+          assert message.contains(\"empty\")
+        }",
+    );
+    println!();
+    paragraph(
+        "Return `Result<(), error>` to use `?` inside a test. Returning `Err`\n\
+         fails it:",
+    );
+    print_test_code(
+        "        #[test]
+        fn loads_config() -> Result<(), error> {
+          let config = load(\"app.toml\")?
+          assert config.port == 8080
+          Ok(())
+        }",
+    );
+
+    println!();
+    println!("  {}", format_bold("The test handle"));
+    println!();
+    paragraph("Take a `t` parameter to reach the test context, for subtests and more:");
+    print_test_code(
+        "        #[test]
+        fn groups_cases(t) {
+          let _ = t.run(\"small inputs\", |t| {
+            assert normalize(1) == 1
+          })
+        }",
+    );
+
+    if let Some(type_info) = build_test_prelude_index()
+        .types
+        .iter()
+        .find(|t| t.name == "TestContext")
+    {
+        print_type(type_info);
+    }
+
+    println!();
+    paragraph("Run them with `lis test`, or `lis test --help` for filters and flags.");
+    println!();
 }
 
 fn prelude_categories(index: &PreludeIndex) -> Vec<(&'static str, Vec<String>)> {
@@ -1125,6 +1236,15 @@ fn format_white(s: &str) -> String {
     if use_color() {
         use owo_colors::OwoColorize;
         s.white().to_string()
+    } else {
+        s.to_string()
+    }
+}
+
+fn format_bold(s: &str) -> String {
+    if use_color() {
+        use owo_colors::OwoColorize;
+        s.bold().to_string()
     } else {
         s.to_string()
     }
@@ -1789,6 +1909,47 @@ pub fn doc(query: Option<String>) -> i32 {
             print_prelude(&index);
             0
         }
+        Some(q) if q.eq_ignore_ascii_case("test") || q.eq_ignore_ascii_case("tests") => {
+            print_test_topic();
+            0
+        }
+        Some(q)
+            if q.eq_ignore_ascii_case("TestContext")
+                || q.to_lowercase().starts_with("testcontext.") =>
+        {
+            let index = build_test_prelude_index();
+            let Some(type_info) = index.types.iter().find(|t| t.name == "TestContext") else {
+                print_test_topic();
+                return 0;
+            };
+            match q.split_once('.') {
+                None => {
+                    print_type(type_info);
+                    0
+                }
+                Some((_, method)) => {
+                    if let Some(method_info) = type_info
+                        .methods
+                        .iter()
+                        .find(|m| m.name.eq_ignore_ascii_case(method))
+                    {
+                        print_method(type_info, method_info);
+                        0
+                    } else {
+                        let help = match suggest_method(method, type_info) {
+                            Some(s) => format!("Did you mean `lis doc TestContext.{}`?", s),
+                            None => "Run `lis doc test` to see the test handle".to_string(),
+                        };
+                        cli_error!(
+                            format!("`TestContext` has no method `{}`", method),
+                            format!("`{}` is not a method on `TestContext`", method),
+                            help
+                        );
+                        1
+                    }
+                }
+            }
+        }
         Some(q) => {
             let index = build_prelude_index();
             let parts: Vec<&str> = q.splitn(2, '.').collect();
@@ -1864,6 +2025,29 @@ pub fn doc(query: Option<String>) -> i32 {
                     1
                 }
             }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_prelude_exposes_the_handle_methods() {
+        let index = build_test_prelude_index();
+        let context = index
+            .types
+            .iter()
+            .find(|t| t.name == "TestContext")
+            .expect("`TestContext` is parsed from the test prelude");
+
+        let methods: Vec<&str> = context.methods.iter().map(|m| m.name.as_str()).collect();
+        for expected in ["run", "parallel", "skip", "log"] {
+            assert!(
+                methods.contains(&expected),
+                "the `lis doc test` handle section documents `{expected}`, got: {methods:?}"
+            );
         }
     }
 }

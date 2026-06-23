@@ -177,7 +177,9 @@ Examples:
     `lis test`                           Run all tests in current dir
     `lis test` {~/projects/demo:g}           Run tests in specific dir
     `lis test` {-f:b} {parse:g}                  Only tests whose name contains \"parse\"
-    `lis test` {--go-flags:b} {\"-failfast\":g}    Stop at the first failing test",
+    `lis test` {--go-flags:b} {\"-failfast\":g}    Stop at the first failing test
+
+Run `lis doc test` to learn how to write tests.",
         ),
 
         "add" => print_help(
@@ -271,6 +273,7 @@ Examples:
     `lis doc` {Slice:g}          Docs on Lisette's `Slice` type
     `lis doc` {Slice.map:g}      Docs on `map` method on Lisette's `Slice` type
     `lis doc` {prelude:g}        List all Lisette prelude symbols
+    `lis doc` {test:g}           How to write and run tests
     `lis doc` {go::g}            List all Go stdlib packages
     `lis doc` {go:os:g}          Docs on Go stdlib `os` package contents
     `lis doc` {go:os.File:g}     Docs on `File` type in Go stdlib `os` package
