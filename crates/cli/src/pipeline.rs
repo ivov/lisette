@@ -146,6 +146,7 @@ pub fn compile(
         &config.go_module,
         EmitOptions {
             sourcemap: config.sourcemap,
+            emit_tests: config.emit_tests,
         },
     );
 

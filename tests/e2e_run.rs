@@ -737,3 +737,40 @@ fn loose_dir_check_does_not_duplicate_child_diagnostics() {
         "a loose-directory check must report a child module's diagnostic once, not once per ancestor sweep:\n{combined}"
     );
 }
+
+#[test]
+fn t_log_renders_logged_values_in_a_logs_section() {
+    if !go_available() {
+        eprintln!("skipping t_log_renders_logged_values_in_a_logs_section: `go` not found");
+        return;
+    }
+
+    let scratch = tempfile::tempdir().expect("create temp dir");
+    let project = scratch.path().join("proj");
+    fs::create_dir_all(project.join("src")).unwrap();
+    fs::write(
+        project.join("lisette.toml"),
+        "[project]\nname = \"logdemo\"\nversion = \"0.1.0\"\n",
+    )
+    .unwrap();
+    fs::write(project.join("src/main.lis"), "fn main() {\n}\n").unwrap();
+    fs::write(
+        project.join("src/demo.test.lis"),
+        "#[test]\nfn logs_a_value(t: TestContext) {\n  let user = \"alice\"\n  t.log(user)\n  assert user.length() == 5\n}\n",
+    )
+    .unwrap();
+
+    let output = lis(&project, "test");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let combined = format!("{stdout}{stderr}");
+
+    assert!(
+        output.status.success(),
+        "lis test should pass with a logged value:\n{combined}"
+    );
+    assert!(
+        combined.contains("Logs") && combined.contains("\"alice\""),
+        "the report should show the logged value in a Logs section:\n{combined}"
+    );
+}

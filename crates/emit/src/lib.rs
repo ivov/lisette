@@ -57,6 +57,7 @@ use syntax::types::{Symbol, Type};
 #[derive(Clone, Debug, Default)]
 pub struct EmitOptions {
     pub sourcemap: bool,
+    pub emit_tests: bool,
 }
 
 #[derive(Default)]
@@ -298,7 +299,10 @@ impl<'a> Planner<'a> {
             bound_types: config.bound_types,
             entry_module: config.module_id.to_string(),
             go_module: config.go_module.to_string(),
-            options: EmitOptions { sourcemap },
+            options: EmitOptions {
+                sourcemap,
+                emit_tests: false,
+            },
             line_indexes,
             globals,
             generic_base: Arc::new(OnceLock::new()),

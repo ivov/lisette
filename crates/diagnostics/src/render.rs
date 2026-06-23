@@ -130,6 +130,27 @@ fn color_handler(highlight: Style) -> GraphicalReportHandler {
     GraphicalReportHandler::new_themed(theme).with_wrap_lines(false)
 }
 
+fn accent_handler(accent: Style) -> GraphicalReportHandler {
+    let theme = GraphicalTheme {
+        characters: ThemeCharacters {
+            error: "✕".into(),
+            warning: "▲".into(),
+            advice: "●".into(),
+            ..ThemeCharacters::unicode()
+        },
+        styles: ThemeStyles {
+            error: Style::new().red(),
+            warning: Style::new().yellow(),
+            advice: accent,
+            link: Style::new(),
+            help: Style::new().dimmed(),
+            highlights: vec![accent],
+            ..ThemeStyles::ansi()
+        },
+    };
+    GraphicalReportHandler::new_themed(theme).with_wrap_lines(false)
+}
+
 fn nocolor_handler() -> GraphicalReportHandler {
     let theme = GraphicalTheme {
         characters: ThemeCharacters {
@@ -165,12 +186,15 @@ pub fn render_to_string(
     source: &str,
     filename: &str,
     use_color: bool,
+    accent: Style,
+    context_lines: usize,
 ) -> String {
     let handler = if use_color {
-        color_handler(Style::new().red())
+        accent_handler(accent)
     } else {
         nocolor_handler()
-    };
+    }
+    .with_context_lines(context_lines);
     let report = diagnostic
         .clone()
         .with_color(use_color)

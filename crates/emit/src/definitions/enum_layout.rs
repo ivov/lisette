@@ -1,6 +1,6 @@
 use rustc_hash::FxHashMap as HashMap;
 
-use crate::definitions::structs::stringer_verb;
+use crate::definitions::structs::{debug_verb, stringer_verb};
 use crate::names::go_name;
 use crate::utils::receiver_name;
 use syntax::ast::{EnumVariant, Generic};
@@ -305,6 +305,85 @@ impl EnumLayout {
         format!(
             "return fmt.Sprintf(\"{}{}{}{}{}\", {})",
             prefix,
+            variant.name,
+            open,
+            placeholders,
+            close,
+            args.join(", ")
+        )
+    }
+
+    pub(crate) fn emit_debug_method(&self, receiver_generics: &str, prelude: &str) -> String {
+        let receiver = receiver_name(&self.enum_name);
+        let go_type_name = go_name::escape_keyword(&self.enum_name);
+        let receiver_type = format!("{}{}", go_type_name, receiver_generics);
+
+        let mut lines = Vec::new();
+        lines.push(format!(
+            "func ({receiver} {receiver_type}) DebugString() string {{"
+        ));
+        lines.push(format!("switch {receiver}.Tag {{"));
+
+        for variant in &self.variants {
+            lines.push(format!("case {}:", variant.tag_constant));
+            lines.push(self.build_variant_debug_line(variant, &receiver, prelude));
+        }
+
+        lines.push("default:".to_string());
+        lines.push(format!(
+            "return fmt.Sprintf(\"{}(%d)\", {receiver}.Tag)",
+            self.enum_name
+        ));
+        lines.push("}".to_string());
+        lines.push("}".to_string());
+
+        lines.join("\n")
+    }
+
+    pub(crate) fn debug_uses_prelude(&self) -> bool {
+        self.variants
+            .iter()
+            .flat_map(|v| v.fields.iter())
+            .any(|f| !f.is_function)
+    }
+
+    fn build_variant_debug_line(
+        &self,
+        variant: &VariantLayout,
+        receiver: &str,
+        prelude: &str,
+    ) -> String {
+        if variant.fields.is_empty() {
+            return format!("return \"{}\"", variant.name);
+        }
+        let args: Vec<String> = variant
+            .fields
+            .iter()
+            .map(|f| {
+                if f.is_function {
+                    format!("{receiver}.{}", f.go_name)
+                } else {
+                    format!("{prelude}.Debug({receiver}.{})", f.go_name)
+                }
+            })
+            .collect();
+        let (open, close, placeholders) = if variant.is_struct_variant {
+            let parts: Vec<String> = variant
+                .fields
+                .iter()
+                .map(|f| format!("{}: {}", f.source_name, debug_verb(f.is_function)))
+                .collect();
+            (" { ", " }", parts.join(", "))
+        } else {
+            let parts: Vec<&str> = variant
+                .fields
+                .iter()
+                .map(|f| debug_verb(f.is_function))
+                .collect();
+            ("(", ")", parts.join(", "))
+        };
+        format!(
+            "return fmt.Sprintf(\"{}{}{}{}\", {})",
             variant.name,
             open,
             placeholders,

@@ -10,4 +10,7 @@ impl TestContext {
 
     /// Skip this test at runtime with a reason.
     pub fn skip(self, reason: string) -> Never
+
+    /// Log a value while debugging.
+    pub fn log(self, value: Unknown)
 }

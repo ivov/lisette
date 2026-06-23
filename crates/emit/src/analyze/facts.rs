@@ -243,6 +243,10 @@ impl<'a> EmitFacts<'a> {
         self.options.sourcemap
     }
 
+    pub(crate) fn emit_tests_enabled(&self) -> bool {
+        self.options.emit_tests
+    }
+
     pub(crate) fn line_index(&self, file_id: u32) -> Option<&LineIndex> {
         self.line_indexes.get(&file_id)
     }

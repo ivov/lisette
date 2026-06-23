@@ -4,8 +4,8 @@ use crate::Renderer;
 use crate::abi::transition::try_emit_lowered_tail_return;
 use crate::context::expression::ExpressionContext;
 use crate::control_flow::propagation::plain_return;
-use crate::definitions::functions::{is_breakless_loop, is_go_never};
-use crate::names::go_name;
+use crate::definitions::functions::{is_breakless_loop, is_go_never, is_test_context_ty};
+use crate::names::go_name::{prelude_qualifier, testkit_qualifier};
 use crate::plan::bodies::{
     ElseArm, ExpressionStatementForm, ExpressionStatementPlan, IfPlan, LoopPlan, LoweredBlock,
     LoweredStatement, MatchStatementPlan, PlacePlan, WhileLetPlan, directed,
@@ -382,6 +382,9 @@ impl Planner<'_> {
                 }
                 LoweredStatement::RawGo(buffer)
             }
+            Expression::Call { .. } if self.is_test_log_call(expression) => {
+                self.lower_test_log_statement(expression, fx)
+            }
             _ => self.lower_expression_statement(expression, fx),
         }
     }
@@ -460,6 +463,7 @@ impl Planner<'_> {
         let AssertShape {
             condition,
             kind,
+            message,
             operands,
         } = shape;
         let handle = self
@@ -467,12 +471,89 @@ impl Planner<'_> {
             .expect("assert without a test handle should be rejected by semantics");
         let span = operand.get_span();
         statements.push(LoweredStatement::RawGo(format!(
-            "if !({condition}) {{\n{handle}.FailAssert({}, {}, {}, \"{kind}\", \"assertion failed\"{operands})\n}}\n",
+            "if !({condition}) {{\n{handle}.FailAssert({}, {}, {}, \"{kind}\", \"{message}\"{operands})\n}}\n",
             span.file_id,
             span.byte_offset,
             span.byte_offset + span.byte_length,
         )));
         LoweredStatement::Block(LoweredBlock { statements })
+    }
+
+    pub(crate) fn is_test_log_call(&self, expression: &Expression) -> bool {
+        let Expression::Call {
+            expression: callee,
+            args,
+            ..
+        } = expression.unwrap_parens()
+        else {
+            return false;
+        };
+        if args.len() != 1 {
+            return false;
+        }
+        let Expression::DotAccess {
+            expression: receiver,
+            member,
+            ..
+        } = callee.unwrap_parens()
+        else {
+            return false;
+        };
+        member.as_str() == "log" && is_test_context_ty(&receiver.get_type())
+    }
+
+    pub(crate) fn lower_test_log_statement(
+        &mut self,
+        expression: &Expression,
+        fx: &mut EmitEffects,
+    ) -> LoweredStatement {
+        let (mut statements, call) = self.lower_test_log_call(expression, fx);
+        statements.push(LoweredStatement::RawGo(format!("{call}\n")));
+        LoweredStatement::Block(LoweredBlock { statements })
+    }
+
+    pub(crate) fn lower_test_log_call(
+        &mut self,
+        expression: &Expression,
+        fx: &mut EmitEffects,
+    ) -> (Vec<LoweredStatement>, String) {
+        let Expression::Call {
+            expression: callee,
+            args,
+            ..
+        } = expression.unwrap_parens()
+        else {
+            unreachable!("lower_test_log_call requires a call");
+        };
+        let Expression::DotAccess {
+            expression: receiver,
+            ..
+        } = callee.unwrap_parens()
+        else {
+            unreachable!("lower_test_log_call requires a method receiver");
+        };
+        fx.require_testkit();
+        fx.require_stdlib();
+
+        let mut statements = Vec::new();
+        let (recv_setup, handle) = self
+            .lower_value(receiver, ExpressionContext::value(), fx)
+            .into_parts();
+        statements.extend(recv_setup);
+        let (arg_setup, value) = self
+            .lower_value(&args[0], ExpressionContext::value(), fx)
+            .into_parts();
+        statements.extend(arg_setup);
+
+        let prelude = prelude_qualifier();
+        let span = args[0].get_span();
+        let call = format!(
+            "{handle}.Log({}, {}, {}, {prelude}.Debug({value}))",
+            span.file_id,
+            span.byte_offset,
+            span.byte_offset + span.byte_length,
+        );
+        (statements, call)
     }
 
     /// `assert a <op> b`: compare the captured temps via the normal binary
@@ -503,6 +584,7 @@ impl Planner<'_> {
         AssertShape {
             condition,
             kind: "relation",
+            message: format!("expected {operator}"),
             operands: paired_operands(&lhs, &rhs),
         }
     }
@@ -523,6 +605,7 @@ impl Planner<'_> {
         AssertShape {
             condition,
             kind: "labeled",
+            message: "expected ==".to_string(),
             operands: paired_operands(&lhs, &rhs),
         }
     }
@@ -539,6 +622,7 @@ impl Planner<'_> {
         AssertShape {
             condition,
             kind: "bare",
+            message: "assertion failed".to_string(),
             operands: String::new(),
         }
     }
@@ -1070,14 +1154,12 @@ impl Planner<'_> {
 struct AssertShape {
     condition: String,
     kind: &'static str,
+    message: String,
     operands: String,
 }
 
 fn paired_operands(lhs: &str, rhs: &str) -> String {
-    let (test_kit, prelude) = (
-        go_name::GeneratedPackage::TestKit.qualifier(),
-        go_name::GeneratedPackage::Prelude.qualifier(),
-    );
+    let (test_kit, prelude) = (testkit_qualifier(), prelude_qualifier());
     format!(
         ", {test_kit}.Operand{{Label: \"left\", Value: {prelude}.Debug({lhs})}}, {test_kit}.Operand{{Label: \"right\", Value: {prelude}.Debug({rhs})}}"
     )

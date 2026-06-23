@@ -87,6 +87,10 @@ impl Planner<'_> {
         ctx: ExpressionContext<'_>,
         fx: &mut EmitEffects,
     ) -> ValuePlan {
+        if self.is_test_log_call(expression) {
+            let (setup, call) = self.lower_test_log_call(expression, fx);
+            return value_plan_from_statements(setup, call);
+        }
         match expression {
             Expression::Paren { expression, .. } => {
                 ValuePlan::Paren(Box::new(self.plan_operand(expression, ctx, fx)))

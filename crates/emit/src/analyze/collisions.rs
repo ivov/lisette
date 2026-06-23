@@ -8,7 +8,9 @@ use crate::Planner;
 use crate::definitions::enum_layout::{
     ENUM_GO_STRINGER_METHOD, ENUM_STRINGER_METHOD, ENUM_TAG_FIELD,
 };
-use crate::definitions::structs::{should_synthesize_stringer, struct_field_go_name};
+use crate::definitions::structs::{
+    DEBUG_STRING_METHOD, should_synthesize_stringer, struct_field_go_name,
+};
 use crate::names::go_name;
 
 type SpanMap = HashMap<String, Vec<Span>>;
@@ -153,6 +155,12 @@ impl Planner<'_> {
                         .or_default()
                         .push(*name_span);
                 }
+                if self.facts.emit_tests_enabled() && !self.debug_string_override(name) {
+                    members
+                        .entry(DEBUG_STRING_METHOD.to_string())
+                        .or_default()
+                        .push(*name_span);
+                }
             }
             Expression::Enum {
                 name,
@@ -234,6 +242,12 @@ impl Planner<'_> {
                 if self.should_synthesize_equals(name) {
                     members
                         .entry(self.equals_method_go_name())
+                        .or_default()
+                        .push(*name_span);
+                }
+                if self.facts.emit_tests_enabled() && !self.debug_string_override(name) {
+                    members
+                        .entry(DEBUG_STRING_METHOD.to_string())
                         .or_default()
                         .push(*name_span);
                 }

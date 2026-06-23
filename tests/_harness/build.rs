@@ -186,7 +186,10 @@ pub fn compile_project_files_with_tests(
     Planner::emit(
         &analysis.into_emit_input(),
         go_module,
-        EmitOptions { sourcemap },
+        EmitOptions {
+            sourcemap,
+            emit_tests,
+        },
     )
 }
 

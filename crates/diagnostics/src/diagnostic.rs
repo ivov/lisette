@@ -1,5 +1,5 @@
 use miette::{Diagnostic, LabeledSpan, Severity};
-use owo_colors::OwoColorize;
+use owo_colors::{OwoColorize, Style};
 use std::fmt;
 use std::sync::Arc;
 
@@ -187,6 +187,7 @@ pub struct LisetteDiagnostic {
     code: Option<String>,
     file_id: Option<u32>,
     use_color: bool,
+    label_accent: Option<Style>,
 }
 
 impl fmt::Display for LisetteDiagnostic {
@@ -279,16 +280,20 @@ impl Diagnostic for LisetteDiagnostic {
     fn labels(&self) -> Option<Box<dyn Iterator<Item = LabeledSpan> + '_>> {
         let use_color = self.use_color;
         let severity = self.severity;
+        let accent = self.label_accent;
 
         let formatted_labels = self.labels.iter().map(move |span| {
             if let Some(label) = span.label() {
                 let formatted = if use_color {
-                    let base_style = match severity {
-                        Severity::Error => |s: &str| format!("{}", s.red()),
-                        Severity::Warning => |s: &str| format!("{}", s.yellow()),
-                        Severity::Advice => |s: &str| format!("{}", s.blue()),
+                    let style = move |s: &str| match accent {
+                        Some(accent) => format!("{}", s.style(accent)),
+                        None => match severity {
+                            Severity::Error => format!("{}", s.red()),
+                            Severity::Warning => format!("{}", s.yellow()),
+                            Severity::Advice => format!("{}", s.blue()),
+                        },
                     };
-                    format_with_backticks(label, true, base_style)
+                    format_with_backticks(label, true, style)
                 } else {
                     label.to_string()
                 };
@@ -333,7 +338,13 @@ impl LisetteDiagnostic {
             code: None,
             file_id: None,
             use_color: false,
+            label_accent: None,
         }
+    }
+
+    pub fn with_label_accent(mut self, accent: Style) -> Self {
+        self.label_accent = Some(accent);
+        self
     }
 
     pub fn error(message: impl Into<String>) -> Self {

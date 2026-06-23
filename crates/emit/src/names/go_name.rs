@@ -348,6 +348,18 @@ impl GeneratedPackage {
     }
 }
 
+pub(crate) fn prelude_qualifier() -> &'static str {
+    GeneratedPackage::Prelude.qualifier()
+}
+
+pub(crate) fn testkit_qualifier() -> &'static str {
+    GeneratedPackage::TestKit.qualifier()
+}
+
+pub(crate) fn testing_qualifier() -> &'static str {
+    GeneratedPackage::Testing.qualifier()
+}
+
 pub(crate) fn is_generated_import_qualifier(name: &str) -> bool {
     GeneratedPackage::ALL
         .iter()

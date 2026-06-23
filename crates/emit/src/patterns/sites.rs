@@ -7,7 +7,7 @@ use syntax::types::Type;
 use crate::EmitEffects;
 use crate::Planner;
 use crate::context::expression::ExpressionContext;
-use crate::names::go_name;
+use crate::names::go_name::{self, prelude_qualifier, testkit_qualifier};
 use crate::patterns::binding_decls::pattern_binds_name;
 use crate::patterns::binding_emit::{
     apply_refutable_root_assertion, apply_root_assertion, compose_refutable_condition,
@@ -368,8 +368,8 @@ impl Planner<'_> {
                     .expect("let assert without a test handle should be rejected by semantics");
                 fx.require_testkit();
                 fx.require_stdlib();
-                let testkit = go_name::GeneratedPackage::TestKit.qualifier();
-                let prelude = go_name::GeneratedPackage::Prelude.qualifier();
+                let testkit = testkit_qualifier();
+                let prelude = prelude_qualifier();
                 self.scope.record_go_use(subject_var);
                 let (file, lo, hi) = (
                     span.file_id,

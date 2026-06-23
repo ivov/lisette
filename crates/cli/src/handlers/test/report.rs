@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::time::Duration;
 
-use owo_colors::OwoColorize;
+use owo_colors::{OwoColorize, Style};
 use semantics::store::ENTRY_MODULE_ID;
 use serde::Deserialize;
 use syntax::ast::Span;
@@ -21,11 +21,13 @@ struct EventTables {
     failures: HashMap<(String, String), FailureRecord>,
     skip_reasons: HashMap<(String, String), String>,
     subtest_names: HashMap<(String, String), String>,
+    logs: HashMap<(String, String), Vec<LogRecord>>,
 }
 
 const FAIL_ATTR_KEY: &str = "lisette-fail";
 const SKIP_ATTR_KEY: &str = "lisette-skip";
 const SUBTEST_ATTR_KEY: &str = "lisette-subtest";
+const LOG_ATTR_KEY: &str = "lisette-log";
 
 const DESC_MAX_WIDTH: usize = 100;
 const DESC_MIN_WIDTH: usize = 20;
@@ -69,6 +71,14 @@ pub struct FailureRecord {
     operands: Vec<Operand>,
 }
 
+#[derive(Deserialize, Clone)]
+pub struct LogRecord {
+    file: u32,
+    lo: u32,
+    hi: u32,
+    value: String,
+}
+
 pub struct TestRow {
     pub package: String,
     pub go_name: String,
@@ -79,6 +89,7 @@ pub struct TestRow {
     pub output: String,
     pub failure: Option<FailureRecord>,
     pub skip_reason: Option<String>,
+    pub logs: Vec<LogRecord>,
     pub children: Vec<TestRow>,
     pub span: Span,
 }
@@ -161,6 +172,7 @@ pub fn build_report_filtered(
     let mut fail_chunks: FailChunks = HashMap::new();
     let mut skip_reasons: HashMap<(String, String), String> = HashMap::new();
     let mut subtest_names: HashMap<(String, String), String> = HashMap::new();
+    let mut logs: HashMap<(String, String), Vec<LogRecord>> = HashMap::new();
     let mut test_elapsed: f64 = 0.0;
 
     for event in events {
@@ -190,6 +202,17 @@ pub fn build_report_filtered(
             && let Some(name) = decode_hex(value).and_then(|b| String::from_utf8(b).ok())
         {
             subtest_names.insert((event.package.clone(), test.clone()), name);
+            continue;
+        }
+        if event.action == "attr"
+            && event.key.as_deref() == Some(LOG_ATTR_KEY)
+            && let (Some(test), Some(value)) = (&event.test, &event.value)
+            && let Some(record) =
+                decode_hex(value).and_then(|b| serde_json::from_slice::<LogRecord>(&b).ok())
+        {
+            logs.entry((event.package.clone(), test.clone()))
+                .or_default()
+                .push(record);
             continue;
         }
         let Some(test) = &event.test else {
@@ -256,6 +279,7 @@ pub fn build_report_filtered(
         failures: reassemble_failures(fail_chunks),
         skip_reasons,
         subtest_names,
+        logs,
     };
 
     let mut rows = Vec::new();
@@ -293,6 +317,7 @@ pub fn build_report_filtered(
             output: tables.outputs.get(&key).cloned().unwrap_or_default(),
             failure: tables.failures.get(&key).cloned(),
             skip_reason: tables.skip_reasons.get(&key).cloned(),
+            logs: tables.logs.get(&key).cloned().unwrap_or_default(),
             children,
             span: test.span,
         });
@@ -406,6 +431,7 @@ fn subtest_rows(
                 output: tables.outputs.get(&key).cloned().unwrap_or_default(),
                 failure: tables.failures.get(&key).cloned(),
                 skip_reason: tables.skip_reasons.get(&key).cloned(),
+                logs: tables.logs.get(&key).cloned().unwrap_or_default(),
                 children: subtest_rows(package, full, children_of, tables),
                 span: Span::new(0, 0, 0),
             }
@@ -518,6 +544,7 @@ pub fn render(report: &Report, sources: &Sources, color: bool, total: Duration) 
         }
     }
 
+    render_logs(&mut out, &report.rows, &report.go_module, sources, color);
     render_failures(&mut out, &report.rows, &report.go_module, sources, color);
 
     out.push('\n');
@@ -552,7 +579,6 @@ fn render_package_rows(
 }
 
 fn render_rows(out: &mut String, rows: &[&TestRow], prefix: &str, color: bool, term_width: usize) {
-    let any_described = rows.iter().any(|r| r.description.is_some());
     for (i, row) in rows.iter().enumerate() {
         let last = i + 1 == rows.len();
         let branch = if last { "└── " } else { "├── " };
@@ -613,34 +639,125 @@ fn render_rows(out: &mut String, rows: &[&TestRow], prefix: &str, color: bool, t
             ));
         }
 
-        if let Some(description) = &row.description {
-            let line = description.split_whitespace().collect::<Vec<_>>().join(" ");
-            if !line.is_empty() {
-                let gutter = if row.children.is_empty() {
-                    "  "
-                } else {
-                    "│ "
-                };
-                let indent = child_prefix.chars().count() + gutter.chars().count();
-                let width = term_width
-                    .saturating_sub(indent)
-                    .clamp(DESC_MIN_WIDTH, DESC_MAX_WIDTH);
-                for wrapped in wrap_description(&line, width, DESC_MAX_LINES) {
-                    out.push_str(&format!(
-                        "{child_prefix}{gutter}{}\n",
-                        format_description(&wrapped, color)
-                    ));
-                }
-            }
-        }
-
         let children: Vec<&TestRow> = row.children.iter().collect();
         render_rows(out, &children, &child_prefix, color, term_width);
+    }
+}
 
-        if any_described && !last {
-            out.push_str(&format!("{prefix}│\n"));
+fn render_logs(
+    out: &mut String,
+    rows: &[TestRow],
+    go_module: &str,
+    sources: &Sources,
+    color: bool,
+) {
+    let multi_package = rows
+        .iter()
+        .map(|r| &r.package)
+        .collect::<HashSet<_>>()
+        .len()
+        > 1;
+    let mut blocks: Vec<(String, String)> = Vec::new();
+    for row in rows {
+        let prefix = if multi_package {
+            package_display(&row.package, go_module).to_string()
+        } else {
+            String::new()
+        };
+        collect_logs(row, &prefix, sources, color, &mut blocks);
+    }
+    if blocks.is_empty() {
+        return;
+    }
+
+    out.push('\n');
+    let heading = if color {
+        "Logs".bold().to_string()
+    } else {
+        "Logs".to_string()
+    };
+    out.push_str(&format!("  {heading}\n"));
+    let glyph = "≡";
+    for (path, body) in blocks {
+        out.push('\n');
+        out.push_str(&format!("  {glyph} {}\n", path.replace('`', "")));
+        for line in body.lines() {
+            out.push_str(&format!("    {line}\n"));
         }
     }
+}
+
+fn collect_logs(
+    row: &TestRow,
+    prefix: &str,
+    sources: &Sources,
+    color: bool,
+    blocks: &mut Vec<(String, String)>,
+) {
+    let path = if prefix.is_empty() {
+        row.name.clone()
+    } else {
+        format!("{prefix} › {}", row.name)
+    };
+    for record in &row.logs {
+        if let Some(body) = render_log(record, sources, color) {
+            blocks.push((path.clone(), body));
+        }
+    }
+    for child in &row.children {
+        collect_logs(child, &path, sources, color, blocks);
+    }
+}
+
+fn render_log(record: &LogRecord, sources: &Sources, color: bool) -> Option<String> {
+    let info = sources.get(&record.file)?;
+    let span = Span::new(record.file, record.lo, record.hi.saturating_sub(record.lo));
+    let diagnostic = LisetteDiagnostic::info(String::new())
+        .with_span_primary_label(&span, truncate_log_value(&record.value))
+        .with_label_accent(Style::new());
+    let rendered = diagnostics::render::render_to_string(
+        &diagnostic,
+        &info.source,
+        &info.filename,
+        color,
+        Style::new(),
+        2,
+    );
+    let body = rendered.lines().skip(1).collect::<Vec<_>>().join("\n");
+    Some(dim_source_lines(&body, color))
+}
+
+fn dim_source_lines(frame: &str, color: bool) -> String {
+    if !color {
+        return frame.to_string();
+    }
+    frame
+        .lines()
+        .map(|line| match line.find('│') {
+            Some(pos) => {
+                let (head, code) = line.split_at(pos + '│'.len_utf8());
+                format!("{head}{}", code.dimmed())
+            }
+            None => line.to_string(),
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn truncate_log_value(value: &str) -> String {
+    if value.chars().count() <= OPERAND_MAX_CHARS {
+        return value.to_string();
+    }
+    let head: String = value.chars().take(OPERAND_MAX_CHARS - 1).collect();
+    format!("{head}…")
+}
+
+struct FailureBlock {
+    status: Status,
+    path: String,
+    description: Option<String>,
+    kind: Option<String>,
+    body: String,
 }
 
 fn render_failures(
@@ -658,7 +775,7 @@ fn render_failures(
         .collect::<HashSet<_>>()
         .len()
         > 1;
-    let mut blocks: Vec<(Status, String, Option<String>, String)> = Vec::new();
+    let mut blocks: Vec<FailureBlock> = Vec::new();
     for row in rows {
         let prefix = if multi_package {
             package_display(&row.package, go_module).to_string()
@@ -678,22 +795,40 @@ fn render_failures(
         "Failures".to_string()
     };
     out.push_str(&format!("  {heading}\n"));
-    for (status, path, kind, body) in blocks {
+    for block in blocks {
         out.push('\n');
-        let glyph = mark(status, color);
-        let bare = path.replace('`', "");
-        let name = match status {
+        let glyph = mark(block.status, color);
+        let bare = block.path.replace('`', "");
+        let name = match block.status {
             Status::Crashed => yellow(&bare, color),
             _ => red(&bare, color),
         };
-        match kind {
+        match block.kind {
             Some(kind) => out.push_str(&format!("  {glyph} {name} · {kind}\n")),
             None => out.push_str(&format!("  {glyph} {name}\n")),
         }
-        for line in body.lines() {
+        if let Some(line) = failure_description_line(block.description.as_deref(), color) {
+            out.push_str(&format!("    {line}\n"));
+        }
+        for line in block.body.lines() {
             out.push_str(&format!("    {line}\n"));
         }
     }
+}
+
+fn failure_description_line(description: Option<&str>, color: bool) -> Option<String> {
+    let collapsed = description?
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    if collapsed.is_empty() {
+        return None;
+    }
+    let width = terminal_width()
+        .saturating_sub(4)
+        .clamp(DESC_MIN_WIDTH, DESC_MAX_WIDTH);
+    let line = wrap_description(&collapsed, width, 1).into_iter().next()?;
+    Some(format_description(&line, color))
 }
 
 fn collect_failures(
@@ -701,7 +836,7 @@ fn collect_failures(
     prefix: &str,
     sources: &Sources,
     color: bool,
-    blocks: &mut Vec<(Status, String, Option<String>, String)>,
+    blocks: &mut Vec<FailureBlock>,
 ) {
     let path = if prefix.is_empty() {
         row.name.clone()
@@ -715,7 +850,13 @@ fn collect_failures(
             .as_ref()
             .and_then(|record| render_failure(record, sources, color))
         {
-            blocks.push((row.status, path.clone(), Some(kind), body));
+            blocks.push(FailureBlock {
+                status: row.status,
+                path: path.clone(),
+                description: row.description.clone(),
+                kind: Some(kind),
+                body,
+            });
         } else if !has_failing_descendant(row) {
             let text = row
                 .output
@@ -726,7 +867,13 @@ fn collect_failures(
                 .collect::<Vec<_>>()
                 .join("\n");
             if !text.is_empty() {
-                blocks.push((row.status, path.clone(), None, text));
+                blocks.push(FailureBlock {
+                    status: row.status,
+                    path: path.clone(),
+                    description: row.description.clone(),
+                    kind: None,
+                    body: text,
+                });
             }
         }
     }
@@ -750,7 +897,7 @@ fn render_failure(
     let info = sources.get(&record.file)?;
     let span = Span::new(record.file, record.lo, record.hi.saturating_sub(record.lo));
 
-    let budget = operand_budget(terminal_width(), record.operands.len());
+    let budget = operand_budget(terminal_width());
     let anchor = match record.operands.as_slice() {
         [left, right] => first_divergence(&left.value, &right.value),
         _ => 0,
@@ -762,57 +909,77 @@ fn render_failure(
         .collect();
 
     let paired = matches!(record.kind.as_str(), "relation" | "labeled");
-    let (label, notes): (String, Vec<String>) = if paired {
+    let mut diagnostic = LisetteDiagnostic::error(record.message.clone());
+    if paired {
+        let label_width = record
+            .operands
+            .iter()
+            .map(|operand| operand.label.chars().count())
+            .max()
+            .unwrap_or(0)
+            + 1;
         let label = record
             .operands
             .iter()
             .zip(&values)
-            .map(|(operand, value)| format!("{}: {}", operand.label, value))
+            .map(|(operand, value)| {
+                let token = format!("{}:", operand.label);
+                format!("{token:<label_width$} {value}")
+            })
             .collect::<Vec<_>>()
-            .join(" · ");
-        (label, Vec::new())
+            .join("\n");
+        diagnostic = diagnostic.with_span_primary_label(&span, label);
     } else {
         let label = values
             .first()
             .cloned()
             .unwrap_or_else(|| record.message.clone());
-        let notes = record
+        diagnostic = diagnostic.with_span_primary_label(&span, label);
+        let notes: Vec<String> = record
             .operands
             .iter()
             .zip(&values)
             .skip(1)
             .map(|(operand, value)| format!("{}: {}", operand.label, value))
             .collect();
-        (label, notes)
-    };
-
-    let mut diagnostic =
-        LisetteDiagnostic::error(record.message.clone()).with_span_primary_label(&span, label);
-    if !notes.is_empty() {
-        diagnostic = diagnostic.with_note(notes.join("\n"));
+        if !notes.is_empty() {
+            diagnostic = diagnostic.with_note(notes.join("\n"));
+        }
     }
-    let rendered =
-        diagnostics::render::render_to_string(&diagnostic, &info.source, &info.filename, color);
+    let rendered = diagnostics::render::render_to_string(
+        &diagnostic,
+        &info.source,
+        &info.filename,
+        color,
+        Style::new().red(),
+        2,
+    );
     let body = rendered.lines().skip(1).collect::<Vec<_>>().join("\n");
     Some((record.message.clone(), body))
 }
 
-fn count_skipped(rows: &[TestRow]) -> usize {
+fn count_status(rows: &[TestRow], status: Status) -> usize {
     rows.iter()
-        .map(|r| (r.status == Status::Skipped) as usize + count_skipped(&r.children))
+        .map(|r| {
+            let own = (counts_in_own_right(r) && r.status == status) as usize;
+            own + count_status(&r.children, status)
+        })
         .sum()
 }
 
+fn counts_in_own_right(row: &TestRow) -> bool {
+    row.children.is_empty()
+        || row.status == Status::Skipped
+        || (matches!(row.status, Status::Failed | Status::Crashed)
+            && (row.failure.is_some() || !has_failing_descendant(row)))
+}
+
 fn summary(rows: &[TestRow], total: Duration, color: bool) -> String {
-    let passed = rows.iter().filter(|r| r.status == Status::Passed).count();
-    let failed = rows.iter().filter(|r| r.status == Status::Failed).count();
-    let crashed = rows.iter().filter(|r| r.status == Status::Crashed).count();
-    // A skip does not propagate to the parent row (unlike pass/fail), so count skips at any depth.
-    let skipped = count_skipped(rows);
-    let unreached = rows
-        .iter()
-        .filter(|r| r.status == Status::Unreached)
-        .count();
+    let passed = count_status(rows, Status::Passed);
+    let failed = count_status(rows, Status::Failed);
+    let crashed = count_status(rows, Status::Crashed);
+    let skipped = count_status(rows, Status::Skipped);
+    let unreached = count_status(rows, Status::Unreached);
 
     let glyph = mark(
         if failed > 0 {
@@ -832,7 +999,10 @@ fn summary(rows: &[TestRow], total: Duration, color: bool) -> String {
     if crashed > 0 {
         parts.push(yellow(&format!("{crashed} crashed"), color));
     }
-    parts.push(green(&format!("{passed} passed"), color));
+    let no_other_counts = failed == 0 && crashed == 0 && skipped == 0 && unreached == 0;
+    if passed > 0 || no_other_counts {
+        parts.push(green(&format!("{passed} passed"), color));
+    }
     if skipped > 0 {
         parts.push(blue(&format!("{skipped} skipped"), color));
     }
@@ -917,10 +1087,12 @@ fn terminal_width() -> usize {
         .unwrap_or(100)
 }
 
-fn operand_budget(term_width: usize, operands: usize) -> usize {
-    let operands = operands.max(1);
-    let reserved = 30 + 11 * operands;
-    (term_width.saturating_sub(reserved) / operands).clamp(OPERAND_MIN_CHARS, OPERAND_MAX_CHARS)
+fn operand_budget(term_width: usize) -> usize {
+    // Reserve the gutter and frame plus one `label: ` prefix.
+    let reserved = 41;
+    term_width
+        .saturating_sub(reserved)
+        .clamp(OPERAND_MIN_CHARS, OPERAND_MAX_CHARS)
 }
 
 fn first_divergence(a: &str, b: &str) -> usize {
@@ -1006,7 +1178,7 @@ fn mark(status: Status, color: bool) -> String {
         Status::Passed => "✓",
         Status::Failed => "✕",
         Status::Crashed => "▲",
-        Status::Skipped => "#",
+        Status::Skipped => "○",
         Status::Unreached => "⊘",
     };
     if !color {
@@ -1125,6 +1297,20 @@ mod tests {
             import_path: None,
             key: Some(SUBTEST_ATTR_KEY.to_string()),
             value: Some(hex_encode(name)),
+        }
+    }
+
+    fn log_attr_event(package: &str, test: &str, file: u32, value: &str) -> GoTestEvent {
+        let record = format!(r#"{{"file":{file},"lo":0,"hi":5,"value":{value:?}}}"#);
+        GoTestEvent {
+            action: "attr".to_string(),
+            package: package.to_string(),
+            test: Some(test.to_string()),
+            elapsed: None,
+            output: None,
+            import_path: None,
+            key: Some(LOG_ATTR_KEY.to_string()),
+            value: Some(hex_encode(&record)),
         }
     }
 
@@ -1262,6 +1448,35 @@ mod tests {
     }
 
     #[test]
+    fn logged_values_render_in_a_logs_section_for_a_passing_test() {
+        let index = index(&[(ENTRY_MODULE_ID, "inspects")]);
+        let events = vec![
+            log_attr_event("demo", "TestInspects", 7, "42"),
+            event("pass", "demo", Some("TestInspects"), None),
+        ];
+        let report = build_report(&index, &events, "demo");
+
+        let mut sources = no_sources();
+        sources.insert(
+            7,
+            SourceInfo {
+                source: "fn inspects() {\n  t.log(count)\n}\n".to_string(),
+                filename: "x.test.lis".to_string(),
+            },
+        );
+        let text = render(&report, &sources, false, Duration::from_millis(1));
+
+        assert!(text.contains("Logs"), "a Logs section appears:\n{text}");
+        assert!(
+            text.contains("inspects"),
+            "the logging test is named:\n{text}"
+        );
+        assert!(text.contains("42"), "the logged value is shown:\n{text}");
+        assert!(text.contains("1 passed"));
+        assert_eq!(exit_code(&report.rows, true), 0);
+    }
+
+    #[test]
     fn every_module_groups_its_tests_under_filenames() {
         let mut index = TestIndex::default();
         for (name, file) in [("adds", 1u32), ("subtracts", 2u32)] {
@@ -1350,6 +1565,25 @@ mod tests {
     }
 
     #[test]
+    fn summary_counts_subtests_not_their_parent() {
+        let index = index(&[(ENTRY_MODULE_ID, "parent")]);
+        let events = vec![
+            event("run", "demo", Some("TestParent"), None),
+            event("run", "demo", Some("TestParent/alpha"), None),
+            event("pass", "demo", Some("TestParent/alpha"), None),
+            event("run", "demo", Some("TestParent/beta"), None),
+            event("pass", "demo", Some("TestParent/beta"), None),
+            event("pass", "demo", Some("TestParent"), None),
+        ];
+        let report = build_report(&index, &events, "demo");
+        let text = render(&report, &no_sources(), false, Duration::from_millis(1));
+        assert!(
+            text.contains("2 passed"),
+            "two passing subtests count as two, not one parent, got:\n{text}"
+        );
+    }
+
+    #[test]
     fn skipped_test_shows_reason_and_is_not_a_failure() {
         let index = index(&[(ENTRY_MODULE_ID, "wip")]);
         let events = vec![
@@ -1362,7 +1596,7 @@ mod tests {
         assert_eq!(report.rows[0].skip_reason.as_deref(), Some("not ready"));
 
         let text = render(&report, &no_sources(), false, Duration::from_millis(1));
-        assert!(text.contains("# wip (not ready)"), "got:\n{text}");
+        assert!(text.contains("○ wip (not ready)"), "got:\n{text}");
         assert!(text.contains("1 skipped"));
         assert_eq!(exit_code(&report.rows, true), 0, "a skip is not a failure");
     }
@@ -1382,7 +1616,7 @@ mod tests {
 
         let row_line = text
             .lines()
-            .find(|line| line.contains("# wip"))
+            .find(|line| line.contains("○ wip"))
             .expect("the skipped row must render");
         assert!(
             !row_line.contains("this reason"),
@@ -1415,7 +1649,7 @@ mod tests {
         assert_eq!(child.skip_reason.as_deref(), Some("needs net"));
 
         let text = render(&report, &no_sources(), false, Duration::from_millis(1));
-        assert!(text.contains("# child (needs net)"), "got:\n{text}");
+        assert!(text.contains("○ child (needs net)"), "got:\n{text}");
         assert!(
             text.contains("1 skipped"),
             "a skipped subtest must count in the footer, got:\n{text}"
@@ -1438,12 +1672,16 @@ mod tests {
 
         let text = render(&report, &no_sources(), false, Duration::from_millis(1));
         assert!(
-            text.contains("# parent (rest not ready)"),
+            text.contains("○ parent (rest not ready)"),
             "a skipped grouping keeps its marker and reason, got:\n{text}"
         );
         assert!(
             text.contains("✓ child"),
             "its child still renders, got:\n{text}"
+        );
+        assert!(
+            text.contains("1 passed") && text.contains("1 skipped"),
+            "the passing child and the skipped grouping both count, got:\n{text}"
         );
     }
 
@@ -1474,6 +1712,10 @@ mod tests {
         assert!(
             text.contains("parent panicked"),
             "a failed parent's own output must show even with subtests, got:\n{text}"
+        );
+        assert!(
+            text.contains("1 failed") && text.contains("1 passed"),
+            "the failed grouping and its passing child both count, got:\n{text}"
         );
     }
 
@@ -1843,6 +2085,44 @@ mod tests {
         assert!(text.contains("x.test.lis"), "got:\n{text}");
     }
 
+    #[test]
+    fn failure_block_shows_test_description() {
+        let mut index = TestIndex::default();
+        index.push(TestFunction {
+            module_id: ENTRY_MODULE_ID.to_string(),
+            qualified_name: format!("{ENTRY_MODULE_ID}.multiplies"),
+            title: None,
+            doc: Some(
+                "Guards the multiplication that downstream calculations rely on.".to_string(),
+            ),
+            span: span(),
+        });
+        let inner = r#"{"file":7,"lo":3,"hi":9,"message":"assertion failed","operands":[{"label":"left","value":"42"},{"label":"right","value":"43"}]}"#;
+        let events = vec![
+            attr_event("demo", "TestMultiplies", &fail_value(inner)),
+            event("fail", "demo", Some("TestMultiplies"), None),
+        ];
+        let report = build_report(&index, &events, "demo");
+
+        let mut sources = no_sources();
+        sources.insert(
+            7,
+            SourceInfo {
+                source: "fn multiplies() {}\n".to_string(),
+                filename: "x.test.lis".to_string(),
+            },
+        );
+        let text = render(&report, &sources, false, Duration::from_millis(1));
+        let failures = text
+            .split("Failures")
+            .nth(1)
+            .expect("a Failures section should render");
+        assert!(
+            failures.contains("Guards the multiplication that downstream calculations rely on."),
+            "the failure block should show the test description, got:\n{text}"
+        );
+    }
+
     fn titled_index() -> TestIndex {
         let mut index = TestIndex::default();
         index.push(TestFunction {
@@ -1863,7 +2143,7 @@ mod tests {
     }
 
     #[test]
-    fn title_replaces_name_and_doc_renders_as_description() {
+    fn title_replaces_name_and_description_stays_off_the_tree() {
         let report = build_report(&titled_index(), &[], "demo");
         let titled = report
             .rows
@@ -1876,9 +2156,12 @@ mod tests {
         );
         let text = render(&report, &no_sources(), false, Duration::from_millis(1));
         assert!(
-            text.contains("splits and trims CSV fields")
-                && text.contains("Trims surrounding whitespace"),
-            "got:\n{text}"
+            text.contains("splits and trims CSV fields"),
+            "the title shows in the tree, got:\n{text}"
+        );
+        assert!(
+            !text.contains("Trims surrounding whitespace"),
+            "the description must not render in the tree, got:\n{text}"
         );
     }
 

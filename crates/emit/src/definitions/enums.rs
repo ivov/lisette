@@ -1,9 +1,9 @@
 use crate::EmitEffects;
 use crate::Planner;
-use crate::definitions::enum_layout::{ENUM_GO_STRINGER_METHOD, ENUM_STRINGER_METHOD};
+use crate::definitions::enum_layout::{ENUM_GO_STRINGER_METHOD, ENUM_STRINGER_METHOD, EnumLayout};
 use crate::definitions::structs::should_synthesize_stringer;
 use crate::names::generics::receiver_generics_string;
-use crate::names::go_name;
+use crate::names::go_name::{self, prelude_qualifier};
 use crate::utils::receiver_name;
 use syntax::ast::{Attribute, Generic};
 use syntax::program::{Definition, DefinitionBody};
@@ -84,6 +84,7 @@ impl Planner<'_> {
             result.push_str("\n\n");
             result.push_str(&layout.emit_variants_function(&fn_name));
         }
+        self.append_enum_debug_method(&mut result, name, &receiver_generics, &layout, fx);
         self.append_to_string_method(&mut result, name, &receiver_generics, attributes);
         self.append_enum_equals_method(&mut result, name, &enum_id, &receiver_generics, fx);
         if needs_fmt {
@@ -94,6 +95,25 @@ impl Planner<'_> {
         }
 
         Some(result)
+    }
+
+    fn append_enum_debug_method(
+        &self,
+        out: &mut String,
+        name: &str,
+        receiver_generics: &str,
+        layout: &EnumLayout,
+        fx: &mut EmitEffects,
+    ) {
+        if !self.synthesizes_debug_string(name) {
+            return;
+        }
+        out.push_str("\n\n");
+        out.push_str(&layout.emit_debug_method(receiver_generics, prelude_qualifier()));
+        fx.require_fmt();
+        if layout.debug_uses_prelude() {
+            fx.require_stdlib();
+        }
     }
 
     fn append_enum_equals_method(

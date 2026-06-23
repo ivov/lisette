@@ -1,7 +1,7 @@
 use crate::EmitEffects;
 use crate::Planner;
 use crate::definitions::functions::is_test_context_ty;
-use crate::names::go_name;
+use crate::names::go_name::{self, testing_qualifier, testkit_qualifier};
 use syntax::ast::{Binding, Expression, FunctionDefinitionView, Pattern, Visibility};
 use syntax::types::{Symbol, Type};
 
@@ -114,8 +114,8 @@ impl Planner<'_> {
     ) -> String {
         fx.require_testing();
         fx.require_testkit();
-        let test_kit = go_name::GeneratedPackage::TestKit.qualifier();
-        let testing = go_name::GeneratedPackage::Testing.qualifier();
+        let test_kit = testkit_qualifier();
+        let testing = testing_qualifier();
 
         let injected = self.synthesized_test_handle_params(function);
         let function = match &injected {

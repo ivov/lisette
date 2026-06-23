@@ -66,6 +66,7 @@ mod tests {
             output: String::new(),
             failure: None,
             skip_reason: None,
+            logs: vec![],
             children: vec![],
             span: Span::new(0, 0, 0),
         }

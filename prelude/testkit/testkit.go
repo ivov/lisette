@@ -39,6 +39,26 @@ func (c TestContext) Skip(reason string) {
 	c.t.SkipNow()
 }
 
+type logRecord struct {
+	File  int    `json:"file"`
+	Lo    uint32 `json:"lo"`
+	Hi    uint32 `json:"hi"`
+	Value string `json:"value"`
+}
+
+// Log reports a logged value to lis.
+func (c TestContext) Log(file int, lo, hi uint32, value string) {
+	const maxRunes = 256
+	if runes := []rune(value); len(runes) > maxRunes {
+		value = string(runes[:maxRunes]) + "…"
+	}
+	inner, err := json.Marshal(logRecord{file, lo, hi, value})
+	if err != nil {
+		return
+	}
+	c.t.Attr("lisette-log", hex.EncodeToString(inner))
+}
+
 // Recover turns an uncaught panic into a Lisette failure anchored at the test, so it reports like an
 // assertion instead of dumping a Go stack. Test wrappers defer this.
 func Recover(t *testing.T, file int, lo, hi uint32) {

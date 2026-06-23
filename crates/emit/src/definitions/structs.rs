@@ -4,11 +4,13 @@ use crate::definitions::enum_layout::{ENUM_GO_STRINGER_METHOD, ENUM_STRINGER_MET
 use crate::definitions::tags::{format_tag_string, interpret_field_attributes};
 use crate::expressions::top_items::emit_doc;
 use crate::names::generics::receiver_generics_string;
-use crate::names::go_name;
+use crate::names::go_name::{self, prelude_qualifier};
 use crate::utils::receiver_name;
 use syntax::ast::{Attribute, Generic, StructFieldDefinition, StructKind};
 use syntax::program::{Definition, DefinitionBody};
 use syntax::types::Type;
+
+pub(crate) const DEBUG_STRING_METHOD: &str = "DebugString";
 
 impl Planner<'_> {
     pub(crate) fn emit_struct_definition(
@@ -71,6 +73,13 @@ impl Planner<'_> {
         } else {
             definition
         };
+        self.append_struct_debug_method(
+            &mut result,
+            name,
+            &receiver_generics,
+            &stringer_fields,
+            fx,
+        );
         self.append_to_string_method(&mut result, name, &receiver_generics, struct_attrs);
         self.append_equals_method(
             &mut result,
@@ -117,6 +126,14 @@ impl Planner<'_> {
                 result.push_str(&string_method);
             }
         }
+        self.append_tuple_struct_debug_method(
+            &mut result,
+            name,
+            &receiver_generics,
+            fields,
+            generics_string,
+            fx,
+        );
         self.append_to_string_method(&mut result, name, &receiver_generics, struct_attrs);
         result
     }
@@ -223,6 +240,94 @@ impl Planner<'_> {
         let has_go_stringer =
             is_user_stringer("goString") || is_user_stringer(ENUM_GO_STRINGER_METHOD);
         (has_stringer, has_go_stringer)
+    }
+
+    pub(crate) fn debug_string_override(&self, name: &str) -> bool {
+        let qualified = self.facts.qualified_current(name);
+        let methods = self
+            .facts
+            .definition(qualified.as_str())
+            .and_then(|definition| match &definition.body {
+                DefinitionBody::Struct { methods, .. }
+                | DefinitionBody::Enum { methods, .. }
+                | DefinitionBody::TypeAlias { methods, .. } => Some(methods),
+                _ => None,
+            });
+        let has_signature = |method_name: &str| {
+            methods.is_some_and(|m| m.get(method_name).is_some_and(Type::is_stringer_signature))
+                && !self.facts.is_ufcs_method(&qualified, method_name)
+        };
+        (self.method_needs_export("debug_string") && has_signature("debug_string"))
+            || has_signature(DEBUG_STRING_METHOD)
+    }
+
+    pub(crate) fn synthesizes_debug_string(&self, name: &str) -> bool {
+        self.facts.emit_tests_enabled() && !self.debug_string_override(name)
+    }
+
+    fn append_struct_debug_method(
+        &self,
+        out: &mut String,
+        name: &str,
+        receiver_generics: &str,
+        stringer_fields: &[StringerField],
+        fx: &mut EmitEffects,
+    ) {
+        if !self.synthesizes_debug_string(name) {
+            return;
+        }
+        if !stringer_fields.is_empty() {
+            fx.require_fmt();
+            if stringer_fields.iter().any(|f| !f.is_function) {
+                fx.require_stdlib();
+            }
+        }
+        out.push_str("\n\n");
+        out.push_str(&emit_struct_debug_method(
+            name,
+            receiver_generics,
+            stringer_fields,
+            prelude_qualifier(),
+        ));
+    }
+
+    fn append_tuple_struct_debug_method(
+        &mut self,
+        out: &mut String,
+        name: &str,
+        receiver_generics: &str,
+        fields: &[StructFieldDefinition],
+        generics_string: &str,
+        fx: &mut EmitEffects,
+    ) {
+        if !self.synthesizes_debug_string(name) {
+            return;
+        }
+        let is_type_alias = fields.len() == 1 && generics_string.is_empty();
+        let underlying = is_type_alias.then(|| self.go_type_string(&fields[0].ty, fx));
+        let field_is_function: Vec<bool> =
+            fields.iter().map(|f| is_raw_function_type(&f.ty)).collect();
+        let uses_prelude = if fields.is_empty() {
+            false
+        } else if is_type_alias {
+            true
+        } else {
+            field_is_function.iter().any(|is_function| !is_function)
+        };
+        if !fields.is_empty() {
+            fx.require_fmt();
+        }
+        if uses_prelude {
+            fx.require_stdlib();
+        }
+        out.push_str("\n\n");
+        out.push_str(&emit_tuple_struct_debug_method(
+            name,
+            receiver_generics,
+            &field_is_function,
+            underlying.as_deref(),
+            prelude_qualifier(),
+        ));
     }
 
     pub(crate) fn should_synthesize_to_string(&self, name: &str, attributes: &[Attribute]) -> bool {
@@ -371,6 +476,10 @@ pub(crate) fn stringer_verb(is_function: bool) -> &'static str {
     if is_function { "%p" } else { "%v" }
 }
 
+pub(crate) fn debug_verb(is_function: bool) -> &'static str {
+    if is_function { "%p" } else { "%s" }
+}
+
 fn is_option_type(ty: &Type) -> bool {
     match ty {
         Type::Nominal {
@@ -423,6 +532,41 @@ fn emit_struct_stringer_method(
     )
 }
 
+fn emit_struct_debug_method(
+    name: &str,
+    receiver_generics: &str,
+    fields: &[StringerField],
+    prelude: &str,
+) -> String {
+    let receiver = receiver_name(name);
+    let go_type_name = go_name::escape_keyword(name);
+    let receiver_type = format!("{go_type_name}{receiver_generics}");
+    if fields.is_empty() {
+        return format!(
+            "func ({receiver} {receiver_type}) DebugString() string {{\nreturn \"{name}\"\n}}"
+        );
+    }
+    let format_parts: Vec<String> = fields
+        .iter()
+        .map(|f| format!("{}: {}", f.source_name, debug_verb(f.is_function)))
+        .collect();
+    let args: Vec<String> = fields
+        .iter()
+        .map(|f| {
+            if f.is_function {
+                format!("{receiver}.{}", f.go_name)
+            } else {
+                format!("{prelude}.Debug({receiver}.{})", f.go_name)
+            }
+        })
+        .collect();
+    format!(
+        "func ({receiver} {receiver_type}) DebugString() string {{\nreturn fmt.Sprintf(\"{name} {{ {} }}\", {})\n}}",
+        format_parts.join(", "),
+        args.join(", ")
+    )
+}
+
 fn emit_tuple_struct_stringer_method(
     name: &str,
     receiver_generics: &str,
@@ -449,6 +593,48 @@ fn emit_tuple_struct_stringer_method(
         .collect();
     format!(
         "func ({receiver} {receiver_type}) {method_name}() string {{\nreturn fmt.Sprintf(\"{name}({})\", {})\n}}",
+        placeholders.join(", "),
+        args.join(", ")
+    )
+}
+
+fn emit_tuple_struct_debug_method(
+    name: &str,
+    receiver_generics: &str,
+    field_is_function: &[bool],
+    underlying_go_type: Option<&str>,
+    prelude: &str,
+) -> String {
+    let receiver = receiver_name(name);
+    let go_type_name = go_name::escape_keyword(name);
+    let receiver_type = format!("{go_type_name}{receiver_generics}");
+    if field_is_function.is_empty() {
+        return format!(
+            "func ({receiver} {receiver_type}) DebugString() string {{\nreturn \"{name}\"\n}}"
+        );
+    }
+    if let Some(underlying) = underlying_go_type {
+        return format!(
+            "func ({receiver} {receiver_type}) DebugString() string {{\nreturn fmt.Sprintf(\"{name}(%s)\", {prelude}.Debug({underlying}({receiver})))\n}}"
+        );
+    }
+    let placeholders: Vec<&str> = field_is_function
+        .iter()
+        .map(|is_function| debug_verb(*is_function))
+        .collect();
+    let args: Vec<String> = field_is_function
+        .iter()
+        .enumerate()
+        .map(|(i, is_function)| {
+            if *is_function {
+                format!("{receiver}.F{i}")
+            } else {
+                format!("{prelude}.Debug({receiver}.F{i})")
+            }
+        })
+        .collect();
+    format!(
+        "func ({receiver} {receiver_type}) DebugString() string {{\nreturn fmt.Sprintf(\"{name}({})\", {})\n}}",
         placeholders.join(", "),
         args.join(", ")
     )

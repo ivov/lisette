@@ -7731,6 +7731,10 @@ fn assert_lowers_to_decomposed_failure_call() {
         "a comparison `assert` must report a relation, got:\n{go}"
     );
     assert!(
+        go.contains("\"relation\", \"expected ==\""),
+        "a comparison `assert` must name the relation in its message, got:\n{go}"
+    );
+    assert!(
         go.contains("Operand{Label: \"left\", Value: lisette.Debug(")
             && go.contains("Operand{Label: \"right\", Value: lisette.Debug("),
         "a relation `assert` must report both operands labeled and through Debug, got:\n{go}"
@@ -7738,6 +7742,115 @@ fn assert_lowers_to_decomposed_failure_call() {
     assert!(
         go.contains("\"bare\""),
         "a non-comparison `assert` must report as bare, got:\n{go}"
+    );
+}
+
+#[test]
+fn test_log_in_value_position_keeps_span_arguments() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(ENTRY_MODULE_ID, "main.lis", "fn main() {}");
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.test.lis",
+        "#[test]\nfn logs(t: TestContext) {\n  let _ = t.log(5)\n  assert true\n}",
+    );
+
+    let outputs = compile_project_files_with_tests(fs, "github.com/user/p", false, true);
+    let go = outputs
+        .iter()
+        .map(|f| f.to_go())
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    assert!(
+        go.contains(".Log(") && go.contains("lisette.Debug("),
+        "a `t.log` in value position must still emit the span-carrying Log call, got:\n{go}"
+    );
+}
+
+#[test]
+fn user_debug_string_suppresses_synthesized_one() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(ENTRY_MODULE_ID, "main.lis", "fn main() {}");
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.test.lis",
+        "pub struct Point { pub x: int }\n\
+         impl Point {\n  pub fn debug_string(self) -> string { \"custom\" }\n}\n\
+         #[test]\nfn logs(t: TestContext) {\n  t.log(Point { x: 1 })\n  assert true\n}",
+    );
+
+    let outputs = compile_project_files_with_tests(fs, "github.com/user/p", false, true);
+    let go = outputs
+        .iter()
+        .map(|f| f.to_go())
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    assert_eq!(
+        go.matches("DebugString() string {").count(),
+        1,
+        "a user `debug_string` must suppress the synthesized DebugString, got:\n{go}"
+    );
+    assert!(
+        go.contains("\"custom\""),
+        "the user's DebugString body must be the one kept, got:\n{go}"
+    );
+}
+
+#[test]
+fn private_debug_string_does_not_suppress_synthesis() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(ENTRY_MODULE_ID, "main.lis", "fn main() {}");
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.test.lis",
+        "pub struct Point { pub x: int }\n\
+         impl Point {\n  fn debug_string(self) -> string { \"priv\" }\n}\n\
+         #[test]\nfn logs(t: TestContext) {\n  \
+         let _ = Point { x: 1 }.debug_string()\n  t.log(Point { x: 1 })\n  assert true\n}",
+    );
+
+    let outputs = compile_project_files_with_tests(fs, "github.com/user/p", false, true);
+    let go = outputs
+        .iter()
+        .map(|f| f.to_go())
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    assert!(
+        go.contains("DebugString() string {"),
+        "a private debug_string must not suppress the synthesized DebugString, got:\n{go}"
+    );
+}
+
+#[test]
+fn exact_debug_string_is_recognized_as_override() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(ENTRY_MODULE_ID, "main.lis", "fn main() {}");
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.test.lis",
+        "pub struct Point { pub x: int }\n\
+         impl Point {\n  pub fn DebugString(self) -> string { \"exact\" }\n}\n\
+         #[test]\nfn logs(t: TestContext) {\n  t.log(Point { x: 1 })\n  assert true\n}",
+    );
+
+    let outputs = compile_project_files_with_tests(fs, "github.com/user/p", false, true);
+    let go = outputs
+        .iter()
+        .map(|f| f.to_go())
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    assert_eq!(
+        go.matches("DebugString() string {").count(),
+        1,
+        "an exact `DebugString` method must suppress synthesis, got:\n{go}"
+    );
+    assert!(
+        go.contains("\"exact\""),
+        "the user's exact DebugString must be kept, got:\n{go}"
     );
 }
 
