@@ -1,10 +1,34 @@
 use crate::checker::EnvResolve;
+use crate::facts::SelectExhaustivenessCheck;
 use syntax::ast::{Expression, MatchArm, Pattern, SelectArm, SelectArmPattern, Span};
 use syntax::types::{Type, unqualified_name};
 
 use crate::checker::infer::InferCtx;
 
+fn select_arm_body_span(pattern: &SelectArmPattern) -> Span {
+    match pattern {
+        SelectArmPattern::Receive { body, .. }
+        | SelectArmPattern::Send { body, .. }
+        | SelectArmPattern::WildCard { body } => body.get_span(),
+        SelectArmPattern::MatchReceive {
+            receive_expression, ..
+        } => receive_expression.get_span(),
+    }
+}
+
 impl InferCtx<'_, '_> {
+    pub fn resolve_select_exhaustiveness(&mut self) {
+        for check in std::mem::take(&mut self.facts.select_exhaustiveness_checks) {
+            let resolved = check.result_ty.resolve_in(&self.env);
+            if !resolved.is_unit() && !resolved.is_variable() {
+                self.sink
+                    .push(diagnostics::infer::non_exhaustive_select_expression(
+                        check.span,
+                    ));
+            }
+        }
+    }
+
     pub(super) fn infer_select(
         &mut self,
         arms: Vec<SelectArm>,
@@ -28,8 +52,14 @@ impl InferCtx<'_, '_> {
         self.unify(expected_ty, &result_ty, &span);
 
         let needs_reconciliation = result_ty.resolve_in(&self.env).is_variable();
+        let value_position = needs_reconciliation && !expected_ty.is_ignored();
 
         let mut arm_target_types: Vec<Type> = if needs_reconciliation {
+            Vec::with_capacity(arms.len())
+        } else {
+            Vec::new()
+        };
+        let mut arm_target_spans: Vec<Span> = if value_position {
             Vec::with_capacity(arms.len())
         } else {
             Vec::new()
@@ -64,9 +94,12 @@ impl InferCtx<'_, '_> {
                     SelectArmPattern::MatchReceive {
                         receive_expression,
                         arms: match_arms,
-                    } => {
-                        self.infer_select_match_receive(receive_expression, match_arms, arm_target)
-                    }
+                    } => self.infer_select_match_receive(
+                        receive_expression,
+                        match_arms,
+                        arm_target,
+                        value_position,
+                    ),
 
                     SelectArmPattern::WildCard { body } => {
                         self.infer_select_wildcard(body, arm_target)
@@ -75,6 +108,9 @@ impl InferCtx<'_, '_> {
 
                 if needs_reconciliation {
                     arm_target_types.push(arm_target.clone());
+                }
+                if value_position {
+                    arm_target_spans.push(select_arm_body_span(&new_arm_pattern));
                 }
 
                 self.scopes.pop();
@@ -85,11 +121,12 @@ impl InferCtx<'_, '_> {
             })
             .collect();
 
-        if needs_reconciliation {
-            self.reconcile_and_unify(&result_ty, &arm_target_types, &span);
+        if value_position {
+            self.reconcile_and_unify(&result_ty, &arm_target_types, &arm_target_spans, &span);
+        } else if needs_reconciliation && let Some(first) = arm_target_types.first() {
+            let _ = self.try_unify(&result_ty, first, &span);
         }
 
-        let resolved_result = result_ty.resolve_in(&self.env);
         let shorthand_receive_count = new_arms
             .iter()
             .filter(|arm| matches!(arm.pattern, SelectArmPattern::Receive { .. }))
@@ -97,14 +134,13 @@ impl InferCtx<'_, '_> {
         let has_default = new_arms
             .iter()
             .any(|arm| matches!(arm.pattern, SelectArmPattern::WildCard { .. }));
-        if !expected_ty.is_ignored()
-            && !resolved_result.is_unit()
-            && !resolved_result.is_variable()
-            && shorthand_receive_count == 1
-            && !has_default
-        {
-            self.sink
-                .push(diagnostics::infer::non_exhaustive_select_expression(span));
+        if !expected_ty.is_ignored() && shorthand_receive_count == 1 && !has_default {
+            self.facts
+                .select_exhaustiveness_checks
+                .push(SelectExhaustivenessCheck {
+                    result_ty: result_ty.clone(),
+                    span,
+                });
         }
 
         Expression::Select {
@@ -238,6 +274,7 @@ impl InferCtx<'_, '_> {
         receive_expression: Box<Expression>,
         match_arms: Vec<MatchArm>,
         result_ty: &Type,
+        value_position: bool,
     ) -> SelectArmPattern {
         let receive_ty = self.new_type_var();
         let new_receive_expression = self.infer_expression(*receive_expression, &receive_ty);
@@ -256,8 +293,14 @@ impl InferCtx<'_, '_> {
         let pattern_ty = receive_ty.resolve_in(&self.env);
 
         let needs_reconciliation = result_ty.resolve_in(&self.env).is_variable();
+        let reconcile_in_value_position = needs_reconciliation && value_position;
 
         let mut arm_expression_types: Vec<Type> = if needs_reconciliation {
+            Vec::with_capacity(match_arms.len())
+        } else {
+            Vec::new()
+        };
+        let mut arm_expression_spans: Vec<Span> = if reconcile_in_value_position {
             Vec::with_capacity(match_arms.len())
         } else {
             Vec::new()
@@ -296,6 +339,9 @@ impl InferCtx<'_, '_> {
                 if needs_reconciliation {
                     arm_expression_types.push(arm_expected.clone());
                 }
+                if reconcile_in_value_position {
+                    arm_expression_spans.push(new_expression.get_span());
+                }
 
                 self.scopes.pop();
 
@@ -308,9 +354,16 @@ impl InferCtx<'_, '_> {
             })
             .collect();
 
-        if needs_reconciliation {
-            let span = new_receive_expression.get_span();
-            self.reconcile_and_unify(result_ty, &arm_expression_types, &span);
+        let span = new_receive_expression.get_span();
+        if reconcile_in_value_position {
+            self.reconcile_and_unify(
+                result_ty,
+                &arm_expression_types,
+                &arm_expression_spans,
+                &span,
+            );
+        } else if needs_reconciliation && let Some(first) = arm_expression_types.first() {
+            let _ = self.try_unify(result_ty, first, &span);
         }
 
         SelectArmPattern::MatchReceive {

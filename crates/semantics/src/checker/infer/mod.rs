@@ -65,6 +65,8 @@ impl InferCtx<'_, '_> {
                     .collect();
 
                 ctx.check_reference_sibling_aliasing(&inferred_items);
+                ctx.resolve_branch_subsumptions();
+                ctx.resolve_select_exhaustiveness();
 
                 let frozen_items = {
                     let state = &mut *ctx;

@@ -10814,3 +10814,24 @@ fn main() {
 "#;
     assert_infer_error_snapshot!(input);
 }
+
+#[test]
+fn infer_match_arm_calls_void_function_in_value_position() {
+    let input = r#"
+struct Match {}
+
+fn report(_e: error) {}
+
+fn accept() -> Result<Match, error> {
+  Ok(Match {})
+}
+
+fn run() {
+  let duel = match accept() {
+    Ok(m) => m,
+    Err(e) => report(e),
+  }
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}

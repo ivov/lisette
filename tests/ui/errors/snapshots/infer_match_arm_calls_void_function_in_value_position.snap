@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Type mismatch
+    ╭─[test.lis:13:15]
+ 12 │     Ok(m) => m,
+ 13 │     Err(e) => report(e),
+    ·               ────┬────
+    ·                   ╰── this arm produces `()`, not `Match`
+ 14 │   }
+    ╰────
+  help: All arms must produce the same type when the `match` or `select` is used as a value · code: [infer.type_mismatch]

@@ -2581,3 +2581,338 @@ fn test() {
 fn panic_in_assignment_expression() {
     infer(r#"{ let x: int = panic("boom") }"#).assert_infer_code("panic_in_expression_position");
 }
+
+#[test]
+fn match_value_arm_with_unit_arm_errors() {
+    infer(
+        r#"
+    fn discard(_x: int) {}
+
+    fn test() {
+      let result = match 1 {
+        1 => 42,
+        _ => discard(1),
+      };
+    }
+        "#,
+    )
+    .assert_type_mismatch();
+}
+
+#[test]
+fn match_value_arm_with_diverging_arm_ok() {
+    infer(
+        r#"
+    fn test() {
+      let result = match 1 {
+        1 => 42,
+        _ => panic("unreachable"),
+      };
+    }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn match_value_arms_scalar_mismatch_errors() {
+    infer(
+        r#"
+    fn test() {
+      let result = match 1 {
+        1 => "one",
+        _ => 42,
+      }
+      let _ = result
+    }
+        "#,
+    )
+    .assert_type_mismatch();
+}
+
+#[test]
+fn match_value_arms_unrelated_structs_error() {
+    infer(
+        r#"
+    struct A {}
+    struct B {}
+
+    fn test() {
+      let result = match 1 {
+        1 => A {},
+        _ => B {},
+      }
+      let _ = result
+    }
+        "#,
+    )
+    .assert_type_mismatch();
+}
+
+#[test]
+fn match_value_arms_widen_to_interface_via_use_site_ok() {
+    infer(
+        r#"
+    import "go:io"
+
+    struct R1 {}
+    struct R2 {}
+
+    impl R1 {
+      fn Read(self, mut _p: Slice<uint8>) -> Partial<int, error> { Partial.Ok(0) }
+    }
+    impl R2 {
+      fn Read(self, mut _p: Slice<uint8>) -> Partial<int, error> { Partial.Ok(1) }
+    }
+
+    fn pick(flag: bool) -> io.Reader {
+      let r = match flag {
+        true => R1 {},
+        false => R2 {},
+      }
+      r
+    }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn select_value_arm_with_unit_arm_errors() {
+    infer(
+        r#"
+    fn discard(_x: int) {}
+
+    fn test() -> int {
+      let ch = Channel.new<int>()
+      let x = select {
+        let Some(v) = ch.receive() => v,
+        _ => discard(1),
+      }
+      x
+    }
+        "#,
+    )
+    .assert_type_mismatch();
+}
+
+#[test]
+fn select_match_receive_inner_value_arm_with_unit_arm_errors() {
+    infer(
+        r#"
+    fn discard(_x: int) {}
+
+    fn test() {
+      let ch = Channel.new<int>()
+      let x = select {
+        match ch.receive() {
+          Some(v) => v,
+          None => discard(1),
+        },
+      }
+    }
+        "#,
+    )
+    .assert_type_mismatch();
+}
+
+#[test]
+fn match_unit_arm_first_does_not_cascade() {
+    let result = infer(
+        r#"
+    fn discard(_x: int) {}
+
+    fn test() -> int {
+      let x = match 1 {
+        1 => discard(1),
+        _ => 42,
+      }
+      x
+    }
+        "#,
+    );
+    assert_eq!(
+        result.errors.len(),
+        1,
+        "expected only the no-value arm diagnostic, got {:?}",
+        result.errors
+    );
+}
+
+#[test]
+fn select_nested_match_unit_arm_does_not_cascade() {
+    let result = infer(
+        r#"
+    fn discard(_x: int) {}
+
+    fn test() {
+      let ch = Channel.new<int>()
+      let x = select {
+        match ch.receive() {
+          Some(v) => discard(v),
+          None => 0,
+        },
+        _ => 99,
+      }
+    }
+        "#,
+    );
+    assert_eq!(
+        result.errors.len(),
+        1,
+        "expected only the no-value arm diagnostic, got {:?}",
+        result.errors
+    );
+}
+
+#[test]
+fn match_value_arm_with_unit_alias_arm_errors() {
+    infer(
+        r#"
+    type Void = Unit
+
+    fn discard() -> Void { () }
+
+    fn test() {
+      let x = match 1 {
+        1 => 42,
+        _ => discard(),
+      }
+      let _ = x
+    }
+        "#,
+    )
+    .assert_type_mismatch();
+}
+
+#[test]
+fn match_value_arm_with_unit_named_value_type_ok() {
+    infer(
+        r#"
+    type Unit = int
+
+    fn make() -> Unit { 7 }
+
+    fn test() {
+      let x = match 1 {
+        1 => 42,
+        _ => make(),
+      }
+      let _ = x
+    }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn match_value_arms_widen_with_diverging_arm_ok() {
+    infer(
+        r#"
+    import "go:io"
+
+    struct R1 {}
+    struct R2 {}
+
+    impl R1 {
+      fn Read(self, mut _p: Slice<uint8>) -> Partial<int, error> { Partial.Ok(0) }
+    }
+    impl R2 {
+      fn Read(self, mut _p: Slice<uint8>) -> Partial<int, error> { Partial.Ok(1) }
+    }
+
+    fn pick(n: int) -> io.Reader {
+      let r = match n {
+        1 => R1 {},
+        2 => R2 {},
+        _ => panic("unreachable"),
+      }
+      r
+    }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn match_leading_diverging_arm_does_not_mask_mismatch() {
+    infer(
+        r#"
+    fn test() {
+      let x = match 1 {
+        1 => panic("boom"),
+        2 => "a",
+        _ => 42,
+      }
+      let _ = x
+    }
+        "#,
+    )
+    .assert_type_mismatch();
+}
+
+#[test]
+fn nested_value_match_widens_to_interface_ok() {
+    let prelude = r#"
+import "go:io"
+struct R1 {}
+struct R2 {}
+struct R3 {}
+impl R1 { fn Read(self, mut _p: Slice<uint8>) -> Partial<int, error> { Partial.Ok(0) } }
+impl R2 { fn Read(self, mut _p: Slice<uint8>) -> Partial<int, error> { Partial.Ok(1) } }
+impl R3 { fn Read(self, mut _p: Slice<uint8>) -> Partial<int, error> { Partial.Ok(2) } }
+"#;
+    infer(&format!(
+        "{prelude}\nfn pick(n: int, m: int) -> io.Reader {{\n  let r = match n {{ 1 => match m {{ 1 => R1 {{}}, _ => R2 {{}} }}, _ => R3 {{}} }}\n  r\n}}"
+    ))
+    .assert_no_errors();
+    infer(&format!(
+        "{prelude}\nfn pick(n: int, m: int) -> io.Reader {{\n  let r = match n {{ 1 => R3 {{}}, _ => match m {{ 1 => R1 {{}}, _ => R2 {{}} }} }}\n  r\n}}"
+    ))
+    .assert_no_errors();
+}
+
+#[test]
+fn deferred_select_widening_arms_still_non_exhaustive() {
+    infer(
+        r#"
+import "go:io"
+struct R1 {}
+struct R2 {}
+impl R1 { fn Read(self, mut _p: Slice<uint8>) -> Partial<int, error> { Partial.Ok(0) } }
+impl R2 { fn Read(self, mut _p: Slice<uint8>) -> Partial<int, error> { Partial.Ok(1) } }
+fn pick() -> io.Reader {
+  let ch = Channel.new<int>()
+  let r = select {
+    let Some(v) = ch.receive() => R1 {},
+    ch.send(1) => R2 {},
+  }
+  r
+}
+"#,
+    )
+    .assert_infer_code("non_exhaustive_select_expression");
+}
+
+#[test]
+fn nested_value_match_in_tuple_widens_to_interface_ok() {
+    infer(
+        r#"
+import "go:io"
+struct R1 {}
+struct R2 {}
+struct R3 {}
+impl R1 { fn Read(self, mut _p: Slice<uint8>) -> Partial<int, error> { Partial.Ok(0) } }
+impl R2 { fn Read(self, mut _p: Slice<uint8>) -> Partial<int, error> { Partial.Ok(1) } }
+impl R3 { fn Read(self, mut _p: Slice<uint8>) -> Partial<int, error> { Partial.Ok(2) } }
+fn pick(n: int, m: int) -> (io.Reader, int) {
+  let r = match n {
+    1 => (match m { 1 => R1 {}, _ => R2 {} }, 0),
+    _ => (R3 {}, 0),
+  }
+  r
+}
+"#,
+    )
+    .assert_no_errors();
+}

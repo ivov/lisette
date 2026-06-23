@@ -55,6 +55,14 @@ pub struct Facts {
     pub empty_collection_checks: Vec<EmptyCollectionCheck>,
     pub statement_tail_checks: Vec<StatementTailCheck>,
 
+    /// Value-position `match`/`select` arms that did not reconcile, drained and
+    /// checked against the use-site result type at the end of `infer_file`.
+    pub branch_subsumptions: Vec<BranchSubsumption>,
+
+    /// Value-position selects with one shorthand receive and no default,
+    /// checked for exhaustiveness once the result type is pinned.
+    pub select_exhaustiveness_checks: Vec<SelectExhaustivenessCheck>,
+
     /// Suppresses contradictory lints from or-patterns whose binding sets disagree.
     pub or_pattern_error_spans: HashSet<Span>,
 
@@ -86,6 +94,18 @@ pub struct StatementTailCheck {
     pub span: Span,
 }
 
+#[derive(Debug, Clone)]
+pub struct BranchSubsumption {
+    pub result_ty: Type,
+    pub arms: Vec<(Type, Span)>,
+}
+
+#[derive(Debug, Clone)]
+pub struct SelectExhaustivenessCheck {
+    pub result_ty: Type,
+    pub span: Span,
+}
+
 impl Facts {
     pub fn new(allocator: Arc<BindingIdAllocator>) -> Self {
         Self {
@@ -103,6 +123,8 @@ impl Facts {
             generic_call_checks: Vec::new(),
             empty_collection_checks: Vec::new(),
             statement_tail_checks: Vec::new(),
+            branch_subsumptions: Vec::new(),
+            select_exhaustiveness_checks: Vec::new(),
             or_pattern_error_spans: HashSet::default(),
             type_error_spans: HashSet::default(),
             usages: Vec::new(),
@@ -234,6 +256,8 @@ impl Facts {
             generic_call_checks,
             empty_collection_checks,
             statement_tail_checks,
+            branch_subsumptions,
+            select_exhaustiveness_checks,
             or_pattern_error_spans,
             type_error_spans,
             usages,
@@ -264,6 +288,9 @@ impl Facts {
         self.generic_call_checks.extend(generic_call_checks);
         self.empty_collection_checks.extend(empty_collection_checks);
         self.statement_tail_checks.extend(statement_tail_checks);
+        self.branch_subsumptions.extend(branch_subsumptions);
+        self.select_exhaustiveness_checks
+            .extend(select_exhaustiveness_checks);
         self.or_pattern_error_spans.extend(or_pattern_error_spans);
         self.type_error_spans.extend(type_error_spans);
 

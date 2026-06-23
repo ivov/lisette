@@ -98,6 +98,12 @@ pub fn lint(source: &str) -> Vec<LisetteDiagnostic> {
     }
 
     {
+        let mut ctx = InferCtx::new(&mut checker, &store);
+        ctx.resolve_branch_subsumptions();
+        ctx.resolve_select_exhaustiveness();
+    }
+
+    {
         let folder = semantics::checker::freeze::FreezeFolder::new(&checker.env);
         folder.freeze_facts(&mut checker.facts);
     }

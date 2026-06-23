@@ -1,4 +1,5 @@
 use crate::checker::EnvResolve;
+use crate::facts::BranchSubsumption;
 use syntax::ast::BindingKind;
 use syntax::ast::{Binding, BindingId, Expression, MatchArm, Pattern, Span, TypedPattern};
 use syntax::types::{SimpleKind, Type};
@@ -34,9 +35,17 @@ impl InferCtx<'_, '_> {
         &mut self,
         result_ty: &Type,
         branch_types: &[Type],
+        branch_spans: &[Span],
         span: &Span,
     ) {
         if branch_types.is_empty() {
+            return;
+        }
+        if branch_types
+            .iter()
+            .any(|t| self.contains_pending_branch_var(t))
+        {
+            self.record_branch_subsumption(result_ty, branch_types, branch_spans);
             return;
         }
         match self.reconcile_branch_types(branch_types, span) {
@@ -47,9 +56,55 @@ impl InferCtx<'_, '_> {
                 self.unify(result_ty, &ty, span);
             }
             BranchReconciliation::Failed => {
-                debug_assert!(branch_types.len() >= 2);
-                let _ = self.try_unify(&branch_types[0], &branch_types[1], span);
-                self.unify(result_ty, &branch_types[0], span);
+                self.record_branch_subsumption(result_ty, branch_types, branch_spans);
+            }
+        }
+    }
+
+    fn record_branch_subsumption(
+        &mut self,
+        result_ty: &Type,
+        branch_types: &[Type],
+        branch_spans: &[Span],
+    ) {
+        self.facts.branch_subsumptions.push(BranchSubsumption {
+            result_ty: result_ty.clone(),
+            arms: branch_types
+                .iter()
+                .cloned()
+                .zip(branch_spans.iter().copied())
+                .collect(),
+        });
+    }
+
+    fn contains_pending_branch_var(&self, ty: &Type) -> bool {
+        self.facts.branch_subsumptions.iter().any(|o| {
+            let Type::Var { id, .. } = self.env.shallow_resolve(&o.result_ty) else {
+                return false;
+            };
+            self.env.occurs(id, ty)
+        })
+    }
+
+    pub fn resolve_branch_subsumptions(&mut self) {
+        let obligations = std::mem::take(&mut self.facts.branch_subsumptions);
+        for obligation in obligations.into_iter().rev() {
+            for (arm_ty, arm_span) in &obligation.arms {
+                let arm = arm_ty.resolve_in(&self.env);
+                if arm.is_never() || arm.is_error() {
+                    continue;
+                }
+                let before = self.sink.len();
+                if self
+                    .try_unify(arm_ty, &obligation.result_ty, arm_span)
+                    .is_err()
+                    && self.sink.len() == before
+                {
+                    let result = obligation.result_ty.resolve_in(&self.env);
+                    self.sink.push(diagnostics::infer::branch_arm_type_mismatch(
+                        &arm, *arm_span, &result,
+                    ));
+                }
             }
         }
     }
@@ -412,7 +467,8 @@ impl InferCtx<'_, '_> {
 
         if needs_reconciliation {
             let arm_types: Vec<Type> = new_arms.iter().map(|a| a.expression.get_type()).collect();
-            self.reconcile_and_unify(&result_ty, &arm_types, &span);
+            let arm_spans: Vec<Span> = new_arms.iter().map(|a| a.expression.get_span()).collect();
+            self.reconcile_and_unify(&result_ty, &arm_types, &arm_spans, &span);
         } else if is_statement && let Some(first_arm) = new_arms.first() {
             // In statement position, set the match's type from the first arm so the
             // expression still has a well-defined type for inspection, even though

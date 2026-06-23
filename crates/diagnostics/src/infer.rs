@@ -1252,6 +1252,22 @@ pub fn branch_type_mismatch(
         .with_help("All branches must return the same type")
 }
 
+pub fn branch_arm_type_mismatch(
+    arm_ty: &Type,
+    arm_span: Span,
+    result_ty: &Type,
+) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Type mismatch")
+        .with_infer_code("type_mismatch")
+        .with_span_label(
+            &arm_span,
+            format!("this arm produces `{}`, not `{}`", arm_ty, result_ty),
+        )
+        .with_help(
+            "All arms must produce the same type when the `match` or `select` is used as a value",
+        )
+}
+
 pub fn let_else_must_diverge(span: Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Invalid `else` block")
         .with_infer_code("let_else_must_diverge")
