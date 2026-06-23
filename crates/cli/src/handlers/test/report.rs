@@ -918,23 +918,25 @@ fn render_failure(
     let paired = matches!(record.kind.as_str(), "relation" | "labeled");
     let mut diagnostic = LisetteDiagnostic::error(record.message.clone());
     if paired {
-        let label_width = record
-            .operands
-            .iter()
-            .map(|operand| operand.label.chars().count())
-            .max()
-            .unwrap_or(0)
-            + 1;
-        let label = record
-            .operands
-            .iter()
-            .zip(&values)
-            .map(|(operand, value)| {
-                let token = format!("{}:", operand.label);
-                format!("{token:<label_width$} {value}")
-            })
-            .collect::<Vec<_>>()
-            .join("\n");
+        let label = paired_inline_label(&record.operands, &values).unwrap_or_else(|| {
+            let label_width = record
+                .operands
+                .iter()
+                .map(|operand| operand.label.chars().count())
+                .max()
+                .unwrap_or(0)
+                + 1;
+            record
+                .operands
+                .iter()
+                .zip(&values)
+                .map(|(operand, value)| {
+                    let token = format!("{}:", operand.label);
+                    format!("{token:<label_width$} {value}")
+                })
+                .collect::<Vec<_>>()
+                .join("\n")
+        });
         diagnostic = diagnostic.with_span_primary_label(&span, label);
     } else {
         let label = values
@@ -1103,6 +1105,20 @@ fn operand_budget(term_width: usize) -> usize {
     term_width
         .saturating_sub(reserved)
         .clamp(OPERAND_MIN_CHARS, OPERAND_MAX_CHARS)
+}
+
+fn paired_inline_label(operands: &[Operand], values: &[String]) -> Option<String> {
+    let is_scalar = |value: &str| !value.contains(['\n', '{', '[', '(']);
+    if !operands.iter().all(|operand| is_scalar(&operand.value)) {
+        return None;
+    }
+    let line = operands
+        .iter()
+        .zip(values)
+        .map(|(operand, value)| format!("{}: {}", operand.label, value))
+        .collect::<Vec<_>>()
+        .join(" · ");
+    (line.chars().count() <= operand_budget(terminal_width())).then_some(line)
 }
 
 fn first_divergence(a: &str, b: &str) -> usize {
@@ -1448,6 +1464,55 @@ mod tests {
         assert!(
             text.contains("left:") && text.contains("right:"),
             "got:\n{text}"
+        );
+    }
+
+    #[test]
+    fn paired_label_inlines_scalars_but_stacks_composites() {
+        let render_relation = |left: &str, right: &str| {
+            let index = index(&[(ENTRY_MODULE_ID, "cmp")]);
+            let inner = serde_json::json!({
+                "file": 7,
+                "lo": 3,
+                "hi": 9,
+                "kind": "relation",
+                "message": "expected ==",
+                "operands": [
+                    {"label": "left", "value": left},
+                    {"label": "right", "value": right},
+                ],
+            })
+            .to_string();
+            let events = vec![
+                attr_event("demo", "TestCmp", &fail_value(&inner)),
+                event("fail", "demo", Some("TestCmp"), None),
+            ];
+            let report = build_report(&index, &events, "demo");
+            let mut sources = no_sources();
+            sources.insert(
+                7,
+                SourceInfo {
+                    source: "fn cmp() {}\n".to_string(),
+                    filename: "x.test.lis".to_string(),
+                },
+            );
+            render(&report, &sources, false, Duration::from_millis(1))
+        };
+
+        let scalar = render_relation("1", "2");
+        assert!(
+            scalar
+                .lines()
+                .any(|line| line.contains("left: 1") && line.contains("right: 2")),
+            "short scalars share one line, got:\n{scalar}"
+        );
+
+        let composite = render_relation("Point { x: 1, y: 2 }", "Point { x: 1, y: 9 }");
+        assert!(
+            !composite
+                .lines()
+                .any(|line| line.contains("left:") && line.contains("right:")),
+            "composite operands stay stacked, got:\n{composite}"
         );
     }
 
