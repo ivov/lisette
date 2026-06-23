@@ -207,14 +207,22 @@ fn batch_parse_modules(
         return HashMap::default();
     };
 
+    const PARALLEL_THRESHOLD: usize = 4;
+
+    let to_scan: Vec<&ModuleId> = modules.iter().filter(|m| !store.has(m)).collect();
+    let scanned: Vec<(&ModuleId, Vec<(String, semantics_loader::FileContent)>)> =
+        if to_scan.len() < PARALLEL_THRESHOLD {
+            to_scan.into_iter().map(|m| (m, scan_one(fs, m))).collect()
+        } else {
+            use rayon::prelude::*;
+            to_scan
+                .into_par_iter()
+                .map(|m| (m, scan_one(fs, m)))
+                .collect()
+        };
+
     let mut jobs: Vec<ParseJob> = Vec::new();
-    for module_id in modules {
-        if store.has(module_id) {
-            continue;
-        }
-        let mut entries: Vec<(String, semantics_loader::FileContent)> =
-            fs.scan_folder(module_id).into_iter().collect();
-        entries.sort_by(|a, b| a.0.cmp(&b.0));
+    for (module_id, entries) in scanned {
         for (filename, content) in entries {
             if filename.ends_with("_test.lis") {
                 sink.push(diagnostics::module_graph::wrong_test_file_suffix(
@@ -236,7 +244,6 @@ fn batch_parse_modules(
         }
     }
 
-    const PARALLEL_THRESHOLD: usize = 4;
     let parsed: Vec<(ModuleId, File, Vec<syntax::ParseError>)> = if jobs.len() < PARALLEL_THRESHOLD
     {
         jobs.into_iter().map(parse_one).collect()
@@ -251,6 +258,13 @@ fn batch_parse_modules(
         grouped.entry(module_id).or_default().push(file);
     }
     grouped
+}
+
+fn scan_one(fs: &dyn Loader, module_id: &str) -> Vec<(String, semantics_loader::FileContent)> {
+    let mut entries: Vec<(String, semantics_loader::FileContent)> =
+        fs.scan_folder(module_id).into_iter().collect();
+    entries.sort_by(|a, b| a.0.cmp(&b.0));
+    entries
 }
 
 fn parse_one(job: ParseJob) -> (ModuleId, File, Vec<syntax::ParseError>) {

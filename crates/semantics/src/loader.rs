@@ -25,7 +25,7 @@ fn is_production_lis(name: &str) -> bool {
     name.ends_with(".lis") && !name.ends_with(".test.lis")
 }
 
-pub trait Loader {
+pub trait Loader: Sync {
     /// Scans a folder and returns all `.lis` files keyed by bare filename.
     fn scan_folder(&self, folder: &str) -> Files;
 
