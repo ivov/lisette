@@ -1,3 +1,4 @@
+use ecow::EcoString;
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use std::cell::Cell;
 use syntax::ast::BindingId;
@@ -86,6 +87,7 @@ pub struct Scope {
     pub type_param_depth: DepthCounter,
     pub use_context: Cell<UseContext>,
     pub in_test_handle: bool,
+    pub test_fn_name: Option<EcoString>,
     /// variable name -> binding ID (for linting)
     pub name_to_binding: HashMap<String, BindingId>,
 }
@@ -114,6 +116,7 @@ impl Scope {
             type_param_depth: DepthCounter::new(),
             use_context: Cell::new(UseContext::Statement),
             in_test_handle: false,
+            test_fn_name: None,
             name_to_binding: HashMap::default(),
         }
     }
@@ -190,6 +193,7 @@ impl Scopes {
         scope.type_param_depth = DepthCounter::with_value(current.type_param_depth.get());
         scope.use_context = Cell::new(current.use_context.get());
         scope.in_test_handle = current.in_test_handle;
+        scope.test_fn_name = current.test_fn_name.clone();
         self.stack.push(scope);
     }
 
@@ -341,6 +345,14 @@ impl Scopes {
 
     pub fn has_test_handle(&self) -> bool {
         self.current().in_test_handle
+    }
+
+    pub fn set_test_fn_name(&mut self, name: EcoString) {
+        self.current_mut().test_fn_name = Some(name);
+    }
+
+    pub fn test_fn_name(&self) -> Option<&str> {
+        self.current().test_fn_name.as_deref()
     }
 
     pub fn increment_loop_depth(&self) {

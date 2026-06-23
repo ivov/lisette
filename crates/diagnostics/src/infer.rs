@@ -288,6 +288,7 @@ pub fn name_not_found(
     span: Span,
     available_names: &[String],
     expected_ty: Option<&Type>,
+    test_fn_name: Option<&str>,
 ) -> LisetteDiagnostic {
     if matches!(variable_name, "nil" | "null" | "Nil" | "undefined") {
         let help = nil_help_for(expected_ty);
@@ -304,10 +305,6 @@ pub fn name_not_found(
             .with_help(hint);
     }
 
-    let mut diagnostic = LisetteDiagnostic::error("Name not found")
-        .with_resolve_code("name_not_found")
-        .with_span_label(&span, "name not found in scope");
-
     let suggestion = available_names
         .iter()
         .filter_map(|c| {
@@ -316,6 +313,24 @@ pub fn name_not_found(
         })
         .min_by_key(|(_, d)| *d)
         .map(|(c, _)| c.clone());
+
+    // `t` is the conventional name for the handle a `#[test]` receives, but it is an
+    // ordinary parameter the test must declare, not an implicit binding. A close-name
+    // suggestion takes precedence, since then the real fix is the typo, not a new param.
+    if suggestion.is_none()
+        && let Some(function) = test_fn_name.filter(|_| variable_name == "t")
+    {
+        return LisetteDiagnostic::error("Undeclared test handle")
+            .with_resolve_code("undeclared_test_handle")
+            .with_span_label(&span, "undeclared")
+            .with_help(format!(
+                "Declare a `t` parameter to receive the test handle: `fn {function}(t)`"
+            ));
+    }
+
+    let mut diagnostic = LisetteDiagnostic::error("Name not found")
+        .with_resolve_code("name_not_found")
+        .with_span_label(&span, "name not found in scope");
 
     if let Some(suggestion) = suggestion {
         diagnostic = diagnostic.with_help(format!("Did you mean `{}`?", suggestion));

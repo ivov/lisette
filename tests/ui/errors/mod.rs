@@ -4059,6 +4059,31 @@ fn test_attribute_with_shadowed_test_context_rejected() {
 }
 
 #[test]
+fn infer_undeclared_test_handle_hints_at_parameter() {
+    let test_src = "#[test]\nfn forgot_the_handle() {\n  t.skip(\"not ready\")\n}\n";
+    let fs = test_attribute_fs("pub fn add(a: int, b: int) -> int { a + b }", test_src);
+    let result = infer_module("_entry_", fs);
+    assert_multimodule_infer_error_snapshot!(result, test_src);
+}
+
+#[test]
+fn undeclared_t_outside_a_test_keeps_the_generic_hint() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file("main", "main.lis", "fn uses() -> int {\n  t\n}");
+    let result = infer_module("main", fs);
+    let diagnostic = result
+        .errors
+        .iter()
+        .find(|d| d.code_str() == Some("resolve.name_not_found"))
+        .expect("expected a name_not_found for `t`");
+    let help = diagnostic.plain_help().unwrap_or_default();
+    assert!(
+        help.contains("Define or import"),
+        "outside a test, `t` must use the generic hint, got: {help:?}"
+    );
+}
+
+#[test]
 fn test_attribute_with_return_rejected() {
     let fs = test_attribute_fs(
         "pub fn add(a: int, b: int) -> int { a + b }",

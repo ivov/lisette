@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Undeclared test handle
+   ╭─[main.lis:3:3]
+ 2 │ fn forgot_the_handle() {
+ 3 │   t.skip("not ready")
+   ·   ┬
+   ·   ╰── undeclared
+ 4 │ }
+   ╰────
+  help: Declare a `t` parameter to receive the test handle: `fn forgot_the_handle(t)` · code: [resolve.undeclared_test_handle]

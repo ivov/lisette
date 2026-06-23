@@ -199,6 +199,9 @@ impl InferCtx<'_, '_> {
         {
             self.scopes.mark_test_handle();
         }
+        if is_test {
+            self.scopes.set_test_fn_name(name.clone());
+        }
         self.mark_test_context_params_used(&new_params);
 
         let unit_ty = self.type_unit();
