@@ -8,5 +8,4 @@ Status:
 
 Planned work:
 
-- Implement a test runner
 - Make diagnostics configurable
