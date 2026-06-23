@@ -549,6 +549,13 @@ pub fn render(report: &Report, sources: &Sources, color: bool, total: Duration) 
 
     out.push('\n');
     out.push_str(&summary(&report.rows, total, color));
+    if nothing_executed(&report.rows) {
+        let note = format_backticks(
+            "No tests ran. `go test` reported success but executed nothing.",
+            color,
+        );
+        out.push_str(&format!("  {note}\n"));
+    }
     out
 }
 
@@ -981,8 +988,10 @@ fn summary(rows: &[TestRow], total: Duration, color: bool) -> String {
     let skipped = count_status(rows, Status::Skipped);
     let unreached = count_status(rows, Status::Unreached);
 
+    let nothing_ran = passed == 0 && failed == 0 && crashed == 0 && skipped == 0 && unreached > 0;
+
     let glyph = mark(
-        if failed > 0 {
+        if failed > 0 || nothing_ran {
             Status::Failed
         } else if crashed > 0 {
             Status::Crashed
@@ -1007,7 +1016,8 @@ fn summary(rows: &[TestRow], total: Duration, color: bool) -> String {
         parts.push(blue(&format!("{skipped} skipped"), color));
     }
     if unreached > 0 {
-        parts.push(format!("{unreached} unreached"));
+        let text = format!("{unreached} unreached");
+        parts.push(if nothing_ran { red(&text, color) } else { text });
     }
 
     format!(
@@ -1163,7 +1173,19 @@ pub fn exit_code(rows: &[TestRow], run_success: bool) -> i32 {
     let any_failure = rows
         .iter()
         .any(|r| matches!(r.status, Status::Failed | Status::Crashed));
-    if !run_success || any_failure { 1 } else { 0 }
+    if !run_success || any_failure || nothing_executed(rows) {
+        1
+    } else {
+        0
+    }
+}
+
+pub fn nothing_executed(rows: &[TestRow]) -> bool {
+    let ran = count_status(rows, Status::Passed)
+        + count_status(rows, Status::Failed)
+        + count_status(rows, Status::Crashed)
+        + count_status(rows, Status::Skipped);
+    ran == 0 && count_status(rows, Status::Unreached) > 0
 }
 
 pub fn failed_keys(rows: &[TestRow]) -> Vec<(String, String)> {
@@ -1445,6 +1467,29 @@ mod tests {
         assert!(text.contains("✓ adds_numbers"));
         assert!(text.contains("2 passed"));
         assert_eq!(exit_code(&report.rows, true), 0);
+    }
+
+    #[test]
+    fn nothing_executed_fails_even_when_go_succeeds() {
+        let index = index(&[(ENTRY_MODULE_ID, "alpha"), (ENTRY_MODULE_ID, "beta")]);
+        let report = build_report(&index, &[], "demo");
+        let text = render(&report, &no_sources(), false, Duration::from_millis(0));
+
+        assert!(text.contains("2 unreached"));
+        assert!(
+            text.contains('✕') && !text.contains('✓'),
+            "an all-unreached run must not read as a green pass, got:\n{text}"
+        );
+        assert!(
+            text.contains("No tests ran"),
+            "a note explains the empty run, got:\n{text}"
+        );
+        assert!(nothing_executed(&report.rows));
+        assert_eq!(
+            exit_code(&report.rows, true),
+            1,
+            "a run that executed nothing must exit non-zero even when `go test` succeeded"
+        );
     }
 
     #[test]

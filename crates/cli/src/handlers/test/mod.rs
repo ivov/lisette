@@ -9,7 +9,9 @@ use super::build::{BuildOptions, build_locked, with_locked_project};
 
 mod failed;
 mod report;
-use report::{all_test_keys, build_report_filtered, exit_code, matching_tests, render};
+use report::{
+    all_test_keys, build_report_filtered, exit_code, matching_tests, nothing_executed, render,
+};
 
 pub fn test(
     path: Option<String>,
@@ -129,7 +131,7 @@ pub fn test(
                 build_error.to_string(),
                 "The generated Go failed to build; run `lis check`"
             );
-        } else if filter.is_none() {
+        } else if filter.is_none() && !nothing_executed(&report.rows) {
             failed::save(&prep.target_dir, &report.rows);
         }
 
