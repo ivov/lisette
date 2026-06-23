@@ -23,3 +23,4 @@
 - [`13-go-interop.md`](13-go-interop.md) — Go stdlib packages, type mappings, `.d.lis`
 - [`14-concurrency.md`](14-concurrency.md) — `task`, channels, `select`, iteration
 - [`15-attributes.md`](15-attributes.md) — Serialization tags, custom tags, lint suppression
+- [`16-testing.md`](16-testing.md) — `#[test]`, `assert`, the test context, `lis test`
