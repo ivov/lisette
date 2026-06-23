@@ -1,4 +1,4 @@
 ---
 source: tests/ui/unix.rs
 ---
-src/main.lis:3:19: error: Type mismatch [infer.type_mismatch]
+src/main.lis:3:8: error: Duplicate binding [infer.duplicate_binding_in_pattern]

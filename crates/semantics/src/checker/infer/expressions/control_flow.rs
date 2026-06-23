@@ -101,7 +101,7 @@ impl InferCtx<'_, '_> {
                     && self.sink.len() == before
                 {
                     let result = obligation.result_ty.resolve_in(&self.env);
-                    self.sink.push(diagnostics::infer::branch_arm_type_mismatch(
+                    self.sink.push(diagnostics::infer::branch_type_mismatch(
                         &arm, *arm_span, &result,
                     ));
                 }
@@ -262,30 +262,12 @@ impl InferCtx<'_, '_> {
         } else if is_expression && !expected_is_concrete {
             let consequence_span = new_consequence.get_span();
             let alternative_span = new_alternative.get_span();
-
-            let resolved_consequence = consequence_ty.resolve_in(&self.env);
-            let resolved_alternative = alternative_ty.resolve_in(&self.env);
-
-            match self
-                .reconcile_branch_types(&[consequence_ty.clone(), alternative_ty.clone()], &span)
-            {
-                BranchReconciliation::FirstBranch => {
-                    self.unify(expected_ty, &consequence_ty, &consequence_span);
-                }
-                BranchReconciliation::Widened(ref ty) => {
-                    self.unify(expected_ty, ty, &alternative_span);
-                }
-                BranchReconciliation::Failed => {
-                    let _ = self.try_unify(&consequence_ty, &alternative_ty, &span);
-                    self.sink.push(diagnostics::infer::branch_type_mismatch(
-                        &resolved_consequence,
-                        consequence_span,
-                        &resolved_alternative,
-                        alternative_span,
-                    ));
-                    self.unify(expected_ty, &consequence_ty, &consequence_span);
-                }
-            }
+            self.reconcile_and_unify(
+                expected_ty,
+                &[consequence_ty.clone(), alternative_ty.clone()],
+                &[consequence_span, alternative_span],
+                &span,
+            );
         }
 
         let result_ty = if has_no_else {

@@ -6,7 +6,7 @@ source: tests/ui/errors/mod.rs
  12 │     Ok(m) => m,
  13 │     Err(e) => report(e),
     ·               ────┬────
-    ·                   ╰── this arm produces `()`, not `Match`
+    ·                   ╰── this branch produces `()`, not `Match`
  14 │   }
     ╰────
-  help: All arms must produce the same type when the `match` or `select` is used as a value · code: [infer.type_mismatch]
+  help: All branches must produce the same type when used as a value · code: [infer.type_mismatch]

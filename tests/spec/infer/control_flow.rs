@@ -2916,3 +2916,34 @@ fn pick(n: int, m: int) -> (io.Reader, int) {
     )
     .assert_no_errors();
 }
+
+#[test]
+fn if_branches_widen_to_interface_via_use_site_ok() {
+    infer(
+        r#"
+import "go:io"
+struct R1 {}
+struct R2 {}
+impl R1 { fn Read(self, mut _p: Slice<uint8>) -> Partial<int, error> { Partial.Ok(0) } }
+impl R2 { fn Read(self, mut _p: Slice<uint8>) -> Partial<int, error> { Partial.Ok(1) } }
+fn pick(flag: bool) -> io.Reader {
+  let r = if flag { R1 {} } else { R2 {} }
+  r
+}
+"#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn if_branches_scalar_mismatch_errors() {
+    infer(
+        r#"
+    fn test() {
+      let x = if true { "a" } else { 42 }
+      let _ = x
+    }
+        "#,
+    )
+    .assert_type_mismatch();
+}

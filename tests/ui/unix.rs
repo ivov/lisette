@@ -37,8 +37,8 @@ fn main() {
 #[test]
 fn unix_multi_label_emits_single_location() {
     let source = r#"
-fn test() {
-  let x = if true { 42 } else { "hello" };
+fn main() {
+  let (x, (y, x)) = (1, (2, 3));
 }
 "#;
     let result = infer(source);
