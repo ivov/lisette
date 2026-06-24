@@ -45,3 +45,7 @@ path = "e2e_suite.rs"
 [[test]]
 name = "embed_diff"
 path = "embed_diff.rs"
+
+[[test]]
+name = "manifest_pins"
+path = "manifest_pins.rs"

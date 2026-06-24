@@ -28,4 +28,5 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # ratchet:actions/checkout@v6
       - uses: ./.github/actions/setup-rust
+      - run: cargo test -p tests --test manifest_pins --locked -- --format terse
       - run: cargo publish --workspace --dry-run
