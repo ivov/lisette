@@ -35,5 +35,6 @@ fs2 = "0.4"
 terminal_size = "0.4"
 owo-colors.workspace = true
 rustc-hash.workspace = true
+rayon.workspace = true
 serde.workspace = true
 serde_json.workspace = true
