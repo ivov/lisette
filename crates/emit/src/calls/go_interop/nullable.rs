@@ -1,4 +1,3 @@
-use crate::EmitEffects;
 use crate::Planner;
 use crate::calls::go_interop::build_tuple_literal;
 use crate::calls::go_interop::wrappers::{
@@ -17,16 +16,14 @@ impl Planner<'_> {
         &mut self,
         call_expression: &Expression,
         option_ty: &Type,
-        fx: &mut EmitEffects,
     ) -> ValuePlan {
         let (mut setup, call_str) =
-            self.lower_call(call_expression, None, ExpressionContext::value(), fx);
+            self.lower_call(call_expression, None, ExpressionContext::value());
         let (wrap_setup, outcome) = self.lower_comma_ok_wrapping(
             &call_str,
             option_ty,
             TupleReturnLayout::Flattened,
             WrapperTarget::FreshSlot,
-            fx,
         );
         setup.extend(wrap_setup);
         value_plan_from_statements(setup, outcome.expect("wrapper produced no slot"))
@@ -37,17 +34,11 @@ impl Planner<'_> {
         call_expression: &Expression,
         option_ty: &Type,
         sentinel: i64,
-        fx: &mut EmitEffects,
     ) -> ValuePlan {
         let (mut setup, call_str) =
-            self.lower_call(call_expression, None, ExpressionContext::value(), fx);
-        let (wrap_setup, outcome) = self.lower_sentinel_wrapping(
-            &call_str,
-            option_ty,
-            sentinel,
-            WrapperTarget::FreshSlot,
-            fx,
-        );
+            self.lower_call(call_expression, None, ExpressionContext::value());
+        let (wrap_setup, outcome) =
+            self.lower_sentinel_wrapping(&call_str, option_ty, sentinel, WrapperTarget::FreshSlot);
         setup.extend(wrap_setup);
         value_plan_from_statements(setup, outcome.expect("wrapper produced no slot"))
     }
@@ -59,12 +50,11 @@ impl Planner<'_> {
         option_ty: &Type,
         sentinel: i64,
         target: WrapperTarget<'_>,
-        fx: &mut EmitEffects,
     ) -> (Vec<LoweredStatement>, WrapperOutcome) {
-        fx.require_stdlib();
+        self.require_stdlib();
         let mut statements = Vec::new();
         let raw = self.hoist_tmp_value_statement(&mut statements, "ret", call_str);
-        let inner_ty_str = self.go_type_string(&option_ty.ok_type(), fx);
+        let inner_ty_str = self.go_type_string(&option_ty.ok_type());
         let value_expr = format!(
             "lisette.OptionFromCommaOk[{}]({}, {} != {})",
             inner_ty_str, raw, raw, sentinel
@@ -83,9 +73,8 @@ impl Planner<'_> {
         option_ty: &Type,
         layout: TupleReturnLayout,
         target: WrapperTarget<'_>,
-        fx: &mut EmitEffects,
     ) -> (Vec<LoweredStatement>, WrapperOutcome) {
-        fx.require_stdlib();
+        self.require_stdlib();
         let mut statements = Vec::new();
 
         let inner_ty = option_ty.ok_type();
@@ -96,7 +85,7 @@ impl Planner<'_> {
             needs_nilable_validation || (layout.is_flattened() && inner_tuple_arity.is_some());
 
         if !needs_complex {
-            let inner_ty_str = self.go_type_string(&inner_ty, fx);
+            let inner_ty_str = self.go_type_string(&inner_ty);
             let value_expr = format!("lisette.OptionFromCommaOk[{}]({})", inner_ty_str, call_str);
             let outcome =
                 self.push_simple_wrapper_value(&mut statements, target, "option", &value_expr);
@@ -127,13 +116,13 @@ impl Planner<'_> {
         )));
 
         let val_expression = if layout.is_flattened() && inner_tuple_arity.is_some() {
-            build_tuple_literal(&val_vars, &inner_ty, fx)
+            build_tuple_literal(self, &val_vars, &inner_ty)
         } else {
             val_vars[0].clone()
         };
 
         let option_ty_str = {
-            let mut fe = FalliblePlanner::new(self, &fallible, fx);
+            let mut fe = FalliblePlanner::new(self, &fallible);
             fe.full_type_string()
         };
 
@@ -149,11 +138,11 @@ impl Planner<'_> {
             self.push_wrapper_slot(&mut statements, target, &option_ty_str, "option");
 
         let some_wrapper = {
-            let mut fe = FalliblePlanner::new(self, &fallible, fx);
+            let mut fe = FalliblePlanner::new(self, &fallible);
             fe.emit_success(&val_expression)
         };
         let none_wrapper = {
-            let mut fe = FalliblePlanner::new(self, &fallible, fx);
+            let mut fe = FalliblePlanner::new(self, &fallible);
             fe.emit_failure(None)
         };
 
@@ -175,12 +164,11 @@ impl Planner<'_> {
         raw_value: &str,
         option_ty: &Type,
         target: WrapperTarget<'_>,
-        fx: &mut EmitEffects,
     ) -> (Vec<LoweredStatement>, WrapperOutcome) {
-        fx.require_stdlib();
+        self.require_stdlib();
         let mut statements = Vec::new();
         let inner_ty = option_ty.ok_type();
-        let inner_ty_str = self.go_type_string(&inner_ty, fx);
+        let inner_ty_str = self.go_type_string(&inner_ty);
         let is_nil_check = if self.is_interface_option(option_ty) {
             format!("lisette.IsNilInterface({})", raw_value)
         } else {
@@ -199,13 +187,12 @@ impl Planner<'_> {
         &mut self,
         call_expression: &Expression,
         option_ty: &Type,
-        fx: &mut EmitEffects,
     ) -> ValuePlan {
         let (mut setup, call_str) =
-            self.lower_call(call_expression, None, ExpressionContext::value(), fx);
+            self.lower_call(call_expression, None, ExpressionContext::value());
         let raw_var = self.hoist_tmp_value_statement(&mut setup, "raw", &call_str);
         let (wrap_setup, outcome) =
-            self.lower_nil_check_option_wrap(&raw_var, option_ty, WrapperTarget::FreshSlot, fx);
+            self.lower_nil_check_option_wrap(&raw_var, option_ty, WrapperTarget::FreshSlot);
         setup.extend(wrap_setup);
         value_plan_from_statements(setup, outcome.expect("wrapper produced no slot"))
     }
@@ -217,7 +204,6 @@ impl Planner<'_> {
         slot_hint: &str,
         slot_ty: &str,
         address: bool,
-        fx: &mut EmitEffects,
     ) -> String {
         let opt_var = self.hoist_tmp_value_statement(statements, "opt", option_value);
         let slot_var = self.fresh_var(Some(slot_hint));
@@ -228,7 +214,7 @@ impl Planner<'_> {
             value: None,
         });
 
-        fx.require_stdlib();
+        self.require_stdlib();
         let amp = if address { "&" } else { "" };
         let body = LoweredBlock {
             statements: vec![LoweredStatement::RawGo(format!(
@@ -251,10 +237,9 @@ impl Planner<'_> {
         statements: &mut Vec<LoweredStatement>,
         ptr_value: &str,
         option_ty: &Type,
-        fx: &mut EmitEffects,
     ) -> String {
-        fx.require_stdlib();
-        let inner_ty_str = self.go_type_string(&option_ty.ok_type(), fx);
+        self.require_stdlib();
+        let inner_ty_str = self.go_type_string(&option_ty.ok_type());
         let value_expr = format!("lisette.OptionFromPointer[{}]({})", inner_ty_str, ptr_value);
         self.hoist_tmp_value_statement(statements, "option", &value_expr)
     }
@@ -266,10 +251,9 @@ impl Planner<'_> {
         statements: &mut Vec<LoweredStatement>,
         raw_value: &str,
         option_ty: &Type,
-        fx: &mut EmitEffects,
     ) -> String {
         let (wrap_statements, outcome) =
-            self.lower_nil_check_option_wrap(raw_value, option_ty, WrapperTarget::FreshSlot, fx);
+            self.lower_nil_check_option_wrap(raw_value, option_ty, WrapperTarget::FreshSlot);
         statements.extend(wrap_statements);
         outcome.expect("FreshSlot produces a slot")
     }
@@ -280,11 +264,10 @@ impl Planner<'_> {
         raw_value: &str,
         collection_ty: &Type,
         shape: &NullableCollectionShape,
-        fx: &mut EmitEffects,
     ) -> String {
-        fx.require_stdlib();
+        self.require_stdlib();
 
-        let lisette_collection_ty = self.go_type_string(collection_ty, fx);
+        let lisette_collection_ty = self.go_type_string(collection_ty);
         let src_var = self.hoist_tmp_value_statement(statements, "src", raw_value);
         let wrapped_var = self.hoist_tmp_value_statement(
             statements,
@@ -307,11 +290,11 @@ impl Planner<'_> {
                     val_var.clone()
                 };
                 let some_wrapper = {
-                    let mut fe = FalliblePlanner::new(self, &fallible, fx);
+                    let mut fe = FalliblePlanner::new(self, &fallible);
                     fe.emit_success(&some_input)
                 };
                 let none_wrapper = {
-                    let mut fe = FalliblePlanner::new(self, &fallible, fx);
+                    let mut fe = FalliblePlanner::new(self, &fallible);
                     fe.emit_failure(None)
                 };
                 let condition = if is_interface {
@@ -352,7 +335,6 @@ impl Planner<'_> {
                     &val_var,
                     &inner_lisette_ty,
                     inner_shape,
-                    fx,
                 );
                 inner_statements.push(LoweredStatement::RawGo(format!(
                     "{}[{}] = {}\n",
@@ -380,10 +362,9 @@ impl Planner<'_> {
         lisette_value: &str,
         collection_ty: &Type,
         shape: &NullableCollectionShape,
-        fx: &mut EmitEffects,
     ) -> String {
-        fx.require_stdlib();
-        let raw_collection_ty = self.shape_raw_collection_ty(shape, fx);
+        self.require_stdlib();
+        let raw_collection_ty = self.shape_raw_collection_ty(shape);
 
         let src_var = self.hoist_tmp_value_statement(statements, "src", lisette_value);
         let unwrapped_var = self.hoist_tmp_value_statement(
@@ -443,7 +424,6 @@ impl Planner<'_> {
                     &val_var,
                     &inner_lisette_ty,
                     inner_shape,
-                    fx,
                 );
                 inner_statements.push(LoweredStatement::RawGo(format!(
                     "{}[{}] = {}\n",
@@ -481,16 +461,12 @@ impl Planner<'_> {
 
     /// Raw Go type for an unwrapped collection; walks the shape recursively so
     /// nested options lower past the outer `[]` (e.g. to `[][]*T`).
-    fn shape_raw_collection_ty(
-        &mut self,
-        shape: &NullableCollectionShape,
-        fx: &mut EmitEffects,
-    ) -> String {
+    fn shape_raw_collection_ty(&mut self, shape: &NullableCollectionShape) -> String {
         let raw_element_ty = match &shape.element {
             NullableCollectionElement::Option(opt_ty) => {
                 let is_pointer_bridged = self.is_non_nilable_option(opt_ty);
                 let inner_ty = opt_ty.ok_type();
-                let inner_ty_str = self.go_type_string(&inner_ty, fx);
+                let inner_ty_str = self.go_type_string(&inner_ty);
                 if is_pointer_bridged {
                     format!("*{}", inner_ty_str)
                 } else {
@@ -498,11 +474,11 @@ impl Planner<'_> {
                 }
             }
             NullableCollectionElement::Nested(inner_shape) => {
-                self.shape_raw_collection_ty(inner_shape, fx)
+                self.shape_raw_collection_ty(inner_shape)
             }
         };
         if let Some(key_ty) = shape.key_ty.as_ref() {
-            let key_ty_str = self.go_type_string(key_ty, fx);
+            let key_ty_str = self.go_type_string(key_ty);
             format!("map[{}]{}", key_ty_str, raw_element_ty)
         } else {
             format!("[]{}", raw_element_ty)

@@ -522,6 +522,7 @@ dependencies = [
  "lisette-stdlib",
  "lisette-syntax",
  "owo-colors",
+ "rayon",
  "rustc-hash",
  "serde",
  "serde_json",

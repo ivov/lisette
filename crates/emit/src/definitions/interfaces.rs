@@ -1,4 +1,3 @@
-use crate::EmitEffects;
 use crate::Planner;
 use crate::names::go_name;
 use syntax::ast::{Annotation, Expression, Generic, ParentInterface, Pattern};
@@ -12,7 +11,6 @@ impl Planner<'_> {
         parents: &[ParentInterface],
         generics: &[Generic],
         is_public: bool,
-        fx: &mut EmitEffects,
     ) -> String {
         if self.facts.is_current_module(go_name::PRELUDE_MODULE) {
             return format!("type {} struct{{}}", name);
@@ -20,7 +18,7 @@ impl Planner<'_> {
 
         let filtered = strip_self_referential_bounds(generics, name);
         let symbol = self.facts.qualified_current(name);
-        let generics_str = self.generics_to_string_for_symbol(&symbol, &filtered, fx);
+        let generics_str = self.generics_to_string_for_symbol(&symbol, &filtered);
 
         let mut output = Vec::new();
         output.push(format!(
@@ -30,11 +28,11 @@ impl Planner<'_> {
         ));
 
         for parent in parents {
-            output.push(self.go_type_string(&parent.ty, fx));
+            output.push(self.go_type_string(&parent.ty));
         }
 
         for item in items {
-            output.push(self.emit_interface_method(name, item, is_public, fx));
+            output.push(self.emit_interface_method(name, item, is_public));
         }
 
         output.push("}".to_string());
@@ -48,7 +46,6 @@ impl Planner<'_> {
         interface_name: &str,
         item: &Expression,
         is_public: bool,
-        fx: &mut EmitEffects,
     ) -> String {
         let func = item.function_definition_view();
         let ty = item.get_type();
@@ -63,7 +60,7 @@ impl Planner<'_> {
         let args: Vec<String> = all_args
             .iter()
             .skip(if has_self_receiver { 1 } else { 0 })
-            .map(|a| self.go_type_string(a, fx))
+            .map(|a| self.go_type_string(a))
             .collect();
         let raw_return_ty = ty
             .get_function_ret()
@@ -72,8 +69,8 @@ impl Planner<'_> {
         let qualified_id = self.facts.qualified_current(interface_name);
         let hints = self.go_interface_method_hints(&qualified_id, func.name);
         let return_type = match self.classify_with_go_hints(&raw_return_ty, &hints) {
-            Some(shape) => self.render_lowered_return_ty(&shape, &raw_return_ty, fx),
-            None => self.go_type_string(&raw_return_ty, fx),
+            Some(shape) => self.render_lowered_return_ty(&shape, &raw_return_ty),
+            None => self.go_type_string(&raw_return_ty),
         };
 
         let method_name = if is_public || self.method_needs_export(func.name) {

@@ -1,4 +1,3 @@
-use crate::EmitEffects;
 use crate::Planner;
 use crate::context::expression::ExpressionContext;
 use crate::names::generics::extract_type_mapping;
@@ -25,7 +24,6 @@ impl Planner<'_> {
         value: &str,
         ty: &Type,
         ctx: ExpressionContext<'_>,
-        fx: &mut EmitEffects,
     ) -> String {
         if let Some(BindingValue::InlineExpr(expr)) = self.scope.resolve_identifier_binding(value) {
             let text = expr.as_str().to_string();
@@ -42,23 +40,23 @@ impl Planner<'_> {
         if let Some(go_name) = &bound_go_name {
             self.scope.record_go_use(go_name);
         }
-        match self.classify_identifier(value, ty, ctx, fx) {
+        match self.classify_identifier(value, ty, ctx) {
             IdentifierKind::UnitValue => "struct{}{}".to_string(),
             IdentifierKind::PublicFunction { capitalized } => capitalized,
             IdentifierKind::UnitConstructor { name, type_args } => {
-                format!("{}{}()", self.resolve_go_name(&name, fx), type_args)
+                format!("{}{}()", self.resolve_go_name(&name), type_args)
             }
             IdentifierKind::ConstructorFunction { name, type_args } => {
-                format!("{}{}", self.resolve_go_name(&name, fx), type_args)
+                format!("{}{}", self.resolve_go_name(&name), type_args)
             }
             IdentifierKind::Regular { name } => {
-                if let Some(expression) = self.try_emit_method_expression(&name, ty, fx) {
+                if let Some(expression) = self.try_emit_method_expression(&name, ty) {
                     return expression;
                 }
                 let resolved = self.capitalize_static_method_if_public(&name);
-                let go_name = self.resolve_go_name(&resolved, fx);
+                let go_name = self.resolve_go_name(&resolved);
                 if !ctx.is_callee()
-                    && let Some(type_args) = self.format_generic_value_type_args(&name, ty, fx)
+                    && let Some(type_args) = self.format_generic_value_type_args(&name, ty)
                 {
                     return format!("{}{}", go_name, type_args);
                 }
@@ -72,7 +70,6 @@ impl Planner<'_> {
         value: &str,
         ty: &Type,
         ctx: ExpressionContext<'_>,
-        fx: &mut EmitEffects,
     ) -> IdentifierKind {
         if value == "Unit" && ty.is_unit() {
             return IdentifierKind::UnitValue;
@@ -117,9 +114,9 @@ impl Planner<'_> {
                 Type::Nominal { params, .. } => {
                     let type_args = match ctx.expected_slot_type() {
                         Some(t) => self
-                            .prelude_container_type_args(t, fx)
-                            .unwrap_or_else(|| self.format_type_args(params, fx)),
-                        None => self.format_type_args(params, fx),
+                            .prelude_container_type_args(t)
+                            .unwrap_or_else(|| self.format_type_args(params)),
+                        None => self.format_type_args(params),
                     };
                     return IdentifierKind::UnitConstructor { name, type_args };
                 }
@@ -129,8 +126,7 @@ impl Planner<'_> {
                         params: ret_params, ..
                     } = f.return_type.as_ref()
                     {
-                        let type_args =
-                            self.constructor_fn_type_args(&f.params, ret_params, ctx, fx);
+                        let type_args = self.constructor_fn_type_args(&f.params, ret_params, ctx);
                         return IdentifierKind::ConstructorFunction { name, type_args };
                     }
                 }
@@ -151,7 +147,6 @@ impl Planner<'_> {
         fn_params: &[Type],
         ret_params: &[Type],
         ctx: ExpressionContext<'_>,
-        fx: &mut EmitEffects,
     ) -> String {
         let needs_type_args = !ctx.is_callee()
             || ret_params.len() > fn_params.len()
@@ -162,7 +157,7 @@ impl Planner<'_> {
                 .iter()
                 .any(|t| self.needs_explicit_args_for_go_inference(t));
         if needs_type_args {
-            self.format_type_args(ret_params, fx)
+            self.format_type_args(ret_params)
         } else {
             String::new()
         }
@@ -176,7 +171,6 @@ impl Planner<'_> {
         definition_ty: &Type,
         instantiated_ty: &Type,
         collapsed_recipe: Option<&str>,
-        fx: &mut EmitEffects,
     ) -> Option<String> {
         let Type::Forall { vars, body } = definition_ty else {
             return None;
@@ -186,14 +180,14 @@ impl Planner<'_> {
         extract_type_mapping(body, instantiated_ty, &mut mapping);
 
         if let Some(recipe) = collapsed_recipe {
-            return self.reconstruct_collapsed_type_args(recipe, &mapping, fx);
+            return self.reconstruct_collapsed_type_args(recipe, &mapping);
         }
 
         let args: Vec<String> = vars
             .iter()
             .filter_map(|var| {
                 let concrete = mapping.get(var.as_str())?;
-                Some(self.go_type_string(concrete, fx))
+                Some(self.go_type_string(concrete))
             })
             .collect();
 
@@ -213,7 +207,6 @@ impl Planner<'_> {
         &mut self,
         name: &str,
         instantiated_ty: &Type,
-        fx: &mut EmitEffects,
     ) -> Option<String> {
         let qualified_name = self.facts.qualified_current(name);
         let definition = self.facts.definition(qualified_name.as_str()).or_else(|| {
@@ -223,7 +216,7 @@ impl Planner<'_> {
         let definition_ty = definition.ty().clone();
         let recipe = definition.go_type_param_recipe().map(str::to_string);
 
-        self.format_type_args_from_forall(&definition_ty, instantiated_ty, recipe.as_deref(), fx)
+        self.format_type_args_from_forall(&definition_ty, instantiated_ty, recipe.as_deref())
     }
 
     /// Like `format_generic_value_type_args` but takes a pre-qualified definition name
@@ -232,23 +225,17 @@ impl Planner<'_> {
         &mut self,
         qualified_name: &str,
         instantiated_ty: &Type,
-        fx: &mut EmitEffects,
     ) -> Option<String> {
         let definition = self.facts.definition(qualified_name)?;
         let definition_ty = definition.ty().clone();
         let recipe = definition.go_type_param_recipe().map(str::to_string);
 
-        self.format_type_args_from_forall(&definition_ty, instantiated_ty, recipe.as_deref(), fx)
+        self.format_type_args_from_forall(&definition_ty, instantiated_ty, recipe.as_deref())
     }
 
     /// Return Go method-expression syntax for a `Type.method` referring to an
     /// instance method (first param is `self`); `None` for static methods.
-    fn try_emit_method_expression(
-        &mut self,
-        name: &str,
-        id_ty: &Type,
-        fx: &mut EmitEffects,
-    ) -> Option<String> {
+    fn try_emit_method_expression(&mut self, name: &str, id_ty: &Type) -> Option<String> {
         let (type_part, method_part) = name.split_once('.')?;
 
         if method_part.contains('.') {
@@ -300,7 +287,7 @@ impl Planner<'_> {
             if params.is_empty() {
                 String::new()
             } else {
-                self.format_type_args(params, fx)
+                self.format_type_args(params)
             }
         } else {
             String::new()
@@ -314,11 +301,7 @@ impl Planner<'_> {
     }
 
     /// Resolve `module.Type.method` as a cross-module static method call.
-    pub(crate) fn try_resolve_cross_module_static_method(
-        &mut self,
-        name: &str,
-        fx: &mut EmitEffects,
-    ) -> Option<String> {
+    pub(crate) fn try_resolve_cross_module_static_method(&mut self, name: &str) -> Option<String> {
         if !name.contains('.') {
             return None;
         }
@@ -357,7 +340,7 @@ impl Planner<'_> {
             .unwrap_or(true)
             || self.method_needs_export(method_name);
 
-        Some(self.qualify_method_call(&type_id, method_name, is_public, fx))
+        Some(self.qualify_method_call(&type_id, method_name, is_public))
     }
 
     /// `Some(capitalized)` when the identifier names a public function in

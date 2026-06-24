@@ -1,4 +1,3 @@
-use crate::EmitEffects;
 use crate::Planner;
 use crate::definitions::functions::is_test_context_ty;
 use crate::names::go_name::{self, testing_qualifier, testkit_qualifier};
@@ -6,7 +5,7 @@ use syntax::ast::{Binding, Expression, FunctionDefinitionView, Pattern, Visibili
 use syntax::types::{Symbol, Type};
 
 impl Planner<'_> {
-    pub(crate) fn emit_top_item(&mut self, item: &Expression, fx: &mut EmitEffects) -> String {
+    pub(crate) fn emit_top_item(&mut self, item: &Expression) -> String {
         match item {
             Expression::Function {
                 doc,
@@ -23,9 +22,9 @@ impl Planner<'_> {
                 let doc_comment = emit_doc(doc);
 
                 if self.facts.is_test(&self.facts.qualified_current(name)) {
-                    self.emit_test_function(name, function, is_public, &doc_comment, fx)
+                    self.emit_test_function(name, function, is_public, &doc_comment)
                 } else {
-                    let code = self.emit_function(function, None, is_public, fx);
+                    let code = self.emit_function(function, None, is_public);
                     format!("{}{}", doc_comment, code)
                 }
             }
@@ -39,8 +38,7 @@ impl Planner<'_> {
                 ..
             } => {
                 let doc_comment = emit_doc(doc);
-                let code =
-                    self.emit_struct_definition(name, generics, fields, kind, attributes, fx);
+                let code = self.emit_struct_definition(name, generics, fields, kind, attributes);
                 format!("{}{}", doc_comment, code)
             }
             Expression::Enum {
@@ -52,7 +50,7 @@ impl Planner<'_> {
             } => {
                 let doc_comment = emit_doc(doc);
                 let code = self
-                    .emit_enum(name, generics, attributes, fx)
+                    .emit_enum(name, generics, attributes)
                     .unwrap_or_default();
                 format!("{}{}", doc_comment, code)
             }
@@ -64,7 +62,7 @@ impl Planner<'_> {
                 ..
             } => {
                 let doc_comment = emit_doc(doc);
-                let code = self.emit_type_alias(name, generics, ty, fx);
+                let code = self.emit_type_alias(name, generics, ty);
                 format!("{}{}", doc_comment, code)
             }
             Expression::Interface {
@@ -79,7 +77,7 @@ impl Planner<'_> {
                 let doc_comment = emit_doc(doc);
                 let is_public = matches!(visibility, Visibility::Public);
                 let code =
-                    self.emit_interface(name, method_signatures, parents, generics, is_public, fx);
+                    self.emit_interface(name, method_signatures, parents, generics, is_public);
                 format!("{}{}", doc_comment, code)
             }
             Expression::ImplBlock {
@@ -88,7 +86,7 @@ impl Planner<'_> {
                 methods,
                 generics,
                 ..
-            } => self.emit_impl_block(receiver_name, ty, methods, generics, fx),
+            } => self.emit_impl_block(receiver_name, ty, methods, generics),
             Expression::Const {
                 doc,
                 identifier,
@@ -97,7 +95,7 @@ impl Planner<'_> {
                 ..
             } => {
                 let doc_comment = emit_doc(doc);
-                let code = self.emit_const(identifier, expression, ty, fx);
+                let code = self.emit_const(identifier, expression, ty);
                 format!("{}{}", doc_comment, code)
             }
             _ => String::new(),
@@ -110,10 +108,9 @@ impl Planner<'_> {
         function: FunctionDefinitionView<'_>,
         is_public: bool,
         doc_comment: &str,
-        fx: &mut EmitEffects,
     ) -> String {
-        fx.require_testing();
-        fx.require_testkit();
+        self.require_testing();
+        self.require_testkit();
         let test_kit = testkit_qualifier();
         let testing = testing_qualifier();
 
@@ -126,7 +123,7 @@ impl Planner<'_> {
         let callee = self.pick_go_function_name(function, false, is_public);
         let test_name = go_name::go_test_function_name(name);
         let handle = go_name::TEST_T_PARAM;
-        let code = self.emit_function(function, None, is_public, fx);
+        let code = self.emit_function(function, None, is_public);
 
         let span = function.name_span;
         let recover = format!(

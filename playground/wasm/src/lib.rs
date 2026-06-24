@@ -214,6 +214,7 @@ fn run_analysis(code: &str) -> AnalysisResult {
         project_root: None,
         locator: lisette_deps::TypedefLocator::default(),
         compile_phase: CompilePhase::Check,
+        emit_tests: false,
         go_module: String::new(),
         disable_cache: false,
     };
@@ -269,6 +270,7 @@ fn run_pipeline(
         ast: ast_result.ast,
         project_root: None,
         compile_phase: phase.clone(),
+        emit_tests: false,
         locator: lisette_deps::TypedefLocator::default(),
         go_module: String::new(),
         disable_cache: false,
@@ -291,7 +293,7 @@ fn run_pipeline(
     let go_files = lisette_emit::Planner::emit(
         &emit_input,
         "lisette_playground",
-        lisette_emit::EmitOptions { sourcemap: false },
+        lisette_emit::EmitOptions { sourcemap: false, emit_tests: false },
     );
 
     (go_files, diagnostics)
@@ -368,6 +370,7 @@ fn child_containing_offset<'a>(expression: &'a Expression, offset: u32) -> Optio
         | Expression::Reference { expression, .. }
         | Expression::Task { expression, .. }
         | Expression::Defer { expression, .. }
+        | Expression::Assert { expression, .. }
         | Expression::Cast { expression, .. } => c(expression),
 
         Expression::Assignment { target, value, .. } => c(target).or_else(|| c(value)),

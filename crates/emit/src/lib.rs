@@ -35,6 +35,7 @@ pub use output::OutputFile;
 pub use output::imports;
 
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
+use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::Arc;
 use std::sync::OnceLock;
@@ -209,6 +210,61 @@ pub struct Planner<'a> {
     pub(crate) function_state: FunctionEmissionState,
     pub(crate) scope: ScopeState,
     pub(crate) adapter_registry: AdapterRegistry,
+    pub(crate) effects: RefCell<EmitEffects>,
+}
+
+impl Planner<'_> {
+    pub(crate) fn require_stdlib(&self) {
+        self.effects.borrow_mut().require_stdlib();
+    }
+
+    pub(crate) fn require_fmt(&self) {
+        self.effects.borrow_mut().require_fmt();
+    }
+
+    pub(crate) fn require_errors(&self) {
+        self.effects.borrow_mut().require_errors();
+    }
+
+    pub(crate) fn require_slices(&self) {
+        self.effects.borrow_mut().require_slices();
+    }
+
+    pub(crate) fn require_strings(&self) {
+        self.effects.borrow_mut().require_strings();
+    }
+
+    pub(crate) fn require_maps(&self) {
+        self.effects.borrow_mut().require_maps();
+    }
+
+    pub(crate) fn require_json(&self) {
+        self.effects.borrow_mut().require_json();
+    }
+
+    pub(crate) fn require_cmp(&self) {
+        self.effects.borrow_mut().require_cmp();
+    }
+
+    pub(crate) fn require_testkit(&self) {
+        self.effects.borrow_mut().require_testkit();
+    }
+
+    pub(crate) fn require_testing(&self) {
+        self.effects.borrow_mut().require_testing();
+    }
+
+    pub(crate) fn note_go_type(&self, go_type: &crate::types::go_type::GoType) {
+        self.effects.borrow_mut().merge_from_go_type(go_type);
+    }
+
+    pub(crate) fn absorb_effects(&self, other: &EmitEffects) {
+        self.effects.borrow_mut().extend(other);
+    }
+
+    pub(crate) fn take_effects(&self) -> EmitEffects {
+        std::mem::take(&mut *self.effects.borrow_mut())
+    }
 }
 
 impl<'a> Planner<'a> {
@@ -318,6 +374,7 @@ impl<'a> Planner<'a> {
             function_state: FunctionEmissionState::default(),
             scope: ScopeState::new(),
             adapter_registry: AdapterRegistry::default(),
+            effects: RefCell::new(EmitEffects::default()),
         }
     }
 
@@ -501,10 +558,9 @@ impl<'a> Planner<'a> {
                 source.collect_with_blank(function.clone());
             }
 
-            let mut fx = EmitEffects::default();
             for expression in &file.items {
                 self.scope.reset_for_top_level();
-                let code = self.emit_top_item(expression, &mut fx);
+                let code = self.emit_top_item(expression);
                 if !code.is_empty() {
                     source.collect_with_blank(code);
                 }
@@ -517,7 +573,7 @@ impl<'a> Planner<'a> {
             );
 
             self.drain_file_emission_into(&mut source);
-            fx.drain_into(&mut import_builder);
+            self.take_effects().drain_into(&mut import_builder);
             if i == 0 {
                 plan.collection_effects.drain_into(&mut import_builder);
             }

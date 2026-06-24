@@ -1,4 +1,3 @@
-use crate::EmitEffects;
 use crate::Planner;
 use crate::definitions::enum_layout::{ENUM_GO_STRINGER_METHOD, ENUM_STRINGER_METHOD, EnumLayout};
 use crate::definitions::structs::should_synthesize_stringer;
@@ -15,7 +14,6 @@ impl Planner<'_> {
         name: &str,
         generics: &[Generic],
         attributes: &[Attribute],
-        fx: &mut EmitEffects,
     ) -> Option<String> {
         if matches!(name, "Option" | "Result" | "Partial") {
             return None;
@@ -40,10 +38,10 @@ impl Planner<'_> {
             Vec::new()
         };
         for ty in &variant_field_types {
-            let _ = self.go_type_string(ty, fx);
+            let _ = self.go_type_string(ty);
         }
 
-        let generics_string = self.generics_to_string_for_symbol(&enum_id, generics, fx);
+        let generics_string = self.generics_to_string_for_symbol(&enum_id, generics);
         let receiver_generics = receiver_generics_string(generics);
         let has_json = attributes.iter().any(|a| a.name == "json");
         let has_iterate = attributes.iter().any(|a| a.name == "iterate");
@@ -84,14 +82,14 @@ impl Planner<'_> {
             result.push_str("\n\n");
             result.push_str(&layout.emit_variants_function(&fn_name));
         }
-        self.append_enum_debug_method(&mut result, name, &receiver_generics, &layout, fx);
+        self.append_enum_debug_method(&mut result, name, &receiver_generics, &layout);
         self.append_to_string_method(&mut result, name, &receiver_generics, attributes);
-        self.append_enum_equals_method(&mut result, name, &enum_id, &receiver_generics, fx);
+        self.append_enum_equals_method(&mut result, name, &enum_id, &receiver_generics);
         if needs_fmt {
-            fx.require_fmt();
+            self.require_fmt();
         }
         if has_json {
-            fx.require_json();
+            self.require_json();
         }
 
         Some(result)
@@ -103,16 +101,15 @@ impl Planner<'_> {
         name: &str,
         receiver_generics: &str,
         layout: &EnumLayout,
-        fx: &mut EmitEffects,
     ) {
         if !self.synthesizes_debug_string(name) {
             return;
         }
         out.push_str("\n\n");
         out.push_str(&layout.emit_debug_method(receiver_generics, prelude_qualifier()));
-        fx.require_fmt();
+        self.require_fmt();
         if layout.debug_uses_prelude() {
-            fx.require_stdlib();
+            self.require_stdlib();
         }
     }
 
@@ -122,7 +119,6 @@ impl Planner<'_> {
         name: &str,
         enum_id: &str,
         receiver_generics: &str,
-        fx: &mut EmitEffects,
     ) {
         if !self.should_synthesize_equals(name) {
             return;
@@ -158,7 +154,7 @@ impl Planner<'_> {
                 .map(|(sem_field, layout_field)| {
                     let lhs = format!("{receiver}.{}", layout_field.go_name);
                     let rhs = format!("other.{}", layout_field.go_name);
-                    self.render_equality(&lhs, &rhs, &sem_field.ty, fx)
+                    self.render_equality(&lhs, &rhs, &sem_field.ty)
                 })
                 .collect();
             cases.push(format!(
@@ -200,7 +196,6 @@ impl Planner<'_> {
         &mut self,
         enum_id: &str,
         variant_name: &str,
-        fx: &mut EmitEffects,
     ) -> String {
         let layout = self
             .module
@@ -245,7 +240,7 @@ impl Planner<'_> {
                 .map(|g| g.name.as_str())
                 .collect::<Vec<_>>()
                 .join(", ");
-            let generics_string = self.generics_to_string_for_symbol(enum_id, &generics, fx);
+            let generics_string = self.generics_to_string_for_symbol(enum_id, &generics);
             (generics_string, format!("[{}]", args))
         };
 
@@ -262,7 +257,7 @@ impl Planner<'_> {
             underlying_ty: None,
         };
 
-        let return_type = self.go_type_string(&return_type, fx);
+        let return_type = self.go_type_string(&return_type);
 
         format!(
             "func {} {} ({}) {} {{\n    return {} {} {{ Tag: {}, {} }}\n}}",

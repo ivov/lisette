@@ -26,6 +26,7 @@ grammar:
 test:
     cargo test -p tests --test suite
     cargo test -p lisette-lsp --test lsp
+    cargo test -p tests --test manifest_pins
 
 test-unit:
     cargo test --workspace --lib --bins

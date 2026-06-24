@@ -1,4 +1,3 @@
-use crate::EmitEffects;
 use crate::Planner;
 use crate::names::go_name;
 use syntax::ast::Expression;
@@ -143,30 +142,21 @@ impl Fallible {
 pub(crate) struct FalliblePlanner<'a, 'e> {
     pub(crate) planner: &'a mut Planner<'e>,
     fallible: &'a Fallible,
-    pub(crate) fx: &'a mut EmitEffects,
 }
 
 impl<'a, 'e> FalliblePlanner<'a, 'e> {
-    pub(crate) fn new(
-        planner: &'a mut Planner<'e>,
-        fallible: &'a Fallible,
-        fx: &'a mut EmitEffects,
-    ) -> Self {
-        Self {
-            planner,
-            fallible,
-            fx,
-        }
+    pub(crate) fn new(planner: &'a mut Planner<'e>, fallible: &'a Fallible) -> Self {
+        Self { planner, fallible }
     }
 
     pub(crate) fn ok_type_string(&mut self) -> String {
-        self.planner.go_type_string(self.fallible.ok_ty(), self.fx)
+        self.planner.go_type_string(self.fallible.ok_ty())
     }
 
     pub(crate) fn err_type_string(&mut self) -> Option<String> {
         self.fallible
             .err_ty()
-            .map(|t| self.planner.go_type_string(t, self.fx))
+            .map(|t| self.planner.go_type_string(t))
     }
 
     /// Ok type from the enclosing return context, with the fallible's own ok type as fallback.
@@ -174,14 +164,14 @@ impl<'a, 'e> FalliblePlanner<'a, 'e> {
         let return_ctx = self.planner.return_ctx();
         if let Some(ty) = return_ctx.ty() {
             let ok_ty = ty.ok_type();
-            self.planner.go_type_string(&ok_ty, self.fx)
+            self.planner.go_type_string(&ok_ty)
         } else {
             self.ok_type_string()
         }
     }
 
     pub(crate) fn full_type_string(&mut self) -> String {
-        self.fx.require_stdlib();
+        self.planner.require_stdlib();
         let pkg = go_name::GO_STDLIB_PKG;
         let inner_ty = self.ok_type_string();
         if self.fallible.is_result() {
@@ -189,7 +179,6 @@ impl<'a, 'e> FalliblePlanner<'a, 'e> {
                 self.fallible
                     .err_ty()
                     .expect("Result type must have an error type"),
-                self.fx,
             );
             format!(
                 "{}.{}[{}, {}]",
@@ -204,7 +193,7 @@ impl<'a, 'e> FalliblePlanner<'a, 'e> {
     }
 
     pub(crate) fn emit_success(&mut self, value: &str) -> String {
-        self.fx.require_stdlib();
+        self.planner.require_stdlib();
         let inner_ty = self.ok_type_string();
         let err_ty = self.err_type_string();
         self.fallible
@@ -212,7 +201,7 @@ impl<'a, 'e> FalliblePlanner<'a, 'e> {
     }
 
     pub(crate) fn emit_failure(&mut self, error_value: Option<&str>) -> String {
-        self.fx.require_stdlib();
+        self.planner.require_stdlib();
         let pkg = go_name::GO_STDLIB_PKG;
         let inner_ty = self.ok_type_string();
         if self.fallible.is_result() {
@@ -230,7 +219,7 @@ impl<'a, 'e> FalliblePlanner<'a, 'e> {
 
     /// Emit a failure wrapper using the contextual ok type (from return context).
     pub(crate) fn emit_contextual_failure(&mut self, error_value: Option<&str>) -> String {
-        self.fx.require_stdlib();
+        self.planner.require_stdlib();
         let pkg = go_name::GO_STDLIB_PKG;
         let inner_ty = self.contextual_ok_type_string();
         if self.fallible.is_result() {

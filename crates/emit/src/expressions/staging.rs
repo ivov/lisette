@@ -1,4 +1,3 @@
-use crate::EmitEffects;
 use crate::Planner;
 use crate::abi::is_tagged_shape_fn_value;
 use crate::abi::transition::lower_arg_to_tagged;
@@ -24,16 +23,15 @@ impl Planner<'_> {
         &mut self,
         expression: &Expression,
         prefix: &str,
-        fx: &mut EmitEffects,
     ) -> StagedExpression {
         if matches!(
             expression,
             Expression::Literal { .. } | Expression::Identifier { .. }
         ) {
-            return self.stage_operand(expression, ExpressionContext::value(), fx);
+            return self.stage_operand(expression, ExpressionContext::value());
         }
 
-        let staged = self.stage_operand(expression, ExpressionContext::value(), fx);
+        let staged = self.stage_operand(expression, ExpressionContext::value());
         let mut setup = staged.setup;
         let temp_var = self.hoist_tmp_value_statement(&mut setup, prefix, &staged.value);
         StagedExpression {
@@ -58,14 +56,13 @@ impl Planner<'_> {
         setup: &mut Vec<LoweredStatement>,
         expression: &Expression,
         prefix: &str,
-        fx: &mut EmitEffects,
     ) -> String {
         if !observable_after_mutation(expression) {
-            return self.capture_operand_into(setup, expression, fx);
+            return self.capture_operand_into(setup, expression);
         }
 
         let (composite_setup, expression_string) = self
-            .lower_composite_value(expression, ExpressionContext::value(), fx)
+            .lower_composite_value(expression, ExpressionContext::value())
             .into_parts();
         setup.extend(composite_setup);
         self.hoist_tmp_value_statement(setup, prefix, &expression_string)
@@ -76,9 +73,8 @@ impl Planner<'_> {
         &mut self,
         expression: &Expression,
         ctx: ExpressionContext<'_>,
-        fx: &mut EmitEffects,
     ) -> StagedExpression {
-        let plan = self.plan_operand(expression, ctx, fx);
+        let plan = self.plan_operand(expression, ctx);
         StagedExpression::from_plan(plan, expression)
     }
 
@@ -87,9 +83,8 @@ impl Planner<'_> {
         &mut self,
         expression: &Expression,
         ctx: ExpressionContext<'_>,
-        fx: &mut EmitEffects,
     ) -> StagedExpression {
-        let plan = self.lower_composite_value(expression, ctx, fx);
+        let plan = self.lower_composite_value(expression, ctx);
         StagedExpression::from_plan(plan, expression)
     }
 
@@ -98,17 +93,16 @@ impl Planner<'_> {
         expression: &Expression,
         declared_param: Option<&syntax::types::Type>,
         param_ty: Option<&syntax::types::Type>,
-        fx: &mut EmitEffects,
     ) -> StagedExpression {
         let suppress = declared_param
             .is_some_and(|p| matches!(p.unwrap_forall(), syntax::types::Type::Function(_)));
         let arg_ctx = ExpressionContext::value().with_forced_tagged_go_function(suppress);
-        let staged = self.stage_composite(expression, arg_ctx, fx);
+        let staged = self.stage_composite(expression, arg_ctx);
 
         if suppress {
             let mut setup = staged.setup;
             if let Some(tagged) =
-                self.try_lower_arg_to_tagged(&mut setup, expression, &staged.value, param_ty, fx)
+                self.try_lower_arg_to_tagged(&mut setup, expression, &staged.value, param_ty)
             {
                 return StagedExpression::from_typed_setup(setup, tagged, expression);
             }
@@ -128,10 +122,9 @@ impl Planner<'_> {
         arg: &Expression,
         value: &str,
         param_ty: Option<&Type>,
-        fx: &mut EmitEffects,
     ) -> Option<String> {
         self.detect_lower_arg_to_tagged(arg, param_ty)?;
-        Some(self.emit_lower_arg_to_tagged(setup, value, param_ty.unwrap(), fx))
+        Some(self.emit_lower_arg_to_tagged(setup, value, param_ty.unwrap()))
     }
 
     /// Detect whether a tagged-Go lowering applies. Pure: no emission.
@@ -162,11 +155,10 @@ impl Planner<'_> {
         setup: &mut Vec<LoweredStatement>,
         value: &str,
         param_ty: &Type,
-        fx: &mut EmitEffects,
     ) -> String {
         let cb_var = self.hoist_tmp_value_statement(setup, "cb", value);
         let mut buffer = String::new();
-        let tagged = lower_arg_to_tagged(self, &mut buffer, &cb_var, param_ty, fx);
+        let tagged = lower_arg_to_tagged(self, &mut buffer, &cb_var, param_ty);
         if !buffer.is_empty() {
             setup.push(LoweredStatement::RawGo(buffer));
         }
@@ -177,7 +169,6 @@ impl Planner<'_> {
         &mut self,
         function: &Expression,
         args: &[Expression],
-        fx: &mut EmitEffects,
     ) -> Vec<StagedExpression> {
         let fn_ty = function.get_type();
         let formal_params: &[syntax::types::Type] = match fn_ty.unwrap_forall() {
@@ -189,7 +180,7 @@ impl Planner<'_> {
             .enumerate()
             .map(|(i, arg)| {
                 let declared = declared_params.and_then(|p| effective_param_type(i, p));
-                self.stage_prelude_arg(arg, declared, formal_params.get(i), fx)
+                self.stage_prelude_arg(arg, declared, formal_params.get(i))
             })
             .collect()
     }
@@ -202,10 +193,9 @@ impl Planner<'_> {
         spread_index: usize,
         wrap_to_any: bool,
         combine: Option<VariadicCombine>,
-        fx: &mut EmitEffects,
     ) {
         if wrap_to_any {
-            fx.require_stdlib();
+            self.require_stdlib();
             values[spread_index] = format!(
                 "{}.SliceToAny({})",
                 go_name::GO_STDLIB_PKG,
@@ -214,7 +204,7 @@ impl Planner<'_> {
         }
         match combine {
             Some(c) if spread_index > c.fixed_count => {
-                let element_go = self.go_type_string(&c.element_ty, fx);
+                let element_go = self.go_type_string(&c.element_ty);
                 let leading = values[c.fixed_count..spread_index].join(", ");
                 let spread_value = &values[spread_index];
                 let combined = format!("append([]{element_go}{{{leading}}}, {spread_value}...)...");
@@ -279,15 +269,14 @@ impl Planner<'_> {
         wrap_to_any: bool,
         prefix: &str,
         combine: Option<VariadicCombine>,
-        fx: &mut EmitEffects,
     ) -> (Vec<LoweredStatement>, Vec<String>) {
         let spread_index = spread.map(|s| {
-            stages.push(self.stage_operand(s, ExpressionContext::value(), fx));
+            stages.push(self.stage_operand(s, ExpressionContext::value()));
             stages.len() - 1
         });
         let (setup, mut values) = self.sequence_structured(stages, prefix);
         if let Some(i) = spread_index {
-            self.finalize_spread_stage(&mut values, i, wrap_to_any, combine, fx);
+            self.finalize_spread_stage(&mut values, i, wrap_to_any, combine);
         }
         (setup, values)
     }
@@ -304,18 +293,17 @@ impl Planner<'_> {
         adapter_params: Option<&[Type]>,
         wrap_to_any: bool,
         combine: Option<VariadicCombine>,
-        fx: &mut EmitEffects,
     ) -> (Vec<LoweredStatement>, Vec<String>) {
         if let Some(spread) = spread
             && let Some(adapter_stage) =
-                self.try_emit_variadic_spread_adapter(spread, adapter_params, fx)
+                self.try_emit_variadic_spread_adapter(spread, adapter_params)
         {
             stages.push(adapter_stage);
             let spread_index = stages.len() - 1;
             let (setup, mut values) = self.sequence_structured(stages, "_arg");
-            self.finalize_spread_stage(&mut values, spread_index, wrap_to_any, combine, fx);
+            self.finalize_spread_stage(&mut values, spread_index, wrap_to_any, combine);
             return (setup, values);
         }
-        self.sequence_with_spread_structured(stages, spread, wrap_to_any, "_arg", combine, fx)
+        self.sequence_with_spread_structured(stages, spread, wrap_to_any, "_arg", combine)
     }
 }

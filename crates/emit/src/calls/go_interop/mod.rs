@@ -3,7 +3,6 @@ mod wrappers;
 
 pub(crate) use wrappers::{TupleReturnLayout, WrapperTarget};
 
-use crate::EmitEffects;
 use crate::Planner;
 use crate::calls::CallBoundary;
 use crate::context::expression::ExpressionContext;
@@ -46,26 +45,23 @@ impl Planner<'_> {
         call_expression: &Expression,
         strategy: &GoCallStrategy,
         result_ty: &Type,
-        fx: &mut EmitEffects,
     ) -> ValuePlan {
         match strategy {
             GoCallStrategy::Tuple { arity } => {
-                self.lower_go_tuple_call_wrapped(call_expression, *arity, fx)
+                self.lower_go_tuple_call_wrapped(call_expression, *arity)
             }
-            GoCallStrategy::Result => {
-                self.lower_go_result_call_wrapped(call_expression, result_ty, fx)
-            }
+            GoCallStrategy::Result => self.lower_go_result_call_wrapped(call_expression, result_ty),
             GoCallStrategy::Partial => {
-                self.lower_go_partial_call_wrapped(call_expression, result_ty, fx)
+                self.lower_go_partial_call_wrapped(call_expression, result_ty)
             }
             GoCallStrategy::CommaOk => {
-                self.lower_go_option_call_wrapped(call_expression, result_ty, fx)
+                self.lower_go_option_call_wrapped(call_expression, result_ty)
             }
             GoCallStrategy::NullableReturn => {
-                self.lower_go_single_return_option_wrapped(call_expression, result_ty, fx)
+                self.lower_go_single_return_option_wrapped(call_expression, result_ty)
             }
             GoCallStrategy::Sentinel { value } => {
-                self.lower_go_sentinel_call_wrapped(call_expression, result_ty, *value, fx)
+                self.lower_go_sentinel_call_wrapped(call_expression, result_ty, *value)
             }
         }
     }
@@ -77,23 +73,21 @@ impl Planner<'_> {
         strategy: &GoCallStrategy,
         result_ty: &Type,
         target: WrapperTarget<'_>,
-        fx: &mut EmitEffects,
     ) -> Option<Vec<LoweredStatement>> {
         if matches!(strategy, GoCallStrategy::Tuple { .. }) {
             return None;
         }
         let (mut statements, call_str) =
-            self.lower_call(expression, None, ExpressionContext::value(), fx);
+            self.lower_call(expression, None, ExpressionContext::value());
         let wrap = match strategy {
             GoCallStrategy::Tuple { .. } => unreachable!("handled above"),
             GoCallStrategy::Result => {
-                fx.require_stdlib();
+                self.require_stdlib();
                 self.lower_result_wrapping(
                     &call_str,
                     result_ty,
                     TupleReturnLayout::Flattened,
                     target,
-                    fx,
                 )
                 .0
             }
@@ -103,28 +97,26 @@ impl Planner<'_> {
                     result_ty,
                     TupleReturnLayout::Flattened,
                     target,
-                    fx,
                 )
                 .0
             }
             GoCallStrategy::NullableReturn => {
                 let raw_var = self.hoist_tmp_value_statement(&mut statements, "raw", &call_str);
-                self.lower_nil_check_option_wrap(&raw_var, result_ty, target, fx)
+                self.lower_nil_check_option_wrap(&raw_var, result_ty, target)
                     .0
             }
             GoCallStrategy::Partial => {
-                fx.require_stdlib();
+                self.require_stdlib();
                 self.lower_partial_wrapping(
                     &call_str,
                     result_ty,
                     TupleReturnLayout::Flattened,
                     target,
-                    fx,
                 )
                 .0
             }
             GoCallStrategy::Sentinel { value } => {
-                self.lower_sentinel_wrapping(&call_str, result_ty, *value, target, fx)
+                self.lower_sentinel_wrapping(&call_str, result_ty, *value, target)
                     .0
             }
         };
@@ -155,7 +147,6 @@ impl Planner<'_> {
         &mut self,
         setup: &mut Vec<LoweredStatement>,
         call_expression: &Expression,
-        fx: &mut EmitEffects,
     ) -> Option<String> {
         let Expression::Call {
             expression: callee, ..
@@ -186,7 +177,7 @@ impl Planner<'_> {
         if has_array_return {
             ctx = ctx.with_raw_go_array_return();
         }
-        let (call_setup, call_str) = self.lower_call(call_expression, None, ctx, fx);
+        let (call_setup, call_str) = self.lower_call(call_expression, None, ctx);
         setup.extend(call_setup);
 
         Some(call_str)
@@ -207,9 +198,8 @@ impl Planner<'_> {
         output: &mut String,
         vars: &[String],
         tuple_ty: &Type,
-        fx: &mut EmitEffects,
     ) -> String {
-        let constructor = build_tuple_literal(vars, tuple_ty, fx);
+        let constructor = build_tuple_literal(self, vars, tuple_ty);
         self.hoist_tmp_value(output, "tup", &constructor)
     }
 
@@ -219,9 +209,8 @@ impl Planner<'_> {
         statements: &mut Vec<LoweredStatement>,
         vars: &[String],
         tuple_ty: &Type,
-        fx: &mut EmitEffects,
     ) -> String {
-        let constructor = build_tuple_literal(vars, tuple_ty, fx);
+        let constructor = build_tuple_literal(self, vars, tuple_ty);
         self.hoist_tmp_value_statement(statements, "tup", &constructor)
     }
 }
@@ -260,11 +249,7 @@ pub(crate) fn is_go_receiver(expression: &Expression) -> bool {
     false
 }
 
-pub(super) fn build_tuple_literal(
-    vars: &[String],
-    _tuple_ty: &Type,
-    fx: &mut EmitEffects,
-) -> String {
-    fx.require_stdlib();
+pub(super) fn build_tuple_literal(planner: &Planner, vars: &[String], _tuple_ty: &Type) -> String {
+    planner.require_stdlib();
     format!("lisette.MakeTuple{}({})", vars.len(), vars.join(", "))
 }

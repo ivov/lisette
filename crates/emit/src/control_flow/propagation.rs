@@ -1,4 +1,3 @@
-use crate::EmitEffects;
 use crate::GoCallStrategy;
 use crate::Planner;
 use crate::Renderer;
@@ -49,7 +48,6 @@ impl Planner<'_> {
         &mut self,
         expression: &Expression,
         result_var_name: Option<&str>,
-        fx: &mut EmitEffects,
     ) -> (Vec<LoweredStatement>, String) {
         let expression_ty = expression.get_type();
         let fallible = Fallible::from_type(&expression_ty)
@@ -59,21 +57,21 @@ impl Planner<'_> {
 
         // `Err(...)?` / `None?` literal already emits its own return.
         if let Some(var_name) = result_var_name
-            && let Some(head) = self.try_lower_error_constructor(expression, &fallible, fx)
+            && let Some(head) = self.try_lower_error_constructor(expression, &fallible)
         {
             statements.extend(head);
-            self.declare_zero_for_dead_path(&mut statements, var_name, &fallible, fx);
+            self.declare_zero_for_dead_path(&mut statements, var_name, &fallible);
             return (statements, String::new());
         }
 
-        if let Some(fused) = self.try_lower_fused_go_propagate(expression, result_var_name, fx) {
+        if let Some(fused) = self.try_lower_fused_go_propagate(expression, result_var_name) {
             return fused;
         }
 
-        fx.require_stdlib();
-        let (check_setup, check_var) = self.hoist_propagate_check_var(expression, fx);
+        self.require_stdlib();
+        let (check_setup, check_var) = self.hoist_propagate_check_var(expression);
         statements.extend(check_setup);
-        statements.push(self.build_propagate_failure_check(&check_var, &fallible, fx));
+        statements.push(self.build_propagate_failure_check(&check_var, &fallible));
 
         let ok_access = format!("{}.{}", check_var, fallible.ok_field());
         let value = match result_var_name {
@@ -95,19 +93,18 @@ impl Planner<'_> {
         statements: &mut Vec<LoweredStatement>,
         var_name: &str,
         fallible: &Fallible,
-        fx: &mut EmitEffects,
     ) {
         if var_name == "_" {
             return;
         }
         let inner_ty = fallible.ok_ty();
         let (zero, effects) = self.zero_value(inner_ty);
-        fx.extend(&effects);
+        self.absorb_effects(&effects);
         if self.is_declared(var_name) {
             statements.push(simple_assign(var_name.to_string(), zero));
         } else {
             // Declared so the dead-path binding stays in scope for later references.
-            let go_ty = self.go_type_string(inner_ty, fx);
+            let go_ty = self.go_type_string(inner_ty);
             statements.push(LoweredStatement::VarDecl {
                 name: var_name.to_string(),
                 go_type: go_ty,
@@ -120,10 +117,9 @@ impl Planner<'_> {
     fn hoist_propagate_check_var(
         &mut self,
         expression: &Expression,
-        fx: &mut EmitEffects,
     ) -> (Vec<LoweredStatement>, String) {
         if let Expression::Identifier { value, ty, .. } = expression {
-            let go_name = self.emit_identifier(value, ty, ExpressionContext::value(), fx);
+            let go_name = self.emit_identifier(value, ty, ExpressionContext::value());
             if go_name.contains('(') {
                 let mut setup = Vec::new();
                 let check = self.hoist_tmp_value_statement(&mut setup, "check", &go_name);
@@ -132,7 +128,7 @@ impl Planner<'_> {
                 (Vec::new(), go_name)
             }
         } else {
-            let staged = self.stage_operand(expression, ExpressionContext::value(), fx);
+            let staged = self.stage_operand(expression, ExpressionContext::value());
             let mut setup = staged.setup;
             let check = self.hoist_tmp_value_statement(&mut setup, "check", &staged.value);
             (setup, check)
@@ -144,7 +140,6 @@ impl Planner<'_> {
         &mut self,
         check_var: &str,
         fallible: &Fallible,
-        fx: &mut EmitEffects,
     ) -> LoweredStatement {
         let err_field = if fallible.is_result() { ".ErrVal" } else { "" };
         let success_tag = fallible.success_tag();
@@ -156,13 +151,13 @@ impl Planner<'_> {
             // shape-specific `None` rather than an err-return.
             if fallible.is_result() {
                 let err_expr = format!("{}{}", check_var, err_field);
-                transition::lowered_err_values(self, &shape, &return_ty, &err_expr, fx)
+                transition::lowered_err_values(self, &shape, &return_ty, &err_expr)
             } else {
-                transition::lowered_none_values(self, &shape, &return_ty, fx)
+                transition::lowered_none_values(self, &shape, &return_ty)
             }
         } else {
             let err_return = {
-                let mut fe = FalliblePlanner::new(self, fallible, fx);
+                let mut fe = FalliblePlanner::new(self, fallible);
                 fe.emit_contextual_failure(Some(&format!("{}{}", check_var, err_field)))
             };
             vec![err_return]
@@ -177,7 +172,6 @@ impl Planner<'_> {
         &mut self,
         expression: &Expression,
         result_var_name: Option<&str>,
-        fx: &mut EmitEffects,
     ) -> Option<(Vec<LoweredStatement>, String)> {
         let plan = self.plan_call(expression)?;
         if !matches!(plan.callee, CalleePlan::GoInterop(GoCallStrategy::Result)) {
@@ -204,14 +198,14 @@ impl Planner<'_> {
         self.declare(&err_var);
 
         let (mut statements, call_str) =
-            self.lower_call(expression, None, ExpressionContext::value(), fx);
+            self.lower_call(expression, None, ExpressionContext::value());
         let bind_line = match &val_var {
             Some(v) => format!("{}, {} := {}\n", v, err_var, call_str),
             None => format!("_, {} := {}\n", err_var, call_str),
         };
         statements.push(LoweredStatement::RawGo(bind_line));
 
-        let failure_values = transition::lowered_err_values(self, &shape, &return_ty, &err_var, fx);
+        let failure_values = transition::lowered_err_values(self, &shape, &return_ty, &err_var);
         statements.push(transition::tag_check(
             format!("{} != nil", err_var),
             failure_values,
@@ -233,9 +227,8 @@ impl Planner<'_> {
     pub(crate) fn lower_propagate_statement(
         &mut self,
         inner: &Expression,
-        fx: &mut EmitEffects,
     ) -> Vec<LoweredStatement> {
-        self.lower_propagate(inner, Some("_"), fx).0
+        self.lower_propagate(inner, Some("_")).0
     }
 
     fn bind_propagate_ok(&mut self, name: &str, ok_access: &str) -> LoweredStatement {
@@ -251,11 +244,7 @@ impl Planner<'_> {
     }
 
     /// Build a `ReturnStatementPlan`, dispatching on return shape.
-    pub(crate) fn build_return_plan(
-        &mut self,
-        expression: &Expression,
-        fx: &mut EmitEffects,
-    ) -> ReturnStatementPlan {
+    pub(crate) fn build_return_plan(&mut self, expression: &Expression) -> ReturnStatementPlan {
         let return_ctx = self.return_ctx();
         let is_unit = return_ctx.ty().is_some_and(Type::is_unit);
         if is_unit {
@@ -271,7 +260,7 @@ impl Planner<'_> {
                 None
             } else {
                 let body = LoweredBlock {
-                    statements: vec![self.lower_statement(expression, fx)],
+                    statements: vec![self.lower_statement(expression)],
                 };
                 (!Renderer.renders_empty(&body)).then_some(body)
             };
@@ -280,7 +269,7 @@ impl Planner<'_> {
             };
         }
 
-        if let Some(statements) = transition::try_emit_lowered_tail_return(self, expression, fx) {
+        if let Some(statements) = transition::try_emit_lowered_tail_return(self, expression) {
             return ReturnStatementPlan {
                 form: ReturnForm::LoweredAbi {
                     body: LoweredBlock { statements },
@@ -288,7 +277,7 @@ impl Planner<'_> {
             };
         }
 
-        if let Some(statements) = self.lower_wrapped_return(expression, fx) {
+        if let Some(statements) = self.lower_wrapped_return(expression) {
             return ReturnStatementPlan {
                 form: ReturnForm::Wrapped {
                     body: LoweredBlock { statements },
@@ -297,16 +286,11 @@ impl Planner<'_> {
         }
 
         let (mut setup, raw_value) = self
-            .lower_value(expression, ExpressionContext::value(), fx)
+            .lower_value(expression, ExpressionContext::value())
             .into_parts();
         let mut coercion_buffer = String::new();
-        let final_value = self.apply_type_coercion(
-            &mut coercion_buffer,
-            return_ctx.ty(),
-            expression,
-            raw_value,
-            fx,
-        );
+        let final_value =
+            self.apply_type_coercion(&mut coercion_buffer, return_ctx.ty(), expression, raw_value);
         if !coercion_buffer.is_empty() {
             setup.push(LoweredStatement::RawGo(coercion_buffer));
         }
@@ -326,7 +310,6 @@ impl Planner<'_> {
     pub(crate) fn lower_wrapped_return(
         &mut self,
         expression: &Expression,
-        fx: &mut EmitEffects,
     ) -> Option<Vec<LoweredStatement>> {
         let expression_ty = expression.get_type();
         let return_ctx = self.return_ctx();
@@ -342,8 +325,7 @@ impl Planner<'_> {
         let mut statements = Vec::new();
 
         if is_go_never(expression) {
-            let (setup, call_str) =
-                self.lower_call(expression, None, ExpressionContext::value(), fx);
+            let (setup, call_str) = self.lower_call(expression, None, ExpressionContext::value());
             statements.extend(setup);
             // Kept as `RawGo`: this is a Go-never call (`panic(...)`) whose
             // `ends_with_diverge` must stay true; `ExpressionStatementForm::Async`
@@ -364,7 +346,6 @@ impl Planner<'_> {
                 &fallible,
                 &return_ty,
                 lowered.as_ref(),
-                fx,
             ));
             return Some(statements);
         }
@@ -376,7 +357,7 @@ impl Planner<'_> {
         };
 
         if matches!(expression, Expression::Call { .. }) {
-            statements.extend(self.lower_wrapped_call_return(expression, info, fx));
+            statements.extend(self.lower_wrapped_call_return(expression, info));
             return Some(statements);
         }
 
@@ -384,7 +365,7 @@ impl Planner<'_> {
             expression,
             Expression::If { .. } | Expression::IfLet { .. } | Expression::Match { .. }
         ) {
-            let block = self.lower_branching_to_block(expression, &PlacePlan::Return, fx);
+            let block = self.lower_branching_to_block(expression, &PlacePlan::Return);
             statements.extend(block.statements);
             return Some(statements);
         }
@@ -393,17 +374,17 @@ impl Planner<'_> {
             expression: inner, ..
         } = expression
         {
-            let (setup, value) = self.lower_propagate(inner, None, fx);
+            let (setup, value) = self.lower_propagate(inner, None);
             statements.extend(setup);
-            statements.extend(self.wrapped_value_return(value, &return_ty, lowered.as_ref(), fx));
+            statements.extend(self.wrapped_value_return(value, &return_ty, lowered.as_ref()));
             return Some(statements);
         }
 
         let (setup, value) = self
-            .lower_value(expression, ExpressionContext::value(), fx)
+            .lower_value(expression, ExpressionContext::value())
             .into_parts();
         statements.extend(setup);
-        statements.extend(self.wrapped_value_return(value, &return_ty, lowered.as_ref(), fx));
+        statements.extend(self.wrapped_value_return(value, &return_ty, lowered.as_ref()));
         Some(statements)
     }
 
@@ -412,7 +393,6 @@ impl Planner<'_> {
         value: String,
         return_ty: &Type,
         lowered: Option<&AbiShape>,
-        fx: &mut EmitEffects,
     ) -> Vec<LoweredStatement> {
         let Some(shape) = lowered else {
             return vec![plain_return(value)];
@@ -422,7 +402,7 @@ impl Planner<'_> {
         let mut statements = Vec::new();
         let temp = self.hoist_tmp_value_statement(&mut statements, "v", &value);
         statements.extend(transition::emit_lowered_result_return(
-            self, &temp, return_ty, shape, fx,
+            self, &temp, return_ty, shape,
         ));
         statements
     }
@@ -434,7 +414,6 @@ impl Planner<'_> {
         &mut self,
         expression: &Expression,
         info: WrappedReturnInfo<'_>,
-        fx: &mut EmitEffects,
     ) -> Vec<LoweredStatement> {
         let WrappedReturnInfo {
             fallible,
@@ -451,12 +430,12 @@ impl Planner<'_> {
         };
         match fallible.classify_constructor(call_expression) {
             Some(ConstructorKind::Success) => {
-                self.lower_success_constructor_return(args, fallible, lowered, fx)
+                self.lower_success_constructor_return(args, fallible, lowered)
             }
             Some(ConstructorKind::Failure) => {
-                self.lower_failure_constructor_return(args, fallible, return_ty, lowered, fx)
+                self.lower_failure_constructor_return(args, fallible, return_ty, lowered)
             }
-            None => self.lower_wrapped_passthrough_return(expression, return_ty, lowered, fx),
+            None => self.lower_wrapped_passthrough_return(expression, return_ty, lowered),
         }
     }
 
@@ -465,14 +444,13 @@ impl Planner<'_> {
         args: &[Expression],
         fallible: &Fallible,
         lowered: Option<&AbiShape>,
-        fx: &mut EmitEffects,
     ) -> Vec<LoweredStatement> {
         let mut statements = Vec::new();
         if let Some(shape) = lowered {
             let ok_arg = if matches!(shape, AbiShape::BareError) {
                 if !args.is_empty() {
                     let (setup, _) = self
-                        .lower_composite_value(&args[0], ExpressionContext::value(), fx)
+                        .lower_composite_value(&args[0], ExpressionContext::value())
                         .into_parts();
                     statements.extend(setup);
                 }
@@ -481,7 +459,7 @@ impl Planner<'_> {
                 "struct{}{}".to_string()
             } else {
                 let (setup, value) = self
-                    .lower_composite_value(&args[0], ExpressionContext::value(), fx)
+                    .lower_composite_value(&args[0], ExpressionContext::value())
                     .into_parts();
                 statements.extend(setup);
                 value
@@ -491,10 +469,10 @@ impl Planner<'_> {
             ));
         } else {
             let (setup, arg) = self
-                .lower_composite_value(&args[0], ExpressionContext::value(), fx)
+                .lower_composite_value(&args[0], ExpressionContext::value())
                 .into_parts();
             let success = {
-                let mut fe = FalliblePlanner::new(self, fallible, fx);
+                let mut fe = FalliblePlanner::new(self, fallible);
                 fe.emit_success(&arg)
             };
             statements.extend(setup);
@@ -509,32 +487,31 @@ impl Planner<'_> {
         fallible: &Fallible,
         return_ty: &Type,
         lowered: Option<&AbiShape>,
-        fx: &mut EmitEffects,
     ) -> Vec<LoweredStatement> {
         let mut statements = Vec::new();
         if let Some(shape) = lowered {
             if args.is_empty() {
                 statements.push(transition::multi_value_return(
-                    transition::lowered_none_values(self, shape, return_ty, fx),
+                    transition::lowered_none_values(self, shape, return_ty),
                 ));
             } else {
                 let (setup, err_expr) = self
-                    .lower_composite_value(&args[0], ExpressionContext::value(), fx)
+                    .lower_composite_value(&args[0], ExpressionContext::value())
                     .into_parts();
-                let values = transition::lowered_err_values(self, shape, return_ty, &err_expr, fx);
+                let values = transition::lowered_err_values(self, shape, return_ty, &err_expr);
                 statements.extend(setup);
                 statements.push(transition::multi_value_return(values));
             }
         } else {
             let failure = if fallible.is_result() {
                 let (setup, arg) = self
-                    .lower_composite_value(&args[0], ExpressionContext::value(), fx)
+                    .lower_composite_value(&args[0], ExpressionContext::value())
                     .into_parts();
                 statements.extend(setup);
-                let mut fe = FalliblePlanner::new(self, fallible, fx);
+                let mut fe = FalliblePlanner::new(self, fallible);
                 fe.emit_failure(Some(&arg))
             } else {
-                let mut fe = FalliblePlanner::new(self, fallible, fx);
+                let mut fe = FalliblePlanner::new(self, fallible);
                 fe.emit_failure(None)
             };
             statements.push(plain_return(failure));
@@ -548,13 +525,12 @@ impl Planner<'_> {
         expression: &Expression,
         return_ty: &Type,
         lowered: Option<&AbiShape>,
-        fx: &mut EmitEffects,
     ) -> Vec<LoweredStatement> {
         let mut statements = Vec::new();
         if let Some(shape) = lowered
             && self.callee_matches_lowered_shape(expression, shape)
         {
-            let (setup, call) = self.lower_call(expression, None, ExpressionContext::value(), fx);
+            let (setup, call) = self.lower_call(expression, None, ExpressionContext::value());
             statements.extend(setup);
             statements.push(plain_return(call));
             return statements;
@@ -563,7 +539,7 @@ impl Planner<'_> {
             && let CalleePlan::GoInterop(strategy) = plan.callee
         {
             let (setup, result_var) = self
-                .lower_go_wrapped_call(expression, &strategy, return_ty, fx)
+                .lower_go_wrapped_call(expression, &strategy, return_ty)
                 .into_parts();
             statements.extend(setup);
             if let Some(shape) = lowered {
@@ -572,7 +548,6 @@ impl Planner<'_> {
                     &result_var,
                     return_ty,
                     shape,
-                    fx,
                 ));
             } else {
                 statements.push(plain_return(result_var));
@@ -581,16 +556,16 @@ impl Planner<'_> {
         }
         if let Some(shape) = lowered {
             let (setup, value) = self
-                .lower_value(expression, ExpressionContext::value(), fx)
+                .lower_value(expression, ExpressionContext::value())
                 .into_parts();
             statements.extend(setup);
             let temp = self.hoist_tmp_value_statement(&mut statements, "v", &value);
             statements.extend(transition::emit_lowered_result_return(
-                self, &temp, return_ty, shape, fx,
+                self, &temp, return_ty, shape,
             ));
             return statements;
         }
-        let (setup, call) = self.lower_call(expression, None, ExpressionContext::value(), fx);
+        let (setup, call) = self.lower_call(expression, None, ExpressionContext::value());
         statements.extend(setup);
         statements.push(plain_return(call));
         statements

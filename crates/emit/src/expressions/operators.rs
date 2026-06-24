@@ -1,4 +1,3 @@
-use crate::EmitEffects;
 use crate::Planner;
 use crate::Renderer;
 use crate::context::expression::ExpressionContext;
@@ -28,7 +27,6 @@ impl Planner<'_> {
         left_expression: &Expression,
         right_expression: &Expression,
         ctx: ExpressionContext<'_>,
-        fx: &mut EmitEffects,
     ) -> ValuePlan {
         if matches!(operator, BinaryOperator::Pipeline) {
             unreachable!("Pipeline operator should have been desugared by now")
@@ -50,7 +48,6 @@ impl Planner<'_> {
                 right_expression,
                 emit_info,
                 ctx,
-                fx,
             );
         }
 
@@ -65,7 +62,7 @@ impl Planner<'_> {
                 && left_ty.is_float()
                 && !left_ty.is_complex()
             {
-                let staged = self.stage_operand(left_expression, ctx, fx);
+                let staged = self.stage_operand(left_expression, ctx);
                 return value_plan_from_statements(
                     staged.setup,
                     format!("complex(0, {}*{})", staged.value, imag_coef),
@@ -78,7 +75,7 @@ impl Planner<'_> {
                 && right_ty.is_float()
                 && !right_ty.is_complex()
             {
-                let staged = self.stage_operand(right_expression, ctx, fx);
+                let staged = self.stage_operand(right_expression, ctx);
                 return value_plan_from_statements(
                     staged.setup,
                     format!("complex(0, {}*{})", staged.value, imag_coef),
@@ -92,13 +89,12 @@ impl Planner<'_> {
                 left_expression,
                 right_expression,
                 ctx,
-                fx,
             );
         }
 
         let stages = vec![
-            self.stage_composite(left_expression, ctx, fx),
-            self.stage_composite(right_expression, ctx, fx),
+            self.stage_composite(left_expression, ctx),
+            self.stage_composite(right_expression, ctx),
         ];
         let (setup, values) = self.sequence_structured(stages, "_left");
         value_plan_from_statements(setup, format!("{} {} {}", values[0], operator, values[1]))
@@ -110,13 +106,12 @@ impl Planner<'_> {
         left_expression: &Expression,
         right_expression: &Expression,
         ctx: ExpressionContext<'_>,
-        fx: &mut EmitEffects,
     ) -> ValuePlan {
-        let left_staged = self.stage_composite(left_expression, ctx, fx);
+        let left_staged = self.stage_composite(left_expression, ctx);
 
         // Wrap RHS setup in an IIFE so it runs only when control reaches the
         // RHS. Hoisting it before the operator would defeat short-circuit.
-        let right_staged = self.stage_composite(right_expression, ctx, fx);
+        let right_staged = self.stage_composite(right_expression, ctx);
         let right_string = if right_staged.setup.is_empty() {
             right_staged.value
         } else {
@@ -139,7 +134,6 @@ impl Planner<'_> {
         operator: &UnaryOperator,
         expression: &Expression,
         ctx: ExpressionContext<'_>,
-        fx: &mut EmitEffects,
     ) -> ValuePlan {
         // Special case: -9223372036854775808 cannot be written as a positive
         // literal because 9223372036854775808 overflows i64. Go handles this
@@ -158,7 +152,7 @@ impl Planner<'_> {
         }
 
         if matches!(operator, UnaryOperator::Not) {
-            return self.plan_unary_not(expression, ctx, fx);
+            return self.plan_unary_not(expression, ctx);
         }
 
         let op = match operator {
@@ -169,18 +163,13 @@ impl Planner<'_> {
         };
         ValuePlan::Unary {
             op,
-            inner: Box::new(self.plan_operand(expression, ctx, fx)),
+            inner: Box::new(self.plan_operand(expression, ctx)),
         }
     }
 
     /// Plan `!` (logical-not). Comparisons flip operator because `!` binds
     /// tighter than `==` in Go (`!(a == b)` must not emit as `!a == b`).
-    fn plan_unary_not(
-        &mut self,
-        expression: &Expression,
-        ctx: ExpressionContext<'_>,
-        fx: &mut EmitEffects,
-    ) -> ValuePlan {
+    fn plan_unary_not(&mut self, expression: &Expression, ctx: ExpressionContext<'_>) -> ValuePlan {
         let target = expression.unwrap_parens();
         let preserve_parens = matches!(expression, Expression::Paren { .. });
         let wrap = |s: String| {
@@ -198,18 +187,18 @@ impl Planner<'_> {
         } = target
             && let Some(flipped) = flip_comparison(cmp)
         {
-            let plan = self.plan_binary(&flipped, left, right, ctx, fx);
+            let plan = self.plan_binary(&flipped, left, right, ctx);
             let (setup, value) = plan.into_parts();
             return value_plan_from_statements(setup, wrap(value));
         }
         if matches!(target, Expression::Call { .. }) {
             let mut setup: Vec<LoweredStatement> = Vec::new();
-            if let Some(negated) = self.try_emit_negated_call(&mut setup, target, fx) {
+            if let Some(negated) = self.try_emit_negated_call(&mut setup, target) {
                 return value_plan_from_statements(setup, wrap(negated));
             }
         }
 
-        let staged = self.stage_operand(expression, ctx, fx);
+        let staged = self.stage_operand(expression, ctx);
         value_plan_from_statements(staged.setup, format!("!{}", staged.value))
     }
 
@@ -220,23 +209,22 @@ impl Planner<'_> {
         right_expression: &Expression,
         info: NumericBinaryEmitInfo,
         ctx: ExpressionContext<'_>,
-        fx: &mut EmitEffects,
     ) -> ValuePlan {
         let stages = vec![
-            self.stage_operand(left_expression, ctx, fx),
-            self.stage_operand(right_expression, ctx, fx),
+            self.stage_operand(left_expression, ctx),
+            self.stage_operand(right_expression, ctx),
         ];
         let (setup, values) = self.sequence_structured(stages, "_left");
         let left_string = values[0].clone();
         let right_string = values[1].clone();
 
         let left_string = match &info.cast_left_to {
-            Some(ty) => format!("{}({})", self.go_type_string(ty, fx), left_string),
+            Some(ty) => format!("{}({})", self.go_type_string(ty), left_string),
             None => left_string,
         };
 
         let right_string = match &info.cast_right_to {
-            Some(ty) => format!("{}({})", self.go_type_string(ty, fx), right_string),
+            Some(ty) => format!("{}({})", self.go_type_string(ty), right_string),
             None => right_string,
         };
 

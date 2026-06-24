@@ -1,4 +1,3 @@
-use crate::EmitEffects;
 use crate::Planner;
 use crate::Renderer;
 use crate::context::expression::ExpressionContext;
@@ -42,17 +41,16 @@ impl Planner<'_> {
         &mut self,
         arms: &[SelectArm],
         place: &PlacePlan,
-        fx: &mut EmitEffects,
     ) -> SelectStatementPlan {
         let needs_retry_loop = arms.iter().any(|arm| {
             matches!(&arm.pattern, SelectArmPattern::Receive { binding, .. } if is_some_pattern(binding))
         });
 
         let mut setup: Vec<LoweredStatement> = Vec::new();
-        let prep = self.preprocess_select_arms(&mut setup, arms, needs_retry_loop, fx);
+        let prep = self.preprocess_select_arms(&mut setup, arms, needs_retry_loop);
 
         self.enter_scope();
-        let arm_plans = self.lower_select_arms(arms, &prep, place, fx);
+        let arm_plans = self.lower_select_arms(arms, &prep, place);
         self.exit_scope();
 
         let has_default = arms
@@ -79,7 +77,6 @@ impl Planner<'_> {
         arms: &[SelectArm],
         prep: &SelectPrep,
         place: &PlacePlan,
-        fx: &mut EmitEffects,
     ) -> Vec<SelectArmPlan> {
         let default_body = arms.iter().find_map(|arm| {
             if let SelectArmPattern::WildCard { body } = &arm.pattern {
@@ -113,11 +110,11 @@ impl Planner<'_> {
                         element_ty: receive_expression.get_type().ok_type(),
                         place,
                     };
-                    self.lower_receive_arm(binding, typed_pattern.as_ref(), &receiver_ctx, fx)
+                    self.lower_receive_arm(binding, typed_pattern.as_ref(), &receiver_ctx)
                 }
                 SelectArmPattern::Send { body, .. } => {
                     let parts = prep.send_parts[i].as_ref().unwrap();
-                    self.lower_send_arm(parts, body, place, fx)
+                    self.lower_send_arm(parts, body, place)
                 }
                 SelectArmPattern::MatchReceive {
                     arms: match_arms,
@@ -125,10 +122,10 @@ impl Planner<'_> {
                 } => {
                     let channel = prep.channel_operands[i].as_ref().unwrap();
                     let element_ty = receive_expression.get_type().ok_type();
-                    self.lower_match_receive_arm(match_arms, channel, &element_ty, place, fx)
+                    self.lower_match_receive_arm(match_arms, channel, &element_ty, place)
                 }
                 SelectArmPattern::WildCard { body } => SelectArmPlan::Default {
-                    body: self.lower_block_to_place(body, place, fx),
+                    body: self.lower_block_to_place(body, place),
                 },
             };
             arm_plans.push(plan);
@@ -143,7 +140,6 @@ impl Planner<'_> {
         setup: &mut Vec<LoweredStatement>,
         arms: &[SelectArm],
         needs_retry_loop: bool,
-        fx: &mut EmitEffects,
     ) -> SelectPrep {
         let mut send_parts: Vec<Option<SendArmParts>> = Vec::with_capacity(arms.len());
         let mut channel_operands: Vec<Option<String>> = Vec::with_capacity(arms.len());
@@ -154,7 +150,7 @@ impl Planner<'_> {
                 SelectArmPattern::Send {
                     send_expression, ..
                 } => {
-                    let parts = self.prepare_send_arm(setup, send_expression, needs_retry_loop, fx);
+                    let parts = self.prepare_send_arm(setup, send_expression, needs_retry_loop);
                     send_parts.push(Some(parts));
                     channel_operands.push(None);
                     channel_shadows.push(None);
@@ -165,7 +161,7 @@ impl Planner<'_> {
                     ..
                 } => {
                     let channel_has_call = channel_expression_has_call(receive_expression);
-                    let ch = self.lower_channel_operand(setup, receive_expression, fx);
+                    let ch = self.lower_channel_operand(setup, receive_expression);
                     if is_some_pattern(binding) && needs_retry_loop {
                         let shadow = self.hoist_tmp_value_statement(setup, "ch", &ch);
                         channel_operands.push(Some(ch));
@@ -185,7 +181,7 @@ impl Planner<'_> {
                     receive_expression, ..
                 } => {
                     let channel_has_call = channel_expression_has_call(receive_expression);
-                    let ch = self.lower_channel_operand(setup, receive_expression, fx);
+                    let ch = self.lower_channel_operand(setup, receive_expression);
                     let ch = if needs_retry_loop && channel_has_call {
                         self.hoist_tmp_value_statement(setup, "ch", &ch)
                     } else {
@@ -214,12 +210,11 @@ impl Planner<'_> {
         &mut self,
         setup: &mut Vec<LoweredStatement>,
         receive_expression: &Expression,
-        fx: &mut EmitEffects,
     ) -> String {
         let unwrapped = receive_expression.unwrap_parens();
         if let Some((channel, "receive", _)) = extract_channel_op(unwrapped) {
             let (op_setup, ch) = self
-                .lower_value(channel, ExpressionContext::value(), fx)
+                .lower_value(channel, ExpressionContext::value())
                 .into_parts();
             setup.extend(op_setup);
             return if channel.get_type().is_ref() {
@@ -229,7 +224,7 @@ impl Planner<'_> {
             };
         }
         let (op_setup, ch) = self
-            .lower_value(receive_expression, ExpressionContext::value(), fx)
+            .lower_value(receive_expression, ExpressionContext::value())
             .into_parts();
         setup.extend(op_setup);
         ch
@@ -247,14 +242,13 @@ impl Planner<'_> {
         &mut self,
         ok_var: &str,
         ctx: &SelectReceiveContext,
-        fx: &mut EmitEffects,
     ) -> Vec<LoweredStatement> {
         // Decide scaffolding on rendered emptiness, not `is_empty`: some lowered
         // statements (e.g. a discard `let _`) render to empty text even when the
         // IR is structurally non-empty.
-        let body_block = self.lower_block_to_place(ctx.body, ctx.place, fx);
+        let body_block = self.lower_block_to_place(ctx.body, ctx.place);
         let body_empty = Renderer.renders_empty(&body_block);
-        let else_block = self.build_ok_else_block(ctx, fx);
+        let else_block = self.build_ok_else_block(ctx);
         let has_else = else_block.is_some();
 
         if body_empty && !has_else {
@@ -288,11 +282,7 @@ impl Planner<'_> {
 
     /// Else branch for an ok-check: retry (`v = nil; continue`) or default
     /// body. `None` when neither applies or the default lowers empty.
-    fn build_ok_else_block(
-        &mut self,
-        ctx: &SelectReceiveContext,
-        fx: &mut EmitEffects,
-    ) -> Option<LoweredBlock> {
+    fn build_ok_else_block(&mut self, ctx: &SelectReceiveContext) -> Option<LoweredBlock> {
         if let Some(retry_var) = ctx.retry_var {
             return Some(LoweredBlock {
                 statements: vec![
@@ -302,7 +292,7 @@ impl Planner<'_> {
             });
         }
         let default_body = ctx.default_body?;
-        let block = self.lower_block_to_place(default_body, ctx.place, fx);
+        let block = self.lower_block_to_place(default_body, ctx.place);
         (!block.is_empty()).then_some(block)
     }
 
@@ -312,7 +302,6 @@ impl Planner<'_> {
         receiver_var: &str,
         inner_pattern: Option<(&Pattern, Option<&TypedPattern>)>,
         ctx: &SelectReceiveContext,
-        fx: &mut EmitEffects,
     ) -> SelectArmPlan {
         let ok_var = self.fresh_ok_var();
         let receive_vars = format!("{}, {}", receiver_var, ok_var);
@@ -327,11 +316,9 @@ impl Planner<'_> {
                 ctx.body,
                 ctx.default_body,
                 ctx.place,
-                fx,
             )
         } else {
-            self.lower_block_to_place(ctx.body, ctx.place, fx)
-                .statements
+            self.lower_block_to_place(ctx.body, ctx.place).statements
         };
         let used = self.scope.exit_use_region();
         let body_holder = LoweredBlock {
@@ -345,7 +332,7 @@ impl Planner<'_> {
         then_statements.extend(body_holder.statements);
         self.scope.pop_binding_frame();
 
-        let else_arm = match self.build_ok_else_block(ctx, fx) {
+        let else_arm = match self.build_ok_else_block(ctx) {
             Some(body) => ElseArm::Else {
                 body,
                 inline: false,
@@ -374,16 +361,15 @@ impl Planner<'_> {
         binding: &Pattern,
         typed_pattern: Option<&TypedPattern>,
         ctx: &SelectReceiveContext,
-        fx: &mut EmitEffects,
     ) -> SelectArmPlan {
         let effective_pattern = unwrap_some_pattern(binding);
         let inner_typed = unwrap_some_typed_pattern(typed_pattern);
 
         self.scope.push_binding_frame();
         if is_some_pattern(binding) {
-            self.lower_receive_arm_with_ok_check(effective_pattern, inner_typed, ctx, fx)
+            self.lower_receive_arm_with_ok_check(effective_pattern, inner_typed, ctx)
         } else {
-            self.lower_receive_arm_simple(effective_pattern, inner_typed, ctx, fx)
+            self.lower_receive_arm_simple(effective_pattern, inner_typed, ctx)
         }
     }
 
@@ -393,20 +379,19 @@ impl Planner<'_> {
         effective_pattern: &Pattern,
         inner_typed: Option<&TypedPattern>,
         ctx: &SelectReceiveContext,
-        fx: &mut EmitEffects,
     ) -> SelectArmPlan {
         if let Pattern::Identifier { identifier, .. } = effective_pattern
             && let Some(go_name) = self.go_name_for_binding(effective_pattern)
         {
             let var = self.scope.bind(identifier, go_name);
-            return self.lower_ok_guard(&var, None, ctx, fx);
+            return self.lower_ok_guard(&var, None, ctx);
         }
         if matches!(
             effective_pattern,
             Pattern::Identifier { .. } | Pattern::WildCard { .. }
         ) {
             let ok_var = self.fresh_ok_var();
-            let body = self.lower_ok_check(&ok_var, ctx, fx);
+            let body = self.lower_ok_check(&ok_var, ctx);
             self.scope.pop_binding_frame();
             return SelectArmPlan::Receive {
                 receive_vars: Some(format!("_, {}", ok_var)),
@@ -415,12 +400,7 @@ impl Planner<'_> {
             };
         }
         let receiver_var = self.fresh_var(Some("recv"));
-        self.lower_ok_guard(
-            &receiver_var,
-            Some((effective_pattern, inner_typed)),
-            ctx,
-            fx,
-        )
+        self.lower_ok_guard(&receiver_var, Some((effective_pattern, inner_typed)), ctx)
     }
 
     /// Plain receive: `case v := <-ch:` then the arm body.
@@ -429,7 +409,6 @@ impl Planner<'_> {
         effective_pattern: &Pattern,
         inner_typed: Option<&TypedPattern>,
         ctx: &SelectReceiveContext,
-        fx: &mut EmitEffects,
     ) -> SelectArmPlan {
         let mut body_statements: Vec<LoweredStatement> = Vec::new();
         let receive_vars = if let Pattern::Identifier { identifier, .. } = effective_pattern
@@ -448,11 +427,10 @@ impl Planner<'_> {
                 effective_pattern,
                 inner_typed,
                 &ctx.element_ty,
-                fx,
             ));
             Some(receiver_var)
         };
-        let block = self.lower_block_to_place(ctx.body, ctx.place, fx);
+        let block = self.lower_block_to_place(ctx.body, ctx.place);
         self.scope.pop_binding_frame();
         body_statements.extend(block.statements);
         SelectArmPlan::Receive {
@@ -469,13 +447,12 @@ impl Planner<'_> {
         setup: &mut Vec<LoweredStatement>,
         send_expression: &Expression,
         needs_hoist: bool,
-        fx: &mut EmitEffects,
     ) -> SendArmParts {
         let unwrapped = send_expression.unwrap_parens();
         if let Some((channel, member, args)) = extract_channel_op(unwrapped) {
             let ch_has_call = needs_hoist && contains_call(channel);
             let (op_setup, mut ch) = self
-                .lower_value(channel, ExpressionContext::value(), fx)
+                .lower_value(channel, ExpressionContext::value())
                 .into_parts();
             setup.extend(op_setup);
             if channel.get_type().is_ref() {
@@ -488,7 +465,7 @@ impl Planner<'_> {
                 "send" if !args.is_empty() => {
                     let val_has_call = needs_hoist && contains_call(&args[0]);
                     let (val_setup, mut val) = self
-                        .lower_composite_value(&args[0], ExpressionContext::value(), fx)
+                        .lower_composite_value(&args[0], ExpressionContext::value())
                         .into_parts();
                     setup.extend(val_setup);
                     if val_has_call {
@@ -502,7 +479,7 @@ impl Planner<'_> {
         } else {
             let expression_has_call = needs_hoist && contains_call(send_expression);
             let (op_setup, mut ch) = self
-                .lower_value(send_expression, ExpressionContext::value(), fx)
+                .lower_value(send_expression, ExpressionContext::value())
                 .into_parts();
             setup.extend(op_setup);
             if send_expression.get_type().is_ref() {
@@ -521,9 +498,8 @@ impl Planner<'_> {
         parts: &SendArmParts,
         body: &Expression,
         place: &PlacePlan,
-        fx: &mut EmitEffects,
     ) -> SelectArmPlan {
-        let block = self.lower_block_to_place(body, place, fx);
+        let block = self.lower_block_to_place(body, place);
         match parts {
             SendArmParts::Send(ch, val) => SelectArmPlan::Send {
                 operation: format!("{} <- {}", ch, val),
@@ -543,7 +519,6 @@ impl Planner<'_> {
         channel: &str,
         element_ty: &syntax::types::Type,
         place: &PlacePlan,
-        fx: &mut EmitEffects,
     ) -> SelectArmPlan {
         self.scope.push_binding_frame();
 
@@ -577,10 +552,9 @@ impl Planner<'_> {
             needs_receiver_destructure,
             element_ty,
             place,
-            fx,
         );
-        let none_block = self
-            .capture_scoped_block(|this| sites::lower_none_arm_body(this, match_arms, place, fx));
+        let none_block =
+            self.capture_scoped_block(|this| sites::lower_none_arm_body(this, match_arms, place));
 
         let arms_plan = build_receive_arms_plan(&ok_var, some_block, none_block);
         if arms_plan.is_some() {
@@ -633,11 +607,10 @@ impl Planner<'_> {
         needs_receiver_destructure: bool,
         element_ty: &syntax::types::Type,
         place: &PlacePlan,
-        fx: &mut EmitEffects,
     ) -> Option<LoweredBlock> {
         self.capture_scoped_block(|this| {
             if !needs_receiver_destructure {
-                return this.lower_block_to_place(&some_arm.expression, place, fx);
+                return this.lower_block_to_place(&some_arm.expression, place);
             }
             let inner_typed = unwrap_some_typed_pattern(some_arm.typed_pattern.as_ref());
             LoweredBlock {
@@ -653,7 +626,6 @@ impl Planner<'_> {
                     &some_arm.expression,
                     match_arms,
                     place,
-                    fx,
                 ),
             }
         })

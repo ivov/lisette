@@ -4,7 +4,6 @@ use syntax::program::{
 };
 use syntax::types::Type;
 
-use crate::EmitEffects;
 use crate::Planner;
 use crate::abi::coercion::{Coercion, CoercionDirection};
 use crate::context::expression::ExpressionContext;
@@ -17,7 +16,6 @@ impl Planner<'_> {
         &mut self,
         dot_access: &Expression,
         ctx: ExpressionContext<'_>,
-        fx: &mut EmitEffects,
     ) -> ValuePlan {
         let Expression::DotAccess {
             expression,
@@ -34,7 +32,7 @@ impl Planner<'_> {
         let receiver_coercion = *receiver_coercion;
 
         if let Some(s) =
-            self.try_emit_pre_receiver_dot(expression, member, result_ty, dot_access_kind, ctx, fx)
+            self.try_emit_pre_receiver_dot(expression, member, result_ty, dot_access_kind, ctx)
         {
             return ValuePlan::Operand(s);
         }
@@ -43,9 +41,9 @@ impl Planner<'_> {
 
         let (mut setup, expression_string) =
             if let Some(module) = expression_ty.as_import_namespace() {
-                (Vec::new(), self.require_module_import_fx(module, fx))
+                (Vec::new(), self.require_module_import(module))
             } else {
-                self.plan_coerced_expression(expression, receiver_coercion, ctx, fx)
+                self.plan_coerced_expression(expression, receiver_coercion, ctx)
             };
 
         if let Some(s) = self.try_emit_tuple_member_dot(
@@ -53,7 +51,6 @@ impl Planner<'_> {
             &expression_ty,
             member,
             dot_access_kind,
-            fx,
         ) {
             return value_plan_from_statements(setup, s);
         }
@@ -70,14 +67,13 @@ impl Planner<'_> {
             &field,
             &expression_ty,
             result_ty,
-            fx,
         ) {
             return value_plan_from_statements(setup, s);
         }
 
         let result = format!("{}.{}", expression_string, field);
         let result =
-            self.append_cross_module_type_args(result, &expression_ty, member, result_ty, ctx, fx);
+            self.append_cross_module_type_args(result, &expression_ty, member, result_ty, ctx);
         value_plan_from_statements(setup, result)
     }
 
@@ -91,12 +87,11 @@ impl Planner<'_> {
         result_ty: &Type,
         dot_access_kind: Option<SemanticDotKind>,
         ctx: ExpressionContext<'_>,
-        fx: &mut EmitEffects,
     ) -> Option<String> {
         match dot_access_kind {
-            Some(SemanticDotKind::EnumVariant) => self.emit_enum_variant_dot(member, result_ty, fx),
+            Some(SemanticDotKind::EnumVariant) => self.emit_enum_variant_dot(member, result_ty),
             Some(SemanticDotKind::StaticMethod { .. }) => {
-                self.emit_static_method_dot(expression, member, result_ty, ctx, fx)
+                self.emit_static_method_dot(expression, member, result_ty, ctx)
             }
             Some(SemanticDotKind::InstanceMethodValue {
                 is_exported,
@@ -107,13 +102,12 @@ impl Planner<'_> {
                 result_ty,
                 is_exported,
                 is_pointer_receiver,
-                fx,
             ),
             Some(SemanticDotKind::ModuleMember) | None => {
-                if let Some(s) = self.emit_enum_variant_dot(member, result_ty, fx) {
+                if let Some(s) = self.emit_enum_variant_dot(member, result_ty) {
                     Some(s)
                 } else {
-                    self.emit_static_method_dot(expression, member, result_ty, ctx, fx)
+                    self.emit_static_method_dot(expression, member, result_ty, ctx)
                 }
             }
             _ => None,
@@ -129,7 +123,6 @@ impl Planner<'_> {
         expression_ty: &Type,
         member: &str,
         dot_access_kind: Option<SemanticDotKind>,
-        fx: &mut EmitEffects,
     ) -> Option<String> {
         let Ok(index) = member.parse::<usize>() else {
             return None;
@@ -143,8 +136,7 @@ impl Planner<'_> {
             }
             Some(SemanticDotKind::TupleStructField { is_newtype }) => {
                 if is_newtype
-                    && let Some(cast) =
-                        self.try_emit_newtype_cast(expression_ty, expression_string, fx)
+                    && let Some(cast) = self.try_emit_newtype_cast(expression_ty, expression_string)
                 {
                     return Some(cast);
                 }
@@ -188,7 +180,6 @@ impl Planner<'_> {
         field: &str,
         expression_ty: &Type,
         result_ty: &Type,
-        fx: &mut EmitEffects,
     ) -> Option<String> {
         if self.go_imported_shape(expression_ty).is_none() || !self.is_go_nullable(result_ty) {
             return None;
@@ -201,7 +192,7 @@ impl Planner<'_> {
             result_ty,
             CoercionDirection::FromGoBoundary,
         );
-        let (coercion_setup, coerced) = coercion.lower(self, raw_var, fx);
+        let (coercion_setup, coerced) = coercion.lower(self, raw_var);
         setup.extend(coercion_setup);
         Some(coerced)
     }
@@ -216,7 +207,6 @@ impl Planner<'_> {
         member: &str,
         result_ty: &Type,
         ctx: ExpressionContext<'_>,
-        fx: &mut EmitEffects,
     ) -> String {
         if ctx.is_callee() {
             return base_access;
@@ -225,7 +215,7 @@ impl Planner<'_> {
             return base_access;
         };
         let qualified = format!("{}.{}", module, member);
-        match self.format_cross_module_type_args(&qualified, result_ty, fx) {
+        match self.format_cross_module_type_args(&qualified, result_ty) {
             Some(type_args) => format!("{}{}", base_access, type_args),
             None => base_access,
         }
@@ -237,7 +227,6 @@ impl Planner<'_> {
         &mut self,
         expression_ty: &Type,
         expression_string: &str,
-        fx: &mut EmitEffects,
     ) -> Option<String> {
         let deref_ty = expression_ty.strip_refs();
         let Type::Nominal { id, .. } = &deref_ty else {
@@ -251,7 +240,7 @@ impl Planner<'_> {
             return None;
         };
         let field_ty = fields.first()?.ty.clone();
-        let go_type = self.go_type_string(&field_ty, fx);
+        let go_type = self.go_type_string(&field_ty);
         let operand = if expression_ty.is_ref() {
             format!("*{}", expression_string)
         } else {
@@ -283,12 +272,11 @@ impl Planner<'_> {
         expression: &Expression,
         coercion: Option<ReceiverCoercion>,
         ctx: ExpressionContext<'_>,
-        fx: &mut EmitEffects,
     ) -> (Vec<LoweredStatement>, String) {
         let (staged, had_explicit_deref) = if let Some(inner) = expression.deref_inner() {
-            (self.stage_operand(inner, ctx, fx), true)
+            (self.stage_operand(inner, ctx), true)
         } else {
-            (self.stage_operand(expression, ctx, fx), false)
+            (self.stage_operand(expression, ctx), false)
         };
         let mut setup = staged.setup;
         let expression_string = staged.value;
@@ -329,7 +317,6 @@ impl Planner<'_> {
         expression_string: &str,
         expression_ty: &Type,
         index: usize,
-        fx: &mut EmitEffects,
     ) -> Option<String> {
         let deref_ty = expression_ty.strip_refs();
         let Type::Nominal { ref id, .. } = deref_ty else {
@@ -355,7 +342,7 @@ impl Planner<'_> {
         }
 
         if fields.len() == 1 && generics.is_empty() {
-            let underlying_ty = self.go_type_string(&fields[0].ty, fx);
+            let underlying_ty = self.go_type_string(&fields[0].ty);
             let expression = if expression_ty.is_ref() {
                 format!("*{}", expression_string)
             } else {

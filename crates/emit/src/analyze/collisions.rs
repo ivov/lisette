@@ -422,7 +422,7 @@ impl Planner<'_> {
                 };
                 self.check_reserved_prefix(qualifier.as_ref(), &span, diagnostics);
                 if let Some(spans) = package_block.get_mut(qualifier.as_ref()) {
-                    spans.push(import.name_span);
+                    spans.push(span);
                 }
             }
         }

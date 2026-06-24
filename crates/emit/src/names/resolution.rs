@@ -5,14 +5,14 @@ use crate::Planner;
 use crate::names::go_name;
 
 impl Planner<'_> {
-    pub(crate) fn resolve_go_name(&mut self, name: &str, fx: &mut EmitEffects) -> String {
+    pub(crate) fn resolve_go_name(&mut self, name: &str) -> String {
         if !name.contains('.')
             && let Some(remapped) = self.module.escape_remap(name)
         {
             return remapped.to_string();
         }
 
-        if let Some(go_call) = self.try_resolve_cross_module_static_method(name, fx) {
+        if let Some(go_call) = self.try_resolve_cross_module_static_method(name) {
             return go_call;
         }
 
@@ -40,7 +40,7 @@ impl Planner<'_> {
 
         let resolved = go_name::resolve(&name);
         if resolved.needs_stdlib {
-            fx.require_stdlib();
+            self.require_stdlib();
         }
         resolved.name
     }
@@ -86,19 +86,24 @@ impl Planner<'_> {
         }
     }
 
-    /// Record the module import into `fx` and return the package qualifier
-    /// exactly as the import renders it: `format_import` sanitizes default
-    /// package names and prints explicit aliases verbatim, so references
-    /// must follow the same rule.
-    pub(crate) fn require_module_import_fx(&self, module: &str, fx: &mut EmitEffects) -> String {
+    /// Record `module`'s Go import into `effects` and return the package
+    /// qualifier exactly as the import renders it: `format_import` sanitizes
+    /// default package names and prints explicit aliases verbatim, so
+    /// references must follow the same rule.
+    pub(crate) fn record_module_import(&self, module: &str, effects: &mut EmitEffects) -> String {
         let path = self.go_import_path_for_module(module);
-        fx.require_go_import(path.clone());
+        effects.require_go_import(path.clone());
         let qualifier = self.go_pkg_qualifier(module);
         if qualifier == go_name::go_package_name(&path) {
             go_name::sanitize_package_name(&qualifier).into_owned()
         } else {
             qualifier
         }
+    }
+
+    /// `record_module_import` writing into the file effects sink.
+    pub(crate) fn require_module_import(&self, module: &str) -> String {
+        self.record_module_import(module, &mut self.effects.borrow_mut())
     }
 
     pub(crate) fn go_import_path_for_module(&self, module: &str) -> String {
@@ -130,7 +135,6 @@ impl Planner<'_> {
         type_id: &str,
         method: &str,
         is_public: bool,
-        fx: &mut EmitEffects,
     ) -> String {
         let module = self
             .facts
@@ -138,9 +142,7 @@ impl Planner<'_> {
             .map(str::to_string);
         let type_name = unqualified_name(type_id);
         let computed_alias = match module.as_deref() {
-            Some(m) if self.facts.is_foreign_module(m) => {
-                Some(self.require_module_import_fx(m, fx))
-            }
+            Some(m) if self.facts.is_foreign_module(m) => Some(self.require_module_import(m)),
             _ => None,
         };
         let resolved = go_name::qualify_method(
@@ -152,23 +154,18 @@ impl Planner<'_> {
             computed_alias.as_deref(),
         );
         if resolved.needs_stdlib {
-            fx.require_stdlib();
+            self.require_stdlib();
         }
         resolved.name
     }
 
-    pub(crate) fn resolve_variant(
-        &mut self,
-        identifier: &str,
-        enum_id: &str,
-        fx: &mut EmitEffects,
-    ) -> String {
+    pub(crate) fn resolve_variant(&mut self, identifier: &str, enum_id: &str) -> String {
         let enum_module = self
             .facts
             .module_for_qualified_name(enum_id)
             .unwrap_or(enum_id);
         let computed_alias = if self.facts.is_foreign_module(enum_module) {
-            Some(self.require_module_import_fx(enum_module, fx))
+            Some(self.require_module_import(enum_module))
         } else {
             None
         };
@@ -180,7 +177,7 @@ impl Planner<'_> {
             computed_alias.as_deref(),
         );
         if resolved.needs_stdlib {
-            fx.require_stdlib();
+            self.require_stdlib();
         }
         resolved.name
     }

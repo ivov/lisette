@@ -267,21 +267,45 @@ fn is_generated_marker(line: &str) -> bool {
 }
 
 pub fn collect_lis_filepaths_recursive(dir: &Path) -> Vec<PathBuf> {
-    let mut files = Vec::new();
+    use rayon::prelude::*;
+
+    const PARALLEL_DIR_THRESHOLD: usize = 8;
+
     let Ok(entries) = read_dir(dir) else {
-        return files;
+        return Vec::new();
     };
 
+    let mut files = Vec::new();
+    let mut subdirs = Vec::new();
     for entry in entries.flatten() {
         let path = entry.path();
-        if path.is_dir() {
-            files.extend(collect_lis_filepaths_recursive(&path));
+        if entry_is_dir(&entry, &path) {
+            subdirs.push(path);
         } else if path.extension().is_some_and(|e| e == "lis") {
             files.push(path);
         }
     }
 
+    let nested: Vec<PathBuf> = if subdirs.len() < PARALLEL_DIR_THRESHOLD {
+        subdirs
+            .iter()
+            .flat_map(|d| collect_lis_filepaths_recursive(d))
+            .collect()
+    } else {
+        subdirs
+            .par_iter()
+            .flat_map_iter(|d| collect_lis_filepaths_recursive(d))
+            .collect()
+    };
+    files.extend(nested);
     files
+}
+
+fn entry_is_dir(entry: &std::fs::DirEntry, path: &Path) -> bool {
+    match entry.file_type() {
+        Ok(file_type) if !file_type.is_symlink() => file_type.is_dir(),
+        _ => path.is_dir(),
+    }
 }
 
 impl Loader for LocalFileSystem {
@@ -699,5 +723,48 @@ mod tests {
 
         assert!(tmp.path().join("cache/cache.go").exists());
         assert!(tmp.path().join("cache/cache.cache").exists());
+    }
+
+    #[test]
+    fn collects_nested_lis_files_past_parallel_threshold() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_file(root, "main.lis", "fn main() {}\n");
+        write_file(root, "ignore.go", "package main\n");
+        let mut expected = vec![root.join("main.lis")];
+        for i in 0..20 {
+            let dir = root.join(format!("m{i}")).join("inner");
+            stdfs::create_dir_all(&dir).unwrap();
+            expected.push(write_file(&dir, &format!("m{i}.lis"), "pub fn x() {}\n"));
+            write_file(&dir, "notes.txt", "x");
+        }
+
+        let mut found = collect_lis_filepaths_recursive(root);
+        found.sort();
+        expected.sort();
+        assert_eq!(found, expected);
+    }
+
+    #[test]
+    fn test_module_ids_finds_nested_modules_with_tests() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let with_both = root.join("alpha").join("beta");
+        stdfs::create_dir_all(&with_both).unwrap();
+        write_file(&with_both, "beta.lis", "pub fn x() {}\n");
+        write_file(&with_both, "beta.test.lis", "#[test]\nfn t() {}\n");
+
+        let test_only = root.join("gamma");
+        stdfs::create_dir_all(&test_only).unwrap();
+        write_file(&test_only, "gamma.test.lis", "#[test]\nfn t() {}\n");
+
+        let prod_only = root.join("delta");
+        stdfs::create_dir_all(&prod_only).unwrap();
+        write_file(&prod_only, "delta.lis", "pub fn x() {}\n");
+
+        let fs = LocalFileSystem::new(root.to_str().unwrap());
+        let mut ids = fs.test_module_ids();
+        ids.sort();
+        assert_eq!(ids, vec!["alpha/beta".to_string()]);
     }
 }

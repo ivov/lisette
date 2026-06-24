@@ -1,4 +1,3 @@
-use crate::EmitEffects;
 use crate::Planner;
 use crate::context::expression::ExpressionContext;
 use crate::names::go_name;
@@ -12,12 +11,11 @@ impl Planner<'_> {
         &mut self,
         member: &str,
         result_ty: &Type,
-        fx: &mut EmitEffects,
     ) -> Option<String> {
-        if let Some(s) = self.emit_enum_variant_constructor(member, result_ty, fx) {
+        if let Some(s) = self.emit_enum_variant_constructor(member, result_ty) {
             return Some(s);
         }
-        self.emit_unit_variant_constructor(member, result_ty, fx)
+        self.emit_unit_variant_constructor(member, result_ty)
     }
 
     /// Static method dot access (cross-module, alias, or instance-as-value).
@@ -27,14 +25,11 @@ impl Planner<'_> {
         member: &str,
         result_ty: &Type,
         ctx: ExpressionContext<'_>,
-        fx: &mut EmitEffects,
     ) -> Option<String> {
-        if let Some(s) =
-            self.emit_cross_module_static_method(expression, member, result_ty, ctx, fx)
-        {
+        if let Some(s) = self.emit_cross_module_static_method(expression, member, result_ty, ctx) {
             return Some(s);
         }
-        if let Some(s) = self.emit_alias_static_method(expression, member, result_ty, fx) {
+        if let Some(s) = self.emit_alias_static_method(expression, member, result_ty) {
             return Some(s);
         }
         None
@@ -46,7 +41,6 @@ impl Planner<'_> {
         &mut self,
         variant_name: &str,
         result_ty: &Type,
-        fx: &mut EmitEffects,
     ) -> Option<String> {
         let Type::Function(f) = result_ty else {
             return None;
@@ -72,7 +66,7 @@ impl Planner<'_> {
 
         let needs_type_args = ret_params.len() > fn_params.len();
         let type_args = if needs_type_args {
-            self.format_type_args(ret_params, fx)
+            self.format_type_args(ret_params)
         } else {
             String::new()
         };
@@ -81,11 +75,11 @@ impl Planner<'_> {
             if make_fn_name.starts_with(go_name::PRELUDE_PREFIX) {
                 let resolved = go_name::resolve(&make_fn_name);
                 if resolved.needs_stdlib {
-                    fx.require_stdlib();
+                    self.require_stdlib();
                 }
                 format!("{}{}", resolved.name, type_args)
             } else {
-                let pkg = self.require_module_import_fx(enum_module, fx);
+                let pkg = self.require_module_import(enum_module);
                 format!("{}.{}{}", pkg, make_fn_name, type_args)
             }
         } else {
@@ -98,7 +92,6 @@ impl Planner<'_> {
         &mut self,
         variant_name: &str,
         result_ty: &Type,
-        fx: &mut EmitEffects,
     ) -> Option<String> {
         let Type::Nominal {
             id: enum_id,
@@ -126,16 +119,16 @@ impl Planner<'_> {
         let enum_name = unqualified_name(enum_id);
         let key = format!("{}.{}", enum_name, variant_name);
         let make_fn = self.facts.make_function_name(&key)?.to_string();
-        let type_args = self.format_type_args(params, fx);
+        let type_args = self.format_type_args(params);
 
         if is_prelude {
             let resolved = go_name::resolve(&make_fn);
             if resolved.needs_stdlib {
-                fx.require_stdlib();
+                self.require_stdlib();
             }
             Some(format!("{}{}()", resolved.name, type_args))
         } else if is_cross_module {
-            let pkg = self.require_module_import_fx(enum_module, fx);
+            let pkg = self.require_module_import(enum_module);
             Some(format!("{}.{}{}()", pkg, make_fn, type_args))
         } else {
             Some(format!("{}{}()", make_fn, type_args))
@@ -149,7 +142,6 @@ impl Planner<'_> {
         expression: &Expression,
         member: &str,
         result_ty: &Type,
-        fx: &mut EmitEffects,
     ) -> Option<String> {
         let func_ty = result_ty.unwrap_forall();
         if !matches!(func_ty, Type::Function(_)) {
@@ -165,7 +157,7 @@ impl Planner<'_> {
         let resolved_name = format!("{}.{}", real_type, member);
 
         let capitalized = self.capitalize_static_method_if_public(&resolved_name);
-        let go_name = self.resolve_go_name(&capitalized, fx);
+        let go_name = self.resolve_go_name(&capitalized);
 
         Some(go_name)
     }
@@ -179,7 +171,6 @@ impl Planner<'_> {
         result_ty: &Type,
         is_exported: bool,
         is_pointer_receiver: bool,
-        fx: &mut EmitEffects,
     ) -> Option<String> {
         if let Expression::Identifier { value, .. } = expression {
             let go_method = if is_exported {
@@ -190,7 +181,7 @@ impl Planner<'_> {
             let type_name = self
                 .resolve_alias_type_name(value)
                 .unwrap_or_else(|| value.to_string());
-            let type_args = self.method_expression_type_args(result_ty, fx);
+            let type_args = self.method_expression_type_args(result_ty);
             return Some(if is_pointer_receiver {
                 format!("(*{}{}).{}", type_name, type_args, go_method)
             } else {
@@ -226,9 +217,9 @@ impl Planner<'_> {
             go_name::escape_keyword(member).into_owned()
         };
 
-        let pkg = self.require_module_import_fx(module_name, fx);
+        let pkg = self.require_module_import(module_name);
         let go_type_name = go_name::snake_to_camel(type_name);
-        let type_args = self.method_expression_type_args(result_ty, fx);
+        let type_args = self.method_expression_type_args(result_ty);
 
         let method_expression = if is_pointer_receiver {
             format!("(*{}.{}{}).{}", pkg, go_type_name, type_args, go_method)
@@ -239,7 +230,7 @@ impl Planner<'_> {
         Some(method_expression)
     }
 
-    fn method_expression_type_args(&mut self, result_ty: &Type, fx: &mut EmitEffects) -> String {
+    fn method_expression_type_args(&mut self, result_ty: &Type) -> String {
         let Type::Function(f) = result_ty.unwrap_forall() else {
             return String::new();
         };
@@ -256,7 +247,7 @@ impl Planner<'_> {
         if receiver_params.is_empty() {
             String::new()
         } else {
-            self.format_type_args(&receiver_params, fx)
+            self.format_type_args(&receiver_params)
         }
     }
 
@@ -268,7 +259,6 @@ impl Planner<'_> {
         member: &str,
         result_ty: &Type,
         ctx: ExpressionContext<'_>,
-        fx: &mut EmitEffects,
     ) -> Option<String> {
         if !matches!(result_ty.unwrap_forall(), Type::Function(_)) {
             return None;
@@ -325,10 +315,10 @@ impl Planner<'_> {
         let qualified_method = format!("{}.{}", qualified_type, member);
 
         let is_public = definition.visibility().is_public() || self.method_needs_export(member);
-        let qualified_name = self.qualify_method_call(&qualified_type, member, is_public, fx);
+        let qualified_name = self.qualify_method_call(&qualified_type, member, is_public);
 
         let type_args = if !ctx.is_callee() {
-            self.format_cross_module_type_args(&qualified_method, result_ty, fx)
+            self.format_cross_module_type_args(&qualified_method, result_ty)
                 .unwrap_or_default()
         } else {
             String::new()

@@ -1,6 +1,5 @@
 use std::fmt::Write;
 
-use crate::EmitEffects;
 use crate::Planner;
 use crate::abi::coercion::{Coercion, CoercionDirection};
 use crate::context::expression::ExpressionContext;
@@ -11,12 +10,7 @@ use syntax::ast::{FormatStringPart, Literal};
 use syntax::types::{SimpleKind, Type};
 
 impl Planner<'_> {
-    pub(super) fn emit_literal(
-        &mut self,
-        literal: &Literal,
-        ty: &Type,
-        fx: &mut EmitEffects,
-    ) -> ValuePlan {
+    pub(super) fn emit_literal(&mut self, literal: &Literal, ty: &Type) -> ValuePlan {
         let mut setup: Vec<LoweredStatement> = Vec::new();
         let value = match literal {
             Literal::Integer { value, text } => match text {
@@ -50,7 +44,7 @@ impl Planner<'_> {
                 format!("'{}'", convert_escape_sequences(c))
             }
             Literal::FormatString(parts) => {
-                let (fmt_setup, value) = self.emit_format_string(parts, fx);
+                let (fmt_setup, value) = self.emit_format_string(parts);
                 setup = fmt_setup;
                 value
             }
@@ -61,7 +55,7 @@ impl Planner<'_> {
                     .first()
                     .expect("Slice type must have element type")
                     .clone();
-                let element_ty = self.go_type_string(&element_lisette_ty, fx);
+                let element_ty = self.go_type_string(&element_lisette_ty);
 
                 if elements.is_empty() {
                     // Parens around the slice type disambiguate the conversion when
@@ -71,7 +65,7 @@ impl Planner<'_> {
                 } else {
                     let stages: Vec<StagedExpression> = elements
                         .iter()
-                        .map(|e| self.stage_composite(e, ExpressionContext::value(), fx))
+                        .map(|e| self.stage_composite(e, ExpressionContext::value()))
                         .collect();
                     let (slice_setup, rendered) = self.sequence_structured(stages, "_v");
                     setup.extend(slice_setup);
@@ -84,7 +78,7 @@ impl Planner<'_> {
                             &element_lisette_ty,
                             CoercionDirection::Internal,
                         );
-                        let (coercion_setup, coerced) = coercion.lower(self, emitted, fx);
+                        let (coercion_setup, coerced) = coercion.lower(self, emitted);
                         setup.extend(coercion_setup);
                         wrapped.push(coerced);
                     }
@@ -109,7 +103,6 @@ impl Planner<'_> {
     fn emit_format_string(
         &mut self,
         parts: &[FormatStringPart],
-        fx: &mut EmitEffects,
     ) -> (Vec<LoweredStatement>, String) {
         let has_interpolation = parts
             .iter()
@@ -119,7 +112,7 @@ impl Planner<'_> {
             .iter()
             .filter_map(|p| {
                 if let FormatStringPart::Expression(e) = p {
-                    Some(self.stage_composite(e, ExpressionContext::value(), fx))
+                    Some(self.stage_composite(e, ExpressionContext::value()))
                 } else {
                     None
                 }
@@ -165,7 +158,7 @@ impl Planner<'_> {
             return (setup, format!("\"{}\"", format_string));
         }
 
-        fx.require_fmt();
+        self.require_fmt();
         // Solo-expression f-strings round-trip through fmt.Sprint, which skips
         // the format-string parse. Excluded: `%c`, because Sprint on a rune
         // prints the integer codepoint instead of the character.

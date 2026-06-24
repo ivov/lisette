@@ -1,6 +1,5 @@
 use rustc_hash::FxHashMap as HashMap;
 
-use crate::EmitEffects;
 use crate::Planner;
 use crate::names::constraints::{ConstraintAtom, ParamConstraintSet, classify_builtin_name};
 use syntax::EcoString;
@@ -41,7 +40,6 @@ impl Planner<'_> {
         &mut self,
         symbol: &str,
         generics: &[Generic],
-        fx: &mut EmitEffects,
     ) -> String {
         if generics.is_empty() {
             return String::new();
@@ -57,7 +55,7 @@ impl Planner<'_> {
                 let set = constraints
                     .as_ref()
                     .and_then(|sets| sets.iter().find(|s| s.name == g.name));
-                let constraint = self.render_constraint(g, set, fx);
+                let constraint = self.render_constraint(g, set);
                 format!("{} {}", g.name, constraint)
             })
             .collect::<Vec<_>>()
@@ -70,7 +68,6 @@ impl Planner<'_> {
         &mut self,
         generic: &Generic,
         constraint_set: Option<&ParamConstraintSet>,
-        fx: &mut EmitEffects,
     ) -> String {
         let (explicit_atoms, inferred_comparable) = match constraint_set {
             Some(set) => (set.explicit.clone(), set.inferred_comparable),
@@ -107,11 +104,11 @@ impl Planner<'_> {
                     comparable_seen = true;
                 }
                 ConstraintAtom::Ordered => {
-                    fx.require_cmp();
+                    self.require_cmp();
                     named_bounds.push("cmp.Ordered".to_string());
                 }
                 ConstraintAtom::Named(ann) => {
-                    named_bounds.push(self.named_bound_go_type(ann, fx));
+                    named_bounds.push(self.named_bound_go_type(ann));
                 }
             }
         }
@@ -127,13 +124,13 @@ impl Planner<'_> {
         }
     }
 
-    fn named_bound_go_type(&mut self, annotation: &Annotation, fx: &mut EmitEffects) -> String {
+    fn named_bound_go_type(&mut self, annotation: &Annotation) -> String {
         let resolved = self
             .facts
             .resolved_bound_type(annotation.get_span())
             .cloned()
             .expect("checker records a resolved type for every generic bound");
-        self.go_type_string(&resolved, fx)
+        self.go_type_string(&resolved)
     }
 }
 

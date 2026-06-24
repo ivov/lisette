@@ -1,6 +1,5 @@
 use rustc_hash::FxHashSet as HashSet;
 
-use crate::EmitEffects;
 use crate::Planner;
 use crate::Renderer;
 use crate::ReturnContext;
@@ -52,11 +51,10 @@ impl Planner<'_> {
         body: &Expression,
         should_return: bool,
         return_ctx: &ReturnContext,
-        fx: &mut EmitEffects,
     ) {
         self.push_const_frame();
         self.push_return_ctx(return_ctx.clone());
-        self.emit_function_body_inner(output, body, should_return, fx);
+        self.emit_function_body_inner(output, body, should_return);
         self.pop_return_ctx();
         self.pop_const_frame();
     }
@@ -66,9 +64,8 @@ impl Planner<'_> {
         output: &mut String,
         body: &Expression,
         should_return: bool,
-        fx: &mut EmitEffects,
     ) {
-        let lowered = self.lower_function_body(body, should_return, fx);
+        let lowered = self.lower_function_body(body, should_return);
         Renderer.render_lowered_block(output, &lowered);
     }
 
@@ -78,11 +75,10 @@ impl Planner<'_> {
         body: &Expression,
         ty: &Type,
         ctx: ExpressionContext<'_>,
-        fx: &mut EmitEffects,
     ) -> String {
         let frame = self.scope.enter_isolated_function();
 
-        let (mut param_pairs, destructure_bindings) = self.build_lambda_param_pairs(params, fx);
+        let (mut param_pairs, destructure_bindings) = self.build_lambda_param_pairs(params);
 
         // A `t.run` subtest closure binds its own handle. Name a discarded `|_|`
         // so `assert` targets the subtest, not the enclosing test.
@@ -104,7 +100,7 @@ impl Planner<'_> {
         }
 
         let recover = handle.as_ref().map(|name| {
-            fx.require_testkit();
+            self.require_testkit();
             let span = body.get_span();
             format!(
                 "defer {name}.Recover({}, {}, {})\n",
@@ -114,13 +110,12 @@ impl Planner<'_> {
             )
         });
 
-        let return_info = self.lambda_return_info(ty, ctx, fx);
+        let return_info = self.lambda_return_info(ty, ctx);
         let mut body_string = self.emit_lambda_body_with_deferred(
             body,
             &destructure_bindings,
             &return_info.ctx,
             return_info.has_return,
-            fx,
         );
         if let Some(recover) = recover {
             body_string.insert_str(0, &recover);
@@ -143,7 +138,6 @@ impl Planner<'_> {
     fn build_lambda_param_pairs<'a>(
         &mut self,
         params: &'a [Binding],
-        fx: &mut EmitEffects,
     ) -> (Vec<(String, String)>, Vec<LambdaParamDestructure<'a>>) {
         let mut destructure_bindings: Vec<LambdaParamDestructure<'a>> = vec![];
         let param_pairs: Vec<(String, String)> = params
@@ -169,7 +163,7 @@ impl Planner<'_> {
                     ));
                     temp_name
                 };
-                (name, self.go_type_string(&p.ty, fx))
+                (name, self.go_type_string(&p.ty))
             })
             .collect();
         (param_pairs, destructure_bindings)
@@ -177,12 +171,7 @@ impl Planner<'_> {
 
     /// Lambda Go return-type + `ReturnContext`. Go-prelude generic callbacks
     /// suppress lambda return-type lowering so signature and body agree.
-    fn lambda_return_info(
-        &mut self,
-        ty: &Type,
-        ctx: ExpressionContext<'_>,
-        fx: &mut EmitEffects,
-    ) -> LambdaReturnInfo {
+    fn lambda_return_info(&mut self, ty: &Type, ctx: ExpressionContext<'_>) -> LambdaReturnInfo {
         let suppress_lowering = ctx.forces_tagged_go_function();
         let argument_flows_to_unknown = ctx.argument_flows_to_unknown();
 
@@ -207,12 +196,9 @@ impl Planner<'_> {
             match ty {
                 Type::Function(f) => match ctx.lowered_shape() {
                     Some(shape) => {
-                        format!(
-                            " {}",
-                            self.render_lowered_return_ty(&shape, &f.return_type, fx)
-                        )
+                        format!(" {}", self.render_lowered_return_ty(&shape, &f.return_type))
                     }
-                    None => format!(" {}", self.go_type_string(&f.return_type, fx)),
+                    None => format!(" {}", self.go_type_string(&f.return_type)),
                 },
                 _ => String::new(),
             }
@@ -233,7 +219,6 @@ impl Planner<'_> {
         destructure_bindings: &[LambdaParamDestructure<'_>],
         return_ctx: &ReturnContext,
         should_return: bool,
-        fx: &mut EmitEffects,
     ) -> String {
         let mut body_string = String::new();
         for (temp_name, pattern, typed, param_ty) in destructure_bindings {
@@ -242,11 +227,10 @@ impl Planner<'_> {
                 pattern,
                 *typed,
                 param_ty,
-                fx,
             );
             Renderer.render_lowered_block(&mut body_string, &LoweredBlock { statements });
         }
-        self.emit_function_body(&mut body_string, body, should_return, return_ctx, fx);
+        self.emit_function_body(&mut body_string, body, should_return, return_ctx);
         body_string
     }
 
@@ -268,7 +252,6 @@ impl Planner<'_> {
         function_definition: FunctionDefinitionView<'_>,
         receiver: Option<(String, Type)>,
         is_public: bool,
-        fx: &mut EmitEffects,
     ) -> String {
         if matches!(function_definition.body, Expression::NoOp) {
             return String::new();
@@ -288,24 +271,20 @@ impl Planner<'_> {
             None => function_definition,
         };
         let (params_to_process, receiver_override) =
-            self.extract_receiver(function_definition, receiver.is_some(), fx);
+            self.extract_receiver(function_definition, receiver.is_some());
 
         let mut parts = vec!["func".to_string()];
 
         let (_, receiver_part) =
-            self.emit_receiver_part(params_to_process, &receiver, receiver_override.as_ref(), fx);
+            self.emit_receiver_part(params_to_process, &receiver, receiver_override.as_ref());
         if let Some(part) = receiver_part {
             parts.push(part);
         }
 
         parts.push(self.pick_go_function_name(function_definition, receiver.is_some(), is_public));
 
-        let generics_str = self.build_generics_string(
-            function_definition,
-            params_to_process,
-            receiver.as_ref(),
-            fx,
-        );
+        let generics_str =
+            self.build_generics_string(function_definition, params_to_process, receiver.as_ref());
         if !generics_str.is_empty() {
             parts.push(generics_str);
         }
@@ -314,13 +293,11 @@ impl Planner<'_> {
         let signature = self.with_absorbed_ref_generics(
             params_to_process,
             function_definition.generics,
-            fx,
-            |this, fx| {
+            |this| {
                 let (params_string, return_ty, deferred_patterns) = this.build_signature_tail(
                     function_definition,
                     params_to_process,
                     return_shape.as_ref(),
-                    fx,
                 );
                 parts.push(params_string);
                 if !return_ty.is_empty() {
@@ -341,7 +318,6 @@ impl Planner<'_> {
                     function_definition,
                     deferred_patterns,
                     &return_ctx,
-                    fx,
                 );
                 if test_handle.is_some() {
                     this.pop_test_handle();
@@ -380,10 +356,9 @@ impl Planner<'_> {
         function_definition: FunctionDefinitionView<'_>,
         _params_to_process: &[Binding],
         receiver: Option<&(String, Type)>,
-        fx: &mut EmitEffects,
     ) -> String {
         let symbol = self.symbol_for_function(function_definition.name, receiver);
-        self.generics_to_string_for_symbol(&symbol, function_definition.generics, fx)
+        self.generics_to_string_for_symbol(&symbol, function_definition.generics)
     }
 
     fn symbol_for_function(
@@ -408,16 +383,15 @@ impl Planner<'_> {
         function_definition: FunctionDefinitionView<'_>,
         params_to_process: &[Binding],
         return_shape: Option<&AbiShape>,
-        fx: &mut EmitEffects,
     ) -> (String, String, Vec<DeferredParamDestructure>) {
-        let (params_string, deferred_patterns) = self.emit_function_params(params_to_process, fx);
+        let (params_string, deferred_patterns) = self.emit_function_params(params_to_process);
 
         let return_ty = if function_definition.return_type.is_unit() {
             String::new()
         } else if let Some(shape) = return_shape {
-            self.render_lowered_return_ty(shape, function_definition.return_type, fx)
+            self.render_lowered_return_ty(shape, function_definition.return_type)
         } else {
-            self.go_type_string(function_definition.return_type, fx)
+            self.go_type_string(function_definition.return_type)
         };
 
         (params_string, return_ty, deferred_patterns)
@@ -429,7 +403,6 @@ impl Planner<'_> {
         function_definition: FunctionDefinitionView<'_>,
         deferred_patterns: Vec<DeferredParamDestructure>,
         return_ctx: &ReturnContext,
-        fx: &mut EmitEffects,
     ) {
         let should_return = !function_definition.return_type.is_unit();
         for (var_name, pattern, typed, param_ty) in deferred_patterns {
@@ -438,17 +411,10 @@ impl Planner<'_> {
                 &pattern,
                 typed.as_ref(),
                 &param_ty,
-                fx,
             );
             Renderer.render_lowered_block(body, &LoweredBlock { statements });
         }
-        self.emit_function_body(
-            body,
-            function_definition.body,
-            should_return,
-            return_ctx,
-            fx,
-        );
+        self.emit_function_body(body, function_definition.body, should_return, return_ctx);
     }
 
     fn emit_receiver_part(
@@ -456,7 +422,6 @@ impl Planner<'_> {
         params_to_process: &[Binding],
         receiver: &Option<(String, Type)>,
         receiver_override: Option<&Type>,
-        fx: &mut EmitEffects,
     ) -> (Option<String>, Option<String>) {
         let Some((_, receiver_ty)) = receiver else {
             return (None, None);
@@ -474,7 +439,7 @@ impl Planner<'_> {
             .collect();
 
         let actual_ty = receiver_override.unwrap_or(receiver_ty);
-        let ty_string = self.go_type_string(actual_ty, fx);
+        let ty_string = self.go_type_string(actual_ty);
         let mut receiver_var = receiver_name(&ty_string);
 
         if param_names.contains(&receiver_var) {
@@ -498,11 +463,10 @@ impl Planner<'_> {
         &mut self,
         params: &[Binding],
         generics: &[Generic],
-        fx: &mut EmitEffects,
         f: F,
     ) -> R
     where
-        F: FnOnce(&mut Self, &mut EmitEffects) -> R,
+        F: FnOnce(&mut Self) -> R,
     {
         let saved = std::mem::take(&mut self.function_state);
         let bounded_generics: HashSet<&str> = generics
@@ -520,7 +484,7 @@ impl Planner<'_> {
                     .record_absorbed_ref_generic(name.to_string());
             }
         }
-        let result = f(self, fx);
+        let result = f(self);
         self.function_state = saved;
         result
     }
@@ -528,7 +492,6 @@ impl Planner<'_> {
     fn emit_function_params(
         &mut self,
         params_to_process: &[Binding],
-        fx: &mut EmitEffects,
     ) -> (String, Vec<DeferredParamDestructure>) {
         let mut deferred_patterns = Vec::new();
         let mut params = Vec::new();
@@ -566,7 +529,7 @@ impl Planner<'_> {
                     param.ty.clone()
                 }
             };
-            params.push((name, self.go_type_string(&param_type, fx)));
+            params.push((name, self.go_type_string(&param_type)));
         }
         (format!("({})", group_params(&params)), deferred_patterns)
     }
@@ -575,7 +538,6 @@ impl Planner<'_> {
         &mut self,
         function_definition: FunctionDefinitionView<'a>,
         has_receiver: bool,
-        fx: &mut EmitEffects,
     ) -> (&'a [Binding], Option<Type>) {
         let default = (function_definition.params, None);
 
@@ -592,7 +554,7 @@ impl Planner<'_> {
         }
 
         let receiver_ty = &function_definition.params[0].ty;
-        let _ty_str = self.go_type_string(receiver_ty, fx);
+        let _ty_str = self.go_type_string(receiver_ty);
 
         (&function_definition.params[1..], Some(receiver_ty.clone()))
     }

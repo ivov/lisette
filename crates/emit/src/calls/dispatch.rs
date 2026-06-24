@@ -1,4 +1,3 @@
-use crate::EmitEffects;
 use crate::expressions::access::struct_call::emit_struct_literal;
 use crate::names::generics::extract_type_mapping;
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
@@ -112,21 +111,20 @@ impl Planner<'_> {
         function: &Expression,
         type_args: &[Type],
         call_ty: Option<&Type>,
-        fx: &mut EmitEffects,
     ) -> String {
         if !type_args.is_empty() {
-            return self.go_type_string(&type_args[0], fx);
+            return self.go_type_string(&type_args[0]);
         }
         if let Some(call_result_ty) = call_ty
             && let Some(first) = call_result_ty
                 .get_type_params()
                 .and_then(|ps| ps.first().cloned())
         {
-            return self.go_type_string(&first, fx);
+            return self.go_type_string(&first);
         }
         let param = extract_return_type_param(function)
             .expect("constructor must have constructor return type");
-        self.go_type_string(&param, fx)
+        self.go_type_string(&param)
     }
 
     fn resolve_map_types(
@@ -134,12 +132,11 @@ impl Planner<'_> {
         function: &Expression,
         type_args: &[Type],
         call_ty: Option<&Type>,
-        fx: &mut EmitEffects,
     ) -> (String, String) {
         if type_args.len() >= 2 {
             return (
-                self.go_type_string(&type_args[0], fx),
-                self.go_type_string(&type_args[1], fx),
+                self.go_type_string(&type_args[0]),
+                self.go_type_string(&type_args[1]),
             );
         }
         if let Some(call_result_ty) = call_ty
@@ -147,8 +144,8 @@ impl Planner<'_> {
             && params.len() >= 2
         {
             return (
-                self.go_type_string(&params[0], fx),
-                self.go_type_string(&params[1], fx),
+                self.go_type_string(&params[0]),
+                self.go_type_string(&params[1]),
             );
         }
         let ty = function.get_type();
@@ -160,36 +157,27 @@ impl Planner<'_> {
             .get_type_params()
             .expect("MapNew must return a type with type arguments");
         (
-            self.go_type_string(&params[0], fx),
-            self.go_type_string(&params[1], fx),
+            self.go_type_string(&params[0]),
+            self.go_type_string(&params[1]),
         )
     }
 
     fn try_lower_native_constructor(
         &mut self,
         ctx: &NativeCallContext,
-        fx: &mut EmitEffects,
     ) -> Option<(Vec<LoweredStatement>, String)> {
         match (ctx.native_type, ctx.method) {
             (NativeGoType::Channel, "new") => {
-                let element = self.resolve_element_type(
-                    ctx.function,
-                    ctx.resolved_type_args,
-                    ctx.call_ty,
-                    fx,
-                );
+                let element =
+                    self.resolve_element_type(ctx.function, ctx.resolved_type_args, ctx.call_ty);
                 Some((Vec::new(), format!("make(chan {})", element)))
             }
             (NativeGoType::Channel, "buffered") => {
-                let element = self.resolve_element_type(
-                    ctx.function,
-                    ctx.resolved_type_args,
-                    ctx.call_ty,
-                    fx,
-                );
+                let element =
+                    self.resolve_element_type(ctx.function, ctx.resolved_type_args, ctx.call_ty);
                 let (setup, capacity) = match ctx.args.first() {
                     Some(a) => {
-                        let staged = self.stage_operand(a, ExpressionContext::value(), fx);
+                        let staged = self.stage_operand(a, ExpressionContext::value());
                         (staged.setup, staged.value)
                     }
                     None => (Vec::new(), "0".to_string()),
@@ -198,16 +186,12 @@ impl Planner<'_> {
             }
             (NativeGoType::Map, "new") => {
                 let (key, val) =
-                    self.resolve_map_types(ctx.function, ctx.resolved_type_args, ctx.call_ty, fx);
+                    self.resolve_map_types(ctx.function, ctx.resolved_type_args, ctx.call_ty);
                 Some((Vec::new(), format!("make(map[{}]{})", key, val)))
             }
             (NativeGoType::Slice, "new") => {
-                let element = self.resolve_element_type(
-                    ctx.function,
-                    ctx.resolved_type_args,
-                    ctx.call_ty,
-                    fx,
-                );
+                let element =
+                    self.resolve_element_type(ctx.function, ctx.resolved_type_args, ctx.call_ty);
                 Some((Vec::new(), format!("[]{}{{}}", element)))
             }
             _ => None,
@@ -222,7 +206,6 @@ impl Planner<'_> {
         &mut self,
         setup: &mut Vec<LoweredStatement>,
         call_expression: &Expression,
-        fx: &mut EmitEffects,
     ) -> Option<String> {
         let Expression::Call {
             expression: callee,
@@ -256,10 +239,10 @@ impl Planner<'_> {
         };
         match call_kind {
             CallKind::NativeMethod(_) => {
-                self.try_emit_negated_native_method_dot_access(setup, &native_ctx, fx)
+                self.try_emit_negated_native_method_dot_access(setup, &native_ctx)
             }
             CallKind::NativeMethodIdentifier(_) => {
-                self.try_emit_negated_native_method_identifier(setup, &native_ctx, fx)
+                self.try_emit_negated_native_method_identifier(setup, &native_ctx)
             }
             _ => unreachable!(),
         }
@@ -271,7 +254,6 @@ impl Planner<'_> {
         call_expression: &Expression,
         call_ty: Option<&Type>,
         ctx: ExpressionContext<'_>,
-        fx: &mut EmitEffects,
     ) -> (Vec<LoweredStatement>, String) {
         let Expression::Call {
             expression: callee,
@@ -292,17 +274,16 @@ impl Planner<'_> {
 
         match &plan.callee {
             CalleePlan::TupleStructConstructor => {
-                if let Some(result) =
-                    self.try_lower_tuple_struct_call(function, args, call_ty, ctx, fx)
+                if let Some(result) = self.try_lower_tuple_struct_call(function, args, call_ty, ctx)
                 {
                     return result;
                 }
             }
             CalleePlan::AssertType => {
-                return self.lower_assert_type(function, args, resolved_type_args, fx);
+                return self.lower_assert_type(function, args, resolved_type_args);
             }
             CalleePlan::UfcsMethod => {
-                return self.lower_ufcs_call(function, args, resolved_type_args, spread, fx);
+                return self.lower_ufcs_call(function, args, resolved_type_args, spread);
             }
             CalleePlan::NativeConstructor(kind)
             | CalleePlan::NativeMethod(kind)
@@ -318,7 +299,7 @@ impl Planner<'_> {
                     native_type: &native_type,
                     method,
                 };
-                return self.lower_native_call(&native_ctx, fx);
+                return self.lower_native_call(&native_ctx);
             }
             CalleePlan::ReceiverMethodUfcs { is_public } => {
                 let method = extract_receiver_ufcs_method(function);
@@ -329,27 +310,22 @@ impl Planner<'_> {
                     &method,
                     *is_public,
                     spread,
-                    fx,
                 );
             }
             CalleePlan::GoInterop(_) | CalleePlan::Regular => {}
         }
 
-        self.lower_regular_call(call_expression, &plan, call_ty, ctx, fx)
+        self.lower_regular_call(call_expression, &plan, call_ty, ctx)
     }
 
-    fn lower_native_call(
-        &mut self,
-        ctx: &NativeCallContext,
-        fx: &mut EmitEffects,
-    ) -> (Vec<LoweredStatement>, String) {
-        if let Some(result) = self.try_lower_native_constructor(ctx, fx) {
+    fn lower_native_call(&mut self, ctx: &NativeCallContext) -> (Vec<LoweredStatement>, String) {
+        if let Some(result) = self.try_lower_native_constructor(ctx) {
             return result;
         }
         if let Expression::DotAccess { .. } = ctx.function {
-            self.lower_native_method_dot_access(ctx, fx)
+            self.lower_native_method_dot_access(ctx)
         } else {
-            self.lower_native_method_identifier(ctx, fx)
+            self.lower_native_method_identifier(ctx)
         }
     }
 
@@ -357,7 +333,6 @@ impl Planner<'_> {
         &mut self,
         function: &Expression,
         arg_shape: CallArgShape,
-        fx: &mut EmitEffects,
     ) -> Option<String> {
         let definition_ty = self.get_callee_definition_type(function)?;
         let Type::Forall { vars, body } = definition_ty else {
@@ -393,7 +368,7 @@ impl Planner<'_> {
             return None;
         }
 
-        Some(self.format_type_args(&resolved, fx))
+        Some(self.format_type_args(&resolved))
     }
 
     fn lookup_definition_type(&self, primary: &str, fallback: Option<&str>) -> Option<Type> {
@@ -449,13 +424,12 @@ impl Planner<'_> {
         args: &[Expression],
         call_ty: Option<&Type>,
         ctx: ExpressionContext<'_>,
-        fx: &mut EmitEffects,
     ) -> Option<(Vec<LoweredStatement>, String)> {
-        let target = self.resolve_tuple_struct_target(function, call_ty, fx)?;
+        let target = self.resolve_tuple_struct_target(function, call_ty)?;
 
         let stages: Vec<StagedExpression> = args
             .iter()
-            .map(|a| self.stage_composite(a, ExpressionContext::value(), fx))
+            .map(|a| self.stage_composite(a, ExpressionContext::value()))
             .collect();
         let (mut setup, values) = self.sequence_structured(stages, "_arg");
 
@@ -470,7 +444,7 @@ impl Planner<'_> {
             let value_ty = arg.get_type();
             let coercion =
                 Coercion::resolve(self, &value_ty, field_ty, CoercionDirection::Internal);
-            let (coercion_setup, coerced) = coercion.lower(self, value, fx);
+            let (coercion_setup, coerced) = coercion.lower(self, value);
             setup.extend(coercion_setup);
             field_pairs.push((format!("F{}", i), coerced));
         }
@@ -485,7 +459,6 @@ impl Planner<'_> {
         &mut self,
         function: &Expression,
         call_ty: Option<&Type>,
-        fx: &mut EmitEffects,
     ) -> Option<TupleStructTarget> {
         let ty = function.get_type();
         let Type::Function(f) = ty.unwrap_forall() else {
@@ -530,7 +503,7 @@ impl Planner<'_> {
                 .collect()
         };
 
-        let go_ty = self.go_type_string(&return_ty, fx);
+        let go_ty = self.go_type_string(&return_ty);
         Some(TupleStructTarget { go_ty, field_tys })
     }
 
@@ -539,22 +512,21 @@ impl Planner<'_> {
         function: &Expression,
         args: &[Expression],
         type_args: &[Type],
-        fx: &mut EmitEffects,
     ) -> (Vec<LoweredStatement>, String) {
         let target_ty = if !type_args.is_empty() {
-            self.go_type_string(&type_args[0], fx)
+            self.go_type_string(&type_args[0])
         } else {
             let param = extract_return_type_param(function)
                 .expect("AssertType must have constructor return type");
-            self.go_type_string(&param, fx)
+            self.go_type_string(&param)
         };
         let (setup, arg_expression) = match args.first() {
             Some(a) => self
-                .lower_composite_value(a, ExpressionContext::value(), fx)
+                .lower_composite_value(a, ExpressionContext::value())
                 .into_parts(),
             None => (Vec::new(), String::new()),
         };
-        fx.require_stdlib();
+        self.require_stdlib();
         (
             setup,
             format!(
@@ -590,11 +562,7 @@ impl Planner<'_> {
         }
     }
 
-    pub(crate) fn prelude_container_type_args(
-        &mut self,
-        ty: &Type,
-        fx: &mut EmitEffects,
-    ) -> Option<String> {
+    pub(crate) fn prelude_container_type_args(&mut self, ty: &Type) -> Option<String> {
         if !ty.is_option() && !ty.is_result() && !ty.is_partial() {
             return None;
         }
@@ -607,7 +575,7 @@ impl Planner<'_> {
         params
             .iter()
             .any(|p| self.facts.is_interface(p) || self.is_function_alias(p))
-            .then(|| self.format_type_args(params, fx))
+            .then(|| self.format_type_args(params))
     }
 }
 
