@@ -2947,3 +2947,51 @@ fn if_branches_scalar_mismatch_errors() {
     )
     .assert_type_mismatch();
 }
+
+#[test]
+fn match_value_ref_arm_with_diverging_arm_resolves_receiver() {
+    infer(
+        r#"
+    struct File {}
+
+    impl File {
+      fn Close(self) {}
+    }
+
+    fn create(f: Ref<File>) -> Result<Ref<File>, error> { Ok(f) }
+
+    fn run(f: Ref<File>) {
+      let file = match create(f) {
+        Ok(handle) => handle,
+        Err(err) => { return },
+      }
+      file.Close()
+    }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn match_value_diverging_arm_first_with_ref_arm_resolves_receiver() {
+    infer(
+        r#"
+    struct File {}
+
+    impl File {
+      fn Close(self) {}
+    }
+
+    fn create(f: Ref<File>) -> Result<Ref<File>, error> { Ok(f) }
+
+    fn run(f: Ref<File>) {
+      let file = match create(f) {
+        Err(err) => { return },
+        Ok(handle) => handle,
+      }
+      file.Close()
+    }
+        "#,
+    )
+    .assert_no_errors();
+}

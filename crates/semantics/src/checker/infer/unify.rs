@@ -265,12 +265,14 @@ impl InferCtx<'_, '_> {
         let neither_is_interface = !self.is_interface(t1) && !self.is_interface(t2);
         let neither_is_unknown = !r1.is_unknown() && !r2.is_unknown();
         let neither_is_error = !r1.is_error() && !r2.is_error();
+        let neither_is_never = !r1.is_never() && !r2.is_never();
 
         either_is_ref
             && both_concrete
             && neither_is_interface
             && neither_is_unknown
             && neither_is_error
+            && neither_is_never
     }
 
     fn is_interface(&self, ty: &Type) -> bool {
