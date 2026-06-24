@@ -6528,11 +6528,7 @@ fn main() {
 
 #[test]
 fn go_name_collision_import_alias_vs_function() {
-    let mut fs = MockFileSystem::new();
-    fs.add_file(
-        ENTRY_MODULE_ID,
-        "main.lis",
-        r#"
+    let source = r#"
 import FooBar "go:fmt"
 
 pub fn foo_bar() -> int {
@@ -6543,13 +6539,22 @@ fn main() {
   let _ = FooBar.Println("x")
   let _ = foo_bar()
 }
-"#,
-    );
+"#;
+    let mut fs = MockFileSystem::new();
+    fs.add_file(ENTRY_MODULE_ID, "main.lis", source);
 
-    let codes = emit_diagnostic_codes(fs);
+    let files = compile_project_files(fs, "github.com/user/myproject", false);
+    let collision = files
+        .iter()
+        .flat_map(|file| file.diagnostics.iter())
+        .find(|diagnostic| diagnostic.code_str() == Some("emit.go_name_collision"))
+        .expect("import alias FooBar collides with the package-block function FooBar");
+
+    let offset = collision.primary_offset();
     assert!(
-        codes.iter().any(|code| code == "emit.go_name_collision"),
-        "import alias FooBar collides with the package-block function FooBar; got: {codes:?}"
+        source[offset..].starts_with("FooBar"),
+        "collision label should point at the `FooBar` import alias, not the import path; pointed at {:?}",
+        &source[offset..(offset + 8).min(source.len())]
     );
 }
 
