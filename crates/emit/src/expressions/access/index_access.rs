@@ -1,7 +1,6 @@
 use syntax::ast::Expression;
 use syntax::types::peel_to_range_type;
 
-use crate::EmitEffects;
 use crate::Planner;
 use crate::context::expression::ExpressionContext;
 use crate::expressions::emission::StagedExpression;
@@ -17,7 +16,6 @@ impl Planner<'_> {
         &mut self,
         expression: &Expression,
         index: &Expression,
-        fx: &mut EmitEffects,
     ) -> ValuePlan {
         if let Expression::Range {
             start,
@@ -27,38 +25,34 @@ impl Planner<'_> {
         } = index
         {
             let (setup, value) =
-                self.plan_range_slice(expression, start.as_deref(), end.as_deref(), *inclusive, fx);
+                self.plan_range_slice(expression, start.as_deref(), end.as_deref(), *inclusive);
             return value_plan_from_statements(setup, value);
         }
 
-        let base_staged = self.stage_base_with_deref(expression, fx);
+        let base_staged = self.stage_base_with_deref(expression);
 
         // Range-typed variable as index (e.g. `items[r]` where `r: Range<int>`,
         // or `r: Prefix` where `type Prefix = RangeTo<int>`).
         let index_ty = index.get_type();
         if let Some(range_kind) = peel_to_range_type(&index_ty).and_then(|t| t.get_name()) {
             let needs_cap = self.is_native_shape(&expression.get_type(), NativeGoType::Slice);
-            let index_staged = self.stage_or_capture(index, "range", fx);
+            let index_staged = self.stage_or_capture(index, "range");
             let (setup, values) =
                 self.sequence_structured(vec![base_staged, index_staged], "_base");
             let value = emit_range_var_slice(&values[0], &values[1], range_kind, needs_cap);
             return value_plan_from_statements(setup, value);
         }
 
-        let index_staged = self.stage_composite(index, ExpressionContext::value(), fx);
+        let index_staged = self.stage_composite(index, ExpressionContext::value());
         let (setup, values) = self.sequence_structured(vec![base_staged, index_staged], "_base");
         value_plan_from_statements(setup, format!("{}[{}]", values[0], values[1]))
     }
 
-    fn stage_base_with_deref(
-        &mut self,
-        expression: &Expression,
-        fx: &mut EmitEffects,
-    ) -> StagedExpression {
+    fn stage_base_with_deref(&mut self, expression: &Expression) -> StagedExpression {
         let Some(inner) = expression.deref_inner() else {
-            return self.stage_operand(expression, ExpressionContext::value(), fx);
+            return self.stage_operand(expression, ExpressionContext::value());
         };
-        let s = self.stage_operand(inner, ExpressionContext::value(), fx);
+        let s = self.stage_operand(inner, ExpressionContext::value());
         StagedExpression {
             value: format!("(*{})", s.value),
             setup: s.setup,
@@ -76,17 +70,16 @@ impl Planner<'_> {
         start: Option<&Expression>,
         end: Option<&Expression>,
         inclusive: bool,
-        fx: &mut EmitEffects,
     ) -> (Vec<LoweredStatement>, String) {
         let needs_cap = self.is_native_shape(&expression.get_type(), NativeGoType::Slice);
-        let base_staged = self.stage_base_with_deref(expression, fx);
+        let base_staged = self.stage_base_with_deref(expression);
 
         let mut all_stages = vec![base_staged];
         if let Some(s) = start {
-            all_stages.push(self.stage_operand(s, ExpressionContext::value(), fx));
+            all_stages.push(self.stage_operand(s, ExpressionContext::value()));
         }
         if let Some(e) = end {
-            all_stages.push(self.stage_operand(e, ExpressionContext::value(), fx));
+            all_stages.push(self.stage_operand(e, ExpressionContext::value()));
         }
         let (mut setup, values) = self.sequence_structured(all_stages, "_base");
         let base_str = values[0].clone();

@@ -1,4 +1,3 @@
-use crate::EmitEffects;
 use crate::Planner;
 use crate::expressions::top_items::emit_doc;
 use crate::names::go_name;
@@ -19,7 +18,6 @@ impl Planner<'_> {
         ty: &Type,
         methods: &[Expression],
         generics: &[Generic],
-        fx: &mut EmitEffects,
     ) -> String {
         let ctx = ImplContext {
             receiver_name,
@@ -30,18 +28,13 @@ impl Planner<'_> {
 
         methods
             .iter()
-            .filter_map(|method| self.emit_impl_method(method, &ctx, fx))
+            .filter_map(|method| self.emit_impl_method(method, &ctx))
             .collect::<Vec<_>>()
             .join("\n\n")
     }
 
     /// Emit one impl method as a receiver method or a UFCS free function.
-    fn emit_impl_method(
-        &mut self,
-        method: &Expression,
-        ctx: &ImplContext<'_>,
-        fx: &mut EmitEffects,
-    ) -> Option<String> {
+    fn emit_impl_method(&mut self, method: &Expression, ctx: &ImplContext<'_>) -> Option<String> {
         let Expression::Function {
             doc,
             visibility,
@@ -83,13 +76,12 @@ impl Planner<'_> {
                 generics: &combined_generics,
                 ..function
             };
-            self.emit_function(free_function, None, false, fx)
+            self.emit_function(free_function, None, false)
         } else {
             self.emit_function(
                 function,
                 Some((ctx.receiver_name.to_string(), ctx.ty.clone())),
                 should_export,
-                fx,
             )
         };
 

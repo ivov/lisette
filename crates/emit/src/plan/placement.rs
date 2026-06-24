@@ -1,4 +1,3 @@
-use crate::EmitEffects;
 use crate::Planner;
 use crate::analyze::inline_uses::region_blocks_inline;
 use crate::context::expression::ExpressionContext;
@@ -192,11 +191,7 @@ pub(crate) fn expression_contains_binding(expression: &Expression, name: &str) -
 impl Planner<'_> {
     /// Lower a discarded expression into structured statements: a bare
     /// side-effecting call (`f()`), a `_ = value` discard, or a propagate.
-    pub(crate) fn lower_discard_value(
-        &mut self,
-        value: &Expression,
-        fx: &mut EmitEffects,
-    ) -> Vec<LoweredStatement> {
+    pub(crate) fn lower_discard_value(&mut self, value: &Expression) -> Vec<LoweredStatement> {
         let unwrapped = value.unwrap_parens();
 
         if is_side_effect_free_discard(unwrapped) {
@@ -204,12 +199,12 @@ impl Planner<'_> {
         }
 
         if let Expression::Propagate { expression, .. } = unwrapped {
-            return self.lower_propagate(expression, Some("_"), fx).0;
+            return self.lower_propagate(expression, Some("_")).0;
         }
 
         let value_ty = value.get_type();
         if value_ty.is_unit() || value_ty.is_variable() || value_ty.is_never() {
-            let staged = self.stage_operand(value, ExpressionContext::value(), fx);
+            let staged = self.stage_operand(value, ExpressionContext::value());
             let mut statements = staged.setup;
             if !staged.value.is_empty() {
                 if matches!(unwrapped, Expression::Call { .. }) {
@@ -229,13 +224,13 @@ impl Planner<'_> {
 
         if let Expression::Call { .. } = unwrapped {
             let mut statements: Vec<LoweredStatement> = Vec::new();
-            if let Some(raw) = self.emit_go_call_discarded(&mut statements, unwrapped, fx) {
+            if let Some(raw) = self.emit_go_call_discarded(&mut statements, unwrapped) {
                 statements.push(LoweredStatement::RawGo(format!("{}\n", raw)));
                 return statements;
             }
         }
 
-        let staged = self.stage_operand(value, ExpressionContext::value(), fx);
+        let staged = self.stage_operand(value, ExpressionContext::value());
         let mut statements = staged.setup;
         statements.push(LoweredStatement::RawGo(format!("_ = {}\n", staged.value)));
         statements
@@ -243,14 +238,9 @@ impl Planner<'_> {
 
     /// Emit a unit-typed call as a statement, then store `struct{}{}` into
     /// `var`.
-    fn lower_unit_call_into_var(
-        &mut self,
-        value: &Expression,
-        var: &str,
-        fx: &mut EmitEffects,
-    ) -> Vec<LoweredStatement> {
+    fn lower_unit_call_into_var(&mut self, value: &Expression, var: &str) -> Vec<LoweredStatement> {
         let (mut statements, call_str) = self
-            .lower_value(value, ExpressionContext::value(), fx)
+            .lower_value(value, ExpressionContext::value())
             .into_parts();
         if !call_str.is_empty() {
             statements.push(LoweredStatement::RawGo(format!("{call_str}\n")));
@@ -267,12 +257,11 @@ impl Planner<'_> {
         expression: &Expression,
         var: &str,
         target_ty: Option<&Type>,
-        fx: &mut EmitEffects,
     ) -> Vec<LoweredStatement> {
         let ty = expression.get_type();
         let is_fallible = ty.is_result() || ty.is_option();
         if is_fallible {
-            return self.lower_option_result_assignment(var, target_ty, expression, fx);
+            return self.lower_option_result_assignment(var, target_ty, expression);
         }
 
         if let Expression::Loop {
@@ -280,7 +269,7 @@ impl Planner<'_> {
         } = expression
         {
             self.push_loop(var);
-            let plan = self.lower_loop_with_header("for {\n".to_string(), body, *needs_label, fx);
+            let plan = self.lower_loop_with_header("for {\n".to_string(), body, *needs_label);
             self.pop_loop();
             return vec![LoweredStatement::Loop(plan)];
         }
@@ -288,20 +277,19 @@ impl Planner<'_> {
         if let Expression::Block { items, .. } = expression
             && items.len() > 1
         {
-            let statements = self.lower_block_to_var(expression, var, target_ty, true, fx);
+            let statements = self.lower_block_to_var(expression, var, target_ty, true);
             return vec![LoweredStatement::Block(LoweredBlock { statements })];
         }
 
-        self.lower_block_to_var(expression, var, target_ty, false, fx)
+        self.lower_block_to_var(expression, var, target_ty, false)
     }
 
     fn lower_plain_assign(
         &mut self,
         target_var: &str,
         expression: &Expression,
-        fx: &mut EmitEffects,
     ) -> Vec<LoweredStatement> {
-        let value = self.plan_operand(expression, ExpressionContext::value(), fx);
+        let value = self.plan_operand(expression, ExpressionContext::value());
         vec![simple_assign(target_var, value)]
     }
 
@@ -314,14 +302,13 @@ impl Planner<'_> {
         target_var: &str,
         target_ty: Option<&Type>,
         expression: &Expression,
-        fx: &mut EmitEffects,
     ) -> Vec<LoweredStatement> {
         let ty = target_ty
             .filter(|t| t.is_option() || t.is_result())
             .cloned()
             .unwrap_or_else(|| expression.get_type());
         let Some(fallible) = Fallible::from_type(&ty) else {
-            return self.lower_plain_assign(target_var, expression, fx);
+            return self.lower_plain_assign(target_var, expression);
         };
 
         let actual_expression = if let Expression::Block { items, .. } = expression {
@@ -345,7 +332,7 @@ impl Planner<'_> {
                     Some(ConstructorKind::Success) => fallible.ok_constructor(),
                     Some(ConstructorKind::Failure) => fallible.err_constructor(),
                     None => {
-                        return self.lower_plain_assign(target_var, expression, fx);
+                        return self.lower_plain_assign(target_var, expression);
                     }
                 };
                 if kind == Some(ConstructorKind::Success)
@@ -353,10 +340,10 @@ impl Planner<'_> {
                         && fallible.err_constructor_takes_arg())
                 {
                     let (arg_setup, call_str) = {
-                        let mut fe = FalliblePlanner::new(self, &fallible, fx);
+                        let mut fe = FalliblePlanner::new(self, &fallible);
                         let (arg_setup, arg) = fe
                             .planner
-                            .lower_composite_value(&args[0], ExpressionContext::value(), fe.fx)
+                            .lower_composite_value(&args[0], ExpressionContext::value())
                             .into_parts();
                         (
                             arg_setup,
@@ -367,7 +354,7 @@ impl Planner<'_> {
                     vec![simple_assign(target_var, value)]
                 } else {
                     let call_str = {
-                        let mut fe = FalliblePlanner::new(self, &fallible, fx);
+                        let mut fe = FalliblePlanner::new(self, &fallible);
                         fe.format_constructor_call(constructor_name, None)
                     };
                     vec![simple_assign(target_var, ValuePlan::Operand(call_str))]
@@ -378,15 +365,15 @@ impl Planner<'_> {
                     == Some(ConstructorKind::Failure)
                 {
                     let call_str = {
-                        let mut fe = FalliblePlanner::new(self, &fallible, fx);
+                        let mut fe = FalliblePlanner::new(self, &fallible);
                         fe.format_constructor_call(fallible.err_constructor(), None)
                     };
                     vec![simple_assign(target_var, ValuePlan::Operand(call_str))]
                 } else {
-                    self.lower_plain_assign(target_var, expression, fx)
+                    self.lower_plain_assign(target_var, expression)
                 }
             }
-            _ => self.lower_block_to_var(expression, target_var, None, false, fx),
+            _ => self.lower_block_to_var(expression, target_var, None, false),
         }
     }
 
@@ -400,7 +387,6 @@ impl Planner<'_> {
         var: &str,
         target_ty: Option<&Type>,
         has_go_braces: bool,
-        fx: &mut EmitEffects,
     ) -> Vec<LoweredStatement> {
         let is_block = matches!(expression, Expression::Block { .. });
         let items: &[Expression] = if let Expression::Block { items, .. } = expression {
@@ -415,9 +401,9 @@ impl Planner<'_> {
         if let Some((last, rest)) = items.split_last() {
             let is_new_target = self.scope.try_acquire_assign_target(var);
             for item in rest {
-                statements.push(self.lower_statement(item, fx));
+                statements.push(self.lower_statement(item));
             }
-            statements.extend(self.lower_assign_tail(last, var, target_ty, fx));
+            statements.extend(self.lower_assign_tail(last, var, target_ty));
             if is_new_target {
                 self.scope.release_assign_target(var);
             }
@@ -455,7 +441,6 @@ impl Planner<'_> {
         last: &Expression,
         var: &str,
         target_ty: Option<&Type>,
-        fx: &mut EmitEffects,
     ) -> Vec<LoweredStatement> {
         if matches!(
             last,
@@ -468,19 +453,19 @@ impl Planner<'_> {
                 | Expression::For { .. }
                 | Expression::Const { .. }
         ) {
-            return vec![self.lower_statement(last, fx)];
+            return vec![self.lower_statement(last)];
         }
         if last.get_type().is_never() {
-            let mut statements = vec![self.lower_statement(last, fx)];
+            let mut statements = vec![self.lower_statement(last)];
             if !is_go_never(last) && !is_breakless_loop(last) {
                 statements.push(LoweredStatement::UnreachablePanic);
             }
             return statements;
         }
         if is_unit_call(last) {
-            return self.lower_unit_call_into_var(last, var, fx);
+            return self.lower_unit_call_into_var(last, var);
         }
-        if let Some(statements) = self.lower_append_to_var(var, last, fx) {
+        if let Some(statements) = self.lower_append_to_var(var, last) {
             return statements;
         }
         if matches!(
@@ -494,14 +479,14 @@ impl Planner<'_> {
                 local: var,
                 target_ty,
             };
-            return self.lower_branching_to_block(last, &place, fx).statements;
+            return self.lower_branching_to_block(last, &place).statements;
         }
         let (mut setup, expression_string) = self
-            .lower_value(last, ExpressionContext::value(), fx)
+            .lower_value(last, ExpressionContext::value())
             .into_parts();
         let mut coercion_buffer = String::new();
         let expression_string =
-            self.apply_type_coercion(&mut coercion_buffer, target_ty, last, expression_string, fx);
+            self.apply_type_coercion(&mut coercion_buffer, target_ty, last, expression_string);
         if !coercion_buffer.is_empty() {
             setup.push(LoweredStatement::RawGo(coercion_buffer));
         }
@@ -514,7 +499,6 @@ impl Planner<'_> {
         &mut self,
         var: &str,
         last: &Expression,
-        fx: &mut EmitEffects,
     ) -> Option<Vec<LoweredStatement>> {
         let Expression::Call {
             expression: func,
@@ -545,18 +529,18 @@ impl Planner<'_> {
 
         let (value, mut statements) = if receiver_is_lvalue {
             let (args_setup, args_str) =
-                self.lower_append_args(func, args, (**spread).as_ref(), is_extend, fx);
+                self.lower_append_args(func, args, (**spread).as_ref(), is_extend);
             let rhs_has_setup = !args_setup.is_empty()
                 || args.iter().any(contains_call)
                 || (**spread).as_ref().is_some_and(contains_call);
             let mut capture: Vec<LoweredStatement> = Vec::new();
             let receiver_lv =
-                self.emit_left_value_capturing(&mut capture, unwrapped, rhs_has_setup, fx);
+                self.emit_left_value_capturing(&mut capture, unwrapped, rhs_has_setup);
             capture.extend(args_setup);
             (format!("append({}, {})", receiver_lv, args_str), capture)
         } else {
             let (setup, value) = self
-                .lower_value(last, ExpressionContext::value(), fx)
+                .lower_value(last, ExpressionContext::value())
                 .into_parts();
             (value, setup)
         };
@@ -582,15 +566,14 @@ impl Planner<'_> {
         args: &[Expression],
         spread: Option<&Expression>,
         is_extend: bool,
-        fx: &mut EmitEffects,
     ) -> (Vec<LoweredStatement>, String) {
         let stages: Vec<StagedExpression> = args
             .iter()
-            .map(|a| self.stage_composite(a, ExpressionContext::value(), fx))
+            .map(|a| self.stage_composite(a, ExpressionContext::value()))
             .collect();
         let combine = plan_variadic_spread(function, spread).map(|p| p.combine(0));
         let (setup, emitted_args) =
-            self.sequence_with_spread_structured(stages, spread, false, "_arg", combine, fx);
+            self.sequence_with_spread_structured(stages, spread, false, "_arg", combine);
         let args_str = emitted_args.join(", ");
         let suffix = if is_extend { "..." } else { "" };
         (setup, format!("{}{}", args_str, suffix))
@@ -601,13 +584,12 @@ impl Planner<'_> {
     pub(crate) fn lower_tail_value(
         &mut self,
         last: &Expression,
-        fx: &mut EmitEffects,
     ) -> (Vec<LoweredStatement>, String) {
         if let Expression::Tuple { elements, ty, .. } = last {
-            let plan = self.plan_tuple_value(elements, ty, true, fx);
+            let plan = self.plan_tuple_value(elements, ty, true);
             plan.into_parts()
         } else {
-            self.lower_value(last, ExpressionContext::value(), fx)
+            self.lower_value(last, ExpressionContext::value())
                 .into_parts()
         }
     }
@@ -616,19 +598,18 @@ impl Planner<'_> {
         &mut self,
         expression: &Expression,
         ty: &Type,
-        fx: &mut EmitEffects,
     ) -> ValuePlan {
         if let Expression::Block { items, .. } = expression {
             if ty.is_never() || ty.is_unit() || matches!(ty, Type::Var { .. } | Type::Forall { .. })
             {
                 return value_plan_from_statements(
-                    self.lower_block_as_body(expression, fx).statements,
+                    self.lower_block_as_body(expression).statements,
                     String::new(),
                 );
             }
-            let (result_var, declaration) = self.operand_temp_declaration(ty, fx);
+            let (result_var, declaration) = self.operand_temp_declaration(ty);
             let needs_braces = items.len() > 1;
-            let body = self.lower_block_to_var(expression, &result_var, None, needs_braces, fx);
+            let body = self.lower_block_to_var(expression, &result_var, None, needs_braces);
             let mut statements = vec![declaration];
             if needs_braces {
                 statements.push(LoweredStatement::Block(LoweredBlock { statements: body }));
@@ -638,21 +619,17 @@ impl Planner<'_> {
             return value_plan_from_statements(statements, result_var);
         }
         if let Expression::Loop { .. } = expression {
-            return self.plan_loop_as_operand_temp(expression, ty, fx);
+            return self.plan_loop_as_operand_temp(expression, ty);
         }
-        let (result_var, declaration) = self.operand_temp_declaration(ty, fx);
+        let (result_var, declaration) = self.operand_temp_declaration(ty);
         let mut statements = vec![declaration];
-        statements.extend(self.lower_assign(expression, &result_var, Some(ty), fx));
+        statements.extend(self.lower_assign(expression, &result_var, Some(ty)));
         value_plan_from_statements(statements, result_var)
     }
 
     /// Build a `BreakValuePlan` for a `break value` statement.
-    pub(crate) fn build_break_value_plan(
-        &mut self,
-        val: &Expression,
-        fx: &mut EmitEffects,
-    ) -> BreakValuePlan {
-        let value = self.plan_value(val, ExpressionContext::value(), fx);
+    pub(crate) fn build_break_value_plan(&mut self, val: &Expression) -> BreakValuePlan {
+        let value = self.plan_value(val, ExpressionContext::value());
         let value_is_empty = value.operand_text().is_some_and(str::is_empty);
         let is_propagate_diverged = value_is_empty && matches!(val, Expression::Propagate { .. });
         let disposition = if is_propagate_diverged {

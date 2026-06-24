@@ -1,7 +1,6 @@
 use syntax::ast::Expression;
 use syntax::types::Type;
 
-use crate::EmitEffects;
 use crate::Planner;
 use crate::Renderer;
 use crate::definitions::interface_adapter::AdapterPlan;
@@ -67,41 +66,40 @@ impl Coercion {
         self,
         planner: &mut Planner,
         value: String,
-        fx: &mut EmitEffects,
     ) -> (Vec<LoweredStatement>, String) {
         let mut statements = Vec::new();
         let value = match self.kind {
             CoercionKind::Identity => value,
             CoercionKind::WrapAsInterface(plan) => {
-                let adapter_name = planner.ensure_adapter_type(plan, fx);
+                let adapter_name = planner.ensure_adapter_type(plan);
                 format!("{}{{inner: {}}}", adapter_name, value)
             }
             CoercionKind::WrapNewtype { ty } => {
-                let type_name = planner.go_type_string(&ty, fx);
+                let type_name = planner.go_type_string(&ty);
                 format!("{}({})", type_name, value)
             }
             CoercionKind::UnwrapNullableOption { ty } => {
-                let inner = planner.go_type_string(&ty.ok_type(), fx);
-                planner.plan_option_projection(&mut statements, &value, "unwrap", &inner, false, fx)
+                let inner = planner.go_type_string(&ty.ok_type());
+                planner.plan_option_projection(&mut statements, &value, "unwrap", &inner, false)
             }
             CoercionKind::UnwrapPointerOption { ty } => {
-                let ptr = format!("*{}", planner.go_type_string(&ty.ok_type(), fx));
-                planner.plan_option_projection(&mut statements, &value, "ptr", &ptr, true, fx)
+                let ptr = format!("*{}", planner.go_type_string(&ty.ok_type()));
+                planner.plan_option_projection(&mut statements, &value, "ptr", &ptr, true)
             }
             CoercionKind::UnwrapOptionToAny => {
-                planner.plan_option_projection(&mut statements, &value, "unwrap", "any", false, fx)
+                planner.plan_option_projection(&mut statements, &value, "unwrap", "any", false)
             }
             CoercionKind::UnwrapNullableCollection { ty, shape } => {
-                planner.plan_collection_nullable_unwrap(&mut statements, &value, &ty, &shape, fx)
+                planner.plan_collection_nullable_unwrap(&mut statements, &value, &ty, &shape)
             }
             CoercionKind::WrapNullableOption { ty } => {
-                planner.plan_nil_check_option_wrap(&mut statements, &value, &ty, fx)
+                planner.plan_nil_check_option_wrap(&mut statements, &value, &ty)
             }
             CoercionKind::WrapPointerOption { ty } => {
-                planner.plan_pointer_to_option_wrap(&mut statements, &value, &ty, fx)
+                planner.plan_pointer_to_option_wrap(&mut statements, &value, &ty)
             }
             CoercionKind::WrapNullableCollection { ty, shape } => {
-                planner.plan_collection_nullable_wrap(&mut statements, &value, &ty, &shape, fx)
+                planner.plan_collection_nullable_wrap(&mut statements, &value, &ty, &shape)
             }
         };
         (statements, value)
@@ -115,7 +113,6 @@ impl Planner<'_> {
         target_ty: Option<&Type>,
         expression: &Expression,
         emitted: String,
-        fx: &mut EmitEffects,
     ) -> String {
         let Some(target) = target_ty else {
             return emitted;
@@ -126,7 +123,7 @@ impl Planner<'_> {
             target,
             CoercionDirection::Internal,
         );
-        let (setup, value) = coercion.lower(self, emitted, fx);
+        let (setup, value) = coercion.lower(self, emitted);
         output.push_str(&Renderer.render_setup(&setup));
         value
     }

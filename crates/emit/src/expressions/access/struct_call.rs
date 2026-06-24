@@ -5,7 +5,6 @@ use syntax::ast::{Expression, StructFieldAssignment, StructSpread};
 use syntax::program::{Definition, DefinitionBody};
 use syntax::types::{CompoundKind, SimpleKind, Type, unqualified_name};
 
-use crate::EmitEffects;
 use crate::Planner;
 use crate::abi::coercion::{Coercion, CoercionDirection};
 use crate::context::expression::ExpressionContext;
@@ -39,9 +38,8 @@ impl Planner<'_> {
         spread: &StructSpread,
         ty: &Type,
         expression_ctx: ExpressionContext<'_>,
-        fx: &mut EmitEffects,
     ) -> ValuePlan {
-        let ctx = self.analyze_struct_call(name, ty, fx);
+        let ctx = self.analyze_struct_call(name, ty);
 
         let tag_field = ctx.enum_ctx.as_ref().map(|e| {
             (
@@ -55,7 +53,7 @@ impl Planner<'_> {
 
         let stages: Vec<StagedExpression> = kept
             .iter()
-            .map(|f| self.stage_composite(&f.value, ExpressionContext::value(), fx))
+            .map(|f| self.stage_composite(&f.value, ExpressionContext::value()))
             .collect();
         let (mut setup, emitted_values) = self.sequence_structured(stages, "_field");
 
@@ -74,7 +72,6 @@ impl Planner<'_> {
                 &value_ty,
                 field_ty.as_ref(),
                 is_go_struct,
-                fx,
             );
             field_names.push(field_name);
             field_values.push(value);
@@ -92,7 +89,7 @@ impl Planner<'_> {
                 // Never-typed spread base diverges — emit as statement and
                 // return a zero-value struct literal (dead code follows).
                 if base.get_type().is_never() {
-                    setup.push(self.lower_statement(base, fx));
+                    setup.push(self.lower_statement(base));
                     format!("{}{{}}", ctx.go_type)
                 } else {
                     let mut field_side_effects: Vec<bool> = Vec::new();
@@ -104,17 +101,11 @@ impl Planner<'_> {
                             .iter()
                             .map(|f| observable_after_mutation(&f.value)),
                     );
-                    self.lower_struct_update(
-                        &mut setup,
-                        base,
-                        &field_pairs,
-                        &field_side_effects,
-                        fx,
-                    )
+                    self.lower_struct_update(&mut setup, base, &field_pairs, &field_side_effects)
                 }
             }
             StructSpread::ZeroFill { .. } if !is_go_struct => {
-                self.append_zero_fills(&mut field_pairs, field_assignments, ty, name, &ctx, fx);
+                self.append_zero_fills(&mut field_pairs, field_assignments, ty, name, &ctx);
                 emit_struct_literal(&ctx.go_type, &field_pairs, expression_ctx)
             }
             StructSpread::ZeroFill { .. } | StructSpread::None => {
@@ -137,7 +128,6 @@ impl Planner<'_> {
         value_ty: &Type,
         field_ty: Option<&Type>,
         is_go_struct: bool,
-        fx: &mut EmitEffects,
     ) -> String {
         if is_go_struct {
             let target_ty = field_ty.unwrap_or(value_ty);
@@ -146,13 +136,13 @@ impl Planner<'_> {
             }
             let coercion =
                 Coercion::resolve(self, value_ty, target_ty, CoercionDirection::ToGoBoundary);
-            let (coercion_setup, coerced) = coercion.lower(self, value, fx);
+            let (coercion_setup, coerced) = coercion.lower(self, value);
             statements.extend(coercion_setup);
             value = coerced;
         }
         if let Some(field_ty) = field_ty {
             let coercion = Coercion::resolve(self, value_ty, field_ty, CoercionDirection::Internal);
-            let (coercion_setup, coerced) = coercion.lower(self, value, fx);
+            let (coercion_setup, coerced) = coercion.lower(self, value);
             statements.extend(coercion_setup);
             value = coerced;
         }
@@ -168,7 +158,6 @@ impl Planner<'_> {
         ty: &Type,
         name: &str,
         ctx: &StructCallContext,
-        fx: &mut EmitEffects,
     ) {
         let assigned: HashSet<&str> = field_assignments.iter().map(|f| f.name.as_str()).collect();
         let Some(unspecified) =
@@ -181,7 +170,7 @@ impl Planner<'_> {
                 continue;
             }
             let go_field_name = self.resolve_struct_call_field_name(&field_name, ty, ctx);
-            let zero = self.lisette_zero(&field_ty, fx);
+            let zero = self.lisette_zero(&field_ty);
             field_pairs.push((go_field_name, zero));
         }
     }
@@ -271,11 +260,11 @@ impl Planner<'_> {
             &map,
         ))
     }
-    fn go_imported_zero(&mut self, ty: &Type, id: &str, fx: &mut EmitEffects) -> String {
+    fn go_imported_zero(&mut self, ty: &Type, id: &str) -> String {
         if self.facts.is_interface(ty) || self.facts.resolve_to_function_type(ty).is_some() {
             return "nil".to_string();
         }
-        let go_ty = self.go_type_string(ty, fx);
+        let go_ty = self.go_type_string(ty);
         // A newtype is a Go named scalar (`type Duration int64`), so a composite
         // literal `Duration{}` is invalid; `*new(Duration)` yields its zero.
         let is_newtype = self.facts.definition(id).is_some_and(|d| d.is_newtype());
@@ -294,7 +283,7 @@ impl Planner<'_> {
         }
     }
 
-    pub(crate) fn lisette_zero(&mut self, ty: &Type, fx: &mut EmitEffects) -> String {
+    pub(crate) fn lisette_zero(&mut self, ty: &Type) -> String {
         match ty {
             Type::Simple(kind) => match kind {
                 SimpleKind::Bool => "false".to_string(),
@@ -306,46 +295,46 @@ impl Planner<'_> {
                 CompoundKind::Slice => {
                     let inner = args
                         .first()
-                        .map(|a| self.go_type_string(a, fx))
+                        .map(|a| self.go_type_string(a))
                         .unwrap_or_else(|| "any".to_string());
                     format!("([]{})(nil)", inner)
                 }
                 CompoundKind::Map => {
                     let key = args
                         .first()
-                        .map(|a| self.go_type_string(a, fx))
+                        .map(|a| self.go_type_string(a))
                         .unwrap_or_else(|| "any".to_string());
                     let val = args
                         .get(1)
-                        .map(|a| self.go_type_string(a, fx))
+                        .map(|a| self.go_type_string(a))
                         .unwrap_or_else(|| "any".to_string());
                     format!("map[{}]{}{{}}", key, val)
                 }
-                _ => format!("{}{{}}", self.go_type_string(ty, fx)),
+                _ => format!("{}{{}}", self.go_type_string(ty)),
             },
             Type::Nominal { id, params, .. } => {
                 if id.as_str() == "prelude.Option" {
                     let inner = params
                         .first()
-                        .map(|a| self.go_type_string(a, fx))
+                        .map(|a| self.go_type_string(a))
                         .unwrap_or_else(|| "any".to_string());
-                    fx.require_stdlib();
+                    self.require_stdlib();
                     return format!("{}.MakeOptionNone[{}]()", go_name::GO_STDLIB_PKG, inner);
                 }
                 if go_name::is_go_import(id.as_str()) {
-                    return self.go_imported_zero(ty, id.as_str(), fx);
+                    return self.go_imported_zero(ty, id.as_str());
                 }
 
                 if let Some(underlying) = self.get_newtype_underlying(ty) {
-                    let go_ty = self.go_type_string(ty, fx);
-                    let inner = self.lisette_zero(&underlying, fx);
+                    let go_ty = self.go_type_string(ty);
+                    let inner = self.lisette_zero(&underlying);
                     return format!("{}({})", go_ty, inner);
                 }
 
                 if let Some(fields) =
                     self.lookup_unspecified_fields(ty, "", None, &HashSet::default())
                 {
-                    let go_ty = self.go_type_string(ty, fx);
+                    let go_ty = self.go_type_string(ty);
                     let is_tuple = self.is_tuple_struct_type(ty);
                     let pairs: Vec<(String, String)> = fields
                         .into_iter()
@@ -359,20 +348,19 @@ impl Planner<'_> {
                             } else {
                                 go_name::escape_keyword(&name).into_owned()
                             };
-                            (go_name, self.lisette_zero(&field_ty, fx))
+                            (go_name, self.lisette_zero(&field_ty))
                         })
                         .collect();
                     return emit_struct_literal(&go_ty, &pairs, ExpressionContext::value());
                 }
                 if let Some(underlying) = ty.get_underlying() {
-                    return self.lisette_zero(underlying, fx);
+                    return self.lisette_zero(underlying);
                 }
-                format!("{}{{}}", self.go_type_string(ty, fx))
+                format!("{}{{}}", self.go_type_string(ty))
             }
             Type::Tuple(elements) => {
-                let parts: Vec<String> =
-                    elements.iter().map(|e| self.lisette_zero(e, fx)).collect();
-                fx.require_stdlib();
+                let parts: Vec<String> = elements.iter().map(|e| self.lisette_zero(e)).collect();
+                self.require_stdlib();
                 format!(
                     "{}.MakeTuple{}({})",
                     go_name::GO_STDLIB_PKG,
@@ -380,7 +368,7 @@ impl Planner<'_> {
                     parts.join(", ")
                 )
             }
-            _ => format!("{}{{}}", self.go_type_string(ty, fx)),
+            _ => format!("{}{{}}", self.go_type_string(ty)),
         }
     }
 
@@ -407,22 +395,17 @@ impl Planner<'_> {
     }
 
     /// Analyze a struct call to determine Go type and enum context.
-    fn analyze_struct_call(
-        &mut self,
-        name: &str,
-        ty: &Type,
-        fx: &mut EmitEffects,
-    ) -> StructCallContext {
+    fn analyze_struct_call(&mut self, name: &str, ty: &Type) -> StructCallContext {
         let is_prelude = is_from_prelude(ty);
         let enum_id = self.as_enum(ty);
 
-        let go_type = self.compute_struct_call_go_type(name, ty, is_prelude, enum_id.is_some(), fx);
+        let go_type = self.compute_struct_call_go_type(name, ty, is_prelude, enum_id.is_some());
 
         if let Some(ref id) = enum_id {
-            self.add_enum_imports_if_needed(name, id, fx);
+            self.add_enum_imports_if_needed(name, id);
         }
 
-        let enum_ctx = enum_id.map(|id| self.compute_enum_call_context(name, &id, fx));
+        let enum_ctx = enum_id.map(|id| self.compute_enum_call_context(name, &id));
 
         StructCallContext { go_type, enum_ctx }
     }
@@ -434,12 +417,11 @@ impl Planner<'_> {
         ty: &Type,
         is_prelude: bool,
         is_enum: bool,
-        fx: &mut EmitEffects,
     ) -> String {
         if let Type::Nominal { id, .. } = ty
             && let Some(go) = self.anon_struct_go_type(id)
         {
-            fx.merge_from_go_type(&go);
+            self.note_go_type(&go);
             return go.code;
         }
 
@@ -453,16 +435,16 @@ impl Planner<'_> {
                 let type_args = if self.is_non_generic_alias_call(parts[1], ty) {
                     String::new()
                 } else if let Type::Nominal { params, .. } = ty {
-                    self.format_type_args(params, fx)
+                    self.format_type_args(params)
                 } else {
                     String::new()
                 };
-                let pkg = self.require_module_import_fx(parts[0], fx);
+                let pkg = self.require_module_import(parts[0]);
                 return format!("{}.{}{}", pkg, go_name::snake_to_camel(parts[1]), type_args);
             }
         }
 
-        self.go_type_string(ty, fx)
+        self.go_type_string(ty)
     }
 
     /// True when `type_name` (e.g., `StringFlag`) is a non-generic alias in the
@@ -482,15 +464,10 @@ impl Planner<'_> {
     }
 
     /// Compute the enum-specific context for a struct call.
-    fn compute_enum_call_context(
-        &mut self,
-        name: &str,
-        enum_id: &str,
-        fx: &mut EmitEffects,
-    ) -> EnumCallContext {
+    fn compute_enum_call_context(&mut self, name: &str, enum_id: &str) -> EnumCallContext {
         let variant_name = unqualified_name(name).to_string();
 
-        let tag_constant = self.resolve_variant(name, enum_id, fx);
+        let tag_constant = self.resolve_variant(name, enum_id);
 
         let pointer_fields = if let Some(layout) = self.enum_layout(enum_id) {
             if let Some(variant) = layout.get_variant(&variant_name) {
@@ -515,12 +492,12 @@ impl Planner<'_> {
         }
     }
 
-    fn add_enum_imports_if_needed(&mut self, name: &str, enum_id: &str, fx: &mut EmitEffects) {
+    fn add_enum_imports_if_needed(&mut self, name: &str, enum_id: &str) {
         if let Some(enum_module) = self.facts.module_for_qualified_name(enum_id)
             && !self.facts.is_current_module(enum_module)
         {
             let enum_module = enum_module.to_string();
-            self.require_module_import_fx(&enum_module, fx);
+            self.require_module_import(&enum_module);
         }
 
         let parts: Vec<&str> = name.split('.').collect();
@@ -530,7 +507,7 @@ impl Planner<'_> {
                 .module_for_alias(parts[0])
                 .unwrap_or(parts[0])
                 .to_string();
-            self.require_module_import_fx(&module, fx);
+            self.require_module_import(&module);
         }
     }
 
@@ -559,10 +536,9 @@ impl Planner<'_> {
         base: &Expression,
         fields: &[(String, String)],
         field_side_effects: &[bool],
-        fx: &mut EmitEffects,
     ) -> String {
         if fields.is_empty() {
-            let staged = self.stage_operand(base, ExpressionContext::value(), fx);
+            let staged = self.stage_operand(base, ExpressionContext::value());
             statements.extend(staged.setup);
             return staged.value;
         }
@@ -580,7 +556,7 @@ impl Planner<'_> {
             })
             .collect();
 
-        let base_staged = self.stage_operand(base, ExpressionContext::value(), fx);
+        let base_staged = self.stage_operand(base, ExpressionContext::value());
         statements.extend(base_staged.setup);
         let tmp = self.hoist_tmp_value_statement(statements, "copy", &base_staged.value);
 

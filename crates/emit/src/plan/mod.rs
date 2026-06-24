@@ -44,8 +44,8 @@ impl Planner<'_> {
         self.collect_generic_constraints(files);
         self.collect_escape_remap(files);
         let collision_diagnostics = self.detect_name_collisions(files);
-        let mut make_functions_by_file =
-            self.collect_local_make_function_code(&mut collection_effects);
+        let mut make_functions_by_file = self.collect_local_make_function_code();
+        collection_effects.extend(&self.take_effects());
 
         let package_name = if self.facts.is_entry_module(module_id) {
             "main".to_string()

@@ -1,6 +1,5 @@
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
-use crate::EmitEffects;
 use crate::names::go_name;
 use crate::{Planner, PreludeType};
 use syntax::ast::{Expression, Visibility};
@@ -121,10 +120,7 @@ impl Planner<'_> {
         }
     }
 
-    pub(crate) fn collect_local_make_function_code(
-        &mut self,
-        fx: &mut EmitEffects,
-    ) -> HashMap<u32, Vec<String>> {
+    pub(crate) fn collect_local_make_function_code(&mut self) -> HashMap<u32, Vec<String>> {
         let module_prefix = format!("{}.", self.facts.current_module());
         let mut code: HashMap<u32, Vec<String>> = HashMap::default();
 
@@ -158,7 +154,7 @@ impl Planner<'_> {
         for (key, variants, file_id) in local_enums {
             self.module.set_active_file(file_id);
             for variant in &variants {
-                let fn_code = self.create_make_function_code(&key, &variant.name, fx);
+                let fn_code = self.create_make_function_code(&key, &variant.name);
                 code.entry(file_id).or_default().push(fn_code);
             }
         }

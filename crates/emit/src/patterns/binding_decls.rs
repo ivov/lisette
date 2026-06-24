@@ -6,7 +6,6 @@ use syntax::ast::{
 use syntax::program::{Definition, DefinitionBody};
 use syntax::types::{Type, unqualified_name};
 
-use crate::EmitEffects;
 use crate::Planner;
 use crate::expressions::literals::{convert_escape_sequences, emit_raw_string};
 use crate::names::generics;
@@ -163,21 +162,18 @@ impl Planner<'_> {
         pattern: &Pattern,
         ty: &Type,
         typed: Option<&TypedPattern>,
-        fx: &mut EmitEffects,
     ) {
         match pattern {
             Pattern::Identifier { identifier, .. } => {
-                self.declare_pattern_var(statements, pattern, identifier, ty, fx);
+                self.declare_pattern_var(statements, pattern, identifier, ty);
             }
             Pattern::Tuple { elements, .. } => {
-                self.lower_tuple_pattern_declarations(statements, elements, ty, typed, fx);
+                self.lower_tuple_pattern_declarations(statements, elements, ty, typed);
             }
             Pattern::Struct {
                 fields, identifier, ..
             } => {
-                self.lower_struct_pattern_declarations(
-                    statements, fields, identifier, ty, typed, fx,
-                );
+                self.lower_struct_pattern_declarations(statements, fields, identifier, ty, typed);
             }
             Pattern::EnumVariant {
                 fields,
@@ -186,11 +182,11 @@ impl Planner<'_> {
                 ..
             } => {
                 self.lower_enum_variant_pattern_declarations(
-                    statements, fields, identifier, pattern_ty, ty, typed, fx,
+                    statements, fields, identifier, pattern_ty, ty, typed,
                 );
             }
             Pattern::Slice { prefix, rest, .. } => {
-                self.lower_slice_pattern_declarations(statements, prefix, rest, ty, typed, fx);
+                self.lower_slice_pattern_declarations(statements, prefix, rest, ty, typed);
             }
             Pattern::Or { patterns, .. } => {
                 let Some(first) = patterns.first() else {
@@ -200,15 +196,15 @@ impl Planner<'_> {
                     Some(TypedPattern::Or { alternatives }) => alternatives.first(),
                     _ => None,
                 };
-                self.lower_binding_declarations_with_type(statements, first, ty, alt, fx);
+                self.lower_binding_declarations_with_type(statements, first, ty, alt);
             }
             p @ Pattern::AsBinding {
                 pattern: inner,
                 name,
                 ..
             } => {
-                self.lower_binding_declarations_with_type(statements, inner, ty, typed, fx);
-                self.declare_pattern_var(statements, p, name, ty, fx);
+                self.lower_binding_declarations_with_type(statements, inner, ty, typed);
+                self.declare_pattern_var(statements, p, name, ty);
             }
             Pattern::WildCard { .. } | Pattern::Literal { .. } | Pattern::Unit { .. } => {}
         }
@@ -221,13 +217,12 @@ impl Planner<'_> {
         pattern: &Pattern,
         lisette_name: &EcoString,
         resolved: &Type,
-        fx: &mut EmitEffects,
     ) {
         let Some(go_name) = self.go_name_for_binding(pattern) else {
             self.scope.bind(lisette_name, "_");
             return;
         };
-        self.declare_var_declaration(statements, lisette_name, go_name, resolved, fx);
+        self.declare_var_declaration(statements, lisette_name, go_name, resolved);
     }
 
     /// Freshen `go_name`, register the binding, emit `var X T`.
@@ -237,7 +232,6 @@ impl Planner<'_> {
         lisette_name: &EcoString,
         go_name: String,
         resolved: &Type,
-        fx: &mut EmitEffects,
     ) {
         let go_name = if self.is_declared(&go_name) {
             self.fresh_var(Some(lisette_name))
@@ -246,7 +240,7 @@ impl Planner<'_> {
         };
         let go_name = self.scope.bind(lisette_name, go_name);
         self.declare(&go_name);
-        let go_ty = self.go_type_string(resolved, fx);
+        let go_ty = self.go_type_string(resolved);
         statements.push(LoweredStatement::VarDecl {
             name: go_name,
             go_type: go_ty,
@@ -261,7 +255,6 @@ impl Planner<'_> {
         elements: &[Pattern],
         resolved: &Type,
         typed: Option<&TypedPattern>,
-        fx: &mut EmitEffects,
     ) {
         let typed_elements: &[TypedPattern] = match typed {
             Some(TypedPattern::Tuple { elements: te, .. }) => te.as_slice(),
@@ -278,7 +271,6 @@ impl Planner<'_> {
                 element,
                 element_ty,
                 typed_elements.get(i),
-                fx,
             );
         }
     }
@@ -292,7 +284,6 @@ impl Planner<'_> {
         identifier: &EcoString,
         resolved: &Type,
         typed: Option<&TypedPattern>,
-        fx: &mut EmitEffects,
     ) {
         match typed {
             Some(TypedPattern::Struct {
@@ -317,7 +308,6 @@ impl Planner<'_> {
                     struct_fields,
                     GenericArgs { generics, params },
                     Some(pattern_fields),
-                    fx,
                 );
             }
             Some(TypedPattern::EnumStructVariant {
@@ -342,10 +332,9 @@ impl Planner<'_> {
                     variant_fields,
                     GenericArgs { generics, params },
                     Some(pattern_fields),
-                    fx,
                 );
             }
-            _ => self.lower_struct_pattern_fallback(statements, fields, identifier, resolved, fx),
+            _ => self.lower_struct_pattern_fallback(statements, fields, identifier, resolved),
         }
     }
 
@@ -356,7 +345,6 @@ impl Planner<'_> {
         fields: &[StructFieldPattern],
         identifier: &EcoString,
         resolved: &Type,
-        fx: &mut EmitEffects,
     ) {
         let Type::Nominal { id, params, .. } = resolved else {
             return;
@@ -373,7 +361,6 @@ impl Planner<'_> {
                     field_definitions,
                     GenericArgs { generics, params },
                     None,
-                    fx,
                 );
             }
             Some(DefinitionBody::Enum {
@@ -387,7 +374,6 @@ impl Planner<'_> {
                         variant_fields_slice(&variant.fields),
                         GenericArgs { generics, params },
                         None,
-                        fx,
                     );
                 }
             }
@@ -406,10 +392,9 @@ impl Planner<'_> {
         pattern_ty: &Type,
         resolved: &Type,
         typed: Option<&TypedPattern>,
-        fx: &mut EmitEffects,
     ) {
         if self.is_tuple_struct_type(pattern_ty) {
-            self.lower_tuple_struct_variant_declarations(statements, fields, resolved, typed, fx);
+            self.lower_tuple_struct_variant_declarations(statements, fields, resolved, typed);
             return;
         }
 
@@ -440,7 +425,6 @@ impl Planner<'_> {
                 variant_fields,
                 GenericArgs { generics, params },
                 typed_fields,
-                fx,
             );
             return;
         }
@@ -467,7 +451,6 @@ impl Planner<'_> {
             variant_fields_slice(&variant.fields),
             GenericArgs { generics, params },
             None,
-            fx,
         );
     }
 
@@ -478,7 +461,6 @@ impl Planner<'_> {
         fields: &[Pattern],
         resolved: &Type,
         typed: Option<&TypedPattern>,
-        fx: &mut EmitEffects,
     ) {
         let Type::Nominal { id, params, .. } = resolved else {
             return;
@@ -506,7 +488,6 @@ impl Planner<'_> {
             field_definitions,
             GenericArgs { generics, params },
             typed_fields,
-            fx,
         );
     }
 
@@ -518,7 +499,6 @@ impl Planner<'_> {
         rest: &RestPattern,
         resolved: &Type,
         typed: Option<&TypedPattern>,
-        fx: &mut EmitEffects,
     ) {
         let (element_ty, typed_prefix): (Type, Option<&[TypedPattern]>) = match typed {
             Some(TypedPattern::Slice {
@@ -544,14 +524,13 @@ impl Planner<'_> {
                 element,
                 &element_ty,
                 typed_child,
-                fx,
             );
         }
 
         if let RestPattern::Bind { name, .. } = rest
             && let Some(go_name) = self.go_name_for_rest_binding(rest)
         {
-            self.declare_var_declaration(statements, name, go_name, resolved, fx);
+            self.declare_var_declaration(statements, name, go_name, resolved);
         }
     }
 
@@ -564,7 +543,6 @@ impl Planner<'_> {
         definitions: &[F],
         generic_args: GenericArgs,
         typed_pf: Option<&[(EcoString, TypedPattern)]>,
-        fx: &mut EmitEffects,
     ) {
         let GenericArgs { generics, params } = generic_args;
         for pattern in patterns {
@@ -582,7 +560,6 @@ impl Planner<'_> {
                 &pattern.value,
                 &field_ty,
                 typed_child,
-                fx,
             );
         }
     }
@@ -595,19 +572,12 @@ impl Planner<'_> {
         definitions: &[F],
         generic_args: GenericArgs,
         typed_fields: Option<&[TypedPattern]>,
-        fx: &mut EmitEffects,
     ) {
         let GenericArgs { generics, params } = generic_args;
         for (i, (pattern, definition)) in patterns.iter().zip(definitions.iter()).enumerate() {
             let field_ty = generics::resolve_field_type(generics, params, definition.ty());
             let typed_child = typed_fields.and_then(|tf| tf.get(i));
-            self.lower_binding_declarations_with_type(
-                statements,
-                pattern,
-                &field_ty,
-                typed_child,
-                fx,
-            );
+            self.lower_binding_declarations_with_type(statements, pattern, &field_ty, typed_child);
         }
     }
 }

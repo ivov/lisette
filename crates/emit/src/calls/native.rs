@@ -1,5 +1,4 @@
 use super::NativeCallContext;
-use crate::EmitEffects;
 use crate::Planner;
 use crate::context::expression::ExpressionContext;
 use crate::expressions::access::index_access::range_var_bounds;
@@ -286,24 +285,24 @@ pub(super) fn has_inline_negation(native_type: &NativeGoType, method: &str, arit
 /// Resolve the inline rule for a dot-access form, applying the static-receiver
 /// fallback when the standard receiver shape does not match.
 fn apply_inline_lookup(
+    planner: &Planner,
     native_type: &NativeGoType,
     method: &str,
     receiver: &str,
     emitted_args: &[String],
     negated: bool,
-    fx: &mut EmitEffects,
 ) -> Option<String> {
     if let Some((inlined, import)) =
         try_inline_native_method(native_type, method, receiver, emitted_args, negated)
     {
-        apply_inline_import(import, fx);
+        apply_inline_import(planner, import);
         return Some(inlined);
     }
     if let Some((static_receiver, remaining)) = emitted_args.split_first()
         && let Some((inlined, import)) =
             try_inline_native_method(native_type, method, static_receiver, remaining, negated)
     {
-        apply_inline_import(import, fx);
+        apply_inline_import(planner, import);
         return Some(inlined);
     }
     None
@@ -311,15 +310,15 @@ fn apply_inline_lookup(
 
 /// Resolve the inline rule for an identifier-form call (args[0] is the receiver).
 fn apply_inline_identifier_lookup(
+    planner: &Planner,
     ctx: &NativeCallContext,
     emitted_args: &[String],
     negated: bool,
-    fx: &mut EmitEffects,
 ) -> Option<String> {
     let (receiver, remaining) = emitted_args.split_first()?;
     let (inlined, import) =
         try_inline_native_method(ctx.native_type, ctx.method, receiver, remaining, negated)?;
-    apply_inline_import(import, fx);
+    apply_inline_import(planner, import);
     Some(inlined)
 }
 
@@ -327,14 +326,13 @@ impl Planner<'_> {
     pub(super) fn lower_native_method_dot_access(
         &mut self,
         ctx: &NativeCallContext,
-        fx: &mut EmitEffects,
     ) -> (Vec<LoweredStatement>, String) {
         let Expression::DotAccess { expression, .. } = ctx.function else {
             unreachable!("expected DotAccess for native method call")
         };
 
         if matches!(ctx.native_type, NativeGoType::String) && ctx.method == "substring" {
-            return self.lower_string_substring(expression, ctx.args, fx);
+            return self.lower_string_substring(expression, ctx.args);
         }
 
         if ctx.method == "equals"
@@ -342,28 +340,28 @@ impl Planner<'_> {
         {
             let receiver_ty = self.facts.peel_alias(&expression.get_type().strip_refs());
             if receiver_ty.is_slice() || receiver_ty.is_map() {
-                let (setup, receiver, emitted_args) = self.stage_native_dot_access_call(ctx, fx);
-                let body = self.render_equality(&receiver, &emitted_args[0], &receiver_ty, fx);
+                let (setup, receiver, emitted_args) = self.stage_native_dot_access_call(ctx);
+                let body = self.render_equality(&receiver, &emitted_args[0], &receiver_ty);
                 return (setup, body);
             }
         }
 
-        let (setup, receiver, emitted_args) = self.stage_native_dot_access_call(ctx, fx);
+        let (setup, receiver, emitted_args) = self.stage_native_dot_access_call(ctx);
 
         if let Some(inlined) = apply_inline_lookup(
+            self,
             ctx.native_type,
             ctx.method,
             &receiver,
             &emitted_args,
             false,
-            fx,
         ) {
             return (setup, inlined);
         }
 
         let mut new_args = vec![receiver];
         new_args.extend(emitted_args);
-        fx.require_stdlib();
+        self.require_stdlib();
         let fn_name = format!(
             "{}.{}{}",
             go_name::GO_STDLIB_PKG,
@@ -372,9 +370,9 @@ impl Planner<'_> {
         );
         let type_args_string = if !ctx.resolved_type_args.is_empty() && ctx.call_ty.is_some() {
             let receiver_ty = expression.get_type();
-            self.format_type_args_with_receiver(&receiver_ty, ctx.resolved_type_args, fx)
+            self.format_type_args_with_receiver(&receiver_ty, ctx.resolved_type_args)
         } else {
-            self.format_type_args(ctx.resolved_type_args, fx)
+            self.format_type_args(ctx.resolved_type_args)
         };
         (
             setup,
@@ -389,20 +387,19 @@ impl Planner<'_> {
         &mut self,
         setup: &mut Vec<LoweredStatement>,
         ctx: &NativeCallContext,
-        fx: &mut EmitEffects,
     ) -> Option<String> {
         if !has_inline_negation(ctx.native_type, ctx.method, ctx.args.len()) {
             return None;
         }
-        let (stage_setup, receiver, emitted_args) = self.stage_native_dot_access_call(ctx, fx);
+        let (stage_setup, receiver, emitted_args) = self.stage_native_dot_access_call(ctx);
         setup.extend(stage_setup);
         apply_inline_lookup(
+            self,
             ctx.native_type,
             ctx.method,
             &receiver,
             &emitted_args,
             true,
-            fx,
         )
     }
 
@@ -428,7 +425,6 @@ impl Planner<'_> {
     fn stage_native_dot_access_call(
         &mut self,
         ctx: &NativeCallContext,
-        fx: &mut EmitEffects,
     ) -> (Vec<LoweredStatement>, String, Vec<String>) {
         let Expression::DotAccess { expression, .. } = ctx.function else {
             unreachable!("expected DotAccess for native method call")
@@ -436,7 +432,7 @@ impl Planner<'_> {
 
         let mut all_stages: Vec<StagedExpression> =
             Vec::with_capacity(1 + ctx.args.len() + ctx.spread.is_some() as usize);
-        let mut receiver_stage = self.stage_operand(expression, ExpressionContext::value(), fx);
+        let mut receiver_stage = self.stage_operand(expression, ExpressionContext::value());
         let rest_has_call =
             ctx.args.iter().any(contains_call) || ctx.spread.is_some_and(contains_call);
         self.pin_receiver_if_mutated(&mut receiver_stage, expression, rest_has_call);
@@ -444,11 +440,11 @@ impl Planner<'_> {
             receiver_stage.value = format!("*{}", receiver_stage.value);
         }
         all_stages.push(receiver_stage);
-        all_stages.extend(self.stage_native_method_args(ctx.function, ctx.args, fx));
+        all_stages.extend(self.stage_native_method_args(ctx.function, ctx.args));
 
         let combine = plan_variadic_spread(ctx.function, ctx.spread).map(|p| p.combine(1));
-        let (setup, all_values) = self
-            .sequence_with_spread_structured(all_stages, ctx.spread, false, "_arg", combine, fx);
+        let (setup, all_values) =
+            self.sequence_with_spread_structured(all_stages, ctx.spread, false, "_arg", combine);
 
         let receiver = all_values[0].clone();
         let emitted_args: Vec<String> = all_values[1..].to_vec();
@@ -458,13 +454,12 @@ impl Planner<'_> {
     pub(super) fn lower_native_method_identifier(
         &mut self,
         ctx: &NativeCallContext,
-        fx: &mut EmitEffects,
     ) -> (Vec<LoweredStatement>, String) {
         if matches!(ctx.native_type, NativeGoType::String)
             && ctx.method == "substring"
             && ctx.args.len() >= 2
         {
-            return self.lower_string_substring(&ctx.args[0], &ctx.args[1..], fx);
+            return self.lower_string_substring(&ctx.args[0], &ctx.args[1..]);
         }
 
         if ctx.method == "equals"
@@ -475,29 +470,29 @@ impl Planner<'_> {
                 .facts
                 .peel_alias(&receiver_expr.get_type().strip_refs());
             if receiver_ty.is_slice() || receiver_ty.is_map() {
-                let (setup, emitted_args) = self.stage_native_identifier_args(ctx, fx);
+                let (setup, emitted_args) = self.stage_native_identifier_args(ctx);
                 if emitted_args.len() >= 2 {
                     let body =
-                        self.render_equality(&emitted_args[0], &emitted_args[1], &receiver_ty, fx);
+                        self.render_equality(&emitted_args[0], &emitted_args[1], &receiver_ty);
                     return (setup, body);
                 }
             }
         }
 
-        let (setup, emitted_args) = self.stage_native_identifier_args(ctx, fx);
+        let (setup, emitted_args) = self.stage_native_identifier_args(ctx);
 
-        if let Some(inlined) = apply_inline_identifier_lookup(ctx, &emitted_args, false, fx) {
+        if let Some(inlined) = apply_inline_identifier_lookup(self, ctx, &emitted_args, false) {
             return (setup, inlined);
         }
 
-        fx.require_stdlib();
+        self.require_stdlib();
         let fn_name = format!(
             "{}.{}{}",
             go_name::GO_STDLIB_PKG,
             ctx.native_type.method_prefix(),
             go_name::snake_to_camel(ctx.method)
         );
-        let type_args_string = self.format_type_args(ctx.resolved_type_args, fx);
+        let type_args_string = self.format_type_args(ctx.resolved_type_args);
         (
             setup,
             format!(
@@ -514,39 +509,36 @@ impl Planner<'_> {
         &mut self,
         setup: &mut Vec<LoweredStatement>,
         ctx: &NativeCallContext,
-        fx: &mut EmitEffects,
     ) -> Option<String> {
         let receiver_arity = ctx.args.len().saturating_sub(1);
         if !has_inline_negation(ctx.native_type, ctx.method, receiver_arity) {
             return None;
         }
-        let (stage_setup, emitted_args) = self.stage_native_identifier_args(ctx, fx);
+        let (stage_setup, emitted_args) = self.stage_native_identifier_args(ctx);
         setup.extend(stage_setup);
-        apply_inline_identifier_lookup(ctx, &emitted_args, true, fx)
+        apply_inline_identifier_lookup(self, ctx, &emitted_args, true)
     }
 
     fn stage_native_identifier_args(
         &mut self,
         ctx: &NativeCallContext,
-        fx: &mut EmitEffects,
     ) -> (Vec<LoweredStatement>, Vec<String>) {
-        let mut stages = self.stage_native_method_args(ctx.function, ctx.args, fx);
+        let mut stages = self.stage_native_method_args(ctx.function, ctx.args);
         if let Some(receiver) = ctx.args.first() {
             let rest_has_call =
                 ctx.args[1..].iter().any(contains_call) || ctx.spread.is_some_and(contains_call);
             self.pin_receiver_if_mutated(&mut stages[0], receiver, rest_has_call);
         }
         let combine = plan_variadic_spread(ctx.function, ctx.spread).map(|p| p.combine(0));
-        self.sequence_with_spread_structured(stages, ctx.spread, false, "_arg", combine, fx)
+        self.sequence_with_spread_structured(stages, ctx.spread, false, "_arg", combine)
     }
 
     fn lower_string_substring(
         &mut self,
         receiver_expr: &Expression,
         args: &[Expression],
-        fx: &mut EmitEffects,
     ) -> (Vec<LoweredStatement>, String) {
-        fx.require_stdlib();
+        self.require_stdlib();
         let arg = &args[0];
         let is_ref_receiver = receiver_expr.get_type().is_ref();
         let deref = |raw: &str| -> String {
@@ -564,13 +556,12 @@ impl Planner<'_> {
             ..
         } = arg
         {
-            let mut stages =
-                vec![self.stage_operand(receiver_expr, ExpressionContext::value(), fx)];
+            let mut stages = vec![self.stage_operand(receiver_expr, ExpressionContext::value())];
             if let Some(s) = start.as_deref() {
-                stages.push(self.stage_operand(s, ExpressionContext::value(), fx));
+                stages.push(self.stage_operand(s, ExpressionContext::value()));
             }
             if let Some(e) = end.as_deref() {
-                stages.push(self.stage_operand(e, ExpressionContext::value(), fx));
+                stages.push(self.stage_operand(e, ExpressionContext::value()));
             }
             let (setup, values) = self.sequence_structured(stages, "_arg");
             let mut bounds = values.iter().skip(1);
@@ -597,8 +588,8 @@ impl Planner<'_> {
         let range_kind = peel_to_range_type(&arg_ty)
             .and_then(|t| t.get_name())
             .expect("substring arg should resolve to a known range type");
-        let receiver_staged = self.stage_operand(receiver_expr, ExpressionContext::value(), fx);
-        let range_staged = self.stage_or_capture(arg, "range", fx);
+        let receiver_staged = self.stage_operand(receiver_expr, ExpressionContext::value());
+        let range_staged = self.stage_or_capture(arg, "range");
         let (setup, values) = self.sequence_structured(vec![receiver_staged, range_staged], "_arg");
         let (start, end) = range_var_bounds(&values[1], range_kind);
         (
@@ -607,35 +598,29 @@ impl Planner<'_> {
         )
     }
 
-    pub(crate) fn render_equality(
-        &mut self,
-        lhs: &str,
-        rhs: &str,
-        ty: &Type,
-        fx: &mut EmitEffects,
-    ) -> String {
+    pub(crate) fn render_equality(&mut self, lhs: &str, rhs: &str, ty: &Type) -> String {
         let peeled = self.facts.peel_alias(ty);
         if peeled.is_ref() {
             return format!("{lhs} == {rhs}");
         }
         if peeled.is_slice() {
-            fx.require_slices();
+            self.require_slices();
             return match peeled.inner() {
                 Some(elem) if self.needs_custom_equality(&elem) => {
-                    let eq = self.equality_closure(&elem, fx);
+                    let eq = self.equality_closure(&elem);
                     format!("slices.EqualFunc({lhs}, {rhs}, {eq})")
                 }
                 _ => format!("slices.Equal({lhs}, {rhs})"),
             };
         }
         if peeled.is_map() {
-            fx.require_maps();
+            self.require_maps();
             let value = peeled
                 .as_compound()
                 .and_then(|(_, args)| args.get(1).cloned());
             return match value {
                 Some(value) if self.needs_custom_equality(&value) => {
-                    let eq = self.equality_closure(&value, fx);
+                    let eq = self.equality_closure(&value);
                     format!("maps.EqualFunc({lhs}, {rhs}, {eq})")
                 }
                 _ => format!("maps.Equal({lhs}, {rhs})"),
@@ -647,11 +632,11 @@ impl Planner<'_> {
         format!("{lhs} == {rhs}")
     }
 
-    fn equality_closure(&mut self, ty: &Type, fx: &mut EmitEffects) -> String {
-        let go_ty = self.go_type_string(ty, fx);
+    fn equality_closure(&mut self, ty: &Type) -> String {
+        let go_ty = self.go_type_string(ty);
         let a = self.fresh_var(Some("a"));
         let b = self.fresh_var(Some("b"));
-        let body = self.render_equality(&a, &b, ty, fx);
+        let body = self.render_equality(&a, &b, ty);
         format!("func({a} {go_ty}, {b} {go_ty}) bool {{ return {body} }}")
     }
 
@@ -675,12 +660,12 @@ fn format_substring_call(receiver: &str, start: Option<&str>, end: Option<&str>)
     }
 }
 
-pub(super) fn apply_inline_import(import: InlineImport, fx: &mut EmitEffects) {
+pub(super) fn apply_inline_import(planner: &Planner, import: InlineImport) {
     match import {
-        InlineImport::Slices => fx.require_slices(),
-        InlineImport::Strings => fx.require_strings(),
-        InlineImport::Maps => fx.require_maps(),
-        InlineImport::Stdlib => fx.require_stdlib(),
+        InlineImport::Slices => planner.require_slices(),
+        InlineImport::Strings => planner.require_strings(),
+        InlineImport::Maps => planner.require_maps(),
+        InlineImport::Stdlib => planner.require_stdlib(),
         InlineImport::None => {}
     }
 }

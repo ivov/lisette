@@ -1,4 +1,3 @@
-use crate::EmitEffects;
 use crate::Planner;
 use crate::abi::AbiShape;
 use crate::abi::transition::emit_return_adapter;
@@ -218,7 +217,6 @@ impl Planner<'_> {
         return_ty: &Type,
         user_shape: &AbiShape,
         interface_shape: &AbiShape,
-        fx: &mut EmitEffects,
     ) -> Option<(String, String)> {
         let (AbiShape::NullableReturn, AbiShape::CommaOk) = (user_shape, interface_shape) else {
             return None;
@@ -228,12 +226,12 @@ impl Planner<'_> {
         let val = self.fresh_var(Some("val"));
         self.declare(&val);
         let nil_check = if is_interface {
-            fx.require_stdlib();
+            self.require_stdlib();
             format!("!lisette.IsNilInterface({})", val)
         } else {
             format!("{} != nil", val)
         };
-        let go_ret = self.render_lowered_return_ty(&AbiShape::CommaOk, return_ty, fx);
+        let go_ret = self.render_lowered_return_ty(&AbiShape::CommaOk, return_ty);
         let body = format!("{val} := {inner_call}\nreturn {val}, {nil_check}\n");
         Some((go_ret, body))
     }
@@ -266,11 +264,7 @@ impl Planner<'_> {
         Some(base)
     }
 
-    pub(crate) fn ensure_adapter_type(
-        &mut self,
-        plan: AdapterPlan,
-        fx: &mut EmitEffects,
-    ) -> String {
+    pub(crate) fn ensure_adapter_type(&mut self, plan: AdapterPlan) -> String {
         let key = (
             concrete_dedup_key(&plan.concrete_ty, &plan.concrete_id),
             plan.interface_id.clone(),
@@ -282,7 +276,7 @@ impl Planner<'_> {
         let index = self.adapter_registry.next_index();
         let adapter_name = adapter_type_name(&plan, index);
 
-        let concrete_go_ty = self.go_type_string(&plan.concrete_ty, fx);
+        let concrete_go_ty = self.go_type_string(&plan.concrete_ty);
 
         let mut declaration = String::new();
         write_line!(declaration, "type {} struct {{", adapter_name);
@@ -291,7 +285,7 @@ impl Planner<'_> {
         declaration.push('\n');
 
         for method in &plan.methods {
-            self.emit_adapter_method(&mut declaration, &adapter_name, method, fx);
+            self.emit_adapter_method(&mut declaration, &adapter_name, method);
             declaration.push('\n');
         }
 
@@ -305,7 +299,6 @@ impl Planner<'_> {
         declaration: &mut String,
         adapter_name: &str,
         method: &AdapterMethod,
-        fx: &mut EmitEffects,
     ) {
         self.enter_scope();
 
@@ -319,7 +312,7 @@ impl Planner<'_> {
         let params_str = param_names
             .iter()
             .zip(method.param_types.iter())
-            .map(|(n, t)| format!("{} {}", n, self.go_type_string(t, fx)))
+            .map(|(n, t)| format!("{} {}", n, self.go_type_string(t)))
             .collect::<Vec<_>>()
             .join(", ");
 
@@ -330,7 +323,7 @@ impl Planner<'_> {
         };
         let inner_call = format!("a.inner.{}({})", go_method_name, param_names.join(", "));
 
-        let (go_ret, body) = self.build_adapter_body(method, &inner_call, fx);
+        let (go_ret, body) = self.build_adapter_body(method, &inner_call);
         self.finish_adapter_method(
             declaration,
             adapter_name,
@@ -341,31 +334,26 @@ impl Planner<'_> {
         );
     }
 
-    fn build_adapter_body(
-        &mut self,
-        method: &AdapterMethod,
-        inner_call: &str,
-        fx: &mut EmitEffects,
-    ) -> (String, String) {
+    fn build_adapter_body(&mut self, method: &AdapterMethod, inner_call: &str) -> (String, String) {
         let user_shape = &method.user_shape;
         let interface_shape = &method.interface_shape;
 
         if user_shape == interface_shape
             && let Some(shape) = user_shape
         {
-            let go_ret = self.render_lowered_return_ty(shape, &method.return_type, fx);
+            let go_ret = self.render_lowered_return_ty(shape, &method.return_type);
             return (go_ret, format!("return {}\n", inner_call));
         }
 
         if let (Some(user), Some(interface)) = (user_shape, interface_shape)
             && user != interface
             && let Some(bridge) =
-                self.emit_hint_shift_bridge(inner_call, &method.return_type, user, interface, fx)
+                self.emit_hint_shift_bridge(inner_call, &method.return_type, user, interface)
         {
             return bridge;
         }
 
-        let adapter = emit_return_adapter(self, inner_call, &method.return_type, fx);
+        let adapter = emit_return_adapter(self, inner_call, &method.return_type);
         if let Some(adapter) = adapter {
             return adapter;
         }
@@ -373,7 +361,7 @@ impl Planner<'_> {
         if method.return_type.is_unit() {
             (String::new(), format!("{}\n", inner_call))
         } else {
-            let ret = self.go_type_string(&method.return_type, fx);
+            let ret = self.go_type_string(&method.return_type);
             (ret, format!("return {}\n", inner_call))
         }
     }

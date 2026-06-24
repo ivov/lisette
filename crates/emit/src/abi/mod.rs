@@ -1,7 +1,6 @@
 pub(crate) mod coercion;
 pub(crate) mod transition;
 
-use crate::EmitEffects;
 use crate::GoCallStrategy;
 use crate::Planner;
 use crate::names::go_name::PRELUDE_ERROR_ID;
@@ -83,25 +82,24 @@ impl Planner<'_> {
         &mut self,
         shape: &AbiShape,
         return_ty: &Type,
-        fx: &mut EmitEffects,
     ) -> String {
         let peeled = self.facts.peel_alias(return_ty);
         match shape {
-            AbiShape::BareError => self.go_type_string(&peeled.err_type(), fx),
+            AbiShape::BareError => self.go_type_string(&peeled.err_type()),
             AbiShape::ResultTuple | AbiShape::PartialTuple => {
-                let ok_str = self.go_type_string(&peeled.ok_type(), fx);
-                let err_str = self.go_type_string(&peeled.err_type(), fx);
+                let ok_str = self.go_type_string(&peeled.ok_type());
+                let err_str = self.go_type_string(&peeled.err_type());
                 format!("({}, {})", ok_str, err_str)
             }
             AbiShape::CommaOk => {
-                let inner_str = self.go_type_string(&peeled.ok_type(), fx);
+                let inner_str = self.go_type_string(&peeled.ok_type());
                 format!("({}, bool)", inner_str)
             }
-            AbiShape::NullableReturn => self.go_type_string(&peeled.ok_type(), fx),
+            AbiShape::NullableReturn => self.go_type_string(&peeled.ok_type()),
             AbiShape::Tuple { .. } => {
                 let parts: Vec<String> = tuple_element_types(&peeled)
                     .iter()
-                    .map(|t| self.tuple_slot_lowered_ty_string(t, fx))
+                    .map(|t| self.tuple_slot_lowered_ty_string(t))
                     .collect();
                 format!("({})", parts.join(", "))
             }
@@ -110,16 +108,12 @@ impl Planner<'_> {
 
     /// Render a tuple slot's Go type, lowering `Option<NilableT>` to bare
     /// nilable `T` (the only arity-preserving slot recursion).
-    pub(crate) fn tuple_slot_lowered_ty_string(
-        &mut self,
-        slot_ty: &Type,
-        fx: &mut EmitEffects,
-    ) -> String {
+    pub(crate) fn tuple_slot_lowered_ty_string(&mut self, slot_ty: &Type) -> String {
         if self.facts.is_nullable_option(slot_ty) {
             let inner = self.facts.peel_alias(slot_ty).ok_type();
-            return self.go_type_string(&inner, fx);
+            return self.go_type_string(&inner);
         }
-        self.go_type_string(slot_ty, fx)
+        self.go_type_string(slot_ty)
     }
 
     /// `&self` variant of `render_lowered_return_ty`, callable from the

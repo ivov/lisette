@@ -1,4 +1,3 @@
-use crate::EmitEffects;
 use crate::GoCallStrategy;
 use crate::Planner;
 use crate::abi::AbiShape;
@@ -31,26 +30,25 @@ impl Planner<'_> {
         subject: &Expression,
         arms: &[MatchArm],
         place: &PlacePlan,
-        fx: &mut EmitEffects,
     ) -> LoweredBlock {
         let mut statements: Vec<LoweredStatement> = Vec::new();
 
         if subject.get_type().is_never() {
-            statements.push(self.lower_statement(subject, fx));
+            statements.push(self.lower_statement(subject));
             return LoweredBlock { statements };
         }
 
-        if let Some(fused) = self.lower_fused_lowered_match(subject, arms, place, fx) {
+        if let Some(fused) = self.lower_fused_lowered_match(subject, arms, place) {
             statements.extend(fused);
             return LoweredBlock { statements };
         }
 
         let subject_ty = subject.get_type();
         let (subject_var, declaration) =
-            self.lower_match_subject_var(&mut statements, subject, arms, fx);
+            self.lower_match_subject_var(&mut statements, subject, arms);
 
         self.scope.enter_use_region();
-        let block = self.lower_match_tree(arms, subject_var.clone(), subject_ty, place, fx);
+        let block = self.lower_match_tree(arms, subject_var.clone(), subject_ty, place);
         let used_set = self.scope.exit_use_region();
         let used = used_set.contains(&subject_var);
 
@@ -83,9 +81,8 @@ impl Planner<'_> {
         subject_var: String,
         subject_ty: syntax::types::Type,
         place: &PlacePlan,
-        fx: &mut EmitEffects,
     ) -> LoweredBlock {
-        let tree_emitter = TreePlanner::new(self, arms, subject_var, subject_ty, fx);
+        let tree_emitter = TreePlanner::new(self, arms, subject_var, subject_ty);
         tree_emitter.lower(place)
     }
 
@@ -120,7 +117,6 @@ impl Planner<'_> {
         subject: &Expression,
         arms: &[MatchArm],
         place: &PlacePlan,
-        fx: &mut EmitEffects,
     ) -> Option<Vec<LoweredStatement>> {
         let plan = self.plan_call(subject)?;
         let shape = self.fusable_result_shape(subject, &plan)?;
@@ -146,8 +142,7 @@ impl Planner<'_> {
         let err_var = self.fresh_var(Some("ret"));
         self.declare(&err_var);
 
-        let (mut statements, call_str) =
-            self.lower_call(subject, None, ExpressionContext::value(), fx);
+        let (mut statements, call_str) = self.lower_call(subject, None, ExpressionContext::value());
         let bind_line = match &val_var {
             Some(v) => format!("{}, {} := {}\n", v, err_var, call_str),
             None => match shape {
@@ -161,17 +156,12 @@ impl Planner<'_> {
         };
         statements.push(LoweredStatement::RawGo(bind_line));
 
-        let then_body = self.lower_fused_arm(
-            ok_name.zip(val_var.as_deref()),
-            &ok_arm.expression,
-            place,
-            fx,
-        );
+        let then_body =
+            self.lower_fused_arm(ok_name.zip(val_var.as_deref()), &ok_arm.expression, place);
         let else_body = self.lower_fused_arm(
             err_name.map(|n| (n, err_var.as_str())),
             &err_arm.expression,
             place,
-            fx,
         );
         statements.push(LoweredStatement::If(IfPlan {
             condition_setup: Vec::new(),
@@ -190,7 +180,6 @@ impl Planner<'_> {
         binding: Option<(&str, &str)>,
         body: &Expression,
         place: &PlacePlan,
-        fx: &mut EmitEffects,
     ) -> LoweredBlock {
         self.scope.push_binding_frame();
         let bound = binding.map(|(name, value)| {
@@ -199,7 +188,7 @@ impl Planner<'_> {
             (go_name, value.to_string())
         });
         self.scope.enter_use_region();
-        let body_block = self.lower_block_to_place(body, place, fx);
+        let body_block = self.lower_block_to_place(body, place);
         let used = self.scope.exit_use_region();
         let mut statements = Vec::new();
         if let Some((go_name, value)) = &bound {
@@ -222,7 +211,6 @@ impl Planner<'_> {
         setup: &mut Vec<LoweredStatement>,
         subject: &Expression,
         arms: &[MatchArm],
-        fx: &mut EmitEffects,
     ) -> (String, SubjectDeclaration) {
         let any_guard = arms.iter().any(|arm| arm.has_guard());
         if let Expression::Identifier { value, .. } = subject
@@ -242,13 +230,13 @@ impl Planner<'_> {
             }
         }
         if matches!(subject, Expression::Literal { .. }) {
-            let staged = self.stage_operand(subject, ExpressionContext::value(), fx);
+            let staged = self.stage_operand(subject, ExpressionContext::value());
             setup.extend(staged.setup);
             return (staged.value, SubjectDeclaration::None);
         }
         let var = self.fresh_var(Some("subject"));
         self.declare(&var);
-        let staged = self.stage_composite(subject, ExpressionContext::value(), fx);
+        let staged = self.stage_composite(subject, ExpressionContext::value());
         setup.extend(staged.setup);
         if !any_guard && is_plain_go_identifier(&staged.value) {
             return (staged.value, SubjectDeclaration::None);

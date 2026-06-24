@@ -1,4 +1,3 @@
-use crate::EmitEffects;
 use crate::Planner;
 use crate::definitions::enum_layout::{ENUM_GO_STRINGER_METHOD, ENUM_STRINGER_METHOD};
 use crate::definitions::tags::{format_tag_string, interpret_field_attributes};
@@ -20,26 +19,18 @@ impl Planner<'_> {
         fields: &[StructFieldDefinition],
         kind: &StructKind,
         struct_attrs: &[Attribute],
-        fx: &mut EmitEffects,
     ) -> String {
         let symbol = self.facts.qualified_current(name);
-        let generics_string = self.generics_to_string_for_symbol(&symbol, generics, fx);
+        let generics_string = self.generics_to_string_for_symbol(&symbol, generics);
 
         if *kind == StructKind::Tuple {
-            return self.emit_tuple_struct(
-                name,
-                &generics_string,
-                fields,
-                generics,
-                struct_attrs,
-                fx,
-            );
+            return self.emit_tuple_struct(name, &generics_string, fields, generics, struct_attrs);
         }
 
         let mut field_strings: Vec<String> = Vec::with_capacity(fields.len());
         let mut stringer_fields: Vec<StringerField> = Vec::with_capacity(fields.len());
         for f in fields {
-            let (field_string, stringer_field) = self.emit_struct_field(f, name, struct_attrs, fx);
+            let (field_string, stringer_field) = self.emit_struct_field(f, name, struct_attrs);
             field_strings.push(field_string);
             stringer_fields.push(stringer_field);
         }
@@ -67,28 +58,15 @@ impl Planner<'_> {
                 stringer_name,
             );
             if !stringer_fields.is_empty() {
-                fx.require_fmt();
+                self.require_fmt();
             }
             format!("{definition}\n\n{string_method}")
         } else {
             definition
         };
-        self.append_struct_debug_method(
-            &mut result,
-            name,
-            &receiver_generics,
-            &stringer_fields,
-            fx,
-        );
+        self.append_struct_debug_method(&mut result, name, &receiver_generics, &stringer_fields);
         self.append_to_string_method(&mut result, name, &receiver_generics, struct_attrs);
-        self.append_equals_method(
-            &mut result,
-            name,
-            &receiver_generics,
-            fields,
-            struct_attrs,
-            fx,
-        );
+        self.append_equals_method(&mut result, name, &receiver_generics, fields, struct_attrs);
         result
     }
 
@@ -100,9 +78,8 @@ impl Planner<'_> {
         fields: &[StructFieldDefinition],
         generics: &[Generic],
         struct_attrs: &[Attribute],
-        fx: &mut EmitEffects,
     ) -> String {
-        let definition = self.emit_tuple_struct_definition(name, generics_string, fields, fx);
+        let definition = self.emit_tuple_struct_definition(name, generics_string, fields);
         let receiver_generics = receiver_generics_string(generics);
         let mut result = definition;
         if self.is_pointer_backed_newtype(name) {
@@ -110,7 +87,7 @@ impl Planner<'_> {
         }
         if let Some(stringer_name) = self.stringer_method_name(name, struct_attrs) {
             let is_type_alias = fields.len() == 1 && generics_string.is_empty();
-            let underlying_go_type = is_type_alias.then(|| self.go_type_string(&fields[0].ty, fx));
+            let underlying_go_type = is_type_alias.then(|| self.go_type_string(&fields[0].ty));
             let string_method = emit_tuple_struct_stringer_method(
                 name,
                 &receiver_generics,
@@ -120,7 +97,7 @@ impl Planner<'_> {
             );
             if !string_method.is_empty() {
                 if string_method.contains("fmt.") {
-                    fx.require_fmt();
+                    self.require_fmt();
                 }
                 result.push_str("\n\n");
                 result.push_str(&string_method);
@@ -132,7 +109,6 @@ impl Planner<'_> {
             &receiver_generics,
             fields,
             generics_string,
-            fx,
         );
         self.append_to_string_method(&mut result, name, &receiver_generics, struct_attrs);
         result
@@ -144,10 +120,9 @@ impl Planner<'_> {
         f: &StructFieldDefinition,
         struct_name: &str,
         struct_attrs: &[Attribute],
-        fx: &mut EmitEffects,
     ) -> (String, StringerField) {
         if f.embedded {
-            let field_with_doc = format!("{}{}", emit_doc(&f.doc), self.go_type_string(&f.ty, fx));
+            let field_with_doc = format!("{}{}", emit_doc(&f.doc), self.go_type_string(&f.ty));
             let stringer_field = StringerField {
                 source_name: f.name.to_string(),
                 go_name: struct_field_go_name(f, struct_attrs),
@@ -169,9 +144,9 @@ impl Planner<'_> {
         }
 
         let field_definition = if let Some(tags) = tag_string {
-            format!("{} {} {}", field_name, self.go_type_string(&f.ty, fx), tags)
+            format!("{} {} {}", field_name, self.go_type_string(&f.ty), tags)
         } else {
-            format!("{} {}", field_name, self.go_type_string(&f.ty, fx))
+            format!("{} {}", field_name, self.go_type_string(&f.ty))
         };
 
         let field_with_doc = format!("{}{}", emit_doc(&f.doc), field_definition);
@@ -189,7 +164,6 @@ impl Planner<'_> {
         name: &str,
         generics_string: &str,
         fields: &[StructFieldDefinition],
-        fx: &mut EmitEffects,
     ) -> String {
         let go_type_name = go_name::escape_keyword(name);
 
@@ -198,14 +172,14 @@ impl Planner<'_> {
         }
 
         if fields.len() == 1 && generics_string.is_empty() {
-            let underlying = self.go_type_string(&fields[0].ty, fx);
+            let underlying = self.go_type_string(&fields[0].ty);
             return format!("type {} {}", go_type_name, underlying);
         }
 
         let field_strings: Vec<String> = fields
             .iter()
             .enumerate()
-            .map(|(i, f)| format!("F{} {}", i, self.go_type_string(&f.ty, fx)))
+            .map(|(i, f)| format!("F{} {}", i, self.go_type_string(&f.ty)))
             .collect();
 
         format!(
@@ -271,15 +245,14 @@ impl Planner<'_> {
         name: &str,
         receiver_generics: &str,
         stringer_fields: &[StringerField],
-        fx: &mut EmitEffects,
     ) {
         if !self.synthesizes_debug_string(name) {
             return;
         }
         if !stringer_fields.is_empty() {
-            fx.require_fmt();
+            self.require_fmt();
             if stringer_fields.iter().any(|f| !f.is_function) {
-                fx.require_stdlib();
+                self.require_stdlib();
             }
         }
         out.push_str("\n\n");
@@ -298,13 +271,12 @@ impl Planner<'_> {
         receiver_generics: &str,
         fields: &[StructFieldDefinition],
         generics_string: &str,
-        fx: &mut EmitEffects,
     ) {
         if !self.synthesizes_debug_string(name) {
             return;
         }
         let is_type_alias = fields.len() == 1 && generics_string.is_empty();
-        let underlying = is_type_alias.then(|| self.go_type_string(&fields[0].ty, fx));
+        let underlying = is_type_alias.then(|| self.go_type_string(&fields[0].ty));
         let field_is_function: Vec<bool> =
             fields.iter().map(|f| is_raw_function_type(&f.ty)).collect();
         let uses_prelude = if fields.is_empty() {
@@ -315,10 +287,10 @@ impl Planner<'_> {
             field_is_function.iter().any(|is_function| !is_function)
         };
         if !fields.is_empty() {
-            fx.require_fmt();
+            self.require_fmt();
         }
         if uses_prelude {
-            fx.require_stdlib();
+            self.require_stdlib();
         }
         out.push_str("\n\n");
         out.push_str(&emit_tuple_struct_debug_method(
@@ -389,7 +361,6 @@ impl Planner<'_> {
         receiver_generics: &str,
         fields: &[StructFieldDefinition],
         attributes: &[Attribute],
-        fx: &mut EmitEffects,
     ) {
         if !self.should_synthesize_equals(name) {
             return;
@@ -401,7 +372,7 @@ impl Planner<'_> {
                 let go_field = struct_field_go_name(f, attributes);
                 let lhs = format!("{receiver}.{go_field}");
                 let rhs = format!("other.{go_field}");
-                self.render_equality(&lhs, &rhs, &f.ty, fx)
+                self.render_equality(&lhs, &rhs, &f.ty)
             })
             .collect();
         let body = if comparisons.is_empty() {

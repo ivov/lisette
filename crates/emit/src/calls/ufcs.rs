@@ -4,7 +4,6 @@ use crate::calls::regular::effective_param_type;
 use crate::plan::calls::plan_variadic_spread;
 use rustc_hash::FxHashMap as HashMap;
 
-use crate::EmitEffects;
 use crate::Planner;
 use crate::context::expression::ExpressionContext;
 use crate::expressions::emission::StagedExpression;
@@ -26,7 +25,6 @@ impl Planner<'_> {
         receiver_ty: &Type,
         type_args: &[Type],
         arg_shape: CallArgShape,
-        fx: &mut EmitEffects,
     ) -> Option<String> {
         let method_key = format!("{}.{}", qualified_name, member);
         let definition_ty = self.facts.definition(method_key.as_str())?.ty().clone();
@@ -49,9 +47,9 @@ impl Planner<'_> {
             let mut go_type_strs = Vec::with_capacity(vars.len());
             for (index, var) in vars.iter().enumerate() {
                 let go_type = if index < impl_count {
-                    self.go_type_string(receiver_mapping.get(var.as_str())?, fx)
+                    self.go_type_string(receiver_mapping.get(var.as_str())?)
                 } else {
-                    self.go_type_string(type_args.get(index - impl_count)?, fx)
+                    self.go_type_string(type_args.get(index - impl_count)?)
                 };
                 go_type_strs.push(go_type);
             }
@@ -85,7 +83,7 @@ impl Planner<'_> {
             let resolved = receiver_mapping
                 .get(var.as_str())
                 .or_else(|| inferred_mapping.get(var.as_str()))?;
-            go_type_strs.push(self.go_type_string(resolved, fx));
+            go_type_strs.push(self.go_type_string(resolved));
         }
         (!go_type_strs.is_empty()).then(|| format!("[{}]", go_type_strs.join(", ")))
     }
@@ -96,7 +94,6 @@ impl Planner<'_> {
         args: &[Expression],
         type_args: &[Type],
         spread: Option<&Expression>,
-        fx: &mut EmitEffects,
     ) -> (Vec<LoweredStatement>, String) {
         let Expression::DotAccess {
             expression: receiver,
@@ -117,12 +114,12 @@ impl Planner<'_> {
         };
 
         let (mut setup, receiver_arg, emitted_args) =
-            self.lower_ufcs_call_args(function, receiver, args, spread, fx);
+            self.lower_ufcs_call_args(function, receiver, args, spread);
         let receiver_arg =
             self.apply_receiver_coercion(&mut setup, receiver, receiver_arg, *coercion);
 
         if let Some(inlined) =
-            try_inline_native_ufcs(receiver, member, &receiver_arg, &emitted_args, fx)
+            try_inline_native_ufcs(self, receiver, member, &receiver_arg, &emitted_args)
         {
             return (setup, inlined);
         }
@@ -140,7 +137,6 @@ impl Planner<'_> {
                 value_count: args.len(),
                 has_spread: spread.is_some(),
             },
-            fx,
         );
         (setup, format!("{}({})", fn_name, new_args.join(", ")))
     }
@@ -151,7 +147,6 @@ impl Planner<'_> {
         receiver: &Expression,
         args: &[Expression],
         spread: Option<&Expression>,
-        fx: &mut EmitEffects,
     ) -> (Vec<LoweredStatement>, String, Vec<String>) {
         // The DotAccess function type curries `self` out, so its params line
         // up 1:1 with the user args. Pair each so a function-typed param
@@ -169,7 +164,7 @@ impl Planner<'_> {
             .flatten();
         let mut all_stages: Vec<StagedExpression> =
             Vec::with_capacity(1 + args.len() + spread.is_some() as usize);
-        all_stages.push(self.stage_operand(receiver, ExpressionContext::value(), fx));
+        all_stages.push(self.stage_operand(receiver, ExpressionContext::value()));
         for (i, arg) in args.iter().enumerate() {
             let declared = declared_params.and_then(|p| effective_param_type(i, p));
             let suppress_decl = suppress_declared.and_then(|p| effective_param_type(i, p));
@@ -178,7 +173,6 @@ impl Planner<'_> {
                 declared,
                 suppress_decl,
                 formal_params.get(i),
-                fx,
             ));
         }
         let combine = plan_variadic_spread(function, spread).map(|p| p.combine(1));
@@ -189,7 +183,6 @@ impl Planner<'_> {
             declared_params,
             false,
             combine,
-            fx,
         );
         let receiver_arg = all_values[0].clone();
         let emitted_args: Vec<String> = all_values[1..].to_vec();
@@ -202,18 +195,15 @@ impl Planner<'_> {
         declared_param: Option<&Type>,
         suppress_declared: Option<&Type>,
         formal_param: Option<&Type>,
-        fx: &mut EmitEffects,
     ) -> StagedExpression {
         let Some(declared) = declared_param else {
-            return self.stage_prelude_arg(arg, suppress_declared, formal_param, fx);
+            return self.stage_prelude_arg(arg, suppress_declared, formal_param);
         };
         let mut setup: Vec<LoweredStatement> = Vec::new();
-        if let Some(value) =
-            self.try_adapt_lowered_fn_arg_shape(&mut setup, arg, Some(declared), fx)
-        {
+        if let Some(value) = self.try_adapt_lowered_fn_arg_shape(&mut setup, arg, Some(declared)) {
             return StagedExpression::from_typed_setup(setup, value, arg);
         }
-        self.stage_composite(arg, ExpressionContext::value(), fx)
+        self.stage_composite(arg, ExpressionContext::value())
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -225,7 +215,6 @@ impl Planner<'_> {
         member: &str,
         type_args: &[Type],
         arg_shape: CallArgShape,
-        fx: &mut EmitEffects,
     ) -> String {
         let type_args_string = self
             .ufcs_type_args(
@@ -235,7 +224,6 @@ impl Planner<'_> {
                 receiver_ty,
                 type_args,
                 arg_shape,
-                fx,
             )
             .unwrap_or_default();
 
@@ -247,7 +235,7 @@ impl Planner<'_> {
             .unwrap_or(false)
             || self.method_needs_export(member);
 
-        let qualified_method_name = self.qualify_method_call(qualified_name, member, is_public, fx);
+        let qualified_method_name = self.qualify_method_call(qualified_name, member, is_public);
         format!("{}{}", qualified_method_name, type_args_string)
     }
 
@@ -281,7 +269,6 @@ impl Planner<'_> {
         method: &str,
         is_public: bool,
         spread: Option<&Expression>,
-        fx: &mut EmitEffects,
     ) -> (Vec<LoweredStatement>, String) {
         let go_method = if is_public {
             go_name::snake_to_camel(method)
@@ -291,17 +278,17 @@ impl Planner<'_> {
 
         let stages: Vec<StagedExpression> = args
             .iter()
-            .map(|a| self.stage_composite(a, ExpressionContext::value(), fx))
+            .map(|a| self.stage_composite(a, ExpressionContext::value()))
             .collect();
 
         let combine = plan_variadic_spread(function, spread).map(|p| p.combine(0));
         let (setup, emitted_all) =
-            self.sequence_with_spread_structured(stages, spread, false, "_arg", combine, fx);
+            self.sequence_with_spread_structured(stages, spread, false, "_arg", combine);
 
         let receiver = emitted_all[0].clone();
         let emitted_rest: Vec<String> = emitted_all[1..].to_vec();
 
-        let type_args_string = self.format_type_args(type_args, fx);
+        let type_args_string = self.format_type_args(type_args);
 
         let receiver = if let Some(stripped) = receiver.strip_prefix('&') {
             if is_address_of_composite_literal(args.first()) {
@@ -353,11 +340,11 @@ impl<'a> Planner<'a> {
 }
 
 fn try_inline_native_ufcs(
+    planner: &Planner,
     receiver: &Expression,
     member: &str,
     receiver_arg: &str,
     emitted_args: &[String],
-    fx: &mut EmitEffects,
 ) -> Option<String> {
     let native_type = NativeGoType::from_type(&receiver.get_type())?;
     let (inlined, extra_import) = super::native::try_inline_native_method(
@@ -367,7 +354,7 @@ fn try_inline_native_ufcs(
         emitted_args,
         false,
     )?;
-    apply_inline_import(extra_import, fx);
+    apply_inline_import(planner, extra_import);
     Some(inlined)
 }
 

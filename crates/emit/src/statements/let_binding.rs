@@ -1,4 +1,3 @@
-use crate::EmitEffects;
 use crate::Planner;
 use crate::abi::coercion::{Coercion, CoercionDirection};
 use crate::calls::go_interop::{GoCallStrategy, WrapperTarget};
@@ -79,12 +78,11 @@ fn maybe_clone_subslice(
     value: &Expression,
     mutable: bool,
     expression: String,
-    fx: &mut EmitEffects,
 ) -> String {
     if !is_mutable_subslice(planner, value, mutable) {
         return expression;
     }
-    fx.require_slices();
+    planner.require_slices();
     format!("slices.Clone({})", expression)
 }
 
@@ -171,7 +169,6 @@ impl Planner<'_> {
         &mut self,
         let_spec: LetSpec,
         raw_go_name: Option<&str>,
-        fx: &mut EmitEffects,
     ) -> Vec<LoweredStatement> {
         let LetSpec {
             identifier,
@@ -180,29 +177,29 @@ impl Planner<'_> {
             ..
         } = let_spec;
         if is_unit_call(value) {
-            return self.lower_let_unit_call(identifier, raw_go_name, value, fx);
+            return self.lower_let_unit_call(identifier, raw_go_name, value);
         }
         let needs_temp = requires_temp_var(value);
         let Some(raw_go_name) = raw_go_name else {
             self.scope.bind(identifier, "_");
             return if needs_temp {
-                self.lower_let_temp("_", value, binding_ty, fx)
+                self.lower_let_temp("_", value, binding_ty)
             } else {
-                self.lower_discard_value(value, fx)
+                self.lower_discard_value(value)
             };
         };
         if needs_temp {
             let go_identifier = escape_reserved(raw_go_name);
             if self.is_declared(&go_identifier) || expression_contains_binding(value, identifier) {
                 let fresh = self.fresh_var(Some(identifier));
-                let statements = self.lower_let_temp(&fresh, value, binding_ty, fx);
+                let statements = self.lower_let_temp(&fresh, value, binding_ty);
                 self.scope.bind(identifier, &fresh);
                 return statements;
             }
             self.scope.bind(identifier, raw_go_name);
-            return self.lower_let_temp(&go_identifier, value, binding_ty, fx);
+            return self.lower_let_temp(&go_identifier, value, binding_ty);
         }
-        self.lower_let_direct(let_spec, raw_go_name, fx)
+        self.lower_let_direct(let_spec, raw_go_name)
     }
 
     /// `let x = expr?`. Adds a leading `var x T` when the binding widens to
@@ -213,7 +210,6 @@ impl Planner<'_> {
         raw_go_name: Option<&str>,
         value: &Expression,
         binding_ty: &Type,
-        fx: &mut EmitEffects,
     ) -> Vec<LoweredStatement> {
         let Expression::Propagate {
             expression: inner, ..
@@ -223,14 +219,14 @@ impl Planner<'_> {
         };
         let Some(raw_go_name) = raw_go_name else {
             self.scope.bind(identifier, "_");
-            return self.lower_propagate(inner, Some("_"), fx).0;
+            return self.lower_propagate(inner, Some("_")).0;
         };
         let go_identifier = self.choose_let_go_name(identifier, raw_go_name, false);
         let widens_to_interface =
             self.facts.is_interface(binding_ty) && *binding_ty != value.get_type();
         let mut statements = Vec::new();
         if widens_to_interface {
-            let var_ty = self.go_type_string(binding_ty, fx);
+            let var_ty = self.go_type_string(binding_ty);
             statements.push(LoweredStatement::VarDecl {
                 name: go_identifier.clone(),
                 go_type: var_ty,
@@ -238,7 +234,7 @@ impl Planner<'_> {
             });
             self.declare(&go_identifier);
         }
-        statements.extend(self.lower_propagate(inner, Some(&go_identifier), fx).0);
+        statements.extend(self.lower_propagate(inner, Some(&go_identifier)).0);
         self.scope.bind(identifier, &go_identifier);
         self.try_declare(&go_identifier);
         statements
@@ -251,10 +247,9 @@ impl Planner<'_> {
         identifier: &str,
         raw_go_name: Option<&str>,
         value: &Expression,
-        fx: &mut EmitEffects,
     ) -> Vec<LoweredStatement> {
         let (mut statements, value_expression) = self
-            .lower_value(value, ExpressionContext::value(), fx)
+            .lower_value(value, ExpressionContext::value())
             .into_parts();
         statements.push(LoweredStatement::RawGo(format!("{}\n", value_expression)));
         let Some(raw_go_name) = raw_go_name else {
@@ -280,12 +275,7 @@ impl Planner<'_> {
         statements
     }
 
-    fn lower_let_direct(
-        &mut self,
-        let_spec: LetSpec,
-        raw_go_name: &str,
-        fx: &mut EmitEffects,
-    ) -> Vec<LoweredStatement> {
+    fn lower_let_direct(&mut self, let_spec: LetSpec, raw_go_name: &str) -> Vec<LoweredStatement> {
         let LetSpec {
             identifier,
             value,
@@ -294,13 +284,13 @@ impl Planner<'_> {
         } = let_spec;
         if !mutable
             && let Some(statements) =
-                self.try_lower_let_into_wrapper_slot(identifier, raw_go_name, value, binding_ty, fx)
+                self.try_lower_let_into_wrapper_slot(identifier, raw_go_name, value, binding_ty)
         {
             return statements;
         }
 
         let (mut statements, value_expression) = self
-            .lower_value(value, ExpressionContext::value(), fx)
+            .lower_value(value, ExpressionContext::value())
             .into_parts();
         let coercion = Coercion::resolve(
             self,
@@ -308,9 +298,9 @@ impl Planner<'_> {
             binding_ty,
             CoercionDirection::Internal,
         );
-        let (coercion_setup, value_expression) = coercion.lower(self, value_expression, fx);
+        let (coercion_setup, value_expression) = coercion.lower(self, value_expression);
         statements.extend(coercion_setup);
-        let value_expression = maybe_clone_subslice(self, value, mutable, value_expression, fx);
+        let value_expression = maybe_clone_subslice(self, value, mutable, value_expression);
 
         let go_identifier = self.scope.bind(identifier, raw_go_name);
         let is_new = self.try_declare(&go_identifier);
@@ -324,7 +314,7 @@ impl Planner<'_> {
                 value: value_expression,
             });
         } else if needs_explicit_type_declaration(self, value, binding_ty) {
-            let var_ty = self.go_type_string(binding_ty, fx);
+            let var_ty = self.go_type_string(binding_ty);
             statements.push(LoweredStatement::VarDecl {
                 name: go_identifier,
                 go_type: var_ty,
@@ -347,7 +337,6 @@ impl Planner<'_> {
         raw_go_name: &str,
         value: &Expression,
         binding_ty: &Type,
-        fx: &mut EmitEffects,
     ) -> Option<Vec<LoweredStatement>> {
         let go_identifier = escape_reserved(raw_go_name);
         if self.is_declared(&go_identifier)
@@ -367,7 +356,7 @@ impl Planner<'_> {
             return None;
         }
         let target = WrapperTarget::Slot(&go_identifier);
-        let statements = self.lower_go_wrapped_call_to(value, &strategy, binding_ty, target, fx)?;
+        let statements = self.lower_go_wrapped_call_to(value, &strategy, binding_ty, target)?;
         // `push_wrapper_slot` / `push_simple_wrapper_value` already declared
         // `go_identifier`; only the binding from the user-name still needs setup.
         self.scope.bind(identifier, go_identifier.as_ref());
@@ -379,16 +368,15 @@ impl Planner<'_> {
         name: &str,
         value: &Expression,
         binding_ty: &Type,
-        fx: &mut EmitEffects,
     ) -> Vec<LoweredStatement> {
         let mut statements = Vec::new();
         if !self.is_declared(name) {
-            if let Some(declaration) = self.let_temp_var_declaration(name, value, binding_ty, fx) {
+            if let Some(declaration) = self.let_temp_var_declaration(name, value, binding_ty) {
                 statements.push(declaration);
             }
             self.try_declare(name);
         }
-        statements.extend(self.lower_assign(value, name, Some(binding_ty), fx));
+        statements.extend(self.lower_assign(value, name, Some(binding_ty)));
         statements
     }
 
@@ -397,7 +385,6 @@ impl Planner<'_> {
         name: &str,
         value: &Expression,
         binding_ty: &Type,
-        fx: &mut EmitEffects,
     ) -> Option<LoweredStatement> {
         if name == "_" {
             return None;
@@ -412,18 +399,18 @@ impl Planner<'_> {
 
         let var_ty = if has_variable_ok_ty {
             if !binding_ty.is_variable() && !binding_ty.ok_type().is_variable() {
-                self.go_type_string(binding_ty, fx)
+                self.go_type_string(binding_ty)
             } else if let Some(ctx_ty) = return_ctx.ty().cloned() {
                 if Fallible::from_type(&ctx_ty).is_some() {
-                    self.go_type_string(&ctx_ty, fx)
+                    self.go_type_string(&ctx_ty)
                 } else {
-                    self.go_type_string(&resolved_ty, fx)
+                    self.go_type_string(&resolved_ty)
                 }
             } else {
-                self.go_type_string(&resolved_ty, fx)
+                self.go_type_string(&resolved_ty)
             }
         } else {
-            self.go_type_string(&resolved_ty, fx)
+            self.go_type_string(&resolved_ty)
         };
         Some(LoweredStatement::VarDecl {
             name: name.to_string(),
@@ -470,7 +457,7 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
     }
 
     /// Classify the binding and build the matching `LetForm`.
-    pub(crate) fn build_form(mut self, fx: &mut EmitEffects) -> LetForm {
+    pub(crate) fn build_form(mut self) -> LetForm {
         // Never-typed values diverge (break/continue/return). Declare the
         // binding so dead code can reference it, then emit the value as a
         // statement.
@@ -480,7 +467,7 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
             {
                 let go_identifier = self.planner.scope.bind(identifier, &raw_go_name);
                 self.planner.try_declare(&go_identifier);
-                let var_ty = self.planner.go_type_string(&self.binding.ty, fx);
+                let var_ty = self.planner.go_type_string(&self.binding.ty);
                 Some(Box::new(LoweredStatement::VarDecl {
                     name: go_identifier,
                     go_type: var_ty,
@@ -492,7 +479,7 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
             return LetForm::Never {
                 declaration,
                 body: LoweredBlock {
-                    statements: vec![self.planner.lower_statement(self.value, fx)],
+                    statements: vec![self.planner.lower_statement(self.value)],
                 },
             };
         }
@@ -510,7 +497,6 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
                         &self.binding.ty,
                         self.value,
                         span,
-                        fx,
                     )
                 } else {
                     let else_block = self
@@ -521,7 +507,6 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
                         &self.binding.ty,
                         self.value,
                         else_block,
-                        fx,
                     )
                 };
                 LetForm::Refutable {
@@ -529,13 +514,13 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
                 }
             }
             LetKind::SimpleIdentifier => LetForm::SimpleIdentifier {
-                body: self.lower_simple_identifier(fx),
+                body: self.lower_simple_identifier(),
             },
             LetKind::Discard => LetForm::Discard {
-                body: self.lower_discard(fx),
+                body: self.lower_discard(),
             },
             LetKind::MultiValueCall => LetForm::MultiValueCall {
-                body: self.lower_multi_value_call(fx),
+                body: self.lower_multi_value_call(),
             },
             LetKind::ComplexPattern => {
                 let value_ty = self.value.get_type();
@@ -544,7 +529,6 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
                     &self.binding.pattern,
                     self.binding.typed_pattern.as_ref(),
                     &value_ty,
-                    fx,
                 );
                 LetForm::ComplexPattern {
                     body: LoweredBlock { statements },
@@ -599,7 +583,7 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
             && extract_simple_tuple_vars(&self.binding.pattern).is_some()
     }
 
-    fn lower_simple_identifier(&mut self, fx: &mut EmitEffects) -> LoweredBlock {
+    fn lower_simple_identifier(&mut self) -> LoweredBlock {
         let Pattern::Identifier { identifier, .. } = &self.binding.pattern else {
             unreachable!("lower_simple_identifier called with non-identifier pattern");
         };
@@ -610,7 +594,6 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
                 raw_go_name.as_deref(),
                 self.value,
                 &self.binding.ty,
-                fx,
             );
             return LoweredBlock { statements };
         }
@@ -622,18 +605,17 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
                 mutable: self.mutable,
             },
             raw_go_name.as_deref(),
-            fx,
         );
         LoweredBlock { statements }
     }
 
-    fn lower_discard(&mut self, fx: &mut EmitEffects) -> LoweredBlock {
+    fn lower_discard(&mut self) -> LoweredBlock {
         LoweredBlock {
-            statements: self.planner.lower_discard_value(self.value, fx),
+            statements: self.planner.lower_discard_value(self.value),
         }
     }
 
-    fn lower_multi_value_call(&mut self, fx: &mut EmitEffects) -> LoweredBlock {
+    fn lower_multi_value_call(&mut self) -> LoweredBlock {
         let Pattern::Tuple { elements, .. } = &self.binding.pattern else {
             unreachable!("lower_multi_value_call called with non-tuple pattern");
         };
@@ -673,7 +655,7 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
 
         let (mut statements, call_str) =
             self.planner
-                .lower_call(self.value, None, ExpressionContext::value(), fx);
+                .lower_call(self.value, None, ExpressionContext::value());
 
         for (identifier, go_name) in planned.iter().flatten() {
             self.planner.scope.bind(*identifier, go_name);
@@ -725,10 +707,8 @@ impl Planner<'_> {
         else_block: Option<&Expression>,
         mutable: bool,
         assert: bool,
-        fx: &mut EmitEffects,
     ) -> LetPlan {
-        let form =
-            LetPlanner::new(self, binding, value, else_block, mutable, assert).build_form(fx);
+        let form = LetPlanner::new(self, binding, value, else_block, mutable, assert).build_form();
         LetPlan { form }
     }
 }

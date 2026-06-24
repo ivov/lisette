@@ -4,7 +4,6 @@ use std::borrow::Cow;
 use syntax::ast::{Expression, MatchArm, Pattern, Span, TypedPattern};
 use syntax::types::Type;
 
-use crate::EmitEffects;
 use crate::Planner;
 use crate::context::expression::ExpressionContext;
 use crate::names::go_name::{self, prelude_qualifier, testkit_qualifier};
@@ -103,7 +102,6 @@ impl Planner<'_> {
         &mut self,
         setup: &mut Vec<LoweredStatement>,
         subject: PatternSubject<'_>,
-        fx: &mut EmitEffects,
     ) -> ResolvedSubject {
         match subject {
             PatternSubject::Existing { var } => ResolvedSubject::Existing { var },
@@ -126,7 +124,7 @@ impl Planner<'_> {
                 let var = self.fresh_var(temp_hint);
                 self.declare(&var);
                 let (op_setup, expression) = self
-                    .lower_value(scrutinee, ExpressionContext::value(), fx)
+                    .lower_value(scrutinee, ExpressionContext::value())
                     .into_parts();
                 setup.extend(op_setup);
                 ResolvedSubject::Composite { var, expression }
@@ -142,12 +140,11 @@ impl Planner<'_> {
         pattern: &Pattern,
         typed: Option<&TypedPattern>,
         subject_ty: &Type,
-        fx: &mut EmitEffects,
     ) -> Vec<LoweredStatement> {
         let mut statements = Vec::new();
-        let resolved = self.resolve_pattern_subject(&mut statements, subject, fx);
+        let resolved = self.resolve_pattern_subject(&mut statements, subject);
         let info = decision_tree::collect_pattern_info(self, pattern, typed, subject_ty);
-        fx.extend(&info.effects);
+        self.absorb_effects(&info.effects);
 
         let mut body = Vec::new();
         self.scope.enter_use_region();
@@ -172,14 +169,12 @@ impl Planner<'_> {
         binding_ty: &Type,
         scrutinee: &Expression,
         else_block: &Expression,
-        fx: &mut EmitEffects,
     ) -> Vec<LoweredStatement> {
         self.lower_refutable_let_site(
             ap,
             binding_ty,
             scrutinee,
             RefutableFail::ElseBlock(else_block),
-            fx,
         )
     }
 
@@ -189,14 +184,12 @@ impl Planner<'_> {
         binding_ty: &Type,
         scrutinee: &Expression,
         pattern_span: Span,
-        fx: &mut EmitEffects,
     ) -> Vec<LoweredStatement> {
         self.lower_refutable_let_site(
             ap,
             binding_ty,
             scrutinee,
             RefutableFail::AssertFail(pattern_span),
-            fx,
         )
     }
 
@@ -206,14 +199,12 @@ impl Planner<'_> {
         binding_ty: &Type,
         scrutinee: &Expression,
         fail: RefutableFail,
-        fx: &mut EmitEffects,
     ) -> Vec<LoweredStatement> {
         let value_ty = scrutinee.get_type();
         let mut statements = Vec::new();
         let resolved = self.resolve_pattern_subject(
             &mut statements,
             PatternSubject::expression(scrutinee, ap.pattern, Some("subject")),
-            fx,
         );
         let subject = TypedSubject {
             var: resolved.var(),
@@ -222,9 +213,9 @@ impl Planner<'_> {
 
         self.scope.enter_use_region();
         let body = if matches!(ap.pattern, Pattern::Or { .. }) {
-            self.lower_let_else_or_pattern(ap, binding_ty, subject, fail, fx)
+            self.lower_let_else_or_pattern(ap, binding_ty, subject, fail)
         } else {
-            self.lower_let_else_single_pattern(ap, subject, fail, fx)
+            self.lower_let_else_single_pattern(ap, subject, fail)
         };
         let used = self.scope.exit_use_region();
         let body_block = LoweredBlock { statements: body };
@@ -245,7 +236,6 @@ impl Planner<'_> {
         &mut self,
         pattern: &Pattern,
         scrutinee: &Expression,
-        fx: &mut EmitEffects,
     ) -> (String, Vec<LoweredStatement>) {
         if let Expression::Identifier { value, .. } = scrutinee {
             let has_collision = pattern_binds_name(pattern, value);
@@ -258,7 +248,7 @@ impl Planner<'_> {
             }
         }
         let var = self.fresh_var(Some("subject"));
-        let staged = self.stage_operand(scrutinee, ExpressionContext::value(), fx);
+        let staged = self.stage_operand(scrutinee, ExpressionContext::value());
         let mut setup = staged.setup;
         setup.push(LoweredStatement::TempBind {
             name: var.clone(),
@@ -274,12 +264,11 @@ impl Planner<'_> {
         scrutinee: &Expression,
         body: &Expression,
         needs_label: bool,
-        fx: &mut EmitEffects,
     ) -> LoweredBlock {
         self.set_current_loop_label_if_needed(needs_label);
         let label = self.current_loop_label().map(str::to_string);
         let scrutinee_ty = scrutinee.get_type();
-        let (subject_var, subject_setup) = self.while_let_subject(pattern, scrutinee, fx);
+        let (subject_var, subject_setup) = self.while_let_subject(pattern, scrutinee);
 
         // Or-patterns with bindings render an `if/else if` chain that closes its
         // own `for`, so they cannot wrap in a structured `Loop`; bridge them as
@@ -297,7 +286,6 @@ impl Planner<'_> {
                 },
                 body,
                 label.as_deref(),
-                fx,
             );
             return LoweredBlock {
                 statements: vec![LoweredStatement::Loop(LoopPlan {
@@ -312,7 +300,7 @@ impl Planner<'_> {
         }
 
         let info = decision_tree::collect_pattern_info(self, pattern, typed, &scrutinee_ty);
-        fx.extend(&info.effects);
+        self.absorb_effects(&info.effects);
         let mut loop_body = subject_setup;
         let (effective, ok_var) =
             apply_refutable_root_assertion(self, &mut loop_body, &info, &subject_var);
@@ -323,7 +311,7 @@ impl Planner<'_> {
         if !matches!(pattern, Pattern::Or { .. }) {
             tree_binding_statements(self, &mut then_body, &info.bindings, &effective, &[body]);
         }
-        then_body.extend(self.lower_block_as_body(body, fx).statements);
+        then_body.extend(self.lower_block_as_body(body).statements);
         self.exit_scope();
 
         loop_body.push(LoweredStatement::If(IfPlan {
@@ -354,20 +342,15 @@ impl Planner<'_> {
         }
     }
 
-    fn lower_refutable_fail(
-        &mut self,
-        fail: RefutableFail,
-        subject_var: &str,
-        fx: &mut EmitEffects,
-    ) -> LoweredBlock {
+    fn lower_refutable_fail(&mut self, fail: RefutableFail, subject_var: &str) -> LoweredBlock {
         match fail {
-            RefutableFail::ElseBlock(else_block) => self.lower_block_as_body(else_block, fx),
+            RefutableFail::ElseBlock(else_block) => self.lower_block_as_body(else_block),
             RefutableFail::AssertFail(span) => {
                 let handle = self
                     .current_test_handle()
                     .expect("let assert without a test handle should be rejected by semantics");
-                fx.require_testkit();
-                fx.require_stdlib();
+                self.require_testkit();
+                self.require_stdlib();
                 let testkit = testkit_qualifier();
                 let prelude = prelude_qualifier();
                 self.scope.record_go_use(subject_var);
@@ -391,7 +374,6 @@ impl Planner<'_> {
         ap: AnnotatedPattern,
         subject: TypedSubject,
         fail: RefutableFail,
-        fx: &mut EmitEffects,
     ) -> Vec<LoweredStatement> {
         let AnnotatedPattern { pattern, typed } = ap;
         let TypedSubject {
@@ -399,7 +381,7 @@ impl Planner<'_> {
             ty: subject_ty,
         } = subject;
         let info = decision_tree::collect_pattern_info(self, pattern, typed, subject_ty);
-        fx.extend(&info.effects);
+        self.absorb_effects(&info.effects);
 
         let mut statements = Vec::new();
         let (effective_subject, assert_ok_var) =
@@ -429,7 +411,7 @@ impl Planner<'_> {
             guard_parts.push(wrap_if_struct_literal(negated));
         }
         let guard = guard_parts.join(" || ");
-        let fail_body = self.lower_refutable_fail(fail, subject_var, fx);
+        let fail_body = self.lower_refutable_fail(fail, subject_var);
         statements.push(LoweredStatement::If(IfPlan {
             condition_setup: Vec::new(),
             condition: guard,
@@ -453,7 +435,6 @@ impl Planner<'_> {
         binding_ty: &Type,
         subject: TypedSubject,
         fail: RefutableFail,
-        fx: &mut EmitEffects,
     ) -> Vec<LoweredStatement> {
         let AnnotatedPattern { pattern, typed } = ap;
         let TypedSubject {
@@ -465,12 +446,12 @@ impl Planner<'_> {
         };
         let pre_let_snapshot = self.scope.binding_snapshot();
         let mut statements = Vec::new();
-        self.lower_binding_declarations_with_type(&mut statements, pattern, binding_ty, typed, fx);
+        self.lower_binding_declarations_with_type(&mut statements, pattern, binding_ty, typed);
         let post_declaration_snapshot = self.scope.binding_snapshot();
 
         let mut asserts = Vec::new();
         let alts =
-            self.collect_let_else_alternatives(&mut asserts, patterns, subject_ty, subject_var, fx);
+            self.collect_let_else_alternatives(&mut asserts, patterns, subject_ty, subject_var);
 
         statements.extend(asserts);
 
@@ -526,7 +507,7 @@ impl Planner<'_> {
             }
             None => {
                 self.scope.restore_binding_snapshot(pre_let_snapshot);
-                let fail_lowered = self.lower_refutable_fail(fail, subject_var, fx);
+                let fail_lowered = self.lower_refutable_fail(fail, subject_var);
                 self.scope
                     .restore_binding_snapshot(post_declaration_snapshot);
                 fail_lowered
@@ -543,14 +524,13 @@ impl Planner<'_> {
         patterns: &[Pattern],
         subject_ty: &Type,
         subject_var: &'s str,
-        fx: &mut EmitEffects,
     ) -> LetElseAlternatives<'s> {
         let collected: Vec<PatternInfo> = patterns
             .iter()
             .map(|alt| decision_tree::collect_pattern_info(self, alt, None, subject_ty))
             .collect();
         for info in &collected {
-            fx.extend(&info.effects);
+            self.absorb_effects(&info.effects);
         }
         let hoisted: Vec<(Cow<'s, str>, Option<String>)> = collected
             .iter()
@@ -577,7 +557,6 @@ impl Planner<'_> {
         subject: TypedSubject,
         body: &Expression,
         label: Option<&str>,
-        fx: &mut EmitEffects,
     ) {
         let TypedSubject {
             var: subject_var,
@@ -588,7 +567,7 @@ impl Planner<'_> {
             .map(|alt| decision_tree::collect_pattern_info(self, alt, None, subject_ty))
             .collect();
         for info in &alternatives {
-            fx.extend(&info.effects);
+            self.absorb_effects(&info.effects);
         }
 
         let unused_names: rustc_hash::FxHashSet<String> = alternatives
@@ -619,7 +598,7 @@ impl Planner<'_> {
             let mut branch = Vec::new();
             let overlays =
                 tree_binding_statements(self, &mut branch, &info.bindings, effective, &[body]);
-            branch.extend(self.lower_block_as_body(body, fx).statements);
+            branch.extend(self.lower_block_as_body(body).statements);
             drop_inline_overlays(self, &overlays);
             self.exit_scope();
 
@@ -641,10 +620,9 @@ impl Planner<'_> {
         body: &Expression,
         default_body: Option<&Expression>,
         place: &PlacePlan,
-        fx: &mut EmitEffects,
     ) -> Vec<LoweredStatement> {
-        self.lower_refutable_arm(subject, ap, body, place, fx, |this, fx| {
-            default_body.map(|default| this.lower_block_to_place(default, place, fx))
+        self.lower_refutable_arm(subject, ap, body, place, |this| {
+            default_body.map(|default| this.lower_block_to_place(default, place))
         })
     }
 
@@ -655,10 +633,9 @@ impl Planner<'_> {
         some_body: &Expression,
         match_arms: &[MatchArm],
         place: &PlacePlan,
-        fx: &mut EmitEffects,
     ) -> Vec<LoweredStatement> {
-        self.lower_refutable_arm(subject, ap, some_body, place, fx, |this, fx| {
-            Some(lower_none_arm_body(this, match_arms, place, fx))
+        self.lower_refutable_arm(subject, ap, some_body, place, |this| {
+            Some(lower_none_arm_body(this, match_arms, place))
         })
     }
 
@@ -671,8 +648,7 @@ impl Planner<'_> {
         ap: AnnotatedPattern,
         body: &Expression,
         place: &PlacePlan,
-        fx: &mut EmitEffects,
-        failure: impl FnOnce(&mut Planner, &mut EmitEffects) -> Option<LoweredBlock>,
+        failure: impl FnOnce(&mut Planner) -> Option<LoweredBlock>,
     ) -> Vec<LoweredStatement> {
         let AnnotatedPattern { pattern, typed } = ap;
         let TypedSubject {
@@ -680,14 +656,14 @@ impl Planner<'_> {
             ty: subject_ty,
         } = subject;
         let info = decision_tree::collect_pattern_info(self, pattern, typed, subject_ty);
-        fx.extend(&info.effects);
+        self.absorb_effects(&info.effects);
         let mut statements = Vec::new();
         let (effective, ok_var) =
             apply_refutable_root_assertion(self, &mut statements, &info, subject_var);
 
         if info.checks.is_empty() && ok_var.is_none() {
             tree_binding_statements(self, &mut statements, &info.bindings, &effective, &[body]);
-            let block = self.lower_block_to_place(body, place, fx);
+            let block = self.lower_block_to_place(body, place);
             statements.extend(block.statements);
             return statements;
         }
@@ -699,10 +675,10 @@ impl Planner<'_> {
         let mut then_body = Vec::new();
         let overlays =
             tree_binding_statements(self, &mut then_body, &info.bindings, &effective, &[body]);
-        let block = self.lower_block_to_place(body, place, fx);
+        let block = self.lower_block_to_place(body, place);
         then_body.extend(block.statements);
         drop_inline_overlays(self, &overlays);
-        let else_arm = match failure(self, fx) {
+        let else_arm = match failure(self) {
             Some(body) => ElseArm::Else {
                 body,
                 inline: false,
@@ -725,13 +701,12 @@ pub(crate) fn lower_none_arm_body(
     planner: &mut Planner,
     match_arms: &[MatchArm],
     place: &PlacePlan,
-    fx: &mut EmitEffects,
 ) -> LoweredBlock {
     for match_arm in match_arms {
         if let Pattern::EnumVariant { identifier, .. } = &match_arm.pattern {
             let variant_name = go_name::unqualified_name(identifier);
             if variant_name == "None" {
-                return planner.lower_block_to_place(&match_arm.expression, place, fx);
+                return planner.lower_block_to_place(&match_arm.expression, place);
             }
         }
     }

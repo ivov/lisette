@@ -118,18 +118,18 @@ impl Planner<'_> {
         build_param_typed(format!("{}[{}]", kind.leaf_name(), type_args), &param_types)
     }
 
-    /// Render a type to Go text, recording stdlib + Go-import effects in `fx`.
-    pub(crate) fn go_type_string(&self, ty: &Type, fx: &mut EmitEffects) -> String {
+    /// Render a type to Go text, recording its stdlib + Go-import effects.
+    pub(crate) fn go_type_string(&self, ty: &Type) -> String {
         let result = self.go_type(ty);
-        fx.merge_from_go_type(&result);
+        self.note_go_type(&result);
         result.code
     }
 
-    pub(crate) fn format_type_args(&mut self, params: &[Type], fx: &mut EmitEffects) -> String {
+    pub(crate) fn format_type_args(&mut self, params: &[Type]) -> String {
         if params.is_empty() {
             return String::new();
         }
-        let args: Vec<String> = params.iter().map(|p| self.go_type_string(p, fx)).collect();
+        let args: Vec<String> = params.iter().map(|p| self.go_type_string(p)).collect();
         format!("[{}]", args.join(", "))
     }
 
@@ -137,11 +137,10 @@ impl Planner<'_> {
         &mut self,
         recipe: &str,
         mapping: &rustc_hash::FxHashMap<String, Type>,
-        fx: &mut EmitEffects,
     ) -> Option<String> {
         let mut parts = Vec::new();
         for entry in split_top_level_commas(recipe) {
-            parts.push(self.render_recipe_entry(entry.trim(), mapping, fx)?);
+            parts.push(self.render_recipe_entry(entry.trim(), mapping)?);
         }
         (!parts.is_empty()).then(|| format!("[{}]", parts.join(", ")))
     }
@@ -150,14 +149,13 @@ impl Planner<'_> {
         &mut self,
         entry: &str,
         mapping: &rustc_hash::FxHashMap<String, Type>,
-        fx: &mut EmitEffects,
     ) -> Option<String> {
         if let Some(elem) = entry
             .strip_prefix("Slice<")
             .and_then(|s| s.strip_suffix('>'))
         {
             let ty = mapping.get(elem.trim())?;
-            return Some(format!("[]{}", self.go_type_string(ty, fx)));
+            return Some(format!("[]{}", self.go_type_string(ty)));
         }
         if let Some(inner) = entry.strip_prefix("Map<").and_then(|s| s.strip_suffix('>')) {
             let (key, value) = inner.split_once(',')?;
@@ -165,11 +163,11 @@ impl Planner<'_> {
             let value_ty = mapping.get(value.trim())?;
             return Some(format!(
                 "map[{}]{}",
-                self.go_type_string(key_ty, fx),
-                self.go_type_string(value_ty, fx)
+                self.go_type_string(key_ty),
+                self.go_type_string(value_ty)
             ));
         }
-        Some(self.go_type_string(mapping.get(entry)?, fx))
+        Some(self.go_type_string(mapping.get(entry)?))
     }
 
     fn emit_tuple_type(&self, elements: &[Type]) -> GoType {
@@ -363,20 +361,19 @@ impl Planner<'_> {
         &mut self,
         receiver_ty: &Type,
         type_args: &[Type],
-        fx: &mut EmitEffects,
     ) -> String {
         let mut go_type_strs = Vec::new();
         if let Some(params) = receiver_ty.get_type_params() {
             let params = params.to_vec();
             for param in &params {
-                go_type_strs.push(self.go_type_string(param, fx));
+                go_type_strs.push(self.go_type_string(param));
             }
         }
         for ta in type_args {
-            go_type_strs.push(self.go_type_string(ta, fx));
+            go_type_strs.push(self.go_type_string(ta));
         }
         if go_type_strs.is_empty() {
-            self.format_type_args(type_args, fx)
+            self.format_type_args(type_args)
         } else {
             format!("[{}]", go_type_strs.join(", "))
         }

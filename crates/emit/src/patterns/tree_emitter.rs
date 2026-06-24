@@ -1,7 +1,6 @@
 use syntax::ast::{Expression, MatchArm};
 use syntax::types::Type;
 
-use crate::EmitEffects;
 use crate::Planner;
 use crate::analyze::inline_uses::{InlineDecision, analyze_inline_candidate, region_blocks_inline};
 use crate::context::expression::ExpressionContext;
@@ -86,7 +85,6 @@ pub(crate) struct TreePlanner<'a, 'e> {
     arms: &'a [MatchArm],
     subject_var: String,
     subject_ty: Type,
-    fx: &'a mut EmitEffects,
 }
 
 impl<'a, 'e> TreePlanner<'a, 'e> {
@@ -95,21 +93,19 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         arms: &'a [MatchArm],
         subject_var: String,
         subject_ty: Type,
-        fx: &'a mut EmitEffects,
     ) -> Self {
         Self {
             planner,
             arms,
             subject_var,
             subject_ty,
-            fx,
         }
     }
 
     pub(crate) fn lower(mut self, place: &PlacePlan) -> LoweredBlock {
         let expanded = expand_or_patterns(self.arms);
         let compiled = compile_expanded_arms(self.planner, &expanded, &self.subject_ty);
-        self.fx.extend(&compiled.effects);
+        self.planner.absorb_effects(&compiled.effects);
         let tree = compiled.decision;
 
         let single_catchall_has_collisions = match &tree {
@@ -125,7 +121,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
             &tree,
             single_catchall_has_collisions,
         );
-        self.fx.extend(&lowered.effects);
+        self.planner.absorb_effects(&lowered.effects);
 
         let mut statements: Vec<LoweredStatement> = Vec::new();
         match lowered.plan {
@@ -900,9 +896,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         place: &PlacePlan,
     ) {
         let arm = &self.arms[arm_index];
-        let block = self
-            .planner
-            .lower_block_to_place(&arm.expression, place, self.fx);
+        let block = self.planner.lower_block_to_place(&arm.expression, place);
         statements.extend(block.statements);
     }
 
@@ -913,11 +907,9 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         arm_index: usize,
     ) -> Option<(Vec<LoweredStatement>, String)> {
         let guard_expression = self.arms[arm_index].guard.as_deref()?;
-        let plan = self.planner.plan_operand(
-            guard_expression,
-            ExpressionContext::value().condition(),
-            self.fx,
-        );
+        let plan = self
+            .planner
+            .plan_operand(guard_expression, ExpressionContext::value().condition());
         let (setup, value) = plan.into_parts();
         Some((setup, wrap_if_struct_literal(value)))
     }

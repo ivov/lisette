@@ -1079,7 +1079,7 @@ fn collect_const_pattern_check(
             if qualifier.is_empty() || qualifier == planner.facts.current_module() {
                 const_name.to_string()
             } else {
-                let qualifier = planner.require_module_import_fx(module, &mut collector.effects);
+                let qualifier = planner.record_module_import(module, &mut collector.effects);
                 format!("{}.{}", qualifier, const_name)
             }
         }
@@ -1187,7 +1187,7 @@ fn collect_tagged_enum_checks(
 ) {
     let enum_module = enum_module_of(planner, variant.ty);
     let alias = if planner.facts.is_foreign_module(enum_module) {
-        Some(planner.require_module_import_fx(enum_module, &mut collector.effects))
+        Some(planner.record_module_import(enum_module, &mut collector.effects))
     } else {
         None
     };
@@ -1345,7 +1345,7 @@ fn resolve_struct_child_path(
     if enum_info.is_some() {
         let enum_module = enum_module_of(planner, ty);
         let alias = if planner.facts.is_foreign_module(enum_module) {
-            Some(planner.require_module_import_fx(enum_module, &mut collector.effects))
+            Some(planner.record_module_import(enum_module, &mut collector.effects))
         } else {
             None
         };

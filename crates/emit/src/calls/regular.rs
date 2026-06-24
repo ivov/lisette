@@ -4,7 +4,6 @@ use crate::calls::dispatch::{
 };
 use crate::calls::go_interop::is_go_receiver;
 
-use crate::EmitEffects;
 use crate::Planner;
 use crate::abi::AbiShape;
 use crate::abi::coercion::{Coercion, CoercionDirection, OptionShape, classify_option_shape};
@@ -125,7 +124,6 @@ impl<'a> Planner<'a> {
         call_plan: &CallPlan,
         call_ty: Option<&Type>,
         expression_ctx: ExpressionContext<'_>,
-        fx: &mut EmitEffects,
     ) -> (Vec<LoweredStatement>, String) {
         let Expression::Call {
             expression: callee,
@@ -143,22 +141,16 @@ impl<'a> Planner<'a> {
         if let Some(go_name) = self.get_callee_go_name(function).map(str::to_string) {
             let stages: Vec<StagedExpression> = args
                 .iter()
-                .map(|a| self.stage_operand(a, ExpressionContext::value(), fx))
+                .map(|a| self.stage_operand(a, ExpressionContext::value()))
                 .collect();
             let wrap_to_any = spread_needs_any_wrap(function, spread);
             let combine = call_plan.variadic_combine(0);
-            let (setup, args_strings) = self.sequence_with_spread_structured(
-                stages,
-                spread,
-                wrap_to_any,
-                "_arg",
-                combine,
-                fx,
-            );
+            let (setup, args_strings) =
+                self.sequence_with_spread_structured(stages, spread, wrap_to_any, "_arg", combine);
             return (setup, format!("{}({})", go_name, args_strings.join(", ")));
         }
 
-        let callee_staged = self.stage_operand(function, expression_ctx.callee(), fx);
+        let callee_staged = self.stage_operand(function, expression_ctx.callee());
         let mut function_string = callee_staged.value;
 
         if function.deref_inner().is_some() {
@@ -175,7 +167,6 @@ impl<'a> Planner<'a> {
             },
             &mut function_string,
             expression_ctx,
-            fx,
         );
 
         let analysis = self.analyze_callee(function);
@@ -190,7 +181,7 @@ impl<'a> Planner<'a> {
             wrap_spread_to_any: spread_needs_any_wrap(function, spread),
             combine_variadic: call_plan.variadic_combine(0),
         };
-        let (args_setup, args_strings) = self.emit_call_args(args, &args_ctx, fx);
+        let (args_setup, args_strings) = self.emit_call_args(args, &args_ctx);
 
         let mut setup = callee_staged.setup;
         let callee_needs_pin = setup.is_empty()
@@ -287,7 +278,6 @@ impl<'a> Planner<'a> {
         &mut self,
         function: &Expression,
         recipe: &str,
-        fx: &mut EmitEffects,
     ) -> Option<String> {
         let definition_ty = self.callee_definition(function)?.ty().clone();
         let Type::Forall { body, .. } = definition_ty else {
@@ -296,7 +286,7 @@ impl<'a> Planner<'a> {
         let instantiated = function.get_type();
         let mut mapping = rustc_hash::FxHashMap::default();
         extract_type_mapping(&body, &instantiated, &mut mapping);
-        self.reconstruct_collapsed_type_args(recipe, &mapping, fx)
+        self.reconstruct_collapsed_type_args(recipe, &mapping)
     }
 
     pub(crate) fn callee_definition(&self, function: &Expression) -> Option<&'a Definition> {
@@ -384,7 +374,6 @@ impl<'a> Planner<'a> {
         arg_shape: CallArgShape,
         function_string: &mut String,
         ctx: ExpressionContext<'_>,
-        fx: &mut EmitEffects,
     ) -> String {
         let has_value_args = arg_shape.value_count > 0 || arg_shape.has_spread;
         if let Some(recipe) = self.callee_collapsed_recipe(function) {
@@ -392,27 +381,27 @@ impl<'a> Planner<'a> {
                 return String::new();
             }
             return self
-                .reconstruct_collapsed_call_type_args(function, &recipe, fx)
+                .reconstruct_collapsed_call_type_args(function, &recipe)
                 .unwrap_or_default();
         }
 
-        let mut type_args_string = self.format_type_args(type_args, fx);
+        let mut type_args_string = self.format_type_args(type_args);
 
         let slot_ty = ctx.expected_slot_type();
 
         if type_args_string.is_empty()
-            && let Some(inferred) = self.infer_return_only_type_args(function, arg_shape, fx)
+            && let Some(inferred) = self.infer_return_only_type_args(function, arg_shape)
         {
             type_args_string = match slot_ty {
-                Some(t) => self.prelude_container_type_args(t, fx).unwrap_or(inferred),
+                Some(t) => self.prelude_container_type_args(t).unwrap_or(inferred),
                 None => inferred,
             };
         }
 
         if type_args_string.is_empty() && is_prelude_variant_constructor(function) {
-            let mut candidate = call_ty.and_then(|t| self.prelude_container_type_args(t, fx));
+            let mut candidate = call_ty.and_then(|t| self.prelude_container_type_args(t));
             if candidate.is_none() {
-                candidate = slot_ty.and_then(|t| self.prelude_container_type_args(t, fx));
+                candidate = slot_ty.and_then(|t| self.prelude_container_type_args(t));
             }
             type_args_string = candidate.unwrap_or_default();
         }
@@ -433,13 +422,12 @@ impl<'a> Planner<'a> {
         &mut self,
         args: &[Expression],
         ctx: &CallArgsContext<'_>,
-        fx: &mut EmitEffects,
     ) -> (Vec<LoweredStatement>, Vec<String>) {
         let stages: Vec<StagedExpression> = args
             .iter()
             .enumerate()
             .map(|(i, arg)| {
-                let (setup, value) = self.lower_call_arg(arg, i, ctx, fx);
+                let (setup, value) = self.lower_call_arg(arg, i, ctx);
                 StagedExpression::from_typed_setup(setup, value, arg)
             })
             .collect();
@@ -450,7 +438,6 @@ impl<'a> Planner<'a> {
             ctx.generic_fn_param_types,
             ctx.wrap_spread_to_any,
             ctx.combine_variadic.clone(),
-            fx,
         )
     }
 
@@ -465,7 +452,6 @@ impl<'a> Planner<'a> {
         arg: &Expression,
         index: usize,
         ctx: &CallArgsContext<'_>,
-        fx: &mut EmitEffects,
     ) -> (Vec<LoweredStatement>, String) {
         let effective_param_ty = effective_param_type(index, ctx.fn_param_types);
         let generic_param_ty = ctx
@@ -488,36 +474,32 @@ impl<'a> Planner<'a> {
                 arg,
                 effective_param_ty.expect("GoCallbackAdapter requires effective_param_ty"),
                 kind,
-                fx,
             ),
             ArgumentPlan::LoweredFnShapeAdapter => self
                 .lower_adapt_lowered_fn_arg_shape(
                     arg,
                     generic_param_ty.expect("LoweredFnShapeAdapter requires generic_param_ty"),
-                    fx,
                 )
                 .expect("detect_lowered_fn_arg_shape ensures Some"),
             ArgumentPlan::NullableCoercion(kind) => self.lower_nullable_coercion(
                 arg,
                 effective_param_ty.expect("NullableCoercion requires effective_param_ty"),
                 kind,
-                fx,
             ),
             ArgumentPlan::GoPointerUnwrap => self.lower_go_pointer_param_unwrap(
                 arg,
                 effective_param_ty.expect("GoPointerUnwrap requires effective_param_ty"),
-                fx,
             ),
             ArgumentPlan::TaggedGoLowering => {
                 let target =
                     effective_param_ty.expect("TaggedGoLowering requires effective_param_ty");
                 let arg_ctx = direct_arg_emit_ctx(ctx, Some(target), true);
-                let (mut setup, value) = self.lower_composite_value(arg, arg_ctx, fx).into_parts();
-                let lowered = self.emit_lower_arg_to_tagged(&mut setup, &value, target, fx);
+                let (mut setup, value) = self.lower_composite_value(arg, arg_ctx).into_parts();
+                let lowered = self.emit_lower_arg_to_tagged(&mut setup, &value, target);
                 (setup, lowered)
             }
             ArgumentPlan::Direct => {
-                self.lower_direct_arg(arg, ctx, effective_param_ty, declared_param_ty, fx)
+                self.lower_direct_arg(arg, ctx, effective_param_ty, declared_param_ty)
             }
         }
     }
@@ -571,16 +553,15 @@ impl<'a> Planner<'a> {
         ctx: &CallArgsContext<'_>,
         effective_param_ty: Option<&Type>,
         declared_param_ty: Option<&Type>,
-        fx: &mut EmitEffects,
     ) -> (Vec<LoweredStatement>, String) {
         let suppress = would_suppress_tagged_go(ctx, declared_param_ty);
         let arg_ctx = direct_arg_emit_ctx(ctx, effective_param_ty, suppress);
-        let (mut setup, value) = self.lower_composite_value(arg, arg_ctx, fx).into_parts();
+        let (mut setup, value) = self.lower_composite_value(arg, arg_ctx).into_parts();
         let final_value = match effective_param_ty {
             Some(target) => {
                 let coercion =
                     Coercion::resolve(self, &arg.get_type(), target, CoercionDirection::Internal);
-                let (coercion_setup, coerced) = coercion.lower(self, value, fx);
+                let (coercion_setup, coerced) = coercion.lower(self, value);
                 setup.extend(coercion_setup);
                 coerced
             }
@@ -596,11 +577,10 @@ impl<'a> Planner<'a> {
         setup: &mut Vec<LoweredStatement>,
         arg: &Expression,
         generic_param_ty: Option<&Type>,
-        fx: &mut EmitEffects,
     ) -> Option<String> {
         self.detect_lowered_fn_arg_shape(arg, generic_param_ty)?;
         let (adapt_setup, value) =
-            self.lower_adapt_lowered_fn_arg_shape(arg, generic_param_ty.unwrap(), fx)?;
+            self.lower_adapt_lowered_fn_arg_shape(arg, generic_param_ty.unwrap())?;
         setup.extend(adapt_setup);
         Some(value)
     }
@@ -652,11 +632,10 @@ impl<'a> Planner<'a> {
         &mut self,
         arg: &Expression,
         generic_param_ty: &Type,
-        fx: &mut EmitEffects,
     ) -> Option<(Vec<LoweredStatement>, String)> {
         let (param_shape, arg_fn, arg_shape) = self.fn_arg_shapes(arg, generic_param_ty)?;
         let (mut setup, value) = self
-            .lower_value(arg, ExpressionContext::value(), fx)
+            .lower_value(arg, ExpressionContext::value())
             .into_parts();
         let mut buffer = String::new();
         let adapted = emit_fn_arg_shape_adapter(
@@ -666,7 +645,6 @@ impl<'a> Planner<'a> {
             &arg_fn,
             &arg_shape,
             param_shape.as_ref(),
-            fx,
         )?;
         if !buffer.is_empty() {
             setup.push(LoweredStatement::RawGo(buffer));
@@ -680,7 +658,6 @@ impl<'a> Planner<'a> {
         &mut self,
         spread: &Expression,
         generic_params: Option<&[Type]>,
-        fx: &mut EmitEffects,
     ) -> Option<StagedExpression> {
         let generic_params = generic_params?;
         let raw_variadic = generic_params.last()?;
@@ -707,18 +684,18 @@ impl<'a> Planner<'a> {
         }
 
         let (mut setup, src_value) = self
-            .lower_value(spread, ExpressionContext::value(), fx)
+            .lower_value(spread, ExpressionContext::value())
             .into_parts();
         let src_var = self.hoist_tmp_value_statement(&mut setup, "src", &src_value);
 
         let target_element_ret = match param_shape.as_ref() {
-            Some(shape) => self.render_lowered_return_ty(shape, arg_ret, fx),
-            None => self.go_type_string(arg_ret, fx),
+            Some(shape) => self.render_lowered_return_ty(shape, arg_ret),
+            None => self.go_type_string(arg_ret),
         };
         let arg_fn_params = arg_fn.get_function_params().unwrap_or(&[]);
         let param_type_strs: Vec<String> = arg_fn_params
             .iter()
-            .map(|p| self.go_type_string(p, fx))
+            .map(|p| self.go_type_string(p))
             .collect();
         let target_element_ty = format!(
             "func({}) {}",
@@ -738,7 +715,6 @@ impl<'a> Planner<'a> {
             &arg_fn,
             &arg_shape,
             param_shape.as_ref(),
-            fx,
         )?;
         write_line!(body, "{}[i] = {}", adapted, closure);
 
@@ -795,10 +771,9 @@ impl<'a> Planner<'a> {
         arg: &Expression,
         effective_param_ty: &Type,
         kind: CallbackWrapperKind,
-        fx: &mut EmitEffects,
     ) -> (Vec<LoweredStatement>, String) {
         let (mut setup, value) = self
-            .lower_value(arg, ExpressionContext::value(), fx)
+            .lower_value(arg, ExpressionContext::value())
             .into_parts();
         let result = match kind {
             CallbackWrapperKind::Identity => value,
@@ -807,7 +782,7 @@ impl<'a> Planner<'a> {
                     .facts
                     .resolve_to_function_type(effective_param_ty.unwrap_forall())
                     .expect("Wrap kind only reached when param resolves to a fn type");
-                emit_lisette_callback_wrapper(self, &mut setup, &value, &param_fn_ty, fx)
+                emit_lisette_callback_wrapper(self, &mut setup, &value, &param_fn_ty)
             }
         };
         (setup, result)
@@ -840,17 +815,16 @@ impl<'a> Planner<'a> {
         &mut self,
         arg: &Expression,
         param_ty: &Type,
-        fx: &mut EmitEffects,
     ) -> (Vec<LoweredStatement>, String) {
         if arg.is_none_literal() {
             return (Vec::new(), "nil".to_string());
         }
         let arg_ty = arg.get_type();
         let (mut setup, value) = self
-            .lower_value(arg, ExpressionContext::value(), fx)
+            .lower_value(arg, ExpressionContext::value())
             .into_parts();
         let coercion = Coercion::resolve(self, &arg_ty, param_ty, CoercionDirection::ToGoBoundary);
-        let (coercion_setup, coerced) = coercion.lower(self, value, fx);
+        let (coercion_setup, coerced) = coercion.lower(self, value);
         setup.extend(coercion_setup);
         (setup, coerced)
     }
@@ -890,7 +864,6 @@ impl<'a> Planner<'a> {
         arg: &Expression,
         effective_param_ty: &Type,
         kind: NullableCoerceKind,
-        fx: &mut EmitEffects,
     ) -> (Vec<LoweredStatement>, String) {
         let arg_ty = arg.get_type();
         match kind {
@@ -900,16 +873,16 @@ impl<'a> Planner<'a> {
                     return (Vec::new(), "nil".to_string());
                 }
                 let (mut setup, value) = self
-                    .lower_value(arg, ExpressionContext::value(), fx)
+                    .lower_value(arg, ExpressionContext::value())
                     .into_parts();
                 let coercion =
                     Coercion::resolve(self, &arg_ty, &check_ty, CoercionDirection::ToGoBoundary);
-                let (coercion_setup, coerced) = coercion.lower(self, value, fx);
+                let (coercion_setup, coerced) = coercion.lower(self, value);
                 setup.extend(coercion_setup);
                 (setup, coerced)
             }
             NullableCoerceKind::NullableInterface => {
-                self.lower_unwrap_go_nullable_arg(arg, &arg_ty, fx)
+                self.lower_unwrap_go_nullable_arg(arg, &arg_ty)
             }
         }
     }
@@ -918,16 +891,15 @@ impl<'a> Planner<'a> {
         &mut self,
         arg: &Expression,
         arg_ty: &Type,
-        fx: &mut EmitEffects,
     ) -> (Vec<LoweredStatement>, String) {
         if arg.is_none_literal() {
             return (Vec::new(), "nil".to_string());
         }
         let (mut setup, value) = self
-            .lower_value(arg, ExpressionContext::value(), fx)
+            .lower_value(arg, ExpressionContext::value())
             .into_parts();
         let coercion = Coercion::resolve(self, arg_ty, arg_ty, CoercionDirection::ToGoBoundary);
-        let (coercion_setup, coerced) = coercion.lower(self, value, fx);
+        let (coercion_setup, coerced) = coercion.lower(self, value);
         setup.extend(coercion_setup);
         (setup, coerced)
     }

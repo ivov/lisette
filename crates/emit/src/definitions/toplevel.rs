@@ -1,4 +1,3 @@
-use crate::EmitEffects;
 use crate::Planner;
 use crate::Renderer;
 use crate::context::expression::ExpressionContext;
@@ -15,7 +14,6 @@ impl Planner<'_> {
         name: &str,
         generics: &[Generic],
         ty: &Type,
-        fx: &mut EmitEffects,
     ) -> String {
         let is_fn_alias;
         let underlying = match ty {
@@ -44,7 +42,7 @@ impl Planner<'_> {
                 ty
             }
         };
-        let ty_string = self.go_type_string(underlying, fx);
+        let ty_string = self.go_type_string(underlying);
 
         if let Type::Nominal { id, .. } = underlying
             && let Some(module) = self.facts.module_for_qualified_name(id.as_str())
@@ -53,11 +51,11 @@ impl Planner<'_> {
             && !go_name::is_go_import(module)
         {
             let module = module.to_string();
-            self.require_module_import_fx(&module, fx);
+            self.require_module_import(&module);
         }
 
         let symbol = self.facts.qualified_current(name);
-        let generics_string = self.generics_to_string_for_symbol(&symbol, generics, fx);
+        let generics_string = self.generics_to_string_for_symbol(&symbol, generics);
 
         let separator = if is_fn_alias { " " } else { " = " };
         format!(
@@ -74,7 +72,6 @@ impl Planner<'_> {
         identifier: &str,
         expression: &Expression,
         ty: &Type,
-        fx: &mut EmitEffects,
     ) -> ConstPlan {
         let target_name = self
             .module
@@ -90,11 +87,11 @@ impl Planner<'_> {
             self.try_declare(&fresh);
             fresh
         };
-        let ty_str = self.go_type_string(ty, fx);
+        let ty_str = self.go_type_string(ty);
 
         // `is_go_const_eligible` admits only literals, identifiers, and
         // constexpr unary/binary — none of which carry setup statements.
-        let raw_value = self.plan_value(expression, ExpressionContext::value(), fx);
+        let raw_value = self.plan_value(expression, ExpressionContext::value());
         let value_text = raw_value.operand_text().unwrap_or_default().to_string();
         let value = if value_text.is_empty() {
             ValuePlan::Operand("struct{}{}".to_string())
@@ -118,9 +115,8 @@ impl Planner<'_> {
         identifier: &str,
         expression: &Expression,
         ty: &Type,
-        fx: &mut EmitEffects,
     ) -> String {
-        let plan = self.build_const_plan(identifier, expression, ty, fx);
+        let plan = self.build_const_plan(identifier, expression, ty);
         let mut out = String::new();
         Renderer.render_const_declaration(&mut out, &plan);
         out.trim_end_matches('\n').to_string()
