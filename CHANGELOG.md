@@ -2,6 +2,23 @@
 
 Lisette is under active development. Any version before 1.0.0 may include breaking changes.
 
+## [0.5.0](https://github.com/ivov/lisette/compare/lisette-v0.4.4...lisette-v0.5.0) - 2026-06-24
+
+### Fixes
+
+- fix: treat ref-type aliases as underlying ref [#858](https://github.com/ivov/lisette/pull/858) [`ab1d9fd`](https://github.com/ivov/lisette/commit/ab1d9fda9d1b311de2ab57e41c66d688bb869314)
+- fix: point go name collision at import alias not path [#854](https://github.com/ivov/lisette/pull/854) [`bbad1ee`](https://github.com/ivov/lisette/commit/bbad1ee2aeb21f60456d8ce0af0e4ee962733c35)
+- fix: pin internal crate deps exactly and enable semver check [#851](https://github.com/ivov/lisette/pull/851) [`3e7f019`](https://github.com/ivov/lisette/commit/3e7f0195777bc678666103942751103da6675944)
+- fix: infer ref binding type when a match arm diverges [#849](https://github.com/ivov/lisette/pull/849) [`5aaad1e`](https://github.com/ivov/lisette/commit/5aaad1ebd3c61f1d0b49c7abfa967734d93ac1b1)
+
+### Internals
+
+- refactor: unify pattern-collection effect channel [#857](https://github.com/ivov/lisette/pull/857) [`38d16b7`](https://github.com/ivov/lisette/commit/38d16b7a4118fd4bd17a0d444a89a8c494d1f804)
+- refactor: dedupe lsp and passes walks via `children()` [#856](https://github.com/ivov/lisette/pull/856) [`95e8c9a`](https://github.com/ivov/lisette/commit/95e8c9af0711971ae9c30abc716235af8119085e)
+- perf: parallelize source-tree dir walk [#855](https://github.com/ivov/lisette/pull/855) [`eacc21e`](https://github.com/ivov/lisette/commit/eacc21e60e9713f8bfc033a474161fb52845e564)
+- chore: rebuild playground and fix stale wasm bindings [#852](https://github.com/ivov/lisette/pull/852) [`4b78ffc`](https://github.com/ivov/lisette/commit/4b78ffc54e62aad74fe256f902daa73aa0adabdf)
+
+
 ## [0.4.4](https://github.com/ivov/lisette/compare/lisette-v0.4.3...lisette-v0.4.4) - 2026-06-23
 
 ### Features
