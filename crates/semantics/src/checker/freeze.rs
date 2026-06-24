@@ -13,14 +13,72 @@ use syntax::ast::{
 use syntax::types::Type;
 
 use crate::checker::type_env::TypeEnv;
+use crate::store::Store;
 
 pub struct FreezeFolder<'a> {
     env: &'a TypeEnv,
+    store: &'a Store,
 }
 
 impl<'a> FreezeFolder<'a> {
-    pub fn new(env: &'a TypeEnv) -> Self {
-        Self { env }
+    pub fn new(env: &'a TypeEnv, store: &'a Store) -> Self {
+        Self { env, store }
+    }
+
+    fn normalize_ref_aliases(&self, ty: &Type) -> Type {
+        match ty {
+            Type::Nominal {
+                id,
+                params,
+                underlying_ty,
+            } => {
+                if underlying_ty.is_some() {
+                    let peeled = self.store.peel_alias(ty);
+                    if peeled.is_ref() {
+                        return self.normalize_ref_aliases(&peeled);
+                    }
+                }
+                Type::Nominal {
+                    id: id.clone(),
+                    params: params
+                        .iter()
+                        .map(|p| self.normalize_ref_aliases(p))
+                        .collect(),
+                    underlying_ty: underlying_ty.clone(),
+                }
+            }
+            Type::Compound { kind, args } => Type::Compound {
+                kind: *kind,
+                args: args.iter().map(|a| self.normalize_ref_aliases(a)).collect(),
+            },
+            Type::Tuple(elements) => Type::Tuple(
+                elements
+                    .iter()
+                    .map(|e| self.normalize_ref_aliases(e))
+                    .collect(),
+            ),
+            Type::Function(f) => f.rebuild(
+                f.params
+                    .iter()
+                    .map(|p| self.normalize_ref_aliases(p))
+                    .collect(),
+                f.bounds.iter().map(|b| self.normalize_bound(b)).collect(),
+                Box::new(self.normalize_ref_aliases(&f.return_type)),
+            ),
+            Type::Forall { vars, body } => Type::Forall {
+                vars: vars.clone(),
+                body: Box::new(self.normalize_ref_aliases(body)),
+            },
+            _ => ty.clone(),
+        }
+    }
+
+    fn normalize_bound(&self, bound: &syntax::types::Bound) -> syntax::types::Bound {
+        syntax::types::Bound {
+            param_name: bound.param_name.clone(),
+            generic: self.normalize_ref_aliases(&bound.generic),
+            ty: self.normalize_ref_aliases(&bound.ty),
+        }
     }
 
     pub fn freeze_items(&mut self, mut items: Vec<Expression>) -> Vec<Expression> {
@@ -38,7 +96,7 @@ impl<'a> FreezeFolder<'a> {
                     Expression::Binary {
                         left, right, ty, ..
                     } => {
-                        self.freeze_ty(ty);
+                        self.freeze_expr_ty(ty);
                         self.freeze_expr(right.as_mut());
                         current = left.as_mut();
                     }
@@ -311,6 +369,11 @@ impl<'a> FreezeFolder<'a> {
         self.env.resolve_in_place(ty);
     }
 
+    fn freeze_expr_ty(&self, ty: &mut Type) {
+        self.env.resolve_in_place(ty);
+        *ty = self.normalize_ref_aliases(ty);
+    }
+
     fn freeze_binding(&self, binding: &mut Binding) {
         self.freeze_ty(&mut binding.ty);
         self.freeze_pattern(&mut binding.pattern);
@@ -488,7 +551,7 @@ impl<'a> FreezeFolder<'a> {
             | Expression::Unit { ty, .. }
             | Expression::Range { ty, .. }
             | Expression::Cast { ty, .. }
-            | Expression::Block { ty, .. } => self.freeze_ty(ty),
+            | Expression::Block { ty, .. } => self.freeze_expr_ty(ty),
 
             Expression::Function {
                 ty,

@@ -16,6 +16,7 @@ use syntax::program::EqualityIndex;
 use syntax::program::Module;
 use syntax::program::UnusedInfo;
 use syntax::program::{File, FileImport};
+use syntax::types::Symbol;
 
 use super::Lint as LintEnum;
 use super::from_facts::LintConfig;
@@ -42,6 +43,16 @@ pub(crate) fn run(
     let equality_index = &store.equality_index;
     let config = LintConfig::default();
 
+    let type_aliases: Arc<HashSet<Symbol>> = Arc::new(
+        store
+            .modules
+            .values()
+            .flat_map(|m| m.definitions.iter())
+            .filter(|(_, def)| def.is_type_alias())
+            .map(|(id, _)| id.clone())
+            .collect(),
+    );
+
     let mut modules: Vec<&Module> = store
         .modules
         .values()
@@ -61,6 +72,7 @@ pub(crate) fn run(
                 equality_index,
                 &config,
                 facts,
+                &type_aliases,
                 &mut unused,
                 &sink,
             );
@@ -80,6 +92,7 @@ pub(crate) fn run(
                 equality_index,
                 &config,
                 facts,
+                &type_aliases,
                 &mut local_unused,
                 &local_sink,
             );
@@ -95,12 +108,14 @@ pub(crate) fn run(
     (LocalSink::merge(worker_sinks), unused)
 }
 
+#[allow(clippy::too_many_arguments)]
 fn apply_ref_lints(
     module: &Module,
     go_package_names: &HashMap<String, String>,
     equality_index: &EqualityIndex,
     config: &LintConfig,
     facts: &Facts,
+    type_aliases: &Arc<HashSet<Symbol>>,
     unused: &mut UnusedInfo,
     sink: &LocalSink,
 ) {
@@ -111,6 +126,7 @@ fn apply_ref_lints(
         equality_index,
         config,
         facts,
+        type_aliases,
     );
     if !result.unused_import_aliases.is_empty() {
         unused.imports_by_module.insert(
@@ -137,6 +153,7 @@ fn run_ref_lints(
     equality_index: &EqualityIndex,
     config: &LintConfig,
     facts: &Facts,
+    type_aliases: &Arc<HashSet<Symbol>>,
 ) -> RefLintResult {
     let mut diagnostics = Vec::new();
     let mut unused_import_aliases = HashSet::default();
@@ -151,7 +168,7 @@ fn run_ref_lints(
         &mut graph,
     );
 
-    let alias_map = AliasMap::build(files, go_package_names);
+    let alias_map = AliasMap::build(files, go_package_names, type_aliases.clone());
     for file in files.values() {
         for item in &file.items {
             extract_references(module, item, &mut graph, &alias_map);
@@ -160,7 +177,12 @@ fn run_ref_lints(
 
     for (from, receiver_ty) in graph.take_equals_dispatch() {
         let mut targets = Vec::new();
-        equals_targets(&receiver_ty, module, equality_index, &mut targets);
+        equals_targets(
+            &receiver_ty.strip_refs(),
+            module,
+            equality_index,
+            &mut targets,
+        );
         for to in targets {
             graph.add_reference(&from, to);
         }

@@ -17900,6 +17900,39 @@ fn main() {
 }
 
 #[test]
+fn method_called_through_ref_alias_is_not_unused() {
+    let mut fs = MockFileSystem::new();
+    let source = r#"
+struct File {}
+type FileRef = Ref<File>
+
+impl File {
+  fn close(self) {}
+}
+
+fn open(f: Ref<File>) -> FileRef { f }
+
+fn main() {
+  let file = open(&File {})
+  file.close()
+}
+"#;
+    fs.add_file(ENTRY_MODULE_ID, "main.lis", source);
+
+    let result = compile_check(fs);
+    assert!(
+        result.errors.is_empty(),
+        "unexpected errors: {:?}",
+        result.errors
+    );
+    let codes: Vec<&str> = result.lints.iter().filter_map(|l| l.code_str()).collect();
+    assert!(
+        !codes.contains(&"lint.unused_function"),
+        "File.close is called through a ref alias and must not be flagged unused: {codes:?}"
+    );
+}
+
+#[test]
 fn equals_on_imported_type_does_not_keep_same_named_local_equals() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
@@ -17989,6 +18022,100 @@ fn main() {
         unused_fns,
         1,
         "Outer's hand-written equals suppresses synthesis and never calls Inner.equals, so Inner.equals must be flagged rather than rooted off the bare attribute: {:?}",
+        result
+            .lints
+            .iter()
+            .filter_map(|l| l.code_str())
+            .collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn equals_dispatch_through_ref_alias_container_keeps_element_equals() {
+    let mut fs = MockFileSystem::new();
+    let source = r#"
+struct Inner { v: int }
+
+impl Inner {
+  fn equals(self, other: Inner) -> bool {
+    self.v == other.v
+  }
+}
+
+type Rs = Ref<Slice<Inner>>
+
+fn cmp(a: Rs, b: Slice<Inner>) -> bool {
+  a.equals(b)
+}
+
+fn main() {
+  let xs: Slice<Inner> = [Inner { v: 1 }]
+  let ys: Slice<Inner> = [Inner { v: 2 }]
+  let _ = cmp(&xs, ys)
+}
+"#;
+    fs.add_file(ENTRY_MODULE_ID, "main.lis", source);
+
+    let result = compile_check(fs);
+    assert!(
+        result.errors.is_empty(),
+        "unexpected errors: {:?}",
+        result.errors
+    );
+    let codes: Vec<&str> = result.lints.iter().filter_map(|l| l.code_str()).collect();
+    assert!(
+        !codes.contains(&"lint.unused_function"),
+        "Inner.equals is reached via equals dispatch through a ref-alias slice and must not be flagged unused: {codes:?}"
+    );
+}
+
+#[test]
+fn equals_on_pointer_backed_newtype_does_not_keep_element_equals() {
+    let mut fs = MockFileSystem::new();
+    let source = r#"
+struct Inner { v: int }
+
+impl Inner {
+  fn equals(self, other: Inner) -> bool {
+    self.v == other.v
+  }
+}
+
+struct H(Ref<Slice<Inner>>)
+
+impl H {
+  fn equals(self, _other: H) -> bool {
+    true
+  }
+}
+
+fn cmp(a: H, b: H) -> bool {
+  a.equals(b)
+}
+
+fn main() {
+  let xs: Slice<Inner> = [Inner { v: 1 }]
+  let ys: Slice<Inner> = [Inner { v: 2 }]
+  let _ = cmp(H(&xs), H(&ys))
+}
+"#;
+    fs.add_file(ENTRY_MODULE_ID, "main.lis", source);
+
+    let result = compile_check(fs);
+    assert!(
+        result.errors.is_empty(),
+        "unexpected errors: {:?}",
+        result.errors
+    );
+    let unused_fns = result
+        .lints
+        .iter()
+        .filter(|l| l.code_str() == Some("lint.unused_function"))
+        .count();
+    assert_eq!(
+        unused_fns,
+        1,
+        "H is an opaque newtype: calling H.equals credits H.equals (keyed under H, not its underlying), and must not be treated as a container dispatch that keeps Inner.equals alive; only the uncalled Inner.equals is unused: {:?}",
         result
             .lints
             .iter()

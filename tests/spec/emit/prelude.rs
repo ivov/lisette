@@ -1,3 +1,4 @@
+use crate::_harness::emit_with_sourcemap;
 use crate::assert_emit_snapshot;
 
 #[test]
@@ -341,6 +342,29 @@ fn test(a: Slice<int>, b: Slice<int>) -> bool {
 }
 "#;
     assert_emit_snapshot!(input);
+}
+
+#[test]
+fn slice_equals_through_ref_alias() {
+    let input = r#"
+type IntSliceRef = Ref<Slice<int>>
+fn test(a: IntSliceRef, b: Slice<int>) -> bool {
+  a.equals(b)
+}
+"#;
+    let go = emit_with_sourcemap(input).go_code();
+    assert!(
+        go.contains("slices.Equal(*a"),
+        "equals on a ref-alias slice must deref the pointer and use the slices helper like a bare ref: {go}"
+    );
+    assert!(
+        !go.contains("SliceEquals"),
+        "must not fall through to the undefined nominal helper: {go}"
+    );
+    assert!(
+        go.contains("func test(a IntSliceRef,"),
+        "the alias name must be preserved in the emitted signature, not flattened to the bare pointer: {go}"
+    );
 }
 
 #[test]

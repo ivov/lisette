@@ -104,10 +104,11 @@ pub fn lint(source: &str) -> Vec<LisetteDiagnostic> {
     }
 
     {
-        let folder = semantics::checker::freeze::FreezeFolder::new(&checker.env);
+        let folder = semantics::checker::freeze::FreezeFolder::new(&checker.env, &store);
         folder.freeze_facts(&mut checker.facts);
     }
-    typed_ast = semantics::checker::freeze::FreezeFolder::new(&checker.env).freeze_items(typed_ast);
+    typed_ast =
+        semantics::checker::freeze::FreezeFolder::new(&checker.env, &store).freeze_items(typed_ast);
 
     if checker.failed() {
         return vec![];

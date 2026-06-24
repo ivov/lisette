@@ -204,6 +204,14 @@ impl DotAccessResolutionArgs<'_> {
 }
 
 impl InferCtx<'_, '_> {
+    fn normalize_aliased_ref(&self, ty: Type) -> Type {
+        if ty.is_ref() {
+            return ty;
+        }
+        let peeled = self.store.peel_alias(&ty);
+        if peeled.is_ref() { peeled } else { ty }
+    }
+
     pub(super) fn infer_dot_access(
         &mut self,
         expression: Box<Expression>,
@@ -215,7 +223,8 @@ impl InferCtx<'_, '_> {
         let prior_dot_access_base = self.scopes.set_dot_access_base(true);
         let new_expression = self.infer_expression(*expression, &expression_ty);
         self.scopes.set_dot_access_base(prior_dot_access_base);
-        let resolved_expression_ty = expression_ty.resolve_in(&self.env);
+        let resolved_expression_ty =
+            self.normalize_aliased_ref(expression_ty.resolve_in(&self.env));
 
         let deref_ty = resolved_expression_ty.strip_refs();
 

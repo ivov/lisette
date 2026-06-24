@@ -133,7 +133,7 @@ impl InferCtx<'_, '_> {
         span: &Span,
     ) -> Result<(), Vec<InterfaceViolation>> {
         let store = self.store;
-        if ty.is_ref() {
+        if store.peel_alias(ty).is_ref() {
             return Ok(());
         }
 

@@ -7861,3 +7861,134 @@ fn main() {
     )
     .assert_no_errors();
 }
+
+#[test]
+fn ref_alias_unifies_with_bare_ref() {
+    infer(
+        r#"
+    struct File {}
+    type FileRef = Ref<File>
+
+    fn open(f: Ref<File>) -> FileRef { f }
+
+    fn run(f: Ref<File>) {
+      let x: Ref<File> = open(f)
+      let _ = x
+    }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn method_resolves_through_ref_alias() {
+    infer(
+        r#"
+    struct File {}
+    type FileRef = Ref<File>
+
+    impl File {
+      fn close(self) {}
+    }
+
+    fn open(f: Ref<File>) -> FileRef { f }
+
+    fn run(f: Ref<File>) {
+      let file = open(f)
+      file.close()
+    }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn field_resolves_through_ref_alias() {
+    infer(
+        r#"
+    struct Point { x: int }
+    type PointRef = Ref<Point>
+
+    fn at(p: Ref<Point>) -> PointRef { p }
+
+    fn run(p: Ref<Point>) -> int {
+      let r = at(p)
+      r.x
+    }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn ref_alias_match_arm_resolves_receiver() {
+    infer(
+        r#"
+    struct File {}
+    type FileRef = Ref<File>
+
+    impl File {
+      fn close(self) {}
+    }
+
+    fn open(f: Ref<File>) -> FileRef { f }
+
+    fn run(cond: bool, f: Ref<File>, g: Ref<File>) {
+      let file = match cond {
+        true => open(f),
+        false => g,
+      }
+      file.close()
+    }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn pointer_backed_newtype_stays_opaque() {
+    infer(
+        r#"
+    struct File {}
+
+    impl File {
+      fn close(self) {}
+    }
+
+    struct Handle(Ref<File>)
+
+    fn run(h: Handle) {
+      h.close()
+    }
+        "#,
+    )
+    .assert_infer_code("member_not_found");
+}
+
+#[test]
+fn ref_alias_satisfies_interface_with_pointer_receiver() {
+    infer(
+        r#"
+    interface Worker {
+      fn name(self) -> string
+      fn work(self) -> int
+    }
+
+    struct MyWorker { label: string, count: int }
+
+    impl MyWorker {
+      fn name(self) -> string { self.label }
+      fn work(self: Ref<MyWorker>) -> int { self.count }
+    }
+
+    type WorkerRef = Ref<MyWorker>
+
+    fn use_worker(w: Worker) -> string { w.name() }
+
+    fn run(w: WorkerRef) {
+      let _ = use_worker(w)
+    }
+        "#,
+    )
+    .assert_no_errors();
+}

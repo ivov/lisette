@@ -69,10 +69,11 @@ impl InferCtx<'_, '_> {
                 ctx.resolve_select_exhaustiveness();
 
                 let frozen_items = {
+                    let store = ctx.store;
                     let state = &mut *ctx;
-                    let folder = FreezeFolder::new(&state.env);
+                    let folder = FreezeFolder::new(&state.env, store);
                     folder.freeze_facts(&mut state.facts);
-                    FreezeFolder::new(&state.env).freeze_items(inferred_items)
+                    FreezeFolder::new(&state.env, store).freeze_items(inferred_items)
                 };
 
                 let typed_file = File {

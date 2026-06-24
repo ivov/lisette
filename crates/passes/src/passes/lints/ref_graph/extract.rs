@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use syntax::ast::{
@@ -12,10 +14,15 @@ use super::reference_graph::{EnumVariantId, ModuleItemId, ReferenceGraph, Struct
 
 pub struct AliasMap {
     aliases: HashMap<String, ModuleItemId>,
+    type_aliases: Arc<HashSet<Symbol>>,
 }
 
 impl AliasMap {
-    pub fn build(files: &HashMap<u32, File>, go_package_names: &HashMap<String, String>) -> Self {
+    pub fn build(
+        files: &HashMap<u32, File>,
+        go_package_names: &HashMap<String, String>,
+        type_aliases: Arc<HashSet<Symbol>>,
+    ) -> Self {
         let mut aliases = HashMap::default();
 
         for file in files.values() {
@@ -29,7 +36,10 @@ impl AliasMap {
             }
         }
 
-        Self { aliases }
+        Self {
+            aliases,
+            type_aliases,
+        }
     }
 
     fn resolve(&self, module: &Module, name: &str) -> Option<ModuleItemId> {
@@ -43,6 +53,26 @@ impl AliasMap {
     fn is_import_alias(&self, name: &str) -> bool {
         self.aliases.contains_key(name)
     }
+
+    fn is_type_alias(&self, id: &Symbol) -> bool {
+        self.type_aliases.contains(id)
+    }
+}
+
+fn deref_for_keying(ty: &Type, aliases: &AliasMap) -> Type {
+    let mut current = ty.strip_refs();
+    while let Type::Nominal {
+        id,
+        underlying_ty: Some(underlying),
+        ..
+    } = &current
+    {
+        if !aliases.is_type_alias(id) {
+            break;
+        }
+        current = underlying.strip_refs();
+    }
+    current
 }
 
 pub fn extract_references(
@@ -101,19 +131,19 @@ fn walk_expression(
             ..
         } => {
             walk_expression(module, expression, graph, alias_map, ctx);
-            if let Some(ty_name) = type_name(&expression.get_type()) {
+            if let Some(ty_name) = type_name(&expression.get_type(), alias_map) {
                 graph.mark_struct_field_used(StructFieldId::new(&ty_name, member));
             }
             if let Some(from) = ctx
                 && is_method_access(dot_access_kind)
-                && credits_local_method(&expression.get_type(), module)
+                && credits_local_method(&expression.get_type(), module, alias_map)
             {
-                let to = method_node(member, &expression.get_type());
+                let to = method_node(member, &expression.get_type(), alias_map);
                 graph.add_reference(from, to);
             }
             if let Some(from) = ctx
                 && member == "equals"
-                && is_container_receiver(&expression.get_type())
+                && is_container_receiver(&expression.get_type(), alias_map)
             {
                 graph.record_equals_dispatch(from.clone(), expression.get_type());
             }
@@ -423,7 +453,7 @@ fn walk_call(
         if let Some(from) = ctx
             && (value.as_str() == "Slice.equals" || value.as_str() == "Map.equals")
             && let Some(receiver) = args.first()
-            && is_container_receiver(&receiver.get_type())
+            && is_container_receiver(&receiver.get_type(), alias_map)
         {
             graph.record_equals_dispatch(from.clone(), receiver.get_type());
         }
@@ -480,7 +510,7 @@ fn walk_struct_call(
         StructSpread::None => {}
         StructSpread::From(spread_expression) => {
             walk_expression(module, spread_expression, graph, alias_map, ctx);
-            if let Some(ty_name) = type_name(&spread_expression.get_type()) {
+            if let Some(ty_name) = type_name(&spread_expression.get_type(), alias_map) {
                 let explicit: HashSet<&str> =
                     field_assignments.iter().map(|f| f.name.as_str()).collect();
                 let qname = Symbol::from_parts(&module.id, &ty_name);
@@ -496,7 +526,7 @@ fn walk_struct_call(
             }
         }
         StructSpread::ZeroFill { .. } => {
-            if let Some(ty_name) = type_name(ty) {
+            if let Some(ty_name) = type_name(ty, alias_map) {
                 let explicit: HashSet<&str> =
                     field_assignments.iter().map(|f| f.name.as_str()).collect();
                 let qname = Symbol::from_parts(&module.id, &ty_name);
@@ -744,7 +774,7 @@ fn mark_constructor_pattern(
         return;
     }
 
-    let enum_name = type_name(ty).or_else(|| {
+    let enum_name = type_name(ty, alias_map).or_else(|| {
         identifier
             .split_once('.')
             .map(|(first, _)| first.to_string())
@@ -799,19 +829,15 @@ fn walk_callable_body(
 
 /// The graph node for a `member` method call on `receiver_ty`, resolving the receiver to
 /// its unqualified type name so `equals` is keyed per receiver type.
-fn method_node(member: &str, receiver_ty: &Type) -> ModuleItemId {
-    match type_name(receiver_ty) {
+fn method_node(member: &str, receiver_ty: &Type, aliases: &AliasMap) -> ModuleItemId {
+    match type_name(receiver_ty, aliases) {
         Some(name) => ModuleItemId::method(member, &name),
         None => ModuleItemId::new(member),
     }
 }
 
-fn credits_local_method(receiver_ty: &Type, module: &Module) -> bool {
-    let mut current = receiver_ty.strip_refs();
-    while let Some(next) = current.get_underlying().cloned() {
-        current = next;
-    }
-    current = match current {
+fn credits_local_method(receiver_ty: &Type, module: &Module, aliases: &AliasMap) -> bool {
+    let current = match deref_for_keying(receiver_ty, aliases) {
         Type::Function(f) => (*f.return_type).clone(),
         other => other,
     };
@@ -863,20 +889,13 @@ pub(super) fn equals_targets(
     }
 }
 
-fn is_container_receiver(receiver_ty: &Type) -> bool {
-    let mut current = receiver_ty.strip_refs();
-    while let Some(next) = current.get_underlying().cloned() {
-        current = next;
-    }
+fn is_container_receiver(receiver_ty: &Type, aliases: &AliasMap) -> bool {
+    let current = deref_for_keying(receiver_ty, aliases);
     current.is_slice() || current.is_map()
 }
 
-fn type_name(ty: &Type) -> Option<String> {
-    let mut current = ty.strip_refs();
-    while let Some(next) = current.get_underlying().cloned() {
-        current = next;
-    }
-    match current {
+fn type_name(ty: &Type, aliases: &AliasMap) -> Option<String> {
+    match deref_for_keying(ty, aliases) {
         Type::Nominal { id, .. } => Some(unqualified_name(&id).to_string()),
         _ => None,
     }

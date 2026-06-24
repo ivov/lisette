@@ -99,7 +99,7 @@ impl InferCtx<'_, '_> {
         match (&r1, &r2) {
             _ if r1.is_ignored() || r2.is_ignored() => Ok(()),
             _ if r1.is_receiver_placeholder() || r2.is_receiver_placeholder() => Ok(()),
-            _ if self.should_unify_refs(&r1, &r2, &r1, &r2) => self.unify_refs(&r1, &r2, span),
+            _ if self.should_unify_refs(&r1, &r2) => self.unify_refs(&r1, &r2, span),
 
             (Type::Var { id: i1, .. }, Type::Var { id: i2, .. }) if i1 == i2 => Ok(()),
 
@@ -259,18 +259,34 @@ impl InferCtx<'_, '_> {
         }
     }
 
-    fn should_unify_refs(&self, t1: &Type, t2: &Type, r1: &Type, r2: &Type) -> bool {
+    fn should_unify_refs(&self, t1: &Type, t2: &Type) -> bool {
         let either_is_ref = t1.is_ref() || t2.is_ref();
         let both_concrete = !t1.is_variable() && !t2.is_variable();
         let neither_is_interface = !self.is_interface(t1) && !self.is_interface(t2);
-        let neither_is_unknown = !r1.is_unknown() && !r2.is_unknown();
-        let neither_is_error = !r1.is_error() && !r2.is_error();
+        let neither_is_unknown = !t1.is_unknown() && !t2.is_unknown();
+        let neither_is_error = !t1.is_error() && !t2.is_error();
+        let neither_is_alias = !self.is_transparent_alias(t1) && !self.is_transparent_alias(t2);
 
         either_is_ref
             && both_concrete
             && neither_is_interface
             && neither_is_unknown
             && neither_is_error
+            && neither_is_alias
+    }
+
+    fn is_transparent_alias(&self, ty: &Type) -> bool {
+        let Type::Nominal {
+            id,
+            underlying_ty: Some(_),
+            ..
+        } = ty
+        else {
+            return false;
+        };
+        self.store
+            .get_definition(id)
+            .is_some_and(|definition| definition.is_type_alias())
     }
 
     fn is_interface(&self, ty: &Type) -> bool {
