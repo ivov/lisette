@@ -22,6 +22,7 @@ impl Planner<'_> {
     pub(crate) fn emit_identifier(
         &mut self,
         value: &str,
+        qualified: Option<&str>,
         ty: &Type,
         ctx: ExpressionContext<'_>,
     ) -> String {
@@ -44,17 +45,17 @@ impl Planner<'_> {
             IdentifierKind::UnitValue => "struct{}{}".to_string(),
             IdentifierKind::PublicFunction { capitalized } => capitalized,
             IdentifierKind::UnitConstructor { name, type_args } => {
-                format!("{}{}()", self.resolve_go_name(&name), type_args)
+                format!("{}{}()", self.resolve_go_name(&name, None), type_args)
             }
             IdentifierKind::ConstructorFunction { name, type_args } => {
-                format!("{}{}", self.resolve_go_name(&name), type_args)
+                format!("{}{}", self.resolve_go_name(&name, None), type_args)
             }
             IdentifierKind::Regular { name } => {
                 if let Some(expression) = self.try_emit_method_expression(&name, ty) {
                     return expression;
                 }
                 let resolved = self.capitalize_static_method_if_public(&name);
-                let go_name = self.resolve_go_name(&resolved);
+                let go_name = self.resolve_go_name(&resolved, qualified);
                 if !ctx.is_callee()
                     && let Some(type_args) = self.format_generic_value_type_args(&name, ty)
                 {
@@ -301,41 +302,22 @@ impl Planner<'_> {
     }
 
     /// Resolve `module.Type.method` as a cross-module static method call.
-    pub(crate) fn try_resolve_cross_module_static_method(&mut self, name: &str) -> Option<String> {
-        if !name.contains('.') {
-            return None;
-        }
-
-        let last_dot = name.rfind('.')?;
-        let method_name = &name[last_dot + 1..];
-        let type_and_module = &name[..last_dot];
-
-        let type_name = if let Some(dot_position) = type_and_module.rfind('.') {
-            &type_and_module[dot_position + 1..]
-        } else if let Some(slash_position) = type_and_module.rfind('/') {
-            &type_and_module[slash_position + 1..]
-        } else {
-            return None;
-        };
-
-        let module_name = if let Some(dot_position) = type_and_module.rfind('.') {
-            type_and_module[..dot_position].to_string()
-        } else if let Some(slash_position) = type_and_module.rfind('/') {
-            type_and_module[..slash_position].to_string()
-        } else {
-            return None;
-        };
-
+    pub(crate) fn try_resolve_cross_module_static_method(
+        &mut self,
+        qualified: Option<&str>,
+    ) -> Option<String> {
+        let id = qualified?;
+        let module_name = self.facts.module_for_qualified_name(id)?.to_string();
         if self.facts.is_current_module(&module_name) {
             return None;
         }
+        let after_module = id.strip_prefix(&module_name)?.strip_prefix('.')?;
+        let (type_part, method_name) = after_module.rsplit_once('.')?;
+        let type_id = format!("{}.{}", module_name, type_part);
 
-        let type_id = format!("{}.{}", module_name, type_name);
-
-        let method_key = format!("{}.{}", type_id, method_name);
         let is_public = self
             .facts
-            .definition(method_key.as_str())
+            .definition(id)
             .map(|d| d.visibility().is_public())
             .unwrap_or(true)
             || self.method_needs_export(method_name);

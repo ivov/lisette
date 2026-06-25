@@ -171,9 +171,7 @@ impl Planner<'_> {
         impl_ty: &Type,
         subst_map: &SubstitutionMap,
     ) -> Option<(AdapterMethod, bool)> {
-        let Type::Function(f) = impl_ty.unwrap_forall() else {
-            return None;
-        };
+        let f = impl_ty.as_function_type()?;
         let params = &f.params;
         let param_types: Vec<Type> = if params.is_empty() {
             Vec::new()

@@ -10,7 +10,7 @@ pub(crate) struct ResolvedNominal<'a> {
 
 impl<'a> Planner<'a> {
     pub(crate) fn resolve_nominal(&self, ty: &Type) -> Option<ResolvedNominal<'a>> {
-        let Type::Nominal { id, .. } = self.facts.peel_alias(&ty.strip_refs()) else {
+        let Type::Nominal { id, .. } = self.facts.strip_and_peel(ty) else {
             return None;
         };
         let definition = self.facts.definition(id.as_str())?;

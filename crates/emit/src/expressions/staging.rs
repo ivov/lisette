@@ -143,9 +143,7 @@ impl Planner<'_> {
             return None;
         }
         let param_ty = param_ty?;
-        let Type::Function(f) = param_ty.unwrap_forall() else {
-            return None;
-        };
+        let f = param_ty.as_function_type()?;
         self.classify_direct_emission(&f.return_type)?;
         Some(())
     }
@@ -171,10 +169,8 @@ impl Planner<'_> {
         args: &[Expression],
     ) -> Vec<StagedExpression> {
         let fn_ty = function.get_type();
-        let formal_params: &[syntax::types::Type] = match fn_ty.unwrap_forall() {
-            syntax::types::Type::Function(f) => &f.params,
-            _ => &[],
-        };
+        let formal_params: &[syntax::types::Type] =
+            fn_ty.as_function_type().map_or(&[], |f| &f.params);
         let declared_params = self.callee_declared_params(function, args.len());
         args.iter()
             .enumerate()

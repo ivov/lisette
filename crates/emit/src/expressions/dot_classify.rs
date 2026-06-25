@@ -157,7 +157,7 @@ impl Planner<'_> {
         let resolved_name = format!("{}.{}", real_type, member);
 
         let capitalized = self.capitalize_static_method_if_public(&resolved_name);
-        let go_name = self.resolve_go_name(&capitalized);
+        let go_name = self.resolve_go_name(&capitalized, None);
 
         Some(go_name)
     }
@@ -231,7 +231,7 @@ impl Planner<'_> {
     }
 
     fn method_expression_type_args(&mut self, result_ty: &Type) -> String {
-        let Type::Function(f) = result_ty.unwrap_forall() else {
+        let Some(f) = result_ty.as_function_type() else {
             return String::new();
         };
         let Some(first_param) = f.params.first() else {

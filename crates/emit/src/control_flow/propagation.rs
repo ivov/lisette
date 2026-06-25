@@ -118,8 +118,15 @@ impl Planner<'_> {
         &mut self,
         expression: &Expression,
     ) -> (Vec<LoweredStatement>, String) {
-        if let Expression::Identifier { value, ty, .. } = expression {
-            let go_name = self.emit_identifier(value, ty, ExpressionContext::value());
+        if let Expression::Identifier {
+            value,
+            ty,
+            qualified,
+            ..
+        } = expression
+        {
+            let go_name =
+                self.emit_identifier(value, qualified.as_deref(), ty, ExpressionContext::value());
             if go_name.contains('(') {
                 let mut setup = Vec::new();
                 let check = self.hoist_tmp_value_statement(&mut setup, "check", &go_name);

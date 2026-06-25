@@ -6,6 +6,7 @@ use std::sync::Arc;
 use ecow::EcoString;
 
 use crate::ast::Generic;
+use crate::program::{Definition, DefinitionBody};
 
 /// Dot-qualified identifier for a named type, method, value, or variant.
 ///
@@ -1451,6 +1452,36 @@ where
     current
 }
 
+pub fn is_nilable_go_type<'a>(ty: &Type, lookup: impl Fn(&str) -> Option<&'a Definition>) -> bool {
+    let is_alias = |id: &str| lookup(id).is_some_and(Definition::is_type_alias);
+    let is_interface = |id: &str| matches!(lookup(id), Some(d) if matches!(d.body, DefinitionBody::Interface { .. }));
+    resolves_to_pointer(ty, is_alias)
+        || resolves_to_interface(ty, is_alias, is_interface)
+        || resolves_to_function(ty, is_alias)
+}
+
+fn resolves_to_pointer<FA: Fn(&str) -> bool>(ty: &Type, is_alias: FA) -> bool {
+    fn as_pointer(ty: &Type) -> bool {
+        ty.is_ref() || ty.get_underlying().is_some_and(Type::is_ref)
+    }
+    as_pointer(ty) || as_pointer(&peel_alias(ty, is_alias))
+}
+
+fn resolves_to_interface<FA, FI>(ty: &Type, is_alias: FA, is_interface: FI) -> bool
+where
+    FA: Fn(&str) -> bool,
+    FI: Fn(&str) -> bool,
+{
+    matches!(peel_alias(ty, is_alias), Type::Nominal { id, .. } if is_interface(id.as_str()))
+}
+
+fn resolves_to_function<FA: Fn(&str) -> bool>(ty: &Type, is_alias: FA) -> bool {
+    fn as_function(ty: &Type) -> bool {
+        matches!(ty, Type::Function(_)) || matches!(ty.get_underlying(), Some(Type::Function(_)))
+    }
+    as_function(ty) || as_function(&peel_alias(ty, is_alias))
+}
+
 /// Walk an alias chain by id alone; used when no `Type` with
 /// `underlying_ty` is available (e.g. Go-name resolution).
 pub fn peel_alias_id<F>(id: &str, next_alias: F) -> String
@@ -1476,6 +1507,13 @@ impl Type {
         match self {
             Type::Forall { body, .. } => body.as_ref(),
             other => other,
+        }
+    }
+
+    pub fn as_function_type(&self) -> Option<&FunctionType> {
+        match self.unwrap_forall() {
+            Type::Function(f) => Some(f),
+            _ => None,
         }
     }
 

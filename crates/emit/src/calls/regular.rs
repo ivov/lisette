@@ -326,7 +326,7 @@ impl<'a> Planner<'a> {
         else {
             return None;
         };
-        let peeled = self.facts.peel_alias(&receiver.get_type().strip_refs());
+        let peeled = self.facts.strip_and_peel(&receiver.get_type());
         if let Some(native) = NativeGoType::from_type(&peeled) {
             return self
                 .facts

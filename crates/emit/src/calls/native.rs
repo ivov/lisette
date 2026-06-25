@@ -338,7 +338,7 @@ impl Planner<'_> {
         if ctx.method == "equals"
             && matches!(ctx.native_type, NativeGoType::Slice | NativeGoType::Map)
         {
-            let receiver_ty = self.facts.peel_alias(&expression.get_type().strip_refs());
+            let receiver_ty = self.facts.strip_and_peel(&expression.get_type());
             if receiver_ty.is_slice() || receiver_ty.is_map() {
                 let (setup, receiver, emitted_args) = self.stage_native_dot_access_call(ctx);
                 let body = self.render_equality(&receiver, &emitted_args[0], &receiver_ty);
@@ -466,9 +466,7 @@ impl Planner<'_> {
             && matches!(ctx.native_type, NativeGoType::Slice | NativeGoType::Map)
             && let Some(receiver_expr) = ctx.args.first()
         {
-            let receiver_ty = self
-                .facts
-                .peel_alias(&receiver_expr.get_type().strip_refs());
+            let receiver_ty = self.facts.strip_and_peel(&receiver_expr.get_type());
             if receiver_ty.is_slice() || receiver_ty.is_map() {
                 let (setup, emitted_args) = self.stage_native_identifier_args(ctx);
                 if emitted_args.len() >= 2 {

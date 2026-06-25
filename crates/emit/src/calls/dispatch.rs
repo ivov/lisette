@@ -96,9 +96,7 @@ impl Planner<'_> {
 
 fn extract_return_type_param(function: &Expression) -> Option<Type> {
     let ty = function.get_type();
-    let Type::Function(f) = ty.unwrap_forall() else {
-        return None;
-    };
+    let f = ty.as_function_type()?;
     let Type::Nominal { params, .. } = f.return_type.as_ref() else {
         return None;
     };
@@ -149,7 +147,7 @@ impl Planner<'_> {
             );
         }
         let ty = function.get_type();
-        let Type::Function(f) = ty.unwrap_forall() else {
+        let Some(f) = ty.as_function_type() else {
             unreachable!("MapNew must be a function");
         };
         let params = f
@@ -461,9 +459,7 @@ impl Planner<'_> {
         call_ty: Option<&Type>,
     ) -> Option<TupleStructTarget> {
         let ty = function.get_type();
-        let Type::Function(f) = ty.unwrap_forall() else {
-            return None;
-        };
+        let f = ty.as_function_type()?;
         let return_ty = call_ty
             .cloned()
             .unwrap_or_else(|| f.return_type.as_ref().clone());

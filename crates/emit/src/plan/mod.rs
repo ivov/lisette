@@ -39,8 +39,7 @@ impl Planner<'_> {
         self.facts.set_current_module(module_id);
         let mut collection_effects = EmitEffects::default();
         self.collect_module_aliases(files);
-        self.collect_local_exported_method_names(files);
-        self.collect_user_to_string_types(files);
+        self.collect_local_method_facts(files);
         self.collect_generic_constraints(files);
         self.collect_escape_remap(files);
         let collision_diagnostics = self.detect_name_collisions(files);

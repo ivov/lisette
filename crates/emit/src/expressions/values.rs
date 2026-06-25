@@ -103,7 +103,7 @@ impl Planner<'_> {
             return false;
         }
         let fn_ty = expression.get_type();
-        let Type::Function(f) = fn_ty.unwrap_forall() else {
+        let Some(f) = fn_ty.as_function_type() else {
             return false;
         };
         let Some(shape) = self.classify_direct_emission(&f.return_type) else {
@@ -138,7 +138,7 @@ impl Planner<'_> {
             return false;
         }
         let fn_ty = expression.get_type();
-        let Type::Function(f) = fn_ty.unwrap_forall() else {
+        let Some(f) = fn_ty.as_function_type() else {
             return false;
         };
         self.fallible_tuple_return(&f.return_type)
@@ -153,9 +153,14 @@ impl Planner<'_> {
     ) -> ValuePlan {
         match expression {
             Expression::Literal { literal, ty, .. } => self.emit_literal(literal, ty),
-            Expression::Identifier { value, ty, .. } => {
+            Expression::Identifier {
+                value,
+                ty,
+                qualified,
+                ..
+            } => {
                 let mut setup: Vec<LoweredStatement> = Vec::new();
-                let raw = self.emit_identifier(value, ty, ctx);
+                let raw = self.emit_identifier(value, qualified.as_deref(), ty, ctx);
                 let value = self.maybe_lower_tagged_fn_ref(&mut setup, expression, ty, raw, ctx);
                 value_plan_from_statements(setup, value)
             }

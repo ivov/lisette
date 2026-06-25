@@ -5,14 +5,14 @@ use crate::Planner;
 use crate::names::go_name;
 
 impl Planner<'_> {
-    pub(crate) fn resolve_go_name(&mut self, name: &str) -> String {
+    pub(crate) fn resolve_go_name(&mut self, name: &str, qualified: Option<&str>) -> String {
         if !name.contains('.')
             && let Some(remapped) = self.module.escape_remap(name)
         {
             return remapped.to_string();
         }
 
-        if let Some(go_call) = self.try_resolve_cross_module_static_method(name) {
+        if let Some(go_call) = self.try_resolve_cross_module_static_method(qualified) {
             return go_call;
         }
 

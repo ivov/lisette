@@ -105,7 +105,7 @@ impl Planner<'_> {
             unreachable!("lower_ufcs_call called on non-DotAccess");
         };
 
-        let receiver_ty = self.facts.peel_alias(&receiver.get_type().strip_refs());
+        let receiver_ty = self.facts.strip_and_peel(&receiver.get_type());
         let Type::Nominal {
             id: qualified_name, ..
         } = &receiver_ty
@@ -152,10 +152,10 @@ impl Planner<'_> {
         // up 1:1 with the user args. Pair each so a function-typed param
         // suppresses the Go-fn-value identity short-circuit before dispatch
         // into prelude helpers like `lisette.OptionAndThen`.
-        let formal_params: Vec<Type> = match function.get_type().unwrap_forall() {
-            Type::Function(f) => f.params.clone(),
-            _ => Vec::new(),
-        };
+        let formal_params: Vec<Type> = function
+            .get_type()
+            .as_function_type()
+            .map_or_else(Vec::new, |f| f.params.clone());
         let declared_params =
             self.ufcs_declared_user_params(receiver, function, formal_params.len());
         let suppress_declared = declared_params

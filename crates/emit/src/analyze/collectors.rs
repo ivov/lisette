@@ -6,60 +6,47 @@ use syntax::ast::{Expression, Visibility};
 use syntax::program::{DefinitionBody, File};
 
 impl Planner<'_> {
-    pub(crate) fn collect_local_exported_method_names(&mut self, files: &[&File]) {
-        for file in files {
-            for item in &file.items {
-                if let syntax::ast::Expression::Interface {
-                    visibility: syntax::ast::Visibility::Public,
+    pub(crate) fn collect_local_method_facts(&mut self, files: &[&File]) {
+        for item in files.iter().flat_map(|file| &file.items) {
+            match item {
+                Expression::Interface {
+                    visibility: Visibility::Public,
                     method_signatures,
                     ..
-                } = item
-                {
+                } => {
                     for method in method_signatures {
                         let func = method.function_definition_view();
                         self.module
                             .record_exported_method_name(func.name.to_string());
                     }
                 }
-
-                if let syntax::ast::Expression::ImplBlock { methods, .. } = item {
-                    for method in methods {
-                        if let syntax::ast::Expression::Function {
-                            name,
-                            visibility: syntax::ast::Visibility::Public,
-                            ..
-                        } = method
-                        {
-                            self.module.record_exported_method_name(name.to_string());
-                        }
-                    }
-                }
+                Expression::ImplBlock {
+                    receiver_name,
+                    methods,
+                    ..
+                } => self.record_impl_method_facts(receiver_name, methods),
+                _ => {}
             }
         }
     }
 
-    pub(crate) fn collect_user_to_string_types(&mut self, files: &[&File]) {
-        for file in files {
-            for item in &file.items {
-                let Expression::ImplBlock {
-                    receiver_name,
-                    methods,
-                    ..
-                } = item
-                else {
-                    continue;
-                };
-                for method in methods {
-                    if !is_display_to_string(method) {
-                        continue;
-                    }
-                    let qualified = self.facts.qualified_current(receiver_name);
-                    if self.facts.is_ufcs_method(qualified.as_str(), "to_string") {
-                        continue;
-                    }
-                    self.module
-                        .record_user_to_string_type(receiver_name.to_string());
-                }
+    fn record_impl_method_facts(&mut self, receiver_name: &str, methods: &[Expression]) {
+        for method in methods {
+            if let Expression::Function {
+                name,
+                visibility: Visibility::Public,
+                ..
+            } = method
+            {
+                self.module.record_exported_method_name(name.to_string());
+            }
+            if is_display_to_string(method)
+                && !self
+                    .facts
+                    .is_ufcs_method(&self.facts.qualified_current(receiver_name), "to_string")
+            {
+                self.module
+                    .record_user_to_string_type(receiver_name.to_string());
             }
         }
     }
