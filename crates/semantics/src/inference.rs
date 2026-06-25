@@ -437,6 +437,7 @@ fn load_cache_candidates(
 
     let mut result = CacheLoad::default();
     let mut build_jobs: Vec<CacheBuildJob> = Vec::new();
+    let mut discarded: Vec<Vec<File>> = Vec::new();
     for (candidate, interface) in candidates.into_iter().zip(loaded) {
         let Some(interface) = interface else {
             let module_id = candidate.module_id;
@@ -452,6 +453,9 @@ fn load_cache_candidates(
             continue;
         };
         let file_id_base = store.reserve_file_ids(interface.files.len() as u32);
+        if !candidate.files.is_empty() {
+            discarded.push(candidate.files);
+        }
         build_jobs.push(CacheBuildJob {
             module_id: candidate.module_id,
             interface,
@@ -465,11 +469,19 @@ fn load_cache_candidates(
     let build = |job: CacheBuildJob| {
         build_cached_module(job.module_id, job.file_id_base, job.interface, root)
     };
-    let built: Vec<CachedModuleBuild> = if build_jobs.len() < PARALLEL_THRESHOLD {
-        build_jobs.into_iter().map(build).collect()
-    } else {
-        build_jobs.into_par_iter().map(build).collect()
+    let run_build = || -> Vec<CachedModuleBuild> {
+        if build_jobs.len() < PARALLEL_THRESHOLD {
+            build_jobs.into_iter().map(build).collect()
+        } else {
+            build_jobs.into_par_iter().map(build).collect()
+        }
     };
+    let built: Vec<CachedModuleBuild> = if discarded.is_empty() {
+        run_build()
+    } else {
+        rayon::join(run_build, move || discarded.into_par_iter().for_each(drop)).0
+    };
+
     for build in built {
         checker.ufcs_methods.extend(build.ufcs_methods);
         let module_id = build.module_id;
