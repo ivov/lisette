@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Invalid tuple
+   ╭─[test.lis:3:10]
+ 2 │ fn f() -> int {
+ 3 │   return 1, 2, 3, 4, 5, 6
+   ·          ────────┬───────
+   ·                  ╰── 6-element tuple not allowed
+ 4 │ }
+   ╰────
+  help: For >5 elements, use a struct with named fields · code: [parse.tuple_element_count]

@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Multiple return values must be a tuple
+   ╭─[test.lis:3:10]
+ 2 │ fn pair(a: int, b: int) -> (int, int) {
+ 3 │   return a, b
+   ·          ──┬─
+   ·            ╰── wrap these values in parentheses
+ 4 │ }
+   ╰────
+  help: To return multiple values, use a tuple: `return (a, b)` · code: [parse.bare_multi_value_return]

@@ -59,7 +59,7 @@ impl<'source> Parser<'source> {
             Recover => self.parse_recover_block(),
             Select => self.parse_select(),
             Loop => self.parse_loop(),
-            Return => self.parse_return(),
+            Return => self.parse_return(false),
             Break => self.parse_break(),
             Continue => self.parse_continue(),
             DotDot | DotDotEqual => self.parse_range(None, self.current_token()),

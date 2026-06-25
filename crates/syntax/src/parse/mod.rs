@@ -264,7 +264,7 @@ impl<'source> Parser<'source> {
             }
 
             Let => self.parse_let(),
-            Return => self.parse_return(),
+            Return => self.parse_return(true),
             For => self.parse_for(),
             While => self.parse_while(),
             Loop => self.parse_loop(),
@@ -694,6 +694,23 @@ impl<'source> Parser<'source> {
             .with_help(format!(
                 "Use Go-style alias syntax: `import {alias} \"{path}\"`"
             ));
+
+        self.errors.push(error);
+    }
+
+    fn error_bare_multi_return(&mut self, span: ast::Span, suggestion: &str) {
+        if self.too_many_errors() {
+            return;
+        }
+        let error = ParseError::new(
+            "Multiple return values must be a tuple",
+            span,
+            "wrap these values in parentheses",
+        )
+        .with_parse_code("bare_multi_value_return")
+        .with_help(format!(
+            "To return multiple values, use a tuple: `{suggestion}`"
+        ));
 
         self.errors.push(error);
     }

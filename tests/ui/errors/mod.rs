@@ -982,6 +982,57 @@ fn f() -> (int,) {}
 }
 
 #[test]
+fn parse_bare_multi_value_return() {
+    let input = r#"
+fn divmod(a: int, b: int) -> (int, int) {
+  return a / b, a % b
+}
+"#;
+    assert_parse_error_snapshot!(input);
+}
+
+#[test]
+fn parse_bare_multi_value_return_identifiers() {
+    let input = r#"
+fn pair(a: int, b: int) -> (int, int) {
+  return a, b
+}
+"#;
+    assert_parse_error_snapshot!(input);
+}
+
+#[test]
+fn parse_return_trailing_comma() {
+    let input = r#"
+fn f() -> int {
+  return 1,
+}
+"#;
+    assert_parse_error_snapshot!(input);
+}
+
+#[test]
+fn parse_bare_multi_value_return_too_many() {
+    let input = r#"
+fn f() -> int {
+  return 1, 2, 3, 4, 5, 6
+}
+"#;
+    assert_parse_error_snapshot!(input);
+}
+
+#[test]
+fn parse_return_trailing_comma_does_not_consume_next_statement() {
+    let input = r#"
+fn f() -> int {
+  return 1,
+  return 2
+}
+"#;
+    assert_parse_error_snapshot!(input);
+}
+
+#[test]
 fn parse_error_enum_variant_missing_paren() {
     let input = r#"
 enum E { A(int }

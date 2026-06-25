@@ -1,4 +1,4 @@
-use super::Parser;
+use super::{MAX_TUPLE_ARITY, Parser};
 use crate::ast::{Expression, MatchArm, Span};
 use crate::lex::TokenKind::*;
 use crate::types::Type;
@@ -164,7 +164,7 @@ impl<'source> Parser<'source> {
         }
     }
 
-    pub(super) fn parse_return(&mut self) -> Expression {
+    pub(super) fn parse_return(&mut self, recover_bare_multi_value: bool) -> Expression {
         let start = self.current_token();
 
         self.ensure(Return);
@@ -177,10 +177,66 @@ impl<'source> Parser<'source> {
             _ => self.parse_expression(),
         };
 
+        let expression = if recover_bare_multi_value && self.is(Comma) {
+            self.recover_bare_multi_return(expression)
+        } else {
+            expression
+        };
+
         Expression::Return {
             expression: expression.into(),
             ty: Type::uninferred(),
             span: self.span_from_tokens(start),
+        }
+    }
+
+    fn recover_bare_multi_return(&mut self, first: Expression) -> Expression {
+        let comma = self.current_token();
+        let mut elements = vec![first];
+
+        while self.is(Comma) {
+            self.next();
+            if self.at_eof()
+                || self.is(Semicolon)
+                || self.is(RightCurlyBrace)
+                || self.at_item_boundary()
+                || self.newline_before_current()
+            {
+                break;
+            }
+            elements.push(self.parse_expression());
+        }
+
+        if elements.len() == 1 {
+            self.track_error_at(
+                self.span_from_token(comma),
+                "unexpected trailing comma",
+                "Remove the trailing comma after the return value.",
+            );
+            return elements.into_iter().next().expect("len is 1");
+        }
+
+        let span = elements[0].get_span().merge(
+            elements
+                .last()
+                .expect("seeded with the first value")
+                .get_span(),
+        );
+
+        if elements.len() > MAX_TUPLE_ARITY {
+            self.error_tuple_arity(elements.len(), span);
+        } else {
+            let suggestion = format!(
+                "return ({})",
+                &self.source[span.byte_offset as usize..span.end() as usize]
+            );
+            self.error_bare_multi_return(span, &suggestion);
+        }
+
+        Expression::Tuple {
+            elements,
+            ty: Type::uninferred(),
+            span,
         }
     }
 
