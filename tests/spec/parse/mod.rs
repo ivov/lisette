@@ -2607,6 +2607,26 @@ fn test(count: int) {
 }
 
 #[test]
+fn subtraction_of_unary_minus_variable() {
+    let input = r#"
+fn test(a: int, b: int) {
+  let result = a--b;
+}
+"#;
+    assert_parse_snapshot!(input);
+}
+
+#[test]
+fn subtraction_of_unary_minus_literal() {
+    let input = r#"
+fn test(a: int) {
+  let result = a--1;
+}
+"#;
+    assert_parse_snapshot!(input);
+}
+
+#[test]
 fn unary_minus_parenthesized() {
     let input = r#"
 fn test(a: int, b: int) {

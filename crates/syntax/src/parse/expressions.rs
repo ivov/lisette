@@ -1311,7 +1311,7 @@ impl<'source> Parser<'source> {
         }
     }
 
-    fn is_valid_assignment_target(&self, expression: &Expression) -> bool {
+    pub(super) fn is_valid_assignment_target(&self, expression: &Expression) -> bool {
         use Expression::*;
 
         matches!(

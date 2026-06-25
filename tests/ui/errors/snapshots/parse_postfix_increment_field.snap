@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Syntax error
+   ╭─[test.lis:6:10]
+ 5 │   let mut c = Counter { value: 0 }
+ 6 │   c.value++
+   ·          ─┬
+   ·           ╰── Lisette has no `++` operator
+ 7 │ }
+   ╰────
+  help: Use `c.value += 1` instead · code: [parse.syntax_error]

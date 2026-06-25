@@ -6314,6 +6314,107 @@ fn test(ch: Channel<int>) {
 }
 
 #[test]
+fn parse_postfix_increment() {
+    let input = r#"
+fn main() {
+  let mut foo = 0
+  foo++
+}
+"#;
+    assert_parse_error_snapshot!(input);
+}
+
+#[test]
+fn parse_postfix_decrement() {
+    let input = r#"
+fn main() {
+  let mut foo = 0
+  foo--
+}
+"#;
+    assert_parse_error_snapshot!(input);
+}
+
+#[test]
+fn parse_postfix_increment_field() {
+    let input = r#"
+struct Counter { value: int }
+
+fn main() {
+  let mut c = Counter { value: 0 }
+  c.value++
+}
+"#;
+    assert_parse_error_snapshot!(input);
+}
+
+#[test]
+fn parse_postfix_increment_index() {
+    let input = r#"
+fn main() {
+  let mut a = [1, 2, 3]
+  a[0]++
+}
+"#;
+    assert_parse_error_snapshot!(input);
+}
+
+#[test]
+fn parse_postfix_increment_in_if_header() {
+    let input = r#"
+fn main() {
+  let mut foo = 0
+  if foo++ {
+    log()
+  }
+}
+
+fn log() {}
+"#;
+    assert_parse_error_snapshot!(input);
+}
+
+#[test]
+fn parse_postfix_increment_in_for_header() {
+    let input = r#"
+fn main() {
+  let mut xs = [1, 2, 3]
+  for x in xs++ {
+    log(x)
+  }
+}
+
+fn log(x: int) {}
+"#;
+    assert_parse_error_snapshot!(input);
+}
+
+#[test]
+fn parse_postfix_increment_trailing_comment() {
+    let input = r#"
+fn main() {
+  let mut foo = 0
+  foo++ // bump it
+}
+"#;
+    assert_parse_error_snapshot!(input);
+}
+
+#[test]
+fn parse_postfix_increment_recovers() {
+    let input = r#"
+fn main() {
+  let mut foo = 0
+  foo++
+  log(foo)
+}
+
+fn log(x: int) {}
+"#;
+    assert_parse_error_snapshot!(input);
+}
+
+#[test]
 fn parse_fn_as_lambda() {
     let input = r#"
 fn main() {

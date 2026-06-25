@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Syntax error
+   ╭─[test.lis:4:14]
+ 3 │   let mut xs = [1, 2, 3]
+ 4 │   for x in xs++ {
+   ·              ─┬
+   ·               ╰── Lisette has no `++` operator
+ 5 │     log(x)
+   ╰────
+  help: Use `xs += 1` instead · code: [parse.syntax_error]

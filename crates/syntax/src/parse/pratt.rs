@@ -39,6 +39,12 @@ impl<'source> Parser<'source> {
                 return lhs;
             }
 
+            if self.check_increment_decrement(&lhs, start.byte_offset) {
+                self.depth = depth_before_loop;
+                self.leave_recursion();
+                return lhs;
+            }
+
             if self.at_range() && RANGE_PREC > min_prec {
                 lhs = self.parse_range(Some(lhs.into()), start);
                 continue;
@@ -363,6 +369,57 @@ impl<'source> Parser<'source> {
             "Use `ch.Send(value)` inside a `select` expression",
         );
         self.resync_on_error();
+        true
+    }
+
+    fn check_increment_decrement(&mut self, lhs: &ast::Expression, start_offset: u32) -> bool {
+        let current = self.current_token();
+        let kind = current.kind;
+        if kind != Plus && kind != Minus {
+            return false;
+        }
+        let next = self.stream.peek_ahead(1);
+        if next.kind != kind {
+            return false;
+        }
+        if current.byte_offset + current.byte_length != next.byte_offset {
+            return false;
+        }
+        if !self.is_valid_assignment_target(lhs) {
+            return false;
+        }
+
+        let mut ahead = 2;
+        while matches!(self.stream.peek_ahead(ahead).kind, Comment | DocComment) {
+            ahead += 1;
+        }
+        let after = self.stream.peek_ahead(ahead);
+        let newline_after = {
+            let from = (next.byte_offset + next.byte_length) as usize;
+            let to = after.byte_offset as usize;
+            from <= to && to <= self.source.len() && self.source[from..to].contains('\n')
+        };
+        let ends_statement = newline_after
+            || matches!(
+                after.kind,
+                EOF | Semicolon | RightCurlyBrace | RightParen | RightSquareBracket | Comma
+            )
+            || (after.kind == LeftCurlyBrace && self.in_control_flow_header);
+        if !ends_statement {
+            return false;
+        }
+
+        let (operator, compound) = if kind == Plus {
+            ("++", "+= 1")
+        } else {
+            ("--", "-= 1")
+        };
+        let span = ast::Span::new(self.file_id, current.byte_offset, 2);
+        let target = self.source[start_offset as usize..current.byte_offset as usize].trim_end();
+        let help = format!("Use `{target} {compound}` instead");
+        self.track_error_at(span, format!("Lisette has no `{operator}` operator"), help);
+        self.next();
+        self.next();
         true
     }
 }

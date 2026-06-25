@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Syntax error
+   ╭─[test.lis:4:6]
+ 3 │   let mut foo = 0
+ 4 │   foo--
+   ·      ─┬
+   ·       ╰── Lisette has no `--` operator
+ 5 │ }
+   ╰────
+  help: Use `foo -= 1` instead · code: [parse.syntax_error]
