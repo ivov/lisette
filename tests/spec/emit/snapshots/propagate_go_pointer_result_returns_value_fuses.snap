@@ -1,0 +1,29 @@
+---
+source: tests/spec/emit/interop_matrix.rs
+description: |
+  
+  import "go:os"
+  
+  fn open(path: string) -> Result<Ref<os.File>, error> {
+    let file = os.Open(path)?
+    Ok(file)
+  }
+---
+package main
+
+import (
+	"errors"
+	"os"
+)
+
+func open(path string) (*os.File, error) {
+	ret_1, ret_2 := os.Open(path)
+	if ret_2 != nil {
+		return nil, ret_2
+	}
+	if ret_1 == nil {
+		return nil, errors.New("unexpected nil")
+	}
+	file := ret_1
+	return file, nil
+}

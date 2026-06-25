@@ -1,0 +1,39 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:os"
+  import "go:fmt"
+  
+  fn test() {
+    let file = match os.Create("f") {
+      Ok(f) => f,
+      Err(e) => {
+        fmt.Println("error")
+        return
+      },
+    }
+    defer file.Close()
+  }
+---
+package main
+
+import (
+	"fmt"
+	"os"
+)
+
+func test() {
+	var file *os.File
+	ret_1, ret_2 := os.Create("f")
+	if ret_2 == nil && ret_1 != nil {
+		f := ret_1
+		file = f
+	} else {
+		e := ret_2
+		_ = e
+		fmt.Println("error")
+		return
+	}
+	defer file.Close()
+}

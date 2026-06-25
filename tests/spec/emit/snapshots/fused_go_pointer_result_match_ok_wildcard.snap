@@ -1,0 +1,34 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:os"
+  import "go:fmt"
+  
+  fn test() {
+    match os.Create("f") {
+      Ok(_) => fmt.Println("made"),
+      Err(e) => fmt.Println(e),
+    }
+  }
+---
+package main
+
+import (
+	"errors"
+	"fmt"
+	"os"
+)
+
+func test() {
+	ret_1, ret_2 := os.Create("f")
+	if ret_2 == nil && ret_1 != nil {
+		fmt.Println("made")
+	} else {
+		if ret_2 == nil {
+			ret_2 = errors.New("unexpected nil")
+		}
+		e := ret_2
+		fmt.Println(e)
+	}
+}

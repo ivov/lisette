@@ -19,6 +19,34 @@ use syntax::types::Type;
 use super::GoCallStrategy;
 
 #[derive(Clone, Copy)]
+pub(crate) enum NilGuard {
+    /// Pointer ok-type: `ptr == nil`.
+    Pointer,
+    /// Non-error interface ok-type: `lisette.IsNilInterface(v)`.
+    Interface,
+}
+
+impl NilGuard {
+    pub(crate) fn is_nil(self, var: &str) -> String {
+        match self {
+            NilGuard::Pointer => format!("{var} == nil"),
+            NilGuard::Interface => format!("lisette.IsNilInterface({var})"),
+        }
+    }
+
+    pub(crate) fn non_nil(self, var: &str) -> String {
+        match self {
+            NilGuard::Pointer => format!("{var} != nil"),
+            NilGuard::Interface => format!("!lisette.IsNilInterface({var})"),
+        }
+    }
+
+    pub(crate) fn is_interface(self) -> bool {
+        matches!(self, NilGuard::Interface)
+    }
+}
+
+#[derive(Clone, Copy)]
 pub(crate) enum WrapperTarget<'a> {
     /// Allocate a fresh `var slot T` and write `slot = X` per branch.
     FreshSlot,
@@ -251,18 +279,29 @@ impl Planner<'_> {
         (statements, outcome)
     }
 
-    /// Nil check for a `Partial` ok value; `None` when the type cannot be nil.
-    fn partial_ok_nil_check(&mut self, ok_ty: &Type, val: &str) -> Option<String> {
+    /// Whether a `Partial` ok value can be Go nil, which makes the bare `Err`
+    /// variant reachable (a nil value alongside a non-nil error).
+    pub(crate) fn partial_ok_is_nilable(&self, ok_ty: &Type) -> bool {
         if self.facts.as_interface(ok_ty).is_some() {
-            self.require_stdlib();
-            return Some(format!("lisette.IsNilInterface({val})"));
+            return true;
         }
         let peeled = self.facts.peel_alias(ok_ty);
-        let nilable = self.facts.is_nilable_go_type(ok_ty)
+        self.facts.is_nilable_go_type(ok_ty)
             || peeled.is_map()
             || peeled.is_slice()
-            || peeled.is_channel();
-        nilable.then(|| format!("{val} == nil"))
+            || peeled.is_channel()
+    }
+
+    pub(crate) fn partial_ok_nil_check(&mut self, ok_ty: &Type, val: &str) -> Option<String> {
+        if !self.partial_ok_is_nilable(ok_ty) {
+            return None;
+        }
+        if self.facts.as_interface(ok_ty).is_some() {
+            self.require_stdlib();
+            Some(format!("lisette.IsNilInterface({val})"))
+        } else {
+            Some(format!("{val} == nil"))
+        }
     }
 
     pub(super) fn lower_go_result_call_wrapped(
@@ -290,6 +329,17 @@ impl Planner<'_> {
                 .as_interface(ok_ty)
                 .as_deref()
                 .is_some_and(|id| id != go_name::PRELUDE_ERROR_ID)
+    }
+
+    pub(crate) fn result_nil_guard(&self, ok_ty: &Type) -> Option<NilGuard> {
+        if !self.go_result_needs_nil_guard(ok_ty) {
+            return None;
+        }
+        Some(if self.facts.is_interface(ok_ty) {
+            NilGuard::Interface
+        } else {
+            NilGuard::Pointer
+        })
     }
 
     /// Lower a `(T, error)` Go return into a tagged `Result`.

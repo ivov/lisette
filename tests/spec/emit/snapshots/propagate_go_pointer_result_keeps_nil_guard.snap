@@ -13,23 +13,16 @@ package main
 
 import (
 	"errors"
-	lisette "github.com/ivov/lisette/prelude"
 	"os"
 )
 
 func open_first(path string) (int, error) {
 	ret_1, ret_2 := os.Open(path)
-	var result_3 lisette.Result[*os.File, error]
 	if ret_2 != nil {
-		result_3 = lisette.MakeResultErr[*os.File, error](ret_2)
-	} else if ret_1 == nil {
-		result_3 = lisette.MakeResultErr[*os.File, error](errors.New("unexpected nil"))
-	} else {
-		result_3 = lisette.MakeResultOk[*os.File, error](ret_1)
+		return 0, ret_2
 	}
-	check_4 := result_3
-	if check_4.Tag != lisette.ResultOk {
-		return 0, check_4.ErrVal
+	if ret_1 == nil {
+		return 0, errors.New("unexpected nil")
 	}
 	return 0, nil
 }

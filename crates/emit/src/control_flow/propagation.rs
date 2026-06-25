@@ -178,18 +178,16 @@ impl Planner<'_> {
             return None;
         }
         let ok_ty = self.facts.peel_alias(&expression.get_type()).ok_type();
-        if ok_ty.is_unit()
-            || matches!(self.facts.peel_alias(&ok_ty), Type::Tuple(_))
-            || self.go_result_needs_nil_guard(&ok_ty)
-        {
+        if ok_ty.is_unit() || matches!(self.facts.peel_alias(&ok_ty), Type::Tuple(_)) {
             return None;
         }
+        let nil_guard = self.result_nil_guard(&ok_ty);
         let return_ctx = self.return_ctx();
         let shape = return_ctx.lowered_shape()?;
         let return_ty = return_ctx.expect_ty();
 
         let want_value = !matches!(result_var_name, Some("_"));
-        let val_var = want_value.then(|| {
+        let val_var = (want_value || nil_guard.is_some()).then(|| {
             let v = self.fresh_var(Some("ret"));
             self.declare(&v);
             v
@@ -210,6 +208,23 @@ impl Planner<'_> {
             format!("{} != nil", err_var),
             failure_values,
         ));
+
+        if let Some(guard) = nil_guard {
+            let val = val_var
+                .as_deref()
+                .expect("nil guard requires the value var");
+            if guard.is_interface() {
+                self.require_stdlib();
+            }
+            self.require_errors();
+            let nil_failure = transition::lowered_err_values(
+                self,
+                &shape,
+                &return_ty,
+                "errors.New(\"unexpected nil\")",
+            );
+            statements.push(transition::tag_check(guard.is_nil(val), nil_failure));
+        }
 
         let value = match result_var_name {
             None => val_var.expect("ok value requested when result_var_name is None"),

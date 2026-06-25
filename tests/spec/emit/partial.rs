@@ -99,6 +99,46 @@ fn test(p: Partial<int, string>) -> bool {
 }
 
 #[test]
+fn fused_partial_match_on_go_write_call() {
+    let input = r#"
+import "go:os"
+import "go:fmt"
+
+fn write_all(file: Ref<os.File>) {
+  match file.Write(['h', 'i']) {
+    Ok(n) => fmt.Println(n),
+    Both(n, _) => fmt.Println(n),
+    Err(e) => {
+      fmt.Println(e)
+      return
+    },
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn fused_partial_match_on_lowered_call() {
+    let input = r#"
+import "go:errors"
+
+fn attempt(ok: bool) -> Partial<int, error> {
+  if ok { Partial.Ok(1) } else { Partial.Err(errors.New("nope")) }
+}
+
+fn test() -> int {
+  match attempt(true) {
+    Partial.Ok(n) => n,
+    Partial.Both(n, _) => n,
+    Partial.Err(_) => 0,
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn lisette_function_returning_partial_tuple_uses_packed_abi() {
     let input = r#"
 fn pair<A, B>(a: A, b: B) -> Partial<(A, B), error> {

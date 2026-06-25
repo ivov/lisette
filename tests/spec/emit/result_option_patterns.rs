@@ -703,6 +703,78 @@ fn test() {
 }
 
 #[test]
+fn fused_go_pointer_result_match_unused_err() {
+    let input = r#"
+import "go:os"
+import "go:fmt"
+
+fn test() {
+  let file = match os.Create("f") {
+    Ok(f) => f,
+    Err(e) => {
+      fmt.Println("error")
+      return
+    },
+  }
+  defer file.Close()
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn fused_go_pointer_result_match_used_err() {
+    let input = r#"
+import "go:os"
+import "go:fmt"
+
+fn test() {
+  let file = match os.Create("f") {
+    Ok(f) => f,
+    Err(e) => {
+      fmt.Println(e)
+      return
+    },
+  }
+  defer file.Close()
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn fused_go_pointer_result_match_ok_wildcard() {
+    let input = r#"
+import "go:os"
+import "go:fmt"
+
+fn test() {
+  match os.Create("f") {
+    Ok(_) => fmt.Println("made"),
+    Err(e) => fmt.Println(e),
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn fused_go_interface_result_match_uses_nil_interface_guard() {
+    let input = r#"
+import "go:net"
+import "go:fmt"
+
+fn test() {
+  match net.Dial("tcp", "addr") {
+    Ok(conn) => { let _ = conn },
+    Err(e) => fmt.Println(e),
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn while_let_option_function_call() {
     let input = r#"
 import "go:fmt"

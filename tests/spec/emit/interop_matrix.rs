@@ -1053,6 +1053,19 @@ fn open_first(path: string) -> Result<int, error> {
 }
 
 #[test]
+fn propagate_go_pointer_result_returns_value_fuses() {
+    let input = r#"
+import "go:os"
+
+fn open(path: string) -> Result<Ref<os.File>, error> {
+  let file = os.Open(path)?
+  Ok(file)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn interop_parallel_error_tuple_return() {
     let input = r#"
 import "go:fmt"

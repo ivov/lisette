@@ -1,0 +1,36 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:net"
+  import "go:fmt"
+  
+  fn test() {
+    match net.Dial("tcp", "addr") {
+      Ok(conn) => { let _ = conn },
+      Err(e) => fmt.Println(e),
+    }
+  }
+---
+package main
+
+import (
+	"errors"
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+	"net"
+)
+
+func test() {
+	ret_1, ret_2 := net.Dial("tcp", "addr")
+	if ret_2 == nil && !lisette.IsNilInterface(ret_1) {
+		conn := ret_1
+		_ = conn
+	} else {
+		if ret_2 == nil {
+			ret_2 = errors.New("unexpected nil")
+		}
+		e := ret_2
+		fmt.Println(e)
+	}
+}

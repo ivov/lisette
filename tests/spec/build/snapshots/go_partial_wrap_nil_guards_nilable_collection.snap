@@ -6,30 +6,18 @@ package main
 
 import (
 	"fmt"
-	lisette "github.com/ivov/lisette/prelude"
 	"io"
 	"strings"
 )
 
 func main() {
 	reader := strings.NewReader("hello")
-	ret_2, ret_3 := io.ReadAll(reader)
-	var result_4 lisette.Partial[[]byte, error]
-	if ret_3 != nil {
-		if ret_2 == nil {
-			result_4 = lisette.MakePartialErr[[]byte, error](ret_3)
-		} else {
-			result_4 = lisette.MakePartialBoth[[]byte, error](ret_2, ret_3)
-		}
-	} else {
-		result_4 = lisette.MakePartialOk[[]byte, error](ret_2)
-	}
-	switch result_4.Tag {
-	case lisette.PartialOk:
+	ret_1, ret_2 := io.ReadAll(reader)
+	if ret_2 == nil {
 		fmt.Print("ok")
-	case lisette.PartialBoth:
-		fmt.Print("both")
-	default:
+	} else if ret_1 == nil {
 		fmt.Print("err")
+	} else {
+		fmt.Print("both")
 	}
 }

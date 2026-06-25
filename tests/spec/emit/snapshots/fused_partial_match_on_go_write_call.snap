@@ -1,0 +1,35 @@
+---
+source: tests/spec/emit/partial.rs
+description: |
+  
+  import "go:os"
+  import "go:fmt"
+  
+  fn write_all(file: Ref<os.File>) {
+    match file.Write(['h', 'i']) {
+      Ok(n) => fmt.Println(n),
+      Both(n, _) => fmt.Println(n),
+      Err(e) => {
+        fmt.Println(e)
+        return
+      },
+    }
+  }
+---
+package main
+
+import (
+	"fmt"
+	"os"
+)
+
+func write_all(file *os.File) {
+	ret_1, ret_2 := file.Write([]byte{'h', 'i'})
+	if ret_2 == nil {
+		n := ret_1
+		fmt.Println(n)
+	} else {
+		n := ret_1
+		fmt.Println(n)
+	}
+}

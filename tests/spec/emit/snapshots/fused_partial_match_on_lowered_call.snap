@@ -1,0 +1,39 @@
+---
+source: tests/spec/emit/partial.rs
+description: |
+  
+  import "go:errors"
+  
+  fn attempt(ok: bool) -> Partial<int, error> {
+    if ok { Partial.Ok(1) } else { Partial.Err(errors.New("nope")) }
+  }
+  
+  fn test() -> int {
+    match attempt(true) {
+      Partial.Ok(n) => n,
+      Partial.Both(n, _) => n,
+      Partial.Err(_) => 0,
+    }
+  }
+---
+package main
+
+import "errors"
+
+func attempt(ok bool) (int, error) {
+	if ok {
+		return 1, nil
+	}
+	return 0, errors.New("nope")
+}
+
+func test() int {
+	ret_1, ret_2 := attempt(true)
+	if ret_2 == nil {
+		n := ret_1
+		return n
+	} else {
+		n := ret_1
+		return n
+	}
+}

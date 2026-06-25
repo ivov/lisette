@@ -1,7 +1,7 @@
 mod nullable;
 mod wrappers;
 
-pub(crate) use wrappers::{TupleReturnLayout, WrapperTarget};
+pub(crate) use wrappers::{NilGuard, TupleReturnLayout, WrapperTarget};
 
 use crate::Planner;
 use crate::calls::CallBoundary;
