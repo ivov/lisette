@@ -10,6 +10,12 @@ pub fn use_color() -> bool {
     *USE_COLOR
 }
 
+pub fn terminal_width() -> usize {
+    terminal_size::terminal_size_of(std::io::stderr())
+        .map(|(w, _)| w.0 as usize)
+        .unwrap_or(100)
+}
+
 pub fn format_elapsed(elapsed: std::time::Duration) -> String {
     let time_str = if elapsed.as_secs() >= 1 {
         format!("{:.2}s", elapsed.as_secs_f64())

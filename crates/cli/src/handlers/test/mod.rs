@@ -3,7 +3,7 @@ use std::time::Duration;
 
 use crate::cli_error;
 use crate::go_cli;
-use crate::output::use_color;
+use crate::output::{terminal_width, use_color};
 
 use super::build::{BuildOptions, build_locked, with_locked_project};
 
@@ -121,6 +121,7 @@ pub fn test(
                 &outcome.sources,
                 use_color(),
                 Duration::from_secs_f64(report.test_elapsed),
+                terminal_width(),
             )
         );
 

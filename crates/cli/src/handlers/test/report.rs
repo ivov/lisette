@@ -495,7 +495,13 @@ fn package_display<'a>(package: &'a str, go_module: &str) -> &'a str {
     }
 }
 
-pub fn render(report: &Report, sources: &Sources, color: bool, total: Duration) -> String {
+pub fn render(
+    report: &Report,
+    sources: &Sources,
+    color: bool,
+    total: Duration,
+    term_width: usize,
+) -> String {
     let mut out = String::from("\n");
 
     if report.rows.is_empty() {
@@ -508,7 +514,6 @@ pub fn render(report: &Report, sources: &Sources, color: bool, total: Duration) 
         by_package.entry(&row.package).or_default().push(row);
     }
 
-    let term_width = terminal_width();
     for (index, (package, mut group)) in by_package.into_iter().enumerate() {
         if index > 0 {
             out.push('\n');
@@ -545,7 +550,14 @@ pub fn render(report: &Report, sources: &Sources, color: bool, total: Duration) 
     }
 
     render_logs(&mut out, &report.rows, &report.go_module, sources, color);
-    render_failures(&mut out, &report.rows, &report.go_module, sources, color);
+    render_failures(
+        &mut out,
+        &report.rows,
+        &report.go_module,
+        sources,
+        color,
+        term_width,
+    );
 
     out.push('\n');
     out.push_str(&summary(&report.rows, total, color));
@@ -773,6 +785,7 @@ fn render_failures(
     go_module: &str,
     sources: &Sources,
     color: bool,
+    term_width: usize,
 ) {
     // The flat Failures section loses the tree's package grouping, so prefix the package when the run
     // spans more than one, to disambiguate same-named tests across packages.
@@ -789,7 +802,7 @@ fn render_failures(
         } else {
             String::new()
         };
-        collect_failures(row, &prefix, sources, color, &mut blocks);
+        collect_failures(row, &prefix, sources, color, term_width, &mut blocks);
     }
     if blocks.is_empty() {
         return;
@@ -814,7 +827,9 @@ fn render_failures(
             Some(kind) => out.push_str(&format!("  {glyph} {name} · {kind}\n")),
             None => out.push_str(&format!("  {glyph} {name}\n")),
         }
-        if let Some(line) = failure_description_line(block.description.as_deref(), color) {
+        if let Some(line) =
+            failure_description_line(block.description.as_deref(), color, term_width)
+        {
             out.push_str(&format!("    {line}\n"));
         }
         for line in block.body.lines() {
@@ -823,7 +838,11 @@ fn render_failures(
     }
 }
 
-fn failure_description_line(description: Option<&str>, color: bool) -> Option<String> {
+fn failure_description_line(
+    description: Option<&str>,
+    color: bool,
+    term_width: usize,
+) -> Option<String> {
     let collapsed = description?
         .split_whitespace()
         .collect::<Vec<_>>()
@@ -831,7 +850,7 @@ fn failure_description_line(description: Option<&str>, color: bool) -> Option<St
     if collapsed.is_empty() {
         return None;
     }
-    let width = terminal_width()
+    let width = term_width
         .saturating_sub(4)
         .clamp(DESC_MIN_WIDTH, DESC_MAX_WIDTH);
     let line = wrap_description(&collapsed, width, 1).into_iter().next()?;
@@ -843,6 +862,7 @@ fn collect_failures(
     prefix: &str,
     sources: &Sources,
     color: bool,
+    term_width: usize,
     blocks: &mut Vec<FailureBlock>,
 ) {
     let path = if prefix.is_empty() {
@@ -855,7 +875,7 @@ fn collect_failures(
         if let Some((kind, body)) = row
             .failure
             .as_ref()
-            .and_then(|record| render_failure(record, sources, color))
+            .and_then(|record| render_failure(record, sources, color, term_width))
         {
             blocks.push(FailureBlock {
                 status: row.status,
@@ -886,7 +906,7 @@ fn collect_failures(
     }
 
     for child in &row.children {
-        collect_failures(child, &path, sources, color, blocks);
+        collect_failures(child, &path, sources, color, term_width, blocks);
     }
 }
 
@@ -900,11 +920,12 @@ fn render_failure(
     record: &FailureRecord,
     sources: &Sources,
     color: bool,
+    term_width: usize,
 ) -> Option<(String, String)> {
     let info = sources.get(&record.file)?;
     let span = Span::new(record.file, record.lo, record.hi.saturating_sub(record.lo));
 
-    let budget = operand_budget(terminal_width());
+    let budget = operand_budget(term_width);
     let anchor = match record.operands.as_slice() {
         [left, right] => first_divergence(&left.value, &right.value),
         _ => 0,
@@ -918,25 +939,26 @@ fn render_failure(
     let paired = matches!(record.kind.as_str(), "relation" | "labeled");
     let mut diagnostic = LisetteDiagnostic::error(record.message.clone());
     if paired {
-        let label = paired_inline_label(&record.operands, &values).unwrap_or_else(|| {
-            let label_width = record
-                .operands
-                .iter()
-                .map(|operand| operand.label.chars().count())
-                .max()
-                .unwrap_or(0)
-                + 1;
-            record
-                .operands
-                .iter()
-                .zip(&values)
-                .map(|(operand, value)| {
-                    let token = format!("{}:", operand.label);
-                    format!("{token:<label_width$} {value}")
-                })
-                .collect::<Vec<_>>()
-                .join("\n")
-        });
+        let label =
+            paired_inline_label(&record.operands, &values, term_width).unwrap_or_else(|| {
+                let label_width = record
+                    .operands
+                    .iter()
+                    .map(|operand| operand.label.chars().count())
+                    .max()
+                    .unwrap_or(0)
+                    + 1;
+                record
+                    .operands
+                    .iter()
+                    .zip(&values)
+                    .map(|(operand, value)| {
+                        let token = format!("{}:", operand.label);
+                        format!("{token:<label_width$} {value}")
+                    })
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            });
         diagnostic = diagnostic.with_span_primary_label(&span, label);
     } else {
         let label = values
@@ -1093,12 +1115,6 @@ fn format_description(text: &str, color: bool) -> String {
     out
 }
 
-fn terminal_width() -> usize {
-    terminal_size::terminal_size_of(std::io::stderr())
-        .map(|(w, _)| w.0 as usize)
-        .unwrap_or(100)
-}
-
 fn operand_budget(term_width: usize) -> usize {
     // Reserve the gutter and frame plus one `label: ` prefix.
     let reserved = 41;
@@ -1107,7 +1123,11 @@ fn operand_budget(term_width: usize) -> usize {
         .clamp(OPERAND_MIN_CHARS, OPERAND_MAX_CHARS)
 }
 
-fn paired_inline_label(operands: &[Operand], values: &[String]) -> Option<String> {
+fn paired_inline_label(
+    operands: &[Operand],
+    values: &[String],
+    term_width: usize,
+) -> Option<String> {
     let is_scalar = |value: &str| !value.contains(['\n', '{', '[', '(']);
     if !operands.iter().all(|operand| is_scalar(&operand.value)) {
         return None;
@@ -1118,7 +1138,7 @@ fn paired_inline_label(operands: &[Operand], values: &[String]) -> Option<String
         .map(|(operand, value)| format!("{}: {}", operand.label, value))
         .collect::<Vec<_>>()
         .join(" · ");
-    (line.chars().count() <= operand_budget(terminal_width())).then_some(line)
+    (line.chars().count() <= operand_budget(term_width)).then_some(line)
 }
 
 fn first_divergence(a: &str, b: &str) -> usize {
@@ -1254,6 +1274,8 @@ mod tests {
     use lisette::pipeline::SourceInfo;
     use syntax::ast::Span;
     use syntax::program::TestFunction;
+
+    const TEST_WIDTH: usize = 100;
 
     fn span() -> Span {
         Span::new(0, 0, 1)
@@ -1445,7 +1467,13 @@ mod tests {
                 filename: "x.test.lis".to_string(),
             },
         );
-        let text = render(&report, &sources, false, Duration::from_millis(1));
+        let text = render(
+            &report,
+            &sources,
+            false,
+            Duration::from_millis(1),
+            TEST_WIDTH,
+        );
 
         assert!(
             text.chars().count() < 2_000,
@@ -1496,7 +1524,13 @@ mod tests {
                     filename: "x.test.lis".to_string(),
                 },
             );
-            render(&report, &sources, false, Duration::from_millis(1))
+            render(
+                &report,
+                &sources,
+                false,
+                Duration::from_millis(1),
+                TEST_WIDTH,
+            )
         };
 
         let scalar = render_relation("1", "2");
@@ -1524,7 +1558,13 @@ mod tests {
             event("pass", "demo/math", Some("TestAddsNumbers"), None),
         ];
         let report = build_report(&index, &events, "demo");
-        let text = render(&report, &no_sources(), false, Duration::from_millis(7));
+        let text = render(
+            &report,
+            &no_sources(),
+            false,
+            Duration::from_millis(7),
+            TEST_WIDTH,
+        );
 
         assert!(text.contains("  demo\n"));
         assert!(text.contains("✓ root_smoke"));
@@ -1538,7 +1578,13 @@ mod tests {
     fn nothing_executed_fails_even_when_go_succeeds() {
         let index = index(&[(ENTRY_MODULE_ID, "alpha"), (ENTRY_MODULE_ID, "beta")]);
         let report = build_report(&index, &[], "demo");
-        let text = render(&report, &no_sources(), false, Duration::from_millis(0));
+        let text = render(
+            &report,
+            &no_sources(),
+            false,
+            Duration::from_millis(0),
+            TEST_WIDTH,
+        );
 
         assert!(text.contains("2 unreached"));
         assert!(
@@ -1574,7 +1620,13 @@ mod tests {
                 filename: "x.test.lis".to_string(),
             },
         );
-        let text = render(&report, &sources, false, Duration::from_millis(1));
+        let text = render(
+            &report,
+            &sources,
+            false,
+            Duration::from_millis(1),
+            TEST_WIDTH,
+        );
 
         assert!(text.contains("Logs"), "a Logs section appears:\n{text}");
         assert!(
@@ -1626,7 +1678,13 @@ mod tests {
                 },
             );
         }
-        let text = render(&report, &sources, false, Duration::from_millis(1));
+        let text = render(
+            &report,
+            &sources,
+            false,
+            Duration::from_millis(1),
+            TEST_WIDTH,
+        );
 
         assert!(
             text.contains("add.test.lis") && text.contains("sub.test.lis"),
@@ -1662,7 +1720,13 @@ mod tests {
         assert_eq!(report.rows[0].children.len(), 1);
         assert_eq!(report.rows[0].children[0].name, "alpha");
 
-        let text = render(&report, &no_sources(), false, Duration::from_millis(1));
+        let text = render(
+            &report,
+            &no_sources(),
+            false,
+            Duration::from_millis(1),
+            TEST_WIDTH,
+        );
         let parent_line = text.lines().position(|l| l.contains("parent")).unwrap();
         let child_line = text.lines().position(|l| l.contains("alpha")).unwrap();
         assert!(child_line > parent_line, "subtest renders under its parent");
@@ -1686,7 +1750,13 @@ mod tests {
             event("pass", "demo", Some("TestParent"), None),
         ];
         let report = build_report(&index, &events, "demo");
-        let text = render(&report, &no_sources(), false, Duration::from_millis(1));
+        let text = render(
+            &report,
+            &no_sources(),
+            false,
+            Duration::from_millis(1),
+            TEST_WIDTH,
+        );
         assert!(
             text.contains("2 passed"),
             "two passing subtests count as two, not one parent, got:\n{text}"
@@ -1705,7 +1775,13 @@ mod tests {
         assert_eq!(report.rows[0].status, Status::Skipped);
         assert_eq!(report.rows[0].skip_reason.as_deref(), Some("not ready"));
 
-        let text = render(&report, &no_sources(), false, Duration::from_millis(1));
+        let text = render(
+            &report,
+            &no_sources(),
+            false,
+            Duration::from_millis(1),
+            TEST_WIDTH,
+        );
         assert!(text.contains("○ wip (not ready)"), "got:\n{text}");
         assert!(text.contains("1 skipped"));
         assert_eq!(exit_code(&report.rows, true), 0, "a skip is not a failure");
@@ -1722,7 +1798,13 @@ mod tests {
             event("skip", "demo", Some("TestWip"), None),
         ];
         let report = build_report(&index, &events, "demo");
-        let text = render(&report, &no_sources(), false, Duration::from_millis(1));
+        let text = render(
+            &report,
+            &no_sources(),
+            false,
+            Duration::from_millis(1),
+            TEST_WIDTH,
+        );
 
         let row_line = text
             .lines()
@@ -1744,6 +1826,41 @@ mod tests {
     }
 
     #[test]
+    fn skip_reason_layout_follows_passed_width_not_terminal() {
+        let index = index(&[(ENTRY_MODULE_ID, "wip")]);
+        let reason = "this reason is far too long to sit inline on the row without \
+                      running well past the edge of any reasonable terminal width";
+        let events = vec![
+            event("run", "demo", Some("TestWip"), None),
+            skip_attr_event("demo", "TestWip", reason),
+            event("skip", "demo", Some("TestWip"), None),
+        ];
+        let report = build_report(&index, &events, "demo");
+        let row_with_width = |width| {
+            render(
+                &report,
+                &no_sources(),
+                false,
+                Duration::from_millis(1),
+                width,
+            )
+            .lines()
+            .find(|line| line.contains("○ wip"))
+            .expect("the skipped row must render")
+            .to_string()
+        };
+
+        assert!(
+            !row_with_width(60).contains("this reason"),
+            "a narrow width must wrap the reason off the row"
+        );
+        assert!(
+            row_with_width(300).contains("this reason"),
+            "a wide width must keep the reason inline; render must honor the passed width, not the live terminal"
+        );
+    }
+
+    #[test]
     fn skipped_subtest_renders_under_parent_with_reason() {
         let index = index(&[(ENTRY_MODULE_ID, "parent")]);
         let events = vec![
@@ -1758,7 +1875,13 @@ mod tests {
         assert_eq!(child.status, Status::Skipped);
         assert_eq!(child.skip_reason.as_deref(), Some("needs net"));
 
-        let text = render(&report, &no_sources(), false, Duration::from_millis(1));
+        let text = render(
+            &report,
+            &no_sources(),
+            false,
+            Duration::from_millis(1),
+            TEST_WIDTH,
+        );
         assert!(text.contains("○ child (needs net)"), "got:\n{text}");
         assert!(
             text.contains("1 skipped"),
@@ -1780,7 +1903,13 @@ mod tests {
         assert_eq!(report.rows[0].status, Status::Skipped);
         assert!(!report.rows[0].children.is_empty());
 
-        let text = render(&report, &no_sources(), false, Duration::from_millis(1));
+        let text = render(
+            &report,
+            &no_sources(),
+            false,
+            Duration::from_millis(1),
+            TEST_WIDTH,
+        );
         assert!(
             text.contains("○ parent (rest not ready)"),
             "a skipped grouping keeps its marker and reason, got:\n{text}"
@@ -1811,7 +1940,13 @@ mod tests {
             event("fail", "demo", Some("TestParent"), None),
         ];
         let report = build_report(&index, &events, "demo");
-        let text = render(&report, &no_sources(), false, Duration::from_millis(1));
+        let text = render(
+            &report,
+            &no_sources(),
+            false,
+            Duration::from_millis(1),
+            TEST_WIDTH,
+        );
 
         let tree = text.split("Failures").next().unwrap_or(&text);
         assert!(
@@ -1851,7 +1986,13 @@ mod tests {
         assert_eq!(inner.name, "inner");
         assert_eq!(inner.status, Status::Failed);
 
-        let text = render(&report, &no_sources(), false, Duration::from_millis(1));
+        let text = render(
+            &report,
+            &no_sources(),
+            false,
+            Duration::from_millis(1),
+            TEST_WIDTH,
+        );
         assert!(text.contains("boom"));
         assert_eq!(exit_code(&report.rows, false), 1);
     }
@@ -1960,7 +2101,13 @@ mod tests {
             event("output", "demo", Some("TestBoom"), Some("panic: boom\n")),
         ];
         let report = build_report(&index, &events, "demo");
-        let text = render(&report, &no_sources(), false, Duration::from_millis(2));
+        let text = render(
+            &report,
+            &no_sources(),
+            false,
+            Duration::from_millis(2),
+            TEST_WIDTH,
+        );
 
         assert!(text.contains("✕ boom"));
         assert!(text.contains("panic: boom"));
@@ -1972,7 +2119,13 @@ mod tests {
     fn declared_test_with_no_event_is_not_run() {
         let index = index(&[(ENTRY_MODULE_ID, "ghost")]);
         let report = build_report(&index, &[], "demo");
-        let text = render(&report, &no_sources(), false, Duration::from_millis(1));
+        let text = render(
+            &report,
+            &no_sources(),
+            false,
+            Duration::from_millis(1),
+            TEST_WIDTH,
+        );
 
         assert!(text.contains("⊘ ghost"));
         assert_eq!(exit_code(&report.rows, false), 1);
@@ -1985,7 +2138,13 @@ mod tests {
         let report = build_report(&index, &events, "demo");
 
         assert_eq!(exit_code(&report.rows, true), 0);
-        let text = render(&report, &no_sources(), false, Duration::from_millis(1));
+        let text = render(
+            &report,
+            &no_sources(),
+            false,
+            Duration::from_millis(1),
+            TEST_WIDTH,
+        );
         assert!(text.contains("⊘ filtered"));
         assert!(text.contains("1 passed · 1 unreached"));
     }
@@ -2022,7 +2181,13 @@ mod tests {
             event("fail", "demo/b", None, None),
         ];
         let report = build_report(&index, &events, "demo");
-        let text = render(&report, &no_sources(), false, Duration::from_millis(1));
+        let text = render(
+            &report,
+            &no_sources(),
+            false,
+            Duration::from_millis(1),
+            TEST_WIDTH,
+        );
 
         assert!(report.build_output.contains("undefined: foo"));
         assert!(text.contains("panic: boom in b"));
@@ -2054,7 +2219,13 @@ mod tests {
             ),
         ];
         let report = build_report(&index, &events, "demo");
-        let text = render(&report, &no_sources(), false, Duration::from_millis(1));
+        let text = render(
+            &report,
+            &no_sources(),
+            false,
+            Duration::from_millis(1),
+            TEST_WIDTH,
+        );
 
         assert!(text.contains("▲ hangs"));
         assert!(text.contains("panic: test timed out"));
@@ -2071,7 +2242,13 @@ mod tests {
             event("fail", "demo", None, None),
         ];
         let report = build_report(&index, &events, "demo");
-        let text = render(&report, &no_sources(), false, Duration::from_millis(1));
+        let text = render(
+            &report,
+            &no_sources(),
+            false,
+            Duration::from_millis(1),
+            TEST_WIDTH,
+        );
 
         assert!(report.rows.iter().all(|r| r.status == Status::Unreached));
         assert!(text.contains("panic: init blew up"));
@@ -2089,7 +2266,13 @@ mod tests {
             event("fail", "demo/b", None, None),
         ];
         let report = build_report(&index, &events, "demo");
-        let text = render(&report, &no_sources(), false, Duration::from_millis(1));
+        let text = render(
+            &report,
+            &no_sources(),
+            false,
+            Duration::from_millis(1),
+            TEST_WIDTH,
+        );
 
         assert!(text.contains("panic: boom in b"));
     }
@@ -2104,7 +2287,13 @@ mod tests {
     #[test]
     fn empty_index_reports_no_tests() {
         let report = build_report(&TestIndex::default(), &[], "demo");
-        let text = render(&report, &no_sources(), false, Duration::from_millis(0));
+        let text = render(
+            &report,
+            &no_sources(),
+            false,
+            Duration::from_millis(0),
+            TEST_WIDTH,
+        );
         assert!(text.contains("No tests found"));
         assert_eq!(exit_code(&report.rows, true), 0);
     }
@@ -2189,7 +2378,13 @@ mod tests {
                 filename: "x.test.lis".to_string(),
             },
         );
-        let text = render(&report, &sources, false, Duration::from_millis(1));
+        let text = render(
+            &report,
+            &sources,
+            false,
+            Duration::from_millis(1),
+            TEST_WIDTH,
+        );
         assert!(text.contains("test returned Err"), "got:\n{text}");
         assert!(text.contains("boom"), "got:\n{text}");
         assert!(text.contains("x.test.lis"), "got:\n{text}");
@@ -2222,7 +2417,13 @@ mod tests {
                 filename: "x.test.lis".to_string(),
             },
         );
-        let text = render(&report, &sources, false, Duration::from_millis(1));
+        let text = render(
+            &report,
+            &sources,
+            false,
+            Duration::from_millis(1),
+            TEST_WIDTH,
+        );
         let failures = text
             .split("Failures")
             .nth(1)
@@ -2264,7 +2465,13 @@ mod tests {
             titled.description.as_deref(),
             Some("Trims surrounding whitespace before splitting.")
         );
-        let text = render(&report, &no_sources(), false, Duration::from_millis(1));
+        let text = render(
+            &report,
+            &no_sources(),
+            false,
+            Duration::from_millis(1),
+            TEST_WIDTH,
+        );
         assert!(
             text.contains("splits and trims CSV fields"),
             "the title shows in the tree, got:\n{text}"
