@@ -348,9 +348,10 @@ fn extract_public_definitions(
         .filter(|(_, definition)| definition.visibility().is_public())
         .filter(|(_, definition)| !store.is_test_definition(definition))
         .map(|(name, definition)| {
+            let is_const = module.const_names.contains(name);
             (
                 name.to_string(),
-                CachedDefinition::from_definition(definition, file_id_to_index),
+                CachedDefinition::from_definition(definition, is_const, file_id_to_index),
             )
         })
         .collect()
@@ -395,8 +396,7 @@ pub(crate) fn build_cached_module(
     }
 
     for (qualified_name, cached_definition) in cached.definitions {
-        let definition = cached_definition.to_definition(&file_ids);
-        module.definitions.insert(qualified_name.into(), definition);
+        cached_definition.install_into(&mut module, qualified_name.into(), &file_ids);
     }
 
     CachedModuleBuild {
@@ -621,6 +621,67 @@ mod tests {
 
         assert!(!is_cache_valid(&cache, 200, &HashMap::default()));
         assert!(is_cache_valid(&cache, 100, &HashMap::default()));
+    }
+
+    #[test]
+    fn build_cached_module_restores_const_names() {
+        use syntax::ast::Literal;
+        use syntax::program::{Definition, DefinitionBody, Visibility};
+
+        let make_value = |const_value: Option<Literal>| Definition {
+            visibility: Visibility::Public,
+            ty: Type::Nominal {
+                id: Symbol::from_raw("int"),
+                params: vec![],
+                underlying_ty: None,
+            },
+            name: None,
+            name_span: None,
+            doc: None,
+            body: DefinitionBody::Value {
+                allowed_lints: vec![],
+                go_hints: vec![],
+                go_name: None,
+                go_type_param_recipe: None,
+                const_value,
+            },
+        };
+
+        let empty_files = HashMap::default();
+        let const_def = make_value(Some(Literal::Integer {
+            value: 5,
+            text: None,
+        }));
+        let var_def = make_value(None);
+
+        let mut definitions = HashMap::default();
+        definitions.insert(
+            "mymod.MAX".to_string(),
+            CachedDefinition::from_definition(&const_def, true, &empty_files),
+        );
+        definitions.insert(
+            "mymod.counter".to_string(),
+            CachedDefinition::from_definition(&var_def, false, &empty_files),
+        );
+
+        let interface = ModuleInterface {
+            version: CACHE_FORMAT_VERSION,
+            compiler_version: COMPILER_VERSION_HASH,
+            stdlib_hash: STDLIB_HASH,
+            module_hash: 0,
+            production_hash: 0,
+            full_hash: 0,
+            dependency_hashes: HashMap::default(),
+            files: vec![],
+            definitions,
+            ufcs_methods: vec![],
+            emit_stamp: None,
+        };
+
+        let built = build_cached_module("mymod".to_string(), 0, interface, Path::new("/project"));
+
+        assert!(built.module.const_names.contains("mymod.MAX"));
+        assert!(!built.module.const_names.contains("mymod.counter"));
     }
 
     #[test]

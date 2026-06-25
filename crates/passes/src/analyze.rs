@@ -96,6 +96,7 @@ pub fn analyze(input: AnalyzeInput) -> AnalyzeOutput {
 
     let mut files = HashMap::default();
     let mut definitions = HashMap::default();
+    let mut const_names = HashSet::default();
     let mut modules = HashMap::default();
 
     let go_module_ids: HashSet<String> = store
@@ -110,6 +111,7 @@ pub fn analyze(input: AnalyzeInput) -> AnalyzeOutput {
         let module = Arc::try_unwrap(module).unwrap_or_else(|shared| (*shared).clone());
         let is_internal = module.is_internal();
 
+        const_names.extend(module.const_names);
         definitions.extend(module.definitions);
 
         // Internal modules (prelude, **nominal, go:...) stay out of `modules`
@@ -137,6 +139,7 @@ pub fn analyze(input: AnalyzeInput) -> AnalyzeOutput {
     let result = SemanticResult {
         files,
         definitions,
+        const_names,
         modules,
         errors,
         lints,

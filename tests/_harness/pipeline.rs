@@ -101,6 +101,7 @@ impl CompiledTest {
         let (
             typed_ast,
             definitions,
+            const_names,
             unused,
             mutations,
             ufcs_methods,
@@ -265,6 +266,12 @@ impl CompiledTest {
                 .map(|(k, v)| (k.clone(), v.clone()))
                 .collect();
 
+            let const_names: HashSet<Symbol> = store
+                .modules
+                .values()
+                .flat_map(|m| m.const_names.iter().cloned())
+                .collect();
+
             let mut unused = UnusedInfo::default();
             let mut mutations = MutationInfo::default();
             for (&binding_id, b) in checker.facts.bindings.iter() {
@@ -290,6 +297,7 @@ impl CompiledTest {
             (
                 typed_ast,
                 definitions,
+                const_names,
                 unused,
                 mutations,
                 ufcs_methods,
@@ -304,6 +312,7 @@ impl CompiledTest {
             ast: typed_ast,
             errors: sink.take(),
             definitions,
+            const_names,
             module_id: TEST_MODULE_ID.to_string(),
             unused,
             mutations,
@@ -320,6 +329,7 @@ pub struct InferenceResult {
     pub ast: Vec<Expression>,
     pub errors: Vec<LisetteDiagnostic>,
     pub definitions: HashMap<Symbol, Definition>,
+    pub const_names: HashSet<Symbol>,
     pub module_id: String,
     pub unused: UnusedInfo,
     pub mutations: MutationInfo,

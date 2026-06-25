@@ -61,9 +61,10 @@ pub fn save_prelude_cache(store: &Store) {
         .definitions
         .iter()
         .map(|(name, definition)| {
+            let is_const = module.const_names.contains(name);
             (
                 name.to_string(),
-                CachedDefinition::from_definition(definition, &file_id_to_index),
+                CachedDefinition::from_definition(definition, is_const, &file_id_to_index),
             )
         })
         .collect();
@@ -117,8 +118,7 @@ pub fn register_cached_prelude(store: &mut Store, cached: PreludeCache) {
         .get_module_mut(PRELUDE_MODULE_ID)
         .expect("prelude module must be registered before loading cached definitions");
     for (qualified_name, cached_definition) in cached.definitions {
-        let definition = cached_definition.to_definition(file_ids);
-        module.definitions.insert(qualified_name.into(), definition);
+        cached_definition.install_into(module, qualified_name.into(), file_ids);
     }
 
     if let Some(path) = deps::prelude_typedef_path() {

@@ -18,6 +18,7 @@ use crate::{EmitOptions, GlobalEmitData, GoCallStrategy};
 
 pub(crate) struct EmitFactsConfig<'a> {
     pub(crate) definitions: &'a HashMap<Symbol, Definition>,
+    pub(crate) const_names: &'a HashSet<Symbol>,
     pub(crate) unused: &'a UnusedInfo,
     pub(crate) mutations: &'a MutationInfo,
     pub(crate) ufcs_methods: &'a HashSet<(String, String)>,
@@ -37,6 +38,7 @@ pub(crate) struct EmitFactsConfig<'a> {
 
 pub(crate) struct EmitFacts<'a> {
     definitions: &'a HashMap<Symbol, Definition>,
+    const_names: &'a HashSet<Symbol>,
     unused: &'a UnusedInfo,
     mutations: &'a MutationInfo,
     ufcs_methods: &'a HashSet<(String, String)>,
@@ -58,6 +60,7 @@ impl<'a> EmitFacts<'a> {
     pub(crate) fn new(config: EmitFactsConfig<'a>) -> Self {
         Self {
             definitions: config.definitions,
+            const_names: config.const_names,
             unused: config.unused,
             mutations: config.mutations,
             ufcs_methods: config.ufcs_methods,
@@ -89,6 +92,10 @@ impl<'a> EmitFacts<'a> {
 
     pub(crate) fn definition(&self, id: &str) -> Option<&'a Definition> {
         self.definitions.get(id)
+    }
+
+    pub(crate) fn is_const(&self, qualified_name: &str) -> bool {
+        self.const_names.contains(qualified_name)
     }
 
     pub(crate) fn iter_definitions(&self) -> impl Iterator<Item = (&'a Symbol, &'a Definition)> {

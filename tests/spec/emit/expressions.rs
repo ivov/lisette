@@ -1,4 +1,4 @@
-use crate::assert_emit_snapshot;
+use crate::{assert_emit_snapshot, assert_emit_snapshot_with_go_typedefs};
 
 #[test]
 fn binary_addition() {
@@ -620,6 +620,49 @@ fn main() {
 }
 "#;
     assert_emit_snapshot!(input);
+}
+
+#[test]
+fn const_imported_constant_stays_const() {
+    let input = r#"
+import "go:fmt"
+import "go:time"
+
+const DELAY = time.Second / 12
+
+fn main() {
+  fmt.Println(DELAY)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn const_imported_nonliteral_constant_stays_const() {
+    let typedef = "pub const SHIFT: int = 60 + 8\n";
+    let input = r#"
+import "go:example.com/consts"
+
+const DELAY = consts.SHIFT / 12
+
+fn main() {
+  let _ = DELAY
+}
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/consts", typedef)]);
+}
+
+#[test]
+fn shift_by_imported_nonliteral_constant_not_pinned() {
+    let typedef = "pub const SHIFT: int = 60 + 8\n";
+    let input = r#"
+import "go:example.com/consts"
+
+fn main() {
+  let _ = (1 << consts.SHIFT) as float64
+}
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/consts", typedef)]);
 }
 
 #[test]

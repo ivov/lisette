@@ -57,6 +57,7 @@ pub fn compile_e2e_suite_test(input: &str, package_name: &str) -> Result<Emitted
     let test_index = syntax::program::TestIndex::default();
     let config = TestEmitConfig {
         definitions: &result.definitions,
+        const_names: &result.const_names,
         module_id: &result.module_id,
         go_module: GO_MODULE,
         unused: &result.unused,

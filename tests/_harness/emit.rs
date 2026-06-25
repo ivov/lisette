@@ -44,6 +44,7 @@ fn emit_inner(
     let test_index = syntax::program::TestIndex::default();
     let config = TestEmitConfig {
         definitions: &result.definitions,
+        const_names: &result.const_names,
         module_id: &result.module_id,
         go_module: "myproject",
         unused: &result.unused,

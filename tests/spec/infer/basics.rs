@@ -174,6 +174,43 @@ fn const_rejects_function_call() {
 }
 
 #[test]
+fn const_accepts_imported_constant() {
+    let typedef = r#"
+pub struct Duration(int64)
+pub const Second: Duration = 1000000000
+"#;
+    let input = r#"
+import "go:time"
+
+const DELAY = time.Second / 12
+
+fn main() {
+  let _ = DELAY
+}
+"#;
+    infer_with_go_typedefs(input, &[("go:time", typedef)]).assert_no_errors();
+}
+
+#[test]
+fn const_rejects_imported_variable() {
+    let typedef = r#"
+pub struct Duration(int64)
+pub var Now: Duration
+"#;
+    let input = r#"
+import "go:time"
+
+const BAD = time.Now
+
+fn main() {
+  let _ = BAD
+}
+"#;
+    infer_with_go_typedefs(input, &[("go:time", typedef)])
+        .assert_infer_code("const_requires_simple_expression");
+}
+
+#[test]
 fn format_string_simple() {
     infer(r#"f"hello world""#).assert_type_string();
 }

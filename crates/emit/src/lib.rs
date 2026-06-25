@@ -192,6 +192,7 @@ pub(crate) fn sentinel_hint(hints: &[String]) -> Option<i64> {
 
 pub struct TestEmitConfig<'a> {
     pub definitions: &'a HashMap<Symbol, Definition>,
+    pub const_names: &'a HashSet<Symbol>,
     pub module_id: &'a str,
     pub go_module: &'a str,
     pub unused: &'a UnusedInfo,
@@ -345,6 +346,7 @@ impl<'a> Planner<'a> {
         let globals = Arc::new(GlobalEmitData::compute(config.definitions));
         let facts = EmitFacts::new(EmitFactsConfig {
             definitions: config.definitions,
+            const_names: config.const_names,
             unused: config.unused,
             mutations: config.mutations,
             ufcs_methods: config.ufcs_methods,
@@ -617,6 +619,7 @@ fn emit_module<'a>(
 ) -> Vec<OutputFile> {
     let facts = EmitFacts::new(EmitFactsConfig {
         definitions: &analysis.definitions,
+        const_names: &analysis.const_names,
         unused: &analysis.unused,
         mutations: &analysis.mutations,
         ufcs_methods: &analysis.ufcs_methods,

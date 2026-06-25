@@ -14,6 +14,7 @@ use crate::LisetteDiagnostic;
 pub struct SemanticResult {
     pub files: HashMap<u32, File>,
     pub definitions: HashMap<Symbol, Definition>,
+    pub const_names: HashSet<Symbol>,
     pub modules: HashMap<String, ModuleInfo>,
     pub errors: Vec<LisetteDiagnostic>,
     pub lints: Vec<LisetteDiagnostic>,
@@ -39,6 +40,7 @@ impl SemanticResult {
         Self {
             files: HashMap::default(),
             definitions: HashMap::default(),
+            const_names: HashSet::default(),
             modules: HashMap::default(),
             errors: errors.into_iter().map(Into::into).collect(),
             lints: vec![],
@@ -64,6 +66,7 @@ impl SemanticResult {
         EmitInput {
             files: self.files,
             definitions: self.definitions,
+            const_names: self.const_names,
             modules: self.modules,
             entry_module_id: self.entry_module_id,
             unused: self.unused,

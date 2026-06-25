@@ -330,6 +330,12 @@ impl Store {
         )
     }
 
+    pub fn is_const(&self, qualified_name: &str) -> bool {
+        self.module_for_qualified_name(qualified_name)
+            .and_then(|module_id| self.get_module(module_id))
+            .is_some_and(|module| module.const_names.contains(qualified_name))
+    }
+
     pub fn variants_of(&self, qualified_name: &str) -> Option<&[EnumVariant]> {
         match &self.get_definition(qualified_name)?.body {
             DefinitionBody::Enum { variants, .. } => Some(variants),

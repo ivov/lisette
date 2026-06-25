@@ -6,7 +6,7 @@ use crate::plan::bodies::ConstPlan;
 use crate::plan::values::ValuePlan;
 use crate::state::bindings::BindingValue;
 use syntax::ast::{Expression, Generic, Literal, UnaryOperator};
-use syntax::types::Type;
+use syntax::types::{Symbol, Type};
 
 impl Planner<'_> {
     pub(crate) fn emit_type_alias(
@@ -148,6 +148,17 @@ impl Planner<'_> {
                 expression,
                 ..
             } => self.is_go_const_eligible(expression),
+            Expression::DotAccess {
+                expression: inner,
+                member,
+                ..
+            } => {
+                let inner_ty = inner.get_type();
+                inner_ty.as_import_namespace().is_some_and(|module_id| {
+                    let qualified = Symbol::from_parts(module_id, member.as_str());
+                    self.facts.is_const(qualified.as_str())
+                })
+            }
             _ => false,
         }
     }

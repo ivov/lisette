@@ -12,25 +12,43 @@ enum ConstInitReject {
     Composite,
 }
 
-fn classify_const_init(expression: &Expression) -> Option<ConstInitReject> {
-    match expression.unwrap_parens() {
-        Expression::Literal { literal, .. } => match literal {
-            Literal::Slice(_) => Some(ConstInitReject::Composite),
-            Literal::FormatString(_) => Some(ConstInitReject::NotSimple),
-            _ => None,
-        },
-        Expression::Identifier { .. } => None,
-        Expression::Binary { left, right, .. } => {
-            classify_const_init(left).or_else(|| classify_const_init(right))
-        }
-        Expression::Unary { expression, .. } => classify_const_init(expression),
-        Expression::StructCall { .. } => Some(ConstInitReject::Composite),
-        Expression::Tuple { .. } => Some(ConstInitReject::Composite),
-        _ => Some(ConstInitReject::NotSimple),
-    }
-}
-
 impl InferCtx<'_, '_> {
+    fn classify_const_init(&self, expression: &Expression) -> Option<ConstInitReject> {
+        match expression.unwrap_parens() {
+            Expression::Literal { literal, .. } => match literal {
+                Literal::Slice(_) => Some(ConstInitReject::Composite),
+                Literal::FormatString(_) => Some(ConstInitReject::NotSimple),
+                _ => None,
+            },
+            Expression::Identifier { .. } => None,
+            Expression::Binary { left, right, .. } => self
+                .classify_const_init(left)
+                .or_else(|| self.classify_const_init(right)),
+            Expression::Unary { expression, .. } => self.classify_const_init(expression),
+            Expression::StructCall { .. } => Some(ConstInitReject::Composite),
+            Expression::Tuple { .. } => Some(ConstInitReject::Composite),
+            dot if self.is_const_member_access(dot) => None,
+            _ => Some(ConstInitReject::NotSimple),
+        }
+    }
+
+    fn is_const_member_access(&self, expression: &Expression) -> bool {
+        let Expression::DotAccess {
+            expression: inner,
+            member,
+            ..
+        } = expression
+        else {
+            return false;
+        };
+        let inner_ty = inner.get_type();
+        let Some(module_id) = inner_ty.as_import_namespace() else {
+            return false;
+        };
+        let qualified = Symbol::from_parts(module_id, member.as_str());
+        self.store.is_const(qualified.as_str())
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub(super) fn infer_const_binding(
         &mut self,
@@ -61,7 +79,7 @@ impl InferCtx<'_, '_> {
 
         let new_expression = self.infer_expression(*expression, &ty);
 
-        match classify_const_init(&new_expression) {
+        match self.classify_const_init(&new_expression) {
             None => {}
             Some(ConstInitReject::NotSimple) => {
                 self.sink

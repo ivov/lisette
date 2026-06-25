@@ -216,6 +216,7 @@ impl MutationInfo {
 pub struct EmitInput {
     pub files: HashMap<u32, File>,
     pub definitions: HashMap<Symbol, Definition>,
+    pub const_names: HashSet<Symbol>,
     pub modules: HashMap<String, ModuleInfo>,
     pub entry_module_id: String,
     pub unused: UnusedInfo,

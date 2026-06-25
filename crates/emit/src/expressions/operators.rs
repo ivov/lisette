@@ -322,19 +322,18 @@ impl Planner<'_> {
             return false;
         };
         let module = self.module.module_for_alias(value).unwrap_or(value);
+        let qualified = format!("{module}.{member}");
         let body = self
             .facts
-            .definition(&format!("{module}.{member}"))
+            .definition(&qualified)
             .or_else(|| {
                 self.facts
                     .definition(&self.facts.qualified_current_member(value, member))
             })
             .map(|definition| &definition.body);
         match body {
-            Some(DefinitionBody::Value { const_value, .. })
-                if module.starts_with(go_name::GO_IMPORT_PREFIX) =>
-            {
-                const_value.is_some()
+            Some(DefinitionBody::Value { .. }) if module.starts_with(go_name::GO_IMPORT_PREFIX) => {
+                self.facts.is_const(&qualified)
             }
             Some(DefinitionBody::Value { .. }) => true,
             _ => false,

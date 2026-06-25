@@ -74,9 +74,10 @@ pub fn save_go_stdlib_cache(store: &Store, go_module_ids: &[String], target: Tar
             .definitions
             .iter()
             .map(|(name, definition)| {
+                let is_const = module.const_names.contains(name);
                 (
                     name.to_string(),
-                    CachedDefinition::from_definition(definition, &empty_file_map),
+                    CachedDefinition::from_definition(definition, is_const, &empty_file_map),
                 )
             })
             .collect();
@@ -186,10 +187,7 @@ fn register_cached_go_module(
 
     let module = store.get_module_mut(module_id).unwrap();
     for (qualified_name, cached_definition) in &cached.definitions {
-        let definition = cached_definition.to_definition(file_ids);
-        module
-            .definitions
-            .insert(qualified_name.clone().into(), definition);
+        cached_definition.install_into(module, qualified_name.clone().into(), file_ids);
     }
 }
 

@@ -6,9 +6,9 @@ use syntax::ast::{
     Annotation, AttributeArg, Generic, Span, StructKind, Visibility as FieldVisibility,
 };
 use syntax::program::{
-    Attributes, Definition, DefinitionBody, Interface, MethodSignatures, Visibility,
+    Attributes, Definition, DefinitionBody, Interface, MethodSignatures, Module, Visibility,
 };
-use syntax::types::Type;
+use syntax::types::{Symbol, Type};
 
 /// Span stored as file index + byte offsets.
 /// file_index refers to position in ModuleInterface.files array (sorted by filename).
@@ -334,6 +334,7 @@ pub struct CachedDefinition {
     pub name_span: Option<CachedSpan>,
     pub doc: Option<String>,
     pub body: CachedDefinitionBody,
+    pub is_const: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -373,7 +374,11 @@ pub enum CachedDefinitionBody {
 impl CachedDefinition {
     /// Create a CachedDefinition from a Definition.
     /// Only call this for public definitions that should be cached.
-    pub fn from_definition(definition: &Definition, file_id_to_index: &HashMap<u32, u32>) -> Self {
+    pub fn from_definition(
+        definition: &Definition,
+        is_const: bool,
+        file_id_to_index: &HashMap<u32, u32>,
+    ) -> Self {
         let Definition {
             ty,
             name,
@@ -458,6 +463,7 @@ impl CachedDefinition {
             name_span: name_span.map(|s| CachedSpan::from_span(&s, file_id_to_index)),
             doc: doc.clone(),
             body,
+            is_const,
         }
     }
 
@@ -473,6 +479,14 @@ impl CachedDefinition {
             .iter()
             .map(|(k, v)| (EcoString::from(k.as_str()), v.clone()))
             .collect()
+    }
+
+    pub fn install_into(&self, module: &mut Module, qualified_name: Symbol, file_ids: &[u32]) {
+        if self.is_const {
+            module.const_names.insert(qualified_name.clone());
+        }
+        let definition = self.to_definition(file_ids);
+        module.definitions.insert(qualified_name, definition);
     }
 
     pub fn to_definition(&self, file_ids: &[u32]) -> Definition {

@@ -432,10 +432,7 @@ impl<'s> TaskState<'s> {
         if qualified_name.starts_with("go:") {
             return false;
         }
-        store
-            .module_for_qualified_name(qualified_name)
-            .and_then(|module_id| store.get_module(module_id))
-            .is_some_and(|module| module.const_names.contains(qualified_name))
+        store.is_const(qualified_name)
     }
 
     pub(crate) fn is_const_var(&self, store: &Store, var_name: &str) -> bool {
