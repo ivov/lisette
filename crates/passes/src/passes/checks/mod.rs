@@ -138,6 +138,8 @@ fn run_file_checks(
         is_d_lis: file.is_d_lis(),
         sink,
         claimed_spans: Default::default(),
+        function_role: Default::default(),
+        pattern_role: Default::default(),
     };
     node_walk::run(&file.items, &ctx);
     interpolation_stringer::run(&file.items, store, ufcs_methods, sink);

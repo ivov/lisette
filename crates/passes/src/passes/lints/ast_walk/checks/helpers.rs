@@ -346,12 +346,12 @@ pub(super) fn mentions_identifier(expression: &Expression, name: &str) -> bool {
     let mut found = false;
     visit_ast(
         std::slice::from_ref(expression),
-        &mut |node| {
+        &mut |node, _| {
             if let Expression::Identifier { value, .. } = node {
                 found |= value.as_str() == name;
             }
         },
-        &mut |_| {},
+        &mut |_, _| {},
     );
     found
 }
@@ -363,7 +363,7 @@ pub(super) fn has_escaping_control_flow(body: &Expression) -> bool {
     let mut found = false;
     visit_ast(
         std::slice::from_ref(body),
-        &mut |node| {
+        &mut |node, _| {
             found |= matches!(
                 node,
                 Expression::Return { .. }
@@ -373,7 +373,7 @@ pub(super) fn has_escaping_control_flow(body: &Expression) -> bool {
                     | Expression::Defer { .. }
             );
         },
-        &mut |_| {},
+        &mut |_, _| {},
     );
     found
 }

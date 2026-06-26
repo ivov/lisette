@@ -286,6 +286,7 @@ pub enum Pattern {
     AsBinding {
         pattern: Box<Self>,
         name: EcoString,
+        name_span: Span,
         span: Span,
     },
 }
@@ -318,10 +319,11 @@ pub fn collect_pattern_bindings(pattern: &Pattern) -> Vec<(String, Span)> {
         Pattern::AsBinding {
             pattern,
             name,
-            span,
+            name_span,
+            ..
         } => {
             let mut bindings = collect_pattern_bindings(pattern);
-            bindings.push((name.to_string(), *span));
+            bindings.push((name.to_string(), *name_span));
             bindings
         }
         Pattern::WildCard { .. } | Pattern::Literal { .. } | Pattern::Unit { .. } => vec![],

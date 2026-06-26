@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  ▲ Miscased name
+   ╭─[test.lis:4:15]
+ 3 │   match xs {
+ 4 │     [first, ..tailItems] => first + tailItems.length(),
+   ·               ────┬────
+   ·                   ╰── expected snake_case
+ 5 │     [] => 0,
+   ╰────
+  help: Rename to `tail_items` · code: [lint.non_snake_case_variable]

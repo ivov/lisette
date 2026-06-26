@@ -185,11 +185,12 @@ impl InferCtx<'_, '_> {
             Pattern::AsBinding {
                 pattern,
                 name,
+                name_span,
                 span,
             } => {
                 if name.chars().next().is_some_and(|c| c.is_uppercase()) {
                     self.sink
-                        .push(diagnostics::infer::uppercase_binding(span, &name));
+                        .push(diagnostics::infer::uppercase_binding(name_span, &name));
                 }
                 match pattern.as_ref() {
                     Pattern::Identifier { identifier, .. } => {
@@ -222,11 +223,6 @@ impl InferCtx<'_, '_> {
                     is_struct_field,
                 );
                 let alias_ty = inner.get_type().unwrap_or_else(|| expected_ty.clone());
-                let name_span = Span::new(
-                    span.file_id,
-                    span.byte_offset + span.byte_length - name.len() as u32,
-                    name.len() as u32,
-                );
                 self.bind_name_in_scope(
                     name.to_string(),
                     name_span,
@@ -240,6 +236,7 @@ impl InferCtx<'_, '_> {
                     Pattern::AsBinding {
                         pattern: Box::new(inner),
                         name,
+                        name_span,
                         span,
                     },
                     typed,

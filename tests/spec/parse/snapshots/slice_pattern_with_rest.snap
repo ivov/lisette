@@ -152,8 +152,8 @@ description: |
                                     name: "rest",
                                     span: Span {
                                         file_id: 0,
-                                        byte_offset: 84,
-                                        byte_length: 6,
+                                        byte_offset: 86,
+                                        byte_length: 4,
                                     },
                                 },
                                 element_ty: Var {

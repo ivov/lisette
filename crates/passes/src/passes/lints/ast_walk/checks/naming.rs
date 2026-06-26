@@ -1,8 +1,8 @@
 use diagnostics::LocalSink;
-use syntax::ast::{Expression, Generic, Pattern, Span};
+use syntax::ast::{Expression, Generic, Pattern, RestPattern, Span};
 
 use crate::passes::lints::ast_walk::casing::{is_snake_case, to_pascal_case, to_snake_case};
-use crate::passes::walk::NodeCtx;
+use crate::passes::walk::{FunctionRole, NodeCtx, PatternRole};
 
 use super::helpers::first_param_is_self;
 
@@ -61,6 +61,17 @@ pub fn check_expression_naming(expression: &Expression, ctx: &NodeCtx) {
                     "non_pascal_case_enum_variant",
                     sink,
                 );
+
+                if !is_d_lis && variant.fields.is_struct() {
+                    for field in variant.fields.iter() {
+                        check_snake_case(
+                            &field.name,
+                            &field.name_span,
+                            "non_snake_case_enum_field",
+                            sink,
+                        );
+                    }
+                }
             }
         }
 
@@ -103,20 +114,24 @@ pub fn check_expression_naming(expression: &Expression, ctx: &NodeCtx) {
             params,
             ..
         } => {
-            if !is_d_lis && !first_param_is_self(params) {
+            let is_go_method = match ctx.function_role.get() {
+                FunctionRole::InterfaceMethod => true,
+                FunctionRole::ImplMethod => first_param_is_self(params),
+                FunctionRole::Free => false,
+            };
+            let exempt = is_go_method && name.chars().next().is_some_and(char::is_uppercase);
+            if !is_d_lis && !exempt {
                 check_snake_case(name, name_span, "non_snake_case_function", sink);
             }
 
             for generic in generics {
                 check_type_parameter(generic, sink);
             }
+        }
 
-            if !is_d_lis {
-                for param in params {
-                    if let Pattern::Identifier { identifier, span } = &param.pattern {
-                        check_snake_case(identifier, span, "non_snake_case_parameter", sink);
-                    }
-                }
+        Expression::ImplBlock { generics, .. } => {
+            for generic in generics {
+                check_type_parameter(generic, sink);
             }
         }
 
@@ -128,9 +143,22 @@ pub fn check_pattern_naming(pattern: &Pattern, ctx: &NodeCtx) {
     if ctx.is_d_lis {
         return;
     }
-    if let Pattern::Identifier { identifier, span } = pattern {
-        check_snake_case(identifier, span, "non_snake_case_variable", ctx.sink);
-    }
+    let (name, span) = match pattern {
+        Pattern::Identifier { identifier, span } => (identifier, span),
+        Pattern::AsBinding {
+            name, name_span, ..
+        } => (name, name_span),
+        Pattern::Slice {
+            rest: RestPattern::Bind { name, span },
+            ..
+        } => (name, span),
+        _ => return,
+    };
+    let code = match ctx.pattern_role.get() {
+        PatternRole::Parameter => "non_snake_case_parameter",
+        PatternRole::Binding => "non_snake_case_variable",
+    };
+    check_snake_case(name, span, code, ctx.sink);
 }
 
 fn check_type_parameter(generic: &Generic, sink: &LocalSink) {

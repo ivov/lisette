@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  ▲ Miscased name
+   ╭─[test.lis:5:6]
+ 4 │ impl Snake {
+ 5 │   fn addPart(self: Ref<Snake>, x: int) {
+   ·      ───┬───
+   ·         ╰── expected snake_case
+ 6 │     self.parts += x
+   ╰────
+  help: Rename to `add_part` · code: [lint.non_snake_case_function]

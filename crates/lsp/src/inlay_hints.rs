@@ -159,17 +159,10 @@ fn collect_identifier_spans(pattern: &Pattern, out: &mut Vec<Span>) {
             .iter()
             .for_each(|p| collect_identifier_spans(p, out)),
         Pattern::AsBinding {
-            pattern,
-            name,
-            span,
+            pattern, name_span, ..
         } => {
             collect_identifier_spans(pattern, out);
-            let name_len = name.len() as u32;
-            out.push(Span::new(
-                span.file_id,
-                span.byte_offset + span.byte_length - name_len,
-                name_len,
-            ));
+            out.push(*name_span);
         }
         Pattern::Literal { .. } | Pattern::WildCard { .. } | Pattern::Unit { .. } => {}
     }

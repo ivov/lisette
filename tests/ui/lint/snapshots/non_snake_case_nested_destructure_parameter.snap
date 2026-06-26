@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  ▲ Miscased name
+   ╭─[test.lis:2:9]
+ 1 │ 
+ 2 │ fn add((leftHand, right): (int, int)) -> int { leftHand + right }
+   ·         ────┬───
+   ·             ╰── expected snake_case
+ 3 │ 
+   ╰────
+  help: Rename to `left_hand` · code: [lint.non_snake_case_parameter]

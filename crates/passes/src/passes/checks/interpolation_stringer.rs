@@ -17,8 +17,8 @@ pub(crate) fn run(
 ) {
     visit_ast(
         items,
-        &mut |expression| check_expression(expression, store, ufcs_methods, sink),
-        &mut |_| {},
+        &mut |expression, _| check_expression(expression, store, ufcs_methods, sink),
+        &mut |_, _| {},
     );
 }
 

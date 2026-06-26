@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  ▲ Miscased name
+   ╭─[test.lis:4:16]
+ 3 │   let _ = match Some(1) {
+ 4 │     Some(_) as wholeThing => wholeThing,
+   ·                ─────┬────
+   ·                     ╰── expected snake_case
+ 5 │     None => None,
+   ╰────
+  help: Rename to `whole_thing` · code: [lint.non_snake_case_variable]

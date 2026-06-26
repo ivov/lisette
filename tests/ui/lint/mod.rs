@@ -8261,6 +8261,240 @@ fn main() {
 }
 
 #[test]
+fn non_snake_case_method() {
+    assert_lint_snapshot!(
+        r#"
+struct Snake { parts: int }
+
+impl Snake {
+  fn addPart(self: Ref<Snake>, x: int) {
+    self.parts += x
+  }
+}
+
+fn main() {
+  let s = &Snake { parts: 0 }
+  s.addPart(1)
+}
+"#
+    );
+}
+
+#[test]
+fn non_snake_case_interface_method() {
+    assert_lint_snapshot!(
+        r#"
+pub interface Doer {
+  fn doThing(self) -> int
+}
+"#
+    );
+}
+
+#[test]
+fn non_snake_case_associated_function() {
+    assert_lint_snapshot!(
+        r#"
+struct Widget { n: int }
+
+impl Widget {
+  fn newWidget(n: int) -> Widget { Widget { n: n } }
+  fn val(self) -> int { self.n }
+}
+
+fn main() {
+  let w = Widget.newWidget(1)
+  let _ = w.val()
+}
+"#
+    );
+}
+
+#[test]
+fn non_snake_case_pascal_associated_function() {
+    assert_lint_snapshot!(
+        r#"
+struct Widget { n: int }
+
+impl Widget {
+  fn NewWidget(n: int) -> Widget { Widget { n: n } }
+  fn val(self) -> int { self.n }
+}
+
+fn main() {
+  let w = Widget.NewWidget(1)
+  let _ = w.val()
+}
+"#
+    );
+}
+
+#[test]
+fn snake_case_method_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+struct Snake { parts: int }
+
+impl Snake {
+  fn add_part(self: Ref<Snake>, x: int) {
+    self.parts += x
+  }
+}
+
+fn main() {
+  let s = &Snake { parts: 0 }
+  s.add_part(1)
+}
+"#
+    );
+}
+
+#[test]
+fn non_snake_case_free_function_with_self_param() {
+    assert_lint_snapshot!(
+        r#"
+fn Error(self: int) -> int { self }
+
+fn main() {
+  let _ = Error(1)
+}
+"#
+    );
+}
+
+#[test]
+fn non_snake_case_select_receive_binding() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let ch = Channel.new<int>()
+  ch.send(1)
+  let _ = select {
+    let Some(headItem) = ch.receive() => headItem,
+    _ => 0,
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn function_parameter_reported_once() {
+    let warnings = crate::_harness::lint::lint(
+        r#"
+fn greet(userId: int) {
+  let _ = userId;
+}
+
+fn main() {
+  greet(42);
+}
+"#,
+    );
+    let miscasings = warnings
+        .iter()
+        .filter(|w| w.code_str() == Some("lint.non_snake_case_parameter"))
+        .count();
+    assert_eq!(
+        miscasings, 1,
+        "a miscased parameter must be reported exactly once, got: {warnings:?}"
+    );
+}
+
+#[test]
+fn non_snake_case_nested_destructure_parameter() {
+    assert_lint_snapshot!(
+        r#"
+fn add((leftHand, right): (int, int)) -> int { leftHand + right }
+
+fn main() {
+  let _ = add((1, 2))
+}
+"#
+    );
+}
+
+#[test]
+fn non_snake_case_enum_field() {
+    assert_lint_snapshot!(
+        r#"
+enum Shape {
+  Rect { widthPx: int, height_px: int },
+}
+
+fn main() {
+  let _ = Shape.Rect { widthPx: 1, height_px: 2 }
+}
+"#
+    );
+}
+
+#[test]
+fn snake_case_enum_field_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+enum Shape {
+  Rect { width_px: int, height_px: int },
+}
+
+fn main() {
+  let _ = Shape.Rect { width_px: 1, height_px: 2 }
+}
+"#
+    );
+}
+
+#[test]
+fn non_snake_case_as_binding() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let _ = match Some(1) {
+    Some(_) as wholeThing => wholeThing,
+    None => None,
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn non_snake_case_slice_rest_binding() {
+    assert_lint_snapshot!(
+        r#"
+fn head_and_tail(xs: Slice<int>) -> int {
+  match xs {
+    [first, ..tailItems] => first + tailItems.length(),
+    [] => 0,
+  }
+}
+
+fn main() {
+  let _ = head_and_tail([1, 2, 3])
+}
+"#
+    );
+}
+
+#[test]
+fn snake_case_slice_rest_binding_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn head_and_tail(xs: Slice<int>) -> int {
+  match xs {
+    [first, ..tail_items] => first + tail_items.length(),
+    [] => 0,
+  }
+}
+
+fn main() {
+  let _ = head_and_tail([1, 2, 3])
+}
+"#
+    );
+}
+
+#[test]
 fn non_snake_case_variable() {
     assert_lint_snapshot!(
         r#"
@@ -8417,6 +8651,23 @@ fn identity<T>(x: T) -> T { x }
 
 fn main() {
   let _ = identity(42);
+}
+"#
+    );
+}
+
+#[test]
+fn non_pascal_case_impl_block_type_parameter() {
+    assert_lint_snapshot!(
+        r#"
+struct Box<T> { value: T }
+
+impl<t> Box<t> {
+  fn get(self) -> t { self.value }
+}
+
+fn main() {
+  let _ = Box { value: 1 }.get()
 }
 "#
     );
@@ -10376,6 +10627,17 @@ impl MyError {
 fn main() {
   let e = MyError { message: "fail" };
   let _ = e.Error();
+}
+"#
+    );
+}
+
+#[test]
+fn interface_method_pascal_case_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+pub interface Stringer {
+  fn String() -> string
 }
 "#
     );

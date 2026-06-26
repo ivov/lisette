@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  ▲ Miscased name
+   ╭─[test.lis:6:14]
+ 5 │   let _ = select {
+ 6 │     let Some(headItem) = ch.receive() => headItem,
+   ·              ────┬───
+   ·                  ╰── expected snake_case
+ 7 │     _ => 0,
+   ╰────
+  help: Rename to `head_item` · code: [lint.non_snake_case_variable]

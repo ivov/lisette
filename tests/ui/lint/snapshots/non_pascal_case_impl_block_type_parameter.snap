@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  ▲ Miscased name
+   ╭─[test.lis:4:6]
+ 3 │ 
+ 4 │ impl<t> Box<t> {
+   ·      ┬
+   ·      ╰── expected PascalCase
+ 5 │   fn get(self) -> t { self.value }
+   ╰────
+  help: Rename to `T` · code: [lint.non_pascal_case_type_parameter]

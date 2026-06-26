@@ -8,13 +8,13 @@ pub(super) fn collect_declaration_allows(items: &[Expression]) -> Vec<(Span, Vec
     let mut out = Vec::new();
     visit_ast(
         items,
-        &mut |expression| {
+        &mut |expression, _| {
             let flags = allow_flags(expression);
             if !flags.is_empty() {
                 out.push((expression.get_span(), flags));
             }
         },
-        &mut |_| {},
+        &mut |_, _| {},
     );
     out
 }

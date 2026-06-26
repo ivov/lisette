@@ -46,10 +46,12 @@ impl<'source> Parser<'source> {
                 self.next();
             } else {
                 let name: EcoString = self.current_token().text.into();
+                let name_span = self.span_from_token(self.current_token());
                 self.next();
                 result = Pattern::AsBinding {
                     pattern: Box::new(result),
                     name,
+                    name_span,
                     span: self.span_from_tokens(start),
                 };
             }
@@ -362,20 +364,14 @@ impl<'source> Parser<'source> {
         let mut rest = RestPattern::Absent;
 
         while self.is_not(RightSquareBracket) {
-            if let Some((binding, rest_start)) = self.try_parse_rest() {
+            if let Some(parsed_rest) = self.try_parse_rest() {
                 if rest.is_present() {
                     self.track_error(
                         "multiple rest patterns in slice pattern",
                         "Only one `..` or `..rest` is allowed.",
                     );
                 } else {
-                    rest = match binding {
-                        Some(name) => RestPattern::Bind {
-                            name,
-                            span: self.span_from_tokens(rest_start),
-                        },
-                        None => RestPattern::Discard(self.span_from_tokens(rest_start)),
-                    };
+                    rest = parsed_rest;
                 }
                 self.expect_comma_or(RightSquareBracket);
                 continue;
@@ -712,29 +708,35 @@ impl<'source> Parser<'source> {
         }
     }
 
-    fn try_parse_rest(&mut self) -> Option<(Option<EcoString>, Token<'source>)> {
+    fn try_parse_rest(&mut self) -> Option<RestPattern> {
         if self.is(DotDot) {
             let rest_start = self.current_token();
             self.ensure(DotDot);
             if self.is(Identifier) {
-                let name: EcoString = self.current_token().text.into();
+                let name_token = self.current_token();
+                let name: EcoString = name_token.text.into();
                 self.next();
-                return Some((Some(name), rest_start));
+                return Some(RestPattern::Bind {
+                    name,
+                    span: self.span_from_token(name_token),
+                });
             }
-            return Some((None, rest_start));
+            return Some(RestPattern::Discard(self.span_from_tokens(rest_start)));
         }
 
         if self.is(Identifier) {
-            let text = self.current_token().text;
-            if let Some(binding) = text.strip_prefix("..") {
-                let rest_start = self.current_token();
+            let token = self.current_token();
+            if let Some(binding) = token.text.strip_prefix("..") {
                 self.next();
-                let name = if binding.is_empty() {
-                    None
-                } else {
-                    Some(EcoString::from(binding))
-                };
-                return Some((name, rest_start));
+                if binding.is_empty() {
+                    return Some(RestPattern::Discard(self.span_from_token(token)));
+                }
+                let name_span =
+                    Span::new(self.file_id, token.byte_offset + 2, binding.len() as u32);
+                return Some(RestPattern::Bind {
+                    name: EcoString::from(binding),
+                    span: name_span,
+                });
             }
         }
 

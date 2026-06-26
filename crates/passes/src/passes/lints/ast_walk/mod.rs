@@ -160,7 +160,7 @@ static LINT_CHECKS: LazyLock<CheckTable> = LazyLock::new(|| {
             (check_negated_logical_operand, &[Binary]),
             (
                 check_expression_naming,
-                &[Struct, Enum, TypeAlias, Interface, Function],
+                &[Struct, Enum, TypeAlias, Interface, Function, ImplBlock],
             ),
             (check_enum_variant_names, &[Enum]),
             (check_self_named_constructors, &[ImplBlock]),
@@ -186,7 +186,14 @@ static LINT_CHECKS: LazyLock<CheckTable> = LazyLock::new(|| {
                 &[PatternKind::Literal],
             ),
             (check_invisible_in_string_pattern, &[PatternKind::Literal]),
-            (check_pattern_naming, &[PatternKind::Identifier]),
+            (
+                check_pattern_naming,
+                &[
+                    PatternKind::Identifier,
+                    PatternKind::AsBinding,
+                    PatternKind::Slice,
+                ],
+            ),
         ],
     )
 });
@@ -258,6 +265,8 @@ fn run_module(
             is_d_lis: file.is_d_lis(),
             sink: &file_sink,
             claimed_spans: Default::default(),
+            function_role: Default::default(),
+            pattern_role: Default::default(),
         };
         walk_nodes(&file.items, &ctx, &LINT_CHECKS);
 

@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  ▲ Miscased name
+   ╭─[test.lis:3:10]
+ 2 │ enum Shape {
+ 3 │   Rect { widthPx: int, height_px: int },
+   ·          ───┬───
+   ·             ╰── expected snake_case
+ 4 │ }
+   ╰────
+  help: Rename to `width_px` · code: [lint.non_snake_case_enum_field]

@@ -116,12 +116,12 @@ fn maps_binding(body: &Expression, binding: &str) -> bool {
     let mut shadowed = false;
     visit_ast(
         std::slice::from_ref(body),
-        &mut |node| {
+        &mut |node, _| {
             if matches!(node, Expression::Identifier { value, .. } if value.as_str() == binding) {
                 referenced = true;
             }
         },
-        &mut |pattern| {
+        &mut |pattern, _| {
             shadowed |= pattern_binds(pattern, binding);
         },
     );
