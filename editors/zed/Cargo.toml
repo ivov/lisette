@@ -1,3 +1,5 @@
+[workspace]
+
 [package]
 name = "zed_lisette"
 version = "0.1.2"

@@ -72,6 +72,8 @@ To iterate:
 
 ### Updating
 
+Run `just zed-release` from the repo root to automate steps 1 and 2. Then review the diff and continue from step 3.
+
 1. Bump `version` in `extension.toml` and `Cargo.toml`, then run `cargo build` in `editors/zed` so the matching `zed_lisette` version in `Cargo.lock` updates too.
 2. Find the commit SHA that Zed should build the tree-sitter grammar from and set it in `grammars.lisette.rev` in `extension.toml`.
 
