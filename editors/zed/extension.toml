@@ -1,14 +1,14 @@
 id = "lisette"
 name = "Lisette"
 description = "Language support for Lisette"
-version = "0.1.1"
+version = "0.1.2"
 schema_version = 1
 authors = ["Iván Ovejero <ivov.src@gmail.com>"]
 repository = "https://github.com/ivov/lisette"
 
 [grammars.lisette]
 repository = "https://github.com/ivov/lisette"
-rev = "5469274bebe8d452a8a10ed19233a55bd6593f1e"
+rev = "8ba205cc17ec985c2a284cb4c84edd606e964bfb"
 path = "editors/tree-sitter-lisette"
 
 [language_servers.lisette-lsp]

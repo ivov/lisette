@@ -72,7 +72,7 @@ To iterate:
 
 ### Updating
 
-1. Bump `version` in `extension.toml` and `Cargo.toml`.
+1. Bump `version` in `extension.toml` and `Cargo.toml`, then run `cargo build` in `editors/zed` so the matching `zed_lisette` version in `Cargo.lock` updates too.
 2. Find the commit SHA that Zed should build the tree-sitter grammar from and set it in `grammars.lisette.rev` in `extension.toml`.
 
     ```bash
@@ -87,4 +87,5 @@ To iterate:
     rev = "5a8800385fdd4e9fe02b758d9d6298b18fd92b72"
     ```
 
-3. Commit, push, and open a PR to [`zed-industries/extensions`](https://github.com/zed-industries/extensions) bumping the submodule ref and `version` in their `extensions.toml`.
+3. Commit, push, open a PR in this repo with the changes above, and merge it. Note its merge commit SHA.
+4. In your fork of [`zed-industries/extensions`](https://github.com/zed-industries/extensions), point the `extensions/lisette` submodule at that merge commit, bump `version` under `[lisette]` in their `extensions.toml` to match, and open a PR.
