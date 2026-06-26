@@ -17,47 +17,27 @@ fn e2e_smoke() {
         std::fs::remove_dir_all(&target_dir).expect("failed to clean target/");
     }
 
-    let build = Command::new("cargo")
-        .args(["run", "-p", "lisette", "--quiet", "--", "build"])
+    let run = Command::new("cargo")
+        .args(["run", "-p", "lisette", "--quiet", "--", "test"])
         .arg(&e2e_dir)
         .current_dir(repo)
         .env("NO_COLOR", "1")
         .output()
-        .expect("failed to run lisette build");
+        .expect("failed to run lisette test");
 
-    let build_stderr = String::from_utf8_lossy(&build.stderr);
-    let build_stdout = String::from_utf8_lossy(&build.stdout);
-    let build_output = format!("{}{}", build_stdout, build_stderr);
-
-    assert!(
-        build.status.success(),
-        "lisette build failed:\n{}",
-        build_output
-    );
-    assert!(
-        !build_output.contains("▲"),
-        "build produced warnings:\n{}",
-        build_output
-    );
-
-    let run = Command::new("go")
-        .args(["run", "."])
-        .current_dir(&target_dir)
-        .output()
-        .expect("failed to run go");
+    let stdout = String::from_utf8_lossy(&run.stdout);
+    let stderr = String::from_utf8_lossy(&run.stderr);
+    let output = format!("{}{}", stdout, stderr);
 
     assert!(
         run.status.success(),
-        "go run failed:\n{}",
-        String::from_utf8_lossy(&run.stderr)
+        "lis test failed (exit {:?}):\n{}",
+        run.status.code(),
+        output
     );
-
-    let stdout = String::from_utf8_lossy(&run.stdout);
-    insta::with_settings!({
-        snapshot_path => "spec/emit/snapshots",
-        snapshot_suffix => "",
-        prepend_module_to_snapshot => false,
-    }, {
-        insta::assert_snapshot!("e2e_smoke", stdout);
-    });
+    assert!(
+        !output.contains("▲"),
+        "lis test produced warnings:\n{}",
+        output
+    );
 }

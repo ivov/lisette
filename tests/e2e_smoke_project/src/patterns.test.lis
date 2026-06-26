@@ -1,0 +1,962 @@
+#[test]
+fn tuple_literal() {
+  let pair = (1, 2)
+  let result = match pair {
+    (1, 2) => 100,
+    _ => 0,
+  }
+  assert result == 100
+}
+
+#[test]
+fn tuple_binding() {
+  let pair = (3, 4)
+  let result = match pair {
+    (x, y) => x + y,
+  }
+  assert result == 7
+}
+
+#[test]
+fn tuple_mixed() {
+  let pair = (0, 42)
+  let result = match pair {
+    (0, y) => y,
+    (x, 0) => x,
+    (x, y) => x + y,
+  }
+  assert result == 42
+}
+
+#[test]
+fn tuple_wildcard() {
+  let pair = (5, 10)
+  let result = match pair {
+    (_, y) => y,
+  }
+  assert result == 10
+}
+
+#[test]
+fn tuple_nested() {
+  let nested = ((1, 2), 3)
+  let result = match nested {
+    ((1, 2), 3) => 100,
+    ((x, y), z) => x + y + z,
+  }
+  assert result == 100
+}
+
+#[test]
+fn tuple_first_match() {
+  let pair = (1, 1)
+  let result = match pair {
+    (1, _) => 10,
+    (_, 1) => 20,
+    _ => 30,
+  }
+  assert result == 10
+}
+
+#[test]
+fn tuple_triple() {
+  let triple = (1, 2, 3)
+  let result = match triple {
+    (1, 2, 3) => 6,
+    (a, b, c) => a + b + c,
+  }
+  assert result == 6
+}
+
+#[test]
+fn tuple_deep() {
+  let deep = (((1, 2), 3), 4)
+  let result = match deep {
+    (((a, b), c), d) => a + b + c + d,
+  }
+  assert result == 10
+}
+
+#[test]
+fn tuple_expr_arm() {
+  let pair = (2, 3)
+  let result = match pair {
+    (x, y) => (x + y) * 2,
+  }
+  assert result == 10
+}
+
+#[test]
+fn tuple_all_wild() {
+  let pair = (99, 99)
+  let result = match pair {
+    (_, _) => 1,
+  }
+  assert result == 1
+}
+
+#[test]
+fn tuple_return_annotation() {
+  let (a, b) = get_pair()
+  let result = a + b
+  assert result == 30
+}
+
+#[test]
+fn enum_simple() {
+  let c = Color.Red
+  let result = match c {
+    Color.Red => 1,
+    Color.Green => 2,
+    Color.Blue => 3,
+  }
+  assert result == 1
+}
+
+#[test]
+fn enum_with_data() {
+  let s = Status.Inactive(42)
+  let result = match s {
+    Status.Active => 0,
+    Status.Inactive(n) => n,
+  }
+  assert result == 42
+}
+
+#[test]
+fn enum_multi_field() {
+  let p = Pair.Both(3, 4)
+  let result = match p {
+    Pair.Both(a, b) => a + b,
+    Pair.Neither => 0,
+  }
+  assert result == 7
+}
+
+#[test]
+fn enum_neither() {
+  let p: Pair<int, int> = Pair.Neither
+  let result = match p {
+    Pair.Both(_, _) => 0,
+    Pair.Neither => 100,
+  }
+  assert result == 100
+}
+
+#[test]
+fn enum_message() {
+  let m = Message.Move(10, 20)
+  let result = match m {
+    Message.Quit => 0,
+    Message.Move(x, y) => x + y,
+    Message.Write(_) => 100,
+  }
+  assert result == 30
+}
+
+#[test]
+fn enum_nested() {
+  let outer = Some(Some(42))
+  let result = match outer {
+    Some(Some(x)) => x,
+    Some(None) => -1,
+    None => -2,
+  }
+  assert result == 42
+}
+
+#[test]
+fn enum_nested_none() {
+  let outer: Option<Option<int>> = Some(None)
+  let result = match outer {
+    Some(Some(x)) => x,
+    Some(None) => -1,
+    None => -2,
+  }
+  assert result == -1
+}
+
+#[test]
+fn enum_message_quit() {
+  let m = Message.Quit
+  let result = match m {
+    Message.Quit => 0,
+    Message.Move(x, y) => x + y,
+    Message.Write(_) => 100,
+  }
+  assert result == 0
+}
+
+#[test]
+fn enum_message_write() {
+  let m = Message.Write("hello")
+  let result = match m {
+    Message.Quit => 0,
+    Message.Move(x, y) => x + y,
+    Message.Write(_) => 100,
+  }
+  assert result == 100
+}
+
+#[test]
+fn enum_multi_arm() {
+  let s = Status.Active
+  let result = match s {
+    Status.Inactive(n) => n,
+    Status.Active => 999,
+  }
+  assert result == 999
+}
+
+#[test]
+fn struct_variant_match() {
+  let e = Event.Click { x: 10, y: 20 }
+  let result = match e {
+    Event.Click { x, y } => x + y,
+    Event.KeyPress { key: _, ctrl: _ } => 0,
+    Event.Resize { width: _, height: _ } => 0,
+    Event.Close => 0,
+  }
+  assert result == 30
+}
+
+#[test]
+fn struct_variant_keypress() {
+  let e = Event.KeyPress { key: "a", ctrl: true }
+  let result = match e {
+    Event.Click { x: _, y: _ } => 0,
+    Event.KeyPress { key: _, ctrl } => if ctrl { 100 } else { 50 },
+    Event.Resize { width: _, height: _ } => 0,
+    Event.Close => 0,
+  }
+  assert result == 100
+}
+
+#[test]
+fn struct_variant_partial() {
+  let e = Event.Resize { width: 800, height: 600 }
+  let result = match e {
+    Event.Click { .. } => 0,
+    Event.KeyPress { .. } => 0,
+    Event.Resize { width, .. } => width,
+    Event.Close => 0,
+  }
+  assert result == 800
+}
+
+#[test]
+fn struct_variant_construction() {
+  let s = Shape.Rectangle { width: 10, height: 5 }
+  let result = match s {
+    Shape.Circle(r) => r * r,
+    Shape.Rectangle { width, height } => width * height,
+    Shape.Triangle { base, height } => base * height / 2,
+  }
+  assert result == 50
+}
+
+#[test]
+fn mixed_variants() {
+  let s1 = Shape.Circle(5)
+  let s2 = Shape.Rectangle { width: 4, height: 3 }
+  let area1 = match s1 {
+    Shape.Circle(r) => r * r,
+    Shape.Rectangle { width, height } => width * height,
+    Shape.Triangle { base, height } => base * height / 2,
+  }
+  let area2 = match s2 {
+    Shape.Circle(r) => r * r,
+    Shape.Rectangle { width, height } => width * height,
+    Shape.Triangle { base, height } => base * height / 2,
+  }
+  let result = area1 + area2
+  assert result == 37
+}
+
+#[test]
+fn struct_variant_with_unit() {
+  let e = Event.Close
+  let result = match e {
+    Event.Click { x, y } => x + y,
+    Event.KeyPress { .. } => 50,
+    Event.Resize { .. } => 75,
+    Event.Close => 99,
+  }
+  assert result == 99
+}
+
+#[test]
+fn if_let_struct_variant() {
+  let e = Event.Click { x: 5, y: 10 }
+  let result = if let Event.Click { x, y } = e { x * y } else { 0 }
+  assert result == 50
+}
+
+#[test]
+fn let_else_struct_variant() {
+  let e = Event.Click { x: 7, y: 8 }
+  let Event.Click { x, y } = e else { return }
+  assert x + y == 15
+}
+
+#[test]
+fn let_else_struct_variant_or() {
+  let e = Event.Click { x: 5, y: 12 }
+  let Event.Click { x, y } | Event.Resize { width: x, height: y } = e else { return }
+  assert x + y == 17
+}
+
+#[test]
+fn struct_variant_field_order() {
+  let e = Event.Click { x: 3, y: 7 }
+  let result = match e {
+    Event.Click { y, x } => y * 10 + x,
+    _ => 0,
+  }
+  assert result == 73
+}
+
+#[test]
+fn struct_variant_type_conflict() {
+  let d1 = TypeConflict.IntVal { int_value: 42 }
+  let d2 = TypeConflict.StrVal { str_value: "hello" }
+  let v1 = match d1 {
+    TypeConflict.IntVal { int_value } => int_value,
+    TypeConflict.StrVal { .. } => 0,
+  }
+  let v2 = match d2 {
+    TypeConflict.IntVal { .. } => 0,
+    TypeConflict.StrVal { str_value } => if str_value == "hello" {
+      5
+    } else {
+      0
+    },
+  }
+  let result = v1 + v2
+  assert result == 47
+}
+
+#[test]
+fn tuple_struct_field_conflict() {
+  let t = TupleStructConflict.Foo(10)
+  let s = TupleStructConflict.Bar { bar_val: "hello" }
+  let v1 = match t {
+    TupleStructConflict.Foo(x) => x,
+    TupleStructConflict.Bar { .. } => 0,
+  }
+  let v2 = match s {
+    TupleStructConflict.Foo(_) => 0,
+    TupleStructConflict.Bar { bar_val } => if bar_val == "hello" {
+      23
+    } else {
+      0
+    },
+  }
+  let result = v1 + v2
+  assert result == 33
+}
+
+#[test]
+fn tag_variant_collision() {
+  let t = TagCollision.Tag(42)
+  let o = TagCollision.Other("hello")
+  let v1 = match t {
+    TagCollision.Tag(x) => x,
+    TagCollision.Other(_) => 0,
+  }
+  let v2 = match o {
+    TagCollision.Tag(_) => 0,
+    TagCollision.Other(s) => if s == "hello" { 8 } else { 0 },
+  }
+  let result = v1 + v2
+  assert result == 50
+}
+
+#[test]
+fn tag_field_collision() {
+  let f = TagFieldCollision.Foo { tag: 25 }
+  let b = TagFieldCollision.Bar("world")
+  let v1 = match f {
+    TagFieldCollision.Foo { tag } => tag,
+    TagFieldCollision.Bar(_) => 0,
+  }
+  let v2 = match b {
+    TagFieldCollision.Foo { .. } => 0,
+    TagFieldCollision.Bar(s) => if s == "world" { 12 } else { 0 },
+  }
+  let result = v1 + v2
+  assert result == 37
+}
+
+#[test]
+fn enum_method() {
+  let e = MethodEnum.Val(21)
+  let result = e.get_val()
+  assert result == 21
+}
+
+#[test]
+fn enum_method_chained() {
+  let e = MethodEnum.Val(25)
+  let result = e.doubled()
+  assert result == 50
+}
+
+#[test]
+fn slice_empty() {
+  let arr: Slice<int> = []
+  let result = match arr {
+    [] => 100,
+    _ => 0,
+  }
+  assert result == 100
+}
+
+#[test]
+fn slice_single() {
+  let arr = [42]
+  let result = match arr {
+    [x] => x,
+    _ => 0,
+  }
+  assert result == 42
+}
+
+#[test]
+fn slice_fixed() {
+  let arr = [1, 2, 3]
+  let result = match arr {
+    [a, b, c] => a + b + c,
+    _ => 0,
+  }
+  assert result == 6
+}
+
+#[test]
+fn slice_fixed_mismatch() {
+  let arr = [1, 2]
+  let result = match arr {
+    [a, b, c] => a + b + c,
+    [a, b] => a + b,
+    _ => 0,
+  }
+  assert result == 3
+}
+
+#[test]
+fn slice_rest_discard() {
+  let arr = [10, 20, 30, 40]
+  let result = match arr {
+    [first, ..] => first,
+    _ => 0,
+  }
+  assert result == 10
+}
+
+#[test]
+fn slice_rest_bind() {
+  let arr = [1, 2, 3, 4, 5]
+  let result = match arr {
+    [first, ..rest] => first + rest[0],
+    _ => 0,
+  }
+  assert result == 3
+}
+
+#[test]
+fn slice_literal_match() {
+  let arr = [1, 2]
+  let result = match arr {
+    [1, 2] => 100,
+    _ => 0,
+  }
+  assert result == 100
+}
+
+#[test]
+fn slice_mixed() {
+  let arr = [0, 99, 3]
+  let result = match arr {
+    [0, x, _] => x,
+    _ => 0,
+  }
+  assert result == 99
+}
+
+#[test]
+fn struct_full() {
+  let p = Point { x: 3, y: 4 }
+  let result = match p {
+    Point { x, y } => x + y,
+  }
+  assert result == 7
+}
+
+#[test]
+fn struct_literal() {
+  let p = Point { x: 0, y: 42 }
+  let result = match p {
+    Point { x: 0, y } => y,
+    Point { x, y: 0 } => x,
+    Point { x, y } => x + y,
+  }
+  assert result == 42
+}
+
+#[test]
+fn struct_renamed() {
+  let p = Point { x: 10, y: 20 }
+  let result = match p {
+    Point { x: a, y: b } => a * b,
+  }
+  assert result == 200
+}
+
+#[test]
+fn struct_partial() {
+  let p = Point { x: 10, y: 20 }
+  let result = match p {
+    Point { x, .. } => x,
+  }
+  assert result == 10
+}
+
+#[test]
+fn struct_nested() {
+  let r = Rect { origin: Point { x: 1, y: 2 }, width: 10, height: 20 }
+  let result = match r {
+    Rect { origin: Point { x, y }, width, height } => x + y + width + height,
+  }
+  assert result == 33
+}
+
+#[test]
+fn struct_wildcard_field() {
+  let p = Point { x: 5, y: 10 }
+  let result = match p {
+    Point { x: _, y } => y,
+  }
+  assert result == 10
+}
+
+#[test]
+fn struct_multiple_arms() {
+  let p = Point { x: 0, y: 5 }
+  let result = match p {
+    Point { x: 0, y: 0 } => 0,
+    Point { x: 0, y } => y,
+    Point { x, y: 0 } => x,
+    Point { x, y } => x + y,
+  }
+  assert result == 5
+}
+
+#[test]
+fn struct_let_destructure() {
+  let p = Point { x: 7, y: 8 }
+  let Point { x, y } = p
+  let result = x + y
+  assert result == 15
+}
+
+#[test]
+fn match_with_block_arm() {
+  let x = 2
+  let result = match x {
+    1 => 10,
+    2 => {
+      let a = 20
+      let b = 30
+      a + b
+    },
+    _ => 0,
+  }
+  assert result == 50
+}
+
+#[test]
+fn match_with_nested_if() {
+  let x = 5
+  let result = match x {
+    n => if n > 3 { n * 10 } else { n },
+  }
+  assert result == 50
+}
+
+#[test]
+fn match_nested_match() {
+  let outer = Some(Some(7))
+  let result = match outer {
+    Some(inner) => match inner {
+      Some(n) => n * 2,
+      None => -1,
+    },
+    None => -2,
+  }
+  assert result == 14
+}
+
+#[test]
+fn if_with_match() {
+  let x = true
+  let y = 3
+  let result = if x {
+    match y {
+      1 => 10,
+      2 => 20,
+      3 => 30,
+      _ => 0,
+    }
+  } else {
+    0
+  }
+  assert result == 30
+}
+
+#[test]
+fn guard_basic() {
+  let opt = Some(42)
+  let result = match opt {
+    Some(x) if x > 0 => 1,
+    Some(_) => 2,
+    None => 3,
+  }
+  assert result == 1
+}
+
+#[test]
+fn guard_negative() {
+  let opt = Some(-10)
+  let result = match opt {
+    Some(x) if x > 0 => 1,
+    Some(_) => 2,
+    None => 3,
+  }
+  assert result == 2
+}
+
+#[test]
+fn guard_zero() {
+  let opt = Some(0)
+  let result = match opt {
+    Some(x) if x > 0 => 1,
+    Some(x) if x < 0 => 2,
+    Some(_) => 3,
+    None => 4,
+  }
+  assert result == 3
+}
+
+#[test]
+fn guard_none() {
+  let opt: Option<int> = None
+  let result = match opt {
+    Some(x) if x > 0 => 1,
+    Some(_) => 2,
+    None => 3,
+  }
+  assert result == 3
+}
+
+#[test]
+fn guard_multiple() {
+  let opt = Some(50)
+  let result = match opt {
+    Some(x) if x > 100 => 1,
+    Some(x) if x > 50 => 2,
+    Some(x) if x > 0 => 3,
+    Some(_) => 4,
+    None => 5,
+  }
+  assert result == 3
+}
+
+#[test]
+fn guard_uses_binding() {
+  let opt = Some(7)
+  let result = match opt {
+    Some(n) if n > 10 => n * 10,
+    Some(n) if n > 5 => n * 2,
+    Some(n) => n,
+    None => 0,
+  }
+  assert result == 14
+}
+
+#[test]
+fn guard_on_tuple() {
+  let pair = (3, 5)
+  let result = match pair {
+    (x, y) if x == y => 1,
+    (x, y) if x > y => 2,
+    (x, y) if x < y => 3,
+    _ => 4,
+  }
+  assert result == 3
+}
+
+#[test]
+fn guard_on_struct() {
+  let p = Point { x: 10, y: 10 }
+  let result = match p {
+    Point { x, y } if x == y => 1,
+    Point { x, y } if x > y => 2,
+    _ => 3,
+  }
+  assert result == 1
+}
+
+#[test]
+fn guard_complex_condition() {
+  let pair = (3, 4)
+  let result = match pair {
+    (x, y) if x > 0 && y > 0 && x + y > 5 => 1,
+    (x, y) if x > 0 || y > 0 => 2,
+    _ => 3,
+  }
+  assert result == 1
+}
+
+#[test]
+fn guard_with_result() {
+  let res = Ok(25)
+  let result = match res {
+    Ok(n) if n > 50 => 1,
+    Ok(n) if n > 20 => 2,
+    Ok(_) => 3,
+    Err(_) => 4,
+  }
+  assert result == 2
+}
+
+#[test]
+fn or_pattern_literals() {
+  let x = 2
+  let result = match x {
+    1 | 2 | 3 => 100,
+    _ => 0,
+  }
+  assert result == 100
+}
+
+#[test]
+fn or_pattern_enum() {
+  let c = Color.Red
+  let result = match c {
+    Color.Red | Color.Green => 1,
+    Color.Blue => 2,
+  }
+  assert result == 1
+}
+
+#[test]
+fn or_pattern_strings() {
+  let s = "y"
+  let result = match s {
+    "yes" | "y" | "true" => 1,
+    "no" | "n" | "false" => 0,
+    _ => -1,
+  }
+  assert result == 1
+}
+
+#[test]
+fn or_pattern_booleans() {
+  let pair = (true, false)
+  let result = match pair {
+    (true, true) | (false, false) => 1,
+    (true, false) | (false, true) => 2,
+  }
+  assert result == 2
+}
+
+#[test]
+fn or_pattern_with_guard() {
+  let x = 5
+  let result = match x {
+    1 | 2 | 3 if x > 0 => 10,
+    1 | 2 | 3 => 20,
+    _ => 30,
+  }
+  assert result == 30
+}
+
+#[test]
+fn or_pattern_guard_skips_arm() {
+  let x = 1
+  let result = match x {
+    1 | 2 if false => 10,
+    _ => 20,
+  }
+  assert result == 20
+}
+
+#[test]
+fn or_pattern_exhaustive() {
+  let c = Color.Blue
+  let result = match c {
+    Color.Red | Color.Green => 1,
+    Color.Blue => 2,
+  }
+  assert result == 2
+}
+
+#[test]
+fn or_pattern_if_let() {
+  let x = 2
+  let result = if let 1 | 2 | 3 = x { 100 } else { 0 }
+  assert result == 100
+}
+
+#[test]
+fn or_pattern_mixed_arms() {
+  let x = 5
+  let result = match x {
+    0 | 1 => 10,
+    2 | 3 | 4 => 20,
+    5 | 6 | 7 => 30,
+    _ => 0,
+  }
+  assert result == 30
+}
+
+#[test]
+fn either_left() {
+  let e: Either<int, string> = Either.Left(42)
+  let result = match e {
+    Either.Left(v) => v,
+    Either.Right(_) => 0,
+  }
+  assert result == 42
+}
+
+#[test]
+fn either_right() {
+  let e: Either<int, string> = Either.Right("hello")
+  let result = match e {
+    Either.Left(_) => 0,
+    Either.Right(s) => if s == "hello" { 100 } else { 0 },
+  }
+  assert result == 100
+}
+
+#[test]
+fn match_statement_result() {
+  let mut hit = 0
+  match divide_for_test(10, 2) {
+    Ok(_) => hit = 1,
+    Err(_) => hit = 2,
+  }
+  assert hit == 1
+}
+
+#[test]
+fn match_statement_option() {
+  let mut hit = 0
+  match maybe_int_for_test(true) {
+    Some(_) => hit = 1,
+    None => hit = 2,
+  }
+  assert hit == 1
+}
+
+#[test]
+fn enum_variant_named_string() {
+  let n = ASTNode.String("hello")
+  let num = ASTNode.Number(42)
+  let null = ASTNode.Null
+  let s_ok = match n {
+    ASTNode.String(s) => s == "hello",
+    _ => false,
+  }
+  let n_ok = match num {
+    ASTNode.Number(v) => v == 42,
+    _ => false,
+  }
+  let null_ok = match null {
+    ASTNode.Null => true,
+    _ => false,
+  }
+  assert s_ok && n_ok && null_ok
+}
+
+pub enum Color {
+  Red,
+  Green,
+  Blue,
+}
+
+pub enum Status {
+  Active,
+  Inactive(int),
+}
+
+pub enum Pair<A, B> {
+  Both(A, B),
+  Neither,
+}
+
+pub enum Message {
+  Quit,
+  Move(int, int),
+  Write(string),
+}
+
+pub enum TypeConflict {
+  IntVal { int_value: int },
+  StrVal { str_value: string },
+}
+
+pub enum Shape {
+  Circle(int),
+  Rectangle { width: int, height: int },
+  Triangle { base: int, height: int },
+}
+
+enum TupleStructConflict {
+  Foo(int),
+  Bar { bar_val: string },
+}
+
+enum TagCollision {
+  Tag(int),
+  Other(string),
+}
+
+enum TagFieldCollision {
+  Foo { tag: int },
+  Bar(string),
+}
+
+enum MethodEnum {
+  Val(int),
+  Empty,
+}
+
+impl MethodEnum {
+  fn get_val(self) -> int {
+    match self {
+      MethodEnum.Val(x) => x,
+      MethodEnum.Empty => 0,
+    }
+  }
+
+  fn doubled(self) -> int {
+    self.get_val() * 2
+  }
+}
+
+enum Either<L, R> {
+  Left(L),
+  Right(R),
+}
+
+enum ASTNode {
+  Number(int),
+  String(string),
+  Null,
+}
+
+fn get_pair() -> (int, int) {
+  (10, 20)
+}

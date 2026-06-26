@@ -1,0 +1,388 @@
+#[test]
+fn struct_spread() {
+  let p1 = MutPoint { x: 10, y: 20 }
+  let p2 = MutPoint { x: 100, ..p1 }
+  let result = p2.x + p2.y
+  assert result == 120
+}
+
+#[test]
+fn struct_spread_override_last() {
+  let p1 = MutPoint { x: 5, y: 5 }
+  let p2 = MutPoint { y: 50, ..p1 }
+  let result = p2.x + p2.y
+  assert result == 55
+}
+
+#[test]
+fn struct_variant_spread() {
+  let base = Event.Click { x: 10, y: 20 }
+  let e = Event.Click { x: 100, ..base }
+  let result = match e {
+    Event.Click { x, y } => x + y,
+    _ => 0,
+  }
+  assert result == 120
+}
+
+#[test]
+fn tuple_struct_single() {
+  let id = UserId(42)
+  let result = id.0
+  assert result == 42
+}
+
+#[test]
+fn tuple_struct_multi() {
+  let p = Point2D(10, 20)
+  let result = p.0 + p.1
+  assert result == 30
+}
+
+#[test]
+fn tuple_struct_pattern() {
+  let p = Point2D(3, 4)
+  let result = match p {
+    Point2D(x, y) => x * x + y * y,
+  }
+  assert result == 25
+}
+
+#[test]
+fn tuple_struct_function_param() {
+  let result = get_user_id_raw(UserId(100))
+  assert result == 100
+}
+
+#[test]
+fn tuple_struct_generic() {
+  let w = Wrapper(50)
+  let result = w.0
+  assert result == 50
+}
+
+#[test]
+fn all_pub_fields() {
+  let p = PublicPoint { x: 10, y: 20 }
+  let result = p.x + p.y
+  assert result == 30
+}
+
+#[test]
+fn mixed_visibility() {
+  let p = MixedPoint { x: 100, y: 50 }
+  let result = p.x + p.y
+  assert result == 150
+}
+
+#[test]
+fn all_private_fields() {
+  let p = PrivateFields { a: 7, b: 8 }
+  let result = p.a + p.b
+  assert result == 15
+}
+
+#[test]
+fn pub_struct_spread() {
+  let p1 = PublicPoint { x: 5, y: 10 }
+  let p2 = PublicPoint { x: 100, ..p1 }
+  let result = p2.x + p2.y
+  assert result == 110
+}
+
+#[test]
+fn mixed_struct_spread() {
+  let p1 = MixedPoint { x: 3, y: 4 }
+  let p2 = MixedPoint { x: 30, ..p1 }
+  let result = p2.x + p2.y
+  assert result == 34
+}
+
+#[test]
+fn pub_field_pattern() {
+  let p = PublicPoint { x: 11, y: 22 }
+  let result = match p {
+    PublicPoint { x, y } => x + y,
+  }
+  assert result == 33
+}
+
+#[test]
+fn mixed_field_pattern() {
+  let p = MixedPoint { x: 33, y: 44 }
+  let result = match p {
+    MixedPoint { x, y } => x + y,
+  }
+  assert result == 77
+}
+
+#[test]
+fn pub_field_method() {
+  let p = PublicPoint { x: 15, y: 25 }
+  let result = p.sum()
+  assert result == 40
+}
+
+#[test]
+fn pub_let_destructure() {
+  let p = PublicPoint { x: 5, y: 10 }
+  let PublicPoint { x, y } = p
+  let result = x + y
+  assert result == 15
+}
+
+#[test]
+fn enum_struct_let_destructure() {
+  let e = Event.Click { x: 30, y: 12 }
+  let result = match e {
+    Event.Click { x, y } => {
+      let Event.Click { x: a, y: b } = e else { return }
+      a + b
+    },
+    _ => 0,
+  }
+  assert result == 42
+}
+
+#[test]
+fn field_assignment() {
+  let mut p = MutPoint { .. }
+  p.x = 10
+  p.y = 20
+  let result = p.x + p.y
+  assert result == 30
+}
+
+#[test]
+fn index_assignment() {
+  let mut arr = [1, 2, 3]
+  arr[0] = 100
+  let result = arr[0]
+  assert result == 100
+}
+
+#[test]
+fn nested_field_assignment() {
+  let mut outer = Outer { middle: Middle { inner: Inner { value: 0 } } }
+  outer.middle.inner.value = 42
+  let result = outer.middle.inner.value
+  assert result == 42
+}
+
+#[test]
+fn index_on_call() {
+  let result = returns_slice()[1]
+  assert result == 20
+}
+
+#[test]
+fn index_nested() {
+  let matrix = [[1, 2], [3, 4], [5, 6]]
+  let result = matrix[1][0] + matrix[2][1]
+  assert result == 9
+}
+
+#[test]
+fn index_in_expression() {
+  let arr = [10, 20, 30]
+  let result = arr[0] + arr[1] * arr[2]
+  assert result == 610
+}
+
+#[test]
+fn index_on_field() {
+  let h = SliceHolder { items: [5, 10, 15] }
+  let result = h.items[0] + h.items[2]
+  assert result == 20
+}
+
+#[test]
+fn if_as_argument() {
+  let val = if true { 42 } else { 0 }
+  let result = use_int(val)
+  assert result == 42
+}
+
+#[test]
+fn match_as_argument() {
+  let x = 1
+  let val = match x {
+    1 => 100,
+    _ => 0,
+  }
+  let result = use_int(val)
+  assert result == 100
+}
+
+#[test]
+fn block_as_argument() {
+  let val = {
+    let a = 10
+    let b = 20
+    a + b
+  }
+  let result = use_int(val)
+  assert result == 30
+}
+
+#[test]
+fn select_as_argument() {
+  let ch = Channel.new<int>()
+  let val = select {
+    let Some(v) = ch.receive() => v,
+    _ => 77,
+  }
+  let result = use_int(val)
+  assert result == 77
+}
+
+#[test]
+fn nested_expr_argument() {
+  let x = true
+  let y = 1
+  let inner = match y {
+    1 => 50,
+    _ => 0,
+  }
+  let val = if x { inner } else { 0 }
+  let result = use_int(val)
+  assert result == 50
+}
+
+#[test]
+fn block_as_value() {
+  let x = {
+    let a = 5
+    let b = 10
+    a * b
+  }
+  assert x == 50
+}
+
+#[test]
+fn fmt_variable() {
+  let result = 1
+  let s = f"result: {result}"
+  assert s == "result: 1"
+}
+
+#[test]
+fn fmt_multi_variable() {
+  let x = 10
+  let y = 20
+  let sum = x + y
+  let product = x * y
+  let s = f"sum: {sum}, product: {product}"
+  assert s == "sum: 30, product: 200"
+}
+
+#[test]
+fn fmt_expression_addition() {
+  let x = 10
+  let y = 20
+  let s = f"sum: {x + y}"
+  assert s == "sum: 30"
+}
+
+#[test]
+fn fmt_expression_method_call() {
+  let arr = [1, 2, 3]
+  let s = f"len: {arr.length()}"
+  assert s == "len: 3"
+}
+
+#[test]
+fn fmt_expression_index_access() {
+  let arr = [10, 20, 30]
+  let s = f"first: {arr[0]}"
+  assert s == "first: 10"
+}
+
+#[test]
+fn fmt_expression_if() {
+  let x = 5
+  let label = if x > 0 { "positive" } else { "negative" }
+  let s = f"result: {label}"
+  assert s == "result: positive"
+}
+
+#[test]
+fn fmt_expression_chained() {
+  let arr = [1, 2, 3, 4, 5]
+  let s = f"sum: {arr[0] + arr[1] + arr[2]}"
+  assert s == "sum: 6"
+}
+
+#[test]
+fn fmt_escaped_braces() {
+  let x = 42
+  let s = f"value: {x}, literal: {{braces}}"
+  assert s == "value: 42, literal: {braces}"
+}
+
+#[test]
+fn go_keyword_as_variable() {
+  let map = 42
+  let range = 10
+  let result = map + range
+  assert result == 52
+}
+
+#[test]
+fn raw_string_backslashes() {
+  let path = r"C:\Users\me"
+  assert path == "C:\\Users\\me"
+}
+
+#[test]
+fn raw_string_pattern_match() {
+  let re = r"\d+"
+  let result = match re {
+    r"\d+" => 100,
+    _ => 0,
+  }
+  assert result == 100
+}
+
+#[test]
+fn raw_string_equals_escaped() {
+  let raw = r"a\nb"
+  let escaped = "a\\nb"
+  assert raw == escaped
+}
+
+fn returns_slice() -> Slice<int> {
+  [10, 20, 30]
+}
+
+struct SliceHolder { items: Slice<int> }
+
+struct MutPoint { x: int, y: int }
+
+struct UserId(int)
+
+struct Point2D(int, int)
+
+struct Wrapper<T>(T)
+
+fn get_user_id_raw(id: UserId) -> int {
+  id.0
+}
+
+pub struct PublicPoint {
+  pub x: int,
+  pub y: int,
+}
+
+pub struct MixedPoint {
+  pub x: int,
+  y: int,
+}
+
+pub struct PrivateFields { a: int, b: int }
+
+impl PublicPoint {
+  fn sum(self: PublicPoint) -> int {
+    self.x + self.y
+  }
+}

@@ -1,0 +1,79 @@
+#[test]
+fn partial_ok() {
+  let result = match make_partial_ok() {
+    Partial.Ok(n) => n,
+    Partial.Err(_) => 0,
+    Partial.Both(n, _) => n,
+  }
+  assert result == 42
+}
+
+#[test]
+fn partial_err() {
+  let result = match make_partial_err() {
+    Partial.Ok(n) => n,
+    Partial.Err(_) => 0,
+    Partial.Both(n, _) => n,
+  }
+  assert result == 0
+}
+
+#[test]
+fn partial_both() {
+  let result = match make_partial_both() {
+    Partial.Ok(n) => n,
+    Partial.Err(_) => 0,
+    Partial.Both(n, _) => n,
+  }
+  assert result == 42
+}
+
+#[test]
+fn partial_match_all_variants() {
+  let ok = make_partial_ok()
+  let err = make_partial_err()
+  let both = make_partial_both()
+  let a = match ok {
+    Partial.Ok(n) => n,
+    _ => 0,
+  }
+  let b = match err {
+    Partial.Err(_) => 16,
+    _ => 0,
+  }
+  let c = match both {
+    Partial.Both(n, _) => n,
+    _ => 0,
+  }
+  assert a + b + c == 100
+}
+
+#[test]
+fn partial_unwrap_or() {
+  let ok = make_partial_ok()
+  let err = make_partial_err()
+  let both = make_partial_both()
+  assert ok.unwrap_or(0) + err.unwrap_or(15) + both.unwrap_or(0) == 99
+}
+
+#[test]
+fn partial_is_ok() {
+  assert make_partial_ok().is_ok()
+}
+
+#[test]
+fn partial_is_both() {
+  assert make_partial_both().is_both()
+}
+
+fn make_partial_ok() -> Partial<int, string> {
+  Partial.Ok(42)
+}
+
+fn make_partial_err() -> Partial<int, string> {
+  Partial.Err("fail")
+}
+
+fn make_partial_both() -> Partial<int, string> {
+  Partial.Both(42, "eof")
+}

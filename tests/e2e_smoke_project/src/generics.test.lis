@@ -1,0 +1,205 @@
+import "go:regexp/syntax"
+import "go:time"
+
+#[test]
+fn generic_method_int() {
+  let b = Box { value: 42 }
+  let result = b.get()
+  assert result == 42
+}
+
+#[test]
+fn generic_method_string() {
+  let b = Box { value: "hello" }
+  assert b.get() == "hello"
+}
+
+#[test]
+fn generic_method_chain() {
+  let b = Box { value: 10 }
+  let result = b
+    .map(|x: int| -> int {
+      x * 2
+    })
+    .get()
+  assert result == 20
+}
+
+#[test]
+fn generic_struct_direct_construction() {
+  let b = Box { value: 50 }
+  let result = b.get()
+  assert result == 50
+}
+
+#[test]
+fn type_alias_basic() {
+  let nums: Ints = [1, 2, 3, 4, 5]
+  let result = sum_ints(nums)
+  assert result == 15
+}
+
+#[test]
+fn type_alias_bitwise() {
+  let m: Mask = 0b1111
+  let result = m & 0b0101
+  assert result == 5
+}
+
+#[test]
+fn multi_type_params() {
+  let duo = make_duo(10, "hello")
+  let result = duo.first
+  assert result == 10
+}
+
+#[test]
+fn multi_type_params_swap() {
+  let duo = make_duo("world", 99)
+  let result = duo.second
+  assert result == 99
+}
+
+#[test]
+fn duration_times_literal() {
+  let d = time.Second * 5
+  assert d == 5000000000
+}
+
+#[test]
+fn duration_times_variable() {
+  let n: int = 3
+  let d = time.Second * (n as time.Duration)
+  assert d == 3000000000
+}
+
+#[test]
+fn duration_div_duration() {
+  let ratio: int64 = (time.Second / time.Millisecond) as int64
+  assert ratio == 1000
+}
+
+#[test]
+fn duration_div_scalar() {
+  let half = time.Second / 2
+  assert half == 500000000
+}
+
+#[test]
+fn named_div_to_named_annotation() {
+  let d: time.Duration = time.Second / time.Millisecond
+  assert d == 1000
+}
+
+#[test]
+fn named_div_literal_to_named_annotation() {
+  let d: time.Duration = time.Second / 2
+  assert d == 500000000
+}
+
+#[test]
+fn string_named_primitive() {
+  let code: syntax.ErrorCode = "invalid escape sequence"
+  let same = code == syntax.ErrInvalidEscape
+  let prefixed: syntax.ErrorCode = code + "!"
+  let raw = code as string
+  assert same && prefixed == "invalid escape sequence!" && raw == "invalid escape sequence"
+}
+
+#[test]
+fn newtype_struct_nominal() {
+  let id: Ticket = 7
+  let n: int = 3
+  let summed = id + (n as Ticket)
+  let raw = id as int
+  assert summed == 10 && raw == 7
+}
+
+#[test]
+fn bool_newtype_nominal() {
+  let on: Toggle = true
+  let off = !on
+  let combined = on && off
+  assert on && !combined
+}
+
+#[test]
+fn duration_add() {
+  let sum = time.Second + time.Millisecond
+  assert sum == 1001000000
+}
+
+#[test]
+fn duration_sub() {
+  let diff = time.Second - time.Millisecond
+  assert diff == 999000000
+}
+
+#[test]
+fn duration_comparison() {
+  assert time.Second > 1000
+}
+
+#[test]
+fn duration_negation() {
+  let neg = -time.Second
+  assert neg == -1000000000
+}
+
+#[test]
+fn eq_with_variable() {
+  let n: int = 1000000000
+  assert time.Second == (n as time.Duration)
+}
+
+#[test]
+fn variable_not_variant() {
+  let n: int = 5
+  let result: time.Duration = time.Second * (n as time.Duration)
+  assert result == 5000000000
+}
+
+#[test]
+fn negated_literal_times_aliased() {
+  let d: time.Duration = -5 * time.Second
+  assert d == -5000000000
+}
+
+#[test]
+fn paren_negated_literal_times_aliased() {
+  let d: time.Duration = (-5) * time.Second
+  assert d == -5000000000
+}
+
+struct Box<T> { value: T }
+
+impl<T> Box<T> {
+  fn get(self: Box<T>) -> T {
+    self.value
+  }
+
+  fn map(self: Box<T>, f: fn(T) -> T) -> Box<T> {
+    Box { value: f(self.value) }
+  }
+}
+
+type Ints = Slice<int>
+type Mask = int
+
+fn sum_ints(nums: Ints) -> int {
+  let mut total = 0
+  for n in nums {
+    total += n
+  }
+  total
+}
+
+struct Duo<A, B> { first: A, second: B }
+
+fn make_duo<A, B>(a: A, b: B) -> Duo<A, B> {
+  Duo { first: a, second: b }
+}
+
+struct Ticket(int)
+
+struct Toggle(bool)

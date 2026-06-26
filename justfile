@@ -78,11 +78,11 @@ check: format-check test test-unit lint
 
 perf-flamegraph:
     cargo build --profile flamegraph -p lisette
-    sudo flamegraph -o flamegraph.svg -- ./target/flamegraph/lis check tests/e2e_smoke_project/src/main.lis
+    sudo flamegraph -o flamegraph.svg -- ./target/flamegraph/lis check tests/e2e_smoke_project
 
 perf-samply:
     cargo build --profile flamegraph -p lisette
-    samply record ./target/flamegraph/lis check tests/e2e_smoke_project/src/main.lis
+    samply record ./target/flamegraph/lis check tests/e2e_smoke_project
 
 fuzz-parse duration="300":
     cargo +nightly fuzz run parse --sanitizer address -- -max_total_time={{duration}} -rss_limit_mb=2048 -dict=fuzz/lisette.dict

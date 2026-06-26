@@ -1,0 +1,187 @@
+import "go:bytes"
+import "go:math"
+import httpx "go:net/http"
+import "go:net/http/httptest"
+import "go:path"
+import "go:strconv"
+import "go:strings"
+import "go:sync"
+import "go:time"
+
+#[test]
+fn go_tuple_destructure() {
+  let (dir, file) = path.Split("/foo/bar.txt")
+  assert dir == "/foo/" && file == "bar.txt"
+}
+
+#[test]
+fn go_tuple_destructure_wildcard() {
+  let (_, file) = path.Split("/foo/bar.txt")
+  assert file == "bar.txt"
+}
+
+#[test]
+fn go_tuple_discard() {
+  let (dir, _) = path.Split("/foo/bar.txt")
+  assert dir == "/foo/"
+}
+
+#[test]
+fn go_tuple_store() {
+  let pair = path.Split("/foo/bar.txt")
+  assert pair.0 == "/foo/" && pair.1 == "bar.txt"
+}
+
+#[test]
+fn go_tuple_field_inline() {
+  assert path.Split("/foo/bar.txt").0 == "/foo/"
+}
+
+#[test]
+fn strings_to_upper() {
+  let s = "hello"
+  assert strings.ToUpper(s) == "HELLO"
+}
+
+#[test]
+fn strings_to_lower() {
+  let s = "WORLD"
+  assert strings.ToLower(s) == "world"
+}
+
+#[test]
+fn strings_to_title() {
+  let s = "hello world"
+  assert strings.ToTitle(s) == "HELLO WORLD"
+}
+
+#[test]
+fn pipeline_go_stdlib() {
+  let result = 42 |> strconv.Itoa
+  assert result == "42"
+}
+
+#[test]
+fn pipeline_go_stdlib_chained() {
+  let result = 42 |> strconv.Itoa |> strings.ToUpper
+  assert result == "42"
+}
+
+#[test]
+fn pipeline_go_stdlib_with_args() {
+  let result = "hello" |> strings.Repeat(3)
+  assert result == "hellohellohello"
+}
+
+#[test]
+fn go_style_access() {
+  let d = time.Second
+  assert d == 1000000000
+}
+
+#[test]
+fn go_style_times_literal() {
+  let d = time.Second * 5
+  assert d == 5000000000
+}
+
+#[test]
+fn go_style_arithmetic() {
+  let sum = time.Second + time.Millisecond
+  assert sum == 1001000000
+}
+
+#[test]
+fn both_styles_equal() {
+  let go_style = time.Second
+  let lis_style = time.Second
+  assert go_style == lis_style
+}
+
+#[test]
+fn mixed_styles_arithmetic() {
+  let result = time.Second + time.Millisecond
+  assert result == 1001000000
+}
+
+#[test]
+fn go_style_times_variable() {
+  let n = 5
+  let d = time.Second * (n as time.Duration)
+  assert d == 5000000000
+}
+
+#[test]
+fn go_style_times_function() {
+  let d = time.Second * (get_duration_multiplier() as time.Duration)
+  assert d == 3000000000
+}
+
+#[test]
+fn lis_style_times_function() {
+  let d = time.Second * (get_duration_multiplier() as time.Duration)
+  assert d == 3000000000
+}
+
+#[test]
+fn go_stdlib_constant_math_pi() {
+  let pi = math.Pi
+  let quarter_pi = pi / 4.0
+  assert quarter_pi > 0.7 && quarter_pi < 0.8
+}
+
+#[test]
+fn go_import_not_shadowed_by_transitive() {
+  let c: Option<Ref<httpx.Client>> = None
+  assert c.is_none()
+}
+
+#[test]
+fn handlerfunc_conversion() {
+  let h = httpx.HandlerFunc(|w: httpx.ResponseWriter, _r: Ref<httpx.Request>| {
+    w.WriteHeader(httpx.StatusNoContent)
+  })
+  assert serve(h) == httpx.StatusNoContent
+}
+
+#[test]
+fn pointer_receiver_struct_literal() {
+  let mut wg = sync.WaitGroup {}
+  wg.Add(1)
+  wg.Done()
+  wg.Wait()
+}
+
+#[test]
+fn pointer_receiver_constructor() {
+  let buf = bytes.NewBufferString("hello")
+  let result = match buf.ReadString(111) {
+    Partial.Ok(s) => if s == "hello" { 100 } else { 0 },
+    Partial.Both(s, _) => if s == "hello" { 100 } else { 0 },
+    Partial.Err(_) => 100,
+  }
+  assert result == 100
+}
+
+#[test]
+fn pointer_receiver_method_expr() {
+  let f = bytes.Buffer.WriteString
+  let mut buf = bytes.Buffer {}
+  let result = match f(&buf, "hello") {
+    Partial.Ok(n) => if n == 5 { 100 } else { 0 },
+    Partial.Both(n, _) => if n == 5 { 100 } else { 0 },
+    Partial.Err(_) => 0,
+  }
+  assert result == 100
+}
+
+fn get_duration_multiplier() -> int {
+  3
+}
+
+fn serve(h: httpx.Handler) -> int {
+  let rec = httptest.NewRecorder()
+  let req = httptest.NewRequest("GET", "/", bytes.NewBufferString(""))
+  h.ServeHTTP(rec, req)
+  rec.Code
+}

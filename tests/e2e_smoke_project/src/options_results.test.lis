@@ -1,0 +1,544 @@
+import "go:fmt"
+
+#[test]
+fn option_some() {
+  let x = Some(42)
+  let result = x.unwrap_or(0)
+  assert result == 42
+}
+
+#[test]
+fn option_none() {
+  let x: Option<int> = None
+  let result = x.unwrap_or(-1)
+  assert result == -1
+}
+
+#[test]
+fn option_chain() {
+  let a = Some(5)
+  let b = Some(10)
+  let result = match (a, b) {
+    (Some(x), Some(y)) => x + y,
+    _ => 0,
+  }
+  assert result == 15
+}
+
+#[test]
+fn option_passthrough() {
+  let x = Some(10)
+  assert x.unwrap_or(0) == 10
+}
+
+#[test]
+fn option_conditional() {
+  let result = maybe_double(5).unwrap_or(0)
+  assert result == 10
+}
+
+#[test]
+fn option_conditional_none() {
+  let result = maybe_double(-1).unwrap_or(-1)
+  assert result == -1
+}
+
+#[test]
+fn option_nested() {
+  let x: Option<Option<int>> = Some(Some(42))
+  let result = match x {
+    Some(Some(n)) => n,
+    Some(None) => -1,
+    None => -2,
+  }
+  assert result == 42
+}
+
+#[test]
+fn option_in_struct() {
+  let c = Container { value: Some(99) }
+  let result = c.value.unwrap_or(0)
+  assert result == 99
+}
+
+#[test]
+fn option_return_some() {
+  assert Some(123).unwrap_or(0) == 123
+}
+
+#[test]
+fn option_return_none() {
+  let x: Option<int> = None
+  assert x.unwrap_or(-1) == -1
+}
+
+#[test]
+fn result_ok() {
+  let x = Ok(42)
+  let result = x.unwrap_or(-1)
+  assert result == 42
+}
+
+#[test]
+fn result_err() {
+  let x: Result<int, string> = Err("failed")
+  let result = x.unwrap_or(-1)
+  assert result == -1
+}
+
+#[test]
+fn result_chain() {
+  let a = Ok(5)
+  let b = Ok(10)
+  let result = match (a, b) {
+    (Ok(x), Ok(y)) => x + y,
+    _ => -1,
+  }
+  assert result == 15
+}
+
+#[test]
+fn result_mixed() {
+  let a = Ok(5)
+  let b: Result<int, string> = Err("oops")
+  let result = match (a, b) {
+    (Ok(x), Ok(y)) => x + y,
+    (Ok(x), Err(_)) => x,
+    (Err(_), Ok(y)) => y,
+    (Err(_), Err(_)) => -1,
+  }
+  assert result == 5
+}
+
+#[test]
+fn result_propagation() {
+  let result = fallible_propagate().unwrap_or(-1)
+  assert result == 11
+}
+
+#[test]
+fn result_propagation_err() {
+  let result = fallible_propagate_err().unwrap_or(-1)
+  assert result == -1
+}
+
+#[test]
+fn result_multi_propagation() {
+  let result = multi_fallible().unwrap_or(-1)
+  assert result == 20
+}
+
+#[test]
+fn result_err_value() {
+  let x: Result<int, string> = Err("specific error")
+  let result = match x {
+    Ok(_) => 0,
+    Err(e) => if e == "specific error" { 42 } else { -1 },
+  }
+  assert result == 42
+}
+
+#[test]
+fn try_block_basic() {
+  let value = try {
+    try_risky_ok()?
+  }
+  let result = value.unwrap_or(0)
+  assert result == 42
+}
+
+#[test]
+fn try_block_multiple() {
+  let value = try {
+    let a = try_risky_ok()?
+    let b = try_risky_ok()?
+    a + b
+  }
+  let result = value.unwrap_or(0)
+  assert result == 84
+}
+
+#[test]
+fn try_block_early_err() {
+  let value: Result<int, string> = try {
+    let _ = try_risky_err()?
+    100
+  }
+  let result = match value {
+    Ok(_) => 0,
+    Err(_) => 42,
+  }
+  assert result == 42
+}
+
+#[test]
+fn try_block_option() {
+  let opt = try {
+    let x = try_maybe_some()?
+    x + 5
+  }
+  let result = opt.unwrap_or(0)
+  assert result == 15
+}
+
+#[test]
+fn try_block_option_none() {
+  let opt: Option<int> = try {
+    let _ = try_maybe_none()?
+    100
+  }
+  let result = match opt {
+    Some(_) => 0,
+    None => 42,
+  }
+  assert result == 42
+}
+
+#[test]
+fn try_block_nested() {
+  let outer = try {
+    let inner: Result<int, string> = try {
+      try_risky_ok()?
+    }
+    let inner_val = inner.unwrap_or(0)
+    inner_val + try_risky_ok()?
+  }
+  let result = outer.unwrap_or(0)
+  assert result == 84
+}
+
+#[test]
+fn try_block_with_loop() {
+  let value = try {
+    let mut sum = 0
+    for i in 0..3 {
+      if i > 1 { break }
+      sum += i
+    }
+    sum + try_risky_ok()?
+  }
+  let result = value.unwrap_or(0)
+  assert result == 43
+}
+
+#[test]
+fn try_block_conditional() {
+  let value = try {
+    if true { try_risky_ok()? } else { 0 }
+  }
+  let result = value.unwrap_or(0)
+  assert result == 42
+}
+
+#[test]
+fn try_in_argument() {
+  let result = try_in_arg_helper().unwrap_or(-1)
+  assert result == 10
+}
+
+#[test]
+fn try_then_chain() {
+  let f = Fallible { value: 25 }
+  let result = f.get().unwrap_or(-1)
+  assert result == 25
+}
+
+#[test]
+fn try_in_return() {
+  let result = try_return_helper().unwrap_or(-1)
+  assert result == 15
+}
+
+#[test]
+fn try_in_lambda() {
+  let f = |x: int| -> Result<int, string> {
+    let v = fallible()?
+    Ok(v + x)
+  }
+  let result = f(5).unwrap_or(-1)
+  assert result == 15
+}
+
+#[test]
+fn result_direct_arg_ok() {
+  let s = describe_result(divide_for_test(10, 2))
+  assert s == "5"
+}
+
+#[test]
+fn result_direct_arg_err() {
+  let s = describe_result(divide_for_test(10, 0))
+  assert s == "division by zero"
+}
+
+#[test]
+fn option_direct_arg_some() {
+  assert maybe_int_for_test(true).unwrap_or(0) == 42
+}
+
+#[test]
+fn option_direct_arg_none() {
+  assert maybe_int_for_test(false).unwrap_or(99) == 99
+}
+
+#[test]
+fn result_if_else_chain_ok() {
+  let res = parse_digit("1")
+  let result = res.unwrap_or(-1)
+  assert result == 1
+}
+
+#[test]
+fn result_if_else_chain_err() {
+  let res = parse_digit("x")
+  let result = match res {
+    Ok(_) => -1,
+    Err(_) => 100,
+  }
+  assert result == 100
+}
+
+#[test]
+fn option_if_else_chain_some() {
+  let opt = get_optional(true)
+  let result = opt.unwrap_or(-1)
+  assert result == 42
+}
+
+#[test]
+fn option_if_else_chain_none() {
+  let opt = get_optional(false)
+  let result = match opt {
+    Some(_) => -1,
+    None => 100,
+  }
+  assert result == 100
+}
+
+#[test]
+fn go_result_call_let_underscore() {
+  let _ = fmt.Print("")
+}
+
+#[test]
+fn go_result_call_in_match() {
+  let result = match fmt.Print("") {
+    Ok(_) => 100,
+    Err(_) => 0,
+  }
+  assert result == 100
+}
+
+#[test]
+fn go_result_call_assigned() {
+  let value = fmt.Print("")
+  let result = match value {
+    Ok(n) => if n == 0 { 100 } else { 0 },
+    Err(_) => 0,
+  }
+  assert result == 100
+}
+
+#[test]
+fn recover_catches_panic() {
+  let value = recover {
+    panicking_function()
+  }
+  let result = match value {
+    Ok(_) => 0,
+    Err(pv) => {
+      if pv.message().length() > 0 { 100 } else { 0 }
+    },
+  }
+  assert result == 100
+}
+
+#[test]
+fn recover_success_path() {
+  let value = recover {
+    42
+  }
+  let result = match value {
+    Ok(n) => if n == 42 { 100 } else { 0 },
+    Err(_) => 0,
+  }
+  assert result == 100
+}
+
+#[test]
+fn recover_with_statements() {
+  let value = recover {
+    let x = 10
+    let y = 20
+    x + y
+  }
+  let result = match value {
+    Ok(n) => if n == 30 { 100 } else { 0 },
+    Err(_) => 0,
+  }
+  assert result == 100
+}
+
+#[test]
+fn recover_panic_value_stack_trace() {
+  let value = recover {
+    panicking_function()
+  }
+  let result = match value {
+    Ok(_) => 0,
+    Err(pv) => {
+      let stack = pv.stack_trace()
+      if stack.length() > 0 { 100 } else { 0 }
+    },
+  }
+  assert result == 100
+}
+
+#[test]
+fn recover_nested() {
+  let outer = recover {
+    let inner = recover {
+      panicking_function()
+    }
+    match inner {
+      Ok(_) => 0,
+      Err(_) => 50,
+    }
+  }
+  let result = match outer {
+    Ok(n) => if n == 50 { 100 } else { 0 },
+    Err(_) => 0,
+  }
+  assert result == 100
+}
+
+#[test]
+fn nested_option_some_some() {
+  let x: Option<Option<int>> = Some(Some(42))
+  let result = match x {
+    Some(Some(v)) => v,
+    Some(None) => -1,
+    None => -2,
+  }
+  assert result == 42
+}
+
+#[test]
+fn nested_option_some_none() {
+  let x: Option<Option<int>> = Some(None)
+  let result = match x {
+    Some(Some(v)) => v,
+    Some(None) => -1,
+    None => -2,
+  }
+  assert result == -1
+}
+
+#[test]
+fn nested_option_none() {
+  let x: Option<Option<int>> = None
+  let result = match x {
+    Some(Some(v)) => v,
+    Some(None) => -1,
+    None => -2,
+  }
+  assert result == -2
+}
+
+#[test]
+fn result_with_option() {
+  let x = Ok(Some(100))
+  let result = match x {
+    Ok(Some(v)) => v,
+    Ok(None) => -1,
+    Err(_) => -2,
+  }
+  assert result == 100
+}
+
+fn maybe_double(x: int) -> Option<int> {
+  if x > 0 { Some(x * 2) } else { None }
+}
+
+struct Container { value: Option<int> }
+
+fn fallible() -> Result<int, string> {
+  Ok(10)
+}
+
+fn fallible_propagate() -> Result<int, string> {
+  let x = fallible()?
+  Ok(x + 1)
+}
+
+fn fallible_err() -> Result<int, string> {
+  Err("error")
+}
+
+fn fallible_propagate_err() -> Result<int, string> {
+  let x = fallible_err()?
+  Ok(x + 1)
+}
+
+fn multi_fallible() -> Result<int, string> {
+  let a = fallible()?
+  let b = fallible()?
+  Ok(a + b)
+}
+
+fn try_risky_ok() -> Result<int, string> {
+  Ok(42)
+}
+
+fn try_risky_err() -> Result<int, string> {
+  Err("error")
+}
+
+fn try_maybe_some() -> Option<int> {
+  Some(10)
+}
+
+fn try_maybe_none() -> Option<int> {
+  None
+}
+
+fn try_in_arg_helper() -> Result<int, string> {
+  Ok(use_int(fallible()?))
+}
+
+struct Fallible { value: int }
+
+impl Fallible {
+  fn get(self: Fallible) -> Result<int, string> {
+    Ok(self.value)
+  }
+}
+
+fn try_return_helper() -> Result<int, string> {
+  let v = fallible()?
+  Ok(v + 5)
+}
+
+fn describe_result(r: Result<int, string>) -> string {
+  match r {
+    Ok(v) => f"{v}",
+    Err(e) => e,
+  }
+}
+
+fn parse_digit(s: string) -> Result<int, string> {
+  if s == "0" {
+    Ok(0)
+  } else if s == "1" {
+    Ok(1)
+  } else if s == "2" { Ok(2) } else { Err("not a digit") }
+}
+
+fn get_optional(flag: bool) -> Option<int> {
+  if flag { Some(42) } else { None }
+}
+
+fn panicking_function() -> int {
+  let arr: Slice<int> = []
+  arr[0]
+}

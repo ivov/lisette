@@ -1,0 +1,240 @@
+import "go:time"
+
+#[test]
+fn compound_add() {
+  let mut x = 10
+  x += 5
+  assert x == 15
+}
+
+#[test]
+fn compound_sub() {
+  let mut x = 20
+  x -= 8
+  assert x == 12
+}
+
+#[test]
+fn compound_mul() {
+  let mut x = 5
+  x *= 4
+  assert x == 20
+}
+
+#[test]
+fn compound_div() {
+  let mut x = 100
+  x /= 5
+  assert x == 20
+}
+
+#[test]
+fn compound_mod() {
+  let mut x = 17
+  x %= 5
+  assert x == 2
+}
+
+#[test]
+fn compound_chain() {
+  let mut x = 10
+  x += 5
+  x *= 2
+  x -= 10
+  assert x == 20
+}
+
+#[test]
+fn bitwise_shift_mixed() {
+  let x: int = 1
+  let n: uint = 2
+  let result = x << n
+  assert result == 4
+}
+
+#[test]
+fn bitwise_field_compound() {
+  let mut b = BitwiseBox { v: 15 }
+  b.v &= 10
+  let result = b.v
+  assert result == 10
+}
+
+#[test]
+fn bitwise_index_compound() {
+  let mut xs = [1, 2, 3]
+  xs[0] |= 6
+  let result = xs[0]
+  assert result == 7
+}
+
+#[test]
+fn unary_not_complex() {
+  let x = false
+  let y = true
+  assert !x && y
+}
+
+#[test]
+fn unary_neg_field() {
+  let p = Point { x: 10, y: 20 }
+  let result = -p.x + p.y
+  assert result == 10
+}
+
+#[test]
+fn unary_not_comparison() {
+  let x = 5
+  assert !(x > 10)
+}
+
+#[test]
+fn imaginary_integer() {
+  assert 4i == 0 + 4i
+}
+
+#[test]
+fn imaginary_float() {
+  assert 1.5i + 1.5i == 3i
+}
+
+#[test]
+fn imaginary_zero() {
+  assert 0i + 7i == 7i
+}
+
+#[test]
+fn complex_addition() {
+  assert (1 + 2i) + (3 + 4i) == 4 + 6i
+}
+
+#[test]
+fn complex_subtraction() {
+  assert (10 - 5i) - (3 - 2i) == 7 - 3i
+}
+
+#[test]
+fn complex_multiplication() {
+  assert (3 + 4i) * 2i == -8 + 6i
+}
+
+#[test]
+fn imaginary_addition() {
+  assert 4i + 4i == 8i
+}
+
+#[test]
+fn complex_return() {
+  assert complex_in_function() == 3 + 4i
+}
+
+#[test]
+fn complex_as_param() {
+  let result = complex_param(3 + 4i)
+  assert result == 100
+}
+
+#[test]
+#[allow(float_cmp)]
+fn cast_int_to_float64() {
+  let x: int = 42
+  let y: float64 = x as float64
+  assert y == 42.0
+}
+
+#[test]
+fn cast_float64_to_int() {
+  let x: float64 = 3.9
+  let y: int = x as int
+  assert y == 3
+}
+
+#[test]
+fn cast_int_to_rune() {
+  let x: int = 65
+  let r: rune = x as rune
+  assert r == 'A'
+}
+
+#[test]
+fn cast_rune_to_int() {
+  let r: rune = 'Z'
+  let x: int = r as int
+  assert x == 90
+}
+
+#[test]
+fn cast_string_to_byte_slice() {
+  let s: string = "hello"
+  let bytes: Slice<byte> = s as Slice<byte>
+  assert bytes.length() == 5 && (bytes[0] as int) == 104
+}
+
+#[test]
+fn cast_byte_slice_to_string() {
+  let bytes: Slice<byte> = "world" as Slice<byte>
+  let s: string = bytes as string
+  assert s == "world"
+}
+
+#[test]
+fn cast_string_to_rune_slice() {
+  let s: string = "héllo"
+  let runes: Slice<rune> = s as Slice<rune>
+  assert runes.length() == 5 && runes[1] == 'é'
+}
+
+#[test]
+fn cast_rune_slice_to_string() {
+  let runes: Slice<rune> = ['h', 'i']
+  let s: string = runes as string
+  assert s == "hi"
+}
+
+#[test]
+#[allow(float_cmp)]
+fn cast_in_expression() {
+  let a: int = 7
+  let b: int = 2
+  let result: float64 = (a as float64) / (b as float64)
+  assert result == 3.5
+}
+
+#[test]
+fn cast_int_to_int8() {
+  let x: int = 127
+  let y: int8 = x as int8
+  assert y == 127
+}
+
+#[test]
+#[allow(float_cmp)]
+fn cast_float32_to_float64() {
+  let x: float32 = 1.5
+  let y: float64 = x as float64
+  assert y == 1.5
+}
+
+#[test]
+fn cast_duration_to_int64() {
+  let d: time.Duration = time.Second
+  let nanos: int64 = d as int64
+  assert nanos == 1000000000
+}
+
+#[test]
+fn cast_int64_to_duration() {
+  let nanos: int64 = 5000000000
+  let d: time.Duration = nanos as time.Duration
+  assert d == 5 * time.Second
+}
+
+struct BitwiseBox { v: int }
+
+fn complex_in_function() -> complex128 {
+  3 + 4i
+}
+
+fn complex_param(_c: complex128) -> int {
+  100
+}

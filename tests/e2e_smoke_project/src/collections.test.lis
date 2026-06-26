@@ -1,0 +1,102 @@
+#[test]
+fn slice_fold_sum() {
+  let nums = [1, 2, 3, 4, 5]
+  assert nums.fold(0, |acc, x| acc + x) == 15
+}
+
+#[test]
+fn slice_fold_product() {
+  let nums = [1, 2, 3, 4, 5]
+  assert nums.fold(1, |acc, x| acc * x) == 120
+}
+
+#[test]
+fn slice_fold_empty() {
+  let empty: Slice<int> = []
+  assert empty.fold(42, |acc, x| acc + x) == 42
+}
+
+#[test]
+fn slice_find_some() {
+  let nums = [1, 2, 3, 4, 5]
+  let result = match nums.find(|x| x > 3) {
+    Some(4) => 100,
+    _ => 0,
+  }
+  assert result == 100
+}
+
+#[test]
+fn slice_find_none() {
+  let nums = [1, 2, 3, 4, 5]
+  let result = match nums.find(|x| x > 100) {
+    None => 100,
+    _ => 0,
+  }
+  assert result == 100
+}
+
+#[test]
+fn slice_find_empty() {
+  let empty: Slice<int> = []
+  let result = match empty.find(|x| x > 0) {
+    None => 100,
+    _ => 0,
+  }
+  assert result == 100
+}
+
+#[test]
+fn slice_enumerate() {
+  let items = [10, 20, 30]
+  let mut sum = 0
+  for (i, v) in items.enumerate() {
+    sum = sum + i * 100 + v
+  }
+  assert sum == 360
+}
+
+#[test]
+fn enumerated_slice_filter() {
+  let items = [10, 20, 30, 40]
+  let evens = items.enumerate().filter(|(i, _)| i % 2 == 0)
+  let result = if evens.length() == 2 {
+    let (i0, v0) = evens[0]
+    let (i1, v1) = evens[1]
+    if i0 == 0 && v0 == 10 && i1 == 2 && v1 == 30 { 100 } else { 0 }
+  } else {
+    0
+  }
+  assert result == 100
+}
+
+#[test]
+fn slice_join() {
+  let result = ["hello", "world"].join(", ")
+  assert result == "hello, world"
+}
+
+#[test]
+fn map_from() {
+  let m = Map.from([("a", 1), ("b", 2)])
+  let result = if m.length() == 2 {
+    match m.get("a") {
+      Some(1) => 100,
+      _ => 0,
+    }
+  } else {
+    0
+  }
+  assert result == 100
+}
+
+#[test]
+fn string_range_slicing() {
+  let s = "hello world"
+  let result = if s.substring(0..5) == "hello" {
+    if s.substring(6..) == "world" { if s.substring(..5) == "hello" { 100 } else { 0 } } else { 0 }
+  } else {
+    0
+  }
+  assert result == 100
+}

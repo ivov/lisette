@@ -1,0 +1,302 @@
+#[test]
+fn if_let_some() {
+  let opt = Some(42)
+  let result = if let Some(x) = opt { x } else { 0 }
+  assert result == 42
+}
+
+#[test]
+fn if_let_none() {
+  let opt: Option<int> = None
+  let result = if let Some(x) = opt { x } else { -1 }
+  assert result == -1
+}
+
+#[test]
+fn if_let_statement() {
+  let opt = Some(10)
+  let mut result = 0
+  if let Some(x) = opt { result = x + 5 }
+  assert result == 15
+}
+
+#[test]
+fn if_let_nested() {
+  let opt: Option<Option<int>> = Some(Some(100))
+  let result = if let Some(inner) = opt {
+    if let Some(x) = inner { x } else { -1 }
+  } else {
+    -2
+  }
+  assert result == 100
+}
+
+#[test]
+fn if_let_else_if_let() {
+  let a: Option<int> = None
+  let b = Some(77)
+  let result = if let Some(x) = a { x } else if let Some(y) = b { y } else { 0 }
+  assert result == 77
+}
+
+#[test]
+fn if_let_result_ok() {
+  let res = Ok(55)
+  let result = if let Ok(x) = res { x } else { -1 }
+  assert result == 55
+}
+
+#[test]
+fn if_let_result_err() {
+  let res: Result<int, string> = Err("oops")
+  let result = if let Ok(x) = res { x } else { -1 }
+  assert result == -1
+}
+
+#[test]
+fn let_else_some() {
+  let opt = Some(42)
+  let Some(x) = opt else { return }
+  assert x == 42
+}
+
+#[test]
+fn let_else_none() {
+  let opt: Option<int> = None
+  let Some(_) = opt else { return }
+  panic("expected None to take the else branch")
+}
+
+#[test]
+fn let_else_result_ok() {
+  let res = Ok(55)
+  let Ok(x) = res else { return }
+  assert x == 55
+}
+
+#[test]
+fn let_else_result_err() {
+  let res: Result<int, string> = Err("oops")
+  let Ok(_) = res else { return }
+  panic("expected Err to take the else branch")
+}
+
+#[test]
+fn let_else_with_computation() {
+  let opt = Some(10)
+  let Some(x) = opt else { return }
+  assert x * 2 + 5 == 25
+}
+
+#[test]
+fn let_else_chained() {
+  let a: Option<int> = None
+  let b = Some(20)
+  let Some(_) = a else {
+    let Some(y) = b else { return }
+    assert y == 20
+    return
+  }
+  panic("expected None to take the outer else branch")
+}
+
+#[test]
+fn let_else_in_loop() {
+  let items = [Some(1), None, Some(2), None, Some(3)]
+  let mut sum = 0
+  for item in items {
+    let Some(x) = item else { continue }
+    sum += x
+  }
+  assert sum == 6
+}
+
+#[test]
+fn let_else_break() {
+  let items = [Some(1), Some(2), None, Some(100)]
+  let mut sum = 0
+  for item in items {
+    let Some(x) = item else { break }
+    sum += x
+  }
+  assert sum == 3
+}
+
+#[test]
+fn while_let_basic() {
+  let mut opt = Some(3)
+  let mut sum = 0
+  while let Some(x) = opt {
+    sum += x
+    if x <= 1 { opt = None } else { opt = Some(x - 1) }
+  }
+  assert sum == 6
+}
+
+#[test]
+fn while_let_none_initially() {
+  let opt: Option<int> = None
+  let mut count = 0
+  while let Some(_) = opt {
+    count += 1
+  }
+  assert count == 0
+}
+
+#[test]
+fn while_let_with_break() {
+  let mut opt = Some(10)
+  let mut sum = 0
+  while let Some(x) = opt {
+    if x > 100 { break }
+    sum += x
+    opt = Some(x * 2)
+  }
+  assert sum == 150
+}
+
+#[test]
+fn while_let_tuple() {
+  let mut opt = Some((1, 2))
+  let mut sum = 0
+  while let Some((a, b)) = opt {
+    sum = sum + a + b
+    opt = None
+  }
+  assert sum == 3
+}
+
+#[test]
+fn while_let_result() {
+  let mut res = Ok(5)
+  let mut sum = 0
+  while let Ok(x) = res {
+    sum += x
+    if x <= 1 { res = Err("done") } else { res = Ok(x - 1) }
+  }
+  assert sum == 15
+}
+
+#[test]
+fn let_slice_destructure() {
+  let arr = [10, 20, 30]
+  let result = match arr {
+    [a, b, c] => a + b + c,
+    _ => 0,
+  }
+  assert result == 60
+}
+
+#[test]
+fn let_slice_rest() {
+  let arr = [1, 2, 3, 4, 5]
+  let result = match arr {
+    [first, ..rest] => first + rest[0] + rest[1],
+    _ => 0,
+  }
+  assert result == 6
+}
+
+#[test]
+fn let_struct_nested() {
+  let r = Rect { origin: Point { x: 5, y: 6 }, width: 10, height: 20 }
+  let Rect { origin: Point { x, y }, width, height } = r
+  assert x + y + width + height == 41
+}
+
+#[test]
+fn let_tuple_destructure() {
+  let pair = (7, 8)
+  let (a, b) = pair
+  assert a + b == 15
+}
+
+#[test]
+fn let_struct_alias() {
+  let Point { x, y: y_coord } = Point { x: 100, y: 200 }
+  assert x + y_coord == 300
+}
+
+#[test]
+fn let_struct_alias_nested() {
+  let Rect { origin: Point { x: ox, y: oy }, width: w, height: h } = Rect {
+    origin: Point { x: 1, y: 2 },
+    width: 3,
+    height: 4,
+  }
+  assert ox + oy + w + h == 10
+}
+
+#[test]
+fn slice_param_destructure() {
+  let slice = [10, 20, 30, 40]
+  let result = match slice {
+    [a, b, ..] => a + b,
+    _ => 0,
+  }
+  assert result == 30
+}
+
+#[test]
+fn slice_param_rest() {
+  let slice = [5, 10, 15]
+  let result = match slice {
+    [head, ..tail] => head + tail[0],
+    _ => 0,
+  }
+  assert result == 15
+}
+
+#[test]
+fn let_else_option_direct_call() {
+  let Some(num) = maybe_int_for_test(true) else { return }
+  assert num == 42
+}
+
+#[test]
+fn let_else_option_direct_call_else() {
+  let Some(_) = maybe_int_for_test(false) else { return }
+  panic("expected None to take the else branch")
+}
+
+#[test]
+fn let_else_result_direct_call() {
+  let Ok(num) = divide_for_test(10, 2) else { return }
+  assert num == 5
+}
+
+#[test]
+fn let_else_result_direct_call_else() {
+  let Ok(_) = divide_for_test(10, 0) else { return }
+  panic("expected Err to take the else branch")
+}
+
+#[test]
+fn underscore_prefix_binding() {
+  let opt: Option<int> = Some(42)
+  let result = match opt {
+    Some(_x) => 100,
+    None => 0,
+  }
+  assert result == 100
+}
+
+#[test]
+fn underscore_prefix_binding_result() {
+  let res = Ok(42)
+  let result = match res {
+    Ok(_val) => 100,
+    Err(_msg) => 0,
+  }
+  assert result == 100
+}
+
+#[test]
+fn underscore_prefix_slice_rest() {
+  let items = [1, 2, 3, 4, 5]
+  let result = match items {
+    [first, .._rest] => first,
+    _ => 0,
+  }
+  assert result == 1
+}

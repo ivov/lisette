@@ -1,0 +1,215 @@
+#[test]
+fn dot_chain_deep() {
+  let o = Outer { middle: Middle { inner: Inner { value: 42 } } }
+  let result = o.middle.inner.value
+  assert result == 42
+}
+
+#[test]
+fn method_chain() {
+  let i = Inner { value: 10 }
+  let result = i.doubled().get()
+  assert result == 20
+}
+
+#[test]
+fn method_then_field() {
+  let i = Inner { value: 15 }
+  let result = i.doubled().value
+  assert result == 30
+}
+
+#[test]
+fn option_map() {
+  let opt: Option<int> = Some(42)
+  let mapped = opt.map(|x| x * 2)
+  let result = match mapped {
+    Some(v) => if v == 84 { 100 } else { 0 },
+    None => 0,
+  }
+  assert result == 100
+}
+
+#[test]
+fn option_and_then() {
+  let opt: Option<int> = Some(10)
+  let mapped = opt.and_then(|x| if x > 5 { Some(x * 2) } else { None })
+  let result = match mapped {
+    Some(v) => if v == 20 { 100 } else { 0 },
+    None => 0,
+  }
+  assert result == 100
+}
+
+#[test]
+fn option_map_or() {
+  let opt: Option<int> = None
+  let result = opt.map_or(100, |x| x * 2)
+  assert result == 100
+}
+
+#[test]
+fn option_map_or_else() {
+  let opt: Option<int> = None
+  let result = opt.map_or_else(|| 100, |x| x * 2)
+  assert result == 100
+}
+
+#[test]
+fn option_zip() {
+  let a: Option<int> = Some(40)
+  let b: Option<int> = Some(60)
+  let zipped = a.zip(b)
+  let result = match zipped {
+    Some((x, y)) => x + y,
+    None => 0,
+  }
+  assert result == 100
+}
+
+#[test]
+fn option_flatten() {
+  let nested: Option<Option<int>> = Some(Some(100))
+  let flat = nested.flatten()
+  let result = flat.unwrap_or(0)
+  assert result == 100
+}
+
+#[test]
+fn result_map() {
+  let res = Ok(50)
+  let mapped = res.map(|x| x * 2)
+  let result = mapped.unwrap_or(0)
+  assert result == 100
+}
+
+#[test]
+fn result_and_then() {
+  let res = Ok(10)
+  let mapped = res.and_then(|x| if x > 5 {
+    Ok(x * 10)
+  } else {
+    Err("too small")
+  })
+  let result = mapped.unwrap_or(0)
+  assert result == 100
+}
+
+#[test]
+fn result_map_or() {
+  let res: Result<int, string> = Err("error")
+  let result = res.map_or(100, |x| x * 2)
+  assert result == 100
+}
+
+#[test]
+fn result_map_or_else() {
+  let res: Result<int, string> = Err("error")
+  let result = res.map_or_else(|e| e.length() * 20, |x| x * 2)
+  assert result == 100
+}
+
+#[test]
+fn option_filter_then_map() {
+  let opt = Some(10)
+  let mapped = opt.filter(|x| x > 5).map(|y| y * 2)
+  let result = match mapped {
+    Some(v) => if v == 20 { 100 } else { 0 },
+    None => 0,
+  }
+  assert result == 100
+}
+
+#[test]
+fn option_or_else_then_map() {
+  let opt: Option<int> = None
+  let mapped = opt.or_else(|| Some(50)).map(|x| x * 2)
+  let result = match mapped {
+    Some(v) => if v == 100 { 100 } else { 0 },
+    None => 0,
+  }
+  assert result == 100
+}
+
+#[test]
+fn option_filter_then_is_some() {
+  let opt = Some(10)
+  assert opt.filter(|x| x > 5).is_some()
+}
+
+#[test]
+fn result_ok_then_map() {
+  let res = Ok(25)
+  let mapped = res.ok().map(|x| x * 4)
+  let result = match mapped {
+    Some(v) => if v == 100 { 100 } else { 0 },
+    None => 0,
+  }
+  assert result == 100
+}
+
+#[test]
+fn nested_ufcs_in_and_then() {
+  let opt = Some(10)
+  let mapped = opt.and_then(|x| Some(x).map(|y| y * 2))
+  let result = match mapped {
+    Some(v) => if v == 20 { 100 } else { 0 },
+    None => 0,
+  }
+  assert result == 100
+}
+
+#[test]
+fn triple_chain_filter_map_map() {
+  let opt = Some(10)
+  let mapped = opt.filter(|x| x > 5).map(|y| y * 2).map(|z| z + 1)
+  let result = match mapped {
+    Some(v) => if v == 21 { 100 } else { 0 },
+    None => 0,
+  }
+  assert result == 100
+}
+
+#[test]
+fn result_and_then_ok() {
+  let res = Ok(10)
+  let mapped = res.and_then(|x| Ok(x * 3))
+  let result = match mapped {
+    Ok(v) => if v == 30 { 100 } else { 0 },
+    Err(_) => 0,
+  }
+  assert result == 100
+}
+
+#[test]
+fn result_and_then_err() {
+  let res = Ok(10)
+  let mapped = res.and_then(|_| Err("failed"))
+  let result = match mapped {
+    Ok(_) => 0,
+    Err(e) => if e == "failed" { 100 } else { 0 },
+  }
+  assert result == 100
+}
+
+#[test]
+fn result_or_else_recover() {
+  let res: Result<int, string> = Err("original")
+  let mapped = res.or_else(|_| Ok(42))
+  let result = match mapped {
+    Ok(v) => if v == 42 { 100 } else { 0 },
+    Err(_) => 0,
+  }
+  assert result == 100
+}
+
+#[test]
+fn long_ufcs_chain() {
+  let opt = Some(1)
+  let mapped = opt.map(|x| x + 1).map(|x| x * 2).map(|x| x + 3).map(|x| x * 2)
+  let result = match mapped {
+    Some(v) => if v == 14 { 100 } else { 0 },
+    None => 0,
+  }
+  assert result == 100
+}

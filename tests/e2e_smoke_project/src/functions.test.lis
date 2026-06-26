@@ -1,0 +1,233 @@
+#[test]
+fn fn_call() {
+  let result = add(3, 4)
+  assert result == 7
+}
+
+#[test]
+fn higher_order() {
+  let result = apply(double, 5)
+  assert result == 10
+}
+
+#[test]
+fn lambda_simple() {
+  let f = |x: int| -> int {
+    x + 1
+  }
+  let result = f(99)
+  assert result == 100
+}
+
+#[test]
+fn lambda_capture() {
+  let y = 10
+  let f = |x: int| -> int {
+    x + y
+  }
+  let result = f(5)
+  assert result == 15
+}
+
+#[test]
+fn recursion() {
+  let result = factorial(5)
+  assert result == 120
+}
+
+#[test]
+fn method_call() {
+  let p = Point { x: 12, y: 13 }
+  let result = p.sum()
+  assert result == 25
+}
+
+#[test]
+fn generic_fn() {
+  let result = identity(42)
+  assert result == 42
+}
+
+#[test]
+fn generic_fn_string() {
+  let s = identity("hello")
+  assert s == "hello"
+}
+
+#[test]
+fn lambda_return_value() {
+  let f = returns_lambda()
+  let result = f(25)
+  assert result == 50
+}
+
+#[test]
+fn lambda_iife() {
+  let result = (|x: int| -> int {
+      x + 10
+    })(
+    30,
+  )
+  assert result == 40
+}
+
+#[test]
+fn lambda_nested() {
+  let make_adder = |x: int| -> fn(int) -> int {
+    |y: int| -> int {
+      x + y
+    }
+  }
+  let add5 = make_adder(5)
+  let result = add5(10)
+  assert result == 15
+}
+
+#[test]
+fn ref_create() {
+  let x = 42
+  let r = &x
+  let result = r.*
+  assert result == 42
+}
+
+#[test]
+fn ref_deref() {
+  let x = 100
+  let r = &x
+  let v = r.*
+  assert v == 100
+}
+
+#[test]
+fn ref_pass() {
+  let x = 55
+  let result = takes_ref(&x)
+  assert result == 55
+}
+
+#[test]
+fn ref_mut() {
+  let mut x = 1
+  mutates_ref(&x)
+  assert x == 99
+}
+
+#[test]
+fn lambda_as_value() {
+  let f = |x: int| -> int {
+    x * 3
+  }
+  let result = f(10)
+  assert result == 30
+}
+
+#[test]
+fn lambda_passed() {
+  let f = |x: int| -> int {
+    x * 2
+  }
+  let result = apply(f, 25)
+  assert result == 50
+}
+
+#[test]
+fn generic_fn_result_closure() {
+  let r = Ok(5)
+  let result = match apply_result(r, |x| Ok(x * 2)) {
+    Ok(v) => if v == 10 { 100 } else { 0 },
+    Err(_) => 0,
+  }
+  assert result == 100
+}
+
+#[test]
+fn user_ufcs_method_result() {
+  let t = Transformer { value: 10 }
+  let result = match t.apply(|x: int| -> Result<int, string> {
+    Ok(x * 2)
+  }) {
+    Ok(v) => if v == 20 { 100 } else { 0 },
+    Err(_) => 0,
+  }
+  assert result == 100
+}
+
+#[test]
+fn closure_var_and_then_chain() {
+  let make = |n: int| -> Result<int, string> {
+    if n > 0 { Ok(n * 10) } else { Err("non-positive") }
+  }
+  let result = match make(5).and_then(|x| make(x / 10)) {
+    Ok(v) => if v == 50 { 100 } else { 0 },
+    Err(_) => 0,
+  }
+  assert result == 100
+}
+
+#[test]
+fn mutual_recursion_result() {
+  let result = match (even_check(4), odd_check(5)) {
+    (Ok(a), Ok(b)) => if a && b { 100 } else { 0 },
+    _ => 0,
+  }
+  assert result == 100
+}
+
+fn add(a: int, b: int) -> int {
+  a + b
+}
+
+fn double(x: int) -> int {
+  x * 2
+}
+
+fn apply(f: fn(int) -> int, x: int) -> int {
+  f(x)
+}
+
+fn factorial(n: int) -> int {
+  if n <= 1 { 1 } else { n * factorial(n - 1) }
+}
+
+fn identity<T>(x: T) -> T {
+  x
+}
+
+fn returns_lambda() -> fn(int) -> int {
+  |x: int| -> int {
+    x * 2
+  }
+}
+
+fn takes_ref(r: Ref<int>) -> int {
+  r.*
+}
+
+fn mutates_ref(r: Ref<int>) {
+  r.* = 99
+}
+
+fn apply_result<T, U, E>(r: Result<T, E>, f: fn(T) -> Result<U, E>) -> Result<U, E> {
+  r.and_then(f)
+}
+
+struct Transformer<T> { value: T }
+
+impl<T> Transformer<T> {
+  fn apply<U, E>(self, f: fn(T) -> Result<U, E>) -> Result<U, E> {
+    f(self.value)
+  }
+}
+
+fn even_check(n: int) -> Result<bool, string> {
+  if n < 0 {
+    Err("negative")
+  } else if n == 0 { Ok(true) } else { odd_check(n - 1) }
+}
+
+fn odd_check(n: int) -> Result<bool, string> {
+  if n < 0 {
+    Err("negative")
+  } else if n == 0 { Ok(false) } else { even_check(n - 1) }
+}
