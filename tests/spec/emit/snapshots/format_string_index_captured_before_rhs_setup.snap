@@ -1,0 +1,31 @@
+---
+source: tests/spec/emit/expressions.rs
+description: |
+  
+  fn main() {
+    let mut m = Map.new<string, int>()
+    m["0"] = 100
+    let mut i = 0
+    m[f"{i}"] = if true { i += 1; 7 } else { 0 }
+    let _ = m
+  }
+---
+package main
+
+import "fmt"
+
+func main() {
+	m := make(map[string]int)
+	m["0"] = 100
+	i := 0
+	idx_2 := fmt.Sprint(i)
+	var tmp_1 int
+	if true {
+		i++
+		tmp_1 = 7
+	} else {
+		tmp_1 = 0
+	}
+	m[idx_2] = tmp_1
+	_ = m
+}

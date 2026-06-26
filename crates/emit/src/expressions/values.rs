@@ -399,9 +399,10 @@ impl Planner<'_> {
     ) -> Vec<LoweredStatement> {
         let rhs_staged = self.stage_composite(value, ExpressionContext::value());
 
+        let rhs_has_setup = !rhs_staged.setup.is_empty() || self.rhs_contains_effectful_call(value);
         let mut setup: Vec<LoweredStatement> = Vec::new();
         let target_str = if is_order_sensitive(target) {
-            self.emit_left_value_capturing(&mut setup, target, !rhs_staged.setup.is_empty())
+            self.emit_left_value_capturing(&mut setup, target, rhs_has_setup)
         } else {
             self.emit_left_value(&mut setup, target)
         };

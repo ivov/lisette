@@ -1,0 +1,25 @@
+---
+source: tests/spec/emit/expressions.rs
+description: |
+  
+  fn main() {
+    let xs = [10, 20]
+    let mut i = 0
+    let make = || -> Slice<int> { i += 1; xs }
+    make()[i] = 99
+    let _ = xs
+  }
+---
+package main
+
+func main() {
+	xs := []int{10, 20}
+	i := 0
+	make_ := func() []int {
+		i++
+		return xs
+	}
+	base_1 := make_()
+	base_1[i] = 99
+	_ = xs
+}

@@ -1,0 +1,30 @@
+---
+source: tests/spec/emit/expressions.rs
+description: |
+  
+  fn main() {
+    let mut xss = [[10, 11], [20, 21]]
+    let mut i = 0
+    let bump = || -> int { i += 1; i }
+    let _ = if true { xss[i][0] = bump() } else {}
+    let _ = xss
+  }
+---
+package main
+
+func main() {
+	xss := [][]int{[]int{10, 11}, []int{20, 21}}
+	i := 0
+	bump := func() int {
+		i++
+		return i
+	}
+	var tmp_1 struct{}
+	if true {
+		base_2 := xss[i]
+		base_2[0] = bump()
+		tmp_1 = struct{}{}
+	}
+	_ = tmp_1
+	_ = xss
+}

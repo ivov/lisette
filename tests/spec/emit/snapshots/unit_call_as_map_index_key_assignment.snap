@@ -15,7 +15,7 @@ func noop() {}
 
 func main() {
 	m := make(map[struct{}]int)
+	base_1 := m
 	noop()
-	idx_1 := struct{}{}
-	m[idx_1] = 7
+	base_1[struct{}{}] = 7
 }

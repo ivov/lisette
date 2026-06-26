@@ -2435,6 +2435,117 @@ fn main() {
 }
 
 #[test]
+fn indexed_field_assignment_no_temp_for_trivial_rhs() {
+    let input = r#"
+struct Pos { x: int, y: int }
+
+struct Snake {
+  parts: Slice<Pos>,
+  head:  int
+}
+
+impl Snake {
+  fn set_head(self: Ref<Snake>, x: int, y: int) {
+    self.parts[self.head].x = x
+    self.parts[self.head].y = y
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn compound_indexed_field_assignment_no_temp_for_trivial_rhs() {
+    let input = r#"
+struct Pos { x: int, y: int }
+
+struct Snake {
+  parts: Slice<Pos>,
+  head:  int
+}
+
+impl Snake {
+  fn grow(self: Ref<Snake>) {
+    self.parts[self.head].x += 1
+    self.parts[self.head].y -= 2
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn indexed_lvalue_pins_base_before_call_index() {
+    let input = r#"
+fn main() {
+  let mut xss = [[10, 11], [20, 21]]
+  let mut i = 0
+  let bump = || -> int { i += 1; i }
+  xss[i][bump()] = 9
+  let _ = xss
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn indexed_lvalue_pins_call_base_before_index() {
+    let input = r#"
+fn main() {
+  let xs = [10, 20]
+  let mut i = 0
+  let make = || -> Slice<int> { i += 1; xs }
+  make()[i] = 99
+  let _ = xs
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn format_string_index_captured_before_rhs_setup() {
+    let input = r#"
+fn main() {
+  let mut m = Map.new<string, int>()
+  m["0"] = 100
+  let mut i = 0
+  m[f"{i}"] = if true { i += 1; 7 } else { 0 }
+  let _ = m
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn indexed_lvalue_pins_call_base_before_format_string_index() {
+    let input = r#"
+fn main() {
+  let mut m = Map.new<string, int>()
+  m["0"] = 100
+  let mut i = 0
+  let make = || -> Map<string, int> { i += 1; m }
+  make()[f"{i}"] = 99
+  let _ = m
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn expr_position_indexed_assign_pins_base_before_call_rhs() {
+    let input = r#"
+fn main() {
+  let mut xss = [[10, 11], [20, 21]]
+  let mut i = 0
+  let bump = || -> int { i += 1; i }
+  let _ = if true { xss[i][0] = bump() } else {}
+  let _ = xss
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn ref_temp_var_no_collision() {
     let input = r#"
 import "go:fmt"

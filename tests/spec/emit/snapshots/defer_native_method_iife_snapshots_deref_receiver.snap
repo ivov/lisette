@@ -11,8 +11,9 @@ package main
 
 func run(out *[]int) {
 	_arg_1 := *out
+	_arg_2 := []int{1, 2, 3}
 	defer func() {
-		_ = copy(_arg_1, []int{1, 2, 3})
+		_ = copy(_arg_1, _arg_2)
 	}()
 	*out = []int{7, 7, 7, 7, 7}
 }

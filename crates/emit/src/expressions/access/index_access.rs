@@ -8,6 +8,7 @@ use crate::is_order_sensitive;
 use crate::plan::bodies::LoweredStatement;
 use crate::plan::values::{ValuePlan, value_plan_from_statements};
 use crate::types::native::NativeGoType;
+use crate::utils::contains_call;
 
 impl Planner<'_> {
     /// Plan an index/slice access. Range-literal and range-typed-variable
@@ -43,12 +44,29 @@ impl Planner<'_> {
             return value_plan_from_statements(setup, value);
         }
 
-        let index_staged = self.stage_composite(index, ExpressionContext::value());
-        let (setup, values) = self.sequence_structured(vec![base_staged, index_staged], "_base");
-        value_plan_from_statements(setup, format!("{}[{}]", values[0], values[1]))
+        let (setup, value) = self.sequence_indexed_access(expression, base_staged, index, "_base");
+        value_plan_from_statements(setup, value)
     }
 
-    fn stage_base_with_deref(&mut self, expression: &Expression) -> StagedExpression {
+    pub(crate) fn sequence_indexed_access(
+        &mut self,
+        base: &Expression,
+        mut base_staged: StagedExpression,
+        index: &Expression,
+        prefix: &str,
+    ) -> (Vec<LoweredStatement>, String) {
+        let index_staged = self.stage_composite(index, ExpressionContext::value());
+        if base_staged.setup.is_empty()
+            && is_order_sensitive(base)
+            && (contains_call(base) || contains_call(index))
+        {
+            self.pin_staged(&mut base_staged, prefix);
+        }
+        let (setup, values) = self.sequence_structured(vec![base_staged, index_staged], prefix);
+        (setup, format!("{}[{}]", values[0], values[1]))
+    }
+
+    pub(crate) fn stage_base_with_deref(&mut self, expression: &Expression) -> StagedExpression {
         let Some(inner) = expression.deref_inner() else {
             return self.stage_operand(expression, ExpressionContext::value());
         };

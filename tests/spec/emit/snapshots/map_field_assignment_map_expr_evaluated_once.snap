@@ -43,6 +43,5 @@ func main() {
 	i := make_i()
 	entry := maps_[i]["k"]
 	entry.x = 1
-	base_1 := maps_[i]
-	base_1["k"] = entry
+	maps_[i]["k"] = entry
 }

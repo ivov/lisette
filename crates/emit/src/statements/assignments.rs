@@ -139,7 +139,7 @@ impl Planner<'_> {
         }
     }
 
-    fn rhs_contains_effectful_call(&self, expression: &Expression) -> bool {
+    pub(crate) fn rhs_contains_effectful_call(&self, expression: &Expression) -> bool {
         match expression.unwrap_parens() {
             Expression::Call {
                 expression: callee,
@@ -338,9 +338,13 @@ impl Planner<'_> {
                 index,
                 ..
             } => {
-                let base_str = self.emit_indexed_base_lvalue(setup, base);
-                let index_str = self.emit_index_lvalue(setup, index, rhs_has_setup);
-                format!("{}[{}]", base_str, index_str)
+                if rhs_has_setup {
+                    let base_str = self.emit_indexed_base_lvalue(setup, base);
+                    let index_str = self.emit_force_capture(setup, index, "idx");
+                    format!("{}[{}]", base_str, index_str)
+                } else {
+                    self.emit_indexed_lvalue_inline(setup, base, index)
+                }
             }
             Expression::DotAccess {
                 expression: base,
@@ -372,9 +376,18 @@ impl Planner<'_> {
         }
     }
 
-    /// Emit the base of an `IndexedAccess` lvalue, peeling an explicit deref
-    /// so `(*ptr)[i]` evaluates the pointer separately from the index, and
-    /// capturing the base to a temp when ordering matters.
+    fn emit_indexed_lvalue_inline(
+        &mut self,
+        setup: &mut Vec<LoweredStatement>,
+        base: &Expression,
+        index: &Expression,
+    ) -> String {
+        let base_staged = self.stage_base_with_deref(base);
+        let (seq_setup, value) = self.sequence_indexed_access(base, base_staged, index, "base");
+        setup.extend(seq_setup);
+        value
+    }
+
     fn emit_indexed_base_lvalue(
         &mut self,
         setup: &mut Vec<LoweredStatement>,
@@ -399,27 +412,6 @@ impl Planner<'_> {
             self.emit_force_capture(setup, expression, "base")
         } else {
             self.capture_operand_into(setup, expression)
-        }
-    }
-
-    /// Emit the index of an `IndexedAccess` lvalue, capturing to a temp when
-    /// the RHS will emit setup statements that could mutate the index variable,
-    /// or when the index expression itself is order-sensitive.
-    fn emit_index_lvalue(
-        &mut self,
-        setup: &mut Vec<LoweredStatement>,
-        index: &Expression,
-        rhs_has_setup: bool,
-    ) -> String {
-        let needs_capture = if rhs_has_setup {
-            !matches!(index.unwrap_parens(), Expression::Literal { .. })
-        } else {
-            is_order_sensitive(index)
-        };
-        if needs_capture {
-            self.emit_force_capture(setup, index, "idx")
-        } else {
-            self.capture_operand_into(setup, index)
         }
     }
 }

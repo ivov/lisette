@@ -1,0 +1,34 @@
+---
+source: tests/spec/emit/expressions.rs
+description: |
+  
+  struct Pos { x: int, y: int }
+  
+  struct Snake {
+    parts: Slice<Pos>,
+    head:  int
+  }
+  
+  impl Snake {
+    fn grow(self: Ref<Snake>) {
+      self.parts[self.head].x += 1
+      self.parts[self.head].y -= 2
+    }
+  }
+---
+package main
+
+type Pos struct {
+	x int
+	y int
+}
+
+type Snake struct {
+	parts []Pos
+	head  int
+}
+
+func (s *Snake) grow() {
+	s.parts[s.head].x++
+	s.parts[s.head].y -= 2
+}

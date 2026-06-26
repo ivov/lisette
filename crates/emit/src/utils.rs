@@ -104,18 +104,31 @@ pub(crate) fn contains_call(expression: &Expression) -> bool {
     }
 }
 
-pub(crate) fn is_order_sensitive(expression: &Expression) -> bool {
-    !matches!(
+pub(crate) fn is_scalar_literal(expression: &Expression) -> bool {
+    matches!(
         expression.unwrap_parens(),
-        Expression::Literal { .. } | Expression::Identifier { .. }
+        Expression::Literal {
+            literal: Literal::Integer { .. }
+                | Literal::Float { .. }
+                | Literal::Imaginary(_)
+                | Literal::Boolean(_)
+                | Literal::String { .. }
+                | Literal::Char(_),
+            ..
+        }
     )
 }
 
-/// True for any expression except a pure literal — i.e. one whose value can
+pub(crate) fn is_order_sensitive(expression: &Expression) -> bool {
+    !(is_scalar_literal(expression)
+        || matches!(expression.unwrap_parens(), Expression::Identifier { .. }))
+}
+
+/// True for any expression except a scalar constant, i.e. one whose value can
 /// be invalidated by a later sibling's setup, or is a call we should not
 /// re-evaluate.
 pub(crate) fn observable_after_mutation(expression: &Expression) -> bool {
-    !matches!(expression.unwrap_parens(), Expression::Literal { .. })
+    !is_scalar_literal(expression)
 }
 
 pub(crate) fn reads_mutable_operand(expression: &Expression) -> bool {
