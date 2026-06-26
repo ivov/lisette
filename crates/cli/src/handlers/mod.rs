@@ -9,6 +9,7 @@ pub mod help;
 mod learn;
 mod lsp;
 mod new;
+mod reconciliation;
 mod run;
 mod sync;
 mod test;
