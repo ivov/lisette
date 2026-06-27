@@ -424,7 +424,7 @@ fn detect_compound_assignment<'a>(
     compound_operator: Option<&'a BinaryOperator>,
 ) -> Option<(&'a BinaryOperator, &'a Expression)> {
     if let Some(op) = compound_operator {
-        return Some((op, compound_rhs(value)));
+        return Some((op, value));
     }
     let Expression::Binary {
         left,
@@ -439,16 +439,6 @@ fn detect_compound_assignment<'a>(
         return None;
     }
     Some((operator, right.as_ref()))
-}
-
-/// Extract the original RHS from a desugared compound assignment.
-/// `x += rhs` is parsed as `Assignment { value: Binary(x, +, rhs), .. }`.
-fn compound_rhs(value: &Expression) -> &Expression {
-    if let Expression::Binary { right, .. } = value {
-        right
-    } else {
-        value
-    }
 }
 
 fn is_literal_one(expression: &Expression) -> bool {

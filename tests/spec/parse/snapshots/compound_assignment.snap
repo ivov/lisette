@@ -95,42 +95,18 @@ description: |
                         binding_id: None,
                         qualified: None,
                     },
-                    value: Binary {
-                        operator: Addition,
-                        left: Identifier {
-                            value: "x",
-                            ty: Var {
-                                id: uninferred,
-                            },
-                            span: Span {
-                                file_id: 0,
-                                byte_offset: 33,
-                                byte_length: 1,
-                            },
-                            binding_id: None,
-                            qualified: None,
-                        },
-                        right: Literal {
-                            literal: Integer {
-                                value: 5,
-                                text: None,
-                            },
-                            ty: Var {
-                                id: uninferred,
-                            },
-                            span: Span {
-                                file_id: 0,
-                                byte_offset: 38,
-                                byte_length: 1,
-                            },
+                    value: Literal {
+                        literal: Integer {
+                            value: 5,
+                            text: None,
                         },
                         ty: Var {
                             id: uninferred,
                         },
                         span: Span {
                             file_id: 0,
-                            byte_offset: 33,
-                            byte_length: 6,
+                            byte_offset: 38,
+                            byte_length: 1,
                         },
                     },
                     compound_operator: Some(
@@ -156,42 +132,18 @@ description: |
                         binding_id: None,
                         qualified: None,
                     },
-                    value: Binary {
-                        operator: Subtraction,
-                        left: Identifier {
-                            value: "x",
-                            ty: Var {
-                                id: uninferred,
-                            },
-                            span: Span {
-                                file_id: 0,
-                                byte_offset: 43,
-                                byte_length: 1,
-                            },
-                            binding_id: None,
-                            qualified: None,
-                        },
-                        right: Literal {
-                            literal: Integer {
-                                value: 3,
-                                text: None,
-                            },
-                            ty: Var {
-                                id: uninferred,
-                            },
-                            span: Span {
-                                file_id: 0,
-                                byte_offset: 48,
-                                byte_length: 1,
-                            },
+                    value: Literal {
+                        literal: Integer {
+                            value: 3,
+                            text: None,
                         },
                         ty: Var {
                             id: uninferred,
                         },
                         span: Span {
                             file_id: 0,
-                            byte_offset: 43,
-                            byte_length: 6,
+                            byte_offset: 48,
+                            byte_length: 1,
                         },
                     },
                     compound_operator: Some(
@@ -217,42 +169,18 @@ description: |
                         binding_id: None,
                         qualified: None,
                     },
-                    value: Binary {
-                        operator: Multiplication,
-                        left: Identifier {
-                            value: "x",
-                            ty: Var {
-                                id: uninferred,
-                            },
-                            span: Span {
-                                file_id: 0,
-                                byte_offset: 53,
-                                byte_length: 1,
-                            },
-                            binding_id: None,
-                            qualified: None,
-                        },
-                        right: Literal {
-                            literal: Integer {
-                                value: 2,
-                                text: None,
-                            },
-                            ty: Var {
-                                id: uninferred,
-                            },
-                            span: Span {
-                                file_id: 0,
-                                byte_offset: 58,
-                                byte_length: 1,
-                            },
+                    value: Literal {
+                        literal: Integer {
+                            value: 2,
+                            text: None,
                         },
                         ty: Var {
                             id: uninferred,
                         },
                         span: Span {
                             file_id: 0,
-                            byte_offset: 53,
-                            byte_length: 6,
+                            byte_offset: 58,
+                            byte_length: 1,
                         },
                     },
                     compound_operator: Some(
@@ -278,42 +206,18 @@ description: |
                         binding_id: None,
                         qualified: None,
                     },
-                    value: Binary {
-                        operator: Division,
-                        left: Identifier {
-                            value: "x",
-                            ty: Var {
-                                id: uninferred,
-                            },
-                            span: Span {
-                                file_id: 0,
-                                byte_offset: 63,
-                                byte_length: 1,
-                            },
-                            binding_id: None,
-                            qualified: None,
-                        },
-                        right: Literal {
-                            literal: Integer {
-                                value: 4,
-                                text: None,
-                            },
-                            ty: Var {
-                                id: uninferred,
-                            },
-                            span: Span {
-                                file_id: 0,
-                                byte_offset: 68,
-                                byte_length: 1,
-                            },
+                    value: Literal {
+                        literal: Integer {
+                            value: 4,
+                            text: None,
                         },
                         ty: Var {
                             id: uninferred,
                         },
                         span: Span {
                             file_id: 0,
-                            byte_offset: 63,
-                            byte_length: 6,
+                            byte_offset: 68,
+                            byte_length: 1,
                         },
                     },
                     compound_operator: Some(
@@ -339,42 +243,18 @@ description: |
                         binding_id: None,
                         qualified: None,
                     },
-                    value: Binary {
-                        operator: Remainder,
-                        left: Identifier {
-                            value: "x",
-                            ty: Var {
-                                id: uninferred,
-                            },
-                            span: Span {
-                                file_id: 0,
-                                byte_offset: 73,
-                                byte_length: 1,
-                            },
-                            binding_id: None,
-                            qualified: None,
-                        },
-                        right: Literal {
-                            literal: Integer {
-                                value: 3,
-                                text: None,
-                            },
-                            ty: Var {
-                                id: uninferred,
-                            },
-                            span: Span {
-                                file_id: 0,
-                                byte_offset: 78,
-                                byte_length: 1,
-                            },
+                    value: Literal {
+                        literal: Integer {
+                            value: 3,
+                            text: None,
                         },
                         ty: Var {
                             id: uninferred,
                         },
                         span: Span {
                             file_id: 0,
-                            byte_offset: 73,
-                            byte_length: 6,
+                            byte_offset: 78,
+                            byte_length: 1,
                         },
                     },
                     compound_operator: Some(

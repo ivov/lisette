@@ -149,7 +149,7 @@ impl InferCtx<'_, '_> {
     /// Infer a binary expression where the left operand is already inferred.
     /// Returns the inferred expression and its result type.
     #[allow(clippy::too_many_arguments)]
-    fn infer_binary_with_left(
+    pub(super) fn infer_binary_with_left(
         &mut self,
         operator: BinaryOperator,
         left_inferred: Expression,

@@ -14,32 +14,19 @@ pub fn check_misrefactored_assign_op(expression: &Expression, ctx: &NodeCtx) {
         return;
     };
 
-    // A compound assignment is lowered to `target <op> rhs`, so the written
-    // right-hand side is this binary's right operand.
-    let Expression::Binary {
-        operator,
-        left,
-        right,
-        ..
-    } = value.unwrap_parens()
-    else {
-        return;
-    };
-    if operator != compound {
-        return;
-    }
-
     let target = target.unwrap_parens();
-    if !expressions_equivalent(target, left) || !is_side_effect_free(target) {
+    if !is_side_effect_free(target) {
         return;
     }
 
+    // The written right-hand side of `target <op>= rhs` is stored directly as
+    // the value. Flag the mirror form `target <op>= other <op> target`.
     let Expression::Binary {
         operator: rhs_operator,
         left: rhs_left,
         right: rhs_right,
         ..
-    } = right.unwrap_parens()
+    } = value.unwrap_parens()
     else {
         return;
     };

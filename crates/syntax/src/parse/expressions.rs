@@ -1263,15 +1263,8 @@ impl<'source> Parser<'source> {
             self.next();
             let rhs = self.parse_expression();
             return Expression::Assignment {
-                target: lhs.clone().into(),
-                value: Expression::Binary {
-                    left: lhs.into(),
-                    operator,
-                    right: rhs.into(),
-                    ty: Type::uninferred(),
-                    span: self.span_from_tokens(start),
-                }
-                .into(),
+                target: lhs.into(),
+                value: rhs.into(),
                 compound_operator: Some(operator),
                 span: self.span_from_tokens(start),
             };
@@ -1810,5 +1803,66 @@ impl<'source> Parser<'source> {
             ty: Type::uninferred(),
             span: token_span,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::ast::{BinaryOperator, Expression};
+    use crate::build_ast;
+
+    fn count_nodes(expression: &Expression) -> usize {
+        1 + expression.children().iter().map(count_nodes).sum::<usize>()
+    }
+
+    fn first_assignment(expression: &Expression) -> Option<&Expression> {
+        if matches!(expression, Expression::Assignment { .. }) {
+            return Some(expression);
+        }
+        expression.children().iter().find_map(first_assignment)
+    }
+
+    #[test]
+    fn compound_assignment_stores_only_the_rhs() {
+        let result = build_ast("fn f() {\n let mut x = 0\n x += 5\n}", 0);
+        assert!(result.errors.is_empty(), "{:?}", result.errors);
+
+        let assignment = result
+            .ast
+            .iter()
+            .find_map(first_assignment)
+            .expect("an assignment");
+        let Expression::Assignment {
+            value,
+            compound_operator,
+            ..
+        } = assignment
+        else {
+            unreachable!()
+        };
+
+        assert_eq!(*compound_operator, Some(BinaryOperator::Addition));
+        assert!(
+            matches!(value.as_ref(), Expression::Literal { .. }),
+            "value should hold only the rhs, not a duplicated `x + 5`: {value:?}"
+        );
+    }
+
+    #[test]
+    fn nested_compound_assignments_stay_linear() {
+        let depth = 14;
+        let source = format!(
+            "fn f() {{ {}x{} }}",
+            "{".repeat(depth),
+            "}.f += 1".repeat(depth),
+        );
+        let result = build_ast(&source, 0);
+        assert!(result.errors.is_empty(), "{:?}", result.errors);
+
+        let nodes: usize = result.ast.iter().map(count_nodes).sum();
+        assert!(
+            nodes < 20 * depth,
+            "nested compound assignments grew super-linearly: {nodes} nodes at depth {depth}",
+        );
     }
 }

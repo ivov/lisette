@@ -333,8 +333,24 @@ impl InferCtx<'_, '_> {
         // Propagates type information to the RHS (e.g., lambda params
         // get their types from a Map's value type).
         let value_expected = target_ty.resolve_in(&self.env);
-        let new_value = self.infer_expression(*value, &value_expected);
-        let value_ty = new_value.get_type();
+        let (new_value, value_ty) = if let Some(operator) = compound_operator {
+            let (binary, result_ty) = self.infer_binary_with_left(
+                operator,
+                new_target.clone(),
+                target_ty.clone(),
+                value,
+                &value_expected,
+                span,
+            );
+            let Expression::Binary { right, .. } = binary else {
+                unreachable!("infer_binary_with_left always returns a binary")
+            };
+            (*right, result_ty)
+        } else {
+            let new_value = self.infer_expression(*value, &value_expected);
+            let value_ty = new_value.get_type();
+            (new_value, value_ty)
+        };
 
         // Track mutation for binding-rooted targets. Call-based lvalues
         // (e.g., `get().*.x = ...`) have no local binding to track.

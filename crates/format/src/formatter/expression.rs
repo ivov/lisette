@@ -901,14 +901,13 @@ impl<'a> Formatter<'a> {
     ) -> Document<'a> {
         if let Some(op) = compound_operator
             && let Some(op_str) = op.compound_assignment_symbol()
-            && let Expression::Binary { right, .. } = value
         {
             return self
                 .expression(target)
                 .append(" ")
                 .append(op_str)
                 .append(" ")
-                .append(self.expression(right));
+                .append(self.expression(value));
         }
 
         self.expression(target)
