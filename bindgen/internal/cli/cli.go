@@ -19,6 +19,8 @@ import (
 type GeneratePkgResult struct {
 	Content string
 	Summary string
+	// ExternalImports are the third-party `go:` packages this typedef references.
+	ExternalImports []string
 }
 
 var lisVersion = "dev"
@@ -256,8 +258,14 @@ func generateFromPackage(pkg *packages.Package, displayPath, lisetteVersion, goV
 
 	emitter.EmitImplBlocks()
 
+	externalImports := make([]string, 0, len(converter.ExternalPkgs()))
+	for path := range converter.ExternalPkgs() {
+		externalImports = append(externalImports, path)
+	}
+
 	return GeneratePkgResult{
-		Content: emitter.String(),
-		Summary: emitter.Summary(),
+		Content:         emitter.String(),
+		Summary:         emitter.Summary(),
+		ExternalImports: externalImports,
 	}
 }

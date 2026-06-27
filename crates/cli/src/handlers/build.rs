@@ -6,7 +6,7 @@ use std::time::Instant;
 use crate::cli_error;
 use crate::go_cli;
 use crate::lock::acquire_target_lock;
-use crate::workspace::{GoWorkspace, WorkspaceBindgen, warm_typedefs_batched};
+use crate::workspace::{GoWorkspace, WorkspaceBindgen, warm_typedefs};
 use diagnostics::render::{self, Filter};
 use lisette::fs::{LocalFileSystem, prune_orphan_go_files};
 use lisette::pipeline::{CompileConfig, CompilePhase, Sources, TestIndex, compile};
@@ -223,7 +223,7 @@ pub(super) fn build_locked(prep: &BuildPrep, options: BuildOptions) -> BuildOutc
     {
         let workspace =
             GoWorkspace::new(&prep.target_dir, &typedef_cache_dir, prep.locator.target());
-        warm_typedefs_batched(&prep.project_path, &workspace, &prep.locator);
+        warm_typedefs(&prep.project_path, &workspace, &prep.locator);
     }
 
     let bindgen = Arc::new(WorkspaceBindgen::new(

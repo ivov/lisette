@@ -149,7 +149,7 @@ func TestGeneratePkgs_FullEmit(t *testing.T) {
 		t.Skip("skipping in short mode")
 	}
 
-	manifest := cli.GeneratePkgs([]string{"fmt", "os"}, "0.0.0", "0.0.0", nil)
+	manifest := cli.GeneratePkgs([]string{"fmt", "os"}, "0.0.0", "0.0.0", nil, false)
 
 	if len(manifest.Errors) != 0 {
 		t.Fatalf("expected no errors, got %v", manifest.Errors)
@@ -172,7 +172,7 @@ func TestGeneratePkgs_HardFail(t *testing.T) {
 		t.Skip("skipping in short mode")
 	}
 
-	manifest := cli.GeneratePkgs([]string{"definitely/nonexistent/foo"}, "0.0.0", "0.0.0", nil)
+	manifest := cli.GeneratePkgs([]string{"definitely/nonexistent/foo"}, "0.0.0", "0.0.0", nil, false)
 
 	if len(manifest.Ok) != 0 {
 		t.Errorf("expected no ok entries, got %d", len(manifest.Ok))
@@ -192,7 +192,7 @@ func TestGeneratePkgs_MixedBatch(t *testing.T) {
 
 	manifest := cli.GeneratePkgs(
 		[]string{"fmt", "definitely/nonexistent/foo"},
-		"0.0.0", "0.0.0", nil,
+		"0.0.0", "0.0.0", nil, false,
 	)
 
 	if len(manifest.Ok) != 1 {
@@ -204,7 +204,7 @@ func TestGeneratePkgs_MixedBatch(t *testing.T) {
 }
 
 func TestGeneratePkgs_Empty(t *testing.T) {
-	manifest := cli.GeneratePkgs(nil, "0.0.0", "0.0.0", nil)
+	manifest := cli.GeneratePkgs(nil, "0.0.0", "0.0.0", nil, false)
 	if len(manifest.Ok) != 0 || len(manifest.Errors) != 0 {
 		t.Errorf("expected empty manifest, got %v", manifest)
 	}
