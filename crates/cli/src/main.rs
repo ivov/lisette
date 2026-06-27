@@ -7,6 +7,7 @@ mod output;
 mod panic;
 mod shell_words;
 mod typedef_regen;
+mod typedef_scan;
 mod workspace;
 
 use command::Command;

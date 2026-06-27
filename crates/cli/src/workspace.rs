@@ -6,7 +6,9 @@ use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, OnceLock};
 
-use deps::{Bindgen, BindgenFailure, BindgenSession, BindgenSetup, GoModule, GoPackage};
+use deps::{
+    Bindgen, BindgenFailure, BindgenSession, BindgenSetup, GoModule, GoPackage, TypedefLocator,
+};
 use serde::Deserialize;
 use syntax::ast::{Expression, ImportAlias};
 use syntax::parse::Parser;
@@ -693,6 +695,133 @@ impl GoWorkspace<'_> {
         }
 
         outcome
+    }
+
+    /// Write a multi-module batch to the cache, resolving each entry's module via
+    /// `locator`. Returns the count written and those typedefs' `go:` imports.
+    pub(crate) fn apply_cross_module_manifest(
+        &self,
+        manifest: &BatchManifest,
+        locator: &TypedefLocator,
+    ) -> (usize, Vec<String>) {
+        let mut written = 0;
+        let mut discovered = Vec::new();
+
+        for entry in &manifest.ok {
+            let Some((module_path, version)) = locator.module_for_package(&entry.package) else {
+                continue;
+            };
+            if validate_typedef_parses(&entry.package, &entry.content).is_err() {
+                continue;
+            }
+
+            let pkg = GoPackage {
+                module: GoModule {
+                    path: &module_path,
+                    version: &version,
+                },
+                package: &entry.package,
+            };
+            let path = pkg.typedef_path(self.typedef_cache_dir, self.target);
+
+            if let Some(parent) = path.parent()
+                && fs::create_dir_all(parent).is_err()
+            {
+                continue;
+            }
+            if atomic_write(&path, &entry.content).is_ok() {
+                written += 1;
+                discovered.extend(extract_go_imports(&entry.content));
+            }
+        }
+
+        (written, discovered)
+    }
+
+    fn typedef_cache_path(&self, locator: &TypedefLocator, package: &str) -> Option<PathBuf> {
+        let (module_path, version) = locator.module_for_package(package)?;
+        let pkg = GoPackage {
+            module: GoModule {
+                path: &module_path,
+                version: &version,
+            },
+            package,
+        };
+        Some(pkg.typedef_path(self.typedef_cache_dir, self.target))
+    }
+
+    fn typedef_cached(&self, locator: &TypedefLocator, package: &str) -> bool {
+        self.typedef_cache_path(locator, package)
+            .is_some_and(|p| p.exists())
+    }
+
+    fn read_cached_typedef(&self, locator: &TypedefLocator, package: &str) -> Option<String> {
+        let path = self.typedef_cache_path(locator, package)?;
+        fs::read_to_string(path).ok()
+    }
+}
+
+/// Best-effort batched typedef warming for `check`/`build` before analysis.
+pub(crate) fn warm_typedefs_batched(
+    project_root: &Path,
+    workspace: &GoWorkspace<'_>,
+    locator: &TypedefLocator,
+) {
+    let src_dir = project_root.join("src");
+    let Ok(scanned) = crate::typedef_scan::scan_source_imports(&src_dir) else {
+        return;
+    };
+
+    let mut visited: HashSet<String> = HashSet::new();
+    let mut frontier: Vec<String> = scanned
+        .non_blank
+        .into_iter()
+        .filter(|pkg| locator.is_declared_go_dep(pkg))
+        .filter(|pkg| visited.insert(pkg.clone()))
+        .collect();
+
+    while !frontier.is_empty() {
+        let (cached, missing): (Vec<String>, Vec<String>) = frontier
+            .into_iter()
+            .partition(|pkg| workspace.typedef_cached(locator, pkg));
+
+        let mut discovered: Vec<String> = Vec::new();
+
+        if !missing.is_empty() {
+            crate::output::print_progress(&format!(
+                "Generating typedefs for {} Go package(s)",
+                missing.len()
+            ));
+            // Retry once: a transient `go list` failure rturns zero typedefs and
+            // would otherwise abort the whole warm into the slow lazy path.
+            let mut wrote = false;
+            for _ in 0..2 {
+                if let Ok(manifest) = workspace.run_bindgen_batch(&missing) {
+                    let (written, imports) =
+                        workspace.apply_cross_module_manifest(&manifest, locator);
+                    if written > 0 {
+                        discovered.extend(imports);
+                        wrote = true;
+                        break;
+                    }
+                }
+            }
+            if !wrote {
+                return;
+            }
+        }
+
+        for package in &cached {
+            if let Some(content) = workspace.read_cached_typedef(locator, package) {
+                discovered.extend(extract_go_imports(&content));
+            }
+        }
+
+        frontier = discovered
+            .into_iter()
+            .filter(|pkg| locator.is_declared_go_dep(pkg))
+            .filter(|pkg| visited.insert(pkg.clone()))
+            .collect();
     }
 }
 

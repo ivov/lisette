@@ -166,6 +166,13 @@ impl TypedefLocator {
         find_module_for_pkg(&self.deps, package_path).is_some()
     }
 
+    /// Resolve a `go:` package path to its declared module path and version by
+    /// longest declared prefix, or `None` if no declared module contains it.
+    pub fn module_for_package(&self, package_path: &str) -> Option<(String, String)> {
+        find_module_for_pkg(&self.deps, package_path)
+            .map(|(module, dep)| (module.to_string(), dep.version.clone()))
+    }
+
     /// Classify a `go:` import path without touching the cache or bindgen.
     pub fn validate_declaration(&self, package_path: &str) -> DeclarationStatus {
         self.classify(package_path)

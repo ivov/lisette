@@ -11,7 +11,7 @@ use lisette::pipeline::{CompileConfig, CompilePhase, CompileResult, compile};
 
 use crate::cli_error;
 use crate::lock::acquire_target_lock;
-use crate::workspace::WorkspaceBindgen;
+use crate::workspace::{GoWorkspace, WorkspaceBindgen, warm_typedefs_batched};
 
 pub fn check(
     path: Option<String>,
@@ -108,6 +108,13 @@ fn check_project(project_path: &Path, filter: &Filter, format: OutputFormat) -> 
     }
 
     let typedef_cache_dir = deps::typedef_cache_dir(project_path);
+
+    // Batch-warm the typedef cache so the lazy path during compile is all hits.
+    {
+        let workspace = GoWorkspace::new(&target_dir, &typedef_cache_dir, locator.target());
+        warm_typedefs_batched(project_path, &workspace, &locator);
+    }
+
     let bindgen = Arc::new(WorkspaceBindgen::new(
         target_dir,
         typedef_cache_dir,
