@@ -10613,7 +10613,7 @@ fn main() {
 }
 
 #[test]
-fn impl_method_pascal_case_no_warning() {
+fn private_impl_method_pascal_case_no_warning() {
     assert_no_lint_warnings!(
         r#"
 struct MyError { message: string }
@@ -10638,6 +10638,159 @@ fn interface_method_pascal_case_no_warning() {
         r#"
 pub interface Stringer {
   fn String() -> string
+}
+"#
+    );
+}
+
+#[test]
+fn pub_impl_method_pascal_case_warns() {
+    assert_lint_snapshot!(
+        r#"
+pub struct Service { count: int }
+
+impl Service {
+  pub fn DefaultRole(self) -> int {
+    self.count
+  }
+}
+
+fn main() {
+  let s = Service { count: 0 };
+  let _ = s.DefaultRole();
+}
+"#
+    );
+}
+
+#[test]
+fn pub_impl_method_pascal_case_acronym_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+pub struct Server {}
+
+impl Server {
+  pub fn ServeHTTP(self) -> int {
+    200
+  }
+}
+
+fn main() {
+  let s = Server {};
+  let _ = s.ServeHTTP();
+}
+"#
+    );
+}
+
+#[test]
+fn pub_interface_method_pascal_case_warns() {
+    assert_lint_snapshot!(
+        r#"
+pub interface Repository {
+  fn List(self) -> int
+}
+"#
+    );
+}
+
+#[test]
+fn builtin_interface_method_names_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+pub interface Printable {
+  fn String(self) -> string
+  fn Error(self) -> string
+}
+"#
+    );
+}
+
+#[test]
+fn pub_interface_non_builtin_pascal_method_warns() {
+    assert_lint_snapshot!(
+        r#"
+pub interface Device {
+  fn Read(self) -> int
+}
+"#
+    );
+}
+
+#[test]
+fn pub_impl_builtin_interface_method_name_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+pub struct MyError { message: string }
+
+impl MyError {
+  pub fn Error(self) -> string {
+    self.message
+  }
+}
+
+fn main() {
+  let e = MyError { message: "fail" };
+  let _ = e.Error();
+}
+"#
+    );
+}
+
+#[test]
+fn pub_impl_method_satisfying_go_interface_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:encoding"
+
+pub struct Widget {}
+
+impl Widget {
+  pub fn MarshalText(self) -> Result<Slice<byte>, error> {
+    Ok("custom" as Slice<byte>)
+  }
+}
+
+fn main() {
+  let w = Widget {}
+  let _: encoding.TextMarshaler = w
+}
+"#
+    );
+}
+
+#[test]
+fn pub_impl_method_camel_case_initialism_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+pub struct Client {}
+
+impl Client {
+  pub fn parseURL(self) -> int { 1 }
+}
+
+fn main() {
+  let c = Client {}
+  let _ = c.parseURL()
+}
+"#
+    );
+}
+
+#[test]
+fn pub_impl_method_allow_suppresses_conformance_name_warning() {
+    assert_no_lint_warnings!(
+        r#"
+pub struct Widget {}
+
+impl Widget {
+  #[allow(non_snake_case_function)]
+  pub fn MarshalText(self) -> int { 1 }
+}
+
+fn main() {
+  let w = Widget {}
+  let _ = w.MarshalText()
 }
 "#
     );
@@ -11300,11 +11453,11 @@ fn interface_method_allow_unused_value_suppresses_lint() {
         r#"
 pub interface Router {
   #[allow(unused_value)]
-  fn Get(self, path: string) -> Router
+  fn get(self, path: string) -> Router
 }
 
 pub fn register(r: Router) {
-  r.Get("/ping")
+  r.get("/ping")
 }
 
 fn main() {
@@ -11319,11 +11472,11 @@ fn interface_method_without_allow_warns_on_discard() {
     assert_lint_snapshot!(
         r#"
 pub interface Router {
-  fn Get(self, path: string) -> Router
+  fn get(self, path: string) -> Router
 }
 
 pub fn register(r: Router) {
-  r.Get("/ping")
+  r.get("/ping")
 }
 
 fn main() {

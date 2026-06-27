@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  ▲ Miscased name
+   ╭─[test.lis:3:6]
+ 2 │ pub interface Repository {
+ 3 │   fn List(self) -> int
+   ·      ──┬─
+   ·        ╰── expected snake_case
+ 4 │ }
+   ╰────
+  help: Rename to `list` · code: [lint.non_snake_case_function]

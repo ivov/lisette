@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  ▲ Miscased name
+   ╭─[test.lis:5:10]
+ 4 │ impl Service {
+ 5 │   pub fn DefaultRole(self) -> int {
+   ·          ─────┬─────
+   ·               ╰── expected snake_case
+ 6 │     self.count
+   ╰────
+  help: Rename to `default_role` · code: [lint.non_snake_case_function]

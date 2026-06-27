@@ -1,5 +1,5 @@
 use diagnostics::LocalSink;
-use syntax::ast::{Expression, Generic, Pattern, RestPattern, Span};
+use syntax::ast::{Binding, Expression, Generic, Pattern, RestPattern, Span, Visibility};
 
 use crate::passes::lints::ast_walk::casing::{is_snake_case, to_pascal_case, to_snake_case};
 use crate::passes::walk::{FunctionRole, NodeCtx, PatternRole};
@@ -112,14 +112,10 @@ pub fn check_expression_naming(expression: &Expression, ctx: &NodeCtx) {
             name_span,
             generics,
             params,
+            visibility,
             ..
         } => {
-            let is_go_method = match ctx.function_role.get() {
-                FunctionRole::InterfaceMethod => true,
-                FunctionRole::ImplMethod => first_param_is_self(params),
-                FunctionRole::Free => false,
-            };
-            let exempt = is_go_method && name.chars().next().is_some_and(char::is_uppercase);
+            let exempt = go_method_name_exempt(ctx, params, *visibility, name);
             if !is_d_lis && !exempt {
                 check_snake_case(name, name_span, "non_snake_case_function", sink);
             }
@@ -159,6 +155,47 @@ pub fn check_pattern_naming(pattern: &Pattern, ctx: &NodeCtx) {
         PatternRole::Binding => "non_snake_case_variable",
     };
     check_snake_case(name, span, code, ctx.sink);
+}
+
+/// Whether a method is exempt from the snake_case lint because a rename would change
+/// its exported Go name or break interface conformance (matched by source name).
+fn go_method_name_exempt(
+    ctx: &NodeCtx,
+    params: &[Binding],
+    visibility: Visibility,
+    name: &str,
+) -> bool {
+    let (is_method, public, impl_type) = match ctx.function_role.get() {
+        FunctionRole::InterfaceMethod { public } => (true, public, None),
+        FunctionRole::ImplMethod { type_name } => (
+            first_param_is_self(params),
+            visibility.is_public(),
+            Some(type_name),
+        ),
+        FunctionRole::Free => (false, false, None),
+    };
+    if !is_method {
+        return false;
+    }
+    if is_builtin_interface_method(name) {
+        return true;
+    }
+    if let Some(type_name) = impl_type
+        && ctx
+            .facts
+            .method_satisfies_interface(ctx.module_id, name, type_name)
+    {
+        return true;
+    }
+    if public {
+        to_pascal_case(&to_snake_case(name)) != to_pascal_case(name)
+    } else {
+        name.chars().next().is_some_and(char::is_uppercase)
+    }
+}
+
+fn is_builtin_interface_method(name: &str) -> bool {
+    matches!(name, "Error" | "String")
 }
 
 fn check_type_parameter(generic: &Generic, sink: &LocalSink) {

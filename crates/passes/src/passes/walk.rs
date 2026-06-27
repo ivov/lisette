@@ -21,7 +21,7 @@ pub(crate) struct NodeCtx<'a> {
     /// Node spans already claimed by an enclosing node, so a check does not also
     /// judge them standalone (e.g. the nested `&&` of an outer comparison chain).
     pub claimed_spans: RefCell<HashSet<Span>>,
-    pub function_role: Cell<FunctionRole>,
+    pub function_role: Cell<FunctionRole<'a>>,
     pub pattern_role: Cell<PatternRole>,
 }
 
@@ -33,9 +33,13 @@ pub enum PatternRole {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum FunctionRole {
-    InterfaceMethod,
-    ImplMethod,
+pub enum FunctionRole<'a> {
+    InterfaceMethod {
+        public: bool,
+    },
+    ImplMethod {
+        type_name: &'a str,
+    },
     #[default]
     Free,
 }
@@ -74,7 +78,7 @@ impl CheckTable {
     }
 }
 
-pub(crate) fn walk_nodes(ast: &[Expression], ctx: &NodeCtx, checks: &CheckTable) {
+pub(crate) fn walk_nodes<'a>(ast: &'a [Expression], ctx: &NodeCtx<'a>, checks: &CheckTable) {
     visit_ast(
         ast,
         &mut |expression, role| {
@@ -92,9 +96,12 @@ pub(crate) fn walk_nodes(ast: &[Expression], ctx: &NodeCtx, checks: &CheckTable)
     );
 }
 
-pub fn visit_ast<E, P>(ast: &[Expression], expression_visitor: &mut E, pattern_visitor: &mut P)
-where
-    E: FnMut(&Expression, FunctionRole),
+pub fn visit_ast<'a, E, P>(
+    ast: &'a [Expression],
+    expression_visitor: &mut E,
+    pattern_visitor: &mut P,
+) where
+    E: FnMut(&Expression, FunctionRole<'a>),
     P: FnMut(&Pattern, PatternRole),
 {
     for expression in ast {
@@ -107,13 +114,13 @@ where
     }
 }
 
-fn visit_node<E, P>(
-    expression: &Expression,
-    role: FunctionRole,
+fn visit_node<'a, E, P>(
+    expression: &'a Expression,
+    role: FunctionRole<'a>,
     expression_visitor: &mut E,
     pattern_visitor: &mut P,
 ) where
-    E: FnMut(&Expression, FunctionRole),
+    E: FnMut(&Expression, FunctionRole<'a>),
     P: FnMut(&Pattern, PatternRole),
 {
     expression_visitor(expression, role);
@@ -160,8 +167,12 @@ fn visit_node<E, P>(
     }
 
     let child_role = match expression {
-        Expression::Interface { .. } => FunctionRole::InterfaceMethod,
-        Expression::ImplBlock { .. } => FunctionRole::ImplMethod,
+        Expression::Interface { visibility, .. } => FunctionRole::InterfaceMethod {
+            public: visibility.is_public(),
+        },
+        Expression::ImplBlock { receiver_name, .. } => FunctionRole::ImplMethod {
+            type_name: receiver_name.as_str(),
+        },
         _ => FunctionRole::Free,
     };
     for child in expression.children() {

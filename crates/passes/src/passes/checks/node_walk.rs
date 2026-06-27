@@ -69,6 +69,6 @@ static NODE_CHECKS: LazyLock<CheckTable> = LazyLock::new(|| {
     )
 });
 
-pub(crate) fn run(items: &[Expression], ctx: &NodeCtx) {
+pub(crate) fn run<'a>(items: &'a [Expression], ctx: &NodeCtx<'a>) {
     walk_nodes(items, ctx, &NODE_CHECKS);
 }

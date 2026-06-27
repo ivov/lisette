@@ -222,6 +222,19 @@ impl Facts {
             .push(impl_type_name);
     }
 
+    /// Whether `type_name`'s `method_name` was found to satisfy an interface method,
+    /// so the naming lint keeps its conformance-required spelling.
+    pub fn method_satisfies_interface(
+        &self,
+        module_id: &str,
+        method_name: &str,
+        type_name: &str,
+    ) -> bool {
+        self.interface_satisfied_methods
+            .get(&(module_id.to_string(), method_name.to_string()))
+            .is_some_and(|types| types.iter().any(|t| t == type_name))
+    }
+
     pub fn absorb_local_facts(&mut self, local: LocalFacts) {
         let LocalFacts {
             unused_expressions,

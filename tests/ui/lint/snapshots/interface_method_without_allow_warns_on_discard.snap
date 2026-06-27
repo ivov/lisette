@@ -7,7 +7,7 @@ source: tests/ui/lint/mod.rs
  6 │ pub fn register(r: Router) {
    ·                            ┬
    ·                            ╰── has `()` as implicit return type
- 7 │   r.Get("/ping")
+ 7 │   r.get("/ping")
    ·   ───────┬──────
    ·          ╰── returns `Router`
  8 │ }
