@@ -207,7 +207,16 @@ pub fn cache_path(project_root: &Path, module_id: &str) -> PathBuf {
 }
 
 pub fn cache_file_name(module_id: &str) -> String {
-    format!("{}.cache", module_id.replace('/', "_"))
+    let mut encoded = String::with_capacity(module_id.len() + 6);
+    for ch in module_id.chars() {
+        match ch {
+            '_' => encoded.push_str("__"),
+            '/' => encoded.push_str("_s"),
+            _ => encoded.push(ch),
+        }
+    }
+    encoded.push_str(".cache");
+    encoded
 }
 
 pub fn try_load_cache(
@@ -325,7 +334,7 @@ pub fn save_module_cache(
     }
 
     // Write to temp file, then rename (atomic)
-    let temp_path = path.with_extension("cache.tmp");
+    let temp_path = global_cache_temp_path(&path);
     let bytes = bincode::serialize(&interface).map_err(io::Error::other)?;
     fs::write(&temp_path, bytes)?;
     fs::rename(&temp_path, &path)?;
@@ -440,7 +449,7 @@ pub fn apply_emit_stamps(
         };
         interface.emit_stamp = *value;
 
-        let temp_path = path.with_extension("cache.tmp");
+        let temp_path = global_cache_temp_path(&path);
         let new_bytes = bincode::serialize(&interface).map_err(io::Error::other)?;
         fs::write(&temp_path, new_bytes)?;
         fs::rename(&temp_path, &path)?;
@@ -740,8 +749,15 @@ mod tests {
         let path = cache_path(Path::new("/project"), "deep/nested/mod");
         assert_eq!(
             path,
-            PathBuf::from("/project/target/cache/deep_nested_mod.cache")
+            PathBuf::from("/project/target/cache/deep_snested_smod.cache")
         );
+    }
+
+    #[test]
+    fn cache_file_name_is_injective_across_slash_underscore() {
+        assert_ne!(cache_file_name("foo/bar"), cache_file_name("foo_bar"));
+        assert_ne!(cache_file_name("a_/b"), cache_file_name("a/_b"));
+        assert_eq!(cache_file_name("utils"), "utils.cache");
     }
 
     #[test]

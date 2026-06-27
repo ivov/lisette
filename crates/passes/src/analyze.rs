@@ -8,7 +8,7 @@ use syntax::program::{ModuleInfo, MutationInfo, UnusedInfo};
 use semantics::cache::{EmitStamp, compute_emit_artifact_hash, save_module_cache};
 use semantics::facts::Facts;
 use semantics::inference::AnalyzeInput;
-use semantics::inference::{InferenceOutput, run_inference};
+use semantics::inference::{InferenceOutput, PARALLEL_THRESHOLD, run_inference};
 use semantics::store::ENTRY_MODULE_ID;
 
 use crate::passes;
@@ -70,7 +70,7 @@ pub fn analyze(input: AnalyzeInput) -> AnalyzeOutput {
     if cache_enabled && let Some(ref project_root) = project_root {
         let has_errors = errors.iter().any(|e| e.is_error());
         if !has_errors {
-            for compiled in compiled_modules {
+            let save = |compiled: &semantics::cache::CompiledModule| {
                 let file_ids: HashSet<u32> = store
                     .get_module(&compiled.module_id)
                     .map(|m| m.file_ids().collect())
@@ -82,14 +82,19 @@ pub fn analyze(input: AnalyzeInput) -> AnalyzeOutput {
                         .unwrap_or(true)
                 });
                 if !has_module_lints
-                    && let Err(e) =
-                        save_module_cache(&compiled, &store, project_root, &ufcs_methods)
+                    && let Err(e) = save_module_cache(compiled, &store, project_root, &ufcs_methods)
                 {
                     eprintln!(
                         "warning: failed to write cache for {}: {e}",
                         compiled.module_id
                     );
                 }
+            };
+            if compiled_modules.len() < PARALLEL_THRESHOLD {
+                compiled_modules.iter().for_each(save);
+            } else {
+                use rayon::prelude::*;
+                compiled_modules.par_iter().for_each(save);
             }
         }
     }
