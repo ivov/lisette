@@ -22,12 +22,12 @@ Rename is not wired up. JetBrains' LSP API does not bridge `textDocument/rename`
 
     ```bash
     cargo install lisette
-    lis version # -> lisette 0.2.1 (go 1.25.10)
+    lis version # -> lis 0.5.0 (go 1.25.10)
     ```
 
 2. Install the plugin. Either:
 
-    - **From the JetBrains Marketplace** (pending publication as of April 2026): in your JetBrains IDE, open **Settings → Plugins → Marketplace**, search for "Lisette", and click **Install**.
+    - **From the JetBrains Marketplace:** in your JetBrains IDE, open **Settings → Plugins → Marketplace**, search for "Lisette", and click **Install**.
     - **From disk:** build the zip yourself with `./gradlew buildPlugin` (see [Development](#development) below), then open **Settings → Plugins → ⚙️ → Install Plugin from Disk...** and select `editors/intellij/build/distributions/lisette-intellij-<version>.zip`.
 
     Restart the IDE when prompted.
@@ -47,4 +47,14 @@ Rename is not wired up. JetBrains' LSP API does not bridge `textDocument/rename`
 
 3. Create a test project and open a `.lis` file in the sandbox IDE.
 
-To produce a distributable zip: `./gradlew buildPlugin` and output at `build/distributions/lisette-intellij-0.1.0.zip`.
+To produce a distributable zip: `./gradlew buildPlugin` and output at `build/distributions/lisette-intellij-<version>.zip`.
+
+## Publishing
+
+The plugin is published on the [JetBrains Marketplace](https://plugins.jetbrains.com/plugin/31270-lisette) (plugin ID 31270). To release a new version:
+
+1. Bump `version` in `build.gradle.kts` and `<version>` in `src/main/resources/META-INF/plugin.xml`, and add a `<change-notes>` entry. The Marketplace rejects re-uploads of an existing version.
+
+2. Build the zip with `./gradlew buildPlugin`. The build vendors the current VSCode TextMate grammar, so highlighting tracks `editors/vscode/syntaxes/lisette.tmLanguage.json` as of build time.
+
+3. Sign in as the vendor, open the [plugin page](https://plugins.jetbrains.com/plugin/31270-lisette), and use **Upload update** to upload `build/distributions/lisette-intellij-<version>.zip`. The page's name, description, and change notes refresh from the bundled `plugin.xml`.

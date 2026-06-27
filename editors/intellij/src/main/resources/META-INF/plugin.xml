@@ -1,7 +1,7 @@
 <idea-plugin>
     <id>run.lisette.plugin</id>
     <name>Lisette</name>
-    <version>0.1.0</version>
+    <version>0.1.1</version>
     <vendor email="ivov.src@gmail.com" url="https://lisette.run">Iván Ovejero</vendor>
 
     <description><![CDATA[
@@ -15,6 +15,8 @@
     ]]></description>
 
     <change-notes><![CDATA[
+        <b>0.1.1</b>: Refreshed syntax highlighting for the <code>embed</code> keyword (replacing <code>impl</code>), the <code>assert</code> keyword, and bitwise operators.
+        <br/><br/>
         <b>0.1.0</b> — Initial release. Syntax highlighting via the Lisette TextMate grammar plus LSP-backed diagnostics, hover, goto, references, completion, signature help, formatting, and document symbols.
     ]]></change-notes>
 
