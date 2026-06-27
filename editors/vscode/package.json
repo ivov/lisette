@@ -2,7 +2,7 @@
   "name": "lisette",
   "displayName": "Lisette",
   "description": "Language support for Lisette",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "publisher": "ivov",
   "license": "MIT",
   "repository": "https://github.com/ivov/lisette",
@@ -19,7 +19,11 @@
         "id": "lisette",
         "aliases": ["Lisette"],
         "extensions": [".lis", ".d.lis"],
-        "configuration": "./language-configuration.json"
+        "configuration": "./language-configuration.json",
+        "icon": {
+          "light": "./icons/lisette.svg",
+          "dark": "./icons/lisette.svg"
+        }
       }
     ],
     "grammars": [
