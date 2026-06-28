@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Syntax error
+   ╭─[test.lis:2:19]
+ 1 │ 
+ 2 │ fn foo() -> Result((), Err) {
+   ·                   ────┬────
+   ·                       ╰── use `<...>` for type args
+ 3 │   Ok(())
+   ╰────
+  help: Write `Result<(), Err>` instead of `Result((), Err)` · code: [parse.angle_brackets_for_generics]

@@ -1,12 +1,12 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  ✕ Statement used as value
+  ✕ Missing value at end of block
    ╭─[test.lis:4:19]
  3 │   let mut x = 0
  4 │   x = if true { { let _ = 1 } } else { 1 }
    ·                   ────┬────
-   ·                       ╰── this is a statement, not an expression
+   ·                       ╰── produces `()`
  5 │   let _ = x
    ╰────
-  help: The last item in this block must be an expression that produces a value. Statements like `let`, `=`, `task`, and `defer` do not produce values · code: [infer.statement_as_tail]
+  help: This block is of type `()` because its last expression produces `()`, but the block was expected to be of type `int`. End the block with an expression that produces `int` · code: [infer.statement_as_tail]

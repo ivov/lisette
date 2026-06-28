@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Syntax error
+   ╭─[test.lis:2:17]
+ 1 │ 
+ 2 │ fn counts(m: Map[string, int]) -> int {
+   ·                 ──────┬──────
+   ·                       ╰── use `<...>` for type args
+ 3 │   0
+   ╰────
+  help: Write `Map<string, int>` instead of `Map[string, int]` · code: [parse.angle_brackets_for_generics]

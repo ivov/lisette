@@ -22,7 +22,10 @@ pub(crate) fn run(facts: &mut Facts, sink: &LocalSink) {
             && !check.expected_ty.is_ignored()
             && !check.expected_ty.is_error()
         {
-            sink.push(diagnostics::infer::statement_as_tail(check.span));
+            sink.push(diagnostics::infer::statement_as_tail(
+                check.span,
+                &check.expected_ty,
+            ));
         }
     }
 }

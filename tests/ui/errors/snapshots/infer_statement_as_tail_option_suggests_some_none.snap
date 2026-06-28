@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Missing value at end of block
+   ╭─[test.lis:4:3]
+ 3 │   let mut x = 0
+ 4 │   x = id
+   ·   ───┬──
+   ·      ╰── produces `()`
+ 5 │ }
+   ╰────
+  help: This block is of type `()` because its last expression produces `()`, but the block was expected to be of type `Option<int>`. End the block with `Some(value)` or `None` · code: [infer.statement_as_tail]

@@ -1,5 +1,7 @@
 use super::{MAX_TUPLE_ARITY, ParamMode, Parser};
+use crate::EcoString;
 use crate::ast::{Annotation, Attribute, Expression, Generic, Span, Visibility};
+use crate::lex::Token;
 use crate::lex::TokenKind::*;
 use crate::types::Type;
 
@@ -68,7 +70,7 @@ impl<'source> Parser<'source> {
         let start = self.current_token();
         let name = self.read_identifier_sequence();
 
-        let params = if self.advance_if(LeftAngleBracket) {
+        if self.advance_if(LeftAngleBracket) {
             let mut type_params = vec![];
 
             while self.can_start_annotation() {
@@ -87,14 +89,79 @@ impl<'source> Parser<'source> {
                 self.track_error("expected `>`", "Add `>` to close the type arguments.");
             }
 
-            type_params
-        } else {
-            vec![]
-        };
+            return Annotation::Constructor {
+                name,
+                params: type_params,
+                span: self.span_from_tokens(start),
+            };
+        }
+
+        if matches!(self.current_token().kind, LeftParen | LeftSquareBracket) {
+            return self.parse_misdelimited_type_args(name, start);
+        }
 
         Annotation::Constructor {
             name,
-            params,
+            params: vec![],
+            span: self.span_from_tokens(start),
+        }
+    }
+
+    fn parse_misdelimited_type_args(
+        &mut self,
+        name: EcoString,
+        start: Token<'source>,
+    ) -> Annotation {
+        let open = self.current_token();
+        let close_kind = if open.kind == LeftParen {
+            RightParen
+        } else {
+            RightSquareBracket
+        };
+        let open_end = (open.byte_offset + open.byte_length) as usize;
+        self.next();
+
+        let mut type_params = vec![];
+        while self.current_token().kind != close_kind && !self.at_eof() {
+            if !self.can_start_annotation() {
+                break;
+            }
+            type_params.push(self.parse_annotation());
+            if !self.advance_if(Comma) {
+                break;
+            }
+        }
+
+        while self.current_token().kind != close_kind && !self.at_eof() {
+            self.next();
+        }
+
+        let close = self.current_token();
+        let close_start = close.byte_offset as usize;
+        let consumed = self.advance_if(close_kind);
+        let close_end = if consumed {
+            (close.byte_offset + close.byte_length) as usize
+        } else {
+            close_start
+        };
+
+        let inner = self.source[open_end..close_start].trim();
+        let corrected = format!("{}<{}>", name, inner);
+        let original = &self.source[start.byte_offset as usize..close_end];
+
+        let label_span = Span::new(
+            self.file_id,
+            open.byte_offset,
+            (close_end as u32).saturating_sub(open.byte_offset),
+        );
+        self.error_angle_brackets_for_generics(
+            label_span,
+            format!("Write `{corrected}` instead of `{original}`"),
+        );
+
+        Annotation::Constructor {
+            name,
+            params: type_params,
             span: self.span_from_tokens(start),
         }
     }

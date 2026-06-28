@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Missing value at end of block
+   ╭─[test.lis:5:3]
+ 4 │ fn create() -> Result<(), error> {
+ 5 │   defer release()
+   ·   ───────┬───────
+   ·          ╰── produces `()`
+ 6 │ }
+   ╰────
+  help: This block is of type `()` because its last expression produces `()`, but the block was expected to be of type `Result<(), error>`. End the block with `Ok(())` or `Err(...)` · code: [infer.statement_as_tail]

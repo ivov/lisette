@@ -672,6 +672,21 @@ impl<'source> Parser<'source> {
         self.errors.push(error);
     }
 
+    fn error_angle_brackets_for_generics(
+        &mut self,
+        span: ast::Span,
+        help: impl Into<std::string::String>,
+    ) {
+        if self.too_many_errors() {
+            return;
+        }
+        let error = ParseError::new("Syntax error", span, "use `<...>` for type args")
+            .with_parse_code("angle_brackets_for_generics")
+            .with_help(help.into());
+
+        self.errors.push(error);
+    }
+
     fn error_var_initializer(&mut self, span: ast::Span) {
         if self.too_many_errors() {
             return;

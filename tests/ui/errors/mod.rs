@@ -6500,6 +6500,26 @@ fn test(arr: []int) {}
 }
 
 #[test]
+fn parse_paren_generics_in_return_type() {
+    let input = r#"
+fn foo() -> Result((), Err) {
+  Ok(())
+}
+"#;
+    assert_parse_error_snapshot!(input);
+}
+
+#[test]
+fn parse_bracket_generics_in_type() {
+    let input = r#"
+fn counts(m: Map[string, int]) -> int {
+  0
+}
+"#;
+    assert_parse_error_snapshot!(input);
+}
+
+#[test]
 fn parse_rust_double_colon_in_pattern() {
     let input = r#"
 pub enum Shape { Circle(int), Rectangle { width: int, height: int } }
@@ -8820,6 +8840,40 @@ fn test() {
     break { let _ = 1 }
   }
   let _ = r
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_statement_as_tail_result_unit_suggests_ok() {
+    let input = r#"
+fn release() {}
+
+fn create() -> Result<(), error> {
+  defer release()
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_statement_as_tail_result_value_suggests_ok_value() {
+    let input = r#"
+fn total() -> Result<int, error> {
+  let mut sum = 0
+  sum = 42
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_statement_as_tail_option_suggests_some_none() {
+    let input = r#"
+fn lookup(id: int) -> Option<int> {
+  let mut x = 0
+  x = id
 }
 "#;
     assert_infer_error_snapshot!(input);

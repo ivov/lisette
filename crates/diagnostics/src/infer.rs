@@ -108,14 +108,32 @@ pub fn definition_shadows_import(
         ))
 }
 
-pub fn statement_as_tail(span: Span) -> LisetteDiagnostic {
-    LisetteDiagnostic::error("Statement used as value")
-        .with_infer_code("statement_as_tail")
-        .with_span_label(&span, "this is a statement, not an expression")
-        .with_help(
-            "The last item in this block must be an expression that produces a value. \
-             Statements like `let`, `=`, `task`, and `defer` do not produce values.",
+pub fn statement_as_tail(span: Span, expected: &Type) -> LisetteDiagnostic {
+    let fix = if expected.is_result() {
+        let success = match expected.get_type_params() {
+            Some([ok, ..]) if ok.is_unit() => "Ok(())",
+            _ => "Ok(value)",
+        };
+        format!("End the block with `{}` or `Err(...)`.", success)
+    } else if expected.is_option() {
+        "End the block with `Some(value)` or `None`.".to_string()
+    } else {
+        format!(
+            "End the block with an expression that produces `{}`.",
+            expected
         )
+    };
+
+    let help = format!(
+        "This block is of type `()` because its last expression produces `()`, \
+         but the block was expected to be of type `{}`. {}",
+        expected, fix
+    );
+
+    LisetteDiagnostic::error("Missing value at end of block")
+        .with_infer_code("statement_as_tail")
+        .with_span_label(&span, "produces `()`")
+        .with_help(help)
 }
 
 pub fn invalid_map_initialization(key: &Type, value: &Type, span: Span) -> LisetteDiagnostic {

@@ -502,7 +502,7 @@ impl InferCtx<'_, '_> {
                         });
                 } else if !expected.is_unit() && !expected.is_error() {
                     self.sink
-                        .push(diagnostics::infer::statement_as_tail(item_span));
+                        .push(diagnostics::infer::statement_as_tail(item_span, &expected));
                 }
             }
 
