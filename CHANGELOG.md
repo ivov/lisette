@@ -2,6 +2,40 @@
 
 Lisette is under active development. Any version before 1.0.0 may include breaking changes.
 
+## [0.6.0](https://github.com/ivov/lisette/compare/lisette-v0.5.0...lisette-v0.6.0) - 2026-06-28
+
+### Features
+
+- feat: clearer errors for generic syntax and missing block value [#912](https://github.com/ivov/lisette/pull/912) [`f6319be`](https://github.com/ivov/lisette/commit/f6319be703f2b54fd1bd58ea4e41b8085051e989)
+- feat: add `.lis` file icon to VSCode and IntelliJ extensions [#905](https://github.com/ivov/lisette/pull/905) [`60db9b2`](https://github.com/ivov/lisette/commit/60db9b26ddae447af102f2589513ed910dfff56e)
+- feat: autocomplete struct field names [#888](https://github.com/ivov/lisette/pull/888) [`d07c32e`](https://github.com/ivov/lisette/commit/d07c32e8ca06a8abc939752213a04d641d977041)
+- feat: inline subscript assignment targets [#890](https://github.com/ivov/lisette/pull/890) [`b42764b`](https://github.com/ivov/lisette/commit/b42764b9b5b132bad4492fe68549fc99482334fc)
+- feat: suggest tuple for bare multi-value return [#873](https://github.com/ivov/lisette/pull/873) [`72566ea`](https://github.com/ivov/lisette/commit/72566eaa7d2f30aa8fff2abfef0220eb8f729059)
+- feat: lint to suggest `+= 1` for `foo++` [#872](https://github.com/ivov/lisette/pull/872) [`cd9b594`](https://github.com/ivov/lisette/commit/cd9b594348251ede8c80769d842e533f8c195bb9)
+- feat: emit compact go for nil-guarded result/partial calls [#870](https://github.com/ivov/lisette/pull/870) [`b5d5908`](https://github.com/ivov/lisette/commit/b5d59087cac54263bb3681536c93006df5777bd9)
+
+### Fixes
+
+- fix: flag public PascalCase methods in snake_case lint [#904](https://github.com/ivov/lisette/pull/904) [`a9276a9`](https://github.com/ivov/lisette/commit/a9276a956631730ef842b2d9f5fa02fb50b0ee07)
+- fix: keep a single lhs copy in compound assignments [#896](https://github.com/ivov/lisette/pull/896) [`5f4c80e`](https://github.com/ivov/lisette/commit/5f4c80e67c51fb193a96a67cf1bdadc14379c6df)
+- fix: widen snake_case and PascalCase lint coverage [#883](https://github.com/ivov/lisette/pull/883) [`df01f8c`](https://github.com/ivov/lisette/commit/df01f8c9e21b0ffa5bb31e9c03d12aa822d34e74)
+- fix: allow imported constants in const expressions [#871](https://github.com/ivov/lisette/pull/871) [`b6aee9f`](https://github.com/ivov/lisette/commit/b6aee9fd52f0e702d2772c93cd4f08e66b66ee35)
+
+### Internals
+
+- ci: allow initial backticks in commit msg subjects [#907](https://github.com/ivov/lisette/pull/907) [`00c4126`](https://github.com/ivov/lisette/commit/00c41269bc1bed04cc663c6587a093711033b4c8)
+- perf: parallelize cache writes [#906](https://github.com/ivov/lisette/pull/906) [`8659a7b`](https://github.com/ivov/lisette/commit/8659a7bc05e0336bc611b1ced56b4d913c3266ba)
+- perf: one-pass typedef generation for Go dependencies [#903](https://github.com/ivov/lisette/pull/903) [`7e695c6`](https://github.com/ivov/lisette/commit/7e695c61691a28cef5c1804ecd45baffab91897e)
+- chore: bump intellij plugin to 0.1.1 [#901](https://github.com/ivov/lisette/pull/901) [`0771dc8`](https://github.com/ivov/lisette/commit/0771dc8bdda100aff7971ee639afb9a353bd4991)
+- perf: batch typedef generation for faster cold builds [#897](https://github.com/ivov/lisette/pull/897) [`df23d0b`](https://github.com/ivov/lisette/commit/df23d0b41bf1c65d6eb36164652e80ce05093850)
+- test: dogfood test runner via e2e suite [#891](https://github.com/ivov/lisette/pull/891) [`2798ce5`](https://github.com/ivov/lisette/commit/2798ce5f0284abef331facb04b66dbcbcba30445)
+- chore: add zed-release recipe [#885](https://github.com/ivov/lisette/pull/885) [`f422086`](https://github.com/ivov/lisette/commit/f4220866c6fb44ac030226615158421e8a52b63e)
+- refactor: extract dep reconciliation [#884](https://github.com/ivov/lisette/pull/884) [`4cd4be7`](https://github.com/ivov/lisette/commit/4cd4be7c9426041baa14a1b375b514016d9dc5f7)
+- refactor: share type classification between checker and emit [#875](https://github.com/ivov/lisette/pull/875) [`7f90e36`](https://github.com/ivov/lisette/commit/7f90e36ff2a834f9ce0a84cc9d21d418ba850be9)
+- perf: free discarded cache-hit parses in parallel [#874](https://github.com/ivov/lisette/pull/874) [`8ba205c`](https://github.com/ivov/lisette/commit/8ba205cc17ec985c2a284cb4c84edd606e964bfb)
+- test: make report rendering independent of terminal width [#867](https://github.com/ivov/lisette/pull/867) [`f228c3a`](https://github.com/ivov/lisette/commit/f228c3a49c454f52e7c967adb190bace9f9a481a)
+
+
 ## [0.5.0](https://github.com/ivov/lisette/compare/lisette-v0.4.4...lisette-v0.5.0) - 2026-06-24
 
 ### Fixes
