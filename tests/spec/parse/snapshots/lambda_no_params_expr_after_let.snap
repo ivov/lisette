@@ -21,6 +21,7 @@ description: |
         params: [],
         return_annotation: Function {
             params: [],
+            param_mutability: [],
             return_type: Constructor {
                 name: "int",
                 params: [],

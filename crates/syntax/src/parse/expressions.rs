@@ -868,7 +868,10 @@ impl<'source> Parser<'source> {
         let mut params = vec![];
 
         while self.is_not(Pipe) {
-            params.push(self.parse_binding());
+            let is_mut = self.advance_if(Mut);
+            let mut binding = self.parse_binding();
+            binding.mutable = is_mut;
+            params.push(binding);
             self.expect_comma_or(Pipe);
         }
 
@@ -1808,7 +1811,7 @@ impl<'source> Parser<'source> {
 
 #[cfg(test)]
 mod tests {
-    use crate::ast::{BinaryOperator, Expression};
+    use crate::ast::{Annotation, BinaryOperator, Expression};
     use crate::build_ast;
 
     fn count_nodes(expression: &Expression) -> usize {
@@ -1845,6 +1848,58 @@ mod tests {
         assert!(
             matches!(value.as_ref(), Expression::Literal { .. }),
             "value should hold only the rhs, not a duplicated `x + 5`: {value:?}"
+        );
+    }
+
+    #[test]
+    fn function_type_annotation_captures_per_param_mutability() {
+        let result = build_ast("fn run(action: fn(mut Bar, Baz) -> ()) {}", 0);
+        assert!(result.errors.is_empty(), "{:?}", result.errors);
+
+        let Some(Expression::Function { params, .. }) = result
+            .ast
+            .iter()
+            .find(|item| matches!(item, Expression::Function { .. }))
+        else {
+            unreachable!("expected a top-level function")
+        };
+        let Some(Annotation::Function {
+            param_mutability, ..
+        }) = &params[0].annotation
+        else {
+            panic!(
+                "expected a function-type annotation, got {:?}",
+                params[0].annotation
+            )
+        };
+
+        assert_eq!(param_mutability, &vec![true, false]);
+    }
+
+    #[test]
+    fn lambda_parameter_can_be_mut() {
+        let result = build_ast("fn f() {\n  let g = |mut x: int| x\n  let _ = g\n}", 0);
+        assert!(result.errors.is_empty(), "{:?}", result.errors);
+
+        fn find_lambda(expression: &Expression) -> Option<&Expression> {
+            if matches!(expression, Expression::Lambda { .. }) {
+                return Some(expression);
+            }
+            expression
+                .children()
+                .iter()
+                .find_map(|child| find_lambda(child))
+        }
+
+        let Some(Expression::Lambda { params, .. }) = result.ast.iter().find_map(find_lambda)
+        else {
+            unreachable!("expected a lambda")
+        };
+
+        assert_eq!(params.len(), 1);
+        assert!(
+            params[0].mutable,
+            "`mut x` lambda parameter should be mutable"
         );
     }
 

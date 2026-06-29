@@ -165,16 +165,19 @@ fn annotations_equivalent(a: &Annotation, b: &Annotation) -> bool {
         (
             Annotation::Function {
                 params: a_params,
+                param_mutability: a_mutability,
                 return_type: a_return,
                 ..
             },
             Annotation::Function {
                 params: b_params,
+                param_mutability: b_mutability,
                 return_type: b_return,
                 ..
             },
         ) => {
-            annotation_lists_equivalent(a_params, b_params)
+            a_mutability == b_mutability
+                && annotation_lists_equivalent(a_params, b_params)
                 && annotations_equivalent(a_return, b_return)
         }
         (
@@ -290,6 +293,26 @@ mod tests {
         assert!(s.add_explicit(parent_int(Span::new(0, 0, 1))));
         assert!(!s.add_explicit(parent_int(Span::new(0, 5, 1))));
         assert_eq!(s.explicit.len(), 1);
+    }
+
+    #[test]
+    fn add_explicit_keeps_function_bounds_differing_only_in_mut() {
+        let fn_bound = |mutability: Vec<bool>, span| {
+            ConstraintAtom::Named(Annotation::Function {
+                params: vec![Annotation::Constructor {
+                    name: "T".into(),
+                    params: vec![],
+                    span,
+                }],
+                param_mutability: mutability,
+                return_type: Box::new(Annotation::unit()),
+                span,
+            })
+        };
+        let mut s = set("F");
+        assert!(s.add_explicit(fn_bound(vec![false], Span::new(0, 0, 1))));
+        assert!(s.add_explicit(fn_bound(vec![true], Span::new(0, 5, 1))));
+        assert_eq!(s.explicit.len(), 2);
     }
 
     #[test]

@@ -46,6 +46,7 @@ impl TaskState<'_> {
 
             Annotation::Function {
                 params,
+                param_mutability,
                 return_type,
                 ..
             } => {
@@ -69,10 +70,9 @@ impl TaskState<'_> {
                     self.convert_to_type(store, return_type, span)
                 };
 
-                let param_mutability = vec![false; new_params.len()];
                 Type::function(
                     new_params,
-                    param_mutability,
+                    param_mutability.clone(),
                     Default::default(),
                     new_return_type.into(),
                 )

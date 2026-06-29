@@ -83,6 +83,10 @@ description: |
                                     },
                                 },
                             ],
+                            param_mutability: [
+                                false,
+                                false,
+                            ],
                             return_type: Constructor {
                                 name: "int",
                                 params: [],

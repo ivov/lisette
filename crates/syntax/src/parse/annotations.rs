@@ -172,8 +172,10 @@ impl<'source> Parser<'source> {
         self.ensure(LeftParen);
 
         let mut params = vec![];
+        let mut param_mutability = vec![];
 
         while self.is_not(RightParen) {
+            param_mutability.push(self.advance_if(Mut));
             params.push(self.parse_annotation());
             self.expect_comma_or(RightParen);
         }
@@ -184,6 +186,7 @@ impl<'source> Parser<'source> {
 
         Annotation::Function {
             params,
+            param_mutability,
             return_type: return_type.into(),
             span: self.span_from_tokens(start),
         }

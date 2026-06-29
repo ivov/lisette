@@ -302,7 +302,7 @@ impl InferCtx<'_, '_> {
                 .iter()
                 .map(|p| p.pattern.get_identifier())
                 .collect(),
-            vec![false; new_params.len()],
+            new_params.iter().map(|p| p.mutable).collect(),
             vec![],
             return_ty.clone().into(),
         );

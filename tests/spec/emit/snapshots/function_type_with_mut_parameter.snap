@@ -1,0 +1,37 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  struct Counter { times_called: int }
+  
+  fn run(counter: Counter, action: fn(mut Counter) -> ()) {
+    action(counter)
+  }
+  
+  fn bump(mut counter: Counter) {
+    counter.times_called += 1
+  }
+  
+  fn test() {
+    let counter = Counter { times_called: 0 }
+    run(counter, bump)
+  }
+---
+package main
+
+type Counter struct {
+	times_called int
+}
+
+func run(counter Counter, action func(Counter)) {
+	action(counter)
+}
+
+func bump(counter Counter) {
+	counter.times_called++
+}
+
+func test() {
+	counter := Counter{times_called: 0}
+	run(counter, bump)
+}

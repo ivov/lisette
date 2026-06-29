@@ -631,6 +631,7 @@ pub enum Annotation {
     },
     Function {
         params: Vec<Self>,
+        param_mutability: Vec<bool>,
         return_type: Box<Self>,
         span: Span,
     },

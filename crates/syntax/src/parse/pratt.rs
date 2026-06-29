@@ -453,6 +453,7 @@ fn format_annotation(ann: &ast::Annotation) -> std::string::String {
         }
         ast::Annotation::Function {
             params,
+            param_mutability,
             return_type,
             ..
         } => {
@@ -460,7 +461,15 @@ fn format_annotation(ann: &ast::Annotation) -> std::string::String {
                 "fn({}) -> {}",
                 params
                     .iter()
-                    .map(format_annotation)
+                    .enumerate()
+                    .map(|(index, param)| {
+                        let rendered = format_annotation(param);
+                        if param_mutability.get(index).copied().unwrap_or(false) {
+                            format!("mut {}", rendered)
+                        } else {
+                            rendered
+                        }
+                    })
                     .collect::<Vec<_>>()
                     .join(", "),
                 format_annotation(return_type)

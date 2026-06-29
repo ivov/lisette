@@ -583,6 +583,45 @@ fn test() -> int {
 }
 
 #[test]
+fn function_type_with_mut_parameter() {
+    let input = r#"
+struct Counter { times_called: int }
+
+fn run(counter: Counter, action: fn(mut Counter) -> ()) {
+  action(counter)
+}
+
+fn bump(mut counter: Counter) {
+  counter.times_called += 1
+}
+
+fn test() {
+  let counter = Counter { times_called: 0 }
+  run(counter, bump)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn lambda_with_mut_parameter() {
+    let input = r#"
+fn apply(f: fn(mut int) -> int, x: int) -> int {
+  f(x)
+}
+
+fn test() -> int {
+  let bump = |mut x: int| {
+    x += 1
+    x
+  }
+  apply(bump, 41)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn function_type_as_return() {
     let input = r#"
 fn make_adder(n: int) -> fn(int) -> int {

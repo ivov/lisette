@@ -36,6 +36,10 @@ description: |
                     },
                 },
             ],
+            param_mutability: [
+                false,
+                false,
+            ],
             return_type: Constructor {
                 name: "bool",
                 params: [],

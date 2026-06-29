@@ -1,0 +1,29 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  fn apply(f: fn(mut int) -> int, x: int) -> int {
+    f(x)
+  }
+  
+  fn test() -> int {
+    let bump = |mut x: int| {
+      x += 1
+      x
+    }
+    apply(bump, 41)
+  }
+---
+package main
+
+func apply(f func(int) int, x int) int {
+	return f(x)
+}
+
+func test() int {
+	bump := func(x int) int {
+		x++
+		return x
+	}
+	return apply(bump, 41)
+}
