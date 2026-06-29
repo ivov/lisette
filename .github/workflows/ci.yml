@@ -28,7 +28,7 @@ jobs:
       - name: Check PR title
         env:
           PR_TITLE: ${{ github.event.pull_request.title }}
-          CONVENTIONAL_COMMIT_REGEX: '^(feat|fix|refactor|test|docs|chore|ci|perf|build)(\(.+\))?!?: [a-z].*'
+          CONVENTIONAL_COMMIT_REGEX: '^(feat|fix|refactor|test|docs|chore|ci|perf|build)(\(.+\))?!?: [a-z`].*'
         run: |
           if ! echo "$PR_TITLE" | grep -qE "$CONVENTIONAL_COMMIT_REGEX"; then
             echo "PR title: $PR_TITLE"
