@@ -80,62 +80,71 @@ impl GlobalEmitData {
 
         for (key, definition) in definitions.iter() {
             let is_go = go_name::is_go_import(key);
-
-            if is_go
-                && let Type::Function(f) = match definition.ty() {
-                    Type::Forall { body, .. } => body.as_ref(),
-                    other => other,
-                }
-                && let Some(strategy) =
-                    classify_go_return_type(definitions, &f.return_type, definition.go_hints())
-            {
-                globals.go_call_strategies.insert(key.to_string(), strategy);
-            }
-
-            match &definition.body {
-                DefinitionBody::Interface {
-                    definition: iface, ..
-                } if definition.visibility.is_public() => {
-                    for method_name in iface.methods.keys() {
-                        globals
-                            .exported_method_names
-                            .insert(method_name.to_string());
-                    }
-                }
-                DefinitionBody::Value { .. }
-                    if definition.visibility.is_public()
-                        && !is_go
-                        && !key.starts_with(go_name::PRELUDE_PREFIX)
-                        && key.chars().filter(|c| *c == '.').count() >= 2 =>
-                {
-                    let method_name = go_name::unqualified_name(key);
-                    globals
-                        .exported_method_names
-                        .insert(method_name.to_string());
-                }
-                _ => {}
-            }
-
-            if definition.visibility.is_public() && definition.is_display() {
-                globals
-                    .exported_method_names
-                    .insert("to_string".to_string());
-            }
-
-            if let Definition {
-                name: Some(name),
-                body: DefinitionBody::Enum { variants, .. },
-                ..
-            } = definition
-                && PreludeType::from_name(name).is_none()
-            {
-                for (constructor, make_fn) in user_enum_make_function_entries(name, variants) {
-                    globals.make_function_names.insert(constructor, make_fn);
-                }
-            }
+            globals.register_go_call_strategy(definitions, key, definition, is_go);
+            globals.register_exported_methods(key, definition, is_go);
+            globals.register_enum_make_functions(definition);
         }
 
         globals
+    }
+
+    fn register_go_call_strategy(
+        &mut self,
+        definitions: &HashMap<Symbol, Definition>,
+        key: &Symbol,
+        definition: &Definition,
+        is_go: bool,
+    ) {
+        if is_go
+            && let Type::Function(f) = match definition.ty() {
+                Type::Forall { body, .. } => body.as_ref(),
+                other => other,
+            }
+            && let Some(strategy) =
+                classify_go_return_type(definitions, &f.return_type, definition.go_hints())
+        {
+            self.go_call_strategies.insert(key.to_string(), strategy);
+        }
+    }
+
+    fn register_exported_methods(&mut self, key: &Symbol, definition: &Definition, is_go: bool) {
+        match &definition.body {
+            DefinitionBody::Interface {
+                definition: iface, ..
+            } if definition.visibility.is_public() => {
+                for method_name in iface.methods.keys() {
+                    self.exported_method_names.insert(method_name.to_string());
+                }
+            }
+            DefinitionBody::Value { .. }
+                if definition.visibility.is_public()
+                    && !is_go
+                    && !key.starts_with(go_name::PRELUDE_PREFIX)
+                    && key.chars().filter(|c| *c == '.').count() >= 2 =>
+            {
+                let method_name = go_name::unqualified_name(key);
+                self.exported_method_names.insert(method_name.to_string());
+            }
+            _ => {}
+        }
+
+        if definition.visibility.is_public() && definition.is_display() {
+            self.exported_method_names.insert("to_string".to_string());
+        }
+    }
+
+    fn register_enum_make_functions(&mut self, definition: &Definition) {
+        if let Definition {
+            name: Some(name),
+            body: DefinitionBody::Enum { variants, .. },
+            ..
+        } = definition
+            && PreludeType::from_name(name).is_none()
+        {
+            for (constructor, make_fn) in user_enum_make_function_entries(name, variants) {
+                self.make_function_names.insert(constructor, make_fn);
+            }
+        }
     }
 }
 

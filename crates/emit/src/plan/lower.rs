@@ -207,19 +207,15 @@ impl Planner<'_> {
                 alternative,
                 ..
             } => {
-                let directive = self.maybe_line_directive(&expression.get_span());
                 let plan =
                     self.lower_if(condition, consequence, alternative, &PlacePlan::Statement);
-                directed(directive, LoweredStatement::If(plan))
+                self.directed_at(expression, LoweredStatement::If(plan))
             }
             Expression::Loop {
                 body, needs_label, ..
             } => {
-                let directive = self.maybe_line_directive(&expression.get_span());
-                directed(
-                    directive,
-                    LoweredStatement::Loop(self.lower_infinite_loop(body, *needs_label)),
-                )
+                let plan = self.lower_infinite_loop(body, *needs_label);
+                self.directed_at(expression, LoweredStatement::Loop(plan))
             }
             Expression::While {
                 condition,
@@ -227,11 +223,8 @@ impl Planner<'_> {
                 needs_label,
                 ..
             } => {
-                let directive = self.maybe_line_directive(&expression.get_span());
-                directed(
-                    directive,
-                    LoweredStatement::Loop(self.lower_while(condition, body, *needs_label)),
-                )
+                let plan = self.lower_while(condition, body, *needs_label);
+                self.directed_at(expression, LoweredStatement::Loop(plan))
             }
             Expression::Block { .. } => {
                 self.enter_scope();
@@ -241,29 +234,18 @@ impl Planner<'_> {
             }
             Expression::For { .. } => self.lower_for_statement(expression),
             Expression::Continue { .. } => {
-                let directive = self.maybe_line_directive(&expression.get_span());
-                directed(
-                    directive,
-                    LoweredStatement::Continue {
-                        label: self.current_loop_label().map(str::to_string),
-                    },
-                )
+                let label = self.current_loop_label().map(str::to_string);
+                self.directed_at(expression, LoweredStatement::Continue { label })
             }
             Expression::Break { value: None, .. } => {
-                let directive = self.maybe_line_directive(&expression.get_span());
-                directed(
-                    directive,
-                    LoweredStatement::Break {
-                        label: self.current_loop_label().map(str::to_string),
-                    },
-                )
+                let label = self.current_loop_label().map(str::to_string);
+                self.directed_at(expression, LoweredStatement::Break { label })
             }
             Expression::Break {
                 value: Some(value), ..
             } => {
-                let directive = self.maybe_line_directive(&expression.get_span());
                 let plan = self.build_break_value_plan(value);
-                directed(directive, LoweredStatement::BreakValue(plan))
+                self.directed_at(expression, LoweredStatement::BreakValue(plan))
             }
             Expression::Const {
                 identifier,
@@ -271,16 +253,14 @@ impl Planner<'_> {
                 ty,
                 ..
             } => {
-                let directive = self.maybe_line_directive(&expression.get_span());
                 let plan = self.build_const_plan(identifier, value, ty);
-                directed(directive, LoweredStatement::Const(plan))
+                self.directed_at(expression, LoweredStatement::Const(plan))
             }
             Expression::Return {
                 expression: value, ..
             } => {
-                let directive = self.maybe_line_directive(&expression.get_span());
                 let plan = self.build_return_plan(value);
-                directed(directive, LoweredStatement::Return(plan))
+                self.directed_at(expression, LoweredStatement::Return(plan))
             }
             Expression::Let {
                 binding,
@@ -290,10 +270,9 @@ impl Planner<'_> {
                 assert,
                 ..
             } => {
-                let directive = self.maybe_line_directive(&expression.get_span());
                 let plan =
                     self.build_let_plan(binding, value, else_block.as_deref(), *mutable, *assert);
-                directed(directive, LoweredStatement::Let(plan))
+                self.directed_at(expression, LoweredStatement::Let(plan))
             }
             Expression::Assignment {
                 target,
@@ -301,9 +280,8 @@ impl Planner<'_> {
                 compound_operator,
                 ..
             } => {
-                let directive = self.maybe_line_directive(&expression.get_span());
                 let plan = self.build_assignment_plan(target, value, compound_operator.as_ref());
-                directed(directive, LoweredStatement::Assign(plan))
+                self.directed_at(expression, LoweredStatement::Assign(plan))
             }
             Expression::IfLet {
                 pattern,
@@ -313,26 +291,23 @@ impl Planner<'_> {
                 typed_pattern,
                 ..
             } => {
-                let directive = self.maybe_line_directive(&expression.get_span());
                 let arms = if_let_match_arms(pattern, typed_pattern, consequence, alternative);
                 let body = self.lower_match_to_block(scrutinee, &arms, &PlacePlan::Statement);
-                directed(
-                    directive,
+                self.directed_at(
+                    expression,
                     LoweredStatement::Match(MatchStatementPlan { body }),
                 )
             }
             Expression::Match { subject, arms, .. } => {
-                let directive = self.maybe_line_directive(&expression.get_span());
                 let body = self.lower_match_to_block(subject, arms, &PlacePlan::Statement);
-                directed(
-                    directive,
+                self.directed_at(
+                    expression,
                     LoweredStatement::Match(MatchStatementPlan { body }),
                 )
             }
             Expression::Select { arms, .. } => {
-                let directive = self.maybe_line_directive(&expression.get_span());
                 let plan = self.lower_select(arms, &PlacePlan::Statement);
-                directed(directive, LoweredStatement::Select(plan))
+                self.directed_at(expression, LoweredStatement::Select(plan))
             }
             Expression::WhileLet { .. } => self.lower_while_let_statement(expression),
             Expression::Assert { .. } => self.lower_assert_statement(expression),
@@ -359,6 +334,12 @@ impl Planner<'_> {
             }
             _ => self.lower_expression_statement(expression),
         }
+    }
+
+    /// Wrap a lowered statement with `expression`'s source-line directive when
+    /// sourcemaps are enabled (a no-op wrapper otherwise).
+    fn directed_at(&self, expression: &Expression, stmt: LoweredStatement) -> LoweredStatement {
+        directed(self.maybe_line_directive(&expression.get_span()), stmt)
     }
 
     /// Lower the statement-position fall-through: Task/Defer (async value),

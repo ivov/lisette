@@ -312,52 +312,7 @@ impl Planner<'_> {
                 }
                 _ => format!("{}{{}}", self.go_type_string(ty)),
             },
-            Type::Nominal { id, params, .. } => {
-                if id.as_str() == "prelude.Option" {
-                    let inner = params
-                        .first()
-                        .map(|a| self.go_type_string(a))
-                        .unwrap_or_else(|| "any".to_string());
-                    self.require_stdlib();
-                    return format!("{}.MakeOptionNone[{}]()", go_name::GO_STDLIB_PKG, inner);
-                }
-                if go_name::is_go_import(id.as_str()) {
-                    return self.go_imported_zero(ty, id.as_str());
-                }
-
-                if let Some(underlying) = self.get_newtype_underlying(ty) {
-                    let go_ty = self.go_type_string(ty);
-                    let inner = self.lisette_zero(&underlying);
-                    return format!("{}({})", go_ty, inner);
-                }
-
-                if let Some(fields) =
-                    self.lookup_unspecified_fields(ty, "", None, &HashSet::default())
-                {
-                    let go_ty = self.go_type_string(ty);
-                    let is_tuple = self.is_tuple_struct_type(ty);
-                    let pairs: Vec<(String, String)> = fields
-                        .into_iter()
-                        .enumerate()
-                        .filter(|(_, (_, field_ty))| !field_ty.is_slice())
-                        .map(|(index, (name, field_ty))| {
-                            let go_name = if is_tuple {
-                                format!("F{}", index)
-                            } else if self.struct_field_is_exported(ty, &name) {
-                                go_name::make_exported(&name)
-                            } else {
-                                go_name::escape_keyword(&name).into_owned()
-                            };
-                            (go_name, self.lisette_zero(&field_ty))
-                        })
-                        .collect();
-                    return emit_struct_literal(&go_ty, &pairs, ExpressionContext::value());
-                }
-                if let Some(underlying) = ty.get_underlying() {
-                    return self.lisette_zero(underlying);
-                }
-                format!("{}{{}}", self.go_type_string(ty))
-            }
+            Type::Nominal { id, params, .. } => self.lisette_zero_nominal(ty, id.as_str(), params),
             Type::Tuple(elements) => {
                 let parts: Vec<String> = elements.iter().map(|e| self.lisette_zero(e)).collect();
                 self.require_stdlib();
@@ -370,6 +325,49 @@ impl Planner<'_> {
             }
             _ => format!("{}{{}}", self.go_type_string(ty)),
         }
+    }
+
+    fn lisette_zero_nominal(&mut self, ty: &Type, id: &str, params: &[Type]) -> String {
+        if id == "prelude.Option" {
+            let inner = params
+                .first()
+                .map(|a| self.go_type_string(a))
+                .unwrap_or_else(|| "any".to_string());
+            self.require_stdlib();
+            return format!("{}.MakeOptionNone[{}]()", go_name::GO_STDLIB_PKG, inner);
+        }
+        if go_name::is_go_import(id) {
+            return self.go_imported_zero(ty, id);
+        }
+        if let Some(underlying) = self.get_newtype_underlying(ty) {
+            let go_ty = self.go_type_string(ty);
+            let inner = self.lisette_zero(&underlying);
+            return format!("{}({})", go_ty, inner);
+        }
+        if let Some(fields) = self.lookup_unspecified_fields(ty, "", None, &HashSet::default()) {
+            let go_ty = self.go_type_string(ty);
+            let is_tuple = self.is_tuple_struct_type(ty);
+            let pairs: Vec<(String, String)> = fields
+                .into_iter()
+                .enumerate()
+                .filter(|(_, (_, field_ty))| !field_ty.is_slice())
+                .map(|(index, (name, field_ty))| {
+                    let go_name = if is_tuple {
+                        format!("F{}", index)
+                    } else if self.struct_field_is_exported(ty, &name) {
+                        go_name::make_exported(&name)
+                    } else {
+                        go_name::escape_keyword(&name).into_owned()
+                    };
+                    (go_name, self.lisette_zero(&field_ty))
+                })
+                .collect();
+            return emit_struct_literal(&go_ty, &pairs, ExpressionContext::value());
+        }
+        if let Some(underlying) = ty.get_underlying() {
+            return self.lisette_zero(underlying);
+        }
+        format!("{}{{}}", self.go_type_string(ty))
     }
 
     /// Address a struct-call field stored behind a compiler-inserted pointer

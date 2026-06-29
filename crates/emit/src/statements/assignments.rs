@@ -31,38 +31,7 @@ impl Planner<'_> {
         }
 
         if let Some((op, rhs)) = detect_compound_assignment(target, value, compound_operator) {
-            let is_inc_dec = is_literal_one(rhs)
-                && matches!(op, BinaryOperator::Addition | BinaryOperator::Subtraction);
-            let (kind, rhs_has_setup) = if is_inc_dec {
-                let kind = if *op == BinaryOperator::Addition {
-                    CompoundKind::Increment
-                } else {
-                    CompoundKind::Decrement
-                };
-                (kind, false)
-            } else {
-                let staged = self.stage_operand(rhs, ExpressionContext::value());
-                let rhs_has_setup =
-                    !staged.setup.is_empty() || self.rhs_contains_effectful_call(rhs);
-                let kind = CompoundKind::OpAssign {
-                    op_text: format!("{}", op),
-                    rhs: value_plan_from_statements(staged.setup, staged.value),
-                };
-                (kind, rhs_has_setup)
-            };
-            let mut target_capture: Vec<LoweredStatement> = Vec::new();
-            let target_str = if is_order_sensitive(target) {
-                self.emit_left_value_capturing(&mut target_capture, target, rhs_has_setup)
-            } else {
-                self.emit_left_value(&mut target_capture, target)
-            };
-            return AssignPlan {
-                form: AssignForm::Compound {
-                    target_capture,
-                    target_str,
-                    kind,
-                },
-            };
+            return self.build_compound_assignment_plan(target, op, rhs);
         }
 
         if self.target_binds_to_discard(target) {
@@ -87,12 +56,7 @@ impl Planner<'_> {
             && target_ty.resolves_to_unknown()
             && value.is_none_literal()
         {
-            let mut target_capture: Vec<LoweredStatement> = Vec::new();
-            let target_str = if is_order_sensitive(target) {
-                self.emit_left_value_capturing(&mut target_capture, target, false)
-            } else {
-                self.emit_left_value(&mut target_capture, target)
-            };
+            let (target_capture, target_str) = self.capture_assignment_target(target, false);
             return AssignPlan {
                 form: AssignForm::NilClear {
                     target_capture,
@@ -106,12 +70,7 @@ impl Planner<'_> {
         // setup + coercion setup into the value plan in emission order.
         let rhs_staged = self.stage_composite(value, ExpressionContext::value());
         let rhs_has_setup = !rhs_staged.setup.is_empty() || self.rhs_contains_effectful_call(value);
-        let mut target_capture: Vec<LoweredStatement> = Vec::new();
-        let target_str = if is_order_sensitive(target) {
-            self.emit_left_value_capturing(&mut target_capture, target, rhs_has_setup)
-        } else {
-            self.emit_left_value(&mut target_capture, target)
-        };
+        let (target_capture, target_str) = self.capture_assignment_target(target, rhs_has_setup);
         let mut value_setup = rhs_staged.setup;
         let coercion = if let Some(target_ty) = go_field_ty {
             Coercion::resolve(
@@ -137,6 +96,58 @@ impl Planner<'_> {
                 value: value_plan_from_statements(value_setup, final_value),
             },
         }
+    }
+
+    /// Build a compound assignment plan (`+=`, `-=`, `++`, etc.), staging the
+    /// right-hand side and capturing the target in evaluation order.
+    fn build_compound_assignment_plan(
+        &mut self,
+        target: &Expression,
+        op: &BinaryOperator,
+        rhs: &Expression,
+    ) -> AssignPlan {
+        let is_inc_dec = is_literal_one(rhs)
+            && matches!(op, BinaryOperator::Addition | BinaryOperator::Subtraction);
+        let (kind, rhs_has_setup) = if is_inc_dec {
+            let kind = if *op == BinaryOperator::Addition {
+                CompoundKind::Increment
+            } else {
+                CompoundKind::Decrement
+            };
+            (kind, false)
+        } else {
+            let staged = self.stage_operand(rhs, ExpressionContext::value());
+            let rhs_has_setup = !staged.setup.is_empty() || self.rhs_contains_effectful_call(rhs);
+            let kind = CompoundKind::OpAssign {
+                op_text: format!("{}", op),
+                rhs: value_plan_from_statements(staged.setup, staged.value),
+            };
+            (kind, rhs_has_setup)
+        };
+        let (target_capture, target_str) = self.capture_assignment_target(target, rhs_has_setup);
+        AssignPlan {
+            form: AssignForm::Compound {
+                target_capture,
+                target_str,
+                kind,
+            },
+        }
+    }
+
+    /// Emit a left-value target, capturing order-sensitive sub-expressions into
+    /// preceding statements when the target reads must be pinned before the RHS.
+    fn capture_assignment_target(
+        &mut self,
+        target: &Expression,
+        rhs_has_setup: bool,
+    ) -> (Vec<LoweredStatement>, String) {
+        let mut target_capture: Vec<LoweredStatement> = Vec::new();
+        let target_str = if is_order_sensitive(target) {
+            self.emit_left_value_capturing(&mut target_capture, target, rhs_has_setup)
+        } else {
+            self.emit_left_value(&mut target_capture, target)
+        };
+        (target_capture, target_str)
     }
 
     pub(crate) fn rhs_contains_effectful_call(&self, expression: &Expression) -> bool {

@@ -6,7 +6,7 @@ use crate::context::expression::ExpressionContext;
 use crate::expressions::emission::StagedExpression;
 use crate::plan::bodies::LoweredStatement;
 use crate::plan::values::{ValuePlan, value_plan_from_statements};
-use syntax::ast::{FormatStringPart, Literal};
+use syntax::ast::{Expression, FormatStringPart, Literal};
 use syntax::types::{SimpleKind, Type};
 
 impl Planner<'_> {
@@ -49,55 +49,67 @@ impl Planner<'_> {
                 value
             }
             Literal::Slice(elements) => {
-                let element_lisette_ty = ty
-                    .get_type_params()
-                    .expect("Slice type must have type args")
-                    .first()
-                    .expect("Slice type must have element type")
-                    .clone();
-                let element_ty = self.go_type_string(&element_lisette_ty);
-
-                if elements.is_empty() {
-                    // Parens around the slice type disambiguate the conversion when
-                    // the element type itself ends in `)` (e.g. `func(int)`); Go
-                    // otherwise parses `[]func(int)(nil)` as a call expression.
-                    format!("([]{})(nil)", element_ty)
-                } else {
-                    let stages: Vec<StagedExpression> = elements
-                        .iter()
-                        .map(|e| self.stage_composite(e, ExpressionContext::value()))
-                        .collect();
-                    let (slice_setup, rendered) = self.sequence_structured(stages, "_v");
-                    setup.extend(slice_setup);
-
-                    let mut wrapped: Vec<String> = Vec::with_capacity(rendered.len());
-                    for (expr, emitted) in elements.iter().zip(rendered) {
-                        let coercion = Coercion::resolve(
-                            self,
-                            &expr.get_type(),
-                            &element_lisette_ty,
-                            CoercionDirection::Internal,
-                        );
-                        let (coercion_setup, coerced) = coercion.lower(self, emitted);
-                        setup.extend(coercion_setup);
-                        wrapped.push(coerced);
-                    }
-                    let elements = wrapped;
-
-                    if elements.len() > 1 && elements.iter().any(|e| e.len() > 30) {
-                        let indented = elements
-                            .iter()
-                            .map(|e| format!("\t{}", e))
-                            .collect::<Vec<_>>()
-                            .join(",\n");
-                        format!("[]{}{{\n{},\n}}", element_ty, indented)
-                    } else {
-                        format!("[]{}{{ {} }}", element_ty, elements.join(", "))
-                    }
-                }
+                let (slice_setup, slice_value) = self.emit_slice_literal(elements, ty);
+                setup = slice_setup;
+                slice_value
             }
         };
         value_plan_from_statements(setup, value)
+    }
+
+    fn emit_slice_literal(
+        &mut self,
+        elements: &[Expression],
+        ty: &Type,
+    ) -> (Vec<LoweredStatement>, String) {
+        let element_lisette_ty = ty
+            .get_type_params()
+            .expect("Slice type must have type args")
+            .first()
+            .expect("Slice type must have element type")
+            .clone();
+        let element_ty = self.go_type_string(&element_lisette_ty);
+
+        if elements.is_empty() {
+            // Parens around the slice type disambiguate the conversion when
+            // the element type itself ends in `)` (e.g. `func(int)`); Go
+            // otherwise parses `[]func(int)(nil)` as a call expression.
+            return (Vec::new(), format!("([]{})(nil)", element_ty));
+        }
+
+        let mut setup: Vec<LoweredStatement> = Vec::new();
+        let stages: Vec<StagedExpression> = elements
+            .iter()
+            .map(|e| self.stage_composite(e, ExpressionContext::value()))
+            .collect();
+        let (slice_setup, rendered) = self.sequence_structured(stages, "_v");
+        setup.extend(slice_setup);
+
+        let mut wrapped: Vec<String> = Vec::with_capacity(rendered.len());
+        for (expr, emitted) in elements.iter().zip(rendered) {
+            let coercion = Coercion::resolve(
+                self,
+                &expr.get_type(),
+                &element_lisette_ty,
+                CoercionDirection::Internal,
+            );
+            let (coercion_setup, coerced) = coercion.lower(self, emitted);
+            setup.extend(coercion_setup);
+            wrapped.push(coerced);
+        }
+        let elements = wrapped;
+
+        let value = if elements.len() > 1 && elements.iter().any(|e| e.len() > 30) {
+            let indented = elements
+                .iter()
+                .map(|e| format!("\t{}", e))
+                .collect::<Vec<_>>()
+                .join(",\n");
+            format!("[]{}{{\n{},\n}}", element_ty, indented)
+        } else {
+            format!("[]{}{{ {} }}", element_ty, elements.join(", "))
+        };
+        (setup, value)
     }
 
     fn emit_format_string(
@@ -136,15 +148,7 @@ impl Planner<'_> {
                     }
                 }
                 FormatStringPart::Expression(expression) => {
-                    let format_verb = match expression.get_type().as_simple() {
-                        Some(SimpleKind::Rune) => "%c",
-                        Some(SimpleKind::String) => "%s",
-                        Some(SimpleKind::Bool) => "%t",
-                        Some(k) if k.is_signed_int() || k.is_unsigned_int() => "%d",
-                        Some(k) if k.is_float() => "%g",
-                        _ => "%v",
-                    };
-                    format_string.push_str(format_verb);
+                    format_string.push_str(format_verb_for(&expression.get_type()));
                     args.push(
                         emitted
                             .next()
@@ -172,6 +176,18 @@ impl Planner<'_> {
             setup,
             format!("fmt.Sprintf(\"{}\", {})", format_string, args.join(", ")),
         )
+    }
+}
+
+/// The `fmt` printf verb for interpolating a value of `ty` into an f-string.
+fn format_verb_for(ty: &Type) -> &'static str {
+    match ty.as_simple() {
+        Some(SimpleKind::Rune) => "%c",
+        Some(SimpleKind::String) => "%s",
+        Some(SimpleKind::Bool) => "%t",
+        Some(k) if k.is_signed_int() || k.is_unsigned_int() => "%d",
+        Some(k) if k.is_float() => "%g",
+        _ => "%v",
     }
 }
 
