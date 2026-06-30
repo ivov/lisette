@@ -322,6 +322,30 @@ impl InferResult {
         self
     }
 
+    pub fn assert_infer_code_once(self, code: &str) -> Self {
+        self.assert_code_count(&format!("infer.{}", code), 1)
+    }
+
+    fn assert_code_count(self, expected_code: &str, expected: usize) -> Self {
+        let count = self
+            .errors
+            .iter()
+            .filter(|err| err.code_str() == Some(expected_code))
+            .count();
+        if count != expected {
+            let actual_codes: Vec<&str> = self
+                .errors
+                .iter()
+                .filter_map(|err| err.code_str())
+                .collect();
+            panic!(
+                "Expected {} occurrence(s) of '{}', found {}. Codes: {:?}",
+                expected, expected_code, count, actual_codes
+            );
+        }
+        self
+    }
+
     pub fn assert_type_mismatch(self) -> Self {
         self.assert_error_contains("type mismatch")
     }

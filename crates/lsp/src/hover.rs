@@ -85,7 +85,7 @@ fn resolve_annotation_hover(
             .find_map(recurse)
             .or_else(|| recurse(return_type.as_ref())),
         Annotation::Tuple { elements, .. } => elements.iter().find_map(recurse),
-        Annotation::Unknown | Annotation::Opaque { .. } => None,
+        Annotation::Unknown | Annotation::Opaque { .. } | Annotation::Constant { .. } => None,
     }
 }
 

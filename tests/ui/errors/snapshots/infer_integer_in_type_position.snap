@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Integer in type position
+   ╭─[test.lis:3:16]
+ 2 │ fn test() {
+ 3 │   let x: Slice<3> = []
+   ·                ┬
+   ·                ╰── expected a type, found an integer literal
+ 4 │ }
+   ╰────
+  help: Integer literals are not valid type arguments · code: [infer.integer_in_type_position]

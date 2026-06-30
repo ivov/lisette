@@ -622,7 +622,10 @@ impl<'source> Parser<'source> {
     }
 
     fn can_start_annotation(&self) -> bool {
-        matches!(self.current_token().kind, Identifier | Function | LeftParen)
+        matches!(
+            self.current_token().kind,
+            Identifier | Function | LeftParen | Integer
+        )
     }
 
     fn at_item_boundary(&self) -> bool {

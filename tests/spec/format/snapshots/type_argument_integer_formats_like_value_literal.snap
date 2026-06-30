@@ -1,0 +1,5 @@
+---
+source: tests/spec/format/mod.rs
+description: "fn test(a: Array<byte, 0x10>, b: Array<byte, 1_000>, c: Array<byte, 16>) {}"
+---
+fn test(a: Array<byte, 0x10>, b: Array<byte, 1000>, c: Array<byte, 16>) {}

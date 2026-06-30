@@ -7992,3 +7992,26 @@ fn ref_alias_satisfies_interface_with_pointer_receiver() {
     )
     .assert_no_errors();
 }
+
+#[test]
+fn integer_in_type_position_is_rejected() {
+    infer(r#"{ let x: Slice<3> = [] }"#).assert_infer_code("integer_in_type_position");
+}
+
+#[test]
+fn integer_in_type_position_not_duplicated_in_annotation() {
+    infer(r#"{ let x: Slice<int, 3> = [] }"#).assert_infer_code_once("integer_in_type_position");
+}
+
+#[test]
+fn integer_in_type_position_not_duplicated_in_call() {
+    infer(
+        r#"
+fn f<T>() {}
+fn main() {
+  f<int, 3>()
+}
+"#,
+    )
+    .assert_infer_code_once("integer_in_type_position");
+}

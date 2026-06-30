@@ -165,25 +165,21 @@ impl TaskState<'_> {
                     other => (vec![], other),
                 };
 
+                let concrete_args: Vec<Type> = params
+                    .iter()
+                    .map(|arg| self.convert_to_type(store, arg, span))
+                    .collect();
+
                 if generics.len() != params.len() {
-                    let actual_types: Vec<Type> = params
-                        .iter()
-                        .map(|arg| self.convert_to_type(store, arg, span))
-                        .collect();
                     let generics_as_str: Vec<String> =
                         generics.iter().map(|s| s.to_string()).collect();
                     self.sink.push(diagnostics::infer::generics_arity_mismatch(
                         &generics_as_str,
                         params,
-                        &actual_types,
+                        &concrete_args,
                         *span,
                     ));
                 }
-
-                let concrete_args: Vec<Type> = params
-                    .iter()
-                    .map(|arg| self.convert_to_type(store, arg, span))
-                    .collect();
                 let resolved_ty = if generics.is_empty() && concrete_args.is_empty() {
                     body
                 } else {
@@ -255,6 +251,14 @@ impl TaskState<'_> {
                     .map(|e| self.convert_to_type(store, e, span))
                     .collect();
                 Type::Tuple(element_types)
+            }
+
+            Annotation::Constant {
+                span: const_span, ..
+            } => {
+                self.sink
+                    .push(diagnostics::infer::integer_in_type_position(*const_span));
+                Type::Error
             }
 
             Annotation::Opaque { .. } => {

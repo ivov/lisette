@@ -802,6 +802,14 @@ fn function_with_generic() {
 }
 
 #[test]
+fn integer_in_type_argument_position() {
+    let input = r#"
+fn test(value: Array<int, 3>) {}
+"#;
+    assert_parse_snapshot!(input);
+}
+
+#[test]
 fn function_with_empty_body() {
     let input = r#"
 fn noop() {

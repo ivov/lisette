@@ -535,6 +535,9 @@ impl<'a> Formatter<'a> {
                     .append(join(elem_docs, Document::str(", ")))
                     .append(")")
             }
+            Annotation::Constant { value, text, .. } => {
+                Document::string(text.clone().unwrap_or_else(|| value.to_string()))
+            }
             Annotation::Opaque { .. } => Document::Sequence(vec![]),
         }
     }

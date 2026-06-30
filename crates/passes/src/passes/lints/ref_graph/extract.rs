@@ -691,7 +691,7 @@ fn walk_annotation(
                 walk_annotation(module, e, graph, alias_map, from);
             }
         }
-        Annotation::Unknown | Annotation::Opaque { .. } => {}
+        Annotation::Unknown | Annotation::Opaque { .. } | Annotation::Constant { .. } => {}
     }
 }
 

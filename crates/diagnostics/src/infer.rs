@@ -219,6 +219,13 @@ pub fn value_in_type_position(
     diag
 }
 
+pub fn integer_in_type_position(span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Integer in type position")
+        .with_infer_code("integer_in_type_position")
+        .with_span_label(&span, "expected a type, found an integer literal")
+        .with_help("Integer literals are not valid type arguments.")
+}
+
 pub fn undeclared_impl_type_param(
     type_name: &str,
     annotation_span: Span,

@@ -670,20 +670,6 @@ impl InferCtx<'_, '_> {
         let is_method_only_arity =
             receiver_generics_count > 0 && type_args.len() == method_only_count;
 
-        if !is_full_arity && !is_method_only_arity {
-            let actual_types: Vec<Type> = type_args
-                .iter()
-                .map(|arg| self.convert_to_type(store, arg, span))
-                .collect();
-            let vars_as_str: Vec<String> = vars.iter().map(|s| s.to_string()).collect();
-            self.sink.push(diagnostics::infer::generics_arity_mismatch(
-                &vars_as_str,
-                type_args,
-                &actual_types,
-                *span,
-            ));
-        }
-
         let mut resolved_args: Vec<Type> = Vec::new();
         let mut instantiated = if is_method_only_arity {
             let mut map: SubstitutionMap = SubstitutionMap::default();
@@ -702,6 +688,16 @@ impl InferCtx<'_, '_> {
             resolved_args = args;
             instantiated
         };
+
+        if !is_full_arity && !is_method_only_arity {
+            let vars_as_str: Vec<String> = vars.iter().map(|s| s.to_string()).collect();
+            self.sink.push(diagnostics::infer::generics_arity_mismatch(
+                &vars_as_str,
+                type_args,
+                &resolved_args,
+                *span,
+            ));
+        }
 
         if let Expression::DotAccess { expression, .. } = callee_expression {
             let receiver_ty = expression.get_type().resolve_in(&self.env);

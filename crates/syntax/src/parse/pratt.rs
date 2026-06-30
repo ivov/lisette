@@ -475,6 +475,9 @@ fn format_annotation(ann: &ast::Annotation) -> std::string::String {
                 format_annotation(return_type)
             )
         }
+        ast::Annotation::Constant { value, text, .. } => {
+            text.clone().unwrap_or_else(|| value.to_string())
+        }
         ast::Annotation::Unknown | ast::Annotation::Opaque { .. } => "_".to_string(),
     }
 }

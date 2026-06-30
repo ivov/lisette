@@ -643,6 +643,11 @@ pub enum Annotation {
     Opaque {
         span: Span,
     },
+    Constant {
+        value: u64,
+        text: Option<String>,
+        span: Span,
+    },
 }
 
 impl Annotation {
@@ -660,6 +665,7 @@ impl Annotation {
             Self::Function { span, .. } => *span,
             Self::Tuple { span, .. } => *span,
             Self::Opaque { span } => *span,
+            Self::Constant { span, .. } => *span,
             Self::Unknown => Span::dummy(),
         }
     }

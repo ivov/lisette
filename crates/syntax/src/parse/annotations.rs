@@ -1,6 +1,6 @@
 use super::{MAX_TUPLE_ARITY, ParamMode, Parser};
 use crate::EcoString;
-use crate::ast::{Annotation, Attribute, Expression, Generic, Span, Visibility};
+use crate::ast::{Annotation, Attribute, Expression, Generic, Literal, Span, Visibility};
 use crate::lex::Token;
 use crate::lex::TokenKind::*;
 use crate::types::Type;
@@ -62,8 +62,20 @@ impl<'source> Parser<'source> {
                     span,
                 }
             }
+            Integer => self.parse_constant_annotation(),
             _ => self.parse_named_annotation(),
         }
+    }
+
+    fn parse_constant_annotation(&mut self) -> Annotation {
+        let token = self.current_token();
+        let span = Span::new(self.file_id, token.byte_offset, token.byte_length);
+        let (value, text) = match self.parse_integer_text(token.text) {
+            Literal::Integer { value, text } => (value, text),
+            _ => (0, None),
+        };
+        self.next();
+        Annotation::Constant { value, text, span }
     }
 
     fn parse_named_annotation(&mut self) -> Annotation {

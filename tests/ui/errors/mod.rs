@@ -4765,6 +4765,16 @@ fn test<T>(x: T<int>) -> T {
 }
 
 #[test]
+fn infer_integer_in_type_position() {
+    let input = r#"
+fn test() {
+  let x: Slice<3> = []
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
 fn infer_irrefutable_while_let() {
     let input = r#"
 fn test() {

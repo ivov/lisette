@@ -119,6 +119,9 @@ fn annotation_to_string(ann: &Annotation) -> String {
                 .join(", ");
             format!("({})", inner)
         }
+        Annotation::Constant { value, text, .. } => {
+            text.clone().unwrap_or_else(|| value.to_string())
+        }
         Annotation::Unknown => "Unknown".to_string(),
         Annotation::Opaque { .. } => String::new(),
     }

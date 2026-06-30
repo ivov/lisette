@@ -148,6 +148,6 @@ fn annotation_remove_names(annotation: &Annotation, names: &mut HashSet<EcoStrin
                 annotation_remove_names(e, names);
             }
         }
-        Annotation::Unknown | Annotation::Opaque { .. } => {}
+        Annotation::Unknown | Annotation::Opaque { .. } | Annotation::Constant { .. } => {}
     }
 }

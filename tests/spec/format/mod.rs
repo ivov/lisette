@@ -163,6 +163,13 @@ fn call_with_multiple_type_args() {
 }
 
 #[test]
+fn type_argument_integer_formats_like_value_literal() {
+    assert_format_snapshot!(
+        "fn test(a: Array<byte, 0x10>, b: Array<byte, 1_000>, c: Array<byte, 16>) {}"
+    );
+}
+
+#[test]
 fn call_with_single_closure_arg() {
     assert_format_snapshot!("fn test() { map(|x| x + 1) }");
 }
