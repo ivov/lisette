@@ -391,6 +391,29 @@ To remove a dependency:
 - Delete the entry from `lisette.toml`
 - Run `lis sync`
 
+### Replacing a dependency
+
+The `--replace` flag adds a dependency under its usual name but sources it from a different module. This is how Lisette exposes Go's [replace directive](https://go.dev/ref/mod#go-mod-file-replace). Use this flag to source a dependency from a fork, to override a version another dependency pulls in, or to redirect to a mirror.
+
+```sh
+lis add gorilla/mux --replace you/mux
+```
+
+The replacement is recorded in the manifest:
+
+```toml
+[dependencies.go]
+"github.com/gorilla/mux" = { replacement = "github.com/you/mux@v1.9.0" }
+```
+
+The substitution is transparent to your code:
+
+```rs
+import "go:github.com/gorilla/mux"
+```
+
+To undo the replacement, re-add the dependency without `--replace`.
+
 <br>
 
 <table><tr>

@@ -1,16 +1,18 @@
-//! Go dependency reconciliation engine.
+//! Go dependency reconciliation engine, shared by `lis add` and `lis sync`.
 //!
 //! The graph walk (bindgen each package, follow its imports), MVS-drift
-//! convergence, and manifest application live here, separate from the `lis add`
-//! CLI handler that drives them.
+//! convergence, replacement-closure reconciliation, and manifest application live here
+//! so neither handler owns them.
 
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
+use crate::go_cli;
 use crate::output::{print_progress, print_warning};
 use crate::workspace::GoWorkspace;
 use crate::{cli_error, error};
-use deps::{GoModule, remove_go_dep, resolve_empty_via, trim_dead_via_parents, upsert_go_dep};
+use deps::{GoModule, resolve_empty_via, trim_dead_via_parents, upsert_go_dependency};
+use stdlib::Target;
 
 /// The dependency to reconcile, after its containing module is resolved.
 pub(crate) struct ResolvedDependency {
@@ -52,7 +54,143 @@ impl GraphResult {
     }
 }
 
-pub(crate) fn reconcile_module_graph(
+/// The replacement a `--replace` add resolves to: where its code comes from.
+#[derive(Clone)]
+pub(crate) struct ReplacementIdentity {
+    pub(crate) replacement_path: String,
+    pub(crate) replacement_version: String,
+}
+
+/// How `apply_graph_to_manifest` writes a replaced root: `AddDirect` promotes it to
+/// a direct dep, `SyncPreserveVia` keeps an existing `via` (so a replaced
+/// transitive is not silently promoted).
+pub(crate) enum ReplacedRootMode {
+    AddDirect,
+    SyncPreserveVia,
+}
+
+pub(crate) struct ReplacedRoot<'a> {
+    pub(crate) identity: &'a ReplacementIdentity,
+    pub(crate) mode: ReplacedRootMode,
+}
+
+/// Re-walk every declared replacement's closure and reconcile the manifest, for `lis sync`.
+pub(crate) fn reconcile_declared_replacements(
+    project_root: &Path,
+    target_dir: &Path,
+    manifest: &deps::Manifest,
+) -> Result<(), i32> {
+    let replaced_roots: Vec<(String, ReplacementIdentity)> = manifest
+        .go_deps()
+        .into_iter()
+        .filter_map(|(module, dep)| match dep {
+            deps::GoDependency::Replaced {
+                replacement_path,
+                replacement_version,
+                ..
+            } => Some((
+                module,
+                ReplacementIdentity {
+                    replacement_path,
+                    replacement_version,
+                },
+            )),
+            deps::GoDependency::Remote { .. } => None,
+        })
+        .collect();
+
+    if replaced_roots.is_empty() {
+        return Ok(());
+    }
+
+    go_cli::require_go()?;
+
+    // Seed every declared dep so MVS picks the versions the real build sees.
+    let locator = deps::TypedefLocator::new(
+        manifest.go_deps(),
+        Some(project_root.to_path_buf()),
+        Target::host(),
+    );
+    if let Err(msg) = go_cli::write_go_mod(target_dir, &manifest.project.name, &locator) {
+        error!("failed to write target/go.mod", msg);
+        return Err(1);
+    }
+
+    let typedef_cache_dir = deps::typedef_cache_dir(project_root);
+    let workspace = GoWorkspace::new(target_dir, &typedef_cache_dir, Target::host());
+
+    // Walk all replacements before writing the manifest, so a partial failure leaves it untouched.
+    let replacements: HashMap<String, ReplacementIdentity> =
+        replaced_roots.iter().cloned().collect();
+
+    let mut walked: Vec<(String, ReplacementIdentity, GraphResult)> = Vec::new();
+    for (original, replacement) in &replaced_roots {
+        let resolved = ResolvedDependency {
+            requested_package: original.clone(),
+            canonical_module: original.clone(),
+        };
+
+        let graph = reconcile_root(&resolved, &workspace, &replacements)?;
+        walked.push((original.clone(), replacement.clone(), graph));
+    }
+
+    for (original, replacement, graph) in &walked {
+        let current = match deps::parse_manifest(project_root) {
+            Ok(m) => m,
+            Err(msg) => {
+                error!("failed to read manifest", msg);
+                return Err(1);
+            }
+        };
+        apply_graph_to_manifest(
+            original,
+            project_root,
+            &current,
+            &replacement.replacement_version,
+            &workspace,
+            graph,
+            Some(ReplacedRoot {
+                identity: replacement,
+                mode: ReplacedRootMode::SyncPreserveVia,
+            }),
+        )?;
+    }
+
+    Ok(())
+}
+
+/// A Go resolution error that means a `replace` target is not import-compatible:
+/// its own packages do not resolve under the original module path (Go binds one
+/// module to two import paths).
+fn import_compat_hint(go_error: &str) -> Option<&'static str> {
+    go_error
+        .contains("used for two different module paths")
+        .then_some(
+            "the `replace` target is not import-compatible: keep its `module` line as the original module path so its own imports resolve",
+        )
+}
+
+/// Reconcile a root's full module graph: walk the manifest subgraph, build each
+/// package's typedefs, expand modules the walk did not reach, and rebuild any
+/// cache entry MVS drift moved to a new version. Returns the resolved graph for
+/// `apply_graph_to_manifest`, shared by `lis add` and `lis sync`.
+pub(crate) fn reconcile_root(
+    dep: &ResolvedDependency,
+    workspace: &GoWorkspace,
+    replacements: &HashMap<String, ReplacementIdentity>,
+) -> Result<GraphResult, i32> {
+    let mut graph = reconcile_module_graph(dep, workspace)?;
+    let bindgenned = walk_typedef_cache(dep, workspace, &mut graph, replacements)?;
+    expand_unwalked_modules(workspace, &mut graph)?;
+    rebuild_drifted_cache_entries(workspace, &graph, &bindgenned, replacements);
+    Ok(graph)
+}
+
+/// Manifest walk: BFS the third-party module subgraph from `dep.canonical_module`
+/// via `go list -json M/...`. Module-grained so the manifest declares every
+/// module a future subpackage import could reach; the outer loop converges
+/// MVS drift since MVS only moves upward.
+fn reconcile_module_graph(
     dep: &ResolvedDependency,
     workspace: &GoWorkspace,
 ) -> Result<GraphResult, i32> {
@@ -72,7 +210,12 @@ pub(crate) fn reconcile_module_graph(
                 Ok(v) => v,
                 Err(msg) => {
                     if is_explicit {
-                        error!("failed to resolve module version", msg);
+                        match import_compat_hint(&msg) {
+                            Some(hint) => {
+                                cli_error!("failed to resolve module version", msg, hint)
+                            }
+                            None => error!("failed to resolve module version", msg),
+                        }
                         return Err(1);
                     }
                     if failed_transitives.insert(module_path.clone()) {
@@ -97,7 +240,12 @@ pub(crate) fn reconcile_module_graph(
                 Ok(l) => l,
                 Err(msg) => {
                     if is_explicit {
-                        error!("failed to scan transitive modules", msg);
+                        match import_compat_hint(&msg) {
+                            Some(hint) => {
+                                cli_error!("failed to scan transitive modules", msg, hint)
+                            }
+                            None => error!("failed to scan transitive modules", msg),
+                        }
                         return Err(1);
                     }
                     if failed_transitives.insert(module_path.clone()) {
@@ -168,15 +316,53 @@ pub(crate) fn reconcile_module_graph(
     })
 }
 
+/// The `Replacement` a module's typedef cache is keyed by, if it is a declared replacement.
+fn replacement_for<'a>(
+    module_path: &str,
+    replacements: &'a HashMap<String, ReplacementIdentity>,
+) -> Option<deps::Replacement<'a>> {
+    replacements
+        .get(module_path)
+        .map(|identity| deps::Replacement {
+            path: &identity.replacement_path,
+            version: &identity.replacement_version,
+        })
+}
+
+/// The declared replacement redirects, keyed by original module path.
+pub(crate) fn declared_replacements(
+    manifest: &deps::Manifest,
+) -> HashMap<String, ReplacementIdentity> {
+    manifest
+        .go_deps()
+        .into_iter()
+        .filter_map(|(module, dep)| match dep {
+            deps::GoDependency::Replaced {
+                replacement_path,
+                replacement_version,
+                ..
+            } => Some((
+                module,
+                ReplacementIdentity {
+                    replacement_path,
+                    replacement_version,
+                },
+            )),
+            deps::GoDependency::Remote { .. } => None,
+        })
+        .collect()
+}
+
 /// Cache walk: bindgen the requested package, then recurse into each
 /// typedef's own `go:` imports. Sibling subpackages stay cache misses for
 /// the locator to handle on first access. Returns each bindgenned
 /// `(module, version, package)` so any later MVS drift in
 /// `expand_unwalked_modules` can re-reconcile at the new pin.
-pub(crate) fn walk_typedef_cache(
+fn walk_typedef_cache(
     dep: &ResolvedDependency,
     workspace: &GoWorkspace,
     module_graph: &mut GraphResult,
+    replacements: &HashMap<String, ReplacementIdentity>,
 ) -> Result<Vec<BindgennedPackage>, i32> {
     let mut visited: HashSet<(String, String)> = HashSet::new();
     let mut queue: Vec<(String, String, String)> = Vec::new();
@@ -198,6 +384,7 @@ pub(crate) fn walk_typedef_cache(
         let module = GoModule {
             path: &module_path,
             version: &version,
+            replacement: replacement_for(&module_path, replacements),
         };
 
         match workspace.reconcile_package(module, &package_path) {
@@ -301,10 +488,11 @@ pub(crate) struct BindgennedPackage {
 }
 
 /// Re-reconcile cache entries whose module version was raised by MVS drift.
-pub(crate) fn rebuild_drifted_cache_entries(
+fn rebuild_drifted_cache_entries(
     workspace: &GoWorkspace,
     graph: &GraphResult,
     bindgenned: &[BindgennedPackage],
+    replacements: &HashMap<String, ReplacementIdentity>,
 ) {
     for entry in bindgenned {
         let Some(current) = graph.versions.get(&entry.module) else {
@@ -316,6 +504,7 @@ pub(crate) fn rebuild_drifted_cache_entries(
         let module = GoModule {
             path: &entry.module,
             version: current,
+            replacement: replacement_for(&entry.module, replacements),
         };
         match workspace.reconcile_package(module, &entry.package) {
             Ok(stubs) => warn_stubbed(&stubs),
@@ -341,10 +530,7 @@ fn warn_stubbed(stubs: &[String]) {
 /// Run the manifest walk for modules in `graph.versions` whose
 /// `find_third_party_modules` result is missing, until the graph is closed
 /// under MVS drift. Failures are warnings since these are all transitives.
-pub(crate) fn expand_unwalked_modules(
-    workspace: &GoWorkspace,
-    graph: &mut GraphResult,
-) -> Result<(), i32> {
+fn expand_unwalked_modules(workspace: &GoWorkspace, graph: &mut GraphResult) -> Result<(), i32> {
     let mut failed: HashSet<String> = HashSet::new();
 
     let mut queue: Vec<String> = graph
@@ -545,6 +731,7 @@ pub(crate) fn apply_graph_to_manifest(
     fallback_version: &str,
     workspace: &GoWorkspace,
     graph: &GraphResult,
+    replaced_root: Option<ReplacedRoot>,
 ) -> Result<Vec<DirectUpgrade>, i32> {
     let existing_deps = manifest.go_deps();
     let transitives = graph.transitive_map(added_dep);
@@ -555,7 +742,34 @@ pub(crate) fn apply_graph_to_manifest(
         .unwrap_or(fallback_version);
     let mut upgraded: Vec<DirectUpgrade> = Vec::new();
 
-    if let Err(msg) = upsert_go_dep(project_root, added_dep, added_dep_version, None) {
+    let root_result = match replaced_root {
+        Some(replaced_root) => {
+            let via = match replaced_root.mode {
+                ReplacedRootMode::SyncPreserveVia => {
+                    existing_deps.get(added_dep).and_then(|d| d.via().cloned())
+                }
+                ReplacedRootMode::AddDirect => None,
+            };
+            upsert_go_dependency(
+                project_root,
+                added_dep,
+                &deps::GoDependency::Replaced {
+                    replacement_path: replaced_root.identity.replacement_path.clone(),
+                    replacement_version: replaced_root.identity.replacement_version.clone(),
+                    via,
+                },
+            )
+        }
+        None => upsert_go_dependency(
+            project_root,
+            added_dep,
+            &deps::GoDependency::Remote {
+                version: added_dep_version.to_string(),
+                via: None,
+            },
+        ),
+    };
+    if let Err(msg) = root_result {
         error!("failed to update manifest", msg);
         return Err(1);
     }
@@ -569,27 +783,40 @@ pub(crate) fn apply_graph_to_manifest(
             None => continue,
         };
 
-        // If already a direct dep, refresh the version but keep it direct
-        if let Some(existing) = existing_deps.get(module_path.as_str())
-            && existing.via.is_none()
+        // If already a direct dep, refresh the version but keep it direct.
+        let existing = existing_deps.get(module_path.as_str());
+        if let Some(existing) = existing
+            && existing.via().is_none()
         {
-            if existing.version != version {
-                upsert_go_dep(project_root, module_path, version, None).map_err(|msg| {
+            if let deps::GoDependency::Remote {
+                version: existing_version,
+                ..
+            } = existing
+                && existing_version != version
+            {
+                upsert_go_dependency(
+                    project_root,
+                    module_path,
+                    &deps::GoDependency::Remote {
+                        version: version.to_string(),
+                        via: None,
+                    },
+                )
+                .map_err(|msg| {
                     error!("failed to update manifest", msg);
                     1
                 })?;
                 upgraded.push(DirectUpgrade {
                     path: (*module_path).clone(),
-                    old_version: existing.version.clone(),
+                    old_version: existing_version.clone(),
                     new_version: version.to_string(),
                 });
             }
             continue;
         }
 
-        let mut via: Vec<String> = existing_deps
-            .get(module_path.as_str())
-            .and_then(|d| d.via.clone())
+        let mut via: Vec<String> = existing
+            .and_then(|d| d.via().cloned())
             .unwrap_or_default()
             .into_iter()
             .filter(|p| p != added_dep)
@@ -602,7 +829,21 @@ pub(crate) fn apply_graph_to_manifest(
         }
         via.sort();
 
-        if let Err(msg) = upsert_go_dep(project_root, module_path, version, Some(via)) {
+        // A replaced transitive keeps its `replace` shape, only its `via` is reconciled.
+        let result = match existing {
+            Some(replaced @ deps::GoDependency::Replaced { .. }) => {
+                upsert_go_dependency(project_root, module_path, &replaced.with_via(Some(via)))
+            }
+            _ => upsert_go_dependency(
+                project_root,
+                module_path,
+                &deps::GoDependency::Remote {
+                    version: version.to_string(),
+                    via: Some(via),
+                },
+            ),
+        };
+        if let Err(msg) = result {
             error!("failed to update manifest", msg);
             return Err(1);
         }
@@ -616,7 +857,7 @@ pub(crate) fn apply_graph_to_manifest(
             continue;
         }
 
-        let Some(ref old_via) = dep.via else { continue };
+        let Some(old_via) = dep.via() else { continue };
 
         if !old_via.iter().any(|p| p == added_dep) {
             continue;
@@ -630,32 +871,78 @@ pub(crate) fn apply_graph_to_manifest(
         filtered.sort();
 
         if filtered.is_empty() {
-            remove_go_dep(project_root, dep_path).map_err(|msg| {
-                error!("failed to update manifest", msg);
-                1
-            })?;
+            upsert_go_dependency(project_root, dep_path, &dep.with_via(Some(Vec::new()))).map_err(
+                |msg| {
+                    error!("failed to update manifest", msg);
+                    1
+                },
+            )?;
             continue;
         }
 
-        let dep_version = workspace.query_version(dep_path).map_err(|msg| {
-            error!("failed to resolve module version", msg);
-            1
-        })?;
+        match dep {
+            deps::GoDependency::Replaced { .. } => {
+                upsert_go_dependency(project_root, dep_path, &dep.with_via(Some(filtered)))
+                    .map_err(|msg| {
+                        error!("failed to update manifest", msg);
+                        1
+                    })?;
+            }
+            deps::GoDependency::Remote { .. } => {
+                let dep_version = workspace.query_version(dep_path).map_err(|msg| {
+                    error!("failed to resolve module version", msg);
+                    1
+                })?;
+                upsert_go_dependency(
+                    project_root,
+                    dep_path,
+                    &deps::GoDependency::Remote {
+                        version: dep_version,
+                        via: Some(filtered),
+                    },
+                )
+                .map_err(|msg| {
+                    error!("failed to update manifest", msg);
+                    1
+                })?;
+            }
+        }
+    }
 
-        upsert_go_dep(project_root, dep_path, &dep_version, Some(filtered)).map_err(|msg| {
+    Ok(upgraded)
+}
+
+/// Trim dead `via` parents and promote/drop empty-`via` entries, to a fixed
+/// point (a removal can orphan another's `via`). `imported_pkgs` promotes a
+/// directly-imported transitive instead of deleting it.
+pub(crate) fn finalize_manifest_via(
+    project_root: &Path,
+    imported_pkgs: &[String],
+) -> Result<(Vec<deps::TrimmedVia>, deps::ResolveReport), i32> {
+    let mut all_trimmed = Vec::new();
+    let mut promoted = Vec::new();
+    let mut removed = Vec::new();
+
+    loop {
+        let trimmed = trim_dead_via_parents(project_root).map_err(|msg| {
             error!("failed to update manifest", msg);
             1
         })?;
+        let report = resolve_empty_via(project_root, imported_pkgs).map_err(|msg| {
+            error!("failed to update manifest", msg);
+            1
+        })?;
+
+        let changed =
+            !trimmed.is_empty() || !report.promoted.is_empty() || !report.removed.is_empty();
+        all_trimmed.extend(trimmed);
+        promoted.extend(report.promoted);
+        removed.extend(report.removed);
+
+        if !changed {
+            break;
+        }
     }
 
-    trim_dead_via_parents(project_root).map_err(|msg| {
-        error!("failed to update manifest", msg);
-        1
-    })?;
-    resolve_empty_via(project_root, &[]).map_err(|msg| {
-        error!("failed to update manifest", msg);
-        1
-    })?;
-
-    Ok(upgraded)
+    Ok((all_trimmed, deps::ResolveReport { promoted, removed }))
 }

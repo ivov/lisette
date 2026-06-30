@@ -2,12 +2,12 @@ use std::fs::File;
 use std::path::{Path, PathBuf};
 
 use super::reconciliation::{
-    ResolvedDependency, apply_graph_to_manifest, expand_unwalked_modules,
-    rebuild_drifted_cache_entries, reconcile_module_graph, walk_typedef_cache,
+    ReplacedRoot, ReplacedRootMode, ReplacementIdentity, ResolvedDependency,
+    apply_graph_to_manifest, declared_replacements, finalize_manifest_via, reconcile_root,
 };
 use crate::go_cli;
 use crate::lock::{acquire_mutation_lock, acquire_target_lock};
-use crate::output::{print_add_success, print_preview_notice, print_progress};
+use crate::output::{print_add_success, print_preview_notice, print_progress, print_warning};
 use crate::workspace::GoWorkspace;
 use crate::{cli_error, error};
 use deps::GoModule;
@@ -29,9 +29,13 @@ struct ProjectContext {
     _target_lock: File,
 }
 
-pub fn add(dep_string: &str) -> i32 {
+pub fn add(dep_string: &str, replace: Option<&str>) -> i32 {
     if let Err(code) = go_cli::require_go() {
         return code;
+    }
+
+    if let Some(replace) = replace {
+        return add_replace(dep_string, replace);
     }
 
     let parsed_dep = match parse_dep_string(dep_string) {
@@ -51,29 +55,109 @@ pub fn add(dep_string: &str) -> i32 {
         Err(code) => return code,
     };
 
+    run_add_pipeline(project_ctx, resolved_dep, None)
+}
+
+/// Expand a bare `owner/repo` to `github.com/owner/repo`; keep a non-GitHub path as-is.
+fn normalize_module_path(path: &str) -> Result<String, String> {
+    if deps::is_third_party(path) {
+        Ok(path.to_string())
+    } else if path.contains('/') {
+        Ok(format!("github.com/{}", path))
+    } else {
+        Err(format!(
+            "`{}` is not a valid module path; expected something like `github.com/owner/repo`",
+            path
+        ))
+    }
+}
+
+/// `lis add <original> --replace <module>[@<version>]`: source `<original>` from another module.
+fn add_replace(original_arg: &str, replace_spec: &str) -> i32 {
+    let original = original_arg.trim();
+    if original.contains('@') {
+        cli_error!(
+            "Invalid dependency",
+            "with `--replace`, the dependency is the original module path, given without `@version`",
+            "Example: `lis add github.com/df-mc/dragonfly --replace github.com/you/dragonfly@v1.2.0`"
+        );
+        return 1;
+    }
+    let original = match normalize_module_path(original) {
+        Ok(p) => p,
+        Err(msg) => {
+            cli_error!(
+                "Invalid dependency",
+                msg,
+                "Example: `lis add github.com/df-mc/dragonfly --replace github.com/you/dragonfly@v1.2.0`"
+            );
+            return 1;
+        }
+    };
+
+    let (replace_raw, replace_query) = match replace_spec.rsplit_once('@') {
+        Some((path, version)) if !path.is_empty() && !version.is_empty() => {
+            (path.to_string(), version.to_string())
+        }
+        Some(_) => {
+            cli_error!(
+                "Invalid `--replace`",
+                format!(
+                    "`{}` is not of the form `<module>[@<version>]`",
+                    replace_spec
+                ),
+                "Example: `--replace github.com/you/dragonfly@v1.2.0`"
+            );
+            return 1;
+        }
+        None => (replace_spec.to_string(), "latest".to_string()),
+    };
+    let replacement_path = match normalize_module_path(&replace_raw) {
+        Ok(p) => p,
+        Err(msg) => {
+            cli_error!(
+                "Invalid `--replace`",
+                msg,
+                "Example: `--replace github.com/you/dragonfly@v1.2.0`"
+            );
+            return 1;
+        }
+    };
+
+    let (project_ctx, resolved_dep, replacement) =
+        match setup_project_replace(&original, &replacement_path, &replace_query) {
+            Ok(triple) => triple,
+            Err(code) => return code,
+        };
+
+    run_add_pipeline(project_ctx, resolved_dep, Some(replacement))
+}
+
+fn run_add_pipeline(
+    project_ctx: ProjectContext,
+    resolved_dep: ResolvedDependency,
+    replacement: Option<ReplacementIdentity>,
+) -> i32 {
     let workspace = GoWorkspace::new(
         &project_ctx.target_dir,
         &project_ctx.typedef_cache_dir,
         Target::host(),
     );
 
-    let mut module_graph = match reconcile_module_graph(&resolved_dep, &workspace) {
-        Ok(v) => v,
-        Err(code) => return code,
-    };
-
-    let bindgenned = match walk_typedef_cache(&resolved_dep, &workspace, &mut module_graph) {
-        Ok(v) => v,
-        Err(code) => return code,
-    };
-
-    if let Err(code) = expand_unwalked_modules(&workspace, &mut module_graph) {
-        return code;
+    let mut replacements = declared_replacements(&project_ctx.manifest);
+    match &replacement {
+        Some(replacement) => {
+            replacements.insert(resolved_dep.canonical_module.clone(), replacement.clone());
+        }
+        None => {
+            replacements.remove(&resolved_dep.canonical_module);
+        }
     }
 
-    // Expansion above may MVS-upgrade modules whose typedefs the cache walk
-    // already wrote at the old version, so refresh them at the new pin.
-    rebuild_drifted_cache_entries(&workspace, &module_graph, &bindgenned);
+    let module_graph = match reconcile_root(&resolved_dep, &workspace, &replacements) {
+        Ok(graph) => graph,
+        Err(code) => return code,
+    };
 
     let upgraded = match apply_graph_to_manifest(
         &resolved_dep.canonical_module,
@@ -82,10 +166,18 @@ pub fn add(dep_string: &str) -> i32 {
         &project_ctx.resolved_version,
         &workspace,
         &module_graph,
+        replacement.as_ref().map(|identity| ReplacedRoot {
+            identity,
+            mode: ReplacedRootMode::AddDirect,
+        }),
     ) {
         Ok(u) => u,
         Err(code) => return code,
     };
+
+    if let Err(code) = finalize_manifest_via(&project_ctx.project_root, &[]) {
+        return code;
+    }
 
     let dep_version = module_graph
         .versions
@@ -104,12 +196,17 @@ pub fn add(dep_string: &str) -> i32 {
         })
         .collect();
 
+    let replacement_label = replacement
+        .as_ref()
+        .map(|f| (f.replacement_path.as_str(), f.replacement_version.as_str()));
+
     print_add_success(
         &resolved_dep.canonical_module,
         &dep_version,
         &module_graph.edges,
         &module_graph.versions,
         &upgraded_tuples,
+        replacement_label,
     );
 
     0
@@ -215,16 +312,7 @@ fn parse_dep_string(input: &str) -> Result<ParsedDependency, String> {
         ));
     }
 
-    let requested_package = if deps::is_third_party(path) {
-        path.to_string()
-    } else if path.contains('/') {
-        format!("github.com/{}", path)
-    } else {
-        return Err(format!(
-            "`{}` is not a valid module path; expected something like `github.com/owner/repo`",
-            path
-        ));
-    };
+    let requested_package = normalize_module_path(path)?;
 
     if requested_package == PRELUDE_MODULE {
         return Err(
@@ -366,9 +454,16 @@ pub(crate) fn find_project_root() -> Option<PathBuf> {
     }
 }
 
-fn setup_project(
-    parsed_dep: ParsedDependency,
-) -> Result<(ProjectContext, ResolvedDependency), i32> {
+struct ProjectSetup {
+    project_root: PathBuf,
+    target_dir: PathBuf,
+    manifest: deps::Manifest,
+    typedef_cache_dir: PathBuf,
+    mutation_lock: File,
+    target_lock: File,
+}
+
+fn open_project_for_mutation() -> Result<ProjectSetup, i32> {
     let project_root = match find_project_root() {
         Some(root) => root,
         None => {
@@ -437,21 +532,74 @@ fn setup_project(
 
     let mutation_lock = acquire_mutation_lock(&project_target_dir)?;
     let target_lock = acquire_target_lock(&project_target_dir)?;
+    let typedef_cache_dir = deps::typedef_cache_dir(&project_root);
 
-    let locator = deps::TypedefLocator::new(
-        manifest.go_deps(),
-        Some(project_root.clone()),
-        Target::host(),
-    );
+    Ok(ProjectSetup {
+        project_root,
+        target_dir: project_target_dir,
+        manifest,
+        typedef_cache_dir,
+        mutation_lock,
+        target_lock,
+    })
+}
 
-    if let Err(msg) = go_cli::write_go_mod(&project_target_dir, &manifest.project.name, &locator) {
+/// Write `target/go.mod` from the manifest, plus one `extra` dep not yet in it.
+fn write_target_go_mod(setup: &ProjectSetup, extra: Option<(&str, deps::GoDependency)>) -> bool {
+    let mut go_deps = setup.manifest.go_deps();
+    if let Some((module, dep)) = extra {
+        go_deps.insert(module.to_string(), dep);
+    }
+    write_target_go_mod_from(setup, go_deps)
+}
+
+/// Write `target/go.mod` from an explicit dependency set.
+fn write_target_go_mod_from(
+    setup: &ProjectSetup,
+    go_deps: std::collections::BTreeMap<String, deps::GoDependency>,
+) -> bool {
+    let locator =
+        deps::TypedefLocator::new(go_deps, Some(setup.project_root.clone()), Target::host());
+    if let Err(msg) =
+        go_cli::write_go_mod(&setup.target_dir, &setup.manifest.project.name, &locator)
+    {
         error!("failed to write target/go.mod", msg);
+        return false;
+    }
+    true
+}
+
+/// Remove any declared replacement for the module that owns `package`.
+fn strip_replacement_for(
+    go_deps: &mut std::collections::BTreeMap<String, deps::GoDependency>,
+    package: &str,
+) {
+    let owner = go_deps
+        .keys()
+        .filter(|module| package == module.as_str() || package.starts_with(&format!("{module}/")))
+        .max_by_key(|module| module.len())
+        .cloned();
+    if let Some(module) = owner
+        && matches!(
+            go_deps.get(&module),
+            Some(deps::GoDependency::Replaced { .. })
+        )
+    {
+        go_deps.remove(&module);
+    }
+}
+
+fn setup_project(
+    parsed_dep: ParsedDependency,
+) -> Result<(ProjectContext, ResolvedDependency), i32> {
+    let setup = open_project_for_mutation()?;
+    let mut go_deps = setup.manifest.go_deps();
+    strip_replacement_for(&mut go_deps, &parsed_dep.requested_package);
+    if !write_target_go_mod_from(&setup, go_deps) {
         return Err(1);
     }
 
-    let typedef_cache_dir = deps::typedef_cache_dir(&project_root);
-
-    let workspace = GoWorkspace::new(&project_target_dir, &typedef_cache_dir, Target::host());
+    let workspace = GoWorkspace::new(&setup.target_dir, &setup.typedef_cache_dir, Target::host());
 
     print_progress(&format!(
         "Fetching {}@{}",
@@ -462,6 +610,7 @@ fn setup_project(
     if let Err(msg) = workspace.go_get(GoModule {
         path: &parsed_dep.requested_package,
         version: &parsed_dep.version,
+        replacement: None,
     }) {
         let enriched = enrich_with_parent_hint(&workspace, &parsed_dep.requested_package, msg);
         error!("failed to download dependency", enriched);
@@ -492,21 +641,117 @@ fn setup_project(
     };
 
     let ctx = ProjectContext {
-        project_root,
-        target_dir: project_target_dir,
-        manifest,
-        typedef_cache_dir,
+        project_root: setup.project_root,
+        target_dir: setup.target_dir,
+        manifest: setup.manifest,
+        typedef_cache_dir: setup.typedef_cache_dir,
         resolved_version: info.version,
-        _mutation_lock: mutation_lock,
-        _target_lock: target_lock,
+        _mutation_lock: setup.mutation_lock,
+        _target_lock: setup.target_lock,
     };
 
     Ok((ctx, resolved))
 }
 
+fn setup_project_replace(
+    original: &str,
+    replacement_path: &str,
+    replace_query: &str,
+) -> Result<(ProjectContext, ResolvedDependency, ReplacementIdentity), i32> {
+    let setup = open_project_for_mutation()?;
+
+    if !write_target_go_mod(&setup, None) {
+        return Err(1);
+    }
+
+    let workspace = GoWorkspace::new(&setup.target_dir, &setup.typedef_cache_dir, Target::host());
+
+    print_progress(&format!(
+        "Resolving replacement {}@{}",
+        replacement_path, replace_query
+    ));
+    let resolution = match workspace.resolve_replace(replacement_path, replace_query) {
+        Ok(r) => r,
+        Err(msg) => {
+            error!("failed to resolve replacement", msg);
+            return Err(1);
+        }
+    };
+
+    if let Err(msg) =
+        deps::check_version_matches_path(replacement_path, &resolution.resolved_version)
+    {
+        cli_error!(
+            "Replacement is not usable",
+            msg,
+            "Publish the replacement at a path whose major version matches, e.g. `<module>/vN`"
+        );
+        return Err(1);
+    }
+
+    if resolution.declared_module != original {
+        print_warning(&format!(
+            "replacement `{}@{}` declares module `{}`, not `{}`. It builds only if its own imports use `{}`",
+            replacement_path,
+            resolution.resolved_version,
+            resolution.declared_module,
+            original,
+            original
+        ));
+    }
+
+    let replaced_dep = deps::GoDependency::Replaced {
+        replacement_path: replacement_path.to_string(),
+        replacement_version: resolution.resolved_version.clone(),
+        via: None,
+    };
+    if !write_target_go_mod(&setup, Some((original, replaced_dep))) {
+        return Err(1);
+    }
+
+    let resolved = ResolvedDependency {
+        requested_package: original.to_string(),
+        canonical_module: original.to_string(),
+    };
+
+    let ctx = ProjectContext {
+        project_root: setup.project_root,
+        target_dir: setup.target_dir,
+        manifest: setup.manifest,
+        typedef_cache_dir: setup.typedef_cache_dir,
+        resolved_version: resolution.resolved_version.clone(),
+        _mutation_lock: setup.mutation_lock,
+        _target_lock: setup.target_lock,
+    };
+
+    let replacement = ReplacementIdentity {
+        replacement_path: replacement_path.to_string(),
+        replacement_version: resolution.resolved_version,
+    };
+
+    Ok((ctx, resolved, replacement))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn normalize_module_path_applies_github_shorthand() {
+        assert_eq!(
+            normalize_module_path("github.com/df-mc/dragonfly").unwrap(),
+            "github.com/df-mc/dragonfly"
+        );
+        assert_eq!(
+            normalize_module_path("df-mc/dragonfly").unwrap(),
+            "github.com/df-mc/dragonfly"
+        );
+        assert_eq!(
+            normalize_module_path("go.uber.org/zap").unwrap(),
+            "go.uber.org/zap"
+        );
+        assert!(normalize_module_path("dragonfly").is_err());
+    }
 
     #[test]
     fn returns_first_ancestor_that_resolves() {
@@ -548,5 +793,51 @@ mod tests {
         let known = ["foo", "foo/bar"];
         let parent = find_first_parent_module("foo/bar/baz/qux", 5, |p| known.contains(&p));
         assert_eq!(parent.as_deref(), Some("foo/bar"));
+    }
+
+    #[test]
+    fn strip_replacement_leaves_parent_when_child_remote_owns_package() {
+        let mut go_deps = std::collections::BTreeMap::new();
+        go_deps.insert(
+            "go.opentelemetry.io/otel".to_string(),
+            deps::GoDependency::Replaced {
+                replacement_path: "github.com/fork/otel".to_string(),
+                replacement_version: "v1.0.0".to_string(),
+                via: None,
+            },
+        );
+        go_deps.insert(
+            "go.opentelemetry.io/otel/sdk".to_string(),
+            deps::GoDependency::Remote {
+                version: "v1.0.0".to_string(),
+                via: None,
+            },
+        );
+        strip_replacement_for(&mut go_deps, "go.opentelemetry.io/otel/sdk");
+        assert!(go_deps.contains_key("go.opentelemetry.io/otel"));
+        assert!(go_deps.contains_key("go.opentelemetry.io/otel/sdk"));
+    }
+
+    #[test]
+    fn strip_replacement_removes_longest_prefix_replaced_owner() {
+        let mut go_deps = std::collections::BTreeMap::new();
+        go_deps.insert(
+            "go.opentelemetry.io/otel".to_string(),
+            deps::GoDependency::Remote {
+                version: "v1.0.0".to_string(),
+                via: None,
+            },
+        );
+        go_deps.insert(
+            "go.opentelemetry.io/otel/sdk".to_string(),
+            deps::GoDependency::Replaced {
+                replacement_path: "github.com/fork/otel-sdk".to_string(),
+                replacement_version: "v1.0.0".to_string(),
+                via: None,
+            },
+        );
+        strip_replacement_for(&mut go_deps, "go.opentelemetry.io/otel/sdk");
+        assert!(go_deps.contains_key("go.opentelemetry.io/otel"));
+        assert!(!go_deps.contains_key("go.opentelemetry.io/otel/sdk"));
     }
 }

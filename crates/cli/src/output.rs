@@ -174,6 +174,7 @@ pub fn print_add_success(
     edges: &std::collections::HashMap<String, Vec<String>>,
     versions: &std::collections::HashMap<String, String>,
     upgraded_directs: &[(&str, &str, &str)],
+    replacement: Option<(&str, &str)>,
 ) {
     eprintln!();
 
@@ -194,10 +195,19 @@ pub fn print_add_success(
         eprintln!();
     }
 
-    if colored {
-        eprintln!("  ✓ Added {} {}", module_path.green(), version.blue());
-    } else {
-        eprintln!("  ✓ Added {} {}", module_path, version);
+    match replacement {
+        Some((replacement_path, replacement_version)) if colored => eprintln!(
+            "  ✓ Added {} (replaced by {} {})",
+            module_path.green(),
+            replacement_path.green(),
+            replacement_version.blue()
+        ),
+        Some((replacement_path, replacement_version)) => eprintln!(
+            "  ✓ Added {} (replaced by {} {})",
+            module_path, replacement_path, replacement_version
+        ),
+        None if colored => eprintln!("  ✓ Added {} {}", module_path.green(), version.blue()),
+        None => eprintln!("  ✓ Added {} {}", module_path, version),
     }
 
     let mut visited: std::collections::HashSet<String> = std::collections::HashSet::new();

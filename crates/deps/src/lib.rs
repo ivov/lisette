@@ -35,7 +35,7 @@ fn typedef_home() -> Option<PathBuf> {
 pub use project_manifest::{
     GoDependency, Manifest, ResolveReport, TrimmedVia, check_no_subpackage_deps,
     check_toolchain_version, parse_manifest, remove_go_dep, resolve_empty_via,
-    trim_dead_via_parents, upsert_go_dep, validate_project_name,
+    trim_dead_via_parents, upsert_go_dependency, validate_project_name,
 };
 pub use typedef_locator::{
     Bindgen, BindgenFailure, BindgenGuard, BindgenSession, BindgenSetup, DeclarationStatus,
@@ -46,6 +46,61 @@ pub fn is_third_party(pkg: &str) -> bool {
     pkg.split('/')
         .next()
         .is_some_and(|first| first.contains('.'))
+}
+
+pub fn placeholder_require_version(module_path: &str) -> String {
+    match path_major(module_path) {
+        Some(major) => format!("v{}.0.0", major),
+        None => "v0.0.0".to_string(),
+    }
+}
+
+pub fn check_version_matches_path(module_path: &str, version: &str) -> Result<(), String> {
+    let Some(actual) = version_major(version) else {
+        return Ok(());
+    };
+    let ok = match path_major(module_path) {
+        Some(required) => actual == required,
+        None => actual <= 1,
+    };
+    if ok {
+        return Ok(());
+    }
+    let expected = match path_major(module_path) {
+        Some(required) => format!("v{}.x", required),
+        None => "v0.x or v1.x".to_string(),
+    };
+    Err(format!(
+        "version `{}` is not valid for module path `{}` (expected {})",
+        version, module_path, expected
+    ))
+}
+
+fn version_major(version: &str) -> Option<u64> {
+    version
+        .strip_prefix('v')?
+        .split(['.', '-', '+'])
+        .next()?
+        .parse()
+        .ok()
+}
+
+/// The major a path's suffix demands: `/vN` (N >= 2), or gopkg.in `.vN` (any N).
+fn path_major(module_path: &str) -> Option<u64> {
+    let last = module_path.rsplit('/').next()?;
+    if module_path.starts_with("gopkg.in/") {
+        let (_, digits) = last.rsplit_once(".v")?;
+        return parse_major_digits(digits);
+    }
+    let digits = last.strip_prefix('v')?;
+    parse_major_digits(digits).filter(|&major| major >= 2)
+}
+
+fn parse_major_digits(digits: &str) -> Option<u64> {
+    let is_canonical = !digits.is_empty()
+        && digits.bytes().all(|b| b.is_ascii_digit())
+        && (digits.len() == 1 || !digits.starts_with('0'));
+    is_canonical.then(|| digits.parse().ok()).flatten()
 }
 
 pub fn is_stdlib(pkg: &str) -> bool {
@@ -249,12 +304,20 @@ pub fn ensure_prelude_extracted() {
     prune_stale_version_dirs(&version_dir);
 }
 
+/// The target of a replace directive: code from `path` at `version`.
+#[derive(Clone, Copy)]
+pub struct Replacement<'a> {
+    pub path: &'a str,
+    pub version: &'a str,
+}
+
 #[derive(Clone, Copy)]
 pub struct GoModule<'a> {
-    /// Module path, e.g. `github.com/gorilla/mux`.
+    /// Module path, e.g. `github.com/gorilla/mux`. For a replaced module, the original path.
     pub path: &'a str,
-    /// Module version, e.g. `v1.8.0`.
+    /// Version handed to Go commands. For a replaced module, a placeholder.
     pub version: &'a str,
+    pub replacement: Option<Replacement<'a>>,
 }
 
 /// A Go package within a module.
@@ -274,9 +337,15 @@ impl GoPackage<'_> {
     /// <project>/target/.lisette/typedefs/lis@v0.1.6/darwin_arm64/github.com/gorilla/mux@v1.8.0/middleware/middleware.d.lis
     /// ```
     pub fn typedef_path(&self, base_dir: &Path, target: Target) -> PathBuf {
-        let module_dir = base_dir
-            .join(target.cache_segment())
-            .join(format!("{}@{}", self.module.path, self.module.version));
+        let target_dir = base_dir.join(target.cache_segment());
+        let module_dir = match self.module.replacement {
+            Some(replacement) => target_dir
+                .join("replaced")
+                .join(self.module.path)
+                .join("module")
+                .join(format!("{}@{}", replacement.path, replacement.version)),
+            None => target_dir.join(format!("{}@{}", self.module.path, self.module.version)),
+        };
 
         let relative = if self.package == self.module.path {
             ""
@@ -327,6 +396,65 @@ mod tests {
         );
         assert!(completed.exists(), "the completed target dir is kept");
         assert!(other_target_tmp.exists(), "another target's temp is kept");
+    }
+
+    #[test]
+    fn typedef_path_uses_replaced_layout_keyed_by_replacement_identity() {
+        let target = Target::new("linux", "amd64");
+        let pkg = GoPackage {
+            module: GoModule {
+                path: "example.com/dragon",
+                version: "v0.0.0",
+                replacement: Some(Replacement {
+                    path: "fork.example/dragon",
+                    version: "v1.2.0",
+                }),
+            },
+            package: "example.com/dragon/server",
+        };
+        let path = pkg.typedef_path(Path::new("/base"), target);
+        assert_eq!(
+            path,
+            Path::new(
+                "/base/linux_amd64/replaced/example.com/dragon/module/fork.example/dragon@v1.2.0/server/server.d.lis"
+            )
+        );
+    }
+
+    #[test]
+    fn check_version_matches_path_enforces_major_suffix() {
+        // /vN path requires vN
+        assert!(check_version_matches_path("example.com/lib/v2", "v2.3.0").is_ok());
+        assert!(check_version_matches_path("example.com/lib/v2", "v1.0.0").is_err());
+        // gopkg.in .vN path requires vN
+        assert!(check_version_matches_path("gopkg.in/yaml.v3", "v3.1.0").is_ok());
+        assert!(check_version_matches_path("gopkg.in/yaml.v3", "v2.0.0").is_err());
+        // plain path requires v0/v1 (incl. pseudo-versions)
+        assert!(check_version_matches_path("github.com/you/mux", "v1.5.0").is_ok());
+        assert!(
+            check_version_matches_path("github.com/you/mux", "v0.0.0-20260101000000-abc").is_ok()
+        );
+        assert!(check_version_matches_path("github.com/you/mux", "v3.1.0").is_err());
+    }
+
+    #[test]
+    fn synthetic_require_version_is_major_matched() {
+        assert_eq!(
+            placeholder_require_version("github.com/df-mc/dragonfly"),
+            "v0.0.0"
+        );
+        assert_eq!(placeholder_require_version("example.com/lib/v2"), "v2.0.0");
+        assert_eq!(
+            placeholder_require_version("example.com/lib/v10"),
+            "v10.0.0"
+        );
+        assert_eq!(placeholder_require_version("example.com/lib/v1"), "v0.0.0");
+        assert_eq!(placeholder_require_version("example.com/vault"), "v0.0.0");
+        assert_eq!(placeholder_require_version("gopkg.in/yaml.v2"), "v2.0.0");
+        assert_eq!(
+            placeholder_require_version("gopkg.in/user/pkg.v3"),
+            "v3.0.0"
+        );
     }
 
     #[test]

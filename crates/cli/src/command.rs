@@ -43,6 +43,7 @@ pub enum Command {
     Version,
     Add {
         dependency: String,
+        replace: Option<String>,
     },
     Sync,
     Lsp,
@@ -400,22 +401,45 @@ impl Command {
 
             "version" | "--version" => Ok(Command::Version),
 
-            "add" => match arguments.next() {
-                Some(dependency) => {
-                    if let Some(extra) = arguments.next() {
+            "add" => {
+                let mut dependency = None;
+                let mut replace = None;
+
+                while let Some(arg) = arguments.next() {
+                    if arg == "--replace" {
+                        let Some(value) = arguments.next() else {
+                            return Err(ParseError::MissingArgument {
+                                command: "add",
+                                argument: "--replace <module@version>",
+                            });
+                        };
+                        replace = Some(value);
+                    } else if let Some(value) = arg.strip_prefix("--replace=") {
+                        replace = Some(value.to_string());
+                    } else if arg.starts_with('-') {
+                        return Err(ParseError::UnknownFlag(arg));
+                    } else if dependency.is_none() {
+                        dependency = Some(arg);
+                    } else {
                         return Err(ParseError::UnexpectedArgument {
-                            message: format!("unexpected argument `{}`", extra),
+                            message: format!("unexpected argument `{}`", arg),
                             reason: "`lis add` accepts a single dependency".to_string(),
                             hint: "Run `lis add` once per dep".to_string(),
                         });
                     }
-                    Ok(Command::Add { dependency })
                 }
-                None => Err(ParseError::MissingArgument {
-                    command: "add",
-                    argument: "dependency",
-                }),
-            },
+
+                match dependency {
+                    Some(dependency) => Ok(Command::Add {
+                        dependency,
+                        replace,
+                    }),
+                    None => Err(ParseError::MissingArgument {
+                        command: "add",
+                        argument: "dependency",
+                    }),
+                }
+            }
 
             "sync" => {
                 if let Some(extra) = arguments.next() {
@@ -545,6 +569,61 @@ mod tests {
     #[test]
     fn test_failed_and_filter_conflict() {
         assert!(parse(&["lis", "test", "--failed", "-f", "parse"]).is_err());
+    }
+
+    #[test]
+    fn add_without_replace_has_no_replace() {
+        let Ok(Command::Add {
+            dependency,
+            replace,
+        }) = parse(&["lis", "add", "github.com/gorilla/mux"])
+        else {
+            panic!("expected Add command");
+        };
+        assert_eq!(dependency, "github.com/gorilla/mux");
+        assert_eq!(replace, None);
+    }
+
+    #[test]
+    fn add_replace_flag_after_dependency() {
+        let Ok(Command::Add {
+            dependency,
+            replace,
+        }) = parse(&[
+            "lis",
+            "add",
+            "github.com/df-mc/dragonfly",
+            "--replace",
+            "github.com/you/dragonfly@v1.2.0",
+        ])
+        else {
+            panic!("expected Add command");
+        };
+        assert_eq!(dependency, "github.com/df-mc/dragonfly");
+        assert_eq!(replace.as_deref(), Some("github.com/you/dragonfly@v1.2.0"));
+    }
+
+    #[test]
+    fn add_replace_flag_before_dependency_and_equals_form() {
+        let Ok(Command::Add {
+            dependency,
+            replace,
+        }) = parse(&[
+            "lis",
+            "add",
+            "--replace=github.com/you/dragonfly@v1.2.0",
+            "github.com/df-mc/dragonfly",
+        ])
+        else {
+            panic!("expected Add command");
+        };
+        assert_eq!(dependency, "github.com/df-mc/dragonfly");
+        assert_eq!(replace.as_deref(), Some("github.com/you/dragonfly@v1.2.0"));
+    }
+
+    #[test]
+    fn add_replace_without_value_errors() {
+        assert!(parse(&["lis", "add", "dep", "--replace"]).is_err());
     }
 
     #[test]

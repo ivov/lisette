@@ -30,9 +30,42 @@ pub struct Dependencies {
 }
 
 #[derive(Debug, Clone)]
-pub struct GoDependency {
-    pub version: String,
-    pub via: Option<Vec<String>>,
+pub enum GoDependency {
+    Remote {
+        version: String,
+        via: Option<Vec<String>>,
+    },
+    Replaced {
+        replacement_path: String,
+        replacement_version: String,
+        via: Option<Vec<String>>,
+    },
+}
+
+impl GoDependency {
+    pub fn via(&self) -> Option<&Vec<String>> {
+        match self {
+            GoDependency::Remote { via, .. } | GoDependency::Replaced { via, .. } => via.as_ref(),
+        }
+    }
+
+    pub fn with_via(&self, via: Option<Vec<String>>) -> GoDependency {
+        match self {
+            GoDependency::Remote { version, .. } => GoDependency::Remote {
+                version: version.clone(),
+                via,
+            },
+            GoDependency::Replaced {
+                replacement_path,
+                replacement_version,
+                ..
+            } => GoDependency::Replaced {
+                replacement_path: replacement_path.clone(),
+                replacement_version: replacement_version.clone(),
+                via,
+            },
+        }
+    }
 }
 
 impl<'de> Deserialize<'de> for GoDependency {
@@ -46,38 +79,75 @@ impl<'de> Deserialize<'de> for GoDependency {
             type Value = GoDependency;
 
             fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-                f.write_str("a version string or a table with `version` and optional `via`")
+                f.write_str(
+                    "a version string, a table with `version` (and optional `via`), or a table with `replace` (and optional `via`)",
+                )
             }
 
             fn visit_str<E: de::Error>(self, v: &str) -> Result<GoDependency, E> {
-                Ok(GoDependency {
+                Ok(GoDependency::Remote {
                     version: v.to_string(),
                     via: None,
                 })
             }
 
             fn visit_map<M: MapAccess<'de>>(self, mut map: M) -> Result<GoDependency, M::Error> {
-                let mut version = None;
-                let mut via = None;
+                let mut version: Option<String> = None;
+                let mut replacement: Option<String> = None;
+                let mut via: Option<Vec<String>> = None;
 
                 while let Some(key) = map.next_key::<String>()? {
                     match key.as_str() {
                         "version" => version = Some(map.next_value()?),
+                        "replacement" => replacement = Some(map.next_value()?),
                         "via" => via = Some(map.next_value()?),
                         other => {
-                            return Err(de::Error::unknown_field(other, &["version", "via"]));
+                            return Err(de::Error::unknown_field(
+                                other,
+                                &["version", "replacement", "via"],
+                            ));
                         }
                     }
                 }
 
-                let version = version.ok_or_else(|| de::Error::missing_field("version"))?;
-
-                Ok(GoDependency { version, via })
+                match (version, replacement) {
+                    (Some(version), None) => Ok(GoDependency::Remote { version, via }),
+                    (None, Some(replacement)) => {
+                        let (replacement_path, replacement_version) =
+                            split_replacement(&replacement).map_err(de::Error::custom)?;
+                        Ok(GoDependency::Replaced {
+                            replacement_path,
+                            replacement_version,
+                            via,
+                        })
+                    }
+                    (Some(_), Some(_)) => Err(de::Error::custom(
+                        "a Go dependency cannot set both `version` and `replacement`",
+                    )),
+                    (None, None) => Err(de::Error::custom(
+                        "a Go dependency table needs either `version` or `replacement`",
+                    )),
+                }
             }
         }
 
         deserializer.deserialize_any(GoDependencyVisitor)
     }
+}
+
+/// Split a `replacement` value of the form `<module-path>@<version>` into its parts.
+fn split_replacement(replacement: &str) -> Result<(String, String), String> {
+    let err = || {
+        format!(
+            "`replacement` must be of the form `<module-path>@<version>`, got `{}`",
+            replacement
+        )
+    };
+    let (path, version) = replacement.rsplit_once('@').ok_or_else(err)?;
+    if path.is_empty() || version.is_empty() {
+        return Err(err());
+    }
+    Ok((path.to_string(), version.to_string()))
 }
 
 impl Manifest {
@@ -97,7 +167,36 @@ pub fn parse_manifest(project_root: &Path) -> Result<Manifest, String> {
     let content =
         strip_bom_to_str(&bytes).map_err(|e| format!("Invalid `lisette.toml` manifest: {}", e))?;
 
-    toml::from_str(content).map_err(|e| format!("Invalid `lisette.toml` manifest: {}", e))
+    let manifest: Manifest =
+        toml::from_str(content).map_err(|e| format!("Invalid `lisette.toml` manifest: {}", e))?;
+    validate_go_dep_paths(&manifest)?;
+    Ok(manifest)
+}
+
+/// A replaced entry's key (the original module) and its `replace` target must
+/// both be third-party module paths, or resolution silently misclassifies them.
+fn validate_go_dep_paths(manifest: &Manifest) -> Result<(), String> {
+    for (key, dep) in &manifest.go_deps() {
+        let GoDependency::Replaced {
+            replacement_path, ..
+        } = dep
+        else {
+            continue;
+        };
+        if !crate::is_third_party(key) {
+            return Err(format!(
+                "`{}` in `[dependencies.go]` has a `replace` but is not a third-party module path (its first path segment needs a dot)",
+                key
+            ));
+        }
+        if !crate::is_third_party(replacement_path) {
+            return Err(format!(
+                "the `replace` target `{}` for `{}` is not a third-party module path",
+                replacement_path, key
+            ));
+        }
+    }
+    Ok(())
 }
 
 pub fn validate_project_name(name: &str) -> Result<(), String> {
@@ -134,7 +233,7 @@ pub fn check_toolchain_version(manifest: &Manifest) -> Result<(), String> {
 
 pub fn check_no_subpackage_deps(manifest: &Manifest) -> Result<(), String> {
     let deps = manifest.go_deps();
-    let has_via = |d: &GoDependency| d.via.as_ref().is_some_and(|v| !v.is_empty());
+    let has_via = |d: &GoDependency| d.via().is_some_and(|v| !v.is_empty());
 
     for (key, dep) in &deps {
         let Some((parent, parent_dep)) = deps
@@ -201,44 +300,69 @@ fn save_manifest(
     .map_err(|e| format!("Failed to write `lisette.toml`: {}", e))
 }
 
-/// Add or update a Go dependency in `lisette.toml`.
-///
-/// ```text
-/// "github.com/gorilla/mux" = "v1.8.0"
-/// "github.com/gorilla/context" = { version = "v1.1.1", via = ["github.com/gorilla/mux"] }
-/// ```
-pub fn upsert_go_dep(
+/// Add or update a Go dependency in `lisette.toml`, written in the shape matching its variant.
+pub fn upsert_go_dependency(
     project_root: &Path,
     module_path: &str,
-    version: &str,
-    via: Option<Vec<String>>,
+    dep: &GoDependency,
 ) -> Result<(), String> {
     let path = project_root.join("lisette.toml");
     let (encoding, mut manifest) = open_manifest(&path)?;
     let go = ensure_go_deps_table(&mut manifest)?;
 
-    match via {
-        Some(mut via_list) => {
-            via_list.sort();
-            via_list.dedup();
-            let mut inline = toml_edit::InlineTable::new();
-            inline.insert("version", version.into());
-            let mut arr = toml_edit::Array::new();
-            for v in &via_list {
-                arr.push(v.as_str());
+    let via = dep.via().map(|via_list| {
+        let mut sorted = via_list.clone();
+        sorted.sort();
+        sorted.dedup();
+        sorted
+    });
+
+    match dep {
+        GoDependency::Remote { version, .. } => match via {
+            Some(via_list) => {
+                let mut inline = toml_edit::InlineTable::new();
+                inline.insert("version", version.as_str().into());
+                inline.insert("via", via_array(&via_list));
+                go.insert(
+                    module_path,
+                    toml_edit::value(toml_edit::Value::InlineTable(inline)),
+                );
             }
-            inline.insert("via", toml_edit::Value::Array(arr));
+            None => {
+                go.insert(module_path, toml_edit::value(version.as_str()));
+            }
+        },
+        GoDependency::Replaced {
+            replacement_path,
+            replacement_version,
+            ..
+        } => {
+            let mut inline = toml_edit::InlineTable::new();
+            inline.insert(
+                "replacement",
+                format!("{}@{}", replacement_path, replacement_version)
+                    .as_str()
+                    .into(),
+            );
+            if let Some(via_list) = via {
+                inline.insert("via", via_array(&via_list));
+            }
             go.insert(
                 module_path,
                 toml_edit::value(toml_edit::Value::InlineTable(inline)),
             );
         }
-        None => {
-            go.insert(module_path, toml_edit::value(version));
-        }
     }
 
     save_manifest(&path, &encoding, &manifest)
+}
+
+fn via_array(via_list: &[String]) -> toml_edit::Value {
+    let mut arr = toml_edit::Array::new();
+    for v in via_list {
+        arr.push(v.as_str());
+    }
+    toml_edit::Value::Array(arr)
 }
 
 pub fn remove_go_dep(project_root: &Path, go_dep_path: &str) -> Result<(), String> {
@@ -277,7 +401,7 @@ pub fn trim_dead_via_parents(project_root: &Path) -> Result<Vec<TrimmedVia>, Str
     let mut trimmed = Vec::new();
 
     for (dep_path, dep) in &live_deps {
-        let Some(ref via) = dep.via else { continue };
+        let Some(via) = dep.via() else { continue };
 
         let removed_parents: Vec<String> = via
             .iter()
@@ -297,7 +421,7 @@ pub fn trim_dead_via_parents(project_root: &Path) -> Result<Vec<TrimmedVia>, Str
         canonical.sort();
         canonical.dedup();
 
-        upsert_go_dep(project_root, dep_path, &dep.version, Some(canonical))?;
+        upsert_go_dependency(project_root, dep_path, &dep.with_via(Some(canonical)))?;
         trimmed.push(TrimmedVia {
             module_path: dep_path.clone(),
             removed_parents,
@@ -332,13 +456,13 @@ pub fn resolve_empty_via(
     let mut removed = Vec::new();
 
     for (dep_path, dep) in &live_deps {
-        let Some(ref via) = dep.via else { continue };
+        let Some(via) = dep.via() else { continue };
         if !via.is_empty() {
             continue;
         }
 
         if matched.contains(dep_path.as_str()) {
-            upsert_go_dep(project_root, dep_path, &dep.version, None)?;
+            upsert_go_dependency(project_root, dep_path, &dep.with_via(None))?;
             promoted.push(dep_path.clone());
         } else {
             remove_go_dep(project_root, dep_path)?;
@@ -520,14 +644,14 @@ version = "0.1.0"
         let mut deps = BTreeMap::new();
         deps.insert(
             "k8s.io".to_string(),
-            GoDependency {
+            GoDependency::Remote {
                 version: "v0.0.0".to_string(),
                 via: None,
             },
         );
         deps.insert(
             "k8s.io/api".to_string(),
-            GoDependency {
+            GoDependency::Remote {
                 version: "v0.30.0".to_string(),
                 via: None,
             },
@@ -555,6 +679,126 @@ version = "0.1.0"
         let error = check_no_subpackage_deps(&manifest).unwrap_err();
         assert!(error.contains("`github.com/gorilla/mux/middleware`"));
         assert!(error.contains("subpackage of `github.com/gorilla/mux`"));
+    }
+
+    fn replacement_manifest(entry: &str) -> TempDir {
+        project_with(&format!(
+            "[project]\nname = \"demo\"\nversion = \"0.1.0\"\n\n[dependencies.go]\n{}\n",
+            entry
+        ))
+    }
+
+    #[test]
+    fn parses_replacement_entry() {
+        let dir = replacement_manifest(
+            r#""github.com/df-mc/dragonfly" = { replacement = "github.com/fork/dragonfly@v1.2.0" }"#,
+        );
+        let manifest = parse_manifest(dir.path()).unwrap();
+        match &manifest.go_deps()["github.com/df-mc/dragonfly"] {
+            GoDependency::Replaced {
+                replacement_path,
+                replacement_version,
+                via,
+            } => {
+                assert_eq!(replacement_path, "github.com/fork/dragonfly");
+                assert_eq!(replacement_version, "v1.2.0");
+                assert!(via.is_none());
+            }
+            other => panic!("expected Replaced, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn parses_replacement_with_via() {
+        let dir = replacement_manifest(
+            r#""github.com/df-mc/dragonfly" = { replacement = "github.com/fork/dragonfly@v0.0.0-20260101000000-abcdef123456", via = ["github.com/x/y"] }"#,
+        );
+        let manifest = parse_manifest(dir.path()).unwrap();
+        match &manifest.go_deps()["github.com/df-mc/dragonfly"] {
+            GoDependency::Replaced {
+                replacement_version,
+                via,
+                ..
+            } => {
+                assert_eq!(replacement_version, "v0.0.0-20260101000000-abcdef123456");
+                assert_eq!(
+                    via.as_deref(),
+                    Some(["github.com/x/y".to_string()].as_slice())
+                );
+            }
+            other => panic!("expected Replaced, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn rejects_replacement_without_version() {
+        let dir = replacement_manifest(
+            r#""github.com/df-mc/dragonfly" = { replacement = "github.com/fork/dragonfly" }"#,
+        );
+        let error = parse_manifest(dir.path()).unwrap_err();
+        assert!(error.contains("<module-path>@<version>"), "{}", error);
+    }
+
+    #[test]
+    fn rejects_replacement_with_non_third_party_key() {
+        let dir =
+            replacement_manifest(r#""dragon" = { replacement = "fork.example/dragon@v1.2.0" }"#);
+        let error = parse_manifest(dir.path()).unwrap_err();
+        assert!(error.contains("not a third-party module path"), "{}", error);
+    }
+
+    #[test]
+    fn rejects_replacement_with_non_third_party_replacement_path() {
+        let dir =
+            replacement_manifest(r#""example.com/dragon" = { replacement = "localfork@v1.2.0" }"#);
+        let error = parse_manifest(dir.path()).unwrap_err();
+        assert!(
+            error.contains("`localfork`") && error.contains("not a third-party"),
+            "{}",
+            error
+        );
+    }
+
+    #[test]
+    fn rejects_both_version_and_replacement() {
+        let dir = replacement_manifest(
+            r#""github.com/df-mc/dragonfly" = { version = "v1.0.0", replacement = "github.com/fork/dragonfly@v1.2.0" }"#,
+        );
+        let error = parse_manifest(dir.path()).unwrap_err();
+        assert!(
+            error.contains("both `version` and `replacement`"),
+            "{}",
+            error
+        );
+    }
+
+    #[test]
+    fn upsert_go_dependency_round_trips_replacement_shape() {
+        let dir = replacement_manifest("");
+        upsert_go_dependency(
+            dir.path(),
+            "github.com/df-mc/dragonfly",
+            &GoDependency::Replaced {
+                replacement_path: "github.com/fork/dragonfly".to_string(),
+                replacement_version: "v1.2.0".to_string(),
+                via: Some(vec!["github.com/x/y".to_string()]),
+            },
+        )
+        .unwrap();
+        let after = manifest_text(&dir);
+        assert!(
+            after.contains(
+                r#""github.com/df-mc/dragonfly" = { replacement = "github.com/fork/dragonfly@v1.2.0", via = ["github.com/x/y"] }"#
+            ),
+            "{}",
+            after
+        );
+
+        let reparsed = parse_manifest(dir.path()).unwrap();
+        assert!(matches!(
+            reparsed.go_deps()["github.com/df-mc/dragonfly"],
+            GoDependency::Replaced { .. }
+        ));
     }
 
     #[test]

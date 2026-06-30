@@ -13,6 +13,8 @@ use std::path::PathBuf;
 use rustc_hash::FxHashMap as HashMap;
 
 use deps::TypedefLocator;
+
+use crate::diagnostics::{GoImportSite, emit_for_locator_result};
 use syntax::ast::{
     Annotation, Attribute, AttributeArg, Binding, EnumVariant, Expression, Generic, Span,
     StructKind, Visibility as SyntacticVisibility,
@@ -303,6 +305,13 @@ impl TaskState<'_> {
 
         let imports = file.imports();
 
+        let replace_importer = module_id.strip_prefix("go:").filter(|pkg| {
+            matches!(
+                locator.validate_declaration(pkg),
+                deps::DeclarationStatus::DeclaredReplacement { .. }
+            )
+        });
+
         for import in &imports {
             if let Some(go_pkg) = import.name.strip_prefix("go:") {
                 if matches!(import.alias, Some(syntax::ast::ImportAlias::Blank(_))) {
@@ -326,13 +335,16 @@ impl TaskState<'_> {
                         );
                     }
                     other => {
-                        crate::diagnostics::emit_for_locator_result(
+                        emit_for_locator_result(
                             &other,
-                            &import.name,
-                            go_pkg,
-                            Some(import.name_span),
-                            locator.target(),
-                            false,
+                            &GoImportSite {
+                                import_name: &import.name,
+                                go_pkg,
+                                name_span: Some(import.name_span),
+                                target: locator.target(),
+                                standalone_mode: false,
+                                replace_importer,
+                            },
                             self.sink,
                         );
                     }

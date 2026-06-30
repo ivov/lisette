@@ -271,7 +271,7 @@ fn graph_declared_dep_missing_typedef() {
     let mut go_deps = BTreeMap::new();
     go_deps.insert(
         "github.com/gorilla/mux".to_string(),
-        deps::GoDependency {
+        deps::GoDependency::Remote {
             version: "v1.8.0".to_string(),
             via: None,
         },
@@ -321,7 +321,7 @@ fn graph_subpackage_missing_typedef_points_at_add() {
     let mut go_deps = BTreeMap::new();
     go_deps.insert(
         "k8s.io/api".to_string(),
-        deps::GoDependency {
+        deps::GoDependency::Remote {
             version: "v0.30.0".to_string(),
             via: None,
         },
@@ -497,7 +497,7 @@ fn resolver_root_vs_subpackage_typedef_lookup() {
     let mut go_deps = BTreeMap::new();
     go_deps.insert(
         "github.com/gorilla/mux".to_string(),
-        deps::GoDependency {
+        deps::GoDependency::Remote {
             version: "v1.8.0".to_string(),
             via: None,
         },
@@ -551,7 +551,7 @@ fn third_party_go_struct_impl_methods_registered() {
     let mut go_deps = std::collections::BTreeMap::new();
     go_deps.insert(
         "github.com/gorilla/mux".to_string(),
-        deps::GoDependency {
+        deps::GoDependency::Remote {
             version: "v1.8.0".to_string(),
             via: None,
         },
@@ -641,7 +641,7 @@ fn stdlib_cache_save_load_excludes_third_party() {
     let mut go_deps = std::collections::BTreeMap::new();
     go_deps.insert(
         "github.com/gorilla/mux".to_string(),
-        deps::GoDependency {
+        deps::GoDependency::Remote {
             version: "v1.8.0".to_string(),
             via: None,
         },

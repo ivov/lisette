@@ -183,18 +183,23 @@ Run `lis doc test` to learn how to write tests.",
         ),
 
         "add" => print_help(
-            "`lis add` <dependency> {[@version]:b}
+            "`lis add` <dependency>{[@version]:b} {[--flags]:b}
 
 Add a third-party Go module as a dependency to your Lisette project.
 
 Arguments:
     {dependency:g} {(required):d}          Go module name
 
+Options:
+    {--replace:b} {<module>:g}             Source from another module
+
 Examples:
     `lis add` {google/uuid:g}            Latest version
     `lis add` {google/uuid:g}{@v1.6.0:b}     Exact version
     `lis add` {google/uuid:g}{@2d3c2a9:b}    Exact commit hash or branch
-    `lis add` {go.uber.org/zap:g}        Full path for non-GitHub host",
+    `lis add` {go.uber.org/zap:g}        Full path for non-GitHub host
+    `lis add` {gorilla/mux:g} \\
+      {--replace:b} {you/mux:g}            Use your own fork of {gorilla/mux:g}",
         ),
 
         "sync" => print_help(

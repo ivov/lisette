@@ -129,9 +129,29 @@ pub fn write_go_mod(dir: &Path, module_name: &str, locator: &TypedefLocator) -> 
     let prelude_version = env!("CARGO_PKG_VERSION");
 
     let mut requires = vec![format!("\t{} v{}", PRELUDE_IMPORT_PATH, prelude_version)];
+    let mut replace_lines: Vec<String> = Vec::new();
 
     for (module_path, dep) in locator.deps() {
-        requires.push(format!("\t{} {}", module_path, dep.version));
+        match dep {
+            deps::GoDependency::Remote { version, .. } => {
+                requires.push(format!("\t{} {}", module_path, version));
+            }
+            deps::GoDependency::Replaced {
+                replacement_path,
+                replacement_version,
+                ..
+            } => {
+                requires.push(format!(
+                    "\t{} {}",
+                    module_path,
+                    deps::placeholder_require_version(module_path)
+                ));
+                replace_lines.push(format!(
+                    "replace {} => {} {}",
+                    module_path, replacement_path, replacement_version
+                ));
+            }
+        }
     }
 
     let mut content = format!(
@@ -140,6 +160,10 @@ pub fn write_go_mod(dir: &Path, module_name: &str, locator: &TypedefLocator) -> 
         go_mod_version(),
         requires.join("\n"),
     );
+
+    for line in &replace_lines {
+        content.push_str(&format!("\n{}\n", line));
+    }
 
     if cfg!(debug_assertions) {
         let prelude_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../prelude");
@@ -635,6 +659,70 @@ mod tests {
     fn binary_name_uses_last_module_segment() {
         assert_eq!(binary_name("myproj", linux()), "myproj");
         assert_eq!(binary_name("github.com/u/myproj", linux()), "myproj");
+    }
+
+    fn locator_with(deps: Vec<(&str, deps::GoDependency)>) -> deps::TypedefLocator {
+        let map = deps
+            .into_iter()
+            .map(|(k, v)| (k.to_string(), v))
+            .collect::<std::collections::BTreeMap<_, _>>();
+        deps::TypedefLocator::new(map, None, Target::host())
+    }
+
+    #[test]
+    fn write_go_mod_emits_synthetic_require_and_replace_for_replaced_dep() {
+        let dir = tempfile::tempdir().unwrap();
+        let locator = locator_with(vec![(
+            "github.com/df-mc/dragonfly",
+            deps::GoDependency::Replaced {
+                replacement_path: "github.com/fork/dragonfly".to_string(),
+                replacement_version: "v0.0.0-20260101000000-abcdef123456".to_string(),
+                via: None,
+            },
+        )]);
+
+        write_go_mod(dir.path(), "example.com/app", &locator).unwrap();
+        let content = std::fs::read_to_string(dir.path().join("go.mod")).unwrap();
+
+        assert!(
+            content.contains("github.com/df-mc/dragonfly v0.0.0\n"),
+            "{}",
+            content
+        );
+        assert!(
+            content.contains(
+                "replace github.com/df-mc/dragonfly => github.com/fork/dragonfly v0.0.0-20260101000000-abcdef123456"
+            ),
+            "{}",
+            content
+        );
+    }
+
+    #[test]
+    fn write_go_mod_uses_major_matched_synthetic_for_v2_replaced_dep() {
+        let dir = tempfile::tempdir().unwrap();
+        let locator = locator_with(vec![(
+            "example.com/lib/v2",
+            deps::GoDependency::Replaced {
+                replacement_path: "github.com/fork/lib/v2".to_string(),
+                replacement_version: "v2.3.0".to_string(),
+                via: None,
+            },
+        )]);
+
+        write_go_mod(dir.path(), "example.com/app", &locator).unwrap();
+        let content = std::fs::read_to_string(dir.path().join("go.mod")).unwrap();
+
+        assert!(
+            content.contains("example.com/lib/v2 v2.0.0\n"),
+            "{}",
+            content
+        );
+        assert!(
+            content.contains("replace example.com/lib/v2 => github.com/fork/lib/v2 v2.3.0"),
+            "{}",
+            content
+        );
     }
 
     #[test]

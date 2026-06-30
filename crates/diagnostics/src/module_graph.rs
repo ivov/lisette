@@ -120,13 +120,33 @@ pub fn undeclared_go_import(go_pkg: &str, span: Span) -> LisetteDiagnostic {
         ))
 }
 
+pub fn undeclared_go_import_via_replace(
+    go_pkg: &str,
+    replaced_module: &str,
+    span: Span,
+) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Undeclared Go dependency")
+        .with_resolve_code("undeclared_go_import")
+        .with_span_label(&span, "not in lisette.toml")
+        .with_help(format!(
+            "`{}` is a dependency of the replaced module `{}`. Run `lis sync` to reconcile the replacement's dependencies, or `lis add {}` to add it directly",
+            go_pkg, replaced_module, go_pkg
+        ))
+}
+
 pub fn missing_go_typedef(
     go_pkg: &str,
     module: &str,
     version: &str,
+    replacement_path: Option<&str>,
     span: Span,
 ) -> LisetteDiagnostic {
-    let help = if go_pkg == module {
+    let help = if let Some(replacement_path) = replacement_path {
+        format!(
+            "Module `{}` is sourced via `replace` from `{}@{}` but has no typedef. Run `lis sync` to regenerate it.",
+            module, replacement_path, version
+        )
+    } else if go_pkg == module {
         format!(
             "Module `{}` {} is declared but no typedef was found. Run `lis check` to regenerate all typedefs, or `lis add {}@{}` to regenerate this one.",
             module, version, module, version

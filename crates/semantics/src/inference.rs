@@ -18,7 +18,7 @@ use crate::cache::{
 };
 use crate::checker::TaskState;
 use crate::checker::infer::InferCtx;
-use crate::diagnostics::emit_for_locator_result;
+use crate::diagnostics::{GoImportSite, emit_for_locator_result};
 use crate::facts::{BindingIdAllocator, Facts};
 use crate::loader::Loader;
 use crate::module_graph::build_module_graph;
@@ -391,11 +391,14 @@ fn register_go_module(
         other => {
             emit_for_locator_result(
                 &other,
-                module_id,
-                go_pkg,
-                None,
-                locator.target(),
-                standalone_mode,
+                &GoImportSite {
+                    import_name: module_id,
+                    go_pkg,
+                    name_span: None,
+                    target: locator.target(),
+                    standalone_mode,
+                    replace_importer: None,
+                },
                 sink,
             );
         }

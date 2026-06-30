@@ -122,7 +122,7 @@ pub fn locator_with_go_dep(module_path: &str, version: &str) -> deps::TypedefLoc
     let mut go_deps = std::collections::BTreeMap::new();
     go_deps.insert(
         module_path.to_string(),
-        deps::GoDependency {
+        deps::GoDependency::Remote {
             version: version.to_string(),
             via: None,
         },

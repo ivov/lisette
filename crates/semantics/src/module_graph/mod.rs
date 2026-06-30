@@ -6,7 +6,7 @@ use deps::TypedefLocator;
 use syntax::ast::{ImportAlias, Span};
 use syntax::program::File;
 
-use crate::diagnostics::{emit_for_declaration_status, emit_for_locator_result};
+use crate::diagnostics::{GoImportSite, emit_for_declaration_status, emit_for_locator_result};
 use crate::loader as semantics_loader;
 use crate::loader::Loader;
 use crate::store::Store;
@@ -345,11 +345,14 @@ fn process_file_imports(
                 let result = locator.find_typedef_content(go_pkg);
                 emit_for_locator_result(
                     &result,
-                    &file_import.name,
-                    go_pkg,
-                    Some(file_import.name_span),
-                    locator.target(),
-                    standalone_mode,
+                    &GoImportSite {
+                        import_name: &file_import.name,
+                        go_pkg,
+                        name_span: Some(file_import.name_span),
+                        target: locator.target(),
+                        standalone_mode,
+                        replace_importer: None,
+                    },
                     sink,
                 )
             };

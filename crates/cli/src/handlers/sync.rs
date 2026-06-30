@@ -4,6 +4,7 @@ use stdlib::Target;
 
 use crate::go_cli;
 use crate::handlers::add::find_project_root;
+use crate::handlers::reconciliation::{finalize_manifest_via, reconcile_declared_replacements};
 use crate::lock::{acquire_mutation_lock, acquire_target_lock};
 use crate::output::print_sync_summary;
 use crate::typedef_regen::prewarm_typedef_cache;
@@ -104,6 +105,32 @@ pub fn sync() -> i32 {
         }
     };
 
+    // Drop dead `via` entries (replaced ones included) before any go.mod write,
+    // so a stale replacement cannot poison later Go commands.
+    let (pre_trimmed, pre_report) = match finalize_manifest_via(&project_root, &scanned.all) {
+        Ok(reports) => reports,
+        Err(code) => return code,
+    };
+    let manifest = match deps::parse_manifest(&project_root) {
+        Ok(m) => m,
+        Err(msg) => {
+            error!("failed to read manifest", msg);
+            return 1;
+        }
+    };
+
+    if let Err(code) = reconcile_declared_replacements(&project_root, &target_dir, &manifest) {
+        return code;
+    }
+
+    let manifest = match deps::parse_manifest(&project_root) {
+        Ok(m) => m,
+        Err(msg) => {
+            error!("failed to read manifest", msg);
+            return 1;
+        }
+    };
+
     let mut bindgen_runner: Option<Arc<WorkspaceBindgen>> = None;
     let prewarm_result = if !scanned.non_blank.is_empty() {
         let target = Target::host();
@@ -129,26 +156,22 @@ pub fn sync() -> i32 {
         Ok(())
     };
 
-    let trimmed = match deps::trim_dead_via_parents(&project_root) {
-        Ok(t) => t,
-        Err(msg) => {
-            error!("failed to update manifest", msg);
-            return 1;
-        }
+    let (post_trimmed, post_report) = match finalize_manifest_via(&project_root, &scanned.all) {
+        Ok(reports) => reports,
+        Err(code) => return code,
     };
 
-    let report = match deps::resolve_empty_via(&project_root, &scanned.all) {
-        Ok(r) => r,
-        Err(msg) => {
-            error!("failed to update manifest", msg);
-            return 1;
-        }
-    };
+    let mut trimmed = pre_trimmed;
+    trimmed.extend(post_trimmed);
+    let mut promoted = pre_report.promoted;
+    promoted.extend(post_report.promoted);
+    let mut removed = pre_report.removed;
+    removed.extend(post_report.removed);
 
     let needs_separator = bindgen_runner
         .as_ref()
         .is_some_and(|r| r.progress_emitted());
-    print_sync_summary(&trimmed, &report.promoted, &report.removed, needs_separator);
+    print_sync_summary(&trimmed, &promoted, &removed, needs_separator);
 
     prewarm_result.err().unwrap_or(0)
 }

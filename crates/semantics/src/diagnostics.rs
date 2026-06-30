@@ -3,15 +3,30 @@ use diagnostics::LocalSink;
 use stdlib::Target;
 use syntax::ast::Span;
 
+/// The import site a typedef-resolution diagnostic refers to.
+pub struct GoImportSite<'a> {
+    pub import_name: &'a str,
+    pub go_pkg: &'a str,
+    pub name_span: Option<Span>,
+    pub target: Target,
+    pub standalone_mode: bool,
+    /// Set when reached through a replaced module's typedef, so the hint points at `lis sync`.
+    pub replace_importer: Option<&'a str>,
+}
+
 pub fn emit_for_locator_result(
     result: &TypedefLocatorResult,
-    import_name: &str,
-    go_pkg: &str,
-    name_span: Option<Span>,
-    target: Target,
-    standalone_mode: bool,
+    site: &GoImportSite,
     sink: &LocalSink,
 ) -> bool {
+    let GoImportSite {
+        import_name,
+        go_pkg,
+        name_span,
+        target,
+        standalone_mode,
+        replace_importer,
+    } = *site;
     let span = name_span.unwrap_or_else(|| Span::new(0, 0, 0));
     match result {
         TypedefLocatorResult::Found { .. } => return true,
@@ -19,11 +34,26 @@ pub fn emit_for_locator_result(
             emit_unknown_stdlib(import_name, go_pkg, span, target, standalone_mode, sink);
         }
         TypedefLocatorResult::UndeclaredImport => {
-            emit_undeclared(import_name, go_pkg, span, standalone_mode, sink);
+            emit_undeclared(
+                import_name,
+                go_pkg,
+                span,
+                standalone_mode,
+                replace_importer,
+                sink,
+            );
         }
-        TypedefLocatorResult::MissingTypedef { module, version } => {
+        TypedefLocatorResult::MissingTypedef {
+            module,
+            version,
+            replacement_path,
+        } => {
             sink.push(diagnostics::module_graph::missing_go_typedef(
-                go_pkg, module, version, span,
+                go_pkg,
+                module,
+                version,
+                replacement_path.as_deref(),
+                span,
             ));
         }
         TypedefLocatorResult::UnreadableTypedef { path, error } => {
@@ -63,7 +93,9 @@ pub fn emit_for_declaration_status(
     sink: &LocalSink,
 ) -> bool {
     match status {
-        DeclarationStatus::Stdlib | DeclarationStatus::DeclaredThirdParty { .. } => true,
+        DeclarationStatus::Stdlib
+        | DeclarationStatus::DeclaredThirdParty { .. }
+        | DeclarationStatus::DeclaredReplacement { .. } => true,
         DeclarationStatus::UnknownStdlib => {
             emit_unknown_stdlib(
                 import_name,
@@ -76,7 +108,7 @@ pub fn emit_for_declaration_status(
             false
         }
         DeclarationStatus::UndeclaredImport => {
-            emit_undeclared(import_name, go_pkg, name_span, standalone_mode, sink);
+            emit_undeclared(import_name, go_pkg, name_span, standalone_mode, None, sink);
             false
         }
     }
@@ -113,6 +145,7 @@ fn emit_undeclared(
     go_pkg: &str,
     span: Span,
     standalone_mode: bool,
+    replace_importer: Option<&str>,
     sink: &LocalSink,
 ) {
     if standalone_mode {
@@ -122,6 +155,12 @@ fn emit_undeclared(
             false,
             true,
             None,
+        ));
+    } else if let Some(replaced_module) = replace_importer {
+        sink.push(diagnostics::module_graph::undeclared_go_import_via_replace(
+            go_pkg,
+            replaced_module,
+            span,
         ));
     } else {
         sink.push(diagnostics::module_graph::undeclared_go_import(

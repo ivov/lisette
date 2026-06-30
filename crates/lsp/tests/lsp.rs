@@ -1090,6 +1090,7 @@ async fn goto_definition_on_third_party_go_function_navigates_to_cache() {
         module: deps::GoModule {
             path: "github.com/example/lib",
             version: "v1.0.0",
+            replacement: None,
         },
         package: "github.com/example/lib",
     };

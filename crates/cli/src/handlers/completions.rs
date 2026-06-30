@@ -63,6 +63,10 @@ fn bash_completions() -> &'static str {
             COMPREPLY=( $(compgen -W "--check" -- "$cur") )
             return 0
             ;;
+        add)
+            COMPREPLY=( $(compgen -W "--replace" -- "$cur") )
+            return 0
+            ;;
         check)
             COMPREPLY=( $(compgen -W "--errors-only --warnings-only --output" -- "$cur") )
             return 0
@@ -145,6 +149,9 @@ _lis() {
                 format)
                     _arguments '--check[Check formatting without modifying]'
                     ;;
+                add)
+                    _arguments '--replace[Source the dependency from another module]:module@version'
+                    ;;
                 check)
                     _arguments \
                         '--errors-only[Show only errors]' \
@@ -181,6 +188,7 @@ complete -c lis -n __fish_use_subcommand -a check -d 'Lint and typecheck a proje
 complete -c lis -n __fish_use_subcommand -a format -d 'Format a project'
 complete -c lis -n __fish_use_subcommand -a test -d 'Run a project\'s tests'
 complete -c lis -n __fish_use_subcommand -a add -d 'Add a third-party Go dependency'
+complete -c lis -n '__fish_seen_subcommand_from add' -l replace -d 'Source the dependency from another module'
 complete -c lis -n __fish_use_subcommand -a sync -d 'Tidy project manifest'
 complete -c lis -n __fish_use_subcommand -a version -d 'Print compiler version'
 complete -c lis -n __fish_use_subcommand -a help -d 'Show help for a command'

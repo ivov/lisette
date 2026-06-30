@@ -11,6 +11,9 @@ use crate::project_manifest::{
 };
 use crate::{GoModule, GoPackage, typedef_cache_dir};
 
+/// `(module path, version to hand Go, optional (replacement path, version))`.
+type ResolvedModule = (String, String, Option<(String, String)>);
+
 #[derive(Debug)]
 pub enum TypedefLocatorResult {
     Found {
@@ -22,7 +25,11 @@ pub enum TypedefLocatorResult {
     /// Has a domain-style path but is not declared in the manifest.
     UndeclaredImport,
     /// Declared in the manifest but no `.d.lis` on disk and no bindgen runner.
-    MissingTypedef { module: String, version: String },
+    MissingTypedef {
+        module: String,
+        version: String,
+        replacement_path: Option<String>,
+    },
     /// Typedef file exists but could not be read.
     UnreadableTypedef { path: PathBuf, error: String },
     /// The bindgen runner ran on cache miss but failed.
@@ -47,7 +54,15 @@ pub enum BindgenFailure {
 #[derive(Debug)]
 pub enum DeclarationStatus {
     Stdlib,
-    DeclaredThirdParty { module: String, version: String },
+    DeclaredThirdParty {
+        module: String,
+        version: String,
+    },
+    DeclaredReplacement {
+        module: String,
+        replacement_path: String,
+        replacement_version: String,
+    },
     UnknownStdlib,
     UndeclaredImport,
 }
@@ -166,11 +181,27 @@ impl TypedefLocator {
         find_module_for_pkg(&self.deps, package_path).is_some()
     }
 
-    /// Resolve a `go:` package path to its declared module path and version by
-    /// longest declared prefix, or `None` if no declared module contains it.
-    pub fn module_for_package(&self, package_path: &str) -> Option<(String, String)> {
-        find_module_for_pkg(&self.deps, package_path)
-            .map(|(module, dep)| (module.to_string(), dep.version.clone()))
+    /// Resolve a `go:` package path to its declared module, the version to hand
+    /// Go, and its replacement if any, by longest declared prefix. `None` if no
+    /// declared module contains it.
+    pub fn module_for_package(&self, package_path: &str) -> Option<ResolvedModule> {
+        let (module, dep) = find_module_for_pkg(&self.deps, package_path)?;
+        let module = module.to_string();
+        Some(match dep {
+            GoDependency::Remote { version, .. } => (module, version.clone(), None),
+            GoDependency::Replaced {
+                replacement_path,
+                replacement_version,
+                ..
+            } => {
+                let synthetic = crate::placeholder_require_version(&module);
+                (
+                    module,
+                    synthetic,
+                    Some((replacement_path.clone(), replacement_version.clone())),
+                )
+            }
+        })
     }
 
     /// Classify a `go:` import path without touching the cache or bindgen.
@@ -187,9 +218,23 @@ impl TypedefLocator {
         }
 
         match find_module_for_pkg(&self.deps, package_path) {
-            Some((module_path, dep)) => DeclarationStatus::DeclaredThirdParty {
+            Some((module_path, GoDependency::Remote { version, .. })) => {
+                DeclarationStatus::DeclaredThirdParty {
+                    module: module_path.to_string(),
+                    version: version.clone(),
+                }
+            }
+            Some((
+                module_path,
+                GoDependency::Replaced {
+                    replacement_path,
+                    replacement_version,
+                    ..
+                },
+            )) => DeclarationStatus::DeclaredReplacement {
                 module: module_path.to_string(),
-                version: dep.version.clone(),
+                replacement_path: replacement_path.clone(),
+                replacement_version: replacement_version.clone(),
             },
             None => DeclarationStatus::UndeclaredImport,
         }
@@ -197,7 +242,7 @@ impl TypedefLocator {
 
     /// Resolve a `go:` package: stdlib -> on-disk cache -> bindgen runner if set.
     pub fn find_typedef_content(&self, package_path: &str) -> TypedefLocatorResult {
-        let (module_path, version) = match self.classify(package_path) {
+        let (module_path, version, replacement) = match self.classify(package_path) {
             DeclarationStatus::Stdlib => {
                 let source = stdlib::get_go_stdlib_typedef(package_path, self.target)
                     .expect("Stdlib classification implies an embedded typedef");
@@ -214,13 +259,33 @@ impl TypedefLocator {
             }
             DeclarationStatus::UnknownStdlib => return TypedefLocatorResult::UnknownStdlib,
             DeclarationStatus::UndeclaredImport => return TypedefLocatorResult::UndeclaredImport,
-            DeclarationStatus::DeclaredThirdParty { module, version } => (module, version),
+            DeclarationStatus::DeclaredThirdParty { module, version } => (module, version, None),
+            DeclarationStatus::DeclaredReplacement {
+                module,
+                replacement_path,
+                replacement_version,
+            } => {
+                let synthetic = crate::placeholder_require_version(&module);
+                (
+                    module,
+                    synthetic,
+                    Some((replacement_path, replacement_version)),
+                )
+            }
         };
+
+        let display_version = match &replacement {
+            Some((_, replacement_version)) => replacement_version.clone(),
+            None => version.clone(),
+        };
+
+        let replacement_path = replacement.as_ref().map(|(path, _)| path.clone());
 
         let Some(project_root) = &self.project_root else {
             return TypedefLocatorResult::MissingTypedef {
                 module: module_path,
-                version,
+                version: display_version,
+                replacement_path,
             };
         };
 
@@ -228,6 +293,9 @@ impl TypedefLocator {
             module: GoModule {
                 path: &module_path,
                 version: &version,
+                replacement: replacement
+                    .as_ref()
+                    .map(|(path, version)| crate::Replacement { path, version }),
             },
             package: package_path,
         };
@@ -246,7 +314,8 @@ impl TypedefLocator {
             ReadOutcome::Missing => match &self.bindgen {
                 None => TypedefLocatorResult::MissingTypedef {
                     module: module_path,
-                    version,
+                    version: display_version,
+                    replacement_path,
                 },
                 Some(runner) => match runner.run(&pkg) {
                     Ok(()) => match read_typedef(&typedef_path) {
@@ -260,7 +329,7 @@ impl TypedefLocator {
                         },
                         ReadOutcome::Missing => TypedefLocatorResult::BindgenFailed {
                             module: module_path,
-                            version,
+                            version: display_version,
                             package: package_path.to_string(),
                             kind: BindgenFailure::InvocationFailed {
                                 stderr: format!(
@@ -272,7 +341,7 @@ impl TypedefLocator {
                     },
                     Err(kind) => TypedefLocatorResult::BindgenFailed {
                         module: module_path,
-                        version,
+                        version: display_version,
                         package: package_path.to_string(),
                         kind,
                     },
@@ -293,5 +362,41 @@ fn read_typedef(path: &Path) -> ReadOutcome {
         Ok(s) => ReadOutcome::Found(s),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => ReadOutcome::Missing,
         Err(e) => ReadOutcome::Unreadable(e.to_string()),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::BTreeMap;
+
+    #[test]
+    fn replace_diagnostic_shows_replacement_version_not_synthetic() {
+        let mut deps = BTreeMap::new();
+        deps.insert(
+            "github.com/df-mc/dragonfly".to_string(),
+            GoDependency::Replaced {
+                replacement_path: "github.com/you/dragonfly".to_string(),
+                replacement_version: "v1.9.0".to_string(),
+                via: None,
+            },
+        );
+        let locator = TypedefLocator::new(deps, None, Target::host());
+
+        match locator.find_typedef_content("github.com/df-mc/dragonfly") {
+            TypedefLocatorResult::MissingTypedef {
+                module,
+                version,
+                replacement_path,
+            } => {
+                assert_eq!(module, "github.com/df-mc/dragonfly");
+                assert_eq!(version, "v1.9.0");
+                assert_eq!(
+                    replacement_path.as_deref(),
+                    Some("github.com/you/dragonfly")
+                );
+            }
+            other => panic!("expected MissingTypedef, got {:?}", other),
+        }
     }
 }

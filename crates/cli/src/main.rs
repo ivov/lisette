@@ -99,7 +99,10 @@ fn main() {
             handlers::help::print_version();
             0
         }
-        Command::Add { dependency } => handlers::add(&dependency),
+        Command::Add {
+            dependency,
+            replace,
+        } => handlers::add(&dependency, replace.as_deref()),
         Command::Sync => handlers::sync(),
         Command::Lsp => handlers::lsp(),
         Command::Bindgen {

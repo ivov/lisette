@@ -44,6 +44,12 @@ struct ErrorEntry {
     message: String,
 }
 
+/// A replacement's resolved version and the module path its `go.mod` declares.
+pub struct ReplaceResolution {
+    pub resolved_version: String,
+    pub declared_module: String,
+}
+
 /// Information about a Go module from `go list -m -json`.
 pub struct GoModuleInfo {
     pub path: String,
@@ -134,6 +140,39 @@ impl<'a> GoWorkspace<'a> {
             return Err(format!("`go list -m -json {}` returned no version", target));
         }
         Ok(version)
+    }
+
+    /// Resolve a replacement's exact version and the module path its `go.mod` declares.
+    pub fn resolve_replace(
+        &self,
+        replacement_path: &str,
+        query: &str,
+    ) -> Result<ReplaceResolution, String> {
+        let target = format!("{}@{}", replacement_path, query);
+        let listed = self.run_go(&["list", "-mod=mod", "-m", "-json", &target])?;
+        let listed: serde_json::Value = serde_json::from_str(&listed)
+            .map_err(|e| format!("Failed to parse Go module JSON: {}", e))?;
+        let resolved_version = listed["Version"].as_str().unwrap_or("").to_string();
+        if resolved_version.is_empty() {
+            return Err(format!("`go list -m -json {}` returned no version", target));
+        }
+        let go_mod = listed["GoMod"].as_str().unwrap_or("");
+        if go_mod.is_empty() {
+            return Err("Go did not report the replacement's go.mod path".to_string());
+        }
+
+        let edited = self.run_go(&["mod", "edit", "-json", go_mod])?;
+        let edited: serde_json::Value = serde_json::from_str(&edited)
+            .map_err(|e| format!("Failed to parse `go mod edit -json` output: {}", e))?;
+        let declared_module = edited["Module"]["Path"].as_str().unwrap_or("").to_string();
+        if declared_module.is_empty() {
+            return Err("replacement `go.mod` has no `module` directive".to_string());
+        }
+
+        Ok(ReplaceResolution {
+            resolved_version,
+            declared_module,
+        })
     }
 
     /// List all public packages in a Go module.
@@ -291,6 +330,7 @@ impl<'a> GoWorkspace<'a> {
         self.go_get(GoModule {
             path: package,
             version: module.version,
+            replacement: None,
         })?;
 
         let manifest = self.run_bindgen_batch(&[package.to_string()], BatchScope::RequestedOnly)?;
@@ -721,7 +761,9 @@ impl GoWorkspace<'_> {
         let mut written = 0;
 
         for entry in &manifest.ok {
-            let Some((module_path, version)) = locator.module_for_package(&entry.package) else {
+            let Some((module_path, version, replacement)) =
+                locator.module_for_package(&entry.package)
+            else {
                 continue;
             };
             if validate_typedef_parses(&entry.package, &entry.content).is_err() {
@@ -732,6 +774,9 @@ impl GoWorkspace<'_> {
                 module: GoModule {
                     path: &module_path,
                     version: &version,
+                    replacement: replacement
+                        .as_ref()
+                        .map(|(path, version)| deps::Replacement { path, version }),
                 },
                 package: &entry.package,
             };
@@ -818,7 +863,17 @@ fn warm_stamp_for(roots: &[String], locator: &TypedefLocator) -> String {
     let deps: Vec<String> = locator
         .deps()
         .iter()
-        .map(|(module, dep)| format!("{} {}", module, dep.version))
+        .map(|(module, dep)| {
+            let source = match dep {
+                deps::GoDependency::Remote { version, .. } => version.clone(),
+                deps::GoDependency::Replaced {
+                    replacement_path,
+                    replacement_version,
+                    ..
+                } => format!("{}@{}", replacement_path, replacement_version),
+            };
+            format!("{} {}", module, source)
+        })
         .collect();
     format!("{}\n--\n{}", roots.join("\n"), deps.join("\n"))
 }
@@ -963,6 +1018,7 @@ impl Bindgen for WorkspaceBindgen {
         let module = GoModule {
             path: pkg.module.path,
             version: pkg.module.version,
+            replacement: pkg.module.replacement,
         };
 
         match workspace.reconcile_package(module, pkg.package) {
@@ -999,6 +1055,7 @@ mod tests {
         GoModule {
             path: MODULE_PATH,
             version: MODULE_VERSION,
+            replacement: None,
         }
     }
 

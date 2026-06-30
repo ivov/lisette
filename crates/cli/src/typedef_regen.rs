@@ -34,7 +34,9 @@ pub fn prewarm_typedef_cache(
             TypedefLocatorResult::UnknownStdlib | TypedefLocatorResult::UndeclaredImport => {
                 // Type-checker handles these.
             }
-            TypedefLocatorResult::MissingTypedef { module, version } => {
+            TypedefLocatorResult::MissingTypedef {
+                module, version, ..
+            } => {
                 print_warning(&format!(
                     "missing typedef for {}",
                     pkg_label(&pkg, &module, &version)
