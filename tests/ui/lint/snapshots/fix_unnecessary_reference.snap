@@ -1,0 +1,10 @@
+---
+source: tests/ui/lint/fixes.rs
+---
+pub fn foo(x: Ref<int>) {
+  let _ = &x;
+}
+=== fixed ===
+pub fn foo(x: Ref<int>) {
+  let _ = x;
+}

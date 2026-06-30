@@ -2,7 +2,9 @@ use rustc_hash::FxHashSet as HashSet;
 
 use diagnostics::LisetteDiagnostic;
 use diagnostics::LocalSink;
+use diagnostics::{Edit, Fix};
 use semantics::facts::Facts;
+use syntax::ast::Span;
 use syntax::program::UnusedInfo;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -149,10 +151,14 @@ fn collect_discarded_tail_expressions(facts: &Facts, out: &mut Vec<LisetteDiagno
 
 fn collect_overused_references(facts: &Facts, out: &mut Vec<LisetteDiagnostic>) {
     for fact in &facts.overused_references {
-        out.push(diagnostics::lint::unnecessary_reference(
-            &fact.span,
-            fact.name.as_deref(),
-        ));
+        out.push(
+            diagnostics::lint::unnecessary_reference(&fact.span, fact.name.as_deref()).with_fix(
+                Fix::new(
+                    "Remove the redundant `&`",
+                    Edit::deletion(Span::new(fact.span.file_id, fact.span.byte_offset, 1)),
+                ),
+            ),
+        );
     }
 }
 

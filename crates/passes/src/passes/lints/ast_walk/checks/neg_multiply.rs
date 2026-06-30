@@ -1,4 +1,5 @@
 use crate::passes::walk::NodeCtx;
+use diagnostics::{Edit, Fix};
 use syntax::ast::{BinaryOperator, Expression, UnaryOperator};
 
 use super::helpers::{signed_integer_literal, span_text};
@@ -57,5 +58,11 @@ pub fn check_neg_multiply(expression: &Expression, ctx: &NodeCtx) {
         return;
     };
 
-    ctx.sink.push(diagnostics::lint::neg_multiply(span, text));
+    let replacement = format!("-{text}");
+    ctx.sink.push(
+        diagnostics::lint::neg_multiply(span, text).with_fix(Fix::new(
+            format!("Replace with `{replacement}`"),
+            Edit::replacement(*span, replacement.clone()),
+        )),
+    );
 }

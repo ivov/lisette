@@ -1,5 +1,6 @@
 use super::helpers::{signed_integer_literal, span_text};
 use crate::passes::walk::NodeCtx;
+use diagnostics::{Edit, Fix};
 use syntax::ast::Expression;
 
 pub fn check_needless_splitn(expression: &Expression, ctx: &NodeCtx) {
@@ -51,13 +52,20 @@ pub fn check_needless_splitn(expression: &Expression, ctx: &NodeCtx) {
         return;
     };
 
-    ctx.sink.push(diagnostics::lint::needless_splitn(
-        span,
-        member.as_str(),
-        target,
-        namespace_text,
-        s_text,
-        sep_text,
-        count_text,
-    ));
+    let replacement = format!("{namespace_text}.{target}({s_text}, {sep_text})");
+    ctx.sink.push(
+        diagnostics::lint::needless_splitn(
+            span,
+            member.as_str(),
+            target,
+            namespace_text,
+            s_text,
+            sep_text,
+            count_text,
+        )
+        .with_fix(Fix::new(
+            format!("Replace with `{replacement}`"),
+            Edit::replacement(*span, replacement.clone()),
+        )),
+    );
 }

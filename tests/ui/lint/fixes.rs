@@ -368,3 +368,90 @@ fn main() {
 "#
     );
 }
+
+#[test]
+fn fix_unnecessary_raw_string() {
+    assert_fix_snapshot!(
+        r#"
+fn main() {
+  let msg = r"hello";
+  let _ = msg
+}
+"#
+    );
+}
+
+#[test]
+fn fix_excess_parens_on_condition() {
+    assert_fix_snapshot!(
+        r#"
+fn main() {
+  let x = 5;
+  if (x > 0) {
+    let _ = x;
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn fix_wildcard_in_or_patterns() {
+    assert_fix_snapshot!(
+        r#"
+pub fn test(n: int) -> int {
+  match n {
+    0 | _ => 1,
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn fix_needless_question_mark() {
+    assert_fix_snapshot!(
+        r#"
+fn consume() -> Option<int> {
+  let x: Option<int> = Some(1)
+  Some(x?)
+}
+"#
+    );
+}
+
+#[test]
+fn fix_neg_multiply() {
+    assert_fix_snapshot!(
+        r#"
+fn negate(x: int) -> int {
+  x * -1
+}
+"#
+    );
+}
+
+#[test]
+fn fix_needless_splitn() {
+    assert_fix_snapshot!(
+        r#"
+import "go:strings"
+
+fn main() {
+  let s = "a,b,c"
+  let _ = strings.SplitN(s, ",", -1)
+}
+"#
+    );
+}
+
+#[test]
+fn fix_unnecessary_reference() {
+    assert_fix_snapshot!(
+        r#"
+pub fn foo(x: Ref<int>) {
+  let _ = &x;
+}
+"#
+    );
+}

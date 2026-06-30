@@ -1,0 +1,16 @@
+---
+source: tests/ui/lint/fixes.rs
+---
+fn main() {
+  let x = 5;
+  if (x > 0) {
+    let _ = x;
+  }
+}
+=== fixed ===
+fn main() {
+  let x = 5;
+  if x > 0 {
+    let _ = x;
+  }
+}
