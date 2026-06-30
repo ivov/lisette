@@ -20335,3 +20335,76 @@ fn main() {
 "#
     );
 }
+
+#[test]
+fn interface_method_param_type_import_not_unused() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:time"
+
+pub interface Repository {
+  fn find(self, deadline: time.Time) -> int
+}
+
+fn main() {
+  ()
+}
+"#
+    );
+}
+
+#[test]
+fn interface_method_return_type_import_not_unused() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:time"
+
+pub interface Repository {
+  fn save(self) -> Result<time.Time, error>
+}
+
+fn main() {
+  ()
+}
+"#
+    );
+}
+
+#[test]
+fn const_in_function_body_import_not_unused() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:math"
+
+fn main() {
+  const TWO_PI = 2.0 * math.Pi
+  let _ = TWO_PI
+  ()
+}
+"#
+    );
+}
+
+#[test]
+fn const_in_impl_method_body_import_not_unused() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:math"
+
+pub struct Circle {
+  r: float64,
+}
+
+impl Circle {
+  pub fn area(self) -> float64 {
+    const TWO_PI = 2.0 * math.Pi
+    TWO_PI * self.r * self.r
+  }
+}
+
+fn main() {
+  ()
+}
+"#
+    );
+}

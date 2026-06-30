@@ -75,21 +75,7 @@ fn deref_for_keying(ty: &Type, aliases: &AliasMap) -> Type {
     current
 }
 
-pub fn extract_references(
-    module: &Module,
-    expression: &Expression,
-    graph: &mut ReferenceGraph,
-    alias_map: &AliasMap,
-) {
-    let ctx = match expression {
-        Expression::Function { name, .. } => Some(ModuleItemId::new(name)),
-        Expression::Const { identifier, .. } => Some(ModuleItemId::new(identifier)),
-        _ => None,
-    };
-    walk_expression(module, expression, graph, alias_map, ctx.as_ref());
-}
-
-fn walk_expression(
+pub(super) fn walk_expression(
     module: &Module,
     expression: &Expression,
     graph: &mut ReferenceGraph,
@@ -157,7 +143,7 @@ fn walk_expression(
             body,
             ..
         } => {
-            let fn_ctx = ModuleItemId::new(name);
+            let fn_ctx = ctx.cloned().unwrap_or_else(|| ModuleItemId::new(name));
             walk_callable_body(
                 module,
                 generics,
@@ -176,7 +162,9 @@ fn walk_expression(
             expression,
             ..
         } => {
-            let const_ctx = ModuleItemId::new(identifier);
+            let const_ctx = ctx
+                .cloned()
+                .unwrap_or_else(|| ModuleItemId::new(identifier));
             if let Some(ann) = annotation {
                 walk_annotation(module, ann, graph, alias_map, &const_ctx);
             }

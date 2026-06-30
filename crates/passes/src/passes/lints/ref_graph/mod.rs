@@ -20,7 +20,7 @@ use syntax::types::Symbol;
 
 use super::Lint as LintEnum;
 use super::from_facts::LintConfig;
-use extract::{AliasMap, equals_targets, extract_references, is_upper};
+use extract::{AliasMap, equals_targets, is_upper, walk_expression};
 use reference_graph::{
     EnumVariantId, EnumVariantInfo, ItemKind, ModuleItemId, ReferenceGraph, StructFieldId,
     StructFieldInfo,
@@ -171,7 +171,7 @@ fn run_ref_lints(
     let alias_map = AliasMap::build(files, go_package_names, type_aliases.clone());
     for file in files.values() {
         for item in &file.items {
-            extract_references(module, item, &mut graph, &alias_map);
+            walk_expression(module, item, &mut graph, &alias_map, None);
         }
     }
 
