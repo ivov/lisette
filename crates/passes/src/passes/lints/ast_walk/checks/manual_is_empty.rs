@@ -1,4 +1,5 @@
 use crate::passes::walk::NodeCtx;
+use diagnostics::{Edit, Fix};
 use syntax::ast::{BinaryOperator, Expression};
 use syntax::types::{CompoundKind, Type};
 
@@ -49,8 +50,12 @@ pub fn check_manual_is_empty(expression: &Expression, ctx: &NodeCtx) {
 
     let replacement = format!("{receiver_text}.is_empty()");
 
-    ctx.sink
-        .push(diagnostics::lint::manual_is_empty(span, &replacement));
+    ctx.sink.push(
+        diagnostics::lint::manual_is_empty(span, &replacement).with_fix(Fix::new(
+            format!("Replace with `{replacement}`"),
+            Edit::replacement(*span, replacement.clone()),
+        )),
+    );
 }
 
 fn length_call_receiver(expression: &Expression) -> Option<&Expression> {

@@ -1,5 +1,6 @@
 use super::helpers::span_text;
 use crate::passes::walk::NodeCtx;
+use diagnostics::{Edit, Fix};
 use syntax::ast::{BinaryOperator, Expression};
 
 const CASE_FUNCTIONS: &[&str] = &["ToLower", "ToUpper"];
@@ -40,13 +41,16 @@ pub fn check_manual_equal_fold(expression: &Expression, ctx: &NodeCtx) {
         return;
     };
 
-    ctx.sink.push(diagnostics::lint::manual_equal_fold(
-        span,
-        negated,
-        namespace_text,
-        left_text,
-        right_text,
-    ));
+    let prefix = if negated { "!" } else { "" };
+    let replacement = format!("{prefix}{namespace_text}.EqualFold({left_text}, {right_text})");
+
+    ctx.sink.push(
+        diagnostics::lint::manual_equal_fold(span, negated, namespace_text, left_text, right_text)
+            .with_fix(Fix::new(
+                format!("Replace with `{replacement}`"),
+                Edit::replacement(*span, replacement.clone()),
+            )),
+    );
 }
 
 fn case_conversion(expression: &Expression) -> Option<(&str, &Expression, &Expression)> {

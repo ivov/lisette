@@ -1,0 +1,16 @@
+---
+source: tests/ui/lint/fixes.rs
+---
+import "go:time"
+
+fn main() {
+  let t = time.Now()
+  let _ = time.Now().Sub(t)
+}
+=== fixed ===
+import "go:time"
+
+fn main() {
+  let t = time.Now()
+  let _ = time.Since(t)
+}

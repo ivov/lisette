@@ -1,5 +1,6 @@
 use super::helpers::{is_side_effect_free, span_text};
 use crate::passes::walk::NodeCtx;
+use diagnostics::{Edit, Fix};
 use syntax::ast::Expression;
 
 pub fn check_manual_time_since(expression: &Expression, ctx: &NodeCtx) {
@@ -44,11 +45,14 @@ pub fn check_manual_time_since(expression: &Expression, ctx: &NodeCtx) {
         return;
     };
 
-    ctx.sink.push(diagnostics::lint::manual_time_since(
-        span,
-        namespace_text,
-        arg_text,
-    ));
+    let replacement = format!("{namespace_text}.Since({arg_text})");
+
+    ctx.sink.push(
+        diagnostics::lint::manual_time_since(span, namespace_text, arg_text).with_fix(Fix::new(
+            format!("Replace with `{replacement}`"),
+            Edit::replacement(*span, replacement.clone()),
+        )),
+    );
 }
 
 fn time_now_namespace(expression: &Expression) -> Option<&Expression> {

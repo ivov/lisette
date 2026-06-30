@@ -1,4 +1,5 @@
 use crate::passes::walk::NodeCtx;
+use diagnostics::{Edit, Fix};
 use syntax::ast::Expression;
 
 use super::helpers::{bool_literal, expressions_equivalent, span_text};
@@ -45,12 +46,21 @@ pub fn check_needless_bool_assign(expression: &Expression, ctx: &NodeCtx) {
         return;
     };
 
-    ctx.sink.push(diagnostics::lint::needless_bool_assign(
-        span,
-        target,
-        condition_text,
-        !then_value,
-    ));
+    let negate = !then_value;
+    let replacement = if negate {
+        format!("{target} = !({condition_text})")
+    } else {
+        format!("{target} = {condition_text}")
+    };
+
+    ctx.sink.push(
+        diagnostics::lint::needless_bool_assign(span, target, condition_text, negate).with_fix(
+            Fix::new(
+                format!("Replace with `{replacement}`"),
+                Edit::replacement(*span, replacement.clone()),
+            ),
+        ),
+    );
 }
 
 fn single_bool_assignment(block: &Expression) -> Option<(&Expression, bool)> {

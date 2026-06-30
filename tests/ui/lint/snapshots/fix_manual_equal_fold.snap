@@ -1,0 +1,18 @@
+---
+source: tests/ui/lint/fixes.rs
+---
+import "go:strings"
+
+fn main() {
+  let a = "Hello"
+  let b = "hELLO"
+  let _ = strings.ToLower(a) == strings.ToLower(b)
+}
+=== fixed ===
+import "go:strings"
+
+fn main() {
+  let a = "Hello"
+  let b = "hELLO"
+  let _ = strings.EqualFold(a, b)
+}

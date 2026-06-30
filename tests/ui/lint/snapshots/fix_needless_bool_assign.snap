@@ -1,0 +1,18 @@
+---
+source: tests/ui/lint/fixes.rs
+---
+pub fn f(c: bool) -> bool {
+  let mut x = false
+  if c {
+    x = true
+  } else {
+    x = false
+  }
+  x
+}
+=== fixed ===
+pub fn f(c: bool) -> bool {
+  let mut x = false
+  x = c
+  x
+}

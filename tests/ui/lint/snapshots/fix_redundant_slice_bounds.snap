@@ -1,0 +1,14 @@
+---
+source: tests/ui/lint/fixes.rs
+---
+fn main() {
+  let xs = [1, 2, 3, 4, 5]
+  let a = 2
+  let _ = xs[a..xs.length()]
+}
+=== fixed ===
+fn main() {
+  let xs = [1, 2, 3, 4, 5]
+  let a = 2
+  let _ = xs[a..]
+}

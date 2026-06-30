@@ -1,0 +1,16 @@
+---
+source: tests/ui/lint/fixes.rs
+---
+import "go:time"
+
+fn main() {
+  let deadline = time.Now()
+  let _ = deadline.Sub(time.Now())
+}
+=== fixed ===
+import "go:time"
+
+fn main() {
+  let deadline = time.Now()
+  let _ = time.Until(deadline)
+}
