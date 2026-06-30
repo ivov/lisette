@@ -6,6 +6,7 @@ Zed language support for [Lisette](https://github.com/ivov/lisette).
 
 - Syntax highlighting
 - Diagnostics
+- Quick fixes (lint autofixes)
 - Hover
 - Completions
 - Go-to-definition

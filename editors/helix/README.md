@@ -4,6 +4,7 @@
 
 - Syntax highlighting
 - Diagnostics
+- Quick fixes (lint autofixes)
 - Hover
 - Completions
 - Go-to-definition
