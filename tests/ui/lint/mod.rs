@@ -1,3 +1,5 @@
+mod fixes;
+
 use crate::_harness::build::compile_check;
 use crate::_harness::filesystem::MockFileSystem;
 use crate::{assert_lint_snapshot, assert_no_lint_warnings};

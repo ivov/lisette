@@ -1,14 +1,23 @@
 use crate::passes::walk::NodeCtx;
+use diagnostics::{Edit, Fix};
 use syntax::ast::{BinaryOperator, Expression};
 use syntax::types::Type;
 
-use super::helpers::{bool_literal, is_one_literal, is_side_effect_free, is_zero_literal};
+use super::helpers::{
+    bool_literal, is_one_literal, is_side_effect_free, is_zero_literal, span_text,
+};
 
 enum Outcome {
     /// The operation returns its other operand unchanged (`x + 0`, `x && true`).
     Identity,
     /// The operation always evaluates to a constant (`x * 0`, `x && false`).
     Constant(&'static str),
+}
+
+#[derive(Clone, Copy)]
+enum Side {
+    Left,
+    Right,
 }
 
 pub fn check_redundant_operation(expression: &Expression, ctx: &NodeCtx) {
@@ -23,103 +32,118 @@ pub fn check_redundant_operation(expression: &Expression, ctx: &NodeCtx) {
         return;
     };
 
-    let left = left.unwrap_parens();
-    let right = right.unwrap_parens();
+    let unwrapped_left = left.unwrap_parens();
+    let unwrapped_right = right.unwrap_parens();
 
-    let Some((other, outcome)) = classify(*operator, left, right) else {
+    let Some((side, outcome)) = classify(*operator, unwrapped_left, unwrapped_right) else {
         return;
+    };
+
+    let (other, other_source) = match side {
+        Side::Left => (unwrapped_left, left.as_ref()),
+        Side::Right => (unwrapped_right, right.as_ref()),
     };
 
     if let Outcome::Constant(value) = outcome {
         if !is_side_effect_free(other) {
             return;
         }
-        ctx.sink
-            .push(diagnostics::lint::redundant_operation(span, Some(value)));
+        ctx.sink.push(
+            diagnostics::lint::redundant_operation(span, Some(value)).with_fix(Fix::new(
+                format!("Replace with `{value}`"),
+                Edit::replacement(*span, value),
+            )),
+        );
     } else {
-        ctx.sink
-            .push(diagnostics::lint::redundant_operation(span, None));
+        let mut diagnostic = diagnostics::lint::redundant_operation(span, None);
+        if let Some(text) = span_text(ctx.source, other_source) {
+            diagnostic = diagnostic.with_fix(Fix::new(
+                format!("Replace with `{text}`"),
+                Edit::replacement(*span, text),
+            ));
+        }
+        ctx.sink.push(diagnostic);
     }
 }
 
-fn classify<'a>(
+fn classify(
     operator: BinaryOperator,
-    left: &'a Expression,
-    right: &'a Expression,
-) -> Option<(&'a Expression, Outcome)> {
+    left: &Expression,
+    right: &Expression,
+) -> Option<(Side, Outcome)> {
     use BinaryOperator::*;
 
     if let And | Or = operator {
         return classify_boolean(operator, left, right);
     }
 
-    let (other, outcome) = match operator {
+    let (side, outcome) = match operator {
         Addition => {
             if is_zero_literal(right) {
-                (left, Outcome::Identity)
+                (Side::Left, Outcome::Identity)
             } else if is_zero_literal(left) {
-                (right, Outcome::Identity)
+                (Side::Right, Outcome::Identity)
             } else {
                 return None;
             }
         }
         Subtraction => {
             if is_zero_literal(right) {
-                (left, Outcome::Identity)
+                (Side::Left, Outcome::Identity)
             } else {
                 return None;
             }
         }
         Multiplication => {
             if is_one_literal(right) {
-                (left, Outcome::Identity)
+                (Side::Left, Outcome::Identity)
             } else if is_one_literal(left) {
-                (right, Outcome::Identity)
+                (Side::Right, Outcome::Identity)
             } else if is_zero_literal(right) {
-                (left, Outcome::Constant("0"))
+                (Side::Left, Outcome::Constant("0"))
             } else if is_zero_literal(left) {
-                (right, Outcome::Constant("0"))
+                (Side::Right, Outcome::Constant("0"))
             } else {
                 return None;
             }
         }
         Division => {
             if is_one_literal(right) {
-                (left, Outcome::Identity)
+                (Side::Left, Outcome::Identity)
             } else {
                 return None;
             }
         }
         Remainder => {
             if is_one_literal(right) {
-                (left, Outcome::Constant("0"))
+                (Side::Left, Outcome::Constant("0"))
             } else {
                 return None;
             }
         }
         BitwiseOr | BitwiseXor => {
             if is_zero_literal(right) {
-                (left, Outcome::Identity)
+                (Side::Left, Outcome::Identity)
             } else if is_zero_literal(left) {
-                (right, Outcome::Identity)
+                (Side::Right, Outcome::Identity)
             } else {
                 return None;
             }
         }
         BitwiseAnd => {
             if is_zero_literal(right) {
-                (left, Outcome::Constant("0"))
+                (Side::Left, Outcome::Constant("0"))
             } else if is_zero_literal(left) {
-                (right, Outcome::Constant("0"))
+                (Side::Right, Outcome::Constant("0"))
             } else {
                 return None;
             }
         }
         BitwiseAndNot => {
             if is_zero_literal(right) {
-                (left, Outcome::Identity)
+                (Side::Left, Outcome::Identity)
             } else if is_zero_literal(left) {
-                (right, Outcome::Constant("0"))
+                (Side::Right, Outcome::Constant("0"))
             } else {
                 return None;
             }
@@ -128,7 +152,7 @@ fn classify<'a>(
             // `0 << n` is not folded to `0`: a negative `n` panics at runtime,
             // so the result is not unconditionally `0`.
             if is_zero_literal(right) {
-                (left, Outcome::Identity)
+                (Side::Left, Outcome::Identity)
             } else {
                 return None;
             }
@@ -136,38 +160,46 @@ fn classify<'a>(
         _ => return None,
     };
 
+    let other = match side {
+        Side::Left => left,
+        Side::Right => right,
+    };
     if !is_integer(&other.get_type()) {
         return None;
     }
-    Some((other, outcome))
+    Some((side, outcome))
 }
 
-fn classify_boolean<'a>(
+fn classify_boolean(
     operator: BinaryOperator,
-    left: &'a Expression,
-    right: &'a Expression,
-) -> Option<(&'a Expression, Outcome)> {
+    left: &Expression,
+    right: &Expression,
+) -> Option<(Side, Outcome)> {
     let is_and = matches!(operator, BinaryOperator::And);
-    let (other, outcome) = if let Some(value) = bool_literal(right) {
-        boolean_outcome(left, value, is_and)
+    let (side, outcome) = if let Some(value) = bool_literal(right) {
+        (Side::Left, boolean_outcome(value, is_and))
     } else if let Some(value) = bool_literal(left) {
-        boolean_outcome(right, value, is_and)
+        (Side::Right, boolean_outcome(value, is_and))
     } else {
         return None;
+    };
+    let other = match side {
+        Side::Left => left,
+        Side::Right => right,
     };
     if !other.get_type().is_boolean() {
         return None;
     }
-    Some((other, outcome))
+    Some((side, outcome))
 }
 
-fn boolean_outcome(other: &Expression, literal: bool, is_and: bool) -> (&Expression, Outcome) {
+fn boolean_outcome(literal: bool, is_and: bool) -> Outcome {
     if is_and == literal {
-        (other, Outcome::Identity)
+        Outcome::Identity
     } else if is_and {
-        (other, Outcome::Constant("false"))
+        Outcome::Constant("false")
     } else {
-        (other, Outcome::Constant("true"))
+        Outcome::Constant("true")
     }
 }
 

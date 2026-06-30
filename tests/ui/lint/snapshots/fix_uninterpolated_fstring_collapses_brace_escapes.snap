@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/fixes.rs
+---
+fn main() {
+  let msg = f"a {{ b }}";
+  let _ = msg
+}
+=== fixed ===
+fn main() {
+  let msg = "a { b }";
+  let _ = msg
+}

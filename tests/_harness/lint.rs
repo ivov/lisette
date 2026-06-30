@@ -1,4 +1,4 @@
-use diagnostics::{LisetteDiagnostic, LocalSink};
+use diagnostics::{Fix, LisetteDiagnostic, LocalSink, apply_fixes};
 use semantics::{checker::TaskState, checker::infer::InferCtx, store::Store};
 use stdlib::{Target, get_go_stdlib_typedef};
 use syntax::{
@@ -131,4 +131,19 @@ pub fn lint(source: &str) -> Vec<LisetteDiagnostic> {
     passes::run(&analysis, &mut checker.facts, &sink, &mut unused, true);
 
     sink.take()
+}
+
+pub fn apply_lint_fixes(source: &str) -> String {
+    let lints = lint(source);
+    let fixes: Vec<&Fix> = lints.iter().filter_map(LisetteDiagnostic::fix).collect();
+    let fixed = apply_fixes(source, fixes).source;
+
+    let reparsed = syntax::build_ast(&fixed, 0);
+    if !reparsed.errors.is_empty() {
+        panic!(
+            "Applied fix produced source that no longer parses:\n{fixed}\nerrors: {:?}",
+            reparsed.errors
+        );
+    }
+    fixed
 }

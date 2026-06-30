@@ -1,7 +1,8 @@
 use crate::passes::walk::NodeCtx;
+use diagnostics::{Edit, Fix};
 use syntax::ast::Expression;
 
-use super::helpers::{is_identity_lambda, method_call};
+use super::helpers::{is_identity_lambda, method_call, span_text};
 
 pub fn check_map_identity(expression: &Expression, ctx: &NodeCtx) {
     let Some((receiver, args, span)) = method_call(expression, "map") else {
@@ -26,5 +27,12 @@ pub fn check_map_identity(expression: &Expression, ctx: &NodeCtx) {
         return;
     }
 
-    ctx.sink.push(diagnostics::lint::map_identity(span));
+    let mut diagnostic = diagnostics::lint::map_identity(span);
+    if let Some(text) = span_text(ctx.source, receiver) {
+        diagnostic = diagnostic.with_fix(Fix::new(
+            "Remove identity map",
+            Edit::replacement(*span, text),
+        ));
+    }
+    ctx.sink.push(diagnostic);
 }

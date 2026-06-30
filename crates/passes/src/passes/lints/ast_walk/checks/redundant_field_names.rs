@@ -2,6 +2,7 @@ use syntax::ast::{Expression, Span, StructFieldAssignment};
 
 use super::helpers::struct_field_names;
 use crate::passes::walk::NodeCtx;
+use diagnostics::{Edit, Fix};
 
 pub fn check_redundant_field_names(expression: &Expression, ctx: &NodeCtx) {
     let Expression::StructCall {
@@ -33,10 +34,12 @@ pub fn check_redundant_field_names(expression: &Expression, ctx: &NodeCtx) {
             continue;
         };
         let span = assignment.name_span.merge(value_span);
-        ctx.sink.push(diagnostics::lint::redundant_field_names(
-            &span,
-            &assignment.name,
-        ));
+        ctx.sink.push(
+            diagnostics::lint::redundant_field_names(&span, &assignment.name).with_fix(Fix::new(
+                format!("Use shorthand `{}`", assignment.name),
+                Edit::replacement(span, assignment.name.to_string()),
+            )),
+        );
     }
 }
 

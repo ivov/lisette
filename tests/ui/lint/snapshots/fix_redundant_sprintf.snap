@@ -1,0 +1,16 @@
+---
+source: tests/ui/lint/fixes.rs
+---
+import "go:fmt"
+
+fn main() {
+  let s = "hello"
+  let _ = fmt.Sprintf("%s", s)
+}
+=== fixed ===
+import "go:fmt"
+
+fn main() {
+  let s = "hello"
+  let _ = s
+}

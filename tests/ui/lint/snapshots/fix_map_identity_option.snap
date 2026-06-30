@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/fixes.rs
+---
+fn main() {
+  let o: Option<int> = Some(1)
+  let _ = o.map(|x| x)
+}
+=== fixed ===
+fn main() {
+  let o: Option<int> = Some(1)
+  let _ = o
+}

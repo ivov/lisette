@@ -29,6 +29,7 @@ pub enum Command {
         errors_only: bool,
         warnings_only: bool,
         format: OutputFormat,
+        fix: bool,
     },
     Test {
         path: Option<String>,
@@ -270,11 +271,13 @@ impl Command {
                 let mut errors_only = false;
                 let mut warnings_only = false;
                 let mut format = OutputFormat::Graphical;
+                let mut fix = false;
 
                 while let Some(arg) = arguments.next() {
                     match arg.as_str() {
                         "--errors-only" => errors_only = true,
                         "--warnings-only" => warnings_only = true,
+                        "--fix" => fix = true,
                         "--output" => {
                             let Some(value) = arguments.next() else {
                                 return Err(ParseError::MissingArgument {
@@ -308,6 +311,7 @@ impl Command {
                     errors_only,
                     warnings_only,
                     format,
+                    fix,
                 })
             }
 

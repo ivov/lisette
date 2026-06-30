@@ -19,7 +19,7 @@ use tower_lsp::LanguageServer;
 use tower_lsp::jsonrpc::Result;
 use tower_lsp::lsp_types::*;
 
-use crate::analysis::{offset_in_span, type_name};
+use crate::analysis::{convert_diagnostic, offset_in_span, type_name};
 use crate::completion::{
     DotContext, attribute_completions, definition_to_completion_kind, detect_dot_context,
     detect_struct_literal_field_context, get_instance_completions, get_module_prefix,
@@ -82,6 +82,7 @@ impl LanguageServer for Backend {
                 definition_provider: Some(OneOf::Left(true)),
                 document_symbol_provider: Some(OneOf::Left(true)),
                 references_provider: Some(OneOf::Left(true)),
+                code_action_provider: Some(CodeActionProviderCapability::Simple(true)),
                 rename_provider: Some(OneOf::Right(RenameOptions {
                     prepare_provider: Some(true),
                     work_done_progress_options: Default::default(),
@@ -1128,6 +1129,63 @@ impl LanguageServer for Backend {
         }))
     }
 
+    async fn code_action(&self, params: CodeActionParams) -> Result<Option<CodeActionResponse>> {
+        let uri = &params.text_document.uri;
+
+        let Some(snapshot) = self.get_snapshot(uri).await else {
+            return Ok(None);
+        };
+        let Some(file_id) = snapshot.get_file_id(uri) else {
+            return Ok(None);
+        };
+        let Some(line_index) = snapshot.get_line_index(file_id) else {
+            return Ok(None);
+        };
+
+        let mut actions: Vec<CodeActionOrCommand> = Vec::new();
+
+        for diagnostic in &snapshot.result.lints {
+            if diagnostic.file_id() != Some(file_id) {
+                continue;
+            }
+            let Some(fix) = diagnostic.fix() else {
+                continue;
+            };
+
+            let lsp_diagnostic = convert_diagnostic(diagnostic, line_index);
+            if !ranges_overlap(params.range, lsp_diagnostic.range) {
+                continue;
+            }
+
+            let edit = fix.edit();
+            let text_edit = TextEdit {
+                range: line_index.span_to_range(edit.span()),
+                new_text: edit.content().to_string(),
+            };
+
+            let mut changes = std::collections::HashMap::new();
+            changes.insert(uri.clone(), vec![text_edit]);
+
+            actions.push(CodeActionOrCommand::CodeAction(CodeAction {
+                title: fix.message().to_string(),
+                kind: Some(CodeActionKind::QUICKFIX),
+                diagnostics: Some(vec![lsp_diagnostic]),
+                edit: Some(WorkspaceEdit {
+                    changes: Some(changes),
+                    ..Default::default()
+                }),
+                is_preferred: Some(true),
+                ..Default::default()
+            }));
+        }
+
+        if actions.is_empty() {
+            return Ok(None);
+        }
+
+        Ok(Some(actions))
+    }
+
     async fn completion(&self, params: CompletionParams) -> Result<Option<CompletionResponse>> {
         let uri = &params.text_document_position.text_document.uri;
         let position = params.text_document_position.position;
@@ -1386,6 +1444,11 @@ impl LanguageServer for Backend {
     }
 }
 
+fn ranges_overlap(a: Range, b: Range) -> bool {
+    let position_le = |x: Position, y: Position| (x.line, x.character) <= (y.line, y.character);
+    position_le(a.start, b.end) && position_le(b.start, a.end)
+}
+
 /// Narrows a usage span to just the trailing member token, dropping any
 /// qualifier (`Color.Red`) and any payload (`Red(x)`).
 fn trailing_segment_span(
@@ -1451,7 +1514,24 @@ pub(crate) fn head_extent(text: &str) -> usize {
 
 #[cfg(test)]
 mod tests {
-    use super::member_token_range;
+    use super::{member_token_range, ranges_overlap};
+    use tower_lsp::lsp_types::{Position, Range};
+
+    fn range(sl: u32, sc: u32, el: u32, ec: u32) -> Range {
+        Range {
+            start: Position::new(sl, sc),
+            end: Position::new(el, ec),
+        }
+    }
+
+    #[test]
+    fn ranges_overlap_detects_intersection() {
+        assert!(ranges_overlap(range(0, 0, 0, 5), range(0, 3, 0, 8)));
+        assert!(ranges_overlap(range(1, 4, 1, 4), range(1, 0, 1, 10)));
+        assert!(ranges_overlap(range(0, 5, 0, 5), range(0, 0, 0, 5)));
+        assert!(!ranges_overlap(range(0, 0, 0, 2), range(0, 3, 0, 5)));
+        assert!(!ranges_overlap(range(0, 0, 0, 9), range(1, 0, 1, 1)));
+    }
 
     #[test]
     fn member_token_range_extracts_trailing_token() {

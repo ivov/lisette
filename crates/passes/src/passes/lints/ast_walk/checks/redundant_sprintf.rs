@@ -1,5 +1,6 @@
 use super::helpers::span_text;
 use crate::passes::walk::NodeCtx;
+use diagnostics::{Edit, Fix};
 use syntax::ast::{Expression, Literal};
 
 pub fn check_redundant_sprintf(expression: &Expression, ctx: &NodeCtx) {
@@ -60,9 +61,10 @@ pub fn check_redundant_sprintf(expression: &Expression, ctx: &NodeCtx) {
         return;
     };
 
-    ctx.sink.push(diagnostics::lint::redundant_sprintf(
-        span,
-        namespace_text,
-        value_text,
-    ));
+    ctx.sink.push(
+        diagnostics::lint::redundant_sprintf(span, namespace_text, value_text).with_fix(Fix::new(
+            format!("Replace with `{value_text}`"),
+            Edit::replacement(*span, value_text),
+        )),
+    );
 }

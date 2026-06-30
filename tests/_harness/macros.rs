@@ -262,6 +262,37 @@ macro_rules! assert_lint_snapshot {
 }
 
 #[macro_export]
+macro_rules! assert_fix_snapshot {
+    ($source:expr) => {
+        let fixed = $crate::_harness::lint::apply_lint_fixes($source);
+        if fixed == $source {
+            panic!("Expected a fix to change the source but it was unchanged");
+        }
+        let combined = format!(
+            "{}\n=== fixed ===\n{}",
+            $source.trim_matches('\n'),
+            fixed.trim_matches('\n'),
+        );
+        insta::with_settings!({
+            prepend_module_to_snapshot => false,
+            omit_expression => true,
+        }, {
+            insta::assert_snapshot!(combined);
+        });
+    };
+}
+
+#[macro_export]
+macro_rules! assert_no_fix {
+    ($source:expr) => {
+        let fixed = $crate::_harness::lint::apply_lint_fixes($source);
+        if fixed != $source {
+            panic!("Expected no fix but the source changed to:\n{fixed}");
+        }
+    };
+}
+
+#[macro_export]
 macro_rules! assert_no_lint_warnings {
     ($source:expr) => {
         let warnings = $crate::_harness::lint::lint($source);

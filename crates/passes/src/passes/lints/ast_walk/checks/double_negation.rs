@@ -1,5 +1,8 @@
 use crate::passes::walk::NodeCtx;
+use diagnostics::{Edit, Fix};
 use syntax::ast::{Expression, Span, UnaryOperator};
+
+use super::helpers::span_text;
 
 pub fn check_double_negation(expression: &Expression, ctx: &NodeCtx) {
     let Expression::Unary {
@@ -14,6 +17,7 @@ pub fn check_double_negation(expression: &Expression, ctx: &NodeCtx) {
 
     let Expression::Unary {
         operator: inner_op,
+        expression: inner_operand,
         span: inner_span,
         ..
     } = operand.unwrap_parens()
@@ -36,6 +40,14 @@ pub fn check_double_negation(expression: &Expression, ctx: &NodeCtx) {
     );
 
     let is_bool = *operator == UnaryOperator::Not;
-    ctx.sink
-        .push(diagnostics::lint::double_negation(&operators_span, is_bool));
+    let mut diagnostic = diagnostics::lint::double_negation(&operators_span, is_bool);
+
+    if let Some(text) = span_text(ctx.source, inner_operand) {
+        diagnostic = diagnostic.with_fix(Fix::new(
+            "Remove double negation",
+            Edit::replacement(*outer_span, text),
+        ));
+    }
+
+    ctx.sink.push(diagnostic);
 }

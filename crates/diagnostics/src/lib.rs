@@ -1,4 +1,5 @@
 mod diagnostic;
+mod fix;
 mod result;
 mod sink;
 
@@ -12,6 +13,7 @@ pub mod pattern;
 pub mod render;
 
 pub use diagnostic::{IndexedSource, LisetteDiagnostic, Report};
+pub use fix::{Edit, Fix, FixApplicationOutcome, apply_fixes};
 pub use result::SemanticResult;
 pub use sink::LocalSink;
 

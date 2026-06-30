@@ -77,7 +77,8 @@ fn main() {
             errors_only,
             warnings_only,
             format,
-        } => handlers::check(path, errors_only, warnings_only, format),
+            fix,
+        } => handlers::check(path, errors_only, warnings_only, format, fix),
         Command::Test {
             path,
             go_flags,

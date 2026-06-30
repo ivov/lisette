@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/fixes.rs
+---
+fn main() {
+  let x = true;
+  let _ = x == true
+}
+=== fixed ===
+fn main() {
+  let x = true;
+  let _ = x
+}

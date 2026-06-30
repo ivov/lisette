@@ -151,12 +151,14 @@ Arguments:
 Flags:
     {--errors-only:b}                Show only errors
     {--warnings-only:b}              Show only warnings
+    {--fix:b}                        Apply lint fixes in place
     {--output:b} {unix}                Machine-readable output
 
 Examples:
     `lis check`                    Check project in current dir
     `lis check` {~/projects/demo:g}    Check project in specific dir
     `lis check` {script.lis:g}         Check single file
+    `lis check` {--fix:b}              Fix all lints in the project
     `lis check` {--output:b} {unix}      One diagnostic per line",
         ),
 

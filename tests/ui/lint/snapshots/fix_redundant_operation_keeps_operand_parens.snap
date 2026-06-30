@@ -1,0 +1,16 @@
+---
+source: tests/ui/lint/fixes.rs
+---
+fn main() {
+  let a = 1
+  let b = 2
+  let c = 3
+  let _ = (a + b) * 1 * c
+}
+=== fixed ===
+fn main() {
+  let a = 1
+  let b = 2
+  let c = 3
+  let _ = (a + b) * c
+}

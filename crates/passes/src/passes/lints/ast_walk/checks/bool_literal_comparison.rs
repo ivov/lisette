@@ -1,4 +1,5 @@
 use crate::passes::walk::NodeCtx;
+use diagnostics::{Edit, Fix};
 use syntax::ast::{BinaryOperator, Expression};
 
 use super::helpers::bool_literal;
@@ -46,8 +47,10 @@ pub fn check_bool_literal_comparison(expression: &Expression, ctx: &NodeCtx) {
         other_text
     };
 
-    ctx.sink.push(diagnostics::lint::bool_literal_comparison(
-        span,
-        &replacement,
-    ));
+    ctx.sink.push(
+        diagnostics::lint::bool_literal_comparison(span, &replacement).with_fix(Fix::new(
+            format!("Replace with `{replacement}`"),
+            Edit::replacement(*span, replacement.clone()),
+        )),
+    );
 }

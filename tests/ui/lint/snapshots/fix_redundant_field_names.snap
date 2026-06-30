@@ -1,0 +1,18 @@
+---
+source: tests/ui/lint/fixes.rs
+---
+struct Point { x: int, y: int }
+
+fn read(p: Point) -> int { p.x + p.y }
+
+fn make(x: int) -> Point {
+  Point { x: x, y: 0 }
+}
+=== fixed ===
+struct Point { x: int, y: int }
+
+fn read(p: Point) -> int { p.x + p.y }
+
+fn make(x: int) -> Point {
+  Point { x, y: 0 }
+}

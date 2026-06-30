@@ -1,6 +1,40 @@
 use crate::assert_desugar_snapshot;
 
 #[test]
+fn desugar_only_rewrites_pipelines() {
+    let source = r#"
+fn main() {
+  let a = if let Some(v) = opt { v } else { 0 }
+  let b = match n { 1 => "a", _ => "b" }
+  let c = Point { x: 1, y: 2 }
+  let d = !!flag
+  let e = first + second * third - 0
+  let g = obj.method(arg).field
+  let h = f"hello {name} world"
+  for item in items { print(item) }
+  while cond { break }
+}
+"#;
+
+    let lexed = syntax::lex::Lexer::new(source, 0).lex();
+    assert!(!lexed.failed(), "lex failed: {:?}", lexed.errors);
+    let parsed = syntax::parse::Parser::new(lexed.tokens, source).parse();
+    assert!(!parsed.failed(), "parse failed: {:?}", parsed.errors);
+
+    let before = parsed.ast.clone();
+    let desugared = syntax::desugar::desugar(parsed.ast);
+    assert!(
+        desugared.errors.is_empty(),
+        "desugar errors: {:?}",
+        desugared.errors
+    );
+    assert_eq!(
+        desugared.ast, before,
+        "desugar rewrote a non-pipeline construct, breaking the lint-autofix source-provenance contract"
+    );
+}
+
+#[test]
 fn pipeline_simple() {
     let input = "fn test() { x |> func; }";
     assert_desugar_snapshot!(input);

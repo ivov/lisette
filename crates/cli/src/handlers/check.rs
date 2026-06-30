@@ -1,11 +1,13 @@
 use rustc_hash::FxHashMap as HashMap;
 use std::fs;
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Instant;
 
 use deps::TypedefLocator;
 use diagnostics::render::{self, Filter, OutputFormat};
+use diagnostics::{Fix, apply_fixes};
 use lisette::fs::LocalFileSystem;
 use lisette::pipeline::{CompileConfig, CompilePhase, CompileResult, compile};
 
@@ -18,6 +20,7 @@ pub fn check(
     errors_only: bool,
     warnings_only: bool,
     format: OutputFormat,
+    fix: bool,
 ) -> i32 {
     let target = path.unwrap_or_else(|| ".".to_string());
     let target_path = Path::new(&target);
@@ -43,17 +46,18 @@ pub fn check(
             false,
             TypedefLocator::default(),
             format,
+            fix,
         );
     }
 
     if target_path.join("lisette.toml").exists() {
-        return check_project(target_path, &filter, format);
+        return check_project(target_path, &filter, format, fix);
     }
 
-    check_loose_dir(target_path, &filter, format)
+    check_loose_dir(target_path, &filter, format, fix)
 }
 
-fn check_project(project_path: &Path, filter: &Filter, format: OutputFormat) -> i32 {
+fn check_project(project_path: &Path, filter: &Filter, format: OutputFormat, fix: bool) -> i32 {
     let root_main = project_path.join("main.lis");
     let src_main = project_path.join("src/main.lis");
 
@@ -122,7 +126,7 @@ fn check_project(project_path: &Path, filter: &Filter, format: OutputFormat) -> 
     ));
     let locator = locator.with_bindgen(bindgen);
 
-    let result = check_single_file(&src_main, filter, true, locator, format);
+    let result = check_single_file(&src_main, filter, true, locator, format, fix);
     drop(target_lock);
     result
 }
@@ -133,6 +137,7 @@ fn check_single_file(
     load_siblings: bool,
     locator: TypedefLocator,
     format: OutputFormat,
+    fix: bool,
 ) -> i32 {
     let start = Instant::now();
     let unix = matches!(format, OutputFormat::Unix);
@@ -143,6 +148,14 @@ fn check_single_file(
     else {
         return 1; // Read error already reported by compile_single_file
     };
+
+    if fix {
+        let mut summary = FixSummary::default();
+        apply_result_fixes(&result, &mut summary);
+        print_fix_summary(&summary, start.elapsed());
+        return i32::from(summary.write_failures > 0);
+    }
+
     let get_source = |file_id: u32| {
         result
             .sources
@@ -228,7 +241,7 @@ fn compile_single_file(
     Some((result, source, entry_display))
 }
 
-fn check_loose_dir(dir: &Path, filter: &Filter, format: OutputFormat) -> i32 {
+fn check_loose_dir(dir: &Path, filter: &Filter, format: OutputFormat, fix: bool) -> i32 {
     let mut files = lisette::fs::collect_lis_filepaths_recursive(dir);
     files.sort();
 
@@ -262,6 +275,8 @@ fn check_loose_dir(dir: &Path, filter: &Filter, format: OutputFormat) -> i32 {
         eprintln!();
     }
 
+    let mut fix_summary = FixSummary::default();
+
     for dir_files in dirs.values() {
         let mut compiled = None;
         let mut dir_read_failures = 0;
@@ -277,6 +292,12 @@ fn check_loose_dir(dir: &Path, filter: &Filter, format: OutputFormat) -> i32 {
             read_failures += dir_read_failures;
             continue;
         };
+
+        if fix {
+            apply_result_fixes(&result, &mut fix_summary);
+            continue;
+        }
+
         let get_source = |file_id: u32| {
             result
                 .sources
@@ -314,10 +335,101 @@ fn check_loose_dir(dir: &Path, filter: &Filter, format: OutputFormat) -> i32 {
 
     let elapsed = start.elapsed();
 
+    if fix {
+        print_fix_summary(&fix_summary, elapsed);
+        return i32::from(fix_summary.write_failures > 0);
+    }
+
     let all_errors = total_errors + read_failures;
     if !unix {
         render::print_summary(total_files, elapsed, all_errors, total_warnings, total_info);
     }
 
     all_errors
+}
+
+#[derive(Default)]
+struct FixSummary {
+    applied: usize,
+    files_changed: usize,
+    write_failures: usize,
+}
+
+fn apply_result_fixes(result: &CompileResult, summary: &mut FixSummary) {
+    let mut by_file: HashMap<u32, Vec<&Fix>> = HashMap::default();
+    for lint in &result.lints {
+        let Some(fix) = lint.fix() else {
+            continue;
+        };
+        let Some(file_id) = lint.file_id() else {
+            continue;
+        };
+        by_file.entry(file_id).or_default().push(fix);
+    }
+
+    for (file_id, fixes) in by_file {
+        let Some(info) = result.sources.get(&file_id) else {
+            continue;
+        };
+        let path = Path::new(&info.filename);
+        if !path.is_file() {
+            continue;
+        }
+
+        let applied = apply_fixes(&info.source, fixes);
+        if applied.applied == 0 {
+            continue;
+        }
+
+        if !syntax::build_ast(&applied.source, file_id)
+            .errors
+            .is_empty()
+        {
+            cli_error!(
+                "Skipped a fix",
+                format!(
+                    "Applying fixes to `{}` would produce invalid syntax",
+                    info.filename
+                ),
+                "Re-run `lis check` to see the remaining diagnostics"
+            );
+            summary.write_failures += 1;
+            continue;
+        }
+
+        match fs::File::create(path).and_then(|mut file| file.write_all(applied.source.as_bytes()))
+        {
+            Ok(()) => {
+                summary.applied += applied.applied;
+                summary.files_changed += 1;
+            }
+            Err(e) => {
+                cli_error!(
+                    "Failed to write fix",
+                    format!("Failed to write `{}`: {}", info.filename, e),
+                    "Check file permissions"
+                );
+                summary.write_failures += 1;
+            }
+        }
+    }
+}
+
+fn print_fix_summary(summary: &FixSummary, elapsed: std::time::Duration) {
+    let time_display = crate::output::format_elapsed(elapsed);
+
+    if summary.files_changed == 0 {
+        eprintln!("  ✓ No fixes applied {}", time_display);
+    } else {
+        let fix_word = if summary.applied == 1 { "fix" } else { "fixes" };
+        let location = if summary.files_changed == 1 {
+            "in 1 file".to_string()
+        } else {
+            format!("across {} files", summary.files_changed)
+        };
+        eprintln!(
+            "  ✓ Applied {} {} {} {}",
+            summary.applied, fix_word, location, time_display
+        );
+    }
 }

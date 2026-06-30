@@ -328,6 +328,26 @@ impl TestClient {
         .await
     }
 
+    pub async fn code_action(
+        &mut self,
+        uri: &str,
+        start: (u32, u32),
+        end: (u32, u32),
+    ) -> Option<CodeActionResponse> {
+        self.request(
+            "textDocument/codeAction",
+            json!({
+                "textDocument": {"uri": uri},
+                "range": {
+                    "start": {"line": start.0, "character": start.1},
+                    "end": {"line": end.0, "character": end.1}
+                },
+                "context": {"diagnostics": []}
+            }),
+        )
+        .await
+    }
+
     pub async fn formatting(&mut self, uri: &str) -> Option<Vec<TextEdit>> {
         self.request(
             "textDocument/formatting",

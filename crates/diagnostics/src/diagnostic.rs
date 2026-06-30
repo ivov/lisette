@@ -188,6 +188,7 @@ pub struct LisetteDiagnostic {
     file_id: Option<u32>,
     use_color: bool,
     label_accent: Option<Style>,
+    fix: Option<crate::Fix>,
 }
 
 impl fmt::Display for LisetteDiagnostic {
@@ -339,6 +340,7 @@ impl LisetteDiagnostic {
             file_id: None,
             use_color: false,
             label_accent: None,
+            fix: None,
         }
     }
 
@@ -393,6 +395,15 @@ impl LisetteDiagnostic {
     pub fn with_note(mut self, note: impl Into<String>) -> Self {
         self.note = Some(note.into());
         self
+    }
+
+    pub fn with_fix(mut self, fix: crate::Fix) -> Self {
+        self.fix = Some(fix);
+        self
+    }
+
+    pub fn fix(&self) -> Option<&crate::Fix> {
+        self.fix.as_ref()
     }
 
     pub fn with_lex_code(mut self, code: &str) -> Self {

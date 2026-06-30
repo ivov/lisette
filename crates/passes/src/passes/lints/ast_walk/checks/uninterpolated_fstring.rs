@@ -1,4 +1,5 @@
 use crate::passes::walk::NodeCtx;
+use diagnostics::{Edit, Fix};
 use syntax::ast::{Expression, FormatStringPart, Literal};
 
 pub fn check_uninterpolated_fstring(expression: &Expression, ctx: &NodeCtx) {
@@ -15,8 +16,23 @@ pub fn check_uninterpolated_fstring(expression: &Expression, ctx: &NodeCtx) {
         .iter()
         .any(|p| matches!(p, FormatStringPart::Expression(_)));
 
-    if !has_interpolation {
-        ctx.sink
-            .push(diagnostics::lint::uninterpolated_fstring(span));
+    if has_interpolation {
+        return;
     }
+
+    let mut diagnostic = diagnostics::lint::uninterpolated_fstring(span);
+
+    if let Some(source) = ctx
+        .source
+        .get(span.byte_offset as usize..span.end() as usize)
+        && let Some(without_prefix) = source.strip_prefix('f')
+    {
+        let replacement = without_prefix.replace("{{", "{").replace("}}", "}");
+        diagnostic = diagnostic.with_fix(Fix::new(
+            "Convert to a regular string",
+            Edit::replacement(*span, replacement),
+        ));
+    }
+
+    ctx.sink.push(diagnostic);
 }

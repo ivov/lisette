@@ -1,7 +1,8 @@
 use crate::passes::walk::NodeCtx;
+use diagnostics::{Edit, Fix};
 use syntax::ast::Expression;
 
-use super::helpers::{expressions_equivalent, is_side_effect_free};
+use super::helpers::{expressions_equivalent, is_side_effect_free, span_text};
 
 pub fn check_manual_compound_assignment(expression: &Expression, ctx: &NodeCtx) {
     let Expression::Assignment {
@@ -14,7 +15,13 @@ pub fn check_manual_compound_assignment(expression: &Expression, ctx: &NodeCtx) 
         return;
     };
 
-    let Expression::Binary { operator, left, .. } = value.unwrap_parens() else {
+    let Expression::Binary {
+        operator,
+        left,
+        right,
+        ..
+    } = value.unwrap_parens()
+    else {
         return;
     };
 
@@ -26,6 +33,17 @@ pub fn check_manual_compound_assignment(expression: &Expression, ctx: &NodeCtx) 
         return;
     }
 
-    ctx.sink
-        .push(diagnostics::lint::manual_compound_assignment(span, symbol));
+    let mut diagnostic = diagnostics::lint::manual_compound_assignment(span, symbol);
+
+    if let (Some(target_text), Some(rhs_text)) =
+        (span_text(ctx.source, target), span_text(ctx.source, right))
+    {
+        let replacement = format!("{target_text} {symbol} {rhs_text}");
+        diagnostic = diagnostic.with_fix(Fix::new(
+            format!("Use `{symbol}`"),
+            Edit::replacement(*span, replacement),
+        ));
+    }
+
+    ctx.sink.push(diagnostic);
 }

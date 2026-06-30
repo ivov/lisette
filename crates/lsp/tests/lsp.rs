@@ -569,6 +569,68 @@ async fn rename_local_variable() {
 }
 
 #[tokio::test]
+async fn code_action_capability_advertised() {
+    let mut client = TestClient::new().await;
+    let result = client.initialize().await;
+    assert!(result.capabilities.code_action_provider.is_some());
+    client.shutdown().await;
+}
+
+#[tokio::test]
+async fn code_action_offers_quick_fix() {
+    let mut client = TestClient::new().await;
+    client.initialize().await;
+    client
+        .open(
+            TEST_URI,
+            "fn main() {\n  let x = true\n  let _ = x == true\n}",
+        )
+        .await;
+
+    let actions = client
+        .code_action(TEST_URI, (2, 12), (2, 12))
+        .await
+        .expect("expected code actions");
+
+    let CodeActionOrCommand::CodeAction(action) = &actions[0] else {
+        panic!("expected a CodeAction");
+    };
+    assert_eq!(action.kind, Some(CodeActionKind::QUICKFIX));
+    assert_eq!(action.is_preferred, Some(true));
+
+    let edits = action
+        .edit
+        .as_ref()
+        .unwrap()
+        .changes
+        .as_ref()
+        .unwrap()
+        .get(&Url::parse(TEST_URI).unwrap())
+        .unwrap();
+    assert_eq!(edits.len(), 1);
+    assert_eq!(edits[0].new_text, "x");
+
+    client.shutdown().await;
+}
+
+#[tokio::test]
+async fn code_action_absent_away_from_diagnostic() {
+    let mut client = TestClient::new().await;
+    client.initialize().await;
+    client
+        .open(
+            TEST_URI,
+            "fn main() {\n  let x = true\n  let _ = x == true\n}",
+        )
+        .await;
+
+    let actions = client.code_action(TEST_URI, (0, 0), (0, 0)).await;
+    assert!(actions.is_none() || actions.unwrap().is_empty());
+
+    client.shutdown().await;
+}
+
+#[tokio::test]
 async fn rename_rejects_keywords() {
     let mut client = TestClient::new().await;
     client.initialize().await;
