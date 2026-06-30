@@ -223,6 +223,9 @@ impl Planner<'_> {
         }
 
         if let Expression::Call { .. } = unwrapped {
+            if let Some(statements) = self.lower_append_statement_writeback(unwrapped) {
+                return statements;
+            }
             let mut statements: Vec<LoweredStatement> = Vec::new();
             if let Some(raw) = self.emit_go_call_discarded(&mut statements, unwrapped) {
                 statements.push(LoweredStatement::RawGo(format!("{}\n", raw)));
@@ -546,6 +549,52 @@ impl Planner<'_> {
         };
 
         statements.push(simple_assign(var, ValuePlan::Operand(value)));
+        Some(statements)
+    }
+
+    fn lower_append_statement_writeback(
+        &mut self,
+        expression: &Expression,
+    ) -> Option<Vec<LoweredStatement>> {
+        let Expression::Call {
+            expression: func,
+            args,
+            spread,
+            ..
+        } = expression
+        else {
+            return None;
+        };
+        if !self.is_slice_append_or_extend(func) {
+            return None;
+        }
+        let Expression::DotAccess {
+            expression: receiver,
+            member,
+            ..
+        } = func.as_ref()
+        else {
+            return None;
+        };
+        let unwrapped = receiver.unwrap_parens();
+        if !is_lvalue_chain(unwrapped) || self.contains_newtype_access(unwrapped) {
+            return None;
+        }
+
+        let is_extend = member == "extend";
+        let (args_setup, args_str) =
+            self.lower_append_args(func, args, (**spread).as_ref(), is_extend);
+        let rhs_has_setup = !args_setup.is_empty()
+            || args.iter().any(contains_call)
+            || (**spread).as_ref().is_some_and(contains_call);
+
+        let mut statements: Vec<LoweredStatement> = Vec::new();
+        let receiver_lv = self.emit_left_value_capturing(&mut statements, unwrapped, rhs_has_setup);
+        statements.extend(args_setup);
+        statements.push(simple_assign(
+            &receiver_lv,
+            ValuePlan::Operand(format!("append({}, {})", receiver_lv, args_str)),
+        ));
         Some(statements)
     }
 

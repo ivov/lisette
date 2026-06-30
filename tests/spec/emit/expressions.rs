@@ -3297,6 +3297,18 @@ fn main() {
 }
 
 #[test]
+fn append_bare_statement_writes_back_to_local() {
+    let input = r#"
+fn main() {
+  let mut items: Slice<int> = []
+  items.append(1)
+  let _ = items
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn ref_call_field_assignment() {
     let input = r#"
 struct Item { x: int }

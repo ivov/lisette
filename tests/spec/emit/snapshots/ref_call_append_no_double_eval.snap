@@ -32,6 +32,6 @@ func arg() int {
 }
 
 func main() {
-	recv_1 := *get()
-	_ = append(recv_1, arg())
+	ref_1 := get()
+	*ref_1 = append(*ref_1, arg())
 }
