@@ -91,11 +91,53 @@ fn visit_expression(
             visit_expression(body, ctx.as_ref(), module_id, store, facts);
             return;
         }
+        Expression::For { iterable, body, .. } => {
+            visit_expression(iterable, None, module_id, store, facts);
+            visit_loop_body(body, module_id, store, facts);
+            return;
+        }
+        Expression::While {
+            condition, body, ..
+        } => {
+            visit_expression(condition, None, module_id, store, facts);
+            visit_loop_body(body, module_id, store, facts);
+            return;
+        }
+        Expression::WhileLet {
+            scrutinee, body, ..
+        } => {
+            visit_expression(scrutinee, None, module_id, store, facts);
+            visit_loop_body(body, module_id, store, facts);
+            return;
+        }
+        Expression::Loop { body, .. } => {
+            visit_loop_body(body, module_id, store, facts);
+            return;
+        }
         _ => {}
     }
 
     for child in expression.children() {
         visit_expression(child, None, module_id, store, facts);
+    }
+}
+
+fn visit_loop_body(body: &Expression, module_id: &str, store: &Store, facts: &mut LocalFacts) {
+    let items = match body {
+        Expression::Block { items, .. }
+        | Expression::TryBlock { items, .. }
+        | Expression::RecoverBlock { items, .. } => items,
+        _ => {
+            visit_expression(body, None, module_id, store, facts);
+            return;
+        }
+    };
+
+    for item in items {
+        if !is_statement_only(item) {
+            descend_discarded(item, &DiscardMode::NonTail, module_id, store, facts);
+        }
+        visit_expression(item, None, module_id, store, facts);
     }
 }
 

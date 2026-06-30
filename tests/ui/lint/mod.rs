@@ -269,6 +269,34 @@ fn main() {
 }
 
 #[test]
+fn discarded_value_as_for_loop_tail() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  for _i in 0..3 {
+    1 + 2
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn discarded_value_as_while_loop_tail() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let mut i = 0
+  while i < 3 {
+    i += 1
+    1 + 2
+  }
+}
+"#
+    );
+}
+
+#[test]
 fn unused_literal() {
     assert_lint_snapshot!(
         r#"
@@ -10161,7 +10189,6 @@ fn main() {
     } else {
       s = Status.Active(x - 1)
     };
-    s
   }
 }
 "#
