@@ -259,7 +259,7 @@ impl InferCtx<'_, '_> {
             .or_else(|| self.as_static_method(&args));
 
         if let Some((expression, _kind)) = resolved {
-            if (member.as_str() == "append" || member.as_str() == "extend")
+            if member.as_str() == "append"
                 && resolved_expression_ty.is_ref()
                 && args.deref_ty.has_name("Slice")
             {

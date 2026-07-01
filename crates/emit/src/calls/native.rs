@@ -125,14 +125,6 @@ static INLINE_METHODS: &[InlineRule] = &[
     },
     InlineRule {
         types: &[N::Slice],
-        method: "extend",
-        arity: 1,
-        template: "append({r}, {0}...)",
-        negated_template: None,
-        import: InlineImport::None,
-    },
-    InlineRule {
-        types: &[N::Slice],
         method: "copy_from",
         arity: 1,
         template: "copy({r}, {0})",

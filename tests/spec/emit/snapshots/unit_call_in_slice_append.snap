@@ -15,6 +15,7 @@ func noop() {}
 
 func test() {
 	xs := ([]struct{})(nil)
+	_arg_1 := xs
 	noop()
-	xs = append(xs, struct{}{})
+	_ = append(_arg_1, struct{}{})
 }

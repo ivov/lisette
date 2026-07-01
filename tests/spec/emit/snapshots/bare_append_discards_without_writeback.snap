@@ -3,7 +3,7 @@ source: tests/spec/emit/expressions.rs
 description: |
   
   fn main() {
-    let mut items: Slice<int> = []
+    let items: Slice<int> = []
     items.append(1)
     let _ = items
   }
@@ -12,6 +12,6 @@ package main
 
 func main() {
 	items := ([]int)(nil)
-	items = append(items, 1)
+	_ = append(items, 1)
 	_ = items
 }

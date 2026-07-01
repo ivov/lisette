@@ -269,6 +269,19 @@ fn main() {
 }
 
 #[test]
+fn discarded_slice_append() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let items: Slice<int> = []
+  items.append(1)
+  let _ = items
+}
+"#
+    );
+}
+
+#[test]
 fn unused_literal() {
     assert_lint_snapshot!(
         r#"

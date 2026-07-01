@@ -223,9 +223,6 @@ impl Planner<'_> {
         }
 
         if let Expression::Call { .. } = unwrapped {
-            if let Some(statements) = self.lower_append_statement_writeback(unwrapped) {
-                return statements;
-            }
             let mut statements: Vec<LoweredStatement> = Vec::new();
             if let Some(raw) = self.emit_go_call_discarded(&mut statements, unwrapped) {
                 statements.push(LoweredStatement::RawGo(format!("{}\n", raw)));
@@ -497,7 +494,7 @@ impl Planner<'_> {
         vec![simple_assign(var, value)]
     }
 
-    /// `None` when `last` is not a slice `append`/`extend` call.
+    /// `None` when `last` is not a slice `append` call.
     fn lower_append_to_var(
         &mut self,
         var: &str,
@@ -512,27 +509,24 @@ impl Planner<'_> {
         else {
             return None;
         };
-        if !self.is_slice_append_or_extend(func) {
+        if !self.is_slice_append(func) {
             return None;
         }
 
         let Expression::DotAccess {
             expression: receiver,
-            member,
             ..
         } = func.as_ref()
         else {
             return Some(Vec::new());
         };
 
-        let is_extend = member == "extend";
         let unwrapped = receiver.unwrap_parens();
         let receiver_is_lvalue =
             is_lvalue_chain(unwrapped) && !self.contains_newtype_access(unwrapped);
 
         let (value, mut statements) = if receiver_is_lvalue {
-            let (args_setup, args_str) =
-                self.lower_append_args(func, args, (**spread).as_ref(), is_extend);
+            let (args_setup, args_str) = self.lower_append_args(func, args, (**spread).as_ref());
             let rhs_has_setup = !args_setup.is_empty()
                 || args.iter().any(contains_call)
                 || (**spread).as_ref().is_some_and(contains_call);
@@ -540,7 +534,12 @@ impl Planner<'_> {
             let receiver_lv =
                 self.emit_left_value_capturing(&mut capture, unwrapped, rhs_has_setup);
             capture.extend(args_setup);
-            (format!("append({}, {})", receiver_lv, args_str), capture)
+            let value = if args_str.is_empty() {
+                receiver_lv
+            } else {
+                format!("append({}, {})", receiver_lv, args_str)
+            };
+            (value, capture)
         } else {
             let (setup, value) = self
                 .lower_value(last, ExpressionContext::value())
@@ -552,57 +551,11 @@ impl Planner<'_> {
         Some(statements)
     }
 
-    fn lower_append_statement_writeback(
-        &mut self,
-        expression: &Expression,
-    ) -> Option<Vec<LoweredStatement>> {
-        let Expression::Call {
-            expression: func,
-            args,
-            spread,
-            ..
-        } = expression
-        else {
-            return None;
-        };
-        if !self.is_slice_append_or_extend(func) {
-            return None;
-        }
-        let Expression::DotAccess {
-            expression: receiver,
-            member,
-            ..
-        } = func.as_ref()
-        else {
-            return None;
-        };
-        let unwrapped = receiver.unwrap_parens();
-        if !is_lvalue_chain(unwrapped) || self.contains_newtype_access(unwrapped) {
-            return None;
-        }
-
-        let is_extend = member == "extend";
-        let (args_setup, args_str) =
-            self.lower_append_args(func, args, (**spread).as_ref(), is_extend);
-        let rhs_has_setup = !args_setup.is_empty()
-            || args.iter().any(contains_call)
-            || (**spread).as_ref().is_some_and(contains_call);
-
-        let mut statements: Vec<LoweredStatement> = Vec::new();
-        let receiver_lv = self.emit_left_value_capturing(&mut statements, unwrapped, rhs_has_setup);
-        statements.extend(args_setup);
-        statements.push(simple_assign(
-            &receiver_lv,
-            ValuePlan::Operand(format!("append({}, {})", receiver_lv, args_str)),
-        ));
-        Some(statements)
-    }
-
-    fn is_slice_append_or_extend(&self, func: &Expression) -> bool {
+    fn is_slice_append(&self, func: &Expression) -> bool {
         if let Expression::DotAccess {
             expression, member, ..
         } = func
-            && (member == "append" || member == "extend")
+            && member == "append"
         {
             return self.is_native_shape(&expression.get_type(), NativeGoType::Slice);
         }
@@ -614,7 +567,6 @@ impl Planner<'_> {
         function: &Expression,
         args: &[Expression],
         spread: Option<&Expression>,
-        is_extend: bool,
     ) -> (Vec<LoweredStatement>, String) {
         let stages: Vec<StagedExpression> = args
             .iter()
@@ -623,9 +575,7 @@ impl Planner<'_> {
         let combine = plan_variadic_spread(function, spread).map(|p| p.combine(0));
         let (setup, emitted_args) =
             self.sequence_with_spread_structured(stages, spread, false, "_arg", combine);
-        let args_str = emitted_args.join(", ");
-        let suffix = if is_extend { "..." } else { "" };
-        (setup, format!("{}{}", args_str, suffix))
+        (setup, emitted_args.join(", "))
     }
 
     /// Lower `last` as a tail value. Tuple literals widen slot types to the

@@ -1257,7 +1257,7 @@ fn cannot_append_to_immutable_slice() {
     infer(
         r#"{
     let s = [1, 2, 3];
-    s.append(4)
+    s = s.append(4)
   }"#,
     )
     .assert_infer_code("immutable");
@@ -1303,7 +1303,7 @@ fn cannot_append_to_immutable_slice_mid_block() {
     infer(
         r#"{
     let s = [1, 2, 3];
-    s.append(4);
+    s = s.append(4);
     s
   }"#,
     )

@@ -2316,7 +2316,7 @@ pub fn complex_select_expression(span: Span) -> LisetteDiagnostic {
 }
 
 pub fn ref_slice_append(span: Span) -> LisetteDiagnostic {
-    LisetteDiagnostic::error("Cannot call append/extend on `Ref<Slice>`")
+    LisetteDiagnostic::error("Cannot call `append` on `Ref<Slice>`")
         .with_infer_code("ref_slice_append")
         .with_span_label(&span, "dereference the ref first")
         .with_help("Use `r.*.append(x)` to deref, then append")

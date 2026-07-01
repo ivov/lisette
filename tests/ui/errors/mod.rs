@@ -8265,7 +8265,7 @@ struct Outer { items: Slice<int> }
 fn main() {
   let mut m = Map.new<string, Outer>()
   m["a"] = Outer{ items: [1] }
-  m["a"].items.append(2)
+  m["a"].items = m["a"].items.append(2)
 }
 "#;
     assert_infer_error_snapshot!(input);

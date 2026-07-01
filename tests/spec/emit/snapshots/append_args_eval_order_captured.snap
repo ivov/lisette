@@ -10,7 +10,7 @@ description: |
   fn main() {
     let mut i = 0
     let mut items: Slice<int> = []
-    items.append(i, bump(&i))
+    items = items.append(i, bump(&i))
     let _ = items
   }
 ---

@@ -218,6 +218,17 @@ fn test(s: Slice<int>) -> Slice<int> {
 }
 
 #[test]
+fn slice_append_no_args_into_var() {
+    let input = r#"
+fn test(s: Slice<int>, flag: bool) -> Slice<int> {
+  let out = if flag { s.append() } else { s }
+  out
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn slice_append_reassign() {
     let input = r#"
 fn test(items: Slice<int>) {
@@ -229,44 +240,11 @@ fn test(items: Slice<int>) {
 }
 
 #[test]
-fn slice_extend() {
-    let input = r#"
-fn test(a: Slice<int>, b: Slice<int>) -> Slice<int> {
-  a.extend(b)
-}
-"#;
-    assert_emit_snapshot!(input);
-}
-
-#[test]
-fn slice_extend_reassign() {
-    let input = r#"
-fn test(items: Slice<int>, b: Slice<int>) {
-  let mut a = items
-  a = a.extend(b)
-}
-"#;
-    assert_emit_snapshot!(input);
-}
-
-#[test]
 fn slice_append_statement() {
     let input = r#"
 fn test(items: Slice<int>) -> Slice<int> {
   let mut s = items
   s = s.append(4)
-  s
-}
-"#;
-    assert_emit_snapshot!(input);
-}
-
-#[test]
-fn slice_extend_statement() {
-    let input = r#"
-fn test(items: Slice<int>, extra: Slice<int>) -> Slice<int> {
-  let mut s = items
-  s = s.extend(extra)
   s
 }
 "#;

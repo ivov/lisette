@@ -17,6 +17,7 @@ pub enum UnusedExpressionKind {
     Option,
     Partial,
     Value,
+    SliceGrow,
 }
 
 impl UnusedExpressionKind {
@@ -26,7 +27,7 @@ impl UnusedExpressionKind {
             Self::Result => "unused_result",
             Self::Option => "unused_option",
             Self::Partial => "unused_partial",
-            Self::Value => "unused_value",
+            Self::Value | Self::SliceGrow => "unused_value",
         }
     }
 }
@@ -177,6 +178,12 @@ pub fn unused_expression(span: &Span, kind: UnusedExpressionKind) -> LisetteDiag
             "Unused expression value",
             "this value is discarded",
             "Use the value, or ignore with `let _ = ...`",
+        ),
+        UnusedExpressionKind::SliceGrow => (
+            "unused_value",
+            "Unused `append()` output",
+            "output is discarded",
+            "`append()` outputs a new slice, leaving the original slice intact. Assign the output back to grow it `let s = s.append(...)` or discard the output with `let _ = s.append(...)`",
         ),
     };
     LisetteDiagnostic::warn(msg)

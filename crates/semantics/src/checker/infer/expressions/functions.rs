@@ -14,7 +14,6 @@ use super::super::unify::Dispatched;
 use super::primitives::contains_deref;
 use crate::checker::infer::InferCtx;
 use crate::checker::registration::test_functions::normalize_test_params;
-use crate::checker::scopes::UseContext;
 use crate::store::ENTRY_MODULE_ID;
 
 impl InferCtx<'_, '_> {
@@ -61,40 +60,6 @@ impl InferCtx<'_, '_> {
         }
         vec![]
     }
-
-    pub(crate) fn has_map_field_in_chain(&self, expression: &Expression) -> bool {
-        match expression.unwrap_parens() {
-            Expression::DotAccess { expression, .. } => {
-                self.is_map_indexed_access(expression) || self.has_map_field_in_chain(expression)
-            }
-            _ => false,
-        }
-    }
-
-    fn is_map_indexed_access(&self, expression: &Expression) -> bool {
-        match expression.unwrap_parens() {
-            Expression::IndexedAccess { expression, .. } => {
-                expression.get_type().resolve_in(&self.env).has_name("Map")
-            }
-            _ => false,
-        }
-    }
-}
-
-fn has_numeric_member_in_chain(expression: &Expression) -> bool {
-    let mut current = expression.unwrap_parens();
-    while let Expression::DotAccess {
-        expression: inner,
-        member,
-        ..
-    } = current
-    {
-        if member.parse::<usize>().is_ok() {
-            return true;
-        }
-        current = inner.unwrap_parens();
-    }
-    false
 }
 
 impl InferCtx<'_, '_> {
@@ -466,12 +431,6 @@ impl InferCtx<'_, '_> {
             }
         });
 
-        // Capture whether expected_ty is unresolved BEFORE
-        // unification, because unify will resolve a fresh variable to the
-        // concrete return type (e.g. Slice<int>). A fresh variable means the
-        // caller doesn't consume the result (non-last block item).
-        let expected_was_variable = expected_ty.resolve_in(&self.env).is_variable();
-
         // Bridge multi-hop aliases by re-resolving the expected type through
         // the store before the final unify (forward-declared intermediates
         // leave gaps in the cached `underlying_ty` chain).
@@ -479,16 +438,7 @@ impl InferCtx<'_, '_> {
         self.unify(&resolved_expected, &return_ty, &span);
         self.unify_trait_bounds(&bounds, &param_types, &new_args, &span);
 
-        // Native mutating methods (append, extend, delete) are rewritten by
-        // the emitter into mutations of the receiver binding. Require `mut`
-        // on the receiver when the call mutates:
-        //   - delete: always mutates (no return value)
-        //   - append/extend: mutates only when the result is not consumed
-        let result_unused = prev_context != UseContext::Value && {
-            let resolved = expected_ty.resolve_in(&self.env);
-            resolved.is_unit() || resolved.is_ignored() || expected_was_variable
-        };
-        self.check_native_mutating_call(&callee_expression, result_unused, &span);
+        self.check_native_mutating_call(&callee_expression, &span);
         self.check_native_equals_ufcs(&callee_expression, &new_args);
 
         let resolved_return = return_ty.resolve_in(&self.env);
@@ -1412,19 +1362,12 @@ impl InferCtx<'_, '_> {
         }
     }
 
-    /// Check that native mutating methods (append, extend,
-    /// delete) are called on mutable receivers. The emitter rewrites these into
-    /// mutations, so the checker must enforce `mut` on the binding.
-    ///
-    /// - `delete`: always mutates (returns unit, modifies map in-place)
-    /// - `append`/`extend`: mutates when the return value is discarded (the
-    ///   emitter rewrites to `s = append(s, ...)` in statement position)
-    fn check_native_mutating_call(
-        &mut self,
-        callee: &Expression,
-        result_unused: bool,
-        span: &Span,
-    ) {
+    /// `Map.delete` modifies the map in place, so its receiver needs `mut`.
+    /// `append` is pure (it returns a new slice and needs no `mut`): growing in
+    /// place is the reassignment `s = s.append(x)`, checked as an ordinary
+    /// assignment, including the rejection of writing back to a non-addressable
+    /// map-value field.
+    fn check_native_mutating_call(&mut self, callee: &Expression, span: &Span) {
         let store = self.store;
         let Expression::DotAccess {
             expression: receiver,
@@ -1436,27 +1379,7 @@ impl InferCtx<'_, '_> {
         };
         let receiver_ty = receiver.get_type().resolve_in(&self.env).strip_refs();
 
-        // append/extend on a map entry field generates an invalid write-back
-        // (Go map values aren't addressable, so `m[k].field = append(...)` fails).
-        // Newtype .0 access is excluded — the emitter treats it as non-lvalue.
-        if matches!(receiver_ty.get_name(), Some("Slice"))
-            && (member == "append" || member == "extend")
-            && self.has_map_field_in_chain(receiver)
-            && !has_numeric_member_in_chain(receiver)
-        {
-            self.sink
-                .push(diagnostics::infer::map_field_chain_assignment(*span));
-            return;
-        }
-
-        let is_mutating = match receiver_ty.get_name() {
-            Some("Slice") => {
-                // append/extend only mutate when the result is discarded
-                (member == "append" || member == "extend") && result_unused
-            }
-            Some("Map") => member == "delete",
-            _ => false,
-        };
+        let is_mutating = matches!(receiver_ty.get_name(), Some("Map")) && member == "delete";
         if !is_mutating {
             return;
         }

@@ -1,0 +1,20 @@
+---
+source: tests/spec/emit/prelude.rs
+description: |
+  
+  fn test(s: Slice<int>, flag: bool) -> Slice<int> {
+    let out = if flag { s.append() } else { s }
+    out
+  }
+---
+package main
+
+func test(s []int, flag bool) []int {
+	var out []int
+	if flag {
+		out = s
+	} else {
+		out = s
+	}
+	return out
+}

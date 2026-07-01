@@ -251,7 +251,37 @@ fn emit_unused_at_leaf(leaf: &Expression, module_id: &str, store: &Store, facts:
     if is_channel_send(leaf) {
         allowed_lints.push("unused_value".to_string());
     }
+    if is_lvalue_slice_grow(leaf) {
+        if !allowed_lints.iter().any(|s| s == "unused_value") {
+            facts.add_unused_expression(span, UnusedExpressionKind::SliceGrow);
+        }
+        return;
+    }
     emit_unused_expression(span, &ty, is_literal, &allowed_lints, facts);
+}
+
+fn is_lvalue_slice_grow(expression: &Expression) -> bool {
+    let Expression::Call {
+        expression: callee, ..
+    } = expression
+    else {
+        return false;
+    };
+    let Expression::DotAccess {
+        expression: receiver,
+        member,
+        ..
+    } = callee.as_ref()
+    else {
+        return false;
+    };
+    if member != "append" {
+        return false;
+    }
+    if receiver.get_var_name().is_none() {
+        return false;
+    }
+    matches!(receiver.get_type().strip_refs().get_name(), Some("Slice"))
 }
 
 fn check_discarded_tail(

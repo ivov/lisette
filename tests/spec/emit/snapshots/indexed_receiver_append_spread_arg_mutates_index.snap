@@ -10,7 +10,7 @@ description: |
   fn test() -> int {
     let xss = [[10], [20]]
     let mut i = 0
-    let ys = xss[i].extend(bump_and_make(&i))
+    let ys = xss[i].append(bump_and_make(&i)...)
     ys[0]
   }
 ---

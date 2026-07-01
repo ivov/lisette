@@ -292,11 +292,10 @@ impl<T> Slice<T> {
   /// Returns the element at `index`, or `None` if out of bounds.
   fn get(self, index: int) -> Option<T>
 
-  /// Returns a new slice with the given elements appended.
+  /// Returns a new slice with the given elements appended. Spread an input slice
+  /// to concatenate: `items.append(xs...)`. Does not modify the original slice.
+  /// Reassign the output to grow in place: `items = items.append(x)`.
   fn append(self, elements: VarArgs<T>) -> Slice<T>
-
-  /// Returns a new slice with all elements from `other` appended.
-  fn extend(self, other: Slice<T>) -> Slice<T>
 
   /// Copies elements from `src` into this slice. Returns the number of elements copied.
   fn copy_from(self, src: Slice<T>) -> int

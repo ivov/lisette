@@ -1232,7 +1232,7 @@ fn bump(i: Ref<int>) -> int {
 fn main() {
   let mut i = 0
   let mut items: Slice<int> = []
-  items.append(i, bump(&i))
+  items = items.append(i, bump(&i))
   let _ = items
 }
 "#;
@@ -2295,6 +2295,23 @@ fn main() {
 }
 
 #[test]
+fn map_field_append_value_position() {
+    let input = r#"
+struct Box {
+  items: Slice<int>,
+}
+
+fn main() {
+  let mut m = Map.new<string, Box>()
+  m["a"] = Box { items: [1] }
+  let xs = m["a"].items.append(2)
+  let _ = xs
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn map_entry_slice_append_tuple_field() {
     let input = r#"
 fn main() {
@@ -3297,10 +3314,10 @@ fn main() {
 }
 
 #[test]
-fn append_bare_statement_writes_back_to_local() {
+fn bare_append_discards_without_writeback() {
     let input = r#"
 fn main() {
-  let mut items: Slice<int> = []
+  let items: Slice<int> = []
   items.append(1)
   let _ = items
 }
@@ -3808,20 +3825,6 @@ fn main() {
   let mut w = Wrap([1])
   let r = &w
   let _ = r.0.append(2)
-}
-"#;
-    assert_emit_snapshot!(input);
-}
-
-#[test]
-fn ref_newtype_extend_expr_position() {
-    let input = r#"
-struct Wrap(Slice<int>)
-
-fn main() {
-  let mut w = Wrap([1])
-  let r = &w
-  let _ = r.0.extend([2])
 }
 "#;
     assert_emit_snapshot!(input);
@@ -4447,7 +4450,7 @@ fn test() -> int {
 }
 
 #[test]
-fn indexed_receiver_extend_arg_mutates_index() {
+fn indexed_receiver_append_spread_arg_mutates_index() {
     let input = r#"
 fn bump_and_make(i: Ref<int>) -> Slice<int> {
   i.* = 1
@@ -4457,7 +4460,7 @@ fn bump_and_make(i: Ref<int>) -> Slice<int> {
 fn test() -> int {
   let xss = [[10], [20]]
   let mut i = 0
-  let ys = xss[i].extend(bump_and_make(&i))
+  let ys = xss[i].append(bump_and_make(&i)...)
   ys[0]
 }
 "#;
