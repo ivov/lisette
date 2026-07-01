@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
    ·      ╰── not all patterns covered
  4 │     Partial.Ok(n) => n,
    ╰────
-  help: Handle the missing case `Partial.Both(_, _)`, e.g. `Partial.Both(_, _) => { ... }` · code: [infer.non_exhaustive]
+  help: Handle the missing case by adding `Partial.Both(_, _) => { ... }` · code: [infer.non_exhaustive]

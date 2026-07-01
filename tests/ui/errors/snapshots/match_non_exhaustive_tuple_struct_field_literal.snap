@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
    ·      ╰── not all patterns covered
  6 │     MP(0, _) => 1,
    ╰────
-  help: Handle the missing case `MP(_, _)`, e.g. `MP(_, _) => { ... }` · code: [infer.non_exhaustive]
+  help: Handle the missing case by adding `MP(_, _) => { ... }` · code: [infer.non_exhaustive]

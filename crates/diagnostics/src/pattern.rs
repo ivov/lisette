@@ -10,19 +10,28 @@ pub struct PatternIssue {
 }
 
 pub fn non_exhaustive(match_span: Span, cases: &[String]) -> LisetteDiagnostic {
-    let listed = cases
+    let arms: Vec<String> = cases
         .iter()
-        .map(|case| format!("`{}`", case))
-        .collect::<Vec<_>>()
-        .join(", ");
+        .map(|case| format!("`{} => {{ ... }}`", case))
+        .collect();
     let noun = if cases.len() == 1 { "case" } else { "cases" };
     LisetteDiagnostic::error("`match` is not exhaustive")
         .with_infer_code("non_exhaustive")
         .with_span_label(&match_span, "not all patterns covered")
         .with_help(format!(
-            "Handle the missing {} {}, e.g. `{} => {{ ... }}`",
-            noun, listed, cases[0]
+            "Handle the missing {} by adding {}",
+            noun,
+            join_and(&arms)
         ))
+}
+
+fn join_and(items: &[String]) -> String {
+    match items {
+        [] => String::new(),
+        [only] => only.clone(),
+        [first, second] => format!("{} and {}", first, second),
+        [rest @ .., last] => format!("{}, and {}", rest.join(", "), last),
+    }
 }
 
 pub fn irrefutable_while_let(pattern_span: Span) -> LisetteDiagnostic {

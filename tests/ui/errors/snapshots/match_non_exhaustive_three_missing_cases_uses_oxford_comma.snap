@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ `match` is not exhaustive
+    ╭─[test.lis:10:3]
+  9 │ fn test(s: Suit) -> int {
+ 10 │   match s {
+    ·   ───┬───
+    ·      ╰── not all patterns covered
+ 11 │     Suit.Hearts => 1,
+    ╰────
+  help: Handle the missing cases by adding `Suit.Clubs => { ... }`, `Suit.Diamonds => { ... }`, and `Suit.Spades => { ... }` · code: [infer.non_exhaustive]
