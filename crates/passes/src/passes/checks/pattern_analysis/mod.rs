@@ -206,8 +206,10 @@ pub fn check(expression: &Expression, ctx: &PatternAnalysisContext, sink: &Local
                 .collect();
 
             if let Err(witnesses) = check_exhaustiveness(&unguarded_rows, &unions) {
-                let first_witness = witnesses.first().expect("witnesses should not be empty");
-                let case = witness::format_witness(first_witness);
+                let mut cases: Vec<String> =
+                    witnesses.iter().map(witness::format_witness).collect();
+                cases.sort();
+                cases.dedup();
 
                 let subject_span = subject.get_span();
                 let match_span = Span::new(
@@ -216,7 +218,7 @@ pub fn check(expression: &Expression, ctx: &PatternAnalysisContext, sink: &Local
                     (subject_span.byte_offset + subject_span.byte_length) - span.byte_offset,
                 );
 
-                sink.push(diagnostics::pattern::non_exhaustive(match_span, &case));
+                sink.push(diagnostics::pattern::non_exhaustive(match_span, &cases));
                 return;
             }
 
@@ -390,6 +392,7 @@ fn check_redundancy_with_guards(
     sink: &LocalSink,
 ) -> bool {
     let mut unguarded_previous: Vec<(usize, Row)> = vec![];
+    let mut found_redundant = false;
 
     for (index, arm) in arms.iter().enumerate() {
         let current_rows = normalize_arm(arm, unions, norm_ctx);
@@ -450,7 +453,7 @@ fn check_redundancy_with_guards(
                 };
 
                 sink.push(diagnostics::pattern::redundant_arm(span, label, help));
-                return false;
+                found_redundant = true;
             }
 
             current_arm_rows.push(current_row.clone());
@@ -465,7 +468,7 @@ fn check_redundancy_with_guards(
         }
     }
 
-    true
+    !found_redundant
 }
 
 fn check_if_let(

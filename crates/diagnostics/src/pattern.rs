@@ -9,13 +9,19 @@ pub struct PatternIssue {
     pub kind: IssueKind,
 }
 
-pub fn non_exhaustive(match_span: Span, case: &str) -> LisetteDiagnostic {
+pub fn non_exhaustive(match_span: Span, cases: &[String]) -> LisetteDiagnostic {
+    let listed = cases
+        .iter()
+        .map(|case| format!("`{}`", case))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let noun = if cases.len() == 1 { "case" } else { "cases" };
     LisetteDiagnostic::error("`match` is not exhaustive")
         .with_infer_code("non_exhaustive")
         .with_span_label(&match_span, "not all patterns covered")
         .with_help(format!(
-            "Handle the missing case `{}`, e.g. `{} => {{ ... }}`",
-            case, case
+            "Handle the missing {} {}, e.g. `{} => {{ ... }}`",
+            noun, listed, cases[0]
         ))
 }
 

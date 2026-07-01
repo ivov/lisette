@@ -326,6 +326,10 @@ impl InferResult {
         self.assert_code_count(&format!("infer.{}", code), 1)
     }
 
+    pub fn assert_infer_code_count(self, code: &str, count: usize) -> Self {
+        self.assert_code_count(&format!("infer.{}", code), count)
+    }
+
     fn assert_code_count(self, expected_code: &str, expected: usize) -> Self {
         let count = self
             .errors
@@ -422,7 +426,25 @@ fn is_slice_with_type_var(ty: &Type) -> bool {
     }
 }
 
+/// A consistent one-to-one renaming between the type variables of the two
+/// types being compared, so `fn(a) -> a` and `fn(a) -> b` are not conflated.
+#[derive(Default)]
+struct VarBijection {
+    forward: std::collections::HashMap<u32, u32>,
+    backward: std::collections::HashMap<u32, u32>,
+}
+
+impl VarBijection {
+    fn unify(&mut self, a: u32, b: u32) -> bool {
+        *self.forward.entry(a).or_insert(b) == b && *self.backward.entry(b).or_insert(a) == a
+    }
+}
+
 fn types_equal(t1: &Type, t2: &Type) -> bool {
+    types_equal_with(t1, t2, &mut VarBijection::default())
+}
+
+fn types_equal_with(t1: &Type, t2: &Type, vars: &mut VarBijection) -> bool {
     if let (Some(n1), Some(n2)) = (t1.get_name(), t2.get_name())
         && n1 == n2
     {
@@ -432,7 +454,7 @@ fn types_equal(t1: &Type, t2: &Type) -> bool {
             && args1
                 .iter()
                 .zip(args2.iter())
-                .all(|(a1, a2)| types_equal(a1, a2))
+                .all(|(a1, a2)| types_equal_with(a1, a2, vars))
         {
             return true;
         }
@@ -446,7 +468,7 @@ fn types_equal(t1: &Type, t2: &Type) -> bool {
                 return args
                     .iter()
                     .zip(params.iter())
-                    .all(|(x, y)| types_equal(x, y));
+                    .all(|(x, y)| types_equal_with(x, y, vars));
             }
         }
         (Type::Simple(kind), Type::Nominal { id, params, .. })
@@ -463,7 +485,7 @@ fn types_equal(t1: &Type, t2: &Type) -> bool {
         underlying_ty: Some(u),
         ..
     } = t1
-        && types_equal(u, t2)
+        && types_equal_with(u, t2, vars)
     {
         return true;
     }
@@ -471,13 +493,13 @@ fn types_equal(t1: &Type, t2: &Type) -> bool {
         underlying_ty: Some(u),
         ..
     } = t2
-        && types_equal(t1, u)
+        && types_equal_with(t1, u, vars)
     {
         return true;
     }
 
     match (t1, t2) {
-        (Type::Var { .. }, Type::Var { .. }) => true,
+        (Type::Var { id: a, .. }, Type::Var { id: b, .. }) => vars.unify(a.0, b.0),
 
         (
             Type::Nominal {
@@ -498,12 +520,12 @@ fn types_equal(t1: &Type, t2: &Type) -> bool {
                 && args1
                     .iter()
                     .zip(args2.iter())
-                    .all(|(a1, a2)| types_equal(a1, a2))
+                    .all(|(a1, a2)| types_equal_with(a1, a2, vars))
             {
                 return true;
             }
             if let Some(u) = u1
-                && types_equal(u, t2)
+                && types_equal_with(u, t2, vars)
             {
                 return true;
             }
@@ -516,8 +538,8 @@ fn types_equal(t1: &Type, t2: &Type) -> bool {
                     .params
                     .iter()
                     .zip(f2.params.iter())
-                    .all(|(a1, a2)| types_equal(a1, a2))
-                && types_equal(&f1.return_type, &f2.return_type)
+                    .all(|(a1, a2)| types_equal_with(a1, a2, vars))
+                && types_equal_with(&f1.return_type, &f2.return_type, vars)
         }
 
         (Type::Tuple(elems1), Type::Tuple(elems2)) => {
@@ -525,7 +547,7 @@ fn types_equal(t1: &Type, t2: &Type) -> bool {
                 && elems1
                     .iter()
                     .zip(elems2.iter())
-                    .all(|(e1, e2)| types_equal(e1, e2))
+                    .all(|(e1, e2)| types_equal_with(e1, e2, vars))
         }
 
         (Type::Simple(k1), Type::Simple(k2)) => k1 == k2,
@@ -533,7 +555,10 @@ fn types_equal(t1: &Type, t2: &Type) -> bool {
         (Type::Compound { kind: k1, args: a1 }, Type::Compound { kind: k2, args: a2 }) => {
             k1 == k2
                 && a1.len() == a2.len()
-                && a1.iter().zip(a2.iter()).all(|(x, y)| types_equal(x, y))
+                && a1
+                    .iter()
+                    .zip(a2.iter())
+                    .all(|(x, y)| types_equal_with(x, y, vars))
         }
 
         _ => false,

@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ `match` is not exhaustive
+    ╭─[test.lis:9:3]
+  8 │ fn test(c: Color) -> int {
+  9 │   match c {
+    ·   ───┬───
+    ·      ╰── not all patterns covered
+ 10 │     Color.Red => 1,
+    ╰────
+  help: Handle the missing cases `Color.Blue`, `Color.Green`, e.g. `Color.Blue => { ... }` · code: [infer.non_exhaustive]

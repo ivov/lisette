@@ -250,6 +250,21 @@ fn test(opt: Option<int>) -> int {
 }
 
 #[test]
+fn test_reports_every_redundant_arm() {
+    let input = r#"
+fn test(opt: Option<int>) -> int {
+  match opt {
+    Option.Some(x) => x,
+    Option.None => 0,
+    Option.Some(y) => y,
+    Option.None => 1,
+  }
+}
+"#;
+    infer(input).assert_infer_code_count("redundant_arm", 2);
+}
+
+#[test]
 fn test_redundant_wildcard() {
     let input = r#"
 match true {
