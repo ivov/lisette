@@ -121,7 +121,20 @@ impl TypeEnv {
         match ty {
             Type::Var { id, .. } if !id.is_reserved() => match &self.entries[Self::slot(*id)] {
                 VarState::Unbound { .. } => None,
-                VarState::Bound(bound) => Some(self.resolve(bound)),
+                VarState::Bound(first) => {
+                    let mut cursor = first;
+                    loop {
+                        match cursor {
+                            Type::Var { id, .. } if !id.is_reserved() => {
+                                match &self.entries[Self::slot(*id)] {
+                                    VarState::Unbound { .. } => return Some(cursor.clone()),
+                                    VarState::Bound(next) => cursor = next,
+                                }
+                            }
+                            _ => return Some(self.resolve(cursor)),
+                        }
+                    }
+                }
             },
             Type::Nominal {
                 id,
@@ -280,5 +293,29 @@ impl EnvResolve for Type {
     }
     fn shallow_resolve_in(&self, env: &TypeEnv) -> Type {
         env.shallow_resolve(self)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use syntax::types::SimpleKind;
+
+    fn var(id: TypeVarId) -> Type {
+        Type::Var { id, hint: None }
+    }
+
+    #[test]
+    fn resolve_follows_deep_var_chain_without_overflow() {
+        let mut env = TypeEnv::new();
+        const DEPTH: usize = 100_000;
+
+        let ids: Vec<TypeVarId> = (0..DEPTH).map(|_| env.fresh(None)).collect();
+        for pair in ids.windows(2) {
+            env.bind(pair[0], var(pair[1]));
+        }
+        env.bind(ids[DEPTH - 1], Type::Simple(SimpleKind::Int));
+
+        assert_eq!(env.resolve(&var(ids[0])), Type::Simple(SimpleKind::Int));
     }
 }
