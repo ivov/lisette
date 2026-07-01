@@ -1,3 +1,5 @@
+import "go:slices"
+
 #[test]
 fn slice_fold_sum() {
   let nums = [1, 2, 3, 4, 5]
@@ -99,4 +101,127 @@ fn string_range_slicing() {
     0
   }
   assert result == 100
+}
+
+#[test]
+fn slice_new_empty() {
+  let s = Slice.new<int>()
+  let grown = s.append(1, 2)
+  assert s.is_empty() && grown.length() == 2
+}
+
+#[test]
+fn slice_capacity() {
+  let s = slices.Grow([1, 2], 1)
+  assert s.length() == 2 && s.capacity() > s.length()
+}
+
+#[test]
+fn slice_append_spread() {
+  let a = [1, 2]
+  let b = [3, 4]
+  let combined = a.append(b...)
+  assert combined.length() == 4 && combined[3] == 4
+}
+
+#[test]
+fn slice_copy_from() {
+  let dst = [0, 0, 0]
+  let src = [1, 2, 3]
+  let copied = dst.copy_from(src)
+  assert copied == 3 && dst[0] == 1 && dst[2] == 3
+}
+
+#[test]
+fn slice_contains() {
+  let nums = [1, 2, 3]
+  assert nums.contains(2) && !nums.contains(9)
+}
+
+#[test]
+fn slice_equals() {
+  let a = [1, 2, 3]
+  let b = [1, 2, 3]
+  let c = [1, 2, 4]
+  assert a.equals(b) && !a.equals(c)
+}
+
+#[test]
+fn slice_any() {
+  let nums = [1, 2, 3]
+  assert nums.any(|x| x > 2) && !nums.any(|x| x > 10)
+}
+
+#[test]
+fn slice_all() {
+  let evens = [2, 4, 6]
+  let mixed = [1, 2, 3]
+  assert evens.all(|x| x % 2 == 0) && !mixed.all(|x| x % 2 == 0)
+}
+
+#[test]
+fn slice_clone() {
+  let original = [1, 2, 3]
+  let mut cloned = original.clone()
+  assert cloned.equals(original)
+  cloned[0] = 99
+  assert original[0] == 1 && cloned[0] == 99
+}
+
+#[test]
+fn enumerated_slice_map() {
+  let items = [10, 20, 30]
+  let indexed = items.enumerate().map(|(i, v)| i * 100 + v)
+  assert indexed[0] == 10 && indexed[1] == 120 && indexed[2] == 230
+}
+
+#[test]
+fn enumerated_slice_fold() {
+  let items = [10, 20, 30]
+  let total = items.enumerate().fold(0, |acc, (i, v)| acc + i + v)
+  assert total == 63
+}
+
+#[test]
+fn enumerated_slice_find() {
+  let items = [10, 20, 30]
+  let result = match items.enumerate().find(|(i, _)| i == 1) {
+    Some((i, v)) => i * 100 + v,
+    None => 0,
+  }
+  assert result == 120
+}
+
+#[test]
+fn map_new_empty() {
+  let m = Map.new<string, int>()
+  assert m.is_empty()
+}
+
+#[test]
+fn map_delete() {
+  let mut m = Map.from([("a", 1), ("b", 2)])
+  m.delete("a")
+  let result = match m.get("a") {
+    Some(_) => 0,
+    None => m.length(),
+  }
+  assert result == 1
+}
+
+#[test]
+fn map_clone() {
+  let original = Map.from([("a", 1), ("b", 2)])
+  let mut cloned = original.clone()
+  assert cloned.equals(original)
+  cloned.delete("a")
+  assert cloned.get("a").is_none() && original.get("a").is_some() && original.length() == 2
+}
+
+#[test]
+fn map_equals() {
+  let a = Map.from([("x", 1)])
+  let b = Map.from([("x", 1)])
+  let c = Map.from([("x", 2)])
+  assert a.equals(b) && !a.equals(c)
 }

@@ -42,3 +42,7 @@ fn divide_for_test(a: int, b: int) -> Result<int, string> {
 fn maybe_int_for_test(b: bool) -> Option<int> {
   if b { Some(42) } else { None }
 }
+
+fn unreachable_from_error(_e: string) -> int {
+  panic("mapper or fallback should not be called")
+}

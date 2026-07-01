@@ -141,3 +141,30 @@ fn select_match_receive_closed() {
   }
   assert result == 100
 }
+
+#[test]
+fn channel_introspection() {
+  let ch = Channel.buffered<int>(4)
+  ch.send(1)
+  ch.send(2)
+  assert ch.length() == 2 && ch.capacity() == 4 && !ch.is_empty()
+}
+
+#[test]
+fn sender_introspection() {
+  let ch = Channel.buffered<int>(3)
+  let (tx, _rx) = ch.split()
+  tx.send(1)
+  let result = tx.length() == 1 && tx.capacity() == 3 && !tx.is_empty()
+  tx.close()
+  assert result
+}
+
+#[test]
+fn receiver_introspection() {
+  let ch = Channel.buffered<int>(3)
+  let (tx, rx) = ch.split()
+  tx.send(7)
+  tx.send(8)
+  assert rx.length() == 2 && rx.capacity() == 3 && !rx.is_empty()
+}

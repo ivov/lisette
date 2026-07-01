@@ -1,4 +1,5 @@
 import "go:fmt"
+import "go:errors"
 
 #[test]
 fn option_some() {
@@ -541,4 +542,163 @@ fn get_optional(flag: bool) -> Option<int> {
 fn panicking_function() -> int {
   let arr: Slice<int> = []
   arr[0]
+}
+
+#[test]
+fn option_unwrap_or_else_none() {
+  let x: Option<int> = None
+  assert x.unwrap_or_else(or_else_default) == 42
+}
+
+#[test]
+fn option_unwrap_or_else_some() {
+  let x = Some(10)
+  assert x.unwrap_or_else(unreachable_int) == 10
+}
+
+#[test]
+fn option_ok_or_some() {
+  let x = Some(5)
+  assert x.ok_or("missing").unwrap_or(0) == 5
+}
+
+#[test]
+fn option_ok_or_none() {
+  let x: Option<int> = None
+  let result = match x.ok_or("missing") {
+    Ok(_) => "",
+    Err(e) => e,
+  }
+  assert result == "missing"
+}
+
+#[test]
+fn option_ok_or_else_none() {
+  let x: Option<int> = None
+  let result = match x.ok_or_else(or_else_message) {
+    Ok(_) => "",
+    Err(e) => e,
+  }
+  assert result == "lazy"
+}
+
+#[test]
+fn option_ok_or_else_some() {
+  let x = Some(5)
+  assert x.ok_or_else(unreachable_string).unwrap_or(0) == 5
+}
+
+#[test]
+fn option_take_some() {
+  let mut opt = Some(7)
+  let taken = opt.take()
+  assert taken.unwrap_or(0) == 7 && opt.unwrap_or(-1) == -1
+}
+
+#[test]
+fn result_is_ok() {
+  let x: Result<int, string> = Ok(1)
+  assert x.is_ok()
+}
+
+#[test]
+fn result_is_err() {
+  let x: Result<int, string> = Err("boom")
+  assert x.is_err()
+}
+
+#[test]
+fn result_err_accessor() {
+  let x: Result<int, string> = Err("boom")
+  assert x.err().unwrap_or("") == "boom"
+}
+
+#[test]
+fn result_unwrap_or_else() {
+  let x: Result<int, string> = Err("boom")
+  assert x.unwrap_or_else(|e| e.length()) == 4
+}
+
+#[test]
+fn result_map_err() {
+  let x: Result<int, string> = Err("oops")
+  let result = match x.map_err(|e| e + "!") {
+    Ok(_) => "",
+    Err(e) => e,
+  }
+  assert result == "oops!"
+}
+
+#[test]
+fn result_unwrap_or_else_ok() {
+  let x: Result<int, string> = Ok(5)
+  assert x.unwrap_or_else(unreachable_from_error) == 5
+}
+
+#[test]
+fn result_map_err_ok() {
+  let x: Result<int, string> = Ok(5)
+  assert x.map_err(unreachable_from_error).unwrap_or(0) == 5
+}
+
+#[test]
+fn result_wrap_err() {
+  let base = errors.New("boom")
+  let r: Result<int, error> = Err(base)
+  let result = match r.wrap_err("loading config") {
+    Ok(_) => 0,
+    Err(e) => if e.Error() == "loading config: boom" && errors.Is(e, base) { 100 } else { 0 },
+  }
+  assert result == 100
+}
+
+#[test]
+fn recover_as_error_some() {
+  let value = recover {
+    panic_with_error()
+  }
+  let result = match value {
+    Ok(_) => 0,
+    Err(pv) => match pv.as_error() {
+      Some(e) if e.Error() == "boom" => 100,
+      _ => 0,
+    },
+  }
+  assert result == 100
+}
+
+#[test]
+fn recover_as_error_none() {
+  let value = recover {
+    panic_with_string()
+  }
+  let result = match value {
+    Ok(_) => 0,
+    Err(pv) => if pv.as_error().is_none() { 100 } else { 0 },
+  }
+  assert result == 100
+}
+
+fn or_else_default() -> int {
+  42
+}
+
+fn or_else_message() -> string {
+  "lazy"
+}
+
+fn panic_with_string() -> int {
+  panic("boom")
+}
+
+fn panic_with_error() -> int {
+  panic(errors.New("boom"))
+}
+
+fn unreachable_int() -> int {
+  panic("fallback should not be called")
+}
+
+fn unreachable_string() -> string {
+  panic("fallback should not be called")
 }

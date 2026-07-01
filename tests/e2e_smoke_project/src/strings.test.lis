@@ -1,0 +1,50 @@
+#[test]
+fn string_is_empty() {
+  let empty = ""
+  let filled = "x"
+  assert empty.is_empty() && !filled.is_empty()
+}
+
+#[test]
+fn string_contains() {
+  let s = "hello world"
+  assert s.contains("world") && !s.contains("xyz")
+}
+
+#[test]
+fn string_starts_with() {
+  let s = "hello world"
+  assert s.starts_with("hello") && !s.starts_with("world")
+}
+
+#[test]
+fn string_ends_with() {
+  let s = "hello world"
+  assert s.ends_with("world") && !s.ends_with("hello")
+}
+
+#[test]
+fn string_byte_at() {
+  let s = "abc"
+  assert (s.byte_at(0) as int) == 97 && (s.byte_at(2) as int) == 99
+}
+
+#[test]
+fn string_rune_at() {
+  let s = "héllo"
+  assert s.rune_at(0) == 'h' && s.rune_at(1) == 'é'
+}
+
+#[test]
+fn string_bytes() {
+  let s = "abc"
+  let bytes = s.bytes()
+  assert bytes.length() == 3 && (bytes[0] as int) == 97
+}
+
+#[test]
+fn string_runes() {
+  let s = "héllo"
+  let runes = s.runes()
+  assert runes.length() == 5 && runes[1] == 'é'
+}

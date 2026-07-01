@@ -1,0 +1,37 @@
+#[test]
+fn builtin_min_int() {
+  assert min(3, 1, 2) == 1
+}
+
+#[test]
+fn builtin_max_int() {
+  assert max(3, 1, 2) == 3
+}
+
+#[test]
+fn builtin_min_string() {
+  assert min("banana", "apple") == "apple"
+}
+
+#[test]
+#[allow(float_cmp)]
+fn builtin_complex_real_imaginary() {
+  let c = complex(3.0, 4.0)
+  assert real(c) == 3.0 && imaginary(c) == 4.0
+}
+
+#[test]
+fn builtin_assert_type_match() {
+  let value: Unknown = 42
+  assert assert_type<int>(value).unwrap_or(0) == 42
+}
+
+#[test]
+fn builtin_assert_type_mismatch() {
+  let value: Unknown = 42
+  let result = match assert_type<string>(value) {
+    Some(_) => 0,
+    None => 100,
+  }
+  assert result == 100
+}

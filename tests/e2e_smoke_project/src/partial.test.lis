@@ -77,3 +77,76 @@ fn make_partial_err() -> Partial<int, string> {
 fn make_partial_both() -> Partial<int, string> {
   Partial.Both(42, "eof")
 }
+
+#[test]
+fn partial_is_err() {
+  assert make_partial_err().is_err()
+}
+
+#[test]
+fn partial_ok_accessor() {
+  assert make_partial_ok().ok().unwrap_or(0) == 42
+}
+
+#[test]
+fn partial_err_accessor() {
+  assert make_partial_err().err().unwrap_or("") == "fail"
+}
+
+#[test]
+fn partial_unwrap_or_else() {
+  assert make_partial_err().unwrap_or_else(|e| e.length()) == 4
+}
+
+#[test]
+fn partial_map() {
+  let result = match make_partial_ok().map(|n| n * 2) {
+    Partial.Ok(n) => n,
+    Partial.Err(_) => 0,
+    Partial.Both(n, _) => n,
+  }
+  assert result == 84
+}
+
+#[test]
+fn partial_map_err() {
+  let result = match make_partial_err().map_err(|e| e.length()) {
+    Partial.Ok(_) => 0,
+    Partial.Err(n) => n,
+    Partial.Both(_, n) => n,
+  }
+  assert result == 4
+}
+
+#[test]
+fn partial_ok_both() {
+  assert make_partial_both().ok().unwrap_or(0) == 42
+}
+
+#[test]
+fn partial_err_both() {
+  assert make_partial_both().err().unwrap_or("") == "eof"
+}
+
+#[test]
+fn partial_unwrap_or_else_both() {
+  assert make_partial_both().unwrap_or_else(unreachable_from_error) == 42
+}
+
+#[test]
+fn partial_map_both() {
+  let result = match make_partial_both().map(|n| n * 2) {
+    Partial.Both(n, e) => if n == 84 && e == "eof" { 100 } else { 0 },
+    _ => 0,
+  }
+  assert result == 100
+}
+
+#[test]
+fn partial_map_err_both() {
+  let result = match make_partial_both().map_err(|e| e.length()) {
+    Partial.Both(n, e) => if n == 42 && e == 3 { 100 } else { 0 },
+    _ => 0,
+  }
+  assert result == 100
+}
