@@ -1,5 +1,6 @@
 use super::helpers::{is_side_effect_free, span_text};
 use crate::passes::walk::NodeCtx;
+use diagnostics::{Edit, Fix};
 use syntax::ast::Expression;
 
 pub fn check_manual_time_until(expression: &Expression, ctx: &NodeCtx) {
@@ -51,11 +52,16 @@ pub fn check_manual_time_until(expression: &Expression, ctx: &NodeCtx) {
         return;
     };
 
-    ctx.sink.push(diagnostics::lint::manual_time_until(
-        span,
-        namespace_text,
-        receiver_text,
-    ));
+    let replacement = format!("{namespace_text}.Until({receiver_text})");
+
+    ctx.sink.push(
+        diagnostics::lint::manual_time_until(span, namespace_text, receiver_text).with_fix(
+            Fix::new(
+                format!("Replace with `{replacement}`"),
+                Edit::replacement(*span, replacement.clone()),
+            ),
+        ),
+    );
 }
 
 fn time_now_namespace(expression: &Expression) -> Option<&Expression> {

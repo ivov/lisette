@@ -1,7 +1,8 @@
 use crate::passes::walk::NodeCtx;
+use diagnostics::{Edit, Fix};
 use syntax::ast::Expression;
 
-use super::helpers::wrapped_single_arg;
+use super::helpers::{span_text, wrapped_single_arg};
 
 pub fn check_needless_question_mark(expression: &Expression, ctx: &NodeCtx) {
     match expression {
@@ -79,8 +80,13 @@ fn flag_needless(value: &Expression, ctx: &NodeCtx) {
         return;
     }
 
-    ctx.sink.push(diagnostics::lint::needless_question_mark(
-        &value.get_span(),
-        wrapper,
-    ));
+    let span = value.get_span();
+    let mut diagnostic = diagnostics::lint::needless_question_mark(&span, wrapper);
+    if let Some(inner_text) = span_text(ctx.source, inner) {
+        diagnostic = diagnostic.with_fix(Fix::new(
+            format!("Replace with `{inner_text}`"),
+            Edit::replacement(span, inner_text),
+        ));
+    }
+    ctx.sink.push(diagnostic);
 }

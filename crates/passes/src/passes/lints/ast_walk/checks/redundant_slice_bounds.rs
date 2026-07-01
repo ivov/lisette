@@ -1,5 +1,6 @@
 use super::helpers::{expressions_equivalent, is_side_effect_free, is_zero_literal, span_text};
 use crate::passes::walk::NodeCtx;
+use diagnostics::{Edit, Fix};
 use syntax::ast::Expression;
 
 pub fn check_redundant_slice_bounds(expression: &Expression, ctx: &NodeCtx) {
@@ -74,10 +75,13 @@ pub fn check_redundant_slice_bounds(expression: &Expression, ctx: &NodeCtx) {
         format!("{receiver_text}[{start_text}..]")
     };
 
-    ctx.sink.push(diagnostics::lint::redundant_slice_bounds(
-        span,
-        &replacement,
-    ));
+    let fix_span = receiver.get_span().merge(*span);
+    ctx.sink.push(
+        diagnostics::lint::redundant_slice_bounds(span, &replacement).with_fix(Fix::new(
+            format!("Replace with `{replacement}`"),
+            Edit::replacement(fix_span, replacement.clone()),
+        )),
+    );
 }
 
 fn is_length_call_on(expression: &Expression, slice_receiver: &Expression) -> bool {

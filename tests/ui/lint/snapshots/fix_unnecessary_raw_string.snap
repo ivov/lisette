@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/fixes.rs
+---
+fn main() {
+  let msg = r"hello";
+  let _ = msg
+}
+=== fixed ===
+fn main() {
+  let msg = "hello";
+  let _ = msg
+}

@@ -1,4 +1,5 @@
 use crate::passes::walk::NodeCtx;
+use diagnostics::{Edit, Fix};
 use syntax::ast::Expression;
 
 use super::helpers::{is_zero_literal, method_call};
@@ -52,9 +53,10 @@ pub fn check_unnecessary_first_then_check(expression: &Expression, ctx: &NodeCtx
         format!("{slice_text}.is_empty()")
     };
 
-    ctx.sink
-        .push(diagnostics::lint::unnecessary_first_then_check(
-            span,
-            &replacement,
-        ));
+    ctx.sink.push(
+        diagnostics::lint::unnecessary_first_then_check(span, &replacement).with_fix(Fix::new(
+            format!("Replace with `{replacement}`"),
+            Edit::replacement(*span, replacement.clone()),
+        )),
+    );
 }

@@ -1,4 +1,5 @@
 use crate::passes::walk::NodeCtx;
+use diagnostics::{Edit, Fix};
 use syntax::ast::{BinaryOperator, Expression};
 
 use super::helpers::is_zero_literal;
@@ -38,13 +39,16 @@ pub fn check_manual_bytes_equal(expression: &Expression, ctx: &NodeCtx) {
         return;
     };
 
-    ctx.sink.push(diagnostics::lint::manual_bytes_equal(
-        span,
-        negated,
-        namespace_text,
-        left_text,
-        right_text,
-    ));
+    let prefix = if negated { "!" } else { "" };
+    let replacement = format!("{prefix}{namespace_text}.Equal({left_text}, {right_text})");
+
+    ctx.sink.push(
+        diagnostics::lint::manual_bytes_equal(span, negated, namespace_text, left_text, right_text)
+            .with_fix(Fix::new(
+                format!("Replace with `{replacement}`"),
+                Edit::replacement(*span, replacement.clone()),
+            )),
+    );
 }
 
 fn bytes_compare(expression: &Expression) -> Option<(&Expression, &Expression, &Expression)> {

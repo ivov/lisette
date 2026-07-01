@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  ▲ Unused expression value
+   ╭─[test.lis:4:5]
+ 3 │   for _i in 0..3 {
+ 4 │     1 + 2
+   ·     ──┬──
+   ·       ╰── this value is discarded
+ 5 │   }
+   ╰────
+  help: Use the value, or ignore with `let _ = ...` · code: [lint.unused_value]

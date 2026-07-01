@@ -242,3 +242,216 @@ fn main() {
     let twice = apply_lint_fixes(&once);
     assert_eq!(once, twice);
 }
+
+#[test]
+fn fix_manual_is_empty() {
+    assert_fix_snapshot!(
+        r#"
+fn main() {
+  let xs = [1, 2, 3]
+  let _ = xs.length() == 0
+}
+"#
+    );
+}
+
+#[test]
+fn fix_unnecessary_first_then_check() {
+    assert_fix_snapshot!(
+        r#"
+fn main() {
+  let xs = [1, 2, 3, 4]
+  let _ = xs.get(0).is_some()
+}
+"#
+    );
+}
+
+#[test]
+fn fix_redundant_slice_bounds() {
+    assert_fix_snapshot!(
+        r#"
+fn main() {
+  let xs = [1, 2, 3, 4, 5]
+  let a = 2
+  let _ = xs[a..xs.length()]
+}
+"#
+    );
+}
+
+#[test]
+fn fix_needless_bool_assign() {
+    assert_fix_snapshot!(
+        r#"
+pub fn f(c: bool) -> bool {
+  let mut x = false
+  if c {
+    x = true
+  } else {
+    x = false
+  }
+  x
+}
+"#
+    );
+}
+
+#[test]
+fn fix_manual_bytes_equal() {
+    assert_fix_snapshot!(
+        r#"
+import "go:bytes"
+
+fn main() {
+  let a = "hello" as Slice<byte>
+  let b = "world" as Slice<byte>
+  let _ = bytes.Compare(a, b) == 0
+}
+"#
+    );
+}
+
+#[test]
+fn fix_manual_equal_fold() {
+    assert_fix_snapshot!(
+        r#"
+import "go:strings"
+
+fn main() {
+  let a = "Hello"
+  let b = "hELLO"
+  let _ = strings.ToLower(a) == strings.ToLower(b)
+}
+"#
+    );
+}
+
+#[test]
+fn fix_manual_replace_all() {
+    assert_fix_snapshot!(
+        r#"
+import "go:strings"
+
+fn main() {
+  let s = "hello world"
+  let _ = strings.Replace(s, "o", "0", -1)
+}
+"#
+    );
+}
+
+#[test]
+fn fix_manual_time_since() {
+    assert_fix_snapshot!(
+        r#"
+import "go:time"
+
+fn main() {
+  let t = time.Now()
+  let _ = time.Now().Sub(t)
+}
+"#
+    );
+}
+
+#[test]
+fn fix_manual_time_until() {
+    assert_fix_snapshot!(
+        r#"
+import "go:time"
+
+fn main() {
+  let deadline = time.Now()
+  let _ = deadline.Sub(time.Now())
+}
+"#
+    );
+}
+
+#[test]
+fn fix_unnecessary_raw_string() {
+    assert_fix_snapshot!(
+        r#"
+fn main() {
+  let msg = r"hello";
+  let _ = msg
+}
+"#
+    );
+}
+
+#[test]
+fn fix_excess_parens_on_condition() {
+    assert_fix_snapshot!(
+        r#"
+fn main() {
+  let x = 5;
+  if (x > 0) {
+    let _ = x;
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn fix_wildcard_in_or_patterns() {
+    assert_fix_snapshot!(
+        r#"
+pub fn test(n: int) -> int {
+  match n {
+    0 | _ => 1,
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn fix_needless_question_mark() {
+    assert_fix_snapshot!(
+        r#"
+fn consume() -> Option<int> {
+  let x: Option<int> = Some(1)
+  Some(x?)
+}
+"#
+    );
+}
+
+#[test]
+fn fix_neg_multiply() {
+    assert_fix_snapshot!(
+        r#"
+fn negate(x: int) -> int {
+  x * -1
+}
+"#
+    );
+}
+
+#[test]
+fn fix_needless_splitn() {
+    assert_fix_snapshot!(
+        r#"
+import "go:strings"
+
+fn main() {
+  let s = "a,b,c"
+  let _ = strings.SplitN(s, ",", -1)
+}
+"#
+    );
+}
+
+#[test]
+fn fix_unnecessary_reference() {
+    assert_fix_snapshot!(
+        r#"
+pub fn foo(x: Ref<int>) {
+  let _ = &x;
+}
+"#
+    );
+}

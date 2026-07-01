@@ -1,5 +1,6 @@
 use crate::passes::walk::NodeCtx;
-use syntax::ast::{Expression, Literal, Pattern};
+use diagnostics::{Edit, Fix};
+use syntax::ast::{Expression, Literal, Pattern, Span};
 
 pub fn check_unnecessary_raw_string_expression(expression: &Expression, ctx: &NodeCtx) {
     let Expression::Literal {
@@ -11,8 +12,12 @@ pub fn check_unnecessary_raw_string_expression(expression: &Expression, ctx: &No
         return;
     };
     if !value.contains('\\') {
-        ctx.sink
-            .push(diagnostics::lint::unnecessary_raw_string(span));
+        ctx.sink.push(
+            diagnostics::lint::unnecessary_raw_string(span).with_fix(Fix::new(
+                "Remove the `r` prefix",
+                Edit::deletion(Span::new(span.file_id, span.byte_offset, 1)),
+            )),
+        );
     }
 }
 
@@ -26,7 +31,11 @@ pub fn check_unnecessary_raw_string_pattern(pattern: &Pattern, ctx: &NodeCtx) {
         return;
     };
     if !value.contains('\\') {
-        ctx.sink
-            .push(diagnostics::lint::unnecessary_raw_string(span));
+        ctx.sink.push(
+            diagnostics::lint::unnecessary_raw_string(span).with_fix(Fix::new(
+                "Remove the `r` prefix",
+                Edit::deletion(Span::new(span.file_id, span.byte_offset, 1)),
+            )),
+        );
     }
 }

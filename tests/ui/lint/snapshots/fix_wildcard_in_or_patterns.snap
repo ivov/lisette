@@ -1,0 +1,14 @@
+---
+source: tests/ui/lint/fixes.rs
+---
+pub fn test(n: int) -> int {
+  match n {
+    0 | _ => 1,
+  }
+}
+=== fixed ===
+pub fn test(n: int) -> int {
+  match n {
+    _ => 1,
+  }
+}

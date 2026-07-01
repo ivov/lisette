@@ -1,0 +1,18 @@
+---
+source: tests/ui/lint/fixes.rs
+---
+import "go:bytes"
+
+fn main() {
+  let a = "hello" as Slice<byte>
+  let b = "world" as Slice<byte>
+  let _ = bytes.Compare(a, b) == 0
+}
+=== fixed ===
+import "go:bytes"
+
+fn main() {
+  let a = "hello" as Slice<byte>
+  let b = "world" as Slice<byte>
+  let _ = bytes.Equal(a, b)
+}

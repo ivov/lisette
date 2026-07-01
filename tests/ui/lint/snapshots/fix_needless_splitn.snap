@@ -1,0 +1,16 @@
+---
+source: tests/ui/lint/fixes.rs
+---
+import "go:strings"
+
+fn main() {
+  let s = "a,b,c"
+  let _ = strings.SplitN(s, ",", -1)
+}
+=== fixed ===
+import "go:strings"
+
+fn main() {
+  let s = "a,b,c"
+  let _ = strings.Split(s, ",")
+}

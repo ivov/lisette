@@ -1,4 +1,5 @@
 use crate::passes::walk::NodeCtx;
+use diagnostics::{Edit, Fix};
 use syntax::ast::{Pattern, collect_pattern_bindings};
 
 pub fn check_wildcard_in_or_patterns(pattern: &Pattern, ctx: &NodeCtx) {
@@ -22,6 +23,8 @@ pub fn check_wildcard_in_or_patterns(pattern: &Pattern, ctx: &NodeCtx) {
         return;
     }
 
-    ctx.sink
-        .push(diagnostics::lint::wildcard_in_or_patterns(span));
+    ctx.sink.push(
+        diagnostics::lint::wildcard_in_or_patterns(span)
+            .with_fix(Fix::new("Replace with `_`", Edit::replacement(*span, "_"))),
+    );
 }

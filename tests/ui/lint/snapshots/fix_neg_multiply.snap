@@ -1,0 +1,10 @@
+---
+source: tests/ui/lint/fixes.rs
+---
+fn negate(x: int) -> int {
+  x * -1
+}
+=== fixed ===
+fn negate(x: int) -> int {
+  -x
+}
