@@ -1,0 +1,13 @@
+---
+source: tests/spec/emit/expressions.rs
+description: |
+  
+  fn test(a: float64, b: float64) -> bool {
+    !(a == b)
+  }
+---
+package main
+
+func test(a, b float64) bool {
+	return (a != b)
+}

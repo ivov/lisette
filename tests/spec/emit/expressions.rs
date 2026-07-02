@@ -205,6 +205,48 @@ fn test() -> bool {
 }
 
 #[test]
+fn negated_float_comparison_keeps_not() {
+    let input = r#"
+type Score = float64
+
+fn test(a: float64, b: float64, c: Score, d: Score) -> bool {
+  !(a < b) && !(c <= d)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn negated_generic_comparison_keeps_not() {
+    let input = r#"
+fn test<T: Ordered>(a: T, b: T) -> bool {
+  !(a > b)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn negated_int_comparison_flips() {
+    let input = r#"
+fn test(a: int, b: int, s: string, t: string) -> bool {
+  !(a < b) && !(s < t)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn negated_float_equality_flips() {
+    let input = r#"
+fn test(a: float64, b: float64) -> bool {
+  !(a == b)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn unary_not_skips_operator_text_inside_string_literal() {
     let input = r#"
 fn test(s: string) -> bool {

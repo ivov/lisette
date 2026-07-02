@@ -186,6 +186,7 @@ impl Planner<'_> {
             ..
         } = target
             && let Some(flipped) = flip_comparison(cmp)
+            && flip_preserves_nan(cmp, left, right)
         {
             let plan = self.plan_binary(&flipped, left, right, ctx);
             let (setup, value) = plan.into_parts();
@@ -231,6 +232,18 @@ impl Planner<'_> {
         let result = format!("{} {} {}", left_string, operator, right_string);
         value_plan_from_statements(setup, result)
     }
+}
+
+fn flip_preserves_nan(operator: &BinaryOperator, left: &Expression, right: &Expression) -> bool {
+    matches!(operator, BinaryOperator::Equal | BinaryOperator::NotEqual)
+        || (is_non_float(left) && is_non_float(right))
+}
+
+fn is_non_float(expression: &Expression) -> bool {
+    expression
+        .get_type()
+        .underlying_simple_kind()
+        .is_some_and(|kind| !kind.is_float())
 }
 
 fn flip_comparison(operator: &BinaryOperator) -> Option<BinaryOperator> {

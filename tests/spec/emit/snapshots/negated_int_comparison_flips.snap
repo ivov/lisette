@@ -1,0 +1,13 @@
+---
+source: tests/spec/emit/expressions.rs
+description: |
+  
+  fn test(a: int, b: int, s: string, t: string) -> bool {
+    !(a < b) && !(s < t)
+  }
+---
+package main
+
+func test(a, b int, s, t string) bool {
+	return (a >= b) && (s >= t)
+}

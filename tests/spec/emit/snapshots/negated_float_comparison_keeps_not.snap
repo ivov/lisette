@@ -1,0 +1,17 @@
+---
+source: tests/spec/emit/expressions.rs
+description: |
+  
+  type Score = float64
+  
+  fn test(a: float64, b: float64, c: Score, d: Score) -> bool {
+    !(a < b) && !(c <= d)
+  }
+---
+package main
+
+type Score = float64
+
+func test(a, b float64, c, d Score) bool {
+	return !(a < b) && !(c <= d)
+}
