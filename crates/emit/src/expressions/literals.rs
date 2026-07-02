@@ -148,7 +148,8 @@ impl Planner<'_> {
                     }
                 }
                 FormatStringPart::Expression(expression) => {
-                    format_string.push_str(format_verb_for(&expression.get_type()));
+                    let peeled = self.facts.peel_alias(&expression.get_type());
+                    format_string.push_str(format_verb_for(&peeled));
                     args.push(
                         emitted
                             .next()
@@ -179,7 +180,8 @@ impl Planner<'_> {
     }
 }
 
-/// The `fmt` printf verb for interpolating a value of `ty` into an f-string.
+/// The `fmt` printf verb for interpolating a value of alias-peeled `ty` into
+/// an f-string.
 fn format_verb_for(ty: &Type) -> &'static str {
     match ty.as_simple() {
         Some(SimpleKind::Rune) => "%c",

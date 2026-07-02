@@ -814,6 +814,39 @@ fn test() {
 }
 
 #[test]
+fn format_string_rune_alias() {
+    let input = r#"
+import "go:fmt"
+
+type Ch = rune
+
+fn test() {
+  let c: Ch = 'A';
+  fmt.Print(f"{c}")
+  fmt.Print(f"char: {c}")
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn format_string_display_rune_newtype_keeps_stringer() {
+    let input = r#"
+import "go:fmt"
+
+#[display]
+struct Grade(rune)
+
+fn test() {
+  let g = Grade('B');
+  fmt.Print(f"{g}")
+  fmt.Print(f"grade: {g}")
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn compound_assignment() {
     let input = r#"
 fn test() -> int {

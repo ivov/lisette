@@ -1,0 +1,34 @@
+---
+source: tests/spec/emit/expressions.rs
+description: |
+  
+  import "go:fmt"
+  
+  #[display]
+  struct Grade(rune)
+  
+  fn test() {
+    let g = Grade('B');
+    fmt.Print(f"{g}")
+    fmt.Print(f"grade: {g}")
+  }
+---
+package main
+
+import "fmt"
+
+type Grade rune
+
+func (g Grade) String() string {
+	return fmt.Sprintf("Grade(%v)", rune(g))
+}
+
+func (g Grade) to_string() string {
+	return g.String()
+}
+
+func test() {
+	g := Grade('B')
+	fmt.Print(fmt.Sprint(g))
+	fmt.Printf("grade: %v", g)
+}
