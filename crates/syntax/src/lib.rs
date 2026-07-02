@@ -3,6 +3,7 @@ pub mod ast_folder;
 pub mod attributes;
 pub mod desugar;
 mod display;
+pub mod go_names;
 pub mod lex;
 pub mod parse;
 pub mod program;

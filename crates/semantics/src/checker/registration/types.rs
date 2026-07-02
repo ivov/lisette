@@ -133,9 +133,8 @@ impl TaskState<'_> {
 
     /// Check for Go-level field name collisions across enum variants.
     ///
-    /// Computes the Go field name for every variant field (struct fields get
-    /// capitalized, single-tuple fields use the variant name, multi-tuple fields
-    /// use variant name + index) and rejects same-name-different-type conflicts.
+    /// Computes each field's Go name via the shared authority in
+    /// `syntax::go_names` and rejects same-name-different-type conflicts.
     fn check_enum_field_type_conflicts(&mut self, name: &str, variants: &[EnumVariant]) {
         if self.cursor.module_id == "prelude" {
             return;
@@ -150,18 +149,14 @@ impl TaskState<'_> {
             let single_field = variant.fields.len() == 1;
 
             for (fi, field) in variant.fields.iter().enumerate() {
-                // Mirror the Go field name logic from enum_layout.rs
-                let go_name = if is_struct {
-                    let mut chars = field.name.chars();
-                    match chars.next() {
-                        None => String::new(),
-                        Some(c) => c.to_uppercase().collect::<String>() + chars.as_str(),
-                    }
-                } else if single_field {
-                    variant.name.to_string()
-                } else {
-                    format!("{}{}", variant.name, fi)
-                };
+                let go_name = syntax::go_names::enum_field_go_name(
+                    &variant.name,
+                    &field.name,
+                    fi,
+                    is_struct,
+                    single_field,
+                    name,
+                );
 
                 let resolved = field.ty.resolve_in(&self.env);
                 let annotation_span = field.annotation.get_span();

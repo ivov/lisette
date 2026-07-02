@@ -5,10 +5,7 @@ use crate::names::go_name;
 use crate::utils::receiver_name;
 use syntax::ast::{EnumVariant, Generic};
 
-pub(crate) const ENUM_TAG_FIELD: &str = "Tag";
-
-pub(crate) const ENUM_STRINGER_METHOD: &str = "String";
-pub(crate) const ENUM_GO_STRINGER_METHOD: &str = "GoString";
+pub(crate) use syntax::go_names::{ENUM_GO_STRINGER_METHOD, ENUM_STRINGER_METHOD, ENUM_TAG_FIELD};
 
 #[derive(Debug, Clone)]
 pub(crate) struct EnumLayout {
@@ -95,7 +92,7 @@ impl EnumLayout {
                     fi.to_string()
                 };
 
-                let go_name = Self::compute_field_go_name(
+                let go_name = syntax::go_names::enum_field_go_name(
                     &variant.name,
                     &field.name,
                     fi,
@@ -127,47 +124,6 @@ impl EnumLayout {
             is_struct_variant: is_struct,
             fields,
             doc: variant.doc.clone(),
-        }
-    }
-
-    fn compute_field_go_name(
-        variant_name: &str,
-        field_name: &str,
-        field_index: usize,
-        is_struct: bool,
-        single_field: bool,
-        enum_name: &str,
-    ) -> String {
-        if is_struct {
-            let base = go_name::snake_to_camel(field_name);
-            if base == ENUM_TAG_FIELD
-                || base == ENUM_STRINGER_METHOD
-                || base == ENUM_GO_STRINGER_METHOD
-            {
-                go_name::escape_keyword(&format!("{}{}", variant_name, base)).into_owned()
-            } else {
-                go_name::escape_keyword(&base).into_owned()
-            }
-        } else if single_field {
-            let base = variant_name.to_string();
-            if base == ENUM_TAG_FIELD
-                || base == ENUM_STRINGER_METHOD
-                || base == ENUM_GO_STRINGER_METHOD
-            {
-                format!("{}{}_", enum_name, base)
-            } else {
-                base
-            }
-        } else {
-            let base = format!("{}{}", variant_name, field_index);
-            if base == ENUM_TAG_FIELD
-                || base == ENUM_STRINGER_METHOD
-                || base == ENUM_GO_STRINGER_METHOD
-            {
-                format!("{}{}_{}", enum_name, variant_name, field_index)
-            } else {
-                base
-            }
         }
     }
 

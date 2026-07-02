@@ -8343,6 +8343,28 @@ enum Shape {
 }
 
 #[test]
+fn infer_enum_field_type_conflict_snake_vs_camel() {
+    let input = r#"
+enum Event {
+  Click { foo_bar: int },
+  Hover { fooBar: string },
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_enum_field_type_conflict_trailing_underscore() {
+    let input = r#"
+enum Event {
+  Click { x_: int },
+  Hover { x: string },
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
 fn infer_native_method_value() {
     let input = r#"
 fn apply(f: fn(Slice<int>, VarArgs<int>) -> Slice<int>) {

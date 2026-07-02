@@ -1,6 +1,6 @@
 use std::borrow::Cow;
 
-use crate::definitions::enum_layout::ENUM_TAG_FIELD;
+use syntax::go_names::ENUM_TAG_FIELD;
 use syntax::types::Type;
 
 pub(crate) const GO_IMPORT_PREFIX: &str = "go:";
@@ -40,25 +40,14 @@ pub(crate) const TEST_PRELUDE_MODULE: &str = "**test_prelude";
 pub const TESTKIT_IMPORT_PATH: &str = "github.com/ivov/lisette/prelude/testkit";
 pub(crate) const TESTKIT_PKG: &str = "testkit";
 
+pub(crate) use syntax::go_names::{GO_KEYWORDS, escape_keyword, snake_to_camel};
 pub(crate) use syntax::types::unqualified_name;
-
-pub(crate) fn capitalize_first(s: &str) -> String {
-    let mut chars = s.chars();
-    match chars.next() {
-        None => String::new(),
-        Some(c) => c.to_uppercase().collect::<String>() + chars.as_str(),
-    }
-}
 
 /// Convert a Lisette identifier to its exported Go form: snake_case becomes
 /// PascalCase (`user_id` → `UserId`), already-Pascal names pass through, and
 /// the result is escaped if it collides with a Go keyword.
 pub(crate) fn make_exported(name: &str) -> String {
     escape_keyword(&snake_to_camel(name)).into_owned()
-}
-
-pub(crate) fn snake_to_camel(s: &str) -> String {
-    s.split('_').map(capitalize_first).collect()
 }
 
 pub fn go_test_function_name(fn_name: &str) -> String {
@@ -107,36 +96,6 @@ pub(crate) fn sanitize_package_name(name: &str) -> Cow<'_, str> {
 
     Cow::Owned(result)
 }
-
-/// Go reserved keywords that cannot be used as identifiers.
-/// See: https://go.dev/ref/spec#Keywords
-const GO_KEYWORDS: &[&str] = &[
-    "break",
-    "case",
-    "chan",
-    "const",
-    "continue",
-    "default",
-    "defer",
-    "else",
-    "fallthrough",
-    "for",
-    "func",
-    "go",
-    "goto",
-    "if",
-    "import",
-    "interface",
-    "map",
-    "package",
-    "range",
-    "return",
-    "select",
-    "struct",
-    "switch",
-    "type",
-    "var",
-];
 
 pub(crate) struct ResolvedName {
     pub(crate) name: String,
@@ -275,14 +234,6 @@ const GO_BUILTINS: &[&str] = &[
     "nil",
     "true",
 ];
-
-pub(crate) fn escape_keyword(name: &str) -> Cow<'_, str> {
-    if GO_KEYWORDS.contains(&name) {
-        Cow::Owned(format!("{}_", name))
-    } else {
-        Cow::Borrowed(name)
-    }
-}
 
 /// Go builtins re-exposed by the Lisette prelude under the same name. The
 /// `prelude_function_shadowed` diagnostic forbids user code from declaring
