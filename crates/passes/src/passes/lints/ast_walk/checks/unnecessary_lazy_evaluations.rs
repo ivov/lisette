@@ -1,7 +1,8 @@
 use crate::passes::walk::NodeCtx;
+use diagnostics::{Edit, Fix};
 use syntax::ast::Expression;
 
-use super::helpers::constant_closure_value;
+use super::helpers::{as_tight_operand, constant_closure_value, expression_is_pure, span_text};
 
 pub fn check_unnecessary_lazy_evaluations(expression: &Expression, ctx: &NodeCtx) {
     let Expression::Call {
@@ -44,7 +45,11 @@ pub fn check_unnecessary_lazy_evaluations(expression: &Expression, ctx: &NodeCtx
         _ => return,
     };
 
-    if constant_closure_value(lazy_argument).is_none() {
+    let Some(constant) = constant_closure_value(lazy_argument) else {
+        return;
+    };
+
+    if !expression_is_pure(constant, ctx.store) {
         return;
     }
 
@@ -56,10 +61,30 @@ pub fn check_unnecessary_lazy_evaluations(expression: &Expression, ctx: &NodeCtx
         return;
     }
 
-    ctx.sink
-        .push(diagnostics::lint::unnecessary_lazy_evaluations(
-            &lazy_argument.get_span(),
-            lazy,
-            eager,
+    let mut diagnostic =
+        diagnostics::lint::unnecessary_lazy_evaluations(&lazy_argument.get_span(), lazy, eager);
+    let rest_texts: Option<Vec<&str>> = args[1..]
+        .iter()
+        .map(|arg| span_text(ctx.source, arg))
+        .collect();
+    if let (Some(receiver_text), Some(constant_text), Some(rest_texts)) = (
+        span_text(ctx.source, receiver),
+        span_text(ctx.source, constant),
+        rest_texts,
+    ) {
+        let mut call_args = constant_text.to_string();
+        for extra in rest_texts {
+            call_args.push_str(", ");
+            call_args.push_str(extra);
+        }
+        let replacement = format!(
+            "{}.{eager}({call_args})",
+            as_tight_operand(receiver_text, receiver)
+        );
+        diagnostic = diagnostic.with_fix(Fix::new(
+            format!("Replace with `{replacement}`"),
+            Edit::replacement(expression.get_span(), replacement),
         ));
+    }
+    ctx.sink.push(diagnostic);
 }

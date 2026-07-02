@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/fixes.rs
+---
+import f "go:fmt"
+
+fn main() {
+  let _ = 5
+}
+=== fixed ===
+fn main() {
+  let _ = 5
+}

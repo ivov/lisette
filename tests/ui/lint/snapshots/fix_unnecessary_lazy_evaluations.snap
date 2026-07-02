@@ -1,0 +1,10 @@
+---
+source: tests/ui/lint/fixes.rs
+---
+pub fn f(o: Option<int>) -> int {
+  o.unwrap_or_else(|| 5)
+}
+=== fixed ===
+pub fn f(o: Option<int>) -> int {
+  o.unwrap_or(5)
+}

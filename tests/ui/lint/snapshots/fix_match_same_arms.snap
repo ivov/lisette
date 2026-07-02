@@ -1,0 +1,19 @@
+---
+source: tests/ui/lint/fixes.rs
+---
+pub fn f(n: int) -> string {
+  match n {
+    1 => "a",
+    2 => "b",
+    3 => "a",
+    _ => "z",
+  }
+}
+=== fixed ===
+pub fn f(n: int) -> string {
+  match n {
+    1 | 3 => "a",
+    2 => "b",
+    _ => "z",
+  }
+}

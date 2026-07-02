@@ -1,4 +1,6 @@
+use crate::passes::lints::span_edit::statement_deletion;
 use crate::passes::walk::NodeCtx;
+use diagnostics::{Edit, Fix};
 use syntax::ast::{Expression, Pattern};
 
 /// Flags `let x = x`, an immutable rebinding of a variable to itself.
@@ -64,6 +66,11 @@ pub fn check_redundant_rebinding(expression: &Expression, ctx: &NodeCtx) {
         return;
     }
 
-    ctx.sink
-        .push(diagnostics::lint::redundant_rebinding(span, identifier));
+    let deletion = statement_deletion(ctx.source, *span);
+    ctx.sink.push(
+        diagnostics::lint::redundant_rebinding(span, identifier).with_fix(Fix::new(
+            "Remove the redundant rebinding",
+            Edit::deletion(deletion),
+        )),
+    );
 }

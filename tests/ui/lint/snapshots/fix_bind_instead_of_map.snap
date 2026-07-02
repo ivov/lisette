@@ -1,0 +1,10 @@
+---
+source: tests/ui/lint/fixes.rs
+---
+pub fn f(o: Option<int>) -> Option<int> {
+  o.and_then(|x| Some(x + 1))
+}
+=== fixed ===
+pub fn f(o: Option<int>) -> Option<int> {
+  o.map(|x| x + 1)
+}

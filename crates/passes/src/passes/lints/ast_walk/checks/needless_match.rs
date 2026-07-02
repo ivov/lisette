@@ -1,8 +1,10 @@
 use crate::passes::walk::NodeCtx;
+use diagnostics::{Edit, Fix};
 use syntax::ast::{Expression, MatchArm, Span};
 
 use super::helpers::{
-    enum_variant_binding, is_bare_identifier, is_none_pattern, span_text, wraps_binding,
+    as_tight_operand, enum_variant_binding, is_bare_identifier, is_none_pattern, span_text,
+    wraps_binding,
 };
 
 pub fn check_needless_match(expression: &Expression, ctx: &NodeCtx) {
@@ -34,15 +36,24 @@ pub fn check_needless_match(expression: &Expression, ctx: &NodeCtx) {
         return;
     }
 
+    // A differing result type means the arms adapt the subject,
+    // so the match is not needless.
+    if subject_ty != result_ty {
+        return;
+    }
+
     let Some(subject_text) = span_text(ctx.source, subject) else {
         return;
     };
 
     let match_keyword_span = Span::new(span.file_id, span.byte_offset, 5);
-    ctx.sink.push(diagnostics::lint::needless_match(
-        &match_keyword_span,
-        subject_text,
-    ));
+    let replacement = as_tight_operand(subject_text, subject);
+    ctx.sink.push(
+        diagnostics::lint::needless_match(&match_keyword_span, subject_text).with_fix(Fix::new(
+            format!("Replace with `{replacement}`"),
+            Edit::replacement(*span, replacement),
+        )),
+    );
 }
 
 fn option_passthrough(a: &MatchArm, b: &MatchArm) -> bool {

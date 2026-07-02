@@ -1,0 +1,15 @@
+---
+source: tests/ui/lint/fixes.rs
+---
+pub fn f() -> int {
+  let x = compute()
+  x
+}
+
+fn compute() -> int { 42 }
+=== fixed ===
+pub fn f() -> int {
+  compute()
+}
+
+fn compute() -> int { 42 }

@@ -1,9 +1,13 @@
 use crate::passes::comparison::{MinMaxOp, prelude_min_max};
 use crate::passes::walk::NodeCtx;
+use diagnostics::{Edit, Fix};
 use syntax::ast::Expression;
 use syntax::types::SimpleKind;
 
-use super::helpers::{expressions_equivalent, is_side_effect_free, signed_integer_literal};
+use super::helpers::{
+    as_tight_operand, expressions_equivalent, is_side_effect_free, signed_integer_literal,
+    span_text,
+};
 
 pub fn check_unnecessary_min_or_max(expression: &Expression, ctx: &NodeCtx) {
     let Some(call) = prelude_min_max(expression) else {
@@ -19,30 +23,31 @@ pub fn check_unnecessary_min_or_max(expression: &Expression, ctx: &NodeCtx) {
         MinMaxOp::Max => "max",
     };
 
-    if expressions_equivalent(call.left, call.right) && is_side_effect_free(call.left) {
-        ctx.sink.push(diagnostics::lint::unnecessary_min_or_max(
-            &expression.get_span(),
-            op,
-        ));
-        return;
-    }
+    let survivor =
+        if expressions_equivalent(call.left, call.right) && is_side_effect_free(call.left) {
+            call.left
+        } else if let Some((value_operand, literal)) = split_one_literal(call.left, call.right)
+            && let Some(kind) = value_operand.get_type().as_simple()
+            && (match call.op {
+                MinMaxOp::Min => max_bound(kind),
+                MinMaxOp::Max => min_bound(kind),
+            }) == Some(literal)
+        {
+            value_operand
+        } else {
+            return;
+        };
 
-    let Some((value_operand, literal)) = split_one_literal(call.left, call.right) else {
-        return;
-    };
-    let Some(kind) = value_operand.get_type().as_simple() else {
-        return;
-    };
-    let no_op_bound = match call.op {
-        MinMaxOp::Min => max_bound(kind),
-        MinMaxOp::Max => min_bound(kind),
-    };
-    if no_op_bound == Some(literal) {
-        ctx.sink.push(diagnostics::lint::unnecessary_min_or_max(
-            &expression.get_span(),
-            op,
+    let span = expression.get_span();
+    let mut diagnostic = diagnostics::lint::unnecessary_min_or_max(&span, op);
+    if let Some(text) = span_text(ctx.source, survivor) {
+        let replacement = as_tight_operand(text, survivor);
+        diagnostic = diagnostic.with_fix(Fix::new(
+            format!("Replace with `{replacement}`"),
+            Edit::replacement(span, replacement),
         ));
     }
+    ctx.sink.push(diagnostic);
 }
 
 fn split_one_literal<'a>(a: &'a Expression, b: &'a Expression) -> Option<(&'a Expression, i128)> {

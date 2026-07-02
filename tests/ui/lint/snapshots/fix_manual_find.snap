@@ -1,0 +1,10 @@
+---
+source: tests/ui/lint/fixes.rs
+---
+pub fn f(xs: Slice<int>) -> Option<int> {
+  xs.filter(|x| x > 0).get(0)
+}
+=== fixed ===
+pub fn f(xs: Slice<int>) -> Option<int> {
+  xs.find(|x| x > 0)
+}

@@ -32,7 +32,13 @@ pub fn check_nested_fstring(expression: &Expression, ctx: &NodeCtx) {
         let has_interpolation = inner_parts
             .iter()
             .any(|part| matches!(part, FormatStringPart::Expression(_)));
-        if !has_interpolation || ctx.facts.expression_only_fstrings.contains(inner_span) {
+        if !has_interpolation
+            || ctx
+                .facts
+                .expression_only_fstrings
+                .iter()
+                .any(|fact| fact.span == *inner_span)
+        {
             continue;
         }
         ctx.sink.push(diagnostics::lint::nested_fstring(inner_span));

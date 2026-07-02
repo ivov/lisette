@@ -10,7 +10,8 @@ use crate::passes::walk::visit_ast;
 use semantics::store::Store;
 
 pub(super) use crate::passes::comparison::{
-    expressions_equivalent, flip_comparison, is_side_effect_free, signed_integer_literal,
+    expressions_equivalent, flip_comparison, is_side_effect_free, negate_comparison,
+    signed_integer_literal,
 };
 
 pub(super) fn first_param_is_self(params: &[Binding]) -> bool {
@@ -225,6 +226,52 @@ fn literal_is_pure(literal: &Literal, store: &Store) -> bool {
 pub(super) fn span_text<'a>(source: &'a str, expression: &Expression) -> Option<&'a str> {
     let span = expression.get_span();
     source.get(span.byte_offset as usize..span.end() as usize)
+}
+
+/// Whether `expression` binds at least as tightly as a postfix operator.
+pub(super) fn is_postfix_tight(expression: &Expression) -> bool {
+    match expression {
+        Expression::Identifier { .. }
+        | Expression::Literal { .. }
+        | Expression::DotAccess { .. }
+        | Expression::IndexedAccess { .. }
+        | Expression::Paren { .. }
+        | Expression::Propagate { .. } => true,
+        // A `|>` pipeline desugars to a `Call` with its piped arg before the callee.
+        Expression::Call {
+            expression: callee,
+            args,
+            ..
+        } => args
+            .iter()
+            .all(|arg| arg.get_span().byte_offset >= callee.get_span().byte_offset),
+        _ => false,
+    }
+}
+
+pub(super) fn lambda_is_annotated(expression: &Expression) -> bool {
+    matches!(
+        expression.unwrap_parens(),
+        Expression::Lambda { params, return_annotation, .. }
+            if !return_annotation.is_unknown()
+                || params.iter().any(|param| param.annotation.is_some())
+    )
+}
+
+pub(super) fn as_tight_operand(text: &str, expression: &Expression) -> String {
+    if is_postfix_tight(expression) {
+        text.to_string()
+    } else {
+        format!("({text})")
+    }
+}
+
+/// Whether every argument sits after `receiver` in source, distinguishing a
+/// written `receiver.method(args)` from a `|>` pipeline (piped value before it).
+pub(super) fn reads_as_method_call(receiver: &Expression, args: &[Expression]) -> bool {
+    let receiver_end = receiver.get_span().end();
+    args.iter()
+        .all(|arg| arg.get_span().byte_offset >= receiver_end)
 }
 
 // The single identifier bound by a one-field enum-variant pattern such as

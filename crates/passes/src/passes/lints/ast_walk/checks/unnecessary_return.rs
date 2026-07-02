@@ -1,6 +1,7 @@
 use crate::passes::walk::NodeCtx;
 use diagnostics::LocalSink;
-use syntax::ast::Expression;
+use diagnostics::{Edit, Fix};
+use syntax::ast::{Expression, Span};
 
 pub fn check_unnecessary_return(expression: &Expression, ctx: &NodeCtx) {
     let Expression::Function { body, .. } = expression else {
@@ -22,7 +23,15 @@ fn flag_tail_returns(expression: &Expression, sink: &LocalSink) {
             // Bare `return` is excluded: dropping it can change the block's
             // type when a preceding statement is non-unit.
             if !matches!(value.as_ref(), Expression::Unit { .. }) {
-                sink.push(diagnostics::lint::unnecessary_return(span));
+                let prefix = Span::new(
+                    span.file_id,
+                    span.byte_offset,
+                    value.get_span().byte_offset - span.byte_offset,
+                );
+                sink.push(
+                    diagnostics::lint::unnecessary_return(span)
+                        .with_fix(Fix::new("Drop `return`", Edit::deletion(prefix))),
+                );
             }
         }
         Expression::Block { items, .. } => {

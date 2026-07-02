@@ -1,0 +1,10 @@
+---
+source: tests/ui/lint/fixes.rs
+---
+pub fn f(a: float64, b: float64) -> bool {
+  if a < b { false } else { true }
+}
+=== fixed ===
+pub fn f(a: float64, b: float64) -> bool {
+  (!(a < b))
+}

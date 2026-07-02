@@ -1,0 +1,14 @@
+---
+source: tests/ui/lint/fixes.rs
+---
+pub fn apply(xs: Slice<int>) -> Slice<int> {
+  xs.map(|x| double(x))
+}
+
+fn double(n: int) -> int { n * 2 }
+=== fixed ===
+pub fn apply(xs: Slice<int>) -> Slice<int> {
+  xs.map(double)
+}
+
+fn double(n: int) -> int { n * 2 }

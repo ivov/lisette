@@ -158,6 +158,19 @@ pub(crate) fn flip_comparison(operator: BinaryOperator) -> BinaryOperator {
     }
 }
 
+pub(crate) fn negate_comparison(operator: BinaryOperator) -> Option<&'static str> {
+    use BinaryOperator::*;
+    Some(match operator {
+        Equal => "!=",
+        NotEqual => "==",
+        LessThan => ">=",
+        LessThanOrEqual => ">",
+        GreaterThan => "<=",
+        GreaterThanOrEqual => "<",
+        _ => return None,
+    })
+}
+
 pub(crate) fn is_side_effect_free(expression: &Expression) -> bool {
     match expression.unwrap_parens() {
         Expression::Identifier { .. } | Expression::Literal { .. } => true,

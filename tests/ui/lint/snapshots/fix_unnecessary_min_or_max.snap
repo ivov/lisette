@@ -1,0 +1,10 @@
+---
+source: tests/ui/lint/fixes.rs
+---
+pub fn f(x: int) -> int {
+  min(x, x)
+}
+=== fixed ===
+pub fn f(x: int) -> int {
+  x
+}

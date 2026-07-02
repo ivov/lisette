@@ -1,8 +1,11 @@
 use crate::passes::walk::NodeCtx;
-use syntax::ast::Expression;
+use diagnostics::{Edit, Fix};
+use semantics::store::Store;
+use syntax::ast::{Expression, Span};
 
 use super::helpers::{
-    is_eager_safe, is_identity_lambda, is_pure_mapper, method_call, wrapped_single_arg,
+    as_tight_operand, expression_is_pure, is_identity_lambda, method_call, reads_as_method_call,
+    span_text, wrapped_single_arg,
 };
 
 pub fn check_unnecessary_map_on_constructor(expression: &Expression, ctx: &NodeCtx) {
@@ -28,11 +31,8 @@ pub fn check_unnecessary_map_on_constructor(expression: &Expression, ctx: &NodeC
             "Some" => container.is_option(),
             _ => container.is_result(),
         };
-        if confirmed && reorder_safe(payload, mapper) {
-            ctx.sink
-                .push(diagnostics::lint::unnecessary_map_on_constructor(
-                    span, variant, "map",
-                ));
+        if confirmed && reorder_safe(payload, mapper, ctx.store) {
+            push_map_on_constructor(ctx, span, receiver, args, variant, "map", payload, mapper);
         }
         return;
     }
@@ -45,21 +45,50 @@ pub fn check_unnecessary_map_on_constructor(expression: &Expression, ctx: &NodeC
         let Some(payload) = wrapped_single_arg(receiver, "Err") else {
             return;
         };
-        if receiver.get_type().is_result() && reorder_safe(payload, mapper) {
-            ctx.sink
-                .push(diagnostics::lint::unnecessary_map_on_constructor(
-                    span, "Err", "map_err",
-                ));
+        if receiver.get_type().is_result() && reorder_safe(payload, mapper, ctx.store) {
+            push_map_on_constructor(ctx, span, receiver, args, "Err", "map_err", payload, mapper);
         }
     }
 }
 
-// `Constructor(p).map(f)` becomes `Constructor(f(p))`, swapping evaluation of
-// `p` and `f`. Invisible when `f` is a lambda literal, or when both are
-// side-effect-free.
-fn reorder_safe(payload: &Expression, mapper: &Expression) -> bool {
-    if !is_pure_mapper(mapper) {
-        return false;
+#[allow(clippy::too_many_arguments)]
+fn push_map_on_constructor(
+    ctx: &NodeCtx,
+    span: &Span,
+    receiver: &Expression,
+    args: &[Expression],
+    variant: &str,
+    method: &str,
+    payload: &Expression,
+    mapper: &Expression,
+) {
+    let mut diagnostic = diagnostics::lint::unnecessary_map_on_constructor(span, variant, method);
+    // A lambda mapper needs beta-reduction to inline, so it reports without a fix.
+    if !matches!(mapper.unwrap_parens(), Expression::Lambda { .. })
+        && reads_as_method_call(receiver, args)
+        && let (Some(mapper_text), Some(payload_text)) = (
+            span_text(ctx.source, mapper),
+            span_text(ctx.source, payload),
+        )
+    {
+        let replacement = format!(
+            "{variant}({}({payload_text}))",
+            as_tight_operand(mapper_text, mapper)
+        );
+        diagnostic = diagnostic.with_fix(Fix::new(
+            format!("Replace with `{replacement}`"),
+            Edit::replacement(*span, replacement),
+        ));
     }
-    matches!(mapper.unwrap_parens(), Expression::Lambda { .. }) || is_eager_safe(payload)
+    ctx.sink.push(diagnostic);
+}
+
+// `Constructor(p).map(f)` to `Constructor(f(p))` swaps evaluation of `p` and `f`.
+// A lambda defers its body, otherwise both must be non-panicking for the swap to
+// be invisible.
+fn reorder_safe(payload: &Expression, mapper: &Expression, store: &Store) -> bool {
+    if matches!(mapper.unwrap_parens(), Expression::Lambda { .. }) {
+        return true;
+    }
+    expression_is_pure(payload, store) && expression_is_pure(mapper, store)
 }

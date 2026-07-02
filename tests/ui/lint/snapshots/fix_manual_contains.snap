@@ -1,0 +1,10 @@
+---
+source: tests/ui/lint/fixes.rs
+---
+pub fn f(xs: Slice<int>, v: int) -> bool {
+  xs.any(|x| x == v)
+}
+=== fixed ===
+pub fn f(xs: Slice<int>, v: int) -> bool {
+  xs.contains(v)
+}

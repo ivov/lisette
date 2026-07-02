@@ -58,7 +58,7 @@ pub fn run(
     sink.extend(checks_diagnostics);
     deferred::run(facts, sink);
     if run_lints {
-        lints::from_facts::run(facts, unused, sink);
+        lints::from_facts::run(analysis, facts, unused, sink);
     }
     if let Some((ast_walk_diagnostics, (ref_graph_diagnostics, ref_graph_unused))) = lint_outputs {
         sink.extend(ast_walk_diagnostics);

@@ -1,0 +1,10 @@
+---
+source: tests/ui/lint/fixes.rs
+---
+pub fn f(r: Result<int, string>) -> bool {
+  match r { Ok(_) => false, Err(_) => true }
+}
+=== fixed ===
+pub fn f(r: Result<int, string>) -> bool {
+  r.is_err()
+}

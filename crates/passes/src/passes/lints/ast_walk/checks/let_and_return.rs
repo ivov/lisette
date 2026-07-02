@@ -1,5 +1,8 @@
 use crate::passes::walk::NodeCtx;
+use diagnostics::{Edit, Fix};
 use syntax::ast::{Expression, Pattern};
+
+use super::helpers::span_text;
 
 pub fn check_let_and_return(expression: &Expression, ctx: &NodeCtx) {
     let Expression::Block { items, .. } = expression else {
@@ -12,6 +15,7 @@ pub fn check_let_and_return(expression: &Expression, ctx: &NodeCtx) {
 
     let Expression::Let {
         binding,
+        value: bound_value,
         mutable: false,
         else_block: None,
         span,
@@ -39,5 +43,13 @@ pub fn check_let_and_return(expression: &Expression, ctx: &NodeCtx) {
         return;
     }
 
-    ctx.sink.push(diagnostics::lint::let_and_return(span));
+    let mut diagnostic = diagnostics::lint::let_and_return(span);
+    if let Some(value_text) = span_text(ctx.source, bound_value) {
+        let edit_span = span.merge(tail.get_span());
+        diagnostic = diagnostic.with_fix(Fix::new(
+            format!("Replace with `{value_text}`"),
+            Edit::replacement(edit_span, value_text.to_string()),
+        ));
+    }
+    ctx.sink.push(diagnostic);
 }

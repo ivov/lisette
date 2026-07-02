@@ -1,0 +1,10 @@
+---
+source: tests/ui/lint/fixes.rs
+---
+pub fn f(c: bool) -> bool {
+  if c { true } else { false }
+}
+=== fixed ===
+pub fn f(c: bool) -> bool {
+  c
+}

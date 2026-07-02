@@ -5,8 +5,8 @@ source: tests/ui/errors/mod.rs
    ╭─[test.lis:3:7]
  2 │ fn test(slice: Slice<int>) {
  3 │   let [a, b] = slice;
-   ·       ──┬──
-   ·         ╰── only matches 2 elements
+   ·       ───┬──
+   ·          ╰── only matches 2 elements
  4 │ }
    ╰────
   help: Use `match` to handle slices of any length:

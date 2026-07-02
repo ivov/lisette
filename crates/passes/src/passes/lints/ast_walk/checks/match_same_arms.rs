@@ -1,4 +1,6 @@
+use crate::passes::lints::span_edit::match_arm_deletion;
 use crate::passes::walk::NodeCtx;
+use diagnostics::{Edit, Fix};
 use ecow::EcoString;
 use syntax::ast::{Expression, Literal, MatchArm, TypedPattern, collect_pattern_bindings};
 use syntax::types::unqualified_name;
@@ -49,16 +51,28 @@ pub fn check_match_same_arms(expression: &Expression, ctx: &NodeCtx) {
             continue;
         };
         let earlier_span = earlier.pattern.get_span();
-        let Some(earlier_text) = ctx
-            .source
-            .get(earlier_span.byte_offset as usize..earlier_span.end() as usize)
-        else {
+        let later_span = later.pattern.get_span();
+        let (Some(earlier_text), Some(later_text)) = (
+            ctx.source
+                .get(earlier_span.byte_offset as usize..earlier_span.end() as usize),
+            ctx.source
+                .get(later_span.byte_offset as usize..later_span.end() as usize),
+        ) else {
             continue;
         };
-        ctx.sink.push(diagnostics::lint::match_same_arms(
-            &later.pattern.get_span(),
-            earlier_text,
-        ));
+
+        let merged = format!("{earlier_text} | {later_text}");
+        let arm_span = later_span.merge(later.expression.get_span());
+        let deletion = match_arm_deletion(ctx.source, arm_span);
+        ctx.sink.push(
+            diagnostics::lint::match_same_arms(&later_span, earlier_text).with_fix(Fix::multi(
+                format!("Merge into `{merged}`"),
+                vec![
+                    Edit::replacement(earlier_span, merged),
+                    Edit::deletion(deletion),
+                ],
+            )),
+        );
     }
 }
 

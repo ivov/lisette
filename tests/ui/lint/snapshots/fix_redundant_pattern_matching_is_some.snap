@@ -1,0 +1,10 @@
+---
+source: tests/ui/lint/fixes.rs
+---
+pub fn f(o: Option<int>) -> bool {
+  match o { Some(_) => true, None => false }
+}
+=== fixed ===
+pub fn f(o: Option<int>) -> bool {
+  o.is_some()
+}

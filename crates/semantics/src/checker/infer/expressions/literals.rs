@@ -173,7 +173,8 @@ impl InferCtx<'_, '_> {
                     && let Some(FormatStringPart::Expression(expression)) = new_parts.first()
                     && expression.get_type().resolve_in(&self.env).is_string()
                 {
-                    self.facts.add_expression_only_fstring(span);
+                    self.facts
+                        .add_expression_only_fstring(span, fstring_inner_needs_parens(expression));
                 }
 
                 let string_ty = self.type_string();
@@ -194,6 +195,28 @@ impl InferCtx<'_, '_> {
         self.unify(&new_ty, &unit_ty, &span);
         self.unify(expected_ty, &new_ty, &span);
         Expression::Unit { ty: new_ty, span }
+    }
+}
+
+/// Whether `expr` must be parenthesized to replace its f-string: true unless it
+/// binds at least as tightly as a postfix operator.
+fn fstring_inner_needs_parens(expression: &Expression) -> bool {
+    match expression {
+        Expression::Identifier { .. }
+        | Expression::Literal { .. }
+        | Expression::DotAccess { .. }
+        | Expression::IndexedAccess { .. }
+        | Expression::Paren { .. }
+        | Expression::Propagate { .. } => false,
+        // A `|>` pipeline desugars to a `Call` with its piped arg before the callee.
+        Expression::Call {
+            expression: callee,
+            args,
+            ..
+        } => !args
+            .iter()
+            .all(|arg| arg.get_span().byte_offset >= callee.get_span().byte_offset),
+        _ => true,
     }
 }
 

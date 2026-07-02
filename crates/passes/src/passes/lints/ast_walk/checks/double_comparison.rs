@@ -1,8 +1,9 @@
 use crate::passes::comparison::{in_scope_comparison, is_side_effect_free};
 use crate::passes::walk::NodeCtx;
+use diagnostics::{Edit, Fix};
 use syntax::ast::{BinaryOperator, Expression};
 
-use super::helpers::expressions_equivalent;
+use super::helpers::{expressions_equivalent, span_text};
 
 /// Inspects a single `&&`/`||` of two directly-joined comparisons over the same
 /// operands; flattened chains and swapped-operand forms are out of scope.
@@ -43,8 +44,18 @@ pub fn check_double_comparison(expression: &Expression, ctx: &NodeCtx) {
         return;
     };
 
-    ctx.sink
-        .push(diagnostics::lint::double_comparison(span, combined));
+    let mut diagnostic = diagnostics::lint::double_comparison(span, combined);
+    if let (Some(lhs), Some(rhs)) = (
+        span_text(ctx.source, left_lhs),
+        span_text(ctx.source, left_rhs),
+    ) {
+        let replacement = format!("{lhs} {combined} {rhs}");
+        diagnostic = diagnostic.with_fix(Fix::new(
+            format!("Replace with `{replacement}`"),
+            Edit::replacement(*span, replacement),
+        ));
+    }
+    ctx.sink.push(diagnostic);
 }
 
 /// True only when the operand's type is known to have a non-float underlying

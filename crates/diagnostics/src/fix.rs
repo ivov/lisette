@@ -30,18 +30,26 @@ impl Edit {
     }
 }
 
-/// A single applicable fix for one diagnostic.
+/// An applicable fix for one diagnostic, carrying one or more edits that are
+/// applied together as a unit.
 #[derive(Debug, Clone)]
 pub struct Fix {
     message: String,
-    edit: Edit,
+    edits: Vec<Edit>,
 }
 
 impl Fix {
     pub fn new(message: impl Into<String>, edit: Edit) -> Self {
         Self {
             message: message.into(),
-            edit,
+            edits: vec![edit],
+        }
+    }
+
+    pub fn multi(message: impl Into<String>, edits: Vec<Edit>) -> Self {
+        Self {
+            message: message.into(),
+            edits,
         }
     }
 
@@ -49,8 +57,8 @@ impl Fix {
         &self.message
     }
 
-    pub fn edit(&self) -> &Edit {
-        &self.edit
+    pub fn edits(&self) -> &[Edit] {
+        &self.edits
     }
 }
 
@@ -60,37 +68,57 @@ pub struct FixApplicationOutcome {
     pub applied: usize,
 }
 
-/// Apply `fixes` to `source` in a single left-to-right pass.
-///
-/// Fixes are sorted by span. A fix whose edit starts at or before the last
-/// applied edit ended is skipped (boundary-adjacent spans count as overlapping)
-/// and stays reported as a diagnostic on the next run.
+/// Apply `fixes` to `source`, each fix atomically. A fix applies only when all of
+/// its edits are mutually non-overlapping and clear of every already-applied edit
+/// (boundary adjacency counts as overlap), else the whole fix is skipped and stays
+/// reported on the next run.
 pub fn apply_fixes(source: &str, mut fixes: Vec<&Fix>) -> FixApplicationOutcome {
-    fixes.sort_by_key(|fix| {
-        let span = fix.edit().span();
-        (span.byte_offset, span.end())
-    });
+    fixes.sort_by_key(|fix| fix.edits().iter().map(|edit| edit.span().byte_offset).min());
 
-    let mut out = String::with_capacity(source.len());
-    let mut last_end: Option<u32> = None;
+    let mut accepted: Vec<&Edit> = Vec::new();
     let mut applied = 0;
 
     for fix in fixes {
-        let span = fix.edit().span();
-        if last_end.is_some_and(|end| span.byte_offset <= end) {
-            continue;
+        let edits = fix.edits();
+        // A fix's own edits are authored together, so adjacent ones concatenate.
+        // Only edits that share a byte genuinely conflict.
+        let internally_clear = edits.iter().enumerate().all(|(i, a)| {
+            edits[i + 1..]
+                .iter()
+                .all(|b| !spans_share_byte(a.span(), b.span()))
+        });
+        let clear_of_accepted = edits.iter().all(|edit| {
+            accepted
+                .iter()
+                .all(|other| !spans_overlap(edit.span(), other.span()))
+        });
+        if internally_clear && clear_of_accepted {
+            accepted.extend(edits);
+            applied += 1;
         }
-        out.push_str(&source[last_end.unwrap_or(0) as usize..span.byte_offset as usize]);
-        out.push_str(fix.edit().content());
-        last_end = Some(span.end());
-        applied += 1;
     }
 
-    out.push_str(&source[last_end.unwrap_or(0) as usize..]);
+    accepted.sort_by_key(|edit| edit.span().byte_offset);
+    let mut out = String::with_capacity(source.len());
+    let mut cursor = 0usize;
+    for edit in accepted {
+        let start = edit.span().byte_offset as usize;
+        out.push_str(&source[cursor..start]);
+        out.push_str(edit.content());
+        cursor = edit.span().end() as usize;
+    }
+    out.push_str(&source[cursor..]);
     FixApplicationOutcome {
         source: out,
         applied,
     }
+}
+
+fn spans_overlap(a: Span, b: Span) -> bool {
+    a.byte_offset <= b.end() && b.byte_offset <= a.end()
+}
+fn spans_share_byte(a: Span, b: Span) -> bool {
+    a.byte_offset < b.end() && b.byte_offset < a.end()
 }
 
 #[cfg(test)]
@@ -140,6 +168,49 @@ mod tests {
         let b = Fix::new("b", Edit::replacement(span(2, 2), "Y"));
         let applied = apply_fixes("abcd", vec![&a, &b]);
         assert_eq!(applied.source, "Xcd");
+        assert_eq!(applied.applied, 1);
+    }
+
+    #[test]
+    fn applies_all_edits_of_a_multi_edit_fix() {
+        let fix = Fix::multi(
+            "m",
+            vec![
+                Edit::replacement(span(0, 1), "A"),
+                Edit::replacement(span(4, 1), "E"),
+            ],
+        );
+        let applied = apply_fixes("abcde", vec![&fix]);
+        assert_eq!(applied.source, "AbcdE");
+        assert_eq!(applied.applied, 1);
+    }
+
+    #[test]
+    fn applies_adjacent_edits_within_one_fix() {
+        let fix = Fix::multi(
+            "m",
+            vec![
+                Edit::replacement(span(0, 1), "X"),
+                Edit::deletion(span(1, 2)),
+            ],
+        );
+        let applied = apply_fixes("abcd", vec![&fix]);
+        assert_eq!(applied.source, "Xd");
+        assert_eq!(applied.applied, 1);
+    }
+
+    #[test]
+    fn skips_whole_multi_edit_fix_when_one_edit_conflicts() {
+        let blocker = Fix::new("b", Edit::replacement(span(0, 1), "Z"));
+        let multi = Fix::multi(
+            "m",
+            vec![
+                Edit::replacement(span(0, 1), "A"),
+                Edit::replacement(span(4, 1), "E"),
+            ],
+        );
+        let applied = apply_fixes("abcde", vec![&blocker, &multi]);
+        assert_eq!(applied.source, "Zbcde");
         assert_eq!(applied.applied, 1);
     }
 

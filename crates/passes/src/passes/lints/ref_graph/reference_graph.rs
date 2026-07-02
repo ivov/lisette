@@ -98,19 +98,27 @@ impl ReferenceGraph {
 
     pub fn add_item(&mut self, id: ModuleItemId, span: Span, kind: ItemKind, is_entry_point: bool) {
         self.nodes.insert(id.clone());
-        self.items.insert(id.clone(), ItemInfo { span, kind });
+        self.items.insert(
+            id.clone(),
+            ItemInfo {
+                span,
+                kind,
+                statement_span: None,
+            },
+        );
         if is_entry_point {
             self.entrypoints.insert(id);
         }
     }
 
-    pub fn add_import(&mut self, id: ModuleItemId, span: Span) {
+    pub fn add_import(&mut self, id: ModuleItemId, span: Span, statement_span: Span) {
         self.nodes.insert(id.clone());
         self.items.insert(
             id,
             ItemInfo {
                 span,
                 kind: ItemKind::Import,
+                statement_span: Some(statement_span),
             },
         );
     }
@@ -228,4 +236,5 @@ pub enum ItemKind {
 pub struct ItemInfo {
     pub span: Span,
     pub kind: ItemKind,
+    pub statement_span: Option<Span>,
 }

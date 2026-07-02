@@ -1,8 +1,12 @@
 use crate::passes::walk::NodeCtx;
+use diagnostics::{Edit, Fix};
 use syntax::ast::Expression;
+use syntax::types::Type;
 
 use super::helpers::{
-    is_bare_identifier, is_side_effect_free, mentions_identifier, method_call, unary_lambda,
+    as_tight_operand, expression_is_pure, is_bare_identifier, is_side_effect_free,
+    lambda_is_annotated, mentions_identifier, method_call, reads_as_method_call, span_text,
+    unary_lambda,
 };
 
 pub fn check_manual_option_zip(expression: &Expression, ctx: &NodeCtx) {
@@ -48,12 +52,58 @@ pub fn check_manual_option_zip(expression: &Expression, ctx: &NodeCtx) {
         return;
     }
 
-    // `zip` evaluates its argument eagerly and outside the outer closure, so the
-    // second option must be side-effect-free and independent of the captured
-    // binding.
-    if !is_side_effect_free(inner_receiver) || mentions_identifier(inner_receiver, outer_param) {
+    // `zip` evaluates the second option eagerly and outside the outer closure, so
+    // it must not depend on the binding or panic where the lazy `and_then` would not.
+    if !is_side_effect_free(inner_receiver)
+        || mentions_identifier(inner_receiver, outer_param)
+        || !expression_is_pure(inner_receiver, ctx.store)
+    {
         return;
     }
 
-    ctx.sink.push(diagnostics::lint::manual_option_zip(span));
+    // `and_then`/`map` can adapt the tuple elements against the result type, which
+    // `zip` (fixing them from the receivers) would not, so require a matching type.
+    let outer_ty = outer_receiver.get_type();
+    let inner_ty = inner_receiver.get_type();
+    let result_ty = expression.get_type();
+    let (Some(first_ty), Some(second_ty), Some(result_inner)) = (
+        option_inner(&outer_ty),
+        option_inner(&inner_ty),
+        option_inner(&result_ty),
+    ) else {
+        return;
+    };
+    if *result_inner != Type::Tuple(vec![first_ty.clone(), second_ty.clone()]) {
+        return;
+    }
+
+    let mut diagnostic = diagnostics::lint::manual_option_zip(span);
+    if !lambda_is_annotated(outer_closure)
+        && !lambda_is_annotated(inner_closure)
+        && reads_as_method_call(outer_receiver, outer_args)
+        && let (Some(receiver_text), Some(other_text)) = (
+            span_text(ctx.source, outer_receiver),
+            span_text(ctx.source, inner_receiver),
+        )
+    {
+        let replacement = format!(
+            "{}.zip({other_text})",
+            as_tight_operand(receiver_text, outer_receiver)
+        );
+        diagnostic = diagnostic.with_fix(Fix::new(
+            format!("Replace with `{replacement}`"),
+            Edit::replacement(*span, replacement),
+        ));
+    }
+    ctx.sink.push(diagnostic);
+}
+
+fn option_inner(ty: &Type) -> Option<&Type> {
+    if !ty.is_option() {
+        return None;
+    }
+    match ty {
+        Type::Nominal { params, .. } => params.first(),
+        _ => None,
+    }
 }

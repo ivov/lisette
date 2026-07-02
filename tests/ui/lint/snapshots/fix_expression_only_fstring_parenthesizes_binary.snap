@@ -1,0 +1,14 @@
+---
+source: tests/ui/lint/fixes.rs
+---
+fn main() {
+  let a = "x"
+  let b = "y"
+  let _ = f"{a + b}".length()
+}
+=== fixed ===
+fn main() {
+  let a = "x"
+  let b = "y"
+  let _ = (a + b).length()
+}

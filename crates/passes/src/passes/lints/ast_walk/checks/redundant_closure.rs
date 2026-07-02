@@ -1,6 +1,8 @@
+use diagnostics::{Edit, Fix};
 use syntax::ast::{Expression, Pattern};
 use syntax::program::{CallKind, DotAccessKind};
 
+use super::helpers::lambda_is_annotated;
 use crate::passes::walk::NodeCtx;
 use semantics::facts::Facts;
 
@@ -57,8 +59,14 @@ pub fn check_redundant_closure(expression: &Expression, ctx: &NodeCtx) {
         return;
     };
 
-    ctx.sink
-        .push(diagnostics::lint::redundant_closure(span, &callee_name));
+    let mut diagnostic = diagnostics::lint::redundant_closure(span, &callee_name);
+    if !lambda_is_annotated(expression) {
+        diagnostic = diagnostic.with_fix(Fix::new(
+            format!("Replace with `{callee_name}`"),
+            Edit::replacement(*span, callee_name.clone()),
+        ));
+    }
+    ctx.sink.push(diagnostic);
 }
 
 fn lambda_body(body: &Expression) -> &Expression {

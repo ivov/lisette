@@ -1,0 +1,18 @@
+---
+source: tests/ui/lint/fixes.rs
+---
+struct Config { debug: bool, port: int }
+
+fn read(c: Config) -> int { if c.debug { c.port } else { 0 } }
+
+fn rebuild(base: Config) -> Config {
+  Config { debug: true, port: 80, ..base }
+}
+=== fixed ===
+struct Config { debug: bool, port: int }
+
+fn read(c: Config) -> int { if c.debug { c.port } else { 0 } }
+
+fn rebuild(base: Config) -> Config {
+  Config { debug: true, port: 80 }
+}

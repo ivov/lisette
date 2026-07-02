@@ -1,0 +1,14 @@
+---
+source: tests/ui/lint/fixes.rs
+---
+pub fn f(x: int) -> bool {
+  match x |> maybe { Some(_) => true, None => false }
+}
+
+fn maybe(n: int) -> Option<int> { Some(n) }
+=== fixed ===
+pub fn f(x: int) -> bool {
+  (x |> maybe).is_some()
+}
+
+fn maybe(n: int) -> Option<int> { Some(n) }

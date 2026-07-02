@@ -5,8 +5,8 @@ source: tests/ui/lint/mod.rs
    ╭─[test.lis:3:7]
  2 │ pub fn test(slice: Slice<int>) {
  3 │   let [..rest] = slice;
-   ·       ───┬───
-   ·          ╰── always matches
+   ·       ────┬───
+   ·           ╰── always matches
  4 │   let _ = rest
    ╰────
   help: Use `let rest` instead · code: [lint.rest_only_slice_pattern]

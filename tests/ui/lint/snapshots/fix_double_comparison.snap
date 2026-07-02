@@ -1,0 +1,10 @@
+---
+source: tests/ui/lint/fixes.rs
+---
+pub fn f(a: int, b: int) -> bool {
+  a < b || a == b
+}
+=== fixed ===
+pub fn f(a: int, b: int) -> bool {
+  a <= b
+}

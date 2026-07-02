@@ -1,0 +1,14 @@
+---
+source: tests/ui/lint/fixes.rs
+---
+pub fn f(o: Option<int>) -> int {
+  o.unwrap_or(fallback())
+}
+
+fn fallback() -> int { 7 }
+=== fixed ===
+pub fn f(o: Option<int>) -> int {
+  o.unwrap_or_else(|| fallback())
+}
+
+fn fallback() -> int { 7 }

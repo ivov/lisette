@@ -1,0 +1,10 @@
+---
+source: tests/ui/lint/fixes.rs
+---
+pub fn f(o: Option<int>) -> Option<int> {
+  match o { Some(x) => Some(x), None => None }
+}
+=== fixed ===
+pub fn f(o: Option<int>) -> Option<int> {
+  o
+}

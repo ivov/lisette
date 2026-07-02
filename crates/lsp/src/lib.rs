@@ -1157,14 +1157,17 @@ impl LanguageServer for Backend {
                 continue;
             }
 
-            let edit = fix.edit();
-            let text_edit = TextEdit {
-                range: line_index.span_to_range(edit.span()),
-                new_text: edit.content().to_string(),
-            };
+            let text_edits: Vec<TextEdit> = fix
+                .edits()
+                .iter()
+                .map(|edit| TextEdit {
+                    range: line_index.span_to_range(edit.span()),
+                    new_text: edit.content().to_string(),
+                })
+                .collect();
 
             let mut changes = std::collections::HashMap::new();
-            changes.insert(uri.clone(), vec![text_edit]);
+            changes.insert(uri.clone(), text_edits);
 
             actions.push(CodeActionOrCommand::CodeAction(CodeAction {
                 title: fix.message().to_string(),

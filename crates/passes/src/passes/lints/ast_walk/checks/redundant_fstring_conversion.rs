@@ -1,5 +1,6 @@
 use super::helpers::span_text;
 use crate::passes::walk::NodeCtx;
+use diagnostics::{Edit, Fix};
 use syntax::ast::{Expression, FormatStringPart, Literal};
 use syntax::types::SimpleKind;
 
@@ -28,12 +29,13 @@ pub fn check_redundant_fstring_conversion(expression: &Expression, ctx: &NodeCtx
         let Some(arg_text) = span_text(ctx.source, arg) else {
             continue;
         };
-        ctx.sink
-            .push(diagnostics::lint::redundant_fstring_conversion(
-                &call.get_span(),
-                method,
-                arg_text,
-            ));
+        ctx.sink.push(
+            diagnostics::lint::redundant_fstring_conversion(&call.get_span(), method, arg_text)
+                .with_fix(Fix::new(
+                    format!("Replace with `{arg_text}`"),
+                    Edit::replacement(call.get_span(), arg_text.to_string()),
+                )),
+        );
     }
 }
 

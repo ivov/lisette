@@ -1,0 +1,14 @@
+---
+source: tests/ui/lint/fixes.rs
+---
+pub fn f(r: Result<int, string>) -> int {
+  r.unwrap_or(fallback())
+}
+
+fn fallback() -> int { 7 }
+=== fixed ===
+pub fn f(r: Result<int, string>) -> int {
+  r.unwrap_or_else(|_| fallback())
+}
+
+fn fallback() -> int { 7 }

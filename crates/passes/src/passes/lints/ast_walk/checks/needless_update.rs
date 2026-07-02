@@ -2,8 +2,10 @@ use rustc_hash::FxHashSet as HashSet;
 use syntax::ast::{Expression, Span, StructSpread};
 use syntax::types::Type;
 
-use super::helpers::{is_side_effect_free, struct_field_names};
+use super::helpers::{expression_is_pure, is_side_effect_free, struct_field_names};
+use crate::passes::lints::span_edit::list_item_deletion;
 use crate::passes::walk::NodeCtx;
+use diagnostics::{Edit, Fix};
 
 pub fn check_needless_update(expression: &Expression, ctx: &NodeCtx) {
     let Expression::StructCall {
@@ -20,7 +22,7 @@ pub fn check_needless_update(expression: &Expression, ctx: &NodeCtx) {
     let StructSpread::From(base) = spread else {
         return;
     };
-    if !is_side_effect_free(base) {
+    if !is_side_effect_free(base) || !expression_is_pure(base, ctx.store) {
         return;
     }
     if is_go_imported(ty) {
@@ -44,8 +46,13 @@ pub fn check_needless_update(expression: &Expression, ctx: &NodeCtx) {
         .source
         .get(base_span.byte_offset as usize..base_span.end() as usize)
         .unwrap_or("");
-    ctx.sink
-        .push(diagnostics::lint::needless_update(&span, base_text));
+    let deletion = list_item_deletion(ctx.source, span);
+    ctx.sink.push(
+        diagnostics::lint::needless_update(&span, base_text).with_fix(Fix::new(
+            "Remove the redundant `..` update",
+            Edit::deletion(deletion),
+        )),
+    );
 }
 
 fn is_go_imported(ty: &Type) -> bool {

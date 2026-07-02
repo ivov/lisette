@@ -1,8 +1,10 @@
+use rustc_hash::FxHashMap as HashMap;
 use rustc_hash::FxHashSet as HashSet;
 
 use diagnostics::LisetteDiagnostic;
 use diagnostics::LocalSink;
 use diagnostics::{Edit, Fix};
+use semantics::context::AnalysisContext;
 use semantics::facts::Facts;
 use syntax::ast::Span;
 use syntax::program::UnusedInfo;
@@ -69,10 +71,16 @@ impl LintConfig {
     }
 }
 
-pub(crate) fn run(facts: &Facts, unused: &mut UnusedInfo, sink: &LocalSink) {
+pub(crate) fn run(
+    analysis: &AnalysisContext,
+    facts: &Facts,
+    unused: &mut UnusedInfo,
+    sink: &LocalSink,
+) {
     let mut diagnostics: Vec<LisetteDiagnostic> = Vec::new();
+    let sources = source_by_file(analysis);
 
-    collect_bindings(facts, unused, &mut diagnostics);
+    collect_bindings(facts, unused, &sources, &mut diagnostics);
     collect_dead_code(facts, &mut diagnostics);
     collect_pattern_issues(facts, &mut diagnostics);
     collect_unused_expressions(facts, &mut diagnostics);
@@ -81,13 +89,54 @@ pub(crate) fn run(facts: &Facts, unused: &mut UnusedInfo, sink: &LocalSink) {
     collect_unused_type_params(facts, &mut diagnostics);
     collect_type_params_only_in_bound(facts, &mut diagnostics);
     collect_always_failing_try_blocks(facts, &mut diagnostics);
-    collect_expression_only_fstrings(facts, &mut diagnostics);
+    collect_expression_only_fstrings(facts, &sources, &mut diagnostics);
 
     diagnostics.sort_by(LisetteDiagnostic::sort_key);
     sink.extend(diagnostics);
 }
 
-fn collect_bindings(facts: &Facts, unused: &mut UnusedInfo, out: &mut Vec<LisetteDiagnostic>) {
+fn source_by_file<'a>(analysis: &AnalysisContext<'a>) -> HashMap<u32, &'a str> {
+    let mut sources = HashMap::default();
+    for module in analysis.store.modules.values() {
+        for (file_id, file) in &module.files {
+            sources.insert(*file_id, file.source.as_str());
+        }
+    }
+    sources
+}
+
+fn mut_keyword_deletion(sources: &HashMap<u32, &str>, name: Span) -> Option<Span> {
+    let source = sources.get(&name.file_id)?;
+    let name_start = name.byte_offset as usize;
+    let before = source.get(..name_start)?.trim_end();
+    let mut_start = before.strip_suffix("mut")?.len();
+    let preceded_by_word = before[..mut_start]
+        .bytes()
+        .last()
+        .is_some_and(|b| b.is_ascii_alphanumeric() || b == b'_');
+    if preceded_by_word {
+        return None;
+    }
+    Some(Span::new(
+        name.file_id,
+        mut_start as u32,
+        (name_start - mut_start) as u32,
+    ))
+}
+
+fn fstring_inner<'a>(sources: &HashMap<u32, &'a str>, span: Span) -> Option<&'a str> {
+    let source = sources.get(&span.file_id)?;
+    let text = source.get(span.byte_offset as usize..span.end() as usize)?;
+    let inner = text.strip_prefix("f\"")?.strip_suffix('"')?.trim();
+    Some(inner.strip_prefix('{')?.strip_suffix('}')?.trim())
+}
+
+fn collect_bindings(
+    facts: &Facts,
+    unused: &mut UnusedInfo,
+    sources: &HashMap<u32, &str>,
+    out: &mut Vec<LisetteDiagnostic>,
+) {
     for b in facts.bindings.values() {
         let is_anon = b.name.starts_with('_');
         let written_but_not_read = b.kind.is_mutable() && b.mutated && !b.used && !is_anon;
@@ -111,7 +160,12 @@ fn collect_bindings(facts: &Facts, unused: &mut UnusedInfo, out: &mut Vec<Lisett
         }
 
         if b.kind.is_mutable() && !b.mutated {
-            out.push(diagnostics::lint::unused_mut(&b.span));
+            let mut diagnostic = diagnostics::lint::unused_mut(&b.span);
+            if let Some(deletion) = mut_keyword_deletion(sources, b.span) {
+                diagnostic =
+                    diagnostic.with_fix(Fix::new("Remove `mut`", Edit::deletion(deletion)));
+            }
+            out.push(diagnostic);
         }
 
         if written_but_not_read {
@@ -182,8 +236,24 @@ fn collect_always_failing_try_blocks(facts: &Facts, out: &mut Vec<LisetteDiagnos
     }
 }
 
-fn collect_expression_only_fstrings(facts: &Facts, out: &mut Vec<LisetteDiagnostic>) {
-    for span in &facts.expression_only_fstrings {
-        out.push(diagnostics::lint::expression_only_fstring(span));
+fn collect_expression_only_fstrings(
+    facts: &Facts,
+    sources: &HashMap<u32, &str>,
+    out: &mut Vec<LisetteDiagnostic>,
+) {
+    for fact in &facts.expression_only_fstrings {
+        let mut diagnostic = diagnostics::lint::expression_only_fstring(&fact.span);
+        if let Some(inner) = fstring_inner(sources, fact.span) {
+            let replacement = if fact.needs_parens {
+                format!("({inner})")
+            } else {
+                inner.to_string()
+            };
+            diagnostic = diagnostic.with_fix(Fix::new(
+                format!("Replace with `{replacement}`"),
+                Edit::replacement(fact.span, replacement),
+            ));
+        }
+        out.push(diagnostic);
     }
 }

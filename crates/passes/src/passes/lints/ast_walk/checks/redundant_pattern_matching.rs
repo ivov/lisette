@@ -1,8 +1,9 @@
 use crate::passes::walk::NodeCtx;
+use diagnostics::{Edit, Fix};
 use syntax::ast::{Expression, MatchArm, Pattern, Span};
 use syntax::types::unqualified_name;
 
-use super::helpers::bool_literal;
+use super::helpers::{as_tight_operand, bool_literal, span_text};
 
 pub fn check_redundant_pattern_matching(expression: &Expression, ctx: &NodeCtx) {
     let Expression::Match {
@@ -50,11 +51,22 @@ pub fn check_redundant_pattern_matching(expression: &Expression, ctx: &NodeCtx) 
         _ => return,
     };
 
+    // A bool newtype (`Flag(bool)`) result adapts the arms, which `.is_some()` loses.
+    if !expression.get_type().is_boolean() {
+        return;
+    }
+
     let match_keyword_span = Span::new(span.file_id, span.byte_offset, 5);
-    ctx.sink.push(diagnostics::lint::redundant_pattern_matching(
-        &match_keyword_span,
-        predicate,
-    ));
+    let mut diagnostic =
+        diagnostics::lint::redundant_pattern_matching(&match_keyword_span, predicate);
+    if let Some(subject_text) = span_text(ctx.source, subject) {
+        let replacement = format!("{}.{predicate}()", as_tight_operand(subject_text, subject));
+        diagnostic = diagnostic.with_fix(Fix::new(
+            format!("Replace with `{replacement}`"),
+            Edit::replacement(*span, replacement),
+        ));
+    }
+    ctx.sink.push(diagnostic);
 }
 
 fn arm_variant_bool(arm: &MatchArm) -> Option<(&str, bool)> {

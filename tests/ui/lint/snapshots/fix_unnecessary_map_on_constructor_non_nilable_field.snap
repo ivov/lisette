@@ -1,0 +1,18 @@
+---
+source: tests/ui/lint/fixes.rs
+---
+struct A { field: int }
+
+pub fn f(a: A) -> Option<int> {
+  Some(a.field).map(triple)
+}
+
+fn triple(n: int) -> int { n * 3 }
+=== fixed ===
+struct A { field: int }
+
+pub fn f(a: A) -> Option<int> {
+  Some(triple(a.field))
+}
+
+fn triple(n: int) -> int { n * 3 }

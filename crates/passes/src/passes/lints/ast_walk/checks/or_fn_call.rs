@@ -1,8 +1,9 @@
 use crate::passes::walk::NodeCtx;
+use diagnostics::{Edit, Fix};
 use syntax::ast::Expression;
 use syntax::program::CallKind;
 
-use super::helpers::has_escaping_control_flow;
+use super::helpers::{as_tight_operand, has_escaping_control_flow, span_text};
 
 pub fn check_or_fn_call(expression: &Expression, ctx: &NodeCtx) {
     let Expression::Call {
@@ -63,11 +64,33 @@ pub fn check_or_fn_call(expression: &Expression, ctx: &NodeCtx) {
         return;
     }
 
-    ctx.sink.push(diagnostics::lint::or_fn_call(
-        &eager_argument.get_span(),
-        eager,
-        lazy,
-    ));
+    let mut diagnostic = diagnostics::lint::or_fn_call(&eager_argument.get_span(), eager, lazy);
+    // `Result`/`Partial` lazy callbacks take the error value, `Option`'s take none.
+    let closure_head = if receiver_ty.is_result() || receiver_ty.is_partial() {
+        "|_|"
+    } else {
+        "||"
+    };
+    let arg_texts: Option<Vec<&str>> = args.iter().map(|arg| span_text(ctx.source, arg)).collect();
+    if let Some(receiver_text) = span_text(ctx.source, receiver)
+        && let Some(arg_texts) = arg_texts
+        && let [first, rest @ ..] = arg_texts.as_slice()
+    {
+        let mut call_args = format!("{closure_head} {first}");
+        for extra in rest {
+            call_args.push_str(", ");
+            call_args.push_str(extra);
+        }
+        let replacement = format!(
+            "{}.{lazy}({call_args})",
+            as_tight_operand(receiver_text, receiver)
+        );
+        diagnostic = diagnostic.with_fix(Fix::new(
+            format!("Replace with `{replacement}`"),
+            Edit::replacement(expression.get_span(), replacement),
+        ));
+    }
+    ctx.sink.push(diagnostic);
 }
 
 // Descends through cheap wrappers (arithmetic, field reads, value constructors),

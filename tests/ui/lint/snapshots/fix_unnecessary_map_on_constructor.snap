@@ -1,0 +1,14 @@
+---
+source: tests/ui/lint/fixes.rs
+---
+pub fn f(x: int) -> Option<int> {
+  Some(x).map(triple)
+}
+
+fn triple(n: int) -> int { n * 3 }
+=== fixed ===
+pub fn f(x: int) -> Option<int> {
+  Some(triple(x))
+}
+
+fn triple(n: int) -> int { n * 3 }

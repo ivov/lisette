@@ -1,0 +1,10 @@
+---
+source: tests/ui/lint/fixes.rs
+---
+pub fn f(a: Option<int>, b: Option<string>) -> Option<(int, string)> {
+  a.and_then(|x| b.map(|y| (x, y)))
+}
+=== fixed ===
+pub fn f(a: Option<int>, b: Option<string>) -> Option<(int, string)> {
+  a.zip(b)
+}

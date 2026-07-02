@@ -394,8 +394,8 @@ impl<'source> Parser<'source> {
             self.expect_comma_or(RightSquareBracket);
         }
 
-        let span = self.span_from_tokens(start);
         self.ensure(RightSquareBracket);
+        let span = self.span_from_tokens(start);
 
         Pattern::Slice {
             prefix: elements,

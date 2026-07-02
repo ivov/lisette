@@ -1,0 +1,16 @@
+---
+source: tests/ui/lint/fixes.rs
+---
+pub fn f(n: int) -> int {
+  match n {
+    x if x == 5 => 1,
+    _ => 0,
+  }
+}
+=== fixed ===
+pub fn f(n: int) -> int {
+  match n {
+    5 => 1,
+    _ => 0,
+  }
+}

@@ -1,5 +1,6 @@
 use crate::passes::walk::NodeCtx;
-use syntax::ast::{BinaryOperator, Expression, Literal, MatchArm, Pattern};
+use diagnostics::{Edit, Fix};
+use syntax::ast::{BinaryOperator, Expression, Literal, MatchArm, Pattern, Span};
 
 use syntax::ast::collect_pattern_bindings;
 
@@ -65,11 +66,22 @@ fn check_arm(arm: &MatchArm, ctx: &NodeCtx) {
         return;
     };
 
-    ctx.sink.push(diagnostics::lint::redundant_guards(
-        span,
-        binding,
-        literal_text,
-    ));
+    let mut diagnostic = diagnostics::lint::redundant_guards(span, binding, literal_text);
+    if let Some((_, binding_span)) = bindings.iter().find(|(name, _)| name == binding)
+        && !binding_in_struct(&arm.pattern, binding)
+    {
+        let pattern_end = arm.pattern.get_span().end();
+        let guard_end = guard.get_span().end();
+        let guard_deletion = Span::new(span.file_id, pattern_end, guard_end - pattern_end);
+        diagnostic = diagnostic.with_fix(Fix::multi(
+            format!("Fold `{binding} == {literal_text}` into the pattern"),
+            vec![
+                Edit::replacement(*binding_span, literal_text.to_string()),
+                Edit::deletion(guard_deletion),
+            ],
+        ));
+    }
+    ctx.sink.push(diagnostic);
 }
 
 fn binding_name(expression: &Expression) -> Option<&str> {
@@ -88,6 +100,22 @@ fn foldable_literal(expression: &Expression) -> bool {
             ..
         }
     )
+}
+
+// A struct-bound `x` would swap to invalid `{ 5 }`, not `{ x: 5 }`, so skip it.
+fn binding_in_struct(pattern: &Pattern, name: &str) -> bool {
+    match pattern {
+        Pattern::Struct { fields, .. } => fields
+            .iter()
+            .any(|field| binds_as_identifier(&field.value, name)),
+        Pattern::EnumVariant { fields, .. }
+        | Pattern::Tuple {
+            elements: fields, ..
+        } => fields.iter().any(|field| binding_in_struct(field, name)),
+        Pattern::Slice { prefix, .. } => prefix.iter().any(|p| binding_in_struct(p, name)),
+        Pattern::AsBinding { pattern, .. } => binding_in_struct(pattern, name),
+        _ => false,
+    }
 }
 
 fn binds_as_identifier(pattern: &Pattern, name: &str) -> bool {

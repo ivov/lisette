@@ -1,0 +1,14 @@
+---
+source: tests/ui/lint/fixes.rs
+---
+pub fn f(x: int) -> bool {
+  if x |> pred { false } else { true }
+}
+
+fn pred(n: int) -> bool { n > 0 }
+=== fixed ===
+pub fn f(x: int) -> bool {
+  (!(x |> pred))
+}
+
+fn pred(n: int) -> bool { n > 0 }

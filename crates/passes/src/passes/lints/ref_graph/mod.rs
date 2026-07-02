@@ -7,8 +7,10 @@ use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use std::sync::Arc;
 
 use crate::passes::PARALLEL_THRESHOLD;
+use crate::passes::lints::span_edit::statement_deletion;
 use diagnostics::LisetteDiagnostic;
 use diagnostics::LocalSink;
+use diagnostics::{Edit, Fix};
 use semantics::context::AnalysisContext;
 use semantics::facts::Facts;
 use syntax::ast::{AttributeArg, Expression, ImportAlias, Span, Visibility};
@@ -220,7 +222,16 @@ fn run_ref_lints(
             if info.kind == ItemKind::Function {
                 unused_definition_spans.push(info.span);
             }
-            if let Some(diagnostic) = create_unused_diagnostic(info.kind, &info.span, config) {
+            if let Some(mut diagnostic) = create_unused_diagnostic(info.kind, &info.span, config) {
+                if let Some(statement_span) = info.statement_span
+                    && let Some(file) = files.get(&statement_span.file_id)
+                {
+                    let deletion = statement_deletion(&file.source, statement_span);
+                    diagnostic = diagnostic.with_fix(Fix::new(
+                        "Remove the unused import",
+                        Edit::deletion(deletion),
+                    ));
+                }
                 diagnostics.push(diagnostic);
             }
         }
@@ -278,7 +289,7 @@ fn collect_items(
 
                     if let Some(effective) = file_import.effective_alias(go_package_names) {
                         let id = ModuleItemId::new(&effective);
-                        graph.add_import(id, *name_span);
+                        graph.add_import(id, *name_span, *span);
                     }
                 }
                 Expression::Function {

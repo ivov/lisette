@@ -45,7 +45,7 @@ pub struct Facts {
     pub unused_type_params: Vec<UnusedTypeParamFact>,
     pub type_params_only_in_bound: Vec<TypeParamOnlyInBoundFact>,
     pub always_failing_try_blocks: Vec<Span>,
-    pub expression_only_fstrings: Vec<Span>,
+    pub expression_only_fstrings: Vec<ExpressionOnlyFstringFact>,
     pub interface_satisfied_methods: HashMap<(String, String), Vec<String>>,
     pub equality_derivations: Vec<String>,
     pub test_functions: Vec<TestFunction>,
@@ -197,8 +197,9 @@ impl Facts {
         self.always_failing_try_blocks.push(span);
     }
 
-    pub fn add_expression_only_fstring(&mut self, span: Span) {
-        self.expression_only_fstrings.push(span);
+    pub fn add_expression_only_fstring(&mut self, span: Span, needs_parens: bool) {
+        self.expression_only_fstrings
+            .push(ExpressionOnlyFstringFact { span, needs_parens });
     }
 
     pub fn add_usage(&mut self, usage_span: Span, definition_span: Span) {
@@ -381,6 +382,12 @@ impl LocalFacts {
         self.type_params_only_in_bound
             .push(TypeParamOnlyInBoundFact { name, span });
     }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct ExpressionOnlyFstringFact {
+    pub span: Span,
+    pub needs_parens: bool,
 }
 
 #[derive(Debug, Clone)]

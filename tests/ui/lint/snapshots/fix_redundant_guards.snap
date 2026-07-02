@@ -1,0 +1,16 @@
+---
+source: tests/ui/lint/fixes.rs
+---
+pub fn f(o: Option<int>) -> int {
+  match o {
+    Some(x) if x == 5 => 1,
+    _ => 0,
+  }
+}
+=== fixed ===
+pub fn f(o: Option<int>) -> int {
+  match o {
+    Some(5) => 1,
+    _ => 0,
+  }
+}

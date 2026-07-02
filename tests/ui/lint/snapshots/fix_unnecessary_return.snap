@@ -1,0 +1,10 @@
+---
+source: tests/ui/lint/fixes.rs
+---
+fn five() -> int {
+  return 5
+}
+=== fixed ===
+fn five() -> int {
+  5
+}

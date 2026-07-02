@@ -1,4 +1,5 @@
 use crate::passes::walk::NodeCtx;
+use diagnostics::{Edit, Fix};
 use syntax::ast::{Pattern, RestPattern};
 
 pub fn check_rest_only_slice_pattern(pattern: &Pattern, ctx: &NodeCtx) {
@@ -15,14 +16,17 @@ pub fn check_rest_only_slice_pattern(pattern: &Pattern, ctx: &NodeCtx) {
         && prefix.is_empty()
         && !matches!(rest, RestPattern::Absent)
     {
-        let help = match rest {
-            RestPattern::Bind { name, .. } => {
-                format!("Use `let {}` instead", name)
-            }
-            _ => "Use `let _` instead".to_string(),
+        let replacement = match rest {
+            RestPattern::Bind { name, .. } => name.to_string(),
+            _ => "_".to_string(),
         };
+        let help = format!("Use `let {replacement}` instead");
 
-        ctx.sink
-            .push(diagnostics::lint::rest_only_slice_pattern(span, help));
+        ctx.sink.push(
+            diagnostics::lint::rest_only_slice_pattern(span, help).with_fix(Fix::new(
+                format!("Replace with `{replacement}`"),
+                Edit::replacement(*span, replacement),
+            )),
+        );
     }
 }

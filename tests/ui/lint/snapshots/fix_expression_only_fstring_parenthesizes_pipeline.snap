@@ -1,0 +1,14 @@
+---
+source: tests/ui/lint/fixes.rs
+---
+pub fn f(x: int) -> string {
+  f"{x |> label}"
+}
+
+fn label(n: int) -> string { "n" }
+=== fixed ===
+pub fn f(x: int) -> string {
+  (x |> label)
+}
+
+fn label(n: int) -> string { "n" }

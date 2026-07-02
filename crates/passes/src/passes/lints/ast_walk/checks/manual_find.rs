@@ -1,5 +1,8 @@
-use super::helpers::{expression_is_pure, is_zero_literal, span_text};
+use super::helpers::{
+    as_tight_operand, expression_is_pure, is_zero_literal, reads_as_method_call, span_text,
+};
 use crate::passes::walk::NodeCtx;
+use diagnostics::{Edit, Fix};
 use semantics::store::Store;
 use syntax::ast::{Expression, Span};
 use syntax::program::{CallKind, NativeTypeKind};
@@ -29,11 +32,18 @@ pub fn check_manual_find(expression: &Expression, ctx: &NodeCtx) {
         return;
     };
 
-    ctx.sink.push(diagnostics::lint::manual_find(
-        span,
-        receiver_text,
-        predicate_text,
-    ));
+    let mut diagnostic = diagnostics::lint::manual_find(span, receiver_text, predicate_text);
+    if reads_as_method_call(receiver, std::slice::from_ref(predicate)) {
+        let replacement = format!(
+            "{}.find({predicate_text})",
+            as_tight_operand(receiver_text, receiver)
+        );
+        diagnostic = diagnostic.with_fix(Fix::new(
+            format!("Replace with `{replacement}`"),
+            Edit::replacement(*span, replacement),
+        ));
+    }
+    ctx.sink.push(diagnostic);
 }
 
 fn native_slice_method<'a>(

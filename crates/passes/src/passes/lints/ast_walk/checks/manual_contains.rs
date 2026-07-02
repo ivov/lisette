@@ -1,8 +1,10 @@
 use crate::passes::walk::NodeCtx;
+use diagnostics::{Edit, Fix};
 use syntax::ast::{BinaryOperator, Expression};
 
 use super::helpers::{
-    expression_is_pure, is_bare_identifier, mentions_identifier, method_call, unary_lambda,
+    as_tight_operand, expression_is_pure, is_bare_identifier, lambda_is_annotated,
+    mentions_identifier, method_call, reads_as_method_call, span_text, unary_lambda,
 };
 
 pub fn check_manual_contains(expression: &Expression, ctx: &NodeCtx) {
@@ -57,5 +59,22 @@ pub fn check_manual_contains(expression: &Expression, ctx: &NodeCtx) {
         return;
     }
 
-    ctx.sink.push(diagnostics::lint::manual_contains(span));
+    let mut diagnostic = diagnostics::lint::manual_contains(span);
+    if !lambda_is_annotated(closure)
+        && reads_as_method_call(receiver, args)
+        && let (Some(receiver_text), Some(value_text)) = (
+            span_text(ctx.source, receiver),
+            span_text(ctx.source, value),
+        )
+    {
+        let replacement = format!(
+            "{}.contains({value_text})",
+            as_tight_operand(receiver_text, receiver)
+        );
+        diagnostic = diagnostic.with_fix(Fix::new(
+            format!("Replace with `{replacement}`"),
+            Edit::replacement(*span, replacement),
+        ));
+    }
+    ctx.sink.push(diagnostic);
 }

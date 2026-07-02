@@ -1,0 +1,14 @@
+---
+source: tests/ui/lint/fixes.rs
+---
+import "go:strconv"
+
+pub fn f(x: int) -> string {
+  f"n={strconv.Itoa(x)}"
+}
+=== fixed ===
+import "go:strconv"
+
+pub fn f(x: int) -> string {
+  f"n={x}"
+}
