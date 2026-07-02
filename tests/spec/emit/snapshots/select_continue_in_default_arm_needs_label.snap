@@ -1,0 +1,58 @@
+---
+source: tests/spec/emit/concurrency.rs
+description: |
+  
+  fn main() {
+    let ch = Channel.buffered<int>(1)
+    let mut skipped = 0
+    for i in 0..2 {
+      if i == 1 {
+        ch.send(7)
+      }
+      select {
+        let Some(_x) = ch.receive() => {},
+        _ => {
+          skipped += 1
+          continue
+        },
+      }
+    }
+    if skipped != 1 {
+      panic(f"expected 1 skip, got {skipped}")
+    }
+  }
+---
+package main
+
+import (
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func main() {
+	ch := make(chan int, 1)
+	skipped := 0
+loop_1:
+	for i := 0; i < 2; i++ {
+		if i == 1 {
+			_ = lisette.ChannelSend(ch, 7)
+		}
+		ch_2 := ch
+		for {
+			select {
+			case _, ok := <-ch_2:
+				if !ok {
+					ch_2 = nil
+					continue
+				}
+			default:
+				skipped++
+				continue loop_1
+			}
+			break
+		}
+	}
+	if skipped != 1 {
+		panic(fmt.Sprintf("expected 1 skip, got %d", skipped))
+	}
+}

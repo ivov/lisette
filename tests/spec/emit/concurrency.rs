@@ -635,6 +635,95 @@ fn main() {
 }
 
 #[test]
+fn select_continue_in_loop_needs_label() {
+    let input = r#"
+fn main() {
+  let ch = Channel.buffered<int>(4)
+  ch.send(-1)
+  ch.send(10)
+  ch.send(20)
+  ch.close()
+  let mut processed = ""
+  for _ in 0..2 {
+    select {
+      let Some(x) = ch.receive() => {
+        if x < 0 {
+          continue
+        }
+        processed += f"{x},"
+      },
+      _ => {
+        processed += "none,"
+      },
+    }
+  }
+  if processed != "10," {
+    panic(f"expected 10, got {processed}")
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn select_continue_in_default_arm_needs_label() {
+    let input = r#"
+fn main() {
+  let ch = Channel.buffered<int>(1)
+  let mut skipped = 0
+  for i in 0..2 {
+    if i == 1 {
+      ch.send(7)
+    }
+    select {
+      let Some(_x) = ch.receive() => {},
+      _ => {
+        skipped += 1
+        continue
+      },
+    }
+  }
+  if skipped != 1 {
+    panic(f"expected 1 skip, got {skipped}")
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn select_continue_without_retry_loop_unlabeled() {
+    let input = r#"
+fn main() {
+  let ch = Channel.buffered<int>(2)
+  ch.send(1)
+  ch.send(2)
+  let mut total = 0
+  for _ in 0..2 {
+    select {
+      match ch.receive() {
+        Some(x) => {
+          if x == 1 {
+            continue
+          }
+          total += x
+        },
+        None => {},
+      },
+      _ => {
+        total += 100
+      },
+    }
+  }
+  if total != 2 {
+    panic(f"expected 2, got {total}")
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn select_arm_binding_does_not_leak() {
     let input = r#"
 import "go:fmt"

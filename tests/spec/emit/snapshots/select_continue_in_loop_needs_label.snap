@@ -1,0 +1,68 @@
+---
+source: tests/spec/emit/concurrency.rs
+description: |
+  
+  fn main() {
+    let ch = Channel.buffered<int>(4)
+    ch.send(-1)
+    ch.send(10)
+    ch.send(20)
+    ch.close()
+    let mut processed = ""
+    for _ in 0..2 {
+      select {
+        let Some(x) = ch.receive() => {
+          if x < 0 {
+            continue
+          }
+          processed += f"{x},"
+        },
+        _ => {
+          processed += "none,"
+        },
+      }
+    }
+    if processed != "10," {
+      panic(f"expected 10, got {processed}")
+    }
+  }
+---
+package main
+
+import (
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func main() {
+	ch := make(chan int, 4)
+	_ = lisette.ChannelSend(ch, -1)
+	_ = lisette.ChannelSend(ch, 10)
+	_ = lisette.ChannelSend(ch, 20)
+	lisette.ChannelClose(ch)
+	processed := ""
+loop_1:
+	for _i_2 := 0; _i_2 < 2; _i_2++ {
+		ch_3 := ch
+		for {
+			select {
+			case x, ok := <-ch_3:
+				if ok {
+					if x < 0 {
+						continue loop_1
+					}
+					processed += fmt.Sprintf("%d,", x)
+				} else {
+					ch_3 = nil
+					continue
+				}
+			default:
+				processed += "none,"
+			}
+			break
+		}
+	}
+	if processed != "10," {
+		panic(fmt.Sprintf("expected 10, got %s", processed))
+	}
+}

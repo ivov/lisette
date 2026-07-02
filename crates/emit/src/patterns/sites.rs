@@ -715,20 +715,6 @@ pub(crate) fn lower_none_arm_body(
     }
 }
 
-/// True when `Some(_)`-shaped (peeling any outer `as`-binding), with exactly
-/// one payload field.
-pub(crate) fn is_some_pattern(pattern: &Pattern) -> bool {
-    let pattern = peel_as_binding(pattern);
-    if let Pattern::EnumVariant {
-        identifier, fields, ..
-    } = pattern
-    {
-        let variant_name = go_name::unqualified_name(identifier);
-        return variant_name == "Some" && fields.len() == 1;
-    }
-    false
-}
-
 /// Peel `Some(inner)` to expose `inner`; returns the original pattern when
 /// the outer is not `Some(_)`.
 pub(crate) fn unwrap_some_pattern(pattern: &Pattern) -> &Pattern {

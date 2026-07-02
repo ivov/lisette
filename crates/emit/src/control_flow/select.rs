@@ -3,7 +3,7 @@ use crate::Renderer;
 use crate::context::expression::ExpressionContext;
 use crate::names::go_name;
 use crate::patterns::sites::{
-    self, AnnotatedPattern, PatternSubject, TypedSubject, is_some_pattern, unwrap_some_pattern,
+    self, AnnotatedPattern, PatternSubject, TypedSubject, unwrap_some_pattern,
     unwrap_some_typed_pattern,
 };
 use crate::plan::bodies::{
@@ -43,7 +43,7 @@ impl Planner<'_> {
         place: &PlacePlan,
     ) -> SelectStatementPlan {
         let needs_retry_loop = arms.iter().any(|arm| {
-            matches!(&arm.pattern, SelectArmPattern::Receive { binding, .. } if is_some_pattern(binding))
+            matches!(&arm.pattern, SelectArmPattern::Receive { binding, .. } if binding.is_some_pattern())
         });
 
         let mut setup: Vec<LoweredStatement> = Vec::new();
@@ -162,7 +162,7 @@ impl Planner<'_> {
                 } => {
                     let channel_has_call = channel_expression_has_call(receive_expression);
                     let ch = self.lower_channel_operand(setup, receive_expression);
-                    if is_some_pattern(binding) && needs_retry_loop {
+                    if binding.is_some_pattern() && needs_retry_loop {
                         let shadow = self.hoist_tmp_value_statement(setup, "ch", &ch);
                         channel_operands.push(Some(ch));
                         channel_shadows.push(Some(shadow));
@@ -366,7 +366,7 @@ impl Planner<'_> {
         let inner_typed = unwrap_some_typed_pattern(typed_pattern);
 
         self.scope.push_binding_frame();
-        if is_some_pattern(binding) {
+        if binding.is_some_pattern() {
             self.lower_receive_arm_with_ok_check(effective_pattern, inner_typed, ctx)
         } else {
             self.lower_receive_arm_simple(effective_pattern, inner_typed, ctx)

@@ -1,0 +1,59 @@
+---
+source: tests/spec/emit/concurrency.rs
+description: |
+  
+  fn main() {
+    let ch = Channel.buffered<int>(2)
+    ch.send(1)
+    ch.send(2)
+    let mut total = 0
+    for _ in 0..2 {
+      select {
+        match ch.receive() {
+          Some(x) => {
+            if x == 1 {
+              continue
+            }
+            total += x
+          },
+          None => {},
+        },
+        _ => {
+          total += 100
+        },
+      }
+    }
+    if total != 2 {
+      panic(f"expected 2, got {total}")
+    }
+  }
+---
+package main
+
+import (
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func main() {
+	ch := make(chan int, 2)
+	_ = lisette.ChannelSend(ch, 1)
+	_ = lisette.ChannelSend(ch, 2)
+	total := 0
+	for _i_1 := 0; _i_1 < 2; _i_1++ {
+		select {
+		case x, ok := <-ch:
+			if ok {
+				if x == 1 {
+					continue
+				}
+				total += x
+			}
+		default:
+			total += 100
+		}
+	}
+	if total != 2 {
+		panic(fmt.Sprintf("expected 2, got %d", total))
+	}
+}

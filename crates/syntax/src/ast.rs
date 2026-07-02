@@ -407,6 +407,15 @@ impl Pattern {
             _ => None,
         }
     }
+
+    pub fn is_some_pattern(&self) -> bool {
+        let peeled = match self {
+            Pattern::AsBinding { pattern, .. } => pattern.as_ref(),
+            p => p,
+        };
+        matches!(peeled, Pattern::EnumVariant { identifier, fields, .. }
+            if crate::types::unqualified_name(identifier) == "Some" && fields.len() == 1)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
