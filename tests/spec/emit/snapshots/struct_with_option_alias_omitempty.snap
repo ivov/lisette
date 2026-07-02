@@ -17,6 +17,6 @@ import lisette "github.com/ivov/lisette/prelude"
 type Maybe[T any] = lisette.Option[T]
 
 type User struct {
-	Name  Maybe[string]          `json:"name,omitempty,omitzero"`
-	Email lisette.Option[string] `json:"email,omitempty,omitzero"`
+	Name  Maybe[string]          `json:"name,omitzero"`
+	Email lisette.Option[string] `json:"email,omitzero"`
 }

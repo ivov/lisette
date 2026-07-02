@@ -2,9 +2,8 @@
 source: tests/spec/emit/types.rs
 description: |
   
-  #[json(omitempty)]
   struct User {
-    name: string,
+    #[tag("json", omitempty)]
     email: Option<string>,
   }
 ---
@@ -13,6 +12,5 @@ package main
 import lisette "github.com/ivov/lisette/prelude"
 
 type User struct {
-	Name  string                 `json:"name,omitempty"`
 	Email lisette.Option[string] `json:"email,omitzero"`
 }

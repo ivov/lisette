@@ -258,7 +258,7 @@ fn interpret_tag_attribute(attribute: &Attribute) -> Option<TagConfig> {
 pub(super) fn format_tag_string(
     field_name: &str,
     configs: &[TagConfig],
-    needs_omitzero: bool,
+    is_option: bool,
 ) -> Option<String> {
     if configs.is_empty() {
         return None;
@@ -269,7 +269,7 @@ pub(super) fn format_tag_string(
 
     let parts: Vec<String> = sorted_configs
         .iter()
-        .filter_map(|config| format_single_tag(field_name, config, needs_omitzero))
+        .filter_map(|config| format_single_tag(field_name, config, is_option))
         .collect();
 
     if parts.is_empty() {
@@ -291,7 +291,7 @@ fn tag_sort_key(config: &TagConfig) -> (u8, &str) {
     }
 }
 
-fn format_single_tag(field_name: &str, config: &TagConfig, needs_omitzero: bool) -> Option<String> {
+fn format_single_tag(field_name: &str, config: &TagConfig, is_option: bool) -> Option<String> {
     if let Some(ref raw) = config.raw_value {
         let key_prefix = format!("{}:", config.key);
         if raw.starts_with(&key_prefix) {
@@ -312,10 +312,11 @@ fn format_single_tag(field_name: &str, config: &TagConfig, needs_omitzero: bool)
 
     let mut options = Vec::new();
     if config.omitempty {
-        options.push("omitempty");
-        if needs_omitzero {
-            options.push("omitzero");
-        }
+        options.push(if is_option && config.key == "json" {
+            "omitzero"
+        } else {
+            "omitempty"
+        });
     }
     if config.string_encoding {
         options.push("string");

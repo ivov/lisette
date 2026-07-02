@@ -1831,6 +1831,29 @@ struct User {
 }
 
 #[test]
+fn struct_with_tag_json_omitempty_option() {
+    let input = r#"
+struct User {
+  #[tag("json", omitempty)]
+  email: Option<string>,
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn struct_with_yaml_option_omitempty() {
+    let input = r#"
+#[yaml(omitempty)]
+struct User {
+  name: string,
+  email: Option<string>,
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn struct_with_multiple_raw_tags() {
     let input = r#"
 #[tag("validate")]

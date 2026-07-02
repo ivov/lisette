@@ -52,6 +52,8 @@ struct Config {
 }
 ```
 
+On `Option` fields, `omitempty` compiles to the `omitzero` JSON tag option, which omits `None` values.
+
 Or override the serialized field name:
 
 ```rust

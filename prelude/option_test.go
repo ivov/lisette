@@ -146,6 +146,72 @@ func TestOptionJSON(t *testing.T) {
 	}
 }
 
+func TestOptionZeroValueIsNone(t *testing.T) {
+	var opt Option[int]
+	if !opt.IsNone() {
+		t.Fatal("expected zero value to be None")
+	}
+}
+
+func TestOptionStructFieldRoundTrip(t *testing.T) {
+	type user struct {
+		Name   string           `json:"name,omitempty"`
+		Emails Option[[]string] `json:"emails,omitzero"`
+	}
+
+	var u user
+	if err := json.Unmarshal([]byte(`{"name":"alice"}`), &u); err != nil {
+		t.Fatal(err)
+	}
+	if !u.Emails.IsNone() {
+		t.Fatal("expected missing key to unmarshal as None")
+	}
+
+	out, err := json.Marshal(u)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(out) != `{"name":"alice"}` {
+		t.Fatalf("expected None field to be omitted, got %s", out)
+	}
+}
+
+func TestOptionUnmarshalNullResetsValue(t *testing.T) {
+	opt := MakeOptionSome(42)
+	if err := json.Unmarshal([]byte("null"), &opt); err != nil {
+		t.Fatal(err)
+	}
+	if opt != MakeOptionNone[int]() {
+		t.Fatalf("expected canonical None, got %#v", opt)
+	}
+}
+
+func TestOptionUnmarshalErrorLeavesValue(t *testing.T) {
+	some := MakeOptionSome(42)
+	if err := json.Unmarshal([]byte(`"nope"`), &some); err == nil {
+		t.Fatal("expected error")
+	}
+	if some != MakeOptionSome(42) {
+		t.Fatalf("expected Some(42) preserved, got %#v", some)
+	}
+
+	none := MakeOptionNone[int]()
+	if err := json.Unmarshal([]byte(`"nope"`), &none); err == nil {
+		t.Fatal("expected error")
+	}
+	if none != MakeOptionNone[int]() {
+		t.Fatalf("expected None preserved, got %#v", none)
+	}
+
+	noneSlice := MakeOptionNone[[]string]()
+	if err := json.Unmarshal([]byte(`"nope"`), &noneSlice); err == nil {
+		t.Fatal("expected error")
+	}
+	if !noneSlice.IsNone() {
+		t.Fatalf("expected None tag preserved, got %#v", noneSlice)
+	}
+}
+
 func TestOptionMap(t *testing.T) {
 	some := MakeOptionSome(21)
 	mapped := OptionMap(some, func(v int) int { return v * 2 })

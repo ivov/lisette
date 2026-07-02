@@ -132,8 +132,8 @@ impl Planner<'_> {
         }
 
         let tag_configs = interpret_field_attributes(f, struct_attrs);
-        let needs_omitzero = is_option_type(&f.ty);
-        let tag_string = format_tag_string(&f.name, &tag_configs, needs_omitzero);
+        let is_option = is_option_type(&f.ty);
+        let tag_string = format_tag_string(&f.name, &tag_configs, is_option);
 
         let has_tags = !tag_configs.is_empty();
         let field_name = struct_field_go_name(f, struct_attrs);
@@ -453,13 +453,8 @@ pub(crate) fn debug_verb(is_function: bool) -> &'static str {
 
 fn is_option_type(ty: &Type) -> bool {
     match ty {
-        Type::Nominal {
-            id, underlying_ty, ..
-        } => {
-            if id == "Option" || id.ends_with(".Option") {
-                return true;
-            }
-            underlying_ty.as_deref().is_some_and(is_option_type)
+        Type::Nominal { underlying_ty, .. } => {
+            ty.is_option() || underlying_ty.as_deref().is_some_and(is_option_type)
         }
         _ => false,
     }

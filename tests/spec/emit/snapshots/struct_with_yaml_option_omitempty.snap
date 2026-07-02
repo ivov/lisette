@@ -2,7 +2,7 @@
 source: tests/spec/emit/types.rs
 description: |
   
-  #[json(omitempty)]
+  #[yaml(omitempty)]
   struct User {
     name: string,
     email: Option<string>,
@@ -13,6 +13,6 @@ package main
 import lisette "github.com/ivov/lisette/prelude"
 
 type User struct {
-	Name  string                 `json:"name,omitempty"`
-	Email lisette.Option[string] `json:"email,omitzero"`
+	Name  string                 `yaml:"name,omitempty"`
+	Email lisette.Option[string] `yaml:"email,omitempty"`
 }

@@ -10,8 +10,8 @@ import (
 type OptionTag int
 
 const (
-	OptionSome OptionTag = iota
-	OptionNone
+	OptionNone OptionTag = iota
+	OptionSome
 )
 
 type Option[T any] struct {
@@ -124,11 +124,15 @@ func (opt Option[T]) MarshalJSON() ([]byte, error) {
 
 func (opt *Option[T]) UnmarshalJSON(data []byte) error {
 	if string(data) == "null" {
-		opt.Tag = OptionNone
+		*opt = Option[T]{Tag: OptionNone}
 		return nil
 	}
-	opt.Tag = OptionSome
-	return json.Unmarshal(data, &opt.SomeVal)
+	value := opt.SomeVal
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	*opt = Option[T]{Tag: OptionSome, SomeVal: value}
+	return nil
 }
 
 func (opt *Option[T]) Scan(src any) error {
