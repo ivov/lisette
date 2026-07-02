@@ -27,6 +27,14 @@ pub(crate) enum ValuePlan {
     },
 }
 
+pub(crate) fn render_unary(op: &str, value: &str) -> String {
+    if op == "-" && value.starts_with('-') {
+        format!("-({value})")
+    } else {
+        format!("{op}{value}")
+    }
+}
+
 /// Build a `ValuePlan`: `Operand` when there is no setup, otherwise
 /// `Composite`.
 pub(crate) fn value_plan_from_statements(setup: Vec<LoweredStatement>, value: String) -> ValuePlan {
@@ -61,7 +69,7 @@ impl ValuePlan {
             }
             ValuePlan::Unary { op, inner } => {
                 let (setup, value) = inner.into_parts();
-                (setup, format!("{op}{value}"))
+                (setup, render_unary(op, &value))
             }
         }
     }

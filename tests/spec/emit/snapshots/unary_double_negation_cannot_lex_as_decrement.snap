@@ -1,0 +1,13 @@
+---
+source: tests/spec/emit/expressions.rs
+description: |
+  
+  fn test(x: int) -> int {
+    - -x
+  }
+---
+package main
+
+func test(x int) int {
+	return -(-x)
+}

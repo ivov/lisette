@@ -6,7 +6,7 @@ use crate::plan::bodies::{
 };
 #[cfg(debug_assertions)]
 use crate::plan::invariants;
-use crate::plan::values::ValuePlan;
+use crate::plan::values::{ValuePlan, render_unary};
 use crate::render::Renderer;
 use crate::write_line;
 
@@ -451,7 +451,7 @@ impl Renderer {
             }
             ValuePlan::Unary { op, inner } => {
                 let inner_text = self.render_value(output, inner);
-                format!("{}{}", op, inner_text)
+                render_unary(op, &inner_text)
             }
         }
     }

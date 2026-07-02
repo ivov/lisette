@@ -195,6 +195,16 @@ fn test() -> int {
 }
 
 #[test]
+fn unary_double_negation_cannot_lex_as_decrement() {
+    let input = r#"
+fn test(x: int) -> int {
+  - -x
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn unary_logical_not() {
     let input = r#"
 fn test() -> bool {
