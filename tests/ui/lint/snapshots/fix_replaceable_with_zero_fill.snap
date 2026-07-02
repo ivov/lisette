@@ -1,0 +1,14 @@
+---
+source: tests/ui/lint/fixes.rs
+---
+struct Cfg { a: int, b: int, c: int, d: int }
+
+pub fn f() -> Cfg {
+  Cfg { a: 5, b: 0, c: 0, d: 0 }
+}
+=== fixed ===
+struct Cfg { a: int, b: int, c: int, d: int }
+
+pub fn f() -> Cfg {
+  Cfg { a: 5, .. }
+}

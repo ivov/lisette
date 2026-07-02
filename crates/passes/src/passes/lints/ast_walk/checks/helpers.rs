@@ -228,6 +228,13 @@ pub(super) fn span_text<'a>(source: &'a str, expression: &Expression) -> Option<
     source.get(span.byte_offset as usize..span.end() as usize)
 }
 
+pub(super) fn replacement_drops_comment(source: &str, span: Span, replacement: &str) -> bool {
+    let Some(original) = source.get(span.byte_offset as usize..span.end() as usize) else {
+        return false;
+    };
+    original.matches("//").count() > replacement.matches("//").count()
+}
+
 /// Whether `expression` binds at least as tightly as a postfix operator.
 pub(super) fn is_postfix_tight(expression: &Expression) -> bool {
     match expression {

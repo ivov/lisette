@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/fixes.rs
+---
+pub fn f(a: bool, b: bool, c: bool) -> int {
+  if a || b { if c { 1 } }
+  0
+}
+=== fixed ===
+pub fn f(a: bool, b: bool, c: bool) -> int {
+  if (a || b) && c { 1 }
+  0
+}

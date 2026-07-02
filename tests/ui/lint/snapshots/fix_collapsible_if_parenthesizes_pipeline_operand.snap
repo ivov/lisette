@@ -1,0 +1,16 @@
+---
+source: tests/ui/lint/fixes.rs
+---
+fn is_even(n: int) -> bool { n % 2 == 0 }
+fn work() {}
+
+pub fn f(x: int, b: bool) {
+  if x |> is_even { if b { work() } }
+}
+=== fixed ===
+fn is_even(n: int) -> bool { n % 2 == 0 }
+fn work() {}
+
+pub fn f(x: int, b: bool) {
+  if (x |> is_even) && b { work() }
+}

@@ -1136,3 +1136,192 @@ pub fn f(n: int) -> string {
 "#
     );
 }
+
+#[test]
+fn fix_equatable_if_let() {
+    assert_fix_snapshot!(
+        r#"
+enum Sig { A, B }
+
+pub fn f(s: Sig) -> int {
+  if let Sig.A = s { 1 } else { 0 }
+}
+"#
+    );
+}
+
+#[test]
+fn fix_collapsible_else_if() {
+    assert_fix_snapshot!(
+        r#"
+pub fn f(a: int) -> int {
+  if a > 0 { 1 } else { if a < 0 { 2 } else { 3 } }
+}
+"#
+    );
+}
+
+#[test]
+fn fix_collapsible_if() {
+    assert_fix_snapshot!(
+        r#"
+pub fn f(a: bool, b: bool) -> int {
+  if a { if b { 1 } }
+  0
+}
+"#
+    );
+}
+
+#[test]
+fn fix_collapsible_if_parenthesizes_or_operand() {
+    assert_fix_snapshot!(
+        r#"
+pub fn f(a: bool, b: bool, c: bool) -> int {
+  if a || b { if c { 1 } }
+  0
+}
+"#
+    );
+}
+
+#[test]
+fn fix_replaceable_with_zero_fill() {
+    assert_fix_snapshot!(
+        r#"
+struct Cfg { a: int, b: int, c: int, d: int }
+
+pub fn f() -> Cfg {
+  Cfg { a: 5, b: 0, c: 0, d: 0 }
+}
+"#
+    );
+}
+
+#[test]
+fn fix_redundant_else() {
+    assert_fix_snapshot!(
+        r#"
+fn log(n: int) {}
+
+pub fn f(x: int) {
+  if x > 0 {
+    return
+  } else {
+    let y = x + 1
+    log(y)
+  }
+  log(x)
+}
+"#
+    );
+}
+
+#[test]
+fn fix_redundant_else_single_line() {
+    assert_fix_snapshot!(
+        r#"
+fn log(n: int) {}
+
+pub fn f(x: int) {
+  if x > 0 { return } else { log(x) }
+  log(0)
+}
+"#
+    );
+}
+
+#[test]
+fn fix_redundant_else_nested_body() {
+    assert_fix_snapshot!(
+        r#"
+fn log(n: int) {}
+
+pub fn f(x: int) {
+  if x > 0 {
+    return
+  } else {
+    if x < -5 {
+      log(1)
+    }
+    log(2)
+  }
+  log(3)
+}
+"#
+    );
+}
+
+#[test]
+fn fix_collapsible_if_parenthesizes_pipeline_operand() {
+    assert_fix_snapshot!(
+        r#"
+fn is_even(n: int) -> bool { n % 2 == 0 }
+fn work() {}
+
+pub fn f(x: int, b: bool) {
+  if x |> is_even { if b { work() } }
+}
+"#
+    );
+}
+
+#[test]
+fn fix_collapsible_if_keeps_comparison_unparenthesized() {
+    assert_fix_snapshot!(
+        r#"
+fn work() {}
+
+pub fn f(x: int, y: int) {
+  if x > 0 { if y > 0 { work() } }
+}
+"#
+    );
+}
+
+#[test]
+fn collapsible_if_with_dropped_comment_has_no_fix() {
+    assert_no_fix!(
+        r#"
+fn work() {}
+fn other() {}
+
+pub fn f(a: bool, b: bool) {
+  if a {
+    // keep me
+    if b { work() }
+  }
+  other()
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_else_leaking_binding_has_no_fix() {
+    assert_no_fix!(
+        r#"
+fn log(n: int) {}
+
+pub fn f(cond: bool) -> int {
+  let y = 0
+  if cond { return 9 } else { let y = 1; log(y) }
+  y
+}
+"#
+    );
+}
+
+#[test]
+fn fix_redundant_else_lifts_binding_used_only_inside() {
+    assert_fix_snapshot!(
+        r#"
+fn log(n: int) {}
+
+pub fn f(cond: bool) {
+  if cond { return } else { let y = 1; log(y) }
+  log(0)
+}
+"#
+    );
+}

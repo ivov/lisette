@@ -1,8 +1,10 @@
+use diagnostics::{Edit, Fix};
 use rustc_hash::FxHashSet as HashSet;
 use syntax::ast::{Expression, Literal, Span, StructFieldAssignment, StructSpread};
 use syntax::program::DefinitionBody;
 use syntax::types::{SubstitutionMap, Type, substitute, unqualified_name};
 
+use super::helpers::replacement_drops_comment;
 use crate::passes::walk::NodeCtx;
 use semantics::store::Store;
 use semantics::zero::has_zero;
@@ -45,11 +47,19 @@ pub fn check_replaceable_with_zero_fill(expression: &Expression, ctx: &NodeCtx) 
 
     let kept = render_kept_fields(ctx.source, field_assignments);
     let owner_span = Span::new(span.file_id, span.byte_offset, name.len() as u32);
-    ctx.sink.push(diagnostics::lint::replaceable_with_zero_fill(
-        &owner_span,
-        &kept,
-        name,
-    ));
+    let replacement = if kept.is_empty() {
+        format!("{name} {{ .. }}")
+    } else {
+        format!("{name} {{ {kept}, .. }}")
+    };
+    let mut diagnostic = diagnostics::lint::replaceable_with_zero_fill(&owner_span, &kept, name);
+    if !replacement_drops_comment(ctx.source, *span, &replacement) {
+        diagnostic = diagnostic.with_fix(Fix::new(
+            format!("Replace with `{replacement}`"),
+            Edit::replacement(*span, replacement),
+        ));
+    }
+    ctx.sink.push(diagnostic);
 }
 
 fn render_kept_fields(source: &str, fields: &[StructFieldAssignment]) -> String {

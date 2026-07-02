@@ -1,8 +1,9 @@
 use crate::passes::walk::NodeCtx;
+use diagnostics::{Edit, Fix};
 use semantics::checker::{TypeEnv, check_not_comparable};
 use syntax::ast::{Expression, Pattern, Span};
 
-use super::helpers::{enum_has_multiple_variants, span_text};
+use super::helpers::{enum_has_multiple_variants, replacement_drops_comment, span_text};
 
 pub fn check_equatable_if_let(expression: &Expression, ctx: &NodeCtx) {
     let Expression::IfLet {
@@ -60,11 +61,21 @@ pub fn check_equatable_if_let(expression: &Expression, ctx: &NodeCtx) {
     };
 
     let if_keyword_span = Span::new(span.file_id, span.byte_offset, 2);
-    ctx.sink.push(diagnostics::lint::equatable_if_let(
-        &if_keyword_span,
-        pattern_text,
-        subject_text,
-    ));
+    let condition_span = Span::new(
+        span.file_id,
+        span.byte_offset,
+        scrutinee.get_span().end() - span.byte_offset,
+    );
+    let replacement = format!("if {subject_text} == {pattern_text}");
+    let mut diagnostic =
+        diagnostics::lint::equatable_if_let(&if_keyword_span, pattern_text, subject_text);
+    if !replacement_drops_comment(ctx.source, condition_span, &replacement) {
+        diagnostic = diagnostic.with_fix(Fix::new(
+            format!("Replace with `{replacement}`"),
+            Edit::replacement(condition_span, replacement),
+        ));
+    }
+    ctx.sink.push(diagnostic);
 }
 
 // Fielded variants and literals are excluded: an inner value can mismatch its

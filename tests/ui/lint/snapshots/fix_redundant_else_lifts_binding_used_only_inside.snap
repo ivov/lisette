@@ -1,0 +1,17 @@
+---
+source: tests/ui/lint/fixes.rs
+---
+fn log(n: int) {}
+
+pub fn f(cond: bool) {
+  if cond { return } else { let y = 1; log(y) }
+  log(0)
+}
+=== fixed ===
+fn log(n: int) {}
+
+pub fn f(cond: bool) {
+  if cond { return }
+  let y = 1; log(y)
+  log(0)
+}

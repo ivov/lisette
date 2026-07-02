@@ -1,0 +1,25 @@
+---
+source: tests/ui/lint/fixes.rs
+---
+fn log(n: int) {}
+
+pub fn f(x: int) {
+  if x > 0 {
+    return
+  } else {
+    let y = x + 1
+    log(y)
+  }
+  log(x)
+}
+=== fixed ===
+fn log(n: int) {}
+
+pub fn f(x: int) {
+  if x > 0 {
+    return
+  }
+  let y = x + 1
+  log(y)
+  log(x)
+}

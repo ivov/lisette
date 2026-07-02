@@ -1,0 +1,14 @@
+---
+source: tests/ui/lint/fixes.rs
+---
+fn work() {}
+
+pub fn f(x: int, y: int) {
+  if x > 0 { if y > 0 { work() } }
+}
+=== fixed ===
+fn work() {}
+
+pub fn f(x: int, y: int) {
+  if x > 0 && y > 0 { work() }
+}

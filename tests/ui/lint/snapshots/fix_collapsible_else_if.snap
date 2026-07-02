@@ -1,0 +1,10 @@
+---
+source: tests/ui/lint/fixes.rs
+---
+pub fn f(a: int) -> int {
+  if a > 0 { 1 } else { if a < 0 { 2 } else { 3 } }
+}
+=== fixed ===
+pub fn f(a: int) -> int {
+  if a > 0 { 1 } else if a < 0 { 2 } else { 3 }
+}

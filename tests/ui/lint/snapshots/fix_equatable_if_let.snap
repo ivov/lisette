@@ -1,0 +1,14 @@
+---
+source: tests/ui/lint/fixes.rs
+---
+enum Sig { A, B }
+
+pub fn f(s: Sig) -> int {
+  if let Sig.A = s { 1 } else { 0 }
+}
+=== fixed ===
+enum Sig { A, B }
+
+pub fn f(s: Sig) -> int {
+  if s == Sig.A { 1 } else { 0 }
+}
