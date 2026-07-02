@@ -1,8 +1,10 @@
 use crate::passes::walk::NodeCtx;
+use diagnostics::{Edit, Fix};
 use syntax::ast::{Expression, MatchArm, Pattern, Span};
 
 use super::helpers::{
-    expressions_equivalent, is_bare_identifier, mentions_identifier, unwrap_block,
+    expressions_equivalent, is_bare_identifier, mentions_identifier, replacement_drops_comment,
+    span_text, unwrap_block,
 };
 
 struct TwoArm<'a> {
@@ -118,8 +120,48 @@ pub fn check_collapsible_match(expression: &Expression, ctx: &NodeCtx) {
         inner.span.byte_offset,
         inner.keyword_len,
     );
-    ctx.sink
-        .push(diagnostics::lint::collapsible_match(&inner_keyword_span));
+    let mut diagnostic = diagnostics::lint::collapsible_match(&inner_keyword_span);
+    if matches!(expression, Expression::Match { .. })
+        && let Some(fix) = merge_fix(ctx.source, &outer, &inner)
+    {
+        diagnostic = diagnostic.with_fix(fix);
+    }
+    ctx.sink.push(diagnostic);
+}
+
+fn merge_fix(source: &str, outer: &TwoArm, inner: &TwoArm) -> Option<Fix> {
+    let Pattern::EnumVariant { fields, .. } = outer.meaningful_pattern else {
+        return None;
+    };
+    let [binding] = fields.as_slice() else {
+        return None;
+    };
+
+    let outer_pattern = outer.meaningful_pattern.get_span();
+    let binding_span = binding.get_span();
+    let inner_pattern = inner.meaningful_pattern.get_span();
+    let inner_pattern_text =
+        source.get(inner_pattern.byte_offset as usize..inner_pattern.end() as usize)?;
+    let before =
+        source.get(outer_pattern.byte_offset as usize..binding_span.byte_offset as usize)?;
+    let after = source.get(binding_span.end() as usize..outer_pattern.end() as usize)?;
+    let merged_pattern = format!("{before}{inner_pattern_text}{after}");
+
+    let inner_body = span_text(source, inner.meaningful_expr)?;
+    let arm = format!("{merged_pattern} => {inner_body}");
+
+    let arm_span = Span::new(
+        outer_pattern.file_id,
+        outer_pattern.byte_offset,
+        outer.meaningful_expr.get_span().end() - outer_pattern.byte_offset,
+    );
+    if replacement_drops_comment(source, arm_span, &arm) {
+        return None;
+    }
+    Some(Fix::new(
+        "Merge the inner pattern into the outer arm",
+        Edit::replacement(arm_span, arm),
+    ))
 }
 
 fn single_binding_variant(pattern: &Pattern) -> Option<&str> {

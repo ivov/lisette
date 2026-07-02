@@ -1325,3 +1325,54 @@ pub fn f(cond: bool) {
 "#
     );
 }
+
+#[test]
+fn fix_collapsible_match() {
+    assert_fix_snapshot!(
+        r#"
+enum Inner { Ok(int), Bad }
+enum Outer { Some(Inner), None }
+
+pub fn f(o: Outer) -> int {
+  match o {
+    Outer.Some(x) => match x {
+      Inner.Ok(y) => y,
+      _ => 0,
+    },
+    _ => 0,
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn fix_collapsible_match_if_let_inner() {
+    assert_fix_snapshot!(
+        r#"
+enum Inner { Ok(int), Bad }
+enum Outer { Some(Inner), None }
+
+pub fn f(o: Outer) -> int {
+  match o {
+    Outer.Some(x) => if let Inner.Ok(y) = x { y } else { 0 },
+    _ => 0,
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn collapsible_match_if_let_outer_has_no_fix() {
+    assert_no_fix!(
+        r#"
+enum Inner { Ok(int), Bad }
+enum Outer { Some(Inner), None }
+
+pub fn f(o: Outer) -> int {
+  if let Outer.Some(x) = o { match x { Inner.Ok(y) => y, _ => 0 } } else { 0 }
+}
+"#
+    );
+}

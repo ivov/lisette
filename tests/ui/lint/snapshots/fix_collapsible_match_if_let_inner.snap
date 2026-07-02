@@ -1,0 +1,22 @@
+---
+source: tests/ui/lint/fixes.rs
+---
+enum Inner { Ok(int), Bad }
+enum Outer { Some(Inner), None }
+
+pub fn f(o: Outer) -> int {
+  match o {
+    Outer.Some(x) => if let Inner.Ok(y) = x { y } else { 0 },
+    _ => 0,
+  }
+}
+=== fixed ===
+enum Inner { Ok(int), Bad }
+enum Outer { Some(Inner), None }
+
+pub fn f(o: Outer) -> int {
+  match o {
+    Outer.Some(Inner.Ok(y)) => { y },
+    _ => 0,
+  }
+}
