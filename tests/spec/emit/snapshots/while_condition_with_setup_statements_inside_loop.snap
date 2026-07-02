@@ -24,7 +24,11 @@ func bump(i *int) int {
 
 func test() {
 	i := 0
-	for lisette.MakeTuple2(i < 3, bump(&i)).First {
+	for {
+		_v_1 := i < 3
+		if !(lisette.MakeTuple2(_v_1, bump(&i)).First) {
+			break
+		}
 		_ = i
 	}
 }

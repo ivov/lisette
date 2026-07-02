@@ -278,7 +278,9 @@ impl CompiledTest {
                 if !b.used {
                     unused.mark_binding_unused(b.span);
                 }
-                if b.mutated {
+                if b.alias_mutated {
+                    mutations.mark_binding_alias_mutated(binding_id);
+                } else if b.mutated {
                     mutations.mark_binding_mutated(binding_id);
                 }
             }

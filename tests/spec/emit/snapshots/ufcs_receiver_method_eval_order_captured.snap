@@ -40,6 +40,7 @@ func bump(i *int) int {
 func main() {
 	i := 0
 	adder := Adder{base: 5}
-	v := adder.add(i, bump(&i))
+	_arg_1 := i
+	v := adder.add(_arg_1, bump(&i))
 	_ = v
 }

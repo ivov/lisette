@@ -4,10 +4,11 @@ use crate::abi::transition::lower_arg_to_tagged;
 use crate::calls::effective_param_type;
 use crate::context::expression::ExpressionContext;
 use crate::expressions::emission::{CapturePolicy, StagedExpression};
+use crate::expressions::values::is_plain_go_call;
 use crate::names::go_name;
 use crate::plan::bodies::LoweredStatement;
 use crate::utils::observable_after_mutation;
-use syntax::ast::Expression;
+use syntax::ast::{Expression, FormatStringPart, Literal};
 use syntax::types::Type;
 
 /// Folds `f(leading, spread...)` into `f(append([]T{leading}, spread...)...)` — Go rejects the former.
@@ -39,6 +40,9 @@ impl Planner<'_> {
             value: temp_var,
             capture: CapturePolicy::Never,
             non_literal: false,
+            has_call: false,
+            has_effectful_call: false,
+            call_pin_exempt: false,
         }
     }
 
@@ -49,6 +53,8 @@ impl Planner<'_> {
         let tmp = self.hoist_tmp_value_statement(&mut staged.setup, prefix, &value);
         staged.value = tmp;
         staged.capture = CapturePolicy::Never;
+        staged.has_call = false;
+        staged.has_effectful_call = false;
     }
 
     pub(crate) fn emit_force_capture(
@@ -75,7 +81,9 @@ impl Planner<'_> {
         ctx: ExpressionContext<'_>,
     ) -> StagedExpression {
         let plan = self.plan_operand(expression, ctx);
-        StagedExpression::from_plan(plan, expression)
+        let mut staged = StagedExpression::from_plan(plan, expression);
+        self.refine_stage_flags(&mut staged, expression);
+        staged
     }
 
     /// Stage an expression as a composite value, capturing typed setup.
@@ -85,7 +93,172 @@ impl Planner<'_> {
         ctx: ExpressionContext<'_>,
     ) -> StagedExpression {
         let plan = self.lower_composite_value(expression, ctx);
-        StagedExpression::from_plan(plan, expression)
+        let mut staged = StagedExpression::from_plan(plan, expression);
+        self.refine_stage_flags(&mut staged, expression);
+        staged
+    }
+
+    /// From typed setup + value, with the exemption refinement applied.
+    pub(crate) fn staged_from_typed_setup(
+        &self,
+        setup: Vec<LoweredStatement>,
+        value: String,
+        expression: &Expression,
+    ) -> StagedExpression {
+        let mut staged = StagedExpression::from_typed_setup(setup, value, expression);
+        self.refine_stage_flags(&mut staged, expression);
+        staged
+    }
+
+    /// Exempt reads of never-mutated bindings (casts are pure conversions)
+    /// and values lowering to plain Go calls, which Go orders lexically.
+    /// Constructor calls are excluded: they can lower to a conversion or
+    /// struct literal, whose operand reads Go does not order.
+    fn refine_stage_flags(&self, staged: &mut StagedExpression, expression: &Expression) {
+        staged.has_effectful_call = staged.has_call && self.contains_effectful_call(expression);
+        let mut inner = expression.unwrap_parens();
+        while let Expression::Cast { expression, .. } = inner {
+            inner = expression.unwrap_parens();
+        }
+        if self.identifier_immune_to_calls(inner) {
+            staged.call_pin_exempt = true;
+            return;
+        }
+        if let Expression::Call {
+            expression: callee, ..
+        } = inner
+            && is_plain_go_call(&staged.value)
+            && !self.callee_lowers_to_type_construction(callee)
+        {
+            staged.call_pin_exempt = true;
+        }
+    }
+
+    /// `Some`/`Ok`/`Err` lower to prelude constructor calls (their non-call
+    /// nilable-slot form already fails the syntactic check).
+    fn callee_lowers_to_type_construction(&self, callee: &Expression) -> bool {
+        let name = match callee.unwrap_parens() {
+            Expression::Identifier { value, .. } => Some(value.as_str()),
+            Expression::DotAccess { member, .. } => Some(member.as_str()),
+            _ => None,
+        };
+        if matches!(name, Some("Some" | "Ok" | "Err" | "None")) {
+            return false;
+        }
+        self.callee_definition(callee)
+            .is_some_and(|definition| definition.is_type_definition())
+    }
+
+    /// Whether evaluating `expression` can mutate observable state.
+    pub(crate) fn contains_effectful_call(&self, expression: &Expression) -> bool {
+        match expression.unwrap_parens() {
+            Expression::Call {
+                expression: callee,
+                args,
+                spread,
+                call_kind,
+                ..
+            } => {
+                if self.is_pure_constructor_callee(callee) {
+                    args.iter().any(|a| self.contains_effectful_call(a))
+                        || (**spread)
+                            .as_ref()
+                            .is_some_and(|s| self.contains_effectful_call(s))
+                } else if is_pure_native_method(callee, call_kind) {
+                    self.contains_effectful_call(callee)
+                        || args.iter().any(|a| self.contains_effectful_call(a))
+                } else {
+                    true
+                }
+            }
+            Expression::Binary { left, right, .. } => {
+                self.contains_effectful_call(left) || self.contains_effectful_call(right)
+            }
+            Expression::Unary { expression, .. }
+            | Expression::DotAccess { expression, .. }
+            | Expression::Cast { expression, .. }
+            | Expression::Reference { expression, .. } => self.contains_effectful_call(expression),
+            Expression::IndexedAccess {
+                expression, index, ..
+            } => self.contains_effectful_call(expression) || self.contains_effectful_call(index),
+            Expression::Tuple { elements, .. } => {
+                elements.iter().any(|e| self.contains_effectful_call(e))
+            }
+            Expression::StructCall {
+                field_assignments,
+                spread,
+                ..
+            } => {
+                field_assignments
+                    .iter()
+                    .any(|f| self.contains_effectful_call(&f.value))
+                    || spread
+                        .as_expression()
+                        .is_some_and(|s| self.contains_effectful_call(s))
+            }
+            Expression::Literal {
+                literal: Literal::Slice(elements),
+                ..
+            } => elements.iter().any(|e| self.contains_effectful_call(e)),
+            Expression::Literal {
+                literal: Literal::FormatString(parts),
+                ..
+            } => parts.iter().any(|part| match part {
+                FormatStringPart::Expression(e) => self.contains_effectful_call(e),
+                FormatStringPart::Text(_) => false,
+            }),
+            Expression::Range { start, end, .. } => {
+                start
+                    .as_deref()
+                    .is_some_and(|e| self.contains_effectful_call(e))
+                    || end
+                        .as_deref()
+                        .is_some_and(|e| self.contains_effectful_call(e))
+            }
+            _ => false,
+        }
+    }
+
+    fn is_pure_constructor_callee(&self, callee: &Expression) -> bool {
+        let name = match callee.unwrap_parens() {
+            Expression::Identifier { value, .. } => Some(value.as_str()),
+            Expression::DotAccess { member, .. } => Some(member.as_str()),
+            _ => None,
+        };
+        if matches!(name, Some("Some" | "Ok" | "Err" | "None")) {
+            return true;
+        }
+        self.callee_definition(callee)
+            .is_some_and(|definition| definition.is_type_definition())
+    }
+
+    /// No binding id means a top-level definition, which is immutable.
+    pub(crate) fn is_unmutated_identifier(&self, expression: &Expression) -> bool {
+        match expression {
+            Expression::Identifier {
+                binding_id: Some(id),
+                ..
+            } => !self.facts.is_mutated(*id),
+            Expression::Identifier {
+                binding_id: None, ..
+            } => true,
+            _ => false,
+        }
+    }
+
+    /// Only a binding mutated through an alias can be rebound by a call, so
+    /// reads of alias-free bindings commute with sibling calls.
+    pub(crate) fn identifier_immune_to_calls(&self, expression: &Expression) -> bool {
+        match expression {
+            Expression::Identifier {
+                binding_id: Some(id),
+                ..
+            } => !self.facts.is_alias_mutated(*id),
+            Expression::Identifier {
+                binding_id: None, ..
+            } => true,
+            _ => false,
+        }
     }
 
     pub(crate) fn stage_prelude_arg(
@@ -104,9 +277,9 @@ impl Planner<'_> {
             if let Some(tagged) =
                 self.try_lower_arg_to_tagged(&mut setup, expression, &staged.value, param_ty)
             {
-                return StagedExpression::from_typed_setup(setup, tagged, expression);
+                return self.staged_from_typed_setup(setup, tagged, expression);
             }
-            return StagedExpression::from_typed_setup(setup, staged.value, expression);
+            return self.staged_from_typed_setup(setup, staged.value, expression);
         }
 
         staged
@@ -212,8 +385,9 @@ impl Planner<'_> {
 
     /// Sequence N staged emissions preserving left-to-right eval order,
     /// accumulating setup into a `Vec<LoweredStatement>` so a value plan can
-    /// carry it as structured setup. A later sibling with setup forces an
-    /// earlier inline-but-observable value to be captured to a `TempBind`.
+    /// carry it as structured setup. A later sibling with setup or a call
+    /// forces an earlier inline-but-observable value to be captured to a
+    /// `TempBind`, since Go otherwise reads it after the call runs.
     /// Returns `(setup_statements, values)`.
     pub(crate) fn sequence_structured(
         &mut self,
@@ -221,24 +395,45 @@ impl Planner<'_> {
         prefix: &str,
     ) -> (Vec<LoweredStatement>, Vec<String>) {
         let eager = self.function_state.eager_operand_capture();
-        if !eager && stages.iter().all(|s| s.setup.is_empty()) {
+        if !eager
+            && stages
+                .iter()
+                .all(|s| s.setup.is_empty() && !s.has_effectful_call)
+        {
             return (Vec::new(), stages.into_iter().map(|s| s.value).collect());
+        }
+
+        // Pinning hoists evaluation into setup, so a call left inline must
+        // also pin when a later sibling pins or carries setup. A value
+        // already reduced to a temp by its own setup evaluates nothing
+        // inline and needs no ordering pin.
+        let mut pins = vec![false; stages.len()];
+        let mut later_has_setup = false;
+        let mut later_effectful = false;
+        let mut later_pins = false;
+        for i in (0..stages.len()).rev() {
+            let stage = &stages[i];
+            let base_pin = matches!(stage.capture, CapturePolicy::IfLaterEffect)
+                && (later_has_setup || (later_effectful && !stage.call_pin_exempt));
+            let value_still_evaluates = stage.value.contains('(') || stage.value.contains("<-");
+            let ordering_pin =
+                stage.has_call && value_still_evaluates && (later_has_setup || later_pins);
+            pins[i] = base_pin || ordering_pin;
+            later_pins |= pins[i];
+            later_has_setup |= !stage.setup.is_empty();
+            later_effectful |= stage.has_effectful_call;
         }
 
         let mut setup: Vec<LoweredStatement> = Vec::new();
         let mut results = Vec::with_capacity(stages.len());
         for i in 0..stages.len() {
-            let later_has_setup = stages[i + 1..].iter().any(|s| !s.setup.is_empty());
-            let s_capture = stages[i].capture;
             let s_non_literal = stages[i].non_literal;
             let s_value = std::mem::take(&mut stages[i].value);
             let s_setup = std::mem::take(&mut stages[i].setup);
 
             setup.extend(s_setup);
 
-            let capture_for_later =
-                later_has_setup && matches!(s_capture, CapturePolicy::IfLaterSetup);
-            if capture_for_later || (eager && s_non_literal) {
+            if pins[i] || (eager && s_non_literal) {
                 let tmp = self.fresh_var(Some(prefix));
                 self.declare(&tmp);
                 setup.push(LoweredStatement::TempBind {
@@ -302,4 +497,17 @@ impl Planner<'_> {
         }
         self.sequence_with_spread_structured(stages, spread, wrap_to_any, "_arg", combine)
     }
+}
+
+fn is_pure_native_method(
+    callee: &Expression,
+    call_kind: &Option<syntax::program::CallKind>,
+) -> bool {
+    if !matches!(call_kind, Some(syntax::program::CallKind::NativeMethod(_))) {
+        return false;
+    }
+    matches!(
+        callee.unwrap_parens(),
+        Expression::DotAccess { member, .. } if matches!(member.as_str(), "length" | "capacity")
+    )
 }

@@ -1,0 +1,30 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: |
+  
+  fn test() -> int {
+    let mut n = 1
+    let consume = || -> int { n = 5; 4 }
+    let mut sum = 0
+    for i in n..consume() {
+      sum += i
+    }
+    sum
+  }
+---
+package main
+
+func test() int {
+	n := 1
+	consume := func() int {
+		n = 5
+		return 4
+	}
+	sum := 0
+	start_2 := n
+	_bound_1 := consume()
+	for i := start_2; i < _bound_1; i++ {
+		sum += i
+	}
+	return sum
+}

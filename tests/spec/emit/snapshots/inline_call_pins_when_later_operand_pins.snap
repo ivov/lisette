@@ -1,0 +1,29 @@
+---
+source: tests/spec/emit/expressions.rs
+description: |
+  
+  fn run() -> int {
+    let mut x = 1
+    let setx = || -> int { x = 50; 100 }
+    let bump = |v: int| -> int { x += 7; v }
+    let r = [setx(), x, bump(5)]
+    r[0] + r[1] + r[2]
+  }
+---
+package main
+
+func run() int {
+	x := 1
+	setx := func() int {
+		x = 50
+		return 100
+	}
+	bump := func(v int) int {
+		x += 7
+		return v
+	}
+	_v_1 := setx()
+	_v_2 := x
+	r := []int{_v_1, _v_2, bump(5)}
+	return r[0] + r[1] + r[2]
+}

@@ -163,6 +163,10 @@ impl<'a> EmitFacts<'a> {
         self.mutations.is_mutated(id)
     }
 
+    pub(crate) fn is_alias_mutated(&self, id: BindingId) -> bool {
+        self.mutations.is_alias_mutated(id)
+    }
+
     pub(crate) fn is_ufcs_method(&self, qualified_type: &str, method: &str) -> bool {
         self.ufcs_methods
             .contains(&(qualified_type.to_string(), method.to_string()))

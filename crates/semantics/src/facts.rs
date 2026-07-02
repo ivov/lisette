@@ -156,6 +156,7 @@ impl Facts {
                 kind,
                 used: false,
                 mutated: false,
+                alias_mutated: false,
                 is_typedef,
                 is_struct_field,
                 is_as_alias,
@@ -173,6 +174,15 @@ impl Facts {
     pub fn mark_mutated(&mut self, id: BindingId) {
         if let Some(fact) = self.bindings.get_mut(&id) {
             fact.mutated = true;
+        }
+    }
+
+    /// The binding is mutated through an alias (address taken, mutable
+    /// capture, mut argument or receiver), so a call can rebind it.
+    pub fn mark_alias_mutated(&mut self, id: BindingId) {
+        if let Some(fact) = self.bindings.get_mut(&id) {
+            fact.mutated = true;
+            fact.alias_mutated = true;
         }
     }
 
@@ -390,6 +400,7 @@ pub struct BindingFact {
     pub kind: BindingKind,
     pub used: bool,
     pub mutated: bool,
+    pub alias_mutated: bool,
     pub is_typedef: bool,
     /// If true, this binding is a shorthand in a struct pattern (e.g., `Point { x }`)
     pub is_struct_field: bool,

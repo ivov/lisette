@@ -1,0 +1,23 @@
+---
+source: tests/spec/emit/expressions.rs
+description: |
+  
+  fn run() -> int {
+    let mut xs = [1, 2, 3]
+    let swap = || -> int { xs = [7, 8, 9]; 42 }
+    xs[0] = swap()
+    xs[0]
+  }
+---
+package main
+
+func run() int {
+	xs := []int{1, 2, 3}
+	swap := func() int {
+		xs = []int{7, 8, 9}
+		return 42
+	}
+	base_1 := xs
+	base_1[0] = swap()
+	return xs[0]
+}

@@ -1,7 +1,6 @@
 use crate::Planner;
 use crate::Renderer;
 use crate::context::expression::ExpressionContext;
-use crate::is_order_sensitive;
 use crate::patterns::binding_decls::pattern_has_bindings;
 use crate::patterns::sites::PatternSubject;
 use crate::plan::bodies::{LoopPlan, LoweredBlock, LoweredStatement, directed};
@@ -470,7 +469,11 @@ impl Planner<'_> {
         let end_expression = end
             .as_ref()
             .map(|e| self.force_capture_into(&mut prologue, e, "_bound"));
-        if prologue.len() > checkpoint && start.as_ref().is_some_and(|s| is_order_sensitive(s)) {
+        if prologue.len() > checkpoint
+            && start
+                .as_ref()
+                .is_some_and(|s| observable_after_mutation(s) && !self.is_unmutated_identifier(s))
+        {
             // The end bound's capture inserted statements after the start value;
             // hoist start into its own temp before them so it evaluates first.
             let var = self.fresh_var(Some("start"));
@@ -573,18 +576,6 @@ impl Planner<'_> {
             "go:iter.Seq" => Some(1),
             "go:iter.Seq2" => Some(2),
             _ => None,
-        }
-    }
-
-    fn is_unmutated_identifier(&self, expression: &Expression) -> bool {
-        if let Expression::Identifier {
-            binding_id: Some(id),
-            ..
-        } = expression
-        {
-            !self.facts.is_mutated(*id)
-        } else {
-            false
         }
     }
 }

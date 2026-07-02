@@ -10,9 +10,8 @@ use crate::plan::bodies::{
 };
 use crate::plan::calls::plan_variadic_spread;
 use crate::plan::values::{ValuePlan, value_plan_from_statements};
-use crate::statements::assignments::is_lvalue_chain;
+use crate::statements::assignments::{RhsEffects, is_lvalue_chain};
 use crate::types::native::NativeGoType;
-use crate::utils::contains_call;
 use syntax::ast::{Expression, Literal};
 use syntax::types::Type;
 
@@ -527,12 +526,15 @@ impl Planner<'_> {
 
         let (value, mut statements) = if receiver_is_lvalue {
             let (args_setup, args_str) = self.lower_append_args(func, args, (**spread).as_ref());
-            let rhs_has_setup = !args_setup.is_empty()
-                || args.iter().any(contains_call)
-                || (**spread).as_ref().is_some_and(contains_call);
+            let rhs = RhsEffects {
+                has_setup: !args_setup.is_empty(),
+                has_effectful_call: args.iter().any(|a| self.contains_effectful_call(a))
+                    || (**spread)
+                        .as_ref()
+                        .is_some_and(|s| self.contains_effectful_call(s)),
+            };
             let mut capture: Vec<LoweredStatement> = Vec::new();
-            let receiver_lv =
-                self.emit_left_value_capturing(&mut capture, unwrapped, rhs_has_setup);
+            let receiver_lv = self.emit_left_value_capturing(&mut capture, unwrapped, rhs);
             capture.extend(args_setup);
             let value = if args_str.is_empty() {
                 receiver_lv

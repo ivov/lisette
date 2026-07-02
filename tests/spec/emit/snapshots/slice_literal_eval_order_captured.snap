@@ -22,6 +22,7 @@ func bump(i *int) int {
 
 func main() {
 	i := 0
-	s := []int{i, bump(&i)}
+	_v_1 := i
+	s := []int{_v_1, bump(&i)}
 	_ = s
 }

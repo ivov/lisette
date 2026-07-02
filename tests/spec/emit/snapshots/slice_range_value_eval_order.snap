@@ -40,8 +40,8 @@ func make_range() lisette.Range[int] {
 }
 
 func main() {
-	_base_2 := make_items()
-	range_1 := make_range()
-	xs := _base_2[range_1.Start:range_1.End:range_1.End]
+	_base_1 := make_items()
+	range_2 := make_range()
+	xs := _base_1[range_2.Start:range_2.End:range_2.End]
 	fmt.Println(len(xs))
 }

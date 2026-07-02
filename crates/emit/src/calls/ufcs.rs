@@ -201,7 +201,7 @@ impl Planner<'_> {
         };
         let mut setup: Vec<LoweredStatement> = Vec::new();
         if let Some(value) = self.try_adapt_lowered_fn_arg_shape(&mut setup, arg, Some(declared)) {
-            return StagedExpression::from_typed_setup(setup, value, arg);
+            return self.staged_from_typed_setup(setup, value, arg);
         }
         self.stage_composite(arg, ExpressionContext::value())
     }

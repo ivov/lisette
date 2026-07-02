@@ -1,0 +1,23 @@
+---
+source: tests/spec/emit/expressions.rs
+description: |
+  
+  fn pure_add(a: int) -> int { a + 100 }
+  
+  fn run() -> int {
+    let mut x = 5
+    x += pure_add(1)
+    x
+  }
+---
+package main
+
+func pure_add(a int) int {
+	return a + 100
+}
+
+func run() int {
+	x := 5
+	x += pure_add(1)
+	return x
+}

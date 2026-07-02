@@ -1,0 +1,31 @@
+---
+source: tests/spec/emit/expressions.rs
+description: |
+  
+  fn bump(a: int) -> int { a + 1 }
+  
+  fn run() -> int {
+    let mut items: Slice<int> = []
+    let mut i = 0
+    let ibump = || -> int { i = 1; 10 }
+    items = items.append(i, ibump())
+    items[0] + items[1]
+  }
+---
+package main
+
+func bump(a int) int {
+	return a + 1
+}
+
+func run() int {
+	items := ([]int)(nil)
+	i := 0
+	ibump := func() int {
+		i = 1
+		return 10
+	}
+	_arg_1 := i
+	items = append(items, _arg_1, ibump())
+	return items[0] + items[1]
+}

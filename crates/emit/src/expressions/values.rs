@@ -399,10 +399,13 @@ impl Planner<'_> {
     ) -> Vec<LoweredStatement> {
         let rhs_staged = self.stage_composite(value, ExpressionContext::value());
 
-        let rhs_has_setup = !rhs_staged.setup.is_empty() || self.rhs_contains_effectful_call(value);
+        let rhs = crate::statements::assignments::RhsEffects {
+            has_setup: !rhs_staged.setup.is_empty(),
+            has_effectful_call: self.contains_effectful_call(value),
+        };
         let mut setup: Vec<LoweredStatement> = Vec::new();
         let target_str = if is_order_sensitive(target) {
-            self.emit_left_value_capturing(&mut setup, target, rhs_has_setup)
+            self.emit_left_value_capturing(&mut setup, target, rhs)
         } else {
             self.emit_left_value(&mut setup, target)
         };
@@ -611,10 +614,12 @@ fn needs_iife_for_async(expression: &Expression, emitted: &str) -> bool {
     if !is_native_method_call(expression) {
         return false;
     }
-    !is_valid_go_async_target(emitted)
+    !is_plain_go_call(emitted)
 }
 
-fn is_valid_go_async_target(emitted: &str) -> bool {
+/// Whether emitted Go text is a plain non-builtin call. Valid as a `go` or
+/// `defer` target, and evaluated in lexical order among sibling operands.
+pub(crate) fn is_plain_go_call(emitted: &str) -> bool {
     let trimmed = emitted.trim();
     if !trimmed.ends_with(')') {
         return false;

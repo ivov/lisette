@@ -250,6 +250,20 @@ impl Scopes {
         None
     }
 
+    /// Whether resolving `name` crosses a function scope, meaning captured.
+    pub fn binding_crosses_function_boundary(&self, name: &str) -> bool {
+        let mut crossed = false;
+        for scope in self.stack.iter().rev() {
+            if scope.name_to_binding.contains_key(name) {
+                return crossed;
+            }
+            if scope.fn_return_type.is_some() {
+                crossed = true;
+            }
+        }
+        false
+    }
+
     /// Look up a type parameter by walking the scope stack from top to bottom.
     pub fn lookup_type_param(&self, name: &str) -> Option<usize> {
         for scope in self.stack.iter().rev() {

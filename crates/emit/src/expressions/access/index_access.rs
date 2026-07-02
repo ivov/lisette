@@ -30,13 +30,16 @@ impl Planner<'_> {
             return value_plan_from_statements(setup, value);
         }
 
-        let base_staged = self.stage_base_with_deref(expression);
+        let mut base_staged = self.stage_base_with_deref(expression);
 
         // Range-typed variable as index (e.g. `items[r]` where `r: Range<int>`,
         // or `r: Prefix` where `type Prefix = RangeTo<int>`).
         let index_ty = index.get_type();
         if let Some(range_kind) = peel_to_range_type(&index_ty).and_then(|t| t.get_name()) {
             let needs_cap = self.is_native_shape(&expression.get_type(), NativeGoType::Slice);
+            if base_staged.has_call {
+                self.pin_staged(&mut base_staged, "_base");
+            }
             let index_staged = self.stage_or_capture(index, "range");
             let (setup, values) =
                 self.sequence_structured(vec![base_staged, index_staged], "_base");
@@ -76,6 +79,9 @@ impl Planner<'_> {
             setup: s.setup,
             capture: s.capture,
             non_literal: s.non_literal,
+            has_call: s.has_call,
+            has_effectful_call: s.has_effectful_call,
+            call_pin_exempt: false,
         }
     }
 

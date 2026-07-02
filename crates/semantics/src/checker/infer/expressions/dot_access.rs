@@ -996,7 +996,7 @@ impl InferCtx<'_, '_> {
         };
 
         if let Some(binding_id) = self.scopes.lookup_binding_id(&var_name) {
-            self.facts.mark_mutated(binding_id);
+            self.facts.mark_alias_mutated(binding_id);
         }
         let is_deref = contains_deref(receiver_expression);
         let binding_is_ref = self

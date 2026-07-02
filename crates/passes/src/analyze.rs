@@ -48,7 +48,9 @@ pub fn analyze(input: AnalyzeInput) -> AnalyzeOutput {
 
     let mut mutations = MutationInfo::default();
     for (&binding_id, b) in facts.bindings.iter() {
-        if b.mutated {
+        if b.alias_mutated {
+            mutations.mark_binding_alias_mutated(binding_id);
+        } else if b.mutated {
             mutations.mark_binding_mutated(binding_id);
         }
     }

@@ -1,0 +1,29 @@
+---
+source: tests/spec/emit/expressions.rs
+description: |
+  
+  struct Box(int)
+  
+  fn run() -> int {
+    let mut x = 1
+    let bump = |v: int| -> int { x = 50; v }
+    let r = (Box(x), bump(5))
+    r.0.0 + r.1
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type Box int
+
+func run() int {
+	x := 1
+	bump := func(v int) int {
+		x = 50
+		return v
+	}
+	_v_1 := Box(x)
+	r := lisette.MakeTuple2(_v_1, bump(5))
+	return int(r.First) + r.Second
+}

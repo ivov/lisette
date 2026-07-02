@@ -1,0 +1,26 @@
+---
+source: tests/spec/emit/expressions.rs
+description: |
+  
+  fn run() -> int {
+    let mut x = 2
+    let mut y = 3
+    let bump = || -> int { y = 10; 4 }
+    x *= y + bump()
+    x
+  }
+---
+package main
+
+func run() int {
+	x := 2
+	y := 3
+	bump := func() int {
+		y = 10
+		return 4
+	}
+	_left_2 := x
+	_left_1 := y
+	x = _left_2 * (_left_1 + bump())
+	return x
+}

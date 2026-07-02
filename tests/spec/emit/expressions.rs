@@ -4593,6 +4593,194 @@ fn run() -> int {
 }
 
 #[test]
+fn compound_identifier_target_reads_before_call_rhs() {
+    let input = r#"
+fn run() -> int {
+  let mut x = 1
+  let bump = || -> int { x = 100; 5 }
+  x += bump()
+  x
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn inline_call_pins_when_later_operand_pins() {
+    let input = r#"
+fn run() -> int {
+  let mut x = 1
+  let setx = || -> int { x = 50; 100 }
+  let bump = |v: int| -> int { x += 7; v }
+  let r = [setx(), x, bump(5)]
+  r[0] + r[1] + r[2]
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn alias_free_target_keeps_compound_assign_with_call_rhs() {
+    let input = r#"
+fn pure_add(a: int) -> int { a + 100 }
+
+fn run() -> int {
+  let mut x = 5
+  x += pure_add(1)
+  x
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn alias_free_base_not_pinned_before_call_rhs() {
+    let input = r#"
+fn pure_add(a: int) -> int { a + 100 }
+
+fn run() -> int {
+  let mut ws = [1, 2, 3]
+  ws[0] = pure_add(7)
+  ws[0]
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn alias_free_operand_not_pinned_before_call() {
+    let input = r#"
+fn bump(a: int) -> int { a + 1 }
+
+fn run() -> int {
+  let mut items: Slice<int> = []
+  let mut i = 0
+  let ibump = || -> int { i = 1; 10 }
+  items = items.append(i, ibump())
+  items[0] + items[1]
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn pure_constructor_does_not_force_sibling_pins() {
+    let input = r#"
+struct Wrap(int)
+
+fn run() -> int {
+  let pair = (Wrap(9), Wrap(8))
+  pair.0.0 + pair.1.0
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn pure_constructor_with_mutable_read_pins_when_later_operand_pins() {
+    let input = r#"
+fn run() -> int {
+  let mut x = 1
+  let bump = || -> int { x = 20; 2 }
+  let elems = [Some(x), Some(x + bump()), Some(x)]
+  elems[0].unwrap_or(-1) + elems[1].unwrap_or(-1) + elems[2].unwrap_or(-1)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn setup_bearing_call_pins_when_later_operand_pins() {
+    let input = r#"
+fn foo(a: int, b: int) -> int { a + b }
+
+fn run() -> int {
+  let mut x = 1
+  let setx = || -> int { x = 50; 100 }
+  let bump = |v: int| -> int { x += 7; v }
+  let r = [foo(x, setx()), x, bump(5)]
+  r[0] + r[1] + r[2]
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn constructor_lowered_to_conversion_pins_before_call() {
+    let input = r#"
+struct Box(int)
+
+fn run() -> int {
+  let mut x = 1
+  let bump = |v: int| -> int { x = 50; v }
+  let r = (Box(x), bump(5))
+  r.0.0 + r.1
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn top_level_reference_not_pinned_before_call() {
+    let input = r#"
+const BASE = 10
+
+fn eff(x: Ref<int>) -> int {
+  x.* = 1
+  2
+}
+
+fn run() -> int {
+  let mut i = 0
+  let r = [BASE, eff(&i)]
+  r[0] + r[1]
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn compound_binary_rhs_keeps_grouping_when_left_pinned() {
+    let input = r#"
+fn run() -> int {
+  let mut x = 2
+  let mut y = 3
+  let bump = || -> int { y = 10; 4 }
+  x *= y + bump()
+  x
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn index_assignment_base_frozen_before_call_rhs() {
+    let input = r#"
+fn run() -> int {
+  let mut xs = [1, 2, 3]
+  let swap = || -> int { xs = [7, 8, 9]; 42 }
+  xs[0] = swap()
+  xs[0]
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn range_variable_slice_base_call_evaluated_once() {
+    let input = r#"
+fn make() -> Slice<int> { [1, 2, 3] }
+
+fn run() -> int {
+  let r = 1..
+  let s = make()[r]
+  s.length()
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn selector_callee_eval_order_captured() {
     let input = r#"
 fn f0(x: int) -> int { x + 10 }

@@ -28,12 +28,13 @@ func make_i() int {
 
 func main() {
 	items := []lisette.Tuple2[int, int]{lisette.MakeTuple2(0, 0)}
-	idx_2 := make_i()
+	base_2 := items
+	idx_3 := make_i()
 	var tmp_1 int
 	if true {
 		tmp_1 = 1
 	} else {
 		tmp_1 = 2
 	}
-	items[idx_2].First = tmp_1
+	base_2[idx_3].First = tmp_1
 }

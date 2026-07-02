@@ -209,7 +209,7 @@ impl InferCtx<'_, '_> {
             if let Some(var_name) = new_expression.get_var_name()
                 && let Some(binding_id) = self.scopes.lookup_binding_id(&var_name)
             {
-                self.facts.mark_mutated(binding_id);
+                self.facts.mark_alias_mutated(binding_id);
             }
         }
 
@@ -361,7 +361,11 @@ impl InferCtx<'_, '_> {
                 if compound_operator.is_some() {
                     self.facts.mark_used(binding_id);
                 }
-                self.facts.mark_mutated(binding_id);
+                if self.scopes.binding_crosses_function_boundary(&var_name) {
+                    self.facts.mark_alias_mutated(binding_id);
+                } else {
+                    self.facts.mark_mutated(binding_id);
+                }
             }
 
             let is_mutable = self.scopes.lookup_mutable(&var_name);

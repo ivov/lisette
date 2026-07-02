@@ -20,7 +20,8 @@ type Container[T any] struct {
 }
 
 func Container_display[T Printable](self Container[T]) string {
-	return fmt.Sprintf("[%s] %s", self.label, self.value.PrintVal())
+	_fmtarg_1 := self.label
+	return fmt.Sprintf("[%s] %s", _fmtarg_1, self.value.PrintVal())
 }
 
 func Container_total[T Summable](self Container[T]) int {

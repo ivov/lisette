@@ -630,7 +630,7 @@ fn emit_lowered_tuple_tail(
                 Some(slot_ty) if planner.facts.is_nullable_option(slot_ty) => {
                     let mut setup = Vec::new();
                     let value = lower_nullable_slot_value(planner, &mut setup, e, slot_ty);
-                    StagedExpression::from_typed_setup(setup, value, e)
+                    planner.staged_from_typed_setup(setup, value, e)
                 }
                 _ => planner.stage_composite(e, ExpressionContext::value()),
             })

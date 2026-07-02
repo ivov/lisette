@@ -22,12 +22,13 @@ func make_b() int {
 
 func main() {
 	s := []int{0, 0, 0}
-	idx_2 := make_a()
+	base_2 := s
+	idx_3 := make_a()
 	var tmp_1 int
 	if true {
 		tmp_1 = make_b()
 	} else {
 		tmp_1 = 0
 	}
-	s[idx_2] = tmp_1
+	base_2[idx_3] = tmp_1
 }

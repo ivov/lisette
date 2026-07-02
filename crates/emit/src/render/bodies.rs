@@ -258,9 +258,25 @@ impl Renderer {
                 match kind {
                     CompoundKind::Increment => write_line!(output, "{}++", target_str),
                     CompoundKind::Decrement => write_line!(output, "{}--", target_str),
-                    CompoundKind::OpAssign { op_text, rhs } => {
+                    CompoundKind::OpAssign {
+                        op_text,
+                        rhs,
+                        pinned_left,
+                    } => {
                         let rhs_text = self.render_value(output, rhs);
-                        write_line!(output, "{} {}= {}", target_str, op_text, rhs_text);
+                        match pinned_left {
+                            Some(left) => write_line!(
+                                output,
+                                "{} = {} {} {}",
+                                target_str,
+                                left,
+                                op_text,
+                                rhs_text
+                            ),
+                            None => {
+                                write_line!(output, "{} {}= {}", target_str, op_text, rhs_text)
+                            }
+                        }
                     }
                 }
             }

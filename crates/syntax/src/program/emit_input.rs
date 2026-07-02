@@ -201,6 +201,7 @@ impl EqualityIndex {
 #[derive(Debug, Clone, Default)]
 pub struct MutationInfo {
     bindings: HashSet<AstBindingId>,
+    alias_bindings: HashSet<AstBindingId>,
 }
 
 impl MutationInfo {
@@ -208,8 +209,18 @@ impl MutationInfo {
         self.bindings.insert(id);
     }
 
+    /// The binding is mutated through an alias, so a call can rebind it.
+    pub fn mark_binding_alias_mutated(&mut self, id: AstBindingId) {
+        self.bindings.insert(id);
+        self.alias_bindings.insert(id);
+    }
+
     pub fn is_mutated(&self, id: AstBindingId) -> bool {
         self.bindings.contains(&id)
+    }
+
+    pub fn is_alias_mutated(&self, id: AstBindingId) -> bool {
+        self.alias_bindings.contains(&id)
     }
 }
 

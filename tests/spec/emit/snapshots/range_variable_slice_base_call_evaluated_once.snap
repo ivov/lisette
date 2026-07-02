@@ -1,0 +1,26 @@
+---
+source: tests/spec/emit/expressions.rs
+description: |
+  
+  fn make() -> Slice<int> { [1, 2, 3] }
+  
+  fn run() -> int {
+    let r = 1..
+    let s = make()[r]
+    s.length()
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func make_() []int {
+	return []int{1, 2, 3}
+}
+
+func run() int {
+	r := lisette.RangeFrom[int]{Start: 1}
+	_base_1 := make_()
+	s := _base_1[r.Start:len(_base_1):len(_base_1)]
+	return len(s)
+}

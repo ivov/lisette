@@ -233,10 +233,12 @@ pub(crate) enum AssignForm {
 pub(crate) enum CompoundKind {
     Increment,
     Decrement,
-    /// `target op= rhs`. `op_text` is the rendered Go operator.
+    /// `target op= rhs`. An effectful RHS forces the target's prior value
+    /// into `pinned_left`, rendered as `target = pinned_left op rhs`.
     OpAssign {
         op_text: String,
         rhs: ValuePlan,
+        pinned_left: Option<String>,
     },
 }
 

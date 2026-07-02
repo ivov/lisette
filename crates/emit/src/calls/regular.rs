@@ -428,7 +428,7 @@ impl<'a> Planner<'a> {
             .enumerate()
             .map(|(i, arg)| {
                 let (setup, value) = self.lower_call_arg(arg, i, ctx);
-                StagedExpression::from_typed_setup(setup, value, arg)
+                self.staged_from_typed_setup(setup, value, arg)
             })
             .collect();
 
@@ -727,7 +727,7 @@ impl<'a> Planner<'a> {
             loop_cb, src_var, body
         )));
 
-        Some(StagedExpression::from_typed_setup(setup, adapted, spread))
+        Some(self.staged_from_typed_setup(setup, adapted, spread))
     }
 
     /// Detect whether a Go-call argument needs a callback wrapper. Returns

@@ -1,0 +1,21 @@
+---
+source: tests/spec/emit/expressions.rs
+description: |
+  
+  struct Wrap(int)
+  
+  fn run() -> int {
+    let pair = (Wrap(9), Wrap(8))
+    pair.0.0 + pair.1.0
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type Wrap int
+
+func run() int {
+	pair := lisette.MakeTuple2(Wrap(9), Wrap(8))
+	return int(pair.First) + int(pair.Second)
+}

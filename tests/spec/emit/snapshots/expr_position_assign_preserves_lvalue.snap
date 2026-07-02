@@ -29,13 +29,14 @@ func cond() bool {
 
 func main() {
 	s := []int{1}
-	idx_2 := idx()
+	base_2 := s
+	idx_3 := idx()
 	var tmp_1 int
 	if cond() {
 		tmp_1 = 2
 	} else {
 		tmp_1 = 3
 	}
-	s[idx_2] = tmp_1
+	base_2[idx_3] = tmp_1
 	fmt.Println(s[0])
 }

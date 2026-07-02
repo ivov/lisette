@@ -733,6 +733,22 @@ fn test() -> int {
 }
 
 #[test]
+fn for_loop_range_start_frozen_before_call_bound() {
+    let input = r#"
+fn test() -> int {
+  let mut n = 1
+  let consume = || -> int { n = 5; 4 }
+  let mut sum = 0
+  for i in n..consume() {
+    sum += i
+  }
+  sum
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn for_loop_range_from_call() {
     let input = r#"
 fn get_range() -> Range<int> { 0..5 }
