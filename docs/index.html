@@ -671,19 +671,19 @@
         </div>
 
         <div class="code-window">
-          <pre><span class="kw">import</span> <span class="str">"go:fmt"</span>
-<span class="kw">import</span> <span class="str">"go:io"</span>
+          <pre><span class="kw">import</span> <span class="str">"go:encoding/json"</span>
+<span class="kw">import</span> <span class="str">"go:fmt"</span>
 <span class="kw">import</span> <span class="str">"go:os"</span>
 
 <span class="kw">fn</span> <span class="fn">load_config</span><span class="pn">(</span><span class="pl">path</span><span class="pn">:</span> <span class="ty">string</span><span class="pn">)</span> <span class="pn">-&gt;</span> <span class="ty">Result</span><span class="pn">&lt;</span><span class="ty">Cfg</span><span class="pn">,</span> <span class="ty">error</span><span class="pn">&gt;</span> <span class="pn">{</span>
-  <span class="kw">let</span> <span class="pl">file</span> <span class="pn">=</span> <span class="pl">os</span><span class="pn">.</span><span class="fn">Open</span><span class="pn">(</span><span class="pl">path</span><span class="pn">)?</span>
-  <span class="kw">defer</span> <span class="pl">file</span><span class="pn">.</span><span class="fn">Close</span><span class="pn">()</span>
-  <span class="kw">let</span> <span class="pl">data</span> <span class="pn">=</span> <span class="pl">io</span><span class="pn">.</span><span class="fn">ReadAll</span><span class="pn">(</span><span class="pl">file</span><span class="pn">)?</span>
-  <span class="fn">parse_yaml</span><span class="pn">(</span><span class="pl">data</span><span class="pn">)</span>
+  <span class="kw">let</span> <span class="pl">data</span> <span class="pn">=</span> <span class="pl">os</span><span class="pn">.</span><span class="fn">ReadFile</span><span class="pn">(</span><span class="pl">path</span><span class="pn">)?</span>
+  <span class="kw">let</span> <span class="kw">mut</span> <span class="pl">config</span> <span class="pn">=</span> <span class="ty">Cfg</span> <span class="pn">{</span> <span class="pl">port</span><span class="pn">:</span> <span class="pl">8080</span><span class="pn">,</span> <span class="pl">debug</span><span class="pn">:</span> <span class="pl">false</span> <span class="pn">}</span>
+  <span class="pl">json</span><span class="pn">.</span><span class="fn">Unmarshal</span><span class="pn">(</span><span class="pl">data</span><span class="pn">,</span> <span class="pn">&amp;</span><span class="pl">config</span><span class="pn">)?</span>
+  <span class="ty">Ok</span><span class="pn">(</span><span class="pl">config</span><span class="pn">)</span>
 <span class="pn">}</span>
 
 <span class="kw">fn</span> <span class="fn">main</span><span class="pn">()</span> <span class="pn">{</span>
-  <span class="kw">match</span> <span class="fn">load_config</span><span class="pn">(</span><span class="str">"app.yaml"</span><span class="pn">)</span> <span class="pn">{</span>
+  <span class="kw">match</span> <span class="fn">load_config</span><span class="pn">(</span><span class="str">"app.json"</span><span class="pn">)</span> <span class="pn">{</span>
     <span class="ty">Ok</span><span class="pn">(</span><span class="pl">config</span><span class="pn">)</span> <span class="pn">=&gt;</span> <span class="fn">start</span><span class="pn">(</span><span class="pl">config</span><span class="pn">),</span>
     <span class="ty">Err</span><span class="pn">(</span><span class="pl">e</span><span class="pn">)</span> <span class="pn">=&gt;</span> <span class="pl">fmt</span><span class="pn">.</span><span class="fn">Println</span><span class="pn">(</span><span class="str">"error:"</span><span class="pn">,</span> <span class="pl">e</span><span class="pn">),</span>
   <span class="pn">}</span>
@@ -800,7 +800,7 @@
   <span class="pn">}</span>
 <span class="pn">}</span>
 
-<span class="kw">fn</span> <span class="fn">max</span><span class="pn">&lt;</span><span class="ty">T</span><span class="pn">:</span> <span class="ty">Metric</span><span class="pn">&gt;(</span><span class="pl">metrics</span><span class="pn">:</span> <span class="ty">Slice</span><span class="pn">&lt;</span><span class="ty">T</span><span class="pn">&gt;)</span> <span class="pn">-&gt;</span> <span class="ty">T</span> <span class="pn">{</span>
+<span class="kw">fn</span> <span class="fn">largest</span><span class="pn">&lt;</span><span class="ty">T</span><span class="pn">:</span> <span class="ty">Metric</span><span class="pn">&gt;(</span><span class="pl">metrics</span><span class="pn">:</span> <span class="ty">Slice</span><span class="pn">&lt;</span><span class="ty">T</span><span class="pn">&gt;)</span> <span class="pn">-&gt;</span> <span class="ty">T</span> <span class="pn">{</span>
   <span class="pl">metrics</span><span class="pn">.</span><span class="fn">fold</span><span class="pn">(</span><span class="pl">metrics</span><span class="pn">[</span><span class="pl">0</span><span class="pn">],</span> <span class="pn">|</span><span class="pl">a</span><span class="pn">,</span> <span class="pl">b</span><span class="pn">|</span>
     <span class="kw">if</span> <span class="pl">a</span><span class="pn">.</span><span class="fn">value</span><span class="pn">()</span> <span class="pn">&gt;</span> <span class="pl">b</span><span class="pn">.</span><span class="fn">value</span><span class="pn">()</span> <span class="pn">{</span> <span class="pl">a</span> <span class="pn">}</span> <span class="kw">else</span> <span class="pn">{</span> <span class="pl">b</span> <span class="pn">}</span>
   <span class="pn">)</span>

@@ -231,10 +231,11 @@ fn find(items: Slice<int>, target: int) -> Option<int> {
 Schedules an expression to run when the enclosing function returns, regardless of how it returns. Multiple defers execute in reverse order (LIFO).
 
 ```rust
-fn read_file(path: string) -> Result<Slice<uint8>, error> {
+fn file_size(path: string) -> Result<int64, error> {
   let file = os.Open(path)?
   defer file.Close()
-  io.ReadAll(file)
+  let info = file.Stat()?
+  Ok(info.Size())
 }
 ```
 

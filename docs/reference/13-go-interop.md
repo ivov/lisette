@@ -160,11 +160,9 @@ Go functions that return `(T, error)` are declared as `Result<T, E>`
 
 ```rust
 import "go:os"
-import "go:io"
 
 fn read_file(path: string) -> Result<Slice<byte>, error> {
-  let file = os.Open(path)?
-  let bytes = io.ReadAll(file)?
+  let bytes = os.ReadFile(path)?
   Ok(bytes)
 }
 ```

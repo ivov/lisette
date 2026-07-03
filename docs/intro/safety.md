@@ -134,8 +134,7 @@ Go allows disregarding errors from fallible operations:
 
 ```go
 func readConfig(path string) (Config, error) {
-    file, _ := os.Open(path)       // error ignored with `_`
-    bytes, _ := io.ReadAll(file)   // error ignored with `_`
+    bytes, _ := os.ReadFile(path)   // error ignored with `_`
     return parseConfig(bytes)
 }
 ```
@@ -144,8 +143,7 @@ Lisette enforces error handling with `Result` and offers `?` for propagation:
 
 ```rust
 fn read_config(path: string) -> Result<Config, error> {
-  let file = os.Open(path)?
-  let bytes = io.ReadAll(file)?
+  let bytes = os.ReadFile(path)?
   parse_config(bytes)
 }
 ```

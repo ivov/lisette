@@ -171,7 +171,7 @@ Run `lis doc Slice` for the full method list.
 A map from keys to values.
 
 ```rust
-let ages = Map.from([("Alice", 20), ("Bob", 25)])
+let mut ages = Map.from([("Alice", 20), ("Bob", 25)])
 
 let alice = ages.get("Alice")    // Option<int>
 let direct = ages["Alice"]

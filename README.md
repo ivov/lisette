@@ -43,18 +43,18 @@ Go interop and `?` for error handling:
 
 ```rust
 import "go:os"
-import "go:io"
+import "go:encoding/json"
 import "go:fmt"
 
 fn load_config(path: string) -> Result<Cfg, error> {
-  let file = os.Open(path)?
-  defer file.Close()
-  let data = io.ReadAll(file)?
-  parse_yaml(data)
+  let data = os.ReadFile(path)?
+  let mut config = Cfg { port: 8080, debug: false }
+  json.Unmarshal(data, &config)?
+  Ok(config)
 }
 
 fn main() {
-  match load_config("app.yaml") {
+  match load_config("app.json") {
     Ok(config) => start(config),
     Err(e) => fmt.Println("error:", e),
   }

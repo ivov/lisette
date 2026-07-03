@@ -10,8 +10,7 @@ When applied to `Result`, `?` unwraps `Ok` or forces the function to return `Err
 
 ```rust
 fn read_config(path: string) -> Result<Config, error> {
-  let file = os.Open(path)?
-  let bytes = io.ReadAll(file)?
+  let bytes = os.ReadFile(path)?
   parse_config(bytes)
 }
 ```
@@ -20,11 +19,7 @@ Without `?`:
 
 ```rust
 fn read_config(path: string) -> Result<Config, error> {
-  let file = match os.Open(path) {
-    Ok(f) => f,
-    Err(e) => return Err(e),
-  }
-  let bytes = match io.ReadAll(file) {
+  let bytes = match os.ReadFile(path) {
     Ok(b) => b,
     Err(e) => return Err(e),
   }
@@ -59,13 +54,12 @@ fn get_name(id: int) -> Option<string> {
 
 ```rs
 fn read_config(path: string) -> Result<Config, error> {
-  let file = os.Open(path).wrap_err("opening config file")?
-  let bytes = io.ReadAll(file).wrap_err("reading config file")?
+  let bytes = os.ReadFile(path).wrap_err("reading config file")?
   parse_config(bytes)
 }
 ```
 
-If `os.Open` fails, the propagated error reads `opening config file: open /etc/app.conf: no such file or directory`. The original error is preserved underneath, so `errors.Is` and `errors.As` still match against it.
+If `os.ReadFile` fails, the propagated error reads `reading config file: open /etc/app.conf: no such file or directory`. The original error is preserved underneath, so `errors.Is` and `errors.As` still match against it.
 
 ## `try` blocks
 
