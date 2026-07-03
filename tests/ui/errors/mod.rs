@@ -2528,6 +2528,20 @@ fn main() {
 }
 
 #[test]
+fn infer_instantiation_cycle() {
+    let input = r#"
+fn depth<T>(x: T, n: int) -> int {
+  if n > 0 { depth([x], n - 1) } else { 0 }
+}
+
+fn main() {
+  let _ = depth(1, 3)
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
 fn infer_option_where_inner_expected() {
     let input = r#"
 fn process(x: int) -> int { x }

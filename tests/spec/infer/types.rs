@@ -1858,6 +1858,344 @@ fn unconstrained_bounded_type_param_produces_error() {
 }
 
 #[test]
+fn polymorphic_recursion_growing_slice_produces_error() {
+    infer(
+        r#"
+    fn depth<T>(x: T, n: int) -> int {
+      if n > 0 { depth([x], n - 1) } else { 0 }
+    }
+
+    fn main() {
+      let _ = depth(1, 3)
+    }
+        "#,
+    )
+    .assert_infer_code_once("instantiation_cycle");
+}
+
+#[test]
+fn polymorphic_recursion_growing_option_produces_error() {
+    infer(
+        r#"
+    fn nest<T>(x: T, n: int) -> int {
+      if n > 0 { nest(Some(x), n - 1) } else { 0 }
+    }
+
+    fn main() {
+      let _ = nest(1, 3)
+    }
+        "#,
+    )
+    .assert_infer_code_once("instantiation_cycle");
+}
+
+#[test]
+fn polymorphic_recursion_explicit_type_args_produces_error() {
+    infer(
+        r#"
+    fn explicit<T>(x: T, n: int) -> int {
+      if n > 0 { explicit<Slice<T>>([x], n - 1) } else { 0 }
+    }
+
+    fn main() {
+      let _ = explicit(1, 3)
+    }
+        "#,
+    )
+    .assert_infer_code_once("instantiation_cycle");
+}
+
+#[test]
+fn polymorphic_recursion_through_reference_produces_error() {
+    infer(
+        r#"
+    fn indirect<T>(x: T, n: int) -> int {
+      if n > 0 {
+        let recurse: fn(Slice<T>, int) -> int = indirect
+        recurse([x], n - 1)
+      } else {
+        0
+      }
+    }
+
+    fn main() {
+      let _ = indirect(1, 3)
+    }
+        "#,
+    )
+    .assert_infer_code_once("instantiation_cycle");
+}
+
+#[test]
+fn mutual_polymorphic_recursion_produces_error() {
+    infer(
+        r#"
+    fn ping<T>(x: T, n: int) -> int {
+      if n > 0 { pong([x], n - 1) } else { 0 }
+    }
+
+    fn pong<U>(x: U, n: int) -> int {
+      ping(x, n)
+    }
+
+    fn main() {
+      let _ = ping(1, 3)
+    }
+        "#,
+    )
+    .assert_infer_code_once("instantiation_cycle");
+}
+
+#[test]
+fn polymorphic_recursion_growing_swap_produces_error() {
+    infer(
+        r#"
+    fn grow<A, B>(a: A, b: B, n: int) -> int {
+      if n > 0 { grow(b, [a], n - 1) } else { 0 }
+    }
+
+    fn main() {
+      let _ = grow(1, "x", 3)
+    }
+        "#,
+    )
+    .assert_infer_code_once("instantiation_cycle");
+}
+
+#[test]
+fn generic_recursion_with_fixed_type_args_is_valid() {
+    infer(
+        r#"
+    fn countdown<T>(x: T, n: int) -> int {
+      if n > 0 { countdown(x, n - 1) } else { 0 }
+    }
+
+    fn main() {
+      let _ = countdown("a", 3)
+    }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn generic_recursion_with_swapped_type_args_is_valid() {
+    infer(
+        r#"
+    fn swap_rec<A, B>(a: A, b: B, n: int) -> int {
+      if n > 0 { swap_rec(b, a, n - 1) } else { 0 }
+    }
+
+    fn main() {
+      let _ = swap_rec(1, "x", 3)
+    }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn one_way_growing_generic_call_is_valid() {
+    infer(
+        r#"
+    fn wrap_once<T>(x: T, n: int) -> int {
+      measure([x], n)
+    }
+
+    fn measure<U>(x: U, n: int) -> int {
+      if n > 0 { measure(x, n - 1) } else { 0 }
+    }
+
+    fn main() {
+      let _ = wrap_once(1, 3)
+    }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn generic_method_polymorphic_recursion_produces_error() {
+    infer(
+        r#"
+    struct Counter {}
+
+    impl Counter {
+      fn depth<T>(self, x: T, n: int) -> int {
+        if n > 0 { self.depth([x], n - 1) } else { 0 }
+      }
+    }
+
+    fn main() {
+      let c = Counter {}
+      let _ = c.depth(1, 3)
+    }
+        "#,
+    )
+    .assert_infer_code_once("instantiation_cycle");
+}
+
+#[test]
+fn static_method_polymorphic_recursion_produces_error() {
+    infer(
+        r#"
+    struct Tool {}
+
+    impl Tool {
+      fn measure<T>(x: T, n: int) -> int {
+        if n > 0 { Tool.measure([x], n - 1) } else { 0 }
+      }
+    }
+
+    fn main() {
+      let _ = Tool.measure(1, 3)
+    }
+        "#,
+    )
+    .assert_infer_code_once("instantiation_cycle");
+}
+
+#[test]
+fn impl_receiver_growth_recursion_produces_error() {
+    infer(
+        r#"
+    struct Box<U> { value: U }
+
+    impl<U> Box<U> {
+      fn deep(self, n: int) -> int {
+        if n > 0 {
+          let bigger = Box { value: self }
+          bigger.deep(n - 1)
+        } else {
+          0
+        }
+      }
+    }
+
+    fn main() {
+      let b = Box { value: 1 }
+      let _ = b.deep(3)
+    }
+        "#,
+    )
+    .assert_infer_code_once("instantiation_cycle");
+}
+
+#[test]
+fn generic_method_recursion_with_fixed_receiver_is_valid() {
+    infer(
+        r#"
+    struct Box<U> { value: U }
+
+    impl<U> Box<U> {
+      fn count(self, n: int) -> int {
+        if n > 0 { self.count(n - 1) } else { 0 }
+      }
+    }
+
+    fn main() {
+      let b = Box { value: 1 }
+      let _ = b.count(3)
+    }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn nested_function_shadowed_generic_produces_no_cycle_error() {
+    infer(
+        r#"
+    fn outer<T>(x: T, n: int) -> int {
+      fn helper<T>(y: T) -> int {
+        outer([y], 1)
+      }
+      n
+    }
+
+    fn main() {
+      let _ = outer(1, 3)
+    }
+        "#,
+    )
+    .assert_infer_code("nested_function")
+    .assert_infer_code_count("instantiation_cycle", 0);
+}
+
+#[test]
+fn static_method_recursion_through_alias_produces_error() {
+    infer(
+        r#"
+    struct Tool {}
+
+    type Gadget = Tool
+
+    impl Tool {
+      fn measure<T>(x: T, n: int) -> int {
+        if n > 0 { Gadget.measure([x], n - 1) } else { 0 }
+      }
+    }
+
+    fn main() {
+      let _ = Tool.measure(1, 3)
+    }
+        "#,
+    )
+    .assert_infer_code_once("instantiation_cycle");
+}
+
+#[test]
+fn imported_module_polymorphic_recursion_produces_error() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "helpers",
+        "lib.lis",
+        r#"
+pub fn tally<T>(x: T, n: int) -> int {
+  if n > 0 { tally([x], n - 1) } else { 0 }
+}
+"#,
+    );
+    fs.add_file(
+        "main",
+        "main.lis",
+        r#"
+import "helpers"
+
+fn main() {
+  let _ = helpers.tally(1, 3)
+}
+"#,
+    );
+
+    infer_module("main", fs).assert_infer_code_once("instantiation_cycle");
+}
+
+#[test]
+fn function_method_polymorphic_recursion_cycle_produces_error() {
+    infer(
+        r#"
+    struct Helper {}
+
+    impl Helper {
+      fn bounce<T>(self, x: T, n: int) -> int {
+        trampoline(x, n)
+      }
+    }
+
+    fn trampoline<T>(x: T, n: int) -> int {
+      if n > 0 { Helper {}.bounce([x], n - 1) } else { 0 }
+    }
+
+    fn main() {
+      let _ = trampoline(1, 3)
+    }
+        "#,
+    )
+    .assert_infer_code_once("instantiation_cycle");
+}
+
+#[test]
 fn constrained_bounded_type_param_is_valid() {
     infer(
         r#"

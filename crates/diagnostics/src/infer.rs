@@ -1752,6 +1752,27 @@ pub fn unconstrained_type_param(param_name: &str, span: Span) -> LisetteDiagnost
         ))
 }
 
+pub fn instantiation_cycle(
+    param_name: &str,
+    type_arg: &Type,
+    target_fn_name: &str,
+    span: Span,
+) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Growing type argument")
+        .with_infer_code("instantiation_cycle")
+        .with_span_label(
+            &span,
+            format!(
+                "`{}` becomes `{}` in this recursive call",
+                param_name, type_arg
+            ),
+        )
+        .with_help(format!(
+            "Each recursive call would need a new version of `{}` at a larger type, so compilation would never finish. Keep type arguments fixed across recursive calls",
+            target_fn_name
+        ))
+}
+
 pub fn slice_index_type_mismatch(index_ty: &Type, span: Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Type mismatch")
         .with_infer_code("slice_index_type_mismatch")

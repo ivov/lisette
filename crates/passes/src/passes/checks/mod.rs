@@ -9,6 +9,7 @@ pub(crate) mod enum_variant_value;
 pub(crate) mod generics;
 pub(crate) mod impossible_comparison;
 pub(crate) mod index_out_of_bounds;
+pub(crate) mod instantiation_cycle;
 pub(crate) mod interpolation_stringer;
 pub(crate) mod irrefutable_patterns;
 pub(crate) mod json_methods;
@@ -56,6 +57,7 @@ pub(crate) fn run_all(
         visibility::run_module(module_id, store, &sink);
         json_methods::run_module(module_id, store, &sink);
     }
+    instantiation_cycle::run(store, &sink);
 
     let mut work: Vec<(&Module, &File)> = store
         .modules
