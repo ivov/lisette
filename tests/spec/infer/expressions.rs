@@ -1989,3 +1989,59 @@ fn assignment_type_mismatch_single_diagnostic() {
     let result = infer(r#"{ let mut x = 0; x = true; let _ = x }"#);
     assert_eq!(result.errors.len(), 1);
 }
+
+#[test]
+fn mut_binding_from_clone_no_error() {
+    infer(r#"{ let a = [1, 2]; let mut b = a.clone(); b = b.append(3); let _ = b; let _ = a }"#)
+        .assert_no_errors();
+}
+
+#[test]
+fn mut_binding_from_call_no_error() {
+    infer(r#"{ let mut b = Slice.new<int>(); b = b.append(1); let _ = b }"#).assert_no_errors();
+}
+
+#[test]
+fn mut_binding_from_literal_no_error() {
+    infer(r#"{ let mut b = [1, 2]; b = b.append(3); let _ = b }"#).assert_no_errors();
+}
+
+#[test]
+fn mut_binding_from_subslice_clone_no_error() {
+    infer(r#"{ let a = [1, 2, 3]; let mut b = a[1..3].clone(); b[0] = 9; let _ = b; let _ = a }"#)
+        .assert_no_errors();
+}
+
+#[test]
+fn mut_binding_from_subslice_single_diagnostic() {
+    let result =
+        infer(r#"{ let a = [1, 2, 3]; let mut b = a[1..3]; b[0] = 9; let _ = b; let _ = a }"#);
+    assert_eq!(result.errors.len(), 1);
+}
+
+#[test]
+fn immutable_binding_from_binding_no_error() {
+    infer(r#"{ let a = [1, 2]; let b = a; let _ = b }"#).assert_no_errors();
+}
+
+#[test]
+fn mut_binding_from_ref_no_error() {
+    infer(r#"{ let a = 1; let r = &a; let mut r2 = r; r2 = &a; let _ = r2 }"#).assert_no_errors();
+}
+
+#[test]
+fn mut_binding_from_scalar_element_no_error() {
+    infer(r#"{ let xs = [1, 2]; let mut x = xs[0]; x += 1; let _ = x }"#).assert_no_errors();
+}
+
+#[test]
+fn mut_binding_from_binding_single_diagnostic() {
+    let result =
+        infer(r#"{ let a = [1, 2]; let mut b = a; b = b.append(3); let _ = b; let _ = a }"#);
+    assert_eq!(result.errors.len(), 1);
+}
+
+#[test]
+fn mut_binding_self_shrink_reassignment_no_error() {
+    infer(r#"{ let mut it = Slice.new<int>(); it = it[1..]; let _ = it }"#).assert_no_errors();
+}

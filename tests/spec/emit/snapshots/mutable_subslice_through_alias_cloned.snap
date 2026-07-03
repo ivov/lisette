@@ -6,7 +6,7 @@ description: |
   
   fn test() {
     let xs: Numbers = [1, 2, 3]
-    let mut part = xs[0..2]
+    let mut part = xs[0..2].clone()
     part[0] = 99
     let _ = xs
   }

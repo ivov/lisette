@@ -410,6 +410,12 @@ impl InferCtx<'_, '_> {
                 self.sink
                     .push(diagnostics::infer::self_reference_in_assignment(span));
             }
+
+            let self_sourced = super::aliasing::place_root_name(new_value.unwrap_parens())
+                .is_some_and(|root| root == var_name);
+            if compound_operator.is_none() && is_simple_target && is_mutable && !self_sourced {
+                self.check_mut_binding_alias(&var_name, &new_value);
+            }
         }
 
         // Only unify if the RHS type is still a variable (not yet resolved).

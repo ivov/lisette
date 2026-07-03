@@ -1,3 +1,4 @@
+pub mod aliasing;
 pub mod bindings;
 pub mod comparison;
 pub mod control_flow;

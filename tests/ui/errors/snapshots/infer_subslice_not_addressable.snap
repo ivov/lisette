@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Non-addressable expression
+   ╭─[test.lis:4:11]
+ 3 │   let a = [1, 2, 3]
+ 4 │   let r = &a[1..3]
+   ·           ────┬───
+   ·               ╰── cannot take address of sub-slice expression
+ 5 │   let _ = r
+   ╰────
+  help: Assign the value to a variable first, then take its address · code: [infer.non_addressable_expression]

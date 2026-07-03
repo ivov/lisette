@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Cannot make a mutable binding to `a[1..3]`
+   ╭─[test.lis:4:16]
+ 3 │   let a = [1, 2, 3]
+ 4 │   let mut b = a[1..3]
+   ·                ───┬──
+   ·                   ╰── would be mutated implicitly
+ 5 │   b[0] = 9
+   ╰────
+  help: Mutating `b` would implicitly mutate `a[1..3]`. Use `a[1..3].clone()` to make a copy · code: [infer.mut_binding_aliases]

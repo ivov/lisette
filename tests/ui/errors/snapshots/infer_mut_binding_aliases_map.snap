@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Cannot make a mutable binding to `m`
+   ╭─[test.lis:4:16]
+ 3 │   let m = Map.from([("a", 1)])
+ 4 │   let mut m2 = m
+   ·                ┬
+   ·                ╰── would be mutated implicitly
+ 5 │   m2["b"] = 2
+   ╰────
+  help: Mutating `m2` would implicitly mutate `m`. Either use `m.clone()` to make a copy or `&m` to take a reference · code: [infer.mut_binding_aliases]

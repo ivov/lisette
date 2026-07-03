@@ -232,7 +232,7 @@ fn test(s: Slice<int>, flag: bool) -> Slice<int> {
 fn slice_append_reassign() {
     let input = r#"
 fn test(items: Slice<int>) {
-  let mut s = items
+  let mut s = items.clone()
   s = s.append(1, 2, 3)
 }
 "#;
@@ -243,7 +243,7 @@ fn test(items: Slice<int>) {
 fn slice_append_statement() {
     let input = r#"
 fn test(items: Slice<int>) -> Slice<int> {
-  let mut s = items
+  let mut s = items.clone()
   s = s.append(4)
   s
 }
@@ -1105,7 +1105,7 @@ fn mut_subslice_clones_for_aliased_range() {
     let input = r#"
 type Prefix = Range<int>
 fn test(arr: Slice<int>, r: Prefix) -> Slice<int> {
-  let mut owned = arr[r]
+  let mut owned = arr[r].clone()
   owned[0] = 99
   owned
 }

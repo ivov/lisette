@@ -118,12 +118,12 @@ let sub = source[1..3]        // compiles to source[1:3:3], cap = 2
 let sub = sub.append(99)      // allocates new array, source untouched
 ```
 
-In addition, when a sub-slice is bound with `let mut`, Lisette clones the sub-slice to sever the backing array alias entirely. This prevents writes through the sub-slice from mutating the original:
+In addition, binding a sub-slice with `let mut` requires an explicit `.clone()`, which severs the backing array alias entirely. This prevents writes through the sub-slice from mutating the original:
 
 ```rust
 let source = [1, 2, 3, 4, 5]
-let mut sub = source[1..3]    // cloned - fresh backing array
-sub[0] = 99                   // only sub is affected, source unchanged
+let mut sub = source[1..3].clone()  // fresh backing array
+sub[0] = 99                         // only sub is affected, source unchanged
 ```
 
 Immutable sub-slices with `let` remain zero-copy since element writes are not permitted on them.
@@ -291,6 +291,33 @@ In Lisette, functions that mutate their parameters in a way observable to the ca
 ```
 
 📚 See [`05-functions.md`](../reference/05-functions.md#mutable-parameters)
+
+### Aliased collections
+
+In Go, assigning a slice or map copies only a small header, so two variables silently share the same backing storage:
+
+```go
+a := []int{1, 2, 3}
+b := a
+b[0] = 99 // `a` is now [99 2 3]
+```
+
+In Lisette, a mutable binding must own its value. Creating one from an existing binding, field, or index of a slice or map is a compile error:
+
+```
+  ✕ Cannot make a mutable binding to `a`
+   ╭─[example.lis:3:15]
+ 2 │   let a = [1, 2, 3]
+ 3 │   let mut b = a
+   ·               ┬
+   ·               ╰── would be mutated implicitly
+ 4 │   b[0] = 99
+   ╰────
+  help: Mutating `b` would implicitly mutate `a`. Either use `a.clone()` to
+        make a copy or `&a` to take a reference.
+```
+
+Fresh values (literals, call results, constructed values) bind without ceremony. Immutable `let` bindings remain zero-copy views, as element writes are not permitted on them.
 
 ## Zero values
 

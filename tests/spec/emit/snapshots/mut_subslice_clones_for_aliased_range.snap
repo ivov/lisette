@@ -4,7 +4,7 @@ description: |
   
   type Prefix = Range<int>
   fn test(arr: Slice<int>, r: Prefix) -> Slice<int> {
-    let mut owned = arr[r]
+    let mut owned = arr[r].clone()
     owned[0] = 99
     owned
   }

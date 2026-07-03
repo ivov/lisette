@@ -3,7 +3,7 @@ source: tests/ui/lint/mod.rs
 ---
   ● Manual `while let`
    ╭─[test.lis:6:3]
- 5 │   let mut it = xs
+ 5 │   let mut it = xs.clone()
  6 │   loop {
    ·   ──┬─
    ·     ╰── can be a `while let`

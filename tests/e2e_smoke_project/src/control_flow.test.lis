@@ -135,7 +135,7 @@ fn subslice_append_no_alias() {
 #[test]
 fn mutable_subslice_element_write_no_alias() {
   let source = [1, 2, 3, 4, 5]
-  let mut sub = source[1..3]
+  let mut sub = source[1..3].clone()
   sub[0] = 99
   let result = source[1]
   assert result == 2

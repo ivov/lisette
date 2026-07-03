@@ -274,6 +274,15 @@ let mut count = 0
 count += 1
 ```
 
+A mutable binding must own its value. Initializing or reassigning a mutable binding from an existing binding, field, or index of a `Slice` or `Map` would share the source's backing storage, so the compiler rejects it. Use `.clone()` for an independent copy, or `&` to share the value intentionally through a reference.
+
+```rust
+let a = [1, 2, 3]
+let mut b = a          // error: mutating `b` would implicitly mutate `a`
+let mut c = a.clone()  // independent copy
+let r = &a             // shared intentionally
+```
+
 `const` defines a compile-time constant. As in Go, only primitive values are allowed: `bool`, `int`, `float`, `string`. The initializer must be a literal or an expression built from literals. `const` bindings are immutable and unaddressable.
 
 ```rust

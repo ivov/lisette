@@ -2238,6 +2238,103 @@ fn test() {
 }
 
 #[test]
+fn infer_mut_binding_aliases_slice() {
+    let input = r#"
+fn test() {
+  let a = [1, 2, 3]
+  let mut b = a
+  b = b.append(4)
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_mut_binding_aliases_map() {
+    let input = r#"
+fn test() {
+  let m = Map.from([("a", 1)])
+  let mut m2 = m
+  m2["b"] = 2
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_mut_binding_aliases_reassignment() {
+    let input = r#"
+fn test(a: Slice<int>) {
+  let mut b = [0]
+  b = a
+  b = b.append(1)
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_mut_binding_aliases_struct_field() {
+    let input = r#"
+struct Doc { tags: Slice<string> }
+
+fn test(d: Doc) {
+  let mut t = d.tags
+  t = t.append("x")
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_mut_binding_aliases_map_index() {
+    let input = r#"
+fn test(m: Map<string, Slice<int>>) {
+  let mut s = m["k"]
+  s = s.append(1)
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_mut_binding_aliases_subslice() {
+    let input = r#"
+fn test() {
+  let a = [1, 2, 3]
+  let mut b = a[1..3]
+  b[0] = 9
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_mut_binding_aliases_computed_index() {
+    let input = r#"
+fn key() -> string { "k" }
+
+fn test(m: Map<string, Slice<int>>) {
+  let mut s = m[key()]
+  s = s.append(1)
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_subslice_not_addressable() {
+    let input = r#"
+fn test() {
+  let a = [1, 2, 3]
+  let r = &a[1..3]
+  let _ = r
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
 fn infer_value_receiver_not_mutable() {
     let input = r#"
 struct Counter { count: int }

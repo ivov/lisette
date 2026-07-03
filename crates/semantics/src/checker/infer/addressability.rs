@@ -1,4 +1,5 @@
 use syntax::ast::{Expression, UnaryOperator};
+use syntax::types::peel_to_range_type;
 
 use crate::checker::EnvResolve;
 use crate::checker::TypeEnv;
@@ -20,7 +21,14 @@ pub(crate) fn check_is_non_addressable(
                 check_is_non_addressable(expression, env)
             }
         }
-        Expression::IndexedAccess { expression, .. } => {
+        Expression::IndexedAccess {
+            expression, index, ..
+        } => {
+            let is_range_index = matches!(index.unwrap_parens(), Expression::Range { .. })
+                || peel_to_range_type(&index.get_type()).is_some();
+            if is_range_index {
+                return Some("sub-slice expression");
+            }
             let expression_ty = expression.get_type().resolve_in(env);
             if let Some(name) = expression_ty.get_name() {
                 if name == "Map" {

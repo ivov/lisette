@@ -3,15 +3,17 @@ source: tests/spec/emit/prelude.rs
 description: |
   
   fn test(items: Slice<int>) -> Slice<int> {
-    let mut s = items
+    let mut s = items.clone()
     s = s.append(4)
     s
   }
 ---
 package main
 
+import "slices"
+
 func test(items []int) []int {
-	s := items
+	s := slices.Clone(items)
 	s = append(s, 4)
 	return s
 }

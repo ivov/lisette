@@ -190,6 +190,13 @@ impl InferCtx<'_, '_> {
             ));
         }
 
+        if mutable
+            && new_binding.pattern.is_identifier()
+            && let Some(ref name) = binding_name
+        {
+            self.check_mut_binding_alias(name, &new_value);
+        }
+
         // Reject enum type bindings: `let c = utils.Color`
         if let Expression::DotAccess {
             expression: inner,

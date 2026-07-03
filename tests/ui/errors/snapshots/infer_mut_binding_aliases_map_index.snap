@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Cannot make a mutable binding to `m["k"]`
+   ╭─[test.lis:3:16]
+ 2 │ fn test(m: Map<string, Slice<int>>) {
+ 3 │   let mut s = m["k"]
+   ·                ──┬──
+   ·                  ╰── would be mutated implicitly
+ 4 │   s = s.append(1)
+   ╰────
+  help: Mutating `s` would implicitly mutate `m["k"]`. Use `m["k"].clone()` to make a copy · code: [infer.mut_binding_aliases]

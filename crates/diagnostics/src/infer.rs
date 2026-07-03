@@ -525,6 +525,27 @@ pub fn self_reference_in_assignment(span: Span) -> LisetteDiagnostic {
         .with_help("Separate the reassignment from reference taking, or use a different variable")
 }
 
+pub fn mut_binding_aliases(
+    binding_name: &str,
+    source: &str,
+    addressable: bool,
+    span: Span,
+) -> LisetteDiagnostic {
+    let help = if addressable {
+        format!(
+            "Mutating `{binding_name}` would implicitly mutate `{source}`. Either use `{source}.clone()` to make a copy or `&{source}` to take a reference."
+        )
+    } else {
+        format!(
+            "Mutating `{binding_name}` would implicitly mutate `{source}`. Use `{source}.clone()` to make a copy."
+        )
+    };
+    LisetteDiagnostic::error(format!("Cannot make a mutable binding to `{source}`"))
+        .with_infer_code("mut_binding_aliases")
+        .with_span_label(&span, "would be mutated implicitly")
+        .with_help(help)
+}
+
 pub fn uppercase_binding(span: Span, name: &str) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Invalid binding name")
         .with_infer_code("uppercase_binding")

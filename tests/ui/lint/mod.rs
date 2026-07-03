@@ -19466,7 +19466,7 @@ fn while_let_loop() {
 import "go:fmt"
 
 pub fn drain(xs: Slice<int>) {
-  let mut it = xs
+  let mut it = xs.clone()
   loop {
     match it.get(0) {
       Some(v) => {

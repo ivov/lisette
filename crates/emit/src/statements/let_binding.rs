@@ -8,9 +8,8 @@ use crate::patterns::sites::{AnnotatedPattern, PatternSubject};
 use crate::plan::bodies::{LetForm, LetPlan, LoweredBlock, LoweredStatement};
 use crate::plan::calls::CalleePlan;
 use crate::plan::placement::{expression_contains_binding, is_unit_call, requires_temp_var};
-use crate::types::native::NativeGoType;
 use syntax::ast::{Binding, Expression, Literal, Pattern, UnaryOperator};
-use syntax::types::{Type, peel_to_range_type};
+use syntax::types::Type;
 
 #[derive(Clone, Copy)]
 pub(crate) struct LetSpec<'a> {
@@ -70,45 +69,6 @@ fn is_fn_alias_nominal(ty: &Type) -> bool {
         return false;
     };
     matches!(inner.unwrap_forall(), Type::Function(_))
-}
-
-/// `let mut x = arr[range]` would otherwise alias the backing array.
-fn maybe_clone_subslice(
-    planner: &mut Planner,
-    value: &Expression,
-    mutable: bool,
-    expression: String,
-) -> String {
-    if !is_mutable_subslice(planner, value, mutable) {
-        return expression;
-    }
-    planner.require_slices();
-    format!("slices.Clone({})", expression)
-}
-
-fn is_mutable_subslice(planner: &Planner, value: &Expression, mutable: bool) -> bool {
-    if !mutable {
-        return false;
-    }
-    let value = value.unwrap_parens();
-    let Expression::IndexedAccess {
-        expression, index, ..
-    } = value
-    else {
-        return false;
-    };
-    let is_range_index = matches!(**index, Expression::Range { .. })
-        || peel_to_range_type(&index.get_type()).is_some();
-    if !is_range_index {
-        return false;
-    }
-    let collection_ty = if let Some(inner) = expression.deref_inner() {
-        let inner_ty = inner.get_type();
-        inner_ty.inner().unwrap_or(inner_ty)
-    } else {
-        expression.get_type()
-    };
-    planner.is_native_shape(&collection_ty, NativeGoType::Slice)
 }
 
 /// Pick the Go type for a `let` binding's `var X T` temp. Diverging values
@@ -300,7 +260,6 @@ impl Planner<'_> {
         );
         let (coercion_setup, value_expression) = coercion.lower(self, value_expression);
         statements.extend(coercion_setup);
-        let value_expression = maybe_clone_subslice(self, value, mutable, value_expression);
 
         let go_identifier = self.scope.bind(identifier, raw_go_name);
         let is_new = self.try_declare(&go_identifier);

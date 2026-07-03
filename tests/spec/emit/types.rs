@@ -1263,7 +1263,7 @@ fn mutable_subslice_cloned() {
     let input = r#"
 fn test(arr: Slice<int>) {
   let view = arr[1..4]
-  let mut owned = arr[1..4]
+  let mut owned = arr[1..4].clone()
   owned[0] = 99
   let _ = view
 }
@@ -1278,7 +1278,7 @@ type Numbers = Slice<int>
 
 fn test() {
   let xs: Numbers = [1, 2, 3]
-  let mut part = xs[0..2]
+  let mut part = xs[0..2].clone()
   part[0] = 99
   let _ = xs
 }

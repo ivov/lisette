@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Cannot make a mutable binding to `d.tags`
+   ╭─[test.lis:5:15]
+ 4 │ fn test(d: Doc) {
+ 5 │   let mut t = d.tags
+   ·               ───┬──
+   ·                  ╰── would be mutated implicitly
+ 6 │   t = t.append("x")
+   ╰────
+  help: Mutating `t` would implicitly mutate `d.tags`. Either use `d.tags.clone()` to make a copy or `&d.tags` to take a reference · code: [infer.mut_binding_aliases]
