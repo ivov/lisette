@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ No zero value for missing key
+   ╭─[test.lis:3:3]
+ 2 │ fn pick<K, V>(m: Map<K, V>, k: K) -> V {
+ 3 │   m[k]
+   ·   ──┬─
+   ·     ╰── `V` is not guaranteed to have a zero value
+ 4 │ }
+   ╰────
+  help: Bracket reads can return a zero value when the key is missing, but the type parameter `V` can be instantiated with a type that has no zero value, such as `Ref<T>`, so this bracket read is disallowed. Use `m.get(key)` instead · code: [infer.map_read_no_zero]

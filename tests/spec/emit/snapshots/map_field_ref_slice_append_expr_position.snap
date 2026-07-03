@@ -8,11 +8,14 @@ description: |
     let mut items = [1]
     let mut m = Map.new<string, Outer>()
     m["a"] = Outer { items: &items }
-    let _ = { m["a"].items.*.append(2) }
+    let Some(o) = m.get("a") else { return; };
+    let _ = { o.items.*.append(2) }
     let _ = items
   }
 ---
 package main
+
+import lisette "github.com/ivov/lisette/prelude"
 
 type Outer struct {
 	items *[]int
@@ -22,8 +25,13 @@ func main() {
 	items := []int{1}
 	m := make(map[string]Outer)
 	m["a"] = Outer{items: &items}
-	var tmp_1 []int
-	tmp_1 = append(*m["a"].items, 2)
-	_ = tmp_1
+	subject_1 := lisette.MapGet(m, "a")
+	if subject_1.Tag != lisette.OptionSome {
+		return
+	}
+	o := subject_1.SomeVal
+	var tmp_2 []int
+	tmp_2 = append(*o.items, 2)
+	_ = tmp_2
 	_ = items
 }

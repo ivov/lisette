@@ -892,6 +892,33 @@ pub fn field_no_zero(
         .with_help(main)
 }
 
+pub fn map_read_no_zero(value_ty: &Type, receiver: &str, span: Span) -> LisetteDiagnostic {
+    let (label, help) = if matches!(value_ty, Type::Parameter(_)) {
+        (
+            format!("`{value_ty}` is not guaranteed to have a zero value"),
+            format!(
+                "Bracket reads can return a zero value when the key is missing, but the type \
+                 parameter `{value_ty}` can be instantiated with a type that has no zero value, \
+                 such as `Ref<T>`, so this bracket read is disallowed. Use \
+                 `{receiver}.get(key)` instead"
+            ),
+        )
+    } else {
+        (
+            format!("`{value_ty}` has no zero value"),
+            format!(
+                "Bracket reads can return a zero value when the key is missing, but \
+                 `{value_ty}` has no zero value, so this bracket read is disallowed. Use \
+                 `{receiver}.get(key)` instead"
+            ),
+        )
+    };
+    LisetteDiagnostic::error("No zero value for missing key")
+        .with_infer_code("map_read_no_zero")
+        .with_span_label(&span, label)
+        .with_help(help)
+}
+
 pub fn unresolved_receiver_type(member: &str, span: Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Cannot infer receiver type")
         .with_infer_code("unresolved_receiver_type")

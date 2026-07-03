@@ -1685,7 +1685,8 @@ impl Counter {
 }
 
 fn test(m: Map<string, Ref<Counter>>) {
-  m["a"].*.increment()
+  let Some(c) = m.get("a") else { return; };
+  c.*.increment()
 }
 "#;
     assert_emit_snapshot!(input);
@@ -3489,7 +3490,8 @@ fn main() {
   let mut items = [1]
   let mut m = Map.new<string, Outer>()
   m["a"] = Outer { items: &items }
-  m["a"].items.* = m["a"].items.*.append(2)
+  let Some(o) = m.get("a") else { return; };
+  o.items.* = o.items.*.append(2)
   let _ = items
 }
 "#;
@@ -3505,7 +3507,8 @@ fn main() {
   let mut w = Wrap(1)
   let mut m = Map.new<string, Ref<Wrap>>()
   m["a"] = &w
-  m["a"].* = Wrap(2)
+  let Some(r) = m.get("a") else { return; };
+  r.* = Wrap(2)
   let _ = w
 }
 "#;
@@ -3522,9 +3525,10 @@ fn main() {
   let mut w = Wrap(Inner { x: 0 })
   let mut m = Map.new<string, Ref<Wrap>>()
   m["a"] = &w
-  let mut inner = m["a"].0
+  let Some(r) = m.get("a") else { return; };
+  let mut inner = r.0
   inner.x = 1
-  m["a"].* = Wrap(inner)
+  r.* = Wrap(inner)
   let _ = w
 }
 "#;
@@ -3540,7 +3544,8 @@ fn main() {
   let mut w = Wrap([1])
   let mut m = Map.new<string, Ref<Wrap>>()
   m["a"] = &w
-  m["a"].* = Wrap(m["a"].0.append(2))
+  let Some(r) = m.get("a") else { return; };
+  r.* = Wrap(r.0.append(2))
   let _ = w
 }
 "#;
@@ -3557,9 +3562,10 @@ fn main() {
   let mut w = Wrap(Inner { items: [1] })
   let mut m = Map.new<string, Ref<Wrap>>()
   m["a"] = &w
-  let mut inner = m["a"].0
+  let Some(r) = m.get("a") else { return; };
+  let mut inner = r.0
   inner.items = inner.items.append(2)
-  m["a"].* = Wrap(inner)
+  r.* = Wrap(inner)
   let _ = w
 }
 "#;
@@ -3575,7 +3581,8 @@ fn main() {
   let mut items = [1]
   let mut m = Map.new<string, Outer>()
   m["a"] = Outer { items: &items }
-  let _ = { m["a"].items.*.append(2) }
+  let Some(o) = m.get("a") else { return; };
+  let _ = { o.items.*.append(2) }
   let _ = items
 }
 "#;
@@ -3593,9 +3600,10 @@ fn main() {
   let mut w = Wrap(Inner { x: 0 })
   let mut m = Map.new<string, Outer>()
   m["a"] = Outer { w: &w }
-  let mut inner = m["a"].w.0
+  let Some(o) = m.get("a") else { return; };
+  let mut inner = o.w.0
   inner.x = 2
-  m["a"].w.* = Wrap(inner)
+  o.w.* = Wrap(inner)
   let _ = w
 }
 "#;
@@ -3613,9 +3621,10 @@ fn main() {
   let mut w = Wrap(Inner { items: [1] })
   let mut m = Map.new<string, Outer>()
   m["a"] = Outer { w: &w }
-  let mut inner = m["a"].w.0
+  let Some(o) = m.get("a") else { return; };
+  let mut inner = o.w.0
   inner.items = inner.items.append(2)
-  m["a"].w.* = Wrap(inner)
+  o.w.* = Wrap(inner)
   let _ = w
 }
 "#;

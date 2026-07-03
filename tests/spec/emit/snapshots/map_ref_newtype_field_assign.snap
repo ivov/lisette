@@ -8,11 +8,14 @@ description: |
     let mut w = Wrap(1)
     let mut m = Map.new<string, Ref<Wrap>>()
     m["a"] = &w
-    m["a"].* = Wrap(2)
+    let Some(r) = m.get("a") else { return; };
+    r.* = Wrap(2)
     let _ = w
   }
 ---
 package main
+
+import lisette "github.com/ivov/lisette/prelude"
 
 type Wrap int
 
@@ -20,6 +23,11 @@ func main() {
 	w := Wrap(1)
 	m := make(map[string]*Wrap)
 	m["a"] = &w
-	*m["a"] = Wrap(2)
+	subject_1 := lisette.MapGet(m, "a")
+	if subject_1.Tag != lisette.OptionSome {
+		return
+	}
+	r := subject_1.SomeVal
+	*r = Wrap(2)
 	_ = w
 }

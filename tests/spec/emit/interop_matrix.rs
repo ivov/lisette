@@ -560,10 +560,12 @@ struct Holder { f: fn(string) -> Result<int, error> }
 fn main() {
   let mut m = Map.new<string, Holder>()
   m["a"] = Holder { f: strconv.Atoi }
-  let mut entry = m["a"]
+  let Some(found) = m.get("a") else { return; };
+  let mut entry = found
   entry.f = strconv.Atoi
   m["a"] = entry
-  let r = m["a"].f("1")
+  let Some(h) = m.get("a") else { return; };
+  let r = h.f("1")
   match r {
     Ok(v) => { let _ = v },
     Err(_) => { let _ = 0 },

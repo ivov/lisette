@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ No zero value for missing key
+   ╭─[test.lis:4:12]
+ 3 │   let m = Map.new<string, Ref<int>>()
+ 4 │   let _r = m["missing"]
+   ·            ──────┬─────
+   ·                  ╰── `Ref<int>` has no zero value
+ 5 │ }
+   ╰────
+  help: Bracket reads can return a zero value when the key is missing, but `Ref<int>` has no zero value, so this bracket read is disallowed. Use `m.get(key)` instead · code: [infer.map_read_no_zero]

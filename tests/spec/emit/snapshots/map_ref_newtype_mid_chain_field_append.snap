@@ -10,13 +10,16 @@ description: |
     let mut w = Wrap(Inner { items: [1] })
     let mut m = Map.new<string, Outer>()
     m["a"] = Outer { w: &w }
-    let mut inner = m["a"].w.0
+    let Some(o) = m.get("a") else { return; };
+    let mut inner = o.w.0
     inner.items = inner.items.append(2)
-    m["a"].w.* = Wrap(inner)
+    o.w.* = Wrap(inner)
     let _ = w
   }
 ---
 package main
+
+import lisette "github.com/ivov/lisette/prelude"
 
 type Inner struct {
 	items []int
@@ -32,8 +35,13 @@ func main() {
 	w := Wrap(Inner{items: []int{1}})
 	m := make(map[string]Outer)
 	m["a"] = Outer{w: &w}
-	inner := Inner(*m["a"].w)
+	subject_1 := lisette.MapGet(m, "a")
+	if subject_1.Tag != lisette.OptionSome {
+		return
+	}
+	o := subject_1.SomeVal
+	inner := Inner(*o.w)
 	inner.items = append(inner.items, 2)
-	*m["a"].w = Wrap(inner)
+	*o.w = Wrap(inner)
 	_ = w
 }

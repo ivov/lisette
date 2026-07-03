@@ -9,10 +9,12 @@ description: |
   fn main() {
     let mut m = Map.new<string, Holder>()
     m["a"] = Holder { f: strconv.Atoi }
-    let mut entry = m["a"]
+    let Some(found) = m.get("a") else { return; };
+    let mut entry = found
     entry.f = strconv.Atoi
     m["a"] = entry
-    let r = m["a"].f("1")
+    let Some(h) = m.get("a") else { return; };
+    let r = h.f("1")
     match r {
       Ok(v) => { let _ = v },
       Err(_) => { let _ = 0 },
@@ -33,17 +35,27 @@ type Holder struct {
 func main() {
 	m := make(map[string]Holder)
 	m["a"] = Holder{f: strconv.Atoi}
-	entry := m["a"]
+	subject_1 := lisette.MapGet(m, "a")
+	if subject_1.Tag != lisette.OptionSome {
+		return
+	}
+	found := subject_1.SomeVal
+	entry := found
 	entry.f = strconv.Atoi
 	m["a"] = entry
-	ret_1, ret_2 := m["a"].f("1")
-	var result_3 lisette.Result[int, error]
-	if ret_2 != nil {
-		result_3 = lisette.MakeResultErr[int, error](ret_2)
-	} else {
-		result_3 = lisette.MakeResultOk[int, error](ret_1)
+	subject_2 := lisette.MapGet(m, "a")
+	if subject_2.Tag != lisette.OptionSome {
+		return
 	}
-	r := result_3
+	h := subject_2.SomeVal
+	ret_3, ret_4 := h.f("1")
+	var result_5 lisette.Result[int, error]
+	if ret_4 != nil {
+		result_5 = lisette.MakeResultErr[int, error](ret_4)
+	} else {
+		result_5 = lisette.MakeResultOk[int, error](ret_3)
+	}
+	r := result_5
 	if r.Tag == lisette.ResultOk {
 		_ = r.OkVal
 	} else {

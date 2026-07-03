@@ -198,6 +198,7 @@ impl CompiledTest {
 
             {
                 let mut ctx = InferCtx::new(&mut checker, &store);
+                ctx.check_map_bracket_reads(&typed_ast);
                 ctx.resolve_branch_subsumptions();
                 ctx.resolve_select_exhaustiveness();
             }

@@ -158,7 +158,9 @@ ages["Alice"] = 20
 let age = ages["Alice"]      // 20
 ```
 
-Bracket access panics if the index is out of bounds (slices) or returns the zero value if the key is missing (maps). For safe access that returns `Option<T>`, use `.get()`. See [`safety.md`](../intro/safety.md)
+Bracket access on a slice panics if the index is out of bounds; bracket access on maps returns the zero value if the key is missing. If the map's value type has no zero value (e.g. `Ref<T>`), bracket reads are rejected at compile time. 
+
+For safe access that returns `Option<T>`, use `.get()`:
 
 ```rust
 let safe = nums.get(0)       // Some(10)

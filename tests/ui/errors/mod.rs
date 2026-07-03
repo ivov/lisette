@@ -1977,6 +1977,128 @@ fn test() {
 }
 
 #[test]
+fn infer_map_read_no_zero_for_ref_value() {
+    let input = r#"
+fn test() {
+  let m = Map.new<string, Ref<int>>()
+  let _r = m["missing"]
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_map_read_no_zero_for_generic_value() {
+    let input = r#"
+fn pick<K, V>(m: Map<K, V>, k: K) -> V {
+  m[k]
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_map_read_no_zero_through_alias() {
+    let input = r#"
+type Registry = Map<string, Ref<int>>
+
+fn test(regs: Registry) {
+  let _r = regs["x"]
+}
+"#;
+    let result = crate::_harness::infer::infer(input);
+    assert!(
+        has_code(&result, "map_read_no_zero"),
+        "a bracket read through a map alias must be rejected, got: {:?}",
+        result.errors
+    );
+}
+
+#[test]
+fn infer_map_read_no_zero_for_struct_with_ref_field() {
+    let input = r#"
+struct Holder { pub r: Ref<int> }
+
+fn test(holders: Map<string, Holder>) {
+  let _h = holders["x"]
+}
+"#;
+    let result = crate::_harness::infer::infer(input);
+    assert!(
+        has_code(&result, "map_read_no_zero"),
+        "a bracket read yielding a struct with a Ref field must be rejected, got: {:?}",
+        result.errors
+    );
+}
+
+#[test]
+fn infer_map_read_no_zero_in_deref_write() {
+    let input = r#"
+fn test() {
+  let mut m = Map.new<string, Ref<int>>()
+  m["k"].* = 5
+}
+"#;
+    let result = crate::_harness::infer::infer(input);
+    assert!(
+        has_code(&result, "map_read_no_zero"),
+        "writing through a bracket-read entry still reads the entry, got: {:?}",
+        result.errors
+    );
+}
+
+#[test]
+fn infer_map_read_no_zero_nested_in_write_target() {
+    let input = r#"
+fn test() {
+  let m = Map.new<string, Ref<int>>()
+  let mut counts = Map.new<int, string>()
+  counts[m["j"].*] = "x"
+}
+"#;
+    let result = crate::_harness::infer::infer(input);
+    assert!(
+        has_code(&result, "map_read_no_zero"),
+        "a bracket read inside an assignment target index must be rejected, got: {:?}",
+        result.errors
+    );
+}
+
+#[test]
+fn infer_map_bracket_write_of_no_zero_value_allowed() {
+    let input = r#"
+fn test() {
+  let x = 5
+  let mut m = Map.new<string, Ref<int>>()
+  m["k"] = &x
+}
+"#;
+    let result = crate::_harness::infer::infer(input);
+    assert!(
+        result.errors.is_empty(),
+        "a bracket write never reads the entry, so it must stay legal, got: {:?}",
+        result.errors
+    );
+}
+
+#[test]
+fn infer_map_read_with_zero_value_allowed() {
+    let input = r#"
+fn test(ages: Map<string, int>, opts: Map<string, Option<Ref<int>>>, rows: Slice<Ref<int>>) {
+  let _age = ages["missing"]
+  let _opt = opts["missing"]
+  let _row = rows[0]
+}
+"#;
+    let result = crate::_harness::infer::infer(input);
+    assert!(
+        result.errors.is_empty(),
+        "reads of zero-valued map entries and slice indexing must stay legal, got: {:?}",
+        result.errors
+    );
+}
+
+#[test]
 fn infer_struct_zero_fill_function_alias_field() {
     let input = r#"
 type F = fn() -> int

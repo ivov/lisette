@@ -65,6 +65,7 @@ impl InferCtx<'_, '_> {
                     .collect();
 
                 ctx.check_reference_sibling_aliasing(&inferred_items);
+                ctx.check_map_bracket_reads(&inferred_items);
                 ctx.resolve_branch_subsumptions();
                 ctx.resolve_select_exhaustiveness();
 

@@ -11,10 +11,13 @@ description: |
   }
   
   fn test(m: Map<string, Ref<Counter>>) {
-    m["a"].*.increment()
+    let Some(c) = m.get("a") else { return; };
+    c.*.increment()
   }
 ---
 package main
+
+import lisette "github.com/ivov/lisette/prelude"
 
 type Counter struct {
 	count int
@@ -25,5 +28,10 @@ func (c *Counter) increment() {
 }
 
 func test(m map[string]*Counter) {
-	m["a"].increment()
+	subject_1 := lisette.MapGet(m, "a")
+	if subject_1.Tag != lisette.OptionSome {
+		return
+	}
+	c := subject_1.SomeVal
+	c.increment()
 }
