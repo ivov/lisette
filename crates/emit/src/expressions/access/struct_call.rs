@@ -68,7 +68,6 @@ impl Planner<'_> {
             value = self.coerce_struct_field(
                 &mut setup,
                 value,
-                &f.value,
                 &value_ty,
                 field_ty.as_ref(),
                 is_go_struct,
@@ -119,21 +118,16 @@ impl Planner<'_> {
     /// Apply Go-boundary coercion followed by internal coercion. The Go-boundary
     /// step targets `field_ty` (falling back to `value_ty` when no declared
     /// field exists); the internal step targets `field_ty` only.
-    #[allow(clippy::too_many_arguments)]
     fn coerce_struct_field(
         &mut self,
         statements: &mut Vec<LoweredStatement>,
         mut value: String,
-        value_expr: &Expression,
         value_ty: &Type,
         field_ty: Option<&Type>,
         is_go_struct: bool,
     ) -> String {
         if is_go_struct {
             let target_ty = field_ty.unwrap_or(value_ty);
-            if value_expr.is_none_literal() && target_ty.resolves_to_unknown() {
-                return "nil".to_string();
-            }
             let coercion =
                 Coercion::resolve(self, value_ty, target_ty, CoercionDirection::ToGoBoundary);
             let (coercion_setup, coerced) = coercion.lower(self, value);

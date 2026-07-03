@@ -27,7 +27,6 @@ pub(crate) enum CoercionKind {
         ty: Type,
         shape: NullableCollectionShape,
     },
-    UnwrapOptionToAny,
     WrapNullableOption {
         ty: Type,
     },
@@ -85,9 +84,6 @@ impl Coercion {
             CoercionKind::UnwrapPointerOption { ty } => {
                 let ptr = format!("*{}", planner.go_type_string(&ty.ok_type()));
                 planner.plan_option_projection(&mut statements, &value, "ptr", &ptr, true)
-            }
-            CoercionKind::UnwrapOptionToAny => {
-                planner.plan_option_projection(&mut statements, &value, "unwrap", "any", false)
             }
             CoercionKind::UnwrapNullableCollection { ty, shape } => {
                 planner.plan_collection_nullable_unwrap(&mut statements, &value, &ty, &shape)
@@ -169,7 +165,7 @@ pub(crate) fn classify_option_shape(planner: &Planner, ty: &Type) -> OptionShape
 fn resolve_to_go(planner: &Planner, from: &Type, to: &Type) -> CoercionKind {
     use OptionShape::*;
     if to.resolves_to_unknown() && from.is_option() {
-        return CoercionKind::UnwrapOptionToAny;
+        return CoercionKind::Identity;
     }
     match classify_option_shape(planner, from) {
         Plain => CoercionKind::Identity,

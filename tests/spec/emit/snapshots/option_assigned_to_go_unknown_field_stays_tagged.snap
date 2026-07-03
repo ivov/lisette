@@ -1,0 +1,27 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  import "go:example.com/dyn"
+  
+  fn main() {
+    let mut obj = dyn.Bag { Decl: "", Data: None }
+    obj.Decl = None
+    let _ = obj
+  }
+---
+package main
+
+import (
+	"example.com/dyn"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func main() {
+	obj := dyn.Bag{
+		Decl: "",
+		Data: lisette.MakeOptionNone[any](),
+	}
+	obj.Decl = lisette.MakeOptionNone[any]()
+	_ = obj
+}

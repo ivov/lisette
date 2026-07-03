@@ -14,7 +14,7 @@ use crate::expressions::staging::VariadicCombine;
 use crate::names::generics::extract_type_mapping;
 use crate::names::go_name;
 use crate::plan::bodies::LoweredStatement;
-use crate::plan::calls::{ArgumentPlan, CallPlan, CallbackWrapperKind, NullableCoerceKind};
+use crate::plan::calls::{ArgumentPlan, CallPlan, CallbackWrapperKind};
 use crate::types::native::NativeGoType;
 use crate::utils::{contains_call, reads_mutable_operand};
 use crate::write_line;
@@ -481,11 +481,10 @@ impl<'a> Planner<'a> {
                     generic_param_ty.expect("LoweredFnShapeAdapter requires generic_param_ty"),
                 )
                 .expect("detect_lowered_fn_arg_shape ensures Some"),
-            ArgumentPlan::NullableCoercion(kind) => self.lower_nullable_coercion(
-                arg,
-                effective_param_ty.expect("NullableCoercion requires effective_param_ty"),
-                kind,
-            ),
+            ArgumentPlan::NullableCoercion => {
+                let arg_ty = arg.get_type();
+                self.lower_unwrap_go_nullable_arg(arg, &arg_ty)
+            }
             ArgumentPlan::GoPointerUnwrap => self.lower_go_pointer_param_unwrap(
                 arg,
                 effective_param_ty.expect("GoPointerUnwrap requires effective_param_ty"),
@@ -526,8 +525,11 @@ impl<'a> Planner<'a> {
         {
             return ArgumentPlan::LoweredFnShapeAdapter;
         }
-        if let Some(kind) = self.detect_nullable_coercion(arg, effective_param_ty) {
-            return ArgumentPlan::NullableCoercion(kind);
+        if self
+            .detect_nullable_coercion(arg, effective_param_ty)
+            .is_some()
+        {
+            return ArgumentPlan::NullableCoercion;
         }
         if ctx.is_go_call
             && self
@@ -829,62 +831,24 @@ impl<'a> Planner<'a> {
         (setup, coerced)
     }
 
-    /// Detect which nullable-coercion strategy (if any) applies to this
-    /// argument. Pure: no emission, callable from the planning layer.
+    /// Detect a nullable `Option` argument flowing into a Go-imported
+    /// interface param. Pure: no emission, callable from the planning layer.
     pub(crate) fn detect_nullable_coercion(
         &self,
         arg: &Expression,
         effective_param_ty: Option<&Type>,
-    ) -> Option<NullableCoerceKind> {
+    ) -> Option<()> {
         let param_ty = effective_param_ty?;
         let arg_ty = arg.get_type();
         let check_ty = varargs_inner_or_self(param_ty);
 
-        if arg_ty.is_option() && check_ty.resolves_to_unknown() {
-            return Some(NullableCoerceKind::OptionToUnknown);
-        }
-
         if !matches!(classify_option_shape(self, &arg_ty), OptionShape::Nullable) {
             return None;
         }
-        let needs_coercion = self
-            .facts
+        self.facts
             .as_interface(&check_ty)
-            .is_some_and(|id| go_name::is_go_import(&id));
-
-        if !needs_coercion {
-            return None;
-        }
-
-        Some(NullableCoerceKind::NullableInterface)
-    }
-
-    fn lower_nullable_coercion(
-        &mut self,
-        arg: &Expression,
-        effective_param_ty: &Type,
-        kind: NullableCoerceKind,
-    ) -> (Vec<LoweredStatement>, String) {
-        let arg_ty = arg.get_type();
-        match kind {
-            NullableCoerceKind::OptionToUnknown => {
-                let check_ty = varargs_inner_or_self(effective_param_ty);
-                if arg.is_none_literal() {
-                    return (Vec::new(), "nil".to_string());
-                }
-                let (mut setup, value) = self
-                    .lower_value(arg, ExpressionContext::value())
-                    .into_parts();
-                let coercion =
-                    Coercion::resolve(self, &arg_ty, &check_ty, CoercionDirection::ToGoBoundary);
-                let (coercion_setup, coerced) = coercion.lower(self, value);
-                setup.extend(coercion_setup);
-                (setup, coerced)
-            }
-            NullableCoerceKind::NullableInterface => {
-                self.lower_unwrap_go_nullable_arg(arg, &arg_ty)
-            }
-        }
+            .is_some_and(|id| go_name::is_go_import(&id))
+            .then_some(())
     }
 
     fn lower_unwrap_go_nullable_arg(

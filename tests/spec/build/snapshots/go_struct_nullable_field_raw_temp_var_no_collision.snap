@@ -26,11 +26,6 @@ func main() {
 	option_4 := lisette.OptionFromNilable[*debug.Module](raw_3, raw_3 == nil)
 	r := option_4
 	raw_1 := 3
-	opt_5 := r
-	var unwrap_6 any
-	if opt_5.Tag == lisette.OptionSome {
-		unwrap_6 = opt_5.SomeVal
-	}
-	fmt.Println(unwrap_6)
+	fmt.Println(r)
 	fmt.Println(raw_1)
 }

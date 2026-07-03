@@ -3805,7 +3805,7 @@ type Cb = fn() -> Unknown;
 }
 
 #[test]
-fn option_in_go_unknown_struct_field_unwraps_to_any() {
+fn option_in_go_unknown_struct_field_stays_tagged() {
     let input = r#"
 import "go:example.com/dyn"
 
@@ -3826,7 +3826,7 @@ pub struct Bag {
 }
 
 #[test]
-fn option_assigned_to_go_unknown_field_unwraps_to_any() {
+fn option_assigned_to_go_unknown_field_stays_tagged() {
     let input = r#"
 import "go:example.com/dyn"
 
@@ -3846,7 +3846,7 @@ pub struct Bag {
 }
 
 #[test]
-fn option_in_go_unknown_call_arg_unwraps_to_any() {
+fn option_in_go_unknown_call_arg_stays_tagged() {
     let input = r#"
 import "go:example.com/dyn"
 

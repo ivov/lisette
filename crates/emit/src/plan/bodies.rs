@@ -219,11 +219,6 @@ pub(crate) enum AssignForm {
         target_str: String,
         value: ValuePlan,
     },
-    /// `target = nil` — clearing a Go-imported nullable field with `None`.
-    NilClear {
-        target_capture: Vec<LoweredStatement>,
-        target_str: String,
-    },
     /// `_ = expr` discard (drops lowered multi-return values).
     Discard { body: LoweredBlock },
     /// The RHS diverges (never-typed); emitted as a statement.
@@ -422,9 +417,7 @@ impl LoweredStatement {
             LoweredStatement::BreakValue(_) => true,
             LoweredStatement::Let(plan) => plan.form.body().ends_with_diverge(),
             LoweredStatement::Assign(plan) => match &plan.form {
-                AssignForm::Compound { .. }
-                | AssignForm::Simple { .. }
-                | AssignForm::NilClear { .. } => false,
+                AssignForm::Compound { .. } | AssignForm::Simple { .. } => false,
                 AssignForm::Discard { body } | AssignForm::NeverTyped { body } => {
                     body.ends_with_diverge()
                 }

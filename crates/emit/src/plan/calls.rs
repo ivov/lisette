@@ -59,24 +59,13 @@ pub(crate) enum ArgumentPlan {
     GoCallbackAdapter(CallbackWrapperKind),
     /// Adapt a lowered-return fn-value arg to the callee's expected shape.
     LoweredFnShapeAdapter,
-    /// Nullable coercion: `Option<Ref<T>>` → `*T` or bare `T`.
-    NullableCoercion(NullableCoerceKind),
+    /// Nullable `Option` argument flowing into a Go-imported interface:
+    /// unwrap the option and apply the Go-boundary coercion.
+    NullableCoercion,
     /// Unwrap a Go pointer parameter at the call site (`&x` or `*x`).
     GoPointerUnwrap,
     /// Lower a tagged Go-function value (prelude-dispatch arg).
     TaggedGoLowering,
-}
-
-/// Sub-variants of `ArgumentPlan::NullableCoercion`. The detection path picks
-/// which branch fires; the emitter applies it.
-#[derive(Debug, Clone, Copy)]
-pub(crate) enum NullableCoerceKind {
-    /// Source `Option<T>` argument flowing into an `unknown`-typed parameter:
-    /// emit `nil` (for `None`) or coerce the option value.
-    OptionToUnknown,
-    /// Nullable `Option` argument flowing into a Go-imported interface: unwrap
-    /// the option and apply the Go-boundary coercion.
-    NullableInterface,
 }
 
 /// Sub-variants of `ArgumentPlan::GoCallbackAdapter`. `Identity` is the

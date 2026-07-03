@@ -289,13 +289,6 @@ impl Renderer {
                 let value_text = self.render_value(output, value);
                 write_line!(output, "{} = {}", target_str, value_text);
             }
-            AssignForm::NilClear {
-                target_capture,
-                target_str,
-            } => {
-                self.render_capture_statements(output, target_capture);
-                write_line!(output, "{} = nil", target_str);
-            }
             AssignForm::Discard { body } | AssignForm::NeverTyped { body } => {
                 self.render_lowered_block(output, body);
             }

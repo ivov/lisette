@@ -5,9 +5,8 @@ description: |
   import "go:example.com/dyn"
   
   fn main() {
-    let mut obj = dyn.Bag { Decl: "", Data: None }
-    obj.Decl = None
-    let _ = obj
+    let _ = dyn.Store("k", None)
+    let _ = dyn.Store("k", Some(1))
   }
 ---
 package main
@@ -18,10 +17,6 @@ import (
 )
 
 func main() {
-	obj := dyn.Bag{
-		Decl: "",
-		Data: nil,
-	}
-	obj.Decl = nil
-	_ = obj
+	_ = dyn.Store("k", lisette.MakeOptionNone[any]())
+	_ = dyn.Store("k", lisette.MakeOptionSome(1))
 }

@@ -27,7 +27,7 @@ impl RhsEffects {
 
 impl Planner<'_> {
     /// Build an `AssignPlan`, dispatching on shape: never-typed, compound,
-    /// discard, Go-nullable-field clear, or simple `target = value`.
+    /// discard, or simple `target = value`.
     pub(crate) fn build_assignment_plan(
         &mut self,
         target: &Expression,
@@ -65,25 +65,6 @@ impl Planner<'_> {
             }
             _ => None,
         };
-
-        if let Some(ref target_ty) = go_field_ty
-            && target_ty.resolves_to_unknown()
-            && value.is_none_literal()
-        {
-            let (target_capture, target_str) = self.capture_assignment_target(
-                target,
-                RhsEffects {
-                    has_setup: false,
-                    has_effectful_call: false,
-                },
-            );
-            return AssignPlan {
-                form: AssignForm::NilClear {
-                    target_capture,
-                    target_str,
-                },
-            };
-        }
 
         // `target = value`. Stage RHS first (so the target capture knows
         // whether RHS produced setup), capture the target, then fold RHS

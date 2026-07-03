@@ -19,13 +19,8 @@ import (
 )
 
 func main() {
-	opt_1 := lisette.MakeOptionSome("decl")
-	var unwrap_2 any
-	if opt_1.Tag == lisette.OptionSome {
-		unwrap_2 = opt_1.SomeVal
-	}
 	_ = dyn.Bag{
-		Decl: unwrap_2,
-		Data: nil,
+		Decl: lisette.MakeOptionSome("decl"),
+		Data: lisette.MakeOptionNone[any](),
 	}
 }
