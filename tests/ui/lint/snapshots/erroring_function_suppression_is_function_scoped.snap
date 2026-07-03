@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  ▲ Unused `mut`
+   ╭─[test.lis:8:11]
+ 7 │ fn clean() {
+ 8 │   let mut b = 2
+   ·           ┬
+   ·           ╰── declared as mutable
+ 9 │   let _ = b
+   ╰────
+  help: Remove `mut` from the declaration if you do not need to mutate the variable · code: [lint.unnecessary_mut]

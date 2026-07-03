@@ -22,6 +22,20 @@ impl LocalSink {
         self.diagnostics.borrow().iter().any(|d| d.is_error())
     }
 
+    pub fn error_label_points(&self) -> Vec<(Option<u32>, usize)> {
+        self.diagnostics
+            .borrow()
+            .iter()
+            .filter(|d| d.is_error())
+            .flat_map(|d| {
+                let file_id = d.file_id();
+                d.label_offsets()
+                    .into_iter()
+                    .map(move |offset| (file_id, offset))
+            })
+            .collect()
+    }
+
     pub fn len(&self) -> usize {
         self.diagnostics.borrow().len()
     }

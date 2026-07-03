@@ -80,7 +80,14 @@ pub(crate) fn run(
     let mut diagnostics: Vec<LisetteDiagnostic> = Vec::new();
     let sources = source_by_file(analysis);
 
-    collect_bindings(facts, unused, &sources, &mut diagnostics);
+    let erroring_functions = erroring_function_spans(facts, sink);
+    collect_bindings(
+        facts,
+        unused,
+        &sources,
+        &erroring_functions,
+        &mut diagnostics,
+    );
     collect_dead_code(facts, &mut diagnostics);
     collect_pattern_issues(facts, &mut diagnostics);
     collect_unused_expressions(facts, &mut diagnostics);
@@ -131,10 +138,38 @@ fn fstring_inner<'a>(sources: &HashMap<u32, &'a str>, span: Span) -> Option<&'a 
     Some(inner.strip_prefix('{')?.strip_suffix('}')?.trim())
 }
 
+fn erroring_function_spans(facts: &Facts, sink: &LocalSink) -> Vec<Span> {
+    let error_points = sink.error_label_points();
+    if error_points.is_empty() {
+        return Vec::new();
+    }
+    facts
+        .function_spans
+        .iter()
+        .filter(|function_span| {
+            error_points.iter().any(|(file_id, offset)| {
+                *file_id == Some(function_span.file_id)
+                    && function_span.byte_offset as usize <= *offset
+                    && *offset < function_span.end() as usize
+            })
+        })
+        .copied()
+        .collect()
+}
+
+fn within_any(function_spans: &[Span], span: Span) -> bool {
+    function_spans.iter().any(|function_span| {
+        function_span.file_id == span.file_id
+            && function_span.byte_offset <= span.byte_offset
+            && span.end() <= function_span.end()
+    })
+}
+
 fn collect_bindings(
     facts: &Facts,
     unused: &mut UnusedInfo,
     sources: &HashMap<u32, &str>,
+    erroring_functions: &[Span],
     out: &mut Vec<LisetteDiagnostic>,
 ) {
     for b in facts.bindings.values() {
@@ -159,7 +194,7 @@ fn collect_bindings(
             unused.mark_binding_unused(b.span);
         }
 
-        if b.kind.is_mutable() && !b.mutated {
+        if b.kind.is_mutable() && !b.mutated && !within_any(erroring_functions, b.span) {
             let mut diagnostic = diagnostics::lint::unused_mut(&b.span);
             if let Some(deletion) = mut_keyword_deletion(sources, b.span) {
                 diagnostic =

@@ -10898,6 +10898,21 @@ fn test(args: Slice<int>) {
 }
 
 #[test]
+fn spread_on_unresolved_callee_not_judged_non_variadic() {
+    let input = r#"
+fn test(args: Slice<int>) {
+  nofn(args...)
+}
+"#;
+    let result = crate::_harness::infer::infer(input);
+    assert!(
+        !has_code(&result, "spread_on_non_variadic"),
+        "an unresolved callee's variadic-ness is unknowable, got: {:?}",
+        result.errors
+    );
+}
+
+#[test]
 fn infer_variadic_param_not_last() {
     let input = r#"
 fn test(rest: VarArgs<int>, trailing: int) -> int {

@@ -468,6 +468,10 @@ impl LisetteDiagnostic {
         self.labels.first().map(|l| l.offset()).unwrap_or(0)
     }
 
+    pub fn label_offsets(&self) -> Vec<usize> {
+        self.labels.iter().map(|l| l.offset()).collect()
+    }
+
     pub fn location_offset(&self) -> Option<usize> {
         self.labels
             .iter()

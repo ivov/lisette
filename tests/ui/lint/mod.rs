@@ -127,6 +127,84 @@ fn main() {
 }
 
 #[test]
+fn erroring_function_suppresses_unnecessary_mut() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let mut file_names: Slice<string> = []
+  file_names.add("x")
+}
+"#
+    );
+}
+
+#[test]
+fn erroring_function_suppresses_unnecessary_mut_for_unrelated_binding() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let mut n = 1
+  let _ = n
+  nofn()
+}
+"#
+    );
+}
+
+#[test]
+fn erroring_function_suppression_is_function_scoped() {
+    assert_lint_snapshot!(
+        r#"
+fn broken() {
+  let mut a = 1
+  a.nope()
+}
+
+fn clean() {
+  let mut b = 2
+  let _ = b
+}
+
+fn main() {
+  broken()
+  clean()
+}
+"#
+    );
+}
+
+#[test]
+fn deferred_error_suppresses_unnecessary_mut() {
+    assert_no_lint_warnings!(
+        r#"
+fn f() {
+  let mut x = 1
+  let _ = x
+  let empty = []
+  let _ = empty
+}
+
+fn main() {
+  f()
+}
+"#
+    );
+}
+
+#[test]
+fn lambda_error_suppresses_enclosing_function_unnecessary_mut() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let mut n = 5
+  let _ = [1].map(|x| x.gone())
+  let _ = n
+}
+"#
+    );
+}
+
+#[test]
 fn mut_param_no_unnecessary_mut_warning() {
     assert_no_lint_warnings!(
         r#"
@@ -7806,7 +7884,8 @@ struct User {
 
 fn main() {
   let u = User { id: 1, name: "Alice" }
-  u.id + u.name.len() as int
+  let _ = u.id
+  let _ = u.name
 }
 "#
     );

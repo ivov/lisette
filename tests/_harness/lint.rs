@@ -91,10 +91,6 @@ pub fn lint(source: &str) -> Vec<LisetteDiagnostic> {
         let typed_expression =
             InferCtx::new(&mut checker, &store).infer_expression(expression, &type_var);
         typed_ast.push(typed_expression);
-
-        if checker.failed() {
-            break;
-        }
     }
 
     {
@@ -110,10 +106,6 @@ pub fn lint(source: &str) -> Vec<LisetteDiagnostic> {
     typed_ast =
         semantics::checker::freeze::FreezeFolder::new(&checker.env, &store).freeze_items(typed_ast);
 
-    if checker.failed() {
-        return vec![];
-    }
-
     let typed_file = File {
         id: file_id,
         module_id: TEST_MODULE_ID.to_string(),
@@ -126,11 +118,32 @@ pub fn lint(source: &str) -> Vec<LisetteDiagnostic> {
     store.store_file(TEST_MODULE_ID, typed_file);
     store.build_closed_domains();
 
+    let inference_len = sink.len();
+
     let analysis = semantics::context::AnalysisContext::new(&store, &checker.ufcs_methods);
     let mut unused = UnusedInfo::default();
     passes::run(&analysis, &mut checker.facts, &sink, &mut unused, true);
 
-    sink.take()
+    // Deferred inference errors surface during passes::run, mixed in with
+    // the error-severity lint diagnostics the tests assert on.
+    let deferred_codes = [
+        "infer.statement_as_tail",
+        "infer.type_not_inferred",
+        "infer.missing_type_argument",
+    ];
+    let mut all_diagnostics = sink.take();
+    let pass_diagnostics = all_diagnostics.split_off(inference_len);
+    let mut diagnostics: Vec<LisetteDiagnostic> = all_diagnostics
+        .into_iter()
+        .filter(|diagnostic| !diagnostic.is_error())
+        .collect();
+    diagnostics.extend(pass_diagnostics.into_iter().filter(|diagnostic| {
+        !diagnostic.is_error()
+            || !diagnostic
+                .code_str()
+                .is_some_and(|code| deferred_codes.contains(&code))
+    }));
+    diagnostics
 }
 
 pub fn apply_lint_fixes(source: &str) -> String {

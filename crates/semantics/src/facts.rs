@@ -69,6 +69,10 @@ pub struct Facts {
     /// Spans of binary expressions the checker rejected, so lints can skip them.
     pub type_error_spans: HashSet<Span>,
 
+    /// Span of every inferred function, so lints can attribute errors to
+    /// the containing function.
+    pub function_spans: Vec<Span>,
+
     /// Resolved type for each generic-bound annotation, keyed by the
     /// annotation's span. Lets emit render bounds from the resolved type
     /// instead of re-resolving the annotation.
@@ -129,6 +133,7 @@ impl Facts {
             select_exhaustiveness_checks: Vec::new(),
             or_pattern_error_spans: HashSet::default(),
             type_error_spans: HashSet::default(),
+            function_spans: Vec::new(),
             usages: Vec::new(),
             usage_set: HashSet::default(),
             interface_satisfied_methods: HashMap::default(),
@@ -184,6 +189,10 @@ impl Facts {
             fact.mutated = true;
             fact.alias_mutated = true;
         }
+    }
+
+    pub fn add_function_span(&mut self, span: Span) {
+        self.function_spans.push(span);
     }
 
     pub fn binding_checkpoint(&self) -> BindingId {
@@ -286,6 +295,7 @@ impl Facts {
             select_exhaustiveness_checks,
             or_pattern_error_spans,
             type_error_spans,
+            function_spans,
             usages,
             usage_set: _,
             interface_satisfied_methods,
@@ -319,6 +329,7 @@ impl Facts {
             .extend(select_exhaustiveness_checks);
         self.or_pattern_error_spans.extend(or_pattern_error_spans);
         self.type_error_spans.extend(type_error_spans);
+        self.function_spans.extend(function_spans);
 
         self.usages.reserve(usages.len());
         self.usage_set.reserve(usages.len());
