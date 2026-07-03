@@ -1257,11 +1257,16 @@ pub fn missing_bound_on_param(
         ))
 }
 
-pub fn division_by_zero(span: Span) -> LisetteDiagnostic {
+pub fn division_by_zero(span: Span, ieee: bool) -> LisetteDiagnostic {
+    let help = if ieee {
+        "This operation evaluates to `+Inf`, `-Inf`, or `NaN` at runtime, which is almost never intended"
+    } else {
+        "This operation will panic at runtime"
+    };
     LisetteDiagnostic::error("Division by zero")
         .with_infer_code("division_by_zero")
         .with_span_label(&span, "cannot divide by zero")
-        .with_help("This operation will panic at runtime")
+        .with_help(help)
 }
 
 pub fn incompatible_named_types(underlying_ty: &Type, span: Span) -> LisetteDiagnostic {

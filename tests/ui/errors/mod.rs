@@ -6104,6 +6104,29 @@ fn main() {
 }
 
 #[test]
+fn infer_float_division_by_zero() {
+    let input = r#"
+fn main() {
+  let x = 1.0 / 0.0;
+  x
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_float_division_by_adapted_zero() {
+    let input = r#"
+fn main() {
+  let x = 3.5;
+  let y = x / 0;
+  y
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
 fn parse_uppercase_binding_in_function_param() {
     let input = r#"
 fn scale(X: int, Y: int) -> int {

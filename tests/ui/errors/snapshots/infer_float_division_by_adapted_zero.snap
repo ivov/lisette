@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Division by zero
+   ╭─[test.lis:4:11]
+ 3 │   let x = 3.5;
+ 4 │   let y = x / 0;
+   ·           ──┬──
+   ·             ╰── cannot divide by zero
+ 5 │   y
+   ╰────
+  help: This operation evaluates to `+Inf`, `-Inf`, or `NaN` at runtime, which is almost never intended · code: [infer.division_by_zero]

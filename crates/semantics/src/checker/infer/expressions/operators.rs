@@ -158,22 +158,8 @@ impl InferCtx<'_, '_> {
         expected_ty: &Type,
         span: Span,
     ) -> (Expression, Type) {
-        if matches!(operator, Division | Remainder) {
-            let is_zero = match right_operand.unwrap_parens() {
-                Expression::Literal {
-                    literal: Literal::Integer { value: 0, .. },
-                    ..
-                } => true,
-                Expression::Literal {
-                    literal: Literal::Float { value, .. },
-                    ..
-                } => *value == 0.0,
-                _ => false,
-            };
-            if is_zero {
-                self.sink.push(diagnostics::infer::division_by_zero(span));
-            }
-        }
+        let divisor_is_zero =
+            matches!(operator, Division | Remainder) && is_zero_literal(&right_operand);
 
         let left_operand_ty = left_ty;
         let right_operand_ty = self.new_type_var();
@@ -190,6 +176,10 @@ impl InferCtx<'_, '_> {
             }
             s.infer_expression(*right_operand, &right_operand_ty)
         });
+
+        if divisor_is_zero {
+            self.report_zero_divisor(operator, &right_operand_ty, span);
+        }
 
         if matches!(operator, And | Or)
             && let Some(span) = Self::find_propagate(&new_right_operand)
@@ -234,22 +224,8 @@ impl InferCtx<'_, '_> {
         expected_ty: &Type,
         span: Span,
     ) -> Expression {
-        if matches!(operator, Division | Remainder) {
-            let is_zero = match right_operand.unwrap_parens() {
-                Expression::Literal {
-                    literal: Literal::Integer { value: 0, .. },
-                    ..
-                } => true,
-                Expression::Literal {
-                    literal: Literal::Float { value, .. },
-                    ..
-                } => *value == 0.0,
-                _ => false,
-            };
-            if is_zero {
-                self.sink.push(diagnostics::infer::division_by_zero(span));
-            }
-        }
+        let divisor_is_zero =
+            matches!(operator, Division | Remainder) && is_zero_literal(&right_operand);
 
         let left_operand_ty = self.new_type_var();
         let right_operand_ty = self.new_type_var();
@@ -288,6 +264,10 @@ impl InferCtx<'_, '_> {
                 (left, right)
             }
         });
+
+        if divisor_is_zero {
+            self.report_zero_divisor(operator, &right_operand_ty, span);
+        }
 
         if matches!(operator, And | Or)
             && let Some(span) = Self::find_propagate(&new_right_operand)
@@ -833,6 +813,30 @@ impl InferCtx<'_, '_> {
             ty: result_ty,
             span,
         }
+    }
+
+    fn report_zero_divisor(&mut self, operator: BinaryOperator, divisor_ty: &Type, span: Span) {
+        let resolved = divisor_ty.resolve_in(&self.env);
+        let ieee = resolved.is_float() || resolved.is_complex();
+        if ieee && matches!(operator, Remainder) {
+            return;
+        }
+        self.sink
+            .push(diagnostics::infer::division_by_zero(span, ieee));
+    }
+}
+
+fn is_zero_literal(expression: &Expression) -> bool {
+    match expression.unwrap_parens() {
+        Expression::Literal {
+            literal: Literal::Integer { value: 0, .. },
+            ..
+        } => true,
+        Expression::Literal {
+            literal: Literal::Float { value, .. },
+            ..
+        } => *value == 0.0,
+        _ => false,
     }
 }
 

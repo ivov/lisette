@@ -2045,3 +2045,29 @@ fn mut_binding_from_binding_single_diagnostic() {
 fn mut_binding_self_shrink_reassignment_no_error() {
     infer(r#"{ let mut it = Slice.new<int>(); it = it[1..]; let _ = it }"#).assert_no_errors();
 }
+
+#[test]
+fn float_remainder_by_zero_single_diagnostic() {
+    let result = infer(
+        r#"
+    fn main() {
+      let x = 3.5;
+      let _ = x % 0.0;
+    }
+        "#,
+    );
+    assert_eq!(result.errors.len(), 1);
+}
+
+#[test]
+fn complex_division_by_zero_rejected() {
+    infer(
+        r#"
+    fn main() {
+      let z: complex128 = 1.0 + 2.0i;
+      let _ = z / 0.0;
+    }
+        "#,
+    )
+    .assert_infer_code("division_by_zero");
+}
