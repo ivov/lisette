@@ -2,6 +2,54 @@
 
 Lisette is under active development. Any version before 1.0.0 may include breaking changes.
 
+## [0.7.0](https://github.com/ivov/lisette/compare/lisette-v0.6.0...lisette-v0.7.0) - 2026-07-04
+
+### Features
+
+- feat: extend `mut` aliasing protection to collection wrappers [#957](https://github.com/ivov/lisette/pull/957) [`066984a`](https://github.com/ivov/lisette/commit/066984a065f0ce893da7e7b53021119ff15afaaa)
+- feat: mutable bindings must own their value [#951](https://github.com/ivov/lisette/pull/951) [`2244b8b`](https://github.com/ivov/lisette/commit/2244b8b8fd0b05fa29023523100ce4893b640294)
+- feat: autofix collapsible match lint [#948](https://github.com/ivov/lisette/pull/948) [`ae1ccf8`](https://github.com/ivov/lisette/commit/ae1ccf82d89a3d9e47f07f893f22b511c01df7b3)
+- feat: autofix five more lints [#947](https://github.com/ivov/lisette/pull/947) [`95561e1`](https://github.com/ivov/lisette/commit/95561e1521bfe336a3cd91b36c44caeca6721c3b)
+- feat: autofix 25 more lints [#941](https://github.com/ivov/lisette/pull/941) [`97c4719`](https://github.com/ivov/lisette/commit/97c471952575d46a15dc9439514d4dbc63ec8bac)
+- feat: report all missing cases and redundant match arms [#935](https://github.com/ivov/lisette/pull/935) [`b62bc84`](https://github.com/ivov/lisette/commit/b62bc842d8ebaa1f4504924aa3c4f846dedc7b1a)
+- feat: autofix seven more lints [#932](https://github.com/ivov/lisette/pull/932) [`120eb8e`](https://github.com/ivov/lisette/commit/120eb8e8a987911f19ab20fc0b5177ade32d5a8f)
+- feat: autofix nine more lints [#930](https://github.com/ivov/lisette/pull/930) [`e819ec0`](https://github.com/ivov/lisette/commit/e819ec010fe9f3758d45e961a0d9a11acb3dd26f)
+- feat: `lis add --replace` to substitute Go dependencies [#925](https://github.com/ivov/lisette/pull/925) [`4b5d2d4`](https://github.com/ivov/lisette/commit/4b5d2d4ac2233a7d6d7dbdc074981c88feffe933)
+- feat: `lis check --fix` to autofix diagnostics [#924](https://github.com/ivov/lisette/pull/924) [`2161f4a`](https://github.com/ivov/lisette/commit/2161f4a80d4657fefda12948e0e3a0aea39171a0)
+
+### Fixes
+
+- fix: reject type names in value position [#960](https://github.com/ivov/lisette/pull/960) [`989b7c9`](https://github.com/ivov/lisette/commit/989b7c9bb2f7eb9d1f8b36914040d366d0229025)
+- fix: silence unused `mut` warning inside erroring functions [#956](https://github.com/ivov/lisette/pull/956) [`a9680cb`](https://github.com/ivov/lisette/commit/a9680cb453176900ae320eaf2b2495a974121f9e)
+- fix: keep options tagged when crossing into Go's `any` [#955](https://github.com/ivov/lisette/pull/955) [`2913cd9`](https://github.com/ivov/lisette/commit/2913cd91abd0e58eeb3dfdc207ff3365e15573d1)
+- fix: reject polymorphic recursion [#953](https://github.com/ivov/lisette/pull/953) [`1f4ecdf`](https://github.com/ivov/lisette/commit/1f4ecdf312e4f57eb5dcaba13cfb24c418393c94)
+- fix: correct division-by-zero help text for float divisors [#952](https://github.com/ivov/lisette/pull/952) [`3cbcbf2`](https://github.com/ivov/lisette/commit/3cbcbf24a441f32662bca499f2dd9a7b0ab21b13)
+- fix: reject map bracket reads when type has no zero value [#950](https://github.com/ivov/lisette/pull/950) [`76d6cf0`](https://github.com/ivov/lisette/commit/76d6cf079abae371b38d96795fdbdf0c1e387e30)
+- fix: parenthesize nested negation to avoid Go decrement token [#946](https://github.com/ivov/lisette/pull/946) [`bec4fae`](https://github.com/ivov/lisette/commit/bec4faebf392006ed5b5bb4d1917dece44e53608)
+- fix: interpolate rune type aliases as characters [#945](https://github.com/ivov/lisette/pull/945) [`92e9a1d`](https://github.com/ivov/lisette/commit/92e9a1dd5f8176d74d7c3b707b8bbe435b92f851)
+- fix: preserve NaN semantics in negated comparisons [#944](https://github.com/ivov/lisette/pull/944) [`b94de0e`](https://github.com/ivov/lisette/commit/b94de0efc6b18be2945960f581d34b3c631325e1)
+- fix: enforce left-to-right eval order [#943](https://github.com/ivov/lisette/pull/943) [`87c2487`](https://github.com/ivov/lisette/commit/87c248712ff374803f1eb0fd409ef244733ca592)
+- fix: label continue in select arms to target user loop [#942](https://github.com/ivov/lisette/pull/942) [`1e030a1`](https://github.com/ivov/lisette/commit/1e030a1024c593c5975db3bb3a62ddac69bdb953)
+- fix: `#[json(omitempty)]` on `Option` fields [#939](https://github.com/ivov/lisette/pull/939) [`11d40db`](https://github.com/ivov/lisette/commit/11d40dbc783ac85d95e709c0861b87bcf9283690)
+- fix: follow type-var chains iteratively to avoid stack overflow [#936](https://github.com/ivov/lisette/pull/936) [`316e663`](https://github.com/ivov/lisette/commit/316e663797ab10f6521017ff1874e19893ab279f)
+- fix!: align `Slice.append` with Go semantics [#933](https://github.com/ivov/lisette/pull/933) [`89389e5`](https://github.com/ivov/lisette/commit/89389e51ad8dbe6cf4114667e8b1eed60857b57d)
+- fix: lint unused value as loop body's final statement [#931](https://github.com/ivov/lisette/pull/931) [`f54073c`](https://github.com/ivov/lisette/commit/f54073c7d84b3f15260532488c57f2a564f60a0d)
+- fix: missing write-back for bare-statement slice append/extend [#926](https://github.com/ivov/lisette/pull/926) [`df26dea`](https://github.com/ivov/lisette/commit/df26dea27e01abeb65e8e90035df87f2097ff51e)
+- fix: unused import warning for interface and const uses [#919](https://github.com/ivov/lisette/pull/919) [`15201a9`](https://github.com/ivov/lisette/commit/15201a9269d139edb47ccc7c39d785ca08509e9a)
+- fix: allow `mut` parsing in function types [#916](https://github.com/ivov/lisette/pull/916) [`3ec2e8f`](https://github.com/ivov/lisette/commit/3ec2e8fd7b53885c33f7d91f93a281d4d6fffbe0)
+
+### Internals
+
+- test: normalize snapshot descriptions to block style [#959](https://github.com/ivov/lisette/pull/959) [`73bde11`](https://github.com/ivov/lisette/commit/73bde111c21e574c5bea70dfd1627630e9bdcd15)
+- chore: no false foreign-type errors when editing prelude source [#958](https://github.com/ivov/lisette/pull/958) [`389aa1e`](https://github.com/ivov/lisette/commit/389aa1e5068c1ead2c12113b4d50aa9ef7521d98)
+- docs: update stale examples [#954](https://github.com/ivov/lisette/pull/954) [`d69352f`](https://github.com/ivov/lisette/commit/d69352fbb6bac85dae23df9bce6dec2903efb55c)
+- refactor: share Go name computation between checker and emit [#940](https://github.com/ivov/lisette/pull/940) [`c35c334`](https://github.com/ivov/lisette/commit/c35c33482c27e91d60b51a06fee82866ca52c76d)
+- test: exercise uncovered prelude methods in e2e tests [#934](https://github.com/ivov/lisette/pull/934) [`1ab95e5`](https://github.com/ivov/lisette/commit/1ab95e50642cd413aa9f7ce3f895a1e013674465)
+- refactor: accept integer literals in type argument position [#928](https://github.com/ivov/lisette/pull/928) [`634c483`](https://github.com/ivov/lisette/commit/634c483329f627d77fed973d9b6a6d4107a57d50)
+- ci: allow initial backticks in PR title check [#917](https://github.com/ivov/lisette/pull/917) [`4b6bf10`](https://github.com/ivov/lisette/commit/4b6bf1050c9a4dbc1b57048438080c123b33cc05)
+- refactor: reduce cyclomatic complexity in emit crate [#914](https://github.com/ivov/lisette/pull/914) [`b1206f2`](https://github.com/ivov/lisette/commit/b1206f2741f40ea5c82b20c039aa184bf124285c)
+
+
 ## [0.6.0](https://github.com/ivov/lisette/compare/lisette-v0.5.0...lisette-v0.6.0) - 2026-06-28
 
 ### Features
