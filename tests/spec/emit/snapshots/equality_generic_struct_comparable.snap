@@ -1,6 +1,9 @@
 ---
 source: tests/spec/emit/types.rs
-description: "\n#[equality]\nstruct Box<T: Comparable> { value: T }\n"
+description: |
+  
+  #[equality]
+  struct Box<T: Comparable> { value: T }
 ---
 package main
 

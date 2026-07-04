@@ -1,6 +1,19 @@
 ---
 source: tests/spec/emit/types.rs
-description: "\nstruct Pair<A, B> { a: A, b: B }\n\nimpl<T> Pair<T, T> {\n  fn first(self) -> T { self.a }\n}\n\ntype IntPair = Pair<int, int>\n\nfn test() -> int {\n  let p: IntPair = Pair { a: 1, b: 2 };\n  p.first()\n}\n"
+description: |
+  
+  struct Pair<A, B> { a: A, b: B }
+  
+  impl<T> Pair<T, T> {
+    fn first(self) -> T { self.a }
+  }
+  
+  type IntPair = Pair<int, int>
+  
+  fn test() -> int {
+    let p: IntPair = Pair { a: 1, b: 2 };
+    p.first()
+  }
 ---
 package main
 

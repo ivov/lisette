@@ -1,6 +1,17 @@
 ---
 source: tests/spec/emit/types.rs
-description: "\nstruct Foo { x: int }\n\nimpl Foo {\n  fn equals(self, other: int) -> bool {\n    false\n  }\n}\n\n#[equality]\nstruct Wrap { foo: Foo }\n"
+description: |
+  
+  struct Foo { x: int }
+  
+  impl Foo {
+    fn equals(self, other: int) -> bool {
+      false
+    }
+  }
+  
+  #[equality]
+  struct Wrap { foo: Foo }
 ---
 package main
 

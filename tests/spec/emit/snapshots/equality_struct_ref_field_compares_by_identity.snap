@@ -1,6 +1,9 @@
 ---
 source: tests/spec/emit/types.rs
-description: "\n#[equality]\nstruct Node { value: int, next: Ref<Node> }\n"
+description: |
+  
+  #[equality]
+  struct Node { value: int, next: Ref<Node> }
 ---
 package main
 

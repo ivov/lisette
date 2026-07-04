@@ -1,6 +1,17 @@
 ---
 source: tests/spec/emit/types.rs
-description: "\nstruct Pair<A, B> { a: A, b: B }\n\nimpl<X, T> Pair<T, T> {\n  fn pick(self, x: X) -> X { x }\n}\n\nfn test() -> bool {\n  let p = Pair { a: 1, b: 2 };\n  p.pick<bool, int>(true)\n}\n"
+description: |
+  
+  struct Pair<A, B> { a: A, b: B }
+  
+  impl<X, T> Pair<T, T> {
+    fn pick(self, x: X) -> X { x }
+  }
+  
+  fn test() -> bool {
+    let p = Pair { a: 1, b: 2 };
+    p.pick<bool, int>(true)
+  }
 ---
 package main
 

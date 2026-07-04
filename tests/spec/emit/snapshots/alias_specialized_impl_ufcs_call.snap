@@ -1,6 +1,19 @@
 ---
 source: tests/spec/emit/types.rs
-description: "\nstruct Box<T> { value: T }\n\nimpl Box<int> {\n  fn only_int(self) -> int { self.value }\n}\n\ntype IntBox = Box<int>\n\nfn test() -> int {\n  let b: IntBox = Box { value: 7 };\n  b.only_int()\n}\n"
+description: |
+  
+  struct Box<T> { value: T }
+  
+  impl Box<int> {
+    fn only_int(self) -> int { self.value }
+  }
+  
+  type IntBox = Box<int>
+  
+  fn test() -> int {
+    let b: IntBox = Box { value: 7 };
+    b.only_int()
+  }
 ---
 package main
 

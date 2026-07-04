@@ -1,6 +1,15 @@
 ---
 source: tests/spec/emit/functions.rs
-description: "\nfn g<T>(head: int, rest: VarArgs<T>) -> Option<T> { None }\n\nfn test() {\n  let r: Option<int> = g(5)\n  if r.unwrap_or(9) != 9 {\n    panic(\"expected 9\")\n  }\n}\n"
+description: |
+  
+  fn g<T>(head: int, rest: VarArgs<T>) -> Option<T> { None }
+  
+  fn test() {
+    let r: Option<int> = g(5)
+    if r.unwrap_or(9) != 9 {
+      panic("expected 9")
+    }
+  }
 ---
 package main
 

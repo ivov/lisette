@@ -1,6 +1,15 @@
 ---
 source: tests/spec/emit/types.rs
-description: "\n#[equality]\nstruct Handler { run: fn(int) -> int }\n\nimpl Handler {\n  fn equals(self, other: Handler) -> bool {\n    true\n  }\n}\n"
+description: |
+  
+  #[equality]
+  struct Handler { run: fn(int) -> int }
+  
+  impl Handler {
+    fn equals(self, other: Handler) -> bool {
+      true
+    }
+  }
 ---
 package main
 

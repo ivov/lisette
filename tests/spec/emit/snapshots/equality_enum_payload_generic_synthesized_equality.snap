@@ -1,6 +1,12 @@
 ---
 source: tests/spec/emit/types.rs
-description: "\n#[equality]\nstruct Box<T: Comparable> { items: Slice<T> }\n\n#[equality]\nenum Wrap { Wrapped(Box<int>) }\n"
+description: |
+  
+  #[equality]
+  struct Box<T: Comparable> { items: Slice<T> }
+  
+  #[equality]
+  enum Wrap { Wrapped(Box<int>) }
 ---
 package main
 

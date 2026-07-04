@@ -1,6 +1,18 @@
 ---
 source: tests/spec/emit/types.rs
-description: "\nstruct Point { x: int }\n\nimpl Point {\n  fn equals(self, other: Point) -> bool {\n    self.x == other.x\n  }\n}\n\nfn test(a: Map<string, Point>, b: Map<string, Point>) -> bool {\n  a.equals(b)\n}\n"
+description: |
+  
+  struct Point { x: int }
+  
+  impl Point {
+    fn equals(self, other: Point) -> bool {
+      self.x == other.x
+    }
+  }
+  
+  fn test(a: Map<string, Point>, b: Map<string, Point>) -> bool {
+    a.equals(b)
+  }
 ---
 package main
 

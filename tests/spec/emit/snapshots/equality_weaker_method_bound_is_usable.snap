@@ -1,6 +1,15 @@
 ---
 source: tests/spec/emit/types.rs
-description: "\n#[equality]\nstruct Box<T: Ordered> { value: T }\n\nimpl<T: Comparable> Box<T> {\n  fn equals(self, other: Box<T>) -> bool {\n    self.value == other.value\n  }\n}\n"
+description: |
+  
+  #[equality]
+  struct Box<T: Ordered> { value: T }
+  
+  impl<T: Comparable> Box<T> {
+    fn equals(self, other: Box<T>) -> bool {
+      self.value == other.value
+    }
+  }
 ---
 package main
 

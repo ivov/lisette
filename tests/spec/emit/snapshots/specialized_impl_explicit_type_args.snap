@@ -1,6 +1,17 @@
 ---
 source: tests/spec/emit/types.rs
-description: "\nstruct Box<T> { value: T }\n\nimpl Box<int> {\n  fn keep<U>(self, x: U) -> U { x }\n}\n\nfn test() -> string {\n  let b = Box { value: 1 };\n  b.keep<string>(\"ok\")\n}\n"
+description: |
+  
+  struct Box<T> { value: T }
+  
+  impl Box<int> {
+    fn keep<U>(self, x: U) -> U { x }
+  }
+  
+  fn test() -> string {
+    let b = Box { value: 1 };
+    b.keep<string>("ok")
+  }
 ---
 package main
 

@@ -1,6 +1,13 @@
 ---
 source: tests/spec/emit/types.rs
-description: "\n#[equality]\nstruct Box<T: Comparable> { items: Slice<T> }\n\nfn test(a: Slice<Box<int>>, b: Slice<Box<int>>) -> bool {\n  a.equals(b)\n}\n"
+description: |
+  
+  #[equality]
+  struct Box<T: Comparable> { items: Slice<T> }
+  
+  fn test(a: Slice<Box<int>>, b: Slice<Box<int>>) -> bool {
+    a.equals(b)
+  }
 ---
 package main
 

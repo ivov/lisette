@@ -1,6 +1,13 @@
 ---
 source: tests/spec/emit/types.rs
-description: "\n#[equality]\nenum Message {\n  Quit,\n  Move { x: int, y: int },\n  Write(string),\n}\n"
+description: |
+  
+  #[equality]
+  enum Message {
+    Quit,
+    Move { x: int, y: int },
+    Write(string),
+  }
 ---
 package main
 

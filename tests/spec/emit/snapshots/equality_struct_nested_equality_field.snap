@@ -1,6 +1,12 @@
 ---
 source: tests/spec/emit/types.rs
-description: "\n#[equality]\nstruct Inner { items: Slice<int> }\n\n#[equality]\nstruct Outer { name: string, inner: Inner }\n"
+description: |
+  
+  #[equality]
+  struct Inner { items: Slice<int> }
+  
+  #[equality]
+  struct Outer { name: string, inner: Inner }
 ---
 package main
 

@@ -1,6 +1,15 @@
 ---
 source: tests/spec/emit/types.rs
-description: "\n#[equality]\nstruct Caseless { value: string }\n\nimpl Caseless {\n  fn equals(self, other: Caseless) -> bool {\n    self.value == other.value\n  }\n}\n"
+description: |
+  
+  #[equality]
+  struct Caseless { value: string }
+  
+  impl Caseless {
+    fn equals(self, other: Caseless) -> bool {
+      self.value == other.value
+    }
+  }
 ---
 package main
 

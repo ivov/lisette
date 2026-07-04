@@ -1,6 +1,13 @@
 ---
 source: tests/spec/emit/types.rs
-description: "\n#[equality]\nstruct Order { id: int, tags: Slice<string> }\n\nfn test(a: Map<string, Order>, b: Map<string, Order>) -> bool {\n  a.equals(b)\n}\n"
+description: |
+  
+  #[equality]
+  struct Order { id: int, tags: Slice<string> }
+  
+  fn test(a: Map<string, Order>, b: Map<string, Order>) -> bool {
+    a.equals(b)
+  }
 ---
 package main
 

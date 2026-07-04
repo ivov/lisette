@@ -1,6 +1,12 @@
 ---
 source: tests/spec/emit/types.rs
-description: "\n#[equality]\nenum Event {\n  Tags(Slice<string>),\n  Empty,\n}\n"
+description: |
+  
+  #[equality]
+  enum Event {
+    Tags(Slice<string>),
+    Empty,
+  }
 ---
 package main
 

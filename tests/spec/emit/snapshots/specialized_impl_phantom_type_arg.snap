@@ -1,6 +1,17 @@
 ---
 source: tests/spec/emit/types.rs
-description: "\nstruct Box<T> { value: T }\n\nimpl Box<int> {\n  fn tag<U>(self) -> int { 1 }\n}\n\nfn test() -> int {\n  let b = Box { value: 1 };\n  b.tag<string>()\n}\n"
+description: |
+  
+  struct Box<T> { value: T }
+  
+  impl Box<int> {
+    fn tag<U>(self) -> int { 1 }
+  }
+  
+  fn test() -> int {
+    let b = Box { value: 1 };
+    b.tag<string>()
+  }
 ---
 package main
 

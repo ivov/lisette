@@ -1,6 +1,9 @@
 ---
 source: tests/spec/emit/types.rs
-description: "\n#[equality]\nstruct Blank {}\n"
+description: |
+  
+  #[equality]
+  struct Blank {}
 ---
 package main
 

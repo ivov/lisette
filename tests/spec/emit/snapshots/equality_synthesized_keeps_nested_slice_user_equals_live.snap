@@ -1,6 +1,17 @@
 ---
 source: tests/spec/emit/types.rs
-description: "\nstruct Inner { x: int }\n\nimpl Inner {\n  fn equals(self, other: Inner) -> bool {\n    self.x == other.x\n  }\n}\n\n#[equality]\nstruct Outer { items: Slice<Inner> }\n"
+description: |
+  
+  struct Inner { x: int }
+  
+  impl Inner {
+    fn equals(self, other: Inner) -> bool {
+      self.x == other.x
+    }
+  }
+  
+  #[equality]
+  struct Outer { items: Slice<Inner> }
 ---
 package main
 

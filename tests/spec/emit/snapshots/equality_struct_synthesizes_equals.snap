@@ -1,6 +1,9 @@
 ---
 source: tests/spec/emit/types.rs
-description: "\n#[equality]\nstruct Order { id: int, tags: Slice<string> }\n"
+description: |
+  
+  #[equality]
+  struct Order { id: int, tags: Slice<string> }
 ---
 package main
 

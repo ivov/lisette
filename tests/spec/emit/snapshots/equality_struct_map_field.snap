@@ -1,6 +1,9 @@
 ---
 source: tests/spec/emit/types.rs
-description: "\n#[equality]\nstruct Counts { name: string, totals: Map<string, int> }\n"
+description: |
+  
+  #[equality]
+  struct Counts { name: string, totals: Map<string, int> }
 ---
 package main
 

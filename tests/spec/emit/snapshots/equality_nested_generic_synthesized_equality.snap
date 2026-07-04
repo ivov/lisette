@@ -1,6 +1,12 @@
 ---
 source: tests/spec/emit/types.rs
-description: "\n#[equality]\nstruct Box<T: Comparable> { items: Slice<T> }\n\n#[equality]\nstruct Wrap { box: Box<int> }\n"
+description: |
+  
+  #[equality]
+  struct Box<T: Comparable> { items: Slice<T> }
+  
+  #[equality]
+  struct Wrap { box: Box<int> }
 ---
 package main
 

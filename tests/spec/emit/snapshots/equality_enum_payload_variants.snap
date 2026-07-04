@@ -1,6 +1,12 @@
 ---
 source: tests/spec/emit/types.rs
-description: "\n#[equality]\nenum Shape {\n  Circle(float64),\n  Rectangle(float64, float64),\n}\n"
+description: |
+  
+  #[equality]
+  enum Shape {
+    Circle(float64),
+    Rectangle(float64, float64),
+  }
 ---
 package main
 

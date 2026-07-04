@@ -1,6 +1,9 @@
 ---
 source: tests/spec/emit/types.rs
-description: "\n#[equality]\nenum Color { Red, Green, Blue }\n"
+description: |
+  
+  #[equality]
+  enum Color { Red, Green, Blue }
 ---
 package main
 

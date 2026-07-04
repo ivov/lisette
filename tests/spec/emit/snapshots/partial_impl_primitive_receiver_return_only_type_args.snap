@@ -1,6 +1,18 @@
 ---
 source: tests/spec/emit/types.rs
-description: "\nstruct Pair<A, B> { a: A, b: B }\n\nimpl<B> Pair<int, B> {\n  fn make<U>(self) -> U { panic(\"boom\") }\n}\n\nfn test() {\n  let p: Pair<int, bool> = Pair { a: 1, b: true };\n  let x: string = p.make();\n  let _ = x;\n}\n"
+description: |
+  
+  struct Pair<A, B> { a: A, b: B }
+  
+  impl<B> Pair<int, B> {
+    fn make<U>(self) -> U { panic("boom") }
+  }
+  
+  fn test() {
+    let p: Pair<int, bool> = Pair { a: 1, b: true };
+    let x: string = p.make();
+    let _ = x;
+  }
 ---
 package main
 
