@@ -3193,6 +3193,13 @@ pub fn record_struct_value(name: &str, span: Span) -> LisetteDiagnostic {
         ))
 }
 
+pub fn type_used_as_value(name: &str, span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Cannot use a type as a value")
+        .with_infer_code("type_used_as_value")
+        .with_span_label(&span, "type names are not runtime values")
+        .with_help(format!("`{name}` refers to a type, not a value"))
+}
+
 pub fn namespace_alias_used_as_value(span: Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Cannot use a module or enum-type alias as a value")
         .with_infer_code("namespace_alias_used_as_value")

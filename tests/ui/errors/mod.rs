@@ -9532,6 +9532,517 @@ fn main() {
 }
 
 #[test]
+fn infer_bare_enum_as_value() {
+    let input = r#"
+enum Color { Red, Blue }
+
+fn main() {
+  let c = Color
+  let _ = c
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_type_alias_of_collection_as_value() {
+    let input = r#"
+type Rows = Slice<Slice<int>>
+
+fn main() {
+  let c = Rows
+  let _ = c
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_instance_method_called_on_type_alias() {
+    let input = r#"
+type Rows = Slice<Slice<int>>
+
+fn main() {
+  let n = Rows.length()
+  let _ = n
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_scalar_alias_as_value() {
+    let input = r#"
+type Id = int
+
+fn main() {
+  let c = Id
+  let _ = c
+}
+"#;
+    let result = crate::_harness::infer::infer(input);
+    assert!(
+        has_code(&result, "type_used_as_value"),
+        "a scalar type alias in value position must be rejected, got: {:?}",
+        result.errors
+    );
+}
+
+#[test]
+fn infer_struct_names_stay_owned_by_native_value_pass() {
+    let input = r#"
+struct Coord { x: int, y: int }
+type Alias = Coord
+
+fn main() {
+  let a = Coord
+  let b = Alias
+  let _ = a
+  let _ = b
+}
+"#;
+    let result = crate::_harness::infer::infer(input);
+    assert!(
+        has_code(&result, "record_struct_value"),
+        "bare struct and struct-alias names must be rejected by the native_value_usage pass, got: {:?}",
+        result.errors
+    );
+    assert!(
+        !has_code(&result, "type_used_as_value"),
+        "struct names must not double-fire type_used_as_value from infer_identifier, got: {:?}",
+        result.errors
+    );
+}
+
+#[test]
+fn infer_multi_hop_struct_alias_stays_struct_diagnostic() {
+    let input = r#"
+struct Coord { x: int, y: int }
+type A = Coord
+type B = A
+
+fn main() {
+  let b = B
+  let _ = b
+}
+"#;
+    let result = crate::_harness::infer::infer(input);
+    assert!(
+        has_code(&result, "record_struct_value"),
+        "a multi-hop struct alias must get the struct-literal diagnostic, got: {:?}",
+        result.errors
+    );
+    assert!(
+        !has_code(&result, "type_used_as_value"),
+        "a multi-hop struct alias must not fall through to the generic type diagnostic, got: {:?}",
+        result.errors
+    );
+}
+
+#[test]
+fn infer_cross_module_struct_alias_stays_struct_diagnostic() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "geo",
+        "lib.lis",
+        r#"
+pub struct Point { pub x: int, pub y: int }
+pub type P = Point
+"#,
+    );
+    let source = r#"
+import "geo"
+
+fn main() {
+  let x = geo.P
+  let _ = x
+}
+"#;
+    fs.add_file("main", "main.lis", source);
+    let result = infer_module("main", fs);
+    assert!(
+        has_code(&result, "record_struct_value"),
+        "an imported struct alias must get the struct-literal diagnostic, got: {:?}",
+        result.errors
+    );
+    assert!(
+        !has_code(&result, "type_used_as_value"),
+        "an imported struct alias must not fall through to the generic type diagnostic, got: {:?}",
+        result.errors
+    );
+}
+
+#[test]
+fn infer_cross_module_tuple_struct_alias_stays_constructor_diagnostic() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "geo",
+        "lib.lis",
+        r#"
+pub struct Pair(int, int)
+pub type P = Pair
+"#,
+    );
+    let source = r#"
+import "geo"
+
+fn main() {
+  let x = geo.P
+  let _ = x
+}
+"#;
+    fs.add_file("main", "main.lis", source);
+    let result = infer_module("main", fs);
+    assert!(
+        has_code(&result, "native_constructor_value"),
+        "an imported tuple-struct alias must get the constructor diagnostic, got: {:?}",
+        result.errors
+    );
+    assert!(
+        !has_code(&result, "type_used_as_value"),
+        "an imported tuple-struct alias must not fall through to the generic type diagnostic, got: {:?}",
+        result.errors
+    );
+}
+
+#[test]
+fn infer_enum_alias_as_value() {
+    let input = r#"
+enum E { A, B }
+type C = E
+
+fn main() {
+  let c = C
+  let _ = c
+}
+"#;
+    let result = crate::_harness::infer::infer(input);
+    assert!(
+        has_code(&result, "type_used_as_value"),
+        "an enum alias in value position must be rejected, got: {:?}",
+        result.errors
+    );
+}
+
+#[test]
+fn infer_clone_called_on_type_alias() {
+    let input = r#"
+type Rows = Slice<Slice<int>>
+
+fn main() {
+  let k = Rows.clone()
+  let _ = k
+}
+"#;
+    let result = crate::_harness::infer::infer(input);
+    assert_eq!(
+        result
+            .errors
+            .iter()
+            .filter(|d| d
+                .code_str()
+                .is_some_and(|c| c.contains("type_used_as_value")))
+            .count(),
+        1,
+        "clone on a type alias must raise exactly one type-in-value error, got: {:?}",
+        result.errors
+    );
+}
+
+#[test]
+fn infer_is_empty_called_on_type_alias() {
+    let input = r#"
+type Rows = Slice<Slice<int>>
+
+fn main() {
+  let e = Rows.is_empty()
+  let _ = e
+}
+"#;
+    let result = crate::_harness::infer::infer(input);
+    assert!(
+        has_code(&result, "type_used_as_value"),
+        "is_empty on a type alias must be rejected, got: {:?}",
+        result.errors
+    );
+}
+
+#[test]
+fn infer_static_constructor_and_enum_variant_allowed() {
+    let input = r#"
+enum Color { Red, Blue }
+
+fn main() {
+  let xs = Slice.new<int>()
+  let c = Color.Red
+  let _ = xs
+  let _ = c
+}
+"#;
+    let result = crate::_harness::infer::infer(input);
+    assert!(
+        result.errors.is_empty(),
+        "static constructors and enum variant constructors must stay legal, got: {:?}",
+        result.errors
+    );
+}
+
+#[test]
+fn infer_value_receiver_instance_method_allowed() {
+    let input = r#"
+fn main() {
+  let xs = [1, 2, 3]
+  let n = xs.length()
+  let k = xs.clone()
+  let _ = n
+  let _ = k
+}
+"#;
+    let result = crate::_harness::infer::infer(input);
+    assert!(
+        result.errors.is_empty(),
+        "instance methods on value receivers must stay legal, got: {:?}",
+        result.errors
+    );
+}
+
+#[test]
+fn infer_cross_module_instance_method_value_allowed() {
+    let mut fs = MockFileSystem::new();
+
+    fs.add_file(
+        "geo",
+        "lib.lis",
+        r#"
+pub struct Point { pub x: int, pub y: int }
+
+impl Point {
+  pub fn sum(self) -> int { self.x + self.y }
+}
+"#,
+    );
+
+    let source = r#"
+import "geo"
+
+fn main() {
+  let p = geo.Point { x: 1, y: 2 }
+  let f = geo.Point.sum
+  let _ = f(p)
+}
+"#;
+    fs.add_file("main", "main.lis", source);
+
+    let result = infer_module("main", fs);
+    assert!(
+        !has_code(&result, "type_used_as_value"),
+        "taking a cross-module instance method as a value must stay legal, got: {:?}",
+        result.errors
+    );
+}
+
+#[test]
+fn infer_instance_method_called_on_cross_module_type() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "geo",
+        "lib.lis",
+        r#"
+pub struct Point { pub x: int, pub y: int }
+impl Point { pub fn sum(self) -> int { self.x + self.y } }
+"#,
+    );
+    let source = r#"
+import "geo"
+
+fn main() {
+  let s = geo.Point.sum()
+  let _ = s
+}
+"#;
+    fs.add_file("main", "main.lis", source);
+    let result = infer_module("main", fs);
+    assert!(
+        has_code(&result, "type_used_as_value"),
+        "an instance method called on a cross-module type name must be rejected, got: {:?}",
+        result.errors
+    );
+}
+
+#[test]
+fn infer_cross_module_struct_literal_via_alias_allowed() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "shapes",
+        "lib.lis",
+        r#"
+pub struct Foo { pub x: int }
+pub type P = Foo
+"#,
+    );
+    let source = r#"
+import "shapes"
+
+fn main() {
+  let a = shapes.P { x: 1 }
+  let _ = a
+}
+"#;
+    fs.add_file("main", "main.lis", source);
+    let result = infer_module("main", fs);
+    assert!(
+        result.errors.is_empty(),
+        "constructing a struct through a cross-module alias must stay legal, got: {:?}",
+        result.errors
+    );
+}
+
+#[test]
+fn infer_cross_module_variant_via_alias_allowed() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "palette",
+        "lib.lis",
+        r#"
+pub enum Color { Red, Blue }
+pub type C = Color
+"#,
+    );
+    let source = r#"
+import "palette"
+
+fn main() {
+  let a = palette.C.Red
+  let _ = a
+}
+"#;
+    fs.add_file("main", "main.lis", source);
+    let result = infer_module("main", fs);
+    assert!(
+        !has_code(&result, "type_used_as_value"),
+        "constructing an enum variant through a cross-module alias must stay legal, got: {:?}",
+        result.errors
+    );
+}
+
+#[test]
+fn infer_bare_interface_as_value() {
+    let input = r#"
+interface Greeter { fn greet(self) -> string }
+
+fn main() {
+  let x = Greeter
+  let _ = x
+}
+"#;
+    let result = crate::_harness::infer::infer(input);
+    assert!(
+        has_code(&result, "type_used_as_value"),
+        "a bare interface name in value position must be rejected, got: {:?}",
+        result.errors
+    );
+}
+
+#[test]
+fn infer_imported_value_member_method_call_allowed() {
+    let input = r#"
+import "go:time"
+import "go:fmt"
+
+fn main() {
+  fmt.Println(time.Second.String())
+}
+"#;
+    let result = crate::_harness::infer::infer(input);
+    assert!(
+        result.errors.is_empty(),
+        "a method call on an imported value member must stay legal, got: {:?}",
+        result.errors
+    );
+}
+
+#[test]
+fn infer_cross_module_collection_alias_as_value() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "grid",
+        "lib.lis",
+        r#"
+pub type Rows = Slice<Slice<int>>
+"#,
+    );
+    let source = r#"
+import "grid"
+
+fn main() {
+  let x = grid.Rows
+  let _ = x
+}
+"#;
+    fs.add_file("main", "main.lis", source);
+    let result = infer_module("main", fs);
+    assert!(
+        has_code(&result, "type_used_as_value"),
+        "a cross-module collection alias in value position must be rejected, got: {:?}",
+        result.errors
+    );
+}
+
+#[test]
+fn infer_cross_module_interface_as_value() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "svc",
+        "lib.lis",
+        r#"
+pub interface Greeter { fn greet(self) -> string }
+"#,
+    );
+    let source = r#"
+import "svc"
+
+fn main() {
+  let x = svc.Greeter
+  let _ = x
+}
+"#;
+    fs.add_file("main", "main.lis", source);
+    let result = infer_module("main", fs);
+    assert!(
+        has_code(&result, "type_used_as_value"),
+        "a cross-module interface in value position must be rejected, got: {:?}",
+        result.errors
+    );
+}
+
+#[test]
+fn infer_cross_module_const_value_allowed() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "conf",
+        "lib.lis",
+        r#"
+pub const LIMIT = 100
+"#,
+    );
+    let source = r#"
+import "conf"
+
+fn main() {
+  let x = conf.LIMIT
+  let _ = x
+}
+"#;
+    fs.add_file("main", "main.lis", source);
+    let result = infer_module("main", fs);
+    assert!(
+        !has_code(&result, "type_used_as_value"),
+        "an imported const value must not be rejected as a type, got: {:?}",
+        result.errors
+    );
+}
+
+#[test]
 fn iterate_on_payload_variant() {
     let input = r#"
 #[iterate]

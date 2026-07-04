@@ -437,6 +437,10 @@ impl Store {
         }
     }
 
+    pub fn deep_struct_kind(&self, ty: &Type) -> Option<syntax::ast::StructKind> {
+        self.struct_kind(self.deep_resolve_alias(ty).get_qualified_id()?)
+    }
+
     pub fn struct_constructor(&self, qualified_name: &str) -> Option<&Type> {
         match &self.get_definition(qualified_name)?.body {
             DefinitionBody::Struct { constructor, .. } => constructor.as_ref(),

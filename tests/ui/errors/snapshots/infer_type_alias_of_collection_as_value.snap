@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Cannot use a type as a value
+   ╭─[test.lis:5:11]
+ 4 │ fn main() {
+ 5 │   let c = Rows
+   ·           ──┬─
+   ·             ╰── type names are not runtime values
+ 6 │   let _ = c
+   ╰────
+  help: `Rows` refers to a type, not a value · code: [infer.type_used_as_value]

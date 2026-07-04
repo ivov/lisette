@@ -181,13 +181,7 @@ fn resolves_to_struct_kind(qualified: &str, kind: StructKind, store: &Store) -> 
             ty: alias_ty,
             body: DefinitionBody::TypeAlias { .. },
             ..
-        }) => {
-            if let Type::Nominal { id, .. } = alias_ty.unwrap_forall() {
-                store.struct_kind(id) == Some(kind)
-            } else {
-                false
-            }
-        }
+        }) => store.deep_struct_kind(alias_ty.unwrap_forall()) == Some(kind),
         _ => false,
     }
 }

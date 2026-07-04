@@ -258,15 +258,17 @@ impl InferCtx<'_, '_> {
                 self.sink
                     .push(diagnostics::infer::test_function_not_callable(span, &value));
             }
-            if let DefinitionBody::TypeAlias { .. } = &definition.body
-                && !self.scopes.is_callee_context()
-                && !self.scopes.is_dot_access_base()
+            let names_a_type = match &definition.body {
+                DefinitionBody::Enum { .. } | DefinitionBody::Interface { .. } => true,
+                DefinitionBody::TypeAlias { .. } => store
+                    .deep_struct_kind(definition.ty.unwrap_forall())
+                    .is_none(),
+                _ => false,
+            };
+            if names_a_type && !self.scopes.is_callee_context() && !self.scopes.is_dot_access_base()
             {
-                let underlying = definition.ty.unwrap_forall();
-                if self.is_enum_type(store, underlying) {
-                    self.sink
-                        .push(diagnostics::infer::namespace_alias_used_as_value(span));
-                }
+                self.sink
+                    .push(diagnostics::infer::type_used_as_value(&value, span));
             }
         }
 
