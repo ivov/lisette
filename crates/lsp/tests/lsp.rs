@@ -12706,3 +12706,32 @@ async fn inlay_hint_lambda_return_over_index_body() {
     );
     client.shutdown().await;
 }
+
+#[tokio::test]
+async fn opening_prelude_source_reports_no_foreign_type_errors() {
+    let dir = tempfile::tempdir().unwrap();
+    let prelude_src = std::fs::read_to_string(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../stdlib/prelude.d.lis"
+    ))
+    .unwrap();
+    let path = dir.path().join("prelude.d.lis");
+    std::fs::write(&path, &prelude_src).unwrap();
+    let uri = Url::from_file_path(&path).unwrap().to_string();
+
+    let mut client = TestClient::new().await;
+    client.initialize().await;
+    client.open(&uri, &prelude_src).await;
+    let diagnostics = client.await_diagnostics().await;
+
+    let offenders: Vec<&str> = diagnostics
+        .iter()
+        .filter(|d| d.message.contains("foreign type"))
+        .map(|d| d.message.as_str())
+        .collect();
+    assert!(
+        offenders.is_empty(),
+        "opening the prelude source must not flag its own impls as foreign: {offenders:?}"
+    );
+    client.shutdown().await;
+}

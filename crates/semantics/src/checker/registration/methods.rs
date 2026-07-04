@@ -147,7 +147,8 @@ impl TaskState<'_> {
         let module_id = self.cursor.module_id.clone();
         let is_d_lis = self.is_d_lis(&*store);
 
-        if let Some(type_module) = store.module_for_qualified_name(&receiver_qualified_name)
+        if !is_d_lis
+            && let Some(type_module) = store.module_for_qualified_name(&receiver_qualified_name)
             && type_module != module_id
         {
             self.sink.push(diagnostics::infer::impl_on_foreign_type(
