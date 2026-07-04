@@ -411,8 +411,12 @@ impl InferCtx<'_, '_> {
                     .push(diagnostics::infer::self_reference_in_assignment(span));
             }
 
-            let self_sourced = super::aliasing::place_root_name(new_value.unwrap_parens())
-                .is_some_and(|root| root == var_name);
+            let value_expr = new_value.unwrap_parens();
+            let value_place = super::aliasing::clone_call_receiver(value_expr)
+                .map(|receiver| receiver.unwrap_parens())
+                .unwrap_or(value_expr);
+            let self_sourced =
+                super::aliasing::place_root_name(value_place).is_some_and(|root| root == var_name);
             if compound_operator.is_none() && is_simple_target && is_mutable && !self_sourced {
                 self.check_mut_binding_alias(&var_name, &new_value);
             }

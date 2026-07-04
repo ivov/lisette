@@ -10,12 +10,14 @@ description: |
   fn main() {
     let mut m = Map.new<string, Wrap>()
     m["a"] = Wrap(Inner { items: [] })
-    let mut inner = m["a"].0
+    let mut inner = Inner { items: m["a"].0.items.clone() }
     inner.items = inner.items.append(1)
     m["a"] = Wrap(inner)
   }
 ---
 package main
+
+import "slices"
 
 type Inner struct {
 	items []int
@@ -26,7 +28,7 @@ type Wrap Inner
 func main() {
 	m := make(map[string]Wrap)
 	m["a"] = Wrap(Inner{})
-	inner := Inner(m["a"])
+	inner := Inner{items: slices.Clone(Inner(m["a"]).items)}
 	inner.items = append(inner.items, 1)
 	m["a"] = Wrap(inner)
 }

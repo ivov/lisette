@@ -7,13 +7,15 @@ description: |
   
   fn main() {
     let mut w = Wrap(Pair([1], 0))
-    let mut p = w.0
+    let mut p = Pair(w.0.0.clone(), w.0.1)
     p.0 = p.0.append(2)
     w = Wrap(p)
     let _ = w
   }
 ---
 package main
+
+import "slices"
 
 type Pair struct {
 	F0 []int
@@ -27,7 +29,10 @@ func main() {
 		F0: []int{1},
 		F1: 0,
 	})
-	p := Pair(w)
+	p := Pair{
+		F0: slices.Clone(Pair(w).F0),
+		F1: Pair(w).F1,
+	}
 	p.F0 = append(p.F0, 2)
 	w = Wrap(p)
 	_ = w

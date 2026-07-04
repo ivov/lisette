@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Cannot make a mutable binding to `t1`
+   ╭─[test.lis:3:16]
+ 2 │ fn test(t1: (Slice<string>, int)) {
+ 3 │   let mut t2 = t1
+   ·                ─┬
+   ·                 ╰── would be mutated implicitly
+ 4 │   t2.0[0] = "y"
+   ╰────
+  help: Mutating `t2` would implicitly mutate `t1`. Either use `&t1` to take a reference or construct a new value to mutate independently · code: [infer.mut_binding_aliases]

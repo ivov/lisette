@@ -4314,3 +4314,103 @@ fn main() {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn clone_nested_slice_deep() {
+    let input = r#"
+fn main() {
+  let a = [[1, 2], [3, 4]]
+  let mut b = a.clone()
+  b[0][0] = 9
+  let _ = a
+  let _ = b
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn clone_map_slice_values_deep() {
+    let input = r#"
+fn main() {
+  let m = Map.from([("k", [1, 2])])
+  let mut m2 = m.clone()
+  m2["k"] = [9]
+  let _ = m
+  let _ = m2
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn clone_slice_of_tuples_deep() {
+    let input = r#"
+fn main() {
+  let a = [(1, [2, 3])]
+  let mut b = a.clone()
+  b[0] = (4, [5])
+  let _ = a
+  let _ = b
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn clone_user_method_dispatched() {
+    let input = r#"
+struct Doc { tags: Slice<string> }
+
+impl Doc {
+  fn clone(self) -> Doc {
+    Doc { tags: self.tags.clone() }
+  }
+}
+
+fn main() {
+  let d1 = Doc { tags: ["x"] }
+  let mut d2 = d1.clone()
+  d2.tags[0] = "y"
+  let _ = d1
+  let _ = d2
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn clone_enumerated_slice() {
+    let input = r#"
+fn main() {
+  let s = [1, 2, 3]
+  let e = s.enumerate()
+  let mut e2 = e.clone()
+  e2 = s.enumerate()
+  let _ = e
+  let _ = e2
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn clone_container_of_user_clone_stays_shallow() {
+    let input = r#"
+struct Doc { tags: Slice<string> }
+
+impl Doc {
+  fn clone(self) -> Doc {
+    Doc { tags: self.tags.clone() }
+  }
+}
+
+fn main() {
+  let docs = [Doc { tags: ["x"] }]
+  let copy = docs.clone()
+  let _ = docs
+  let _ = copy
+}
+"#;
+    assert_emit_snapshot!(input);
+}

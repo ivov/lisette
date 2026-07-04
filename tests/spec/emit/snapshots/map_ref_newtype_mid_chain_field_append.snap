@@ -11,7 +11,7 @@ description: |
     let mut m = Map.new<string, Outer>()
     m["a"] = Outer { w: &w }
     let Some(o) = m.get("a") else { return; };
-    let mut inner = o.w.0
+    let mut inner = Inner { items: o.w.0.items.clone() }
     inner.items = inner.items.append(2)
     o.w.* = Wrap(inner)
     let _ = w
@@ -19,7 +19,10 @@ description: |
 ---
 package main
 
-import lisette "github.com/ivov/lisette/prelude"
+import (
+	lisette "github.com/ivov/lisette/prelude"
+	"slices"
+)
 
 type Inner struct {
 	items []int
@@ -40,7 +43,7 @@ func main() {
 		return
 	}
 	o := subject_1.SomeVal
-	inner := Inner(*o.w)
+	inner := Inner{items: slices.Clone(Inner(*o.w).items)}
 	inner.items = append(inner.items, 2)
 	*o.w = Wrap(inner)
 	_ = w

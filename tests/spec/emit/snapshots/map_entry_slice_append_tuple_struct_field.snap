@@ -7,12 +7,14 @@ description: |
   fn main() {
     let mut m = Map.new<string, Wrap>()
     m["a"] = Wrap([], 0)
-    let mut entry = m["a"]
+    let mut entry = Wrap(m["a"].0.clone(), m["a"].1)
     entry.0 = entry.0.append(2)
     m["a"] = entry
   }
 ---
 package main
+
+import "slices"
 
 type Wrap struct {
 	F0 []int
@@ -25,7 +27,10 @@ func main() {
 		F0: ([]int)(nil),
 		F1: 0,
 	}
-	entry := m["a"]
+	entry := Wrap{
+		F0: slices.Clone(m["a"].F0),
+		F1: m["a"].F1,
+	}
 	entry.F0 = append(entry.F0, 2)
 	m["a"] = entry
 }

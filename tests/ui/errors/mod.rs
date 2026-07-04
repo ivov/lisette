@@ -2445,6 +2445,82 @@ fn test(m: Map<string, Slice<int>>) {
 }
 
 #[test]
+fn infer_mut_binding_aliases_struct() {
+    let input = r#"
+struct Doc { tags: Slice<string> }
+
+fn test(d1: Doc) {
+  let mut d2 = d1
+  d2.tags[0] = "y"
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_mut_binding_aliases_tuple() {
+    let input = r#"
+fn test(t1: (Slice<string>, int)) {
+  let mut t2 = t1
+  t2.0[0] = "y"
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_mut_binding_aliases_enum() {
+    let input = r#"
+enum Holder { Tags(Slice<string>), Empty }
+
+fn test(h1: Holder) {
+  let mut h2 = h1
+  h2 = Holder.Empty
+  let _ = h2
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_mut_binding_aliases_generic_param_fed() {
+    let input = r#"
+struct Box<T> { items: Slice<T> }
+
+fn test(b1: Box<Slice<int>>) {
+  let mut b2 = b1
+  b2.items[0][0] = 9
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_mut_binding_clone_does_not_sever() {
+    let input = r#"
+struct Doc { tags: Slice<string> }
+
+fn test(docs: Slice<Doc>) {
+  let mut copy = docs.clone()
+  copy[0].tags[0] = "y"
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_mut_binding_aliases_option() {
+    let input = r#"
+fn test(o1: Option<Slice<int>>) {
+  let mut o2 = o1
+  o2 = None
+  let _ = o2
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
 fn infer_subslice_not_addressable() {
     let input = r#"
 fn test() {

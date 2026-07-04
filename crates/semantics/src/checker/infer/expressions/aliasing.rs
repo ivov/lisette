@@ -1,42 +1,123 @@
 use syntax::ast::{Expression, Literal, UnaryOperator};
-use syntax::types::{CompoundKind, Type};
+use syntax::program::CallKind;
 
-use crate::checker::EnvResolve;
 use crate::checker::infer::InferCtx;
 use crate::checker::infer::addressability::check_is_non_addressable;
+use crate::checker::infer::carry_mut::{
+    can_carry_mutation_across_fn_boundary, clone_recipe_is_known, clone_severs_alias,
+};
 
 impl InferCtx<'_, '_> {
-    /// A mutable binding initialized or reassigned from a place expression of
-    /// a directly aliasable type would share the source's backing storage, so
-    /// writes through the binding would also be visible through the source.
+    /// Reject a mutable binding that would alias a carry-mut place. A
+    /// `clone()` of the place is exempt only when the clone actually severs.
     pub(super) fn check_mut_binding_alias(&mut self, binding_name: &str, value: &Expression) {
-        let place = value.unwrap_parens();
+        let expr = value.unwrap_parens();
+        let (place, via_clone) = match clone_call_receiver(expr) {
+            Some(receiver) => (receiver.unwrap_parens(), true),
+            None => (expr, false),
+        };
         if !is_aliasing_place(place) {
             return;
         }
-        if !self.is_directly_aliasable(&value.get_type()) {
+        let rooted_in_binding = place_root_name(place)
+            .is_some_and(|root| self.scopes.lookup_binding_id(&root).is_some());
+        if !rooted_in_binding {
+            return;
+        }
+        let ty = if via_clone {
+            place.get_type()
+        } else {
+            value.get_type()
+        };
+        if !can_carry_mutation_across_fn_boundary(&ty, &self.env, self.store) {
+            return;
+        }
+        if via_clone && !clone_recipe_is_known(&ty, &self.env, self.store) {
+            return;
+        }
+        let clone_severs = clone_severs_alias(&ty, &self.env, self.store);
+        if via_clone && clone_severs {
             return;
         }
         let source = render_place(place);
         let addressable = check_is_non_addressable(place, &self.env).is_none();
-        self.sink.push(diagnostics::infer::mut_binding_aliases(
-            binding_name,
-            &source,
-            addressable,
-            value.get_span(),
-        ));
+        let diagnostic = if via_clone {
+            diagnostics::infer::mut_binding_clone_does_not_sever(
+                binding_name,
+                &source,
+                addressable,
+                value.get_span(),
+            )
+        } else {
+            diagnostics::infer::mut_binding_aliases(
+                binding_name,
+                &source,
+                addressable,
+                clone_severs,
+                value.get_span(),
+            )
+        };
+        self.sink.push(diagnostic);
     }
 
-    fn is_directly_aliasable(&self, ty: &Type) -> bool {
-        let resolved = ty.resolve_in(&self.env);
-        let peeled = self.store.peel_alias(&resolved);
-        matches!(
-            peeled,
-            Type::Compound {
-                kind: CompoundKind::Slice | CompoundKind::Map | CompoundKind::EnumeratedSlice,
-                ..
-            }
-        )
+    /// Source of a `.clone()` of a local carry-mut place that the clone does
+    /// not fully sever, or `None` when the clone is fresh, opaque, or severing.
+    pub(super) fn non_severing_clone_source(&self, value: &Expression) -> Option<String> {
+        let receiver = clone_call_receiver(value.unwrap_parens())?;
+        let place = receiver.unwrap_parens();
+        if !is_aliasing_place(place) {
+            return None;
+        }
+        let root = place_root_name(place)?;
+        self.scopes.lookup_binding_id(&root)?;
+        let ty = place.get_type();
+        if !can_carry_mutation_across_fn_boundary(&ty, &self.env, self.store) {
+            return None;
+        }
+        if !clone_recipe_is_known(&ty, &self.env, self.store) {
+            return None;
+        }
+        if clone_severs_alias(&ty, &self.env, self.store) {
+            return None;
+        }
+        Some(render_place(place))
+    }
+}
+
+/// The receiver of a `clone()` call written as `x.clone()`, `Type.clone(x)`,
+/// or `Slice.clone(x)`. `None` for a free function named `clone` (UFCS).
+pub(super) fn clone_call_receiver(expression: &Expression) -> Option<&Expression> {
+    let Expression::Call {
+        expression: callee,
+        args,
+        call_kind,
+        ..
+    } = expression
+    else {
+        return None;
+    };
+    match callee.unwrap_parens() {
+        Expression::DotAccess {
+            expression, member, ..
+        } if member == "clone"
+            && args.is_empty()
+            && !matches!(call_kind, Some(CallKind::UfcsMethod)) =>
+        {
+            Some(expression)
+        }
+        Expression::Identifier { .. }
+            if args.len() == 1
+                && matches!(
+                    call_kind,
+                    Some(CallKind::NativeMethodIdentifier(_) | CallKind::ReceiverMethodUfcs { .. })
+                )
+                && callee
+                    .get_var_name()
+                    .is_some_and(|name| name.ends_with(".clone")) =>
+        {
+            args.first()
+        }
+        _ => None,
     }
 }
 

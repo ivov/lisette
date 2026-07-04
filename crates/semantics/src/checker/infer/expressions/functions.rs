@@ -1445,6 +1445,15 @@ impl InferCtx<'_, '_> {
         if !can_carry_mutation_across_fn_boundary(param_ty, &self.env, store) {
             return;
         }
+        if let Some(source) = self.non_severing_clone_source(arg) {
+            self.sink
+                .push(diagnostics::infer::mut_arg_clone_does_not_sever(
+                    &source,
+                    callee_label,
+                    arg.get_span(),
+                ));
+            return;
+        }
         let Some(var_name) = arg.get_var_name() else {
             return;
         };

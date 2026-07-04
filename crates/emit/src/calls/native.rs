@@ -9,14 +9,13 @@ use crate::plan::calls::plan_variadic_spread;
 use crate::types::native::NativeGoType;
 use crate::utils::{contains_call, reads_mutable_operand};
 use syntax::ast::Expression;
-use syntax::types::{Type, peel_to_range_type};
+use syntax::types::{CompoundKind, Type, peel_to_range_type};
 
 #[derive(Clone, Copy)]
 pub(super) enum InlineImport {
     None,
     Slices,
     Strings,
-    Maps,
     Stdlib,
 }
 
@@ -81,22 +80,6 @@ static INLINE_METHODS: &[InlineRule] = &[
         template: "{r}",
         negated_template: None,
         import: InlineImport::None,
-    },
-    InlineRule {
-        types: &[N::Slice],
-        method: "clone",
-        arity: 0,
-        template: "slices.Clone({r})",
-        negated_template: None,
-        import: InlineImport::Slices,
-    },
-    InlineRule {
-        types: &[N::Map],
-        method: "clone",
-        arity: 0,
-        template: "maps.Clone({r})",
-        negated_template: None,
-        import: InlineImport::Maps,
     },
     InlineRule {
         types: &[N::String],
@@ -338,6 +321,15 @@ impl Planner<'_> {
             }
         }
 
+        if ctx.method == "clone" {
+            let receiver_ty = self.facts.strip_and_peel(&expression.get_type());
+            if is_cloneable_container(&receiver_ty) {
+                let (setup, receiver, _) = self.stage_native_dot_access_call(ctx);
+                let body = self.render_clone(&receiver, &receiver_ty);
+                return (setup, body);
+            }
+        }
+
         let (setup, receiver, emitted_args) = self.stage_native_dot_access_call(ctx);
 
         if let Some(inlined) = apply_inline_lookup(
@@ -464,6 +456,19 @@ impl Planner<'_> {
                 if emitted_args.len() >= 2 {
                     let body =
                         self.render_equality(&emitted_args[0], &emitted_args[1], &receiver_ty);
+                    return (setup, body);
+                }
+            }
+        }
+
+        if ctx.method == "clone"
+            && let Some(receiver_expr) = ctx.args.first()
+        {
+            let receiver_ty = self.facts.strip_and_peel(&receiver_expr.get_type());
+            if is_cloneable_container(&receiver_ty) {
+                let (setup, emitted_args) = self.stage_native_identifier_args(ctx);
+                if let Some(receiver) = emitted_args.first() {
+                    let body = self.render_clone(receiver, &receiver_ty);
                     return (setup, body);
                 }
             }
@@ -640,6 +645,16 @@ impl Planner<'_> {
     }
 }
 
+fn is_cloneable_container(ty: &Type) -> bool {
+    matches!(
+        ty,
+        Type::Compound {
+            kind: CompoundKind::Slice | CompoundKind::EnumeratedSlice | CompoundKind::Map,
+            ..
+        }
+    )
+}
+
 fn format_substring_call(receiver: &str, start: Option<&str>, end: Option<&str>) -> String {
     let pkg = go_name::GO_STDLIB_PKG;
     match (start, end) {
@@ -654,7 +669,6 @@ pub(super) fn apply_inline_import(planner: &Planner, import: InlineImport) {
     match import {
         InlineImport::Slices => planner.require_slices(),
         InlineImport::Strings => planner.require_strings(),
-        InlineImport::Maps => planner.require_maps(),
         InlineImport::Stdlib => planner.require_stdlib(),
         InlineImport::None => {}
     }

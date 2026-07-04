@@ -2372,7 +2372,7 @@ struct Box {
 fn main() {
   let mut m = Map.new<string, Box>()
   m["a"] = Box { items: [] }
-  let mut entry = m["a"]
+  let mut entry = Box { items: m["a"].items.clone() }
   entry.items = entry.items.append(1)
   m["a"] = entry
 }
@@ -2403,7 +2403,7 @@ fn map_entry_slice_append_tuple_field() {
 fn main() {
   let mut m = Map.new<string, (Slice<int>, int)>()
   m["a"] = ([1], 2)
-  let mut entry = m["a"]
+  let mut entry = (m["a"].0.clone(), m["a"].1)
   entry.0 = entry.0.append(3)
   m["a"] = entry
 }
@@ -2419,7 +2419,7 @@ struct Wrap(Slice<int>, int)
 fn main() {
   let mut m = Map.new<string, Wrap>()
   m["a"] = Wrap([], 0)
-  let mut entry = m["a"]
+  let mut entry = Wrap(m["a"].0.clone(), m["a"].1)
   entry.0 = entry.0.append(2)
   m["a"] = entry
 }
@@ -2452,7 +2452,7 @@ struct Wrap(Inner)
 fn main() {
   let mut m = Map.new<string, Wrap>()
   m["a"] = Wrap(Inner { items: [] })
-  let mut inner = m["a"].0
+  let mut inner = Inner { items: m["a"].0.items.clone() }
   inner.items = inner.items.append(1)
   m["a"] = Wrap(inner)
 }
@@ -2475,7 +2475,7 @@ fn main() {
   let mut m = Map.new<string, Box>()
   m["a"] = Box { items: [] }
   let mut map = get_map(m)
-  let mut entry = map["a"]
+  let mut entry = Box { items: map["a"].items.clone() }
   entry.items = entry.items.append(1)
   map["a"] = entry
 }
@@ -2494,7 +2494,7 @@ fn main() {
   let mut m = Map.new<string, Box>()
   m["a"] = Box { items: [] }
   let r = &m
-  let mut entry = r.*["a"]
+  let mut entry = Box { items: r.*["a"].items.clone() }
   entry.items = entry.items.append(1)
   r.*["a"] = entry
 }
@@ -3433,7 +3433,7 @@ struct Wrap(Pair)
 
 fn main() {
   let mut w = Wrap(Pair([1], 0))
-  let mut p = w.0
+  let mut p = Pair(w.0.0.clone(), w.0.1)
   p.0 = p.0.append(2)
   w = Wrap(p)
   let _ = w
@@ -3563,7 +3563,7 @@ fn main() {
   let mut m = Map.new<string, Ref<Wrap>>()
   m["a"] = &w
   let Some(r) = m.get("a") else { return; };
-  let mut inner = r.0
+  let mut inner = Inner { items: r.0.items.clone() }
   inner.items = inner.items.append(2)
   r.* = Wrap(inner)
   let _ = w
@@ -3622,7 +3622,7 @@ fn main() {
   let mut m = Map.new<string, Outer>()
   m["a"] = Outer { w: &w }
   let Some(o) = m.get("a") else { return; };
-  let mut inner = o.w.0
+  let mut inner = Inner { items: o.w.0.items.clone() }
   inner.items = inner.items.append(2)
   o.w.* = Wrap(inner)
   let _ = w
@@ -3790,7 +3790,7 @@ fn main() {
   let mut m = Map.new<string, Outer>()
   m["a"] = Outer{ items: [1] }
   let k = key()
-  let mut entry = m[k]
+  let mut entry = Outer { items: m[k].items.clone() }
   entry.items = entry.items.append(2)
   m[k] = entry
 }

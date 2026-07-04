@@ -10,12 +10,14 @@ description: |
     let mut m = Map.new<string, Box>()
     m["a"] = Box { items: [] }
     let r = &m
-    let mut entry = r.*["a"]
+    let mut entry = Box { items: r.*["a"].items.clone() }
     entry.items = entry.items.append(1)
     r.*["a"] = entry
   }
 ---
 package main
+
+import "slices"
 
 type Box struct {
 	items []int
@@ -25,7 +27,7 @@ func main() {
 	m := make(map[string]Box)
 	m["a"] = Box{}
 	r := &m
-	entry := (*r)["a"]
+	entry := Box{items: slices.Clone((*r)["a"].items)}
 	entry.items = append(entry.items, 1)
 	(*r)["a"] = entry
 }

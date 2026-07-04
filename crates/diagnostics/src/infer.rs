@@ -529,21 +529,59 @@ pub fn mut_binding_aliases(
     binding_name: &str,
     source: &str,
     addressable: bool,
+    clone_severs: bool,
     span: Span,
 ) -> LisetteDiagnostic {
-    let help = if addressable {
-        format!(
-            "Mutating `{binding_name}` would implicitly mutate `{source}`. Either use `{source}.clone()` to make a copy or `&{source}` to take a reference."
-        )
-    } else {
-        format!(
-            "Mutating `{binding_name}` would implicitly mutate `{source}`. Use `{source}.clone()` to make a copy."
-        )
+    let target = mutation_target(binding_name, source);
+    let help = match (clone_severs, addressable) {
+        (true, true) => format!(
+            "Mutating `{binding_name}` would implicitly mutate {target}. Either use `{source}.clone()` to make a copy or `&{source}` to take a reference."
+        ),
+        (true, false) => format!(
+            "Mutating `{binding_name}` would implicitly mutate {target}. Use `{source}.clone()` to make a copy."
+        ),
+        (false, true) => format!(
+            "Mutating `{binding_name}` would implicitly mutate {target}. Either use `&{source}` to take a reference or construct a new value to mutate independently."
+        ),
+        (false, false) => format!(
+            "Mutating `{binding_name}` would implicitly mutate {target}. Construct a new value to mutate independently."
+        ),
     };
     LisetteDiagnostic::error(format!("Cannot make a mutable binding to `{source}`"))
         .with_infer_code("mut_binding_aliases")
         .with_span_label(&span, "would be mutated implicitly")
         .with_help(help)
+}
+
+pub fn mut_binding_clone_does_not_sever(
+    binding_name: &str,
+    source: &str,
+    addressable: bool,
+    span: Span,
+) -> LisetteDiagnostic {
+    let target = mutation_target(binding_name, source);
+    let help = if addressable {
+        format!(
+            "`{source}.clone()` leaves collections inside struct or enum values shared, so mutating one through `{binding_name}` could still implicitly mutate {target}. Either use `&{source}` to take a reference or construct a new value to mutate independently."
+        )
+    } else {
+        format!(
+            "`{source}.clone()` leaves collections inside struct or enum values shared, so mutating one through `{binding_name}` could still implicitly mutate {target}. Construct a new value to mutate independently."
+        )
+    };
+    LisetteDiagnostic::error(format!("Cannot make a mutable binding to `{source}`"))
+        .with_infer_code("mut_binding_aliases")
+        .with_span_label(&span, "does not make an independent copy")
+        .with_help(help)
+}
+
+/// A same-name source means the new binding shadows the one it aliases.
+fn mutation_target(binding_name: &str, source: &str) -> String {
+    if binding_name == source {
+        format!("the shadowed `{source}`")
+    } else {
+        format!("`{source}`")
+    }
 }
 
 pub fn uppercase_binding(span: Span, name: &str) -> LisetteDiagnostic {
@@ -3227,6 +3265,20 @@ pub fn immutable_argument_to_mut_param(
     LisetteDiagnostic::error("Immutable argument passed to `mut` parameter")
         .with_infer_code("immutable_arg_to_mut_param")
         .with_span_label(&span, "expected mutable, found immutable")
+        .with_help(help)
+}
+
+pub fn mut_arg_clone_does_not_sever(
+    source: &str,
+    callee_label: &str,
+    span: Span,
+) -> LisetteDiagnostic {
+    let help = format!(
+        "`{source}.clone()` leaves collections inside struct or enum values shared, so {callee_label} could still mutate one shared with `{source}`. Construct a new value to pass instead."
+    );
+    LisetteDiagnostic::error("Aliasing argument passed to `mut` parameter")
+        .with_infer_code("mut_arg_clone_does_not_sever")
+        .with_span_label(&span, "does not make an independent copy")
         .with_help(help)
 }
 

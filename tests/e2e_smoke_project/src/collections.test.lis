@@ -225,3 +225,19 @@ fn map_equals() {
   let c = Map.from([("x", 2)])
   assert a.equals(b) && !a.equals(c)
 }
+
+#[test]
+fn nested_slice_clone_severs() {
+  let a = [[1, 2], [3, 4]]
+  let mut b = a.clone()
+  b[0][0] = 9
+  assert a[0][0] == 1 && b[0][0] == 9
+}
+
+#[test]
+fn map_slice_values_clone_severs() {
+  let m = Map.from([("k", [1, 2])])
+  let mut m2 = m.clone()
+  m2["k"][0] = 9
+  assert m["k"][0] == 1 && m2["k"][0] == 9
+}

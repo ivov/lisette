@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Cannot make a mutable binding to `b1`
+   ╭─[test.lis:5:16]
+ 4 │ fn test(b1: Box<Slice<int>>) {
+ 5 │   let mut b2 = b1
+   ·                ─┬
+   ·                 ╰── would be mutated implicitly
+ 6 │   b2.items[0][0] = 9
+   ╰────
+  help: Mutating `b2` would implicitly mutate `b1`. Either use `&b1` to take a reference or construct a new value to mutate independently · code: [infer.mut_binding_aliases]

@@ -1,0 +1,37 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  struct Doc { tags: Slice<string> }
+  
+  impl Doc {
+    fn clone(self) -> Doc {
+      Doc { tags: self.tags.clone() }
+    }
+  }
+  
+  fn main() {
+    let docs = [Doc { tags: ["x"] }]
+    let copy = docs.clone()
+    let _ = docs
+    let _ = copy
+  }
+---
+package main
+
+import "slices"
+
+type Doc struct {
+	tags []string
+}
+
+func (d Doc) clone() Doc {
+	return Doc{tags: slices.Clone(d.tags)}
+}
+
+func main() {
+	docs := []Doc{Doc{tags: []string{"x"}}}
+	copy_ := slices.Clone(docs)
+	_ = docs
+	_ = copy_
+}

@@ -1,0 +1,26 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  fn main() {
+    let m = Map.from([("k", [1, 2])])
+    let mut m2 = m.clone()
+    m2["k"] = [9]
+    let _ = m
+    let _ = m2
+  }
+---
+package main
+
+import (
+	lisette "github.com/ivov/lisette/prelude"
+	"slices"
+)
+
+func main() {
+	m := lisette.MapFrom([]lisette.Tuple2[string, []int]{lisette.MakeTuple2("k", []int{1, 2})})
+	m2 := lisette.MapCloneFunc(m, func(e_1 []int) []int { return slices.Clone(e_1) })
+	m2["k"] = []int{9}
+	_ = m
+	_ = m2
+}

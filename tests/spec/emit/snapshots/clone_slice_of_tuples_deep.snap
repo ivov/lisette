@@ -1,0 +1,29 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  fn main() {
+    let a = [(1, [2, 3])]
+    let mut b = a.clone()
+    b[0] = (4, [5])
+    let _ = a
+    let _ = b
+  }
+---
+package main
+
+import (
+	lisette "github.com/ivov/lisette/prelude"
+	"slices"
+)
+
+func main() {
+	a := []lisette.Tuple2[int, []int]{lisette.MakeTuple2(1, []int{2, 3})}
+	b := lisette.SliceCloneFunc(a, func(e_1 lisette.Tuple2[int, []int]) lisette.Tuple2[int, []int] {
+		e_1.Second = slices.Clone(e_1.Second)
+		return e_1
+	})
+	b[0] = lisette.MakeTuple2(4, []int{5})
+	_ = a
+	_ = b
+}

@@ -274,7 +274,7 @@ let mut count = 0
 count += 1
 ```
 
-A mutable binding must own its value. Initializing or reassigning a mutable binding from an existing binding, field, or index of a `Slice` or `Map` would share the source's backing storage, so the compiler rejects it. Use `.clone()` for an independent copy, or `&` to share the value intentionally through a reference.
+A mutable binding must own its value. Initializing or reassigning one from an existing binding, field, or element whose type holds a `Slice` or `Map` (directly, or nested inside a struct, tuple, or enum) would share the source's backing storage, so the compiler rejects it. Use `.clone()` for an independent copy, or `&` to share the value intentionally through a reference.
 
 ```rust
 let a = [1, 2, 3]

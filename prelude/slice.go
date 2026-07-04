@@ -98,3 +98,14 @@ func SliceToAny[T any](s []T) []any {
 	}
 	return out
 }
+
+func SliceCloneFunc[S ~[]E, E any](s S, clone func(E) E) S {
+	if s == nil {
+		return nil
+	}
+	out := make(S, len(s))
+	for i, v := range s {
+		out[i] = clone(v)
+	}
+	return out
+}

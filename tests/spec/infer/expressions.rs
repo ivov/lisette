@@ -2047,6 +2047,219 @@ fn mut_binding_self_shrink_reassignment_no_error() {
 }
 
 #[test]
+fn mut_binding_from_struct_place_single_diagnostic() {
+    let result = infer(
+        r#"
+    struct Doc { tags: Slice<string> }
+
+    fn main() {
+      let d1 = Doc { tags: ["x"] }
+      let mut d2 = d1
+      d2.tags[0] = "y"
+    }
+        "#,
+    );
+    assert_eq!(result.errors.len(), 1);
+}
+
+#[test]
+fn mut_binding_from_scalar_struct_no_error() {
+    infer(
+        r#"
+    struct Point { x: int, y: int }
+
+    fn main() {
+      let p1 = Point { x: 1, y: 2 }
+      let mut p2 = p1
+      p2.x = 3
+      let _ = p1
+      let _ = p2
+    }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn mut_binding_from_tuple_place_single_diagnostic() {
+    let result = infer(
+        r#"
+    fn main() {
+      let t1 = (["x"], 1)
+      let mut t2 = t1
+      t2.0[0] = "y"
+      let _ = t1
+    }
+        "#,
+    );
+    assert_eq!(result.errors.len(), 1);
+}
+
+#[test]
+fn mut_binding_from_enum_place_single_diagnostic() {
+    let result = infer(
+        r#"
+    enum Holder { Tags(Slice<string>), Empty }
+
+    fn main() {
+      let h1 = Holder.Tags(["x"])
+      let mut h2 = h1
+      h2 = Holder.Empty
+      let _ = h1
+      let _ = h2
+    }
+        "#,
+    );
+    assert_eq!(result.errors.len(), 1);
+}
+
+#[test]
+fn mut_binding_from_nested_slice_clone_no_error() {
+    infer(r#"{ let a = [[1], [2]]; let mut b = a.clone(); b[0][0] = 9; let _ = a; let _ = b }"#)
+        .assert_no_errors();
+}
+
+#[test]
+fn mut_binding_specialized_clone_opaque_no_error() {
+    infer(
+        r#"
+    struct Box<T> { items: Slice<T> }
+
+    impl Box<int> {
+      fn clone(self) -> Box<int> {
+        Box { items: self.items.clone() }
+      }
+    }
+
+    fn main() {
+      let g1 = Box { items: [1] }
+      let mut g2 = g1.clone()
+      g2.items[0] = 9
+      let _ = g1
+      let _ = g2
+    }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn mut_binding_specialized_clone_not_trusted_single_diagnostic() {
+    let result = infer(
+        r#"
+    struct Box<T> { items: Slice<T> }
+
+    impl Box<int> {
+      fn clone(self) -> Box<int> {
+        Box { items: self.items.clone() }
+      }
+    }
+
+    fn main() {
+      let g1 = Box { items: ["x"] }
+      let mut g2 = g1
+      g2.items[0] = "y"
+      let _ = g1
+    }
+        "#,
+    );
+    assert_eq!(result.errors.len(), 1);
+}
+
+#[test]
+fn mut_binding_shadowing_severing_clone_no_error() {
+    infer(
+        r#"
+    fn test() {
+      let a = [[1]]
+      {
+        let mut a = a.clone()
+        a[0][0] = 9
+        let _ = a
+      }
+      let _ = a
+    }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn mut_binding_reassign_own_clone_no_error() {
+    infer(r#"{ let mut b = [[1]]; b = b.clone(); let _ = b }"#).assert_no_errors();
+}
+
+#[test]
+fn mut_binding_user_clone_opaque_no_error() {
+    infer(
+        r#"
+    struct Doc { tags: Slice<string> }
+
+    impl Doc {
+      fn clone(self) -> Doc {
+        Doc { tags: self.tags.clone() }
+      }
+    }
+
+    fn main() {
+      let d1 = Doc { tags: ["x"] }
+      let mut d2 = d1.clone()
+      d2.tags[0] = "y"
+      let _ = d1
+      let _ = d2
+    }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn mut_binding_user_clone_not_vouched_single_diagnostic() {
+    let result = infer(
+        r#"
+    struct Doc { tags: Slice<string> }
+
+    impl Doc {
+      fn clone(self) -> Doc {
+        self
+      }
+    }
+
+    fn main() {
+      let d1 = Doc { tags: ["x"] }
+      let mut d2 = d1
+      d2.tags[0] = "y"
+      let _ = d1
+    }
+        "#,
+    );
+    assert_eq!(result.errors.len(), 1);
+}
+
+#[test]
+fn mut_binding_container_of_user_clone_single_diagnostic() {
+    let result = infer(
+        r#"
+    struct Doc { tags: Slice<string> }
+
+    impl Doc {
+      fn clone(self) -> Doc {
+        self
+      }
+    }
+
+    fn main() {
+      let docs = [Doc { tags: ["x"] }]
+      let mut copy = docs.clone()
+      copy[0].tags[0] = "y"
+      let _ = docs
+    }
+        "#,
+    );
+    assert_eq!(result.errors.len(), 1);
+}
+
+#[test]
 fn float_remainder_by_zero_single_diagnostic() {
     let result = infer(
         r#"

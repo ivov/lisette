@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Cannot make a mutable binding to `h1`
+   ╭─[test.lis:5:16]
+ 4 │ fn test(h1: Holder) {
+ 5 │   let mut h2 = h1
+   ·                ─┬
+   ·                 ╰── would be mutated implicitly
+ 6 │   h2 = Holder.Empty
+   ╰────
+  help: Mutating `h2` would implicitly mutate `h1`. Either use `&h1` to take a reference or construct a new value to mutate independently · code: [infer.mut_binding_aliases]

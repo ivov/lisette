@@ -21,6 +21,68 @@ pub(super) fn can_carry_mutation_across_fn_boundary(
     can_carry_mutation(ty, env, store, &mut visited)
 }
 
+/// Whether `.clone()` on `ty` fully severs. Only built-in container clones
+/// qualify, and they leave collections inside a nominal element shared, so a
+/// container of such elements does not sever.
+pub(super) fn clone_severs_alias(ty: &Type, env: &TypeEnv, store: &Store) -> bool {
+    let resolved = store.peel_alias(&ty.resolve_in(env));
+    match &resolved {
+        Type::Compound {
+            kind: CompoundKind::Slice | CompoundKind::EnumeratedSlice,
+            args,
+        } => args
+            .first()
+            .is_some_and(|elem| element_severed(elem, env, store)),
+        Type::Compound {
+            kind: CompoundKind::Map,
+            args,
+        } => args
+            .get(1)
+            .is_some_and(|value| element_severed(value, env, store)),
+        _ => false,
+    }
+}
+
+/// Whether the built-in clone fully copies this element: scalars and nested
+/// containers/tuples do, a carry-mut nominal does not (it copies shallowly).
+fn element_severed(ty: &Type, env: &TypeEnv, store: &Store) -> bool {
+    let resolved = store.peel_alias(&ty.resolve_in(env));
+    if !can_carry_mutation_across_fn_boundary(&resolved, env, store) {
+        return true;
+    }
+    match &resolved {
+        Type::Compound {
+            kind: CompoundKind::Slice | CompoundKind::EnumeratedSlice,
+            args,
+        } => args
+            .first()
+            .is_some_and(|elem| element_severed(elem, env, store)),
+        Type::Compound {
+            kind: CompoundKind::Map,
+            args,
+        } => args
+            .get(1)
+            .is_some_and(|value| element_severed(value, env, store)),
+        Type::Tuple(elems) => elems.iter().all(|e| element_severed(e, env, store)),
+        Type::Forall { body, .. } => element_severed(body, env, store),
+        _ => false,
+    }
+}
+
+/// Whether `.clone()` on `ty` is a built-in container clone (depth the
+/// compiler controls). A nominal `.clone()` is user-written, so it is treated
+/// as an ordinary call producing a fresh value.
+pub(super) fn clone_recipe_is_known(ty: &Type, env: &TypeEnv, store: &Store) -> bool {
+    let resolved = store.peel_alias(&ty.resolve_in(env));
+    matches!(
+        resolved,
+        Type::Compound {
+            kind: CompoundKind::Slice | CompoundKind::EnumeratedSlice | CompoundKind::Map,
+            ..
+        }
+    )
+}
+
 fn can_carry_mutation(
     ty: &Type,
     env: &TypeEnv,

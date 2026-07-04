@@ -2220,6 +2220,88 @@ fn my_sort(items: Slice<int>) {
 }
 
 #[test]
+fn mut_param_non_severing_clone_arg_rejected() {
+    infer(
+        r#"
+struct Doc { tags: Slice<string> }
+
+fn touch(mut docs: Slice<Doc>) {
+  docs[0] = Doc { tags: ["z"] }
+}
+
+fn main() {
+  let items = [Doc { tags: ["x"] }]
+  touch(items.clone())
+  let _ = items
+}
+"#,
+    )
+    .assert_infer_code("mut_arg_clone_does_not_sever");
+}
+
+#[test]
+fn mut_param_severing_clone_arg_accepted() {
+    infer(
+        r#"
+fn touch(mut m: Slice<Slice<int>>) {
+  m[0][0] = 9
+}
+
+fn main() {
+  let a = [[1]]
+  touch(a.clone())
+  let _ = a
+}
+"#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn mut_param_user_clone_arg_accepted() {
+    infer(
+        r#"
+struct Box { items: Slice<int> }
+
+impl Box {
+  fn clone(self) -> Box { self }
+}
+
+fn touch(mut b: Box) {
+  b.items[0] = 9
+}
+
+fn main() {
+  let b1 = Box { items: [1] }
+  touch(b1.clone())
+  let _ = b1
+}
+"#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn mut_param_fresh_clone_arg_accepted() {
+    infer(
+        r#"
+fn make() -> Slice<Slice<int>> {
+  [[1]]
+}
+
+fn touch(mut m: Slice<Slice<int>>) {
+  m[0][0] = 9
+}
+
+fn main() {
+  touch(make().clone())
+}
+"#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
 fn mut_int_param_does_not_require_mut_arg() {
     infer(
         r#"

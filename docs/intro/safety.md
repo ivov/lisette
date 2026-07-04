@@ -302,7 +302,7 @@ b := a
 b[0] = 99 // `a` is now [99 2 3]
 ```
 
-In Lisette, a mutable binding must own its value. Creating one from an existing binding, field, or index of a slice or map is a compile error:
+In Lisette, a mutable binding must own its value. Creating one from an existing binding, field, or element whose type holds a slice or map (directly, or nested inside a struct, tuple, or enum) is a compile error:
 
 ```
   ✕ Cannot make a mutable binding to `a`
