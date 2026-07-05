@@ -24,7 +24,7 @@ impl InferCtx<'_, '_> {
         if value as i128 > bounds.max {
             self.sink.push(diagnostics::infer::integer_literal_overflow(
                 bounds.name,
-                0,
+                bounds.min,
                 bounds.max,
                 span,
             ));

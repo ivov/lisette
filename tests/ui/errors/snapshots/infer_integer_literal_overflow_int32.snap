@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Integer literal overflow
+   ╭─[test.lis:3:18]
+ 2 │ fn test() {
+ 3 │   let x: int32 = 3000000000;
+   ·                  ─────┬────
+   ·                       ╰── overflows `int32`
+ 4 │ }
+   ╰────
+  help: `int32` must be in range `-2147483648` to `2147483647` · code: [infer.integer_literal_overflow]

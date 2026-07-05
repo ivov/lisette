@@ -7394,6 +7394,26 @@ fn test() {
 }
 
 #[test]
+fn infer_integer_literal_overflow_int32() {
+    let input = r#"
+fn test() {
+  let x: int32 = 3000000000;
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_integer_literal_overflow_int64() {
+    let input = r#"
+fn test() {
+  let x: int64 = 10000000000000000000;
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
 fn infer_negative_literal_overflow_int8() {
     let input = r#"
 fn test() {

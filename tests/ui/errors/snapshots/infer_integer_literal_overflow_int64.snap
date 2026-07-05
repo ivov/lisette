@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Integer literal overflow
+   ╭─[test.lis:3:18]
+ 2 │ fn test() {
+ 3 │   let x: int64 = 10000000000000000000;
+   ·                  ──────────┬─────────
+   ·                            ╰── overflows `int64`
+ 4 │ }
+   ╰────
+  help: `int64` must be in range `-9223372036854775808` to `9223372036854775807` · code: [infer.integer_literal_overflow]
