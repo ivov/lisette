@@ -1,0 +1,69 @@
+---
+source: tests/spec/emit/interop_matrix.rs
+description: |
+  
+  import "go:strconv"
+  import "go:os"
+  
+  fn open_and_check(path: string, n: string) -> Result<int, error> {
+    try {
+      let f = os.Open(path)?
+      let _ = f.Stat()?
+      strconv.Atoi(n)?
+    }
+  }
+  
+  fn main() {
+    match open_and_check("/tmp/x", "7") {
+      Ok(v) => { let _ = v },
+      Err(_) => { let _ = 0 },
+    }
+  }
+---
+package main
+
+import (
+	"errors"
+	lisette "github.com/ivov/lisette/prelude"
+	"os"
+	"strconv"
+)
+
+func open_and_check(path, n string) (int, error) {
+	tryResult_1 := func() lisette.Result[int, error] {
+		ret_2, ret_3 := os.Open(path)
+		if ret_3 != nil {
+			return lisette.MakeResultErr[int, error](ret_3)
+		}
+		if ret_2 == nil {
+			return lisette.MakeResultErr[int, error](errors.New("unexpected nil"))
+		}
+		f := ret_2
+		ret_4, ret_5 := f.Stat()
+		if ret_5 != nil {
+			return lisette.MakeResultErr[int, error](ret_5)
+		}
+		if lisette.IsNilInterface(ret_4) {
+			return lisette.MakeResultErr[int, error](errors.New("unexpected nil"))
+		}
+		ret_6, ret_7 := strconv.Atoi(n)
+		if ret_7 != nil {
+			return lisette.MakeResultErr[int, error](ret_7)
+		}
+		return lisette.MakeResultOk[int, error](ret_6)
+	}()
+	v_8 := tryResult_1
+	if v_8.Tag == lisette.ResultOk {
+		return v_8.OkVal, nil
+	}
+	return 0, v_8.ErrVal
+}
+
+func main() {
+	ret_1, ret_2 := open_and_check("/tmp/x", "7")
+	if ret_2 == nil {
+		v := ret_1
+		_ = v
+	} else {
+	}
+}

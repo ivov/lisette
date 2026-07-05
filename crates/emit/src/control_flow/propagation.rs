@@ -64,7 +64,9 @@ impl Planner<'_> {
             return (statements, String::new());
         }
 
-        if let Some(fused) = self.try_lower_fused_go_propagate(expression, result_var_name) {
+        if let Some(fused) =
+            self.try_lower_fused_go_propagate(expression, &fallible, result_var_name)
+        {
             return fused;
         }
 
@@ -150,27 +152,26 @@ impl Planner<'_> {
     ) -> LoweredStatement {
         let err_field = if fallible.is_result() { ".ErrVal" } else { "" };
         let success_tag = fallible.success_tag();
-        let return_ctx = self.return_ctx();
+        let err_expr = format!("{}{}", check_var, err_field);
+        let values = self.propagate_failure_values(fallible, &err_expr);
+        transition::tag_check(format!("{}.Tag != {}", check_var, success_tag), values)
+    }
 
-        let values = if let Some(shape) = return_ctx.lowered_shape() {
+    fn propagate_failure_values(&mut self, fallible: &Fallible, err_expr: &str) -> Vec<String> {
+        let return_ctx = self.return_ctx();
+        if let Some(shape) = return_ctx.lowered_shape() {
             let return_ty = return_ctx.expect_ty();
             // Option propagation: failure carries no payload, so return a
             // shape-specific `None` rather than an err-return.
             if fallible.is_result() {
-                let err_expr = format!("{}{}", check_var, err_field);
-                transition::lowered_err_values(self, &shape, &return_ty, &err_expr)
+                transition::lowered_err_values(self, &shape, &return_ty, err_expr)
             } else {
                 transition::lowered_none_values(self, &shape, &return_ty)
             }
         } else {
-            let err_return = {
-                let mut fe = FalliblePlanner::new(self, fallible);
-                fe.emit_contextual_failure(Some(&format!("{}{}", check_var, err_field)))
-            };
-            vec![err_return]
-        };
-
-        transition::tag_check(format!("{}.Tag != {}", check_var, success_tag), values)
+            let mut fe = FalliblePlanner::new(self, fallible);
+            vec![fe.emit_contextual_failure(Some(err_expr))]
+        }
     }
 
     /// Fuse `go_call()?` into `v, err := call(); if err != nil { return ... }`,
@@ -178,6 +179,7 @@ impl Planner<'_> {
     fn try_lower_fused_go_propagate(
         &mut self,
         expression: &Expression,
+        fallible: &Fallible,
         result_var_name: Option<&str>,
     ) -> Option<(Vec<LoweredStatement>, String)> {
         let plan = self.plan_call(expression)?;
@@ -188,10 +190,15 @@ impl Planner<'_> {
         if ok_ty.is_unit() || matches!(self.facts.peel_alias(&ok_ty), Type::Tuple(_)) {
             return None;
         }
-        let nil_guard = self.result_nil_guard(&ok_ty);
         let return_ctx = self.return_ctx();
-        let shape = return_ctx.lowered_shape()?;
-        let return_ty = return_ctx.expect_ty();
+        let has_fallible_return = return_ctx.lowered_shape().is_some()
+            || return_ctx
+                .ty()
+                .is_some_and(|ty| Fallible::from_type(ty).is_some());
+        if !has_fallible_return {
+            return None;
+        }
+        let nil_guard = self.result_nil_guard(&ok_ty);
 
         let want_value = !matches!(result_var_name, Some("_"));
         let val_var = (want_value || nil_guard.is_some()).then(|| {
@@ -210,7 +217,7 @@ impl Planner<'_> {
         };
         statements.push(LoweredStatement::RawGo(bind_line));
 
-        let failure_values = transition::lowered_err_values(self, &shape, &return_ty, &err_var);
+        let failure_values = self.propagate_failure_values(fallible, &err_var);
         statements.push(transition::tag_check(
             format!("{} != nil", err_var),
             failure_values,
@@ -224,12 +231,8 @@ impl Planner<'_> {
                 self.require_stdlib();
             }
             self.require_errors();
-            let nil_failure = transition::lowered_err_values(
-                self,
-                &shape,
-                &return_ty,
-                "errors.New(\"unexpected nil\")",
-            );
+            let nil_failure =
+                self.propagate_failure_values(fallible, "errors.New(\"unexpected nil\")");
             statements.push(transition::tag_check(guard.is_nil(val), nil_failure));
         }
 

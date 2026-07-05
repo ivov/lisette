@@ -631,6 +631,75 @@ fn main() {
 }
 
 #[test]
+fn interop_result_propagate_in_try_block() {
+    let input = r#"
+import "go:strconv"
+
+fn sum_parsed(a: string, b: string) -> Result<int, error> {
+  try {
+    let x = strconv.Atoi(a)?
+    let y = strconv.Atoi(b)?
+    x + y
+  }
+}
+
+fn main() {
+  match sum_parsed("3", "4") {
+    Ok(n) => { let _ = n },
+    Err(_) => { let _ = 0 },
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn interop_result_propagate_in_try_block_discard_and_nil_guard() {
+    let input = r#"
+import "go:strconv"
+import "go:os"
+
+fn open_and_check(path: string, n: string) -> Result<int, error> {
+  try {
+    let f = os.Open(path)?
+    let _ = f.Stat()?
+    strconv.Atoi(n)?
+  }
+}
+
+fn main() {
+  match open_and_check("/tmp/x", "7") {
+    Ok(v) => { let _ = v },
+    Err(_) => { let _ = 0 },
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn interop_comma_ok_propagate_in_try_block_stays_boxed() {
+    let input = r#"
+import "go:os"
+
+fn lookup(k: string) -> Option<string> {
+  try {
+    let v = os.LookupEnv(k)?
+    v
+  }
+}
+
+fn main() {
+  match lookup("HOME") {
+    Some(v) => { let _ = v },
+    None => { let _ = 0 },
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn interop_result_break_value() {
     let input = r#"
 import "go:strconv"

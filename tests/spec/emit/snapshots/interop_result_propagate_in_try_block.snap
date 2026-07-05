@@ -1,0 +1,57 @@
+---
+source: tests/spec/emit/interop_matrix.rs
+description: |
+  
+  import "go:strconv"
+  
+  fn sum_parsed(a: string, b: string) -> Result<int, error> {
+    try {
+      let x = strconv.Atoi(a)?
+      let y = strconv.Atoi(b)?
+      x + y
+    }
+  }
+  
+  fn main() {
+    match sum_parsed("3", "4") {
+      Ok(n) => { let _ = n },
+      Err(_) => { let _ = 0 },
+    }
+  }
+---
+package main
+
+import (
+	lisette "github.com/ivov/lisette/prelude"
+	"strconv"
+)
+
+func sum_parsed(a, b string) (int, error) {
+	tryResult_1 := func() lisette.Result[int, error] {
+		ret_2, ret_3 := strconv.Atoi(a)
+		if ret_3 != nil {
+			return lisette.MakeResultErr[int, error](ret_3)
+		}
+		x := ret_2
+		ret_4, ret_5 := strconv.Atoi(b)
+		if ret_5 != nil {
+			return lisette.MakeResultErr[int, error](ret_5)
+		}
+		y := ret_4
+		return lisette.MakeResultOk[int, error](x + y)
+	}()
+	v_6 := tryResult_1
+	if v_6.Tag == lisette.ResultOk {
+		return v_6.OkVal, nil
+	}
+	return 0, v_6.ErrVal
+}
+
+func main() {
+	ret_1, ret_2 := sum_parsed("3", "4")
+	if ret_2 == nil {
+		n := ret_1
+		_ = n
+	} else {
+	}
+}
