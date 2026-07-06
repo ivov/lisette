@@ -4354,6 +4354,46 @@ fn test(x: int) {
 }
 
 #[test]
+fn fmt_println_still_collapses_explicit_sprintf() {
+    let input = r#"
+import "go:fmt"
+
+fn test(x: int) {
+  fmt.Println(fmt.Sprintf("%d", x))
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn fmt_println_does_not_collapse_concatenated_format_strings() {
+    let input = r#"
+import "go:fmt"
+
+fn test(a: int, b: int) {
+  fmt.Println(f"a={a}" + f" b={b}")
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn fmt_println_does_not_collapse_sprintf_plus_call() {
+    let input = r#"
+import "go:fmt"
+
+fn suffix() -> string {
+  "tail"
+}
+
+fn test() {
+  fmt.Println(fmt.Sprintf("%d", 1) + suffix())
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn newtype_return_from_underlying_variable_casts() {
     let input = r#"
 struct UserId(int)

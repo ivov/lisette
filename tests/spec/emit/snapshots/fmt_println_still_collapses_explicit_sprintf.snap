@@ -1,0 +1,17 @@
+---
+source: tests/spec/emit/expressions.rs
+description: |
+  
+  import "go:fmt"
+  
+  fn test(x: int) {
+    fmt.Println(fmt.Sprintf("%d", x))
+  }
+---
+package main
+
+import "fmt"
+
+func test(x int) {
+	fmt.Printf("%d\n", x)
+}

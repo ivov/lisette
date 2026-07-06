@@ -18,7 +18,7 @@ use crate::plan::calls::{ArgumentPlan, CallPlan, CallbackWrapperKind};
 use crate::types::native::NativeGoType;
 use crate::utils::{contains_call, reads_mutable_operand};
 use crate::write_line;
-use syntax::ast::Expression;
+use syntax::ast::{Expression, Literal};
 use syntax::program::Definition;
 use syntax::types::Type;
 
@@ -59,6 +59,19 @@ fn find_go_string_literal_close(s: &str) -> Option<usize> {
     None
 }
 
+fn lowers_to_bare_sprintf(expression: &Expression) -> bool {
+    match expression.unwrap_parens() {
+        Expression::Literal {
+            literal: Literal::FormatString(_),
+            ..
+        } => true,
+        Expression::Call {
+            expression: callee, ..
+        } => callee.unwrap_parens().as_dotted_path().as_deref() == Some("fmt.Sprintf"),
+        _ => false,
+    }
+}
+
 /// Collapse redundant fmt wrappers:
 /// - `fmt.Print{ln}(fmt.Sprintf(...))` → `fmt.Printf(..., "\n")`
 /// - `fmt.Print{ln}(fmt.Sprint(x))` → `fmt.Print{ln}(x)`
@@ -76,9 +89,11 @@ fn collapse_fmt_print(
     }
     let arg = &args_strings[0];
 
-    if let Some(inner) = arg
-        .strip_prefix("fmt.Sprintf(")
-        .and_then(|s| s.strip_suffix(')'))
+    if let Some(arg_expression) = args.first()
+        && lowers_to_bare_sprintf(arg_expression)
+        && let Some(inner) = arg
+            .strip_prefix("fmt.Sprintf(")
+            .and_then(|s| s.strip_suffix(')'))
     {
         let suffix = if function_string == "fmt.Println" {
             "\\n"
