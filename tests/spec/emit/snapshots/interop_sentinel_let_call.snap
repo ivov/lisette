@@ -1,0 +1,35 @@
+---
+source: tests/spec/emit/interop_matrix.rs
+description: |
+  
+  import "go:example.com/idx"
+  
+  fn main() {
+    let f = idx.Find
+    let r = f("hello", "ll")
+    match r {
+      Some(v) => { let _ = v },
+      None => { let _ = -2 },
+    }
+  }
+---
+package main
+
+import (
+	"example.com/idx"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func main() {
+	f := func(arg0 string, arg1 string) (int, bool) {
+		ret_1 := idx.Find(arg0, arg1)
+		return ret_1, ret_1 != -1
+	}
+	option_2 := lisette.OptionFromCommaOk[int](f("hello", "ll"))
+	r := option_2
+	if r.Tag == lisette.OptionSome {
+		_ = r.SomeVal
+	} else {
+		_ = -2
+	}
+}
