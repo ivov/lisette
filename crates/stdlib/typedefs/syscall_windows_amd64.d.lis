@@ -12,7 +12,7 @@ import "go:sync"
 /// 
 /// 	_, _, err := syscall.Syscall(...)
 /// 	if errors.Is(err, fs.ErrNotExist) ...
-pub struct Errno(uint)
+pub struct Errno(uintptr)
 
 pub const E2BIG: Errno = 536870912
 
@@ -413,22 +413,22 @@ pub fn CertGetCertificateChain(
   additionalStore: Handle,
   para: Ref<CertChainPara>,
   flags: uint32,
-  reserved: uint,
+  reserved: uintptr,
   chainCtx: Ref<Ref<CertChainContext>>,
 ) -> Result<(), error>
 
 pub fn CertOpenStore(
-  storeProvider: uint,
+  storeProvider: uintptr,
   msgAndCertEncodingType: uint32,
-  cryptProv: uint,
+  cryptProv: uintptr,
   flags: uint32,
-  para: uint,
+  para: uintptr,
 ) -> Result<Handle, error>
 
 pub fn CertOpenSystemStore(hprov: Handle, name: Ref<uint16>) -> Result<Handle, error>
 
 pub fn CertVerifyCertificateChainPolicy(
-  policyOID: uint,
+  policyOID: uintptr,
   chain: Ref<CertChainContext>,
   para: Ref<CertChainPolicyPara>,
   status: Ref<CertChainPolicyStatus>,
@@ -497,7 +497,7 @@ pub fn CreateFileMapping(
 pub fn CreateHardLink(
   filename: Ref<uint16>,
   existingfilename: Ref<uint16>,
-  reserved: uint,
+  reserved: uintptr,
 ) -> Result<(), error>
 
 /// Deprecated: CreateIoCompletionPort has the wrong function signature. Use x/sys/windows.CreateIoCompletionPort.
@@ -631,7 +631,7 @@ pub fn FindNextFile(handle: Handle, data: Ref<Win32finddata>) -> Result<(), erro
 
 pub fn FlushFileBuffers(handle: Handle) -> Result<(), error>
 
-pub fn FlushViewOfFile(addr: uint, length: uint) -> Result<(), error>
+pub fn FlushViewOfFile(addr: uintptr, length: uintptr) -> Result<(), error>
 
 /// FormatMessage is deprecated (msgsrc should be uintptr, not uint32, but can
 /// not be changed due to the Go 1 compatibility guarantee).
@@ -727,7 +727,7 @@ pub fn GetLengthSid(sid: Ref<SID>) -> uint32
 
 pub fn GetLongPathName(path: Ref<uint16>, buf: Ref<uint16>, buflen: uint32) -> Result<uint32, error>
 
-pub fn GetProcAddress(module: Handle, procname: string) -> Result<uint, error>
+pub fn GetProcAddress(module: Handle, procname: string) -> Result<uintptr, error>
 
 pub fn GetProcessTimes(
   handle: Handle,
@@ -881,8 +881,8 @@ pub fn MapViewOfFile(
   access: uint32,
   offsetHigh: uint32,
   offsetLow: uint32,
-  length: uint,
-) -> Result<uint, error>
+  length: uintptr,
+) -> Result<uintptr, error>
 
 pub fn Mkdir(path: string, mode: uint32) -> Result<(), error>
 
@@ -912,7 +912,7 @@ pub fn NetUserGetInfo(
 /// Only a limited number of callbacks may be created in a single Go process, and any memory allocated
 /// for these callbacks is never released.
 /// Between NewCallback and NewCallbackCDecl, at least 1024 callbacks can always be created.
-pub fn NewCallback(fn_: Unknown) -> uint
+pub fn NewCallback(fn_: Unknown) -> uintptr
 
 /// NewCallbackCDecl converts a Go function to a function pointer conforming to the cdecl calling convention.
 /// This is useful when interoperating with Windows code requiring callbacks.
@@ -920,7 +920,7 @@ pub fn NewCallback(fn_: Unknown) -> uint
 /// Only a limited number of callbacks may be created in a single Go process, and any memory allocated
 /// for these callbacks is never released.
 /// Between NewCallback and NewCallbackCDecl, at least 1024 callbacks can always be created.
-pub fn NewCallbackCDecl(fn_: Unknown) -> uint
+pub fn NewCallbackCDecl(fn_: Unknown) -> uintptr
 
 /// NewLazyDLL creates new [LazyDLL] associated with [DLL] file.
 pub fn NewLazyDLL(name: string) -> Ref<LazyDLL>
@@ -975,7 +975,7 @@ pub fn ReadDirectoryChanges(
   mask: uint32,
   retlen: Ref<uint32>,
   overlapped: Ref<Overlapped>,
-  completionRoutine: uint,
+  completionRoutine: uintptr,
 ) -> Result<(), error>
 
 pub fn ReadFile(
@@ -1124,7 +1124,7 @@ pub fn Shutdown(fd: Handle, how: int) -> Result<(), error>
 
 pub fn Socket(domain: int, typ: int, proto: int) -> Result<Handle, error>
 
-pub fn StartProcess(argv0: string, argv: Slice<string>, attr: Ref<ProcAttr>) -> Result<(int, uint), error>
+pub fn StartProcess(argv0: string, argv: Slice<string>, attr: Ref<ProcAttr>) -> Result<(int, uintptr), error>
 
 /// StringBytePtr returns a pointer to a NUL-terminated array of bytes.
 /// If s contains a NUL byte this function panics instead of returning
@@ -1162,99 +1162,105 @@ pub fn StringToUTF16Ptr(s: string) -> Ref<uint16>
 pub fn Symlink(path: string, link: string) -> Result<(), error>
 
 /// Deprecated: Use [SyscallN] instead.
-pub fn Syscall(trap: uint, nargs: uint, a1: uint, a2: uint, a3: uint) -> (uint, uint, Errno)
+pub fn Syscall(
+  trap: uintptr,
+  nargs: uintptr,
+  a1: uintptr,
+  a2: uintptr,
+  a3: uintptr,
+) -> (uintptr, uintptr, Errno)
 
 /// Deprecated: Use [SyscallN] instead.
 pub fn Syscall12(
-  trap: uint,
-  nargs: uint,
-  a1: uint,
-  a2: uint,
-  a3: uint,
-  a4: uint,
-  a5: uint,
-  a6: uint,
-  a7: uint,
-  a8: uint,
-  a9: uint,
-  a10: uint,
-  a11: uint,
-  a12: uint,
-) -> (uint, uint, Errno)
+  trap: uintptr,
+  nargs: uintptr,
+  a1: uintptr,
+  a2: uintptr,
+  a3: uintptr,
+  a4: uintptr,
+  a5: uintptr,
+  a6: uintptr,
+  a7: uintptr,
+  a8: uintptr,
+  a9: uintptr,
+  a10: uintptr,
+  a11: uintptr,
+  a12: uintptr,
+) -> (uintptr, uintptr, Errno)
 
 /// Deprecated: Use [SyscallN] instead.
 pub fn Syscall15(
-  trap: uint,
-  nargs: uint,
-  a1: uint,
-  a2: uint,
-  a3: uint,
-  a4: uint,
-  a5: uint,
-  a6: uint,
-  a7: uint,
-  a8: uint,
-  a9: uint,
-  a10: uint,
-  a11: uint,
-  a12: uint,
-  a13: uint,
-  a14: uint,
-  a15: uint,
-) -> (uint, uint, Errno)
+  trap: uintptr,
+  nargs: uintptr,
+  a1: uintptr,
+  a2: uintptr,
+  a3: uintptr,
+  a4: uintptr,
+  a5: uintptr,
+  a6: uintptr,
+  a7: uintptr,
+  a8: uintptr,
+  a9: uintptr,
+  a10: uintptr,
+  a11: uintptr,
+  a12: uintptr,
+  a13: uintptr,
+  a14: uintptr,
+  a15: uintptr,
+) -> (uintptr, uintptr, Errno)
 
 /// Deprecated: Use [SyscallN] instead.
 pub fn Syscall18(
-  trap: uint,
-  nargs: uint,
-  a1: uint,
-  a2: uint,
-  a3: uint,
-  a4: uint,
-  a5: uint,
-  a6: uint,
-  a7: uint,
-  a8: uint,
-  a9: uint,
-  a10: uint,
-  a11: uint,
-  a12: uint,
-  a13: uint,
-  a14: uint,
-  a15: uint,
-  a16: uint,
-  a17: uint,
-  a18: uint,
-) -> (uint, uint, Errno)
+  trap: uintptr,
+  nargs: uintptr,
+  a1: uintptr,
+  a2: uintptr,
+  a3: uintptr,
+  a4: uintptr,
+  a5: uintptr,
+  a6: uintptr,
+  a7: uintptr,
+  a8: uintptr,
+  a9: uintptr,
+  a10: uintptr,
+  a11: uintptr,
+  a12: uintptr,
+  a13: uintptr,
+  a14: uintptr,
+  a15: uintptr,
+  a16: uintptr,
+  a17: uintptr,
+  a18: uintptr,
+) -> (uintptr, uintptr, Errno)
 
 /// Deprecated: Use [SyscallN] instead.
 pub fn Syscall6(
-  trap: uint,
-  nargs: uint,
-  a1: uint,
-  a2: uint,
-  a3: uint,
-  a4: uint,
-  a5: uint,
-  a6: uint,
-) -> (uint, uint, Errno)
+  trap: uintptr,
+  nargs: uintptr,
+  a1: uintptr,
+  a2: uintptr,
+  a3: uintptr,
+  a4: uintptr,
+  a5: uintptr,
+  a6: uintptr,
+) -> (uintptr, uintptr, Errno)
 
 /// Deprecated: Use [SyscallN] instead.
 pub fn Syscall9(
-  trap: uint,
-  nargs: uint,
-  a1: uint,
-  a2: uint,
-  a3: uint,
-  a4: uint,
-  a5: uint,
-  a6: uint,
-  a7: uint,
-  a8: uint,
-  a9: uint,
-) -> (uint, uint, Errno)
+  trap: uintptr,
+  nargs: uintptr,
+  a1: uintptr,
+  a2: uintptr,
+  a3: uintptr,
+  a4: uintptr,
+  a5: uintptr,
+  a6: uintptr,
+  a7: uintptr,
+  a8: uintptr,
+  a9: uintptr,
+) -> (uintptr, uintptr, Errno)
 
-pub fn SyscallN(trap: uint, args: VarArgs<uint>) -> (uint, uint, Errno)
+pub fn SyscallN(trap: uintptr, args: VarArgs<uintptr>) -> (uintptr, uintptr, Errno)
 
 pub fn TerminateProcess(handle: Handle, exitcode: uint32) -> Result<(), error>
 
@@ -1306,7 +1312,7 @@ pub fn UTF16ToString(s: Slice<uint16>) -> string
 
 pub fn Unlink(path: string) -> Result<(), error>
 
-pub fn UnmapViewOfFile(addr: uint) -> Result<(), error>
+pub fn UnmapViewOfFile(addr: uintptr) -> Result<(), error>
 
 pub fn Unsetenv(key: string) -> Result<(), error>
 
@@ -1314,9 +1320,9 @@ pub fn Utimes(path: string, tv: Slice<Timeval>) -> Result<(), error>
 
 pub fn UtimesNano(path: string, ts: Slice<Timespec>) -> Result<(), error>
 
-pub fn VirtualLock(addr: uint, length: uint) -> Result<(), error>
+pub fn VirtualLock(addr: uintptr, length: uintptr) -> Result<(), error>
 
-pub fn VirtualUnlock(addr: uint, length: uint) -> Result<(), error>
+pub fn VirtualUnlock(addr: uintptr, length: uintptr) -> Result<(), error>
 
 pub fn WSACleanup() -> Result<(), error>
 
@@ -1335,7 +1341,7 @@ pub fn WSAIoctl(
   cbob: uint32,
   cbbr: Ref<uint32>,
   overlapped: Ref<Overlapped>,
-  completionRoutine: uint,
+  completionRoutine: uintptr,
 ) -> Result<(), error>
 
 pub fn WSARecv(
@@ -1419,7 +1425,7 @@ pub struct AddrinfoW {
   pub Family: int32,
   pub Socktype: int32,
   pub Protocol: int32,
-  pub Addrlen: uint,
+  pub Addrlen: uintptr,
   pub Canonname: Option<uint16>,
   pub Addr: Pointer,
   pub Next: Option<Ref<AddrinfoW>>,
@@ -1604,7 +1610,7 @@ pub struct GUID {
   // SKIPPED field "Data4": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
 }
 
-pub struct Handle(uint)
+pub struct Handle(uintptr)
 
 pub struct Hostent {
   pub Name: Option<Ref<byte>>,
@@ -1717,8 +1723,8 @@ pub struct MibIfRow {
 }
 
 pub struct Overlapped {
-  pub Internal: uint,
-  pub InternalHigh: uint,
+  pub Internal: uintptr,
+  pub InternalHigh: uintptr,
   pub Offset: uint32,
   pub OffsetHigh: uint32,
   pub HEvent: Handle,
@@ -1741,7 +1747,7 @@ pub struct Proc {
 pub struct ProcAttr {
   pub Dir: string,
   pub Env: Slice<string>,
-  pub Files: Slice<uint>,
+  pub Files: Slice<uintptr>,
   pub Sys: Option<Ref<SysProcAttr>>,
 }
 
@@ -1749,7 +1755,7 @@ pub struct ProcessEntry32 {
   pub Size: uint32,
   pub Usage: uint32,
   pub ProcessID: uint32,
-  pub DefaultHeapID: uint,
+  pub DefaultHeapID: uintptr,
   pub ModuleID: uint32,
   pub Threads: uint32,
   pub ParentProcessID: uint32,
@@ -1773,9 +1779,9 @@ pub struct Protoent {
 
 /// A RawConn is a raw network connection.
 pub interface RawConn {
-  fn Control(f: fn(uint) -> ()) -> Result<(), error>
-  fn Read(f: fn(uint) -> bool) -> Result<(), error>
-  fn Write(f: fn(uint) -> bool) -> Result<(), error>
+  fn Control(f: fn(uintptr) -> ()) -> Result<(), error>
+  fn Read(f: fn(uintptr) -> bool) -> Result<(), error>
+  fn Write(f: fn(uintptr) -> bool) -> Result<(), error>
 }
 
 pub struct RawSockaddr {
@@ -1834,7 +1840,7 @@ pub struct SSLExtraCertChainPolicyPara {
 
 pub struct SecurityAttributes {
   pub Length: uint32,
-  pub SecurityDescriptor: uint,
+  pub SecurityDescriptor: uintptr,
   pub InheritHandle: uint32,
 }
 
@@ -1944,7 +1950,7 @@ pub struct Timezoneinformation {
 /// privileges. The system uses the token to control access to securable
 /// objects and to control the ability of the user to perform various
 /// system-related operations on the local computer.
-pub struct Token(uint)
+pub struct Token(uintptr)
 
 pub struct Tokenprimarygroup {
   pub PrimaryGroup: Option<Ref<SID>>,
@@ -1955,9 +1961,9 @@ pub struct Tokenuser {
 }
 
 pub struct TransmitFileBuffers {
-  pub Head: uint,
+  pub Head: uintptr,
   pub HeadLength: uint32,
-  pub Tail: uint,
+  pub Tail: uintptr,
   pub TailLength: uint32,
 }
 
@@ -3110,7 +3116,7 @@ impl Filetime {
 
 impl LazyDLL {
   /// Handle returns d's module handle.
-  fn Handle(self: Ref<LazyDLL>) -> uint
+  fn Handle(self: Ref<LazyDLL>) -> uintptr
 
   /// Load loads DLL file d.Name into memory. It returns an error if fails.
   /// Load will not try to load DLL, if it is already loaded into memory.
@@ -3123,11 +3129,11 @@ impl LazyDLL {
 impl LazyProc {
   /// Addr returns the address of the procedure represented by p.
   /// The return value can be passed to Syscall to run the procedure.
-  fn Addr(self: Ref<LazyProc>) -> uint
+  fn Addr(self: Ref<LazyProc>) -> uintptr
 
   /// Call executes procedure p with arguments a. See the documentation of
   /// Proc.Call for more information.
-  fn Call(self: Ref<LazyProc>, a: VarArgs<uint>) -> Result<(uint, uint), error>
+  fn Call(self: Ref<LazyProc>, a: VarArgs<uintptr>) -> Result<(uintptr, uintptr), error>
 
   /// Find searches [DLL] for procedure named p.Name. It returns
   /// an error if search fails. Find will not search procedure,
@@ -3138,7 +3144,7 @@ impl LazyProc {
 impl Proc {
   /// Addr returns the address of the procedure represented by p.
   /// The return value can be passed to Syscall to run the procedure.
-  fn Addr(self: Ref<Proc>) -> uint
+  fn Addr(self: Ref<Proc>) -> uintptr
 
   /// Call executes procedure p with arguments a.
   /// 
@@ -3154,7 +3160,7 @@ impl Proc {
   /// values are returned in r2. The return value for C type "float" is
   /// [math.Float32frombits](uint32(r2)). For C type "double", it is
   /// [math.Float64frombits](uint64(r2)).
-  fn Call(self: Ref<Proc>, a: VarArgs<uint>) -> Result<(uint, uint), error>
+  fn Call(self: Ref<Proc>, a: VarArgs<uintptr>) -> Result<(uintptr, uintptr), error>
 }
 
 impl RawSockaddrAny {

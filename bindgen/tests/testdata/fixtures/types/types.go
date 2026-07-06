@@ -18,7 +18,7 @@ func GetFloat64() float64 { return 0 }
 func GetString() string   { return "" }
 func GetRune() rune       { return 0 } // → int32
 func GetByte() byte       { return 0 } // → uint8
-func GetUintptr() uintptr { return 0 } // → uint
+func GetUintptr() uintptr { return 0 }
 
 // Pointers
 

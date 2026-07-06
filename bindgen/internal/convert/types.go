@@ -213,7 +213,7 @@ func basicToLisette(t *types.Basic) string {
 	case types.Uint64:
 		return "uint64"
 	case types.Uintptr:
-		return "uint"
+		return "uintptr"
 	case types.Float32:
 		return "float32"
 	case types.Float64:

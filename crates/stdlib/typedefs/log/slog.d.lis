@@ -170,7 +170,7 @@ pub fn NewLogLogger(h: Handler, level: Level) -> Ref<log.Logger>
 /// 
 /// NewRecord is intended for logging APIs that want to support a [Handler] as
 /// a backend.
-pub fn NewRecord(t: time.Time, level: Level, msg: string, pc: uint) -> Record
+pub fn NewRecord(t: time.Time, level: Level, msg: string, pc: uintptr) -> Record
 
 /// NewTextHandler creates a [TextHandler] that writes to w,
 /// using the given options.
@@ -320,7 +320,7 @@ pub struct Record {
   pub Time: time.Time,
   pub Message: string,
   pub Level: Level,
-  pub PC: uint,
+  pub PC: uintptr,
 }
 
 /// Source describes the location of a line of source code.

@@ -19,7 +19,7 @@ import "go:sync"
 /// 
 /// 	_, _, err := syscall.Syscall(...)
 /// 	if errors.Is(err, fs.ErrNotExist) ...
-pub struct Errno(uint)
+pub struct Errno(uintptr)
 
 /// Errors
 pub const E2BIG: Errno = 7
@@ -538,7 +538,7 @@ pub fn Fchmod(fd: int, mode: uint32) -> Result<(), error>
 pub fn Fchown(fd: int, uid: int, gid: int) -> Result<(), error>
 
 /// FcntlFlock performs a fcntl syscall for the [F_GETLK], [F_SETLK] or [F_SETLKW] command.
-pub fn FcntlFlock(fd: uint, cmd: int, lk: Ref<Flock_t>) -> Result<(), error>
+pub fn FcntlFlock(fd: uintptr, cmd: int, lk: Ref<Flock_t>) -> Result<(), error>
 
 pub fn Flock(fd: int, how: int) -> Result<(), error>
 
@@ -560,7 +560,7 @@ pub fn Ftruncate(fd: int, length: int64) -> Result<(), error>
 
 pub fn Futimes(fd: int, tv: Slice<Timeval>) -> Result<(), error>
 
-pub fn Getdirentries(fd: int, mut buf: Slice<byte>, basep: Ref<uint>) -> Result<int, error>
+pub fn Getdirentries(fd: int, mut buf: Slice<byte>, basep: Ref<uintptr>) -> Result<int, error>
 
 pub fn Getdtablesize() -> int
 
@@ -705,17 +705,17 @@ pub fn PtraceDetach(pid: int) -> Result<(), error>
 
 pub fn Pwrite(fd: int, p: Slice<byte>, offset: int64) -> Result<int, error>
 
-pub fn RawSyscall(trap: uint, a1: uint, a2: uint, a3: uint) -> (uint, uint, Errno)
+pub fn RawSyscall(trap: uintptr, a1: uintptr, a2: uintptr, a3: uintptr) -> (uintptr, uintptr, Errno)
 
 pub fn RawSyscall6(
-  trap: uint,
-  a1: uint,
-  a2: uint,
-  a3: uint,
-  a4: uint,
-  a5: uint,
-  a6: uint,
-) -> (uint, uint, Errno)
+  trap: uintptr,
+  a1: uintptr,
+  a2: uintptr,
+  a3: uintptr,
+  a4: uintptr,
+  a5: uintptr,
+  a6: uintptr,
+) -> (uintptr, uintptr, Errno)
 
 pub fn Read(fd: int, mut p: Slice<byte>) -> Result<int, error>
 
@@ -864,7 +864,7 @@ pub fn Socket(domain: int, typ: int, proto: int) -> Result<int, error>
 pub fn Socketpair(domain: int, typ: int, proto: int) -> Result<Slice<int>, error>
 
 /// StartProcess wraps [ForkExec] for package os.
-pub fn StartProcess(argv0: string, argv: Slice<string>, attr: Ref<ProcAttr>) -> Result<(int, uint), error>
+pub fn StartProcess(argv0: string, argv: Slice<string>, attr: Ref<ProcAttr>) -> Result<(int, uintptr), error>
 
 pub fn Stat(path: string, stat: Ref<Stat_t>) -> Result<(), error>
 
@@ -895,30 +895,30 @@ pub fn Symlink(path: string, link: string) -> Result<(), error>
 
 pub fn Sync() -> Result<(), error>
 
-pub fn Syscall(trap: uint, a1: uint, a2: uint, a3: uint) -> (uint, uint, Errno)
+pub fn Syscall(trap: uintptr, a1: uintptr, a2: uintptr, a3: uintptr) -> (uintptr, uintptr, Errno)
 
 pub fn Syscall6(
-  trap: uint,
-  a1: uint,
-  a2: uint,
-  a3: uint,
-  a4: uint,
-  a5: uint,
-  a6: uint,
-) -> (uint, uint, Errno)
+  trap: uintptr,
+  a1: uintptr,
+  a2: uintptr,
+  a3: uintptr,
+  a4: uintptr,
+  a5: uintptr,
+  a6: uintptr,
+) -> (uintptr, uintptr, Errno)
 
 pub fn Syscall9(
-  num: uint,
-  a1: uint,
-  a2: uint,
-  a3: uint,
-  a4: uint,
-  a5: uint,
-  a6: uint,
-  a7: uint,
-  a8: uint,
-  a9: uint,
-) -> (uint, uint, Errno)
+  num: uintptr,
+  a1: uintptr,
+  a2: uintptr,
+  a3: uintptr,
+  a4: uintptr,
+  a5: uintptr,
+  a6: uintptr,
+  a7: uintptr,
+  a8: uintptr,
+  a9: uintptr,
+) -> (uintptr, uintptr, Errno)
 
 pub fn Sysctl(name: string) -> Result<string, error>
 
@@ -1221,7 +1221,7 @@ pub struct Msghdr {
 pub struct ProcAttr {
   pub Dir: string,
   pub Env: Slice<string>,
-  pub Files: Slice<uint>,
+  pub Files: Slice<uintptr>,
   pub Sys: Option<Ref<SysProcAttr>>,
 }
 
@@ -1233,9 +1233,9 @@ pub struct Radvisory_t {
 
 /// A RawConn is a raw network connection.
 pub interface RawConn {
-  fn Control(f: fn(uint) -> ()) -> Result<(), error>
-  fn Read(f: fn(uint) -> bool) -> Result<(), error>
-  fn Write(f: fn(uint) -> bool) -> Result<(), error>
+  fn Control(f: fn(uintptr) -> ()) -> Result<(), error>
+  fn Read(f: fn(uintptr) -> bool) -> Result<(), error>
+  fn Write(f: fn(uintptr) -> bool) -> Result<(), error>
 }
 
 pub struct RawSockaddr {
