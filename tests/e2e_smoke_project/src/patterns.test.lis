@@ -880,6 +880,21 @@ fn enum_variant_named_string() {
   assert s_ok && n_ok && null_ok
 }
 
+#[test]
+fn indirect_recursive_enum_through_struct() {
+  let t = Tree.Fork(Branch {
+    left: Tree.Tip(1),
+    right: Tree.Fork(Branch { left: Tree.Tip(2), right: Tree.Tip(3) }),
+  })
+  assert tree_sum(t) == 6
+}
+
+#[test]
+fn mutually_recursive_enums() {
+  let p = Ping.Next(Pong.Reply(Ping.Next(Pong.Reply(Ping.Stop))))
+  assert ping_depth(p) == 4
+}
+
 pub enum Color {
   Red,
   Green,

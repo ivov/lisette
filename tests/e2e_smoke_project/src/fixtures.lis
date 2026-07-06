@@ -46,3 +46,36 @@ fn maybe_int_for_test(b: bool) -> Option<int> {
 fn unreachable_from_error(_e: string) -> int {
   panic("mapper or fallback should not be called")
 }
+
+enum Tree {
+  Tip(int),
+  Fork(Branch),
+}
+
+struct Branch {
+  left: Tree,
+  right: Tree,
+}
+
+fn tree_sum(t: Tree) -> int {
+  match t {
+    Tree.Tip(n) => n,
+    Tree.Fork(b) => tree_sum(b.left) + tree_sum(b.right),
+  }
+}
+
+enum Ping {
+  Stop,
+  Next(Pong),
+}
+
+enum Pong {
+  Reply(Ping),
+}
+
+fn ping_depth(p: Ping) -> int {
+  match p {
+    Ping.Stop => 0,
+    Ping.Next(Pong.Reply(inner)) => 2 + ping_depth(inner),
+  }
+}

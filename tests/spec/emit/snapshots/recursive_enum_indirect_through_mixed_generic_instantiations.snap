@@ -1,0 +1,59 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  enum Tree {
+    Leaf,
+    Node(Outer),
+  }
+  
+  struct Outer {
+    a: Box<int>,
+    b: Box<Tree>,
+  }
+  
+  struct Box<T> {
+    value: T,
+  }
+  
+  fn test() -> Tree {
+    Tree.Node(Outer { a: Box { value: 1 }, b: Box { value: Tree.Leaf } })
+  }
+---
+package main
+
+func MakeTreeLeaf() Tree {
+	return Tree{Tag: TreeLeaf}
+}
+
+func MakeTreeNode(arg0 Outer) Tree {
+	return Tree{Tag: TreeNode, Node: &arg0}
+}
+
+type TreeTag int
+
+const (
+	TreeLeaf TreeTag = iota
+	TreeNode
+)
+
+type Tree struct {
+	Tag  TreeTag
+	Node *Outer
+}
+
+type Outer struct {
+	a Box[int]
+	b Box[Tree]
+}
+
+type Box[T any] struct {
+	value T
+}
+
+func test() Tree {
+	return MakeTreeNode(Outer{
+		a: Box[int]{value: 1},
+		b: Box[Tree]{value: MakeTreeLeaf()},
+	})
+}

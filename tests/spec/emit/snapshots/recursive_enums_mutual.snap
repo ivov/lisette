@@ -1,0 +1,57 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  enum A {
+    End,
+    X(B),
+  }
+  
+  enum B {
+    Y(A),
+  }
+  
+  fn test() -> A {
+    A.X(B.Y(A.End))
+  }
+---
+package main
+
+func MakeAEnd() A {
+	return A{Tag: AEnd}
+}
+
+func MakeAX(arg0 B) A {
+	return A{Tag: AX, X: &arg0}
+}
+
+func MakeBY(arg0 A) B {
+	return B{Tag: BY, Y: &arg0}
+}
+
+type ATag int
+
+const (
+	AEnd ATag = iota
+	AX
+)
+
+type A struct {
+	Tag ATag
+	X   *B
+}
+
+type BTag int
+
+const (
+	BY BTag = iota
+)
+
+type B struct {
+	Tag BTag
+	Y   *A
+}
+
+func test() A {
+	return MakeAX(MakeBY(MakeAEnd()))
+}

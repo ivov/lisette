@@ -2043,6 +2043,98 @@ fn list_sum(l: List) -> int {
 }
 
 #[test]
+fn recursive_enum_indirect_through_struct() {
+    let input = r#"
+enum Tree {
+  Leaf(int),
+  Node(Pair),
+}
+
+struct Pair {
+  l: Tree,
+  r: Tree,
+}
+
+fn sum(t: Tree) -> int {
+  match t {
+    Tree.Leaf(n) => n,
+    Tree.Node(p) => sum(p.l) + sum(p.r),
+  }
+}
+
+fn test() -> Tree {
+  Tree.Node(Pair { l: Tree.Leaf(1), r: Tree.Leaf(2) })
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn recursive_enums_mutual() {
+    let input = r#"
+enum A {
+  End,
+  X(B),
+}
+
+enum B {
+  Y(A),
+}
+
+fn test() -> A {
+  A.X(B.Y(A.End))
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn recursive_enum_indirect_through_mixed_generic_instantiations() {
+    let input = r#"
+enum Tree {
+  Leaf,
+  Node(Outer),
+}
+
+struct Outer {
+  a: Box<int>,
+  b: Box<Tree>,
+}
+
+struct Box<T> {
+  value: T,
+}
+
+fn test() -> Tree {
+  Tree.Node(Outer { a: Box { value: 1 }, b: Box { value: Tree.Leaf } })
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn recursive_enum_indirect_through_alias() {
+    let input = r#"
+enum Tree {
+  Leaf(int),
+  Node(P),
+}
+
+type P = Pair
+
+struct Pair {
+  l: Tree,
+  r: Tree,
+}
+
+fn test() -> Tree {
+  Tree.Node(Pair { l: Tree.Leaf(1), r: Tree.Leaf(2) })
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn pub_field_assignment_capitalizes() {
     let input = r#"
 pub struct Counter {

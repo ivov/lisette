@@ -1,0 +1,56 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  enum Tree {
+    Leaf(int),
+    Node(P),
+  }
+  
+  type P = Pair
+  
+  struct Pair {
+    l: Tree,
+    r: Tree,
+  }
+  
+  fn test() -> Tree {
+    Tree.Node(Pair { l: Tree.Leaf(1), r: Tree.Leaf(2) })
+  }
+---
+package main
+
+func MakeTreeLeaf(arg0 int) Tree {
+	return Tree{Tag: TreeLeaf, Leaf: arg0}
+}
+
+func MakeTreeNode(arg0 P) Tree {
+	return Tree{Tag: TreeNode, Node: &arg0}
+}
+
+type TreeTag int
+
+const (
+	TreeLeaf TreeTag = iota
+	TreeNode
+)
+
+type Tree struct {
+	Tag  TreeTag
+	Leaf int
+	Node *P
+}
+
+type P = Pair
+
+type Pair struct {
+	l Tree
+	r Tree
+}
+
+func test() Tree {
+	return MakeTreeNode(Pair{
+		l: MakeTreeLeaf(1),
+		r: MakeTreeLeaf(2),
+	})
+}
