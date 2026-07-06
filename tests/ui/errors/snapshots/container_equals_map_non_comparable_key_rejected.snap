@@ -1,12 +1,12 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  ✕ Invalid comparison
-   ╭─[test.lis:5:3]
+  ✕ Invalid map key type
+   ╭─[test.lis:4:12]
+ 3 │ 
  4 │ fn test(a: Map<Key, int>, b: Map<Key, int>) -> bool {
+   ·            ──────┬──────
+   ·                  ╰── `Key` is not comparable
  5 │   a.equals(b)
-   ·   ┬
-   ·   ╰── cannot be compared
- 6 │ }
    ╰────
-  help: `Map<Key, int>` cannot be compared because a map with a non-comparable key cannot be compared · code: [infer.not_equatable]
+  help: Map keys must be comparable in Go. a struct containing non-comparable fields cannot be used as map keys · code: [infer.non_comparable_map_key]

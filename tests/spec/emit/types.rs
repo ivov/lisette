@@ -342,6 +342,67 @@ enum Event {
 }
 
 #[test]
+fn nested_generic_instantiation_compares_natively() {
+    let input = r#"
+struct Box<T: Comparable> {
+  value: T,
+}
+
+fn same(a: Box<Box<int>>, b: Box<Box<int>>) -> bool {
+  a == b
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn equality_recursive_enum_derefs_pointer_payload() {
+    let input = r#"
+#[equality]
+enum List {
+  Nil,
+  Cons(int, List),
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn equality_mutually_recursive_enums_deref_pointer_payloads() {
+    let input = r#"
+#[equality]
+enum A {
+  End,
+  X(B),
+}
+
+#[equality]
+enum B {
+  Y(A),
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn equality_indirect_recursive_enum_through_struct() {
+    let input = r#"
+#[equality]
+enum Tree {
+  Leaf,
+  Node(Pair),
+}
+
+#[equality]
+struct Pair {
+  l: Tree,
+  r: Tree,
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn equality_user_equals_over_function_field() {
     let input = r#"
 #[equality]

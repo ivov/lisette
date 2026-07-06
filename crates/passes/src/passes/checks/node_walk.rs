@@ -8,9 +8,9 @@ use crate::passes::walk::{CheckTable, NodeCtx, walk_nodes};
 use super::{
     cast_nan_to_int, const_naming, decimal_file_mode, duplicate_bindings, empty_infinite_loop,
     empty_range, enum_variant_value, impossible_comparison, index_out_of_bounds,
-    irrefutable_patterns, min_max, nan_comparison, newtype, oversized_shift, predeclared_shadowing,
-    pub_type_export, receivers, repeated_if_condition, stringer_signature, temp_producing,
-    unchanging_loop_condition,
+    irrefutable_patterns, map_key, min_max, nan_comparison, newtype, oversized_shift,
+    predeclared_shadowing, pub_type_export, receivers, repeated_if_condition, stringer_signature,
+    temp_producing, unchanging_loop_condition,
 };
 
 static NODE_CHECKS: LazyLock<CheckTable> = LazyLock::new(|| {
@@ -60,6 +60,7 @@ static NODE_CHECKS: LazyLock<CheckTable> = LazyLock::new(|| {
                     Literal,
                 ],
             ),
+            (map_key::check, &[Let, TypeAlias, Call]),
             (newtype::check, &[Assignment, Reference]),
             (enum_variant_value::check, &[Identifier, DotAccess]),
             (unchanging_loop_condition::check, &[While]),

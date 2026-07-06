@@ -1,0 +1,21 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  struct Box<T: Comparable> {
+    value: T,
+  }
+  
+  fn same(a: Box<Box<int>>, b: Box<Box<int>>) -> bool {
+    a == b
+  }
+---
+package main
+
+type Box[T comparable] struct {
+	value T
+}
+
+func same(a, b Box[Box[int]]) bool {
+	return a == b
+}

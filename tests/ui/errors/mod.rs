@@ -7832,6 +7832,62 @@ fn test() {
 }
 
 #[test]
+fn infer_not_comparable_recursive_enum_suggests_equality() {
+    let input = r#"
+enum List {
+  Nil,
+  Cons(int, List),
+}
+
+fn test() {
+  let a = List.Cons(1, List.Nil);
+  let b = List.Nil;
+  let result = a == b;
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_not_comparable_recursive_enum_with_equality_suggests_equals() {
+    let input = r#"
+#[equality]
+enum List {
+  Nil,
+  Cons(int, List),
+}
+
+fn test() {
+  let a = List.Cons(1, List.Nil);
+  let b = List.Nil;
+  let result = a == b;
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_not_comparable_mutually_recursive_enums() {
+    let input = r#"
+enum A {
+  End,
+  X(B),
+}
+
+enum B {
+  Y(A),
+}
+
+fn test() {
+  let a = A.End;
+  let b = A.X(B.Y(A.End));
+  let result = a == b;
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
 fn infer_not_comparable_interface() {
     let input = r#"
 interface Shape {
@@ -10298,6 +10354,23 @@ struct Outer {
 }
 
 #[test]
+fn equality_rejects_recursive_cycle_field_without_equality() {
+    let input = r#"
+#[equality]
+enum Tree {
+  Leaf,
+  Node(Pair),
+}
+
+struct Pair {
+  l: Tree,
+  r: Tree,
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
 fn equality_enum_rejects_function_payload() {
     let input = r#"
 #[equality]
@@ -11207,6 +11280,81 @@ struct Key { tags: Slice<int> }
 fn test(a: Map<Key, int>, b: Map<Key, int>) -> bool {
   a.equals(b)
 }
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn map_key_annotation_rejects_noncomparable_struct() {
+    let input = r#"
+struct Holder { items: Slice<int> }
+
+fn count(m: Map<Holder, int>) -> int {
+  m.length()
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn map_key_constructor_rejects_noncomparable_struct() {
+    let input = r#"
+struct Holder { items: Slice<int> }
+
+fn test() -> int {
+  let mut m = Map.new<Holder, int>()
+  m[Holder { items: [1] }] = 1
+  m.length()
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn map_key_constructor_rejects_recursive_enum() {
+    let input = r#"
+enum List {
+  Nil,
+  Cons(int, List),
+}
+
+fn test() -> int {
+  let mut m = Map.new<List, int>()
+  m[List.Nil] = 1
+  m.length()
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn map_key_expression_position_rejects_slice_key() {
+    let input = r#"
+fn test() -> int {
+  Map.new<Slice<int>, int>().length()
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn map_key_inferred_rejects_slice_key() {
+    let input = r#"
+fn test() -> int {
+  let mut m = Map.new()
+  m[[1, 2]] = 1
+  m.length()
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn map_key_alias_body_rejects_noncomparable_struct() {
+    let input = r#"
+struct Holder { items: Slice<int> }
+
+type Index = Map<Holder, int>
 "#;
     assert_infer_error_snapshot!(input);
 }

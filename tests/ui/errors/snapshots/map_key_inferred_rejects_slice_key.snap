@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Invalid map key type
+   ╭─[test.lis:3:15]
+ 2 │ fn test() -> int {
+ 3 │   let mut m = Map.new()
+   ·               ────┬────
+   ·                   ╰── `Slice<int>` is not comparable
+ 4 │   m[[1, 2]] = 1
+   ╰────
+  help: Map keys must be comparable in Go. slices cannot be used as map keys · code: [infer.non_comparable_map_key]

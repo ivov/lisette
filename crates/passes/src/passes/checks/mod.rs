@@ -14,6 +14,7 @@ pub(crate) mod interpolation_stringer;
 pub(crate) mod irrefutable_patterns;
 pub(crate) mod json_methods;
 pub(crate) mod json_serializable_fields;
+pub(crate) mod map_key;
 pub(crate) mod min_max;
 pub(crate) mod nan_comparison;
 pub(crate) mod native_value_usage;

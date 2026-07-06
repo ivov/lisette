@@ -460,6 +460,76 @@ fn main() {
 }
 
 #[test]
+fn run_equality_on_recursive_enums_compares_structurally() {
+    if !go_available() {
+        eprintln!("skipping run_equality_on_recursive_enums_compares_structurally: `go` not found");
+        return;
+    }
+
+    let scratch = tempfile::tempdir().expect("create temp dir");
+    let project = scratch.path().join("proj");
+    let invocation = scratch.path().join("invocation");
+    fs::create_dir_all(project.join("src")).unwrap();
+    fs::create_dir_all(&invocation).unwrap();
+
+    fs::write(
+        project.join("lisette.toml"),
+        "[project]\nname = \"eqrecursive\"\nversion = \"0.1.0\"\n",
+    )
+    .unwrap();
+    fs::write(
+        project.join("src/main.lis"),
+        r#"import "go:fmt"
+
+#[equality]
+enum List {
+  Nil,
+  Cons(int, List),
+}
+
+#[equality]
+enum Tree {
+  Leaf,
+  Node(Pair),
+}
+
+#[equality]
+struct Pair {
+  l: Tree,
+  r: Tree,
+}
+
+fn main() {
+  let a = List.Cons(1, List.Cons(2, List.Nil))
+  let b = List.Cons(1, List.Cons(2, List.Nil))
+  let c = List.Cons(1, List.Cons(3, List.Nil))
+  let d = List.Cons(1, List.Nil)
+  fmt.Println(a.equals(b), a.equals(c), a.equals(d))
+  let t1 = Tree.Node(Pair { l: Tree.Leaf, r: Tree.Leaf })
+  let t2 = Tree.Node(Pair { l: Tree.Leaf, r: Tree.Leaf })
+  let t3 = Tree.Node(Pair { l: t1, r: Tree.Leaf })
+  fmt.Println(t1.equals(t2), t1.equals(t3))
+}
+"#,
+    )
+    .unwrap();
+
+    let output = lis_run(&project, &invocation, &[]);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    assert!(
+        output.status.success(),
+        "lis run failed:\nstdout: {stdout}\nstderr: {stderr}"
+    );
+    assert!(
+        stdout.lines().any(|line| line == "true false false")
+            && stdout.lines().any(|line| line == "true false"),
+        "expected structural equality results:\nstdout: {stdout}\nstderr: {stderr}"
+    );
+}
+
+#[test]
 fn run_equality_matching_parametrized_interface_bound_builds() {
     if !go_available() {
         eprintln!(

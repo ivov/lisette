@@ -2,10 +2,11 @@
 source: tests/ui/errors/mod.rs
 ---
   ✕ Invalid map key type
-   ╭─[test.lis:6:24]
- 5 │ #[equality]
- 6 │ struct Index { values: Map<Key, int> }
-   ·                        ──────┬──────
-   ·                              ╰── `Key` is not comparable
+   ╭─[test.lis:4:13]
+ 3 │ 
+ 4 │ fn count(m: Map<Holder, int>) -> int {
+   ·             ────────┬───────
+   ·                     ╰── `Holder` is not comparable
+ 5 │   m.length()
    ╰────
   help: Map keys must be comparable in Go. a struct containing non-comparable fields cannot be used as map keys · code: [infer.non_comparable_map_key]

@@ -1,0 +1,44 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  #[equality]
+  enum List {
+    Nil,
+    Cons(int, List),
+  }
+---
+package main
+
+func MakeListNil() List {
+	return List{Tag: ListNil}
+}
+
+func MakeListCons(arg0 int, arg1 List) List {
+	return List{Tag: ListCons, Cons0: arg0, Cons1: &arg1}
+}
+
+type ListTag int
+
+const (
+	ListNil ListTag = iota
+	ListCons
+)
+
+type List struct {
+	Tag   ListTag
+	Cons0 int
+	Cons1 *List
+}
+
+func (l List) equals(other List) bool {
+	if l.Tag != other.Tag {
+		return false
+	}
+	switch l.Tag {
+	case ListCons:
+		return l.Cons0 == other.Cons0 && (*l.Cons1).equals((*other.Cons1))
+	default:
+		return true
+	}
+}

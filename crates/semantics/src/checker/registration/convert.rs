@@ -1,6 +1,7 @@
 use rustc_hash::FxHashMap as HashMap;
 
 use crate::checker::EnvResolve;
+use crate::checker::infer::expressions::comparison::check_never_comparable;
 use syntax::EcoString;
 use syntax::ast::{Annotation, Generic, Span};
 use syntax::program::{Definition, DefinitionBody};
@@ -377,9 +378,6 @@ impl TaskState<'_> {
         (substitute(body, &map), args)
     }
 
-    /// Check that a map key type is comparable.
-    /// Only rejects concrete non-comparable types (Slice, Map, Function).
-    /// Type parameters are allowed here — they may be instantiated with comparable types.
     /// Pre-check impl annotation for undeclared type params (e.g. `impl Container<T>`
     /// without `impl<T>`). Adds them to scope to prevent cascading errors from
     /// `convert_to_type`, and emits a diagnostic with the specific fix.
@@ -446,19 +444,11 @@ impl TaskState<'_> {
             return;
         }
 
-        let reason = if matches!(&resolved, Type::Function(_)) {
-            "functions"
-        } else if resolved.has_name("Slice") {
-            "slices"
-        } else if resolved.has_name("Map") {
-            "maps"
-        } else {
-            return;
-        };
-
-        self.sink.push(diagnostics::infer::non_comparable_map_key(
-            &resolved, reason, span,
-        ));
+        if let Some(reason) = check_never_comparable(&self.env, store, &resolved) {
+            self.sink.push(diagnostics::infer::non_comparable_map_key(
+                &resolved, reason, span,
+            ));
+        }
     }
 }
 

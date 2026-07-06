@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Cannot derive equality
+   ╭─[test.lis:5:3]
+ 4 │   Leaf,
+ 5 │   Node(Pair),
+   ·   ──┬─
+   ·     ╰── `Node` cannot be compared
+ 6 │ }
+   ╰────
+  help: `#[equality]` cannot compare recursive types. Give `Tree` a hand-written `equals` method, mark the field's type `#[equality]`, or remove the field · code: [attribute.cannot_derive_equality]

@@ -1991,6 +1991,21 @@ fn assignment_type_mismatch_single_diagnostic() {
 }
 
 #[test]
+fn annotated_map_binding_bad_key_single_diagnostic() {
+    let result = infer(
+        r#"
+    struct Holder { items: Slice<int> }
+
+    fn test() -> int {
+      let m: Map<Holder, int> = Map.new()
+      m.length()
+    }
+        "#,
+    );
+    assert_eq!(result.errors.len(), 1);
+}
+
+#[test]
 fn mut_binding_from_clone_no_error() {
     infer(r#"{ let a = [1, 2]; let mut b = a.clone(); b = b.append(3); let _ = b; let _ = a }"#)
         .assert_no_errors();

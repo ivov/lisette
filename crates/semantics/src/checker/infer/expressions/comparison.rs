@@ -1,3 +1,5 @@
+use rustc_hash::FxHashSet as HashSet;
+
 use crate::checker::EnvResolve;
 use crate::checker::TypeEnv;
 use crate::checker::infer::InferCtx;
@@ -7,12 +9,36 @@ use syntax::ast::{Annotation, Expression, Span};
 use syntax::program::{DefinitionBody, EqualityUnusableReason, Visibility};
 use syntax::types::{CompoundKind, Type, build_substitution_map, substitute};
 
+const RECURSIVE_TYPES: &str = "recursive types";
+
+fn nested_reason(inner: &'static str, wrapper: &'static str) -> &'static str {
+    if inner == RECURSIVE_TYPES {
+        RECURSIVE_TYPES
+    } else {
+        wrapper
+    }
+}
+
 pub fn check_not_comparable(env: &TypeEnv, store: &Store, ty: &Type) -> Option<&'static str> {
+    check_not_comparable_impl(env, store, ty, &mut HashSet::default(), false)
+}
+
+pub fn check_never_comparable(env: &TypeEnv, store: &Store, ty: &Type) -> Option<&'static str> {
+    check_not_comparable_impl(env, store, ty, &mut HashSet::default(), true)
+}
+
+fn check_not_comparable_impl(
+    env: &TypeEnv,
+    store: &Store,
+    ty: &Type,
+    visiting: &mut HashSet<String>,
+    definite_only: bool,
+) -> Option<&'static str> {
     let resolved = store.deep_resolve_alias(ty);
     let ty = &resolved;
 
     if is_opaque_go_handle(store, ty) {
-        return Some("opaque Go handles");
+        return (!definite_only).then_some("opaque Go handles");
     }
 
     if matches!(ty, Type::Function(_)) {
@@ -35,20 +61,29 @@ pub fn check_not_comparable(env: &TypeEnv, store: &Store, ty: &Type) -> Option<&
     }
 
     if ty.is_unknown() {
-        return Some("interface values");
+        return (!definite_only).then_some("interface values");
     }
 
     if let Some(underlying) = ty.get_underlying() {
-        return check_not_comparable(env, store, underlying);
+        return check_not_comparable_impl(env, store, underlying, visiting, definite_only);
     }
 
     if matches!(ty, Type::Parameter(_)) {
-        return Some("type parameters");
+        return (!definite_only).then_some("type parameters");
     }
 
     if let Some(name) = ty.get_qualified_id()
         && let Some(definition) = store.get_definition(name)
     {
+        if definition_reaches_itself(env, store, name) {
+            return Some(RECURSIVE_TYPES);
+        }
+
+        let type_key = format!("{ty:?}");
+        if !visiting.insert(type_key.clone()) {
+            return Some(RECURSIVE_TYPES);
+        }
+
         let type_args = ty.get_type_params().unwrap_or_default();
         let generics = match &definition.body {
             DefinitionBody::Struct { generics, .. } | DefinitionBody::Enum { generics, .. } => {
@@ -66,8 +101,13 @@ pub fn check_not_comparable(env: &TypeEnv, store: &Store, ty: &Type) -> Option<&
             DefinitionBody::Struct { fields, .. } => {
                 for f in fields {
                     let field_ty = substitute(&f.ty.resolve_in(env), &sub_map);
-                    if check_not_comparable(env, store, &field_ty).is_some() {
-                        return Some("a struct containing non-comparable fields");
+                    if let Some(inner) =
+                        check_not_comparable_impl(env, store, &field_ty, visiting, definite_only)
+                    {
+                        return Some(nested_reason(
+                            inner,
+                            "a struct containing non-comparable fields",
+                        ));
                     }
                 }
             }
@@ -75,26 +115,139 @@ pub fn check_not_comparable(env: &TypeEnv, store: &Store, ty: &Type) -> Option<&
                 for v in variants {
                     for f in v.fields.iter() {
                         let field_ty = substitute(&f.ty.resolve_in(env), &sub_map);
-                        if check_not_comparable(env, store, &field_ty).is_some() {
-                            return Some("an enum containing non-comparable fields");
+                        if let Some(inner) = check_not_comparable_impl(
+                            env,
+                            store,
+                            &field_ty,
+                            visiting,
+                            definite_only,
+                        ) {
+                            return Some(nested_reason(
+                                inner,
+                                "an enum containing non-comparable fields",
+                            ));
                         }
                     }
                 }
             }
-            DefinitionBody::Interface { .. } => return Some("interface values"),
+            DefinitionBody::Interface { .. } if !definite_only => {
+                return Some("interface values");
+            }
             _ => {}
         }
+
+        visiting.remove(&type_key);
     }
 
     if let Type::Tuple(elems) = ty {
         for e in elems {
-            if check_not_comparable(env, store, &e.resolve_in(env)).is_some() {
-                return Some("a tuple containing non-comparable elements");
+            if let Some(inner) =
+                check_not_comparable_impl(env, store, &e.resolve_in(env), visiting, definite_only)
+            {
+                return Some(nested_reason(
+                    inner,
+                    "a tuple containing non-comparable elements",
+                ));
             }
         }
     }
 
     None
+}
+
+/// Bounds the walk under non-uniform generic recursion, where instantiations never repeat.
+const REACHES_DEPTH_LIMIT: usize = 256;
+
+/// Whether a definition's value layout transitively contains itself.
+fn definition_reaches_itself(env: &TypeEnv, store: &Store, target: &str) -> bool {
+    let Some(definition) = store.get_definition(target) else {
+        return false;
+    };
+    let mut visited = HashSet::default();
+    let mut field_reaches = |field_ty: &Type| {
+        reaches_definition(
+            env,
+            store,
+            &field_ty.resolve_in(env),
+            target,
+            &mut visited,
+            0,
+        )
+    };
+    match &definition.body {
+        DefinitionBody::Struct { fields, .. } => fields.iter().any(|f| field_reaches(&f.ty)),
+        DefinitionBody::Enum { variants, .. } => variants
+            .iter()
+            .flat_map(|v| v.fields.iter())
+            .any(|f| field_reaches(&f.ty)),
+        _ => false,
+    }
+}
+
+fn reaches_definition(
+    env: &TypeEnv,
+    store: &Store,
+    ty: &Type,
+    target: &str,
+    visited: &mut HashSet<String>,
+    depth: usize,
+) -> bool {
+    if depth > REACHES_DEPTH_LIMIT {
+        return false;
+    }
+    let resolved = store.deep_resolve_alias(ty);
+    match &resolved {
+        Type::Nominal { id, params, .. } => {
+            if id.as_str() == target {
+                return true;
+            }
+            if !visited.insert(format!("{resolved:?}")) {
+                return false;
+            }
+            let field_types: Vec<(Type, &[syntax::ast::Generic])> =
+                match store.get_definition(id.as_str()).map(|d| &d.body) {
+                    Some(DefinitionBody::Struct {
+                        generics, fields, ..
+                    }) => fields
+                        .iter()
+                        .map(|f| (f.ty.clone(), generics.as_slice()))
+                        .collect(),
+                    Some(DefinitionBody::Enum {
+                        generics, variants, ..
+                    }) => variants
+                        .iter()
+                        .flat_map(|v| v.fields.iter())
+                        .map(|f| (f.ty.clone(), generics.as_slice()))
+                        .collect(),
+                    Some(_) => return false,
+                    None => {
+                        return params.iter().any(|param| {
+                            reaches_definition(env, store, param, target, visited, depth + 1)
+                        });
+                    }
+                };
+            field_types.iter().any(|(field_ty, generics)| {
+                let sub_map = generics
+                    .iter()
+                    .map(|g| g.name.clone())
+                    .zip(params.iter().cloned())
+                    .collect();
+                let substituted = substitute(&field_ty.resolve_in(env), &sub_map);
+                reaches_definition(env, store, &substituted, target, visited, depth + 1)
+            })
+        }
+        Type::Tuple(elements) => elements.iter().any(|element| {
+            reaches_definition(
+                env,
+                store,
+                &element.resolve_in(env),
+                target,
+                visited,
+                depth + 1,
+            )
+        }),
+        _ => false,
+    }
 }
 
 pub(crate) fn is_opaque_go_handle(store: &Store, ty: &Type) -> bool {
@@ -403,6 +556,10 @@ impl InferCtx<'_, '_> {
             .collect();
         field_types.iter().all(|field_ty| {
             let substituted = substitute(&field_ty.resolve_in(&self.env), &sub_map);
+            let field_resolved = self.store.deep_resolve_alias(&substituted);
+            if field_resolved.get_qualified_id() == Some(name) {
+                return true;
+            }
             check_not_equatable(
                 &self.env,
                 self.store,

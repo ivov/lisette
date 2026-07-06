@@ -1,0 +1,75 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  #[equality]
+  enum A {
+    End,
+    X(B),
+  }
+  
+  #[equality]
+  enum B {
+    Y(A),
+  }
+---
+package main
+
+func MakeAEnd() A {
+	return A{Tag: AEnd}
+}
+
+func MakeAX(arg0 B) A {
+	return A{Tag: AX, X: &arg0}
+}
+
+func MakeBY(arg0 A) B {
+	return B{Tag: BY, Y: &arg0}
+}
+
+type ATag int
+
+const (
+	AEnd ATag = iota
+	AX
+)
+
+type A struct {
+	Tag ATag
+	X   *B
+}
+
+func (a A) equals(other A) bool {
+	if a.Tag != other.Tag {
+		return false
+	}
+	switch a.Tag {
+	case AX:
+		return (*a.X).equals((*other.X))
+	default:
+		return true
+	}
+}
+
+type BTag int
+
+const (
+	BY BTag = iota
+)
+
+type B struct {
+	Tag BTag
+	Y   *A
+}
+
+func (b B) equals(other B) bool {
+	if b.Tag != other.Tag {
+		return false
+	}
+	switch b.Tag {
+	case BY:
+		return (*b.Y).equals((*other.Y))
+	default:
+		return true
+	}
+}

@@ -152,8 +152,12 @@ impl Planner<'_> {
                 .iter()
                 .zip(layout_variant.fields.iter())
                 .map(|(sem_field, layout_field)| {
-                    let lhs = format!("{receiver}.{}", layout_field.go_name);
-                    let rhs = format!("other.{}", layout_field.go_name);
+                    let mut lhs = format!("{receiver}.{}", layout_field.go_name);
+                    let mut rhs = format!("other.{}", layout_field.go_name);
+                    if layout_field.is_recursive {
+                        lhs = format!("(*{lhs})");
+                        rhs = format!("(*{rhs})");
+                    }
                     self.render_equality(&lhs, &rhs, &sem_field.ty)
                 })
                 .collect();

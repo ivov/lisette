@@ -23,7 +23,7 @@ use syntax::program::{
 };
 use syntax::types::{SubstitutionMap, Symbol, Type, substitute};
 
-pub use infer::expressions::comparison::check_not_comparable;
+pub use infer::expressions::comparison::{check_never_comparable, check_not_comparable};
 pub use type_env::{EnvResolve, Speculation, TypeEnv, VarState};
 
 #[derive(Debug, Clone)]

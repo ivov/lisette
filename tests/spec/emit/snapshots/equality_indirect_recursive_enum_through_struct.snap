@@ -1,0 +1,58 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  #[equality]
+  enum Tree {
+    Leaf,
+    Node(Pair),
+  }
+  
+  #[equality]
+  struct Pair {
+    l: Tree,
+    r: Tree,
+  }
+---
+package main
+
+func MakeTreeLeaf() Tree {
+	return Tree{Tag: TreeLeaf}
+}
+
+func MakeTreeNode(arg0 Pair) Tree {
+	return Tree{Tag: TreeNode, Node: &arg0}
+}
+
+type TreeTag int
+
+const (
+	TreeLeaf TreeTag = iota
+	TreeNode
+)
+
+type Tree struct {
+	Tag  TreeTag
+	Node *Pair
+}
+
+func (t Tree) equals(other Tree) bool {
+	if t.Tag != other.Tag {
+		return false
+	}
+	switch t.Tag {
+	case TreeNode:
+		return (*t.Node).equals((*other.Node))
+	default:
+		return true
+	}
+}
+
+type Pair struct {
+	l Tree
+	r Tree
+}
+
+func (p Pair) equals(other Pair) bool {
+	return p.l.equals(other.l) && p.r.equals(other.r)
+}
