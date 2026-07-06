@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Cannot make a mutable binding to `a`
+   ╭─[test.lis:6:32]
+ 5 │   let a = [1, 2, 3]
+ 6 │   let mut boxed = Box { items: a }
+   ·                                ┬
+   ·                                ╰── would be mutated implicitly
+ 7 │   boxed.items[0] = 9
+   ╰────
+  help: Mutating `boxed` would implicitly mutate `a`. Either use `a.clone()` to make a copy or `&a` to take a reference · code: [infer.mut_binding_aliases]

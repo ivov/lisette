@@ -420,7 +420,7 @@ impl InferCtx<'_, '_> {
             let self_sourced =
                 super::aliasing::place_root_name(value_place).is_some_and(|root| root == var_name);
             if compound_operator.is_none() && is_simple_target && is_mutable && !self_sourced {
-                self.check_mut_binding_alias(&var_name, &new_value);
+                self.check_mut_reassignment_alias(&var_name, &new_value);
             }
         }
 

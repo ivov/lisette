@@ -2260,6 +2260,151 @@ fn mut_binding_container_of_user_clone_single_diagnostic() {
 }
 
 #[test]
+fn mut_binding_from_block_tail_single_diagnostic() {
+    let result = infer(r#"{ let a = [1, 2, 3]; let mut b = { a }; b[0] = 9; let _ = a }"#);
+    assert_eq!(result.errors.len(), 1);
+}
+
+#[test]
+fn mut_binding_from_constructor_field_single_diagnostic() {
+    let result = infer(
+        r#"
+    struct Box { items: Slice<int> }
+
+    fn main() {
+      let a = [1, 2, 3]
+      let mut boxed = Box { items: a }
+      boxed.items[0] = 9
+      let _ = a
+    }
+        "#,
+    );
+    assert_eq!(result.errors.len(), 1);
+}
+
+#[test]
+fn mut_binding_from_tuple_literal_single_diagnostic() {
+    let result = infer(r#"{ let a = [1, 2, 3]; let mut p = (a, 0); p.0[0] = 9; let _ = a }"#);
+    assert_eq!(result.errors.len(), 1);
+}
+
+#[test]
+fn mut_binding_from_if_branch_single_diagnostic() {
+    let result = infer(
+        r#"{ let a = [1, 2, 3]; let c = true; let mut b = if c { a } else { [0] }; b[0] = 9; let _ = a }"#,
+    );
+    assert_eq!(result.errors.len(), 1);
+}
+
+#[test]
+fn mut_binding_from_slice_literal_element_single_diagnostic() {
+    let result = infer(r#"{ let a = [1, 2, 3]; let mut o = [a]; o[0][0] = 9; let _ = a }"#);
+    assert_eq!(result.errors.len(), 1);
+}
+
+#[test]
+fn mut_binding_from_constructor_field_clone_no_error() {
+    infer(
+        r#"
+    struct Box { items: Slice<int> }
+
+    fn main() {
+      let a = [1, 2, 3]
+      let mut boxed = Box { items: a.clone() }
+      boxed.items[0] = 9
+      let _ = a
+    }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn mut_binding_from_if_branch_clone_no_error() {
+    infer(
+        r#"{ let a = [1, 2, 3]; let c = true; let mut b = if c { a.clone() } else { [0] }; b[0] = 9; let _ = a }"#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn mut_binding_from_scalar_tuple_literal_no_error() {
+    infer(r#"{ let mut p = (1, 2); p.0 = 9; let _ = p }"#).assert_no_errors();
+}
+
+#[test]
+fn mut_binding_from_tuple_struct_constructor_single_diagnostic() {
+    let result = infer(
+        r#"
+    struct Pair(Slice<int>, int)
+
+    fn main() {
+      let a = [1, 2, 3]
+      let mut p = Pair(a, 0)
+      p.0[0] = 9
+      let _ = a
+    }
+        "#,
+    );
+    assert_eq!(result.errors.len(), 1);
+}
+
+#[test]
+fn mut_binding_from_block_local_shadow_no_error() {
+    infer(
+        r#"
+    fn main() {
+      let x = [1, 2, 3]
+      let mut b = { let x = [9, 9]; x }
+      b[0] = 0
+      let _ = x
+    }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn mut_reassignment_moves_binding_into_constructor_no_error() {
+    infer(
+        r#"
+    struct Wrap(Slice<int>)
+
+    fn main() {
+      let mut w = Wrap([1])
+      let p = [2, 3]
+      w = Wrap(p)
+      let _ = w
+    }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn mut_binding_from_unit_if_no_error() {
+    infer(r#"{ let a = [1, 2, 3]; let c = true; let mut b = if c { a }; let _ = b; let _ = a }"#)
+        .assert_no_errors();
+}
+
+#[test]
+fn mut_binding_from_enum_struct_variant_no_error() {
+    infer(
+        r#"
+    enum Holder { Tags { items: Slice<int> }, Empty }
+
+    fn main() {
+      let a = [1, 2, 3]
+      let mut h = Holder.Tags { items: a }
+      let _ = h
+      let _ = a
+    }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
 fn float_remainder_by_zero_single_diagnostic() {
     let result = infer(
         r#"

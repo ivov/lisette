@@ -2483,6 +2483,32 @@ fn test(h1: Holder) {
 }
 
 #[test]
+fn infer_mut_binding_aliases_block_tail() {
+    let input = r#"
+fn test() {
+  let a = [1, 2, 3]
+  let mut b = { a }
+  b[0] = 9
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_mut_binding_aliases_constructor_field() {
+    let input = r#"
+struct Box { items: Slice<int> }
+
+fn test() {
+  let a = [1, 2, 3]
+  let mut boxed = Box { items: a }
+  boxed.items[0] = 9
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
 fn infer_mut_binding_aliases_generic_param_fed() {
     let input = r#"
 struct Box<T> { items: Slice<T> }

@@ -1,86 +1,161 @@
-use syntax::ast::{Expression, Literal, UnaryOperator};
-use syntax::program::CallKind;
+use syntax::ast::{Expression, Literal, Span, UnaryOperator};
+use syntax::program::{CallKind, DefinitionBody};
+use syntax::types::Type;
 
+use crate::checker::EnvResolve;
 use crate::checker::infer::InferCtx;
 use crate::checker::infer::addressability::check_is_non_addressable;
 use crate::checker::infer::carry_mut::{
     can_carry_mutation_across_fn_boundary, clone_recipe_is_known, clone_severs_alias,
 };
 
+struct AliasFinding {
+    source: String,
+    span: Span,
+    via_non_severing_clone: bool,
+    clone_severs: bool,
+    addressable: bool,
+}
+
 impl InferCtx<'_, '_> {
-    /// Reject a mutable binding that would alias a carry-mut place. A
-    /// `clone()` of the place is exempt only when the clone actually severs.
+    /// Reject a mutable binding that would share the backing store of a live one.
     pub(super) fn check_mut_binding_alias(&mut self, binding_name: &str, value: &Expression) {
-        let expr = value.unwrap_parens();
-        let (place, via_clone) = match clone_call_receiver(expr) {
-            Some(receiver) => (receiver.unwrap_parens(), true),
-            None => (expr, false),
+        let Some(finding) = self.find_alias(value, true) else {
+            return;
         };
-        if !is_aliasing_place(place) {
+        self.push_binding_alias(binding_name, finding);
+    }
+
+    pub(super) fn check_mut_reassignment_alias(&mut self, binding_name: &str, value: &Expression) {
+        let Some(finding) = self.find_alias(value, false) else {
             return;
-        }
-        let rooted_in_binding = place_root_name(place)
-            .is_some_and(|root| self.scopes.lookup_binding_id(&root).is_some());
-        if !rooted_in_binding {
-            return;
-        }
-        let ty = if via_clone {
-            place.get_type()
-        } else {
-            value.get_type()
         };
-        if !can_carry_mutation_across_fn_boundary(&ty, &self.env, self.store) {
-            return;
-        }
-        if via_clone && !clone_recipe_is_known(&ty, &self.env, self.store) {
-            return;
-        }
-        let clone_severs = clone_severs_alias(&ty, &self.env, self.store);
-        if via_clone && clone_severs {
-            return;
-        }
-        let source = render_place(place);
-        let addressable = check_is_non_addressable(place, &self.env).is_none();
-        let diagnostic = if via_clone {
+        self.push_binding_alias(binding_name, finding);
+    }
+
+    fn push_binding_alias(&mut self, binding_name: &str, finding: AliasFinding) {
+        let diagnostic = if finding.via_non_severing_clone {
             diagnostics::infer::mut_binding_clone_does_not_sever(
                 binding_name,
-                &source,
-                addressable,
-                value.get_span(),
+                &finding.source,
+                finding.addressable,
+                finding.span,
             )
         } else {
             diagnostics::infer::mut_binding_aliases(
                 binding_name,
-                &source,
-                addressable,
-                clone_severs,
-                value.get_span(),
+                &finding.source,
+                finding.addressable,
+                finding.clone_severs,
+                finding.span,
             )
         };
         self.sink.push(diagnostic);
     }
 
-    /// Source of a `.clone()` of a local carry-mut place that the clone does
-    /// not fully sever, or `None` when the clone is fresh, opaque, or severing.
-    pub(super) fn non_severing_clone_source(&self, value: &Expression) -> Option<String> {
-        let receiver = clone_call_receiver(value.unwrap_parens())?;
-        let place = receiver.unwrap_parens();
-        if !is_aliasing_place(place) {
+    fn find_alias(&self, value: &Expression, through_constructions: bool) -> Option<AliasFinding> {
+        let expr = value.unwrap_parens();
+
+        if let Some(receiver) = clone_call_receiver(expr) {
+            return self.alias_leaf(receiver.unwrap_parens(), true, expr.get_span());
+        }
+
+        match expr {
+            Expression::Identifier { .. }
+            | Expression::DotAccess { .. }
+            | Expression::IndexedAccess { .. }
+            | Expression::Unary {
+                operator: UnaryOperator::Deref,
+                ..
+            } => return self.alias_leaf(expr, false, expr.get_span()),
+            _ => {}
+        }
+
+        if !through_constructions
+            || !can_carry_mutation_across_fn_boundary(&expr.get_type(), &self.env, self.store)
+        {
             return None;
         }
-        let root = place_root_name(place)?;
-        self.scopes.lookup_binding_id(&root)?;
+
+        match expr {
+            Expression::Block { items, .. } => self.find_alias(items.last()?, true),
+            Expression::If {
+                consequence,
+                alternative,
+                ..
+            } => self
+                .find_alias(consequence, true)
+                .or_else(|| self.find_alias(alternative, true)),
+            Expression::Tuple { elements, .. } => {
+                elements.iter().find_map(|e| self.find_alias(e, true))
+            }
+            Expression::StructCall {
+                field_assignments,
+                ty,
+                ..
+            } if self.is_struct_backed(ty) => field_assignments
+                .iter()
+                .find_map(|f| self.find_alias(&f.value, true)),
+            Expression::Literal {
+                literal: Literal::Slice(elements),
+                ..
+            } => elements.iter().find_map(|e| self.find_alias(e, true)),
+            Expression::Call {
+                args,
+                call_kind: Some(CallKind::TupleStructConstructor),
+                ..
+            } => args.iter().find_map(|a| self.find_alias(a, true)),
+            _ => None,
+        }
+    }
+
+    fn is_struct_backed(&self, ty: &Type) -> bool {
+        let Type::Nominal { id, .. } = self.store.peel_alias(&ty.resolve_in(&self.env)) else {
+            return false;
+        };
+        matches!(
+            self.store.get_definition(id.as_str()).map(|d| &d.body),
+            Some(DefinitionBody::Struct { .. })
+        )
+    }
+
+    fn alias_leaf(&self, place: &Expression, via_clone: bool, span: Span) -> Option<AliasFinding> {
+        let Expression::Identifier {
+            value,
+            binding_id: Some(root_id),
+            ..
+        } = place_root(place)?
+        else {
+            return None;
+        };
+        if self.scopes.lookup_binding_id(value) != Some(*root_id) {
+            return None;
+        }
         let ty = place.get_type();
         if !can_carry_mutation_across_fn_boundary(&ty, &self.env, self.store) {
             return None;
         }
-        if !clone_recipe_is_known(&ty, &self.env, self.store) {
+        if via_clone && !clone_recipe_is_known(&ty, &self.env, self.store) {
             return None;
         }
-        if clone_severs_alias(&ty, &self.env, self.store) {
+        let clone_severs = clone_severs_alias(&ty, &self.env, self.store);
+        if via_clone && clone_severs {
             return None;
         }
-        Some(render_place(place))
+        Some(AliasFinding {
+            source: render_place(place),
+            span,
+            via_non_severing_clone: via_clone,
+            clone_severs,
+            addressable: check_is_non_addressable(place, &self.env).is_none(),
+        })
+    }
+
+    pub(super) fn non_severing_clone_source(&self, value: &Expression) -> Option<String> {
+        let expr = value.unwrap_parens();
+        let receiver = clone_call_receiver(expr)?;
+        let finding = self.alias_leaf(receiver.unwrap_parens(), true, expr.get_span())?;
+        Some(finding.source)
     }
 }
 
@@ -121,10 +196,9 @@ pub(super) fn clone_call_receiver(expression: &Expression) -> Option<&Expression
     }
 }
 
-/// Name of the identifier a place expression is rooted at.
-pub(super) fn place_root_name(expression: &Expression) -> Option<String> {
+fn place_root(expression: &Expression) -> Option<&Expression> {
     match expression {
-        Expression::Identifier { .. } => expression.get_var_name(),
+        Expression::Identifier { .. } => Some(expression),
         Expression::DotAccess {
             expression: inner, ..
         }
@@ -135,29 +209,14 @@ pub(super) fn place_root_name(expression: &Expression) -> Option<String> {
             operator: UnaryOperator::Deref,
             expression: inner,
             ..
-        } => place_root_name(inner.unwrap_parens()),
+        } => place_root(inner.unwrap_parens()),
         _ => None,
     }
 }
 
-/// Identifiers, field accesses, indexed accesses, and derefs rooted at one of
-/// these.
-fn is_aliasing_place(expression: &Expression) -> bool {
-    match expression {
-        Expression::Identifier { .. } => true,
-        Expression::DotAccess {
-            expression: inner, ..
-        } => is_aliasing_place(inner.unwrap_parens()),
-        Expression::IndexedAccess {
-            expression: inner, ..
-        } => is_aliasing_place(inner.unwrap_parens()),
-        Expression::Unary {
-            operator: UnaryOperator::Deref,
-            expression: inner,
-            ..
-        } => is_aliasing_place(inner.unwrap_parens()),
-        _ => false,
-    }
+/// Name of the identifier a place expression is rooted at.
+pub(super) fn place_root_name(expression: &Expression) -> Option<String> {
+    place_root(expression)?.get_var_name()
 }
 
 /// Reconstructed source text for a place expression. Indexes that are not
