@@ -62,7 +62,7 @@ pub fn GetUint64() -> uint64
 
 pub fn GetUint8() -> uint8
 
-pub fn GetUintptr() -> uint
+pub fn GetUintptr() -> uintptr
 
 pub struct T {
   pub X: int,

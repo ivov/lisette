@@ -92,7 +92,7 @@ pub fn CPUProfile() -> Slice<byte>
 /// the program counter, the file name (using forward slashes as path separator, even
 /// on Windows), and the line number within the file of the corresponding call.
 /// The boolean ok is false if it was not possible to recover the information.
-pub fn Caller(skip: int) -> Option<(uint, string, int)>
+pub fn Caller(skip: int) -> Option<(uintptr, string, int)>
 
 /// Callers fills the slice pc with the return program counters of function invocations
 /// on the calling goroutine's stack. The argument skip is the number of stack frames
@@ -107,12 +107,12 @@ pub fn Caller(skip: int) -> Option<(uint, string, int)>
 /// directly is discouraged, as is using [FuncForPC] on any of the
 /// returned PCs, since these cannot account for inlining or return
 /// program counter adjustment.
-pub fn Callers(skip: int, mut pc: Slice<uint>) -> int
+pub fn Callers(skip: int, mut pc: Slice<uintptr>) -> int
 
 /// CallersFrames takes a slice of PC values returned by [Callers] and
 /// prepares to return function/file/line information.
 /// Do not change the slice until you are done with the [Frames].
-pub fn CallersFrames(callers: Slice<uint>) -> Ref<Frames>
+pub fn CallersFrames(callers: Slice<uintptr>) -> Ref<Frames>
 
 /// FuncForPC returns a *[Func] describing the function that contains the
 /// given program counter address, or else nil.
@@ -120,7 +120,7 @@ pub fn CallersFrames(callers: Slice<uint>) -> Ref<Frames>
 /// If pc represents multiple functions because of inlining, it returns
 /// the *Func describing the innermost function, but with an entry of
 /// the outermost function.
-pub fn FuncForPC(pc: uint) -> Option<Ref<Func>>
+pub fn FuncForPC(pc: uintptr) -> Option<Ref<Func>>
 
 /// GC runs a garbage collection and blocks the caller until the
 /// garbage collection is complete. It may also block the entire
@@ -693,12 +693,12 @@ pub interface Error {
 
 /// Frame is the information returned by [Frames] for each call frame.
 pub struct Frame {
-  pub PC: uint,
+  pub PC: uintptr,
   pub Func: Option<Ref<Func>>,
   pub Function: string,
   pub File: string,
   pub Line: int,
-  pub Entry: uint,
+  pub Entry: uintptr,
 }
 
 /// Frames may be used to get function/file/line information for a
@@ -833,13 +833,13 @@ impl Frames {
 
 impl Func {
   /// Entry returns the entry address of the function.
-  fn Entry(self: Ref<Func>) -> uint
+  fn Entry(self: Ref<Func>) -> uintptr
 
   /// FileLine returns the file name and line number of the
   /// source code corresponding to the program counter pc.
   /// The result will not be accurate if pc is not a program
   /// counter within f.
-  fn FileLine(self: Ref<Func>, pc: uint) -> (string, int)
+  fn FileLine(self: Ref<Func>, pc: uintptr) -> (string, int)
 
   /// Name returns the name of the function.
   fn Name(self: Ref<Func>) -> string
@@ -854,7 +854,7 @@ impl MemProfileRecord {
 
   /// Stack returns the stack trace associated with the record,
   /// a prefix of r.Stack0.
-  fn Stack(self: Ref<MemProfileRecord>) -> Slice<uint>
+  fn Stack(self: Ref<MemProfileRecord>) -> Slice<uintptr>
 }
 
 impl PanicNilError {
@@ -883,7 +883,7 @@ impl Pinner {
 impl StackRecord {
   /// Stack returns the stack trace associated with the record,
   /// a prefix of r.Stack0.
-  fn Stack(self: Ref<StackRecord>) -> Slice<uint>
+  fn Stack(self: Ref<StackRecord>) -> Slice<uintptr>
 }
 
 impl TypeAssertionError {

@@ -19,7 +19,7 @@ import "go:sync"
 /// 
 /// 	_, _, err := syscall.Syscall(...)
 /// 	if errors.Is(err, fs.ErrNotExist) ...
-pub struct Errno(uint)
+pub struct Errno(uintptr)
 
 /// Errors
 pub const E2BIG: Errno = 7
@@ -557,19 +557,19 @@ pub fn Adjtimex(buf: Ref<Timex>) -> Result<int, error>
 /// AllThreadsSyscall is unaware of any threads that are launched
 /// explicitly by cgo linked code, so the function always returns
 /// [ENOTSUP] in binaries that use cgo.
-pub fn AllThreadsSyscall(trap: uint, a1: uint, a2: uint, a3: uint) -> (uint, uint, Errno)
+pub fn AllThreadsSyscall(trap: uintptr, a1: uintptr, a2: uintptr, a3: uintptr) -> (uintptr, uintptr, Errno)
 
 /// AllThreadsSyscall6 is like [AllThreadsSyscall], but extended to six
 /// arguments.
 pub fn AllThreadsSyscall6(
-  trap: uint,
-  a1: uint,
-  a2: uint,
-  a3: uint,
-  a4: uint,
-  a5: uint,
-  a6: uint,
-) -> (uint, uint, Errno)
+  trap: uintptr,
+  a1: uintptr,
+  a2: uintptr,
+  a3: uintptr,
+  a4: uintptr,
+  a5: uintptr,
+  a6: uintptr,
+) -> (uintptr, uintptr, Errno)
 
 /// Deprecated: Use golang.org/x/net/bpf instead.
 pub fn AttachLsf(fd: int, i: Slice<SockFilter>) -> Result<(), error>
@@ -652,7 +652,7 @@ pub fn Fchown(fd: int, uid: int, gid: int) -> Result<(), error>
 pub fn Fchownat(dirfd: int, path: string, uid: int, gid: int, flags: int) -> Result<(), error>
 
 /// FcntlFlock performs a fcntl syscall for the [F_GETLK], [F_SETLK] or [F_SETLKW] command.
-pub fn FcntlFlock(fd: uint, cmd: int, lk: Ref<Flock_t>) -> Result<(), error>
+pub fn FcntlFlock(fd: uintptr, cmd: int, lk: Ref<Flock_t>) -> Result<(), error>
 
 pub fn Fdatasync(fd: int) -> Result<(), error>
 
@@ -788,7 +788,7 @@ pub fn Mount(
   source: string,
   target: string,
   fstype: string,
-  flags: uint,
+  flags: uintptr,
   data: string,
 ) -> Result<(), error>
 
@@ -864,13 +864,13 @@ pub fn PtraceGetEventMsg(pid: int) -> Result<uint, error>
 
 pub fn PtraceGetRegs(pid: int, regsout: Ref<PtraceRegs>) -> Result<(), error>
 
-pub fn PtracePeekData(pid: int, addr: uint, out: Slice<byte>) -> Result<int, error>
+pub fn PtracePeekData(pid: int, addr: uintptr, out: Slice<byte>) -> Result<int, error>
 
-pub fn PtracePeekText(pid: int, addr: uint, out: Slice<byte>) -> Result<int, error>
+pub fn PtracePeekText(pid: int, addr: uintptr, out: Slice<byte>) -> Result<int, error>
 
-pub fn PtracePokeData(pid: int, addr: uint, data: Slice<byte>) -> Result<int, error>
+pub fn PtracePokeData(pid: int, addr: uintptr, data: Slice<byte>) -> Result<int, error>
 
-pub fn PtracePokeText(pid: int, addr: uint, data: Slice<byte>) -> Result<int, error>
+pub fn PtracePokeText(pid: int, addr: uintptr, data: Slice<byte>) -> Result<int, error>
 
 pub fn PtraceSetOptions(pid: int, options: int) -> Result<(), error>
 
@@ -882,17 +882,17 @@ pub fn PtraceSyscall(pid: int, signal: int) -> Result<(), error>
 
 pub fn Pwrite(fd: int, p: Slice<byte>, offset: int64) -> Result<int, error>
 
-pub fn RawSyscall(trap: uint, a1: uint, a2: uint, a3: uint) -> (uint, uint, Errno)
+pub fn RawSyscall(trap: uintptr, a1: uintptr, a2: uintptr, a3: uintptr) -> (uintptr, uintptr, Errno)
 
 pub fn RawSyscall6(
-  trap: uint,
-  a1: uint,
-  a2: uint,
-  a3: uint,
-  a4: uint,
-  a5: uint,
-  a6: uint,
-) -> (uint, uint, Errno)
+  trap: uintptr,
+  a1: uintptr,
+  a2: uintptr,
+  a3: uintptr,
+  a4: uintptr,
+  a5: uintptr,
+  a6: uintptr,
+) -> (uintptr, uintptr, Errno)
 
 pub fn Read(fd: int, mut p: Slice<byte>) -> Result<int, error>
 
@@ -1036,7 +1036,7 @@ pub fn Splice(
 ) -> Result<int64, error>
 
 /// StartProcess wraps [ForkExec] for package os.
-pub fn StartProcess(argv0: string, argv: Slice<string>, attr: Ref<ProcAttr>) -> Result<(int, uint), error>
+pub fn StartProcess(argv0: string, argv: Slice<string>, attr: Ref<ProcAttr>) -> Result<(int, uintptr), error>
 
 pub fn Stat(path: string, stat: Ref<Stat_t>) -> Result<(), error>
 
@@ -1069,17 +1069,17 @@ pub fn Sync()
 
 pub fn SyncFileRange(fd: int, off: int64, n: int64, flags: int) -> Result<(), error>
 
-pub fn Syscall(trap: uint, a1: uint, a2: uint, a3: uint) -> (uint, uint, Errno)
+pub fn Syscall(trap: uintptr, a1: uintptr, a2: uintptr, a3: uintptr) -> (uintptr, uintptr, Errno)
 
 pub fn Syscall6(
-  trap: uint,
-  a1: uint,
-  a2: uint,
-  a3: uint,
-  a4: uint,
-  a5: uint,
-  a6: uint,
-) -> (uint, uint, Errno)
+  trap: uintptr,
+  a1: uintptr,
+  a2: uintptr,
+  a3: uintptr,
+  a4: uintptr,
+  a5: uintptr,
+  a6: uintptr,
+) -> (uintptr, uintptr, Errno)
 
 pub fn Sysinfo(info: Ref<Sysinfo_t>) -> Result<(), error>
 
@@ -1089,7 +1089,7 @@ pub fn Tgkill(tgid: int, tid: int, sig: Signal) -> Result<(), error>
 
 pub fn Time(t: Ref<Time_t>) -> Result<Time_t, error>
 
-pub fn Times(tms: Ref<Tms>) -> Result<uint, error>
+pub fn Times(tms: Ref<Tms>) -> Result<uintptr, error>
 
 /// TimespecToNsec returns the time stored in ts as nanoseconds.
 pub fn TimespecToNsec(ts: Timespec) -> int64
@@ -1312,7 +1312,7 @@ pub struct NlMsghdr {
 pub struct ProcAttr {
   pub Dir: string,
   pub Env: Slice<string>,
-  pub Files: Slice<uint>,
+  pub Files: Slice<uintptr>,
   pub Sys: Option<Ref<SysProcAttr>>,
 }
 
@@ -1325,9 +1325,9 @@ pub struct PtraceRegs {
 
 /// A RawConn is a raw network connection.
 pub interface RawConn {
-  fn Control(f: fn(uint) -> ()) -> Result<(), error>
-  fn Read(f: fn(uint) -> bool) -> Result<(), error>
-  fn Write(f: fn(uint) -> bool) -> Result<(), error>
+  fn Control(f: fn(uintptr) -> ()) -> Result<(), error>
+  fn Read(f: fn(uintptr) -> bool) -> Result<(), error>
+  fn Write(f: fn(uintptr) -> bool) -> Result<(), error>
 }
 
 pub struct RawSockaddr {
@@ -1530,12 +1530,12 @@ pub struct SysProcAttr {
   pub Foreground: bool,
   pub Pgid: int,
   pub Pdeathsig: Signal,
-  pub Cloneflags: uint,
-  pub Unshareflags: uint,
+  pub Cloneflags: uintptr,
+  pub Unshareflags: uintptr,
   pub UidMappings: Slice<SysProcIDMap>,
   pub GidMappings: Slice<SysProcIDMap>,
   pub GidMappingsEnableSetgroups: bool,
-  pub AmbientCaps: Slice<uint>,
+  pub AmbientCaps: Slice<uintptr>,
   pub UseCgroupFD: bool,
   pub CgroupFD: int,
   pub PidFD: Option<int>,

@@ -223,6 +223,76 @@ fn main() {
 }
 
 #[test]
+fn interop_sentinel_let_call() {
+    let input = r#"
+import "go:example.com/idx"
+
+fn main() {
+  let f = idx.Find
+  let r = f("hello", "ll")
+  match r {
+    Some(v) => { let _ = v },
+    None => { let _ = -2 },
+  }
+}
+"#;
+    let typedef = r#"
+#[go(sentinel_minus_one)]
+pub fn Find(s: string, substr: string) -> Option<int>
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/idx", typedef)]);
+}
+
+#[test]
+fn interop_sentinel_call_arg() {
+    let input = r#"
+import "go:example.com/idx"
+
+fn apply(f: fn(string, string) -> Option<int>, s: string) -> int {
+  match f(s, "ll") {
+    Some(v) => v,
+    None => -2,
+  }
+}
+
+fn main() {
+  let r = apply(idx.Find, "hello")
+  let _ = r
+}
+"#;
+    let typedef = r#"
+#[go(sentinel_minus_one)]
+pub fn Find(s: string, substr: string) -> Option<int>
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/idx", typedef)]);
+}
+
+#[test]
+fn interop_sentinel_return_pos() {
+    let input = r#"
+import "go:example.com/idx"
+
+fn make_finder() -> fn(string, string) -> Option<int> {
+  idx.Find
+}
+
+fn main() {
+  let f = make_finder()
+  let r = f("hello", "ll")
+  match r {
+    Some(v) => { let _ = v },
+    None => { let _ = -2 },
+  }
+}
+"#;
+    let typedef = r#"
+#[go(sentinel_minus_one)]
+pub fn Find(s: string, substr: string) -> Option<int>
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/idx", typedef)]);
+}
+
+#[test]
 fn interop_nullable_direct_call() {
     let input = r#"
 import "go:flag"

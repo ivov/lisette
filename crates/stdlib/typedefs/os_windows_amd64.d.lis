@@ -312,7 +312,7 @@ pub fn MkdirTemp(dir: string, pattern: string) -> Result<string, error>
 /// 
 /// After passing it to NewFile, fd may become invalid under the same conditions described
 /// in the comments of [File.Fd], and the same constraints apply.
-pub fn NewFile(fd: uint, name: string) -> Option<Ref<File>>
+pub fn NewFile(fd: uintptr, name: string) -> Option<Ref<File>>
 
 /// NewSyscallError returns, as an error, a new [SyscallError]
 /// with the given system call name and error details.
@@ -878,7 +878,7 @@ impl File {
   ///     operations on the file.
   /// 
   /// For most uses prefer the f.SyscallConn method.
-  fn Fd(self: Ref<File>) -> uint
+  fn Fd(self: Ref<File>) -> uintptr
 
   /// Name returns the name of the file as presented to Open.
   /// 
