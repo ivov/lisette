@@ -17,6 +17,12 @@ use crate::names::go_name;
 
 type SpanMap = HashMap<String, Vec<Span>>;
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum CollectPayloadFields {
+    Yes,
+    No,
+}
+
 impl Planner<'_> {
     pub(crate) fn detect_name_collisions(&self, files: &[&File]) -> Vec<LisetteDiagnostic> {
         let mut package_block: SpanMap = HashMap::default();
@@ -32,6 +38,7 @@ impl Planner<'_> {
                     &mut selectors,
                     &mut interfaces,
                     &mut diagnostics,
+                    CollectPayloadFields::Yes,
                 );
             }
         }
@@ -49,6 +56,32 @@ impl Planner<'_> {
         diagnostics
     }
 
+    pub(crate) fn package_block_names(&self, files: &[&File]) -> HashSet<String> {
+        let mut package_block: SpanMap = HashMap::default();
+        let mut selectors: HashMap<String, SpanMap> = HashMap::default();
+        let mut interfaces: HashMap<String, SpanMap> = HashMap::default();
+        let mut diagnostics = Vec::new();
+
+        for file in files {
+            for item in &file.items {
+                self.collect_item(
+                    item,
+                    &mut package_block,
+                    &mut selectors,
+                    &mut interfaces,
+                    &mut diagnostics,
+                    CollectPayloadFields::No,
+                );
+            }
+        }
+
+        let mut names: HashSet<String> = package_block.into_keys().collect();
+        self.for_each_import_qualifier(files, |qualifier, _span| {
+            names.insert(qualifier.to_string());
+        });
+        names
+    }
+
     fn collect_item(
         &self,
         item: &Expression,
@@ -56,6 +89,7 @@ impl Planner<'_> {
         selectors: &mut HashMap<String, SpanMap>,
         interfaces: &mut HashMap<String, SpanMap>,
         diagnostics: &mut Vec<LisetteDiagnostic>,
+        payload_fields: CollectPayloadFields,
     ) {
         match item {
             Expression::Function { .. } => self.collect_function(item, package_block, diagnostics),
@@ -67,7 +101,7 @@ impl Planner<'_> {
                 self.collect_struct(item, package_block, selectors, diagnostics)
             }
             Expression::Enum { .. } => {
-                self.collect_enum(item, package_block, selectors, diagnostics)
+                self.collect_enum(item, package_block, selectors, diagnostics, payload_fields)
             }
             Expression::Interface { .. } => {
                 self.collect_interface(item, package_block, interfaces, diagnostics)
@@ -232,6 +266,7 @@ impl Planner<'_> {
         package_block: &mut SpanMap,
         selectors: &mut HashMap<String, SpanMap>,
         diagnostics: &mut Vec<LisetteDiagnostic>,
+        payload_fields: CollectPayloadFields,
     ) {
         let Expression::Enum {
             name,
@@ -333,7 +368,9 @@ impl Planner<'_> {
                 .or_default()
                 .push(*name_span);
         }
-        self.collect_enum_payload_fields(name, variants, members, diagnostics);
+        if payload_fields == CollectPayloadFields::Yes {
+            self.collect_enum_payload_fields(name, variants, members, diagnostics);
+        }
     }
 
     /// Record enum payload-field Go names in the type's selector namespace.
@@ -503,6 +540,15 @@ impl Planner<'_> {
         package_block: &mut SpanMap,
         diagnostics: &mut Vec<LisetteDiagnostic>,
     ) {
+        self.for_each_import_qualifier(files, |qualifier, span| {
+            self.check_reserved_prefix(qualifier, &span, diagnostics);
+            if let Some(spans) = package_block.get_mut(qualifier) {
+                spans.push(span);
+            }
+        });
+    }
+
+    fn for_each_import_qualifier(&self, files: &[&File], mut visit: impl FnMut(&str, Span)) {
         let go_package_names = self.facts.go_package_names();
         let unused = self.facts.unused_imports_for_current_module();
         for file in files {
@@ -521,10 +567,7 @@ impl Planner<'_> {
                     Some(ImportAlias::Named(_, span)) => *span,
                     _ => import.name_span,
                 };
-                self.check_reserved_prefix(qualifier.as_ref(), &span, diagnostics);
-                if let Some(spans) = package_block.get_mut(qualifier.as_ref()) {
-                    spans.push(span);
-                }
+                visit(qualifier.as_ref(), span);
             }
         }
     }

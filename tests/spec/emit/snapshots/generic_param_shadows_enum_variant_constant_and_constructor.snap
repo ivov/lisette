@@ -1,0 +1,79 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  enum Wrap {
+    Empty,
+    Full(int),
+    Partial(int),
+  }
+  
+  fn describe<WrapFull>(w: Wrap, _tag: WrapFull) -> int {
+    match w {
+      Wrap.Empty => 0,
+      Wrap.Full(n) => n,
+      Wrap.Partial(m) => m + 100,
+    }
+  }
+  
+  fn build<MakeWrapFull>(_seed: MakeWrapFull) -> int {
+    match Wrap.Full(7) {
+      Wrap.Full(n) => n,
+      _ => 0,
+    }
+  }
+  
+  fn test() -> int {
+    describe(Wrap.Full(42), "x") + build(true)
+  }
+---
+package main
+
+func MakeWrapEmpty() Wrap {
+	return Wrap{Tag: WrapEmpty}
+}
+
+func MakeWrapFull(arg0 int) Wrap {
+	return Wrap{Tag: WrapFull, Full: arg0}
+}
+
+func MakeWrapPartial(arg0 int) Wrap {
+	return Wrap{Tag: WrapPartial, Partial: arg0}
+}
+
+type WrapTag int
+
+const (
+	WrapEmpty WrapTag = iota
+	WrapFull
+	WrapPartial
+)
+
+type Wrap struct {
+	Tag     WrapTag
+	Full    int
+	Partial int
+}
+
+func describe[WrapFull_2 any](w Wrap, _ WrapFull_2) int {
+	switch w.Tag {
+	case WrapEmpty:
+		return 0
+	case WrapFull:
+		return w.Full
+	default:
+		return w.Partial + 100
+	}
+}
+
+func build[MakeWrapFull_2 any](_ MakeWrapFull_2) int {
+	subject_1 := MakeWrapFull(7)
+	if subject_1.Tag == WrapFull {
+		return subject_1.Full
+	}
+	return 0
+}
+
+func test() int {
+	return describe(MakeWrapFull(42), "x") + build(true)
+}

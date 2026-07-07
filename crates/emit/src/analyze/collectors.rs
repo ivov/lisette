@@ -2,7 +2,8 @@ use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use crate::names::go_name;
 use crate::{Planner, PreludeType};
-use syntax::ast::{Expression, Visibility};
+use syntax::EcoString;
+use syntax::ast::{Expression, Generic, Visibility};
 use syntax::program::{DefinitionBody, File};
 
 impl Planner<'_> {
@@ -95,6 +96,38 @@ impl Planner<'_> {
         }
     }
 
+    pub(crate) fn collect_generic_renames(&mut self, files: &[&File]) {
+        let mut generic_names: HashSet<EcoString> = HashSet::default();
+        for item in files.iter().flat_map(|file| &file.items) {
+            collect_item_generic_names(item, &mut generic_names);
+        }
+        if generic_names.is_empty() {
+            return;
+        }
+
+        let reserved = self.package_block_names(files);
+        let mut colliding: Vec<&EcoString> = generic_names
+            .iter()
+            .filter(|name| reserved.contains(name.as_str()))
+            .collect();
+        if colliding.is_empty() {
+            return;
+        }
+        colliding.sort();
+
+        let mut taken = reserved;
+        taken.extend(generic_names.iter().map(EcoString::to_string));
+
+        for name in colliding {
+            let fresh = (2..)
+                .map(|n| format!("{}_{}", name, n))
+                .find(|candidate| !taken.contains(candidate))
+                .expect("freshening counter is unbounded");
+            taken.insert(fresh.clone());
+            self.module.record_generic_rename(name.to_string(), fresh);
+        }
+    }
+
     pub(crate) fn collect_module_aliases(&mut self, files: &[&File]) {
         for file in files {
             for import in file.imports() {
@@ -147,6 +180,41 @@ impl Planner<'_> {
         }
 
         code
+    }
+}
+
+fn collect_item_generic_names(item: &Expression, out: &mut HashSet<EcoString>) {
+    let extend = |out: &mut HashSet<EcoString>, generics: &[Generic]| {
+        out.extend(generics.iter().map(|g| g.name.clone()));
+    };
+    match item {
+        Expression::Function { generics, .. }
+        | Expression::Struct { generics, .. }
+        | Expression::Enum { generics, .. }
+        | Expression::TypeAlias { generics, .. } => extend(out, generics),
+        Expression::Interface {
+            generics,
+            method_signatures,
+            ..
+        } => {
+            extend(out, generics);
+            for method in method_signatures {
+                if let Expression::Function { generics, .. } = method {
+                    extend(out, generics);
+                }
+            }
+        }
+        Expression::ImplBlock {
+            generics, methods, ..
+        } => {
+            extend(out, generics);
+            for method in methods {
+                if let Expression::Function { generics, .. } = method {
+                    extend(out, generics);
+                }
+            }
+        }
+        _ => {}
     }
 }
 

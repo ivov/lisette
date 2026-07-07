@@ -29,6 +29,46 @@ pub(crate) fn receiver_name(type_name: &str) -> String {
         .to_string()
 }
 
+fn receiver_generic_names(receiver_generics: &str) -> impl Iterator<Item = &str> {
+    receiver_generics
+        .trim_start_matches('[')
+        .trim_end_matches(']')
+        .split(',')
+        .map(str::trim)
+        .filter(|part| !part.is_empty())
+}
+
+pub(crate) fn synthesized_receiver_name(type_name: &str, receiver_generics: &str) -> String {
+    let generic_names: Vec<&str> = receiver_generic_names(receiver_generics).collect();
+    let mut receiver = receiver_name(type_name);
+    if generic_names.contains(&receiver.as_str()) {
+        receiver = format!("{receiver}{receiver}");
+        let mut counter = 2;
+        while generic_names.contains(&receiver.as_str()) {
+            receiver = format!("{}{}", receiver_name(type_name), counter);
+            counter += 1;
+        }
+    }
+    receiver
+}
+
+pub(crate) fn synthesized_local_name(
+    base: &str,
+    receiver: &str,
+    receiver_generics: &str,
+) -> String {
+    let reserved = |name: &str| {
+        name == receiver || receiver_generic_names(receiver_generics).any(|g| g == name)
+    };
+    if !reserved(base) {
+        return base.to_string();
+    }
+    (2..)
+        .map(|n| format!("{base}_{n}"))
+        .find(|candidate| !reserved(candidate))
+        .expect("freshening counter is unbounded")
+}
+
 /// Group consecutive parameters with the same Go type: `a int, b int` → `a, b int`.
 pub(crate) fn group_params(params: &[(String, String)]) -> String {
     if params.is_empty() {

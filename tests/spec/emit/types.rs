@@ -4567,3 +4567,168 @@ fn main() {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn generic_struct_param_shadows_module_type() {
+    let input = r#"
+struct T {
+  v: int,
+}
+
+fn make_t() -> T {
+  T { v: 7 }
+}
+
+struct Box<T> {
+  item: T,
+}
+
+impl<T> Box<T> {
+  fn probe(self) -> int {
+    let mut opt = None
+    opt = Some(make_t())
+    match opt {
+      Some(t) => t.v,
+      None => 0,
+    }
+  }
+}
+
+fn test() -> int {
+  let b = Box { item: 42 }
+  b.probe()
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn generic_enum_param_shadows_module_type() {
+    let input = r#"
+struct T {
+  v: int,
+}
+
+enum Wrap<T> {
+  Empty,
+  Full(T),
+}
+
+fn test() -> int {
+  let w = Wrap.Full(99)
+  match w {
+    Wrap.Empty => 0,
+    Wrap.Full(n) => n,
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn receiver_var_freshens_against_colliding_type_param() {
+    let input = r#"
+struct Box<b> {
+  item: b,
+}
+
+impl<b> Box<b> {
+  fn value(self) -> b {
+    self.item
+  }
+}
+
+fn test() -> int {
+  let boxed = Box { item: 7 }
+  boxed.value()
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn synthesized_struct_methods_freshen_receiver_against_type_param() {
+    let input = r#"
+#[display]
+#[equality]
+struct Box<b: Comparable> {
+  pub item: b,
+}
+
+fn test() -> bool {
+  let x = Box { item: 7 }
+  let y = Box { item: 7 }
+  x == y
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn synthesized_enum_methods_freshen_receiver_against_type_param() {
+    let input = r#"
+#[display]
+#[json]
+enum Box<b> {
+  Empty,
+  Full(b),
+}
+
+fn test() -> string {
+  let x = Box.Full(7)
+  x.to_string()
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn synthesized_equals_freshens_param_against_type_param() {
+    let input = r#"
+#[equality]
+struct Box<other: Comparable> {
+  pub item: other,
+}
+
+fn test() -> bool {
+  Box { item: 7 } == Box { item: 7 }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn synthesized_json_freshens_param_against_type_param() {
+    let input = r#"
+#[json]
+enum Box<data> {
+  Empty,
+  Full(data),
+}
+
+fn test() -> int {
+  match Box.Full(7) {
+    Box.Full(n) => n,
+    Box.Empty => 0,
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn synthesized_json_freshens_local_against_receiver() {
+    let input = r#"
+#[json]
+enum Vault {
+  Full { a: int, b: int },
+}
+
+fn test() -> int {
+  match Vault.Full { a: 1, b: 2 } {
+    Vault.Full { a, b } => a + b,
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}

@@ -1941,3 +1941,136 @@ fn test() {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn generic_param_shadows_module_struct() {
+    let input = r#"
+struct T {
+  v: int,
+}
+
+fn make_t() -> T {
+  T { v: 7 }
+}
+
+fn f<T>(x: T) -> int {
+  let mut opt = None
+  opt = Some(make_t())
+  match opt {
+    Some(t) => t.v,
+    None => 0,
+  }
+}
+
+fn test() -> int {
+  f("hi")
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn generic_param_shadows_enum_variant_constant_and_constructor() {
+    let input = r#"
+enum Wrap {
+  Empty,
+  Full(int),
+  Partial(int),
+}
+
+fn describe<WrapFull>(w: Wrap, _tag: WrapFull) -> int {
+  match w {
+    Wrap.Empty => 0,
+    Wrap.Full(n) => n,
+    Wrap.Partial(m) => m + 100,
+  }
+}
+
+fn build<MakeWrapFull>(_seed: MakeWrapFull) -> int {
+  match Wrap.Full(7) {
+    Wrap.Full(n) => n,
+    _ => 0,
+  }
+}
+
+fn test() -> int {
+  describe(Wrap.Full(42), "x") + build(true)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn generic_param_shadows_import_qualifier() {
+    let input = r#"
+import sc "go:strconv"
+
+fn label<sc>(_tag: sc) -> string {
+  sc.Itoa(5)
+}
+
+fn test() -> string {
+  label(1)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn renamed_generic_freshens_colliding_value_param() {
+    let input = r#"
+import sc "go:strconv"
+
+fn label<sc>(sc_2: int, _tag: sc) -> string {
+  sc.Itoa(sc_2)
+}
+
+fn test() -> string {
+  label(5, 1)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn renamed_generic_freshens_colliding_local() {
+    let input = r#"
+import sc "go:strconv"
+
+fn label<sc>(_tag: sc) -> string {
+  let sc_2 = 9
+  sc.Itoa(sc_2)
+}
+
+fn test() -> string {
+  label(1)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn renamed_generic_type_in_closure_after_colliding_local() {
+    let input = r#"
+import sc "go:strconv"
+
+fn make<sc>(x: sc) -> fn() -> sc {
+  || -> sc {
+    let sc_2 = 1
+    let _ = sc.Itoa(sc_2)
+    let mut opt = None
+    opt = Some(x)
+    match opt {
+      Some(v) => v,
+      None => x,
+    }
+  }
+}
+
+fn test() -> int {
+  let f = make(7)
+  f()
+}
+"#;
+    assert_emit_snapshot!(input);
+}

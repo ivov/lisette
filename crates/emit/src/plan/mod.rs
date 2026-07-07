@@ -42,6 +42,7 @@ impl Planner<'_> {
         self.collect_local_method_facts(files);
         self.collect_generic_constraints(files);
         self.collect_escape_remap(files);
+        self.collect_generic_renames(files);
         let collision_diagnostics = self.detect_name_collisions(files);
         let mut make_functions_by_file = self.collect_local_make_function_code();
         collection_effects.extend(&self.take_effects());

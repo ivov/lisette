@@ -1,0 +1,48 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  import sc "go:strconv"
+  
+  fn make<sc>(x: sc) -> fn() -> sc {
+    || -> sc {
+      let sc_2 = 1
+      let _ = sc.Itoa(sc_2)
+      let mut opt = None
+      opt = Some(x)
+      match opt {
+        Some(v) => v,
+        None => x,
+      }
+    }
+  }
+  
+  fn test() -> int {
+    let f = make(7)
+    f()
+  }
+---
+package main
+
+import (
+	lisette "github.com/ivov/lisette/prelude"
+	sc "strconv"
+)
+
+func make_[sc_2 any](x sc_2) func() sc_2 {
+	return func() sc_2 {
+		sc_2_1 := 1
+		_ = sc.Itoa(sc_2_1)
+		opt := lisette.MakeOptionNone[sc_2]()
+		opt = lisette.MakeOptionSome(x)
+		if opt.Tag == lisette.OptionSome {
+			return opt.SomeVal
+		}
+		return x
+	}
+}
+
+func test() int {
+	f := make_(7)
+	return f()
+}

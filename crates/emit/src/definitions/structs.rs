@@ -2,9 +2,8 @@ use crate::Planner;
 use crate::definitions::enum_layout::{ENUM_GO_STRINGER_METHOD, ENUM_STRINGER_METHOD};
 use crate::definitions::tags::{format_tag_string, interpret_field_attributes};
 use crate::expressions::top_items::emit_doc;
-use crate::names::generics::receiver_generics_string;
 use crate::names::go_name::{self, prelude_qualifier};
-use crate::utils::receiver_name;
+use crate::utils::{synthesized_local_name, synthesized_receiver_name};
 use syntax::ast::{Attribute, Generic, StructFieldDefinition, StructKind};
 use syntax::program::{Definition, DefinitionBody};
 use syntax::types::Type;
@@ -35,7 +34,7 @@ impl Planner<'_> {
             stringer_fields.push(stringer_field);
         }
 
-        let receiver_generics = receiver_generics_string(generics);
+        let receiver_generics = self.receiver_generics_string(generics);
         let go_type_name = go_name::escape_keyword(name);
 
         let definition = if field_strings.is_empty() {
@@ -80,7 +79,7 @@ impl Planner<'_> {
         struct_attrs: &[Attribute],
     ) -> String {
         let definition = self.emit_tuple_struct_definition(name, generics_string, fields);
-        let receiver_generics = receiver_generics_string(generics);
+        let receiver_generics = self.receiver_generics_string(generics);
         let mut result = definition;
         if self.is_pointer_backed_newtype(name) {
             return result;
@@ -365,13 +364,14 @@ impl Planner<'_> {
         if !self.should_synthesize_equals(name) {
             return;
         }
-        let receiver = receiver_name(name);
+        let receiver = synthesized_receiver_name(name, receiver_generics);
+        let other = synthesized_local_name("other", &receiver, receiver_generics);
         let comparisons: Vec<String> = fields
             .iter()
             .map(|f| {
                 let go_field = struct_field_go_name(f, attributes);
                 let lhs = format!("{receiver}.{go_field}");
-                let rhs = format!("other.{go_field}");
+                let rhs = format!("{other}.{go_field}");
                 self.render_equality(&lhs, &rhs, &f.ty)
             })
             .collect();
@@ -385,7 +385,7 @@ impl Planner<'_> {
         let receiver_type = format!("{go_type_name}{receiver_generics}");
         out.push_str("\n\n");
         out.push_str(&format!(
-            "func ({receiver} {receiver_type}) {go_method}(other {receiver_type}) bool {{\nreturn {body}\n}}"
+            "func ({receiver} {receiver_type}) {go_method}({other} {receiver_type}) bool {{\nreturn {body}\n}}"
         ));
     }
 
@@ -461,7 +461,7 @@ fn is_option_type(ty: &Type) -> bool {
 }
 
 fn emit_to_string_method(name: &str, receiver_generics: &str, method_name: &str) -> String {
-    let receiver = receiver_name(name);
+    let receiver = synthesized_receiver_name(name, receiver_generics);
     let go_type_name = go_name::escape_keyword(name);
     let receiver_type = format!("{go_type_name}{receiver_generics}");
     format!(
@@ -475,7 +475,7 @@ fn emit_struct_stringer_method(
     fields: &[StringerField],
     method_name: &str,
 ) -> String {
-    let receiver = receiver_name(name);
+    let receiver = synthesized_receiver_name(name, receiver_generics);
     let go_type_name = go_name::escape_keyword(name);
     let receiver_type = format!("{go_type_name}{receiver_generics}");
     if fields.is_empty() {
@@ -504,7 +504,7 @@ fn emit_struct_debug_method(
     fields: &[StringerField],
     prelude: &str,
 ) -> String {
-    let receiver = receiver_name(name);
+    let receiver = synthesized_receiver_name(name, receiver_generics);
     let go_type_name = go_name::escape_keyword(name);
     let receiver_type = format!("{go_type_name}{receiver_generics}");
     if fields.is_empty() {
@@ -540,7 +540,7 @@ fn emit_tuple_struct_stringer_method(
     underlying_go_type: Option<&str>,
     method_name: &str,
 ) -> String {
-    let receiver = receiver_name(name);
+    let receiver = synthesized_receiver_name(name, receiver_generics);
     let go_type_name = go_name::escape_keyword(name);
     let receiver_type = format!("{go_type_name}{receiver_generics}");
     if field_count == 0 {
@@ -571,7 +571,7 @@ fn emit_tuple_struct_debug_method(
     underlying_go_type: Option<&str>,
     prelude: &str,
 ) -> String {
-    let receiver = receiver_name(name);
+    let receiver = synthesized_receiver_name(name, receiver_generics);
     let go_type_name = go_name::escape_keyword(name);
     let receiver_type = format!("{go_type_name}{receiver_generics}");
     if field_is_function.is_empty() {

@@ -26,16 +26,25 @@ pub(crate) fn resolve_field_type(
     substitute(field_ty, &type_map)
 }
 
-pub(crate) fn receiver_generics_string(generics: &[Generic]) -> String {
-    if generics.is_empty() {
-        String::new()
-    } else {
-        let params: Vec<&str> = generics.iter().map(|g| g.name.as_str()).collect();
-        format!("[{}]", params.join(", "))
-    }
-}
-
 impl Planner<'_> {
+    pub(crate) fn generic_go_name<'a>(&'a self, source_name: &'a str) -> &'a str {
+        self.module
+            .generic_rename(source_name)
+            .unwrap_or(source_name)
+    }
+
+    pub(crate) fn receiver_generics_string(&self, generics: &[Generic]) -> String {
+        if generics.is_empty() {
+            String::new()
+        } else {
+            let params: Vec<&str> = generics
+                .iter()
+                .map(|g| self.generic_go_name(&g.name))
+                .collect();
+            format!("[{}]", params.join(", "))
+        }
+    }
+
     pub(crate) fn generics_to_string_for_symbol(
         &mut self,
         symbol: &str,
@@ -56,7 +65,7 @@ impl Planner<'_> {
                     .as_ref()
                     .and_then(|sets| sets.iter().find(|s| s.name == g.name));
                 let constraint = self.render_constraint(g, set);
-                format!("{} {}", g.name, constraint)
+                format!("{} {}", self.generic_go_name(&g.name), constraint)
             })
             .collect::<Vec<_>>()
             .join(", ");

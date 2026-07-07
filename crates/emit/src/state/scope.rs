@@ -12,6 +12,7 @@ pub(crate) struct ScopeState {
     next_var: usize,
     bindings: Bindings,
     declared: Vec<HashSet<String>>,
+    type_param_go_names: HashSet<String>,
     scope_depth: usize,
     loop_stack: Vec<LoopContext>,
     return_ctx_stack: Vec<Rc<ReturnContext>>,
@@ -37,6 +38,7 @@ impl ScopeState {
             next_var: 0,
             bindings: Bindings::new(),
             declared: vec![HashSet::default()],
+            type_param_go_names: HashSet::default(),
             scope_depth: 0,
             loop_stack: Vec::new(),
             return_ctx_stack: Vec::new(),
@@ -71,7 +73,13 @@ impl ScopeState {
         self.bindings.reset();
         self.declared.clear();
         self.declared.push(HashSet::default());
+        self.type_param_go_names.clear();
         self.go_const_bindings.truncate(1);
+    }
+
+    pub(crate) fn declare_type_param(&mut self, go_name: &str) {
+        self.type_param_go_names.insert(go_name.to_string());
+        self.declare_go_name(go_name);
     }
 
     pub(crate) fn bind(
@@ -174,7 +182,7 @@ impl ScopeState {
             declared: std::mem::take(&mut self.declared),
             scope_depth: self.scope_depth,
         };
-        self.declared = vec![HashSet::default()];
+        self.declared = vec![self.type_param_go_names.clone()];
         self.scope_depth = 0;
         self.bindings.save();
         saved

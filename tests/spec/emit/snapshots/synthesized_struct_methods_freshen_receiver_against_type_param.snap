@@ -1,0 +1,41 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  #[display]
+  #[equality]
+  struct Box<b: Comparable> {
+    pub item: b,
+  }
+  
+  fn test() -> bool {
+    let x = Box { item: 7 }
+    let y = Box { item: 7 }
+    x == y
+  }
+---
+package main
+
+import "fmt"
+
+type Box[b comparable] struct {
+	Item b
+}
+
+func (bb Box[b]) String() string {
+	return fmt.Sprintf("Box { item: %v }", bb.Item)
+}
+
+func (bb Box[b]) to_string() string {
+	return bb.String()
+}
+
+func (bb Box[b]) equals(other Box[b]) bool {
+	return bb.Item == other.Item
+}
+
+func test() bool {
+	x := Box[int]{Item: 7}
+	y := Box[int]{Item: 7}
+	return x == y
+}

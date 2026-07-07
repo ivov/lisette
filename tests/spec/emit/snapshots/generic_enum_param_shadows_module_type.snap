@@ -1,0 +1,54 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  struct T {
+    v: int,
+  }
+  
+  enum Wrap<T> {
+    Empty,
+    Full(T),
+  }
+  
+  fn test() -> int {
+    let w = Wrap.Full(99)
+    match w {
+      Wrap.Empty => 0,
+      Wrap.Full(n) => n,
+    }
+  }
+---
+package main
+
+func MakeWrapEmpty[T_2 any]() Wrap[T_2] {
+	return Wrap[T_2]{Tag: WrapEmpty}
+}
+
+func MakeWrapFull[T_2 any](arg0 T_2) Wrap[T_2] {
+	return Wrap[T_2]{Tag: WrapFull, Full: arg0}
+}
+
+type T struct {
+	v int
+}
+
+type WrapTag int
+
+const (
+	WrapEmpty WrapTag = iota
+	WrapFull
+)
+
+type Wrap[T_2 any] struct {
+	Tag  WrapTag
+	Full T_2
+}
+
+func test() int {
+	w := MakeWrapFull(99)
+	if w.Tag == WrapEmpty {
+		return 0
+	}
+	return w.Full
+}

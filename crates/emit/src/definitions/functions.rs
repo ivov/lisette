@@ -234,6 +234,25 @@ impl Planner<'_> {
         body_string
     }
 
+    fn declare_type_param_go_names(
+        &mut self,
+        generics: &[Generic],
+        receiver: Option<&(String, Type)>,
+    ) {
+        for generic in generics {
+            let go = self.generic_go_name(&generic.name).to_string();
+            self.scope.declare_type_param(&go);
+        }
+        if let Some((_, receiver_ty)) = receiver {
+            for param in receiver_ty.get_type_params().into_iter().flatten() {
+                if let Type::Parameter(name) = param {
+                    let go = self.generic_go_name(name).to_string();
+                    self.scope.declare_type_param(&go);
+                }
+            }
+        }
+    }
+
     /// Bind and declare a parameter; freshens the Go name on collision.
     fn declare_param(&mut self, lisette_name: &str, raw_go_name: impl Into<String>) -> String {
         let go_id = self.scope.bind(lisette_name, raw_go_name);
@@ -272,6 +291,8 @@ impl Planner<'_> {
         };
         let (params_to_process, receiver_override) =
             self.extract_receiver(function_definition, receiver.is_some());
+
+        self.declare_type_param_go_names(function_definition.generics, receiver.as_ref());
 
         let mut parts = vec!["func".to_string()];
 
@@ -442,10 +463,12 @@ impl Planner<'_> {
         let ty_string = self.go_type_string(actual_ty);
         let mut receiver_var = receiver_name(&ty_string);
 
-        if param_names.contains(&receiver_var) {
+        let taken =
+            |this: &Self, name: &String| param_names.contains(name) || this.is_declared(name);
+        if taken(self, &receiver_var) {
             receiver_var = format!("{}{}", receiver_var, receiver_var);
             let mut counter = 2;
-            while param_names.contains(&receiver_var) {
+            while taken(self, &receiver_var) {
                 receiver_var = format!("{}{}", receiver_name(&ty_string), counter);
                 counter += 1;
             }

@@ -1,0 +1,89 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  #[json]
+  enum Box<data> {
+    Empty,
+    Full(data),
+  }
+  
+  fn test() -> int {
+    match Box.Full(7) {
+      Box.Full(n) => n,
+      Box.Empty => 0,
+    }
+  }
+---
+package main
+
+import (
+	"encoding/json"
+	"fmt"
+)
+
+func MakeBoxEmpty[data any]() Box[data] {
+	return Box[data]{Tag: BoxEmpty}
+}
+
+func MakeBoxFull[data any](arg0 data) Box[data] {
+	return Box[data]{Tag: BoxFull, Full: arg0}
+}
+
+type BoxTag int
+
+const (
+	BoxEmpty BoxTag = iota
+	BoxFull
+)
+
+type Box[data any] struct {
+	Tag  BoxTag
+	Full data
+}
+
+func (b Box[data]) MarshalJSON() ([]byte, error) {
+	switch b.Tag {
+	case BoxEmpty:
+		return json.Marshal("Empty")
+	case BoxFull:
+		return json.Marshal(map[string]any{"Full": b.Full})
+	default:
+		return nil, fmt.Errorf("unknown Box tag: %d", b.Tag)
+	}
+}
+
+func (b *Box[data]) UnmarshalJSON(data_2 []byte) error {
+	var name string
+	if err := json.Unmarshal(data_2, &name); err == nil {
+		switch name {
+		case "Empty":
+			b.Tag = BoxEmpty
+			return nil
+		default:
+			return fmt.Errorf("unknown Box variant: %s", name)
+		}
+	}
+	var obj map[string]json.RawMessage
+	if err := json.Unmarshal(data_2, &obj); err != nil {
+		return fmt.Errorf("invalid Box JSON")
+	}
+	for key, val := range obj {
+		switch key {
+		case "Full":
+			b.Tag = BoxFull
+			return json.Unmarshal(val, &b.Full)
+		default:
+			return fmt.Errorf("unknown Box variant: %s", key)
+		}
+	}
+	return fmt.Errorf("empty Box JSON object")
+}
+
+func test() int {
+	subject_1 := MakeBoxFull(7)
+	if subject_1.Tag == BoxFull {
+		return subject_1.Full
+	}
+	return 0
+}

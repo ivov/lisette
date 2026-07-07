@@ -1,9 +1,8 @@
 use crate::Planner;
 use crate::definitions::enum_layout::{ENUM_GO_STRINGER_METHOD, ENUM_STRINGER_METHOD, EnumLayout};
 use crate::definitions::structs::should_synthesize_stringer;
-use crate::names::generics::receiver_generics_string;
 use crate::names::go_name::{self, prelude_qualifier};
-use crate::utils::receiver_name;
+use crate::utils::{synthesized_local_name, synthesized_receiver_name};
 use syntax::ast::{Attribute, Generic};
 use syntax::program::{Definition, DefinitionBody};
 use syntax::types::{Symbol, Type};
@@ -42,7 +41,7 @@ impl Planner<'_> {
         }
 
         let generics_string = self.generics_to_string_for_symbol(&enum_id, generics);
-        let receiver_generics = receiver_generics_string(generics);
+        let receiver_generics = self.receiver_generics_string(generics);
         let has_json = attributes.iter().any(|a| a.name == "json");
         let has_iterate = attributes.iter().any(|a| a.name == "iterate");
 
@@ -137,7 +136,8 @@ impl Planner<'_> {
         let sem_variants = sem_variants.clone();
         let layout = self.enum_layout(enum_id).expect("enum layout should exist");
 
-        let receiver = receiver_name(name);
+        let receiver = synthesized_receiver_name(name, receiver_generics);
+        let other = synthesized_local_name("other", &receiver, receiver_generics);
         let go_type_name = go_name::escape_keyword(name);
         let receiver_type = format!("{go_type_name}{receiver_generics}");
         let go_method = self.equals_method_go_name();
@@ -153,7 +153,7 @@ impl Planner<'_> {
                 .zip(layout_variant.fields.iter())
                 .map(|(sem_field, layout_field)| {
                     let mut lhs = format!("{receiver}.{}", layout_field.go_name);
-                    let mut rhs = format!("other.{}", layout_field.go_name);
+                    let mut rhs = format!("{other}.{}", layout_field.go_name);
                     if layout_field.is_recursive {
                         lhs = format!("(*{lhs})");
                         rhs = format!("(*{rhs})");
@@ -171,12 +171,12 @@ impl Planner<'_> {
         out.push_str("\n\n");
         if cases.is_empty() {
             out.push_str(&format!(
-                "func ({receiver} {receiver_type}) {go_method}(other {receiver_type}) bool {{\nreturn {receiver}.Tag == other.Tag\n}}"
+                "func ({receiver} {receiver_type}) {go_method}({other} {receiver_type}) bool {{\nreturn {receiver}.Tag == {other}.Tag\n}}"
             ));
             return;
         }
         let mut method = format!(
-            "func ({receiver} {receiver_type}) {go_method}(other {receiver_type}) bool {{\nif {receiver}.Tag != other.Tag {{\nreturn false\n}}\nswitch {receiver}.Tag {{\n"
+            "func ({receiver} {receiver_type}) {go_method}({other} {receiver_type}) bool {{\nif {receiver}.Tag != {other}.Tag {{\nreturn false\n}}\nswitch {receiver}.Tag {{\n"
         );
         for case in &cases {
             method.push_str(case);
@@ -241,7 +241,7 @@ impl Planner<'_> {
         } else {
             let args = generics
                 .iter()
-                .map(|g| g.name.as_str())
+                .map(|g| self.generic_go_name(&g.name))
                 .collect::<Vec<_>>()
                 .join(", ");
             let generics_string = self.generics_to_string_for_symbol(enum_id, &generics);
@@ -252,11 +252,7 @@ impl Planner<'_> {
             id: Symbol::from_raw(enum_name.clone()),
             params: generics
                 .iter()
-                .map(|g| Type::Nominal {
-                    id: Symbol::from_raw(g.name.clone()),
-                    params: vec![],
-                    underlying_ty: None,
-                })
+                .map(|g| Type::Parameter(g.name.clone()))
                 .collect(),
             underlying_ty: None,
         };
