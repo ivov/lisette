@@ -1,0 +1,21 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  struct Plain { pub v: int }
+  
+  struct Wrapper {
+    embed Plain,
+    pub tag: int,
+  }
+---
+package main
+
+type Plain struct {
+	V int
+}
+
+type Wrapper struct {
+	Plain
+	Tag int
+}

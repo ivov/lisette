@@ -1,0 +1,48 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  #[display]
+  struct A { pub a: int }
+  
+  struct N { pub n: int }
+  
+  impl N {
+    fn string(self) -> string {
+      "N!"
+    }
+  }
+  
+  struct C {
+    embed A,
+    embed N,
+  }
+---
+package main
+
+import "fmt"
+
+type A struct {
+	A int
+}
+
+func (a A) String() string {
+	return fmt.Sprintf("A { a: %v }", a.A)
+}
+
+func (a A) to_string() string {
+	return a.String()
+}
+
+type N struct {
+	N int
+}
+
+func (n N) String() string {
+	return "N!"
+}
+
+type C struct {
+	A
+	N
+}

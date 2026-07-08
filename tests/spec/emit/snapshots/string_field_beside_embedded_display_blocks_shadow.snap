@@ -1,0 +1,32 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  #[display]
+  struct Logger { pub prefix: string }
+  
+  struct Server {
+    embed Logger,
+    pub string: int,
+  }
+---
+package main
+
+import "fmt"
+
+type Logger struct {
+	Prefix string
+}
+
+func (l Logger) String() string {
+	return fmt.Sprintf("Logger { prefix: %v }", l.Prefix)
+}
+
+func (l Logger) to_string() string {
+	return l.String()
+}
+
+type Server struct {
+	Logger
+	String int
+}

@@ -118,6 +118,17 @@ impl<'a> EmitFacts<'a> {
         self.peel_alias(&ty.strip_refs())
     }
 
+    pub(crate) fn resolve_embed_target(&self, ty: &Type) -> Type {
+        let mut current = ty.clone();
+        loop {
+            let next = self.peel_alias(&current.strip_refs());
+            if next == current {
+                return next;
+            }
+            current = next;
+        }
+    }
+
     pub(crate) fn as_interface(&self, ty: &Type) -> Option<String> {
         as_interface(self.definitions, ty)
     }

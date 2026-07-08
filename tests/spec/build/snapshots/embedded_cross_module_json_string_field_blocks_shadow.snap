@@ -1,0 +1,53 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === dep/inner.go ===
+package dep
+
+import "fmt"
+
+type Logger struct {
+	Prefix string
+}
+
+func (l Logger) String() string {
+	return fmt.Sprintf("Logger { prefix: %v }", l.Prefix)
+}
+
+func (l Logger) ToString() string {
+	return l.String()
+}
+
+type Inner struct {
+	Logger
+	String int `json:"string"`
+}
+
+func Make(p string, n int) Inner {
+	return Inner{
+		Logger: Logger{Prefix: p},
+		String: n,
+	}
+}
+
+
+// === main.go ===
+package main
+
+import (
+	"fmt"
+	"github.com/user/myproject/dep"
+)
+
+type Outer struct {
+	dep.Inner
+	Name string
+}
+
+func main() {
+	o := Outer{
+		Inner: dep.Make("srv:", 5),
+		Name:  "n",
+	}
+	fmt.Println(o)
+}

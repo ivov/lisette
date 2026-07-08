@@ -4,8 +4,11 @@ use crate::definitions::tags::{format_tag_string, interpret_field_attributes};
 use crate::expressions::top_items::emit_doc;
 use crate::names::go_name::{self, prelude_qualifier};
 use crate::utils::{synthesized_local_name, synthesized_receiver_name};
+use rustc_hash::{FxHashMap, FxHashSet};
+use std::borrow::Cow;
 use syntax::ast::{Attribute, Generic, StructFieldDefinition, StructKind};
-use syntax::program::{Definition, DefinitionBody};
+use syntax::attributes::struct_attribute_forces_field_export;
+use syntax::program::{Definition, DefinitionBody, Interface, MethodSignatures};
 use syntax::types::Type;
 
 pub(crate) const DEBUG_STRING_METHOD: &str = "DebugString";
@@ -66,7 +69,107 @@ impl Planner<'_> {
         self.append_struct_debug_method(&mut result, name, &receiver_generics, &stringer_fields);
         self.append_to_string_method(&mut result, name, &receiver_generics, struct_attrs);
         self.append_equals_method(&mut result, name, &receiver_generics, fields, struct_attrs);
+        self.append_embedded_stringer_shadow(
+            &mut result,
+            name,
+            &receiver_generics,
+            &stringer_fields,
+        );
         result
+    }
+
+    fn append_embedded_stringer_shadow(
+        &self,
+        out: &mut String,
+        name: &str,
+        receiver_generics: &str,
+        stringer_fields: &[StringerField],
+    ) {
+        if !self.synthesizes_embedded_stringer_shadow(name) {
+            return;
+        }
+        self.require_fmt();
+        out.push_str("\n\n");
+        out.push_str(&emit_struct_shadow_stringer_method(
+            name,
+            receiver_generics,
+            stringer_fields,
+        ));
+    }
+
+    pub(crate) fn synthesizes_embedded_stringer_shadow(&self, name: &str) -> bool {
+        let id = self.facts.qualified_current(name);
+        let Some(definition) = self.facts.definition(&id) else {
+            return false;
+        };
+        !definition.is_display()
+            && self.stringer_kind_of(&id, &mut FxHashSet::default())
+                == Some(StringerKind::Synthesized)
+    }
+
+    fn stringer_kind(&self, ty: &Type, visited: &mut FxHashSet<String>) -> Option<StringerKind> {
+        let Type::Nominal { id, .. } = &self.facts.resolve_embed_target(ty) else {
+            return None;
+        };
+        if !visited.insert(id.to_string()) {
+            return None;
+        }
+        let kind = self.stringer_kind_of(id.as_str(), visited);
+        visited.remove(id.as_str());
+        kind
+    }
+
+    fn stringer_kind_of(&self, id: &str, visited: &mut FxHashSet<String>) -> Option<StringerKind> {
+        let definition = self.facts.definition(id)?;
+        if definition_declares_string(definition, |m| self.facts.is_ufcs_method(id, m)) {
+            return Some(StringerKind::Foreign);
+        }
+        if let DefinitionBody::Interface {
+            definition: interface,
+        } = &definition.body
+        {
+            return self
+                .interface_has_string_selector(interface, visited)
+                .then_some(StringerKind::Foreign);
+        }
+        if definition_emits_go_string_field(definition) {
+            return Some(StringerKind::Foreign);
+        }
+        if definition.is_display() {
+            return Some(StringerKind::Synthesized);
+        }
+        let DefinitionBody::Struct { fields, .. } = &definition.body else {
+            return None;
+        };
+        self.promoted_stringer_kind(fields, visited)
+    }
+
+    fn promoted_stringer_kind(
+        &self,
+        fields: &[StructFieldDefinition],
+        visited: &mut FxHashSet<String>,
+    ) -> Option<StringerKind> {
+        let mut kinds = fields
+            .iter()
+            .filter(|f| f.embedded)
+            .filter_map(|f| self.stringer_kind(&f.ty, visited));
+        let first = kinds.next()?;
+        if kinds.next().is_some() {
+            return None;
+        }
+        matches!(first, StringerKind::Synthesized).then_some(StringerKind::Synthesized)
+    }
+
+    fn interface_has_string_selector(
+        &self,
+        interface: &Interface,
+        visited: &mut FxHashSet<String>,
+    ) -> bool {
+        interface_declares_string(&interface.methods)
+            || interface
+                .parents
+                .iter()
+                .any(|parent| self.stringer_kind(parent, visited).is_some())
     }
 
     /// Emit a tuple struct and its optional Stringer.
@@ -197,12 +300,7 @@ impl Planner<'_> {
         let methods = self
             .facts
             .definition(qualified.as_str())
-            .and_then(|definition| match &definition.body {
-                DefinitionBody::Struct { methods, .. }
-                | DefinitionBody::Enum { methods, .. }
-                | DefinitionBody::TypeAlias { methods, .. } => Some(methods),
-                _ => None,
-            });
+            .and_then(type_methods);
 
         let is_user_stringer = |method_name: &str| {
             methods.is_some_and(|m| m.get(method_name).is_some_and(Type::is_stringer_signature))
@@ -220,12 +318,7 @@ impl Planner<'_> {
         let methods = self
             .facts
             .definition(qualified.as_str())
-            .and_then(|definition| match &definition.body {
-                DefinitionBody::Struct { methods, .. }
-                | DefinitionBody::Enum { methods, .. }
-                | DefinitionBody::TypeAlias { methods, .. } => Some(methods),
-                _ => None,
-            });
+            .and_then(type_methods);
         let has_signature = |method_name: &str| {
             methods.is_some_and(|m| m.get(method_name).is_some_and(Type::is_stringer_signature))
                 && !self.facts.is_ufcs_method(&qualified, method_name)
@@ -417,15 +510,23 @@ pub(crate) fn struct_field_go_name(
     field: &StructFieldDefinition,
     struct_attrs: &[Attribute],
 ) -> String {
+    let struct_forces_export = struct_attrs
+        .iter()
+        .any(struct_attribute_forces_field_export);
+    field_go_name(field, struct_forces_export).into_owned()
+}
+
+fn field_go_name(field: &StructFieldDefinition, struct_forces_export: bool) -> Cow<'_, str> {
     if field.embedded {
-        return go_name::escape_keyword(&field.name).into_owned();
+        return go_name::escape_keyword(&field.name);
     }
-    let needs_export =
-        field.visibility.is_public() || !interpret_field_attributes(field, struct_attrs).is_empty();
-    if needs_export {
-        go_name::make_exported(&field.name)
+    let exported = field.visibility.is_public()
+        || struct_forces_export
+        || !interpret_field_attributes(field, &[]).is_empty();
+    if exported {
+        Cow::Owned(go_name::make_exported(&field.name))
     } else {
-        go_name::escape_keyword(&field.name).into_owned()
+        go_name::escape_keyword(&field.name)
     }
 }
 
@@ -494,6 +595,71 @@ fn emit_struct_stringer_method(
     format!(
         "func ({receiver} {receiver_type}) {method_name}() string {{\nreturn fmt.Sprintf(\"{name} {{ {} }}\", {})\n}}",
         format_parts.join(", "),
+        args.join(", ")
+    )
+}
+
+#[derive(Clone, Copy, PartialEq)]
+enum StringerKind {
+    Synthesized,
+    Foreign,
+}
+
+fn definition_emits_go_string_field(definition: &Definition) -> bool {
+    let DefinitionBody::Struct { fields, .. } = &definition.body else {
+        return false;
+    };
+    let forces_export = definition.is_serialized();
+    fields
+        .iter()
+        .any(|field| field_go_name(field, forces_export) == ENUM_STRINGER_METHOD)
+}
+
+fn type_methods(definition: &Definition) -> Option<&MethodSignatures> {
+    match &definition.body {
+        DefinitionBody::Struct { methods, .. }
+        | DefinitionBody::Enum { methods, .. }
+        | DefinitionBody::TypeAlias { methods, .. } => Some(methods),
+        _ => None,
+    }
+}
+
+fn definition_declares_string(definition: &Definition, is_ufcs: impl Fn(&str) -> bool) -> bool {
+    let Some(methods) = type_methods(definition) else {
+        return false;
+    };
+    ["string", ENUM_STRINGER_METHOD]
+        .iter()
+        .any(|method| methods.contains_key(*method) && !is_ufcs(method))
+}
+
+fn interface_declares_string(methods: &FxHashMap<ecow::EcoString, Type>) -> bool {
+    ["string", ENUM_STRINGER_METHOD]
+        .iter()
+        .any(|method| methods.contains_key(*method))
+}
+
+fn emit_struct_shadow_stringer_method(
+    name: &str,
+    receiver_generics: &str,
+    fields: &[StringerField],
+) -> String {
+    let receiver = synthesized_receiver_name(name, receiver_generics);
+    let go_type_name = go_name::escape_keyword(name);
+    let receiver_type = format!("{go_type_name}{receiver_generics}");
+    if fields.is_empty() {
+        return format!(
+            "func ({receiver} {receiver_type}) String() string {{\nreturn \"{{}}\"\n}}"
+        );
+    }
+    let placeholders: Vec<&str> = fields.iter().map(|_| "%v").collect();
+    let args: Vec<String> = fields
+        .iter()
+        .map(|f| format!("{receiver}.{}", f.go_name))
+        .collect();
+    format!(
+        "func ({receiver} {receiver_type}) String() string {{\nreturn fmt.Sprintf(\"{{{}}}\", {})\n}}",
+        placeholders.join(" "),
         args.join(", ")
     )
 }

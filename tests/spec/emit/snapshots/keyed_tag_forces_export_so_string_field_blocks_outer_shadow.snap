@@ -1,0 +1,43 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  #[display]
+  struct Logger { pub prefix: string }
+  
+  #[tag("validate", "required")]
+  struct Inner {
+    embed Logger,
+    string: int,
+  }
+  
+  struct Outer {
+    embed Inner,
+    pub name: string,
+  }
+---
+package main
+
+import "fmt"
+
+type Logger struct {
+	Prefix string
+}
+
+func (l Logger) String() string {
+	return fmt.Sprintf("Logger { prefix: %v }", l.Prefix)
+}
+
+func (l Logger) to_string() string {
+	return l.String()
+}
+
+type Inner struct {
+	Logger
+	String int `validate:"string"`
+}
+
+type Outer struct {
+	Inner
+	Name string
+}

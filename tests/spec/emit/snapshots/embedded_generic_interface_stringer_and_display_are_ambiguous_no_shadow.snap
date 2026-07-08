@@ -1,0 +1,42 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  #[display]
+  struct D { pub x: int }
+  
+  interface Base<T> {
+    fn string(self) -> T
+  }
+  
+  struct C {
+    embed D,
+    embed Base<string>,
+    pub n: int,
+  }
+---
+package main
+
+import "fmt"
+
+type D struct {
+	X int
+}
+
+func (d D) String() string {
+	return fmt.Sprintf("D { x: %v }", d.X)
+}
+
+func (d D) to_string() string {
+	return d.String()
+}
+
+type Base[T any] interface {
+	String() T
+}
+
+type C struct {
+	D
+	Base[string]
+	N int
+}

@@ -1,0 +1,40 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  #[display]
+  struct Logger { pub prefix: string }
+  
+  type Alias = Logger
+  
+  struct Server {
+    embed Alias,
+    pub port: int,
+  }
+---
+package main
+
+import "fmt"
+
+type Logger struct {
+	Prefix string
+}
+
+func (l Logger) String() string {
+	return fmt.Sprintf("Logger { prefix: %v }", l.Prefix)
+}
+
+func (l Logger) to_string() string {
+	return l.String()
+}
+
+type Alias = Logger
+
+type Server struct {
+	Alias
+	Port int
+}
+
+func (s Server) String() string {
+	return fmt.Sprintf("{%v %v}", s.Alias, s.Port)
+}

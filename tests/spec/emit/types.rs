@@ -189,6 +189,473 @@ impl Point {
 }
 
 #[test]
+fn embedded_display_struct_gets_shadow_stringer() {
+    let input = r#"
+#[display]
+struct Logger { pub prefix: string }
+
+struct Server {
+  embed Logger,
+  pub port: int,
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn embedded_display_shadow_is_transitive() {
+    let input = r#"
+#[display]
+struct Logger { pub prefix: string }
+
+struct Server {
+  embed Logger,
+  pub port: int,
+}
+
+struct Cluster {
+  embed Server,
+  pub name: string,
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn embedded_plain_struct_gets_no_shadow_stringer() {
+    let input = r#"
+struct Plain { pub v: int }
+
+struct Wrapper {
+  embed Plain,
+  pub tag: int,
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn display_outer_over_embedded_display_needs_no_shadow() {
+    let input = r#"
+#[display]
+struct Logger { pub prefix: string }
+
+#[display]
+struct Server {
+  embed Logger,
+  pub port: int,
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn embedded_user_stringer_promotes_without_shadow() {
+    let input = r#"
+struct Named { pub who: string }
+
+impl Named {
+  fn string(self) -> string {
+    "Named!"
+  }
+}
+
+struct Holder {
+  embed Named,
+  pub n: int,
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn embedded_display_with_user_stringer_promotes_without_shadow() {
+    let input = r#"
+#[display]
+struct Logger { pub prefix: string }
+
+impl Logger {
+  fn string(self) -> string {
+    "custom"
+  }
+}
+
+struct Server {
+  embed Logger,
+  pub port: int,
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn deeper_promoted_stringer_does_not_block_shallower_display_shadow() {
+    let input = r#"
+#[display]
+struct D { pub x: int }
+
+struct N { pub n: int }
+
+impl N {
+  fn string(self) -> string {
+    "N"
+  }
+}
+
+struct P {
+  embed N,
+}
+
+struct C {
+  embed D,
+  embed P,
+  pub c: int,
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn embedded_intermediate_user_stringer_stops_shadow_walk() {
+    let input = r#"
+#[display]
+struct Logger { pub prefix: string }
+
+struct Server {
+  embed Logger,
+  pub port: int,
+}
+
+impl Server {
+  fn string(self) -> string {
+    "srv"
+  }
+}
+
+struct Cluster {
+  embed Server,
+  pub name: string,
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn embedded_alias_of_display_gets_shadow() {
+    let input = r#"
+#[display]
+struct Logger { pub prefix: string }
+
+type Alias = Logger
+
+struct Server {
+  embed Alias,
+  pub port: int,
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn embedded_display_pointer_gets_shadow() {
+    let input = r#"
+#[display]
+struct Logger { pub prefix: string }
+
+struct Server {
+  embed Ref<Logger>,
+  pub port: int,
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn embedded_alias_to_ref_display_gets_shadow() {
+    let input = r#"
+#[display]
+struct Logger { pub prefix: string }
+
+type P = Ref<Logger>
+
+struct Server {
+  embed P,
+  pub port: int,
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn embedded_ref_to_alias_display_gets_shadow() {
+    let input = r#"
+#[display]
+struct Logger { pub prefix: string }
+
+type L = Logger
+
+struct Server {
+  embed Ref<L>,
+  pub port: int,
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn two_embedded_display_stringers_are_ambiguous_no_shadow() {
+    let input = r#"
+#[display]
+struct A { pub a: int }
+
+#[display]
+struct B { pub b: int }
+
+struct C {
+  embed A,
+  embed B,
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn embedded_display_and_user_stringer_are_ambiguous_no_shadow() {
+    let input = r#"
+#[display]
+struct A { pub a: int }
+
+struct N { pub n: int }
+
+impl N {
+  fn string(self) -> string {
+    "N!"
+  }
+}
+
+struct C {
+  embed A,
+  embed N,
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn single_embedded_display_beside_plain_embed_shadows() {
+    let input = r#"
+#[display]
+struct A { pub a: int }
+
+struct P { pub p: int }
+
+struct C {
+  embed A,
+  embed P,
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn embedded_interface_stringer_and_display_are_ambiguous_no_shadow() {
+    let input = r#"
+#[display]
+struct D { pub x: int }
+
+interface I {
+  fn string(self) -> string
+}
+
+struct C {
+  embed D,
+  embed I,
+  pub n: int,
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn embedded_interface_parent_stringer_and_display_are_ambiguous_no_shadow() {
+    let input = r#"
+#[display]
+struct D { pub x: int }
+
+interface Base {
+  fn string(self) -> string
+}
+
+interface I {
+  embed Base
+  fn area(self) -> int
+}
+
+struct C {
+  embed D,
+  embed I,
+  pub n: int,
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn embedded_interface_without_stringer_leaves_display_shadow() {
+    let input = r#"
+#[display]
+struct D { pub x: int }
+
+interface I {
+  fn area(self) -> int
+}
+
+struct C {
+  embed D,
+  embed I,
+  pub n: int,
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn embedded_interface_non_stringer_string_method_is_ambiguous_no_shadow() {
+    let input = r#"
+#[display]
+struct D { pub x: int }
+
+interface I {
+  fn string(self) -> int
+}
+
+struct C {
+  embed D,
+  embed I,
+  pub n: int,
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn embedded_generic_interface_stringer_and_display_are_ambiguous_no_shadow() {
+    let input = r#"
+#[display]
+struct D { pub x: int }
+
+interface Base<T> {
+  fn string(self) -> T
+}
+
+struct C {
+  embed D,
+  embed Base<string>,
+  pub n: int,
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn embedded_generic_parent_interface_stringer_and_display_are_ambiguous_no_shadow() {
+    let input = r#"
+#[display]
+struct D { pub x: int }
+
+interface Base<T> {
+  fn string(self) -> T
+}
+
+interface I {
+  embed Base<string>
+  fn area(self) -> int
+}
+
+struct C {
+  embed D,
+  embed I,
+  pub n: int,
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn string_field_beside_embedded_display_blocks_shadow() {
+    let input = r#"
+#[display]
+struct Logger { pub prefix: string }
+
+struct Server {
+  embed Logger,
+  pub string: int,
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn tag_exported_string_field_on_embed_blocks_outer_shadow() {
+    let input = r#"
+#[display]
+struct Logger { pub prefix: string }
+
+#[json]
+struct Inner {
+  embed Logger,
+  string: int,
+}
+
+struct Outer {
+  embed Inner,
+  pub name: string,
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn bare_tag_does_not_force_export_so_outer_still_shadows() {
+    let input = r#"
+#[display]
+struct Logger { pub prefix: string }
+
+#[tag]
+struct Inner {
+  embed Logger,
+  string: int,
+}
+
+struct Outer {
+  embed Inner,
+  pub name: string,
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn keyed_tag_forces_export_so_string_field_blocks_outer_shadow() {
+    let input = r#"
+#[display]
+struct Logger { pub prefix: string }
+
+#[tag("validate", "required")]
+struct Inner {
+  embed Logger,
+  string: int,
+}
+
+struct Outer {
+  embed Inner,
+  pub name: string,
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn equality_struct_comparable_fields() {
     let input = r#"
 #[equality]

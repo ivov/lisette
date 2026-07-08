@@ -120,6 +120,16 @@ pub fn is_serialization_key(key: &str) -> bool {
     SERIALIZATION_KEYS.contains(&key)
 }
 
+pub fn struct_attribute_forces_field_export(attribute: &crate::ast::Attribute) -> bool {
+    if attribute.name == "tag" {
+        return matches!(
+            attribute.args.first(),
+            Some(crate::ast::AttributeArg::String(_))
+        );
+    }
+    is_serialization_key(&attribute.name)
+}
+
 pub fn known_attribute_names() -> Vec<&'static str> {
     ATTRIBUTES.iter().map(|a| a.name).collect()
 }

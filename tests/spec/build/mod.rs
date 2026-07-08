@@ -107,6 +107,51 @@ fn main() {
 }
 
 #[test]
+fn embedded_cross_module_json_string_field_blocks_shadow() {
+    let mut fs = MockFileSystem::new();
+
+    fs.add_file(
+        "dep",
+        "inner.lis",
+        r#"
+#[display]
+pub struct Logger { pub prefix: string }
+
+#[json]
+pub struct Inner {
+  embed Logger,
+  string: int,
+}
+
+pub fn make(p: string, n: int) -> Inner {
+  Inner { Logger: Logger { prefix: p }, string: n }
+}
+"#,
+    );
+
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+import "go:fmt"
+import "dep"
+
+struct Outer {
+  embed dep.Inner,
+  pub name: string,
+}
+
+fn main() {
+  let o = Outer { Inner: dep.make("srv:", 5), name: "n" }
+  fmt.Println(o)
+}
+"#,
+    );
+
+    assert_build_snapshot!(fs, "github.com/user/myproject");
+}
+
+#[test]
 fn display_cross_module_satisfies_local_interface() {
     let mut fs = MockFileSystem::new();
 
@@ -176,6 +221,37 @@ fn main() {
     assert!(
         codes.iter().any(|code| code == "emit.go_name_collision"),
         "a wrong-signature user to_string does not suppress synthesis, so the synthesized to_string collides with it; got: {codes:?}"
+    );
+}
+
+#[test]
+fn embedded_display_beside_string_field_needs_no_shadow() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+#[display]
+struct Logger {
+  pub prefix: string,
+}
+
+struct Server {
+  embed Logger,
+  pub string: int,
+}
+
+fn main() {
+  let s = Server { Logger: Logger { prefix: "srv:" }, string: 5 }
+  let _ = s.string
+}
+"#,
+    );
+
+    let codes = emit_diagnostic_codes(fs);
+    assert!(
+        !codes.iter().any(|code| code == "emit.go_name_collision"),
+        "the `String` field occupies the selector, so no shadow is synthesized and nothing collides; got: {codes:?}"
     );
 }
 

@@ -1,0 +1,51 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  #[display]
+  struct Logger { pub prefix: string }
+  
+  #[tag]
+  struct Inner {
+    embed Logger,
+    string: int,
+  }
+  
+  struct Outer {
+    embed Inner,
+    pub name: string,
+  }
+---
+package main
+
+import "fmt"
+
+type Logger struct {
+	Prefix string
+}
+
+func (l Logger) String() string {
+	return fmt.Sprintf("Logger { prefix: %v }", l.Prefix)
+}
+
+func (l Logger) to_string() string {
+	return l.String()
+}
+
+type Inner struct {
+	Logger
+	string int
+}
+
+func (i Inner) String() string {
+	return fmt.Sprintf("{%v %v}", i.Logger, i.string)
+}
+
+type Outer struct {
+	Inner
+	Name string
+}
+
+func (o Outer) String() string {
+	return fmt.Sprintf("{%v %v}", o.Inner, o.Name)
+}

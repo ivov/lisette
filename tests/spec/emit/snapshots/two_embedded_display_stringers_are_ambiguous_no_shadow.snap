@@ -1,0 +1,47 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  #[display]
+  struct A { pub a: int }
+  
+  #[display]
+  struct B { pub b: int }
+  
+  struct C {
+    embed A,
+    embed B,
+  }
+---
+package main
+
+import "fmt"
+
+type A struct {
+	A int
+}
+
+func (a A) String() string {
+	return fmt.Sprintf("A { a: %v }", a.A)
+}
+
+func (a A) to_string() string {
+	return a.String()
+}
+
+type B struct {
+	B int
+}
+
+func (b B) String() string {
+	return fmt.Sprintf("B { b: %v }", b.B)
+}
+
+func (b B) to_string() string {
+	return b.String()
+}
+
+type C struct {
+	A
+	B
+}

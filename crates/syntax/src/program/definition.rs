@@ -26,6 +26,7 @@ pub enum TypeAttribute {
     /// Go struct that looks flat but hides an embed bindgen could not emit, so it
     /// cannot be soundly embedded.
     HiddenEmbed,
+    Serialized,
 }
 
 pub type Attributes = HashMap<TypeAttribute, ()>;
@@ -180,6 +181,11 @@ impl Definition {
     pub fn is_closed_domain(&self) -> bool {
         self.attributes()
             .is_some_and(|a| a.contains_key(&TypeAttribute::ClosedDomain))
+    }
+
+    pub fn is_serialized(&self) -> bool {
+        self.attributes()
+            .is_some_and(|a| a.contains_key(&TypeAttribute::Serialized))
     }
 
     pub fn is_anon_struct(&self) -> bool {

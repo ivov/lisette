@@ -1,0 +1,39 @@
+---
+source: tests/spec/emit/imports.rs
+description: |
+  
+  import "go:example.com/lib"
+  
+  #[display]
+  struct D { pub x: int }
+  
+  struct C {
+    embed lib.N,
+    embed D,
+    pub n: int,
+  }
+---
+package main
+
+import (
+	"example.com/lib"
+	"fmt"
+)
+
+type D struct {
+	X int
+}
+
+func (d D) String() string {
+	return fmt.Sprintf("D { x: %v }", d.X)
+}
+
+func (d D) to_string() string {
+	return d.String()
+}
+
+type C struct {
+	lib.N
+	D
+	N int
+}

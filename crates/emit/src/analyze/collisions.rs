@@ -240,6 +240,12 @@ impl Planner<'_> {
                 .or_default()
                 .push(*name_span);
         }
+        if self.synthesizes_embedded_stringer_shadow(name) {
+            members
+                .entry(ENUM_STRINGER_METHOD.to_string())
+                .or_default()
+                .push(*name_span);
+        }
         if self.should_synthesize_to_string(name, attributes) {
             members
                 .entry(self.to_string_method_go_name())

@@ -19,6 +19,7 @@ use syntax::ast::{
     Annotation, Attribute, AttributeArg, Binding, EnumVariant, Expression, Generic, Span,
     StructKind, Visibility as SyntacticVisibility,
 };
+use syntax::attributes::struct_attribute_forces_field_export;
 use syntax::program::{
     Attributes, Definition, DefinitionBody, File, FileImport, TypeAttribute, Visibility,
 };
@@ -107,6 +108,10 @@ pub(super) fn has_unexported_attribute(attributes: &[Attribute]) -> bool {
         .any(|flag| flag == "unexported")
 }
 
+pub(super) fn has_serialization_attribute(attributes: &[Attribute]) -> bool {
+    attributes.iter().any(struct_attribute_forces_field_export)
+}
+
 pub(super) fn collect_enum_attributes(attributes: &[Attribute]) -> Attributes {
     let mut map = Attributes::default();
     if has_display_attribute(attributes) {
@@ -128,6 +133,9 @@ pub(super) fn collect_struct_attributes(attributes: &[Attribute]) -> Attributes 
     }
     if has_hidden_embed_attribute(attributes) {
         map.insert(TypeAttribute::HiddenEmbed, ());
+    }
+    if has_serialization_attribute(attributes) {
+        map.insert(TypeAttribute::Serialized, ());
     }
     map
 }

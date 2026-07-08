@@ -1,0 +1,31 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  struct Named { pub who: string }
+  
+  impl Named {
+    fn string(self) -> string {
+      "Named!"
+    }
+  }
+  
+  struct Holder {
+    embed Named,
+    pub n: int,
+  }
+---
+package main
+
+type Named struct {
+	Who string
+}
+
+func (n Named) String() string {
+	return "Named!"
+}
+
+type Holder struct {
+	Named
+	N int
+}

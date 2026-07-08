@@ -1,6 +1,30 @@
 use crate::{assert_emit_snapshot, assert_emit_snapshot_with_go_typedefs};
 
 #[test]
+fn embedded_imported_non_stringer_string_method_blocks_shadow() {
+    let input = r#"
+import "go:example.com/lib"
+
+#[display]
+struct D { pub x: int }
+
+struct C {
+  embed lib.N,
+  embed D,
+  pub n: int,
+}
+"#;
+    let typedef = r#"
+pub struct N {}
+
+impl N {
+  pub fn String(self) -> int
+}
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/lib", typedef)]);
+}
+
+#[test]
 fn import_single() {
     let input = r#"
 import "go:io"

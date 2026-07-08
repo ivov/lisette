@@ -1,5 +1,5 @@
 use syntax::ast::{Attribute, AttributeArg, StructFieldDefinition};
-use syntax::attributes::is_serialization_key;
+use syntax::attributes::{is_serialization_key, struct_attribute_forces_field_export};
 
 #[derive(Default)]
 pub(super) struct TagConfig {
@@ -75,14 +75,13 @@ pub(super) fn interpret_field_attributes(
 }
 
 fn interpret_struct_attribute(attribute: &Attribute) -> Option<TagConfig> {
-    let key = &attribute.name;
-
-    if key == "tag" {
-        return interpret_struct_tag_attribute(attribute);
+    if !struct_attribute_forces_field_export(attribute) {
+        return None;
     }
 
-    if !is_serialization_key(key) {
-        return None;
+    let key = &attribute.name;
+    if key == "tag" {
+        return interpret_struct_tag_attribute(attribute);
     }
 
     let mut config = TagConfig {

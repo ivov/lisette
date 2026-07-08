@@ -694,6 +694,42 @@ mod tests {
     }
 
     #[test]
+    fn serialized_attribute_survives_cache_roundtrip() {
+        use syntax::ast::StructKind;
+        use syntax::program::{Attributes, Definition, DefinitionBody, TypeAttribute, Visibility};
+
+        let mut attributes = Attributes::default();
+        attributes.insert(TypeAttribute::Serialized, ());
+
+        let struct_def = Definition {
+            visibility: Visibility::Public,
+            ty: Type::Nominal {
+                id: Symbol::from_raw("dep.Inner"),
+                params: vec![],
+                underlying_ty: None,
+            },
+            name: Some("Inner".into()),
+            name_span: None,
+            doc: None,
+            body: DefinitionBody::Struct {
+                generics: vec![],
+                fields: vec![],
+                kind: StructKind::Record,
+                methods: Default::default(),
+                constructor: None,
+                attributes,
+            },
+        };
+
+        let empty_files = HashMap::default();
+        let cached = CachedDefinition::from_definition(&struct_def, false, &empty_files);
+        let bytes = bincode::serialize(&cached).unwrap();
+        let restored: CachedDefinition = bincode::deserialize(&bytes).unwrap();
+
+        assert!(restored.to_definition(&[]).is_serialized());
+    }
+
+    #[test]
     fn test_cache_validity_checks_dep_hashes() {
         let mut cached_deps = HashMap::default();
         cached_deps.insert("dep".to_string(), 111u64);
