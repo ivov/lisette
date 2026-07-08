@@ -57,7 +57,7 @@ pub enum Lint {
     UnreachableIfLetElse,
     TryBlockNoSuccessPath,
     ExcessParensOnCondition,
-    ReplaceableWithZeroFill,
+    ReplaceableWithAutofill,
 }
 
 #[derive(Debug, Clone, Default)]

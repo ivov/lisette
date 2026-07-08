@@ -513,7 +513,7 @@ fn walk_struct_call(
                 }
             }
         }
-        StructSpread::ZeroFill { .. } => {
+        StructSpread::Autofill { .. } => {
             if let Some(ty_name) = type_name(ty, alias_map) {
                 let explicit: HashSet<&str> =
                     field_assignments.iter().map(|f| f.name.as_str()).collect();

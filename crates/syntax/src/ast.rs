@@ -607,7 +607,7 @@ pub struct StructFieldAssignment {
 pub enum StructSpread {
     None,
     From(Box<Expression>),
-    ZeroFill { span: Span },
+    Autofill { span: Span },
 }
 
 impl StructSpread {
@@ -623,14 +623,14 @@ impl StructSpread {
         match self {
             Self::None => None,
             Self::From(e) => Some(e.get_span()),
-            Self::ZeroFill { span } => Some(*span),
+            Self::Autofill { span } => Some(*span),
         }
     }
 
     pub fn as_expression(&self) -> Option<&Expression> {
         match self {
             Self::From(e) => Some(e),
-            Self::None | Self::ZeroFill { .. } => None,
+            Self::None | Self::Autofill { .. } => None,
         }
     }
 }

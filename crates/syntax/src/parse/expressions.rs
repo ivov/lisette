@@ -302,7 +302,7 @@ impl<'source> Parser<'source> {
                 self.ensure(DotDot);
 
                 if self.is(RightCurlyBrace) || self.is(Comma) {
-                    spread = StructSpread::ZeroFill { span: dotdot_span };
+                    spread = StructSpread::Autofill { span: dotdot_span };
                 } else {
                     spread = StructSpread::From(Box::new(self.parse_expression()));
                 }

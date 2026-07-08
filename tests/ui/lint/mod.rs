@@ -6689,7 +6689,7 @@ fn main() {
 }
 
 #[test]
-fn zero_fill_through_alias_does_not_warn_unused_fields() {
+fn autofill_through_alias_does_not_warn_unused_fields() {
     assert_no_lint_warnings!(
         r#"
 struct Inner { x: int, y: int }
@@ -11180,7 +11180,7 @@ fn main() {
 }
 
 #[test]
-fn replaceable_with_zero_fill_lisette_struct() {
+fn replaceable_with_autofill_lisette_struct() {
     assert_lint_snapshot!(
         r#"
 struct Conf { name: string, count: int, on: bool, retries: int }
@@ -11195,7 +11195,7 @@ fn main() -> int {
 }
 
 #[test]
-fn replaceable_with_zero_fill_enum_variant() {
+fn replaceable_with_autofill_enum_variant() {
     assert_lint_snapshot!(
         r#"
 enum Action {
@@ -11216,7 +11216,7 @@ fn main() -> int {
 }
 
 #[test]
-fn replaceable_with_zero_fill_all_fields_zero() {
+fn replaceable_with_autofill_all_fields_zero() {
     assert_lint_snapshot!(
         r#"
 struct Point3 { x: int, y: int, z: int }
@@ -11230,7 +11230,7 @@ fn main() -> int {
 }
 
 #[test]
-fn replaceable_with_zero_fill_multiline_literal() {
+fn replaceable_with_autofill_multiline_literal() {
     assert_lint_snapshot!(
         r#"
 struct Conf { name: string, count: int, on: bool, retries: int }
@@ -11250,7 +11250,7 @@ fn main() -> int {
 }
 
 #[test]
-fn replaceable_with_zero_fill_below_threshold_no_warning() {
+fn replaceable_with_autofill_below_threshold_no_warning() {
     assert_no_lint_warnings!(
         r#"
 struct Conf { name: string, count: int, on: bool }
@@ -11265,7 +11265,7 @@ fn main() -> int {
 }
 
 #[test]
-fn replaceable_with_zero_fill_already_uses_spread_no_warning() {
+fn replaceable_with_autofill_already_uses_spread_no_warning() {
     assert_no_lint_warnings!(
         r#"
 struct Conf { name: string, count: int, on: bool }
@@ -11280,7 +11280,7 @@ fn main() -> int {
 }
 
 #[test]
-fn replaceable_with_zero_fill_binding_zero_no_warning() {
+fn replaceable_with_autofill_binding_zero_no_warning() {
     assert_no_lint_warnings!(
         r#"
 struct Conf { count: int, more: int, name: string }
@@ -11295,7 +11295,7 @@ fn main() -> int {
 }
 
 #[test]
-fn replaceable_with_zero_fill_incomplete_literal_no_warning() {
+fn replaceable_with_autofill_incomplete_literal_no_warning() {
     let warnings = crate::_harness::lint::lint(
         r#"
 struct Conf {
@@ -11312,18 +11312,18 @@ fn main() -> string {
 }
 "#,
     );
-    let zero_fill = warnings
+    let autofill = warnings
         .iter()
-        .any(|w| w.code_str() == Some("lint.replaceable_with_zero_fill"));
+        .any(|w| w.code_str() == Some("lint.replaceable_with_autofill"));
     assert!(
-        !zero_fill,
-        "expected no replaceable_with_zero_fill warning on incomplete literal, got: {:?}",
+        !autofill,
+        "expected no replaceable_with_autofill warning on incomplete literal, got: {:?}",
         warnings
     );
 }
 
 #[test]
-fn replaceable_with_zero_fill_constructor_call_no_warning() {
+fn replaceable_with_autofill_constructor_call_no_warning() {
     assert_no_lint_warnings!(
         r#"
 struct Conf { name: string, items: Slice<int>, lookup: Map<string, int> }
@@ -20055,7 +20055,7 @@ fn main() {
 }
 
 #[test]
-fn needless_update_zero_fill_no_warning() {
+fn needless_update_autofill_no_warning() {
     assert_no_lint_warnings!(
         r#"
 struct Config { debug: bool, port: int }

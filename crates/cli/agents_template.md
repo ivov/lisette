@@ -52,9 +52,9 @@ Variables are immutable by default. Use `let mut` for mutable bindings.
 
 `"..."` strings can span multiple lines — newlines and indentation are preserved verbatim. Use `r"..."` for raw strings (no escape processing), useful for regex, Windows paths, or any text with backslashes.
 
-## Zero-filling struct literals
+## Autofilling struct literals
 
-Lisette requires all struct fields to be initialized. Use `..` to fill any unspecified fields with their zero value: `Point { x: 10, .. }` leaves `y` at its zero value, `Point { .. }` zero-fills everything. Useful for Go structs with many config fields.
+Lisette requires all struct fields to be initialized. Use `..` to fill any unspecified fields with their zero value: `Point { x: 10, .. }` leaves `y` at its zero value, `Point { .. }` autofills everything. Useful for Go structs with many config fields.
 
 ## Partial results
 

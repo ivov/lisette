@@ -11,7 +11,7 @@ use semantics::zero::has_zero;
 
 const ZERO_FIELD_THRESHOLD: usize = 3;
 
-pub fn check_replaceable_with_zero_fill(expression: &Expression, ctx: &NodeCtx) {
+pub fn check_replaceable_with_autofill(expression: &Expression, ctx: &NodeCtx) {
     let Expression::StructCall {
         name,
         field_assignments,
@@ -52,7 +52,7 @@ pub fn check_replaceable_with_zero_fill(expression: &Expression, ctx: &NodeCtx) 
     } else {
         format!("{name} {{ {kept}, .. }}")
     };
-    let mut diagnostic = diagnostics::lint::replaceable_with_zero_fill(&owner_span, &kept, name);
+    let mut diagnostic = diagnostics::lint::replaceable_with_autofill(&owner_span, &kept, name);
     if !replacement_drops_comment(ctx.source, *span, &replacement) {
         diagnostic = diagnostic.with_fix(Fix::new(
             format!("Replace with `{replacement}`"),

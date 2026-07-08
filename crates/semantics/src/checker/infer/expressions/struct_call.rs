@@ -279,10 +279,10 @@ impl InferCtx<'_, '_> {
             },
         );
 
-        if let StructSpread::ZeroFill { span: spread_span } = &new_spread
+        if let StructSpread::Autofill { span: spread_span } = &new_spread
             && !is_go_imported
         {
-            self.check_zero_fill_fields(
+            self.check_autofill_fields(
                 &struct_name,
                 struct_fields.iter().map(|f| (&f.name, &f.ty)),
                 &matched_fields,
@@ -301,8 +301,8 @@ impl InferCtx<'_, '_> {
             for field in &struct_fields {
                 if !matched_fields.contains(&field.name) && !field.visibility.is_public() {
                     let diag = match &new_spread {
-                        StructSpread::ZeroFill { .. } => {
-                            diagnostics::infer::private_field_in_zero_fill(
+                        StructSpread::Autofill { .. } => {
+                            diagnostics::infer::private_field_in_autofill(
                                 &field.name,
                                 &struct_name,
                                 owning_module,
@@ -376,8 +376,8 @@ impl InferCtx<'_, '_> {
             },
         );
 
-        if let StructSpread::ZeroFill { span: spread_span } = &new_spread {
-            self.check_zero_fill_fields(
+        if let StructSpread::Autofill { span: spread_span } = &new_spread {
+            self.check_autofill_fields(
                 &variant_name,
                 variant_fields.iter().map(|f| (&f.name, &f.ty)),
                 &matched_fields,
@@ -403,7 +403,7 @@ impl InferCtx<'_, '_> {
                     self.with_value_context(|checker| checker.infer_expression(*s, target_ty));
                 StructSpread::From(Box::new(inferred))
             }
-            StructSpread::ZeroFill { span } => StructSpread::ZeroFill { span },
+            StructSpread::Autofill { span } => StructSpread::Autofill { span },
         }
     }
 
@@ -469,7 +469,7 @@ impl InferCtx<'_, '_> {
         (new_assignments, matched)
     }
 
-    fn check_zero_fill_fields<'a>(
+    fn check_autofill_fields<'a>(
         &mut self,
         owner_name: &str,
         fields: impl Iterator<Item = (&'a EcoString, &'a Type)>,

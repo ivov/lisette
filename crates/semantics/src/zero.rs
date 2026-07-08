@@ -1,5 +1,5 @@
 //! Whether a type has a Lisette-side zero value, used by inference (struct
-//! literal spreads) and by the `replaceable_with_zero_fill` lint.
+//! literal spreads) and by the `replaceable_with_autofill` lint.
 
 use ecow::EcoString;
 use syntax::program::DefinitionBody;

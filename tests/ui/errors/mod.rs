@@ -1922,7 +1922,7 @@ fn test() {
 }
 
 #[test]
-fn infer_struct_zero_fill_no_zero_for_field() {
+fn infer_struct_autofill_no_zero_for_field() {
     let input = r#"
 struct Bad {
   ok: int,
@@ -1937,7 +1937,7 @@ fn test() {
 }
 
 #[test]
-fn infer_struct_zero_fill_no_zero_for_ref_field() {
+fn infer_struct_autofill_no_zero_for_ref_field() {
     let input = r#"
 struct Bad {
   ok: int,
@@ -1952,7 +1952,7 @@ fn test() {
 }
 
 #[test]
-fn infer_struct_zero_fill_tuple_chain() {
+fn infer_struct_autofill_tuple_chain() {
     let input = r#"
 struct Outer { t: (int, Channel<int>) }
 
@@ -1964,7 +1964,7 @@ fn test() {
 }
 
 #[test]
-fn infer_struct_zero_fill_struct_chain() {
+fn infer_struct_autofill_struct_chain() {
     let input = r#"
 struct Inner { bad: Channel<int> }
 struct Outer { inner: Inner }
@@ -2099,7 +2099,7 @@ fn test(ages: Map<string, int>, opts: Map<string, Option<Ref<int>>>, rows: Slice
 }
 
 #[test]
-fn infer_struct_zero_fill_function_alias_field() {
+fn infer_struct_autofill_function_alias_field() {
     let input = r#"
 type F = fn() -> int
 struct A { g: F, x: int }
@@ -2112,7 +2112,7 @@ fn test() {
 }
 
 #[test]
-fn infer_struct_zero_fill_generic_function_alias_field() {
+fn infer_struct_autofill_generic_function_alias_field() {
     let input = r#"
 type F<T> = fn(T) -> T
 struct A { g: F<int>, x: int }
@@ -2125,7 +2125,7 @@ fn test() {
 }
 
 #[test]
-fn infer_enum_struct_variant_zero_fill_no_zero_for_field() {
+fn infer_enum_struct_variant_autofill_no_zero_for_field() {
     let input = r#"
 enum Action {
   Move { x: int, dst: Channel<int> },
@@ -5345,7 +5345,7 @@ fn main() {
 }
 
 #[test]
-fn infer_private_field_in_struct_zero_fill_direct() {
+fn infer_private_field_in_struct_autofill_direct() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
@@ -5373,7 +5373,7 @@ fn main() {
 }
 
 #[test]
-fn infer_private_field_in_struct_zero_fill_transitive() {
+fn infer_private_field_in_struct_autofill_transitive() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(

@@ -358,7 +358,7 @@ fn child_containing_offset<'a>(expression: &'a Expression, offset: u32) -> Optio
             field_assignments.iter().find_map(|fa| c(&fa.value))
                 .or_else(|| match spread {
                     StructSpread::From(e) => c(e),
-                    StructSpread::None | StructSpread::ZeroFill { .. } => None,
+                    StructSpread::None | StructSpread::Autofill { .. } => None,
                 }),
 
         Expression::DotAccess { expression, .. }

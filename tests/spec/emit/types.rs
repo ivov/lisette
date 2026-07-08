@@ -1995,7 +1995,7 @@ fn test(id: UserId) -> int {
 }
 
 #[test]
-fn newtype_field_zero_fill_casts() {
+fn newtype_field_autofill_casts() {
     let input = r#"
 struct GameModeParam(string)
 
@@ -2019,7 +2019,7 @@ fn register() -> Command {
 }
 
 #[test]
-fn tuple_struct_field_zero_fill_uses_f_names() {
+fn tuple_struct_field_autofill_uses_f_names() {
     let input = r#"
 struct MP(int, string)
 
@@ -2035,7 +2035,7 @@ fn make() -> Holder {
 }
 
 #[test]
-fn tuple_field_zero_fill_uses_constructor() {
+fn tuple_field_autofill_uses_constructor() {
     let input = r#"
 struct Probe {
   pub pair: (int, string),

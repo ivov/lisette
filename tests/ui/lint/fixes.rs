@@ -1186,7 +1186,7 @@ pub fn f(a: bool, b: bool, c: bool) -> int {
 }
 
 #[test]
-fn fix_replaceable_with_zero_fill() {
+fn fix_replaceable_with_autofill() {
     assert_fix_snapshot!(
         r#"
 struct Cfg { a: int, b: int, c: int, d: int }

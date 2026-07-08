@@ -275,7 +275,7 @@ pub trait AstFolder {
                     StructSpread::From(e) => {
                         StructSpread::From(Box::new(self.fold_expression(*e)?))
                     }
-                    StructSpread::ZeroFill { span } => StructSpread::ZeroFill { span },
+                    StructSpread::Autofill { span } => StructSpread::Autofill { span },
                 },
                 ty,
                 span,

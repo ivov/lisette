@@ -103,11 +103,11 @@ impl Planner<'_> {
                     self.lower_struct_update(&mut setup, base, &field_pairs, &field_side_effects)
                 }
             }
-            StructSpread::ZeroFill { .. } if !is_go_struct => {
-                self.append_zero_fills(&mut field_pairs, field_assignments, ty, name, &ctx);
+            StructSpread::Autofill { .. } if !is_go_struct => {
+                self.append_autofills(&mut field_pairs, field_assignments, ty, name, &ctx);
                 emit_struct_literal(&ctx.go_type, &field_pairs, expression_ctx)
             }
-            StructSpread::ZeroFill { .. } | StructSpread::None => {
+            StructSpread::Autofill { .. } | StructSpread::None => {
                 emit_struct_literal(&ctx.go_type, &field_pairs, expression_ctx)
             }
         };
@@ -145,7 +145,7 @@ impl Planner<'_> {
 
     /// Append zero-value pairs for fields the user did not assign. Slice fields
     /// are skipped so Go's nil zero-value applies instead of `[]T{}`.
-    fn append_zero_fills(
+    fn append_autofills(
         &mut self,
         field_pairs: &mut Vec<(String, String)>,
         field_assignments: &[StructFieldAssignment],
