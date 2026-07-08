@@ -1,0 +1,33 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  struct Box<b> {
+    item: b,
+  }
+  
+  impl<b> Box<b> {
+    fn value(self) -> b {
+      self.item
+    }
+  }
+  
+  fn test() -> int {
+    let boxed = Box { item: 7 }
+    boxed.value()
+  }
+---
+package main
+
+type Box[b any] struct {
+	item b
+}
+
+func (bb Box[b]) value() b {
+	return bb.item
+}
+
+func test() int {
+	boxed := Box[int]{item: 7}
+	return boxed.value()
+}

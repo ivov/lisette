@@ -361,7 +361,7 @@ pub struct SelectCase {
 /// 
 /// Deprecated: Use unsafe.Slice or unsafe.SliceData instead.
 pub struct SliceHeader {
-  pub Data: uint,
+  pub Data: uintptr,
   pub Len: int,
   pub Cap: int,
 }
@@ -375,7 +375,7 @@ pub struct SliceHeader {
 /// 
 /// Deprecated: Use unsafe.String or unsafe.StringData instead.
 pub struct StringHeader {
-  pub Data: uint,
+  pub Data: uintptr,
   pub Len: int,
 }
 
@@ -385,7 +385,7 @@ pub struct StructField {
   pub PkgPath: string,
   pub Type: Option<Type>,
   pub Tag: StructTag,
-  pub Offset: uint,
+  pub Offset: uintptr,
   pub Index: Slice<int>,
   pub Anonymous: bool,
 }
@@ -445,7 +445,7 @@ pub interface Type {
   fn OverflowInt(x: int64) -> bool
   fn OverflowUint(x: uint64) -> bool
   fn PkgPath() -> string
-  fn Size() -> uint
+  fn Size() -> uintptr
   fn String() -> string
   #[go(unexported, "reflect.common() *internal/abi.Type")]
   fn common()
@@ -719,7 +719,7 @@ impl Value {
   /// Deprecated: The memory representation of interface values is not
   /// compatible with InterfaceData.
   #[go(array_return)]
-  fn InterfaceData(self) -> Slice<uint>
+  fn InterfaceData(self) -> Slice<uintptr>
 
   /// IsNil reports whether its argument v is nil. The argument must be
   /// a chan, func, interface, map, pointer, or slice value; if it is
@@ -841,7 +841,7 @@ impl Value {
   /// element of the underlying bytes of string.
   /// 
   /// It's preferred to use uintptr(Value.UnsafePointer()) to get the equivalent result.
-  fn Pointer(self) -> uint
+  fn Pointer(self) -> uintptr
 
   /// Recv receives and returns a value from the channel v.
   /// It panics if v's Kind is not [Chan].
@@ -995,7 +995,7 @@ impl Value {
   /// It panics if v is not addressable.
   /// 
   /// It's preferred to use uintptr(Value.Addr().UnsafePointer()) to get the equivalent result.
-  fn UnsafeAddr(self) -> uint
+  fn UnsafeAddr(self) -> uintptr
 
   /// UnsafePointer returns v's value as a [unsafe.Pointer].
   /// It panics if v's Kind is not [Chan], [Func], [Map], [Pointer], [Slice], [String] or [UnsafePointer].

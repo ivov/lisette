@@ -1,0 +1,26 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  #[equality]
+  struct Box<other: Comparable> {
+    pub item: other,
+  }
+  
+  fn test() -> bool {
+    Box { item: 7 } == Box { item: 7 }
+  }
+---
+package main
+
+type Box[other comparable] struct {
+	Item other
+}
+
+func (b Box[other]) equals(other_2 Box[other]) bool {
+	return b.Item == other_2.Item
+}
+
+func test() bool {
+	return Box[int]{Item: 7} == Box[int]{Item: 7}
+}

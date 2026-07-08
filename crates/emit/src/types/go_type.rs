@@ -72,7 +72,7 @@ impl Planner<'_> {
             Type::Function(f) => self.emit_function_type(&f.params, &f.return_type),
             Type::Var { .. } => GoType::new("any"),
             Type::Forall { .. } => GoType::new("any"),
-            Type::Parameter(name) => GoType::new(go_name::escape_type_name(name).into_owned()),
+            Type::Parameter(name) => GoType::new(self.generic_go_name(name).into_owned()),
             Type::Never => GoType::new("struct{}"),
             Type::Error => unreachable!("Type::Error should not reach the emitter"),
             Type::Tuple(elements) => self.emit_tuple_type(elements),

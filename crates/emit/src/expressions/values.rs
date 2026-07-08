@@ -31,6 +31,10 @@ impl Planner<'_> {
                 let mut setup = Vec::new();
                 let value = if self.go_fn_needs_lowered_tuple_adapter(expression, ctx) {
                     self.emit_go_fn_lowered_tuple_adapter(&mut setup, expression)
+                } else if let GoCallStrategy::Sentinel { value } = &strategy
+                    && !ctx.forces_tagged_go_function()
+                {
+                    self.emit_go_fn_sentinel_adapter(&mut setup, expression, *value)
                 } else {
                     self.emit_go_fn_wrapper(&mut setup, expression, &strategy)
                 };

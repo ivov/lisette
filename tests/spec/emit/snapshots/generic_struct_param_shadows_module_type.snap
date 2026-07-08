@@ -1,0 +1,61 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  struct T {
+    v: int,
+  }
+  
+  fn make_t() -> T {
+    T { v: 7 }
+  }
+  
+  struct Box<T> {
+    item: T,
+  }
+  
+  impl<T> Box<T> {
+    fn probe(self) -> int {
+      let mut opt = None
+      opt = Some(make_t())
+      match opt {
+        Some(t) => t.v,
+        None => 0,
+      }
+    }
+  }
+  
+  fn test() -> int {
+    let b = Box { item: 42 }
+    b.probe()
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type T struct {
+	v int
+}
+
+func make_t() T {
+	return T{v: 7}
+}
+
+type Box[T_2 any] struct {
+	item T_2
+}
+
+func (b Box[T_2]) probe() int {
+	opt := lisette.MakeOptionNone[T]()
+	opt = lisette.MakeOptionSome(make_t())
+	if opt.Tag == lisette.OptionSome {
+		return opt.SomeVal.v
+	}
+	return 0
+}
+
+func test() int {
+	b := Box[int]{item: 42}
+	return b.probe()
+}

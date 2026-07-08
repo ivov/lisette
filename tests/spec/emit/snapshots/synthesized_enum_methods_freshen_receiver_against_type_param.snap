@@ -1,0 +1,111 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  #[display]
+  #[json]
+  enum Box<b> {
+    Empty,
+    Full(b),
+  }
+  
+  fn test() -> string {
+    let x = Box.Full(7)
+    x.to_string()
+  }
+---
+package main
+
+import (
+	"encoding/json"
+	"fmt"
+)
+
+func MakeBoxEmpty[b any]() Box[b] {
+	return Box[b]{Tag: BoxEmpty}
+}
+
+func MakeBoxFull[b any](arg0 b) Box[b] {
+	return Box[b]{Tag: BoxFull, Full: arg0}
+}
+
+type BoxTag int
+
+const (
+	BoxEmpty BoxTag = iota
+	BoxFull
+)
+
+type Box[b any] struct {
+	Tag  BoxTag
+	Full b
+}
+
+func (bb Box[b]) String() string {
+	switch bb.Tag {
+	case BoxEmpty:
+		return "Empty"
+	case BoxFull:
+		return fmt.Sprintf("Full(%v)", bb.Full)
+	default:
+		return fmt.Sprintf("Box(%d)", bb.Tag)
+	}
+}
+
+func (bb Box[b]) GoString() string {
+	switch bb.Tag {
+	case BoxEmpty:
+		return "Box.Empty"
+	case BoxFull:
+		return fmt.Sprintf("Box.Full(%v)", bb.Full)
+	default:
+		return fmt.Sprintf("Box(%d)", bb.Tag)
+	}
+}
+
+func (bb Box[b]) MarshalJSON() ([]byte, error) {
+	switch bb.Tag {
+	case BoxEmpty:
+		return json.Marshal("Empty")
+	case BoxFull:
+		return json.Marshal(map[string]any{"Full": bb.Full})
+	default:
+		return nil, fmt.Errorf("unknown Box tag: %d", bb.Tag)
+	}
+}
+
+func (bb *Box[b]) UnmarshalJSON(data []byte) error {
+	var name string
+	if err := json.Unmarshal(data, &name); err == nil {
+		switch name {
+		case "Empty":
+			bb.Tag = BoxEmpty
+			return nil
+		default:
+			return fmt.Errorf("unknown Box variant: %s", name)
+		}
+	}
+	var obj map[string]json.RawMessage
+	if err := json.Unmarshal(data, &obj); err != nil {
+		return fmt.Errorf("invalid Box JSON")
+	}
+	for key, val := range obj {
+		switch key {
+		case "Full":
+			bb.Tag = BoxFull
+			return json.Unmarshal(val, &bb.Full)
+		default:
+			return fmt.Errorf("unknown Box variant: %s", key)
+		}
+	}
+	return fmt.Errorf("empty Box JSON object")
+}
+
+func (bb Box[b]) to_string() string {
+	return bb.String()
+}
+
+func test() string {
+	x := MakeBoxFull(7)
+	return x.to_string()
+}

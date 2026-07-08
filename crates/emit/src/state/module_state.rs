@@ -18,6 +18,7 @@ pub(crate) struct ModuleState {
     reverse_module_aliases: HashMap<String, String>,
     active_file: Cell<Option<u32>>,
     escape_remap: HashMap<String, String>,
+    generic_renames: HashMap<String, String>,
     generic_constraints: GenericConstraintTable,
 }
 
@@ -122,6 +123,19 @@ impl ModuleState {
 
     pub(crate) fn escape_remap(&self, lisette_name: &str) -> Option<&str> {
         self.escape_remap.get(lisette_name).map(String::as_str)
+    }
+
+    pub(crate) fn record_generic_rename(
+        &mut self,
+        source_name: impl Into<String>,
+        go_name: impl Into<String>,
+    ) {
+        self.generic_renames
+            .insert(source_name.into(), go_name.into());
+    }
+
+    pub(crate) fn generic_rename(&self, source_name: &str) -> Option<&str> {
+        self.generic_renames.get(source_name).map(String::as_str)
     }
 
     pub(crate) fn set_generic_constraints(&mut self, table: GenericConstraintTable) {

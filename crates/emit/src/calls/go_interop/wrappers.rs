@@ -744,4 +744,30 @@ impl Planner<'_> {
             body
         )
     }
+
+    pub(crate) fn emit_go_fn_sentinel_adapter(
+        &mut self,
+        setup: &mut Vec<LoweredStatement>,
+        expression: &Expression,
+        sentinel: i64,
+    ) -> String {
+        let (return_type, param_strs, call_str) = self
+            .wrapper_call_parts(setup, expression)
+            .expect("expected function type");
+
+        let inner_ty_str = self.go_type_string(&return_type.ok_type());
+        let ret_var = self.fresh_var(Some("ret"));
+        self.declare(&ret_var);
+
+        let mut body = String::new();
+        write_line!(body, "{} := {}", ret_var, call_str);
+        write_line!(body, "return {}, {} != {}", ret_var, ret_var, sentinel);
+
+        format!(
+            "func({}) ({}, bool) {{\n{}}}",
+            param_strs.join(", "),
+            inner_ty_str,
+            body
+        )
+    }
 }

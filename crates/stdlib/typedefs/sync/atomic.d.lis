@@ -27,7 +27,7 @@ pub fn AddUint64(addr: Ref<uint64>, delta: uint64) -> uint64
 
 /// AddUintptr atomically adds delta to *addr and returns the new value.
 /// Consider using the more ergonomic and less error-prone [Uintptr.Add] instead.
-pub fn AddUintptr(addr: Ref<uint>, delta: uint) -> uint
+pub fn AddUintptr(addr: Ref<uintptr>, delta: uintptr) -> uintptr
 
 /// AndInt32 atomically performs a bitwise AND operation on *addr using the bitmask provided as mask
 /// and returns the old value.
@@ -52,7 +52,7 @@ pub fn AndUint64(addr: Ref<uint64>, mask: uint64) -> uint64
 /// AndUintptr atomically performs a bitwise AND operation on *addr using the bitmask provided as mask
 /// and returns the old value.
 /// Consider using the more ergonomic and less error-prone [Uintptr.And] instead.
-pub fn AndUintptr(addr: Ref<uint>, mask: uint) -> uint
+pub fn AndUintptr(addr: Ref<uintptr>, mask: uintptr) -> uintptr
 
 /// CompareAndSwapInt32 executes the compare-and-swap operation for an int32 value.
 /// Consider using the more ergonomic and less error-prone [Int32.CompareAndSwap] instead.
@@ -78,7 +78,7 @@ pub fn CompareAndSwapUint64(addr: Ref<uint64>, old: uint64, new: uint64) -> bool
 
 /// CompareAndSwapUintptr executes the compare-and-swap operation for a uintptr value.
 /// Consider using the more ergonomic and less error-prone [Uintptr.CompareAndSwap] instead.
-pub fn CompareAndSwapUintptr(addr: Ref<uint>, old: uint, new: uint) -> bool
+pub fn CompareAndSwapUintptr(addr: Ref<uintptr>, old: uintptr, new: uintptr) -> bool
 
 /// LoadInt32 atomically loads *addr.
 /// Consider using the more ergonomic and less error-prone [Int32.Load] instead.
@@ -104,7 +104,7 @@ pub fn LoadUint64(addr: Ref<uint64>) -> uint64
 
 /// LoadUintptr atomically loads *addr.
 /// Consider using the more ergonomic and less error-prone [Uintptr.Load] instead.
-pub fn LoadUintptr(addr: Ref<uint>) -> uint
+pub fn LoadUintptr(addr: Ref<uintptr>) -> uintptr
 
 /// OrInt32 atomically performs a bitwise OR operation on *addr using the bitmask provided as mask
 /// and returns the old value.
@@ -129,7 +129,7 @@ pub fn OrUint64(addr: Ref<uint64>, mask: uint64) -> uint64
 /// OrUintptr atomically performs a bitwise OR operation on *addr using the bitmask provided as mask
 /// and returns the old value.
 /// Consider using the more ergonomic and less error-prone [Uintptr.Or] instead.
-pub fn OrUintptr(addr: Ref<uint>, mask: uint) -> uint
+pub fn OrUintptr(addr: Ref<uintptr>, mask: uintptr) -> uintptr
 
 /// StoreInt32 atomically stores val into *addr.
 /// Consider using the more ergonomic and less error-prone [Int32.Store] instead.
@@ -155,7 +155,7 @@ pub fn StoreUint64(addr: Ref<uint64>, val: uint64)
 
 /// StoreUintptr atomically stores val into *addr.
 /// Consider using the more ergonomic and less error-prone [Uintptr.Store] instead.
-pub fn StoreUintptr(addr: Ref<uint>, val: uint)
+pub fn StoreUintptr(addr: Ref<uintptr>, val: uintptr)
 
 /// SwapInt32 atomically stores new into *addr and returns the previous *addr value.
 /// Consider using the more ergonomic and less error-prone [Int32.Swap] instead.
@@ -181,7 +181,7 @@ pub fn SwapUint64(addr: Ref<uint64>, new: uint64) -> uint64
 
 /// SwapUintptr atomically stores new into *addr and returns the previous *addr value.
 /// Consider using the more ergonomic and less error-prone [Uintptr.Swap] instead.
-pub fn SwapUintptr(addr: Ref<uint>, new: uint) -> uint
+pub fn SwapUintptr(addr: Ref<uintptr>, new: uintptr) -> uintptr
 
 /// A Bool is an atomic boolean value.
 /// The zero value is false.
@@ -356,27 +356,27 @@ impl Uint64 {
 
 impl Uintptr {
   /// Add atomically adds delta to x and returns the new value.
-  fn Add(self: Ref<Uintptr>, delta: uint) -> uint
+  fn Add(self: Ref<Uintptr>, delta: uintptr) -> uintptr
 
   /// And atomically performs a bitwise AND operation on x using the bitmask
   /// provided as mask and returns the old value.
-  fn And(self: Ref<Uintptr>, mask: uint) -> uint
+  fn And(self: Ref<Uintptr>, mask: uintptr) -> uintptr
 
   /// CompareAndSwap executes the compare-and-swap operation for x.
-  fn CompareAndSwap(self: Ref<Uintptr>, old: uint, new: uint) -> bool
+  fn CompareAndSwap(self: Ref<Uintptr>, old: uintptr, new: uintptr) -> bool
 
   /// Load atomically loads and returns the value stored in x.
-  fn Load(self: Ref<Uintptr>) -> uint
+  fn Load(self: Ref<Uintptr>) -> uintptr
 
   /// Or atomically performs a bitwise OR operation on x using the bitmask
   /// provided as mask and returns the old value.
-  fn Or(self: Ref<Uintptr>, mask: uint) -> uint
+  fn Or(self: Ref<Uintptr>, mask: uintptr) -> uintptr
 
   /// Store atomically stores val into x.
-  fn Store(self: Ref<Uintptr>, val: uint)
+  fn Store(self: Ref<Uintptr>, val: uintptr)
 
   /// Swap atomically stores new into x and returns the previous value.
-  fn Swap(self: Ref<Uintptr>, new: uint) -> uint
+  fn Swap(self: Ref<Uintptr>, new: uintptr) -> uintptr
 }
 
 impl Value {

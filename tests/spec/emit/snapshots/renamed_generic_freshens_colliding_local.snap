@@ -1,0 +1,27 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  import sc "go:strconv"
+  
+  fn label<sc>(_tag: sc) -> string {
+    let sc_2 = 9
+    sc.Itoa(sc_2)
+  }
+  
+  fn test() -> string {
+    label(1)
+  }
+---
+package main
+
+import sc "strconv"
+
+func label[sc_2 any](_ sc_2) string {
+	sc_2_1 := 9
+	return sc.Itoa(sc_2_1)
+}
+
+func test() string {
+	return label(1)
+}

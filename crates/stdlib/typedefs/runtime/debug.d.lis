@@ -190,7 +190,7 @@ pub fn Stack() -> Slice<byte>
 /// process; instead, use a temporary file or network socket.
 /// 
 /// The heap dump format is defined at https://golang.org/s/go15heapdump.
-pub fn WriteHeapDump(fd: uint)
+pub fn WriteHeapDump(fd: uintptr)
 
 /// BuildInfo represents the build information read from a Go binary.
 pub struct BuildInfo {

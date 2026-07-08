@@ -1,0 +1,49 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  struct T {
+    v: int,
+  }
+  
+  fn make_t() -> T {
+    T { v: 7 }
+  }
+  
+  fn f<T>(x: T) -> int {
+    let mut opt = None
+    opt = Some(make_t())
+    match opt {
+      Some(t) => t.v,
+      None => 0,
+    }
+  }
+  
+  fn test() -> int {
+    f("hi")
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type T struct {
+	v int
+}
+
+func make_t() T {
+	return T{v: 7}
+}
+
+func f[T_2 any](_ T_2) int {
+	opt := lisette.MakeOptionNone[T]()
+	opt = lisette.MakeOptionSome(make_t())
+	if opt.Tag == lisette.OptionSome {
+		return opt.SomeVal.v
+	}
+	return 0
+}
+
+func test() int {
+	return f("hi")
+}
