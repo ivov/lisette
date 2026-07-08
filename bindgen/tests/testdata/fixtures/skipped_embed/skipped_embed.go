@@ -15,9 +15,13 @@ type Box[T any] struct {
 
 func (Box[T]) M() int { return 0 }
 
-// Embeds Box[[2]int]: the array type argument is unrepresentable, so bindgen
-// skips the field; Host.M must stay flattened, not dropped with the skipped embed.
+// Embeds Box[struct{...}] with a tagged anonymous struct type argument, which is
+// unrepresentable, so bindgen skips the embed; Host.M must stay flattened, not
+// dropped with it. Distinct from Widget above: the gate propagates through a
+// generic type argument, not a direct internal-package embed.
 type Host struct {
-	Box[[2]int]
+	Box[struct {
+		K int `json:"k"`
+	}]
 	Y int
 }

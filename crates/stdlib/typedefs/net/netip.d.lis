@@ -3,11 +3,13 @@
 // Go: 1.25.10
 // Lisette: 0.4.5
 
-// SKIPPED: AddrFrom16 - array-currently-not-representable
-// fixed-size array cannot currently be represented in Lisette
+/// AddrFrom16 returns the IPv6 address given by the bytes in addr.
+/// An IPv4-mapped IPv6 address is left as an IPv6 address.
+/// (Use Unmap to convert them if needed.)
+pub fn AddrFrom16(addr: Array<byte, 16>) -> Addr
 
-// SKIPPED: AddrFrom4 - array-currently-not-representable
-// fixed-size array cannot currently be represented in Lisette
+/// AddrFrom4 returns the address of the IPv4 address given by the bytes in addr.
+pub fn AddrFrom4(addr: Array<byte, 4>) -> Addr
 
 /// AddrFromSlice parses the 4- or 16-byte byte slice as an IPv4 or IPv6 address.
 /// Note that a [net.IP] can be passed directly as the []byte argument.
@@ -114,14 +116,12 @@ impl Addr {
   /// IPv6 addresses with zones are returned without their zone (use the
   /// [Addr.Zone] method to get it).
   /// The ip zero value returns all zeroes.
-  #[go(array_return)]
-  fn As16(self) -> Slice<byte>
+  fn As16(self) -> Array<byte, 16>
 
   /// As4 returns an IPv4 or IPv4-in-IPv6 address in its 4-byte representation.
   /// If ip is the zero [Addr] or an IPv6 address, As4 panics.
   /// Note that 0.0.0.0 is not the zero Addr.
-  #[go(array_return)]
-  fn As4(self) -> Slice<byte>
+  fn As4(self) -> Array<byte, 4>
 
   /// AsSlice returns an IPv4 or IPv6 address in its respective 4-byte or 16-byte representation.
   fn AsSlice(self) -> Slice<byte>

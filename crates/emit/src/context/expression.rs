@@ -19,13 +19,6 @@ pub(crate) enum SyntaxContext {
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub(crate) enum GoArrayReturnPolicy {
-    #[default]
-    WrapArrayReturn,
-    KeepRawArrayReturn,
-}
-
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(crate) enum GoFunctionValuePolicy {
     #[default]
     AllowLoweredIdentity,
@@ -44,7 +37,6 @@ pub(crate) struct ExpressionContext<'a> {
     callee_role: CalleeRole,
     syntax_context: SyntaxContext,
     expected_slot_type: Option<&'a Type>,
-    go_array_return_policy: GoArrayReturnPolicy,
     go_function_value_policy: GoFunctionValuePolicy,
     argument_target: ArgumentTarget,
 }
@@ -66,11 +58,6 @@ impl<'a> ExpressionContext<'a> {
 
     pub(crate) fn with_expected_slot_type(mut self, ty: Option<&'a Type>) -> Self {
         self.expected_slot_type = ty;
-        self
-    }
-
-    pub(crate) fn with_raw_go_array_return(mut self) -> Self {
-        self.go_array_return_policy = GoArrayReturnPolicy::KeepRawArrayReturn;
         self
     }
 
@@ -112,13 +99,6 @@ impl<'a> ExpressionContext<'a> {
         matches!(
             self.go_function_value_policy,
             GoFunctionValuePolicy::ForceTaggedWrapper
-        )
-    }
-
-    pub(crate) fn keeps_raw_go_array_return(self) -> bool {
-        matches!(
-            self.go_array_return_policy,
-            GoArrayReturnPolicy::KeepRawArrayReturn
         )
     }
 

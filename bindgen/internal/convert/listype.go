@@ -1,10 +1,16 @@
 package convert
 
-import "strings"
+import (
+	"strconv"
+	"strings"
+)
 
 // Constructors and predicates for the string-based Lisette type vocabulary.
 
-func sliceOf(elem string) string    { return "Slice<" + elem + ">" }
+func sliceOf(elem string) string { return "Slice<" + elem + ">" }
+func arrayOf(elem string, n int64) string {
+	return "Array<" + elem + ", " + strconv.FormatInt(n, 10) + ">"
+}
 func optionOf(elem string) string   { return "Option<" + elem + ">" }
 func refOf(elem string) string      { return "Ref<" + elem + ">" }
 func mapOf(key, val string) string  { return "Map<" + key + ", " + val + ">" }

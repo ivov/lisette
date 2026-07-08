@@ -355,8 +355,8 @@ pub struct Section {
 
 /// A Section32 is a 32-bit Mach-O section header.
 pub struct Section32 {
-  // SKIPPED field "Name": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
-  // SKIPPED field "Seg": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
+  pub Name: Array<byte, 16>,
+  pub Seg: Array<byte, 16>,
   pub Addr: uint32,
   pub Size: uint32,
   pub Offset: uint32,
@@ -370,8 +370,8 @@ pub struct Section32 {
 
 /// A Section64 is a 64-bit Mach-O section header.
 pub struct Section64 {
-  // SKIPPED field "Name": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
-  // SKIPPED field "Seg": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
+  pub Name: Array<byte, 16>,
+  pub Seg: Array<byte, 16>,
   pub Addr: uint64,
   pub Size: uint64,
   pub Offset: uint32,
@@ -408,7 +408,7 @@ pub struct Segment {
 pub struct Segment32 {
   pub Cmd: LoadCmd,
   pub Len: uint32,
-  // SKIPPED field "Name": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
+  pub Name: Array<byte, 16>,
   pub Addr: uint32,
   pub Memsz: uint32,
   pub Offset: uint32,
@@ -423,7 +423,7 @@ pub struct Segment32 {
 pub struct Segment64 {
   pub Cmd: LoadCmd,
   pub Len: uint32,
-  // SKIPPED field "Name": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
+  pub Name: Array<byte, 16>,
   pub Addr: uint64,
   pub Memsz: uint64,
   pub Offset: uint64,

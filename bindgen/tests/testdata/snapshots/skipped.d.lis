@@ -9,15 +9,6 @@ pub fn MakeOpaqueFunc() -> OpaqueFunc
 
 pub fn SkippedMin<T: Ordered>(a: T, b: T) -> T
 
-// SKIPPED: TakesAliasArray - array-currently-not-representable
-// fixed-size array cannot currently be represented in Lisette
-
-// SKIPPED: TakesArray - array-currently-not-representable
-// fixed-size array cannot currently be represented in Lisette
-
-// SKIPPED: TakesArrayKeyMap - array-currently-not-representable
-// fixed-size array cannot currently be represented in Lisette
-
 /// Should be skipped: unsafe.Pointer
 pub fn UnsafeFunc(p: Unknown)
 
@@ -28,33 +19,6 @@ pub fn UnsafeParam(p: Unknown) -> int
 pub fn UnsafeReturn() -> Unknown
 
 pub fn UseOpaqueFunc(fn_: OpaqueFunc)
-
-pub struct AliasArrayKeyHolder {
-  // SKIPPED field "Pairs": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
-  pub Name: string,
-}
-
-// SKIPPED: AliasToArray - array-currently-not-representable
-// fixed-size array cannot currently be represented in Lisette
-pub type AliasToArray
-
-/// Arrays inside other structural positions: slice element, map value, and
-/// pointer must all propagate the skip rather than leaking a slice-shaped
-/// Lisette type.
-// SKIPPED field "SliceOfArr": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
-// SKIPPED field "MapValArr": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
-// SKIPPED field "PtrToArr": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
-// SKIPPED field "DirectField": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
-pub type ArrayInStructPositions
-
-/// Should skip: array as map key produces an uncomparable Lisette type.
-pub struct ArrayKeyHolder {
-  // SKIPPED field "Pairs": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
-  pub Name: string,
-}
-
-/// Should skip: array param on the receiver method, same reason.
-pub type ArrayParamHolder
 
 pub struct HasUnsafe {
   pub Ptr: Unknown,
@@ -83,10 +47,6 @@ pub struct UnsafeStruct {
 }
 
 pub var DefaultOpaqueFunc: OpaqueFunc
-
-impl ArrayParamHolder {
-  // SKIPPED method "Set": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
-}
 
 impl SafeStruct {
   /// Method on safe struct

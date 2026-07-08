@@ -21,9 +21,8 @@ func TupleReturn() (struct{ A int }, struct{ B int }) {
 // Parameter position; constructible from Lisette because every field is exported.
 func TakesAnon(p struct{ X int }) {}
 
-// Collection, pointer, and channel element positions. The array element still
-// gates, because fixed-size arrays are unrepresentable, so only that field is
-// dropped.
+// Collection, pointer, channel, and array element positions all synthesize the
+// anonymous element.
 type Carriers struct {
 	Slice  []struct{ X int }
 	MapKey map[struct{ X int }]int
@@ -41,11 +40,14 @@ type Holder struct {
 	Writer struct{ W io.Writer }
 }
 
-// OnlyInArray's anonymous element appears nowhere else. The array gates, so the
-// field drops; the element synthesis must not leak a type into the output.
-type OnlyInArray struct {
-	Items [3]struct{ Q int }
-	Name  string
+// OnlyGated's anonymous value element appears nowhere else. The field gates (its
+// map key is a tagged anonymous struct, which is unrepresentable), so the field
+// drops; the value's element synthesis must not leak a type into the output.
+type OnlyGated struct {
+	Items map[struct {
+		K int `json:"k"`
+	}]struct{ Q int }
+	Name string
 }
 
 // Variable position.

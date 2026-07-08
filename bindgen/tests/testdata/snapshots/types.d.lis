@@ -3,8 +3,7 @@
 // Go: 0.0.0
 // Lisette: 0.0.0
 
-#[go(array_return)]
-pub fn GetArray() -> Slice<int>
+pub fn GetArray() -> Array<int, 10>
 
 pub fn GetBiDir() -> Channel<int>
 

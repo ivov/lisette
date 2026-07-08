@@ -35,7 +35,7 @@ pub fn NewIEEE() -> hash.Hash32
 pub fn Update(crc: uint32, tab: Ref<Table>, p: Slice<byte>) -> uint32
 
 /// Table is a 256-word table representing the polynomial for efficient processing.
-pub struct Table(Slice<uint32>)
+pub struct Table(Array<uint32, 256>)
 
 /// Predefined polynomials.
 pub const Castagnoli = 0x82f63b78

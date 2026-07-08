@@ -450,9 +450,7 @@ pub fn CloseOnExec(fd: Handle)
 
 pub fn Closesocket(s: Handle) -> Result<(), error>
 
-// SKIPPED returns-with: array-currently-not-representable
-// fixed-size array cannot currently be represented in Lisette
-pub fn CommandLineToArgv(cmd: Ref<uint16>, argc: Ref<int32>) -> Result<Unknown, error>
+pub fn CommandLineToArgv(cmd: Ref<uint16>, argc: Ref<int32>) -> Result<Ref<Array<Ref<Array<uint16, 8192>>, 8192>>, error>
 
 pub fn ComputerName() -> Result<string, error>
 
@@ -1111,8 +1109,12 @@ pub fn SetsockoptIPMreq(fd: Handle, level: int, opt: int, mreq: Ref<IPMreq>) -> 
 
 pub fn SetsockoptIPv6Mreq(fd: Handle, level: int, opt: int, mreq: Ref<IPv6Mreq>) -> Result<(), error>
 
-// SKIPPED: SetsockoptInet4Addr - array-currently-not-representable
-// fixed-size array cannot currently be represented in Lisette
+pub fn SetsockoptInet4Addr(
+  fd: Handle,
+  level: int,
+  opt: int,
+  value: Array<byte, 4>,
+) -> Result<(), error>
 
 pub fn SetsockoptInt(fd: Handle, level: int, opt: int, value: int) -> Result<(), error>
 
@@ -1575,7 +1577,7 @@ pub struct DNSRecord {
   pub Dw: uint32,
   pub Ttl: uint32,
   pub Reserved: uint32,
-  // SKIPPED field "Data": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
+  pub Data: Array<byte, 40>,
 }
 
 pub struct DNSSRVData {
@@ -1588,7 +1590,7 @@ pub struct DNSSRVData {
 
 pub struct DNSTXTData {
   pub StringCount: uint16,
-  // SKIPPED field "StringArray": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
+  pub StringArray: Array<Option<uint16>, 1>,
 }
 
 pub struct FileNotifyInformation {
@@ -1607,7 +1609,7 @@ pub struct GUID {
   pub Data1: uint32,
   pub Data2: uint16,
   pub Data3: uint16,
-  // SKIPPED field "Data4": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
+  pub Data4: Array<byte, 8>,
 }
 
 pub struct Handle(uintptr)
@@ -1620,12 +1622,13 @@ pub struct Hostent {
   pub AddrList: Option<Ref<Ref<byte>>>,
 }
 
-// SKIPPED field "Multiaddr": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
-// SKIPPED field "Interface": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
-pub type IPMreq
+pub struct IPMreq {
+  pub Multiaddr: Array<byte, 4>,
+  pub Interface: Array<byte, 4>,
+}
 
 pub struct IPv6Mreq {
-  // SKIPPED field "Multiaddr": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
+  pub Multiaddr: Array<byte, 16>,
   pub Interface: uint32,
 }
 
@@ -1639,10 +1642,10 @@ pub struct InterfaceInfo {
 pub struct IpAdapterInfo {
   pub Next: Option<Ref<IpAdapterInfo>>,
   pub ComboIndex: uint32,
-  // SKIPPED field "AdapterName": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
-  // SKIPPED field "Description": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
+  pub AdapterName: Array<byte, 260>,
+  pub Description: Array<byte, 132>,
   pub AddressLength: uint32,
-  // SKIPPED field "Address": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
+  pub Address: Array<byte, 8>,
   pub Index: uint32,
   pub Type: uint32,
   pub DhcpEnabled: uint32,
@@ -1664,11 +1667,13 @@ pub struct IpAddrString {
   pub Context: uint32,
 }
 
-// SKIPPED field "String": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
-pub type IpAddressString
+pub struct IpAddressString {
+  pub String: Array<byte, 16>,
+}
 
-// SKIPPED field "String": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
-pub type IpMaskString
+pub struct IpMaskString {
+  pub String: Array<byte, 16>,
+}
 
 /// A LazyDLL implements access to a single [DLL].
 /// It will delay the load of the DLL until the first
@@ -1696,13 +1701,13 @@ pub struct Linger {
 }
 
 pub struct MibIfRow {
-  // SKIPPED field "Name": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
+  pub Name: Array<uint16, 256>,
   pub Index: uint32,
   pub Type: uint32,
   pub Mtu: uint32,
   pub Speed: uint32,
   pub PhysAddrLen: uint32,
-  // SKIPPED field "PhysAddr": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
+  pub PhysAddr: Array<byte, 8>,
   pub AdminStatus: uint32,
   pub OperStatus: uint32,
   pub LastChange: uint32,
@@ -1719,7 +1724,7 @@ pub struct MibIfRow {
   pub OutErrors: uint32,
   pub OutQLen: uint32,
   pub DescrLen: uint32,
-  // SKIPPED field "Descr": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
+  pub Descr: Array<byte, 256>,
 }
 
 pub struct Overlapped {
@@ -1761,7 +1766,7 @@ pub struct ProcessEntry32 {
   pub ParentProcessID: uint32,
   pub PriClassBase: int32,
   pub Flags: uint32,
-  // SKIPPED field "ExeFile": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
+  pub ExeFile: Array<uint16, 260>,
 }
 
 pub struct ProcessInformation {
@@ -1786,32 +1791,32 @@ pub interface RawConn {
 
 pub struct RawSockaddr {
   pub Family: uint16,
-  // SKIPPED field "Data": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
+  pub Data: Array<int8, 14>,
 }
 
 pub struct RawSockaddrAny {
   pub Addr: RawSockaddr,
-  // SKIPPED field "Pad": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
+  pub Pad: Array<int8, 100>,
 }
 
 pub struct RawSockaddrInet4 {
   pub Family: uint16,
   pub Port: uint16,
-  // SKIPPED field "Addr": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
-  // SKIPPED field "Zero": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
+  pub Addr: Array<byte, 4>,
+  pub Zero: Array<uint8, 8>,
 }
 
 pub struct RawSockaddrInet6 {
   pub Family: uint16,
   pub Port: uint16,
   pub Flowinfo: uint32,
-  // SKIPPED field "Addr": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
+  pub Addr: Array<byte, 16>,
   pub Scope_id: uint32,
 }
 
 pub struct RawSockaddrUnix {
   pub Family: uint16,
-  // SKIPPED field "Path": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
+  pub Path: Array<int8, 108>,
 }
 
 /// Invented structures to support what package os expects.
@@ -1856,17 +1861,17 @@ pub interface Sockaddr {
   fn sockaddr()
 }
 
-pub struct SockaddrGen(Slice<byte>)
+pub struct SockaddrGen(Array<byte, 24>)
 
 pub struct SockaddrInet4 {
   pub Port: int,
-  // SKIPPED field "Addr": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
+  pub Addr: Array<byte, 4>,
 }
 
 pub struct SockaddrInet6 {
   pub Port: int,
   pub ZoneId: uint32,
-  // SKIPPED field "Addr": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
+  pub Addr: Array<byte, 16>,
 }
 
 pub struct SockaddrUnix {
@@ -1935,10 +1940,10 @@ pub struct Timeval {
 
 pub struct Timezoneinformation {
   pub Bias: int32,
-  // SKIPPED field "StandardName": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
+  pub StandardName: Array<uint16, 32>,
   pub StandardDate: Systemtime,
   pub StandardBias: int32,
-  // SKIPPED field "DaylightName": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
+  pub DaylightName: Array<uint16, 32>,
   pub DaylightDate: Systemtime,
   pub DaylightBias: int32,
 }
@@ -1985,13 +1990,13 @@ pub struct WSAData {
   pub MaxSockets: uint16,
   pub MaxUdpDg: uint16,
   pub VendorInfo: Option<Ref<byte>>,
-  // SKIPPED field "Description": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
-  // SKIPPED field "SystemStatus": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
+  pub Description: Array<byte, 257>,
+  pub SystemStatus: Array<byte, 129>,
 }
 
 pub struct WSAProtocolChain {
   pub ChainLen: int32,
-  // SKIPPED field "ChainEntries": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
+  pub ChainEntries: Array<uint32, 7>,
 }
 
 pub struct WSAProtocolInfo {
@@ -2014,7 +2019,7 @@ pub struct WSAProtocolInfo {
   pub SecurityScheme: int32,
   pub MessageSize: uint32,
   pub ProviderReserved: uint32,
-  // SKIPPED field "ProtocolName": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
+  pub ProtocolName: Array<uint16, 256>,
 }
 
 pub struct WaitStatus {
@@ -2039,8 +2044,8 @@ pub struct Win32finddata {
   pub FileSizeLow: uint32,
   pub Reserved0: uint32,
   pub Reserved1: uint32,
-  // SKIPPED field "FileName": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
-  // SKIPPED field "AlternateFileName": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
+  pub FileName: Array<uint16, 259>,
+  pub AlternateFileName: Array<uint16, 13>,
 }
 
 pub const AF_INET = 2

@@ -38,20 +38,16 @@ pub fn NewSHAKE128() -> Ref<SHAKE>
 pub fn NewSHAKE256() -> Ref<SHAKE>
 
 /// Sum224 returns the SHA3-224 hash of data.
-#[go(array_return)]
-pub fn Sum224(data: Slice<byte>) -> Slice<byte>
+pub fn Sum224(data: Slice<byte>) -> Array<byte, 28>
 
 /// Sum256 returns the SHA3-256 hash of data.
-#[go(array_return)]
-pub fn Sum256(data: Slice<byte>) -> Slice<byte>
+pub fn Sum256(data: Slice<byte>) -> Array<byte, 32>
 
 /// Sum384 returns the SHA3-384 hash of data.
-#[go(array_return)]
-pub fn Sum384(data: Slice<byte>) -> Slice<byte>
+pub fn Sum384(data: Slice<byte>) -> Array<byte, 48>
 
 /// Sum512 returns the SHA3-512 hash of data.
-#[go(array_return)]
-pub fn Sum512(data: Slice<byte>) -> Slice<byte>
+pub fn Sum512(data: Slice<byte>) -> Array<byte, 64>
 
 /// SumSHAKE128 applies the SHAKE128 extendable output function to data and
 /// returns an output of the given length in bytes.

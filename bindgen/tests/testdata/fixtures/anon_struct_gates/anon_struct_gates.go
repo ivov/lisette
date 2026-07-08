@@ -38,10 +38,13 @@ func PartlyExported() struct {
 	}{}
 }
 
-// OrphanSibling skips whole (the array param is unrepresentable). Its first
-// param mints a uniquely-shaped synthesized struct; that synth must not leak
-// into the output as an orphan once the function is dropped.
-func OrphanSibling(p struct{ OnlyHere int }, addr [4]byte) {}
+// OrphanSibling skips whole (the second param is a tagged anonymous struct,
+// which gates). Its first param mints a uniquely-shaped synthesized struct; that
+// synth must not leak into the output as an orphan once the function is dropped.
+func OrphanSibling(p struct{ OnlyHere int }, gate struct {
+	G int `json:"g"`
+}) {
+}
 
 // In a named struct each gated anonymous-struct field drops while the rest stay.
 type Mix struct {

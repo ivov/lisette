@@ -56,20 +56,20 @@ bindgen/bin/bindgen pkg github.com/gorilla/mux \
 
 Some Go types map 1:1 to Lisette types.
 
-| Go                     | Lisette                               |
-| ---------------------- | ------------------------------------- |
-| `string`               | identical                             |
-| `bool`                 | identical                             |
-| `int`, `int64`, etc.   | identical                             |
-| `uint8`, `uint16` etc. | identical                             |
-| `float32`, `float64`   | identical                             |
-| `any`, `interface{}`   | `Unknown`                             |
-| `[]T`                  | `Slice<T>`                            |
-| `[N]T`                 | `Slice<T>` with `#[go(array_return)]` |
-| `map[K]V`              | `Map<K, V>`                           |
-| `chan T`               | `Channel<T>`                          |
-| `<-chan T`             | `Receiver<T>`                         |
-| `chan<- T`             | `Sender<T>`                           |
+| Go                     | Lisette         |
+| ---------------------- | ----------------|
+| `string`               | identical       |
+| `bool`                 | identical       |
+| `int`, `int64`, etc.   | identical       |
+| `uint8`, `uint16` etc. | identical       |
+| `float32`, `float64`   | identical       |
+| `any`, `interface{}`   | `Unknown`       |
+| `[]T`                  | `Slice<T>`      |
+| `[N]T`                 | `Array<T, N>`   |
+| `map[K]V`              | `Map<K, V>`     |
+| `chan T`               | `Channel<T>`    |
+| `<-chan T`             | `Receiver<T>`   |
+| `chan<- T`             | `Sender<T>`     |
 
 ## Contextual mappings
 

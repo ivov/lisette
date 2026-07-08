@@ -7,11 +7,13 @@ pub struct Box<T> {
   pub V: T,
 }
 
-/// Embeds Box[[2]int]: the array type argument is unrepresentable, so bindgen
-/// skips the field; Host.M must stay flattened, not dropped with the skipped embed.
+/// Embeds Box[struct{...}] with a tagged anonymous struct type argument, which is
+/// unrepresentable, so bindgen skips the embed; Host.M must stay flattened, not
+/// dropped with it. Distinct from Widget above: the gate propagates through a
+/// generic type argument, not a direct internal-package embed.
 #[go(hidden_embed)]
 pub struct Host {
-  // SKIPPED field "Box": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
+  // SKIPPED field "Box": anonymous-struct — anonymous struct types are not supported
   pub Y: int,
 }
 

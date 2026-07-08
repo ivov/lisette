@@ -391,9 +391,6 @@ func (e *Emitter) emitFunction(result convert.ConvertResult) {
 	if result.CommaOk {
 		e.buf.WriteString("#[go(comma_ok)]\n")
 	}
-	if result.ArrayReturn {
-		e.buf.WriteString("#[go(array_return)]\n")
-	}
 	if result.CollapsedTypeParamRecipe != "" {
 		fmt.Fprintf(&e.buf, "#[go(collapsed_type_params, %q)]\n", result.CollapsedTypeParamRecipe)
 	}
@@ -455,9 +452,6 @@ func (e *Emitter) emitMethodInImpl(result convert.ConvertResult, recvName string
 
 	if result.CommaOk {
 		e.buf.WriteString("  #[go(comma_ok)]\n")
-	}
-	if result.ArrayReturn {
-		e.buf.WriteString("  #[go(array_return)]\n")
 	}
 	if result.SentinelInt != nil {
 		e.buf.WriteString("  " + sentinelFlag(*result.SentinelInt) + "\n")
@@ -525,9 +519,6 @@ func (e *Emitter) emitInterface(result convert.ConvertResult) {
 			}
 			if m.CommaOk {
 				signature.WriteString("  #[go(comma_ok)]\n")
-			}
-			if m.ArrayReturn {
-				signature.WriteString("  #[go(array_return)]\n")
 			}
 			if m.BuilderMethod {
 				signature.WriteString("  #[allow(unused_value)]\n")

@@ -528,19 +528,6 @@ impl Planner<'_> {
         None
     }
 
-    pub(crate) fn is_go_array_return_value(&self, expression: &Expression) -> bool {
-        if let Expression::DotAccess {
-            expression: receiver,
-            member,
-            ..
-        } = expression.unwrap_parens()
-            && is_go_receiver(receiver)
-        {
-            return self.has_go_array_return(receiver, member);
-        }
-        false
-    }
-
     fn hoist_go_fn_if_needed(
         &mut self,
         setup: &mut Vec<LoweredStatement>,
@@ -596,31 +583,6 @@ impl Planner<'_> {
         let (param_strs, arg_names) = self.build_wrapper_params(&params);
         let call_str = format!("{}({})", go_fn_str, arg_names.join(", "));
         Some((return_type, param_strs, call_str))
-    }
-
-    pub(crate) fn emit_array_return_wrapper(
-        &mut self,
-        setup: &mut Vec<LoweredStatement>,
-        expression: &Expression,
-    ) -> String {
-        let Some((return_type, param_strs, call_str)) = self.wrapper_call_parts(setup, expression)
-        else {
-            return self.capture_operand_into(setup, expression);
-        };
-
-        let ret_ty_str = self.go_type_string(&return_type);
-
-        let arr_var = self.fresh_var(Some("arr"));
-        self.declare(&arr_var);
-
-        format!(
-            "func({}) {} {{\n{} := {}\nreturn {}[:]\n}}",
-            param_strs.join(", "),
-            ret_ty_str,
-            arr_var,
-            call_str,
-            arr_var,
-        )
     }
 
     pub(crate) fn emit_go_fn_wrapper(

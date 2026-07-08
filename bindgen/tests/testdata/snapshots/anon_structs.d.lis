@@ -69,16 +69,15 @@ pub fn TakesAnon(p: AnonX)
 /// TupleReturn returns two distinct anonymous structs.
 pub fn TupleReturn() -> (AnonA, AnonB)
 
-/// Collection, pointer, and channel element positions. The array element still
-/// gates, because fixed-size arrays are unrepresentable, so only that field is
-/// dropped.
+/// Collection, pointer, channel, and array element positions all synthesize the
+/// anonymous element.
 pub struct Carriers {
   pub Slice: Slice<AnonX>,
   pub MapKey: Map<AnonX, int>,
   pub MapVal: Map<string, AnonX>,
   pub Ptr: Option<Ref<AnonX>>,
   pub Chan: Channel<AnonX>,
-  // SKIPPED field "Array": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
+  pub Array: Array<AnonX, 4>,
 }
 
 /// Struct fields, including a nested anonymous struct and one carrying an
@@ -89,10 +88,11 @@ pub struct Holder {
   pub Writer: AnonW,
 }
 
-/// OnlyInArray's anonymous element appears nowhere else. The array gates, so the
-/// field drops; the element synthesis must not leak a type into the output.
-pub struct OnlyInArray {
-  // SKIPPED field "Items": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
+/// OnlyGated's anonymous value element appears nowhere else. The field gates (its
+/// map key is a tagged anonymous struct, which is unrepresentable), so the field
+/// drops; the value's element synthesis must not leak a type into the output.
+pub struct OnlyGated {
+  // SKIPPED field "Items": anonymous-struct — anonymous struct types are not supported
   pub Name: string,
 }
 

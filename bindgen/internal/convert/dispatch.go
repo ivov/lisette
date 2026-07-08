@@ -31,7 +31,6 @@ type ConvertResult struct {
 	IsInterface bool // true when this type should be emitted as `pub interface`
 	IsTypeAlias bool // true for Go type aliases (type X = Y)
 	CommaOk     bool // true when return is from (T, bool) comma-ok with nilable T
-	ArrayReturn bool // true when Go type is [N]T but Lisette type is Slice<T>
 	// CollapsedTypeParamRecipe is non-empty when a type param was collapsed into
 	// its shape (`S ~[]E` -> `Slice<E>`), so the Lisette type-param list no
 	// longer lines up with Go's. It holds Go's full type-param list in order,
@@ -88,7 +87,6 @@ type InterfaceMethod struct {
 	Params        []FunctionParameter
 	ReturnType    string
 	CommaOk       bool
-	ArrayReturn   bool
 	BuilderMethod bool
 	SealId        string // non-empty for a Go unexported method: its seal identity
 }

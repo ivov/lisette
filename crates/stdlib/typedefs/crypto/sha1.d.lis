@@ -12,8 +12,7 @@ import "go:hash"
 pub fn New() -> hash.Hash
 
 /// Sum returns the SHA-1 checksum of the data.
-#[go(array_return)]
-pub fn Sum(data: Slice<byte>) -> Slice<byte>
+pub fn Sum(data: Slice<byte>) -> Array<byte, 20>
 
 /// The blocksize of SHA-1 in bytes.
 pub const BlockSize = 64

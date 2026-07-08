@@ -19,7 +19,6 @@ type TypeResult struct {
 	LisetteType          string
 	SkipReason           *SkipReason
 	CommaOk              bool // true when return type comes from a (T, bool) comma-ok pattern
-	ArrayReturn          bool // true when Go type is [N]T but Lisette type is Slice<T>
 	IsDirectError        bool // true when *T where T implements error was auto-detected as error value
 	NilableReturnApplied bool // set when per-element wrapping already occurred; callers must skip whole-return wrap to avoid double-wrapping
 }
@@ -81,15 +80,7 @@ func toLisetteRecursive(t types.Type, seen map[types.Type]bool, conv *Converter)
 		return TypeResult{LisetteType: sliceOf(elem.LisetteType)}
 
 	case *types.Array:
-		// Arrays are unrepresentable regardless of element; probe only to surface
-		// a more specific skip, discarding any stand-in minted along the way.
-		mark := conv.synthMark()
-		elem := toLisetteRecursive(t.Elem(), seen, conv)
-		conv.rollbackSynth(mark)
-		if elem.SkipReason != nil {
-			return elem
-		}
-		return TypeResult{SkipReason: arrayUnrepresentable()}
+		return arrayTypeResult(t, seen, conv, false)
 
 	case *types.Map:
 		key := toLisetteRecursive(t.Key(), seen, conv)
@@ -402,13 +393,7 @@ func toLisetteNilableRecursive(t types.Type, seen map[types.Type]bool, conv *Con
 		return TypeResult{LisetteType: sliceOf(elem.LisetteType)}
 
 	case *types.Array:
-		mark := conv.synthMark()
-		elem := toLisetteNilableRecursive(t.Elem(), seen, conv)
-		conv.rollbackSynth(mark)
-		if elem.SkipReason != nil {
-			return elem
-		}
-		return TypeResult{SkipReason: arrayUnrepresentable()}
+		return arrayTypeResult(t, seen, conv, true)
 
 	case *types.Map:
 		key := toLisetteRecursive(t.Key(), seen, conv)
@@ -429,50 +414,22 @@ func toLisetteNilableRecursive(t types.Type, seen map[types.Type]bool, conv *Con
 	}
 }
 
-func arrayUnrepresentable() *SkipReason {
-	return &SkipReason{
-		Code:    "array-currently-not-representable",
-		Message: "fixed-size array cannot currently be represented in Lisette",
+// arrayTypeResult converts a Go fixed-size array `[N]T` to Lisette `Array<T, N>`,
+// recursing into the element (so `[N][M]T` becomes `Array<Array<T, M>, N>`). The
+// length is part of the type, so no boundary annotation is needed. `nilable`
+// selects the element recursion so a nil-capable element (pointer, interface) is
+// wrapped in Option in nilable positions, matching Slice and Map.
+func arrayTypeResult(arr *types.Array, seen map[types.Type]bool, conv *Converter, nilable bool) TypeResult {
+	var elem TypeResult
+	if nilable {
+		elem = toLisetteNilableRecursive(arr.Elem(), seen, conv)
+	} else {
+		elem = toLisetteRecursive(arr.Elem(), seen, conv)
 	}
-}
-
-func unwrapArray(t types.Type) *types.Array {
-	for {
-		switch v := t.(type) {
-		case *types.Array:
-			return v
-		case *types.Alias:
-			t = v.Rhs()
-		default:
-			return nil
-		}
-	}
-}
-
-func arrayReturnTypeResult(arr *types.Array, seen map[types.Type]bool, conv *Converter) TypeResult {
-	elem := arrayElementToLisette(arr.Elem(), seen, conv)
 	if elem.SkipReason != nil {
 		return elem
 	}
-	return TypeResult{
-		LisetteType: sliceOf(elem.LisetteType),
-		ArrayReturn: true,
-	}
-}
-
-func arraySliceTypeResult(arr *types.Array, seen map[types.Type]bool, conv *Converter) TypeResult {
-	elem := arrayElementToLisette(arr.Elem(), seen, conv)
-	if elem.SkipReason != nil {
-		return elem
-	}
-	return TypeResult{LisetteType: sliceOf(elem.LisetteType)}
-}
-
-func arrayElementToLisette(t types.Type, seen map[types.Type]bool, conv *Converter) TypeResult {
-	if inner := unwrapArray(t); inner != nil {
-		return arraySliceTypeResult(inner, seen, conv)
-	}
-	return toLisetteRecursive(t, seen, conv)
+	return TypeResult{LisetteType: arrayOf(elem.LisetteType, arr.Len())}
 }
 
 func namedImplementsError(t *types.Named) bool {

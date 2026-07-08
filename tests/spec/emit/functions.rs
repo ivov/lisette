@@ -1176,22 +1176,6 @@ struct Cache<K, V> {
 }
 
 #[test]
-fn go_array_return_temp_var_no_collision() {
-    let input = r#"
-import "go:crypto/sha256"
-
-fn main() {
-  let data = "hello" as Slice<uint8>
-  let hash = sha256.Sum256(data)
-  let arr_1 = 7
-  let _ = hash
-  let _ = arr_1
-}
-"#;
-    assert_emit_snapshot!(input);
-}
-
-#[test]
 fn go_interface_method_err_result_type() {
     let input = r#"
 import "go:context"

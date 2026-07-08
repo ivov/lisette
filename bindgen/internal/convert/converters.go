@@ -224,7 +224,6 @@ func (c *Converter) applyReturnType(result *ConvertResult, sig *types.Signature,
 		result.SkipNote = returnType.SkipReason
 	}
 	result.CommaOk = returnType.CommaOk
-	result.ArrayReturn = returnType.ArrayReturn
 	c.applySentinelInt(result, lookupName)
 	return returnType
 }
@@ -674,17 +673,8 @@ func (c *Converter) convertType(result *ConvertResult, exp extract.SymbolExport)
 		result.LisetteType = basicToLisette(u)
 
 	default:
-		// `type UUID [16]byte` keeps its slice-shaped newtype body; this is
-		// the one position where an array lowers to a slice rather than skipping.
-		if arr := unwrapArray(underlying); arr != nil {
-			t := arraySliceTypeResult(arr, make(map[types.Type]bool), c)
-			if t.SkipReason != nil {
-				result.SkipReason = withOpaqueType(t.SkipReason)
-				return
-			}
-			result.LisetteType = t.LisetteType
-			return
-		}
+		// Newtype body, e.g. `type UUID [16]byte` keeps `Array<byte, 16>` and
+		// `type Handler func(...)` keeps its function type.
 		t := ToLisette(underlying, c)
 		if t.SkipReason != nil {
 			result.SkipReason = withOpaqueType(t.SkipReason)
@@ -1914,11 +1904,10 @@ func (c *Converter) extractInterfaceMethods(_interface *types.Interface, typeNam
 		}
 
 		methods = append(methods, InterfaceMethod{
-			Name:        method.Name(),
-			Params:      params,
-			ReturnType:  returnType.LisetteType,
-			CommaOk:     returnType.CommaOk,
-			ArrayReturn: returnType.ArrayReturn,
+			Name:       method.Name(),
+			Params:     params,
+			ReturnType: returnType.LisetteType,
+			CommaOk:    returnType.CommaOk,
 		})
 	}
 

@@ -3,6 +3,14 @@
 // Go: 1.25.10
 // Lisette: 0.4.5
 
+/// Synthesized from a Go anonymous struct type.
+#[go(anon_struct)]
+pub struct AnonSizeMallocsFrees {
+  pub Size: uint32,
+  pub Mallocs: uint64,
+  pub Frees: uint64,
+}
+
 /// AddCleanup attaches a cleanup function to ptr. Some time after ptr is no longer
 /// reachable, the runtime will call cleanup(arg) in a separate goroutine.
 /// 
@@ -715,7 +723,7 @@ pub struct MemProfileRecord {
   pub FreeBytes: int64,
   pub AllocObjects: int64,
   pub FreeObjects: int64,
-  // SKIPPED field "Stack0": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
+  pub Stack0: Array<uintptr, 32>,
 }
 
 /// A MemStats records statistics about the memory allocator.
@@ -744,14 +752,14 @@ pub struct MemStats {
   pub NextGC: uint64,
   pub LastGC: uint64,
   pub PauseTotalNs: uint64,
-  // SKIPPED field "PauseNs": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
-  // SKIPPED field "PauseEnd": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
+  pub PauseNs: Array<uint64, 256>,
+  pub PauseEnd: Array<uint64, 256>,
   pub NumGC: uint32,
   pub NumForcedGC: uint32,
   pub GCCPUFraction: float64,
   pub EnableGC: bool,
   pub DebugGC: bool,
-  // SKIPPED field "BySize": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
+  pub BySize: Array<AnonSizeMallocsFrees, 61>,
 }
 
 /// A PanicNilError happens when code calls panic(nil).
@@ -768,9 +776,10 @@ pub struct Pinner {
   embed Ref<pinner>,
 }
 
-// SKIPPED field "Stack0": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
 /// A StackRecord describes a single execution stack.
-pub type StackRecord
+pub struct StackRecord {
+  pub Stack0: Array<uintptr, 32>,
+}
 
 /// A TypeAssertionError explains a failed type assertion.
 pub type TypeAssertionError

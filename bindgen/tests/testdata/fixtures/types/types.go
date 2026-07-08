@@ -33,7 +33,7 @@ func GetDoublePtr() **int { return nil }
 func GetIntSlice() []int       { return nil }
 func GetStringSlice() []string { return nil }
 func GetNestedSlice() [][]byte { return nil }
-func GetArray() [10]int        { return [10]int{} } // arrays also become Slice
+func GetArray() [10]int        { return [10]int{} } // [N]T becomes Array<T, N>
 
 // Maps
 

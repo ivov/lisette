@@ -718,8 +718,7 @@ impl Value {
   /// 
   /// Deprecated: The memory representation of interface values is not
   /// compatible with InterfaceData.
-  #[go(array_return)]
-  fn InterfaceData(self) -> Slice<uintptr>
+  fn InterfaceData(self) -> Array<uintptr, 2>
 
   /// IsNil reports whether its argument v is nil. The argument must be
   /// a chan, func, interface, map, pointer, or slice value; if it is

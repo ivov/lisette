@@ -3,8 +3,7 @@
 // Go: 0.0.0
 // Lisette: 0.0.0
 
-#[go(array_return)]
-pub fn ComputeDigest() -> Slice<byte>
+pub fn ComputeDigest() -> Array<byte, 32>
 
 /// Function returning alias
 pub fn GetMap() -> Map<string, int>
@@ -21,9 +20,9 @@ pub type AliasStringMap = Map<string, int>
 /// Callback is a simple callback function.
 pub type Callback = fn() -> ()
 
-// SKIPPED: Digest - array-currently-not-representable
-// fixed-size array cannot currently be represented in Lisette
-pub type Digest
+/// Alias-to-array peels to the array type, so the return lowers to
+/// Array<byte, 32>.
+pub type Digest = Array<byte, 32>
 
 /// Handler is a function that handles requests.
 pub type Handler = fn(string) -> Result<string, error>

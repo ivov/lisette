@@ -220,17 +220,7 @@ impl<'a> Planner<'a> {
 
         setup.extend(args_setup);
 
-        let has_array_return = call_plan.has_go_array_return();
-        let value = match self.wrap_go_array_return(
-            &mut setup,
-            has_array_return,
-            &call_str,
-            expression_ctx,
-        ) {
-            Some(wrapped) => wrapped,
-            None => call_str,
-        };
-        (setup, value)
+        (setup, call_str)
     }
 
     fn analyze_callee(&mut self, function: &Expression) -> CalleeAnalysis<'a> {
@@ -362,22 +352,6 @@ impl<'a> Planner<'a> {
         let params = definition.ty().unwrap_forall().get_function_params()?;
         let self_offset = params.len().saturating_sub(num_args);
         params.get(self_offset..)
-    }
-
-    /// Hoist a Go array-return call into a temp and reslice as `[]T`. Skipped
-    /// for discarded calls.
-    fn wrap_go_array_return(
-        &mut self,
-        setup: &mut Vec<LoweredStatement>,
-        has_array_return: bool,
-        call_str: &str,
-        ctx: ExpressionContext<'_>,
-    ) -> Option<String> {
-        if !has_array_return || ctx.keeps_raw_go_array_return() {
-            return None;
-        }
-        let temp = self.hoist_tmp_value_statement(setup, "arr", call_str);
-        Some(format!("{}[:]", temp))
     }
 
     #[allow(clippy::too_many_arguments)]

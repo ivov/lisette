@@ -608,7 +608,7 @@ pub fn GetsockoptIPv6MTUInfo(fd: int, level: int, opt: int) -> Result<Ref<IPv6MT
 
 pub fn GetsockoptIPv6Mreq(fd: int, level: int, opt: int) -> Result<Ref<IPv6Mreq>, error>
 
-pub fn GetsockoptInet4Addr(fd: int, level: int, opt: int) -> Result<Slice<byte>, error>
+pub fn GetsockoptInet4Addr(fd: int, level: int, opt: int) -> Result<Array<byte, 4>, error>
 
 pub fn GetsockoptInt(fd: int, level: int, opt: int) -> Result<int, error>
 
@@ -837,8 +837,7 @@ pub fn SetsockoptIPMreq(fd: int, level: int, opt: int, mreq: Ref<IPMreq>) -> Res
 
 pub fn SetsockoptIPv6Mreq(fd: int, level: int, opt: int, mreq: Ref<IPv6Mreq>) -> Result<(), error>
 
-// SKIPPED: SetsockoptInet4Addr - array-currently-not-representable
-// fixed-size array cannot currently be represented in Lisette
+pub fn SetsockoptInet4Addr(fd: int, level: int, opt: int, value: Array<byte, 4>) -> Result<(), error>
 
 pub fn SetsockoptInt(fd: int, level: int, opt: int, value: int) -> Result<(), error>
 
@@ -861,7 +860,7 @@ pub fn SlicePtrFromStrings(ss: Slice<string>) -> Result<Slice<Ref<byte>>, error>
 
 pub fn Socket(domain: int, typ: int, proto: int) -> Result<int, error>
 
-pub fn Socketpair(domain: int, typ: int, proto: int) -> Result<Slice<int>, error>
+pub fn Socketpair(domain: int, typ: int, proto: int) -> Result<Array<int, 2>, error>
 
 /// StartProcess wraps [ForkExec] for package os.
 pub fn StartProcess(argv0: string, argv: Slice<string>, attr: Ref<ProcAttr>) -> Result<(int, uintptr), error>
@@ -964,7 +963,7 @@ pub struct BpfHdr {
   pub Caplen: uint32,
   pub Datalen: uint32,
   pub Hdrlen: uint16,
-  // SKIPPED field "Pad_cgo_0": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
+  pub Pad_cgo_0: Array<byte, 2>,
 }
 
 pub struct BpfInsn {
@@ -976,7 +975,7 @@ pub struct BpfInsn {
 
 pub struct BpfProgram {
   pub Len: uint32,
-  // SKIPPED field "Pad_cgo_0": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
+  pub Pad_cgo_0: Array<byte, 4>,
   pub Insns: Option<Ref<BpfInsn>>,
 }
 
@@ -1017,8 +1016,8 @@ pub struct Dirent {
   pub Reclen: uint16,
   pub Namlen: uint16,
   pub Type: uint8,
-  // SKIPPED field "Name": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
-  // SKIPPED field "Pad_cgo_0": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
+  pub Name: Array<int8, 1024>,
+  pub Pad_cgo_0: Array<byte, 3>,
 }
 
 pub struct Fbootstraptransfer_t {
@@ -1027,8 +1026,9 @@ pub struct Fbootstraptransfer_t {
   pub Buffer: Option<Ref<byte>>,
 }
 
-// SKIPPED field "Bits": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
-pub type FdSet
+pub struct FdSet {
+  pub Bits: Array<int32, 32>,
+}
 
 pub struct Flock_t {
   pub Start: int64,
@@ -1038,8 +1038,9 @@ pub struct Flock_t {
   pub Whence: int16,
 }
 
-// SKIPPED field "Val": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
-pub type Fsid
+pub struct Fsid {
+  pub Val: Array<int32, 2>,
+}
 
 pub struct Fstore_t {
   pub Flags: uint32,
@@ -1049,12 +1050,14 @@ pub struct Fstore_t {
   pub Bytesalloc: int64,
 }
 
-// SKIPPED field "Filt": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
-pub type ICMPv6Filter
+pub struct ICMPv6Filter {
+  pub Filt: Array<uint32, 8>,
+}
 
-// SKIPPED field "Multiaddr": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
-// SKIPPED field "Interface": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
-pub type IPMreq
+pub struct IPMreq {
+  pub Multiaddr: Array<byte, 4>,
+  pub Interface: Array<byte, 4>,
+}
 
 pub struct IPv6MTUInfo {
   pub Addr: RawSockaddrInet6,
@@ -1062,7 +1065,7 @@ pub struct IPv6MTUInfo {
 }
 
 pub struct IPv6Mreq {
-  // SKIPPED field "Multiaddr": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
+  pub Multiaddr: Array<byte, 16>,
   pub Interface: uint32,
 }
 
@@ -1105,7 +1108,7 @@ pub struct IfMsghdr {
   pub Addrs: int32,
   pub Flags: int32,
   pub Index: uint16,
-  // SKIPPED field "Pad_cgo_0": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
+  pub Pad_cgo_0: Array<byte, 2>,
   pub Data: IfData,
 }
 
@@ -1116,7 +1119,7 @@ pub struct IfaMsghdr {
   pub Addrs: int32,
   pub Flags: int32,
   pub Index: uint16,
-  // SKIPPED field "Pad_cgo_0": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
+  pub Pad_cgo_0: Array<byte, 2>,
   pub Metric: int32,
 }
 
@@ -1127,7 +1130,7 @@ pub struct IfmaMsghdr {
   pub Addrs: int32,
   pub Flags: int32,
   pub Index: uint16,
-  // SKIPPED field "Pad_cgo_0": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
+  pub Pad_cgo_0: Array<byte, 2>,
 }
 
 pub struct IfmaMsghdr2 {
@@ -1137,18 +1140,18 @@ pub struct IfmaMsghdr2 {
   pub Addrs: int32,
   pub Flags: int32,
   pub Index: uint16,
-  // SKIPPED field "Pad_cgo_0": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
+  pub Pad_cgo_0: Array<byte, 2>,
   pub Refcount: int32,
 }
 
 pub struct Inet4Pktinfo {
   pub Ifindex: uint32,
-  // SKIPPED field "Spec_dst": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
-  // SKIPPED field "Addr": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
+  pub Spec_dst: Array<byte, 4>,
+  pub Addr: Array<byte, 4>,
 }
 
 pub struct Inet6Pktinfo {
-  // SKIPPED field "Addr": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
+  pub Addr: Array<byte, 16>,
   pub Ifindex: uint32,
 }
 
@@ -1207,10 +1210,10 @@ pub struct Log2phys_t {
 pub struct Msghdr {
   pub Name: Option<Ref<byte>>,
   pub Namelen: uint32,
-  // SKIPPED field "Pad_cgo_0": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
+  pub Pad_cgo_0: Array<byte, 4>,
   pub Iov: Option<Ref<Iovec>>,
   pub Iovlen: int32,
-  // SKIPPED field "Pad_cgo_1": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
+  pub Pad_cgo_1: Array<byte, 4>,
   pub Control: Option<Ref<byte>>,
   pub Controllen: uint32,
   pub Flags: int32,
@@ -1228,7 +1231,7 @@ pub struct ProcAttr {
 pub struct Radvisory_t {
   pub Offset: int64,
   pub Count: int32,
-  // SKIPPED field "Pad_cgo_0": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
+  pub Pad_cgo_0: Array<byte, 4>,
 }
 
 /// A RawConn is a raw network connection.
@@ -1241,12 +1244,12 @@ pub interface RawConn {
 pub struct RawSockaddr {
   pub Len: uint8,
   pub Family: uint8,
-  // SKIPPED field "Data": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
+  pub Data: Array<int8, 14>,
 }
 
 pub struct RawSockaddrAny {
   pub Addr: RawSockaddr,
-  // SKIPPED field "Pad": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
+  pub Pad: Array<int8, 92>,
 }
 
 pub struct RawSockaddrDatalink {
@@ -1257,15 +1260,15 @@ pub struct RawSockaddrDatalink {
   pub Nlen: uint8,
   pub Alen: uint8,
   pub Slen: uint8,
-  // SKIPPED field "Data": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
+  pub Data: Array<int8, 12>,
 }
 
 pub struct RawSockaddrInet4 {
   pub Len: uint8,
   pub Family: uint8,
   pub Port: uint16,
-  // SKIPPED field "Addr": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
-  // SKIPPED field "Zero": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
+  pub Addr: Array<byte, 4>,
+  pub Zero: Array<int8, 8>,
 }
 
 pub struct RawSockaddrInet6 {
@@ -1273,14 +1276,14 @@ pub struct RawSockaddrInet6 {
   pub Family: uint8,
   pub Port: uint16,
   pub Flowinfo: uint32,
-  // SKIPPED field "Addr": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
+  pub Addr: Array<byte, 16>,
   pub Scope_id: uint32,
 }
 
 pub struct RawSockaddrUnix {
   pub Len: uint8,
   pub Family: uint8,
-  // SKIPPED field "Path": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
+  pub Path: Array<int8, 104>,
 }
 
 pub struct Rlimit {
@@ -1316,7 +1319,7 @@ pub struct RtMetrics {
   pub Rtt: uint32,
   pub Rttvar: uint32,
   pub Pksent: uint32,
-  // SKIPPED field "Filler": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
+  pub Filler: Array<uint32, 4>,
 }
 
 pub struct RtMsghdr {
@@ -1324,7 +1327,7 @@ pub struct RtMsghdr {
   pub Version: uint8,
   pub Type: uint8,
   pub Index: uint16,
-  // SKIPPED field "Pad_cgo_0": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
+  pub Pad_cgo_0: Array<byte, 2>,
   pub Flags: int32,
   pub Addrs: int32,
   pub Pid: int32,
@@ -1367,18 +1370,18 @@ pub struct SockaddrDatalink {
   pub Nlen: uint8,
   pub Alen: uint8,
   pub Slen: uint8,
-  // SKIPPED field "Data": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
+  pub Data: Array<int8, 12>,
 }
 
 pub struct SockaddrInet4 {
   pub Port: int,
-  // SKIPPED field "Addr": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
+  pub Addr: Array<byte, 4>,
 }
 
 pub struct SockaddrInet6 {
   pub Port: int,
   pub ZoneId: uint32,
-  // SKIPPED field "Addr": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
+  pub Addr: Array<byte, 16>,
 }
 
 pub struct SockaddrUnix {
@@ -1399,7 +1402,7 @@ pub struct Stat_t {
   pub Uid: uint32,
   pub Gid: uint32,
   pub Rdev: int32,
-  // SKIPPED field "Pad_cgo_0": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
+  pub Pad_cgo_0: Array<byte, 4>,
   pub Atimespec: Timespec,
   pub Mtimespec: Timespec,
   pub Ctimespec: Timespec,
@@ -1410,7 +1413,7 @@ pub struct Stat_t {
   pub Flags: uint32,
   pub Gen: uint32,
   pub Lspare: int32,
-  // SKIPPED field "Qspare": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
+  pub Qspare: Array<int64, 2>,
 }
 
 pub struct Statfs_t {
@@ -1426,10 +1429,10 @@ pub struct Statfs_t {
   pub Type: uint32,
   pub Flags: uint32,
   pub Fssubtype: uint32,
-  // SKIPPED field "Fstypename": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
-  // SKIPPED field "Mntonname": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
-  // SKIPPED field "Mntfromname": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
-  // SKIPPED field "Reserved": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
+  pub Fstypename: Array<int8, 16>,
+  pub Mntonname: Array<int8, 1024>,
+  pub Mntfromname: Array<int8, 1024>,
+  pub Reserved: Array<uint32, 8>,
 }
 
 pub struct SysProcAttr {
@@ -1450,8 +1453,8 @@ pub struct Termios {
   pub Oflag: uint64,
   pub Cflag: uint64,
   pub Lflag: uint64,
-  // SKIPPED field "Cc": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
-  // SKIPPED field "Pad_cgo_0": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
+  pub Cc: Array<uint8, 20>,
+  pub Pad_cgo_0: Array<byte, 4>,
   pub Ispeed: uint64,
   pub Ospeed: uint64,
 }
@@ -1464,7 +1467,7 @@ pub struct Timespec {
 pub struct Timeval {
   pub Sec: int64,
   pub Usec: int32,
-  // SKIPPED field "Pad_cgo_0": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
+  pub Pad_cgo_0: Array<byte, 4>,
 }
 
 pub struct Timeval32 {

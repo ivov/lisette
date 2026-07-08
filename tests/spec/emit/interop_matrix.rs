@@ -367,35 +367,6 @@ fn main() {
 }
 
 #[test]
-fn interop_array_return_direct_call() {
-    let input = r#"
-import "go:crypto/sha256"
-
-fn main() {
-  let data = "hello" as Slice<uint8>
-  let hash = sha256.Sum256(data)
-  let _ = hash
-}
-"#;
-    assert_emit_snapshot!(input);
-}
-
-#[test]
-fn interop_array_return_let_call() {
-    let input = r#"
-import "go:crypto/sha256"
-
-fn main() {
-  let f = sha256.Sum256
-  let data = "hello" as Slice<uint8>
-  let hash = f(data)
-  let _ = hash
-}
-"#;
-    assert_emit_snapshot!(input);
-}
-
-#[test]
 fn interop_tuple_direct_call() {
     let input = r#"
 import "go:path"
@@ -521,100 +492,6 @@ fn main() {
     Some(v) => { let _ = v },
     None => {},
   }
-}
-"#;
-    assert_emit_snapshot!(input);
-}
-
-#[test]
-fn interop_array_return_explicit_return() {
-    let input = r#"
-import "go:crypto/sha256"
-
-fn get() -> fn(Slice<uint8>) -> Slice<uint8> {
-  return sha256.Sum256
-}
-
-fn main() {
-  let f = get()
-  let data: Slice<uint8> = []
-  let out = f(data)
-  let _ = out
-}
-"#;
-    assert_emit_snapshot!(input);
-}
-
-#[test]
-fn interop_array_return_parenthesized_call() {
-    let input = r#"
-import "go:crypto/sha256"
-
-fn main() {
-  let data: Slice<uint8> = []
-  let out = (sha256.Sum256)(data)
-  let out2 = out.append(1)
-  let _ = out2
-}
-"#;
-    assert_emit_snapshot!(input);
-}
-
-#[test]
-fn interop_array_return_if_assignment() {
-    let input = r#"
-import "go:crypto/sha256"
-
-fn main() {
-  let f: fn(Slice<uint8>) -> Slice<uint8> = if true {
-    sha256.Sum256
-  } else {
-    sha256.Sum224
-  }
-  let data: Slice<uint8> = []
-  let out = f(data)
-  let _ = out
-}
-"#;
-    assert_emit_snapshot!(input);
-}
-
-#[test]
-fn interop_array_return_if_tail() {
-    let input = r#"
-import "go:crypto/sha256"
-
-fn get(cond: bool) -> fn(Slice<uint8>) -> Slice<uint8> {
-  if cond {
-    sha256.Sum256
-  } else {
-    sha256.Sum224
-  }
-}
-
-fn main() {
-  let f = get(true)
-  let data: Slice<uint8> = []
-  let out = f(data)
-  let _ = out
-}
-"#;
-    assert_emit_snapshot!(input);
-}
-
-#[test]
-fn interop_array_return_call_arg() {
-    let input = r#"
-import "go:crypto/sha256"
-
-fn apply(f: fn(Slice<uint8>) -> Slice<uint8>, data: Slice<uint8>) -> Slice<uint8> {
-  f(data)
-}
-
-fn main() {
-  let data: Slice<uint8> = []
-  let out = apply(sha256.Sum256, data)
-  let _ = out
 }
 "#;
     assert_emit_snapshot!(input);
@@ -849,34 +726,6 @@ fn main() {
     Ok(v) => { let _ = v },
     Err(_) => { let _ = 0 },
   }
-}
-"#;
-    assert_emit_snapshot!(input);
-}
-
-#[test]
-fn interop_array_return_defer() {
-    let input = r#"
-import "go:crypto/sha256"
-
-fn main() {
-  let data: Slice<uint8> = [1, 2, 3]
-  defer sha256.Sum256(data)
-  let _ = 0
-}
-"#;
-    assert_emit_snapshot!(input);
-}
-
-#[test]
-fn interop_array_return_statement_position() {
-    let input = r#"
-import "go:crypto/sha256"
-
-fn main() {
-  let data: Slice<uint8> = [1, 2, 3]
-  sha256.Sum256(data)
-  let _ = 0
 }
 "#;
     assert_emit_snapshot!(input);
@@ -1943,4 +1792,35 @@ fn main() {
 pub fn Pick<E, R>(s: Slice<E>) -> R
 "#;
     assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/pick", typedef)]);
+}
+
+#[test]
+fn interop_array_return() {
+    // A Go function returning a fixed-size array now yields `Array<T, N>` directly,
+    // with no boundary wrapping (the old `#[go(array_return)]` shim is gone).
+    let input = r#"
+import "go:crypto/sha256"
+
+fn main() {
+  let data = "hi" as Slice<byte>
+  let hash = sha256.Sum256(data)
+  let _ = hash
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn interop_array_return_as_slice() {
+    // Code that wants a slice from a Go array-returning function uses `.as_slice()`.
+    let input = r#"
+import "go:crypto/sha256"
+
+fn main() {
+  let data = "hi" as Slice<byte>
+  let bytes = sha256.Sum256(data).as_slice()
+  let _ = bytes
+}
+"#;
+    assert_emit_snapshot!(input);
 }

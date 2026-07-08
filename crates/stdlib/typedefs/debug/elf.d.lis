@@ -3027,7 +3027,7 @@ pub type FormatError
 
 /// ELF32 File header.
 pub struct Header32 {
-  // SKIPPED field "Ident": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
+  pub Ident: Array<byte, 16>,
   pub Type: uint16,
   pub Machine: uint16,
   pub Version: uint32,
@@ -3045,7 +3045,7 @@ pub struct Header32 {
 
 /// ELF64 file header.
 pub struct Header64 {
-  // SKIPPED field "Ident": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
+  pub Ident: Array<byte, 16>,
   pub Type: uint16,
   pub Machine: uint16,
   pub Version: uint32,

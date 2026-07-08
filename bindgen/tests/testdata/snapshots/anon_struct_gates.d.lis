@@ -3,8 +3,8 @@
 // Go: 0.0.0
 // Lisette: 0.0.0
 
-// SKIPPED: OrphanSibling - array-currently-not-representable
-// fixed-size array cannot currently be represented in Lisette
+// SKIPPED: OrphanSibling - anonymous-struct
+// anonymous struct types are not supported
 
 // SKIPPED returns-with: anonymous-struct
 // anonymous struct types are not supported
