@@ -2753,7 +2753,7 @@ fn test() {
 #[test]
 fn mutable_interface_var_uses_var_declaration() {
     let input = r#"
-interface Printable {
+pub interface Printable {
   fn to_string(self) -> string
 }
 

@@ -1,0 +1,51 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  import "go:fmt"
+  
+  enum Box<int> {
+    Some(int),
+    None,
+  }
+  
+  fn main() {
+    let b = Box.Some("x")
+    match b {
+      Box.Some(v) => fmt.Println(v),
+      Box.None => fmt.Println("none"),
+    }
+  }
+---
+package main
+
+import "fmt"
+
+func MakeBoxSome[int_ any](arg0 int_) Box[int_] {
+	return Box[int_]{Tag: BoxSome, Some: arg0}
+}
+
+func MakeBoxNone[int_ any]() Box[int_] {
+	return Box[int_]{Tag: BoxNone}
+}
+
+type BoxTag int
+
+const (
+	BoxSome BoxTag = iota
+	BoxNone
+)
+
+type Box[int_ any] struct {
+	Tag  BoxTag
+	Some int_
+}
+
+func main() {
+	b := MakeBoxSome("x")
+	if b.Tag == BoxSome {
+		fmt.Println(b.Some)
+	} else {
+		fmt.Println("none")
+	}
+}

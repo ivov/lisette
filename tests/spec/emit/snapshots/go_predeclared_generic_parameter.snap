@@ -1,0 +1,29 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  import "go:fmt"
+  
+  fn f<int>(x: int) -> int {
+    let xs = [1, 2, 3]
+    let _ = xs.length()
+    x
+  }
+  
+  fn main() {
+    fmt.Println(f("hello"))
+  }
+---
+package main
+
+import "fmt"
+
+func f[int_ any](x int_) int_ {
+	xs := []int{1, 2, 3}
+	_ = len(xs)
+	return x
+}
+
+func main() {
+	fmt.Println(f("hello"))
+}

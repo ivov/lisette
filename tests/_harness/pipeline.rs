@@ -156,7 +156,7 @@ impl CompiledTest {
 
             checker.put_imported_modules_in_scope(&store, &imports);
 
-            checker.register_types_and_values(&mut store, &self.ast, &Visibility::Local);
+            checker.register_types_and_values(&mut store, &self.ast, &Visibility::Private);
             InferCtx::new(&mut checker, &store).check_const_cycles(&[self.ast.as_slice()]);
 
             let test_file_id = store.new_file_id();

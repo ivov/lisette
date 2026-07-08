@@ -7653,8 +7653,8 @@ fn main() {
 fn interface_embed_keyword_alias_satisfies() {
     infer(
         r#"
-interface Reader { fn read(self) -> int }
-interface ReadWriter { embed Reader }
+pub interface Reader { fn read(self) -> int }
+pub interface ReadWriter { embed Reader }
 struct File { name: string }
 impl File { pub fn read(self) -> int { 0 } }
 fn use_rw(rw: ReadWriter) -> int { rw.read() }

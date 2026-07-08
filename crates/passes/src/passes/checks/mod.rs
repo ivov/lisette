@@ -22,7 +22,6 @@ pub(crate) mod newtype;
 mod node_walk;
 pub(crate) mod oversized_shift;
 mod pattern_analysis;
-pub(crate) mod predeclared_shadowing;
 pub(crate) mod prelude_shadowing;
 pub(crate) mod pub_type_export;
 pub(crate) mod receivers;

@@ -181,11 +181,12 @@ impl Planner<'_> {
             let type_name = self
                 .resolve_alias_type_name(value)
                 .unwrap_or_else(|| value.to_string());
+            let type_go = go_name::escape_type_name(&type_name);
             let type_args = self.method_expression_type_args(result_ty);
             return Some(if is_pointer_receiver {
-                format!("(*{}{}).{}", type_name, type_args, go_method)
+                format!("(*{}{}).{}", type_go, type_args, go_method)
             } else {
-                format!("{}{}.{}", type_name, type_args, go_method)
+                format!("{}{}.{}", type_go, type_args, go_method)
             });
         }
 

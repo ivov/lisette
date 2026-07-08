@@ -1,0 +1,31 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  import "go:fmt"
+  
+  struct len {
+    v: int,
+  }
+  
+  fn main() {
+    let xs = [1, 2, 3]
+    fmt.Println(xs.length())
+    let l = len { v: 1 }
+    fmt.Println(l.v)
+  }
+---
+package main
+
+import "fmt"
+
+type len_ struct {
+	v int
+}
+
+func main() {
+	xs := []int{1, 2, 3}
+	fmt.Println(len(xs))
+	l := len_{v: 1}
+	fmt.Println(l.v)
+}

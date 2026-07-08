@@ -2995,6 +2995,27 @@ fn main() {
 }
 
 #[test]
+fn promoted_method_expression_on_predeclared_type_name() {
+    let input = r#"
+import "go:fmt"
+
+struct Base { pub v: int }
+
+impl Base {
+  pub fn value(self) -> int { self.v }
+}
+
+struct len { embed Base }
+
+fn main() {
+  let f = len.value
+  fmt.Println(f(len { Base: Base { v: 3 } }))
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn promoted_method_expression_pointer_receiver() {
     let input = r#"
 struct Base { pub id: int }

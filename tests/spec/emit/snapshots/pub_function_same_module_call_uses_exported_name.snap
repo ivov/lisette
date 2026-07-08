@@ -1,0 +1,25 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  import "go:fmt"
+  
+  pub fn greet_all() -> string {
+    "hi"
+  }
+  
+  fn main() {
+    fmt.Println(greet_all())
+  }
+---
+package main
+
+import "fmt"
+
+func GreetAll() string {
+	return "hi"
+}
+
+func main() {
+	fmt.Println(GreetAll())
+}

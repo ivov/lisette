@@ -6123,6 +6123,62 @@ fn emit_diagnostic_codes(fs: MockFileSystem) -> Vec<String> {
 }
 
 #[test]
+fn go_name_collision_generic_params_escape_to_same_name() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+fn f<int, int_>(x: int, y: int_) -> int {
+  let _ = y
+  x
+}
+
+fn main() {
+  let _ = f(1, "a")
+}
+"#,
+    );
+
+    let codes = emit_diagnostic_codes(fs);
+    assert!(
+        codes.iter().any(|code| code == "emit.go_name_collision"),
+        "generic params `int` and `int_` both become int_; got: {codes:?}"
+    );
+}
+
+#[test]
+fn go_name_collision_impl_and_method_generics_escape_to_same_name() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+struct Box<T> {
+  v: T,
+}
+
+impl<int> Box<int> {
+  fn pair<int_>(x: int, y: int_) -> int {
+    let _ = y
+    x
+  }
+}
+
+fn main() {
+  let _ = Box.pair(1, "a")
+}
+"#,
+    );
+
+    let codes = emit_diagnostic_codes(fs);
+    assert!(
+        codes.iter().any(|code| code == "emit.go_name_collision"),
+        "impl generic `int` and method generic `int_` share one Go list; got: {codes:?}"
+    );
+}
+
+#[test]
 fn go_name_collision_public_private_function() {
     let mut fs = MockFileSystem::new();
     fs.add_file(

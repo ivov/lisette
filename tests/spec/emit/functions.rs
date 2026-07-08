@@ -821,6 +821,146 @@ fn main() {
 }
 
 #[test]
+fn go_keyword_generic_parameter() {
+    let input = r#"
+import "go:fmt"
+
+fn id<range>(x: range) -> range {
+  x
+}
+
+fn main() {
+  fmt.Println(id(7))
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn go_predeclared_generic_parameter() {
+    let input = r#"
+import "go:fmt"
+
+fn f<int>(x: int) -> int {
+  let xs = [1, 2, 3]
+  let _ = xs.length()
+  x
+}
+
+fn main() {
+  fmt.Println(f("hello"))
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn generic_enum_constructor_with_predeclared_generic_parameter() {
+    let input = r#"
+import "go:fmt"
+
+enum Box<int> {
+  Some(int),
+  None,
+}
+
+fn main() {
+  let b = Box.Some("x")
+  match b {
+    Box.Some(v) => fmt.Println(v),
+    Box.None => fmt.Println("none"),
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn struct_go_predeclared_type_name_len() {
+    let input = r#"
+import "go:fmt"
+
+struct len {
+  v: int,
+}
+
+fn main() {
+  let xs = [1, 2, 3]
+  fmt.Println(xs.length())
+  let l = len { v: 1 }
+  fmt.Println(l.v)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn struct_go_predeclared_type_name_iota_with_enum() {
+    let input = r#"
+import "go:fmt"
+
+struct iota {
+  v: int,
+}
+
+enum Color {
+  Red,
+  Green,
+}
+
+fn main() {
+  let i = iota { v: 1 }
+  let c = Color.Red
+  match c {
+    Color.Red => fmt.Println("red"),
+    Color.Green => fmt.Println("green"),
+  }
+  fmt.Println(i.v)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn enum_tag_constant_spells_reserved_word() {
+    let input = r#"
+import "go:fmt"
+
+enum ma {
+  ke,
+  other,
+}
+
+fn main() {
+  let m = ma.ke
+  let mut counts = Map.new<string, int>()
+  counts["a"] = 1
+  match m {
+    ma.ke => fmt.Println(counts.length()),
+    ma.other => fmt.Println("other"),
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn pub_function_uncased_name_gets_export_prefix() {
+    let input = r#"
+import "go:fmt"
+
+pub fn 挨拶() -> string {
+  "こんにちは"
+}
+
+fn main() {
+  fmt.Println(挨拶())
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn struct_pattern_param_public_field() {
     let input = r#"
 struct Point { pub x: int, pub y: int }
@@ -958,7 +1098,7 @@ fn test() -> Option<int> {
 #[test]
 fn option_interface_type_param_in_match() {
     let input = r#"
-interface Printable {
+pub interface Printable {
   fn to_string(self) -> string
 }
 
@@ -1937,6 +2077,22 @@ fn test() {
   if r.unwrap_or(7) != 7 {
     panic("expected 7")
   }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn pub_function_same_module_call_uses_exported_name() {
+    let input = r#"
+import "go:fmt"
+
+pub fn greet_all() -> string {
+  "hi"
+}
+
+fn main() {
+  fmt.Println(greet_all())
 }
 "#;
     assert_emit_snapshot!(input);

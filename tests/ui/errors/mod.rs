@@ -2692,45 +2692,6 @@ impl Status {
 }
 
 #[test]
-fn infer_struct_shadows_predeclared_any() {
-    let input = r#"
-struct any {}
-
-fn main() {
-  let x: Unknown = 1
-  let _ = x
-}
-"#;
-    assert_infer_error_snapshot!(input);
-}
-
-#[test]
-fn infer_struct_shadows_predeclared_comparable() {
-    let input = r#"
-struct comparable {}
-
-fn main() {
-  let _ = 1
-}
-"#;
-    assert_infer_error_snapshot!(input);
-}
-
-#[test]
-fn infer_generic_param_shadows_predeclared_any() {
-    let input = r#"
-fn id<any>(x: any) -> any {
-  x
-}
-
-fn main() {
-  let _ = id(1)
-}
-"#;
-    assert_infer_error_snapshot!(input);
-}
-
-#[test]
 fn infer_pub_struct_not_exportable() {
     let input = r#"
 pub struct widget {

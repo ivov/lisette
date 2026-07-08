@@ -2,7 +2,7 @@
 source: tests/spec/emit/functions.rs
 description: |
   
-  interface Printable {
+  pub interface Printable {
     fn to_string(self) -> string
   }
   

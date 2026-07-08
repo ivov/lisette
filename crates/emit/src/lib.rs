@@ -153,7 +153,7 @@ pub(crate) fn user_enum_make_function_entries<'a>(
     name: &'a str,
     variants: &'a [syntax::ast::EnumVariant],
 ) -> impl Iterator<Item = (String, String)> + 'a {
-    let go_type_name = go_name::escape_keyword(name).into_owned();
+    let go_type_name = go_name::escape_type_name(name).into_owned();
     variants.iter().map(move |variant| {
         let constructor = format!("{}.{}", name, variant.name);
         let make_fn = format!("Make{}{}", go_type_name, variant.name);

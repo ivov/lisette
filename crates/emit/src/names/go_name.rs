@@ -40,7 +40,9 @@ pub(crate) const TEST_PRELUDE_MODULE: &str = "**test_prelude";
 pub const TESTKIT_IMPORT_PATH: &str = "github.com/ivov/lisette/prelude/testkit";
 pub(crate) const TESTKIT_PKG: &str = "testkit";
 
-pub(crate) use syntax::go_names::{GO_KEYWORDS, escape_keyword, snake_to_camel};
+pub(crate) use syntax::go_names::{
+    GO_BUILTINS, GO_KEYWORDS, escape_keyword, escape_type_name, is_go_reserved_word, snake_to_camel,
+};
 pub(crate) use syntax::types::unqualified_name;
 
 /// Convert a Lisette identifier to its exported Go form: snake_case becomes
@@ -159,21 +161,11 @@ pub(crate) fn variant_by_id(
     let enum_name = unqualified_name(enum_id);
     let variant_name = unqualified_name(identifier);
 
-    let needs_qualifier = !is_prelude && enum_module != current_module;
-
     if is_prelude {
         ResolvedName::stdlib(format!("{}.{enum_name}{variant_name}", GO_STDLIB_PKG))
-    } else if variant_name == ENUM_TAG_FIELD {
-        let base = format!("{enum_name}Tag_");
-        if needs_qualifier {
-            let pkg = module_alias.unwrap_or_else(|| go_package_name(enum_module));
-            ResolvedName::local(format!("{pkg}.{base}"))
-        } else {
-            ResolvedName::local(base)
-        }
     } else {
-        let base = format!("{enum_name}{variant_name}");
-        if needs_qualifier {
+        let base = enum_tag_constant(enum_name, variant_name);
+        if enum_module != current_module {
             let pkg = module_alias.unwrap_or_else(|| go_package_name(enum_module));
             ResolvedName::local(format!("{pkg}.{base}"))
         } else {
@@ -182,58 +174,17 @@ pub(crate) fn variant_by_id(
     }
 }
 
-/// Go predeclared identifiers (builtin functions, types, constants).
-/// See: https://go.dev/ref/spec#Predeclared_identifiers
-const GO_BUILTINS: &[&str] = &[
-    // Builtin functions
-    "any",
-    "append",
-    "cap",
-    "clear",
-    "close",
-    "complex",
-    "copy",
-    "delete",
-    "imag",
-    "init",
-    "len",
-    "make",
-    "max",
-    "min",
-    "new",
-    "panic",
-    "print",
-    "println",
-    "real",
-    "recover",
-    // Predeclared types
-    "bool",
-    "byte",
-    "comparable",
-    "complex64",
-    "complex128",
-    "error",
-    "float32",
-    "float64",
-    "int",
-    "int8",
-    "int16",
-    "int32",
-    "int64",
-    "rune",
-    "string",
-    "uint",
-    "uint8",
-    "uint16",
-    "uint32",
-    "uint64",
-    "uintptr",
-    // Predeclared constants
-    "false",
-    "iota",
-    "nil",
-    "true",
-];
+pub(crate) fn enum_tag_constant(enum_name: &str, variant_name: &str) -> String {
+    if variant_name == ENUM_TAG_FIELD {
+        return format!("{enum_name}Tag_");
+    }
+    let constant = format!("{enum_name}{variant_name}");
+    if is_go_reserved_word(&constant) {
+        format!("{constant}_")
+    } else {
+        constant
+    }
+}
 
 /// Go builtins re-exposed by the Lisette prelude under the same name. The
 /// `prelude_function_shadowed` diagnostic forbids user code from declaring
@@ -318,7 +269,7 @@ pub(crate) fn is_generated_import_qualifier(name: &str) -> bool {
 }
 
 fn is_reserved_package_name(name: &str) -> bool {
-    GO_KEYWORDS.contains(&name) || GO_BUILTINS.contains(&name)
+    name == "main" || is_go_reserved_word(name)
 }
 
 fn is_reserved_identifier(name: &str) -> bool {

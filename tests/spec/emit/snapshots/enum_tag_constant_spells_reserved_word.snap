@@ -1,0 +1,54 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  import "go:fmt"
+  
+  enum ma {
+    ke,
+    other,
+  }
+  
+  fn main() {
+    let m = ma.ke
+    let mut counts = Map.new<string, int>()
+    counts["a"] = 1
+    match m {
+      ma.ke => fmt.Println(counts.length()),
+      ma.other => fmt.Println("other"),
+    }
+  }
+---
+package main
+
+import "fmt"
+
+func Makemake() ma {
+	return ma{Tag: make_}
+}
+
+func Makemaother() ma {
+	return ma{Tag: maother}
+}
+
+type maTag int
+
+const (
+	make_ maTag = iota
+	maother
+)
+
+type ma struct {
+	Tag maTag
+}
+
+func main() {
+	m := Makemake()
+	counts := make(map[string]int)
+	counts["a"] = 1
+	if m.Tag == make_ {
+		fmt.Println(len(counts))
+	} else {
+		fmt.Println("other")
+	}
+}

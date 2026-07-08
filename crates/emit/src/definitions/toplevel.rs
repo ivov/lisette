@@ -60,7 +60,7 @@ impl Planner<'_> {
         let separator = if is_fn_alias { " " } else { " = " };
         format!(
             "type {}{}{}{}",
-            go_name::escape_keyword(name),
+            go_name::escape_type_name(name),
             generics_string,
             separator,
             ty_string

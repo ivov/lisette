@@ -1,7 +1,10 @@
+use std::borrow::Cow;
+
 use rustc_hash::FxHashMap as HashMap;
 
 use crate::Planner;
 use crate::names::constraints::{ConstraintAtom, ParamConstraintSet, classify_builtin_name};
+use crate::names::go_name;
 use syntax::EcoString;
 use syntax::ast::{Annotation, Generic};
 use syntax::types::Type;
@@ -30,7 +33,10 @@ pub(crate) fn receiver_generics_string(generics: &[Generic]) -> String {
     if generics.is_empty() {
         String::new()
     } else {
-        let params: Vec<&str> = generics.iter().map(|g| g.name.as_str()).collect();
+        let params: Vec<Cow<'_, str>> = generics
+            .iter()
+            .map(|g| go_name::escape_type_name(&g.name))
+            .collect();
         format!("[{}]", params.join(", "))
     }
 }
@@ -56,7 +62,7 @@ impl Planner<'_> {
                     .as_ref()
                     .and_then(|sets| sets.iter().find(|s| s.name == g.name));
                 let constraint = self.render_constraint(g, set);
-                format!("{} {}", g.name, constraint)
+                format!("{} {}", go_name::escape_type_name(&g.name), constraint)
             })
             .collect::<Vec<_>>()
             .join(", ");

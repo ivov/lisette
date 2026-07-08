@@ -43,7 +43,7 @@ type BuildPhase struct {
 	Tag BuildPhaseTag
 }
 
-func BuildPhase_variants() []BuildPhase {
+func BuildPhase_Variants() []BuildPhase {
 	return []BuildPhase{
 		{Tag: BuildPhaseValidate},
 		{Tag: BuildPhaseParse},
@@ -53,7 +53,7 @@ func BuildPhase_variants() []BuildPhase {
 
 func count() int {
 	total := 0
-	for range BuildPhase_variants() {
+	for range BuildPhase_Variants() {
 		total++
 	}
 	return total

@@ -72,7 +72,7 @@ impl Planner<'_> {
             Type::Function(f) => self.emit_function_type(&f.params, &f.return_type),
             Type::Var { .. } => GoType::new("any"),
             Type::Forall { .. } => GoType::new("any"),
-            Type::Parameter(name) => GoType::new(name.to_string()),
+            Type::Parameter(name) => GoType::new(go_name::escape_type_name(name).into_owned()),
             Type::Never => GoType::new("struct{}"),
             Type::Error => unreachable!("Type::Error should not reach the emitter"),
             Type::Tuple(elements) => self.emit_tuple_type(elements),
@@ -325,7 +325,7 @@ impl Planner<'_> {
             (&id[..go_name::GO_IMPORT_PREFIX.len() + path.len()], ty)
         } else {
             let Some(split) = id.split_once('.') else {
-                return go_name::escape_keyword(id).into_owned();
+                return go_name::escape_type_name(id).into_owned();
             };
             split
         };
@@ -334,7 +334,11 @@ impl Planner<'_> {
             return "any".to_string();
         }
 
-        let escaped = go_name::escape_keyword(unqualified);
+        let escaped = if module == go_name::PRELUDE_MODULE || self.facts.is_foreign_module(module) {
+            go_name::escape_keyword(unqualified)
+        } else {
+            go_name::escape_type_name(unqualified)
+        };
 
         if self.facts.is_foreign_module(module) {
             // A non-exported foreign type name (first char not uppercase) is an

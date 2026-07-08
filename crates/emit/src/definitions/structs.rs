@@ -36,7 +36,7 @@ impl Planner<'_> {
         }
 
         let receiver_generics = receiver_generics_string(generics);
-        let go_type_name = go_name::escape_keyword(name);
+        let go_type_name = go_name::escape_type_name(name);
 
         let definition = if field_strings.is_empty() {
             format!("type {}{} struct{{}}", go_type_name, generics_string)
@@ -165,7 +165,7 @@ impl Planner<'_> {
         generics_string: &str,
         fields: &[StructFieldDefinition],
     ) -> String {
-        let go_type_name = go_name::escape_keyword(name);
+        let go_type_name = go_name::escape_type_name(name);
 
         if fields.is_empty() {
             return format!("type {}{} struct{{}}", go_type_name, generics_string);
@@ -381,7 +381,7 @@ impl Planner<'_> {
             comparisons.join(" && ")
         };
         let go_method = self.equals_method_go_name();
-        let go_type_name = go_name::escape_keyword(name);
+        let go_type_name = go_name::escape_type_name(name);
         let receiver_type = format!("{go_type_name}{receiver_generics}");
         out.push_str("\n\n");
         out.push_str(&format!(
@@ -462,7 +462,7 @@ fn is_option_type(ty: &Type) -> bool {
 
 fn emit_to_string_method(name: &str, receiver_generics: &str, method_name: &str) -> String {
     let receiver = receiver_name(name);
-    let go_type_name = go_name::escape_keyword(name);
+    let go_type_name = go_name::escape_type_name(name);
     let receiver_type = format!("{go_type_name}{receiver_generics}");
     format!(
         "func ({receiver} {receiver_type}) {method_name}() string {{\nreturn {receiver}.String()\n}}"
@@ -476,7 +476,7 @@ fn emit_struct_stringer_method(
     method_name: &str,
 ) -> String {
     let receiver = receiver_name(name);
-    let go_type_name = go_name::escape_keyword(name);
+    let go_type_name = go_name::escape_type_name(name);
     let receiver_type = format!("{go_type_name}{receiver_generics}");
     if fields.is_empty() {
         return format!(
@@ -505,7 +505,7 @@ fn emit_struct_debug_method(
     prelude: &str,
 ) -> String {
     let receiver = receiver_name(name);
-    let go_type_name = go_name::escape_keyword(name);
+    let go_type_name = go_name::escape_type_name(name);
     let receiver_type = format!("{go_type_name}{receiver_generics}");
     if fields.is_empty() {
         return format!(
@@ -541,7 +541,7 @@ fn emit_tuple_struct_stringer_method(
     method_name: &str,
 ) -> String {
     let receiver = receiver_name(name);
-    let go_type_name = go_name::escape_keyword(name);
+    let go_type_name = go_name::escape_type_name(name);
     let receiver_type = format!("{go_type_name}{receiver_generics}");
     if field_count == 0 {
         return format!(
@@ -572,7 +572,7 @@ fn emit_tuple_struct_debug_method(
     prelude: &str,
 ) -> String {
     let receiver = receiver_name(name);
-    let go_type_name = go_name::escape_keyword(name);
+    let go_type_name = go_name::escape_type_name(name);
     let receiver_type = format!("{go_type_name}{receiver_generics}");
     if field_is_function.is_empty() {
         return format!(

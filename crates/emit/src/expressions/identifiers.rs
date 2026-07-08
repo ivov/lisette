@@ -294,10 +294,11 @@ impl Planner<'_> {
             String::new()
         };
 
+        let type_go = go_name::escape_type_name(type_part);
         if is_pointer {
-            Some(format!("(*{}{}).{}", type_part, type_args, go_method))
+            Some(format!("(*{}{}).{}", type_go, type_args, go_method))
         } else {
-            Some(format!("{}{}.{}", type_part, type_args, go_method))
+            Some(format!("{}{}.{}", type_go, type_args, go_method))
         }
     }
 

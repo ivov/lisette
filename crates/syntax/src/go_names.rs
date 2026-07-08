@@ -33,6 +33,59 @@ pub const GO_KEYWORDS: &[&str] = &[
     "var",
 ];
 
+/// Go predeclared identifiers (builtin functions, types, constants).
+/// See: https://go.dev/ref/spec#Predeclared_identifiers
+pub const GO_BUILTINS: &[&str] = &[
+    // Builtin functions
+    "any",
+    "append",
+    "cap",
+    "clear",
+    "close",
+    "complex",
+    "copy",
+    "delete",
+    "imag",
+    "init",
+    "len",
+    "make",
+    "max",
+    "min",
+    "new",
+    "panic",
+    "print",
+    "println",
+    "real",
+    "recover",
+    // Predeclared types
+    "bool",
+    "byte",
+    "comparable",
+    "complex64",
+    "complex128",
+    "error",
+    "float32",
+    "float64",
+    "int",
+    "int8",
+    "int16",
+    "int32",
+    "int64",
+    "rune",
+    "string",
+    "uint",
+    "uint8",
+    "uint16",
+    "uint32",
+    "uint64",
+    "uintptr",
+    // Predeclared constants
+    "false",
+    "iota",
+    "nil",
+    "true",
+];
+
 pub const ENUM_TAG_FIELD: &str = "Tag";
 
 pub const ENUM_STRINGER_METHOD: &str = "String";
@@ -47,11 +100,28 @@ fn capitalize_first(s: &str) -> String {
 }
 
 pub fn snake_to_camel(s: &str) -> String {
-    s.split('_').map(capitalize_first).collect()
+    let camel: String = s.split('_').map(capitalize_first).collect();
+    if camel.is_empty() || camel.starts_with(char::is_uppercase) {
+        camel
+    } else {
+        format!("X{}", camel)
+    }
 }
 
 pub fn escape_keyword(name: &str) -> Cow<'_, str> {
     if GO_KEYWORDS.contains(&name) {
+        Cow::Owned(format!("{}_", name))
+    } else {
+        Cow::Borrowed(name)
+    }
+}
+
+pub fn is_go_reserved_word(name: &str) -> bool {
+    GO_KEYWORDS.contains(&name) || GO_BUILTINS.contains(&name)
+}
+
+pub fn escape_type_name(name: &str) -> Cow<'_, str> {
+    if is_go_reserved_word(name) {
         Cow::Owned(format!("{}_", name))
     } else {
         Cow::Borrowed(name)
@@ -110,10 +180,28 @@ mod tests {
     }
 
     #[test]
+    fn snake_to_camel_prefixes_uncased_names() {
+        assert_eq!(snake_to_camel("挨拶"), "X挨拶");
+        assert_eq!(snake_to_camel("挨拶_する"), "X挨拶する");
+        assert_eq!(snake_to_camel("épée"), "Épée");
+    }
+
+    #[test]
     fn escape_keyword_appends_underscore() {
         assert_eq!(escape_keyword("type"), "type_");
         assert_eq!(escape_keyword("Type"), "Type");
         assert_eq!(escape_keyword("target"), "target");
+    }
+
+    #[test]
+    fn escape_type_name_covers_keywords_and_predeclared() {
+        assert_eq!(escape_type_name("range"), "range_");
+        assert_eq!(escape_type_name("len"), "len_");
+        assert_eq!(escape_type_name("init"), "init_");
+        assert_eq!(escape_type_name("iota"), "iota_");
+        assert_eq!(escape_type_name("int"), "int_");
+        assert_eq!(escape_type_name("Len"), "Len");
+        assert_eq!(escape_type_name("Point"), "Point");
     }
 
     #[test]

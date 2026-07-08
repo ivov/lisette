@@ -1,0 +1,62 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  import "go:fmt"
+  
+  struct iota {
+    v: int,
+  }
+  
+  enum Color {
+    Red,
+    Green,
+  }
+  
+  fn main() {
+    let i = iota { v: 1 }
+    let c = Color.Red
+    match c {
+      Color.Red => fmt.Println("red"),
+      Color.Green => fmt.Println("green"),
+    }
+    fmt.Println(i.v)
+  }
+---
+package main
+
+import "fmt"
+
+func MakeColorRed() Color {
+	return Color{Tag: ColorRed}
+}
+
+func MakeColorGreen() Color {
+	return Color{Tag: ColorGreen}
+}
+
+type iota_ struct {
+	v int
+}
+
+type ColorTag int
+
+const (
+	ColorRed ColorTag = iota
+	ColorGreen
+)
+
+type Color struct {
+	Tag ColorTag
+}
+
+func main() {
+	i := iota_{v: 1}
+	c := MakeColorRed()
+	if c.Tag == ColorRed {
+		fmt.Println("red")
+	} else {
+		fmt.Println("green")
+	}
+	fmt.Println(i.v)
+}

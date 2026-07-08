@@ -23,7 +23,7 @@ impl Planner<'_> {
         let mut output = Vec::new();
         output.push(format!(
             "type {}{} interface {{",
-            go_name::escape_keyword(name),
+            go_name::escape_type_name(name),
             generics_str
         ));
 

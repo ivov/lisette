@@ -1,0 +1,39 @@
+---
+source: tests/spec/emit/expressions.rs
+description: |
+  
+  import "go:fmt"
+  
+  struct Base { pub v: int }
+  
+  impl Base {
+    pub fn value(self) -> int { self.v }
+  }
+  
+  struct len { embed Base }
+  
+  fn main() {
+    let f = len.value
+    fmt.Println(f(len { Base: Base { v: 3 } }))
+  }
+---
+package main
+
+import "fmt"
+
+type Base struct {
+	V int
+}
+
+func (b Base) Value() int {
+	return b.V
+}
+
+type len_ struct {
+	Base
+}
+
+func main() {
+	f := len_.Value
+	fmt.Println(f(len_{Base: Base{V: 3}}))
+}

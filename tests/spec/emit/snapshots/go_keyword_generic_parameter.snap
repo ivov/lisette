@@ -1,0 +1,25 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  import "go:fmt"
+  
+  fn id<range>(x: range) -> range {
+    x
+  }
+  
+  fn main() {
+    fmt.Println(id(7))
+  }
+---
+package main
+
+import "fmt"
+
+func id[range_ any](x range_) range_ {
+	return x
+}
+
+func main() {
+	fmt.Println(id(7))
+}

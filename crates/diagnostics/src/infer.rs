@@ -3070,16 +3070,6 @@ pub fn pub_type_not_exportable(name: &str, suggested: &str, span: Span) -> Liset
         ))
 }
 
-pub fn predeclared_type_shadowed(name: &str, span: Span) -> LisetteDiagnostic {
-    LisetteDiagnostic::error("Cannot shadow Go predeclared identifier")
-        .with_infer_code("predeclared_type_shadowed")
-        .with_span_label(&span, format!("`{}` is a Go predeclared identifier", name))
-        .with_help(format!(
-            "Lisette emits `{}` directly in the generated Go, so a user declaration with this name shadows the builtin and the output fails to compile. Choose a different name",
-            name
-        ))
-}
-
 pub fn non_pub_interface_with_pub_impl(
     interface_name: &str,
     struct_name: &str,

@@ -72,11 +72,7 @@ impl EnumLayout {
         enum_name: &str,
         field_types: &FieldTypeMap,
     ) -> VariantLayout {
-        let tag_constant = if variant.name == ENUM_TAG_FIELD {
-            format!("{}Tag_", enum_name)
-        } else {
-            format!("{}{}", enum_name, variant.name)
-        };
+        let tag_constant = go_name::enum_tag_constant(enum_name, &variant.name);
 
         let is_struct = variant.fields.is_struct();
         let single_field = variant.fields.len() == 1;
@@ -171,7 +167,7 @@ impl EnumLayout {
 
         output.push(")".to_string());
 
-        let go_type_name = go_name::escape_keyword(&self.enum_name);
+        let go_type_name = go_name::escape_type_name(&self.enum_name);
         output.push(format!(
             "type {}{} struct {{",
             go_type_name, generics_string
@@ -199,7 +195,7 @@ impl EnumLayout {
         qualified: bool,
     ) -> String {
         let receiver = receiver_name(&self.enum_name);
-        let go_type_name = go_name::escape_keyword(&self.enum_name);
+        let go_type_name = go_name::escape_type_name(&self.enum_name);
         let receiver_type = format!("{}{}", go_type_name, receiver_generics);
 
         let mut lines = Vec::new();
@@ -271,7 +267,7 @@ impl EnumLayout {
 
     pub(crate) fn emit_debug_method(&self, receiver_generics: &str, prelude: &str) -> String {
         let receiver = receiver_name(&self.enum_name);
-        let go_type_name = go_name::escape_keyword(&self.enum_name);
+        let go_type_name = go_name::escape_type_name(&self.enum_name);
         let receiver_type = format!("{}{}", go_type_name, receiver_generics);
 
         let mut lines = Vec::new();
@@ -349,7 +345,7 @@ impl EnumLayout {
     }
 
     pub(crate) fn emit_variants_function(&self, fn_name: &str) -> String {
-        let go_type_name = go_name::escape_keyword(&self.enum_name);
+        let go_type_name = go_name::escape_type_name(&self.enum_name);
 
         let mut lines = Vec::new();
         lines.push(format!("func {fn_name}() []{go_type_name} {{"));
@@ -365,7 +361,7 @@ impl EnumLayout {
 
     pub(crate) fn emit_json_methods(&self, receiver_generics: &str) -> String {
         let receiver = receiver_name(&self.enum_name);
-        let go_type_name = go_name::escape_keyword(&self.enum_name);
+        let go_type_name = go_name::escape_type_name(&self.enum_name);
         let receiver_type = format!("{}{}", go_type_name, receiver_generics);
 
         let marshal = self.emit_marshal_json(&receiver, &receiver_type);

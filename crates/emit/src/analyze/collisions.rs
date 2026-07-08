@@ -143,7 +143,7 @@ impl Planner<'_> {
         else {
             return;
         };
-        let go = go_name::escape_keyword(name).into_owned();
+        let go = go_name::escape_type_name(name).into_owned();
         self.check_reserved_prefix(&go, name_span, diagnostics);
         self.check_reserved_qualifier(&go, name_span, diagnostics);
         self.check_reserved_qualifier_generics(generics, diagnostics);
@@ -169,7 +169,7 @@ impl Planner<'_> {
         else {
             return;
         };
-        let type_go = go_name::escape_keyword(name).into_owned();
+        let type_go = go_name::escape_type_name(name).into_owned();
         self.check_reserved_prefix(&type_go, name_span, diagnostics);
         self.check_reserved_qualifier(&type_go, name_span, diagnostics);
         self.check_reserved_qualifier_generics(generics, diagnostics);
@@ -245,7 +245,7 @@ impl Planner<'_> {
         else {
             return;
         };
-        let type_go = go_name::escape_keyword(name).into_owned();
+        let type_go = go_name::escape_type_name(name).into_owned();
         self.check_reserved_prefix(&type_go, name_span, diagnostics);
         self.check_reserved_qualifier(&type_go, name_span, diagnostics);
         self.check_reserved_qualifier_generics(generics, diagnostics);
@@ -270,16 +270,12 @@ impl Planner<'_> {
             .or_default()
             .push(*name_span);
         for variant in variants {
-            let tag_constant = if variant.name.as_str() == ENUM_TAG_FIELD {
-                format!("{}Tag_", name)
-            } else {
-                format!("{}{}", name, variant.name)
-            };
+            let tag_constant = go_name::enum_tag_constant(name, &variant.name);
             package_block
                 .entry(tag_constant)
                 .or_default()
                 .push(variant.name_span);
-            let constructor = format!("Make{}{}", go_name::escape_keyword(name), variant.name);
+            let constructor = format!("Make{}{}", go_name::escape_type_name(name), variant.name);
             package_block
                 .entry(constructor)
                 .or_default()
@@ -393,7 +389,7 @@ impl Planner<'_> {
         else {
             return;
         };
-        let type_go = go_name::escape_keyword(name).into_owned();
+        let type_go = go_name::escape_type_name(name).into_owned();
         self.check_reserved_prefix(&type_go, name_span, diagnostics);
         self.check_reserved_qualifier(&type_go, name_span, diagnostics);
         self.check_reserved_qualifier_generics(generics, diagnostics);
@@ -440,7 +436,7 @@ impl Planner<'_> {
             return;
         };
         self.check_reserved_qualifier_generics(generics, diagnostics);
-        let type_go = go_name::escape_keyword(receiver_name).into_owned();
+        let type_go = go_name::escape_type_name(receiver_name).into_owned();
         let qualified_type = self.facts.qualified_current(receiver_name);
         for method in methods {
             let Expression::Function {
@@ -457,7 +453,6 @@ impl Planner<'_> {
             if self.facts.is_unused_definition(name_span) {
                 continue;
             }
-            self.check_reserved_qualifier_generics(method_generics, diagnostics);
             let has_self = params.first().is_some_and(|binding| {
                         matches!(&binding.pattern, Pattern::Identifier { identifier, .. } if identifier == "self")
                     });
@@ -465,6 +460,7 @@ impl Planner<'_> {
             let should_export =
                 matches!(visibility, Visibility::Public) || self.method_needs_export(name);
             if has_self && !is_ufcs {
+                self.check_reserved_qualifier_generics(method_generics, diagnostics);
                 // Go receiver method: lives in the type's selector set.
                 let method_go = if should_export {
                     go_name::snake_to_camel(name)
@@ -480,6 +476,7 @@ impl Planner<'_> {
                     .push(*name_span);
             } else {
                 // self-less or UFCS method: package-level free function.
+                self.check_free_function_generics(generics, method_generics, diagnostics);
                 let method_go = if should_export {
                     go_name::snake_to_camel(name)
                 } else {
@@ -564,9 +561,39 @@ impl Planner<'_> {
         generics: &[syntax::ast::Generic],
         out: &mut Vec<LisetteDiagnostic>,
     ) {
+        let mut emitted: SpanMap = HashMap::default();
         for generic in generics {
             self.check_reserved_qualifier(&generic.name, &generic.span, out);
+            emitted
+                .entry(go_name::escape_type_name(&generic.name).into_owned())
+                .or_default()
+                .push(generic.span);
         }
+        report_collisions(emitted, out);
+    }
+
+    fn check_free_function_generics(
+        &self,
+        impl_generics: &[syntax::ast::Generic],
+        method_generics: &[syntax::ast::Generic],
+        out: &mut Vec<LisetteDiagnostic>,
+    ) {
+        let mut emitted: SpanMap = HashMap::default();
+        for generic in impl_generics {
+            emitted
+                .entry(go_name::escape_type_name(&generic.name).into_owned())
+                .or_default()
+                .push(generic.span);
+        }
+        let mut method_names: HashSet<String> = HashSet::default();
+        for generic in method_generics {
+            self.check_reserved_qualifier(&generic.name, &generic.span, out);
+            let go = go_name::escape_type_name(&generic.name).into_owned();
+            emitted.entry(go.clone()).or_default().push(generic.span);
+            method_names.insert(go);
+        }
+        emitted.retain(|go, _| method_names.contains(go));
+        report_collisions(emitted, out);
     }
 }
 
