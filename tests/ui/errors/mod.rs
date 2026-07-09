@@ -2140,6 +2140,54 @@ fn test() {
 }
 
 #[test]
+fn infer_enum_spread_missing_field() {
+    let input = r#"
+enum E {
+  A { x: int, z: int },
+  B { x: int, y: int },
+}
+
+fn test() {
+  let e = E.A { x: 1, z: 2 }
+  let _f = E.B { x: 9, ..e }
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_enum_spread_missing_fields_plural() {
+    let input = r#"
+enum E {
+  A { x: int },
+  B { x: int, y: int, z: int },
+}
+
+fn test() {
+  let a = E.A { x: 1 }
+  let _b = E.B { ..a }
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_enum_spread_shared_field_slot_mismatch() {
+    let input = r#"
+enum E {
+  A { tag: int, x: int },
+  B { tag: int, y: int },
+}
+
+fn test() {
+  let a = E.A { tag: 1, x: 2 }
+  let _b = E.B { y: 3, ..a }
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
 fn infer_struct_not_found() {
     let input = r#"
 fn test() {

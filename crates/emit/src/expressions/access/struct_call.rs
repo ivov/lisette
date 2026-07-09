@@ -13,7 +13,7 @@ use crate::expressions::emission::StagedExpression;
 use crate::go_name;
 use crate::plan::bodies::LoweredStatement;
 use crate::plan::values::{ValuePlan, value_plan_from_statements};
-use crate::utils::observable_after_mutation;
+use crate::utils::{is_order_sensitive, observable_after_mutation};
 
 struct StructCallContext {
     go_type: String,
@@ -100,7 +100,26 @@ impl Planner<'_> {
                             .iter()
                             .map(|f| observable_after_mutation(&f.value)),
                     );
-                    self.lower_struct_update(&mut setup, base, &field_pairs, &field_side_effects)
+                    if ctx.enum_ctx.is_some() {
+                        self.lower_enum_variant_spread(
+                            &mut setup,
+                            base,
+                            name,
+                            ty,
+                            &ctx,
+                            field_pairs,
+                            &field_side_effects,
+                            field_assignments,
+                            expression_ctx,
+                        )
+                    } else {
+                        self.lower_struct_update(
+                            &mut setup,
+                            base,
+                            &field_pairs,
+                            &field_side_effects,
+                        )
+                    }
                 }
             }
             StructSpread::ZeroFill { .. } if !is_go_struct => {
@@ -589,6 +608,60 @@ impl Planner<'_> {
         }
 
         tmp
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn lower_enum_variant_spread(
+        &mut self,
+        statements: &mut Vec<LoweredStatement>,
+        base: &Expression,
+        name: &str,
+        ty: &Type,
+        ctx: &StructCallContext,
+        field_pairs: Vec<(String, String)>,
+        field_side_effects: &[bool],
+        field_assignments: &[StructFieldAssignment],
+        expression_ctx: ExpressionContext<'_>,
+    ) -> String {
+        let mut pairs: Vec<(String, String)> = field_pairs
+            .into_iter()
+            .enumerate()
+            .map(|(i, (field_name, value))| {
+                if field_side_effects.get(i).copied().unwrap_or(false) {
+                    let temp = self.hoist_tmp_value_statement(statements, "field", &value);
+                    (field_name, temp)
+                } else {
+                    (field_name, value)
+                }
+            })
+            .collect();
+
+        let assigned: HashSet<&str> = field_assignments.iter().map(|f| f.name.as_str()).collect();
+        let carried = self
+            .lookup_unspecified_fields(ty, name, ctx.enum_ctx.as_ref(), &assigned)
+            .unwrap_or_default();
+
+        let base_staged = self.stage_operand(base, ExpressionContext::value());
+        statements.extend(base_staged.setup);
+
+        if carried.is_empty() {
+            statements.push(LoweredStatement::RawGo(format!(
+                "_ = {}\n",
+                base_staged.value
+            )));
+            return emit_struct_literal(&ctx.go_type, &pairs, expression_ctx);
+        }
+
+        let source = if is_order_sensitive(base) {
+            self.hoist_tmp_value_statement(statements, "spread", &base_staged.value)
+        } else {
+            base_staged.value
+        };
+        for (field_name, _) in carried {
+            let slot = self.resolve_struct_call_field_name(&field_name, ty, ctx);
+            pairs.push((slot.clone(), format!("{}.{}", source, slot)));
+        }
+        emit_struct_literal(&ctx.go_type, &pairs, expression_ctx)
     }
 }
 

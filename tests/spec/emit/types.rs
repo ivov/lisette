@@ -1698,6 +1698,76 @@ fn main() {
 }
 
 #[test]
+fn enum_variant_spread_builds_fresh_literal() {
+    let input = r#"
+enum Cursor {
+  Point { id: int, x: int },
+  Area { id: int, w: int },
+}
+
+fn test() -> Cursor {
+  let base = Cursor.Point { id: 7, x: 10 };
+  Cursor.Area { w: 3, ..base }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn enum_variant_spread_all_fields_assigned_discards_base_call() {
+    let input = r#"
+import "go:fmt"
+
+enum Cursor {
+  Point { id: int, x: int },
+  Area { id: int, w: int },
+}
+
+fn make_base() -> Cursor { fmt.Println("base"); Cursor.Point { id: 1, x: 2 } }
+
+fn test() -> Cursor {
+  Cursor.Area { id: 4, w: 3, ..make_base() }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn enum_variant_spread_all_fields_assigned_consumes_identifier_base() {
+    let input = r#"
+enum Cursor {
+  Point { id: int, x: int },
+  Area { id: int, w: int },
+}
+
+fn test() -> Cursor {
+  let base = Cursor.Point { id: 1, x: 2 };
+  Cursor.Area { id: 4, w: 3, ..base }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn enum_variant_spread_side_effecting_base_evaluated_once() {
+    let input = r#"
+import "go:fmt"
+
+enum Cursor {
+  Point { id: int, x: int },
+  Area { id: int, w: int },
+}
+
+fn make_base() -> Cursor { fmt.Println("base"); Cursor.Point { id: 1, x: 2 } }
+
+fn test() -> Cursor {
+  Cursor.Area { w: 3, ..make_base() }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn struct_spread_field_before_base_eval_order() {
     let input = r#"
 import "go:fmt"

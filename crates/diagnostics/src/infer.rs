@@ -2458,6 +2458,47 @@ pub fn enum_field_type_conflict(
         ))
 }
 
+pub fn enum_spread_missing_fields(
+    enum_name: &str,
+    target_variant: &str,
+    missing: &[String],
+    counterexample: Option<(&str, &str)>,
+    span: Span,
+) -> LisetteDiagnostic {
+    let (noun, pronoun, fields_fmt) = if missing.len() == 1 {
+        ("field", "it", format!("`{}`", missing[0]))
+    } else {
+        let formatted: Vec<String> = missing.iter().map(|f| format!("`{}`", f)).collect();
+        ("fields", "them", formatted.join(", "))
+    };
+
+    let (label, help) = match counterexample {
+        Some((lacking_variant, lacked_field)) => (
+            format!("may be `{enum_name}.{lacking_variant}`, which has no field `{lacked_field}`"),
+            format!(
+                "A spread can only fill fields that exist in every `{enum_name}` variant. Assign {noun} {fields_fmt} explicitly, or bind {pronoun} first when the source is known to be `{enum_name}.{target_variant}`: `let {enum_name}.{target_variant} {{ {pattern}, .. }} = source else {{ ... }}`",
+                pattern = missing.join(", "),
+            ),
+        ),
+        None => (
+            format!("may hold any `{enum_name}` variant"),
+            format!(
+                "Every `{enum_name}` variant has {fields_fmt}, but the {name_noun} with a built-in enum member, so each variant stores {pronoun} separately and a spread cannot fill {pronoun}. Assign {noun} {fields_fmt} explicitly",
+                name_noun = if missing.len() == 1 {
+                    "name collides"
+                } else {
+                    "names collide"
+                },
+            ),
+        ),
+    };
+
+    LisetteDiagnostic::error("Enum spread cannot fill variant-specific fields")
+        .with_infer_code("enum_spread_missing_fields")
+        .with_span_label(&span, label)
+        .with_help(help)
+}
+
 pub fn cannot_auto_address_receiver(
     receiver_kind: &str,
     method_name: &str,

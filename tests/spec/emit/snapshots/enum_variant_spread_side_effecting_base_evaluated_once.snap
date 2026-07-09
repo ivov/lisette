@@ -1,0 +1,60 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  import "go:fmt"
+  
+  enum Cursor {
+    Point { id: int, x: int },
+    Area { id: int, w: int },
+  }
+  
+  fn make_base() -> Cursor { fmt.Println("base"); Cursor.Point { id: 1, x: 2 } }
+  
+  fn test() -> Cursor {
+    Cursor.Area { w: 3, ..make_base() }
+  }
+---
+package main
+
+import "fmt"
+
+func MakeCursorPoint(arg0 int, arg1 int) Cursor {
+	return Cursor{Tag: CursorPoint, Id: arg0, X: arg1}
+}
+
+func MakeCursorArea(arg0 int, arg1 int) Cursor {
+	return Cursor{Tag: CursorArea, Id: arg0, W: arg1}
+}
+
+type CursorTag int
+
+const (
+	CursorPoint CursorTag = iota
+	CursorArea
+)
+
+type Cursor struct {
+	Tag CursorTag
+	Id  int
+	X   int
+	W   int
+}
+
+func make_base() Cursor {
+	fmt.Println("base")
+	return Cursor{
+		Tag: CursorPoint,
+		Id:  1,
+		X:   2,
+	}
+}
+
+func test() Cursor {
+	spread_1 := make_base()
+	return Cursor{
+		Tag: CursorArea,
+		W:   3,
+		Id:  spread_1.Id,
+	}
+}

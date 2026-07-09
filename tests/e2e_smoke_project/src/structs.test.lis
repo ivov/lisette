@@ -15,14 +15,22 @@ fn struct_spread_override_last() {
 }
 
 #[test]
-fn struct_variant_spread() {
-  let base = Event.Click { x: 10, y: 20 }
-  let e = Event.Click { x: 100, ..base }
-  let result = match e {
-    Event.Click { x, y } => x + y,
+fn struct_variant_spread_carries_shared_field() {
+  let base = Cursor.Point { id: 7, x: 10, y: 20 }
+  let area = Cursor.Area { w: 3, h: 4, ..base }
+  let result = match area {
+    Cursor.Area { id, w, h } => id * 100 + w * 10 + h,
     _ => 0,
   }
-  assert result == 120
+  assert result == 734
+}
+
+#[test]
+fn struct_variant_spread_no_stale_slots() {
+  let base = Cursor.Point { id: 7, x: 10, y: 20 }
+  let from_spread = Cursor.Area { w: 3, h: 4, ..base }
+  let fresh = Cursor.Area { id: 7, w: 3, h: 4 }
+  assert from_spread == fresh
 }
 
 #[test]
@@ -358,6 +366,11 @@ fn returns_slice() -> Slice<int> {
 struct SliceHolder { items: Slice<int> }
 
 struct MutPoint { x: int, y: int }
+
+enum Cursor {
+  Point { id: int, x: int, y: int },
+  Area { id: int, w: int, h: int },
+}
 
 struct UserId(int)
 

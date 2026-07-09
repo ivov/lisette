@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Enum spread cannot fill variant-specific fields
+    ╭─[test.lis:9:20]
+  8 │   let a = E.A { x: 1 }
+  9 │   let _b = E.B { ..a }
+    ·                    ┬
+    ·                    ╰── may be `E.A`, which has no field `y`
+ 10 │ }
+    ╰────
+  help: A spread can only fill fields that exist in every `E` variant. Assign fields `y`, `z` explicitly, or bind them first when the source is known to be `E.B`: `let E.B { y, z, .. } = source else { ... }` · code: [infer.enum_spread_missing_fields]
