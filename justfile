@@ -84,6 +84,12 @@ perf-samply:
     cargo build --profile flamegraph -p lisette
     samply record ./target/flamegraph/lis check tests/e2e_smoke_project
 
+loc:
+    git fetch origin gh-pages:gh-pages
+    rm -rf target/loc-chart && mkdir -p target/loc-chart
+    git archive gh-pages loc | tar -x -C target/loc-chart
+    open target/loc-chart/loc/index.html
+
 fuzz-parse duration="300":
     cargo +nightly fuzz run parse --sanitizer address -- -max_total_time={{duration}} -rss_limit_mb=2048 -dict=fuzz/lisette.dict
 

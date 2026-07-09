@@ -1,0 +1,25 @@
+name: loc
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  loc:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # ratchet:actions/checkout@v6
+      - uses: cargo-bins/cargo-binstall@732870f031d2fb36309d0deaf36abcc704a7be65 # ratchet:cargo-bins/cargo-binstall@v1.20.1
+      - run: cargo binstall -y cargo-warloc@0.1.1 tokei@14.0.0
+      - run: scripts/loc-metrics.sh > loc.json
+      - uses: benchmark-action/github-action-benchmark@52576c92bccf6ac60c8223ec7eb2565637cae9ba # ratchet:benchmark-action/github-action-benchmark@v1.22.1
+        with:
+          name: production-loc
+          tool: customSmallerIsBetter
+          output-file-path: loc.json
+          benchmark-data-dir-path: loc
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          auto-push: true
