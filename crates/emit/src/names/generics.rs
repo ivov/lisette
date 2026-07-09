@@ -182,6 +182,18 @@ pub(crate) fn extract_type_mapping(
                 extract_type_mapping(g, c, mapping);
             }
         }
+        (
+            Type::Array {
+                element: gen_element,
+                ..
+            },
+            Type::Array {
+                element: conc_element,
+                ..
+            },
+        ) => {
+            extract_type_mapping(gen_element, conc_element, mapping);
+        }
         _ => {}
     }
 }

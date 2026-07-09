@@ -9,6 +9,10 @@ import "go:fmt"
 /// Empty constraint (any)
 pub fn Clone<T>(v: T) -> T
 
+/// Array-shape rewrite: A ~[4]E with E any.
+#[go(collapsed_type_params, "Array<E, 4>, E")]
+pub fn Echo4<E>(x: Array<E, 4>) -> Array<E, 4>
+
 // SKIPPED: Either - constraint:union
 // type constraint T cannot be represented
 

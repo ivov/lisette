@@ -1845,6 +1845,41 @@ pub fn Pick<E, R>(s: Slice<E>) -> R
 }
 
 #[test]
+fn interop_collapsed_array_constraint_call_omits_turbofish() {
+    let input = r#"
+import "go:example.com/arr"
+import "go:fmt"
+
+fn main() {
+  let out = arr.Echo4([1, 2, 3, 4])
+  fmt.Println(out.length())
+}
+"#;
+    let typedef = r#"
+#[go(collapsed_type_params, "Array<E, 4>, E")]
+pub fn Echo4<E>(x: Array<E, 4>) -> Array<E, 4>
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/arr", typedef)]);
+}
+
+#[test]
+fn interop_collapsed_array_constraint_reconstructs_when_uninferrable() {
+    let input = r#"
+import "go:example.com/arr"
+
+fn main() {
+  let out = arr.Make4<int>()
+  let _ = out
+}
+"#;
+    let typedef = r#"
+#[go(collapsed_type_params, "Array<E, 4>, E")]
+pub fn Make4<E>() -> Array<E, 4>
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/arr", typedef)]);
+}
+
+#[test]
 fn interop_array_return() {
     // A Go function returning a fixed-size array now yields `Array<T, N>` directly,
     // with no boundary wrapping (the old `#[go(array_return)]` shim is gone).

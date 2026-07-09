@@ -1,0 +1,23 @@
+---
+source: tests/spec/emit/interop_matrix.rs
+description: |
+  
+  import "go:example.com/arr"
+  import "go:fmt"
+  
+  fn main() {
+    let out = arr.Echo4([1, 2, 3, 4])
+    fmt.Println(out.length())
+  }
+---
+package main
+
+import (
+	"example.com/arr"
+	"fmt"
+)
+
+func main() {
+	out := arr.Echo4([4]int{1, 2, 3, 4})
+	fmt.Println(len(out))
+}

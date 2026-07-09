@@ -131,6 +131,11 @@ func SortInts[S ~[]E, E cmp.Ordered](x S) S {
 	return x
 }
 
+// Array-shape rewrite: A ~[4]E with E any.
+func Echo4[A ~[4]E, E any](x A) A {
+	return x
+}
+
 // Map-shape rewrite: single map, V any.
 func MapClone[M ~map[K]V, K comparable, V any](m M) M {
 	return m

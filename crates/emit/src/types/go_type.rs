@@ -173,6 +173,18 @@ impl Planner<'_> {
                 self.go_type_string(value_ty)
             ));
         }
+        if let Some(inner) = entry
+            .strip_prefix("Array<")
+            .and_then(|s| s.strip_suffix('>'))
+        {
+            let (elem, length) = inner.rsplit_once(',')?;
+            let elem_ty = mapping.get(elem.trim())?;
+            return Some(format!(
+                "[{}]{}",
+                length.trim(),
+                self.go_type_string(elem_ty)
+            ));
+        }
         Some(self.go_type_string(mapping.get(entry)?))
     }
 

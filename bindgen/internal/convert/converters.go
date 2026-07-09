@@ -1095,12 +1095,12 @@ func formatConstantValue(val constant.Value) string {
 	}
 }
 
-// `S ~[]E` and `M ~map[K]V` shapes go into substitutions (caller rewrites `S`
-// to `Slice<E>` or `M` to `Map<K, V>`) rather than into specs. Recognized
-// bounds register their imports on conv. `recipe` is Go's full type-parameter
-// list in declaration order, each entry as a Lisette type (collapsed entries as
-// their shape, kept entries as the bare name), so emit can rebuild Go's type
-// arguments when inference cannot.
+// `S ~[]E`, `M ~map[K]V`, and `A ~[N]E` shapes go into substitutions (caller
+// rewrites `S` to `Slice<E>`, `M` to `Map<K, V>`, or `A` to `Array<E, N>`)
+// rather than into specs. Recognized bounds register their imports on conv.
+// `recipe` is Go's full type-parameter list in declaration order, each entry as
+// a Lisette type (collapsed entries as their shape, kept entries as the bare
+// name), so emit can rebuild Go's type arguments when inference cannot.
 func collectTypeParams(
 	typeParams *types.TypeParamList,
 	emitOpaque bool,
@@ -1120,6 +1120,15 @@ func collectTypeParams(
 			}
 			substitutions[name] = sliceOf(elemName)
 			recipe = append(recipe, sliceOf(elemName))
+			continue
+		}
+
+		if elemName, length, ok := recognizeArrayShape(constraint); ok {
+			if substitutions == nil {
+				substitutions = make(map[string]string)
+			}
+			substitutions[name] = arrayOf(elemName, length)
+			recipe = append(recipe, arrayOf(elemName, length))
 			continue
 		}
 

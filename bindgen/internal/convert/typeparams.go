@@ -218,6 +218,24 @@ func recognizeSliceShape(constraint types.Type) (sliceElemTypeParamName string, 
 	return tp.Obj().Name(), true
 }
 
+// Detects `A ~[N]E` over a *types.TypeParam element. Returns the inner E's name
+// and the array length so callers can rewrite `A` to `Array<E, N>`.
+func recognizeArrayShape(constraint types.Type) (elemName string, length int64, ok bool) {
+	inner, ok := singleTildeTerm(constraint)
+	if !ok {
+		return "", 0, false
+	}
+	array, isArray := inner.(*types.Array)
+	if !isArray {
+		return "", 0, false
+	}
+	tp, isTp := array.Elem().(*types.TypeParam)
+	if !isTp {
+		return "", 0, false
+	}
+	return tp.Obj().Name(), array.Len(), true
+}
+
 // Detects `M ~map[K]V` over *types.TypeParam key and value. Returns the inner
 // K's and V's names so callers can rewrite `M` to `Map<K, V>`.
 func recognizeMapShape(constraint types.Type) (keyName, valName string, ok bool) {
