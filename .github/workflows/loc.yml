@@ -1,4 +1,4 @@
-name: loc
+name: Lines of code
 
 on:
   push:
