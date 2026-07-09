@@ -25,38 +25,58 @@ pub(crate) struct ScannedImports {
 
 /// Collect every third-party `go:` import across `src/**/*.lis`.
 pub(crate) fn scan_source_imports(src_dir: &Path) -> Result<ScannedImports, SourceScanError> {
+    use rayon::prelude::*;
+
     let mut all = Vec::new();
     let mut non_blank = Vec::new();
     if !src_dir.is_dir() {
         return Ok(ScannedImports { all, non_blank });
     }
 
-    for path in collect_lis_filepaths_recursive(src_dir) {
-        let source = match std::fs::read_to_string(&path) {
-            Ok(s) => s,
-            Err(e) => return Err(SourceScanError::Read { path, error: e }),
-        };
-        let parse_result = Parser::lex_and_parse_file(&source, 0);
-        if parse_result.failed() {
-            return Err(SourceScanError::Parse {
-                path,
-                message: parse_result.errors[0].message.clone(),
-            });
-        }
-        for expr in &parse_result.ast {
-            if let Expression::ModuleImport { name, alias, .. } = expr
-                && let Some(pkg) = name.strip_prefix("go:")
-                && deps::is_third_party(pkg)
-            {
-                all.push(pkg.to_string());
-                if !matches!(alias, Some(ImportAlias::Blank(_))) {
-                    non_blank.push(pkg.to_string());
-                }
+    let scanned: Vec<Result<Vec<(String, bool)>, SourceScanError>> =
+        collect_lis_filepaths_recursive(src_dir)
+            .into_par_iter()
+            .map(scan_file_imports)
+            .collect();
+
+    for imports in scanned {
+        for (pkg, blank) in imports? {
+            if !blank {
+                non_blank.push(pkg.clone());
             }
+            all.push(pkg);
         }
     }
 
     Ok(ScannedImports { all, non_blank })
+}
+
+fn scan_file_imports(path: PathBuf) -> Result<Vec<(String, bool)>, SourceScanError> {
+    let source = match std::fs::read_to_string(&path) {
+        Ok(s) => s,
+        Err(e) => return Err(SourceScanError::Read { path, error: e }),
+    };
+    let parse_result = Parser::lex_and_parse_file(&source, 0);
+    if parse_result.failed() {
+        return Err(SourceScanError::Parse {
+            path,
+            message: parse_result.errors[0].message.clone(),
+        });
+    }
+
+    let mut imports = Vec::new();
+    for expr in &parse_result.ast {
+        if let Expression::ModuleImport { name, alias, .. } = expr
+            && let Some(pkg) = name.strip_prefix("go:")
+            && deps::is_third_party(pkg)
+        {
+            imports.push((
+                pkg.to_string(),
+                matches!(alias, Some(ImportAlias::Blank(_))),
+            ));
+        }
+    }
+    Ok(imports)
 }
 
 #[cfg(test)]

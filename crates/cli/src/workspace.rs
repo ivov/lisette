@@ -821,6 +821,10 @@ pub(crate) fn warm_typedefs(
     workspace: &GoWorkspace<'_>,
     locator: &TypedefLocator,
 ) {
+    if locator.deps().is_empty() {
+        return;
+    }
+
     let src_dir = project_root.join("src");
     let Ok(scanned) = crate::typedef_scan::scan_source_imports(&src_dir) else {
         return;
