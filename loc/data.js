@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1783631838848,
+  "lastUpdate": 1783632635724,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -1321,6 +1321,95 @@ window.BENCHMARK_DATA = {
           "url": "https://github.com/ivov/lisette/commit/7123691f88839f427965bbf75d454413d47588e5"
         },
         "date": 1783631837902,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 112118,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 27975,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 22813,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 16443,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 12807,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 10078,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 6160,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 4348,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2783,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1031,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 695,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 6095,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 890,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "bf785370741fc05e376e2479bda2638a9f9c97c7",
+          "message": "chore: bump stdlib typedefs to v0.8.0 (#983)",
+          "timestamp": "2026-07-09T23:30:09+02:00",
+          "tree_id": "6121e0f5e766b8796d6ea7945e22a1a1831233eb",
+          "url": "https://github.com/ivov/lisette/commit/bf785370741fc05e376e2479bda2638a9f9c97c7"
+        },
+        "date": 1783632634024,
         "tool": "customSmallerIsBetter",
         "benches": [
           {
