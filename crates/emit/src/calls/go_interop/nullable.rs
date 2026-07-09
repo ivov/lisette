@@ -269,10 +269,12 @@ impl Planner<'_> {
 
         let lisette_collection_ty = self.go_type_string(collection_ty);
         let src_var = self.hoist_tmp_value_statement(statements, "src", raw_value);
-        let wrapped_var = self.hoist_tmp_value_statement(
+        let wrapped_var = self.plan_boundary_collection_dest(
             statements,
+            shape.kind,
             "wrapped",
-            &format!("make({}, len({}))", lisette_collection_ty, src_var),
+            &lisette_collection_ty,
+            &src_var,
         );
         let index_var = self.fresh_var(Some("i"));
         self.declare(&index_var);
@@ -367,10 +369,12 @@ impl Planner<'_> {
         let raw_collection_ty = self.shape_raw_collection_ty(shape);
 
         let src_var = self.hoist_tmp_value_statement(statements, "src", lisette_value);
-        let unwrapped_var = self.hoist_tmp_value_statement(
+        let unwrapped_var = self.plan_boundary_collection_dest(
             statements,
+            shape.kind,
             "unwrapped",
-            &format!("make({}, len({}))", raw_collection_ty, src_var),
+            &raw_collection_ty,
+            &src_var,
         );
         let index_var = self.fresh_var(Some("i"));
         self.declare(&index_var);
@@ -445,9 +449,43 @@ impl Planner<'_> {
         unwrapped_var
     }
 
-    /// Lisette element type of a collection: `Slice<X>` to `X`, `Map<K, V>` to `V`.
+    /// Allocate the destination collection for a boundary-conversion loop.
+    /// Slices and maps use `make(...)` sized from the source. Fixed arrays are
+    /// value types Go cannot `make`, so declare a zero-valued `var` of the full
+    /// `[N]T` type instead.
+    fn plan_boundary_collection_dest(
+        &mut self,
+        statements: &mut Vec<LoweredStatement>,
+        kind: CollectionKind,
+        prefix: &str,
+        go_ty: &str,
+        src_var: &str,
+    ) -> String {
+        if matches!(kind, CollectionKind::Array { .. }) {
+            let var = self.fresh_var(Some(prefix));
+            self.declare(&var);
+            statements.push(LoweredStatement::VarDecl {
+                name: var.clone(),
+                go_type: go_ty.to_string(),
+                value: None,
+            });
+            var
+        } else {
+            self.hoist_tmp_value_statement(
+                statements,
+                prefix,
+                &format!("make({}, len({}))", go_ty, src_var),
+            )
+        }
+    }
+
+    /// Lisette element type of a collection: `Slice<X>` to `X`, `Map<K, V>` to
+    /// `V`, `Array<X, N>` to `X`.
     fn collection_element_ty(&self, collection_ty: &Type, shape: &NullableCollectionShape) -> Type {
         let resolved = self.emit_shape_ty(collection_ty);
+        if let Type::Array { element, .. } = &resolved {
+            return (**element).clone();
+        }
         let params = resolved
             .get_type_params()
             .expect("native collection has type params");
@@ -477,11 +515,14 @@ impl Planner<'_> {
                 self.shape_raw_collection_ty(inner_shape)
             }
         };
-        if let Some(key_ty) = shape.key_ty.as_ref() {
-            let key_ty_str = self.go_type_string(key_ty);
-            format!("map[{}]{}", key_ty_str, raw_element_ty)
-        } else {
-            format!("[]{}", raw_element_ty)
+        match shape.kind {
+            CollectionKind::Map => {
+                let key_ty_str = self
+                    .go_type_string(shape.key_ty.as_ref().expect("map shape carries a key type"));
+                format!("map[{}]{}", key_ty_str, raw_element_ty)
+            }
+            CollectionKind::Array { length } => format!("[{}]{}", length, raw_element_ty),
+            CollectionKind::Slice => format!("[]{}", raw_element_ty),
         }
     }
 }

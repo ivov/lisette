@@ -1,0 +1,36 @@
+---
+source: tests/spec/emit/interop_matrix.rs
+description: |
+  
+  import "go:example.com/aws"
+  
+  fn main() {
+    let n = aws.Node { .. }
+    let mut b = aws.Bucket { .. }
+    b.Slots = [Some(&n), None]
+    let _ = b
+  }
+---
+package main
+
+import (
+	"example.com/aws"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func main() {
+	n := aws.Node{}
+	b := aws.Bucket{}
+	src_1 := [2]lisette.Option[*aws.Node]{
+		lisette.MakeOptionSome(&n),
+		lisette.MakeOptionNone[*aws.Node](),
+	}
+	var unwrapped_2 [2]*aws.Node
+	for i_3, v_4 := range src_1 {
+		if v_4.Tag == lisette.OptionSome {
+			unwrapped_2[i_3] = v_4.SomeVal
+		}
+	}
+	b.Slots = unwrapped_2
+	_ = b
+}

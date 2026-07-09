@@ -29,6 +29,7 @@ pub(crate) struct GoImportedShape {
 pub(crate) enum CollectionKind {
     Slice,
     Map,
+    Array { length: u64 },
 }
 
 #[derive(Debug, Clone)]
@@ -126,11 +127,20 @@ impl Planner<'_> {
         }
     }
 
-    /// Classify a type as a nullable collection (`Slice<Option<...>>` or
-    /// `Map<K, Option<...>>`) after alias peeling. Element option types are
-    /// also alias-aware via the inner option classifier. Nested collections
-    /// (e.g. `Slice<Slice<Option<T>>>`) are detected recursively.
+    /// Classify a type as a nullable collection (`Slice<Option<...>>`,
+    /// `Map<K, Option<...>>`, or `Array<Option<...>, N>`) after alias peeling.
+    /// Element option types are also alias-aware via the inner option
+    /// classifier. Nested collections (e.g. `Slice<Slice<Option<T>>>`) are
+    /// detected recursively.
     pub(crate) fn nullable_collection_shape(&self, ty: &Type) -> Option<NullableCollectionShape> {
+        if let Type::Array { length, element } = self.emit_shape_ty(ty) {
+            let element = self.classify_nullable_element(&element)?;
+            return Some(NullableCollectionShape {
+                kind: CollectionKind::Array { length },
+                key_ty: None,
+                element,
+            });
+        }
         let shape = self.native_shape(ty)?;
         match shape.kind {
             NativeGoType::Slice => {

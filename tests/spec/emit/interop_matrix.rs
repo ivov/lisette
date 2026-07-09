@@ -1397,6 +1397,56 @@ pub struct Bucket {
 }
 
 #[test]
+fn interop_struct_field_read_array_option_pointer_index() {
+    let input = r#"
+import "go:example.com/aws"
+
+fn main() {
+  let b = aws.Bucket { .. }
+  let slots = b.Slots
+  match slots[0] {
+    Some(v) => { let _ = v },
+    None => {},
+  }
+}
+"#;
+    let typedef = r#"
+pub struct Node {
+  pub Value: int,
+}
+
+pub struct Bucket {
+  pub Slots: Array<Option<Ref<Node>>, 2>,
+}
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/aws", typedef)]);
+}
+
+#[test]
+fn interop_struct_field_assign_array_option_pointer() {
+    let input = r#"
+import "go:example.com/aws"
+
+fn main() {
+  let n = aws.Node { .. }
+  let mut b = aws.Bucket { .. }
+  b.Slots = [Some(&n), None]
+  let _ = b
+}
+"#;
+    let typedef = r#"
+pub struct Node {
+  pub Value: int,
+}
+
+pub struct Bucket {
+  pub Slots: Array<Option<Ref<Node>>, 2>,
+}
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/aws", typedef)]);
+}
+
+#[test]
 fn interop_struct_field_read_map_option_string_index() {
     let input = r#"
 import "go:example.com/aws"
