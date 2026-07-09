@@ -3398,6 +3398,60 @@ fn test() {
 }
 
 #[test]
+fn infer_array_cast_to_interface() {
+    let input = r#"
+interface Sized { fn length(self) -> int }
+
+fn f(a: Array<int, 3>) -> Sized {
+  a as Sized
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_slice_cast_to_interface() {
+    let input = r#"
+interface Sized { fn length(self) -> int }
+
+fn f(s: Slice<int>) -> Sized {
+  s as Sized
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_slice_passed_as_interface() {
+    let input = r#"
+interface Sized { fn length(self) -> int }
+
+fn takes(s: Sized) -> int {
+  s.length()
+}
+
+fn main() {
+  let _ = takes([1, 2, 3])
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_map_coerced_to_interface_annotation() {
+    let input = r#"
+interface Sized { fn length(self) -> int }
+
+fn main() {
+  let m = Map.new<string, int>()
+  let s: Sized = m
+  let _ = s
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
 fn infer_comma_ok_abi_mismatch() {
     let typedef = r#"
 pub interface Lookup {
@@ -3438,7 +3492,7 @@ fn main() {}
 }
 
 #[test]
-fn builtin_generic_type_satisfies_interface_bound() {
+fn infer_builtin_type_fails_interface_bound() {
     let input = r#"
 interface HasLength {
   fn length() -> int;
@@ -3452,8 +3506,7 @@ fn main() -> int {
   print_length([1, 2, 3])
 }
 "#;
-    let result = crate::_harness::infer::infer(input);
-    result.assert_no_errors();
+    assert_infer_error_snapshot!(input);
 }
 
 #[test]

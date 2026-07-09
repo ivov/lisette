@@ -6,10 +6,7 @@ source: tests/ui/errors/mod.rs
  14 │ fn main() {
  15 │   accept(bounded)
     ·          ───┬───
-    ·             ╰── `int` does not implement `Display`
+    ·             ╰── `int` cannot implement `Display`
  16 │ }
     ╰────
-  help: Missing methods:
-          From `Display`
-            - show: fn () -> string
-        code: [infer.interface_not_implemented]
+  help: Built-in types have no Go methods, so they cannot satisfy interfaces. Wrap the value in a struct that implements `Display` · code: [infer.interface_not_implemented]

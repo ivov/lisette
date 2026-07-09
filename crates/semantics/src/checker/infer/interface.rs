@@ -73,52 +73,83 @@ impl InferCtx<'_, '_> {
 
         self.satisfying_stack.remove(&pair);
 
-        if violations.is_empty() {
-            Ok(())
+        let builtin_receiver = self.is_builtin_receiver(ty);
+
+        if violations.is_empty()
+            && !(builtin_receiver
+                && interface_declares_methods(
+                    self.store,
+                    interface,
+                    &mut rustc_hash::FxHashSet::default(),
+                ))
+        {
+            return Ok(());
+        }
+
+        if let Some(sealed) = violations.iter().find(|v| {
+            v.missing
+                .iter()
+                .any(|(name, _)| crate::checker::sealing::is_unexported_key(name))
+        }) {
+            let type_name = ty.get_name().map_or_else(|| ty.to_string(), str::to_owned);
+            self.sink
+                .push(diagnostics::infer::sealed_interface_not_satisfiable(
+                    &sealed.interface_name,
+                    &type_name,
+                    *span,
+                ));
+            return Err(violations);
+        }
+        let resolved = ty.resolve_in(&self.env);
+        let wrapper = if resolved.is_result() {
+            Some(diagnostics::infer::WrapperKind::Result)
+        } else if resolved.is_option() {
+            Some(diagnostics::infer::WrapperKind::Option)
+        } else if resolved.is_partial() {
+            Some(diagnostics::infer::WrapperKind::Partial)
         } else {
-            if let Some(sealed) = violations.iter().find(|v| {
-                v.missing
-                    .iter()
-                    .any(|(name, _)| crate::checker::sealing::is_unexported_key(name))
-            }) {
-                let type_name = ty.get_name().map_or_else(|| ty.to_string(), str::to_owned);
-                self.sink
-                    .push(diagnostics::infer::sealed_interface_not_satisfiable(
-                        &sealed.interface_name,
-                        &type_name,
-                        *span,
-                    ));
-                return Err(violations);
+            None
+        };
+        if let Some(wrapper) = wrapper {
+            self.sink
+                .push(diagnostics::infer::wrapper_does_not_implement_interface(
+                    &interface.name,
+                    wrapper,
+                    &resolved,
+                    *span,
+                ));
+        } else if builtin_receiver {
+            let type_name = ty.get_name().map_or_else(|| ty.to_string(), str::to_owned);
+            self.sink
+                .push(diagnostics::infer::builtin_type_cannot_implement_interface(
+                    &interface.name,
+                    &type_name,
+                    *span,
+                ));
+        } else {
+            let type_name = ty.get_name().map_or_else(|| ty.to_string(), str::to_owned);
+            self.sink
+                .push(diagnostics::infer::interface_not_implemented(
+                    &interface.name,
+                    &type_name,
+                    &violations,
+                    *span,
+                ));
+        }
+        Err(violations)
+    }
+
+    fn is_builtin_receiver(&self, ty: &Type) -> bool {
+        let resolved = self
+            .store
+            .deep_resolve_alias(&ty.strip_refs().resolve_in(&self.env));
+        match resolved.strip_refs() {
+            Type::Simple(_) | Type::Compound { .. } | Type::Array { .. } => true,
+            Type::Nominal { id, .. } => {
+                id.as_str().starts_with("prelude.")
+                    && self.store.get_interface(id.as_str()).is_none()
             }
-            let resolved = ty.resolve_in(&self.env);
-            let wrapper = if resolved.is_result() {
-                Some(diagnostics::infer::WrapperKind::Result)
-            } else if resolved.is_option() {
-                Some(diagnostics::infer::WrapperKind::Option)
-            } else if resolved.is_partial() {
-                Some(diagnostics::infer::WrapperKind::Partial)
-            } else {
-                None
-            };
-            if let Some(wrapper) = wrapper {
-                self.sink
-                    .push(diagnostics::infer::wrapper_does_not_implement_interface(
-                        &interface.name,
-                        wrapper,
-                        &resolved,
-                        *span,
-                    ));
-            } else {
-                let type_name = ty.get_name().map_or_else(|| ty.to_string(), str::to_owned);
-                self.sink
-                    .push(diagnostics::infer::interface_not_implemented(
-                        &interface.name,
-                        &type_name,
-                        &violations,
-                        *span,
-                    ));
-            }
-            Err(violations)
+            _ => false,
         }
     }
 
@@ -252,10 +283,6 @@ impl InferCtx<'_, '_> {
             .unwrap_or_default();
 
         for (method_name, method_ty) in &interface.methods {
-            if method_name.as_str() == "equals" && self.is_native_container(ty) {
-                missing.push((method_name.to_string(), method_ty.clone()));
-                continue;
-            }
             let Some(symbol_method) = symbol_methods.get(method_name.as_str()) else {
                 missing.push((method_name.to_string(), method_ty.clone()));
                 continue;
@@ -435,6 +462,25 @@ impl InferCtx<'_, '_> {
             _ => ty.clone(),
         }
     }
+}
+
+fn interface_declares_methods(
+    store: &Store,
+    interface: &Interface,
+    seen: &mut rustc_hash::FxHashSet<String>,
+) -> bool {
+    if !interface.methods.is_empty() {
+        return true;
+    }
+    interface.parents.iter().any(|parent| {
+        let parent_name = parent.get_qualified_name();
+        seen.insert(parent_name.to_string())
+            && store
+                .get_interface(&parent_name)
+                .is_some_and(|parent_interface| {
+                    interface_declares_methods(store, parent_interface, seen)
+                })
+    })
 }
 
 /// Lift impl return T to Option<T> when the interface is Go-imported, the

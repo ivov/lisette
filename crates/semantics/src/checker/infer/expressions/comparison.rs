@@ -612,12 +612,6 @@ impl InferCtx<'_, '_> {
         }
     }
 
-    /// A container's `equals` lowers to a free function, not a Go method, so it cannot satisfy an interface or bound.
-    pub(in crate::checker::infer) fn is_native_container(&self, ty: &Type) -> bool {
-        let resolved = self.store.deep_resolve_alias(&ty.resolve_in(&self.env));
-        resolved.is_slice() || resolved.is_map()
-    }
-
     fn container_equals_element(&self, ty: &Type) -> Option<Type> {
         let resolved = self.store.deep_resolve_alias(&ty.resolve_in(&self.env));
         match resolved.as_compound() {

@@ -2123,6 +2123,23 @@ pub fn wrapper_does_not_implement_interface(
         .with_help(help)
 }
 
+pub fn builtin_type_cannot_implement_interface(
+    interface_name: &str,
+    type_name: &str,
+    span: Span,
+) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Interface not implemented")
+        .with_infer_code("interface_not_implemented")
+        .with_span_label(
+            &span,
+            format!("`{type_name}` cannot implement `{interface_name}`"),
+        )
+        .with_help(format!(
+            "Built-in types have no Go methods, so they cannot satisfy interfaces. Wrap the \
+             value in a struct that implements `{interface_name}`."
+        ))
+}
+
 pub fn pointer_receiver_interface_mismatch(
     interface_name: &str,
     type_name: &str,

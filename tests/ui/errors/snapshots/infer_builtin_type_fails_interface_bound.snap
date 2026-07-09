@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Interface not implemented
+    ╭─[test.lis:11:16]
+ 10 │ fn main() -> int {
+ 11 │   print_length([1, 2, 3])
+    ·                ────┬────
+    ·                    ╰── `Slice` cannot implement `HasLength`
+ 12 │ }
+    ╰────
+  help: Built-in types have no Go methods, so they cannot satisfy interfaces. Wrap the value in a struct that implements `HasLength` · code: [infer.interface_not_implemented]
