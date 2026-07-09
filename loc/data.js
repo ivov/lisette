@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 0,
+  "lastUpdate": 1783631599587,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -1209,6 +1209,95 @@ window.BENCHMARK_DATA = {
             "name": "prelude",
             "unit": "lines",
             "value": 890
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "7c9da0ea24d3117af8fc5bef095efd882126b015",
+          "message": "ci: track production lines of code over time (#981)",
+          "timestamp": "2026-07-09T23:12:55+02:00",
+          "tree_id": "c06a071f0ad59ef87633a677aa46a7279ef68709",
+          "url": "https://github.com/ivov/lisette/commit/7c9da0ea24d3117af8fc5bef095efd882126b015"
+        },
+        "date": 1783631598273,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 112118,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 27975,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 22813,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 16443,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 12807,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 10078,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 6160,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 4348,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2783,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1031,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 695,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 6095,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 890,
+            "unit": "lines"
           }
         ]
       }
