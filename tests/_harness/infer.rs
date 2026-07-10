@@ -12,6 +12,14 @@ use super::filesystem::MockFileSystem;
 use super::pipeline::TestPipeline;
 use super::register_test_builtins;
 
+pub fn checker_errors(raw_source: &str, typedefs: &[(&str, &str)]) -> Vec<LisetteDiagnostic> {
+    let mut pipeline = TestPipeline::new(raw_source);
+    for (name, source) in typedefs {
+        pipeline = pipeline.with_go_typedef(name, source);
+    }
+    pipeline.compile().run_inference().errors
+}
+
 pub fn infer(raw_source: &str) -> InferResult {
     let result = TestPipeline::new(raw_source)
         .wrapped()

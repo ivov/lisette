@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Unknown go hint `array_return`
+   ╭─[typedef.d.lis:2:1]
+ 1 │ 
+ 2 │ #[go(array_return)]
+   · ─────────┬─────────
+   ·          ╰── unknown
+ 3 │ pub fn Sum(data: Slice<byte>) -> Slice<byte>
+   ╰────
+  help: The hint in this attribute is not recognized. Regenerate this typedef by re-running `lis add` · code: [attribute.unknown]

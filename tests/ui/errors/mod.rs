@@ -3842,6 +3842,115 @@ fn infer_valueless_const_missing_annotation_in_typedef() {
     infer_module("types", fs).assert_infer_code("valueless_const_missing_annotation");
 }
 
+fn assert_go_hint_error_snapshot(name: &str, input: &str, module: &str, typedef: &str) {
+    let errors = crate::_harness::infer::checker_errors(input, &[(module, typedef)]);
+    let error = errors
+        .iter()
+        .find(|e| e.code_str() == Some("attribute.unknown"))
+        .expect("expected an unknown attribute error");
+    let output = format_diagnostic_for_snapshot(error, typedef, "typedef.d.lis");
+    insta::with_settings!({
+        prepend_module_to_snapshot => false,
+        omit_expression => true,
+    }, {
+        insta::assert_snapshot!(name, output);
+    });
+}
+
+#[test]
+fn attribute_removed_go_hint() {
+    let input = r#"
+import "go:example.com/old"
+
+fn main() {
+  let _ = old.Sum([1])
+}
+"#;
+    let typedef = r#"
+#[go(array_return)]
+pub fn Sum(data: Slice<byte>) -> Slice<byte>
+"#;
+    assert_go_hint_error_snapshot(
+        "attribute_removed_go_hint",
+        input,
+        "go:example.com/old",
+        typedef,
+    );
+}
+
+#[test]
+fn attribute_unknown_go_hint() {
+    let input = r#"
+import "go:example.com/odd"
+
+fn main() {
+  let _ = odd.Get()
+}
+"#;
+    let typedef = r#"
+#[go(comma_okay)]
+pub fn Get() -> Option<int>
+"#;
+    assert_go_hint_error_snapshot(
+        "attribute_unknown_go_hint",
+        input,
+        "go:example.com/odd",
+        typedef,
+    );
+}
+
+#[test]
+fn attribute_unknown_go_hint_on_method() {
+    let input = r#"
+import "go:example.com/w"
+
+fn main() {
+  let _ = w.Make()
+}
+"#;
+    let typedef = r#"
+pub struct Widget {
+  pub Size: int,
+}
+
+impl Widget {
+  #[go(array_return)]
+  fn Bytes(self) -> Slice<byte>
+}
+
+pub fn Make() -> Widget
+"#;
+    assert_go_hint_error_snapshot(
+        "attribute_unknown_go_hint_on_method",
+        input,
+        "go:example.com/w",
+        typedef,
+    );
+}
+
+#[test]
+fn attribute_unknown_go_hint_on_type_alias() {
+    let input = r#"
+import "go:example.com/h"
+
+fn main() {
+  let _ = h.Open()
+}
+"#;
+    let typedef = r#"
+#[go(array_return)]
+pub type Handle
+
+pub fn Open() -> Handle
+"#;
+    assert_go_hint_error_snapshot(
+        "attribute_unknown_go_hint_on_type_alias",
+        input,
+        "go:example.com/h",
+        typedef,
+    );
+}
+
 #[test]
 fn module_graph_module_not_found() {
     let mut fs = MockFileSystem::new();

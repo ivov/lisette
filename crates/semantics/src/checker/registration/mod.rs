@@ -179,6 +179,32 @@ fn canonical_const_literal(expression: &Expression) -> Option<syntax::ast::Liter
     }
 }
 
+const KNOWN_GO_HINTS: &[&str] = &[
+    "anon_struct",
+    "bit_flag_set",
+    "closed_domain",
+    "collapsed_type_params",
+    "comma_ok",
+    "hidden_embed",
+    "sentinel_minus_one",
+    "unexported",
+];
+
+pub(super) fn check_go_hints(attributes: &[Attribute], sink: &diagnostics::LocalSink) {
+    for attribute in attributes.iter().filter(|a| a.name == "go") {
+        for arg in &attribute.args {
+            if let AttributeArg::Flag(flag) = arg
+                && !KNOWN_GO_HINTS.contains(&flag.as_str())
+            {
+                sink.push(diagnostics::attribute::unknown_go_hint(
+                    &attribute.span,
+                    flag,
+                ));
+            }
+        }
+    }
+}
+
 pub(super) fn extract_attribute_flags(attributes: &[Attribute], name: &str) -> Vec<String> {
     attributes
         .iter()
@@ -649,7 +675,35 @@ impl TaskState<'_> {
         entries
     }
 
+    fn check_go_hints_in_items(&self, items: &[Expression]) {
+        for item in items {
+            match item {
+                Expression::Enum { attributes, .. }
+                | Expression::Struct { attributes, .. }
+                | Expression::TypeAlias { attributes, .. }
+                | Expression::Function { attributes, .. } => {
+                    check_go_hints(attributes, self.sink);
+                }
+                Expression::ImplBlock {
+                    methods: functions, ..
+                }
+                | Expression::Interface {
+                    method_signatures: functions,
+                    ..
+                } => {
+                    for function in functions {
+                        if let Expression::Function { attributes, .. } = function {
+                            check_go_hints(attributes, self.sink);
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
     pub fn register_type_definitions(&mut self, store: &mut Store, items: &[Expression]) {
+        self.check_go_hints_in_items(items);
         for item in items {
             if let Expression::TypeAlias {
                 name,

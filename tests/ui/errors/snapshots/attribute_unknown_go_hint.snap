@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Unknown go hint `comma_okay`
+   ╭─[typedef.d.lis:2:1]
+ 1 │ 
+ 2 │ #[go(comma_okay)]
+   · ────────┬────────
+   ·         ╰── unknown
+ 3 │ pub fn Get() -> Option<int>
+   ╰────
+  help: The hint in this attribute is not recognized. Regenerate this typedef by re-running `lis add` · code: [attribute.unknown]

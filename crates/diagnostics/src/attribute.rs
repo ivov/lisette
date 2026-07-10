@@ -1,6 +1,15 @@
 use crate::LisetteDiagnostic;
 use syntax::ast::Span;
 
+pub fn unknown_go_hint(attribute_span: &Span, hint: &str) -> LisetteDiagnostic {
+    LisetteDiagnostic::error(format!("Unknown go hint `{}`", hint))
+        .with_attribute_code("unknown")
+        .with_span_label(attribute_span, "unknown")
+        .with_help(
+            "The hint in this attribute is not recognized. Regenerate this typedef by re-running `lis add`",
+        )
+}
+
 pub fn field_attribute_without_struct_attribute(
     field_span: &Span,
     attribute_name: &str,

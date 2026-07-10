@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Unknown go hint `array_return`
+   ╭─[typedef.d.lis:7:3]
+ 6 │ impl Widget {
+ 7 │   #[go(array_return)]
+   ·   ─────────┬─────────
+   ·            ╰── unknown
+ 8 │   fn Bytes(self) -> Slice<byte>
+   ╰────
+  help: The hint in this attribute is not recognized. Regenerate this typedef by re-running `lis add` · code: [attribute.unknown]
