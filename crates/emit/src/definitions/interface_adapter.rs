@@ -1,5 +1,5 @@
 use crate::Planner;
-use crate::abi::AbiShape;
+use crate::abi::callable::{AbiTransition, CallableReturnAbi, OptionReturnAbi, PayloadLayout};
 use crate::abi::transition::emit_return_adapter;
 use crate::names::go_name;
 use crate::names::go_name::GO_IMPORT_PREFIX;
@@ -18,8 +18,8 @@ pub(crate) struct AdapterMethod {
     pub(crate) name: EcoString,
     pub(crate) param_types: Vec<Type>,
     pub(crate) return_type: Type,
-    pub(crate) user_shape: Option<AbiShape>,
-    pub(crate) interface_shape: Option<AbiShape>,
+    pub(crate) user_abi: CallableReturnAbi,
+    pub(crate) interface_abi: CallableReturnAbi,
 }
 
 impl Planner<'_> {
@@ -186,23 +186,27 @@ impl Planner<'_> {
         // Compute the natural shape once and shift it for the interface side
         // if a `#[go(...)]` hint applies, instead of re-walking `peel_alias`
         // twice via two `classify_direct_emission` calls.
-        let user_shape = self.classify_direct_emission(&return_type);
+        let user_abi = self.callable_return_abi(&return_type);
         let interface_hints = self.go_interface_method_hints(declaring_id, method_name);
-        let interface_shape = match user_shape.as_ref() {
-            Some(AbiShape::NullableReturn) if interface_hints.iter().any(|h| h == "comma_ok") => {
-                Some(AbiShape::CommaOk)
-            }
-            other => other.cloned(),
+        let interface_abi = match &user_abi {
+            CallableReturnAbi::Option {
+                encoding: OptionReturnAbi::Nullable,
+                payload,
+            } if interface_hints.iter().any(|h| h == "comma_ok") => CallableReturnAbi::Option {
+                encoding: OptionReturnAbi::CommaOk,
+                payload: *payload,
+            },
+            other => other.clone(),
         };
-        let adapted = user_shape != interface_shape;
+        let adapted = user_abi != interface_abi;
 
         Some((
             AdapterMethod {
                 name: method_name.clone(),
                 param_types,
                 return_type,
-                user_shape,
-                interface_shape,
+                user_abi,
+                interface_abi,
             },
             adapted,
         ))
@@ -213,10 +217,20 @@ impl Planner<'_> {
         &mut self,
         inner_call: &str,
         return_ty: &Type,
-        user_shape: &AbiShape,
-        interface_shape: &AbiShape,
+        user_abi: &CallableReturnAbi,
+        interface_abi: &CallableReturnAbi,
     ) -> Option<(String, String)> {
-        let (AbiShape::NullableReturn, AbiShape::CommaOk) = (user_shape, interface_shape) else {
+        let (
+            CallableReturnAbi::Option {
+                encoding: OptionReturnAbi::Nullable,
+                ..
+            },
+            CallableReturnAbi::Option {
+                encoding: OptionReturnAbi::CommaOk,
+                ..
+            },
+        ) = (user_abi, interface_abi)
+        else {
             return None;
         };
         let inner = self.facts.peel_alias(return_ty).ok_type();
@@ -229,7 +243,13 @@ impl Planner<'_> {
         } else {
             format!("{} != nil", val)
         };
-        let go_ret = self.render_lowered_return_ty(&AbiShape::CommaOk, return_ty);
+        let go_ret = self.render_lowered_return_ty(
+            &CallableReturnAbi::Option {
+                encoding: OptionReturnAbi::CommaOk,
+                payload: PayloadLayout::Packed,
+            },
+            return_ty,
+        );
         let body = format!("{val} := {inner_call}\nreturn {val}, {nil_check}\n");
         Some((go_ret, body))
     }
@@ -250,16 +270,24 @@ impl Planner<'_> {
 
     /// Classify with `#[go(...)]` hints — `comma_ok` shifts the default
     /// `NullableReturn` to `CommaOk` for nilable `Option`s.
-    pub(crate) fn classify_with_go_hints(
+    pub(crate) fn callable_return_abi_with_go_hints(
         &self,
         return_ty: &Type,
         hints: &[String],
-    ) -> Option<AbiShape> {
-        let base = self.classify_direct_emission(return_ty)?;
-        if matches!(base, AbiShape::NullableReturn) && hints.iter().any(|h| h == "comma_ok") {
-            return Some(AbiShape::CommaOk);
+    ) -> CallableReturnAbi {
+        let base = self.callable_return_abi(return_ty);
+        if let CallableReturnAbi::Option {
+            encoding: OptionReturnAbi::Nullable,
+            payload,
+        } = base
+            && hints.iter().any(|h| h == "comma_ok")
+        {
+            return CallableReturnAbi::Option {
+                encoding: OptionReturnAbi::CommaOk,
+                payload,
+            };
         }
-        Some(base)
+        base
     }
 
     pub(crate) fn ensure_adapter_type(&mut self, plan: AdapterPlan) -> String {
@@ -333,26 +361,32 @@ impl Planner<'_> {
     }
 
     fn build_adapter_body(&mut self, method: &AdapterMethod, inner_call: &str) -> (String, String) {
-        let user_shape = &method.user_shape;
-        let interface_shape = &method.interface_shape;
+        let user_abi = &method.user_abi;
+        let interface_abi = &method.interface_abi;
 
-        if user_shape == interface_shape
-            && let Some(shape) = user_shape
-        {
-            let go_ret = self.render_lowered_return_ty(shape, &method.return_type);
+        if user_abi == interface_abi {
+            if user_abi.is_lowered() {
+                let go_ret = self.render_lowered_return_ty(user_abi, &method.return_type);
+                return (go_ret, format!("return {}\n", inner_call));
+            }
+            if method.return_type.is_unit() {
+                return (String::new(), format!("{}\n", inner_call));
+            }
+            let go_ret = self.go_type_string(&method.return_type);
             return (go_ret, format!("return {}\n", inner_call));
         }
 
-        if let (Some(user), Some(interface)) = (user_shape, interface_shape)
-            && user != interface
-            && let Some(bridge) =
-                self.emit_hint_shift_bridge(inner_call, &method.return_type, user, interface)
+        if let Some(bridge) =
+            self.emit_hint_shift_bridge(inner_call, &method.return_type, user_abi, interface_abi)
         {
             return bridge;
         }
 
-        let adapter = emit_return_adapter(self, inner_call, &method.return_type);
-        if let Some(adapter) = adapter {
+        if matches!(
+            user_abi.transition_to(interface_abi),
+            AbiTransition::LowerFromTagged
+        ) && let Some(adapter) = emit_return_adapter(self, inner_call, &method.return_type)
+        {
             return adapter;
         }
 

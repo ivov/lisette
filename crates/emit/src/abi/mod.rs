@@ -1,70 +1,63 @@
+pub(crate) mod callable;
 pub(crate) mod coercion;
 pub(crate) mod transition;
 
-use crate::GoCallStrategy;
 use crate::Planner;
 use crate::names::go_name::PRELUDE_ERROR_ID;
 use crate::types::go_type::GoType;
+use callable::{CallableReturnAbi, OptionReturnAbi, PayloadLayout};
 use syntax::ast::Expression;
 use syntax::types::Type;
 
-/// Go ABI shape that a Lisette type lowers to at function-boundary
-/// positions.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) enum AbiShape {
-    /// `Result<T, error>` → `(T, error)`.
-    ResultTuple,
-    /// `Result<(), error>` → `error`.
-    BareError,
-    /// `Partial<T, error>` → `(T, error)`. Same Go shape as `ResultTuple`
-    /// but with three-way Ok/Err/Both source variants.
-    PartialTuple,
-    /// `Option<T>` → `(T, bool)` for non-nilable T (Go's comma-ok idiom).
-    CommaOk,
-    /// `Option<Ref<T>>` / `Option<fn>` / `Option<Iface>` → bare nilable T.
-    NullableReturn,
-    /// `Tuple<T1, T2, ...>` → `(T1, T2, ...)`. Arity ≥ 2.
-    Tuple { arity: usize },
-}
-
-impl AbiShape {
-    pub(crate) fn matches_go_strategy(&self, strategy: &GoCallStrategy) -> bool {
-        match (strategy, self) {
-            (GoCallStrategy::Result, AbiShape::ResultTuple | AbiShape::BareError)
-            | (GoCallStrategy::Partial, AbiShape::PartialTuple)
-            | (GoCallStrategy::CommaOk, AbiShape::CommaOk)
-            | (GoCallStrategy::NullableReturn, AbiShape::NullableReturn) => true,
-            (GoCallStrategy::Tuple { arity: a }, AbiShape::Tuple { arity: b }) => a == b,
-            _ => false,
+impl Planner<'_> {
+    /// ABI of a value after it has crossed into Lisette expression space.
+    pub(crate) fn value_return_abi(&self, return_ty: &Type) -> CallableReturnAbi {
+        let peeled = self.facts.peel_alias(return_ty);
+        if peeled.is_result()
+            || peeled.is_partial()
+            || peeled.is_option()
+            || peeled.tuple_arity().is_some_and(|arity| arity >= 2)
+        {
+            CallableReturnAbi::Tagged
+        } else {
+            CallableReturnAbi::Direct
         }
     }
-}
 
-impl Planner<'_> {
+    /// Natural physical ABI of a Lisette-authored callable return.
+    pub(crate) fn callable_return_abi(&self, return_ty: &Type) -> CallableReturnAbi {
+        self.classify_direct_emission(return_ty)
+            .unwrap_or_else(|| self.value_return_abi(return_ty))
+    }
+
     /// Lowered shape for a Lisette return type, or `None` to keep it tagged.
-    pub(crate) fn classify_direct_emission(&self, return_ty: &Type) -> Option<AbiShape> {
+    pub(crate) fn classify_direct_emission(&self, return_ty: &Type) -> Option<CallableReturnAbi> {
         let peeled = self.facts.peel_alias(return_ty);
         if peeled.is_result() && self.err_slot_is_nilable(&peeled) {
-            return Some(if peeled.ok_type().is_unit() {
-                AbiShape::BareError
-            } else {
-                AbiShape::ResultTuple
+            return Some(CallableReturnAbi::Result {
+                bare_error: peeled.ok_type().is_unit(),
+                payload: PayloadLayout::Packed,
             });
         }
         if peeled.is_partial() && self.err_slot_is_nilable(&peeled) {
-            return Some(AbiShape::PartialTuple);
+            return Some(CallableReturnAbi::Partial {
+                payload: PayloadLayout::Packed,
+            });
         }
         if peeled.is_option() {
-            return Some(if self.facts.is_nullable_option(&peeled) {
-                AbiShape::NullableReturn
-            } else {
-                AbiShape::CommaOk
+            return Some(CallableReturnAbi::Option {
+                encoding: if self.facts.is_nullable_option(&peeled) {
+                    OptionReturnAbi::Nullable
+                } else {
+                    OptionReturnAbi::CommaOk
+                },
+                payload: PayloadLayout::Packed,
             });
         }
         if let Some(arity) = peeled.tuple_arity()
             && arity >= 2
         {
-            return Some(AbiShape::Tuple { arity });
+            return Some(CallableReturnAbi::Tuple { arity });
         }
         None
     }
@@ -80,23 +73,35 @@ impl Planner<'_> {
     /// Render the lowered Go return type.
     pub(crate) fn render_lowered_return_ty(
         &mut self,
-        shape: &AbiShape,
+        shape: &CallableReturnAbi,
         return_ty: &Type,
     ) -> String {
         let peeled = self.facts.peel_alias(return_ty);
         match shape {
-            AbiShape::BareError => self.go_type_string(&peeled.err_type()),
-            AbiShape::ResultTuple | AbiShape::PartialTuple => {
+            CallableReturnAbi::Tagged | CallableReturnAbi::Direct => self.go_type_string(&peeled),
+            CallableReturnAbi::Result {
+                bare_error: true, ..
+            } => self.go_type_string(&peeled.err_type()),
+            CallableReturnAbi::Result {
+                bare_error: false, ..
+            }
+            | CallableReturnAbi::Partial { .. } => {
                 let ok_str = self.go_type_string(&peeled.ok_type());
                 let err_str = self.go_type_string(&peeled.err_type());
                 format!("({}, {})", ok_str, err_str)
             }
-            AbiShape::CommaOk => {
+            CallableReturnAbi::Option {
+                encoding: OptionReturnAbi::CommaOk,
+                ..
+            } => {
                 let inner_str = self.go_type_string(&peeled.ok_type());
                 format!("({}, bool)", inner_str)
             }
-            AbiShape::NullableReturn => self.go_type_string(&peeled.ok_type()),
-            AbiShape::Tuple { .. } => {
+            CallableReturnAbi::Option {
+                encoding: OptionReturnAbi::Nullable | OptionReturnAbi::Sentinel(_),
+                ..
+            } => self.go_type_string(&peeled.ok_type()),
+            CallableReturnAbi::Tuple { .. } => {
                 let parts: Vec<String> = tuple_element_types(&peeled)
                     .iter()
                     .map(|t| self.tuple_slot_lowered_ty_string(t))
@@ -118,11 +123,21 @@ impl Planner<'_> {
 
     /// `&self` variant of `render_lowered_return_ty`, callable from the
     /// `go_type` recursion which doesn't have `&mut self`.
-    pub(crate) fn lowered_return_go_type(&self, shape: &AbiShape, return_ty: &Type) -> GoType {
+    pub(crate) fn lowered_return_go_type(
+        &self,
+        shape: &CallableReturnAbi,
+        return_ty: &Type,
+    ) -> GoType {
         let peeled = self.facts.peel_alias(return_ty);
         match shape {
-            AbiShape::BareError => self.go_type(&peeled.err_type()),
-            AbiShape::ResultTuple | AbiShape::PartialTuple => {
+            CallableReturnAbi::Tagged | CallableReturnAbi::Direct => self.go_type(&peeled),
+            CallableReturnAbi::Result {
+                bare_error: true, ..
+            } => self.go_type(&peeled.err_type()),
+            CallableReturnAbi::Result {
+                bare_error: false, ..
+            }
+            | CallableReturnAbi::Partial { .. } => {
                 let ok_go = self.go_type(&peeled.ok_type());
                 let err_go = self.go_type(&peeled.err_type());
                 let mut result = GoType::new(format!("({}, {})", ok_go.code, err_go.code));
@@ -130,14 +145,20 @@ impl Planner<'_> {
                 result.merge(&err_go);
                 result
             }
-            AbiShape::CommaOk => {
+            CallableReturnAbi::Option {
+                encoding: OptionReturnAbi::CommaOk,
+                ..
+            } => {
                 let inner_go = self.go_type(&peeled.ok_type());
                 let mut result = GoType::new(format!("({}, bool)", inner_go.code));
                 result.merge(&inner_go);
                 result
             }
-            AbiShape::NullableReturn => self.go_type(&peeled.ok_type()),
-            AbiShape::Tuple { .. } => {
+            CallableReturnAbi::Option {
+                encoding: OptionReturnAbi::Nullable | OptionReturnAbi::Sentinel(_),
+                ..
+            } => self.go_type(&peeled.ok_type()),
+            CallableReturnAbi::Tuple { .. } => {
                 let elements = tuple_element_types(&peeled);
                 let element_gos: Vec<GoType> = elements
                     .iter()

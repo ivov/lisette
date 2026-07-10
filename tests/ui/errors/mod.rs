@@ -1922,7 +1922,7 @@ fn test() {
 }
 
 #[test]
-fn infer_struct_zero_fill_no_zero_for_field() {
+fn infer_struct_autofill_no_zero_for_field() {
     let input = r#"
 struct Bad {
   ok: int,
@@ -1937,7 +1937,7 @@ fn test() {
 }
 
 #[test]
-fn infer_struct_zero_fill_no_zero_for_ref_field() {
+fn infer_struct_autofill_no_zero_for_ref_field() {
     let input = r#"
 struct Bad {
   ok: int,
@@ -1952,7 +1952,7 @@ fn test() {
 }
 
 #[test]
-fn infer_struct_zero_fill_tuple_chain() {
+fn infer_struct_autofill_tuple_chain() {
     let input = r#"
 struct Outer { t: (int, Channel<int>) }
 
@@ -1964,7 +1964,7 @@ fn test() {
 }
 
 #[test]
-fn infer_struct_zero_fill_struct_chain() {
+fn infer_struct_autofill_struct_chain() {
     let input = r#"
 struct Inner { bad: Channel<int> }
 struct Outer { inner: Inner }
@@ -2099,7 +2099,7 @@ fn test(ages: Map<string, int>, opts: Map<string, Option<Ref<int>>>, rows: Slice
 }
 
 #[test]
-fn infer_struct_zero_fill_function_alias_field() {
+fn infer_struct_autofill_function_alias_field() {
     let input = r#"
 type F = fn() -> int
 struct A { g: F, x: int }
@@ -2112,7 +2112,7 @@ fn test() {
 }
 
 #[test]
-fn infer_struct_zero_fill_generic_function_alias_field() {
+fn infer_struct_autofill_generic_function_alias_field() {
     let input = r#"
 type F<T> = fn(T) -> T
 struct A { g: F<int>, x: int }
@@ -2125,7 +2125,7 @@ fn test() {
 }
 
 #[test]
-fn infer_enum_struct_variant_zero_fill_no_zero_for_field() {
+fn infer_enum_struct_variant_autofill_no_zero_for_field() {
     let input = r#"
 enum Action {
   Move { x: int, dst: Channel<int> },
@@ -2134,6 +2134,54 @@ enum Action {
 
 fn test() {
   let m = Action.Move { x: 5, .. };
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_enum_spread_missing_field() {
+    let input = r#"
+enum E {
+  A { x: int, z: int },
+  B { x: int, y: int },
+}
+
+fn test() {
+  let e = E.A { x: 1, z: 2 }
+  let _f = E.B { x: 9, ..e }
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_enum_spread_missing_fields_plural() {
+    let input = r#"
+enum E {
+  A { x: int },
+  B { x: int, y: int, z: int },
+}
+
+fn test() {
+  let a = E.A { x: 1 }
+  let _b = E.B { ..a }
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_enum_spread_shared_field_slot_mismatch() {
+    let input = r#"
+enum E {
+  A { tag: int, x: int },
+  B { tag: int, y: int },
+}
+
+fn test() {
+  let a = E.A { tag: 1, x: 2 }
+  let _b = E.B { y: 3, ..a }
 }
 "#;
     assert_infer_error_snapshot!(input);
@@ -3350,6 +3398,60 @@ fn test() {
 }
 
 #[test]
+fn infer_array_cast_to_interface() {
+    let input = r#"
+interface Sized { fn length(self) -> int }
+
+fn f(a: Array<int, 3>) -> Sized {
+  a as Sized
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_slice_cast_to_interface() {
+    let input = r#"
+interface Sized { fn length(self) -> int }
+
+fn f(s: Slice<int>) -> Sized {
+  s as Sized
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_slice_passed_as_interface() {
+    let input = r#"
+interface Sized { fn length(self) -> int }
+
+fn takes(s: Sized) -> int {
+  s.length()
+}
+
+fn main() {
+  let _ = takes([1, 2, 3])
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_map_coerced_to_interface_annotation() {
+    let input = r#"
+interface Sized { fn length(self) -> int }
+
+fn main() {
+  let m = Map.new<string, int>()
+  let s: Sized = m
+  let _ = s
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
 fn infer_comma_ok_abi_mismatch() {
     let typedef = r#"
 pub interface Lookup {
@@ -3390,7 +3492,7 @@ fn main() {}
 }
 
 #[test]
-fn builtin_generic_type_satisfies_interface_bound() {
+fn infer_builtin_type_fails_interface_bound() {
     let input = r#"
 interface HasLength {
   fn length() -> int;
@@ -3404,8 +3506,7 @@ fn main() -> int {
   print_length([1, 2, 3])
 }
 "#;
-    let result = crate::_harness::infer::infer(input);
-    result.assert_no_errors();
+    assert_infer_error_snapshot!(input);
 }
 
 #[test]
@@ -5345,7 +5446,7 @@ fn main() {
 }
 
 #[test]
-fn infer_private_field_in_struct_zero_fill_direct() {
+fn infer_private_field_in_struct_autofill_direct() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
@@ -5373,7 +5474,7 @@ fn main() {
 }
 
 #[test]
-fn infer_private_field_in_struct_zero_fill_transitive() {
+fn infer_private_field_in_struct_autofill_transitive() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(

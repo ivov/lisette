@@ -279,10 +279,10 @@ impl InferCtx<'_, '_> {
             },
         );
 
-        if let StructSpread::ZeroFill { span: spread_span } = &new_spread
+        if let StructSpread::Autofill { span: spread_span } = &new_spread
             && !is_go_imported
         {
-            self.check_zero_fill_fields(
+            self.check_autofill_fields(
                 &struct_name,
                 struct_fields.iter().map(|f| (&f.name, &f.ty)),
                 &matched_fields,
@@ -301,8 +301,8 @@ impl InferCtx<'_, '_> {
             for field in &struct_fields {
                 if !matched_fields.contains(&field.name) && !field.visibility.is_public() {
                     let diag = match &new_spread {
-                        StructSpread::ZeroFill { .. } => {
-                            diagnostics::infer::private_field_in_zero_fill(
+                        StructSpread::Autofill { .. } => {
+                            diagnostics::infer::private_field_in_autofill(
                                 &field.name,
                                 &struct_name,
                                 owning_module,
@@ -376,13 +376,23 @@ impl InferCtx<'_, '_> {
             },
         );
 
-        if let StructSpread::ZeroFill { span: spread_span } = &new_spread {
-            self.check_zero_fill_fields(
+        if let StructSpread::Autofill { span: spread_span } = &new_spread {
+            self.check_autofill_fields(
                 &variant_name,
                 variant_fields.iter().map(|f| (&f.name, &f.ty)),
                 &matched_fields,
                 &map,
                 *spread_span,
+            );
+        }
+
+        if let StructSpread::From(spread_expression) = &new_spread {
+            self.check_enum_spread_fields(
+                &resolved_enum,
+                &variant_name,
+                &variant_fields,
+                &matched_fields,
+                spread_expression.get_span(),
             );
         }
 
@@ -403,8 +413,82 @@ impl InferCtx<'_, '_> {
                     self.with_value_context(|checker| checker.infer_expression(*s, target_ty));
                 StructSpread::From(Box::new(inferred))
             }
-            StructSpread::ZeroFill { span } => StructSpread::ZeroFill { span },
+            StructSpread::Autofill { span } => StructSpread::Autofill { span },
         }
+    }
+
+    fn check_enum_spread_fields(
+        &mut self,
+        resolved_enum: &Type,
+        written_name: &str,
+        variant_fields: &[syntax::ast::EnumFieldDefinition],
+        matched_fields: &HashSet<EcoString>,
+        spread_span: Span,
+    ) {
+        let store = self.store;
+        let Type::Nominal { id, .. } = resolved_enum else {
+            return;
+        };
+        let Some(variants) = store.variants_of(id) else {
+            return;
+        };
+        let enum_name = unqualified_name(id);
+        let target_variant = unqualified_name(written_name);
+        let written_enum = written_name
+            .rsplit_once('.')
+            .map_or(enum_name, |(prefix, _)| prefix);
+        let target_single = variant_fields.len() == 1;
+
+        let missing: Vec<String> = variant_fields
+            .iter()
+            .enumerate()
+            .filter(|(_, field)| !matched_fields.contains(&field.name))
+            .filter(|(field_index, field)| {
+                let target_slot = syntax::go_names::enum_field_go_name(
+                    target_variant,
+                    &field.name,
+                    *field_index,
+                    true,
+                    target_single,
+                    enum_name,
+                );
+                !variants.iter().all(|variant| {
+                    variant
+                        .fields
+                        .iter()
+                        .enumerate()
+                        .any(|(other_index, other)| {
+                            other.name == field.name
+                                && syntax::go_names::enum_field_go_name(
+                                    &variant.name,
+                                    &other.name,
+                                    other_index,
+                                    variant.fields.is_struct(),
+                                    variant.fields.len() == 1,
+                                    enum_name,
+                                ) == target_slot
+                        })
+                })
+            })
+            .map(|(_, field)| field.name.to_string())
+            .collect();
+        if missing.is_empty() {
+            return;
+        }
+        let counterexample = missing.iter().find_map(|field_name| {
+            variants
+                .iter()
+                .find(|variant| !variant.fields.iter().any(|f| f.name == field_name.as_str()))
+                .map(|variant| (variant.name.as_str(), field_name.as_str()))
+        });
+        self.sink
+            .push(diagnostics::infer::enum_spread_missing_fields(
+                written_enum,
+                target_variant,
+                &missing,
+                counterexample,
+                spread_span,
+            ));
     }
 
     fn infer_structish_fields<'a, FindDef>(
@@ -469,7 +553,7 @@ impl InferCtx<'_, '_> {
         (new_assignments, matched)
     }
 
-    fn check_zero_fill_fields<'a>(
+    fn check_autofill_fields<'a>(
         &mut self,
         owner_name: &str,
         fields: impl Iterator<Item = (&'a EcoString, &'a Type)>,

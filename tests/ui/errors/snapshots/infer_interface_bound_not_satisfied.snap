@@ -6,10 +6,7 @@ source: tests/ui/errors/mod.rs
  10 │ fn test() {
  11 │   use_writer(42)
     ·              ─┬
-    ·               ╰── `int` does not implement `Writer`
+    ·               ╰── `int` cannot implement `Writer`
  12 │ }
     ╰────
-  help: Missing methods:
-          From `Writer`
-            - write: fn (string) -> int
-        code: [infer.interface_not_implemented]
+  help: Built-in types have no Go methods, so they cannot satisfy interfaces. Wrap the value in a struct that implements `Writer` · code: [infer.interface_not_implemented]

@@ -1,48 +1,13 @@
 use crate::Planner;
+use crate::abi::callable::PayloadLayout;
 use crate::calls::go_interop::build_tuple_literal;
-use crate::calls::go_interop::wrappers::{
-    TupleReturnLayout, WrapperOutcome, WrapperTarget, leaf_block,
-};
-use crate::context::expression::ExpressionContext;
+use crate::calls::go_interop::wrappers::{WrapperOutcome, WrapperTarget, leaf_block};
 use crate::control_flow::fallible::{Fallible, FalliblePlanner, OPTION_SOME_TAG};
 use crate::plan::bodies::{ElseArm, IfPlan, LoopPlan, LoweredBlock, LoweredStatement};
-use crate::plan::values::{ValuePlan, value_plan_from_statements};
 use crate::types::shape::{CollectionKind, NullableCollectionElement, NullableCollectionShape};
-use syntax::ast::Expression;
 use syntax::types::Type;
 
 impl Planner<'_> {
-    pub(super) fn lower_go_option_call_wrapped(
-        &mut self,
-        call_expression: &Expression,
-        option_ty: &Type,
-    ) -> ValuePlan {
-        let (mut setup, call_str) =
-            self.lower_call(call_expression, None, ExpressionContext::value());
-        let (wrap_setup, outcome) = self.lower_comma_ok_wrapping(
-            &call_str,
-            option_ty,
-            TupleReturnLayout::Flattened,
-            WrapperTarget::FreshSlot,
-        );
-        setup.extend(wrap_setup);
-        value_plan_from_statements(setup, outcome.expect("wrapper produced no slot"))
-    }
-
-    pub(super) fn lower_go_sentinel_call_wrapped(
-        &mut self,
-        call_expression: &Expression,
-        option_ty: &Type,
-        sentinel: i64,
-    ) -> ValuePlan {
-        let (mut setup, call_str) =
-            self.lower_call(call_expression, None, ExpressionContext::value());
-        let (wrap_setup, outcome) =
-            self.lower_sentinel_wrapping(&call_str, option_ty, sentinel, WrapperTarget::FreshSlot);
-        setup.extend(wrap_setup);
-        value_plan_from_statements(setup, outcome.expect("wrapper produced no slot"))
-    }
-
     /// Wrap a sentinel-call via `OptionFromCommaOk` with `raw != sentinel`.
     pub(crate) fn lower_sentinel_wrapping(
         &mut self,
@@ -71,7 +36,7 @@ impl Planner<'_> {
         &mut self,
         call_str: &str,
         option_ty: &Type,
-        layout: TupleReturnLayout,
+        layout: PayloadLayout,
         target: WrapperTarget<'_>,
     ) -> (Vec<LoweredStatement>, WrapperOutcome) {
         self.require_stdlib();
@@ -181,20 +146,6 @@ impl Planner<'_> {
         let outcome =
             self.push_simple_wrapper_value(&mut statements, target, "option", &value_expr);
         (statements, outcome)
-    }
-
-    pub(super) fn lower_go_single_return_option_wrapped(
-        &mut self,
-        call_expression: &Expression,
-        option_ty: &Type,
-    ) -> ValuePlan {
-        let (mut setup, call_str) =
-            self.lower_call(call_expression, None, ExpressionContext::value());
-        let raw_var = self.hoist_tmp_value_statement(&mut setup, "raw", &call_str);
-        let (wrap_setup, outcome) =
-            self.lower_nil_check_option_wrap(&raw_var, option_ty, WrapperTarget::FreshSlot);
-        setup.extend(wrap_setup);
-        value_plan_from_statements(setup, outcome.expect("wrapper produced no slot"))
     }
 
     pub(crate) fn plan_option_projection(

@@ -13,12 +13,12 @@ use diagnostics::LocalSink;
 use diagnostics::{Edit, Fix};
 use semantics::context::AnalysisContext;
 use semantics::facts::Facts;
+use semantics::store::Store;
 use syntax::ast::{AttributeArg, Expression, ImportAlias, Span, Visibility};
 use syntax::program::EqualityIndex;
 use syntax::program::Module;
 use syntax::program::UnusedInfo;
 use syntax::program::{File, FileImport};
-use syntax::types::Symbol;
 
 use super::Lint as LintEnum;
 use super::from_facts::LintConfig;
@@ -41,19 +41,7 @@ pub(crate) fn run(
     facts: &Facts,
 ) -> (Vec<LisetteDiagnostic>, UnusedInfo) {
     let store = analysis.store;
-    let go_package_names = &store.go_package_names;
-    let equality_index = &store.equality_index;
     let config = LintConfig::default();
-
-    let type_aliases: Arc<HashSet<Symbol>> = Arc::new(
-        store
-            .modules
-            .values()
-            .flat_map(|m| m.definitions.iter())
-            .filter(|(_, def)| def.is_type_alias())
-            .map(|(id, _)| id.clone())
-            .collect(),
-    );
 
     let mut modules: Vec<&Module> = store
         .modules
@@ -68,16 +56,7 @@ pub(crate) fn run(
     if modules.len() < PARALLEL_THRESHOLD {
         let sink = LocalSink::new();
         for module in &modules {
-            apply_ref_lints(
-                module,
-                go_package_names,
-                equality_index,
-                &config,
-                facts,
-                &type_aliases,
-                &mut unused,
-                &sink,
-            );
+            apply_ref_lints(module, &config, facts, store, &mut unused, &sink);
         }
         return (sink.take(), unused);
     }
@@ -90,11 +69,9 @@ pub(crate) fn run(
             let mut local_unused = UnusedInfo::default();
             apply_ref_lints(
                 module,
-                go_package_names,
-                equality_index,
                 &config,
                 facts,
-                &type_aliases,
+                store,
                 &mut local_unused,
                 &local_sink,
             );
@@ -110,26 +87,15 @@ pub(crate) fn run(
     (LocalSink::merge(worker_sinks), unused)
 }
 
-#[allow(clippy::too_many_arguments)]
 fn apply_ref_lints(
     module: &Module,
-    go_package_names: &HashMap<String, String>,
-    equality_index: &EqualityIndex,
     config: &LintConfig,
     facts: &Facts,
-    type_aliases: &Arc<HashSet<Symbol>>,
+    store: &Store,
     unused: &mut UnusedInfo,
     sink: &LocalSink,
 ) {
-    let result = run_ref_lints(
-        module,
-        &module.files,
-        go_package_names,
-        equality_index,
-        config,
-        facts,
-        type_aliases,
-    );
+    let result = run_ref_lints(module, config, facts, store);
     if !result.unused_import_aliases.is_empty() {
         unused.imports_by_module.insert(
             module.id.clone().into(),
@@ -150,13 +116,12 @@ fn apply_ref_lints(
 
 fn run_ref_lints(
     module: &Module,
-    files: &HashMap<u32, File>,
-    go_package_names: &HashMap<String, String>,
-    equality_index: &EqualityIndex,
     config: &LintConfig,
     facts: &Facts,
-    type_aliases: &Arc<HashSet<Symbol>>,
+    store: &Store,
 ) -> RefLintResult {
+    let files = &module.files;
+    let equality_index = &store.equality_index;
     let mut diagnostics = Vec::new();
     let mut unused_import_aliases = HashSet::default();
     let mut unused_definition_spans = Vec::new();
@@ -165,12 +130,12 @@ fn run_ref_lints(
     collect_items(
         files,
         &module.id,
-        go_package_names,
+        &store.go_package_names,
         equality_index,
         &mut graph,
     );
 
-    let alias_map = AliasMap::build(files, go_package_names, type_aliases.clone());
+    let alias_map = AliasMap::build(files, store);
     for file in files.values() {
         for item in &file.items {
             walk_expression(module, item, &mut graph, &alias_map, None);
@@ -372,11 +337,11 @@ fn collect_items(
                     });
 
                     let has_display_attr = attributes.iter().any(|a| a.name == "display");
-                    let synthesizes_equals =
-                        equality_index.is_synthesized(&format!("{module_id}.{name}"));
+                    let qualified_name = format!("{module_id}.{name}");
+                    let synthesizes_equals = equality_index.is_synthesized(&qualified_name);
 
                     for struct_field in fields {
-                        let field_id = StructFieldId::new(name, &struct_field.name);
+                        let field_id = StructFieldId::new(&qualified_name, &struct_field.name);
                         let has_tag_attribute =
                             struct_field.attributes.iter().any(|a| a.name == "tag");
                         graph.add_struct_field(

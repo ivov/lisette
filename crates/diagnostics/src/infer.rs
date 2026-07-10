@@ -837,7 +837,7 @@ pub fn struct_missing_fields(
     LisetteDiagnostic::error(format!("Struct `{}` is missing fields", simple_name))
         .with_infer_code("missing_struct_fields")
         .with_span_label(&name_span, format!("missing fields: {}", fields_list))
-        .with_help("Initialize all fields, or add `..` to zero-fill the rest")
+        .with_help("Initialize all fields, or add `..` to autofill the rest")
 }
 
 pub fn pattern_missing_fields(missing: &[String], span: Span) -> LisetteDiagnostic {
@@ -893,17 +893,17 @@ pub fn private_field_in_spread(
         ))
 }
 
-pub fn private_field_in_zero_fill(
+pub fn private_field_in_autofill(
     field_name: &str,
     struct_name: &str,
     owning_module: &str,
     span: Span,
 ) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Private field")
-        .with_resolve_code("private_field_zero_fill")
+        .with_resolve_code("private_field_autofill")
         .with_span_label(&span, "private")
         .with_help(format!(
-            "`{}` of `{}` cannot be zero-filled because `{}` is private to module `{}`. \
+            "`{}` of `{}` cannot be autofilled because `{}` is private to module `{}`. \
              Provide an explicit value, or have `{}` expose `{}` as `pub` or offer a \
              constructor.",
             field_name, struct_name, field_name, owning_module, owning_module, field_name
@@ -920,7 +920,7 @@ pub fn field_no_zero(
 ) -> LisetteDiagnostic {
     let main = match private {
         Some((priv_struct, priv_field, priv_module)) => format!(
-            "`{}` of `{}` cannot be zero-filled because `{}.{}` is private to module `{}`. \
+            "`{}` of `{}` cannot be autofilled because `{}.{}` is private to module `{}`. \
              Provide an explicit value for `{}`, or have `{}` expose `{}` as `pub`.",
             field_name,
             struct_name,
@@ -2123,6 +2123,23 @@ pub fn wrapper_does_not_implement_interface(
         .with_help(help)
 }
 
+pub fn builtin_type_cannot_implement_interface(
+    interface_name: &str,
+    type_name: &str,
+    span: Span,
+) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Interface not implemented")
+        .with_infer_code("interface_not_implemented")
+        .with_span_label(
+            &span,
+            format!("`{type_name}` cannot implement `{interface_name}`"),
+        )
+        .with_help(format!(
+            "Built-in types have no Go methods, so they cannot satisfy interfaces. Wrap the \
+             value in a struct that implements `{interface_name}`."
+        ))
+}
+
 pub fn pointer_receiver_interface_mismatch(
     interface_name: &str,
     type_name: &str,
@@ -2456,6 +2473,47 @@ pub fn enum_field_type_conflict(
         .with_help(format!(
             "`{loc_a}` is `{type_a}` but `{loc_b}` is `{type_b}`. Rename one of the fields or align their types",
         ))
+}
+
+pub fn enum_spread_missing_fields(
+    enum_name: &str,
+    target_variant: &str,
+    missing: &[String],
+    counterexample: Option<(&str, &str)>,
+    span: Span,
+) -> LisetteDiagnostic {
+    let (noun, pronoun, fields_fmt) = if missing.len() == 1 {
+        ("field", "it", format!("`{}`", missing[0]))
+    } else {
+        let formatted: Vec<String> = missing.iter().map(|f| format!("`{}`", f)).collect();
+        ("fields", "them", formatted.join(", "))
+    };
+
+    let (label, help) = match counterexample {
+        Some((lacking_variant, lacked_field)) => (
+            format!("may be `{enum_name}.{lacking_variant}`, which has no field `{lacked_field}`"),
+            format!(
+                "A spread can only fill fields that exist in every `{enum_name}` variant. Assign {noun} {fields_fmt} explicitly, or bind {pronoun} first when the source is known to be `{enum_name}.{target_variant}`: `let {enum_name}.{target_variant} {{ {pattern}, .. }} = source else {{ ... }}`",
+                pattern = missing.join(", "),
+            ),
+        ),
+        None => (
+            format!("may hold any `{enum_name}` variant"),
+            format!(
+                "Every `{enum_name}` variant has {fields_fmt}, but the {name_noun} with a built-in enum member, so each variant stores {pronoun} separately and a spread cannot fill {pronoun}. Assign {noun} {fields_fmt} explicitly",
+                name_noun = if missing.len() == 1 {
+                    "name collides"
+                } else {
+                    "names collide"
+                },
+            ),
+        ),
+    };
+
+    LisetteDiagnostic::error("Enum spread cannot fill variant-specific fields")
+        .with_infer_code("enum_spread_missing_fields")
+        .with_span_label(&span, label)
+        .with_help(help)
 }
 
 pub fn cannot_auto_address_receiver(

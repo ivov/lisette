@@ -1,0 +1,50 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  enum Cursor {
+    Point { id: int, x: int },
+    Area { id: int, w: int },
+  }
+  
+  fn test() -> Cursor {
+    let base = Cursor.Point { id: 7, x: 10 };
+    Cursor.Area { w: 3, ..base }
+  }
+---
+package main
+
+func MakeCursorPoint(arg0 int, arg1 int) Cursor {
+	return Cursor{Tag: CursorPoint, Id: arg0, X: arg1}
+}
+
+func MakeCursorArea(arg0 int, arg1 int) Cursor {
+	return Cursor{Tag: CursorArea, Id: arg0, W: arg1}
+}
+
+type CursorTag int
+
+const (
+	CursorPoint CursorTag = iota
+	CursorArea
+)
+
+type Cursor struct {
+	Tag CursorTag
+	Id  int
+	X   int
+	W   int
+}
+
+func test() Cursor {
+	base := Cursor{
+		Tag: CursorPoint,
+		Id:  7,
+		X:   10,
+	}
+	return Cursor{
+		Tag: CursorArea,
+		W:   3,
+		Id:  base.Id,
+	}
+}

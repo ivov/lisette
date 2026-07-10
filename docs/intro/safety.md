@@ -359,7 +359,7 @@ In Lisette, all struct fields must be initialized:
    ·              ╰── missing fields: `db`, `logger`
  9 │ }
    ╰────
-  help: Initialize all fields, or add `..` to zero-fill the rest
+  help: Initialize all fields, or add `..` to autofill the rest
 ```
 
 📚 See [`07-pointers.md`](../reference/07-pointers.md) and [`13-go-interop.md`](../reference/13-go-interop.md)

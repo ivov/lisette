@@ -9,7 +9,7 @@ use crate::context::expression::ExpressionContext;
 use crate::expressions::emission::StagedExpression;
 use crate::names::go_name;
 use crate::plan::bodies::LoweredStatement;
-use crate::plan::calls::CalleePlan;
+use crate::plan::calls::CallableOrigin;
 use crate::types::native::NativeGoType;
 use syntax::EcoString;
 use syntax::ast::{Expression, StructKind};
@@ -278,22 +278,22 @@ impl Planner<'_> {
             .plan_call(call_expression)
             .expect("plan_call yields Some for a Call expression");
 
-        match &plan.callee {
-            CalleePlan::TupleStructConstructor => {
+        match &plan.resolved.origin {
+            CallableOrigin::TupleStructConstructor => {
                 if let Some(result) = self.try_lower_tuple_struct_call(function, args, call_ty, ctx)
                 {
                     return result;
                 }
             }
-            CalleePlan::AssertType => {
+            CallableOrigin::AssertType => {
                 return self.lower_assert_type(function, args, resolved_type_args);
             }
-            CalleePlan::UfcsMethod => {
-                return self.lower_ufcs_call(function, args, resolved_type_args, spread);
+            CallableOrigin::UfcsMethod => {
+                return self.lower_ufcs_call(function, args, resolved_type_args, spread, &plan);
             }
-            CalleePlan::NativeConstructor(kind)
-            | CalleePlan::NativeMethod(kind)
-            | CalleePlan::NativeMethodIdentifier(kind) => {
+            CallableOrigin::NativeConstructor(kind)
+            | CallableOrigin::NativeMethod(kind)
+            | CallableOrigin::NativeMethodIdentifier(kind) => {
                 let native_type = NativeGoType::from_kind(*kind);
                 let method = extract_native_method_name(function);
                 let native_ctx = NativeCallContext {
@@ -307,7 +307,7 @@ impl Planner<'_> {
                 };
                 return self.lower_native_call(&native_ctx);
             }
-            CalleePlan::ReceiverMethodUfcs { is_public } => {
+            CallableOrigin::ReceiverMethodUfcs { is_public } => {
                 let method = extract_receiver_ufcs_method(function);
                 return self.lower_receiver_method_ufcs(
                     function,
@@ -318,7 +318,7 @@ impl Planner<'_> {
                     spread,
                 );
             }
-            CalleePlan::GoInterop(_) | CalleePlan::Regular => {}
+            CallableOrigin::GoInterop | CallableOrigin::Regular => {}
         }
 
         self.lower_regular_call(call_expression, &plan, call_ty, ctx)
@@ -338,21 +338,21 @@ impl Planner<'_> {
     pub(super) fn infer_return_only_type_args(
         &mut self,
         function: &Expression,
+        declared: Option<&Type>,
         arg_shape: CallArgShape,
     ) -> Option<String> {
-        let definition_ty = self.get_callee_definition_type(function)?;
-        let Type::Forall { vars, body } = definition_ty else {
+        let Type::Forall { vars, body } = declared? else {
             return None;
         };
         let Type::Function(f) = body.as_ref() else {
             return None;
         };
         let generic_params = &f.params;
-        let all_inferrable = all_type_params_inferrable(&vars, generic_params, 0, arg_shape);
+        let all_inferrable = all_type_params_inferrable(vars, generic_params, 0, arg_shape);
 
         let instantiated_ty = function.get_type();
         let mut mapping: HashMap<String, Type> = HashMap::default();
-        extract_type_mapping(&body, &instantiated_ty, &mut mapping);
+        extract_type_mapping(body, &instantiated_ty, &mut mapping);
 
         if all_inferrable {
             let any_needs_explicit = vars.iter().any(|v| {
@@ -375,51 +375,6 @@ impl Planner<'_> {
         }
 
         Some(self.format_type_args(&resolved))
-    }
-
-    fn lookup_definition_type(&self, primary: &str, fallback: Option<&str>) -> Option<Type> {
-        self.facts
-            .definition(primary)
-            .or_else(|| fallback.and_then(|f| self.facts.definition(f)))
-            .map(|d| d.ty().clone())
-    }
-
-    fn get_callee_definition_type(&self, function: &Expression) -> Option<Type> {
-        let function = function.unwrap_parens();
-        match function {
-            Expression::Identifier { value, .. } => {
-                let qualified = self.facts.qualified_current(value);
-                self.lookup_definition_type(&qualified, Some(value.as_str()))
-            }
-            Expression::DotAccess {
-                expression, member, ..
-            } => {
-                if let Expression::Identifier { value, .. } = expression.as_ref() {
-                    let module_name = self.module.module_for_alias(value).unwrap_or(value);
-                    let qualified = format!("{}.{}", module_name, member);
-                    let local = self.facts.qualified_current_member(value, member);
-                    return self.lookup_definition_type(&qualified, Some(&local));
-                }
-                if let Expression::DotAccess {
-                    expression: inner_expression,
-                    member: type_name,
-                    ..
-                } = expression.as_ref()
-                    && let Expression::Identifier {
-                        value: module_name, ..
-                    } = inner_expression.as_ref()
-                {
-                    let module_name = self
-                        .module
-                        .module_for_alias(module_name)
-                        .unwrap_or(module_name);
-                    let qualified = format!("{}.{}.{}", module_name, type_name, member);
-                    return self.lookup_definition_type(&qualified, None);
-                }
-                None
-            }
-            _ => None,
-        }
     }
 
     /// Plan a tuple-struct constructor as a struct literal. `None` when this

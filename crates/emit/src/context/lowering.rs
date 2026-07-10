@@ -1,4 +1,4 @@
-use crate::abi::AbiShape;
+use crate::abi::callable::CallableReturnAbi;
 use syntax::types::Type;
 
 #[derive(Clone)]
@@ -40,7 +40,7 @@ pub(crate) enum ReturnContext {
     Tagged(Type),
     Lowered {
         return_ty: Type,
-        shape: AbiShape,
+        shape: CallableReturnAbi,
     },
     TaggedBlock(Type),
 }
@@ -55,7 +55,7 @@ impl ReturnContext {
         }
     }
 
-    pub(crate) fn lowered_shape(&self) -> Option<AbiShape> {
+    pub(crate) fn lowered_shape(&self) -> Option<CallableReturnAbi> {
         match self {
             ReturnContext::Lowered { shape, .. } => Some(shape.clone()),
             _ => None,

@@ -1,12 +1,12 @@
 use crate::Planner;
 use crate::abi::is_tagged_shape_fn_value;
 use crate::abi::transition::lower_arg_to_tagged;
-use crate::calls::effective_param_type;
 use crate::context::expression::ExpressionContext;
 use crate::expressions::emission::{CapturePolicy, StagedExpression};
 use crate::expressions::values::is_plain_go_call;
 use crate::names::go_name;
 use crate::plan::bodies::LoweredStatement;
+use crate::plan::calls::CallableOrigin;
 use crate::utils::observable_after_mutation;
 use syntax::ast::{Expression, FormatStringPart, Literal};
 use syntax::types::Type;
@@ -145,7 +145,8 @@ impl Planner<'_> {
         if matches!(name, Some("Some" | "Ok" | "Err" | "None")) {
             return false;
         }
-        self.callee_definition(callee)
+        self.resolve_callee_definition(callee)
+            .1
             .is_some_and(|definition| definition.is_type_definition())
     }
 
@@ -228,7 +229,8 @@ impl Planner<'_> {
         if matches!(name, Some("Some" | "Ok" | "Err" | "None")) {
             return true;
         }
-        self.callee_definition(callee)
+        self.resolve_callee_definition(callee)
+            .1
             .is_some_and(|definition| definition.is_type_definition())
     }
 
@@ -312,7 +314,10 @@ impl Planner<'_> {
         if is_tagged_shape_fn_value(arg) {
             return None;
         }
-        if self.classify_go_fn_value(arg).is_some() {
+        if self
+            .resolve_callable_value(arg)
+            .is_some_and(|callee| matches!(callee.origin, CallableOrigin::GoInterop))
+        {
             return None;
         }
         let param_ty = param_ty?;
@@ -341,15 +346,20 @@ impl Planner<'_> {
         function: &Expression,
         args: &[Expression],
     ) -> Vec<StagedExpression> {
-        let fn_ty = function.get_type();
-        let formal_params: &[syntax::types::Type] =
-            fn_ty.as_function_type().map_or(&[], |f| &f.params);
-        let declared_params = self.callee_declared_params(function, args.len());
+        let params = self.resolve_callable_params(function, args.len());
         args.iter()
             .enumerate()
             .map(|(i, arg)| {
-                let declared = declared_params.and_then(|p| effective_param_type(i, p));
-                self.stage_prelude_arg(arg, declared, formal_params.get(i))
+                let param = params.get(i).or_else(|| {
+                    params
+                        .last()
+                        .filter(|param| param.instantiated.get_name() == Some("VarArgs"))
+                });
+                self.stage_prelude_arg(
+                    arg,
+                    param.and_then(|param| param.declared.as_ref()),
+                    param.map(|param| &param.instantiated),
+                )
             })
             .collect()
     }

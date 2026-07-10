@@ -1669,6 +1669,35 @@ fn main() {
 }
 
 #[test]
+fn builtin_type_satisfies_empty_interface() {
+    infer(
+        r#"
+interface Marker {}
+fn tag(m: Marker) -> Marker { m }
+fn main() {
+  let _ = tag([1, 2, 3])
+  let _ = [1, 2] as Marker
+}
+"#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn failed_cast_to_interface_reports_single_error() {
+    infer(
+        r#"
+interface Sized { fn length(self) -> int }
+fn main() {
+  let _ = [1, 2, 3] as Sized
+}
+"#,
+    )
+    .assert_infer_code_once("interface_not_implemented")
+    .assert_infer_code_count("invalid_cast", 0);
+}
+
+#[test]
 fn generic_impl_mismatched_param_position_rejected() {
     infer(
         r#"

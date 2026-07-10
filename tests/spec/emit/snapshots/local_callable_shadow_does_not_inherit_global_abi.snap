@@ -1,0 +1,25 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  fn apply(x: int) -> Result<int, error> { Ok(x) }
+  
+  fn main() {
+    let apply = |x: int| -> int { x + 1 }
+    let value = apply(1)
+    let _ = value
+  }
+---
+package main
+
+func apply(x int) (int, error) {
+	return x, nil
+}
+
+func main() {
+	apply := func(x int) int {
+		return x + 1
+	}
+	value := apply(1)
+	_ = value
+}

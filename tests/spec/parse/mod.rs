@@ -2856,7 +2856,7 @@ fn test(base: Point) { let p = Point { ..base, }; }
 }
 
 #[test]
-fn struct_zero_fill_with_fields() {
+fn struct_autofill_with_fields() {
     let input = r#"
 fn test() { let p = Point { x: 1, .. }; }
 "#;
@@ -2864,7 +2864,7 @@ fn test() { let p = Point { x: 1, .. }; }
 }
 
 #[test]
-fn struct_zero_fill_only() {
+fn struct_autofill_only() {
     let input = r#"
 fn test() { let p = Point { .. }; }
 "#;
@@ -2872,7 +2872,7 @@ fn test() { let p = Point { .. }; }
 }
 
 #[test]
-fn struct_zero_fill_trailing_comma() {
+fn struct_autofill_trailing_comma() {
     let input = r#"
 fn test() { let p = Point { x: 1, .., }; }
 "#;

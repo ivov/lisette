@@ -6,10 +6,7 @@ source: tests/ui/errors/mod.rs
  11 │   let x = [1, 2]
  12 │   let _ = same(x, x)
     ·                ┬
-    ·                ╰── `Slice` does not implement `Equatable`
+    ·                ╰── `Slice` cannot implement `Equatable`
  13 │ }
     ╰────
-  help: Missing methods:
-          From `Equatable`
-            - equals: fn (T) -> bool
-        code: [infer.interface_not_implemented]
+  help: Built-in types have no Go methods, so they cannot satisfy interfaces. Wrap the value in a struct that implements `Equatable` · code: [infer.interface_not_implemented]

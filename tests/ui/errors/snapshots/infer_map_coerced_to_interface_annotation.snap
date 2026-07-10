@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Interface not implemented
+   ╭─[test.lis:6:18]
+ 5 │   let m = Map.new<string, int>()
+ 6 │   let s: Sized = m
+   ·                  ┬
+   ·                  ╰── `Map` cannot implement `Sized`
+ 7 │   let _ = s
+   ╰────
+  help: Built-in types have no Go methods, so they cannot satisfy interfaces. Wrap the value in a struct that implements `Sized` · code: [infer.interface_not_implemented]

@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Enum spread cannot fill variant-specific fields
+    ╭─[test.lis:9:26]
+  8 │   let a = E.A { tag: 1, x: 2 }
+  9 │   let _b = E.B { y: 3, ..a }
+    ·                          ┬
+    ·                          ╰── may hold any `E` variant
+ 10 │ }
+    ╰────
+  help: Every `E` variant has `tag`, but the name collides with a built-in enum member, so each variant stores it separately and a spread cannot fill it. Assign field `tag` explicitly · code: [infer.enum_spread_missing_fields]

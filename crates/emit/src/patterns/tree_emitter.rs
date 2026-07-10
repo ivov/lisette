@@ -4,11 +4,12 @@ use syntax::types::Type;
 use crate::Planner;
 use crate::analyze::inline_uses::{InlineDecision, analyze_inline_candidate, region_blocks_inline};
 use crate::context::expression::ExpressionContext;
+use crate::patterns::binding_decls::{is_catchall_pattern, is_unconditional_catchall};
 use crate::patterns::binding_emit::drop_inline_overlays;
-use crate::patterns::decision_tree::{Decision, compile_expanded_arms, expand_or_patterns};
-use crate::patterns::emit_plan::{
-    ChainPlan, EmitBinding, EmitCase, EmitChainTest, EmitDecision, MatchEmitPlan, RetryLoopPlan,
-    SingleCatchallPlan, is_empty_emit_decision, lower_match,
+use crate::patterns::decision_tree::{
+    ChainTest, Decision, PatternBinding, SwitchBranch, SwitchKind as PatternSwitchKind,
+    SwitchShape, compile_expanded_arms, decision_is_exhaustive, expand_or_patterns,
+    render_condition, tree_has_unguarded_terminal,
 };
 use crate::plan::bodies::{
     ElseArm, IfPlan, LoopPlan, LoweredBlock, LoweredStatement, PlacePlan, SwitchCasePlan,
@@ -83,7 +84,7 @@ impl<'a> WalkCtx<'a> {
 pub(crate) struct TreePlanner<'a, 'e> {
     planner: &'a mut Planner<'e>,
     arms: &'a [MatchArm],
-    subject_var: String,
+    current_subject: String,
     subject_ty: Type,
 }
 
@@ -97,7 +98,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         Self {
             planner,
             arms,
-            subject_var,
+            current_subject: subject_var,
             subject_ty,
         }
     }
@@ -107,56 +108,58 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         let compiled = compile_expanded_arms(self.planner, &expanded, &self.subject_ty);
         self.planner.absorb_effects(&compiled.effects);
         let tree = compiled.decision;
-
-        let single_catchall_has_collisions = match &tree {
-            Decision::Success { arm_index, .. } => self
-                .planner
-                .pattern_has_binding_collisions(&self.arms[*arm_index].pattern),
-            _ => false,
-        };
-
-        let lowered = lower_match(
-            self.arms,
-            self.subject_var.clone(),
-            &tree,
-            single_catchall_has_collisions,
-        );
-        self.planner.absorb_effects(&lowered.effects);
+        if decision_needs_stdlib(&tree) {
+            self.planner.require_stdlib();
+        }
 
         let mut statements: Vec<LoweredStatement> = Vec::new();
-        match lowered.plan {
-            MatchEmitPlan::Switch { tree } => {
+        match &tree {
+            Decision::Switch { .. } => {
                 let ctx = WalkCtx::switch_case(place);
                 self.walk(&mut statements, &tree, &ctx);
             }
-            MatchEmitPlan::SingleCatchall(plan) => {
-                self.render_single_catchall(&mut statements, &plan, place);
+            Decision::Success {
+                arm_index,
+                bindings,
+            } => {
+                self.render_single_catchall(&mut statements, *arm_index, bindings, place);
             }
-            MatchEmitPlan::Chain(plan) => {
-                self.render_chain_root(&mut statements, &plan, place);
+            _ if self.arms.iter().any(|arm| arm.has_guard()) => {
+                self.render_retry_loop(&mut statements, &tree, place);
             }
-            MatchEmitPlan::RetryLoop(plan) => {
-                self.render_retry_loop(&mut statements, &plan, place);
+            _ => {
+                self.render_chain_root(&mut statements, &tree, place);
             }
         }
         LoweredBlock { statements }
     }
 
+    fn with_subject<R>(&mut self, subject: String, f: impl FnOnce(&mut Self) -> R) -> R {
+        let previous = std::mem::replace(&mut self.current_subject, subject);
+        let result = f(self);
+        self.current_subject = previous;
+        result
+    }
+
     fn render_single_catchall(
         &mut self,
         statements: &mut Vec<LoweredStatement>,
-        plan: &SingleCatchallPlan,
+        arm_index: usize,
+        bindings: &[PatternBinding],
         place: &PlacePlan,
     ) {
-        let arm_body = &*self.arms[plan.arm_index].expression;
+        let pattern_has_collisions = self
+            .planner
+            .pattern_has_binding_collisions(&self.arms[arm_index].pattern);
+        let arm_body = &*self.arms[arm_index].expression;
 
         self.planner.enter_scope();
         let mut inner: Vec<LoweredStatement> = Vec::new();
-        let inlines = self.emit_bindings(&mut inner, &plan.bindings, &[arm_body], None);
-        self.emit_arm_body(&mut inner, plan.arm_index, place);
-        self.drop_inline_bindings(&inlines);
+        let inlines = self.emit_bindings(&mut inner, bindings, &[arm_body], None);
+        self.emit_arm_body(&mut inner, arm_index, place);
+        drop_inline_overlays(self.planner, &inlines);
         let needs_block =
-            self.planner.scope.current_block_declared_nonempty() || plan.pattern_has_collisions;
+            self.planner.scope.current_block_declared_nonempty() || pattern_has_collisions;
         self.planner.exit_scope();
 
         if needs_block {
@@ -169,11 +172,16 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
     fn render_chain_root(
         &mut self,
         statements: &mut Vec<LoweredStatement>,
-        plan: &ChainPlan,
+        tree: &Decision,
         place: &PlacePlan,
     ) {
-        self.emit_chain_root_decision(statements, &plan.tree, place);
-        if let Some(panic) = unreachable_panic_if_needed(place, plan.chain_tail_is_exhaustive) {
+        let chain_tail_is_exhaustive = decision_is_exhaustive(tree)
+            || self
+                .arms
+                .last()
+                .is_some_and(|arm| !arm.has_guard() && is_unconditional_catchall(&arm.pattern));
+        self.emit_chain_root_decision(statements, tree, place);
+        if let Some(panic) = unreachable_panic_if_needed(place, chain_tail_is_exhaustive) {
             statements.push(panic);
         }
     }
@@ -181,32 +189,27 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
     fn emit_chain_root_decision(
         &mut self,
         statements: &mut Vec<LoweredStatement>,
-        tree: &EmitDecision,
+        tree: &Decision,
         place: &PlacePlan,
     ) {
         match tree {
-            EmitDecision::Success {
+            Decision::Success {
                 arm_index,
                 bindings,
-                ..
             } => {
                 let arm_body = &*self.arms[*arm_index].expression;
                 let inlines = self.emit_bindings(statements, bindings, &[arm_body], None);
                 self.emit_arm_body(statements, *arm_index, place);
-                self.drop_inline_bindings(&inlines);
+                drop_inline_overlays(self.planner, &inlines);
             }
-            EmitDecision::Chain {
-                tests,
-                fallback,
-                last_is_catchall,
-            } => {
-                self.lower_chain_branch(statements, tests, fallback, *last_is_catchall, place);
+            Decision::Chain { tests, fallback } => {
+                self.lower_chain_branch(statements, tests, fallback, place);
             }
-            EmitDecision::Unreachable => {}
-            EmitDecision::Guard { .. } => {
+            Decision::Unreachable => {}
+            Decision::Guard { .. } => {
                 self.walk(statements, tree, &WalkCtx::chain_test(place));
             }
-            _ => {
+            Decision::Switch { .. } => {
                 self.walk(statements, tree, &WalkCtx::switch_case(place));
             }
         }
@@ -215,15 +218,16 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
     fn lower_chain_branch(
         &mut self,
         statements: &mut Vec<LoweredStatement>,
-        tests: &[EmitChainTest],
-        fallback: &EmitDecision,
-        last_is_catchall: bool,
+        tests: &[ChainTest],
+        fallback: &Decision,
         place: &PlacePlan,
     ) {
-        let regular = if last_is_catchall {
-            &tests[..tests.len() - 1]
+        let last_is_catchall = chain_last_is_catchall(tests, fallback);
+        let conditions = self.render_chain_conditions(tests);
+        let regular_len = if last_is_catchall {
+            tests.len() - 1
         } else {
-            tests
+            tests.len()
         };
 
         let guard_ctx = WalkCtx::switch_case(place);
@@ -231,14 +235,14 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
 
         // Lower each branch body in its own scope, recording the last branch's
         // divergence so the trailing else decides else/flat structurally.
-        let mut branches: Vec<ChainBranch> = Vec::with_capacity(regular.len());
+        let mut branches: Vec<ChainBranch> = Vec::with_capacity(regular_len);
         let mut last_diverges = false;
-        for test in regular {
-            if let Some(subject) = &test.subject {
-                self.planner.scope.record_go_use(subject);
+        for (test, condition) in tests[..regular_len].iter().zip(&conditions) {
+            if condition.is_some() {
+                self.planner.scope.record_go_use(&self.current_subject);
             }
-            let condition = test.condition.as_deref().unwrap_or("true").to_string();
-            let walk_ctx = if matches!(test.decision.as_ref(), EmitDecision::Guard { .. }) {
+            let condition = condition.as_deref().unwrap_or("true").to_string();
+            let walk_ctx = if matches!(test.decision, Decision::Guard { .. }) {
                 &guard_ctx
             } else {
                 &chain_ctx
@@ -255,7 +259,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         let trailing = if last_is_catchall {
             let last_test = tests.last().unwrap();
             self.lower_else_or_flat(&last_test.decision, &chain_ctx, last_diverges)
-        } else if matches!(fallback, EmitDecision::Unreachable) {
+        } else if matches!(fallback, Decision::Unreachable) {
             ElseArm::None
         } else {
             self.lower_else_or_flat(fallback, &chain_ctx, last_diverges)
@@ -276,19 +280,29 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
     fn render_retry_loop(
         &mut self,
         statements: &mut Vec<LoweredStatement>,
-        plan: &RetryLoopPlan,
+        tree: &Decision,
         place: &PlacePlan,
     ) {
+        let all_arms_diverge = self
+            .arms
+            .iter()
+            .all(|arm| arm.expression.diverges().is_some());
+        let root_has_unguarded_terminal = tree_has_unguarded_terminal(tree);
+        let last_arm_is_any_catchall = self
+            .arms
+            .last()
+            .is_some_and(|arm| !arm.has_guard() && is_catchall_pattern(&arm.pattern));
+
         let use_direct_return = place.is_return();
-        let unguarded_exit = plan.root_has_unguarded_terminal || plan.last_arm_is_any_catchall;
-        let skip_wrapper = !use_direct_return && unguarded_exit && plan.all_arms_diverge;
+        let unguarded_exit = root_has_unguarded_terminal || last_arm_is_any_catchall;
+        let skip_wrapper = !use_direct_return && unguarded_exit && all_arms_diverge;
 
         // No `for { ... }` wrapper: walk the tree flat (direct-return or a
         // diverging-exit fast path).
         if use_direct_return || skip_wrapper {
             let ctx = WalkCtx::retry_loop(place, None);
-            self.walk(statements, &plan.tree, &ctx);
-            if use_direct_return && !plan.root_has_unguarded_terminal {
+            self.walk(statements, tree, &ctx);
+            if use_direct_return && !root_has_unguarded_terminal {
                 statements.push(LoweredStatement::UnreachablePanic);
             }
             return;
@@ -298,7 +312,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         let label = self.planner.fresh_var(Some("match"));
         let ctx = WalkCtx::retry_loop(place, Some(label.as_str()));
         let mut body: Vec<LoweredStatement> = Vec::new();
-        self.walk(&mut body, &plan.tree, &ctx);
+        self.walk(&mut body, tree, &ctx);
         if !unguarded_exit {
             body.push(LoweredStatement::Break {
                 label: Some(label.clone()),
@@ -312,17 +326,11 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         }));
     }
 
-    fn walk(
-        &mut self,
-        statements: &mut Vec<LoweredStatement>,
-        decision: &EmitDecision,
-        ctx: &WalkCtx,
-    ) {
+    fn walk(&mut self, statements: &mut Vec<LoweredStatement>, decision: &Decision, ctx: &WalkCtx) {
         match decision {
-            EmitDecision::Success {
+            Decision::Success {
                 arm_index,
                 bindings,
-                ..
             } => {
                 let wrap = ctx.leaf_scope_explicit();
                 let arm_body = &*self.arms[*arm_index].expression;
@@ -335,7 +343,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
                 self.emit_arm_body(&mut body_statements, *arm_index, ctx.arm_place);
                 let body_diverges = capture_diverge(body_statements, &mut leaf);
                 apply_leaf_terminator(&mut leaf, ctx, body_diverges);
-                self.drop_inline_bindings(&inlines);
+                drop_inline_overlays(self.planner, &inlines);
                 if wrap {
                     self.planner.exit_scope();
                     statements.push(LoweredStatement::Block(LoweredBlock { statements: leaf }));
@@ -343,85 +351,145 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
                     statements.extend(leaf);
                 }
             }
-            EmitDecision::Guard {
+            Decision::Guard {
                 arm_index,
                 bindings,
                 success,
                 failure,
             } => self.walk_guard(statements, *arm_index, bindings, success, failure, ctx),
-            EmitDecision::IfElse {
-                condition,
-                subject,
-                then_branch,
-                else_branch,
-            } => {
-                if let Some(subject) = subject {
-                    self.planner.scope.record_go_use(subject);
-                }
-                let plan =
-                    self.lower_if_else_block(condition, then_branch, else_branch.as_deref(), ctx);
-                let body_diverges = capture_diverge(vec![LoweredStatement::If(plan)], statements);
-                apply_leaf_terminator(statements, ctx, body_diverges);
-            }
-            EmitDecision::InlineBranch { branch } => {
-                let inner = WalkCtx::switch_case(ctx.arm_place);
-                let mut branch_statements: Vec<LoweredStatement> = Vec::new();
-                self.walk(&mut branch_statements, branch, &inner);
-                let body_diverges = capture_diverge(branch_statements, statements);
-                apply_leaf_terminator(statements, ctx, body_diverges);
-            }
-            EmitDecision::Switch {
-                expr,
-                subject,
-                cases,
-                default,
-            } => {
-                self.planner.scope.record_go_use(subject);
-                let plan = self.lower_value_switch(expr, cases, default.as_deref(), ctx.arm_place);
-                let body_diverges =
-                    capture_diverge(vec![LoweredStatement::Switch(plan)], statements);
-                apply_leaf_terminator(statements, ctx, body_diverges);
-            }
-            EmitDecision::TypeSwitch {
-                base,
-                subject,
-                cases,
-                default,
-            } => {
-                self.planner.scope.record_go_use(subject);
-                let plan = self.lower_type_switch(base, cases, default.as_deref(), ctx.arm_place);
-                let body_diverges =
-                    capture_diverge(vec![LoweredStatement::Switch(plan)], statements);
-                apply_leaf_terminator(statements, ctx, body_diverges);
-            }
-            EmitDecision::Chain {
-                tests,
-                fallback,
-                last_is_catchall,
-            } => {
+            Decision::Switch { .. } => self.walk_switch(statements, decision, ctx),
+            Decision::Chain { tests, fallback } => {
                 if ctx.is_grouped_retry() {
-                    self.emit_chain_grouped(statements, tests, fallback, *last_is_catchall, ctx);
+                    self.emit_chain_grouped(statements, tests, fallback, ctx);
                 } else {
-                    self.lower_chain_branch(
-                        statements,
-                        tests,
-                        fallback,
-                        *last_is_catchall,
-                        ctx.arm_place,
-                    );
+                    self.lower_chain_branch(statements, tests, fallback, ctx.arm_place);
                 }
             }
-            EmitDecision::Unreachable => {}
+            Decision::Unreachable => {}
         }
+    }
+
+    fn walk_switch(
+        &mut self,
+        statements: &mut Vec<LoweredStatement>,
+        decision: &Decision,
+        ctx: &WalkCtx,
+    ) {
+        let Decision::Switch {
+            path,
+            kind,
+            shape,
+            branches,
+            fallback,
+        } = decision
+        else {
+            unreachable!("walk_switch requires a Switch decision");
+        };
+        let fallback = fallback.as_deref();
+        let rendered_path = path.render(&self.current_subject);
+        match shape {
+            SwitchShape::TypeSwitch => {
+                self.planner.scope.record_go_use(&self.current_subject);
+                let plan = self.lower_type_switch(rendered_path, branches, fallback, ctx.arm_place);
+                let body_diverges =
+                    capture_diverge(vec![LoweredStatement::Switch(plan)], statements);
+                apply_leaf_terminator(statements, ctx, body_diverges);
+            }
+            SwitchShape::Bool => {
+                let true_branch = branches
+                    .iter()
+                    .find(|branch| branch.case_label == "true")
+                    .expect("Bool shape requires a true-labeled branch");
+                let false_branch = branches
+                    .iter()
+                    .find(|branch| branch.case_label == "false")
+                    .expect("Bool shape requires a false-labeled branch");
+                self.walk_condition_branch(
+                    statements,
+                    wrap_if_struct_literal(rendered_path),
+                    &true_branch.decision,
+                    &false_branch.decision,
+                    ctx,
+                );
+            }
+            SwitchShape::Binary => {
+                let condition = format!(
+                    "{} == {}",
+                    render_switch_expression(&rendered_path, kind),
+                    branches[0].case_label
+                );
+                self.walk_condition_branch(
+                    statements,
+                    condition,
+                    &branches[0].decision,
+                    &branches[1].decision,
+                    ctx,
+                );
+            }
+            SwitchShape::SingleArm => {
+                let branch = &branches[0];
+                let Some(fallback) = fallback else {
+                    let inner = WalkCtx::switch_case(ctx.arm_place);
+                    let mut branch_statements: Vec<LoweredStatement> = Vec::new();
+                    self.walk(&mut branch_statements, &branch.decision, &inner);
+                    let body_diverges = capture_diverge(branch_statements, statements);
+                    apply_leaf_terminator(statements, ctx, body_diverges);
+                    return;
+                };
+                let condition = format!(
+                    "{} == {}",
+                    render_switch_expression(&rendered_path, kind),
+                    branch.case_label
+                );
+                self.walk_condition_branch(statements, condition, &branch.decision, fallback, ctx);
+            }
+            SwitchShape::Multi => {
+                self.planner.scope.record_go_use(&self.current_subject);
+                let expr = render_switch_expression(&rendered_path, kind);
+                let plan = self.lower_value_switch(expr, branches, fallback, ctx.arm_place);
+                let body_diverges =
+                    capture_diverge(vec![LoweredStatement::Switch(plan)], statements);
+                apply_leaf_terminator(statements, ctx, body_diverges);
+            }
+        }
+    }
+
+    fn walk_condition_branch(
+        &mut self,
+        statements: &mut Vec<LoweredStatement>,
+        condition: String,
+        then_branch: &Decision,
+        else_branch: &Decision,
+        ctx: &WalkCtx,
+    ) {
+        self.planner.scope.record_go_use(&self.current_subject);
+        let inner = WalkCtx::switch_case(ctx.arm_place);
+        self.planner.enter_scope();
+        let mut then_statements: Vec<LoweredStatement> = Vec::new();
+        self.walk(&mut then_statements, then_branch, &inner);
+        self.planner.exit_scope();
+        let then_body = LoweredBlock {
+            statements: then_statements,
+        };
+        let then_diverges = then_body.ends_with_diverge();
+        let else_arm = self.lower_else_or_flat(else_branch, &inner, then_diverges);
+        let plan = IfPlan {
+            condition_setup: Vec::new(),
+            condition,
+            then_body,
+            else_arm,
+        };
+        let body_diverges = capture_diverge(vec![LoweredStatement::If(plan)], statements);
+        apply_leaf_terminator(statements, ctx, body_diverges);
     }
 
     fn walk_guard(
         &mut self,
         statements: &mut Vec<LoweredStatement>,
         arm_index: usize,
-        bindings: &[EmitBinding],
-        success: &EmitDecision,
-        failure: &EmitDecision,
+        bindings: &[PatternBinding],
+        success: &Decision,
+        failure: &Decision,
         ctx: &WalkCtx,
     ) {
         let needs_pre_scope = ctx.leaf_scope_explicit() && !bindings.is_empty();
@@ -431,8 +499,8 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         let arm = &self.arms[arm_index];
         let arm_body = &*arm.expression;
         let mut guard_consumers: Vec<&Expression> = Vec::with_capacity(2);
-        if let Some(g) = arm.guard.as_deref() {
-            guard_consumers.push(g);
+        if let Some(guard) = arm.guard.as_deref() {
+            guard_consumers.push(guard);
         }
         guard_consumers.push(arm_body);
 
@@ -454,7 +522,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
             };
             let success_diverges = then_body.ends_with_diverge();
             self.planner.exit_scope();
-            self.drop_inline_bindings(&inlines);
+            drop_inline_overlays(self.planner, &inlines);
             let else_arm = if ctx.role == WalkRole::SwitchCase {
                 self.lower_else_or_flat(failure, ctx, success_diverges)
             } else {
@@ -467,7 +535,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
                 else_arm,
             }));
         } else {
-            self.drop_inline_bindings(&inlines);
+            drop_inline_overlays(self.planner, &inlines);
         }
         if needs_pre_scope {
             self.planner.exit_scope();
@@ -488,11 +556,11 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
     /// an `else` block.
     fn lower_else_or_flat(
         &mut self,
-        decision: &EmitDecision,
+        decision: &Decision,
         ctx: &WalkCtx,
         preceding_diverges: bool,
     ) -> ElseArm {
-        if is_empty_emit_decision(decision) {
+        if self.is_empty_leaf(decision) {
             return ElseArm::None;
         }
         if preceding_diverges {
@@ -513,47 +581,28 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         }
     }
 
-    fn lower_if_else_block(
-        &mut self,
-        condition: &str,
-        then_branch: &EmitDecision,
-        else_branch: Option<&EmitDecision>,
-        ctx: &WalkCtx,
-    ) -> IfPlan {
-        let inner = WalkCtx::switch_case(ctx.arm_place);
-        self.planner.enter_scope();
-        let mut then_statements: Vec<LoweredStatement> = Vec::new();
-        self.walk(&mut then_statements, then_branch, &inner);
-        self.planner.exit_scope();
-        let then_body = LoweredBlock {
-            statements: then_statements,
-        };
-        let then_diverges = then_body.ends_with_diverge();
-        let else_arm = match else_branch {
-            Some(decision) => self.lower_else_or_flat(decision, &inner, then_diverges),
-            None => ElseArm::None,
-        };
-        IfPlan {
-            condition_setup: Vec::new(),
-            condition: condition.to_string(),
-            then_body,
-            else_arm,
+    fn is_empty_leaf(&self, decision: &Decision) -> bool {
+        match decision {
+            Decision::Success {
+                arm_index,
+                bindings,
+            } => bindings.is_empty() && body_is_unit_or_empty(&self.arms[*arm_index].expression),
+            _ => false,
         }
     }
 
     fn lower_value_switch(
         &mut self,
-        expr: &str,
-        cases: &[EmitCase],
-        default: Option<&EmitDecision>,
+        expr: String,
+        branches: &[SwitchBranch],
+        fallback: Option<&Decision>,
         place: &PlacePlan,
     ) -> SwitchStatementPlan {
-        let case_plans = self.lower_switch_cases(cases, place);
+        let (regular, default) = split_with_default_lift(branches, fallback);
+        let case_plans = self.lower_switch_cases(regular, place);
         let default_block = self.lower_switch_default(default, place);
         SwitchStatementPlan {
-            kind: SwitchKind::Value {
-                subject: expr.to_string(),
-            },
+            kind: SwitchKind::Value { subject: expr },
             cases: case_plans,
             default: default_block,
             postlude: switch_postlude(place, default.is_some()),
@@ -562,24 +611,28 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
 
     fn lower_type_switch(
         &mut self,
-        base: &str,
-        cases: &[EmitCase],
-        default: Option<&EmitDecision>,
+        base: String,
+        branches: &[SwitchBranch],
+        fallback: Option<&Decision>,
         place: &PlacePlan,
     ) -> SwitchStatementPlan {
+        let (regular, default) = split_with_default_lift(branches, fallback);
         self.planner.scope.enter_use_region();
-        let case_plans = self.lower_switch_cases(cases, place);
-        let default_block = self.lower_switch_default(default, place);
+        let (case_plans, default_block) = self.with_subject(base.clone(), |tree_planner| {
+            let case_plans = tree_planner.lower_switch_cases(regular, place);
+            let default_block = tree_planner.lower_switch_default(default, place);
+            (case_plans, default_block)
+        });
         let used = self.planner.scope.exit_use_region();
 
         // Keep the `base :=` type-switch binding only when a case references it;
         // Go rejects an unused `:= base` assignment otherwise.
-        let references_base = used.contains(base);
-        let binding = references_base.then(|| base.to_string());
+        let references_base = used.contains(&base);
+        let binding = references_base.then(|| base.clone());
 
         SwitchStatementPlan {
             kind: SwitchKind::Type {
-                subject: base.to_string(),
+                subject: base,
                 binding,
             },
             cases: case_plans,
@@ -588,16 +641,20 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         }
     }
 
-    fn lower_switch_cases(&mut self, cases: &[EmitCase], place: &PlacePlan) -> Vec<SwitchCasePlan> {
+    fn lower_switch_cases(
+        &mut self,
+        branches: &[SwitchBranch],
+        place: &PlacePlan,
+    ) -> Vec<SwitchCasePlan> {
         let ctx = WalkCtx::switch_case(place);
-        let mut case_plans = Vec::with_capacity(cases.len());
-        for case in cases {
+        let mut case_plans = Vec::with_capacity(branches.len());
+        for branch in branches {
             let mut body: Vec<LoweredStatement> = Vec::new();
             self.planner.enter_scope();
-            self.walk(&mut body, &case.decision, &ctx);
+            self.walk(&mut body, &branch.decision, &ctx);
             self.planner.exit_scope();
             case_plans.push(SwitchCasePlan {
-                labels: case.case_label.clone(),
+                labels: branch.case_label.clone(),
                 body: LoweredBlock { statements: body },
             });
         }
@@ -608,7 +665,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
     /// would otherwise emit a bare `default:`).
     fn lower_switch_default(
         &mut self,
-        default: Option<&EmitDecision>,
+        default: Option<&Decision>,
         place: &PlacePlan,
     ) -> Option<LoweredBlock> {
         let default_decision = default?;
@@ -623,22 +680,30 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
     fn emit_chain_grouped(
         &mut self,
         statements: &mut Vec<LoweredStatement>,
-        tests: &[EmitChainTest],
-        fallback: &EmitDecision,
-        last_is_catchall: bool,
+        tests: &[ChainTest],
+        fallback: &Decision,
         ctx: &WalkCtx,
     ) {
+        let last_is_catchall = chain_last_is_catchall(tests, fallback);
+        let conditions = self.render_chain_conditions(tests);
         let inner_ctx = ctx.nested();
-        let groups = group_chain_tests_by_condition(tests);
+        let groups = group_chain_tests_by_condition(&conditions);
         let group_count = groups.len();
 
         for (g, (_condition, indices)) in groups.iter().enumerate() {
             let is_last_group = g == group_count - 1;
             let collapse_as_catchall = is_last_group && last_is_catchall && indices.len() == 1;
-            self.emit_chain_group(statements, indices, tests, &inner_ctx, collapse_as_catchall);
+            self.emit_chain_group(
+                statements,
+                indices,
+                tests,
+                &conditions,
+                &inner_ctx,
+                collapse_as_catchall,
+            );
         }
 
-        if !matches!(fallback, EmitDecision::Unreachable) {
+        if !matches!(fallback, Decision::Unreachable) {
             self.walk(statements, fallback, ctx);
         }
     }
@@ -647,7 +712,8 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         &mut self,
         statements: &mut Vec<LoweredStatement>,
         indices: &[usize],
-        tests: &[EmitChainTest],
+        tests: &[ChainTest],
+        conditions: &[Option<String>],
         ctx: &WalkCtx,
         collapse_as_catchall: bool,
     ) {
@@ -656,7 +722,6 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
             return;
         }
 
-        let first = &tests[indices[0]];
         self.planner.enter_scope();
         let mut body: Vec<LoweredStatement> = Vec::new();
         if bindings_are_hoistable(tests, indices) {
@@ -667,10 +732,11 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         self.planner.exit_scope();
 
         let body = LoweredBlock { statements: body };
-        if let Some(subject) = &first.subject {
-            self.planner.scope.record_go_use(subject);
+        let first_condition = &conditions[indices[0]];
+        if first_condition.is_some() {
+            self.planner.scope.record_go_use(&self.current_subject);
         }
-        match &first.condition {
+        match first_condition {
             Some(condition) => statements.push(LoweredStatement::If(IfPlan {
                 condition_setup: Vec::new(),
                 condition: condition.clone(),
@@ -685,7 +751,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         &mut self,
         statements: &mut Vec<LoweredStatement>,
         indices: &[usize],
-        tests: &[EmitChainTest],
+        tests: &[ChainTest],
         ctx: &WalkCtx,
     ) {
         let mut inlines: Vec<(String, Option<BindingValue>)> = Vec::new();
@@ -695,16 +761,17 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         {
             let mut consumers: Vec<&Expression> = Vec::new();
             for &index in indices {
-                let decision = &*tests[index].decision;
+                let decision = &tests[index].decision;
                 let arm_index = match decision {
-                    EmitDecision::Success { arm_index, .. }
-                    | EmitDecision::Guard { arm_index, .. } => Some(*arm_index),
+                    Decision::Success { arm_index, .. } | Decision::Guard { arm_index, .. } => {
+                        Some(*arm_index)
+                    }
                     _ => None,
                 };
                 if let Some(arm_index) = arm_index {
                     let arm = &self.arms[arm_index];
-                    if let Some(g) = arm.guard.as_deref() {
-                        consumers.push(g);
+                    if let Some(guard) = arm.guard.as_deref() {
+                        consumers.push(guard);
                     }
                     consumers.push(&arm.expression);
                 }
@@ -717,14 +784,14 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
             );
         }
         for &test_index in indices {
-            match &*tests[test_index].decision {
-                EmitDecision::Success { arm_index, .. } => {
+            match &tests[test_index].decision {
+                Decision::Success { arm_index, .. } => {
                     let mut body_statements: Vec<LoweredStatement> = Vec::new();
                     self.emit_arm_body(&mut body_statements, *arm_index, ctx.arm_place);
                     let body_diverges = capture_diverge(body_statements, statements);
                     apply_leaf_terminator(statements, ctx, body_diverges);
                 }
-                EmitDecision::Guard { arm_index, .. } => {
+                Decision::Guard { arm_index, .. } => {
                     if let Some((condition_setup, condition)) =
                         self.lower_guard_condition(*arm_index)
                     {
@@ -748,20 +815,20 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
                 _ => self.walk(statements, &tests[test_index].decision, ctx),
             }
         }
-        self.drop_inline_bindings(&inlines);
+        drop_inline_overlays(self.planner, &inlines);
     }
 
     fn emit_chain_group_per_test(
         &mut self,
         statements: &mut Vec<LoweredStatement>,
         indices: &[usize],
-        tests: &[EmitChainTest],
+        tests: &[ChainTest],
         ctx: &WalkCtx,
     ) {
         for (j, &test_index) in indices.iter().enumerate() {
             let is_last_in_group = j == indices.len() - 1;
             let needs_wrapper =
-                !is_last_in_group && decision_has_bindings(&tests[test_index].decision);
+                !is_last_in_group && !decision_top_bindings(&tests[test_index].decision).is_empty();
             if needs_wrapper {
                 self.planner.enter_scope();
                 let mut wrapped: Vec<LoweredStatement> = Vec::new();
@@ -777,13 +844,13 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
     }
 
     /// Returns the overlay pairs installed for inline substitutions; pass to
-    /// `drop_inline_bindings` to roll them back.
+    /// `drop_inline_overlays` to roll them back.
     fn emit_bindings(
         &mut self,
         statements: &mut Vec<LoweredStatement>,
-        bindings: &[EmitBinding],
+        bindings: &[PatternBinding],
         consumers: &[&Expression],
-        failure_blocker: Option<&EmitDecision>,
+        failure_blocker: Option<&Decision>,
     ) -> Vec<(String, Option<BindingValue>)> {
         let failure_trees: Vec<&Expression> = match failure_blocker {
             Some(failure) => {
@@ -808,25 +875,19 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
                 self.planner.scope.bind(&binding.lisette_name, "");
                 continue;
             };
-            let access_expression = &binding.rendered_access;
 
             let previous = self
                 .planner
                 .scope
                 .resolve_identifier_binding(&binding.lisette_name)
                 .cloned();
-            if self.try_inline_binding(
-                &binding.lisette_name,
-                &binding.composable_access,
-                &binding.subject,
-                consumers,
-                &failure_trees,
-            ) {
+            if self.try_inline_binding(binding, consumers, &failure_trees) {
                 installed_inlines.push((binding.lisette_name.clone(), previous));
                 continue;
             }
 
-            self.planner.scope.record_go_use(&binding.subject);
+            let access_expression = binding.path.render(&self.current_subject);
+            self.planner.scope.record_go_use(&self.current_subject);
             if self.planner.scope.has_binding_for_go_name(go_name) {
                 let fresh = self.planner.fresh_var(Some(&binding.lisette_name));
                 self.planner.scope.bind(&binding.lisette_name, &fresh);
@@ -859,32 +920,27 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         installed_inlines
     }
 
-    fn drop_inline_bindings(&mut self, installed: &[(String, Option<BindingValue>)]) {
-        drop_inline_overlays(self.planner, installed);
-    }
-
     fn try_inline_binding(
         &mut self,
-        lisette_name: &str,
-        composable_access: &str,
-        subject: &str,
+        binding: &PatternBinding,
         consumers: &[&Expression],
         failure_trees: &[&Expression],
     ) -> bool {
         if consumers.is_empty() {
             return false;
         }
-        if analyze_inline_candidate(lisette_name, consumers) != InlineDecision::Inline {
+        if analyze_inline_candidate(&binding.lisette_name, consumers) != InlineDecision::Inline {
             return false;
         }
         if !failure_trees.is_empty()
-            && region_blocks_inline(failure_trees.iter().copied(), lisette_name)
+            && region_blocks_inline(failure_trees.iter().copied(), &binding.lisette_name)
         {
             return false;
         }
+        let composable_access = binding.path.render_composable(&self.current_subject);
         self.planner.scope.bind_inline_expr(
-            lisette_name,
-            InlineExpr::with_refs(composable_access, vec![subject.to_string()]),
+            &binding.lisette_name,
+            InlineExpr::with_refs(composable_access, vec![self.current_subject.clone()]),
         );
         true
     }
@@ -913,23 +969,83 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         let (setup, value) = plan.into_parts();
         Some((setup, wrap_if_struct_literal(value)))
     }
+
+    fn render_chain_conditions(&self, tests: &[ChainTest]) -> Vec<Option<String>> {
+        tests
+            .iter()
+            .map(|test| {
+                (!test.checks.is_empty())
+                    .then(|| render_condition(&test.checks, &self.current_subject))
+            })
+            .collect()
+    }
 }
 
-fn decision_top_bindings(decision: &EmitDecision) -> &[EmitBinding] {
+fn chain_last_is_catchall(tests: &[ChainTest], fallback: &Decision) -> bool {
+    matches!(fallback, Decision::Unreachable) && tests.len() > 1
+}
+
+fn split_with_default_lift<'t>(
+    branches: &'t [SwitchBranch],
+    fallback: Option<&'t Decision>,
+) -> (&'t [SwitchBranch], Option<&'t Decision>) {
+    match (fallback, branches.split_last()) {
+        (None, Some((last, rest))) => (rest, Some(&last.decision)),
+        _ => (branches, fallback),
+    }
+}
+
+fn render_switch_expression(rendered_path: &str, kind: &PatternSwitchKind) -> String {
+    match kind {
+        PatternSwitchKind::EnumTag => wrap_if_struct_literal(format!("{}.Tag", rendered_path)),
+        PatternSwitchKind::Value => wrap_if_struct_literal(rendered_path.to_string()),
+        PatternSwitchKind::TypeSwitch => unreachable!("TypeSwitch handled separately"),
+    }
+}
+
+fn decision_needs_stdlib(decision: &Decision) -> bool {
     match decision {
-        EmitDecision::Guard { bindings, .. } | EmitDecision::Success { bindings, .. } => bindings,
+        Decision::Success { .. } | Decision::Unreachable => false,
+        Decision::Guard {
+            success, failure, ..
+        } => decision_needs_stdlib(success) || decision_needs_stdlib(failure),
+        Decision::Switch {
+            branches, fallback, ..
+        } => {
+            branches
+                .iter()
+                .any(|branch| branch.needs_stdlib || decision_needs_stdlib(&branch.decision))
+                || fallback.as_deref().is_some_and(decision_needs_stdlib)
+        }
+        Decision::Chain { tests, fallback } => {
+            tests
+                .iter()
+                .any(|test| decision_needs_stdlib(&test.decision))
+                || decision_needs_stdlib(fallback)
+        }
+    }
+}
+
+fn body_is_unit_or_empty(expression: &Expression) -> bool {
+    matches!(expression, Expression::Unit { .. })
+        || matches!(expression, Expression::Block { items, .. } if items.is_empty())
+}
+
+fn decision_top_bindings(decision: &Decision) -> &[PatternBinding] {
+    match decision {
+        Decision::Guard { bindings, .. } | Decision::Success { bindings, .. } => bindings,
         _ => &[],
     }
 }
 
-fn collect_reachable_arms(decision: &EmitDecision, out: &mut Vec<usize>) {
+fn collect_reachable_arms(decision: &Decision, out: &mut Vec<usize>) {
     match decision {
-        EmitDecision::Success { arm_index, .. } => {
+        Decision::Success { arm_index, .. } => {
             if !out.contains(arm_index) {
                 out.push(*arm_index);
             }
         }
-        EmitDecision::Guard {
+        Decision::Guard {
             arm_index,
             success,
             failure,
@@ -941,69 +1057,60 @@ fn collect_reachable_arms(decision: &EmitDecision, out: &mut Vec<usize>) {
             collect_reachable_arms(success, out);
             collect_reachable_arms(failure, out);
         }
-        EmitDecision::IfElse {
-            then_branch,
-            else_branch,
-            ..
+        Decision::Switch {
+            branches, fallback, ..
         } => {
-            collect_reachable_arms(then_branch, out);
-            if let Some(else_b) = else_branch.as_deref() {
-                collect_reachable_arms(else_b, out);
+            for branch in branches {
+                collect_reachable_arms(&branch.decision, out);
+            }
+            if let Some(fallback) = fallback.as_deref() {
+                collect_reachable_arms(fallback, out);
             }
         }
-        EmitDecision::InlineBranch { branch } => collect_reachable_arms(branch, out),
-        EmitDecision::Switch { cases, default, .. }
-        | EmitDecision::TypeSwitch { cases, default, .. } => {
-            for c in cases {
-                collect_reachable_arms(&c.decision, out);
-            }
-            if let Some(d) = default.as_deref() {
-                collect_reachable_arms(d, out);
-            }
-        }
-        EmitDecision::Chain {
-            tests, fallback, ..
-        } => {
-            for t in tests {
-                collect_reachable_arms(&t.decision, out);
+        Decision::Chain { tests, fallback } => {
+            for test in tests {
+                collect_reachable_arms(&test.decision, out);
             }
             collect_reachable_arms(fallback, out);
         }
-        EmitDecision::Unreachable => {}
+        Decision::Unreachable => {}
     }
 }
 
-fn decision_has_bindings(decision: &EmitDecision) -> bool {
-    !decision_top_bindings(decision).is_empty()
-}
-
-fn bindings_are_hoistable(tests: &[EmitChainTest], indices: &[usize]) -> bool {
+fn bindings_are_hoistable(tests: &[ChainTest], indices: &[usize]) -> bool {
     if indices.len() <= 1 {
         return false;
     }
     let reference = indices.iter().find_map(|&index| {
-        let b = decision_top_bindings(&tests[index].decision);
-        if !b.is_empty() { Some(b) } else { None }
+        let bindings = decision_top_bindings(&tests[index].decision);
+        if !bindings.is_empty() {
+            Some(bindings)
+        } else {
+            None
+        }
     });
     let Some(reference) = reference else {
         return false;
     };
     indices.iter().all(|&index| {
-        let b = decision_top_bindings(&tests[index].decision);
-        b.is_empty()
-            || (b.len() == reference.len()
-                && b.iter().zip(reference.iter()).all(|(a, r)| {
-                    a.lisette_name == r.lisette_name
-                        && a.go_name == r.go_name
-                        && a.rendered_access == r.rendered_access
-                }))
+        let bindings = decision_top_bindings(&tests[index].decision);
+        bindings.is_empty()
+            || (bindings.len() == reference.len()
+                && bindings
+                    .iter()
+                    .zip(reference.iter())
+                    .all(|(binding, reference_binding)| {
+                        binding.lisette_name == reference_binding.lisette_name
+                            && binding.go_name == reference_binding.go_name
+                            && binding.path == reference_binding.path
+                    }))
     })
 }
 
-fn group_chain_tests_by_condition<'a>(tests: &'a [EmitChainTest]) -> Vec<(&'a str, Vec<usize>)> {
-    let mut groups: Vec<(&'a str, Vec<usize>)> = Vec::new();
-    for (i, test) in tests.iter().enumerate() {
-        let key = test.condition.as_deref().unwrap_or("");
+fn group_chain_tests_by_condition(conditions: &[Option<String>]) -> Vec<(&str, Vec<usize>)> {
+    let mut groups: Vec<(&str, Vec<usize>)> = Vec::new();
+    for (i, condition) in conditions.iter().enumerate() {
+        let key = condition.as_deref().unwrap_or("");
         if let Some((last_key, indices)) = groups.last_mut()
             && *last_key == key
         {

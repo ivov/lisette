@@ -78,20 +78,18 @@ impl InferCtx<'_, '_> {
             return;
         }
 
+        if store.peel_alias_deep(&source_ty) == store.peel_alias_deep(&target_ty) {
+            return;
+        }
+
         // Concrete type -> interface: allowed if source satisfies the interface.
         // Used for explicit coercion before wrapping in generic containers,
         // e.g. `Some(my_dog as Animal)` to get `Option<Animal>`.
         let peeled_target = store.peel_alias(&target_ty);
         if let Type::Nominal { id, params, .. } = &peeled_target
             && let Some(interface) = store.get_interface(id).cloned()
-            && self
-                .satisfies_interface(&source_ty, &interface, id, params, &span)
-                .is_ok()
         {
-            return;
-        }
-
-        if store.peel_alias_deep(&source_ty) == store.peel_alias_deep(&target_ty) {
+            let _ = self.satisfies_interface(&source_ty, &interface, id, params, &span);
             return;
         }
 

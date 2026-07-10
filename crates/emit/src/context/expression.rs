@@ -19,10 +19,10 @@ pub(crate) enum SyntaxContext {
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub(crate) enum GoFunctionValuePolicy {
+pub(crate) enum FunctionValueAbiTarget {
     #[default]
-    AllowLoweredIdentity,
-    ForceTaggedWrapper,
+    Natural,
+    Tagged,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -37,7 +37,7 @@ pub(crate) struct ExpressionContext<'a> {
     callee_role: CalleeRole,
     syntax_context: SyntaxContext,
     expected_slot_type: Option<&'a Type>,
-    go_function_value_policy: GoFunctionValuePolicy,
+    function_value_abi_target: FunctionValueAbiTarget,
     argument_target: ArgumentTarget,
 }
 
@@ -64,7 +64,7 @@ impl<'a> ExpressionContext<'a> {
     pub(crate) fn with_forced_tagged_go_function(self, force: bool) -> Self {
         if force {
             Self {
-                go_function_value_policy: GoFunctionValuePolicy::ForceTaggedWrapper,
+                function_value_abi_target: FunctionValueAbiTarget::Tagged,
                 ..self
             }
         } else {
@@ -97,8 +97,8 @@ impl<'a> ExpressionContext<'a> {
 
     pub(crate) fn forces_tagged_go_function(self) -> bool {
         matches!(
-            self.go_function_value_policy,
-            GoFunctionValuePolicy::ForceTaggedWrapper
+            self.function_value_abi_target,
+            FunctionValueAbiTarget::Tagged
         )
     }
 

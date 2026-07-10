@@ -190,7 +190,7 @@ fn test() {
 }
 
 #[test]
-fn go_opaque_type_zero_fill_spread() {
+fn go_opaque_type_autofill_spread() {
     let input = r#"
 import "go:sync"
 
@@ -204,7 +204,7 @@ fn test() {
 }
 
 #[test]
-fn lisette_struct_with_go_imported_field_zero_fills() {
+fn lisette_struct_with_go_imported_field_autofills() {
     let input = r#"
 import "go:net/http"
 
@@ -218,7 +218,7 @@ fn test() -> Wrapper {
 }
 
 #[test]
-fn lisette_struct_with_go_named_scalar_zero_fills() {
+fn lisette_struct_with_go_named_scalar_autofills() {
     let input = r#"
 import "go:time"
 
@@ -232,7 +232,7 @@ fn test() -> Wrapper {
 }
 
 #[test]
-fn lisette_struct_with_go_interface_zero_fills() {
+fn lisette_struct_with_go_interface_autofills() {
     let input = r#"
 import "go:context"
 

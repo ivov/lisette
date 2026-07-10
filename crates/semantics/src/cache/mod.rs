@@ -135,6 +135,18 @@ pub fn compute_emit_artifact_hash(production_hash: u64, go_module: &str) -> u64 
     hasher.finish()
 }
 
+/// Hashes a module's sources: the production-only hash drives dependents and
+/// the emit artifact, the all-files hash drives the module's own validity.
+pub fn hash_module_source_pair(files: &[File]) -> (u64, u64) {
+    let production_hash = hash_module_sources(files.iter().filter(|f| !f.is_test()));
+    let full_hash = if files.iter().any(|f| f.is_test()) {
+        hash_module_sources(files)
+    } else {
+        production_hash
+    };
+    (production_hash, full_hash)
+}
+
 pub fn hash_module_sources<'a>(files: impl IntoIterator<Item = &'a File>) -> u64 {
     let mut hasher = FnvHasher::new();
 

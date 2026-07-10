@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Interface not implemented
+   ╭─[test.lis:5:3]
+ 4 │ fn f(s: Slice<int>) -> Sized {
+ 5 │   s as Sized
+   ·   ─────┬────
+   ·        ╰── `Slice` cannot implement `Sized`
+ 6 │ }
+   ╰────
+  help: Built-in types have no Go methods, so they cannot satisfy interfaces. Wrap the value in a struct that implements `Sized` · code: [infer.interface_not_implemented]

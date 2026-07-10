@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
     ·                    ╰── no zero available
  10 │   let _ = o;
     ╰────
-  help: `inner` of `Outer` cannot be zero-filled because `Inner.b` is private to module `other`. Provide an explicit value for `inner`, or have `other` expose `b` as `pub` · code: [infer.field_no_zero]
+  help: `inner` of `Outer` cannot be autofilled because `Inner.b` is private to module `other`. Provide an explicit value for `inner`, or have `other` expose `b` as `pub` · code: [infer.field_no_zero]

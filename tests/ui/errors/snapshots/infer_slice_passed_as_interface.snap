@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Interface not implemented
+    ╭─[test.lis:9:17]
+  8 │ fn main() {
+  9 │   let _ = takes([1, 2, 3])
+    ·                 ────┬────
+    ·                     ╰── `Slice` cannot implement `Sized`
+ 10 │ }
+    ╰────
+  help: Built-in types have no Go methods, so they cannot satisfy interfaces. Wrap the value in a struct that implements `Sized` · code: [infer.interface_not_implemented]

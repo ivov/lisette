@@ -871,7 +871,7 @@ impl<'a> Formatter<'a> {
                     Document::str("..").append(self.expression(spread_expression)),
                 ))
             }
-            StructSpread::ZeroFill { span } => {
+            StructSpread::Autofill { span } => {
                 let leading = self.split_for_rest(&mut entries, span.byte_offset);
                 Some((leading, Document::str("..")))
             }

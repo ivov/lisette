@@ -1,7 +1,7 @@
-use std::sync::Arc;
-
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
+use semantics::checker::promotion::{self, MemberKind, Resolution};
+use semantics::store::Store;
 use syntax::ast::{
     Annotation, Attribute, Binding, Expression, Generic, ImportAlias, Pattern, SelectArm,
     SelectArmPattern, StructSpread,
@@ -12,17 +12,13 @@ use syntax::types::{CompoundKind, Symbol, Type, unqualified_name};
 
 use super::reference_graph::{EnumVariantId, ModuleItemId, ReferenceGraph, StructFieldId};
 
-pub struct AliasMap {
+pub struct AliasMap<'a> {
     aliases: HashMap<String, ModuleItemId>,
-    type_aliases: Arc<HashSet<Symbol>>,
+    store: &'a Store,
 }
 
-impl AliasMap {
-    pub fn build(
-        files: &HashMap<u32, File>,
-        go_package_names: &HashMap<String, String>,
-        type_aliases: Arc<HashSet<Symbol>>,
-    ) -> Self {
+impl<'a> AliasMap<'a> {
+    pub fn build(files: &HashMap<u32, File>, store: &'a Store) -> Self {
         let mut aliases = HashMap::default();
 
         for file in files.values() {
@@ -30,16 +26,13 @@ impl AliasMap {
                 if matches!(import.alias, Some(ImportAlias::Blank(_))) {
                     continue;
                 }
-                if let Some(effective) = import.effective_alias(go_package_names) {
+                if let Some(effective) = import.effective_alias(&store.go_package_names) {
                     aliases.insert(effective.clone(), ModuleItemId::new(&effective));
                 }
             }
         }
 
-        Self {
-            aliases,
-            type_aliases,
-        }
+        Self { aliases, store }
     }
 
     fn resolve(&self, module: &Module, name: &str) -> Option<ModuleItemId> {
@@ -55,7 +48,9 @@ impl AliasMap {
     }
 
     fn is_type_alias(&self, id: &Symbol) -> bool {
-        self.type_aliases.contains(id)
+        self.store
+            .get_definition(id.as_str())
+            .is_some_and(|def| def.is_type_alias())
     }
 }
 
@@ -117,9 +112,11 @@ pub(super) fn walk_expression(
             ..
         } => {
             walk_expression(module, expression, graph, alias_map, ctx);
-            if let Some(ty_name) = type_name(&expression.get_type(), alias_map) {
-                graph.mark_struct_field_used(StructFieldId::new(&ty_name, member));
+            let receiver_ty = expression.get_type();
+            if let Some(ty_name) = qualified_type_name(&receiver_ty, alias_map) {
+                graph.mark_struct_field_used(StructFieldId::new(ty_name.as_str(), member));
             }
+            mark_promoted_field_read(&receiver_ty, member, graph, alias_map);
             if let Some(from) = ctx
                 && is_method_access(dot_access_kind)
                 && credits_local_method(&expression.get_type(), module, alias_map)
@@ -498,32 +495,36 @@ fn walk_struct_call(
         StructSpread::None => {}
         StructSpread::From(spread_expression) => {
             walk_expression(module, spread_expression, graph, alias_map, ctx);
-            if let Some(ty_name) = type_name(&spread_expression.get_type(), alias_map) {
+            if let Some(ty_name) = qualified_type_name(&spread_expression.get_type(), alias_map) {
                 let explicit: HashSet<&str> =
                     field_assignments.iter().map(|f| f.name.as_str()).collect();
-                let qname = Symbol::from_parts(&module.id, &ty_name);
-                if let Some(def) = module.definitions.get(qname.as_str())
+                if let Some(def) = module.definitions.get(ty_name.as_str())
                     && let DefinitionBody::Struct { fields, .. } = &def.body
                 {
                     for field in fields {
                         if !explicit.contains(field.name.as_str()) {
-                            graph.mark_struct_field_used(StructFieldId::new(&ty_name, &field.name));
+                            graph.mark_struct_field_used(StructFieldId::new(
+                                ty_name.as_str(),
+                                &field.name,
+                            ));
                         }
                     }
                 }
             }
         }
-        StructSpread::ZeroFill { .. } => {
-            if let Some(ty_name) = type_name(ty, alias_map) {
+        StructSpread::Autofill { .. } => {
+            if let Some(ty_name) = qualified_type_name(ty, alias_map) {
                 let explicit: HashSet<&str> =
                     field_assignments.iter().map(|f| f.name.as_str()).collect();
-                let qname = Symbol::from_parts(&module.id, &ty_name);
-                if let Some(def) = module.definitions.get(qname.as_str())
+                if let Some(def) = module.definitions.get(ty_name.as_str())
                     && let DefinitionBody::Struct { fields, .. } = &def.body
                 {
                     for field in fields {
                         if !explicit.contains(field.name.as_str()) {
-                            graph.mark_struct_field_used(StructFieldId::new(&ty_name, &field.name));
+                            graph.mark_struct_field_used(StructFieldId::new(
+                                ty_name.as_str(),
+                                &field.name,
+                            ));
                         }
                     }
                 }
@@ -601,9 +602,14 @@ fn walk_pattern(
             ..
         } => {
             mark_constructor_pattern(module, identifier, ty, graph, alias_map, ctx);
+            let key = qualified_type_name(ty, alias_map).or_else(|| {
+                (!identifier.contains('.')).then(|| Symbol::from_parts(&module.id, identifier))
+            });
             for f in fields {
                 walk_pattern(module, &f.value, graph, alias_map, ctx);
-                graph.mark_struct_field_used(StructFieldId::new(identifier, &f.name));
+                if let Some(key) = &key {
+                    graph.mark_struct_field_used(StructFieldId::new(key.as_str(), &f.name));
+                }
             }
         }
         Pattern::Tuple { elements, .. } => {
@@ -883,9 +889,36 @@ fn is_container_receiver(receiver_ty: &Type, aliases: &AliasMap) -> bool {
     current.is_slice() || current.is_map()
 }
 
+/// Follow promotion so a read through an embed credits the declaring struct's
+/// field, not a non-existent field on the embedder.
+fn mark_promoted_field_read(
+    receiver_ty: &Type,
+    member: &str,
+    graph: &mut ReferenceGraph,
+    aliases: &AliasMap,
+) {
+    let receiver = receiver_ty.strip_refs();
+    if !promotion::has_direct_embed(aliases.store, &receiver) {
+        return;
+    }
+    if let Resolution::Found(resolved) =
+        promotion::resolve_selector(aliases.store, &receiver, member)
+        && matches!(resolved.kind, MemberKind::Field { .. })
+    {
+        graph.mark_struct_field_used(StructFieldId::new(resolved.declaring_type.as_str(), member));
+    }
+}
+
 fn type_name(ty: &Type, aliases: &AliasMap) -> Option<String> {
     match deref_for_keying(ty, aliases) {
         Type::Nominal { id, .. } => Some(unqualified_name(&id).to_string()),
+        _ => None,
+    }
+}
+
+fn qualified_type_name(ty: &Type, aliases: &AliasMap) -> Option<Symbol> {
+    match deref_for_keying(ty, aliases) {
+        Type::Nominal { id, .. } => Some(id),
         _ => None,
     }
 }

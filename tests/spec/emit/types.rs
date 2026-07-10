@@ -1698,6 +1698,76 @@ fn main() {
 }
 
 #[test]
+fn enum_variant_spread_builds_fresh_literal() {
+    let input = r#"
+enum Cursor {
+  Point { id: int, x: int },
+  Area { id: int, w: int },
+}
+
+fn test() -> Cursor {
+  let base = Cursor.Point { id: 7, x: 10 };
+  Cursor.Area { w: 3, ..base }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn enum_variant_spread_all_fields_assigned_discards_base_call() {
+    let input = r#"
+import "go:fmt"
+
+enum Cursor {
+  Point { id: int, x: int },
+  Area { id: int, w: int },
+}
+
+fn make_base() -> Cursor { fmt.Println("base"); Cursor.Point { id: 1, x: 2 } }
+
+fn test() -> Cursor {
+  Cursor.Area { id: 4, w: 3, ..make_base() }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn enum_variant_spread_all_fields_assigned_consumes_identifier_base() {
+    let input = r#"
+enum Cursor {
+  Point { id: int, x: int },
+  Area { id: int, w: int },
+}
+
+fn test() -> Cursor {
+  let base = Cursor.Point { id: 1, x: 2 };
+  Cursor.Area { id: 4, w: 3, ..base }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn enum_variant_spread_side_effecting_base_evaluated_once() {
+    let input = r#"
+import "go:fmt"
+
+enum Cursor {
+  Point { id: int, x: int },
+  Area { id: int, w: int },
+}
+
+fn make_base() -> Cursor { fmt.Println("base"); Cursor.Point { id: 1, x: 2 } }
+
+fn test() -> Cursor {
+  Cursor.Area { w: 3, ..make_base() }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn struct_spread_field_before_base_eval_order() {
     let input = r#"
 import "go:fmt"
@@ -1995,7 +2065,7 @@ fn test(id: UserId) -> int {
 }
 
 #[test]
-fn newtype_field_zero_fill_casts() {
+fn newtype_field_autofill_casts() {
     let input = r#"
 struct GameModeParam(string)
 
@@ -2019,7 +2089,7 @@ fn register() -> Command {
 }
 
 #[test]
-fn tuple_struct_field_zero_fill_uses_f_names() {
+fn tuple_struct_field_autofill_uses_f_names() {
     let input = r#"
 struct MP(int, string)
 
@@ -2035,7 +2105,7 @@ fn make() -> Holder {
 }
 
 #[test]
-fn tuple_field_zero_fill_uses_constructor() {
+fn tuple_field_autofill_uses_constructor() {
     let input = r#"
 struct Probe {
   pub pair: (int, string),

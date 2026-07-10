@@ -6689,7 +6689,7 @@ fn main() {
 }
 
 #[test]
-fn zero_fill_through_alias_does_not_warn_unused_fields() {
+fn autofill_through_alias_does_not_warn_unused_fields() {
     assert_no_lint_warnings!(
         r#"
 struct Inner { x: int, y: int }
@@ -7087,6 +7087,209 @@ fn main() {
   let _u = User { email: "a@b.c", age: 1 }
 }
 "#
+    );
+}
+
+#[test]
+fn promoted_field_read_not_unused() {
+    assert_no_lint_warnings!(
+        r#"
+struct Size {
+  width: int,
+  height: int,
+}
+
+struct Widget {
+  embed Size,
+}
+
+fn main() {
+  let w = Widget { Size: Size { width: 1, height: 2 } };
+  let _ = w.width + w.height
+}
+"#
+    );
+}
+
+#[test]
+fn promoted_field_read_through_ref_embed_not_unused() {
+    assert_no_lint_warnings!(
+        r#"
+struct Size {
+  width: int,
+  height: int,
+}
+
+struct Widget {
+  embed Ref<Size>,
+}
+
+fn main() {
+  let s = Size { width: 1, height: 2 };
+  let w = Widget { Size: &s };
+  let _ = w.width + w.height
+}
+"#
+    );
+}
+
+#[test]
+fn promoted_field_read_through_multi_level_embed_not_unused() {
+    assert_no_lint_warnings!(
+        r#"
+struct Inner {
+  value: int,
+}
+
+struct Middle {
+  embed Inner,
+}
+
+struct Outer {
+  embed Middle,
+}
+
+fn main() {
+  let o = Outer { Middle: Middle { Inner: Inner { value: 1 } } };
+  let _ = o.value
+}
+"#
+    );
+}
+
+#[test]
+fn genuinely_unread_embedded_field_still_warns() {
+    assert_lint_snapshot!(
+        r#"
+struct Size {
+  width: int,
+  height: int,
+}
+
+struct Widget {
+  embed Size,
+}
+
+fn main() {
+  let w = Widget { Size: Size { width: 1, height: 2 } };
+  let _ = w.width
+}
+"#
+    );
+}
+
+#[test]
+fn shadowed_embedded_field_still_warns() {
+    assert_lint_snapshot!(
+        r#"
+struct Shadow {
+  depth: int,
+}
+
+struct Panel {
+  depth: int,
+  embed Shadow,
+}
+
+fn main() {
+  let p = Panel { depth: 3, Shadow: Shadow { depth: 4 } };
+  let _ = p.depth
+}
+"#
+    );
+}
+
+#[test]
+fn same_named_type_in_other_module_does_not_mask_unused_field() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "geo",
+        "lib.lis",
+        r#"
+pub struct Size {
+  pub width: int,
+}
+"#,
+    );
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+import "geo"
+
+struct Size {
+  width: int,
+}
+
+fn main() {
+  let _ = Size { width: 9 }
+  let g = geo.Size { width: 1 }
+  let _ = g.width
+}
+"#,
+    );
+    let result = compile_check(fs);
+    assert!(
+        result.errors.is_empty(),
+        "unexpected errors: {:?}",
+        result.errors
+    );
+    assert!(
+        result
+            .lints
+            .iter()
+            .any(|d| d.plain_message() == "Unused field"),
+        "local Size.width is never read and must warn despite the geo.Size.width read: {:?}",
+        result.lints
+    );
+}
+
+#[test]
+fn same_named_type_in_other_module_does_not_mask_unused_field_via_embed() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "geo",
+        "lib.lis",
+        r#"
+pub struct Size {
+  pub width: int,
+}
+"#,
+    );
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+import "geo"
+
+struct Size {
+  width: int,
+}
+
+struct Widget {
+  embed geo.Size,
+}
+
+fn main() {
+  let _ = Size { width: 9 }
+  let w = Widget { Size: geo.Size { width: 1 } }
+  let _ = w.width
+}
+"#,
+    );
+    let result = compile_check(fs);
+    assert!(
+        result.errors.is_empty(),
+        "unexpected errors: {:?}",
+        result.errors
+    );
+    assert!(
+        result
+            .lints
+            .iter()
+            .any(|d| d.plain_message() == "Unused field"),
+        "local Size.width is never read and must warn despite the promoted geo.Size.width read: {:?}",
+        result.lints
     );
 }
 
@@ -11180,7 +11383,7 @@ fn main() {
 }
 
 #[test]
-fn replaceable_with_zero_fill_lisette_struct() {
+fn replaceable_with_autofill_lisette_struct() {
     assert_lint_snapshot!(
         r#"
 struct Conf { name: string, count: int, on: bool, retries: int }
@@ -11195,7 +11398,7 @@ fn main() -> int {
 }
 
 #[test]
-fn replaceable_with_zero_fill_enum_variant() {
+fn replaceable_with_autofill_enum_variant() {
     assert_lint_snapshot!(
         r#"
 enum Action {
@@ -11216,7 +11419,7 @@ fn main() -> int {
 }
 
 #[test]
-fn replaceable_with_zero_fill_all_fields_zero() {
+fn replaceable_with_autofill_all_fields_zero() {
     assert_lint_snapshot!(
         r#"
 struct Point3 { x: int, y: int, z: int }
@@ -11230,7 +11433,7 @@ fn main() -> int {
 }
 
 #[test]
-fn replaceable_with_zero_fill_multiline_literal() {
+fn replaceable_with_autofill_multiline_literal() {
     assert_lint_snapshot!(
         r#"
 struct Conf { name: string, count: int, on: bool, retries: int }
@@ -11250,7 +11453,7 @@ fn main() -> int {
 }
 
 #[test]
-fn replaceable_with_zero_fill_below_threshold_no_warning() {
+fn replaceable_with_autofill_below_threshold_no_warning() {
     assert_no_lint_warnings!(
         r#"
 struct Conf { name: string, count: int, on: bool }
@@ -11265,7 +11468,7 @@ fn main() -> int {
 }
 
 #[test]
-fn replaceable_with_zero_fill_already_uses_spread_no_warning() {
+fn replaceable_with_autofill_already_uses_spread_no_warning() {
     assert_no_lint_warnings!(
         r#"
 struct Conf { name: string, count: int, on: bool }
@@ -11280,7 +11483,7 @@ fn main() -> int {
 }
 
 #[test]
-fn replaceable_with_zero_fill_binding_zero_no_warning() {
+fn replaceable_with_autofill_binding_zero_no_warning() {
     assert_no_lint_warnings!(
         r#"
 struct Conf { count: int, more: int, name: string }
@@ -11295,7 +11498,7 @@ fn main() -> int {
 }
 
 #[test]
-fn replaceable_with_zero_fill_incomplete_literal_no_warning() {
+fn replaceable_with_autofill_incomplete_literal_no_warning() {
     let warnings = crate::_harness::lint::lint(
         r#"
 struct Conf {
@@ -11312,18 +11515,18 @@ fn main() -> string {
 }
 "#,
     );
-    let zero_fill = warnings
+    let autofill = warnings
         .iter()
-        .any(|w| w.code_str() == Some("lint.replaceable_with_zero_fill"));
+        .any(|w| w.code_str() == Some("lint.replaceable_with_autofill"));
     assert!(
-        !zero_fill,
-        "expected no replaceable_with_zero_fill warning on incomplete literal, got: {:?}",
+        !autofill,
+        "expected no replaceable_with_autofill warning on incomplete literal, got: {:?}",
         warnings
     );
 }
 
 #[test]
-fn replaceable_with_zero_fill_constructor_call_no_warning() {
+fn replaceable_with_autofill_constructor_call_no_warning() {
     assert_no_lint_warnings!(
         r#"
 struct Conf { name: string, items: Slice<int>, lookup: Map<string, int> }
@@ -20055,7 +20258,7 @@ fn main() {
 }
 
 #[test]
-fn needless_update_zero_fill_no_warning() {
+fn needless_update_autofill_no_warning() {
     assert_no_lint_warnings!(
         r#"
 struct Config { debug: bool, port: int }

@@ -311,7 +311,7 @@ fn test(p: Point) {
 }
 
 #[test]
-fn struct_zero_fill_lisette_primitives() {
+fn struct_autofill_lisette_primitives() {
     let input = r#"
 struct Conf { name: string, count: int, on: bool }
 
@@ -323,7 +323,7 @@ fn test() -> Conf {
 }
 
 #[test]
-fn struct_zero_fill_lisette_option_emits_none() {
+fn struct_autofill_lisette_option_emits_none() {
     let input = r#"
 struct Conf { name: string, opt: Option<int> }
 
@@ -335,7 +335,7 @@ fn test() -> Conf {
 }
 
 #[test]
-fn struct_zero_fill_nested_user_struct_recurses() {
+fn struct_autofill_nested_user_struct_recurses() {
     let input = r#"
 struct Inner { opt: Option<int>, items: Slice<int> }
 struct Outer { inner: Inner }
@@ -348,7 +348,7 @@ fn test() -> Outer {
 }
 
 #[test]
-fn struct_zero_fill_lisette_slice_omitted_map_non_nil() {
+fn struct_autofill_lisette_slice_omitted_map_non_nil() {
     let input = r#"
 struct Conf { items: Slice<int>, lookup: Map<string, int> }
 
@@ -360,7 +360,7 @@ fn test() -> Conf {
 }
 
 #[test]
-fn struct_zero_fill_enum_struct_variant() {
+fn struct_autofill_enum_struct_variant() {
     let input = r#"
 enum Action {
   Move { x: int, y: int, dist: int },
