@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1783702638765,
+  "lastUpdate": 1783708111785,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -1776,6 +1776,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "emit",
             "value": 27975,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 22879,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 16438,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 12807,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 10078,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 6176,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 4348,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2783,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1031,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 695,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 6095,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 890,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "1e6516bfccb12a5334e2d4d66a28519fdfe6b3a6",
+          "message": "refactor: unify how calls resolve their Go signature (#988)",
+          "timestamp": "2026-07-10T20:28:09+02:00",
+          "tree_id": "8019f0692ca969ef9912a40d1da4f3dacb7f8b8c",
+          "url": "https://github.com/ivov/lisette/commit/1e6516bfccb12a5334e2d4d66a28519fdfe6b3a6"
+        },
+        "date": 1783708110593,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 112320,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 28100,
             "unit": "lines"
           },
           {
