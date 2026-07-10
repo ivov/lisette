@@ -158,7 +158,9 @@ impl Planner<'_> {
         let err_var = self.fresh_var(Some("ret"));
         self.declare(&err_var);
 
-        let (mut statements, call_str) = self.lower_call(subject, None, ExpressionContext::value());
+        let (mut statements, call_str) = self
+            .lower_call(subject, None, ExpressionContext::value())
+            .into_parts();
         let bind_line = match &val_var {
             Some(v) => format!("{}, {} := {}\n", v, err_var, call_str),
             None => match shape {
@@ -263,7 +265,9 @@ impl Planner<'_> {
         let err_var = self.fresh_var(Some("ret"));
         self.declare(&err_var);
 
-        let (mut statements, call_str) = self.lower_call(subject, None, ExpressionContext::value());
+        let (mut statements, call_str) = self
+            .lower_call(subject, None, ExpressionContext::value())
+            .into_parts();
         let bind_line = match &val_var {
             Some(v) => format!("{}, {} := {}\n", v, err_var, call_str),
             None => format!("_, {} := {}\n", err_var, call_str),
@@ -385,19 +389,21 @@ impl Planner<'_> {
         }
         if matches!(subject, Expression::Literal { .. }) {
             let staged = self.stage_operand(subject, ExpressionContext::value());
-            setup.extend(staged.setup);
-            return (staged.value, SubjectDeclaration::None);
+            let (subject_setup, value) = staged.into_parts();
+            setup.extend(subject_setup);
+            return (value, SubjectDeclaration::None);
         }
         let var = self.fresh_var(Some("subject"));
         self.declare(&var);
         let staged = self.stage_composite(subject, ExpressionContext::value());
-        setup.extend(staged.setup);
-        if !any_guard && is_plain_go_identifier(&staged.value) {
-            return (staged.value, SubjectDeclaration::None);
+        let (subject_setup, value) = staged.into_parts();
+        setup.extend(subject_setup);
+        if !any_guard && is_plain_go_identifier(&value) {
+            return (value, SubjectDeclaration::None);
         }
         let declaration = SubjectDeclaration::Deferred {
             var: var.clone(),
-            expression: staged.value,
+            expression: value,
         };
         (var, declaration)
     }

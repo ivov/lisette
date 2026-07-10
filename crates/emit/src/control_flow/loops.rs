@@ -4,9 +4,9 @@ use crate::context::expression::ExpressionContext;
 use crate::patterns::binding_decls::pattern_has_bindings;
 use crate::patterns::sites::PatternSubject;
 use crate::plan::bodies::{LoopPlan, LoweredBlock, LoweredStatement, directed};
+use crate::plan::values::CaptureBoundary;
 use crate::types::native::NativeGoType;
 use crate::types::shape::RangeShape;
-use crate::utils::observable_after_mutation;
 use syntax::ast::{Binding, Expression, Pattern};
 use syntax::types::Type;
 
@@ -89,30 +89,6 @@ impl Planner<'_> {
         value
     }
 
-    /// `capture_operand_into`, hoisting to a fresh temp when `expr` is
-    /// observable after a mutation (mirrors `emit_force_capture`).
-    fn force_capture_into(
-        &mut self,
-        prologue: &mut Vec<LoweredStatement>,
-        expr: &Expression,
-        prefix: &str,
-    ) -> String {
-        if !observable_after_mutation(expr) {
-            return self.capture_operand_into(prologue, expr);
-        }
-        let temp_var = self.fresh_var(Some(prefix));
-        self.declare(&temp_var);
-        let (setup, value) = self
-            .lower_composite_value(expr, ExpressionContext::value())
-            .into_parts();
-        prologue.extend(setup);
-        prologue.push(LoweredStatement::TempBind {
-            name: temp_var.clone(),
-            value,
-        });
-        temp_var
-    }
-
     /// `for i in stored_range`.
     fn lower_stored_range_for(
         &mut self,
@@ -126,7 +102,12 @@ impl Planner<'_> {
         let range_var = if self.is_unmutated_identifier(iterable) {
             self.capture_operand_into(&mut prologue, iterable)
         } else {
-            self.force_capture_into(&mut prologue, iterable, "_range")
+            self.capture_value_at_boundary(
+                &mut prologue,
+                iterable,
+                "_range",
+                CaptureBoundary::LoopLifetime,
+            )
         };
         let loop_var = self.bind_loop_pattern(&binding.pattern, Some("_i"));
         let header = match range_shape {
@@ -184,7 +165,12 @@ impl Planner<'_> {
         let receiver_var = if self.is_unmutated_identifier(receiver) {
             self.capture_operand_into(&mut prologue, receiver)
         } else {
-            self.force_capture_into(&mut prologue, receiver, "_s")
+            self.capture_value_at_boundary(
+                &mut prologue,
+                receiver,
+                "_s",
+                CaptureBoundary::LoopLifetime,
+            )
         };
         let index_var = self.fresh_var(Some("_i"));
         let loop_var = self.bind_loop_pattern(&binding.pattern, None);
@@ -461,18 +447,29 @@ impl Planner<'_> {
         };
 
         let mut prologue = Vec::new();
-        let mut start_expression = match start {
-            Some(s) => self.capture_operand_into(&mut prologue, s),
-            None => "0".to_string(),
+        let (mut start_expression, start_is_observable) = match start {
+            Some(start) => {
+                let plan = self.plan_operand(start, ExpressionContext::value());
+                let is_observable = plan.evaluation.stability.is_observable();
+                let (setup, value) = plan.into_parts();
+                prologue.extend(setup);
+                (value, is_observable)
+            }
+            None => ("0".to_string(), false),
         };
         let checkpoint = prologue.len();
-        let end_expression = end
-            .as_ref()
-            .map(|e| self.force_capture_into(&mut prologue, e, "_bound"));
+        let end_expression = end.as_ref().map(|end| {
+            self.capture_value_at_boundary(
+                &mut prologue,
+                end,
+                "_bound",
+                CaptureBoundary::LoopLifetime,
+            )
+        });
         if prologue.len() > checkpoint
             && start
                 .as_ref()
-                .is_some_and(|s| observable_after_mutation(s) && !self.is_unmutated_identifier(s))
+                .is_some_and(|start| start_is_observable && !self.is_unmutated_identifier(start))
         {
             // The end bound's capture inserted statements after the start value;
             // hoist start into its own temp before them so it evaluates first.

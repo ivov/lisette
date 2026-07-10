@@ -3,15 +3,12 @@ use std::fmt::Write;
 use crate::Planner;
 use crate::abi::coercion::{Coercion, CoercionDirection};
 use crate::context::expression::ExpressionContext;
-use crate::expressions::emission::StagedExpression;
-use crate::plan::bodies::LoweredStatement;
-use crate::plan::values::{ValuePlan, value_plan_from_statements};
+use crate::plan::values::{CaptureBoundary, EvaluationEffect, GoExpression, ValuePlan};
 use syntax::ast::{Expression, FormatStringPart, Literal};
 use syntax::types::{SimpleKind, Type};
 
 impl Planner<'_> {
     pub(super) fn emit_literal(&mut self, literal: &Literal, ty: &Type) -> ValuePlan {
-        let mut setup: Vec<LoweredStatement> = Vec::new();
         let value = match literal {
             Literal::Integer { value, text } => match text {
                 Some(original) => original.clone(),
@@ -43,25 +40,13 @@ impl Planner<'_> {
             Literal::Char(c) => {
                 format!("'{}'", convert_escape_sequences(c))
             }
-            Literal::FormatString(parts) => {
-                let (fmt_setup, value) = self.emit_format_string(parts);
-                setup = fmt_setup;
-                value
-            }
-            Literal::Slice(elements) => {
-                let (slice_setup, slice_value) = self.emit_slice_literal(elements, ty);
-                setup = slice_setup;
-                slice_value
-            }
+            Literal::FormatString(parts) => return self.emit_format_string(parts),
+            Literal::Slice(elements) => return self.emit_slice_literal(elements, ty),
         };
-        value_plan_from_statements(setup, value)
+        ValuePlan::literal(value)
     }
 
-    fn emit_slice_literal(
-        &mut self,
-        elements: &[Expression],
-        ty: &Type,
-    ) -> (Vec<LoweredStatement>, String) {
+    fn emit_slice_literal(&mut self, elements: &[Expression], ty: &Type) -> ValuePlan {
         // A list literal builds a slice or a fixed-size array, per its type.
         let (element_lisette_ty, type_prefix, is_array) = match ty {
             Type::Array { length, element } => {
@@ -80,22 +65,29 @@ impl Planner<'_> {
         let element_ty = self.go_type_string(&element_lisette_ty);
 
         if elements.is_empty() {
-            if is_array {
-                return (Vec::new(), format!("{}{}{{}}", type_prefix, element_ty));
-            }
-            // Parens around the slice type disambiguate the conversion when
-            // the element type itself ends in `)` (e.g. `func(int)`); Go
-            // otherwise parses `[]func(int)(nil)` as a call expression.
-            return (Vec::new(), format!("({}{})(nil)", type_prefix, element_ty));
+            let value = if is_array {
+                format!("{}{}{{}}", type_prefix, element_ty)
+            } else {
+                // Parens around the slice type disambiguate the conversion when
+                // the element type itself ends in `)` (e.g. `func(int)`); Go
+                // otherwise parses `[]func(int)(nil)` as a call expression.
+                format!("({}{})(nil)", type_prefix, element_ty)
+            };
+            return ValuePlan::computed(
+                Vec::new(),
+                GoExpression::composite_literal(value, false),
+                EvaluationEffect::Pure,
+            );
         }
 
-        let mut setup: Vec<LoweredStatement> = Vec::new();
-        let stages: Vec<StagedExpression> = elements
+        let stages: Vec<ValuePlan> = elements
             .iter()
             .map(|e| self.stage_composite(e, ExpressionContext::value()))
             .collect();
-        let (slice_setup, rendered) = self.sequence_structured(stages, "_v");
-        setup.extend(slice_setup);
+        let sequenced = self.sequence_values(stages, CaptureBoundary::SiblingSequence, "_v");
+        let effect = sequenced.effect;
+        let contains_deferred_evaluation = sequenced.contains_deferred_evaluation();
+        let (mut setup, rendered) = sequenced.into_rendered();
 
         let mut wrapped: Vec<String> = Vec::with_capacity(rendered.len());
         for (expr, emitted) in elements.iter().zip(rendered) {
@@ -121,18 +113,19 @@ impl Planner<'_> {
         } else {
             format!("{}{}{{ {} }}", type_prefix, element_ty, elements.join(", "))
         };
-        (setup, value)
+        ValuePlan::computed(
+            setup,
+            GoExpression::composite_literal(value, contains_deferred_evaluation),
+            effect,
+        )
     }
 
-    fn emit_format_string(
-        &mut self,
-        parts: &[FormatStringPart],
-    ) -> (Vec<LoweredStatement>, String) {
+    fn emit_format_string(&mut self, parts: &[FormatStringPart]) -> ValuePlan {
         let has_interpolation = parts
             .iter()
             .any(|p| matches!(p, FormatStringPart::Expression(_)));
 
-        let stages: Vec<StagedExpression> = parts
+        let stages: Vec<ValuePlan> = parts
             .iter()
             .filter_map(|p| {
                 if let FormatStringPart::Expression(e) = p {
@@ -142,7 +135,9 @@ impl Planner<'_> {
                 }
             })
             .collect();
-        let (setup, emitted) = self.sequence_structured(stages, "_fmtarg");
+        let sequenced = self.sequence_values(stages, CaptureBoundary::SiblingSequence, "_fmtarg");
+        let effect = sequenced.effect;
+        let (setup, emitted) = sequenced.into_rendered();
 
         let mut format_string = String::new();
         let mut args = Vec::with_capacity(emitted.len());
@@ -172,7 +167,7 @@ impl Planner<'_> {
         }
 
         if args.is_empty() {
-            return (setup, format!("\"{}\"", format_string));
+            return ValuePlan::evaluated_literal(setup, format!("\"{}\"", format_string), effect);
         }
 
         self.require_fmt();
@@ -183,11 +178,21 @@ impl Planner<'_> {
             && matches!(parts, [FormatStringPart::Expression(_)])
             && format_string != "%c"
         {
-            return (setup, format!("fmt.Sprint({})", args[0]));
+            return ValuePlan::observable_call(
+                setup,
+                GoExpression::call(
+                    GoExpression::opaque("fmt.Sprint".to_string()),
+                    vec![GoExpression::opaque(args[0].clone())],
+                ),
+                effect,
+            );
         }
-        (
+        let mut arguments = vec![GoExpression::literal(format!("\"{}\"", format_string))];
+        arguments.extend(args.into_iter().map(GoExpression::opaque));
+        ValuePlan::observable_call(
             setup,
-            format!("fmt.Sprintf(\"{}\", {})", format_string, args.join(", ")),
+            GoExpression::call(GoExpression::opaque("fmt.Sprintf".to_string()), arguments),
+            effect,
         )
     }
 }

@@ -1,15 +1,15 @@
 use crate::calls::dispatch::{CallArgShape, all_type_params_inferrable};
-use crate::calls::native::apply_inline_import;
+use crate::calls::native::{apply_inline_import, native_method_lowers_to_plain_call};
 use crate::plan::calls::plan_variadic_spread;
 use rustc_hash::FxHashMap as HashMap;
 
 use crate::Planner;
 use crate::context::expression::ExpressionContext;
-use crate::expressions::emission::StagedExpression;
 use crate::names::generics::extract_type_mapping;
 use crate::names::go_name;
 use crate::plan::bodies::LoweredStatement;
 use crate::plan::calls::{CallPlan, ResolvedCallee};
+use crate::plan::values::{CaptureBoundary, EvaluationEffect, GoExpression, ValuePlan};
 use crate::types::native::NativeGoType;
 use syntax::ast::{Expression, Literal};
 use syntax::program::ReceiverCoercion;
@@ -90,7 +90,7 @@ impl Planner<'_> {
         type_args: &[Type],
         spread: Option<&Expression>,
         call_plan: &CallPlan<'_>,
-    ) -> (Vec<LoweredStatement>, String) {
+    ) -> ValuePlan {
         let Expression::DotAccess {
             expression: receiver,
             member,
@@ -109,7 +109,7 @@ impl Planner<'_> {
             unreachable!("UFCS receiver must be a constructor type");
         };
 
-        let (mut setup, receiver_arg, emitted_args) =
+        let (mut setup, receiver_arg, emitted_args, arguments_contain_deferred_evaluation) =
             self.lower_ufcs_call_args(function, receiver, args, spread, &call_plan.resolved);
         let receiver_arg =
             self.apply_receiver_coercion(&mut setup, receiver, receiver_arg, *coercion);
@@ -117,7 +117,30 @@ impl Planner<'_> {
         if let Some(inlined) =
             try_inline_native_ufcs(self, receiver, member, &receiver_arg, &emitted_args)
         {
-            return (setup, inlined);
+            let native_type = NativeGoType::from_type(&receiver.get_type())
+                .expect("inlined UFCS receiver has a native type");
+            let plain_call =
+                native_method_lowers_to_plain_call(&native_type, member, emitted_args.len());
+            let expression = if plain_call {
+                GoExpression::opaque_with_deferred_evaluation(inlined, true)
+            } else if member == "byte_at" {
+                GoExpression::opaque_with_deferred_evaluation(
+                    inlined,
+                    arguments_contain_deferred_evaluation,
+                )
+            } else if member == "is_empty" {
+                GoExpression::opaque_with_deferred_evaluation(inlined, true)
+            } else {
+                GoExpression::opaque_with_deferred_evaluation(
+                    inlined,
+                    arguments_contain_deferred_evaluation,
+                )
+            };
+            return if plain_call {
+                ValuePlan::plain_call(setup, expression, EvaluationEffect::EffectfulCall)
+            } else {
+                ValuePlan::computed(setup, expression, EvaluationEffect::EffectfulCall)
+            };
         }
 
         let mut new_args = vec![receiver_arg];
@@ -135,7 +158,15 @@ impl Planner<'_> {
                 has_spread: spread.is_some(),
             },
         );
-        (setup, format!("{}({})", fn_name, new_args.join(", ")))
+        let expression = GoExpression::call(
+            GoExpression::opaque(fn_name),
+            new_args.into_iter().map(GoExpression::opaque).collect(),
+        );
+        if self.callee_lowers_to_type_construction(function) {
+            ValuePlan::observable_call(setup, expression, EvaluationEffect::EffectfulCall)
+        } else {
+            ValuePlan::plain_call(setup, expression, EvaluationEffect::EffectfulCall)
+        }
     }
 
     fn lower_ufcs_call_args(
@@ -145,12 +176,12 @@ impl Planner<'_> {
         args: &[Expression],
         spread: Option<&Expression>,
         callee: &ResolvedCallee<'_>,
-    ) -> (Vec<LoweredStatement>, String, Vec<String>) {
+    ) -> (Vec<LoweredStatement>, String, Vec<String>, bool) {
         // The DotAccess function type curries `self` out, so its params line
         // up 1:1 with the user args. Pair each so a function-typed param
         // suppresses the Go-fn-value identity short-circuit before dispatch
         // into prelude helpers like `lisette.OptionAndThen`.
-        let mut all_stages: Vec<StagedExpression> =
+        let mut all_stages: Vec<ValuePlan> =
             Vec::with_capacity(1 + args.len() + spread.is_some() as usize);
         all_stages.push(self.stage_operand(receiver, ExpressionContext::value()));
         for (i, arg) in args.iter().enumerate() {
@@ -171,7 +202,7 @@ impl Planner<'_> {
         }
         let combine = plan_variadic_spread(function, spread).map(|p| p.combine(1));
 
-        let (setup, all_values) = self.sequence_args_with_spread_adapter(
+        let sequenced = self.sequence_args_with_spread_adapter_values(
             all_stages,
             spread,
             (!callee.is_prelude_dispatch)
@@ -184,10 +215,18 @@ impl Planner<'_> {
                 .flatten(),
             false,
             combine,
+            CaptureBoundary::SiblingSequence,
         );
+        let contains_deferred_evaluation = sequenced.contains_deferred_evaluation();
+        let (setup, all_values) = sequenced.into_rendered();
         let receiver_arg = all_values[0].clone();
         let emitted_args: Vec<String> = all_values[1..].to_vec();
-        (setup, receiver_arg, emitted_args)
+        (
+            setup,
+            receiver_arg,
+            emitted_args,
+            contains_deferred_evaluation,
+        )
     }
 
     fn stage_ufcs_arg(
@@ -196,13 +235,12 @@ impl Planner<'_> {
         declared_param: Option<&Type>,
         suppress_declared: Option<&Type>,
         formal_param: Option<&Type>,
-    ) -> StagedExpression {
+    ) -> ValuePlan {
         let Some(declared) = declared_param else {
             return self.stage_prelude_arg(arg, suppress_declared, formal_param);
         };
-        let mut setup: Vec<LoweredStatement> = Vec::new();
-        if let Some(value) = self.try_adapt_lowered_fn_arg_shape(&mut setup, arg, Some(declared)) {
-            return self.staged_from_typed_setup(setup, value, arg);
+        if let Some(value) = self.try_adapt_lowered_fn_arg_shape(arg, Some(declared)) {
+            return value;
         }
         self.stage_composite(arg, ExpressionContext::value())
     }
@@ -262,21 +300,28 @@ impl Planner<'_> {
         method: &str,
         is_public: bool,
         spread: Option<&Expression>,
-    ) -> (Vec<LoweredStatement>, String) {
+    ) -> ValuePlan {
         let go_method = if is_public {
             go_name::snake_to_camel(method)
         } else {
             go_name::escape_keyword(method).into_owned()
         };
 
-        let stages: Vec<StagedExpression> = args
+        let stages: Vec<ValuePlan> = args
             .iter()
             .map(|a| self.stage_composite(a, ExpressionContext::value()))
             .collect();
 
         let combine = plan_variadic_spread(function, spread).map(|p| p.combine(0));
-        let (setup, emitted_all) =
-            self.sequence_with_spread_structured(stages, spread, false, "_arg", combine);
+        let sequenced = self.sequence_with_spread_values(
+            stages,
+            spread,
+            false,
+            "_arg",
+            combine,
+            CaptureBoundary::SiblingSequence,
+        );
+        let (setup, emitted_all) = sequenced.into_rendered();
 
         let receiver = emitted_all[0].clone();
         let emitted_rest: Vec<String> = emitted_all[1..].to_vec();
@@ -295,15 +340,13 @@ impl Planner<'_> {
             receiver
         };
 
-        (
+        ValuePlan::observable_call(
             setup,
-            format!(
-                "{}.{}{}({})",
-                receiver,
-                go_method,
-                type_args_string,
-                emitted_rest.join(", ")
+            GoExpression::call(
+                GoExpression::opaque(format!("{}.{}{}", receiver, go_method, type_args_string)),
+                emitted_rest.into_iter().map(GoExpression::opaque).collect(),
             ),
+            EvaluationEffect::EffectfulCall,
         )
     }
 }

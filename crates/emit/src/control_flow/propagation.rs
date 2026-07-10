@@ -10,7 +10,7 @@ use crate::plan::bodies::{
     ReturnStatementPlan,
 };
 use crate::plan::calls::CallableOrigin;
-use crate::plan::values::{ValuePlan, value_plan_from_statements};
+use crate::plan::values::{GoExpression, ValuePlan};
 use syntax::ast::Expression;
 use syntax::types::Type;
 
@@ -24,7 +24,7 @@ struct WrappedReturnInfo<'a> {
 pub(crate) fn plain_return(value: String) -> LoweredStatement {
     LoweredStatement::Return(ReturnStatementPlan {
         form: ReturnForm::Plain {
-            value: ValuePlan::Operand(value),
+            value: ValuePlan::opaque(value),
         },
     })
 }
@@ -34,7 +34,7 @@ fn simple_assign(target: String, value: String) -> LoweredStatement {
         form: AssignForm::Simple {
             target_capture: Vec::new(),
             target_str: target,
-            value: ValuePlan::Operand(value),
+            value: ValuePlan::opaque(value),
         },
     })
 }
@@ -119,27 +119,15 @@ impl Planner<'_> {
         &mut self,
         expression: &Expression,
     ) -> (Vec<LoweredStatement>, String) {
-        if let Expression::Identifier {
-            value,
-            ty,
-            qualified,
-            ..
-        } = expression
-        {
-            let go_name =
-                self.emit_identifier(value, qualified.as_deref(), ty, ExpressionContext::value());
-            if go_name.contains('(') {
-                let mut setup = Vec::new();
-                let check = self.hoist_tmp_value_statement(&mut setup, "check", &go_name);
-                (setup, check)
-            } else {
-                (Vec::new(), go_name)
-            }
-        } else {
-            let staged = self.stage_operand(expression, ExpressionContext::value());
-            let mut setup = staged.setup;
-            let check = self.hoist_tmp_value_statement(&mut setup, "check", &staged.value);
+        let plan = self.stage_operand(expression, ExpressionContext::value());
+        let requires_capture = !matches!(expression, Expression::Identifier { .. })
+            || plan.expression.contains_deferred_evaluation();
+        let (mut setup, value) = plan.into_parts();
+        if requires_capture {
+            let check = self.hoist_tmp_value_statement(&mut setup, "check", &value);
             (setup, check)
+        } else {
+            (setup, value)
         }
     }
 
@@ -216,8 +204,9 @@ impl Planner<'_> {
         let err_var = self.fresh_var(Some("ret"));
         self.declare(&err_var);
 
-        let (mut statements, call_str) =
-            self.lower_call(expression, None, ExpressionContext::value());
+        let (mut statements, call_str) = self
+            .lower_call(expression, None, ExpressionContext::value())
+            .into_parts();
         let bind_line = match &val_var {
             Some(v) => format!("{}, {} := {}\n", v, err_var, call_str),
             None => format!("_, {} := {}\n", err_var, call_str),
@@ -317,18 +306,27 @@ impl Planner<'_> {
             };
         }
 
-        let (mut setup, raw_value) = self
-            .lower_value(expression, ExpressionContext::value())
-            .into_parts();
-        let mut coercion_buffer = String::new();
-        let final_value =
-            self.apply_type_coercion(&mut coercion_buffer, return_ctx.ty(), expression, raw_value);
-        if !coercion_buffer.is_empty() {
-            setup.push(LoweredStatement::RawGo(coercion_buffer));
-        }
+        let plan = self.lower_value(expression, ExpressionContext::value());
         ReturnStatementPlan {
             form: ReturnForm::Plain {
-                value: value_plan_from_statements(setup, final_value),
+                value: plan.map_rendered_as_computed(
+                    |setup, raw_value, contains_deferred_evaluation| {
+                        let mut coercion_buffer = String::new();
+                        let final_value = self.apply_type_coercion(
+                            &mut coercion_buffer,
+                            return_ctx.ty(),
+                            expression,
+                            raw_value,
+                        );
+                        if !coercion_buffer.is_empty() {
+                            setup.push(LoweredStatement::RawGo(coercion_buffer));
+                        }
+                        GoExpression::opaque_with_deferred_evaluation(
+                            final_value,
+                            contains_deferred_evaluation,
+                        )
+                    },
+                ),
             },
         }
     }
@@ -357,7 +355,9 @@ impl Planner<'_> {
         let mut statements = Vec::new();
 
         if is_go_never(expression) {
-            let (setup, call_str) = self.lower_call(expression, None, ExpressionContext::value());
+            let (setup, call_str) = self
+                .lower_call(expression, None, ExpressionContext::value())
+                .into_parts();
             statements.extend(setup);
             // Kept as `RawGo`: this is a Go-never call (`panic(...)`) whose
             // `ends_with_diverge` must stay true; `ExpressionStatementForm::Async`
@@ -568,7 +568,9 @@ impl Planner<'_> {
         if let Some(shape) = lowered
             && self.callee_matches_lowered_shape(expression, shape)
         {
-            let (setup, call) = self.lower_call(expression, None, ExpressionContext::value());
+            let (setup, call) = self
+                .lower_call(expression, None, ExpressionContext::value())
+                .into_parts();
             statements.extend(setup);
             statements.push(plain_return(call));
             return statements;
@@ -603,7 +605,9 @@ impl Planner<'_> {
             ));
             return statements;
         }
-        let (setup, call) = self.lower_call(expression, None, ExpressionContext::value());
+        let (setup, call) = self
+            .lower_call(expression, None, ExpressionContext::value())
+            .into_parts();
         statements.extend(setup);
         statements.push(plain_return(call));
         statements

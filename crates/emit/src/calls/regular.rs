@@ -8,13 +8,15 @@ use crate::abi::callable::{AbiTransition, CallableParamAbi, CallableReturnAbi};
 use crate::abi::coercion::{Coercion, CoercionDirection, OptionShape, classify_option_shape};
 use crate::abi::transition::{emit_fn_arg_shape_adapter, emit_lisette_callback_wrapper};
 use crate::context::expression::ExpressionContext;
-use crate::expressions::emission::StagedExpression;
 use crate::expressions::staging::VariadicCombine;
 use crate::names::generics::extract_type_mapping;
 use crate::names::go_name;
 use crate::plan::bodies::LoweredStatement;
 use crate::plan::calls::{ArgumentPlan, CallPlan, CallableOrigin, ResolvedCallee};
-use crate::utils::{contains_call, reads_mutable_operand};
+use crate::plan::values::{
+    CaptureBoundary, EvaluationEffect, GoExpression, SequencedValues, ValuePlan,
+};
+use crate::utils::reads_mutable_operand;
 use crate::write_line;
 use syntax::ast::{Expression, Literal};
 use syntax::types::Type;
@@ -26,6 +28,7 @@ struct CallArgsContext<'plan, 'facts> {
     spread: Option<&'plan Expression>,
     wrap_spread_to_any: bool,
     combine_variadic: Option<VariadicCombine>,
+    capture_boundary: CaptureBoundary,
 }
 
 /// Escape-aware close-quote search; plain `find` would collide with `\"` inside the literal.
@@ -125,7 +128,7 @@ impl<'a> Planner<'a> {
         call_plan: &CallPlan<'a>,
         call_ty: Option<&Type>,
         expression_ctx: ExpressionContext<'_>,
-    ) -> (Vec<LoweredStatement>, String) {
+    ) -> ValuePlan {
         let Expression::Call {
             expression: callee,
             args,
@@ -140,19 +143,36 @@ impl<'a> Planner<'a> {
         let spread = (**spread).as_ref();
 
         if let Some(go_name) = self.get_callee_go_name(function).map(str::to_string) {
-            let stages: Vec<StagedExpression> = args
+            let stages: Vec<ValuePlan> = args
                 .iter()
                 .map(|a| self.stage_operand(a, ExpressionContext::value()))
                 .collect();
             let wrap_to_any = spread_needs_any_wrap(function, spread);
             let combine = call_plan.variadic_combine(0);
-            let (setup, args_strings) =
-                self.sequence_with_spread_structured(stages, spread, wrap_to_any, "_arg", combine);
-            return (setup, format!("{}({})", go_name, args_strings.join(", ")));
+            let sequenced = self.sequence_with_spread_values(
+                stages,
+                spread,
+                wrap_to_any,
+                "_arg",
+                combine,
+                expression_ctx.capture_boundary(),
+            );
+            let effect = self.regular_call_effect(function, sequenced.effect);
+            let (setup, args_strings) = sequenced.into_rendered();
+            let expression = GoExpression::call(
+                GoExpression::opaque(go_name),
+                args_strings.into_iter().map(GoExpression::opaque).collect(),
+            );
+            return if self.callee_lowers_to_type_construction(function) {
+                ValuePlan::observable_call(setup, expression, effect)
+            } else {
+                ValuePlan::plain_call(setup, expression, effect)
+            };
         }
 
         let callee_staged = self.stage_operand(function, expression_ctx.callee());
-        let mut function_string = callee_staged.value;
+        let callee_effect = callee_staged.evaluation.effect;
+        let (mut setup, mut function_string) = callee_staged.into_parts();
 
         if function.deref_inner().is_some() {
             function_string = format!("({})", function_string);
@@ -176,16 +196,17 @@ impl<'a> Planner<'a> {
             spread,
             wrap_spread_to_any: spread_needs_any_wrap(function, spread),
             combine_variadic: call_plan.variadic_combine(0),
+            capture_boundary: expression_ctx.capture_boundary(),
         };
-        let (args_setup, args_strings) = self.emit_call_args(args, &args_ctx);
+        let sequenced_args = self.emit_call_args(args, &args_ctx);
+        let args_effect = sequenced_args.effect;
+        let (args_setup, args_strings) = sequenced_args.into_rendered();
 
-        let mut setup = callee_staged.setup;
         let callee_needs_pin = setup.is_empty()
             && type_args_string.is_empty()
             && reads_mutable_operand(function)
             && (!args_setup.is_empty()
-                || (!matches!(function, Expression::Call { .. })
-                    && (args.iter().any(contains_call) || spread.is_some_and(contains_call))));
+                || (!matches!(function, Expression::Call { .. }) && args_effect.has_call()));
         if callee_needs_pin {
             function_string =
                 self.hoist_tmp_value_statement(&mut setup, "callee", &function_string);
@@ -211,7 +232,34 @@ impl<'a> Planner<'a> {
             Some(wrapped) => wrapped,
             None => call_str,
         };
-        (setup, value)
+        let effect = self
+            .regular_call_effect(function, args_effect)
+            .combine(callee_effect);
+        if self.callee_lowers_to_type_construction(function) {
+            ValuePlan::computed(
+                setup,
+                GoExpression::opaque_with_deferred_evaluation(value, true),
+                effect,
+            )
+        } else {
+            ValuePlan::plain_call(
+                setup,
+                GoExpression::opaque_with_deferred_evaluation(value, true),
+                effect,
+            )
+        }
+    }
+
+    fn regular_call_effect(
+        &self,
+        function: &Expression,
+        argument_effect: EvaluationEffect,
+    ) -> EvaluationEffect {
+        if self.is_pure_constructor_callee(function) {
+            EvaluationEffect::PureCall.combine(argument_effect)
+        } else {
+            EvaluationEffect::EffectfulCall
+        }
     }
 
     fn callee_collapsed_recipe(&self, callee: &ResolvedCallee<'_>) -> Option<String> {
@@ -329,17 +377,14 @@ impl<'a> Planner<'a> {
         &mut self,
         args: &[Expression],
         ctx: &CallArgsContext<'_, '_>,
-    ) -> (Vec<LoweredStatement>, Vec<String>) {
-        let stages: Vec<StagedExpression> = args
+    ) -> SequencedValues {
+        let stages: Vec<ValuePlan> = args
             .iter()
             .enumerate()
-            .map(|(i, arg)| {
-                let (setup, value) = self.lower_call_arg(arg, i, ctx);
-                self.staged_from_typed_setup(setup, value, arg)
-            })
+            .map(|(i, arg)| self.lower_call_arg(arg, i, ctx))
             .collect();
 
-        self.sequence_args_with_spread_adapter(
+        self.sequence_args_with_spread_adapter_values(
             stages,
             ctx.spread,
             ctx.plan
@@ -349,6 +394,7 @@ impl<'a> Planner<'a> {
                 .and_then(|ty| ty.unwrap_forall().get_function_params()),
             ctx.wrap_spread_to_any,
             ctx.combine_variadic.clone(),
+            ctx.capture_boundary,
         )
     }
 
@@ -363,7 +409,7 @@ impl<'a> Planner<'a> {
         arg: &Expression,
         index: usize,
         ctx: &CallArgsContext<'_, '_>,
-    ) -> (Vec<LoweredStatement>, String) {
+    ) -> ValuePlan {
         let param = ctx.plan.resolved.abi.param(index);
         let effective_param_ty = param.map(|param| &param.instantiated);
         let generic_param_ty = param.and_then(|param| param.declared.as_ref());
@@ -405,9 +451,11 @@ impl<'a> Planner<'a> {
                 let target =
                     effective_param_ty.expect("TaggedGoLowering requires effective_param_ty");
                 let arg_ctx = direct_arg_emit_ctx(Some(target), true);
-                let (mut setup, value) = self.lower_composite_value(arg, arg_ctx).into_parts();
-                let lowered = self.emit_lower_arg_to_tagged(&mut setup, &value, target);
-                (setup, lowered)
+                let argument = self.lower_composite_value(arg, arg_ctx);
+                argument.map_rendered_as_computed(|setup, value, _contains_deferred_evaluation| {
+                    let lowered = self.emit_lower_arg_to_tagged(setup, &value, target);
+                    GoExpression::opaque_with_deferred_evaluation(lowered, true)
+                })
             }
             ArgumentPlan::Direct => {
                 self.lower_direct_arg(arg, ctx, effective_param_ty, declared_param_ty)
@@ -472,36 +520,38 @@ impl<'a> Planner<'a> {
         ctx: &CallArgsContext<'_, '_>,
         effective_param_ty: Option<&Type>,
         declared_param_ty: Option<&Type>,
-    ) -> (Vec<LoweredStatement>, String) {
+    ) -> ValuePlan {
         let suppress = would_suppress_tagged_go(&ctx.plan.resolved, declared_param_ty);
         let arg_ctx = direct_arg_emit_ctx(effective_param_ty, suppress);
-        let (mut setup, value) = self.lower_composite_value(arg, arg_ctx).into_parts();
-        let final_value = match effective_param_ty {
-            Some(target) => {
-                let coercion =
-                    Coercion::resolve(self, &arg.get_type(), target, CoercionDirection::Internal);
-                let (coercion_setup, coerced) = coercion.lower(self, value);
-                setup.extend(coercion_setup);
-                coerced
-            }
-            None => value,
-        };
-        (setup, final_value)
+        let argument = self.lower_composite_value(arg, arg_ctx);
+        argument.map_rendered_as_computed(|setup, value, contains_deferred_evaluation| {
+            let final_value = match effective_param_ty {
+                Some(target) => {
+                    let coercion = Coercion::resolve(
+                        self,
+                        &arg.get_type(),
+                        target,
+                        CoercionDirection::Internal,
+                    );
+                    let (coercion_setup, coerced) = coercion.lower(self, value);
+                    setup.extend(coercion_setup);
+                    coerced
+                }
+                None => value,
+            };
+            GoExpression::opaque_with_deferred_evaluation(final_value, contains_deferred_evaluation)
+        })
     }
 
     /// Adapt a lowered-return fn arg when its shape disagrees with the
     /// callee's generic-param shape.
     pub(crate) fn try_adapt_lowered_fn_arg_shape(
         &mut self,
-        setup: &mut Vec<LoweredStatement>,
         arg: &Expression,
         generic_param_ty: Option<&Type>,
-    ) -> Option<String> {
+    ) -> Option<ValuePlan> {
         self.detect_lowered_fn_arg_shape(arg, generic_param_ty)?;
-        let (adapt_setup, value) =
-            self.lower_adapt_lowered_fn_arg_shape(arg, generic_param_ty.unwrap())?;
-        setup.extend(adapt_setup);
-        Some(value)
+        self.lower_adapt_lowered_fn_arg_shape(arg, generic_param_ty.unwrap())
     }
 
     /// Detect whether `arg`'s fn-shape disagrees with the callee's generic
@@ -553,18 +603,19 @@ impl<'a> Planner<'a> {
         &mut self,
         arg: &Expression,
         generic_param_ty: &Type,
-    ) -> Option<(Vec<LoweredStatement>, String)> {
+    ) -> Option<ValuePlan> {
         let (param_abi, arg_fn, arg_abi) = self.fn_arg_shapes(arg, generic_param_ty)?;
-        let (mut setup, value) = self
-            .lower_value(arg, ExpressionContext::value())
-            .into_parts();
-        let mut buffer = String::new();
-        let adapted =
-            emit_fn_arg_shape_adapter(self, &mut buffer, &value, &arg_fn, &arg_abi, &param_abi)?;
-        if !buffer.is_empty() {
-            setup.push(LoweredStatement::RawGo(buffer));
-        }
-        Some((setup, adapted))
+        let argument = self.lower_value(arg, ExpressionContext::value());
+        Some(argument.map_rendered_as_computed(|setup, value, _| {
+            let mut buffer = String::new();
+            let adapted =
+                emit_fn_arg_shape_adapter(self, &mut buffer, &value, &arg_fn, &arg_abi, &param_abi)
+                    .expect("fn_arg_shapes resolved a function signature");
+            if !buffer.is_empty() {
+                setup.push(LoweredStatement::RawGo(buffer));
+            }
+            GoExpression::opaque_with_deferred_evaluation(adapted, true)
+        }))
     }
 
     /// Adapt `slice...` spread into a generic `VarArgs<fn(...)>` when the
@@ -573,7 +624,7 @@ impl<'a> Planner<'a> {
         &mut self,
         spread: &Expression,
         generic_params: Option<&[Type]>,
-    ) -> Option<StagedExpression> {
+    ) -> Option<ValuePlan> {
         let generic_params = generic_params?;
         let raw_variadic = generic_params.last()?;
         if raw_variadic.get_name() != Some("VarArgs") {
@@ -600,10 +651,12 @@ impl<'a> Planner<'a> {
             return None;
         }
 
-        let (mut setup, src_value) = self
+        let source = self
             .lower_value(spread, ExpressionContext::value())
-            .into_parts();
-        let src_var = self.hoist_tmp_value_statement(&mut setup, "src", &src_value);
+            .map_rendered_as_name(|setup, source_value, _| {
+                GoExpression::name(self.hoist_tmp_value_statement(setup, "src", &source_value))
+            });
+        let source_variable = source.rendered();
 
         let target_element_ret = self.render_lowered_return_ty(&param_abi, arg_ret);
         let arg_fn_params = arg_fn.get_function_params().unwrap_or(&[]);
@@ -626,16 +679,19 @@ impl<'a> Planner<'a> {
             emit_fn_arg_shape_adapter(self, &mut body, &loop_cb, &arg_fn, &arg_abi, &param_abi)?;
         write_line!(body, "{}[i] = {}", adapted, closure);
 
-        setup.push(LoweredStatement::RawGo(format!(
-            "{} := make([]{}, len({}))\n",
-            adapted, target_element_ty, src_var
-        )));
-        setup.push(LoweredStatement::RawGo(format!(
-            "for i, {} := range {} {{\n{}}}\n",
-            loop_cb, src_var, body
-        )));
-
-        Some(self.staged_from_typed_setup(setup, adapted, spread))
+        Some(
+            source.map_rendered_as_name(|setup, _source_value, _contains_deferred_evaluation| {
+                setup.push(LoweredStatement::RawGo(format!(
+                    "{} := make([]{}, len({}))\n",
+                    adapted, target_element_ty, source_variable
+                )));
+                setup.push(LoweredStatement::RawGo(format!(
+                    "for i, {} := range {} {{\n{}}}\n",
+                    loop_cb, source_variable, body
+                )));
+                GoExpression::name(adapted)
+            }),
+        )
     }
 
     /// Resolve the source and target callback contracts at a Go call boundary.
@@ -680,52 +736,53 @@ impl<'a> Planner<'a> {
         source: &CallableReturnAbi,
         target: &CallableReturnAbi,
         transition: AbiTransition,
-    ) -> (Vec<LoweredStatement>, String) {
-        let (mut setup, value) = match transition {
-            AbiTransition::Identity => self
-                .lower_value(arg, ExpressionContext::value())
-                .into_parts(),
-            _ => self
-                .plan_operand(
-                    arg,
-                    ExpressionContext::value().with_forced_tagged_go_function(true),
-                )
-                .into_parts(),
+    ) -> ValuePlan {
+        let argument = match transition {
+            AbiTransition::Identity => self.lower_value(arg, ExpressionContext::value()),
+            _ => self.plan_operand(
+                arg,
+                ExpressionContext::value().with_forced_tagged_go_function(true),
+            ),
         };
-        let result = match transition {
-            AbiTransition::Identity => value,
-            AbiTransition::LowerFromTagged => {
-                let param_fn_ty = self
-                    .facts
-                    .resolve_to_function_type(effective_param_ty.unwrap_forall())
-                    .expect("callback target resolves to a fn type");
-                emit_lisette_callback_wrapper(self, &mut setup, &value, &param_fn_ty)
-            }
-            AbiTransition::WrapToTagged | AbiTransition::Reencode => {
-                let arg_fn_ty = self
-                    .facts
-                    .resolve_to_function_type(arg.get_type().unwrap_forall())
-                    .expect("callback source resolves to a fn type");
-                let mut buffer = String::new();
-                let adapted = emit_fn_arg_shape_adapter(
-                    self,
-                    &mut buffer,
-                    &value,
-                    &arg_fn_ty,
-                    source,
-                    target,
-                )
-                .expect("callback ABI transition has a function signature");
-                if !buffer.is_empty() {
-                    setup.push(LoweredStatement::RawGo(buffer));
+        argument.map_rendered_as_computed(|setup, value, contains_deferred_evaluation| {
+            let result = match transition {
+                AbiTransition::Identity => value,
+                AbiTransition::LowerFromTagged => {
+                    let param_fn_ty = self
+                        .facts
+                        .resolve_to_function_type(effective_param_ty.unwrap_forall())
+                        .expect("callback target resolves to a fn type");
+                    emit_lisette_callback_wrapper(self, setup, &value, &param_fn_ty)
                 }
-                adapted
-            }
-            AbiTransition::Incompatible => {
-                unreachable!("type-checked callback ABIs must describe the same result")
-            }
-        };
-        (setup, result)
+                AbiTransition::WrapToTagged | AbiTransition::Reencode => {
+                    let arg_fn_ty = self
+                        .facts
+                        .resolve_to_function_type(arg.get_type().unwrap_forall())
+                        .expect("callback source resolves to a fn type");
+                    let mut buffer = String::new();
+                    let adapted = emit_fn_arg_shape_adapter(
+                        self,
+                        &mut buffer,
+                        &value,
+                        &arg_fn_ty,
+                        source,
+                        target,
+                    )
+                    .expect("callback ABI transition has a function signature");
+                    if !buffer.is_empty() {
+                        setup.push(LoweredStatement::RawGo(buffer));
+                    }
+                    adapted
+                }
+                AbiTransition::Incompatible => {
+                    unreachable!("type-checked callback ABIs must describe the same result")
+                }
+            };
+            GoExpression::opaque_with_deferred_evaluation(
+                result,
+                contains_deferred_evaluation || !matches!(transition, AbiTransition::Identity),
+            )
+        })
     }
 
     /// Detect whether `arg`/`param_ty` form a Go pointer-param unwrap pair.
@@ -751,22 +808,22 @@ impl<'a> Planner<'a> {
         }
     }
 
-    fn lower_go_pointer_param_unwrap(
-        &mut self,
-        arg: &Expression,
-        param_ty: &Type,
-    ) -> (Vec<LoweredStatement>, String) {
+    fn lower_go_pointer_param_unwrap(&mut self, arg: &Expression, param_ty: &Type) -> ValuePlan {
         if arg.is_none_literal() {
-            return (Vec::new(), "nil".to_string());
+            return ValuePlan::evaluated_literal(
+                Vec::new(),
+                "nil".to_string(),
+                EvaluationEffect::PureCall,
+            );
         }
         let arg_ty = arg.get_type();
-        let (mut setup, value) = self
-            .lower_value(arg, ExpressionContext::value())
-            .into_parts();
+        let argument = self.lower_value(arg, ExpressionContext::value());
         let coercion = Coercion::resolve(self, &arg_ty, param_ty, CoercionDirection::ToGoBoundary);
-        let (coercion_setup, coerced) = coercion.lower(self, value);
-        setup.extend(coercion_setup);
-        (setup, coerced)
+        argument.map_rendered_as_computed(|setup, value, _contains_deferred_evaluation| {
+            let (coercion_setup, coerced) = coercion.lower(self, value);
+            setup.extend(coercion_setup);
+            GoExpression::opaque_with_deferred_evaluation(coerced, true)
+        })
     }
 
     /// Detect a nullable `Option` argument flowing into a Go-imported
@@ -789,21 +846,21 @@ impl<'a> Planner<'a> {
             .then_some(())
     }
 
-    fn lower_unwrap_go_nullable_arg(
-        &mut self,
-        arg: &Expression,
-        arg_ty: &Type,
-    ) -> (Vec<LoweredStatement>, String) {
+    fn lower_unwrap_go_nullable_arg(&mut self, arg: &Expression, arg_ty: &Type) -> ValuePlan {
         if arg.is_none_literal() {
-            return (Vec::new(), "nil".to_string());
+            return ValuePlan::evaluated_literal(
+                Vec::new(),
+                "nil".to_string(),
+                EvaluationEffect::PureCall,
+            );
         }
-        let (mut setup, value) = self
-            .lower_value(arg, ExpressionContext::value())
-            .into_parts();
+        let argument = self.lower_value(arg, ExpressionContext::value());
         let coercion = Coercion::resolve(self, arg_ty, arg_ty, CoercionDirection::ToGoBoundary);
-        let (coercion_setup, coerced) = coercion.lower(self, value);
-        setup.extend(coercion_setup);
-        (setup, coerced)
+        argument.map_rendered_as_computed(|setup, value, _contains_deferred_evaluation| {
+            let (coercion_setup, coerced) = coercion.lower(self, value);
+            setup.extend(coercion_setup);
+            GoExpression::opaque_with_deferred_evaluation(coerced, true)
+        })
     }
 }
 

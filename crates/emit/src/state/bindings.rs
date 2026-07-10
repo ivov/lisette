@@ -7,13 +7,19 @@ pub(crate) struct InlineExpr {
     text: String,
     /// Emitter vars the text references, recorded as uses on substitution.
     refs: Vec<String>,
+    contains_deferred_evaluation: bool,
 }
 
 impl InlineExpr {
-    pub(crate) fn with_refs(text: impl Into<String>, refs: Vec<String>) -> Self {
+    pub(crate) fn new(
+        text: impl Into<String>,
+        refs: Vec<String>,
+        contains_deferred_evaluation: bool,
+    ) -> Self {
         Self {
             text: text.into(),
             refs,
+            contains_deferred_evaluation,
         }
     }
 
@@ -23,6 +29,10 @@ impl InlineExpr {
 
     pub(crate) fn refs(&self) -> &[String] {
         &self.refs
+    }
+
+    pub(crate) fn contains_deferred_evaluation(&self) -> bool {
+        self.contains_deferred_evaluation
     }
 }
 

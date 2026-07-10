@@ -940,7 +940,11 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         let composable_access = binding.path.render_composable(&self.current_subject);
         self.planner.scope.bind_inline_expr(
             &binding.lisette_name,
-            InlineExpr::with_refs(composable_access, vec![self.current_subject.clone()]),
+            InlineExpr::new(
+                composable_access,
+                vec![self.current_subject.clone()],
+                binding.path.contains_deferred_evaluation(),
+            ),
         );
         true
     }

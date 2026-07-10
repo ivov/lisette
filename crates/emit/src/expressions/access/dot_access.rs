@@ -9,7 +9,7 @@ use crate::abi::coercion::{Coercion, CoercionDirection};
 use crate::context::expression::ExpressionContext;
 use crate::go_name;
 use crate::plan::bodies::LoweredStatement;
-use crate::plan::values::{ValuePlan, value_plan_from_statements};
+use crate::plan::values::{EvaluationEffect, GoExpression, ValuePlan};
 
 impl Planner<'_> {
     pub(crate) fn plan_dot_access(
@@ -34,17 +34,23 @@ impl Planner<'_> {
         if let Some(s) =
             self.try_emit_pre_receiver_dot(expression, member, result_ty, dot_access_kind, ctx)
         {
-            return ValuePlan::Operand(s);
+            return ValuePlan::computed(
+                Vec::new(),
+                GoExpression::opaque(s),
+                EvaluationEffect::Pure,
+            );
         }
 
         let expression_ty = expression.get_type();
 
-        let (mut setup, expression_string) =
-            if let Some(module) = expression_ty.as_import_namespace() {
-                (Vec::new(), self.require_module_import(module))
-            } else {
-                self.plan_coerced_expression(expression, receiver_coercion, ctx)
-            };
+        let base_plan = if let Some(module) = expression_ty.as_import_namespace() {
+            ValuePlan::name(Vec::new(), self.require_module_import(module), true)
+        } else {
+            self.plan_coerced_expression(expression, receiver_coercion, ctx)
+        };
+        let effect = base_plan.evaluation.effect;
+        let base_contains_deferred_evaluation = base_plan.expression.contains_deferred_evaluation();
+        let (mut setup, expression_string) = base_plan.into_parts();
 
         if let Some(s) = self.try_emit_tuple_member_dot(
             &expression_string,
@@ -52,7 +58,18 @@ impl Planner<'_> {
             member,
             dot_access_kind,
         ) {
-            return value_plan_from_statements(setup, s);
+            let is_newtype_conversion = matches!(
+                dot_access_kind,
+                Some(SemanticDotKind::TupleStructField { is_newtype: true })
+            );
+            return ValuePlan::computed(
+                setup,
+                GoExpression::opaque_with_deferred_evaluation(
+                    s,
+                    base_contains_deferred_evaluation || is_newtype_conversion,
+                ),
+                effect,
+            );
         }
 
         let is_exported =
@@ -68,13 +85,30 @@ impl Planner<'_> {
             &expression_ty,
             result_ty,
         ) {
-            return value_plan_from_statements(setup, s);
+            return ValuePlan::computed(setup, GoExpression::opaque(s), effect);
         }
 
-        let result = format!("{}.{}", expression_string, field);
-        let result =
-            self.append_cross_module_type_args(result, &expression_ty, member, result_ty, ctx);
-        value_plan_from_statements(setup, result)
+        let selector = GoExpression::selector(
+            GoExpression::opaque_with_deferred_evaluation(
+                expression_string,
+                base_contains_deferred_evaluation,
+            ),
+            field,
+        );
+        let rendered_selector = selector.rendered();
+        let result = self.append_cross_module_type_args(
+            rendered_selector.clone(),
+            &expression_ty,
+            member,
+            result_ty,
+            ctx,
+        );
+        let expression = if result == rendered_selector {
+            selector
+        } else {
+            GoExpression::opaque_with_deferred_evaluation(result, base_contains_deferred_evaluation)
+        };
+        ValuePlan::computed(setup, expression, effect)
     }
 
     /// Dispatch kinds that can resolve without the receiver emitted first.
@@ -272,32 +306,38 @@ impl Planner<'_> {
         expression: &Expression,
         coercion: Option<ReceiverCoercion>,
         ctx: ExpressionContext<'_>,
-    ) -> (Vec<LoweredStatement>, String) {
+    ) -> ValuePlan {
         let (staged, had_explicit_deref) = if let Some(inner) = expression.deref_inner() {
             (self.stage_operand(inner, ctx), true)
         } else {
             (self.stage_operand(expression, ctx), false)
         };
-        let mut setup = staged.setup;
-        let expression_string = staged.value;
-
         let is_absorbed_ref = self.is_absorbed_ref_generic(expression);
-
-        let value = match (coercion, had_explicit_deref) {
-            _ if is_absorbed_ref => expression_string,
-            (Some(ReceiverCoercion::AutoAddress), true) => expression_string,
-            (Some(ReceiverCoercion::AutoAddress), false) => match expression.unwrap_parens() {
-                Expression::Call { .. } => {
-                    self.hoist_tmp_value_statement(&mut setup, "ref", &expression_string)
-                }
-                Expression::StructCall { .. } => format!("(&{})", expression_string),
-                _ => expression_string,
+        staged.map_rendered(
+            |setup, expression_string, mut contains_deferred_evaluation| {
+                let value = match (coercion, had_explicit_deref) {
+                    _ if is_absorbed_ref => expression_string,
+                    (Some(ReceiverCoercion::AutoAddress), true) => expression_string,
+                    (Some(ReceiverCoercion::AutoAddress), false) => {
+                        match expression.unwrap_parens() {
+                            Expression::Call { .. } => {
+                                contains_deferred_evaluation = false;
+                                self.hoist_tmp_value_statement(setup, "ref", &expression_string)
+                            }
+                            Expression::StructCall { .. } => {
+                                contains_deferred_evaluation = true;
+                                format!("(&{})", expression_string)
+                            }
+                            _ => expression_string,
+                        }
+                    }
+                    (Some(ReceiverCoercion::AutoDeref), _) => expression_string,
+                    (None, true) => expression_string,
+                    (None, false) => expression_string,
+                };
+                GoExpression::opaque_with_deferred_evaluation(value, contains_deferred_evaluation)
             },
-            (Some(ReceiverCoercion::AutoDeref), _) => expression_string,
-            (None, true) => expression_string,
-            (None, false) => expression_string,
-        };
-        (setup, value)
+        )
     }
 
     /// Check if expression has an absorbed `Ref<T>` generic (T already emitted as `*Concrete`).

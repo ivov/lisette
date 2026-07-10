@@ -54,6 +54,7 @@ use syntax::program::{
     UnusedInfo,
 };
 use syntax::types::{Symbol, Type};
+use types::go_type::GoType;
 
 #[derive(Clone, Debug, Default)]
 pub struct EmitOptions {
@@ -290,7 +291,7 @@ impl Planner<'_> {
         self.effects.borrow_mut().require_testing();
     }
 
-    pub(crate) fn note_go_type(&self, go_type: &crate::types::go_type::GoType) {
+    pub(crate) fn note_go_type(&self, go_type: &GoType) {
         self.effects.borrow_mut().merge_from_go_type(go_type);
     }
 

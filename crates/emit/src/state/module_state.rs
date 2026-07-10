@@ -161,7 +161,6 @@ impl Drop for ActiveFileGuard<'_> {
 #[derive(Default)]
 pub(crate) struct FunctionEmissionState {
     absorbed_ref_generics: HashSet<String>,
-    eager_operand_capture: bool,
 }
 
 impl FunctionEmissionState {
@@ -171,13 +170,5 @@ impl FunctionEmissionState {
 
     pub(crate) fn record_absorbed_ref_generic(&mut self, name: impl Into<String>) {
         self.absorbed_ref_generics.insert(name.into());
-    }
-
-    pub(crate) fn eager_operand_capture(&self) -> bool {
-        self.eager_operand_capture
-    }
-
-    pub(crate) fn set_eager_operand_capture(&mut self, value: bool) -> bool {
-        std::mem::replace(&mut self.eager_operand_capture, value)
     }
 }

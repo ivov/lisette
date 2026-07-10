@@ -95,6 +95,18 @@ impl AccessPath {
             rendered
         }
     }
+
+    pub(crate) fn contains_deferred_evaluation(&self) -> bool {
+        self.segments.iter().any(|segment| {
+            matches!(
+                segment,
+                PathSegment::ArraySliceFrom { .. }
+                    | PathSegment::Deref
+                    | PathSegment::NewtypeCast(_)
+                    | PathSegment::AssertedAs(_)
+            )
+        })
+    }
 }
 
 #[derive(Clone, Debug)]

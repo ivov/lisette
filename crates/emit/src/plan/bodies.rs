@@ -1,7 +1,7 @@
 //! Lowered body IR: the typed vocabulary `plan::lower` produces and `render/`
 //! consumes. `RawGo` is a transitional node holding pre-rendered Go.
 
-use crate::plan::values::ValuePlan;
+use crate::plan::values::{GoExpression, ValuePlan};
 use syntax::types::Type;
 
 /// Destination for a lowered block's tail. The enclosing function's return
@@ -326,7 +326,7 @@ pub(crate) enum SelectArmPlan {
     },
     /// `case <operation>:` where `operation` is `ch <- val` or `<-ch`.
     Send {
-        operation: String,
+        operation: GoExpression,
         body: LoweredBlock,
     },
     /// `default:`

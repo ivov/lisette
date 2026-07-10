@@ -5,11 +5,12 @@ use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use super::NativeCallContext;
 use crate::Planner;
 use crate::abi::coercion::{Coercion, CoercionDirection};
+use crate::calls::native::native_method_lowers_to_plain_call;
 use crate::context::expression::ExpressionContext;
-use crate::expressions::emission::StagedExpression;
 use crate::names::go_name;
 use crate::plan::bodies::LoweredStatement;
 use crate::plan::calls::CallableOrigin;
+use crate::plan::values::{CaptureBoundary, EvaluationEffect, GoExpression, ValuePlan};
 use crate::types::native::NativeGoType;
 use syntax::EcoString;
 use syntax::ast::{Expression, StructKind};
@@ -160,47 +161,90 @@ impl Planner<'_> {
         )
     }
 
-    fn try_lower_native_constructor(
-        &mut self,
-        ctx: &NativeCallContext,
-    ) -> Option<(Vec<LoweredStatement>, String)> {
+    fn try_lower_native_constructor(&mut self, ctx: &NativeCallContext) -> Option<ValuePlan> {
         match (ctx.native_type, ctx.method) {
             (NativeGoType::Channel, "new") => {
                 let element =
                     self.resolve_element_type(ctx.function, ctx.resolved_type_args, ctx.call_ty);
-                Some((Vec::new(), format!("make(chan {})", element)))
+                Some(ValuePlan::observable_call(
+                    Vec::new(),
+                    GoExpression::call(
+                        GoExpression::name("make".to_string()),
+                        vec![GoExpression::opaque(format!("chan {}", element))],
+                    ),
+                    self.native_constructor_effect(ctx, EvaluationEffect::Pure),
+                ))
             }
             (NativeGoType::Channel, "buffered") => {
                 let element =
                     self.resolve_element_type(ctx.function, ctx.resolved_type_args, ctx.call_ty);
-                let (setup, capacity) = match ctx.args.first() {
+                let (setup, capacity, argument_effect) = match ctx.args.first() {
                     Some(a) => {
                         let staged = self.stage_operand(a, ExpressionContext::value());
-                        (staged.setup, staged.value)
+                        let effect = staged.evaluation.effect;
+                        let (setup, value) = staged.into_parts();
+                        (setup, value, effect)
                     }
-                    None => (Vec::new(), "0".to_string()),
+                    None => (Vec::new(), "0".to_string(), EvaluationEffect::Pure),
                 };
-                Some((setup, format!("make(chan {}, {})", element, capacity)))
+                Some(ValuePlan::observable_call(
+                    setup,
+                    GoExpression::call(
+                        GoExpression::name("make".to_string()),
+                        vec![
+                            GoExpression::opaque(format!("chan {}", element)),
+                            GoExpression::opaque(capacity),
+                        ],
+                    ),
+                    self.native_constructor_effect(ctx, argument_effect),
+                ))
             }
             (NativeGoType::Map, "new") => {
                 let (key, val) =
                     self.resolve_map_types(ctx.function, ctx.resolved_type_args, ctx.call_ty);
-                Some((Vec::new(), format!("make(map[{}]{})", key, val)))
+                Some(ValuePlan::observable_call(
+                    Vec::new(),
+                    GoExpression::call(
+                        GoExpression::name("make".to_string()),
+                        vec![GoExpression::opaque(format!("map[{}]{}", key, val))],
+                    ),
+                    self.native_constructor_effect(ctx, EvaluationEffect::Pure),
+                ))
             }
             (NativeGoType::Slice, "new") => {
                 let element =
                     self.resolve_element_type(ctx.function, ctx.resolved_type_args, ctx.call_ty);
-                Some((Vec::new(), format!("[]{}{{}}", element)))
+                Some(ValuePlan::computed(
+                    Vec::new(),
+                    GoExpression::composite_literal(format!("[]{}{{}}", element), false),
+                    self.native_constructor_effect(ctx, EvaluationEffect::Pure),
+                ))
             }
             (NativeGoType::Array, "new") => {
                 let peeled = ctx.call_ty.map(|t| self.facts.peel_alias(t));
                 if let Some(Type::Array { length, element }) = &peeled {
-                    Some((Vec::new(), self.array_zero(*length, element)))
+                    Some(ValuePlan::computed(
+                        Vec::new(),
+                        GoExpression::composite_literal(self.array_zero(*length, element), false),
+                        self.native_constructor_effect(ctx, EvaluationEffect::Pure),
+                    ))
                 } else {
                     None
                 }
             }
             _ => None,
+        }
+    }
+
+    fn native_constructor_effect(
+        &self,
+        ctx: &NativeCallContext,
+        argument_effect: EvaluationEffect,
+    ) -> EvaluationEffect {
+        if self.is_pure_constructor_callee(ctx.function) {
+            EvaluationEffect::PureCall.combine(argument_effect)
+        } else {
+            EvaluationEffect::EffectfulCall
         }
     }
 
@@ -242,6 +286,7 @@ impl Planner<'_> {
             call_ty: None,
             native_type: &native_type,
             method,
+            capture_boundary: CaptureBoundary::SiblingSequence,
         };
         match call_kind {
             CallKind::NativeMethod(_) => {
@@ -260,7 +305,7 @@ impl Planner<'_> {
         call_expression: &Expression,
         call_ty: Option<&Type>,
         ctx: ExpressionContext<'_>,
-    ) -> (Vec<LoweredStatement>, String) {
+    ) -> ValuePlan {
         let Expression::Call {
             expression: callee,
             args,
@@ -286,7 +331,12 @@ impl Planner<'_> {
                 }
             }
             CallableOrigin::AssertType => {
-                return self.lower_assert_type(function, args, resolved_type_args);
+                let (setup, value) = self.lower_assert_type(function, args, resolved_type_args);
+                return ValuePlan::plain_call(
+                    setup,
+                    GoExpression::opaque_with_deferred_evaluation(value, true),
+                    EvaluationEffect::EffectfulCall,
+                );
             }
             CallableOrigin::UfcsMethod => {
                 return self.lower_ufcs_call(function, args, resolved_type_args, spread, &plan);
@@ -304,8 +354,9 @@ impl Planner<'_> {
                     call_ty,
                     native_type: &native_type,
                     method,
+                    capture_boundary: ctx.capture_boundary(),
                 };
-                return self.lower_native_call(&native_ctx);
+                return self.lower_native_call(&native_ctx, &plan.resolved.origin);
             }
             CallableOrigin::ReceiverMethodUfcs { is_public } => {
                 let method = extract_receiver_ufcs_method(function);
@@ -324,15 +375,58 @@ impl Planner<'_> {
         self.lower_regular_call(call_expression, &plan, call_ty, ctx)
     }
 
-    fn lower_native_call(&mut self, ctx: &NativeCallContext) -> (Vec<LoweredStatement>, String) {
+    fn lower_native_call(&mut self, ctx: &NativeCallContext, origin: &CallableOrigin) -> ValuePlan {
         if let Some(result) = self.try_lower_native_constructor(ctx) {
             return result;
         }
-        if let Expression::DotAccess { .. } = ctx.function {
+        let result = if let Expression::DotAccess { .. } = ctx.function {
             self.lower_native_method_dot_access(ctx)
         } else {
             self.lower_native_method_identifier(ctx)
+        };
+        let effect = if matches!(origin, CallableOrigin::NativeConstructor(_)) {
+            self.native_constructor_effect(ctx, result.argument_effect)
+        } else if matches!(origin, CallableOrigin::NativeMethod(_))
+            && matches!(ctx.method, "length" | "capacity")
+        {
+            EvaluationEffect::PureCall.combine(result.argument_effect)
+        } else {
+            EvaluationEffect::EffectfulCall
+        };
+        let receiver_arity = if matches!(origin, CallableOrigin::NativeMethodIdentifier(_)) {
+            ctx.args.len().saturating_sub(1)
+        } else {
+            ctx.args.len()
+        };
+        let plain_call = !matches!(origin, CallableOrigin::NativeConstructor(_))
+            && native_method_lowers_to_plain_call(ctx.native_type, ctx.method, receiver_arity);
+        if plain_call {
+            return ValuePlan::plain_call(
+                result.setup,
+                GoExpression::opaque_with_deferred_evaluation(result.value, true),
+                effect,
+            );
         }
+
+        let contains_deferred_evaluation = match ctx.method {
+            "enumerate" => result.arguments_contain_deferred_evaluation,
+            "append" if receiver_arity == 0 => result.arguments_contain_deferred_evaluation,
+            _ => true,
+        };
+        let expression = if ctx.method == "byte_at" {
+            GoExpression::opaque_with_deferred_evaluation(
+                result.value,
+                result.arguments_contain_deferred_evaluation,
+            )
+        } else if ctx.method == "is_empty" {
+            GoExpression::opaque_with_deferred_evaluation(result.value, true)
+        } else {
+            GoExpression::opaque_with_deferred_evaluation(
+                result.value,
+                contains_deferred_evaluation,
+            )
+        };
+        ValuePlan::computed(result.setup, expression, effect)
     }
 
     pub(super) fn infer_return_only_type_args(
@@ -385,14 +479,17 @@ impl Planner<'_> {
         args: &[Expression],
         call_ty: Option<&Type>,
         ctx: ExpressionContext<'_>,
-    ) -> Option<(Vec<LoweredStatement>, String)> {
+    ) -> Option<ValuePlan> {
         let target = self.resolve_tuple_struct_target(function, call_ty)?;
 
-        let stages: Vec<StagedExpression> = args
+        let stages: Vec<ValuePlan> = args
             .iter()
             .map(|a| self.stage_composite(a, ExpressionContext::value()))
             .collect();
-        let (mut setup, values) = self.sequence_structured(stages, "_arg");
+        let sequenced = self.sequence_values(stages, CaptureBoundary::SiblingSequence, "_arg");
+        let effect = EvaluationEffect::PureCall.combine(sequenced.effect);
+        let contains_deferred_evaluation = sequenced.contains_deferred_evaluation();
+        let (mut setup, values) = sequenced.into_rendered();
 
         let mut field_pairs: Vec<(String, String)> = Vec::with_capacity(target.field_tys.len());
         for (i, ((field_ty, arg), value)) in target
@@ -410,7 +507,14 @@ impl Planner<'_> {
             field_pairs.push((format!("F{}", i), coerced));
         }
 
-        Some((setup, emit_struct_literal(&target.go_ty, &field_pairs, ctx)))
+        Some(ValuePlan::computed(
+            setup,
+            GoExpression::composite_literal(
+                emit_struct_literal(&target.go_ty, &field_pairs, ctx),
+                contains_deferred_evaluation,
+            ),
+            effect,
+        ))
     }
 
     /// Drill the function's return type into a tuple-struct definition,

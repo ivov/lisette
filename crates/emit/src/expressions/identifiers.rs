@@ -2,6 +2,7 @@ use crate::Planner;
 use crate::context::expression::ExpressionContext;
 use crate::names::generics::extract_type_mapping;
 use crate::names::go_name;
+use crate::plan::values::GoExpression;
 use crate::state::bindings::BindingValue;
 use syntax::types::{Type, unqualified_name};
 
@@ -25,14 +26,18 @@ impl Planner<'_> {
         qualified: Option<&str>,
         ty: &Type,
         ctx: ExpressionContext<'_>,
-    ) -> String {
+    ) -> GoExpression {
         if let Some(BindingValue::InlineExpr(expr)) = self.scope.resolve_identifier_binding(value) {
             let text = expr.as_str().to_string();
             let refs = expr.refs().to_vec();
+            let contains_deferred_evaluation = expr.contains_deferred_evaluation();
             for go_name in &refs {
                 self.scope.record_go_use(go_name);
             }
-            return text;
+            return GoExpression::opaque_with_deferred_evaluation(
+                text,
+                contains_deferred_evaluation,
+            );
         }
         let bound_go_name = self
             .scope
@@ -42,26 +47,35 @@ impl Planner<'_> {
             self.scope.record_go_use(go_name);
         }
         match self.classify_identifier(value, ty, ctx) {
-            IdentifierKind::UnitValue => "struct{}{}".to_string(),
-            IdentifierKind::PublicFunction { capitalized } => capitalized,
-            IdentifierKind::UnitConstructor { name, type_args } => {
-                format!("{}{}()", self.resolve_go_name(&name, None), type_args)
+            IdentifierKind::UnitValue => {
+                GoExpression::composite_literal("struct{}{}".to_string(), false)
             }
-            IdentifierKind::ConstructorFunction { name, type_args } => {
-                format!("{}{}", self.resolve_go_name(&name, None), type_args)
-            }
+            IdentifierKind::PublicFunction { capitalized } => GoExpression::name(capitalized),
+            IdentifierKind::UnitConstructor { name, type_args } => GoExpression::call(
+                GoExpression::opaque(format!(
+                    "{}{}",
+                    self.resolve_go_name(&name, None),
+                    type_args
+                )),
+                Vec::new(),
+            ),
+            IdentifierKind::ConstructorFunction { name, type_args } => GoExpression::name(format!(
+                "{}{}",
+                self.resolve_go_name(&name, None),
+                type_args
+            )),
             IdentifierKind::Regular { name } => {
                 if let Some(expression) = self.try_emit_method_expression(&name, ty) {
-                    return expression;
+                    return GoExpression::opaque(expression);
                 }
                 let resolved = self.capitalize_static_method_if_public(&name);
                 let go_name = self.resolve_go_name(&resolved, qualified);
                 if !ctx.is_callee()
                     && let Some(type_args) = self.format_generic_value_type_args(&name, ty)
                 {
-                    return format!("{}{}", go_name, type_args);
+                    return GoExpression::name(format!("{}{}", go_name, type_args));
                 }
-                go_name
+                GoExpression::name(go_name)
             }
         }
     }

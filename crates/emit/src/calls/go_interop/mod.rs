@@ -8,7 +8,7 @@ use crate::abi::callable::{CallableReturnAbi, OptionReturnAbi};
 use crate::context::expression::ExpressionContext;
 use crate::names::go_name;
 use crate::plan::bodies::LoweredStatement;
-use crate::plan::values::{ValuePlan, value_plan_from_statements};
+use crate::plan::values::{GoExpression, ValuePlan};
 use syntax::ast::Expression;
 use syntax::types::Type;
 
@@ -20,11 +20,14 @@ impl Planner<'_> {
         abi: &CallableReturnAbi,
         result_ty: &Type,
     ) -> ValuePlan {
-        let (mut setup, call_str) =
-            self.lower_call(call_expression, None, ExpressionContext::value());
-        let (wrap, value) = self.lower_abi_to_tagged(&call_str, abi, result_ty);
-        setup.extend(wrap);
-        value_plan_from_statements(setup, value)
+        let call_plan = self.lower_call(call_expression, None, ExpressionContext::value());
+        call_plan.map_rendered_as_observable_computed(
+            |setup, call_string, _contains_deferred_evaluation| {
+                let (wrap, value) = self.lower_abi_to_tagged(&call_string, abi, result_ty);
+                setup.extend(wrap);
+                GoExpression::opaque(value)
+            },
+        )
     }
 
     pub(crate) fn lower_abi_wrapping(
@@ -82,8 +85,9 @@ impl Planner<'_> {
         ) {
             return None;
         }
-        let (mut statements, call_str) =
-            self.lower_call(expression, None, ExpressionContext::value());
+        let (mut statements, call_str) = self
+            .lower_call(expression, None, ExpressionContext::value())
+            .into_parts();
         let (wrap, _) = self.lower_abi_wrapping(&call_str, abi, result_ty, target);
         statements.extend(wrap);
         Some(statements)
@@ -142,7 +146,7 @@ impl Planner<'_> {
         if has_array_return {
             ctx = ctx.with_raw_go_array_return();
         }
-        let (call_setup, call_str) = self.lower_call(call_expression, None, ctx);
+        let (call_setup, call_str) = self.lower_call(call_expression, None, ctx).into_parts();
         setup.extend(call_setup);
 
         Some(call_str)

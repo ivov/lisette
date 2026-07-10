@@ -7,13 +7,14 @@ use crate::abi::callable::{AbiTransition, CallableReturnAbi, OptionReturnAbi, Pa
 use crate::abi::coercion::{Coercion, CoercionDirection};
 use crate::abi::transition::emit_lisette_callback_wrapper;
 use crate::context::expression::ExpressionContext;
-use crate::expressions::emission::StagedExpression;
 use crate::is_order_sensitive;
 use crate::plan::bodies::{
     ExpressionStatementForm, ExpressionStatementPlan, LoweredBlock, LoweredStatement,
 };
 use crate::plan::calls::CallableOrigin;
-use crate::plan::values::{ValuePlan, value_plan_from_statements};
+use crate::plan::values::{
+    CaptureBoundary, EvaluationEffect, GoExpression, OperandForm, ValuePlan,
+};
 use crate::state::bindings::BindingValue;
 use syntax::ast::Expression;
 use syntax::program::CallKind;
@@ -43,13 +44,20 @@ impl Planner<'_> {
                 } else {
                     self.emit_go_fn_wrapper(&mut setup, expression, abi)
                 };
-                return value_plan_from_statements(setup, value);
+                return ValuePlan::computed(
+                    setup,
+                    GoExpression::opaque(value),
+                    EvaluationEffect::Pure,
+                )
+                .stable_across_calls_if(
+                    self.identifier_immune_to_calls(expression.unwrap_parens()),
+                );
             }
         }
         if self.is_go_array_return_value(expression) {
             let mut setup = Vec::new();
             let value = self.emit_array_return_wrapper(&mut setup, expression);
-            return value_plan_from_statements(setup, value);
+            return ValuePlan::computed(setup, GoExpression::opaque(value), EvaluationEffect::Pure);
         }
 
         self.plan_operand(expression, ctx)
@@ -66,11 +74,14 @@ impl Planner<'_> {
                 Expression::Call { .. } | Expression::Block { .. }
             )
         {
-            let (mut setup, call_str) = self.lower_value(expression, ctx).into_parts();
-            if !call_str.is_empty() {
-                setup.push(LoweredStatement::RawGo(format!("{call_str}\n")));
-            }
-            return value_plan_from_statements(setup, "struct{}{}".to_string());
+            return self
+                .lower_value(expression, ctx)
+                .map_rendered_as_observable_computed(|setup, call_string, _| {
+                    if !call_string.is_empty() {
+                        setup.push(LoweredStatement::RawGo(format!("{call_string}\n")));
+                    }
+                    GoExpression::composite_literal("struct{}{}".to_string(), false)
+                });
         }
         self.lower_value(expression, ctx)
     }
@@ -173,20 +184,36 @@ impl Planner<'_> {
                 qualified,
                 ..
             } => {
-                let mut setup: Vec<LoweredStatement> = Vec::new();
-                let raw = self.emit_identifier(value, qualified.as_deref(), ty, ctx);
-                let value = self.maybe_lower_tagged_fn_ref(&mut setup, expression, ty, raw, ctx);
-                value_plan_from_statements(setup, value)
+                let go_expression = self.emit_identifier(value, qualified.as_deref(), ty, ctx);
+                let stable_across_calls = self.identifier_immune_to_calls(expression);
+                let plan =
+                    ValuePlan::from_identifier_expression(go_expression, stable_across_calls);
+                let mut adapter_setup = Vec::new();
+                let value = self.maybe_lower_tagged_fn_ref(
+                    &mut adapter_setup,
+                    expression,
+                    ty,
+                    plan.rendered(),
+                    ctx,
+                );
+                if adapter_setup.is_empty() {
+                    plan
+                } else {
+                    plan.map_rendered_as_computed(|setup, _, contains_deferred_evaluation| {
+                        setup.extend(adapter_setup);
+                        GoExpression::opaque_with_deferred_evaluation(
+                            value,
+                            contains_deferred_evaluation,
+                        )
+                    })
+                }
             }
             Expression::Call { ty, .. } => {
                 let plan = self
                     .plan_call(expression)
                     .expect("plan_call yields Some for a Call expression");
                 match plan.result_transition {
-                    AbiTransition::Identity => {
-                        let (setup, value) = self.lower_call(expression, Some(ty), ctx);
-                        value_plan_from_statements(setup, value)
-                    }
+                    AbiTransition::Identity => self.lower_call(expression, Some(ty), ctx),
                     AbiTransition::WrapToTagged => {
                         self.lower_abi_wrapped_call(expression, &plan.resolved.abi.result, ty)
                     }
@@ -197,15 +224,15 @@ impl Planner<'_> {
                     }
                 }
             }
-            Expression::RawGo { text } => ValuePlan::Operand(text.clone()),
-            Expression::Unit { .. } => ValuePlan::Operand("struct{}{}".to_string()),
-            Expression::NoOp => ValuePlan::Operand(String::new()),
+            Expression::RawGo { text } => ValuePlan::opaque(text.clone()),
+            Expression::Unit { .. } => ValuePlan::opaque("struct{}{}".to_string()),
+            Expression::NoOp => ValuePlan::opaque(String::new()),
             Expression::Lambda {
                 params, body, ty, ..
             }
             | Expression::Function {
                 params, body, ty, ..
-            } => ValuePlan::Operand(self.emit_lambda(params, body, ty, ctx)),
+            } => ValuePlan::opaque(self.emit_lambda(params, body, ty, ctx)),
             Expression::IfLet { ty, .. }
             | Expression::Match { ty, .. }
             | Expression::Select { ty, .. }
@@ -215,15 +242,24 @@ impl Planner<'_> {
                 ..
             } => {
                 let plan = self.build_return_plan(return_expression);
-                value_plan_from_statements(vec![LoweredStatement::Return(plan)], String::new())
+                ValuePlan::computed(
+                    vec![LoweredStatement::Return(plan)],
+                    GoExpression::opaque(String::new()),
+                    EvaluationEffect::Pure,
+                )
             }
             Expression::Assignment { target, value, .. } => {
                 let setup = self.lower_assignment_operand(target, value);
-                value_plan_from_statements(setup, "struct{}{}".to_string())
+                ValuePlan::computed(
+                    setup,
+                    GoExpression::opaque("struct{}{}".to_string()),
+                    EvaluationEffect::Pure,
+                )
             }
-            Expression::Assert { .. } => value_plan_from_statements(
+            Expression::Assert { .. } => ValuePlan::computed(
                 vec![self.lower_assert_statement(expression)],
-                "struct{}{}".to_string(),
+                GoExpression::opaque("struct{}{}".to_string()),
+                EvaluationEffect::Pure,
             ),
             _ => unreachable!(
                 "unexpected leaf expression in plan_operand: {:?}",
@@ -241,15 +277,13 @@ impl Planner<'_> {
         ty: &Type,
         in_tail: bool,
     ) -> ValuePlan {
-        use value_plan_from_statements;
-
         let inferred_slot_types: Vec<Type> = match ty {
             Type::Tuple(slots) => slots.clone(),
             _ => Vec::new(),
         };
         let slot_types = self.resolve_tuple_slot_types(inferred_slot_types, in_tail);
 
-        let stages: Vec<StagedExpression> = elements
+        let stages: Vec<ValuePlan> = elements
             .iter()
             .enumerate()
             .map(|(i, e)| {
@@ -258,7 +292,9 @@ impl Planner<'_> {
                 self.stage_composite(e, element_ctx)
             })
             .collect();
-        let (mut setup, element_expressions) = self.sequence_structured(stages, "_v");
+        let sequenced = self.sequence_values(stages, CaptureBoundary::SiblingSequence, "_v");
+        let effect = sequenced.effect;
+        let (mut setup, element_expressions) = sequenced.into_rendered();
 
         let mut wrapped_expressions: Vec<String> = Vec::with_capacity(element_expressions.len());
         for (i, (expr, emitted)) in elements.iter().zip(element_expressions).enumerate() {
@@ -286,23 +322,24 @@ impl Planner<'_> {
         let needs_explicit_type_args =
             !slot_types.is_empty() && slot_types.iter().any(|t| self.facts.is_interface(t));
 
-        let value = if !needs_explicit_type_args {
-            format!(
-                "lisette.MakeTuple{}({})",
-                arity,
-                element_expressions.join(", ")
-            )
+        let callee = if !needs_explicit_type_args {
+            format!("lisette.MakeTuple{}", arity)
         } else {
             let slot_ty_strs: Vec<String> =
                 slot_types.iter().map(|t| self.go_type_string(t)).collect();
-            format!(
-                "lisette.MakeTuple{}[{}]({})",
-                arity,
-                slot_ty_strs.join(", "),
-                element_expressions.join(", ")
-            )
+            format!("lisette.MakeTuple{}[{}]", arity, slot_ty_strs.join(", "))
         };
-        value_plan_from_statements(setup, value)
+        ValuePlan::observable_call(
+            setup,
+            GoExpression::call(
+                GoExpression::opaque(callee),
+                element_expressions
+                    .into_iter()
+                    .map(GoExpression::opaque)
+                    .collect(),
+            ),
+            effect,
+        )
     }
 
     /// Plan a `cast` expression. The interface-target path resolves through
@@ -319,30 +356,27 @@ impl Planner<'_> {
         let inner = self.plan_operand(expression, ctx);
 
         if self.facts.is_interface(ty) {
-            let (mut setup, value) = inner.into_parts();
             let source_ty = expression.get_type();
             let coercion = Coercion::resolve(self, &source_ty, ty, CoercionDirection::Internal);
-            let (coercion_setup, coerced) = coercion.lower(self, value);
-            setup.extend(coercion_setup);
-            return value_plan_from_statements(setup, coerced);
+            let mut converted =
+                inner.map_rendered_as_computed(|setup, value, _contains_deferred_evaluation| {
+                    let (coercion_setup, coerced) = coercion.lower(self, value);
+                    setup.extend(coercion_setup);
+                    GoExpression::opaque_with_deferred_evaluation(coerced, true)
+                });
+            if !converted.evaluation.stability.is_stable_across_calls() {
+                converted.make_observable();
+            }
+            return converted;
         }
 
         let go_type = self.go_type_string(ty);
 
         if let Some(source_go_type) = self.shift_pin_go_type(expression, ty) {
-            return ValuePlan::Cast {
-                go_type,
-                inner: Box::new(ValuePlan::Cast {
-                    go_type: source_go_type,
-                    inner: Box::new(inner),
-                }),
-            };
+            return inner.conversion(source_go_type).conversion(go_type);
         }
 
-        ValuePlan::Cast {
-            go_type,
-            inner: Box::new(inner),
-        }
+        inner.conversion(go_type)
     }
 
     fn shift_pin_go_type(&self, expression: &Expression, target_ty: &Type) -> Option<String> {
@@ -364,31 +398,38 @@ impl Planner<'_> {
     pub(crate) fn plan_reference(&mut self, inner: &Expression, ty: &Type) -> ValuePlan {
         if inner.get_type().is_unit() && matches!(inner.unwrap_parens(), Expression::Call { .. }) {
             let staged = self.stage_operand(inner.unwrap_parens(), ExpressionContext::value());
-            let mut setup = staged.setup;
-            if !staged.value.is_empty() {
-                setup.push(LoweredStatement::Expression(ExpressionStatementPlan {
-                    form: ExpressionStatementForm::Async {
-                        value: ValuePlan::Operand(staged.value),
-                    },
-                }));
-            }
-            let tmp = self.hoist_tmp_value_statement(&mut setup, "ref", "struct{}{}");
-            return value_plan_from_statements(setup, format!("&{}", tmp));
+            return staged.map_rendered_as_observable_computed(
+                |setup, staged_value, _contains_deferred_evaluation| {
+                    if !staged_value.is_empty() {
+                        setup.push(LoweredStatement::Expression(ExpressionStatementPlan {
+                            form: ExpressionStatementForm::Async {
+                                value: ValuePlan::opaque(staged_value),
+                            },
+                        }));
+                    }
+                    let tmp = self.hoist_tmp_value_statement(setup, "ref", "struct{}{}");
+                    GoExpression::opaque(format!("&{}", tmp))
+                },
+            );
         }
 
-        let (mut setup, emitted) = self
-            .lower_value(inner, ExpressionContext::value())
-            .into_parts();
-
-        let value = if inner.get_type() == *ty {
-            emitted
-        } else if self.is_go_unaddressable(inner) || matches!(inner.get_type(), Type::Function(_)) {
-            let tmp = self.hoist_tmp_value_statement(&mut setup, "ref", &emitted);
-            format!("&{}", tmp)
-        } else {
-            format!("&{}", emitted)
-        };
-        value_plan_from_statements(setup, value)
+        let inner_plan = self.lower_value(inner, ExpressionContext::value());
+        inner_plan.map_rendered_as_observable_computed(
+            |setup, emitted, mut contains_deferred_evaluation| {
+                let value = if inner.get_type() == *ty {
+                    emitted
+                } else if self.is_go_unaddressable(inner)
+                    || matches!(inner.get_type(), Type::Function(_))
+                {
+                    contains_deferred_evaluation = false;
+                    let tmp = self.hoist_tmp_value_statement(setup, "ref", &emitted);
+                    format!("&{}", tmp)
+                } else {
+                    format!("&{}", emitted)
+                };
+                GoExpression::opaque_with_deferred_evaluation(value, contains_deferred_evaluation)
+            },
+        )
     }
 
     pub(crate) fn contains_newtype_access(&self, expression: &Expression) -> bool {
@@ -414,19 +455,15 @@ impl Planner<'_> {
         target: &Expression,
         value: &Expression,
     ) -> Vec<LoweredStatement> {
-        let rhs_staged = self.stage_composite(value, ExpressionContext::value());
-
-        let rhs = crate::statements::assignments::RhsEffects {
-            has_setup: !rhs_staged.setup.is_empty(),
-            has_effectful_call: self.contains_effectful_call(value),
-        };
+        let right_hand_side = self.stage_composite(value, ExpressionContext::value());
         let mut setup: Vec<LoweredStatement> = Vec::new();
         let target_str = if is_order_sensitive(target) {
-            self.emit_left_value_capturing(&mut setup, target, rhs)
+            self.emit_left_value_capturing(&mut setup, target, Some(&right_hand_side))
         } else {
             self.emit_left_value(&mut setup, target)
         };
-        setup.extend(rhs_staged.setup);
+        let (rhs_setup, rhs_value) = right_hand_side.into_parts();
+        setup.extend(rhs_setup);
 
         if let Expression::DotAccess {
             expression: receiver,
@@ -438,7 +475,7 @@ impl Planner<'_> {
         {
             let coercion =
                 Coercion::resolve(self, &value.get_type(), ty, CoercionDirection::ToGoBoundary);
-            let (coercion_setup, unwrapped) = coercion.lower(self, rhs_staged.value);
+            let (coercion_setup, unwrapped) = coercion.lower(self, rhs_value);
             setup.extend(coercion_setup);
             setup.push(LoweredStatement::RawGo(format!(
                 "{} = {}\n",
@@ -447,7 +484,7 @@ impl Planner<'_> {
         } else {
             setup.push(LoweredStatement::RawGo(format!(
                 "{} = {}\n",
-                target_str, rhs_staged.value
+                target_str, rhs_value
             )));
         }
         setup
@@ -462,7 +499,7 @@ impl Planner<'_> {
     ) -> ValuePlan {
         let type_string = self.go_type_string(ty);
 
-        let mut stages: Vec<StagedExpression> = Vec::new();
+        let mut stages: Vec<ValuePlan> = Vec::new();
         let has_start = start.is_some();
         if let Some(s) = start {
             stages.push(self.stage_operand(s, ExpressionContext::value()));
@@ -472,10 +509,17 @@ impl Planner<'_> {
         }
 
         if stages.is_empty() {
-            return ValuePlan::Operand("struct{}{}".to_string());
+            return ValuePlan::computed(
+                Vec::new(),
+                GoExpression::composite_literal("struct{}{}".to_string(), false),
+                EvaluationEffect::Pure,
+            );
         }
 
-        let (setup, values) = self.sequence_structured(stages, "_range");
+        let sequenced = self.sequence_values(stages, CaptureBoundary::SiblingSequence, "_range");
+        let effect = sequenced.effect;
+        let contains_deferred_evaluation = sequenced.contains_deferred_evaluation();
+        let (setup, values) = sequenced.into_rendered();
         let mut fields = Vec::new();
         if has_start {
             fields.push(("Start".to_string(), values[0].clone()));
@@ -487,24 +531,17 @@ impl Planner<'_> {
         }
 
         let value = emit_struct_literal(&type_string, &fields, ExpressionContext::value());
-        value_plan_from_statements(setup, value)
+        ValuePlan::computed(
+            setup,
+            GoExpression::composite_literal(value, contains_deferred_evaluation),
+            effect,
+        )
     }
 
     pub(crate) fn with_fresh_scope<R>(&mut self, f: impl FnOnce(&mut Self) -> R) -> R {
         let frame = self.scope.enter_isolated_function();
         let result = f(self);
         self.scope.exit_isolated_function(frame);
-        result
-    }
-
-    fn with_eager_operand_capture<R>(
-        &mut self,
-        enabled: bool,
-        f: impl FnOnce(&mut Self) -> R,
-    ) -> R {
-        let previous = self.function_state.set_eager_operand_capture(enabled);
-        let result = f(self);
-        self.function_state.set_eager_operand_capture(previous);
         result
     }
 
@@ -522,23 +559,35 @@ impl Planner<'_> {
                     body,
                 },
             })];
-            return value_plan_from_statements(setup, String::new());
+            return ValuePlan::computed(
+                setup,
+                GoExpression::opaque(String::new()),
+                EvaluationEffect::Pure,
+            );
         }
 
         let mut setup: Vec<LoweredStatement> = Vec::new();
         if let Some(call_str) = self.emit_go_call_discarded(&mut setup, expression) {
-            return value_plan_from_statements(setup, format!("{} {}", keyword, call_str));
+            return ValuePlan::computed(
+                setup,
+                GoExpression::opaque(format!("{} {}", keyword, call_str)),
+                EvaluationEffect::Pure,
+            );
         }
 
-        let (setup, inner) = self
-            .lower_value(expression, ExpressionContext::value())
-            .into_parts();
-        if needs_iife_for_async(expression, &inner) {
-            let (mut setup, inner) = self.with_eager_operand_capture(true, |planner| {
-                planner
-                    .lower_value(expression, ExpressionContext::value())
-                    .into_parts()
-            });
+        let plan = self.lower_value(expression, ExpressionContext::value());
+        if needs_iife_for_async(expression, plan.evaluation.form) {
+            let capture_boundary = if keyword == "defer" {
+                CaptureBoundary::DeferSite
+            } else {
+                CaptureBoundary::TaskSite
+            };
+            let (mut setup, inner) = self
+                .lower_value(
+                    expression,
+                    ExpressionContext::value().with_capture_boundary(capture_boundary),
+                )
+                .into_parts();
             let mut body_statements = Vec::new();
             if !inner.is_empty() {
                 let line = if expression.get_type().is_unit() {
@@ -557,9 +606,18 @@ impl Planner<'_> {
                     body,
                 },
             }));
-            return value_plan_from_statements(setup, String::new());
+            return ValuePlan::computed(
+                setup,
+                GoExpression::opaque(String::new()),
+                EvaluationEffect::Pure,
+            );
         }
-        value_plan_from_statements(setup, format!("{} {}", keyword, inner))
+        let (setup, inner) = plan.into_parts();
+        ValuePlan::computed(
+            setup,
+            GoExpression::opaque(format!("{} {}", keyword, inner)),
+            EvaluationEffect::Pure,
+        )
     }
 }
 
@@ -627,29 +685,9 @@ fn is_native_method_call(expression: &Expression) -> bool {
     )
 }
 
-fn needs_iife_for_async(expression: &Expression, emitted: &str) -> bool {
+fn needs_iife_for_async(expression: &Expression, form: OperandForm) -> bool {
     if !is_native_method_call(expression) {
         return false;
     }
-    !is_plain_go_call(emitted)
-}
-
-/// Whether emitted Go text is a plain non-builtin call. Valid as a `go` or
-/// `defer` target, and evaluated in lexical order among sibling operands.
-pub(crate) fn is_plain_go_call(emitted: &str) -> bool {
-    let trimmed = emitted.trim();
-    if !trimmed.ends_with(')') {
-        return false;
-    }
-    let Some(open) = trimmed.find('(') else {
-        return false;
-    };
-    let callee = trimmed[..open].trim_end();
-    if callee.is_empty() || callee.starts_with('[') {
-        return false;
-    }
-    !matches!(
-        callee,
-        "len" | "cap" | "append" | "copy" | "new" | "make" | "complex" | "real" | "imag"
-    )
+    !matches!(form, OperandForm::Call)
 }

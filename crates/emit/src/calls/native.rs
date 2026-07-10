@@ -2,14 +2,37 @@ use super::NativeCallContext;
 use crate::Planner;
 use crate::context::expression::ExpressionContext;
 use crate::expressions::access::index_access::range_var_bounds;
-use crate::expressions::emission::StagedExpression;
 use crate::names::go_name;
 use crate::plan::bodies::LoweredStatement;
 use crate::plan::calls::plan_variadic_spread;
+use crate::plan::values::{CaptureBoundary, EvaluationEffect, ValuePlan};
 use crate::types::native::NativeGoType;
-use crate::utils::{contains_call, reads_mutable_operand};
+use crate::utils::reads_mutable_operand;
 use syntax::ast::{Expression, UnaryOperator};
 use syntax::types::{CompoundKind, Type, peel_to_range_type};
+
+pub(super) struct NativeCallResult {
+    pub setup: Vec<LoweredStatement>,
+    pub value: String,
+    pub argument_effect: EvaluationEffect,
+    pub arguments_contain_deferred_evaluation: bool,
+}
+
+impl NativeCallResult {
+    fn new(
+        setup: Vec<LoweredStatement>,
+        value: String,
+        argument_effect: EvaluationEffect,
+        arguments_contain_deferred_evaluation: bool,
+    ) -> Self {
+        Self {
+            setup,
+            value,
+            argument_effect,
+            arguments_contain_deferred_evaluation,
+        }
+    }
+}
 
 #[derive(Clone, Copy)]
 pub(super) enum InlineImport {
@@ -255,6 +278,23 @@ fn is_native_array_method(method: &str) -> bool {
     matches!(method, "as_slice" | "get")
 }
 
+pub(super) fn native_method_lowers_to_plain_call(
+    native_type: &NativeGoType,
+    method: &str,
+    receiver_arity: usize,
+) -> bool {
+    if matches!(method, "substring" | "equals" | "clone") || is_native_array_method(method) {
+        return true;
+    }
+    let Some(rule) = lookup_inline_rule(native_type, method, receiver_arity) else {
+        return true;
+    };
+    matches!(
+        rule.method,
+        "delete" | "contains" | "split" | "starts_with" | "ends_with" | "rune_at" | "join" | "any"
+    )
+}
+
 /// Whether a rule for `(type, method, arity)` defines a negated template.
 pub(super) fn has_inline_negation(native_type: &NativeGoType, method: &str, arity: usize) -> bool {
     lookup_inline_rule(native_type, method, arity)
@@ -306,13 +346,13 @@ impl Planner<'_> {
     pub(super) fn lower_native_method_dot_access(
         &mut self,
         ctx: &NativeCallContext,
-    ) -> (Vec<LoweredStatement>, String) {
+    ) -> NativeCallResult {
         let Expression::DotAccess { expression, .. } = ctx.function else {
             unreachable!("expected DotAccess for native method call")
         };
 
         if matches!(ctx.native_type, NativeGoType::String) && ctx.method == "substring" {
-            return self.lower_string_substring(expression, ctx.args);
+            return self.lower_string_substring(expression, ctx.args, ctx.capture_boundary);
         }
 
         if ctx.method == "equals"
@@ -320,9 +360,10 @@ impl Planner<'_> {
         {
             let receiver_ty = self.facts.strip_and_peel(&expression.get_type());
             if receiver_ty.is_slice() || receiver_ty.is_map() {
-                let (setup, receiver, emitted_args) = self.stage_native_dot_access_call(ctx);
+                let (setup, receiver, emitted_args, effect, contains_deferred_evaluation) =
+                    self.stage_native_dot_access_call(ctx);
                 let body = self.render_equality(&receiver, &emitted_args[0], &receiver_ty);
-                return (setup, body);
+                return NativeCallResult::new(setup, body, effect, contains_deferred_evaluation);
             }
         }
 
@@ -335,13 +376,15 @@ impl Planner<'_> {
         if ctx.method == "clone" {
             let receiver_ty = self.facts.strip_and_peel(&expression.get_type());
             if is_cloneable_container(&receiver_ty) {
-                let (setup, receiver, _) = self.stage_native_dot_access_call(ctx);
+                let (setup, receiver, _, effect, contains_deferred_evaluation) =
+                    self.stage_native_dot_access_call(ctx);
                 let body = self.render_clone(&receiver, &receiver_ty);
-                return (setup, body);
+                return NativeCallResult::new(setup, body, effect, contains_deferred_evaluation);
             }
         }
 
-        let (setup, receiver, emitted_args) = self.stage_native_dot_access_call(ctx);
+        let (setup, receiver, emitted_args, effect, contains_deferred_evaluation) =
+            self.stage_native_dot_access_call(ctx);
 
         if let Some(inlined) = apply_inline_lookup(
             self,
@@ -351,7 +394,7 @@ impl Planner<'_> {
             &emitted_args,
             false,
         ) {
-            return (setup, inlined);
+            return NativeCallResult::new(setup, inlined, effect, contains_deferred_evaluation);
         }
 
         let mut new_args = vec![receiver];
@@ -369,9 +412,11 @@ impl Planner<'_> {
         } else {
             self.format_type_args(ctx.resolved_type_args)
         };
-        (
+        NativeCallResult::new(
             setup,
             format!("{}{}({})", fn_name, type_args_string, new_args.join(", ")),
+            effect,
+            contains_deferred_evaluation,
         )
     }
 
@@ -379,7 +424,7 @@ impl Planner<'_> {
         &mut self,
         ctx: &NativeCallContext,
         expression: &Expression,
-    ) -> Option<(Vec<LoweredStatement>, String)> {
+    ) -> Option<NativeCallResult> {
         if !is_native_array_method(ctx.method)
             || !matches!(
                 self.facts.strip_and_peel(&expression.get_type()),
@@ -388,11 +433,17 @@ impl Planner<'_> {
         {
             return None;
         }
-        let (mut setup, receiver, emitted_args) = self.stage_native_dot_access_call(ctx);
+        let (mut setup, receiver, emitted_args, effect, contains_deferred_evaluation) =
+            self.stage_native_dot_access_call(ctx);
         let index = emitted_args.first();
         let body =
             self.lower_array_method_body(ctx.method, expression, receiver, index, &mut setup);
-        Some((setup, body))
+        Some(NativeCallResult::new(
+            setup,
+            body,
+            effect,
+            contains_deferred_evaluation,
+        ))
     }
 
     fn lower_array_method_body(
@@ -480,7 +531,7 @@ impl Planner<'_> {
         if !has_inline_negation(ctx.native_type, ctx.method, ctx.args.len()) {
             return None;
         }
-        let (stage_setup, receiver, emitted_args) = self.stage_native_dot_access_call(ctx);
+        let (stage_setup, receiver, emitted_args, _, _) = self.stage_native_dot_access_call(ctx);
         setup.extend(stage_setup);
         apply_inline_lookup(
             self,
@@ -498,7 +549,7 @@ impl Planner<'_> {
     /// mutate it. A receiver that is itself a call already evaluates eagerly.
     fn pin_receiver_if_mutated(
         &mut self,
-        stage: &mut StagedExpression,
+        stage: &mut ValuePlan,
         receiver: &Expression,
         rest_has_call: bool,
     ) {
@@ -514,41 +565,68 @@ impl Planner<'_> {
     fn stage_native_dot_access_call(
         &mut self,
         ctx: &NativeCallContext,
-    ) -> (Vec<LoweredStatement>, String, Vec<String>) {
+    ) -> (
+        Vec<LoweredStatement>,
+        String,
+        Vec<String>,
+        EvaluationEffect,
+        bool,
+    ) {
         let Expression::DotAccess { expression, .. } = ctx.function else {
             unreachable!("expected DotAccess for native method call")
         };
 
-        let mut all_stages: Vec<StagedExpression> =
+        let mut all_stages: Vec<ValuePlan> =
             Vec::with_capacity(1 + ctx.args.len() + ctx.spread.is_some() as usize);
         let mut receiver_stage = self.stage_operand(expression, ExpressionContext::value());
-        let rest_has_call =
-            ctx.args.iter().any(contains_call) || ctx.spread.is_some_and(contains_call);
+        let argument_stages = self.stage_native_method_args(ctx.function, ctx.args);
+        let spread_stage = ctx
+            .spread
+            .map(|spread| self.stage_operand(spread, ExpressionContext::value()));
+        let rest_has_call = argument_stages
+            .iter()
+            .chain(spread_stage.iter())
+            .any(|stage| stage.evaluation.effect.has_call());
         self.pin_receiver_if_mutated(&mut receiver_stage, expression, rest_has_call);
         if expression.get_type().is_ref() {
-            receiver_stage.value = format!("*{}", receiver_stage.value);
+            receiver_stage = receiver_stage.unary("*");
         }
         all_stages.push(receiver_stage);
-        all_stages.extend(self.stage_native_method_args(ctx.function, ctx.args));
+        all_stages.extend(argument_stages);
+        let spread_index = spread_stage.map(|stage| {
+            all_stages.push(stage);
+            all_stages.len() - 1
+        });
 
         let combine = plan_variadic_spread(ctx.function, ctx.spread).map(|p| p.combine(1));
-        let (setup, all_values) =
-            self.sequence_with_spread_structured(all_stages, ctx.spread, false, "_arg", combine);
+        let mut sequenced = self.sequence_values(all_stages, ctx.capture_boundary, "_arg");
+        if let Some(spread_index) = spread_index {
+            self.finalize_spread_stage(&mut sequenced.values, spread_index, false, combine);
+        }
+        let effect = sequenced.effect;
+        let contains_deferred_evaluation = sequenced.contains_deferred_evaluation();
+        let (setup, all_values) = sequenced.into_rendered();
 
         let receiver = all_values[0].clone();
         let emitted_args: Vec<String> = all_values[1..].to_vec();
-        (setup, receiver, emitted_args)
+        (
+            setup,
+            receiver,
+            emitted_args,
+            effect,
+            contains_deferred_evaluation,
+        )
     }
 
     pub(super) fn lower_native_method_identifier(
         &mut self,
         ctx: &NativeCallContext,
-    ) -> (Vec<LoweredStatement>, String) {
+    ) -> NativeCallResult {
         if matches!(ctx.native_type, NativeGoType::String)
             && ctx.method == "substring"
             && ctx.args.len() >= 2
         {
-            return self.lower_string_substring(&ctx.args[0], &ctx.args[1..]);
+            return self.lower_string_substring(&ctx.args[0], &ctx.args[1..], ctx.capture_boundary);
         }
 
         if ctx.method == "equals"
@@ -557,11 +635,17 @@ impl Planner<'_> {
         {
             let receiver_ty = self.facts.strip_and_peel(&receiver_expr.get_type());
             if receiver_ty.is_slice() || receiver_ty.is_map() {
-                let (setup, emitted_args) = self.stage_native_identifier_args(ctx);
+                let (setup, emitted_args, effect, contains_deferred_evaluation) =
+                    self.stage_native_identifier_args(ctx);
                 if emitted_args.len() >= 2 {
                     let body =
                         self.render_equality(&emitted_args[0], &emitted_args[1], &receiver_ty);
-                    return (setup, body);
+                    return NativeCallResult::new(
+                        setup,
+                        body,
+                        effect,
+                        contains_deferred_evaluation,
+                    );
                 }
             }
         }
@@ -571,10 +655,16 @@ impl Planner<'_> {
         {
             let receiver_ty = self.facts.strip_and_peel(&receiver_expr.get_type());
             if is_cloneable_container(&receiver_ty) {
-                let (setup, emitted_args) = self.stage_native_identifier_args(ctx);
+                let (setup, emitted_args, effect, contains_deferred_evaluation) =
+                    self.stage_native_identifier_args(ctx);
                 if let Some(receiver) = emitted_args.first() {
                     let body = self.render_clone(receiver, &receiver_ty);
-                    return (setup, body);
+                    return NativeCallResult::new(
+                        setup,
+                        body,
+                        effect,
+                        contains_deferred_evaluation,
+                    );
                 }
             }
         }
@@ -586,7 +676,8 @@ impl Planner<'_> {
                 Type::Array { .. }
             )
         {
-            let (mut setup, emitted_args) = self.stage_native_identifier_args(ctx);
+            let (mut setup, emitted_args, effect, contains_deferred_evaluation) =
+                self.stage_native_identifier_args(ctx);
             let receiver = emitted_args[0].clone();
             let index = emitted_args.get(1);
             let body = self.lower_array_method_body(
@@ -596,13 +687,14 @@ impl Planner<'_> {
                 index,
                 &mut setup,
             );
-            return (setup, body);
+            return NativeCallResult::new(setup, body, effect, contains_deferred_evaluation);
         }
 
-        let (setup, emitted_args) = self.stage_native_identifier_args(ctx);
+        let (setup, emitted_args, effect, contains_deferred_evaluation) =
+            self.stage_native_identifier_args(ctx);
 
         if let Some(inlined) = apply_inline_identifier_lookup(self, ctx, &emitted_args, false) {
-            return (setup, inlined);
+            return NativeCallResult::new(setup, inlined, effect, contains_deferred_evaluation);
         }
 
         self.require_stdlib();
@@ -613,7 +705,7 @@ impl Planner<'_> {
             go_name::snake_to_camel(ctx.method)
         );
         let type_args_string = self.format_type_args(ctx.resolved_type_args);
-        (
+        NativeCallResult::new(
             setup,
             format!(
                 "{}{}({})",
@@ -621,6 +713,8 @@ impl Planner<'_> {
                 type_args_string,
                 emitted_args.join(", ")
             ),
+            effect,
+            contains_deferred_evaluation,
         )
     }
 
@@ -634,7 +728,7 @@ impl Planner<'_> {
         if !has_inline_negation(ctx.native_type, ctx.method, receiver_arity) {
             return None;
         }
-        let (stage_setup, emitted_args) = self.stage_native_identifier_args(ctx);
+        let (stage_setup, emitted_args, _, _) = self.stage_native_identifier_args(ctx);
         setup.extend(stage_setup);
         apply_inline_identifier_lookup(self, ctx, &emitted_args, true)
     }
@@ -642,22 +736,39 @@ impl Planner<'_> {
     fn stage_native_identifier_args(
         &mut self,
         ctx: &NativeCallContext,
-    ) -> (Vec<LoweredStatement>, Vec<String>) {
+    ) -> (Vec<LoweredStatement>, Vec<String>, EvaluationEffect, bool) {
         let mut stages = self.stage_native_method_args(ctx.function, ctx.args);
+        let spread_stage = ctx
+            .spread
+            .map(|spread| self.stage_operand(spread, ExpressionContext::value()));
         if let Some(receiver) = ctx.args.first() {
-            let rest_has_call =
-                ctx.args[1..].iter().any(contains_call) || ctx.spread.is_some_and(contains_call);
+            let rest_has_call = stages[1..]
+                .iter()
+                .chain(spread_stage.iter())
+                .any(|stage| stage.evaluation.effect.has_call());
             self.pin_receiver_if_mutated(&mut stages[0], receiver, rest_has_call);
         }
+        let spread_index = spread_stage.map(|stage| {
+            stages.push(stage);
+            stages.len() - 1
+        });
         let combine = plan_variadic_spread(ctx.function, ctx.spread).map(|p| p.combine(0));
-        self.sequence_with_spread_structured(stages, ctx.spread, false, "_arg", combine)
+        let mut sequenced = self.sequence_values(stages, ctx.capture_boundary, "_arg");
+        if let Some(spread_index) = spread_index {
+            self.finalize_spread_stage(&mut sequenced.values, spread_index, false, combine);
+        }
+        let effect = sequenced.effect;
+        let contains_deferred_evaluation = sequenced.contains_deferred_evaluation();
+        let (setup, values) = sequenced.into_rendered();
+        (setup, values, effect, contains_deferred_evaluation)
     }
 
     fn lower_string_substring(
         &mut self,
         receiver_expr: &Expression,
         args: &[Expression],
-    ) -> (Vec<LoweredStatement>, String) {
+        capture_boundary: CaptureBoundary,
+    ) -> NativeCallResult {
         self.require_stdlib();
         let arg = &args[0];
         let is_ref_receiver = receiver_expr.get_type().is_ref();
@@ -683,7 +794,10 @@ impl Planner<'_> {
             if let Some(e) = end.as_deref() {
                 stages.push(self.stage_operand(e, ExpressionContext::value()));
             }
-            let (setup, values) = self.sequence_structured(stages, "_arg");
+            let sequenced = self.sequence_values(stages, capture_boundary, "_arg");
+            let effect = sequenced.effect;
+            let contains_deferred_evaluation = sequenced.contains_deferred_evaluation();
+            let (setup, values) = sequenced.into_rendered();
             let mut bounds = values.iter().skip(1);
             let start_bound = start.is_some().then(|| bounds.next().unwrap().clone());
             let end_bound = end.is_some().then(|| {
@@ -694,13 +808,15 @@ impl Planner<'_> {
                     e.clone()
                 }
             });
-            return (
+            return NativeCallResult::new(
                 setup,
                 format_substring_call(
                     &deref(&values[0]),
                     start_bound.as_deref(),
                     end_bound.as_deref(),
                 ),
+                effect,
+                contains_deferred_evaluation,
             );
         }
 
@@ -710,11 +826,20 @@ impl Planner<'_> {
             .expect("substring arg should resolve to a known range type");
         let receiver_staged = self.stage_operand(receiver_expr, ExpressionContext::value());
         let range_staged = self.stage_or_capture(arg, "range");
-        let (setup, values) = self.sequence_structured(vec![receiver_staged, range_staged], "_arg");
+        let sequenced = self.sequence_values(
+            vec![receiver_staged, range_staged],
+            capture_boundary,
+            "_arg",
+        );
+        let effect = sequenced.effect;
+        let contains_deferred_evaluation = sequenced.contains_deferred_evaluation();
+        let (setup, values) = sequenced.into_rendered();
         let (start, end) = range_var_bounds(&values[1], range_kind);
-        (
+        NativeCallResult::new(
             setup,
             format_substring_call(&deref(&values[0]), start.as_deref(), end.as_deref()),
+            effect,
+            contains_deferred_evaluation,
         )
     }
 
