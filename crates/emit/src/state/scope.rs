@@ -207,6 +207,14 @@ impl ScopeState {
         }
     }
 
+    pub(crate) fn fresh_go_name_checkpoint(&self) -> usize {
+        self.next_var
+    }
+
+    pub(crate) fn restore_fresh_go_name_checkpoint(&mut self, checkpoint: usize) {
+        self.next_var = checkpoint;
+    }
+
     pub(crate) fn push_loop(&mut self, ctx: LoopContext) {
         self.loop_stack.push(ctx);
     }

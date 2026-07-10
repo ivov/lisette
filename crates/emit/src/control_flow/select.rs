@@ -10,7 +10,7 @@ use crate::plan::bodies::{
     ElseArm, IfPlan, LoweredBlock, LoweredStatement, PlacePlan, SelectArmPlan, SelectStatementPlan,
 };
 use crate::plan::placement::unreachable_panic_if_needed;
-use crate::utils::contains_call;
+use crate::plan::values::{GoExpression, ValuePlan};
 use syntax::ast::{Expression, MatchArm, Pattern, SelectArm, SelectArmPattern, TypedPattern};
 use syntax::types::unqualified_name;
 
@@ -160,8 +160,10 @@ impl Planner<'_> {
                     binding,
                     ..
                 } => {
-                    let channel_has_call = channel_expression_has_call(receive_expression);
-                    let ch = self.lower_channel_operand(setup, receive_expression);
+                    let channel = self.lower_channel_operand(receive_expression);
+                    let channel_has_call = channel.evaluation.effect.has_call();
+                    let (channel_setup, ch) = channel.into_parts();
+                    setup.extend(channel_setup);
                     if binding.is_some_pattern() && needs_retry_loop {
                         let shadow = self.hoist_tmp_value_statement(setup, "ch", &ch);
                         channel_operands.push(Some(ch));
@@ -180,8 +182,10 @@ impl Planner<'_> {
                 SelectArmPattern::MatchReceive {
                     receive_expression, ..
                 } => {
-                    let channel_has_call = channel_expression_has_call(receive_expression);
-                    let ch = self.lower_channel_operand(setup, receive_expression);
+                    let channel = self.lower_channel_operand(receive_expression);
+                    let channel_has_call = channel.evaluation.effect.has_call();
+                    let (channel_setup, ch) = channel.into_parts();
+                    setup.extend(channel_setup);
                     let ch = if needs_retry_loop && channel_has_call {
                         self.hoist_tmp_value_statement(setup, "ch", &ch)
                     } else {
@@ -206,28 +210,21 @@ impl Planner<'_> {
         }
     }
 
-    fn lower_channel_operand(
-        &mut self,
-        setup: &mut Vec<LoweredStatement>,
-        receive_expression: &Expression,
-    ) -> String {
+    fn lower_channel_operand(&mut self, receive_expression: &Expression) -> ValuePlan {
         let unwrapped = receive_expression.unwrap_parens();
         if let Some((channel, "receive", _)) = extract_channel_op(unwrapped) {
-            let (op_setup, ch) = self
-                .lower_value(channel, ExpressionContext::value())
-                .into_parts();
-            setup.extend(op_setup);
-            return if channel.get_type().is_ref() {
-                cancel_deref_of_address(ch)
-            } else {
-                ch
-            };
+            let plan = self.lower_value(channel, ExpressionContext::value());
+            if channel.get_type().is_ref() {
+                return plan.map_rendered(|_, value, contains_deferred_evaluation| {
+                    GoExpression::opaque_with_deferred_evaluation(
+                        cancel_deref_of_address(value),
+                        contains_deferred_evaluation,
+                    )
+                });
+            }
+            return plan;
         }
-        let (op_setup, ch) = self
-            .lower_value(receive_expression, ExpressionContext::value())
-            .into_parts();
-        setup.extend(op_setup);
-        ch
+        self.lower_value(receive_expression, ExpressionContext::value())
     }
 
     fn fresh_ok_var(&mut self) -> String {
@@ -450,10 +447,9 @@ impl Planner<'_> {
     ) -> SendArmParts {
         let unwrapped = send_expression.unwrap_parens();
         if let Some((channel, member, args)) = extract_channel_op(unwrapped) {
-            let ch_has_call = needs_hoist && contains_call(channel);
-            let (op_setup, mut ch) = self
-                .lower_value(channel, ExpressionContext::value())
-                .into_parts();
+            let channel_plan = self.lower_value(channel, ExpressionContext::value());
+            let ch_has_call = needs_hoist && channel_plan.evaluation.effect.has_call();
+            let (op_setup, mut ch) = channel_plan.into_parts();
             setup.extend(op_setup);
             if channel.get_type().is_ref() {
                 ch = cancel_deref_of_address(ch);
@@ -463,10 +459,10 @@ impl Planner<'_> {
             }
             match member {
                 "send" if !args.is_empty() => {
-                    let val_has_call = needs_hoist && contains_call(&args[0]);
-                    let (val_setup, mut val) = self
-                        .lower_composite_value(&args[0], ExpressionContext::value())
-                        .into_parts();
+                    let value_plan =
+                        self.lower_composite_value(&args[0], ExpressionContext::value());
+                    let val_has_call = needs_hoist && value_plan.evaluation.effect.has_call();
+                    let (val_setup, mut val) = value_plan.into_parts();
                     setup.extend(val_setup);
                     if val_has_call {
                         val = self.hoist_tmp_value_statement(setup, "send_val", &val);
@@ -477,10 +473,9 @@ impl Planner<'_> {
                 _ => SendArmParts::Default,
             }
         } else {
-            let expression_has_call = needs_hoist && contains_call(send_expression);
-            let (op_setup, mut ch) = self
-                .lower_value(send_expression, ExpressionContext::value())
-                .into_parts();
+            let expression_plan = self.lower_value(send_expression, ExpressionContext::value());
+            let expression_has_call = needs_hoist && expression_plan.evaluation.effect.has_call();
+            let (op_setup, mut ch) = expression_plan.into_parts();
             setup.extend(op_setup);
             if send_expression.get_type().is_ref() {
                 ch = cancel_deref_of_address(ch);
@@ -502,11 +497,11 @@ impl Planner<'_> {
         let block = self.lower_block_to_place(body, place);
         match parts {
             SendArmParts::Send(ch, val) => SelectArmPlan::Send {
-                operation: format!("{} <- {}", ch, val),
+                operation: GoExpression::opaque(format!("{} <- {}", ch, val)),
                 body: block,
             },
             SendArmParts::Receive(ch) => SelectArmPlan::Send {
-                operation: format!("<-{}", ch),
+                operation: GoExpression::receive(GoExpression::opaque(ch.clone())),
                 body: block,
             },
             SendArmParts::Default => SelectArmPlan::Default { body: block },
@@ -641,15 +636,6 @@ fn cancel_deref_of_address(ch: String) -> String {
         inner.to_string()
     } else {
         format!("*{}", ch)
-    }
-}
-
-fn channel_expression_has_call(receive_expression: &Expression) -> bool {
-    let unwrapped = receive_expression.unwrap_parens();
-    if let Some((channel, "receive", _)) = extract_channel_op(unwrapped) {
-        contains_call(channel)
-    } else {
-        contains_call(receive_expression)
     }
 }
 

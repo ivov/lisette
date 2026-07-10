@@ -10,7 +10,7 @@ use crate::plan::bodies::{
     LoweredStatement, MatchStatementPlan, PlacePlan, WhileLetPlan, directed,
 };
 use crate::plan::placement::{requires_temp_var, try_elide_tail_let};
-use crate::plan::values::{ValuePlan, value_plan_from_statements};
+use crate::plan::values::ValuePlan;
 use crate::utils::wrap_if_struct_literal;
 use syntax::ast::{BinaryOperator, Expression, Literal, MatchArm, Pattern, TypedPattern};
 use syntax::types::Type;
@@ -81,7 +81,11 @@ impl Planner<'_> {
                 target_ty: Some(ty),
             },
         );
-        value_plan_from_statements(vec![declaration, LoweredStatement::If(plan)], result_var)
+        ValuePlan::name(
+            vec![declaration, LoweredStatement::If(plan)],
+            result_var,
+            false,
+        )
     }
 
     /// Lower a value-position `if let`/`match`/`select` to a fresh operand-temp
@@ -102,7 +106,7 @@ impl Planner<'_> {
         );
         let mut setup = vec![declaration];
         setup.extend(block.statements);
-        value_plan_from_statements(setup, result_var)
+        ValuePlan::name(setup, result_var, false)
     }
 
     /// Lower a value-position `loop` to a fresh operand-temp variable.
@@ -123,7 +127,11 @@ impl Planner<'_> {
         self.push_loop(result_var.clone());
         let plan = self.lower_loop_with_header("for {\n".to_string(), body, *needs_label);
         self.pop_loop();
-        value_plan_from_statements(vec![declaration, LoweredStatement::Loop(plan)], result_var)
+        ValuePlan::name(
+            vec![declaration, LoweredStatement::Loop(plan)],
+            result_var,
+            false,
+        )
     }
 
     fn lower_body_until_diverge(
@@ -912,9 +920,9 @@ impl Planner<'_> {
     fn lower_plain_return_tail(&mut self, last: &Expression) -> Vec<LoweredStatement> {
         if requires_temp_var(last) {
             let staged = self.stage_operand(last, ExpressionContext::value());
-            let mut statements = staged.setup;
-            if !staged.value.is_empty() {
-                statements.push(plain_return(staged.value));
+            let (mut statements, value) = staged.into_parts();
+            if !value.is_empty() {
+                statements.push(plain_return(value));
             }
             statements
         } else {

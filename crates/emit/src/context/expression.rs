@@ -1,5 +1,7 @@
 use syntax::types::Type;
 
+use crate::plan::values::CaptureBoundary;
+
 /// Whether the expression is being emitted as the callee of a call.
 /// Independent of [`SyntaxContext`]: a callee can appear inside a condition.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -39,6 +41,7 @@ pub(crate) struct ExpressionContext<'a> {
     expected_slot_type: Option<&'a Type>,
     function_value_abi_target: FunctionValueAbiTarget,
     argument_target: ArgumentTarget,
+    capture_boundary: CaptureBoundary,
 }
 
 impl<'a> ExpressionContext<'a> {
@@ -83,6 +86,11 @@ impl<'a> ExpressionContext<'a> {
         }
     }
 
+    pub(crate) fn with_capture_boundary(mut self, boundary: CaptureBoundary) -> Self {
+        self.capture_boundary = boundary;
+        self
+    }
+
     pub(crate) fn expected_slot_type(self) -> Option<&'a Type> {
         self.expected_slot_type
     }
@@ -104,5 +112,9 @@ impl<'a> ExpressionContext<'a> {
 
     pub(crate) fn argument_flows_to_unknown(self) -> bool {
         matches!(self.argument_target, ArgumentTarget::Unknown)
+    }
+
+    pub(crate) fn capture_boundary(self) -> CaptureBoundary {
+        self.capture_boundary
     }
 }

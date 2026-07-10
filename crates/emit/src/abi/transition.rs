@@ -9,10 +9,10 @@ use crate::context::expression::ExpressionContext;
 use crate::control_flow::fallible::{
     OPTION_SOME_TAG, PARTIAL_ERR_TAG, PARTIAL_OK_TAG, RESULT_OK_TAG,
 };
-use crate::expressions::emission::StagedExpression;
 use crate::plan::bodies::{
     ElseArm, IfPlan, LoweredBlock, LoweredStatement, ReturnForm, ReturnStatementPlan,
 };
+use crate::plan::values::{CaptureBoundary, EvaluationEffect, GoExpression, ValuePlan};
 use crate::write_line;
 use syntax::parse::TUPLE_FIELDS;
 
@@ -638,19 +638,19 @@ fn emit_lowered_tuple_tail(
     {
         let return_ty = planner.return_ctx().expect_ty();
         let slot_tys = tuple_element_types(&planner.facts.peel_alias(&return_ty));
-        let stages: Vec<StagedExpression> = elements
+        let stages: Vec<ValuePlan> = elements
             .iter()
             .enumerate()
             .map(|(i, e)| match slot_tys.get(i) {
                 Some(slot_ty) if planner.facts.is_nullable_option(slot_ty) => {
-                    let mut setup = Vec::new();
-                    let value = lower_nullable_slot_value(planner, &mut setup, e, slot_ty);
-                    planner.staged_from_typed_setup(setup, value, e)
+                    lower_nullable_slot_value(planner, e, slot_ty)
                 }
                 _ => planner.stage_composite(e, ExpressionContext::value()),
             })
             .collect();
-        let (mut statements, parts) = planner.sequence_structured(stages, "_ret");
+        let (mut statements, parts) = planner
+            .sequence_values(stages, CaptureBoundary::SiblingSequence, "_ret")
+            .into_rendered();
         statements.push(multi_value_return(parts));
         return statements;
     }
@@ -728,10 +728,9 @@ fn emit_lowered_partial_tail(
 /// project at runtime.
 fn lower_nullable_slot_value(
     planner: &mut Planner,
-    setup: &mut Vec<LoweredStatement>,
     expression: &syntax::ast::Expression,
     slot_ty: &Type,
-) -> String {
+) -> ValuePlan {
     use syntax::ast::Expression;
     if let Expression::Call {
         expression: callee,
@@ -743,22 +742,28 @@ fn lower_nullable_slot_value(
         return match kind {
             Ok(()) => {
                 debug_assert_eq!(args.len(), 1, "Some(...) takes exactly one arg");
-                let (slot_setup, value) = planner
+                planner
                     .lower_composite_value(&args[0], ExpressionContext::value())
-                    .into_parts();
-                setup.extend(slot_setup);
-                value
+                    .with_pure_constructor_evaluation()
             }
-            Err(()) => "nil".to_string(),
+            Err(()) => ValuePlan::evaluated_literal(
+                Vec::new(),
+                "nil".to_string(),
+                EvaluationEffect::PureCall,
+            ),
         };
     }
     if expression.is_none_literal() {
-        return "nil".to_string();
+        return ValuePlan::evaluated_literal(
+            Vec::new(),
+            "nil".to_string(),
+            EvaluationEffect::PureCall,
+        );
     }
-    let (value_setup, value) = planner
-        .lower_value(expression, ExpressionContext::value())
-        .into_parts();
-    setup.extend(value_setup);
+    let value = planner.lower_value(expression, ExpressionContext::value());
     let inner = planner.go_type_string(&slot_ty.ok_type());
-    planner.plan_option_projection(setup, &value, "unwrap", &inner, false)
+    value.map_rendered_as_computed(|setup, value, _contains_deferred_evaluation| {
+        let projected = planner.plan_option_projection(setup, &value, "unwrap", &inner, false);
+        GoExpression::opaque_with_deferred_evaluation(projected, true)
+    })
 }

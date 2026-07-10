@@ -130,7 +130,11 @@ pub(crate) fn tree_binding_statements(
             let safe_text = binding.path.render_composable(subject_var);
             planner.scope.bind_inline_expr(
                 &binding.lisette_name,
-                InlineExpr::with_refs(safe_text, vec![subject_var.to_string()]),
+                InlineExpr::new(
+                    safe_text,
+                    vec![subject_var.to_string()],
+                    binding.path.contains_deferred_evaluation(),
+                ),
             );
             installed_inlines.push((binding.lisette_name.clone(), previous));
             continue;
@@ -200,6 +204,6 @@ pub(crate) fn tree_assignment_statements(
         let name = registered_name.to_string();
         planner.scope.record_go_use(subject_var);
         let access_expression = binding.path.render(subject_var);
-        statements.push(simple_assign(&name, ValuePlan::Operand(access_expression)));
+        statements.push(simple_assign(&name, ValuePlan::opaque(access_expression)));
     }
 }

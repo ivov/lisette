@@ -611,9 +611,10 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
             })
             .collect();
 
-        let (mut statements, call_str) =
-            self.planner
-                .lower_call(self.value, None, ExpressionContext::value());
+        let (mut statements, call_str) = self
+            .planner
+            .lower_call(self.value, None, ExpressionContext::value())
+            .into_parts();
 
         for (identifier, go_name) in planned.iter().flatten() {
             self.planner.scope.bind(*identifier, go_name);

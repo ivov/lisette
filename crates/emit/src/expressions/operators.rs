@@ -3,7 +3,7 @@ use crate::Renderer;
 use crate::context::expression::ExpressionContext;
 use crate::names::go_name;
 use crate::plan::bodies::LoweredStatement;
-use crate::plan::values::{ValuePlan, value_plan_from_statements};
+use crate::plan::values::{CaptureBoundary, EvaluationEffect, GoExpression, ValuePlan};
 use syntax::ast::{BinaryOperator, Expression, Literal, UnaryOperator};
 use syntax::program::DefinitionBody;
 use syntax::types::Type;
@@ -63,10 +63,19 @@ impl Planner<'_> {
                 && !left_ty.is_complex()
             {
                 let staged = self.stage_operand(left_expression, ctx);
-                return value_plan_from_statements(
-                    staged.setup,
-                    format!("complex(0, {}*{})", staged.value, imag_coef),
-                );
+                return staged.map_rendered_as_computed(|_, value, _| {
+                    GoExpression::call(
+                        GoExpression::name("complex".to_string()),
+                        vec![
+                            GoExpression::literal("0".to_string()),
+                            GoExpression::compact_binary(
+                                GoExpression::opaque_with_deferred_evaluation(value, true),
+                                "*",
+                                GoExpression::literal(imag_coef.to_string()),
+                            ),
+                        ],
+                    )
+                });
             }
             if let Expression::Literal {
                 literal: Literal::Imaginary(imag_coef),
@@ -76,10 +85,19 @@ impl Planner<'_> {
                 && !right_ty.is_complex()
             {
                 let staged = self.stage_operand(right_expression, ctx);
-                return value_plan_from_statements(
-                    staged.setup,
-                    format!("complex(0, {}*{})", staged.value, imag_coef),
-                );
+                return staged.map_rendered_as_computed(|_, value, _| {
+                    GoExpression::call(
+                        GoExpression::name("complex".to_string()),
+                        vec![
+                            GoExpression::literal("0".to_string()),
+                            GoExpression::compact_binary(
+                                GoExpression::opaque_with_deferred_evaluation(value, true),
+                                "*",
+                                GoExpression::literal(imag_coef.to_string()),
+                            ),
+                        ],
+                    )
+                });
             }
         }
 
@@ -96,8 +114,21 @@ impl Planner<'_> {
             self.stage_composite(left_expression, ctx),
             self.stage_composite(right_expression, ctx),
         ];
-        let (setup, values) = self.sequence_structured(stages, "_left");
-        value_plan_from_statements(setup, format!("{} {} {}", values[0], operator, values[1]))
+        let sequenced = self.sequence_values(stages, CaptureBoundary::SiblingSequence, "_left");
+        let effect = sequenced.effect;
+        let setup = sequenced.setup;
+        let mut values = sequenced.values.into_iter();
+        ValuePlan::computed(
+            setup,
+            GoExpression::binary(
+                values.next().expect("binary expression has a left operand"),
+                operator.to_string(),
+                values
+                    .next()
+                    .expect("binary expression has a right operand"),
+            ),
+            effect,
+        )
     }
 
     fn plan_short_circuit_binary(
@@ -108,23 +139,42 @@ impl Planner<'_> {
         ctx: ExpressionContext<'_>,
     ) -> ValuePlan {
         let left_staged = self.stage_composite(left_expression, ctx);
+        let left_effect = left_staged.evaluation.effect;
+        let left_contains_deferred_evaluation =
+            left_staged.expression.contains_deferred_evaluation();
+        let (left_setup, left_value) = left_staged.into_parts();
 
         // Wrap RHS setup in an IIFE so it runs only when control reaches the
         // RHS. Hoisting it before the operator would defeat short-circuit.
         let right_staged = self.stage_composite(right_expression, ctx);
-        let right_string = if right_staged.setup.is_empty() {
-            right_staged.value
+        let right_effect = right_staged.evaluation.effect;
+        let right_contains_deferred_evaluation =
+            right_staged.expression.contains_deferred_evaluation();
+        let (right_setup, right_value) = right_staged.into_parts();
+        let right_string = if right_setup.is_empty() {
+            right_value
         } else {
             format!(
                 "func() bool {{\n{}return {}\n}}()",
-                Renderer.render_setup(&right_staged.setup),
-                right_staged.value
+                Renderer.render_setup(&right_setup),
+                right_value
             )
         };
 
-        value_plan_from_statements(
-            left_staged.setup,
-            format!("{} {} {}", left_staged.value, operator, right_string),
+        ValuePlan::computed(
+            left_setup,
+            GoExpression::binary(
+                GoExpression::opaque_with_deferred_evaluation(
+                    left_value,
+                    left_contains_deferred_evaluation,
+                ),
+                operator.to_string(),
+                GoExpression::opaque_with_deferred_evaluation(
+                    right_string,
+                    right_contains_deferred_evaluation || !right_setup.is_empty(),
+                ),
+            ),
+            left_effect.combine(right_effect),
         )
     }
 
@@ -148,7 +198,7 @@ impl Planner<'_> {
                 ..
             } = expression
         {
-            return ValuePlan::Operand("-9223372036854775808".to_string());
+            return ValuePlan::literal("-9223372036854775808".to_string());
         }
 
         if matches!(operator, UnaryOperator::Not) {
@@ -161,10 +211,7 @@ impl Planner<'_> {
             UnaryOperator::Deref => "*",
             UnaryOperator::Not => unreachable!("Not handled above"),
         };
-        ValuePlan::Unary {
-            op,
-            inner: Box::new(self.plan_operand(expression, ctx)),
-        }
+        self.plan_operand(expression, ctx).unary(op)
     }
 
     /// Plan `!` (logical-not). Comparisons flip operator because `!` binds
@@ -189,18 +236,25 @@ impl Planner<'_> {
             && flip_preserves_nan(cmp, left, right)
         {
             let plan = self.plan_binary(&flipped, left, right, ctx);
-            let (setup, value) = plan.into_parts();
-            return value_plan_from_statements(setup, wrap(value));
+            return if preserve_parens {
+                plan.parenthesized()
+            } else {
+                plan
+            };
         }
         if matches!(target, Expression::Call { .. }) {
             let mut setup: Vec<LoweredStatement> = Vec::new();
             if let Some(negated) = self.try_emit_negated_call(&mut setup, target) {
-                return value_plan_from_statements(setup, wrap(negated));
+                return ValuePlan::computed(
+                    setup,
+                    GoExpression::opaque_with_deferred_evaluation(wrap(negated), true),
+                    EvaluationEffect::EffectfulCall,
+                );
             }
         }
 
         let staged = self.stage_operand(expression, ctx);
-        value_plan_from_statements(staged.setup, format!("!{}", staged.value))
+        staged.unary("!")
     }
 
     fn plan_numeric_binary_with_casts(
@@ -215,22 +269,33 @@ impl Planner<'_> {
             self.stage_operand(left_expression, ctx),
             self.stage_operand(right_expression, ctx),
         ];
-        let (setup, values) = self.sequence_structured(stages, "_left");
-        let left_string = values[0].clone();
-        let right_string = values[1].clone();
-
-        let left_string = match &info.cast_left_to {
-            Some(ty) => format!("{}({})", self.go_type_string(ty), left_string),
-            None => left_string,
-        };
-
-        let right_string = match &info.cast_right_to {
-            Some(ty) => format!("{}({})", self.go_type_string(ty), right_string),
-            None => right_string,
-        };
-
-        let result = format!("{} {} {}", left_string, operator, right_string);
-        value_plan_from_statements(setup, result)
+        let sequenced = self.sequence_values(stages, CaptureBoundary::SiblingSequence, "_left");
+        let effect = sequenced.effect;
+        let setup = sequenced.setup;
+        let mut values = sequenced.values.into_iter();
+        let mut left = values
+            .next()
+            .expect("numeric binary expression has a left operand");
+        let mut right = values
+            .next()
+            .expect("numeric binary expression has a right operand");
+        if let Some(ty) = &info.cast_left_to {
+            left = GoExpression::Conversion {
+                go_type: self.go_type_string(ty),
+                value: Box::new(left),
+            };
+        }
+        if let Some(ty) = &info.cast_right_to {
+            right = GoExpression::Conversion {
+                go_type: self.go_type_string(ty),
+                value: Box::new(right),
+            };
+        }
+        ValuePlan::computed(
+            setup,
+            GoExpression::binary(left, operator.to_string(), right),
+            effect,
+        )
     }
 }
 

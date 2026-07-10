@@ -3,14 +3,13 @@ use crate::analyze::inline_uses::region_blocks_inline;
 use crate::context::expression::ExpressionContext;
 use crate::control_flow::fallible::{ConstructorKind, Fallible, FalliblePlanner};
 use crate::definitions::functions::{is_breakless_loop, is_go_never};
-use crate::expressions::emission::StagedExpression;
 use crate::plan::bodies::{
     AssignForm, AssignPlan, BreakValueDisposition, BreakValuePlan, LoweredBlock, LoweredStatement,
     PlacePlan,
 };
 use crate::plan::calls::plan_variadic_spread;
-use crate::plan::values::{ValuePlan, value_plan_from_statements};
-use crate::statements::assignments::{RhsEffects, is_lvalue_chain};
+use crate::plan::values::{CaptureBoundary, EvaluationEffect, GoExpression, ValuePlan};
+use crate::statements::assignments::is_lvalue_chain;
 use crate::types::native::NativeGoType;
 use syntax::ast::{Expression, Literal};
 use syntax::types::Type;
@@ -204,10 +203,10 @@ impl Planner<'_> {
         let value_ty = value.get_type();
         if value_ty.is_unit() || value_ty.is_variable() || value_ty.is_never() {
             let staged = self.stage_operand(value, ExpressionContext::value());
-            let mut statements = staged.setup;
-            if !staged.value.is_empty() {
+            let (mut statements, staged_value) = staged.into_parts();
+            if !staged_value.is_empty() {
                 if matches!(unwrapped, Expression::Call { .. }) {
-                    let line = format!("{}\n", staged.value);
+                    let line = format!("{}\n", staged_value);
                     // A never-typed call (e.g. `panic(...)`) diverges.
                     statements.push(if value_ty.is_never() {
                         LoweredStatement::DivergingRawGo(line)
@@ -215,7 +214,7 @@ impl Planner<'_> {
                         LoweredStatement::RawGo(line)
                     });
                 } else {
-                    statements.push(LoweredStatement::RawGo(format!("_ = {}\n", staged.value)));
+                    statements.push(LoweredStatement::RawGo(format!("_ = {}\n", staged_value)));
                 }
             }
             return statements;
@@ -230,8 +229,8 @@ impl Planner<'_> {
         }
 
         let staged = self.stage_operand(value, ExpressionContext::value());
-        let mut statements = staged.setup;
-        statements.push(LoweredStatement::RawGo(format!("_ = {}\n", staged.value)));
+        let (mut statements, staged_value) = staged.into_parts();
+        statements.push(LoweredStatement::RawGo(format!("_ = {}\n", staged_value)));
         statements
     }
 
@@ -246,7 +245,7 @@ impl Planner<'_> {
         }
         statements.push(simple_assign(
             var,
-            ValuePlan::Operand("struct{}{}".to_string()),
+            ValuePlan::opaque("struct{}{}".to_string()),
         ));
         statements
     }
@@ -338,25 +337,31 @@ impl Planner<'_> {
                     || (kind == Some(ConstructorKind::Failure)
                         && fallible.err_constructor_takes_arg())
                 {
-                    let (arg_setup, call_str) = {
+                    let (arg_setup, call_str, argument_effect) = {
                         let mut fe = FalliblePlanner::new(self, &fallible);
-                        let (arg_setup, arg) = fe
+                        let argument = fe
                             .planner
-                            .lower_composite_value(&args[0], ExpressionContext::value())
-                            .into_parts();
+                            .lower_composite_value(&args[0], ExpressionContext::value());
+                        let argument_effect = argument.evaluation.effect;
+                        let (arg_setup, arg) = argument.into_parts();
                         (
                             arg_setup,
                             fe.format_constructor_call(constructor_name, Some(&arg)),
+                            argument_effect,
                         )
                     };
-                    let value = value_plan_from_statements(arg_setup, call_str);
+                    let value = ValuePlan::plain_call(
+                        arg_setup,
+                        GoExpression::opaque_with_deferred_evaluation(call_str, true),
+                        EvaluationEffect::PureCall.combine(argument_effect),
+                    );
                     vec![simple_assign(target_var, value)]
                 } else {
                     let call_str = {
                         let mut fe = FalliblePlanner::new(self, &fallible);
                         fe.format_constructor_call(constructor_name, None)
                     };
-                    vec![simple_assign(target_var, ValuePlan::Operand(call_str))]
+                    vec![simple_assign(target_var, ValuePlan::opaque(call_str))]
                 }
             }
             Expression::Identifier { .. } => {
@@ -367,7 +372,7 @@ impl Planner<'_> {
                         let mut fe = FalliblePlanner::new(self, &fallible);
                         fe.format_constructor_call(fallible.err_constructor(), None)
                     };
-                    vec![simple_assign(target_var, ValuePlan::Operand(call_str))]
+                    vec![simple_assign(target_var, ValuePlan::opaque(call_str))]
                 } else {
                     self.lower_plain_assign(target_var, expression)
                 }
@@ -480,16 +485,25 @@ impl Planner<'_> {
             };
             return self.lower_branching_to_block(last, &place).statements;
         }
-        let (mut setup, expression_string) = self
-            .lower_value(last, ExpressionContext::value())
-            .into_parts();
-        let mut coercion_buffer = String::new();
-        let expression_string =
-            self.apply_type_coercion(&mut coercion_buffer, target_ty, last, expression_string);
-        if !coercion_buffer.is_empty() {
-            setup.push(LoweredStatement::RawGo(coercion_buffer));
-        }
-        let value = value_plan_from_statements(setup, expression_string);
+        let value = self.lower_value(last, ExpressionContext::value());
+        let value = value.map_rendered_as_computed(
+            |setup, expression_string, contains_deferred_evaluation| {
+                let mut coercion_buffer = String::new();
+                let expression_string = self.apply_type_coercion(
+                    &mut coercion_buffer,
+                    target_ty,
+                    last,
+                    expression_string,
+                );
+                if !coercion_buffer.is_empty() {
+                    setup.push(LoweredStatement::RawGo(coercion_buffer));
+                }
+                GoExpression::opaque_with_deferred_evaluation(
+                    expression_string,
+                    contains_deferred_evaluation,
+                )
+            },
+        );
         vec![simple_assign(var, value)]
     }
 
@@ -525,16 +539,11 @@ impl Planner<'_> {
             is_lvalue_chain(unwrapped) && !self.contains_newtype_access(unwrapped);
 
         let (value, mut statements) = if receiver_is_lvalue {
-            let (args_setup, args_str) = self.lower_append_args(func, args, (**spread).as_ref());
-            let rhs = RhsEffects {
-                has_setup: !args_setup.is_empty(),
-                has_effectful_call: args.iter().any(|a| self.contains_effectful_call(a))
-                    || (**spread)
-                        .as_ref()
-                        .is_some_and(|s| self.contains_effectful_call(s)),
-            };
+            let arguments = self.lower_append_args(func, args, (**spread).as_ref());
             let mut capture: Vec<LoweredStatement> = Vec::new();
-            let receiver_lv = self.emit_left_value_capturing(&mut capture, unwrapped, rhs);
+            let receiver_lv =
+                self.emit_left_value_capturing(&mut capture, unwrapped, Some(&arguments));
+            let (args_setup, args_str) = arguments.into_parts();
             capture.extend(args_setup);
             let value = if args_str.is_empty() {
                 receiver_lv
@@ -549,7 +558,7 @@ impl Planner<'_> {
             (value, setup)
         };
 
-        statements.push(simple_assign(var, ValuePlan::Operand(value)));
+        statements.push(simple_assign(var, ValuePlan::opaque(value)));
         Some(statements)
     }
 
@@ -569,15 +578,31 @@ impl Planner<'_> {
         function: &Expression,
         args: &[Expression],
         spread: Option<&Expression>,
-    ) -> (Vec<LoweredStatement>, String) {
-        let stages: Vec<StagedExpression> = args
+    ) -> ValuePlan {
+        let stages: Vec<ValuePlan> = args
             .iter()
             .map(|a| self.stage_composite(a, ExpressionContext::value()))
             .collect();
         let combine = plan_variadic_spread(function, spread).map(|p| p.combine(0));
-        let (setup, emitted_args) =
-            self.sequence_with_spread_structured(stages, spread, false, "_arg", combine);
-        (setup, emitted_args.join(", "))
+        let sequenced = self.sequence_with_spread_values(
+            stages,
+            spread,
+            false,
+            "_arg",
+            combine,
+            CaptureBoundary::SiblingSequence,
+        );
+        let effect = sequenced.effect;
+        let contains_deferred_evaluation = sequenced.contains_deferred_evaluation();
+        let (setup, emitted_args) = sequenced.into_rendered();
+        ValuePlan::computed(
+            setup,
+            GoExpression::opaque_with_deferred_evaluation(
+                emitted_args.join(", "),
+                contains_deferred_evaluation,
+            ),
+            effect,
+        )
     }
 
     /// Lower `last` as a tail value. Tuple literals widen slot types to the
@@ -603,9 +628,10 @@ impl Planner<'_> {
         if let Expression::Block { items, .. } = expression {
             if ty.is_never() || ty.is_unit() || matches!(ty, Type::Var { .. } | Type::Forall { .. })
             {
-                return value_plan_from_statements(
+                return ValuePlan::computed(
                     self.lower_block_as_body(expression).statements,
-                    String::new(),
+                    GoExpression::opaque(String::new()),
+                    EvaluationEffect::Pure,
                 );
             }
             let (result_var, declaration) = self.operand_temp_declaration(ty);
@@ -617,7 +643,7 @@ impl Planner<'_> {
             } else {
                 statements.extend(body);
             }
-            return value_plan_from_statements(statements, result_var);
+            return ValuePlan::name(statements, result_var, false);
         }
         if let Expression::Loop { .. } = expression {
             return self.plan_loop_as_operand_temp(expression, ty);
@@ -625,13 +651,13 @@ impl Planner<'_> {
         let (result_var, declaration) = self.operand_temp_declaration(ty);
         let mut statements = vec![declaration];
         statements.extend(self.lower_assign(expression, &result_var, Some(ty)));
-        value_plan_from_statements(statements, result_var)
+        ValuePlan::name(statements, result_var, false)
     }
 
     /// Build a `BreakValuePlan` for a `break value` statement.
     pub(crate) fn build_break_value_plan(&mut self, val: &Expression) -> BreakValuePlan {
         let value = self.plan_value(val, ExpressionContext::value());
-        let value_is_empty = value.operand_text().is_some_and(str::is_empty);
+        let value_is_empty = value.is_empty();
         let is_propagate_diverged = value_is_empty && matches!(val, Expression::Propagate { .. });
         let disposition = if is_propagate_diverged {
             BreakValueDisposition::Diverged

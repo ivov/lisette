@@ -6,7 +6,7 @@ use crate::plan::bodies::{
 };
 #[cfg(debug_assertions)]
 use crate::plan::invariants;
-use crate::plan::values::{ValuePlan, render_unary};
+use crate::plan::values::ValuePlan;
 use crate::render::Renderer;
 use crate::write_line;
 
@@ -113,7 +113,7 @@ impl Renderer {
                 self.render_lowered_block(output, body);
             }
             SelectArmPlan::Send { operation, body } => {
-                write_line!(output, "case {}:", operation);
+                write_line!(output, "case {}:", operation.rendered());
                 self.render_lowered_block(output, body);
             }
             SelectArmPlan::Default { body } => {
@@ -426,26 +426,9 @@ impl Renderer {
     /// Render a value plan: emit its setup statements (if any), then return the
     /// value text.
     pub(crate) fn render_value(&self, output: &mut String, plan: &ValuePlan) -> String {
-        match plan {
-            ValuePlan::Operand(value) => value.clone(),
-            ValuePlan::Composite { setup, value } => {
-                for statement in setup {
-                    self.render_statement(output, statement);
-                }
-                value.clone()
-            }
-            ValuePlan::Paren(inner) => {
-                let inner_text = self.render_value(output, inner);
-                format!("({})", inner_text)
-            }
-            ValuePlan::Cast { go_type, inner } => {
-                let inner_text = self.render_value(output, inner);
-                format!("{}({})", go_type, inner_text)
-            }
-            ValuePlan::Unary { op, inner } => {
-                let inner_text = self.render_value(output, inner);
-                render_unary(op, &inner_text)
-            }
+        for statement in &plan.setup {
+            self.render_statement(output, statement);
         }
+        plan.expression.rendered()
     }
 }

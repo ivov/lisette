@@ -1,4 +1,4 @@
-use syntax::ast::{Expression, FormatStringPart, Literal, UnaryOperator};
+use syntax::ast::{Expression, Literal, UnaryOperator};
 use syntax::program::DotAccessKind;
 
 macro_rules! write_line {
@@ -95,55 +95,6 @@ pub(crate) fn group_params(params: &[(String, String)]) -> String {
     parts.join(", ")
 }
 
-/// Whether an expression contains a function call (i.e. is side-effectful).
-/// Temp-lifted forms (if/match/block) return false — after emission they're
-/// just variable names.
-pub(crate) fn contains_call(expression: &Expression) -> bool {
-    match expression.unwrap_parens() {
-        Expression::Call { .. } => true,
-        Expression::Binary { left, right, .. } => contains_call(left) || contains_call(right),
-        Expression::Unary { expression, .. }
-        | Expression::DotAccess { expression, .. }
-        | Expression::Cast { expression, .. }
-        | Expression::Reference { expression, .. } => contains_call(expression),
-        Expression::IndexedAccess {
-            expression, index, ..
-        } => contains_call(expression) || contains_call(index),
-        Expression::Tuple { elements, .. } => elements.iter().any(contains_call),
-        Expression::StructCall {
-            field_assignments,
-            spread,
-            ..
-        } => {
-            field_assignments.iter().any(|f| contains_call(&f.value))
-                || spread.as_expression().is_some_and(contains_call)
-        }
-        Expression::Literal {
-            literal: Literal::Slice(elements),
-            ..
-        } => elements.iter().any(contains_call),
-        Expression::Literal {
-            literal: Literal::FormatString(parts),
-            ..
-        } => parts.iter().any(|part| match part {
-            FormatStringPart::Expression(e) => contains_call(e),
-            FormatStringPart::Text(_) => false,
-        }),
-        Expression::Range { start, end, .. } => {
-            start.as_deref().is_some_and(contains_call) || end.as_deref().is_some_and(contains_call)
-        }
-        Expression::If { .. }
-        | Expression::IfLet { .. }
-        | Expression::Match { .. }
-        | Expression::Block { .. }
-        | Expression::Loop { .. }
-        | Expression::Propagate { .. }
-        | Expression::TryBlock { .. }
-        | Expression::Select { .. } => false,
-        _ => false,
-    }
-}
-
 pub(crate) fn is_scalar_literal(expression: &Expression) -> bool {
     matches!(
         expression.unwrap_parens(),
@@ -162,13 +113,6 @@ pub(crate) fn is_scalar_literal(expression: &Expression) -> bool {
 pub(crate) fn is_order_sensitive(expression: &Expression) -> bool {
     !(is_scalar_literal(expression)
         || matches!(expression.unwrap_parens(), Expression::Identifier { .. }))
-}
-
-/// True for any expression except a scalar constant, i.e. one whose value can
-/// be invalidated by a later sibling's setup, or is a call we should not
-/// re-evaluate.
-pub(crate) fn observable_after_mutation(expression: &Expression) -> bool {
-    !is_scalar_literal(expression)
 }
 
 pub(crate) fn reads_mutable_operand(expression: &Expression) -> bool {

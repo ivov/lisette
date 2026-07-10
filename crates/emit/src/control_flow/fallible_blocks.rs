@@ -7,7 +7,7 @@ use crate::control_flow::fallible::{ConstructorKind, Fallible, FalliblePlanner};
 use crate::definitions::functions::{is_breakless_loop, is_go_never};
 use crate::plan::bodies::{LoweredBlock, LoweredStatement};
 use crate::plan::placement::is_unit_call;
-use crate::plan::values::{ValuePlan, value_plan_from_statements};
+use crate::plan::values::ValuePlan;
 use syntax::ast::Expression;
 use syntax::types::Type;
 
@@ -40,7 +40,7 @@ impl Planner<'_> {
             body,
             closure_close: "}()\n".to_string(),
         }];
-        value_plan_from_statements(setup, result_var)
+        ValuePlan::name(setup, result_var, false)
     }
 
     fn lower_try_body(&mut self, items: &[Expression], fallible: &Fallible) -> LoweredBlock {
@@ -192,7 +192,7 @@ impl Planner<'_> {
             body,
             closure_close: "})\n".to_string(),
         }];
-        value_plan_from_statements(setup, result_var)
+        ValuePlan::name(setup, result_var, false)
     }
 
     fn lower_recover_body_block(

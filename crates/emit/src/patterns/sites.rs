@@ -249,10 +249,10 @@ impl Planner<'_> {
         }
         let var = self.fresh_var(Some("subject"));
         let staged = self.stage_operand(scrutinee, ExpressionContext::value());
-        let mut setup = staged.setup;
+        let (mut setup, value) = staged.into_parts();
         setup.push(LoweredStatement::TempBind {
             name: var.clone(),
-            value: staged.value,
+            value,
         });
         (var, setup)
     }
