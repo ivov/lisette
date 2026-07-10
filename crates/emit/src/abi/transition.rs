@@ -2,8 +2,9 @@ use syntax::types::Type;
 
 use crate::Planner;
 use crate::Renderer;
-use crate::abi::{AbiShape, tuple_element_types};
-use crate::calls::go_interop::{TupleReturnLayout, WrapperTarget};
+use crate::abi::callable::{CallableReturnAbi, OptionReturnAbi, PayloadLayout};
+use crate::abi::tuple_element_types;
+use crate::calls::go_interop::WrapperTarget;
 use crate::context::expression::ExpressionContext;
 use crate::control_flow::fallible::{
     OPTION_SOME_TAG, PARTIAL_ERR_TAG, PARTIAL_OK_TAG, RESULT_OK_TAG,
@@ -42,7 +43,7 @@ pub(crate) fn render_lowered_result_return(
     output: &mut String,
     result_value: &str,
     return_ty: &Type,
-    shape: &AbiShape,
+    shape: &CallableReturnAbi,
 ) {
     let statements = emit_lowered_result_return(planner, result_value, return_ty, shape);
     let block = LoweredBlock { statements };
@@ -60,20 +61,26 @@ fn lowered_zero(planner: &mut Planner, ok_ty: &Type) -> String {
 /// enclosing function's lowered shape (e.g. `[zero, err]`).
 pub(crate) fn lowered_err_values(
     planner: &mut Planner,
-    shape: &AbiShape,
+    shape: &CallableReturnAbi,
     return_ty: &Type,
     err_expr: &str,
 ) -> Vec<String> {
     match shape {
-        AbiShape::BareError => vec![err_expr.to_string()],
-        AbiShape::ResultTuple => {
+        CallableReturnAbi::Result {
+            bare_error: true, ..
+        } => vec![err_expr.to_string()],
+        CallableReturnAbi::Result {
+            bare_error: false, ..
+        } => {
             let ok_ty = planner.facts.peel_alias(return_ty).ok_type();
             vec![lowered_zero(planner, &ok_ty), err_expr.to_string()]
         }
-        AbiShape::PartialTuple | AbiShape::Tuple { .. } => {
+        CallableReturnAbi::Partial { .. } | CallableReturnAbi::Tuple { .. } => {
             unreachable!("not reached for shapes with their own emission paths")
         }
-        AbiShape::CommaOk | AbiShape::NullableReturn => {
+        CallableReturnAbi::Tagged
+        | CallableReturnAbi::Direct
+        | CallableReturnAbi::Option { .. } => {
             unreachable!("Option's failure constructor `None` carries no payload")
         }
     }
@@ -81,15 +88,31 @@ pub(crate) fn lowered_err_values(
 
 /// The lowered Go-return values for a success-constructor payload, in the
 /// enclosing function's lowered shape (e.g. `[ok, "nil"]`).
-pub(crate) fn lowered_ok_values(shape: &AbiShape, ok_expr: &str) -> Vec<String> {
+pub(crate) fn lowered_ok_values(shape: &CallableReturnAbi, ok_expr: &str) -> Vec<String> {
     match shape {
-        AbiShape::BareError => vec!["nil".to_string()],
-        AbiShape::ResultTuple => vec![ok_expr.to_string(), "nil".to_string()],
-        AbiShape::PartialTuple | AbiShape::Tuple { .. } => {
+        CallableReturnAbi::Result {
+            bare_error: true, ..
+        } => vec!["nil".to_string()],
+        CallableReturnAbi::Result {
+            bare_error: false, ..
+        } => vec![ok_expr.to_string(), "nil".to_string()],
+        CallableReturnAbi::Partial { .. } | CallableReturnAbi::Tuple { .. } => {
             unreachable!("not reached for shapes with their own emission paths")
         }
-        AbiShape::CommaOk => vec![ok_expr.to_string(), "true".to_string()],
-        AbiShape::NullableReturn => vec![ok_expr.to_string()],
+        CallableReturnAbi::Option {
+            encoding: OptionReturnAbi::CommaOk,
+            ..
+        } => vec![ok_expr.to_string(), "true".to_string()],
+        CallableReturnAbi::Option {
+            encoding: OptionReturnAbi::Nullable,
+            ..
+        } => vec![ok_expr.to_string()],
+        CallableReturnAbi::Tagged
+        | CallableReturnAbi::Direct
+        | CallableReturnAbi::Option {
+            encoding: OptionReturnAbi::Sentinel(_),
+            ..
+        } => unreachable!("not a lowered Lisette return ABI"),
     }
 }
 
@@ -97,15 +120,21 @@ pub(crate) fn lowered_ok_values(shape: &AbiShape, ok_expr: &str) -> Vec<String> 
 /// lowered shape (e.g. `[zero, "false"]`).
 pub(crate) fn lowered_none_values(
     planner: &mut Planner,
-    shape: &AbiShape,
+    shape: &CallableReturnAbi,
     return_ty: &Type,
 ) -> Vec<String> {
     match shape {
-        AbiShape::CommaOk => {
+        CallableReturnAbi::Option {
+            encoding: OptionReturnAbi::CommaOk,
+            ..
+        } => {
             let inner = planner.facts.peel_alias(return_ty).ok_type();
             vec![lowered_zero(planner, &inner), "false".to_string()]
         }
-        AbiShape::NullableReturn => vec!["nil".to_string()],
+        CallableReturnAbi::Option {
+            encoding: OptionReturnAbi::Nullable,
+            ..
+        } => vec!["nil".to_string()],
         _ => unreachable!("only Option's `None` lacks a payload"),
     }
 }
@@ -116,7 +145,7 @@ pub(crate) fn emit_lowered_result_return(
     planner: &mut Planner,
     result_value: &str,
     return_ty: &Type,
-    shape: &AbiShape,
+    shape: &CallableReturnAbi,
 ) -> Vec<LoweredStatement> {
     planner.require_stdlib();
     let p = result_value;
@@ -125,14 +154,18 @@ pub(crate) fn emit_lowered_result_return(
         lowered_zero(planner, &ok_ty)
     };
     match shape {
-        AbiShape::BareError => vec![
+        CallableReturnAbi::Result {
+            bare_error: true, ..
+        } => vec![
             tag_check(
                 format!("{p}.Tag == {RESULT_OK_TAG}"),
                 vec!["nil".to_string()],
             ),
             multi_value_return(vec![format!("{p}.ErrVal")]),
         ],
-        AbiShape::ResultTuple => {
+        CallableReturnAbi::Result {
+            bare_error: false, ..
+        } => {
             let zero = ok_zero(planner);
             vec![
                 tag_check(
@@ -142,7 +175,7 @@ pub(crate) fn emit_lowered_result_return(
                 multi_value_return(vec![zero, format!("{p}.ErrVal")]),
             ]
         }
-        AbiShape::PartialTuple => {
+        CallableReturnAbi::Partial { .. } => {
             let zero = ok_zero(planner);
             vec![
                 tag_check(
@@ -156,7 +189,10 @@ pub(crate) fn emit_lowered_result_return(
                 multi_value_return(vec![format!("{p}.OkVal"), format!("{p}.ErrVal")]),
             ]
         }
-        AbiShape::CommaOk => {
+        CallableReturnAbi::Option {
+            encoding: OptionReturnAbi::CommaOk,
+            ..
+        } => {
             let zero = ok_zero(planner);
             vec![
                 tag_check(
@@ -166,16 +202,25 @@ pub(crate) fn emit_lowered_result_return(
                 multi_value_return(vec![zero, "false".to_string()]),
             ]
         }
-        AbiShape::NullableReturn => vec![
+        CallableReturnAbi::Option {
+            encoding: OptionReturnAbi::Nullable,
+            ..
+        } => vec![
             tag_check(
                 format!("{p}.Tag == {OPTION_SOME_TAG}"),
                 vec![format!("{p}.SomeVal")],
             ),
             multi_value_return(vec!["nil".to_string()]),
         ],
-        AbiShape::Tuple { arity } => {
+        CallableReturnAbi::Tuple { arity, .. } => {
             emit_lowered_tuple_return(planner, result_value, return_ty, *arity)
         }
+        CallableReturnAbi::Tagged
+        | CallableReturnAbi::Direct
+        | CallableReturnAbi::Option {
+            encoding: OptionReturnAbi::Sentinel(_),
+            ..
+        } => unreachable!("not a lowered Lisette return ABI"),
     }
 }
 
@@ -214,75 +259,46 @@ fn emit_lowered_tuple_return(
     statements
 }
 
-/// Wrap a lowered-callee `call_str` (Go-shaped return) into the Lisette
-/// tagged shape declared by `result_ty`.
-pub(crate) fn lower_callee_abi_wrapping(
-    planner: &mut Planner,
-    shape: &AbiShape,
-    call_str: &str,
-    result_ty: &Type,
-) -> (Vec<LoweredStatement>, String) {
-    match shape {
-        AbiShape::PartialTuple => {
-            let (statements, outcome) = planner.lower_partial_wrapping(
-                call_str,
-                result_ty,
-                TupleReturnLayout::Packed,
-                WrapperTarget::FreshSlot,
-            );
-            (statements, outcome.expect("wrapper produced no slot"))
+impl Planner<'_> {
+    /// Wrap a callable's physical Go result into the Lisette-visible value.
+    pub(crate) fn lower_abi_to_tagged(
+        &mut self,
+        raw_value: &str,
+        abi: &CallableReturnAbi,
+        result_ty: &Type,
+    ) -> (Vec<LoweredStatement>, String) {
+        if abi.is_passthrough() {
+            return (Vec::new(), raw_value.to_string());
         }
-        AbiShape::CommaOk => {
-            let (statements, outcome) = planner.lower_comma_ok_wrapping(
-                call_str,
-                result_ty,
-                TupleReturnLayout::Packed,
-                WrapperTarget::FreshSlot,
-            );
-            (statements, outcome.expect("wrapper produced no slot"))
-        }
-        AbiShape::NullableReturn => {
+        if let CallableReturnAbi::Tuple { arity } = abi {
             let mut statements = Vec::new();
-            let raw_var = planner.hoist_tmp_value_statement(&mut statements, "raw", call_str);
-            let (wrap, outcome) =
-                planner.lower_nil_check_option_wrap(&raw_var, result_ty, WrapperTarget::FreshSlot);
-            statements.extend(wrap);
-            (statements, outcome.expect("wrapper produced no slot"))
-        }
-        AbiShape::ResultTuple | AbiShape::BareError => {
-            let (statements, outcome) = planner.lower_result_wrapping(
-                call_str,
-                result_ty,
-                TupleReturnLayout::Packed,
-                WrapperTarget::FreshSlot,
-            );
-            (statements, outcome.expect("wrapper produced no slot"))
-        }
-        AbiShape::Tuple { arity } => {
-            let mut statements = Vec::new();
-            let temps = planner.create_temp_vars("ret", *arity);
+            let temps = self.create_temp_vars("ret", *arity);
             statements.push(LoweredStatement::RawGo(format!(
                 "{} := {}\n",
                 temps.join(", "),
-                call_str
+                raw_value
             )));
-            let slot_tys = tuple_element_types(&planner.facts.peel_alias(result_ty));
-            let wrapped: Vec<String> = temps
+            let slot_tys = tuple_element_types(&self.facts.peel_alias(result_ty));
+            let values: Vec<String> = temps
                 .iter()
                 .enumerate()
-                .map(|(i, v)| {
+                .map(|(index, value)| {
                     slot_tys
-                        .get(i)
-                        .filter(|slot_ty| planner.facts.is_nullable_option(slot_ty))
+                        .get(index)
+                        .filter(|slot_ty| self.facts.is_nullable_option(slot_ty))
                         .map(|slot_ty| {
-                            planner.plan_nil_check_option_wrap(&mut statements, v, slot_ty)
+                            self.plan_nil_check_option_wrap(&mut statements, value, slot_ty)
                         })
-                        .unwrap_or_else(|| v.clone())
+                        .unwrap_or_else(|| value.clone())
                 })
                 .collect();
-            let tuple = planner.plan_tuple_from_vars(&mut statements, &wrapped, result_ty);
-            (statements, tuple)
+            let tuple = self.plan_tuple_from_vars(&mut statements, &values, result_ty);
+            return (statements, tuple);
         }
+
+        let (wrap, outcome) =
+            self.lower_abi_wrapping(raw_value, abi, result_ty, WrapperTarget::FreshSlot);
+        (wrap, outcome.expect("wrapper produced no slot"))
     }
 }
 
@@ -506,8 +522,8 @@ pub(crate) fn emit_fn_arg_shape_adapter(
     output: &mut String,
     fn_value: &str,
     arg_fn_type: &Type,
-    arg_shape: &AbiShape,
-    target_shape: Option<&AbiShape>,
+    arg_abi: &CallableReturnAbi,
+    target_abi: &CallableReturnAbi,
 ) -> Option<String> {
     let params = arg_fn_type.get_function_params()?;
     let arg_ret = arg_fn_type.get_function_ret()?;
@@ -516,17 +532,14 @@ pub(crate) fn emit_fn_arg_shape_adapter(
     let (param_strs, arg_names) = planner.build_wrapper_params(params);
     let inner_call = format!("{}({})", cb_var, arg_names.join(", "));
 
-    let outer_ret = match target_shape {
-        Some(shape) => planner.render_lowered_return_ty(shape, arg_ret),
-        None => planner.go_type_string(arg_ret),
-    };
+    let outer_ret = planner.render_lowered_return_ty(target_abi, arg_ret);
 
-    let (wrap_statements, tagged) =
-        lower_callee_abi_wrapping(planner, arg_shape, &inner_call, arg_ret);
+    let (wrap_statements, tagged) = planner.lower_abi_to_tagged(&inner_call, arg_abi, arg_ret);
     let mut body = Renderer.render_setup(&wrap_statements);
-    match target_shape {
-        Some(shape) => render_lowered_result_return(planner, &mut body, &tagged, arg_ret, shape),
-        None => write_line!(body, "return {}", tagged),
+    if target_abi.is_passthrough() {
+        write_line!(body, "return {}", tagged);
+    } else {
+        render_lowered_result_return(planner, &mut body, &tagged, arg_ret, target_abi);
     }
 
     Some(format!(
@@ -555,13 +568,13 @@ pub(crate) fn lower_arg_to_tagged(
     let Some(shape) = planner.classify_direct_emission(inner_ret) else {
         return arg_name.to_string();
     };
+    let abi = shape;
 
     let (inner_param_strs, inner_arg_names) = planner.build_wrapper_params(inner_params);
     let inner_call = format!("{}({})", arg_name, inner_arg_names.join(", "));
     let tagged_ret = planner.go_type_string(inner_ret);
 
-    let (wrap_statements, result_var) =
-        lower_callee_abi_wrapping(planner, &shape, &inner_call, inner_ret);
+    let (wrap_statements, result_var) = planner.lower_abi_to_tagged(&inner_call, &abi, inner_ret);
     let mut body = Renderer.render_setup(&wrap_statements);
     write_line!(body, "return {}", result_var);
 
@@ -586,8 +599,10 @@ pub(crate) fn try_emit_lowered_tail_return(
 ) -> Option<Vec<LoweredStatement>> {
     let shape = planner.return_ctx().lowered_shape()?;
     match shape {
-        AbiShape::PartialTuple => Some(emit_lowered_partial_tail(planner, expression)),
-        AbiShape::Tuple { arity } => Some(emit_lowered_tuple_tail(planner, expression, arity)),
+        CallableReturnAbi::Partial { .. } => Some(emit_lowered_partial_tail(planner, expression)),
+        CallableReturnAbi::Tuple { arity, .. } => {
+            Some(emit_lowered_tuple_tail(planner, expression, arity))
+        }
         _ => None,
     }
 }
@@ -596,7 +611,7 @@ fn lowered_tail_fallback(
     planner: &mut Planner,
     expression: &syntax::ast::Expression,
     return_ty: &Type,
-    shape: &AbiShape,
+    shape: &CallableReturnAbi,
     hoist_hint: Option<&str>,
 ) -> Vec<LoweredStatement> {
     let (mut statements, value) = planner
@@ -645,7 +660,7 @@ fn emit_lowered_tuple_tail(
         planner,
         expression,
         &return_ty,
-        &AbiShape::Tuple { arity },
+        &CallableReturnAbi::Tuple { arity },
         Some("tup"),
     )
 }
@@ -702,7 +717,9 @@ fn emit_lowered_partial_tail(
         planner,
         expression,
         &return_ty,
-        &AbiShape::PartialTuple,
+        &CallableReturnAbi::Partial {
+            payload: PayloadLayout::Packed,
+        },
         None,
     )
 }

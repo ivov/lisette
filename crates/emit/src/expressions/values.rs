@@ -2,18 +2,17 @@ use crate::abi::is_tagged_shape_fn_value;
 use crate::expressions::access::struct_call::emit_struct_literal;
 use syntax::program::DefinitionBody;
 
-use crate::GoCallStrategy;
 use crate::Planner;
-use crate::abi::AbiShape;
+use crate::abi::callable::{AbiTransition, CallableReturnAbi, OptionReturnAbi, PayloadLayout};
 use crate::abi::coercion::{Coercion, CoercionDirection};
-use crate::abi::transition::{emit_lisette_callback_wrapper, lower_callee_abi_wrapping};
-use crate::calls::CallBoundary;
+use crate::abi::transition::emit_lisette_callback_wrapper;
 use crate::context::expression::ExpressionContext;
 use crate::expressions::emission::StagedExpression;
 use crate::is_order_sensitive;
 use crate::plan::bodies::{
     ExpressionStatementForm, ExpressionStatementPlan, LoweredBlock, LoweredStatement,
 };
+use crate::plan::calls::CallableOrigin;
 use crate::plan::values::{ValuePlan, value_plan_from_statements};
 use crate::state::bindings::BindingValue;
 use syntax::ast::Expression;
@@ -26,21 +25,28 @@ impl Planner<'_> {
         expression: &Expression,
         ctx: ExpressionContext<'_>,
     ) -> ValuePlan {
-        if let Some(strategy) = self.classify_go_fn_value(expression) {
-            if !self.go_fn_matches_lowered_slot(expression, &strategy, ctx) {
+        if let Some(callee) = self.resolve_callable_value(expression)
+            && matches!(callee.origin, CallableOrigin::GoInterop)
+        {
+            let abi = &callee.abi.result;
+            if !self.go_fn_matches_lowered_slot(expression, abi, ctx) {
                 let mut setup = Vec::new();
-                let value = if self.go_fn_needs_lowered_tuple_adapter(expression, ctx) {
+                let value = if self.go_fn_needs_lowered_tuple_adapter(expression, abi, ctx) {
                     self.emit_go_fn_lowered_tuple_adapter(&mut setup, expression)
-                } else if let GoCallStrategy::Sentinel { value } = &strategy
+                } else if let CallableReturnAbi::Option {
+                    encoding: OptionReturnAbi::Sentinel(value),
+                    ..
+                } = abi
                     && !ctx.forces_tagged_go_function()
                 {
                     self.emit_go_fn_sentinel_adapter(&mut setup, expression, *value)
                 } else {
-                    self.emit_go_fn_wrapper(&mut setup, expression, &strategy)
+                    self.emit_go_fn_wrapper(&mut setup, expression, abi)
                 };
                 return value_plan_from_statements(setup, value);
             }
-        } else if self.is_go_array_return_value(expression) {
+        }
+        if self.is_go_array_return_value(expression) {
             let mut setup = Vec::new();
             let value = self.emit_array_return_wrapper(&mut setup, expression);
             return value_plan_from_statements(setup, value);
@@ -100,7 +106,7 @@ impl Planner<'_> {
     fn go_fn_matches_lowered_slot(
         &self,
         expression: &Expression,
-        strategy: &GoCallStrategy,
+        source: &CallableReturnAbi,
         ctx: ExpressionContext<'_>,
     ) -> bool {
         if ctx.forces_tagged_go_function() {
@@ -110,32 +116,17 @@ impl Planner<'_> {
         let Some(f) = fn_ty.as_function_type() else {
             return false;
         };
-        let Some(shape) = self.classify_direct_emission(&f.return_type) else {
-            return false;
-        };
-        if self.fallible_tuple_return(&f.return_type) {
-            return false;
-        }
-        shape.matches_go_strategy(strategy)
-    }
-
-    /// True for a `Result`/`Partial` whose ok-type is a multi-element tuple, which lowers to one bundled value.
-    fn fallible_tuple_return(&self, return_type: &Type) -> bool {
-        matches!(
-            self.classify_direct_emission(return_type),
-            Some(AbiShape::ResultTuple | AbiShape::PartialTuple)
-        ) && self
-            .facts
-            .peel_alias(return_type)
-            .ok_type()
-            .tuple_arity()
-            .is_some_and(|arity| arity >= 2)
+        let target = self
+            .classify_direct_emission(&f.return_type)
+            .unwrap_or_else(|| self.value_return_abi(&f.return_type));
+        source == &target
     }
 
     /// True when a tuple-ok fallible Go function value must be wrapped to match a lowered slot.
     fn go_fn_needs_lowered_tuple_adapter(
         &self,
         expression: &Expression,
+        source: &CallableReturnAbi,
         ctx: ExpressionContext<'_>,
     ) -> bool {
         if ctx.forces_tagged_go_function() {
@@ -145,7 +136,26 @@ impl Planner<'_> {
         let Some(f) = fn_ty.as_function_type() else {
             return false;
         };
-        self.fallible_tuple_return(&f.return_type)
+        let target = self
+            .classify_direct_emission(&f.return_type)
+            .unwrap_or_else(|| self.value_return_abi(&f.return_type));
+        matches!(
+            (source, target),
+            (
+                CallableReturnAbi::Result {
+                    payload: PayloadLayout::Flattened,
+                    ..
+                } | CallableReturnAbi::Partial {
+                    payload: PayloadLayout::Flattened,
+                },
+                CallableReturnAbi::Result {
+                    payload: PayloadLayout::Packed,
+                    ..
+                } | CallableReturnAbi::Partial {
+                    payload: PayloadLayout::Packed,
+                }
+            )
+        )
     }
 
     /// Plan a value-position leaf expression (one `plan_operand` does not lower
@@ -168,22 +178,25 @@ impl Planner<'_> {
                 let value = self.maybe_lower_tagged_fn_ref(&mut setup, expression, ty, raw, ctx);
                 value_plan_from_statements(setup, value)
             }
-            Expression::Call { ty, .. } => match self.classify_call(expression) {
-                CallBoundary::GoWrapped(strategy) => {
-                    self.lower_go_wrapped_call(expression, &strategy, ty)
+            Expression::Call { ty, .. } => {
+                let plan = self
+                    .plan_call(expression)
+                    .expect("plan_call yields Some for a Call expression");
+                match plan.result_transition {
+                    AbiTransition::Identity => {
+                        let (setup, value) = self.lower_call(expression, Some(ty), ctx);
+                        value_plan_from_statements(setup, value)
+                    }
+                    AbiTransition::WrapToTagged => {
+                        self.lower_abi_wrapped_call(expression, &plan.resolved.abi.result, ty)
+                    }
+                    AbiTransition::LowerFromTagged
+                    | AbiTransition::Reencode
+                    | AbiTransition::Incompatible => {
+                        unreachable!("call results target their Lisette value representation")
+                    }
                 }
-                CallBoundary::LoweredCallee(shape) => {
-                    self.require_stdlib();
-                    let (mut setup, call_str) = self.lower_call(expression, Some(ty), ctx);
-                    let (wrap, value) = lower_callee_abi_wrapping(self, &shape, &call_str, ty);
-                    setup.extend(wrap);
-                    value_plan_from_statements(setup, value)
-                }
-                CallBoundary::Plain => {
-                    let (setup, value) = self.lower_call(expression, Some(ty), ctx);
-                    value_plan_from_statements(setup, value)
-                }
-            },
+            }
             Expression::RawGo { text } => ValuePlan::Operand(text.clone()),
             Expression::Unit { .. } => ValuePlan::Operand("struct{}{}".to_string()),
             Expression::NoOp => ValuePlan::Operand(String::new()),

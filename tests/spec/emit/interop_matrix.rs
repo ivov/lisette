@@ -855,6 +855,21 @@ fn main() {
 }
 
 #[test]
+fn interop_flattened_result_tuple_tail_repackages_payload() {
+    let input = r#"
+import "go:example.com/multi"
+
+fn load() -> Result<(string, int), error> {
+  multi.Load()
+}
+"#;
+    let typedef = r#"
+pub fn Load() -> Result<(string, int), error>
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/multi", typedef)]);
+}
+
+#[test]
 fn interop_array_return_defer() {
     let input = r#"
 import "go:crypto/sha256"

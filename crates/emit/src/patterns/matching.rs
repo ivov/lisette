@@ -1,18 +1,17 @@
-use crate::GoCallStrategy;
 use crate::Planner;
-use crate::abi::AbiShape;
+use crate::abi::callable::CallableReturnAbi;
 use crate::calls::go_interop::NilGuard;
 use crate::context::expression::ExpressionContext;
 use crate::patterns::binding_decls::pattern_binds_name;
 use crate::patterns::tree_emitter::TreePlanner;
 use crate::plan::bodies::{ElseArm, IfPlan, LoweredBlock, LoweredStatement, PlacePlan};
-use crate::plan::calls::{CallPlan, CallReturnShape, CalleePlan};
+use crate::plan::calls::{CallPlan, CallableOrigin};
 use crate::state::bindings::BindingValue;
 use syntax::ast::{Expression, MatchArm, Pattern};
 use syntax::types::Type;
 
 struct FusedShape {
-    shape: AbiShape,
+    shape: CallableReturnAbi,
     nil_guard: Option<NilGuard>,
 }
 
@@ -100,25 +99,26 @@ impl Planner<'_> {
     /// The shape a match subject fuses against: lowered Lisette `Result` callees
     /// and single-value Go `(T, error)` calls. `None` keeps the lift-then-match
     /// path (Partial, Option, comma-ok, flattened multi-returns).
-    fn fusable_result_shape(&self, subject: &Expression, plan: &CallPlan) -> Option<FusedShape> {
-        let (shape, nil_guard) = match (&plan.callee, &plan.return_shape) {
-            (_, CallReturnShape::Lowered(shape)) => (shape.clone(), None),
-            (CalleePlan::GoInterop(GoCallStrategy::Result), _) => {
+    fn fusable_result_shape(
+        &self,
+        subject: &Expression,
+        plan: &CallPlan<'_>,
+    ) -> Option<FusedShape> {
+        let shape = plan.resolved.abi.result.clone();
+        let nil_guard = match &plan.resolved.origin {
+            CallableOrigin::GoInterop
+                if matches!(plan.resolved.abi.result, CallableReturnAbi::Result { .. }) =>
+            {
                 let ok_ty = self.facts.peel_alias(&subject.get_type()).ok_type();
                 if matches!(self.facts.peel_alias(&ok_ty), Type::Tuple(_)) {
                     return None;
                 }
-                let shape = if ok_ty.is_unit() {
-                    AbiShape::BareError
-                } else {
-                    AbiShape::ResultTuple
-                };
-                (shape, self.result_nil_guard(&ok_ty))
+                self.result_nil_guard(&ok_ty)
             }
-            _ => return None,
+            CallableOrigin::GoInterop => return None,
+            _ => None,
         };
-        matches!(shape, AbiShape::ResultTuple | AbiShape::BareError)
-            .then_some(FusedShape { shape, nil_guard })
+        matches!(shape, CallableReturnAbi::Result { .. }).then_some(FusedShape { shape, nil_guard })
     }
 
     /// Fuse the lift+match into one `if err == nil { ... } else { ... }`
@@ -143,8 +143,13 @@ impl Planner<'_> {
         let ok_name = ok_binding.filter(|n| *n != "_");
         let err_name = err_binding.filter(|n| *n != "_");
 
-        let need_val =
-            matches!(shape, AbiShape::ResultTuple) && (ok_name.is_some() || nil_guard.is_some());
+        let need_val = matches!(
+            shape,
+            CallableReturnAbi::Result {
+                bare_error: false,
+                ..
+            }
+        ) && (ok_name.is_some() || nil_guard.is_some());
         let val_var = need_val.then(|| {
             let v = self.fresh_var(Some("ret"));
             self.declare(&v);
@@ -157,12 +162,17 @@ impl Planner<'_> {
         let bind_line = match &val_var {
             Some(v) => format!("{}, {} := {}\n", v, err_var, call_str),
             None => match shape {
-                AbiShape::ResultTuple => format!("_, {} := {}\n", err_var, call_str),
-                AbiShape::BareError => format!("{} := {}\n", err_var, call_str),
-                AbiShape::PartialTuple
-                | AbiShape::CommaOk
-                | AbiShape::NullableReturn
-                | AbiShape::Tuple { .. } => unreachable!("rejected above"),
+                CallableReturnAbi::Result {
+                    bare_error: false, ..
+                } => format!("_, {} := {}\n", err_var, call_str),
+                CallableReturnAbi::Result {
+                    bare_error: true, ..
+                } => format!("{} := {}\n", err_var, call_str),
+                CallableReturnAbi::Tagged
+                | CallableReturnAbi::Direct
+                | CallableReturnAbi::Partial { .. }
+                | CallableReturnAbi::Option { .. }
+                | CallableReturnAbi::Tuple { .. } => unreachable!("rejected above"),
             },
         };
         statements.push(LoweredStatement::RawGo(bind_line));
@@ -212,12 +222,8 @@ impl Planner<'_> {
         Some(statements)
     }
 
-    fn fusable_partial(&self, subject: &Expression, plan: &CallPlan) -> bool {
-        let is_partial = matches!(
-            (&plan.callee, &plan.return_shape),
-            (_, CallReturnShape::Lowered(AbiShape::PartialTuple))
-                | (CalleePlan::GoInterop(GoCallStrategy::Partial), _)
-        );
+    fn fusable_partial(&self, subject: &Expression, plan: &CallPlan<'_>) -> bool {
+        let is_partial = matches!(plan.resolved.abi.result, CallableReturnAbi::Partial { .. });
         if !is_partial {
             return false;
         }
@@ -504,18 +510,21 @@ fn partial_both_bindings(arm: &MatchArm) -> Option<(&str, &str)> {
 
 /// True when an Ok arm has no value to bind: empty `Ok` or `Ok(())`,
 /// only meaningful under `BareError`.
-fn ok_arm_payload_is_omitted(arm: &MatchArm, shape: &AbiShape) -> bool {
+fn ok_arm_payload_is_omitted(arm: &MatchArm, shape: &CallableReturnAbi) -> bool {
     let Pattern::EnumVariant { fields, .. } = &arm.pattern else {
         return false;
     };
     match shape {
-        AbiShape::BareError => {
-            fields.is_empty() || matches!(fields.as_slice(), [Pattern::Unit { .. }])
+        CallableReturnAbi::Result {
+            bare_error: true, ..
+        } => fields.is_empty() || matches!(fields.as_slice(), [Pattern::Unit { .. }]),
+        CallableReturnAbi::Tagged
+        | CallableReturnAbi::Direct
+        | CallableReturnAbi::Result {
+            bare_error: false, ..
         }
-        AbiShape::ResultTuple
-        | AbiShape::PartialTuple
-        | AbiShape::CommaOk
-        | AbiShape::NullableReturn
-        | AbiShape::Tuple { .. } => false,
+        | CallableReturnAbi::Partial { .. }
+        | CallableReturnAbi::Option { .. }
+        | CallableReturnAbi::Tuple { .. } => false,
     }
 }

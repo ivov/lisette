@@ -1,12 +1,13 @@
 use crate::Planner;
+use crate::abi::callable::CallableReturnAbi;
 use crate::abi::coercion::{Coercion, CoercionDirection};
-use crate::calls::go_interop::{GoCallStrategy, WrapperTarget};
+use crate::calls::go_interop::WrapperTarget;
 use crate::context::expression::ExpressionContext;
 use crate::control_flow::fallible::Fallible;
 use crate::escape_reserved;
 use crate::patterns::sites::{AnnotatedPattern, PatternSubject};
 use crate::plan::bodies::{LetForm, LetPlan, LoweredBlock, LoweredStatement};
-use crate::plan::calls::CalleePlan;
+use crate::plan::calls::CallableOrigin;
 use crate::plan::placement::{expression_contains_binding, is_unit_call, requires_temp_var};
 use syntax::ast::{Binding, Expression, Literal, Pattern, UnaryOperator};
 use syntax::types::Type;
@@ -308,14 +309,15 @@ impl Planner<'_> {
             return None;
         }
         let plan = self.plan_call(value)?;
-        let CalleePlan::GoInterop(strategy) = plan.callee else {
+        if !matches!(plan.resolved.origin, CallableOrigin::GoInterop) {
             return None;
-        };
-        if matches!(strategy, GoCallStrategy::Tuple { .. }) {
+        }
+        if matches!(plan.resolved.abi.result, CallableReturnAbi::Tuple { .. }) {
             return None;
         }
         let target = WrapperTarget::Slot(&go_identifier);
-        let statements = self.lower_go_wrapped_call_to(value, &strategy, binding_ty, target)?;
+        let statements =
+            self.lower_abi_wrapped_call_to(value, &plan.resolved.abi.result, binding_ty, target)?;
         // `push_wrapper_slot` / `push_simple_wrapper_value` already declared
         // `go_identifier`; only the binding from the user-name still needs setup.
         self.scope.bind(identifier, go_identifier.as_ref());
@@ -530,13 +532,10 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
             return false;
         };
 
-        let has_multi_return_go_strategy = matches!(
-            self.planner.plan_call(self.value),
-            Some(plan) if matches!(
-                &plan.callee,
-                CalleePlan::GoInterop(strategy) if strategy.is_multi_return()
-            )
-        );
+        let has_multi_return_go_strategy = self.planner.plan_call(self.value).is_some_and(|plan| {
+            matches!(plan.resolved.origin, CallableOrigin::GoInterop)
+                && plan.resolved.abi.result.is_multi_return()
+        });
         has_multi_return_go_strategy
             && !self.value.get_type().is_result()
             && extract_simple_tuple_vars(&self.binding.pattern).is_some()

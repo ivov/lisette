@@ -1,9 +1,7 @@
 use crate::Planner;
 use crate::Renderer;
-use crate::calls::go_interop::build_tuple_literal;
-use crate::calls::go_interop::go_qualified_name;
+use crate::abi::callable::{CallableReturnAbi, PayloadLayout};
 use crate::calls::go_interop::is_go_receiver;
-use crate::context::expression::ExpressionContext;
 use crate::control_flow::fallible::{
     Fallible, FalliblePlanner, PARTIAL_BOTH_CTOR, PARTIAL_ERR_CTOR, PARTIAL_OK_CTOR,
 };
@@ -11,12 +9,9 @@ use crate::control_flow::propagation::plain_return;
 use crate::is_order_sensitive;
 use crate::names::go_name;
 use crate::plan::bodies::{ElseArm, IfPlan, LoweredBlock, LoweredStatement};
-use crate::plan::values::{ValuePlan, value_plan_from_statements};
 use crate::write_line;
 use syntax::ast::Expression;
 use syntax::types::Type;
-
-use super::GoCallStrategy;
 
 #[derive(Clone, Copy)]
 pub(crate) enum NilGuard {
@@ -54,22 +49,6 @@ pub(crate) enum WrapperTarget<'a> {
     Slot(&'a str),
     /// Emit `return X` per branch; caller skips its trailing return.
     Return,
-}
-
-/// How a fallible callee presents a tuple `Ok`/`Some` payload at the Go
-/// boundary: as separate return values (`Flattened`, e.g. a Go-imported
-/// `(A, B, error)`) or already bundled into one tuple value (`Packed`, the
-/// Lisette `(Tuple_n[...], error)` ABI).
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub(crate) enum TupleReturnLayout {
-    Packed,
-    Flattened,
-}
-
-impl TupleReturnLayout {
-    pub(crate) fn is_flattened(self) -> bool {
-        matches!(self, TupleReturnLayout::Flattened)
-    }
 }
 
 /// `Some(slot_name)` when the wrapper wrote into a fresh or named slot; `None`
@@ -136,7 +115,7 @@ impl Planner<'_> {
         statements: &mut Vec<LoweredStatement>,
         call_str: &str,
         ok_ty: &Type,
-        layout: TupleReturnLayout,
+        layout: PayloadLayout,
     ) -> (String, String) {
         let mut buffer = String::new();
         let result = self.extract_go_returns(&mut buffer, call_str, ok_ty, layout);
@@ -175,54 +154,12 @@ impl Planner<'_> {
 }
 
 impl Planner<'_> {
-    pub(super) fn lower_go_tuple_call_wrapped(
-        &mut self,
-        call_expression: &Expression,
-        arity: usize,
-    ) -> ValuePlan {
-        let Expression::Call { ty, .. } = call_expression else {
-            unreachable!("lower_go_tuple_call_wrapped called with non-call expression");
-        };
-
-        let (mut setup, call_str) =
-            self.lower_call(call_expression, None, ExpressionContext::value());
-
-        let temp_vars = self.create_temp_vars("ret", arity);
-        setup.push(LoweredStatement::RawGo(format!(
-            "{} := {}\n",
-            temp_vars.join(", "),
-            call_str
-        )));
-
-        let constructor = build_tuple_literal(self, &temp_vars, ty);
-        let tuple = self.hoist_tmp_value_statement(&mut setup, "tup", &constructor);
-        value_plan_from_statements(setup, tuple)
-    }
-
-    pub(super) fn lower_go_partial_call_wrapped(
-        &mut self,
-        call_expression: &Expression,
-        partial_ty: &Type,
-    ) -> ValuePlan {
-        self.require_stdlib();
-        let (mut setup, call_str) =
-            self.lower_call(call_expression, None, ExpressionContext::value());
-        let (wrap_setup, outcome) = self.lower_partial_wrapping(
-            &call_str,
-            partial_ty,
-            TupleReturnLayout::Flattened,
-            WrapperTarget::FreshSlot,
-        );
-        setup.extend(wrap_setup);
-        value_plan_from_statements(setup, outcome.expect("wrapper produced no slot"))
-    }
-
     /// Lower a `(T, error)` Go return into a tagged `Partial`.
     pub(crate) fn lower_partial_wrapping(
         &mut self,
         call_str: &str,
         partial_ty: &Type,
-        layout: TupleReturnLayout,
+        layout: PayloadLayout,
         target: WrapperTarget<'_>,
     ) -> (Vec<LoweredStatement>, WrapperOutcome) {
         let ok_ty = partial_ty.ok_type();
@@ -304,24 +241,6 @@ impl Planner<'_> {
         }
     }
 
-    pub(super) fn lower_go_result_call_wrapped(
-        &mut self,
-        call_expression: &Expression,
-        result_ty: &Type,
-    ) -> ValuePlan {
-        self.require_stdlib();
-        let (mut setup, call_str) =
-            self.lower_call(call_expression, None, ExpressionContext::value());
-        let (wrap_setup, outcome) = self.lower_result_wrapping(
-            &call_str,
-            result_ty,
-            TupleReturnLayout::Flattened,
-            WrapperTarget::FreshSlot,
-        );
-        setup.extend(wrap_setup);
-        value_plan_from_statements(setup, outcome.expect("wrapper produced no slot"))
-    }
-
     pub(crate) fn go_result_needs_nil_guard(&self, ok_ty: &Type) -> bool {
         ok_ty.is_ref()
             || self
@@ -347,7 +266,7 @@ impl Planner<'_> {
         &mut self,
         call_str: &str,
         result_ty: &Type,
-        layout: TupleReturnLayout,
+        layout: PayloadLayout,
         target: WrapperTarget<'_>,
     ) -> (Vec<LoweredStatement>, WrapperOutcome) {
         let fallible = Fallible::from_type(result_ty).expect("Result type expected");
@@ -475,7 +394,7 @@ impl Planner<'_> {
         output: &mut String,
         call_str: &str,
         ok_ty: &Type,
-        layout: TupleReturnLayout,
+        layout: PayloadLayout,
     ) -> (String, String) {
         if layout.is_flattened()
             && let Type::Tuple(elements) = ok_ty
@@ -493,39 +412,6 @@ impl Planner<'_> {
             write_line!(output, "{}, {} := {}", val_var, err_var, call_str);
             (err_var, val_var)
         }
-    }
-
-    pub(crate) fn classify_go_fn_value(&self, expression: &Expression) -> Option<GoCallStrategy> {
-        let inner = expression.unwrap_parens();
-
-        if let Expression::DotAccess {
-            expression: receiver,
-            ..
-        } = inner
-            && is_go_receiver(receiver)
-        {
-            let fn_type = expression.get_type();
-            let f = fn_type.as_function_type()?;
-            let return_type = f.return_type.clone();
-
-            let go_hints = if let Expression::DotAccess {
-                expression: receiver_expression,
-                member,
-                ..
-            } = inner
-            {
-                go_qualified_name(receiver_expression, member)
-                    .and_then(|name| self.facts.definition(name.as_str()))
-                    .map(|d| d.go_hints().to_vec())
-                    .unwrap_or_default()
-            } else {
-                vec![]
-            };
-
-            return self.facts.classify_go_return_type(&return_type, &go_hints);
-        }
-
-        None
     }
 
     pub(crate) fn is_go_array_return_value(&self, expression: &Expression) -> bool {
@@ -627,7 +513,7 @@ impl Planner<'_> {
         &mut self,
         setup: &mut Vec<LoweredStatement>,
         expression: &Expression,
-        strategy: &GoCallStrategy,
+        abi: &CallableReturnAbi,
     ) -> String {
         self.require_stdlib();
 
@@ -638,35 +524,11 @@ impl Planner<'_> {
         let ret_ty_str = self.go_type_string(&return_type);
 
         let mut statements = Vec::new();
-        let outcome = match strategy {
-            GoCallStrategy::Result => {
-                let (wrap, outcome) = self.lower_result_wrapping(
-                    &call_str,
-                    &return_type,
-                    TupleReturnLayout::Flattened,
-                    WrapperTarget::Return,
-                );
-                statements.extend(wrap);
-                outcome
+        let outcome = match abi {
+            CallableReturnAbi::Tagged | CallableReturnAbi::Direct => {
+                unreachable!("passthrough Go function needs no wrapper")
             }
-            GoCallStrategy::CommaOk => {
-                let (wrap, outcome) = self.lower_comma_ok_wrapping(
-                    &call_str,
-                    &return_type,
-                    TupleReturnLayout::Flattened,
-                    WrapperTarget::Return,
-                );
-                statements.extend(wrap);
-                outcome
-            }
-            GoCallStrategy::NullableReturn => {
-                let raw_var = self.hoist_tmp_value_statement(&mut statements, "raw", &call_str);
-                let (wrap, outcome) =
-                    self.lower_nil_check_option_wrap(&raw_var, &return_type, WrapperTarget::Return);
-                statements.extend(wrap);
-                outcome
-            }
-            GoCallStrategy::Tuple { arity } => {
+            CallableReturnAbi::Tuple { arity } => {
                 let temp_vars = self.create_temp_vars("ret", *arity);
                 statements.push(LoweredStatement::RawGo(format!(
                     "{} := {}\n",
@@ -675,23 +537,9 @@ impl Planner<'_> {
                 )));
                 Some(self.plan_tuple_from_vars(&mut statements, &temp_vars, &return_type))
             }
-            GoCallStrategy::Partial => {
-                let (wrap, outcome) = self.lower_partial_wrapping(
-                    &call_str,
-                    &return_type,
-                    TupleReturnLayout::Flattened,
-                    WrapperTarget::Return,
-                );
-                statements.extend(wrap);
-                outcome
-            }
-            GoCallStrategy::Sentinel { value } => {
-                let (wrap, outcome) = self.lower_sentinel_wrapping(
-                    &call_str,
-                    &return_type,
-                    *value,
-                    WrapperTarget::Return,
-                );
+            _ => {
+                let (wrap, outcome) =
+                    self.lower_abi_wrapping(&call_str, abi, &return_type, WrapperTarget::Return);
                 statements.extend(wrap);
                 outcome
             }

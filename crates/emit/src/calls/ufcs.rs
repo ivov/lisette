@@ -1,6 +1,5 @@
 use crate::calls::dispatch::{CallArgShape, all_type_params_inferrable};
 use crate::calls::native::apply_inline_import;
-use crate::calls::regular::effective_param_type;
 use crate::plan::calls::plan_variadic_spread;
 use rustc_hash::FxHashMap as HashMap;
 
@@ -10,6 +9,7 @@ use crate::expressions::emission::StagedExpression;
 use crate::names::generics::extract_type_mapping;
 use crate::names::go_name;
 use crate::plan::bodies::LoweredStatement;
+use crate::plan::calls::{CallPlan, ResolvedCallee};
 use crate::types::native::NativeGoType;
 use syntax::ast::{Expression, Literal};
 use syntax::program::ReceiverCoercion;
@@ -20,14 +20,12 @@ impl Planner<'_> {
     fn ufcs_type_args(
         &mut self,
         function: &Expression,
-        qualified_name: &str,
-        member: &str,
+        callee: &ResolvedCallee<'_>,
         receiver_ty: &Type,
         type_args: &[Type],
         arg_shape: CallArgShape,
     ) -> Option<String> {
-        let method_key = format!("{}.{}", qualified_name, member);
-        let definition_ty = self.facts.definition(method_key.as_str())?.ty().clone();
+        let definition_ty = callee.declared.as_ref()?;
 
         // A method with no type parameters lowers to a non-generic free function.
         let Type::Forall { vars, body } = &definition_ty else {
@@ -56,10 +54,7 @@ impl Planner<'_> {
             return (!go_type_strs.is_empty()).then(|| format!("[{}]", go_type_strs.join(", ")));
         }
 
-        let receiver_count = match function.get_type() {
-            Type::Function(inst) if inst.params.len() + 1 == f.params.len() => 1,
-            _ => 0,
-        };
+        let receiver_count = callee.receiver_offset.min(1);
         if all_type_params_inferrable(vars, &f.params, receiver_count, arg_shape) {
             return None;
         }
@@ -94,6 +89,7 @@ impl Planner<'_> {
         args: &[Expression],
         type_args: &[Type],
         spread: Option<&Expression>,
+        call_plan: &CallPlan<'_>,
     ) -> (Vec<LoweredStatement>, String) {
         let Expression::DotAccess {
             expression: receiver,
@@ -114,7 +110,7 @@ impl Planner<'_> {
         };
 
         let (mut setup, receiver_arg, emitted_args) =
-            self.lower_ufcs_call_args(function, receiver, args, spread);
+            self.lower_ufcs_call_args(function, receiver, args, spread, &call_plan.resolved);
         let receiver_arg =
             self.apply_receiver_coercion(&mut setup, receiver, receiver_arg, *coercion);
 
@@ -129,6 +125,7 @@ impl Planner<'_> {
 
         let fn_name = self.build_ufcs_qualified_call(
             function,
+            &call_plan.resolved,
             &receiver_ty,
             qualified_name,
             member,
@@ -147,32 +144,29 @@ impl Planner<'_> {
         receiver: &Expression,
         args: &[Expression],
         spread: Option<&Expression>,
+        callee: &ResolvedCallee<'_>,
     ) -> (Vec<LoweredStatement>, String, Vec<String>) {
         // The DotAccess function type curries `self` out, so its params line
         // up 1:1 with the user args. Pair each so a function-typed param
         // suppresses the Go-fn-value identity short-circuit before dispatch
         // into prelude helpers like `lisette.OptionAndThen`.
-        let formal_params: Vec<Type> = function
-            .get_type()
-            .as_function_type()
-            .map_or_else(Vec::new, |f| f.params.clone());
-        let declared_params =
-            self.ufcs_declared_user_params(receiver, function, formal_params.len());
-        let suppress_declared = declared_params
-            .is_none()
-            .then(|| self.callee_declared_params(function, args.len()))
-            .flatten();
         let mut all_stages: Vec<StagedExpression> =
             Vec::with_capacity(1 + args.len() + spread.is_some() as usize);
         all_stages.push(self.stage_operand(receiver, ExpressionContext::value()));
         for (i, arg) in args.iter().enumerate() {
-            let declared = declared_params.and_then(|p| effective_param_type(i, p));
-            let suppress_decl = suppress_declared.and_then(|p| effective_param_type(i, p));
+            let param = callee.abi.param(i);
+            let declared = (!callee.is_prelude_dispatch)
+                .then(|| param.and_then(|param| param.declared.as_ref()))
+                .flatten();
+            let suppress_decl = callee
+                .is_prelude_dispatch
+                .then(|| param.and_then(|param| param.declared.as_ref()))
+                .flatten();
             all_stages.push(self.stage_ufcs_arg(
                 arg,
                 declared,
                 suppress_decl,
-                formal_params.get(i),
+                param.map(|param| &param.instantiated),
             ));
         }
         let combine = plan_variadic_spread(function, spread).map(|p| p.combine(1));
@@ -180,7 +174,14 @@ impl Planner<'_> {
         let (setup, all_values) = self.sequence_args_with_spread_adapter(
             all_stages,
             spread,
-            declared_params,
+            (!callee.is_prelude_dispatch)
+                .then(|| {
+                    callee
+                        .declared
+                        .as_ref()
+                        .and_then(|ty| ty.unwrap_forall().get_function_params())
+                })
+                .flatten(),
             false,
             combine,
         );
@@ -210,6 +211,7 @@ impl Planner<'_> {
     fn build_ufcs_qualified_call(
         &mut self,
         function: &Expression,
+        callee: &ResolvedCallee<'_>,
         receiver_ty: &Type,
         qualified_name: &str,
         member: &str,
@@ -217,20 +219,11 @@ impl Planner<'_> {
         arg_shape: CallArgShape,
     ) -> String {
         let type_args_string = self
-            .ufcs_type_args(
-                function,
-                qualified_name,
-                member,
-                receiver_ty,
-                type_args,
-                arg_shape,
-            )
+            .ufcs_type_args(function, callee, receiver_ty, type_args, arg_shape)
             .unwrap_or_default();
 
-        let method_key = format!("{}.{}", qualified_name, member);
-        let is_public = self
-            .facts
-            .definition(method_key.as_str())
+        let is_public = callee
+            .definition
             .map(|d| d.visibility().is_public())
             .unwrap_or(false)
             || self.method_needs_export(member);
@@ -312,30 +305,6 @@ impl Planner<'_> {
                 emitted_rest.join(", ")
             ),
         )
-    }
-}
-
-impl<'a> Planner<'a> {
-    fn ufcs_declared_user_params(
-        &self,
-        receiver: &Expression,
-        function: &Expression,
-        arg_count: usize,
-    ) -> Option<&'a [Type]> {
-        let receiver_ty = receiver.get_type().strip_refs();
-        let Type::Nominal { id, .. } = &receiver_ty else {
-            return None;
-        };
-        if id.starts_with("prelude.") || go_name::is_go_import(id.as_str()) {
-            return None;
-        }
-        let declared = self
-            .callee_definition(function)?
-            .ty()
-            .unwrap_forall()
-            .get_function_params()?;
-        let self_offset = declared.len().saturating_sub(arg_count);
-        declared.get(self_offset..)
     }
 }
 

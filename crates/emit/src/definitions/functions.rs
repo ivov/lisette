@@ -3,7 +3,7 @@ use rustc_hash::FxHashSet as HashSet;
 use crate::Planner;
 use crate::Renderer;
 use crate::ReturnContext;
-use crate::abi::AbiShape;
+use crate::abi::callable::CallableReturnAbi;
 use crate::context::expression::ExpressionContext;
 use crate::names::go_name;
 use crate::patterns::sites::PatternSubject;
@@ -403,7 +403,7 @@ impl Planner<'_> {
         &mut self,
         function_definition: FunctionDefinitionView<'_>,
         params_to_process: &[Binding],
-        return_shape: Option<&AbiShape>,
+        return_shape: Option<&CallableReturnAbi>,
     ) -> (String, String, Vec<DeferredParamDestructure>) {
         let (params_string, deferred_patterns) = self.emit_function_params(params_to_process);
 

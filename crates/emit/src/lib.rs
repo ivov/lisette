@@ -16,7 +16,6 @@ pub(crate) mod types;
 mod utils;
 
 pub(crate) use analyze::facts::EmitFacts;
-pub(crate) use calls::go_interop::GoCallStrategy;
 pub(crate) use context::lowering::{LineIndex, LoopContext, ReturnContext};
 pub(crate) use definitions::enum_layout::EnumLayout;
 pub(crate) use names::go_name;
@@ -40,6 +39,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 use std::sync::OnceLock;
 
+use abi::callable::{CallableReturnAbi, OptionReturnAbi, PayloadLayout};
 use analyze::facts::{EmitFactsConfig, is_nullable_option};
 use names::constraints::GenericConstraintTable;
 use output::imports::ImportBuilder;
@@ -63,7 +63,7 @@ pub struct EmitOptions {
 
 #[derive(Default)]
 pub(crate) struct GlobalEmitData {
-    pub(crate) go_call_strategies: HashMap<String, GoCallStrategy>,
+    pub(crate) go_callable_returns: HashMap<String, CallableReturnAbi>,
     pub(crate) exported_method_names: HashSet<String>,
     pub(crate) make_function_names: HashMap<String, String>,
 }
@@ -80,7 +80,7 @@ impl GlobalEmitData {
 
         for (key, definition) in definitions.iter() {
             let is_go = go_name::is_go_import(key);
-            globals.register_go_call_strategy(definitions, key, definition, is_go);
+            globals.register_go_callable_return(definitions, key, definition, is_go);
             globals.register_exported_methods(key, definition, is_go);
             globals.register_enum_make_functions(definition);
         }
@@ -88,7 +88,7 @@ impl GlobalEmitData {
         globals
     }
 
-    fn register_go_call_strategy(
+    fn register_go_callable_return(
         &mut self,
         definitions: &HashMap<Symbol, Definition>,
         key: &Symbol,
@@ -100,10 +100,10 @@ impl GlobalEmitData {
                 Type::Forall { body, .. } => body.as_ref(),
                 other => other,
             }
-            && let Some(strategy) =
+            && let Some(result) =
                 classify_go_return_type(definitions, &f.return_type, definition.go_hints())
         {
-            self.go_call_strategies.insert(key.to_string(), strategy);
+            self.go_callable_returns.insert(key.to_string(), result);
         }
     }
 
@@ -165,29 +165,55 @@ pub(crate) fn classify_go_return_type(
     definitions: &HashMap<Symbol, Definition>,
     return_ty: &Type,
     go_hints: &[String],
-) -> Option<GoCallStrategy> {
+) -> Option<CallableReturnAbi> {
+    let payload = || {
+        if return_ty
+            .ok_type()
+            .tuple_arity()
+            .is_some_and(|arity| arity >= 2)
+        {
+            PayloadLayout::Flattened
+        } else {
+            PayloadLayout::Packed
+        }
+    };
     if return_ty.is_partial() {
-        return Some(GoCallStrategy::Partial);
+        return Some(CallableReturnAbi::Partial { payload: payload() });
     }
     if return_ty.is_result() {
-        return Some(GoCallStrategy::Result);
+        return Some(CallableReturnAbi::Result {
+            bare_error: return_ty.ok_type().is_unit(),
+            payload: payload(),
+        });
     }
     if return_ty.is_option() {
         if let Some(value) = sentinel_hint(go_hints) {
-            return Some(GoCallStrategy::Sentinel { value });
+            return Some(CallableReturnAbi::Option {
+                encoding: OptionReturnAbi::Sentinel(value),
+                payload: PayloadLayout::Packed,
+            });
         }
         if !is_nullable_option(definitions, return_ty) {
-            return Some(GoCallStrategy::CommaOk);
+            return Some(CallableReturnAbi::Option {
+                encoding: OptionReturnAbi::CommaOk,
+                payload: payload(),
+            });
         }
         if go_hints.iter().any(|s| s == "comma_ok") {
-            return Some(GoCallStrategy::CommaOk);
+            return Some(CallableReturnAbi::Option {
+                encoding: OptionReturnAbi::CommaOk,
+                payload: payload(),
+            });
         }
-        return Some(GoCallStrategy::NullableReturn);
+        return Some(CallableReturnAbi::Option {
+            encoding: OptionReturnAbi::Nullable,
+            payload: PayloadLayout::Packed,
+        });
     }
     if let Some(arity) = return_ty.tuple_arity()
         && arity >= 2
     {
-        return Some(GoCallStrategy::Tuple { arity });
+        return Some(CallableReturnAbi::Tuple { arity });
     }
     None
 }

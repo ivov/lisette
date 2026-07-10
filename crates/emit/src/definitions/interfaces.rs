@@ -68,9 +68,11 @@ impl Planner<'_> {
             .clone();
         let qualified_id = self.facts.qualified_current(interface_name);
         let hints = self.go_interface_method_hints(&qualified_id, func.name);
-        let return_type = match self.classify_with_go_hints(&raw_return_ty, &hints) {
-            Some(shape) => self.render_lowered_return_ty(&shape, &raw_return_ty),
-            None => self.go_type_string(&raw_return_ty),
+        let return_abi = self.callable_return_abi_with_go_hints(&raw_return_ty, &hints);
+        let return_type = if return_abi.is_lowered() {
+            self.render_lowered_return_ty(&return_abi, &raw_return_ty)
+        } else {
+            self.go_type_string(&raw_return_ty)
         };
 
         let method_name = if is_public || self.method_needs_export(func.name) {

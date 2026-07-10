@@ -2,10 +2,9 @@ use crate::abi::is_tagged_shape_fn_value;
 use crate::calls::dispatch::{
     CallArgShape, all_type_params_inferrable, is_prelude_variant_constructor,
 };
-use crate::calls::go_interop::is_go_receiver;
 
 use crate::Planner;
-use crate::abi::AbiShape;
+use crate::abi::callable::{AbiTransition, CallableParamAbi, CallableReturnAbi};
 use crate::abi::coercion::{Coercion, CoercionDirection, OptionShape, classify_option_shape};
 use crate::abi::transition::{emit_fn_arg_shape_adapter, emit_lisette_callback_wrapper};
 use crate::context::expression::ExpressionContext;
@@ -14,30 +13,17 @@ use crate::expressions::staging::VariadicCombine;
 use crate::names::generics::extract_type_mapping;
 use crate::names::go_name;
 use crate::plan::bodies::LoweredStatement;
-use crate::plan::calls::{ArgumentPlan, CallPlan, CallbackWrapperKind};
-use crate::types::native::NativeGoType;
+use crate::plan::calls::{ArgumentPlan, CallPlan, CallableOrigin, ResolvedCallee};
 use crate::utils::{contains_call, reads_mutable_operand};
 use crate::write_line;
 use syntax::ast::{Expression, Literal};
-use syntax::program::Definition;
 use syntax::types::Type;
 
-struct CalleeAnalysis<'a> {
-    fn_param_types: Vec<Type>,
-    generic_fn_param_types: Option<&'a [Type]>,
-    is_go_call: bool,
-    is_prelude_dispatch: bool,
-}
-
-struct CallArgsContext<'a> {
-    fn_param_types: &'a [Type],
-    generic_fn_param_types: Option<&'a [Type]>,
-    is_go_call: bool,
+struct CallArgsContext<'plan, 'facts> {
+    plan: &'plan CallPlan<'facts>,
     /// Suppresses the Go-fn identity short-circuit on fn-typed params
     /// dispatching into prelude generic helpers (e.g. `OptionAndThen`).
-    is_prelude_dispatch: bool,
-    declared_param_types: Option<&'a [Type]>,
-    spread: Option<&'a Expression>,
+    spread: Option<&'plan Expression>,
     wrap_spread_to_any: bool,
     combine_variadic: Option<VariadicCombine>,
 }
@@ -136,7 +122,7 @@ impl<'a> Planner<'a> {
     pub(super) fn lower_regular_call(
         &mut self,
         call_expression: &Expression,
-        call_plan: &CallPlan,
+        call_plan: &CallPlan<'a>,
         call_ty: Option<&Type>,
         expression_ctx: ExpressionContext<'_>,
     ) -> (Vec<LoweredStatement>, String) {
@@ -174,6 +160,7 @@ impl<'a> Planner<'a> {
 
         let type_args_string = self.resolve_call_type_args(
             function,
+            &call_plan.resolved,
             resolved_type_args,
             call_ty,
             CallArgShape {
@@ -184,14 +171,8 @@ impl<'a> Planner<'a> {
             expression_ctx,
         );
 
-        let analysis = self.analyze_callee(function);
-        let declared_param_types = self.callee_declared_params(function, args.len());
         let args_ctx = CallArgsContext {
-            fn_param_types: &analysis.fn_param_types,
-            generic_fn_param_types: analysis.generic_fn_param_types,
-            is_go_call: analysis.is_go_call,
-            is_prelude_dispatch: analysis.is_prelude_dispatch,
-            declared_param_types,
+            plan: call_plan,
             spread,
             wrap_spread_to_any: spread_needs_any_wrap(function, spread),
             combine_variadic: call_plan.variadic_combine(0),
@@ -233,39 +214,10 @@ impl<'a> Planner<'a> {
         (setup, value)
     }
 
-    fn analyze_callee(&mut self, function: &Expression) -> CalleeAnalysis<'a> {
-        let fn_param_types: Vec<Type> = function
-            .get_type()
-            .unwrap_forall()
-            .get_function_params()
-            .map(<[Type]>::to_vec)
-            .unwrap_or_default();
-        let generic_fn_param_types = self
-            .callee_definition(function)
-            .and_then(|definition| definition.ty().unwrap_forall().get_function_params());
-        let (is_go_call, is_prelude_dispatch) = match function.unwrap_parens() {
-            Expression::DotAccess { expression, .. } => {
-                let is_prelude = matches!(
-                    expression.get_type().strip_refs().unwrap_forall(),
-                    Type::Nominal { id, .. } if id.starts_with("prelude.")
-                );
-                (is_go_receiver(expression), is_prelude)
-            }
-            Expression::Identifier {
-                qualified: Some(q), ..
-            } if q.starts_with("prelude.") => (false, true),
-            _ => (false, false),
-        };
-        CalleeAnalysis {
-            fn_param_types,
-            generic_fn_param_types,
-            is_go_call,
-            is_prelude_dispatch,
-        }
-    }
-
-    fn callee_collapsed_recipe(&self, function: &Expression) -> Option<String> {
-        self.callee_definition(function)?
+    fn callee_collapsed_recipe(&self, callee: &ResolvedCallee<'_>) -> Option<String> {
+        callee.id.as_deref()?;
+        callee
+            .definition?
             .go_type_param_recipe()
             .map(str::to_string)
     }
@@ -276,11 +228,10 @@ impl<'a> Planner<'a> {
     /// recipe must be rebuilt.
     fn collapsed_callee_fully_inferable(
         &self,
-        function: &Expression,
+        callee: &ResolvedCallee<'_>,
         arg_shape: CallArgShape,
     ) -> bool {
-        let Some(Type::Forall { vars, body }) = self.callee_definition(function).map(|d| d.ty())
-        else {
+        let Some(Type::Forall { vars, body }) = callee.declared.as_ref() else {
             return false;
         };
         let Type::Function(f) = body.as_ref() else {
@@ -291,77 +242,16 @@ impl<'a> Planner<'a> {
 
     fn reconstruct_collapsed_call_type_args(
         &mut self,
-        function: &Expression,
+        callee: &ResolvedCallee<'_>,
         recipe: &str,
     ) -> Option<String> {
-        let definition_ty = self.callee_definition(function)?.ty().clone();
+        let definition_ty = callee.declared.clone()?;
         let Type::Forall { body, .. } = definition_ty else {
             return None;
         };
-        let instantiated = function.get_type();
         let mut mapping = rustc_hash::FxHashMap::default();
-        extract_type_mapping(&body, &instantiated, &mut mapping);
+        extract_type_mapping(&body, &callee.instantiated, &mut mapping);
         self.reconstruct_collapsed_type_args(recipe, &mapping)
-    }
-
-    pub(crate) fn callee_definition(&self, function: &Expression) -> Option<&'a Definition> {
-        match function.unwrap_parens() {
-            Expression::Identifier {
-                qualified: Some(q), ..
-            } => self.facts.definition(q.as_str()),
-            Expression::DotAccess {
-                expression: receiver,
-                member,
-                ..
-            } => {
-                let receiver_ty = receiver.get_type();
-                if let Some(module) = receiver_ty.as_import_namespace() {
-                    return self.facts.definition(&format!("{}.{}", module, member));
-                }
-                match receiver_ty.strip_refs() {
-                    Type::Nominal { id, .. } => {
-                        self.facts.definition(&format!("{}.{}", id, member))
-                    }
-                    _ => None,
-                }
-            }
-            _ => None,
-        }
-    }
-
-    fn declared_callee_definition(&self, function: &Expression) -> Option<&'a Definition> {
-        if let Some(definition) = self.callee_definition(function) {
-            return Some(definition);
-        }
-        let Expression::DotAccess {
-            expression: receiver,
-            member,
-            ..
-        } = function.unwrap_parens()
-        else {
-            return None;
-        };
-        let peeled = self.facts.strip_and_peel(&receiver.get_type());
-        if let Some(native) = NativeGoType::from_type(&peeled) {
-            return self
-                .facts
-                .definition(&format!("prelude.{}.{}", native.lisette_name(), member));
-        }
-        match peeled {
-            Type::Nominal { id, .. } => self.facts.definition(&format!("{}.{}", id, member)),
-            _ => None,
-        }
-    }
-
-    pub(crate) fn callee_declared_params(
-        &self,
-        function: &Expression,
-        num_args: usize,
-    ) -> Option<&'a [Type]> {
-        let definition = self.declared_callee_definition(function)?;
-        let params = definition.ty().unwrap_forall().get_function_params()?;
-        let self_offset = params.len().saturating_sub(num_args);
-        params.get(self_offset..)
     }
 
     /// Hoist a Go array-return call into a temp and reslice as `[]T`. Skipped
@@ -384,6 +274,7 @@ impl<'a> Planner<'a> {
     fn resolve_call_type_args(
         &mut self,
         function: &Expression,
+        callee: &ResolvedCallee<'_>,
         type_args: &[Type],
         call_ty: Option<&Type>,
         arg_shape: CallArgShape,
@@ -391,12 +282,12 @@ impl<'a> Planner<'a> {
         ctx: ExpressionContext<'_>,
     ) -> String {
         let has_value_args = arg_shape.value_count > 0 || arg_shape.has_spread;
-        if let Some(recipe) = self.callee_collapsed_recipe(function) {
-            if has_value_args && self.collapsed_callee_fully_inferable(function, arg_shape) {
+        if let Some(recipe) = self.callee_collapsed_recipe(callee) {
+            if has_value_args && self.collapsed_callee_fully_inferable(callee, arg_shape) {
                 return String::new();
             }
             return self
-                .reconstruct_collapsed_call_type_args(function, &recipe)
+                .reconstruct_collapsed_call_type_args(callee, &recipe)
                 .unwrap_or_default();
         }
 
@@ -405,7 +296,8 @@ impl<'a> Planner<'a> {
         let slot_ty = ctx.expected_slot_type();
 
         if type_args_string.is_empty()
-            && let Some(inferred) = self.infer_return_only_type_args(function, arg_shape)
+            && let Some(inferred) =
+                self.infer_return_only_type_args(function, callee.declared.as_ref(), arg_shape)
         {
             type_args_string = match slot_ty {
                 Some(t) => self.prelude_container_type_args(t).unwrap_or(inferred),
@@ -436,7 +328,7 @@ impl<'a> Planner<'a> {
     fn emit_call_args(
         &mut self,
         args: &[Expression],
-        ctx: &CallArgsContext<'_>,
+        ctx: &CallArgsContext<'_, '_>,
     ) -> (Vec<LoweredStatement>, Vec<String>) {
         let stages: Vec<StagedExpression> = args
             .iter()
@@ -450,7 +342,11 @@ impl<'a> Planner<'a> {
         self.sequence_args_with_spread_adapter(
             stages,
             ctx.spread,
-            ctx.generic_fn_param_types,
+            ctx.plan
+                .resolved
+                .declared
+                .as_ref()
+                .and_then(|ty| ty.unwrap_forall().get_function_params()),
             ctx.wrap_spread_to_any,
             ctx.combine_variadic.clone(),
         )
@@ -466,29 +362,30 @@ impl<'a> Planner<'a> {
         &mut self,
         arg: &Expression,
         index: usize,
-        ctx: &CallArgsContext<'_>,
+        ctx: &CallArgsContext<'_, '_>,
     ) -> (Vec<LoweredStatement>, String) {
-        let effective_param_ty = effective_param_type(index, ctx.fn_param_types);
-        let generic_param_ty = ctx
-            .generic_fn_param_types
-            .and_then(|params| effective_param_type(index, params));
-        let declared_param_ty = ctx
-            .declared_param_types
-            .and_then(|params| effective_param_type(index, params));
+        let param = ctx.plan.resolved.abi.param(index);
+        let effective_param_ty = param.map(|param| &param.instantiated);
+        let generic_param_ty = param.and_then(|param| param.declared.as_ref());
+        let declared_param_ty = generic_param_ty;
 
-        let plan = self.plan_argument(
-            arg,
-            ctx,
-            effective_param_ty,
-            generic_param_ty,
-            declared_param_ty,
-        );
+        let plan = ctx
+            .plan
+            .arguments
+            .get(index)
+            .expect("CallPlan has one argument plan per argument");
 
         match plan {
-            ArgumentPlan::GoCallbackAdapter(kind) => self.lower_callback_wrapper(
+            ArgumentPlan::GoCallbackAdapter {
+                source,
+                target,
+                transition,
+            } => self.lower_callback_wrapper(
                 arg,
                 effective_param_ty.expect("GoCallbackAdapter requires effective_param_ty"),
-                kind,
+                source,
+                target,
+                *transition,
             ),
             ArgumentPlan::LoweredFnShapeAdapter => self
                 .lower_adapt_lowered_fn_arg_shape(
@@ -507,7 +404,7 @@ impl<'a> Planner<'a> {
             ArgumentPlan::TaggedGoLowering => {
                 let target =
                     effective_param_ty.expect("TaggedGoLowering requires effective_param_ty");
-                let arg_ctx = direct_arg_emit_ctx(ctx, Some(target), true);
+                let arg_ctx = direct_arg_emit_ctx(Some(target), true);
                 let (mut setup, value) = self.lower_composite_value(arg, arg_ctx).into_parts();
                 let lowered = self.emit_lower_arg_to_tagged(&mut setup, &value, target);
                 (setup, lowered)
@@ -521,21 +418,26 @@ impl<'a> Planner<'a> {
     /// Pre-plan adaptations for a single argument. Mirrors the prior
     /// `try_emit_*` chain in order; the first hit wins. Returns `Direct` for
     /// the fallback path (which still handles tagged-Go suppression inline).
-    fn plan_argument(
+    pub(crate) fn plan_argument(
         &self,
         arg: &Expression,
-        ctx: &CallArgsContext<'_>,
-        effective_param_ty: Option<&Type>,
-        generic_param_ty: Option<&Type>,
-        declared_param_ty: Option<&Type>,
+        callee: &ResolvedCallee<'_>,
+        param: Option<&CallableParamAbi>,
     ) -> ArgumentPlan {
-        if ctx.is_go_call
-            && let Some(kind) = self.detect_callback_wrapper(arg, effective_param_ty)
+        let effective_param_ty = param.map(|param| &param.instantiated);
+        let declared_param_ty = param.and_then(|param| param.declared.as_ref());
+        if matches!(callee.origin, CallableOrigin::GoInterop)
+            && let Some((source, target, transition)) =
+                self.detect_callback_wrapper(arg, effective_param_ty)
         {
-            return ArgumentPlan::GoCallbackAdapter(kind);
+            return ArgumentPlan::GoCallbackAdapter {
+                source,
+                target,
+                transition,
+            };
         }
         if self
-            .detect_lowered_fn_arg_shape(arg, generic_param_ty)
+            .detect_lowered_fn_arg_shape(arg, declared_param_ty)
             .is_some()
         {
             return ArgumentPlan::LoweredFnShapeAdapter;
@@ -546,14 +448,14 @@ impl<'a> Planner<'a> {
         {
             return ArgumentPlan::NullableCoercion;
         }
-        if ctx.is_go_call
+        if matches!(callee.origin, CallableOrigin::GoInterop)
             && self
                 .detect_go_pointer_param_unwrap(arg, effective_param_ty)
                 .is_some()
         {
             return ArgumentPlan::GoPointerUnwrap;
         }
-        let suppress = would_suppress_tagged_go(ctx, declared_param_ty);
+        let suppress = would_suppress_tagged_go(callee, declared_param_ty);
         if suppress
             && self
                 .detect_lower_arg_to_tagged(arg, effective_param_ty)
@@ -567,12 +469,12 @@ impl<'a> Planner<'a> {
     fn lower_direct_arg(
         &mut self,
         arg: &Expression,
-        ctx: &CallArgsContext<'_>,
+        ctx: &CallArgsContext<'_, '_>,
         effective_param_ty: Option<&Type>,
         declared_param_ty: Option<&Type>,
     ) -> (Vec<LoweredStatement>, String) {
-        let suppress = would_suppress_tagged_go(ctx, declared_param_ty);
-        let arg_ctx = direct_arg_emit_ctx(ctx, effective_param_ty, suppress);
+        let suppress = would_suppress_tagged_go(&ctx.plan.resolved, declared_param_ty);
+        let arg_ctx = direct_arg_emit_ctx(effective_param_ty, suppress);
         let (mut setup, value) = self.lower_composite_value(arg, arg_ctx).into_parts();
         let final_value = match effective_param_ty {
             Some(target) => {
@@ -608,7 +510,7 @@ impl<'a> Planner<'a> {
         &self,
         arg: &Expression,
         raw_param_ty: &Type,
-    ) -> Option<(Option<AbiShape>, Type, AbiShape)> {
+    ) -> Option<(CallableReturnAbi, Type, CallableReturnAbi)> {
         let variadic_inner = (raw_param_ty.get_name() == Some("VarArgs"))
             .then(|| raw_param_ty.inner())
             .flatten();
@@ -617,16 +519,18 @@ impl<'a> Planner<'a> {
             .facts
             .resolve_to_function_type(param_ty.unwrap_forall())?;
         let param_ret = param_fn.get_function_ret()?;
-        let param_shape = self.classify_direct_emission(param_ret);
+        let param_abi = self
+            .classify_direct_emission(param_ret)
+            .unwrap_or_else(|| self.value_return_abi(param_ret));
 
         let arg_ty = arg.get_type();
         let arg_fn = self
             .facts
             .resolve_to_function_type(arg_ty.unwrap_forall())?;
         let arg_ret = arg_fn.get_function_ret()?;
-        let arg_shape = self.classify_direct_emission(arg_ret)?;
+        let arg_abi = self.classify_direct_emission(arg_ret)?;
 
-        Some((param_shape, arg_fn, arg_shape))
+        Some((param_abi, arg_fn, arg_abi))
     }
 
     pub(crate) fn detect_lowered_fn_arg_shape(
@@ -638,8 +542,8 @@ impl<'a> Planner<'a> {
             return None;
         }
         let raw_param_ty = generic_param_ty?;
-        let (param_shape, _arg_fn, arg_shape) = self.fn_arg_shapes(arg, raw_param_ty)?;
-        if param_shape.as_ref() == Some(&arg_shape) {
+        let (param_abi, _arg_fn, arg_abi) = self.fn_arg_shapes(arg, raw_param_ty)?;
+        if param_abi == arg_abi {
             return None;
         }
         Some(())
@@ -650,19 +554,13 @@ impl<'a> Planner<'a> {
         arg: &Expression,
         generic_param_ty: &Type,
     ) -> Option<(Vec<LoweredStatement>, String)> {
-        let (param_shape, arg_fn, arg_shape) = self.fn_arg_shapes(arg, generic_param_ty)?;
+        let (param_abi, arg_fn, arg_abi) = self.fn_arg_shapes(arg, generic_param_ty)?;
         let (mut setup, value) = self
             .lower_value(arg, ExpressionContext::value())
             .into_parts();
         let mut buffer = String::new();
-        let adapted = emit_fn_arg_shape_adapter(
-            self,
-            &mut buffer,
-            &value,
-            &arg_fn,
-            &arg_shape,
-            param_shape.as_ref(),
-        )?;
+        let adapted =
+            emit_fn_arg_shape_adapter(self, &mut buffer, &value, &arg_fn, &arg_abi, &param_abi)?;
         if !buffer.is_empty() {
             setup.push(LoweredStatement::RawGo(buffer));
         }
@@ -686,7 +584,9 @@ impl<'a> Planner<'a> {
             .facts
             .resolve_to_function_type(variadic_inner.unwrap_forall())?;
         let param_ret = param_fn.get_function_ret()?;
-        let param_shape = self.classify_direct_emission(param_ret);
+        let param_abi = self
+            .classify_direct_emission(param_ret)
+            .unwrap_or_else(|| self.value_return_abi(param_ret));
 
         let spread_ty = spread.get_type();
         let element_ty = spread_ty.unwrap_forall().inner()?;
@@ -694,9 +594,9 @@ impl<'a> Planner<'a> {
             .facts
             .resolve_to_function_type(element_ty.unwrap_forall())?;
         let arg_ret = arg_fn.get_function_ret()?;
-        let arg_shape = self.classify_direct_emission(arg_ret)?;
+        let arg_abi = self.classify_direct_emission(arg_ret)?;
 
-        if param_shape.as_ref() == Some(&arg_shape) {
+        if param_abi == arg_abi {
             return None;
         }
 
@@ -705,10 +605,7 @@ impl<'a> Planner<'a> {
             .into_parts();
         let src_var = self.hoist_tmp_value_statement(&mut setup, "src", &src_value);
 
-        let target_element_ret = match param_shape.as_ref() {
-            Some(shape) => self.render_lowered_return_ty(shape, arg_ret),
-            None => self.go_type_string(arg_ret),
-        };
+        let target_element_ret = self.render_lowered_return_ty(&param_abi, arg_ret);
         let arg_fn_params = arg_fn.get_function_params().unwrap_or(&[]);
         let param_type_strs: Vec<String> = arg_fn_params
             .iter()
@@ -725,14 +622,8 @@ impl<'a> Planner<'a> {
         let loop_cb = self.fresh_var(Some("cb"));
 
         let mut body = String::new();
-        let closure = emit_fn_arg_shape_adapter(
-            self,
-            &mut body,
-            &loop_cb,
-            &arg_fn,
-            &arg_shape,
-            param_shape.as_ref(),
-        )?;
+        let closure =
+            emit_fn_arg_shape_adapter(self, &mut body, &loop_cb, &arg_fn, &arg_abi, &param_abi)?;
         write_line!(body, "{}[i] = {}", adapted, closure);
 
         setup.push(LoweredStatement::RawGo(format!(
@@ -747,14 +638,12 @@ impl<'a> Planner<'a> {
         Some(self.staged_from_typed_setup(setup, adapted, spread))
     }
 
-    /// Detect whether a Go-call argument needs a callback wrapper. Returns
-    /// `Identity` when the shapes already agree (no wrapping, just emit) and
-    /// `Wrap` when the Lisette callback ABI must be wrapped for the Go param.
+    /// Resolve the source and target callback contracts at a Go call boundary.
     pub(crate) fn detect_callback_wrapper(
         &self,
         arg: &Expression,
         effective_param_ty: Option<&Type>,
-    ) -> Option<CallbackWrapperKind> {
+    ) -> Option<(CallableReturnAbi, CallableReturnAbi, AbiTransition)> {
         let param_fn_ty = effective_param_ty
             .and_then(|param_ty| {
                 self.facts
@@ -769,37 +658,71 @@ impl<'a> Planner<'a> {
                     || f.return_type.tuple_arity().is_some_and(|a| a >= 2)
             })?;
 
-        let arg_ty = arg.get_type();
-        let arg_fn_ty = self.facts.resolve_to_function_type(arg_ty.unwrap_forall());
-        if let Some(Type::Function(arg_f)) = arg_fn_ty.as_ref()
-            && let Type::Function(param_f) = &param_fn_ty
-            && self.classify_direct_emission(&arg_f.return_type).is_some()
-            && self
-                .classify_direct_emission(&param_f.return_type)
-                .is_some()
-        {
-            return Some(CallbackWrapperKind::Identity);
-        }
-        Some(CallbackWrapperKind::Wrap)
+        let Type::Function(param_f) = &param_fn_ty else {
+            return None;
+        };
+        let target = self.classify_direct_emission(&param_f.return_type)?;
+        let source = if is_tagged_shape_fn_value(arg) {
+            CallableReturnAbi::Tagged
+        } else {
+            self.resolve_callable_value(arg)
+                .map(|callee| callee.abi.result)
+                .unwrap_or(CallableReturnAbi::Direct)
+        };
+        let transition = source.transition_to(&target);
+        Some((source, target, transition))
     }
 
     fn lower_callback_wrapper(
         &mut self,
         arg: &Expression,
         effective_param_ty: &Type,
-        kind: CallbackWrapperKind,
+        source: &CallableReturnAbi,
+        target: &CallableReturnAbi,
+        transition: AbiTransition,
     ) -> (Vec<LoweredStatement>, String) {
-        let (mut setup, value) = self
-            .lower_value(arg, ExpressionContext::value())
-            .into_parts();
-        let result = match kind {
-            CallbackWrapperKind::Identity => value,
-            CallbackWrapperKind::Wrap => {
+        let (mut setup, value) = match transition {
+            AbiTransition::Identity => self
+                .lower_value(arg, ExpressionContext::value())
+                .into_parts(),
+            _ => self
+                .plan_operand(
+                    arg,
+                    ExpressionContext::value().with_forced_tagged_go_function(true),
+                )
+                .into_parts(),
+        };
+        let result = match transition {
+            AbiTransition::Identity => value,
+            AbiTransition::LowerFromTagged => {
                 let param_fn_ty = self
                     .facts
                     .resolve_to_function_type(effective_param_ty.unwrap_forall())
-                    .expect("Wrap kind only reached when param resolves to a fn type");
+                    .expect("callback target resolves to a fn type");
                 emit_lisette_callback_wrapper(self, &mut setup, &value, &param_fn_ty)
+            }
+            AbiTransition::WrapToTagged | AbiTransition::Reencode => {
+                let arg_fn_ty = self
+                    .facts
+                    .resolve_to_function_type(arg.get_type().unwrap_forall())
+                    .expect("callback source resolves to a fn type");
+                let mut buffer = String::new();
+                let adapted = emit_fn_arg_shape_adapter(
+                    self,
+                    &mut buffer,
+                    &value,
+                    &arg_fn_ty,
+                    source,
+                    target,
+                )
+                .expect("callback ABI transition has a function signature");
+                if !buffer.is_empty() {
+                    setup.push(LoweredStatement::RawGo(buffer));
+                }
+                adapted
+            }
+            AbiTransition::Incompatible => {
+                unreachable!("type-checked callback ABIs must describe the same result")
             }
         };
         (setup, result)
@@ -909,15 +832,14 @@ fn spread_needs_any_wrap(function: &Expression, spread: Option<&Expression>) -> 
         .is_some_and(|t| !t.is_unknown())
 }
 
-fn would_suppress_tagged_go(ctx: &CallArgsContext<'_>, declared_param_ty: Option<&Type>) -> bool {
+fn would_suppress_tagged_go(callee: &ResolvedCallee<'_>, declared_param_ty: Option<&Type>) -> bool {
     let unwrapped = declared_param_ty.map(|p| p.unwrap_forall());
-    ctx.is_prelude_dispatch && unwrapped.is_some_and(|p| matches!(p, Type::Function(_)))
+    callee.is_prelude_dispatch && unwrapped.is_some_and(|p| matches!(p, Type::Function(_)))
 }
 
 /// Compute the `ExpressionContext` for emitting a Direct or TaggedGoLowering
 /// argument's underlying value via `emit_composite_value`.
 fn direct_arg_emit_ctx<'b>(
-    _ctx: &CallArgsContext<'b>,
     effective_param_ty: Option<&'b Type>,
     suppress: bool,
 ) -> ExpressionContext<'b> {
@@ -926,12 +848,4 @@ fn direct_arg_emit_ctx<'b>(
     ExpressionContext::value()
         .with_forced_tagged_go_function(suppress)
         .with_unknown_argument_target(flows_to_unknown)
-}
-
-pub(crate) fn effective_param_type(index: usize, fn_param_types: &[Type]) -> Option<&Type> {
-    fn_param_types.get(index).or_else(|| {
-        fn_param_types
-            .last()
-            .filter(|t| t.get_name() == Some("VarArgs"))
-    })
 }

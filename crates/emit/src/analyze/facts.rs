@@ -10,11 +10,12 @@ use syntax::program::{
 };
 use syntax::types::{Symbol, Type};
 
+use crate::abi::callable::CallableReturnAbi;
 use crate::classify_go_return_type;
 use crate::context::lowering::LineIndex;
 use crate::names::constraints::GenericConstraintTable;
 use crate::names::go_name;
-use crate::{EmitOptions, GlobalEmitData, GoCallStrategy};
+use crate::{EmitOptions, GlobalEmitData};
 
 pub(crate) struct EmitFactsConfig<'a> {
     pub(crate) definitions: &'a HashMap<Symbol, Definition>,
@@ -106,7 +107,7 @@ impl<'a> EmitFacts<'a> {
         &self,
         return_ty: &Type,
         go_hints: &[String],
-    ) -> Option<GoCallStrategy> {
+    ) -> Option<CallableReturnAbi> {
         classify_go_return_type(self.definitions, return_ty, go_hints)
     }
 
@@ -257,8 +258,8 @@ impl<'a> EmitFacts<'a> {
             .map(String::as_str)
     }
 
-    pub(crate) fn go_call_strategy(&self, qualified_name: &str) -> Option<&GoCallStrategy> {
-        self.globals.go_call_strategies.get(qualified_name)
+    pub(crate) fn go_callable_return(&self, qualified_name: &str) -> Option<&CallableReturnAbi> {
+        self.globals.go_callable_returns.get(qualified_name)
     }
 
     pub(crate) fn resolved_bound_type(&self, span: Span) -> Option<&'a Type> {

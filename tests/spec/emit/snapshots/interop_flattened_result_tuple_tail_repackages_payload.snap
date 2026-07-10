@@ -1,0 +1,31 @@
+---
+source: tests/spec/emit/interop_matrix.rs
+description: |
+  
+  import "go:example.com/multi"
+  
+  fn load() -> Result<(string, int), error> {
+    multi.Load()
+  }
+---
+package main
+
+import (
+	"example.com/multi"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func load() (lisette.Tuple2[string, int], error) {
+	ret_1, ret_2, ret_3 := multi.Load()
+	tup_4 := lisette.MakeTuple2(ret_1, ret_2)
+	var result_5 lisette.Result[lisette.Tuple2[string, int], error]
+	if ret_3 != nil {
+		result_5 = lisette.MakeResultErr[lisette.Tuple2[string, int], error](ret_3)
+	} else {
+		result_5 = lisette.MakeResultOk[lisette.Tuple2[string, int], error](tup_4)
+	}
+	if result_5.Tag == lisette.ResultOk {
+		return result_5.OkVal, nil
+	}
+	return *new(lisette.Tuple2[string, int]), result_5.ErrVal
+}

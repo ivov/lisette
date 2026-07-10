@@ -1,29 +1,42 @@
-use crate::GoCallStrategy;
 use crate::Planner;
-use crate::abi::AbiShape;
+use crate::abi::callable::{AbiTransition, CallableAbi, CallableParamAbi, CallableReturnAbi};
 use crate::calls::go_interop::go_qualified_name;
 use crate::calls::go_interop::is_go_receiver;
 use crate::expressions::staging::VariadicCombine;
 use crate::types::native::NativeGoType;
 use syntax::ast::Expression;
-use syntax::program::{CallKind, NativeTypeKind};
+use syntax::program::{CallKind, Definition, DotAccessKind, NativeTypeKind};
 use syntax::types::Type;
 
 #[derive(Debug)]
-pub(crate) struct CallPlan {
-    pub(crate) callee: CalleePlan,
-    pub(crate) return_shape: CallReturnShape,
+pub(crate) struct CallPlan<'a> {
+    pub(crate) resolved: ResolvedCallee<'a>,
+    pub(crate) arguments: Vec<ArgumentPlan>,
+    pub(crate) result_transition: AbiTransition,
     /// Call-level wrapping (variadic spread, array-return wrapper).
     pub(crate) wrapper: WrapperPlan,
 }
 
-/// AST-level `CallKind` plus emit-side classification.
+/// Canonical identity, signatures, and physical ABI for one callable.
 #[derive(Debug)]
-pub(crate) enum CalleePlan {
+pub(crate) struct ResolvedCallee<'a> {
+    pub(crate) id: Option<String>,
+    pub(crate) origin: CallableOrigin,
+    pub(crate) definition: Option<&'a Definition>,
+    pub(crate) instantiated: Type,
+    pub(crate) declared: Option<Type>,
+    pub(crate) receiver_offset: usize,
+    pub(crate) abi: CallableAbi,
+    pub(crate) is_prelude_dispatch: bool,
+}
+
+/// AST-level `CallKind` plus emit-side classification.
+#[derive(Debug, Clone)]
+pub(crate) enum CallableOrigin {
     /// Regular Lisette function or method call.
     Regular,
-    /// Go interop call. `strategy` describes argument/return handling.
-    GoInterop(GoCallStrategy),
+    /// Go interop call; `ResolvedCallee::abi` describes its physical boundary.
+    GoInterop,
     /// UFCS method call: `receiver.method()` where `method` is a free function.
     UfcsMethod,
     /// Native type constructor: `Channel.new(...)`, `Map.new(...)`.
@@ -40,23 +53,17 @@ pub(crate) enum CalleePlan {
     AssertType,
 }
 
-/// Return-shape adaptation at the call boundary (Go interop is encoded in
-/// `CalleePlan`).
-#[derive(Debug, Clone)]
-pub(crate) enum CallReturnShape {
-    /// No adaptation: rendered call result is used as-is.
-    Direct,
-    /// Lisette callee returns a lowered ABI shape.
-    Lowered(AbiShape),
-}
-
 /// Per-argument adaptation; first applicable wins.
 #[derive(Debug, Clone)]
 pub(crate) enum ArgumentPlan {
     /// No special adaptation beyond the final type coercion.
     Direct,
     /// Wrap a function value in a Go callback adapter (Go calls only).
-    GoCallbackAdapter(CallbackWrapperKind),
+    GoCallbackAdapter {
+        source: CallableReturnAbi,
+        target: CallableReturnAbi,
+        transition: AbiTransition,
+    },
     /// Adapt a lowered-return fn-value arg to the callee's expected shape.
     LoweredFnShapeAdapter,
     /// Nullable `Option` argument flowing into a Go-imported interface:
@@ -66,17 +73,6 @@ pub(crate) enum ArgumentPlan {
     GoPointerUnwrap,
     /// Lower a tagged Go-function value (prelude-dispatch arg).
     TaggedGoLowering,
-}
-
-/// Sub-variants of `ArgumentPlan::GoCallbackAdapter`. `Identity` is the
-/// no-op case where source and target callback ABIs already agree.
-#[derive(Debug, Clone, Copy)]
-pub(crate) enum CallbackWrapperKind {
-    /// Both arg and param callback returns are already lowered; pass through.
-    Identity,
-    /// Wrap the Lisette callback so its tagged returns marshal into the
-    /// callee's expected lowered ABI.
-    Wrap,
 }
 
 /// Call-level wrapping (variadic spread, Go-array return).
@@ -114,7 +110,7 @@ impl VariadicSpreadPlan {
     }
 }
 
-impl CallPlan {
+impl CallPlan<'_> {
     /// Derive a `VariadicCombine` from this plan, given the caller's
     /// `extra_leading` argument count (UFCS adds 1 for the implicit receiver).
     pub(crate) fn variadic_combine(&self, extra_leading: usize) -> Option<VariadicCombine> {
@@ -131,14 +127,16 @@ impl CallPlan {
     }
 }
 
-impl Planner<'_> {
+impl<'a> Planner<'a> {
     /// Build a `CallPlan` for the given expression. Returns `None` for
     /// non-Call expressions.
-    pub(crate) fn plan_call(&self, expression: &Expression) -> Option<CallPlan> {
+    pub(crate) fn plan_call(&self, expression: &Expression) -> Option<CallPlan<'a>> {
         let Expression::Call {
             expression: callee,
+            args,
             call_kind,
             spread,
+            ty,
             ..
         } = expression
         else {
@@ -148,41 +146,267 @@ impl Planner<'_> {
         let function = callee.unwrap_parens();
         let wrapper = self.plan_call_wrapper(function, (**spread).as_ref());
 
-        if let Some(strategy) = self.resolve_go_call_strategy(expression) {
-            return Some(CallPlan {
-                callee: CalleePlan::GoInterop(strategy),
-                return_shape: CallReturnShape::Direct,
-                wrapper,
-            });
-        }
+        let go_return = self.resolve_go_call_abi(expression);
 
         let kind = call_kind.filter(|_| !self.is_local_binding(function));
 
-        let callee_plan = match kind {
-            Some(CallKind::TupleStructConstructor) => CalleePlan::TupleStructConstructor,
-            Some(CallKind::AssertType) => CalleePlan::AssertType,
-            Some(CallKind::UfcsMethod) => CalleePlan::UfcsMethod,
-            Some(CallKind::NativeConstructor(kind)) => CalleePlan::NativeConstructor(kind),
-            Some(CallKind::NativeMethod(kind)) => CalleePlan::NativeMethod(kind),
-            Some(CallKind::NativeMethodIdentifier(kind)) => {
-                CalleePlan::NativeMethodIdentifier(kind)
+        let callee_plan = if is_go_callable(function) {
+            CallableOrigin::GoInterop
+        } else {
+            match kind {
+                Some(CallKind::TupleStructConstructor) => CallableOrigin::TupleStructConstructor,
+                Some(CallKind::AssertType) => CallableOrigin::AssertType,
+                Some(CallKind::UfcsMethod) => CallableOrigin::UfcsMethod,
+                Some(CallKind::NativeConstructor(kind)) => CallableOrigin::NativeConstructor(kind),
+                Some(CallKind::NativeMethod(kind)) => CallableOrigin::NativeMethod(kind),
+                Some(CallKind::NativeMethodIdentifier(kind)) => {
+                    CallableOrigin::NativeMethodIdentifier(kind)
+                }
+                Some(CallKind::ReceiverMethodUfcs { is_public }) => {
+                    CallableOrigin::ReceiverMethodUfcs { is_public }
+                }
+                None | Some(CallKind::Regular) => CallableOrigin::Regular,
             }
-            Some(CallKind::ReceiverMethodUfcs { is_public }) => {
-                CalleePlan::ReceiverMethodUfcs { is_public }
-            }
-            None | Some(CallKind::Regular) => CalleePlan::Regular,
         };
 
-        let return_shape = match self.classify_callee_abi(callee) {
-            Some(shape) => CallReturnShape::Lowered(shape),
-            None => CallReturnShape::Direct,
+        let resolved = self.resolve_callee(
+            function,
+            callee_plan.clone(),
+            go_return.as_ref(),
+            args.len(),
+        );
+        let callee_diverges = resolved
+            .instantiated
+            .get_function_ret()
+            .is_some_and(Type::is_never);
+        let result_transition = if callee_diverges {
+            AbiTransition::Identity
+        } else {
+            resolved
+                .abi
+                .result
+                .transition_to(&self.value_return_abi(ty))
         };
+        debug_assert_ne!(
+            result_transition,
+            AbiTransition::Incompatible,
+            "a typed call must preserve its logical result type"
+        );
+        let arguments = args
+            .iter()
+            .enumerate()
+            .map(|(index, argument)| {
+                let param = resolved.abi.param(index);
+                self.plan_argument(argument, &resolved, param)
+            })
+            .collect();
 
         Some(CallPlan {
-            callee: callee_plan,
-            return_shape,
+            resolved,
+            arguments,
+            result_transition,
             wrapper,
         })
+    }
+
+    fn resolve_callee(
+        &self,
+        function: &Expression,
+        origin: CallableOrigin,
+        go_return: Option<&CallableReturnAbi>,
+        arg_count: usize,
+    ) -> ResolvedCallee<'a> {
+        let (id, definition) = self.resolve_callee_definition(function);
+        let declared = definition.map(|definition| definition.ty().clone());
+        let instantiated = self
+            .facts
+            .resolve_to_function_type(function.get_type().unwrap_forall())
+            .unwrap_or_else(|| function.get_type().unwrap_forall().clone());
+        let declared_params = declared
+            .as_ref()
+            .and_then(|ty| ty.unwrap_forall().get_function_params());
+        let receiver_offset =
+            declared_params.map_or(0, |params| params.len().saturating_sub(arg_count));
+        let params = build_param_abi(&instantiated, declared_params, receiver_offset);
+        let result = match go_return {
+            Some(result) => result.clone(),
+            None => self
+                .classify_callee_abi(function, definition)
+                .unwrap_or_else(|| {
+                    instantiated
+                        .get_function_ret()
+                        .map(|return_ty| self.value_return_abi(return_ty))
+                        .unwrap_or(CallableReturnAbi::Direct)
+                }),
+        };
+        let is_prelude_dispatch = match function.unwrap_parens() {
+            Expression::DotAccess { expression, .. } => {
+                let receiver_ty = self.facts.strip_and_peel(&expression.get_type());
+                matches!(
+                    &receiver_ty,
+                    Type::Nominal { id, .. } if id.starts_with("prelude.")
+                ) || NativeGoType::from_type(&receiver_ty).is_some()
+            }
+            Expression::Identifier {
+                qualified: Some(qualified),
+                ..
+            } => qualified.starts_with("prelude."),
+            _ => false,
+        };
+
+        ResolvedCallee {
+            id,
+            origin,
+            definition,
+            instantiated,
+            declared,
+            receiver_offset,
+            abi: CallableAbi { params, result },
+            is_prelude_dispatch,
+        }
+    }
+
+    pub(crate) fn resolve_callable_value(
+        &self,
+        expression: &Expression,
+    ) -> Option<ResolvedCallee<'a>> {
+        let instantiated = self
+            .facts
+            .resolve_to_function_type(expression.get_type().unwrap_forall())?;
+        let params = instantiated.get_function_params()?;
+        let return_ty = instantiated.get_function_ret()?;
+        let go_return = self.resolve_go_callee_abi(expression, return_ty);
+        let origin = if is_go_callable(expression) {
+            CallableOrigin::GoInterop
+        } else {
+            CallableOrigin::Regular
+        };
+        Some(self.resolve_callee(expression, origin, go_return.as_ref(), params.len()))
+    }
+
+    pub(crate) fn resolve_callee_definition(
+        &self,
+        function: &Expression,
+    ) -> (Option<String>, Option<&'a Definition>) {
+        let primary = self.resolve_callee_id(function);
+        if let Some(id) = primary.as_deref()
+            && let Some(definition) = self.facts.definition(id)
+        {
+            return (primary, Some(definition));
+        }
+
+        match function.unwrap_parens() {
+            Expression::Identifier {
+                value, binding_id, ..
+            } if binding_id.is_none() => {
+                let qualified = self.facts.qualified_current(value);
+                if let Some(definition) = self.facts.definition(&qualified) {
+                    return (Some(qualified), Some(definition));
+                }
+                if let Some(definition) = self.facts.definition(value) {
+                    return (Some(value.to_string()), Some(definition));
+                }
+            }
+            Expression::DotAccess {
+                dot_access_kind:
+                    Some(
+                        DotAccessKind::StructField { .. }
+                        | DotAccessKind::TupleStructField { .. }
+                        | DotAccessKind::TupleElement,
+                    ),
+                ..
+            } => {}
+            Expression::DotAccess {
+                expression, member, ..
+            } => {
+                if let Expression::Identifier { value, .. } = expression.as_ref() {
+                    let module = self.module.module_for_alias(value).unwrap_or(value);
+                    let qualified = format!("{module}.{member}");
+                    if let Some(definition) = self.facts.definition(&qualified) {
+                        return (Some(qualified), Some(definition));
+                    }
+                    let local = self.facts.qualified_current_member(value, member);
+                    if let Some(definition) = self.facts.definition(&local) {
+                        return (Some(local), Some(definition));
+                    }
+                }
+                if let Expression::DotAccess {
+                    expression: inner,
+                    member: type_name,
+                    ..
+                } = expression.as_ref()
+                    && let Expression::Identifier { value: module, .. } = inner.as_ref()
+                {
+                    let module = self.module.module_for_alias(module).unwrap_or(module);
+                    let qualified = format!("{module}.{type_name}.{member}");
+                    if let Some(definition) = self.facts.definition(&qualified) {
+                        return (Some(qualified), Some(definition));
+                    }
+                }
+
+                let receiver = self.facts.strip_and_peel(&expression.get_type());
+                if let Some(native) = NativeGoType::from_type(&receiver) {
+                    let qualified = format!("prelude.{}.{}", native.lisette_name(), member);
+                    if let Some(definition) = self.facts.definition(&qualified) {
+                        return (Some(qualified), Some(definition));
+                    }
+                }
+            }
+            _ => {}
+        }
+
+        (primary, None)
+    }
+
+    pub(crate) fn resolve_callable_params(
+        &self,
+        function: &Expression,
+        arg_count: usize,
+    ) -> Vec<CallableParamAbi> {
+        let (_, definition) = self.resolve_callee_definition(function);
+        let declared = definition.map(Definition::ty);
+        let declared_params = declared.and_then(|ty| ty.unwrap_forall().get_function_params());
+        let receiver_offset =
+            declared_params.map_or(0, |params| params.len().saturating_sub(arg_count));
+        let instantiated = self
+            .facts
+            .resolve_to_function_type(function.get_type().unwrap_forall())
+            .unwrap_or_else(|| function.get_type().unwrap_forall().clone());
+        build_param_abi(&instantiated, declared_params, receiver_offset)
+    }
+
+    fn resolve_callee_id(&self, function: &Expression) -> Option<String> {
+        match function.unwrap_parens() {
+            Expression::Identifier {
+                value,
+                qualified,
+                binding_id,
+                ..
+            } => qualified.as_deref().map(str::to_string).or_else(|| {
+                binding_id
+                    .is_none()
+                    .then(|| self.facts.qualified_current(value))
+            }),
+            Expression::DotAccess {
+                dot_access_kind:
+                    Some(
+                        DotAccessKind::StructField { .. }
+                        | DotAccessKind::TupleStructField { .. }
+                        | DotAccessKind::TupleElement,
+                    ),
+                ..
+            } => None,
+            Expression::DotAccess {
+                expression, member, ..
+            } => go_qualified_name(expression, member).or_else(|| {
+                let receiver = self.facts.strip_and_peel(&expression.get_type());
+                match receiver {
+                    Type::Nominal { id, .. } => Some(format!("{id}.{member}")),
+                    _ => None,
+                }
+            }),
+            _ => None,
+        }
     }
 
     /// Plan call-level wrapping. Detects variadic spread (if a trailing
@@ -209,7 +433,11 @@ impl Planner<'_> {
 
     /// Lowered shape of a callee. Type-driven, so it fires regardless of
     /// whether the callee is a direct ref, local, parameter, or field.
-    pub(crate) fn classify_callee_abi(&self, callee: &Expression) -> Option<AbiShape> {
+    fn classify_callee_abi(
+        &self,
+        callee: &Expression,
+        definition: Option<&Definition>,
+    ) -> Option<CallableReturnAbi> {
         let callee_ty = callee.get_type();
         let unwrapped = callee_ty.unwrap_forall();
         let resolved = self
@@ -264,19 +492,15 @@ impl Planner<'_> {
         {
             return None;
         }
-        let declared_return = self
-            .callee_definition(callee)
-            .and_then(|definition| definition.ty().unwrap_forall().get_function_ret());
+        let declared_return =
+            definition.and_then(|definition| definition.ty().unwrap_forall().get_function_ret());
         let classify_ty = declared_return.unwrap_or(f.return_type.as_ref());
 
         self.classify_direct_emission(classify_ty)
     }
 
     /// Resolve a Go-interop call's strategy.
-    pub(crate) fn resolve_go_call_strategy(
-        &self,
-        expression: &Expression,
-    ) -> Option<GoCallStrategy> {
+    pub(crate) fn resolve_go_call_abi(&self, expression: &Expression) -> Option<CallableReturnAbi> {
         let Expression::Call {
             expression: callee,
             ty,
@@ -286,8 +510,15 @@ impl Planner<'_> {
             return None;
         };
 
-        let inner = callee.unwrap_parens();
+        self.resolve_go_callee_abi(callee, ty)
+    }
 
+    fn resolve_go_callee_abi(
+        &self,
+        callee: &Expression,
+        return_ty: &Type,
+    ) -> Option<CallableReturnAbi> {
+        let inner = callee.unwrap_parens();
         if let Expression::DotAccess {
             expression: receiver_expression,
             member,
@@ -296,25 +527,51 @@ impl Planner<'_> {
             && is_go_receiver(receiver_expression)
         {
             if let Some(qualified_name) = go_qualified_name(receiver_expression, member)
-                && let Some(strategy) = self.facts.go_call_strategy(&qualified_name)
+                && let Some(result) = self.facts.go_callable_return(&qualified_name)
             {
-                return Some(strategy.clone());
+                return Some(result.clone());
             }
             let go_hints = go_qualified_name(receiver_expression, member)
                 .and_then(|name| self.facts.definition(name.as_str()))
                 .map(|d| d.go_hints())
                 .unwrap_or_default();
-            return self.facts.classify_go_return_type(ty, go_hints);
+            return self.facts.classify_go_return_type(return_ty, go_hints);
         }
 
         None
     }
 }
 
+fn build_param_abi(
+    instantiated: &Type,
+    declared: Option<&[Type]>,
+    receiver_offset: usize,
+) -> Vec<CallableParamAbi> {
+    instantiated
+        .get_function_params()
+        .unwrap_or(&[])
+        .iter()
+        .enumerate()
+        .map(|(index, instantiated)| CallableParamAbi {
+            instantiated: instantiated.clone(),
+            declared: declared
+                .and_then(|params| params.get(receiver_offset + index))
+                .cloned(),
+        })
+        .collect()
+}
+
 fn receiver_is_prelude_type(ty: &Type) -> bool {
     matches!(
         ty.strip_refs().unwrap_forall(),
         Type::Nominal { id, .. } if id.starts_with("prelude.")
+    )
+}
+
+fn is_go_callable(expression: &Expression) -> bool {
+    matches!(
+        expression.unwrap_parens(),
+        Expression::DotAccess { expression, .. } if is_go_receiver(expression)
     )
 }
 

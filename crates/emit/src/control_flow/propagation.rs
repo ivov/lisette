@@ -1,7 +1,6 @@
-use crate::GoCallStrategy;
 use crate::Planner;
 use crate::Renderer;
-use crate::abi::AbiShape;
+use crate::abi::callable::{CallableReturnAbi, PayloadLayout};
 use crate::abi::transition;
 use crate::context::expression::ExpressionContext;
 use crate::control_flow::fallible::{ConstructorKind, Fallible, FalliblePlanner};
@@ -10,7 +9,7 @@ use crate::plan::bodies::{
     AssignForm, AssignPlan, LoweredBlock, LoweredStatement, PlacePlan, ReturnForm,
     ReturnStatementPlan,
 };
-use crate::plan::calls::{CallReturnShape, CalleePlan};
+use crate::plan::calls::CallableOrigin;
 use crate::plan::values::{ValuePlan, value_plan_from_statements};
 use syntax::ast::Expression;
 use syntax::types::Type;
@@ -19,7 +18,7 @@ use syntax::types::Type;
 struct WrappedReturnInfo<'a> {
     fallible: &'a Fallible,
     return_ty: &'a Type,
-    lowered: Option<&'a AbiShape>,
+    lowered: Option<&'a CallableReturnAbi>,
 }
 
 pub(crate) fn plain_return(value: String) -> LoweredStatement {
@@ -183,7 +182,15 @@ impl Planner<'_> {
         result_var_name: Option<&str>,
     ) -> Option<(Vec<LoweredStatement>, String)> {
         let plan = self.plan_call(expression)?;
-        if !matches!(plan.callee, CalleePlan::GoInterop(GoCallStrategy::Result)) {
+        if !matches!(plan.resolved.origin, CallableOrigin::GoInterop)
+            || !matches!(
+                plan.resolved.abi.result,
+                CallableReturnAbi::Result {
+                    payload: PayloadLayout::Packed,
+                    ..
+                }
+            )
+        {
             return None;
         }
         let ok_ty = self.facts.peel_alias(&expression.get_type()).ok_type();
@@ -417,7 +424,7 @@ impl Planner<'_> {
         &mut self,
         value: String,
         return_ty: &Type,
-        lowered: Option<&AbiShape>,
+        lowered: Option<&CallableReturnAbi>,
     ) -> Vec<LoweredStatement> {
         let Some(shape) = lowered else {
             return vec![plain_return(value)];
@@ -468,11 +475,17 @@ impl Planner<'_> {
         &mut self,
         args: &[Expression],
         fallible: &Fallible,
-        lowered: Option<&AbiShape>,
+        lowered: Option<&CallableReturnAbi>,
     ) -> Vec<LoweredStatement> {
         let mut statements = Vec::new();
         if let Some(shape) = lowered {
-            let ok_arg = if matches!(shape, AbiShape::BareError) {
+            let ok_arg = if matches!(
+                shape,
+                CallableReturnAbi::Result {
+                    bare_error: true,
+                    ..
+                }
+            ) {
                 if !args.is_empty() {
                     let (setup, _) = self
                         .lower_composite_value(&args[0], ExpressionContext::value())
@@ -511,7 +524,7 @@ impl Planner<'_> {
         args: &[Expression],
         fallible: &Fallible,
         return_ty: &Type,
-        lowered: Option<&AbiShape>,
+        lowered: Option<&CallableReturnAbi>,
     ) -> Vec<LoweredStatement> {
         let mut statements = Vec::new();
         if let Some(shape) = lowered {
@@ -549,7 +562,7 @@ impl Planner<'_> {
         &mut self,
         expression: &Expression,
         return_ty: &Type,
-        lowered: Option<&AbiShape>,
+        lowered: Option<&CallableReturnAbi>,
     ) -> Vec<LoweredStatement> {
         let mut statements = Vec::new();
         if let Some(shape) = lowered
@@ -561,10 +574,10 @@ impl Planner<'_> {
             return statements;
         }
         if let Some(plan) = self.plan_call(expression)
-            && let CalleePlan::GoInterop(strategy) = plan.callee
+            && !plan.resolved.abi.result.is_passthrough()
         {
             let (setup, result_var) = self
-                .lower_go_wrapped_call(expression, &strategy, return_ty)
+                .lower_abi_wrapped_call(expression, &plan.resolved.abi.result, return_ty)
                 .into_parts();
             statements.extend(setup);
             if let Some(shape) = lowered {
@@ -601,16 +614,11 @@ impl Planner<'_> {
     fn callee_matches_lowered_shape(
         &self,
         call_expression: &Expression,
-        enclosing_shape: &AbiShape,
+        enclosing_shape: &CallableReturnAbi,
     ) -> bool {
         let Some(plan) = self.plan_call(call_expression) else {
             return false;
         };
-        match &plan.callee {
-            CalleePlan::GoInterop(strategy) => enclosing_shape.matches_go_strategy(strategy),
-            _ => {
-                matches!(&plan.return_shape, CallReturnShape::Lowered(shape) if shape == enclosing_shape)
-            }
-        }
+        plan.resolved.abi.result == *enclosing_shape
     }
 }

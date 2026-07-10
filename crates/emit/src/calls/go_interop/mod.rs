@@ -1,125 +1,90 @@
 mod nullable;
 mod wrappers;
 
-pub(crate) use wrappers::{NilGuard, TupleReturnLayout, WrapperTarget};
+pub(crate) use wrappers::{NilGuard, WrapperTarget};
 
 use crate::Planner;
-use crate::calls::CallBoundary;
+use crate::abi::callable::{CallableReturnAbi, OptionReturnAbi};
 use crate::context::expression::ExpressionContext;
 use crate::names::go_name;
 use crate::plan::bodies::LoweredStatement;
-use crate::plan::values::ValuePlan;
+use crate::plan::values::{ValuePlan, value_plan_from_statements};
 use syntax::ast::Expression;
 use syntax::types::Type;
 
-#[derive(Debug, Clone)]
-pub(crate) enum GoCallStrategy {
-    /// `(T1, T2, ...)` → tuple struct (arity ≥ 2, no error/bool suffix).
-    Tuple { arity: usize },
-    /// `(T, error)` → `Result<T, Error>`.
-    Result,
-    /// `(T, bool)` → `Option<T>` (non-nullable or `#[go(comma_ok)]`).
-    CommaOk,
-    /// Single pointer/interface return → `Option<Ref<T>>` via nil check.
-    NullableReturn,
-    /// `(T, error)` → `Partial<T, error>` (value and error not exclusive,
-    /// e.g. `io.Reader.Read`).
-    Partial,
-    /// Single `T` return → `Option<T>` via `val != sentinel`.
-    Sentinel { value: i64 },
-}
-
-impl GoCallStrategy {
-    pub(crate) fn is_multi_return(&self) -> bool {
-        !matches!(
-            self,
-            GoCallStrategy::NullableReturn | GoCallStrategy::Sentinel { .. }
-        )
-    }
-}
-
 impl Planner<'_> {
-    /// Lower a Go-imported callee through its ABI bridge.
-    pub(crate) fn lower_go_wrapped_call(
+    /// Lower a raw callable result through its canonical physical ABI.
+    pub(crate) fn lower_abi_wrapped_call(
         &mut self,
         call_expression: &Expression,
-        strategy: &GoCallStrategy,
+        abi: &CallableReturnAbi,
         result_ty: &Type,
     ) -> ValuePlan {
-        match strategy {
-            GoCallStrategy::Tuple { arity } => {
-                self.lower_go_tuple_call_wrapped(call_expression, *arity)
+        let (mut setup, call_str) =
+            self.lower_call(call_expression, None, ExpressionContext::value());
+        let (wrap, value) = self.lower_abi_to_tagged(&call_str, abi, result_ty);
+        setup.extend(wrap);
+        value_plan_from_statements(setup, value)
+    }
+
+    pub(crate) fn lower_abi_wrapping(
+        &mut self,
+        call_str: &str,
+        abi: &CallableReturnAbi,
+        result_ty: &Type,
+        target: WrapperTarget<'_>,
+    ) -> (Vec<LoweredStatement>, Option<String>) {
+        match abi {
+            CallableReturnAbi::Tagged
+            | CallableReturnAbi::Direct
+            | CallableReturnAbi::Tuple { .. } => {
+                unreachable!("direct and tuple results do not use a scalar wrapper")
             }
-            GoCallStrategy::Result => self.lower_go_result_call_wrapped(call_expression, result_ty),
-            GoCallStrategy::Partial => {
-                self.lower_go_partial_call_wrapped(call_expression, result_ty)
+            CallableReturnAbi::Result { payload, .. } => {
+                self.require_stdlib();
+                self.lower_result_wrapping(call_str, result_ty, *payload, target)
             }
-            GoCallStrategy::CommaOk => {
-                self.lower_go_option_call_wrapped(call_expression, result_ty)
+            CallableReturnAbi::Partial { payload } => {
+                self.require_stdlib();
+                self.lower_partial_wrapping(call_str, result_ty, *payload, target)
             }
-            GoCallStrategy::NullableReturn => {
-                self.lower_go_single_return_option_wrapped(call_expression, result_ty)
+            CallableReturnAbi::Option {
+                encoding: OptionReturnAbi::CommaOk,
+                payload,
+            } => self.lower_comma_ok_wrapping(call_str, result_ty, *payload, target),
+            CallableReturnAbi::Option {
+                encoding: OptionReturnAbi::Nullable,
+                ..
+            } => {
+                let mut statements = Vec::new();
+                let raw_var = self.hoist_tmp_value_statement(&mut statements, "raw", call_str);
+                let (wrap, outcome) = self.lower_nil_check_option_wrap(&raw_var, result_ty, target);
+                statements.extend(wrap);
+                (statements, outcome)
             }
-            GoCallStrategy::Sentinel { value } => {
-                self.lower_go_sentinel_call_wrapped(call_expression, result_ty, *value)
-            }
+            CallableReturnAbi::Option {
+                encoding: OptionReturnAbi::Sentinel(value),
+                ..
+            } => self.lower_sentinel_wrapping(call_str, result_ty, *value, target),
         }
     }
 
-    /// `lower_go_wrapped_call` writing into `target`. `None` for `Tuple`.
-    pub(crate) fn lower_go_wrapped_call_to(
+    pub(crate) fn lower_abi_wrapped_call_to(
         &mut self,
         expression: &Expression,
-        strategy: &GoCallStrategy,
+        abi: &CallableReturnAbi,
         result_ty: &Type,
         target: WrapperTarget<'_>,
     ) -> Option<Vec<LoweredStatement>> {
-        if matches!(strategy, GoCallStrategy::Tuple { .. }) {
+        if matches!(
+            abi,
+            CallableReturnAbi::Tagged | CallableReturnAbi::Direct | CallableReturnAbi::Tuple { .. }
+        ) {
             return None;
         }
         let (mut statements, call_str) =
             self.lower_call(expression, None, ExpressionContext::value());
-        let wrap = match strategy {
-            GoCallStrategy::Tuple { .. } => unreachable!("handled above"),
-            GoCallStrategy::Result => {
-                self.require_stdlib();
-                self.lower_result_wrapping(
-                    &call_str,
-                    result_ty,
-                    TupleReturnLayout::Flattened,
-                    target,
-                )
-                .0
-            }
-            GoCallStrategy::CommaOk => {
-                self.lower_comma_ok_wrapping(
-                    &call_str,
-                    result_ty,
-                    TupleReturnLayout::Flattened,
-                    target,
-                )
-                .0
-            }
-            GoCallStrategy::NullableReturn => {
-                let raw_var = self.hoist_tmp_value_statement(&mut statements, "raw", &call_str);
-                self.lower_nil_check_option_wrap(&raw_var, result_ty, target)
-                    .0
-            }
-            GoCallStrategy::Partial => {
-                self.require_stdlib();
-                self.lower_partial_wrapping(
-                    &call_str,
-                    result_ty,
-                    TupleReturnLayout::Flattened,
-                    target,
-                )
-                .0
-            }
-            GoCallStrategy::Sentinel { value } => {
-                self.lower_sentinel_wrapping(&call_str, result_ty, *value, target)
-                    .0
-            }
-        };
+        let (wrap, _) = self.lower_abi_wrapping(&call_str, abi, result_ty, target);
         statements.extend(wrap);
         Some(statements)
     }
@@ -155,7 +120,7 @@ impl Planner<'_> {
             return None;
         };
 
-        let boundary = self.classify_call(call_expression);
+        let plan = self.plan_call(call_expression)?;
 
         let has_array_return = if let Expression::DotAccess {
             expression: receiver_expression,
@@ -169,7 +134,7 @@ impl Planner<'_> {
             false
         };
 
-        if matches!(boundary, CallBoundary::Plain) && !has_array_return {
+        if plan.resolved.abi.result.is_passthrough() && !has_array_return {
             return None;
         }
 

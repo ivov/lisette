@@ -1477,6 +1477,20 @@ fn main() {
 }
 
 #[test]
+fn local_callable_shadow_does_not_inherit_global_abi() {
+    let input = r#"
+fn apply(x: int) -> Result<int, error> { Ok(x) }
+
+fn main() {
+  let apply = |x: int| -> int { x + 1 }
+  let value = apply(1)
+  let _ = value
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn go_fn_value_if_binding_wrapping() {
     let input = r#"
 import "go:fmt"
