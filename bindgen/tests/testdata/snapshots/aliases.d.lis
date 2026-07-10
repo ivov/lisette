@@ -20,8 +20,7 @@ pub type AliasStringMap = Map<string, int>
 /// Callback is a simple callback function.
 pub type Callback = fn() -> ()
 
-/// Alias-to-array peels to the array type, so the return lowers to
-/// Array<byte, 32>.
+/// Alias-to-array peels to the array type.
 pub type Digest = Array<byte, 32>
 
 /// Handler is a function that handles requests.

@@ -129,17 +129,13 @@ impl Planner<'_> {
         setup: &mut Vec<LoweredStatement>,
         call_expression: &Expression,
     ) -> Option<String> {
-        let Expression::Call { .. } = call_expression else {
-            return None;
-        };
-
         let boundary = self.classify_call(call_expression);
         if matches!(boundary, CallBoundary::Plain) {
             return None;
         }
 
-        let ctx = ExpressionContext::value();
-        let (call_setup, call_str) = self.lower_call(call_expression, None, ctx);
+        let (call_setup, call_str) =
+            self.lower_call(call_expression, None, ExpressionContext::value());
         setup.extend(call_setup);
 
         Some(call_str)

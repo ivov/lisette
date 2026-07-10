@@ -673,8 +673,6 @@ func (c *Converter) convertType(result *ConvertResult, exp extract.SymbolExport)
 		result.LisetteType = basicToLisette(u)
 
 	default:
-		// Newtype body, e.g. `type UUID [16]byte` keeps `Array<byte, 16>` and
-		// `type Handler func(...)` keeps its function type.
 		t := ToLisette(underlying, c)
 		if t.SkipReason != nil {
 			result.SkipReason = withOpaqueType(t.SkipReason)
@@ -1114,30 +1112,12 @@ func collectTypeParams(
 		name := tp.Obj().Name()
 		constraint := tp.Constraint()
 
-		if elemName, ok := recognizeSliceShape(constraint); ok {
+		if shape, ok := collapsedShape(constraint); ok {
 			if substitutions == nil {
 				substitutions = make(map[string]string)
 			}
-			substitutions[name] = sliceOf(elemName)
-			recipe = append(recipe, sliceOf(elemName))
-			continue
-		}
-
-		if elemName, length, ok := recognizeArrayShape(constraint); ok {
-			if substitutions == nil {
-				substitutions = make(map[string]string)
-			}
-			substitutions[name] = arrayOf(elemName, length)
-			recipe = append(recipe, arrayOf(elemName, length))
-			continue
-		}
-
-		if keyName, valName, ok := recognizeMapShape(constraint); ok {
-			if substitutions == nil {
-				substitutions = make(map[string]string)
-			}
-			substitutions[name] = mapOf(keyName, valName)
-			recipe = append(recipe, mapOf(keyName, valName))
+			substitutions[name] = shape
+			recipe = append(recipe, shape)
 			continue
 		}
 

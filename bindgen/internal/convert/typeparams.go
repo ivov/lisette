@@ -200,6 +200,21 @@ func singleTildeTerm(constraint types.Type) (types.Type, bool) {
 	return term.Type(), true
 }
 
+// Composed Lisette type for a collapsible constraint (`S ~[]E`, `A ~[N]E`,
+// `M ~map[K]V`), so callers can rewrite the type parameter to its shape.
+func collapsedShape(constraint types.Type) (string, bool) {
+	if elemName, ok := recognizeSliceShape(constraint); ok {
+		return sliceOf(elemName), true
+	}
+	if elemName, length, ok := recognizeArrayShape(constraint); ok {
+		return arrayOf(elemName, length), true
+	}
+	if keyName, valName, ok := recognizeMapShape(constraint); ok {
+		return mapOf(keyName, valName), true
+	}
+	return "", false
+}
+
 // Detects `S ~[]E` over a *types.TypeParam. Returns the inner E's name so
 // callers can rewrite `S` to `Slice<E>`.
 func recognizeSliceShape(constraint types.Type) (sliceElemTypeParamName string, ok bool) {

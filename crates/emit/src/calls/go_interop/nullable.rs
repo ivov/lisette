@@ -449,10 +449,8 @@ impl Planner<'_> {
         unwrapped_var
     }
 
-    /// Allocate the destination collection for a boundary-conversion loop.
-    /// Slices and maps use `make(...)` sized from the source. Fixed arrays are
-    /// value types Go cannot `make`, so declare a zero-valued `var` of the full
-    /// `[N]T` type instead.
+    /// Destination for a boundary-conversion loop: `make(...)` for slices and
+    /// maps, a zero-valued `var` for fixed arrays, which Go cannot `make`.
     fn plan_boundary_collection_dest(
         &mut self,
         statements: &mut Vec<LoweredStatement>,
@@ -482,19 +480,20 @@ impl Planner<'_> {
     /// Lisette element type of a collection: `Slice<X>` to `X`, `Map<K, V>` to
     /// `V`, `Array<X, N>` to `X`.
     fn collection_element_ty(&self, collection_ty: &Type, shape: &NullableCollectionShape) -> Type {
-        let resolved = self.emit_shape_ty(collection_ty);
-        if let Type::Array { element, .. } = &resolved {
-            return (**element).clone();
+        match self.emit_shape_ty(collection_ty) {
+            Type::Array { element, .. } => *element,
+            resolved => {
+                let params = resolved
+                    .get_type_params()
+                    .expect("native collection has type params");
+                let index = if matches!(shape.kind, CollectionKind::Map) {
+                    1
+                } else {
+                    0
+                };
+                params[index].clone()
+            }
         }
-        let params = resolved
-            .get_type_params()
-            .expect("native collection has type params");
-        let index = if matches!(shape.kind, CollectionKind::Map) {
-            1
-        } else {
-            0
-        };
-        params[index].clone()
     }
 
     /// Raw Go type for an unwrapped collection; walks the shape recursively so

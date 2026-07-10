@@ -65,7 +65,11 @@ impl Planner<'_> {
     /// only accepts `Type::Compound` shapes (not nominals whose leaf name
     /// happens to be `Slice`/`Map`/etc.) plus `SimpleKind::String`.
     pub(crate) fn native_shape(&self, ty: &Type) -> Option<NativeShape> {
-        let resolved = self.emit_shape_ty(ty);
+        self.native_shape_from_resolved(self.emit_shape_ty(ty))
+    }
+
+    /// `native_shape` on a type already resolved by `emit_shape_ty`.
+    fn native_shape_from_resolved(&self, resolved: Type) -> Option<NativeShape> {
         match resolved {
             Type::Compound { kind, args } => {
                 let native = match kind {
@@ -133,37 +137,41 @@ impl Planner<'_> {
     /// classifier. Nested collections (e.g. `Slice<Slice<Option<T>>>`) are
     /// detected recursively.
     pub(crate) fn nullable_collection_shape(&self, ty: &Type) -> Option<NullableCollectionShape> {
-        if let Type::Array { length, element } = self.emit_shape_ty(ty) {
-            let element = self.classify_nullable_element(&element)?;
-            return Some(NullableCollectionShape {
-                kind: CollectionKind::Array { length },
-                key_ty: None,
-                element,
-            });
-        }
-        let shape = self.native_shape(ty)?;
-        match shape.kind {
-            NativeGoType::Slice => {
-                let element_ty = shape.params.into_iter().next()?;
-                let element = self.classify_nullable_element(&element_ty)?;
+        match self.emit_shape_ty(ty) {
+            Type::Array { length, element } => {
+                let element = self.classify_nullable_element(&element)?;
                 Some(NullableCollectionShape {
-                    kind: CollectionKind::Slice,
+                    kind: CollectionKind::Array { length },
                     key_ty: None,
                     element,
                 })
             }
-            NativeGoType::Map => {
-                let mut iter = shape.params.into_iter();
-                let key_ty = iter.next()?;
-                let val_ty = iter.next()?;
-                let element = self.classify_nullable_element(&val_ty)?;
-                Some(NullableCollectionShape {
-                    kind: CollectionKind::Map,
-                    key_ty: Some(key_ty),
-                    element,
-                })
+            resolved => {
+                let shape = self.native_shape_from_resolved(resolved)?;
+                match shape.kind {
+                    NativeGoType::Slice => {
+                        let element_ty = shape.params.into_iter().next()?;
+                        let element = self.classify_nullable_element(&element_ty)?;
+                        Some(NullableCollectionShape {
+                            kind: CollectionKind::Slice,
+                            key_ty: None,
+                            element,
+                        })
+                    }
+                    NativeGoType::Map => {
+                        let mut iter = shape.params.into_iter();
+                        let key_ty = iter.next()?;
+                        let val_ty = iter.next()?;
+                        let element = self.classify_nullable_element(&val_ty)?;
+                        Some(NullableCollectionShape {
+                            kind: CollectionKind::Map,
+                            key_ty: Some(key_ty),
+                            element,
+                        })
+                    }
+                    _ => None,
+                }
             }
-            _ => None,
         }
     }
 

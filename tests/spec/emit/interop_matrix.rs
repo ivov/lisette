@@ -1881,8 +1881,6 @@ pub fn Make4<E>() -> Array<E, 4>
 
 #[test]
 fn interop_array_return() {
-    // A Go function returning a fixed-size array now yields `Array<T, N>` directly,
-    // with no boundary wrapping (the old `#[go(array_return)]` shim is gone).
     let input = r#"
 import "go:crypto/sha256"
 
@@ -1897,7 +1895,6 @@ fn main() {
 
 #[test]
 fn interop_array_return_as_slice() {
-    // Code that wants a slice from a Go array-returning function uses `.as_slice()`.
     let input = r#"
 import "go:crypto/sha256"
 

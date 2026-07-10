@@ -13,8 +13,9 @@ use syntax::types::Type;
 pub(crate) struct CallPlan {
     pub(crate) callee: CalleePlan,
     pub(crate) return_shape: CallReturnShape,
-    /// Call-level wrapping (variadic spread, array-return wrapper).
-    pub(crate) wrapper: WrapperPlan,
+    /// Variadic spread combine: present when the callee accepts a variadic
+    /// parameter and the call supplies a trailing spread argument.
+    pub(crate) variadic: Option<VariadicSpreadPlan>,
 }
 
 /// AST-level `CallKind` plus emit-side classification.
@@ -79,14 +80,6 @@ pub(crate) enum CallbackWrapperKind {
     Wrap,
 }
 
-/// Call-level wrapping (variadic spread).
-#[derive(Debug, Clone, Default)]
-pub(crate) struct WrapperPlan {
-    /// Variadic spread combine: present when the callee accepts a variadic
-    /// parameter and the call supplies a trailing spread argument.
-    pub(crate) variadic: Option<VariadicSpreadPlan>,
-}
-
 /// Variadic spread combine: a trailing spread argument must be combined
 /// with fixed args via the variadic boundary helper.
 #[derive(Debug, Clone)]
@@ -114,8 +107,7 @@ impl CallPlan {
     /// Derive a `VariadicCombine` from this plan, given the caller's
     /// `extra_leading` argument count (UFCS adds 1 for the implicit receiver).
     pub(crate) fn variadic_combine(&self, extra_leading: usize) -> Option<VariadicCombine> {
-        self.wrapper
-            .variadic
+        self.variadic
             .as_ref()
             .map(|spread| spread.combine(extra_leading))
     }
@@ -136,13 +128,13 @@ impl Planner<'_> {
         };
 
         let function = callee.unwrap_parens();
-        let wrapper = self.plan_call_wrapper(function, (**spread).as_ref());
+        let variadic = plan_variadic_spread(function, (**spread).as_ref());
 
         if let Some(strategy) = self.resolve_go_call_strategy(expression) {
             return Some(CallPlan {
                 callee: CalleePlan::GoInterop(strategy),
                 return_shape: CallReturnShape::Direct,
-                wrapper,
+                variadic,
             });
         }
 
@@ -171,15 +163,8 @@ impl Planner<'_> {
         Some(CallPlan {
             callee: callee_plan,
             return_shape,
-            wrapper,
+            variadic,
         })
-    }
-
-    /// Plan call-level wrapping. Detects variadic spread (if a trailing
-    /// spread argument is supplied).
-    fn plan_call_wrapper(&self, function: &Expression, spread: Option<&Expression>) -> WrapperPlan {
-        let variadic = plan_variadic_spread(function, spread);
-        WrapperPlan { variadic }
     }
 
     /// Lowered shape of a callee. Type-driven, so it fires regardless of

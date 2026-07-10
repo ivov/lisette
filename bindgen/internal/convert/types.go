@@ -80,7 +80,11 @@ func toLisetteRecursive(t types.Type, seen map[types.Type]bool, conv *Converter)
 		return TypeResult{LisetteType: sliceOf(elem.LisetteType)}
 
 	case *types.Array:
-		return arrayTypeResult(t, seen, conv, false)
+		elem := toLisetteRecursive(t.Elem(), seen, conv)
+		if elem.SkipReason != nil {
+			return elem
+		}
+		return TypeResult{LisetteType: arrayOf(elem.LisetteType, t.Len())}
 
 	case *types.Map:
 		key := toLisetteRecursive(t.Key(), seen, conv)
@@ -393,7 +397,11 @@ func toLisetteNilableRecursive(t types.Type, seen map[types.Type]bool, conv *Con
 		return TypeResult{LisetteType: sliceOf(elem.LisetteType)}
 
 	case *types.Array:
-		return arrayTypeResult(t, seen, conv, true)
+		elem := toLisetteNilableRecursive(t.Elem(), seen, conv)
+		if elem.SkipReason != nil {
+			return elem
+		}
+		return TypeResult{LisetteType: arrayOf(elem.LisetteType, t.Len())}
 
 	case *types.Map:
 		key := toLisetteRecursive(t.Key(), seen, conv)
@@ -412,24 +420,6 @@ func toLisetteNilableRecursive(t types.Type, seen map[types.Type]bool, conv *Con
 	default:
 		return toLisetteRecursive(t, seen, conv)
 	}
-}
-
-// arrayTypeResult converts a Go fixed-size array `[N]T` to Lisette `Array<T, N>`,
-// recursing into the element (so `[N][M]T` becomes `Array<Array<T, M>, N>`). The
-// length is part of the type, so no boundary annotation is needed. `nilable`
-// selects the element recursion so a nil-capable element (pointer, interface) is
-// wrapped in Option in nilable positions, matching Slice and Map.
-func arrayTypeResult(arr *types.Array, seen map[types.Type]bool, conv *Converter, nilable bool) TypeResult {
-	var elem TypeResult
-	if nilable {
-		elem = toLisetteNilableRecursive(arr.Elem(), seen, conv)
-	} else {
-		elem = toLisetteRecursive(arr.Elem(), seen, conv)
-	}
-	if elem.SkipReason != nil {
-		return elem
-	}
-	return TypeResult{LisetteType: arrayOf(elem.LisetteType, arr.Len())}
 }
 
 func namedImplementsError(t *types.Named) bool {

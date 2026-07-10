@@ -5,22 +5,16 @@
 
 pub fn Compute() -> Array<byte, 16>
 
-/// Nested array: [2][3]int becomes Array<Array<int, 3>, 2>.
 pub fn Grid() -> Array<Array<int, 3>, 2>
 
-/// Two arrays in a multi-return become a tuple of arrays.
 pub fn Pair() -> (Array<int, 2>, Array<int, 3>)
 
-/// Pointer to array: *[8]byte becomes Ref<Array<byte, 8>>.
 pub fn Ptr() -> Option<Ref<Array<byte, 8>>>
 
-/// Slice of array: [][4]int becomes Slice<Array<int, 4>>.
 pub fn Rows() -> Slice<Array<int, 4>>
 
-/// Return position: [32]byte becomes Array<byte, 32>.
 pub fn Sum() -> Array<byte, 32>
 
-/// Parameter position: [4]byte becomes Array<byte, 4> (previously skipped).
 pub fn Take(addr: Array<byte, 4>)
 
 pub fn TakeDigest(d: Array<byte, 16>)
@@ -30,25 +24,17 @@ pub fn TakeDigestKey(m: Map<Array<byte, 16>, int>)
 /// Array as a map key (arrays are comparable when the element is).
 pub fn TakesArrayKey(m: Map<Array<uint16, 2>, int>)
 
-/// Array alongside an error becomes Result<Array<T, N>, error>.
 pub fn WithErr() -> Result<Array<byte, 32>, error>
 
-/// Array of a nilable element in a nilable position (struct fields): the element
-/// is Option-wrapped like a slice element. A pointer to a scalar drops Ref
-/// (Array<Option<int>, 2>); a pointer to a struct keeps it
-/// (Array<Option<Ref<Cell>>, 2>).
+/// A nilable element in a nilable position is Option-wrapped like a slice
+/// element: a pointer to a scalar drops Ref, a pointer to a struct keeps it.
 pub struct Cell {
   pub Ptrs: Array<Option<int>, 2>,
   pub Nodes: Array<Option<Ref<Cell>>, 2>,
 }
 
-/// Alias to an array peels to the array type, in return, parameter, and map-key
-/// positions.
 pub type Digest = Array<byte, 16>
 
-/// Struct with an array field, a map-value array field, an array param method,
-/// and an array-returning method (the field and map-value positions were
-/// previously skipped).
 pub struct Holder {
   pub Data: Array<int, 3>,
   pub Pairs: Map<string, Array<byte, 4>>,
