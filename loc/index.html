@@ -1,280 +1,518 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, minimum-scale=1.0, initial-scale=1, user-scalable=yes" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Lisette lines of code</title>
     <style>
+      :root {
+        --page: #0d0d0d;
+        --surface: #1a1a19;
+        --text-primary: #ffffff;
+        --text-secondary: #c3c2b7;
+        --text-muted: #898781;
+        --grid: #2c2c2a;
+        --axis: #383835;
+        --border: rgba(255, 255, 255, 0.1);
+      }
+      * {
+        box-sizing: border-box;
+      }
       html {
-        font-family: BlinkMacSystemFont,-apple-system,"Segoe UI",Roboto,Oxygen,Ubuntu,Cantarell,"Fira Sans","Droid Sans","Helvetica Neue",Helvetica,Arial,sans-serif;
+        background: var(--page);
+        font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
         -webkit-font-smoothing: antialiased;
-        background-color: #fff;
-        font-size: 16px;
       }
       body {
-        color: #4a4a4a;
-        margin: 8px;
-        font-size: 1em;
-        font-weight: 400;
-      }
-      header {
-        margin-bottom: 8px;
-        display: flex;
-        flex-direction: column;
-      }
-      main {
-        width: 100%;
-        display: flex;
-        flex-direction: column;
+        margin: 0 auto;
+        padding: 24px 20px 16px;
+        max-width: 1280px;
+        color: var(--text-secondary);
+        font-size: 14px;
       }
       a {
-        color: #3273dc;
-        cursor: pointer;
+        color: #3987e5;
         text-decoration: none;
       }
       a:hover {
-        color: #000;
+        text-decoration: underline;
       }
-      button {
-        color: #fff;
-        background-color: #3298dc;
-        border-color: transparent;
-        cursor: pointer;
-        text-align: center;
+      header {
+        display: flex;
+        align-items: baseline;
+        gap: 16px;
+        flex-wrap: wrap;
+        margin-bottom: 20px;
       }
-      button:hover {
-        background-color: #2793da;
+      header h1 {
+        margin: 0;
+        font-size: 1.25rem;
+        font-weight: 600;
+        color: var(--text-primary);
+      }
+      header .meta {
+        font-size: 0.8rem;
+        color: var(--text-muted);
+      }
+      .charts {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 14px;
+      }
+      @media (max-width: 980px) {
+        .charts {
+          grid-template-columns: repeat(2, 1fr);
+        }
+      }
+      @media (max-width: 620px) {
+        .charts {
+          grid-template-columns: 1fr;
+        }
+      }
+      .card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 12px 14px 10px;
+      }
+      .card-head {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 8px;
+        margin-bottom: 6px;
+      }
+      .card-title {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        font-weight: 600;
+        color: var(--text-primary);
+        font-size: 0.9rem;
+      }
+      .card-title .key {
+        width: 12px;
+        height: 3px;
+        border-radius: 2px;
         flex: none;
       }
-      .spacer {
-        flex: auto;
+      .card-value {
+        color: var(--text-secondary);
+        font-size: 0.85rem;
       }
-      .small {
+      .card-value span {
+        color: var(--text-muted);
         font-size: 0.75rem;
       }
-      footer {
-        margin-top: 16px;
-        display: flex;
-        align-items: center;
+      .plot {
+        position: relative;
+        height: 180px;
       }
-      .header-label {
-        margin-right: 4px;
+      details {
+        margin-top: 20px;
       }
-      .benchmark-set {
-        margin: 8px 0;
+      summary {
+        cursor: pointer;
+        color: var(--text-muted);
+        font-size: 0.85rem;
+      }
+      .table-wrap {
+        overflow-x: auto;
+        margin-top: 10px;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+      }
+      table {
+        border-collapse: collapse;
         width: 100%;
-        display: flex;
-        flex-direction: column;
+        font-size: 0.78rem;
+        background: var(--surface);
       }
-      .benchmark-title {
-        font-size: 3rem;
+      th,
+      td {
+        padding: 5px 10px;
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+      }
+      th:first-child,
+      td:first-child {
+        text-align: left;
+      }
+      th {
+        color: var(--text-primary);
         font-weight: 600;
-        word-break: break-word;
-        text-align: center;
+        border-bottom: 1px solid var(--axis);
       }
-      .benchmark-graphs {
+      td {
+        color: var(--text-secondary);
+        border-bottom: 1px solid var(--grid);
+      }
+      tr:last-child td {
+        border-bottom: none;
+      }
+      footer {
         display: flex;
-        flex-direction: row;
-        justify-content: space-around;
         align-items: center;
-        flex-wrap: wrap;
-        width: 100%;
+        margin-top: 20px;
+        font-size: 0.75rem;
+        color: var(--text-muted);
       }
-      .benchmark-chart {
-        max-width: 1000px;
+      footer .spacer {
+        flex: auto;
+      }
+      button {
+        background: transparent;
+        color: var(--text-secondary);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 4px 10px;
+        font-size: 0.75rem;
+        cursor: pointer;
+      }
+      button:hover {
+        color: var(--text-primary);
+        border-color: var(--text-muted);
+      }
+      .chart-tooltip {
+        position: absolute;
+        z-index: 10;
+        pointer-events: none;
+        opacity: 0;
+        max-width: 340px;
+        padding: 8px 10px;
+        background: rgba(36, 36, 35, 0.97);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        font-size: 12px;
+        line-height: 1.45;
+      }
+      .chart-tooltip .tt-title,
+      .chart-tooltip .tt-value {
+        color: var(--text-primary);
+        font-weight: 600;
       }
     </style>
-    <title>Benchmarks</title>
   </head>
 
   <body>
-    <header id="header">
-      <div class="header-item">
-        <strong class="header-label">Last Update:</strong>
-        <span id="last-update"></span>
-      </div>
-      <div class="header-item">
-        <strong class="header-label">Repository:</strong>
-        <a id="repository-link" rel="noopener"></a>
-      </div>
+    <header>
+      <h1 id="suite-name"></h1>
+      <span class="meta">updated <span id="last-update"></span></span>
+      <span class="meta"><a id="repository-link" rel="noopener"></a></span>
     </header>
     <main id="main"></main>
+    <details>
+      <summary>Data table</summary>
+      <div class="table-wrap"><table id="data-table"></table></div>
+    </details>
     <footer>
       <button id="dl-button">Download data as JSON</button>
       <div class="spacer"></div>
-      <div class="small">Powered by <a rel="noopener" href="https://github.com/marketplace/actions/continuous-benchmark">github-action-benchmark</a></div>
+      <div>Powered by <a rel="noopener" href="https://github.com/marketplace/actions/continuous-benchmark">github-action-benchmark</a></div>
     </footer>
 
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@2.9.2/dist/Chart.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
     <script src="data.js"></script>
-    <script id="main-script">
+    <script>
       'use strict';
-      (function() {
-        // Colors from https://github.com/github/linguist/blob/master/lib/linguist/languages.yml
-        const toolColors = {
-          cargo: '#dea584',
-          go: '#00add8',
-          benchmarkjs: '#f1e05a',
-          benchmarkluau: '#000080',
-          pytest: '#3572a5',
-          googlecpp: '#f34b7d',
-          catch2: '#f34b7d',
-          julia: '#a270ba',
-          jmh: '#b07219',
-          benchmarkdotnet: '#178600',
-          customBiggerIsBetter: '#38ff38',
-          customSmallerIsBetter: '#ff3838',
-          _: '#333333'
+      (function () {
+        const css = getComputedStyle(document.documentElement);
+        const token = (name) => css.getPropertyValue(name).trim();
+        const SURFACE = token('--surface');
+
+        const SERIES_COLORS = [
+          '#3987e5', // blue
+          '#199e70', // aqua
+          '#c98500', // yellow
+          '#008300', // green
+          '#9085e9', // violet
+          '#e66767', // red
+          '#d55181', // magenta
+          '#d95926', // orange
+        ];
+
+        const pad = (n) => String(n).padStart(2, '0');
+        const formatDay = (ms) => {
+          const d = new Date(ms);
+          return pad(d.getDate()) + '.' + pad(d.getMonth() + 1);
+        };
+        const formatDate = (ms) => formatDay(ms) + '.' + new Date(ms).getFullYear();
+        const formatCount = (v) => v.toLocaleString('en-US');
+        const kFormat = (v) => (Math.abs(v) >= 1000 ? +(v / 1000).toFixed(1) + 'k' : String(v));
+
+        const crosshair = {
+          id: 'crosshair',
+          afterDraw(chart) {
+            const active = chart.tooltip && chart.tooltip.getActiveElements();
+            if (!active || !active.length) return;
+            const { ctx, chartArea } = chart;
+            ctx.save();
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.18)';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(active[0].element.x, chartArea.top);
+            ctx.lineTo(active[0].element.x, chartArea.bottom);
+            ctx.stroke();
+            ctx.restore();
+          },
         };
 
-        function init() {
-          function collectBenchesPerTestCase(entries) {
-            const map = new Map();
-            for (const entry of entries) {
-              const {commit, date, tool, benches} = entry;
-              for (const bench of benches) {
-                const result = { commit, date, tool, bench };
-                const arr = map.get(bench.name);
-                if (arr === undefined) {
-                  map.set(bench.name, [result]);
-                } else {
-                  arr.push(result);
-                }
+        const EXCLUDED = new Set(['total', 'benchmark', 'deps', 'prelude', 'stdlib']);
+
+        // anchor the tooltip model at the cursor itself, placement happens in the external handler
+        Chart.Tooltip.positioners.cursor = (_elements, eventPosition) => eventPosition;
+
+        // one shared HTML tooltip, rendered outside the canvas so it can sit
+        // at the top right of the cursor without being clipped by the card
+        const tooltipEl = () => {
+          let el = document.getElementById('chart-tooltip');
+          if (!el) {
+            el = document.createElement('div');
+            el.id = 'chart-tooltip';
+            el.className = 'chart-tooltip';
+            document.body.appendChild(el);
+          }
+          return el;
+        };
+
+        function externalTooltip(context) {
+          const { chart, tooltip } = context;
+          const el = tooltipEl();
+          if (tooltip.opacity === 0) {
+            el.style.opacity = '0';
+            return;
+          }
+          while (el.firstChild) el.removeChild(el.firstChild);
+          const addLine = (text, cls) => {
+            const div = document.createElement('div');
+            div.className = cls;
+            div.textContent = text;
+            el.appendChild(div);
+          };
+          for (const line of tooltip.title || []) addLine(line, 'tt-title');
+          for (const item of tooltip.body || []) for (const line of item.lines) addLine(line, 'tt-value');
+
+          const rect = chart.canvas.getBoundingClientRect();
+          const pad = 12;
+          let left = rect.left + window.scrollX + tooltip.caretX + pad;
+          let top = rect.top + window.scrollY + tooltip.caretY - pad - el.offsetHeight;
+          const maxLeft = window.scrollX + document.documentElement.clientWidth - el.offsetWidth - 8;
+          if (left > maxLeft) left = maxLeft;
+          const minTop = window.scrollY + 8;
+          if (top < minTop) top = minTop;
+          el.style.left = left + 'px';
+          el.style.top = top + 'px';
+          el.style.opacity = '1';
+        }
+
+        const data = window.BENCHMARK_DATA;
+        document.getElementById('last-update').textContent = formatDate(data.lastUpdate);
+        const repoLink = document.getElementById('repository-link');
+        repoLink.href = data.repoUrl;
+        repoLink.textContent = data.repoUrl.replace('https://github.com/', '');
+        document.getElementById('dl-button').onclick = () => {
+          const a = document.createElement('a');
+          a.href = 'data:,' + encodeURIComponent(JSON.stringify(data, null, 2));
+          a.download = 'benchmark_data.json';
+          a.click();
+        };
+
+        const main = document.getElementById('main');
+        for (const [suiteName, entries] of Object.entries(data.entries)) {
+          document.getElementById('suite-name').textContent = suiteName;
+          renderSuite(entries, main);
+        }
+
+        function renderSuite(entries, parent) {
+          const labels = entries.map((e) => formatDay(e.date));
+
+          // color by first appearance so a series keeps its hue as data grows
+          const series = new Map();
+          for (const entry of entries) {
+            for (const bench of entry.benches) {
+              if (EXCLUDED.has(bench.name)) continue;
+              if (!series.has(bench.name)) {
+                series.set(bench.name, {
+                  name: bench.name,
+                  unit: bench.unit,
+                  color: SERIES_COLORS[series.size % SERIES_COLORS.length],
+                  values: new Array(entries.length).fill(null),
+                });
               }
             }
-            return map;
           }
+          entries.forEach((entry, i) => {
+            for (const bench of entry.benches) {
+              const s = series.get(bench.name);
+              if (s) s.values[i] = bench.value;
+            }
+          });
 
-          const data = window.BENCHMARK_DATA;
-
-          // Render header
-          document.getElementById('last-update').textContent = new Date(data.lastUpdate).toString();
-          const repoLink = document.getElementById('repository-link');
-          repoLink.href = data.repoUrl;
-          repoLink.textContent = data.repoUrl;
-
-          // Render footer
-          document.getElementById('dl-button').onclick = () => {
-            const dataUrl = 'data:,' + JSON.stringify(data, null, 2);
-            const a = document.createElement('a');
-            a.href = dataUrl;
-            a.download = 'benchmark_data.json';
-            a.click();
+          const latest = (s) => {
+            for (let i = s.values.length - 1; i >= 0; i--) {
+              if (s.values[i] != null) return s.values[i];
+            }
+            return 0;
           };
+          const panels = [...series.values()].sort((a, b) => latest(b) - latest(a));
 
-          // Prepare data points for charts
-          return Object.keys(data.entries).map(name => ({
-            name,
-            dataSet: collectBenchesPerTestCase(data.entries[name]),
-          }));
+          // shared y max so panel heights are proportional across crates
+          const yMax = 30000;
+
+          const grid = document.createElement('div');
+          grid.className = 'charts';
+          parent.appendChild(grid);
+          for (const s of panels) renderPanel(grid, s, entries, labels, yMax);
+          renderTable(panels, entries);
         }
 
-        function renderAllChars(dataSets) {
+        function renderPanel(parent, s, entries, labels, yMax) {
+          const card = document.createElement('div');
+          card.className = 'card';
 
-          function renderGraph(parent, name, dataset) {
-            const canvas = document.createElement('canvas');
-            canvas.className = 'benchmark-chart';
-            parent.appendChild(canvas);
+          const head = document.createElement('div');
+          head.className = 'card-head';
+          const title = document.createElement('div');
+          title.className = 'card-title';
+          const key = document.createElement('span');
+          key.className = 'key';
+          key.style.background = s.color;
+          title.appendChild(key);
+          title.appendChild(document.createTextNode(s.name));
+          const value = document.createElement('div');
+          value.className = 'card-value';
+          value.textContent = formatCount(latestValue(s)) + ' ';
+          const unit = document.createElement('span');
+          unit.textContent = s.unit;
+          value.appendChild(unit);
+          head.appendChild(title);
+          head.appendChild(value);
+          card.appendChild(head);
 
-            const color = toolColors[dataset.length > 0 ? dataset[0].tool : '_'];
-            const data = {
-              labels: dataset.map(d => d.commit.id.slice(0, 7)),
+          const plot = document.createElement('div');
+          plot.className = 'plot';
+          const canvas = document.createElement('canvas');
+          plot.appendChild(canvas);
+          card.appendChild(plot);
+          parent.appendChild(card);
+
+          const lastIdx = s.values.reduce((acc, v, i) => (v != null ? i : acc), -1);
+
+          new Chart(canvas, {
+            type: 'line',
+            data: {
+              labels,
               datasets: [
                 {
-                  label: name,
-                  data: dataset.map(d => d.bench.value),
-                  borderColor: color,
-                  backgroundColor: color + '60', // Add alpha for #rrggbbaa
-                }
+                  label: s.name,
+                  data: s.values,
+                  borderColor: s.color,
+                  backgroundColor: s.color + '1a',
+                  fill: true,
+                  borderWidth: 2,
+                  borderJoinStyle: 'round',
+                  borderCapStyle: 'round',
+                  spanGaps: false,
+                  pointRadius: (ctx) => (ctx.dataIndex === lastIdx ? 4 : 0),
+                  pointBackgroundColor: s.color,
+                  pointBorderColor: SURFACE,
+                  pointBorderWidth: 2,
+                  pointHoverRadius: 5,
+                  pointHoverBackgroundColor: s.color,
+                  pointHoverBorderColor: SURFACE,
+                  pointHoverBorderWidth: 2,
+                },
               ],
-            };
-            const options = {
+            },
+            plugins: [crosshair],
+            options: {
+              maintainAspectRatio: false,
+              interaction: { mode: 'index', intersect: false },
+              plugins: {
+                legend: { display: false },
+                tooltip: {
+                  enabled: false,
+                  external: externalTooltip,
+                  position: 'cursor',
+                  animation: false,
+                  callbacks: {
+                    title: (items) => formatDate(entries[items[0].dataIndex].date),
+                    label: (item) => formatCount(item.parsed.y) + ' ' + s.unit,
+                  },
+                },
+              },
+              onClick: (_evt, elems) => {
+                if (elems.length) window.open(entries[elems[0].index].commit.url, '_blank');
+              },
               scales: {
-                xAxes: [
-                  {
-                    scaleLabel: {
-                      display: true,
-                      labelString: 'commit',
-                    },
-                  }
-                ],
-                yAxes: [
-                  {
-                    scaleLabel: {
-                      display: true,
-                      labelString: dataset.length > 0 ? dataset[0].bench.unit : '',
-                    },
-                    ticks: {
-                      beginAtZero: true,
-                    }
-                  }
-                ],
-              },
-              tooltips: {
-                callbacks: {
-                  afterTitle: items => {
-                    const {index} = items[0];
-                    const data = dataset[index];
-                    return '\n' + data.commit.message + '\n\n' + data.commit.timestamp + ' committed by @' + data.commit.committer.username + '\n';
+                x: {
+                  grid: { display: false },
+                  border: { color: token('--axis') },
+                  ticks: {
+                    color: token('--text-muted'),
+                    maxRotation: 0,
+                    autoSkip: true,
+                    maxTicksLimit: 4,
+                    font: { size: 10 },
                   },
-                  label: item => {
-                    let label = item.value;
-                    const { range, unit } = dataset[item.index].bench;
-                    label += ' ' + unit;
-                    if (range) {
-                      label += ' (' + range + ')';
-                    }
-                    return label;
+                },
+                y: {
+                  beginAtZero: true,
+                  max: yMax,
+                  grid: { color: token('--grid'), drawTicks: false },
+                  border: { display: false },
+                  ticks: {
+                    color: token('--text-muted'),
+                    maxTicksLimit: 5,
+                    padding: 6,
+                    font: { size: 10 },
+                    callback: (v) => kFormat(v),
                   },
-                  afterLabel: item => {
-                    const { extra } = dataset[item.index].bench;
-                    return extra ? '\n' + extra : '';
-                  }
-                }
+                },
               },
-              onClick: (_mouseEvent, activeElems) => {
-                if (activeElems.length === 0) {
-                  return;
-                }
-                // XXX: Undocumented. How can we know the index?
-                const index = activeElems[0]._index;
-                const url = dataset[index].commit.url;
-                window.open(url, '_blank');
-              },
-            };
-
-            new Chart(canvas, {
-              type: 'line',
-              data,
-              options,
-            });
-          }
-
-          function renderBenchSet(name, benchSet, main) {
-            const setElem = document.createElement('div');
-            setElem.className = 'benchmark-set';
-            main.appendChild(setElem);
-
-            const nameElem = document.createElement('h1');
-            nameElem.className = 'benchmark-title';
-            nameElem.textContent = name;
-            setElem.appendChild(nameElem);
-
-            const graphsElem = document.createElement('div');
-            graphsElem.className = 'benchmark-graphs';
-            setElem.appendChild(graphsElem);
-
-            for (const [benchName, benches] of benchSet.entries()) {
-              renderGraph(graphsElem, benchName, benches)
-            }
-          }
-
-          const main = document.getElementById('main');
-          for (const {name, dataSet} of dataSets) {
-            renderBenchSet(name, dataSet, main);
-          }
+            },
+          });
         }
 
-        renderAllChars(init()); // Start
+        function latestValue(s) {
+          for (let i = s.values.length - 1; i >= 0; i--) {
+            if (s.values[i] != null) return s.values[i];
+          }
+          return 0;
+        }
+
+        function renderTable(panels, entries) {
+          const table = document.getElementById('data-table');
+          const thead = document.createElement('thead');
+          const headRow = document.createElement('tr');
+          for (const text of ['commit', ...panels.map((p) => p.name)]) {
+            const th = document.createElement('th');
+            th.textContent = text;
+            headRow.appendChild(th);
+          }
+          thead.appendChild(headRow);
+          table.appendChild(thead);
+
+          const tbody = document.createElement('tbody');
+          for (let i = entries.length - 1; i >= 0; i--) {
+            const tr = document.createElement('tr');
+            const label = document.createElement('td');
+            const link = document.createElement('a');
+            link.href = entries[i].commit.url;
+            link.rel = 'noopener';
+            link.textContent = formatDate(entries[i].date) + ' ' + entries[i].commit.id.slice(0, 7);
+            label.appendChild(link);
+            tr.appendChild(label);
+            for (const p of panels) {
+              const td = document.createElement('td');
+              td.textContent = p.values[i] == null ? '' : formatCount(p.values[i]);
+              tr.appendChild(td);
+            }
+            tbody.appendChild(tr);
+          }
+          table.appendChild(tbody);
+        }
       })();
     </script>
   </body>
