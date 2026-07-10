@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1783708111785,
+  "lastUpdate": 1783717071756,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -1865,6 +1865,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "emit",
             "value": 28100,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 22879,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 16438,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 12807,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 10078,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 6176,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 4348,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2783,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1031,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 695,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 6095,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 890,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "6c99aa5dbfff87812a4914e2bc9e771a3e34def7",
+          "message": "refactor: record side effects when lowering expressions (#989)",
+          "timestamp": "2026-07-10T22:57:28+02:00",
+          "tree_id": "148bc48a8d17f3a9e043f3dbd7e0d81f768cf606",
+          "url": "https://github.com/ivov/lisette/commit/6c99aa5dbfff87812a4914e2bc9e771a3e34def7"
+        },
+        "date": 1783717070564,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 113315,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 29095,
             "unit": "lines"
           },
           {
