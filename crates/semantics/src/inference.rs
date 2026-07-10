@@ -14,7 +14,7 @@ use crate::cache::{
     CachedModuleBuild, CompiledModule, ModuleInterface, build_cached_module,
     compute_emit_artifact_hash, compute_module_hash, get_dependency_module_hashes,
     go_stdlib::{self, load_cached_go_module},
-    hash_module_sources, is_cache_disabled, prelude as prelude_cache, try_load_cache,
+    hash_module_source_pair, is_cache_disabled, prelude as prelude_cache, try_load_cache,
 };
 use crate::checker::TaskState;
 use crate::checker::infer::InferCtx;
@@ -214,6 +214,21 @@ pub fn run_inference(input: AnalyzeInput) -> InferenceOutput {
         let mut to_infer: Vec<(usize, String)> = Vec::new();
         let mut candidates: Vec<CacheCandidate> = Vec::new();
 
+        let source_hashes: HashMap<String, (u64, u64)> =
+            if graph_result.files.len() < PARALLEL_THRESHOLD {
+                graph_result
+                    .files
+                    .iter()
+                    .map(|(id, files)| (id.clone(), hash_module_source_pair(files)))
+                    .collect()
+            } else {
+                graph_result
+                    .files
+                    .par_iter()
+                    .map(|(id, files)| (id.clone(), hash_module_source_pair(files)))
+                    .collect()
+            };
+
         for (topo_rank, module_id) in order.into_iter().enumerate() {
             if module_id.starts_with("go:") {
                 if graph_result.link_only_modules.contains(&module_id) {
@@ -237,8 +252,10 @@ pub fn run_inference(input: AnalyzeInput) -> InferenceOutput {
 
             let files = graph_result.files.remove(&module_id).unwrap_or_default();
             // Production-only hash drives dependents/emit; all-files hash drives own validity.
-            let production_hash = hash_module_sources(files.iter().filter(|f| !f.is_test()));
-            let full_hash = hash_module_sources(&files);
+            let (production_hash, full_hash) = source_hashes
+                .get(&module_id)
+                .copied()
+                .unwrap_or_else(|| hash_module_source_pair(&files));
 
             let dep_hashes = get_dependency_module_hashes(&module_id, edges, &module_hashes);
             let production_dep_hashes =
