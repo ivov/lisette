@@ -113,8 +113,8 @@ pub(super) fn walk_expression(
         } => {
             walk_expression(module, expression, graph, alias_map, ctx);
             let receiver_ty = expression.get_type();
-            if let Some(ty_name) = type_name(&receiver_ty, alias_map) {
-                graph.mark_struct_field_used(StructFieldId::new(&ty_name, member));
+            if let Some(ty_name) = qualified_type_name(&receiver_ty, alias_map) {
+                graph.mark_struct_field_used(StructFieldId::new(ty_name.as_str(), member));
             }
             mark_promoted_field_read(&receiver_ty, member, graph, alias_map);
             if let Some(from) = ctx
@@ -495,32 +495,36 @@ fn walk_struct_call(
         StructSpread::None => {}
         StructSpread::From(spread_expression) => {
             walk_expression(module, spread_expression, graph, alias_map, ctx);
-            if let Some(ty_name) = type_name(&spread_expression.get_type(), alias_map) {
+            if let Some(ty_name) = qualified_type_name(&spread_expression.get_type(), alias_map) {
                 let explicit: HashSet<&str> =
                     field_assignments.iter().map(|f| f.name.as_str()).collect();
-                let qname = Symbol::from_parts(&module.id, &ty_name);
-                if let Some(def) = module.definitions.get(qname.as_str())
+                if let Some(def) = module.definitions.get(ty_name.as_str())
                     && let DefinitionBody::Struct { fields, .. } = &def.body
                 {
                     for field in fields {
                         if !explicit.contains(field.name.as_str()) {
-                            graph.mark_struct_field_used(StructFieldId::new(&ty_name, &field.name));
+                            graph.mark_struct_field_used(StructFieldId::new(
+                                ty_name.as_str(),
+                                &field.name,
+                            ));
                         }
                     }
                 }
             }
         }
         StructSpread::Autofill { .. } => {
-            if let Some(ty_name) = type_name(ty, alias_map) {
+            if let Some(ty_name) = qualified_type_name(ty, alias_map) {
                 let explicit: HashSet<&str> =
                     field_assignments.iter().map(|f| f.name.as_str()).collect();
-                let qname = Symbol::from_parts(&module.id, &ty_name);
-                if let Some(def) = module.definitions.get(qname.as_str())
+                if let Some(def) = module.definitions.get(ty_name.as_str())
                     && let DefinitionBody::Struct { fields, .. } = &def.body
                 {
                     for field in fields {
                         if !explicit.contains(field.name.as_str()) {
-                            graph.mark_struct_field_used(StructFieldId::new(&ty_name, &field.name));
+                            graph.mark_struct_field_used(StructFieldId::new(
+                                ty_name.as_str(),
+                                &field.name,
+                            ));
                         }
                     }
                 }
@@ -598,9 +602,14 @@ fn walk_pattern(
             ..
         } => {
             mark_constructor_pattern(module, identifier, ty, graph, alias_map, ctx);
+            let key = qualified_type_name(ty, alias_map).or_else(|| {
+                (!identifier.contains('.')).then(|| Symbol::from_parts(&module.id, identifier))
+            });
             for f in fields {
                 walk_pattern(module, &f.value, graph, alias_map, ctx);
-                graph.mark_struct_field_used(StructFieldId::new(identifier, &f.name));
+                if let Some(key) = &key {
+                    graph.mark_struct_field_used(StructFieldId::new(key.as_str(), &f.name));
+                }
             }
         }
         Pattern::Tuple { elements, .. } => {
@@ -896,14 +905,20 @@ fn mark_promoted_field_read(
         promotion::resolve_selector(aliases.store, &receiver, member)
         && matches!(resolved.kind, MemberKind::Field { .. })
     {
-        let declaring = unqualified_name(resolved.declaring_type.as_str());
-        graph.mark_struct_field_used(StructFieldId::new(declaring, member));
+        graph.mark_struct_field_used(StructFieldId::new(resolved.declaring_type.as_str(), member));
     }
 }
 
 fn type_name(ty: &Type, aliases: &AliasMap) -> Option<String> {
     match deref_for_keying(ty, aliases) {
         Type::Nominal { id, .. } => Some(unqualified_name(&id).to_string()),
+        _ => None,
+    }
+}
+
+fn qualified_type_name(ty: &Type, aliases: &AliasMap) -> Option<Symbol> {
+    match deref_for_keying(ty, aliases) {
+        Type::Nominal { id, .. } => Some(id),
         _ => None,
     }
 }

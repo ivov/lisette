@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  ▲ Unused field
+   ╭─[test.lis:3:3]
+ 2 │ struct Shadow {
+ 3 │   depth: int,
+   ·   ──┬──
+   ·     ╰── never read
+ 4 │ }
+   ╰────
+  help: Use or remove this field · code: [lint.unused_struct_field]

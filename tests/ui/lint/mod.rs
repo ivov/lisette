@@ -7179,6 +7179,121 @@ fn main() {
 }
 
 #[test]
+fn shadowed_embedded_field_still_warns() {
+    assert_lint_snapshot!(
+        r#"
+struct Shadow {
+  depth: int,
+}
+
+struct Panel {
+  depth: int,
+  embed Shadow,
+}
+
+fn main() {
+  let p = Panel { depth: 3, Shadow: Shadow { depth: 4 } };
+  let _ = p.depth
+}
+"#
+    );
+}
+
+#[test]
+fn same_named_type_in_other_module_does_not_mask_unused_field() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "geo",
+        "lib.lis",
+        r#"
+pub struct Size {
+  pub width: int,
+}
+"#,
+    );
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+import "geo"
+
+struct Size {
+  width: int,
+}
+
+fn main() {
+  let _ = Size { width: 9 }
+  let g = geo.Size { width: 1 }
+  let _ = g.width
+}
+"#,
+    );
+    let result = compile_check(fs);
+    assert!(
+        result.errors.is_empty(),
+        "unexpected errors: {:?}",
+        result.errors
+    );
+    assert!(
+        result
+            .lints
+            .iter()
+            .any(|d| d.plain_message() == "Unused field"),
+        "local Size.width is never read and must warn despite the geo.Size.width read: {:?}",
+        result.lints
+    );
+}
+
+#[test]
+fn same_named_type_in_other_module_does_not_mask_unused_field_via_embed() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "geo",
+        "lib.lis",
+        r#"
+pub struct Size {
+  pub width: int,
+}
+"#,
+    );
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+import "geo"
+
+struct Size {
+  width: int,
+}
+
+struct Widget {
+  embed geo.Size,
+}
+
+fn main() {
+  let _ = Size { width: 9 }
+  let w = Widget { Size: geo.Size { width: 1 } }
+  let _ = w.width
+}
+"#,
+    );
+    let result = compile_check(fs);
+    assert!(
+        result.errors.is_empty(),
+        "unexpected errors: {:?}",
+        result.errors
+    );
+    assert!(
+        result
+            .lints
+            .iter()
+            .any(|d| d.plain_message() == "Unused field"),
+        "local Size.width is never read and must warn despite the promoted geo.Size.width read: {:?}",
+        result.lints
+    );
+}
+
+#[test]
 fn struct_field_used_in_pattern() {
     assert_no_lint_warnings!(
         r#"

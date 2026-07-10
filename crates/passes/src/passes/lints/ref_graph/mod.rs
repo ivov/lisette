@@ -337,11 +337,11 @@ fn collect_items(
                     });
 
                     let has_display_attr = attributes.iter().any(|a| a.name == "display");
-                    let synthesizes_equals =
-                        equality_index.is_synthesized(&format!("{module_id}.{name}"));
+                    let qualified_name = format!("{module_id}.{name}");
+                    let synthesizes_equals = equality_index.is_synthesized(&qualified_name);
 
                     for struct_field in fields {
-                        let field_id = StructFieldId::new(name, &struct_field.name);
+                        let field_id = StructFieldId::new(&qualified_name, &struct_field.name);
                         let has_tag_attribute =
                             struct_field.attributes.iter().any(|a| a.name == "tag");
                         graph.add_struct_field(
