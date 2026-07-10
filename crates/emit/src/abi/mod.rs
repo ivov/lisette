@@ -1,5 +1,7 @@
 pub(crate) mod callable;
+pub(crate) mod catalog;
 pub(crate) mod coercion;
+pub(crate) mod layout;
 pub(crate) mod transition;
 
 use crate::Planner;

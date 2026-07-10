@@ -1,0 +1,36 @@
+---
+source: tests/spec/emit/interop_matrix.rs
+description: "\nimport \"go:example.com/maps\"\n\nfn main() {\n  let mut values = Map.new<Option<int>, string>()\n  values[Some(1)] = \"one\"\n  values[None] = \"none\"\n  let container = maps.Container { Values: values }\n  let roundtrip = container.Values\n  let _ = roundtrip\n}\n"
+---
+package main
+
+import (
+	"example.com/maps"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func main() {
+	values := make(map[lisette.Option[int]]string)
+	values[lisette.MakeOptionSome(1)] = "one"
+	values[lisette.MakeOptionNone[int]()] = "none"
+	src_1 := values
+	unwrapped_2 := make(map[*int]string, len(src_1))
+	for i_3, v_4 := range src_1 {
+		opt_5 := i_3
+		var ptr_6 *int
+		if opt_5.Tag == lisette.OptionSome {
+			ptr_6 = &opt_5.SomeVal
+		}
+		unwrapped_2[ptr_6] = v_4
+	}
+	container := maps.Container{Values: unwrapped_2}
+	raw_7 := container.Values
+	src_8 := raw_7
+	wrapped_9 := make(map[lisette.Option[int]]string, len(src_8))
+	for i_10, v_11 := range src_8 {
+		option_12 := lisette.OptionFromPointer[int](i_10)
+		wrapped_9[option_12] = v_11
+	}
+	roundtrip := wrapped_9
+	_ = roundtrip
+}

@@ -1,5 +1,4 @@
 use crate::Planner;
-use crate::abi::callable::AbiTransition;
 use crate::context::expression::ExpressionContext;
 use crate::plan::bodies::LoweredStatement;
 use std::fmt::{self, Display, Formatter};
@@ -711,22 +710,7 @@ impl Planner<'_> {
             {
                 self.plan_branching_as_operand_temp(expression, ty)
             }
-            Expression::Call { ty, .. } => {
-                let plan = self
-                    .plan_call(expression)
-                    .expect("plan_call yields Some for a Call expression");
-                match plan.result_transition {
-                    AbiTransition::Identity => self.lower_call(expression, Some(ty), ctx),
-                    AbiTransition::WrapToTagged => {
-                        self.lower_abi_wrapped_call(expression, &plan.resolved.abi.result, ty)
-                    }
-                    AbiTransition::LowerFromTagged
-                    | AbiTransition::Reencode
-                    | AbiTransition::Incompatible => {
-                        unreachable!("call results target their Lisette value representation")
-                    }
-                }
-            }
+            Expression::Call { ty, .. } => self.lower_call_value(expression, ty, ctx),
             _ => self.plan_operand_leaf(expression, ctx),
         }
     }

@@ -5,12 +5,12 @@ use crate::calls::dispatch::{
 
 use crate::Planner;
 use crate::abi::callable::{AbiTransition, CallableParamAbi, CallableReturnAbi};
-use crate::abi::coercion::{Coercion, CoercionDirection, OptionShape, classify_option_shape};
+use crate::abi::coercion::CoercionPlan;
+use crate::abi::layout::{SlotOrigin, ValueLayout};
 use crate::abi::transition::{emit_fn_arg_shape_adapter, emit_lisette_callback_wrapper};
 use crate::context::expression::ExpressionContext;
 use crate::expressions::staging::VariadicCombine;
 use crate::names::generics::extract_type_mapping;
-use crate::names::go_name;
 use crate::plan::bodies::LoweredStatement;
 use crate::plan::calls::{ArgumentPlan, CallPlan, CallableOrigin, ResolvedCallee};
 use crate::plan::values::{
@@ -374,10 +374,8 @@ impl<'a> Planner<'a> {
 
     /// Classify and lower a single call argument: dispatch is plan-driven and
     /// returns typed setup. The plain `Direct` / `TaggedGoLowering` paths produce
-    /// typed `TempBind` setup; the remaining adapter paths (`GoCallbackAdapter`,
-    /// `LoweredFnShapeAdapter`, `NullableCoercion`, `GoPointerUnwrap`) capture
-    /// their string emission as a single `RawGo` until each is individually
-    /// converted.
+    /// typed `TempBind` setup; adapter and slot-bridge paths retain their own
+    /// structured setup until sequencing.
     fn lower_call_arg(
         &mut self,
         arg: &Expression,
@@ -413,14 +411,8 @@ impl<'a> Planner<'a> {
                     generic_param_ty.expect("LoweredFnShapeAdapter requires generic_param_ty"),
                 )
                 .expect("detect_lowered_fn_arg_shape ensures Some"),
-            ArgumentPlan::NullableCoercion => {
-                let arg_ty = arg.get_type();
-                self.lower_unwrap_go_nullable_arg(arg, &arg_ty)
-            }
-            ArgumentPlan::GoPointerUnwrap => self.lower_go_pointer_param_unwrap(
-                arg,
-                effective_param_ty.expect("GoPointerUnwrap requires effective_param_ty"),
-            ),
+            ArgumentPlan::GoSlotBridge => self
+                .lower_go_slot_bridge(arg, param.expect("GoSlotBridge requires a parameter ABI")),
             ArgumentPlan::TaggedGoLowering => {
                 let target =
                     effective_param_ty.expect("TaggedGoLowering requires effective_param_ty");
@@ -464,18 +456,8 @@ impl<'a> Planner<'a> {
         {
             return ArgumentPlan::LoweredFnShapeAdapter;
         }
-        if self
-            .detect_nullable_coercion(arg, effective_param_ty)
-            .is_some()
-        {
-            return ArgumentPlan::NullableCoercion;
-        }
-        if matches!(callee.origin, CallableOrigin::GoInterop)
-            && self
-                .detect_go_pointer_param_unwrap(arg, effective_param_ty)
-                .is_some()
-        {
-            return ArgumentPlan::GoPointerUnwrap;
+        if param.is_some_and(|param| self.argument_needs_slot_bridge(arg, param)) {
+            return ArgumentPlan::GoSlotBridge;
         }
         let suppress = would_suppress_tagged_go(callee, declared_param_ty);
         if suppress
@@ -501,12 +483,7 @@ impl<'a> Planner<'a> {
         argument.map_rendered_as_computed(|setup, value, contains_deferred_evaluation| {
             let final_value = match effective_param_ty {
                 Some(target) => {
-                    let coercion = Coercion::resolve(
-                        self,
-                        &arg.get_type(),
-                        target,
-                        CoercionDirection::Internal,
-                    );
+                    let coercion = CoercionPlan::internal(self, &arg.get_type(), target);
                     let (coercion_setup, coerced) = coercion.lower(self, value);
                     setup.extend(coercion_setup);
                     coerced
@@ -759,78 +736,48 @@ impl<'a> Planner<'a> {
         })
     }
 
-    /// Detect whether `arg`/`param_ty` form a Go pointer-param unwrap pair.
-    /// Bridges a Lisette `Option<T>` argument to Go's nil-accepting form when
-    /// the param and arg agree on an Option shape Go expresses as `*T`:
-    /// either both `Nullable` (`Option<Ref<T>>`) or both `PointerBridged`
-    /// (`Option<scalar>` produced by bindgen's `nilable_param` config).
-    /// Pure: no emission, callable from the planning layer.
-    pub(crate) fn detect_go_pointer_param_unwrap(
-        &self,
-        arg: &Expression,
-        effective_param_ty: Option<&Type>,
-    ) -> Option<()> {
-        let param_ty = effective_param_ty?;
-        let arg_ty = arg.get_type();
-        match (
-            classify_option_shape(self, param_ty),
-            classify_option_shape(self, &arg_ty),
-        ) {
-            (OptionShape::Nullable, OptionShape::Nullable)
-            | (OptionShape::PointerBridged, OptionShape::PointerBridged) => Some(()),
-            _ => None,
+    fn argument_slot_layout(&self, parameter: &CallableParamAbi) -> ValueLayout {
+        if parameter.instantiated.get_name() == Some("VarArgs") {
+            let slot_type = varargs_inner_or_self(&parameter.instantiated);
+            let declared_slot = parameter.declared.as_ref().map(varargs_inner_or_self);
+            declared_slot.as_ref().map_or_else(
+                || self.value_layout(&slot_type, parameter.origin),
+                |declared| {
+                    self.value_layout_with_declaration(&slot_type, parameter.origin, declared)
+                },
+            )
+        } else {
+            parameter.layout.clone()
         }
     }
 
-    fn lower_go_pointer_param_unwrap(&mut self, arg: &Expression, param_ty: &Type) -> ValuePlan {
-        if arg.is_none_literal() {
+    fn argument_needs_slot_bridge(
+        &self,
+        argument: &Expression,
+        parameter: &CallableParamAbi,
+    ) -> bool {
+        let source = self.value_layout(&argument.get_type(), SlotOrigin::Lisette);
+        let target = self.argument_slot_layout(parameter);
+        !CoercionPlan::bridge(self, &source, &target).is_identity()
+    }
+
+    fn lower_go_slot_bridge(
+        &mut self,
+        argument: &Expression,
+        parameter: &CallableParamAbi,
+    ) -> ValuePlan {
+        if argument.is_none_literal() {
             return ValuePlan::evaluated_literal(
                 Vec::new(),
                 "nil".to_string(),
                 EvaluationEffect::PureCall,
             );
         }
-        let arg_ty = arg.get_type();
-        let argument = self.lower_value(arg, ExpressionContext::value());
-        let coercion = Coercion::resolve(self, &arg_ty, param_ty, CoercionDirection::ToGoBoundary);
-        argument.map_rendered_as_computed(|setup, value, _contains_deferred_evaluation| {
-            let (coercion_setup, coerced) = coercion.lower(self, value);
-            setup.extend(coercion_setup);
-            GoExpression::opaque_with_deferred_evaluation(coerced, true)
-        })
-    }
-
-    /// Detect a nullable `Option` argument flowing into a Go-imported
-    /// interface param. Pure: no emission, callable from the planning layer.
-    pub(crate) fn detect_nullable_coercion(
-        &self,
-        arg: &Expression,
-        effective_param_ty: Option<&Type>,
-    ) -> Option<()> {
-        let param_ty = effective_param_ty?;
-        let arg_ty = arg.get_type();
-        let check_ty = varargs_inner_or_self(param_ty);
-
-        if !matches!(classify_option_shape(self, &arg_ty), OptionShape::Nullable) {
-            return None;
-        }
-        self.facts
-            .as_interface(&check_ty)
-            .is_some_and(|id| go_name::is_go_import(&id))
-            .then_some(())
-    }
-
-    fn lower_unwrap_go_nullable_arg(&mut self, arg: &Expression, arg_ty: &Type) -> ValuePlan {
-        if arg.is_none_literal() {
-            return ValuePlan::evaluated_literal(
-                Vec::new(),
-                "nil".to_string(),
-                EvaluationEffect::PureCall,
-            );
-        }
-        let argument = self.lower_value(arg, ExpressionContext::value());
-        let coercion = Coercion::resolve(self, arg_ty, arg_ty, CoercionDirection::ToGoBoundary);
-        argument.map_rendered_as_computed(|setup, value, _contains_deferred_evaluation| {
+        let source = self.value_layout(&argument.get_type(), SlotOrigin::Lisette);
+        let target = self.argument_slot_layout(parameter);
+        let coercion = CoercionPlan::bridge(self, &source, &target);
+        let value = self.lower_value(argument, ExpressionContext::value());
+        value.map_rendered_as_computed(|setup, value, _contains_deferred_evaluation| {
             let (coercion_setup, coerced) = coercion.lower(self, value);
             setup.extend(coercion_setup);
             GoExpression::opaque_with_deferred_evaluation(coerced, true)

@@ -1,5 +1,6 @@
 use crate::Planner;
 use crate::abi::callable::{AbiTransition, CallableAbi, CallableParamAbi, CallableReturnAbi};
+use crate::abi::layout::SlotOrigin;
 use crate::calls::go_interop::go_qualified_name;
 use crate::calls::go_interop::is_go_receiver;
 use crate::expressions::staging::VariadicCombine;
@@ -67,11 +68,8 @@ pub(crate) enum ArgumentPlan {
     },
     /// Adapt a lowered-return fn-value arg to the callee's expected shape.
     LoweredFnShapeAdapter,
-    /// Nullable `Option` argument flowing into a Go-imported interface:
-    /// unwrap the option and apply the Go-boundary coercion.
-    NullableCoercion,
-    /// Unwrap a Go pointer parameter at the call site (`&x` or `*x`).
-    GoPointerUnwrap,
+    /// Bridge the Lisette value layout to the parameter slot's physical layout.
+    GoSlotBridge,
     /// Lower a tagged Go-function value (prelude-dispatch arg).
     TaggedGoLowering,
 }
@@ -209,7 +207,14 @@ impl<'a> Planner<'a> {
             .and_then(|ty| ty.unwrap_forall().get_function_params());
         let receiver_offset =
             declared_params.map_or(0, |params| params.len().saturating_sub(arg_count));
-        let params = build_param_abi(&instantiated, declared_params, receiver_offset);
+        let params = build_param_abi(
+            self,
+            &instantiated,
+            declared_params,
+            receiver_offset,
+            id.as_deref(),
+            &origin,
+        );
         let result = match go_return {
             Some(result) => result.clone(),
             None => self
@@ -220,6 +225,23 @@ impl<'a> Planner<'a> {
                         .map(|return_ty| self.value_return_abi(return_ty))
                         .unwrap_or(CallableReturnAbi::Direct)
                 }),
+        };
+        let return_type = instantiated.get_function_ret().unwrap_or(&Type::Never);
+        let return_layout = if matches!(origin, CallableOrigin::GoInterop) {
+            id.as_deref()
+                .and_then(|id| self.facts.go_callable_return_slot(id))
+                .map(|slot| {
+                    self.value_layout_with_declaration(
+                        return_type,
+                        slot.origin,
+                        &slot.declared_type,
+                    )
+                })
+                .unwrap_or_else(|| {
+                    self.value_layout(return_type, SlotOrigin::go_return(return_type))
+                })
+        } else {
+            self.value_layout(return_type, SlotOrigin::Lisette)
         };
         let is_prelude_dispatch = match function.unwrap_parens() {
             Expression::DotAccess { expression, .. } => {
@@ -243,7 +265,11 @@ impl<'a> Planner<'a> {
             instantiated,
             declared,
             receiver_offset,
-            abi: CallableAbi { params, result },
+            abi: CallableAbi {
+                params,
+                result,
+                return_layout,
+            },
             is_prelude_dispatch,
         }
     }
@@ -345,7 +371,7 @@ impl<'a> Planner<'a> {
         function: &Expression,
         arg_count: usize,
     ) -> Vec<CallableParamAbi> {
-        let (_, definition) = self.resolve_callee_definition(function);
+        let (id, definition) = self.resolve_callee_definition(function);
         let declared = definition.map(Definition::ty);
         let declared_params = declared.and_then(|ty| ty.unwrap_forall().get_function_params());
         let receiver_offset =
@@ -354,7 +380,19 @@ impl<'a> Planner<'a> {
             .facts
             .resolve_to_function_type(function.get_type().unwrap_forall())
             .unwrap_or_else(|| function.get_type().unwrap_forall().clone());
-        build_param_abi(&instantiated, declared_params, receiver_offset)
+        let origin = if is_go_callable(function) {
+            CallableOrigin::GoInterop
+        } else {
+            CallableOrigin::Regular
+        };
+        build_param_abi(
+            self,
+            &instantiated,
+            declared_params,
+            receiver_offset,
+            id.as_deref(),
+            &origin,
+        )
     }
 
     fn resolve_callee_id(&self, function: &Expression) -> Option<String> {
@@ -487,9 +525,12 @@ impl<'a> Planner<'a> {
             && is_go_receiver(receiver_expression)
         {
             if let Some(qualified_name) = go_qualified_name(receiver_expression, member)
-                && let Some(result) = self.facts.go_callable_return(&qualified_name)
+                && self
+                    .facts
+                    .go_callable_return_slot(&qualified_name)
+                    .is_some()
             {
-                return Some(result.clone());
+                return self.facts.go_callable_return(&qualified_name).cloned();
             }
             let go_hints = go_qualified_name(receiver_expression, member)
                 .and_then(|name| self.facts.definition(name.as_str()))
@@ -503,20 +544,57 @@ impl<'a> Planner<'a> {
 }
 
 fn build_param_abi(
+    planner: &Planner<'_>,
     instantiated: &Type,
     declared: Option<&[Type]>,
     receiver_offset: usize,
+    callee_id: Option<&str>,
+    callable_origin: &CallableOrigin,
 ) -> Vec<CallableParamAbi> {
     instantiated
         .get_function_params()
         .unwrap_or(&[])
         .iter()
         .enumerate()
-        .map(|(index, instantiated)| CallableParamAbi {
-            instantiated: instantiated.clone(),
-            declared: declared
+        .map(|(index, instantiated)| {
+            let declared = declared
                 .and_then(|params| params.get(receiver_offset + index))
-                .cloned(),
+                .cloned();
+            let catalog_slot = if matches!(callable_origin, CallableOrigin::GoInterop) {
+                callee_id.and_then(|id| {
+                    planner
+                        .facts
+                        .go_callable_parameter(id, receiver_offset + index)
+                })
+            } else {
+                None
+            };
+            let origin = catalog_slot.map_or_else(
+                || {
+                    if matches!(callable_origin, CallableOrigin::GoInterop) {
+                        SlotOrigin::go_parameter(declared.as_ref().unwrap_or(instantiated))
+                    } else {
+                        SlotOrigin::Lisette
+                    }
+                },
+                |slot| slot.origin,
+            );
+            let layout = catalog_slot
+                .map(|slot| {
+                    planner.value_layout_with_declaration(instantiated, origin, &slot.declared_type)
+                })
+                .or_else(|| {
+                    declared.as_ref().map(|declared| {
+                        planner.value_layout_with_declaration(instantiated, origin, declared)
+                    })
+                })
+                .unwrap_or_else(|| planner.value_layout(instantiated, origin));
+            CallableParamAbi {
+                instantiated: instantiated.clone(),
+                declared,
+                origin,
+                layout,
+            }
         })
         .collect()
 }

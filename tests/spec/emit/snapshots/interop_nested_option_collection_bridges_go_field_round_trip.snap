@@ -1,0 +1,48 @@
+---
+source: tests/spec/emit/interop_matrix.rs
+description: "\nimport \"go:example.com/nested\"\n\nfn main() {\n  let values: Option<Slice<Option<int>>> = Some([Some(1), None])\n  let container = nested.Container { Values: values }\n  let roundtrip = container.Values\n  let _ = roundtrip\n}\n"
+---
+package main
+
+import (
+	"example.com/nested"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func main() {
+	values := lisette.MakeOptionSome([]lisette.Option[int]{lisette.MakeOptionSome(1), lisette.MakeOptionNone[int]()})
+	opt_1 := values
+	var ptr_2 *[]*int
+	if opt_1.Tag == lisette.OptionSome {
+		src_3 := opt_1.SomeVal
+		unwrapped_4 := make([]*int, len(src_3))
+		for i_5, v_6 := range src_3 {
+			if v_6.Tag == lisette.OptionSome {
+				unwrapped_4[i_5] = &v_6.SomeVal
+			} else {
+				unwrapped_4[i_5] = nil
+			}
+		}
+		ptr_2 = &unwrapped_4
+	}
+	container := nested.Container{Values: ptr_2}
+	raw_7 := container.Values
+	raw_8 := raw_7
+	var option_9 lisette.Option[[]lisette.Option[int]]
+	if raw_8 != nil {
+		src_10 := *raw_8
+		wrapped_11 := make([]lisette.Option[int], len(src_10))
+		for i_12, v_13 := range src_10 {
+			if v_13 != nil {
+				wrapped_11[i_12] = lisette.MakeOptionSome[int](*v_13)
+			} else {
+				wrapped_11[i_12] = lisette.MakeOptionNone[int]()
+			}
+		}
+		option_9 = lisette.MakeOptionSome[[]lisette.Option[int]](wrapped_11)
+	} else {
+		option_9 = lisette.MakeOptionNone[[]lisette.Option[int]]()
+	}
+	roundtrip := option_9
+	_ = roundtrip
+}

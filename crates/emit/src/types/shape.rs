@@ -1,13 +1,11 @@
-use syntax::types::{CompoundKind, Symbol, Type};
+use syntax::types::{CompoundKind, Type};
 
 use crate::Planner;
-use crate::names::go_name;
 use crate::types::native::NativeGoType;
 
 #[derive(Debug, Clone)]
 pub(crate) struct NativeShape {
     pub(crate) kind: NativeGoType,
-    pub(crate) params: Vec<Type>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -17,32 +15,6 @@ pub(crate) enum RangeShape {
     RangeFrom,
     RangeTo,
     RangeToInclusive,
-}
-
-#[derive(Debug, Clone)]
-pub(crate) struct GoImportedShape {
-    #[allow(dead_code)]
-    pub(crate) id: Symbol,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum CollectionKind {
-    Slice,
-    Map,
-    Array { length: u64 },
-}
-
-#[derive(Debug, Clone)]
-pub(crate) struct NullableCollectionShape {
-    pub(crate) kind: CollectionKind,
-    pub(crate) key_ty: Option<Type>,
-    pub(crate) element: NullableCollectionElement,
-}
-
-#[derive(Debug, Clone)]
-pub(crate) enum NullableCollectionElement {
-    Option(Type),
-    Nested(Box<NullableCollectionShape>),
 }
 
 impl Planner<'_> {
@@ -65,13 +37,9 @@ impl Planner<'_> {
     /// only accepts `Type::Compound` shapes (not nominals whose leaf name
     /// happens to be `Slice`/`Map`/etc.) plus `SimpleKind::String`.
     pub(crate) fn native_shape(&self, ty: &Type) -> Option<NativeShape> {
-        self.native_shape_from_resolved(self.emit_shape_ty(ty))
-    }
-
-    /// `native_shape` on a type already resolved by `emit_shape_ty`.
-    fn native_shape_from_resolved(&self, resolved: Type) -> Option<NativeShape> {
+        let resolved = self.emit_shape_ty(ty);
         match resolved {
-            Type::Compound { kind, args } => {
+            Type::Compound { kind, .. } => {
                 let native = match kind {
                     CompoundKind::Slice => NativeGoType::Slice,
                     CompoundKind::EnumeratedSlice => NativeGoType::EnumeratedSlice,
@@ -81,14 +49,10 @@ impl Planner<'_> {
                     CompoundKind::Receiver => NativeGoType::Receiver,
                     CompoundKind::Ref | CompoundKind::VarArgs => return None,
                 };
-                Some(NativeShape {
-                    kind: native,
-                    params: args,
-                })
+                Some(NativeShape { kind: native })
             }
             Type::Simple(syntax::types::SimpleKind::String) => Some(NativeShape {
                 kind: NativeGoType::String,
-                params: Vec::new(),
             }),
             _ => None,
         }
@@ -115,86 +79,5 @@ impl Planner<'_> {
             "prelude.RangeToInclusive" => Some(RangeShape::RangeToInclusive),
             _ => None,
         }
-    }
-
-    /// Classify a type as a Go-imported nominal after alias peeling.
-    /// `type MyFlag = flag.Flag` and `Ref<MyFlag>` both match.
-    pub(crate) fn go_imported_shape(&self, ty: &Type) -> Option<GoImportedShape> {
-        let resolved = self.emit_shape_ty(ty);
-        let Type::Nominal { id, .. } = resolved else {
-            return None;
-        };
-        if go_name::is_go_import(id.as_str()) {
-            Some(GoImportedShape { id })
-        } else {
-            None
-        }
-    }
-
-    /// Classify a type as a nullable collection (`Slice<Option<...>>`,
-    /// `Map<K, Option<...>>`, or `Array<Option<...>, N>`) after alias peeling.
-    /// Element option types are also alias-aware via the inner option
-    /// classifier. Nested collections (e.g. `Slice<Slice<Option<T>>>`) are
-    /// detected recursively.
-    pub(crate) fn nullable_collection_shape(&self, ty: &Type) -> Option<NullableCollectionShape> {
-        match self.emit_shape_ty(ty) {
-            Type::Array { length, element } => {
-                let element = self.classify_nullable_element(&element)?;
-                Some(NullableCollectionShape {
-                    kind: CollectionKind::Array { length },
-                    key_ty: None,
-                    element,
-                })
-            }
-            resolved => {
-                let shape = self.native_shape_from_resolved(resolved)?;
-                match shape.kind {
-                    NativeGoType::Slice => {
-                        let element_ty = shape.params.into_iter().next()?;
-                        let element = self.classify_nullable_element(&element_ty)?;
-                        Some(NullableCollectionShape {
-                            kind: CollectionKind::Slice,
-                            key_ty: None,
-                            element,
-                        })
-                    }
-                    NativeGoType::Map => {
-                        let mut iter = shape.params.into_iter();
-                        let key_ty = iter.next()?;
-                        let val_ty = iter.next()?;
-                        let element = self.classify_nullable_element(&val_ty)?;
-                        Some(NullableCollectionShape {
-                            kind: CollectionKind::Map,
-                            key_ty: Some(key_ty),
-                            element,
-                        })
-                    }
-                    _ => None,
-                }
-            }
-        }
-    }
-
-    fn classify_nullable_element(&self, element_ty: &Type) -> Option<NullableCollectionElement> {
-        if let Some(opt) = self.pointer_bridged_option_ty(element_ty) {
-            return Some(NullableCollectionElement::Option(opt));
-        }
-        let nested = self.nullable_collection_shape(element_ty)?;
-        Some(NullableCollectionElement::Nested(Box::new(nested)))
-    }
-
-    fn pointer_bridged_option_ty(&self, ty: &Type) -> Option<Type> {
-        let resolved = self.emit_shape_ty(ty);
-        if !resolved.is_option() {
-            return None;
-        }
-        let inner = resolved.ok_type();
-        if self.facts.is_nilable_go_type(&inner) {
-            return Some(resolved);
-        }
-        if inner.contains_unknown() || inner.has_name("any") {
-            return None;
-        }
-        Some(resolved)
     }
 }

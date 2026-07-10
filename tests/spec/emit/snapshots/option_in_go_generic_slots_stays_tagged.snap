@@ -1,0 +1,27 @@
+---
+source: tests/spec/emit/types.rs
+description: "\nimport \"go:example.com/generic\"\n\nfn main() {\n  let option = Some(1)\n  let options: Slice<Option<int>> = [option]\n  generic.Store(option)\n  generic.StoreAll(options)\n  generic.StoreMany(option, option)\n  let loaded = generic.Load(option)\n  let loaded_all = generic.LoadAll(options)\n  let bag = generic.Bag { Value: option, Values: options }\n  generic.Store(bag.Value)\n  generic.Store(loaded)\n  generic.StoreAll(loaded_all)\n}\n"
+---
+package main
+
+import (
+	"example.com/generic"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func main() {
+	option := lisette.MakeOptionSome(1)
+	options := []lisette.Option[int]{option}
+	generic.Store(option)
+	generic.StoreAll(options)
+	generic.StoreMany(option, option)
+	loaded := generic.Load(option)
+	loaded_all := generic.LoadAll(options)
+	bag := generic.Bag[lisette.Option[int]]{
+		Value:  option,
+		Values: options,
+	}
+	generic.Store(bag.Value)
+	generic.Store(loaded)
+	generic.StoreAll(loaded_all)
+}

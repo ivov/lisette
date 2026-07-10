@@ -207,12 +207,6 @@ impl Planner<'_> {
         let inner = ty.ok_type();
         self.facts.is_interface(&inner)
     }
-
-    pub(crate) fn is_go_nullable(&self, ty: &Type) -> bool {
-        self.facts.is_nullable_option(ty)
-            || self.is_non_nilable_option(ty)
-            || self.nullable_collection_shape(ty).is_some()
-    }
 }
 
 impl Planner<'_> {

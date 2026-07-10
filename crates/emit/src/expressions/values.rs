@@ -4,14 +4,15 @@ use syntax::program::DefinitionBody;
 
 use crate::Planner;
 use crate::abi::callable::{AbiTransition, CallableReturnAbi, OptionReturnAbi, PayloadLayout};
-use crate::abi::coercion::{Coercion, CoercionDirection};
+use crate::abi::coercion::CoercionPlan;
+use crate::abi::layout::SlotOrigin;
 use crate::abi::transition::emit_lisette_callback_wrapper;
 use crate::context::expression::ExpressionContext;
 use crate::is_order_sensitive;
 use crate::plan::bodies::{
     ExpressionStatementForm, ExpressionStatementPlan, LoweredBlock, LoweredStatement,
 };
-use crate::plan::calls::CallableOrigin;
+use crate::plan::calls::{CallPlan, CallableOrigin};
 use crate::plan::values::{
     CaptureBoundary, EvaluationEffect, GoExpression, OperandForm, ValuePlan,
 };
@@ -79,6 +80,54 @@ impl Planner<'_> {
                 });
         }
         self.lower_value(expression, ctx)
+    }
+
+    pub(crate) fn lower_call_value(
+        &mut self,
+        expression: &Expression,
+        result_type: &Type,
+        context: ExpressionContext<'_>,
+    ) -> ValuePlan {
+        let plan = self
+            .plan_call(expression)
+            .expect("plan_call yields Some for a Call expression");
+        let layout_bridge = self.call_result_layout_bridge(&plan, result_type);
+
+        if let Some(bridge) = layout_bridge {
+            let call_type =
+                matches!(plan.result_transition, AbiTransition::Identity).then_some(result_type);
+            let call = self.lower_call(expression, call_type, context);
+            return call.map_rendered_as_observable_computed(
+                |setup, call_string, _contains_deferred_evaluation| {
+                    let (bridge_setup, value) = bridge.lower(self, call_string);
+                    setup.extend(bridge_setup);
+                    GoExpression::opaque(value)
+                },
+            );
+        }
+
+        match plan.result_transition {
+            AbiTransition::Identity => self.lower_call(expression, Some(result_type), context),
+            AbiTransition::WrapToTagged => {
+                self.lower_go_abi_wrapped_call(expression, &plan.resolved.abi, result_type)
+            }
+            AbiTransition::LowerFromTagged
+            | AbiTransition::Reencode
+            | AbiTransition::Incompatible => {
+                unreachable!("call results target their Lisette value representation")
+            }
+        }
+    }
+
+    pub(crate) fn call_result_layout_bridge(
+        &self,
+        plan: &CallPlan<'_>,
+        result_type: &Type,
+    ) -> Option<CoercionPlan> {
+        if !matches!(plan.resolved.origin, CallableOrigin::GoInterop) {
+            return None;
+        }
+        self.go_result_layout_bridge(&plan.resolved.abi, result_type)
     }
 
     /// Wrap a captured tagged-shape prelude fn ref into a lowered-ABI closure
@@ -203,22 +252,7 @@ impl Planner<'_> {
                     })
                 }
             }
-            Expression::Call { ty, .. } => {
-                let plan = self
-                    .plan_call(expression)
-                    .expect("plan_call yields Some for a Call expression");
-                match plan.result_transition {
-                    AbiTransition::Identity => self.lower_call(expression, Some(ty), ctx),
-                    AbiTransition::WrapToTagged => {
-                        self.lower_abi_wrapped_call(expression, &plan.resolved.abi.result, ty)
-                    }
-                    AbiTransition::LowerFromTagged
-                    | AbiTransition::Reencode
-                    | AbiTransition::Incompatible => {
-                        unreachable!("call results target their Lisette value representation")
-                    }
-                }
-            }
+            Expression::Call { ty, .. } => self.lower_call_value(expression, ty, ctx),
             Expression::RawGo { text } => ValuePlan::opaque(text.clone()),
             Expression::Unit { .. } => ValuePlan::opaque("struct{}{}".to_string()),
             Expression::NoOp => ValuePlan::opaque(String::new()),
@@ -295,12 +329,7 @@ impl Planner<'_> {
         for (i, (expr, emitted)) in elements.iter().zip(element_expressions).enumerate() {
             let value = match slot_types.get(i) {
                 Some(slot) => {
-                    let coercion = Coercion::resolve(
-                        self,
-                        &expr.get_type(),
-                        slot,
-                        CoercionDirection::Internal,
-                    );
+                    let coercion = CoercionPlan::internal(self, &expr.get_type(), slot);
                     let (coercion_setup, coerced) = coercion.lower(self, emitted);
                     setup.extend(coercion_setup);
                     coerced
@@ -352,7 +381,7 @@ impl Planner<'_> {
 
         if self.facts.is_interface(ty) {
             let source_ty = expression.get_type();
-            let coercion = Coercion::resolve(self, &source_ty, ty, CoercionDirection::Internal);
+            let coercion = CoercionPlan::internal(self, &source_ty, ty);
             let mut converted =
                 inner.map_rendered_as_computed(|setup, value, _contains_deferred_evaluation| {
                     let (coercion_setup, coerced) = coercion.lower(self, value);
@@ -462,26 +491,28 @@ impl Planner<'_> {
 
         if let Expression::DotAccess {
             expression: receiver,
+            member,
             ty,
             ..
         } = target
-            && self.go_imported_shape(&receiver.get_type()).is_some()
-            && self.is_go_nullable(ty)
+            && let Some(target_layout) = self.field_slot_layout(&receiver.get_type(), member, ty)
         {
-            let coercion =
-                Coercion::resolve(self, &value.get_type(), ty, CoercionDirection::ToGoBoundary);
-            let (coercion_setup, unwrapped) = coercion.lower(self, rhs_value);
-            setup.extend(coercion_setup);
-            setup.push(LoweredStatement::RawGo(format!(
-                "{} = {}\n",
-                target_str, unwrapped
-            )));
-        } else {
-            setup.push(LoweredStatement::RawGo(format!(
-                "{} = {}\n",
-                target_str, rhs_value
-            )));
+            let source_layout = self.value_layout(&value.get_type(), SlotOrigin::Lisette);
+            let coercion = CoercionPlan::bridge(self, &source_layout, &target_layout);
+            if !coercion.is_identity() {
+                let (coercion_setup, unwrapped) = coercion.lower(self, rhs_value);
+                setup.extend(coercion_setup);
+                setup.push(LoweredStatement::RawGo(format!(
+                    "{} = {}\n",
+                    target_str, unwrapped
+                )));
+                return setup;
+            }
         }
+        setup.push(LoweredStatement::RawGo(format!(
+            "{} = {}\n",
+            target_str, rhs_value
+        )));
         setup
     }
 

@@ -1,10 +1,11 @@
 use crate::Planner;
 use crate::abi::callable::PayloadLayout;
+use crate::abi::coercion::{BridgeDirection, CoercionPlan, LayoutBridge};
+use crate::abi::layout::ValueLayout;
 use crate::calls::go_interop::build_tuple_literal;
 use crate::calls::go_interop::wrappers::{WrapperOutcome, WrapperTarget, leaf_block};
 use crate::control_flow::fallible::{Fallible, FalliblePlanner, OPTION_SOME_TAG};
 use crate::plan::bodies::{ElseArm, IfPlan, LoopPlan, LoweredBlock, LoweredStatement};
-use crate::types::shape::{CollectionKind, NullableCollectionElement, NullableCollectionShape};
 use syntax::types::Type;
 
 impl Planner<'_> {
@@ -37,6 +38,7 @@ impl Planner<'_> {
         call_str: &str,
         option_ty: &Type,
         layout: PayloadLayout,
+        payload_bridge: Option<CoercionPlan>,
         target: WrapperTarget<'_>,
     ) -> (Vec<LoweredStatement>, WrapperOutcome) {
         self.require_stdlib();
@@ -46,8 +48,9 @@ impl Planner<'_> {
         let inner_tuple_arity = inner_ty.tuple_arity();
         let needs_nilable_validation = self.facts.is_nullable_option(option_ty);
 
-        let needs_complex =
-            needs_nilable_validation || (layout.is_flattened() && inner_tuple_arity.is_some());
+        let needs_complex = payload_bridge.is_some()
+            || needs_nilable_validation
+            || (layout.is_flattened() && inner_tuple_arity.is_some());
 
         if !needs_complex {
             let inner_ty_str = self.go_type_string(&inner_ty);
@@ -85,6 +88,10 @@ impl Planner<'_> {
         } else {
             val_vars[0].clone()
         };
+        let (mut payload_setup, val_expression) = match payload_bridge {
+            Some(bridge) => bridge.lower(self, val_expression),
+            None => (Vec::new(), val_expression),
+        };
 
         let option_ty_str = {
             let mut fe = FalliblePlanner::new(self, &fallible);
@@ -111,10 +118,14 @@ impl Planner<'_> {
             fe.emit_failure(None)
         };
 
+        let mut then_body = leaf_block(&sink, &some_wrapper);
+        payload_setup.append(&mut then_body.statements);
         statements.push(LoweredStatement::If(IfPlan {
             condition_setup: Vec::new(),
             condition,
-            then_body: leaf_block(&sink, &some_wrapper),
+            then_body: LoweredBlock {
+                statements: payload_setup,
+            },
             else_arm: ElseArm::Else {
                 body: leaf_block(&sink, &none_wrapper),
                 inline: false,
@@ -209,151 +220,311 @@ impl Planner<'_> {
         outcome.expect("FreshSlot produces a slot")
     }
 
-    pub(crate) fn plan_collection_nullable_wrap(
+    pub(crate) fn plan_layout_bridge(
+        &mut self,
+        statements: &mut Vec<LoweredStatement>,
+        value: &str,
+        bridge: &LayoutBridge,
+    ) -> String {
+        match bridge {
+            LayoutBridge::Identity => value.to_string(),
+            LayoutBridge::UnwrapNullableOption {
+                option_type,
+                target_payload,
+                payload,
+            } => {
+                if payload.is_identity() {
+                    let slot_type = target_payload.go_type(self);
+                    self.plan_option_projection(statements, value, "unwrap", &slot_type, false)
+                } else {
+                    self.plan_option_projection_with_bridge(
+                        statements,
+                        value,
+                        option_type,
+                        target_payload,
+                        payload,
+                        false,
+                    )
+                }
+            }
+            LayoutBridge::UnwrapPointerOption {
+                option_type,
+                target_payload,
+                payload,
+            } => {
+                if payload.is_identity() {
+                    let slot_type = format!("*{}", target_payload.go_type(self));
+                    self.plan_option_projection(statements, value, "ptr", &slot_type, true)
+                } else {
+                    self.plan_option_projection_with_bridge(
+                        statements,
+                        value,
+                        option_type,
+                        target_payload,
+                        payload,
+                        true,
+                    )
+                }
+            }
+            LayoutBridge::WrapNullableOption {
+                option_type,
+                source_payload,
+                payload,
+            } => {
+                if payload.is_identity() {
+                    self.plan_nil_check_option_wrap(statements, value, option_type)
+                } else {
+                    self.plan_option_wrap_with_bridge(
+                        statements,
+                        value,
+                        option_type,
+                        source_payload,
+                        payload,
+                        false,
+                    )
+                }
+            }
+            LayoutBridge::WrapPointerOption {
+                option_type,
+                source_payload,
+                payload,
+            } => {
+                if payload.is_identity() {
+                    self.plan_pointer_to_option_wrap(statements, value, option_type)
+                } else {
+                    self.plan_option_wrap_with_bridge(
+                        statements,
+                        value,
+                        option_type,
+                        source_payload,
+                        payload,
+                        true,
+                    )
+                }
+            }
+            LayoutBridge::Aggregate {
+                source,
+                target,
+                key,
+                element,
+            } => self.plan_aggregate_layout_bridge(
+                statements,
+                value,
+                source,
+                target,
+                key.as_deref(),
+                element,
+            ),
+        }
+    }
+
+    fn plan_option_projection_with_bridge(
+        &mut self,
+        statements: &mut Vec<LoweredStatement>,
+        option_value: &str,
+        _option_type: &Type,
+        target_payload: &ValueLayout,
+        payload_bridge: &LayoutBridge,
+        address: bool,
+    ) -> String {
+        let option = self.hoist_tmp_value_statement(statements, "opt", option_value);
+        let target_type = target_payload.go_type(self);
+        let slot_type = if address {
+            format!("*{target_type}")
+        } else {
+            target_type
+        };
+        let slot_hint = if address { "ptr" } else { "unwrap" };
+        let slot = self.fresh_var(Some(slot_hint));
+        self.declare(&slot);
+        statements.push(LoweredStatement::VarDecl {
+            name: slot.clone(),
+            go_type: slot_type,
+            value: None,
+        });
+
+        let mut then_statements = Vec::new();
+        let payload = self.plan_layout_bridge(
+            &mut then_statements,
+            &format!("{}.SomeVal", option),
+            payload_bridge,
+        );
+        let payload = if address {
+            format!("&{payload}")
+        } else {
+            payload
+        };
+        then_statements.push(LoweredStatement::RawGo(format!("{slot} = {payload}\n")));
+        statements.push(LoweredStatement::If(IfPlan {
+            condition_setup: Vec::new(),
+            condition: format!("{}.Tag == {}", option, OPTION_SOME_TAG),
+            then_body: LoweredBlock {
+                statements: then_statements,
+            },
+            else_arm: ElseArm::None,
+        }));
+        slot
+    }
+
+    fn plan_option_wrap_with_bridge(
         &mut self,
         statements: &mut Vec<LoweredStatement>,
         raw_value: &str,
-        collection_ty: &Type,
-        shape: &NullableCollectionShape,
+        option_type: &Type,
+        _source_payload: &ValueLayout,
+        payload_bridge: &LayoutBridge,
+        pointer: bool,
     ) -> String {
         self.require_stdlib();
-
-        let lisette_collection_ty = self.go_type_string(collection_ty);
-        let src_var = self.hoist_tmp_value_statement(statements, "src", raw_value);
-        let wrapped_var = self.plan_boundary_collection_dest(
-            statements,
-            shape.kind,
-            "wrapped",
-            &lisette_collection_ty,
-            &src_var,
-        );
-        let index_var = self.fresh_var(Some("i"));
-        self.declare(&index_var);
-        let val_var = self.fresh_var(Some("v"));
-        self.declare(&val_var);
-
-        let loop_body = match &shape.element {
-            NullableCollectionElement::Option(opt_ty) => {
-                let fallible = Fallible::from_type(opt_ty).expect("Option type expected");
-                let is_pointer_bridged = self.is_non_nilable_option(opt_ty);
-                let is_interface = self.is_interface_option(opt_ty);
-                let some_input = if is_pointer_bridged {
-                    format!("*{}", val_var)
-                } else {
-                    val_var.clone()
-                };
-                let some_wrapper = {
-                    let mut fe = FalliblePlanner::new(self, &fallible);
-                    fe.emit_success(&some_input)
-                };
-                let none_wrapper = {
-                    let mut fe = FalliblePlanner::new(self, &fallible);
-                    fe.emit_failure(None)
-                };
-                let condition = if is_interface {
-                    format!("!lisette.IsNilInterface({})", val_var)
-                } else {
-                    format!("{} != nil", val_var)
-                };
-                let then_body = LoweredBlock {
-                    statements: vec![LoweredStatement::RawGo(format!(
-                        "{}[{}] = {}\n",
-                        wrapped_var, index_var, some_wrapper
-                    ))],
-                };
-                let else_body = LoweredBlock {
-                    statements: vec![LoweredStatement::RawGo(format!(
-                        "{}[{}] = {}\n",
-                        wrapped_var, index_var, none_wrapper
-                    ))],
-                };
-                let if_plan = IfPlan {
-                    condition_setup: Vec::new(),
-                    condition,
-                    then_body,
-                    else_arm: ElseArm::Else {
-                        body: else_body,
-                        inline: false,
-                    },
-                };
-                LoweredBlock {
-                    statements: vec![LoweredStatement::If(if_plan)],
-                }
-            }
-            NullableCollectionElement::Nested(inner_shape) => {
-                let inner_lisette_ty = self.collection_element_ty(collection_ty, shape);
-                let mut inner_statements = Vec::new();
-                let inner_var = self.plan_collection_nullable_wrap(
-                    &mut inner_statements,
-                    &val_var,
-                    &inner_lisette_ty,
-                    inner_shape,
-                );
-                inner_statements.push(LoweredStatement::RawGo(format!(
-                    "{}[{}] = {}\n",
-                    wrapped_var, index_var, inner_var
-                )));
-                LoweredBlock {
-                    statements: inner_statements,
-                }
-            }
+        let source = self.hoist_tmp_value_statement(statements, "raw", raw_value);
+        let fallible = Fallible::from_type(option_type).expect("Option type expected");
+        let option_type_string = {
+            let mut planner = FalliblePlanner::new(self, &fallible);
+            planner.full_type_string()
         };
+        let option = self.fresh_var(Some("option"));
+        self.declare(&option);
+        statements.push(LoweredStatement::VarDecl {
+            name: option.clone(),
+            go_type: option_type_string,
+            value: None,
+        });
 
+        let raw_payload = if pointer {
+            format!("*{source}")
+        } else {
+            source.clone()
+        };
+        let mut then_statements = Vec::new();
+        let payload = self.plan_layout_bridge(&mut then_statements, &raw_payload, payload_bridge);
+        let some = {
+            let mut planner = FalliblePlanner::new(self, &fallible);
+            planner.emit_success(&payload)
+        };
+        then_statements.push(LoweredStatement::RawGo(format!("{option} = {some}\n")));
+        let none = {
+            let mut planner = FalliblePlanner::new(self, &fallible);
+            planner.emit_failure(None)
+        };
+        let condition = if !pointer && self.is_interface_option(option_type) {
+            format!("!lisette.IsNilInterface({source})")
+        } else {
+            format!("{source} != nil")
+        };
+        statements.push(LoweredStatement::If(IfPlan {
+            condition_setup: Vec::new(),
+            condition,
+            then_body: LoweredBlock {
+                statements: then_statements,
+            },
+            else_arm: ElseArm::Else {
+                body: LoweredBlock {
+                    statements: vec![LoweredStatement::RawGo(format!("{option} = {none}\n"))],
+                },
+                inline: false,
+            },
+        }));
+        option
+    }
+
+    fn plan_aggregate_layout_bridge(
+        &mut self,
+        statements: &mut Vec<LoweredStatement>,
+        value: &str,
+        source_layout: &ValueLayout,
+        target_layout: &ValueLayout,
+        key_bridge: Option<&LayoutBridge>,
+        element_bridge: &LayoutBridge,
+    ) -> String {
+        self.require_stdlib();
+        let source = self.hoist_tmp_value_statement(statements, "src", value);
+        let direction = key_bridge
+            .and_then(LayoutBridge::direction)
+            .or_else(|| element_bridge.direction())
+            .expect("aggregate layout bridge must contain an option bridge");
+        let output_hint = match direction {
+            BridgeDirection::ToGo => "unwrapped",
+            BridgeDirection::FromGo => "wrapped",
+        };
+        let target_type = target_layout.go_type(self);
+        let output = if matches!(target_layout, ValueLayout::Array { .. }) {
+            let output = self.fresh_var(Some(output_hint));
+            self.declare(&output);
+            statements.push(LoweredStatement::VarDecl {
+                name: output.clone(),
+                go_type: target_type,
+                value: None,
+            });
+            output
+        } else {
+            self.hoist_tmp_value_statement(
+                statements,
+                output_hint,
+                &format!("make({}, len({}))", target_type, source),
+            )
+        };
+        let index = self.fresh_var(Some("i"));
+        self.declare(&index);
+        let element = self.fresh_var(Some("v"));
+        self.declare(&element);
+        let mut key_statements = Vec::new();
+        let output_index = key_bridge.map_or_else(
+            || index.clone(),
+            |bridge| self.plan_layout_bridge(&mut key_statements, &index, bridge),
+        );
+        let mut body = self.plan_aggregate_element_bridge(
+            &output,
+            &output_index,
+            &element,
+            source_layout,
+            element_bridge,
+        );
+        if !key_statements.is_empty() {
+            key_statements.append(&mut body.statements);
+            body.statements = key_statements;
+        }
         statements.push(LoweredStatement::Loop(LoopPlan {
             prologue: Vec::new(),
             label: None,
-            header: format!("for {}, {} := range {} {{\n", index_var, val_var, src_var),
-            body: loop_body,
+            header: format!("for {index}, {element} := range {source} {{\n"),
+            body,
         }));
-
-        wrapped_var
+        output
     }
 
-    pub(crate) fn plan_collection_nullable_unwrap(
+    fn plan_aggregate_element_bridge(
         &mut self,
-        statements: &mut Vec<LoweredStatement>,
-        lisette_value: &str,
-        collection_ty: &Type,
-        shape: &NullableCollectionShape,
-    ) -> String {
-        self.require_stdlib();
-        let raw_collection_ty = self.shape_raw_collection_ty(shape);
-
-        let src_var = self.hoist_tmp_value_statement(statements, "src", lisette_value);
-        let unwrapped_var = self.plan_boundary_collection_dest(
-            statements,
-            shape.kind,
-            "unwrapped",
-            &raw_collection_ty,
-            &src_var,
-        );
-        let index_var = self.fresh_var(Some("i"));
-        self.declare(&index_var);
-        let val_var = self.fresh_var(Some("v"));
-        self.declare(&val_var);
-
-        let loop_body = match &shape.element {
-            NullableCollectionElement::Option(opt_ty) => {
-                let is_pointer_bridged = self.is_non_nilable_option(opt_ty);
-                let is_map = matches!(shape.kind, CollectionKind::Map);
-                let emit_nil_else = is_map || is_pointer_bridged;
-                let some_assignment = if is_pointer_bridged {
-                    format!("&{}.SomeVal", val_var)
+        output: &str,
+        index: &str,
+        element: &str,
+        source_layout: &ValueLayout,
+        bridge: &LayoutBridge,
+    ) -> LoweredBlock {
+        match bridge {
+            LayoutBridge::UnwrapNullableOption { payload, .. }
+            | LayoutBridge::UnwrapPointerOption { payload, .. } => {
+                let pointer = matches!(bridge, LayoutBridge::UnwrapPointerOption { .. });
+                let mut then_statements = Vec::new();
+                let projected = format!("{element}.SomeVal");
+                let projected = if payload.is_identity() {
+                    projected
                 } else {
-                    format!("{}.SomeVal", val_var)
+                    self.plan_layout_bridge(&mut then_statements, &projected, payload)
                 };
-                let then_body = LoweredBlock {
-                    statements: vec![LoweredStatement::RawGo(format!(
-                        "{}[{}] = {}\n",
-                        unwrapped_var, index_var, some_assignment
-                    ))],
+                let projected = if pointer {
+                    format!("&{projected}")
+                } else {
+                    projected
                 };
-                let else_arm = if emit_nil_else {
+                then_statements.push(LoweredStatement::RawGo(format!(
+                    "{output}[{index}] = {projected}\n"
+                )));
+                let needs_nil_else = matches!(source_layout, ValueLayout::Map { .. }) || pointer;
+                let else_arm = if needs_nil_else {
                     ElseArm::Else {
                         body: LoweredBlock {
                             statements: vec![LoweredStatement::RawGo(format!(
-                                "{}[{}] = nil\n",
-                                unwrapped_var, index_var
+                                "{output}[{index}] = nil\n"
                             ))],
                         },
                         inline: false,
@@ -361,118 +532,89 @@ impl Planner<'_> {
                 } else {
                     ElseArm::None
                 };
-                let if_plan = IfPlan {
-                    condition_setup: Vec::new(),
-                    condition: format!("{}.Tag == {}", val_var, OPTION_SOME_TAG),
-                    then_body,
-                    else_arm,
-                };
                 LoweredBlock {
-                    statements: vec![LoweredStatement::If(if_plan)],
+                    statements: vec![LoweredStatement::If(IfPlan {
+                        condition_setup: Vec::new(),
+                        condition: format!("{element}.Tag == {OPTION_SOME_TAG}"),
+                        then_body: LoweredBlock {
+                            statements: then_statements,
+                        },
+                        else_arm,
+                    })],
                 }
             }
-            NullableCollectionElement::Nested(inner_shape) => {
-                let inner_lisette_ty = self.collection_element_ty(collection_ty, shape);
+            LayoutBridge::WrapNullableOption {
+                option_type,
+                payload,
+                ..
+            }
+            | LayoutBridge::WrapPointerOption {
+                option_type,
+                payload,
+                ..
+            } => {
+                let pointer = matches!(bridge, LayoutBridge::WrapPointerOption { .. });
+                let raw_payload = if pointer {
+                    format!("*{element}")
+                } else {
+                    element.to_string()
+                };
+                let mut then_statements = Vec::new();
+                let payload = if payload.is_identity() {
+                    raw_payload
+                } else {
+                    self.plan_layout_bridge(&mut then_statements, &raw_payload, payload)
+                };
+                let fallible = Fallible::from_type(option_type).expect("Option type expected");
+                let some = {
+                    let mut planner = FalliblePlanner::new(self, &fallible);
+                    planner.emit_success(&payload)
+                };
+                let none = {
+                    let mut planner = FalliblePlanner::new(self, &fallible);
+                    planner.emit_failure(None)
+                };
+                then_statements.push(LoweredStatement::RawGo(format!(
+                    "{output}[{index}] = {some}\n"
+                )));
+                let condition = if !pointer && self.is_interface_option(option_type) {
+                    format!("!lisette.IsNilInterface({element})")
+                } else {
+                    format!("{element} != nil")
+                };
+                LoweredBlock {
+                    statements: vec![LoweredStatement::If(IfPlan {
+                        condition_setup: Vec::new(),
+                        condition,
+                        then_body: LoweredBlock {
+                            statements: then_statements,
+                        },
+                        else_arm: ElseArm::Else {
+                            body: LoweredBlock {
+                                statements: vec![LoweredStatement::RawGo(format!(
+                                    "{output}[{index}] = {none}\n"
+                                ))],
+                            },
+                            inline: false,
+                        },
+                    })],
+                }
+            }
+            LayoutBridge::Aggregate { .. } => {
                 let mut inner_statements = Vec::new();
-                let inner_var = self.plan_collection_nullable_unwrap(
-                    &mut inner_statements,
-                    &val_var,
-                    &inner_lisette_ty,
-                    inner_shape,
-                );
+                let inner = self.plan_layout_bridge(&mut inner_statements, element, bridge);
                 inner_statements.push(LoweredStatement::RawGo(format!(
-                    "{}[{}] = {}\n",
-                    unwrapped_var, index_var, inner_var
+                    "{output}[{index}] = {inner}\n"
                 )));
                 LoweredBlock {
                     statements: inner_statements,
                 }
             }
-        };
-
-        statements.push(LoweredStatement::Loop(LoopPlan {
-            prologue: Vec::new(),
-            label: None,
-            header: format!("for {}, {} := range {} {{\n", index_var, val_var, src_var),
-            body: loop_body,
-        }));
-
-        unwrapped_var
-    }
-
-    /// Destination for a boundary-conversion loop: `make(...)` for slices and
-    /// maps, a zero-valued `var` for fixed arrays, which Go cannot `make`.
-    fn plan_boundary_collection_dest(
-        &mut self,
-        statements: &mut Vec<LoweredStatement>,
-        kind: CollectionKind,
-        prefix: &str,
-        go_ty: &str,
-        src_var: &str,
-    ) -> String {
-        if matches!(kind, CollectionKind::Array { .. }) {
-            let var = self.fresh_var(Some(prefix));
-            self.declare(&var);
-            statements.push(LoweredStatement::VarDecl {
-                name: var.clone(),
-                go_type: go_ty.to_string(),
-                value: None,
-            });
-            var
-        } else {
-            self.hoist_tmp_value_statement(
-                statements,
-                prefix,
-                &format!("make({}, len({}))", go_ty, src_var),
-            )
-        }
-    }
-
-    /// Lisette element type of a collection: `Slice<X>` to `X`, `Map<K, V>` to
-    /// `V`, `Array<X, N>` to `X`.
-    fn collection_element_ty(&self, collection_ty: &Type, shape: &NullableCollectionShape) -> Type {
-        match self.emit_shape_ty(collection_ty) {
-            Type::Array { element, .. } => *element,
-            resolved => {
-                let params = resolved
-                    .get_type_params()
-                    .expect("native collection has type params");
-                let index = if matches!(shape.kind, CollectionKind::Map) {
-                    1
-                } else {
-                    0
-                };
-                params[index].clone()
-            }
-        }
-    }
-
-    /// Raw Go type for an unwrapped collection; walks the shape recursively so
-    /// nested options lower past the outer `[]` (e.g. to `[][]*T`).
-    fn shape_raw_collection_ty(&mut self, shape: &NullableCollectionShape) -> String {
-        let raw_element_ty = match &shape.element {
-            NullableCollectionElement::Option(opt_ty) => {
-                let is_pointer_bridged = self.is_non_nilable_option(opt_ty);
-                let inner_ty = opt_ty.ok_type();
-                let inner_ty_str = self.go_type_string(&inner_ty);
-                if is_pointer_bridged {
-                    format!("*{}", inner_ty_str)
-                } else {
-                    inner_ty_str
-                }
-            }
-            NullableCollectionElement::Nested(inner_shape) => {
-                self.shape_raw_collection_ty(inner_shape)
-            }
-        };
-        match shape.kind {
-            CollectionKind::Map => {
-                let key_ty_str = self
-                    .go_type_string(shape.key_ty.as_ref().expect("map shape carries a key type"));
-                format!("map[{}]{}", key_ty_str, raw_element_ty)
-            }
-            CollectionKind::Array { length } => format!("[{}]{}", length, raw_element_ty),
-            CollectionKind::Slice => format!("[]{}", raw_element_ty),
+            LayoutBridge::Identity => LoweredBlock {
+                statements: vec![LoweredStatement::RawGo(format!(
+                    "{output}[{index}] = {element}\n"
+                ))],
+            },
         }
     }
 }

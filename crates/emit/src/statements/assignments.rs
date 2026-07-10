@@ -1,5 +1,6 @@
 use crate::Planner;
-use crate::abi::coercion::{Coercion, CoercionDirection};
+use crate::abi::coercion::CoercionPlan;
+use crate::abi::layout::{SlotOrigin, ValueLayout};
 use crate::context::expression::ExpressionContext;
 use crate::is_order_sensitive;
 use crate::names::go_name;
@@ -41,13 +42,15 @@ impl Planner<'_> {
             };
         }
 
-        let go_field_ty: Option<Type> = match target {
-            Expression::DotAccess { expression, ty, .. }
-                if self.go_imported_shape(&expression.get_type()).is_some()
-                    && (self.is_go_nullable(ty) || ty.resolves_to_unknown()) =>
-            {
-                Some(ty.clone())
-            }
+        let go_field_slot: Option<(Type, ValueLayout)> = match target {
+            Expression::DotAccess {
+                expression,
+                member,
+                ty,
+                ..
+            } => self
+                .field_slot_layout(&expression.get_type(), member, ty)
+                .map(|layout| (ty.clone(), layout)),
             _ => None,
         };
 
@@ -57,20 +60,11 @@ impl Planner<'_> {
         let right_hand_side = self.stage_composite(value, ExpressionContext::value());
         let (target_capture, target_str) =
             self.capture_assignment_target(target, Some(&right_hand_side));
-        let coercion = if let Some(target_ty) = go_field_ty {
-            Coercion::resolve(
-                self,
-                &value.get_type(),
-                &target_ty,
-                CoercionDirection::ToGoBoundary,
-            )
+        let coercion = if let Some((_target_ty, target_layout)) = go_field_slot {
+            let source_layout = self.value_layout(&value.get_type(), SlotOrigin::Lisette);
+            CoercionPlan::bridge(self, &source_layout, &target_layout)
         } else {
-            Coercion::resolve(
-                self,
-                &value.get_type(),
-                &target.get_type(),
-                CoercionDirection::Internal,
-            )
+            CoercionPlan::internal(self, &value.get_type(), &target.get_type())
         };
         let value = right_hand_side.map_rendered_as_computed(
             |value_setup, rhs_value, contains_deferred_evaluation| {

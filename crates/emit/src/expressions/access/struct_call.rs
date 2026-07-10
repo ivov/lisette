@@ -6,7 +6,8 @@ use syntax::program::{Definition, DefinitionBody};
 use syntax::types::{CompoundKind, SimpleKind, Type, unqualified_name};
 
 use crate::Planner;
-use crate::abi::coercion::{Coercion, CoercionDirection};
+use crate::abi::coercion::CoercionPlan;
+use crate::abi::layout::{SlotOrigin, ValueLayout};
 use crate::context::expression::ExpressionContext;
 use crate::definitions::enum_layout;
 use crate::go_name;
@@ -47,7 +48,7 @@ impl Planner<'_> {
             )
         });
 
-        let is_go_struct = self.go_imported_shape(ty).is_some();
+        let is_go_struct = self.is_go_abi_type(ty);
         let kept = self.kept_struct_call_fields(field_assignments, spread, ty, is_go_struct);
 
         let stages: Vec<ValuePlan> = kept
@@ -74,12 +75,14 @@ impl Planner<'_> {
             value = self.wrap_recursive_enum_field(&mut setup, value, f, &ctx);
             let value_ty = f.value.get_type();
             let field_ty = self.lookup_struct_field_ty(ty, &f.name);
+            let field_layout =
+                self.field_slot_layout(ty, &f.name, field_ty.as_ref().unwrap_or(&value_ty));
             value = self.coerce_struct_field(
                 &mut setup,
                 value,
                 &value_ty,
                 field_ty.as_ref(),
-                is_go_struct,
+                field_layout.as_ref(),
             );
             field_names.push(field_name);
             field_values.push(value);
@@ -161,18 +164,17 @@ impl Planner<'_> {
         mut value: String,
         value_ty: &Type,
         field_ty: Option<&Type>,
-        is_go_struct: bool,
+        field_layout: Option<&ValueLayout>,
     ) -> String {
-        if is_go_struct {
-            let target_ty = field_ty.unwrap_or(value_ty);
-            let coercion =
-                Coercion::resolve(self, value_ty, target_ty, CoercionDirection::ToGoBoundary);
+        if let Some(field_layout) = field_layout {
+            let source_layout = self.value_layout(value_ty, SlotOrigin::Lisette);
+            let coercion = CoercionPlan::bridge(self, &source_layout, field_layout);
             let (coercion_setup, coerced) = coercion.lower(self, value);
             statements.extend(coercion_setup);
             value = coerced;
         }
         if let Some(field_ty) = field_ty {
-            let coercion = Coercion::resolve(self, value_ty, field_ty, CoercionDirection::Internal);
+            let coercion = CoercionPlan::internal(self, value_ty, field_ty);
             let (coercion_setup, coerced) = coercion.lower(self, value);
             statements.extend(coercion_setup);
             value = coerced;
@@ -315,37 +317,37 @@ impl Planner<'_> {
     }
 
     pub(crate) fn lisette_zero(&mut self, ty: &Type) -> String {
-        match ty {
-            Type::Simple(kind) => match kind {
+        let layout = self.value_layout(ty, SlotOrigin::Lisette);
+        match (ty, &layout) {
+            (Type::Simple(kind), _) => match kind {
                 SimpleKind::Bool => "false".to_string(),
                 SimpleKind::String => "\"\"".to_string(),
                 SimpleKind::Unit => "struct{}{}".to_string(),
                 _ => "0".to_string(),
             },
-            Type::Compound { kind, args } => match kind {
-                CompoundKind::Slice => {
-                    let inner = args
-                        .first()
-                        .map(|a| self.go_type_string(a))
-                        .unwrap_or_else(|| "any".to_string());
-                    format!("([]{})(nil)", inner)
-                }
-                CompoundKind::Map => {
-                    let key = args
-                        .first()
-                        .map(|a| self.go_type_string(a))
-                        .unwrap_or_else(|| "any".to_string());
-                    let val = args
-                        .get(1)
-                        .map(|a| self.go_type_string(a))
-                        .unwrap_or_else(|| "any".to_string());
-                    format!("map[{}]{}{{}}", key, val)
-                }
-                _ => format!("{}{{}}", self.go_type_string(ty)),
-            },
-            Type::Nominal { id, params, .. } => self.lisette_zero_nominal(ty, id.as_str(), params),
-            Type::Tuple(elements) => {
-                let parts: Vec<String> = elements.iter().map(|e| self.lisette_zero(e)).collect();
+            (
+                Type::Compound {
+                    kind: CompoundKind::Slice,
+                    ..
+                },
+                ValueLayout::Slice { element, .. },
+            ) => format!("([]{})(nil)", element.go_type(self)),
+            (
+                Type::Compound {
+                    kind: CompoundKind::Map,
+                    ..
+                },
+                ValueLayout::Map { key, value, .. },
+            ) => format!("map[{}]{}{{}}", key.go_type(self), value.go_type(self)),
+            (Type::Compound { .. }, _) => format!("{}{{}}", self.go_type_string(ty)),
+            (Type::Nominal { id, params, .. }, _) => {
+                self.lisette_zero_nominal(ty, id.as_str(), params)
+            }
+            (Type::Tuple(_), ValueLayout::Tuple { elements, .. }) => {
+                let parts: Vec<String> = elements
+                    .iter()
+                    .map(|element| self.lisette_zero(element.logical_type()))
+                    .collect();
                 self.require_stdlib();
                 format!(
                     "{}.MakeTuple{}({})",
@@ -354,7 +356,12 @@ impl Planner<'_> {
                     parts.join(", ")
                 )
             }
-            Type::Array { length, element } => self.array_zero(*length, element),
+            (
+                Type::Array { .. },
+                ValueLayout::Array {
+                    length, element, ..
+                },
+            ) => self.array_zero(*length, element.logical_type()),
             _ => format!("{}{{}}", self.go_type_string(ty)),
         }
     }

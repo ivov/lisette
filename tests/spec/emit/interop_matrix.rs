@@ -1686,6 +1686,87 @@ pub struct Group {
 }
 
 #[test]
+fn interop_array_of_pointer_options_bridges_go_field_round_trip() {
+    let input = r#"
+import "go:example.com/arrays"
+
+fn main() {
+  let values: Array<Option<int>, 2> = [Some(1), None]
+  let container = arrays.Container { Values: values }
+  let roundtrip = container.Values
+  let _ = roundtrip
+}
+"#;
+    let typedef = r#"
+pub struct Container {
+  pub Values: Array<Option<int>, 2>,
+}
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/arrays", typedef)]);
+}
+
+#[test]
+fn interop_map_with_pointer_option_keys_bridges_go_field_round_trip() {
+    let input = r#"
+import "go:example.com/maps"
+
+fn main() {
+  let mut values = Map.new<Option<int>, string>()
+  values[Some(1)] = "one"
+  values[None] = "none"
+  let container = maps.Container { Values: values }
+  let roundtrip = container.Values
+  let _ = roundtrip
+}
+"#;
+    let typedef = r#"
+pub struct Container {
+  pub Values: Map<Option<int>, string>,
+}
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/maps", typedef)]);
+}
+
+#[test]
+fn interop_nested_option_collection_bridges_go_field_round_trip() {
+    let input = r#"
+import "go:example.com/nested"
+
+fn main() {
+  let values: Option<Slice<Option<int>>> = Some([Some(1), None])
+  let container = nested.Container { Values: values }
+  let roundtrip = container.Values
+  let _ = roundtrip
+}
+"#;
+    let typedef = r#"
+pub struct Container {
+  pub Values: Option<Slice<Option<int>>>,
+}
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/nested", typedef)]);
+}
+
+#[test]
+fn interop_nested_option_collections_bridge_go_returns() {
+    let input = r#"
+import "go:example.com/nested"
+
+fn main() {
+  let values = nested.Values()
+  let maybe_values = nested.MaybeValues()
+  let _ = values
+  let _ = maybe_values
+}
+"#;
+    let typedef = r#"
+pub fn Values() -> Slice<Option<int>>
+pub fn MaybeValues() -> Option<Slice<Option<int>>>
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/nested", typedef)]);
+}
+
+#[test]
 fn interop_some_stores_result_fn_in_lowered_abi() {
     let input = r#"
 import ext "go:example.com/ext"

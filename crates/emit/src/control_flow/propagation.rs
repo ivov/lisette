@@ -579,7 +579,7 @@ impl Planner<'_> {
             && !plan.resolved.abi.result.is_passthrough()
         {
             let (setup, result_var) = self
-                .lower_abi_wrapped_call(expression, &plan.resolved.abi.result, return_ty)
+                .lower_go_abi_wrapped_call(expression, &plan.resolved.abi, return_ty)
                 .into_parts();
             statements.extend(setup);
             if let Some(shape) = lowered {

@@ -4552,6 +4552,40 @@ pub fn Store(key: string, value: Unknown) -> int
 }
 
 #[test]
+fn option_in_go_generic_slots_stays_tagged() {
+    let input = r#"
+import "go:example.com/generic"
+
+fn main() {
+  let option = Some(1)
+  let options: Slice<Option<int>> = [option]
+  generic.Store(option)
+  generic.StoreAll(options)
+  generic.StoreMany(option, option)
+  let loaded = generic.Load(option)
+  let loaded_all = generic.LoadAll(options)
+  let bag = generic.Bag { Value: option, Values: options }
+  generic.Store(bag.Value)
+  generic.Store(loaded)
+  generic.StoreAll(loaded_all)
+}
+"#;
+    let typedef = r#"
+pub fn Store<T>(value: T)
+pub fn StoreAll<T>(values: Slice<T>)
+pub fn StoreMany<T>(values: VarArgs<T>)
+pub fn Load<T>(value: T) -> T
+pub fn LoadAll<T>(values: Slice<T>) -> Slice<T>
+
+pub struct Bag<T> {
+  pub Value: T,
+  pub Values: Slice<T>,
+}
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/generic", typedef)]);
+}
+
+#[test]
 fn omitted_return_in_callback_param_stays_void() {
     let input = r#"
 fn run(callback: fn(int)) {}

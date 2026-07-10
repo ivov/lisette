@@ -4,7 +4,7 @@ use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use super::NativeCallContext;
 use crate::Planner;
-use crate::abi::coercion::{Coercion, CoercionDirection};
+use crate::abi::coercion::CoercionPlan;
 use crate::calls::native::native_method_lowers_to_plain_call;
 use crate::context::expression::ExpressionContext;
 use crate::names::go_name;
@@ -500,8 +500,7 @@ impl Planner<'_> {
             .enumerate()
         {
             let value_ty = arg.get_type();
-            let coercion =
-                Coercion::resolve(self, &value_ty, field_ty, CoercionDirection::Internal);
+            let coercion = CoercionPlan::internal(self, &value_ty, field_ty);
             let (coercion_setup, coerced) = coercion.lower(self, value);
             setup.extend(coercion_setup);
             field_pairs.push((format!("F{}", i), coerced));

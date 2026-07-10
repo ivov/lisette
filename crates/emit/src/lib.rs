@@ -40,6 +40,7 @@ use std::sync::Arc;
 use std::sync::OnceLock;
 
 use abi::callable::{CallableReturnAbi, OptionReturnAbi, PayloadLayout};
+use abi::catalog::GoAbiCatalog;
 use analyze::facts::{EmitFactsConfig, is_nullable_option};
 use names::constraints::GenericConstraintTable;
 use output::imports::ImportBuilder;
@@ -64,14 +65,17 @@ pub struct EmitOptions {
 
 #[derive(Default)]
 pub(crate) struct GlobalEmitData {
-    pub(crate) go_callable_returns: HashMap<String, CallableReturnAbi>,
+    pub(crate) go_abi_catalog: GoAbiCatalog,
     pub(crate) exported_method_names: HashSet<String>,
     pub(crate) make_function_names: HashMap<String, String>,
 }
 
 impl GlobalEmitData {
     fn compute(definitions: &HashMap<Symbol, Definition>) -> Self {
-        let mut globals = GlobalEmitData::default();
+        let mut globals = GlobalEmitData {
+            go_abi_catalog: GoAbiCatalog::from_definitions(definitions),
+            ..GlobalEmitData::default()
+        };
 
         for prelude_type in PreludeType::enum_types() {
             for (constructor, make_fn) in prelude_type.make_function_entries() {
@@ -81,31 +85,11 @@ impl GlobalEmitData {
 
         for (key, definition) in definitions.iter() {
             let is_go = go_name::is_go_import(key);
-            globals.register_go_callable_return(definitions, key, definition, is_go);
             globals.register_exported_methods(key, definition, is_go);
             globals.register_enum_make_functions(definition);
         }
 
         globals
-    }
-
-    fn register_go_callable_return(
-        &mut self,
-        definitions: &HashMap<Symbol, Definition>,
-        key: &Symbol,
-        definition: &Definition,
-        is_go: bool,
-    ) {
-        if is_go
-            && let Type::Function(f) = match definition.ty() {
-                Type::Forall { body, .. } => body.as_ref(),
-                other => other,
-            }
-            && let Some(result) =
-                classify_go_return_type(definitions, &f.return_type, definition.go_hints())
-        {
-            self.go_callable_returns.insert(key.to_string(), result);
-        }
     }
 
     fn register_exported_methods(&mut self, key: &Symbol, definition: &Definition, is_go: bool) {

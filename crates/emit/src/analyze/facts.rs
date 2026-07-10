@@ -11,6 +11,7 @@ use syntax::program::{
 use syntax::types::{Symbol, Type};
 
 use crate::abi::callable::CallableReturnAbi;
+use crate::abi::catalog::GoSlotDescriptor;
 use crate::classify_go_return_type;
 use crate::context::lowering::LineIndex;
 use crate::names::constraints::GenericConstraintTable;
@@ -259,7 +260,36 @@ impl<'a> EmitFacts<'a> {
     }
 
     pub(crate) fn go_callable_return(&self, qualified_name: &str) -> Option<&CallableReturnAbi> {
-        self.globals.go_callable_returns.get(qualified_name)
+        self.globals
+            .go_abi_catalog
+            .callable_return_abi(qualified_name)
+    }
+
+    pub(crate) fn go_callable_parameter(
+        &self,
+        qualified_name: &str,
+        index: usize,
+    ) -> Option<&GoSlotDescriptor> {
+        self.globals
+            .go_abi_catalog
+            .callable_parameter(qualified_name, index)
+    }
+
+    pub(crate) fn go_callable_return_slot(
+        &self,
+        qualified_name: &str,
+    ) -> Option<&GoSlotDescriptor> {
+        self.globals
+            .go_abi_catalog
+            .callable_return_slot(qualified_name)
+    }
+
+    pub(crate) fn go_field(&self, owner: &str, field: &str) -> Option<&GoSlotDescriptor> {
+        self.globals.go_abi_catalog.field(owner, field)
+    }
+
+    pub(crate) fn is_go_imported_type(&self, qualified_name: &str) -> bool {
+        self.globals.go_abi_catalog.is_imported_type(qualified_name)
     }
 
     pub(crate) fn resolved_bound_type(&self, span: Span) -> Option<&'a Type> {

@@ -4,66 +4,114 @@ use syntax::types::Type;
 use crate::Planner;
 use crate::Renderer;
 use crate::definitions::interface_adapter::AdapterPlan;
+use crate::names::go_name;
 use crate::plan::bodies::LoweredStatement;
-use crate::types::shape::NullableCollectionShape;
 
-pub(crate) struct Coercion {
+use super::layout::ValueLayout;
+
+pub(crate) struct CoercionPlan {
     kind: CoercionKind,
 }
 
-pub(crate) enum CoercionKind {
+enum CoercionKind {
     Identity,
     WrapAsInterface(AdapterPlan),
-    WrapNewtype {
-        ty: Type,
-    },
+    WrapNewtype { ty: Type },
+    Layout(LayoutBridge),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum BridgeDirection {
+    ToGo,
+    FromGo,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) enum LayoutBridge {
+    Identity,
     UnwrapNullableOption {
-        ty: Type,
+        option_type: Type,
+        target_payload: Box<ValueLayout>,
+        payload: Box<LayoutBridge>,
     },
     UnwrapPointerOption {
-        ty: Type,
-    },
-    UnwrapNullableCollection {
-        ty: Type,
-        shape: NullableCollectionShape,
+        option_type: Type,
+        target_payload: Box<ValueLayout>,
+        payload: Box<LayoutBridge>,
     },
     WrapNullableOption {
-        ty: Type,
+        option_type: Type,
+        source_payload: Box<ValueLayout>,
+        payload: Box<LayoutBridge>,
     },
     WrapPointerOption {
-        ty: Type,
+        option_type: Type,
+        source_payload: Box<ValueLayout>,
+        payload: Box<LayoutBridge>,
     },
-    WrapNullableCollection {
-        ty: Type,
-        shape: NullableCollectionShape,
+    Aggregate {
+        source: Box<ValueLayout>,
+        target: Box<ValueLayout>,
+        key: Option<Box<LayoutBridge>>,
+        element: Box<LayoutBridge>,
     },
 }
 
-#[derive(Clone, Copy)]
-pub(crate) enum CoercionDirection {
-    Internal,
-    ToGoBoundary,
-    FromGoBoundary,
+impl LayoutBridge {
+    pub(crate) fn is_identity(&self) -> bool {
+        matches!(self, Self::Identity)
+    }
+
+    pub(crate) fn direction(&self) -> Option<BridgeDirection> {
+        match self {
+            Self::Identity => None,
+            Self::UnwrapNullableOption { .. } | Self::UnwrapPointerOption { .. } => {
+                Some(BridgeDirection::ToGo)
+            }
+            Self::WrapNullableOption { .. } | Self::WrapPointerOption { .. } => {
+                Some(BridgeDirection::FromGo)
+            }
+            Self::Aggregate { key, element, .. } => key
+                .as_deref()
+                .and_then(LayoutBridge::direction)
+                .or_else(|| element.direction()),
+        }
+    }
 }
 
-impl Coercion {
-    pub(crate) fn resolve(
-        planner: &Planner,
-        from: &Type,
-        to: &Type,
-        direction: CoercionDirection,
-    ) -> Self {
-        let kind = match direction {
-            CoercionDirection::Internal => resolve_internal(planner, from, to),
-            CoercionDirection::ToGoBoundary => resolve_to_go(planner, from, to),
-            CoercionDirection::FromGoBoundary => resolve_from_go(planner, from),
+impl CoercionPlan {
+    pub(crate) fn internal(planner: &Planner<'_>, from: &Type, to: &Type) -> Self {
+        let kind = if let Some(plan) = planner.needs_adapter(from, to) {
+            CoercionKind::WrapAsInterface(plan)
+        } else if needs_newtype_wrap(planner, from, to) {
+            CoercionKind::WrapNewtype { ty: to.clone() }
+        } else {
+            CoercionKind::Identity
         };
         Self { kind }
     }
 
+    pub(crate) fn bridge(
+        planner: &Planner<'_>,
+        source: &ValueLayout,
+        target: &ValueLayout,
+    ) -> Self {
+        let bridge = resolve_layout_bridge(planner, source, target);
+        let kind = if bridge.is_identity() {
+            CoercionKind::Identity
+        } else {
+            CoercionKind::Layout(bridge)
+        };
+        Self { kind }
+    }
+
+    pub(crate) fn is_identity(&self) -> bool {
+        matches!(self.kind, CoercionKind::Identity)
+    }
+
     pub(crate) fn lower(
         self,
-        planner: &mut Planner,
+        planner: &mut Planner<'_>,
         value: String,
     ) -> (Vec<LoweredStatement>, String) {
         let mut statements = Vec::new();
@@ -77,25 +125,8 @@ impl Coercion {
                 let type_name = planner.go_type_string(&ty);
                 format!("{}({})", type_name, value)
             }
-            CoercionKind::UnwrapNullableOption { ty } => {
-                let inner = planner.go_type_string(&ty.ok_type());
-                planner.plan_option_projection(&mut statements, &value, "unwrap", &inner, false)
-            }
-            CoercionKind::UnwrapPointerOption { ty } => {
-                let ptr = format!("*{}", planner.go_type_string(&ty.ok_type()));
-                planner.plan_option_projection(&mut statements, &value, "ptr", &ptr, true)
-            }
-            CoercionKind::UnwrapNullableCollection { ty, shape } => {
-                planner.plan_collection_nullable_unwrap(&mut statements, &value, &ty, &shape)
-            }
-            CoercionKind::WrapNullableOption { ty } => {
-                planner.plan_nil_check_option_wrap(&mut statements, &value, &ty)
-            }
-            CoercionKind::WrapPointerOption { ty } => {
-                planner.plan_pointer_to_option_wrap(&mut statements, &value, &ty)
-            }
-            CoercionKind::WrapNullableCollection { ty, shape } => {
-                planner.plan_collection_nullable_wrap(&mut statements, &value, &ty, &shape)
+            CoercionKind::Layout(bridge) => {
+                planner.plan_layout_bridge(&mut statements, &value, &bridge)
             }
         };
         (statements, value)
@@ -113,90 +144,205 @@ impl Planner<'_> {
         let Some(target) = target_ty else {
             return emitted;
         };
-        let coercion = Coercion::resolve(
-            self,
-            &expression.get_type(),
-            target,
-            CoercionDirection::Internal,
-        );
+        let coercion = CoercionPlan::internal(self, &expression.get_type(), target);
         let (setup, value) = coercion.lower(self, emitted);
         output.push_str(&Renderer.render_setup(&setup));
         value
     }
 }
 
-fn resolve_internal(planner: &Planner, from: &Type, to: &Type) -> CoercionKind {
-    if let Some(plan) = planner.needs_adapter(from, to) {
-        CoercionKind::WrapAsInterface(plan)
-    } else if needs_newtype_wrap(planner, from, to) {
-        CoercionKind::WrapNewtype { ty: to.clone() }
-    } else {
-        CoercionKind::Identity
+fn resolve_layout_bridge(
+    planner: &Planner<'_>,
+    source: &ValueLayout,
+    target: &ValueLayout,
+) -> LayoutBridge {
+    if source.same_representation(target) {
+        return LayoutBridge::Identity;
     }
-}
 
-/// Option-related shape of a type at a Go boundary. Adding a new variant is
-/// a compile-time call to revisit every `match` against it.
-pub(crate) enum OptionShape {
-    Plain,
-    /// Lisette `Option<T>` where `T` is Go-nilable (interface, slice, pointer);
-    /// the Go side uses nil itself as the absence marker.
-    Nullable,
-    /// Lisette `Option<T>` where `T` is a Go non-nilable scalar; the Go side
-    /// uses `*T` and bridges nil ↔ `None`.
-    PointerBridged,
-    NullableCollection {
-        shape: NullableCollectionShape,
-    },
-}
+    use ValueLayout::{Array, Map, Named, NullableOption, PointerOption, Slice, TaggedOption};
 
-pub(crate) fn classify_option_shape(planner: &Planner, ty: &Type) -> OptionShape {
-    if planner.facts.is_nullable_option(ty) {
-        OptionShape::Nullable
-    } else if planner.is_non_nilable_option(ty) {
-        OptionShape::PointerBridged
-    } else if let Some(shape) = planner.nullable_collection_shape(ty) {
-        OptionShape::NullableCollection { shape }
-    } else {
-        OptionShape::Plain
-    }
-}
-
-fn resolve_to_go(planner: &Planner, from: &Type, to: &Type) -> CoercionKind {
-    use OptionShape::*;
-    if to.resolves_to_unknown() && from.is_option() {
-        return CoercionKind::Identity;
-    }
-    match classify_option_shape(planner, from) {
-        Plain => CoercionKind::Identity,
-        Nullable => CoercionKind::UnwrapNullableOption { ty: from.clone() },
-        // Only unwrap to `*T` when the Go side also expects `*T`. A
-        // pointer-bridged source against any other target stays tagged.
-        PointerBridged if matches!(classify_option_shape(planner, to), PointerBridged) => {
-            CoercionKind::UnwrapPointerOption { ty: from.clone() }
+    match (source, target) {
+        (
+            TaggedOption {
+                option_type,
+                payload: source_payload,
+            },
+            NullableOption {
+                payload: target_payload,
+                ..
+            },
+        ) => LayoutBridge::UnwrapNullableOption {
+            option_type: option_type.clone(),
+            target_payload: target_payload.clone(),
+            payload: Box::new(resolve_layout_bridge(
+                planner,
+                source_payload,
+                target_payload,
+            )),
+        },
+        (
+            TaggedOption {
+                option_type,
+                payload: source_payload,
+            },
+            PointerOption {
+                payload: target_payload,
+                ..
+            },
+        ) => LayoutBridge::UnwrapPointerOption {
+            option_type: option_type.clone(),
+            target_payload: target_payload.clone(),
+            payload: Box::new(resolve_layout_bridge(
+                planner,
+                source_payload,
+                target_payload,
+            )),
+        },
+        (
+            NullableOption {
+                payload: source_payload,
+                ..
+            },
+            TaggedOption {
+                option_type,
+                payload: target_payload,
+            },
+        ) => LayoutBridge::WrapNullableOption {
+            option_type: option_type.clone(),
+            source_payload: source_payload.clone(),
+            payload: Box::new(resolve_layout_bridge(
+                planner,
+                source_payload,
+                target_payload,
+            )),
+        },
+        (
+            PointerOption {
+                payload: source_payload,
+                ..
+            },
+            TaggedOption {
+                option_type,
+                payload: target_payload,
+            },
+        ) => LayoutBridge::WrapPointerOption {
+            option_type: option_type.clone(),
+            source_payload: source_payload.clone(),
+            payload: Box::new(resolve_layout_bridge(
+                planner,
+                source_payload,
+                target_payload,
+            )),
+        },
+        (
+            TaggedOption {
+                option_type,
+                payload: source_payload,
+            },
+            target,
+        ) if is_go_interface_slot(planner, target.logical_type()) => {
+            LayoutBridge::UnwrapNullableOption {
+                option_type: option_type.clone(),
+                target_payload: Box::new(target.clone()),
+                payload: Box::new(resolve_layout_bridge(planner, source_payload, target)),
+            }
         }
-        PointerBridged => CoercionKind::Identity,
-        NullableCollection { shape } => CoercionKind::UnwrapNullableCollection {
-            ty: from.clone(),
-            shape,
-        },
+        (
+            Slice {
+                element: source_element,
+                ..
+            },
+            Slice {
+                element: target_element,
+                ..
+            },
+        )
+        | (
+            Array {
+                element: source_element,
+                ..
+            },
+            Array {
+                element: target_element,
+                ..
+            },
+        ) => aggregate_bridge(
+            planner,
+            source,
+            target,
+            None,
+            source_element,
+            target_element,
+        ),
+        (
+            Map {
+                key: source_key,
+                value: source_value,
+                ..
+            },
+            Map {
+                key: target_key,
+                value: target_value,
+                ..
+            },
+        ) => aggregate_bridge(
+            planner,
+            source,
+            target,
+            Some((source_key, target_key)),
+            source_value,
+            target_value,
+        ),
+        (
+            Named {
+                underlying: source_underlying,
+                ..
+            },
+            target,
+        ) => resolve_layout_bridge(planner, source_underlying, target),
+        (
+            source,
+            Named {
+                underlying: target_underlying,
+                ..
+            },
+        ) => resolve_layout_bridge(planner, source, target_underlying),
+        _ => LayoutBridge::Identity,
     }
 }
 
-fn resolve_from_go(planner: &Planner, from: &Type) -> CoercionKind {
-    use OptionShape::*;
-    match classify_option_shape(planner, from) {
-        Plain => CoercionKind::Identity,
-        Nullable => CoercionKind::WrapNullableOption { ty: from.clone() },
-        PointerBridged => CoercionKind::WrapPointerOption { ty: from.clone() },
-        NullableCollection { shape } => CoercionKind::WrapNullableCollection {
-            ty: from.clone(),
-            shape,
-        },
+fn aggregate_bridge(
+    planner: &Planner<'_>,
+    source: &ValueLayout,
+    target: &ValueLayout,
+    key_layouts: Option<(&ValueLayout, &ValueLayout)>,
+    source_element: &ValueLayout,
+    target_element: &ValueLayout,
+) -> LayoutBridge {
+    let key = key_layouts
+        .map(|(source, target)| Box::new(resolve_layout_bridge(planner, source, target)));
+    let element = resolve_layout_bridge(planner, source_element, target_element);
+    if element.is_identity() && key.as_deref().is_none_or(LayoutBridge::is_identity) {
+        LayoutBridge::Identity
+    } else {
+        LayoutBridge::Aggregate {
+            source: Box::new(source.clone()),
+            target: Box::new(target.clone()),
+            key,
+            element: Box::new(element),
+        }
     }
 }
 
-fn needs_newtype_wrap(planner: &Planner, from: &Type, to: &Type) -> bool {
+fn is_go_interface_slot(planner: &Planner<'_>, ty: &Type) -> bool {
+    planner
+        .facts
+        .as_interface(ty)
+        .is_some_and(|id| go_name::is_go_import(&id))
+}
+
+fn needs_newtype_wrap(planner: &Planner<'_>, from: &Type, to: &Type) -> bool {
     if from == to {
         return false;
     }

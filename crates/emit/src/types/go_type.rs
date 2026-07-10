@@ -1,11 +1,12 @@
 use crate::EmitEffects;
 use crate::Planner;
+use crate::abi::layout::{SlotOrigin, ValueLayout};
 use crate::definitions::structs::struct_field_go_name;
 use crate::names::go_name;
 use crate::types::native::NativeGoType;
 use crate::types::prelude::PreludeType;
 use syntax::program::DefinitionBody;
-use syntax::types::Type;
+use syntax::types::{CompoundKind, SimpleKind, Type};
 
 #[derive(Debug, Clone, Default)]
 pub(crate) struct GoType {
@@ -410,27 +411,44 @@ impl Planner<'_> {
         let go_ty = self.go_type(ty);
         effects.merge_from_go_type(&go_ty);
 
-        let value = match go_ty.code.as_str() {
-            "int" | "int8" | "int16" | "int32" | "int64" | "uint" | "uint8" | "uint16"
-            | "uint32" | "uint64" | "uintptr" | "byte" | "rune" => "0".to_string(),
-            "float32" | "float64" => "0.0".to_string(),
-            "bool" => "false".to_string(),
-            "string" => "\"\"".to_string(),
-            "struct{}" => "struct{}{}".to_string(),
-            // `[N]E` (digit after `[`) zeroes to `[N]E{}`.
-            s if s.starts_with('[') && s.as_bytes().get(1).is_some_and(u8::is_ascii_digit) => {
-                format!("{}{{}}", s)
-            }
-            s if s.starts_with("[]")
-                || s.starts_with("map[")
-                || s.starts_with("chan ")
-                || s.starts_with("chan<-")
-                || s.starts_with("<-chan")
-                || s.starts_with("*")
-                || s.starts_with("func") =>
-            {
-                "nil".to_string()
-            }
+        let layout = self.value_layout(ty, SlotOrigin::Lisette);
+        let value = match layout {
+            ValueLayout::Plain(Type::Simple(kind)) => match kind {
+                SimpleKind::Int
+                | SimpleKind::Int8
+                | SimpleKind::Int16
+                | SimpleKind::Int32
+                | SimpleKind::Int64
+                | SimpleKind::Uint
+                | SimpleKind::Uint8
+                | SimpleKind::Uint16
+                | SimpleKind::Uint32
+                | SimpleKind::Uint64
+                | SimpleKind::Uintptr
+                | SimpleKind::Byte
+                | SimpleKind::Rune => "0".to_string(),
+                SimpleKind::Float32 | SimpleKind::Float64 => "0.0".to_string(),
+                SimpleKind::Bool => "false".to_string(),
+                SimpleKind::String => "\"\"".to_string(),
+                SimpleKind::Unit => "struct{}{}".to_string(),
+                SimpleKind::Complex64 | SimpleKind::Complex128 => {
+                    format!("*new({})", go_ty.code)
+                }
+            },
+            ValueLayout::Array { .. } => format!("{}{{}}", go_ty.code),
+            ValueLayout::Slice { .. }
+            | ValueLayout::Map { .. }
+            | ValueLayout::Function { .. }
+            | ValueLayout::NullableOption { .. }
+            | ValueLayout::PointerOption { .. }
+            | ValueLayout::Plain(Type::Compound {
+                kind:
+                    CompoundKind::Ref
+                    | CompoundKind::Channel
+                    | CompoundKind::Sender
+                    | CompoundKind::Receiver,
+                ..
+            }) => "nil".to_string(),
             _ => format!("*new({})", go_ty.code),
         };
         (value, effects)

@@ -1,6 +1,6 @@
 use crate::Planner;
 use crate::abi::callable::CallableReturnAbi;
-use crate::abi::coercion::{Coercion, CoercionDirection};
+use crate::abi::coercion::CoercionPlan;
 use crate::calls::go_interop::WrapperTarget;
 use crate::context::expression::ExpressionContext;
 use crate::control_flow::fallible::Fallible;
@@ -253,12 +253,7 @@ impl Planner<'_> {
         let (mut statements, value_expression) = self
             .lower_value(value, ExpressionContext::value())
             .into_parts();
-        let coercion = Coercion::resolve(
-            self,
-            &value.get_type(),
-            binding_ty,
-            CoercionDirection::Internal,
-        );
+        let coercion = CoercionPlan::internal(self, &value.get_type(), binding_ty);
         let (coercion_setup, value_expression) = coercion.lower(self, value_expression);
         statements.extend(coercion_setup);
 
@@ -315,9 +310,12 @@ impl Planner<'_> {
         if matches!(plan.resolved.abi.result, CallableReturnAbi::Tuple { .. }) {
             return None;
         }
+        if self.call_result_layout_bridge(&plan, binding_ty).is_some() {
+            return None;
+        }
         let target = WrapperTarget::Slot(&go_identifier);
         let statements =
-            self.lower_abi_wrapped_call_to(value, &plan.resolved.abi.result, binding_ty, target)?;
+            self.lower_abi_wrapped_call_to(value, &plan.resolved.abi, binding_ty, target)?;
         // `push_wrapper_slot` / `push_simple_wrapper_value` already declared
         // `go_identifier`; only the binding from the user-name still needs setup.
         self.scope.bind(identifier, go_identifier.as_ref());

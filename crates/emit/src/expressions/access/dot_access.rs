@@ -5,7 +5,8 @@ use syntax::program::{
 use syntax::types::Type;
 
 use crate::Planner;
-use crate::abi::coercion::{Coercion, CoercionDirection};
+use crate::abi::coercion::CoercionPlan;
+use crate::abi::layout::SlotOrigin;
 use crate::context::expression::ExpressionContext;
 use crate::go_name;
 use crate::plan::bodies::LoweredStatement;
@@ -81,6 +82,7 @@ impl Planner<'_> {
         if let Some(s) = self.plan_nullable_field_access(
             &mut setup,
             &expression_string,
+            member,
             &field,
             &expression_ty,
             result_ty,
@@ -211,21 +213,19 @@ impl Planner<'_> {
         &mut self,
         setup: &mut Vec<LoweredStatement>,
         expression_string: &str,
+        member: &str,
         field: &str,
         expression_ty: &Type,
         result_ty: &Type,
     ) -> Option<String> {
-        if self.go_imported_shape(expression_ty).is_none() || !self.is_go_nullable(result_ty) {
+        let source_layout = self.field_slot_layout(expression_ty, member, result_ty)?;
+        let target_layout = self.value_layout(result_ty, SlotOrigin::Lisette);
+        let coercion = CoercionPlan::bridge(self, &source_layout, &target_layout);
+        if coercion.is_identity() {
             return None;
         }
         let raw_access = format!("{}.{}", expression_string, field);
         let raw_var = self.hoist_tmp_value_statement(setup, "raw", &raw_access);
-        let coercion = Coercion::resolve(
-            self,
-            result_ty,
-            result_ty,
-            CoercionDirection::FromGoBoundary,
-        );
         let (coercion_setup, coerced) = coercion.lower(self, raw_var);
         setup.extend(coercion_setup);
         Some(coerced)

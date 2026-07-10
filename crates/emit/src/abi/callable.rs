@@ -1,5 +1,7 @@
 use syntax::types::Type;
 
+use crate::abi::layout::{SlotOrigin, ValueLayout};
+
 /// How a logical tuple payload occupies a callable's physical Go result slots.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum PayloadLayout {
@@ -104,6 +106,8 @@ pub(crate) enum AbiTransition {
 pub(crate) struct CallableParamAbi {
     pub(crate) instantiated: Type,
     pub(crate) declared: Option<Type>,
+    pub(crate) origin: SlotOrigin,
+    pub(crate) layout: ValueLayout,
 }
 
 /// Complete physical contract consumed by call lowering.
@@ -111,6 +115,7 @@ pub(crate) struct CallableParamAbi {
 pub(crate) struct CallableAbi {
     pub(crate) params: Vec<CallableParamAbi>,
     pub(crate) result: CallableReturnAbi,
+    pub(crate) return_layout: ValueLayout,
 }
 
 impl CallableAbi {

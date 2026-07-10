@@ -1,7 +1,7 @@
 use std::fmt::Write;
 
 use crate::Planner;
-use crate::abi::coercion::{Coercion, CoercionDirection};
+use crate::abi::coercion::CoercionPlan;
 use crate::context::expression::ExpressionContext;
 use crate::plan::values::{CaptureBoundary, EvaluationEffect, GoExpression, ValuePlan};
 use syntax::ast::{Expression, FormatStringPart, Literal};
@@ -91,12 +91,7 @@ impl Planner<'_> {
 
         let mut wrapped: Vec<String> = Vec::with_capacity(rendered.len());
         for (expr, emitted) in elements.iter().zip(rendered) {
-            let coercion = Coercion::resolve(
-                self,
-                &expr.get_type(),
-                &element_lisette_ty,
-                CoercionDirection::Internal,
-            );
+            let coercion = CoercionPlan::internal(self, &expr.get_type(), &element_lisette_ty);
             let (coercion_setup, coerced) = coercion.lower(self, emitted);
             setup.extend(coercion_setup);
             wrapped.push(coerced);
