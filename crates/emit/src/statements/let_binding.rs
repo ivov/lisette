@@ -533,6 +533,10 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
         let has_multi_return_go_strategy = self.planner.plan_call(self.value).is_some_and(|plan| {
             matches!(plan.resolved.origin, CallableOrigin::GoInterop)
                 && plan.resolved.abi.result.is_multi_return()
+                && self
+                    .planner
+                    .go_tuple_result_bridges(&plan.resolved.abi, &self.value.get_type())
+                    .is_none()
         });
         has_multi_return_go_strategy
             && !self.value.get_type().is_result()

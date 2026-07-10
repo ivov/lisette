@@ -439,6 +439,7 @@ impl Planner<'_> {
             ValueLayout::Slice { .. }
             | ValueLayout::Map { .. }
             | ValueLayout::Function { .. }
+            | ValueLayout::Reference { .. }
             | ValueLayout::NullableOption { .. }
             | ValueLayout::PointerOption { .. }
             | ValueLayout::Plain(Type::Compound {

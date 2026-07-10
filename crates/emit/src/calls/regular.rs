@@ -352,11 +352,27 @@ impl<'a> Planner<'a> {
         args: &[Expression],
         ctx: &CallArgsContext<'_, '_>,
     ) -> SequencedValues {
-        let stages: Vec<ValuePlan> = args
+        let mut stages: Vec<ValuePlan> = args
             .iter()
             .enumerate()
             .map(|(i, arg)| self.lower_call_arg(arg, i, ctx))
             .collect();
+
+        if let Some(spread) = ctx.spread
+            && let Some(stage) =
+                self.lower_variadic_spread_slot_bridge(spread, ctx.plan.resolved.abi.params.last())
+        {
+            stages.push(stage);
+            let spread_index = stages.len() - 1;
+            let mut sequenced = self.sequence_values(stages, ctx.capture_boundary, "_arg");
+            self.finalize_spread_stage(
+                &mut sequenced.values,
+                spread_index,
+                ctx.wrap_spread_to_any,
+                ctx.combine_variadic.clone(),
+            );
+            return sequenced;
+        }
 
         self.sequence_args_with_spread_adapter_values(
             stages,
@@ -677,7 +693,7 @@ impl<'a> Planner<'a> {
                 .unwrap_or(CallableReturnAbi::Direct)
         };
         let transition = source.transition_to(&target);
-        Some((source, target, transition))
+        (!matches!(transition, AbiTransition::Identity)).then_some((source, target, transition))
     }
 
     fn lower_callback_wrapper(
@@ -756,9 +772,20 @@ impl<'a> Planner<'a> {
         argument: &Expression,
         parameter: &CallableParamAbi,
     ) -> bool {
-        let source = self.value_layout(&argument.get_type(), SlotOrigin::Lisette);
+        let physical_source = self.go_physical_expression_layout(argument);
+        let source = physical_source
+            .clone()
+            .unwrap_or_else(|| self.value_layout(&argument.get_type(), SlotOrigin::Lisette));
         let target = self.argument_slot_layout(parameter);
-        !CoercionPlan::bridge(self, &source, &target).is_identity()
+        let can_forward_physical = match (&physical_source, &target) {
+            (
+                Some(ValueLayout::Function { layout: source, .. }),
+                ValueLayout::Function { layout: target, .. },
+            ) => source.return_abi == target.return_abi,
+            (Some(_), _) => true,
+            (None, _) => false,
+        };
+        can_forward_physical || !CoercionPlan::bridge(self, &source, &target).is_identity()
     }
 
     fn lower_go_slot_bridge(
@@ -773,15 +800,79 @@ impl<'a> Planner<'a> {
                 EvaluationEffect::PureCall,
             );
         }
-        let source = self.value_layout(&argument.get_type(), SlotOrigin::Lisette);
+        let raw_source = self.go_physical_expression_layout(argument);
+        let source = raw_source
+            .clone()
+            .unwrap_or_else(|| self.value_layout(&argument.get_type(), SlotOrigin::Lisette));
         let target = self.argument_slot_layout(parameter);
         let coercion = CoercionPlan::bridge(self, &source, &target);
-        let value = self.lower_value(argument, ExpressionContext::value());
+        let value = if raw_source.is_some() {
+            if matches!(argument.unwrap_parens(), Expression::Call { .. }) {
+                self.lower_call(
+                    argument,
+                    Some(&argument.get_type()),
+                    ExpressionContext::value(),
+                )
+            } else {
+                self.plan_operand(argument, ExpressionContext::value())
+            }
+        } else {
+            self.lower_value(argument, ExpressionContext::value())
+        };
         value.map_rendered_as_computed(|setup, value, _contains_deferred_evaluation| {
             let (coercion_setup, coerced) = coercion.lower(self, value);
             setup.extend(coercion_setup);
             GoExpression::opaque_with_deferred_evaluation(coerced, true)
         })
+    }
+
+    fn go_physical_expression_layout(&self, expression: &Expression) -> Option<ValueLayout> {
+        if let Some(plan) = self.plan_call(expression)
+            && matches!(plan.resolved.origin, CallableOrigin::GoInterop)
+            && matches!(plan.resolved.abi.result, CallableReturnAbi::Direct)
+        {
+            return Some(plan.resolved.abi.return_layout.clone());
+        }
+        let callable = self.resolve_callable_value(expression)?;
+        matches!(callable.origin, CallableOrigin::GoInterop).then(|| ValueLayout::Function {
+            function_type: expression.get_type(),
+            layout: callable.abi.function_layout(),
+        })
+    }
+
+    fn lower_variadic_spread_slot_bridge(
+        &mut self,
+        spread: &Expression,
+        parameter: Option<&CallableParamAbi>,
+    ) -> Option<ValuePlan> {
+        let parameter = parameter?;
+        if parameter.instantiated.get_name() != Some("VarArgs") {
+            return None;
+        }
+
+        let raw_source = self.go_physical_expression_layout(spread);
+        let source = raw_source
+            .clone()
+            .unwrap_or_else(|| self.value_layout(&spread.get_type(), SlotOrigin::Lisette));
+        let target = ValueLayout::Slice {
+            collection_type: spread.get_type(),
+            element: Box::new(self.argument_slot_layout(parameter)),
+        };
+        let coercion = CoercionPlan::bridge(self, &source, &target);
+        if coercion.is_identity() && raw_source.is_none() {
+            return None;
+        }
+
+        let value = if raw_source.is_some() {
+            self.lower_call(spread, Some(&spread.get_type()), ExpressionContext::value())
+        } else {
+            self.lower_value(spread, ExpressionContext::value())
+        };
+        Some(value.map_rendered_as_computed(|setup, value, _| {
+            let (coercion_setup, coerced) = coercion.lower(self, value);
+            setup.extend(coercion_setup);
+            GoExpression::opaque_with_deferred_evaluation(coerced, true)
+        }))
     }
 }
 

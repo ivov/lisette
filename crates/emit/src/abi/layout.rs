@@ -1,7 +1,7 @@
 use syntax::types::{CompoundKind, Type};
 
 use crate::Planner;
-use crate::abi::callable::CallableReturnAbi;
+use crate::abi::callable::{CallableReturnAbi, OptionReturnAbi};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum SlotOrigin {
@@ -46,7 +46,97 @@ impl SlotOrigin {
 pub(crate) struct FunctionLayout {
     pub(crate) parameters: Vec<ValueLayout>,
     pub(crate) result: Box<ValueLayout>,
+    pub(crate) payload: Option<Box<ValueLayout>>,
     pub(crate) return_abi: CallableReturnAbi,
+}
+
+impl FunctionLayout {
+    fn result_same_representation(&self, other: &Self) -> bool {
+        match self.return_abi {
+            CallableReturnAbi::Result { .. }
+            | CallableReturnAbi::Partial { .. }
+            | CallableReturnAbi::Option { .. } => {
+                optional_layouts_match(self.payload.as_deref(), other.payload.as_deref())
+            }
+            CallableReturnAbi::Tagged
+            | CallableReturnAbi::Direct
+            | CallableReturnAbi::Tuple { .. } => self.result.same_representation(&other.result),
+        }
+    }
+
+    pub(crate) fn go_type(&self, planner: &Planner<'_>) -> String {
+        let parameters = self
+            .parameters
+            .iter()
+            .map(|parameter| parameter.go_type(planner))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let result = self.result_go_type(planner);
+        if result.is_empty() {
+            format!("func({parameters})")
+        } else {
+            format!("func({parameters}) {result}")
+        }
+    }
+
+    pub(crate) fn result_go_type(&self, planner: &Planner<'_>) -> String {
+        if self.result.logical_type().is_unit() {
+            return String::new();
+        }
+        match &self.return_abi {
+            CallableReturnAbi::Tagged | CallableReturnAbi::Direct => self.result.go_type(planner),
+            CallableReturnAbi::Result {
+                bare_error: true, ..
+            } => planner.go_type_string(&self.result.logical_type().err_type()),
+            CallableReturnAbi::Result { .. } | CallableReturnAbi::Partial { .. } => {
+                let payload = self
+                    .payload
+                    .as_deref()
+                    .expect("fallible callable layout has a payload");
+                let error = planner.go_type_string(&self.result.logical_type().err_type());
+                format!("({}, {error})", payload.go_type(planner))
+            }
+            CallableReturnAbi::Option {
+                encoding: OptionReturnAbi::CommaOk,
+                ..
+            } => {
+                let payload = self
+                    .payload
+                    .as_deref()
+                    .expect("option callable layout has a payload");
+                format!("({}, bool)", payload.go_type(planner))
+            }
+            CallableReturnAbi::Option {
+                encoding: OptionReturnAbi::Nullable,
+                ..
+            } => self
+                .payload
+                .as_deref()
+                .expect("option callable layout has a payload")
+                .go_type(planner),
+            CallableReturnAbi::Option {
+                encoding: OptionReturnAbi::Sentinel(_),
+                ..
+            } => self
+                .payload
+                .as_deref()
+                .expect("option callable layout has a payload")
+                .go_type(planner),
+            CallableReturnAbi::Tuple { .. } => {
+                let ValueLayout::Tuple { elements, .. } = self.result.as_ref() else {
+                    return self.result.go_type(planner);
+                };
+                format!(
+                    "({})",
+                    elements
+                        .iter()
+                        .map(|element| element.go_type(planner))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -63,6 +153,10 @@ pub(crate) enum ValueLayout {
     PointerOption {
         option_type: Type,
         payload: Box<ValueLayout>,
+    },
+    Reference {
+        reference_type: Type,
+        pointee: Box<ValueLayout>,
     },
     Slice {
         collection_type: Type,
@@ -118,6 +212,7 @@ impl ValueLayout {
                 Self::PointerOption { payload: left, .. },
                 Self::PointerOption { payload: right, .. },
             )
+            | (Self::Reference { pointee: left, .. }, Self::Reference { pointee: right, .. })
             | (Self::Slice { element: left, .. }, Self::Slice { element: right, .. })
             | (
                 Self::Named {
@@ -162,7 +257,7 @@ impl ValueLayout {
                         .iter()
                         .zip(&right.parameters)
                         .all(|(left, right)| left.same_representation(right))
-                    && left.result.same_representation(&right.result)
+                    && left.result_same_representation(right)
             }
             (
                 Self::Tuple { elements: left, .. },
@@ -192,6 +287,9 @@ impl ValueLayout {
             | Self::PointerOption {
                 option_type: ty, ..
             }
+            | Self::Reference {
+                reference_type: ty, ..
+            }
             | Self::Slice {
                 collection_type: ty,
                 ..
@@ -213,6 +311,7 @@ impl ValueLayout {
         match self {
             Self::NullableOption { payload, .. } => payload.go_type(planner),
             Self::PointerOption { payload, .. } => format!("*{}", payload.go_type(planner)),
+            Self::Reference { pointee, .. } => format!("*{}", pointee.go_type(planner)),
             Self::Slice { element, .. } => format!("[]{}", element.go_type(planner)),
             Self::Map { key, value, .. } => {
                 format!("map[{}]{}", key.go_type(planner), value.go_type(planner))
@@ -220,12 +319,10 @@ impl ValueLayout {
             Self::Array {
                 length, element, ..
             } => format!("[{length}]{}", element.go_type(planner)),
+            Self::Function { layout, .. } => layout.go_type(planner),
             Self::Plain(ty)
             | Self::TaggedOption {
                 option_type: ty, ..
-            }
-            | Self::Function {
-                function_type: ty, ..
             }
             | Self::Tuple { tuple_type: ty, .. }
             | Self::Named { named_type: ty, .. } => planner.go_type_string(ty),
@@ -261,6 +358,17 @@ impl Planner<'_> {
         declaration: &Type,
     ) -> ValueLayout {
         self.value_layout_with_hint(ty, origin, Some(declaration))
+    }
+
+    pub(crate) fn callable_payload_layout(
+        &self,
+        result_type: &Type,
+        origin: SlotOrigin,
+        declaration: Option<&Type>,
+    ) -> Option<ValueLayout> {
+        let payload = callable_payload_type(result_type)?;
+        let declared_payload = declaration.and_then(callable_payload_type);
+        Some(self.value_layout_with_hint(&payload, origin.nested(), declared_payload.as_ref()))
     }
 
     fn value_layout_with_hint(
@@ -341,6 +449,22 @@ impl Planner<'_> {
         }
 
         match &ty {
+            Type::Compound {
+                kind: CompoundKind::Ref,
+                args,
+            } => {
+                let Some(pointee) = args.first() else {
+                    return ValueLayout::Plain(ty);
+                };
+                ValueLayout::Reference {
+                    reference_type: ty.clone(),
+                    pointee: Box::new(self.value_layout_with_hint(
+                        pointee,
+                        origin.nested(),
+                        compound_hint(declaration, CompoundKind::Ref, 0),
+                    )),
+                }
+            }
             Type::Compound {
                 kind: kind @ (CompoundKind::Slice | CompoundKind::EnumeratedSlice),
                 args,
@@ -433,12 +557,16 @@ impl Planner<'_> {
                         origin.nested(),
                         declared_result,
                     ));
+                    let payload = self
+                        .callable_payload_layout(&result_type, origin, declared_result)
+                        .map(Box::new);
                     let return_abi = self.callable_return_abi(&result_type);
                     return ValueLayout::Function {
                         function_type: ty,
                         layout: FunctionLayout {
                             parameters,
                             result,
+                            payload,
                             return_abi,
                         },
                     };
@@ -458,6 +586,18 @@ impl Planner<'_> {
                 ValueLayout::Plain(ty)
             }
         }
+    }
+}
+
+fn callable_payload_type(ty: &Type) -> Option<Type> {
+    (ty.is_result() || ty.is_partial() || ty.is_option()).then(|| ty.ok_type())
+}
+
+fn optional_layouts_match(left: Option<&ValueLayout>, right: Option<&ValueLayout>) -> bool {
+    match (left, right) {
+        (Some(left), Some(right)) => left.same_representation(right),
+        (None, None) => true,
+        _ => false,
     }
 }
 

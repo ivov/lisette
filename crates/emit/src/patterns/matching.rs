@@ -113,6 +113,12 @@ impl Planner<'_> {
                 if matches!(self.facts.peel_alias(&ok_ty), Type::Tuple(_)) {
                     return None;
                 }
+                if self
+                    .go_return_payload_bridge(&plan.resolved.abi, &subject.get_type())
+                    .is_some()
+                {
+                    return None;
+                }
                 self.result_nil_guard(&ok_ty)
             }
             CallableOrigin::GoInterop => return None,
@@ -227,6 +233,12 @@ impl Planner<'_> {
     fn fusable_partial(&self, subject: &Expression, plan: &CallPlan<'_>) -> bool {
         let is_partial = matches!(plan.resolved.abi.result, CallableReturnAbi::Partial { .. });
         if !is_partial {
+            return false;
+        }
+        if self
+            .go_return_payload_bridge(&plan.resolved.abi, &subject.get_type())
+            .is_some()
+        {
             return false;
         }
         let ok_ty = self.facts.peel_alias(&subject.get_type()).ok_type();

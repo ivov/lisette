@@ -1,0 +1,43 @@
+---
+source: tests/spec/emit/interop_matrix.rs
+description: "\nimport \"go:fmt\"\nimport \"go:example.com/aws\"\n\nfn main() {\n  let f = aws.Read\n  match f() {\n    Ok(xs) => fmt.Println(\"ok\", Slice.length(xs)),\n    Both(xs, e) => fmt.Println(\"both\", Slice.length(xs), e),\n    Err(e) => fmt.Println(\"err\", e),\n  }\n}\n"
+---
+package main
+
+import (
+	"example.com/aws"
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func main() {
+	cb_1 := aws.Read
+	f := func() ([]lisette.Option[string], error) {
+		ret_2, ret_3 := cb_1()
+		if ret_2 == nil {
+			return nil, ret_3
+		}
+		src_4 := ret_2
+		wrapped_5 := make([]lisette.Option[string], len(src_4))
+		for i_6, v_7 := range src_4 {
+			if v_7 != nil {
+				wrapped_5[i_6] = lisette.MakeOptionSome[string](*v_7)
+			} else {
+				wrapped_5[i_6] = lisette.MakeOptionNone[string]()
+			}
+		}
+		return wrapped_5, ret_3
+	}
+	ret_8, ret_9 := f()
+	if ret_9 == nil {
+		xs := ret_8
+		fmt.Println("ok", len(xs))
+	} else if ret_8 == nil {
+		e := ret_9
+		fmt.Println("err", e)
+	} else {
+		xs := ret_8
+		e := ret_9
+		fmt.Println("both", len(xs), e)
+	}
+}

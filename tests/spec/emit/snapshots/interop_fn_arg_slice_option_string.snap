@@ -1,0 +1,26 @@
+---
+source: tests/spec/emit/interop_matrix.rs
+description: "\nimport \"go:example.com/aws\"\n\nfn main() {\n  aws.Use([Some(\"hi\"), None])\n}\n"
+---
+package main
+
+import (
+	"example.com/aws"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func main() {
+	src_1 := []lisette.Option[string]{
+		lisette.MakeOptionSome("hi"),
+		lisette.MakeOptionNone[string](),
+	}
+	unwrapped_2 := make([]*string, len(src_1))
+	for i_3, v_4 := range src_1 {
+		if v_4.Tag == lisette.OptionSome {
+			unwrapped_2[i_3] = &v_4.SomeVal
+		} else {
+			unwrapped_2[i_3] = nil
+		}
+	}
+	aws.Use(unwrapped_2)
+}

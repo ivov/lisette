@@ -5,7 +5,7 @@ use syntax::program::DefinitionBody;
 use crate::Planner;
 use crate::abi::callable::{AbiTransition, CallableReturnAbi, OptionReturnAbi, PayloadLayout};
 use crate::abi::coercion::CoercionPlan;
-use crate::abi::layout::SlotOrigin;
+use crate::abi::layout::{SlotOrigin, ValueLayout};
 use crate::abi::transition::emit_lisette_callback_wrapper;
 use crate::context::expression::ExpressionContext;
 use crate::is_order_sensitive;
@@ -31,6 +31,24 @@ impl Planner<'_> {
             && matches!(callee.origin, CallableOrigin::GoInterop)
         {
             let abi = &callee.abi.result;
+            let source_layout = ValueLayout::Function {
+                function_type: expression.get_type(),
+                layout: callee.abi.function_layout(),
+            };
+            let target_layout = self.value_layout(&expression.get_type(), SlotOrigin::Lisette);
+            let same_abi = matches!(
+                &target_layout,
+                ValueLayout::Function { layout, .. } if layout.return_abi == *abi
+            );
+            let layout_coercion = CoercionPlan::bridge(self, &source_layout, &target_layout);
+            if !ctx.is_callee() && same_abi && !layout_coercion.is_identity() {
+                let value = self.plan_operand(expression, ctx);
+                return value.map_rendered_as_computed(|setup, value, _| {
+                    let (bridge_setup, value) = layout_coercion.lower(self, value);
+                    setup.extend(bridge_setup);
+                    GoExpression::opaque_with_deferred_evaluation(value, true)
+                });
+            }
             if !self.go_fn_matches_lowered_slot(expression, abi, ctx) {
                 let mut setup = Vec::new();
                 let value = if self.go_fn_needs_lowered_tuple_adapter(expression, abi, ctx) {

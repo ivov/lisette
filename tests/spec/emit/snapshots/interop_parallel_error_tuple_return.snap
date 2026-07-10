@@ -26,7 +26,13 @@ import (
 )
 
 func main() {
-	src, db := migrate.Close()
+	ret_2, ret_3 := migrate.Close()
+	option_4 := lisette.OptionFromNilable[error](ret_2, lisette.IsNilInterface(ret_2))
+	option_5 := lisette.OptionFromNilable[error](ret_3, lisette.IsNilInterface(ret_3))
+	tup_6 := lisette.MakeTuple2(option_4, option_5)
+	tmp_1 := tup_6
+	src := tmp_1.First
+	db := tmp_1.Second
 	if src.Tag == lisette.OptionSome {
 		fmt.Println("source:", src.SomeVal)
 	}

@@ -1,0 +1,39 @@
+---
+source: tests/spec/emit/interop_matrix.rs
+description: "\nimport \"go:fmt\"\n\nfn make() -> Result<Slice<Option<string>>, error> {\n  Ok([Some(\"hi\"), None])\n}\n\nfn main() {\n  let r = make()\n  match r {\n    Ok(xs) => {\n      for x in xs {\n        match x {\n          Some(v) => fmt.Println(v),\n          None => fmt.Println(\"none\"),\n        }\n      }\n    },\n    Err(e) => { let _ = e },\n  }\n}\n"
+---
+package main
+
+import (
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func make_() ([]lisette.Option[string], error) {
+	return []lisette.Option[string]{
+		lisette.MakeOptionSome("hi"),
+		lisette.MakeOptionNone[string](),
+	}, nil
+}
+
+func main() {
+	ret_1, ret_2 := make_()
+	var result_3 lisette.Result[[]lisette.Option[string], error]
+	if ret_2 != nil {
+		result_3 = lisette.MakeResultErr[[]lisette.Option[string], error](ret_2)
+	} else {
+		result_3 = lisette.MakeResultOk[[]lisette.Option[string], error](ret_1)
+	}
+	r := result_3
+	if r.Tag == lisette.ResultOk {
+		for _, x := range r.OkVal {
+			if x.Tag == lisette.OptionSome {
+				fmt.Println(x.SomeVal)
+			} else {
+				fmt.Println("none")
+			}
+		}
+	} else {
+		_ = r.ErrVal
+	}
+}

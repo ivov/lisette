@@ -1,6 +1,6 @@
 use crate::Planner;
 use crate::abi::callable::PayloadLayout;
-use crate::abi::coercion::{BridgeDirection, CoercionPlan, LayoutBridge};
+use crate::abi::coercion::{BridgeDirection, LayoutBridge};
 use crate::abi::layout::ValueLayout;
 use crate::calls::go_interop::build_tuple_literal;
 use crate::calls::go_interop::wrappers::{WrapperOutcome, WrapperTarget, leaf_block};
@@ -38,7 +38,7 @@ impl Planner<'_> {
         call_str: &str,
         option_ty: &Type,
         layout: PayloadLayout,
-        payload_bridge: Option<CoercionPlan>,
+        payload_bridge: Option<&LayoutBridge>,
         target: WrapperTarget<'_>,
     ) -> (Vec<LoweredStatement>, WrapperOutcome) {
         self.require_stdlib();
@@ -89,7 +89,11 @@ impl Planner<'_> {
             val_vars[0].clone()
         };
         let (mut payload_setup, val_expression) = match payload_bridge {
-            Some(bridge) => bridge.lower(self, val_expression),
+            Some(bridge) => {
+                let mut setup = Vec::new();
+                let value = self.plan_layout_bridge(&mut setup, &val_expression, bridge);
+                (setup, value)
+            }
             None => (Vec::new(), val_expression),
         };
 
@@ -301,6 +305,14 @@ impl Planner<'_> {
                         true,
                     )
                 }
+            }
+            LayoutBridge::Reference { pointee } => {
+                let source = self.hoist_tmp_value_statement(statements, "src", value);
+                let pointee = self.plan_layout_bridge(statements, &format!("*{source}"), pointee);
+                self.hoist_tmp_value_statement(statements, "ref", &format!("&{pointee}"))
+            }
+            LayoutBridge::Function { source, target, .. } => {
+                self.plan_function_layout_bridge(statements, value, source, target)
             }
             LayoutBridge::Aggregate {
                 source,
@@ -600,7 +612,9 @@ impl Planner<'_> {
                     })],
                 }
             }
-            LayoutBridge::Aggregate { .. } => {
+            LayoutBridge::Aggregate { .. }
+            | LayoutBridge::Reference { .. }
+            | LayoutBridge::Function { .. } => {
                 let mut inner_statements = Vec::new();
                 let inner = self.plan_layout_bridge(&mut inner_statements, element, bridge);
                 inner_statements.push(LoweredStatement::RawGo(format!(

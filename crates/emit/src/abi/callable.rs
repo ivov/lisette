@@ -1,6 +1,6 @@
 use syntax::types::Type;
 
-use crate::abi::layout::{SlotOrigin, ValueLayout};
+use crate::abi::layout::{FunctionLayout, SlotOrigin, ValueLayout};
 
 /// How a logical tuple payload occupies a callable's physical Go result slots.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -116,6 +116,7 @@ pub(crate) struct CallableAbi {
     pub(crate) params: Vec<CallableParamAbi>,
     pub(crate) result: CallableReturnAbi,
     pub(crate) return_layout: ValueLayout,
+    pub(crate) return_payload_layout: Option<ValueLayout>,
 }
 
 impl CallableAbi {
@@ -125,5 +126,18 @@ impl CallableAbi {
                 .last()
                 .filter(|param| param.instantiated.get_name() == Some("VarArgs"))
         })
+    }
+
+    pub(crate) fn function_layout(&self) -> FunctionLayout {
+        FunctionLayout {
+            parameters: self
+                .params
+                .iter()
+                .map(|param| param.layout.clone())
+                .collect(),
+            result: Box::new(self.return_layout.clone()),
+            payload: self.return_payload_layout.clone().map(Box::new),
+            return_abi: self.result.clone(),
+        }
     }
 }

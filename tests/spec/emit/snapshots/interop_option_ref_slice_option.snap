@@ -1,0 +1,52 @@
+---
+source: tests/spec/emit/interop_matrix.rs
+description: "\nimport \"go:example.com/aws\"\n\nfn main() {\n  match aws.Make() {\n    Some(xs) => aws.Use(Some(xs)),\n    None => aws.Use(None),\n  }\n}\n"
+---
+package main
+
+import (
+	"example.com/aws"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func main() {
+	raw_2 := aws.Make()
+	var option_3 lisette.Option[*[]lisette.Option[string]]
+	if raw_2 != nil {
+		src_4 := raw_2
+		src_5 := *src_4
+		wrapped_6 := make([]lisette.Option[string], len(src_5))
+		for i_7, v_8 := range src_5 {
+			if v_8 != nil {
+				wrapped_6[i_7] = lisette.MakeOptionSome[string](*v_8)
+			} else {
+				wrapped_6[i_7] = lisette.MakeOptionNone[string]()
+			}
+		}
+		ref_9 := &wrapped_6
+		option_3 = lisette.MakeOptionSome[*[]lisette.Option[string]](ref_9)
+	} else {
+		option_3 = lisette.MakeOptionNone[*[]lisette.Option[string]]()
+	}
+	if option_3.Tag == lisette.OptionSome {
+		opt_10 := lisette.MakeOptionSome(option_3.SomeVal)
+		var unwrap_11 *[]*string
+		if opt_10.Tag == lisette.OptionSome {
+			src_12 := opt_10.SomeVal
+			src_13 := *src_12
+			unwrapped_14 := make([]*string, len(src_13))
+			for i_15, v_16 := range src_13 {
+				if v_16.Tag == lisette.OptionSome {
+					unwrapped_14[i_15] = &v_16.SomeVal
+				} else {
+					unwrapped_14[i_15] = nil
+				}
+			}
+			ref_17 := &unwrapped_14
+			unwrap_11 = ref_17
+		}
+		aws.Use(unwrap_11)
+	} else {
+		aws.Use(nil)
+	}
+}

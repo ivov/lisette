@@ -1,0 +1,51 @@
+---
+source: tests/spec/emit/interop_matrix.rs
+description: "\nimport \"go:example.com/aws\"\n\nfn apply(f: fn() -> (Option<Slice<Option<string>>>, int)) -> (Option<Slice<Option<string>>>, int) {\n  f()\n}\n\nfn main() {\n  let (xs, n) = apply(aws.Make)\n  let _ = n\n  match xs {\n    Some(inner) => { for x in inner { let _ = x } },\n    None => {},\n  }\n}\n"
+---
+package main
+
+import (
+	"example.com/aws"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func apply(f func() (lisette.Option[[]lisette.Option[string]], int)) (lisette.Option[[]lisette.Option[string]], int) {
+	ret_1, ret_2 := f()
+	tup_3 := lisette.MakeTuple2(ret_1, ret_2)
+	tup_4 := tup_3
+	return tup_4.First, tup_4.Second
+}
+
+func main() {
+	cb_2 := aws.Make
+	ret_11, ret_12 := apply(func() (lisette.Option[[]lisette.Option[string]], int) {
+		ret_3, ret_4 := cb_2()
+		raw_5 := ret_3
+		var option_6 lisette.Option[[]lisette.Option[string]]
+		if raw_5 != nil {
+			src_7 := *raw_5
+			wrapped_8 := make([]lisette.Option[string], len(src_7))
+			for i_9, v_10 := range src_7 {
+				if v_10 != nil {
+					wrapped_8[i_9] = lisette.MakeOptionSome[string](*v_10)
+				} else {
+					wrapped_8[i_9] = lisette.MakeOptionNone[string]()
+				}
+			}
+			option_6 = lisette.MakeOptionSome[[]lisette.Option[string]](wrapped_8)
+		} else {
+			option_6 = lisette.MakeOptionNone[[]lisette.Option[string]]()
+		}
+		return option_6, ret_4
+	})
+	tup_13 := lisette.MakeTuple2(ret_11, ret_12)
+	tmp_1 := tup_13
+	xs := tmp_1.First
+	n := tmp_1.Second
+	_ = n
+	if xs.Tag == lisette.OptionSome {
+		for _, x := range xs.SomeVal {
+			_ = x
+		}
+	}
+}

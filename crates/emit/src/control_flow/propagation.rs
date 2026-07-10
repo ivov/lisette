@@ -185,6 +185,12 @@ impl Planner<'_> {
         if ok_ty.is_unit() || matches!(self.facts.peel_alias(&ok_ty), Type::Tuple(_)) {
             return None;
         }
+        if self
+            .go_return_payload_bridge(&plan.resolved.abi, &expression.get_type())
+            .is_some()
+        {
+            return None;
+        }
         let return_ctx = self.return_ctx();
         let has_fallible_return = return_ctx.lowered_shape().is_some()
             || return_ctx

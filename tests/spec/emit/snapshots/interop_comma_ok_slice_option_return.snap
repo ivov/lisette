@@ -1,0 +1,41 @@
+---
+source: tests/spec/emit/interop_matrix.rs
+description: "\nimport \"go:fmt\"\nimport \"go:example.com/aws\"\n\nfn main() {\n  match aws.Fetch() {\n    Some(xs) => {\n      for x in xs {\n        match x {\n          Some(v) => fmt.Println(v),\n          None => fmt.Println(\"none\"),\n        }\n      }\n    },\n    None => fmt.Println(\"missing\"),\n  }\n}\n"
+---
+package main
+
+import (
+	"example.com/aws"
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func main() {
+	ret_2, ret_3 := aws.Fetch()
+	var option_8 lisette.Option[[]lisette.Option[string]]
+	if ret_3 {
+		src_4 := ret_2
+		wrapped_5 := make([]lisette.Option[string], len(src_4))
+		for i_6, v_7 := range src_4 {
+			if v_7 != nil {
+				wrapped_5[i_6] = lisette.MakeOptionSome[string](*v_7)
+			} else {
+				wrapped_5[i_6] = lisette.MakeOptionNone[string]()
+			}
+		}
+		option_8 = lisette.MakeOptionSome[[]lisette.Option[string]](wrapped_5)
+	} else {
+		option_8 = lisette.MakeOptionNone[[]lisette.Option[string]]()
+	}
+	if option_8.Tag == lisette.OptionSome {
+		for _, x := range option_8.SomeVal {
+			if x.Tag == lisette.OptionSome {
+				fmt.Println(x.SomeVal)
+			} else {
+				fmt.Println("none")
+			}
+		}
+	} else {
+		fmt.Println("missing")
+	}
+}

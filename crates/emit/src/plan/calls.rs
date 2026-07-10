@@ -227,22 +227,31 @@ impl<'a> Planner<'a> {
                 }),
         };
         let return_type = instantiated.get_function_ret().unwrap_or(&Type::Never);
-        let return_layout = if matches!(origin, CallableOrigin::GoInterop) {
-            id.as_deref()
-                .and_then(|id| self.facts.go_callable_return_slot(id))
-                .map(|slot| {
-                    self.value_layout_with_declaration(
-                        return_type,
-                        slot.origin,
-                        &slot.declared_type,
-                    )
-                })
-                .unwrap_or_else(|| {
-                    self.value_layout(return_type, SlotOrigin::go_return(return_type))
-                })
+        let declared_return = declared
+            .as_ref()
+            .and_then(|ty| ty.unwrap_forall().get_function_ret());
+        let catalog_return = matches!(origin, CallableOrigin::GoInterop)
+            .then(|| {
+                id.as_deref()
+                    .and_then(|id| self.facts.go_callable_return_slot(id))
+            })
+            .flatten();
+        let return_origin = if matches!(origin, CallableOrigin::GoInterop) {
+            catalog_return.map_or_else(|| SlotOrigin::go_return(return_type), |slot| slot.origin)
         } else {
-            self.value_layout(return_type, SlotOrigin::Lisette)
+            SlotOrigin::Lisette
         };
+        let return_declaration = catalog_return
+            .map(|slot| &slot.declared_type)
+            .or(declared_return);
+        let return_layout = return_declaration.map_or_else(
+            || self.value_layout(return_type, return_origin),
+            |declaration| {
+                self.value_layout_with_declaration(return_type, return_origin, declaration)
+            },
+        );
+        let return_payload_layout =
+            self.callable_payload_layout(return_type, return_origin, return_declaration);
         let is_prelude_dispatch = match function.unwrap_parens() {
             Expression::DotAccess { expression, .. } => {
                 let receiver_ty = self.facts.strip_and_peel(&expression.get_type());
@@ -269,6 +278,7 @@ impl<'a> Planner<'a> {
                 params,
                 result,
                 return_layout,
+                return_payload_layout,
             },
             is_prelude_dispatch,
         }

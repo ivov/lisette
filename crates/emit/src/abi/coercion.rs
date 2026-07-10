@@ -7,7 +7,8 @@ use crate::definitions::interface_adapter::AdapterPlan;
 use crate::names::go_name;
 use crate::plan::bodies::LoweredStatement;
 
-use super::layout::ValueLayout;
+use super::callable::AbiTransition;
+use super::layout::{FunctionLayout, ValueLayout};
 
 pub(crate) struct CoercionPlan {
     kind: CoercionKind,
@@ -49,6 +50,14 @@ pub(crate) enum LayoutBridge {
         source_payload: Box<ValueLayout>,
         payload: Box<LayoutBridge>,
     },
+    Reference {
+        pointee: Box<LayoutBridge>,
+    },
+    Function {
+        source: Box<FunctionLayout>,
+        target: Box<FunctionLayout>,
+        direction: BridgeDirection,
+    },
     Aggregate {
         source: Box<ValueLayout>,
         target: Box<ValueLayout>,
@@ -71,6 +80,8 @@ impl LayoutBridge {
             Self::WrapNullableOption { .. } | Self::WrapPointerOption { .. } => {
                 Some(BridgeDirection::FromGo)
             }
+            Self::Reference { pointee } => pointee.direction(),
+            Self::Function { direction, .. } => Some(*direction),
             Self::Aggregate { key, element, .. } => key
                 .as_deref()
                 .and_then(LayoutBridge::direction)
@@ -151,7 +162,7 @@ impl Planner<'_> {
     }
 }
 
-fn resolve_layout_bridge(
+pub(crate) fn resolve_layout_bridge(
     planner: &Planner<'_>,
     source: &ValueLayout,
     target: &ValueLayout,
@@ -160,7 +171,9 @@ fn resolve_layout_bridge(
         return LayoutBridge::Identity;
     }
 
-    use ValueLayout::{Array, Map, Named, NullableOption, PointerOption, Slice, TaggedOption};
+    use ValueLayout::{
+        Array, Function, Map, Named, NullableOption, PointerOption, Reference, Slice, TaggedOption,
+    };
 
     match (source, target) {
         (
@@ -248,6 +261,34 @@ fn resolve_layout_bridge(
                 payload: Box::new(resolve_layout_bridge(planner, source_payload, target)),
             }
         }
+        (Function { layout: source, .. }, Function { layout: target, .. })
+            if source.return_abi == target.return_abi =>
+        {
+            LayoutBridge::Function {
+                direction: function_bridge_direction(planner, source, target),
+                source: Box::new(source.clone()),
+                target: Box::new(target.clone()),
+            }
+        }
+        (
+            Reference {
+                pointee: source_pointee,
+                ..
+            },
+            Reference {
+                pointee: target_pointee,
+                ..
+            },
+        ) => {
+            let pointee = resolve_layout_bridge(planner, source_pointee, target_pointee);
+            if pointee.is_identity() {
+                LayoutBridge::Identity
+            } else {
+                LayoutBridge::Reference {
+                    pointee: Box::new(pointee),
+                }
+            }
+        }
         (
             Slice {
                 element: source_element,
@@ -309,6 +350,45 @@ fn resolve_layout_bridge(
             },
         ) => resolve_layout_bridge(planner, source, target_underlying),
         _ => LayoutBridge::Identity,
+    }
+}
+
+fn function_bridge_direction(
+    planner: &Planner<'_>,
+    source: &FunctionLayout,
+    target: &FunctionLayout,
+) -> BridgeDirection {
+    let result = resolve_layout_bridge(planner, &source.result, &target.result).direction();
+    let payload = source
+        .payload
+        .as_deref()
+        .zip(target.payload.as_deref())
+        .and_then(|(source, target)| resolve_layout_bridge(planner, source, target).direction());
+    let parameter = target
+        .parameters
+        .iter()
+        .zip(&source.parameters)
+        .find_map(|(target, source)| resolve_layout_bridge(planner, target, source).direction())
+        .map(invert_direction);
+    result
+        .or(payload)
+        .or(parameter)
+        .or_else(
+            || match source.return_abi.transition_to(&target.return_abi) {
+                AbiTransition::LowerFromTagged => Some(BridgeDirection::ToGo),
+                AbiTransition::WrapToTagged => Some(BridgeDirection::FromGo),
+                AbiTransition::Identity | AbiTransition::Reencode | AbiTransition::Incompatible => {
+                    None
+                }
+            },
+        )
+        .unwrap_or(BridgeDirection::ToGo)
+}
+
+fn invert_direction(direction: BridgeDirection) -> BridgeDirection {
+    match direction {
+        BridgeDirection::ToGo => BridgeDirection::FromGo,
+        BridgeDirection::FromGo => BridgeDirection::ToGo,
     }
 }
 

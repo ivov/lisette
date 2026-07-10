@@ -1,6 +1,8 @@
 use crate::Planner;
 use crate::Renderer;
-use crate::abi::callable::{CallableReturnAbi, PayloadLayout};
+use crate::abi::callable::{CallableReturnAbi, OptionReturnAbi, PayloadLayout};
+use crate::abi::coercion::{LayoutBridge, resolve_layout_bridge};
+use crate::abi::layout::{FunctionLayout, ValueLayout};
 use crate::control_flow::fallible::{
     Fallible, FalliblePlanner, PARTIAL_BOTH_CTOR, PARTIAL_ERR_CTOR, PARTIAL_OK_CTOR,
 };
@@ -75,6 +77,171 @@ pub(super) fn leaf_block(sink: &ResolvedSink, value: &str) -> LoweredBlock {
 }
 
 impl Planner<'_> {
+    pub(crate) fn plan_function_layout_bridge(
+        &mut self,
+        statements: &mut Vec<LoweredStatement>,
+        value: &str,
+        source: &FunctionLayout,
+        target: &FunctionLayout,
+    ) -> String {
+        debug_assert_eq!(source.return_abi, target.return_abi);
+        let function = self.hoist_tmp_value_statement(statements, "cb", value);
+        let mut body = Vec::new();
+        let mut parameters = Vec::new();
+        let mut arguments = Vec::new();
+
+        for (index, (source, target)) in
+            source.parameters.iter().zip(&target.parameters).enumerate()
+        {
+            let name = format!("arg{index}");
+            parameters.push(format!("{name} {}", target.go_type(self)));
+            let bridge = resolve_layout_bridge(self, target, source);
+            let argument = self.plan_layout_bridge(&mut body, &name, &bridge);
+            if source.logical_type().get_name() == Some("VarArgs") {
+                arguments.push(format!("{argument}..."));
+            } else {
+                arguments.push(argument);
+            }
+        }
+
+        let call = format!("{function}({})", arguments.join(", "));
+        self.plan_function_result_bridge(&mut body, &call, source, target);
+        let body = Renderer.render_setup(&body);
+        let result = target.result_go_type(self);
+        let signature = if result.is_empty() {
+            format!("func({})", parameters.join(", "))
+        } else {
+            format!("func({}) {result}", parameters.join(", "))
+        };
+        format!("{signature} {{\n{body}}}")
+    }
+
+    fn plan_function_result_bridge(
+        &mut self,
+        statements: &mut Vec<LoweredStatement>,
+        call: &str,
+        source: &FunctionLayout,
+        target: &FunctionLayout,
+    ) {
+        match &source.return_abi {
+            CallableReturnAbi::Tagged | CallableReturnAbi::Direct => {
+                if source.result.logical_type().is_unit() {
+                    statements.push(LoweredStatement::RawGo(format!("{call}\n")));
+                    return;
+                }
+                let bridge = resolve_layout_bridge(self, &source.result, &target.result);
+                let value = self.plan_layout_bridge(statements, call, &bridge);
+                statements.push(plain_return(value));
+            }
+            CallableReturnAbi::Result {
+                bare_error: true, ..
+            } => statements.push(plain_return(call.to_string())),
+            CallableReturnAbi::Result { .. }
+            | CallableReturnAbi::Partial { .. }
+            | CallableReturnAbi::Option {
+                encoding: OptionReturnAbi::CommaOk,
+                ..
+            } => {
+                let value = self.fresh_var(Some("ret"));
+                self.declare(&value);
+                let auxiliary = self.fresh_var(Some("ret"));
+                self.declare(&auxiliary);
+                statements.push(LoweredStatement::RawGo(format!(
+                    "{value}, {auxiliary} := {call}\n"
+                )));
+
+                if matches!(source.return_abi, CallableReturnAbi::Partial { .. }) {
+                    let ok_type = source.result.logical_type().ok_type();
+                    if let Some(condition) = self.partial_ok_nil_check(&ok_type, &value) {
+                        statements.push(LoweredStatement::If(IfPlan {
+                            condition_setup: Vec::new(),
+                            condition,
+                            then_body: LoweredBlock {
+                                statements: vec![plain_return(format!("nil, {auxiliary}"))],
+                            },
+                            else_arm: ElseArm::None,
+                        }));
+                    }
+                }
+
+                let source_payload = source
+                    .payload
+                    .as_deref()
+                    .expect("lowered callable has a payload layout");
+                let target_payload = target
+                    .payload
+                    .as_deref()
+                    .expect("lowered callable target has a payload layout");
+                let bridge = resolve_layout_bridge(self, source_payload, target_payload);
+                let value = self.plan_layout_bridge(statements, &value, &bridge);
+                statements.push(plain_return(format!("{value}, {auxiliary}")));
+            }
+            CallableReturnAbi::Option {
+                encoding: OptionReturnAbi::Nullable,
+                ..
+            } => {
+                let raw = self.hoist_tmp_value_statement(statements, "raw", call);
+                let condition = if self.is_interface_option(source.result.logical_type()) {
+                    self.require_stdlib();
+                    format!("lisette.IsNilInterface({raw})")
+                } else {
+                    format!("{raw} == nil")
+                };
+                statements.push(LoweredStatement::If(IfPlan {
+                    condition_setup: Vec::new(),
+                    condition,
+                    then_body: LoweredBlock {
+                        statements: vec![plain_return("nil".to_string())],
+                    },
+                    else_arm: ElseArm::None,
+                }));
+                let source_payload = source
+                    .payload
+                    .as_deref()
+                    .expect("nullable option callable has a payload layout");
+                let target_payload = target
+                    .payload
+                    .as_deref()
+                    .expect("nullable option target has a payload layout");
+                let bridge = resolve_layout_bridge(self, source_payload, target_payload);
+                let value = self.plan_layout_bridge(statements, &raw, &bridge);
+                statements.push(plain_return(value));
+            }
+            CallableReturnAbi::Option {
+                encoding: OptionReturnAbi::Sentinel(_),
+                ..
+            } => statements.push(plain_return(call.to_string())),
+            CallableReturnAbi::Tuple { arity } => {
+                let values = self.create_temp_vars("ret", *arity);
+                statements.push(LoweredStatement::RawGo(format!(
+                    "{} := {call}\n",
+                    values.join(", ")
+                )));
+                let (
+                    ValueLayout::Tuple {
+                        elements: source, ..
+                    },
+                    ValueLayout::Tuple {
+                        elements: target, ..
+                    },
+                ) = (source.result.as_ref(), target.result.as_ref())
+                else {
+                    statements.push(plain_return(values.join(", ")));
+                    return;
+                };
+                let values = values
+                    .into_iter()
+                    .zip(source.iter().zip(target))
+                    .map(|(value, (source, target))| {
+                        let bridge = resolve_layout_bridge(self, source, target);
+                        self.plan_layout_bridge(statements, &value, &bridge)
+                    })
+                    .collect::<Vec<_>>();
+                statements.push(plain_return(values.join(", ")));
+            }
+        }
+    }
+
     /// Prepare a wrapper sink: declare `var slot T` (slot targets) or route
     /// writes to `return`.
     pub(super) fn push_wrapper_slot(
@@ -159,6 +326,7 @@ impl Planner<'_> {
         call_str: &str,
         partial_ty: &Type,
         layout: PayloadLayout,
+        payload_bridge: Option<&LayoutBridge>,
         target: WrapperTarget<'_>,
     ) -> (Vec<LoweredStatement>, WrapperOutcome) {
         let ok_ty = partial_ty.ok_type();
@@ -176,7 +344,22 @@ impl Planner<'_> {
         let (sink, outcome) =
             self.push_wrapper_slot(&mut statements, target, &result_ty_str, "result");
 
-        let both = format!("{PARTIAL_BOTH_CTOR}[{type_params}]({val_var}, {err_var})");
+        let (mut both_setup, both_value) =
+            self.plan_optional_payload_bridge(&val_var, payload_bridge);
+        let both = format!("{PARTIAL_BOTH_CTOR}[{type_params}]({both_value}, {err_var})");
+        both_setup.push(leaf_statement(&sink, &both));
+        let both_body = LoweredBlock {
+            statements: both_setup,
+        };
+
+        let (mut ok_setup, ok_value) = self.plan_optional_payload_bridge(&val_var, payload_bridge);
+        ok_setup.push(leaf_statement(
+            &sink,
+            &format!("{PARTIAL_OK_CTOR}[{type_params}]({ok_value})"),
+        ));
+        let ok_body = LoweredBlock {
+            statements: ok_setup,
+        };
 
         let then_body = if let Some(check) = &nil_check {
             let inner = IfPlan {
@@ -187,7 +370,7 @@ impl Planner<'_> {
                     &format!("{PARTIAL_ERR_CTOR}[{type_params}]({err_var})"),
                 ),
                 else_arm: ElseArm::Else {
-                    body: leaf_block(&sink, &both),
+                    body: both_body,
                     inline: false,
                 },
             };
@@ -195,14 +378,11 @@ impl Planner<'_> {
                 statements: vec![LoweredStatement::If(inner)],
             }
         } else {
-            leaf_block(&sink, &both)
+            both_body
         };
 
         let else_arm = ElseArm::Else {
-            body: leaf_block(
-                &sink,
-                &format!("{PARTIAL_OK_CTOR}[{type_params}]({})", val_var),
-            ),
+            body: ok_body,
             inline: false,
         };
 
@@ -266,6 +446,7 @@ impl Planner<'_> {
         call_str: &str,
         result_ty: &Type,
         layout: PayloadLayout,
+        payload_bridge: Option<&LayoutBridge>,
         target: WrapperTarget<'_>,
     ) -> (Vec<LoweredStatement>, WrapperOutcome) {
         let fallible = Fallible::from_type(result_ty).expect("Result type expected");
@@ -287,6 +468,16 @@ impl Planner<'_> {
 
         let (sink, outcome) =
             self.push_wrapper_slot(&mut statements, target, &result_ty_str, "result");
+
+        let (mut ok_setup, ok_value) = self.plan_optional_payload_bridge(&ok_val, payload_bridge);
+        let ok_wrapper = {
+            let mut fe = FalliblePlanner::new(self, &fallible);
+            fe.emit_success(&ok_value)
+        };
+        ok_setup.push(leaf_statement(&sink, &ok_wrapper));
+        let ok_body = LoweredBlock {
+            statements: ok_setup,
+        };
 
         let err_wrapper = {
             let mut fe = FalliblePlanner::new(self, &fallible);
@@ -310,26 +501,18 @@ impl Planner<'_> {
                 let mut fe = FalliblePlanner::new(self, &fallible);
                 fe.emit_failure(Some("errors.New(\"unexpected nil\")"))
             };
-            let ok_wrapper = {
-                let mut fe = FalliblePlanner::new(self, &fallible);
-                fe.emit_success(&ok_val)
-            };
             ElseArm::ElseIf(Box::new(IfPlan {
                 condition_setup: Vec::new(),
                 condition: nil_condition,
                 then_body: leaf_block(&sink, &nil_err),
                 else_arm: ElseArm::Else {
-                    body: leaf_block(&sink, &ok_wrapper),
+                    body: ok_body,
                     inline: false,
                 },
             }))
         } else {
-            let ok_wrapper = {
-                let mut fe = FalliblePlanner::new(self, &fallible);
-                fe.emit_success(&ok_val)
-            };
             ElseArm::Else {
-                body: leaf_block(&sink, &ok_wrapper),
+                body: ok_body,
                 inline: false,
             }
         };
@@ -341,6 +524,19 @@ impl Planner<'_> {
             else_arm,
         }));
         (statements, outcome)
+    }
+
+    fn plan_optional_payload_bridge(
+        &mut self,
+        value: &str,
+        bridge: Option<&LayoutBridge>,
+    ) -> (Vec<LoweredStatement>, String) {
+        let mut statements = Vec::new();
+        let value = bridge.map_or_else(
+            || value.to_string(),
+            |bridge| self.plan_layout_bridge(&mut statements, value, bridge),
+        );
+        (statements, value)
     }
 
     fn lower_unit_result_wrapping(

@@ -5,11 +5,12 @@ pub(crate) use wrappers::{NilGuard, WrapperTarget};
 
 use crate::Planner;
 use crate::abi::callable::{CallableAbi, CallableReturnAbi, OptionReturnAbi};
-use crate::abi::coercion::CoercionPlan;
-use crate::abi::layout::SlotOrigin;
+use crate::abi::coercion::{CoercionPlan, LayoutBridge, resolve_layout_bridge};
+use crate::abi::layout::{SlotOrigin, ValueLayout};
 use crate::context::expression::ExpressionContext;
 use crate::names::go_name;
 use crate::plan::bodies::LoweredStatement;
+use crate::plan::calls::CallableOrigin;
 use crate::plan::values::{GoExpression, ValuePlan};
 use syntax::ast::Expression;
 use syntax::types::Type;
@@ -22,6 +23,25 @@ impl Planner<'_> {
         abi: &CallableAbi,
         result_ty: &Type,
     ) -> ValuePlan {
+        if let Some(bridges) = self.go_tuple_result_bridges(abi, result_ty) {
+            let call = self.lower_call(call_expression, None, ExpressionContext::value());
+            return call.map_rendered_as_observable_computed(|setup, call_string, _| {
+                let values = self.create_temp_vars("ret", bridges.len());
+                setup.push(LoweredStatement::RawGo(format!(
+                    "{} := {}\n",
+                    values.join(", "),
+                    call_string
+                )));
+                let values = values
+                    .into_iter()
+                    .zip(&bridges)
+                    .map(|(value, bridge)| self.plan_layout_bridge(setup, &value, bridge))
+                    .collect::<Vec<_>>();
+                let tuple = self.plan_tuple_from_vars(setup, &values, result_ty);
+                GoExpression::opaque(tuple)
+            });
+        }
+
         if let Some(bridge) = self.go_result_layout_bridge(abi, result_ty) {
             let call = self.lower_call(call_expression, None, ExpressionContext::value());
             return call.map_rendered_as_observable_computed(
@@ -33,7 +53,7 @@ impl Planner<'_> {
             );
         }
 
-        let payload_bridge = self.option_result_payload_bridge(abi, result_ty);
+        let payload_bridge = self.go_return_payload_bridge(abi, result_ty);
         let call_plan = self.lower_call(call_expression, None, ExpressionContext::value());
         call_plan.map_rendered_as_observable_computed(
             |setup, call_string, _contains_deferred_evaluation| {
@@ -42,7 +62,7 @@ impl Planner<'_> {
                         &call_string,
                         &abi.result,
                         result_ty,
-                        payload_bridge,
+                        payload_bridge.as_ref(),
                         WrapperTarget::FreshSlot,
                     );
                     (wrap, outcome.expect("wrapper produced no slot"))
@@ -79,6 +99,40 @@ impl Planner<'_> {
         (!bridge.is_identity()).then_some(bridge)
     }
 
+    pub(crate) fn go_tuple_result_bridges(
+        &self,
+        abi: &CallableAbi,
+        result_ty: &Type,
+    ) -> Option<Vec<LayoutBridge>> {
+        if !matches!(abi.result, CallableReturnAbi::Tuple { .. }) {
+            return None;
+        }
+        let ValueLayout::Tuple {
+            elements: source, ..
+        } = &abi.return_layout
+        else {
+            return None;
+        };
+        let ValueLayout::Tuple {
+            elements: target, ..
+        } = self.value_layout(result_ty, SlotOrigin::Lisette)
+        else {
+            return None;
+        };
+        if source.len() != target.len() {
+            return None;
+        }
+        let bridges = source
+            .iter()
+            .zip(&target)
+            .map(|(source, target)| resolve_layout_bridge(self, source, target))
+            .collect::<Vec<_>>();
+        bridges
+            .iter()
+            .any(|bridge| !bridge.is_identity())
+            .then_some(bridges)
+    }
+
     pub(crate) fn lower_abi_wrapping(
         &mut self,
         call_str: &str,
@@ -94,7 +148,7 @@ impl Planner<'_> {
         call_str: &str,
         abi: &CallableReturnAbi,
         result_ty: &Type,
-        payload_bridge: Option<CoercionPlan>,
+        payload_bridge: Option<&LayoutBridge>,
         target: WrapperTarget<'_>,
     ) -> (Vec<LoweredStatement>, Option<String>) {
         match abi {
@@ -105,11 +159,11 @@ impl Planner<'_> {
             }
             CallableReturnAbi::Result { payload, .. } => {
                 self.require_stdlib();
-                self.lower_result_wrapping(call_str, result_ty, *payload, target)
+                self.lower_result_wrapping(call_str, result_ty, *payload, payload_bridge, target)
             }
             CallableReturnAbi::Partial { payload } => {
                 self.require_stdlib();
-                self.lower_partial_wrapping(call_str, result_ty, *payload, target)
+                self.lower_partial_wrapping(call_str, result_ty, *payload, payload_bridge, target)
             }
             CallableReturnAbi::Option {
                 encoding: OptionReturnAbi::CommaOk,
@@ -147,7 +201,7 @@ impl Planner<'_> {
         ) {
             return None;
         }
-        let payload_bridge = self.option_result_payload_bridge(abi, result_ty);
+        let payload_bridge = self.go_return_payload_bridge(abi, result_ty);
         let (mut statements, call_str) = self
             .lower_call(expression, None, ExpressionContext::value())
             .into_parts();
@@ -155,25 +209,22 @@ impl Planner<'_> {
             &call_str,
             &abi.result,
             result_ty,
-            payload_bridge,
+            payload_bridge.as_ref(),
             target,
         );
         statements.extend(wrap);
         Some(statements)
     }
 
-    fn option_result_payload_bridge(
+    pub(crate) fn go_return_payload_bridge(
         &self,
         abi: &CallableAbi,
         result_ty: &Type,
-    ) -> Option<CoercionPlan> {
-        if !matches!(abi.result, CallableReturnAbi::Option { .. }) {
-            return None;
-        }
-        let source = abi.return_layout.option_payload()?;
-        let target_layout = self.value_layout(result_ty, SlotOrigin::Lisette);
-        let target = target_layout.option_payload()?;
-        let bridge = CoercionPlan::bridge(self, source, target);
+    ) -> Option<LayoutBridge> {
+        let source = abi.return_payload_layout.as_ref()?;
+        let target_type = result_ty.ok_type();
+        let target = self.value_layout(&target_type, SlotOrigin::Lisette);
+        let bridge = resolve_layout_bridge(self, source, &target);
         (!bridge.is_identity()).then_some(bridge)
     }
 
@@ -183,7 +234,12 @@ impl Planner<'_> {
         call_expression: &Expression,
     ) -> Option<String> {
         let plan = self.plan_call(call_expression)?;
-        if plan.resolved.abi.result.is_passthrough() {
+        if plan.resolved.abi.result.is_passthrough()
+            && (!matches!(plan.resolved.origin, CallableOrigin::GoInterop)
+                || self
+                    .go_result_layout_bridge(&plan.resolved.abi, &call_expression.get_type())
+                    .is_none())
+        {
             return None;
         }
 
