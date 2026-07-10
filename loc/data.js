@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1783719077334,
+  "lastUpdate": 1783721278955,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -2043,6 +2043,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "emit",
             "value": 29040,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 22929,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 16438,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 12807,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 10078,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 6184,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 4348,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2783,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1031,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 695,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 6046,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 890,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "01cb446f9271fa366b6c94dba271508e891f0b27",
+          "message": "refactor: model recursive Go slot layouts with provenance (#990)",
+          "timestamp": "2026-07-11T00:07:38+02:00",
+          "tree_id": "bcd540051dfe0fa3255dcbd66228b837a14ac13b",
+          "url": "https://github.com/ivov/lisette/commit/01cb446f9271fa366b6c94dba271508e891f0b27"
+        },
+        "date": 1783721278011,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 114203,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 29974,
             "unit": "lines"
           },
           {
