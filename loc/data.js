@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1783721278955,
+  "lastUpdate": 1783725001782,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -2132,6 +2132,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "emit",
             "value": 29974,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 22929,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 16438,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 12807,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 10078,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 6184,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 4348,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2783,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1031,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 695,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 6046,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 890,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "8fbbd1bc2989f5f1b47215a86c0f3c912f7ef252",
+          "message": "fix: convert `Option` values across Go callable boundaries (#991)",
+          "timestamp": "2026-07-11T01:09:39+02:00",
+          "tree_id": "a25204e1f88dd5f43485e716f7763264170efb79",
+          "url": "https://github.com/ivov/lisette/commit/8fbbd1bc2989f5f1b47215a86c0f3c912f7ef252"
+        },
+        "date": 1783725001368,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 114812,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 30583,
             "unit": "lines"
           },
           {
