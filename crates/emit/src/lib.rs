@@ -23,7 +23,6 @@ pub(crate) use names::go_name::escape_reserved;
 pub(crate) use output::OutputCollector;
 pub(crate) use render::Renderer;
 pub(crate) use state::bindings::Bindings;
-pub(crate) use state::effects::EmitEffects;
 pub(crate) use types::prelude::PreludeType;
 pub(crate) use utils::is_order_sensitive;
 pub(crate) use utils::write_line;
@@ -34,7 +33,7 @@ pub use output::OutputFile;
 pub use output::imports;
 
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
-use std::cell::RefCell;
+use std::cell::{Ref, RefCell, RefMut};
 use std::rc::Rc;
 use std::sync::Arc;
 use std::sync::OnceLock;
@@ -43,10 +42,12 @@ use abi::callable::{CallableReturnAbi, OptionReturnAbi, PayloadLayout};
 use abi::catalog::GoAbiCatalog;
 use analyze::facts::{EmitFactsConfig, is_nullable_option};
 use names::constraints::GenericConstraintTable;
-use output::imports::ImportBuilder;
+use names::go_name::GeneratedPackage;
+use names::packages::{PackageRequirements, PackageUse};
 use plan::ModulePlan;
 use plan::bodies::{LoweredBlock, LoweredStatement};
 use state::adapter_registry::AdapterRegistry;
+use state::file_namespace::FileNamespace;
 use state::module_state::{FunctionEmissionState, ModuleState};
 use state::scope::ScopeState;
 use syntax::ast::Span;
@@ -231,60 +232,77 @@ pub struct Planner<'a> {
     pub(crate) function_state: FunctionEmissionState,
     pub(crate) scope: ScopeState,
     pub(crate) adapter_registry: AdapterRegistry,
-    pub(crate) effects: RefCell<EmitEffects>,
+    namespace: RefCell<Option<FileNamespace>>,
 }
 
 impl Planner<'_> {
+    pub(crate) fn file_namespace(&self) -> Ref<'_, FileNamespace> {
+        Ref::map(self.namespace.borrow(), |namespace| {
+            namespace
+                .as_ref()
+                .expect("package resolution requires an active file namespace")
+        })
+    }
+
+    pub(crate) fn file_namespace_mut(&self) -> RefMut<'_, FileNamespace> {
+        RefMut::map(self.namespace.borrow_mut(), |namespace| {
+            namespace
+                .as_mut()
+                .expect("package resolution requires an active file namespace")
+        })
+    }
+
     pub(crate) fn require_stdlib(&self) {
-        self.effects.borrow_mut().require_stdlib();
+        self.require_generated_package(GeneratedPackage::Prelude);
     }
 
     pub(crate) fn require_fmt(&self) {
-        self.effects.borrow_mut().require_fmt();
+        self.require_generated_package(GeneratedPackage::Fmt);
     }
 
     pub(crate) fn require_errors(&self) {
-        self.effects.borrow_mut().require_errors();
+        self.require_generated_package(GeneratedPackage::Errors);
     }
 
     pub(crate) fn require_slices(&self) {
-        self.effects.borrow_mut().require_slices();
+        self.require_generated_package(GeneratedPackage::Slices);
     }
 
     pub(crate) fn require_strings(&self) {
-        self.effects.borrow_mut().require_strings();
+        self.require_generated_package(GeneratedPackage::Strings);
     }
 
     pub(crate) fn require_maps(&self) {
-        self.effects.borrow_mut().require_maps();
+        self.require_generated_package(GeneratedPackage::Maps);
     }
 
     pub(crate) fn require_json(&self) {
-        self.effects.borrow_mut().require_json();
+        self.require_generated_package(GeneratedPackage::Json);
     }
 
     pub(crate) fn require_cmp(&self) {
-        self.effects.borrow_mut().require_cmp();
+        self.require_generated_package(GeneratedPackage::Cmp);
     }
 
     pub(crate) fn require_testkit(&self) {
-        self.effects.borrow_mut().require_testkit();
+        self.require_generated_package(GeneratedPackage::TestKit);
     }
 
     pub(crate) fn require_testing(&self) {
-        self.effects.borrow_mut().require_testing();
+        self.require_generated_package(GeneratedPackage::Testing);
+    }
+
+    pub(crate) fn require_generated_package(&self, package: GeneratedPackage) {
+        self.file_namespace_mut()
+            .require(PackageUse::generated(package));
     }
 
     pub(crate) fn note_go_type(&self, go_type: &GoType) {
-        self.effects.borrow_mut().merge_from_go_type(go_type);
+        self.file_namespace_mut().absorb(go_type.requirements());
     }
 
-    pub(crate) fn absorb_effects(&self, other: &EmitEffects) {
-        self.effects.borrow_mut().extend(other);
-    }
-
-    pub(crate) fn take_effects(&self) -> EmitEffects {
-        std::mem::take(&mut *self.effects.borrow_mut())
+    pub(crate) fn require_packages(&self, requirements: &PackageRequirements) {
+        self.file_namespace_mut().absorb(requirements);
     }
 }
 
@@ -396,7 +414,7 @@ impl<'a> Planner<'a> {
             function_state: FunctionEmissionState::default(),
             scope: ScopeState::new(),
             adapter_registry: AdapterRegistry::default(),
-            effects: RefCell::new(EmitEffects::default()),
+            namespace: RefCell::new(None),
         }
     }
 
@@ -564,20 +582,27 @@ impl<'a> Planner<'a> {
 
     pub fn emit_files(&mut self, files: &[&File], module_id: &str) -> Vec<OutputFile> {
         let plan = self.build_module_plan(files, module_id);
-        self.render_module_plan(files, &plan)
+        self.render_module_plan(files, plan)
     }
 
-    fn render_module_plan(&mut self, files: &[&File], plan: &ModulePlan) -> Vec<OutputFile> {
+    fn render_module_plan(&mut self, files: &[&File], plan: ModulePlan) -> Vec<OutputFile> {
+        let ModulePlan {
+            package_name,
+            files: file_plans,
+            mut collision_diagnostics,
+        } = plan;
         let mut output_files = Vec::new();
 
-        for (i, (file, file_plan)) in files.iter().zip(&plan.files).enumerate() {
+        for (i, (file, file_plan)) in files.iter().zip(file_plans).enumerate() {
             debug_assert_eq!(file.id, file_plan.file_id, "plan/file order mismatch");
 
-            self.module.set_active_file(file.id);
+            *self.namespace.borrow_mut() = Some(file_plan.namespace);
             let mut source = OutputCollector::new();
 
             for function in &file_plan.make_functions {
-                source.collect_with_blank(function.clone());
+                source.collect_with_blank(
+                    self.create_make_function_code(&function.enum_id, &function.variant_name),
+                );
             }
 
             for expression in &file.items {
@@ -588,31 +613,24 @@ impl<'a> Planner<'a> {
                 }
             }
 
-            let mut import_builder = ImportBuilder::from_plan(
-                &file_plan.imports,
-                self.facts.go_package_names(),
-                self.facts.go_module_ids(),
-            );
-
             self.drain_file_emission_into(&mut source);
-            self.take_effects().drain_into(&mut import_builder);
-            if i == 0 {
-                plan.collection_effects.drain_into(&mut import_builder);
-            }
-
-            import_builder.filter_unused_imports();
-
             let rendered_source = source.render();
 
-            let (imports, mut diagnostics) = import_builder.build();
+            let namespace = self
+                .namespace
+                .borrow_mut()
+                .take()
+                .expect("file namespace was installed before rendering");
+            let (imports, mut diagnostics) =
+                namespace.finish(self.facts.go_package_names(), self.facts.go_module_ids());
             if i == 0 {
-                diagnostics.extend(plan.collision_diagnostics.iter().cloned());
+                diagnostics.append(&mut collision_diagnostics);
             }
             output_files.push(OutputFile {
                 name: file_plan.output_name.clone(),
                 imports,
                 source: rendered_source,
-                package_name: plan.package_name.clone(),
+                package_name: package_name.clone(),
                 diagnostics,
             });
         }

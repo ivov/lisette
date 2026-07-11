@@ -106,11 +106,8 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
     pub(crate) fn lower(mut self, place: &PlacePlan) -> LoweredBlock {
         let expanded = expand_or_patterns(self.arms);
         let compiled = compile_expanded_arms(self.planner, &expanded, &self.subject_ty);
-        self.planner.absorb_effects(&compiled.effects);
+        self.planner.require_packages(&compiled.packages);
         let tree = compiled.decision;
-        if decision_needs_stdlib(&tree) {
-            self.planner.require_stdlib();
-        }
 
         let mut statements: Vec<LoweredStatement> = Vec::new();
         match &tree {
@@ -1004,29 +1001,6 @@ fn render_switch_expression(rendered_path: &str, kind: &PatternSwitchKind) -> St
         PatternSwitchKind::EnumTag => wrap_if_struct_literal(format!("{}.Tag", rendered_path)),
         PatternSwitchKind::Value => wrap_if_struct_literal(rendered_path.to_string()),
         PatternSwitchKind::TypeSwitch => unreachable!("TypeSwitch handled separately"),
-    }
-}
-
-fn decision_needs_stdlib(decision: &Decision) -> bool {
-    match decision {
-        Decision::Success { .. } | Decision::Unreachable => false,
-        Decision::Guard {
-            success, failure, ..
-        } => decision_needs_stdlib(success) || decision_needs_stdlib(failure),
-        Decision::Switch {
-            branches, fallback, ..
-        } => {
-            branches
-                .iter()
-                .any(|branch| branch.needs_stdlib || decision_needs_stdlib(&branch.decision))
-                || fallback.as_deref().is_some_and(decision_needs_stdlib)
-        }
-        Decision::Chain { tests, fallback } => {
-            tests
-                .iter()
-                .any(|test| decision_needs_stdlib(&test.decision))
-                || decision_needs_stdlib(fallback)
-        }
     }
 }
 

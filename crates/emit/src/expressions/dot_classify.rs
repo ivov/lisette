@@ -74,8 +74,8 @@ impl Planner<'_> {
         let make_fn = if needs_qualifier {
             if make_fn_name.starts_with(go_name::PRELUDE_PREFIX) {
                 let resolved = go_name::resolve(&make_fn_name);
-                if resolved.needs_stdlib {
-                    self.require_stdlib();
+                if let Some(package) = resolved.package {
+                    self.require_generated_package(package);
                 }
                 format!("{}{}", resolved.name, type_args)
             } else {
@@ -123,8 +123,8 @@ impl Planner<'_> {
 
         if is_prelude {
             let resolved = go_name::resolve(&make_fn);
-            if resolved.needs_stdlib {
-                self.require_stdlib();
+            if let Some(package) = resolved.package {
+                self.require_generated_package(package);
             }
             Some(format!("{}{}()", resolved.name, type_args))
         } else if is_cross_module {

@@ -96,8 +96,8 @@ impl Planner<'_> {
     }
 
     fn lower_try_unit_return(&mut self, fallible: &Fallible) -> LoweredStatement {
-        let (unit_val, effects) = self.zero_value(fallible.ok_ty());
-        self.absorb_effects(&effects);
+        let (unit_val, packages) = self.zero_value(fallible.ok_ty());
+        self.require_packages(&packages);
         self.lower_try_success_return(&unit_val, fallible)
     }
 
@@ -242,8 +242,8 @@ impl Planner<'_> {
 
     /// A structured zero-value return for a `recover` block's inner type.
     fn lower_zero_return(&mut self, ty: &Type) -> LoweredStatement {
-        let (zero, effects) = self.zero_value(ty);
-        self.absorb_effects(&effects);
+        let (zero, packages) = self.zero_value(ty);
+        self.require_packages(&packages);
         plain_return(zero)
     }
 }

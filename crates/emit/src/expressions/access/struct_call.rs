@@ -567,11 +567,7 @@ impl Planner<'_> {
 
         let parts: Vec<&str> = name.split('.').collect();
         if parts.len() == 3 {
-            let module = self
-                .module
-                .module_for_alias(parts[0])
-                .unwrap_or(parts[0])
-                .to_string();
+            let module = self.canonical_module(parts[0]);
             self.require_module_import(&module);
         }
     }

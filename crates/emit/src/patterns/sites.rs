@@ -144,7 +144,7 @@ impl Planner<'_> {
         let mut statements = Vec::new();
         let resolved = self.resolve_pattern_subject(&mut statements, subject);
         let info = decision_tree::collect_pattern_info(self, pattern, typed, subject_ty);
-        self.absorb_effects(&info.effects);
+        self.require_packages(&info.packages);
 
         let mut body = Vec::new();
         self.scope.enter_use_region();
@@ -300,7 +300,7 @@ impl Planner<'_> {
         }
 
         let info = decision_tree::collect_pattern_info(self, pattern, typed, &scrutinee_ty);
-        self.absorb_effects(&info.effects);
+        self.require_packages(&info.packages);
         let mut loop_body = subject_setup;
         let (effective, ok_var) =
             apply_refutable_root_assertion(self, &mut loop_body, &info, &subject_var);
@@ -381,7 +381,7 @@ impl Planner<'_> {
             ty: subject_ty,
         } = subject;
         let info = decision_tree::collect_pattern_info(self, pattern, typed, subject_ty);
-        self.absorb_effects(&info.effects);
+        self.require_packages(&info.packages);
 
         let mut statements = Vec::new();
         let (effective_subject, assert_ok_var) =
@@ -530,7 +530,7 @@ impl Planner<'_> {
             .map(|alt| decision_tree::collect_pattern_info(self, alt, None, subject_ty))
             .collect();
         for info in &collected {
-            self.absorb_effects(&info.effects);
+            self.require_packages(&info.packages);
         }
         let hoisted: Vec<(Cow<'s, str>, Option<String>)> = collected
             .iter()
@@ -567,7 +567,7 @@ impl Planner<'_> {
             .map(|alt| decision_tree::collect_pattern_info(self, alt, None, subject_ty))
             .collect();
         for info in &alternatives {
-            self.absorb_effects(&info.effects);
+            self.require_packages(&info.packages);
         }
 
         let unused_names: rustc_hash::FxHashSet<String> = alternatives
@@ -656,7 +656,7 @@ impl Planner<'_> {
             ty: subject_ty,
         } = subject;
         let info = decision_tree::collect_pattern_info(self, pattern, typed, subject_ty);
-        self.absorb_effects(&info.effects);
+        self.require_packages(&info.packages);
         let mut statements = Vec::new();
         let (effective, ok_var) =
             apply_refutable_root_assertion(self, &mut statements, &info, subject_var);

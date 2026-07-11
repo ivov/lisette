@@ -399,7 +399,7 @@ impl Planner<'_> {
         let Expression::Identifier { value, .. } = package.unwrap_parens() else {
             return false;
         };
-        let module = self.module.module_for_alias(value).unwrap_or(value);
+        let module = self.canonical_module(value);
         let qualified = format!("{module}.{member}");
         let body = self
             .facts

@@ -52,8 +52,8 @@ pub(crate) fn render_lowered_result_return(
 
 /// Idiomatic Go zero (`0`, `""`, `nil`, ...) for a lowered failure slot.
 fn lowered_zero(planner: &mut Planner, ok_ty: &Type) -> String {
-    let (zero, effects) = planner.zero_value(ok_ty);
-    planner.absorb_effects(&effects);
+    let (zero, packages) = planner.zero_value(ok_ty);
+    planner.require_packages(&packages);
     zero
 }
 

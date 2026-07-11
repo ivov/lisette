@@ -1,8 +1,8 @@
-use crate::EmitEffects;
 use crate::Planner;
 use crate::abi::layout::{SlotOrigin, ValueLayout};
 use crate::definitions::structs::struct_field_go_name;
 use crate::names::go_name;
+use crate::names::packages::{PackageRequirements, PackageUse};
 use crate::types::native::NativeGoType;
 use crate::types::prelude::PreludeType;
 use syntax::program::DefinitionBody;
@@ -11,44 +11,43 @@ use syntax::types::{CompoundKind, SimpleKind, Type};
 #[derive(Debug, Clone, Default)]
 pub(crate) struct GoType {
     pub(crate) code: String,
-    pub(crate) needs_stdlib: bool,
-    pub(crate) go_imports: Vec<String>,
+    requirements: PackageRequirements,
 }
 
 impl GoType {
     pub(crate) fn new(code: impl Into<String>) -> Self {
         Self {
             code: code.into(),
-            needs_stdlib: false,
-            go_imports: Vec::new(),
+            requirements: PackageRequirements::default(),
         }
     }
 
     pub(crate) fn stdlib(code: impl Into<String>) -> Self {
-        Self {
-            code: code.into(),
-            needs_stdlib: true,
-            go_imports: Vec::new(),
-        }
+        let mut result = Self::new(code);
+        result
+            .requirements
+            .require_generated(go_name::GeneratedPackage::Prelude);
+        result
     }
 
-    pub(crate) fn with_go_import(code: impl Into<String>, go_path: String) -> Self {
-        Self {
-            code: code.into(),
-            needs_stdlib: false,
-            go_imports: vec![go_path],
-        }
+    pub(crate) fn with_package(code: impl Into<String>, package: PackageUse) -> Self {
+        let mut result = Self::new(code);
+        result.requirements.require(package);
+        result
     }
 
     pub(crate) fn merge(&mut self, other: &GoType) {
-        self.needs_stdlib = self.needs_stdlib || other.needs_stdlib;
-        self.go_imports.extend(other.go_imports.iter().cloned());
+        self.requirements.extend(&other.requirements);
     }
 
     fn merge_all<'a>(&mut self, others: impl IntoIterator<Item = &'a GoType>) {
         for other in others {
             self.merge(other);
         }
+    }
+
+    pub(crate) fn requirements(&self) -> &PackageRequirements {
+        &self.requirements
     }
 }
 
@@ -125,7 +124,7 @@ impl Planner<'_> {
         build_param_typed(format!("{}[{}]", kind.leaf_name(), type_args), &param_types)
     }
 
-    /// Render a type to Go text, recording its stdlib + Go-import effects.
+    /// Render a type to Go text, recording its package requirements.
     pub(crate) fn go_type_string(&self, ty: &Type) -> String {
         let result = self.go_type(ty);
         self.note_go_type(&result);
@@ -212,7 +211,7 @@ impl Planner<'_> {
             return go;
         }
 
-        let name = self.unqualify_name(qualified_name);
+        let (name, package) = self.unqualify_name(qualified_name);
 
         if ty.is_unit() {
             return GoType::new("struct{}");
@@ -245,13 +244,13 @@ impl Planner<'_> {
             return build_param_typed(format!("...{}", type_args), &param_types);
         }
 
-        if let Some(go_path) = self.resolve_go_import_path(qualified_name) {
+        if let Some(package) = package {
             let code = if params.is_empty() {
                 name.clone()
             } else {
                 format!("{}[{}]", name, type_args)
             };
-            return build_go_import_typed(code, go_path, &param_types);
+            return build_go_import_typed(code, package, &param_types);
         }
 
         if let Some(name) = qualified_name.strip_prefix(go_name::PRELUDE_PREFIX)
@@ -267,23 +266,6 @@ impl Planner<'_> {
             return GoType::new(name);
         }
         build_param_typed(format!("{}[{}]", name, type_args), &param_types)
-    }
-
-    /// Resolve a Go-import path for a nominal constructor: either an explicit
-    /// `lisette/go/...` prefix on `qualified_name`, or an implicit one via a
-    /// foreign module mapped to a Go import. Returns `None` for prelude,
-    /// stdlib, or local nominal types.
-    fn resolve_go_import_path(&self, qualified_name: &str) -> Option<String> {
-        if let Some(rest) = qualified_name.strip_prefix(go_name::GO_IMPORT_PREFIX)
-            && let Some((go_path, _)) = rest.rsplit_once('.')
-        {
-            return Some(go_path.to_string());
-        }
-        let (module, _) = qualified_name.split_once('.')?;
-        if self.facts.is_foreign_module(module) && !go_name::is_go_import(module) {
-            return Some(self.facts.go_import_path(module));
-        }
-        None
     }
 
     fn emit_native_type(&self, native: NativeGoType, ty: &Type) -> GoType {
@@ -333,24 +315,24 @@ impl Planner<'_> {
         result
     }
 
-    fn unqualify_name(&self, id: &str) -> String {
+    fn unqualify_name(&self, id: &str) -> (String, Option<PackageUse>) {
         if id == "Unknown" {
-            return "any".to_string();
+            return ("any".to_string(), None);
         }
         let (module, unqualified) = if let Some(rest) = id.strip_prefix(go_name::GO_IMPORT_PREFIX) {
             let Some((path, ty)) = rest.rsplit_once('.') else {
-                return go_name::escape_keyword(id).into_owned();
+                return (go_name::escape_keyword(id).into_owned(), None);
             };
             (&id[..go_name::GO_IMPORT_PREFIX.len() + path.len()], ty)
         } else {
             let Some(split) = id.split_once('.') else {
-                return go_name::escape_type_name(id).into_owned();
+                return (go_name::escape_type_name(id).into_owned(), None);
             };
             split
         };
 
         if unqualified == "Unknown" {
-            return "any".to_string();
+            return ("any".to_string(), None);
         }
 
         let escaped = if module == go_name::PRELUDE_MODULE || self.facts.is_foreign_module(module) {
@@ -371,10 +353,13 @@ impl Planner<'_> {
                  argument; it cannot be stored, returned, wrapped, or otherwise placed where \
                  its unexported Go type must be spelled."
             );
-            let pkg = self.go_pkg_qualifier(module);
-            format!("{}.{}", pkg, escaped)
+            let package = self.package_use_for_module(module);
+            (
+                format!("{}.{}", package.qualifier(), escaped),
+                Some(package),
+            )
         } else {
-            escaped.into_owned()
+            (escaped.into_owned(), None)
         }
     }
 
@@ -402,14 +387,14 @@ impl Planner<'_> {
         }
     }
 
-    pub(crate) fn zero_value(&self, ty: &Type) -> (String, EmitEffects) {
-        let mut effects = EmitEffects::default();
+    pub(crate) fn zero_value(&self, ty: &Type) -> (String, PackageRequirements) {
+        let mut packages = PackageRequirements::default();
         if self.facts.is_interface(ty) {
-            return ("nil".to_string(), effects);
+            return ("nil".to_string(), packages);
         }
 
         let go_ty = self.go_type(ty);
-        effects.merge_from_go_type(&go_ty);
+        packages.extend(go_ty.requirements());
 
         let layout = self.value_layout(ty, SlotOrigin::Lisette);
         let value = match layout {
@@ -452,7 +437,7 @@ impl Planner<'_> {
             }) => "nil".to_string(),
             _ => format!("*new({})", go_ty.code),
         };
-        (value, effects)
+        (value, packages)
     }
 
     /// Render a `#[go(anon_struct)]` stand-in as inline `struct{...}`: its name
@@ -489,8 +474,8 @@ fn build_param_typed(code: String, param_types: &[GoType]) -> GoType {
     result
 }
 
-fn build_go_import_typed(code: String, go_path: String, param_types: &[GoType]) -> GoType {
-    let mut result = GoType::with_go_import(code, go_path);
+fn build_go_import_typed(code: String, package: PackageUse, param_types: &[GoType]) -> GoType {
+    let mut result = GoType::with_package(code, package);
     result.merge_all(param_types);
     result
 }

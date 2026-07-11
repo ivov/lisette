@@ -4556,6 +4556,56 @@ fn main() {
 }
 
 #[test]
+fn generated_dependencies_stay_with_owning_file() {
+    let mut fs = MockFileSystem::new();
+
+    fs.add_file(
+        "foo",
+        "foo.lis",
+        r#"
+pub struct Foo {
+  pub value: int
+}
+"#,
+    );
+
+    fs.add_file(
+        "types",
+        "a_helpers.lis",
+        r#"
+pub fn ping() -> int { 1 }
+"#,
+    );
+
+    fs.add_file(
+        "types",
+        "z_enum.lis",
+        r#"
+import f "foo"
+
+pub enum MyEnum {
+  Empty,
+  Value(f.Foo),
+}
+"#,
+    );
+
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+import "types"
+
+fn main() {
+  let _ = types.MyEnum.Empty
+}
+"#,
+    );
+
+    assert_build_snapshot!(fs, "github.com/user/myproject");
+}
+
+#[test]
 fn user_file_named_bootstrap_does_not_collide() {
     let mut fs = MockFileSystem::new();
 

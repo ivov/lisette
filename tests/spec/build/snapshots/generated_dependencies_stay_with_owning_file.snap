@@ -1,0 +1,53 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === foo/foo.go ===
+package foo
+
+type Foo struct {
+	Value int
+}
+
+
+// === main.go ===
+package main
+
+import "github.com/user/myproject/types"
+
+func main() {
+	_ = types.MakeMyEnumEmpty()
+}
+
+
+// === types/a_helpers.go ===
+package types
+
+func Ping() int {
+	return 1
+}
+
+
+// === types/z_enum.go ===
+package types
+
+import f "github.com/user/myproject/foo"
+
+func MakeMyEnumEmpty() MyEnum {
+	return MyEnum{Tag: MyEnumEmpty}
+}
+
+func MakeMyEnumValue(arg0 f.Foo) MyEnum {
+	return MyEnum{Tag: MyEnumValue, Value: arg0}
+}
+
+type MyEnumTag int
+
+const (
+	MyEnumEmpty MyEnumTag = iota
+	MyEnumValue
+)
+
+type MyEnum struct {
+	Tag   MyEnumTag
+	Value f.Foo
+}

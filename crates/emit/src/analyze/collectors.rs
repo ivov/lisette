@@ -1,6 +1,7 @@
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use crate::names::go_name;
+use crate::plan::MakeFunctionPlan;
 use crate::{Planner, PreludeType};
 use syntax::EcoString;
 use syntax::ast::{Expression, Generic, Visibility};
@@ -128,21 +129,9 @@ impl Planner<'_> {
         }
     }
 
-    pub(crate) fn collect_module_aliases(&mut self, files: &[&File]) {
-        for file in files {
-            for import in file.imports() {
-                let Some(alias) = import.effective_alias(self.facts.go_package_names()) else {
-                    continue;
-                };
-                self.module
-                    .record_module_alias(file.id, import.name.to_string(), alias);
-            }
-        }
-    }
-
-    pub(crate) fn collect_local_make_function_code(&mut self) -> HashMap<u32, Vec<String>> {
+    pub(crate) fn collect_local_make_function_plans(&self) -> HashMap<u32, Vec<MakeFunctionPlan>> {
         let module_prefix = format!("{}.", self.facts.current_module());
-        let mut code: HashMap<u32, Vec<String>> = HashMap::default();
+        let mut code: HashMap<u32, Vec<MakeFunctionPlan>> = HashMap::default();
 
         let local_enums: Vec<_> = self
             .facts
@@ -171,11 +160,12 @@ impl Planner<'_> {
             })
             .collect();
 
-        for (key, variants, file_id) in local_enums {
-            self.module.set_active_file(file_id);
-            for variant in &variants {
-                let fn_code = self.create_make_function_code(&key, &variant.name);
-                code.entry(file_id).or_default().push(fn_code);
+        for (enum_id, variants, file_id) in local_enums {
+            for variant in variants {
+                code.entry(file_id).or_default().push(MakeFunctionPlan {
+                    enum_id: enum_id.clone(),
+                    variant_name: variant.name.to_string(),
+                });
             }
         }
 

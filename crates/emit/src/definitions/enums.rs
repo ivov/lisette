@@ -20,9 +20,7 @@ impl Planner<'_> {
 
         let enum_id = self.facts.qualified_current(name);
 
-        if !self.module.has_enum_layout(&enum_id) {
-            return None;
-        }
+        let layout = self.enum_layout(&enum_id)?;
 
         let variant_field_types: Vec<Type> = if let Some(Definition {
             body: DefinitionBody::Enum { variants, .. },
@@ -50,7 +48,6 @@ impl Planner<'_> {
         let emit_string = synthesize && !has_user_string;
         let emit_go_string = synthesize && !has_user_go_string;
         let needs_fmt = emit_string || emit_go_string || has_json;
-        let layout = self.enum_layout(&enum_id).unwrap();
         let mut result = layout.emit_definition(&generics_string);
         if emit_string {
             result.push_str("\n\n");
@@ -201,10 +198,7 @@ impl Planner<'_> {
         enum_id: &str,
         variant_name: &str,
     ) -> String {
-        let layout = self
-            .module
-            .enum_layout(enum_id)
-            .expect("enum layout should exist");
+        let layout = self.enum_layout(enum_id).expect("enum layout should exist");
         let variant = layout
             .get_variant(variant_name)
             .expect("variant should exist in layout");

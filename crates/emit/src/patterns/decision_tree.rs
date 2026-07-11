@@ -7,9 +7,9 @@ use syntax::ast::{
 use syntax::parse::TUPLE_FIELDS;
 use syntax::types::{Type, unqualified_name};
 
-use crate::EmitEffects;
 use crate::Planner;
 use crate::names::go_name;
+use crate::names::packages::PackageRequirements;
 use crate::patterns::binding_decls::emit_pattern_literal;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -114,7 +114,6 @@ pub(crate) enum Check {
     EnumTag {
         path: AccessPath,
         tag_constant: String,
-        needs_stdlib: bool,
     },
     Literal {
         path: AccessPath,
@@ -245,13 +244,9 @@ impl Check {
         }
     }
 
-    pub(crate) fn as_enum_tag(&self) -> Option<(&str, bool)> {
+    pub(crate) fn as_enum_tag(&self) -> Option<&str> {
         match self {
-            Check::EnumTag {
-                tag_constant,
-                needs_stdlib,
-                ..
-            } => Some((tag_constant, *needs_stdlib)),
+            Check::EnumTag { tag_constant, .. } => Some(tag_constant),
             _ => None,
         }
     }
@@ -283,7 +278,7 @@ pub(crate) struct PatternInfo {
     pub root_assertion: Option<TypeAssertion>,
     pub checks: Vec<Check>,
     pub bindings: Vec<PatternBinding>,
-    pub effects: PatternEffects,
+    pub packages: PackageRequirements,
 }
 
 impl PatternInfo {
@@ -293,22 +288,17 @@ impl PatternInfo {
     }
 }
 
-/// Side effects (stdlib gate + Go imports) accumulated while walking a
-/// pattern. Alias for the crate-wide `EmitEffects` so analysis helpers
-/// outside `patterns/` can produce the same shape.
-pub(crate) type PatternEffects = EmitEffects;
-
 /// Result of compiling a list of expanded arms into a `Decision`.
 pub(crate) struct CompiledDecision {
     pub decision: Decision,
-    pub effects: PatternEffects,
+    pub packages: PackageRequirements,
 }
 
-/// Accumulates checks, bindings, and effects during pattern compilation.
+/// Accumulates checks, bindings, and package requirements during compilation.
 struct PatternCollector {
     checks: Vec<Check>,
     bindings: Vec<PatternBinding>,
-    effects: PatternEffects,
+    packages: PackageRequirements,
 }
 
 impl PatternCollector {
@@ -316,7 +306,7 @@ impl PatternCollector {
         Self {
             checks: Vec::new(),
             bindings: Vec::new(),
-            effects: PatternEffects::default(),
+            packages: PackageRequirements::default(),
         }
     }
 }
@@ -441,7 +431,6 @@ pub(crate) fn tree_has_unguarded_terminal(tree: &Decision) -> bool {
 #[derive(Debug)]
 pub(crate) struct SwitchBranch {
     pub case_label: String,
-    pub needs_stdlib: bool,
     pub decision: Decision,
 }
 
@@ -589,7 +578,6 @@ fn validate_switch_arms(
 }
 
 struct BranchGroup {
-    needs_stdlib: bool,
     arms: Vec<ArmInfo>,
 }
 
@@ -610,18 +598,18 @@ fn group_switch_branches(arms: &[ArmInfo], kind: &SwitchKind) -> GroupedBranches
             continue;
         }
 
-        let (case_label, needs_stdlib, inner_checks) = match kind {
+        let (case_label, inner_checks) = match kind {
             SwitchKind::EnumTag => {
-                let (tag, needs) = arm.checks[0].as_enum_tag().unwrap();
-                (tag.to_string(), needs, arm.checks[1..].to_vec())
+                let tag = arm.checks[0].as_enum_tag().unwrap();
+                (tag.to_string(), arm.checks[1..].to_vec())
             }
             SwitchKind::Value => {
                 let lit = arm.checks[0].as_literal().unwrap();
-                (lit.to_string(), false, arm.checks[1..].to_vec())
+                (lit.to_string(), arm.checks[1..].to_vec())
             }
             SwitchKind::TypeSwitch => {
                 let assertion = arm.root_assertion.as_ref().unwrap();
-                (assertion.go_types.join(", "), false, arm.checks.clone())
+                (assertion.go_types.join(", "), arm.checks.clone())
             }
         };
         let inner_arm = ArmInfo {
@@ -638,7 +626,6 @@ fn group_switch_branches(arms: &[ArmInfo], kind: &SwitchKind) -> GroupedBranches
             .or_insert_with(|| {
                 order.push(case_label);
                 BranchGroup {
-                    needs_stdlib,
                     arms: vec![inner_arm],
                 }
             });
@@ -661,10 +648,7 @@ fn build_switch_branches(
     order
         .into_iter()
         .map(|label| {
-            let BranchGroup {
-                needs_stdlib,
-                arms: inner_arms,
-            } = by_label.remove(&label).unwrap();
+            let BranchGroup { arms: inner_arms } = by_label.remove(&label).unwrap();
             let any_inner_can_fail = inner_arms
                 .iter()
                 .any(|a| a.has_guard || !a.checks.is_empty());
@@ -677,7 +661,6 @@ fn build_switch_branches(
             };
             SwitchBranch {
                 case_label: label,
-                needs_stdlib,
                 decision,
             }
         })
@@ -969,7 +952,7 @@ fn collect_or_pattern_checks(
         }
 
         for alt in &alt_collectors {
-            collector.effects.extend(&alt.effects);
+            collector.packages.extend(&alt.packages);
         }
         collector.checks.push(Check::Or {
             alternatives: alt_collectors.into_iter().map(|c| c.checks).collect(),
@@ -1034,7 +1017,7 @@ fn interface_assert_child_path(
 ) -> Option<AccessPath> {
     path_ty.filter(|st| planner.facts.as_interface(st).is_some())?;
     let go_type_result = planner.go_type(pattern_ty);
-    collector.effects.merge_from_go_type(&go_type_result);
+    collector.packages.extend(go_type_result.requirements());
     let go_type = go_type_result.code;
     let child_path = if path.is_root() {
         path.clone()
@@ -1124,7 +1107,7 @@ fn collect_const_pattern_check(
             if qualifier.is_empty() || qualifier == planner.facts.current_module() {
                 const_name.to_string()
             } else {
-                let qualifier = planner.record_module_import(module, &mut collector.effects);
+                let qualifier = planner.record_module_import(module, &mut collector.packages);
                 format!("{}.{}", qualifier, const_name)
             }
         }
@@ -1152,8 +1135,8 @@ fn handle_foreign_variant_literal(
         && planner.facts.is_foreign_module(module)
     {
         collector
-            .effects
-            .require_go_import(planner.go_import_path_for_module(module));
+            .packages
+            .require(planner.package_use_for_module(module));
     }
     collector.checks.push(Check::Literal {
         path: path.clone(),
@@ -1173,7 +1156,7 @@ fn collect_newtype_checks(
         return;
     };
     let go_underlying = planner.go_type(&underlying_ty);
-    collector.effects.merge_from_go_type(&go_underlying);
+    collector.packages.extend(go_underlying.requirements());
     let field_path = path.push(PathSegment::NewtypeCast(go_underlying.code));
     if let Some(field) = variant.fields.first() {
         collect_checks_and_bindings(
@@ -1232,7 +1215,7 @@ fn collect_tagged_enum_checks(
 ) {
     let enum_module = enum_module_of(planner, variant.ty);
     let alias = if planner.facts.is_foreign_module(enum_module) {
-        Some(planner.record_module_import(enum_module, &mut collector.effects))
+        Some(planner.record_module_import(enum_module, &mut collector.packages))
     } else {
         None
     };
@@ -1243,13 +1226,12 @@ fn collect_tagged_enum_checks(
         planner.facts.current_module(),
         alias.as_deref(),
     );
-    if resolved.needs_stdlib {
-        collector.effects.require_stdlib();
+    if let Some(package) = resolved.package {
+        collector.packages.require_generated(package);
     }
     collector.checks.push(Check::EnumTag {
         path: path.clone(),
         tag_constant: resolved.name.clone(),
-        needs_stdlib: resolved.needs_stdlib,
     });
 
     let variant_name = variant
@@ -1390,7 +1372,7 @@ fn resolve_struct_child_path(
     if enum_info.is_some() {
         let enum_module = enum_module_of(planner, ty);
         let alias = if planner.facts.is_foreign_module(enum_module) {
-            Some(planner.record_module_import(enum_module, &mut collector.effects))
+            Some(planner.record_module_import(enum_module, &mut collector.packages))
         } else {
             None
         };
@@ -1401,13 +1383,12 @@ fn resolve_struct_child_path(
             planner.facts.current_module(),
             alias.as_deref(),
         );
-        if resolved.needs_stdlib {
-            collector.effects.require_stdlib();
+        if let Some(package) = resolved.package {
+            collector.packages.require_generated(package);
         }
         collector.checks.push(Check::EnumTag {
             path: path.clone(),
             tag_constant: resolved.name.clone(),
-            needs_stdlib: resolved.needs_stdlib,
         });
     }
     (enum_info, path.clone())
@@ -1559,18 +1540,18 @@ fn expand_interface_or_checks(arm_infos: Vec<ArmInfo>) -> Vec<ArmInfo> {
     result
 }
 
-/// Compile expanded arms into a decision tree plus accumulated effects.
+/// Compile expanded arms into a decision tree plus package requirements.
 pub(super) fn compile_expanded_arms<'a>(
     planner: &Planner,
     expanded: &'a [ExpandedArm<'a>],
     subject_ty: &Type,
 ) -> CompiledDecision {
-    let mut effects = PatternEffects::default();
+    let mut packages = PackageRequirements::default();
     let arm_infos: Vec<ArmInfo> = expanded
         .iter()
         .map(|ea| {
             let info = collect_pattern_info(planner, ea.pattern, ea.typed_pattern, subject_ty);
-            effects.extend(&info.effects);
+            packages.extend(&info.packages);
             ArmInfo {
                 arm_index: ea.arm_index,
                 root_assertion: info.root_assertion,
@@ -1612,7 +1593,7 @@ pub(super) fn compile_expanded_arms<'a>(
 
     CompiledDecision {
         decision: build_tree(arm_infos),
-        effects,
+        packages,
     }
 }
 
@@ -1641,7 +1622,7 @@ pub(crate) fn collect_pattern_info(
         root_assertion,
         checks: collector.checks,
         bindings: collector.bindings,
-        effects: collector.effects,
+        packages: collector.packages,
     }
 }
 

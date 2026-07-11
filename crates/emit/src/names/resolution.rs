@@ -1,8 +1,8 @@
 use syntax::types::unqualified_name;
 
-use crate::EmitEffects;
 use crate::Planner;
 use crate::names::go_name;
+use crate::names::packages::{PackageRequirements, PackageUse};
 
 impl Planner<'_> {
     pub(crate) fn resolve_go_name(&mut self, name: &str, qualified: Option<&str>) -> String {
@@ -39,8 +39,8 @@ impl Planner<'_> {
         };
 
         let resolved = go_name::resolve(&name);
-        if resolved.needs_stdlib {
-            self.require_stdlib();
+        if let Some(package) = resolved.package {
+            self.require_generated_package(package);
         }
         resolved.name
     }
@@ -86,48 +86,62 @@ impl Planner<'_> {
         }
     }
 
-    /// Record `module`'s Go import into `effects` and return the package
+    /// Record `module`'s Go import and return the package
     /// qualifier exactly as the import renders it: `format_import` sanitizes
     /// default package names and prints explicit aliases verbatim, so
     /// references must follow the same rule.
-    pub(crate) fn record_module_import(&self, module: &str, effects: &mut EmitEffects) -> String {
-        let path = self.go_import_path_for_module(module);
-        effects.require_go_import(path.clone());
-        let qualifier = self.go_pkg_qualifier(module);
-        if qualifier == go_name::go_package_name(&path) {
-            go_name::sanitize_package_name(&qualifier).into_owned()
-        } else {
-            qualifier
-        }
+    pub(crate) fn record_module_import(
+        &self,
+        module: &str,
+        requirements: &mut PackageRequirements,
+    ) -> String {
+        let package = self.package_use_for_module(module);
+        let qualifier = package.qualifier().to_string();
+        requirements.require(package);
+        qualifier
     }
 
-    /// `record_module_import` writing into the file effects sink.
+    /// Record a module reference in the current file namespace.
     pub(crate) fn require_module_import(&self, module: &str) -> String {
-        self.record_module_import(module, &mut self.effects.borrow_mut())
-    }
-
-    pub(crate) fn go_import_path_for_module(&self, module: &str) -> String {
-        let canonical = self.module.module_for_alias(module).unwrap_or(module);
-        match canonical.strip_prefix(go_name::GO_IMPORT_PREFIX) {
-            Some(rest) => rest.to_string(),
-            None => self.facts.go_import_path(canonical),
-        }
+        let package = self.package_use_for_module(module);
+        self.file_namespace_mut().reference(package)
     }
 
     pub(crate) fn go_pkg_qualifier(&self, module: &str) -> String {
-        if module == go_name::TEST_PRELUDE_MODULE {
-            return go_name::TESTKIT_PKG.to_string();
+        self.package_use_for_module(module).qualifier().to_string()
+    }
+
+    pub(crate) fn canonical_module(&self, module: &str) -> String {
+        self.file_namespace()
+            .module_for_alias(module)
+            .unwrap_or(module)
+            .to_string()
+    }
+
+    pub(crate) fn package_use_for_module(&self, module: &str) -> PackageUse {
+        let canonical = self.canonical_module(module);
+        if canonical == go_name::TEST_PRELUDE_MODULE {
+            return PackageUse::generated(go_name::GeneratedPackage::TestKit);
         }
-        if let Some(alias) = self.module.module_alias(module) {
-            return alias.to_string();
-        }
-        if let Some(pkg_name) = self.facts.go_package_name(module) {
-            return pkg_name.to_string();
-        }
-        match module.strip_prefix(go_name::GO_IMPORT_PREFIX) {
-            Some(go_path) => syntax::program::go_import_default_name(go_path).to_string(),
-            None => go_name::go_package_name(module).to_string(),
-        }
+        let path = match canonical.strip_prefix(go_name::GO_IMPORT_PREFIX) {
+            Some(rest) => rest.to_string(),
+            None => self.facts.go_import_path(&canonical),
+        };
+        let qualifier = self
+            .file_namespace()
+            .module_alias(&canonical)
+            .map(str::to_string)
+            .or_else(|| self.facts.go_package_name(&canonical).map(str::to_string))
+            .unwrap_or_else(|| match canonical.strip_prefix(go_name::GO_IMPORT_PREFIX) {
+                Some(go_path) => syntax::program::go_import_default_name(go_path).to_string(),
+                None => go_name::go_package_name(&canonical).to_string(),
+            });
+        let qualifier = if qualifier == go_name::go_package_name(&path) {
+            go_name::sanitize_package_name(&qualifier).into_owned()
+        } else {
+            qualifier
+        };
+        PackageUse::new(path, qualifier)
     }
 
     pub(crate) fn qualify_method_call(
@@ -153,8 +167,8 @@ impl Planner<'_> {
             is_public,
             computed_alias.as_deref(),
         );
-        if resolved.needs_stdlib {
-            self.require_stdlib();
+        if let Some(package) = resolved.package {
+            self.require_generated_package(package);
         }
         resolved.name
     }
@@ -176,8 +190,8 @@ impl Planner<'_> {
             self.facts.current_module(),
             computed_alias.as_deref(),
         );
-        if resolved.needs_stdlib {
-            self.require_stdlib();
+        if let Some(package) = resolved.package {
+            self.require_generated_package(package);
         }
         resolved.name
     }

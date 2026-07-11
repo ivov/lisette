@@ -99,8 +99,8 @@ impl Planner<'_> {
             return;
         }
         let inner_ty = fallible.ok_ty();
-        let (zero, effects) = self.zero_value(inner_ty);
-        self.absorb_effects(&effects);
+        let (zero, packages) = self.zero_value(inner_ty);
+        self.require_packages(&packages);
         if self.is_declared(var_name) {
             statements.push(simple_assign(var_name.to_string(), zero));
         } else {

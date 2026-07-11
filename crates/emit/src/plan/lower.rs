@@ -194,8 +194,8 @@ impl Planner<'_> {
             && let Some(return_ty) = return_ctx.ty().filter(|ty| !ty.is_unit())
         {
             let return_ty = return_ty.clone();
-            let (zero, effects) = self.zero_value(&return_ty);
-            self.absorb_effects(&effects);
+            let (zero, packages) = self.zero_value(&return_ty);
+            self.require_packages(&packages);
             statements.push(plain_return(zero));
         }
 

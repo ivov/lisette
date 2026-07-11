@@ -338,7 +338,7 @@ impl<'a> Planner<'a> {
                 expression, member, ..
             } => {
                 if let Expression::Identifier { value, .. } = expression.as_ref() {
-                    let module = self.module.module_for_alias(value).unwrap_or(value);
+                    let module = self.canonical_module(value);
                     let qualified = format!("{module}.{member}");
                     if let Some(definition) = self.facts.definition(&qualified) {
                         return (Some(qualified), Some(definition));
@@ -355,7 +355,7 @@ impl<'a> Planner<'a> {
                 } = expression.as_ref()
                     && let Expression::Identifier { value: module, .. } = inner.as_ref()
                 {
-                    let module = self.module.module_for_alias(module).unwrap_or(module);
+                    let module = self.canonical_module(module);
                     let qualified = format!("{module}.{type_name}.{member}");
                     if let Some(definition) = self.facts.definition(&qualified) {
                         return (Some(qualified), Some(definition));

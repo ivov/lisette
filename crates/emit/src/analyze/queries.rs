@@ -211,17 +211,14 @@ impl Planner<'_> {
 
 impl Planner<'_> {
     pub(crate) fn enum_layout(&self, enum_id: &str) -> Option<Rc<EnumLayout>> {
-        if let Some(layout) = self.module.enum_layout(enum_id) {
+        let file_id = self.file_namespace().file_id();
+        if let Some(layout) = self.module.enum_layout(file_id, enum_id) {
             return Some(layout);
         }
-        let _active = self
-            .facts
-            .definition(enum_id)
-            .and_then(|d| d.name_span)
-            .map(|span| self.module.with_active_file(span.file_id));
         let layout = self.compute_enum_layout(enum_id)?;
-        self.module.record_enum_layout(enum_id.to_string(), layout);
-        self.module.enum_layout(enum_id)
+        self.module
+            .record_enum_layout(file_id, enum_id.to_string(), layout);
+        self.module.enum_layout(file_id, enum_id)
     }
 
     fn compute_enum_layout(&self, enum_id: &str) -> Option<EnumLayout> {

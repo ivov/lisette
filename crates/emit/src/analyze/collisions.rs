@@ -387,25 +387,38 @@ impl Planner<'_> {
         members: &mut SpanMap,
         diagnostics: &mut Vec<LisetteDiagnostic>,
     ) {
-        let qualified = self.facts.qualified_current(name);
-        let Some(layout) = self.enum_layout(&qualified) else {
-            return;
-        };
-        let mut seen: HashSet<&str> = HashSet::default();
-        for (variant, layout_variant) in variants.iter().zip(&layout.variants) {
-            for field in &layout_variant.fields {
-                if seen.insert(field.go_name.as_str()) {
+        let mut seen: HashSet<String> = HashSet::default();
+        for variant in variants {
+            let is_struct = variant.fields.is_struct();
+            let single_field = variant.fields.len() == 1;
+            let field_names = variant
+                .fields
+                .iter()
+                .enumerate()
+                .map(|(index, field)| {
+                    syntax::go_names::enum_field_go_name(
+                        &variant.name,
+                        &field.name,
+                        index,
+                        is_struct,
+                        single_field,
+                        name,
+                    )
+                })
+                .collect::<Vec<_>>();
+            for field_name in &field_names {
+                if seen.insert(field_name.clone()) {
                     members
-                        .entry(field.go_name.clone())
+                        .entry(field_name.clone())
                         .or_default()
                         .push(variant.name_span);
                 }
             }
             if let VariantFields::Struct(fields) = &variant.fields {
                 let mut variant_fields: SpanMap = HashMap::default();
-                for (field, layout_field) in fields.iter().zip(&layout_variant.fields) {
+                for (field, field_name) in fields.iter().zip(&field_names) {
                     variant_fields
-                        .entry(layout_field.go_name.clone())
+                        .entry(field_name.clone())
                         .or_default()
                         .push(field.name_span);
                 }

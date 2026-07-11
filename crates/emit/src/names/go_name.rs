@@ -101,21 +101,21 @@ pub(crate) fn sanitize_package_name(name: &str) -> Cow<'_, str> {
 
 pub(crate) struct ResolvedName {
     pub(crate) name: String,
-    pub(crate) needs_stdlib: bool,
+    pub(crate) package: Option<GeneratedPackage>,
 }
 
 impl ResolvedName {
     fn stdlib(name: String) -> Self {
         Self {
             name,
-            needs_stdlib: true,
+            package: Some(GeneratedPackage::Prelude),
         }
     }
 
     fn local(name: String) -> Self {
         Self {
             name,
-            needs_stdlib: false,
+            package: None,
         }
     }
 }
@@ -123,9 +123,9 @@ impl ResolvedName {
 /// Convert a qualified Lisette name to its Go equivalent.
 ///
 /// # Examples
-/// - `"prelude.Option"` → `"lisette.Option"` (needs_stdlib: true)
-/// - `"prelude.Slice.filter"` → `"lisette.SliceFilter"` (needs_stdlib: true)
-/// - `"mymodule.foo"` → `"mymodule_foo"` (needs_stdlib: false)
+/// - `"prelude.Option"` → `"lisette.Option"` (Prelude package)
+/// - `"prelude.Slice.filter"` → `"lisette.SliceFilter"` (Prelude package)
+/// - `"mymodule.foo"` → `"mymodule_foo"` (no package)
 /// - `"range"` → `"range_"` (Go keyword escaped)
 pub(crate) fn resolve(name: &str) -> ResolvedName {
     if let Some(rest) = name.strip_prefix(PRELUDE_PREFIX) {
@@ -191,7 +191,7 @@ pub(crate) fn enum_tag_constant(enum_name: &str, variant_name: &str) -> String {
 /// identifiers with these names, so the emitter need not escape them.
 const PRELUDE_BUILTIN_NAMES: &[&str] = &["complex", "max", "min", "panic", "real"];
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) enum GeneratedPackage {
     Prelude,
     Fmt,
