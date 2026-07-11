@@ -13,7 +13,7 @@ description: |
   }
   
   fn to_slice(a: Addr) -> Slice<byte> {
-    a.as_slice()
+    a.to_slice()
   }
   
   fn size(a: Addr) -> int {

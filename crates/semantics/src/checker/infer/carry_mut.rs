@@ -9,9 +9,9 @@ use syntax::types::{CompoundKind, Symbol, Type, build_substitution_map, substitu
 
 /// Whether a value of `ty` can carry mutation across a function call boundary.
 ///
-/// True for `Slice<T>`, `Map<K,V>`, `EnumeratedSlice<T>`, and any struct,
-/// tuple, or enum that recursively contains one. `Ref<T>`, `Channel<T>`,
-/// `Sender<T>`, and `Receiver<T>` are excluded by design.
+/// True for `Slice<T>`, `Map<K,V>`, `EnumeratedSlice<T>`, and any array,
+/// struct, tuple, or enum that recursively contains one. `Ref<T>`,
+/// `Channel<T>`, `Sender<T>`, and `Receiver<T>` are excluded by design.
 pub(super) fn can_carry_mutation_across_fn_boundary(
     ty: &Type,
     env: &TypeEnv,

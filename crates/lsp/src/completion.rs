@@ -59,9 +59,14 @@ pub(crate) fn definition_to_completion_kind(
     }
 }
 
-/// Extract the element type from a collection type (Slice<T>, EnumeratedSlice<T>, Map<K, V>).
-fn element_type_name(ty: &syntax::types::Type) -> Option<String> {
+/// Extract the element type from an array, slice, or map.
+fn element_type_name(ty: &Type) -> Option<String> {
     use syntax::types::CompoundKind;
+
+    if let Type::Array { element, .. } = ty {
+        return type_name(element);
+    }
+
     match ty.as_compound()? {
         (CompoundKind::Slice | CompoundKind::EnumeratedSlice, args) => {
             args.first().and_then(type_name)

@@ -1790,6 +1790,35 @@ fn main() {
 }
 
 #[tokio::test]
+async fn completion_dot_after_array_indexed_access() {
+    let mut client = TestClient::new().await;
+    client.initialize().await;
+
+    let source = "\
+struct Item { name: string }
+impl Item {
+  pub fn label(self) -> string { self.name }
+}
+fn main() {
+  let items: Array<Item, 1> = [Item { name: \"a\" }]
+  items[0].
+}";
+    client.open(TEST_URI, source).await;
+
+    let response = client.completion(TEST_URI, 6, 11).await;
+    let labels = completion_labels(&response.expect("completion response"));
+
+    assert!(
+        ["label", "name"]
+            .iter()
+            .all(|expected| labels.iter().any(|label| label == expected)),
+        "should include element members, got: {labels:?}"
+    );
+
+    client.shutdown().await;
+}
+
+#[tokio::test]
 async fn completion_dot_on_slice_variable() {
     let mut client = TestClient::new().await;
     client.initialize().await;

@@ -305,8 +305,8 @@ fn non_comparable_array_alias_rejected_as_map_key() {
 }
 
 #[test]
-fn array_as_slice_returns_slice_of_element() {
-    infer("let xs: Array<int, 3> = [1, 2, 3]; xs.as_slice()")
+fn array_to_slice_returns_slice_of_element() {
+    infer("let xs: Array<int, 3> = [1, 2, 3]; xs.to_slice()")
         .assert_last_type(slice_type(int_type()));
 }
 

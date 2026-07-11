@@ -259,14 +259,14 @@ fn f<T>(b: Box<Array<T, 2>>) -> int {
 }
 
 #[test]
-fn array_get_as_slice_identifier_form() {
+fn array_get_to_slice_identifier_form() {
     let input = r#"
 fn at(xs: Array<int, 3>, i: int) -> Option<int> {
   Array.get(xs, i)
 }
 
 fn all(xs: Array<int, 3>) -> Slice<int> {
-  Array.as_slice(xs)
+  Array.to_slice(xs)
 }
 "#;
     assert_emit_snapshot!(input);
@@ -360,10 +360,10 @@ fn make() -> S {
 }
 
 #[test]
-fn array_as_slice_copies_into_new_slice() {
+fn array_to_slice_copies_into_new_slice() {
     let input = r#"
 fn to_slice(a: Array<int, 3>) -> Slice<int> {
-  a.as_slice()
+  a.to_slice()
 }
 "#;
     assert_emit_snapshot!(input);
@@ -417,7 +417,7 @@ fn at(a: Addr, i: int) -> Option<byte> {
 }
 
 fn to_slice(a: Addr) -> Slice<byte> {
-  a.as_slice()
+  a.to_slice()
 }
 
 fn size(a: Addr) -> int {

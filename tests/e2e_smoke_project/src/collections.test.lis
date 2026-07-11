@@ -126,12 +126,12 @@ fn array_equality_and_inequality() {
 }
 
 #[test]
-fn array_for_loop_and_as_slice() {
+fn array_for_loop_and_to_slice() {
   let a: Array<int, 3> = [1, 2, 3]
   let mut sum = 0
   for x in a { sum += x }
   assert sum == 6
-  assert a.as_slice().length() == 3
+  assert a.to_slice().length() == 3
 }
 
 #[test]

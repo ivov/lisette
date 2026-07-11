@@ -6,7 +6,7 @@ source: tests/ui/errors/mod.rs
  3 │   let x = 42;
  4 │   x[0]
    ·   ┬
-   ·   ╰── expected `Slice` or `Map`, found `int`
+   ·   ╰── expected `Array`, `Slice`, or `Map`, found `int`
  5 │ }
    ╰────
-  help: Only `Slice` and `Map` can be indexed into · code: [infer.not_indexable]
+  help: Only `Array`, `Slice`, and `Map` can be indexed into · code: [infer.not_indexable]

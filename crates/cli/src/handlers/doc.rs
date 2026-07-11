@@ -482,6 +482,10 @@ fn build_index_from_source(source: &str) -> PreludeIndex {
 
 fn build_prelude_index() -> PreludeIndex {
     let mut index = build_index_from_source(stdlib::LIS_PRELUDE_SOURCE);
+    if let Some(array) = index.types.iter_mut().find(|t| t.name == "Array") {
+        array.generics.push("N".to_string());
+        array.definition = "type Array<T, N>".to_string();
+    }
     index.types.push(TypeInfo {
         name: "Unit".to_string(),
         generics: Vec::new(),
@@ -1091,7 +1095,7 @@ fn prelude_categories(index: &PreludeIndex) -> Vec<(&'static str, Vec<String>)> 
             .map(|t| format_type_with_generics_plain(&t.name, &t.generics))
             .collect()
     };
-    composite_leaves.extend(pick_generic(&["Slice", "Map"]));
+    composite_leaves.extend(pick_generic(&["Array", "Slice", "Map"]));
     composite_leaves.extend(pick_generic(&["Ref"]));
     composite_leaves.extend(pick_generic(&["Channel", "Sender", "Receiver"]));
     composite_leaves.extend(
@@ -2044,6 +2048,30 @@ pub fn doc(query: Option<String>) -> i32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn prelude_displays_array_size_parameter() {
+        let index = build_prelude_index();
+        let array = index
+            .types
+            .iter()
+            .find(|t| t.name == "Array")
+            .expect("`Array` is parsed from the prelude");
+
+        assert_eq!(array.definition, "type Array<T, N>");
+    }
+
+    #[test]
+    fn prelude_lists_array_as_a_composite() {
+        let index = build_prelude_index();
+        let composites = prelude_categories(&index)
+            .into_iter()
+            .find(|(name, _)| *name == "composites")
+            .expect("the prelude has composite types")
+            .1;
+
+        assert!(composites.contains(&"Array<T, N>".to_string()));
+    }
 
     #[test]
     fn test_prelude_exposes_the_handle_methods() {

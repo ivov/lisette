@@ -268,12 +268,12 @@ impl<T, E> Partial<T, E> {
   fn map_err<F>(self, f: fn(E) -> F) -> Partial<T, F>
 }
 
-/// A fixed-sized array, indexable sequence of elements. Equivalent to Go's `[N]T`.
+/// A fixed-size, indexable sequence of elements. Equivalent to Go's `[N]T`.
 ///
 /// Example:
 ///   let xs: Array<int, 3> = [1, 2, 3]
 ///   let n = xs.length()
-///   let s = xs.as_slice()
+///   let s = xs.to_slice()
 type Array<T>
 
 impl<T> Array<T> {
@@ -284,7 +284,7 @@ impl<T> Array<T> {
   fn get(self, index: int) -> Option<T>
 
   /// Copies the elements into a new slice.
-  fn as_slice(self) -> Slice<T>
+  fn to_slice(self) -> Slice<T>
 }
 
 /// A growable, indexable sequence of elements. Equivalent to Go's `[]T`.

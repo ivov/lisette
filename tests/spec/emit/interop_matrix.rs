@@ -1909,13 +1909,13 @@ fn main() {
 }
 
 #[test]
-fn interop_array_return_as_slice() {
+fn interop_array_return_to_slice() {
     let input = r#"
 import "go:crypto/sha256"
 
 fn main() {
   let data = "hi" as Slice<byte>
-  let bytes = sha256.Sum256(data).as_slice()
+  let bytes = sha256.Sum256(data).to_slice()
   let _ = bytes
 }
 "#;

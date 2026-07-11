@@ -3,7 +3,7 @@ source: tests/spec/emit/arrays.rs
 description: |
   
   fn to_slice(a: Array<int, 3>) -> Slice<int> {
-    a.as_slice()
+    a.to_slice()
   }
 ---
 package main

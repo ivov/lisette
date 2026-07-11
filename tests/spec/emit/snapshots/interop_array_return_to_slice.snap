@@ -6,7 +6,7 @@ description: |
   
   fn main() {
     let data = "hi" as Slice<byte>
-    let bytes = sha256.Sum256(data).as_slice()
+    let bytes = sha256.Sum256(data).to_slice()
     let _ = bytes
   }
 ---

@@ -3225,6 +3225,17 @@ fn test(m: Map<string, int>) {
 }
 
 #[test]
+fn infer_array_range_index_suggests_to_slice() {
+    let input = r#"
+fn test() {
+  let items: Array<int, 3> = [1, 2, 3]
+  let _ = items[1..]
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
 fn infer_interface_bound_not_satisfied() {
     let input = r#"
 interface Writer {
@@ -5321,6 +5332,19 @@ fn test() {
 fn infer_array_size_too_large() {
     let input = r#"
 fn f(x: Array<int, 18000000000000000000>) {}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_array_to_slice_type_mismatch_hint() {
+    let input = r#"
+fn consume(items: Slice<int>) {}
+
+fn main() {
+  let items: Array<int, 3> = [1, 2, 3]
+  consume(items)
+}
 "#;
     assert_infer_error_snapshot!(input);
 }

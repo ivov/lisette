@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Type mismatch
+   ╭─[test.lis:4:11]
+ 3 │   let items: Array<int, 3> = [1, 2, 3]
+ 4 │   let _ = items[1..]
+   ·           ──┬──
+   ·             ╰── expected `Slice`, found `Array<int, 3>`
+ 5 │ }
+   ╰────
+  help: Call `.to_slice()` to copy the elements into a new slice before range indexing · code: [infer.range_index_not_slice]

@@ -562,11 +562,11 @@ pub fn mut_binding_clone_does_not_sever(
     let target = mutation_target(binding_name, source);
     let help = if addressable {
         format!(
-            "`{source}.clone()` leaves collections inside struct or enum values shared, so mutating one through `{binding_name}` could still implicitly mutate {target}. Either use `&{source}` to take a reference or construct a new value to mutate independently."
+            "`{source}.clone()` leaves collections inside composite values shared, so mutating one through `{binding_name}` could still implicitly mutate {target}. Either use `&{source}` to take a reference or construct a new value to mutate independently."
         )
     } else {
         format!(
-            "`{source}.clone()` leaves collections inside struct or enum values shared, so mutating one through `{binding_name}` could still implicitly mutate {target}. Construct a new value to mutate independently."
+            "`{source}.clone()` leaves collections inside composite values shared, so mutating one through `{binding_name}` could still implicitly mutate {target}. Construct a new value to mutate independently."
         )
     };
     LisetteDiagnostic::error(format!("Cannot make a mutable binding to `{source}`"))
@@ -1873,11 +1873,14 @@ pub fn slice_index_type_mismatch(index_ty: &Type, span: Span) -> LisetteDiagnost
         )
 }
 
-pub fn only_slices_and_maps_indexable(ty: &Type, span: Span) -> LisetteDiagnostic {
+pub fn not_indexable(ty: &Type, span: Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Not indexable")
         .with_infer_code("not_indexable")
-        .with_span_label(&span, format!("expected `Slice` or `Map`, found `{}`", ty))
-        .with_help("Only `Slice` and `Map` can be indexed into")
+        .with_span_label(
+            &span,
+            format!("expected `Array`, `Slice`, or `Map`, found `{}`", ty),
+        )
+        .with_help("Only `Array`, `Slice`, and `Map` can be indexed into")
 }
 
 pub fn string_not_indexable(span: Span, receiver: &str) -> LisetteDiagnostic {
@@ -2307,13 +2310,17 @@ pub fn non_int_range_not_iterable(element_ty: &Type, span: Span) -> LisetteDiagn
 }
 
 pub fn only_slices_indexable_by_range(ty: &Type, span: Span) -> LisetteDiagnostic {
-    LisetteDiagnostic::error("Type mismatch")
+    let diagnostic = LisetteDiagnostic::error("Type mismatch")
         .with_infer_code("range_index_not_slice")
-        .with_span_label(
-            &span,
-            format!("expected `Slice` or `string`, found `{}`", ty),
+        .with_span_label(&span, format!("expected `Slice`, found `{}`", ty));
+
+    if matches!(ty, Type::Array { .. }) {
+        diagnostic.with_help(
+            "Call `.to_slice()` to copy the elements into a new slice before range indexing",
         )
-        .with_help("Range indexing only works on `Slice` and `string`")
+    } else {
+        diagnostic.with_help("Range indexing only works on `Slice`")
+    }
 }
 
 pub fn empty_body_return_mismatch(expected_ty: &Type, span: Span) -> LisetteDiagnostic {
@@ -3338,7 +3345,7 @@ pub fn mut_arg_clone_does_not_sever(
     span: Span,
 ) -> LisetteDiagnostic {
     let help = format!(
-        "`{source}.clone()` leaves collections inside struct or enum values shared, so {callee_label} could still mutate one shared with `{source}`. Construct a new value to pass instead."
+        "`{source}.clone()` leaves collections inside composite values shared, so {callee_label} could still mutate one shared with `{source}`. Construct a new value to pass instead."
     );
     LisetteDiagnostic::error("Aliasing argument passed to `mut` parameter")
         .with_infer_code("mut_arg_clone_does_not_sever")

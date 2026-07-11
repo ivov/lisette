@@ -161,11 +161,10 @@ impl InferCtx<'_, '_> {
                 };
             }
             _ => {
-                self.sink
-                    .push(diagnostics::infer::only_slices_and_maps_indexable(
-                        &resolved_collection_ty,
-                        collection_expression.get_span(),
-                    ));
+                self.sink.push(diagnostics::infer::not_indexable(
+                    &resolved_collection_ty,
+                    collection_expression.get_span(),
+                ));
                 return Expression::IndexedAccess {
                     expression: collection_expression.into(),
                     index: index_expression.into(),

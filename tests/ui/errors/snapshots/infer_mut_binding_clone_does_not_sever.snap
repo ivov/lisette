@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
    ·                        ╰── does not make an independent copy
  6 │   copy[0].tags[0] = "y"
    ╰────
-  help: `docs.clone()` leaves collections inside struct or enum values shared, so mutating one through `copy` could still implicitly mutate `docs`. Either use `&docs` to take a reference or construct a new value to mutate independently · code: [infer.mut_binding_aliases]
+  help: `docs.clone()` leaves collections inside composite values shared, so mutating one through `copy` could still implicitly mutate `docs`. Either use `&docs` to take a reference or construct a new value to mutate independently · code: [infer.mut_binding_aliases]

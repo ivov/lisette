@@ -276,7 +276,7 @@ pub(super) fn try_inline_native_method(
 }
 
 fn is_native_array_method(method: &str) -> bool {
-    matches!(method, "as_slice" | "get")
+    matches!(method, "to_slice" | "get")
 }
 
 pub(super) fn native_method_lowers_to_plain_call(
@@ -456,7 +456,7 @@ impl Planner<'_> {
         setup: &mut Vec<LoweredStatement>,
     ) -> String {
         match method {
-            "as_slice" => {
+            "to_slice" => {
                 self.require_slices();
                 let view = self.sliceable_receiver(receiver_expr, receiver, setup);
                 format!("slices.Clone({view})")

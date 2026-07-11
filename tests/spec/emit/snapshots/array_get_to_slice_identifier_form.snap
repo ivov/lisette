@@ -7,7 +7,7 @@ description: |
   }
   
   fn all(xs: Array<int, 3>) -> Slice<int> {
-    Array.as_slice(xs)
+    Array.to_slice(xs)
   }
 ---
 package main

@@ -833,6 +833,12 @@ impl InferCtx<'_, '_> {
             return "Unwrap the inner value with `?` or using `match`".to_string();
         }
 
+        if array_to_slice_help_applies(expected, actual) {
+            return format!(
+                "Call `.to_slice()` to copy the elements into a new slice, or change the receiving type to `{actual}`"
+            );
+        }
+
         if actual.wraps("Slice", expected) {
             return "Index into the slice, e.g. `items[0]`".to_string();
         }
@@ -893,6 +899,20 @@ impl InferCtx<'_, '_> {
         }
         absorbed
     }
+}
+
+fn array_to_slice_help_applies(expected: &Type, actual: &Type) -> bool {
+    if !expected.is_slice() {
+        return false;
+    }
+    let Type::Array { element, .. } = actual else {
+        return false;
+    };
+    let Some(expected_element) = expected.get_type_params().and_then(|params| params.first())
+    else {
+        return false;
+    };
+    expected_element == element.as_ref()
 }
 
 fn function_return_under_nominal(ty: &Type) -> Option<&Type> {
