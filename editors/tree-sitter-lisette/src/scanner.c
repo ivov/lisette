@@ -186,6 +186,13 @@ static inline bool scan_open_angle(TSLexer *lexer) {
             depth++;
             has_content = true;
             skip(lexer);
+        } else if (lexer->lookahead == '-') {
+            // A function type's `->` arrow: its '>' is not a closing angle.
+            skip(lexer);
+            if (lexer->lookahead == '>') {
+                skip(lexer);
+            }
+            has_content = true;
         } else if (lexer->lookahead == '>') {
             depth--;
             if (depth == 0) {
@@ -198,12 +205,12 @@ static inline bool scan_open_angle(TSLexer *lexer) {
                 return lexer->lookahead == '(' && has_content;
             }
             skip(lexer);
-        } else if (lexer->lookahead == '(' || lexer->lookahead == ')' ||
-                   lexer->lookahead == '{' || lexer->lookahead == '}' ||
+        } else if (lexer->lookahead == '{' || lexer->lookahead == '}' ||
                    lexer->lookahead == ';' || lexer->lookahead == '=' ||
                    lexer->lookahead == '!' || lexer->lookahead == '/' ||
                    lexer->lookahead == '"' || lexer->lookahead == '\'') {
-            // Characters that can't appear in type arguments
+            // Characters that can't appear in type arguments. Parens are
+            // allowed: function types like fn(int) -> int contain them.
             return false;
         } else if (lexer->lookahead == 0) {
             return false;
@@ -284,7 +291,23 @@ static inline bool scan_automatic_semicolon(TSLexer *lexer) {
 
         case '|': // |> and || continue, but bare | is closure
             advance(lexer);
-            return lexer->lookahead != '>' && lexer->lookahead != '|';
+            if (lexer->lookahead == '>') {
+                return false;
+            }
+            if (lexer->lookahead == '|') {
+                // `|| ->` is an empty closure with a return type, never
+                // binary or (mirrors PipeDouble+Arrow in the Pratt parser).
+                advance(lexer);
+                while (lexer->lookahead == ' ' || lexer->lookahead == '\t') {
+                    advance(lexer);
+                }
+                if (lexer->lookahead == '-') {
+                    advance(lexer);
+                    return lexer->lookahead == '>';
+                }
+                return false;
+            }
+            return true;
 
         case '&': // && continues, but bare & is reference (prefix)
             advance(lexer);

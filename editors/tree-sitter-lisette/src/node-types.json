@@ -324,6 +324,10 @@
         "named": true
       },
       {
+        "type": "scoped_type_identifier",
+        "named": true
+      },
+      {
         "type": "slice_pattern",
         "named": true
       },
@@ -1306,6 +1310,10 @@
         {
           "type": "field_declaration",
           "named": true
+        },
+        {
+          "type": "struct_embedding",
+          "named": true
         }
       ]
     }
@@ -1898,6 +1906,10 @@
       "multiple": true,
       "required": false,
       "types": [
+        {
+          "type": "attribute_item",
+          "named": true
+        },
         {
           "type": "function_signature_item",
           "named": true
@@ -2675,6 +2687,22 @@
           "named": true
         }
       ]
+    }
+  },
+  {
+    "type": "struct_embedding",
+    "named": true,
+    "fields": {
+      "type": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "_type",
+            "named": true
+          }
+        ]
+      }
     }
   },
   {

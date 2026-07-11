@@ -182,3 +182,63 @@ match p { Point { x, .. } as pt => pt.y }
           value: (field_expression
             value: (identifier)
             field: (field_identifier)))))))
+
+================================================================================
+Bare enum path pattern
+================================================================================
+
+match s { Status.Pending => "pending", Status.Cancelled(reason) => reason, _ => "other" }
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (expression_statement
+    (match_expression
+      (identifier)
+      (match_block
+        (match_arm
+          (match_pattern
+            (scoped_type_identifier
+              (type_identifier)
+              (type_identifier)))
+          (string_literal
+            (string_content)))
+        (match_arm
+          (match_pattern
+            (tuple_struct_pattern
+              (scoped_type_identifier
+                (type_identifier)
+                (type_identifier))
+              (identifier)))
+          (identifier))
+        (match_arm
+          (match_pattern)
+          (string_literal
+            (string_content)))))))
+
+================================================================================
+Or pattern with enum paths
+================================================================================
+
+match s { Status.Pending | Status.Active => 1, _ => 0 }
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (expression_statement
+    (match_expression
+      (identifier)
+      (match_block
+        (match_arm
+          (match_pattern
+            (or_pattern
+              (scoped_type_identifier
+                (type_identifier)
+                (type_identifier))
+              (scoped_type_identifier
+                (type_identifier)
+                (type_identifier))))
+          (integer_literal))
+        (match_arm
+          (match_pattern)
+          (integer_literal))))))

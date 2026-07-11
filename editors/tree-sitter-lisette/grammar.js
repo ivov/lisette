@@ -102,6 +102,7 @@ module.exports = grammar({
     [$._type, $.scoped_type_identifier],
     [$._expression_except_range, $._type_identifier],
     [$._pattern, $._type_identifier],
+    [$._pattern, $._type],
   ],
 
   word: $ => $.identifier,
@@ -213,12 +214,20 @@ module.exports = grammar({
     field_declaration_list: $ => bracedList(seq(
       repeat($.attribute_item),
       optional($.doc_comment),
-      $.field_declaration,
+      choice($.field_declaration, $.struct_embedding),
     )),
+
+    struct_embedding: $ => seq(
+      'embed',
+      field('type', $._type),
+    ),
 
     field_declaration: $ => seq(
       optional($.visibility_modifier),
-      field('name', $._field_identifier),
+      field('name', choice(
+        $._field_identifier,
+        alias('embed', $.field_identifier),
+      )),
       ':',
       field('type', $._type),
     ),
@@ -297,9 +306,12 @@ module.exports = grammar({
 
     interface_body: $ => seq(
       '{',
-      repeat(choice(
-        $.function_signature_item,
-        $.interface_embedding,
+      repeat(seq(
+        repeat($.attribute_item),
+        choice(
+          $.function_signature_item,
+          $.interface_embedding,
+        ),
       )),
       '}',
     ),
@@ -871,6 +883,7 @@ module.exports = grammar({
     _pattern: $ => choice(
       $._literal_pattern,
       $.identifier,
+      $.scoped_type_identifier,
       $.tuple_pattern,
       $.tuple_struct_pattern,
       $.struct_pattern,

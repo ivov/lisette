@@ -676,3 +676,63 @@ Rawgo
     (rawgo_directive
       (string_literal
         (string_content)))))
+
+================================================================================
+Generic call with function type argument
+================================================================================
+
+fn main() {
+  let m = Map.new<string, fn(int, int) -> int>()
+}
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (function_item
+    (identifier)
+    (parameters)
+    (block
+      (let_declaration
+        (identifier)
+        (generic_call_expression
+          (field_expression
+            (identifier)
+            (field_identifier))
+          (call_type_arguments
+            (type_identifier)
+            (function_type
+              (parameters
+                (type_identifier)
+                (type_identifier))
+              (type_identifier)))
+          (arguments))))))
+
+================================================================================
+Closure with return type at statement start
+================================================================================
+
+fn make() -> fn() -> int {
+  let mut n = 0
+  || -> int { n }
+}
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (function_item
+    (identifier)
+    (parameters)
+    (function_type
+      (parameters)
+      (type_identifier))
+    (block
+      (let_declaration
+        (mutable_specifier)
+        (identifier)
+        (integer_literal))
+      (expression_statement
+        (closure_expression
+          (closure_parameters)
+          (type_identifier)
+          (block
+            (identifier)))))))

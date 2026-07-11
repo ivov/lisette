@@ -312,3 +312,80 @@ import _ "go:net/http/pprof"
   (import_declaration
     path: (string_literal
       (string_content))))
+
+================================================================================
+Struct with embedded fields
+================================================================================
+
+struct ReadWriter {
+  embed Ref<Reader>,
+  embed base,
+  pub size: int,
+}
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (struct_item
+    (type_identifier)
+    (field_declaration_list
+      (struct_embedding
+        (generic_type
+          (type_identifier)
+          (type_arguments
+            (type_identifier))))
+      (struct_embedding
+        (type_identifier))
+      (field_declaration
+        (visibility_modifier)
+        (field_identifier)
+        (type_identifier)))))
+
+================================================================================
+Interface with attribute on method
+================================================================================
+
+interface Sealed {
+  fn Do() -> int
+  #[go(unexported, "pkg.private()")]
+  fn private()
+}
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (interface_item
+    (type_identifier)
+    (interface_body
+      (function_signature_item
+        (identifier)
+        (parameters)
+        (type_identifier))
+      (attribute_item
+        (attribute
+          (identifier)
+          (attribute_arguments
+            (identifier)
+            (string_literal
+              (string_content)))))
+      (function_signature_item
+        (identifier)
+        (parameters)))))
+
+================================================================================
+Field named embed
+================================================================================
+
+struct S {
+  embed: int,
+}
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (struct_item
+    (type_identifier)
+    (field_declaration_list
+      (field_declaration
+        (field_identifier)
+        (type_identifier)))))
