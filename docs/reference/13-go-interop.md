@@ -52,6 +52,7 @@ Compound types are different:
 | Lisette         | Go                           |
 | --------------- | ---------------------------- |
 | `Slice<T>`      | `[]T`                        |
+| `Array<T, N>`   | `[N]T`                       |
 | `Map<K, V>`     | `map[K]V`                    |
 | `Ref<T>`        | `*T`                         |
 | `Result<T, E>`  | `(T, error)` or `error`      |
@@ -62,8 +63,6 @@ Compound types are different:
 | `Receiver<T>`   | `<-chan T`                   |
 | `VarArgs<T>`    | `...T` (call-site only)      |
 | `Unknown`       | `any` or `interface{}`       |
-
-Fixed-size arrays `[N]T` are not yet representable in Lisette. In return position they lower to `Slice<T>`. In any other position (e.g. parameters, struct fields, map keys, slice or map elements), the declaration is currently skipped.
 
 ### Named primitive types
 

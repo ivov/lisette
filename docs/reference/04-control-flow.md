@@ -100,6 +100,7 @@ Supported iterables:
 | Iterable                                        | Element type |
 | ----------------------------------------------- | ------------ |
 | `Slice<T>`                                      | `T`          |
+| `Array<T, N>`                                   | `T`          |
 | `Map<K, V>`                                     | `(K, V)`     |
 | `Range<T>`, `RangeInclusive<T>`, `RangeFrom<T>` | `T`          |
 | `Channel<T>`, `Receiver<T>`                     | `T`          |

@@ -247,7 +247,7 @@ ages["Alice"] = 20
 let age = ages.get("Bob") // Option<int>
 ```
 
-Lisette offers `Slice<T>` and `Map<K, V>`. Map access returns `Option<V>`.
+Lisette offers `Array<T, N>` for fixed-size arrays, `Slice<T>` for slices, and `Map<K, V>` for maps. `Map.get` returns `Option<V>`.
 
 ## Loops
 

@@ -50,7 +50,7 @@ let greeting = "hello" + ", " + "world"
 
 ## Comparison
 
-`==` and `!=` compare any two values of the same type.
+`==` and `!=` compare values of the same comparable type.
 
 `<`, `>`, `<=`, `>=` compare numeric types and strings.
 
@@ -147,24 +147,37 @@ let value = r.*              // 42
 
 ## Indexed access
 
-Slices and maps support bracket indexing:
+Arrays and slices support integer indexing:
 
 ```rust
 let nums = [10, 20, 30]
 let first = nums[0]          // 10
 
+let fixed: Array<int, 3> = [10, 20, 30]
+let second = fixed[1]        // 20
+```
+
+Maps support key indexing:
+
+```rust
 let mut ages = Map.new<string, int>()
 ages["Alice"] = 20
 let age = ages["Alice"]      // 20
 ```
 
-Bracket access on a slice panics if the index is out of bounds; bracket access on maps returns the zero value if the key is missing. If the map's value type has no zero value (e.g. `Ref<T>`), bracket reads are rejected at compile time. 
+Bracket access on an array or slice panics if the index is out of bounds. Bracket access on maps returns the zero value if the key is missing. If the map's value type has no zero value (e.g. `Ref<T>`), bracket reads are rejected at compile time.
 
 For safe access that returns `Option<T>`, use `.get()`:
 
 ```rust
 let safe = nums.get(0)       // Some(10)
 let missing = nums.get(99)   // None
+```
+
+Range indexing is available only on slices. To range-index an array, first copy its elements into a slice:
+
+```rust
+let tail = fixed.to_slice()[1..]
 ```
 
 ## Compound assignment

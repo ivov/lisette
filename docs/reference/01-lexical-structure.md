@@ -140,12 +140,13 @@ let null = '\0'
 
 Escape sequences: `\\`, `\'`, `\n`, `\r`, `\t`, `\0`.
 
-### Slice literals
+### Slices and array literals
 
-A slice literal is a comma-separated list of values in square brackets. All elements must have the same type.
+In a bracketed sequence of values, all elements must have the same type. This sequence is a `Slice` by default, or an `Array` when an array type is expected.
 
 ```rust
-let nums = [1, 2, 3]
+let nums = [1, 2, 3] // Slice<int>
+let address: Array<byte, 4> = [127, 0, 0, 1]
 let empty: Slice<int> = []
 let nested = [[1, 2], [3, 4]]
 ```

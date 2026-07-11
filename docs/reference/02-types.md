@@ -166,6 +166,20 @@ let first_positive = nums.find(|x| x > 0)
 
 Run `lis doc Slice` for the full method list.
 
+### `Array<T, N>`
+
+A fixed-size, indexable sequence of elements.
+
+```rust
+let address: Array<byte, 4> = [127, 0, 0, 1]
+let first = address[0]
+let length = address.length()
+```
+
+A bracketed sequence is a `Slice` by default, or an `Array` when an array type is expected.
+
+Run `lis doc Array` for the full method list.
+
 ### `Map<K, V>`
 
 A map from keys to values.
@@ -274,7 +288,7 @@ let mut count = 0
 count += 1
 ```
 
-A mutable binding must own its value. Initializing or reassigning one from an existing binding, field, or element whose type holds a `Slice` or `Map` (directly, or nested inside a struct, tuple, or enum) would share the source's backing storage, so the compiler rejects it. Use `.clone()` for an independent copy, or `&` to share the value intentionally through a reference.
+A mutable binding must own its value. Initializing or reassigning one from an existing binding, field, or element whose type holds a `Slice` or `Map` (directly, or nested inside an `Array`, struct, tuple, or enum) would share the source's backing storage, so the compiler rejects it. Use `.clone()` for an independent copy, or `&` to share the value intentionally through a reference.
 
 ```rust
 let a = [1, 2, 3]

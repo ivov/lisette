@@ -84,7 +84,7 @@ fn combine<T: Display, U: Debug>(a: T, b: U) -> string {
 
 Two bounds are built in:
 
-- `Comparable` for types that admit `==` and `!=` (everything except slices, maps, functions, and structs or tuples that contain them)
+- `Comparable` for types that admit `==` and `!=` (arrays, structs, enums, and tuples qualify when all their components do; slices, maps, functions, and interfaces do not)
 - `Ordered` for types that admit `<`, `>`, `<=`, and `>=` (signed and unsigned integers, floats, and `string`)
 
 `Ordered` implies `Comparable`, so `==` and `!=` are also available on a type bound by `Ordered`.
@@ -112,9 +112,9 @@ let nums = [3, 1, 2] // arg immutable
 sort_in_place(nums)  // param immutable, error
 ```
 
-This additional rule applies to `Slice<T>`, `Map<K, V>`, and any struct, tuple, or enum that recursively contains one. This rule does not apply to:
+This additional rule applies to `Slice<T>`, `Map<K, V>`, and any array, struct, tuple, or enum that recursively contains one. This rule does not apply to:
 
-- Values that Go passes by copy, e.g. `int`, `string`, `bool`, `float64`, plain structs, tuples.
+- Values that Go passes by copy and that do not recursively contain a slice or map, e.g. `int`, `string`, `bool`, `float64`, arrays, plain structs, and tuples.
 - `Ref<T>` and `Channel<T>`. The purpose of pointers and channels is to share or transmit data, so mutation is implied.
 
 ## Lambdas

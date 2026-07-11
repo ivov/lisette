@@ -73,7 +73,7 @@ match FindHandler("api") {
 
 📚 See [`13-go-interop.md`](../reference/13-go-interop.md#typed-nil-at-the-boundary)
 
-### Safe access for maps and slices
+### Safe access for maps, slices, and arrays
 
 Go zero-values a missing key in a map, and panics on out-of-bounds index access in a slice:
 
@@ -86,7 +86,7 @@ items := arr[1:]       // `items` is `[]`
 items[0]               // panic: index out of range
 ```
 
-Lisette offers `Map.get` and `Slice.get` returning `Option<V>`:
+Lisette offers `Map.get`, `Slice.get`, and `Array.get`, returning `Option` instead:
 
 ```rust
 match users.get("bob") {
@@ -300,7 +300,7 @@ b := a
 b[0] = 99 // `a` is now [99 2 3]
 ```
 
-In Lisette, a mutable binding must own its value. Creating one from an existing binding, field, or element whose type holds a slice or map (directly, or nested inside a struct, tuple, or enum) is a compile error:
+In Lisette, a mutable binding must own its value. Creating one from an existing binding, field, or element whose type holds a slice or map (directly, or nested inside an array, struct, tuple, or enum) is a compile error:
 
 ```
   ✕ Cannot make a mutable binding to `a`
@@ -536,5 +536,5 @@ Lisette catches several more Go pitfalls at compile time. For example:
 
 - **Nil hiding behind nil error.** Go functions can return `(nil, nil)` — a nil pointer with no error. The `err != nil` check passes, and the nil pointer panics later. When wrapping Go calls that return `(*T, error)`, Lisette checks both values and converts a nil pointer to `Err` even when the error is nil.
 - **Map field chain assignment.** In Go `m["key"].field = value` is a silent no-op (map lookup returns a copy). Lisette rejects this.
-- **Non-comparable equality.** In Lisette, using `==` on a struct that contains a slice, function, or map field is a compile error. Go panics at runtime.
+- **Non-comparable equality.** Lisette rejects `==` on a composite value that contains a slice, function, map, or another non-comparable value. In Go, a non-comparable value hidden behind an interface can instead panic at runtime.
 - **Numeric literal overflow.** Lisette rejects `let x: int8 = 200`. Go silently truncates.

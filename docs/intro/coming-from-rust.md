@@ -57,6 +57,7 @@ Lisette has a single reference type `Ref<T>` instead of Rust's `&T` and `&mut T`
 | `char`                   | `rune`                 |
 | `String`, `&str`         | `string`               |
 | `Vec<T>`                 | `Slice<T>`             |
+| `[T; N]`                 | `Array<T, N>`          |
 | `HashMap<K, V>`          | `Map<K, V>`            |
 | `Box<T>`, `&T`, `&mut T` | `Ref<T>`               |
 | `Option<T>`              | `Option<T>`            |

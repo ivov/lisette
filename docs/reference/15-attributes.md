@@ -222,7 +222,7 @@ render(Point { x: 1, y: 2 }) // `Point` satisfies `Display`
 
 ## Equality
 
-`==` and `!=` work on natively comparable types: primitives and any struct, enum, and tuple whose components are all comparable.
+`==` and `!=` work on natively comparable types: primitives, arrays whose elements are comparable, and structs, enums, and tuples whose components are all comparable.
 
 ```rs
 struct User {
@@ -236,7 +236,7 @@ let u2 = User { name: "Alice", age: 30 }
 u1 == u2 // true
 ```
 
-Other types are not natively comparable: slice and map and any struct, enum, and tuple that contains a slice or map, plus any function and interface value.
+Other types are not natively comparable: slices, maps, functions, interfaces, and any array, struct, enum, or tuple that contains a non-comparable value.
 
 ```rs
 struct Order {

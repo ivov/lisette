@@ -115,9 +115,9 @@ error: Private field
 
 Lisette's prelude is a set of definitions that are always available in every file without an import.
 
-- Primitive types: `int`, `string`, `bool`, `float64`, etc.
-- Common types: `Option`, `Result`, `Slice`, `Map`
-- Enum variants: `Some`, `None`, `Ok`, `Err`
+- `int`, `string`, `bool`, `float64`, etc.
+- `Option`, `Result`, `Array`, `Slice`, `Map`
+- `Some`, `None`, `Ok`, `Err`
 - among others
 
 Run `lis doc` to view all prelude definitions.

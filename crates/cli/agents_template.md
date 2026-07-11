@@ -9,6 +9,7 @@ Lisette compiles to Go. Rust-like syntax, Go runtime. No ownership, no borrowing
 | `&T`, `&mut T`            | `Ref<T>`                                                         |
 | `*ptr`                    | `ptr.*`                                                          |
 | `Vec<T>`                  | `Slice<T>`                                                       |
+| `[T; N]`                  | `Array<T, N>`                                                    |
 | `HashMap<K, V>`           | `Map<K, V>`                                                      |
 | `String`, `&str`          | `string`                                                         |
 | `Color::Red`              | `Color.Red`                                                      |
@@ -94,6 +95,7 @@ Go type mappings:
 | Go                   | Lisette                                            |
 | -------------------- | -------------------------------------------------- |
 | `*T`                 | `Ref<T>` (non-null) or `Option<Ref<T>>` (nullable) |
+| `[N]T`               | `Array<T, N>`                                      |
 | `[]T`                | `Slice<T>`                                         |
 | `map[K]V`            | `Map<K, V>`                                        |
 | `chan T`             | `Channel<T>`                                       |

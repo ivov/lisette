@@ -121,9 +121,9 @@ match msg {
 }
 ```
 
-### Slices
+### Slices and arrays
 
-Slice patterns match elements:
+Bracketed patterns match slice and array elements:
 
 ```rust
 match items {
@@ -134,7 +134,7 @@ match items {
 }
 ```
 
-The rest pattern `..rest` captures remaining elements as a slice. It must appear last; elements after `..` are not allowed.
+The rest pattern `..rest` captures remaining elements as a `Slice` when matching a slice, or as an `Array` when matching an array. It must appear last. Elements after `..` are not allowed.
 
 Use `..` without an identifier to ignore the rest:
 
