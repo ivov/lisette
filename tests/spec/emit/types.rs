@@ -1184,7 +1184,7 @@ interface Displayable {
   fn display(self) -> string
 }
 
-enum Either<L, R> {
+enum Either<L: Displayable, R: Displayable> {
   Left(L),
   Right(R),
 }
@@ -1407,6 +1407,25 @@ impl<T> Box<T> {
 
 fn main() -> int {
   let b: Box<int> = Box.new(42);
+  b.value
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn generic_static_method_uses_receiver_bound() {
+    let input = r#"
+struct Box<T: Comparable> { value: T }
+
+impl<U> Box<U> {
+  fn new(value: U) -> Box<U> {
+    Box { value: value }
+  }
+}
+
+fn main() -> int {
+  let b = Box.new(42)
   b.value
 }
 "#;
@@ -3575,7 +3594,7 @@ interface Displayable {
   fn display(self) -> string
 }
 
-struct Labeled<T> {
+struct Labeled<T: Displayable> {
   label: string,
   value: T,
 }
@@ -3978,7 +3997,7 @@ fn test() -> Marker {
 #[test]
 fn generic_enum_with_map_key_type_parameter() {
     let input = r#"
-enum Container<K, V> {
+enum Container<K: Comparable, V> {
   Empty,
   Indexed(Map<K, V>),
 }
@@ -4014,7 +4033,7 @@ fn test() -> MyColor {
 #[test]
 fn type_alias_map_comparable_constraint() {
     let input = r#"
-type KeyVal<K, V> = Map<K, V>
+type KeyVal<K: Comparable, V> = Map<K, V>
 
 fn test() -> KeyVal<string, int> {
   let mut m = Map.new<string, int>()
@@ -4028,7 +4047,7 @@ fn test() -> KeyVal<string, int> {
 #[test]
 fn interface_map_key_comparable_constraint() {
     let input = r#"
-interface Store<K, V> {
+interface Store<K: Comparable, V> {
   fn entries(self) -> Map<K, V>
 }
 "#;
@@ -4142,13 +4161,13 @@ fn main() {
 }
 
 #[test]
-fn embedded_interface_comparable_propagation() {
+fn embedded_interface_uses_declared_comparable_bound() {
     let input = r#"
-interface A<K> {
+interface A<K: Comparable> {
   fn get(self, m: Map<K, int>) -> int
 }
 
-interface B<K> {
+interface B<K: Comparable> {
   embed A<K>
 }
 
@@ -4158,17 +4177,17 @@ fn main() { let _ = 0 }
 }
 
 #[test]
-fn embedded_interface_comparable_transitive() {
+fn embedded_interface_chain_uses_declared_comparable_bounds() {
     let input = r#"
-interface A<K> {
+interface A<K: Comparable> {
   fn get(self, m: Map<K, int>) -> int
 }
 
-interface B<K> {
+interface B<K: Comparable> {
   embed A<K>
 }
 
-interface C<K> {
+interface C<K: Comparable> {
   embed B<K>
 }
 
@@ -4613,13 +4632,13 @@ fn run(callback: fn(int)) {}
 }
 
 #[test]
-fn impl_method_map_key_return_constrains_struct_receiver() {
+fn impl_method_map_key_return_uses_declared_receiver_bound() {
     let input = r#"
-struct Box<T> {
+struct Box<T: Comparable> {
   value: T,
 }
 
-impl<T> Box<T> {
+impl<T: Comparable> Box<T> {
   fn make_map(self) -> Map<T, int> {
     Map.new<T, int>()
   }
@@ -4634,13 +4653,13 @@ fn main() {
 }
 
 #[test]
-fn impl_method_map_key_body_constrains_struct_receiver() {
+fn impl_method_map_key_body_uses_declared_struct_bound() {
     let input = r#"
-struct Box<T> {
+struct Box<T: Comparable> {
   value: T,
 }
 
-impl<T> Box<T> {
+impl<T: Comparable> Box<T> {
   fn count(self) -> int {
     let m = Map.new<T, int>()
     m.length()
@@ -4656,13 +4675,13 @@ fn main() {
 }
 
 #[test]
-fn impl_method_map_key_body_constrains_enum_receiver_and_make_function() {
+fn impl_method_map_key_body_uses_declared_enum_bound() {
     let input = r#"
-enum Holder<T> {
+enum Holder<T: Comparable> {
   Empty,
 }
 
-impl<T> Holder<T> {
+impl<T: Comparable> Holder<T> {
   fn count(self) -> int {
     let m = Map.new<T, int>()
     m.length()
@@ -4706,11 +4725,11 @@ fn main() {
 }
 
 #[test]
-fn map_alias_propagates_comparable_to_struct_field_use() {
+fn map_alias_with_comparable_bound_in_struct_field() {
     let input = r#"
-type Table<T> = Map<T, int>
+type Table<T: Comparable> = Map<T, int>
 
-struct Box<T> {
+struct Box<T: Comparable> {
   table: Table<T>,
 }
 
@@ -4723,11 +4742,11 @@ fn main() {
 }
 
 #[test]
-fn map_alias_propagates_comparable_to_function_signature() {
+fn map_alias_with_comparable_bound_in_function_signature() {
     let input = r#"
-type Table<T> = Map<T, int>
+type Table<T: Comparable> = Map<T, int>
 
-fn id<T>(table: Table<T>) -> Table<T> {
+fn id<T: Comparable>(table: Table<T>) -> Table<T> {
   table
 }
 
@@ -4740,11 +4759,11 @@ fn main() {
 }
 
 #[test]
-fn map_alias_propagates_comparable_to_enum_variant() {
+fn map_alias_with_comparable_bound_in_enum_variant() {
     let input = r#"
-type Table<T> = Map<T, int>
+type Table<T: Comparable> = Map<T, int>
 
-enum Holder<T> {
+enum Holder<T: Comparable> {
   Some(Table<T>),
 }
 
@@ -4757,11 +4776,11 @@ fn main() {
 }
 
 #[test]
-fn map_alias_propagates_comparable_to_interface_method() {
+fn map_alias_with_comparable_bound_in_interface_method() {
     let input = r#"
-type Table<T> = Map<T, int>
+type Table<T: Comparable> = Map<T, int>
 
-interface Uses<T> {
+interface Uses<T: Comparable> {
   fn id(self, table: Table<T>) -> Table<T>
 }
 
@@ -4773,9 +4792,9 @@ fn main() {
 }
 
 #[test]
-fn map_key_use_in_let_initializer_constrains_generic() {
+fn map_key_use_in_let_initializer_uses_declared_bound() {
     let input = r#"
-fn is_empty<T>() -> bool {
+fn is_empty<T: Comparable>() -> bool {
   let empty = Map.new<T, int>().is_empty()
   empty
 }
@@ -4788,9 +4807,9 @@ fn main() {
 }
 
 #[test]
-fn map_key_use_in_tail_expression_constrains_generic() {
+fn map_key_use_in_tail_expression_uses_declared_bound() {
     let input = r#"
-fn is_empty<T>() -> bool {
+fn is_empty<T: Comparable>() -> bool {
   Map.new<T, int>().is_empty()
 }
 
@@ -4802,9 +4821,9 @@ fn main() {
 }
 
 #[test]
-fn map_key_use_in_if_condition_constrains_generic() {
+fn map_key_use_in_if_condition_uses_declared_bound() {
     let input = r#"
-fn score<T>() -> int {
+fn score<T: Comparable>() -> int {
   if Map.new<T, int>().is_empty() {
     1
   } else {
@@ -4820,7 +4839,7 @@ fn main() {
 }
 
 #[test]
-fn explicit_named_bound_merges_with_inferred_comparable_on_function() {
+fn explicit_named_and_comparable_bounds_on_function() {
     let input = r#"
 interface Named {
   fn name(self) -> string
@@ -4836,7 +4855,7 @@ impl Person {
   }
 }
 
-fn count<T: Named>(x: T) -> int {
+fn count<T: Named + Comparable>(x: T) -> int {
   let mut m: Map<T, int> = Map.new()
   m[x] = 1
   m.length()
@@ -4850,7 +4869,7 @@ fn main() {
 }
 
 #[test]
-fn explicit_named_bound_merges_with_inferred_comparable_on_struct() {
+fn explicit_named_and_comparable_bounds_on_struct() {
     let input = r#"
 interface Named {
   fn name(self) -> string
@@ -4866,7 +4885,7 @@ impl Person {
   }
 }
 
-struct Box<T: Named> {
+struct Box<T: Named + Comparable> {
   table: Map<T, int>,
 }
 
@@ -4897,12 +4916,12 @@ fn main() {
 }
 
 #[test]
-fn alias_chain_propagates_comparable_through_two_steps() {
+fn alias_chain_uses_declared_comparable_bounds() {
     let input = r#"
-type B<T> = Map<T, int>
-type A<T> = B<T>
+type B<T: Comparable> = Map<T, int>
+type A<T: Comparable> = B<T>
 
-struct Box<T> {
+struct Box<T: Comparable> {
   table: A<T>,
 }
 
@@ -5041,7 +5060,7 @@ fn zero() {
 #[test]
 fn conditional_impl_renamed_param_keeps_receiver_bound() {
     let input = r#"
-struct Box<T> { value: T }
+struct Box<T: Ordered> { value: T }
 
 impl<U: Ordered> Box<U> {
   fn less(self, other: Box<U>) -> bool {

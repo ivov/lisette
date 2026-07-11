@@ -1,5 +1,3 @@
-use rustc_hash::FxHashMap as HashMap;
-
 use ecow::EcoString;
 use syntax::ast::{Annotation, Expression, Generic, ParentInterface, Span};
 use syntax::program::{Definition, DefinitionBody};
@@ -21,22 +19,19 @@ impl InferCtx<'_, '_> {
 
         self.put_in_scope(&generics);
 
-        for g in &generics {
-            let qualified_name = self.qualify_name(&g.name);
-            for b in &g.bounds {
-                let bound_ty = self.convert_bound_to_type(store, b, &span);
-                self.scopes
-                    .current_mut()
-                    .trait_bounds
-                    .get_or_insert_with(HashMap::default)
-                    .entry(qualified_name.clone())
-                    .or_default()
-                    .push(bound_ty);
+        for generic in &generics {
+            for bound in &generic.bounds {
+                self.register_generic_bound(store, &generic.name, bound, &span);
             }
         }
 
         self.check_undeclared_impl_type_params(&annotation, &generics);
-        let impl_ty = self.convert_to_type(store, &annotation, &span);
+        let impl_ty = self.convert_to_type_inner(store, &annotation, &span, false, false);
+
+        if self.impl_has_simple_type_params(&impl_ty, &generics) {
+            let receiver_qualified = impl_ty.get_qualified_name();
+            self.register_receiver_type_bounds(store, &receiver_qualified, &generics);
+        }
 
         let receiver_ty = if generics.is_empty() {
             impl_ty.clone()
@@ -111,6 +106,7 @@ impl InferCtx<'_, '_> {
 
         self.scopes.push();
         self.put_in_scope(&generics);
+        self.validate_generic_bounds(store, &generics, &span);
 
         // Interface method parameters are declarations, not implementations — they
         // have no body and are always "unused". Remove their bindings so the unused

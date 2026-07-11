@@ -1,12 +1,16 @@
 use rustc_hash::FxHashMap as HashMap;
 
 use crate::checker::EnvResolve;
-use crate::checker::infer::expressions::comparison::check_never_comparable;
+use crate::checker::infer::BuiltinBound;
+use crate::checker::infer::expressions::comparison::{
+    check_never_comparable, check_never_comparable_with_bounds, check_not_comparable_with_bounds,
+};
 use syntax::EcoString;
 use syntax::ast::{Annotation, Generic, Span};
 use syntax::program::{Definition, DefinitionBody};
 use syntax::types::{SubstitutionMap, Symbol, Type, substitute, unqualified_name};
 
+use super::impl_bounds::import_module_for_alias;
 use crate::checker::TaskState;
 use crate::prelude::PRELUDE_MODULE_ID;
 use crate::store::Store;
@@ -33,7 +37,7 @@ impl TaskState<'_> {
     }
 
     pub fn convert_to_type(&mut self, store: &Store, annotation: &Annotation, span: &Span) -> Type {
-        self.convert_to_type_inner(store, annotation, span, false)
+        self.convert_to_type_inner(store, annotation, span, false, true)
     }
 
     pub(crate) fn convert_to_type_inner(
@@ -42,6 +46,7 @@ impl TaskState<'_> {
         annotation: &Annotation,
         span: &Span,
         variadic_allowed: bool,
+        check_type_argument_bounds: bool,
     ) -> Type {
         match annotation {
             Annotation::Unknown => self.new_type_var(),
@@ -58,7 +63,7 @@ impl TaskState<'_> {
                     .enumerate()
                     .map(|(index, param)| {
                         if index == last_param {
-                            self.convert_to_type_inner(store, param, span, true)
+                            self.convert_to_type_inner(store, param, span, true, true)
                         } else {
                             self.convert_to_type(store, param, span)
                         }
@@ -187,6 +192,14 @@ impl TaskState<'_> {
                         *span,
                     ));
                 }
+                if check_type_argument_bounds && qualified_name != "prelude.Map" {
+                    self.check_builtin_type_argument_bounds(
+                        store,
+                        &qualified_name,
+                        &concrete_args,
+                        *annotation_span,
+                    );
+                }
                 let resolved_ty = if generics.is_empty() && concrete_args.is_empty() {
                     body
                 } else {
@@ -216,12 +229,11 @@ impl TaskState<'_> {
                 }
 
                 if qualified_name == "prelude.Map"
-                    && !params.is_empty()
                     && let Some(key_ty) = resolved_ty
                         .get_type_params()
-                        .and_then(|p| p.first().cloned())
+                        .and_then(|parameters| parameters.first())
                 {
-                    self.check_map_key_comparable(store, &key_ty, *annotation_span);
+                    self.check_map_key_comparable(store, key_ty, *annotation_span);
                 }
 
                 // Preserve alias name in emitter output. Guard against re-wrapping bodies whose
@@ -517,6 +529,154 @@ impl TaskState<'_> {
             self.sink.push(diagnostics::infer::non_comparable_map_key(
                 &resolved, reason, span,
             ));
+            return;
+        }
+        if !self.is_lis(store) {
+            return;
+        }
+
+        self.check_missing_map_key_bounds(store, &resolved, span);
+    }
+
+    fn check_missing_map_key_bounds(&mut self, store: &Store, key_ty: &Type, span: Span) {
+        let mut missing = Vec::new();
+        let resolved = key_ty.resolve_in(&self.env);
+        let _ = check_never_comparable_with_bounds(&self.env, store, &resolved, &mut |parameter| {
+            if !self.parameter_satisfies_bound(parameter, BuiltinBound::Comparable) {
+                missing.push(parameter.to_string());
+            }
+            true
+        });
+        missing.sort_unstable();
+        missing.dedup();
+        for parameter in missing {
+            self.sink
+                .push(diagnostics::infer::missing_map_key_bound(&parameter, span));
+        }
+    }
+
+    pub(crate) fn check_deferred_map_key_bounds(&mut self, store: &Store) {
+        for (key, span, check_concrete) in self.scopes.take_deferred_map_key_checks() {
+            if check_concrete {
+                let resolved = key.resolve_in(&self.env);
+                if !resolved.resolves_to_unknown() {
+                    self.check_map_key_comparable(store, &resolved, span);
+                }
+            } else {
+                self.check_missing_map_key_bounds(store, &key, span);
+            }
+        }
+    }
+
+    fn check_builtin_type_argument_bounds(
+        &mut self,
+        store: &Store,
+        definition_name: &str,
+        arguments: &[Type],
+        span: Span,
+    ) {
+        let Some(definition) = store.get_definition(definition_name) else {
+            return;
+        };
+        let generics = match &definition.body {
+            DefinitionBody::Struct { generics, .. }
+            | DefinitionBody::Enum { generics, .. }
+            | DefinitionBody::TypeAlias { generics, .. } => generics,
+            DefinitionBody::Interface { definition } => &definition.generics,
+            DefinitionBody::Value { .. } => return,
+        };
+        let Some(module_name) = store.module_for_qualified_name(definition_name) else {
+            return;
+        };
+        for (generic, argument) in generics.iter().zip(arguments) {
+            for bound in &generic.bounds {
+                let required = self
+                    .facts
+                    .bound_types
+                    .get(&bound.get_span())
+                    .and_then(Type::get_qualified_id)
+                    .and_then(BuiltinBound::from_qualified_id)
+                    .or_else(|| builtin_bound_from_annotation(store, module_name, bound));
+                if let Some(required) = required {
+                    self.check_builtin_bound_argument(store, argument, required, span);
+                }
+            }
+        }
+    }
+
+    pub(crate) fn check_builtin_bound_argument(
+        &mut self,
+        store: &Store,
+        argument: &Type,
+        required: BuiltinBound,
+        span: Span,
+    ) {
+        let resolved = store.deep_resolve_alias(&argument.resolve_in(&self.env));
+        if resolved.is_variable() {
+            return;
+        }
+        if let Type::Parameter(parameter) = &resolved {
+            if !self.parameter_satisfies_bound(parameter, required) {
+                self.sink.push(diagnostics::infer::missing_bound_on_param(
+                    parameter,
+                    required.label(),
+                    span,
+                ));
+            }
+            return;
+        }
+
+        match required {
+            BuiltinBound::Comparable => {
+                let mut missing_parameter = None;
+                let reason = check_not_comparable_with_bounds(
+                    &self.env,
+                    store,
+                    &resolved,
+                    &mut |parameter| {
+                        let satisfied =
+                            self.parameter_satisfies_bound(parameter, BuiltinBound::Comparable);
+                        if !satisfied && missing_parameter.is_none() {
+                            missing_parameter = Some(parameter.to_string());
+                        }
+                        satisfied
+                    },
+                );
+                if let Some(parameter) = missing_parameter {
+                    self.sink.push(diagnostics::infer::missing_bound_on_param(
+                        &parameter,
+                        required.label(),
+                        span,
+                    ));
+                } else if reason.is_some() {
+                    self.sink
+                        .push(diagnostics::infer::not_comparable_bound(span));
+                }
+            }
+            BuiltinBound::Ordered if !resolved.satisfies_ordered_constraint() => {
+                self.sink
+                    .push(diagnostics::infer::not_orderable_bound(span));
+            }
+            BuiltinBound::Ordered => {}
+        }
+    }
+}
+
+fn builtin_bound_from_annotation(
+    store: &Store,
+    definition_module: &str,
+    annotation: &Annotation,
+) -> Option<BuiltinBound> {
+    let Annotation::Constructor { name, .. } = annotation else {
+        return None;
+    };
+    match name.as_str() {
+        "Comparable" | "prelude.Comparable" => Some(BuiltinBound::Comparable),
+        "Ordered" | "prelude.Ordered" | "go:cmp.Ordered" => Some(BuiltinBound::Ordered),
+        _ => {
+            let (alias, bound_name) = name.split_once('.')?;
+            let module = import_module_for_alias(store, definition_module, alias)?;
+            BuiltinBound::from_qualified_id(&format!("{module}.{bound_name}"))
         }
     }
 }

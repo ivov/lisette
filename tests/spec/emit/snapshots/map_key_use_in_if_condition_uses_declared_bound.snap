@@ -2,7 +2,7 @@
 source: tests/spec/emit/types.rs
 description: |
   
-  fn score<T>() -> int {
+  fn score<T: Comparable>() -> int {
     if Map.new<T, int>().is_empty() {
       1
     } else {

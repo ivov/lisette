@@ -50,8 +50,8 @@ use state::module_state::{FunctionEmissionState, ModuleState};
 use state::scope::ScopeState;
 use syntax::ast::Span;
 use syntax::program::{
-    Definition, DefinitionBody, EmitInput, EqualityIndex, File, GenericConstraintsByDefinition,
-    ModuleId, MutationInfo, ResolvedDefinitions, TestIndex, UnusedInfo,
+    Definition, DefinitionBody, EmitInput, EqualityIndex, File, ModuleId, MutationInfo,
+    ResolvedDefinitions, TestIndex, UnusedInfo,
 };
 use syntax::types::{Symbol, Type};
 use types::go_type::GoType;
@@ -222,7 +222,6 @@ pub struct TestEmitConfig<'a> {
     pub go_package_names: &'a HashMap<String, String>,
     pub go_module_ids: &'a HashSet<String>,
     pub bound_types: &'a HashMap<Span, Type>,
-    pub generic_constraints: &'a GenericConstraintsByDefinition,
     pub resolved_definitions: &'a ResolvedDefinitions,
 }
 
@@ -392,7 +391,6 @@ impl<'a> Planner<'a> {
             go_package_names: config.go_package_names,
             go_module_ids: config.go_module_ids,
             bound_types: config.bound_types,
-            generic_constraints: config.generic_constraints,
             resolved_definitions: config.resolved_definitions,
             entry_module: config.module_id.to_string(),
             go_module: config.go_module.to_string(),
@@ -654,7 +652,6 @@ fn emit_module<'a>(
         go_package_names: &analysis.go_package_names,
         go_module_ids: &analysis.go_module_ids,
         bound_types: &analysis.bound_types,
-        generic_constraints: &analysis.generic_constraints,
         resolved_definitions: &analysis.resolved_definitions,
         entry_module: analysis.entry_module_id.to_string(),
         go_module: go_module.to_string(),

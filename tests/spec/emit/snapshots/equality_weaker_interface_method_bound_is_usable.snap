@@ -32,10 +32,7 @@ type Child interface {
 	c()
 }
 
-type Box[T interface {
-	Child
-	Parent
-}] struct {
+type Box[T Child] struct {
 	value T
 }
 

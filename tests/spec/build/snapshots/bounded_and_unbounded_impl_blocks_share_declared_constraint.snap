@@ -10,12 +10,12 @@ type Printable interface {
 	ToString() string
 }
 
-type Box[T any] struct {
+type Box[T Printable] struct {
 	value T
 }
 
-func Box_print[T Printable](self Box[T]) {
-	fmt.Println(self.value.ToString())
+func (b Box[T]) print() {
+	fmt.Println(b.value.ToString())
 }
 
 func (b Box[T]) get() T {
@@ -32,7 +32,6 @@ func (n Name) ToString() string {
 
 func main() {
 	b := Box[Name]{value: Name{name: "Alice"}}
-	Box_print(b)
-	b2 := Box[int]{value: 42}
-	fmt.Printf("int box: %d\n", b2.get())
+	b.print()
+	fmt.Println(b.get().ToString())
 }

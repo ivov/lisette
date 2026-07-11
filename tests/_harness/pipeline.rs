@@ -1,7 +1,10 @@
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use diagnostics::{LisetteDiagnostic, LocalSink};
-use semantics::{checker::TaskState, checker::infer::InferCtx, store::Store};
+use semantics::{
+    call_classification::compute_module_ufcs, checker::TaskState, checker::infer::InferCtx,
+    store::Store,
+};
 use stdlib::{Target, get_go_stdlib_typedef};
 use syntax::{
     ast::Expression,
@@ -9,8 +12,8 @@ use syntax::{
     lex::Lexer,
     parse::Parser,
     program::{
-        Definition, EqualityIndex, File, FileImport, GenericConstraintsByDefinition, MutationInfo,
-        ResolvedDefinitions, UnusedInfo, Visibility,
+        Definition, EqualityIndex, File, FileImport, MutationInfo, ResolvedDefinitions, UnusedInfo,
+        Visibility,
     },
     types::Symbol,
 };
@@ -112,7 +115,6 @@ impl CompiledTest {
             bound_types,
             go_package_names,
             go_module_ids,
-            generic_constraints,
             resolved_definitions,
         ) = {
             let mut checker = TaskState::with_fresh_allocator(&sink);
@@ -180,8 +182,7 @@ impl CompiledTest {
                 let module = store
                     .get_module(TEST_MODULE_ID)
                     .expect("test module must exist");
-                let ufcs_entries =
-                    semantics::call_classification::compute_module_ufcs(module, TEST_MODULE_ID);
+                let ufcs_entries = compute_module_ufcs(module);
                 checker.ufcs_methods.extend(ufcs_entries);
             }
 
@@ -265,18 +266,6 @@ impl CompiledTest {
                 }
             }
 
-            store.store_file(
-                TEST_MODULE_ID,
-                File::new(
-                    TEST_MODULE_ID,
-                    "test.lis",
-                    "test.lis",
-                    "",
-                    typed_ast.clone(),
-                    test_file_id,
-                ),
-            );
-
             let definitions: HashMap<Symbol, Definition> = store
                 .modules
                 .values()
@@ -303,12 +292,6 @@ impl CompiledTest {
                 }
             }
 
-            let generic_constraints = if checker.failed() {
-                Default::default()
-            } else {
-                passes::collect_generic_constraints(&store, &checker.ufcs_methods, &unused)
-            };
-
             let ufcs_methods = std::mem::take(&mut checker.ufcs_methods);
             let equality_index = std::mem::take(&mut store.equality_index);
             let bound_types = std::mem::take(&mut checker.facts.bound_types);
@@ -332,7 +315,6 @@ impl CompiledTest {
                 bound_types,
                 go_package_names,
                 go_module_ids,
-                generic_constraints,
                 resolved_definitions,
             )
         };
@@ -350,7 +332,6 @@ impl CompiledTest {
             bound_types,
             go_package_names,
             go_module_ids,
-            generic_constraints,
             resolved_definitions,
         }
     }
@@ -369,7 +350,6 @@ pub struct InferenceResult {
     pub bound_types: HashMap<syntax::ast::Span, syntax::types::Type>,
     pub go_package_names: HashMap<String, String>,
     pub go_module_ids: HashSet<String>,
-    pub generic_constraints: GenericConstraintsByDefinition,
     pub resolved_definitions: ResolvedDefinitions,
 }
 

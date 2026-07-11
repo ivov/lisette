@@ -277,13 +277,49 @@ fn array_deep_alias_cast_peels_element() {
 }
 
 #[test]
-fn generic_array_map_key_infers_comparable() {
-    infer("fn f<T>(m: Map<Array<T, 2>, int>) -> int { m.length() }").assert_no_errors();
+fn generic_array_map_key_requires_comparable_bound() {
+    infer("fn f<T>(m: Map<Array<T, 2>, int>) {}").assert_infer_code_once("missing_map_key_bound");
 }
 
 #[test]
 fn bounded_generic_array_map_key_is_allowed() {
     infer("fn f<T: Comparable>(m: Map<Array<T, 2>, int>) -> int { m.length() }").assert_no_errors();
+}
+
+#[test]
+fn inferred_generic_map_key_requires_comparable_bound() {
+    infer("fn f<T>() { Map.new<T, int>() }").assert_infer_code_once("missing_map_key_bound");
+}
+
+#[test]
+fn late_inferred_generic_map_key_requires_comparable_bound() {
+    infer(
+        r#"
+fn f<T>(key: T) {
+  let mut values = Map.new()
+  values[key] = 1
+}
+        "#,
+    )
+    .assert_infer_code_once("missing_map_key_bound");
+}
+
+#[test]
+fn late_inferred_bounded_map_key_is_allowed() {
+    infer(
+        r#"
+fn f<T: Comparable>(key: T) {
+  let mut values = Map.new()
+  values[key] = 1
+}
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn interface_like_map_key_component_does_not_hide_missing_bound() {
+    infer("fn f<T>(m: Map<(Unknown, T), int>) {}").assert_infer_code_once("missing_map_key_bound");
 }
 
 #[test]

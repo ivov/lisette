@@ -2,7 +2,7 @@
 source: tests/spec/emit/types.rs
 description: |
   
-  interface Store<K, V> {
+  interface Store<K: Comparable, V> {
     fn entries(self) -> Map<K, V>
   }
 ---

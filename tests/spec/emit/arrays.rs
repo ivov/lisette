@@ -197,7 +197,7 @@ fn count(m: Map<Array<int, 2>, string>) -> int {
 #[test]
 fn generic_array_map_key_renders_comparable_bound() {
     let input = r#"
-fn count<T>(m: Map<Array<T, 2>, int>) -> int {
+fn count<T: Comparable>(m: Map<Array<T, 2>, int>) -> int {
   m.length()
 }
 "#;
@@ -209,7 +209,7 @@ fn alias_over_array_map_key_renders_comparable_bound() {
     let input = r#"
 type Key<T> = Array<T, 2>
 
-fn f<T>(m: Map<Key<T>, int>) -> int {
+fn f<T: Comparable>(m: Map<Key<T>, int>) -> int {
   m.length()
 }
 "#;
@@ -223,7 +223,7 @@ struct Key<T> {
   value: Array<T, 2>,
 }
 
-fn f<T>(m: Map<Key<T>, int>) -> int {
+fn f<T: Comparable>(m: Map<Key<T>, int>) -> int {
   m.length()
 }
 "#;
@@ -245,13 +245,13 @@ fn f<T>(m: Map<Phantom<T>, int>) -> int {
 }
 
 #[test]
-fn nested_array_map_key_propagates_comparable_bound() {
+fn nested_array_map_key_uses_declared_comparable_bounds() {
     let input = r#"
-struct Box<K> {
+struct Box<K: Comparable> {
   table: Map<K, int>,
 }
 
-fn f<T>(b: Box<Array<T, 2>>) -> int {
+fn f<T: Comparable>(b: Box<Array<T, 2>>) -> int {
   b.table.length()
 }
 "#;

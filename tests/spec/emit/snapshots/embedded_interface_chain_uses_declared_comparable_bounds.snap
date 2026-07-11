@@ -2,12 +2,16 @@
 source: tests/spec/emit/types.rs
 description: |
   
-  interface A<K> {
+  interface A<K: Comparable> {
     fn get(self, m: Map<K, int>) -> int
   }
   
-  interface B<K> {
+  interface B<K: Comparable> {
     embed A<K>
+  }
+  
+  interface C<K: Comparable> {
+    embed B<K>
   }
   
   fn main() { let _ = 0 }
@@ -20,6 +24,10 @@ type A[K comparable] interface {
 
 type B[K comparable] interface {
 	A[K]
+}
+
+type C[K comparable] interface {
+	B[K]
 }
 
 func main() {}

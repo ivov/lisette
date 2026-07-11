@@ -6,7 +6,7 @@ description: |
     fn display(self) -> string
   }
   
-  struct Labeled<T> {
+  struct Labeled<T: Displayable> {
     label: string,
     value: T,
   }

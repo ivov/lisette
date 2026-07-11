@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Missing map key bound
+   ╭─[test.lis:2:16]
+ 1 │ 
+ 2 │ fn count<K>(m: Map<K, int>) -> int {
+   ·                ─────┬─────
+   ·                     ╰── `K` reaches this map key without `Comparable`
+ 3 │   m.length()
+   ╰────
+  help: Map keys must be comparable. Add the bound where `K` is declared: `<K: Comparable>` · code: [infer.missing_map_key_bound]

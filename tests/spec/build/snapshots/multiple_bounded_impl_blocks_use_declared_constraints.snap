@@ -14,18 +14,21 @@ type Summable interface {
 	SumVal() int
 }
 
-type Container[T any] struct {
+type Container[T interface {
+	Printable
+	Summable
+}] struct {
 	value T
 	label string
 }
 
-func Container_display[T Printable](self Container[T]) string {
-	_fmtarg_1 := self.label
-	return fmt.Sprintf("[%s] %s", _fmtarg_1, self.value.PrintVal())
+func (c Container[T]) display() string {
+	_fmtarg_1 := c.label
+	return fmt.Sprintf("[%s] %s", _fmtarg_1, c.value.PrintVal())
 }
 
-func Container_total[T Summable](self Container[T]) int {
-	return self.value.SumVal()
+func (c Container[T]) total() int {
+	return c.value.SumVal()
 }
 
 type Item struct {
@@ -49,6 +52,6 @@ func main() {
 		},
 		label: "box",
 	}
-	fmt.Println(Container_display(c))
-	fmt.Printf("total: %d\n", Container_total(c))
+	fmt.Println(c.display())
+	fmt.Printf("total: %d\n", c.total())
 }

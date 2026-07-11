@@ -2,9 +2,9 @@
 source: tests/spec/emit/types.rs
 description: |
   
-  type Table<T> = Map<T, int>
+  type Table<T: Comparable> = Map<T, int>
   
-  interface Uses<T> {
+  interface Uses<T: Comparable> {
     fn id(self, table: Table<T>) -> Table<T>
   }
   

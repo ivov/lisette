@@ -2,9 +2,9 @@
 source: tests/spec/emit/types.rs
 description: |
   
-  type Table<T> = Map<T, int>
+  type Table<T: Comparable> = Map<T, int>
   
-  struct Box<T> {
+  struct Box<T: Comparable> {
     table: Table<T>,
   }
   

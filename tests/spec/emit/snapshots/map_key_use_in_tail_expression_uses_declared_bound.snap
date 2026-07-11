@@ -2,7 +2,7 @@
 source: tests/spec/emit/types.rs
 description: |
   
-  fn is_empty<T>() -> bool {
+  fn is_empty<T: Comparable>() -> bool {
     Map.new<T, int>().is_empty()
   }
   

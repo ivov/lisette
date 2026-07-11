@@ -110,21 +110,14 @@ pub struct EqualityIndex {
 }
 
 #[derive(Debug, Clone)]
-pub enum EqualityInfo {
+enum EqualityInfo {
     Method {
         private_to_module: Option<String>,
         synthesized: bool,
     },
-    Unusable {
-        reason: EqualityUnusableReason,
+    UfcsLowered {
         private_to_module: Option<String>,
     },
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum EqualityUnusableReason {
-    UfcsLowered,
-    BoundMismatch,
 }
 
 fn visible_from(private_to_module: &Option<String>, current_module: &str) -> bool {
@@ -150,19 +143,9 @@ impl EqualityIndex {
         );
     }
 
-    pub fn insert_unusable(
-        &mut self,
-        id: String,
-        reason: EqualityUnusableReason,
-        private_to_module: Option<String>,
-    ) {
-        self.by_id.insert(
-            id,
-            EqualityInfo::Unusable {
-                reason,
-                private_to_module,
-            },
-        );
+    pub fn insert_ufcs_lowered(&mut self, id: String, private_to_module: Option<String>) {
+        self.by_id
+            .insert(id, EqualityInfo::UfcsLowered { private_to_module });
     }
 
     pub fn usable_from(&self, id: &str, current_module: &str) -> bool {
@@ -173,18 +156,12 @@ impl EqualityIndex {
         )
     }
 
-    pub fn unusable_reason_from(
-        &self,
-        id: &str,
-        current_module: &str,
-    ) -> Option<EqualityUnusableReason> {
-        match self.by_id.get(id) {
-            Some(EqualityInfo::Unusable {
-                reason,
-                private_to_module,
-            }) if visible_from(private_to_module, current_module) => Some(*reason),
-            _ => None,
-        }
+    pub fn is_ufcs_lowered_from(&self, id: &str, current_module: &str) -> bool {
+        matches!(
+            self.by_id.get(id),
+            Some(EqualityInfo::UfcsLowered { private_to_module })
+                if visible_from(private_to_module, current_module)
+        )
     }
 
     pub fn is_synthesized(&self, id: &str) -> bool {
@@ -239,7 +216,6 @@ pub struct EmitInput {
     pub go_package_names: HashMap<String, String>,
     pub go_module_ids: HashSet<String>,
     pub bound_types: HashMap<crate::ast::Span, crate::types::Type>,
-    pub generic_constraints: super::GenericConstraintsByDefinition,
     pub resolved_definitions: super::ResolvedDefinitions,
 }
 

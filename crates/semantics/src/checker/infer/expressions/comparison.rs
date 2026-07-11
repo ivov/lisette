@@ -6,7 +6,7 @@ use crate::checker::infer::InferCtx;
 use crate::checker::scopes::Scopes;
 use crate::store::Store;
 use syntax::ast::{Annotation, Expression, Span};
-use syntax::program::{DefinitionBody, EqualityUnusableReason, Visibility};
+use syntax::program::{DefinitionBody, Visibility};
 use syntax::types::{CompoundKind, Type, build_substitution_map, substitute};
 
 const RECURSIVE_TYPES: &str = "recursive types";
@@ -20,11 +20,47 @@ fn nested_reason(inner: &'static str, wrapper: &'static str) -> &'static str {
 }
 
 pub fn check_not_comparable(env: &TypeEnv, store: &Store, ty: &Type) -> Option<&'static str> {
-    check_not_comparable_impl(env, store, ty, &mut HashSet::default(), false)
+    check_not_comparable_impl(env, store, ty, &mut HashSet::default(), false, &mut |_| {
+        false
+    })
 }
 
 pub fn check_never_comparable(env: &TypeEnv, store: &Store, ty: &Type) -> Option<&'static str> {
-    check_not_comparable_impl(env, store, ty, &mut HashSet::default(), true)
+    check_not_comparable_impl(env, store, ty, &mut HashSet::default(), true, &mut |_| {
+        false
+    })
+}
+
+pub(crate) fn check_not_comparable_with_bounds(
+    env: &TypeEnv,
+    store: &Store,
+    ty: &Type,
+    comparable_parameter: &mut dyn FnMut(&str) -> bool,
+) -> Option<&'static str> {
+    check_not_comparable_impl(
+        env,
+        store,
+        ty,
+        &mut HashSet::default(),
+        false,
+        comparable_parameter,
+    )
+}
+
+pub(crate) fn check_never_comparable_with_bounds(
+    env: &TypeEnv,
+    store: &Store,
+    ty: &Type,
+    comparable_parameter: &mut dyn FnMut(&str) -> bool,
+) -> Option<&'static str> {
+    check_not_comparable_impl(
+        env,
+        store,
+        ty,
+        &mut HashSet::default(),
+        true,
+        comparable_parameter,
+    )
 }
 
 fn check_not_comparable_impl(
@@ -33,6 +69,7 @@ fn check_not_comparable_impl(
     ty: &Type,
     visiting: &mut HashSet<String>,
     definite_only: bool,
+    comparable_parameter: &mut dyn FnMut(&str) -> bool,
 ) -> Option<&'static str> {
     let resolved = store.deep_resolve_alias(ty);
     let ty = &resolved;
@@ -65,10 +102,20 @@ fn check_not_comparable_impl(
     }
 
     if let Some(underlying) = ty.get_underlying() {
-        return check_not_comparable_impl(env, store, underlying, visiting, definite_only);
+        return check_not_comparable_impl(
+            env,
+            store,
+            underlying,
+            visiting,
+            definite_only,
+            comparable_parameter,
+        );
     }
 
-    if matches!(ty, Type::Parameter(_)) {
+    if let Type::Parameter(parameter) = ty {
+        if comparable_parameter(parameter) {
+            return None;
+        }
         return (!definite_only).then_some("type parameters");
     }
 
@@ -101,9 +148,14 @@ fn check_not_comparable_impl(
             DefinitionBody::Struct { fields, .. } => {
                 for f in fields {
                     let field_ty = substitute(&f.ty.resolve_in(env), &sub_map);
-                    if let Some(inner) =
-                        check_not_comparable_impl(env, store, &field_ty, visiting, definite_only)
-                    {
+                    if let Some(inner) = check_not_comparable_impl(
+                        env,
+                        store,
+                        &field_ty,
+                        visiting,
+                        definite_only,
+                        comparable_parameter,
+                    ) {
                         return Some(nested_reason(
                             inner,
                             "a struct containing non-comparable fields",
@@ -121,6 +173,7 @@ fn check_not_comparable_impl(
                             &field_ty,
                             visiting,
                             definite_only,
+                            comparable_parameter,
                         ) {
                             return Some(nested_reason(
                                 inner,
@@ -141,9 +194,14 @@ fn check_not_comparable_impl(
 
     if let Type::Tuple(elems) = ty {
         for e in elems {
-            if let Some(inner) =
-                check_not_comparable_impl(env, store, &e.resolve_in(env), visiting, definite_only)
-            {
+            if let Some(inner) = check_not_comparable_impl(
+                env,
+                store,
+                &e.resolve_in(env),
+                visiting,
+                definite_only,
+                comparable_parameter,
+            ) {
                 return Some(nested_reason(
                     inner,
                     "a tuple containing non-comparable elements",
@@ -160,6 +218,7 @@ fn check_not_comparable_impl(
             &element.resolve_in(env),
             visiting,
             definite_only,
+            comparable_parameter,
         )
     {
         return Some(nested_reason(
@@ -299,23 +358,6 @@ pub(crate) fn type_has_usable_equals(store: &Store, ty: &Type, current_module: &
     store.equality_index.usable_from(qualified, current_module)
 }
 
-fn callable_unusable_equals_reason(
-    store: &Store,
-    ty: &Type,
-    current_module: &str,
-) -> Option<&'static str> {
-    let id = ty.get_qualified_id()?;
-    match store
-        .equality_index
-        .unusable_reason_from(id, current_module)?
-    {
-        EqualityUnusableReason::BoundMismatch => {
-            Some("a type whose `equals` requires stricter bounds")
-        }
-        EqualityUnusableReason::UfcsLowered => Some("a type whose `equals` is not a method"),
-    }
-}
-
 pub(crate) fn check_not_equatable(
     env: &TypeEnv,
     store: &Store,
@@ -335,7 +377,11 @@ pub(crate) fn check_not_equatable(
     }
 
     let Some(reason) = check_not_comparable(env, store, &resolved) else {
-        return callable_unusable_equals_reason(store, &resolved, current_module);
+        let id = resolved.get_qualified_id()?;
+        return store
+            .equality_index
+            .is_ufcs_lowered_from(id, current_module)
+            .then_some("a type whose `equals` is not a method");
     };
 
     match resolved.as_compound() {
@@ -359,12 +405,10 @@ fn map_key_not_comparable(
     comparable_param: &dyn Fn(&str) -> bool,
 ) -> bool {
     let resolved = store.deep_resolve_alias(&key.resolve_in(env));
-    if let Type::Parameter(name) = &resolved
-        && comparable_param(name)
-    {
-        return false;
-    }
-    check_not_comparable(env, store, &resolved).is_some()
+    check_not_comparable_with_bounds(env, store, &resolved, &mut |parameter| {
+        comparable_param(parameter)
+    })
+    .is_some()
 }
 
 pub(crate) fn bound_implied(store: &Store, type_bounds: &[Type], method_bound: &Type) -> bool {
@@ -422,22 +466,6 @@ fn bound_satisfies(store: &Store, start: &Type, target: &Type) -> bool {
     interface_closure_any(store, start, |current| current == &target)
 }
 
-pub(crate) fn bounds_conflict(store: &Store, type_bounds: &[Type], impl_bound: &Type) -> bool {
-    let impl_bound = store.deep_resolve_alias(impl_bound);
-    let Some(impl_base) = impl_bound.get_qualified_id().map(str::to_string) else {
-        return false;
-    };
-    type_bounds
-        .iter()
-        .any(|tb| closure_conflicts(store, tb, &impl_base, &impl_bound))
-}
-
-fn closure_conflicts(store: &Store, start: &Type, target_base: &str, target: &Type) -> bool {
-    interface_closure_any(store, start, |current| {
-        current.get_qualified_id() == Some(target_base) && current != target
-    })
-}
-
 pub(crate) fn param_is_comparable(scopes: &Scopes, env: &TypeEnv, param_name: &str) -> bool {
     let mut found = false;
     scopes.for_each_bound_on_param(param_name, |bound_ty| {
@@ -459,13 +487,10 @@ pub(crate) fn param_is_comparable(scopes: &Scopes, env: &TypeEnv, param_name: &s
 impl InferCtx<'_, '_> {
     fn is_comparable_with_param_bounds(&self, ty: &Type) -> bool {
         let resolved = ty.resolve_in(&self.env);
-        match &resolved {
-            Type::Parameter(name) => {
-                self.parameter_satisfies_bound(name, super::super::unify::BuiltinBound::Comparable)
-            }
-            Type::Array { element, .. } => self.is_comparable_with_param_bounds(element),
-            _ => check_not_comparable(&self.env, self.store, &resolved).is_none(),
-        }
+        check_not_comparable_with_bounds(&self.env, self.store, &resolved, &mut |parameter| {
+            self.parameter_satisfies_bound(parameter, super::super::unify::BuiltinBound::Comparable)
+        })
+        .is_none()
     }
 
     pub(super) fn ensure_comparable(

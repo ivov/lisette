@@ -54,8 +54,7 @@ impl Planner<'_> {
             self.require_module_import(&module);
         }
 
-        let symbol = self.facts.qualified_current(name);
-        let generics_string = self.generics_to_string_for_symbol(&symbol, generics);
+        let generics_string = self.generics_to_string(generics);
 
         let separator = if is_fn_alias { " " } else { " = " };
         format!(

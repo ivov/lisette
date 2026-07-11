@@ -380,7 +380,7 @@ impl Slice<string> {
 ///   let m = Map.new<string, int>()
 ///   m["key"] = 42
 ///   let value = m.get("key").unwrap_or(0)
-type Map<K, V>
+type Map<K: Comparable, V>
 
 impl<K, V> Map<K, V> {
   /// Creates a new empty map.

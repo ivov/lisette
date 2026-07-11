@@ -131,10 +131,6 @@ pub struct TaskState<'s> {
     /// Lets `convert_to_type` admit bound-only markers (e.g. `Comparable`)
     /// without flagging them as misuse in value positions.
     pub bound_position_depth: u32,
-    /// Interface bounds seen per receiver type parameter, keyed by (receiver qualified name,
-    /// parameter position), so `check_conflicting_cross_impl_bounds` can reject two impls
-    /// that instantiate one interface differently on the same parameter.
-    pub impl_param_interface_bounds: HashMap<(EcoString, usize), Vec<(Type, Span)>>,
 }
 
 impl<'s> TaskState<'s> {
@@ -155,7 +151,6 @@ impl<'s> TaskState<'s> {
             ufcs_shared: None,
             typed_files: Vec::new(),
             bound_position_depth: 0,
-            impl_param_interface_bounds: HashMap::default(),
         }
     }
 
@@ -276,11 +271,59 @@ impl<'s> TaskState<'s> {
         generics: &[Generic],
         span: &Span,
     ) {
-        for g in generics {
-            for b in &g.bounds {
-                self.register_bound_annotation(store, b, span);
+        for generic in generics {
+            for bound in &generic.bounds {
+                self.register_generic_bound(store, &generic.name, bound, span);
             }
         }
+    }
+
+    pub(crate) fn register_generic_bound(
+        &mut self,
+        store: &Store,
+        parameter: &str,
+        bound: &Annotation,
+        span: &Span,
+    ) -> Type {
+        let bound_ty = self.register_bound_annotation(store, bound, span);
+        self.record_generic_bound(parameter, bound_ty.clone());
+        bound_ty
+    }
+
+    pub(crate) fn record_generic_bound(&mut self, parameter: &str, bound: Type) {
+        let qualified_parameter = self.qualify_name(parameter);
+        let bounds = self
+            .scopes
+            .current_mut()
+            .trait_bounds
+            .get_or_insert_with(HashMap::default)
+            .entry(qualified_parameter)
+            .or_default();
+        if !bounds.contains(&bound) {
+            bounds.push(bound);
+        }
+    }
+
+    pub(crate) fn parameter_satisfies_bound(
+        &self,
+        parameter: &str,
+        target: infer::BuiltinBound,
+    ) -> bool {
+        let mut found = false;
+        self.scopes.for_each_bound_on_param(parameter, |bound_ty| {
+            if found {
+                return;
+            }
+            if let Some(declared) = bound_ty
+                .resolve_in(&self.env)
+                .get_qualified_id()
+                .and_then(infer::BuiltinBound::from_qualified_id)
+                && declared.satisfies(target)
+            {
+                found = true;
+            }
+        });
+        found
     }
 
     pub(crate) fn register_bound_annotation(

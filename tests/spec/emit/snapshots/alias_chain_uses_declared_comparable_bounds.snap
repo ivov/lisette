@@ -2,10 +2,10 @@
 source: tests/spec/emit/types.rs
 description: |
   
-  type B<T> = Map<T, int>
-  type A<T> = B<T>
+  type B<T: Comparable> = Map<T, int>
+  type A<T: Comparable> = B<T>
   
-  struct Box<T> {
+  struct Box<T: Comparable> {
     table: A<T>,
   }
   

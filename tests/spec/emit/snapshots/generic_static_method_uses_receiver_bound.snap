@@ -1,0 +1,31 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  struct Box<T: Comparable> { value: T }
+  
+  impl<U> Box<U> {
+    fn new(value: U) -> Box<U> {
+      Box { value: value }
+    }
+  }
+  
+  fn main() -> int {
+    let b = Box.new(42)
+    b.value
+  }
+---
+package main
+
+type Box[T comparable] struct {
+	value T
+}
+
+func Box_new[U comparable](value U) Box[U] {
+	return Box[U]{value: value}
+}
+
+func main() int {
+	b := Box_new(42)
+	return b.value
+}

@@ -2,7 +2,7 @@
 source: tests/spec/emit/types.rs
 description: |
   
-  struct Box<T> { value: T }
+  struct Box<T: Ordered> { value: T }
   
   impl<U: Ordered> Box<U> {
     fn less(self, other: Box<U>) -> bool {

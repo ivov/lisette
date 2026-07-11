@@ -2,7 +2,7 @@
 source: tests/spec/emit/functions.rs
 description: |
   
-  fn use_map_in_task<K, V>(key: K, value: V) {
+  fn use_map_in_task<K: Comparable, V>(key: K, value: V) {
     task {
       let mut m: Map<K, V> = Map.new()
       m[key] = value

@@ -16,14 +16,15 @@ description: |
     }
   }
   
-  fn count<T: Named>(x: T) -> int {
-    let mut m: Map<T, int> = Map.new()
-    m[x] = 1
-    m.length()
+  struct Box<T: Named + Comparable> {
+    table: Map<T, int>,
   }
   
   fn main() {
-    let _ = count(Person { value: "Ada" })
+    let p = Person { value: "Ada" }
+    let _ = p.name()
+    let b: Box<Person> = Box { table: Map.new() }
+    let _ = b
   }
 ---
 package main
@@ -40,15 +41,16 @@ func (p Person) name() string {
 	return p.value
 }
 
-func count[T interface {
+type Box[T interface {
 	Named
 	comparable
-}](x T) int {
-	m := make(map[T]int)
-	m[x] = 1
-	return len(m)
+}] struct {
+	table map[T]int
 }
 
 func main() {
-	_ = count(Person{value: "Ada"})
+	p := Person{value: "Ada"}
+	_ = p.name()
+	b := Box[Person]{table: make(map[Person]int)}
+	_ = b
 }

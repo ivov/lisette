@@ -2,19 +2,20 @@
 source: tests/spec/emit/types.rs
 description: |
   
-  struct Box<T> {
+  struct Box<T: Comparable> {
     value: T,
   }
   
-  impl<T> Box<T> {
-    fn make_map(self) -> Map<T, int> {
-      Map.new<T, int>()
+  impl<T: Comparable> Box<T> {
+    fn count(self) -> int {
+      let m = Map.new<T, int>()
+      m.length()
     }
   }
   
   fn main() {
     let b = Box { value: "a" }
-    let _ = b.make_map()
+    let _ = b.count()
   }
 ---
 package main
@@ -23,11 +24,12 @@ type Box[T comparable] struct {
 	value T
 }
 
-func (b Box[T]) make_map() map[T]int {
-	return make(map[T]int)
+func (b Box[T]) count() int {
+	m := make(map[T]int)
+	return len(m)
 }
 
 func main() {
 	b := Box[string]{value: "a"}
-	_ = b.make_map()
+	_ = b.count()
 }

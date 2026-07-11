@@ -1,14 +1,12 @@
-use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
+use rustc_hash::FxHashSet as HashSet;
 
 use syntax::EcoString;
 use syntax::ast::{Attribute, Expression, Generic, Span, VariantFields};
-use syntax::program::{Definition, DefinitionBody, EqualityUnusableReason};
-use syntax::types::{Symbol, Type, substitute};
+use syntax::program::{Definition, DefinitionBody};
+use syntax::types::{Symbol, Type};
 
 use super::{TaskState, wrap_with_impl_generics};
-use crate::checker::infer::expressions::comparison::{
-    bound_implied, check_not_equatable, param_is_comparable,
-};
+use crate::checker::infer::expressions::comparison::{check_not_equatable, param_is_comparable};
 use crate::store::Store;
 
 fn equals_visibility(store: &Store, id: &str) -> Option<String> {
@@ -23,8 +21,8 @@ fn equals_visibility(store: &Store, id: &str) -> Option<String> {
 enum UserEquals {
     /// No `equals`: gate the fields and synthesize.
     None,
-    /// A valid full-type override (its type variables, for the bound comparison).
-    ValidReceiver(Vec<EcoString>),
+    /// A valid full-type override.
+    ValidReceiver,
     /// A partial or concrete receiver (`impl Box<int>`, `impl<T> Pair<T, T>`) or extra
     /// generics: does not cover every instantiation, so it cannot derive equality.
     Specialized,
@@ -61,37 +59,6 @@ impl TaskState<'_> {
         for candidate in candidates {
             self.process_equality_candidate(store, module_id, candidate);
         }
-    }
-
-    fn collect_bound_mismatched_equals(&mut self, store: &Store, module_id: &str) -> Vec<String> {
-        let candidates: Vec<(Symbol, Vec<EcoString>)> = {
-            let module = store.get_module(module_id).expect("module must exist");
-            module
-                .definitions
-                .iter()
-                .filter_map(|(qualified, definition)| {
-                    let (methods, arity) = match &definition.body {
-                        DefinitionBody::Struct {
-                            methods, generics, ..
-                        }
-                        | DefinitionBody::Enum {
-                            methods, generics, ..
-                        } => (methods, generics.len()),
-                        _ => return None,
-                    };
-                    let method_ty = methods.get("equals")?;
-                    let vars = method_ty.equals_receiver_vars(qualified.as_str(), arity)?;
-                    Some((qualified.clone(), vars))
-                })
-                .collect()
-        };
-        let mut mismatched = Vec::new();
-        for (qualified, vars) in &candidates {
-            if self.equals_bounds_mismatch(store, qualified, vars) {
-                mismatched.push(qualified.to_string());
-            }
-        }
-        mismatched
     }
 
     fn process_equality_candidate(
@@ -142,21 +109,13 @@ impl TaskState<'_> {
         }
 
         match user_equals(store, &qualified) {
-            UserEquals::ValidReceiver(vars) => {
+            UserEquals::ValidReceiver => {
                 if self.is_ufcs_method(qualified.as_str(), "equals") {
                     self.sink
                         .push(diagnostics::attribute::equality_specialized_equals(
                             &attribute_span,
                         ));
                     return;
-                }
-                if self.equals_bounds_mismatch(store, &qualified, &vars)
-                    && !store.bound_conflict_types.contains(qualified.as_str())
-                {
-                    self.sink
-                        .push(diagnostics::attribute::equality_bounded_equals(
-                            &attribute_span,
-                        ));
                 }
                 return;
             }
@@ -261,17 +220,9 @@ impl TaskState<'_> {
         self.scopes.push();
         self.put_in_scope(&generics);
         let before = self.sink.len();
-        for g in &generics {
-            let qualified_g = self.qualify_name(&g.name);
-            for bound in &g.bounds {
-                let bound_ty = self.register_bound_annotation(store, bound, &g.span);
-                self.scopes
-                    .current_mut()
-                    .trait_bounds
-                    .get_or_insert_with(HashMap::default)
-                    .entry(qualified_g.clone())
-                    .or_default()
-                    .push(bound_ty);
+        for generic in &generics {
+            for bound in &generic.bounds {
+                self.register_generic_bound(store, &generic.name, bound, &generic.span);
             }
         }
         self.sink.truncate(before);
@@ -292,11 +243,6 @@ impl TaskState<'_> {
     }
 
     fn record_equality_index(&mut self, store: &mut Store) {
-        let module_ids: Vec<String> = store.modules.keys().cloned().collect();
-        let bound_mismatch: HashSet<String> = module_ids
-            .iter()
-            .flat_map(|module_id| self.collect_bound_mismatched_equals(store, module_id))
-            .collect();
         let synthesized: HashSet<String> =
             self.facts.equality_derivations.iter().cloned().collect();
 
@@ -318,24 +264,16 @@ impl TaskState<'_> {
             let id_str = id.as_str();
             let visibility = equals_visibility(store, id_str);
             let classification = user_equals(store, &id);
-            if bound_mismatch.contains(id_str) {
-                store.equality_index.insert_unusable(
-                    id.to_string(),
-                    EqualityUnusableReason::BoundMismatch,
-                    visibility,
-                );
-            } else if self.is_ufcs_method(id_str, "equals")
+            if self.is_ufcs_method(id_str, "equals")
                 && matches!(
                     classification,
-                    UserEquals::ValidReceiver(_) | UserEquals::Specialized
+                    UserEquals::ValidReceiver | UserEquals::Specialized
                 )
             {
-                store.equality_index.insert_unusable(
-                    id.to_string(),
-                    EqualityUnusableReason::UfcsLowered,
-                    visibility,
-                );
-            } else if matches!(classification, UserEquals::ValidReceiver(_)) {
+                store
+                    .equality_index
+                    .insert_ufcs_lowered(id.to_string(), visibility);
+            } else if matches!(classification, UserEquals::ValidReceiver) {
                 store.equality_index.insert_method(
                     id.to_string(),
                     visibility,
@@ -343,65 +281,6 @@ impl TaskState<'_> {
                 );
             }
         }
-    }
-
-    fn equals_bounds_mismatch(
-        &mut self,
-        store: &Store,
-        qualified: &Symbol,
-        vars: &[EcoString],
-    ) -> bool {
-        let Some(definition) = store.get_definition(qualified.as_str()) else {
-            return false;
-        };
-        let (generics, method_ty) = match &definition.body {
-            DefinitionBody::Struct {
-                generics, methods, ..
-            }
-            | DefinitionBody::Enum {
-                generics, methods, ..
-            } => {
-                let Some(method) = methods.get("equals") else {
-                    return false;
-                };
-                (generics.clone(), method.clone())
-            }
-            _ => return false,
-        };
-        if generics.is_empty() {
-            return false;
-        }
-        let method_bounds = method_bounds_by_var(store, &method_ty);
-        let empty: Vec<Type> = Vec::new();
-        let alpha: HashMap<EcoString, Type> = vars
-            .iter()
-            .zip(&generics)
-            .map(|(var, generic)| (var.clone(), Type::Parameter(generic.name.clone())))
-            .collect();
-
-        self.scopes.push();
-        self.put_in_scope(&generics);
-        let before = self.sink.len();
-        let mut mismatch = false;
-        for (position, generic) in generics.iter().enumerate() {
-            let mut type_bounds: Vec<Type> = Vec::new();
-            for bound in &generic.bounds {
-                if let Some(ty) = self.resolve_type_bound(store, bound, &generic.span, qualified) {
-                    type_bounds.push(ty);
-                }
-            }
-            let method_set = method_bounds.get(&vars[position]).unwrap_or(&empty);
-            if !method_set
-                .iter()
-                .all(|mb| bound_implied(store, &type_bounds, &substitute(mb, &alpha)))
-            {
-                mismatch = true;
-                break;
-            }
-        }
-        self.sink.truncate(before);
-        self.scopes.pop();
-        mismatch
     }
 
     fn type_generic_bounds(
@@ -487,26 +366,6 @@ impl TaskState<'_> {
     }
 }
 
-/// The bounds a method type carries, keyed by its type-variable name.
-fn method_bounds_by_var(store: &Store, method_ty: &Type) -> HashMap<EcoString, Vec<Type>> {
-    let func = match method_ty {
-        Type::Forall { body, .. } => body.as_ref(),
-        other => other,
-    };
-    let mut map: HashMap<EcoString, Vec<Type>> = HashMap::default();
-    if let Type::Function(f) = func {
-        for bound in &f.bounds {
-            let resolved = store.deep_resolve_alias(&bound.ty);
-            if resolved.get_qualified_id().is_some() {
-                map.entry(bound.param_name.clone())
-                    .or_default()
-                    .push(resolved);
-            }
-        }
-    }
-    map
-}
-
 fn is_tuple_struct(store: &Store, qualified: &Symbol) -> bool {
     matches!(
         store.get_definition(qualified.as_str()).map(|d| &d.body),
@@ -548,8 +407,11 @@ fn user_equals(store: &Store, qualified: &Symbol) -> UserEquals {
     let Some(method_ty) = methods.get("equals") else {
         return UserEquals::None;
     };
-    if let Some(vars) = method_ty.equals_receiver_vars(qualified.as_str(), generics_len) {
-        UserEquals::ValidReceiver(vars)
+    if method_ty
+        .equals_receiver_vars(qualified.as_str(), generics_len)
+        .is_some()
+    {
+        UserEquals::ValidReceiver
     } else if method_ty.is_equals_signature() {
         UserEquals::Specialized
     } else {

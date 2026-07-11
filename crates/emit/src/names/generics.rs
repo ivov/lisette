@@ -5,8 +5,7 @@ use rustc_hash::FxHashMap as HashMap;
 use crate::Planner;
 use crate::names::go_name;
 use syntax::EcoString;
-use syntax::ast::{Annotation, Generic};
-use syntax::program::{GenericConstraint, GenericConstraints};
+use syntax::ast::Generic;
 use syntax::types::Type;
 
 fn build_type_map(generics: &[Generic], type_args: &[Type]) -> HashMap<EcoString, Type> {
@@ -49,65 +48,64 @@ impl Planner<'_> {
         }
     }
 
-    pub(crate) fn generics_to_string_for_symbol(
+    pub(crate) fn generics_to_string(&mut self, generics: &[Generic]) -> String {
+        let resolved_generics = generics
+            .iter()
+            .map(|generic| {
+                let bounds = generic
+                    .bounds
+                    .iter()
+                    .map(|bound| {
+                        self.facts
+                            .resolved_bound_type(bound.get_span())
+                            .cloned()
+                            .expect("checker records a resolved type for every generic bound")
+                    })
+                    .collect::<Vec<_>>();
+                (generic.name.clone(), bounds)
+            })
+            .collect::<Vec<_>>();
+        self.resolved_generics_to_string(&resolved_generics)
+    }
+
+    pub(crate) fn resolved_generics_to_string(
         &mut self,
-        symbol: &str,
-        generics: &[Generic],
+        generics: &[(EcoString, Vec<Type>)],
     ) -> String {
         if generics.is_empty() {
             return String::new();
         }
-        let constraints = self
-            .facts
-            .generic_constraints
-            .get(symbol)
-            .expect("passes records constraints for every emitted generic definition");
 
         let rendered = generics
             .iter()
-            .map(|g| {
-                let constraints = constraints
-                    .iter()
-                    .find(|constraints| constraints.parameter == g.name)
-                    .expect("generic constraints preserve every generic parameter");
-                let constraint = self.render_constraint(constraints);
-                format!("{} {}", self.generic_go_name(&g.name), constraint)
+            .map(|(name, bounds)| {
+                let constraint = self.render_bounds(bounds);
+                format!("{} {}", self.generic_go_name(name), constraint)
             })
             .collect::<Vec<_>>()
             .join(", ");
 
-        format!("[{}]", rendered)
+        format!("[{rendered}]")
     }
 
-    fn render_constraint(&mut self, constraints: &GenericConstraints) -> String {
-        // `Ordered` already implies `Comparable`; never double up.
-        let needs_comparable_appendage = constraints.inferred_comparable
-            && !constraints.explicit.iter().any(|constraint| {
-                matches!(
-                    constraint,
-                    GenericConstraint::Comparable | GenericConstraint::Ordered
-                )
-            });
-
+    fn render_bounds(&mut self, bounds: &[Type]) -> String {
+        let has_ordered = bounds.iter().any(is_ordered_bound);
         let mut named_bounds: Vec<String> = Vec::new();
-        let mut comparable_seen = false;
-        for constraint in &constraints.explicit {
-            match constraint {
-                GenericConstraint::Comparable => {
-                    comparable_seen = true;
+        for bound in bounds {
+            let rendered = if is_comparable_bound(bound) {
+                if has_ordered {
+                    continue;
                 }
-                GenericConstraint::Ordered => {
-                    self.require_cmp();
-                    named_bounds.push("cmp.Ordered".to_string());
-                }
-                GenericConstraint::Named(annotation) => {
-                    named_bounds.push(self.named_bound_go_type(annotation));
-                }
+                "comparable".to_string()
+            } else if is_ordered_bound(bound) {
+                self.require_cmp();
+                "cmp.Ordered".to_string()
+            } else {
+                self.go_type_string(bound)
+            };
+            if !named_bounds.contains(&rendered) {
+                named_bounds.push(rendered);
             }
-        }
-
-        if needs_comparable_appendage || comparable_seen {
-            named_bounds.push("comparable".to_string());
         }
 
         match named_bounds.as_slice() {
@@ -116,15 +114,17 @@ impl Planner<'_> {
             multiple => format!("interface {{ {} }}", multiple.join("; ")),
         }
     }
+}
 
-    fn named_bound_go_type(&mut self, annotation: &Annotation) -> String {
-        let resolved = self
-            .facts
-            .resolved_bound_type(annotation.get_span())
-            .cloned()
-            .expect("checker records a resolved type for every generic bound");
-        self.go_type_string(&resolved)
-    }
+fn is_comparable_bound(bound: &Type) -> bool {
+    bound.get_qualified_id() == Some("prelude.Comparable")
+}
+
+fn is_ordered_bound(bound: &Type) -> bool {
+    matches!(
+        bound.get_qualified_id(),
+        Some("prelude.Ordered" | "go:cmp.Ordered")
+    )
 }
 
 pub(crate) fn extract_type_mapping(

@@ -2984,6 +2984,19 @@ pub fn non_comparable_map_key(key_ty: &Type, reason: &str, span: Span) -> Lisett
         ))
 }
 
+pub fn missing_map_key_bound(parameter: &str, span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Missing map key bound")
+        .with_infer_code("missing_map_key_bound")
+        .with_span_label(
+            &span,
+            format!("`{parameter}` reaches this map key without `Comparable`"),
+        )
+        .with_help(format!(
+            "Map keys must be comparable. Add the bound where `{parameter}` is declared: \
+             `<{parameter}: Comparable>`"
+        ))
+}
+
 pub fn ref_of_interface_type(inner_ty: &Type, span: Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Invalid use of `Ref` with interface")
         .with_infer_code("ref_of_interface")
@@ -3063,31 +3076,15 @@ pub fn impl_on_foreign_type(type_name: &str, module_name: &str, span: Span) -> L
         ))
 }
 
-pub fn impl_bound_conflicts_with_type(
-    interface: &str,
-    type_name: &str,
-    span: Span,
-) -> LisetteDiagnostic {
-    LisetteDiagnostic::error("Conflicting impl bound")
-        .with_infer_code("impl_bound_conflicts_with_type")
-        .with_span_label(&span, "this bound cannot strengthen the receiver type")
+pub fn impl_bound_strengthens_type(type_name: &str, span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("`impl` cannot strengthen receiver bounds")
+        .with_infer_code("impl_bound_strengthens_type")
+        .with_span_label(
+            &span,
+            format!("this bound is not guaranteed by `{type_name}`'s declaration"),
+        )
         .with_help(format!(
-            "`{type_name}` already bounds this parameter with a different `{interface}` instantiation. A receiver method would embed `{interface}` twice, and no type argument satisfies both. Match the type's bound, or relax the type's declaration."
-        ))
-}
-
-pub fn conflicting_impl_interface_instantiations(
-    interface: &str,
-    type_name: &str,
-    span: Span,
-    earlier: Span,
-) -> LisetteDiagnostic {
-    LisetteDiagnostic::error("Conflicting interface bounds")
-        .with_infer_code("conflicting_impl_interface_instantiations")
-        .with_span_label(&span, "one impl instantiates it differently here")
-        .with_span_label(&earlier, "one impl instantiates it here")
-        .with_help(format!(
-            "Two impls instantiate `{interface}` differently for the same parameter of `{type_name}`. A receiver method folds its bound onto the type, so Go would embed `{interface}` twice. Use one instantiation, or split `{type_name}` into separate types."
+            "Declare this bound on `{type_name}`, or remove it from the `impl`"
         ))
 }
 

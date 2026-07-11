@@ -22,8 +22,7 @@ impl Planner<'_> {
         kind: &StructKind,
         struct_attrs: &[Attribute],
     ) -> String {
-        let symbol = self.facts.qualified_current(name);
-        let generics_string = self.generics_to_string_for_symbol(&symbol, generics);
+        let generics_string = self.generics_to_string(generics);
 
         if *kind == StructKind::Tuple {
             return self.emit_tuple_struct(name, &generics_string, fields, generics, struct_attrs);

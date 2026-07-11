@@ -7,6 +7,6 @@ source: tests/ui/errors/mod.rs
  6 │ impl<T: Parent<string>> Box<T> {
    ·         ───────┬──────
    ·                ╰── this bound is not guaranteed by `Box`'s declaration
- 7 │   fn label(self) -> string {
+ 7 │   fn less(self, _other: Box<T>) -> bool {
    ╰────
   help: Declare this bound on `Box`, or remove it from the `impl` · code: [infer.impl_bound_strengthens_type]

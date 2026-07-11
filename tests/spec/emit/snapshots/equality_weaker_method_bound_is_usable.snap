@@ -15,10 +15,7 @@ package main
 
 import "cmp"
 
-type Box[T interface {
-	cmp.Ordered
-	comparable
-}] struct {
+type Box[T cmp.Ordered] struct {
 	value T
 }
 

@@ -69,7 +69,7 @@ fn lis(project: &Path, subcommand: &str) -> std::process::Output {
         .expect("failed to invoke lisette")
 }
 
-const BOUND_MISMATCHED_BOX: &str = r#"
+const STRENGTHENED_IMPL_BOX: &str = r#"
 pub struct Box<T: Comparable> { pub items: Slice<T> }
 
 impl<T: Ordered> Box<T> {
@@ -79,14 +79,17 @@ impl<T: Ordered> Box<T> {
 }
 "#;
 
-const WRAP_OVER_BOX: &str = r#"
-import "box"
-
-#[equality]
-pub struct Wrap { pub box: box.Box<int> }
+const CONSTRAINED_MAP_BOX: &str = r#"
+pub struct Box<T: Comparable> { pub values: Map<T, int> }
 "#;
 
-fn assert_rejected_at_check(output: &std::process::Output) {
+const UNBOUNDED_WRAP: &str = r#"
+import "box"
+
+pub struct Wrap<T> { pub value: box.Box<T> }
+"#;
+
+fn assert_rejected_at_check(output: &std::process::Output, expected: &str) {
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
@@ -95,8 +98,8 @@ fn assert_rejected_at_check(output: &std::process::Output) {
     );
     let combined = format!("{stdout}{stderr}");
     assert!(
-        combined.contains("Cannot derive equality"),
-        "expected `Cannot derive equality` at check, got:\nstdout: {stdout}\nstderr: {stderr}"
+        combined.contains(expected),
+        "expected `{expected}` at check, got:\nstdout: {stdout}\nstderr: {stderr}"
     );
     assert!(
         !combined.contains("invalid operation"),
@@ -105,18 +108,15 @@ fn assert_rejected_at_check(output: &std::process::Output) {
 }
 
 #[test]
-fn parallel_equality_field_rejects_bound_mismatched_dependency() {
+fn parallel_strengthened_impl_bound_rejected() {
     if !go_available() {
-        eprintln!(
-            "skipping parallel_equality_field_rejects_bound_mismatched_dependency: `go` not found"
-        );
+        eprintln!("skipping parallel_strengthened_impl_bound_rejected: `go` not found");
         return;
     }
 
     let scratch = tempfile::tempdir().expect("create temp dir");
     let project = scratch.path().join("proj");
     fs::create_dir_all(project.join("src/box")).unwrap();
-    fs::create_dir_all(project.join("src/wrap")).unwrap();
     for pad in ["a", "b", "c"] {
         fs::create_dir_all(project.join("src").join(pad)).unwrap();
         fs::write(
@@ -130,12 +130,10 @@ fn parallel_equality_field_rejects_bound_mismatched_dependency() {
         "[project]\nname = \"github.com/user/eqpar\"\nversion = \"0.1.0\"\n",
     )
     .unwrap();
-    fs::write(project.join("src/box/box.lis"), BOUND_MISMATCHED_BOX).unwrap();
-    fs::write(project.join("src/wrap/wrap.lis"), WRAP_OVER_BOX).unwrap();
+    fs::write(project.join("src/box/box.lis"), STRENGTHENED_IMPL_BOX).unwrap();
     fs::write(
         project.join("src/main.lis"),
-        r#"import "wrap"
-import "box"
+        r#"import "box"
 import "a"
 import "b"
 import "c"
@@ -144,23 +142,22 @@ fn main() {
   let _ = a.ping()
   let _ = b.ping()
   let _ = c.ping()
-  let x = wrap.Wrap { box: box.Box { items: [1] } }
-  let y = wrap.Wrap { box: box.Box { items: [1] } }
-  let _ok = x.equals(y)
+  let _ = box.Box { items: [1] }
 }
 "#,
     )
     .unwrap();
 
-    assert_rejected_at_check(&lis(&project, "check"));
+    assert_rejected_at_check(
+        &lis(&project, "check"),
+        "`impl` cannot strengthen receiver bounds",
+    );
 }
 
 #[test]
-fn cached_equality_field_rejects_bound_mismatched_dependency() {
+fn cached_constrained_type_rejects_unbounded_argument() {
     if !go_available() {
-        eprintln!(
-            "skipping cached_equality_field_rejects_bound_mismatched_dependency: `go` not found"
-        );
+        eprintln!("skipping cached_constrained_type_rejects_unbounded_argument: `go` not found");
         return;
     }
 
@@ -172,10 +169,10 @@ fn cached_equality_field_rejects_bound_mismatched_dependency() {
         "[project]\nname = \"github.com/user/eqcache\"\nversion = \"0.1.0\"\n",
     )
     .unwrap();
-    fs::write(project.join("src/box/box.lis"), BOUND_MISMATCHED_BOX).unwrap();
+    fs::write(project.join("src/box/box.lis"), CONSTRAINED_MAP_BOX).unwrap();
     fs::write(
         project.join("src/main.lis"),
-        "import \"box\"\n\nfn main() {\n  let _b = box.Box { items: [1] }\n}\n",
+        "import \"box\"\n\nfn main() {\n  let _ = box.Box { values: Map.new<int, int>() }\n}\n",
     )
     .unwrap();
 
@@ -187,22 +184,19 @@ fn cached_equality_field_rejects_bound_mismatched_dependency() {
     );
 
     fs::create_dir_all(project.join("src/wrap")).unwrap();
-    fs::write(project.join("src/wrap/wrap.lis"), WRAP_OVER_BOX).unwrap();
+    fs::write(project.join("src/wrap/wrap.lis"), UNBOUNDED_WRAP).unwrap();
     fs::write(
         project.join("src/main.lis"),
-        r#"import "box"
-import "wrap"
+        r#"import "wrap"
 
 fn main() {
-  let x = wrap.Wrap { box: box.Box { items: [1] } }
-  let y = wrap.Wrap { box: box.Box { items: [1] } }
-  let _ok = x.equals(y)
+  let _ = 1
 }
 "#,
     )
     .unwrap();
 
-    assert_rejected_at_check(&lis(&project, "check"));
+    assert_rejected_at_check(&lis(&project, "check"), "Missing bound on type parameter");
 }
 
 #[test]
@@ -662,58 +656,6 @@ fn main() {
     assert!(
         stdout.contains("false"),
         "expected `false`:\nstdout: {stdout}\nstderr: {stderr}"
-    );
-}
-
-#[test]
-fn run_unused_stronger_bound_does_not_constrain_type() {
-    if !go_available() {
-        eprintln!("skipping run_unused_stronger_bound_does_not_constrain_type: `go` not found");
-        return;
-    }
-
-    let scratch = tempfile::tempdir().expect("create temp dir");
-    let project = scratch.path().join("proj");
-    let invocation = scratch.path().join("invocation");
-    fs::create_dir_all(project.join("src")).unwrap();
-    fs::create_dir_all(&invocation).unwrap();
-
-    fs::write(
-        project.join("lisette.toml"),
-        "[project]\nname = \"unusedstronger\"\nversion = \"0.1.0\"\n",
-    )
-    .unwrap();
-    fs::write(
-        project.join("src/main.lis"),
-        r#"import "go:fmt"
-
-struct Point { x: int }
-
-struct Box<T: Comparable> { value: T }
-
-impl<T: Ordered> Box<T> {
-  fn less(self, _other: Box<T>) -> bool { true }
-}
-
-fn main() {
-  let _ = Box { value: Point { x: 1 } }
-  fmt.Println("ok")
-}
-"#,
-    )
-    .unwrap();
-
-    let output = lis_run(&project, &invocation, &[]);
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let stderr = String::from_utf8_lossy(&output.stderr);
-
-    assert!(
-        output.status.success(),
-        "lis run failed (unused stronger bound likely hoisted into the type):\nstdout: {stdout}\nstderr: {stderr}"
-    );
-    assert!(
-        stdout.contains("ok"),
-        "program did not run:\nstdout: {stdout}\nstderr: {stderr}"
     );
 }
 

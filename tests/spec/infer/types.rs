@@ -2258,7 +2258,7 @@ fn impl_bound_is_enforced_on_method_call() {
       fn show() -> string;
     }
 
-    struct Box<T> { value: T }
+    struct Box<T: Display> { value: T }
 
     impl<T: Display> Box<T> {
       fn describe(self: Box<T>) -> string {
@@ -2283,7 +2283,7 @@ fn impl_bound_is_satisfied_when_type_implements_interface() {
       fn show() -> string;
     }
 
-    struct Box<T> { value: T }
+    struct Box<T: Display> { value: T }
 
     impl<T: Display> Box<T> {
       fn describe(self: Box<T>) -> string {

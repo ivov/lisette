@@ -2754,7 +2754,7 @@ fn main() {
 }
 
 #[test]
-fn multiple_bounded_impl_blocks_merge_constraints() {
+fn multiple_bounded_impl_blocks_use_declared_constraints() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
@@ -2770,7 +2770,7 @@ pub interface Summable {
   fn sum_val(self) -> int
 }
 
-struct Container<T> {
+struct Container<T: Printable + Summable> {
   value: T,
   label: string
 }
@@ -2819,7 +2819,7 @@ fn main() {
 }
 
 #[test]
-fn mixed_constrained_unconstrained_impl_blocks() {
+fn bounded_and_unbounded_impl_blocks_share_declared_constraint() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
@@ -2832,7 +2832,7 @@ pub interface Printable {
   fn to_string(self) -> string
 }
 
-struct Box<T> {
+struct Box<T: Printable> {
   value: T,
 }
 
@@ -2861,8 +2861,7 @@ impl Name {
 fn main() {
   let b = Box { value: Name { name: "Alice" } }
   b.print()
-  let b2 = Box { value: 42 }
-  fmt.Println(f"int box: {b2.get()}")
+  fmt.Println(b.get().to_string())
 }
 "#,
     );
@@ -2890,7 +2889,7 @@ pub interface Showable {
         r#"
 import "ifaces"
 
-pub struct Box<T> {
+pub struct Box<T: ifaces.Showable> {
   pub value: T,
 }
 
@@ -2949,7 +2948,7 @@ pub interface Showable {
         r#"
 import "traits"
 
-pub struct Pair<A, B> {
+pub struct Pair<A: traits.Showable, B: traits.Showable> {
   pub first: A,
   pub second: B,
 }
@@ -2964,7 +2963,7 @@ impl<A: traits.Showable, B: traits.Showable> Pair<A, B> {
   }
 }
 
-pub struct Tagged<T> {
+pub struct Tagged<T: traits.Showable> {
   pub value: T,
   pub label: string,
 }
@@ -3983,7 +3982,7 @@ pub interface Printable {
         r#"
 import I "ifaces"
 
-struct Box<T> { value: T }
+struct Box<T: I.Printable> { value: T }
 
 impl<T: I.Printable> Box<T> {
   fn show(self) -> string {
@@ -7279,7 +7278,7 @@ pub interface Renderable {
         r#"
 import s "iface_a"
 
-pub struct BoxA<T> {
+pub struct BoxA<T: s.Drawable> {
   pub v: T,
 }
 
@@ -7297,7 +7296,7 @@ impl<T: s.Drawable> BoxA<T> {
         r#"
 import s "iface_b"
 
-pub struct BoxB<T> {
+pub struct BoxB<T: s.Renderable> {
   pub v: T,
 }
 

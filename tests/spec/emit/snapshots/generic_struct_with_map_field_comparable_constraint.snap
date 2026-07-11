@@ -2,7 +2,7 @@
 source: tests/spec/emit/functions.rs
 description: |
   
-  struct Cache<K, V> {
+  struct Cache<K: Comparable, V> {
     data: Map<K, V>,
   }
 ---

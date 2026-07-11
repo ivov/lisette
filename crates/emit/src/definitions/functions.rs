@@ -10,6 +10,7 @@ use crate::patterns::sites::PatternSubject;
 use crate::plan::bodies::LoweredBlock;
 use crate::types::native::NativeGoType;
 use crate::utils::{group_params, receiver_name};
+use syntax::EcoString;
 use syntax::ast::{
     Annotation, Binding, Expression, FunctionDefinitionView, Generic, Pattern, Span, TypedPattern,
 };
@@ -261,9 +262,9 @@ impl Planner<'_> {
     pub(crate) fn emit_function(
         &mut self,
         function_definition: FunctionDefinitionView<'_>,
-        generic_definition: &str,
         receiver: Option<(String, Type)>,
         is_public: bool,
+        resolved_generic_bounds: Option<&[(EcoString, Vec<Type>)]>,
     ) -> String {
         if matches!(function_definition.body, Expression::NoOp) {
             return String::new();
@@ -297,8 +298,10 @@ impl Planner<'_> {
 
         parts.push(self.pick_go_function_name(function_definition, receiver.is_some(), is_public));
 
-        let generics_str =
-            self.generics_to_string_for_symbol(generic_definition, function_definition.generics);
+        let generics_str = match resolved_generic_bounds {
+            Some(generics) => self.resolved_generics_to_string(generics),
+            None => self.generics_to_string(function_definition.generics),
+        };
         if !generics_str.is_empty() {
             parts.push(generics_str);
         }

@@ -5,8 +5,8 @@ use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use syntax::ast::{BindingId, Pattern, RestPattern, Span};
 use syntax::program::{
-    Definition, DefinitionBody, EqualityIndex, GenericConstraintsByDefinition, ModuleId,
-    MutationInfo, ResolvedDefinitions, TestIndex, UnusedInfo,
+    Definition, DefinitionBody, EqualityIndex, ModuleId, MutationInfo, ResolvedDefinitions,
+    TestIndex, UnusedInfo,
 };
 use syntax::types::{Symbol, Type};
 
@@ -33,7 +33,6 @@ pub(crate) struct EmitFactsConfig<'a> {
     pub(crate) options: EmitOptions,
     pub(crate) line_indexes: Arc<HashMap<u32, LineIndex>>,
     pub(crate) globals: Arc<GlobalEmitData>,
-    pub(crate) generic_constraints: &'a GenericConstraintsByDefinition,
     pub(crate) resolved_definitions: &'a ResolvedDefinitions,
     pub(crate) current_module: ModuleId,
 }
@@ -54,7 +53,6 @@ pub(crate) struct EmitFacts<'a> {
     options: EmitOptions,
     line_indexes: Arc<HashMap<u32, LineIndex>>,
     globals: Arc<GlobalEmitData>,
-    pub(crate) generic_constraints: &'a GenericConstraintsByDefinition,
     pub(crate) resolved_definitions: &'a ResolvedDefinitions,
     current_module: ModuleId,
 }
@@ -77,7 +75,6 @@ impl<'a> EmitFacts<'a> {
             options: config.options,
             line_indexes: config.line_indexes,
             globals: config.globals,
-            generic_constraints: config.generic_constraints,
             resolved_definitions: config.resolved_definitions,
             current_module: config.current_module,
         }

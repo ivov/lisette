@@ -115,7 +115,6 @@ pub struct Store {
     /// Closed-domain index, keyed by the type's qualified name (the `id` in
     /// `Type::Nominal`). Built once after registration by `build_closed_domains`.
     pub closed_domains: HashMap<Symbol, ClosedDomain>,
-    pub bound_conflict_types: HashSet<String>,
     pub equality_index: EqualityIndex,
     pub test_index: TestIndex,
     /// File IDs of `.test.lis` files, for detecting test-file context during
@@ -152,7 +151,6 @@ impl Store {
             visited_modules: Default::default(),
             next_file_id: AtomicU32::new(2), // 0 = entrypoint, 1 = prelude
             closed_domains: Default::default(),
-            bound_conflict_types: Default::default(),
             equality_index: Default::default(),
             test_index: Default::default(),
             test_file_ids: Default::default(),
@@ -292,7 +290,6 @@ impl Store {
             visited_modules: HashSet::default(),
             next_file_id: AtomicU32::new(self.next_file_id.load(Ordering::Relaxed)),
             closed_domains: HashMap::default(),
-            bound_conflict_types: HashSet::default(),
             equality_index: EqualityIndex::default(),
             test_index: TestIndex::default(),
             test_file_ids: self.test_file_ids.clone(),

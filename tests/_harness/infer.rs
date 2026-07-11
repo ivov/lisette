@@ -298,10 +298,6 @@ impl InferResult {
         self.assert_code(&format!("infer.{}", code))
     }
 
-    pub fn assert_attribute_code(self, code: &str) -> Self {
-        self.assert_code(&format!("attribute.{}", code))
-    }
-
     fn assert_code(self, expected_code: &str) -> Self {
         if self.errors.is_empty() {
             panic!("Expected errors, but inference succeeded");

@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ `impl` cannot strengthen receiver bounds
+   ╭─[test.lis:4:9]
+ 3 │ 
+ 4 │ impl<T: Ordered> Box<T> {
+   ·         ───┬───
+   ·            ╰── this bound is not guaranteed by `Box`'s declaration
+ 5 │   fn less(self, other: Box<T>) -> bool {
+   ╰────
+  help: Declare this bound on `Box`, or remove it from the `impl` · code: [infer.impl_bound_strengthens_type]

@@ -78,6 +78,7 @@ pub struct Scope {
     pub type_params: Option<HashMap<String, usize>>,
     pub trait_bounds: Option<HashMap<Symbol, Vec<Type>>>,
     pub fn_return_type: Option<Type>,
+    deferred_map_key_checks: Vec<(Type, Span, bool)>,
     pub try_block_context: Option<TryBlockContext>,
     pub recover_block_context: Option<RecoverBlockContext>,
     pub loop_break_type: Option<Type>,
@@ -107,6 +108,7 @@ impl Scope {
             type_params: None,
             trait_bounds: None,
             fn_return_type: None,
+            deferred_map_key_checks: Vec::new(),
             try_block_context: None,
             recover_block_context: None,
             loop_break_type: None,
@@ -265,6 +267,23 @@ impl Scopes {
             }
         }
         None
+    }
+
+    pub(crate) fn defer_map_key_check(&mut self, key: Type, span: Span, check_concrete: bool) {
+        if let Some(scope) = self
+            .stack
+            .iter_mut()
+            .rev()
+            .find(|scope| scope.fn_return_type.is_some())
+        {
+            scope
+                .deferred_map_key_checks
+                .push((key, span, check_concrete));
+        }
+    }
+
+    pub(crate) fn take_deferred_map_key_checks(&mut self) -> Vec<(Type, Span, bool)> {
+        std::mem::take(&mut self.current_mut().deferred_map_key_checks)
     }
 
     /// Look up the enclosing try block context, stopping at function boundaries.

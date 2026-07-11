@@ -1,12 +1,11 @@
-use ecow::EcoString;
-use rustc_hash::FxHashMap as HashMap;
-
 use crate::checker::EnvResolve;
+use ecow::EcoString;
 use syntax::ast::BindingKind;
 use syntax::ast::{Annotation, Binding, Expression, Pattern, Span, StructKind};
 use syntax::program::{CallKind, Definition, DefinitionBody, NativeTypeKind};
 use syntax::types::{
-    Bound, SubstitutionMap, Symbol, Type, peel_to_range_type, substitute, unqualified_name,
+    Bound, CompoundKind, SubstitutionMap, Symbol, Type, peel_to_range_type, substitute,
+    unqualified_name,
 };
 
 use super::super::carry_mut::can_carry_mutation_across_fn_boundary;
@@ -129,23 +128,13 @@ impl InferCtx<'_, '_> {
 
         let mut bounds = vec![];
 
-        for g in &generics {
-            let qualified_name = self.qualify_name(&g.name);
-
-            for b in &g.bounds {
-                let bound_ty = self.convert_bound_to_type(store, b, &span);
-
-                self.scopes
-                    .current_mut()
-                    .trait_bounds
-                    .get_or_insert_with(HashMap::default)
-                    .entry(qualified_name.clone())
-                    .or_default()
-                    .push(bound_ty.clone());
+        for generic in &generics {
+            for bound in &generic.bounds {
+                let bound_ty = self.register_generic_bound(store, &generic.name, bound, &span);
 
                 bounds.push(Bound {
-                    param_name: g.name.clone(),
-                    generic: Type::Parameter(g.name.clone()),
+                    param_name: generic.name.clone(),
+                    generic: Type::Parameter(generic.name.clone()),
                     ty: bound_ty,
                 });
             }
@@ -197,6 +186,8 @@ impl InferCtx<'_, '_> {
 
         let new_body = self.infer_function_body(body, &body_ty, &return_annotation, &return_ty);
 
+        self.check_deferred_map_key_bounds(store);
+
         self.scopes.pop();
 
         let fn_ty = if generics.is_empty() {
@@ -237,6 +228,7 @@ impl InferCtx<'_, '_> {
         span: Span,
         expected_ty: &Type,
     ) -> Expression {
+        let store = self.store;
         self.scopes.push();
 
         // Resolve type variables so that a Go function alias bound via speculative
@@ -288,6 +280,8 @@ impl InferCtx<'_, '_> {
         };
         let new_body = self.infer_function_body(body, &body_ty, &return_annotation, &return_ty);
         self.scopes.restore_loop_depth(saved_loop_depth);
+
+        self.check_deferred_map_key_bounds(store);
 
         self.scopes.pop();
 
@@ -450,13 +444,30 @@ impl InferCtx<'_, '_> {
         // the store before the final unify (forward-declared intermediates
         // leave gaps in the cached `underlying_ty` chain).
         let resolved_expected = store.deep_resolve_alias(&expected_ty.resolve_in(&self.env));
+        let expected_is_map = matches!(
+            resolved_expected.as_compound(),
+            Some((CompoundKind::Map, _))
+        );
         self.unify(&resolved_expected, &return_ty, &span);
         self.unify_trait_bounds(&bounds, &param_types, &new_args, &span);
+
+        let resolved_return = store.deep_resolve_alias(&return_ty.resolve_in(&self.env));
+        if let Some((CompoundKind::Map, arguments)) = resolved_return.as_compound()
+            && let Some(key) = arguments.first()
+        {
+            let check_concrete = matches!(
+                call_kind,
+                CallKind::NativeConstructor(NativeTypeKind::Map)
+                    | CallKind::NativeMethod(NativeTypeKind::Map)
+                    | CallKind::NativeMethodIdentifier(NativeTypeKind::Map)
+            ) && !expected_is_map;
+            self.scopes
+                .defer_map_key_check(key.clone(), span, check_concrete);
+        }
 
         self.check_native_mutating_call(&callee_expression, &span);
         self.check_native_equals_ufcs(&callee_expression, &new_args);
 
-        let resolved_return = return_ty.resolve_in(&self.env);
         let return_check_recorded = self.is_generic_callee(&callee_expression)
             && type_args.is_empty()
             && !self.is_enum_type(store, &resolved_return);
@@ -800,7 +811,11 @@ impl InferCtx<'_, '_> {
 
         // Write the substituted type back onto the callee node so its type (and
         // hover) reflects explicit type arguments, as an inferred call already does.
-        self.unify(&instantiated, &callee_expression.get_type(), span);
+        let callee_ty = callee_expression.get_type();
+        for (inferred, explicit) in callee_ty.get_bounds().iter().zip(instantiated.get_bounds()) {
+            let _ = self.try_unify(&inferred.generic, &explicit.generic, span);
+        }
+        self.unify(&instantiated, &callee_ty, span);
 
         (instantiated, type_args.to_vec(), resolved_args)
     }
@@ -1230,7 +1245,7 @@ impl InferCtx<'_, '_> {
                     binding
                         .annotation
                         .as_ref()
-                        .map(|a| self.convert_to_type_inner(store, a, pattern_span, true))
+                        .map(|a| self.convert_to_type_inner(store, a, pattern_span, true, true))
                         .unwrap_or_else(|| self.new_type_var())
                 });
 

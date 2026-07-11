@@ -32,12 +32,13 @@ impl TaskState<'_> {
         self.scopes.push();
         self.put_in_scope(generics);
         self.validate_generic_bounds(&*store, generics, span);
-        self.scopes.pop();
 
         let new_variants: Vec<_> = variants
             .iter()
-            .map(|v| self.resolve_enum_variant_fields(&*store, v, generics, span))
+            .map(|v| self.resolve_enum_variant_fields(&*store, v, span))
             .collect();
+
+        self.scopes.pop();
 
         self.check_enum_field_type_conflicts(name, &new_variants);
 
@@ -206,17 +207,16 @@ impl TaskState<'_> {
         &mut self,
         store: &Store,
         enum_variant: &EnumVariant,
-        enum_generics: &[Generic],
         span: &Span,
     ) -> EnumVariant {
         let new_fields = match &enum_variant.fields {
             VariantFields::Unit => VariantFields::Unit,
             VariantFields::Tuple(fields) => {
-                let resolved_fields = self.resolve_enum_fields(store, fields, enum_generics, span);
+                let resolved_fields = self.resolve_enum_fields(store, fields, span);
                 VariantFields::Tuple(resolved_fields)
             }
             VariantFields::Struct(fields) => {
-                let resolved_fields = self.resolve_enum_fields(store, fields, enum_generics, span);
+                let resolved_fields = self.resolve_enum_fields(store, fields, span);
                 VariantFields::Struct(resolved_fields)
             }
         };
@@ -233,13 +233,9 @@ impl TaskState<'_> {
         &mut self,
         store: &Store,
         fields: &[EnumFieldDefinition],
-        enum_generics: &[Generic],
         span: &Span,
     ) -> Vec<EnumFieldDefinition> {
-        self.scopes.push();
-        self.put_in_scope(enum_generics);
-
-        let resolved_fields = fields
+        fields
             .iter()
             .map(|f| {
                 let resolved_ty = self.convert_to_type(store, &f.annotation, span);
@@ -251,11 +247,7 @@ impl TaskState<'_> {
                     ..f.clone()
                 }
             })
-            .collect();
-
-        self.scopes.pop();
-
-        resolved_fields
+            .collect()
     }
 
     pub(crate) fn add_enum_variant_to_scope(

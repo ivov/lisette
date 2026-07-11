@@ -2,11 +2,11 @@
 source: tests/spec/emit/types.rs
 description: |
   
-  enum Holder<T> {
+  enum Holder<T: Comparable> {
     Empty,
   }
   
-  impl<T> Holder<T> {
+  impl<T: Comparable> Holder<T> {
     fn count(self) -> int {
       let m = Map.new<T, int>()
       m.length()

@@ -1826,35 +1826,26 @@ fn unknown_as_map_key_turbofish_via_alias_compiles() {
 }
 
 #[test]
-fn unknown_as_map_key_via_generic_alias_wrapping_map_compiles() {
+fn generic_alias_map_key_requires_comparable_bound() {
     infer(
         r#"
     type Claims<K, V> = Map<K, V>;
-    fn make<K, V>() -> Claims<K, V> { Map.new() }
-    fn main() {
-      let m = make<Unknown, int>();
-      let _ = m;
-    }
         "#,
     )
-    .assert_no_errors();
+    .assert_infer_code_once("missing_map_key_bound");
 }
 
 #[test]
-fn unknown_as_map_key_method_only_turbofish_compiles() {
+fn method_generic_map_key_requires_comparable_bound() {
     infer(
         r#"
     struct Bag<T> {}
     impl<T> Bag<T> {
-      pub fn make<K>(self) -> Map<K, T> { Map.new() }
-    }
-    fn main() {
-      let b: Bag<int> = Bag {};
-      let _ = b.make<Unknown>();
+      pub fn make<K>(self) -> Map<K, T> { panic("unreachable") }
     }
         "#,
     )
-    .assert_no_errors();
+    .assert_infer_code_once("missing_map_key_bound");
 }
 
 #[test]
@@ -1888,20 +1879,6 @@ fn result_unknown_accepts_concrete_ok() {
 }
 
 #[test]
-fn unknown_as_map_key_via_alias_at_annotation_site_compiles() {
-    infer(
-        r#"
-    type AnyMap<K, V> = Map<K, V>;
-    fn main() {
-      let m: AnyMap<Unknown, int> = Map.new();
-      let _ = m;
-    }
-        "#,
-    )
-    .assert_no_errors();
-}
-
-#[test]
 fn unknown_map_return_from_typedef_api_allowed() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
@@ -1924,17 +1901,61 @@ fn unknown_map_return_from_typedef_api_allowed() {
 }
 
 #[test]
-fn unknown_as_map_key_via_inferred_receiver_compiles() {
+fn receiver_generic_map_key_requires_comparable_bound() {
     infer(
         r#"
     struct Bag<K> {}
     impl<K> Bag<K> {
-      fn make(self) -> Map<K, int> { Map.new() }
+      fn make(self) -> Map<K, int> { panic("unreachable") }
     }
-    fn main() {
-      let b: Bag<Unknown> = Bag {};
-      let _ = b.make();
-    }
+        "#,
+    )
+    .assert_infer_code_once("missing_map_key_bound");
+}
+
+#[test]
+fn generic_reaching_map_key_through_struct_requires_comparable_bound() {
+    infer(
+        r#"
+    struct Key<T: Comparable> { values: Map<T, int> }
+    struct Outer<T> { key: Key<T> }
+        "#,
+    )
+    .assert_infer_code_once("missing_bound_on_param");
+}
+
+#[test]
+fn generic_reaching_map_key_through_function_signature_requires_comparable_bound() {
+    infer(
+        r#"
+    struct Key<T: Comparable> { values: Map<T, int> }
+    fn use_key<T>(key: Key<T>) {}
+        "#,
+    )
+    .assert_infer_code_once("missing_bound_on_param");
+}
+
+#[test]
+fn generic_using_ordered_type_requires_ordered_bound() {
+    infer(
+        r#"
+    import "go:cmp"
+
+    struct OrderedValue<T: cmp.Ordered> { value: T }
+    struct Outer<T> { value: OrderedValue<T> }
+        "#,
+    )
+    .assert_infer_code_once("missing_bound_on_param");
+}
+
+#[test]
+fn generic_using_ordered_type_with_matching_bound_is_allowed() {
+    infer(
+        r#"
+    import "go:cmp"
+
+    struct OrderedValue<T: cmp.Ordered> { value: T }
+    struct Outer<T: cmp.Ordered> { value: OrderedValue<T> }
         "#,
     )
     .assert_no_errors();

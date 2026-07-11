@@ -68,7 +68,6 @@ pub fn compile_e2e_suite_test(input: &str, package_name: &str) -> Result<Emitted
         go_package_names: &result.go_package_names,
         go_module_ids: &result.go_module_ids,
         bound_types: &result.bound_types,
-        generic_constraints: &result.generic_constraints,
         resolved_definitions: &result.resolved_definitions,
     };
     let mut emitter = Planner::new_for_tests(&config, None);

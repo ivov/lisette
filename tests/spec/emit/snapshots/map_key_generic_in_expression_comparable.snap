@@ -4,7 +4,7 @@ description: |
   
   fn foo<U>(u: U) {}
   
-  fn make_map<T>(t: T) -> int {
+  fn make_map<T: Comparable>(t: T) -> int {
     foo(Map.new<T, int>())
     0
   }

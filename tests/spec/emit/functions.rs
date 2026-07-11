@@ -1156,7 +1156,7 @@ fn test() -> bool {
 #[test]
 fn generic_function_with_map_key_type_parameter() {
     let input = r#"
-fn put_in_map<K, V>(key: K, value: V) -> Map<K, V> {
+fn put_in_map<K: Comparable, V>(key: K, value: V) -> Map<K, V> {
   let mut m: Map<K, V> = Map.new()
   m[key] = value
   m
@@ -1168,7 +1168,7 @@ fn put_in_map<K, V>(key: K, value: V) -> Map<K, V> {
 #[test]
 fn generic_struct_with_map_field_comparable_constraint() {
     let input = r#"
-struct Cache<K, V> {
+struct Cache<K: Comparable, V> {
   data: Map<K, V>,
 }
 "#;
@@ -1335,7 +1335,7 @@ fn map_key_generic_in_expression_comparable() {
     let input = r#"
 fn foo<U>(u: U) {}
 
-fn make_map<T>(t: T) -> int {
+fn make_map<T: Comparable>(t: T) -> int {
   foo(Map.new<T, int>())
   0
 }
@@ -1506,7 +1506,7 @@ fn main() {
 #[test]
 fn generic_map_key_in_task_body() {
     let input = r#"
-fn use_map_in_task<K, V>(key: K, value: V) {
+fn use_map_in_task<K: Comparable, V>(key: K, value: V) {
   task {
     let mut m: Map<K, V> = Map.new()
     m[key] = value

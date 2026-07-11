@@ -2,7 +2,7 @@
 source: tests/spec/emit/types.rs
 description: |
   
-  type KeyVal<K, V> = Map<K, V>
+  type KeyVal<K: Comparable, V> = Map<K, V>
   
   fn test() -> KeyVal<string, int> {
     let mut m = Map.new<string, int>()

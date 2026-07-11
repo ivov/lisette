@@ -5,8 +5,8 @@ use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use syntax::ParseError;
 use syntax::ast::Span;
 use syntax::program::{
-    Definition, EmitInput, EqualityIndex, File, GenericConstraintsByDefinition, ModuleInfo,
-    MutationInfo, ResolvedDefinitions, TestIndex, UnusedInfo,
+    Definition, EmitInput, EqualityIndex, File, ModuleInfo, MutationInfo, ResolvedDefinitions,
+    TestIndex, UnusedInfo,
 };
 use syntax::types::{Symbol, Type};
 
@@ -34,7 +34,6 @@ pub struct SemanticResult {
     pub go_module_ids: HashSet<String>,
     /// Resolved type for each generic-bound annotation, keyed by span.
     pub bound_types: HashMap<Span, Type>,
-    pub generic_constraints: GenericConstraintsByDefinition,
     pub resolved_definitions: ResolvedDefinitions,
 }
 
@@ -58,7 +57,6 @@ impl SemanticResult {
             go_package_names: HashMap::default(),
             go_module_ids: HashSet::default(),
             bound_types: HashMap::default(),
-            generic_constraints: GenericConstraintsByDefinition::default(),
             resolved_definitions: HashMap::default(),
         }
     }
@@ -83,7 +81,6 @@ impl SemanticResult {
             go_package_names: self.go_package_names,
             go_module_ids: self.go_module_ids,
             bound_types: self.bound_types,
-            generic_constraints: self.generic_constraints,
             resolved_definitions: self.resolved_definitions,
         }
     }

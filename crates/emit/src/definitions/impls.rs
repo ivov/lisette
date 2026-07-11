@@ -1,8 +1,10 @@
 use crate::Planner;
 use crate::expressions::top_items::emit_doc;
 use crate::names::go_name;
+use syntax::EcoString;
 use syntax::ast::{Expression, FunctionDefinitionView, Generic, Pattern, Visibility};
-use syntax::types::Type;
+use syntax::program::DefinitionBody;
+use syntax::types::{Type, build_substitution_map, substitute, type_args_match_params};
 
 struct ImplContext<'a> {
     receiver_name: &'a str,
@@ -61,7 +63,6 @@ impl Planner<'_> {
             .is_ufcs_method(&ctx.qualified_type, function.name);
         let should_export = is_public || self.method_needs_export(function.name);
         let is_free_function = !has_self || is_ufcs;
-        let generic_definition = format!("{}.{}", ctx.qualified_type, function.name);
 
         let code = if is_free_function {
             let method_name = if should_export {
@@ -72,18 +73,19 @@ impl Planner<'_> {
             let free_name = format!("{}_{}", ctx.receiver_name, method_name).into();
             let mut combined_generics = ctx.generics.to_vec();
             combined_generics.extend(function.generics.iter().cloned());
+            let generic_bounds = self.free_function_generic_bounds(ctx, function.generics);
             let free_function = FunctionDefinitionView {
                 name: &free_name,
                 generics: &combined_generics,
                 ..function
             };
-            self.emit_function(free_function, &generic_definition, None, false)
+            self.emit_function(free_function, None, false, generic_bounds.as_deref())
         } else {
             self.emit_function(
                 function,
-                &generic_definition,
                 Some((ctx.receiver_name.to_string(), ctx.ty.clone())),
                 should_export,
+                None,
             )
         };
 
@@ -92,5 +94,65 @@ impl Planner<'_> {
         }
         let method_doc_comment = emit_doc(doc);
         Some(format!("{}{}", method_doc_comment, code))
+    }
+
+    fn free_function_generic_bounds(
+        &self,
+        ctx: &ImplContext<'_>,
+        method_generics: &[Generic],
+    ) -> Option<Vec<(EcoString, Vec<Type>)>> {
+        let receiver_generics = self.facts.definition(&ctx.qualified_type).and_then(
+            |definition| match &definition.body {
+                DefinitionBody::Struct { generics, .. } | DefinitionBody::Enum { generics, .. } => {
+                    Some(generics)
+                }
+                _ => None,
+            },
+        )?;
+        if receiver_generics.len() != ctx.generics.len()
+            || !type_args_match_params(
+                ctx.ty.get_type_params().unwrap_or_default(),
+                ctx.generics.iter().map(|generic| &generic.name),
+            )
+        {
+            return None;
+        }
+
+        let substitution = build_substitution_map(
+            receiver_generics,
+            ctx.ty.get_type_params().unwrap_or_default(),
+        );
+        let mut generic_bounds = receiver_generics
+            .iter()
+            .zip(ctx.generics)
+            .map(|(receiver_generic, impl_generic)| {
+                let bounds = receiver_generic
+                    .bounds
+                    .iter()
+                    .map(|bound| {
+                        let resolved = self
+                            .facts
+                            .resolved_bound_type(bound.get_span())
+                            .expect("checker records every receiver bound");
+                        substitute(resolved, &substitution)
+                    })
+                    .collect();
+                (impl_generic.name.clone(), bounds)
+            })
+            .collect::<Vec<_>>();
+        generic_bounds.extend(method_generics.iter().map(|generic| {
+            let bounds = generic
+                .bounds
+                .iter()
+                .map(|bound| {
+                    self.facts
+                        .resolved_bound_type(bound.get_span())
+                        .cloned()
+                        .expect("checker records every method bound")
+                })
+                .collect();
+            (generic.name.clone(), bounds)
+        }));
+        Some(generic_bounds)
     }
 }

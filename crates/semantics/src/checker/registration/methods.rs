@@ -5,7 +5,8 @@ use syntax::ast::{
 };
 use syntax::program::{Definition, DefinitionBody, Interface, Visibility};
 use syntax::types::{
-    Symbol, Type, build_substitution_map, substitute, type_args_match_params, unqualified_name,
+    Bound, Symbol, Type, build_substitution_map, substitute, type_args_match_params,
+    unqualified_name,
 };
 
 use super::{extract_attribute_flags, has_recursive_instantiation, wrap_with_impl_generics};
@@ -137,8 +138,20 @@ impl TaskState<'_> {
         self.scopes.push();
         self.put_in_scope(generics);
 
+        let mut impl_bounds: Vec<Bound> = Vec::new();
+        for generic in generics {
+            for bound in &generic.bounds {
+                let bound_ty = self.register_generic_bound(&*store, &generic.name, bound, span);
+                impl_bounds.push(Bound {
+                    param_name: generic.name.clone(),
+                    generic: Type::Parameter(generic.name.clone()),
+                    ty: bound_ty,
+                });
+            }
+        }
+
         self.check_undeclared_impl_type_params(annotation, generics);
-        let receiver_ty = self.convert_to_type(&*store, annotation, span);
+        let receiver_ty = self.convert_to_type_inner(&*store, annotation, span, false, false);
         let Some(type_name) = receiver_ty.get_name() else {
             self.scopes.pop();
             return;
@@ -203,34 +216,16 @@ impl TaskState<'_> {
             return;
         }
 
-        if self.check_conflicting_impl_bounds(
-            &*store,
-            annotation,
-            &receiver_qualified_name,
-            generics,
-        ) {
-            store
-                .bound_conflict_types
-                .insert(receiver_qualified_name.to_string());
-        }
-
-        self.check_conflicting_cross_impl_bounds(
-            &*store,
-            annotation,
-            &receiver_qualified_name,
-            generics,
-        );
-
-        let mut impl_bounds: Vec<syntax::types::Bound> = Vec::new();
-        for g in generics {
-            for b in &g.bounds {
-                let bound_ty = self.register_bound_annotation(&*store, b, span);
-                impl_bounds.push(syntax::types::Bound {
-                    param_name: g.name.clone(),
-                    generic: Type::Parameter(g.name.clone()),
-                    ty: bound_ty,
-                });
-            }
+        if self.impl_has_simple_type_params(&receiver_ty, generics) {
+            let receiver_bounds =
+                self.register_receiver_type_bounds(&*store, &receiver_qualified_name, generics);
+            self.check_strengthened_impl_bounds(
+                &*store,
+                &receiver_qualified_name,
+                generics,
+                &impl_bounds,
+                &receiver_bounds,
+            );
         }
 
         let mut static_methods: Vec<(String, Type)> = Vec::new();
@@ -675,7 +670,11 @@ impl TaskState<'_> {
     /// Check if the impl receiver type has simple type parameters that match the generics.
     /// E.g., `impl<T> Box<T>` has simple params (T maps directly to the generic T).
     /// `impl<U> Option<Option<U>>` does NOT have simple params (Option<U> is not a bare generic).
-    fn impl_has_simple_type_params(&self, receiver_ty: &Type, generics: &[Generic]) -> bool {
+    pub(crate) fn impl_has_simple_type_params(
+        &self,
+        receiver_ty: &Type,
+        generics: &[Generic],
+    ) -> bool {
         let params = match receiver_ty {
             Type::Nominal { params, .. } => params,
             _ => return false,

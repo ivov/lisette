@@ -3,7 +3,7 @@ source: tests/ui/errors/mod.rs
 ---
   ✕ No zero value for missing key
    ╭─[test.lis:3:3]
- 2 │ fn pick<K, V>(m: Map<K, V>, k: K) -> V {
+ 2 │ fn pick<K: Comparable, V>(m: Map<K, V>, k: K) -> V {
  3 │   m[k]
    ·   ──┬─
    ·     ╰── `V` is not guaranteed to have a zero value

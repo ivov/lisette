@@ -10,10 +10,9 @@ mod types;
 
 use std::path::PathBuf;
 
-use rustc_hash::FxHashMap as HashMap;
-
 use deps::TypedefLocator;
 
+use crate::call_classification::compute_module_ufcs;
 use crate::diagnostics::{GoImportSite, emit_for_locator_result};
 use syntax::ast::{
     Annotation, Attribute, AttributeArg, Binding, EnumVariant, Expression, Generic, Span,
@@ -286,7 +285,7 @@ impl TaskState<'_> {
         self.validate_module_embeds(store, id);
 
         let module = store.get_module(id).expect("module must exist");
-        let ufcs_entries = crate::call_classification::compute_module_ufcs(module, id);
+        let ufcs_entries = compute_module_ufcs(module);
         self.ufcs_methods.extend(ufcs_entries);
 
         self.register_module_equality(store, id);
@@ -1108,23 +1107,13 @@ impl TaskState<'_> {
 
         let mut bounds = vec![];
 
-        for g in generics {
-            let qualified_name = self.qualify_name(&g.name);
-
-            for b in &g.bounds {
-                let bound_ty = self.register_bound_annotation(store, b, span);
-
-                self.scopes
-                    .current_mut()
-                    .trait_bounds
-                    .get_or_insert_with(HashMap::default)
-                    .entry(qualified_name.clone())
-                    .or_default()
-                    .push(bound_ty.clone());
+        for generic in generics {
+            for bound in &generic.bounds {
+                let bound_ty = self.register_generic_bound(store, &generic.name, bound, span);
 
                 bounds.push(syntax::types::Bound {
-                    param_name: g.name.clone(),
-                    generic: Type::Parameter(g.name.clone()),
+                    param_name: generic.name.clone(),
+                    generic: Type::Parameter(generic.name.clone()),
                     ty: bound_ty,
                 });
             }
@@ -1135,7 +1124,7 @@ impl TaskState<'_> {
         let param_types: Vec<Type> = params
             .iter()
             .map(|binding| match &binding.annotation {
-                Some(a) => self.convert_to_type_inner(store, a, span, true),
+                Some(a) => self.convert_to_type_inner(store, a, span, true, true),
                 None if !binding.ty.is_uninferred() => binding.ty.clone(),
                 None => self.new_type_var(),
             })

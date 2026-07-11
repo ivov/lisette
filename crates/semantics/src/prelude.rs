@@ -113,5 +113,5 @@ pub fn compute_prelude_ufcs(store: &Store) -> Vec<(String, String)> {
     let module = store
         .get_module(PRELUDE_MODULE_ID)
         .expect("prelude must exist");
-    compute_module_ufcs(module, PRELUDE_MODULE_ID)
+    compute_module_ufcs(module)
 }

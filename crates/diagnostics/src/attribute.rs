@@ -168,15 +168,6 @@ pub fn equality_on_tuple_struct(attribute_span: &Span) -> LisetteDiagnostic {
         .with_help("Give the type named fields, or hand-write an `equals` method")
 }
 
-pub fn equality_bounded_equals(attribute_span: &Span) -> LisetteDiagnostic {
-    LisetteDiagnostic::error("`#[equality]` conflicts with a bounded `equals`")
-        .with_attribute_code("equality_bounded_equals")
-        .with_span_label(attribute_span, "would synthesize an `equals` of its own")
-        .with_help(
-            "A hand-written `equals` must carry the same generic bounds as the type, or it strengthens the type for every instantiation. Match the type's bounds, or remove `#[equality]`.",
-        )
-}
-
 pub fn equality_specialized_equals(attribute_span: &Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("`#[equality]` conflicts with a specialized `equals`")
         .with_attribute_code("equality_specialized_equals")

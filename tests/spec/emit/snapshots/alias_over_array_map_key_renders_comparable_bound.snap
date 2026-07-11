@@ -4,7 +4,7 @@ description: |
   
   type Key<T> = Array<T, 2>
   
-  fn f<T>(m: Map<Key<T>, int>) -> int {
+  fn f<T: Comparable>(m: Map<Key<T>, int>) -> int {
     m.length()
   }
 ---

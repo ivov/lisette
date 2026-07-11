@@ -2,7 +2,7 @@
 source: tests/spec/emit/arrays.rs
 description: |
   
-  fn count<T>(m: Map<Array<T, 2>, int>) -> int {
+  fn count<T: Comparable>(m: Map<Array<T, 2>, int>) -> int {
     m.length()
   }
 ---

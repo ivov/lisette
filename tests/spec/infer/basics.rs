@@ -882,7 +882,7 @@ fn type_alias_of_alias() {
 fn multiple_generic_params_in_alias() {
     infer(
         r#"
-    type Pair<A, B> = Map<A, B>
+    type Pair<A: Comparable, B> = Map<A, B>
 
     fn test() -> Pair<int, string> {
       return Map.new();
@@ -941,7 +941,7 @@ fn unused_generic_parameter() {
 fn parameter_reuse() {
     infer(
         r#"
-    type Mirror<T> = Map<T, T>
+    type Mirror<T: Comparable> = Map<T, T>
 
     fn test() -> Mirror<int> {
       return Map.new();
@@ -955,7 +955,7 @@ fn parameter_reuse() {
 fn parameter_order_swapping() {
     infer(
         r#"
-    type Swapped<A, B> = Map<B, A>
+    type Swapped<A, B: Comparable> = Map<B, A>
 
     fn test() -> Swapped<int, string> {
       return Map.new();

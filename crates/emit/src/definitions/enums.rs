@@ -38,7 +38,7 @@ impl Planner<'_> {
             let _ = self.go_type_string(ty);
         }
 
-        let generics_string = self.generics_to_string_for_symbol(&enum_id, generics);
+        let generics_string = self.generics_to_string(generics);
         let receiver_generics = self.receiver_generics_string(generics);
         let has_json = attributes.iter().any(|a| a.name == "json");
         let has_iterate = attributes.iter().any(|a| a.name == "iterate");
@@ -238,7 +238,7 @@ impl Planner<'_> {
                 .map(|g| self.generic_go_name(&g.name))
                 .collect::<Vec<_>>()
                 .join(", ");
-            let generics_string = self.generics_to_string_for_symbol(enum_id, &generics);
+            let generics_string = self.generics_to_string(&generics);
             (generics_string, format!("[{}]", args))
         };
 

@@ -6,7 +6,7 @@ description: |
     fn display(self) -> string
   }
   
-  enum Either<L, R> {
+  enum Either<L: Displayable, R: Displayable> {
     Left(L),
     Right(R),
   }

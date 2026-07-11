@@ -676,55 +676,8 @@ impl InferCtx<'_, '_> {
             return Dispatched::Fallthrough;
         };
 
-        if let Type::Parameter(param_name) = resolved_generic {
-            if !self.parameter_satisfies_bound(param_name, builtin) {
-                self.sink.push(diagnostics::infer::missing_bound_on_param(
-                    param_name,
-                    builtin.label(),
-                    *span,
-                ));
-            }
-            return Dispatched::Handled;
-        }
-
-        match builtin {
-            BuiltinBound::Ordered if !resolved_generic.satisfies_ordered_constraint() => {
-                self.sink
-                    .push(diagnostics::infer::not_orderable_bound(*span));
-            }
-            BuiltinBound::Comparable => {
-                if super::expressions::comparison::check_not_comparable(
-                    &self.env,
-                    store,
-                    resolved_generic,
-                )
-                .is_some()
-                {
-                    self.sink
-                        .push(diagnostics::infer::not_comparable_bound(*span));
-                }
-            }
-            BuiltinBound::Ordered => {}
-        }
+        self.check_builtin_bound_argument(store, resolved_generic, builtin, *span);
         Dispatched::Handled
-    }
-
-    pub(super) fn parameter_satisfies_bound(&self, param_name: &str, target: BuiltinBound) -> bool {
-        let mut found = false;
-        self.scopes.for_each_bound_on_param(param_name, |bound_ty| {
-            if found {
-                return;
-            }
-            if let Some(declared) = bound_ty
-                .resolve_in(&self.env)
-                .get_qualified_id()
-                .and_then(BuiltinBound::from_qualified_id)
-                && declared.satisfies(target)
-            {
-                found = true;
-            }
-        });
-        found
     }
 
     fn unification_diagnostic(

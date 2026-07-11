@@ -2,11 +2,11 @@
 source: tests/spec/emit/arrays.rs
 description: |
   
-  struct Box<K> {
+  struct Box<K: Comparable> {
     table: Map<K, int>,
   }
   
-  fn f<T>(b: Box<Array<T, 2>>) -> int {
+  fn f<T: Comparable>(b: Box<Array<T, 2>>) -> int {
     b.table.length()
   }
 ---

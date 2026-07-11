@@ -17,8 +17,7 @@ impl Planner<'_> {
         }
 
         let filtered = strip_self_referential_bounds(generics, name);
-        let symbol = self.facts.qualified_current(name);
-        let generics_str = self.generics_to_string_for_symbol(&symbol, &filtered);
+        let generics_str = self.generics_to_string(&filtered);
 
         let mut output = Vec::new();
         output.push(format!(

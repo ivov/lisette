@@ -2,7 +2,7 @@
 source: tests/spec/emit/types.rs
 description: |
   
-  enum Container<K, V> {
+  enum Container<K: Comparable, V> {
     Empty,
     Indexed(Map<K, V>),
   }
