@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1783725001782,
+  "lastUpdate": 1783765822029,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -2221,6 +2221,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "emit",
             "value": 30583,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 22929,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 16438,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 12807,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 10078,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 6184,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 4348,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2783,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1031,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 695,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 6046,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 890,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "5bae4a43c827e88907a9e7e7cb335286210385cf",
+          "message": "fix: let Go infer method call type arguments (#993)",
+          "timestamp": "2026-07-11T12:29:57+02:00",
+          "tree_id": "8042cb08feb655534349871d70b0f9a5938bc5cf",
+          "url": "https://github.com/ivov/lisette/commit/5bae4a43c827e88907a9e7e7cb335286210385cf"
+        },
+        "date": 1783765821030,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 114818,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 30589,
             "unit": "lines"
           },
           {
