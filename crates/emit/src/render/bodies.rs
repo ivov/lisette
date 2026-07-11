@@ -132,11 +132,11 @@ impl Renderer {
                 self.render_lowered_block(output, body);
                 output.push_str("}\n");
             }
-            LoweredStatement::Break { label } => match label {
+            LoweredStatement::Break { label, .. } => match label {
                 Some(label) => write_line!(output, "break {}", label),
                 None => output.push_str("break\n"),
             },
-            LoweredStatement::Continue { label } => match label {
+            LoweredStatement::Continue { label, .. } => match label {
                 Some(label) => write_line!(output, "continue {}", label),
                 None => output.push_str("continue\n"),
             },

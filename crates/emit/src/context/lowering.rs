@@ -1,4 +1,5 @@
 use crate::abi::callable::CallableReturnAbi;
+use crate::plan::bodies::LoopId;
 use syntax::types::Type;
 
 #[derive(Clone)]
@@ -70,6 +71,6 @@ impl ReturnContext {
 }
 
 pub(crate) struct LoopContext {
+    pub(crate) id: LoopId,
     pub(crate) result_var: String,
-    pub(crate) label: Option<String>,
 }

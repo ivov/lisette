@@ -26,6 +26,9 @@ pub(crate) struct LoweredBlock {
     pub(crate) statements: Vec<LoweredStatement>,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct LoopId(pub(crate) u32);
+
 pub(crate) fn directed(directive: String, stmt: LoweredStatement) -> LoweredStatement {
     if directive.is_empty() {
         stmt
@@ -42,9 +45,11 @@ pub(crate) enum LoweredStatement {
     Loop(LoopPlan),
     Block(LoweredBlock),
     Break {
+        target: Option<LoopId>,
         label: Option<String>,
     },
     Continue {
+        target: Option<LoopId>,
         label: Option<String>,
     },
     Const(ConstPlan),
@@ -134,6 +139,7 @@ pub(crate) enum ReturnForm {
 pub(crate) struct BreakValuePlan {
     pub(crate) value: ValuePlan,
     pub(crate) disposition: BreakValueDisposition,
+    pub(crate) target: Option<LoopId>,
     pub(crate) label: Option<String>,
 }
 
@@ -190,6 +196,17 @@ pub(crate) enum LetForm {
 
 impl LetForm {
     pub(crate) fn body(&self) -> &LoweredBlock {
+        match self {
+            LetForm::Never { body, .. }
+            | LetForm::SimpleIdentifier { body }
+            | LetForm::Discard { body }
+            | LetForm::ComplexPattern { body }
+            | LetForm::MultiValueCall { body }
+            | LetForm::Refutable { body } => body,
+        }
+    }
+
+    pub(crate) fn body_mut(&mut self) -> &mut LoweredBlock {
         match self {
             LetForm::Never { body, .. }
             | LetForm::SimpleIdentifier { body }
@@ -354,6 +371,14 @@ impl SelectArmPlan {
             | SelectArmPlan::Default { body } => body,
         }
     }
+
+    pub(crate) fn body_mut(&mut self) -> &mut LoweredBlock {
+        match self {
+            SelectArmPlan::Receive { body, .. }
+            | SelectArmPlan::Send { body, .. }
+            | SelectArmPlan::Default { body } => body,
+        }
+    }
 }
 
 pub(crate) struct WhileLetPlan {
@@ -365,6 +390,7 @@ pub(crate) struct WhileLetPlan {
 /// opening brace; `label` is the optional break/continue label.
 pub(crate) struct LoopPlan {
     pub(crate) prologue: Vec<LoweredStatement>,
+    pub(crate) target: Option<LoopId>,
     pub(crate) label: Option<String>,
     pub(crate) header: String,
     pub(crate) body: LoweredBlock,

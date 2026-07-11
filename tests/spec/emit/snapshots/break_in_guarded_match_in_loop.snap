@@ -19,18 +19,18 @@ func find_first_negative(items []int) int {
 	result := 0
 loop_1:
 	for _, item := range items {
-		subject_2 := item
-	match_3:
+		subject_1 := item
+	match_2:
 		for {
 			{
-				n := subject_2
+				n := subject_1
 				if n < 0 {
 					result = n
 					break loop_1
 				}
 			}
 			{
-				break match_3
+				break match_2
 			}
 		}
 	}

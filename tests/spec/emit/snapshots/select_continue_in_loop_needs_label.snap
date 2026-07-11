@@ -42,18 +42,18 @@ func main() {
 	lisette.ChannelClose(ch)
 	processed := ""
 loop_1:
-	for _i_2 := 0; _i_2 < 2; _i_2++ {
-		ch_3 := ch
+	for _i_1 := 0; _i_1 < 2; _i_1++ {
+		ch_2 := ch
 		for {
 			select {
-			case x, ok := <-ch_3:
+			case x, ok := <-ch_2:
 				if ok {
 					if x < 0 {
 						continue loop_1
 					}
 					processed += fmt.Sprintf("%d,", x)
 				} else {
-					ch_3 = nil
+					ch_2 = nil
 					continue
 				}
 			default:

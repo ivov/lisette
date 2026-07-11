@@ -229,7 +229,6 @@ description: |
                         byte_offset: 15,
                         byte_length: 99,
                     },
-                    needs_label: false,
                     binding_id: None,
                 },
             ],

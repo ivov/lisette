@@ -497,6 +497,7 @@ impl Planner<'_> {
         }
         statements.push(LoweredStatement::Loop(LoopPlan {
             prologue: Vec::new(),
+            target: None,
             label: None,
             header: format!("for {index}, {element} := range {source} {{\n"),
             body,

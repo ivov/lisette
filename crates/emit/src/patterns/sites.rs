@@ -13,7 +13,7 @@ use crate::patterns::binding_emit::{
     drop_inline_overlays, tree_assignment_statements, tree_binding_statements,
 };
 use crate::patterns::decision_tree::{self, PatternInfo, render_condition};
-use crate::plan::bodies::{ElseArm, IfPlan, LoopPlan, LoweredBlock, LoweredStatement, PlacePlan};
+use crate::plan::bodies::{ElseArm, IfPlan, LoweredBlock, LoweredStatement, PlacePlan};
 use crate::state::bindings::BindingValue;
 use crate::utils::wrap_if_struct_literal;
 use crate::write_line;
@@ -263,10 +263,7 @@ impl Planner<'_> {
         typed: Option<&TypedPattern>,
         scrutinee: &Expression,
         body: &Expression,
-        needs_label: bool,
     ) -> LoweredBlock {
-        self.set_current_loop_label_if_needed(needs_label);
-        let label = self.current_loop_label().map(str::to_string);
         let scrutinee_ty = scrutinee.get_type();
         let (subject_var, subject_setup) = self.while_let_subject(pattern, scrutinee);
 
@@ -285,17 +282,16 @@ impl Planner<'_> {
                     ty: &scrutinee_ty,
                 },
                 body,
-                label.as_deref(),
+            );
+            let plan = self.build_source_loop(
+                Vec::new(),
+                "for {\n".to_string(),
+                LoweredBlock {
+                    statements: loop_body,
+                },
             );
             return LoweredBlock {
-                statements: vec![LoweredStatement::Loop(LoopPlan {
-                    prologue: Vec::new(),
-                    label,
-                    header: "for {\n".to_string(),
-                    body: LoweredBlock {
-                        statements: loop_body,
-                    },
-                })],
+                statements: vec![LoweredStatement::Loop(plan)],
             };
         }
 
@@ -323,22 +319,23 @@ impl Planner<'_> {
             else_arm: ElseArm::Else {
                 body: LoweredBlock {
                     statements: vec![LoweredStatement::Break {
-                        label: label.clone(),
+                        target: self.current_loop_id(),
+                        label: None,
                     }],
                 },
                 inline: false,
             },
         }));
 
+        let plan = self.build_source_loop(
+            Vec::new(),
+            "for {\n".to_string(),
+            LoweredBlock {
+                statements: loop_body,
+            },
+        );
         LoweredBlock {
-            statements: vec![LoweredStatement::Loop(LoopPlan {
-                prologue: Vec::new(),
-                label,
-                header: "for {\n".to_string(),
-                body: LoweredBlock {
-                    statements: loop_body,
-                },
-            })],
+            statements: vec![LoweredStatement::Loop(plan)],
         }
     }
 
@@ -556,7 +553,6 @@ impl Planner<'_> {
         patterns: &[Pattern],
         subject: TypedSubject,
         body: &Expression,
-        label: Option<&str>,
     ) {
         let TypedSubject {
             var: subject_var,
@@ -607,7 +603,8 @@ impl Planner<'_> {
 
         let terminal = LoweredBlock {
             statements: vec![LoweredStatement::Break {
-                label: label.map(str::to_string),
+                target: self.current_loop_id(),
+                label: None,
             }],
         };
         statements.push(assemble_if_else_chain(pieces, terminal));

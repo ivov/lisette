@@ -17,10 +17,9 @@ package main
 
 func test(items []int) int {
 	sum := 0
-loop_1:
 	for _, item := range items {
 		if item == 0 {
-			break loop_1
+			break
 		}
 		sum += item
 	}

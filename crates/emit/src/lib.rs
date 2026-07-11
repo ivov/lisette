@@ -16,7 +16,7 @@ pub(crate) mod types;
 mod utils;
 
 pub(crate) use analyze::facts::EmitFacts;
-pub(crate) use context::lowering::{LineIndex, LoopContext, ReturnContext};
+pub(crate) use context::lowering::{LineIndex, ReturnContext};
 pub(crate) use definitions::enum_layout::EnumLayout;
 pub(crate) use names::go_name;
 pub(crate) use names::go_name::escape_reserved;
@@ -45,7 +45,7 @@ use names::constraints::GenericConstraintTable;
 use names::go_name::GeneratedPackage;
 use names::packages::{PackageRequirements, PackageUse};
 use plan::ModulePlan;
-use plan::bodies::{LoweredBlock, LoweredStatement};
+use plan::bodies::{LoopId, LoweredBlock, LoweredStatement};
 use state::adapter_registry::AdapterRegistry;
 use state::file_namespace::FileNamespace;
 use state::module_state::{FunctionEmissionState, ModuleState};
@@ -419,10 +419,7 @@ impl<'a> Planner<'a> {
     }
 
     pub(crate) fn push_loop(&mut self, result_var: impl Into<String>) {
-        self.scope.push_loop(LoopContext {
-            result_var: result_var.into(),
-            label: None,
-        });
+        self.scope.push_loop(result_var.into());
     }
 
     pub(crate) fn pop_loop(&mut self) {
@@ -433,8 +430,8 @@ impl<'a> Planner<'a> {
         self.scope.current_loop_result_var()
     }
 
-    pub(crate) fn current_loop_label(&self) -> Option<&str> {
-        self.scope.current_loop_label()
+    pub(crate) fn current_loop_id(&self) -> Option<LoopId> {
+        self.scope.current_loop_id()
     }
 
     /// Push the enclosing function/lambda/try/recover return context. This
@@ -540,13 +537,6 @@ impl<'a> Planner<'a> {
 
     pub(crate) fn fresh_var(&mut self, hint: Option<&str>) -> String {
         self.scope.fresh_go_name(hint)
-    }
-
-    pub(crate) fn set_current_loop_label_if_needed(&mut self, needs_label: bool) {
-        if needs_label {
-            let label = self.fresh_var(Some("loop"));
-            self.scope.set_current_loop_label(label);
-        }
     }
 
     pub(crate) fn push_const_frame(&mut self) {

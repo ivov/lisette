@@ -338,14 +338,12 @@ pub trait AstFolder {
                 iterable,
                 body,
                 span,
-                needs_label,
                 binding_id,
             } => For {
                 binding,
                 iterable: Box::new(self.fold_expression(*iterable)?),
                 body: Box::new(self.fold_expression(*body)?),
                 span,
-                needs_label,
                 binding_id,
             },
 
@@ -353,12 +351,10 @@ pub trait AstFolder {
                 condition,
                 body,
                 span,
-                needs_label,
             } => While {
                 condition: Box::new(self.fold_expression(*condition)?),
                 body: Box::new(self.fold_expression(*body)?),
                 span,
-                needs_label,
             },
 
             WhileLet {
@@ -367,26 +363,18 @@ pub trait AstFolder {
                 body,
                 typed_pattern,
                 span,
-                needs_label,
             } => WhileLet {
                 pattern,
                 scrutinee: Box::new(self.fold_expression(*scrutinee)?),
                 body: Box::new(self.fold_expression(*body)?),
                 typed_pattern,
                 span,
-                needs_label,
             },
 
-            Loop {
-                body,
-                ty,
-                span,
-                needs_label,
-            } => Loop {
+            Loop { body, ty, span } => Loop {
                 body: Box::new(self.fold_expression(*body)?),
                 ty,
                 span,
-                needs_label,
             },
 
             Task {

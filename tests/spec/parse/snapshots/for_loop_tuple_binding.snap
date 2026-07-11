@@ -190,7 +190,6 @@ description: |
                         byte_offset: 41,
                         byte_length: 57,
                     },
-                    needs_label: false,
                     binding_id: None,
                 },
             ],

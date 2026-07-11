@@ -284,7 +284,10 @@ impl Planner<'_> {
             return Some(LoweredBlock {
                 statements: vec![
                     LoweredStatement::RawGo(format!("{} = nil\n", retry_var)),
-                    LoweredStatement::Continue { label: None },
+                    LoweredStatement::Continue {
+                        target: None,
+                        label: None,
+                    },
                 ],
             });
         }

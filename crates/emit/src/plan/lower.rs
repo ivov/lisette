@@ -3,6 +3,7 @@ use crate::Renderer;
 use crate::abi::transition::try_emit_lowered_tail_return;
 use crate::context::expression::ExpressionContext;
 use crate::control_flow::propagation::plain_return;
+use crate::control_flow::targets::legalize_source_loop;
 use crate::definitions::functions::{is_breakless_loop, is_go_never, is_test_context_ty};
 use crate::names::go_name::{prelude_qualifier, testkit_qualifier};
 use crate::plan::bodies::{
@@ -117,15 +118,12 @@ impl Planner<'_> {
         expression: &Expression,
         ty: &Type,
     ) -> ValuePlan {
-        let Expression::Loop {
-            body, needs_label, ..
-        } = expression
-        else {
+        let Expression::Loop { body, .. } = expression else {
             unreachable!("plan_loop_as_operand_temp called on non-Loop expression");
         };
         let (result_var, declaration) = self.operand_temp_declaration(ty);
         self.push_loop(result_var.clone());
-        let plan = self.lower_loop_with_header("for {\n".to_string(), body, *needs_label);
+        let plan = self.lower_loop_with_header("for {\n".to_string(), body);
         self.pop_loop();
         ValuePlan::name(
             vec![declaration, LoweredStatement::Loop(plan)],
@@ -219,19 +217,14 @@ impl Planner<'_> {
                     self.lower_if(condition, consequence, alternative, &PlacePlan::Statement);
                 self.directed_at(expression, LoweredStatement::If(plan))
             }
-            Expression::Loop {
-                body, needs_label, ..
-            } => {
-                let plan = self.lower_infinite_loop(body, *needs_label);
+            Expression::Loop { body, .. } => {
+                let plan = self.lower_infinite_loop(body);
                 self.directed_at(expression, LoweredStatement::Loop(plan))
             }
             Expression::While {
-                condition,
-                body,
-                needs_label,
-                ..
+                condition, body, ..
             } => {
-                let plan = self.lower_while(condition, body, *needs_label);
+                let plan = self.lower_while(condition, body);
                 self.directed_at(expression, LoweredStatement::Loop(plan))
             }
             Expression::Block { .. } => {
@@ -242,12 +235,24 @@ impl Planner<'_> {
             }
             Expression::For { .. } => self.lower_for_statement(expression),
             Expression::Continue { .. } => {
-                let label = self.current_loop_label().map(str::to_string);
-                self.directed_at(expression, LoweredStatement::Continue { label })
+                let target = self.current_loop_id();
+                self.directed_at(
+                    expression,
+                    LoweredStatement::Continue {
+                        target,
+                        label: None,
+                    },
+                )
             }
             Expression::Break { value: None, .. } => {
-                let label = self.current_loop_label().map(str::to_string);
-                self.directed_at(expression, LoweredStatement::Break { label })
+                let target = self.current_loop_id();
+                self.directed_at(
+                    expression,
+                    LoweredStatement::Break {
+                        target,
+                        label: None,
+                    },
+                )
             }
             Expression::Break {
                 value: Some(value), ..
@@ -630,7 +635,6 @@ impl Planner<'_> {
             typed_pattern,
             scrutinee,
             body,
-            needs_label,
             ..
         } = expression
         else {
@@ -638,20 +642,14 @@ impl Planner<'_> {
         };
         let directive = self.maybe_line_directive(&expression.get_span());
         self.push_loop("_");
-        let body = self.lower_while_let(
-            pattern,
-            typed_pattern.as_ref(),
-            scrutinee,
-            body,
-            *needs_label,
-        );
+        let body = self.lower_while_let(pattern, typed_pattern.as_ref(), scrutinee, body);
         self.pop_loop();
         directed(directive, LoweredStatement::WhileLet(WhileLetPlan { body }))
     }
 
-    fn lower_infinite_loop(&mut self, body: &Expression, needs_label: bool) -> LoopPlan {
+    fn lower_infinite_loop(&mut self, body: &Expression) -> LoopPlan {
         self.push_loop("_");
-        let plan = self.lower_loop_with_header("for {\n".to_string(), body, needs_label);
+        let plan = self.lower_loop_with_header("for {\n".to_string(), body);
         self.pop_loop();
         plan
     }
@@ -661,12 +659,7 @@ impl Planner<'_> {
         plan.into_parts()
     }
 
-    fn lower_while(
-        &mut self,
-        condition: &Expression,
-        body: &Expression,
-        needs_label: bool,
-    ) -> LoopPlan {
+    fn lower_while(&mut self, condition: &Expression, body: &Expression) -> LoopPlan {
         self.push_loop("_");
         let (setup, rendered) = self.lower_condition(condition);
         let header = if !setup.is_empty() {
@@ -685,30 +678,38 @@ impl Planner<'_> {
         } else {
             format!("for {} {{\n", wrap_if_struct_literal(rendered))
         };
-        let plan = self.lower_loop_with_header(header, body, needs_label);
+        let plan = self.lower_loop_with_header(header, body);
         self.pop_loop();
         plan
     }
 
-    /// Shared loop lowering once the header is known: set the label, lower
-    /// the body in a fresh scope. Caller owns `push_loop`/`pop_loop`.
-    pub(crate) fn lower_loop_with_header(
-        &mut self,
-        header: String,
-        body: &Expression,
-        needs_label: bool,
-    ) -> LoopPlan {
-        self.set_current_loop_label_if_needed(needs_label);
-        let label = self.current_loop_label().map(str::to_string);
+    /// Shared loop lowering once the header is known. Caller owns
+    /// `push_loop`/`pop_loop`.
+    pub(crate) fn lower_loop_with_header(&mut self, header: String, body: &Expression) -> LoopPlan {
         self.enter_scope();
         let lowered_body = self.lower_block_as_body(body);
         self.exit_scope();
-        LoopPlan {
-            prologue: Vec::new(),
-            label,
+        self.build_source_loop(Vec::new(), header, lowered_body)
+    }
+
+    pub(crate) fn build_source_loop(
+        &mut self,
+        prologue: Vec<LoweredStatement>,
+        header: String,
+        body: LoweredBlock,
+    ) -> LoopPlan {
+        let mut plan = LoopPlan {
+            prologue,
+            target: Some(
+                self.current_loop_id()
+                    .expect("source loop plan requires an active loop context"),
+            ),
+            label: None,
             header,
-            body: lowered_body,
-        }
+            body,
+        };
+        legalize_source_loop(&mut plan);
+        plan
     }
 
     /// Lower a branch arm body in statement position (`PlacePlan::Statement`).

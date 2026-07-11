@@ -3,7 +3,7 @@ use crate::Renderer;
 use crate::context::expression::ExpressionContext;
 use crate::patterns::binding_decls::pattern_has_bindings;
 use crate::patterns::sites::PatternSubject;
-use crate::plan::bodies::{LoopPlan, LoweredBlock, LoweredStatement, directed};
+use crate::plan::bodies::{LoweredBlock, LoweredStatement, directed};
 use crate::plan::values::CaptureBoundary;
 use crate::types::native::NativeGoType;
 use crate::types::shape::RangeShape;
@@ -17,7 +17,6 @@ impl Planner<'_> {
             binding,
             iterable,
             body,
-            needs_label,
             ..
         } = full_expression
         else {
@@ -25,7 +24,6 @@ impl Planner<'_> {
         };
         let iterable = iterable.as_ref();
         let body = body.as_ref();
-        let needs_label = *needs_label;
         let iterable_ty = iterable.get_type();
         let is_range = matches!(iterable, Expression::Range { .. });
         let stored_range = (!is_range)
@@ -43,8 +41,6 @@ impl Planner<'_> {
 
         let directive = self.maybe_line_directive(&full_expression.get_span());
         self.push_loop("_");
-        self.set_current_loop_label_if_needed(needs_label);
-        let label = self.current_loop_label().map(str::to_string);
 
         let (prologue, header, lowered_body) = if is_range {
             self.lower_range_for(binding, iterable, body)
@@ -63,17 +59,9 @@ impl Planner<'_> {
             self.lower_pattern_site_for(binding, iterable, body)
         };
 
+        let plan = self.build_source_loop(prologue, header, lowered_body);
         self.pop_loop();
-
-        directed(
-            directive,
-            LoweredStatement::Loop(LoopPlan {
-                prologue,
-                label,
-                header,
-                body: lowered_body,
-            }),
-        )
+        directed(directive, LoweredStatement::Loop(plan))
     }
 
     /// Plan `expr` as an operand, pushing its setup into `prologue` and

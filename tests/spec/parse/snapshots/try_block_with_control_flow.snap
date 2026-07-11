@@ -174,7 +174,6 @@ description: |
                                     byte_offset: 38,
                                     byte_length: 63,
                                 },
-                                needs_label: false,
                                 binding_id: None,
                             },
                             Propagate {

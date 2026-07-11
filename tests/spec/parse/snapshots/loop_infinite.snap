@@ -91,7 +91,6 @@ description: |
                         byte_offset: 15,
                         byte_length: 32,
                     },
-                    needs_label: false,
                 },
             ],
             ty: Var {

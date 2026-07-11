@@ -271,7 +271,6 @@ impl<'source> Parser<'source> {
             iterable: iterable.into(),
             body: body.into(),
             span: self.span_from_tokens(start),
-            needs_label: false,
             binding_id: None,
         }
     }
@@ -292,7 +291,6 @@ impl<'source> Parser<'source> {
             condition: condition.into(),
             body: body.into(),
             span: self.span_from_tokens(start),
-            needs_label: false,
         }
     }
 
@@ -310,7 +308,6 @@ impl<'source> Parser<'source> {
             body: body.into(),
             typed_pattern: None,
             span: self.span_from_tokens(start),
-            needs_label: false,
         }
     }
 
@@ -324,7 +321,6 @@ impl<'source> Parser<'source> {
             body: body.into(),
             ty: Type::uninferred(),
             span: self.span_from_tokens(start),
-            needs_label: false,
         }
     }
 

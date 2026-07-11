@@ -262,12 +262,9 @@ impl Planner<'_> {
             return self.lower_option_result_assignment(var, target_ty, expression);
         }
 
-        if let Expression::Loop {
-            body, needs_label, ..
-        } = expression
-        {
+        if let Expression::Loop { body, .. } = expression {
             self.push_loop(var);
-            let plan = self.lower_loop_with_header("for {\n".to_string(), body, *needs_label);
+            let plan = self.lower_loop_with_header("for {\n".to_string(), body);
             self.pop_loop();
             return vec![LoweredStatement::Loop(plan)];
         }
@@ -670,11 +667,11 @@ impl Planner<'_> {
         } else {
             BreakValueDisposition::Discard
         };
-        let label = self.current_loop_label().map(str::to_string);
         BreakValuePlan {
             value,
             disposition,
-            label,
+            target: self.current_loop_id(),
+            label: None,
         }
     }
 }

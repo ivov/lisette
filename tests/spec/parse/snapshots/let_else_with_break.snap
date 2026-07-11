@@ -204,7 +204,6 @@ description: |
                         byte_offset: 15,
                         byte_length: 79,
                     },
-                    needs_label: false,
                 },
             ],
             ty: Var {

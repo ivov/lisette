@@ -6,10 +6,12 @@ use crate::Bindings;
 use crate::ReturnContext;
 use crate::context::lowering::LoopContext;
 use crate::escape_reserved;
+use crate::plan::bodies::LoopId;
 use crate::state::bindings::{BindingValue, InlineExpr};
 
 pub(crate) struct ScopeState {
     next_var: usize,
+    next_loop_id: u32,
     bindings: Bindings,
     declared: Vec<HashSet<String>>,
     type_param_go_names: HashSet<String>,
@@ -36,6 +38,7 @@ impl ScopeState {
     pub(crate) fn new() -> Self {
         Self {
             next_var: 0,
+            next_loop_id: 0,
             bindings: Bindings::new(),
             declared: vec![HashSet::default()],
             type_param_go_names: HashSet::default(),
@@ -70,6 +73,7 @@ impl ScopeState {
 
     pub(crate) fn reset_for_top_level(&mut self) {
         self.next_var = 0;
+        self.next_loop_id = 0;
         self.bindings.reset();
         self.declared.clear();
         self.declared.push(HashSet::default());
@@ -215,8 +219,10 @@ impl ScopeState {
         self.next_var = checkpoint;
     }
 
-    pub(crate) fn push_loop(&mut self, ctx: LoopContext) {
-        self.loop_stack.push(ctx);
+    pub(crate) fn push_loop(&mut self, result_var: String) {
+        let id = LoopId(self.next_loop_id);
+        self.next_loop_id += 1;
+        self.loop_stack.push(LoopContext { id, result_var });
     }
 
     pub(crate) fn pop_loop(&mut self) {
@@ -251,14 +257,8 @@ impl ScopeState {
         self.loop_stack.last().map(|c| c.result_var.as_str())
     }
 
-    pub(crate) fn current_loop_label(&self) -> Option<&str> {
-        self.loop_stack.last().and_then(|c| c.label.as_deref())
-    }
-
-    pub(crate) fn set_current_loop_label(&mut self, label: String) {
-        if let Some(ctx) = self.loop_stack.last_mut() {
-            ctx.label = Some(label);
-        }
+    pub(crate) fn current_loop_id(&self) -> Option<LoopId> {
+        self.loop_stack.last().map(|context| context.id)
     }
 
     pub(crate) fn try_acquire_assign_target(&mut self, var: &str) -> bool {

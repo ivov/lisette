@@ -946,13 +946,11 @@ pub enum Expression {
         body: Box<Expression>,
         ty: Type,
         span: Span,
-        needs_label: bool,
     },
     While {
         condition: Box<Expression>,
         body: Box<Expression>,
         span: Span,
-        needs_label: bool,
     },
     WhileLet {
         pattern: Pattern,
@@ -960,14 +958,12 @@ pub enum Expression {
         body: Box<Expression>,
         typed_pattern: Option<TypedPattern>,
         span: Span,
-        needs_label: bool,
     },
     For {
         binding: Box<Binding>,
         iterable: Box<Expression>,
         body: Box<Expression>,
         span: Span,
-        needs_label: bool,
         binding_id: Option<BindingId>,
     },
     Break {

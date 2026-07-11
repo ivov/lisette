@@ -17,15 +17,14 @@ package main
 func test() int {
 	n := 0
 	var tmp_1 int
-loop_2:
 	for {
-		var tmp_3 int
+		var tmp_2 int
 		if n == 5 {
 			tmp_1 = n
-			break loop_2
+			break
 		}
-		tmp_3 = n + 1
-		n = tmp_3
+		tmp_2 = n + 1
+		n = tmp_2
 	}
 	return tmp_1
 }

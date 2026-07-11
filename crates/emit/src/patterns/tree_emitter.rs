@@ -312,11 +312,13 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         self.walk(&mut body, tree, &ctx);
         if !unguarded_exit {
             body.push(LoweredStatement::Break {
+                target: None,
                 label: Some(label.clone()),
             });
         }
         statements.push(LoweredStatement::Loop(LoopPlan {
             prologue: Vec::new(),
+            target: None,
             label: Some(label),
             header: "for {\n".to_string(),
             body: LoweredBlock { statements: body },
@@ -1158,6 +1160,7 @@ fn apply_leaf_terminator(
         && !body_diverges
     {
         statements.push(LoweredStatement::Break {
+            target: None,
             label: Some(label.to_string()),
         });
     }

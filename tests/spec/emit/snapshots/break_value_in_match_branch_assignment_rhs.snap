@@ -15,16 +15,15 @@ package main
 
 func test() {
 	var tmp_1 int
-loop_2:
 	for {
 		x := 0
-		var tmp_3 int
+		var tmp_2 int
 		if 1 == 1 {
 			tmp_1 = 1
-			break loop_2
+			break
 		}
-		tmp_3 = 1
-		x = tmp_3
+		tmp_2 = 1
+		x = tmp_2
 		_ = x
 	}
 	_ = tmp_1

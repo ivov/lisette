@@ -18,12 +18,11 @@ package main
 
 func test() {
 	i := 0
-loop_1:
 	for i < 100 {
 		var v int
-		subject_2 := i >= 5
-		if subject_2 {
-			break loop_1
+		subject_1 := i >= 5
+		if subject_1 {
+			break
 		}
 		v = i
 		_ = v

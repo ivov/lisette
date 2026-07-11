@@ -141,7 +141,6 @@ description: |
                         byte_offset: 13,
                         byte_length: 27,
                     },
-                    needs_label: false,
                     binding_id: None,
                 },
             ],

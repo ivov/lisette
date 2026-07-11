@@ -724,6 +724,35 @@ fn main() {
 }
 
 #[test]
+fn select_retry_region_preserves_nested_loop_target() {
+    let input = r#"
+fn main() {
+  let ch = Channel.buffered<int>(1)
+  ch.send(1)
+  let mut total = 0
+  loop {
+    select {
+      let Some(_) = ch.receive() => {
+        for i in 0..2 {
+          if i == 0 {
+            continue
+          }
+          total += 1
+        }
+        break
+      },
+      _ => break,
+    }
+  }
+  if total != 1 {
+    panic(f"expected 1, got {total}")
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn select_arm_binding_does_not_leak() {
     let input = r#"
 import "go:fmt"

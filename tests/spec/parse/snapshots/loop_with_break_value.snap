@@ -149,7 +149,6 @@ description: |
                             byte_offset: 23,
                             byte_length: 48,
                         },
-                        needs_label: false,
                     },
                     mutable: false,
                     mut_span: None,

@@ -48,10 +48,6 @@ impl InferCtx<'_, '_> {
         self.check_multiple_select_receives(&arms);
         self.check_duplicate_select_defaults(&arms);
 
-        let has_retry_loop = arms.iter().any(|arm| {
-            matches!(&arm.pattern, SelectArmPattern::Receive { binding, .. } if binding.is_some_pattern())
-        });
-
         let result_ty = self.new_type_var();
         self.unify(expected_ty, &result_ty, &span);
 
@@ -88,18 +84,12 @@ impl InferCtx<'_, '_> {
                         receive_expression,
                         body,
                         ..
-                    } => self.infer_select_receive(
-                        binding,
-                        receive_expression,
-                        body,
-                        arm_target,
-                        has_retry_loop,
-                    ),
+                    } => self.infer_select_receive(binding, receive_expression, body, arm_target),
 
                     SelectArmPattern::Send {
                         send_expression,
                         body,
-                    } => self.infer_select_send(send_expression, body, arm_target, has_retry_loop),
+                    } => self.infer_select_send(send_expression, body, arm_target),
 
                     SelectArmPattern::MatchReceive {
                         receive_expression,
@@ -109,11 +99,10 @@ impl InferCtx<'_, '_> {
                         match_arms,
                         arm_target,
                         value_position,
-                        has_retry_loop,
                     ),
 
                     SelectArmPattern::WildCard { body } => {
-                        self.infer_select_wildcard(body, arm_target, has_retry_loop)
+                        self.infer_select_wildcard(body, arm_target)
                     }
                 };
 
@@ -161,30 +150,12 @@ impl InferCtx<'_, '_> {
         }
     }
 
-    fn infer_select_arm_body(
-        &mut self,
-        body: Expression,
-        expected_ty: &Type,
-        has_retry_loop: bool,
-    ) -> Expression {
-        let saved_in_match_arm = self.scopes.set_in_match_arm(true);
-        let saved_in_retry_loop_arm = self
-            .scopes
-            .set_in_retry_loop_arm(self.scopes.is_in_retry_loop_arm() || has_retry_loop);
-        self.scopes.set_in_subexpression(false);
-        let new_body = self.infer_expression(body, expected_ty);
-        self.scopes.set_in_retry_loop_arm(saved_in_retry_loop_arm);
-        self.scopes.set_in_match_arm(saved_in_match_arm);
-        new_body
-    }
-
     fn infer_select_receive(
         &mut self,
         binding: Box<Pattern>,
         receive_expression: Box<Expression>,
         body: Box<Expression>,
         result_ty: &Type,
-        has_retry_loop: bool,
     ) -> SelectArmPattern {
         let receive_ty = self.new_type_var();
         let new_receive_expression = self.infer_expression(*receive_expression, &receive_ty);
@@ -255,7 +226,8 @@ impl InferCtx<'_, '_> {
             syntax::ast::BindingKind::Let { mutable: false },
         );
 
-        let new_body = self.infer_select_arm_body(*body, result_ty, has_retry_loop);
+        self.scopes.set_in_subexpression(false);
+        let new_body = self.infer_expression(*body, result_ty);
 
         SelectArmPattern::Receive {
             binding: Box::new(new_binding),
@@ -270,7 +242,6 @@ impl InferCtx<'_, '_> {
         send_expression: Box<Expression>,
         body: Box<Expression>,
         result_ty: &Type,
-        has_retry_loop: bool,
     ) -> SelectArmPattern {
         let send_ty = self.new_type_var();
         let new_send_expression = self.infer_expression(*send_expression, &send_ty);
@@ -285,7 +256,8 @@ impl InferCtx<'_, '_> {
             ));
         }
 
-        let new_body = self.infer_select_arm_body(*body, result_ty, has_retry_loop);
+        self.scopes.set_in_subexpression(false);
+        let new_body = self.infer_expression(*body, result_ty);
 
         SelectArmPattern::Send {
             send_expression: Box::new(new_send_expression),
@@ -299,7 +271,6 @@ impl InferCtx<'_, '_> {
         match_arms: Vec<MatchArm>,
         result_ty: &Type,
         value_position: bool,
-        has_retry_loop: bool,
     ) -> SelectArmPattern {
         let receive_ty = self.new_type_var();
         let new_receive_expression = self.infer_expression(*receive_expression, &receive_ty);
@@ -356,8 +327,8 @@ impl InferCtx<'_, '_> {
                     result_ty
                 };
 
-                let new_expression =
-                    self.infer_select_arm_body(*match_arm.expression, arm_expected, has_retry_loop);
+                self.scopes.set_in_subexpression(false);
+                let new_expression = self.infer_expression(*match_arm.expression, arm_expected);
 
                 if needs_reconciliation {
                     arm_expression_types.push(arm_expected.clone());
@@ -399,9 +370,9 @@ impl InferCtx<'_, '_> {
         &mut self,
         body: Box<Expression>,
         result_ty: &Type,
-        has_retry_loop: bool,
     ) -> SelectArmPattern {
-        let new_body = self.infer_select_arm_body(*body, result_ty, has_retry_loop);
+        self.scopes.set_in_subexpression(false);
+        let new_body = self.infer_expression(*body, result_ty);
         SelectArmPattern::WildCard {
             body: Box::new(new_body),
         }

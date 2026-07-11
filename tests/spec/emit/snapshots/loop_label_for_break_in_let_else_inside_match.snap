@@ -35,19 +35,18 @@ func maybe(flag bool) (int, bool) {
 
 func test() int {
 	count := 0
-loop_1:
 	for {
 		count++
 		if count > 5 {
-			break loop_1
+			break
 		}
 		if count == 1 {
-			option_3 := lisette.OptionFromCommaOk[int](maybe(true))
-			subject_2 := option_3
-			if subject_2.Tag != lisette.OptionSome {
-				break loop_1
+			option_2 := lisette.OptionFromCommaOk[int](maybe(true))
+			subject_1 := option_2
+			if subject_1.Tag != lisette.OptionSome {
+				break
 			}
-			v := subject_2.SomeVal
+			v := subject_1.SomeVal
 			_ = v
 		}
 	}
