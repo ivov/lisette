@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1783771143199,
+  "lastUpdate": 1783774331366,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -2518,6 +2518,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "lsp",
             "value": 4348,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2783,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1031,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 695,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 6046,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 890,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "0efc0bec291c56990e30b02a9d6d16a5c3b2af1d",
+          "message": "feat: polish array API, diagnostics, tooling (#996)",
+          "timestamp": "2026-07-11T14:51:47+02:00",
+          "tree_id": "7b6aa622ce6e0a6670c9f05cc8097781e029ff1e",
+          "url": "https://github.com/ivov/lisette/commit/0efc0bec291c56990e30b02a9d6d16a5c3b2af1d"
+        },
+        "date": 1783774330328,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 114900,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 30759,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 22848,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 16438,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 12787,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 10082,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 6190,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 4351,
             "unit": "lines"
           },
           {
