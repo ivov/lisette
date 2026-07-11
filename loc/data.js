@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1783765822029,
+  "lastUpdate": 1783767406962,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -2310,6 +2310,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "emit",
             "value": 30589,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 22929,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 16438,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 12807,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 10078,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 6184,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 4348,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2783,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1031,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 695,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 6046,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 890,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "32723ee250ad0ca0662b505dac0e6e68b8b769fd",
+          "message": "refactor: give each emitted file its own package namespace (#994)",
+          "timestamp": "2026-07-11T12:56:26+02:00",
+          "tree_id": "949d272f7e1209c15c15071447405f03579ba573",
+          "url": "https://github.com/ivov/lisette/commit/32723ee250ad0ca0662b505dac0e6e68b8b769fd"
+        },
+        "date": 1783767406405,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 114783,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 30554,
             "unit": "lines"
           },
           {
