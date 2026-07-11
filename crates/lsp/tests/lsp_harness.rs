@@ -7,10 +7,10 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 use tokio::io::{DuplexStream, ReadHalf, WriteHalf};
 use tokio_util::codec::{Decoder, Encoder, FramedRead, FramedWrite};
+use tower_lsp::Server;
 use tower_lsp::lsp_types::*;
-use tower_lsp::{LspService, Server};
 
-use lisette_lsp::Backend;
+use lisette_lsp::build_service;
 
 /// LSP message codec implementing Content-Length framing.
 struct LspCodec;
@@ -60,6 +60,7 @@ pub struct TestClient {
     writer: FramedWrite<WriteHalf<DuplexStream>, LspCodec>,
     next_id: i64,
     buffered: Vec<Value>,
+    exit_code: tokio::sync::oneshot::Receiver<i32>,
 }
 
 fn init_test_typedef_home() {
@@ -82,7 +83,7 @@ impl TestClient {
         let (server_read, server_write) = tokio::io::split(server);
         let (client_read, client_write) = tokio::io::split(client);
 
-        let (service, socket) = LspService::new(|client| Backend::new(client, None));
+        let (service, socket, exit_code) = build_service(None);
         tokio::spawn(Server::new(server_read, server_write, socket).serve(service));
 
         Self {
@@ -90,10 +91,15 @@ impl TestClient {
             writer: FramedWrite::new(client_write, LspCodec),
             next_id: 1,
             buffered: Vec::new(),
+            exit_code,
         }
     }
 
-    async fn request<T: for<'de> Deserialize<'de>>(&mut self, method: &str, params: Value) -> T {
+    async fn try_request<T: for<'de> Deserialize<'de>>(
+        &mut self,
+        method: &str,
+        params: Value,
+    ) -> Result<T, String> {
         let id = self.next_id;
         self.next_id += 1;
 
@@ -105,10 +111,22 @@ impl TestClient {
         loop {
             let msg = self.reader.next().await.unwrap().unwrap();
             if msg.get("id") == Some(&json!(id)) {
-                return serde_json::from_value(msg.get("result").cloned().unwrap_or(Value::Null))
-                    .unwrap();
+                if let Some(error) = msg.get("error") {
+                    return Err(error["message"].as_str().unwrap_or_default().to_owned());
+                }
+                return Ok(serde_json::from_value(
+                    msg.get("result").cloned().unwrap_or(Value::Null),
+                )
+                .unwrap());
             }
             self.buffered.push(msg);
+        }
+    }
+
+    async fn request<T: for<'de> Deserialize<'de>>(&mut self, method: &str, params: Value) -> T {
+        match self.try_request(method, params).await {
+            Ok(result) => result,
+            Err(error) => panic!("{method} request failed: {error}"),
         }
     }
 
@@ -294,17 +312,46 @@ impl TestClient {
         .await
     }
 
+    pub async fn try_prepare_rename(
+        &mut self,
+        uri: &str,
+        line: u32,
+        character: u32,
+    ) -> Result<Option<PrepareRenameResponse>, String> {
+        self.try_request(
+            "textDocument/prepareRename",
+            json!({
+                "textDocument": {"uri": uri},
+                "position": {"line": line, "character": character}
+            }),
+        )
+        .await
+    }
+
     pub async fn prepare_rename(
         &mut self,
         uri: &str,
         line: u32,
         character: u32,
     ) -> Option<PrepareRenameResponse> {
-        self.request(
-            "textDocument/prepareRename",
+        self.try_prepare_rename(uri, line, character)
+            .await
+            .expect("prepareRename request failed")
+    }
+
+    pub async fn try_rename(
+        &mut self,
+        uri: &str,
+        line: u32,
+        character: u32,
+        new_name: &str,
+    ) -> Result<Option<WorkspaceEdit>, String> {
+        self.try_request(
+            "textDocument/rename",
             json!({
                 "textDocument": {"uri": uri},
-                "position": {"line": line, "character": character}
+                "position": {"line": line, "character": character},
+                "newName": new_name
             }),
         )
         .await
@@ -317,15 +364,9 @@ impl TestClient {
         character: u32,
         new_name: &str,
     ) -> Option<WorkspaceEdit> {
-        self.request(
-            "textDocument/rename",
-            json!({
-                "textDocument": {"uri": uri},
-                "position": {"line": line, "character": character},
-                "newName": new_name
-            }),
-        )
-        .await
+        self.try_rename(uri, line, character, new_name)
+            .await
+            .expect("rename request failed")
     }
 
     pub async fn code_action(
@@ -369,6 +410,14 @@ impl TestClient {
 
     pub async fn shutdown(&mut self) {
         let _: Value = self.request("shutdown", json!(null)).await;
+    }
+
+    pub async fn exit(&mut self) {
+        self.notify("exit", json!(null)).await;
+    }
+
+    pub async fn await_exit_code(self) -> i32 {
+        self.exit_code.await.unwrap()
     }
 }
 

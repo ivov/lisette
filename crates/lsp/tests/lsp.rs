@@ -639,11 +639,13 @@ async fn rename_rejects_keywords() {
         .open(TEST_URI, "fn main() {\n  let foo = 1\n  foo + 1\n}")
         .await;
 
-    let edit = client.rename(TEST_URI, 1, 6, "fn").await;
-    assert!(edit.is_none());
-
-    let edit = client.rename(TEST_URI, 1, 6, "assert").await;
-    assert!(edit.is_none());
+    for keyword in ["fn", "assert"] {
+        let error = client
+            .try_rename(TEST_URI, 1, 6, keyword)
+            .await
+            .unwrap_err();
+        assert_eq!(error, format!("'{keyword}' is a reserved keyword"));
+    }
 
     client.shutdown().await;
 }
@@ -4318,7 +4320,7 @@ async fn stress_test_all_positions(source: &str) -> bool {
             let _comp = client.completion(TEST_URI, line, col).await;
             let _sig = client.signature_help(TEST_URI, line, col).await;
             let _refs = client.references(TEST_URI, line, col, true).await;
-            let _rename = client.prepare_rename(TEST_URI, line, col).await;
+            let _rename = client.try_prepare_rename(TEST_URI, line, col).await;
             let _inlay = client
                 .inlay_hint(TEST_URI, (line, col), doc_end(source))
                 .await;
@@ -7125,12 +7127,9 @@ async fn stress_rename_empty_name() {
     client.initialize().await;
     client.open(TEST_URI, "fn main() { let x = 1; x }").await;
 
-    // Rename to empty string — should be rejected by validation
-    let edit = client.rename(TEST_URI, 0, 16, "").await;
-    // rename() returns None or error when validation fails
-    let _ = edit;
+    let error = client.try_rename(TEST_URI, 0, 16, "").await.unwrap_err();
+    assert_eq!(error, "Identifier cannot be empty");
 
-    // Server should still be alive
     let hover = client.hover(TEST_URI, 0, 4).await;
     assert!(hover.is_some());
 
@@ -7143,17 +7142,14 @@ async fn stress_rename_to_keyword() {
     client.initialize().await;
     client.open(TEST_URI, "fn main() { let x = 1; x }").await;
 
-    // Rename to keyword — should be rejected
-    let edit = client.rename(TEST_URI, 0, 16, "fn").await;
-    let _ = edit;
+    for keyword in ["fn", "let", "match"] {
+        let error = client
+            .try_rename(TEST_URI, 0, 16, keyword)
+            .await
+            .unwrap_err();
+        assert_eq!(error, format!("'{keyword}' is a reserved keyword"));
+    }
 
-    let edit = client.rename(TEST_URI, 0, 16, "let").await;
-    let _ = edit;
-
-    let edit = client.rename(TEST_URI, 0, 16, "match").await;
-    let _ = edit;
-
-    // Server still alive
     let hover = client.hover(TEST_URI, 0, 4).await;
     assert!(hover.is_some());
 
@@ -7166,12 +7162,32 @@ async fn stress_rename_to_special_characters() {
     client.initialize().await;
     client.open(TEST_URI, "fn main() { let x = 1; x }").await;
 
-    for name in ["123abc", "a-b", "a b", "a.b", "@foo", ""] {
-        let edit = client.rename(TEST_URI, 0, 16, name).await;
-        let _ = edit;
+    for (name, expected) in [
+        (
+            "123abc",
+            "Identifier must start with a letter or underscore, not '1'",
+        ),
+        (
+            "a-b",
+            "Identifier cannot contain '-' - only letters, digits, and underscores allowed",
+        ),
+        (
+            "a b",
+            "Identifier cannot contain ' ' - only letters, digits, and underscores allowed",
+        ),
+        (
+            "a.b",
+            "Identifier cannot contain '.' - only letters, digits, and underscores allowed",
+        ),
+        (
+            "@foo",
+            "Identifier must start with a letter or underscore, not '@'",
+        ),
+    ] {
+        let error = client.try_rename(TEST_URI, 0, 16, name).await.unwrap_err();
+        assert_eq!(error, expected);
     }
 
-    // Server still alive
     let hover = client.hover(TEST_URI, 0, 4).await;
     assert!(hover.is_some());
 
@@ -12856,4 +12872,21 @@ async fn opening_prelude_source_reports_no_foreign_type_errors() {
         "opening the prelude source must not flag its own impls as foreign: {offenders:?}"
     );
     client.shutdown().await;
+}
+
+#[tokio::test]
+async fn exit_after_shutdown_signals_clean_exit() {
+    let mut client = TestClient::new().await;
+    client.initialize().await;
+    client.shutdown().await;
+    client.exit().await;
+    assert_eq!(client.await_exit_code().await, 0);
+}
+
+#[tokio::test]
+async fn exit_without_shutdown_signals_error_exit() {
+    let mut client = TestClient::new().await;
+    client.initialize().await;
+    client.exit().await;
+    assert_eq!(client.await_exit_code().await, 1);
 }

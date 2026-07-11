@@ -9,6 +9,7 @@ mod paths;
 mod patterns;
 mod position;
 mod project;
+mod service;
 mod signature_help;
 mod snapshot;
 mod state;
@@ -36,6 +37,7 @@ use crate::project::find_project_root;
 use crate::snapshot::AnalysisSnapshot;
 use crate::traversal::find_expression_at;
 
+pub use crate::service::{ProtocolAdapter, build_service};
 pub use crate::state::{Backend, SharedState};
 
 #[tower_lsp::async_trait]

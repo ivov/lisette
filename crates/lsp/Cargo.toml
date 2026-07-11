@@ -18,6 +18,7 @@ passes = { package = "lisette-passes", version = "=0.7.0", path = "../passes" }
 diagnostics = { package = "lisette-diagnostics", version = "=0.7.0", path = "../diagnostics" }
 deps = { package = "lisette-deps", version = "=0.7.0", path = "../deps" }
 format = { package = "lisette-format", version = "=0.7.0", path = "../format" }
+tower = { version = "0.4", default-features = false }
 tower-lsp = "0.20"
 tokio = { version = "1", features = ["full"] }
 dashmap = "6"

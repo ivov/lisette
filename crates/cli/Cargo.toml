@@ -29,7 +29,7 @@ emit = { package = "lisette-emit", version = "=0.7.0", path = "../emit" }
 stdlib = { package = "lisette-stdlib", version = "=0.7.0", path = "../stdlib" }
 deps = { package = "lisette-deps", version = "=0.7.0", path = "../deps" }
 lsp = { package = "lisette-lsp", version = "=0.7.0", path = "../lsp" }
-tokio = { version = "1", features = ["rt-multi-thread", "io-std"] }
+tokio = { version = "1", features = ["rt-multi-thread", "io-std", "macros"] }
 tower-lsp = "0.20"
 fs2 = "0.4"
 terminal_size = "0.4"

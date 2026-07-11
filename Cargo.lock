@@ -593,6 +593,7 @@ dependencies = [
  "tempfile",
  "tokio",
  "tokio-util",
+ "tower",
  "tower-lsp",
 ]
 
