@@ -303,6 +303,10 @@ impl<'a> Planner<'a> {
         function_string: &mut String,
         ctx: ExpressionContext<'_>,
     ) -> String {
+        if callee_curries_receiver(callee) {
+            return String::new();
+        }
+
         let has_value_args = arg_shape.value_count > 0 || arg_shape.has_spread;
         if let Some(recipe) = self.callee_collapsed_recipe(callee) {
             if has_value_args && self.collapsed_callee_fully_inferable(callee, arg_shape) {
@@ -874,6 +878,19 @@ impl<'a> Planner<'a> {
             GoExpression::opaque_with_deferred_evaluation(coerced, true)
         }))
     }
+}
+
+fn callee_curries_receiver(callee: &ResolvedCallee<'_>) -> bool {
+    let Some(Type::Forall { body, .. }) = callee.declared.as_ref() else {
+        return false;
+    };
+    let Type::Function(declared_fn) = body.as_ref() else {
+        return false;
+    };
+    callee
+        .instantiated
+        .as_function_type()
+        .is_some_and(|instantiated_fn| instantiated_fn.params.len() < declared_fn.params.len())
 }
 
 /// The element type of a `VarArgs<T>`, or the type itself when not variadic.

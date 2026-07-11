@@ -2569,3 +2569,31 @@ pub fn Use(x: Option<Ref<Slice<Option<string>>>>)
 "#;
     assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/aws", typedef)]);
 }
+
+#[test]
+fn interop_generic_go_method_no_type_args() {
+    let input = r#"
+import "go:example.com/ttl"
+
+fn main() {
+  let cache = ttl.New<string, int>()
+  let _ = cache.Get("key")
+  cache.Set("key", 1, ttl.DefaultTTL)
+}
+"#;
+    let typedef = r#"
+pub type Duration = int64
+
+pub const DefaultTTL: Duration = 0
+
+pub type Cache<K: Comparable, V>
+
+pub fn New<K: Comparable, V>() -> Ref<Cache<K, V>>
+
+impl<K: Comparable, V> Cache<K, V> {
+  fn Get(self: Ref<Cache<K, V>>, key: K) -> V
+  fn Set(self: Ref<Cache<K, V>>, key: K, value: V, ttl: Duration)
+}
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/ttl", typedef)]);
+}

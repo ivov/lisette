@@ -291,12 +291,10 @@ impl Planner<'_> {
         }
     }
 
-    #[allow(clippy::too_many_arguments)]
     pub(super) fn lower_receiver_method_ufcs(
         &mut self,
         function: &Expression,
         args: &[Expression],
-        type_args: &[Type],
         method: &str,
         is_public: bool,
         spread: Option<&Expression>,
@@ -326,8 +324,6 @@ impl Planner<'_> {
         let receiver = emitted_all[0].clone();
         let emitted_rest: Vec<String> = emitted_all[1..].to_vec();
 
-        let type_args_string = self.format_type_args(type_args);
-
         let receiver = if let Some(stripped) = receiver.strip_prefix('&') {
             if is_address_of_composite_literal(args.first()) {
                 format!("(&{})", stripped)
@@ -343,7 +339,7 @@ impl Planner<'_> {
         ValuePlan::observable_call(
             setup,
             GoExpression::call(
-                GoExpression::opaque(format!("{}.{}{}", receiver, go_method, type_args_string)),
+                GoExpression::opaque(format!("{}.{}", receiver, go_method)),
                 emitted_rest.into_iter().map(GoExpression::opaque).collect(),
             ),
             EvaluationEffect::EffectfulCall,

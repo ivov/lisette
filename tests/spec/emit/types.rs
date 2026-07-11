@@ -1433,6 +1433,25 @@ fn main() -> int {
 }
 
 #[test]
+fn generic_receiver_method_ufcs_explicit_type_arg() {
+    let input = r#"
+struct Box<T> { value: T }
+
+impl<T> Box<T> {
+  fn get(self) -> T {
+    self.value
+  }
+}
+
+fn main() -> int {
+  let b = Box { value: 42 };
+  Box.get<int>(b)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn generic_fn_explicit_unknown_type_arg() {
     let input = r#"
 fn foo<T>(args: T) -> T {

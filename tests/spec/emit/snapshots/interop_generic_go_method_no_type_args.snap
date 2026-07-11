@@ -1,0 +1,21 @@
+---
+source: tests/spec/emit/interop_matrix.rs
+description: |
+  
+  import "go:example.com/ttl"
+  
+  fn main() {
+    let cache = ttl.New<string, int>()
+    let _ = cache.Get("key")
+    cache.Set("key", 1, ttl.DefaultTTL)
+  }
+---
+package main
+
+import "example.com/ttl"
+
+func main() {
+	cache := ttl.New[string, int]()
+	_ = cache.Get("key")
+	cache.Set("key", 1, ttl.DefaultTTL)
+}

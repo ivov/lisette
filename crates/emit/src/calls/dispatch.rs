@@ -360,14 +360,8 @@ impl Planner<'_> {
             }
             CallableOrigin::ReceiverMethodUfcs { is_public } => {
                 let method = extract_receiver_ufcs_method(function);
-                return self.lower_receiver_method_ufcs(
-                    function,
-                    args,
-                    resolved_type_args,
-                    &method,
-                    *is_public,
-                    spread,
-                );
+                return self
+                    .lower_receiver_method_ufcs(function, args, &method, *is_public, spread);
             }
             CallableOrigin::GoInterop | CallableOrigin::Regular => {}
         }

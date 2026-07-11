@@ -1,0 +1,31 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  struct Box<T> { value: T }
+  
+  impl<T> Box<T> {
+    fn get(self) -> T {
+      self.value
+    }
+  }
+  
+  fn main() -> int {
+    let b = Box { value: 42 };
+    Box.get<int>(b)
+  }
+---
+package main
+
+type Box[T any] struct {
+	value T
+}
+
+func (b Box[T]) get() T {
+	return b.value
+}
+
+func main() int {
+	b := Box[int]{value: 42}
+	return b.get()
+}
