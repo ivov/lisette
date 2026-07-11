@@ -22,7 +22,7 @@ pub(crate) fn check(expression: &Expression, ctx: &NodeCtx) {
         return;
     }
 
-    if !is_math_nan_call(operand.unwrap_parens()) {
+    if !is_math_nan_call(operand.unwrap_parens(), ctx) {
         return;
     }
 

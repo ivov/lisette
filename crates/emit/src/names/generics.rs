@@ -3,10 +3,10 @@ use std::borrow::Cow;
 use rustc_hash::FxHashMap as HashMap;
 
 use crate::Planner;
-use crate::names::constraints::{ConstraintAtom, ParamConstraintSet, classify_builtin_name};
 use crate::names::go_name;
 use syntax::EcoString;
 use syntax::ast::{Annotation, Generic};
+use syntax::program::{GenericConstraint, GenericConstraints};
 use syntax::types::Type;
 
 fn build_type_map(generics: &[Generic], type_args: &[Type]) -> HashMap<EcoString, Type> {
@@ -58,17 +58,19 @@ impl Planner<'_> {
             return String::new();
         }
         let constraints = self
-            .module
-            .generic_constraints_for(symbol)
-            .map(<[ParamConstraintSet]>::to_vec);
+            .facts
+            .generic_constraints
+            .get(symbol)
+            .expect("passes records constraints for every emitted generic definition");
 
         let rendered = generics
             .iter()
             .map(|g| {
-                let set = constraints
-                    .as_ref()
-                    .and_then(|sets| sets.iter().find(|s| s.name == g.name));
-                let constraint = self.render_constraint(g, set);
+                let constraints = constraints
+                    .iter()
+                    .find(|constraints| constraints.parameter == g.name)
+                    .expect("generic constraints preserve every generic parameter");
+                let constraint = self.render_constraint(constraints);
                 format!("{} {}", self.generic_go_name(&g.name), constraint)
             })
             .collect::<Vec<_>>()
@@ -77,51 +79,29 @@ impl Planner<'_> {
         format!("[{}]", rendered)
     }
 
-    fn render_constraint(
-        &mut self,
-        generic: &Generic,
-        constraint_set: Option<&ParamConstraintSet>,
-    ) -> String {
-        let (explicit_atoms, inferred_comparable) = match constraint_set {
-            Some(set) => (set.explicit.clone(), set.inferred_comparable),
-            None => {
-                // Fallback for symbols that bypassed `collect_generic_constraints`.
-                let atoms: Vec<ConstraintAtom> = generic
-                    .bounds
-                    .iter()
-                    .map(|ann| {
-                        if let Annotation::Constructor { name, .. } = ann
-                            && let Some(b) = classify_builtin_name(name)
-                        {
-                            b
-                        } else {
-                            ConstraintAtom::Named(ann.clone())
-                        }
-                    })
-                    .collect();
-                (atoms, false)
-            }
-        };
-
+    fn render_constraint(&mut self, constraints: &GenericConstraints) -> String {
         // `Ordered` already implies `Comparable`; never double up.
-        let needs_comparable_appendage = inferred_comparable
-            && !explicit_atoms
-                .iter()
-                .any(ConstraintAtom::implies_comparable);
+        let needs_comparable_appendage = constraints.inferred_comparable
+            && !constraints.explicit.iter().any(|constraint| {
+                matches!(
+                    constraint,
+                    GenericConstraint::Comparable | GenericConstraint::Ordered
+                )
+            });
 
         let mut named_bounds: Vec<String> = Vec::new();
         let mut comparable_seen = false;
-        for atom in &explicit_atoms {
-            match atom {
-                ConstraintAtom::Comparable => {
+        for constraint in &constraints.explicit {
+            match constraint {
+                GenericConstraint::Comparable => {
                     comparable_seen = true;
                 }
-                ConstraintAtom::Ordered => {
+                GenericConstraint::Ordered => {
                     self.require_cmp();
                     named_bounds.push("cmp.Ordered".to_string());
                 }
-                ConstraintAtom::Named(ann) => {
-                    named_bounds.push(self.named_bound_go_type(ann));
+                GenericConstraint::Named(annotation) => {
+                    named_bounds.push(self.named_bound_go_type(annotation));
                 }
             }
         }

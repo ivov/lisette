@@ -38,7 +38,6 @@ impl Planner<'_> {
     pub(crate) fn build_module_plan(&mut self, files: &[&File], module_id: &str) -> ModulePlan {
         self.facts.set_current_module(module_id);
         self.collect_local_method_facts(files);
-        self.collect_generic_constraints(files);
         self.collect_escape_remap(files);
         self.collect_generic_renames(files);
         let collision_diagnostics = self.detect_name_collisions(files);

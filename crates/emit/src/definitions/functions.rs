@@ -26,14 +26,6 @@ pub(crate) fn is_test_context_ty(ty: &Type) -> bool {
     })
 }
 
-fn receiver_type_name(ty: &Type) -> Option<&str> {
-    if let Type::Nominal { id, .. } = ty.unwrap_forall() {
-        Some(syntax::types::unqualified_name(id.as_str()))
-    } else {
-        None
-    }
-}
-
 /// Borrowed lambda param-destructure record. Lambdas keep references to the
 /// caller's `params` slice since they cannot outlive emission scope.
 type LambdaParamDestructure<'a> = (String, &'a Pattern, Option<&'a TypedPattern>, &'a Type);
@@ -269,6 +261,7 @@ impl Planner<'_> {
     pub(crate) fn emit_function(
         &mut self,
         function_definition: FunctionDefinitionView<'_>,
+        generic_definition: &str,
         receiver: Option<(String, Type)>,
         is_public: bool,
     ) -> String {
@@ -305,7 +298,7 @@ impl Planner<'_> {
         parts.push(self.pick_go_function_name(function_definition, receiver.is_some(), is_public));
 
         let generics_str =
-            self.build_generics_string(function_definition, params_to_process, receiver.as_ref());
+            self.generics_to_string_for_symbol(generic_definition, function_definition.generics);
         if !generics_str.is_empty() {
             parts.push(generics_str);
         }
@@ -369,33 +362,6 @@ impl Planner<'_> {
             remapped.to_string()
         } else {
             go_name::escape_reserved(function_definition.name).into_owned()
-        }
-    }
-
-    fn build_generics_string(
-        &mut self,
-        function_definition: FunctionDefinitionView<'_>,
-        _params_to_process: &[Binding],
-        receiver: Option<&(String, Type)>,
-    ) -> String {
-        let symbol = self.symbol_for_function(function_definition.name, receiver);
-        self.generics_to_string_for_symbol(&symbol, function_definition.generics)
-    }
-
-    fn symbol_for_function(
-        &self,
-        function_name: &str,
-        receiver: Option<&(String, Type)>,
-    ) -> String {
-        if let Some((_, receiver_ty)) = receiver
-            && let Some(name) = receiver_type_name(receiver_ty)
-        {
-            return self.facts.qualified_current_member(name, function_name);
-        }
-        if let Some((receiver, method)) = function_name.split_once('.') {
-            self.facts.qualified_current_member(receiver, method)
-        } else {
-            self.facts.qualified_current(function_name)
         }
     }
 

@@ -4,7 +4,7 @@ use std::sync::atomic::{AtomicU32, Ordering};
 
 use diagnostics::{PatternIssue, UnusedExpressionKind};
 use syntax::ast::{BindingId, BindingKind, DeadCodeCause, Span};
-use syntax::program::TestFunction;
+use syntax::program::{ResolvedDefinitions, TestFunction};
 use syntax::types::Type;
 
 #[derive(Debug, Default)]
@@ -77,6 +77,10 @@ pub struct Facts {
     /// annotation's span. Lets emit render bounds from the resolved type
     /// instead of re-resolving the annotation.
     pub bound_types: HashMap<Span, Type>,
+
+    /// Canonical definition selected for resolved dot accesses, keyed by the
+    /// dot expression's span.
+    pub resolved_definitions: ResolvedDefinitions,
 }
 
 #[derive(Debug, Clone)]
@@ -140,6 +144,7 @@ impl Facts {
             equality_derivations: Vec::new(),
             test_functions: Vec::new(),
             bound_types: HashMap::default(),
+            resolved_definitions: HashMap::default(),
         }
     }
 
@@ -302,10 +307,12 @@ impl Facts {
             equality_derivations,
             test_functions,
             bound_types,
+            resolved_definitions,
         } = other;
         self.equality_derivations.extend(equality_derivations);
         self.test_functions.extend(test_functions);
         self.bound_types.extend(bound_types);
+        self.resolved_definitions.extend(resolved_definitions);
 
         self.bindings.extend(bindings);
         self.dead_code.extend(dead_code);

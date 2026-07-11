@@ -1,12 +1,10 @@
 use crate::Planner;
 use crate::abi::callable::{AbiTransition, CallableAbi, CallableParamAbi, CallableReturnAbi};
 use crate::abi::layout::SlotOrigin;
-use crate::calls::go_interop::go_qualified_name;
-use crate::calls::go_interop::is_go_receiver;
 use crate::expressions::staging::VariadicCombine;
 use crate::types::native::NativeGoType;
 use syntax::ast::Expression;
-use syntax::program::{CallKind, Definition, DotAccessKind, NativeTypeKind};
+use syntax::program::{CallKind, Definition, NativeTypeKind, resolved_definition};
 use syntax::types::Type;
 
 #[derive(Debug)]
@@ -130,7 +128,7 @@ impl<'a> Planner<'a> {
 
         let kind = call_kind.filter(|_| !self.is_local_binding(function));
 
-        let callee_plan = if is_go_callable(function) {
+        let callee_plan = if self.is_go_callable(function) {
             CallableOrigin::GoInterop
         } else {
             match kind {
@@ -252,20 +250,15 @@ impl<'a> Planner<'a> {
         );
         let return_payload_layout =
             self.callable_payload_layout(return_type, return_origin, return_declaration);
-        let is_prelude_dispatch = match function.unwrap_parens() {
-            Expression::DotAccess { expression, .. } => {
-                let receiver_ty = self.facts.strip_and_peel(&expression.get_type());
-                matches!(
-                    &receiver_ty,
-                    Type::Nominal { id, .. } if id.starts_with("prelude.")
-                ) || NativeGoType::from_type(&receiver_ty).is_some()
-            }
-            Expression::Identifier {
-                qualified: Some(qualified),
-                ..
-            } => qualified.starts_with("prelude."),
-            _ => false,
-        };
+        let is_prelude_dispatch = id
+            .as_deref()
+            .is_some_and(|definition| definition.starts_with("prelude."))
+            || matches!(
+                origin,
+                CallableOrigin::NativeConstructor(_)
+                    | CallableOrigin::NativeMethod(_)
+                    | CallableOrigin::NativeMethodIdentifier(_)
+            );
 
         ResolvedCallee {
             id,
@@ -294,7 +287,7 @@ impl<'a> Planner<'a> {
         let params = instantiated.get_function_params()?;
         let return_ty = instantiated.get_function_ret()?;
         let go_return = self.resolve_go_callee_abi(expression, return_ty);
-        let origin = if is_go_callable(expression) {
+        let origin = if self.is_go_callable(expression) {
             CallableOrigin::GoInterop
         } else {
             CallableOrigin::Regular
@@ -306,74 +299,11 @@ impl<'a> Planner<'a> {
         &self,
         function: &Expression,
     ) -> (Option<String>, Option<&'a Definition>) {
-        let primary = self.resolve_callee_id(function);
-        if let Some(id) = primary.as_deref()
-            && let Some(definition) = self.facts.definition(id)
-        {
-            return (primary, Some(definition));
-        }
-
-        match function.unwrap_parens() {
-            Expression::Identifier {
-                value, binding_id, ..
-            } if binding_id.is_none() => {
-                let qualified = self.facts.qualified_current(value);
-                if let Some(definition) = self.facts.definition(&qualified) {
-                    return (Some(qualified), Some(definition));
-                }
-                if let Some(definition) = self.facts.definition(value) {
-                    return (Some(value.to_string()), Some(definition));
-                }
-            }
-            Expression::DotAccess {
-                dot_access_kind:
-                    Some(
-                        DotAccessKind::StructField { .. }
-                        | DotAccessKind::TupleStructField { .. }
-                        | DotAccessKind::TupleElement,
-                    ),
-                ..
-            } => {}
-            Expression::DotAccess {
-                expression, member, ..
-            } => {
-                if let Expression::Identifier { value, .. } = expression.as_ref() {
-                    let module = self.canonical_module(value);
-                    let qualified = format!("{module}.{member}");
-                    if let Some(definition) = self.facts.definition(&qualified) {
-                        return (Some(qualified), Some(definition));
-                    }
-                    let local = self.facts.qualified_current_member(value, member);
-                    if let Some(definition) = self.facts.definition(&local) {
-                        return (Some(local), Some(definition));
-                    }
-                }
-                if let Expression::DotAccess {
-                    expression: inner,
-                    member: type_name,
-                    ..
-                } = expression.as_ref()
-                    && let Expression::Identifier { value: module, .. } = inner.as_ref()
-                {
-                    let module = self.canonical_module(module);
-                    let qualified = format!("{module}.{type_name}.{member}");
-                    if let Some(definition) = self.facts.definition(&qualified) {
-                        return (Some(qualified), Some(definition));
-                    }
-                }
-
-                let receiver = self.facts.strip_and_peel(&expression.get_type());
-                if let Some(native) = NativeGoType::from_type(&receiver) {
-                    let qualified = format!("prelude.{}.{}", native.lisette_name(), member);
-                    if let Some(definition) = self.facts.definition(&qualified) {
-                        return (Some(qualified), Some(definition));
-                    }
-                }
-            }
-            _ => {}
-        }
-
-        (primary, None)
+        let id = resolved_definition(function, self.facts.resolved_definitions).map(str::to_string);
+        let definition = id
+            .as_deref()
+            .and_then(|definition| self.facts.definition(definition));
+        (id, definition)
     }
 
     pub(crate) fn resolve_callable_params(
@@ -390,7 +320,7 @@ impl<'a> Planner<'a> {
             .facts
             .resolve_to_function_type(function.get_type().unwrap_forall())
             .unwrap_or_else(|| function.get_type().unwrap_forall().clone());
-        let origin = if is_go_callable(function) {
+        let origin = if self.is_go_callable(function) {
             CallableOrigin::GoInterop
         } else {
             CallableOrigin::Regular
@@ -403,40 +333,6 @@ impl<'a> Planner<'a> {
             id.as_deref(),
             &origin,
         )
-    }
-
-    fn resolve_callee_id(&self, function: &Expression) -> Option<String> {
-        match function.unwrap_parens() {
-            Expression::Identifier {
-                value,
-                qualified,
-                binding_id,
-                ..
-            } => qualified.as_deref().map(str::to_string).or_else(|| {
-                binding_id
-                    .is_none()
-                    .then(|| self.facts.qualified_current(value))
-            }),
-            Expression::DotAccess {
-                dot_access_kind:
-                    Some(
-                        DotAccessKind::StructField { .. }
-                        | DotAccessKind::TupleStructField { .. }
-                        | DotAccessKind::TupleElement,
-                    ),
-                ..
-            } => None,
-            Expression::DotAccess {
-                expression, member, ..
-            } => go_qualified_name(expression, member).or_else(|| {
-                let receiver = self.facts.strip_and_peel(&expression.get_type());
-                match receiver {
-                    Type::Nominal { id, .. } => Some(format!("{id}.{member}")),
-                    _ => None,
-                }
-            }),
-            _ => None,
-        }
     }
 
     /// Lowered shape of a callee. Type-driven, so it fires regardless of
@@ -456,47 +352,34 @@ impl<'a> Planner<'a> {
             return None;
         };
         let inner = callee.unwrap_parens();
+        let callee_definition = resolved_definition(callee, self.facts.resolved_definitions);
+        if callee_definition.is_some_and(|definition| definition.starts_with("go:")) {
+            return None;
+        }
         if let Expression::DotAccess {
             expression: receiver,
             ..
         } = inner
         {
-            if is_go_receiver(receiver) {
-                return None;
-            }
-            // Methods on native types (`xs.find(f)`) and prelude types
-            // (`r.map(f)`, `opt.map(f)`) dispatch to Lisette-prelude
-            // helpers whose Go signatures keep the tagged return — no
-            // lowering at the call site.
-            let receiver_ty = receiver.get_type();
-            // Peel so an alias over a native type stays native, else its methods
-            // get a second tagged-return wrap at the call site.
-            if NativeGoType::from_type(&self.facts.strip_and_peel(&receiver_ty)).is_some()
-                || receiver_is_prelude_type(&receiver_ty)
+            let receiver_type = receiver.get_type();
+            if NativeGoType::from_type(&self.facts.strip_and_peel(&receiver_type)).is_some()
+                || receiver_is_prelude_type(&receiver_type)
+                || matches!(
+                    &**receiver,
+                    Expression::Identifier { qualified: Some(definition), .. }
+                        if definition.starts_with("prelude.")
+                )
             {
                 return None;
             }
-            // Type-namespace dispatch like `Option.map(opt, f)` — prelude helper, tagged return.
-            if matches!(
-                &**receiver,
-                Expression::Identifier { qualified: Some(q), .. } if q.starts_with("prelude.")
-            ) {
-                return None;
-            }
+        } else if callee_definition.is_some_and(|definition| definition.starts_with("prelude.")) {
+            return None;
         }
         // Tagged-type constructors compile to `lisette.MakeX(...)`,
         // not multi-return Go calls.
         if inner.as_result_constructor().is_some()
             || inner.as_option_constructor().is_some()
             || inner.as_partial_constructor().is_some()
-        {
-            return None;
-        }
-        // Prelude function refs (`assert_type(x)`) — prelude helper, tagged return.
-        if let Expression::Identifier {
-            qualified: Some(q), ..
-        } = inner
-            && q.starts_with("prelude.")
         {
             return None;
         }
@@ -526,31 +409,32 @@ impl<'a> Planner<'a> {
         callee: &Expression,
         return_ty: &Type,
     ) -> Option<CallableReturnAbi> {
-        let inner = callee.unwrap_parens();
-        if let Expression::DotAccess {
-            expression: receiver_expression,
-            member,
-            ..
-        } = inner
-            && is_go_receiver(receiver_expression)
-        {
-            if let Some(qualified_name) = go_qualified_name(receiver_expression, member)
-                && self
-                    .facts
-                    .go_callable_return_slot(&qualified_name)
-                    .is_some()
-            {
-                return self.facts.go_callable_return(&qualified_name).cloned();
-            }
-            let go_hints = go_qualified_name(receiver_expression, member)
-                .and_then(|name| self.facts.definition(name.as_str()))
-                .map(|d| d.go_hints())
-                .unwrap_or_default();
-            return self.facts.classify_go_return_type(return_ty, go_hints);
+        let qualified_name = resolved_definition(callee, self.facts.resolved_definitions)?;
+        if !qualified_name.starts_with("go:") {
+            return None;
         }
-
-        None
+        if self.facts.go_callable_return_slot(qualified_name).is_some() {
+            return self.facts.go_callable_return(qualified_name).cloned();
+        }
+        let go_hints = self
+            .facts
+            .definition(qualified_name)
+            .map(Definition::go_hints)
+            .unwrap_or_default();
+        self.facts.classify_go_return_type(return_ty, go_hints)
     }
+
+    fn is_go_callable(&self, expression: &Expression) -> bool {
+        resolved_definition(expression, self.facts.resolved_definitions)
+            .is_some_and(|definition| definition.starts_with("go:"))
+    }
+}
+
+fn receiver_is_prelude_type(ty: &Type) -> bool {
+    matches!(
+        ty.strip_refs().unwrap_forall(),
+        Type::Nominal { id, .. } if id.starts_with("prelude.")
+    )
 }
 
 fn build_param_abi(
@@ -607,20 +491,6 @@ fn build_param_abi(
             }
         })
         .collect()
-}
-
-fn receiver_is_prelude_type(ty: &Type) -> bool {
-    matches!(
-        ty.strip_refs().unwrap_forall(),
-        Type::Nominal { id, .. } if id.starts_with("prelude.")
-    )
-}
-
-fn is_go_callable(expression: &Expression) -> bool {
-    matches!(
-        expression.unwrap_parens(),
-        Expression::DotAccess { expression, .. } if is_go_receiver(expression)
-    )
 }
 
 /// Plan a variadic spread: present when the callee accepts a variadic

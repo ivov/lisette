@@ -5,7 +5,6 @@ use rustc_hash::FxHashMap as HashMap;
 use rustc_hash::FxHashSet as HashSet;
 
 use crate::EnumLayout;
-use crate::names::constraints::{GenericConstraintTable, ParamConstraintSet};
 
 #[derive(Default)]
 pub(crate) struct ModuleState {
@@ -15,7 +14,6 @@ pub(crate) struct ModuleState {
     user_to_string_types: HashSet<String>,
     escape_remap: HashMap<String, String>,
     generic_renames: HashMap<String, String>,
-    generic_constraints: GenericConstraintTable,
 }
 
 impl ModuleState {
@@ -83,14 +81,6 @@ impl ModuleState {
 
     pub(crate) fn generic_rename(&self, source_name: &str) -> Option<&str> {
         self.generic_renames.get(source_name).map(String::as_str)
-    }
-
-    pub(crate) fn set_generic_constraints(&mut self, table: GenericConstraintTable) {
-        self.generic_constraints = table;
-    }
-
-    pub(crate) fn generic_constraints_for(&self, symbol: &str) -> Option<&[ParamConstraintSet]> {
-        self.generic_constraints.get(symbol)
     }
 }
 

@@ -8,7 +8,6 @@ use crate::abi::callable::{CallableAbi, CallableReturnAbi, OptionReturnAbi};
 use crate::abi::coercion::{CoercionPlan, LayoutBridge, resolve_layout_bridge};
 use crate::abi::layout::{SlotOrigin, ValueLayout};
 use crate::context::expression::ExpressionContext;
-use crate::names::go_name;
 use crate::plan::bodies::LoweredStatement;
 use crate::plan::calls::CallableOrigin;
 use crate::plan::values::{GoExpression, ValuePlan};
@@ -281,40 +280,6 @@ impl Planner<'_> {
         let constructor = build_tuple_literal(self, vars, tuple_ty);
         self.hoist_tmp_value_statement(statements, "tup", &constructor)
     }
-}
-
-pub(crate) fn go_qualified_name(receiver_expression: &Expression, member: &str) -> Option<String> {
-    let ty = receiver_expression.get_type();
-
-    if let Some(module_path) = ty.as_import_namespace() {
-        return Some(format!("{}.{}", module_path, member));
-    }
-
-    if let Type::Nominal { id, .. } = ty.strip_refs()
-        && go_name::is_go_import(&id)
-    {
-        return Some(format!("{}.{}", id, member));
-    }
-
-    None
-}
-
-pub(crate) fn is_go_receiver(expression: &Expression) -> bool {
-    let ty = expression.get_type();
-
-    if let Some(module_id) = ty.as_import_namespace()
-        && module_id.starts_with(go_name::GO_IMPORT_PREFIX)
-    {
-        return true;
-    }
-
-    if let Type::Nominal { id, .. } = ty.strip_refs()
-        && go_name::is_go_import(&id)
-    {
-        return true;
-    }
-
-    false
 }
 
 pub(super) fn build_tuple_literal(planner: &Planner, vars: &[String], _tuple_ty: &Type) -> String {

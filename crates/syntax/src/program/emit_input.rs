@@ -239,6 +239,8 @@ pub struct EmitInput {
     pub go_package_names: HashMap<String, String>,
     pub go_module_ids: HashSet<String>,
     pub bound_types: HashMap<crate::ast::Span, crate::types::Type>,
+    pub generic_constraints: super::GenericConstraintsByDefinition,
+    pub resolved_definitions: super::ResolvedDefinitions,
 }
 
 #[cfg(test)]

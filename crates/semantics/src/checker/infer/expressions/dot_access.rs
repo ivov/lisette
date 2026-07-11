@@ -641,100 +641,95 @@ impl InferCtx<'_, '_> {
             return Some((args.build_dot_access(Type::Error, Some(kind), None), kind));
         };
 
-        if let Some(module_id) = module_ty.as_import_namespace() {
-            let qualified_name = Symbol::from_parts(module_id, args.member_name);
-            if let Some(definition_span) = self.get_definition_name_span(store, &qualified_name) {
-                self.facts.add_usage(*args.span, definition_span);
-            }
-
-            // Reject cross-module tuple-struct constructors used as values
-            if !self.scopes.is_callee_context()
-                && matches!(
-                    store.get_definition(&qualified_name).map(|d| &d.body),
-                    Some(DefinitionBody::Struct {
-                        kind: StructKind::Tuple,
-                        ..
-                    })
-                )
-            {
-                let display_name = format!("{}.{}", type_name, args.member_name);
-                self.sink.push(diagnostics::infer::native_constructor_value(
-                    &display_name,
-                    *args.span,
-                ));
-            }
-
-            if !self.scopes.is_callee_context()
-                && !self.scopes.is_dot_access_base()
-                && matches!(
-                    store.get_definition(&qualified_name).map(|d| &d.body),
-                    Some(DefinitionBody::Struct {
-                        kind: StructKind::Record,
-                        ..
-                    })
-                )
-            {
-                let display_name = format!("{}.{}", type_name, args.member_name);
-                self.sink.push(diagnostics::infer::record_struct_value(
-                    &display_name,
-                    *args.span,
-                ));
-            }
-
-            if !self.scopes.is_callee_context()
-                && !self.scopes.is_dot_access_base()
-                && !self.scopes.is_let_binding_rhs()
-                && matches!(
-                    store.get_definition(&qualified_name).map(|d| &d.body),
-                    Some(DefinitionBody::Enum { .. })
-                )
-            {
-                self.sink
-                    .push(diagnostics::infer::namespace_alias_used_as_value(
-                        *args.span,
-                    ));
-            }
-
-            if !self.scopes.is_callee_context()
-                && !self.scopes.is_dot_access_base()
-                && let Some(definition) = store.get_definition(&qualified_name)
-            {
-                let display_name = format!("{}.{}", type_name, args.member_name);
-                match &definition.body {
-                    DefinitionBody::TypeAlias { .. } => {
-                        let diagnostic = match store.deep_struct_kind(definition.ty.unwrap_forall())
-                        {
-                            Some(StructKind::Record) => {
-                                diagnostics::infer::record_struct_value(&display_name, *args.span)
-                            }
-                            Some(StructKind::Tuple) => {
-                                diagnostics::infer::native_constructor_value(
-                                    &display_name,
-                                    *args.span,
-                                )
-                            }
-                            None => {
-                                diagnostics::infer::type_used_as_value(&display_name, *args.span)
-                            }
-                        };
-                        self.sink.push(diagnostic);
-                    }
-                    DefinitionBody::Interface { .. } => {
-                        self.sink.push(diagnostics::infer::type_used_as_value(
-                            &display_name,
-                            *args.span,
-                        ));
-                    }
-                    _ => {}
-                }
-            }
+        let module_id = module_ty.as_import_namespace()?;
+        let resolved_definition = Symbol::from_parts(module_id, args.member_name);
+        if let Some(definition_span) = self.get_definition_name_span(store, &resolved_definition) {
+            self.facts.add_usage(*args.span, definition_span);
         }
 
+        // Reject cross-module tuple-struct constructors used as values
+        if !self.scopes.is_callee_context()
+            && matches!(
+                store.get_definition(&resolved_definition).map(|d| &d.body),
+                Some(DefinitionBody::Struct {
+                    kind: StructKind::Tuple,
+                    ..
+                })
+            )
+        {
+            let display_name = format!("{}.{}", type_name, args.member_name);
+            self.sink.push(diagnostics::infer::native_constructor_value(
+                &display_name,
+                *args.span,
+            ));
+        }
+
+        if !self.scopes.is_callee_context()
+            && !self.scopes.is_dot_access_base()
+            && matches!(
+                store.get_definition(&resolved_definition).map(|d| &d.body),
+                Some(DefinitionBody::Struct {
+                    kind: StructKind::Record,
+                    ..
+                })
+            )
+        {
+            let display_name = format!("{}.{}", type_name, args.member_name);
+            self.sink.push(diagnostics::infer::record_struct_value(
+                &display_name,
+                *args.span,
+            ));
+        }
+
+        if !self.scopes.is_callee_context()
+            && !self.scopes.is_dot_access_base()
+            && !self.scopes.is_let_binding_rhs()
+            && matches!(
+                store.get_definition(&resolved_definition).map(|d| &d.body),
+                Some(DefinitionBody::Enum { .. })
+            )
+        {
+            self.sink
+                .push(diagnostics::infer::namespace_alias_used_as_value(
+                    *args.span,
+                ));
+        }
+
+        if !self.scopes.is_callee_context()
+            && !self.scopes.is_dot_access_base()
+            && let Some(definition) = store.get_definition(&resolved_definition)
+        {
+            let display_name = format!("{}.{}", type_name, args.member_name);
+            match &definition.body {
+                DefinitionBody::TypeAlias { .. } => {
+                    let diagnostic = match store.deep_struct_kind(definition.ty.unwrap_forall()) {
+                        Some(StructKind::Record) => {
+                            diagnostics::infer::record_struct_value(&display_name, *args.span)
+                        }
+                        Some(StructKind::Tuple) => {
+                            diagnostics::infer::native_constructor_value(&display_name, *args.span)
+                        }
+                        None => diagnostics::infer::type_used_as_value(&display_name, *args.span),
+                    };
+                    self.sink.push(diagnostic);
+                }
+                DefinitionBody::Interface { .. } => {
+                    self.sink.push(diagnostics::infer::type_used_as_value(
+                        &display_name,
+                        *args.span,
+                    ));
+                }
+                _ => {}
+            }
+        }
         let (module_ty, _) = self.instantiate(&module_ty);
         let (member_ty, _) = self.instantiate(&member_type);
 
         self.unify(&args.deref_ty, &module_ty, args.span);
         self.unify(args.expected_ty, &member_ty, args.span);
+        self.facts
+            .resolved_definitions
+            .insert(*args.span, resolved_definition);
 
         Some((args.build_dot_access(member_ty, Some(kind), None), kind))
     }
@@ -747,12 +742,15 @@ impl InferCtx<'_, '_> {
 
         // Array methods live on the size-erased prelude `Array` impl, reached via
         // the `method_lookup_key` bridge, with the size ignored in receiver unify.
-        let (method_ty, is_exported) = if let Type::Array { .. } = &args.deref_ty {
+        let (method_ty, is_exported, resolved_definition) = if let Type::Array { .. } =
+            &args.deref_ty
+        {
             (
                 self.get_all_methods(store, &args.deref_ty)
                     .get(args.member_name)
                     .cloned()?,
                 true,
+                self.resolve_instance_method_definition(&args.deref_ty, args.member_name),
             )
         } else {
             if !matches!(
@@ -773,13 +771,20 @@ impl InferCtx<'_, '_> {
                 return self.as_promoted_method_expression(args, &method_ty);
             }
 
-            self.check_instance_method_access(&args.deref_ty, &method_ty, args);
+            let resolved_definition =
+                self.check_instance_method_access(&args.deref_ty, &method_ty, args, None);
 
             let is_exported = self.is_dot_access_exported(&args.deref_ty, args.member_name);
-            (method_ty, is_exported)
+            (method_ty, is_exported, resolved_definition)
         };
 
         let kind = DotAccessKind::InstanceMethod { is_exported };
+
+        if let Some(resolved_definition) = resolved_definition.as_ref() {
+            self.facts
+                .resolved_definitions
+                .insert(*args.span, resolved_definition.clone());
+        }
 
         let (mut method_ty, _) = self.instantiate(&method_ty);
 
@@ -835,7 +840,13 @@ impl InferCtx<'_, '_> {
             return None;
         };
 
-        self.check_instance_method_access(&args.deref_ty, method_ty, args);
+        let resolved_definition = member.declaring_type.with_segment(args.member_name);
+        self.check_instance_method_access(
+            &args.deref_ty,
+            method_ty,
+            args,
+            Some(resolved_definition.clone()),
+        );
 
         let (method_ty, _) = self.instantiate(method_ty);
         let Type::Function(f) = &method_ty else {
@@ -859,6 +870,9 @@ impl InferCtx<'_, '_> {
         };
 
         self.unify(args.expected_ty, &method_ty, args.span);
+        self.facts
+            .resolved_definitions
+            .insert(*args.span, resolved_definition);
         Some((args.build_dot_access(method_ty, Some(kind), None), kind))
     }
 
@@ -884,37 +898,28 @@ impl InferCtx<'_, '_> {
         deref_ty: &Type,
         method_ty: &Type,
         args: &DotAccessResolutionArgs,
-    ) {
+        resolved_definition: Option<Symbol>,
+    ) -> Option<Symbol> {
         let store = self.store;
-        if let Type::Nominal { .. } = deref_ty {
-            let outer = deref_ty.get_qualified_name();
-            let direct_key = outer.with_segment(args.member_name);
-
-            let declaring = if store.get_definition(&direct_key).is_some()
-                || !promotion::has_direct_embed(store, deref_ty)
-            {
-                outer
-            } else if let Resolution::Found(member) =
-                promotion::resolve_selector(store, deref_ty, args.member_name)
-            {
-                member.declaring_type
-            } else {
-                outer
-            };
-            let method_key = declaring.with_segment(args.member_name);
-
-            if let Some(definition_span) = self.get_definition_name_span(store, &method_key) {
+        let resolved_definition = resolved_definition
+            .or_else(|| self.resolve_instance_method_definition(deref_ty, args.member_name));
+        if let Some(method_key) = resolved_definition.as_ref() {
+            if let Some(definition_span) = self.get_definition_name_span(store, method_key) {
                 self.facts.add_usage(*args.span, definition_span);
             }
 
-            if self.is_foreign_type(&declaring)
-                && let Some(def) = store.get_definition(&method_key)
+            let declaring = method_key
+                .without_last_segment()
+                .unwrap_or(method_key.as_str());
+            if matches!(deref_ty, Type::Nominal { .. })
+                && self.is_foreign_type(declaring)
+                && let Some(def) = store.get_definition(method_key)
                 && matches!(def.body, DefinitionBody::Value { .. })
                 && !def.visibility.is_public()
             {
                 self.sink.push(diagnostics::infer::private_method_access(
                     args.member_name,
-                    &declaring,
+                    declaring,
                     *args.span,
                 ));
             }
@@ -931,6 +936,45 @@ impl InferCtx<'_, '_> {
             self.sink
                 .push(diagnostics::infer::taking_value_of_ufcs_method(*args.span));
         }
+
+        resolved_definition
+    }
+
+    fn resolve_instance_method_definition(
+        &self,
+        receiver_type: &Type,
+        method_name: &str,
+    ) -> Option<Symbol> {
+        let store = self.store;
+        if let Type::Nominal { id, .. } = receiver_type {
+            let direct = id.with_segment(method_name);
+            if store.get_definition(&direct).is_some() {
+                return Some(direct);
+            }
+            if promotion::has_direct_embed(store, receiver_type)
+                && let Resolution::Found(member) =
+                    promotion::resolve_selector(store, receiver_type, method_name)
+            {
+                let promoted = member.declaring_type.with_segment(method_name);
+                if store.get_definition(&promoted).is_some() {
+                    return Some(promoted);
+                }
+            }
+        }
+
+        let resolved = store.deep_resolve_alias(receiver_type);
+        let owner = match resolved.strip_refs() {
+            Type::Nominal { id, .. } => id,
+            Type::Simple(kind) => Symbol::from_parts("prelude", kind.leaf_name()),
+            Type::Compound { kind, .. } => Symbol::from_parts("prelude", kind.leaf_name()),
+            Type::Array { .. } => Symbol::from_parts("prelude", "Array"),
+            _ => return None,
+        };
+        let resolved_definition = owner.with_segment(method_name);
+        store
+            .get_definition(&resolved_definition)
+            .is_some()
+            .then_some(resolved_definition)
     }
 
     /// When a cross-module instance method is used as a value (not called),
@@ -1167,6 +1211,9 @@ impl InferCtx<'_, '_> {
 
         let (variant_ty, _) = self.instantiate(&variant_ty);
         self.unify(args.expected_ty, &variant_ty, args.span);
+        self.facts
+            .resolved_definitions
+            .insert(*args.span, variant_qualified_name);
 
         Some((args.build_dot_access(variant_ty, Some(kind), None), kind))
     }
@@ -1275,6 +1322,9 @@ impl InferCtx<'_, '_> {
         let is_cross_module = type_module != self.cursor.module_id;
         let is_exported = is_public || is_cross_module;
         let kind = DotAccessKind::StaticMethod { is_exported };
+        self.facts
+            .resolved_definitions
+            .insert(*args.span, method_qualified_name);
 
         Some((args.build_dot_access(method_ty, Some(kind), None), kind))
     }

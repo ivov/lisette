@@ -11,6 +11,7 @@ use semantics::inference::AnalyzeInput;
 use semantics::inference::{InferenceOutput, PARALLEL_THRESHOLD, run_inference};
 use semantics::store::ENTRY_MODULE_ID;
 
+use crate::generic_constraints;
 use crate::passes;
 
 /// Wraps `SemanticResult` plus per-module emit stamps the CLI uses to update
@@ -45,6 +46,11 @@ pub fn analyze(input: AnalyzeInput) -> AnalyzeOutput {
     if !has_pre_check_errors {
         passes::run(&analysis, &mut facts, &sink, &mut unused, run_lints);
     }
+    let generic_constraints = if sink.has_errors() {
+        Default::default()
+    } else {
+        generic_constraints::collect_generic_constraints(&store, &ufcs_methods, &unused)
+    };
 
     let mut mutations = MutationInfo::default();
     for (&binding_id, b) in facts.bindings.iter() {
@@ -161,6 +167,8 @@ pub fn analyze(input: AnalyzeInput) -> AnalyzeOutput {
         go_package_names: store.go_package_names,
         go_module_ids,
         bound_types: std::mem::take(&mut facts.bound_types),
+        generic_constraints,
+        resolved_definitions: std::mem::take(&mut facts.resolved_definitions),
     };
 
     AnalyzeOutput {

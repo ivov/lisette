@@ -1,12 +1,12 @@
 use std::sync::Arc;
-use std::sync::OnceLock;
 
 use ecow::EcoString;
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use syntax::ast::{BindingId, Pattern, RestPattern, Span};
 use syntax::program::{
-    Definition, DefinitionBody, EqualityIndex, ModuleId, MutationInfo, TestIndex, UnusedInfo,
+    Definition, DefinitionBody, EqualityIndex, GenericConstraintsByDefinition, ModuleId,
+    MutationInfo, ResolvedDefinitions, TestIndex, UnusedInfo,
 };
 use syntax::types::{Symbol, Type};
 
@@ -14,7 +14,6 @@ use crate::abi::callable::CallableReturnAbi;
 use crate::abi::catalog::GoSlotDescriptor;
 use crate::classify_go_return_type;
 use crate::context::lowering::LineIndex;
-use crate::names::constraints::GenericConstraintTable;
 use crate::names::go_name;
 use crate::{EmitOptions, GlobalEmitData};
 
@@ -34,7 +33,8 @@ pub(crate) struct EmitFactsConfig<'a> {
     pub(crate) options: EmitOptions,
     pub(crate) line_indexes: Arc<HashMap<u32, LineIndex>>,
     pub(crate) globals: Arc<GlobalEmitData>,
-    pub(crate) generic_base: Arc<OnceLock<Arc<GenericConstraintTable>>>,
+    pub(crate) generic_constraints: &'a GenericConstraintsByDefinition,
+    pub(crate) resolved_definitions: &'a ResolvedDefinitions,
     pub(crate) current_module: ModuleId,
 }
 
@@ -54,7 +54,8 @@ pub(crate) struct EmitFacts<'a> {
     options: EmitOptions,
     line_indexes: Arc<HashMap<u32, LineIndex>>,
     globals: Arc<GlobalEmitData>,
-    generic_base: Arc<OnceLock<Arc<GenericConstraintTable>>>,
+    pub(crate) generic_constraints: &'a GenericConstraintsByDefinition,
+    pub(crate) resolved_definitions: &'a ResolvedDefinitions,
     current_module: ModuleId,
 }
 
@@ -76,13 +77,10 @@ impl<'a> EmitFacts<'a> {
             options: config.options,
             line_indexes: config.line_indexes,
             globals: config.globals,
-            generic_base: config.generic_base,
+            generic_constraints: config.generic_constraints,
+            resolved_definitions: config.resolved_definitions,
             current_module: config.current_module,
         }
-    }
-
-    pub(crate) fn generic_base(&self) -> Arc<OnceLock<Arc<GenericConstraintTable>>> {
-        self.generic_base.clone()
     }
 
     pub(crate) fn module_for_qualified_name<'b>(&self, id: &'b str) -> Option<&'b str>

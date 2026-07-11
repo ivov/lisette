@@ -1,6 +1,6 @@
-use crate::call_target::resolve_call;
 use crate::passes::walk::NodeCtx;
 use syntax::ast::{BinaryOperator, Expression, Literal, UnaryOperator};
+use syntax::program::resolved_definition;
 
 use super::helpers::{expressions_equivalent, is_float_operand, is_side_effect_free};
 
@@ -39,19 +39,27 @@ pub fn check_float_cmp(expression: &Expression, ctx: &NodeCtx) {
     }
 
     // `math.NaN()` is owned by `nan_comparison`.
-    if is_exact_operand(left) || is_exact_operand(right) {
+    if is_exact_operand(left, ctx) || is_exact_operand(right, ctx) {
         return;
     }
 
     ctx.sink.push(diagnostics::lint::float_cmp(span, is_equal));
 }
 
-fn is_exact_operand(expression: &Expression) -> bool {
+fn is_exact_operand(expression: &Expression, ctx: &NodeCtx) -> bool {
     if is_float_zero(expression) {
         return true;
     }
-    resolve_call(expression)
-        .is_some_and(|target| target.is("go:math", "NaN") || target.is("go:math", "Inf"))
+    let Expression::Call {
+        expression: callee, ..
+    } = expression
+    else {
+        return false;
+    };
+    matches!(
+        resolved_definition(callee, &ctx.facts.resolved_definitions),
+        Some("go:math.NaN" | "go:math.Inf")
+    )
 }
 
 fn is_float_zero(expression: &Expression) -> bool {

@@ -36,12 +36,10 @@ use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use std::cell::{Ref, RefCell, RefMut};
 use std::rc::Rc;
 use std::sync::Arc;
-use std::sync::OnceLock;
 
 use abi::callable::{CallableReturnAbi, OptionReturnAbi, PayloadLayout};
 use abi::catalog::GoAbiCatalog;
 use analyze::facts::{EmitFactsConfig, is_nullable_option};
-use names::constraints::GenericConstraintTable;
 use names::go_name::GeneratedPackage;
 use names::packages::{PackageRequirements, PackageUse};
 use plan::ModulePlan;
@@ -52,8 +50,8 @@ use state::module_state::{FunctionEmissionState, ModuleState};
 use state::scope::ScopeState;
 use syntax::ast::Span;
 use syntax::program::{
-    Definition, DefinitionBody, EmitInput, EqualityIndex, File, ModuleId, MutationInfo, TestIndex,
-    UnusedInfo,
+    Definition, DefinitionBody, EmitInput, EqualityIndex, File, GenericConstraintsByDefinition,
+    ModuleId, MutationInfo, ResolvedDefinitions, TestIndex, UnusedInfo,
 };
 use syntax::types::{Symbol, Type};
 use types::go_type::GoType;
@@ -224,6 +222,8 @@ pub struct TestEmitConfig<'a> {
     pub go_package_names: &'a HashMap<String, String>,
     pub go_module_ids: &'a HashSet<String>,
     pub bound_types: &'a HashMap<Span, Type>,
+    pub generic_constraints: &'a GenericConstraintsByDefinition,
+    pub resolved_definitions: &'a ResolvedDefinitions,
 }
 
 pub struct Planner<'a> {
@@ -343,7 +343,6 @@ impl<'a> Planner<'a> {
             options,
             line_indexes,
             globals: Arc::new(GlobalEmitData::compute(&analysis.definitions)),
-            generic_base: Arc::new(OnceLock::new()),
         };
 
         let mut work: Vec<(&ModuleId, &syntax::program::ModuleInfo)> = analysis
@@ -393,6 +392,8 @@ impl<'a> Planner<'a> {
             go_package_names: config.go_package_names,
             go_module_ids: config.go_module_ids,
             bound_types: config.bound_types,
+            generic_constraints: config.generic_constraints,
+            resolved_definitions: config.resolved_definitions,
             entry_module: config.module_id.to_string(),
             go_module: config.go_module.to_string(),
             options: EmitOptions {
@@ -401,7 +402,6 @@ impl<'a> Planner<'a> {
             },
             line_indexes,
             globals,
-            generic_base: Arc::new(OnceLock::new()),
             current_module: config.module_id.to_string(),
         });
         Self::new(facts)
@@ -629,13 +629,11 @@ impl<'a> Planner<'a> {
     }
 }
 
-/// Emit state built once in [`Planner::emit`] and shared (by `&`) across every
-/// module worker: options plus the three computed-once `Arc`s.
+/// Emit state built once in [`Planner::emit`] and shared by every module worker.
 struct SharedEmitContext {
     options: EmitOptions,
     line_indexes: Arc<HashMap<u32, LineIndex>>,
     globals: Arc<GlobalEmitData>,
-    generic_base: Arc<OnceLock<Arc<GenericConstraintTable>>>,
 }
 
 fn emit_module<'a>(
@@ -656,12 +654,13 @@ fn emit_module<'a>(
         go_package_names: &analysis.go_package_names,
         go_module_ids: &analysis.go_module_ids,
         bound_types: &analysis.bound_types,
+        generic_constraints: &analysis.generic_constraints,
+        resolved_definitions: &analysis.resolved_definitions,
         entry_module: analysis.entry_module_id.to_string(),
         go_module: go_module.to_string(),
         options: shared_emit_ctx.options.clone(),
         line_indexes: shared_emit_ctx.line_indexes.clone(),
         globals: shared_emit_ctx.globals.clone(),
-        generic_base: shared_emit_ctx.generic_base.clone(),
         current_module: module_id.to_string(),
     });
     let mut planner: Planner<'a> = Planner::new(facts);

@@ -1,7 +1,6 @@
 use crate::passes::walk::NodeCtx;
 use syntax::ast::{BinaryOperator, Expression};
-
-use crate::call_target::resolve_call;
+use syntax::program::resolved_definition;
 
 pub(crate) fn check(expression: &Expression, ctx: &NodeCtx) {
     if let Expression::Binary {
@@ -16,7 +15,8 @@ pub(crate) fn check(expression: &Expression, ctx: &NodeCtx) {
         if matches!(
             operator,
             Equal | NotEqual | LessThan | LessThanOrEqual | GreaterThan | GreaterThanOrEqual
-        ) && (is_math_nan_call(left.unwrap_parens()) || is_math_nan_call(right.unwrap_parens()))
+        ) && (is_math_nan_call(left.unwrap_parens(), ctx)
+            || is_math_nan_call(right.unwrap_parens(), ctx))
         {
             let always_true = matches!(operator, NotEqual);
             ctx.sink
@@ -25,6 +25,12 @@ pub(crate) fn check(expression: &Expression, ctx: &NodeCtx) {
     }
 }
 
-pub(super) fn is_math_nan_call(expression: &Expression) -> bool {
-    resolve_call(expression).is_some_and(|target| target.is("go:math", "NaN"))
+pub(super) fn is_math_nan_call(expression: &Expression, ctx: &NodeCtx) -> bool {
+    let Expression::Call {
+        expression: callee, ..
+    } = expression
+    else {
+        return false;
+    };
+    resolved_definition(callee, &ctx.facts.resolved_definitions) == Some("go:math.NaN")
 }

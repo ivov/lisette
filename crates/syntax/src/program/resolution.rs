@@ -1,9 +1,24 @@
-//! Resolution metadata attached to `Expression::Call` and
-//! `Expression::DotAccess` during type checking. Inference populates these
-//! so downstream consumers (the emitter in particular) do not re-derive the
-//! classification from the typed AST.
+use rustc_hash::FxHashMap as HashMap;
 
+use crate::ast::{Expression, Span};
+use crate::types::Symbol;
 use crate::types::Type;
+
+pub type ResolvedDefinitions = HashMap<Span, Symbol>;
+
+pub fn resolved_definition<'a>(
+    expression: &'a Expression,
+    definitions: &'a ResolvedDefinitions,
+) -> Option<&'a str> {
+    match expression.unwrap_parens() {
+        Expression::Identifier {
+            qualified: Some(definition),
+            ..
+        } => Some(definition),
+        Expression::DotAccess { span, .. } => definitions.get(span).map(Symbol::as_str),
+        _ => None,
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ReceiverCoercion {

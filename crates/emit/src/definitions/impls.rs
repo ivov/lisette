@@ -61,6 +61,7 @@ impl Planner<'_> {
             .is_ufcs_method(&ctx.qualified_type, function.name);
         let should_export = is_public || self.method_needs_export(function.name);
         let is_free_function = !has_self || is_ufcs;
+        let generic_definition = format!("{}.{}", ctx.qualified_type, function.name);
 
         let code = if is_free_function {
             let method_name = if should_export {
@@ -76,10 +77,11 @@ impl Planner<'_> {
                 generics: &combined_generics,
                 ..function
             };
-            self.emit_function(free_function, None, false)
+            self.emit_function(free_function, &generic_definition, None, false)
         } else {
             self.emit_function(
                 function,
+                &generic_definition,
                 Some((ctx.receiver_name.to_string(), ctx.ty.clone())),
                 should_export,
             )

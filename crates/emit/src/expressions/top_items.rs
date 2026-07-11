@@ -20,11 +20,18 @@ impl Planner<'_> {
                 let is_public = matches!(visibility, Visibility::Public);
                 let function = item.function_definition_view();
                 let doc_comment = emit_doc(doc);
+                let generic_definition = self.facts.qualified_current(name);
 
-                if self.facts.is_test(&self.facts.qualified_current(name)) {
-                    self.emit_test_function(name, function, is_public, &doc_comment)
+                if self.facts.is_test(&generic_definition) {
+                    self.emit_test_function(
+                        name,
+                        &generic_definition,
+                        function,
+                        is_public,
+                        &doc_comment,
+                    )
                 } else {
-                    let code = self.emit_function(function, None, is_public);
+                    let code = self.emit_function(function, &generic_definition, None, is_public);
                     format!("{}{}", doc_comment, code)
                 }
             }
@@ -105,6 +112,7 @@ impl Planner<'_> {
     fn emit_test_function(
         &mut self,
         name: &str,
+        generic_definition: &str,
         function: FunctionDefinitionView<'_>,
         is_public: bool,
         doc_comment: &str,
@@ -123,7 +131,7 @@ impl Planner<'_> {
         let callee = self.pick_go_function_name(function, false, is_public);
         let test_name = go_name::go_test_function_name(name);
         let handle = go_name::TEST_T_PARAM;
-        let code = self.emit_function(function, None, is_public);
+        let code = self.emit_function(function, generic_definition, None, is_public);
 
         let span = function.name_span;
         let recover = format!(
