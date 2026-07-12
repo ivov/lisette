@@ -272,8 +272,9 @@ impl<T, E> Partial<T, E> {
 ///
 /// Example:
 ///   let xs: Array<int, 3> = [1, 2, 3]
+///   let ys = Array.new<int, 256>()
 ///   let n = xs.length()
-///   let s = xs.to_slice()
+///   let copy = xs.to_slice()
 type Array<T>
 
 impl<T> Array<T> {

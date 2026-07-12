@@ -236,6 +236,8 @@ nums = append(nums, 4)
 ages := make(map[string]int)
 ages["Alice"] = 20
 age, ok := ages["Bob"]
+
+var digest [32]byte
 ```
 
 ```rust
@@ -245,6 +247,8 @@ let nums = nums.append(4)
 let mut ages = Map.new<string, int>()
 ages["Alice"] = 20
 let age = ages.get("Bob") // Option<int>
+
+let digest = Array.new<byte, 32>()
 ```
 
 Lisette offers `Array<T, N>` for fixed-size arrays, `Slice<T>` for slices, and `Map<K, V>` for maps. `Map.get` returns `Option<V>`.

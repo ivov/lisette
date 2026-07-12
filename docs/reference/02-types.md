@@ -168,7 +168,9 @@ Run `lis doc Slice` for the full method list.
 
 ### `Array<T, N>`
 
-A fixed-size, indexable sequence of elements.
+A fixed-size, indexable sequence of elements. The size is part of the type, so `Array<byte, 2>` and `Array<byte, 3>` are distinct types. The size must be an integer literal.
+
+A literal creates an array from its elements and must list exactly `N` of them:
 
 ```rust
 let address: Array<byte, 4> = [127, 0, 0, 1]
@@ -177,6 +179,15 @@ let length = address.length()
 ```
 
 A bracketed sequence is a `Slice` by default, or an `Array` when an array type is expected.
+
+`Array.new` creates an array with every element set to its zero value. The element type and size follow from the annotation, or pass them explicitly:
+
+```rust
+let mut counts = Array.new<int, 256>()
+counts[97] += 1
+```
+
+If the element type has no zero value (e.g. `Ref<T>`), create the array from a literal instead.
 
 Run `lis doc Array` for the full method list.
 
