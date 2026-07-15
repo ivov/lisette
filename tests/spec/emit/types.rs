@@ -2706,6 +2706,55 @@ fn test() -> Tree {
 }
 
 #[test]
+fn recursive_enum_through_array_payload() {
+    let input = r#"
+enum Tree {
+  Leaf(int),
+  Node(Array<Tree, 2>),
+}
+
+fn sum(t: Tree) -> int {
+  match t {
+    Tree.Leaf(n) => n,
+    Tree.Node(kids) => sum(kids[0]) + sum(kids[1]),
+  }
+}
+
+fn test() -> Tree {
+  Tree.Node([Tree.Leaf(1), Tree.Leaf(2)])
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn recursive_generic_enum_payload_wrapped() {
+    let input = r#"
+enum Cycle<T> {
+  End,
+  Next(Link<T>),
+}
+
+struct Link<T> {
+  pub value: T,
+  pub next: Cycle<T>,
+}
+
+fn total(c: Cycle<int>) -> int {
+  match c {
+    Cycle.End => 0,
+    Cycle.Next(l) => l.value + total(l.next),
+  }
+}
+
+fn test() -> int {
+  total(Cycle.Next(Link { value: 5, next: Cycle.Next(Link { value: 6, next: Cycle.End }) }))
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn recursive_enums_mutual() {
     let input = r#"
 enum A {

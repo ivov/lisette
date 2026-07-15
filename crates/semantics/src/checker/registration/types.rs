@@ -1,8 +1,10 @@
 use crate::checker::EnvResolve;
+use rustc_hash::{FxHashMap, FxHashSet};
 use syntax::ast::{
     Annotation, Attribute, EnumFieldDefinition, EnumVariant, Generic, Span, StructFieldDefinition,
     StructKind, VariantFields,
 };
+use syntax::containment::{EnumPayloads, definition_contains_by_value};
 use syntax::program::{Attributes, Definition, DefinitionBody, MethodSignatures, Visibility};
 use syntax::types::Type;
 
@@ -128,8 +130,6 @@ impl TaskState<'_> {
                 },
             },
         );
-
-        self.check_recursive_type(store, &qualified_name, name, name_span);
     }
 
     /// Check for Go-level field name collisions across enum variants.
@@ -142,8 +142,7 @@ impl TaskState<'_> {
         }
 
         // (variant_name, field_name, is_struct, type, span)
-        let mut seen: rustc_hash::FxHashMap<String, (&str, &str, bool, &Type, Span)> =
-            rustc_hash::FxHashMap::default();
+        let mut seen: FxHashMap<String, (&str, &str, bool, &Type, Span)> = FxHashMap::default();
 
         for variant in variants {
             let is_struct = variant.fields.is_struct();
@@ -362,8 +361,6 @@ impl TaskState<'_> {
                 },
             },
         );
-
-        self.check_recursive_type(&*store, &qualified_name, name, name_span);
     }
 
     pub(super) fn validate_module_embeds(&mut self, store: &Store, module_id: &str) {
@@ -452,116 +449,41 @@ impl TaskState<'_> {
         }
     }
 
-    /// Check whether a type is recursive without Ref indirection.
-    /// A type that contains itself (directly or through Option, Tuple, etc.) without going
-    /// through Ref has infinite size and is rejected by Go.
-    fn check_recursive_type(
-        &mut self,
-        store: &Store,
-        qualified_name: &str,
-        struct_name: &str,
-        name_span: &Span,
-    ) {
-        if self.contains_type_without_ref(
-            store,
-            qualified_name,
-            qualified_name,
-            &mut rustc_hash::FxHashSet::default(),
-        ) {
-            self.sink
-                .push(diagnostics::infer::recursive_type(struct_name, *name_span));
+    pub(super) fn check_module_recursive_types(&mut self, store: &Store, module_id: &str) {
+        if module_id.starts_with("go:") {
+            return;
         }
-    }
+        let Some(module) = store.get_module(module_id) else {
+            return;
+        };
 
-    /// Check if a type transitively contains the target type without passing through Ref.
-    /// `target_id` is the qualified name of the type we're checking for recursion.
-    /// `current_id` is the qualified name of the type whose fields we're inspecting.
-    fn contains_type_without_ref(
-        &self,
-        store: &Store,
-        target_id: &str,
-        current_id: &str,
-        visited: &mut rustc_hash::FxHashSet<String>,
-    ) -> bool {
-        if !visited.insert(current_id.to_string()) {
-            return false; // Already checked this type
-        }
-
-        if let Some(fields) = store.fields_of(current_id) {
-            for field in fields {
-                if self.type_contains_target_without_ref(store, target_id, &field.ty, visited) {
-                    return true;
+        let mut targets: Vec<(&str, &str, Span)> = module
+            .definitions
+            .iter()
+            .filter(|(_, definition)| matches!(definition.body, DefinitionBody::Struct { .. }))
+            .filter_map(|(qualified_name, definition)| {
+                let span = definition.name_span?;
+                if module.typedefs.contains_key(&span.file_id) {
+                    return None;
                 }
+                Some((qualified_name.as_str(), definition.name.as_deref()?, span))
+            })
+            .collect();
+        targets.sort_by_key(|(_, _, span)| (span.file_id, span.byte_offset));
+
+        let mut flagged: FxHashSet<String> = FxHashSet::default();
+        for (qualified_name, name, span) in targets {
+            if definition_contains_by_value(
+                qualified_name,
+                qualified_name,
+                EnumPayloads::Skip,
+                &flagged,
+                |id| store.get_definition(id),
+            ) {
+                self.sink
+                    .push(diagnostics::infer::recursive_type(name, span));
+                flagged.insert(qualified_name.to_string());
             }
-        }
-
-        // Check enum variant payloads.
-        // Skip direct self-references (e.g. `Node(Tree, Tree)`) — the emitter wraps
-        // those in pointers automatically. Only flag indirect recursion through other
-        // types (e.g. `Node(Box<Tree>)` where Box is a value-type struct).
-        if let Some(variants) = store.variants_of(current_id) {
-            for variant in variants {
-                for field in &variant.fields {
-                    if let Type::Nominal { id, .. } = field.ty.resolve_in(&self.env)
-                        && id == target_id
-                    {
-                        continue;
-                    }
-                    if self.type_contains_target_without_ref(store, target_id, &field.ty, visited) {
-                        return true;
-                    }
-                }
-            }
-        }
-
-        false
-    }
-
-    fn type_contains_target_without_ref(
-        &self,
-        store: &Store,
-        target_id: &str,
-        ty: &Type,
-        visited: &mut rustc_hash::FxHashSet<String>,
-    ) -> bool {
-        match ty {
-            Type::Nominal { id, params, .. } => {
-                // Ref, Slice, and Map provide heap indirection in Go (pointer,
-                // slice header, map pointer) — don't treat as direct containment.
-                if matches!(
-                    id.as_str(),
-                    "Ref" | "prelude.Ref" | "Slice" | "prelude.Slice" | "Map" | "prelude.Map"
-                ) {
-                    return false;
-                }
-
-                if id == target_id {
-                    return true;
-                }
-
-                for param in params {
-                    if self.type_contains_target_without_ref(store, target_id, param, visited) {
-                        return true;
-                    }
-                }
-
-                if (store.fields_of(id).is_some() || store.variants_of(id).is_some())
-                    && self.contains_type_without_ref(store, target_id, id, visited)
-                {
-                    return true;
-                }
-
-                false
-            }
-            Type::Tuple(elements) => elements
-                .iter()
-                .any(|e| self.type_contains_target_without_ref(store, target_id, e, visited)),
-            // A fixed-size array stores its element inline (Go `[N]T`), so it is
-            // direct containment like a tuple, not an indirection like `Slice`.
-            Type::Array { element, .. } => {
-                self.type_contains_target_without_ref(store, target_id, element, visited)
-            }
-            _ => false,
         }
     }
 

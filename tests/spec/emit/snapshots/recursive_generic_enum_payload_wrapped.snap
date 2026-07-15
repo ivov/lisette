@@ -1,0 +1,70 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  enum Cycle<T> {
+    End,
+    Next(Link<T>),
+  }
+  
+  struct Link<T> {
+    pub value: T,
+    pub next: Cycle<T>,
+  }
+  
+  fn total(c: Cycle<int>) -> int {
+    match c {
+      Cycle.End => 0,
+      Cycle.Next(l) => l.value + total(l.next),
+    }
+  }
+  
+  fn test() -> int {
+    total(Cycle.Next(Link { value: 5, next: Cycle.Next(Link { value: 6, next: Cycle.End }) }))
+  }
+---
+package main
+
+func MakeCycleEnd[T any]() Cycle[T] {
+	return Cycle[T]{Tag: CycleEnd}
+}
+
+func MakeCycleNext[T any](arg0 Link[T]) Cycle[T] {
+	return Cycle[T]{Tag: CycleNext, Next: &arg0}
+}
+
+type CycleTag int
+
+const (
+	CycleEnd CycleTag = iota
+	CycleNext
+)
+
+type Cycle[T any] struct {
+	Tag  CycleTag
+	Next *Link[T]
+}
+
+type Link[T any] struct {
+	Value T
+	Next  Cycle[T]
+}
+
+func total(c Cycle[int]) int {
+	if c.Tag == CycleEnd {
+		return 0
+	}
+	l := *c.Next
+	_left_1 := l.Value
+	return _left_1 + total(l.Next)
+}
+
+func test() int {
+	return total(MakeCycleNext(Link[int]{
+		Value: 5,
+		Next: MakeCycleNext(Link[int]{
+			Value: 6,
+			Next:  MakeCycleEnd[int](),
+		}),
+	}))
+}

@@ -4639,7 +4639,7 @@ fn recursive_struct_with_map_allowed() {
 }
 
 #[test]
-fn recursive_enum_through_generic_struct_rejected() {
+fn recursive_enum_through_generic_struct_allowed() {
     infer(
         r#"
     struct Box<T> { value: T }
@@ -4649,10 +4649,538 @@ fn recursive_enum_through_generic_struct_rejected() {
       Node(Box<Tree>, Box<Tree>),
     }
 
+    fn main() {
+      let t = Tree.Node(Box { value: Tree.Leaf(1) }, Box { value: Tree.Leaf(2) });
+    }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn self_type_argument_to_unused_generic_param_allowed() {
+    infer(
+        r#"
+    struct Foo<T> {}
+
+    struct Bar {
+      foo: Foo<Bar>,
+    }
+
+    fn main() {
+      let b = Bar { foo: Foo {} };
+    }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn self_type_argument_behind_ref_in_generic_allowed() {
+    infer(
+        r#"
+    struct Foo<T> {
+      parent: Option<Ref<T>>,
+    }
+
+    struct Bar {
+      foo: Foo<Bar>,
+    }
+
+    fn main() {}
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn self_type_argument_behind_slice_in_generic_allowed() {
+    infer(
+        r#"
+    struct Foo<T> {
+      items: Slice<T>,
+    }
+
+    struct Bar {
+      foo: Foo<Bar>,
+    }
+
+    fn main() {}
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn self_type_argument_stored_inline_rejected() {
+    infer(
+        r#"
+    struct Foo<T> {
+      value: T,
+    }
+
+    struct Bar {
+      foo: Foo<Bar>,
+    }
+
     fn main() {}
         "#,
     )
     .assert_infer_code("recursive_type");
+}
+
+#[test]
+fn self_type_argument_stored_inline_transitively_rejected() {
+    infer(
+        r#"
+    struct Inner<U> {
+      value: U,
+    }
+
+    struct Foo<T> {
+      inner: Inner<T>,
+    }
+
+    struct Bar {
+      foo: Foo<Bar>,
+    }
+
+    fn main() {}
+        "#,
+    )
+    .assert_infer_code("recursive_type");
+}
+
+#[test]
+fn self_type_argument_inline_in_second_instantiation_rejected() {
+    infer(
+        r#"
+    struct Holder<T> {
+      value: T,
+    }
+
+    struct Bar {
+      a: Holder<int>,
+      b: Holder<Bar>,
+    }
+
+    fn main() {}
+        "#,
+    )
+    .assert_infer_code("recursive_type");
+}
+
+#[test]
+fn self_type_argument_in_indirect_position_allowed() {
+    infer(
+        r#"
+    struct Env<K, V> {
+      keys: Slice<K>,
+      current: V,
+    }
+
+    struct Bar {
+      env: Env<Bar, int>,
+    }
+
+    fn main() {}
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn self_type_argument_in_inline_position_rejected() {
+    infer(
+        r#"
+    struct Env<K, V> {
+      keys: Slice<K>,
+      current: V,
+    }
+
+    struct Bar {
+      env: Env<int, Bar>,
+    }
+
+    fn main() {}
+        "#,
+    )
+    .assert_infer_code("recursive_type");
+}
+
+#[test]
+fn self_type_argument_to_unused_enum_param_allowed() {
+    infer(
+        r#"
+    enum Marker<T> {
+      On,
+      Off,
+    }
+
+    struct Bar {
+      marker: Marker<Bar>,
+    }
+
+    fn main() {}
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn self_type_argument_to_enum_payload_rejected() {
+    infer(
+        r#"
+    enum Wrapper<T> {
+      Empty,
+      Full(T),
+    }
+
+    struct Bar {
+      wrapper: Wrapper<Bar>,
+    }
+
+    fn main() {}
+        "#,
+    )
+    .assert_infer_code("recursive_type");
+}
+
+#[test]
+fn self_type_argument_behind_slice_alias_in_generic_allowed() {
+    infer(
+        r#"
+    type Stack<T> = Slice<T>
+
+    struct Foo<T> {
+      items: Stack<T>,
+    }
+
+    struct Bar {
+      foo: Foo<Bar>,
+    }
+
+    fn main() {}
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn self_type_argument_through_inline_alias_rejected() {
+    infer(
+        r#"
+    struct Box<T> {
+      value: T,
+    }
+
+    type Boxed<T> = Box<T>
+
+    struct Foo<T> {
+      inner: Boxed<T>,
+    }
+
+    struct Bar {
+      foo: Foo<Bar>,
+    }
+
+    fn main() {}
+        "#,
+    )
+    .assert_infer_code("recursive_type");
+}
+
+#[test]
+fn self_type_argument_to_generic_interface_allowed() {
+    infer(
+        r#"
+    interface Producer<T> {
+      fn produce(self) -> T
+    }
+
+    struct Bar {
+      producer: Producer<Bar>,
+    }
+
+    fn main() {}
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn channel_of_self_allowed() {
+    infer(
+        r#"
+    struct Bar {
+      peers: Channel<Bar>,
+    }
+
+    fn main() {}
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn self_type_argument_before_generic_definition_allowed() {
+    infer(
+        r#"
+    struct Bar {
+      foo: Foo<Bar>,
+    }
+
+    struct Foo<T> {}
+
+    fn main() {
+      let b = Bar { foo: Foo {} };
+    }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn self_type_argument_across_files_allowed() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "main",
+        "a.lis",
+        r#"
+struct Bar {
+  pub foo: Foo<Bar>,
+}
+
+fn main() {
+  let _b = Bar { foo: Foo {} }
+}
+"#,
+    );
+    fs.add_file(
+        "main",
+        "b.lis",
+        r#"
+struct Foo<T> {}
+"#,
+    );
+
+    infer_module("main", fs).assert_no_errors();
+}
+
+#[test]
+fn self_type_argument_to_opaque_go_type_rejected() {
+    let typedef = r#"
+pub type Registry<T>
+"#;
+    let input = r#"
+import "go:example.com/reg"
+
+struct Bar {
+  r: reg.Registry<Bar>,
+}
+
+fn main() {}
+"#;
+    infer_with_go_typedefs(input, &[("go:example.com/reg", typedef)])
+        .assert_infer_code("recursive_type");
+}
+
+#[test]
+fn recursive_enum_cycle_struct_declared_first_allowed() {
+    infer(
+        r#"
+    struct Pair {
+      l: Tree,
+      r: Tree,
+    }
+
+    enum Tree {
+      Leaf(int),
+      Node(Pair),
+    }
+
+    fn main() {
+      let t = Tree.Node(Pair { l: Tree.Leaf(1), r: Tree.Leaf(2) });
+    }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn recursive_enum_two_hop_chain_allowed() {
+    infer(
+        r#"
+    enum Expr {
+      Lit(int),
+      Add(Operands),
+    }
+
+    struct Operands {
+      wrap: Inner,
+    }
+
+    struct Inner {
+      l: Expr,
+      r: Expr,
+    }
+
+    fn main() {
+      let e = Expr.Add(Operands { wrap: Inner { l: Expr.Lit(1), r: Expr.Lit(2) } });
+    }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn recursive_struct_through_alias_rejected() {
+    infer(
+        r#"
+    type BarAlias = Bar
+
+    struct Bar {
+      x: Option<BarAlias>,
+    }
+
+    fn main() {}
+        "#,
+    )
+    .assert_infer_code("recursive_type");
+}
+
+#[test]
+fn recursive_enum_through_array_payload_allowed() {
+    infer(
+        r#"
+    enum Tree {
+      Leaf(int),
+      Node(Array<Tree, 2>),
+    }
+
+    fn main() {
+      let t = Tree.Node([Tree.Leaf(1), Tree.Leaf(2)]);
+    }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn self_type_argument_through_function_alias_allowed() {
+    infer(
+        r#"
+    type Callback<T> = fn(T)
+
+    struct Holder<T> {
+      cb: Callback<T>,
+    }
+
+    struct Bar {
+      h: Holder<Bar>,
+    }
+
+    fn main() {}
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn self_type_argument_behind_wrapped_enum_payload_allowed() {
+    infer(
+        r#"
+    enum Cycle<T> {
+      End,
+      Next(Link<T>),
+    }
+
+    struct Link<T> {
+      value: T,
+      next: Cycle<T>,
+    }
+
+    struct Root {
+      c: Cycle<Root>,
+    }
+
+    fn main() {}
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn self_type_argument_in_unwrapped_payload_rejected() {
+    infer(
+        r#"
+    enum Mixed<T> {
+      Value(T),
+      Chain(Link<T>),
+    }
+
+    struct Link<T> {
+      next: Mixed<T>,
+    }
+
+    struct Root {
+      m: Mixed<Root>,
+    }
+
+    fn main() {}
+        "#,
+    )
+    .assert_infer_code("recursive_type");
+}
+
+#[test]
+fn self_type_argument_through_mutual_enum_cycle_allowed() {
+    infer(
+        r#"
+    enum First<T> {
+      Stop,
+      Go(Left<T>),
+    }
+
+    struct Left<T> {
+      x: Second<T>,
+    }
+
+    enum Second<T> {
+      Halt,
+      Run(Right<T>),
+    }
+
+    struct Right<T> {
+      y: First<T>,
+    }
+
+    struct Root {
+      f: First<Root>,
+    }
+
+    fn main() {}
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn recursive_struct_cycle_reported_once() {
+    infer(
+        r#"
+    struct A {
+      b: B,
+    }
+
+    struct B {
+      a: Option<A>,
+    }
+
+    fn main() {}
+        "#,
+    )
+    .assert_infer_code_once("recursive_type");
 }
 
 #[test]

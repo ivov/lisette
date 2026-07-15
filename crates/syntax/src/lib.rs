@@ -1,6 +1,7 @@
 pub mod ast;
 pub mod ast_folder;
 pub mod attributes;
+pub mod containment;
 pub mod desugar;
 mod display;
 pub mod go_names;

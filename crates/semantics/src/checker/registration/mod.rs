@@ -283,6 +283,7 @@ impl TaskState<'_> {
         self.register_module_iterate(store, id);
         self.register_module_display(store, id);
         self.validate_module_embeds(store, id);
+        self.check_module_recursive_types(store, id);
 
         let module = store.get_module(id).expect("module must exist");
         let ufcs_entries = compute_module_ufcs(module);
@@ -537,6 +538,7 @@ impl TaskState<'_> {
         self.register_display(store, items);
         let module_id = self.cursor.module_id.clone();
         self.validate_module_embeds(store, &module_id);
+        self.check_module_recursive_types(store, &module_id);
     }
 
     pub fn register_type_names(

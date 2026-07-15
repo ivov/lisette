@@ -1,16 +1,16 @@
 use std::rc::Rc;
 
 use rustc_hash::FxHashMap as HashMap;
-use rustc_hash::FxHashSet;
 
 use crate::Planner;
 use crate::control_flow::fallible;
 use crate::definitions::enum_layout::{EnumLayout, FieldTypeInfo, FieldTypeMap};
 use crate::definitions::structs::is_raw_function_type;
 use crate::names::go_name;
-use syntax::ast::{Generic, Pattern, RestPattern, StructKind};
+use syntax::ast::{Pattern, RestPattern, StructKind};
+use syntax::containment::enum_payload_pointer_wrapped;
 use syntax::program::{Definition, DefinitionBody};
-use syntax::types::{SubstitutionMap, Type, substitute};
+use syntax::types::{Type, substitute};
 
 impl Planner<'_> {
     pub(crate) fn go_name_for_binding(&self, pattern: &Pattern) -> Option<String> {
@@ -241,8 +241,9 @@ impl Planner<'_> {
         for (vi, variant) in variants.iter().enumerate() {
             for (fi, field) in variant.fields.iter().enumerate() {
                 let mut go_type = self.go_type(&field.ty).code;
-                let recursive =
-                    self.is_recursive_type(&field.ty, enum_id, &mut FxHashSet::default());
+                let recursive = enum_payload_pointer_wrapped(enum_id, vi, fi, &field.ty, |id| {
+                    self.facts.definition(id)
+                });
 
                 if recursive {
                     go_type = format!("*{}", go_type);
@@ -261,65 +262,6 @@ impl Planner<'_> {
         }
 
         Some(EnumLayout::new(enum_id, generics, variants, &field_types))
-    }
-
-    fn is_recursive_type(&self, ty: &Type, enum_id: &str, visited: &mut FxHashSet<String>) -> bool {
-        let peeled = self.facts.peel_alias(ty);
-        match &peeled {
-            Type::Nominal { id, params, .. } => {
-                if id == enum_id {
-                    return true;
-                }
-                if !visited.insert(format!("{:?}", peeled)) {
-                    return false;
-                }
-                match self.facts.definition(id.as_str()) {
-                    Some(Definition {
-                        body:
-                            DefinitionBody::Struct {
-                                generics, fields, ..
-                            },
-                        ..
-                    }) => {
-                        let substitutions = generic_substitutions(generics, params);
-                        fields.iter().any(|field| {
-                            self.is_recursive_type(
-                                &substitute(&field.ty, &substitutions),
-                                enum_id,
-                                visited,
-                            )
-                        })
-                    }
-                    Some(Definition {
-                        body:
-                            DefinitionBody::Enum {
-                                generics, variants, ..
-                            },
-                        ..
-                    }) => {
-                        let substitutions = generic_substitutions(generics, params);
-                        variants
-                            .iter()
-                            .flat_map(|variant| variant.fields.iter())
-                            .any(|field| {
-                                self.is_recursive_type(
-                                    &substitute(&field.ty, &substitutions),
-                                    enum_id,
-                                    visited,
-                                )
-                            })
-                    }
-                    Some(_) => false,
-                    None => params
-                        .iter()
-                        .any(|param| self.is_recursive_type(param, enum_id, visited)),
-                }
-            }
-            Type::Tuple(elements) => elements
-                .iter()
-                .any(|element| self.is_recursive_type(element, enum_id, visited)),
-            _ => false,
-        }
     }
 
     pub(crate) fn enum_struct_field_name(
@@ -466,12 +408,4 @@ impl Planner<'_> {
         }
         None
     }
-}
-
-fn generic_substitutions(generics: &[Generic], params: &[Type]) -> SubstitutionMap {
-    generics
-        .iter()
-        .map(|generic| generic.name.clone())
-        .zip(params.iter().cloned())
-        .collect()
 }

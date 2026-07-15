@@ -1,0 +1,54 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  enum Tree {
+    Leaf(int),
+    Node(Array<Tree, 2>),
+  }
+  
+  fn sum(t: Tree) -> int {
+    match t {
+      Tree.Leaf(n) => n,
+      Tree.Node(kids) => sum(kids[0]) + sum(kids[1]),
+    }
+  }
+  
+  fn test() -> Tree {
+    Tree.Node([Tree.Leaf(1), Tree.Leaf(2)])
+  }
+---
+package main
+
+func MakeTreeLeaf(arg0 int) Tree {
+	return Tree{Tag: TreeLeaf, Leaf: arg0}
+}
+
+func MakeTreeNode(arg0 [2]Tree) Tree {
+	return Tree{Tag: TreeNode, Node: &arg0}
+}
+
+type TreeTag int
+
+const (
+	TreeLeaf TreeTag = iota
+	TreeNode
+)
+
+type Tree struct {
+	Tag  TreeTag
+	Leaf int
+	Node *[2]Tree
+}
+
+func sum(t Tree) int {
+	if t.Tag == TreeLeaf {
+		return t.Leaf
+	}
+	kids := *t.Node
+	return sum(kids[0]) + sum(kids[1])
+}
+
+func test() Tree {
+	return MakeTreeNode([2]Tree{MakeTreeLeaf(1), MakeTreeLeaf(2)})
+}
