@@ -175,12 +175,14 @@ impl InferCtx<'_, '_> {
             && new_value.is_empty_collection()
             && let Some(ref name) = binding_name
         {
+            let module_id = self.cursor.module_id.clone();
             self.facts
                 .empty_collection_checks
                 .push(crate::facts::EmptyCollectionCheck {
                     name: name.to_string(),
                     ty: new_binding.ty.clone(),
                     span,
+                    module_id,
                 });
         }
 

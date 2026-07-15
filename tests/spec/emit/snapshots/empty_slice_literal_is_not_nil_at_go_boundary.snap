@@ -1,0 +1,61 @@
+---
+source: tests/spec/emit/literals.rs
+description: |
+  
+  import "go:encoding/json"
+  
+  struct Payload {
+    pub items: Slice<int>,
+  }
+  
+  fn main() {
+    let xs: Slice<int> = []
+    let encoded = json.Marshal(xs).unwrap_or([]) as string
+    if encoded != "[]" {
+      panic(f"expected an explicit empty literal to encode as [], got {encoded}")
+    }
+    let payload = Payload { items: [] }
+    let wrapped = json.Marshal(payload).unwrap_or([]) as string
+    if wrapped != "{\"Items\":[]}" {
+      panic(f"expected an empty slice field to encode as [], got {wrapped}")
+    }
+  }
+---
+package main
+
+import (
+	"encoding/json"
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+type Payload struct {
+	Items []int
+}
+
+func main() {
+	xs := []int{}
+	ret_1, ret_2 := json.Marshal(xs)
+	var result_3 lisette.Result[[]byte, error]
+	if ret_2 != nil {
+		result_3 = lisette.MakeResultErr[[]byte, error](ret_2)
+	} else {
+		result_3 = lisette.MakeResultOk[[]byte, error](ret_1)
+	}
+	encoded := string(result_3.UnwrapOr([]byte{}))
+	if encoded != "[]" {
+		panic(fmt.Sprintf("expected an explicit empty literal to encode as [], got %s", encoded))
+	}
+	payload := Payload{Items: []int{}}
+	ret_4, ret_5 := json.Marshal(payload)
+	var result_6 lisette.Result[[]byte, error]
+	if ret_5 != nil {
+		result_6 = lisette.MakeResultErr[[]byte, error](ret_5)
+	} else {
+		result_6 = lisette.MakeResultOk[[]byte, error](ret_4)
+	}
+	wrapped := string(result_6.UnwrapOr([]byte{}))
+	if wrapped != "{\"Items\":[]}" {
+		panic(fmt.Sprintf("expected an empty slice field to encode as [], got %s", wrapped))
+	}
+}

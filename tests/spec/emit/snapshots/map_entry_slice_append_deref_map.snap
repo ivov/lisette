@@ -25,7 +25,7 @@ type Box struct {
 
 func main() {
 	m := make(map[string]Box)
-	m["a"] = Box{}
+	m["a"] = Box{items: []int{}}
 	r := &m
 	entry := Box{items: slices.Clone((*r)["a"].items)}
 	entry.items = append(entry.items, 1)

@@ -16,7 +16,7 @@ package main
 import lisette "github.com/ivov/lisette/prelude"
 
 func panicky() int {
-	arr := ([]int)(nil)
+	arr := []int{}
 	return arr[0]
 }
 

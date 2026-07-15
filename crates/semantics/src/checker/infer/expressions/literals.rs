@@ -172,7 +172,18 @@ impl InferCtx<'_, '_> {
                     .collect();
 
                 let slice_ty = self.type_slice(element_expected_ty);
-                self.unify(expected_ty, &slice_ty, &span);
+                let unified = self.unify(expected_ty, &slice_ty, &span);
+
+                if new_elements.is_empty() && unified {
+                    let module_id = self.cursor.module_id.clone();
+                    self.facts
+                        .empty_literal_checks
+                        .push(crate::facts::EmptyLiteralCheck {
+                            ty: slice_ty.clone(),
+                            span,
+                            module_id,
+                        });
+                }
 
                 Expression::Literal {
                     literal: Literal::Slice(new_elements),

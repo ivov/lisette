@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Cannot infer the element type of this empty slice
+   ╭─[test.lis:7:9]
+ 6 │ fn test() -> int {
+ 7 │   count([])
+   ·         ─┬
+   ·          ╰── `[]` needs an element type from context
+ 8 │ }
+   ╰────
+  help: Annotate the enclosing binding, e.g. `let xs: Slice<int> = []`, or write `Slice.new<int>()` · code: [infer.empty_slice_no_element_type]

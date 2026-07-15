@@ -19,7 +19,7 @@ import "strconv"
 type F func(string) (int, error)
 
 func main() {
-	xs := ([]F)(nil)
+	xs := []F{}
 	xs = append(xs, strconv.Atoi)
 	_ = xs
 }

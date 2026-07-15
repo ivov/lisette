@@ -25,7 +25,10 @@ type Container[T any] struct {
 }
 
 func Container_new[T any](name string) Container[T] {
-	return Container[T]{name: name}
+	return Container[T]{
+		items: []T{},
+		name:  name,
+	}
 }
 
 func test() Container[string] {

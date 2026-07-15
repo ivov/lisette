@@ -360,6 +360,9 @@ impl<'a> FreezeFolder<'a> {
         for check in &mut facts.empty_collection_checks {
             self.env.resolve_in_place(&mut check.ty);
         }
+        for check in &mut facts.empty_literal_checks {
+            self.env.resolve_in_place(&mut check.ty);
+        }
         for check in &mut facts.statement_tail_checks {
             self.env.resolve_in_place(&mut check.expected_ty);
         }

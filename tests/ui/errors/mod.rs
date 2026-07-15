@@ -3100,6 +3100,20 @@ fn test() {
 }
 
 #[test]
+fn infer_empty_slice_no_element_type() {
+    let input = r#"
+fn count<T>(items: Slice<T>) -> int {
+  items.length()
+}
+
+fn test() -> int {
+  count([])
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
 fn infer_cannot_infer_type_arguments() {
     let input = r#"
 fn test() {

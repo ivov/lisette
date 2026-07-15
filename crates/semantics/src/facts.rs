@@ -53,6 +53,7 @@ pub struct Facts {
     // Drained by passes::deferred via mem::take.
     pub generic_call_checks: Vec<GenericCallCheck>,
     pub empty_collection_checks: Vec<EmptyCollectionCheck>,
+    pub empty_literal_checks: Vec<EmptyLiteralCheck>,
     pub statement_tail_checks: Vec<StatementTailCheck>,
 
     /// Value-position `match`/`select` arms that did not reconcile, drained and
@@ -89,6 +90,8 @@ pub struct GenericCallCheck {
     /// unbound type variables, the call's generic parameter couldn't be inferred.
     pub ty: Type,
     pub span: Span,
+    /// Qualifies `ty`'s variable ids, which are unique only per inference context.
+    pub module_id: String,
 }
 
 #[derive(Debug, Clone)]
@@ -96,6 +99,15 @@ pub struct EmptyCollectionCheck {
     pub name: String,
     pub ty: Type,
     pub span: Span,
+    pub module_id: String,
+}
+
+/// An empty slice literal, rejected if its element type stays unbound.
+#[derive(Debug, Clone)]
+pub struct EmptyLiteralCheck {
+    pub ty: Type,
+    pub span: Span,
+    pub module_id: String,
 }
 
 #[derive(Debug, Clone)]
@@ -132,6 +144,7 @@ impl Facts {
             expression_only_fstrings: Vec::new(),
             generic_call_checks: Vec::new(),
             empty_collection_checks: Vec::new(),
+            empty_literal_checks: Vec::new(),
             statement_tail_checks: Vec::new(),
             branch_subsumptions: Vec::new(),
             select_exhaustiveness_checks: Vec::new(),
@@ -295,6 +308,7 @@ impl Facts {
             expression_only_fstrings,
             generic_call_checks,
             empty_collection_checks,
+            empty_literal_checks,
             statement_tail_checks,
             branch_subsumptions,
             select_exhaustiveness_checks,
@@ -330,6 +344,7 @@ impl Facts {
             .extend(expression_only_fstrings);
         self.generic_call_checks.extend(generic_call_checks);
         self.empty_collection_checks.extend(empty_collection_checks);
+        self.empty_literal_checks.extend(empty_literal_checks);
         self.statement_tail_checks.extend(statement_tail_checks);
         self.branch_subsumptions.extend(branch_subsumptions);
         self.select_exhaustiveness_checks

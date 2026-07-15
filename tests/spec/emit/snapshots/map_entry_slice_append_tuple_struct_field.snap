@@ -24,7 +24,7 @@ type Wrap struct {
 func main() {
 	m := make(map[string]Wrap)
 	m["a"] = Wrap{
-		F0: ([]int)(nil),
+		F0: []int{},
 		F1: 0,
 	}
 	entry := Wrap{

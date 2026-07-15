@@ -53,18 +53,20 @@ pub enum Dispatched {
 }
 
 impl InferCtx<'_, '_> {
-    /// Make two types equal.
+    /// Make two types equal. Returns `false` when they do not match.
     ///
     /// - For two concrete types, verifies that they match.
     /// - For two variable types, records that the first equals the second.
     /// - For a concrete and a variable type, records that the variable equals the concrete.
-    pub(super) fn unify(&mut self, t1: &Type, t2: &Type, span: &Span) {
-        if let Err(unify_error) = self.try_unify(t1, t2, span) {
-            if unify_error == UnifyError::AlreadyReported {
-                return;
+    pub(super) fn unify(&mut self, t1: &Type, t2: &Type, span: &Span) -> bool {
+        match self.try_unify(t1, t2, span) {
+            Ok(()) => true,
+            Err(UnifyError::AlreadyReported) => false,
+            Err(unify_error) => {
+                let err = self.unification_diagnostic(t1, t2, span, &unify_error);
+                self.sink.push(err);
+                false
             }
-            let err = self.unification_diagnostic(t1, t2, span, &unify_error);
-            self.sink.push(err);
         }
     }
 

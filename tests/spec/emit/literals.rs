@@ -151,6 +151,31 @@ fn test() {
 }
 
 #[test]
+fn empty_slice_literal_is_not_nil_at_go_boundary() {
+    let input = r#"
+import "go:encoding/json"
+
+struct Payload {
+  pub items: Slice<int>,
+}
+
+fn main() {
+  let xs: Slice<int> = []
+  let encoded = json.Marshal(xs).unwrap_or([]) as string
+  if encoded != "[]" {
+    panic(f"expected an explicit empty literal to encode as [], got {encoded}")
+  }
+  let payload = Payload { items: [] }
+  let wrapped = json.Marshal(payload).unwrap_or([]) as string
+  if wrapped != "{\"Items\":[]}" {
+    panic(f"expected an empty slice field to encode as [], got {wrapped}")
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn empty_slice_of_function_type() {
     let input = r#"
 fn test() {

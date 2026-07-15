@@ -23,5 +23,5 @@ type Box[T any] struct {
 }
 
 func Box_New[T any]() Box[T] {
-	return Box[T]{}
+	return Box[T]{Items: []T{}}
 }

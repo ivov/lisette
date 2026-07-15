@@ -472,11 +472,13 @@ impl InferCtx<'_, '_> {
             && type_args.is_empty()
             && !self.is_enum_type(store, &resolved_return);
         if return_check_recorded {
+            let module_id = self.cursor.module_id.clone();
             self.facts
                 .generic_call_checks
                 .push(crate::facts::GenericCallCheck {
                     ty: return_ty.clone(),
                     span,
+                    module_id,
                 });
         }
 
@@ -491,11 +493,13 @@ impl InferCtx<'_, '_> {
             let already_covered = return_check_recorded
                 && resolved_return.contains_type(&elem_ty.resolve_in(&self.env));
             if !already_covered {
+                let module_id = self.cursor.module_id.clone();
                 self.facts
                     .generic_call_checks
                     .push(crate::facts::GenericCallCheck {
                         ty: elem_ty.clone(),
                         span,
+                        module_id,
                     });
             }
         }

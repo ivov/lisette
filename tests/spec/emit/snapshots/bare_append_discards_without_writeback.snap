@@ -11,7 +11,7 @@ description: |
 package main
 
 func main() {
-	items := ([]int)(nil)
+	items := []int{}
 	_ = append(items, 1)
 	_ = items
 }

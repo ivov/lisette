@@ -48,10 +48,8 @@ impl Planner<'_> {
 
     fn emit_slice_literal(&mut self, elements: &[Expression], ty: &Type) -> ValuePlan {
         // A list literal builds a slice or a fixed-size array, per its type.
-        let (element_lisette_ty, type_prefix, is_array) = match ty {
-            Type::Array { length, element } => {
-                (element.as_ref().clone(), format!("[{}]", length), true)
-            }
+        let (element_lisette_ty, type_prefix) = match ty {
+            Type::Array { length, element } => (element.as_ref().clone(), format!("[{}]", length)),
             _ => (
                 ty.get_type_params()
                     .expect("Slice type must have type args")
@@ -59,23 +57,17 @@ impl Planner<'_> {
                     .expect("Slice type must have element type")
                     .clone(),
                 "[]".to_string(),
-                false,
             ),
         };
         let element_ty = self.go_type_string(&element_lisette_ty);
 
         if elements.is_empty() {
-            let value = if is_array {
-                format!("{}{}{{}}", type_prefix, element_ty)
-            } else {
-                // Parens around the slice type disambiguate the conversion when
-                // the element type itself ends in `)` (e.g. `func(int)`); Go
-                // otherwise parses `[]func(int)(nil)` as a call expression.
-                format!("({}{})(nil)", type_prefix, element_ty)
-            };
             return ValuePlan::computed(
                 Vec::new(),
-                GoExpression::composite_literal(value, false),
+                GoExpression::composite_literal(
+                    format!("{}{}{{}}", type_prefix, element_ty),
+                    false,
+                ),
                 EvaluationEffect::Pure,
             );
         }

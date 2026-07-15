@@ -9,5 +9,5 @@ description: |
 package main
 
 func test() {
-	_ = ([]int)(nil)
+	_ = []int{}
 }

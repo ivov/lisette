@@ -15,7 +15,7 @@ package main
 func noop() {}
 
 func main() {
-	xs := ([]struct{})(nil)
+	xs := []struct{}{}
 	_arg_1 := xs
 	noop()
 	y := append(_arg_1, struct{}{})

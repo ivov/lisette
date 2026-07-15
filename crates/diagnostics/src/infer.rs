@@ -2939,6 +2939,15 @@ pub fn cannot_infer_type_argument(span: Span) -> LisetteDiagnostic {
         .with_help("Supply a type argument for the call, e.g. `Channel.new<int>()`")
 }
 
+pub fn empty_slice_no_element_type(span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Cannot infer the element type of this empty slice")
+        .with_infer_code("empty_slice_no_element_type")
+        .with_span_label(&span, "`[]` needs an element type from context")
+        .with_help(
+            "Annotate the enclosing binding, e.g. `let xs: Slice<int> = []`, or write `Slice.new<int>()`",
+        )
+}
+
 fn format_list<T, F>(items: &[T], fmt: F) -> String
 where
     F: Fn(&T) -> String,

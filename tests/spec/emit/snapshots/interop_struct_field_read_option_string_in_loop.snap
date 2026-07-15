@@ -24,7 +24,7 @@ import (
 )
 
 func main() {
-	buckets := ([]aws.Bucket)(nil)
+	buckets := []aws.Bucket{}
 	for _, bucket := range buckets {
 		raw_2 := bucket.Name
 		option_3 := lisette.OptionFromPointer[string](raw_2)

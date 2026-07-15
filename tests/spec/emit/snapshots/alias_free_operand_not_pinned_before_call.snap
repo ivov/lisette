@@ -19,7 +19,7 @@ func bump(a int) int {
 }
 
 func run() int {
-	items := ([]int)(nil)
+	items := []int{}
 	i := 0
 	ibump := func() int {
 		i = 1

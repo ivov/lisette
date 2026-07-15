@@ -21,7 +21,7 @@ type Stack[T any] struct {
 }
 
 func Stack_new[T any]() Stack[T] {
-	return Stack[T]{}
+	return Stack[T]{items: []T{}}
 }
 
 func test() {

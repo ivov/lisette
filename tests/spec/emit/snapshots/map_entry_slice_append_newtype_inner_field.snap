@@ -27,7 +27,7 @@ type Wrap Inner
 
 func main() {
 	m := make(map[string]Wrap)
-	m["a"] = Wrap(Inner{})
+	m["a"] = Wrap(Inner{items: []int{}})
 	inner := Inner{items: slices.Clone(Inner(m["a"]).items)}
 	inner.items = append(inner.items, 1)
 	m["a"] = Wrap(inner)

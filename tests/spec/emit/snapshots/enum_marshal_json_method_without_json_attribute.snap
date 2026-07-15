@@ -29,5 +29,5 @@ type Status struct {
 }
 
 func (s Status) MarshalJSON() ([]byte, error) {
-	return ([]byte)(nil), nil
+	return []byte{}, nil
 }

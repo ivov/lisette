@@ -1304,6 +1304,45 @@ impl Type {
         }
     }
 
+    pub fn collect_unbound_variables(&self, out: &mut Vec<TypeVarId>) {
+        match self {
+            Type::Var { id, hint } => {
+                if hint.is_some() {
+                    out.push(*id);
+                }
+            }
+            Type::Nominal { params, .. } => {
+                for p in params {
+                    p.collect_unbound_variables(out);
+                }
+            }
+            Type::Function(f) => {
+                for p in &f.params {
+                    p.collect_unbound_variables(out);
+                }
+                f.return_type.collect_unbound_variables(out);
+            }
+            Type::Forall { body, .. } => body.collect_unbound_variables(out),
+            Type::Tuple(elements) => {
+                for e in elements {
+                    e.collect_unbound_variables(out);
+                }
+            }
+            Type::Array { element, .. } => element.collect_unbound_variables(out),
+            Type::Compound { args, .. } => {
+                for a in args {
+                    a.collect_unbound_variables(out);
+                }
+            }
+            Type::Simple(_)
+            | Type::Parameter(_)
+            | Type::Never
+            | Type::Error
+            | Type::ImportNamespace(_)
+            | Type::ReceiverPlaceholder => {}
+        }
+    }
+
     pub fn remove_found_type_names(&self, names: &mut HashSet<EcoString>) {
         if names.is_empty() {
             return;

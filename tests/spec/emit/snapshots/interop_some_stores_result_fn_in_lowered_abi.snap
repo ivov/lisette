@@ -19,7 +19,7 @@ import (
 )
 
 func configure(conf *ext.Config) {
-	wrapped := ([]lisette.Option[func(ext.Config) (ext.Listener, error)])(nil)
+	wrapped := []lisette.Option[func(ext.Config) (ext.Listener, error)]{}
 	for _, listener := range ext.WrapListeners(conf.Listeners) {
 		wrapped = append(wrapped, lisette.MakeOptionSome(listener))
 	}

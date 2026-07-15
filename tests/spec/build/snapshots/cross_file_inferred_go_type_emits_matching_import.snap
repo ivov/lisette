@@ -20,5 +20,5 @@ import (
 )
 
 func main() {
-	fmt.Println(Count(([]time.Duration)(nil)))
+	fmt.Println(Count([]time.Duration{}))
 }

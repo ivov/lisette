@@ -49,9 +49,8 @@ impl Planner<'_> {
         });
 
         let is_go_struct = self.is_go_abi_type(ty);
-        let kept = self.kept_struct_call_fields(field_assignments, spread, ty, is_go_struct);
 
-        let stages: Vec<ValuePlan> = kept
+        let stages: Vec<ValuePlan> = field_assignments
             .iter()
             .map(|f| self.stage_composite(&f.value, ExpressionContext::value()))
             .collect();
@@ -69,7 +68,7 @@ impl Planner<'_> {
 
         let mut field_names: Vec<String> = Vec::new();
         let mut field_values: Vec<String> = Vec::new();
-        for (slot, f) in kept.iter().enumerate() {
+        for (slot, f) in field_assignments.iter().enumerate() {
             let field_name = self.resolve_struct_call_field_name(&f.name, ty, &ctx);
             let mut value = emitted_values[slot].clone();
             value = self.wrap_recursive_enum_field(&mut setup, value, f, &ctx);
@@ -206,37 +205,6 @@ impl Planner<'_> {
             let zero = self.lisette_zero(&field_ty);
             field_pairs.push((go_field_name, zero));
         }
-    }
-
-    /// Drop empty `Slice<T>` field assignments so Go's nil zero-value applies
-    /// instead of an `[]T{}` allocation. Skipped for Go-imported structs (the
-    /// Go API may distinguish nil from empty) and `From` spreads (the override
-    /// must still fire to clear the inherited value).
-    fn kept_struct_call_fields<'a>(
-        &self,
-        field_assignments: &'a [StructFieldAssignment],
-        spread: &StructSpread,
-        ty: &Type,
-        is_go_struct: bool,
-    ) -> Vec<&'a StructFieldAssignment> {
-        let can_omit_slices = !is_go_struct
-            && !matches!(spread, StructSpread::From(_))
-            && field_assignments
-                .iter()
-                .any(|f| f.value.is_empty_collection());
-        if !can_omit_slices {
-            return field_assignments.iter().collect();
-        }
-        field_assignments
-            .iter()
-            .filter(|f| {
-                !(f.value.is_empty_collection()
-                    && self
-                        .lookup_struct_field_ty(ty, &f.name)
-                        .as_ref()
-                        .is_some_and(Type::is_slice))
-            })
-            .collect()
     }
 
     /// Look up unspecified fields of a Lisette-defined struct or enum struct variant,
