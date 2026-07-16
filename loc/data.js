@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1784143209534,
+  "lastUpdate": 1784228226529,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -3502,6 +3502,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "format",
             "value": 2783,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1031,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 695,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 6046,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 890,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "85a72423d892ad450f1746f1a2e3f7603d5e0ec2",
+          "message": "feat: file comments (#1013)",
+          "timestamp": "2026-07-16T20:56:42+02:00",
+          "tree_id": "ab76b01bea4aa86692806f2fc04eccd996ace518",
+          "url": "https://github.com/ivov/lisette/commit/85a72423d892ad450f1746f1a2e3f7603d5e0ec2"
+        },
+        "date": 1784228225383,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 114389,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 29770,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 22852,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 16428,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 13174,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 10086,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 6191,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 4414,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2812,
             "unit": "lines"
           },
           {
