@@ -105,7 +105,7 @@ fn annotation_to_string(ann: &Annotation) -> String {
                 .collect::<Vec<_>>()
                 .join(", ");
             let ret = annotation_to_string(return_type);
-            if ret == "Unit" {
+            if ret == "Unit" || ret == "()" {
                 format!("fn({})", params_str)
             } else {
                 format!("fn({}) -> {}", params_str, ret)
@@ -135,7 +135,21 @@ fn generics_to_string(generics: &[Generic]) -> String {
             "<{}>",
             generics
                 .iter()
-                .map(|g| g.name.to_string())
+                .map(|g| {
+                    if g.bounds.is_empty() {
+                        g.name.to_string()
+                    } else {
+                        format!(
+                            "{}: {}",
+                            g.name,
+                            g.bounds
+                                .iter()
+                                .map(annotation_to_string)
+                                .collect::<Vec<_>>()
+                                .join(" + ")
+                        )
+                    }
+                })
                 .collect::<Vec<_>>()
                 .join(", ")
         )
@@ -177,10 +191,14 @@ fn function_signature(
         .collect::<Vec<_>>()
         .join(", ");
     let ret = match return_annotation {
-        Annotation::Unknown => "Unit".to_string(),
+        Annotation::Unknown => String::new(),
         other => annotation_to_string(other),
     };
-    format!("fn {}{}({}) -> {}", name, generics_str, params_str, ret)
+    if ret.is_empty() || ret == "Unit" || ret == "()" {
+        format!("fn {}{}({})", name, generics_str, params_str)
+    } else {
+        format!("fn {}{}({}) -> {}", name, generics_str, params_str, ret)
+    }
 }
 
 fn struct_definition(
@@ -192,10 +210,16 @@ fn struct_definition(
 ) -> String {
     match kind {
         StructKind::Record => {
-            if fields.is_empty() {
+            let visible: Vec<_> = if show_pub {
+                fields.iter().collect()
+            } else {
+                fields.iter().filter(|f| f.visibility.is_public()).collect()
+            };
+            let hidden = fields.len() - visible.len();
+            if visible.is_empty() && hidden == 0 {
                 format!("struct {}{} {{}}", name, gen_str)
             } else {
-                let field_strs: Vec<String> = fields
+                let mut field_strs: Vec<String> = visible
                     .iter()
                     .map(|f| {
                         let vis = if show_pub && f.visibility.is_public() {
@@ -206,6 +230,9 @@ fn struct_definition(
                         format!("{}{}: {}", vis, f.name, annotation_to_string(&f.annotation))
                     })
                     .collect();
+                if hidden > 0 {
+                    field_strs.push("..".to_string());
+                }
                 format!("struct {}{} {{ {} }}", name, gen_str, field_strs.join(", "))
             }
         }
@@ -763,61 +790,45 @@ fn format_method_name(s: &str) -> String {
     out
 }
 
-fn colorize_definition(definition: &str) -> String {
-    if !use_color() {
-        return definition.to_string();
-    }
-    use owo_colors::OwoColorize;
-
-    let mut result = String::new();
-    let chars: Vec<char> = definition.chars().collect();
-    let len = chars.len();
-    let mut i = 0;
-
-    while i < len {
-        let ch = chars[i];
-        if ch.is_alphabetic() || ch == '_' {
-            let start = i;
-            while i < len && (chars[i].is_alphanumeric() || chars[i] == '_') {
-                i += 1;
-            }
-            let word: String = chars[start..i].iter().collect();
-            match word.as_str() {
-                "enum" | "struct" | "type" | "interface" | "fn" | "pub" => {
-                    result.push_str(&word.blue().to_string());
-                }
-                "int" | "int8" | "int16" | "int32" | "int64" | "uint" | "uint8" | "uint16"
-                | "uint32" | "uint64" | "uintptr" | "byte" | "bool" | "string" | "rune"
-                | "float32" | "float64" | "complex64" | "complex128" | "Unit" | "Unknown"
-                | "Never" => {
-                    result.push_str(&word.bright_cyan().to_string());
-                }
-                _ if word.starts_with(char::is_uppercase) => {
-                    result.push_str(&word.bright_cyan().to_string());
-                }
-                _ => result.push_str(&word),
-            }
-        } else {
-            result.push(ch);
-            i += 1;
-        }
-    }
-
-    result
+fn is_primitive_word(word: &str) -> bool {
+    matches!(
+        word,
+        "int"
+            | "int8"
+            | "int16"
+            | "int32"
+            | "int64"
+            | "uint"
+            | "uint8"
+            | "uint16"
+            | "uint32"
+            | "uint64"
+            | "uintptr"
+            | "byte"
+            | "bool"
+            | "string"
+            | "rune"
+            | "float32"
+            | "float64"
+            | "complex64"
+            | "complex128"
+            | "Unit"
+            | "Unknown"
+            | "Never"
+    )
 }
 
-fn colorize_signature(sig: &str) -> String {
+fn colorize_code(code: &str) -> String {
     if !use_color() {
-        return sig.to_string();
+        return code.to_string();
     }
     use owo_colors::OwoColorize;
 
     let mut result = String::new();
-    let chars: Vec<char> = sig.chars().collect();
+    let chars: Vec<char> = code.chars().collect();
     let len = chars.len();
     let mut i = 0;
     let mut after_fn_keyword = false;
-    let mut fn_name_done = false;
 
     while i < len {
         let ch = chars[i];
@@ -827,17 +838,21 @@ fn colorize_signature(sig: &str) -> String {
                 i += 1;
             }
             let word: String = chars[start..i].iter().collect();
+            let names_a_function = after_fn_keyword;
+            after_fn_keyword = false;
             match word.as_str() {
+                "enum" | "struct" | "type" | "interface" | "pub" => {
+                    result.push_str(&word.blue().to_string());
+                }
                 "fn" => {
                     result.push_str(&word.blue().to_string());
                     after_fn_keyword = true;
                 }
-                "self" => {
-                    result.push_str(&word);
-                }
-                _ if after_fn_keyword && !fn_name_done => {
+                _ if names_a_function => {
                     result.push_str(&word.bright_magenta().to_string());
-                    fn_name_done = true;
+                }
+                _ if is_primitive_word(&word) => {
+                    result.push_str(&word.bright_cyan().to_string());
                 }
                 _ if word.starts_with(char::is_uppercase) => {
                     result.push_str(&word.bright_cyan().to_string());
@@ -845,10 +860,8 @@ fn colorize_signature(sig: &str) -> String {
                 _ => result.push_str(&word),
             }
         } else {
-            if after_fn_keyword && !fn_name_done && ch == ' ' {
-                result.push(ch);
-                i += 1;
-                continue;
+            if ch != ' ' {
+                after_fn_keyword = false;
             }
             result.push(ch);
             i += 1;
@@ -966,7 +979,9 @@ fn print_test_code(code: &str) {
         } else {
             line.trim_start()
         };
-        if use_color() {
+        if stripped.trim().is_empty() {
+            println!();
+        } else if use_color() {
             use owo_colors::OwoColorize;
             println!("      {}", stripped.dimmed().italic());
         } else {
@@ -1314,7 +1329,9 @@ fn print_example(example: &str) {
         } else {
             line.trim_start()
         };
-        if use_color() {
+        if stripped.trim().is_empty() {
+            println!();
+        } else if use_color() {
             use owo_colors::OwoColorize;
             println!("      {}", stripped.dimmed().italic());
         } else {
@@ -1323,10 +1340,22 @@ fn print_example(example: &str) {
     }
 }
 
+fn print_doc_line(indent: usize, line: &str) {
+    if line.trim().is_empty() {
+        println!();
+    } else {
+        println!(
+            "{}{}",
+            " ".repeat(indent),
+            format_backticks(line, use_color())
+        );
+    }
+}
+
 fn print_doc(doc: &str) {
     let (description, example) = split_doc_and_example(doc);
     for line in description.lines() {
-        println!("    {}", format_backticks(line, use_color()));
+        print_doc_line(4, line);
     }
     if let Some(example) = example {
         println!();
@@ -1334,43 +1363,50 @@ fn print_doc(doc: &str) {
     }
 }
 
-fn print_type_header(type_info: &TypeInfo) {
+fn print_type_header(type_info: &TypeInfo, include_example: bool) {
     println!();
-    for line in colorize_definition(&type_info.definition).lines() {
+    for line in colorize_code(&type_info.definition).lines() {
         println!("  {}", line);
     }
     if let Some(doc) = &type_info.doc {
-        print_doc(doc);
+        if include_example {
+            print_doc(doc);
+        } else {
+            let (description, _) = split_doc_and_example(doc);
+            for line in description.lines() {
+                print_doc_line(4, line);
+            }
+        }
     }
 }
 
 fn print_type(type_info: &TypeInfo) {
-    print_type_header(type_info);
+    print_type_header(type_info, true);
     for method in &type_info.methods {
         println!();
-        println!("    {}", colorize_signature(&method.signature));
+        println!("    {}", colorize_code(&method.signature));
         if let Some(doc) = &method.doc {
             for line in doc.lines() {
-                println!("      {}", format_backticks(line, use_color()));
+                print_doc_line(6, line);
             }
         }
     }
 }
 
 fn print_method(type_info: &TypeInfo, method: &MethodInfo) {
-    print_type_header(type_info);
+    print_type_header(type_info, false);
     println!();
-    println!("    {}", colorize_signature(&method.signature));
+    println!("    {}", colorize_code(&method.signature));
     if let Some(doc) = &method.doc {
         for line in doc.lines() {
-            println!("      {}", format_backticks(line, use_color()));
+            print_doc_line(6, line);
         }
     }
 }
 
 fn print_function(func: &FunctionInfo) {
     println!();
-    println!("  {}", colorize_signature(&func.signature));
+    println!("  {}", colorize_code(&func.signature));
     if let Some(doc) = &func.doc {
         print_doc(doc);
     }
@@ -1463,7 +1499,7 @@ fn print_go_function(index: &GoPackageIndex, func: &FunctionInfo) {
 fn print_go_const(index: &GoPackageIndex, c: &ConstInfo) {
     print_go_package_header(&index.package);
     println!();
-    println!("  {}", colorize_signature(&c.signature));
+    println!("  {}", colorize_code(&c.signature));
     if let Some(doc) = &c.doc {
         print_doc(doc);
     }
@@ -1472,7 +1508,7 @@ fn print_go_const(index: &GoPackageIndex, c: &ConstInfo) {
 fn print_go_var(index: &GoPackageIndex, v: &VarInfo) {
     print_go_package_header(&index.package);
     println!();
-    println!("  {}", colorize_signature(&v.signature));
+    println!("  {}", colorize_code(&v.signature));
     if let Some(doc) = &v.doc {
         print_doc(doc);
     }
@@ -1681,7 +1717,7 @@ fn format_search_line(qualifier: &str, func_name: &str, signature: &str) -> Stri
 
     if use_color() {
         use owo_colors::OwoColorize;
-        let colored_rest = colorize_definition(after_name);
+        let colored_rest = colorize_code(after_name);
         if qualifier.is_empty() {
             format!("    {}{}", func_name.bright_magenta(), colored_rest)
         } else {
@@ -2082,6 +2118,64 @@ mod tests {
         assert_eq!(new.name, "new");
         assert_eq!(new.signature, "fn new() -> Array<T, N>");
         assert!(new.doc.is_some());
+    }
+
+    #[test]
+    fn signature_omits_unit_return() {
+        let index = build_prelude_index();
+        let map = index
+            .types
+            .iter()
+            .find(|t| t.name == "Map")
+            .expect("`Map` is parsed from the prelude");
+        let delete = map
+            .methods
+            .iter()
+            .find(|m| m.name == "delete")
+            .expect("`Map` documents `delete`");
+
+        assert_eq!(delete.signature, "fn delete(self, key: K)");
+    }
+
+    #[test]
+    fn definition_shows_generic_bounds() {
+        let index = build_prelude_index();
+        let map = index
+            .types
+            .iter()
+            .find(|t| t.name == "Map")
+            .expect("`Map` is parsed from the prelude");
+
+        assert_eq!(map.definition, "type Map<K: Comparable, V>");
+
+        let min = index
+            .functions
+            .iter()
+            .find(|f| f.name == "min")
+            .expect("`min` is parsed from the prelude");
+
+        assert_eq!(
+            min.signature,
+            "fn min<T: Ordered>(x: T, rest: VarArgs<T>) -> T"
+        );
+    }
+
+    #[test]
+    fn go_struct_definition_hides_private_fields() {
+        let source = r#"
+pub struct File {
+  handle: int,
+  pub Name: string,
+}
+"#;
+        let index = build_go_package_index(source, "os");
+        let file = index
+            .types
+            .iter()
+            .find(|t| t.name == "File")
+            .expect("`File` is parsed from the typedef");
+
+        assert_eq!(file.definition, "struct File { Name: string, .. }");
     }
 
     #[test]
