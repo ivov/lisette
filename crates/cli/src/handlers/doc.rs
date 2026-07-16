@@ -485,6 +485,14 @@ fn build_prelude_index() -> PreludeIndex {
     if let Some(array) = index.types.iter_mut().find(|t| t.name == "Array") {
         array.generics.push("N".to_string());
         array.definition = "type Array<T, N>".to_string();
+        array.methods.insert(
+            0,
+            MethodInfo {
+                name: "new".to_string(),
+                signature: "fn new() -> Array<T, N>".to_string(),
+                doc: Some("Creates an array of `N` zero values.".to_string()),
+            },
+        );
     }
     index.types.push(TypeInfo {
         name: "Unit".to_string(),
@@ -2059,6 +2067,21 @@ mod tests {
             .expect("`Array` is parsed from the prelude");
 
         assert_eq!(array.definition, "type Array<T, N>");
+    }
+
+    #[test]
+    fn prelude_documents_array_new() {
+        let index = build_prelude_index();
+        let array = index
+            .types
+            .iter()
+            .find(|t| t.name == "Array")
+            .expect("`Array` is parsed from the prelude");
+
+        let new = array.methods.first().expect("`Array` has methods");
+        assert_eq!(new.name, "new");
+        assert_eq!(new.signature, "fn new() -> Array<T, N>");
+        assert!(new.doc.is_some());
     }
 
     #[test]

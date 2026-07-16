@@ -213,10 +213,12 @@ impl<T, E> Result<T, E> {
   /// Applies `default` to the `Err` value, or `f` to the `Ok` value.
   fn map_or_else<U>(self, default: fn(E) -> U, f: fn(T) -> U) -> U
 
-  /// Calls `f` with the `Ok` value, leaving `Err` unchanged.
+  /// Calls `f` with the `Ok` value and returns the result,
+  /// leaving `Err` unchanged.
   fn and_then<U>(self, f: fn(T) -> Result<U, E>) -> Result<U, E>
 
-  /// Calls `f` with the `Err` value, leaving `Ok` unchanged.
+  /// Calls `f` with the `Err` value and returns the result,
+  /// leaving `Ok` unchanged.
   fn or_else<F>(self, f: fn(E) -> Result<T, F>) -> Result<T, F>
 }
 
@@ -292,8 +294,13 @@ impl<T> Array<T> {
 ///
 /// Example:
 ///   let items = [1, 2, 3]
+///   let first = items[0]
+///   let middle = items[1..3]
 ///   let more = items.append(4, 5)
 ///   let value = items.get(0).unwrap_or(0)
+///   for item in items {
+///     fmt.Println(item)
+///   }
 type Slice<T>
 
 impl<T> Slice<T> {
@@ -306,7 +313,7 @@ impl<T> Slice<T> {
   /// Returns `true` if the slice contains no elements.
   fn is_empty(self) -> bool
 
-  /// Returns the capacity of the slice.
+  /// Returns the number of elements the slice can hold before reallocating.
   fn capacity(self) -> int
 
   /// Returns the element at `index`, or `None` if out of bounds.
@@ -317,7 +324,8 @@ impl<T> Slice<T> {
   /// Reassign the output to grow in place: `items = items.append(x)`.
   fn append(self, elements: VarArgs<T>) -> Slice<T>
 
-  /// Copies elements from `src` into this slice. Returns the number of elements copied.
+  /// Overwrites the elements of this slice in place with elements from `src`,
+  /// up to the shorter of the two lengths. Returns the number of elements copied.
   fn copy_from(self, src: Slice<T>) -> int
 
   /// Returns a new slice containing only elements for which `f` returns `true`.
@@ -357,16 +365,21 @@ impl<T> Slice<T> {
 type EnumeratedSlice<T>
 
 impl<T> EnumeratedSlice<T> {
+  /// Returns the `(index, element)` pairs for which `f` returns `true`.
   fn filter(self, f: fn((int, T)) -> bool) -> Slice<(int, T)>
 
+  /// Returns a new slice with `f` applied to each `(index, element)` pair.
   fn map<U>(self, f: fn((int, T)) -> U) -> Slice<U>
 
+  /// Reduces the `(index, element)` pairs to a single value by applying `f`
+  /// to each pair with an accumulator, starting from `accumulator`.
   fn fold<U>(self, accumulator: U, f: fn(U, (int, T)) -> U) -> U
 
+  /// Returns the first `(index, element)` pair for which `f` returns `true`,
+  /// or `None`.
   fn find(self, f: fn((int, T)) -> bool) -> Option<(int, T)>
 
-  /// Returns a copy of the underlying slice, including any nested slices,
-  /// maps, and tuples.
+  /// Returns a copy, including any nested slices, maps, and tuples.
   fn clone(self) -> EnumeratedSlice<T>
 }
 
@@ -378,9 +391,12 @@ impl Slice<string> {
 /// A map from keys to values. Equivalent to Go's `map[K]V`.
 ///
 /// Example:
-///   let m = Map.new<string, int>()
-///   m["key"] = 42
-///   let value = m.get("key").unwrap_or(0)
+///   let mut ages = Map.new<string, int>()
+///   ages["alice"] = 30
+///   let alice_age = ages.get("alice").unwrap_or(0)
+///   for (name, age) in ages {
+///     fmt.Println(name, age)
+///   }
 type Map<K: Comparable, V>
 
 impl<K, V> Map<K, V> {
@@ -554,8 +570,8 @@ pub struct RangeToInclusive<T> {
 //     Special types
 // -----------------------
 
-/// Represents Go's `any` type. Only usable in `.d.lis` typedef files.
-/// Use `assert_type` to narrow an `Unknown` value to a concrete type.
+/// Represents Go's `any` type. Values typed `any` in Go APIs arrive as
+/// `Unknown`. Use `assert_type` to narrow an `Unknown` value to a concrete type.
 ///
 /// Example:
 ///   let value: Unknown = get_any_value()
@@ -650,9 +666,9 @@ fn imaginary(c: complex128) -> float64
 fn panic(msg: Unknown) -> Never
 
 /// Returns the smallest of its arguments. All arguments must be of the same
-/// type and (signed/unsigned ints, floats, or `string`).
+/// `Ordered` type (signed/unsigned ints, floats, or `string`).
 fn min<T: Ordered>(x: T, rest: VarArgs<T>) -> T
 
 /// Returns the largest of its arguments. All arguments must be of the same
-/// type and (signed/unsigned ints, floats, or `string`).
+/// `Ordered` type (signed/unsigned ints, floats, or `string`).
 fn max<T: Ordered>(x: T, rest: VarArgs<T>) -> T
