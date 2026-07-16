@@ -1,0 +1,36 @@
+---
+source: tests/spec/emit/prelude.rs
+description: |
+  
+  fn identity(s: Slice<int>) -> Slice<int> {
+    s
+  }
+  
+  fn main() {
+    let mut base = [1, 2]
+    base = base.append(3)
+    let u = identity(base).append(7)
+    base[0] = 99
+    if u.get(0).unwrap_or(-1) != 1 {
+      panic("a call-produced receiver must not alias the argument")
+    }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func identity(s []int) []int {
+	return s
+}
+
+func main() {
+	base := []int{1, 2}
+	base = append(base, 3)
+	recv_1 := identity(base)
+	u := append(recv_1[:len(recv_1):len(recv_1)], 7)
+	base[0] = 99
+	if lisette.SliceGet(u, 0).UnwrapOr(-1) != 1 {
+		panic("a call-produced receiver must not alias the argument")
+	}
+}

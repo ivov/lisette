@@ -9,5 +9,5 @@ description: |
 package main
 
 func test(s []int) []int {
-	return append(s, 1, 2, 3)
+	return append(s[:len(s):len(s)], 1, 2, 3)
 }

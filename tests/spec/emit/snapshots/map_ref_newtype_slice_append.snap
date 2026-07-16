@@ -28,7 +28,8 @@ func main() {
 		return
 	}
 	r := subject_1.SomeVal
-	ref_2 := r
-	*ref_2 = Wrap(append([]int(*r), 2))
+	ref_3 := r
+	recv_2 := []int(*r)
+	*ref_3 = Wrap(append(recv_2[:len(recv_2):len(recv_2)], 2))
 	_ = w
 }

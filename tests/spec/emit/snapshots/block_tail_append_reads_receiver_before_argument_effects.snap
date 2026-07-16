@@ -1,0 +1,44 @@
+---
+source: tests/spec/emit/prelude.rs
+description: |
+  
+  struct Holder {
+    slc: Slice<()>,
+  }
+  
+  fn main() {
+    let mut h = Holder { slc: [] }
+    let bump = || { h.slc = [(), (), ()] }
+    let ys = {
+      h.slc.append(bump())
+    }
+    if ys.length() != 1 {
+      panic("the receiver must be read before argument effects run")
+    }
+    if h.slc.length() != 3 {
+      panic("the argument mutation must still apply")
+    }
+  }
+---
+package main
+
+type Holder struct {
+	slc []struct{}
+}
+
+func main() {
+	h := Holder{slc: []struct{}{}}
+	bump := func() {
+		h.slc = []struct{}{struct{}{}, struct{}{}, struct{}{}}
+	}
+	var ys []struct{}
+	recv_1 := h.slc
+	bump()
+	ys = append(recv_1[:len(recv_1):len(recv_1)], struct{}{})
+	if len(ys) != 1 {
+		panic("the receiver must be read before argument effects run")
+	}
+	if len(h.slc) != 3 {
+		panic("the argument mutation must still apply")
+	}
+}

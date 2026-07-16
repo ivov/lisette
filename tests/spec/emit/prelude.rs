@@ -148,6 +148,104 @@ fn test() -> Slice<fn(int)> {
 }
 
 #[test]
+fn append_from_call_result_does_not_alias() {
+    let input = r#"
+fn identity(s: Slice<int>) -> Slice<int> {
+  s
+}
+
+fn main() {
+  let mut base = [1, 2]
+  base = base.append(3)
+  let u = identity(base).append(7)
+  base[0] = 99
+  if u.get(0).unwrap_or(-1) != 1 {
+    panic("a call-produced receiver must not alias the argument")
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn append_results_do_not_alias() {
+    let input = r#"
+fn main() {
+  let base = [1, 2]
+  let t = base.append(3)
+  let u1 = t.append(7)
+  let u2 = t.append(8)
+  if u1.get(3).unwrap_or(-1) != 7 {
+    panic("append results must not share a backing array")
+  }
+  if u2.get(3).unwrap_or(-1) != 8 {
+    panic("append results must not share a backing array")
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn append_from_zero_growth_append_does_not_alias() {
+    let input = r#"
+fn main() {
+  let mut s = [1, 2]
+  s = s.append(3)
+  let u1 = s.append().append(7)
+  let u2 = s.append().append(8)
+  if u1.get(3).unwrap_or(-1) != 7 {
+    panic("a zero-growth append receiver must not be treated as fresh")
+  }
+  if u2.get(3).unwrap_or(-1) != 8 {
+    panic("a zero-growth append receiver must not be treated as fresh")
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn block_tail_append_reads_receiver_before_argument_effects() {
+    let input = r#"
+struct Holder {
+  slc: Slice<()>,
+}
+
+fn main() {
+  let mut h = Holder { slc: [] }
+  let bump = || { h.slc = [(), (), ()] }
+  let ys = {
+    h.slc.append(bump())
+  }
+  if ys.length() != 1 {
+    panic("the receiver must be read before argument effects run")
+  }
+  if h.slc.length() != 3 {
+    panic("the argument mutation must still apply")
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn append_base_mutation_does_not_leak_into_result() {
+    let input = r#"
+fn main() {
+  let mut t = [1, 2]
+  t = t.append(3)
+  let u = t.append(7)
+  t[0] = 99
+  if u.get(0).unwrap_or(-1) != 1 {
+    panic("mutating the base must not write through to an append result")
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn slice_length() {
     let input = r#"
 fn test(s: Slice<int>) -> int {

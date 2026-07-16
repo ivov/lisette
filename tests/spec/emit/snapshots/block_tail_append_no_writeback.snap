@@ -11,6 +11,6 @@ package main
 
 func test(s []int) []int {
 	var x []int
-	x = append(s, 2)
+	x = append(s[:len(s):len(s)], 2)
 	return x
 }

@@ -29,6 +29,7 @@ struct CallArgsContext<'plan, 'facts> {
     wrap_spread_to_any: bool,
     combine_variadic: Option<VariadicCombine>,
     capture_boundary: CaptureBoundary,
+    retired_receiver: Option<&'plan Expression>,
 }
 
 /// Escape-aware close-quote search; plain `find` would collide with `\"` inside the literal.
@@ -143,9 +144,15 @@ impl<'a> Planner<'a> {
         let spread = (**spread).as_ref();
 
         if let Some(go_name) = self.get_callee_go_name(function).map(str::to_string) {
+            let arg_ctx = match (expression_ctx.retired_receiver(), args.len()) {
+                (Some(retired), 1) if self.callee_lowers_to_type_construction(function) => {
+                    ExpressionContext::value().with_retired_receiver(retired)
+                }
+                _ => ExpressionContext::value(),
+            };
             let stages: Vec<ValuePlan> = args
                 .iter()
-                .map(|a| self.stage_operand(a, ExpressionContext::value()))
+                .map(|a| self.stage_operand(a, arg_ctx))
                 .collect();
             let wrap_to_any = spread_needs_any_wrap(function, spread);
             let combine = call_plan.variadic_combine(0);
@@ -197,6 +204,10 @@ impl<'a> Planner<'a> {
             wrap_spread_to_any: spread_needs_any_wrap(function, spread),
             combine_variadic: call_plan.variadic_combine(0),
             capture_boundary: expression_ctx.capture_boundary(),
+            retired_receiver: (args.len() == 1
+                && self.callee_lowers_to_type_construction(function))
+            .then(|| expression_ctx.retired_receiver())
+            .flatten(),
         };
         let sequenced_args = self.emit_call_args(args, &args_ctx);
         let args_effect = sequenced_args.effect;
@@ -498,7 +509,10 @@ impl<'a> Planner<'a> {
         declared_param_ty: Option<&Type>,
     ) -> ValuePlan {
         let suppress = would_suppress_tagged_go(&ctx.plan.resolved, declared_param_ty);
-        let arg_ctx = direct_arg_emit_ctx(effective_param_ty, suppress);
+        let mut arg_ctx = direct_arg_emit_ctx(effective_param_ty, suppress);
+        if let Some(retired) = ctx.retired_receiver {
+            arg_ctx = arg_ctx.with_retired_receiver(retired);
+        }
         let argument = self.lower_composite_value(arg, arg_ctx);
         argument.map_rendered_as_computed(|setup, value, contains_deferred_evaluation| {
             let final_value = match effective_param_ty {

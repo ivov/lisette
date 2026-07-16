@@ -1,0 +1,33 @@
+---
+source: tests/spec/emit/prelude.rs
+description: |
+  
+  fn main() {
+    let base = [1, 2]
+    let t = base.append(3)
+    let u1 = t.append(7)
+    let u2 = t.append(8)
+    if u1.get(3).unwrap_or(-1) != 7 {
+      panic("append results must not share a backing array")
+    }
+    if u2.get(3).unwrap_or(-1) != 8 {
+      panic("append results must not share a backing array")
+    }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func main() {
+	base := []int{1, 2}
+	t := append(base[:len(base):len(base)], 3)
+	u1 := append(t[:len(t):len(t)], 7)
+	u2 := append(t[:len(t):len(t)], 8)
+	if lisette.SliceGet(u1, 3).UnwrapOr(-1) != 7 {
+		panic("append results must not share a backing array")
+	}
+	if lisette.SliceGet(u2, 3).UnwrapOr(-1) != 8 {
+		panic("append results must not share a backing array")
+	}
+}

@@ -31,7 +31,8 @@ func main() {
 	}
 	o := subject_1.SomeVal
 	var tmp_2 []int
-	tmp_2 = append(*o.items, 2)
+	recv_3 := *o.items
+	tmp_2 = append(recv_3[:len(recv_3):len(recv_3)], 2)
 	_ = tmp_2
 	_ = items
 }

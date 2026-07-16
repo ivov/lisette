@@ -18,6 +18,6 @@ func main() {
 	xs := []struct{}{}
 	_arg_1 := xs
 	noop()
-	y := append(_arg_1, struct{}{})
+	y := append(_arg_1[:len(_arg_1):len(_arg_1)], struct{}{})
 	_ = y
 }

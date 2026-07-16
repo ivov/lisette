@@ -13,5 +13,6 @@ package main
 func main() {
 	s := []int{1}
 	r := &s
-	_ = append(*r, 2)
+	recv_1 := *r
+	_ = append(recv_1[:len(recv_1):len(recv_1)], 2)
 }

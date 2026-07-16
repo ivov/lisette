@@ -1,3 +1,4 @@
+use syntax::ast::Expression;
 use syntax::types::Type;
 
 use crate::plan::values::CaptureBoundary;
@@ -42,6 +43,7 @@ pub(crate) struct ExpressionContext<'a> {
     function_value_abi_target: FunctionValueAbiTarget,
     argument_target: ArgumentTarget,
     capture_boundary: CaptureBoundary,
+    retired_receiver: Option<&'a Expression>,
 }
 
 impl<'a> ExpressionContext<'a> {
@@ -116,5 +118,14 @@ impl<'a> ExpressionContext<'a> {
 
     pub(crate) fn capture_boundary(self) -> CaptureBoundary {
         self.capture_boundary
+    }
+
+    pub(crate) fn with_retired_receiver(mut self, target: &'a Expression) -> Self {
+        self.retired_receiver = Some(target);
+        self
+    }
+
+    pub(crate) fn retired_receiver(self) -> Option<&'a Expression> {
+        self.retired_receiver
     }
 }

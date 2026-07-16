@@ -33,5 +33,5 @@ func arg() int {
 
 func main() {
 	recv_1 := *get()
-	_ = append(recv_1, arg())
+	_ = append(recv_1[:len(recv_1):len(recv_1)], arg())
 }

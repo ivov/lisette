@@ -22,6 +22,6 @@ func test() {
 	_arg_1 := xs
 	_arg_2 := mark()
 	defer func() {
-		_ = append(_arg_1, _arg_2)
+		_ = append(_arg_1[:len(_arg_1):len(_arg_1)], _arg_2)
 	}()
 }

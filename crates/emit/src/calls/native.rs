@@ -1,15 +1,17 @@
 use super::NativeCallContext;
 use crate::Planner;
+use crate::calls::dispatch::extract_native_method_name;
 use crate::context::expression::ExpressionContext;
 use crate::expressions::access::index_access::range_var_bounds;
 use crate::names::go_name;
 use crate::plan::bodies::LoweredStatement;
 use crate::plan::calls::plan_variadic_spread;
 use crate::plan::values::{CaptureBoundary, EvaluationEffect, ValuePlan};
+use crate::statements::assignments::lvalues_match;
 use crate::types::native::NativeGoType;
 use crate::utils::reads_mutable_operand;
-use syntax::ast::{Expression, UnaryOperator};
-use syntax::program::DotAccessKind;
+use syntax::ast::{Expression, Literal, UnaryOperator};
+use syntax::program::{CallKind, DotAccessKind, NativeTypeKind};
 use syntax::types::{CompoundKind, Type, peel_to_range_type};
 
 pub(super) struct NativeCallResult {
@@ -222,6 +224,79 @@ static INLINE_METHODS: &[InlineRule] = &[
     },
 ];
 
+pub(crate) fn clip_shared_capacity(receiver: &str) -> String {
+    format!("{r}[:len({r}):len({r})]", r = receiver)
+}
+
+fn grows_into_capacity(method: &str, appends_anything: bool) -> bool {
+    method == "append" && appends_anything
+}
+
+pub(crate) fn is_clip_safe_path(value: &str) -> bool {
+    !value.is_empty()
+        && value
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '.')
+}
+
+fn growth_clip_applies(ctx: &NativeCallContext, receiver: &Expression) -> bool {
+    let appends_anything = if matches!(ctx.function, Expression::DotAccess { .. }) {
+        !ctx.args.is_empty() || ctx.spread.is_some()
+    } else {
+        ctx.args.len() > 1 || ctx.spread.is_some()
+    };
+    grows_into_capacity(ctx.method, appends_anything)
+        && !is_fresh_slice_value(receiver)
+        && !ctx
+            .retired_receiver
+            .is_some_and(|target| retired_covers_receiver(target, receiver))
+}
+
+fn is_fresh_slice_value(receiver: &Expression) -> bool {
+    match receiver.unwrap_parens() {
+        Expression::Literal {
+            literal: Literal::Slice(_),
+            ..
+        } => true,
+        Expression::Call {
+            expression: callee,
+            args,
+            spread,
+            call_kind,
+            ..
+        } => match call_kind {
+            Some(CallKind::NativeConstructor(NativeTypeKind::Slice)) => true,
+            Some(
+                CallKind::NativeMethod(NativeTypeKind::Slice)
+                | CallKind::NativeMethodIdentifier(NativeTypeKind::Slice),
+            ) => match extract_native_method_name(callee.unwrap_parens()) {
+                "append" => {
+                    let receiver_argument_count =
+                        matches!(call_kind, Some(CallKind::NativeMethodIdentifier(_))) as usize;
+                    args.len() > receiver_argument_count || spread.is_some()
+                }
+                "clone" | "filter" | "map" => true,
+                _ => false,
+            },
+            _ => false,
+        },
+        _ => false,
+    }
+}
+
+fn retired_covers_receiver(target: &Expression, receiver: &Expression) -> bool {
+    let mut current = receiver.unwrap_parens();
+    loop {
+        if lvalues_match(target, current) {
+            return true;
+        }
+        match current {
+            Expression::DotAccess { expression, .. } => current = expression.unwrap_parens(),
+            _ => return false,
+        }
+    }
+}
+
 fn render_inline(template: &str, receiver: &str, args: &[String]) -> String {
     let mut result = template.replace("{r}", receiver);
     for (i, arg) in args.iter().enumerate() {
@@ -386,6 +461,12 @@ impl Planner<'_> {
 
         let (setup, receiver, emitted_args, effect, contains_deferred_evaluation) =
             self.stage_native_dot_access_call(ctx);
+
+        let receiver = if growth_clip_applies(ctx, expression) {
+            clip_shared_capacity(&receiver)
+        } else {
+            receiver
+        };
 
         if let Some(inlined) = apply_inline_lookup(
             self,
@@ -600,6 +681,11 @@ impl Planner<'_> {
         if expression.get_type().is_ref() {
             receiver_stage = receiver_stage.unary("*");
         }
+        if growth_clip_applies(ctx, expression)
+            && !is_clip_safe_path(&receiver_stage.expression.rendered())
+        {
+            self.pin_staged(&mut receiver_stage, "recv");
+        }
         all_stages.push(receiver_stage);
         all_stages.extend(argument_stages);
         let spread_index = spread_stage.map(|stage| {
@@ -699,8 +785,15 @@ impl Planner<'_> {
             return NativeCallResult::new(setup, body, effect, contains_deferred_evaluation);
         }
 
-        let (setup, emitted_args, effect, contains_deferred_evaluation) =
+        let (setup, mut emitted_args, effect, contains_deferred_evaluation) =
             self.stage_native_identifier_args(ctx);
+
+        if let Some(receiver_expr) = ctx.args.first()
+            && growth_clip_applies(ctx, receiver_expr)
+            && let Some(first) = emitted_args.first_mut()
+        {
+            *first = clip_shared_capacity(first);
+        }
 
         if let Some(inlined) = apply_inline_identifier_lookup(self, ctx, &emitted_args, false) {
             return NativeCallResult::new(setup, inlined, effect, contains_deferred_evaluation);
@@ -756,6 +849,11 @@ impl Planner<'_> {
                 .chain(spread_stage.iter())
                 .any(|stage| stage.evaluation.effect.has_call());
             self.pin_receiver_if_mutated(&mut stages[0], receiver, rest_has_call);
+            if growth_clip_applies(ctx, receiver)
+                && !is_clip_safe_path(&stages[0].expression.rendered())
+            {
+                self.pin_staged(&mut stages[0], "recv");
+            }
         }
         let spread_index = spread_stage.map(|stage| {
             stages.push(stage);

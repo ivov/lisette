@@ -1,7 +1,7 @@
 mod clone;
 pub(crate) mod dispatch;
 pub(crate) mod go_interop;
-mod native;
+pub(crate) mod native;
 mod regular;
 mod ufcs;
 
@@ -19,4 +19,5 @@ pub(super) struct NativeCallContext<'a> {
     pub native_type: &'a NativeGoType,
     pub method: &'a str,
     pub capture_boundary: CaptureBoundary,
+    pub retired_receiver: Option<&'a Expression>,
 }

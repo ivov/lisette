@@ -57,7 +57,10 @@ impl Planner<'_> {
         // `target = value`. Stage RHS first (so the target capture knows
         // whether RHS produced setup), capture the target, then fold RHS
         // setup + coercion setup into the value plan in emission order.
-        let right_hand_side = self.stage_composite(value, ExpressionContext::value());
+        let right_hand_side = self.stage_composite(
+            value,
+            ExpressionContext::value().with_retired_receiver(target),
+        );
         let (target_capture, target_str) =
             self.capture_assignment_target(target, Some(&right_hand_side));
         let coercion = if let Some((_target_ty, target_layout)) = go_field_slot {
@@ -461,7 +464,7 @@ fn is_literal_one(expression: &Expression) -> bool {
 /// Used to detect `x = x + y` → `x += y` patterns.
 /// Compares by binding_id for identifiers, recursively for DotAccess/Deref.
 /// Deliberately skips IndexedAccess (side-effect hazard from index evaluation).
-fn lvalues_match(a: &Expression, b: &Expression) -> bool {
+pub(crate) fn lvalues_match(a: &Expression, b: &Expression) -> bool {
     let a = a.unwrap_parens();
     let b = b.unwrap_parens();
     match (a, b) {

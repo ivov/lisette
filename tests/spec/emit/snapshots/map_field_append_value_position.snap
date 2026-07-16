@@ -22,6 +22,7 @@ type Box struct {
 func main() {
 	m := make(map[string]Box)
 	m["a"] = Box{items: []int{1}}
-	xs := append(m["a"].items, 2)
+	recv_1 := m["a"].items
+	xs := append(recv_1[:len(recv_1):len(recv_1)], 2)
 	_ = xs
 }

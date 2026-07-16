@@ -287,6 +287,7 @@ impl Planner<'_> {
             native_type: &native_type,
             method,
             capture_boundary: CaptureBoundary::SiblingSequence,
+            retired_receiver: None,
         };
         match call_kind {
             CallKind::NativeMethod(_) => {
@@ -355,6 +356,7 @@ impl Planner<'_> {
                     native_type: &native_type,
                     method,
                     capture_boundary: ctx.capture_boundary(),
+                    retired_receiver: ctx.retired_receiver(),
                 };
                 return self.lower_native_call(&native_ctx, &plan.resolved.origin);
             }
@@ -476,9 +478,13 @@ impl Planner<'_> {
     ) -> Option<ValuePlan> {
         let target = self.resolve_tuple_struct_target(function, call_ty)?;
 
+        let arg_ctx = match (ctx.retired_receiver(), args.len()) {
+            (Some(retired), 1) => ExpressionContext::value().with_retired_receiver(retired),
+            _ => ExpressionContext::value(),
+        };
         let stages: Vec<ValuePlan> = args
             .iter()
-            .map(|a| self.stage_composite(a, ExpressionContext::value()))
+            .map(|a| self.stage_composite(a, arg_ctx))
             .collect();
         let sequenced = self.sequence_values(stages, CaptureBoundary::SiblingSequence, "_arg");
         let effect = EvaluationEffect::PureCall.combine(sequenced.effect);
@@ -635,7 +641,7 @@ impl Planner<'_> {
     }
 }
 
-fn extract_native_method_name(function: &Expression) -> &str {
+pub(super) fn extract_native_method_name(function: &Expression) -> &str {
     match function {
         Expression::DotAccess { member, .. } => member,
         Expression::Identifier { value, .. } => {

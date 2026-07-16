@@ -22,6 +22,7 @@ func arg() int {
 
 func main() {
 	var x []int
-	x = append(get(), arg())
+	recv_1 := get()
+	x = append(recv_1[:len(recv_1):len(recv_1)], arg())
 	_ = x[1]
 }

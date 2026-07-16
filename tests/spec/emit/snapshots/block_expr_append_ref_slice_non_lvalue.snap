@@ -27,6 +27,7 @@ func arg() int {
 func main() {
 	var x []int
 	ref_1 := get()
-	x = append(*ref_1, arg())
+	recv_2 := *ref_1
+	x = append(recv_2[:len(recv_2):len(recv_2)], arg())
 	_ = x[1]
 }

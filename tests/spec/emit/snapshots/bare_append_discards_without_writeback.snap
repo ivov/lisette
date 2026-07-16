@@ -12,6 +12,6 @@ package main
 
 func main() {
 	items := []int{}
-	_ = append(items, 1)
+	_ = append(items[:len(items):len(items)], 1)
 	_ = items
 }

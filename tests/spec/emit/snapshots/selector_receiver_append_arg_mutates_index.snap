@@ -27,6 +27,6 @@ func run() int {
 	hs := []Holder{Holder{slc: []int{10}}, Holder{slc: []int{20}}}
 	i := 0
 	recv_1 := hs[i].slc
-	ys := append(recv_1, bump(&i))
+	ys := append(recv_1[:len(recv_1):len(recv_1)], bump(&i))
 	return ys[0]
 }

@@ -1,0 +1,33 @@
+---
+source: tests/spec/emit/prelude.rs
+description: |
+  
+  fn main() {
+    let mut s = [1, 2]
+    s = s.append(3)
+    let u1 = s.append().append(7)
+    let u2 = s.append().append(8)
+    if u1.get(3).unwrap_or(-1) != 7 {
+      panic("a zero-growth append receiver must not be treated as fresh")
+    }
+    if u2.get(3).unwrap_or(-1) != 8 {
+      panic("a zero-growth append receiver must not be treated as fresh")
+    }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func main() {
+	s := []int{1, 2}
+	s = append(s, 3)
+	u1 := append(s[:len(s):len(s)], 7)
+	u2 := append(s[:len(s):len(s)], 8)
+	if lisette.SliceGet(u1, 3).UnwrapOr(-1) != 7 {
+		panic("a zero-growth append receiver must not be treated as fresh")
+	}
+	if lisette.SliceGet(u2, 3).UnwrapOr(-1) != 8 {
+		panic("a zero-growth append receiver must not be treated as fresh")
+	}
+}

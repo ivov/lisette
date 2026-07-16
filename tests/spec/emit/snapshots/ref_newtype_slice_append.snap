@@ -18,7 +18,8 @@ type Wrap []int
 func main() {
 	w := Wrap([]int{1})
 	r := &w
-	ref_1 := r
-	*ref_1 = Wrap(append([]int(*r), 2))
+	ref_2 := r
+	recv_1 := []int(*r)
+	*ref_2 = Wrap(append(recv_1[:len(recv_1):len(recv_1)], 2))
 	_ = w
 }

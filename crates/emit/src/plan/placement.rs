@@ -1,5 +1,6 @@
 use crate::Planner;
 use crate::analyze::inline_uses::region_blocks_inline;
+use crate::calls::native::{clip_shared_capacity, is_clip_safe_path};
 use crate::context::expression::ExpressionContext;
 use crate::control_flow::fallible::{ConstructorKind, Fallible, FalliblePlanner};
 use crate::definitions::functions::{is_breakless_loop, is_go_never};
@@ -541,6 +542,17 @@ impl Planner<'_> {
             let receiver_lv =
                 self.emit_left_value_capturing(&mut capture, unwrapped, Some(&arguments));
             let (args_setup, args_str) = arguments.into_parts();
+            let grows = !args_str.is_empty();
+            let receiver_lv = if grows && receiver_lv != var {
+                let clippable = if is_clip_safe_path(&receiver_lv) && args_setup.is_empty() {
+                    receiver_lv
+                } else {
+                    self.hoist_tmp_value_statement(&mut capture, "recv", &receiver_lv)
+                };
+                clip_shared_capacity(&clippable)
+            } else {
+                receiver_lv
+            };
             capture.extend(args_setup);
             let value = if args_str.is_empty() {
                 receiver_lv
