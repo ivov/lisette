@@ -1,7 +1,7 @@
 name = "Lisette"
 grammar = "lisette"
 path_suffixes = ["lis"]
-line_comments = ["// ", "/// "]
+line_comments = ["// ", "/// ", "//! "]
 tab_size = 2
 hard_tabs = false
 autoclose_before = ";:.,=}])"

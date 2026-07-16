@@ -1,0 +1,32 @@
+---
+source: tests/spec/lex/mod.rs
+description: //!
+---
+LexResult {
+    tokens: [
+        Token {
+            kind: FileComment,
+            text: "",
+            byte_offset: 0,
+            byte_length: 3,
+        },
+        Token {
+            kind: EOF,
+            text: "",
+            byte_offset: 3,
+            byte_length: 0,
+        },
+    ],
+    errors: [],
+    trivia: Trivia {
+        comments: [],
+        doc_comments: [],
+        file_comments: [
+            (
+                0,
+                3,
+            ),
+        ],
+        blank_lines: [],
+    },
+}

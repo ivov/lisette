@@ -280,6 +280,7 @@ fn parse_one(job: ParseJob) -> (ModuleId, File, Vec<syntax::ParseError>) {
         &job.display_path,
         &job.source,
         result.ast,
+        result.file_comment,
         job.file_id,
     );
     (job.module_id, file, result.errors)

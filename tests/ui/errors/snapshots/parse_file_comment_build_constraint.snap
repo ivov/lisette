@@ -1,0 +1,11 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Invalid file comment
+   ╭─[test.lis:1:1]
+ 1 │ //! +build ignore
+   · ────────┬────────
+   ·         ╰── would become a Go build constraint
+ 2 │ 
+   ╰────
+  help: Reword the line so it does not start with `+build`. Emitted as a Go comment it would act as a legacy build constraint and exclude the generated file from builds · code: [parse.file_comment_build_constraint]

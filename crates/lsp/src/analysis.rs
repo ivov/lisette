@@ -138,6 +138,7 @@ impl SharedState {
             display_path: filename.clone(),
             filename,
             ast: desugar_result.ast,
+            file_comment: parse_result.file_comment,
             project_root: if config.standalone_mode {
                 None
             } else {

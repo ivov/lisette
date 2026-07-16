@@ -23,7 +23,15 @@ impl<'a> Formatter<'a> {
 
         let mut docs = Vec::new();
 
+        if let Some(file_comment) = self.comments.take_file_comments() {
+            docs.push(file_comment.force_break());
+        }
+
         if !imports.is_empty() {
+            if !docs.is_empty() {
+                docs.push(Document::Newline);
+                docs.push(Document::Newline);
+            }
             docs.push(self.sort_imports(&imports));
         }
 

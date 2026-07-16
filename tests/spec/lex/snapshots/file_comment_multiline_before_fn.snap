@@ -1,0 +1,81 @@
+---
+source: tests/spec/lex/mod.rs
+description: |-
+  //! First line
+  //! Second line
+  fn foo() {}
+---
+LexResult {
+    tokens: [
+        Token {
+            kind: FileComment,
+            text: "First line",
+            byte_offset: 0,
+            byte_length: 14,
+        },
+        Token {
+            kind: FileComment,
+            text: "Second line",
+            byte_offset: 15,
+            byte_length: 15,
+        },
+        Token {
+            kind: Function,
+            text: "fn",
+            byte_offset: 31,
+            byte_length: 2,
+        },
+        Token {
+            kind: Identifier,
+            text: "foo",
+            byte_offset: 34,
+            byte_length: 3,
+        },
+        Token {
+            kind: LeftParen,
+            text: "(",
+            byte_offset: 37,
+            byte_length: 1,
+        },
+        Token {
+            kind: RightParen,
+            text: ")",
+            byte_offset: 38,
+            byte_length: 1,
+        },
+        Token {
+            kind: LeftCurlyBrace,
+            text: "{",
+            byte_offset: 40,
+            byte_length: 1,
+        },
+        Token {
+            kind: RightCurlyBrace,
+            text: "}",
+            byte_offset: 41,
+            byte_length: 1,
+        },
+        Token {
+            kind: EOF,
+            text: "",
+            byte_offset: 42,
+            byte_length: 0,
+        },
+    ],
+    errors: [],
+    trivia: Trivia {
+        comments: [],
+        doc_comments: [],
+        file_comments: [
+            (
+                0,
+                14,
+            ),
+            (
+                15,
+                30,
+            ),
+        ],
+        blank_lines: [],
+    },
+}

@@ -110,6 +110,7 @@ pub fn register_cached_prelude(store: &mut Store, cached: PreludeCache) {
             display_path: "prelude.d.lis".to_string(),
             source: stdlib::LIS_PRELUDE_SOURCE.to_string(),
             items: vec![],
+            file_comment: None,
         },
     );
 

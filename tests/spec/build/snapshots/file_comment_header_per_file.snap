@@ -1,0 +1,45 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === main.go ===
+// Entry point header.
+
+package main
+
+import (
+	"fmt"
+	"github.com/user/myproject/util"
+)
+
+func main() {
+	fmt.Println(util.Shout("hi"), util.Double(util.Id(2)))
+}
+
+
+// === util/numbers.go ===
+// Generated from numbers.csv, do not edit by hand.
+
+package util
+
+func Double(n int) int {
+	return n * 2
+}
+
+
+// === util/plain.go ===
+package util
+
+func Id(n int) int {
+	return n
+}
+
+
+// === util/strings.go ===
+// Copyright 2026 Acme Corp.
+// SPDX-License-Identifier: Apache-2.0
+
+package util
+
+func Shout(s string) string {
+	return s + "!"
+}

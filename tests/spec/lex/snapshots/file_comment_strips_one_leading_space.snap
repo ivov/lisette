@@ -1,0 +1,44 @@
+---
+source: tests/spec/lex/mod.rs
+description: |-
+  //!  two spaces
+  //!no space
+---
+LexResult {
+    tokens: [
+        Token {
+            kind: FileComment,
+            text: " two spaces",
+            byte_offset: 0,
+            byte_length: 15,
+        },
+        Token {
+            kind: FileComment,
+            text: "no space",
+            byte_offset: 16,
+            byte_length: 11,
+        },
+        Token {
+            kind: EOF,
+            text: "",
+            byte_offset: 27,
+            byte_length: 0,
+        },
+    ],
+    errors: [],
+    trivia: Trivia {
+        comments: [],
+        doc_comments: [],
+        file_comments: [
+            (
+                0,
+                15,
+            ),
+            (
+                16,
+                27,
+            ),
+        ],
+        blank_lines: [],
+    },
+}

@@ -7,4 +7,4 @@
 (slice_expression "]" @end) @indent
 (field_initializer_list "}" @end) @indent
 
-[(line_comment) (doc_comment)] @indent.ignore
+[(line_comment) (doc_comment) (file_comment)] @indent.ignore

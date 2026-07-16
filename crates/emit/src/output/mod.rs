@@ -6,6 +6,7 @@ use std::process::{Command, Stdio};
 use diagnostics::LisetteDiagnostic;
 
 use self::imports::format_import;
+use crate::expressions::top_items::emit_doc;
 
 #[derive(Clone, Debug)]
 pub struct OutputFile {
@@ -15,6 +16,7 @@ pub struct OutputFile {
     /// import coexists with a source alias of the same package.
     pub imports: Vec<(String, String)>,
     pub package_name: String,
+    pub file_comment: Option<String>,
     pub diagnostics: Vec<LisetteDiagnostic>,
 }
 
@@ -30,6 +32,12 @@ impl OutputFile {
 
     fn render_unformatted(&self) -> String {
         let mut output = OutputCollector::new();
+
+        let header = emit_doc(&self.file_comment);
+        if !header.is_empty() {
+            output.collect(header.trim_end_matches('\n'));
+            output.collect("");
+        }
 
         output.collect(format!("package {}", self.package_name));
 

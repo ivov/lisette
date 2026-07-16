@@ -835,6 +835,7 @@ mod tests {
             "src/greet/greet.lis",
             "pub fn x() -> int { 1 }",
             vec![],
+            None,
             1,
         );
         let lsp_file = File::new(
@@ -843,6 +844,7 @@ mod tests {
             "greet.lis",
             "pub fn x() -> int { 1 }",
             vec![],
+            None,
             1,
         );
 

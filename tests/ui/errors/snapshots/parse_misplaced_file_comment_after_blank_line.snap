@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Misplaced file comment
+   ╭─[test.lis:2:1]
+ 1 │ 
+ 2 │ //! Not at the very top.
+   · ────────────┬───────────
+   ·             ╰── not allowed here
+ 3 │ 
+   ╰────
+  help: Move this file comment to the very top of the file to document it, or use `///` to document the symbol below · code: [parse.misplaced_file_comment]

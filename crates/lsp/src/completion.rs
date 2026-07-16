@@ -661,8 +661,7 @@ fn following_item(after: &[Token]) -> Following {
                 i += 1;
                 continue;
             }
-            // A doc comment must come before the attribute, not after it.
-            Some(Tk::DocComment) => FollowingItem::Invalid,
+            Some(Tk::DocComment | Tk::FileComment) => FollowingItem::Invalid,
             Some(Tk::Hash) if kind(i + 1) == Some(Tk::LeftSquareBracket) => {
                 i = skip_stacked_attribute(after, i);
                 continue;

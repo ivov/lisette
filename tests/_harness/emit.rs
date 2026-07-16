@@ -39,6 +39,7 @@ fn emit_inner(
         display_path: "src/test.lis".to_string(),
         source: source_for_sourcemap.unwrap_or("").to_string(),
         items: result.ast,
+        file_comment: None,
     };
 
     let test_index = syntax::program::TestIndex::default();

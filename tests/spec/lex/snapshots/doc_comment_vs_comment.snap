@@ -39,6 +39,7 @@ LexResult {
                 34,
             ),
         ],
+        file_comments: [],
         blank_lines: [],
     },
 }

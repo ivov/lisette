@@ -113,6 +113,7 @@ pub fn lint(source: &str) -> Vec<LisetteDiagnostic> {
         display_path: "test.lis".to_string(),
         source: source.to_string(),
         items: typed_ast,
+        file_comment: None,
     };
 
     store.store_file(TEST_MODULE_ID, typed_file);

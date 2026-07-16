@@ -168,6 +168,15 @@ fn add(a: int, b: int) -> int {
 }
 ```
 
+File comments start with `//!` and document the file itself. They form one contiguous block at the very top of the file, nothing may come before it, and their content is emitted at the top of the generated Go file.
+
+```rust
+//! Copyright 2026 Acme Corp.
+//! SPDX-License-Identifier: Apache-2.0
+
+import "strings"
+```
+
 ## Semicolons
 
 Semicolons separate statements but are almost always optional. The compiler inserts them automatically at line boundaries.

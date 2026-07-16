@@ -14,6 +14,8 @@ pub struct Comments<'a> {
     doc_comments: Vec<Comment<'a>>,
     doc_comments_cursor: usize,
 
+    file_comments: Vec<Comment<'a>>,
+
     empty_lines: &'a [u32],
     empty_cursor: usize,
 
@@ -42,11 +44,22 @@ impl<'a> Comments<'a> {
             })
             .collect();
 
+        let file_comments = trivia
+            .file_comments
+            .iter()
+            .filter_map(|&(start, end)| {
+                let content = source.get(start as usize..end as usize)?;
+                let content = content.strip_prefix("//!").unwrap_or(content);
+                Some(Comment { start, content })
+            })
+            .collect();
+
         Self {
             comments,
             comments_cursor: 0,
             doc_comments,
             doc_comments_cursor: 0,
+            file_comments,
             empty_lines: &trivia.blank_lines,
             empty_cursor: 0,
             source,
@@ -199,6 +212,19 @@ impl<'a> Comments<'a> {
         self.doc_comments_cursor = end;
 
         doc_comment_to_document(popped.iter().map(|c| c.content))
+    }
+
+    pub fn take_file_comments(&mut self) -> Option<Document<'a>> {
+        if self.file_comments.is_empty() {
+            return None;
+        }
+
+        Some(join(
+            self.file_comments
+                .drain(..)
+                .map(|c| Document::string(format!("//!{}", c.content))),
+            Document::Newline,
+        ))
     }
 
     pub fn take_trailing_comments(&mut self) -> Option<Document<'a>> {
@@ -375,6 +401,7 @@ mod tests {
         Trivia {
             comments,
             doc_comments: Vec::new(),
+            file_comments: Vec::new(),
             blank_lines,
         }
     }

@@ -18,5 +18,6 @@ impl<'source> LexResult<'source> {
 pub struct Trivia {
     pub comments: Vec<(u32, u32)>,
     pub doc_comments: Vec<(u32, u32)>,
+    pub file_comments: Vec<(u32, u32)>,
     pub blank_lines: Vec<u32>,
 }

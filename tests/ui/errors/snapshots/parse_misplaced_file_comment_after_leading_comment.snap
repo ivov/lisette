@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Misplaced file comment
+   ╭─[test.lis:3:1]
+ 2 │ // a regular comment first
+ 3 │ //! Too late for a file header.
+   · ───────────────┬───────────────
+   ·                ╰── not allowed here
+ 4 │ 
+   ╰────
+  help: Move this file comment to the very top of the file to document it, or use `///` to document the symbol below · code: [parse.misplaced_file_comment]

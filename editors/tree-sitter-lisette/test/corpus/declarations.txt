@@ -389,3 +389,22 @@ struct S {
       (field_declaration
         (field_identifier)
         (type_identifier)))))
+
+================================================================================
+File comment
+================================================================================
+
+//! Copyright 2026 Acme Corp.
+//! SPDX-License-Identifier: Apache-2.0
+
+fn main() {}
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (file_comment)
+  (file_comment)
+  (function_item
+    name: (identifier)
+    parameters: (parameters)
+    body: (block)))

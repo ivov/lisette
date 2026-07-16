@@ -17,6 +17,7 @@ pub struct File {
     pub display_path: String,
     pub source: String,
     pub items: Vec<Expression>,
+    pub file_comment: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -75,6 +76,7 @@ impl File {
         display_path: &str,
         source: &str,
         items: Vec<Expression>,
+        file_comment: Option<String>,
         id: u32,
     ) -> Self {
         File {
@@ -84,6 +86,7 @@ impl File {
             display_path: display_path.to_string(),
             source: source.to_string(),
             items,
+            file_comment,
         }
     }
 
@@ -101,6 +104,7 @@ impl File {
             display_path: display_path.to_string(),
             source: source.to_string(),
             items: vec![],
+            file_comment: None,
         }
     }
 

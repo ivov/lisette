@@ -28,6 +28,7 @@ pub fn parse_and_register_prelude(store: &mut Store, sink: &LocalSink) {
             display_path: "prelude.d.lis".to_string(),
             source: LIS_PRELUDE_SOURCE.to_string(),
             items: result.ast,
+            file_comment: None,
         },
     );
 
@@ -80,6 +81,7 @@ pub fn parse_and_register_test_prelude(store: &mut Store, sink: &LocalSink) {
             display_path: "test_prelude.d.lis".to_string(),
             source: LIS_TEST_PRELUDE_SOURCE.to_string(),
             items: result.ast,
+            file_comment: None,
         },
     );
 

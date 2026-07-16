@@ -26,6 +26,7 @@ LexResult {
                 25,
             ),
         ],
+        file_comments: [],
         blank_lines: [],
     },
 }

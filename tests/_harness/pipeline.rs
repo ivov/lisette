@@ -175,6 +175,7 @@ impl CompiledTest {
                     "test.lis",
                     "",
                     self.ast.clone(),
+                    None,
                     test_file_id,
                 ),
             );
@@ -227,6 +228,7 @@ impl CompiledTest {
                         "test.lis",
                         "",
                         typed_ast.clone(),
+                        None,
                         test_file_id,
                     ),
                 );

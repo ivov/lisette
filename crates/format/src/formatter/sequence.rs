@@ -242,6 +242,7 @@ mod tests {
         Trivia {
             comments,
             doc_comments: Vec::new(),
+            file_comments: Vec::new(),
             blank_lines,
         }
     }

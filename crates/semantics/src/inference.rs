@@ -49,6 +49,7 @@ pub struct AnalyzeInput<'a> {
     /// equals `filename` when there is no separate display path.
     pub display_path: String,
     pub ast: Vec<Expression>,
+    pub file_comment: Option<String>,
     pub project_root: Option<PathBuf>,
     pub compile_phase: CompilePhase,
     pub emit_tests: bool,
@@ -102,6 +103,7 @@ pub fn run_inference(input: AnalyzeInput) -> InferenceOutput {
         &input.display_path,
         &input.source,
         input.ast,
+        input.file_comment,
     );
 
     let sink = LocalSink::new();
@@ -146,6 +148,7 @@ pub fn run_inference(input: AnalyzeInput) -> InferenceOutput {
                     &content.display_path,
                     &content.source,
                     result.ast,
+                    result.file_comment,
                     file_id,
                 ),
             );

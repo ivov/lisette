@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Split file comment
+   ╭─[test.lis:3:1]
+ 2 │ 
+ 3 │ //! Second run.
+   · ───────┬───────
+   ·        ╰── separated from the block above
+ 4 │ 
+   ╰────
+  help: Remove the blank line, or write a bare `//!` line to keep a visible gap in the emitted header · code: [parse.split_file_comment]

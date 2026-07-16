@@ -37,7 +37,7 @@
     file-types = ["lis"]
     roots = ["lisette.toml"]
     auto-format = true
-    comment-tokens = ["//", "///"]
+    comment-tokens = ["//", "///", "//!"]
     language-servers = ["lisette-lsp"]
     indent = { tab-width = 2, unit = "  " }
 

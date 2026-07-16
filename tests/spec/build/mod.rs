@@ -8481,3 +8481,133 @@ fn main() {
 
     assert_build_snapshot!(fs, "github.com/user/myproject");
 }
+
+#[test]
+fn file_comment_header_per_file() {
+    let mut fs = MockFileSystem::new();
+
+    fs.add_file(
+        "util",
+        "strings.lis",
+        r#"//! Copyright 2026 Acme Corp.
+//! SPDX-License-Identifier: Apache-2.0
+
+pub fn shout(s: string) -> string {
+  s + "!"
+}
+"#,
+    );
+
+    fs.add_file(
+        "util",
+        "numbers.lis",
+        r#"//! Generated from numbers.csv, do not edit by hand.
+
+pub fn double(n: int) -> int {
+  n * 2
+}
+"#,
+    );
+
+    fs.add_file("util", "plain.lis", "pub fn id(n: int) -> int { n }\n");
+
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"//! Entry point header.
+
+import "go:fmt"
+import "util"
+
+fn main() {
+  fmt.Println(util.shout("hi"), util.double(util.id(2)))
+}
+"#,
+    );
+
+    assert_build_snapshot!(fs, "github.com/user/myproject");
+}
+
+#[test]
+fn file_comment_bare_lines_keep_gaps() {
+    let mut fs = MockFileSystem::new();
+
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"//! Copyright 2026 Acme Corp.
+//!
+//! Provenance: generated on 2026-07-15.
+
+import "go:fmt"
+
+fn main() {
+  fmt.Println("hi")
+}
+"#,
+    );
+
+    assert_build_snapshot!(fs, "github.com/user/myproject");
+}
+
+#[test]
+fn file_comment_in_test_file() {
+    let mut fs = MockFileSystem::new();
+
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        "import \"math\"\n\nfn main() {\n  let _ = math.add(1, 2)\n}",
+    );
+    fs.add_file(
+        "math",
+        "core.lis",
+        "pub fn add(a: int, b: int) -> int { a + b }",
+    );
+    fs.add_file(
+        "math",
+        "core.test.lis",
+        "//! Test file header.\n\n#[test]\nfn adds(t: TestContext) {\n  assert add(1, 2) == 3\n}",
+    );
+
+    let outputs = compile_project_files_with_tests(fs, "github.com/user/p", false, true);
+    let test_file = outputs
+        .iter()
+        .find(|f| f.name.ends_with("core_test.go"))
+        .expect("core_test.go must be emitted");
+    let go = test_file.to_go();
+    assert!(
+        go.starts_with("// Test file header.\n\npackage math"),
+        "test file must carry its header above the package clause; got:\n{go}"
+    );
+    let plain_file = outputs
+        .iter()
+        .find(|f| f.name.ends_with("/core.go"))
+        .expect("core.go must be emitted");
+    assert!(
+        plain_file.to_go().starts_with("package math"),
+        "a file without a header must start at the package clause"
+    );
+}
+
+#[test]
+fn file_comment_edge_bare_lines_survive() {
+    let mut fs = MockFileSystem::new();
+
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"//!
+//! Copyright 2026 Acme Corp.
+//!
+
+import "go:fmt"
+
+fn main() {
+  fmt.Println("hi")
+}
+"#,
+    );
+
+    assert_build_snapshot!(fs, "github.com/user/myproject");
+}

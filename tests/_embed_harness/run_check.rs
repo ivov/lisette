@@ -198,6 +198,7 @@ fn emit_and_write(
         filename: "main.lis".to_string(),
         display_path: "main.lis".to_string(),
         ast: build.ast,
+        file_comment: build.file_comment,
         project_root: None,
         locator: TypedefLocator::default(),
         compile_phase: CompilePhase::Emit,

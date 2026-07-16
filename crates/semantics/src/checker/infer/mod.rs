@@ -84,6 +84,7 @@ impl InferCtx<'_, '_> {
                     display_path: file.display_path,
                     source: file.source,
                     items: frozen_items,
+                    file_comment: file.file_comment,
                 };
 
                 ctx.typed_files.push((module_id.to_string(), typed_file));

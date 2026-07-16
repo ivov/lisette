@@ -185,6 +185,7 @@ impl Store {
         display_path: &str,
         source: &str,
         ast: Vec<Expression>,
+        file_comment: Option<String>,
     ) {
         self.store_file(
             ENTRY_MODULE_ID,
@@ -195,6 +196,7 @@ impl Store {
                 display_path: display_path.to_string(),
                 source: source.to_string(),
                 items: ast,
+                file_comment,
             },
         );
     }

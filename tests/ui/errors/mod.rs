@@ -964,6 +964,81 @@ impl Foo {
 }
 
 #[test]
+fn parse_misplaced_file_comment_after_import() {
+    let input = r#"
+import "some_module"
+
+//! Provides utilities for working with strings.
+
+fn foo() {}
+"#;
+    assert_parse_error_snapshot!(input);
+}
+
+#[test]
+fn parse_misplaced_file_comment_after_items() {
+    let input = r#"
+fn foo() {}
+
+//! Trailing file header.
+//! Second line.
+"#;
+    assert_parse_error_snapshot!(input);
+}
+
+#[test]
+fn parse_misplaced_file_comment_in_block() {
+    let input = r#"
+fn foo() {
+  //! Not a file header.
+  1
+}
+"#;
+    assert_parse_error_snapshot!(input);
+}
+
+#[test]
+fn parse_misplaced_file_comment_after_leading_comment() {
+    let input = r#"
+// a regular comment first
+//! Too late for a file header.
+
+fn main() {}
+"#;
+    assert_parse_error_snapshot!(input);
+}
+
+#[test]
+fn parse_split_file_comment() {
+    let input = r#"//! First run.
+
+//! Second run.
+
+fn main() {}
+"#;
+    assert_parse_error_snapshot!(input);
+}
+
+#[test]
+fn parse_file_comment_build_constraint() {
+    let input = r#"//! +build ignore
+
+fn main() {}
+"#;
+    assert_parse_error_snapshot!(input);
+}
+
+#[test]
+fn parse_misplaced_file_comment_after_blank_line() {
+    let input = r#"
+//! Not at the very top.
+
+fn main() {}
+"#;
+    assert_parse_error_snapshot!(input);
+}
+
+#[test]
 fn parse_error_single_element_tuple() {
     let input = r#"
 fn test() {

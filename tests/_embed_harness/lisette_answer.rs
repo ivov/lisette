@@ -164,6 +164,7 @@ fn check(source: &str) -> Checked {
         filename: "main.lis".to_string(),
         display_path: "main.lis".to_string(),
         ast: build.ast,
+        file_comment: build.file_comment,
         project_root: None,
         locator: TypedefLocator::default(),
         compile_phase: CompilePhase::Check,

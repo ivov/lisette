@@ -390,7 +390,10 @@ impl<'source> Parser<'source> {
         }
 
         let mut ahead = 2;
-        while matches!(self.stream.peek_ahead(ahead).kind, Comment | DocComment) {
+        while matches!(
+            self.stream.peek_ahead(ahead).kind,
+            Comment | DocComment | FileComment
+        ) {
             ahead += 1;
         }
         let after = self.stream.peek_ahead(ahead);

@@ -1,0 +1,16 @@
+---
+source: tests/spec/format/mod.rs
+description: |-
+  //! Header.
+  
+  // section note
+  fn main() {
+    let _ = 1
+  }
+---
+//! Header.
+
+// section note
+fn main() {
+  let _ = 1
+}

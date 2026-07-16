@@ -34,6 +34,7 @@ pub struct ParseResult {
     pub ast: Vec<ast::Expression>,
     pub errors: Vec<ParseError>,
     pub has_desugarables: bool,
+    pub file_comment: Option<std::string::String>,
 }
 
 impl ParseResult {
@@ -67,6 +68,7 @@ impl<'source> Parser<'source> {
                 ast: vec![],
                 errors: lex_result.errors,
                 has_desugarables: false,
+                file_comment: None,
             };
         }
 
@@ -81,7 +83,7 @@ impl<'source> Parser<'source> {
         let stream = TokenStream::new(tokens);
         let first_token = stream.peek();
 
-        let mut parser = Parser {
+        Parser {
             stream,
             previous_token: first_token,
             pending_right_angle: None,
@@ -91,16 +93,13 @@ impl<'source> Parser<'source> {
             source,
             depth: 0,
             has_desugarables: false,
-        };
-
-        parser.skip_comments();
-
-        parser
+        }
     }
 
     pub fn parse(mut self) -> ParseResult {
         let mut top_items = vec![];
 
+        let file_comment = self.collect_file_comments();
         self.skip_comments();
 
         while !self.at_eof() && !self.too_many_errors() {
@@ -119,6 +118,7 @@ impl<'source> Parser<'source> {
             ast: top_items,
             errors: self.errors,
             has_desugarables: self.has_desugarables,
+            file_comment,
         }
     }
 
@@ -312,6 +312,46 @@ impl<'source> Parser<'source> {
         while self.is(Comment) {
             self.previous_token = self.current_token();
             self.stream.consume();
+        }
+        if self.is(FileComment) {
+            self.error_misplaced_file_comment();
+        }
+    }
+
+    fn collect_file_comments(&mut self) -> Option<std::string::String> {
+        let mut docs = Vec::new();
+        let mut previous_end: Option<u32> = None;
+
+        while self.is(FileComment) {
+            let token = self.current_token();
+            match previous_end {
+                None if token.byte_offset != 0 => {
+                    self.error_misplaced_file_comment_at(self.span_from_token(token));
+                }
+                Some(end)
+                    if self.source[end as usize..token.byte_offset as usize]
+                        .bytes()
+                        .filter(|&byte| byte == b'\n')
+                        .count()
+                        > 1 =>
+                {
+                    self.error_split_file_comment(self.span_from_token(token));
+                }
+                _ => {}
+            }
+            if is_go_build_constraint(token.text) {
+                self.error_file_comment_build_constraint(self.span_from_token(token));
+            }
+            docs.push(token.text.to_string());
+            previous_end = Some(token.byte_offset + token.byte_length);
+            self.previous_token = token;
+            self.stream.consume();
+        }
+
+        if docs.is_empty() {
+            None
+        } else {
+            Some(docs.join("\n"))
         }
     }
 
@@ -927,7 +967,65 @@ impl<'source> Parser<'source> {
     fn error_detached_doc_comment(&mut self, span: Span) {
         let error = ParseError::new("Unattached doc comment", span, "is detached")
             .with_parse_code("detached_doc_comment")
-            .with_help("Place the doc comment on the line immediately above a symbol definition");
+            .with_help(
+                "Place doc comments `///` on the line above a symbol definition and file comments `//!` at the very top of the file",
+            );
+
+        self.errors.push(error);
+    }
+
+    fn error_split_file_comment(&mut self, span: Span) {
+        let error = ParseError::new("Split file comment", span, "separated from the block above")
+            .with_parse_code("split_file_comment")
+            .with_help(
+                "Remove the blank line, or write a bare `//!` line to keep a visible gap in the emitted header",
+            );
+
+        self.errors.push(error);
+    }
+
+    fn error_file_comment_build_constraint(&mut self, span: Span) {
+        let error = ParseError::new(
+            "Invalid file comment",
+            span,
+            "would become a Go build constraint",
+        )
+        .with_parse_code("file_comment_build_constraint")
+        .with_help(
+            "Reword the line so it does not start with `+build`. Emitted as a Go comment it would act as a legacy build constraint and exclude the generated file from builds",
+        );
+
+        self.errors.push(error);
+    }
+
+    fn error_misplaced_file_comment(&mut self) {
+        let first = self.current_token();
+        let mut last = first;
+
+        while self.is(FileComment) {
+            last = self.current_token();
+            self.previous_token = last;
+            self.stream.consume();
+            while self.is(Comment) {
+                self.previous_token = self.current_token();
+                self.stream.consume();
+            }
+        }
+
+        let length = last.byte_offset + last.byte_length - first.byte_offset;
+        self.error_misplaced_file_comment_at(ast::Span::new(
+            self.file_id,
+            first.byte_offset,
+            length,
+        ));
+    }
+
+    fn error_misplaced_file_comment_at(&mut self, span: Span) {
+        let error = ParseError::new("Misplaced file comment", span, "not allowed here")
+            .with_parse_code("misplaced_file_comment")
+            .with_help(
+                "Move this file comment to the very top of the file to document it, or use `///` to document the symbol below",
+            );
 
         self.errors.push(error);
     }
@@ -1109,6 +1207,10 @@ impl<'source> Parser<'source> {
     }
 }
 
+fn is_go_build_constraint(text: &str) -> bool {
+    text.split_whitespace().next() == Some("+build")
+}
+
 struct TokenStream<'source> {
     tokens: Vec<Token<'source>>,
     position: usize,
@@ -1149,5 +1251,158 @@ impl<'source> TokenStream<'source> {
             self.position += 1;
         }
         token
+    }
+}
+
+#[cfg(test)]
+mod file_comment_tests {
+    use crate::build_ast;
+
+    fn file_comment(source: &str) -> Option<std::string::String> {
+        let result = build_ast(source, 0);
+        assert!(
+            result.errors.is_empty(),
+            "unexpected errors: {:?}",
+            result.errors
+        );
+        result.file_comment
+    }
+
+    #[test]
+    fn consecutive_lines_join_with_newlines() {
+        assert_eq!(
+            file_comment("//! a\n//! b\nfn f() {}").as_deref(),
+            Some("a\nb")
+        );
+    }
+
+    #[test]
+    fn bare_line_contributes_empty_line() {
+        assert_eq!(
+            file_comment("//! a\n//!\n//! b\nfn f() {}").as_deref(),
+            Some("a\n\nb")
+        );
+    }
+
+    #[test]
+    fn blank_line_between_runs_is_an_error() {
+        for source in [
+            "//! a\n\n//! b\n\nfn f() {}",
+            "//! a\r\n\r\n//! b\r\n\r\nfn f() {}",
+            "//! a\n//!\n\n//! b\nfn f() {}",
+        ] {
+            let result = build_ast(source, 0);
+            let codes: Vec<_> = result.errors.iter().map(|e| e.code.as_str()).collect();
+            assert_eq!(
+                codes,
+                ["parse.split_file_comment"],
+                "for source: {source:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn anything_before_the_block_is_rejected() {
+        for source in ["\n//! a\nfn f() {}", " //! a\nfn f() {}"] {
+            let result = build_ast(source, 0);
+            let codes: Vec<_> = result.errors.iter().map(|e| e.code.as_str()).collect();
+            assert_eq!(
+                codes,
+                ["parse.misplaced_file_comment"],
+                "for source: {source:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn blank_lines_after_the_block_are_allowed() {
+        assert_eq!(
+            file_comment("//! a\n//! b\n\n\nfn f() {}").as_deref(),
+            Some("a\nb")
+        );
+    }
+
+    #[test]
+    fn leading_comment_makes_the_header_misplaced() {
+        let result = build_ast("// leading\n//! too late\nfn f() {}", 0);
+        let codes: Vec<_> = result.errors.iter().map(|e| e.code.as_str()).collect();
+        assert_eq!(codes, ["parse.misplaced_file_comment"]);
+    }
+
+    #[test]
+    fn interleaved_comment_ends_the_block() {
+        let result = build_ast("//! a\n// note\n//! b\nfn f() {}", 0);
+        let codes: Vec<_> = result.errors.iter().map(|e| e.code.as_str()).collect();
+        assert_eq!(codes, ["parse.misplaced_file_comment"]);
+    }
+
+    #[test]
+    fn comment_after_the_block_is_allowed() {
+        assert_eq!(
+            file_comment("//! a\n\n// section note\nfn f() {}").as_deref(),
+            Some("a")
+        );
+    }
+
+    #[test]
+    fn file_without_header_has_no_file_comment() {
+        assert_eq!(file_comment("fn f() {}"), None);
+    }
+
+    #[test]
+    fn header_without_items_is_valid() {
+        assert_eq!(
+            file_comment("//! header only").as_deref(),
+            Some("header only")
+        );
+    }
+
+    #[test]
+    fn header_before_doc_commented_item() {
+        let result = build_ast("//! header\n/// item doc\nfn f() {}", 0);
+        assert!(result.errors.is_empty(), "{:?}", result.errors);
+        assert_eq!(result.file_comment.as_deref(), Some("header"));
+    }
+
+    #[test]
+    fn misplaced_file_comment_reports_one_error_per_run() {
+        let result = build_ast("fn f() {}\n//! a\n//! b\nfn g() {}", 0);
+        let codes: Vec<_> = result.errors.iter().map(|e| e.code.as_str()).collect();
+        assert_eq!(codes, ["parse.misplaced_file_comment"]);
+    }
+
+    #[test]
+    fn build_constraint_lines_are_rejected() {
+        for source in [
+            "//!+build ignore\nfn f() {}",
+            "//! +build ignore\nfn f() {}",
+            "//!  \t+build linux\nfn f() {}",
+            "//! +build\nfn f() {}",
+            "//! +build ignore\r\nfn f() {}",
+            "//! +build\r\nfn f() {}",
+            "//!\u{00A0}+build ignore\nfn f() {}",
+            "//! +build\u{00A0}ignore\nfn f() {}",
+            "//! +build\u{3000}ignore\nfn f() {}",
+        ] {
+            let result = build_ast(source, 0);
+            let codes: Vec<_> = result.errors.iter().map(|e| e.code.as_str()).collect();
+            assert_eq!(
+                codes,
+                ["parse.file_comment_build_constraint"],
+                "for source: {source:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn build_constraint_lookalikes_are_allowed() {
+        for source in [
+            "//! +buildx tag\nfn f() {}",
+            "//! use +build wisely\nfn f() {}",
+            "//! +builder pattern\nfn f() {}",
+        ] {
+            let result = build_ast(source, 0);
+            assert!(result.errors.is_empty(), "for source: {source:?}");
+        }
     }
 }

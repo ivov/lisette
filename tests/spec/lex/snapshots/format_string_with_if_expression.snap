@@ -99,6 +99,7 @@ LexResult {
     trivia: Trivia {
         comments: [],
         doc_comments: [],
+        file_comments: [],
         blank_lines: [],
     },
 }

@@ -246,6 +246,7 @@
 ; Comments
 (line_comment) @comment
 (doc_comment) @comment.documentation
+(file_comment) @comment.documentation
 
 ; Visibility
 (visibility_modifier) @keyword.modifier

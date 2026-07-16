@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
    ·                         ╰── is detached
  3 │ import "some_module"
    ╰────
-  help: Place the doc comment on the line immediately above a symbol definition · code: [parse.detached_doc_comment]
+  help: Place doc comments `///` on the line above a symbol definition and file comments `//!` at the very top of the file · code: [parse.detached_doc_comment]

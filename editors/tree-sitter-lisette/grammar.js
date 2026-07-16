@@ -69,6 +69,7 @@ module.exports = grammar({
   extras: $ => [
     /\s/,
     $.line_comment,
+    $.file_comment,
   ],
 
   externals: $ => [
@@ -1026,6 +1027,8 @@ module.exports = grammar({
     line_comment: _ => token(seq('//', /.*/)),
 
     doc_comment: _ => token(seq('///', /.*/)),
+
+    file_comment: _ => token(prec(1, seq('//!', /.*/))),
 
     // Identifiers
 

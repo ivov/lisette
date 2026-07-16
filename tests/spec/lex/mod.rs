@@ -185,6 +185,36 @@ fn doc_comment_four_slashes_is_comment() {
 }
 
 #[test]
+fn file_comment() {
+    let input = "//! This is a file comment";
+    assert_lex_snapshot!(input);
+}
+
+#[test]
+fn file_comment_strips_one_leading_space() {
+    let input = "//!  two spaces\n//!no space";
+    assert_lex_snapshot!(input);
+}
+
+#[test]
+fn file_comment_bare() {
+    let input = "//!";
+    assert_lex_snapshot!(input);
+}
+
+#[test]
+fn file_comment_multiline_before_fn() {
+    let input = "//! First line\n//! Second line\nfn foo() {}";
+    assert_lex_snapshot!(input);
+}
+
+#[test]
+fn file_comment_vs_comment_vs_doc_comment() {
+    let input = "//! file comment\n// comment\n/// doc";
+    assert_lex_snapshot!(input);
+}
+
+#[test]
 fn format_string_simple() {
     let input = "f\"hello world\"";
     assert_lex_snapshot!(input);

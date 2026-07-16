@@ -3475,6 +3475,11 @@
     "named": true
   },
   {
+    "type": "file_comment",
+    "named": true,
+    "extra": true
+  },
+  {
     "type": "float_literal",
     "named": true
   },

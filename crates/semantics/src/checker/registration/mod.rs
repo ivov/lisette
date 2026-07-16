@@ -334,6 +334,7 @@ impl TaskState<'_> {
             display_path: filename,
             source: source.to_string(),
             items: build_result.ast,
+            file_comment: build_result.file_comment,
         };
 
         let imports = file.imports();

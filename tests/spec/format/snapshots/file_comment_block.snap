@@ -1,0 +1,20 @@
+---
+source: tests/spec/format/mod.rs
+description: |-
+  //! Copyright 2026 Acme Corp.
+  //! SPDX-License-Identifier: Apache-2.0
+  
+  import "go:fmt"
+  
+  fn main() {
+    fmt.Println(1)
+  }
+---
+//! Copyright 2026 Acme Corp.
+//! SPDX-License-Identifier: Apache-2.0
+
+import "go:fmt"
+
+fn main() {
+  fmt.Println(1)
+}

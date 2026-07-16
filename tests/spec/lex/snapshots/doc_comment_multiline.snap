@@ -75,6 +75,7 @@ LexResult {
                 30,
             ),
         ],
+        file_comments: [],
         blank_lines: [],
     },
 }

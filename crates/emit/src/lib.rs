@@ -619,6 +619,7 @@ impl<'a> Planner<'a> {
                 imports,
                 source: rendered_source,
                 package_name: package_name.clone(),
+                file_comment: file.file_comment.clone(),
                 diagnostics,
             });
         }

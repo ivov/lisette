@@ -52,6 +52,7 @@ pub fn compile_e2e_suite_test(input: &str, package_name: &str) -> Result<Emitted
         display_path: "test.lis".to_string(),
         source: String::new(),
         items: result.ast,
+        file_comment: None,
     };
 
     let test_index = syntax::program::TestIndex::default();

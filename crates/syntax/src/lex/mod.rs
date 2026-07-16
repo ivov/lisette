@@ -163,10 +163,12 @@ impl<'source> Lexer<'source> {
         tokens: &'a [Token<'source>],
         start_index: usize,
     ) -> Option<&'a Token<'source>> {
-        tokens
-            .iter()
-            .skip(start_index)
-            .find(|&token| token.kind != TokenKind::Comment && token.kind != TokenKind::DocComment)
+        tokens.iter().skip(start_index).find(|&token| {
+            !matches!(
+                token.kind,
+                TokenKind::Comment | TokenKind::DocComment | TokenKind::FileComment
+            )
+        })
     }
 
     fn has_newline_between(&self, start: usize, end: usize) -> bool {
@@ -1348,6 +1350,27 @@ impl<'source> Lexer<'source> {
         }
 
         self.skip(slash_count);
+
+        if slash_count == 2 && self.current_byte() == b'!' {
+            self.next();
+            if self.current_byte() == b' ' {
+                self.next();
+            }
+            let text_start = self.current_offset;
+            self.skip_to_eol();
+            let end_offset = self.current_offset;
+
+            self.trivia
+                .file_comments
+                .push((start_offset as u32, end_offset as u32));
+
+            return Token {
+                kind: TokenKind::FileComment,
+                text: &self.input[text_start..end_offset],
+                byte_offset: start_offset as u32,
+                byte_length: (end_offset - start_offset) as u32,
+            };
+        }
 
         if slash_count == 3 {
             if self.current_byte() == b' ' {

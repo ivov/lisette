@@ -180,7 +180,7 @@ pub(crate) fn emit_doc(doc: &Option<String>) -> String {
     match doc {
         Some(text) => {
             let lines: Vec<String> = text
-                .lines()
+                .split('\n')
                 .map(|line| {
                     if line.is_empty() {
                         "//".to_string()
@@ -189,11 +189,7 @@ pub(crate) fn emit_doc(doc: &Option<String>) -> String {
                     }
                 })
                 .collect();
-            if lines.is_empty() {
-                String::new()
-            } else {
-                format!("{}\n", lines.join("\n"))
-            }
+            format!("{}\n", lines.join("\n"))
         }
         None => String::new(),
     }

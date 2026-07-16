@@ -1862,3 +1862,32 @@ fn comment_same_line_trailing_before_inlinable_last_arg() {
 fn struct_embedded_field() {
     assert_format_snapshot!("struct Outer {\n  embed Base,\n  embed Ref<Other>,\n  extra: int,\n}");
 }
+
+#[test]
+fn file_comment_block() {
+    assert_format_snapshot!(
+        "//! Copyright 2026 Acme Corp.\n//! SPDX-License-Identifier: Apache-2.0\n\nimport \"go:fmt\"\n\nfn main() {\n  fmt.Println(1)\n}"
+    );
+}
+
+#[test]
+fn file_comment_only() {
+    assert_format_snapshot!("//! Header only.");
+}
+
+#[test]
+fn file_comment_with_bare_line() {
+    assert_format_snapshot!(
+        "//! Copyright 2026 Acme Corp.\n//!\n//! Second paragraph.\n\nfn main() {\n  let _ = 1\n}"
+    );
+}
+
+#[test]
+fn file_comment_before_item_without_imports() {
+    assert_format_snapshot!("//! Header.\nfn main() {\n  let _ = 1\n}");
+}
+
+#[test]
+fn file_comment_followed_by_regular_comment() {
+    assert_format_snapshot!("//! Header.\n\n// section note\nfn main() {\n  let _ = 1\n}");
+}
