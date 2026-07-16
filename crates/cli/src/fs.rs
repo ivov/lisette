@@ -8,14 +8,13 @@ use std::{
 
 use semantics::cache::cache_file_name;
 use semantics::loader::{FileContent, Files, Loader};
-use semantics::path::relative_to_cwd_with;
+use semantics::path::DisplayPathBase;
 use semantics::store::ENTRY_MODULE_ID;
 
 pub use semantics::path::relative_to_cwd;
 
 pub struct LocalFileSystem {
-    search_paths: Vec<PathBuf>,
-    display_cwd: Option<PathBuf>,
+    search_paths: Vec<(PathBuf, DisplayPathBase)>,
 }
 
 impl LocalFileSystem {
@@ -26,12 +25,17 @@ impl LocalFileSystem {
             .join("std");
 
         Self {
-            search_paths: vec![current_path, stdlib_path],
-            display_cwd: std::env::current_dir().ok(),
+            search_paths: [current_path, stdlib_path]
+                .into_iter()
+                .map(|path| {
+                    let display_base = DisplayPathBase::new(&path);
+                    (path, display_base)
+                })
+                .collect(),
         }
     }
 
-    fn collect_files(&self, folder_path: &Path) -> Files {
+    fn collect_files(&self, folder_path: &Path, fs_name: &str, base: &DisplayPathBase) -> Files {
         let Ok(entries) = read_dir(folder_path) else {
             return HashMap::default();
         };
@@ -45,7 +49,8 @@ impl LocalFileSystem {
                 && let Ok(source) = read_to_string(&path)
                 && let Some(name) = path.file_name().and_then(|s| s.to_str())
             {
-                let display_path = relative_to_cwd_with(&path, self.display_cwd.as_deref())
+                let display_path = base
+                    .relative(&Path::new(fs_name).join(name))
                     .unwrap_or_else(|| name.to_string());
                 files.insert(name.to_string(), FileContent::new(source, display_path));
             }
@@ -311,13 +316,13 @@ fn entry_is_dir(entry: &std::fs::DirEntry, path: &Path) -> bool {
 impl Loader for LocalFileSystem {
     fn scan_folder(&self, folder_name: &str) -> Files {
         let fs_name = to_fs_path(folder_name);
-        for search_path in &self.search_paths {
+        for (search_path, display_base) in &self.search_paths {
             let folder_path = if fs_name.is_empty() {
                 search_path.clone()
             } else {
                 search_path.join(fs_name)
             };
-            let files = self.collect_files(&folder_path);
+            let files = self.collect_files(&folder_path, fs_name, display_base);
 
             if !files.is_empty() {
                 return files;
@@ -328,7 +333,7 @@ impl Loader for LocalFileSystem {
     }
 
     fn test_module_ids(&self) -> Vec<String> {
-        let Some(root) = self.search_paths.first() else {
+        let Some((root, _)) = self.search_paths.first() else {
             return Vec::new();
         };
         let mut with_test: HashSet<PathBuf> = HashSet::default();

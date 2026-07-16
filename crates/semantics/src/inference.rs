@@ -489,8 +489,14 @@ fn load_cache_candidates(
     let Some(root) = project_root else {
         return result;
     };
+    let display_base = crate::path::DisplayPathBase::new(&root.join("src"));
     let build = |job: CacheBuildJob| {
-        build_cached_module(job.module_id, job.file_id_base, job.interface, root)
+        build_cached_module(
+            job.module_id,
+            job.file_id_base,
+            job.interface,
+            &display_base,
+        )
     };
     let run_build = || -> Vec<CachedModuleBuild> {
         if build_jobs.len() < PARALLEL_THRESHOLD {

@@ -2,6 +2,7 @@ pub mod go_stdlib;
 pub mod prelude;
 pub mod types;
 
+use crate::path::DisplayPathBase;
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use std::fs;
 use std::hash::{Hash, Hasher};
@@ -390,7 +391,7 @@ pub(crate) fn build_cached_module(
     module_id: String,
     file_id_base: u32,
     cached: ModuleInterface,
-    project_root: &Path,
+    display_base: &DisplayPathBase,
 ) -> CachedModuleBuild {
     let mut module = Module::new(&module_id);
     let mut file_ids: Vec<u32> = Vec::with_capacity(cached.files.len());
@@ -401,7 +402,7 @@ pub(crate) fn build_cached_module(
         file_ids.push(file_id);
         file_map.push((file_id, module_id.clone()));
 
-        let display_path = cached_file_display_path(project_root, &module_id, &cached_file.name);
+        let display_path = cached_file_display_path(display_base, &module_id, &cached_file.name);
         let file = File::new_cached(
             &module_id,
             &cached_file.name,
@@ -428,13 +429,19 @@ pub(crate) fn build_cached_module(
     }
 }
 
-fn cached_file_display_path(project_root: &Path, module_id: &str, bare_name: &str) -> String {
-    let on_disk = if module_id == ENTRY_MODULE_ID {
-        project_root.join("src").join(bare_name)
+fn cached_file_display_path(
+    display_base: &DisplayPathBase,
+    module_id: &str,
+    bare_name: &str,
+) -> String {
+    let rel = if module_id == ENTRY_MODULE_ID {
+        PathBuf::from(bare_name)
     } else {
-        project_root.join("src").join(module_id).join(bare_name)
+        Path::new(module_id).join(bare_name)
     };
-    crate::path::relative_to_cwd(&on_disk).unwrap_or_else(|| bare_name.to_string())
+    display_base
+        .relative(&rel)
+        .unwrap_or_else(|| bare_name.to_string())
 }
 
 /// Set or clear the `emit_stamp` for each module's cache file. Missing files
@@ -699,7 +706,12 @@ mod tests {
             emit_stamp: None,
         };
 
-        let built = build_cached_module("mymod".to_string(), 0, interface, Path::new("/project"));
+        let built = build_cached_module(
+            "mymod".to_string(),
+            0,
+            interface,
+            &DisplayPathBase::new(Path::new("/project/src")),
+        );
 
         assert!(built.module.const_names.contains("mymod.MAX"));
         assert!(!built.module.const_names.contains("mymod.counter"));
