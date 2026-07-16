@@ -186,7 +186,7 @@ fn slice_append_spread() {
 
 #[test]
 fn slice_copy_from() {
-  let dst = [0, 0, 0]
+  let mut dst = [0, 0, 0]
   let src = [1, 2, 3]
   let copied = dst.copy_from(src)
   assert copied == 3 && dst[0] == 1 && dst[2] == 3

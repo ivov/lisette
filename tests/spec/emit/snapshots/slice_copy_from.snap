@@ -2,7 +2,7 @@
 source: tests/spec/emit/prelude.rs
 description: |
   
-  fn test(dst: Slice<int>, src: Slice<int>) -> int {
+  fn test(mut dst: Slice<int>, src: Slice<int>) -> int {
     dst.copy_from(src)
   }
 ---

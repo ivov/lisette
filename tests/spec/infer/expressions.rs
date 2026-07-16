@@ -1373,6 +1373,28 @@ fn delete_on_mutable_map_is_allowed() {
 }
 
 #[test]
+fn cannot_copy_into_immutable_slice() {
+    infer(
+        r#"{
+    let dst = [0, 0, 0];
+    dst.copy_from([1, 2, 3])
+  }"#,
+    )
+    .assert_infer_code("immutable");
+}
+
+#[test]
+fn copy_from_on_mutable_slice_is_allowed() {
+    infer(
+        r#"{
+    let mut dst = [0, 0, 0];
+    dst.copy_from([1, 2, 3])
+  }"#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
 fn auto_address_value_to_ref_receiver() {
     infer(
         r#"

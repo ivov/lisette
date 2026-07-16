@@ -275,7 +275,7 @@ fn test(s: Slice<int>) {
 #[test]
 fn slice_copy_from() {
     let input = r#"
-fn test(dst: Slice<int>, src: Slice<int>) -> int {
+fn test(mut dst: Slice<int>, src: Slice<int>) -> int {
   dst.copy_from(src)
 }
 "#;

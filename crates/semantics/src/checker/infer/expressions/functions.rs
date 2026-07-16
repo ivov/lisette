@@ -1499,11 +1499,11 @@ impl InferCtx<'_, '_> {
         }
     }
 
-    /// `Map.delete` modifies the map in place, so its receiver needs `mut`.
-    /// `append` is pure (it returns a new slice and needs no `mut`): growing in
-    /// place is the reassignment `s = s.append(x)`, checked as an ordinary
-    /// assignment, including the rejection of writing back to a non-addressable
-    /// map-value field.
+    /// `Map.delete` and `Slice.copy_from` modify the receiver in place, so it
+    /// needs `mut`. `append` is pure (it returns a new slice and needs no
+    /// `mut`): growing in place is the reassignment `s = s.append(x)`, checked
+    /// as an ordinary assignment, including the rejection of writing back to a
+    /// non-addressable map-value field.
     fn check_native_mutating_call(&mut self, callee: &Expression, span: &Span) {
         let store = self.store;
         let Expression::DotAccess {
@@ -1516,7 +1516,11 @@ impl InferCtx<'_, '_> {
         };
         let receiver_ty = receiver.get_type().resolve_in(&self.env).strip_refs();
 
-        let is_mutating = matches!(receiver_ty.get_name(), Some("Map")) && member == "delete";
+        let is_mutating = match receiver_ty.get_name() {
+            Some("Map") => member == "delete",
+            Some("Slice") => member == "copy_from",
+            _ => false,
+        };
         if !is_mutating {
             return;
         }
