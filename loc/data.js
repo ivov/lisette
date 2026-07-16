@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1784234192670,
+  "lastUpdate": 1784235413041,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -3754,6 +3754,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "cli",
             "value": 10094,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 6191,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 4414,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2812,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1031,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 695,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 6046,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 890,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "f2290e6f9cdb003e6f1fc0093c3597c65e8f3274",
+          "message": "docs: improve `lis doc` formatting (#1016)",
+          "timestamp": "2026-07-16T22:56:27+02:00",
+          "tree_id": "f189896cc6b3cfa234f44719aa5d3777fa158092",
+          "url": "https://github.com/ivov/lisette/commit/f2290e6f9cdb003e6f1fc0093c3597c65e8f3274"
+        },
+        "date": 1784235411863,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 114439,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 29770,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 22856,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 16428,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 13174,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 10132,
             "unit": "lines"
           },
           {
