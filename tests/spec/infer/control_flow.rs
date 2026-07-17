@@ -1900,6 +1900,86 @@ fn recursive_enum_pattern_matching() {
 }
 
 #[test]
+fn match_on_variant_named_never() {
+    infer(
+        r#"
+    enum Signal {
+      Never,
+      Sometimes,
+    }
+
+    fn test(s: Signal) -> int {
+      match s {
+        Never => 0,
+        Sometimes => 1,
+      }
+    }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn match_tuple_struct_through_alias() {
+    infer(
+        r#"
+    struct Wrap(int)
+    type Alias = Wrap
+
+    fn test(w: Wrap) -> int {
+      match w {
+        Alias(x) => x,
+      }
+    }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn match_variant_name_sharing_struct_name() {
+    infer(
+        r#"
+    struct Foo { a: int }
+
+    enum E {
+      Foo,
+      Bar,
+    }
+
+    fn test(e: E) -> int {
+      match e {
+        Foo => 1,
+        Bar => 2,
+      }
+    }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn variant_pattern_field_type_ignores_shadowing_function() {
+    infer(
+        r#"
+    enum E { V(string), W }
+
+    fn V(x: int) -> E {
+      E.V("")
+    }
+
+    fn test(e: E) {
+      if let V(x) = e {
+        let y: string = x
+        let _ = y
+      }
+    }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
 fn for_loop_over_channel() {
     infer(
         r#"

@@ -1366,6 +1366,255 @@ fn test() {
 }
 
 #[test]
+fn infer_never_type_as_match_pattern() {
+    let input = r#"
+enum Status { Active, Inactive }
+
+fn test(s: Status) {
+  match s {
+    Never => {}
+  }
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_never_type_as_if_let_pattern() {
+    let input = r#"
+enum Status { Active, Inactive }
+
+fn test(s: Status) {
+  if let Never = s {}
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_never_type_as_let_pattern() {
+    let input = r#"
+enum Status { Active, Inactive }
+
+fn test(s: Status) {
+  let Never = s
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_never_type_alias_as_match_pattern() {
+    let input = r#"
+type Impossible = Never
+
+enum Status { Active, Inactive }
+
+fn test(s: Status) {
+  match s {
+    Impossible => {}
+  }
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_never_type_as_pattern_on_never_scrutinee() {
+    let input = r#"
+fn diverge() -> Never {
+  panic("boom")
+}
+
+fn test() {
+  match diverge() {
+    Never => {}
+  }
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_never_type_as_pattern_on_interface_scrutinee() {
+    let input = r#"
+interface Event {}
+
+fn test(e: Event) {
+  match e {
+    Never => {}
+  }
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_struct_name_as_match_pattern() {
+    let input = r#"
+struct Point { x: int }
+
+fn test(p: Point) -> int {
+  match p {
+    Point => 0,
+  }
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_enum_name_as_match_pattern() {
+    let input = r#"
+enum Color { Red, Blue }
+
+fn test(c: Color) -> int {
+  match c {
+    Color => 0,
+  }
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_type_alias_as_match_pattern() {
+    let input = r#"
+type Ints = Slice<int>
+
+fn test(xs: Ints) -> int {
+  match xs {
+    Ints => 0,
+  }
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_function_type_alias_as_match_pattern() {
+    let input = r#"
+type Callback = fn() -> int
+
+fn test(f: Callback) -> int {
+  match f {
+    Callback => 0,
+    _ => 1,
+  }
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_function_as_match_pattern() {
+    let input = r#"
+enum Status { Active, Inactive }
+
+pub fn Pretend() -> Status {
+  Status.Active
+}
+
+fn test(s: Status) -> int {
+  match s {
+    Pretend => 0,
+    _ => 1,
+  }
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_function_returning_enum_as_pattern() {
+    let input = r#"
+enum Status { Active, Inactive }
+
+pub fn Make(x: int) -> Status {
+  Status.Active
+}
+
+fn test(s: Status) -> int {
+  match s {
+    Make(x) => x,
+    _ => 1,
+  }
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_const_of_struct_type_as_interface_pattern() {
+    let input = r#"
+interface Shape {}
+
+struct Token(int)
+
+const ZERO: Token = 0
+
+fn test(s: Shape) -> int {
+  match s {
+    ZERO => 0,
+    _ => 1,
+  }
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_enum_name_as_pattern_on_interface_scrutinee() {
+    let input = r#"
+interface Event {}
+
+enum Color { Red, Blue }
+
+fn test(e: Event) -> int {
+  match e {
+    Color => 0,
+    _ => 1,
+  }
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_type_alias_as_pattern_on_interface_scrutinee() {
+    let input = r#"
+interface Event {}
+
+type Ints = Slice<int>
+
+fn test(e: Event) -> int {
+  match e {
+    Ints => 0,
+    _ => 1,
+  }
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_function_type_alias_as_pattern_on_interface_scrutinee() {
+    let input = r#"
+interface Event {}
+
+type Callback = fn() -> int
+
+fn test(e: Event) -> int {
+  match e {
+    Callback => 0,
+    _ => 1,
+  }
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
 fn infer_enum_variant_misqualified_in_pattern() {
     let mut fs = MockFileSystem::new();
 

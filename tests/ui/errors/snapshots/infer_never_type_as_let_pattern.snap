@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Invalid binding name
+   ╭─[test.lis:5:7]
+ 4 │ fn test(s: Status) {
+ 5 │   let Never = s
+   ·       ──┬──
+   ·         ╰── binding names must start with a lowercase letter
+ 6 │ }
+   ╰────
+  help: Use a lowercase name instead of `Never` · code: [infer.uppercase_binding]

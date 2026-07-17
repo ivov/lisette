@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Variant not found
+    ╭─[test.lis:10:5]
+  9 │   match s {
+ 10 │     Pretend => 0,
+    ·     ───┬───
+    ·        ╰── not found
+ 11 │     _ => 1,
+    ╰────
+  help: Available variants for `Status` are `Active` and `Inactive` · code: [resolve.variant_not_found]

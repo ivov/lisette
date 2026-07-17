@@ -371,59 +371,44 @@ impl InferCtx<'_, '_> {
         let is_bare_name =
             fields.is_empty() && !identifier.contains('.') && !kind.is_pattern_position();
 
-        let bare_variant_ty = if kind.is_match_arm() {
-            self.resolve_bare_variant_type(&identifier, &expected_ty)
-        } else {
-            None
-        };
-
-        let ty = if let Some(ty) = bare_variant_ty {
+        let constructor_ty = if kind.is_match_arm()
+            && let Some(ty) = self.resolve_bare_variant_type(&identifier, &expected_ty)
+        {
             ty
-        } else if let Some(ty) = self.lookup_type(store, &identifier) {
+        } else if let Some(value_ty) = self.lookup_type(store, &identifier) {
+            if matches!(self.instantiate(&value_ty).0, Type::Error) {
+                return (Pattern::WildCard { span }, TypedPattern::Wildcard);
+            }
+            let Some(ty) =
+                self.resolve_pattern_constructor(&identifier, &expected_ty, is_bare_name)
+            else {
+                return self.reject_non_constructor_pattern(
+                    &identifier,
+                    &expected_ty,
+                    span,
+                    kind,
+                    is_bare_name,
+                );
+            };
             ty
         } else if let Some((alias_ty, _)) = self.try_resolve_type_alias_variant(&identifier) {
             alias_ty
         } else {
-            if is_bare_name {
-                self.sink
-                    .push(diagnostics::infer::uppercase_binding(span, &identifier));
-                return (Pattern::WildCard { span }, TypedPattern::Wildcard);
-            }
-            let enum_info = self.get_enum_variant_info(&expected_ty);
-            let bare_name = unqualified_name(&identifier);
-            self.sink
-                .push(diagnostics::infer::enum_variant_constructor_not_found(
-                    span,
-                    enum_info.as_ref().map(|(n, v)| (n.as_str(), v.as_slice())),
-                    bare_name,
-                    kind.is_match_arm(),
-                ));
-            return (Pattern::WildCard { span }, TypedPattern::Wildcard);
+            return self.reject_non_constructor_pattern(
+                &identifier,
+                &expected_ty,
+                span,
+                kind,
+                is_bare_name,
+            );
         };
 
-        let (value_constructor_type, _) = self.instantiate(&ty);
-
-        if is_bare_name
-            && matches!(
-                &value_constructor_type,
-                Type::Nominal { .. } | Type::Compound { .. } | Type::Simple(_)
-            )
-            && !self.is_enum_type(store, &value_constructor_type)
-        {
-            self.sink
-                .push(diagnostics::infer::uppercase_binding(span, &identifier));
-            return (Pattern::WildCard { span }, TypedPattern::Wildcard);
-        }
-
-        let (pattern_ty, params) = match value_constructor_type {
+        let (pattern_ty, params) = match self.instantiate(&constructor_ty).0 {
             Type::Function(f) => {
                 let f = std::sync::Arc::try_unwrap(f).unwrap_or_else(|arc| (*arc).clone());
                 (*f.return_type, f.params)
             }
-            Type::Nominal { .. } | Type::Compound { .. } | Type::Simple(_) => {
-                (value_constructor_type, vec![])
-            }
-            _ => unreachable!(),
+            other => (other, vec![]),
         };
 
         let unify_expected = store.deep_resolve_alias(&expected_ty.resolve_in(&self.env));
@@ -500,6 +485,99 @@ impl InferCtx<'_, '_> {
             span,
         };
         (pattern, typed)
+    }
+
+    fn resolve_pattern_constructor(
+        &self,
+        identifier: &str,
+        expected_ty: &Type,
+        is_bare_name: bool,
+    ) -> Option<Type> {
+        if let Some(ty) = self.resolve_variant_type(identifier, expected_ty) {
+            return Some(ty);
+        }
+        let definition = self.resolve_struct_definition(identifier)?;
+        match &definition.body {
+            DefinitionBody::Struct {
+                constructor: Some(constructor_ty),
+                ..
+            } => Some(constructor_ty.clone()),
+            _ if !is_bare_name && self.scrutinee_is_interface(expected_ty) => {
+                Some(definition.ty().clone())
+            }
+            _ => None,
+        }
+    }
+
+    fn scrutinee_is_interface(&self, expected_ty: &Type) -> bool {
+        let store = self.store;
+        let resolved = store.deep_resolve_alias(&expected_ty.resolve_in(&self.env));
+        store.is_interface(&resolved)
+    }
+
+    fn resolve_variant_type(&self, identifier: &str, expected_ty: &Type) -> Option<Type> {
+        let store = self.store;
+        // A bare name is a variant of the scrutinee's enum, if any.
+        if !identifier.contains('.') {
+            return self.resolve_bare_variant_type(identifier, expected_ty);
+        }
+        // A qualified name is a variant when it is an enum's own nested member.
+        let qualified = self.lookup_qualified_name(store, identifier)?;
+        let (parent, variant_name) = qualified.rsplit_once('.')?;
+        let variant = store
+            .variants_of(parent)?
+            .iter()
+            .find(|v| v.name == variant_name)?;
+        if let Some(ty) = store.get_type(&qualified) {
+            return Some(ty.clone());
+        }
+        variant
+            .fields
+            .is_empty()
+            .then(|| store.get_type(parent).cloned())
+            .flatten()
+    }
+
+    fn resolve_struct_definition(&self, identifier: &str) -> Option<&Definition> {
+        let store = self.store;
+        let qualified_name = self.lookup_qualified_name(store, identifier)?;
+        let definition = store.get_definition(&qualified_name)?;
+        match &definition.body {
+            DefinitionBody::Struct { .. } => Some(definition),
+            DefinitionBody::TypeAlias { .. } => {
+                let underlying = store.deep_resolve_alias(definition.ty().unwrap_forall());
+                let Type::Nominal { id, .. } = underlying else {
+                    return None;
+                };
+                let target = store.get_definition(&id)?;
+                matches!(target.body, DefinitionBody::Struct { .. }).then_some(target)
+            }
+            _ => None,
+        }
+    }
+
+    fn reject_non_constructor_pattern(
+        &mut self,
+        identifier: &str,
+        expected_ty: &Type,
+        span: Span,
+        kind: BindingKind,
+        is_bare_name: bool,
+    ) -> (Pattern, TypedPattern) {
+        if is_bare_name {
+            self.sink
+                .push(diagnostics::infer::uppercase_binding(span, identifier));
+        } else {
+            let enum_info = self.get_enum_variant_info(expected_ty);
+            self.sink
+                .push(diagnostics::infer::enum_variant_constructor_not_found(
+                    span,
+                    enum_info.as_ref().map(|(n, v)| (n.as_str(), v.as_slice())),
+                    unqualified_name(identifier),
+                    kind.is_match_arm(),
+                ));
+        }
+        (Pattern::WildCard { span }, TypedPattern::Wildcard)
     }
 
     fn try_infer_const_pattern(
