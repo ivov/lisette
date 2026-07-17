@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1784318207459,
+  "lastUpdate": 1784321070381,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -4293,6 +4293,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "diagnostics",
             "value": 6217,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 4414,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2812,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1031,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 695,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 6046,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 890,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "cf3502d373b7916c22c136c60e9ed1f334637dd8",
+          "message": "refactor: reword mutable receiver interface diagnostic (#1031)",
+          "timestamp": "2026-07-17T22:44:06+02:00",
+          "tree_id": "3ca823ecb12941bf5302efa0d7cbcc5cf77b823c",
+          "url": "https://github.com/ivov/lisette/commit/cf3502d373b7916c22c136c60e9ed1f334637dd8"
+        },
+        "date": 1784321069211,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 114771,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 29902,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 23019,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 16431,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 13174,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 10137,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 6220,
             "unit": "lines"
           },
           {
