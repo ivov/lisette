@@ -259,11 +259,12 @@ impl InferCtx<'_, '_> {
             .or_else(|| self.as_static_method(&args));
 
         if let Some((expression, _kind)) = resolved {
-            if member.as_str() == "append"
+            if matches!(member.as_str(), "append" | "reserve")
                 && resolved_expression_ty.is_ref()
                 && args.deref_ty.has_name("Slice")
             {
-                self.sink.push(diagnostics::infer::ref_slice_append(span));
+                self.sink
+                    .push(diagnostics::infer::ref_slice_growth(&member, span));
             }
             if member.as_str() == "equals" && self.scopes.is_callee_context() {
                 self.gate_container_equals(&args.deref_ty, args.expression.get_span());

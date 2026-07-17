@@ -306,9 +306,35 @@ impl InferCtx<'_, '_> {
         span: Span,
         expected_ty: &Type,
     ) -> Expression {
+        let callee_path = expression.unwrap_parens().as_dotted_path();
+
         // `Array.new` has no prelude signature (no const generics), so resolve inline.
-        if expression.as_dotted_path().as_deref() == Some("Array.new") {
+        if callee_path.as_deref() == Some("Array.new") {
             return self.infer_array_new_call(&expression, args, type_args, span, expected_ty);
+        }
+
+        if let Some(diagnostic) = match callee_path.as_deref() {
+            Some("Map.make") => Some(diagnostics::infer::map_no_make_constructor(span)),
+            Some("Channel.make") => Some(diagnostics::infer::channel_no_make_constructor(span)),
+            _ => None,
+        } {
+            self.sink.push(diagnostic);
+            let new_args: Vec<Expression> = args
+                .into_iter()
+                .map(|arg| self.with_value_context(|s| s.infer_expression(arg, &Type::Error)))
+                .collect();
+            let new_spread = spread
+                .map(|s| self.with_value_context(|state| state.infer_expression(s, &Type::Error)));
+            return Expression::Call {
+                expression,
+                args: new_args,
+                spread: Box::new(new_spread),
+                raw_type_args: type_args,
+                resolved_type_args: Vec::new(),
+                ty: Type::Error,
+                span,
+                call_kind: None,
+            };
         }
 
         let store = self.store;
@@ -522,6 +548,17 @@ impl InferCtx<'_, '_> {
 
         if call_kind == CallKind::AssertType {
             self.check_redundant_assert_type(&return_ty, &new_args, span);
+        }
+
+        if callee_path.as_deref() == Some("Slice.make") {
+            let module_id = self.cursor.module_id.clone();
+            self.facts
+                .slice_make_checks
+                .push(crate::facts::SliceMakeCheck {
+                    ty: call_ty.clone(),
+                    span,
+                    module_id,
+                });
         }
 
         Expression::Call {
@@ -1353,14 +1390,7 @@ impl InferCtx<'_, '_> {
                     return CallKind::TupleStructConstructor;
                 }
 
-                // Native constructor: Channel.new, Map.new, Slice.new
-                let constructor_kind = match value.as_str() {
-                    "Channel.new" | "Channel.buffered" => Some(NativeTypeKind::Channel),
-                    "Map.new" => Some(NativeTypeKind::Map),
-                    "Slice.new" => Some(NativeTypeKind::Slice),
-                    _ => None,
-                };
-                if let Some(kind) = constructor_kind {
+                if let Some(kind) = NativeTypeKind::from_constructor_path(value) {
                     return CallKind::NativeConstructor(kind);
                 }
 

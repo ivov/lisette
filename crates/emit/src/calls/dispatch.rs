@@ -1,6 +1,7 @@
 use crate::expressions::access::struct_call::emit_struct_literal;
 use crate::names::generics::extract_type_mapping;
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
+use std::borrow::Cow;
 
 use super::NativeCallContext;
 use crate::Planner;
@@ -111,19 +112,28 @@ impl Planner<'_> {
         type_args: &[Type],
         call_ty: Option<&Type>,
     ) -> String {
-        if !type_args.is_empty() {
-            return self.go_type_string(&type_args[0]);
+        let element = self.resolve_element_lisette_type(function, type_args, call_ty);
+        self.go_type_string(&element)
+    }
+
+    fn resolve_element_lisette_type<'t>(
+        &self,
+        function: &Expression,
+        type_args: &'t [Type],
+        call_ty: Option<&'t Type>,
+    ) -> Cow<'t, Type> {
+        if let Some(first) = type_args.first() {
+            return Cow::Borrowed(first);
         }
         if let Some(call_result_ty) = call_ty
-            && let Some(first) = call_result_ty
-                .get_type_params()
-                .and_then(|ps| ps.first().cloned())
+            && let Some(first) = call_result_ty.get_type_params().and_then(|ps| ps.first())
         {
-            return self.go_type_string(&first);
+            return Cow::Borrowed(first);
         }
-        let param = extract_return_type_param(function)
-            .expect("constructor must have constructor return type");
-        self.go_type_string(&param)
+        Cow::Owned(
+            extract_return_type_param(function)
+                .expect("constructor must have constructor return type"),
+        )
     }
 
     fn resolve_map_types(
@@ -161,6 +171,21 @@ impl Planner<'_> {
         )
     }
 
+    fn stage_size_argument(
+        &mut self,
+        ctx: &NativeCallContext,
+    ) -> (Vec<LoweredStatement>, String, EvaluationEffect) {
+        match ctx.args.first() {
+            Some(a) => {
+                let staged = self.stage_operand(a, ExpressionContext::value());
+                let effect = staged.evaluation.effect;
+                let (setup, value) = staged.into_parts();
+                (setup, value, effect)
+            }
+            None => (Vec::new(), "0".to_string(), EvaluationEffect::Pure),
+        }
+    }
+
     fn try_lower_native_constructor(&mut self, ctx: &NativeCallContext) -> Option<ValuePlan> {
         match (ctx.native_type, ctx.method) {
             (NativeGoType::Channel, "new") => {
@@ -178,15 +203,7 @@ impl Planner<'_> {
             (NativeGoType::Channel, "buffered") => {
                 let element =
                     self.resolve_element_type(ctx.function, ctx.resolved_type_args, ctx.call_ty);
-                let (setup, capacity, argument_effect) = match ctx.args.first() {
-                    Some(a) => {
-                        let staged = self.stage_operand(a, ExpressionContext::value());
-                        let effect = staged.evaluation.effect;
-                        let (setup, value) = staged.into_parts();
-                        (setup, value, effect)
-                    }
-                    None => (Vec::new(), "0".to_string(), EvaluationEffect::Pure),
-                };
+                let (setup, capacity, argument_effect) = self.stage_size_argument(ctx);
                 Some(ValuePlan::observable_call(
                     setup,
                     GoExpression::call(
@@ -218,6 +235,34 @@ impl Planner<'_> {
                     Vec::new(),
                     GoExpression::composite_literal(format!("[]{}{{}}", element), false),
                     self.native_constructor_effect(ctx, EvaluationEffect::Pure),
+                ))
+            }
+            (NativeGoType::Slice, "make") => {
+                let element_ty = self.resolve_element_lisette_type(
+                    ctx.function,
+                    ctx.resolved_type_args,
+                    ctx.call_ty,
+                );
+                let element = self.go_type_string(&element_ty);
+                let (setup, length, argument_effect) = self.stage_size_argument(ctx);
+                let value = if self.element_go_zero_ok(&element_ty) {
+                    GoExpression::call(
+                        GoExpression::name("make".to_string()),
+                        vec![
+                            GoExpression::opaque(format!("[]{}", element)),
+                            GoExpression::opaque(length),
+                        ],
+                    )
+                } else {
+                    let zero = self.lisette_zero(&element_ty);
+                    GoExpression::opaque(format!(
+                        "func() []{element} {{ s := make([]{element}, {length}); for i := range s {{ s[i] = {zero} }}; return s }}()"
+                    ))
+                };
+                Some(ValuePlan::observable_call(
+                    setup,
+                    value,
+                    self.native_constructor_effect(ctx, argument_effect),
                 ))
             }
             (NativeGoType::Array, "new") => {

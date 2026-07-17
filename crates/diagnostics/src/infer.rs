@@ -2451,11 +2451,11 @@ pub fn complex_select_expression(span: Span) -> LisetteDiagnostic {
         .with_help("Hoist to a `let` binding before the `select`")
 }
 
-pub fn ref_slice_append(span: Span) -> LisetteDiagnostic {
-    LisetteDiagnostic::error("Cannot call `append` on `Ref<Slice>`")
-        .with_infer_code("ref_slice_append")
+pub fn ref_slice_growth(method: &str, span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error(format!("Cannot call `{method}` on `Ref<Slice>`"))
+        .with_infer_code("ref_slice_growth")
         .with_span_label(&span, "dereference the ref first")
-        .with_help("Use `r.*.append(x)` to deref, then append")
+        .with_help(format!("Use `r.*.{method}(...)` to deref first"))
 }
 
 pub fn map_field_chain_assignment(span: Span) -> LisetteDiagnostic {
@@ -3536,6 +3536,30 @@ pub fn array_new_no_zero(element: &dyn std::fmt::Display, span: Span) -> Lisette
         .with_help(
             "Build the array from a list literal instead, e.g. `let xs: Array<int, 3> = [1, 2, 3]`",
         )
+}
+
+pub fn map_no_make_constructor(span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("`Map` has no `make` constructor")
+        .with_infer_code("no_make_constructor")
+        .with_span_label(&span, "`Map` has no capacity-taking constructor")
+        .with_help("Use `Map.new<K, V>()`. Go's map capacity hint has no observable effect")
+}
+
+pub fn channel_no_make_constructor(span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("`Channel` has no `make` constructor")
+        .with_infer_code("no_make_constructor")
+        .with_span_label(&span, "a channel's only size is its buffer")
+        .with_help("Use `Channel.new<T>()` for an unbuffered channel, or `Channel.buffered<T>(n)` for a buffered one")
+}
+
+pub fn slice_make_no_zero(element: &dyn std::fmt::Display, span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error(format!("`{element}` has no zero value"))
+        .with_infer_code("slice_make_no_zero")
+        .with_span_label(
+            &span,
+            format!("`Slice.make` zero-fills every element, but `{element}` has none"),
+        )
+        .with_help("Build the slice from a list literal instead, e.g. `let xs = [a, b, c]`")
 }
 
 pub fn array_new_takes_no_arguments(actual: usize, span: Span) -> LisetteDiagnostic {

@@ -1,0 +1,13 @@
+---
+source: tests/spec/emit/prelude.rs
+description: |
+  
+  fn test(n: int) -> Slice<int> {
+    Slice.make<int>(n)
+  }
+---
+package main
+
+func test(n int) []int {
+	return make([]int, n)
+}

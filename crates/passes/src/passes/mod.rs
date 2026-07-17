@@ -56,7 +56,7 @@ pub fn run(
     facts.absorb_local_facts(producer_facts);
 
     sink.extend(checks_diagnostics);
-    deferred::run(facts, sink);
+    deferred::run(analysis.store, facts, sink);
     if run_lints {
         lints::from_facts::run(analysis, facts, unused, sink);
     }

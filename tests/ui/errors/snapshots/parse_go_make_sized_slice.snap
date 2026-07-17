@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
    ·                  ╰── Lisette has no `make` builtin
  4 │ }
    ╰────
-  help: Use `slices.Repeat([value], n)` after importing `go:slices` · code: [parse.go_make_builtin]
+  help: Use `Slice.make<T>(n)` for a zero-filled slice · code: [parse.go_make_builtin]

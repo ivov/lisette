@@ -1,4 +1,5 @@
 mod almost_swapped;
+mod append_to_zero_filled;
 mod bad_bit_mask;
 mod bind_instead_of_map;
 mod bool_literal_comparison;
@@ -106,6 +107,7 @@ mod while_let_loop;
 mod wildcard_in_or_patterns;
 
 pub use almost_swapped::check_almost_swapped;
+pub use append_to_zero_filled::check_append_to_zero_filled;
 pub use bad_bit_mask::check_bad_bit_mask;
 pub use bind_instead_of_map::check_bind_instead_of_map;
 pub use bool_literal_comparison::check_bool_literal_comparison;

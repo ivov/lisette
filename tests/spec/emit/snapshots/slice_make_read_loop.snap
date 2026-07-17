@@ -1,0 +1,45 @@
+---
+source: tests/spec/emit/prelude.rs
+description: |
+  
+  import "go:strings"
+  
+  fn main() {
+    let reader = strings.NewReader("hello world")
+    let mut buffer = Slice.make<byte>(8)
+    let n = reader.Read(buffer).unwrap_or(0)
+    if n != 8 {
+      panic("expected to read 8 bytes into the buffer")
+    }
+    let head = buffer[..n] as string
+    if head != "hello wo" {
+      panic("expected the first 8 bytes of the input")
+    }
+  }
+---
+package main
+
+import (
+	lisette "github.com/ivov/lisette/prelude"
+	"strings"
+)
+
+func main() {
+	reader := strings.NewReader("hello world")
+	buffer := make([]byte, 8)
+	ret_1, ret_2 := reader.Read(buffer)
+	var result_3 lisette.Partial[int, error]
+	if ret_2 != nil {
+		result_3 = lisette.MakePartialBoth[int, error](ret_1, ret_2)
+	} else {
+		result_3 = lisette.MakePartialOk[int, error](ret_1)
+	}
+	n := result_3.UnwrapOr(0)
+	if n != 8 {
+		panic("expected to read 8 bytes into the buffer")
+	}
+	head := string(buffer[:n:n])
+	if head != "hello wo" {
+		panic("expected the first 8 bytes of the input")
+	}
+}

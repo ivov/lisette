@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Cannot call `reserve` on `Ref<Slice>`
+   ╭─[test.lis:3:11]
+ 2 │ fn test(r: Ref<Slice<int>>) {
+ 3 │   let _ = r.reserve(10)
+   ·           ────┬────
+   ·               ╰── dereference the ref first
+ 4 │ }
+   ╰────
+  help: Use `r.*.reserve(...)` to deref first · code: [infer.ref_slice_growth]

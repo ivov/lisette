@@ -153,6 +153,25 @@ let empty: Slice<int> = []
 let also_empty = Slice.new<int>()
 ```
 
+`Slice.make` creates a slice of a given length with every element set to its zero value, like Go's `make([]T, n)`. The length may be a runtime value:
+
+```rust
+let mut buffer = Slice.make<byte>(1024)
+let n = reader.Read(buffer).unwrap_or(0)
+process(buffer[..n])
+```
+
+If the element type has no zero value (e.g. `Ref<T>`), build the slice from a literal instead.
+
+`reserve` returns a slice with capacity for at least `additional` more elements, like Go's `slices.Grow`. Use it to preallocate an append accumulator:
+
+```rust
+let mut ids = Slice.new<int>().reserve(4096)
+for user in users {
+  ids = ids.append(user.id) // no reallocation until 4096 elements
+}
+```
+
 ```rust
 let first = nums[0]
 let safe = nums.get(0)           // Option<int>

@@ -1,0 +1,13 @@
+---
+source: tests/spec/emit/prelude.rs
+description: |
+  
+  fn test() -> Slice<byte> {
+    Slice.make<byte>(1024)
+  }
+---
+package main
+
+func test() []byte {
+	return make([]byte, 1024)
+}

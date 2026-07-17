@@ -1,0 +1,41 @@
+---
+source: tests/spec/emit/prelude.rs
+description: |
+  
+  fn main() {
+    let xs = Slice.make<int>(3)
+    if xs.length() != 3 {
+      panic("expected length 3")
+    }
+    if xs.capacity() != 3 {
+      panic("expected capacity 3")
+    }
+    if xs.get(0).unwrap_or(-1) != 0 {
+      panic("expected zero-filled elements")
+    }
+    let empty = Slice.make<int>(0)
+    if !empty.is_empty() {
+      panic("expected an empty slice for zero length")
+    }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func main() {
+	xs := make([]int, 3)
+	if len(xs) != 3 {
+		panic("expected length 3")
+	}
+	if cap(xs) != 3 {
+		panic("expected capacity 3")
+	}
+	if lisette.SliceGet(xs, 0).UnwrapOr(-1) != 0 {
+		panic("expected zero-filled elements")
+	}
+	empty := make([]int, 0)
+	if len(empty) != 0 {
+		panic("expected an empty slice for zero length")
+	}
+}

@@ -233,6 +233,9 @@ Lisette uses structural typing for interfaces, like Go.
 nums := []int{1, 2, 3}
 nums = append(nums, 4)
 
+buf := make([]byte, 1024)
+acc := make([]int, 0, 4096)
+
 ages := make(map[string]int)
 ages["Alice"] = 20
 age, ok := ages["Bob"]
@@ -243,6 +246,9 @@ var digest [32]byte
 ```rust
 let nums = [1, 2, 3]
 let nums = nums.append(4)
+
+let buf = Slice.make<byte>(1024)
+let acc = Slice.new<int>().reserve(4096)
 
 let mut ages = Map.new<string, int>()
 ages["Alice"] = 20

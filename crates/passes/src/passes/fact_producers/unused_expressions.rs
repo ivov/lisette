@@ -1,5 +1,6 @@
 use diagnostics::UnusedExpressionKind;
 use syntax::ast::{Annotation, Expression, SelectArmPattern, Span, UnaryOperator};
+use syntax::program::{CallKind, NativeTypeKind};
 use syntax::types::{Symbol, Type};
 
 use diagnostics::infer::MismatchedTailKind;
@@ -293,21 +294,23 @@ fn emit_unused_at_leaf(leaf: &Expression, module_id: &str, store: &Store, facts:
     if is_channel_send(leaf) {
         allowed_lints.push("unused_value".to_string());
     }
-    if is_lvalue_slice_grow(leaf) {
+    if let Some(kind) = lvalue_slice_growth_kind(leaf) {
         if !allowed_lints.iter().any(|s| s == "unused_value") {
-            facts.add_unused_expression(span, UnusedExpressionKind::SliceGrow);
+            facts.add_unused_expression(span, kind);
         }
         return;
     }
     emit_unused_expression(span, &ty, is_literal, &allowed_lints, facts);
 }
 
-fn is_lvalue_slice_grow(expression: &Expression) -> bool {
+fn lvalue_slice_growth_kind(expression: &Expression) -> Option<UnusedExpressionKind> {
     let Expression::Call {
-        expression: callee, ..
+        expression: callee,
+        call_kind: Some(CallKind::NativeMethod(NativeTypeKind::Slice)),
+        ..
     } = expression
     else {
-        return false;
+        return None;
     };
     let Expression::DotAccess {
         expression: receiver,
@@ -315,15 +318,14 @@ fn is_lvalue_slice_grow(expression: &Expression) -> bool {
         ..
     } = callee.as_ref()
     else {
-        return false;
+        return None;
     };
-    if member != "append" {
-        return false;
-    }
-    if receiver.get_var_name().is_none() {
-        return false;
-    }
-    matches!(receiver.get_type().strip_refs().get_name(), Some("Slice"))
+    let kind = match member.as_str() {
+        "append" => UnusedExpressionKind::SliceGrow,
+        "reserve" => UnusedExpressionKind::SliceReserve,
+        _ => return None,
+    };
+    receiver.get_var_name().map(|_| kind)
 }
 
 fn check_discarded_tail(

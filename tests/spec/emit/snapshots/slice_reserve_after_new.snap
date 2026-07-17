@@ -1,0 +1,15 @@
+---
+source: tests/spec/emit/prelude.rs
+description: |
+  
+  fn test() -> Slice<int> {
+    Slice.new<int>().reserve(4096)
+  }
+---
+package main
+
+import "slices"
+
+func test() []int {
+	return slices.Grow([]int{}, 4096)
+}

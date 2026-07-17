@@ -1,0 +1,19 @@
+---
+source: tests/spec/emit/prelude.rs
+description: |
+  
+  fn test() {
+    let mut acc = [1, 2, 3]
+    acc = acc.reserve(50)
+    let _ = acc
+  }
+---
+package main
+
+import "slices"
+
+func test() {
+	acc := []int{1, 2, 3}
+	acc = slices.Grow(acc, 50)
+	_ = acc
+}

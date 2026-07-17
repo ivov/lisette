@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  ▲ Appending to a zero-filled slice
+   ╭─[test.lis:3:15]
+ 2 │ fn main() {
+ 3 │   let grown = Slice.make<int>(100).append(1)
+   ·               ──────────┬─────────
+   ·                         ╰── every element is already a zero value
+ 4 │   let _ = grown
+   ╰────
+  help: `Slice.make(n)` creates n zero-valued elements, so `append` adds element n+1. For an empty slice with room for n, use `Slice.new<T>().reserve(n)` · code: [lint.append_to_zero_filled]

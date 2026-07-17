@@ -1,6 +1,6 @@
 use diagnostics::LocalSink;
 use syntax::ast::{Expression, Span, StructKind};
-use syntax::program::{Definition, DefinitionBody};
+use syntax::program::{Definition, DefinitionBody, NativeTypeKind};
 use syntax::types::{Symbol, Type, unqualified_name};
 
 use semantics::store::Store;
@@ -116,7 +116,7 @@ fn check_one(
     );
 
     if is_native {
-        if matches!(method_part, "new" | "buffered") {
+        if NativeTypeKind::is_constructor_method(method_part) {
             sink.push(diagnostics::infer::native_constructor_value(value, span));
         } else {
             sink.push(diagnostics::infer::native_method_value(
@@ -128,7 +128,9 @@ fn check_one(
         return;
     }
 
-    if matches!(method_part, "new" | "buffered") {
+    if NativeTypeKind::is_constructor_method(method_part)
+        && !is_user_type(type_part, module_id, store)
+    {
         let ret_ty = match ty {
             Type::Function(f) => Some(f.return_type.as_ref()),
             Type::Forall { body, .. } => match body.as_ref() {
@@ -177,6 +179,18 @@ fn check_one(
     if !is_public {
         sink.push(diagnostics::infer::private_method_expression(span));
     }
+}
+
+fn is_user_type(type_part: &str, module_id: &str, store: &Store) -> bool {
+    let qualified = if type_part.contains('.') {
+        type_part.to_string()
+    } else {
+        Symbol::from_parts(module_id, type_part).to_string()
+    };
+    matches!(
+        store.get_definition(&qualified).map(|d| &d.body),
+        Some(DefinitionBody::Struct { .. } | DefinitionBody::Enum { .. })
+    )
 }
 
 fn resolves_to_struct_kind(qualified: &str, kind: StructKind, store: &Store) -> bool {

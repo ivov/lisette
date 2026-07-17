@@ -307,6 +307,10 @@ impl<T> Slice<T> {
   /// Creates a new empty slice.
   fn new() -> Slice<T>
 
+  /// Creates a slice of `length` elements, each set to its zero value.
+  /// The capacity equals the length.
+  fn make(length: int) -> Slice<T>
+
   /// Returns the number of elements in the slice.
   fn length(self) -> int
 
@@ -315,6 +319,9 @@ impl<T> Slice<T> {
 
   /// Returns the number of elements the slice can hold before reallocating.
   fn capacity(self) -> int
+
+  /// Returns a slice with capacity for at least `additional` more elements.
+  fn reserve(self, additional: int) -> Slice<T>
 
   /// Returns the element at `index`, or `None` if out of bounds.
   fn get(self, index: int) -> Option<T>

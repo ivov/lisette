@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ `Channel` has no `make` constructor
+   ╭─[test.lis:3:11]
+ 2 │ fn test() {
+ 3 │   let c = Channel.make<int>(5)
+   ·           ──────────┬─────────
+   ·                     ╰── a channel's only size is its buffer
+ 4 │ }
+   ╰────
+  help: Use `Channel.new<T>()` for an unbuffered channel, or `Channel.buffered<T>(n)` for a buffered one · code: [infer.no_make_constructor]

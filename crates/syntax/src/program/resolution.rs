@@ -88,6 +88,19 @@ impl NativeTypeKind {
         Self::from_name(name)
     }
 
+    pub fn from_constructor_path(path: &str) -> Option<Self> {
+        match path {
+            "Channel.new" | "Channel.buffered" => Some(Self::Channel),
+            "Map.new" => Some(Self::Map),
+            "Slice.new" | "Slice.make" => Some(Self::Slice),
+            _ => None,
+        }
+    }
+
+    pub fn is_constructor_method(name: &str) -> bool {
+        matches!(name, "new" | "buffered" | "make")
+    }
+
     pub fn from_name(name: &str) -> Option<Self> {
         match name {
             "Slice" => Some(Self::Slice),

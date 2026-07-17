@@ -1,0 +1,48 @@
+---
+source: tests/spec/emit/prelude.rs
+description: |
+  
+  fn main() {
+    let mut acc = Slice.new<int>().reserve(64)
+    if acc.length() != 0 {
+      panic("expected an empty accumulator")
+    }
+    if acc.capacity() < 64 {
+      panic("expected reserved capacity")
+    }
+    let start = acc.capacity()
+    acc = acc.append(1)
+    acc = acc.append(2)
+    if acc.capacity() != start {
+      panic("expected appends within reserved capacity not to reallocate")
+    }
+    if acc.get(1).unwrap_or(-1) != 2 {
+      panic("expected appended elements to be readable")
+    }
+  }
+---
+package main
+
+import (
+	lisette "github.com/ivov/lisette/prelude"
+	"slices"
+)
+
+func main() {
+	acc := slices.Grow([]int{}, 64)
+	if len(acc) != 0 {
+		panic("expected an empty accumulator")
+	}
+	if cap(acc) < 64 {
+		panic("expected reserved capacity")
+	}
+	start := cap(acc)
+	acc = append(acc, 1)
+	acc = append(acc, 2)
+	if cap(acc) != start {
+		panic("expected appends within reserved capacity not to reallocate")
+	}
+	if lisette.SliceGet(acc, 1).UnwrapOr(-1) != 2 {
+		panic("expected appended elements to be readable")
+	}
+}

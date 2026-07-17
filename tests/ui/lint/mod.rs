@@ -33,6 +33,146 @@ fn main() {
 }
 
 #[test]
+fn append_to_zero_filled_make() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let mut ids = Slice.make<int>(100)
+  ids = ids.append(7)
+  let _ = ids
+}
+"#
+    );
+}
+
+#[test]
+fn append_to_zero_filled_silent_for_zero_length() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let mut a = Slice.make<int>(0)
+  a = a.append(1)
+  let _ = a
+}
+"#
+    );
+}
+
+#[test]
+fn append_to_zero_filled_silent_for_shadowed_binding() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let mut ids = Slice.make<int>(5)
+  {
+    let mut ids = Slice.new<int>()
+    ids = ids.append(1)
+    let _ = ids
+  }
+  ids[0] = 1
+  let _ = ids
+}
+"#
+    );
+}
+
+#[test]
+fn append_to_zero_filled_silent_for_loop_shadow() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let mut ids = Slice.make<int>(5)
+  for ids in [[1], [2]] {
+    let grown = ids.append(9)
+    let _ = grown
+  }
+  ids[0] = 1
+  let _ = ids
+}
+"#
+    );
+}
+
+#[test]
+fn append_to_zero_filled_fires_for_chained_call() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let grown = Slice.make<int>(100).append(1)
+  let _ = grown
+}
+"#
+    );
+}
+
+#[test]
+fn append_to_zero_filled_fires_for_ufcs_call() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let mut ids = Slice.make<int>(100)
+  ids = Slice.append(ids, 7)
+  let _ = ids
+}
+"#
+    );
+}
+
+#[test]
+fn append_to_zero_filled_silent_after_reassignment() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let mut ids = Slice.make<int>(100)
+  ids = Slice.new<int>()
+  ids = ids.append(7)
+  let _ = ids
+}
+"#
+    );
+}
+
+#[test]
+fn append_to_zero_filled_silent_for_zero_argument_append() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let ids = Slice.make<int>(5)
+  let copied = ids.append()
+  let _ = (ids, copied)
+}
+"#
+    );
+}
+
+#[test]
+fn append_to_zero_filled_silent_after_element_use() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let mut buffer = Slice.make<byte>(8)
+  let n = buffer.length()
+  buffer = buffer.append(1)
+  let _ = (buffer, n)
+}
+"#
+    );
+}
+
+#[test]
+fn reserve_discarded_output_warns() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let ids = Slice.new<int>()
+  ids.reserve(100);
+  let _ = ids
+}
+"#
+    );
+}
+
+#[test]
 fn unused_variable_suppressed_by_underscore() {
     assert_no_lint_warnings!(
         r#"

@@ -18,6 +18,7 @@ pub enum UnusedExpressionKind {
     Partial,
     Value,
     SliceGrow,
+    SliceReserve,
 }
 
 impl UnusedExpressionKind {
@@ -27,7 +28,7 @@ impl UnusedExpressionKind {
             Self::Result => "unused_result",
             Self::Option => "unused_option",
             Self::Partial => "unused_partial",
-            Self::Value | Self::SliceGrow => "unused_value",
+            Self::Value | Self::SliceGrow | Self::SliceReserve => "unused_value",
         }
     }
 }
@@ -185,6 +186,12 @@ pub fn unused_expression(span: &Span, kind: UnusedExpressionKind) -> LisetteDiag
             "output is discarded",
             "`append()` outputs a new slice, leaving the original slice intact. Assign the output back to grow it `let s = s.append(...)` or discard the output with `let _ = s.append(...)`",
         ),
+        UnusedExpressionKind::SliceReserve => (
+            "unused_value",
+            "Unused `reserve()` output",
+            "output is discarded",
+            "`reserve()` outputs a new slice, leaving the original slice intact. Assign the output back `let s = s.reserve(...)` or discard the output with `let _ = s.reserve(...)`",
+        ),
     };
     LisetteDiagnostic::warn(msg)
         .with_lint_code(code)
@@ -231,6 +238,16 @@ pub fn ineffective_try_block(span: &Span) -> LisetteDiagnostic {
         .with_lint_code("try_block_no_success_path")
         .with_span_label(span, "always propagates")
         .with_help("A `try` block is effective only if the expression may succeed or fail")
+}
+
+pub fn append_to_zero_filled(span: &Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::warn("Appending to a zero-filled slice")
+        .with_lint_code("append_to_zero_filled")
+        .with_span_label(span, "every element is already a zero value")
+        .with_help(
+            "`Slice.make(n)` creates n zero-valued elements, so `append` adds element n+1. \
+             For an empty slice with room for n, use `Slice.new<T>().reserve(n)`",
+        )
 }
 
 pub fn replaceable_with_autofill(span: &Span, kept: &str, struct_name: &str) -> LisetteDiagnostic {

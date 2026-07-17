@@ -148,6 +148,157 @@ fn test() -> Slice<fn(int)> {
 }
 
 #[test]
+fn slice_make() {
+    let input = r#"
+fn test() -> Slice<byte> {
+  Slice.make<byte>(1024)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn slice_make_inferred_type() {
+    let input = r#"
+fn test() -> Slice<string> {
+  Slice.make(5)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn slice_make_runtime_length() {
+    let input = r#"
+fn test(n: int) -> Slice<int> {
+  Slice.make<int>(n)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn slice_make_zero_filled() {
+    let input = r#"
+fn main() {
+  let xs = Slice.make<int>(3)
+  if xs.length() != 3 {
+    panic("expected length 3")
+  }
+  if xs.capacity() != 3 {
+    panic("expected capacity 3")
+  }
+  if xs.get(0).unwrap_or(-1) != 0 {
+    panic("expected zero-filled elements")
+  }
+  let empty = Slice.make<int>(0)
+  if !empty.is_empty() {
+    panic("expected an empty slice for zero length")
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn slice_make_read_loop() {
+    let input = r#"
+import "go:strings"
+
+fn main() {
+  let reader = strings.NewReader("hello world")
+  let mut buffer = Slice.make<byte>(8)
+  let n = reader.Read(buffer).unwrap_or(0)
+  if n != 8 {
+    panic("expected to read 8 bytes into the buffer")
+  }
+  let head = buffer[..n] as string
+  if head != "hello wo" {
+    panic("expected the first 8 bytes of the input")
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn slice_reserve_after_new() {
+    let input = r#"
+fn test() -> Slice<int> {
+  Slice.new<int>().reserve(4096)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn slice_reserve_self_reassign_not_clipped() {
+    let input = r#"
+fn test() {
+  let mut acc = [1, 2, 3]
+  acc = acc.reserve(50)
+  let _ = acc
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn slice_reserve_value_position_clips_receiver() {
+    let input = r#"
+fn test(source: Slice<int>) -> Slice<int> {
+  let grown = source.reserve(10)
+  grown
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn slice_reserve_accumulator_round_trip() {
+    let input = r#"
+fn main() {
+  let mut acc = Slice.new<int>().reserve(64)
+  if acc.length() != 0 {
+    panic("expected an empty accumulator")
+  }
+  if acc.capacity() < 64 {
+    panic("expected reserved capacity")
+  }
+  let start = acc.capacity()
+  acc = acc.append(1)
+  acc = acc.append(2)
+  if acc.capacity() != start {
+    panic("expected appends within reserved capacity not to reallocate")
+  }
+  if acc.get(1).unwrap_or(-1) != 2 {
+    panic("expected appended elements to be readable")
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn slice_make_fills_elements_without_go_zero() {
+    let input = r#"
+fn main() {
+  let maps = Slice.make<Map<string, int>>(2)
+  let mut first = maps.get(0).unwrap_or(Map.new<string, int>())
+  first["k"] = 1
+  let second = maps.get(1).unwrap_or(Map.new<string, int>())
+  if first.length() != 1 {
+    panic("expected a writable empty map element")
+  }
+  if second.length() != 0 {
+    panic("expected each element to get its own map")
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn append_from_call_result_does_not_alias() {
     let input = r#"
 fn identity(s: Slice<int>) -> Slice<int> {

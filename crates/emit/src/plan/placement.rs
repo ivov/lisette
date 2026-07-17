@@ -467,7 +467,7 @@ impl Planner<'_> {
         if is_unit_call(last) {
             return self.lower_unit_call_into_var(last, var);
         }
-        if let Some(statements) = self.lower_append_to_var(var, last) {
+        if let Some(statements) = self.lower_slice_growth_to_var(var, last) {
             return statements;
         }
         if matches!(
@@ -505,8 +505,8 @@ impl Planner<'_> {
         vec![simple_assign(var, value)]
     }
 
-    /// `None` when `last` is not a slice `append` call.
-    fn lower_append_to_var(
+    /// `None` when `last` is not a slice `append` or `reserve` call.
+    fn lower_slice_growth_to_var(
         &mut self,
         var: &str,
         last: &Expression,
@@ -520,24 +520,14 @@ impl Planner<'_> {
         else {
             return None;
         };
-        if !self.is_slice_append(func) {
-            return None;
-        }
-
-        let Expression::DotAccess {
-            expression: receiver,
-            ..
-        } = func.as_ref()
-        else {
-            return Some(Vec::new());
-        };
+        let (method, receiver) = self.slice_growth_method(func)?;
 
         let unwrapped = receiver.unwrap_parens();
         let receiver_is_lvalue =
             is_lvalue_chain(unwrapped) && !self.contains_newtype_access(unwrapped);
 
         let (value, mut statements) = if receiver_is_lvalue {
-            let arguments = self.lower_append_args(func, args, (**spread).as_ref());
+            let arguments = self.lower_growth_args(func, args, (**spread).as_ref());
             let mut capture: Vec<LoweredStatement> = Vec::new();
             let receiver_lv =
                 self.emit_left_value_capturing(&mut capture, unwrapped, Some(&arguments));
@@ -554,7 +544,10 @@ impl Planner<'_> {
                 receiver_lv
             };
             capture.extend(args_setup);
-            let value = if args_str.is_empty() {
+            let value = if method == "reserve" {
+                self.require_slices();
+                format!("slices.Grow({}, {})", receiver_lv, args_str)
+            } else if args_str.is_empty() {
                 receiver_lv
             } else {
                 format!("append({}, {})", receiver_lv, args_str)
@@ -571,18 +564,19 @@ impl Planner<'_> {
         Some(statements)
     }
 
-    fn is_slice_append(&self, func: &Expression) -> bool {
+    fn slice_growth_method<'e>(&self, func: &'e Expression) -> Option<(&'e str, &'e Expression)> {
         if let Expression::DotAccess {
             expression, member, ..
         } = func
-            && member == "append"
+            && matches!(member.as_str(), "append" | "reserve")
+            && self.is_native_shape(&expression.get_type(), NativeGoType::Slice)
         {
-            return self.is_native_shape(&expression.get_type(), NativeGoType::Slice);
+            return Some((member.as_str(), expression));
         }
-        false
+        None
     }
 
-    fn lower_append_args(
+    fn lower_growth_args(
         &mut self,
         function: &Expression,
         args: &[Expression],

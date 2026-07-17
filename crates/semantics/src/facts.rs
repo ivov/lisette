@@ -54,6 +54,7 @@ pub struct Facts {
     pub generic_call_checks: Vec<GenericCallCheck>,
     pub empty_collection_checks: Vec<EmptyCollectionCheck>,
     pub empty_literal_checks: Vec<EmptyLiteralCheck>,
+    pub slice_make_checks: Vec<SliceMakeCheck>,
     pub statement_tail_checks: Vec<StatementTailCheck>,
 
     /// Value-position `match`/`select` arms that did not reconcile, drained and
@@ -111,6 +112,13 @@ pub struct EmptyLiteralCheck {
 }
 
 #[derive(Debug, Clone)]
+pub struct SliceMakeCheck {
+    pub ty: Type,
+    pub span: Span,
+    pub module_id: String,
+}
+
+#[derive(Debug, Clone)]
 pub struct StatementTailCheck {
     pub expected_ty: Type,
     pub span: Span,
@@ -145,6 +153,7 @@ impl Facts {
             generic_call_checks: Vec::new(),
             empty_collection_checks: Vec::new(),
             empty_literal_checks: Vec::new(),
+            slice_make_checks: Vec::new(),
             statement_tail_checks: Vec::new(),
             branch_subsumptions: Vec::new(),
             select_exhaustiveness_checks: Vec::new(),
@@ -309,6 +318,7 @@ impl Facts {
             generic_call_checks,
             empty_collection_checks,
             empty_literal_checks,
+            slice_make_checks,
             statement_tail_checks,
             branch_subsumptions,
             select_exhaustiveness_checks,
@@ -345,6 +355,7 @@ impl Facts {
         self.generic_call_checks.extend(generic_call_checks);
         self.empty_collection_checks.extend(empty_collection_checks);
         self.empty_literal_checks.extend(empty_literal_checks);
+        self.slice_make_checks.extend(slice_make_checks);
         self.statement_tail_checks.extend(statement_tail_checks);
         self.branch_subsumptions.extend(branch_subsumptions);
         self.select_exhaustiveness_checks

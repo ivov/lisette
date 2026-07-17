@@ -1,0 +1,41 @@
+---
+source: tests/spec/emit/prelude.rs
+description: |
+  
+  fn main() {
+    let maps = Slice.make<Map<string, int>>(2)
+    let mut first = maps.get(0).unwrap_or(Map.new<string, int>())
+    first["k"] = 1
+    let second = maps.get(1).unwrap_or(Map.new<string, int>())
+    if first.length() != 1 {
+      panic("expected a writable empty map element")
+    }
+    if second.length() != 0 {
+      panic("expected each element to get its own map")
+    }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func main() {
+	maps_ := func() []map[string]int {
+		s := make([]map[string]int, 2)
+		for i := range s {
+			s[i] = map[string]int{}
+		}
+		return s
+	}()
+	callee_1 := lisette.SliceGet(maps_, 0).UnwrapOr
+	first := callee_1(make(map[string]int))
+	first["k"] = 1
+	callee_2 := lisette.SliceGet(maps_, 1).UnwrapOr
+	second := callee_2(make(map[string]int))
+	if len(first) != 1 {
+		panic("expected a writable empty map element")
+	}
+	if len(second) != 0 {
+		panic("expected each element to get its own map")
+	}
+}

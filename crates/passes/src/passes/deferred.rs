@@ -2,9 +2,10 @@ use diagnostics::LocalSink;
 use rustc_hash::FxHashSet as HashSet;
 
 use semantics::facts::Facts;
-use syntax::types::TypeVarId;
+use semantics::store::Store;
+use syntax::types::{CompoundKind, TypeVarId};
 
-pub(crate) fn run(facts: &mut Facts, sink: &LocalSink) {
+pub(crate) fn run(store: &Store, facts: &mut Facts, sink: &LocalSink) {
     let mut reported_vars: HashSet<(String, TypeVarId)> = HashSet::default();
     let mut collected = Vec::new();
     let mut report_vars = |ty: &syntax::types::Type, module_id: &str| {
@@ -42,6 +43,24 @@ pub(crate) fn run(facts: &mut Facts, sink: &LocalSink) {
         }
         if reported_literal_spans.insert(check.span) {
             sink.push(diagnostics::infer::empty_slice_no_element_type(check.span));
+        }
+    }
+    for check in std::mem::take(&mut facts.slice_make_checks) {
+        let slice_ty = store.peel_alias(&check.ty);
+        let Some((CompoundKind::Slice, args)) = slice_ty.as_compound() else {
+            continue;
+        };
+        let Some(element_ty) = args.first() else {
+            continue;
+        };
+        if element_ty.is_error() || element_ty.is_variable() {
+            continue;
+        }
+        if let Err(no_zero) = semantics::zero::has_zero(store, element_ty, &check.module_id) {
+            sink.push(diagnostics::infer::slice_make_no_zero(
+                &no_zero.leaf_ty.stringify(),
+                check.span,
+            ));
         }
     }
     for check in std::mem::take(&mut facts.statement_tail_checks) {
@@ -89,7 +108,7 @@ mod tests {
             module_id: literal_module.to_string(),
         });
         let sink = LocalSink::new();
-        run(&mut facts, &sink);
+        run(&Store::new(), &mut facts, &sink);
         sink.take()
             .iter()
             .filter_map(|d| d.code_str().map(str::to_string))

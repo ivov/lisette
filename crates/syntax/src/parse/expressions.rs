@@ -436,11 +436,9 @@ impl<'source> Parser<'source> {
         let kind = self.classify_go_make()?;
         let help = match (kind, self.scan_go_make_args()) {
             (GoMakeKind::Slice, 0) => "Use `Slice.new<T>()` for an empty slice.",
-            (GoMakeKind::Slice, 1) => {
-                "Use `slices.Repeat([value], n)` after importing `go:slices`."
-            }
+            (GoMakeKind::Slice, 1) => "Use `Slice.make<T>(n)` for a zero-filled slice.",
             (GoMakeKind::Slice, _) => {
-                "Use `slices.Grow(Slice.new<T>(), capacity)` after importing `go:slices`."
+                "For `make([]T, 0, c)` use `Slice.new<T>().reserve(c)`. For a nonzero length, use `Slice.make<T>(n)` and `reserve` the extra capacity."
             }
             (GoMakeKind::Channel, 0) => "Use `Channel.new<T>()`.",
             (GoMakeKind::Channel, _) => "Use `Channel.buffered<T>(n)`.",

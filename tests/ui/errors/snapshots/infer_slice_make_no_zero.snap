@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ `Ref<int>` has no zero value
+   ╭─[test.lis:3:14]
+ 2 │ fn test() {
+ 3 │   let refs = Slice.make<Ref<int>>(4)
+   ·              ───────────┬───────────
+   ·                         ╰── `Slice.make` zero-fills every element, but `Ref<int>` has none
+ 4 │ }
+   ╰────
+  help: Build the slice from a list literal instead, e.g. `let xs = [a, b, c]` · code: [infer.slice_make_no_zero]

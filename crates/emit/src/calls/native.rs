@@ -213,6 +213,14 @@ static INLINE_METHODS: &[InlineRule] = &[
         negated_template: None,
         import: InlineImport::Slices,
     },
+    InlineRule {
+        types: &[N::Slice],
+        method: "reserve",
+        arity: 1,
+        template: "slices.Grow({r}, {0})",
+        negated_template: None,
+        import: InlineImport::Slices,
+    },
     // Variadic methods
     InlineRule {
         types: &[N::Slice],
@@ -229,7 +237,7 @@ pub(crate) fn clip_shared_capacity(receiver: &str) -> String {
 }
 
 fn grows_into_capacity(method: &str, appends_anything: bool) -> bool {
-    method == "append" && appends_anything
+    method == "reserve" || (method == "append" && appends_anything)
 }
 
 pub(crate) fn is_clip_safe_path(value: &str) -> bool {
@@ -275,7 +283,7 @@ fn is_fresh_slice_value(receiver: &Expression) -> bool {
                         matches!(call_kind, Some(CallKind::NativeMethodIdentifier(_))) as usize;
                     args.len() > receiver_argument_count || spread.is_some()
                 }
-                "clone" | "filter" | "map" => true,
+                "reserve" | "clone" | "filter" | "map" => true,
                 _ => false,
             },
             _ => false,

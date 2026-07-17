@@ -1,0 +1,17 @@
+---
+source: tests/spec/emit/prelude.rs
+description: |
+  
+  fn test(source: Slice<int>) -> Slice<int> {
+    let grown = source.reserve(10)
+    grown
+  }
+---
+package main
+
+import "slices"
+
+func test(source []int) []int {
+	grown := slices.Grow(source[:len(source):len(source)], 10)
+	return grown
+}

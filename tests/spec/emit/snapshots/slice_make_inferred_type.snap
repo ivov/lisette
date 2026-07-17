@@ -1,0 +1,13 @@
+---
+source: tests/spec/emit/prelude.rs
+description: |
+  
+  fn test() -> Slice<string> {
+    Slice.make(5)
+  }
+---
+package main
+
+func test() []string {
+	return make([]string, 5)
+}

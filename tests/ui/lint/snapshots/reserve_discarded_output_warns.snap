@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  ▲ Unused `reserve()` output
+   ╭─[test.lis:4:3]
+ 3 │   let ids = Slice.new<int>()
+ 4 │   ids.reserve(100);
+   ·   ────────┬───────
+   ·           ╰── output is discarded
+ 5 │   let _ = ids
+   ╰────
+  help: `reserve()` outputs a new slice, leaving the original slice intact. Assign the output back `let s = s.reserve(...)` or discard the output with `let _ = s.reserve(...)` · code: [lint.unused_value]

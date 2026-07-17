@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
    ·              ╰── Lisette has no `make` builtin
  4 │ }
    ╰────
-  help: Use `slices.Grow(Slice.new<T>(), capacity)` after importing `go:slices` · code: [parse.go_make_builtin]
+  help: For `make([]T, 0, c)` use `Slice.new<T>().reserve(c)`. For a nonzero length, use `Slice.make<T>(n)` and `reserve` the extra capacity · code: [parse.go_make_builtin]

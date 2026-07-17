@@ -25,6 +25,129 @@ fn slice_new_without_type_arg_errors() {
 }
 
 #[test]
+fn slice_make_without_type_arg_errors() {
+    infer(
+        r#"
+    fn test() {
+      let s = Slice.make(4);
+    }
+        "#,
+    )
+    .assert_infer_code("missing_type_argument");
+}
+
+#[test]
+fn slice_make_with_type_arg_succeeds() {
+    infer(
+        r#"
+    fn test() {
+      let s = Slice.make<string>(4);
+    }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn slice_make_type_from_annotation_succeeds() {
+    infer(
+        r#"
+    fn test() {
+      let s: Slice<bool> = Slice.make(2);
+    }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn slice_make_zero_length_succeeds() {
+    infer(
+        r#"
+    fn test() {
+      let s = Slice.make<int>(0);
+    }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn slice_make_option_ref_element_succeeds() {
+    infer(
+        r#"
+    fn test() {
+      let s = Slice.make<Option<Ref<int>>>(3);
+    }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn slice_make_ref_element_errors() {
+    infer(
+        r#"
+    fn test() {
+      let refs = Slice.make<Ref<int>>(4);
+    }
+        "#,
+    )
+    .assert_infer_code("slice_make_no_zero");
+}
+
+#[test]
+fn slice_make_annotation_ref_element_errors() {
+    infer(
+        r#"
+    fn test() {
+      let refs: Slice<Ref<int>> = Slice.make(4);
+    }
+        "#,
+    )
+    .assert_infer_code("slice_make_no_zero");
+}
+
+#[test]
+fn slice_make_element_resolved_later_errors() {
+    infer(
+        r#"
+    fn test() {
+      let mut chans = Slice.make(1);
+      chans = chans.append(Channel.new<int>());
+    }
+        "#,
+    )
+    .assert_infer_code("slice_make_no_zero");
+}
+
+#[test]
+fn slice_make_struct_with_ref_field_errors() {
+    infer(
+        r#"
+    struct Holder { r: Ref<int> }
+
+    fn test() {
+      let holders = Slice.make<Holder>(1);
+    }
+        "#,
+    )
+    .assert_infer_code("slice_make_no_zero");
+}
+
+#[test]
+fn slice_make_type_parameter_element_errors() {
+    infer(
+        r#"
+    fn make<T>(n: int) -> Slice<T> {
+      Slice.make<T>(n)
+    }
+        "#,
+    )
+    .assert_infer_code("slice_make_no_zero");
+}
+
+#[test]
 fn map_new_without_type_args_errors() {
     infer(
         r#"
@@ -166,6 +289,64 @@ fn channel_new_type_from_return_type_succeeds() {
         "#,
     )
     .assert_no_errors();
+}
+
+#[test]
+fn slice_make_guard_sees_through_parens() {
+    infer(
+        r#"
+    fn test() {
+      let refs: Slice<Ref<int>> = (Slice.make)(4);
+      let _ = refs;
+    }
+        "#,
+    )
+    .assert_infer_code("slice_make_no_zero");
+}
+
+#[test]
+fn user_static_named_make_is_a_legal_value() {
+    infer(
+        r#"
+    struct Builder {}
+
+    impl Builder {
+      fn make() -> Slice<int> {
+        [1, 2]
+      }
+    }
+
+    fn test() {
+      let factory = Builder.make;
+      let made = factory();
+      let _ = made;
+    }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn map_make_recovery_infers_spread() {
+    let result = crate::_harness::infer::infer(
+        r#"
+    fn test(xs: Slice<int>) {
+      let m = Map.make<string, int>(xs...);
+      let _ = m;
+    }
+        "#,
+    );
+    let errors: Vec<_> = result
+        .errors
+        .iter()
+        .filter(|e| e.is_error())
+        .filter_map(|e| e.code_str())
+        .collect();
+    assert_eq!(
+        errors,
+        vec!["infer.no_make_constructor"],
+        "the recovery must infer the spread without cascading"
+    );
 }
 
 #[test]
