@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1784323790837,
+  "lastUpdate": 1784327300955,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -4471,6 +4471,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "diagnostics",
             "value": 6220,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 4414,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2812,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1031,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 695,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 6046,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 890,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "101fd72ebf24c266fd2869eb5042f7a95e49a138",
+          "message": "fix!: reject `self` on interface methods (#1033)",
+          "timestamp": "2026-07-18T00:27:55+02:00",
+          "tree_id": "eaaf8242cd37f929d4023393ce13954466f9fd0d",
+          "url": "https://github.com/ivov/lisette/commit/101fd72ebf24c266fd2869eb5042f7a95e49a138"
+        },
+        "date": 1784327299283,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 114801,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 29917,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 23027,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 16431,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 13175,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 10137,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 6226,
             "unit": "lines"
           },
           {
