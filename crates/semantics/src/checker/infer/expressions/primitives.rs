@@ -181,6 +181,22 @@ impl InferCtx<'_, '_> {
         let resolved_inner = inner_ty.resolve_in(&self.env);
         let is_already_ref = resolved_inner.is_ref();
 
+        if !is_already_ref
+            && matches!(resolved_inner.unwrap_forall(), Type::Nominal { .. })
+            && store.is_interface(&store.peel_alias(&resolved_inner))
+        {
+            self.sink.push(diagnostics::infer::ref_of_interface_value(
+                &resolved_inner,
+                span,
+            ));
+            self.unify(expected_ty, &Type::Error, &span);
+            return Expression::Reference {
+                expression: new_expression.into(),
+                ty: Type::Error,
+                span,
+            };
+        }
+
         // Collapse &ref_var to ref_var — adding another reference layer is a no-op
         let ref_ty = if is_already_ref {
             self.facts

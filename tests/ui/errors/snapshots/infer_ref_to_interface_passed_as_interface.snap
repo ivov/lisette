@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Invalid use of `Ref` with interface
+    ╭─[test.lis:23:7]
+ 22 │   let r = ref_of(bar)
+ 23 │   foo(r)
+    ·       ┬
+    ·       ╰── `Ref<Foo<int>>` does not implement `Foo`
+ 24 │ }
+    ╰────
+  help: A reference to an interface does not implement the interface. Dereference with `.*` until reaching the interface value · code: [infer.ref_of_interface]

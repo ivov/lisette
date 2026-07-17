@@ -481,6 +481,16 @@ impl Store {
         })
     }
 
+    pub fn peel_refs_and_aliases(&self, ty: &Type) -> (Type, bool) {
+        let mut current = self.peel_alias(ty);
+        let mut behind_ref = false;
+        while current.is_ref() {
+            behind_ref = true;
+            current = self.peel_alias(&current.strip_refs());
+        }
+        (current, behind_ref)
+    }
+
     pub fn deep_resolve_alias(&self, ty: &Type) -> Type {
         let mut current = ty.clone();
         let mut seen: HashSet<Symbol> = HashSet::default();

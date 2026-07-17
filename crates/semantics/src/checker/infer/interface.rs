@@ -44,11 +44,29 @@ impl InferCtx<'_, '_> {
         type_args: &[Type],
         span: &Span,
     ) -> Result<(), Vec<InterfaceViolation>> {
+        let resolved = ty.resolve_in(&self.env);
+        let (core, behind_ref) = self.store.peel_refs_and_aliases(&resolved);
+        if behind_ref
+            && self.store.is_interface(&core)
+            && interface_declares_methods(
+                self.store,
+                interface,
+                &mut rustc_hash::FxHashSet::default(),
+            )
+        {
+            self.sink
+                .push(diagnostics::infer::ref_to_interface_does_not_implement(
+                    &interface.name,
+                    &resolved,
+                    *span,
+                ));
+            return Err(vec![]);
+        }
+
         // Get type ID to track circular satisfaction checks.
         // If we're already checking if this type satisfies this interface, return success
         // to prevent infinite recursion (e.g., interface Fluent { fn next() -> Fluent }).
-        let type_id = ty
-            .resolve_in(&self.env)
+        let type_id = resolved
             .get_qualified_id()
             .map(String::from)
             .unwrap_or_else(|| ty.to_string());

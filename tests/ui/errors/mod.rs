@@ -8928,6 +8928,153 @@ fn copy_data(dest: Ref<Writable>) {
 }
 
 #[test]
+fn infer_ref_of_interface_value() {
+    let input = r#"
+interface Foo<T> {
+  fn get(self) -> T
+}
+
+struct Bar {}
+
+impl Bar {
+  fn new() -> Foo<int> {
+    Bar {}
+  }
+
+  fn get(self) -> int {
+    42
+  }
+}
+
+fn foo<T>(_foo: Foo<T>) {}
+
+fn main() {
+  let bar = Bar.new()
+  foo(&bar)
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_ref_of_interface_alias_value() {
+    let input = r#"
+interface Writable {
+  fn write(self, data: string)
+}
+
+type Sink = Writable
+
+struct File {}
+
+impl File {
+  fn write(self, data: string) {}
+}
+
+fn main() {
+  let s: Sink = File {}
+  let r = &s
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_ref_to_interface_passed_as_interface() {
+    let input = r#"
+interface Foo<T> {
+  fn get(self) -> T
+}
+
+struct Bar {}
+
+impl Bar {
+  fn get(self) -> int {
+    42
+  }
+}
+
+fn ref_of<T>(x: T) -> Ref<T> {
+  &x
+}
+
+fn foo<T>(_foo: Foo<T>) {}
+
+fn main() {
+  let bar: Foo<int> = Bar {}
+  let r = ref_of(bar)
+  foo(r)
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_ref_of_interface_alias_passed_as_interface() {
+    let input = r#"
+interface Foo {
+  fn get(self) -> int
+}
+
+struct Bar {}
+
+impl Bar {
+  fn get(self) -> int {
+    42
+  }
+}
+
+type P = Ref<Foo>
+
+fn ref_of<T>(x: T) -> Ref<T> {
+  &x
+}
+
+fn foo(_foo: Foo) {}
+
+fn main() {
+  let bar: Foo = Bar {}
+  let p: P = ref_of(bar)
+  foo(p)
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_ref_of_interface_nested_alias_passed_as_interface() {
+    let input = r#"
+interface Foo {
+  fn get(self) -> int
+}
+
+struct Bar {}
+
+impl Bar {
+  fn get(self) -> int {
+    42
+  }
+}
+
+type P = Ref<Foo>
+
+fn ref_of<T>(x: T) -> Ref<T> {
+  &x
+}
+
+fn foo(_foo: Foo) {}
+
+fn main() {
+  let bar: Foo = Bar {}
+  let p: P = ref_of(bar)
+  let pp: Ref<P> = ref_of(p)
+  foo(pp)
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
 fn infer_specialized_impl_interface_satisfaction_rejected() {
     let input = r#"
 interface Describable {

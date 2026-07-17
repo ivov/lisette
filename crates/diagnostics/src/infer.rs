@@ -3016,6 +3016,34 @@ pub fn ref_of_interface_type(inner_ty: &Type, span: Span) -> LisetteDiagnostic {
         ))
 }
 
+pub fn ref_of_interface_value(inner_ty: &Type, span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Invalid use of `&` with interface")
+        .with_infer_code("ref_of_interface")
+        .with_span_label(
+            &span,
+            format!("cannot take a reference to a `{inner_ty}` value"),
+        )
+        .with_help(
+            "Use the value directly, without `&`. Interfaces are already reference types in Go.",
+        )
+}
+
+pub fn ref_to_interface_does_not_implement(
+    interface_name: &str,
+    ref_ty: &Type,
+    span: Span,
+) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Invalid use of `Ref` with interface")
+        .with_infer_code("ref_of_interface")
+        .with_span_label(
+            &span,
+            format!("`{ref_ty}` does not implement `{interface_name}`"),
+        )
+        .with_help(
+            "A reference to an interface does not implement the interface. Dereference with `.*` until reaching the interface value.",
+        )
+}
+
 pub fn float_modulo_not_supported(span: Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Invalid operation")
         .with_infer_code("float_modulo")

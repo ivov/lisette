@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Invalid use of `&` with interface
+    ╭─[test.lis:22:7]
+ 21 │   let bar = Bar.new()
+ 22 │   foo(&bar)
+    ·       ──┬─
+    ·         ╰── cannot take a reference to a `Foo<int>` value
+ 23 │ }
+    ╰────
+  help: Use the value directly, without `&`. Interfaces are already reference types in Go · code: [infer.ref_of_interface]

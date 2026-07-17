@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Invalid use of `&` with interface
+    ╭─[test.lis:16:11]
+ 15 │   let s: Sink = File {}
+ 16 │   let r = &s
+    ·           ─┬
+    ·            ╰── cannot take a reference to a `Sink` value
+ 17 │ }
+    ╰────
+  help: Use the value directly, without `&`. Interfaces are already reference types in Go · code: [infer.ref_of_interface]
