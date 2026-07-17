@@ -358,3 +358,82 @@ fn empty_literal_in_tuple_destructuring_errors() {
     )
     .assert_infer_code("empty_slice_no_element_type");
 }
+
+#[test]
+fn impl_generic_constraint_satisfies_generic_return_type() {
+    infer(
+        r#"
+struct Foo<E: error> {}
+
+impl<E: error> Foo<E> {
+  fn new() -> Foo<E> {
+    Foo {}
+  }
+
+  fn bar(self) -> int {
+    42
+  }
+}
+
+fn main() {
+  let foo = Foo.new<error>()
+  let _ = foo.bar()
+}
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn function_generic_constraint_satisfies_generic_return_type() {
+    infer(
+        r#"
+struct Foo<E: error> {}
+
+struct Factory {}
+
+impl Factory {
+  fn new<E: error>() -> Foo<E> {
+    Foo {}
+  }
+}
+
+impl<E: error> Foo<E> {
+  fn bar(self) -> int {
+    42
+  }
+}
+
+fn main() {
+  let foo = Factory.new<error>()
+  let _ = foo.bar()
+}
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn unconstrained_generic_return_type_with_prelude_bound_errors() {
+    infer(
+        r#"
+struct Foo<E: error> {}
+
+impl<E: error> Foo<E> {
+  fn bar(self) -> int {
+    42
+  }
+}
+
+fn make<E>() -> Foo<E> {
+  Foo {}
+}
+
+fn main() {
+  let foo = make<error>()
+  let _ = foo.bar()
+}
+        "#,
+    )
+    .assert_infer_code("missing_constraint_on_return_type");
+}

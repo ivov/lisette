@@ -8,6 +8,7 @@ use rustc_hash::FxHashMap as HashMap;
 use syntax::ast::{Annotation, Expression, Generic, Span};
 use syntax::types::{Bound, Symbol, Type};
 
+use semantics::prelude::PRELUDE_MODULE_ID;
 use semantics::store::Store;
 
 pub(crate) fn run(typed_ast: &[Expression], module_id: &str, store: &Store, sink: &LocalSink) {
@@ -198,12 +199,14 @@ fn lookup_qualified_name(id: &str, module_id: &str, store: &Store) -> Option<Str
         return Some(id.to_string());
     }
 
-    let candidate = Symbol::from_parts(module_id, id);
-    if store
-        .get_module(module_id)
-        .is_some_and(|m| m.definitions.contains_key(candidate.as_str()))
-    {
-        return Some(candidate.to_string());
+    for module in [module_id, PRELUDE_MODULE_ID] {
+        let candidate = Symbol::from_parts(module, id);
+        if store
+            .get_module(module)
+            .is_some_and(|m| m.definitions.contains_key(candidate.as_str()))
+        {
+            return Some(candidate.to_string());
+        }
     }
     None
 }
