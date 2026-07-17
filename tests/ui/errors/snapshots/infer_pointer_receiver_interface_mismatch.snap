@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
     ·              ╰── `MyWorker` does not implement `Worker`
  19 │ }
     ╰────
-  help: `MyWorker.work` takes `self: Ref<MyWorker>`, so pass a `Ref<MyWorker>` · code: [infer.interface_not_implemented]
+  help: `MyWorker.work` mutates through `self: Ref<MyWorker>`, so `Worker` is satisfied by a `Ref<MyWorker>`, not a value. Take a reference with `&` (for example `&MyWorker { ... }`) · code: [infer.interface_not_implemented]

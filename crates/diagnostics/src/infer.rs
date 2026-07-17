@@ -2154,10 +2154,10 @@ pub fn pointer_receiver_interface_mismatch(
         .map(|m| format!("`{}.{}`", type_name, m))
         .collect::<Vec<_>>()
         .join(", ");
-    let takes = if methods.len() == 1 {
-        format!("{} takes `self: Ref<{}>`", methods_str, type_name)
+    let mutates = if methods.len() == 1 {
+        format!("{} mutates through `self: Ref<{}>`", methods_str, type_name)
     } else {
-        format!("{} take `self: Ref<{}>`", methods_str, type_name)
+        format!("{} mutate through `self: Ref<{}>`", methods_str, type_name)
     };
     LisetteDiagnostic::error("Interface not implemented")
         .with_infer_code("interface_not_implemented")
@@ -2165,7 +2165,10 @@ pub fn pointer_receiver_interface_mismatch(
             &span,
             format!("`{}` does not implement `{}`", type_name, interface_name),
         )
-        .with_help(format!("{}, so pass a `Ref<{}>`.", takes, type_name))
+        .with_help(format!(
+            "{}, so `{}` is satisfied by a `Ref<{}>`, not a value. Take a reference with `&` (for example `&{} {{ ... }}`).",
+            mutates, interface_name, type_name, type_name
+        ))
 }
 
 pub fn unknown_in_bound_position(span: Span) -> LisetteDiagnostic {
