@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1784321070381,
+  "lastUpdate": 1784323790837,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -4357,6 +4357,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "emit",
             "value": 29902,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 23019,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 16431,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 13174,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 10137,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 6220,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 4414,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2812,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1031,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 695,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 6046,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 890,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "b99edd6deb91b4fd603d0a29d785583ecba1463a",
+          "message": "fix: preserve mutations through `Ref` method receivers (#1032)",
+          "timestamp": "2026-07-17T23:29:29+02:00",
+          "tree_id": "a268896d642b697ea3055f56fde9f564725b5696",
+          "url": "https://github.com/ivov/lisette/commit/b99edd6deb91b4fd603d0a29d785583ecba1463a"
+        },
+        "date": 1784323789867,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 114794,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 29925,
             "unit": "lines"
           },
           {
