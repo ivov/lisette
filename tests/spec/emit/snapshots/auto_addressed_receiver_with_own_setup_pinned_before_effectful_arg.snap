@@ -1,0 +1,80 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  struct Cell { a: int, b: int }
+  
+  impl Cell {
+    fn add<T>(self: Ref<Cell>, delta: int) {
+      self.b += delta
+    }
+  }
+  
+  fn seed() -> Result<int, error> {
+    Ok(1)
+  }
+  
+  fn bump(i: Ref<int>) -> Result<int, error> {
+    i.* = 99
+    Ok(7)
+  }
+  
+  fn run() -> Result<(), error> {
+    let mut i = 0
+    Cell { a: seed()?, b: i }.add<int>(bump(&i)?)
+    Ok(())
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type Cell struct {
+	a int
+	b int
+}
+
+func Cell_add[T any](self *Cell, delta int) {
+	self.b += delta
+}
+
+func seed() (int, error) {
+	return 1, nil
+}
+
+func bump(i *int) (int, error) {
+	*i = 99
+	return 7, nil
+}
+
+func run() error {
+	i := 0
+	ret_1, ret_2 := seed()
+	var result_3 lisette.Result[int, error]
+	if ret_2 != nil {
+		result_3 = lisette.MakeResultErr[int, error](ret_2)
+	} else {
+		result_3 = lisette.MakeResultOk[int, error](ret_1)
+	}
+	check_4 := result_3
+	if check_4.Tag != lisette.ResultOk {
+		return check_4.ErrVal
+	}
+	ref_5 := &Cell{
+		a: check_4.OkVal,
+		b: i,
+	}
+	ret_6, ret_7 := bump(&i)
+	var result_8 lisette.Result[int, error]
+	if ret_7 != nil {
+		result_8 = lisette.MakeResultErr[int, error](ret_7)
+	} else {
+		result_8 = lisette.MakeResultOk[int, error](ret_6)
+	}
+	check_9 := result_8
+	if check_9.Tag != lisette.ResultOk {
+		return check_9.ErrVal
+	}
+	Cell_add[int](ref_5, check_9.OkVal)
+	return nil
+}

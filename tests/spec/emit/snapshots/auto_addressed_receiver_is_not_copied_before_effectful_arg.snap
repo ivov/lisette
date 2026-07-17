@@ -1,0 +1,45 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  struct Foo { count: int }
+  
+  impl Foo {
+    fn add<T>(self: Ref<Foo>, _val: Bar) {
+      self.count += 1
+    }
+  }
+  
+  struct Bar {}
+  
+  impl Bar {
+    fn new() -> Bar {
+      Bar {}
+    }
+  }
+  
+  fn run() {
+    let mut foo = Foo { count: 0 }
+    foo.add<int>(Bar.new())
+  }
+---
+package main
+
+type Foo struct {
+	count int
+}
+
+func Foo_add[T any](self *Foo, _ Bar) {
+	self.count++
+}
+
+type Bar struct{}
+
+func Bar_new() Bar {
+	return Bar{}
+}
+
+func run() {
+	foo := Foo{count: 0}
+	Foo_add[int](&foo, Bar_new())
+}

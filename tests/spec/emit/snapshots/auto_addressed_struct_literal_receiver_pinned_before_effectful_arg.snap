@@ -1,0 +1,42 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  struct Cell { v: int }
+  
+  impl Cell {
+    fn add<T>(self: Ref<Cell>, delta: int) {
+      self.v += delta
+    }
+  }
+  
+  fn bump(i: Ref<int>) -> int {
+    i.* = 1
+    7
+  }
+  
+  fn run() {
+    let mut i = 0
+    Cell { v: i }.add<int>(bump(&i))
+  }
+---
+package main
+
+type Cell struct {
+	v int
+}
+
+func Cell_add[T any](self *Cell, delta int) {
+	self.v += delta
+}
+
+func bump(i *int) int {
+	*i = 1
+	return 7
+}
+
+func run() {
+	i := 0
+	_arg_1 := &Cell{v: i}
+	Cell_add[int](_arg_1, bump(&i))
+}

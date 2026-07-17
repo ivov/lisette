@@ -109,10 +109,19 @@ impl Planner<'_> {
             unreachable!("UFCS receiver must be a constructor type");
         };
 
-        let (mut setup, receiver_arg, emitted_args, arguments_contain_deferred_evaluation) =
-            self.lower_ufcs_call_args(function, receiver, args, spread, &call_plan.resolved);
-        let receiver_arg =
-            self.apply_receiver_coercion(&mut setup, receiver, receiver_arg, *coercion);
+        let (setup, receiver_arg, emitted_args, arguments_contain_deferred_evaluation) = self
+            .lower_ufcs_call_args(
+                function,
+                receiver,
+                args,
+                spread,
+                &call_plan.resolved,
+                *coercion,
+            );
+        let receiver_arg = match coercion {
+            Some(ReceiverCoercion::AutoDeref) => format!("*{receiver_arg}"),
+            Some(ReceiverCoercion::AutoAddress) | None => receiver_arg,
+        };
 
         if let Some(inlined) =
             try_inline_native_ufcs(self, receiver, member, &receiver_arg, &emitted_args)
@@ -176,6 +185,7 @@ impl Planner<'_> {
         args: &[Expression],
         spread: Option<&Expression>,
         callee: &ResolvedCallee<'_>,
+        coercion: Option<ReceiverCoercion>,
     ) -> (Vec<LoweredStatement>, String, Vec<String>, bool) {
         // The DotAccess function type curries `self` out, so its params line
         // up 1:1 with the user args. Pair each so a function-typed param
@@ -183,7 +193,11 @@ impl Planner<'_> {
         // into prelude helpers like `lisette.OptionAndThen`.
         let mut all_stages: Vec<ValuePlan> =
             Vec::with_capacity(1 + args.len() + spread.is_some() as usize);
-        all_stages.push(self.stage_operand(receiver, ExpressionContext::value()));
+        let mut receiver_stage = self.stage_operand(receiver, ExpressionContext::value());
+        if coercion == Some(ReceiverCoercion::AutoAddress) {
+            receiver_stage = self.coerce_receiver_address_stage(receiver, receiver_stage);
+        }
+        all_stages.push(receiver_stage);
         for (i, arg) in args.iter().enumerate() {
             let param = callee.abi.param(i);
             let declared = (!callee.is_prelude_dispatch)
@@ -270,24 +284,28 @@ impl Planner<'_> {
         format!("{}{}", qualified_method_name, type_args_string)
     }
 
-    fn apply_receiver_coercion(
+    fn coerce_receiver_address_stage(
         &mut self,
-        setup: &mut Vec<LoweredStatement>,
         receiver: &Expression,
-        receiver_arg: String,
-        coercion: Option<ReceiverCoercion>,
-    ) -> String {
-        match coercion {
-            Some(ReceiverCoercion::AutoAddress) => {
-                if matches!(receiver.unwrap_parens(), Expression::Call { .. }) {
-                    let tmp = self.hoist_tmp_value_statement(setup, "ref", &receiver_arg);
-                    format!("&{}", tmp)
-                } else {
-                    format!("&{}", receiver_arg)
-                }
-            }
-            Some(ReceiverCoercion::AutoDeref) => format!("*{}", receiver_arg),
-            None => receiver_arg,
+        mut stage: ValuePlan,
+    ) -> ValuePlan {
+        let value = stage.expression.rendered();
+        if matches!(receiver.unwrap_parens(), Expression::Call { .. }) {
+            let tmp = self.hoist_tmp_value_statement(&mut stage.setup, "ref", &value);
+            stage.expression = GoExpression::opaque(format!("&{tmp}"));
+            return stage.into_addressed_location();
+        }
+        let addressed = format!("&{value}");
+        if matches!(receiver.unwrap_parens(), Expression::Identifier { .. }) {
+            stage.expression = GoExpression::opaque(addressed);
+            stage.into_addressed_location()
+        } else if stage.setup.is_empty() {
+            stage.expression = GoExpression::opaque(addressed);
+            stage.make_observable_computed();
+            stage
+        } else {
+            let tmp = self.hoist_tmp_value_statement(&mut stage.setup, "ref", &addressed);
+            ValuePlan::captured(stage.setup, tmp)
         }
     }
 

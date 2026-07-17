@@ -1942,6 +1942,111 @@ fn run() -> Result<int, error> {
 }
 
 #[test]
+fn auto_addressed_receiver_is_not_copied_before_effectful_arg() {
+    let input = r#"
+struct Foo { count: int }
+
+impl Foo {
+  fn add<T>(self: Ref<Foo>, _val: Bar) {
+    self.count += 1
+  }
+}
+
+struct Bar {}
+
+impl Bar {
+  fn new() -> Bar {
+    Bar {}
+  }
+}
+
+fn run() {
+  let mut foo = Foo { count: 0 }
+  foo.add<int>(Bar.new())
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn auto_addressed_index_receiver_pinned_before_effectful_arg() {
+    let input = r#"
+struct Cell { v: int }
+
+impl Cell {
+  fn add<T>(self: Ref<Cell>, delta: int) {
+    self.v += delta
+  }
+}
+
+fn bump(i: Ref<int>) -> int {
+  i.* = 1
+  7
+}
+
+fn run() {
+  let mut items = [Cell { v: 0 }, Cell { v: 0 }]
+  let mut i = 0
+  items[i].add<int>(bump(&i))
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn auto_addressed_struct_literal_receiver_pinned_before_effectful_arg() {
+    let input = r#"
+struct Cell { v: int }
+
+impl Cell {
+  fn add<T>(self: Ref<Cell>, delta: int) {
+    self.v += delta
+  }
+}
+
+fn bump(i: Ref<int>) -> int {
+  i.* = 1
+  7
+}
+
+fn run() {
+  let mut i = 0
+  Cell { v: i }.add<int>(bump(&i))
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn auto_addressed_receiver_with_own_setup_pinned_before_effectful_arg() {
+    let input = r#"
+struct Cell { a: int, b: int }
+
+impl Cell {
+  fn add<T>(self: Ref<Cell>, delta: int) {
+    self.b += delta
+  }
+}
+
+fn seed() -> Result<int, error> {
+  Ok(1)
+}
+
+fn bump(i: Ref<int>) -> Result<int, error> {
+  i.* = 99
+  Ok(7)
+}
+
+fn run() -> Result<(), error> {
+  let mut i = 0
+  Cell { a: seed()?, b: i }.add<int>(bump(&i)?)
+  Ok(())
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn discarded_tail_call_to_go_builtin_uses_underscore() {
     let input = r#"
 fn test() {

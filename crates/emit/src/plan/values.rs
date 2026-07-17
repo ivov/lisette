@@ -559,6 +559,12 @@ impl ValuePlan {
         self.make_observable();
     }
 
+    pub(crate) fn into_addressed_location(mut self) -> Self {
+        self.evaluation.form = OperandForm::Other;
+        self.evaluation.stability = Stability::StableAcrossCalls;
+        self
+    }
+
     pub(crate) fn replace_with_pinned_name(&mut self, name: String) {
         self.expression = GoExpression::name(name);
         self.evaluation.form = OperandForm::Name;
