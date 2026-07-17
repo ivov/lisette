@@ -4,7 +4,7 @@ source: tests/ui/lint/mod.rs
   ▲ Miscased name
    ╭─[test.lis:3:6]
  2 │ pub interface Repository {
- 3 │   fn List(self) -> int
+ 3 │   fn List() -> int
    ·      ──┬─
    ·        ╰── expected snake_case
  4 │ }

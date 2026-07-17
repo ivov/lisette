@@ -3236,7 +3236,7 @@ fn main() {
 fn private_field_not_capitalized_by_method_export() {
     let input = r#"
 pub interface IFoo {
-  fn foo(self) -> int
+  fn foo() -> int
 }
 
 struct S {

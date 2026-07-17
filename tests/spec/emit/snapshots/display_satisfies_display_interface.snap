@@ -3,7 +3,7 @@ source: tests/spec/emit/types.rs
 description: |
   
   interface Display {
-    fn to_string(self) -> string
+    fn to_string() -> string
   }
   
   #[display]

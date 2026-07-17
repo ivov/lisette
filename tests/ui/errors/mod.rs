@@ -624,7 +624,7 @@ fn parse_attribute_on_unsupported_declaration() {
     let input = r#"
 #[iterate]
 interface Service {
-  fn run(self) -> int
+  fn run() -> int
 }
 "#;
     assert_parse_error_snapshot!(input);
@@ -634,7 +634,7 @@ interface Service {
 fn parse_attribute_on_interface_parent() {
     let input = r#"
 interface Parent {
-  fn base(self) -> int
+  fn base() -> int
 }
 
 interface Child {
@@ -1858,7 +1858,7 @@ fn parse_misplaced_interface_in_function() {
     let input = r#"
 fn main() {
   interface Greeter {
-    fn greet(self) -> string
+    fn greet() -> string
   }
 }
 "#;
@@ -2616,7 +2616,7 @@ enum Foo<T: Undefined> {
 fn infer_type_not_found_interface_bound() {
     let input = r#"
 interface Foo<T: Undefined> {
-  fn get(self) -> T
+  fn get() -> T
 }
 "#;
     assert_infer_error_snapshot!(input);
@@ -3674,8 +3674,8 @@ fn test() {
 fn infer_pointer_receiver_interface_mismatch() {
     let input = r#"
 interface Worker {
-  fn name(self) -> string
-  fn work(self) -> int
+  fn name() -> string
+  fn work() -> int
 }
 
 struct MyWorker { label: string, count: int }
@@ -3749,7 +3749,7 @@ fn test() {
 #[test]
 fn infer_array_cast_to_interface() {
     let input = r#"
-interface Sized { fn length(self) -> int }
+interface Sized { fn length() -> int }
 
 fn f(a: Array<int, 3>) -> Sized {
   a as Sized
@@ -3761,7 +3761,7 @@ fn f(a: Array<int, 3>) -> Sized {
 #[test]
 fn infer_slice_cast_to_interface() {
     let input = r#"
-interface Sized { fn length(self) -> int }
+interface Sized { fn length() -> int }
 
 fn f(s: Slice<int>) -> Sized {
   s as Sized
@@ -3773,7 +3773,7 @@ fn f(s: Slice<int>) -> Sized {
 #[test]
 fn infer_slice_passed_as_interface() {
     let input = r#"
-interface Sized { fn length(self) -> int }
+interface Sized { fn length() -> int }
 
 fn takes(s: Sized) -> int {
   s.length()
@@ -3789,7 +3789,7 @@ fn main() {
 #[test]
 fn infer_map_coerced_to_interface_annotation() {
     let input = r#"
-interface Sized { fn length(self) -> int }
+interface Sized { fn length() -> int }
 
 fn main() {
   let m = Map.new<string, int>()
@@ -3805,7 +3805,7 @@ fn infer_comma_ok_abi_mismatch() {
     let typedef = r#"
 pub interface Lookup {
   #[go(comma_ok)]
-  fn Get(self) -> Option<int>
+  fn Get() -> Option<int>
 }
 
 pub struct Base {}
@@ -7320,6 +7320,16 @@ interface Mapper {
 }
 
 #[test]
+fn parse_self_after_other_parameter_rejected() {
+    let input = r#"
+interface I {
+  fn f(x: int, self) -> int
+}
+"#;
+    assert_parse_error_snapshot!(input);
+}
+
+#[test]
 fn parse_use_instead_of_import() {
     let input = r#"
 use fmt
@@ -7584,7 +7594,7 @@ fn test() {
 fn parse_rust_impl_trait_for_type() {
     let input = r#"
 interface Showable {
-  fn show(self) -> string
+  fn show() -> string
 }
 
 struct Item { name: string }
@@ -7927,7 +7937,7 @@ fn test() -> int {
 fn assert_type_interface_narrowing_not_redundant() {
     let input = r#"
 interface Animal {
-  fn sound(self) -> string
+  fn sound() -> string
 }
 
 struct Dog {}
@@ -8321,7 +8331,7 @@ fn test(a: Slice<Holder>, b: Slice<Holder>) -> bool {
 fn infer_equals_container_fails_interface_bound() {
     let input = r#"
 interface Equatable<T> {
-  fn equals(self, other: T) -> bool
+  fn equals(other: T) -> bool
 }
 
 fn same<T: Equatable<T>>(x: T, y: T) -> bool {
@@ -8495,7 +8505,7 @@ fn test() {
 fn infer_not_comparable_interface() {
     let input = r#"
 interface Shape {
-  fn area(self) -> float64
+  fn area() -> float64
 }
 
 fn test(a: Shape, b: Shape) {
@@ -8519,7 +8529,7 @@ fn test(a: Unknown, b: Unknown) {
 fn infer_not_comparable_struct_with_interface_field() {
     let input = r#"
 interface Shape {
-  fn area(self) -> float64
+  fn area() -> float64
 }
 
 struct Holder {
@@ -8537,7 +8547,7 @@ fn test(a: Holder, b: Holder) {
 fn infer_not_comparable_concrete_against_interface() {
     let input = r#"
 interface Shape {
-  fn area(self) -> float64
+  fn area() -> float64
 }
 
 struct Circle { r: int }
@@ -8557,7 +8567,7 @@ fn test(c: Circle, s: Shape) {
 fn infer_not_comparable_interface_through_alias() {
     let input = r#"
 interface Shape {
-  fn area(self) -> float64
+  fn area() -> float64
 }
 
 type ShapeAlias = Shape
@@ -8915,8 +8925,8 @@ fn infer_non_pub_interface_with_pub_implementations() {
 
     let source = r#"
 interface Shape {
-  fn area(self) -> float64
-  fn name(self) -> string
+  fn area() -> float64
+  fn name() -> string
 }
 
 struct Circle {
@@ -8946,7 +8956,7 @@ fn infer_non_pub_interface_with_private_implementations() {
 import "go:fmt"
 
 interface Greeter {
-  fn greet(self) -> string
+  fn greet() -> string
 }
 
 struct Hello { name: string }
@@ -9060,7 +9070,7 @@ fn main() {
 fn infer_missing_constraint_on_generic_return_type() {
     let input = r#"
 interface Displayable {
-  fn display(self) -> string
+  fn display() -> string
 }
 
 struct Wrapper<T: Displayable> {
@@ -9088,7 +9098,7 @@ fn main() {
 fn infer_missing_constraint_duplicate_bounds_deduped() {
     let input = r#"
 pub interface Summable {
-  fn value(self) -> int
+  fn value() -> int
 }
 
 struct Box<T: Summable> {
@@ -9166,7 +9176,7 @@ fn check(p: Pt) -> string {
 fn infer_ref_of_interface_type() {
     let input = r#"
 interface Writable {
-  fn write(self, data: string)
+  fn write(data: string)
 }
 
 fn copy_data(dest: Ref<Writable>) {
@@ -9180,7 +9190,7 @@ fn copy_data(dest: Ref<Writable>) {
 fn infer_ref_of_interface_value() {
     let input = r#"
 interface Foo<T> {
-  fn get(self) -> T
+  fn get() -> T
 }
 
 struct Bar {}
@@ -9209,7 +9219,7 @@ fn main() {
 fn infer_ref_of_interface_alias_value() {
     let input = r#"
 interface Writable {
-  fn write(self, data: string)
+  fn write(data: string)
 }
 
 type Sink = Writable
@@ -9232,7 +9242,7 @@ fn main() {
 fn infer_ref_to_interface_passed_as_interface() {
     let input = r#"
 interface Foo<T> {
-  fn get(self) -> T
+  fn get() -> T
 }
 
 struct Bar {}
@@ -9262,7 +9272,7 @@ fn main() {
 fn infer_ref_of_interface_alias_passed_as_interface() {
     let input = r#"
 interface Foo {
-  fn get(self) -> int
+  fn get() -> int
 }
 
 struct Bar {}
@@ -9294,7 +9304,7 @@ fn main() {
 fn infer_ref_of_interface_nested_alias_passed_as_interface() {
     let input = r#"
 interface Foo {
-  fn get(self) -> int
+  fn get() -> int
 }
 
 struct Bar {}
@@ -9327,7 +9337,7 @@ fn main() {
 fn infer_specialized_impl_interface_satisfaction_rejected() {
     let input = r#"
 interface Describable {
-  fn describe(self) -> string
+  fn describe() -> string
 }
 
 struct Pair<A, B> { first: A, second: B }
@@ -9376,7 +9386,17 @@ impl Wrapper<string> {
 fn infer_self_type_in_interface() {
     let input = r#"
 interface Comparable {
-  fn compare(self, other: Self) -> int
+  fn compare(other: Self) -> int
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_self_receiver_in_interface() {
+    let input = r#"
+interface Greeter {
+  fn greet(self) -> string
 }
 "#;
     assert_infer_error_snapshot!(input);
@@ -10786,7 +10806,7 @@ fn main() {
 #[test]
 fn infer_bare_interface_as_value() {
     let input = r#"
-interface Greeter { fn greet(self) -> string }
+interface Greeter { fn greet() -> string }
 
 fn main() {
   let x = Greeter
@@ -10853,7 +10873,7 @@ fn infer_cross_module_interface_as_value() {
         "svc",
         "lib.lis",
         r#"
-pub interface Greeter { fn greet(self) -> string }
+pub interface Greeter { fn greet() -> string }
 "#,
     );
     let source = r#"
@@ -11098,7 +11118,7 @@ struct Handler {
 fn equality_rejects_interface_field() {
     let input = r#"
 interface Drawable {
-  fn draw(self)
+  fn draw()
 }
 
 #[equality]
@@ -11663,7 +11683,7 @@ struct Holder { item: models.Item }
 #[test]
 fn impl_bound_must_be_declared_on_receiver_type() {
     let input = r#"
-interface Parent<T> { fn p(self) -> T }
+interface Parent<T> { fn p() -> T }
 
 struct Box<T> { value: T }
 
@@ -11693,11 +11713,11 @@ impl<T: Ordered> Box<T> {
 #[test]
 fn impl_conflicting_inherited_bound_rejected() {
     let input = r#"
-interface Parent<T> { fn p(self) -> T }
+interface Parent<T> { fn p() -> T }
 
 interface Child<T> {
   embed Parent<T>
-  fn c(self)
+  fn c()
 }
 
 struct Box<T: Child<string>> { value: T }
@@ -11714,7 +11734,7 @@ impl<T: Parent<int>> Box<T> {
 #[test]
 fn impl_conflicting_type_variable_bound_rejected() {
     let input = r#"
-interface Parent<T> { fn p(self) -> T }
+interface Parent<T> { fn p() -> T }
 
 struct Box<T: Parent<T>> { value: T }
 
@@ -11730,7 +11750,7 @@ impl<T: Parent<string>> Box<T> {
 #[test]
 fn impl_redundant_same_interface_instantiation_accepted() {
     let input = r#"
-interface Parent<T> { fn p(self) -> T }
+interface Parent<T> { fn p() -> T }
 
 struct Box<T: Parent<int>> { value: T }
 

@@ -3,7 +3,7 @@ source: tests/spec/emit/expressions.rs
 description: |
   
   pub interface IFoo {
-    fn foo(self) -> int
+    fn foo() -> int
   }
   
   struct S {

@@ -790,8 +790,8 @@
             <span>Interfaces &amp; generics</span>
           </div>
           <pre><span class="kw">interface</span> <span class="ty">Metric</span> <span class="pn">{</span>
-  <span class="kw">fn</span> <span class="fn">label</span><span class="pn">(</span><span class="pl">self</span><span class="pn">)</span> <span class="pn">-&gt;</span> <span class="ty">string</span>
-  <span class="kw">fn</span> <span class="fn">value</span><span class="pn">(</span><span class="pl">self</span><span class="pn">)</span> <span class="pn">-&gt;</span> <span class="ty">float64</span>
+  <span class="kw">fn</span> <span class="fn">label</span><span class="pn">()</span> <span class="pn">-&gt;</span> <span class="ty">string</span>
+  <span class="kw">fn</span> <span class="fn">value</span><span class="pn">()</span> <span class="pn">-&gt;</span> <span class="ty">float64</span>
 <span class="pn">}</span>
 
 <span class="kw">fn</span> <span class="fn">report</span><span class="pn">(</span><span class="pl">metrics</span><span class="pn">:</span> <span class="ty">Slice</span><span class="pn">&lt;</span><span class="ty">Metric</span><span class="pn">&gt;)</span> <span class="pn">{</span>

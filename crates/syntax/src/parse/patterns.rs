@@ -620,7 +620,7 @@ impl<'source> Parser<'source> {
         }
     }
 
-    pub(crate) fn parse_binding_with_type(&mut self, mode: ParamMode) -> Binding {
+    pub(crate) fn parse_binding_with_type(&mut self, mode: ParamMode, is_first: bool) -> Binding {
         if self.is_current_uppercase() && self.stream.peek_ahead(1).kind == Colon {
             let start = self.current_token();
             let name = start.text.to_string();
@@ -673,7 +673,8 @@ impl<'source> Parser<'source> {
 
         let pattern = self.parse_pattern();
 
-        if let Pattern::Identifier { identifier, .. } = &pattern
+        if is_first
+            && let Pattern::Identifier { identifier, .. } = &pattern
             && identifier == "self"
             && self.is_not(Colon)
         {

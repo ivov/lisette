@@ -1805,7 +1805,7 @@ fn generic_function_reference_assigned_to_concrete_fn_type() {
     infer(
         r#"
     interface HasName {
-      fn name(self) -> string
+      fn name() -> string
     }
 
     struct Person { full_name: string }

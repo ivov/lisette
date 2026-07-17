@@ -7900,7 +7900,7 @@ fn interface_used_in_embedding_not_unused() {
     assert_no_lint_warnings!(
         r#"
 interface HasName {
-  fn name(self) -> string
+  fn name() -> string
 }
 
 pub interface Person {
@@ -7915,12 +7915,12 @@ fn main() {
 }
 
 #[test]
-fn interface_self_param_no_unused_warning() {
+fn interface_method_parameter_no_unused_warning() {
     assert_no_lint_warnings!(
         r#"
 pub interface Greetable {
-  fn greet(self) -> string;
-  fn update(self, value: int);
+  fn greet() -> string;
+  fn update(value: int);
 }
 
 fn main() {
@@ -8389,7 +8389,7 @@ fn type_param_only_in_bound_warns() {
     assert_lint_snapshot!(
         r#"
 pub interface Cloner<T: Cloner<T>> {
-  fn clone(self) -> T
+  fn clone() -> T
 }
 
 pub fn squiggle<A: Cloner<B>, B>(_: A) {}
@@ -8402,7 +8402,7 @@ fn type_param_in_bound_and_used_as_parameter_no_warning() {
     assert_no_lint_warnings!(
         r#"
 pub interface Cloner<T: Cloner<T>> {
-  fn clone(self) -> T
+  fn clone() -> T
 }
 
 struct Foo{}
@@ -8425,7 +8425,7 @@ fn type_param_in_bound_and_used_as_return_type_no_warning() {
     assert_no_lint_warnings!(
         r#"
 pub interface Cloner<T: Cloner<T>> {
-  fn clone(self) -> T
+  fn clone() -> T
 }
 
 struct Foo{}
@@ -8450,7 +8450,7 @@ fn type_param_only_in_bound_underscore_prefix_suppressed() {
     assert_no_lint_warnings!(
         r#"
 pub interface Cloner<T: Cloner<T>> {
-  fn clone(self) -> T
+  fn clone() -> T
 }
 
 pub fn squiggle<A: Cloner<_B>, _B>(_: A) {}
@@ -8465,7 +8465,7 @@ fn interface_used_as_struct_type_parameter_constraint_no_warning() {
 import "go:fmt"
 
 interface Showable {
-  fn show(self) -> string
+  fn show() -> string
 }
 
 struct Wrapper<T: Showable> {
@@ -8622,7 +8622,7 @@ fn non_snake_case_interface_method() {
     assert_lint_snapshot!(
         r#"
 pub interface Doer {
-  fn doThing(self) -> int
+  fn doThing() -> int
 }
 "#
     );
@@ -10827,7 +10827,7 @@ fn interface_used_as_generic_bound_not_unused() {
     assert_no_lint_warnings!(
         r#"
 interface Describable {
-  fn describe(self) -> string
+  fn describe() -> string
 }
 
 struct Dog {
@@ -10856,7 +10856,7 @@ fn interface_method_via_structural_typing_no_warning() {
     assert_no_lint_warnings!(
         r#"
 pub interface Describable {
-  fn describe(self) -> string
+  fn describe() -> string
 }
 
 pub fn print_desc(d: Describable) -> string {
@@ -10886,7 +10886,7 @@ fn interface_method_unused_still_warns() {
     assert_lint_snapshot!(
         r#"
 pub interface Describable {
-  fn describe(self) -> string
+  fn describe() -> string
 }
 
 struct Dog {
@@ -10911,7 +10911,7 @@ fn interface_method_multiple_implementers_no_warning() {
     assert_no_lint_warnings!(
         r#"
 interface Animal {
-  fn speak(self) -> string
+  fn speak() -> string
 }
 
 fn make_sound(a: Animal) -> string {
@@ -11024,7 +11024,7 @@ fn pub_interface_method_pascal_case_warns() {
     assert_lint_snapshot!(
         r#"
 pub interface Repository {
-  fn List(self) -> int
+  fn List() -> int
 }
 "#
     );
@@ -11035,8 +11035,8 @@ fn builtin_interface_method_names_no_warning() {
     assert_no_lint_warnings!(
         r#"
 pub interface Printable {
-  fn String(self) -> string
-  fn Error(self) -> string
+  fn String() -> string
+  fn Error() -> string
 }
 "#
     );
@@ -11047,7 +11047,7 @@ fn pub_interface_non_builtin_pascal_method_warns() {
     assert_lint_snapshot!(
         r#"
 pub interface Device {
-  fn Read(self) -> int
+  fn Read() -> int
 }
 "#
     );
@@ -11170,7 +11170,7 @@ fn interface_used_as_struct_field_type_no_warning() {
     assert_no_lint_warnings!(
         r#"
 interface Greeter {
-  fn greet(self) -> string
+  fn greet() -> string
 }
 
 struct Person { name: string }
@@ -11195,7 +11195,7 @@ fn interface_used_as_enum_variant_field_type_no_warning() {
     assert_no_lint_warnings!(
         r#"
 interface Handler {
-  fn handle(self) -> string
+  fn handle() -> string
 }
 
 struct MyHandler {}
@@ -11224,7 +11224,7 @@ fn type_used_in_turbofish_no_warning() {
     assert_no_lint_warnings!(
         r#"
 interface Worker {
-  fn work(self) -> string;
+  fn work() -> string;
 }
 
 struct Greeter { name: string }
@@ -11789,7 +11789,7 @@ fn interface_method_allow_unused_value_suppresses_lint() {
         r#"
 pub interface Router {
   #[allow(unused_value)]
-  fn get(self, path: string) -> Router
+  fn get(path: string) -> Router
 }
 
 pub fn register(r: Router) {
@@ -11808,7 +11808,7 @@ fn interface_method_without_allow_warns_on_discard() {
     assert_lint_snapshot!(
         r#"
 pub interface Router {
-  fn get(self, path: string) -> Router
+  fn get(path: string) -> Router
 }
 
 pub fn register(r: Router) {
@@ -13489,7 +13489,7 @@ fn deprecated_interface_method() {
         r#"
 interface Store {
   /// Deprecated: use `fetch` instead.
-  fn old_get(self) -> int
+  fn old_get() -> int
 }
 
 struct Db {}
@@ -15488,7 +15488,7 @@ fn manual_find_interface_equality_predicate_no_warning() {
     assert_no_lint_warnings!(
         r#"
 interface Animal {
-  fn sound(self) -> string
+  fn sound() -> string
 }
 
 struct Dog {}
@@ -15692,7 +15692,7 @@ fn manual_contains_interface_equality_no_warning() {
     assert_no_lint_warnings!(
         r#"
 interface Animal {
-  fn sound(self) -> string
+  fn sound() -> string
 }
 
 struct Dog {}
@@ -16383,7 +16383,7 @@ fn generic_call_with_imported_interface_bound_does_not_suppress_local_function()
         "lib.lis",
         r#"
 pub interface Area {
-  fn area(self) -> int
+  fn area() -> int
 }
 "#,
     );
@@ -16429,7 +16429,7 @@ fn imported_bound_with_same_named_local_interface_does_not_suppress_local_functi
         "lib.lis",
         r#"
 pub interface Area {
-  fn area(self) -> int
+  fn area() -> int
 }
 "#,
     );
@@ -16437,7 +16437,7 @@ pub interface Area {
 import "shapes"
 
 interface LocalArea {
-  fn area(self) -> int
+  fn area() -> int
 }
 
 fn area() -> int {
@@ -17911,7 +17911,7 @@ fn map_identity_option_upcast_no_warning() {
     assert_no_lint_warnings!(
         r#"
 interface Printable {
-  fn print(self) -> string
+  fn print() -> string
 }
 
 struct Text {
@@ -17937,7 +17937,7 @@ fn map_identity_result_upcast_no_warning() {
     assert_no_lint_warnings!(
         r#"
 interface Printable {
-  fn print(self) -> string
+  fn print() -> string
 }
 
 struct Text {
@@ -18082,7 +18082,7 @@ fn map_or_into_option_upcast_no_map_or_none() {
     let mut fs = MockFileSystem::new();
     let source = r#"
 interface Printable {
-  fn print(self) -> string
+  fn print() -> string
 }
 
 struct Text {
@@ -18648,7 +18648,7 @@ fn equals_method_satisfying_interface_is_kept() {
     let mut fs = MockFileSystem::new();
     let source = r#"
 interface Eq<T> {
-  fn equals(self, other: T) -> bool
+  fn equals(other: T) -> bool
 }
 
 struct Point { x: int }
@@ -19018,7 +19018,7 @@ fn equality_method_satisfying_interface_is_kept() {
     let mut fs = MockFileSystem::new();
     let source = r#"
 interface Eq<T> {
-  fn equals(self, other: T) -> bool
+  fn equals(other: T) -> bool
 }
 
 struct Point { x: int }
@@ -19058,7 +19058,7 @@ fn equality_accepts_alpha_renamed_generic_bound() {
     let mut fs = MockFileSystem::new();
     let source = r#"
 interface Parent<T> {
-  fn p(self, value: T)
+  fn p(value: T)
 }
 
 #[equality]
@@ -20712,7 +20712,7 @@ fn interface_method_param_type_import_not_unused() {
 import "go:time"
 
 pub interface Repository {
-  fn find(self, deadline: time.Time) -> int
+  fn find(deadline: time.Time) -> int
 }
 
 fn main() {
@@ -20729,7 +20729,7 @@ fn interface_method_return_type_import_not_unused() {
 import "go:time"
 
 pub interface Repository {
-  fn save(self) -> Result<time.Time, error>
+  fn save() -> Result<time.Time, error>
 }
 
 fn main() {

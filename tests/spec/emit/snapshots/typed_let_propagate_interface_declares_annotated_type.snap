@@ -3,7 +3,7 @@ source: tests/spec/emit/types.rs
 description: |
   
   interface Printable {
-    fn text(self) -> string
+    fn text() -> string
   }
   
   struct A {}

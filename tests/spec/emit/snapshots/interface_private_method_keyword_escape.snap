@@ -5,7 +5,7 @@ description: |
   import "go:fmt"
   
   interface Worker {
-    fn range(self) -> int
+    fn range() -> int
   }
   
   struct S {

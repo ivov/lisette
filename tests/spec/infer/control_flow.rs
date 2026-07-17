@@ -2479,7 +2479,7 @@ fn if_branches_coerce_to_interface_return_type() {
     infer(
         r#"
     interface Printable {
-      fn to_string(self) -> string
+      fn to_string() -> string
     }
 
     struct Box { label: string }

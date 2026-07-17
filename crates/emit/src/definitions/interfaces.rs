@@ -1,6 +1,6 @@
 use crate::Planner;
 use crate::names::go_name;
-use syntax::ast::{Annotation, Expression, Generic, ParentInterface, Pattern};
+use syntax::ast::{Annotation, Expression, Generic, ParentInterface};
 use syntax::types::unqualified_name;
 
 impl Planner<'_> {
@@ -52,15 +52,7 @@ impl Planner<'_> {
             .get_function_params()
             .expect("interface method must have function type");
 
-        let has_self_receiver = func.params.first().is_some_and(|p| {
-            matches!(p.pattern, Pattern::Identifier { ref identifier, .. } if identifier == "self")
-                && p.annotation.is_none()
-        });
-        let args: Vec<String> = all_args
-            .iter()
-            .skip(if has_self_receiver { 1 } else { 0 })
-            .map(|a| self.go_type_string(a))
-            .collect();
+        let args: Vec<String> = all_args.iter().map(|a| self.go_type_string(a)).collect();
         let raw_return_ty = ty
             .get_function_ret()
             .expect("interface method must have return type")

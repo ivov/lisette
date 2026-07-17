@@ -3,7 +3,7 @@ source: tests/spec/emit/types.rs
 description: |
   
   interface Describable {
-    fn describe(self) -> string
+    fn describe() -> string
   }
 ---
 package main

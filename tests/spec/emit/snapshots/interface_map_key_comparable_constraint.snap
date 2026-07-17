@@ -3,7 +3,7 @@ source: tests/spec/emit/types.rs
 description: |
   
   interface Store<K: Comparable, V> {
-    fn entries(self) -> Map<K, V>
+    fn entries() -> Map<K, V>
   }
 ---
 package main

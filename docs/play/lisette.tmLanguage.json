@@ -23,6 +23,10 @@
           "match": "///.*$"
         },
         {
+          "name": "comment.line.documentation.lisette",
+          "match": "//!.*$"
+        },
+        {
           "name": "comment.line.double-slash.lisette",
           "match": "//.*$"
         }

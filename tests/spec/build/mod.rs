@@ -175,7 +175,7 @@ import "go:fmt"
 import "util"
 
 interface Display {
-  fn to_string(self) -> string
+  fn to_string() -> string
 }
 
 fn render(value: Display) -> string {
@@ -2041,7 +2041,7 @@ fn cross_module_interface_method_call() {
         "models.lis",
         r#"
 pub interface Showable {
-  fn show(self) -> string
+  fn show() -> string
 }
 
 pub struct Item {
@@ -2083,7 +2083,7 @@ fn same_module_pub_interface_method_call() {
 import "go:fmt"
 
 pub interface Shape {
-  fn area(self) -> int
+  fn area() -> int
 }
 
 fn total_area(s: Shape) -> int {
@@ -2234,7 +2234,7 @@ fn pub_interface_method_accessible_cross_module() {
         "lib.lis",
         r#"
 pub interface Greetable {
-  fn greet(self) -> string
+  fn greet() -> string
 }
 
 pub struct Person {
@@ -2368,7 +2368,7 @@ fn covariant_generics_assignment_rejected() {
         "main.lis",
         r#"
 interface Describable {
-  fn describe(self) -> string
+  fn describe() -> string
 }
 
 struct Dog { name: string }
@@ -2545,7 +2545,7 @@ fn cross_module_interface_impl_in_main() {
         "mod.lis",
         r#"
 pub interface Printable {
-  fn display(self) -> string
+  fn display() -> string
 }
 
 pub fn print_all<T: Printable>(items: Slice<T>) -> string {
@@ -2764,10 +2764,10 @@ fn multiple_bounded_impl_blocks_use_declared_constraints() {
 import "go:fmt"
 
 pub interface Printable {
-  fn print_val(self) -> string
+  fn print_val() -> string
 }
 pub interface Summable {
-  fn sum_val(self) -> int
+  fn sum_val() -> int
 }
 
 struct Container<T: Printable + Summable> {
@@ -2829,7 +2829,7 @@ fn bounded_and_unbounded_impl_blocks_share_declared_constraint() {
 import "go:fmt"
 
 pub interface Printable {
-  fn to_string(self) -> string
+  fn to_string() -> string
 }
 
 struct Box<T: Printable> {
@@ -2878,7 +2878,7 @@ fn cross_module_bounded_impl_tracks_imports() {
         "lib.lis",
         r#"
 pub interface Showable {
-  fn show(self) -> string
+  fn show() -> string
 }
 "#,
     );
@@ -2937,7 +2937,7 @@ fn nested_generics_with_bounded_impls() {
         "lib.lis",
         r#"
 pub interface Showable {
-  fn show(self) -> string
+  fn show() -> string
 }
 "#,
     );
@@ -3051,7 +3051,7 @@ fn interface_with_self_referential_method_covariant_rejected() {
     infer(
         r#"
 interface Fluent {
-  fn next(self) -> Fluent
+  fn next() -> Fluent
 }
 
 struct Counter { n: int }
@@ -3077,11 +3077,11 @@ fn generic_interface_embedding_type_substitution() {
 import "go:fmt"
 
 pub interface Mapper<T> {
-  fn map_val(self) -> T
+  fn map_val() -> T
 }
 
 pub interface Filter {
-  fn keep(self) -> bool
+  fn keep() -> bool
 }
 
 pub interface Processor<T> {
@@ -3175,7 +3175,7 @@ import "go:fmt"
 import "models"
 
 interface Describable {
-  fn describe(self) -> string
+  fn describe() -> string
 }
 
 fn print_it(item: Describable) {
@@ -3971,7 +3971,7 @@ fn impl_bounds_with_module_alias_import_path() {
         "ifaces.lis",
         r#"
 pub interface Printable {
-  fn print(self) -> string
+  fn print() -> string
 }
 "#,
     );
@@ -6691,8 +6691,8 @@ fn go_name_collision_interface_methods() {
         "main.lis",
         r#"
 pub interface Shape {
-  fn foo_bar(self) -> int
-  fn FooBar(self) -> int
+  fn foo_bar() -> int
+  fn FooBar() -> int
 }
 
 fn main() {
@@ -7257,7 +7257,7 @@ fn same_alias_in_impl_bounds_does_not_leak_imports() {
         "lib.lis",
         r#"
 pub interface Drawable {
-  fn draw(self) -> string
+  fn draw() -> string
 }
 "#,
     );
@@ -7267,7 +7267,7 @@ pub interface Drawable {
         "lib.lis",
         r#"
 pub interface Renderable {
-  fn render(self) -> string
+  fn render() -> string
 }
 "#,
     );
@@ -7573,7 +7573,7 @@ fn private_test_interface_does_not_flag_production_method() {
     fs.add_file(
         ENTRY_MODULE_ID,
         "shapes.test.lis",
-        "interface Shape {\n  fn area(self) -> float64\n}",
+        "interface Shape {\n  fn area() -> float64\n}",
     );
 
     let result = compile_check(fs);

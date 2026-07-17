@@ -4,7 +4,7 @@ An interface is a set of method signatures that a type can implement.
 
 ```rust
 interface Shape {
-  fn area(self) -> int
+  fn area() -> int
 }
 ```
 
@@ -35,11 +35,11 @@ An interface can embed other interfaces, inheriting their methods:
 
 ```
 interface Reader {
-  fn read(self, buf: Slice<byte>) -> Result<int, error>
+  fn read(buf: Slice<byte>) -> Result<int, error>
 }
 
 interface Writer {
-  fn write(self, buf: Slice<byte>) -> Result<int, error>
+  fn write(buf: Slice<byte>) -> Result<int, error>
 }
 
 interface ReadWriter {
@@ -56,7 +56,7 @@ Interfaces accept type parameters:
 
 ```rust
 interface Iterator<T> {
-  fn next(self) -> Option<T>
+  fn next() -> Option<T>
 }
 
 struct Range {
@@ -82,7 +82,7 @@ Generic type parameters are invariant with respect to interface satisfaction. A 
 
 ```rust
 interface Animal {
-  fn name(self) -> string
+  fn name() -> string
 }
 
 struct Box<T> {

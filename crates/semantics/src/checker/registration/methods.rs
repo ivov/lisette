@@ -378,6 +378,7 @@ impl TaskState<'_> {
             doc: Option<String>,
         }
         let mut method_defs: Vec<MethodDef> = Vec::new();
+        let mut self_receiver_spans: Vec<Span> = Vec::new();
         let methods = fn_expressions
             .iter()
             .map(|fe| {
@@ -402,14 +403,16 @@ impl TaskState<'_> {
                     _ => fn_ty,
                 };
 
-                // Strip bare `self` parameter from the interface method type.
-                // The satisfaction checker also strips the receiver from impl methods
-                // via `remove_first_param`, so both sides must omit the receiver.
-                let has_self_receiver = method_sig.params.first().is_some_and(|p| {
-                    matches!(p.pattern, Pattern::Identifier { ref identifier, .. } if identifier == "self")
-                        && p.annotation.is_none()
+                // Interface methods declare no receiver: it is always the implementing
+                // type. Reject an explicit `self` and strip it so the rest still checks.
+                let self_receiver_span = method_sig.params.first().and_then(|p| match &p.pattern {
+                    Pattern::Identifier { identifier, span } if identifier == "self" => Some(*span),
+                    _ => None,
                 });
-                let fn_ty = if has_self_receiver {
+                if let Some(self_span) = self_receiver_span {
+                    self_receiver_spans.push(self_span);
+                }
+                let fn_ty = if self_receiver_span.is_some() {
                     match fn_ty {
                         Type::Function(f) => f.without_receiver(),
                         other => other,
@@ -437,6 +440,11 @@ impl TaskState<'_> {
                 }
             })
             .collect();
+
+        for self_span in self_receiver_spans {
+            self.sink
+                .push(diagnostics::infer::self_in_interface_method(self_span));
+        }
 
         self.scopes.pop();
 

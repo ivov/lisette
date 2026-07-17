@@ -5,7 +5,7 @@ description: |
   type Table<T: Comparable> = Map<T, int>
   
   interface Uses<T: Comparable> {
-    fn id(self, table: Table<T>) -> Table<T>
+    fn id(table: Table<T>) -> Table<T>
   }
   
   fn main() {

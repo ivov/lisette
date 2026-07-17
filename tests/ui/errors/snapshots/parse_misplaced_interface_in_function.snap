@@ -7,6 +7,6 @@ source: tests/ui/errors/mod.rs
  3 │   interface Greeter {
    ·   ────┬────
    ·       ╰── misplaced
- 4 │     fn greet(self) -> string
+ 4 │     fn greet() -> string
    ╰────
   help: Move this interface definition to the top level of the file · code: [parse.syntax_error]

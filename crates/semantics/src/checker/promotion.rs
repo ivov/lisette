@@ -433,7 +433,6 @@ mod tests {
         )
     }
 
-    /// An interface method as stored after registration: receiver already stripped.
     fn interface_method() -> Type {
         Type::function(vec![], vec![], vec![], Box::new(Type::string()))
     }

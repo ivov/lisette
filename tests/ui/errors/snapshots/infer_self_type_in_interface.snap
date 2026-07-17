@@ -2,11 +2,11 @@
 source: tests/ui/errors/mod.rs
 ---
   ✕ Use of `Self` type
-   ╭─[test.lis:3:27]
+   ╭─[test.lis:3:21]
  2 │ interface Comparable {
- 3 │   fn compare(self, other: Self) -> int
-   ·                           ──┬─
-   ·                             ╰── invalid type
+ 3 │   fn compare(other: Self) -> int
+   ·                     ──┬─
+   ·                       ╰── invalid type
  4 │ }
    ╰────
-  help: Use a type parameter instead, e.g. `interface Comparable<T> { fn compare(self, other: T) -> int }` · code: [resolve.self_type_not_supported]
+  help: Use a type parameter instead, e.g. `interface Comparable<T> { fn compare(other: T) -> int }` · code: [resolve.self_type_not_supported]

@@ -331,7 +331,7 @@ export const LISETTE_SNIPPETS: SnippetDef[] = [
   },
   {
     label: "interface",
-    insertText: "interface ${1:Name} {\n\tfn ${2:method}(self) -> ${3:ReturnType}\n}",
+    insertText: "interface ${1:Name} {\n\tfn ${2:method}() -> ${3:ReturnType}\n}",
     documentation: "Interface definition",
   },
   {

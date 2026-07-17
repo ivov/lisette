@@ -3,7 +3,7 @@ source: tests/spec/emit/types.rs
 description: |
   
   interface Mutable {
-    fn mutate(self, val: string)
+    fn mutate(val: string)
   }
   
   struct Box {

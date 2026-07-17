@@ -3,7 +3,7 @@ source: tests/spec/emit/types.rs
 description: |
   
   interface A<K: Comparable> {
-    fn get(self, m: Map<K, int>) -> int
+    fn get(m: Map<K, int>) -> int
   }
   
   interface B<K: Comparable> {

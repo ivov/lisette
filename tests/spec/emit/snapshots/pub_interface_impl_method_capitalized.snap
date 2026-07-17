@@ -3,7 +3,7 @@ source: tests/spec/emit/types.rs
 description: |
   
   pub interface Printable {
-    fn display(self) -> string
+    fn display() -> string
   }
   
   struct Box {

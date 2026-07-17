@@ -7,6 +7,6 @@ source: tests/ui/errors/mod.rs
  2 │ interface Foo<T: Undefined> {
    ·                  ────┬────
    ·                      ╰── type not found in scope
- 3 │   fn get(self) -> T
+ 3 │   fn get() -> T
    ╰────
   help: Define or import this type · code: [resolve.type_not_found]

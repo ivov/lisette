@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Receiver on interface method
+   ╭─[test.lis:3:12]
+ 2 │ interface Greeter {
+ 3 │   fn greet(self) -> string
+   ·            ──┬─
+   ·              ╰── not allowed here
+ 4 │ }
+   ╰────
+  help: Remove `self` from the signature. Interface methods declare no receiver · code: [resolve.self_in_interface_method]

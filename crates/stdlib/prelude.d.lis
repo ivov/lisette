@@ -101,7 +101,7 @@ impl string {
 }
 
 // -----------------------
-//     Compound types
+//     Composite types
 // -----------------------
 
 /// A value that may or may not be present.

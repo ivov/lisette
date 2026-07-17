@@ -3,7 +3,7 @@ source: tests/spec/emit/types.rs
 description: |
   
   interface Greetable {
-    fn greet(self) -> string
+    fn greet() -> string
   }
   
   struct Person { name: string }

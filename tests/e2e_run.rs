@@ -217,13 +217,13 @@ fn imported_weaker_interface_bound_equals_accepted() {
     fs::write(
         project.join("src/iface/iface.lis"),
         r#"pub interface Parent {
-  fn p(self)
+  fn p()
 }
 
 pub interface Child {
   embed Parent
 
-  fn c(self)
+  fn c()
 }
 "#,
     )
@@ -548,7 +548,7 @@ fn run_equality_matching_parametrized_interface_bound_builds() {
         r#"import "go:fmt"
 
 interface Parent<T> {
-  fn p(self) -> T
+  fn p() -> T
 }
 
 struct Holder { tag: string }
@@ -616,7 +616,7 @@ fn run_equality_user_type_parametrized_bound_builds() {
 struct Key { v: int }
 
 interface Parent<T> {
-  fn p(self) -> T
+  fn p() -> T
 }
 
 struct Leaf { k: Key }

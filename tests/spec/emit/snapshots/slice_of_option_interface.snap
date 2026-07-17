@@ -3,7 +3,7 @@ source: tests/spec/emit/result_option_patterns.rs
 description: |
   
   interface Printable {
-    fn to_string(self) -> string
+    fn to_string() -> string
   }
   
   struct Text { content: string }

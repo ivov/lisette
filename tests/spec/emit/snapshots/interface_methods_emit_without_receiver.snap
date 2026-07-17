@@ -3,9 +3,9 @@ source: tests/spec/emit/types.rs
 description: |
   
   interface Greetable {
-    fn greet(self) -> string;
-    fn name(self) -> string;
-    fn reset(self);
+    fn greet() -> string;
+    fn name() -> string;
+    fn reset();
   }
 ---
 package main

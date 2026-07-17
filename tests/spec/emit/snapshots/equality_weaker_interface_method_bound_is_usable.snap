@@ -3,13 +3,13 @@ source: tests/spec/emit/types.rs
 description: |
   
   interface Parent {
-    fn p(self)
+    fn p()
   }
   
   interface Child {
     embed Parent
   
-    fn c(self)
+    fn c()
   }
   
   #[equality]

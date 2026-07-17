@@ -216,7 +216,7 @@ type ReadWriter interface {
 
 ```rust
 interface Reader {
-  fn Read(self, p: Slice<byte>) -> Result<int, error>
+  fn Read(p: Slice<byte>) -> Result<int, error>
 }
 
 interface ReadWriter {

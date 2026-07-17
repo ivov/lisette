@@ -2,7 +2,7 @@
 source: tests/_embed_harness/render_lis.rs
 ---
 pub interface N0 {
-  fn Speak(self) -> string
+  fn Speak() -> string
 }
 
 struct N1 {}

@@ -1007,7 +1007,7 @@ fn print_hello() -> Result<int, error> {
 fn option_with_interface_type_param() {
     let input = r#"
 interface Printable {
-  fn to_string(self) -> string
+  fn to_string() -> string
 }
 
 struct Text { content: string }
@@ -1027,7 +1027,7 @@ fn test() {
 fn slice_of_option_interface() {
     let input = r#"
 interface Printable {
-  fn to_string(self) -> string
+  fn to_string() -> string
 }
 
 struct Text { content: string }

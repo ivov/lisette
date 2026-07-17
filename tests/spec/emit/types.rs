@@ -464,7 +464,7 @@ fn embedded_interface_stringer_and_display_are_ambiguous_no_shadow() {
 struct D { pub x: int }
 
 interface I {
-  fn string(self) -> string
+  fn string() -> string
 }
 
 struct C {
@@ -483,12 +483,12 @@ fn embedded_interface_parent_stringer_and_display_are_ambiguous_no_shadow() {
 struct D { pub x: int }
 
 interface Base {
-  fn string(self) -> string
+  fn string() -> string
 }
 
 interface I {
   embed Base
-  fn area(self) -> int
+  fn area() -> int
 }
 
 struct C {
@@ -507,7 +507,7 @@ fn embedded_interface_without_stringer_leaves_display_shadow() {
 struct D { pub x: int }
 
 interface I {
-  fn area(self) -> int
+  fn area() -> int
 }
 
 struct C {
@@ -526,7 +526,7 @@ fn embedded_interface_non_stringer_string_method_is_ambiguous_no_shadow() {
 struct D { pub x: int }
 
 interface I {
-  fn string(self) -> int
+  fn string() -> int
 }
 
 struct C {
@@ -545,7 +545,7 @@ fn embedded_generic_interface_stringer_and_display_are_ambiguous_no_shadow() {
 struct D { pub x: int }
 
 interface Base<T> {
-  fn string(self) -> T
+  fn string() -> T
 }
 
 struct C {
@@ -564,12 +564,12 @@ fn embedded_generic_parent_interface_stringer_and_display_are_ambiguous_no_shado
 struct D { pub x: int }
 
 interface Base<T> {
-  fn string(self) -> T
+  fn string() -> T
 }
 
 interface I {
   embed Base<string>
-  fn area(self) -> int
+  fn area() -> int
 }
 
 struct C {
@@ -918,13 +918,13 @@ impl<T: Comparable> Box<T> {
 fn equality_weaker_interface_method_bound_is_usable() {
     let input = r#"
 interface Parent {
-  fn p(self)
+  fn p()
 }
 
 interface Child {
   embed Parent
 
-  fn c(self)
+  fn c()
 }
 
 #[equality]
@@ -1082,7 +1082,7 @@ struct Outer { items: Slice<Inner> }
 fn display_satisfies_display_interface() {
     let input = r#"
 interface Display {
-  fn to_string(self) -> string
+  fn to_string() -> string
 }
 
 #[display]
@@ -1181,7 +1181,7 @@ fn test() -> Option<int> {
 fn generic_enum_with_constrained_impl_make_functions() {
     let input = r#"
 interface Displayable {
-  fn display(self) -> string
+  fn display() -> string
 }
 
 enum Either<L: Displayable, R: Displayable> {
@@ -1612,7 +1612,7 @@ fn test() {
 fn interface_self_referential_fbound_erased() {
     let input = r#"
 pub interface Cloner<T: Cloner<T>> {
-  fn clone(self) -> T
+  fn clone() -> T
 }
 
 struct Foo{}
@@ -1631,12 +1631,12 @@ fn main() {
 }
 
 #[test]
-fn interface_self_param_stripped() {
+fn interface_methods_emit_without_receiver() {
     let input = r#"
 interface Greetable {
-  fn greet(self) -> string;
-  fn name(self) -> string;
-  fn reset(self);
+  fn greet() -> string;
+  fn name() -> string;
+  fn reset();
 }
 "#;
     assert_emit_snapshot!(input);
@@ -2978,7 +2978,7 @@ fn test() -> int {
 fn generic_interface_constraint_with_type_args() {
     let input = r#"
 interface Mapper<A, B> {
-  fn map_value(self, a: A) -> B
+  fn map_value(a: A) -> B
 }
 
 fn apply_mapper<M: Mapper<int, string>>(m: M, val: int) -> string {
@@ -2992,7 +2992,7 @@ fn apply_mapper<M: Mapper<int, string>>(m: M, val: int) -> string {
 fn ref_bounded_generic_absorbs_ref_into_type_param() {
     let input = r#"
 interface Mutable {
-  fn mutate(self, val: string)
+  fn mutate(val: string)
 }
 
 struct Box {
@@ -3021,7 +3021,7 @@ fn test() {
 fn ref_bounded_generic_explicit_deref() {
     let input = r#"
 interface Greetable {
-  fn greet(self) -> string
+  fn greet() -> string
 }
 
 struct Person { name: string }
@@ -3321,7 +3321,7 @@ fn test() -> int {
 fn pub_interface_methods_exported() {
     let input = r#"
 pub interface Describable {
-  fn describe(self) -> string
+  fn describe() -> string
 }
 "#;
     assert_emit_snapshot!(input);
@@ -3331,7 +3331,7 @@ pub interface Describable {
 fn private_interface_methods_unexported() {
     let input = r#"
 interface Describable {
-  fn describe(self) -> string
+  fn describe() -> string
 }
 "#;
     assert_emit_snapshot!(input);
@@ -3341,7 +3341,7 @@ interface Describable {
 fn pub_interface_impl_method_capitalized() {
     let input = r#"
 pub interface Printable {
-  fn display(self) -> string
+  fn display() -> string
 }
 
 struct Box {
@@ -3378,7 +3378,7 @@ fn test() {
 fn mutable_interface_var_uses_var_declaration() {
     let input = r#"
 pub interface Printable {
-  fn to_string(self) -> string
+  fn to_string() -> string
 }
 
 struct Box { label: string }
@@ -3397,7 +3397,7 @@ fn test() {
 fn typed_let_loop_interface_declares_annotated_type() {
     let input = r#"
 interface Printable {
-  fn text(self) -> string
+  fn text() -> string
 }
 
 struct A {}
@@ -3421,7 +3421,7 @@ fn test() {
 fn typed_let_propagate_interface_declares_annotated_type() {
     let input = r#"
 interface Printable {
-  fn text(self) -> string
+  fn text() -> string
 }
 
 struct A {}
@@ -3640,7 +3640,7 @@ fn test() -> bool {
 fn constrained_impl_block_emits_bound() {
     let input = r#"
 interface Displayable {
-  fn display(self) -> string
+  fn display() -> string
 }
 
 struct Labeled<T: Displayable> {
@@ -4097,7 +4097,7 @@ fn test() -> KeyVal<string, int> {
 fn interface_map_key_comparable_constraint() {
     let input = r#"
 interface Store<K: Comparable, V> {
-  fn entries(self) -> Map<K, V>
+  fn entries() -> Map<K, V>
 }
 "#;
     assert_emit_snapshot!(input);
@@ -4125,7 +4125,7 @@ fn interface_private_method_keyword_escape() {
 import "go:fmt"
 
 interface Worker {
-  fn range(self) -> int
+  fn range() -> int
 }
 
 struct S {
@@ -4213,7 +4213,7 @@ fn main() {
 fn embedded_interface_uses_declared_comparable_bound() {
     let input = r#"
 interface A<K: Comparable> {
-  fn get(self, m: Map<K, int>) -> int
+  fn get(m: Map<K, int>) -> int
 }
 
 interface B<K: Comparable> {
@@ -4229,7 +4229,7 @@ fn main() { let _ = 0 }
 fn embedded_interface_chain_uses_declared_comparable_bounds() {
     let input = r#"
 interface A<K: Comparable> {
-  fn get(self, m: Map<K, int>) -> int
+  fn get(m: Map<K, int>) -> int
 }
 
 interface B<K: Comparable> {
@@ -4830,7 +4830,7 @@ fn map_alias_with_comparable_bound_in_interface_method() {
 type Table<T: Comparable> = Map<T, int>
 
 interface Uses<T: Comparable> {
-  fn id(self, table: Table<T>) -> Table<T>
+  fn id(table: Table<T>) -> Table<T>
 }
 
 fn main() {
@@ -4891,7 +4891,7 @@ fn main() {
 fn explicit_named_and_comparable_bounds_on_function() {
     let input = r#"
 interface Named {
-  fn name(self) -> string
+  fn name() -> string
 }
 
 struct Person {
@@ -4921,7 +4921,7 @@ fn main() {
 fn explicit_named_and_comparable_bounds_on_struct() {
     let input = r#"
 interface Named {
-  fn name(self) -> string
+  fn name() -> string
 }
 
 struct Person {

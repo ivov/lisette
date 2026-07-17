@@ -101,7 +101,7 @@ impl Display for Point {
 
 ```rust
 interface Display {
-  fn to_string(self) -> string
+  fn to_string() -> string
 }
 
 impl Point {

@@ -200,10 +200,12 @@ fn render_node(scenario: &Scenario, node: &Node, out: &mut String) {
                     ));
                 }
                 for method in methods {
+                    let params = lis_parameters(scenario, &method.signature.parameters);
+                    let params = params.strip_prefix(", ").unwrap_or(&params);
                     out.push_str(&format!(
-                        "  fn {}(self{}) -> {}\n",
+                        "  fn {}({}) -> {}\n",
                         method.name,
-                        lis_parameters(scenario, &method.signature.parameters),
+                        params,
                         lis_type(scenario, &method.signature.return_type),
                     ));
                 }
@@ -450,8 +452,8 @@ mod tests {
 
     #[test]
     fn multi_member_interface_parses() {
-        let src = "interface N1 {\n  fn C(self) -> bool\n}\n\n\
-                   interface N0 {\n  embed N1\n  fn A(self) -> int\n  fn B(self) -> string\n}\n";
+        let src = "interface N1 {\n  fn C() -> bool\n}\n\n\
+                   interface N0 {\n  embed N1\n  fn A() -> int\n  fn B() -> string\n}\n";
         let result = syntax::build_ast(src, 0);
         assert!(
             !result.failed(),

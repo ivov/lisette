@@ -437,7 +437,7 @@ fn numeric_int_literal_adapts_through_multi_hop_alias_struct_literal() {
 fn interface_payload_adapts_through_aliased_struct_literal() {
     infer(
         r#"
-    interface Printable { fn print(self) -> string }
+    interface Printable { fn print() -> string }
     struct Text {}
     impl Text { fn print(self) -> string { "x" } }
     struct Box<T> { value: T }
@@ -454,7 +454,7 @@ fn interface_payload_adapts_through_aliased_struct_literal() {
 fn interface_payload_adapts_through_struct_literal() {
     infer(
         r#"
-    interface Printable { fn print(self) -> string }
+    interface Printable { fn print() -> string }
     struct Text {}
     impl Text { fn print(self) -> string { "x" } }
     struct Box<T> { value: T }
@@ -2535,7 +2535,7 @@ fn expected_type_propagation_option_with_interface() {
     infer(
         r#"
     interface Printable {
-      fn display(self) -> string
+      fn display() -> string
     }
 
     struct Text { content: string }
@@ -2557,7 +2557,7 @@ fn expected_type_propagation_result_with_interface() {
     infer(
         r#"
     interface Printable {
-      fn display(self) -> string
+      fn display() -> string
     }
 
     struct Text { content: string }
@@ -2579,7 +2579,7 @@ fn expected_type_propagation_does_not_make_variable_covariant() {
     infer(
         r#"
     interface Printable {
-      fn display(self) -> string
+      fn display() -> string
     }
 
     struct Text { content: string }
@@ -3140,7 +3140,7 @@ fn self_referential_fbound_accepts_matching_type() {
     infer(
         r#"
         pub interface Cloner<T: Cloner<T>> {
-          fn clone(self) -> T
+          fn clone() -> T
         }
 
         struct Foo{}
@@ -3164,7 +3164,7 @@ fn self_referential_fbound_rejects_mismatched_type() {
     infer(
         r#"
         pub interface Cloner<T: Cloner<T>> {
-          fn clone(self) -> T
+          fn clone() -> T
         }
 
         struct Foo{}

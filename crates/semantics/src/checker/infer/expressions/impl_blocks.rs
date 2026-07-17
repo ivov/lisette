@@ -110,7 +110,7 @@ impl InferCtx<'_, '_> {
 
         // Interface method parameters are declarations, not implementations — they
         // have no body and are always "unused". Remove their bindings so the unused
-        // parameter lint doesn't fire (e.g., `self` would otherwise trigger it).
+        // parameter lint doesn't fire.
         let checkpoint = self.facts.binding_checkpoint();
         let new_method_signatures = method_signatures
             .into_iter()

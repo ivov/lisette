@@ -6,7 +6,7 @@ description: |
   struct D { pub x: int }
   
   interface I {
-    fn area(self) -> int
+    fn area() -> int
   }
   
   struct C {

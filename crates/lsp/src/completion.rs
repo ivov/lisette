@@ -773,7 +773,7 @@ mod attribute_completion_tests {
 
     #[test]
     fn method_in_interface_offers_allow_only() {
-        let labels = labels_at("interface I {\n  #[|\n  fn run(self)\n}", false).unwrap();
+        let labels = labels_at("interface I {\n  #[|\n  fn run()\n}", false).unwrap();
         assert_eq!(labels, vec!["allow".to_string()]);
     }
 
@@ -812,7 +812,7 @@ mod attribute_completion_tests {
 
     #[test]
     fn interface_pub_fn_offers_nothing() {
-        let labels = labels_at("interface I {\n  #[|\n  pub fn run(self)\n}", false).unwrap();
+        let labels = labels_at("interface I {\n  #[|\n  pub fn run()\n}", false).unwrap();
         assert!(labels.is_empty());
     }
 

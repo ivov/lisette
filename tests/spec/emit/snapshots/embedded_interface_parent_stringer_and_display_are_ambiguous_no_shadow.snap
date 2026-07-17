@@ -6,12 +6,12 @@ description: |
   struct D { pub x: int }
   
   interface Base {
-    fn string(self) -> string
+    fn string() -> string
   }
   
   interface I {
     embed Base
-    fn area(self) -> int
+    fn area() -> int
   }
   
   struct C {

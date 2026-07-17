@@ -3,7 +3,7 @@ source: tests/spec/emit/types.rs
 description: |
   
   interface Named {
-    fn name(self) -> string
+    fn name() -> string
   }
   
   struct Person {

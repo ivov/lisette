@@ -4,7 +4,7 @@ source: tests/ui/lint/mod.rs
   ▲ Miscased name
    ╭─[test.lis:3:6]
  2 │ pub interface Doer {
- 3 │   fn doThing(self) -> int
+ 3 │   fn doThing() -> int
    ·      ───┬───
    ·         ╰── expected snake_case
  4 │ }

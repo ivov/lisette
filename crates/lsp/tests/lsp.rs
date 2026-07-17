@@ -474,7 +474,7 @@ async fn signature_help_interface_method_shows_param_names() {
     client.initialize().await;
     let source = "\
 interface Account {
-  fn withdraw(self, amount: int) -> int
+  fn withdraw(amount: int) -> int
 }
 fn process(a: Account) -> int {
   a.withdraw(50)
@@ -1275,7 +1275,7 @@ async fn completion_attribute_before_interface_is_empty() {
     let mut client = TestClient::new().await;
     client.initialize().await;
     client
-        .open(TEST_URI, "#[\ninterface Service {\n  fn run(self)\n}\n")
+        .open(TEST_URI, "#[\ninterface Service {\n  fn run()\n}\n")
         .await;
 
     // Attributes are rejected on interfaces, so offer nothing rather than a
@@ -3136,7 +3136,7 @@ async fn stress_interface_implementation_mismatch() {
         stress_test_input(
             "\
 interface Printable {
-  fn to_string(self) -> string
+  fn to_string() -> string
 }
 struct Foo { x: int }
 impl Foo {
@@ -3927,7 +3927,7 @@ async fn stress_all_expression_types() {
 struct Foo { x: int }
 enum Bar { A(int), B }
 interface Baz {
-  fn method(self) -> int
+  fn method() -> int
 }
 type Alias = int
 const CONST = 42
@@ -4120,7 +4120,7 @@ async fn stress_bounded_generic() {
         stress_test_input(
             "\
 interface Printable {
-  fn to_str(self) -> string
+  fn to_str() -> string
 }
 fn print<T: Printable>(x: T) -> string {
   x.to_str()
@@ -4136,7 +4136,7 @@ async fn stress_bounded_generic_mismatch() {
         stress_test_input(
             "\
 interface Printable {
-  fn to_str(self) -> string
+  fn to_str() -> string
 }
 fn print<T: Printable>(x: T) -> string {
   x.to_str()
@@ -4702,7 +4702,7 @@ async fn stress_interface_with_generic_constraint() {
         stress_test_all_positions(
             "\
 interface Printable {
-  fn to_str(self) -> string
+  fn to_str() -> string
 }
 fn print<T: Printable>(x: T) -> string { x.to_str() }
 fn main() { print(42) }"
@@ -5869,9 +5869,9 @@ async fn stress_interface_multiple_methods() {
         stress_test_all_positions(
             "\
 interface Shape {
-  fn area(self) -> float64
-  fn perimeter(self) -> float64
-  fn name(self) -> string
+  fn area() -> float64
+  fn perimeter() -> float64
+  fn name() -> string
 }
 struct Circle { radius: float64 }
 impl Circle {
@@ -6679,7 +6679,7 @@ async fn stress_all_handlers_at_position_zero() {
             "\
 struct Foo { x: int }
 enum Bar { A, B }
-interface Baz { fn do_thing(self) -> int }
+interface Baz { fn do_thing() -> int }
 fn main() { 1 }",
         )
         .await;
@@ -7500,7 +7500,7 @@ async fn stress_document_symbols_all_kinds() {
             "\
 struct MyStruct { x: int }
 enum MyEnum { A, B }
-interface MyInterface { fn method(self: Self) -> int }
+interface MyInterface { fn method() -> int }
 type MyAlias = int
 const MY_CONST: int = 42
 var my_var: int
@@ -7816,7 +7816,7 @@ async fn stress_interface_generic_impl_all_positions() {
         stress_test_all_positions(
             "\
 interface Printable {
-  fn to_string(self: Self) -> string
+  fn to_string() -> string
 }
 struct Name { value: string }
 impl Name {
@@ -9076,7 +9076,7 @@ async fn stress_bounded_generic_function_all_positions() {
         stress_test_all_positions(
             "\
 interface Summable {
-  fn sum(self: Self) -> int
+  fn sum() -> int
 }
 struct Pair { a: int, b: int }
 impl Pair {
@@ -12319,7 +12319,7 @@ async fn completion_includes_interface_methods() {
     let mut client = TestClient::new().await;
     client.initialize().await;
 
-    let source = "interface Example { fn example(self) -> string }\nfn test(ex: Example) { ex. }";
+    let source = "interface Example { fn example() -> string }\nfn test(ex: Example) { ex. }";
     client.open(TEST_URI, source).await;
 
     let response = client.completion(TEST_URI, 1, 26).await;
@@ -12339,10 +12339,10 @@ async fn completion_includes_inherited_interface_methods() {
     client.initialize().await;
 
     let source = "\
-interface Reader { fn read(self) -> string }
+interface Reader { fn read() -> string }
 interface ReadWriter {
 embed Reader
-fn write(self) -> string
+fn write() -> string
 }
 fn use_rw(rw: ReadWriter) { rw. }";
     client.open(TEST_URI, source).await;

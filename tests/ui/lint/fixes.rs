@@ -670,7 +670,7 @@ pub fn f(o: Option<int>) -> Flag {
 fn needless_match_interface_adaptation_no_warning() {
     assert_no_lint_warnings!(
         r#"
-pub interface Face { fn tag(self) -> int }
+pub interface Face { fn tag() -> int }
 pub struct Impl {}
 impl Impl { fn tag(self) -> int { 1 } }
 
@@ -909,7 +909,7 @@ pub fn f(xs: Slice<int>) -> Option<int> {
 fn manual_option_zip_result_adaptation_no_warning() {
     assert_no_lint_warnings!(
         r#"
-pub interface Face { fn tag(self) -> int }
+pub interface Face { fn tag() -> int }
 pub struct Impl {}
 impl Impl { fn tag(self) -> int { 1 } }
 

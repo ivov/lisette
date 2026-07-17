@@ -3,7 +3,7 @@ source: tests/spec/emit/types.rs
 description: |
   
   interface Mapper<A, B> {
-    fn map_value(self, a: A) -> B
+    fn map_value(a: A) -> B
   }
   
   fn apply_mapper<M: Mapper<int, string>>(m: M, val: int) -> string {

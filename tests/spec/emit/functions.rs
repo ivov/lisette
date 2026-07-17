@@ -1099,7 +1099,7 @@ fn test() -> Option<int> {
 fn option_interface_type_param_in_match() {
     let input = r#"
 pub interface Printable {
-  fn to_string(self) -> string
+  fn to_string() -> string
 }
 
 struct Box { label: string }

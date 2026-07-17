@@ -3,7 +3,7 @@ source: tests/spec/emit/types.rs
 description: |
   
   interface Displayable {
-    fn display(self) -> string
+    fn display() -> string
   }
   
   enum Either<L: Displayable, R: Displayable> {

@@ -1638,7 +1638,7 @@ fn generic_interface_with_type_parameter_satisfied() {
 fn generic_impl_satisfies_interface_for_matching_instantiation() {
     infer(
         r#"
-interface IntGetter { fn get(self) -> int }
+interface IntGetter { fn get() -> int }
 struct Box<T> { value: T }
 impl<T> Box<T> { fn get(self) -> T { self.value } }
 fn want(g: IntGetter) -> int { g.get() }
@@ -1655,7 +1655,7 @@ fn main() {
 fn generic_impl_mismatched_instantiation_rejected() {
     infer(
         r#"
-interface IntGetter { fn get(self) -> int }
+interface IntGetter { fn get() -> int }
 struct Box<T> { value: T }
 impl<T> Box<T> { fn get(self) -> T { self.value } }
 fn want(g: IntGetter) -> int { g.get() }
@@ -1687,7 +1687,7 @@ fn main() {
 fn failed_cast_to_interface_reports_single_error() {
     infer(
         r#"
-interface Sized { fn length(self) -> int }
+interface Sized { fn length() -> int }
 fn main() {
   let _ = [1, 2, 3] as Sized
 }
@@ -1701,7 +1701,7 @@ fn main() {
 fn generic_impl_mismatched_param_position_rejected() {
     infer(
         r#"
-interface IntSetter { fn set(self, v: int) }
+interface IntSetter { fn set(v: int) }
 struct Box<T> { value: T }
 impl<T> Box<T> { fn set(self, v: T) {} }
 fn want(s: IntSetter) { s.set(1) }
@@ -1718,7 +1718,7 @@ fn main() {
 fn constrained_generic_impl_receiver_mismatch_rejected() {
     infer(
         r#"
-interface Same { fn same(self) -> int }
+interface Same { fn same() -> int }
 struct Pair<A, B> { a: A, b: B }
 impl<A> Pair<A, A> { fn same(self) -> int { 1 } }
 fn want(s: Same) -> int { s.same() }
@@ -1735,7 +1735,7 @@ fn main() {
 fn partial_impl_receiver_cannot_satisfy_interface() {
     infer(
         r#"
-interface Same { fn same(self) -> int }
+interface Same { fn same() -> int }
 struct Pair<A, B> { a: A, b: B }
 impl<A> Pair<A, A> { fn same(self) -> int { 1 } }
 fn want(s: Same) -> int { s.same() }
@@ -1752,7 +1752,7 @@ fn main() {
 fn partial_impl_on_enum_cannot_satisfy_interface() {
     infer(
         r#"
-interface Same { fn same(self) -> int }
+interface Same { fn same() -> int }
 enum Pair<A, B> { Both(A, B) }
 impl<T> Pair<T, T> { fn same(self) -> int { 1 } }
 fn want(s: Same) -> int { s.same() }
@@ -1769,7 +1769,7 @@ fn main() {
 fn generic_method_on_nongeneric_receiver_cannot_satisfy_interface() {
     infer(
         r#"
-interface IntId { fn id(self, x: int) -> int }
+interface IntId { fn id(x: int) -> int }
 struct S {}
 impl S { fn id<T>(self, x: T) -> T { x } }
 fn want(i: IntId) -> int { i.id(1) }
@@ -1819,7 +1819,7 @@ fn main() {
 fn alias_partial_impl_cannot_satisfy_interface() {
     infer(
         r#"
-interface Same { fn same(self) -> int }
+interface Same { fn same() -> int }
 struct Pair<A, B> { a: A, b: B }
 impl<T> Pair<T, T> { fn same(self) -> int { 1 } }
 type IntPair = Pair<int, int>
@@ -1837,7 +1837,7 @@ fn main() {
 fn alias_specialized_impl_cannot_satisfy_interface() {
     infer(
         r#"
-interface OnlyInt { fn only_int(self) -> int }
+interface OnlyInt { fn only_int() -> int }
 struct Box<T> { value: T }
 impl Box<int> { fn only_int(self) -> int { self.value } }
 type IntBox = Box<int>
@@ -1855,7 +1855,7 @@ fn main() {
 fn generic_impl_satisfies_generic_interface_for_matching_instantiation() {
     infer(
         r#"
-interface Getter<U> { fn get(self) -> U }
+interface Getter<U> { fn get() -> U }
 struct Box<T> { value: T }
 impl<T> Box<T> { fn get(self) -> T { self.value } }
 fn want(g: Getter<string>) -> string { g.get() }
@@ -2313,7 +2313,7 @@ fn impl_bound_propagated_to_method_return_type() {
     infer(
         r#"
     interface Printable {
-      fn to_str(self) -> string
+      fn to_str() -> string
     }
 
     struct Box<T: Printable> { value: T }
@@ -3041,11 +3041,11 @@ fn pointer_to_struct_satisfies_interface() {
 }
 
 #[test]
-fn interface_method_with_bare_self_parameter() {
+fn interface_satisfied_by_receiver_method() {
     infer(
         r#"
     interface Greetable {
-      fn greet(self) -> string
+      fn greet() -> string
     }
 
     struct Person { name: string }
@@ -4895,7 +4895,7 @@ fn self_type_argument_to_generic_interface_allowed() {
     infer(
         r#"
     interface Producer<T> {
-      fn produce(self) -> T
+      fn produce() -> T
     }
 
     struct Bar {
@@ -5206,7 +5206,7 @@ fn interface_self_embedding_rejected() {
         r#"
     interface Z {
       embed Z
-      fn z_method(self) -> string
+      fn z_method() -> string
     }
 
     fn main() {}
@@ -5221,12 +5221,12 @@ fn interface_mutual_cycle_rejected() {
         r#"
     interface P {
       embed Q
-      fn p_method(self) -> string
+      fn p_method() -> string
     }
 
     interface Q {
       embed P
-      fn q_method(self) -> string
+      fn q_method() -> string
     }
 
     fn main() {}
@@ -5241,17 +5241,17 @@ fn interface_three_way_cycle_rejected() {
         r#"
     interface R {
       embed S
-      fn r_method(self) -> string
+      fn r_method() -> string
     }
 
     interface S {
       embed T
-      fn s_method(self) -> string
+      fn s_method() -> string
     }
 
     interface T {
       embed R
-      fn t_method(self) -> string
+      fn t_method() -> string
     }
 
     fn main() {}
@@ -5269,12 +5269,12 @@ fn interface_cycle_with_dot_access_does_not_crash() {
         r#"
 interface P {
   embed Q
-  fn foo(self) -> int
+  fn foo() -> int
 }
 
 interface Q {
   embed P
-  fn bar(self) -> int
+  fn bar() -> int
 }
 
 fn use_it(p: P) -> int { p.foo() }
@@ -5294,12 +5294,12 @@ fn interface_cycle_with_satisfaction_does_not_crash() {
         r#"
 interface P {
   embed Q
-  fn foo(self) -> int
+  fn foo() -> int
 }
 
 interface Q {
   embed P
-  fn bar(self) -> int
+  fn bar() -> int
 }
 
 struct S {}
@@ -5325,7 +5325,7 @@ fn interface_diamond_conflicting_type_args_rejected() {
         "main.lis",
         r#"
 interface Base<T> {
-  fn get(self) -> T
+  fn get() -> T
 }
 
 interface A {
@@ -5363,7 +5363,7 @@ fn pointer_receiver_through_same_named_parent_interface_rejected() {
         "lib.lis",
         r#"
 pub interface Worker {
-  fn work(self) -> int
+  fn work() -> int
 }
 "#,
     );
@@ -5375,7 +5375,7 @@ import "shapes"
 
 interface Worker {
   embed shapes.Worker
-  fn name(self) -> string
+  fn name() -> string
 }
 
 struct MyWorker {}
@@ -5398,11 +5398,11 @@ fn interface_method_conflict_rejected() {
     infer(
         r#"
     interface HasName {
-      fn name(self) -> string
+      fn name() -> string
     }
 
     interface HasNameInt {
-      fn name(self) -> int
+      fn name() -> int
     }
 
     interface Both {
@@ -5421,11 +5421,11 @@ fn interface_embedding_no_conflict() {
     infer(
         r#"
     interface HasName {
-      fn name(self) -> string
+      fn name() -> string
     }
 
     interface HasAge {
-      fn age(self) -> int
+      fn age() -> int
     }
 
     interface Person {
@@ -5510,7 +5510,7 @@ fn impl_block_generic_bound_struct_field_method() {
     infer(
         r#"
     interface Displayable {
-      fn display(self) -> string
+      fn display() -> string
     }
 
     struct Wrapper<T: Displayable> {
@@ -5534,7 +5534,7 @@ fn impl_block_generic_bound_enum_pattern_match() {
     infer(
         r#"
     interface Displayable {
-      fn display(self) -> string
+      fn display() -> string
     }
 
     enum Boxed<T: Displayable> {
@@ -5562,7 +5562,7 @@ fn impl_block_generic_bound_with_ref() {
     infer(
         r#"
     interface Describable {
-      fn describe(self) -> string
+      fn describe() -> string
     }
 
     struct Container<T: Describable> {
@@ -5699,7 +5699,7 @@ fn none_for_lisette_interface_still_rejected() {
 fn interface_covariant_return_rejected() {
     infer(
         r#"
-interface Maker { fn make(self) -> Maker }
+interface Maker { fn make() -> Maker }
 struct Widget {}
 impl Widget { fn make(self) -> Widget { Widget {} } }
 fn test() { let _m: Maker = Widget {} }
@@ -5713,8 +5713,8 @@ fn interface_generic_covariant_return_rejected() {
     infer(
         r#"
 interface Container<T> {
-  fn with(self, val: T) -> Container<T>
-  fn get(self) -> T
+  fn with(val: T) -> Container<T>
+  fn get() -> T
 }
 struct Box<T> { value: T }
 impl<T> Box<T> {
@@ -5731,10 +5731,10 @@ fn test() { let _c: Container<int> = Box { value: 0 } }
 fn interface_cross_interface_return_rejected() {
     infer(
         r#"
-interface Readable { fn read_val(self) -> string }
+interface Readable { fn read_val() -> string }
 interface Source {
-  fn name(self) -> string
-  fn reader(self) -> Readable
+  fn name() -> string
+  fn reader() -> Readable
 }
 struct TextReader { content: string }
 impl TextReader { fn read_val(self) -> string { self.content } }
@@ -5754,8 +5754,8 @@ fn interface_contravariant_param_rejected() {
     infer(
         r#"
 interface Processable {
-  fn value(self) -> int
-  fn apply(self, f: fn(Processable) -> int) -> int
+  fn value() -> int
+  fn apply(f: fn(Processable) -> int) -> int
 }
 struct Data { n: int }
 impl Data {
@@ -5773,8 +5773,8 @@ fn interface_pointer_receiver_rejected() {
     infer(
         r#"
 interface Worker {
-  fn name(self) -> string
-  fn work(self) -> int
+  fn name() -> string
+  fn work() -> int
 }
 struct MyWorker { label: string, count: int }
 impl MyWorker {
@@ -5791,7 +5791,7 @@ fn test() { let _w: Worker = MyWorker { label: "t", count: 0 } }
 fn pointer_receiver_through_value_bound_rejected() {
     infer(
         r#"
-interface Bumper { fn bump(self) }
+interface Bumper { fn bump() }
 struct Counter { n: int }
 impl Counter { fn bump(self: Ref<Counter>) { self.n += 1 } }
 fn use_bound<T: Bumper>(x: T) { x.bump() }
@@ -5805,7 +5805,7 @@ fn main() { let c = Counter { n: 0 }; use_bound(c) }
 fn pointer_receiver_through_ref_bound_accepted() {
     infer(
         r#"
-interface Bumper { fn bump(self) }
+interface Bumper { fn bump() }
 struct Counter { n: int }
 impl Counter { fn bump(self: Ref<Counter>) { self.n += 1 } }
 fn use_bound<T: Bumper>(x: Ref<T>) { x.bump() }
@@ -5819,7 +5819,7 @@ fn main() { let mut c = Counter { n: 0 }; use_bound(&c) }
 fn pointer_receiver_through_value_bound_function_value_rejected() {
     infer(
         r#"
-interface Bumper { fn bump(self) }
+interface Bumper { fn bump() }
 struct Counter { n: int }
 impl Counter { fn bump(self: Ref<Counter>) { self.n += 1 } }
 fn use_bound<T: Bumper>(x: T) { x.bump() }
@@ -5834,7 +5834,7 @@ fn main() { apply(use_bound) }
 fn pointer_receiver_through_ref_bound_function_value_accepted() {
     infer(
         r#"
-interface Bumper { fn bump(self) }
+interface Bumper { fn bump() }
 struct Counter { n: int }
 impl Counter { fn bump(self: Ref<Counter>) { self.n += 1 } }
 fn use_bound<T: Bumper>(x: Ref<T>) { x.bump() }
@@ -5849,7 +5849,7 @@ fn main() { apply(use_bound) }
 fn pointer_receiver_through_mixed_value_and_ref_bound_rejected() {
     infer(
         r#"
-interface Bumper { fn bump(self) }
+interface Bumper { fn bump() }
 struct Counter { n: int }
 impl Counter { fn bump(self: Ref<Counter>) { self.n += 1 } }
 fn use_bound<T: Bumper>(x: T, y: Ref<T>) { x.bump(); y.bump() }
@@ -5867,7 +5867,7 @@ fn main() {
 fn pointer_receiver_through_repeated_ref_bound_accepted() {
     infer(
         r#"
-interface Bumper { fn bump(self) }
+interface Bumper { fn bump() }
 struct Counter { n: int }
 impl Counter { fn bump(self: Ref<Counter>) { self.n += 1 } }
 fn use_bound<T: Bumper>(x: Ref<T>, y: Ref<T>) { x.bump(); y.bump() }
@@ -7016,7 +7016,7 @@ fn main() {}
 fn embed_pointer_to_interface_rejected() {
     infer(
         r#"
-interface Greeter { fn hello(self) -> string }
+interface Greeter { fn hello() -> string }
 struct S { embed Ref<Greeter> }
 fn main() {}
 "#,
@@ -7310,7 +7310,7 @@ fn main() {}
 fn embedded_specialized_impl_method_cannot_satisfy_interface() {
     infer(
         r#"
-interface OnlyInt { fn only_int(self) -> int }
+interface OnlyInt { fn only_int() -> int }
 pub struct Box<T> { pub value: T }
 impl Box<int> { pub fn only_int(self) -> int { self.value } }
 struct Outer { embed Box<int> }
@@ -7661,7 +7661,7 @@ fn main() {}
 fn embed_imported_interface_promotes() {
     let typedef = r#"
 pub interface Reader {
-  fn Read(self) -> int
+  fn Read() -> int
 }
 "#;
     let input = r#"
@@ -7796,7 +7796,7 @@ fn satisfy_comma_ok_interface_via_promoted_method_rejected() {
     let typedef = r#"
 pub interface Lookup {
   #[go(comma_ok)]
-  fn Get(self) -> Option<int>
+  fn Get() -> Option<int>
 }
 
 pub struct Base {
@@ -7821,7 +7821,7 @@ fn satisfy_comma_ok_interface_via_declared_method_ok() {
     let typedef = r#"
 pub interface Lookup {
   #[go(comma_ok)]
-  fn Get(self) -> Option<int>
+  fn Get() -> Option<int>
 }
 "#;
     let input = r#"
@@ -7839,7 +7839,7 @@ fn satisfy_comma_ok_interface_via_promoted_comma_ok_method_ok() {
     let typedef = r#"
 pub interface Lookup {
   #[go(comma_ok)]
-  fn Get(self) -> Option<int>
+  fn Get() -> Option<int>
 }
 
 pub struct Base {}
@@ -7862,7 +7862,7 @@ fn satisfy_comma_ok_interface_via_imported_declared_method_rejected() {
     let typedef = r#"
 pub interface Lookup {
   #[go(comma_ok)]
-  fn Get(self) -> Option<int>
+  fn Get() -> Option<int>
 }
 
 pub struct Base {}
@@ -7883,7 +7883,7 @@ fn main() {}
 fn satisfy_comma_ok_interface_inverse_plain_target_rejected() {
     let typedef = r#"
 pub interface Lookup {
-  fn Get(self) -> Option<int>
+  fn Get() -> Option<int>
 }
 
 pub struct Base {}
@@ -7906,14 +7906,14 @@ fn satisfy_comma_ok_interface_via_promoted_inherited_method_ok() {
     let typedef = r#"
 pub interface Parent {
   #[go(comma_ok)]
-  fn Get(self) -> Option<int>
+  fn Get() -> Option<int>
 }
 
 pub interface Child { embed Parent }
 
 pub interface Target {
   #[go(comma_ok)]
-  fn Get(self) -> Option<int>
+  fn Get() -> Option<int>
 }
 "#;
     let input = r#"
@@ -8071,7 +8071,7 @@ fn main() {}
 fn embed_defined_type_over_interface_rejected() {
     infer(
         r#"
-interface I { fn m(self) -> int }
+interface I { fn m() -> int }
 struct P(I)
 struct S { embed P }
 fn main() {}
@@ -8240,7 +8240,7 @@ fn main() {
 fn interface_embed_keyword_alias_satisfies() {
     infer(
         r#"
-pub interface Reader { fn read(self) -> int }
+pub interface Reader { fn read() -> int }
 pub interface ReadWriter { embed Reader }
 struct File { name: string }
 impl File { pub fn read(self) -> int { 0 } }
@@ -8450,7 +8450,7 @@ fn main() {}
 fn value_embed_satisfies_interface_via_promotion() {
     infer(
         r#"
-pub interface Speaker { fn speak(self) -> string }
+pub interface Speaker { fn speak() -> string }
 struct Base {}
 impl Base { pub fn speak(self) -> string { "hi" } }
 struct Outer { embed Base }
@@ -8467,7 +8467,7 @@ fn main() {
 fn pointer_embed_promotes_pointer_receiver_method_as_value_callable() {
     infer(
         r#"
-pub interface Bumper { fn bump(self) -> int }
+pub interface Bumper { fn bump() -> int }
 struct Counter { pub n: int }
 impl Counter { pub fn bump(self: Ref<Counter>) -> int { self.n } }
 struct Holder { embed Ref<Counter> }
@@ -8499,10 +8499,10 @@ fn main() {}
 fn interface_local_method_conflicts_with_parent() {
     infer(
         r#"
-interface P { fn m(self) -> string }
+interface P { fn m() -> string }
 interface Q {
   embed P
-  fn m(self) -> int
+  fn m() -> int
 }
 fn main() {}
 "#,
@@ -8565,7 +8565,7 @@ fn main() {
 fn interface_diamond_matching_type_args_is_fine() {
     infer(
         r#"
-interface Base<T> { fn get(self) -> T }
+interface Base<T> { fn get() -> T }
 interface Left { embed Base<int> }
 interface Right { embed Base<int> }
 interface Q {
@@ -8627,7 +8627,7 @@ fn value_embed_of_pointer_receiver_method_does_not_satisfy_by_value() {
     // in the interface's value method set; only `Ref<Holder>` satisfies.
     infer(
         r#"
-pub interface Bumper { fn bump(self) -> int }
+pub interface Bumper { fn bump() -> int }
 struct Counter { pub n: int }
 impl Counter { pub fn bump(self: Ref<Counter>) -> int { self.n } }
 struct Holder { embed Counter }
@@ -8895,8 +8895,8 @@ fn ref_alias_satisfies_interface_with_pointer_receiver() {
     infer(
         r#"
     interface Worker {
-      fn name(self) -> string
-      fn work(self) -> int
+      fn name() -> string
+      fn work() -> int
     }
 
     struct MyWorker { label: string, count: int }

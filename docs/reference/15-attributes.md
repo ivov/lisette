@@ -210,7 +210,7 @@ fmt.Println(p) // `{1 2}` if Point is not `#[display]`
 
 ```rs
 interface Display {
-  fn to_string(self) -> string
+  fn to_string() -> string
 }
 
 fn render(value: Display) -> string {

@@ -424,7 +424,7 @@ pub enum Type {
     /// Unifies with everything silently, preventing cascading diagnostics.
     Error,
 
-    /// Sentinel occupying the `self` slot of an interface method type.
+    /// Sentinel occupying the receiver slot of an interface method type.
     /// Unifies silently so an implementing type's receiver does not conflict
     /// with the abstract method shape. Previously encoded as
     /// `Constructor { id: "**nominal.__receiver__" }`.

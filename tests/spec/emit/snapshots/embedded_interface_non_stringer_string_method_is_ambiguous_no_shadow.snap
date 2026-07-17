@@ -6,7 +6,7 @@ description: |
   struct D { pub x: int }
   
   interface I {
-    fn string(self) -> int
+    fn string() -> int
   }
   
   struct C {

@@ -4,7 +4,7 @@ source: tests/ui/lint/mod.rs
   ▲ Miscased name
    ╭─[test.lis:3:6]
  2 │ pub interface Device {
- 3 │   fn Read(self) -> int
+ 3 │   fn Read() -> int
    ·      ──┬─
    ·        ╰── expected snake_case
  4 │ }

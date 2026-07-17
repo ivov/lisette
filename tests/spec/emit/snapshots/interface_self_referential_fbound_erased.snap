@@ -3,7 +3,7 @@ source: tests/spec/emit/types.rs
 description: |
   
   pub interface Cloner<T: Cloner<T>> {
-    fn clone(self) -> T
+    fn clone() -> T
   }
   
   struct Foo{}
