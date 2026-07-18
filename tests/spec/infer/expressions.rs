@@ -2466,3 +2466,102 @@ fn complex_division_by_zero_rejected() {
     )
     .assert_infer_code("division_by_zero");
 }
+
+fn assert_not_sibling_flagged(source: &str) {
+    let mut fs = MockFileSystem::new();
+    fs.add_file("main", "main.lis", source);
+    let result = infer_module("main", fs);
+    assert!(
+        !result
+            .errors
+            .iter()
+            .any(|e| e.code_str() == Some("infer.reference_aliases_sibling")),
+        "must not flag reference_aliases_sibling, got:\n{:?}",
+        result.errors
+    );
+}
+
+#[test]
+fn sibling_ref_read_before_ampersand_is_ok() {
+    assert_not_sibling_flagged(
+        r#"
+        struct Options { port: string }
+        fn configure(o: Ref<Options>) -> bool {
+          o.port = "8080"
+          true
+        }
+        fn main() {
+          let mut options = Options{ port: "" }
+          if options.port.is_empty() && !configure(&options) { () }
+        }
+        "#,
+    );
+}
+
+#[test]
+fn sibling_ref_bare_ampersand_before_read_is_ok() {
+    assert_not_sibling_flagged(
+        r#"
+        fn g(p: Ref<int>, v: int) -> int { v }
+        fn main() {
+          let mut a = 1
+          let _ = g(&a, a)
+        }
+        "#,
+    );
+}
+
+#[test]
+fn sibling_ref_read_inside_closure_is_ok() {
+    assert_not_sibling_flagged(
+        r#"
+        fn h(p: Ref<int>, f: fn() -> int) -> int { f() }
+        fn main() {
+          let mut a = 1
+          let _ = h(&a, || a)
+        }
+        "#,
+    );
+}
+
+#[test]
+fn sibling_ref_ampersand_before_read_in_tuple_is_flagged() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "main",
+        "main.lis",
+        r#"
+        fn inc(n: Ref<int>) -> int {
+          n.* = n.* + 1
+          n.*
+        }
+        fn main() {
+          let mut n = 1
+          let pair = (inc(&n), n)
+          let _ = pair
+        }
+        "#,
+    );
+    infer_module("main", fs).assert_infer_code("reference_aliases_sibling");
+}
+
+#[test]
+fn sibling_ref_ampersand_before_read_in_short_circuit_is_flagged() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "main",
+        "main.lis",
+        r#"
+        struct Options { port: string }
+        fn configure(o: Ref<Options>) -> bool {
+          o.port = "8080"
+          true
+        }
+        fn main() {
+          let mut options = Options{ port: "" }
+          if configure(&options) && options.port.is_empty() { () }
+        }
+        "#,
+    );
+    infer_module("main", fs).assert_infer_code("reference_aliases_sibling");
+}

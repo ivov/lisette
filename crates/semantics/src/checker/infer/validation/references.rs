@@ -116,12 +116,12 @@ impl InferCtx<'_, '_> {
         self.check_sibling_ref_aliasing_refs(&refs);
     }
 
-    /// Given a list of sibling expressions, check that no `&v` in one sibling
-    /// conflicts with a bare read of `v` in another sibling.
+    /// In evaluation order, flag a read of `v` when an *earlier* sibling takes
+    /// `&v`, so the read may see the mutation. A `&v` after the read is fine.
     fn check_sibling_ref_aliasing_refs(&mut self, siblings: &[&Expression]) {
         let mut ref_vars: HashSet<String> = HashSet::default();
         for sib in siblings {
-            collect_ref_targets(sib, &mut ref_vars);
+            collect_ref_targets(sib, &mut ref_vars, false);
         }
         if ref_vars.is_empty() {
             return;
@@ -132,17 +132,22 @@ impl InferCtx<'_, '_> {
             collect_read_vars(sib, &mut reads, false);
             for var in reads.intersection(&ref_vars) {
                 let mut ref_in_same = HashSet::default();
-                collect_ref_targets(sib, &mut ref_in_same);
+                collect_ref_targets(sib, &mut ref_in_same, false);
                 if ref_in_same.contains(var.as_str()) {
                     continue; // `&v` and `v` in the same operand is fine
                 }
+                let Some(read_span) = find_read_span(sib, var, false) else {
+                    continue;
+                };
                 for (j, other) in siblings.iter().enumerate() {
-                    if i == j {
-                        continue;
+                    if j >= i {
+                        continue; // only a `&v` before the read can affect it
                     }
-                    if let Some(span) = find_ref_span(other, var) {
+                    if let Some(ref_span) = find_ref_span(other, var) {
                         self.sink
-                            .push(diagnostics::infer::reference_aliases_sibling(span, var));
+                            .push(diagnostics::infer::reference_aliases_sibling(
+                                ref_span, read_span, var,
+                            ));
                         return; // One error per compound expression is enough
                     }
                 }
@@ -151,18 +156,25 @@ impl InferCtx<'_, '_> {
     }
 }
 
-/// Collect all variable names that appear under `&` anywhere in the expression tree.
-fn collect_ref_targets(expression: &Expression, out: &mut HashSet<String>) {
+/// Collect `v` for each `&v` passed into a call, which executes and may mutate
+/// `v`. A bare `&v` that is only captured never mutates before a sibling read.
+fn collect_ref_targets(expression: &Expression, out: &mut HashSet<String>, inside_call: bool) {
     match expression.unwrap_parens() {
         Expression::Reference { expression, .. } => {
-            if let Expression::Identifier { value, .. } = expression.unwrap_parens() {
+            if inside_call && let Expression::Identifier { value, .. } = expression.unwrap_parens()
+            {
                 out.insert(value.to_string());
             }
-            collect_ref_targets(expression, out);
+            collect_ref_targets(expression, out, inside_call);
+        }
+        node @ Expression::Call { .. } => {
+            for child in node.children() {
+                collect_ref_targets(child, out, true);
+            }
         }
         other => {
             for child in other.children() {
-                collect_ref_targets(child, out);
+                collect_ref_targets(child, out, inside_call);
             }
         }
     }
@@ -184,6 +196,19 @@ fn collect_read_vars(expression: &Expression, out: &mut HashSet<String>, inside_
                 collect_read_vars(child, out, false);
             }
         }
+    }
+}
+
+fn find_read_span(expression: &Expression, var_name: &str, inside_ref: bool) -> Option<Span> {
+    match expression.unwrap_parens() {
+        Expression::Identifier { value, span, .. } => {
+            (!inside_ref && value.as_str() == var_name).then_some(*span)
+        }
+        Expression::Reference { expression, .. } => find_read_span(expression, var_name, true),
+        other => other
+            .children()
+            .into_iter()
+            .find_map(|child| find_read_span(child, var_name, false)),
     }
 }
 

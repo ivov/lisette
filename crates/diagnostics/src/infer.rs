@@ -3649,18 +3649,17 @@ pub fn range_to_for_variadic(span: Span, var_name: Option<&str>) -> LisetteDiagn
         .with_help(suggestion)
 }
 
-pub fn reference_aliases_sibling(ref_span: Span, var_name: &str) -> LisetteDiagnostic {
-    LisetteDiagnostic::error("Reference aliases sibling expression")
+pub fn reference_aliases_sibling(
+    ref_span: Span,
+    read_span: Span,
+    var_name: &str,
+) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Reference may mutate a value read in the same expression")
         .with_infer_code("reference_aliases_sibling")
-        .with_span_label(
-            &ref_span,
-            format!(
-                "`&{}` could mutate `{}` used by a sibling",
-                var_name, var_name
-            ),
-        )
+        .with_span_label(&ref_span, format!("may mutate `{}`", var_name))
+        .with_span_label(&read_span, "may see the mutated value")
         .with_help(format!(
-            "Bind `{}` to a `let` before this expression to make evaluation order explicit",
+            "Copy `{0}` into a separate variable first: `let before = {0}`, then read `before` instead",
             var_name
         ))
 }

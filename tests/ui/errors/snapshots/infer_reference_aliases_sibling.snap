@@ -1,0 +1,13 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Reference may mutate a value read in the same expression
+    ╭─[main.lis:9:21]
+  8 │   let mut total = 1
+  9 │   let pair = (store(&total, 5), total)
+    ·                     ───┬──      ──┬──
+    ·                        │          ╰── may see the mutated value
+    ·                        ╰── may mutate `total`
+ 10 │   let _ = pair
+    ╰────
+  help: Copy `total` into a separate variable first: `let before = total`, then read `before` instead · code: [infer.reference_aliases_sibling]

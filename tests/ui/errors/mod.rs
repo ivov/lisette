@@ -12983,3 +12983,25 @@ fn run() {
 "#;
     assert_infer_error_snapshot!(input);
 }
+
+#[test]
+fn infer_reference_aliases_sibling() {
+    let mut fs = MockFileSystem::new();
+
+    let source = r#"
+fn store(dst: Ref<int>, value: int) -> int {
+  dst.* = value
+  value
+}
+
+fn main() {
+  let mut total = 1
+  let pair = (store(&total, 5), total)
+  let _ = pair
+}
+"#;
+    fs.add_file("main", "main.lis", source);
+
+    let result = infer_module("main", fs);
+    assert_multimodule_infer_error_snapshot!(result, source);
+}
