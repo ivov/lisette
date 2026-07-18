@@ -5390,3 +5390,859 @@ fn test() -> int {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn generic_error_interface_adapts_concrete_result_impl() {
+    let input = r#"
+import "go:errors"
+
+interface Foo<E: error> {
+  fn get() -> Result<int, E>
+}
+
+struct Bar {}
+
+impl Bar {
+  fn get(self) -> Result<int, error> {
+    Err(errors.New("failure"))
+  }
+}
+
+fn use_foo(_foo: Foo<error>) {}
+
+fn main() {
+  use_foo(Bar {})
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn generic_error_interface_generic_impl_needs_no_adapter() {
+    let input = r#"
+import "go:errors"
+
+interface Foo<E: error> {
+  fn get(fail: bool) -> Result<int, E>
+}
+
+struct Bar<E: error> {
+  e: E,
+}
+
+impl<E: error> Bar<E> {
+  fn get(self, fail: bool) -> Result<int, E> {
+    if fail { Err(self.e) } else { Ok(42) }
+  }
+}
+
+fn run<E: error>(foo: Foo<E>) {
+  match foo.get(false) {
+    Ok(v) => { let _ = v },
+    Err(e) => { let _ = e },
+  }
+}
+
+fn main() {
+  run(Bar { e: errors.New("boom") })
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn generic_error_interface_consumed_generically() {
+    let input = r#"
+import "go:errors"
+
+interface Foo<E: error> {
+  fn get(fail: bool) -> Result<int, E>
+}
+
+struct Bar {}
+
+impl Bar {
+  fn get(self, fail: bool) -> Result<int, error> {
+    if fail { Err(errors.New("boom")) } else { Ok(42) }
+  }
+}
+
+fn run<E: error>(foo: Foo<E>) {
+  match foo.get(false) {
+    Ok(v) => { let _ = v },
+    Err(e) => { let _ = e },
+  }
+}
+
+fn main() {
+  run(Bar {})
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn bare_param_interface_return_wraps_concrete_result_impl() {
+    let input = r#"
+interface Foo<T> {
+  fn get() -> T
+}
+
+struct Bar {}
+
+impl Bar {
+  fn get(self) -> Result<int, error> {
+    Ok(1)
+  }
+}
+
+fn use_foo(foo: Foo<Result<int, error>>) {
+  match foo.get() {
+    Ok(v) => { let _ = v },
+    Err(e) => { let _ = e },
+  }
+}
+
+fn main() {
+  use_foo(Bar {})
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn aliased_result_return_adapts_to_generic_interface() {
+    let input = r#"
+import "go:errors"
+
+type R = Result<int, error>
+
+interface Foo<E: error> {
+  fn get() -> Result<int, E>
+}
+
+struct Bar {}
+
+impl Bar {
+  fn get(self) -> R {
+    Err(errors.New("x"))
+  }
+}
+
+fn use_foo(_foo: Foo<error>) {}
+
+fn main() {
+  use_foo(Bar {})
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn bare_param_interface_matches_generic_result_impl_without_adapter() {
+    let input = r#"
+import "go:errors"
+
+interface Box<T> {
+  fn get() -> T
+}
+
+struct Bar<E: error> {
+  e: E,
+}
+
+impl<E: error> Bar<E> {
+  fn get(self) -> Result<int, E> {
+    Err(self.e)
+  }
+}
+
+fn consume<E: error>(box: Box<Result<int, E>>) {
+  match box.get() {
+    Ok(v) => { let _ = v },
+    Err(e) => { let _ = e },
+  }
+}
+
+fn pass<E: error>(b: Bar<E>) {
+  consume(b)
+}
+
+fn main() {
+  pass(Bar { e: errors.New("x") })
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn bare_param_interface_wraps_nullable_option_impl() {
+    let input = r#"
+struct Thing {
+  v: int,
+}
+
+interface Box<T> {
+  fn get() -> T
+}
+
+struct Bar {}
+
+impl Bar {
+  fn get(self) -> Option<Ref<Thing>> {
+    None
+  }
+}
+
+fn use_box(box: Box<Option<Ref<Thing>>>) {
+  match box.get() {
+    Some(t) => { let _ = t },
+    None => {},
+  }
+}
+
+fn main() {
+  use_box(Bar {})
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn bare_param_interface_wraps_void_impl_as_unit_value() {
+    let input = r#"
+interface Box<T> {
+  fn get() -> T
+}
+
+struct Bar {}
+
+impl Bar {
+  fn get(self) {}
+}
+
+fn consume(box: Box<()>) {
+  let _ = box.get()
+}
+
+fn main() {
+  consume(Bar {})
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn void_interface_discards_generic_unit_value_and_preserves_value_method() {
+    let input = r#"
+interface Mixed<T> {
+  fn run()
+  fn value() -> T
+}
+
+struct Bar<T> {
+  item: T,
+}
+
+impl<T> Bar<T> {
+  fn run(self) -> T {
+    self.item
+  }
+
+  fn value(self) -> T {
+    self.item
+  }
+}
+
+fn consume(mixed: Mixed<()>) {
+  mixed.run()
+  let _ = mixed.value()
+}
+
+fn main() {
+  consume(Bar { item: () })
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn generic_struct_adapter_declares_its_type_parameters() {
+    let input = r#"
+interface Box<U> {
+  fn get() -> U
+}
+
+struct Bar<T> {
+  x: Option<T>,
+}
+
+impl<T> Bar<T> {
+  fn get(self) -> Option<T> {
+    self.x
+  }
+}
+
+fn consume<T>(box: Box<Option<T>>) {
+  if let Some(v) = box.get() {
+    let _ = v
+  }
+}
+
+fn pass<T>(b: Bar<T>) {
+  consume(b)
+}
+
+fn main() {
+  pass(Bar { x: Some(3) })
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn generic_adapter_declares_nested_type_parameter() {
+    let input = r#"
+interface Box<U> {
+  fn get() -> U
+}
+
+struct Bar<S> {
+  xs: S,
+}
+
+impl<S> Bar<S> {
+  fn get(self) -> Option<S> {
+    Some(self.xs)
+  }
+}
+
+fn consume<T>(box: Box<Option<Slice<T>>>) {
+  if let Some(v) = box.get() {
+    let _ = v
+  }
+}
+
+fn pass<T>(b: Bar<Slice<T>>) {
+  consume(b)
+}
+
+fn main() {
+  pass(Bar { xs: [1, 2] })
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn generic_adapter_declares_repeated_type_parameter_once() {
+    let input = r#"
+interface Box<U> {
+  fn get() -> U
+}
+
+struct Pair<A, B> {
+  a: A,
+  b: B,
+}
+
+impl<A, B> Pair<A, B> {
+  fn get(self) -> Option<A> {
+    Some(self.a)
+  }
+}
+
+fn consume<T>(box: Box<Option<T>>) {
+  if let Some(v) = box.get() {
+    let _ = v
+  }
+}
+
+fn pass<T>(p: Pair<T, T>) {
+  consume(p)
+}
+
+fn main() {
+  pass(Pair { a: 1, b: 2 })
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn generic_adapter_preserves_nested_parameter_constraint() {
+    let input = r#"
+interface Box<U> {
+  fn get() -> U
+}
+
+struct Bar<S> {
+  m: S,
+}
+
+impl<S> Bar<S> {
+  fn get(self) -> Option<S> {
+    Some(self.m)
+  }
+}
+
+fn consume<K: Comparable, V>(box: Box<Option<Map<K, V>>>) {
+  if let Some(v) = box.get() {
+    let _ = v
+  }
+}
+
+fn pass<K: Comparable, V>(b: Bar<Map<K, V>>) {
+  consume(b)
+}
+
+fn main() {
+  pass(Bar { m: Map.from([("a", 1)]) })
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn generic_adapter_uses_receiver_generic_bounds() {
+    let input = r#"
+interface Box<U> {
+  fn get() -> U
+}
+
+struct Bar<S> {
+  m: S,
+}
+
+impl<S> Bar<S> {
+  fn get(self) -> Option<S> {
+    Some(self.m)
+  }
+}
+
+fn consume<K: Comparable>(box: Box<Option<Map<K, int>>>) {
+  if let Some(v) = box.get() {
+    let _ = v
+  }
+}
+
+struct Runner<K: Comparable> {
+  k: K,
+}
+
+impl<K: Comparable> Runner<K> {
+  fn run(self, b: Bar<Map<K, int>>) {
+    consume(b)
+  }
+}
+
+fn main() {
+  let r = Runner { k: "x" }
+  r.run(Bar { m: Map.from([("a", 1)]) })
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn generic_adapter_uses_separate_caller_contexts() {
+    let input = r#"
+interface Box<U> {
+  fn get() -> U
+}
+
+struct Bar<T> {
+  x: Option<T>,
+}
+
+impl<T> Bar<T> {
+  fn get(self) -> Option<T> {
+    self.x
+  }
+}
+
+fn consume<T>(box: Box<Option<T>>) {
+  if let Some(v) = box.get() {
+    let _ = v
+  }
+}
+
+fn strong<T: Comparable>(b: Bar<T>) {
+  consume(b)
+}
+
+fn weak<T>(b: Bar<T>) {
+  consume(b)
+}
+
+fn main() {
+  strong(Bar { x: Some(1) })
+  weak(Bar { x: Some(2) })
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn generic_adapter_captures_complete_caller_context() {
+    let input = r#"
+interface Holder<X> {
+  fn h() -> X
+}
+
+interface Box<U> {
+  fn get() -> U
+}
+
+struct Bar<S> {
+  s: S,
+}
+
+impl<S> Bar<S> {
+  fn get(self) -> Option<S> {
+    Some(self.s)
+  }
+}
+
+struct IntHolder {}
+
+impl IntHolder {
+  fn h(self) -> int {
+    1
+  }
+}
+
+fn consume<T>(box: Box<Option<T>>) {
+  if let Some(v) = box.get() {
+    let _ = v
+  }
+}
+
+fn pass<U, T: Holder<U>>(b: Bar<T>) {
+  consume(b)
+}
+
+fn main() {
+  pass<int, IntHolder>(Bar { s: IntHolder {} })
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn generic_adapter_pointer_map_key_stays_unconstrained() {
+    let input = r#"
+struct Thing { v: int }
+
+interface Box<U> {
+  fn get() -> U
+}
+
+struct Bar<S> {
+  m: S,
+}
+
+impl<S> Bar<S> {
+  fn get(self) -> Option<S> {
+    Some(self.m)
+  }
+}
+
+fn consume<T>(box: Box<Option<Map<Ref<T>, int>>>) {
+  if let Some(v) = box.get() {
+    let _ = v
+  }
+}
+
+fn pass<T>(b: Bar<Map<Ref<T>, int>>) {
+  consume(b)
+}
+
+fn main() {
+  let m: Map<Ref<Thing>, int> = Map.new()
+  pass(Bar { m: m })
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn generic_adapter_struct_map_key_requires_field_comparability() {
+    let input = r#"
+interface Box<U> {
+  fn get() -> U
+}
+
+struct Bar<S> {
+  m: S,
+}
+
+impl<S> Bar<S> {
+  fn get(self) -> Option<S> {
+    Some(self.m)
+  }
+}
+
+struct Pair<A, B> {
+  a: A,
+  b: B,
+}
+
+fn consume<A: Comparable, B: Comparable>(box: Box<Option<Map<Pair<A, B>, int>>>) {
+  if let Some(v) = box.get() {
+    let _ = v
+  }
+}
+
+fn pass<A: Comparable, B: Comparable>(b: Bar<Map<Pair<A, B>, int>>) {
+  consume(b)
+}
+
+fn main() {
+  let m: Map<Pair<int, int>, int> = Map.new()
+  pass(Bar { m: m })
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn generic_adapter_captures_interface_parameter_bound() {
+    let input = r#"
+interface Foo<T: Comparable> {
+  fn f() -> T
+}
+
+struct IntFoo {}
+
+impl IntFoo {
+  fn f(self) -> int {
+    1
+  }
+}
+
+interface Box<U> {
+  fn get() -> U
+}
+
+struct Bar<S> {
+  m: S,
+}
+
+impl<S> Bar<S> {
+  fn get(self) -> Option<S> {
+    Some(self.m)
+  }
+}
+
+fn consume<T: Comparable>(box: Box<Option<Foo<T>>>) {
+  if let Some(v) = box.get() {
+    let _ = v
+  }
+}
+
+fn pass<T: Comparable>(b: Bar<Foo<T>>) {
+  consume(b)
+}
+
+fn main() {
+  let f: Foo<int> = IntFoo {}
+  pass(Bar { m: f })
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn generic_adapter_captures_alias_parameter_bound() {
+    let input = r#"
+type Wrapped<T: Comparable> = Slice<T>
+
+interface Box<U> {
+  fn get() -> U
+}
+
+struct Bar<S> {
+  m: S,
+}
+
+impl<S> Bar<S> {
+  fn get(self) -> Option<S> {
+    Some(self.m)
+  }
+}
+
+fn consume<T: Comparable>(box: Box<Option<Wrapped<T>>>) {
+  if let Some(v) = box.get() {
+    let _ = v
+  }
+}
+
+fn pass<T: Comparable>(b: Bar<Wrapped<T>>) {
+  consume(b)
+}
+
+fn main() {
+  let w: Wrapped<int> = [1, 2]
+  pass(Bar { m: w })
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn generic_adapter_copies_context_bound_for_composite_arg() {
+    let input = r#"
+struct Keyed<K: Comparable> {
+  k: K,
+}
+
+impl<K: Comparable> Keyed<K> {
+  fn get(self) -> Option<K> {
+    Some(self.k)
+  }
+}
+
+interface Box<U> {
+  fn get() -> U
+}
+
+fn consume<T: Comparable>(box: Box<Option<Array<T, 2>>>) {
+  if let Some(v) = box.get() {
+    let _ = v
+  }
+}
+
+fn pass<T: Comparable>(k: Keyed<Array<T, 2>>) {
+  consume(k)
+}
+
+fn main() {
+  let a: Array<int, 2> = [1, 2]
+  pass(Keyed { k: a })
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn generic_adapter_enum_map_key_requires_payload_comparability() {
+    let input = r#"
+enum Maybe<T> {
+  Just(T),
+  Nothing,
+}
+
+interface Box<U> {
+  fn get() -> U
+}
+
+struct Bar<S> {
+  m: S,
+}
+
+impl<S> Bar<S> {
+  fn get(self) -> Option<S> {
+    Some(self.m)
+  }
+}
+
+fn consume<T: Comparable>(box: Box<Option<Map<Maybe<T>, int>>>) {
+  if let Some(v) = box.get() {
+    let _ = v
+  }
+}
+
+fn pass<T: Comparable>(b: Bar<Map<Maybe<T>, int>>) {
+  consume(b)
+}
+
+fn main() {
+  let m: Map<Maybe<int>, int> = Map.new()
+  pass(Bar { m: m })
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn generic_adapter_copies_sibling_referencing_bound() {
+    let input = r#"
+interface Holder<T> {
+  fn item() -> T
+}
+
+interface Box<U> {
+  fn get() -> U
+}
+
+struct IntHolder {}
+
+impl IntHolder {
+  fn item(self) -> int {
+    5
+  }
+}
+
+struct Wrap<A, B: Holder<A>> {
+  a: A,
+  b: B,
+}
+
+impl<A, B: Holder<A>> Wrap<A, B> {
+  fn get(self) -> Option<A> {
+    Some(self.a)
+  }
+}
+
+fn consume<A>(box: Box<Option<A>>) {
+  if let Some(v) = box.get() {
+    let _ = v
+  }
+}
+
+fn use_wrap<A, B: Holder<A>>(w: Wrap<A, B>) {
+  consume(w)
+}
+
+fn main() {
+  use_wrap(Wrap { a: 3, b: IntHolder {} })
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn nullable_interface_reencodes_comma_ok_option_impl() {
+    let input = r#"
+struct Thing {
+  v: int,
+}
+
+interface Opt {
+  fn find() -> Option<Ref<Thing>>
+}
+
+struct Bar<T> {
+  x: Option<T>,
+}
+
+impl<T> Bar<T> {
+  fn find(self) -> Option<T> {
+    self.x
+  }
+}
+
+fn use_opt(o: Opt) {
+  match o.find() {
+    Some(t) => { let _ = t },
+    None => {},
+  }
+}
+
+fn main() {
+  use_opt(Bar { x: None })
+}
+"#;
+    assert_emit_snapshot!(input);
+}

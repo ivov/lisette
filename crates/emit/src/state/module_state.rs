@@ -1,8 +1,10 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
+use ecow::EcoString;
 use rustc_hash::FxHashMap as HashMap;
 use rustc_hash::FxHashSet as HashSet;
+use syntax::types::Type;
 
 use crate::EnumLayout;
 
@@ -87,6 +89,7 @@ impl ModuleState {
 #[derive(Default)]
 pub(crate) struct FunctionEmissionState {
     absorbed_ref_generics: HashSet<String>,
+    generic_context: Vec<(EcoString, Vec<Type>)>,
 }
 
 impl FunctionEmissionState {
@@ -96,5 +99,13 @@ impl FunctionEmissionState {
 
     pub(crate) fn record_absorbed_ref_generic(&mut self, name: impl Into<String>) {
         self.absorbed_ref_generics.insert(name.into());
+    }
+
+    pub(crate) fn set_generic_context(&mut self, context: &[(EcoString, Vec<Type>)]) {
+        self.generic_context = context.to_vec();
+    }
+
+    pub(crate) fn generic_context(&self) -> &[(EcoString, Vec<Type>)] {
+        &self.generic_context
     }
 }

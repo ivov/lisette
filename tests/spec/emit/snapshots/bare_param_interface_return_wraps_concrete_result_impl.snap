@@ -1,0 +1,68 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  interface Foo<T> {
+    fn get() -> T
+  }
+  
+  struct Bar {}
+  
+  impl Bar {
+    fn get(self) -> Result<int, error> {
+      Ok(1)
+    }
+  }
+  
+  fn use_foo(foo: Foo<Result<int, error>>) {
+    match foo.get() {
+      Ok(v) => { let _ = v },
+      Err(e) => { let _ = e },
+    }
+  }
+  
+  fn main() {
+    use_foo(Bar {})
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type Foo[T any] interface {
+	get() T
+}
+
+type Bar struct{}
+
+func (b Bar) get() (int, error) {
+	return 1, nil
+}
+
+func use_foo(foo Foo[lisette.Result[int, error]]) {
+	subject_1 := foo.get()
+	if subject_1.Tag == lisette.ResultOk {
+		_ = subject_1.OkVal
+	} else {
+		_ = subject_1.ErrVal
+	}
+}
+
+func main() {
+	use_foo(_lisAdapter_Bar_Foo_0{inner: Bar{}})
+}
+
+type _lisAdapter_Bar_Foo_0 struct {
+	inner Bar
+}
+
+func (a _lisAdapter_Bar_Foo_0) get() lisette.Result[int, error] {
+	ret_1, ret_2 := a.inner.get()
+	var result_3 lisette.Result[int, error]
+	if ret_2 != nil {
+		result_3 = lisette.MakeResultErr[int, error](ret_2)
+	} else {
+		result_3 = lisette.MakeResultOk[int, error](ret_1)
+	}
+	return result_3
+}

@@ -1,0 +1,48 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  interface Box<T> {
+    fn get() -> T
+  }
+  
+  struct Bar {}
+  
+  impl Bar {
+    fn get(self) {}
+  }
+  
+  fn consume(box: Box<()>) {
+    let _ = box.get()
+  }
+  
+  fn main() {
+    consume(Bar {})
+  }
+---
+package main
+
+type Box[T any] interface {
+	get() T
+}
+
+type Bar struct{}
+
+func (b Bar) get() {}
+
+func consume(box Box[struct{}]) {
+	box.get()
+}
+
+func main() {
+	consume(_lisAdapter_Bar_Box_0{inner: Bar{}})
+}
+
+type _lisAdapter_Bar_Box_0 struct {
+	inner Bar
+}
+
+func (a _lisAdapter_Bar_Box_0) get() struct{} {
+	a.inner.get()
+	return struct{}{}
+}

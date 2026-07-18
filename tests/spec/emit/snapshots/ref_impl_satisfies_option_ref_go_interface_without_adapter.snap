@@ -1,0 +1,41 @@
+---
+source: tests/spec/emit/go_interface_adapter.rs
+description: |
+  
+  import "go:example.com/store"
+  
+  struct Store {}
+  
+  impl Store {
+    fn Find(self, key: string) -> Ref<store.Entry> {
+      store.NewEntry()
+    }
+  }
+  
+  fn use_store(s: store.Storage) {
+    let _ = s
+  }
+  
+  fn main() {
+    let s = Store {}
+    use_store(s as store.Storage)
+  }
+---
+package main
+
+import "example.com/store"
+
+type Store struct{}
+
+func (s Store) Find(_ string) *store.Entry {
+	return store.NewEntry()
+}
+
+func use_store(s store.Storage) {
+	_ = s
+}
+
+func main() {
+	s := Store{}
+	use_store(s)
+}

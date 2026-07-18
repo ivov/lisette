@@ -14,7 +14,7 @@ impl AdapterRegistry {
     }
 
     pub(crate) fn next_index(&self) -> usize {
-        self.synthesized.len()
+        self.declarations.len()
     }
 
     pub(crate) fn insert(
@@ -24,6 +24,10 @@ impl AdapterRegistry {
         declaration: String,
     ) {
         self.synthesized.insert(key, name);
+        self.declarations.push(declaration);
+    }
+
+    pub(crate) fn push_declaration(&mut self, declaration: String) {
         self.declarations.push(declaration);
     }
 

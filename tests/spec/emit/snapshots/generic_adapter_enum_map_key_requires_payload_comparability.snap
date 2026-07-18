@@ -1,0 +1,98 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  enum Maybe<T> {
+    Just(T),
+    Nothing,
+  }
+  
+  interface Box<U> {
+    fn get() -> U
+  }
+  
+  struct Bar<S> {
+    m: S,
+  }
+  
+  impl<S> Bar<S> {
+    fn get(self) -> Option<S> {
+      Some(self.m)
+    }
+  }
+  
+  fn consume<T: Comparable>(box: Box<Option<Map<Maybe<T>, int>>>) {
+    if let Some(v) = box.get() {
+      let _ = v
+    }
+  }
+  
+  fn pass<T: Comparable>(b: Bar<Map<Maybe<T>, int>>) {
+    consume(b)
+  }
+  
+  fn main() {
+    let m: Map<Maybe<int>, int> = Map.new()
+    pass(Bar { m: m })
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func MakeMaybeJust[T any](arg0 T) Maybe[T] {
+	return Maybe[T]{Tag: MaybeJust, Just: arg0}
+}
+
+func MakeMaybeNothing[T any]() Maybe[T] {
+	return Maybe[T]{Tag: MaybeNothing}
+}
+
+type MaybeTag int
+
+const (
+	MaybeJust MaybeTag = iota
+	MaybeNothing
+)
+
+type Maybe[T any] struct {
+	Tag  MaybeTag
+	Just T
+}
+
+type Box[U any] interface {
+	get() U
+}
+
+type Bar[S any] struct {
+	m S
+}
+
+func (b Bar[S]) get() (S, bool) {
+	return b.m, true
+}
+
+func consume[T comparable](box Box[lisette.Option[map[Maybe[T]]int]]) {
+	subject_1 := box.get()
+	if subject_1.Tag == lisette.OptionSome {
+		_ = subject_1.SomeVal
+	}
+}
+
+func pass[T comparable](b Bar[map[Maybe[T]]int]) {
+	consume(_lisAdapter_Bar_Box_0[T]{inner: b})
+}
+
+func main() {
+	m := make(map[Maybe[int]]int)
+	pass(Bar[map[Maybe[int]]int]{m: m})
+}
+
+type _lisAdapter_Bar_Box_0[T comparable] struct {
+	inner Bar[map[Maybe[T]]int]
+}
+
+func (a _lisAdapter_Bar_Box_0[T]) get() lisette.Option[map[Maybe[T]]int] {
+	option_1 := lisette.OptionFromCommaOk[map[Maybe[T]]int](a.inner.get())
+	return option_1
+}

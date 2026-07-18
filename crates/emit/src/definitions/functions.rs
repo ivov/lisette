@@ -14,7 +14,7 @@ use syntax::EcoString;
 use syntax::ast::{
     Annotation, Binding, Expression, FunctionDefinitionView, Generic, Pattern, Span, TypedPattern,
 };
-use syntax::types::Type;
+use syntax::types::{Type, build_substitution_map, substitute};
 
 /// Owned param-destructure record: temp var, pattern, typed pattern, param type.
 type DeferredParamDestructure = (String, Pattern, Option<TypedPattern>, Type);
@@ -270,6 +270,11 @@ impl Planner<'_> {
             return String::new();
         }
 
+        let generic_context = self.function_generic_context(
+            function_definition.generics,
+            receiver.as_ref().map(|(_, ty)| ty),
+            resolved_generic_bounds,
+        );
         let directive = self.maybe_line_directive(&function_definition.name_span);
         let return_ctx = self.return_context_for_type(function_definition.return_type.clone());
         let return_shape = return_ctx.lowered_shape();
@@ -307,9 +312,11 @@ impl Planner<'_> {
         }
 
         let mut body = String::new();
-        let signature = self.with_absorbed_ref_generics(
+        let signature = self.with_function_state(
             params_to_process,
+            &generic_context,
             function_definition.generics,
+            resolved_generic_bounds,
             |this| {
                 let (params_string, return_ty, deferred_patterns) = this.build_signature_tail(
                     function_definition,
@@ -451,21 +458,82 @@ impl Planner<'_> {
         (Some(receiver_var), Some(receiver_part))
     }
 
-    fn with_absorbed_ref_generics<F, R>(
+    fn function_generic_context(
+        &self,
+        function_generics: &[Generic],
+        receiver_ty: Option<&Type>,
+        resolved_generic_bounds: Option<&[(EcoString, Vec<Type>)]>,
+    ) -> Vec<(EcoString, Vec<Type>)> {
+        let mut context = receiver_ty
+            .map(|ty| self.receiver_generic_context(ty))
+            .unwrap_or_default();
+        if let Some(resolved) = resolved_generic_bounds {
+            context.extend_from_slice(resolved);
+        } else {
+            context.extend(
+                function_generics
+                    .iter()
+                    .map(|generic| (generic.name.clone(), generic.resolved_bounds.clone())),
+            );
+        }
+        context
+    }
+
+    fn receiver_generic_context(&self, receiver_ty: &Type) -> Vec<(EcoString, Vec<Type>)> {
+        let stripped = receiver_ty.strip_refs();
+        let Type::Nominal { id, params, .. } = &stripped else {
+            return Vec::new();
+        };
+        let Some(generics) = self
+            .facts
+            .definition(id)
+            .and_then(|definition| definition.body.generics())
+        else {
+            return Vec::new();
+        };
+        let substitution = build_substitution_map(generics, params);
+        generics
+            .iter()
+            .zip(params)
+            .filter_map(|(generic, param)| {
+                let Type::Parameter(name) = param else {
+                    return None;
+                };
+                let bounds = generic
+                    .resolved_bounds
+                    .iter()
+                    .map(|bound| substitute(bound, &substitution))
+                    .collect();
+                Some((name.clone(), bounds))
+            })
+            .collect()
+    }
+
+    fn with_function_state<F, R>(
         &mut self,
         params: &[Binding],
-        generics: &[Generic],
+        generic_context: &[(EcoString, Vec<Type>)],
+        signature_generics: &[Generic],
+        resolved_signature_generics: Option<&[(EcoString, Vec<Type>)]>,
         f: F,
     ) -> R
     where
         F: FnOnce(&mut Self) -> R,
     {
         let saved = std::mem::take(&mut self.function_state);
-        let bounded_generics: HashSet<&str> = generics
-            .iter()
-            .filter(|g| !g.bounds.is_empty())
-            .map(|g| g.name.as_ref())
-            .collect();
+        self.function_state.set_generic_context(generic_context);
+        let bounded_generics: HashSet<&str> = match resolved_signature_generics {
+            Some(generics) => generics
+                .iter()
+                .filter(|(_, bounds)| !bounds.is_empty())
+                .map(|(name, _)| name.as_str())
+                .collect(),
+            None => signature_generics
+                .iter()
+                .filter(|generic| !generic.resolved_bounds.is_empty())
+                .map(|generic| generic.name.as_str())
+                .collect(),
+        };
         for param in params.iter() {
             if param.ty.is_ref()
                 && let Some(inner) = param.ty.inner()

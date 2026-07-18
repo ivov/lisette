@@ -112,7 +112,6 @@ impl CompiledTest {
             mutations,
             ufcs_methods,
             equality_index,
-            bound_types,
             go_package_names,
             go_module_ids,
             resolved_definitions,
@@ -217,6 +216,7 @@ impl CompiledTest {
             }
             typed_ast = semantics::checker::freeze::FreezeFolder::new(&checker.env, &store)
                 .freeze_items(typed_ast);
+            checker.populate_item_generic_bounds(&mut typed_ast);
 
             if !checker.failed() {
                 // Overwrite the stored file with the typed AST so passes::run
@@ -297,7 +297,6 @@ impl CompiledTest {
 
             let ufcs_methods = std::mem::take(&mut checker.ufcs_methods);
             let equality_index = std::mem::take(&mut store.equality_index);
-            let bound_types = std::mem::take(&mut checker.facts.bound_types);
             let resolved_definitions = std::mem::take(&mut checker.facts.resolved_definitions);
             let go_package_names = store.go_package_names.clone();
             let go_module_ids: HashSet<String> = store
@@ -315,7 +314,6 @@ impl CompiledTest {
                 mutations,
                 ufcs_methods,
                 equality_index,
-                bound_types,
                 go_package_names,
                 go_module_ids,
                 resolved_definitions,
@@ -332,7 +330,6 @@ impl CompiledTest {
             mutations,
             ufcs_methods,
             equality_index,
-            bound_types,
             go_package_names,
             go_module_ids,
             resolved_definitions,
@@ -350,7 +347,6 @@ pub struct InferenceResult {
     pub mutations: MutationInfo,
     pub ufcs_methods: HashSet<(String, String)>,
     pub equality_index: EqualityIndex,
-    pub bound_types: HashMap<syntax::ast::Span, syntax::types::Type>,
     pub go_package_names: HashMap<String, String>,
     pub go_module_ids: HashSet<String>,
     pub resolved_definitions: ResolvedDefinitions,

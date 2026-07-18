@@ -4,6 +4,8 @@ source: tests/spec/build/mod.rs
 // === main.go ===
 package main
 
+import lisette "github.com/ivov/lisette/prelude"
+
 type Entry[T any] struct {
 	value T
 }
@@ -36,8 +38,12 @@ type _lisAdapter_MyCache_Cache_0 struct {
 }
 
 func (a _lisAdapter_MyCache_Cache_0) Get(arg0 string) (*Entry[int], bool) {
-	val_1 := a.inner.Get(arg0)
-	return val_1, val_1 != nil
+	raw_1 := a.inner.Get(arg0)
+	option_2 := lisette.OptionFromNilable[*Entry[int]](raw_1, raw_1 == nil)
+	if option_2.Tag == lisette.OptionSome {
+		return option_2.SomeVal, true
+	}
+	return nil, false
 }
 
 type _lisAdapter_MyCache_Cache_1 struct {
@@ -45,6 +51,10 @@ type _lisAdapter_MyCache_Cache_1 struct {
 }
 
 func (a _lisAdapter_MyCache_Cache_1) Get(arg0 string) (*Entry[string], bool) {
-	val_2 := a.inner.Get(arg0)
-	return val_2, val_2 != nil
+	raw_3 := a.inner.Get(arg0)
+	option_4 := lisette.OptionFromNilable[*Entry[string]](raw_3, raw_3 == nil)
+	if option_4.Tag == lisette.OptionSome {
+		return option_4.SomeVal, true
+	}
+	return nil, false
 }

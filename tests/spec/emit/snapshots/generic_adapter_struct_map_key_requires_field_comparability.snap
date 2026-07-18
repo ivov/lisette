@@ -1,0 +1,83 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  interface Box<U> {
+    fn get() -> U
+  }
+  
+  struct Bar<S> {
+    m: S,
+  }
+  
+  impl<S> Bar<S> {
+    fn get(self) -> Option<S> {
+      Some(self.m)
+    }
+  }
+  
+  struct Pair<A, B> {
+    a: A,
+    b: B,
+  }
+  
+  fn consume<A: Comparable, B: Comparable>(box: Box<Option<Map<Pair<A, B>, int>>>) {
+    if let Some(v) = box.get() {
+      let _ = v
+    }
+  }
+  
+  fn pass<A: Comparable, B: Comparable>(b: Bar<Map<Pair<A, B>, int>>) {
+    consume(b)
+  }
+  
+  fn main() {
+    let m: Map<Pair<int, int>, int> = Map.new()
+    pass(Bar { m: m })
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type Box[U any] interface {
+	get() U
+}
+
+type Bar[S any] struct {
+	m S
+}
+
+func (b Bar[S]) get() (S, bool) {
+	return b.m, true
+}
+
+type Pair[A any, B any] struct {
+	a A
+	b B
+}
+
+func consume[A comparable, B comparable](box Box[lisette.Option[map[Pair[A, B]]int]]) {
+	subject_1 := box.get()
+	if subject_1.Tag == lisette.OptionSome {
+		_ = subject_1.SomeVal
+	}
+}
+
+func pass[A comparable, B comparable](b Bar[map[Pair[A, B]]int]) {
+	consume(_lisAdapter_Bar_Box_0[A, B]{inner: b})
+}
+
+func main() {
+	m := make(map[Pair[int, int]]int)
+	pass(Bar[map[Pair[int, int]]int]{m: m})
+}
+
+type _lisAdapter_Bar_Box_0[A comparable, B comparable] struct {
+	inner Bar[map[Pair[A, B]]int]
+}
+
+func (a _lisAdapter_Bar_Box_0[A, B]) get() lisette.Option[map[Pair[A, B]]int] {
+	option_1 := lisette.OptionFromCommaOk[map[Pair[A, B]]int](a.inner.get())
+	return option_1
+}

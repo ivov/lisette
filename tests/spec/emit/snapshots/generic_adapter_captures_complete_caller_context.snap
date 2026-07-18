@@ -1,0 +1,93 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  interface Holder<X> {
+    fn h() -> X
+  }
+  
+  interface Box<U> {
+    fn get() -> U
+  }
+  
+  struct Bar<S> {
+    s: S,
+  }
+  
+  impl<S> Bar<S> {
+    fn get(self) -> Option<S> {
+      Some(self.s)
+    }
+  }
+  
+  struct IntHolder {}
+  
+  impl IntHolder {
+    fn h(self) -> int {
+      1
+    }
+  }
+  
+  fn consume<T>(box: Box<Option<T>>) {
+    if let Some(v) = box.get() {
+      let _ = v
+    }
+  }
+  
+  fn pass<U, T: Holder<U>>(b: Bar<T>) {
+    consume(b)
+  }
+  
+  fn main() {
+    pass<int, IntHolder>(Bar { s: IntHolder {} })
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type Holder[X any] interface {
+	h() X
+}
+
+type Box[U any] interface {
+	get() U
+}
+
+type Bar[S any] struct {
+	s S
+}
+
+func (b Bar[S]) get() (S, bool) {
+	return b.s, true
+}
+
+type IntHolder struct{}
+
+func (i IntHolder) h() int {
+	return 1
+}
+
+func consume[T any](box Box[lisette.Option[T]]) {
+	subject_1 := box.get()
+	if subject_1.Tag == lisette.OptionSome {
+		_ = subject_1.SomeVal
+	}
+}
+
+func pass[U any, T Holder[U]](b Bar[T]) {
+	consume(_lisAdapter_Bar_Box_0[U, T]{inner: b})
+}
+
+func main() {
+	pass[int, IntHolder](Bar[IntHolder]{s: IntHolder{}})
+}
+
+type _lisAdapter_Bar_Box_0[U any, T Holder[U]] struct {
+	inner Bar[T]
+}
+
+func (a _lisAdapter_Bar_Box_0[U, T]) get() lisette.Option[T] {
+	option_1 := lisette.OptionFromCommaOk[T](a.inner.get())
+	return option_1
+}

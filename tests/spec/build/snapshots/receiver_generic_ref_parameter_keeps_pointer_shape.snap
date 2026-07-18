@@ -1,0 +1,31 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+type Marker interface {
+	get() int
+}
+
+type Item struct {
+	n int
+}
+
+func (i Item) get() int {
+	return i.n
+}
+
+type Holder[T Marker] struct {
+	item T
+}
+
+func (h Holder[T]) read(value *T) int {
+	return value.get()
+}
+
+func main() {
+	holder := Holder[Item]{item: Item{n: 1}}
+	value := Item{n: 2}
+	_ = holder.read(&value)
+}

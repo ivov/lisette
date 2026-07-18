@@ -1,0 +1,98 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  interface Holder<T> {
+    fn item() -> T
+  }
+  
+  interface Box<U> {
+    fn get() -> U
+  }
+  
+  struct IntHolder {}
+  
+  impl IntHolder {
+    fn item(self) -> int {
+      5
+    }
+  }
+  
+  struct Wrap<A, B: Holder<A>> {
+    a: A,
+    b: B,
+  }
+  
+  impl<A, B: Holder<A>> Wrap<A, B> {
+    fn get(self) -> Option<A> {
+      Some(self.a)
+    }
+  }
+  
+  fn consume<A>(box: Box<Option<A>>) {
+    if let Some(v) = box.get() {
+      let _ = v
+    }
+  }
+  
+  fn use_wrap<A, B: Holder<A>>(w: Wrap<A, B>) {
+    consume(w)
+  }
+  
+  fn main() {
+    use_wrap(Wrap { a: 3, b: IntHolder {} })
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type Holder[T any] interface {
+	item() T
+}
+
+type Box[U any] interface {
+	get() U
+}
+
+type IntHolder struct{}
+
+func (i IntHolder) item() int {
+	return 5
+}
+
+type Wrap[A any, B Holder[A]] struct {
+	a A
+	b B
+}
+
+func (w Wrap[A, B]) get() (A, bool) {
+	return w.a, true
+}
+
+func consume[A any](box Box[lisette.Option[A]]) {
+	subject_1 := box.get()
+	if subject_1.Tag == lisette.OptionSome {
+		_ = subject_1.SomeVal
+	}
+}
+
+func use_wrap[A any, B Holder[A]](w Wrap[A, B]) {
+	consume(_lisAdapter_Wrap_Box_0[A, B]{inner: w})
+}
+
+func main() {
+	use_wrap(Wrap[int, IntHolder]{
+		a: 3,
+		b: IntHolder{},
+	})
+}
+
+type _lisAdapter_Wrap_Box_0[A any, B Holder[A]] struct {
+	inner Wrap[A, B]
+}
+
+func (a _lisAdapter_Wrap_Box_0[A, B]) get() lisette.Option[A] {
+	option_1 := lisette.OptionFromCommaOk[A](a.inner.get())
+	return option_1
+}

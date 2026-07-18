@@ -1,0 +1,65 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  import "go:errors"
+  
+  interface Foo<E: error> {
+    fn get(fail: bool) -> Result<int, E>
+  }
+  
+  struct Bar<E: error> {
+    e: E,
+  }
+  
+  impl<E: error> Bar<E> {
+    fn get(self, fail: bool) -> Result<int, E> {
+      if fail { Err(self.e) } else { Ok(42) }
+    }
+  }
+  
+  fn run<E: error>(foo: Foo<E>) {
+    match foo.get(false) {
+      Ok(v) => { let _ = v },
+      Err(e) => { let _ = e },
+    }
+  }
+  
+  fn main() {
+    run(Bar { e: errors.New("boom") })
+  }
+---
+package main
+
+import (
+	"errors"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+type Foo[E error] interface {
+	get(bool) lisette.Result[int, E]
+}
+
+type Bar[E error] struct {
+	e E
+}
+
+func (b Bar[E]) get(fail bool) lisette.Result[int, E] {
+	if fail {
+		return lisette.MakeResultErr[int, E](b.e)
+	}
+	return lisette.MakeResultOk[int, E](42)
+}
+
+func run[E error](foo Foo[E]) {
+	subject_1 := foo.get(false)
+	if subject_1.Tag == lisette.ResultOk {
+		_ = subject_1.OkVal
+	} else {
+		_ = subject_1.ErrVal
+	}
+}
+
+func main() {
+	run(Bar[error]{e: errors.New("boom")})
+}

@@ -1,0 +1,101 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  interface Foo<T: Comparable> {
+    fn f() -> T
+  }
+  
+  struct IntFoo {}
+  
+  impl IntFoo {
+    fn f(self) -> int {
+      1
+    }
+  }
+  
+  interface Box<U> {
+    fn get() -> U
+  }
+  
+  struct Bar<S> {
+    m: S,
+  }
+  
+  impl<S> Bar<S> {
+    fn get(self) -> Option<S> {
+      Some(self.m)
+    }
+  }
+  
+  fn consume<T: Comparable>(box: Box<Option<Foo<T>>>) {
+    if let Some(v) = box.get() {
+      let _ = v
+    }
+  }
+  
+  fn pass<T: Comparable>(b: Bar<Foo<T>>) {
+    consume(b)
+  }
+  
+  fn main() {
+    let f: Foo<int> = IntFoo {}
+    pass(Bar { m: f })
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type Foo[T comparable] interface {
+	f() T
+}
+
+type IntFoo struct{}
+
+func (i IntFoo) f() int {
+	return 1
+}
+
+type Box[U any] interface {
+	get() U
+}
+
+type Bar[S any] struct {
+	m S
+}
+
+func (b Bar[S]) get() (S, bool) {
+	return b.m, true
+}
+
+func consume[T comparable](box Box[lisette.Option[Foo[T]]]) {
+	subject_1 := box.get()
+	if subject_1.Tag == lisette.OptionSome {
+		_ = subject_1.SomeVal
+	}
+}
+
+func pass[T comparable](b Bar[Foo[T]]) {
+	consume(_lisAdapter_Bar_Box_0[T]{inner: b})
+}
+
+func main() {
+	var f Foo[int] = IntFoo{}
+	pass(Bar[Foo[int]]{m: f})
+}
+
+type _lisAdapter_Bar_Box_0[T comparable] struct {
+	inner Bar[Foo[T]]
+}
+
+func (a _lisAdapter_Bar_Box_0[T]) get() lisette.Option[Foo[T]] {
+	ret_1, ret_2 := a.inner.get()
+	var option_3 lisette.Option[Foo[T]]
+	if ret_2 && !lisette.IsNilInterface(ret_1) {
+		option_3 = lisette.MakeOptionSome[Foo[T]](ret_1)
+	} else {
+		option_3 = lisette.MakeOptionNone[Foo[T]]()
+	}
+	return option_3
+}

@@ -4,7 +4,10 @@ source: tests/spec/build/mod.rs
 // === main.go ===
 package main
 
-import "crypto/tls"
+import (
+	"crypto/tls"
+	lisette "github.com/ivov/lisette/prelude"
+)
 
 type MyCache struct{}
 
@@ -30,6 +33,10 @@ func (a _lisAdapter_MyCache_ClientSessionCache_0) Put(arg0 string, arg1 *tls.Cli
 }
 
 func (a _lisAdapter_MyCache_ClientSessionCache_0) Get(arg0 string) (*tls.ClientSessionState, bool) {
-	val_1 := a.inner.Get(arg0)
-	return val_1, val_1 != nil
+	raw_1 := a.inner.Get(arg0)
+	option_2 := lisette.OptionFromNilable[*tls.ClientSessionState](raw_1, raw_1 == nil)
+	if option_2.Tag == lisette.OptionSome {
+		return option_2.SomeVal, true
+	}
+	return nil, false
 }

@@ -1,0 +1,76 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  interface Box<U> {
+    fn get() -> U
+  }
+  
+  struct Pair<A, B> {
+    a: A,
+    b: B,
+  }
+  
+  impl<A, B> Pair<A, B> {
+    fn get(self) -> Option<A> {
+      Some(self.a)
+    }
+  }
+  
+  fn consume<T>(box: Box<Option<T>>) {
+    if let Some(v) = box.get() {
+      let _ = v
+    }
+  }
+  
+  fn pass<T>(p: Pair<T, T>) {
+    consume(p)
+  }
+  
+  fn main() {
+    pass(Pair { a: 1, b: 2 })
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type Box[U any] interface {
+	get() U
+}
+
+type Pair[A any, B any] struct {
+	a A
+	b B
+}
+
+func (p Pair[A, B]) get() (A, bool) {
+	return p.a, true
+}
+
+func consume[T any](box Box[lisette.Option[T]]) {
+	subject_1 := box.get()
+	if subject_1.Tag == lisette.OptionSome {
+		_ = subject_1.SomeVal
+	}
+}
+
+func pass[T any](p Pair[T, T]) {
+	consume(_lisAdapter_Pair_Box_0[T]{inner: p})
+}
+
+func main() {
+	pass(Pair[int, int]{
+		a: 1,
+		b: 2,
+	})
+}
+
+type _lisAdapter_Pair_Box_0[T any] struct {
+	inner Pair[T, T]
+}
+
+func (a _lisAdapter_Pair_Box_0[T]) get() lisette.Option[T] {
+	option_1 := lisette.OptionFromCommaOk[T](a.inner.get())
+	return option_1
+}

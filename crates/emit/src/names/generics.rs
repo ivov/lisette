@@ -51,19 +51,7 @@ impl Planner<'_> {
     pub(crate) fn generics_to_string(&mut self, generics: &[Generic]) -> String {
         let resolved_generics = generics
             .iter()
-            .map(|generic| {
-                let bounds = generic
-                    .bounds
-                    .iter()
-                    .map(|bound| {
-                        self.facts
-                            .resolved_bound_type(bound.get_span())
-                            .cloned()
-                            .expect("checker records a resolved type for every generic bound")
-                    })
-                    .collect::<Vec<_>>();
-                (generic.name.clone(), bounds)
-            })
+            .map(|generic| (generic.name.clone(), generic.resolved_bounds.clone()))
             .collect::<Vec<_>>();
         self.resolved_generics_to_string(&resolved_generics)
     }

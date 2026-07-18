@@ -1,0 +1,83 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  interface Box<U> {
+    fn get() -> U
+  }
+  
+  struct Bar<S> {
+    m: S,
+  }
+  
+  impl<S> Bar<S> {
+    fn get(self) -> Option<S> {
+      Some(self.m)
+    }
+  }
+  
+  fn consume<K: Comparable>(box: Box<Option<Map<K, int>>>) {
+    if let Some(v) = box.get() {
+      let _ = v
+    }
+  }
+  
+  struct Runner<K: Comparable> {
+    k: K,
+  }
+  
+  impl<K: Comparable> Runner<K> {
+    fn run(self, b: Bar<Map<K, int>>) {
+      consume(b)
+    }
+  }
+  
+  fn main() {
+    let r = Runner { k: "x" }
+    r.run(Bar { m: Map.from([("a", 1)]) })
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type Box[U any] interface {
+	get() U
+}
+
+type Bar[S any] struct {
+	m S
+}
+
+func (b Bar[S]) get() (S, bool) {
+	return b.m, true
+}
+
+func consume[K comparable](box Box[lisette.Option[map[K]int]]) {
+	subject_1 := box.get()
+	if subject_1.Tag == lisette.OptionSome {
+		_ = subject_1.SomeVal
+	}
+}
+
+type Runner[K comparable] struct {
+	k K
+}
+
+func (r Runner[K]) Run(b Bar[map[K]int]) {
+	consume(_lisAdapter_Bar_Box_0[K]{inner: b})
+}
+
+func main() {
+	r := Runner[string]{k: "x"}
+	r.Run(Bar[map[string]int]{m: lisette.MapFrom([]lisette.Tuple2[string, int]{lisette.MakeTuple2("a", 1)})})
+}
+
+type _lisAdapter_Bar_Box_0[K comparable] struct {
+	inner Bar[map[K]int]
+}
+
+func (a _lisAdapter_Bar_Box_0[K]) get() lisette.Option[map[K]int] {
+	option_1 := lisette.OptionFromCommaOk[map[K]int](a.inner.get())
+	return option_1
+}

@@ -1,0 +1,77 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  type Wrapped<T: Comparable> = Slice<T>
+  
+  interface Box<U> {
+    fn get() -> U
+  }
+  
+  struct Bar<S> {
+    m: S,
+  }
+  
+  impl<S> Bar<S> {
+    fn get(self) -> Option<S> {
+      Some(self.m)
+    }
+  }
+  
+  fn consume<T: Comparable>(box: Box<Option<Wrapped<T>>>) {
+    if let Some(v) = box.get() {
+      let _ = v
+    }
+  }
+  
+  fn pass<T: Comparable>(b: Bar<Wrapped<T>>) {
+    consume(b)
+  }
+  
+  fn main() {
+    let w: Wrapped<int> = [1, 2]
+    pass(Bar { m: w })
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type Wrapped[T comparable] = []T
+
+type Box[U any] interface {
+	get() U
+}
+
+type Bar[S any] struct {
+	m S
+}
+
+func (b Bar[S]) get() (S, bool) {
+	return b.m, true
+}
+
+func consume[T comparable](box Box[lisette.Option[Wrapped[T]]]) {
+	subject_1 := box.get()
+	if subject_1.Tag == lisette.OptionSome {
+		_ = subject_1.SomeVal
+	}
+}
+
+func pass[T comparable](b Bar[Wrapped[T]]) {
+	consume(_lisAdapter_Bar_Box_0[T]{inner: b})
+}
+
+func main() {
+	w := []int{1, 2}
+	pass(Bar[Wrapped[int]]{m: w})
+}
+
+type _lisAdapter_Bar_Box_0[T comparable] struct {
+	inner Bar[Wrapped[T]]
+}
+
+func (a _lisAdapter_Bar_Box_0[T]) get() lisette.Option[Wrapped[T]] {
+	option_1 := lisette.OptionFromCommaOk[Wrapped[T]](a.inner.get())
+	return option_1
+}

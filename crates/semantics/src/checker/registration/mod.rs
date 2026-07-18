@@ -314,6 +314,14 @@ impl TaskState<'_> {
         }
     }
 
+    /// Fill `resolved_bounds` on each item's generics, mirroring the per-module
+    /// pass. Test harnesses that emit a typed AST directly bypass that pass.
+    pub fn populate_item_generic_bounds(&self, items: &mut [Expression]) {
+        for item in items {
+            populate_expression_generic_bounds(item, &self.facts.bound_types);
+        }
+    }
+
     /// Register a Go module (stdlib or third-party). Unlike regular modules,
     /// Go modules export everything as public and do not put their own module
     /// in scope (no self-references like `MyModule.Type`). `cache_path` is the

@@ -399,6 +399,40 @@ pub interface Storage {
 }
 
 #[test]
+fn ref_impl_satisfies_option_ref_go_interface_without_adapter() {
+    let input = r#"
+import "go:example.com/store"
+
+struct Store {}
+
+impl Store {
+  fn Find(self, key: string) -> Ref<store.Entry> {
+    store.NewEntry()
+  }
+}
+
+fn use_store(s: store.Storage) {
+  let _ = s
+}
+
+fn main() {
+  let s = Store {}
+  use_store(s as store.Storage)
+}
+"#;
+    let typedef = r#"
+pub struct Entry { pub Name: string }
+
+pub fn NewEntry() -> Ref<Entry>
+
+pub interface Storage {
+  fn Find(key: string) -> Option<Ref<Entry>>
+}
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/store", typedef)]);
+}
+
+#[test]
 fn go_named_function_alias_preserved_through_option_tuple_return() {
     let input = r#"
 import "go:example.com/tea"

@@ -1,0 +1,76 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  import "go:errors"
+  
+  interface Foo<E: error> {
+    fn get(fail: bool) -> Result<int, E>
+  }
+  
+  struct Bar {}
+  
+  impl Bar {
+    fn get(self, fail: bool) -> Result<int, error> {
+      if fail { Err(errors.New("boom")) } else { Ok(42) }
+    }
+  }
+  
+  fn run<E: error>(foo: Foo<E>) {
+    match foo.get(false) {
+      Ok(v) => { let _ = v },
+      Err(e) => { let _ = e },
+    }
+  }
+  
+  fn main() {
+    run(Bar {})
+  }
+---
+package main
+
+import (
+	"errors"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+type Foo[E error] interface {
+	get(bool) lisette.Result[int, E]
+}
+
+type Bar struct{}
+
+func (b Bar) get(fail bool) (int, error) {
+	if fail {
+		return 0, errors.New("boom")
+	}
+	return 42, nil
+}
+
+func run[E error](foo Foo[E]) {
+	subject_1 := foo.get(false)
+	if subject_1.Tag == lisette.ResultOk {
+		_ = subject_1.OkVal
+	} else {
+		_ = subject_1.ErrVal
+	}
+}
+
+func main() {
+	run(_lisAdapter_Bar_Foo_0{inner: Bar{}})
+}
+
+type _lisAdapter_Bar_Foo_0 struct {
+	inner Bar
+}
+
+func (a _lisAdapter_Bar_Foo_0) get(arg0 bool) lisette.Result[int, error] {
+	ret_1, ret_2 := a.inner.get(arg0)
+	var result_3 lisette.Result[int, error]
+	if ret_2 != nil {
+		result_3 = lisette.MakeResultErr[int, error](ret_2)
+	} else {
+		result_3 = lisette.MakeResultOk[int, error](ret_1)
+	}
+	return result_3
+}

@@ -3,7 +3,6 @@ use crate::expressions::top_items::emit_doc;
 use crate::names::go_name;
 use syntax::EcoString;
 use syntax::ast::{Expression, FunctionDefinitionView, Generic, Pattern, Visibility};
-use syntax::program::DefinitionBody;
 use syntax::types::{Type, build_substitution_map, substitute, type_args_match_params};
 
 struct ImplContext<'a> {
@@ -101,14 +100,11 @@ impl Planner<'_> {
         ctx: &ImplContext<'_>,
         method_generics: &[Generic],
     ) -> Option<Vec<(EcoString, Vec<Type>)>> {
-        let receiver_generics = self.facts.definition(&ctx.qualified_type).and_then(
-            |definition| match &definition.body {
-                DefinitionBody::Struct { generics, .. } | DefinitionBody::Enum { generics, .. } => {
-                    Some(generics)
-                }
-                _ => None,
-            },
-        )?;
+        let receiver_generics = self
+            .facts
+            .definition(&ctx.qualified_type)?
+            .body
+            .generics()?;
         if receiver_generics.len() != ctx.generics.len()
             || !type_args_match_params(
                 ctx.ty.get_type_params().unwrap_or_default(),
@@ -127,32 +123,18 @@ impl Planner<'_> {
             .zip(ctx.generics)
             .map(|(receiver_generic, impl_generic)| {
                 let bounds = receiver_generic
-                    .bounds
+                    .resolved_bounds
                     .iter()
-                    .map(|bound| {
-                        let resolved = self
-                            .facts
-                            .resolved_bound_type(bound.get_span())
-                            .expect("checker records every receiver bound");
-                        substitute(resolved, &substitution)
-                    })
+                    .map(|bound| substitute(bound, &substitution))
                     .collect();
                 (impl_generic.name.clone(), bounds)
             })
             .collect::<Vec<_>>();
-        generic_bounds.extend(method_generics.iter().map(|generic| {
-            let bounds = generic
-                .bounds
+        generic_bounds.extend(
+            method_generics
                 .iter()
-                .map(|bound| {
-                    self.facts
-                        .resolved_bound_type(bound.get_span())
-                        .cloned()
-                        .expect("checker records every method bound")
-                })
-                .collect();
-            (generic.name.clone(), bounds)
-        }));
+                .map(|generic| (generic.name.clone(), generic.resolved_bounds.clone())),
+        );
         Some(generic_bounds)
     }
 }

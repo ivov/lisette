@@ -5906,6 +5906,213 @@ fn main() {
 }
 
 #[test]
+fn generic_adapter_uses_validated_receiver_context() {
+    let mut fs = MockFileSystem::new();
+
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+struct Keyed<K: Comparable> {
+  key: K,
+}
+
+impl<K: Comparable> Keyed<K> {
+  fn get(self) -> Option<K> {
+    Some(self.key)
+  }
+}
+
+interface Box<T> {
+  fn get() -> T
+}
+
+fn consume<T: Comparable>(_box: Box<Option<Array<T, 2>>>) {}
+
+struct Runner<T: Comparable> {
+  marker: T,
+}
+
+impl<T: Comparable> Runner<T> {
+  fn pass(self, keyed: Keyed<Array<T, 2>>) {
+    consume(keyed)
+  }
+}
+
+fn main() {
+  let key: Array<int, 2> = [1, 2]
+  let runner = Runner { marker: 0 }
+  runner.pass(Keyed { key: key })
+}
+"#,
+    );
+
+    assert_build_snapshot!(fs, "github.com/user/myproject");
+}
+
+#[test]
+fn generic_adapter_instantiates_renamed_impl_parameters() {
+    let mut fs = MockFileSystem::new();
+
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+interface Box<T> {
+  fn get() -> T
+}
+
+struct Bar<T> {
+  value: Option<T>,
+}
+
+impl<Item> Bar<Item> {
+  fn get(self) -> Option<Item> {
+    self.value
+  }
+}
+
+fn consume<T>(_box: Box<Option<T>>) {}
+
+fn main() {
+  consume(Bar { value: Some(1) })
+}
+"#,
+    );
+
+    assert_build_snapshot!(fs, "github.com/user/myproject");
+}
+
+#[test]
+fn generic_adapter_freshens_method_names_against_type_parameters() {
+    let mut fs = MockFileSystem::new();
+
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+interface Box<T> {
+  fn get(index: int) -> T
+}
+
+struct Bar<T> {
+  value: T,
+}
+
+impl<T> Bar<T> {
+  fn get(self, _index: int) -> Option<T> {
+    Some(self.value)
+  }
+}
+
+fn consume<T>(_box: Box<Option<T>>) {}
+
+fn pass<a, arg0>(bar: Bar<a>, _marker: arg0) {
+  consume(bar)
+}
+
+fn main() {
+  pass(Bar { value: 1 }, true)
+}
+"#,
+    );
+
+    assert_build_snapshot!(fs, "github.com/user/myproject");
+}
+
+#[test]
+fn adapter_type_name_freshens_against_active_scope() {
+    let mut fs = MockFileSystem::new();
+
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+interface Box<T> {
+  fn get() -> T
+}
+
+struct Bar<T> {
+  value: Option<T>,
+}
+
+impl<T> Bar<T> {
+  fn get(self) -> Option<T> {
+    self.value
+  }
+}
+
+fn consume<T>(_box: Box<Option<T>>) {}
+
+fn generic_collision<_lisAdapter_Bar_Box_0>(bar: Bar<_lisAdapter_Bar_Box_0>) {
+  consume(bar)
+}
+
+fn prime_cache(bar: Bar<int>) {
+  consume(bar)
+}
+
+fn cached_collision(bar: Bar<int>) {
+  let _lisAdapter_Bar_Box_1 = 1
+  consume(bar)
+  let _ = _lisAdapter_Bar_Box_1
+}
+
+fn main() {
+  generic_collision(Bar { value: Some(1) })
+  prime_cache(Bar { value: Some(2) })
+  cached_collision(Bar { value: Some(3) })
+}
+"#,
+    );
+
+    assert_build_snapshot!(fs, "github.com/user/myproject");
+}
+
+#[test]
+fn receiver_generic_ref_parameter_keeps_pointer_shape() {
+    let mut fs = MockFileSystem::new();
+
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+interface Marker {
+  fn get() -> int
+}
+
+struct Item {
+  n: int,
+}
+
+impl Item {
+  fn get(self) -> int {
+    self.n
+  }
+}
+
+struct Holder<T: Marker> {
+  item: T,
+}
+
+impl<T: Marker> Holder<T> {
+  fn read(self, value: Ref<T>) -> int {
+    value.*.get()
+  }
+}
+
+fn main() {
+  let holder = Holder { item: Item { n: 1 } }
+  let value = Item { n: 2 }
+  let _ = holder.read(&value)
+}
+"#,
+    );
+
+    assert_build_snapshot!(fs, "github.com/user/myproject");
+}
+
+#[test]
 fn result_with_pointer_error_lowers_to_native_tuple() {
     let mut fs = MockFileSystem::new();
 

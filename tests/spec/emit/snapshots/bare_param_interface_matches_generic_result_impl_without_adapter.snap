@@ -1,0 +1,70 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  import "go:errors"
+  
+  interface Box<T> {
+    fn get() -> T
+  }
+  
+  struct Bar<E: error> {
+    e: E,
+  }
+  
+  impl<E: error> Bar<E> {
+    fn get(self) -> Result<int, E> {
+      Err(self.e)
+    }
+  }
+  
+  fn consume<E: error>(box: Box<Result<int, E>>) {
+    match box.get() {
+      Ok(v) => { let _ = v },
+      Err(e) => { let _ = e },
+    }
+  }
+  
+  fn pass<E: error>(b: Bar<E>) {
+    consume(b)
+  }
+  
+  fn main() {
+    pass(Bar { e: errors.New("x") })
+  }
+---
+package main
+
+import (
+	"errors"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+type Box[T any] interface {
+	get() T
+}
+
+type Bar[E error] struct {
+	e E
+}
+
+func (b Bar[E]) get() lisette.Result[int, E] {
+	return lisette.MakeResultErr[int, E](b.e)
+}
+
+func consume[E error](box Box[lisette.Result[int, E]]) {
+	subject_1 := box.get()
+	if subject_1.Tag == lisette.ResultOk {
+		_ = subject_1.OkVal
+	} else {
+		_ = subject_1.ErrVal
+	}
+}
+
+func pass[E error](b Bar[E]) {
+	consume(b)
+}
+
+func main() {
+	pass(Bar[error]{e: errors.New("x")})
+}

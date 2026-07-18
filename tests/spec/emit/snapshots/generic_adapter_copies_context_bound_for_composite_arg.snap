@@ -1,0 +1,73 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  struct Keyed<K: Comparable> {
+    k: K,
+  }
+  
+  impl<K: Comparable> Keyed<K> {
+    fn get(self) -> Option<K> {
+      Some(self.k)
+    }
+  }
+  
+  interface Box<U> {
+    fn get() -> U
+  }
+  
+  fn consume<T: Comparable>(box: Box<Option<Array<T, 2>>>) {
+    if let Some(v) = box.get() {
+      let _ = v
+    }
+  }
+  
+  fn pass<T: Comparable>(k: Keyed<Array<T, 2>>) {
+    consume(k)
+  }
+  
+  fn main() {
+    let a: Array<int, 2> = [1, 2]
+    pass(Keyed { k: a })
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type Keyed[K comparable] struct {
+	k K
+}
+
+func (k Keyed[K]) get() (K, bool) {
+	return k.k, true
+}
+
+type Box[U any] interface {
+	get() U
+}
+
+func consume[T comparable](box Box[lisette.Option[[2]T]]) {
+	subject_1 := box.get()
+	if subject_1.Tag == lisette.OptionSome {
+		_ = subject_1.SomeVal
+	}
+}
+
+func pass[T comparable](k Keyed[[2]T]) {
+	consume(_lisAdapter_Keyed_Box_0[T]{inner: k})
+}
+
+func main() {
+	a := [2]int{1, 2}
+	pass(Keyed[[2]int]{k: a})
+}
+
+type _lisAdapter_Keyed_Box_0[T comparable] struct {
+	inner Keyed[[2]T]
+}
+
+func (a _lisAdapter_Keyed_Box_0[T]) get() lisette.Option[[2]T] {
+	option_1 := lisette.OptionFromCommaOk[[2]T](a.inner.get())
+	return option_1
+}

@@ -55,7 +55,6 @@ fn emit_inner(
         test_index: &test_index,
         go_package_names: &result.go_package_names,
         go_module_ids: &result.go_module_ids,
-        bound_types: &result.bound_types,
         resolved_definitions: &result.resolved_definitions,
     };
     let mut emitter = Planner::new_for_tests(&config, source_for_sourcemap);

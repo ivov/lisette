@@ -1,0 +1,71 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  interface Mixed<T> {
+    fn run()
+    fn value() -> T
+  }
+  
+  struct Bar<T> {
+    item: T,
+  }
+  
+  impl<T> Bar<T> {
+    fn run(self) -> T {
+      self.item
+    }
+  
+    fn value(self) -> T {
+      self.item
+    }
+  }
+  
+  fn consume(mixed: Mixed<()>) {
+    mixed.run()
+    let _ = mixed.value()
+  }
+  
+  fn main() {
+    consume(Bar { item: () })
+  }
+---
+package main
+
+type Mixed[T any] interface {
+	Run()
+	value() T
+}
+
+type Bar[T any] struct {
+	item T
+}
+
+func (b Bar[T]) Run() T {
+	return b.item
+}
+
+func (b Bar[T]) value() T {
+	return b.item
+}
+
+func consume(mixed Mixed[struct{}]) {
+	mixed.Run()
+	mixed.value()
+}
+
+func main() {
+	consume(_lisAdapter_Bar_Mixed_0{inner: Bar[struct{}]{item: struct{}{}}})
+}
+
+type _lisAdapter_Bar_Mixed_0 struct {
+	inner Bar[struct{}]
+}
+
+func (a _lisAdapter_Bar_Mixed_0) value() struct{} {
+	return a.inner.value()
+}
+
+func (a _lisAdapter_Bar_Mixed_0) Run() {
+	a.inner.Run()
+}

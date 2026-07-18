@@ -1,0 +1,38 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type Box[T any] interface {
+	get(int) T
+}
+
+type Bar[T any] struct {
+	value T
+}
+
+func (b Bar[T]) get(_ int) (T, bool) {
+	return b.value, true
+}
+
+func consume[T any](_ Box[lisette.Option[T]]) {}
+
+func pass[a any, arg0 any](bar Bar[a], _ arg0) {
+	consume(_lisAdapter_Bar_Box_0[a, arg0]{inner: bar})
+}
+
+func main() {
+	pass(Bar[int]{value: 1}, true)
+}
+
+type _lisAdapter_Bar_Box_0[a any, arg0 any] struct {
+	inner Bar[a]
+}
+
+func (a_1 _lisAdapter_Bar_Box_0[a, arg0]) get(arg0_2 int) lisette.Option[a] {
+	option_3 := lisette.OptionFromCommaOk[a](a_1.inner.get(arg0_2))
+	return option_3
+}

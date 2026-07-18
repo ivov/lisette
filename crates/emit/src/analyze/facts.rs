@@ -27,7 +27,6 @@ pub(crate) struct EmitFactsConfig<'a> {
     pub(crate) test_index: &'a TestIndex,
     pub(crate) go_package_names: &'a HashMap<String, String>,
     pub(crate) go_module_ids: &'a HashSet<String>,
-    pub(crate) bound_types: &'a HashMap<Span, Type>,
     pub(crate) entry_module: ModuleId,
     pub(crate) go_module: String,
     pub(crate) options: EmitOptions,
@@ -47,7 +46,6 @@ pub(crate) struct EmitFacts<'a> {
     test_index: &'a TestIndex,
     go_package_names: &'a HashMap<String, String>,
     go_module_ids: &'a HashSet<String>,
-    bound_types: &'a HashMap<Span, Type>,
     entry_module: ModuleId,
     go_module: String,
     options: EmitOptions,
@@ -69,7 +67,6 @@ impl<'a> EmitFacts<'a> {
             test_index: config.test_index,
             go_package_names: config.go_package_names,
             go_module_ids: config.go_module_ids,
-            bound_types: config.bound_types,
             entry_module: config.entry_module,
             go_module: config.go_module,
             options: config.options,
@@ -285,10 +282,6 @@ impl<'a> EmitFacts<'a> {
 
     pub(crate) fn is_go_imported_type(&self, qualified_name: &str) -> bool {
         self.globals.go_abi_catalog.is_imported_type(qualified_name)
-    }
-
-    pub(crate) fn resolved_bound_type(&self, span: Span) -> Option<&'a Type> {
-        self.bound_types.get(&span)
     }
 
     pub(crate) fn sourcemap_enabled(&self) -> bool {
