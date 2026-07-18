@@ -1,0 +1,28 @@
+---
+source: tests/spec/emit/go_interface_adapter.rs
+description: |
+  
+  import "go:example.com/srv"
+  
+  fn setup_handler() -> srv.Handler {
+    srv.NewHandler()
+  }
+  
+  fn main() {
+    let _ = &srv.Server { Addr: ":8000", Handler: setup_handler(), .. }
+  }
+---
+package main
+
+import "example.com/srv"
+
+func setup_handler() srv.Handler {
+	return srv.NewHandler()
+}
+
+func main() {
+	_ = &srv.Server{
+		Addr:    ":8000",
+		Handler: setup_handler(),
+	}
+}

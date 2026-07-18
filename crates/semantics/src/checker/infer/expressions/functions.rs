@@ -11,6 +11,7 @@ use syntax::types::{
 use super::super::carry_mut::can_carry_mutation_across_fn_boundary;
 use super::super::unify::Dispatched;
 use super::primitives::contains_deref;
+use super::struct_call::same_nominal;
 use crate::checker::infer::InferCtx;
 use crate::checker::registration::test_functions::normalize_test_params;
 use crate::store::ENTRY_MODULE_ID;
@@ -509,10 +510,9 @@ impl InferCtx<'_, '_> {
                 .push(diagnostics::infer::cannot_infer_type_argument(span));
         }
 
-        // Use expected_ty for generic containers (Option, Result) when it has
-        // interface type parameters. This ensures coercion like `Option<Printable>`
-        // from `Some(Text{...})` gets the correct type for codegen.
+        // Widen to the expected interface container for codegen, only when the return is the same container.
         let call_ty = if !expected_ty.is_variable()
+            && same_nominal(&resolved_expected, &resolved_return)
             && self.is_generic_container_with_interface(store, expected_ty)
         {
             expected_ty.clone()

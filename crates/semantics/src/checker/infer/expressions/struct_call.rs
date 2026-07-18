@@ -597,7 +597,7 @@ impl InferCtx<'_, '_> {
     }
 }
 
-fn same_nominal(a: &Type, b: &Type) -> bool {
+pub(super) fn same_nominal(a: &Type, b: &Type) -> bool {
     matches!(
         (a, b),
         (Type::Nominal { id: ai, .. }, Type::Nominal { id: bi, .. }) if ai == bi

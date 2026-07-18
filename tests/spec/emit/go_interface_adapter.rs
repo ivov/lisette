@@ -782,3 +782,31 @@ fn main() {
 "#;
     assert_emit_snapshot_with_go_typedefs!(input, &[]);
 }
+
+#[test]
+fn call_returning_go_interface_widens_into_option_field() {
+    let input = r#"
+import "go:example.com/srv"
+
+fn setup_handler() -> srv.Handler {
+  srv.NewHandler()
+}
+
+fn main() {
+  let _ = &srv.Server { Addr: ":8000", Handler: setup_handler(), .. }
+}
+"#;
+    let typedef = r#"
+pub interface Handler {
+  fn Serve()
+}
+
+pub struct Server {
+  pub Addr: string,
+  pub Handler: Option<Handler>,
+}
+
+pub fn NewHandler() -> Handler
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/srv", typedef)]);
+}
