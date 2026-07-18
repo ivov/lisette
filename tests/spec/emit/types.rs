@@ -3460,6 +3460,23 @@ fn test() -> string {
 }
 
 #[test]
+fn json_tagged_struct_field_access_before_definition() {
+    let input = r#"
+fn test() -> string {
+  let u = User { name: "Alice", age: 30 };
+  u.name
+}
+
+#[json]
+struct User {
+  name: string,
+  age: int,
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn assoc_fn_returning_option_self() {
     let input = r#"
 struct Thing {

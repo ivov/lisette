@@ -41,6 +41,19 @@ pub(super) enum CaseTransform {
     CamelCase,
 }
 
+pub(super) fn field_has_export_forcing_attribute(field: &StructFieldDefinition) -> bool {
+    field.attributes.iter().any(|attribute| {
+        if attribute.name == "tag" {
+            matches!(
+                attribute.args.first(),
+                Some(AttributeArg::String(_) | AttributeArg::Raw(_))
+            )
+        } else {
+            is_serialization_key(&attribute.name)
+        }
+    })
+}
+
 pub(super) fn interpret_field_attributes(
     field: &StructFieldDefinition,
     struct_attrs: &[Attribute],

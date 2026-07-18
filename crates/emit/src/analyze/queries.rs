@@ -5,7 +5,7 @@ use rustc_hash::FxHashMap as HashMap;
 use crate::Planner;
 use crate::control_flow::fallible;
 use crate::definitions::enum_layout::{EnumLayout, FieldTypeInfo, FieldTypeMap};
-use crate::definitions::structs::is_raw_function_type;
+use crate::definitions::structs::{field_go_name_is_exported, is_raw_function_type};
 use crate::names::go_name;
 use syntax::ast::{Pattern, RestPattern, StructKind};
 use syntax::containment::enum_payload_pointer_wrapped;
@@ -58,12 +58,7 @@ impl Planner<'_> {
         match &resolved.definition.body {
             DefinitionBody::Struct { fields, .. } => {
                 if let Some(field) = fields.iter().find(|f| f.name == field_name) {
-                    if field.visibility.is_public() {
-                        return true;
-                    }
-                    // Also export fields that have serialization tags (e.g. #[json])
-                    let tag_key = format!("{}.{}", id, field_name);
-                    return self.module.is_tag_exported_field(&tag_key);
+                    return field_go_name_is_exported(field, resolved.definition.is_serialized());
                 }
                 let method_key = format!("{}.{}", id, field_name);
                 self.facts

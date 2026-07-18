@@ -1,0 +1,29 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  fn test() -> string {
+    let u = User { name: "Alice", age: 30 };
+    u.name
+  }
+  
+  #[json]
+  struct User {
+    name: string,
+    age: int,
+  }
+---
+package main
+
+func test() string {
+	u := User{
+		Name: "Alice",
+		Age:  30,
+	}
+	return u.Name
+}
+
+type User struct {
+	Name string `json:"name"`
+	Age  int    `json:"age"`
+}

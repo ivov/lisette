@@ -9,7 +9,6 @@ use crate::EnumLayout;
 #[derive(Default)]
 pub(crate) struct ModuleState {
     enum_layouts: RefCell<HashMap<u32, HashMap<String, Rc<EnumLayout>>>>,
-    tag_exported_fields: HashSet<String>,
     exported_method_names: HashSet<String>,
     user_to_string_types: HashSet<String>,
     escape_remap: HashMap<String, String>,
@@ -31,14 +30,6 @@ impl ModuleState {
             .get(&file_id)?
             .get(enum_id)
             .cloned()
-    }
-
-    pub(crate) fn record_tag_exported_field(&mut self, key: String) {
-        self.tag_exported_fields.insert(key);
-    }
-
-    pub(crate) fn is_tag_exported_field(&self, key: &str) -> bool {
-        self.tag_exported_fields.contains(key)
     }
 
     pub(crate) fn record_exported_method_name(&mut self, name: impl Into<String>) {

@@ -1,6 +1,8 @@
 use crate::Planner;
 use crate::definitions::enum_layout::{ENUM_GO_STRINGER_METHOD, ENUM_STRINGER_METHOD};
-use crate::definitions::tags::{format_tag_string, interpret_field_attributes};
+use crate::definitions::tags::{
+    field_has_export_forcing_attribute, format_tag_string, interpret_field_attributes,
+};
 use crate::expressions::top_items::emit_doc;
 use crate::names::go_name::{self, prelude_qualifier};
 use crate::utils::{synthesized_local_name, synthesized_receiver_name};
@@ -31,7 +33,7 @@ impl Planner<'_> {
         let mut field_strings: Vec<String> = Vec::with_capacity(fields.len());
         let mut stringer_fields: Vec<StringerField> = Vec::with_capacity(fields.len());
         for f in fields {
-            let (field_string, stringer_field) = self.emit_struct_field(f, name, struct_attrs);
+            let (field_string, stringer_field) = self.emit_struct_field(f, struct_attrs);
             field_strings.push(field_string);
             stringer_fields.push(stringer_field);
         }
@@ -219,7 +221,6 @@ impl Planner<'_> {
     fn emit_struct_field(
         &mut self,
         f: &StructFieldDefinition,
-        struct_name: &str,
         struct_attrs: &[Attribute],
     ) -> (String, StringerField) {
         if f.embedded {
@@ -236,13 +237,7 @@ impl Planner<'_> {
         let is_option = is_option_type(&f.ty);
         let tag_string = format_tag_string(&f.name, &tag_configs, is_option);
 
-        let has_tags = !tag_configs.is_empty();
         let field_name = struct_field_go_name(f, struct_attrs);
-
-        if has_tags && !f.visibility.is_public() {
-            let key = self.facts.qualified_current_member(struct_name, &f.name);
-            self.module.record_tag_exported_field(key);
-        }
 
         let field_definition = if let Some(tags) = tag_string {
             format!("{} {} {}", field_name, self.go_type_string(&f.ty), tags)
@@ -516,17 +511,21 @@ pub(crate) fn struct_field_go_name(
 }
 
 fn field_go_name(field: &StructFieldDefinition, struct_forces_export: bool) -> Cow<'_, str> {
-    if field.embedded {
-        return go_name::escape_keyword(&field.name);
-    }
-    let exported = field.visibility.is_public()
-        || struct_forces_export
-        || !interpret_field_attributes(field, &[]).is_empty();
-    if exported {
+    if field_go_name_is_exported(field, struct_forces_export) {
         Cow::Owned(go_name::make_exported(&field.name))
     } else {
         go_name::escape_keyword(&field.name)
     }
+}
+
+pub(crate) fn field_go_name_is_exported(
+    field: &StructFieldDefinition,
+    struct_forces_export: bool,
+) -> bool {
+    !field.embedded
+        && (field.visibility.is_public()
+            || struct_forces_export
+            || field_has_export_forcing_attribute(field))
 }
 
 pub(crate) struct StringerField {
