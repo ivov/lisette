@@ -300,6 +300,11 @@ pub fn run_inference(input: AnalyzeInput) -> InferenceOutput {
             to_infer.push((topo_rank, module_id));
         }
 
+        let go_cache_module_ids: Option<HashSet<String>> = go_cache
+            .take()
+            .flatten()
+            .map(|cache| cache.modules.keys().cloned().collect());
+
         let cache_load = load_cache_candidates(
             &mut checker,
             &mut store,
@@ -351,9 +356,9 @@ pub fn run_inference(input: AnalyzeInput) -> InferenceOutput {
                 .collect();
             // A non-empty list implies the lazy cache load was attempted.
             let needs_save = !all_go_modules.is_empty()
-                && go_cache.as_ref().and_then(Option::as_ref).is_none_or(|c| {
-                    all_go_modules.len() != c.modules.len()
-                        || all_go_modules.iter().any(|id| !c.modules.contains_key(id))
+                && go_cache_module_ids.as_ref().is_none_or(|ids| {
+                    all_go_modules.len() != ids.len()
+                        || all_go_modules.iter().any(|id| !ids.contains(id))
                 });
             if needs_save {
                 go_stdlib::save_go_stdlib_cache(&store, &all_go_modules, input.locator.target());
