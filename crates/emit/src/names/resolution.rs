@@ -119,22 +119,21 @@ impl Planner<'_> {
     }
 
     pub(crate) fn package_use_for_module(&self, module: &str) -> PackageUse {
-        let canonical = self.canonical_module(module);
-        if canonical == go_name::TEST_PRELUDE_MODULE {
+        if module == go_name::TEST_PRELUDE_MODULE {
             return PackageUse::generated(go_name::GeneratedPackage::TestKit);
         }
-        let path = match canonical.strip_prefix(go_name::GO_IMPORT_PREFIX) {
+        let path = match module.strip_prefix(go_name::GO_IMPORT_PREFIX) {
             Some(rest) => rest.to_string(),
-            None => self.facts.go_import_path(&canonical),
+            None => self.facts.go_import_path(module),
         };
         let qualifier = self
             .file_namespace()
-            .module_alias(&canonical)
+            .module_alias(module)
             .map(str::to_string)
-            .or_else(|| self.facts.go_package_name(&canonical).map(str::to_string))
-            .unwrap_or_else(|| match canonical.strip_prefix(go_name::GO_IMPORT_PREFIX) {
+            .or_else(|| self.facts.go_package_name(module).map(str::to_string))
+            .unwrap_or_else(|| match module.strip_prefix(go_name::GO_IMPORT_PREFIX) {
                 Some(go_path) => syntax::program::go_import_default_name(go_path).to_string(),
-                None => go_name::go_package_name(&canonical).to_string(),
+                None => go_name::go_package_name(module).to_string(),
             });
         let qualifier = if qualifier == go_name::go_package_name(&path) {
             go_name::sanitize_package_name(&qualifier).into_owned()

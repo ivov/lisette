@@ -472,7 +472,7 @@ impl Planner<'_> {
                 } else {
                     String::new()
                 };
-                let pkg = self.require_module_import(parts[0]);
+                let pkg = self.require_module_import(&self.canonical_module(parts[0]));
                 return format!("{}.{}{}", pkg, go_name::snake_to_camel(parts[1]), type_args);
             }
         }

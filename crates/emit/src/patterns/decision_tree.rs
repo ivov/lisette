@@ -1136,7 +1136,7 @@ fn handle_foreign_variant_literal(
     {
         collector
             .packages
-            .require(planner.package_use_for_module(module));
+            .require(planner.package_use_for_module(&planner.canonical_module(module)));
     }
     collector.checks.push(Check::Literal {
         path: path.clone(),

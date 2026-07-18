@@ -608,6 +608,7 @@ impl InferCtx<'_, '_> {
     ) -> Option<(Expression, DotAccessKind)> {
         let store = self.store;
         let type_name = args.deref_ty.get_name()?;
+        let namespace_id = args.deref_ty.as_import_namespace();
 
         // Look up by type-derived name first (works for non-aliased imports).
         // For aliased imports (e.g. `import u "utils"`), the map key is "u" but
@@ -616,9 +617,10 @@ impl InferCtx<'_, '_> {
             .imports
             .imported_modules
             .get(type_name)
+            .filter(|(_, ty)| namespace_id.is_none() || ty.as_import_namespace() == namespace_id)
             .cloned()
             .or_else(|| {
-                let module_id = args.deref_ty.as_import_namespace()?;
+                let module_id = namespace_id?;
                 self.imports
                     .imported_modules
                     .values()

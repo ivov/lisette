@@ -1,0 +1,32 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === http/foo.go ===
+package http
+
+type Foo struct{}
+
+func Foo_New() Foo {
+	return Foo{}
+}
+
+
+// === main.go ===
+package main
+
+import (
+	"fmt"
+	foo "github.com/user/myproject/http"
+	"net/http"
+)
+
+func main() {
+	made := foo.Foo_New()
+	built := foo.Foo{}
+	n := 1
+	pinned := float64(int((http.StatusOK << n)))
+	fmt.Println(made)
+	fmt.Println(built)
+	fmt.Println(http.MethodGet)
+	fmt.Println(pinned)
+}

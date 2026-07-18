@@ -46,6 +46,49 @@ fn main() {
 }
 
 #[test]
+fn aliased_local_module_survives_go_import_name_clash() {
+    let mut fs = MockFileSystem::new();
+
+    fs.add_file(
+        "http",
+        "foo.lis",
+        r#"
+pub struct Foo {}
+
+impl Foo {
+  pub fn new() -> Foo {
+    Foo {}
+  }
+}
+"#,
+    );
+
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+import "go:net/http"
+import "go:fmt"
+
+import foo "http"
+
+fn main() {
+  let made = foo.Foo.new()
+  let built = foo.Foo {}
+  let n = 1
+  let pinned = (http.StatusOK << n) as float64
+  fmt.Println(made)
+  fmt.Println(built)
+  fmt.Println(http.MethodGet)
+  fmt.Println(pinned)
+}
+"#,
+    );
+
+    assert_build_snapshot!(fs, "github.com/user/myproject");
+}
+
+#[test]
 fn cast_shift_imported_module_const_count_needs_no_pin() {
     let mut fs = MockFileSystem::new();
 
