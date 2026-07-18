@@ -292,6 +292,34 @@ fn channel_new_type_from_return_type_succeeds() {
 }
 
 #[test]
+fn negative_literal_buffered_errors() {
+    infer("fn test() { let c = Channel.buffered<int>(-2); let _ = c }")
+        .assert_infer_code("negative_size_literal");
+}
+
+#[test]
+fn negative_literal_reserve_errors() {
+    infer("fn test() { let mut s = [1]; s = s.reserve(-3); let _ = s }")
+        .assert_infer_code("negative_size_literal");
+}
+
+#[test]
+fn negative_literal_reserve_ufcs_errors() {
+    infer("fn test() { let mut s = [1]; s = Slice.reserve(s, -4); let _ = s }")
+        .assert_infer_code("negative_size_literal");
+}
+
+#[test]
+fn negative_zero_size_literal_is_legal() {
+    infer("fn test() { let a = Slice.make<byte>(-0); let _ = a }").assert_no_errors();
+}
+
+#[test]
+fn computed_negative_size_stays_runtime() {
+    infer("fn test() { let a = Slice.make<byte>(0 - 1); let _ = a }").assert_no_errors();
+}
+
+#[test]
 fn slice_make_guard_sees_through_parens() {
     infer(
         r#"

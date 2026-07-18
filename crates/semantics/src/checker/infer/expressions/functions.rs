@@ -1,7 +1,9 @@
 use crate::checker::EnvResolve;
 use ecow::EcoString;
 use syntax::ast::BindingKind;
-use syntax::ast::{Annotation, Binding, Expression, Pattern, Span, StructKind};
+use syntax::ast::{
+    Annotation, Binding, Expression, Literal, Pattern, Span, StructKind, UnaryOperator,
+};
 use syntax::program::{CallKind, Definition, DefinitionBody, NativeTypeKind};
 use syntax::types::{
     Bound, CompoundKind, SubstitutionMap, Symbol, Type, peel_to_range_type, substitute,
@@ -561,6 +563,13 @@ impl InferCtx<'_, '_> {
                 });
         }
 
+        self.check_negative_size_literal(
+            call_kind,
+            &callee_expression,
+            callee_path.as_deref(),
+            &new_args,
+        );
+
         Expression::Call {
             expression: callee_expression.into(),
             args: new_args,
@@ -570,6 +579,49 @@ impl InferCtx<'_, '_> {
             ty: call_ty,
             span,
             call_kind: Some(call_kind),
+        }
+    }
+
+    fn check_negative_size_literal(
+        &mut self,
+        call_kind: CallKind,
+        callee_expression: &Expression,
+        callee_path: Option<&str>,
+        args: &[Expression],
+    ) {
+        let sized = match call_kind {
+            CallKind::NativeConstructor(NativeTypeKind::Slice)
+                if callee_path == Some("Slice.make") =>
+            {
+                args.first().map(|arg| ("length", arg))
+            }
+            CallKind::NativeConstructor(NativeTypeKind::Channel)
+                if callee_path == Some("Channel.buffered") =>
+            {
+                args.first().map(|arg| ("capacity", arg))
+            }
+            CallKind::NativeMethod(NativeTypeKind::Slice) => {
+                match callee_expression.unwrap_parens() {
+                    Expression::DotAccess { member, .. } if member == "reserve" => {
+                        args.first().map(|arg| ("capacity", arg))
+                    }
+                    _ => None,
+                }
+            }
+            CallKind::NativeMethodIdentifier(NativeTypeKind::Slice)
+                if callee_path == Some("Slice.reserve") =>
+            {
+                args.get(1).map(|arg| ("capacity", arg))
+            }
+            _ => None,
+        };
+        if let Some((what, arg)) = sized
+            && is_negative_integer_literal(arg)
+        {
+            self.sink.push(diagnostics::infer::negative_size_literal(
+                what,
+                arg.get_span(),
+            ));
         }
     }
 
@@ -1714,4 +1766,18 @@ fn callee_label(expr: &Expression) -> String {
         },
         _ => "the function".to_string(),
     }
+}
+
+fn is_negative_integer_literal(expression: &Expression) -> bool {
+    matches!(
+        expression.unwrap_parens(),
+        Expression::Unary {
+            operator: UnaryOperator::Negative,
+            expression: inner,
+            ..
+        } if matches!(
+            inner.unwrap_parens(),
+            Expression::Literal { literal: Literal::Integer { value, .. }, .. } if *value > 0
+        )
+    )
 }

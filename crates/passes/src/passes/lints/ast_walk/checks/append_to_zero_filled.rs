@@ -1,71 +1,105 @@
 use super::helpers::{is_bare_identifier, is_zero_literal};
 use crate::passes::walk::NodeCtx;
-use syntax::ast::{BindingId, Expression, Pattern, Span};
+use syntax::ast::{BindingId, Expression, Literal, Pattern, Span};
 use syntax::program::{CallKind, NativeTypeKind};
 
 pub fn check_append_to_zero_filled(expression: &Expression, ctx: &NodeCtx) {
     if let Some(receiver) = growing_append_receiver(expression)
-        && let Some(make_span) = zero_filled_make_call(receiver.unwrap_parens())
+        && let Some(make) = zero_filled_make_call(receiver.unwrap_parens())
     {
-        ctx.sink
-            .push(diagnostics::lint::append_to_zero_filled(&make_span));
+        ctx.sink.push(diagnostics::lint::append_to_zero_filled(
+            &make.span,
+            &expression.get_span(),
+            make.length,
+            &make.element,
+        ));
     }
 
     let Expression::Block { items, .. } = expression else {
         return;
     };
     for (index, item) in items.iter().enumerate() {
-        let Some((binding_id, make_span)) = zero_filled_make_binding(item, ctx) else {
+        let Some((binding_id, make)) = zero_filled_make_binding(item, ctx) else {
             continue;
         };
-        if let Some(FirstUse::AppendReceiver) = items[index + 1..]
+        if let Some(FirstUse::AppendReceiver(append_span)) = items[index + 1..]
             .iter()
             .find_map(|later| first_use(later, binding_id))
         {
-            ctx.sink
-                .push(diagnostics::lint::append_to_zero_filled(&make_span));
+            ctx.sink.push(diagnostics::lint::append_to_zero_filled(
+                &make.span,
+                &append_span,
+                make.length,
+                &make.element,
+            ));
         }
     }
 }
 
+struct MakeCall {
+    span: Span,
+    length: Option<u64>,
+    element: String,
+}
+
 /// `Slice.make(n)` with `n` not a literal zero, which has no zeros to append after.
-fn zero_filled_make_call(expression: &Expression) -> Option<Span> {
+fn zero_filled_make_call(expression: &Expression) -> Option<MakeCall> {
     let Expression::Call {
         expression: callee,
         call_kind: Some(CallKind::NativeConstructor(NativeTypeKind::Slice)),
         args,
         span,
+        ty,
         ..
     } = expression
     else {
         return None;
     };
-    let length = args.first()?;
-    if is_zero_literal(length.unwrap_parens()) {
+    let length_arg = args.first()?;
+    if is_zero_literal(length_arg.unwrap_parens()) {
         return None;
     }
-    is_bare_identifier(callee, "Slice.make").then_some(*span)
+    if !is_bare_identifier(callee, "Slice.make") {
+        return None;
+    }
+    let length = match length_arg.unwrap_parens() {
+        Expression::Literal {
+            literal: Literal::Integer { value, .. },
+            ..
+        } if *value > 0 => Some(*value),
+        _ => None,
+    };
+    let element = ty
+        .get_type_params()
+        .and_then(|params| params.first())
+        .map(|element| element.to_string())
+        .unwrap_or_else(|| "T".to_string());
+    Some(MakeCall {
+        span: *span,
+        length,
+        element,
+    })
 }
 
 /// The binding id comes from the pattern-span-keyed facts, so shadows never match.
-fn zero_filled_make_binding(item: &Expression, ctx: &NodeCtx) -> Option<(BindingId, Span)> {
+fn zero_filled_make_binding(item: &Expression, ctx: &NodeCtx) -> Option<(BindingId, MakeCall)> {
     let Expression::Let { binding, value, .. } = item else {
         return None;
     };
     let Pattern::Identifier { identifier, span } = &binding.pattern else {
         return None;
     };
-    let make_span = zero_filled_make_call(value.unwrap_parens())?;
+    let make = zero_filled_make_call(value.unwrap_parens())?;
     let (id, _) = ctx
         .facts
         .bindings
         .iter()
         .find(|(_, fact)| fact.span == *span && fact.name == identifier.as_str())?;
-    Some((*id, make_span))
+    Some((*id, make))
 }
 
 enum FirstUse {
-    AppendReceiver,
+    AppendReceiver(Span),
     Other,
 }
 
@@ -80,7 +114,7 @@ fn first_use(expression: &Expression, binding_id: BindingId) -> Option<FirstUse>
     if let Some(receiver) = growing_append_receiver(expression)
         && is_binding(receiver, binding_id)
     {
-        return Some(FirstUse::AppendReceiver);
+        return Some(FirstUse::AppendReceiver(expression.get_span()));
     }
     if is_binding(expression, binding_id) {
         return Some(FirstUse::Other);

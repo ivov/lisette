@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Negative length
+   ╭─[test.lis:3:28]
+ 2 │ fn test() {
+ 3 │   let a = Slice.make<byte>(-1)
+   ·                            ─┬
+   ·                             ╰── a length cannot be negative
+ 4 │   let _ = a
+   ╰────
+  help: This would always fail at runtime, so it is rejected here · code: [infer.negative_size_literal]

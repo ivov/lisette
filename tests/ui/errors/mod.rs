@@ -2137,6 +2137,17 @@ fn test(r: Ref<Slice<int>>) {
 }
 
 #[test]
+fn infer_negative_size_literal_make() {
+    let input = r#"
+fn test() {
+  let a = Slice.make<byte>(-1)
+  let _ = a
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
 fn infer_slice_make_no_zero() {
     let input = r#"
 fn test() {

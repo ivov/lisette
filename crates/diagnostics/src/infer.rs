@@ -3538,11 +3538,20 @@ pub fn array_new_no_zero(element: &dyn std::fmt::Display, span: Span) -> Lisette
         )
 }
 
+pub fn negative_size_literal(what: &str, span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error(format!("Negative {what}"))
+        .with_infer_code("negative_size_literal")
+        .with_span_label(&span, format!("a {what} cannot be negative"))
+        .with_help("This would always fail at runtime, so it is rejected here")
+}
+
 pub fn map_no_make_constructor(span: Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("`Map` has no `make` constructor")
         .with_infer_code("no_make_constructor")
         .with_span_label(&span, "`Map` has no capacity-taking constructor")
-        .with_help("Use `Map.new<K, V>()`. Go's map capacity hint has no observable effect")
+        .with_help(
+            "Use `Map.new<K, V>()`. Go's map size hint only pre-sizes the initial allocation",
+        )
 }
 
 pub fn channel_no_make_constructor(span: Span) -> LisetteDiagnostic {

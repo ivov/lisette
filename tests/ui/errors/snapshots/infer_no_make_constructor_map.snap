@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
    ·                       ╰── `Map` has no capacity-taking constructor
  4 │ }
    ╰────
-  help: Use `Map.new<K, V>()`. Go's map capacity hint has no observable effect · code: [infer.no_make_constructor]
+  help: Use `Map.new<K, V>()`. Go's map size hint only pre-sizes the initial allocation · code: [infer.no_make_constructor]

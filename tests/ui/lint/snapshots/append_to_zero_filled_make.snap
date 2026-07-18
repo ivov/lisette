@@ -8,5 +8,8 @@ source: tests/ui/lint/mod.rs
    ·                 ──────────┬─────────
    ·                           ╰── every element is already a zero value
  4 │   ids = ids.append(7)
+   ·         ──────┬──────
+   ·               ╰── `append` adds element 101 here
+ 5 │   let _ = ids
    ╰────
-  help: `Slice.make(n)` creates n zero-valued elements, so `append` adds element n+1. For an empty slice with room for n, use `Slice.new<T>().reserve(n)` · code: [lint.append_to_zero_filled]
+  help: For an empty slice with room for 100, use `Slice.new<int>().reserve(100)` · code: [lint.append_to_zero_filled]

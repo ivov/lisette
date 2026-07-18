@@ -240,14 +240,29 @@ pub fn ineffective_try_block(span: &Span) -> LisetteDiagnostic {
         .with_help("A `try` block is effective only if the expression may succeed or fail")
 }
 
-pub fn append_to_zero_filled(span: &Span) -> LisetteDiagnostic {
+pub fn append_to_zero_filled(
+    make_span: &Span,
+    append_span: &Span,
+    length: Option<u64>,
+    element: &str,
+) -> LisetteDiagnostic {
+    let append_label = match length {
+        Some(n) => format!("`append` adds element {} here", n + 1),
+        None => "`append` adds elements after the zeros here".to_string(),
+    };
+    let help = match length {
+        Some(n) => format!(
+            "For an empty slice with room for {n}, use `Slice.new<{element}>().reserve({n})`"
+        ),
+        None => format!(
+            "For an empty slice with reserved room, use `Slice.new<{element}>().reserve(n)`"
+        ),
+    };
     LisetteDiagnostic::warn("Appending to a zero-filled slice")
         .with_lint_code("append_to_zero_filled")
-        .with_span_label(span, "every element is already a zero value")
-        .with_help(
-            "`Slice.make(n)` creates n zero-valued elements, so `append` adds element n+1. \
-             For an empty slice with room for n, use `Slice.new<T>().reserve(n)`",
-        )
+        .with_span_label(make_span, "every element is already a zero value")
+        .with_span_label(append_span, append_label)
+        .with_help(help)
 }
 
 pub fn replaceable_with_autofill(span: &Span, kept: &str, struct_name: &str) -> LisetteDiagnostic {
