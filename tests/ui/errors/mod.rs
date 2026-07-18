@@ -8746,7 +8746,7 @@ struct Foo<T: Bar<E>, E> { value: T }
 fn infer_missing_transitive_bound_user_interface() {
     let input = r#"
 interface Shower {
-  fn show(self) -> string
+  fn show() -> string
 }
 
 interface Bar<E: Shower> {}
@@ -8790,7 +8790,7 @@ interface Foo<T: Wrapper<E>, E: Comparable> {}
 fn infer_missing_transitive_bound_distinguishes_type_args() {
     let input = r#"
 interface Parent<T> {
-  fn p(self) -> T
+  fn p() -> T
 }
 
 interface Bar<E: Parent<string>> {}
@@ -8804,7 +8804,7 @@ interface Foo<T: Bar<E>, E: Parent<int>> {}
 fn infer_transitive_bound_matching_type_args_no_error() {
     let input = r#"
 interface Parent<T> {
-  fn p(self) -> T
+  fn p() -> T
 }
 
 interface Bar<E: Parent<string>> {}
@@ -8823,7 +8823,7 @@ interface Foo<T: Bar<E>, E: Parent<string>> {}
 fn infer_missing_transitive_bound_substitutes_referenced_params() {
     let input = r#"
 interface Parent<T> {
-  fn p(self) -> T
+  fn p() -> T
 }
 
 interface Bar<X, E: Parent<X>> {}
@@ -8837,7 +8837,7 @@ interface Foo<T: Bar<string, E>, E: Parent<int>> {}
 fn infer_transitive_bound_substituted_match_no_error() {
     let input = r#"
 interface Parent<T> {
-  fn p(self) -> T
+  fn p() -> T
 }
 
 interface Bar<X, E: Parent<X>> {}
@@ -8945,7 +8945,7 @@ fn foo<T: Outer<Slice<Inner<E>>>, E>(_x: T) {}
 fn infer_self_referential_transitive_bound_no_error() {
     let input = r#"
 interface Cloner<T: Cloner<T>> {
-  fn clone(self) -> T
+  fn clone() -> T
 }
 
 fn squiggle<A: Cloner<B>, B>(_a: A, _b: B) {}

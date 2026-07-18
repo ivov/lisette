@@ -212,7 +212,7 @@ fn cached_aliased_interface_bound_keeps_its_identity() {
     .unwrap();
     fs::write(
         project.join("src/constraints/constraints.lis"),
-        "pub interface Parent<T> {\n  fn value(self) -> T\n}\n",
+        "pub interface Parent<T> {\n  fn value() -> T\n}\n",
     )
     .unwrap();
     fs::write(
@@ -281,7 +281,7 @@ fn cached_public_bound_can_reference_private_interface() {
     fs::write(
         project.join("src/box/box.lis"),
         r#"interface Hidden {
-  fn show(self) -> string
+  fn show() -> string
 }
 
 pub interface Box<T: Hidden> {}
@@ -342,7 +342,7 @@ fn cached_public_function_bound_can_reference_private_interface() {
     fs::write(
         project.join("src/api/api.lis"),
         r#"interface Hidden {
-  fn show(self) -> string
+  fn show() -> string
 }
 
 pub fn use<T: Hidden>(_value: T) {}
@@ -397,7 +397,7 @@ fn cached_public_interface_can_embed_private_parent() {
     fs::write(
         project.join("src/api/api.lis"),
         r#"interface Hidden {
-  fn show(self) -> string
+  fn show() -> string
 }
 
 pub interface Public {
@@ -472,7 +472,7 @@ impl Box<int> {
         r#"import "dep"
 
 pub interface Shower {
-  fn show(self) -> string
+  fn show() -> string
 }
 
 pub interface Need<T: Shower> {}
@@ -852,7 +852,7 @@ fn run_equality_matching_parametrized_interface_bound_builds() {
         r#"import "go:fmt"
 
 interface Parent<T> {
-  fn p(self) -> T
+  fn p() -> T
 }
 
 struct Holder { tag: string }
@@ -920,7 +920,7 @@ fn run_equality_user_type_parametrized_bound_builds() {
 struct Key { v: int }
 
 interface Parent<T> {
-  fn p(self) -> T
+  fn p() -> T
 }
 
 struct Leaf { k: Key }
