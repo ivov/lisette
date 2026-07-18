@@ -28,6 +28,7 @@ pub enum Command {
         path: Option<String>,
         errors_only: bool,
         warnings_only: bool,
+        deny_warnings: bool,
         format: OutputFormat,
         fix: bool,
     },
@@ -142,6 +143,17 @@ fn parse_format(value: &str) -> Result<OutputFormat, ParseError> {
             message: format!("unexpected value `{}` for `--output`", other),
             reason: "`--output` accepts `unix`".to_string(),
             hint: "Use `lis check --output unix`".to_string(),
+        }),
+    }
+}
+
+fn parse_deny(value: &str) -> Result<bool, ParseError> {
+    match value {
+        "warnings" => Ok(true),
+        other => Err(ParseError::UnexpectedArgument {
+            message: format!("unexpected value `{}` for `--deny`", other),
+            reason: "`--deny` accepts `warnings`".to_string(),
+            hint: "Use `lis check --deny warnings`".to_string(),
         }),
     }
 }
@@ -271,6 +283,7 @@ impl Command {
                 let mut path = None;
                 let mut errors_only = false;
                 let mut warnings_only = false;
+                let mut deny_warnings = false;
                 let mut format = OutputFormat::Graphical;
                 let mut fix = false;
 
@@ -291,6 +304,18 @@ impl Command {
                         s if s.starts_with("--output=") => {
                             format = parse_format(s.split_once('=').unwrap().1)?;
                         }
+                        "--deny" => {
+                            let Some(value) = arguments.next() else {
+                                return Err(ParseError::MissingArgument {
+                                    command: "check",
+                                    argument: "--deny <value>",
+                                });
+                            };
+                            deny_warnings = parse_deny(&value)?;
+                        }
+                        s if s.starts_with("--deny=") => {
+                            deny_warnings = parse_deny(s.split_once('=').unwrap().1)?;
+                        }
                         s if s.starts_with('-') => {
                             return Err(ParseError::UnknownFlag(s.to_string()));
                         }
@@ -307,10 +332,31 @@ impl Command {
                     });
                 }
 
+                if errors_only && deny_warnings {
+                    return Err(ParseError::UnexpectedArgument {
+                        message: "`--errors-only` and `--deny warnings` cannot be used together"
+                            .to_string(),
+                        reason: "`--errors-only` hides warnings, so `--deny warnings` would have nothing to act on"
+                            .to_string(),
+                        hint: "Drop `--errors-only` to make warnings fail the check".to_string(),
+                    });
+                }
+
+                if fix && deny_warnings {
+                    return Err(ParseError::UnexpectedArgument {
+                        message: "`--fix` and `--deny warnings` cannot be used together".to_string(),
+                        reason: "`--fix` reports what it rewrote, not which warnings remain, so it cannot fail on leftover warnings"
+                            .to_string(),
+                        hint: "Run `lis check --fix` first, then `lis check --deny warnings`"
+                            .to_string(),
+                    });
+                }
+
                 Ok(Command::Check {
                     path,
                     errors_only,
                     warnings_only,
+                    deny_warnings,
                     format,
                     fix,
                 })
@@ -677,6 +723,82 @@ mod tests {
     fn check_rejects_both_filter_flags() {
         assert!(matches!(
             parse(&["lis", "check", "--errors-only", "--warnings-only"]),
+            Err(ParseError::UnexpectedArgument { .. })
+        ));
+    }
+
+    #[test]
+    fn check_deny_defaults_off() {
+        let Ok(Command::Check { deny_warnings, .. }) = parse(&["lis", "check"]) else {
+            panic!("expected Check command");
+        };
+        assert!(!deny_warnings);
+    }
+
+    #[test]
+    fn check_deny_warnings_space_form() {
+        let Ok(Command::Check { deny_warnings, .. }) =
+            parse(&["lis", "check", "--deny", "warnings"])
+        else {
+            panic!("expected Check command");
+        };
+        assert!(deny_warnings);
+    }
+
+    #[test]
+    fn check_deny_warnings_equals_form() {
+        let Ok(Command::Check { deny_warnings, .. }) = parse(&["lis", "check", "--deny=warnings"])
+        else {
+            panic!("expected Check command");
+        };
+        assert!(deny_warnings);
+    }
+
+    #[test]
+    fn check_deny_missing_value() {
+        assert!(matches!(
+            parse(&["lis", "check", "--deny"]),
+            Err(ParseError::MissingArgument {
+                command: "check",
+                argument: "--deny <value>",
+            })
+        ));
+    }
+
+    #[test]
+    fn check_deny_invalid_value() {
+        assert!(matches!(
+            parse(&["lis", "check", "--deny", "errors"]),
+            Err(ParseError::UnexpectedArgument { .. })
+        ));
+    }
+
+    #[test]
+    fn check_deny_warnings_composes_with_warnings_only() {
+        let Ok(Command::Check {
+            deny_warnings,
+            warnings_only,
+            ..
+        }) = parse(&["lis", "check", "--deny", "warnings", "--warnings-only"])
+        else {
+            panic!("expected Check command");
+        };
+        assert!(deny_warnings);
+        assert!(warnings_only);
+    }
+
+    #[test]
+    fn check_rejects_deny_warnings_with_errors_only() {
+        assert!(matches!(
+            parse(&["lis", "check", "--errors-only", "--deny", "warnings"]),
+            Err(ParseError::UnexpectedArgument { .. })
+        ));
+    }
+
+    #[test]
+    fn check_rejects_deny_warnings_with_fix() {
+        assert!(matches!(
+            parse(&["lis", "check", "--fix", "--deny", "warnings"]),
             Err(ParseError::UnexpectedArgument { .. })
         ));
     }

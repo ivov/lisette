@@ -68,11 +68,15 @@ fn bash_completions() -> &'static str {
             return 0
             ;;
         check)
-            COMPREPLY=( $(compgen -W "--errors-only --warnings-only --fix --output" -- "$cur") )
+            COMPREPLY=( $(compgen -W "--errors-only --warnings-only --deny --fix --output" -- "$cur") )
             return 0
             ;;
         --output)
             COMPREPLY=( $(compgen -W "unix" -- "$cur") )
+            return 0
+            ;;
+        --deny)
+            COMPREPLY=( $(compgen -W "warnings" -- "$cur") )
             return 0
             ;;
         doc)
@@ -156,6 +160,7 @@ _lis() {
                     _arguments \
                         '--errors-only[Show only errors]' \
                         '--warnings-only[Show only warnings]' \
+                        '--deny[Fail check if warnings found]:group:(warnings)' \
                         '--fix[Apply lint fixes in place]' \
                         '--output[Machine-readable output]:output:(unix)'
                     ;;
@@ -209,6 +214,7 @@ complete -c lis -n '__fish_seen_subcommand_from test' -l go-flags -r -d 'Flags p
 complete -c lis -n '__fish_seen_subcommand_from format' -l check -d 'Check formatting without modifying'
 complete -c lis -n '__fish_seen_subcommand_from check' -l errors-only -d 'Show only errors'
 complete -c lis -n '__fish_seen_subcommand_from check' -l warnings-only -d 'Show only warnings'
+complete -c lis -n '__fish_seen_subcommand_from check' -l deny -r -a warnings -d 'Fail check if warnings found'
 complete -c lis -n '__fish_seen_subcommand_from check' -l fix -d 'Apply lint fixes in place'
 complete -c lis -n '__fish_seen_subcommand_from check' -l output -r -a unix -d 'Machine-readable output'
 complete -c lis -n '__fish_seen_subcommand_from doc' -s s -l search -d 'Search across prelude and Go stdlib'

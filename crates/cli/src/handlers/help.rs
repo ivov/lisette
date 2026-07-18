@@ -151,6 +151,7 @@ Arguments:
 Flags:
     {--errors-only:b}                Show only errors
     {--warnings-only:b}              Show only warnings
+    {--deny:b} {warnings}              Fail check if warnings found
     {--fix:b}                        Apply lint fixes in place
     {--output:b} {unix}                Machine-readable output
 

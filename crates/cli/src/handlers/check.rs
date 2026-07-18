@@ -15,10 +15,18 @@ use crate::cli_error;
 use crate::lock::acquire_target_lock;
 use crate::workspace::{GoWorkspace, WorkspaceBindgen, warm_typedefs};
 
+struct CheckOptions {
+    filter: Filter,
+    format: OutputFormat,
+    fix: bool,
+    deny_warnings: bool,
+}
+
 pub fn check(
     path: Option<String>,
     errors_only: bool,
     warnings_only: bool,
+    deny_warnings: bool,
     format: OutputFormat,
     fix: bool,
 ) -> i32 {
@@ -34,30 +42,28 @@ pub fn check(
         return 1;
     }
 
-    let filter = Filter {
-        errors_only,
-        warnings_only,
+    let options = CheckOptions {
+        filter: Filter {
+            errors_only,
+            warnings_only,
+        },
+        format,
+        fix,
+        deny_warnings,
     };
 
     if !target_path.is_dir() {
-        return check_single_file(
-            target_path,
-            &filter,
-            false,
-            TypedefLocator::default(),
-            format,
-            fix,
-        );
+        return check_single_file(target_path, &options, false, TypedefLocator::default());
     }
 
     if target_path.join("lisette.toml").exists() {
-        return check_project(target_path, &filter, format, fix);
+        return check_project(target_path, &options);
     }
 
-    check_loose_dir(target_path, &filter, format, fix)
+    check_loose_dir(target_path, &options)
 }
 
-fn check_project(project_path: &Path, filter: &Filter, format: OutputFormat, fix: bool) -> i32 {
+fn check_project(project_path: &Path, options: &CheckOptions) -> i32 {
     let root_main = project_path.join("main.lis");
     let src_main = project_path.join("src/main.lis");
 
@@ -126,21 +132,19 @@ fn check_project(project_path: &Path, filter: &Filter, format: OutputFormat, fix
     ));
     let locator = locator.with_bindgen(bindgen);
 
-    let result = check_single_file(&src_main, filter, true, locator, format, fix);
+    let result = check_single_file(&src_main, options, true, locator);
     drop(target_lock);
     result
 }
 
 fn check_single_file(
     file_path: &Path,
-    filter: &Filter,
+    options: &CheckOptions,
     load_siblings: bool,
     locator: TypedefLocator,
-    format: OutputFormat,
-    fix: bool,
 ) -> i32 {
     let start = Instant::now();
-    let unix = matches!(format, OutputFormat::Unix);
+    let unix = matches!(options.format, OutputFormat::Unix);
     if !unix {
         eprintln!();
     }
@@ -149,7 +153,7 @@ fn check_single_file(
         return 1; // Read error already reported by compile_single_file
     };
 
-    if fix {
+    if options.fix {
         let mut summary = FixSummary::default();
         apply_result_fixes(&result, &mut summary);
         print_fix_summary(&summary, start.elapsed());
@@ -168,7 +172,7 @@ fn check_single_file(
             &result.lints,
             get_source,
             result.user_file_count,
-            filter,
+            &options.filter,
             &source,
             &filename,
         );
@@ -180,7 +184,7 @@ fn check_single_file(
             &result.lints,
             get_source,
             result.user_file_count,
-            filter,
+            &options.filter,
             &source,
             &filename,
         )
@@ -194,7 +198,7 @@ fn check_single_file(
             counts.info,
         );
     }
-    counts.errors
+    exit_code(counts.errors, counts.warnings, options.deny_warnings)
 }
 
 fn compile_single_file(
@@ -241,7 +245,7 @@ fn compile_single_file(
     Some((result, source, entry_display))
 }
 
-fn check_loose_dir(dir: &Path, filter: &Filter, format: OutputFormat, fix: bool) -> i32 {
+fn check_loose_dir(dir: &Path, options: &CheckOptions) -> i32 {
     let mut files = lisette::fs::collect_lis_filepaths_recursive(dir);
     files.sort();
 
@@ -269,7 +273,7 @@ fn check_loose_dir(dir: &Path, filter: &Filter, format: OutputFormat, fix: bool)
     let mut total_files = 0;
     let mut read_failures = 0;
 
-    let unix = matches!(format, OutputFormat::Unix);
+    let unix = matches!(options.format, OutputFormat::Unix);
     let start = Instant::now();
     if !unix {
         eprintln!();
@@ -293,7 +297,7 @@ fn check_loose_dir(dir: &Path, filter: &Filter, format: OutputFormat, fix: bool)
             continue;
         };
 
-        if fix {
+        if options.fix {
             apply_result_fixes(&result, &mut fix_summary);
             continue;
         }
@@ -310,7 +314,7 @@ fn check_loose_dir(dir: &Path, filter: &Filter, format: OutputFormat, fix: bool)
                 &result.lints,
                 get_source,
                 result.user_file_count,
-                filter,
+                &options.filter,
                 &source,
                 &filename,
             );
@@ -322,7 +326,7 @@ fn check_loose_dir(dir: &Path, filter: &Filter, format: OutputFormat, fix: bool)
                 &result.lints,
                 get_source,
                 result.user_file_count,
-                filter,
+                &options.filter,
                 &source,
                 &filename,
             )
@@ -335,7 +339,7 @@ fn check_loose_dir(dir: &Path, filter: &Filter, format: OutputFormat, fix: bool)
 
     let elapsed = start.elapsed();
 
-    if fix {
+    if options.fix {
         print_fix_summary(&fix_summary, elapsed);
         return i32::from(fix_summary.write_failures > 0);
     }
@@ -345,7 +349,11 @@ fn check_loose_dir(dir: &Path, filter: &Filter, format: OutputFormat, fix: bool)
         render::print_summary(total_files, elapsed, all_errors, total_warnings, total_info);
     }
 
-    all_errors
+    exit_code(all_errors, total_warnings, options.deny_warnings)
+}
+
+fn exit_code(errors: i32, warnings: i32, deny_warnings: bool) -> i32 {
+    i32::from(errors > 0 || (deny_warnings && warnings > 0))
 }
 
 #[derive(Default)]
@@ -431,5 +439,34 @@ fn print_fix_summary(summary: &FixSummary, elapsed: std::time::Duration) {
             "  ✓ Applied {} {} {} {}",
             summary.applied, fix_word, location, time_display
         );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::exit_code;
+
+    #[test]
+    fn warnings_are_ignored_without_deny() {
+        assert_eq!(exit_code(0, 3, false), 0);
+        assert_eq!(exit_code(2, 3, false), 1);
+    }
+
+    #[test]
+    fn deny_makes_warnings_fail_the_check() {
+        assert_eq!(exit_code(0, 1, true), 1);
+        assert_eq!(exit_code(0, 3, true), 1);
+    }
+
+    #[test]
+    fn deny_with_no_warnings_still_passes() {
+        assert_eq!(exit_code(0, 0, true), 0);
+    }
+
+    #[test]
+    fn diagnostic_totals_never_wrap_to_a_false_success() {
+        assert_eq!(exit_code(0, 256, true), 1);
+        assert_eq!(exit_code(256, 0, false), 1);
+        assert_eq!(exit_code(128, 128, true), 1);
     }
 }
