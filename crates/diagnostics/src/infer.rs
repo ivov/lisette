@@ -2964,6 +2964,23 @@ pub fn cannot_infer_type_argument(span: Span) -> LisetteDiagnostic {
         .with_help("Supply a type argument for the call, e.g. `Channel.new<int>()`")
 }
 
+pub fn cannot_infer_struct_type_argument(
+    struct_name: &str,
+    param_name: &str,
+    bound: &str,
+    span: Span,
+) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Cannot infer type argument")
+        .with_infer_code("cannot_infer_struct_type_argument")
+        .with_span_label(
+            &span,
+            format!("cannot infer `{param_name}` (bound by `{bound}`) for `{struct_name}`"),
+        )
+        .with_help(format!(
+            "Annotate the binding so the type argument is known, e.g. `let x: {struct_name}<T> = ...`, where `T` satisfies `{bound}`"
+        ))
+}
+
 pub fn empty_slice_no_element_type(span: Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Cannot infer the element type of this empty slice")
         .with_infer_code("empty_slice_no_element_type")

@@ -498,6 +498,12 @@ impl InferCtx<'_, '_> {
     }
 }
 
+pub(crate) fn interface_requires_methods(store: &Store, id: &str) -> bool {
+    store.get_interface(id).is_some_and(|interface| {
+        interface_declares_methods(store, interface, &mut rustc_hash::FxHashSet::default())
+    })
+}
+
 fn interface_declares_methods(
     store: &Store,
     interface: &Interface,

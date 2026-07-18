@@ -210,6 +210,8 @@ impl CompiledTest {
                 ctx.resolve_select_exhaustiveness();
             }
 
+            checker.check_pending_interface_bounds(&store);
+
             {
                 let folder = semantics::checker::freeze::FreezeFolder::new(&checker.env, &store);
                 folder.freeze_facts(&mut checker.facts);

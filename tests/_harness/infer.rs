@@ -138,6 +138,8 @@ pub fn infer_module(module_name: &str, fs: MockFileSystem) -> InferResult {
             store.store_file(&module_id, typed_file);
         }
 
+        checker.check_pending_interface_bounds(&store);
+
         let module = store.get_module(module_name).unwrap();
         let ast: Vec<_> = module
             .files

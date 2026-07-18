@@ -52,6 +52,7 @@ pub struct Facts {
 
     // Drained by passes::deferred via mem::take.
     pub generic_call_checks: Vec<GenericCallCheck>,
+    pub struct_bound_checks: Vec<StructBoundCheck>,
     pub empty_collection_checks: Vec<EmptyCollectionCheck>,
     pub empty_literal_checks: Vec<EmptyLiteralCheck>,
     pub slice_make_checks: Vec<SliceMakeCheck>,
@@ -93,6 +94,16 @@ pub struct GenericCallCheck {
     pub span: Span,
     /// Qualifies `ty`'s variable ids, which are unique only per inference context.
     pub module_id: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct StructBoundCheck {
+    pub ty: Type,
+    pub span: Span,
+    pub module_id: String,
+    pub struct_name: String,
+    pub param_name: String,
+    pub bound: String,
 }
 
 #[derive(Debug, Clone)]
@@ -151,6 +162,7 @@ impl Facts {
             always_failing_try_blocks: Vec::new(),
             expression_only_fstrings: Vec::new(),
             generic_call_checks: Vec::new(),
+            struct_bound_checks: Vec::new(),
             empty_collection_checks: Vec::new(),
             empty_literal_checks: Vec::new(),
             slice_make_checks: Vec::new(),
@@ -316,6 +328,7 @@ impl Facts {
             always_failing_try_blocks,
             expression_only_fstrings,
             generic_call_checks,
+            struct_bound_checks,
             empty_collection_checks,
             empty_literal_checks,
             slice_make_checks,
@@ -353,6 +366,7 @@ impl Facts {
         self.expression_only_fstrings
             .extend(expression_only_fstrings);
         self.generic_call_checks.extend(generic_call_checks);
+        self.struct_bound_checks.extend(struct_bound_checks);
         self.empty_collection_checks.extend(empty_collection_checks);
         self.empty_literal_checks.extend(empty_literal_checks);
         self.slice_make_checks.extend(slice_make_checks);

@@ -128,6 +128,9 @@ pub struct TaskState<'s> {
     /// Typed files produced by inference.
     pub typed_files: Vec<(String, File)>,
     pub(crate) pending_generic_bound_checks: Vec<(Type, Type, Span)>,
+    /// Interface bounds on concrete type arguments named in annotations. Drained
+    /// once after inference, since body annotations register during it.
+    pub(crate) pending_interface_bound_checks: Vec<(Type, Type, Span)>,
 }
 
 impl<'s> TaskState<'s> {
@@ -148,6 +151,7 @@ impl<'s> TaskState<'s> {
             ufcs_shared: None,
             typed_files: Vec::new(),
             pending_generic_bound_checks: Vec::new(),
+            pending_interface_bound_checks: Vec::new(),
         }
     }
 

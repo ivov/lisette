@@ -357,6 +357,9 @@ impl<'a> FreezeFolder<'a> {
         for check in &mut facts.generic_call_checks {
             self.env.resolve_in_place(&mut check.ty);
         }
+        for check in &mut facts.struct_bound_checks {
+            self.env.resolve_in_place(&mut check.ty);
+        }
         for check in &mut facts.empty_collection_checks {
             self.env.resolve_in_place(&mut check.ty);
         }

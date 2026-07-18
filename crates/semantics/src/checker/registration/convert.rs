@@ -288,7 +288,7 @@ impl TaskState<'_> {
                     ));
                 }
                 if type_argument_checks.current() && qualified_name != "prelude.Map" {
-                    self.check_builtin_type_argument_bounds(
+                    self.check_type_argument_bounds(
                         store,
                         &qualified_name,
                         &concrete_args,
@@ -695,7 +695,7 @@ impl TaskState<'_> {
         }
     }
 
-    fn check_builtin_type_argument_bounds(
+    fn check_type_argument_bounds(
         &mut self,
         store: &Store,
         definition_name: &str,
@@ -706,16 +706,61 @@ impl TaskState<'_> {
             return;
         };
         let generics = definition.body.generics().unwrap_or_default();
+        let substitution: SubstitutionMap = generics
+            .iter()
+            .map(|generic| generic.name.clone())
+            .zip(arguments.iter().cloned())
+            .collect();
         for (generic, argument) in generics.iter().zip(arguments) {
-            for required in generic
-                .resolved_bounds
-                .iter()
-                .filter_map(Type::get_qualified_id)
-                .filter_map(BuiltinBound::from_qualified_id)
-            {
-                self.check_builtin_bound_argument(store, argument, required, span);
+            for declared in &generic.resolved_bounds {
+                match declared
+                    .get_qualified_id()
+                    .and_then(BuiltinBound::from_qualified_id)
+                {
+                    Some(builtin) => {
+                        self.check_builtin_bound_argument(store, argument, builtin, span)
+                    }
+                    None => self.check_interface_type_argument(
+                        store,
+                        argument,
+                        declared,
+                        &substitution,
+                        span,
+                    ),
+                }
             }
         }
+    }
+
+    fn check_interface_type_argument(
+        &mut self,
+        store: &Store,
+        argument: &Type,
+        declared: &Type,
+        substitution: &SubstitutionMap,
+        span: Span,
+    ) {
+        let required = substitute(declared, substitution);
+        if required.contains_error() {
+            return;
+        }
+        let resolved_required = store.deep_resolve_alias(&required);
+        let Some(required_id) = resolved_required.get_qualified_id() else {
+            return;
+        };
+        if store.get_interface(required_id).is_none() {
+            return;
+        }
+        let argument = store.deep_resolve_alias(&argument.resolve_in(&self.env));
+        if argument.is_variable()
+            || matches!(argument, Type::Parameter(_))
+            || argument.contains_error()
+            || argument.contains_unknown()
+        {
+            return;
+        }
+        self.pending_interface_bound_checks
+            .push((argument, required, span));
     }
 
     pub(crate) fn check_builtin_bound_argument(

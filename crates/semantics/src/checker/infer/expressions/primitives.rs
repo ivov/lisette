@@ -312,6 +312,20 @@ impl InferCtx<'_, '_> {
 
         self.unify(expected_ty, &identifier_ty, &span);
 
+        if let Some(enum_id) = self.enum_of_variant(store, &value) {
+            let nominal = match &identifier_ty {
+                Type::Nominal { .. } => Some(&identifier_ty),
+                Type::Function(function) => match function.return_type.as_ref() {
+                    nominal @ Type::Nominal { .. } => Some(nominal),
+                    _ => None,
+                },
+                _ => None,
+            };
+            if let Some(nominal) = nominal {
+                self.register_struct_bound_checks(&enum_id, &enum_id, nominal, span);
+            }
+        }
+
         Expression::Identifier {
             value,
             ty: identifier_ty,
@@ -319,6 +333,16 @@ impl InferCtx<'_, '_> {
             binding_id,
             qualified,
         }
+    }
+
+    fn enum_of_variant(&self, store: &crate::store::Store, value: &str) -> Option<EcoString> {
+        let (type_part, variant_name) = value.rsplit_once('.')?;
+        let qualified = self.lookup_qualified_name(store, type_part)?;
+        store
+            .variants_of(qualified.as_str())?
+            .iter()
+            .any(|variant| variant.name == variant_name)
+            .then_some(qualified)
     }
 
     pub(super) fn infer_assignment(

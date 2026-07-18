@@ -121,6 +121,17 @@ impl TaskState<'_> {
         }
     }
 
+    pub fn check_pending_interface_bounds(&mut self, store: &Store) {
+        let pending = std::mem::take(&mut self.pending_interface_bound_checks);
+        let mut seen = rustc_hash::FxHashSet::default();
+        let mut ctx = InferCtx::new(self, store);
+        for (argument, required, span) in pending {
+            if seen.insert((span, argument.to_string(), required.to_string())) {
+                ctx.check_concrete_bound(&argument, &required, &span);
+            }
+        }
+    }
+
     fn parameter_bounds(
         &self,
         parameter_name: &str,

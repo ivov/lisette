@@ -660,7 +660,12 @@ fn infer_modules(
         let fields_shared = Arc::new(checker.module_fields_snapshot());
         let store_ref: &Store = store;
 
-        type WorkerOutput = (Vec<(String, File)>, Facts, LocalSink);
+        type WorkerOutput = (
+            Vec<(String, File)>,
+            Facts,
+            Vec<(Type, Type, Span)>,
+            LocalSink,
+        );
         let outputs: Vec<WorkerOutput> = module_files
             .into_par_iter()
             .map(|(module_id, files)| {
@@ -671,16 +676,18 @@ fn infer_modules(
                 InferCtx::new(&mut worker, store_ref).infer_module(&module_id, files);
                 let typed_files = std::mem::take(&mut worker.typed_files);
                 let facts = std::mem::replace(&mut worker.facts, Facts::new(allocator.clone()));
-                (typed_files, facts, local_sink)
+                let pending = std::mem::take(&mut worker.pending_interface_bound_checks);
+                (typed_files, facts, pending, local_sink)
             })
             .collect();
 
         checker.ufcs_methods = Arc::try_unwrap(ufcs_shared).unwrap_or_else(|arc| (*arc).clone());
 
         let mut worker_sinks: Vec<LocalSink> = Vec::with_capacity(outputs.len());
-        for (typed_files, facts, sink_local) in outputs {
+        for (typed_files, facts, pending, sink_local) in outputs {
             checker.typed_files.extend(typed_files);
             checker.facts.merge(facts);
+            checker.pending_interface_bound_checks.extend(pending);
             worker_sinks.push(sink_local);
         }
         sink.extend(LocalSink::merge(worker_sinks));
@@ -689,6 +696,8 @@ fn infer_modules(
     for (module_id, typed_file) in std::mem::take(&mut checker.typed_files) {
         store.store_file(&module_id, typed_file);
     }
+
+    checker.check_pending_interface_bounds(store);
 }
 
 /// Groups topologically ordered modules into dependency waves, so a wave only

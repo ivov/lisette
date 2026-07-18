@@ -646,3 +646,325 @@ fn main() {
     )
     .assert_infer_code("missing_constraint_on_return_type");
 }
+
+#[test]
+fn struct_bounded_param_uninferrable_errors() {
+    infer(
+        r#"
+struct Bar<E: error> {}
+
+fn main() {
+  let bar = Bar {}
+  let _ = bar
+}
+        "#,
+    )
+    .assert_infer_code("cannot_infer_struct_type_argument");
+}
+
+#[test]
+fn struct_bounded_param_via_interface_arg_errors() {
+    infer(
+        r#"
+interface Foo<E: error> {}
+
+struct Bar<E: error> {}
+
+impl<E> Bar<E> {
+  fn with_foo(self, _foo: Foo<E>) -> Bar<E> {
+    self
+  }
+}
+
+fn run<E: error>(bar: Bar<E>) -> Bar<E> {
+  bar.with_foo(Bar {})
+}
+
+fn main() {
+  let bar: Bar<error> = Bar {}
+  let _ = run(bar)
+}
+        "#,
+    )
+    .assert_infer_code("cannot_infer_struct_type_argument");
+}
+
+#[test]
+fn struct_bounded_param_with_annotation_succeeds() {
+    infer(
+        r#"
+struct Bar<E: error> {}
+
+fn main() {
+  let bar: Bar<error> = Bar {}
+  let _ = bar
+}
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn struct_unbounded_param_uninferrable_succeeds() {
+    infer(
+        r#"
+struct Box<T> {}
+
+fn main() {
+  let b = Box {}
+  let _ = b
+}
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn struct_empty_interface_bound_uninferrable_succeeds() {
+    infer(
+        r#"
+interface Marker {}
+
+struct Bar<E: Marker> {}
+
+fn main() {
+  let bar = Bar {}
+  let _ = bar
+}
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn struct_bounded_param_resolved_by_later_use_succeeds() {
+    infer(
+        r#"
+struct MyErr {}
+
+impl MyErr {
+  fn Error(self) -> string {
+    "boom"
+  }
+}
+
+struct Bar<E: error> {}
+
+fn takes(_b: Bar<MyErr>) {}
+
+fn main() {
+  let bar = Bar {}
+  takes(bar)
+}
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn enum_struct_variant_bounded_param_uninferrable_errors() {
+    infer(
+        r#"
+enum Wrap<E: error> {
+  Full { x: int }
+}
+
+fn main() {
+  let w = Wrap.Full { x: 1 }
+  let _ = w
+}
+        "#,
+    )
+    .assert_infer_code("cannot_infer_struct_type_argument");
+}
+
+#[test]
+fn enum_struct_variant_bounded_param_from_field_succeeds() {
+    infer(
+        r#"
+struct MyErr {}
+
+impl MyErr {
+  fn Error(self) -> string {
+    "boom"
+  }
+}
+
+enum Wrap<E: error> {
+  Full { e: E }
+}
+
+fn main() {
+  let w = Wrap.Full { e: MyErr {} }
+  let _ = w
+}
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn struct_concrete_type_argument_violating_bound_errors() {
+    infer(
+        r#"
+struct Bar<E: error> {}
+
+fn main() {
+  let bar: Bar<int> = Bar {}
+  let _ = bar
+}
+        "#,
+    )
+    .assert_infer_code("interface_not_implemented");
+}
+
+#[test]
+fn struct_concrete_type_argument_in_return_annotation_reports_once() {
+    infer(
+        r#"
+struct Bar<E: error> {}
+
+fn f() -> Bar<int> {
+  Bar {}
+}
+
+fn main() {
+  let _ = f()
+}
+        "#,
+    )
+    .assert_infer_code_count("interface_not_implemented", 1);
+}
+
+#[test]
+fn struct_concrete_type_argument_in_field_errors() {
+    infer(
+        r#"
+struct Bar<E: error> {}
+
+struct Holder {
+  bar: Bar<int>
+}
+
+fn main() {}
+        "#,
+    )
+    .assert_infer_code("interface_not_implemented");
+}
+
+#[test]
+fn struct_concrete_type_argument_satisfying_bound_succeeds() {
+    infer(
+        r#"
+struct MyErr {}
+
+impl MyErr {
+  fn Error(self) -> string {
+    "boom"
+  }
+}
+
+struct Bar<E: error> {}
+
+fn main() {
+  let bar: Bar<MyErr> = Bar {}
+  let _ = bar
+}
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn struct_type_argument_bounded_parameter_succeeds() {
+    infer(
+        r#"
+struct Bar<E: error> {}
+
+fn f<T: error>(x: Bar<T>) -> Bar<T> {
+  x
+}
+
+fn main() {}
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn enum_tuple_variant_bounded_param_uninferrable_errors() {
+    infer(
+        r#"
+enum W<E: error> {
+  A(int)
+}
+
+fn main() {
+  let w = W.A(1)
+  let _ = w
+}
+        "#,
+    )
+    .assert_infer_code("cannot_infer_struct_type_argument");
+}
+
+#[test]
+fn enum_bare_variant_bounded_param_uninferrable_errors() {
+    infer(
+        r#"
+enum W<E: error> {
+  A,
+  B
+}
+
+fn main() {
+  let w = W.A
+  let _ = w
+}
+        "#,
+    )
+    .assert_infer_code("cannot_infer_struct_type_argument");
+}
+
+#[test]
+fn enum_tuple_variant_bounded_param_from_arg_succeeds() {
+    infer(
+        r#"
+struct MyErr {}
+
+impl MyErr {
+  fn Error(self) -> string {
+    "boom"
+  }
+}
+
+enum W<E: error> {
+  A(E)
+}
+
+fn main() {
+  let w = W.A(MyErr {})
+  let _ = w
+}
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn enum_unbounded_variant_uninferrable_succeeds() {
+    infer(
+        r#"
+enum Box<T> {
+  Full(int),
+  Empty
+}
+
+fn main() {
+  let b = Box.Empty
+  let _ = b
+}
+        "#,
+    )
+    .assert_no_errors();
+}
