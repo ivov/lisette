@@ -10,10 +10,35 @@ use syntax::ast::{Annotation, Generic, Span};
 use syntax::program::{Definition, DefinitionBody};
 use syntax::types::{SubstitutionMap, Symbol, Type, substitute, unqualified_name};
 
-use super::impl_bounds::import_module_for_alias;
 use crate::checker::TaskState;
 use crate::prelude::PRELUDE_MODULE_ID;
 use crate::store::Store;
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum TypePosition {
+    Value,
+    Bound,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum TypeArgumentChecks {
+    All,
+    Descendants,
+    Deferred,
+}
+
+impl TypeArgumentChecks {
+    fn current(self) -> bool {
+        self == Self::All
+    }
+
+    fn nested(self) -> Self {
+        match self {
+            Self::Descendants => Self::All,
+            other => other,
+        }
+    }
+}
 
 impl TaskState<'_> {
     /// Resolves a generic-bound annotation. Bound-only markers like
@@ -25,9 +50,14 @@ impl TaskState<'_> {
         annotation: &Annotation,
         span: &Span,
     ) -> Type {
-        self.bound_position_depth += 1;
-        let result = self.convert_to_type(store, annotation, span);
-        self.bound_position_depth -= 1;
+        let result = self.convert_to_type_mode(
+            store,
+            annotation,
+            span,
+            false,
+            TypeArgumentChecks::Deferred,
+            TypePosition::Bound,
+        );
         if !result.contains_error() {
             self.facts
                 .bound_types
@@ -37,16 +67,56 @@ impl TaskState<'_> {
     }
 
     pub fn convert_to_type(&mut self, store: &Store, annotation: &Annotation, span: &Span) -> Type {
-        self.convert_to_type_inner(store, annotation, span, false, true)
+        self.convert_to_type_mode(
+            store,
+            annotation,
+            span,
+            false,
+            TypeArgumentChecks::All,
+            TypePosition::Value,
+        )
     }
 
-    pub(crate) fn convert_to_type_inner(
+    pub(crate) fn convert_variadic_to_type(
+        &mut self,
+        store: &Store,
+        annotation: &Annotation,
+        span: &Span,
+    ) -> Type {
+        self.convert_to_type_mode(
+            store,
+            annotation,
+            span,
+            true,
+            TypeArgumentChecks::All,
+            TypePosition::Value,
+        )
+    }
+
+    pub(crate) fn convert_receiver_to_type(
+        &mut self,
+        store: &Store,
+        annotation: &Annotation,
+        span: &Span,
+    ) -> Type {
+        self.convert_to_type_mode(
+            store,
+            annotation,
+            span,
+            false,
+            TypeArgumentChecks::Descendants,
+            TypePosition::Value,
+        )
+    }
+
+    fn convert_to_type_mode(
         &mut self,
         store: &Store,
         annotation: &Annotation,
         span: &Span,
         variadic_allowed: bool,
-        check_type_argument_bounds: bool,
+        type_argument_checks: TypeArgumentChecks,
+        position: TypePosition,
     ) -> Type {
         match annotation {
             Annotation::Unknown => self.new_type_var(),
@@ -62,11 +132,14 @@ impl TaskState<'_> {
                     .iter()
                     .enumerate()
                     .map(|(index, param)| {
-                        if index == last_param {
-                            self.convert_to_type_inner(store, param, span, true, true)
-                        } else {
-                            self.convert_to_type(store, param, span)
-                        }
+                        self.convert_to_type_mode(
+                            store,
+                            param,
+                            span,
+                            index == last_param,
+                            type_argument_checks.nested(),
+                            TypePosition::Value,
+                        )
                     })
                     .collect();
                 // For function type annotations, omitted return type means Unit (`()`),
@@ -74,7 +147,14 @@ impl TaskState<'_> {
                 let new_return_type = if matches!(return_type.as_ref(), Annotation::Unknown) {
                     self.type_unit()
                 } else {
-                    self.convert_to_type(store, return_type, span)
+                    self.convert_to_type_mode(
+                        store,
+                        return_type,
+                        span,
+                        false,
+                        type_argument_checks.nested(),
+                        TypePosition::Value,
+                    )
                 };
 
                 Type::function(
@@ -120,7 +200,13 @@ impl TaskState<'_> {
 
                 // `Array` carries a const-integer size, so it needs its own path.
                 if type_name == "Array" {
-                    return self.convert_array_annotation(store, params, *annotation_span, span);
+                    return self.convert_array_annotation(
+                        store,
+                        params,
+                        *annotation_span,
+                        span,
+                        type_argument_checks,
+                    );
                 }
 
                 let Some((qualified_name, ty)) =
@@ -160,7 +246,7 @@ impl TaskState<'_> {
                     type_name.len() as u32,
                 );
 
-                if self.bound_position_depth == 0
+                if position == TypePosition::Value
                     && let Some(builtin) =
                         crate::checker::infer::BuiltinBound::from_qualified_id(&qualified_name)
                 {
@@ -179,7 +265,16 @@ impl TaskState<'_> {
 
                 let concrete_args: Vec<Type> = params
                     .iter()
-                    .map(|arg| self.convert_to_type(store, arg, span))
+                    .map(|arg| {
+                        self.convert_to_type_mode(
+                            store,
+                            arg,
+                            span,
+                            false,
+                            type_argument_checks.nested(),
+                            TypePosition::Value,
+                        )
+                    })
                     .collect();
 
                 if generics.len() != params.len() {
@@ -192,7 +287,7 @@ impl TaskState<'_> {
                         *span,
                     ));
                 }
-                if check_type_argument_bounds && qualified_name != "prelude.Map" {
+                if type_argument_checks.current() && qualified_name != "prelude.Map" {
                     self.check_builtin_type_argument_bounds(
                         store,
                         &qualified_name,
@@ -228,7 +323,8 @@ impl TaskState<'_> {
                     }
                 }
 
-                if qualified_name == "prelude.Map"
+                if type_argument_checks.current()
+                    && qualified_name == "prelude.Map"
                     && let Some(key_ty) = resolved_ty
                         .get_type_params()
                         .and_then(|parameters| parameters.first())
@@ -267,7 +363,16 @@ impl TaskState<'_> {
             Annotation::Tuple { elements, .. } => {
                 let element_types = elements
                     .iter()
-                    .map(|e| self.convert_to_type(store, e, span))
+                    .map(|element| {
+                        self.convert_to_type_mode(
+                            store,
+                            element,
+                            span,
+                            false,
+                            type_argument_checks.nested(),
+                            TypePosition::Value,
+                        )
+                    })
                     .collect();
                 Type::Tuple(element_types)
             }
@@ -292,9 +397,17 @@ impl TaskState<'_> {
         params: &[Annotation],
         annotation_span: Span,
         span: &Span,
+        type_argument_checks: TypeArgumentChecks,
     ) -> Type {
         if params.len() == 1 && self.cursor.module_id == PRELUDE_MODULE_ID {
-            let element = self.convert_to_type(store, &params[0], span);
+            let element = self.convert_to_type_mode(
+                store,
+                &params[0],
+                span,
+                false,
+                type_argument_checks.nested(),
+                TypePosition::Value,
+            );
             return Type::Nominal {
                 id: Symbol::from_parts("prelude", "Array"),
                 params: vec![element],
@@ -308,12 +421,26 @@ impl TaskState<'_> {
                 annotation_span,
             ));
             for param in params {
-                let _ = self.convert_to_type(store, param, span);
+                let _ = self.convert_to_type_mode(
+                    store,
+                    param,
+                    span,
+                    false,
+                    type_argument_checks.nested(),
+                    TypePosition::Value,
+                );
             }
             return Type::Error;
         }
 
-        let element = self.convert_to_type(store, &params[0], span);
+        let element = self.convert_to_type_mode(
+            store,
+            &params[0],
+            span,
+            false,
+            type_argument_checks.nested(),
+            TypePosition::Value,
+        );
         if element.contains_error() {
             return Type::Error;
         }
@@ -517,7 +644,7 @@ impl TaskState<'_> {
         }
     }
 
-    fn check_map_key_comparable(&mut self, store: &Store, key_ty: &Type, span: Span) {
+    pub(super) fn check_map_key_comparable(&mut self, store: &Store, key_ty: &Type, span: Span) {
         let resolved = key_ty.resolve_in(&self.env);
 
         if self.is_lis(store) && resolved.resolves_to_unknown() {
@@ -578,28 +705,15 @@ impl TaskState<'_> {
         let Some(definition) = store.get_definition(definition_name) else {
             return;
         };
-        let generics = match &definition.body {
-            DefinitionBody::Struct { generics, .. }
-            | DefinitionBody::Enum { generics, .. }
-            | DefinitionBody::TypeAlias { generics, .. } => generics,
-            DefinitionBody::Interface { definition } => &definition.generics,
-            DefinitionBody::Value { .. } => return,
-        };
-        let Some(module_name) = store.module_for_qualified_name(definition_name) else {
-            return;
-        };
+        let generics = definition.body.generics().unwrap_or_default();
         for (generic, argument) in generics.iter().zip(arguments) {
-            for bound in &generic.bounds {
-                let required = self
-                    .facts
-                    .bound_types
-                    .get(&bound.get_span())
-                    .and_then(Type::get_qualified_id)
-                    .and_then(BuiltinBound::from_qualified_id)
-                    .or_else(|| builtin_bound_from_annotation(store, module_name, bound));
-                if let Some(required) = required {
-                    self.check_builtin_bound_argument(store, argument, required, span);
-                }
+            for required in generic
+                .resolved_bounds
+                .iter()
+                .filter_map(Type::get_qualified_id)
+                .filter_map(BuiltinBound::from_qualified_id)
+            {
+                self.check_builtin_bound_argument(store, argument, required, span);
             }
         }
     }
@@ -658,25 +772,6 @@ impl TaskState<'_> {
                     .push(diagnostics::infer::not_orderable_bound(span));
             }
             BuiltinBound::Ordered => {}
-        }
-    }
-}
-
-fn builtin_bound_from_annotation(
-    store: &Store,
-    definition_module: &str,
-    annotation: &Annotation,
-) -> Option<BuiltinBound> {
-    let Annotation::Constructor { name, .. } = annotation else {
-        return None;
-    };
-    match name.as_str() {
-        "Comparable" | "prelude.Comparable" => Some(BuiltinBound::Comparable),
-        "Ordered" | "prelude.Ordered" | "go:cmp.Ordered" => Some(BuiltinBound::Ordered),
-        _ => {
-            let (alias, bound_name) = name.split_once('.')?;
-            let module = import_module_for_alias(store, definition_module, alias)?;
-            BuiltinBound::from_qualified_id(&format!("{module}.{bound_name}"))
         }
     }
 }

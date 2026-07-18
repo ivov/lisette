@@ -83,6 +83,7 @@ pub fn lint(source: &str) -> Vec<LisetteDiagnostic> {
     checker.register_types_and_values(&mut store, &ast, &Visibility::Private);
     checker.register_equality(&mut store, &ast);
     checker.finalize_equality(&mut store);
+    checker.check_pending_generic_bounds(&store);
 
     let mut typed_ast = vec![];
 

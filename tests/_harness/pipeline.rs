@@ -189,6 +189,7 @@ impl CompiledTest {
 
             checker.register_equality(&mut store, &self.ast);
             checker.finalize_equality(&mut store);
+            checker.check_pending_generic_bounds(&store);
 
             let mut typed_ast = vec![];
 

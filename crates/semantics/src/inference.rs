@@ -5,8 +5,9 @@ use std::sync::Arc;
 
 use diagnostics::LocalSink;
 use ecow::EcoString;
-use syntax::ast::{Expression, StructFieldDefinition};
+use syntax::ast::{Expression, Span, StructFieldDefinition};
 use syntax::program::{File, Module};
+use syntax::types::Type;
 
 use deps::TypedefLocator;
 
@@ -14,7 +15,8 @@ use crate::cache::{
     CachedModuleBuild, CompiledModule, ModuleInterface, build_cached_module,
     compute_emit_artifact_hash, compute_module_hash, get_dependency_module_hashes,
     go_stdlib::{self, load_cached_go_module},
-    hash_module_source_pair, is_cache_disabled, prelude as prelude_cache, try_load_cache,
+    hash_module_source_pair, is_cache_disabled, prelude as prelude_cache,
+    restore_cached_generic_bounds, try_load_cache,
 };
 use crate::checker::TaskState;
 use crate::checker::infer::InferCtx;
@@ -309,6 +311,11 @@ pub fn run_inference(input: AnalyzeInput) -> InferenceOutput {
         cached_modules.extend(cache_load.cached);
         to_infer.extend(cache_load.to_infer);
 
+        for (_, module_id) in &to_infer {
+            checker.predeclare_module_types(&mut store, module_id);
+        }
+        restore_cached_generic_bounds(&mut store, &sink, &cached_modules);
+
         to_infer.sort_by_key(|(topo_rank, _)| *topo_rank);
         let to_infer: Vec<String> = to_infer.into_iter().map(|(_, id)| id).collect();
 
@@ -576,6 +583,7 @@ fn register_modules(
             HashSet<(String, String)>,
             HashMap<EcoString, Arc<[StructFieldDefinition]>>,
             Facts,
+            Vec<(Type, Type, Span)>,
             LocalSink,
         );
         let outputs: Vec<RegisterOutput> = chunks
@@ -601,19 +609,22 @@ fn register_modules(
                     std::mem::take(&mut worker.ufcs_methods),
                     worker.module_fields_snapshot(),
                     facts,
+                    std::mem::take(&mut worker.pending_generic_bound_checks),
                     local_sink,
                 )
             })
             .collect();
 
         let mut worker_sinks: Vec<LocalSink> = Vec::with_capacity(outputs.len());
-        for (registered, ufcs_methods, module_fields, facts, sink_local) in outputs {
+        for (registered, ufcs_methods, module_fields, facts, pending_bounds, sink_local) in outputs
+        {
             for (module_id, module) in registered {
                 store.modules.insert(module_id, module);
             }
             checker.ufcs_methods.extend(ufcs_methods);
             checker.merge_module_fields(module_fields);
             checker.facts.merge(facts);
+            checker.pending_generic_bound_checks.extend(pending_bounds);
             worker_sinks.push(sink_local);
         }
         sink.extend(LocalSink::merge(worker_sinks));
@@ -628,6 +639,7 @@ fn infer_modules(
     binding_ids: &Arc<BindingIdAllocator>,
 ) {
     checker.finalize_equality(store);
+    checker.check_pending_generic_bounds(store);
     checker.finalize_tests(store);
 
     let module_files: Vec<(String, Vec<File>)> = to_infer

@@ -22,7 +22,7 @@ use syntax::program::{
     Definition, DefinitionBody, File, FileImport, MethodSignatures, Module, NativeTypeKind,
     go_import_default_name,
 };
-use syntax::types::{SubstitutionMap, Symbol, Type, substitute};
+use syntax::types::{Bound, SubstitutionMap, Symbol, Type, substitute};
 
 pub use infer::expressions::comparison::{check_never_comparable, check_not_comparable};
 pub use type_env::{EnvResolve, Speculation, TypeEnv, VarState};
@@ -127,10 +127,7 @@ pub struct TaskState<'s> {
     pub ufcs_shared: Option<Arc<HashSet<(String, String)>>>,
     /// Typed files produced by inference.
     pub typed_files: Vec<(String, File)>,
-    /// Reentrancy counter: > 0 while resolving a generic bound annotation.
-    /// Lets `convert_to_type` admit bound-only markers (e.g. `Comparable`)
-    /// without flagging them as misuse in value positions.
-    pub bound_position_depth: u32,
+    pub(crate) pending_generic_bound_checks: Vec<(Type, Type, Span)>,
 }
 
 impl<'s> TaskState<'s> {
@@ -150,7 +147,7 @@ impl<'s> TaskState<'s> {
             ufcs_methods: HashSet::default(),
             ufcs_shared: None,
             typed_files: Vec::new(),
-            bound_position_depth: 0,
+            pending_generic_bound_checks: Vec::new(),
         }
     }
 
@@ -264,30 +261,47 @@ impl<'s> TaskState<'s> {
         }
     }
 
-    /// Validate that all bound annotations on generics refer to types that exist in scope.
-    pub(crate) fn validate_generic_bounds(
+    pub(crate) fn resolve_generic_bounds(
         &mut self,
         store: &Store,
         generics: &[Generic],
         span: &Span,
-    ) {
+    ) -> Vec<Generic> {
+        let mut resolved = generics.to_vec();
+        for generic in &mut resolved {
+            generic.resolved_bounds = generic
+                .bounds
+                .iter()
+                .map(|bound| self.register_bound_annotation(store, bound, span))
+                .collect();
+        }
+        self.record_resolved_generic_bounds(&resolved);
+        resolved
+    }
+
+    pub(crate) fn record_resolved_generic_bounds(&mut self, generics: &[Generic]) {
         for generic in generics {
-            for bound in &generic.bounds {
-                self.register_generic_bound(store, &generic.name, bound, span);
+            for bound in &generic.resolved_bounds {
+                self.record_generic_bound(&generic.name, bound.clone());
             }
         }
     }
 
-    pub(crate) fn register_generic_bound(
+    pub(crate) fn ensure_generic_bounds(
         &mut self,
         store: &Store,
-        parameter: &str,
-        bound: &Annotation,
+        generics: Vec<Generic>,
         span: &Span,
-    ) -> Type {
-        let bound_ty = self.register_bound_annotation(store, bound, span);
-        self.record_generic_bound(parameter, bound_ty.clone());
-        bound_ty
+    ) -> Vec<Generic> {
+        if generics
+            .iter()
+            .all(|generic| generic.bounds.len() == generic.resolved_bounds.len())
+        {
+            self.record_resolved_generic_bounds(&generics);
+            generics
+        } else {
+            self.resolve_generic_bounds(store, &generics, span)
+        }
     }
 
     pub(crate) fn record_generic_bound(&mut self, parameter: &str, bound: Type) {
@@ -957,6 +971,19 @@ impl<'s> TaskState<'s> {
         self.env.end_speculation(spec, result.is_err());
         result
     }
+}
+
+pub(crate) fn resolved_generic_bounds(generics: &[Generic]) -> Vec<Bound> {
+    generics
+        .iter()
+        .flat_map(|generic| {
+            generic.resolved_bounds.iter().cloned().map(|ty| Bound {
+                param_name: generic.name.clone(),
+                generic: Type::Parameter(generic.name.clone()),
+                ty,
+            })
+        })
+        .collect()
 }
 
 /// Returns `true` if the given name is reserved and cannot be used as an import alias.

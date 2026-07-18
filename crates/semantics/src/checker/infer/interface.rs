@@ -36,6 +36,22 @@ fn method_comma_ok(store: &Store, type_id: &str, method: &str) -> bool {
 }
 
 impl InferCtx<'_, '_> {
+    pub(crate) fn check_concrete_bound(&mut self, ty: &Type, bound: &Type, span: &Span) {
+        let bound = self.store.deep_resolve_alias(bound);
+        let Type::Nominal { id, params, .. } = bound else {
+            return;
+        };
+        let Some(interface) = self.store.get_interface(&id).cloned() else {
+            return;
+        };
+        if self
+            .satisfies_interface(ty, &interface, &id, &params, span)
+            .is_ok()
+        {
+            let _ = self.check_pointer_receivers(ty, &interface, &id, span);
+        }
+    }
+
     pub(super) fn satisfies_interface(
         &mut self,
         ty: &Type,

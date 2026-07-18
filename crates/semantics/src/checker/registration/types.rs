@@ -33,7 +33,7 @@ impl TaskState<'_> {
 
         self.scopes.push();
         self.put_in_scope(generics);
-        self.validate_generic_bounds(&*store, generics, span);
+        let generics = self.resolve_generic_bounds(&*store, generics, span);
 
         let new_variants: Vec<_> = variants
             .iter()
@@ -45,7 +45,7 @@ impl TaskState<'_> {
         self.check_enum_field_type_conflicts(name, &new_variants);
 
         for new_variant in &new_variants {
-            self.add_enum_variant_to_scope(new_variant, name, &enum_ty, generics);
+            self.add_enum_variant_to_scope(new_variant, name, &enum_ty, &generics);
         }
 
         let visibility = self
@@ -60,7 +60,7 @@ impl TaskState<'_> {
         let variant_definitions: Vec<_> = new_variants
             .iter()
             .map(|v| {
-                let variant_ty = enum_variant_constructor_type(v, &enum_ty, generics);
+                let variant_ty = enum_variant_constructor_type(v, &enum_ty, &generics);
                 let qualified_variant_name = qualified_name.with_segment(&v.name);
                 let simple_qualified_name = if is_prelude {
                     Some(self.qualify_name(&v.name))
@@ -123,7 +123,7 @@ impl TaskState<'_> {
                 name_span: Some(*name_span),
                 doc: doc.clone(),
                 body: DefinitionBody::Enum {
-                    generics: generics.to_vec(),
+                    generics,
                     variants: new_variants,
                     methods: MethodSignatures::default(),
                     attributes,
@@ -292,7 +292,7 @@ impl TaskState<'_> {
 
         self.scopes.push();
         self.put_in_scope(generics);
-        self.validate_generic_bounds(&*store, generics, span);
+        let generics = self.resolve_generic_bounds(&*store, generics, span);
 
         let new_fields: Vec<StructFieldDefinition> = fields
             .iter()
@@ -352,7 +352,7 @@ impl TaskState<'_> {
                 name_span: Some(*name_span),
                 doc: doc.clone(),
                 body: DefinitionBody::Struct {
-                    generics: generics.to_vec(),
+                    generics,
                     fields: new_fields,
                     kind,
                     methods: Default::default(),
@@ -501,6 +501,10 @@ impl TaskState<'_> {
     ) {
         let qualified_name = self.qualify_name(name);
 
+        self.scopes.push();
+        self.put_in_scope(generics);
+        let generics = self.resolve_generic_bounds(&*store, generics, span);
+
         if annotation.is_opaque() {
             if self.is_lis(&*store) {
                 self.sink
@@ -563,6 +567,8 @@ impl TaskState<'_> {
                 ));
             }
 
+            self.scopes.pop();
+
             self.current_module_mut(store).definitions.insert(
                 qualified_name,
                 Definition {
@@ -572,7 +578,7 @@ impl TaskState<'_> {
                     name_span: Some(*name_span),
                     doc: doc.clone(),
                     body: DefinitionBody::TypeAlias {
-                        generics: generics.to_vec(),
+                        generics,
                         annotation: annotation.clone(),
                         methods: Default::default(),
                         attributes: super::collect_struct_attributes(attributes),
@@ -582,11 +588,6 @@ impl TaskState<'_> {
 
             return;
         }
-
-        self.scopes.push();
-
-        self.put_in_scope(generics);
-        self.validate_generic_bounds(&*store, generics, span);
 
         let body_ty = self.convert_to_type(&*store, annotation, span);
         let is_function_body = matches!(body_ty, Type::Function(_));
@@ -645,7 +646,7 @@ impl TaskState<'_> {
                 name_span: Some(*name_span),
                 doc: doc.clone(),
                 body: DefinitionBody::TypeAlias {
-                    generics: generics.to_vec(),
+                    generics,
                     annotation: annotation.clone(),
                     methods: Default::default(),
                     attributes: super::collect_struct_attributes(attributes),

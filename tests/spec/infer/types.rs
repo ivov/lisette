@@ -5318,6 +5318,64 @@ fn main() { take(S {}) }
 }
 
 #[test]
+fn transforming_interface_cycle_with_bound_check_terminates() {
+    infer(
+        r#"
+interface Required {
+  fn required(self)
+}
+
+interface A<T> {
+  embed B<Slice<T>>
+}
+
+interface B<T> {
+  embed A<Slice<T>>
+}
+
+interface Holder<T: Required> {}
+
+interface Uses<T: Holder<U>, U: A<int>> {}
+"#,
+    )
+    .assert_infer_code("interface_cycle");
+}
+
+#[test]
+fn concrete_generic_argument_must_satisfy_user_interface_bound() {
+    infer(
+        r#"
+interface Shower {
+  fn show(self) -> string
+}
+
+interface Need<T: Shower> {}
+
+struct Plain {}
+
+interface Uses<T: Need<Plain>> {}
+"#,
+    )
+    .assert_infer_code("interface_not_implemented");
+}
+
+#[test]
+fn nested_impl_receiver_argument_keeps_its_bound_check() {
+    infer(
+        r#"
+struct Inner<T: Comparable> {}
+
+struct Pair<A, B> {}
+
+impl<T> Pair<Inner<T>, int> {
+  fn value(self) -> int { 0 }
+}
+"#,
+    )
+    .assert_infer_code("missing_bound_on_param");
+}
+
+#[test]
 fn interface_diamond_conflicting_type_args_rejected() {
     let mut fs = MockFileSystem::new();
     fs.add_file(

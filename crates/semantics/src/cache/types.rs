@@ -58,6 +58,7 @@ impl CachedGeneric {
         Generic {
             name: EcoString::from(self.name.as_str()),
             bounds: self.bounds.clone(),
+            resolved_bounds: vec![],
             span: self.span.to_span(file_ids),
         }
     }

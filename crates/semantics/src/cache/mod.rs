@@ -1,6 +1,9 @@
+mod bounds;
 pub mod go_stdlib;
 pub mod prelude;
 pub mod types;
+
+pub(crate) use bounds::restore_cached_generic_bounds;
 
 use crate::path::DisplayPathBase;
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};

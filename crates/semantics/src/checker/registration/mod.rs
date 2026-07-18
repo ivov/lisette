@@ -2,6 +2,7 @@ mod builtins;
 mod convert;
 mod display;
 mod equality;
+mod generic_bounds;
 mod impl_bounds;
 mod iterate;
 mod methods;
@@ -24,7 +25,7 @@ use syntax::program::{
 };
 use syntax::types::{Symbol, Type};
 
-use super::{FileContextKind, TaskState};
+use super::{FileContextKind, TaskState, resolved_generic_bounds};
 use crate::store::Store;
 
 pub(crate) fn extract_package_directive(source: &str) -> Option<String> {
@@ -266,9 +267,7 @@ impl TaskState<'_> {
     }
 
     pub fn register_module(&mut self, store: &mut Store, id: &str) {
-        let type_name_entries =
-            self.with_module_cursor(id, |this| this.collect_module_type_name_entries(store, id));
-        self.insert_type_name_entries(store, id, type_name_entries);
+        self.predeclare_module_types(store, id);
 
         let file_data = self.module_file_data(store, id);
 
@@ -291,6 +290,28 @@ impl TaskState<'_> {
 
         self.register_module_equality(store, id);
         self.register_module_tests(store, id);
+        self.populate_module_generic_bounds(store, id);
+    }
+
+    pub(crate) fn predeclare_module_types(&mut self, store: &mut Store, id: &str) {
+        let type_name_entries =
+            self.with_module_cursor(id, |this| this.collect_module_type_name_entries(store, id));
+        self.insert_type_name_entries(store, id, type_name_entries);
+    }
+
+    fn populate_module_generic_bounds(&self, store: &mut Store, module_id: &str) {
+        let Some(module) = store.get_module_mut(module_id) else {
+            return;
+        };
+        for file in module
+            .files
+            .values_mut()
+            .chain(module.typedefs.values_mut())
+        {
+            for item in &mut file.items {
+                populate_expression_generic_bounds(item, &self.facts.bound_types);
+            }
+        }
     }
 
     /// Register a Go module (stdlib or third-party). Unlike regular modules,
@@ -514,6 +535,7 @@ impl TaskState<'_> {
                         .items,
                 );
 
+                this.check_type_generic_bounds(store, &items);
                 this.register_impl_blocks(store, &items);
                 this.register_values(store, &items, &Visibility::Private);
 
@@ -533,6 +555,7 @@ impl TaskState<'_> {
     ) {
         self.register_type_names(store, items, visibility);
         self.register_type_definitions(store, items);
+        self.check_type_generic_bounds(store, items);
         self.register_impl_blocks(store, items);
         self.register_values(store, items, visibility);
         self.register_iterate(store, items);
@@ -787,6 +810,34 @@ impl TaskState<'_> {
                 ),
                 _ => (),
             }
+        }
+    }
+
+    fn check_type_generic_bounds(&mut self, store: &Store, items: &[Expression]) {
+        for item in items {
+            let (name, span) = match item {
+                Expression::Enum { name, span, .. }
+                | Expression::Struct { name, span, .. }
+                | Expression::Interface { name, span, .. }
+                | Expression::TypeAlias { name, span, .. } => (name, *span),
+                _ => continue,
+            };
+            let Some(definition) = store.get_definition(&self.qualify_name(name)) else {
+                continue;
+            };
+            let Some(generics) = definition.body.generics().map(|generics| generics.to_vec())
+            else {
+                continue;
+            };
+            if generics.is_empty() {
+                continue;
+            }
+
+            self.scopes.push();
+            self.put_in_scope(&generics);
+            self.record_resolved_generic_bounds(&generics);
+            self.check_transitive_generic_bounds(store, &generics, span);
+            self.scopes.pop();
         }
     }
 
@@ -1107,27 +1158,16 @@ impl TaskState<'_> {
     ) -> Type {
         self.scopes.push();
         self.put_in_scope(generics);
-
-        let mut bounds = vec![];
-
-        for generic in generics {
-            for bound in &generic.bounds {
-                let bound_ty = self.register_generic_bound(store, &generic.name, bound, span);
-
-                bounds.push(syntax::types::Bound {
-                    param_name: generic.name.clone(),
-                    generic: Type::Parameter(generic.name.clone()),
-                    ty: bound_ty,
-                });
-            }
-        }
+        let generics = self.resolve_generic_bounds(store, generics, span);
+        self.check_transitive_generic_bounds(store, &generics, *span);
+        let bounds = resolved_generic_bounds(&generics);
 
         let before = self.sink.len();
 
         let param_types: Vec<Type> = params
             .iter()
             .map(|binding| match &binding.annotation {
-                Some(a) => self.convert_to_type_inner(store, a, span, true, true),
+                Some(a) => self.convert_variadic_to_type(store, a, span),
                 None if !binding.ty.is_uninferred() => binding.ty.clone(),
                 None => self.new_type_var(),
             })
@@ -1160,6 +1200,55 @@ impl TaskState<'_> {
                 body: Box::new(base_fn_ty),
             }
         }
+    }
+}
+
+fn populate_expression_generic_bounds(
+    expression: &mut Expression,
+    bound_types: &rustc_hash::FxHashMap<Span, Type>,
+) {
+    match expression {
+        Expression::Function { generics, .. }
+        | Expression::Struct { generics, .. }
+        | Expression::Enum { generics, .. }
+        | Expression::TypeAlias { generics, .. } => populate_generic_bounds(generics, bound_types),
+        Expression::ImplBlock {
+            generics, methods, ..
+        } => {
+            populate_generic_bounds(generics, bound_types);
+            for method in methods {
+                populate_expression_generic_bounds(method, bound_types);
+            }
+        }
+        Expression::Interface {
+            generics,
+            method_signatures,
+            ..
+        } => {
+            populate_generic_bounds(generics, bound_types);
+            for method in method_signatures {
+                populate_expression_generic_bounds(method, bound_types);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn populate_generic_bounds(
+    generics: &mut [Generic],
+    bound_types: &rustc_hash::FxHashMap<Span, Type>,
+) {
+    for generic in generics {
+        generic.resolved_bounds = generic
+            .bounds
+            .iter()
+            .map(|bound| {
+                bound_types
+                    .get(&bound.get_span())
+                    .cloned()
+                    .unwrap_or(Type::Error)
+            })
+            .collect();
     }
 }
 

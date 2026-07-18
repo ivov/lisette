@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Missing bound on type parameter
+    ╭─[test.lis:9:3]
+  8 │ impl<E> W<E> {
+  9 │   fn m<T: Bar<E>>(self, x: T) {}
+    ·   ───────────────┬──────────────
+    ·                  ╰── must satisfy `error`
+ 10 │ }
+    ╰────
+  help: `Bar` requires its type argument to satisfy `error`. Add the bound: `E: error` · code: [infer.missing_transitive_bound]

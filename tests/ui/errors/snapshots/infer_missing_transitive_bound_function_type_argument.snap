@@ -1,0 +1,11 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Missing bound on type parameter
+   ╭─[test.lis:6:32]
+ 5 │ 
+ 6 │ fn foo<T: Outer<fn(Inner<E>)>, E>(x: T) {}
+   ·                                ┬
+   ·                                ╰── must satisfy `Comparable`
+   ╰────
+  help: `Inner` requires its type argument to satisfy `Comparable`. Add the bound: `E: Comparable` · code: [infer.missing_transitive_bound]

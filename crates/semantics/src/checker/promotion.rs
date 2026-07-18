@@ -521,6 +521,7 @@ mod tests {
                         .map(|g| Generic {
                             name: g.into(),
                             bounds: vec![],
+                            resolved_bounds: vec![],
                             span: Span::dummy(),
                         })
                         .collect(),

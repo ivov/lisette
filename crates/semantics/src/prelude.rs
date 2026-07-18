@@ -58,6 +58,7 @@ pub fn parse_and_register_prelude(store: &mut Store, sink: &LocalSink) {
                 checker.register_impl_blocks(store, &file.items);
                 checker.register_values(store, &file.items, &Visibility::Public);
             }
+            checker.check_pending_generic_bounds(&*store);
         },
     );
 }
@@ -107,6 +108,7 @@ pub fn parse_and_register_test_prelude(store: &mut Store, sink: &LocalSink) {
                 checker.register_impl_blocks(store, &file.items);
                 checker.register_values(store, &file.items, &Visibility::Public);
             }
+            checker.check_pending_generic_bounds(&*store);
         },
     );
 }

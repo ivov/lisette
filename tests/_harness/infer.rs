@@ -123,6 +123,7 @@ pub fn infer_module(module_name: &str, fs: MockFileSystem) -> InferResult {
         }
 
         checker.finalize_equality(&mut store);
+        checker.check_pending_generic_bounds(&store);
         checker.finalize_tests(&mut store);
 
         for module_id in &to_infer {

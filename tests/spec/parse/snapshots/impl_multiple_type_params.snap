@@ -31,6 +31,7 @@ description: |
             Generic {
                 name: "K",
                 bounds: [],
+                resolved_bounds: [],
                 span: Span {
                     file_id: 0,
                     byte_offset: 13,
@@ -40,6 +41,7 @@ description: |
             Generic {
                 name: "V",
                 bounds: [],
+                resolved_bounds: [],
                 span: Span {
                     file_id: 0,
                     byte_offset: 16,
@@ -393,6 +395,7 @@ description: |
             Generic {
                 name: "K",
                 bounds: [],
+                resolved_bounds: [],
                 span: Span {
                     file_id: 0,
                     byte_offset: 51,
@@ -402,6 +405,7 @@ description: |
             Generic {
                 name: "V",
                 bounds: [],
+                resolved_bounds: [],
                 span: Span {
                     file_id: 0,
                     byte_offset: 54,

@@ -26,6 +26,7 @@ description: |
             Generic {
                 name: "T",
                 bounds: [],
+                resolved_bounds: [],
                 span: Span {
                     file_id: 0,
                     byte_offset: 18,
@@ -211,6 +212,7 @@ description: |
             Generic {
                 name: "T",
                 bounds: [],
+                resolved_bounds: [],
                 span: Span {
                     file_id: 0,
                     byte_offset: 43,

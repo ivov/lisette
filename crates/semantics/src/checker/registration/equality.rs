@@ -5,7 +5,7 @@ use syntax::ast::{Attribute, Expression, Generic, Span, VariantFields};
 use syntax::program::{Definition, DefinitionBody};
 use syntax::types::{Symbol, Type};
 
-use super::{TaskState, wrap_with_impl_generics};
+use super::{TaskState, resolved_generic_bounds, wrap_with_impl_generics};
 use crate::checker::infer::expressions::comparison::{check_not_equatable, param_is_comparable};
 use crate::store::Store;
 
@@ -219,13 +219,7 @@ impl TaskState<'_> {
 
         self.scopes.push();
         self.put_in_scope(&generics);
-        let before = self.sink.len();
-        for generic in &generics {
-            for bound in &generic.bounds {
-                self.register_generic_bound(store, &generic.name, bound, &generic.span);
-            }
-        }
-        self.sink.truncate(before);
+        self.record_resolved_generic_bounds(&generics);
 
         for (field_name, field_span, field_ty) in &fields {
             let reason = check_not_equatable(&self.env, store, field_ty, module_id, &|name| {
@@ -283,34 +277,6 @@ impl TaskState<'_> {
         }
     }
 
-    fn type_generic_bounds(
-        &mut self,
-        store: &Store,
-        qualified: &Symbol,
-        generics: &[Generic],
-    ) -> Vec<syntax::types::Bound> {
-        self.scopes.push();
-        self.put_in_scope(generics);
-        let before = self.sink.len();
-        let mut bounds = Vec::new();
-        for generic in generics {
-            for bound in &generic.bounds {
-                if let Some(bound_ty) =
-                    self.resolve_type_bound(store, bound, &generic.span, qualified)
-                {
-                    bounds.push(syntax::types::Bound {
-                        param_name: generic.name.clone(),
-                        generic: Type::Parameter(generic.name.clone()),
-                        ty: bound_ty,
-                    });
-                }
-            }
-        }
-        self.sink.truncate(before);
-        self.scopes.pop();
-        bounds
-    }
-
     fn synthesize_equals(&mut self, store: &mut Store, module_id: &str, qualified: &Symbol) {
         let Some(scheme) = store.get_type(qualified.as_str()).cloned() else {
             return;
@@ -334,7 +300,7 @@ impl TaskState<'_> {
             Default::default(),
             Box::new(Type::bool()),
         );
-        let impl_bounds = self.type_generic_bounds(store, qualified, &generics);
+        let impl_bounds = resolved_generic_bounds(&generics);
         let method_ty = wrap_with_impl_generics(&fn_ty, &generics, &impl_bounds);
 
         let equals_key = qualified.with_segment("equals");

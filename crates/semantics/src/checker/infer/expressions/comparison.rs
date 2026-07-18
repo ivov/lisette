@@ -434,19 +434,23 @@ fn interface_closure_any(
     start: &Type,
     mut predicate: impl FnMut(&Type) -> bool,
 ) -> bool {
-    let mut stack = vec![store.deep_resolve_alias(start)];
-    let mut seen: Vec<Type> = Vec::new();
-    while let Some(current) = stack.pop() {
-        if predicate(&current) {
-            return true;
-        }
+    let mut stack = vec![(store.deep_resolve_alias(start), Vec::<String>::new())];
+    let mut seen = Vec::new();
+    while let Some((current, mut path)) = stack.pop() {
         if seen.contains(&current) {
             continue;
         }
         seen.push(current.clone());
+        if predicate(&current) {
+            return true;
+        }
         let Some(id) = current.get_qualified_id() else {
             continue;
         };
+        if path.iter().any(|seen_id| seen_id == id) {
+            continue;
+        }
+        path.push(id.to_string());
         let Some(interface) = store.get_interface(id) else {
             continue;
         };
@@ -455,7 +459,10 @@ fn interface_closure_any(
             current.get_type_params().unwrap_or_default(),
         );
         for parent in &interface.parents {
-            stack.push(store.deep_resolve_alias(&substitute(parent, &map)));
+            stack.push((
+                store.deep_resolve_alias(&substitute(parent, &map)),
+                path.clone(),
+            ));
         }
     }
     false

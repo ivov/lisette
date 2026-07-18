@@ -710,6 +710,7 @@ impl Annotation {
 pub struct Generic {
     pub name: EcoString,
     pub bounds: Vec<Annotation>,
+    pub resolved_bounds: Vec<Type>,
     pub span: Span,
 }
 

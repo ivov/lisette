@@ -18,15 +18,10 @@ impl InferCtx<'_, '_> {
         self.scopes.push();
 
         self.put_in_scope(&generics);
-
-        for generic in &generics {
-            for bound in &generic.bounds {
-                self.register_generic_bound(store, &generic.name, bound, &span);
-            }
-        }
+        let generics = self.ensure_generic_bounds(store, generics, &span);
 
         self.check_undeclared_impl_type_params(&annotation, &generics);
-        let impl_ty = self.convert_to_type_inner(store, &annotation, &span, false, false);
+        let impl_ty = self.convert_receiver_to_type(store, &annotation, &span);
 
         if self.impl_has_simple_type_params(&impl_ty, &generics) {
             let receiver_qualified = impl_ty.get_qualified_name();
@@ -106,7 +101,7 @@ impl InferCtx<'_, '_> {
 
         self.scopes.push();
         self.put_in_scope(&generics);
-        self.validate_generic_bounds(store, &generics, &span);
+        let generics = self.ensure_generic_bounds(store, generics, &span);
 
         // Interface method parameters are declarations, not implementations — they
         // have no body and are always "unused". Remove their bindings so the unused

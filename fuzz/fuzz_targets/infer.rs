@@ -35,6 +35,7 @@ fuzz_target!(|data: &[u8]| {
         &desugar_result.ast,
         &lisette_syntax::program::Visibility::Private,
     );
+    checker.check_pending_generic_bounds(&store);
 
     for expression in desugar_result.ast {
         let type_var = checker.new_type_var();

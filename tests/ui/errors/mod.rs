@@ -8723,6 +8723,242 @@ fn user() -> bool { eq(1, 1) }
 }
 
 #[test]
+fn infer_missing_transitive_bound_on_interface() {
+    let input = r#"
+interface Bar<E: error> {}
+
+interface Foo<T: Bar<E>, E> {}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_missing_transitive_bound_on_struct() {
+    let input = r#"
+interface Bar<E: error> {}
+
+struct Foo<T: Bar<E>, E> { value: T }
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_missing_transitive_bound_user_interface() {
+    let input = r#"
+interface Shower {
+  fn show(self) -> string
+}
+
+interface Bar<E: Shower> {}
+
+interface Foo<T: Bar<E>, E> {}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_transitive_bound_satisfied_no_error() {
+    let input = r#"
+interface Bar<E: error> {}
+
+interface Foo<T: Bar<E>, E: error> {}
+"#;
+    let result = crate::_harness::infer::infer(input);
+    assert!(
+        result.errors.is_empty(),
+        "Expected no errors, got: {:?}",
+        result.errors
+    );
+}
+
+#[test]
+fn infer_transitive_builtin_bound_declared_after_no_error() {
+    let input = r#"
+interface Wrapper<E: Comparable> {}
+
+interface Foo<T: Wrapper<E>, E: Comparable> {}
+"#;
+    let result = crate::_harness::infer::infer(input);
+    assert!(
+        result.errors.is_empty(),
+        "Expected no errors, got: {:?}",
+        result.errors
+    );
+}
+
+#[test]
+fn infer_missing_transitive_bound_distinguishes_type_args() {
+    let input = r#"
+interface Parent<T> {
+  fn p(self) -> T
+}
+
+interface Bar<E: Parent<string>> {}
+
+interface Foo<T: Bar<E>, E: Parent<int>> {}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_transitive_bound_matching_type_args_no_error() {
+    let input = r#"
+interface Parent<T> {
+  fn p(self) -> T
+}
+
+interface Bar<E: Parent<string>> {}
+
+interface Foo<T: Bar<E>, E: Parent<string>> {}
+"#;
+    let result = crate::_harness::infer::infer(input);
+    assert!(
+        result.errors.is_empty(),
+        "Expected no errors, got: {:?}",
+        result.errors
+    );
+}
+
+#[test]
+fn infer_missing_transitive_bound_substitutes_referenced_params() {
+    let input = r#"
+interface Parent<T> {
+  fn p(self) -> T
+}
+
+interface Bar<X, E: Parent<X>> {}
+
+interface Foo<T: Bar<string, E>, E: Parent<int>> {}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_transitive_bound_substituted_match_no_error() {
+    let input = r#"
+interface Parent<T> {
+  fn p(self) -> T
+}
+
+interface Bar<X, E: Parent<X>> {}
+
+interface Foo<T: Bar<string, E>, E: Parent<string>> {}
+"#;
+    let result = crate::_harness::infer::infer(input);
+    assert!(
+        result.errors.is_empty(),
+        "Expected no errors, got: {:?}",
+        result.errors
+    );
+}
+
+#[test]
+fn infer_missing_transitive_bound_function_type_argument() {
+    let input = r#"
+interface Inner<K: Comparable> {}
+
+interface Outer<X> {}
+
+fn foo<T: Outer<fn(Inner<E>)>, E>(x: T) {}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_missing_transitive_bound_impl_level_param() {
+    let input = r#"
+interface Bar<E: error> {}
+
+struct W<E> {
+  v: E
+}
+
+impl<E> W<E> {
+  fn m<T: Bar<E>>(self, x: T) {}
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_missing_transitive_bound_nested_argument() {
+    let input = r#"
+interface Inner<K: Comparable> {}
+
+interface Outer<X> {}
+
+fn foo<T: Outer<Inner<E>>, E>(x: T) {}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_transitive_bound_receiver_inherited_no_error() {
+    let input = r#"
+interface Bar<E: error> {}
+
+struct Box<E: error> {
+  value: E
+}
+
+impl<E> Box<E> {
+  fn m<T: Bar<E>>(self, _x: T) {}
+}
+"#;
+    let result = crate::_harness::infer::infer(input);
+    assert!(
+        result.errors.is_empty(),
+        "Expected no errors, got: {:?}",
+        result.errors
+    );
+}
+
+#[test]
+fn infer_missing_transitive_bound_impl_without_receiver_bound() {
+    let input = r#"
+interface Bar<E: error> {}
+
+struct W<E> {
+  value: E
+}
+
+impl<E> W<E> {
+  fn m<T: Bar<E>>(self, _x: T) {}
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_missing_transitive_bound_in_slice_argument() {
+    let input = r#"
+interface Inner<K: Comparable> {}
+
+interface Outer<X> {}
+
+fn foo<T: Outer<Slice<Inner<E>>>, E>(_x: T) {}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_self_referential_transitive_bound_no_error() {
+    let input = r#"
+interface Cloner<T: Cloner<T>> {
+  fn clone(self) -> T
+}
+
+fn squiggle<A: Cloner<B>, B>(_a: A, _b: B) {}
+"#;
+    let result = crate::_harness::infer::infer(input);
+    assert!(
+        result.errors.is_empty(),
+        "Expected no errors, got: {:?}",
+        result.errors
+    );
+}
+
+#[test]
 fn infer_shadowed_inner_generic_does_not_inherit_bound() {
     let input = r#"
 import "go:cmp"

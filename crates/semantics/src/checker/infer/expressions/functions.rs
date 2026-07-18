@@ -1,4 +1,4 @@
-use crate::checker::EnvResolve;
+use crate::checker::{EnvResolve, resolved_generic_bounds};
 use ecow::EcoString;
 use syntax::ast::BindingKind;
 use syntax::ast::{Annotation, Binding, Expression, Pattern, Span, StructKind};
@@ -125,20 +125,8 @@ impl InferCtx<'_, '_> {
         self.scopes.push();
 
         self.put_in_scope(&generics);
-
-        let mut bounds = vec![];
-
-        for generic in &generics {
-            for bound in &generic.bounds {
-                let bound_ty = self.register_generic_bound(store, &generic.name, bound, &span);
-
-                bounds.push(Bound {
-                    param_name: generic.name.clone(),
-                    generic: Type::Parameter(generic.name.clone()),
-                    ty: bound_ty,
-                });
-            }
-        }
+        let generics = self.ensure_generic_bounds(store, generics, &span);
+        let bounds = resolved_generic_bounds(&generics);
 
         let resolved_expected = expected_ty.resolve_in(&self.env);
         let expected_params = resolved_expected.get_function_params().unwrap_or_default();
@@ -1249,7 +1237,7 @@ impl InferCtx<'_, '_> {
                     binding
                         .annotation
                         .as_ref()
-                        .map(|a| self.convert_to_type_inner(store, a, pattern_span, true, true))
+                        .map(|a| self.convert_variadic_to_type(store, a, pattern_span))
                         .unwrap_or_else(|| self.new_type_var())
                 });
 

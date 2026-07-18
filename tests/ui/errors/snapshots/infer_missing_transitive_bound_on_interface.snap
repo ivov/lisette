@@ -1,0 +1,11 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Missing bound on type parameter
+   ╭─[test.lis:4:26]
+ 3 │ 
+ 4 │ interface Foo<T: Bar<E>, E> {}
+   ·                          ┬
+   ·                          ╰── must satisfy `error`
+   ╰────
+  help: `Bar` requires its type argument to satisfy `error`. Add the bound: `E: error` · code: [infer.missing_transitive_bound]

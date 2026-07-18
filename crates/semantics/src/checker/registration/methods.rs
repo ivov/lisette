@@ -5,12 +5,11 @@ use syntax::ast::{
 };
 use syntax::program::{Definition, DefinitionBody, Interface, Visibility};
 use syntax::types::{
-    Bound, Symbol, Type, build_substitution_map, substitute, type_args_match_params,
-    unqualified_name,
+    Symbol, Type, build_substitution_map, substitute, type_args_match_params, unqualified_name,
 };
 
 use super::{extract_attribute_flags, has_recursive_instantiation, wrap_with_impl_generics};
-use crate::checker::TaskState;
+use crate::checker::{TaskState, resolved_generic_bounds};
 use crate::store::Store;
 
 impl TaskState<'_> {
@@ -137,21 +136,11 @@ impl TaskState<'_> {
     ) {
         self.scopes.push();
         self.put_in_scope(generics);
+        let generics = self.resolve_generic_bounds(&*store, generics, span);
+        let impl_bounds = resolved_generic_bounds(&generics);
 
-        let mut impl_bounds: Vec<Bound> = Vec::new();
-        for generic in generics {
-            for bound in &generic.bounds {
-                let bound_ty = self.register_generic_bound(&*store, &generic.name, bound, span);
-                impl_bounds.push(Bound {
-                    param_name: generic.name.clone(),
-                    generic: Type::Parameter(generic.name.clone()),
-                    ty: bound_ty,
-                });
-            }
-        }
-
-        self.check_undeclared_impl_type_params(annotation, generics);
-        let receiver_ty = self.convert_to_type_inner(&*store, annotation, span, false, false);
+        self.check_undeclared_impl_type_params(annotation, &generics);
+        let receiver_ty = self.convert_receiver_to_type(&*store, annotation, span);
         let Some(type_name) = receiver_ty.get_name() else {
             self.scopes.pop();
             return;
@@ -216,17 +205,18 @@ impl TaskState<'_> {
             return;
         }
 
-        if self.impl_has_simple_type_params(&receiver_ty, generics) {
+        if self.impl_has_simple_type_params(&receiver_ty, &generics) {
             let receiver_bounds =
-                self.register_receiver_type_bounds(&*store, &receiver_qualified_name, generics);
+                self.register_receiver_type_bounds(&*store, &receiver_qualified_name, &generics);
             self.check_strengthened_impl_bounds(
                 &*store,
                 &receiver_qualified_name,
-                generics,
+                &generics,
                 &impl_bounds,
                 &receiver_bounds,
             );
         }
+        self.check_transitive_generic_bounds(&*store, &generics, *span);
 
         let mut static_methods: Vec<(String, Type)> = Vec::new();
 
@@ -247,12 +237,13 @@ impl TaskState<'_> {
                 Visibility::Private
             };
             let fn_sig = function.to_function_signature();
+            let fn_span = function.get_span();
             let mut fn_ty = self.extract_signature_parts(
                 &*store,
                 &fn_sig.generics,
                 &fn_sig.params,
                 &fn_sig.annotation,
-                span,
+                &fn_span,
             );
             let qualified_name = format!("{}.{}", type_name, fn_sig.name);
             let module_qualified_name = Symbol::from_parts(&module_id, &qualified_name);
@@ -269,7 +260,7 @@ impl TaskState<'_> {
                 fn_ty = fn_ty.with_replaced_first_param(&receiver_ty);
             }
 
-            let method_ty = wrap_with_impl_generics(&fn_ty, generics, &impl_bounds);
+            let method_ty = wrap_with_impl_generics(&fn_ty, &generics, &impl_bounds);
 
             let go_hints = extract_attribute_flags(fn_attrs, "go");
             let method_key: EcoString =
@@ -280,7 +271,7 @@ impl TaskState<'_> {
                 };
 
             if !generics.is_empty()
-                && self.impl_has_simple_type_params(&receiver_ty, generics)
+                && self.impl_has_simple_type_params(&receiver_ty, &generics)
                 && has_recursive_instantiation(&receiver_qualified_name, &fn_ty)
             {
                 self.sink
@@ -360,7 +351,7 @@ impl TaskState<'_> {
     ) {
         self.scopes.push();
         self.put_in_scope(generics);
-        self.validate_generic_bounds(&*store, generics, span);
+        let generics = self.resolve_generic_bounds(&*store, generics, span);
 
         let new_parents = parents
             .iter()
@@ -390,12 +381,13 @@ impl TaskState<'_> {
                     (&[][..], None)
                 };
                 let method_sig = fe.to_function_signature();
+                let method_span = fe.get_span();
                 let fn_ty = self.extract_signature_parts(
                     &*store,
                     &method_sig.generics,
                     &method_sig.params,
                     &method_sig.annotation,
-                    span,
+                    &method_span,
                 );
                 let fn_ty = match &fn_ty {
                     Type::Forall { body, .. } => body.as_ref().clone(),
@@ -448,7 +440,7 @@ impl TaskState<'_> {
 
         let interface = Interface {
             name: interface_name.into(),
-            generics: generics.to_owned(),
+            generics,
             parents: new_parents,
             methods,
         };

@@ -304,6 +304,7 @@ impl<'source> Parser<'source> {
         Generic {
             name: self.read_identifier(),
             bounds: self.parse_generic_bounds(),
+            resolved_bounds: vec![],
             span: self.span_from_tokens(start),
         }
     }

@@ -1295,6 +1295,21 @@ pub fn missing_bound_on_param(
         ))
 }
 
+pub fn missing_transitive_bound(
+    param_name: &str,
+    required_bound: &str,
+    referenced_type: &str,
+    span: Span,
+) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Missing bound on type parameter")
+        .with_infer_code("missing_transitive_bound")
+        .with_span_label(&span, format!("must satisfy `{required_bound}`"))
+        .with_help(format!(
+            "`{}` requires its type argument to satisfy `{}`. Add the bound: `{}: {}`",
+            referenced_type, required_bound, param_name, required_bound
+        ))
+}
+
 pub fn division_by_zero(span: Span, ieee: bool) -> LisetteDiagnostic {
     let help = if ieee {
         "This operation evaluates to `+Inf`, `-Inf`, or `NaN` at runtime, which is almost never intended"

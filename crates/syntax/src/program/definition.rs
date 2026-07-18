@@ -72,6 +72,28 @@ pub enum DefinitionBody {
     },
 }
 
+impl DefinitionBody {
+    pub fn generics(&self) -> Option<&[Generic]> {
+        match self {
+            Self::TypeAlias { generics, .. }
+            | Self::Enum { generics, .. }
+            | Self::Struct { generics, .. } => Some(generics),
+            Self::Interface { definition } => Some(&definition.generics),
+            Self::Value { .. } => None,
+        }
+    }
+
+    pub fn generics_mut(&mut self) -> Option<&mut [Generic]> {
+        match self {
+            Self::TypeAlias { generics, .. }
+            | Self::Enum { generics, .. }
+            | Self::Struct { generics, .. } => Some(generics),
+            Self::Interface { definition } => Some(&mut definition.generics),
+            Self::Value { .. } => None,
+        }
+    }
+}
+
 impl Definition {
     pub fn ty(&self) -> &Type {
         &self.ty

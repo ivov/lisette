@@ -200,6 +200,310 @@ fn main() {
 }
 
 #[test]
+fn cached_aliased_interface_bound_keeps_its_identity() {
+    let scratch = tempfile::tempdir().expect("create temp dir");
+    let project = scratch.path().join("proj");
+    fs::create_dir_all(project.join("src/constraints")).unwrap();
+    fs::create_dir_all(project.join("src/box")).unwrap();
+    fs::write(
+        project.join("lisette.toml"),
+        "[project]\nname = \"github.com/user/boundcache\"\nversion = \"0.1.0\"\n",
+    )
+    .unwrap();
+    fs::write(
+        project.join("src/constraints/constraints.lis"),
+        "pub interface Parent<T> {\n  fn value(self) -> T\n}\n",
+    )
+    .unwrap();
+    fs::write(
+        project.join("src/box/box.lis"),
+        "import c \"constraints\"\n\npub interface Box<T: c.Parent<string>> {}\n",
+    )
+    .unwrap();
+    fs::write(
+        project.join("src/main.lis"),
+        "import \"box\"\n\nfn main() {}\n",
+    )
+    .unwrap();
+
+    let first = lis(&project, "check");
+    assert!(
+        first.status.success(),
+        "first check should cache `box`:\nstderr: {}",
+        String::from_utf8_lossy(&first.stderr)
+    );
+
+    fs::create_dir_all(project.join("src/wrap")).unwrap();
+    fs::write(
+        project.join("src/wrap/wrap.lis"),
+        r#"import "box"
+import c "constraints"
+
+pub interface Wrap<U: box.Box<T>, T: c.Parent<string>> {}
+"#,
+    )
+    .unwrap();
+    fs::write(
+        project.join("src/main.lis"),
+        "import \"wrap\"\n\nfn main() {}\n",
+    )
+    .unwrap();
+
+    let matching = lis(&project, "check");
+    assert!(
+        matching.status.success(),
+        "matching imported bounds should pass after a cache hit:\nstderr: {}",
+        String::from_utf8_lossy(&matching.stderr)
+    );
+
+    fs::write(
+        project.join("src/wrap/wrap.lis"),
+        r#"import "box"
+import c "constraints"
+
+pub interface Wrap<U: box.Box<T>, T: c.Parent<int>> {}
+"#,
+    )
+    .unwrap();
+    assert_rejected_at_check(&lis(&project, "check"), "Missing bound on type parameter");
+}
+
+#[test]
+fn cached_public_bound_can_reference_private_interface() {
+    let scratch = tempfile::tempdir().expect("create temp dir");
+    let project = scratch.path().join("proj");
+    fs::create_dir_all(project.join("src/box")).unwrap();
+    fs::write(
+        project.join("lisette.toml"),
+        "[project]\nname = \"github.com/user/privatebound\"\nversion = \"0.1.0\"\n",
+    )
+    .unwrap();
+    fs::write(
+        project.join("src/box/box.lis"),
+        r#"interface Hidden {
+  fn show(self) -> string
+}
+
+pub interface Box<T: Hidden> {}
+"#,
+    )
+    .unwrap();
+    fs::write(
+        project.join("src/main.lis"),
+        "import \"box\"\n\nfn main() {}\n",
+    )
+    .unwrap();
+
+    let first = lis(&project, "check");
+    assert!(
+        first.status.success(),
+        "first check should succeed:\nstdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&first.stdout),
+        String::from_utf8_lossy(&first.stderr)
+    );
+
+    let second = lis(&project, "check");
+    assert!(
+        second.status.success(),
+        "cached check should succeed:\nstdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&second.stdout),
+        String::from_utf8_lossy(&second.stderr)
+    );
+
+    fs::create_dir_all(project.join("src/wrap")).unwrap();
+    fs::write(
+        project.join("src/wrap/wrap.lis"),
+        r#"import "box"
+
+struct Plain {}
+
+pub interface Wrap<T: box.Box<Plain>> {}
+"#,
+    )
+    .unwrap();
+    fs::write(
+        project.join("src/main.lis"),
+        "import \"wrap\"\n\nfn main() {}\n",
+    )
+    .unwrap();
+    assert_rejected_at_check(&lis(&project, "check"), "Interface not implemented");
+}
+
+#[test]
+fn cached_public_function_bound_can_reference_private_interface() {
+    let scratch = tempfile::tempdir().expect("create temp dir");
+    let project = scratch.path().join("proj");
+    fs::create_dir_all(project.join("src/api")).unwrap();
+    fs::write(
+        project.join("lisette.toml"),
+        "[project]\nname = \"github.com/user/privatefunctionbound\"\nversion = \"0.1.0\"\n",
+    )
+    .unwrap();
+    fs::write(
+        project.join("src/api/api.lis"),
+        r#"interface Hidden {
+  fn show(self) -> string
+}
+
+pub fn use<T: Hidden>(_value: T) {}
+"#,
+    )
+    .unwrap();
+    fs::write(
+        project.join("src/main.lis"),
+        "import \"api\"\n\nfn main() {}\n",
+    )
+    .unwrap();
+
+    let first = lis(&project, "check");
+    assert!(
+        first.status.success(),
+        "first check should cache `api`:\nstderr: {}",
+        String::from_utf8_lossy(&first.stderr)
+    );
+
+    fs::create_dir_all(project.join("src/use_api")).unwrap();
+    fs::write(
+        project.join("src/use_api/use_api.lis"),
+        r#"import "api"
+
+struct Plain {}
+
+pub fn call() {
+  api.use(Plain {})
+}
+"#,
+    )
+    .unwrap();
+    fs::write(
+        project.join("src/main.lis"),
+        "import \"use_api\"\n\nfn main() {}\n",
+    )
+    .unwrap();
+
+    assert_rejected_at_check(&lis(&project, "check"), "Interface not implemented");
+}
+
+#[test]
+fn cached_public_interface_can_embed_private_parent() {
+    let scratch = tempfile::tempdir().expect("create temp dir");
+    let project = scratch.path().join("proj");
+    fs::create_dir_all(project.join("src/api")).unwrap();
+    fs::write(
+        project.join("lisette.toml"),
+        "[project]\nname = \"github.com/user/privateparent\"\nversion = \"0.1.0\"\n",
+    )
+    .unwrap();
+    fs::write(
+        project.join("src/api/api.lis"),
+        r#"interface Hidden {
+  fn show(self) -> string
+}
+
+pub interface Public {
+  embed Hidden
+}
+
+pub fn use(_value: Public) {}
+"#,
+    )
+    .unwrap();
+    fs::write(
+        project.join("src/main.lis"),
+        "import \"api\"\n\nfn main() {}\n",
+    )
+    .unwrap();
+
+    let first = lis(&project, "check");
+    assert!(
+        first.status.success(),
+        "first check should cache `api`:\nstderr: {}",
+        String::from_utf8_lossy(&first.stderr)
+    );
+
+    fs::create_dir_all(project.join("src/use_api")).unwrap();
+    fs::write(
+        project.join("src/use_api/use_api.lis"),
+        r#"import "api"
+
+struct Plain {}
+
+pub fn call() {
+  api.use(Plain {})
+}
+"#,
+    )
+    .unwrap();
+    fs::write(
+        project.join("src/main.lis"),
+        "import \"use_api\"\n\nfn main() {}\n",
+    )
+    .unwrap();
+
+    assert_rejected_at_check(&lis(&project, "check"), "Interface not implemented");
+}
+
+#[test]
+fn parallel_registration_validates_bounds_with_dependency_ufcs_methods() {
+    let scratch = tempfile::tempdir().expect("create temp dir");
+    let project = scratch.path().join("proj");
+    for module in ["dep", "use_a", "use_b"] {
+        fs::create_dir_all(project.join("src").join(module)).unwrap();
+    }
+    fs::write(
+        project.join("lisette.toml"),
+        "[project]\nname = \"github.com/user/parallelbounds\"\nversion = \"0.1.0\"\n",
+    )
+    .unwrap();
+    fs::write(
+        project.join("src/dep/dep.lis"),
+        r#"pub struct Box<T> {
+  pub value: T
+}
+
+impl Box<int> {
+  pub fn show(self) -> string { "box" }
+}
+"#,
+    )
+    .unwrap();
+    fs::write(
+        project.join("src/use_a/use_a.lis"),
+        r#"import "dep"
+
+pub interface Shower {
+  fn show(self) -> string
+}
+
+pub interface Need<T: Shower> {}
+
+pub interface Uses<T: Need<dep.Box<int>>> {}
+"#,
+    )
+    .unwrap();
+    fs::write(
+        project.join("src/use_b/use_b.lis"),
+        r#"import "dep"
+
+pub struct Keep {
+  pub value: dep.Box<int>
+}
+"#,
+    )
+    .unwrap();
+    fs::write(
+        project.join("src/main.lis"),
+        "import \"use_a\"\nimport \"use_b\"\n\nfn main() {}\n",
+    )
+    .unwrap();
+
+    assert_rejected_at_check(
+        &lis(&project, "check"),
+        "Specialized impl cannot satisfy interface",
+    );
+}
+
+#[test]
 fn imported_weaker_interface_bound_equals_accepted() {
     if !go_available() {
         eprintln!("skipping imported_weaker_interface_bound_equals_accepted: `go` not found");

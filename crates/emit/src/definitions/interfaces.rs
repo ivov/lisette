@@ -106,6 +106,13 @@ fn strip_self_referential_bounds(generics: &[Generic], interface_name: &str) -> 
                 .filter(|ann| !bound_references_interface(ann, interface_name))
                 .cloned()
                 .collect(),
+            resolved_bounds: g
+                .bounds
+                .iter()
+                .zip(&g.resolved_bounds)
+                .filter(|(ann, _)| !bound_references_interface(ann, interface_name))
+                .map(|(_, ty)| ty.clone())
+                .collect(),
             span: g.span,
         })
         .collect()
