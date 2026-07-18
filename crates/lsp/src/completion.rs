@@ -674,7 +674,8 @@ fn following_item(after: &[Token]) -> Following {
             Some(Tk::Struct) => FollowingItem::Target(AttributeTarget::Struct),
             Some(Tk::Enum) => FollowingItem::Target(AttributeTarget::Enum),
             Some(Tk::Function) => FollowingItem::Target(AttributeTarget::Function),
-            Some(Tk::Interface | Tk::Impl | Tk::Const | Tk::Var | Tk::Import | Tk::Type) => {
+            Some(Tk::Type) => FollowingItem::Target(AttributeTarget::TypeAlias),
+            Some(Tk::Interface | Tk::Impl | Tk::Const | Tk::Var | Tk::Import) => {
                 FollowingItem::Invalid
             }
             // `embed` is a contextual keyword lexed as an identifier; an interface
@@ -739,7 +740,7 @@ mod attribute_completion_tests {
         assert!(labels.contains(&"equality".to_string()));
         assert!(labels.contains(&"tag".to_string()));
         assert!(!labels.contains(&"iterate".to_string()));
-        assert!(!labels.contains(&"allow".to_string()));
+        assert!(labels.contains(&"allow".to_string()));
     }
 
     #[test]
@@ -751,7 +752,7 @@ mod attribute_completion_tests {
         assert!(labels.contains(&"json".to_string()));
         assert!(!labels.contains(&"xml".to_string()));
         assert!(!labels.contains(&"tag".to_string()));
-        assert!(!labels.contains(&"allow".to_string()));
+        assert!(labels.contains(&"allow".to_string()));
     }
 
     #[test]
@@ -801,7 +802,7 @@ mod attribute_completion_tests {
     fn comment_between_attribute_and_enum_resolves_target() {
         let labels = labels_at("#[|\n// note\nenum E { A }", false).unwrap();
         assert!(labels.contains(&"iterate".to_string()));
-        assert!(!labels.contains(&"allow".to_string()));
+        assert!(labels.contains(&"allow".to_string()));
     }
 
     #[test]
@@ -833,7 +834,7 @@ mod attribute_completion_tests {
         let labels = labels_at("#[|tag(`json:\")\"`)]\nstruct S { x: int }", false).unwrap();
         assert!(labels.contains(&"json".to_string()));
         assert!(!labels.contains(&"iterate".to_string()));
-        assert!(!labels.contains(&"allow".to_string()));
+        assert!(labels.contains(&"allow".to_string()));
     }
 
     #[test]
@@ -841,7 +842,7 @@ mod attribute_completion_tests {
         let labels = labels_at("#[|\n#[json(\"x]\")]\nstruct S { x: int }", false).unwrap();
         assert!(labels.contains(&"json".to_string()));
         assert!(!labels.contains(&"iterate".to_string()));
-        assert!(!labels.contains(&"allow".to_string()));
+        assert!(labels.contains(&"allow".to_string()));
     }
 
     #[test]
@@ -890,13 +891,19 @@ mod attribute_completion_tests {
 
     #[test]
     fn before_attribute_rejecting_declaration_offers_nothing() {
-        for decl in ["interface S {}", "impl S {}", "const X = 1", "type A = int"] {
+        for decl in ["interface S {}", "impl S {}", "const X = 1"] {
             let labels = labels_at(&format!("#[|\n{decl}"), false).unwrap();
             assert!(
                 labels.is_empty(),
                 "expected nothing before `{decl}`, got {labels:?}"
             );
         }
+    }
+
+    #[test]
+    fn top_level_type_alias_offers_allow() {
+        let labels = labels_at("#[|\ntype Alias = int", false).unwrap();
+        assert_eq!(labels, vec!["allow".to_string()]);
     }
 
     #[test]

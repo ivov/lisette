@@ -2,7 +2,6 @@ pub(crate) mod attributes;
 pub(crate) mod casing;
 mod checks;
 mod deprecation;
-mod suppression;
 
 use std::sync::{Arc, LazyLock};
 
@@ -279,7 +278,7 @@ fn run_module(
         if produced.is_empty() {
             continue;
         }
-        let allows = suppression::collect_declaration_allows(&file.items);
-        sink.extend(suppression::filter_allowed(produced, &allows));
+        let allows = super::suppression::collect_function_allows(&file.items);
+        sink.extend(super::suppression::filter_allowed(produced, &allows));
     }
 }

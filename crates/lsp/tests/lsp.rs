@@ -1225,8 +1225,8 @@ async fn completion_attribute_on_struct() {
     assert!(labels.contains(&"json".to_string()));
     assert!(labels.contains(&"display".to_string()));
     assert!(labels.contains(&"tag".to_string()));
+    assert!(labels.contains(&"allow".to_string()));
     assert!(!labels.contains(&"iterate".to_string()));
-    assert!(!labels.contains(&"allow".to_string()));
     assert!(!labels.iter().any(|l| l == "fn" || l == "let" || l == "int"));
 
     client.shutdown().await;
@@ -1265,6 +1265,7 @@ async fn completion_attribute_on_enum() {
     assert!(labels.contains(&"iterate".to_string()));
     assert!(labels.contains(&"display".to_string()));
     assert!(labels.contains(&"json".to_string()));
+    assert!(labels.contains(&"allow".to_string()));
     assert!(!labels.contains(&"tag".to_string()));
 
     client.shutdown().await;

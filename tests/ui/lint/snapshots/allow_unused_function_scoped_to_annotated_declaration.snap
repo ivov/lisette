@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  ▲ Unused function
+   ╭─[test.lis:5:4]
+ 4 │ 
+ 5 │ fn warned() {}
+   ·    ───┬──
+   ·       ╰── never called
+ 6 │ 
+   ╰────
+  help: Call or remove this function · code: [lint.unused_function]

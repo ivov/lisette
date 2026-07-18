@@ -147,7 +147,7 @@ fn describe(ready: bool) -> string {
 }
 ```
 
-For the unused-value of lints (namely `unused_result`, `unused_option`, `unused_literal`, and `unused_value`), place `#[allow]` on the function whose result is ignored, so every call to it stops warning.
+For unused-value lints (`unused_result`, `unused_option`, `unused_literal`, `unused_value`), place `#[allow]` on the function whose result is ignored, so every call to it stops warning.
 
 ```rs
 import "go:os"
@@ -160,6 +160,20 @@ fn warm_cache(path: string) -> Result<Slice<byte>, error> {
 fn main() {
   warm_cache("/config")
   warm_cache("/data")
+}
+```
+
+For the unused-item lints (`unused_function`, `unused_type`, `unused_struct_field`, `unused_enum_variant`), place `#[allow]` on the flagged declaration itself. An allow on a struct or enum also covers its fields and variants.
+
+```rs
+#[allow(unused_enum_variant)]
+enum Direction {
+  North,
+  South,
+}
+
+fn main() {
+  let _ = Direction.North
 }
 ```
 

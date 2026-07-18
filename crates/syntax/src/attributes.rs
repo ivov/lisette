@@ -8,6 +8,7 @@ pub enum AttributeTarget {
     Enum,
     Function,
     Method,
+    TypeAlias,
 }
 
 pub struct AttributeInfo {
@@ -87,7 +88,7 @@ pub const ATTRIBUTES: &[AttributeInfo] = &[
     AttributeInfo {
         name: "allow",
         detail: "suppress a lint",
-        targets: &[Function, Method],
+        targets: &[Function, Method, Struct, Enum, TypeAlias],
     },
     AttributeInfo {
         name: "iterate",

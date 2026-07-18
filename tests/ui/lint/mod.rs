@@ -14134,6 +14134,170 @@ fn main() {
 }
 
 #[test]
+fn allow_suppresses_unused_function() {
+    assert_no_lint_warnings!(
+        r#"
+#[allow(unused_function)]
+fn unused_helper() -> int {
+  42
+}
+
+fn main() {
+  ()
+}
+"#
+    );
+}
+
+#[test]
+fn allow_suppresses_unused_type_alias() {
+    assert_no_lint_warnings!(
+        r#"
+struct Inner { x: int }
+
+#[allow(unused_type)]
+type Unused = Inner
+
+fn main() {
+  let i = Inner { x: 1 }
+  let _ = i.x
+}
+"#
+    );
+}
+
+#[test]
+fn allow_on_struct_suppresses_unused_field() {
+    assert_no_lint_warnings!(
+        r#"
+#[allow(unused_struct_field)]
+struct Point { x: int, y: int }
+
+fn main() {
+  let p = Point { x: 1, y: 2 }
+  let _ = p.x
+}
+"#
+    );
+}
+
+#[test]
+fn allow_on_enum_suppresses_unused_variant() {
+    assert_no_lint_warnings!(
+        r#"
+#[allow(unused_enum_variant)]
+enum Color { Red, Green }
+
+fn main() {
+  let _ = Color.Red
+}
+"#
+    );
+}
+
+#[test]
+fn allow_unused_function_scoped_to_annotated_declaration() {
+    assert_lint_snapshot!(
+        r#"
+#[allow(unused_function)]
+fn allowed() {}
+
+fn warned() {}
+
+fn main() {
+  ()
+}
+"#
+    );
+}
+
+#[test]
+fn allow_suppresses_only_annotated_function_across_module_files() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+#[allow(unused_function)]
+fn allowed_helper() {}
+
+fn main() {}
+"#,
+    );
+    fs.add_file(ENTRY_MODULE_ID, "other.lis", "fn warned_helper() {}\n");
+    let result = compile_check(fs);
+    let unused_functions: Vec<_> = result
+        .lints
+        .iter()
+        .filter(|d| d.plain_message() == "Unused function")
+        .collect();
+    assert_eq!(
+        unused_functions.len(),
+        1,
+        "allow in main.lis must suppress only allowed_helper, leaving warned_helper in other.lis: {:?}",
+        result.lints
+    );
+}
+
+#[test]
+fn allow_unused_type_does_not_suppress_naming_lint_on_struct() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+#[allow(non_pascal_case_type)]
+struct myStruct { x: int }
+
+fn main() {
+  let s = myStruct { x: 1 }
+  let _ = s.x
+}
+"#,
+    );
+    let result = compile_check(fs);
+    assert!(
+        result
+            .lints
+            .iter()
+            .any(|d| d.lint_name() == Some("non_pascal_case_type")),
+        "reference-graph allow scoping must not silence AST-walk naming lints: {:?}",
+        result.lints
+    );
+}
+
+#[test]
+fn allow_does_not_suppress_internal_type_leak() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+struct Secret { pub x: int }
+
+#[allow(internal_type_leak)]
+pub fn leak() -> Secret {
+  Secret { x: 1 }
+}
+
+fn main() {
+  let s = leak()
+  let _ = s.x
+}
+"#,
+    );
+    let result = compile_check(fs);
+    assert!(
+        result
+            .lints
+            .iter()
+            .any(|d| d.lint_name() == Some("internal_type_leak")),
+        "allow must not suppress the internal_type_leak guardrail: {:?}",
+        result.lints
+    );
+}
+
+#[test]
 fn unnecessary_range_loop_read() {
     assert_lint_snapshot!(
         r#"

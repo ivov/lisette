@@ -110,6 +110,14 @@ fn apply_ref_lints(
         unused.mark_definition_unused(span);
     }
     let mut diagnostics = result.diagnostics;
+    if !diagnostics.is_empty() {
+        let allows: Vec<_> = module
+            .files
+            .values()
+            .flat_map(|file| super::suppression::collect_declaration_allows(&file.items))
+            .collect();
+        diagnostics = super::suppression::filter_unused_allowed(diagnostics, &allows);
+    }
     diagnostics.sort_by(LisetteDiagnostic::sort_key);
     sink.extend(diagnostics);
 }
