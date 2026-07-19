@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1784483900202,
+  "lastUpdate": 1784486826940,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -6429,6 +6429,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "diagnostics",
             "value": 6360,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 4431,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2812,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1031,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 695,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 6050,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 890,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "185ff660fdf7f5ead1186e9b370e022870dcc8f4",
+          "message": "feat: `lis check` for orphan modules (#1075)",
+          "timestamp": "2026-07-19T20:46:42+02:00",
+          "tree_id": "0baef753df40403b508bddd3c71e7ecab7defd45",
+          "url": "https://github.com/ivov/lisette/commit/185ff660fdf7f5ead1186e9b370e022870dcc8f4"
+        },
+        "date": 1784486825833,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 116813,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 30097,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 24304,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 16706,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 13207,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 10215,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 6375,
             "unit": "lines"
           },
           {
