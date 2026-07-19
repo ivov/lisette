@@ -2,6 +2,49 @@
 
 Lisette is under active development. Any version before 1.0.0 may include breaking changes.
 
+## [0.9.0](https://github.com/ivov/lisette/compare/lisette-v0.8.0...lisette-v0.9.0) - 2026-07-19
+
+### Features
+
+- feat: lint for discarding a unit expression [#1064](https://github.com/ivov/lisette/pull/1064) [`4171e63`](https://github.com/ivov/lisette/commit/4171e6398f9e14a3ff758a7da0d1939f4c409862)
+- feat: `lis check --deny warnings` [#1042](https://github.com/ivov/lisette/pull/1042) [`a1aa9da`](https://github.com/ivov/lisette/commit/a1aa9da4304a0dae70768d52fd9cfb7ad3f61a6b)
+- feat: `Slice.make` and `Slice.reserve` [#1026](https://github.com/ivov/lisette/pull/1026) [`616025f`](https://github.com/ivov/lisette/commit/616025fb2db664b01e43264e6f7b9880ad79b807)
+- feat: file comments [#1013](https://github.com/ivov/lisette/pull/1013) [`85a7242`](https://github.com/ivov/lisette/commit/85a72423d892ad450f1746f1a2e3f7603d5e0ec2)
+
+### Fixes
+
+- fix: enforce generic bounds on indirect uses of bounded types [#1066](https://github.com/ivov/lisette/pull/1066) [`b8e8d6c`](https://github.com/ivov/lisette/commit/b8e8d6c5323425b2aa8f874a58da62ee2927d3cf)
+- fix: collision between built-in `Array` and third-party `Array` [#1065](https://github.com/ivov/lisette/pull/1065) [`2856c2e`](https://github.com/ivov/lisette/commit/2856c2e2dc1ed752b8348be8f1ae3a60cd387938)
+- fix: reject generic function used as a value with uninferable type [#1060](https://github.com/ivov/lisette/pull/1060) [`443df9f`](https://github.com/ivov/lisette/commit/443df9fdd3a6ceccec212f531715e0be55737a4d)
+- fix: reject uninferred bounded type args in construction [#1053](https://github.com/ivov/lisette/pull/1053) [`50774c7`](https://github.com/ivov/lisette/commit/50774c79254d599dd085f2369ca4c7fabb3e16d6)
+- fix: tighten `reference_aliases_sibling` lint [#1050](https://github.com/ivov/lisette/pull/1050) [`ab72f1b`](https://github.com/ivov/lisette/commit/ab72f1b23b76fdc0aa6bb12ed3e0e874e05a8940)
+- fix: interface satisfaction for generic `Result` methods [#1046](https://github.com/ivov/lisette/pull/1046) [`7745077`](https://github.com/ivov/lisette/commit/7745077902de90cfde6d1b91cb8c526befd69ef7)
+- fix: allow suppressing unused symbol lints [#1044](https://github.com/ivov/lisette/pull/1044) [`0fb4dce`](https://github.com/ivov/lisette/commit/0fb4dce2a39d68768084219e895995003b27e4bd)
+- fix: make `#[json]` struct field capitalization consistent [#1043](https://github.com/ivov/lisette/pull/1043) [`523fbbb`](https://github.com/ivov/lisette/commit/523fbbb417454b4eb743449cd8de3e5067672645)
+- fix: reject missing transitive generic bounds [#1039](https://github.com/ivov/lisette/pull/1039) [`48c6883`](https://github.com/ivov/lisette/commit/48c68835ffdaa11621c2f47ff8486db7f2eb57ef)
+- fix: aliased import whose name conflicts with a Go import [#1038](https://github.com/ivov/lisette/pull/1038) [`3783b52`](https://github.com/ivov/lisette/commit/3783b52a0474ad681f2b26824bbf41ab0dd49781)
+- fix: preserve interface type in optional field [#1037](https://github.com/ivov/lisette/pull/1037) [`06e939a`](https://github.com/ivov/lisette/commit/06e939ae3e77d7f3bb0a82af59b368293b41312c)
+- fix!: reject `self` on interface methods [#1033](https://github.com/ivov/lisette/pull/1033) [`101fd72`](https://github.com/ivov/lisette/commit/101fd72ebf24c266fd2869eb5042f7a95e49a138)
+- fix: preserve mutations through `Ref` method receivers [#1032](https://github.com/ivov/lisette/pull/1032) [`b99edd6`](https://github.com/ivov/lisette/commit/b99edd6deb91b4fd603d0a29d785583ecba1463a)
+- fix: reject non-constructor names in match patterns [#1029](https://github.com/ivov/lisette/pull/1029) [`7519a70`](https://github.com/ivov/lisette/commit/7519a7008c5fdb1f46fb6a921a07ca89e9ff9763)
+- fix: stop rejecting generic returns constrained by builtins [#1028](https://github.com/ivov/lisette/pull/1028) [`f8973d3`](https://github.com/ivov/lisette/commit/f8973d39f46736dc94819a247e5e823799e144d1)
+- fix: reject references to interface values [#1023](https://github.com/ivov/lisette/pull/1023) [`ba506a3`](https://github.com/ivov/lisette/commit/ba506a32a018995b70964382adcfdec2262db1bb)
+- fix: prevent unintended mutation from `append` aliasing [#1017](https://github.com/ivov/lisette/pull/1017) [`4ff43be`](https://github.com/ivov/lisette/commit/4ff43be9787045886ec9aea68c385fb853d95366)
+- fix: require `mut` for `copy_from` [#1014](https://github.com/ivov/lisette/pull/1014) [`7debe4e`](https://github.com/ivov/lisette/commit/7debe4e0de82ef96f87e8ebdb115fbf91277b50e)
+- fix: make empty slice literals consistent with constructors [#1011](https://github.com/ivov/lisette/pull/1011) [`8ad90fa`](https://github.com/ivov/lisette/commit/8ad90fa4828caed917317c399f5a43fffe65bf0e)
+- fix: stop rejecting valid self-referential generic types [#1010](https://github.com/ivov/lisette/pull/1010) [`735f6e1`](https://github.com/ivov/lisette/commit/735f6e176801cd6086bb6cceae7dbcda0e40359a)
+
+### Internals
+
+- refactor: reword `reference_aliases_sibling` helptext [#1063](https://github.com/ivov/lisette/pull/1063) [`327c8b0`](https://github.com/ivov/lisette/commit/327c8b032f6570431f06df57394c4203a31e159f)
+- perf: drop raw Go-stdlib cache before inference [#1052](https://github.com/ivov/lisette/pull/1052) [`26c92e7`](https://github.com/ivov/lisette/commit/26c92e7ca027f18d143ab8fe572e75a32cad00c6)
+- refactor: reword mutable receiver interface diagnostic [#1031](https://github.com/ivov/lisette/pull/1031) [`cf3502d`](https://github.com/ivov/lisette/commit/cf3502d373b7916c22c136c60e9ed1f334637dd8)
+- perf: resolve display paths without per-file syscalls [#1018](https://github.com/ivov/lisette/pull/1018) [`3c1837a`](https://github.com/ivov/lisette/commit/3c1837a6deaa204ce70ca8c699e1ee6083c4bf77)
+- docs: improve `lis doc` formatting [#1016](https://github.com/ivov/lisette/pull/1016) [`f2290e6`](https://github.com/ivov/lisette/commit/f2290e6f9cdb003e6f1fc0093c3597c65e8f3274)
+- docs: expand prelude docs [#1015](https://github.com/ivov/lisette/pull/1015) [`14e7636`](https://github.com/ivov/lisette/commit/14e7636aa255b08a7d7d83f89ebf801f9a7e0578)
+- docs: expand array coverage [#1005](https://github.com/ivov/lisette/pull/1005) [`fdbffb8`](https://github.com/ivov/lisette/commit/fdbffb83f4de2a621e9ec95db0f50f5b7aa245e7)
+
+
 ## [0.8.0](https://github.com/ivov/lisette/compare/lisette-v0.7.0...lisette-v0.8.0) - 2026-07-11
 
 ### Features
