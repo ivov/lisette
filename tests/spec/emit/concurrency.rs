@@ -965,6 +965,20 @@ fn main() {
 }
 
 #[test]
+fn select_ufcs_receive() {
+    let input = r#"
+fn main() {
+  let ch = Channel.new<int>()
+  select {
+    let Some(value) = Channel.receive(ch) => { let _ = value },
+    _ => {},
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn select_send_hoisted_temp_no_redeclare() {
     let input = r#"
 fn get(ch: Channel<int>) -> Channel<int> {

@@ -20,6 +20,72 @@ pub fn resolved_definition<'a>(
     }
 }
 
+#[derive(Debug, Clone, Copy)]
+pub enum ChannelOperation<'a> {
+    Receive {
+        channel: &'a Expression,
+    },
+    Send {
+        channel: &'a Expression,
+        value: &'a Expression,
+    },
+}
+
+impl<'a> ChannelOperation<'a> {
+    pub fn channel(self) -> &'a Expression {
+        match self {
+            Self::Receive { channel } | Self::Send { channel, .. } => channel,
+        }
+    }
+
+    pub fn value(self) -> Option<&'a Expression> {
+        match self {
+            Self::Receive { .. } => None,
+            Self::Send { value, .. } => Some(value),
+        }
+    }
+}
+
+pub fn channel_operation(expression: &Expression) -> Option<ChannelOperation<'_>> {
+    let Expression::Call {
+        expression: callee,
+        args,
+        ..
+    } = expression
+    else {
+        return None;
+    };
+
+    let (channel, method, operands): (&Expression, &str, &[Expression]) = match callee.as_ref() {
+        Expression::DotAccess {
+            expression: channel,
+            member,
+            ..
+        } => (channel, member, args),
+        Expression::Identifier { value, .. } if has_channel_ufcs_prefix(value) => {
+            let (channel, operands) = args.split_first()?;
+            (channel, value.rsplit('.').next()?, operands)
+        }
+        _ => return None,
+    };
+
+    match (method, operands) {
+        ("receive", []) => Some(ChannelOperation::Receive { channel }),
+        ("send", [value]) => Some(ChannelOperation::Send { channel, value }),
+        _ => None,
+    }
+}
+
+fn has_channel_ufcs_prefix(identifier: &str) -> bool {
+    let Some((prefix, _)) = identifier.rsplit_once('.') else {
+        return false;
+    };
+    matches!(
+        prefix.rsplit('.').next(),
+        Some("Channel" | "Sender" | "Receiver")
+    )
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ReceiverCoercion {
     /// Insert `&` to convert `T` to `Ref<T>`

@@ -12,12 +12,12 @@ use crate::plan::bodies::{
 use crate::plan::placement::unreachable_panic_if_needed;
 use crate::plan::values::{GoExpression, ValuePlan};
 use syntax::ast::{Expression, MatchArm, Pattern, SelectArm, SelectArmPattern, TypedPattern};
-use syntax::types::unqualified_name;
+use syntax::program::{ChannelOperation, channel_operation};
+use syntax::types::Type;
 
-enum SendArmParts {
+enum PreparedChannelOperation {
     Send(String, String),
     Receive(String),
-    Default,
 }
 
 struct SelectReceiveContext<'a> {
@@ -29,10 +29,27 @@ struct SelectReceiveContext<'a> {
     place: &'a PlacePlan<'a>,
 }
 
-struct SelectPrep {
-    send_parts: Vec<Option<SendArmParts>>,
-    channel_operands: Vec<Option<String>>,
-    channel_shadows: Vec<Option<String>>,
+enum PreparedSelectArm<'a> {
+    Receive {
+        binding: &'a Pattern,
+        typed_pattern: Option<&'a TypedPattern>,
+        body: &'a Expression,
+        channel: String,
+        retry_on_close: bool,
+        element_ty: Type,
+    },
+    Send {
+        body: &'a Expression,
+        operation: PreparedChannelOperation,
+    },
+    MatchReceive {
+        arms: &'a [MatchArm],
+        channel: String,
+        element_ty: Type,
+    },
+    Default {
+        body: &'a Expression,
+    },
 }
 
 impl Planner<'_> {
@@ -49,13 +66,14 @@ impl Planner<'_> {
         let mut setup: Vec<LoweredStatement> = Vec::new();
         let prep = self.preprocess_select_arms(&mut setup, arms, needs_retry_loop);
 
+        let has_default = prep
+            .iter()
+            .any(|arm| matches!(arm, PreparedSelectArm::Default { .. }));
+
         self.enter_scope();
-        let arm_plans = self.lower_select_arms(arms, &prep, place);
+        let arm_plans = self.lower_select_arms(prep, place);
         self.exit_scope();
 
-        let has_default = arms
-            .iter()
-            .any(|arm| matches!(arm.pattern, SelectArmPattern::WildCard { .. }));
         let all_arms_diverge =
             !arm_plans.is_empty() && arm_plans.iter().all(|arm| arm.body().ends_with_diverge());
         let exhaustive = all_arms_diverge || if needs_retry_loop { false } else { has_default };
@@ -72,59 +90,46 @@ impl Planner<'_> {
         }
     }
 
-    fn lower_select_arms(
+    fn lower_select_arms<'a>(
         &mut self,
-        arms: &[SelectArm],
-        prep: &SelectPrep,
+        arms: Vec<PreparedSelectArm<'a>>,
         place: &PlacePlan,
     ) -> Vec<SelectArmPlan> {
-        let default_body = arms.iter().find_map(|arm| {
-            if let SelectArmPattern::WildCard { body } = &arm.pattern {
-                Some(body.as_ref())
-            } else {
-                None
-            }
+        let default_body = arms.iter().find_map(|arm| match arm {
+            PreparedSelectArm::Default { body } => Some(*body),
+            _ => None,
         });
 
         let mut arm_plans = Vec::with_capacity(arms.len());
-        for (i, arm) in arms.iter().enumerate() {
-            let plan = match &arm.pattern {
-                SelectArmPattern::Receive {
+        for arm in arms {
+            let plan = match arm {
+                PreparedSelectArm::Receive {
                     binding,
                     typed_pattern,
-                    receive_expression,
                     body,
+                    channel,
+                    retry_on_close,
+                    element_ty,
                 } => {
-                    let (channel, retry_var) = if let Some(shadow) =
-                        prep.channel_shadows.get(i).and_then(|s| s.as_ref())
-                    {
-                        (shadow.as_str(), Some(shadow.as_str()))
-                    } else {
-                        (prep.channel_operands[i].as_ref().unwrap().as_str(), None)
-                    };
                     let receiver_ctx = SelectReceiveContext {
-                        channel,
+                        channel: &channel,
                         body,
                         default_body,
-                        retry_var,
-                        element_ty: receive_expression.get_type().ok_type(),
+                        retry_var: retry_on_close.then_some(channel.as_str()),
+                        element_ty,
                         place,
                     };
-                    self.lower_receive_arm(binding, typed_pattern.as_ref(), &receiver_ctx)
+                    self.lower_receive_arm(binding, typed_pattern, &receiver_ctx)
                 }
-                SelectArmPattern::Send { body, .. } => {
-                    let parts = prep.send_parts[i].as_ref().unwrap();
-                    self.lower_send_arm(parts, body, place)
+                PreparedSelectArm::Send { body, operation } => {
+                    self.lower_send_arm(&operation, body, place)
                 }
-                SelectArmPattern::MatchReceive {
-                    arms: match_arms,
-                    receive_expression,
-                } => {
-                    let channel = prep.channel_operands[i].as_ref().unwrap();
-                    let element_ty = receive_expression.get_type().ok_type();
-                    self.lower_match_receive_arm(match_arms, channel, &element_ty, place)
-                }
-                SelectArmPattern::WildCard { body } => SelectArmPlan::Default {
+                PreparedSelectArm::MatchReceive {
+                    arms,
+                    channel,
+                    element_ty,
+                } => self.lower_match_receive_arm(arms, &channel, &element_ty, place),
+                PreparedSelectArm::Default { body } => SelectArmPlan::Default {
                     body: self.lower_block_to_place(body, place),
                 },
             };
@@ -135,52 +140,57 @@ impl Planner<'_> {
 
     /// Hoist all side-effectful arm expressions into temps so they evaluate
     /// in source order, not on each retry.
-    fn preprocess_select_arms(
+    fn preprocess_select_arms<'a>(
         &mut self,
         setup: &mut Vec<LoweredStatement>,
-        arms: &[SelectArm],
+        arms: &'a [SelectArm],
         needs_retry_loop: bool,
-    ) -> SelectPrep {
-        let mut send_parts: Vec<Option<SendArmParts>> = Vec::with_capacity(arms.len());
-        let mut channel_operands: Vec<Option<String>> = Vec::with_capacity(arms.len());
-        let mut channel_shadows: Vec<Option<String>> = Vec::with_capacity(arms.len());
+    ) -> Vec<PreparedSelectArm<'a>> {
+        let mut prepared = Vec::with_capacity(arms.len());
 
-        for arm in arms.iter() {
-            match &arm.pattern {
+        for arm in arms {
+            let prepared_arm = match &arm.pattern {
                 SelectArmPattern::Send {
-                    send_expression, ..
-                } => {
-                    let parts = self.prepare_send_arm(setup, send_expression, needs_retry_loop);
-                    send_parts.push(Some(parts));
-                    channel_operands.push(None);
-                    channel_shadows.push(None);
-                }
+                    send_expression,
+                    body,
+                } => PreparedSelectArm::Send {
+                    body,
+                    operation: self.prepare_send_arm(setup, send_expression, needs_retry_loop),
+                },
                 SelectArmPattern::Receive {
                     receive_expression,
                     binding,
+                    typed_pattern,
+                    body,
                     ..
                 } => {
                     let channel = self.lower_channel_operand(receive_expression);
                     let channel_has_call = channel.evaluation.effect.has_call();
                     let (channel_setup, ch) = channel.into_parts();
                     setup.extend(channel_setup);
-                    if binding.is_some_pattern() && needs_retry_loop {
-                        let shadow = self.hoist_tmp_value_statement(setup, "ch", &ch);
-                        channel_operands.push(Some(ch));
-                        channel_shadows.push(Some(shadow));
+                    let (channel, retry_on_close) = if binding.is_some_pattern() && needs_retry_loop
+                    {
+                        (self.hoist_tmp_value_statement(setup, "ch", &ch), true)
                     } else {
                         let ch = if needs_retry_loop && channel_has_call {
                             self.hoist_tmp_value_statement(setup, "ch", &ch)
                         } else {
                             ch
                         };
-                        channel_operands.push(Some(ch));
-                        channel_shadows.push(None);
+                        (ch, false)
+                    };
+                    PreparedSelectArm::Receive {
+                        binding,
+                        typed_pattern: typed_pattern.as_ref(),
+                        body,
+                        channel,
+                        retry_on_close,
+                        element_ty: receive_expression.get_type().ok_type(),
                     }
-                    send_parts.push(None);
                 }
                 SelectArmPattern::MatchReceive {
-                    receive_expression, ..
+                    receive_expression,
+                    arms,
                 } => {
                     let channel = self.lower_channel_operand(receive_expression);
                     let channel_has_call = channel.evaluation.effect.has_call();
@@ -191,28 +201,23 @@ impl Planner<'_> {
                     } else {
                         ch
                     };
-                    channel_operands.push(Some(ch));
-                    send_parts.push(None);
-                    channel_shadows.push(None);
+                    PreparedSelectArm::MatchReceive {
+                        arms,
+                        channel: ch,
+                        element_ty: receive_expression.get_type().ok_type(),
+                    }
                 }
-                SelectArmPattern::WildCard { .. } => {
-                    send_parts.push(None);
-                    channel_operands.push(None);
-                    channel_shadows.push(None);
-                }
-            }
+                SelectArmPattern::WildCard { body } => PreparedSelectArm::Default { body },
+            };
+            prepared.push(prepared_arm);
         }
 
-        SelectPrep {
-            send_parts,
-            channel_operands,
-            channel_shadows,
-        }
+        prepared
     }
 
     fn lower_channel_operand(&mut self, receive_expression: &Expression) -> ValuePlan {
         let unwrapped = receive_expression.unwrap_parens();
-        if let Some((channel, "receive", _)) = extract_channel_op(unwrapped) {
+        if let Some(ChannelOperation::Receive { channel }) = channel_operation(unwrapped) {
             let plan = self.lower_value(channel, ExpressionContext::value());
             if channel.get_type().is_ref() {
                 return plan.map_rendered(|_, value, contains_deferred_evaluation| {
@@ -447,9 +452,10 @@ impl Planner<'_> {
         setup: &mut Vec<LoweredStatement>,
         send_expression: &Expression,
         needs_hoist: bool,
-    ) -> SendArmParts {
+    ) -> PreparedChannelOperation {
         let unwrapped = send_expression.unwrap_parens();
-        if let Some((channel, member, args)) = extract_channel_op(unwrapped) {
+        if let Some(operation) = channel_operation(unwrapped) {
+            let channel = operation.channel();
             let channel_plan = self.lower_value(channel, ExpressionContext::value());
             let ch_has_call = needs_hoist && channel_plan.evaluation.effect.has_call();
             let (op_setup, mut ch) = channel_plan.into_parts();
@@ -460,20 +466,18 @@ impl Planner<'_> {
             if ch_has_call {
                 ch = self.hoist_tmp_value_statement(setup, "ch", &ch);
             }
-            match member {
-                "send" if !args.is_empty() => {
-                    let value_plan =
-                        self.lower_composite_value(&args[0], ExpressionContext::value());
+            match operation {
+                ChannelOperation::Send { value, .. } => {
+                    let value_plan = self.lower_composite_value(value, ExpressionContext::value());
                     let val_has_call = needs_hoist && value_plan.evaluation.effect.has_call();
                     let (val_setup, mut val) = value_plan.into_parts();
                     setup.extend(val_setup);
                     if val_has_call {
                         val = self.hoist_tmp_value_statement(setup, "send_val", &val);
                     }
-                    SendArmParts::Send(ch, val)
+                    PreparedChannelOperation::Send(ch, val)
                 }
-                "receive" if args.is_empty() => SendArmParts::Receive(ch),
-                _ => SendArmParts::Default,
+                ChannelOperation::Receive { .. } => PreparedChannelOperation::Receive(ch),
             }
         } else {
             let expression_plan = self.lower_value(send_expression, ExpressionContext::value());
@@ -486,28 +490,27 @@ impl Planner<'_> {
             if expression_has_call {
                 ch = self.hoist_tmp_value_statement(setup, "ch", &ch);
             }
-            SendArmParts::Receive(ch)
+            PreparedChannelOperation::Receive(ch)
         }
     }
 
     /// `case <send>:` (or `default:`) plus the arm body.
     fn lower_send_arm(
         &mut self,
-        parts: &SendArmParts,
+        operation: &PreparedChannelOperation,
         body: &Expression,
         place: &PlacePlan,
     ) -> SelectArmPlan {
         let block = self.lower_block_to_place(body, place);
-        match parts {
-            SendArmParts::Send(ch, val) => SelectArmPlan::Send {
+        match operation {
+            PreparedChannelOperation::Send(ch, val) => SelectArmPlan::Send {
                 operation: GoExpression::opaque(format!("{} <- {}", ch, val)),
                 body: block,
             },
-            SendArmParts::Receive(ch) => SelectArmPlan::Send {
+            PreparedChannelOperation::Receive(ch) => SelectArmPlan::Send {
                 operation: GoExpression::receive(GoExpression::opaque(ch.clone())),
                 body: block,
             },
-            SendArmParts::Default => SelectArmPlan::Default { body: block },
         }
     }
 
@@ -673,32 +676,4 @@ fn build_receive_arms_plan(
         }),
         (None, None) => None,
     }
-}
-
-fn extract_channel_op(expression: &Expression) -> Option<(&Expression, &str, &[Expression])> {
-    let Expression::Call {
-        expression, args, ..
-    } = expression
-    else {
-        return None;
-    };
-
-    if let Expression::DotAccess {
-        expression: channel,
-        member,
-        ..
-    } = expression.as_ref()
-        && (member == "send" || member == "receive")
-    {
-        return Some((channel, member, args));
-    }
-
-    if let Expression::Identifier { value, .. } = expression.as_ref() {
-        let method = unqualified_name(value);
-        if (method == "send" || method == "receive") && !args.is_empty() {
-            return Some((&args[0], method, &args[1..]));
-        }
-    }
-
-    None
 }

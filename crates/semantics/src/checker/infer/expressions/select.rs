@@ -1,6 +1,7 @@
 use crate::checker::EnvResolve;
 use crate::facts::SelectExhaustivenessCheck;
 use syntax::ast::{Expression, MatchArm, Pattern, SelectArm, SelectArmPattern, Span};
+use syntax::program::{ChannelOperation, channel_operation};
 use syntax::types::{Type, unqualified_name};
 
 use crate::checker::infer::InferCtx;
@@ -379,161 +380,47 @@ impl InferCtx<'_, '_> {
     }
 
     pub(crate) fn is_channel_receive_call(&self, expression: &Expression) -> bool {
-        if let Expression::Call {
-            expression, args, ..
-        } = expression
-        {
-            // Dot form: ch.receive()
-            if args.is_empty()
-                && let Expression::DotAccess {
-                    member,
-                    expression: receiver,
-                    ..
-                } = expression.as_ref()
-                && member == "receive"
-            {
-                return self.is_channel_type(&receiver.get_type());
-            }
-            // UFCS form after inference: Channel.receive(ch) is rewritten to
-            // Identifier("Channel.receive") with 1 arg
-            if args.len() == 1
-                && let Expression::Identifier { value, .. } = expression.as_ref()
-                && value.ends_with(".receive")
-                && Self::is_ufcs_channel_prefix(value)
-                && self.is_channel_type(&args[0].get_type())
-            {
-                return true;
-            }
-        }
-        false
+        matches!(
+            self.valid_channel_operation(expression),
+            Some(ChannelOperation::Receive { .. })
+        )
     }
 
-    /// Check if an expression is a channel send call: `ch.send(value)` or `Channel.send(ch, value)`.
     pub(crate) fn is_channel_send_call(&self, expression: &Expression) -> bool {
-        if let Expression::Call {
-            expression, args, ..
-        } = expression
-        {
-            // Dot form: ch.send(v) — 1 arg, receiver is channel
-            if let Expression::DotAccess {
-                member,
-                expression: receiver,
-                ..
-            } = expression.as_ref()
-                && member == "send"
-                && args.len() == 1
-                && self.is_channel_type(&receiver.get_type())
-            {
-                return true;
-            }
-            // UFCS form after inference: Channel.send(ch, v) is rewritten to
-            // Identifier("Channel.send") with 2 args
-            if args.len() == 2
-                && let Expression::Identifier { value, .. } = expression.as_ref()
-                && value.ends_with(".send")
-                && Self::is_ufcs_channel_prefix(value)
-                && self.is_channel_type(&args[0].get_type())
-            {
-                return true;
-            }
-        }
-        false
+        matches!(
+            self.valid_channel_operation(expression),
+            Some(ChannelOperation::Send { .. })
+        )
     }
 
-    /// Check if a UFCS identifier like "Channel.send" or "module.Sender.receive"
-    /// has a native channel type as the component immediately before the method name.
-    fn is_ufcs_channel_prefix(identifier: &str) -> bool {
-        if let Some((prefix, _method)) = identifier.rsplit_once('.') {
-            let base = prefix.rsplit_once('.').map(|(_, b)| b).unwrap_or(prefix);
-            matches!(base, "Channel" | "Sender" | "Receiver")
-        } else {
-            false
-        }
+    fn valid_channel_operation<'a>(
+        &self,
+        expression: &'a Expression,
+    ) -> Option<ChannelOperation<'a>> {
+        let operation = channel_operation(expression)?;
+        self.is_channel_type(&operation.channel().get_type())
+            .then_some(operation)
     }
 
-    /// Check if a type is a channel-like type (Channel, Sender, Receiver).
     fn is_channel_type(&self, ty: &Type) -> bool {
         let resolved = ty.resolve_in(&self.env).strip_refs();
         matches!(resolved.get_name(), Some("Channel" | "Sender" | "Receiver"))
     }
 
-    /// Extract the channel sub-expression from a channel operation call.
-    /// Returns the channel expression from `ch.receive()`, `ch.send(v)`,
-    /// or UFCS forms like `Channel.receive(ch)`, `Channel.send(ch, v)`.
-    fn extract_channel_expression(expression: &Expression) -> Option<&Expression> {
-        let Expression::Call {
-            expression, args, ..
-        } = expression
-        else {
-            return None;
-        };
-
-        // Dot form: ch.send(v) / ch.receive()
-        if let Expression::DotAccess {
-            expression: channel,
-            member,
-            ..
-        } = expression.as_ref()
-            && (member == "send" || member == "receive")
-        {
-            return Some(channel);
-        }
-
-        // UFCS form: Channel.send(ch, v) / Channel.receive(ch)
-        if let Expression::Identifier { value, .. } = expression.as_ref()
-            && (value.ends_with(".send") || value.ends_with(".receive"))
-            && !args.is_empty()
-        {
-            return Some(&args[0]);
-        }
-
-        None
-    }
-
-    /// Extract the send value from a channel send call.
-    fn extract_send_value(expression: &Expression) -> Option<&Expression> {
-        let Expression::Call {
-            expression, args, ..
-        } = expression
-        else {
-            return None;
-        };
-
-        // Dot form: ch.send(v)
-        if let Expression::DotAccess { member, .. } = expression.as_ref()
-            && member == "send"
-            && args.len() == 1
-        {
-            return Some(&args[0]);
-        }
-
-        // UFCS form: Channel.send(ch, v)
-        if let Expression::Identifier { value, .. } = expression.as_ref()
-            && value.ends_with(".send")
-            && args.len() == 2
-        {
-            return Some(&args[1]);
-        }
-
-        None
-    }
-
     fn check_complex_select_expression(&mut self, expression: &Expression) {
-        if let Some(channel) = Self::extract_channel_expression(expression)
-            && channel.is_temp_producing()
+        let Some(operation) = channel_operation(expression) else {
+            return;
+        };
+        for operand in [Some(operation.channel()), operation.value()]
+            .into_iter()
+            .flatten()
         {
-            self.sink
-                .push(diagnostics::infer::complex_select_expression(
-                    channel.get_span(),
-                ));
-        }
-        if let Some(value) = Self::extract_send_value(expression)
-            && value.is_temp_producing()
-        {
-            self.sink
-                .push(diagnostics::infer::complex_select_expression(
-                    value.get_span(),
-                ));
+            if operand.is_temp_producing() {
+                self.sink
+                    .push(diagnostics::infer::complex_select_expression(
+                        operand.get_span(),
+                    ));
+            }
         }
     }
 }
