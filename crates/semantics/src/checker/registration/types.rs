@@ -6,7 +6,7 @@ use syntax::ast::{
 };
 use syntax::containment::{EnumPayloads, definition_contains_by_value};
 use syntax::program::{Attributes, Definition, DefinitionBody, MethodSignatures, Visibility};
-use syntax::types::Type;
+use syntax::types::{Symbol, Type};
 
 use super::enum_variant_constructor_type;
 use crate::checker::TaskState;
@@ -487,6 +487,37 @@ impl TaskState<'_> {
         }
     }
 
+    pub(super) fn settle_module_aliases(&self, store: &mut Store, module_id: &str) {
+        if module_id.starts_with("go:") {
+            return;
+        }
+        let Some(module) = store.get_module(module_id) else {
+            return;
+        };
+
+        let updates: Vec<(Symbol, Type)> = module
+            .definitions
+            .iter()
+            .filter(|(_, definition)| matches!(definition.body, DefinitionBody::TypeAlias { .. }))
+            .filter_map(|(name, definition)| {
+                let mut changed = false;
+                let mut in_progress = FxHashSet::default();
+                let filled =
+                    fill_alias_underlyings(definition.ty(), store, &mut changed, &mut in_progress);
+                changed.then(|| (name.clone(), filled))
+            })
+            .collect();
+
+        let Some(module) = store.get_module_mut(module_id) else {
+            return;
+        };
+        for (name, ty) in updates {
+            if let Some(definition) = module.definitions.get_mut(&name) {
+                definition.ty = ty;
+            }
+        }
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub(super) fn populate_type_alias(
         &mut self,
@@ -815,6 +846,93 @@ fn is_pointer_backed_newtype(store: &Store, ty: &Type) -> bool {
         .get_type(id.as_str())
         .and_then(Type::get_underlying)
         .is_some_and(|underlying| store.deep_resolve_alias(underlying).is_ref())
+}
+
+fn fill_alias_underlyings(
+    ty: &Type,
+    store: &Store,
+    changed: &mut bool,
+    in_progress: &mut FxHashSet<Symbol>,
+) -> Type {
+    match ty {
+        Type::Nominal {
+            id,
+            params,
+            underlying_ty,
+        } => {
+            let params: Vec<Type> = params
+                .iter()
+                .map(|param| fill_alias_underlyings(param, store, changed, in_progress))
+                .collect();
+            let underlying = match underlying_ty {
+                Some(inner) => Some(Box::new(fill_alias_underlyings(
+                    inner,
+                    store,
+                    changed,
+                    in_progress,
+                ))),
+                None if in_progress.contains(id) => None,
+                None => {
+                    let probe = Type::Nominal {
+                        id: id.clone(),
+                        params: params.clone(),
+                        underlying_ty: None,
+                    };
+                    let resolved = store.deep_resolve_alias(&probe);
+                    if resolved.get_qualified_id() == Some(id.as_str()) {
+                        None
+                    } else {
+                        *changed = true;
+                        in_progress.insert(id.clone());
+                        let filled = fill_alias_underlyings(&resolved, store, changed, in_progress);
+                        in_progress.remove(id);
+                        Some(Box::new(filled))
+                    }
+                }
+            };
+            Type::Nominal {
+                id: id.clone(),
+                params,
+                underlying_ty: underlying,
+            }
+        }
+        Type::Compound { kind, args } => Type::Compound {
+            kind: *kind,
+            args: args
+                .iter()
+                .map(|arg| fill_alias_underlyings(arg, store, changed, in_progress))
+                .collect(),
+        },
+        Type::Array { length, element } => Type::Array {
+            length: *length,
+            element: Box::new(fill_alias_underlyings(element, store, changed, in_progress)),
+        },
+        Type::Tuple(elements) => Type::Tuple(
+            elements
+                .iter()
+                .map(|element| fill_alias_underlyings(element, store, changed, in_progress))
+                .collect(),
+        ),
+        Type::Forall { vars, body } => Type::Forall {
+            vars: vars.clone(),
+            body: Box::new(fill_alias_underlyings(body, store, changed, in_progress)),
+        },
+        Type::Function(function) => {
+            let params = function
+                .params
+                .iter()
+                .map(|param| fill_alias_underlyings(param, store, changed, in_progress))
+                .collect();
+            let return_type = Box::new(fill_alias_underlyings(
+                &function.return_type,
+                store,
+                changed,
+                in_progress,
+            ));
+            function.rebuild(params, function.bounds.clone(), return_type)
+        }
+        other => other.clone(),
+    }
 }
 
 // Mirror the written type's own visibility: peel storage (`Option`/`Ref`), not aliases.

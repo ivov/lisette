@@ -272,7 +272,13 @@ impl TaskState<'_> {
         let file_data = self.module_file_data(store, id);
 
         for (file_id, imports) in &file_data {
-            self.register_file_type_definitions(store, id, *file_id, imports);
+            self.register_file_type_aliases(store, id, *file_id, imports);
+        }
+
+        self.settle_module_aliases(store, id);
+
+        for (file_id, imports) in &file_data {
+            self.register_file_type_bodies(store, id, *file_id, imports);
         }
 
         for (file_id, imports) in &file_data {
@@ -491,12 +497,13 @@ impl TaskState<'_> {
             .collect()
     }
 
-    fn register_file_type_definitions(
+    fn with_file_items(
         &mut self,
         store: &mut Store,
         module_id: &str,
         file_id: u32,
         imports: &[FileImport],
+        register: impl FnOnce(&mut Self, &mut Store, &[Expression]),
     ) {
         self.with_file_context_mut(
             store,
@@ -512,7 +519,7 @@ impl TaskState<'_> {
                         .items,
                 );
 
-                this.register_type_definitions(store, &items);
+                register(this, store, &items);
 
                 store
                     .get_file_mut(file_id)
@@ -522,6 +529,30 @@ impl TaskState<'_> {
         );
     }
 
+    fn register_file_type_aliases(
+        &mut self,
+        store: &mut Store,
+        module_id: &str,
+        file_id: u32,
+        imports: &[FileImport],
+    ) {
+        self.with_file_items(store, module_id, file_id, imports, |this, store, items| {
+            this.register_type_aliases(store, items);
+        });
+    }
+
+    fn register_file_type_bodies(
+        &mut self,
+        store: &mut Store,
+        module_id: &str,
+        file_id: u32,
+        imports: &[FileImport],
+    ) {
+        self.with_file_items(store, module_id, file_id, imports, |this, store, items| {
+            this.register_type_bodies(store, items);
+        });
+    }
+
     fn register_file_values(
         &mut self,
         store: &mut Store,
@@ -529,30 +560,11 @@ impl TaskState<'_> {
         file_id: u32,
         imports: &[FileImport],
     ) {
-        self.with_file_context_mut(
-            store,
-            module_id,
-            file_id,
-            imports,
-            FileContextKind::Standard,
-            |this, store| {
-                let items = std::mem::take(
-                    &mut store
-                        .get_file_mut(file_id)
-                        .expect("file must exist for registration")
-                        .items,
-                );
-
-                this.check_type_generic_bounds(store, &items);
-                this.register_impl_blocks(store, &items);
-                this.register_values(store, &items, &Visibility::Private);
-
-                store
-                    .get_file_mut(file_id)
-                    .expect("file must exist after registration")
-                    .items = items;
-            },
-        );
+        self.with_file_items(store, module_id, file_id, imports, |this, store, items| {
+            this.check_type_generic_bounds(store, items);
+            this.register_impl_blocks(store, items);
+            this.register_values(store, items, &Visibility::Private);
+        });
     }
 
     pub fn register_types_and_values(
@@ -736,7 +748,13 @@ impl TaskState<'_> {
     }
 
     pub fn register_type_definitions(&mut self, store: &mut Store, items: &[Expression]) {
-        self.check_go_hints_in_items(items);
+        self.register_type_aliases(store, items);
+        let module_id = self.cursor.module_id.clone();
+        self.settle_module_aliases(store, &module_id);
+        self.register_type_bodies(store, items);
+    }
+
+    fn register_type_aliases(&mut self, store: &mut Store, items: &[Expression]) {
         for item in items {
             if let Expression::TypeAlias {
                 name,
@@ -754,7 +772,10 @@ impl TaskState<'_> {
                 );
             }
         }
+    }
 
+    fn register_type_bodies(&mut self, store: &mut Store, items: &[Expression]) {
+        self.check_go_hints_in_items(items);
         for item in items {
             match item {
                 Expression::Enum {

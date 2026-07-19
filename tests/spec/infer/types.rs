@@ -9076,3 +9076,90 @@ fn main() {
     )
     .assert_infer_code_once("integer_in_type_position");
 }
+
+#[test]
+fn interface_method_return_expands_alias_from_sibling_file() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file("main", "aliases.lis", "pub type MyInt = int\n");
+    fs.add_file(
+        "main",
+        "main.lis",
+        r#"
+interface Bar {
+  fn value() -> MyInt
+}
+
+fn baz(value: Bar) {
+  let _: int = value.value()
+}
+"#,
+    );
+
+    infer_module("main", fs).assert_no_errors();
+}
+
+#[test]
+fn struct_field_expands_alias_from_sibling_file() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file("main", "aliases.lis", "pub type MyInt = int\n");
+    fs.add_file(
+        "main",
+        "main.lis",
+        r#"
+struct Holder {
+  value: MyInt,
+}
+
+fn read(h: Holder) {
+  let _: int = h.value
+}
+"#,
+    );
+
+    infer_module("main", fs).assert_no_errors();
+}
+
+#[test]
+fn interface_method_return_expands_chained_alias_across_files() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file("main", "base.lis", "pub type B = int\n");
+    fs.add_file("main", "middle.lis", "pub type A = B\n");
+    fs.add_file(
+        "main",
+        "main.lis",
+        r#"
+interface Bar {
+  fn value() -> A
+}
+
+fn baz(value: Bar) {
+  let _: int = value.value()
+}
+"#,
+    );
+
+    infer_module("main", fs).assert_no_errors();
+}
+
+#[test]
+fn interface_method_return_expands_chained_alias_declared_out_of_order() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "main",
+        "main.lis",
+        r#"
+type A = B
+type B = int
+
+interface Bar {
+  fn value() -> A
+}
+
+fn baz(value: Bar) {
+  let _: int = value.value()
+}
+"#,
+    );
+
+    infer_module("main", fs).assert_no_errors();
+}
