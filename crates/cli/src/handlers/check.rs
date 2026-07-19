@@ -145,9 +145,6 @@ fn check_single_file(
 ) -> i32 {
     let start = Instant::now();
     let unix = matches!(options.format, OutputFormat::Unix);
-    if !unix {
-        eprintln!();
-    }
     let Some((result, source, filename)) = compile_single_file(file_path, load_siblings, locator)
     else {
         return 1; // Read error already reported by compile_single_file
@@ -190,6 +187,9 @@ fn check_single_file(
         )
     };
     if !unix {
+        if counts.errors + counts.warnings + counts.info == 0 {
+            eprintln!();
+        }
         render::print_summary(
             counts.files,
             start.elapsed(),
@@ -275,9 +275,6 @@ fn check_loose_dir(dir: &Path, options: &CheckOptions) -> i32 {
 
     let unix = matches!(options.format, OutputFormat::Unix);
     let start = Instant::now();
-    if !unix {
-        eprintln!();
-    }
 
     let mut fix_summary = FixSummary::default();
 
@@ -346,6 +343,9 @@ fn check_loose_dir(dir: &Path, options: &CheckOptions) -> i32 {
 
     let all_errors = total_errors + read_failures;
     if !unix {
+        if total_errors + total_warnings + total_info == 0 {
+            eprintln!();
+        }
         render::print_summary(total_files, elapsed, all_errors, total_warnings, total_info);
     }
 

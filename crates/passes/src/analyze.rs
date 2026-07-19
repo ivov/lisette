@@ -19,6 +19,7 @@ pub struct AnalyzeOutput {
     pub result: SemanticResult,
     pub facts: Facts,
     pub emit_stamps: Vec<EmitStamp>,
+    pub unreachable_modules: Vec<String>,
 }
 
 pub fn analyze(input: AnalyzeInput) -> AnalyzeOutput {
@@ -35,6 +36,7 @@ pub fn analyze(input: AnalyzeInput) -> AnalyzeOutput {
         compiled_modules,
         cached_modules,
         cache_enabled,
+        unreachable_modules,
     } = run_inference(input);
 
     store.build_closed_domains();
@@ -167,5 +169,6 @@ pub fn analyze(input: AnalyzeInput) -> AnalyzeOutput {
         result,
         facts,
         emit_stamps,
+        unreachable_modules,
     }
 }

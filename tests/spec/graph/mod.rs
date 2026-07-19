@@ -1,14 +1,21 @@
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use diagnostics::LocalSink;
-use semantics::module_graph::build_module_graph;
 use semantics::module_graph::kahn::topological_sort;
+use semantics::module_graph::{Roots, build_module_graph};
 use semantics::store::Store;
 
 use crate::_harness::filesystem::MockFileSystem;
 
 fn default_resolver() -> deps::TypedefLocator {
     deps::TypedefLocator::default()
+}
+
+fn roots(entry: &str) -> Roots {
+    Roots {
+        primary: vec![entry.to_string()],
+        additional: vec![],
+    }
 }
 
 fn host_module_cache_dir(project_root: &std::path::Path, module: &str) -> std::path::PathBuf {
@@ -104,12 +111,11 @@ fn test_only_imports_excluded_from_production_edges() {
     let result = build_module_graph(
         &mut store,
         Some(&fs),
-        "main",
+        roots("main"),
         &sink,
         false,
         &default_resolver(),
         true,
-        false,
     );
 
     assert!(
@@ -140,12 +146,11 @@ fn graph_simple_dependency() {
     let result = build_module_graph(
         &mut store,
         Some(&fs),
-        "main",
+        roots("main"),
         &sink,
         false,
         &default_resolver(),
         true,
-        false,
     );
 
     assert!(result.cycles.is_empty());
@@ -171,12 +176,11 @@ fn graph_missing_module() {
     let _result = build_module_graph(
         &mut store,
         Some(&fs),
-        "main",
+        roots("main"),
         &sink,
         false,
         &default_resolver(),
         true,
-        false,
     );
 
     assert!(sink.has_errors());
@@ -198,15 +202,206 @@ fn graph_cycle_detection() {
     let result = build_module_graph(
         &mut store,
         Some(&fs),
-        "a",
+        roots("a"),
         &sink,
         false,
         &default_resolver(),
         true,
-        false,
     );
 
     assert!(!result.cycles.is_empty());
+}
+
+#[test]
+fn additional_roots_widen_graph_but_not_reachable_set() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file("main", "main.lis", r#"import "lib""#);
+    fs.add_file("lib", "lib.lis", "pub fn f() -> int { 1 }");
+    fs.add_file("orphan", "orphan.lis", "pub fn g() -> int { 2 }");
+
+    let mut store = Store::new();
+    for m in ["main", "lib", "orphan"] {
+        store.module_ids.push(m.to_string());
+    }
+
+    let sink = LocalSink::new();
+    let result = build_module_graph(
+        &mut store,
+        Some(&fs),
+        Roots {
+            primary: vec!["main".to_string()],
+            additional: vec!["orphan".to_string()],
+        },
+        &sink,
+        false,
+        &default_resolver(),
+        true,
+    );
+
+    assert!(result.order.iter().any(|m| m == "orphan"));
+    assert!(result.edges.contains_key("orphan"));
+    assert!(result.files.contains_key("orphan"));
+    assert!(
+        !result.primary_reachable.contains("orphan"),
+        "orphan is outside the primary reachable set"
+    );
+    assert!(result.primary_reachable.contains("main"));
+    assert!(result.primary_reachable.contains("lib"));
+}
+
+#[test]
+fn empty_additional_leaves_orphan_out_of_graph() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file("main", "main.lis", r#"import "lib""#);
+    fs.add_file("lib", "lib.lis", "pub fn f() -> int { 1 }");
+    fs.add_file("orphan", "orphan.lis", "pub fn g() -> int { 2 }");
+
+    let mut store = Store::new();
+    for m in ["main", "lib", "orphan"] {
+        store.module_ids.push(m.to_string());
+    }
+
+    let sink = LocalSink::new();
+    let result = build_module_graph(
+        &mut store,
+        Some(&fs),
+        roots("main"),
+        &sink,
+        false,
+        &default_resolver(),
+        true,
+    );
+
+    assert!(!result.order.iter().any(|m| m == "orphan"));
+}
+
+#[test]
+fn zero_primary_roots_begins_with_additional() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file("lib", "lib.lis", "pub fn f() -> int { 1 }");
+
+    let mut store = Store::new();
+    store.module_ids.push("lib".to_string());
+
+    let sink = LocalSink::new();
+    let result = build_module_graph(
+        &mut store,
+        Some(&fs),
+        Roots {
+            primary: vec![],
+            additional: vec!["lib".to_string()],
+        },
+        &sink,
+        false,
+        &default_resolver(),
+        true,
+    );
+
+    assert!(result.primary_reachable.is_empty());
+    assert!(result.order.iter().any(|m| m == "lib"));
+}
+
+#[test]
+fn check_analyzes_orphan_and_surfaces_its_error() {
+    use passes::analyze;
+    use semantics::inference::{AnalyzeInput, CompilePhase, SemanticConfig};
+    use semantics::loader::MemoryLoader;
+
+    let tmp = tempfile::tempdir().unwrap();
+
+    let mut fs = MemoryLoader::new();
+    fs.add_file("lib", "lib.lis", "pub fn f() -> int { 1 }");
+    fs.add_file(
+        "orphan",
+        "orphan.lis",
+        "pub fn broken(x: int) -> int { x + \"boom\" }",
+    );
+
+    let source = "import \"lib\"\n\nfn main() {\n  let _ = lib.f()\n}\n";
+    let build = syntax::build_ast(source, 0);
+    let output = analyze(AnalyzeInput {
+        config: SemanticConfig {
+            run_lints: true,
+            standalone_mode: false,
+            load_siblings: false,
+        },
+        loader: &fs,
+        source: source.to_string(),
+        filename: "main.lis".to_string(),
+        display_path: "main.lis".to_string(),
+        ast: build.ast,
+        file_comment: build.file_comment,
+        project_root: Some(tmp.path().to_path_buf()),
+        compile_phase: CompilePhase::Check,
+        emit_tests: false,
+        locator: deps::TypedefLocator::default(),
+        go_module: String::new(),
+        disable_cache: true,
+    });
+
+    assert!(
+        output.unreachable_modules.iter().any(|m| m == "orphan"),
+        "orphan must be reported as unreachable, got: {:?}",
+        output.unreachable_modules
+    );
+    assert!(
+        output
+            .result
+            .errors
+            .iter()
+            .any(|e| e.code_str() == Some("infer.type_mismatch")),
+        "check must analyze the orphan and surface its error: {:?}",
+        output.result.errors
+    );
+}
+
+#[test]
+fn check_analyzes_tests_in_declaration_only_module() {
+    use passes::analyze;
+    use semantics::inference::{AnalyzeInput, CompilePhase, SemanticConfig};
+    use semantics::loader::MemoryLoader;
+
+    let tmp = tempfile::tempdir().unwrap();
+
+    let mut fs = MemoryLoader::new();
+    fs.add_file("decl", "decl.d.lis", "pub fn ext() -> int\n");
+    fs.add_file(
+        "decl",
+        "decl.test.lis",
+        "#[test]\nfn broken() {\n  let _ = 1 + \"x\"\n}\n",
+    );
+
+    let source = "fn main() {}\n";
+    let build = syntax::build_ast(source, 0);
+    let output = analyze(AnalyzeInput {
+        config: SemanticConfig {
+            run_lints: true,
+            standalone_mode: false,
+            load_siblings: false,
+        },
+        loader: &fs,
+        source: source.to_string(),
+        filename: "main.lis".to_string(),
+        display_path: "main.lis".to_string(),
+        ast: build.ast,
+        file_comment: build.file_comment,
+        project_root: Some(tmp.path().to_path_buf()),
+        compile_phase: CompilePhase::Check,
+        emit_tests: false,
+        locator: deps::TypedefLocator::default(),
+        go_module: String::new(),
+        disable_cache: true,
+    });
+
+    assert!(
+        output
+            .result
+            .errors
+            .iter()
+            .any(|e| e.code_str() == Some("infer.type_mismatch")),
+        "a test in a declaration-plus-test module must be checked: {:?}",
+        output.result.errors
+    );
 }
 
 #[test]
@@ -221,12 +416,11 @@ fn graph_standalone_third_party_go_import_uses_module_not_found() {
     let _result = build_module_graph(
         &mut store,
         Some(&fs),
-        "main",
+        roots("main"),
         &sink,
         true, // standalone mode
         &default_resolver(),
         true,
-        false,
     );
 
     assert!(sink.has_errors());
@@ -245,12 +439,11 @@ fn graph_project_third_party_go_import_undeclared() {
     let _result = build_module_graph(
         &mut store,
         Some(&fs),
-        "main",
+        roots("main"),
         &sink,
         false, // project mode
         &default_resolver(),
         true,
-        false,
     );
 
     assert!(sink.has_errors());
@@ -282,12 +475,11 @@ fn graph_declared_dep_missing_typedef() {
     let _result = build_module_graph(
         &mut store,
         Some(&fs),
-        "main",
+        roots("main"),
         &sink,
         false,
         &resolver,
         true,
-        false,
     );
 
     assert!(sink.has_errors());
@@ -332,12 +524,11 @@ fn graph_subpackage_missing_typedef_points_at_add() {
     let _result = build_module_graph(
         &mut store,
         Some(&fs),
-        "main",
+        roots("main"),
         &sink,
         false,
         &resolver,
         true,
-        false,
     );
 
     assert!(sink.has_errors());

@@ -28,131 +28,138 @@ pub struct ModuleGraphResult {
     pub production_edges: HashMap<ModuleId, HashSet<ModuleId>>,
     /// `go:` modules that are only ever blank-imported in the visited file set.
     pub link_only_modules: HashSet<ModuleId>,
+    /// Reachable from the primary roots, snapshotted before `additional` runs.
+    pub primary_reachable: HashSet<ModuleId>,
+}
+
+/// `primary` defines the target. `additional` widens what is analyzed.
+#[derive(Debug, Default)]
+pub struct Roots {
+    pub primary: Vec<ModuleId>,
+    pub additional: Vec<ModuleId>,
 }
 
 #[allow(clippy::too_many_arguments)]
 pub fn build_module_graph(
     store: &mut Store,
     loader: Option<&dyn Loader>,
-    entry_module: &str,
+    mut roots: Roots,
     sink: &LocalSink,
     standalone_mode: bool,
     locator: &TypedefLocator,
     include_tests: bool,
-    discover_test_modules: bool,
 ) -> ModuleGraphResult {
     let mut edges: HashMap<ModuleId, HashSet<ModuleId>> = HashMap::default();
     let mut production_edges: HashMap<ModuleId, HashSet<ModuleId>> = HashMap::default();
-    let mut to_visit = vec![entry_module.to_string()];
+    let mut to_visit = roots.primary;
     let mut visited: HashSet<ModuleId> = HashSet::default();
     let mut files: HashMap<ModuleId, Vec<File>> = HashMap::default();
     let mut import_spans: HashMap<ModuleId, Span> = HashMap::default();
     let mut blank_tracker = BlankTracker::default();
 
-    let walk_loader = (include_tests && discover_test_modules)
-        .then_some(loader)
-        .flatten();
-    std::thread::scope(|scope| {
-        let mut walk = walk_loader.map(|walk_loader| scope.spawn(|| walk_loader.test_module_ids()));
-        loop {
-            while !to_visit.is_empty() {
-                let drained: Vec<ModuleId> = std::mem::take(&mut to_visit);
-                let mut batch: Vec<ModuleId> = Vec::with_capacity(drained.len());
-                for module_id in drained {
-                    if visited.insert(module_id.clone()) {
-                        batch.push(module_id);
-                    }
+    let mut primary_reachable: HashSet<ModuleId> = HashSet::default();
+    let mut additional_injected = false;
+    loop {
+        while !to_visit.is_empty() {
+            let drained: Vec<ModuleId> = std::mem::take(&mut to_visit);
+            let mut batch: Vec<ModuleId> = Vec::with_capacity(drained.len());
+            for module_id in drained {
+                if visited.insert(module_id.clone()) {
+                    batch.push(module_id);
                 }
-                if batch.is_empty() {
+            }
+            if batch.is_empty() {
+                continue;
+            }
+
+            batch.sort();
+
+            let mut parsed = batch_parse_modules(&batch, store, loader, sink, include_tests);
+
+            for module_id in &batch {
+                let module_files = parsed.remove(module_id).unwrap_or_default();
+                let file_imports: Vec<_> = if !module_files.is_empty() {
+                    module_files.iter().flat_map(|f| f.imports()).collect()
+                } else if let Some(module) = store.get_module(module_id) {
+                    module.all_imports()
+                } else {
+                    Vec::new()
+                };
+                let has_parsed_files = !module_files.is_empty();
+                let production_import_names: HashSet<String> = module_files
+                    .iter()
+                    .filter(|f| !f.is_test())
+                    .flat_map(|f| f.imports())
+                    .map(|import| import.name.to_string())
+                    .collect();
+                let imports_with_spans = process_file_imports(
+                    file_imports,
+                    sink,
+                    standalone_mode,
+                    locator,
+                    &mut blank_tracker,
+                );
+
+                let has_production_file = module_files.iter().any(|file| !file.is_test());
+                let module_exists =
+                    has_production_file || store.has(module_id) || module_id.starts_with("go:");
+
+                if !module_exists {
+                    if let Some(span) = import_spans.get(module_id) {
+                        let is_go_stdlib =
+                            stdlib::get_go_stdlib_typedef(module_id, locator.target()).is_some();
+
+                        let src_prefix_hint = module_id
+                            .strip_prefix("src/")
+                            .filter(|stripped| {
+                                loader.is_some_and(|fs| !fs.scan_folder(stripped).is_empty())
+                            })
+                            .map(String::from);
+
+                        sink.push(diagnostics::module_graph::module_not_found(
+                            module_id,
+                            *span,
+                            is_go_stdlib,
+                            standalone_mode,
+                            src_prefix_hint,
+                        ));
+                    }
                     continue;
                 }
 
-                batch.sort();
+                files.insert(module_id.clone(), module_files);
 
-                let mut parsed = batch_parse_modules(&batch, store, loader, sink, include_tests);
+                let imports: HashSet<_> = imports_with_spans.keys().cloned().collect();
 
-                for module_id in &batch {
-                    let module_files = parsed.remove(module_id).unwrap_or_default();
-                    let file_imports: Vec<_> = if !module_files.is_empty() {
-                        module_files.iter().flat_map(|f| f.imports()).collect()
-                    } else if let Some(module) = store.get_module(module_id) {
-                        module.all_imports()
-                    } else {
-                        Vec::new()
-                    };
-                    let has_parsed_files = !module_files.is_empty();
-                    let production_import_names: HashSet<String> = module_files
-                        .iter()
-                        .filter(|f| !f.is_test())
-                        .flat_map(|f| f.imports())
-                        .map(|import| import.name.to_string())
-                        .collect();
-                    let imports_with_spans = process_file_imports(
-                        file_imports,
-                        sink,
-                        standalone_mode,
-                        locator,
-                        &mut blank_tracker,
-                    );
-
-                    let has_production_file = module_files.iter().any(|file| !file.is_test());
-                    let module_exists = has_production_file
-                        || store.has(module_id)
-                        || module_id == entry_module
-                        || module_id.starts_with("go:");
-
-                    if !module_exists {
-                        if let Some(span) = import_spans.get(module_id) {
-                            let is_go_stdlib =
-                                stdlib::get_go_stdlib_typedef(module_id, locator.target())
-                                    .is_some();
-
-                            let src_prefix_hint = module_id
-                                .strip_prefix("src/")
-                                .filter(|stripped| {
-                                    loader.is_some_and(|fs| !fs.scan_folder(stripped).is_empty())
-                                })
-                                .map(String::from);
-
-                            sink.push(diagnostics::module_graph::module_not_found(
-                                module_id,
-                                *span,
-                                is_go_stdlib,
-                                standalone_mode,
-                                src_prefix_hint,
-                            ));
-                        }
-                        continue;
+                for (import, span) in imports_with_spans {
+                    if !visited.contains(&import) {
+                        to_visit.push(import.clone());
                     }
-
-                    files.insert(module_id.clone(), module_files);
-
-                    let imports: HashSet<_> = imports_with_spans.keys().cloned().collect();
-
-                    for (import, span) in imports_with_spans {
-                        if !visited.contains(&import) {
-                            to_visit.push(import.clone());
-                        }
-                        import_spans.entry(import).or_insert(span);
-                    }
-
-                    let production_edge_set: HashSet<ModuleId> = if has_parsed_files {
-                        imports
-                            .iter()
-                            .filter(|import| production_import_names.contains(import.as_str()))
-                            .cloned()
-                            .collect()
-                    } else {
-                        imports.clone()
-                    };
-                    production_edges.insert(module_id.clone(), production_edge_set);
-                    edges.insert(module_id.clone(), imports);
+                    import_spans.entry(import).or_insert(span);
                 }
+
+                let production_edge_set: HashSet<ModuleId> = if has_parsed_files {
+                    imports
+                        .iter()
+                        .filter(|import| production_import_names.contains(import.as_str()))
+                        .cloned()
+                        .collect()
+                } else {
+                    imports.clone()
+                };
+                production_edges.insert(module_id.clone(), production_edge_set);
+                edges.insert(module_id.clone(), imports);
             }
-            let Some(handle) = walk.take() else { break };
-            to_visit.extend(handle.join().unwrap());
         }
-    });
+
+        if !additional_injected {
+            primary_reachable = visited.clone();
+            to_visit.extend(std::mem::take(&mut roots.additional));
+            additional_injected = true;
+            continue;
+        }
+        break;
+    }
 
     let (order, cycles) = kahn::topological_sort(&edges);
 
@@ -163,6 +170,7 @@ pub fn build_module_graph(
         edges,
         production_edges,
         link_only_modules: blank_tracker.into_link_only_modules(),
+        primary_reachable,
     }
 }
 

@@ -102,6 +102,7 @@ pub fn compile(
     });
     let semantic_result = analyze_output.result;
     let emit_stamps = analyze_output.emit_stamps;
+    let unreachable_modules = analyze_output.unreachable_modules;
 
     let user_file_count: usize = semantic_result
         .modules
@@ -125,9 +126,15 @@ pub fn compile(
 
     let failed = semantic_result.failed();
     let mut errors = semantic_result.errors.clone();
-    let lints = semantic_result.lints.clone();
+    let mut lints = semantic_result.lints.clone();
     let live_modules: Vec<String> = semantic_result.modules.keys().cloned().collect();
     let test_index = semantic_result.test_index.clone();
+
+    if !unreachable_modules.is_empty() && !config.emit_tests {
+        lints.push(diagnostics::module_graph::unreachable_modules(
+            &unreachable_modules,
+        ));
+    }
 
     if failed || config.target_phase == CompilePhase::Check {
         return CompileResult {

@@ -22,8 +22,8 @@ use crate::checker::TaskState;
 use crate::checker::infer::InferCtx;
 use crate::diagnostics::{GoImportSite, emit_for_locator_result};
 use crate::facts::{BindingIdAllocator, Facts};
-use crate::loader::Loader;
-use crate::module_graph::build_module_graph;
+use crate::loader::{DiscoveredModules, Loader};
+use crate::module_graph::{Roots, build_module_graph};
 use crate::prelude::{parse_and_register_prelude, parse_and_register_test_prelude};
 use crate::store::{ENTRY_MODULE_ID, Store};
 
@@ -92,6 +92,7 @@ pub struct InferenceOutput {
     pub compiled_modules: Vec<CompiledModule>,
     pub cached_modules: HashSet<String>,
     pub cache_enabled: bool,
+    pub unreachable_modules: Vec<String>,
 }
 
 /// Loads, registers, and infers every module, returning the artifacts the
@@ -158,21 +159,46 @@ pub fn run_inference(input: AnalyzeInput) -> InferenceOutput {
     }
 
     let entry_module = store.entry_module_id().to_string();
-    let discover_test_modules = input.project_root.is_some();
+    let discovered = if input.project_root.is_some() {
+        input.loader.discover_modules()
+    } else {
+        DiscoveredModules::default()
+    };
+    let additional = match input.compile_phase {
+        // Test roots too, so a declaration-plus-test module is still checked.
+        CompilePhase::Check => {
+            let mut roots = discovered.production_modules.clone();
+            roots.extend(discovered.test_roots.iter().cloned());
+            roots
+        }
+        CompilePhase::Emit if input.emit_tests => discovered.test_roots.clone(),
+        CompilePhase::Emit => Vec::new(),
+    };
+    let roots = Roots {
+        primary: vec![entry_module],
+        additional,
+    };
     let mut graph_result = build_module_graph(
         &mut store,
         Some(input.loader),
-        &entry_module,
+        roots,
         &sink,
         input.config.standalone_mode,
         &input.locator,
         include_tests,
-        discover_test_modules,
     );
 
     for cycle in &graph_result.cycles {
         sink.push(diagnostics::module_graph::import_cycle(cycle));
     }
+
+    let mut unreachable_modules: Vec<String> = discovered
+        .production_modules
+        .iter()
+        .filter(|m| !graph_result.primary_reachable.contains(m.as_str()))
+        .cloned()
+        .collect();
+    unreachable_modules.sort();
 
     let has_pre_check_errors = sink.has_errors();
 
@@ -386,6 +412,7 @@ pub fn run_inference(input: AnalyzeInput) -> InferenceOutput {
         compiled_modules,
         cached_modules,
         cache_enabled,
+        unreachable_modules,
     }
 }
 

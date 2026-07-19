@@ -207,6 +207,22 @@ pub fn bindgen_failed(
     ))
 }
 
+pub fn unreachable_modules(module_ids: &[String]) -> LisetteDiagnostic {
+    let list = module_ids.join("` · `");
+    let (message, help) = if module_ids.len() == 1 {
+        (
+            format!("Unreachable module: `{list}`"),
+            "This module is never imported. Use or remove it.",
+        )
+    } else {
+        (
+            format!("Unreachable modules: `{list}`"),
+            "These modules are never imported. Use or remove them.",
+        )
+    };
+    LisetteDiagnostic::warn(message).with_help(help)
+}
+
 pub fn import_cycle(path: &[String]) -> LisetteDiagnostic {
     let modules: Vec<_> = path[..path.len() - 1].to_vec();
 
@@ -274,4 +290,28 @@ pub fn import_cycle(path: &[String]) -> LisetteDiagnostic {
     LisetteDiagnostic::error(format!("Import cycle detected\n\n{}", art))
         .with_resolve_code("import_cycle")
         .with_help(help)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn unreachable_modules_singular_is_a_spanless_warning() {
+        let diagnostic = unreachable_modules(&["orphan".to_string()]);
+        assert!(diagnostic.is_warning());
+        assert_eq!(diagnostic.plain_message(), "Unreachable module: `orphan`");
+        assert_eq!(diagnostic.file_id(), None);
+        assert_eq!(diagnostic.code_str(), None);
+    }
+
+    #[test]
+    fn unreachable_modules_plural_joins_ids() {
+        let diagnostic = unreachable_modules(&["alpha".to_string(), "beta".to_string()]);
+        assert!(diagnostic.is_warning());
+        assert_eq!(
+            diagnostic.plain_message(),
+            "Unreachable modules: `alpha` · `beta`"
+        );
+    }
 }

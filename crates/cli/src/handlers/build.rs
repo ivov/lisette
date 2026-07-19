@@ -413,7 +413,9 @@ pub(super) fn build_locked(prep: &BuildPrep, options: BuildOptions) -> BuildOutc
     go_cli::write_emit_manifest(&prep.target_dir, &emit.new_manifest);
 
     if !quiet {
-        eprintln!();
+        if counts.errors + counts.warnings + counts.info == 0 {
+            eprintln!();
+        }
         if crate::output::use_color() {
             use owo_colors::OwoColorize;
             eprintln!(

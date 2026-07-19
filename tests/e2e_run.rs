@@ -1090,3 +1090,181 @@ fn t_log_renders_logged_values_in_a_logs_section() {
         "the report should show the logged value in a Logs section:\n{combined}"
     );
 }
+
+fn scaffold_orphan_project(root: &Path, orphan_body: &str) -> PathBuf {
+    let project = root.join("proj");
+    fs::create_dir_all(project.join("src/lib")).unwrap();
+    fs::create_dir_all(project.join("src/orphan")).unwrap();
+    fs::write(
+        project.join("lisette.toml"),
+        "[project]\nname = \"github.com/user/orphanproj\"\nversion = \"0.1.0\"\n",
+    )
+    .unwrap();
+    fs::write(project.join("src/lib/lib.lis"), "pub fn f() -> int { 1 }\n").unwrap();
+    fs::write(
+        project.join("src/main.lis"),
+        "import \"lib\"\n\nfn main() {\n  let _ = lib.f()\n}\n",
+    )
+    .unwrap();
+    fs::write(project.join("src/orphan/orphan.lis"), orphan_body).unwrap();
+    project
+}
+
+fn contains_file_named(dir: &Path, name: &str) -> bool {
+    let Ok(entries) = fs::read_dir(dir) else {
+        return false;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            if contains_file_named(&path, name) {
+                return true;
+            }
+        } else if path.file_name().and_then(|n| n.to_str()) == Some(name) {
+            return true;
+        }
+    }
+    false
+}
+
+#[test]
+fn broken_orphan_module_fails_check() {
+    let scratch = tempfile::tempdir().expect("create temp dir");
+    let project = scaffold_orphan_project(
+        scratch.path(),
+        "pub fn broken(x: int) -> int {\n  x + \"boom\"\n}\n",
+    );
+
+    let output = lis(&project, "check");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let combined = format!("{stdout}{stderr}");
+
+    assert!(
+        !output.status.success(),
+        "a type error in an unimported module must fail check:\n{combined}"
+    );
+    assert!(
+        combined.contains("Type mismatch") && combined.contains("infer.type_mismatch"),
+        "the orphan's real type error should surface:\n{combined}"
+    );
+}
+
+#[test]
+fn clean_orphan_module_warns_at_check_but_passes() {
+    let scratch = tempfile::tempdir().expect("create temp dir");
+    let project = scaffold_orphan_project(scratch.path(), "pub fn helper() -> int { 1 }\n");
+
+    let output = lis(&project, "check");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let combined = format!("{stdout}{stderr}");
+
+    assert!(
+        output.status.success(),
+        "a clean unreachable module is a warning, not an error:\n{combined}"
+    );
+    assert!(
+        combined.contains("Unreachable module: `orphan`"),
+        "check should warn about the unreachable module:\n{combined}"
+    );
+}
+
+#[test]
+fn build_excludes_and_notes_orphan_module() {
+    if !go_available() {
+        eprintln!("skipping build_excludes_and_notes_orphan_module: `go` not found");
+        return;
+    }
+
+    let scratch = tempfile::tempdir().expect("create temp dir");
+    let project = scaffold_orphan_project(scratch.path(), "pub fn helper() -> int { 1 }\n");
+
+    let output = lis(&project, "build");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let combined = format!("{stdout}{stderr}");
+
+    assert!(
+        output.status.success(),
+        "the binary is sound, so build succeeds:\n{combined}"
+    );
+    assert!(
+        combined.contains("Unreachable module: `orphan`"),
+        "build should warn about the unreachable module:\n{combined}"
+    );
+    assert!(
+        !contains_file_named(&project.join("target"), "orphan.go"),
+        "the orphan module must not be emitted into target/"
+    );
+}
+
+fn target_contains_text(dir: &Path, needle: &str) -> bool {
+    let Ok(entries) = fs::read_dir(dir) else {
+        return false;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            if target_contains_text(&path, needle) {
+                return true;
+            }
+        } else if let Ok(content) = fs::read_to_string(&path)
+            && content.contains(needle)
+        {
+            return true;
+        }
+    }
+    false
+}
+
+#[test]
+fn lis_test_does_not_emit_production_orphan_or_its_dependency() {
+    if !go_available() {
+        eprintln!(
+            "skipping lis_test_does_not_emit_production_orphan_or_its_dependency: `go` not found"
+        );
+        return;
+    }
+
+    let scratch = tempfile::tempdir().expect("create temp dir");
+    let project = scratch.path().join("proj");
+    fs::create_dir_all(project.join("src/lib")).unwrap();
+    fs::create_dir_all(project.join("src/orphan")).unwrap();
+    fs::write(
+        project.join("lisette.toml"),
+        "[project]\nname = \"github.com/user/orphantest\"\nversion = \"0.1.0\"\n",
+    )
+    .unwrap();
+    fs::write(project.join("src/lib/lib.lis"), "pub fn f() -> int { 1 }\n").unwrap();
+    fs::write(
+        project.join("src/lib/lib.test.lis"),
+        "#[test]\nfn f_returns_one() {\n  assert f() == 1\n}\n",
+    )
+    .unwrap();
+    fs::write(
+        project.join("src/main.lis"),
+        "import \"lib\"\n\nfn main() {\n  let _ = lib.f()\n}\n",
+    )
+    .unwrap();
+    fs::write(
+        project.join("src/orphan/orphan.lis"),
+        "import \"go:archive/tar\"\n\npub fn make() -> tar.Header {\n  tar.Header {}\n}\n",
+    )
+    .unwrap();
+
+    let output = lis(&project, "test");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let combined = format!("{stdout}{stderr}");
+
+    assert!(output.status.success(), "lis test should pass:\n{combined}");
+    assert!(
+        !contains_file_named(&project.join("target"), "orphan.go"),
+        "lis test must not emit the production orphan into target/"
+    );
+    assert!(
+        !target_contains_text(&project.join("target"), "archive/tar"),
+        "the orphan's unique Go dependency must not leak into emitted output:\n{combined}"
+    );
+}

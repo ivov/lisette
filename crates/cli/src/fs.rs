@@ -7,7 +7,7 @@ use std::{
 };
 
 use semantics::cache::cache_file_name;
-use semantics::loader::{FileContent, Files, Loader};
+use semantics::loader::{DiscoveredModules, FileContent, Files, Loader};
 use semantics::path::DisplayPathBase;
 use semantics::store::ENTRY_MODULE_ID;
 
@@ -308,8 +308,9 @@ pub fn collect_lis_filepaths_recursive(dir: &Path) -> Vec<PathBuf> {
 
 fn entry_is_dir(entry: &std::fs::DirEntry, path: &Path) -> bool {
     match entry.file_type() {
-        Ok(file_type) if !file_type.is_symlink() => file_type.is_dir(),
-        _ => path.is_dir(),
+        Ok(file_type) if file_type.is_symlink() => false,
+        Ok(file_type) => file_type.is_dir(),
+        Err(_) => path.is_dir(),
     }
 }
 
@@ -332,12 +333,13 @@ impl Loader for LocalFileSystem {
         HashMap::default()
     }
 
-    fn test_module_ids(&self) -> Vec<String> {
+    fn discover_modules(&self) -> DiscoveredModules {
         let Some((root, _)) = self.search_paths.first() else {
-            return Vec::new();
+            return DiscoveredModules::default();
         };
         let mut with_test: HashSet<PathBuf> = HashSet::default();
-        let mut with_production: HashSet<PathBuf> = HashSet::default();
+        let mut with_test_root_file: HashSet<PathBuf> = HashSet::default();
+        let mut with_production_module: HashSet<PathBuf> = HashSet::default();
         for path in collect_lis_filepaths_recursive(root) {
             let Some(name) = path.file_name().and_then(|name| name.to_str()) else {
                 continue;
@@ -348,15 +350,26 @@ impl Loader for LocalFileSystem {
             if name.ends_with(".test.lis") {
                 with_test.insert(dir.to_path_buf());
             } else {
-                with_production.insert(dir.to_path_buf());
+                with_test_root_file.insert(dir.to_path_buf());
+                if !name.ends_with(".d.lis") {
+                    with_production_module.insert(dir.to_path_buf());
+                }
             }
         }
-        with_test
+        let dir_to_id = |dir: &Path| dir.strip_prefix(root).ok().map(module_id_from_rel);
+        let production_modules = with_production_module
             .iter()
-            .filter(|dir| with_production.contains(*dir))
-            .filter_map(|dir| dir.strip_prefix(root).ok())
-            .map(module_id_from_rel)
-            .collect()
+            .filter_map(|d| dir_to_id(d))
+            .collect();
+        let test_roots = with_test
+            .iter()
+            .filter(|dir| with_test_root_file.contains(*dir))
+            .filter_map(|d| dir_to_id(d))
+            .collect();
+        DiscoveredModules {
+            production_modules,
+            test_roots,
+        }
     }
 }
 
@@ -751,9 +764,10 @@ mod tests {
     }
 
     #[test]
-    fn test_module_ids_finds_nested_modules_with_tests() {
+    fn discover_modules_separates_production_and_test_roots() {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
+
         let with_both = root.join("alpha").join("beta");
         stdfs::create_dir_all(&with_both).unwrap();
         write_file(&with_both, "beta.lis", "pub fn x() {}\n");
@@ -767,9 +781,27 @@ mod tests {
         stdfs::create_dir_all(&prod_only).unwrap();
         write_file(&prod_only, "delta.lis", "pub fn x() {}\n");
 
+        let decl_only = root.join("epsilon");
+        stdfs::create_dir_all(&decl_only).unwrap();
+        write_file(&decl_only, "epsilon.d.lis", "pub fn ext() -> int\n");
+
         let fs = LocalFileSystem::new(root.to_str().unwrap());
-        let mut ids = fs.test_module_ids();
-        ids.sort();
-        assert_eq!(ids, vec!["alpha/beta".to_string()]);
+        let discovered = fs.discover_modules();
+
+        let mut production = discovered.production_modules;
+        production.sort();
+        assert_eq!(
+            production,
+            vec!["alpha/beta".to_string(), "delta".to_string()],
+            "production modules are non-test, non-declaration dirs"
+        );
+
+        let mut test_roots = discovered.test_roots;
+        test_roots.sort();
+        assert_eq!(
+            test_roots,
+            vec!["alpha/beta".to_string()],
+            "a test root needs both a test file and a production file"
+        );
     }
 }

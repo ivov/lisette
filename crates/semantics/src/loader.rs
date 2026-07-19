@@ -21,16 +21,26 @@ impl FileContent {
 
 pub type Files = HashMap<String, FileContent>;
 
-fn is_production_lis(name: &str) -> bool {
+fn counts_for_test_root(name: &str) -> bool {
     name.ends_with(".lis") && !name.ends_with(".test.lis")
+}
+
+fn is_production_module_file(name: &str) -> bool {
+    name.ends_with(".lis") && !name.ends_with(".test.lis") && !name.ends_with(".d.lis")
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct DiscoveredModules {
+    pub production_modules: Vec<String>,
+    pub test_roots: Vec<String>,
 }
 
 pub trait Loader: Sync {
     /// Scans a folder and returns all `.lis` files keyed by bare filename.
     fn scan_folder(&self, folder: &str) -> Files;
 
-    fn test_module_ids(&self) -> Vec<String> {
-        Vec::new()
+    fn discover_modules(&self) -> DiscoveredModules {
+        DiscoveredModules::default()
     }
 }
 
@@ -76,14 +86,25 @@ impl Loader for MemoryLoader {
         self.folders.get(folder).cloned().unwrap_or_default()
     }
 
-    fn test_module_ids(&self) -> Vec<String> {
-        self.folders
+    fn discover_modules(&self) -> DiscoveredModules {
+        let production_modules = self
+            .folders
+            .iter()
+            .filter(|(_, files)| files.keys().any(|name| is_production_module_file(name)))
+            .map(|(folder, _)| folder.clone())
+            .collect();
+        let test_roots = self
+            .folders
             .iter()
             .filter(|(_, files)| {
                 files.keys().any(|name| name.ends_with(".test.lis"))
-                    && files.keys().any(|name| is_production_lis(name))
+                    && files.keys().any(|name| counts_for_test_root(name))
             })
             .map(|(folder, _)| folder.clone())
-            .collect()
+            .collect();
+        DiscoveredModules {
+            production_modules,
+            test_roots,
+        }
     }
 }

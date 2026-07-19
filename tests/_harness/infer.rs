@@ -1,6 +1,8 @@
 use diagnostics::{LisetteDiagnostic, LocalSink};
+use semantics::loader::Loader;
 use semantics::{
-    checker::TaskState, checker::infer::InferCtx, module_graph::build_module_graph, store::Store,
+    checker::TaskState, checker::infer::InferCtx, module_graph::Roots,
+    module_graph::build_module_graph, store::Store,
 };
 use stdlib::{Target, get_go_stdlib_typedef};
 use syntax::{ast::Expression, types::Type};
@@ -55,16 +57,12 @@ pub fn infer_module(module_name: &str, fs: MockFileSystem) -> InferResult {
     let sink = LocalSink::new();
 
     let locator = deps::TypedefLocator::default();
-    let mut graph_result = build_module_graph(
-        &mut store,
-        Some(&fs),
-        module_name,
-        &sink,
-        false,
-        &locator,
-        true,
-        true,
-    );
+    let roots = Roots {
+        primary: vec![module_name.to_string()],
+        additional: fs.discover_modules().test_roots,
+    };
+    let mut graph_result =
+        build_module_graph(&mut store, Some(&fs), roots, &sink, false, &locator, true);
 
     if sink.has_errors() {
         return InferResult {
