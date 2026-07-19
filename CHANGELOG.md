@@ -2,6 +2,19 @@
 
 Lisette is under active development. Any version before 1.0.0 may include breaking changes.
 
+## [0.10.0](https://github.com/ivov/lisette/compare/lisette-v0.9.0...lisette-v0.10.0) - 2026-07-19
+
+### Fixes
+
+- fix: resolve forward-referenced type aliases [#1074](https://github.com/ivov/lisette/pull/1074) [`4564597`](https://github.com/ivov/lisette/commit/4564597d46c4198a8a0d36366652a11d25cc29b0)
+- fix: reject variable shadowing imported module [#1073](https://github.com/ivov/lisette/pull/1073) [`4e2c006`](https://github.com/ivov/lisette/commit/4e2c006122d0c979b5e152b6be8d506bc4ac5f4d)
+- fix: refresh LSP diagnostics in other open files post-edit [#1070](https://github.com/ivov/lisette/pull/1070) [`c2f92e5`](https://github.com/ivov/lisette/commit/c2f92e55641b849804c7c28e4299f3c5ed0dce8b)
+
+### Internals
+
+- refactor: unify generic bound handling [#1072](https://github.com/ivov/lisette/pull/1072) [`5a3f855`](https://github.com/ivov/lisette/commit/5a3f8554acf570c21727eb7a346db947a19a0a48)
+
+
 ## [0.9.0](https://github.com/ivov/lisette/compare/lisette-v0.8.0...lisette-v0.9.0) - 2026-07-19
 
 ### Features
