@@ -370,7 +370,7 @@ pub fn NewAlias(obj: Ref<TypeName>, rhs: Type) -> Ref<Alias>
 
 /// NewArray returns a new array type for the given element type and length.
 /// A negative length indicates an unknown length.
-pub fn NewArray(elem: Type, len: int64) -> Ref<Array>
+pub fn NewArray(elem: Type, len: int64) -> Ref<types.Array>
 
 /// NewChan returns a new channel type for the given direction and element type.
 pub fn NewChan(dir: ChanDir, elem: Type) -> Ref<Chan>
@@ -1073,17 +1073,17 @@ impl ArgumentError {
   fn Unwrap(self: Ref<ArgumentError>) -> Option<error>
 }
 
-impl Array {
+impl types.Array {
   /// Elem returns element type of array a.
-  fn Elem(self: Ref<Array>) -> Type
+  fn Elem(self: Ref<types.Array>) -> Type
 
   /// Len returns the length of array a.
   /// A negative result indicates an unknown length.
-  fn Len(self: Ref<Array>) -> int64
+  fn Len(self: Ref<types.Array>) -> int64
 
-  fn String(self: Ref<Array>) -> string
+  fn String(self: Ref<types.Array>) -> string
 
-  fn Underlying(self: Ref<Array>) -> Type
+  fn Underlying(self: Ref<types.Array>) -> Type
 }
 
 impl Basic {

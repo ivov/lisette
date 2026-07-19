@@ -8792,6 +8792,84 @@ fn main() {
 }
 
 #[test]
+fn go_self_qualified_array_type_coexists_with_builtin() {
+    let pgtype = r#"
+pub struct Array<T> {
+  pub Elements: Slice<T>,
+  pub Valid: bool,
+}
+
+pub struct Holder {
+  pub Ints: pgtype.Array<int>,
+  pub Digest: Array<byte, 16>,
+}
+
+pub fn MakeArray<T>(seed: T) -> pgtype.Array<T>
+
+pub fn Digest() -> Array<byte, 16>
+
+impl<T> pgtype.Array<T> {
+  fn Len(self) -> int
+}
+"#;
+    let input = r#"
+import "go:example.com/pgtype"
+
+fn main(h: pgtype.Holder) {
+  let arr = pgtype.MakeArray(1)
+  let _ = arr.Len()
+  let _ = h.Ints
+  let _ = h.Digest
+}
+"#;
+    infer_with_go_typedefs(input, &[("go:example.com/pgtype", pgtype)]).assert_no_errors();
+}
+
+#[test]
+fn go_self_qualified_nongeneric_array_type_resolves() {
+    let goty = r#"
+pub type Array
+
+impl goty.Array {
+  fn Len(self: Ref<goty.Array>) -> int64
+}
+
+pub fn NewArray() -> Ref<goty.Array>
+"#;
+    let input = r#"
+import "go:example.com/goty"
+
+fn main() {
+  let a = goty.NewArray()
+  let _ = a.Len()
+}
+"#;
+    infer_with_go_typedefs(input, &[("go:example.com/goty", goty)]).assert_no_errors();
+}
+
+#[test]
+fn go_bare_array_reference_binds_to_fixed_size_builtin() {
+    let typedef = r#"
+pub struct Array<T> {
+  pub Valid: bool,
+}
+
+impl<T> Array<T> {
+  fn Len(self) -> int
+}
+"#;
+    let input = r#"
+import "go:example.com/pgtype"
+
+fn main(a: pgtype.Array<int>) {
+  let _ = a.Valid
+}
+"#;
+    infer_with_go_typedefs(input, &[("go:example.com/pgtype", typedef)])
+        .assert_infer_code("array_type_arity");
+}
+
+#[test]
 fn versioned_go_modules_do_not_falsely_conflict_when_typedefs_missing() {
     let webrtc = r#"// Package: webrtc
 

@@ -206,7 +206,7 @@ func generateFromPackage(pkg *packages.Package, displayPath, lisetteVersion, goV
 
 	selfQualifies := false
 	for _, result := range results {
-		if result.Kind == extract.ExportType && convert.CollidesWithPreludeGeneric(result.Name, len(result.TypeParams)) {
+		if result.Kind == extract.ExportType && convert.CollidesWithBuiltinType(result.Name, len(result.TypeParams)) {
 			selfQualifies = true
 			break
 		}

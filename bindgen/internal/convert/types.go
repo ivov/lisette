@@ -327,23 +327,27 @@ func namedToLisette(t *types.Named, seen map[types.Type]bool, conv *Converter) T
 		return TypeResult{LisetteType: pkgPrefix + "." + obj.Name()}
 	}
 
-	return TypeResult{LisetteType: typeName}
+	return TypeResult{LisetteType: SelfQualify(pkg.Name(), obj.Name(), 0)}
 }
 
 var preludeGenericArity = map[string]int{"Option": 1, "Result": 2, "Partial": 2}
 
-// CollidesWithPreludeGeneric reports whether a Go type's name and arity match a
-// prelude generic, meaning references to it must be package-qualified.
-func CollidesWithPreludeGeneric(typeName string, arity int) bool {
+// builtinNameCollisions bind at every arity, so a package's own type of that name
+// always needs qualifying. Only `Array` (the checker's fixed-size `Array<T, N>`).
+var builtinNameCollisions = map[string]bool{"Array": true}
+
+// CollidesWithBuiltinType reports whether a bare `name` at `arity` binds to a built-in.
+func CollidesWithBuiltinType(typeName string, arity int) bool {
+	if builtinNameCollisions[typeName] {
+		return true
+	}
 	a, ok := preludeGenericArity[typeName]
 	return ok && a == arity
 }
 
-// SelfQualify returns `pkgName.typeName` when a package's own type collides with
-// a prelude generic by name and arity (e.g. huh's `Option<T>`), so the reference
-// stays distinct from the prelude. The declaration itself stays bare.
+// SelfQualify qualifies a colliding type name with its package (declarations stay bare).
 func SelfQualify(pkgName, typeName string, arity int) string {
-	if CollidesWithPreludeGeneric(typeName, arity) {
+	if CollidesWithBuiltinType(typeName, arity) {
 		return pkgName + "." + typeName
 	}
 	return typeName
