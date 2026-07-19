@@ -161,13 +161,8 @@ impl TestClient {
     }
 
     pub async fn await_diagnostics(&mut self) -> Vec<Diagnostic> {
-        // Check buffered notifications first
         for msg in self.buffered.drain(..) {
-            if msg.get("method") == Some(&json!("textDocument/publishDiagnostics"))
-                && let Some(params) = msg.get("params")
-                && let Ok(result) =
-                    serde_json::from_value::<PublishDiagnosticsParams>(params.clone())
-            {
+            if let Some(result) = as_publish_diagnostics(&msg) {
                 return result.diagnostics;
             }
         }
@@ -176,15 +171,37 @@ impl TestClient {
         loop {
             match tokio::time::timeout_at(deadline, self.reader.next()).await {
                 Ok(Some(Ok(msg))) => {
-                    if msg.get("method") == Some(&json!("textDocument/publishDiagnostics"))
-                        && let Some(params) = msg.get("params")
-                        && let Ok(result) =
-                            serde_json::from_value::<PublishDiagnosticsParams>(params.clone())
-                    {
+                    if let Some(result) = as_publish_diagnostics(&msg) {
                         return result.diagnostics;
                     }
                 }
                 _ => return Vec::new(),
+            }
+        }
+    }
+
+    pub async fn await_diagnostics_for(&mut self, uri: &str) -> Option<Vec<Diagnostic>> {
+        let matches = |msg: &Value| {
+            as_publish_diagnostics(msg).is_some_and(|result| result.uri.as_str() == uri)
+        };
+
+        if let Some(pos) = self.buffered.iter().position(matches) {
+            let msg = self.buffered.remove(pos);
+            return as_publish_diagnostics(&msg).map(|result| result.diagnostics);
+        }
+
+        let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
+        loop {
+            match tokio::time::timeout_at(deadline, self.reader.next()).await {
+                Ok(Some(Ok(msg))) => {
+                    if let Some(result) = as_publish_diagnostics(&msg) {
+                        if result.uri.as_str() == uri {
+                            return Some(result.diagnostics);
+                        }
+                        self.buffered.push(msg);
+                    }
+                }
+                _ => return None,
             }
         }
     }
@@ -207,6 +224,15 @@ impl TestClient {
                 "textDocument": {"uri": uri, "version": version},
                 "contentChanges": [{"text": content}]
             }),
+        )
+        .await;
+        self.wait_for_server().await;
+    }
+
+    pub async fn close(&mut self, uri: &str) {
+        self.notify(
+            "textDocument/didClose",
+            json!({"textDocument": {"uri": uri}}),
         )
         .await;
         self.wait_for_server().await;
@@ -419,6 +445,13 @@ impl TestClient {
     pub async fn await_exit_code(self) -> i32 {
         self.exit_code.await.unwrap()
     }
+}
+
+fn as_publish_diagnostics(msg: &Value) -> Option<PublishDiagnosticsParams> {
+    if msg.get("method") != Some(&json!("textDocument/publishDiagnostics")) {
+        return None;
+    }
+    serde_json::from_value(msg.get("params")?.clone()).ok()
 }
 
 pub fn hover_content(hover: &Hover) -> String {

@@ -127,10 +127,9 @@ impl LanguageServer for Backend {
     async fn did_change(&self, params: DidChangeTextDocumentParams) {
         let uri = params.text_document.uri;
         if let Some(change) = params.content_changes.into_iter().last() {
-            self.snapshots.clear();
-            self.update_document(uri.clone(), change.text, params.text_document.version)
+            self.update_document(uri, change.text, params.text_document.version)
                 .await;
-            self.shared_state.schedule_diagnostics(uri).await;
+            self.shared_state.recheck_open_documents().await;
         }
     }
 
@@ -147,16 +146,23 @@ impl LanguageServer for Backend {
         self.snapshots.remove(uri);
         self.last_valid_snapshot.remove(uri);
 
-        if let Some(config) = self.project_config.read().await.as_ref()
+        let overlay_removed = if let Some(config) = self.project_config.read().await.as_ref()
             && let Some((module_id, filename)) = uri_to_module_file(config, uri)
         {
             let mut loader = self.loader.write().await;
             loader.remove_overlay(&module_id, &filename);
-        }
+            true
+        } else {
+            false
+        };
 
         self.client
             .publish_diagnostics(uri.clone(), vec![], None)
             .await;
+
+        if overlay_removed {
+            self.shared_state.recheck_open_documents().await;
+        }
     }
 
     async fn formatting(&self, params: DocumentFormattingParams) -> Result<Option<Vec<TextEdit>>> {

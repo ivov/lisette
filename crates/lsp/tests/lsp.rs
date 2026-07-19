@@ -12876,6 +12876,125 @@ async fn opening_prelude_source_reports_no_foreign_type_errors() {
 }
 
 #[tokio::test]
+async fn editing_a_file_refreshes_diagnostics_in_dependent_open_files() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    std::fs::write(
+        root.join("lisette.toml"),
+        "[project]\nname = \"test\"\nversion = \"0.0.1\"\n",
+    )
+    .unwrap();
+    let src = root.join("src");
+    std::fs::create_dir_all(&src).unwrap();
+
+    let foo_content = "pub struct Foo {}\n\nimpl Foo {\n  pub fn foo(self) {}\n}\n";
+    let main_content = "fn main() {\n  let foo = Foo {}\n  foo.foo()\n}\n";
+    std::fs::write(src.join("foo.lis"), foo_content).unwrap();
+    std::fs::write(src.join("main.lis"), main_content).unwrap();
+
+    let mut client = TestClient::new().await;
+    client.initialize_with_root(root).await;
+    let foo_uri = Url::from_file_path(src.join("foo.lis"))
+        .unwrap()
+        .to_string();
+    let main_uri = Url::from_file_path(src.join("main.lis"))
+        .unwrap()
+        .to_string();
+
+    client.open(&foo_uri, foo_content).await;
+    client.open(&main_uri, main_content).await;
+
+    let initial = client
+        .await_diagnostics_for(&main_uri)
+        .await
+        .expect("main.lis should publish diagnostics on open");
+    let initial_errors: Vec<_> = initial
+        .iter()
+        .filter(|d| d.severity == Some(DiagnosticSeverity::ERROR))
+        .collect();
+    assert!(
+        initial_errors.is_empty(),
+        "main.lis should start clean, got: {initial_errors:?}"
+    );
+
+    let renamed_foo = "pub struct Foo {}\n\nimpl Foo {\n  pub fn floo(self) {}\n}\n";
+    client.change(&foo_uri, renamed_foo, 2).await;
+
+    let refreshed = client
+        .await_diagnostics_for(&main_uri)
+        .await
+        .expect("editing foo.lis should refresh diagnostics for the dependent main.lis");
+    assert!(
+        refreshed
+            .iter()
+            .any(|d| d.severity == Some(DiagnosticSeverity::ERROR) && d.message.contains("floo")),
+        "main.lis should now report the renamed member, got: {refreshed:?}"
+    );
+
+    client.shutdown().await;
+}
+
+#[tokio::test]
+async fn closing_an_unsaved_file_refreshes_dependent_open_files() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    std::fs::write(
+        root.join("lisette.toml"),
+        "[project]\nname = \"test\"\nversion = \"0.0.1\"\n",
+    )
+    .unwrap();
+    let src = root.join("src");
+    std::fs::create_dir_all(&src).unwrap();
+
+    let foo_content = "pub struct Foo {}\n\nimpl Foo {\n  pub fn foo(self) {}\n}\n";
+    let main_content = "fn main() {\n  let foo = Foo {}\n  foo.foo()\n}\n";
+    std::fs::write(src.join("foo.lis"), foo_content).unwrap();
+    std::fs::write(src.join("main.lis"), main_content).unwrap();
+
+    let mut client = TestClient::new().await;
+    client.initialize_with_root(root).await;
+    let foo_uri = Url::from_file_path(src.join("foo.lis"))
+        .unwrap()
+        .to_string();
+    let main_uri = Url::from_file_path(src.join("main.lis"))
+        .unwrap()
+        .to_string();
+
+    client.open(&foo_uri, foo_content).await;
+    client.open(&main_uri, main_content).await;
+    client.await_diagnostics_for(&main_uri).await;
+
+    let renamed_foo = "pub struct Foo {}\n\nimpl Foo {\n  pub fn floo(self) {}\n}\n";
+    client.change(&foo_uri, renamed_foo, 2).await;
+    let broken = client
+        .await_diagnostics_for(&main_uri)
+        .await
+        .expect("editing foo.lis should break main.lis");
+    assert!(
+        broken
+            .iter()
+            .any(|d| d.severity == Some(DiagnosticSeverity::ERROR)),
+        "main.lis should have an error against the unsaved rename, got: {broken:?}"
+    );
+
+    client.close(&foo_uri).await;
+    let restored = client
+        .await_diagnostics_for(&main_uri)
+        .await
+        .expect("closing the unsaved foo.lis should refresh main.lis against on-disk content");
+    let errors: Vec<_> = restored
+        .iter()
+        .filter(|d| d.severity == Some(DiagnosticSeverity::ERROR))
+        .collect();
+    assert!(
+        errors.is_empty(),
+        "reverting foo.lis to disk should clear main.lis errors, got: {errors:?}"
+    );
+
+    client.shutdown().await;
+}
+
+#[tokio::test]
 async fn exit_after_shutdown_signals_clean_exit() {
     let mut client = TestClient::new().await;
     client.initialize().await;

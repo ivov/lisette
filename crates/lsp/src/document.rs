@@ -74,6 +74,18 @@ impl SharedState {
             .await;
     }
 
+    pub(crate) async fn recheck_open_documents(self: &Arc<Self>) {
+        self.snapshots.clear();
+        let uris: Vec<Url> = self
+            .documents
+            .iter()
+            .map(|entry| entry.key().clone())
+            .collect();
+        for uri in uris {
+            self.schedule_diagnostics(uri).await;
+        }
+    }
+
     pub(crate) async fn schedule_diagnostics(self: &Arc<Self>, uri: Url) {
         if let Some((_, (_, old_handle))) = self.pending_diagnostics.remove(&uri) {
             old_handle.abort();
