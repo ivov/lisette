@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1784479306917,
+  "lastUpdate": 1784479578205,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -6251,6 +6251,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "diagnostics",
             "value": 6364,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 4431,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2812,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1031,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 695,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 6050,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 890,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "4e2c006122d0c979b5e152b6be8d506bc4ac5f4d",
+          "message": "fix: reject variable shadowing imported module (#1073)",
+          "timestamp": "2026-07-19T18:45:56+02:00",
+          "tree_id": "76766936e54232cee4768a694659a075e58d040a",
+          "url": "https://github.com/ivov/lisette/commit/4e2c006122d0c979b5e152b6be8d506bc4ac5f4d"
+        },
+        "date": 1784479577213,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 116594,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 30097,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 24124,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 16703,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 13207,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 10194,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 6360,
             "unit": "lines"
           },
           {
