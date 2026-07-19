@@ -328,7 +328,7 @@ impl InferCtx<'_, '_> {
         self.unify(expected_ty, &identifier_ty, &span);
 
         if coerced_to_unconstrained_value {
-            self.register_function_value_bound_checks(&value, &identifier_ty, span);
+            self.register_function_value_obligations(&value, &identifier_ty, span);
         }
 
         if let Some(enum_id) = self.enum_of_variant(store, &value) {
@@ -341,7 +341,7 @@ impl InferCtx<'_, '_> {
                 _ => None,
             };
             if let Some(nominal) = nominal {
-                self.register_struct_bound_checks(&enum_id, &enum_id, nominal, span);
+                self.register_construction_obligations(&enum_id, nominal, span);
             }
         }
 

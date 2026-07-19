@@ -1,12 +1,9 @@
-use rustc_hash::FxHashMap as HashMap;
-
-use syntax::EcoString;
 use syntax::ast::Generic;
 use syntax::program::DefinitionBody;
-use syntax::types::{Bound, Symbol, Type, substitute, unqualified_name};
+use syntax::types::{Bound, Symbol, Type, unqualified_name};
 
 use super::TaskState;
-use crate::checker::infer::expressions::comparison::bound_implied;
+use crate::generics::{apply_bounds, bound_implied};
 use crate::store::Store;
 
 impl TaskState<'_> {
@@ -27,24 +24,20 @@ impl TaskState<'_> {
             ) => generics.clone(),
             _ => return Vec::new(),
         };
-        let alpha: HashMap<EcoString, Type> = type_generics
+        let arguments: Vec<Type> = impl_generics
             .iter()
-            .zip(impl_generics)
-            .map(|(type_generic, impl_generic)| {
-                (
-                    type_generic.name.clone(),
-                    Type::Parameter(impl_generic.name.clone()),
-                )
-            })
+            .map(|generic| Type::Parameter(generic.name.clone()))
             .collect();
+        let applied = apply_bounds(&type_generics, &arguments);
 
         let mut bounds_by_position = Vec::with_capacity(type_generics.len());
         for generic in &type_generics {
-            let resolved_bounds: Vec<Type> = generic
-                .resolved_bounds
+            let resolved_bounds: Vec<Type> = applied
                 .iter()
-                .filter(|bound| !bound.contains_error())
-                .map(|bound| substitute(bound, &alpha))
+                .filter(|bound| {
+                    bound.parameter_name == generic.name && !bound.required.contains_error()
+                })
+                .map(|bound| bound.required.clone())
                 .collect();
             bounds_by_position.push(resolved_bounds);
         }

@@ -469,6 +469,12 @@ impl InferCtx<'_, '_> {
         self.unify_trait_bounds(&bounds, &param_types, &new_args, &span);
 
         let resolved_return = store.deep_resolve_alias(&return_ty.resolve_in(&self.env));
+        if call_kind == CallKind::TupleStructConstructor
+            && let Type::Nominal { id, .. } = &resolved_return
+        {
+            let written_name = callee_path.as_deref().unwrap_or(id.as_str());
+            self.register_construction_obligations(written_name, &resolved_return, span);
+        }
         if let Some((CompoundKind::Map, arguments)) = resolved_return.as_compound()
             && let Some(key) = arguments.first()
         {

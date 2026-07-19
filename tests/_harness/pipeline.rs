@@ -210,14 +210,13 @@ impl CompiledTest {
                 ctx.resolve_select_exhaustiveness();
             }
 
-            checker.check_pending_interface_bounds(&store);
-
             {
                 let folder = semantics::checker::freeze::FreezeFolder::new(&checker.env, &store);
                 folder.freeze_facts(&mut checker.facts);
             }
             typed_ast = semantics::checker::freeze::FreezeFolder::new(&checker.env, &store)
                 .freeze_items(typed_ast);
+            checker.check_post_inference_bounds(&store);
             checker.populate_item_generic_bounds(&mut typed_ast);
 
             if !checker.failed() {

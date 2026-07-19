@@ -7,7 +7,7 @@ use syntax::ast::{Expression, Span, StructFieldAssignment, StructSpread};
 use syntax::program::{Definition, DefinitionBody};
 use syntax::types::{SubstitutionMap, Type, substitute, unqualified_name};
 
-use crate::checker::infer::{BuiltinBound, InferCtx};
+use crate::checker::infer::InferCtx;
 
 /// Inputs to `infer_structish_fields` shared between struct and enum-variant literals.
 struct StructishCtx<'a, 'b, F> {
@@ -324,7 +324,7 @@ impl InferCtx<'_, '_> {
         let final_expected = store.deep_resolve_alias(&expected_ty.resolve_in(&self.env));
         self.unify(&final_expected, &struct_call_ty, &span);
 
-        self.register_struct_bound_checks(&qualified_name, &struct_name, &struct_call_ty, span);
+        self.register_construction_obligations(&struct_name, &struct_call_ty, span);
 
         Expression::StructCall {
             name: struct_name,
@@ -332,77 +332,6 @@ impl InferCtx<'_, '_> {
             spread: new_spread,
             ty: struct_call_ty,
             span,
-        }
-    }
-
-    pub(super) fn register_struct_bound_checks(
-        &mut self,
-        qualified_name: &str,
-        written_name: &str,
-        call_ty: &Type,
-        span: Span,
-    ) {
-        let Type::Nominal { params, .. } = call_ty else {
-            return;
-        };
-        if params.is_empty() {
-            return;
-        }
-        let store = self.store;
-        let Some(generics) = store
-            .get_definition(qualified_name)
-            .and_then(|def| def.body.generics())
-        else {
-            return;
-        };
-        let module_id = self.cursor.module_id.clone();
-        let display = unqualified_name(written_name).to_string();
-        for (generic, arg) in generics.iter().zip(params) {
-            let Some(bound) = generic
-                .resolved_bounds
-                .iter()
-                .find_map(|bound| failing_bound_name(store, bound))
-            else {
-                continue;
-            };
-            self.facts
-                .struct_bound_checks
-                .push(crate::facts::StructBoundCheck {
-                    ty: arg.clone(),
-                    span,
-                    module_id: module_id.clone(),
-                    struct_name: display.clone(),
-                    param_name: generic.name.to_string(),
-                    bound: bound.to_string(),
-                    is_function_reference: false,
-                });
-        }
-    }
-
-    pub(super) fn register_function_value_bound_checks(
-        &mut self,
-        written_name: &str,
-        function_ty: &Type,
-        span: Span,
-    ) {
-        let store = self.store;
-        let display = unqualified_name(written_name).to_string();
-        let module_id = self.cursor.module_id.clone();
-        for bound in function_ty.get_bounds() {
-            let Some(bound_name) = failing_bound_name(store, &bound.ty) else {
-                continue;
-            };
-            self.facts
-                .struct_bound_checks
-                .push(crate::facts::StructBoundCheck {
-                    ty: bound.generic.clone(),
-                    span,
-                    module_id: module_id.clone(),
-                    struct_name: display.clone(),
-                    param_name: bound.param_name.to_string(),
-                    bound: bound_name.to_string(),
-                    is_function_reference: true,
-                });
         }
     }
 
@@ -471,7 +400,7 @@ impl InferCtx<'_, '_> {
 
         if let Type::Nominal { id, .. } = &resolved_enum {
             let enum_id = id.as_str();
-            self.register_struct_bound_checks(enum_id, enum_id, &enum_ty, span);
+            self.register_construction_obligations(enum_id, &enum_ty, span);
         }
 
         Expression::StructCall {
@@ -673,14 +602,6 @@ impl InferCtx<'_, '_> {
         let store = self.store;
         crate::zero::has_zero(store, ty, from_module)
     }
-}
-
-fn failing_bound_name(store: &crate::store::Store, bound: &Type) -> Option<EcoString> {
-    let resolved = store.deep_resolve_alias(bound);
-    let id = resolved.get_qualified_id()?;
-    let fails = BuiltinBound::from_qualified_id(id).is_some()
-        || crate::checker::infer::interface::interface_requires_methods(store, id);
-    fails.then(|| unqualified_name(id).into())
 }
 
 pub(super) fn same_nominal(a: &Type, b: &Type) -> bool {

@@ -752,7 +752,7 @@ impl InferCtx<'_, '_> {
 
         if coerced_to_unconstrained_value {
             let display_name = format!("{}.{}", type_name, args.member_name);
-            self.register_function_value_bound_checks(&display_name, &member_ty, *args.span);
+            self.register_function_value_obligations(&display_name, &member_ty, *args.span);
         }
 
         self.facts

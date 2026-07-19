@@ -1147,3 +1147,89 @@ fn main() {
     )
     .assert_no_errors();
 }
+
+#[test]
+fn inferred_record_struct_argument_must_satisfy_bound() {
+    infer(
+        r#"
+interface Display { fn show() -> string }
+struct Box<T: Display> { value: T }
+
+fn main() {
+  let boxed = Box { value: 42 }
+  let _ = boxed
+}
+"#,
+    )
+    .assert_infer_code_once("interface_not_implemented");
+}
+
+#[test]
+fn inferred_tuple_struct_argument_must_satisfy_bound() {
+    infer(
+        r#"
+interface Display { fn show() -> string }
+struct Box<T: Display>(T)
+
+fn main() {
+  let boxed = Box(42)
+  let _ = boxed
+}
+"#,
+    )
+    .assert_infer_code_once("interface_not_implemented");
+}
+
+#[test]
+fn inferred_enum_argument_must_satisfy_bound() {
+    infer(
+        r#"
+interface Display { fn show() -> string }
+enum Box<T: Display> { Full(T) }
+
+fn main() {
+  let boxed = Box.Full(42)
+  let _ = boxed
+}
+"#,
+    )
+    .assert_infer_code_once("interface_not_implemented");
+}
+
+#[test]
+fn generic_return_propagates_declared_type_bound_without_methods() {
+    infer(
+        r#"
+struct Box<T: error> {}
+
+fn make<T>() -> Box<T> {
+  Box {}
+}
+
+fn main() {
+  let boxed = make<int>()
+  let _ = boxed
+}
+"#,
+    )
+    .assert_infer_code_once("missing_constraint_on_return_type");
+}
+
+#[test]
+fn shadowed_parameter_does_not_inherit_constructor_bound() {
+    infer(
+        r#"
+interface Display { fn show() -> string }
+struct Owner<T: Display> { value: T }
+struct Box<T: Display> { value: T }
+
+impl<T: Display> Owner<T> {
+  fn replace<T>(value: T) {
+    let boxed = Box { value: value }
+    let _ = boxed
+  }
+}
+"#,
+    )
+    .assert_infer_code_once("missing_bound_on_param");
+}

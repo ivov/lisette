@@ -4,32 +4,57 @@
 //! `passes::fact_producers::generics`.
 
 use diagnostics::LocalSink;
-use rustc_hash::FxHashMap as HashMap;
 use syntax::ast::{Annotation, Expression, Generic, Span};
-use syntax::types::{Bound, Symbol, Type};
+use syntax::types::{Bound, Type};
 
-use semantics::prelude::PRELUDE_MODULE_ID;
+use semantics::generics::{bound_implied, bound_requires_evidence, type_obligations};
 use semantics::store::Store;
 
-pub(crate) fn run(typed_ast: &[Expression], module_id: &str, store: &Store, sink: &LocalSink) {
+#[derive(Clone, Copy)]
+struct GenericContext<'a> {
+    generics: &'a [Generic],
+    receiver: Option<&'a Type>,
+}
+
+pub(crate) fn run(typed_ast: &[Expression], store: &Store, sink: &LocalSink) {
     for item in typed_ast {
-        visit_expression(item, None, module_id, store, sink);
+        visit_expression(item, None, store, sink);
     }
 }
 
 fn visit_expression(
     expression: &Expression,
-    enclosing_impl_generics: Option<&[Generic]>,
-    module_id: &str,
+    enclosing: Option<GenericContext<'_>>,
     store: &Store,
     sink: &LocalSink,
 ) {
     match expression {
         Expression::ImplBlock {
-            methods, generics, ..
+            methods,
+            generics,
+            ty,
+            ..
         } => {
+            let context = GenericContext {
+                generics,
+                receiver: Some(ty),
+            };
             for method in methods {
-                visit_expression(method, Some(generics), module_id, store, sink);
+                visit_expression(method, Some(context), store, sink);
+            }
+            return;
+        }
+        Expression::Interface {
+            method_signatures,
+            generics,
+            ..
+        } => {
+            let context = GenericContext {
+                generics,
+                receiver: None,
+            };
+            for method in method_signatures {
+                visit_expression(method, Some(context), store, sink);
             }
             return;
         }
@@ -43,10 +68,9 @@ fn visit_expression(
             check_constrained_return_type(
                 return_type,
                 generics,
-                enclosing_impl_generics,
+                enclosing,
                 return_annotation,
                 name,
-                module_id,
                 store,
                 sink,
             );
@@ -66,7 +90,7 @@ fn visit_expression(
     }
 
     for child in expression.children() {
-        visit_expression(child, enclosing_impl_generics, module_id, store, sink);
+        visit_expression(child, enclosing, store, sink);
     }
 }
 
@@ -85,141 +109,63 @@ fn check_unconstrained_bounded(bounds: &[Bound], span: &Span, sink: &LocalSink) 
 fn check_constrained_return_type(
     return_ty: &Type,
     generics: &[Generic],
-    enclosing_impl_generics: Option<&[Generic]>,
+    enclosing: Option<GenericContext<'_>>,
     return_annotation: &Annotation,
     fn_name: &str,
-    module_id: &str,
     store: &Store,
     sink: &LocalSink,
 ) {
-    let Type::Nominal { id, params, .. } = return_ty else {
-        return;
-    };
-
-    if params.is_empty() {
-        return;
-    }
-
-    let qualified_id =
-        lookup_qualified_name(id, module_id, store).unwrap_or_else(|| id.to_string());
-    let Some(methods) = store.get_own_methods(&qualified_id) else {
-        return;
-    };
-
-    let mut required_bounds: HashMap<String, Vec<Type>> = HashMap::default();
-    for method_ty in methods.values() {
-        let fn_ty = match method_ty {
-            Type::Forall { body, .. } => body.as_ref(),
-            other => other,
-        };
-        if let Type::Function(f) = fn_ty {
-            for bound in &f.bounds {
-                if let Type::Parameter(param_name) = &bound.generic {
-                    let entry = required_bounds.entry(param_name.to_string()).or_default();
-                    if !entry.contains(&bound.ty) {
-                        entry.push(bound.ty.clone());
-                    }
-                }
-            }
-        }
-    }
-
     let span = return_annotation.get_span();
-    for return_param in params.iter() {
-        if let Type::Parameter(param_name) = return_param
-            && let Some(method_bounds) = required_bounds.get(param_name.as_str())
+    let mut seen = rustc_hash::FxHashSet::default();
+    for applied in type_obligations(store, return_ty) {
+        let Type::Parameter(param_name) = &applied.argument else {
+            continue;
+        };
+        if !bound_requires_evidence(store, &applied.required)
+            || !seen.insert((param_name.clone(), applied.required.to_string()))
         {
-            let fn_generic = generics
-                .iter()
-                .find(|g| g.name.as_str() == param_name.as_str());
-
-            if let Some(fn_gen) = fn_generic {
-                let fn_bounds: Vec<Type> = fn_gen
-                    .bounds
-                    .iter()
-                    .filter_map(|b| annotation_to_type(b, module_id, store))
-                    .collect();
-
-                for method_bound in method_bounds {
-                    if !fn_bounds.iter().any(|fb| fb == method_bound) {
-                        sink.push(
-                            diagnostics::infer::missing_constraint_on_generic_return_type(
-                                fn_name,
-                                param_name.as_ref(),
-                                method_bound,
-                                span,
-                            ),
-                        );
-                    }
-                }
-            } else if let Some(impl_generics) = enclosing_impl_generics {
-                let impl_bounds: Vec<Type> = impl_generics
-                    .iter()
-                    .filter(|g| g.name.as_str() == param_name.as_str())
-                    .flat_map(|g| g.bounds.iter())
-                    .filter_map(|b| annotation_to_type(b, module_id, store))
-                    .collect();
-                let all_covered = method_bounds.iter().all(|mb| impl_bounds.contains(mb));
-                if !all_covered {
-                    let bound_str = method_bounds
-                        .iter()
-                        .map(|b| b.to_string())
-                        .collect::<Vec<_>>()
-                        .join(" + ");
-                    sink.push(
-                        diagnostics::infer::missing_constraint_on_generic_return_type(
-                            fn_name,
-                            param_name.as_ref(),
-                            &Type::Parameter(bound_str.into()),
-                            span,
-                        ),
-                    );
-                }
-            } else {
-                let bound_str = method_bounds
-                    .iter()
-                    .map(|b| b.to_string())
-                    .collect::<Vec<_>>()
-                    .join(" + ");
-                sink.push(
-                    diagnostics::infer::missing_constraint_on_generic_return_type(
-                        fn_name,
-                        param_name.as_ref(),
-                        &Type::Parameter(bound_str.into()),
-                        span,
-                    ),
-                );
-            }
+            continue;
+        }
+        let available = generics
+            .iter()
+            .find(|generic| generic.name == *param_name)
+            .map(|generic| generic.resolved_bounds.clone())
+            .unwrap_or_else(|| enclosing_parameter_bounds(store, enclosing, param_name));
+        if !bound_implied(store, &available, &applied.required) {
+            sink.push(
+                diagnostics::infer::missing_constraint_on_generic_return_type(
+                    fn_name,
+                    param_name,
+                    &applied.required,
+                    span,
+                ),
+            );
         }
     }
 }
 
-fn lookup_qualified_name(id: &str, module_id: &str, store: &Store) -> Option<String> {
-    if id.contains('.') {
-        return Some(id.to_string());
-    }
-
-    for module in [module_id, PRELUDE_MODULE_ID] {
-        let candidate = Symbol::from_parts(module, id);
-        if store
-            .get_module(module)
-            .is_some_and(|m| m.definitions.contains_key(candidate.as_str()))
-        {
-            return Some(candidate.to_string());
-        }
-    }
-    None
-}
-
-fn annotation_to_type(annotation: &Annotation, module_id: &str, store: &Store) -> Option<Type> {
-    let Annotation::Constructor { name, params, .. } = annotation else {
-        return None;
+fn enclosing_parameter_bounds(
+    store: &Store,
+    context: Option<GenericContext<'_>>,
+    parameter: &str,
+) -> Vec<Type> {
+    let Some(context) = context else {
+        return Vec::new();
     };
-    let qualified = lookup_qualified_name(name, module_id, store)?;
-    let ty = store.get_type(&qualified)?.clone();
-    let instantiated = match &ty {
-        Type::Forall { body, .. } if params.is_empty() => (**body).clone(),
-        _ => ty,
-    };
-    Some(instantiated)
+    let mut available = context
+        .generics
+        .iter()
+        .find(|generic| generic.name == parameter)
+        .map_or_else(Vec::new, |generic| generic.resolved_bounds.clone());
+    if let Some(receiver) = context.receiver {
+        available.extend(
+            type_obligations(store, receiver)
+                .into_iter()
+                .filter_map(|obligation| {
+                    (obligation.argument == Type::Parameter(parameter.into()))
+                        .then_some(obligation.required)
+                }),
+        );
+    }
+    available
 }

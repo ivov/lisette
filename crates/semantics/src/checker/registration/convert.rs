@@ -11,6 +11,7 @@ use syntax::program::{Definition, DefinitionBody};
 use syntax::types::{SubstitutionMap, Symbol, Type, substitute, unqualified_name};
 
 use crate::checker::TaskState;
+use crate::generics::apply_bounds;
 use crate::prelude::PRELUDE_MODULE_ID;
 use crate::store::Store;
 
@@ -706,28 +707,21 @@ impl TaskState<'_> {
             return;
         };
         let generics = definition.body.generics().unwrap_or_default();
-        let substitution: SubstitutionMap = generics
-            .iter()
-            .map(|generic| generic.name.clone())
-            .zip(arguments.iter().cloned())
-            .collect();
-        for (generic, argument) in generics.iter().zip(arguments) {
-            for declared in &generic.resolved_bounds {
-                match declared
-                    .get_qualified_id()
-                    .and_then(BuiltinBound::from_qualified_id)
-                {
-                    Some(builtin) => {
-                        self.check_builtin_bound_argument(store, argument, builtin, span)
-                    }
-                    None => self.check_interface_type_argument(
-                        store,
-                        argument,
-                        declared,
-                        &substitution,
-                        span,
-                    ),
+        for applied in apply_bounds(generics, arguments) {
+            match applied
+                .required
+                .get_qualified_id()
+                .and_then(BuiltinBound::from_qualified_id)
+            {
+                Some(builtin) => {
+                    self.check_builtin_bound_argument(store, &applied.argument, builtin, span)
                 }
+                None => self.check_interface_type_argument(
+                    store,
+                    &applied.argument,
+                    &applied.required,
+                    span,
+                ),
             }
         }
     }
@@ -736,15 +730,13 @@ impl TaskState<'_> {
         &mut self,
         store: &Store,
         argument: &Type,
-        declared: &Type,
-        substitution: &SubstitutionMap,
+        required: &Type,
         span: Span,
     ) {
-        let required = substitute(declared, substitution);
         if required.contains_error() {
             return;
         }
-        let resolved_required = store.deep_resolve_alias(&required);
+        let resolved_required = store.deep_resolve_alias(required);
         let Some(required_id) = resolved_required.get_qualified_id() else {
             return;
         };
@@ -760,7 +752,7 @@ impl TaskState<'_> {
             return;
         }
         self.pending_interface_bound_checks
-            .push((argument, required, span));
+            .push((argument, required.clone(), span));
     }
 
     pub(crate) fn check_builtin_bound_argument(

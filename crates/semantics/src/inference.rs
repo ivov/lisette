@@ -702,7 +702,7 @@ fn infer_modules(
         store.store_file(&module_id, typed_file);
     }
 
-    checker.check_pending_interface_bounds(store);
+    checker.check_post_inference_bounds(store);
 }
 
 /// Groups topologically ordered modules into dependency waves, so a wave only

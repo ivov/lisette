@@ -4,6 +4,7 @@ pub mod checker;
 pub mod context;
 pub mod diagnostics;
 pub mod facts;
+pub mod generics;
 pub mod inference;
 pub mod loader;
 pub mod module_graph;

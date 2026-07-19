@@ -1,10 +1,10 @@
 use syntax::ast::{Generic, Span};
-use syntax::types::{CompoundKind, SubstitutionMap, Type, substitute, unqualified_name};
+use syntax::types::{CompoundKind, Type, unqualified_name};
 
 use crate::checker::EnvResolve;
 use crate::checker::TaskState;
-use crate::checker::infer::expressions::comparison::bound_implied;
 use crate::checker::infer::{BuiltinBound, InferCtx};
+use crate::generics::{apply_bounds, bound_implied};
 use crate::store::Store;
 
 impl TaskState<'_> {
@@ -90,85 +90,65 @@ impl TaskState<'_> {
             return;
         };
         let referenced_generics = definition.body.generics().unwrap_or_default();
-        let substitution: SubstitutionMap = referenced_generics
-            .iter()
-            .map(|generic| generic.name.clone())
-            .zip(argument_types.iter().cloned())
-            .collect();
-
-        for (referenced_generic, argument_type) in referenced_generics.iter().zip(argument_types) {
-            for declared in &referenced_generic.resolved_bounds {
-                if declared.get_qualified_id() == Some(referenced_id) {
-                    continue;
-                }
-                let required = substitute(declared, &substitution);
-                if required.contains_error() {
-                    continue;
-                }
-                let resolved_required = store.deep_resolve_alias(&required);
-                if let Some(required_id) = resolved_required.get_qualified_id()
-                    && store.get_interface(required_id).is_some()
-                    && !crate::checker::infer::interface::interface_requires_methods(
-                        store,
-                        required_id,
-                    )
-                {
-                    continue;
-                }
-                if defer_to_interface_list
-                    && resolved_required
-                        .get_qualified_id()
-                        .and_then(BuiltinBound::from_qualified_id)
-                        .is_some()
-                {
-                    continue;
-                }
-                let argument = store.deep_resolve_alias(&argument_type.resolve_in(&self.env));
-                if let Type::Parameter(parameter_name) = &argument {
-                    let Some(parameter_bounds) =
-                        self.parameter_bounds(parameter_name, own_generics)
-                    else {
-                        continue;
-                    };
-                    if !bound_implied(store, &parameter_bounds, &required) {
-                        let span = own_generics
-                            .iter()
-                            .find(|generic| generic.name == *parameter_name)
-                            .map_or(declaration_span, |generic| generic.span);
-                        self.sink.push(diagnostics::infer::missing_transitive_bound(
-                            parameter_name,
-                            &type_bound_display(&required),
-                            unqualified_name(referenced_id),
-                            span,
-                        ));
-                    }
-                } else if let Some(required) = store
-                    .deep_resolve_alias(&required)
+        for applied in apply_bounds(referenced_generics, argument_types) {
+            let required = applied.required;
+            if required.get_qualified_id() == Some(referenced_id) || required.contains_error() {
+                continue;
+            }
+            let resolved_required = store.deep_resolve_alias(&required);
+            if let Some(required_id) = resolved_required.get_qualified_id()
+                && store.get_interface(required_id).is_some()
+                && !crate::checker::infer::interface::interface_requires_methods(store, required_id)
+            {
+                continue;
+            }
+            if defer_to_interface_list
+                && resolved_required
                     .get_qualified_id()
                     .and_then(BuiltinBound::from_qualified_id)
-                {
-                    self.check_builtin_bound_argument(store, &argument, required, declaration_span);
-                } else if !argument.contains_error()
-                    && !argument.contains_unknown()
-                    && !argument.is_variable()
-                    && store
-                        .deep_resolve_alias(&required)
-                        .get_qualified_id()
-                        .is_some_and(|id| store.get_interface(id).is_some())
-                {
-                    if defer_to_interface_list {
-                        self.pending_interface_bound_checks.push((
-                            argument,
-                            required,
-                            declaration_span,
-                        ));
-                    } else {
-                        self.pending_generic_bound_checks.push((
-                            argument,
-                            required,
-                            declaration_span,
-                        ));
-                    }
+                    .is_some()
+            {
+                continue;
+            }
+            let argument = store.deep_resolve_alias(&applied.argument.resolve_in(&self.env));
+            if let Type::Parameter(parameter_name) = &argument {
+                let Some(parameter_bounds) = self.parameter_bounds(parameter_name, own_generics)
+                else {
+                    continue;
+                };
+                if !bound_implied(store, &parameter_bounds, &required) {
+                    let span = own_generics
+                        .iter()
+                        .find(|generic| generic.name == *parameter_name)
+                        .map_or(declaration_span, |generic| generic.span);
+                    self.sink.push(diagnostics::infer::missing_transitive_bound(
+                        parameter_name,
+                        &type_bound_display(&required),
+                        unqualified_name(referenced_id),
+                        span,
+                    ));
+                }
+            } else if let Some(required) = resolved_required
+                .get_qualified_id()
+                .and_then(BuiltinBound::from_qualified_id)
+            {
+                self.check_builtin_bound_argument(store, &argument, required, declaration_span);
+            } else if !argument.contains_error()
+                && !argument.contains_unknown()
+                && !argument.is_variable()
+                && resolved_required
+                    .get_qualified_id()
+                    .is_some_and(|id| store.get_interface(id).is_some())
+            {
+                if defer_to_interface_list {
+                    self.pending_interface_bound_checks.push((
+                        argument,
+                        required,
+                        declaration_span,
+                    ));
+                } else {
+                    self.pending_generic_bound_checks
+                        .push((argument, required, declaration_span));
                 }
             }
         }
@@ -182,7 +162,7 @@ impl TaskState<'_> {
         }
     }
 
-    pub fn check_pending_interface_bounds(&mut self, store: &Store) {
+    pub(crate) fn check_pending_interface_bounds(&mut self, store: &Store) {
         let pending = std::mem::take(&mut self.pending_interface_bound_checks);
         let mut seen = rustc_hash::FxHashSet::default();
         let mut ctx = InferCtx::new(self, store);

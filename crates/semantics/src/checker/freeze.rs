@@ -357,8 +357,21 @@ impl<'a> FreezeFolder<'a> {
         for check in &mut facts.generic_call_checks {
             self.env.resolve_in_place(&mut check.ty);
         }
-        for check in &mut facts.struct_bound_checks {
-            self.env.resolve_in_place(&mut check.ty);
+        for obligation in &mut facts.generic_bound_obligations {
+            self.env.resolve_in_place(&mut obligation.argument);
+            self.env.resolve_in_place(&mut obligation.required);
+            if let crate::facts::GenericBoundOrigin::Construction {
+                enclosing_return_type: Some(return_type),
+                ..
+            } = &mut obligation.origin
+            {
+                self.env.resolve_in_place(return_type);
+            }
+            for (_, bounds) in &mut obligation.available_bounds {
+                for bound in bounds {
+                    self.env.resolve_in_place(bound);
+                }
+            }
         }
         for check in &mut facts.empty_collection_checks {
             self.env.resolve_in_place(&mut check.ty);

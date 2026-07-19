@@ -321,9 +321,13 @@ impl Scopes {
     }
 
     pub fn collect_all_trait_bounds(&self) -> HashMap<Symbol, Vec<Type>> {
-        let mut all_bounds = HashMap::default();
+        let mut all_bounds: HashMap<Symbol, Vec<Type>> = HashMap::default();
         // Walk from bottom to top so inner scopes override outer
         for scope in &self.stack {
+            if let Some(type_params) = &scope.type_params {
+                all_bounds
+                    .retain(|parameter, _| !type_params.contains_key(parameter.last_segment()));
+            }
             if let Some(ref bounds) = scope.trait_bounds {
                 for (key, value) in bounds {
                     all_bounds.insert(key.clone(), value.clone());

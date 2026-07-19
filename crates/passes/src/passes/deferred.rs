@@ -2,6 +2,8 @@ use diagnostics::LocalSink;
 use rustc_hash::FxHashSet as HashSet;
 
 use semantics::facts::Facts;
+use semantics::facts::GenericBoundOrigin;
+use semantics::generics::bound_display_name;
 use semantics::store::Store;
 use syntax::types::{CompoundKind, TypeVarId};
 
@@ -19,25 +21,29 @@ pub(crate) fn run(store: &Store, facts: &mut Facts, sink: &LocalSink) {
             report_vars(&check.ty, &check.module_id);
         }
     }
-    for check in std::mem::take(&mut facts.struct_bound_checks) {
-        if check.ty.has_unbound_variables() {
-            let diagnostic = if check.is_function_reference {
-                diagnostics::infer::cannot_infer_bounded_function_reference(
-                    &check.struct_name,
-                    &check.param_name,
-                    &check.bound,
-                    check.span,
-                )
-            } else {
-                diagnostics::infer::cannot_infer_struct_type_argument(
-                    &check.struct_name,
-                    &check.param_name,
-                    &check.bound,
-                    check.span,
-                )
+    for obligation in std::mem::take(&mut facts.generic_bound_obligations) {
+        if obligation.argument.has_unbound_variables() {
+            let required_name = bound_display_name(store, &obligation.required);
+            let diagnostic = match &obligation.origin {
+                GenericBoundOrigin::FunctionReference { name } => {
+                    diagnostics::infer::cannot_infer_bounded_function_reference(
+                        name,
+                        &obligation.param_name,
+                        &required_name,
+                        obligation.span,
+                    )
+                }
+                GenericBoundOrigin::Construction { name, .. } => {
+                    diagnostics::infer::cannot_infer_struct_type_argument(
+                        name,
+                        &obligation.param_name,
+                        &required_name,
+                        obligation.span,
+                    )
+                }
             };
             sink.push(diagnostic);
-            report_vars(&check.ty, &check.module_id);
+            report_vars(&obligation.argument, &obligation.module_id);
         }
     }
     for check in std::mem::take(&mut facts.empty_collection_checks) {

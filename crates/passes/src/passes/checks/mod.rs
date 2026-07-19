@@ -147,7 +147,7 @@ fn run_file_checks(
     interpolation_stringer::run(&file.items, store, ufcs_methods, sink);
 
     prelude_shadowing::run(&file.items, store, sink);
-    generics::run(&file.items, &module.id, store, sink);
+    generics::run(&file.items, store, sink);
     native_value_usage::run(&file.items, &module.id, store, sink);
     json_serializable_fields::run(&file.items, sink);
     empty_select_default::run(&file.items, sink);

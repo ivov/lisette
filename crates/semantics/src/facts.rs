@@ -3,6 +3,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
 
 use diagnostics::{PatternIssue, UnusedExpressionKind};
+use syntax::EcoString;
 use syntax::ast::{BindingId, BindingKind, DeadCodeCause, Span};
 use syntax::program::{ResolvedDefinitions, TestFunction};
 use syntax::types::Type;
@@ -50,9 +51,8 @@ pub struct Facts {
     pub equality_derivations: Vec<String>,
     pub test_functions: Vec<TestFunction>,
 
-    // Drained by passes::deferred via mem::take.
     pub generic_call_checks: Vec<GenericCallCheck>,
-    pub struct_bound_checks: Vec<StructBoundCheck>,
+    pub generic_bound_obligations: Vec<GenericBoundObligation>,
     pub empty_collection_checks: Vec<EmptyCollectionCheck>,
     pub empty_literal_checks: Vec<EmptyLiteralCheck>,
     pub slice_make_checks: Vec<SliceMakeCheck>,
@@ -97,14 +97,25 @@ pub struct GenericCallCheck {
 }
 
 #[derive(Debug, Clone)]
-pub struct StructBoundCheck {
-    pub ty: Type,
+pub struct GenericBoundObligation {
+    pub argument: Type,
+    pub required: Type,
     pub span: Span,
     pub module_id: String,
-    pub struct_name: String,
-    pub param_name: String,
-    pub bound: String,
-    pub is_function_reference: bool,
+    pub param_name: EcoString,
+    pub available_bounds: Vec<(EcoString, Vec<Type>)>,
+    pub origin: GenericBoundOrigin,
+}
+
+#[derive(Debug, Clone)]
+pub enum GenericBoundOrigin {
+    Construction {
+        name: EcoString,
+        enclosing_return_type: Option<Type>,
+    },
+    FunctionReference {
+        name: EcoString,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -163,7 +174,7 @@ impl Facts {
             always_failing_try_blocks: Vec::new(),
             expression_only_fstrings: Vec::new(),
             generic_call_checks: Vec::new(),
-            struct_bound_checks: Vec::new(),
+            generic_bound_obligations: Vec::new(),
             empty_collection_checks: Vec::new(),
             empty_literal_checks: Vec::new(),
             slice_make_checks: Vec::new(),
@@ -329,7 +340,7 @@ impl Facts {
             always_failing_try_blocks,
             expression_only_fstrings,
             generic_call_checks,
-            struct_bound_checks,
+            generic_bound_obligations,
             empty_collection_checks,
             empty_literal_checks,
             slice_make_checks,
@@ -367,7 +378,8 @@ impl Facts {
         self.expression_only_fstrings
             .extend(expression_only_fstrings);
         self.generic_call_checks.extend(generic_call_checks);
-        self.struct_bound_checks.extend(struct_bound_checks);
+        self.generic_bound_obligations
+            .extend(generic_bound_obligations);
         self.empty_collection_checks.extend(empty_collection_checks);
         self.empty_literal_checks.extend(empty_literal_checks);
         self.slice_make_checks.extend(slice_make_checks);
