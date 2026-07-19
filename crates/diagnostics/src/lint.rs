@@ -1015,6 +1015,15 @@ pub fn redundant_rebinding(span: &Span, name: &str) -> LisetteDiagnostic {
         ))
 }
 
+pub fn discarded_unit_binding(span: &Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::info("Discard binds an expression with no value")
+        .with_lint_code("discarded_unit_binding")
+        .with_span_label(span, "this expression produces no value to discard")
+        .with_help(
+            "Remove `let _ = ` and keep the expression as a statement. A `let _ = ` discard is only meaningful when the expression produces a value.",
+        )
+}
+
 pub fn uninterpolated_fstring(span: &Span) -> LisetteDiagnostic {
     LisetteDiagnostic::info("Uninterpolated f-string")
         .with_lint_code("uninterpolated_fstring")

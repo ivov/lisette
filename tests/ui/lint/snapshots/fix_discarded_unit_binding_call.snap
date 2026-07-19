@@ -1,0 +1,18 @@
+---
+source: tests/ui/lint/fixes.rs
+---
+struct Options { port: string }
+fn configure(o: Ref<Options>) { o.*.port = "8080" }
+fn main() {
+  let mut o = Options{ port: "" }
+  let _ = configure(&o)
+  let _ = o.port
+}
+=== fixed ===
+struct Options { port: string }
+fn configure(o: Ref<Options>) { o.*.port = "8080" }
+fn main() {
+  let mut o = Options{ port: "" }
+  configure(&o)
+  let _ = o.port
+}

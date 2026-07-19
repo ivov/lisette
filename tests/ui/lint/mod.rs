@@ -20344,6 +20344,91 @@ fn main() {
 }
 
 #[test]
+fn discarded_unit_binding() {
+    assert_lint_snapshot!(
+        r#"
+struct Options { port: string }
+fn configure(o: Ref<Options>) { o.*.port = "8080" }
+fn main() {
+  let mut o = Options{ port: "" }
+  let _ = configure(&o)
+  let _ = o.port
+}
+"#
+    );
+}
+
+#[test]
+fn discarded_unit_binding_unit_literal() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let _ = ()
+}
+"#
+    );
+}
+
+#[test]
+fn discarded_unit_binding_value_not_flagged() {
+    assert_no_lint_warnings!(
+        r#"
+fn choose() -> bool { true }
+fn main() {
+  let _ = choose()
+}
+"#
+    );
+}
+
+#[test]
+fn discarded_unit_binding_result_not_flagged() {
+    assert_no_lint_warnings!(
+        r#"
+fn run() -> Result<(), string> { Ok(()) }
+fn main() {
+  let _ = run()
+}
+"#
+    );
+}
+
+#[test]
+fn discarded_unit_binding_never_not_flagged() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let _ = panic("boom")
+}
+"#
+    );
+}
+
+#[test]
+fn discarded_unit_binding_annotated_not_flagged() {
+    assert_no_lint_warnings!(
+        r#"
+fn touch() {}
+fn main() {
+  let _: () = touch()
+}
+"#
+    );
+}
+
+#[test]
+fn discarded_unit_binding_tuple_wildcard_not_flagged() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let (a, _) = (1, 2)
+  let _ = a
+}
+"#
+    );
+}
+
+#[test]
 fn unused_result_in_if_let_branch() {
     assert_lint_snapshot!(
         r#"

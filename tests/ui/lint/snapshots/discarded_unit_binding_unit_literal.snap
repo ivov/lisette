@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  ● Discard binds an expression with no value
+   ╭─[test.lis:3:3]
+ 2 │ fn main() {
+ 3 │   let _ = ()
+   ·   ─────┬────
+   ·        ╰── this expression produces no value to discard
+ 4 │ }
+   ╰────
+  help: Remove `let _ = ` and keep the expression as a statement. A `let _ = ` discard is only meaningful when the expression produces a value · code: [lint.discarded_unit_binding]

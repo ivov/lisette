@@ -14,6 +14,32 @@ fn main() {
 }
 
 #[test]
+fn fix_discarded_unit_binding_call() {
+    assert_fix_snapshot!(
+        r#"
+struct Options { port: string }
+fn configure(o: Ref<Options>) { o.*.port = "8080" }
+fn main() {
+  let mut o = Options{ port: "" }
+  let _ = configure(&o)
+  let _ = o.port
+}
+"#
+    );
+}
+
+#[test]
+fn fix_discarded_unit_binding_unit_literal() {
+    assert_fix_snapshot!(
+        r#"
+fn main() {
+  let _ = ()
+}
+"#
+    );
+}
+
+#[test]
 fn fix_bool_literal_comparison_ne_true() {
     assert_fix_snapshot!(
         r#"

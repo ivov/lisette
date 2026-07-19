@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  ● Discard binds an expression with no value
+   ╭─[test.lis:6:3]
+ 5 │   let mut o = Options{ port: "" }
+ 6 │   let _ = configure(&o)
+   ·   ──────────┬──────────
+   ·             ╰── this expression produces no value to discard
+ 7 │   let _ = o.port
+   ╰────
+  help: Remove `let _ = ` and keep the expression as a statement. A `let _ = ` discard is only meaningful when the expression produces a value · code: [lint.discarded_unit_binding]
