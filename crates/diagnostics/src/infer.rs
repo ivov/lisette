@@ -90,20 +90,16 @@ pub fn duplicate_import_path(path: &str, name_span: Span) -> LisetteDiagnostic {
         ))
 }
 
-pub fn definition_shadows_import(
-    name: &str,
-    import_path: &str,
-    name_span: Span,
-) -> LisetteDiagnostic {
-    LisetteDiagnostic::error("Definition shadows import")
-        .with_resolve_code("definition_shadows_import")
+pub fn name_shadows_import(name: &str, import_path: &str, name_span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Name shadows import")
+        .with_resolve_code("name_shadows_import")
         .with_span_label(
             &name_span,
             format!("conflicts with imported module `{}`", import_path),
         )
         .with_help(format!(
             "`{}` is already used as a module alias for `{}`. \
-             Rename this definition or use a different import alias.",
+             Rename it or use a different import alias.",
             name, import_path
         ))
 }

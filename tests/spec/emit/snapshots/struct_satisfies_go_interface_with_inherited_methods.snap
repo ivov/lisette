@@ -15,8 +15,8 @@ description: |
     }
   }
   
-  fn use_rw(rw: rw.ReadWriter) {
-    let _ = rw
+  fn use_rw(target: rw.ReadWriter) {
+    let _ = target
   }
   
   fn main() {
@@ -38,8 +38,8 @@ func (d Dev) Write(_ []uint8) (int, error) {
 	return 0, nil
 }
 
-func use_rw(rw rw.ReadWriter) {
-	_ = rw
+func use_rw(target rw.ReadWriter) {
+	_ = target
 }
 
 func main() {

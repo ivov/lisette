@@ -213,6 +213,8 @@ impl InferCtx<'_, '_> {
         is_struct_field: bool,
         is_as_alias: bool,
     ) {
+        self.check_binding_shadows_import(&name, span, is_typedef);
+
         let binding_id = self.facts.add_binding(
             name.clone(),
             span,
@@ -272,6 +274,7 @@ impl InferCtx<'_, '_> {
                 self.type_array(remaining, element_ty.clone())
             };
             let is_typedef = self.is_d_lis(store);
+            self.check_binding_shadows_import(name, *span, is_typedef);
             let binding_id =
                 self.facts
                     .add_binding(name.to_string(), *span, kind, is_typedef, false, false);
@@ -327,6 +330,7 @@ impl InferCtx<'_, '_> {
                 self.type_slice(element_ty.clone())
             };
             let is_typedef = self.is_d_lis(store);
+            self.check_binding_shadows_import(name, *span, is_typedef);
             let binding_id =
                 self.facts
                     .add_binding(name.to_string(), *span, kind, is_typedef, false, false);

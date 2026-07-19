@@ -14,7 +14,7 @@ use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use super::freeze::FreezeFolder;
 use super::{FileContextKind, TaskState};
 use crate::store::Store;
-use syntax::ast::Expression;
+use syntax::ast::{Expression, Span};
 use syntax::program::{File, FileImport};
 
 impl TaskState<'_> {
@@ -128,13 +128,25 @@ impl InferCtx<'_, '_> {
             };
 
             if let Some(import_path) = alias_to_path.get(definition_name) {
-                self.sink
-                    .push(diagnostics::infer::definition_shadows_import(
-                        definition_name,
-                        import_path,
-                        name_span,
-                    ));
+                self.sink.push(diagnostics::infer::name_shadows_import(
+                    definition_name,
+                    import_path,
+                    name_span,
+                ));
             }
+        }
+    }
+
+    fn check_binding_shadows_import(&mut self, name: &str, span: Span, is_typedef: bool) {
+        if !is_typedef
+            && name != crate::prelude::PRELUDE_MODULE_ID
+            && let Some(import_path) = self.imports.prefix_to_module.get(name)
+        {
+            self.sink.push(diagnostics::infer::name_shadows_import(
+                name,
+                import_path,
+                span,
+            ));
         }
     }
 
@@ -161,6 +173,8 @@ impl InferCtx<'_, '_> {
         else {
             return;
         };
+
+        self.check_binding_shadows_import(identifier, *identifier_span, self.is_d_lis(store));
 
         let qualified_name = self.qualify_name(identifier);
         let is_duplicate = self.scopes.lookup_const(identifier)

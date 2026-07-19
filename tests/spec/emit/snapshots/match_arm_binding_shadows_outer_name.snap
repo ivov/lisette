@@ -2,21 +2,17 @@
 source: tests/spec/emit/patterns.rs
 description: |
   
-  import "go:fmt"
-  
   struct Point { x: int, y: int }
   
   fn test(p: Point) -> int {
+    let outer = 100
     let result = match p {
-      Point { x, .. } as fmt => fmt.x + x,
+      Point { x, .. } as outer => outer.x + x,
     }
-    fmt.Println(result)
-    result
+    result + outer
   }
 ---
 package main
-
-import "fmt"
 
 type Point struct {
 	x int
@@ -24,8 +20,10 @@ type Point struct {
 }
 
 func test(p Point) int {
+	outer := 100
 	var result int
-	result = p.x + p.x
-	fmt.Println(result)
-	return result
+	{
+		result = p.x + p.x
+	}
+	return result + outer
 }

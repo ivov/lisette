@@ -10628,8 +10628,8 @@ fn main() {
         result
             .errors
             .iter()
-            .any(|e| e.code_str() == Some("resolve.definition_shadows_import")),
-        "Expected definition_shadows_import error, got: {:?}",
+            .any(|e| e.code_str() == Some("resolve.name_shadows_import")),
+        "Expected name_shadows_import error, got: {:?}",
         result.errors
     );
 }
@@ -10654,8 +10654,8 @@ fn main() {
         result
             .errors
             .iter()
-            .any(|e| e.code_str() == Some("resolve.definition_shadows_import")),
-        "Expected definition_shadows_import error, got: {:?}",
+            .any(|e| e.code_str() == Some("resolve.name_shadows_import")),
+        "Expected name_shadows_import error, got: {:?}",
         result.errors
     );
 }
@@ -10680,8 +10680,85 @@ fn main() {
         result
             .errors
             .iter()
-            .any(|e| e.code_str() == Some("resolve.definition_shadows_import")),
-        "Expected definition_shadows_import error, got: {:?}",
+            .any(|e| e.code_str() == Some("resolve.name_shadows_import")),
+        "Expected name_shadows_import error, got: {:?}",
+        result.errors
+    );
+}
+
+#[test]
+fn infer_let_binding_shadows_import() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "foo",
+        "bar.lis",
+        "pub struct Bar {}\nimpl Bar {\n  pub fn bar<T>(self: Ref<Bar>, _val: T) {}\n}",
+    );
+    let source = r#"
+import "foo"
+
+fn main() {
+  let foo = &foo.Bar {}
+  foo.bar(5)
+}
+"#;
+    fs.add_file(ENTRY_MODULE_ID, "main.lis", source);
+    let result = compile_check(fs);
+    assert!(
+        result
+            .errors
+            .iter()
+            .any(|e| e.code_str() == Some("resolve.name_shadows_import")),
+        "Expected name_shadows_import error, got: {:?}",
+        result.errors
+    );
+}
+
+#[test]
+fn infer_param_shadows_import() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file("lib", "mod.lis", "pub fn hello() -> int { 7 }");
+    let source = r#"
+import "lib"
+
+fn take(lib: int) -> int { lib }
+
+fn main() {
+  let _ = take(lib.hello())
+}
+"#;
+    fs.add_file(ENTRY_MODULE_ID, "main.lis", source);
+    let result = compile_check(fs);
+    assert!(
+        result
+            .errors
+            .iter()
+            .any(|e| e.code_str() == Some("resolve.name_shadows_import")),
+        "Expected name_shadows_import error, got: {:?}",
+        result.errors
+    );
+}
+
+#[test]
+fn infer_block_local_const_shadows_import() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file("lib", "mod.lis", "pub const VALUE: int = 7");
+    let source = r#"
+import LIB "lib"
+
+fn main() {
+  const LIB = 7
+  let _ = LIB
+}
+"#;
+    fs.add_file(ENTRY_MODULE_ID, "main.lis", source);
+    let result = compile_check(fs);
+    assert!(
+        result
+            .errors
+            .iter()
+            .any(|e| e.code_str() == Some("resolve.name_shadows_import")),
+        "Expected name_shadows_import error, got: {:?}",
         result.errors
     );
 }

@@ -1129,16 +1129,14 @@ fn test(s: Status) -> int {
 #[test]
 fn match_arm_binding_shadows_outer_name() {
     let input = r#"
-import "go:fmt"
-
 struct Point { x: int, y: int }
 
 fn test(p: Point) -> int {
+  let outer = 100
   let result = match p {
-    Point { x, .. } as fmt => fmt.x + x,
+    Point { x, .. } as outer => outer.x + x,
   }
-  fmt.Println(result)
-  result
+  result + outer
 }
 "#;
     assert_emit_snapshot!(input);

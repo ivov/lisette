@@ -340,8 +340,8 @@ impl Dev {
   }
 }
 
-fn use_rw(rw: rw.ReadWriter) {
-  let _ = rw
+fn use_rw(target: rw.ReadWriter) {
+  let _ = target
 }
 
 fn main() {
