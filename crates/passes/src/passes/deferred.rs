@@ -21,12 +21,22 @@ pub(crate) fn run(store: &Store, facts: &mut Facts, sink: &LocalSink) {
     }
     for check in std::mem::take(&mut facts.struct_bound_checks) {
         if check.ty.has_unbound_variables() {
-            sink.push(diagnostics::infer::cannot_infer_struct_type_argument(
-                &check.struct_name,
-                &check.param_name,
-                &check.bound,
-                check.span,
-            ));
+            let diagnostic = if check.is_function_reference {
+                diagnostics::infer::cannot_infer_bounded_function_reference(
+                    &check.struct_name,
+                    &check.param_name,
+                    &check.bound,
+                    check.span,
+                )
+            } else {
+                diagnostics::infer::cannot_infer_struct_type_argument(
+                    &check.struct_name,
+                    &check.param_name,
+                    &check.bound,
+                    check.span,
+                )
+            };
+            sink.push(diagnostic);
             report_vars(&check.ty, &check.module_id);
         }
     }

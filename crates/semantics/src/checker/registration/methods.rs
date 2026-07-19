@@ -260,6 +260,16 @@ impl TaskState<'_> {
                 fn_ty = fn_ty.with_replaced_first_param(&receiver_ty);
             }
 
+            let (method_signature_pairs, method_signature_bounds) =
+                super::function_signature_pairs(&fn_ty, &fn_sig.params, fn_span);
+            self.scopes.push();
+            self.put_in_scope(&fn_sig.generics);
+            for bound in &method_signature_bounds {
+                self.record_generic_bound(&bound.param_name, bound.ty.clone());
+            }
+            self.check_value_position_bounds(&*store, &[], &method_signature_pairs);
+            self.scopes.pop();
+
             let method_ty = wrap_with_impl_generics(&fn_ty, &generics, &impl_bounds);
 
             let go_hints = extract_attribute_flags(fn_attrs, "go");
@@ -412,6 +422,21 @@ impl TaskState<'_> {
                 } else {
                     fn_ty
                 };
+
+                let (mut signature_pairs, signature_bounds) =
+                    super::function_signature_pairs(&fn_ty, &[], method_span);
+                if let Type::Function(f) = fn_ty.unwrap_forall() {
+                    signature_pairs.push(((*f.return_type).clone(), method_span));
+                }
+                self.scopes.push();
+                self.put_in_scope(&generics);
+                self.record_resolved_generic_bounds(&generics);
+                self.put_in_scope(&method_sig.generics);
+                for bound in &signature_bounds {
+                    self.record_generic_bound(&bound.param_name, bound.ty.clone());
+                }
+                self.check_value_position_bounds(&*store, &[], &signature_pairs);
+                self.scopes.pop();
 
                 let go_hints = extract_attribute_flags(fn_attrs, "go");
                 if go_hints.iter().any(|h| h == "unexported") {

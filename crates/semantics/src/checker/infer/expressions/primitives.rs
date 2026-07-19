@@ -321,7 +321,15 @@ impl InferCtx<'_, '_> {
 
         let (identifier_ty, _) = self.instantiate(&ty);
 
+        let coerced_to_unconstrained_value = !self.scopes.is_callee_context()
+            && !self.scopes.is_assignment_target_context()
+            && expected_ty.resolve_in(&self.env).is_variable();
+
         self.unify(expected_ty, &identifier_ty, &span);
+
+        if coerced_to_unconstrained_value {
+            self.register_function_value_bound_checks(&value, &identifier_ty, span);
+        }
 
         if let Some(enum_id) = self.enum_of_variant(store, &value) {
             let nominal = match &identifier_ty {

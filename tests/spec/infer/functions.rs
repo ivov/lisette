@@ -2839,3 +2839,68 @@ fn main() {
 
     infer_module("main", fs).assert_infer_code("uninferable_generic_reference");
 }
+
+#[test]
+fn bounded_function_reference_with_uninferable_bound_rejected() {
+    infer(
+        r#"
+interface Show { fn show() -> string; }
+fn foo_f<T: Show>(x: T) {}
+fn main() { let _f = foo_f }
+"#,
+    )
+    .assert_infer_code("cannot_infer_bounded_function_reference");
+}
+
+#[test]
+fn bounded_phantom_function_reference_rejected() {
+    infer(
+        r#"
+interface Show { fn show() -> string; }
+fn foo_f<T: Show>() {}
+fn main() { let _f = foo_f }
+"#,
+    )
+    .assert_infer_code("cannot_infer_bounded_function_reference");
+}
+
+#[test]
+fn bounded_function_reference_in_tuple_rejected() {
+    infer(
+        r#"
+interface Show { fn show() -> string; }
+fn foo_f<T: Show>() {}
+fn main() { let _t = (foo_f, 1) }
+"#,
+    )
+    .assert_infer_code("cannot_infer_bounded_function_reference");
+}
+
+#[test]
+fn bounded_function_reference_pinned_by_later_call_succeeds() {
+    infer(
+        r#"
+interface Show { fn show() -> string; }
+struct W {}
+impl W { fn show(self) -> string { "w" } }
+fn foo_f<T: Show>(x: T) {}
+fn main() {
+  let f = foo_f
+  f(W {})
+}
+"#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn empty_interface_bounded_function_reference_succeeds() {
+    infer(
+        r#"
+interface Empty {}
+fn foo_f<T: Empty>(x: T) { let _ = x }
+fn main() { let _f = foo_f }
+"#,
+    )
+    .assert_no_errors();
+}

@@ -2,7 +2,7 @@ pub(crate) mod addressability;
 mod carry_mut;
 mod context;
 pub(crate) mod expressions;
-mod interface;
+pub(crate) mod interface;
 mod unify;
 mod validation;
 

@@ -968,3 +968,182 @@ fn main() {
     )
     .assert_no_errors();
 }
+
+#[test]
+fn transitive_bound_required_on_struct_field_parameter() {
+    infer(
+        r#"
+struct Bar<E: error> { e: E }
+struct Holder<T> { b: Bar<T> }
+"#,
+    )
+    .assert_infer_code("missing_transitive_bound");
+}
+
+#[test]
+fn transitive_bound_required_on_enum_variant_parameter() {
+    infer(
+        r#"
+struct Bar<E: error> { e: E }
+enum Wrap<T> { W(Bar<T>) }
+"#,
+    )
+    .assert_infer_code("missing_transitive_bound");
+}
+
+#[test]
+fn transitive_bound_required_on_function_parameter() {
+    infer(
+        r#"
+struct Bar<E: error> { e: E }
+fn f<T>(x: Bar<T>) { let _ = x }
+"#,
+    )
+    .assert_infer_code("missing_transitive_bound");
+}
+
+#[test]
+fn transitive_bound_required_on_type_alias_body_parameter() {
+    infer(
+        r#"
+struct Bar<E: error> { e: E }
+type Alias<T> = Bar<T>
+"#,
+    )
+    .assert_infer_code("missing_transitive_bound");
+}
+
+#[test]
+fn transitive_bound_required_on_forward_referenced_struct_field() {
+    infer(
+        r#"
+struct Holder<T> { b: Bar<T> }
+struct Bar<E: error> { e: E }
+"#,
+    )
+    .assert_infer_code("missing_transitive_bound");
+}
+
+#[test]
+fn concrete_bound_violation_through_type_alias_errors() {
+    infer(
+        r#"
+struct Bar<E: error> { e: E }
+type Alias = Bar<int>
+fn use_alias(x: Alias) { let _ = x }
+"#,
+    )
+    .assert_infer_code("interface_not_implemented");
+}
+
+#[test]
+fn concrete_bound_violation_forward_referenced_struct_field_errors() {
+    infer(
+        r#"
+struct Holder { b: Bar<int> }
+struct Bar<E: error> { e: E }
+"#,
+    )
+    .assert_infer_code("interface_not_implemented");
+}
+
+#[test]
+fn transitive_bound_satisfied_on_struct_field_succeeds() {
+    infer(
+        r#"
+struct MyErr {}
+impl MyErr { fn Error(self) -> string { "e" } }
+struct Bar<E: error> { e: E }
+struct Holder<T: error> { b: Bar<T> }
+fn main() {
+  let h = Holder { b: Bar { e: MyErr {} } }
+  let _ = h
+}
+"#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn transitive_bound_required_on_method_parameter() {
+    infer(
+        r#"
+struct Bar<E: error> { e: E }
+struct Host {}
+impl Host {
+  fn m<T>(self, x: Bar<T>) { let _ = x }
+}
+"#,
+    )
+    .assert_infer_code("missing_transitive_bound");
+}
+
+#[test]
+fn transitive_bound_satisfied_on_method_via_impl_generic_succeeds() {
+    infer(
+        r#"
+struct Bar<E: error> { e: E }
+struct Host<E: error> {}
+impl<E: error> Host<E> {
+  fn m(self, x: Bar<E>) { let _ = x }
+}
+"#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn empty_interface_bound_needs_no_transitive_bound_succeeds() {
+    infer(
+        r#"
+interface Empty {}
+struct Bar<E: Empty> { e: E }
+struct Holder<T> { b: Bar<T> }
+"#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn two_level_transitive_bound_required() {
+    infer(
+        r#"
+struct Bar<E: error> { e: E }
+struct Mid<X: error> { b: Bar<X> }
+struct Holder<T> { m: Mid<T> }
+"#,
+    )
+    .assert_infer_code("missing_transitive_bound");
+}
+
+#[test]
+fn transitive_bound_required_in_interface_method_signature() {
+    infer(
+        r#"
+struct Bar<E: error> { e: E }
+interface Foo<T> { fn get() -> Bar<T>; }
+"#,
+    )
+    .assert_infer_code("missing_transitive_bound");
+}
+
+#[test]
+fn transitive_bound_satisfied_in_interface_method_signature_succeeds() {
+    infer(
+        r#"
+struct MyErr {}
+impl MyErr { fn Error(self) -> string { "e" } }
+struct Bar<E: error> { e: E }
+impl<E: error> Bar<E> { fn inner(self) -> E { self.e } }
+interface Foo<T: error> { fn get() -> Bar<T>; }
+struct Holder { b: Bar<MyErr> }
+impl Holder { fn get(self) -> Bar<MyErr> { self.b } }
+fn use_foo(f: Foo<MyErr>) { let _ = f.get().inner() }
+fn main() {
+  let h = Holder { b: Bar { e: MyErr {} } }
+  use_foo(h)
+}
+"#,
+    )
+    .assert_no_errors();
+}

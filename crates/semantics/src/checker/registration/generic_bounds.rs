@@ -16,7 +16,21 @@ impl TaskState<'_> {
     ) {
         for generic in own_generics {
             for bound in &generic.resolved_bounds {
-                self.check_bound_type(store, own_generics, declaration_span, bound);
+                self.check_bound_type(store, own_generics, declaration_span, bound, true, false);
+            }
+        }
+    }
+
+    pub(crate) fn check_value_position_bounds(
+        &mut self,
+        store: &Store,
+        own_generics: &[Generic],
+        types: &[(Type, Span)],
+    ) {
+        let mut seen = rustc_hash::FxHashSet::default();
+        for (ty, span) in types {
+            if seen.insert(ty.to_string()) {
+                self.check_bound_type(store, own_generics, *span, ty, false, true);
             }
         }
     }
@@ -27,22 +41,39 @@ impl TaskState<'_> {
         own_generics: &[Generic],
         declaration_span: Span,
         ty: &Type,
+        check_map_keys: bool,
+        defer_to_interface_list: bool,
     ) {
         if let Type::Nominal { id, params, .. } = ty
             && !params.is_empty()
         {
-            self.check_nominal_arguments(store, own_generics, declaration_span, id, params);
+            self.check_nominal_arguments(
+                store,
+                own_generics,
+                declaration_span,
+                id,
+                params,
+                defer_to_interface_list,
+            );
         }
-        if let Type::Compound {
-            kind: CompoundKind::Map,
-            args,
-        } = ty
+        if check_map_keys
+            && let Type::Compound {
+                kind: CompoundKind::Map,
+                args,
+            } = ty
             && let Some(key) = args.first()
         {
             self.check_map_key_comparable(store, key, declaration_span);
         }
         for child in type_argument_children(ty) {
-            self.check_bound_type(store, own_generics, declaration_span, child);
+            self.check_bound_type(
+                store,
+                own_generics,
+                declaration_span,
+                child,
+                check_map_keys,
+                defer_to_interface_list,
+            );
         }
     }
 
@@ -53,6 +84,7 @@ impl TaskState<'_> {
         declaration_span: Span,
         referenced_id: &str,
         argument_types: &[Type],
+        defer_to_interface_list: bool,
     ) {
         let Some(definition) = store.get_definition(referenced_id) else {
             return;
@@ -71,6 +103,24 @@ impl TaskState<'_> {
                 }
                 let required = substitute(declared, &substitution);
                 if required.contains_error() {
+                    continue;
+                }
+                let resolved_required = store.deep_resolve_alias(&required);
+                if let Some(required_id) = resolved_required.get_qualified_id()
+                    && store.get_interface(required_id).is_some()
+                    && !crate::checker::infer::interface::interface_requires_methods(
+                        store,
+                        required_id,
+                    )
+                {
+                    continue;
+                }
+                if defer_to_interface_list
+                    && resolved_required
+                        .get_qualified_id()
+                        .and_then(BuiltinBound::from_qualified_id)
+                        .is_some()
+                {
                     continue;
                 }
                 let argument = store.deep_resolve_alias(&argument_type.resolve_in(&self.env));
@@ -106,8 +156,19 @@ impl TaskState<'_> {
                         .get_qualified_id()
                         .is_some_and(|id| store.get_interface(id).is_some())
                 {
-                    self.pending_generic_bound_checks
-                        .push((argument, required, declaration_span));
+                    if defer_to_interface_list {
+                        self.pending_interface_bound_checks.push((
+                            argument,
+                            required,
+                            declaration_span,
+                        ));
+                    } else {
+                        self.pending_generic_bound_checks.push((
+                            argument,
+                            required,
+                            declaration_span,
+                        ));
+                    }
                 }
             }
         }

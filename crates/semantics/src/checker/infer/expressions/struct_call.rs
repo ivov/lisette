@@ -374,6 +374,34 @@ impl InferCtx<'_, '_> {
                     struct_name: display.clone(),
                     param_name: generic.name.to_string(),
                     bound: bound.to_string(),
+                    is_function_reference: false,
+                });
+        }
+    }
+
+    pub(super) fn register_function_value_bound_checks(
+        &mut self,
+        written_name: &str,
+        function_ty: &Type,
+        span: Span,
+    ) {
+        let store = self.store;
+        let display = unqualified_name(written_name).to_string();
+        let module_id = self.cursor.module_id.clone();
+        for bound in function_ty.get_bounds() {
+            let Some(bound_name) = failing_bound_name(store, &bound.ty) else {
+                continue;
+            };
+            self.facts
+                .struct_bound_checks
+                .push(crate::facts::StructBoundCheck {
+                    ty: bound.generic.clone(),
+                    span,
+                    module_id: module_id.clone(),
+                    struct_name: display.clone(),
+                    param_name: bound.param_name.to_string(),
+                    bound: bound_name.to_string(),
+                    is_function_reference: true,
                 });
         }
     }

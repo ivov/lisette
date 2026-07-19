@@ -743,8 +743,18 @@ impl InferCtx<'_, '_> {
         let (module_ty, _) = self.instantiate(&module_ty);
         let (member_ty, _) = self.instantiate(&member_type);
 
+        let coerced_to_unconstrained_value = !self.scopes.is_callee_context()
+            && !self.scopes.is_dot_access_base()
+            && args.expected_ty.resolve_in(&self.env).is_variable();
+
         self.unify(&args.deref_ty, &module_ty, args.span);
         self.unify(args.expected_ty, &member_ty, args.span);
+
+        if coerced_to_unconstrained_value {
+            let display_name = format!("{}.{}", type_name, args.member_name);
+            self.register_function_value_bound_checks(&display_name, &member_ty, *args.span);
+        }
+
         self.facts
             .resolved_definitions
             .insert(*args.span, resolved_definition);

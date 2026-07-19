@@ -17,13 +17,13 @@ use crate::call_classification::compute_module_ufcs;
 use crate::diagnostics::{GoImportSite, emit_for_locator_result};
 use syntax::ast::{
     Annotation, Attribute, AttributeArg, Binding, EnumVariant, Expression, Generic, Span,
-    StructKind, Visibility as SyntacticVisibility,
+    StructKind, VariantFields, Visibility as SyntacticVisibility,
 };
 use syntax::attributes::struct_attribute_forces_field_export;
 use syntax::program::{
     Attributes, Definition, DefinitionBody, File, FileImport, TypeAttribute, Visibility,
 };
-use syntax::types::{Symbol, Type};
+use syntax::types::{Bound, Symbol, Type, unqualified_name};
 
 use super::{FileContextKind, TaskState, resolved_generic_bounds};
 use crate::store::Store;
@@ -833,18 +833,18 @@ impl TaskState<'_> {
             let Some(definition) = store.get_definition(&self.qualify_name(name)) else {
                 continue;
             };
-            let Some(generics) = definition.body.generics().map(|generics| generics.to_vec())
-            else {
-                continue;
-            };
-            if generics.is_empty() {
-                continue;
-            }
+            let generics = definition
+                .body
+                .generics()
+                .map(<[Generic]>::to_vec)
+                .unwrap_or_default();
+            let value_types = declaration_value_position_types(definition);
 
             self.scopes.push();
             self.put_in_scope(&generics);
             self.record_resolved_generic_bounds(&generics);
             self.check_transitive_generic_bounds(store, &generics, span);
+            self.check_value_position_bounds(store, &generics, &value_types);
             self.scopes.pop();
         }
     }
@@ -945,6 +945,12 @@ impl TaskState<'_> {
         };
 
         let fn_ty = self.extract_signature_parts(store, generics, params, return_annotation, span);
+
+        let (signature_pairs, signature_bounds) = function_signature_pairs(&fn_ty, params, *span);
+        for bound in &signature_bounds {
+            self.record_generic_bound(&bound.param_name, bound.ty.clone());
+        }
+        self.check_value_position_bounds(store, &[], &signature_pairs);
 
         self.scopes.pop();
 
@@ -1209,6 +1215,67 @@ impl TaskState<'_> {
             }
         }
     }
+}
+
+fn declaration_value_position_types(definition: &Definition) -> Vec<(Type, Span)> {
+    match &definition.body {
+        DefinitionBody::Struct { fields, .. } => fields
+            .iter()
+            .map(|field| (field.ty.clone(), field.annotation.get_span()))
+            .collect(),
+        DefinitionBody::Enum { variants, .. } => variants
+            .iter()
+            .flat_map(|variant| variant_field_types(&variant.fields))
+            .collect(),
+        DefinitionBody::TypeAlias { annotation, .. } => alias_body_types(definition, annotation),
+        _ => Vec::new(),
+    }
+}
+
+fn function_signature_pairs(
+    fn_ty: &Type,
+    params: &[Binding],
+    fallback: Span,
+) -> (Vec<(Type, Span)>, Vec<Bound>) {
+    let Type::Function(function) = fn_ty.unwrap_forall() else {
+        return (Vec::new(), Vec::new());
+    };
+    let pairs: Vec<(Type, Span)> = function
+        .params
+        .iter()
+        .enumerate()
+        .map(|(index, param_ty)| {
+            let span = params
+                .get(index)
+                .and_then(|binding| binding.annotation.as_ref())
+                .map_or(fallback, Annotation::get_span);
+            (param_ty.clone(), span)
+        })
+        .collect();
+    (pairs, function.bounds.clone())
+}
+
+fn variant_field_types(fields: &VariantFields) -> Vec<(Type, Span)> {
+    match fields {
+        VariantFields::Unit => Vec::new(),
+        VariantFields::Tuple(fields) | VariantFields::Struct(fields) => fields
+            .iter()
+            .map(|field| (field.ty.clone(), field.annotation.get_span()))
+            .collect(),
+    }
+}
+
+fn alias_body_types(definition: &Definition, annotation: &Annotation) -> Vec<(Type, Span)> {
+    let body = definition.ty.unwrap_forall();
+    if let Type::Nominal { id, .. } = body
+        && definition
+            .name
+            .as_ref()
+            .is_some_and(|name| unqualified_name(id) == name.as_str())
+    {
+        return Vec::new();
+    }
+    vec![(body.clone(), annotation.get_span())]
 }
 
 fn populate_expression_generic_bounds(

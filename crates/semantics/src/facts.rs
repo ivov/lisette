@@ -104,6 +104,7 @@ pub struct StructBoundCheck {
     pub struct_name: String,
     pub param_name: String,
     pub bound: String,
+    pub is_function_reference: bool,
 }
 
 #[derive(Debug, Clone)]
