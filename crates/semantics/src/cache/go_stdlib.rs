@@ -1,10 +1,10 @@
 use rustc_hash::FxHashMap as HashMap;
-use std::fs;
 use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 use stdlib::{Target, get_go_stdlib_typedef};
 
+use super::disk;
 use super::types::CachedDefinition;
 use super::{COMPILER_VERSION_HASH, GO_STDLIB_HASH};
 use crate::checker::registration::extract_package_directive;
@@ -30,28 +30,15 @@ fn cache_file_name(target: Target) -> String {
 }
 
 fn cache_path(target: Target) -> Option<PathBuf> {
-    let home = std::env::var("HOME").ok()?;
-    Some(
-        PathBuf::from(home)
-            .join(".lisette")
-            .join("cache")
-            .join(cache_file_name(target)),
-    )
+    disk::global_path(&cache_file_name(target))
 }
 
 pub fn try_load_go_stdlib_cache(target: Target) -> Option<GoStdlibCache> {
     let path = cache_path(target)?;
-    let bytes = fs::read(&path).ok()?;
-    let cache: GoStdlibCache = match bincode::deserialize(&bytes) {
-        Ok(cache) => cache,
-        Err(_) => {
-            let _ = fs::remove_file(&path);
-            return None;
-        }
-    };
+    let cache: GoStdlibCache = disk::read(&path).ok()?;
 
     if cache.content_hash != GO_STDLIB_HASH || cache.compiler_version != COMPILER_VERSION_HASH {
-        let _ = fs::remove_file(&path);
+        let _ = std::fs::remove_file(&path);
         return None;
     }
 
@@ -99,24 +86,7 @@ pub fn save_go_stdlib_cache(store: &Store, go_module_ids: &[String], target: Tar
         modules,
     };
 
-    let Ok(bytes) = bincode::serialize(&cache) else {
-        return;
-    };
-
-    let Some(parent) = path.parent() else {
-        return;
-    };
-    let _ = fs::create_dir_all(parent);
-
-    let temp_path = super::global_cache_temp_path(&path);
-    if fs::write(&temp_path, &bytes).is_err() {
-        return;
-    }
-    if fs::rename(&temp_path, &path).is_err() {
-        let _ = fs::remove_file(&temp_path);
-        return;
-    }
-    super::prune_legacy_global_caches(parent, "stdlib_defs");
+    disk::write_global(&path, &cache, "stdlib_defs");
 }
 
 /// Load a Go module and its transitive deps from cache, recursively.

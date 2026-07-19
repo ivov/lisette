@@ -1,9 +1,9 @@
 use rustc_hash::FxHashMap as HashMap;
-use std::fs;
 use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
+use super::disk;
 use super::types::CachedDefinition;
 use super::{COMPILER_VERSION_HASH, PRELUDE_HASH};
 use crate::prelude::{PRELUDE_FILE_ID, PRELUDE_MODULE_ID};
@@ -21,28 +21,15 @@ fn cache_file_name() -> &'static str {
 }
 
 fn cache_path() -> Option<PathBuf> {
-    let home = std::env::var("HOME").ok()?;
-    Some(
-        PathBuf::from(home)
-            .join(".lisette")
-            .join("cache")
-            .join(cache_file_name()),
-    )
+    disk::global_path(cache_file_name())
 }
 
 pub fn try_load_prelude_cache() -> Option<PreludeCache> {
     let path = cache_path()?;
-    let bytes = fs::read(&path).ok()?;
-    let cache: PreludeCache = match bincode::deserialize(&bytes) {
-        Ok(cache) => cache,
-        Err(_) => {
-            let _ = fs::remove_file(&path);
-            return None;
-        }
-    };
+    let cache: PreludeCache = disk::read(&path).ok()?;
 
     if cache.content_hash != PRELUDE_HASH || cache.compiler_version != COMPILER_VERSION_HASH {
-        let _ = fs::remove_file(&path);
+        let _ = std::fs::remove_file(&path);
         return None;
     }
 
@@ -75,24 +62,7 @@ pub fn save_prelude_cache(store: &Store) {
         definitions,
     };
 
-    let Ok(bytes) = bincode::serialize(&cache) else {
-        return;
-    };
-
-    let Some(parent) = path.parent() else {
-        return;
-    };
-    let _ = fs::create_dir_all(parent);
-
-    let temp_path = super::global_cache_temp_path(&path);
-    if fs::write(&temp_path, &bytes).is_err() {
-        return;
-    }
-    if fs::rename(&temp_path, &path).is_err() {
-        let _ = fs::remove_file(&temp_path);
-        return;
-    }
-    super::prune_legacy_global_caches(parent, "prelude_defs");
+    disk::write_global(&path, &cache, "prelude_defs");
 }
 
 pub fn register_cached_prelude(store: &mut Store, cached: PreludeCache) {

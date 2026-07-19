@@ -1,4 +1,5 @@
 mod bounds;
+mod disk;
 pub mod go_stdlib;
 pub mod prelude;
 pub mod types;
@@ -11,7 +12,6 @@ use std::fs;
 use std::hash::{Hash, Hasher};
 use std::io;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicU64, Ordering};
 
 use serde::{Deserialize, Serialize};
 use syntax::program::{File, Module};
@@ -244,14 +244,7 @@ pub fn try_load_cache(
     check_go_files: bool,
 ) -> Option<ModuleInterface> {
     let path = cache_path(project_root, module_id);
-    let bytes = fs::read(&path).ok()?;
-    let interface: ModuleInterface = match bincode::deserialize(&bytes) {
-        Ok(i) => i,
-        Err(_) => {
-            let _ = fs::remove_file(&path);
-            return None;
-        }
-    };
+    let interface: ModuleInterface = disk::read(&path).ok()?;
 
     if !is_cache_valid(&interface, expected_full_hash, expected_dep_hashes) {
         let _ = fs::remove_file(&path);
@@ -345,17 +338,7 @@ pub fn save_module_cache(
     };
 
     let path = cache_path(project_root, &compiled.module_id);
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)?;
-    }
-
-    // Write to temp file, then rename (atomic)
-    let temp_path = global_cache_temp_path(&path);
-    let bytes = bincode::serialize(&interface).map_err(io::Error::other)?;
-    fs::write(&temp_path, bytes)?;
-    fs::rename(&temp_path, &path)?;
-
-    Ok(())
+    disk::write(&path, &interface)
 }
 
 fn extract_public_definitions(
@@ -457,24 +440,20 @@ pub fn apply_emit_stamps(
 ) -> io::Result<()> {
     for (stamp, value) in updates {
         let path = cache_path(project_root, &stamp.module_id);
-        let bytes = match fs::read(&path) {
-            Ok(b) => b,
-            Err(e) if e.kind() == io::ErrorKind::NotFound => continue,
-            Err(e) => return Err(e),
-        };
-        let mut interface: ModuleInterface = match bincode::deserialize(&bytes) {
-            Ok(i) => i,
-            Err(_) => {
-                let _ = fs::remove_file(&path);
+        let mut interface: ModuleInterface = match disk::read(&path) {
+            Ok(interface) => interface,
+            Err(error)
+                if matches!(
+                    error.kind(),
+                    io::ErrorKind::NotFound | io::ErrorKind::InvalidData
+                ) =>
+            {
                 continue;
             }
+            Err(error) => return Err(error),
         };
         interface.emit_stamp = *value;
-
-        let temp_path = global_cache_temp_path(&path);
-        let new_bytes = bincode::serialize(&interface).map_err(io::Error::other)?;
-        fs::write(&temp_path, new_bytes)?;
-        fs::rename(&temp_path, &path)?;
+        disk::write(&path, &interface)?;
     }
     Ok(())
 }
@@ -483,26 +462,6 @@ pub fn is_cache_disabled() -> bool {
     std::env::var("LISETTE_NO_CACHE")
         .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
         .unwrap_or(false)
-}
-
-static GLOBAL_CACHE_TEMP_COUNTER: AtomicU64 = AtomicU64::new(0);
-
-pub(crate) fn global_cache_temp_path(final_path: &Path) -> PathBuf {
-    let counter = GLOBAL_CACHE_TEMP_COUNTER.fetch_add(1, Ordering::Relaxed);
-    final_path.with_extension(format!("tmp.{}.{}", std::process::id(), counter))
-}
-
-pub(crate) fn prune_legacy_global_caches(dir: &Path, prefix: &str) {
-    let Ok(entries) = fs::read_dir(dir) else {
-        return;
-    };
-    for entry in entries.flatten() {
-        let name = entry.file_name();
-        let name = name.to_string_lossy();
-        if name.starts_with(prefix) && name.contains("_compiler_") {
-            let _ = fs::remove_file(entry.path());
-        }
-    }
 }
 
 #[cfg(test)]
@@ -938,6 +897,22 @@ mod tests {
     }
 
     #[test]
+    fn apply_emit_stamps_removes_corrupt_cache() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = cache_path(temp.path(), "corrupt");
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(&path, b"invalid").unwrap();
+        let stamp = EmitStamp {
+            module_id: "corrupt".to_string(),
+            artifact_hash: 0,
+        };
+
+        let result = apply_emit_stamps(temp.path(), &[(stamp, None)]);
+
+        assert_eq!((result.is_ok(), path.exists()), (true, false));
+    }
+
+    #[test]
     fn try_load_cache_rejects_unstamped_for_emit() {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
@@ -1039,48 +1014,5 @@ mod tests {
             )
             .is_none()
         );
-    }
-
-    #[test]
-    fn prune_legacy_global_caches_removes_only_hashed_files() {
-        let tmp = tempfile::tempdir().unwrap();
-        let dir = tmp.path();
-        let legacy_prelude = dir.join("prelude_defs_4330e9_compiler_f709f8.bin");
-        let legacy_stdlib = dir.join("stdlib_defs_151b6b_compiler_f709f8_darwin_arm64.bin");
-        let stable_prelude = dir.join("prelude_defs.bin");
-        let stable_stdlib = dir.join("stdlib_defs_darwin_arm64.bin");
-        let other_stdlib = dir.join("stdlib_defs_linux_amd64.bin");
-        for path in [
-            &legacy_prelude,
-            &legacy_stdlib,
-            &stable_prelude,
-            &stable_stdlib,
-            &other_stdlib,
-        ] {
-            std::fs::write(path, b"x").unwrap();
-        }
-
-        prune_legacy_global_caches(dir, "prelude_defs");
-        prune_legacy_global_caches(dir, "stdlib_defs");
-
-        assert!(!legacy_prelude.exists());
-        assert!(!legacy_stdlib.exists());
-        assert!(stable_prelude.exists());
-        assert!(stable_stdlib.exists());
-        assert!(other_stdlib.exists());
-    }
-
-    #[test]
-    fn prune_legacy_global_caches_missing_dir_is_noop() {
-        let tmp = tempfile::tempdir().unwrap();
-        prune_legacy_global_caches(&tmp.path().join("does_not_exist"), "prelude_defs");
-    }
-
-    #[test]
-    fn global_cache_temp_paths_are_unique() {
-        let base = Path::new("/cache/prelude_defs.bin");
-        let first = global_cache_temp_path(base);
-        let second = global_cache_temp_path(base);
-        assert_ne!(first, second);
     }
 }
