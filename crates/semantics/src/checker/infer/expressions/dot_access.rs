@@ -9,6 +9,7 @@ use syntax::program::{
 use syntax::types::{Symbol, Type, substitute, unqualified_name};
 
 use super::super::addressability::check_is_non_addressable;
+use super::functions::phantom_type_params;
 use super::primitives::contains_deref;
 use crate::checker::infer::InferCtx;
 use crate::checker::promotion::{self, MemberKind, Resolution};
@@ -725,6 +726,20 @@ impl InferCtx<'_, '_> {
                 _ => {}
             }
         }
+
+        if !self.scopes.is_callee_context() && !self.scopes.is_dot_access_base() {
+            let phantom = phantom_type_params(&member_type);
+            if !phantom.is_empty() {
+                let display_name = format!("{}.{}", type_name, args.member_name);
+                self.sink
+                    .push(diagnostics::infer::uninferable_generic_reference(
+                        &display_name,
+                        &phantom,
+                        *args.span,
+                    ));
+            }
+        }
+
         let (module_ty, _) = self.instantiate(&module_ty);
         let (member_ty, _) = self.instantiate(&member_type);
 

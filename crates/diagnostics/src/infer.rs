@@ -2964,6 +2964,28 @@ pub fn cannot_infer_type_argument(span: Span) -> LisetteDiagnostic {
         .with_help("Supply a type argument for the call, e.g. `Channel.new<int>()`")
 }
 
+pub fn uninferable_generic_reference(
+    function: &str,
+    params: &[String],
+    span: Span,
+) -> LisetteDiagnostic {
+    let joined = format_list(params, |param| format!("`{param}`"));
+    let noun = if params.len() == 1 {
+        "type parameter"
+    } else {
+        "type parameters"
+    };
+    LisetteDiagnostic::error("Cannot infer type argument")
+        .with_infer_code("uninferable_generic_reference")
+        .with_span_label(
+            &span,
+            format!("cannot infer {joined} for `{function}` used as a value"),
+        )
+        .with_help(format!(
+            "A generic function used as a value cannot have its type arguments inferred. Give `{function}` a signature that uses {joined}, or remove the unused {noun}."
+        ))
+}
+
 pub fn cannot_infer_struct_type_argument(
     struct_name: &str,
     param_name: &str,

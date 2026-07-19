@@ -774,19 +774,7 @@ impl InferCtx<'_, '_> {
     }
 
     fn callee_has_phantom_type_param(&self, expression: &Expression) -> bool {
-        let Type::Forall { vars, body } = self.declared_callee_type(expression) else {
-            return false;
-        };
-        let Type::Function(f) = body.as_ref() else {
-            return false;
-        };
-        vars.iter().any(|var| {
-            let param = Type::Parameter(var.clone());
-            let in_signature = f.params.iter().any(|pt| pt.contains_type(&param))
-                || f.return_type.contains_type(&param);
-            let is_bounded = f.bounds.iter().any(|bound| bound.param_name == *var);
-            !in_signature && !is_bounded
-        })
+        !phantom_type_params(&self.declared_callee_type(expression)).is_empty()
     }
 
     fn instantiate_callee_type(
@@ -1728,6 +1716,25 @@ impl InferCtx<'_, '_> {
                 .is_some_and(|n| n == "Range")
         })
     }
+}
+
+pub(crate) fn phantom_type_params(ty: &Type) -> Vec<String> {
+    let Type::Forall { vars, body } = ty else {
+        return Vec::new();
+    };
+    let Type::Function(f) = body.as_ref() else {
+        return Vec::new();
+    };
+    vars.iter()
+        .filter(|var| {
+            let param = Type::Parameter((**var).clone());
+            let in_signature = f.params.iter().any(|pt| pt.contains_type(&param))
+                || f.return_type.contains_type(&param);
+            let is_bounded = f.bounds.iter().any(|bound| bound.param_name == **var);
+            !in_signature && !is_bounded
+        })
+        .map(|var| var.to_string())
+        .collect()
 }
 
 fn receiver_inferred_prefix_count(body: &Type, vars: &[EcoString]) -> usize {

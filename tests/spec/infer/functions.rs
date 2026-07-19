@@ -2695,3 +2695,147 @@ fn main() {
     )
     .assert_no_errors();
 }
+
+#[test]
+fn generic_function_with_phantom_param_passed_as_argument_rejected() {
+    infer(
+        r#"
+fn bar(f: fn() -> ()) {}
+
+fn foo_f<T>() {}
+
+fn main() {
+  let _ = bar(foo_f)
+}
+"#,
+    )
+    .assert_infer_code_once("uninferable_generic_reference");
+}
+
+#[test]
+fn generic_function_with_phantom_param_bound_to_let_rejected() {
+    infer(
+        r#"
+fn foo_f<T>() {}
+
+fn main() {
+  let _f = foo_f
+}
+"#,
+    )
+    .assert_infer_code("uninferable_generic_reference");
+}
+
+#[test]
+fn generic_function_with_phantom_param_returned_rejected() {
+    infer(
+        r#"
+fn foo_f<T>() {}
+
+fn make() -> fn() -> () {
+  foo_f
+}
+"#,
+    )
+    .assert_infer_code("uninferable_generic_reference");
+}
+
+#[test]
+fn generic_function_with_partially_inferable_params_as_argument_rejected() {
+    infer(
+        r#"
+fn bar(f: fn(int) -> ()) {
+  f(1)
+}
+
+fn foo_f<T, U>(x: T) {}
+
+fn main() {
+  bar(foo_f)
+}
+"#,
+    )
+    .assert_infer_code("uninferable_generic_reference");
+}
+
+#[test]
+fn generic_function_reference_with_inferable_param_ok() {
+    infer(
+        r#"
+fn apply(f: fn(int) -> int) -> int {
+  f(1)
+}
+
+fn identity<T>(x: T) -> T {
+  x
+}
+
+fn main() {
+  let _ = apply(identity)
+}
+"#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn imported_generic_function_reference_with_inferable_param_ok() {
+    let mut fs = MockFileSystem::new();
+
+    fs.add_file(
+        "util",
+        "util.lis",
+        r#"
+pub fn identity<T>(x: T) -> T {
+  x
+}
+"#,
+    );
+
+    fs.add_file(
+        "main",
+        "main.lis",
+        r#"
+import "util"
+
+fn apply(f: fn(int) -> int) -> int {
+  f(1)
+}
+
+fn main() {
+  let _ = apply(util.identity)
+}
+"#,
+    );
+
+    infer_module("main", fs).assert_no_errors();
+}
+
+#[test]
+fn imported_generic_function_with_phantom_param_reference_rejected() {
+    let mut fs = MockFileSystem::new();
+
+    fs.add_file(
+        "util",
+        "util.lis",
+        r#"
+pub fn weird<T>() {}
+"#,
+    );
+
+    fs.add_file(
+        "main",
+        "main.lis",
+        r#"
+import "util"
+
+fn bar(f: fn() -> ()) {}
+
+fn main() {
+  let _ = bar(util.weird)
+}
+"#,
+    );
+
+    infer_module("main", fs).assert_infer_code("uninferable_generic_reference");
+}

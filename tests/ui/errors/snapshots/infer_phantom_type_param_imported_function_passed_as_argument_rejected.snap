@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Cannot infer type argument
+   ╭─[main.lis:7:15]
+ 6 │ fn main() {
+ 7 │   let _ = bar(util.weird)
+   ·               ─────┬────
+   ·                    ╰── cannot infer `T` for `util.weird` used as a value
+ 8 │ }
+   ╰────
+  help: A generic function used as a value cannot have its type arguments inferred. Give `util.weird` a signature that uses `T`, or remove the unused type parameter · code: [infer.uninferable_generic_reference]

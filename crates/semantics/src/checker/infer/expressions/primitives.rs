@@ -8,6 +8,7 @@ use syntax::types::Type;
 use super::super::addressability::{
     check_is_non_addressable, check_non_addressable_assignment_target,
 };
+use super::functions::phantom_type_params;
 use crate::checker::infer::InferCtx;
 
 /// Checks whether an assignment target expression contains a deref (`.* `)
@@ -306,6 +307,16 @@ impl InferCtx<'_, '_> {
                 .push(diagnostics::infer::module_namespace_used_as_value(
                     &value, span,
                 ));
+        }
+
+        if !self.scopes.is_callee_context() && !self.scopes.is_assignment_target_context() {
+            let phantom = phantom_type_params(&ty);
+            if !phantom.is_empty() {
+                self.sink
+                    .push(diagnostics::infer::uninferable_generic_reference(
+                        &value, &phantom, span,
+                    ));
+            }
         }
 
         let (identifier_ty, _) = self.instantiate(&ty);

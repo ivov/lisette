@@ -1260,6 +1260,47 @@ fn main() {
 }
 
 #[test]
+fn infer_phantom_type_param_function_passed_as_argument_rejected() {
+    let input = r#"
+fn bar(f: fn() -> ()) {}
+
+fn foo_f<T>() {}
+
+fn main() {
+  let _ = bar(foo_f)
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_phantom_type_param_imported_function_passed_as_argument_rejected() {
+    let mut fs = MockFileSystem::new();
+
+    fs.add_file(
+        "util",
+        "util.lis",
+        r#"
+pub fn weird<T>() {}
+"#,
+    );
+
+    let source = r#"
+import "util"
+
+fn bar(f: fn() -> ()) {}
+
+fn main() {
+  let _ = bar(util.weird)
+}
+"#;
+    fs.add_file("main", "main.lis", source);
+
+    let result = infer_module("main", fs);
+    assert_multimodule_infer_error_snapshot!(result, source);
+}
+
+#[test]
 fn infer_imported_function_shortened_type_args_rejected() {
     let mut fs = MockFileSystem::new();
 
