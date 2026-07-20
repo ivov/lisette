@@ -122,7 +122,7 @@ impl<'source> Parser<'source> {
         }
     }
 
-    pub fn parse_top_item(&mut self) -> ast::Expression {
+    fn parse_top_item(&mut self) -> ast::Expression {
         let doc_with_span = self.collect_doc_comments();
 
         let attributes = self.parse_attributes();
@@ -201,7 +201,7 @@ impl<'source> Parser<'source> {
         expression
     }
 
-    pub fn parse_block_item(&mut self) -> ast::Expression {
+    fn parse_block_item(&mut self) -> ast::Expression {
         match self.current_token().kind {
             Enum => {
                 self.track_error(

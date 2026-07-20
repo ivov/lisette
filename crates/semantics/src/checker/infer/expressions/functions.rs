@@ -758,14 +758,14 @@ impl InferCtx<'_, '_> {
                 if let Type::Nominal { id, .. } = &stripped {
                     let qualified = id.with_segment(member);
                     if let Some(definition) = store.get_definition(&qualified) {
-                        return definition.ty().clone();
+                        return definition.ty.clone();
                     }
                 }
 
                 if let Some(module_id) = stripped.as_import_namespace() {
                     let qualified = Symbol::from_parts(module_id, member);
                     if let Some(definition) = store.get_definition(&qualified) {
-                        return definition.ty().clone();
+                        return definition.ty.clone();
                     }
                 }
 
@@ -1510,7 +1510,7 @@ impl InferCtx<'_, '_> {
 
         let is_public = store
             .get_definition(&Symbol::from_parts(&qualified_name, method))
-            .map(|d| d.visibility().is_public())
+            .map(|d| d.visibility.is_public())
             .unwrap_or(false);
 
         Some(CallKind::ReceiverMethodUfcs { is_public })

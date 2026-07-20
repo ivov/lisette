@@ -482,7 +482,7 @@ impl TaskState<'_> {
             .current_module(&*store)
             .definitions
             .get(qualified_name.as_str())
-            .map(|definition| definition.visibility().clone())
+            .map(|definition| definition.visibility.clone())
             .unwrap_or(Visibility::Private);
 
         let module = self.current_module_mut(store);

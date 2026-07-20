@@ -52,7 +52,7 @@ impl TaskState<'_> {
             .current_module(&*store)
             .definitions
             .get(qualified_name.as_str())
-            .map(|definition| definition.visibility().clone())
+            .map(|definition| definition.visibility.clone())
             .unwrap_or(Visibility::Private);
 
         let is_prelude = self.cursor.module_id == "prelude";
@@ -334,7 +334,7 @@ impl TaskState<'_> {
             .current_module(&*store)
             .definitions
             .get(qualified_name.as_str())
-            .map(|definition| definition.visibility().clone())
+            .map(|definition| definition.visibility.clone())
             .unwrap_or(Visibility::Private);
 
         if self.is_lis(&*store) && self.type_definition_exists(&*store, &qualified_name) {
@@ -503,7 +503,7 @@ impl TaskState<'_> {
                 let mut changed = false;
                 let mut in_progress = FxHashSet::default();
                 let filled =
-                    fill_alias_underlyings(definition.ty(), store, &mut changed, &mut in_progress);
+                    fill_alias_underlyings(&definition.ty, store, &mut changed, &mut in_progress);
                 changed.then(|| (name.clone(), filled))
             })
             .collect();
@@ -546,7 +546,7 @@ impl TaskState<'_> {
                 .current_module(&*store)
                 .definitions
                 .get(qualified_name.as_str())
-                .map(|definition| definition.visibility().clone())
+                .map(|definition| definition.visibility.clone())
                 .unwrap_or(Visibility::Private);
 
             let alias_ty = if name == "Never" && generics.is_empty() {
@@ -657,7 +657,7 @@ impl TaskState<'_> {
             .current_module(&*store)
             .definitions
             .get(qualified_name.as_str())
-            .map(|definition| definition.visibility().clone())
+            .map(|definition| definition.visibility.clone())
             .unwrap_or(Visibility::Private);
 
         if self.is_lis(&*store) && self.type_definition_exists(&*store, &qualified_name) {
@@ -943,7 +943,7 @@ fn embed_field_visibility(store: &Store, field_ty: &Type) -> syntax::ast::Visibi
         target = inner;
     }
     let public = matches!(&target, Type::Nominal { id, .. }
-        if store.get_definition(id.as_str()).is_some_and(|d| d.visibility().is_public()));
+        if store.get_definition(id.as_str()).is_some_and(|d| d.visibility.is_public()));
     if public {
         syntax::ast::Visibility::Public
     } else {

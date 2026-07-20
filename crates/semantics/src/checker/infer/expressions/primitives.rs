@@ -266,7 +266,7 @@ impl InferCtx<'_, '_> {
         if let Some(ref qname) = qualified
             && let Some(definition) = store.get_definition(qname.as_str())
         {
-            if let Some(definition_span) = definition.name_span() {
+            if let Some(definition_span) = definition.name_span {
                 self.facts.add_usage(span, definition_span);
             }
             if store.is_test_definition(definition)

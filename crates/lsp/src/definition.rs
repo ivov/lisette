@@ -61,7 +61,7 @@ pub(crate) fn resolve_struct_call_field(
             lookup_definition_span(name, file, snapshot).or_else(|| {
                 type_id
                     .as_deref()
-                    .and_then(|tid| snapshot.definitions().get(tid).and_then(|d| d.name_span()))
+                    .and_then(|tid| snapshot.definitions().get(tid).and_then(|d| d.name_span))
             })
         })
 }
@@ -77,13 +77,13 @@ pub(crate) fn resolve_dot_access_definition(
         snapshot
             .definitions()
             .get(name)
-            .and_then(|d| d.name_span())
+            .and_then(|d| d.name_span)
             .or_else(|| {
                 let qualified = format!("{}.{}", file.module_id, name);
                 snapshot
                     .definitions()
                     .get(qualified.as_str())
-                    .and_then(|d| d.name_span())
+                    .and_then(|d| d.name_span)
             })
             .or_else(|| {
                 file.imports().into_iter().find_map(|import| {
@@ -95,8 +95,8 @@ pub(crate) fn resolve_dot_access_definition(
                         snapshot
                             .definitions()
                             .get(qualified.as_str())
-                            .filter(|d| d.visibility().is_public())
-                            .and_then(|d| d.name_span())
+                            .filter(|d| d.visibility.is_public())
+                            .and_then(|d| d.name_span)
                     } else {
                         None
                     }
@@ -107,7 +107,7 @@ pub(crate) fn resolve_dot_access_definition(
                 snapshot
                     .definitions()
                     .get(in_prelude.as_str())
-                    .and_then(|d| d.name_span())
+                    .and_then(|d| d.name_span)
             })
     };
 
@@ -142,7 +142,7 @@ pub(crate) fn resolve_dot_access_definition(
             snapshot
                 .definitions()
                 .get(qualified.as_str())
-                .and_then(|d| d.name_span())
+                .and_then(|d| d.name_span)
         } else {
             try_lookup(&dotted_path)
         }
@@ -159,7 +159,7 @@ pub(crate) fn resolve_dot_access_definition(
             snapshot
                 .definitions()
                 .get(qualified.as_str())
-                .and_then(|d| d.name_span())
+                .and_then(|d| d.name_span)
         } else {
             try_lookup(&format!("{}.{}", value, member))
         }
@@ -260,7 +260,7 @@ fn resolve_constructor_name(
     snapshot
         .definitions()
         .get(qualified.as_str())
-        .and_then(|d| d.name_span())
+        .and_then(|d| d.name_span)
 }
 
 pub(crate) fn lookup_definition_span(
@@ -269,14 +269,14 @@ pub(crate) fn lookup_definition_span(
     snapshot: &AnalysisSnapshot,
 ) -> Option<syntax::ast::Span> {
     if let Some(definition) = snapshot.definitions().get(name)
-        && let Some(span) = definition.name_span()
+        && let Some(span) = definition.name_span
     {
         return Some(span);
     }
 
     let qualified = format!("{}.{}", file.module_id, name);
     if let Some(definition) = snapshot.definitions().get(qualified.as_str())
-        && let Some(span) = definition.name_span()
+        && let Some(span) = definition.name_span
     {
         return Some(span);
     }
@@ -287,7 +287,7 @@ pub(crate) fn lookup_definition_span(
         }
         let imported = format!("{}.{}", import.name, name);
         if let Some(definition) = snapshot.definitions().get(imported.as_str())
-            && let Some(span) = definition.name_span()
+            && let Some(span) = definition.name_span
         {
             return Some(span);
         }
@@ -295,7 +295,7 @@ pub(crate) fn lookup_definition_span(
 
     let in_prelude = format!("prelude.{name}");
     if let Some(definition) = snapshot.definitions().get(in_prelude.as_str())
-        && let Some(span) = definition.name_span()
+        && let Some(span) = definition.name_span
     {
         return Some(span);
     }
@@ -416,12 +416,12 @@ pub(crate) fn resolve_enum_in_pattern(
                     snapshot
                         .definitions()
                         .get(qualified.as_str())
-                        .and_then(|d| d.name_span())
+                        .and_then(|d| d.name_span)
                 }
                 Some(TypedPattern::Const { qualified_name, .. }) => snapshot
                     .definitions()
                     .get(qualified_name.as_str())
-                    .and_then(|d| d.name_span()),
+                    .and_then(|d| d.name_span),
                 _ => lookup_definition_span(identifier, file, snapshot),
             }
         }
@@ -487,7 +487,7 @@ pub(crate) fn resolve_enum_in_pattern(
                 return snapshot
                     .definitions()
                     .get(qualified.as_str())
-                    .and_then(|d| d.name_span());
+                    .and_then(|d| d.name_span);
             }
             lookup_definition_span(identifier, file, snapshot)
         }
@@ -572,7 +572,7 @@ pub(crate) fn resolve_definition_span(
                         snapshot
                             .definitions()
                             .get(qualified.as_str())
-                            .and_then(|d| d.name_span())
+                            .and_then(|d| d.name_span)
                     })
                     .or(Some(*name_span)),
 

@@ -287,8 +287,8 @@ impl TaskState<'_> {
         let Some(generics) = type_generics(definition) else {
             return;
         };
-        let visibility = definition.visibility().clone();
-        let name_span = definition.name_span();
+        let visibility = definition.visibility.clone();
+        let name_span = definition.name_span;
 
         let receiver_ty = match scheme {
             Type::Forall { body, .. } => *body,
@@ -354,7 +354,7 @@ fn has_hidden_user_equals(store: &Store, qualified: &Symbol) -> bool {
     let equals_key = qualified.with_segment("equals");
     store
         .get_definition(equals_key.as_str())
-        .is_some_and(|d| d.name_span().is_some())
+        .is_some_and(|d| d.name_span.is_some())
 }
 
 fn user_equals(store: &Store, qualified: &Symbol) -> UserEquals {

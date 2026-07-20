@@ -51,8 +51,8 @@ pub fn load(target_dir: &Path) -> HashSet<(String, String)> {
 
 #[cfg(test)]
 mod tests {
-    use super::super::report::Status;
     use super::*;
+    use crate::handlers::test::report::Status;
     use syntax::ast::Span;
 
     fn row(package: &str, go_name: &str, status: Status) -> TestRow {

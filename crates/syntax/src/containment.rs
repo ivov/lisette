@@ -164,7 +164,7 @@ impl<'d, F: Fn(&str) -> Option<&'d Definition>> ContainmentWalk<'_, F> {
                     })
             }
             DefinitionBody::TypeAlias { .. } => {
-                let Type::Forall { vars, body } = definition.ty() else {
+                let Type::Forall { vars, body } = &definition.ty else {
                     return true;
                 };
                 let Some(name) = vars.get(position) else {

@@ -375,7 +375,7 @@ impl<'s> TaskState<'s> {
         // Direct match: module_id.simple_name
         let direct = format!("{}{}", module_prefix, simple_name);
         if let Some(definition) = module.definitions.get(direct.as_str())
-            && definition.visibility().is_public()
+            && definition.visibility.is_public()
             && !store.is_test_definition(definition)
         {
             return Some((direct, definition));
@@ -389,7 +389,7 @@ impl<'s> TaskState<'s> {
         for (qn, definition) in &module.definitions {
             if qn.ends_with(suffix.as_str())
                 && qn.starts_with(module_prefix.as_str())
-                && definition.visibility().is_public()
+                && definition.visibility.is_public()
                 && !store.is_test_definition(definition)
             {
                 let rest = &qn[module_prefix.len()..];
@@ -487,7 +487,7 @@ impl<'s> TaskState<'s> {
         store: &Store,
         qualified_name: &str,
     ) -> Option<Span> {
-        store.get_definition(qualified_name)?.name_span()
+        store.get_definition(qualified_name)?.name_span
     }
 
     pub(crate) fn is_const_name(&self, store: &Store, qualified_name: &str) -> bool {
@@ -558,7 +558,7 @@ impl<'s> TaskState<'s> {
             }
         }
 
-        definition.ty().clone()
+        definition.ty.clone()
     }
 
     pub(crate) fn lookup_type(&self, store: &Store, value_name: &str) -> Option<Type> {
@@ -903,7 +903,7 @@ impl<'s> TaskState<'s> {
                 {
                     ctor_ty.clone()
                 } else {
-                    definition.ty().clone()
+                    definition.ty.clone()
                 };
                 StructFieldDefinition {
                     doc: None,

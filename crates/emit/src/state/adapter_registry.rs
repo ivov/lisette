@@ -9,8 +9,8 @@ pub(crate) struct AdapterRegistry {
 }
 
 impl AdapterRegistry {
-    pub(crate) fn lookup(&self, key: &(EcoString, EcoString)) -> Option<&String> {
-        self.synthesized.get(key)
+    pub(crate) fn lookup(&self, key: &(EcoString, EcoString)) -> Option<&str> {
+        self.synthesized.get(key).map(String::as_str)
     }
 
     pub(crate) fn next_index(&self) -> usize {

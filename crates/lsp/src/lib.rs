@@ -235,7 +235,7 @@ impl LanguageServer for Backend {
 
         let doc = hover::get_hover_doc(expression, offset, file, &snapshot).or_else(|| {
             let type_id = ty.get_qualified_id()?;
-            snapshot.definitions().get(type_id)?.doc().cloned()
+            snapshot.definitions().get(type_id)?.doc.clone()
         });
 
         let content = match doc {
@@ -354,7 +354,7 @@ impl LanguageServer for Backend {
                 snapshot
                     .definitions()
                     .get(qname.as_str())
-                    .and_then(|d| d.name_span())
+                    .and_then(|d| d.name_span)
             }
 
             syntax::ast::Expression::DotAccess {
@@ -422,7 +422,7 @@ impl LanguageServer for Backend {
                     snapshot
                         .definitions()
                         .get(qualified.as_str())
-                        .and_then(|d| d.name_span())
+                        .and_then(|d| d.name_span)
                 })
                 .or_else(|| offset_in_span(offset, name_span).then_some(*name_span)),
 
@@ -647,7 +647,7 @@ impl LanguageServer for Backend {
                 } => snapshot
                     .definitions()
                     .get(qname.as_str())
-                    .and_then(|d| d.name_span()),
+                    .and_then(|d| d.name_span),
 
                 syntax::ast::Expression::DotAccess {
                     expression,
@@ -1046,7 +1046,7 @@ impl LanguageServer for Backend {
                     snapshot
                         .definitions()
                         .get(qname.as_str())
-                        .and_then(|d| d.name_span())
+                        .and_then(|d| d.name_span)
                 }
 
                 syntax::ast::Expression::DotAccess {
@@ -1240,12 +1240,12 @@ impl LanguageServer for Backend {
                 if let Some(rest) = qname.strip_prefix(imp.name.as_str())
                     && let Some(name) = rest.strip_prefix('.')
                     && !name.contains('.')
-                    && definition.visibility().is_public()
+                    && definition.visibility.is_public()
                 {
                     items.push(CompletionItem {
                         label: name.to_string(),
                         kind: Some(definition_to_completion_kind(definition)),
-                        detail: Some(definition.ty().to_string()),
+                        detail: Some(definition.ty.to_string()),
                         ..Default::default()
                     });
                 }
@@ -1288,7 +1288,7 @@ impl LanguageServer for Backend {
                     let qualified = format!("{}.{}", import.name, prefix);
                     if let Some(definition) = snapshot.definitions().get(qualified.as_str())
                         && definition.is_type_definition()
-                        && definition.visibility().is_public()
+                        && definition.visibility.is_public()
                     {
                         let items = get_type_completions(&qualified, &snapshot, &file.module_id);
                         return Ok(Some(CompletionResponse::Array(items)));
@@ -1400,7 +1400,7 @@ impl LanguageServer for Backend {
                 items.push(CompletionItem {
                     label: name.to_string(),
                     kind: Some(definition_to_completion_kind(definition)),
-                    detail: Some(definition.ty().to_string()),
+                    detail: Some(definition.ty.to_string()),
                     ..Default::default()
                 });
             }

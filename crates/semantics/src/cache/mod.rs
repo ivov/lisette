@@ -353,7 +353,7 @@ fn extract_public_definitions(
     module
         .definitions
         .iter()
-        .filter(|(_, definition)| definition.visibility().is_public())
+        .filter(|(_, definition)| definition.visibility.is_public())
         .filter(|(_, definition)| !store.is_test_definition(definition))
         .map(|(name, definition)| {
             let is_const = module.const_names.contains(name);

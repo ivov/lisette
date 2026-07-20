@@ -915,7 +915,7 @@ impl InferCtx<'_, '_> {
         let method_key = declaring_type.with_segment(member_name);
         store
             .get_definition(&method_key)
-            .map(|d| d.visibility().is_public())
+            .map(|d| d.visibility.is_public())
             .unwrap_or(false)
     }
 
@@ -1374,7 +1374,7 @@ impl InferCtx<'_, '_> {
         let method_key = id.with_segment(member_name);
         store
             .get_definition(&method_key)
-            .map(|d| d.visibility().is_public())
+            .map(|d| d.visibility.is_public())
             .unwrap_or(false)
     }
 }

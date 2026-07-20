@@ -73,7 +73,7 @@ impl Planner<'_> {
             let is_public = self
                 .facts
                 .definition(enum_id.as_str())
-                .is_some_and(|definition| definition.visibility().is_public());
+                .is_some_and(|definition| definition.visibility.is_public());
             let fn_name = self.variants_go_name(name, is_public);
             result.push_str("\n\n");
             result.push_str(&layout.emit_variants_function(&fn_name));

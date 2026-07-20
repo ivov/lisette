@@ -74,7 +74,7 @@ impl Planner<'_> {
             self.facts.definition(alias_key.as_str())
         });
         let is_public = if let Some(d) = found {
-            d.visibility().is_public() || self.method_needs_export(method_part)
+            d.visibility.is_public() || self.method_needs_export(method_part)
         } else {
             self.method_needs_export(method_part)
         };

@@ -195,7 +195,7 @@ impl<'a> Planner<'a> {
         arg_count: usize,
     ) -> ResolvedCallee<'a> {
         let (id, definition) = self.resolve_callee_definition(function);
-        let declared = definition.map(|definition| definition.ty().clone());
+        let declared = definition.map(|definition| definition.ty.clone());
         let instantiated = self
             .facts
             .resolve_to_function_type(function.get_type().unwrap_forall())
@@ -312,7 +312,7 @@ impl<'a> Planner<'a> {
         arg_count: usize,
     ) -> Vec<CallableParamAbi> {
         let (id, definition) = self.resolve_callee_definition(function);
-        let declared = definition.map(Definition::ty);
+        let declared = definition.map(|definition| &definition.ty);
         let declared_params = declared.and_then(|ty| ty.unwrap_forall().get_function_params());
         let receiver_offset =
             declared_params.map_or(0, |params| params.len().saturating_sub(arg_count));
@@ -384,7 +384,7 @@ impl<'a> Planner<'a> {
             return None;
         }
         let declared_return =
-            definition.and_then(|definition| definition.ty().unwrap_forall().get_function_ret());
+            definition.and_then(|definition| definition.ty.unwrap_forall().get_function_ret());
         let classify_ty = declared_return.unwrap_or(f.return_type.as_ref());
 
         self.classify_direct_emission(classify_ty)

@@ -5,6 +5,7 @@ use crate::names::go_name;
 use crate::names::go_name::GO_IMPORT_PREFIX;
 use crate::write_line;
 use ecow::EcoString;
+use rustc_hash::FxHashSet as HashSet;
 use syntax::program::{Definition, DefinitionBody, Interface};
 use syntax::types::{SubstitutionMap, Type, build_substitution_map, substitute, unqualified_name};
 pub(crate) struct AdapterPlan {
@@ -68,7 +69,7 @@ impl Planner<'_> {
         iface: &Interface,
     ) -> Vec<(EcoString, Type, EcoString)> {
         let mut result: Vec<(EcoString, Type, EcoString)> = Vec::new();
-        let mut seen: std::collections::HashSet<EcoString> = std::collections::HashSet::new();
+        let mut seen: HashSet<EcoString> = HashSet::default();
         let mut queue: Vec<(&Interface, EcoString)> = vec![(iface, EcoString::from(root_id))];
         while let Some((current, current_id)) = queue.pop() {
             for (name, ty) in &current.methods {
@@ -259,7 +260,7 @@ impl Planner<'_> {
             && let Some(name) = self.adapter_registry.lookup(&key)
             && !self.is_declared(name)
         {
-            return name.clone();
+            return name.to_string();
         }
 
         let index = self.adapter_registry.next_index();

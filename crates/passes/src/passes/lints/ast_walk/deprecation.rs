@@ -13,10 +13,10 @@ pub(super) fn build_index(store: &Store) -> HashMap<Span, String> {
             if !is_function_type(&definition.ty) {
                 continue;
             }
-            let Some(name_span) = definition.name_span() else {
+            let Some(name_span) = definition.name_span else {
                 continue;
             };
-            let Some(doc) = definition.doc() else {
+            let Some(doc) = &definition.doc else {
                 continue;
             };
             if let Some(message) = deprecation_message(doc) {

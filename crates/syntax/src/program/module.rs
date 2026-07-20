@@ -36,7 +36,7 @@ impl Module {
 
     pub fn is_public(&self, qualified_name: &str) -> bool {
         if let Some(definition) = self.definitions.get(qualified_name) {
-            return definition.visibility() == &Visibility::Public;
+            return definition.visibility == Visibility::Public;
         }
 
         false

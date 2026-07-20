@@ -25,7 +25,7 @@ pub(crate) fn resolve_declaration_hover(
         }
         let qualified = format!("{}.{}", file.module_id, name);
         let definition = snapshot.definitions().get(qualified.as_str())?;
-        Some((definition.ty().clone(), name_span))
+        Some((definition.ty.clone(), name_span))
     };
 
     match expression {
@@ -106,7 +106,7 @@ fn resolve_constructor_name_hover(
         let definition = snapshot.definitions().get(qualified.as_str())?;
         let simple_offset = span.byte_offset + dot_pos as u32 + 1;
         let simple_span = Span::new(span.file_id, simple_offset, simple.len() as u32);
-        return Some((definition.ty().clone(), simple_span));
+        return Some((definition.ty.clone(), simple_span));
     }
 
     let first = &name[..dot_pos];
@@ -127,7 +127,7 @@ fn lookup_type_by_name(
     ];
     for qualified in &candidates {
         if let Some(def) = snapshot.definitions().get(qualified.as_str()) {
-            return Some(def.ty().clone());
+            return Some(def.ty.clone());
         }
     }
     for import in file.imports() {
@@ -136,7 +136,7 @@ fn lookup_type_by_name(
         }
         let qualified = format!("{}.{}", import.name, name);
         if let Some(def) = snapshot.definitions().get(qualified.as_str()) {
-            return Some(def.ty().clone());
+            return Some(def.ty.clone());
         }
     }
     None
@@ -302,7 +302,7 @@ fn resolve_dot_access_doc(
     if let Some(type_id) = type_name(&expression.get_type()) {
         let qualified = format!("{}.{}", type_id, member);
         if let Some(def) = snapshot.definitions().get(qualified.as_str())
-            && let Some(doc) = def.doc()
+            && let Some(doc) = &def.doc
         {
             return Some(doc.clone());
         }
@@ -335,11 +335,7 @@ fn resolve_dot_access_doc(
         format!("{}.{}", module_name, member)
     };
 
-    snapshot
-        .definitions()
-        .get(qualified.as_str())?
-        .doc()
-        .cloned()
+    snapshot.definitions().get(qualified.as_str())?.doc.clone()
 }
 
 /// Resolve the doc comment for the hovered expression.
@@ -360,9 +356,9 @@ pub(crate) fn get_hover_doc(
         } => {
             let definition = snapshot.definitions().get(qname.as_str())?;
             definition
-                .name_span()
+                .name_span
                 .and_then(|span| find_doc_at_definition_span(span, snapshot))
-                .or_else(|| definition.doc().cloned())
+                .or_else(|| definition.doc.clone())
         }
 
         Expression::DotAccess {
@@ -398,7 +394,7 @@ pub(crate) fn get_hover_doc(
                 return None;
             }
 
-            let span = snapshot.definitions().get(type_id.as_str())?.name_span()?;
+            let span = snapshot.definitions().get(type_id.as_str())?.name_span?;
             find_doc_at_definition_span(span, snapshot)
         }
 

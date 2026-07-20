@@ -315,7 +315,7 @@ impl Planner<'_> {
 
         let qualified_method = format!("{}.{}", qualified_type, member);
 
-        let is_public = definition.visibility().is_public() || self.method_needs_export(member);
+        let is_public = definition.visibility.is_public() || self.method_needs_export(member);
         let qualified_name = self.qualify_method_call(&qualified_type, member, is_public);
 
         let type_args = if !ctx.is_callee() {

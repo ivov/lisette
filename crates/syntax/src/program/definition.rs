@@ -95,22 +95,6 @@ impl DefinitionBody {
 }
 
 impl Definition {
-    pub fn ty(&self) -> &Type {
-        &self.ty
-    }
-
-    pub fn visibility(&self) -> &Visibility {
-        &self.visibility
-    }
-
-    pub fn name_span(&self) -> Option<Span> {
-        self.name_span
-    }
-
-    pub fn doc(&self) -> Option<&String> {
-        self.doc.as_ref()
-    }
-
     /// A newtype is a single-field, non-generic tuple struct. Relevant
     /// because Go compiles newtypes to named scalar types, so `.0` is a cast
     /// rather than a field access — it cannot be assigned to, and taking

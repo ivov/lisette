@@ -56,7 +56,7 @@ use syntax::program::{
 use syntax::types::{Symbol, Type};
 use types::go_type::GoType;
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct EmitOptions {
     pub sourcemap: bool,
     pub emit_tests: bool,

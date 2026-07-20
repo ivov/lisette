@@ -173,7 +173,7 @@ fn check_one(
     let method_key = format!("{}.{}.{}", module_id, type_part, method_part);
     let is_public = store
         .get_definition(&method_key)
-        .map(|d| d.visibility().is_public())
+        .map(|d| d.visibility.is_public())
         .unwrap_or(true);
 
     if !is_public {

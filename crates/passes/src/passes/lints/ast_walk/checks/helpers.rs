@@ -51,7 +51,7 @@ pub(super) fn is_float_operand(store: &Store, expression: &Expression) -> bool {
         && let Some(definition) = store.get_definition(id.as_str())
     {
         return definition
-            .ty()
+            .ty
             .underlying_simple_kind()
             .is_some_and(SimpleKind::is_float);
     }

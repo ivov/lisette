@@ -62,7 +62,7 @@ pub(crate) fn run_module(module_id: &str, store: &Store, sink: &LocalSink) {
                         let method_is_pub = module
                             .definitions
                             .get(method_key.as_str())
-                            .map(|definition| definition.visibility().is_public())
+                            .map(|definition| definition.visibility.is_public())
                             .unwrap_or(false);
 
                         if method_is_pub {

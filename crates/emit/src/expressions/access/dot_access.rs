@@ -401,13 +401,13 @@ impl Planner<'_> {
         }
         let qualified_name = format!("{}.{}", module, member);
         let definition = self.facts.definition(qualified_name.as_str())?;
-        if !definition.visibility().is_public() {
+        if !definition.visibility.is_public() {
             return None;
         }
         if !matches!(definition.body, DefinitionBody::Value { .. }) {
             return None;
         }
-        let ty = definition.ty();
+        let ty = &definition.ty;
         let is_function = matches!(ty, Type::Function(_))
             || matches!(ty, Type::Forall { body, .. } if matches!(body.as_ref(), Type::Function(_)));
         if is_function {

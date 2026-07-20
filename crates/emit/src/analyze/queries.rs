@@ -63,14 +63,14 @@ impl Planner<'_> {
                 let method_key = format!("{}.{}", id, field_name);
                 self.facts
                     .definition(method_key.as_str())
-                    .map(|d| d.visibility().is_public())
+                    .map(|d| d.visibility.is_public())
                     .unwrap_or(false)
             }
             DefinitionBody::Enum { .. } => {
                 let method_key = format!("{}.{}", id, field_name);
                 self.facts
                     .definition(method_key.as_str())
-                    .map(|d| d.visibility().is_public())
+                    .map(|d| d.visibility.is_public())
                     .unwrap_or(false)
             }
             DefinitionBody::Interface { definition } => {

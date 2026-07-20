@@ -96,7 +96,7 @@ impl TaskState<'_> {
         let (has_instance_variants, visibility) = match store.get_definition(qualified.as_str()) {
             Some(definition) => (
                 matches!(&definition.body, DefinitionBody::Enum { methods, .. } if methods.contains_key("variants")),
-                definition.visibility().clone(),
+                definition.visibility.clone(),
             ),
             None => (false, Visibility::Private),
         };

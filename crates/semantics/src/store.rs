@@ -318,7 +318,7 @@ impl Store {
     /// contexts must not resolve such definitions.
     pub fn is_test_definition(&self, definition: &Definition) -> bool {
         definition
-            .name_span()
+            .name_span
             .is_some_and(|span| self.test_file_ids.contains(&span.file_id))
     }
 
@@ -363,7 +363,7 @@ impl Store {
                 // Float domains rely on exact-equality over fragile values and do
                 // not occur in the Go stdlib; they are deliberately not indexed.
                 if definition.is_closed_domain()
-                    && let Some(base) = definition.ty().underlying_simple_kind()
+                    && let Some(base) = definition.ty.underlying_simple_kind()
                     && !base.is_float()
                 {
                     bases.insert(qualified_name.clone(), (base, module.id.clone()));
@@ -381,7 +381,7 @@ impl Store {
                 let Some(const_literal) = definition.const_value() else {
                     continue;
                 };
-                let Type::Nominal { id, .. } = definition.ty() else {
+                let Type::Nominal { id, .. } = &definition.ty else {
                     continue;
                 };
                 let Some((base, declaring_module)) = bases.get(id) else {
@@ -456,7 +456,7 @@ impl Store {
 
     pub fn get_type(&self, qualified_name: &str) -> Option<&Type> {
         self.get_definition(qualified_name)
-            .map(|definition| definition.ty())
+            .map(|definition| &definition.ty)
     }
 
     pub fn get_interface(&self, qualified_name: &str) -> Option<&Interface> {

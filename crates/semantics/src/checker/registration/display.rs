@@ -111,8 +111,8 @@ impl TaskState<'_> {
         let Some(generics) = type_generics(definition) else {
             return;
         };
-        let visibility = definition.visibility().clone();
-        let name_span = definition.name_span();
+        let visibility = definition.visibility.clone();
+        let name_span = definition.name_span;
 
         if let Some(user_ty) = user_to_string_type(store, qualified) {
             if is_ufcs_method_type(&user_ty, generics.len()) {

@@ -34,7 +34,7 @@ pub enum CompilePhase {
     Emit,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct SemanticConfig {
     pub run_lints: bool,
     pub standalone_mode: bool,

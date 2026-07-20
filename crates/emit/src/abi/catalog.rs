@@ -72,7 +72,7 @@ impl GoAbiCatalog {
         qualified_name: &str,
         definition: &Definition,
     ) {
-        let Type::Function(function) = definition.ty().unwrap_forall() else {
+        let Type::Function(function) = definition.ty.unwrap_forall() else {
             return;
         };
         let parameters = function

@@ -507,7 +507,7 @@ impl InferCtx<'_, '_> {
                 ..
             } => Some(constructor_ty.clone()),
             _ if !is_bare_name && self.scrutinee_is_interface(expected_ty) => {
-                Some(definition.ty().clone())
+                Some(definition.ty.clone())
             }
             _ => None,
         }
@@ -549,7 +549,7 @@ impl InferCtx<'_, '_> {
         match &definition.body {
             DefinitionBody::Struct { .. } => Some(definition),
             DefinitionBody::TypeAlias { .. } => {
-                let underlying = store.deep_resolve_alias(definition.ty().unwrap_forall());
+                let underlying = store.deep_resolve_alias(definition.ty.unwrap_forall());
                 let Type::Nominal { id, .. } = underlying else {
                     return None;
                 };
@@ -599,7 +599,7 @@ impl InferCtx<'_, '_> {
             return None;
         }
 
-        let definition_ty = definition.ty();
+        let definition_ty = &definition.ty;
         let unwrapped_ty = definition_ty.unwrap_forall();
 
         // Enum-variant resolution takes precedence, so a unit variant of its own

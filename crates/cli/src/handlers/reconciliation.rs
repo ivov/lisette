@@ -745,9 +745,9 @@ pub(crate) fn apply_graph_to_manifest(
     let root_result = match replaced_root {
         Some(replaced_root) => {
             let via = match replaced_root.mode {
-                ReplacedRootMode::SyncPreserveVia => {
-                    existing_deps.get(added_dep).and_then(|d| d.via().cloned())
-                }
+                ReplacedRootMode::SyncPreserveVia => existing_deps
+                    .get(added_dep)
+                    .and_then(|d| d.via().map(<[String]>::to_vec)),
                 ReplacedRootMode::AddDirect => None,
             };
             upsert_go_dependency(
@@ -816,7 +816,7 @@ pub(crate) fn apply_graph_to_manifest(
         }
 
         let mut via: Vec<String> = existing
-            .and_then(|d| d.via().cloned())
+            .and_then(|d| d.via().map(<[String]>::to_vec))
             .unwrap_or_default()
             .into_iter()
             .filter(|p| p != added_dep)

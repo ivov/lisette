@@ -240,13 +240,13 @@ pub(crate) fn get_instance_completions(
                 definition.body,
                 syntax::program::DefinitionBody::Value { .. }
             )
-            && is_instance_method(definition.ty(), type_id)
-            && (same_module || definition.visibility().is_public())
+            && is_instance_method(&definition.ty, type_id)
+            && (same_module || definition.visibility.is_public())
         {
             items.push(CompletionItem {
                 label: method_name.to_string(),
                 kind: Some(CompletionItemKind::METHOD),
-                detail: Some(definition.ty().to_string()),
+                detail: Some(definition.ty.to_string()),
                 ..Default::default()
             });
         }
@@ -432,14 +432,14 @@ pub(crate) fn get_type_completions(
         if let Some(method_name) = qname.strip_prefix(method_prefix.as_str())
             && !method_name.contains('.')
             && matches!(definition.body, DefinitionBody::Value { .. })
-            && !is_instance_method(definition.ty(), method_id)
-            && (same_module || definition.visibility().is_public())
+            && !is_instance_method(&definition.ty, method_id)
+            && (same_module || definition.visibility.is_public())
             && !items.iter().any(|i| i.label == method_name)
         {
             items.push(CompletionItem {
                 label: method_name.to_string(),
                 kind: Some(CompletionItemKind::METHOD),
-                detail: Some(definition.ty().to_string()),
+                detail: Some(definition.ty.to_string()),
                 ..Default::default()
             });
         }

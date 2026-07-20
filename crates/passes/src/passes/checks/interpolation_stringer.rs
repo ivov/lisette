@@ -79,7 +79,7 @@ fn is_foreign(definition: &Definition, id: &str, store: &Store) -> bool {
         return true;
     }
     definition
-        .name_span()
+        .name_span
         .and_then(|span| store.get_file(span.file_id))
         .is_some_and(File::is_d_lis)
 }

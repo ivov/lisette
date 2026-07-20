@@ -12,7 +12,7 @@ pub fn check_visibility_constraints(
     diagnostics: &mut Vec<LisetteDiagnostic>,
 ) {
     for (qualified_name, definition) in &module.definitions {
-        if definition.visibility() != &Visibility::Public {
+        if definition.visibility != Visibility::Public {
             continue;
         }
 
@@ -27,10 +27,10 @@ pub fn check_visibility_constraints(
         let mut ctx = LeakCtx {
             module,
             public_definition: item_name,
-            fallback_span: definition.name_span(),
+            fallback_span: definition.name_span,
             diagnostics,
         };
-        ctx.check(definition.ty(), annotation.as_ref());
+        ctx.check(&definition.ty, annotation.as_ref());
     }
 }
 
@@ -66,7 +66,7 @@ impl LeakCtx<'_> {
         match ty {
             Type::Nominal { id, params, .. } => {
                 if let Some(definition) = self.module.definitions.get(id.as_str())
-                    && definition.visibility() == &Visibility::Private
+                    && definition.visibility == Visibility::Private
                 {
                     let span = annotation.map(|ann| ann.get_span()).or(self.fallback_span);
                     let type_name = unqualified_name(id);

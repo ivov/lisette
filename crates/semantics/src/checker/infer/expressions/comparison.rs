@@ -335,7 +335,7 @@ pub(crate) fn is_opaque_go_handle(store: &Store, ty: &Type) -> bool {
     let Some(definition) = store.get_definition(id) else {
         return false;
     };
-    definition.visibility() == &Visibility::Private
+    definition.visibility == Visibility::Private
         && matches!(
             &definition.body,
             DefinitionBody::TypeAlias {

@@ -43,9 +43,9 @@ pub enum GoDependency {
 }
 
 impl GoDependency {
-    pub fn via(&self) -> Option<&Vec<String>> {
+    pub fn via(&self) -> Option<&[String]> {
         match self {
-            GoDependency::Remote { via, .. } | GoDependency::Replaced { via, .. } => via.as_ref(),
+            GoDependency::Remote { via, .. } | GoDependency::Replaced { via, .. } => via.as_deref(),
         }
     }
 
@@ -311,7 +311,7 @@ pub fn upsert_go_dependency(
     let go = ensure_go_deps_table(&mut manifest)?;
 
     let via = dep.via().map(|via_list| {
-        let mut sorted = via_list.clone();
+        let mut sorted = via_list.to_vec();
         sorted.sort();
         sorted.dedup();
         sorted

@@ -228,7 +228,7 @@ impl Planner<'_> {
             let prelude_name = format!("{}.{}", go_name::PRELUDE_MODULE, name);
             self.facts.definition(prelude_name.as_str())
         })?;
-        let definition_ty = definition.ty().clone();
+        let definition_ty = definition.ty.clone();
         let recipe = definition.go_type_param_recipe().map(str::to_string);
 
         self.format_type_args_from_forall(&definition_ty, instantiated_ty, recipe.as_deref())
@@ -242,7 +242,7 @@ impl Planner<'_> {
         instantiated_ty: &Type,
     ) -> Option<String> {
         let definition = self.facts.definition(qualified_name)?;
-        let definition_ty = definition.ty().clone();
+        let definition_ty = definition.ty.clone();
         let recipe = definition.go_type_param_recipe().map(str::to_string);
 
         self.format_type_args_from_forall(&definition_ty, instantiated_ty, recipe.as_deref())
@@ -289,7 +289,7 @@ impl Planner<'_> {
         let should_export = self
             .facts
             .definition(method_key.as_str())
-            .map(|d| d.visibility().is_public())
+            .map(|d| d.visibility.is_public())
             .unwrap_or(false)
             || self.method_needs_export(method_part);
         let go_method = if should_export {
@@ -333,7 +333,7 @@ impl Planner<'_> {
         let is_public = self
             .facts
             .definition(id)
-            .map(|d| d.visibility().is_public())
+            .map(|d| d.visibility.is_public())
             .unwrap_or(true)
             || self.method_needs_export(method_name);
 
@@ -360,7 +360,7 @@ impl Planner<'_> {
         let qualified_name = self.facts.qualified_current(name);
         let definition = self.facts.definition(qualified_name.as_str())?;
 
-        if !definition.visibility().is_public() {
+        if !definition.visibility.is_public() {
             return None;
         }
 
