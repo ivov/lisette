@@ -1,6 +1,18 @@
 ---
 source: tests/spec/emit/interop_matrix.rs
-description: "\nimport \"go:fmt\"\nimport \"go:example.com/aws\"\n\nfn main() {\n  let f = aws.Read\n  match f() {\n    Ok(xs) => fmt.Println(\"ok\", Slice.length(xs)),\n    Both(xs, e) => fmt.Println(\"both\", Slice.length(xs), e),\n    Err(e) => fmt.Println(\"err\", e),\n  }\n}\n"
+description: |
+  
+  import "go:fmt"
+  import "go:example.com/aws"
+  
+  fn main() {
+    let f = aws.Read
+    match f() {
+      Ok(xs) => fmt.Println("ok", Slice.length(xs)),
+      Both(xs, e) => fmt.Println("both", Slice.length(xs), e),
+      Err(e) => fmt.Println("err", e),
+    }
+  }
 ---
 package main
 

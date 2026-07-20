@@ -1,6 +1,10 @@
 ---
 source: tests/spec/emit/arrays.rs
-description: "\nfn grid() -> Array<Array<int, 3>, 2> {\n  [[1, 2, 3], [4, 5, 6]]\n}\n"
+description: |
+  
+  fn grid() -> Array<Array<int, 3>, 2> {
+    [[1, 2, 3], [4, 5, 6]]
+  }
 ---
 package main
 

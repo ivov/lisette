@@ -1,6 +1,10 @@
 ---
 source: tests/spec/emit/arrays.rs
-description: "\nfn first(xs: Array<int, 3>) -> int {\n  xs[0]\n}\n"
+description: |
+  
+  fn first(xs: Array<int, 3>) -> int {
+    xs[0]
+  }
 ---
 package main
 

@@ -1,6 +1,14 @@
 ---
 source: tests/spec/emit/interop_matrix.rs
-description: "\nimport \"go:crypto/sha256\"\n\nfn main() {\n  let data = \"hi\" as Slice<byte>\n  let hash = sha256.Sum256(data)\n  let _ = hash\n}\n"
+description: |
+  
+  import "go:crypto/sha256"
+  
+  fn main() {
+    let data = "hi" as Slice<byte>
+    let hash = sha256.Sum256(data)
+    let _ = hash
+  }
 ---
 package main
 

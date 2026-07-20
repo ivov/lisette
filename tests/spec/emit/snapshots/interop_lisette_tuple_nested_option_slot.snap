@@ -1,6 +1,20 @@
 ---
 source: tests/spec/emit/interop_matrix.rs
-description: "\nfn make() -> (Option<Slice<Option<string>>>, int) {\n  (Some([Some(\"hi\"), None]), 7)\n}\n\nfn main() {\n  let t = make()\n  let (xs, n) = t\n  let _ = n\n  match xs {\n    Some(inner) => { for x in inner { let _ = x } },\n    None => {},\n  }\n}\n"
+description: |
+  
+  fn make() -> (Option<Slice<Option<string>>>, int) {
+    (Some([Some("hi"), None]), 7)
+  }
+  
+  fn main() {
+    let t = make()
+    let (xs, n) = t
+    let _ = n
+    match xs {
+      Some(inner) => { for x in inner { let _ = x } },
+      None => {},
+    }
+  }
 ---
 package main
 

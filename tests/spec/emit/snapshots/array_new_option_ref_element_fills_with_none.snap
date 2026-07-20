@@ -1,6 +1,10 @@
 ---
 source: tests/spec/emit/arrays.rs
-description: "\nfn flags() -> Array<Option<Ref<bool>>, 2> {\n  Array.new<Option<Ref<bool>>, 2>()\n}\n"
+description: |
+  
+  fn flags() -> Array<Option<Ref<bool>>, 2> {
+    Array.new<Option<Ref<bool>>, 2>()
+  }
 ---
 package main
 

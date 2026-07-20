@@ -1,6 +1,10 @@
 ---
 source: tests/spec/emit/arrays.rs
-description: "\nfn count(m: Map<Array<int, 2>, string>) -> int {\n  m.length()\n}\n"
+description: |
+  
+  fn count(m: Map<Array<int, 2>, string>) -> int {
+    m.length()
+  }
 ---
 package main
 

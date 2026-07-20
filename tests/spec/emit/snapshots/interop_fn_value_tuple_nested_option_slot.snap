@@ -1,6 +1,21 @@
 ---
 source: tests/spec/emit/interop_matrix.rs
-description: "\nimport \"go:example.com/aws\"\n\nfn apply(f: fn() -> (Option<Slice<Option<string>>>, int)) -> (Option<Slice<Option<string>>>, int) {\n  f()\n}\n\nfn main() {\n  let (xs, n) = apply(aws.Make)\n  let _ = n\n  match xs {\n    Some(inner) => { for x in inner { let _ = x } },\n    None => {},\n  }\n}\n"
+description: |
+  
+  import "go:example.com/aws"
+  
+  fn apply(f: fn() -> (Option<Slice<Option<string>>>, int)) -> (Option<Slice<Option<string>>>, int) {
+    f()
+  }
+  
+  fn main() {
+    let (xs, n) = apply(aws.Make)
+    let _ = n
+    match xs {
+      Some(inner) => { for x in inner { let _ = x } },
+      None => {},
+    }
+  }
 ---
 package main
 

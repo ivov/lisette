@@ -1,6 +1,25 @@
 ---
 source: tests/spec/emit/interop_matrix.rs
-description: "\nimport \"go:fmt\"\nimport \"go:example.com/aws\"\n\nfn main() {\n  let f = aws.Make\n  let r = f()\n  match r {\n    Ok(xs) => {\n      for x in xs {\n        match x {\n          Some(v) => fmt.Println(v),\n          None => fmt.Println(\"none\"),\n        }\n      }\n    },\n    Err(e) => { let _ = e },\n  }\n}\n"
+description: |
+  
+  import "go:fmt"
+  import "go:example.com/aws"
+  
+  fn main() {
+    let f = aws.Make
+    let r = f()
+    match r {
+      Ok(xs) => {
+        for x in xs {
+          match x {
+            Some(v) => fmt.Println(v),
+            None => fmt.Println("none"),
+          }
+        }
+      },
+      Err(e) => { let _ = e },
+    }
+  }
 ---
 package main
 

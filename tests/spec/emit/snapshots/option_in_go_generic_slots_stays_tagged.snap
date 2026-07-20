@@ -1,6 +1,22 @@
 ---
 source: tests/spec/emit/types.rs
-description: "\nimport \"go:example.com/generic\"\n\nfn main() {\n  let option = Some(1)\n  let options: Slice<Option<int>> = [option]\n  generic.Store(option)\n  generic.StoreAll(options)\n  generic.StoreMany(option, option)\n  let loaded = generic.Load(option)\n  let loaded_all = generic.LoadAll(options)\n  let bag = generic.Bag { Value: option, Values: options }\n  generic.Store(bag.Value)\n  generic.Store(loaded)\n  generic.StoreAll(loaded_all)\n}\n"
+description: |
+  
+  import "go:example.com/generic"
+  
+  fn main() {
+    let option = Some(1)
+    let options: Slice<Option<int>> = [option]
+    generic.Store(option)
+    generic.StoreAll(options)
+    generic.StoreMany(option, option)
+    let loaded = generic.Load(option)
+    let loaded_all = generic.LoadAll(options)
+    let bag = generic.Bag { Value: option, Values: options }
+    generic.Store(bag.Value)
+    generic.Store(loaded)
+    generic.StoreAll(loaded_all)
+  }
 ---
 package main
 

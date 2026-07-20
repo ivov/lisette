@@ -1,6 +1,23 @@
 ---
 source: tests/spec/emit/interop_matrix.rs
-description: "\nimport \"go:fmt\"\nimport \"go:example.com/aws\"\n\nfn main() {\n  match aws.Fetch() {\n    Some(xs) => {\n      for x in xs {\n        match x {\n          Some(v) => fmt.Println(v),\n          None => fmt.Println(\"none\"),\n        }\n      }\n    },\n    None => fmt.Println(\"missing\"),\n  }\n}\n"
+description: |
+  
+  import "go:fmt"
+  import "go:example.com/aws"
+  
+  fn main() {
+    match aws.Fetch() {
+      Some(xs) => {
+        for x in xs {
+          match x {
+            Some(v) => fmt.Println(v),
+            None => fmt.Println("none"),
+          }
+        }
+      },
+      None => fmt.Println("missing"),
+    }
+  }
 ---
 package main
 

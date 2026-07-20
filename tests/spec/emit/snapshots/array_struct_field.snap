@@ -1,6 +1,14 @@
 ---
 source: tests/spec/emit/arrays.rs
-description: "\nstruct Grid {\n  cells: Array<int, 4>,\n}\n\nfn make() -> Grid {\n  Grid { cells: [1, 2, 3, 4] }\n}\n"
+description: |
+  
+  struct Grid {
+    cells: Array<int, 4>,
+  }
+  
+  fn make() -> Grid {
+    Grid { cells: [1, 2, 3, 4] }
+  }
 ---
 package main
 

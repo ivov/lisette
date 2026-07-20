@@ -1,6 +1,15 @@
 ---
 source: tests/spec/emit/arrays.rs
-description: "\nstruct Horse {\n  speed: int,\n  fast: Option<int>,\n}\n\nfn herd() -> Array<Horse, 2> {\n  Array.new<Horse, 2>()\n}\n"
+description: |
+  
+  struct Horse {
+    speed: int,
+    fast: Option<int>,
+  }
+  
+  fn herd() -> Array<Horse, 2> {
+    Array.new<Horse, 2>()
+  }
 ---
 package main
 

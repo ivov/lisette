@@ -1,6 +1,14 @@
 ---
 source: tests/spec/emit/arrays.rs
-description: "\nfn ints() -> Array<int, 3> {\n  Array.new<int, 3>()\n}\n\nfn bools() -> Array<bool, 2> {\n  Array.new<bool, 2>()\n}\n"
+description: |
+  
+  fn ints() -> Array<int, 3> {
+    Array.new<int, 3>()
+  }
+  
+  fn bools() -> Array<bool, 2> {
+    Array.new<bool, 2>()
+  }
 ---
 package main
 

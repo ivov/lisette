@@ -1,6 +1,14 @@
 ---
 source: tests/spec/emit/interop_matrix.rs
-description: "\nimport \"go:example.com/aws\"\n\nfn main() {\n  let n = aws.Node { .. }\n  let xs = [Some(&n), None]\n  aws.Use(xs...)\n}\n"
+description: |
+  
+  import "go:example.com/aws"
+  
+  fn main() {
+    let n = aws.Node { .. }
+    let xs = [Some(&n), None]
+    aws.Use(xs...)
+  }
 ---
 package main
 

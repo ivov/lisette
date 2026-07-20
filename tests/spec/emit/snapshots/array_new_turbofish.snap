@@ -1,6 +1,10 @@
 ---
 source: tests/spec/emit/arrays.rs
-description: "\nfn make() -> Array<int, 5> {\n  Array.new<int, 5>()\n}\n"
+description: |
+  
+  fn make() -> Array<int, 5> {
+    Array.new<int, 5>()
+  }
 ---
 package main
 

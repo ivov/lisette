@@ -1,6 +1,27 @@
 ---
 source: tests/spec/emit/interop_matrix.rs
-description: "\nimport \"go:fmt\"\n\nfn make() -> Result<Slice<Option<string>>, error> {\n  Ok([Some(\"hi\"), None])\n}\n\nfn main() {\n  let r = make()\n  match r {\n    Ok(xs) => {\n      for x in xs {\n        match x {\n          Some(v) => fmt.Println(v),\n          None => fmt.Println(\"none\"),\n        }\n      }\n    },\n    Err(e) => { let _ = e },\n  }\n}\n"
+description: |
+  
+  import "go:fmt"
+  
+  fn make() -> Result<Slice<Option<string>>, error> {
+    Ok([Some("hi"), None])
+  }
+  
+  fn main() {
+    let r = make()
+    match r {
+      Ok(xs) => {
+        for x in xs {
+          match x {
+            Some(v) => fmt.Println(v),
+            None => fmt.Println("none"),
+          }
+        }
+      },
+      Err(e) => { let _ = e },
+    }
+  }
 ---
 package main
 

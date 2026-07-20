@@ -1,6 +1,19 @@
 ---
 source: tests/spec/emit/arrays.rs
-description: "\nstruct Horse {\n  speed: int,\n  fast: Option<int>,\n}\n\nstruct Stable {\n  horses: Array<Horse, 2>,\n}\n\nfn empty() -> Stable {\n  Stable { .. }\n}\n"
+description: |
+  
+  struct Horse {
+    speed: int,
+    fast: Option<int>,
+  }
+  
+  struct Stable {
+    horses: Array<Horse, 2>,
+  }
+  
+  fn empty() -> Stable {
+    Stable { .. }
+  }
 ---
 package main
 

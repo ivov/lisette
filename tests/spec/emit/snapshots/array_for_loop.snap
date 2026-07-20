@@ -1,6 +1,14 @@
 ---
 source: tests/spec/emit/arrays.rs
-description: "\nfn sum(a: Array<int, 3>) -> int {\n  let mut total = 0\n  for x in a {\n    total = total + x\n  }\n  total\n}\n"
+description: |
+  
+  fn sum(a: Array<int, 3>) -> int {
+    let mut total = 0
+    for x in a {
+      total = total + x
+    }
+    total
+  }
 ---
 package main
 

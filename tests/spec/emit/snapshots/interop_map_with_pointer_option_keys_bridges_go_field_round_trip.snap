@@ -1,6 +1,17 @@
 ---
 source: tests/spec/emit/interop_matrix.rs
-description: "\nimport \"go:example.com/maps\"\n\nfn main() {\n  let mut values = Map.new<Option<int>, string>()\n  values[Some(1)] = \"one\"\n  values[None] = \"none\"\n  let container = maps.Container { Values: values }\n  let roundtrip = container.Values\n  let _ = roundtrip\n}\n"
+description: |
+  
+  import "go:example.com/maps"
+  
+  fn main() {
+    let mut values = Map.new<Option<int>, string>()
+    values[Some(1)] = "one"
+    values[None] = "none"
+    let container = maps.Container { Values: values }
+    let roundtrip = container.Values
+    let _ = roundtrip
+  }
 ---
 package main
 

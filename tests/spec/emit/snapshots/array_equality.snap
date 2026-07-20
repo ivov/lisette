@@ -1,6 +1,10 @@
 ---
 source: tests/spec/emit/arrays.rs
-description: "\nfn same(a: Array<int, 2>, b: Array<int, 2>) -> bool {\n  a == b\n}\n"
+description: |
+  
+  fn same(a: Array<int, 2>, b: Array<int, 2>) -> bool {
+    a == b
+  }
 ---
 package main
 

@@ -1,6 +1,8 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "\nfn test(xs: Array<int, 3>) -> int { xs[0] }\n"
+description: |
+  
+  fn test(xs: Array<int, 3>) -> int { xs[0] }
 ---
 [
     Function {

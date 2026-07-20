@@ -1,6 +1,14 @@
 ---
 source: tests/spec/emit/arrays.rs
-description: "\nstruct Buf {\n  data: Array<int, 4>,\n}\n\nfn empty() -> Buf {\n  Buf { .. }\n}\n"
+description: |
+  
+  struct Buf {
+    data: Array<int, 4>,
+  }
+  
+  fn empty() -> Buf {
+    Buf { .. }
+  }
 ---
 package main
 

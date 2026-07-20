@@ -1,6 +1,15 @@
 ---
 source: tests/spec/emit/interop_matrix.rs
-description: "\nimport \"go:example.com/arrays\"\n\nfn main() {\n  let values: Array<Option<int>, 2> = [Some(1), None]\n  let container = arrays.Container { Values: values }\n  let roundtrip = container.Values\n  let _ = roundtrip\n}\n"
+description: |
+  
+  import "go:example.com/arrays"
+  
+  fn main() {
+    let values: Array<Option<int>, 2> = [Some(1), None]
+    let container = arrays.Container { Values: values }
+    let roundtrip = container.Values
+    let _ = roundtrip
+  }
 ---
 package main
 

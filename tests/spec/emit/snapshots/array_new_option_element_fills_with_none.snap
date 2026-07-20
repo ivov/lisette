@@ -1,6 +1,10 @@
 ---
 source: tests/spec/emit/arrays.rs
-description: "\nfn opts() -> Array<Option<int>, 2> {\n  Array.new<Option<int>, 2>()\n}\n"
+description: |
+  
+  fn opts() -> Array<Option<int>, 2> {
+    Array.new<Option<int>, 2>()
+  }
 ---
 package main
 

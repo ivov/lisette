@@ -1,6 +1,10 @@
 ---
 source: tests/spec/emit/arrays.rs
-description: "\nfn empty() -> Array<int, 0> {\n  []\n}\n"
+description: |
+  
+  fn empty() -> Array<int, 0> {
+    []
+  }
 ---
 package main
 

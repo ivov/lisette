@@ -1,6 +1,10 @@
 ---
 source: tests/spec/emit/arrays.rs
-description: "\nfn count(xs: Array<int, 3>) -> int {\n  xs.length()\n}\n"
+description: |
+  
+  fn count(xs: Array<int, 3>) -> int {
+    xs.length()
+  }
 ---
 package main
 

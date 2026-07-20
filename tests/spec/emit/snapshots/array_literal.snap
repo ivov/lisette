@@ -1,6 +1,10 @@
 ---
 source: tests/spec/emit/arrays.rs
-description: "\nfn test() -> Array<int, 3> {\n  [1, 2, 3]\n}\n"
+description: |
+  
+  fn test() -> Array<int, 3> {
+    [1, 2, 3]
+  }
 ---
 package main
 

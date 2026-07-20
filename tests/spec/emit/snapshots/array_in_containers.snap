@@ -1,6 +1,16 @@
 ---
 source: tests/spec/emit/arrays.rs
-description: "\ntype Addr = Array<byte, 4>\n\nstruct Holder {\n  slice_of_arr: Slice<Array<int, 3>>,\n  map_val_arr: Map<string, Array<int, 3>>,\n  ptr_to_arr: Ref<Array<int, 3>>,\n  multidim: Array<Array<int, 3>, 2>,\n  aliased: Addr,\n}\n"
+description: |
+  
+  type Addr = Array<byte, 4>
+  
+  struct Holder {
+    slice_of_arr: Slice<Array<int, 3>>,
+    map_val_arr: Map<string, Array<int, 3>>,
+    ptr_to_arr: Ref<Array<int, 3>>,
+    multidim: Array<Array<int, 3>, 2>,
+    aliased: Addr,
+  }
 ---
 package main
 

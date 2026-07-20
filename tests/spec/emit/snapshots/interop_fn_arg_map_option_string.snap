@@ -1,6 +1,15 @@
 ---
 source: tests/spec/emit/interop_matrix.rs
-description: "\nimport \"go:example.com/aws\"\n\nfn main() {\n  let mut xs = Map.new<string, Option<string>>()\n  xs[\"k\"] = Some(\"hi\")\n  xs[\"gone\"] = None\n  aws.Use(xs)\n}\n"
+description: |
+  
+  import "go:example.com/aws"
+  
+  fn main() {
+    let mut xs = Map.new<string, Option<string>>()
+    xs["k"] = Some("hi")
+    xs["gone"] = None
+    aws.Use(xs)
+  }
 ---
 package main
 

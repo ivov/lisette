@@ -1,6 +1,13 @@
 ---
 source: tests/spec/emit/interop_matrix.rs
-description: "\nimport \"go:example.com/aws\"\n\nfn main() {\n  let xs = aws.Make()\n  aws.Use(xs)\n}\n"
+description: |
+  
+  import "go:example.com/aws"
+  
+  fn main() {
+    let xs = aws.Make()
+    aws.Use(xs)
+  }
 ---
 package main
 

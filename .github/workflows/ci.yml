@@ -55,6 +55,14 @@ jobs:
           cache: 'false'
       - run: just format-check
 
+  snapshot-style:
+    name: Snapshot style
+    if: ${{ !startsWith(github.head_ref, 'release-plz-') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # ratchet:actions/checkout@v6
+      - run: ./scripts/check-snapshot-block-style.sh
+
   clippy:
     name: Clippy
     if: ${{ !startsWith(github.head_ref, 'release-plz-') }}

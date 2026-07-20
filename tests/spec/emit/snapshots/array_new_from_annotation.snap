@@ -1,6 +1,11 @@
 ---
 source: tests/spec/emit/arrays.rs
-description: "\nfn make() -> Array<int, 3> {\n  let xs: Array<int, 3> = Array.new()\n  xs\n}\n"
+description: |
+  
+  fn make() -> Array<int, 3> {
+    let xs: Array<int, 3> = Array.new()
+    xs
+  }
 ---
 package main
 

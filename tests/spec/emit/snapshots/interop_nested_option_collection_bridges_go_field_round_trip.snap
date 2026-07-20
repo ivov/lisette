@@ -1,6 +1,15 @@
 ---
 source: tests/spec/emit/interop_matrix.rs
-description: "\nimport \"go:example.com/nested\"\n\nfn main() {\n  let values: Option<Slice<Option<int>>> = Some([Some(1), None])\n  let container = nested.Container { Values: values }\n  let roundtrip = container.Values\n  let _ = roundtrip\n}\n"
+description: |
+  
+  import "go:example.com/nested"
+  
+  fn main() {
+    let values: Option<Slice<Option<int>>> = Some([Some(1), None])
+    let container = nested.Container { Values: values }
+    let roundtrip = container.Values
+    let _ = roundtrip
+  }
 ---
 package main
 
