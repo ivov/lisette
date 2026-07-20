@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1784579535010,
+  "lastUpdate": 1784580145443,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -7131,6 +7131,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "syntax",
             "value": 13254,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 10240,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 6375,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 4428,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2812,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1039,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 695,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 6084,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 890,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "storm.patrik@gmail.com",
+            "name": "Patrik Storm",
+            "username": "stormpat"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "ce9d2751ce037166eee03eb7e06da803f5767f7a",
+          "message": "fix: preserve tuple type aliases at use sites (#1082)",
+          "timestamp": "2026-07-20T22:42:03+02:00",
+          "tree_id": "714811dc68b727ff4a206cee02789eb2655cb7f6",
+          "url": "https://github.com/ivov/lisette/commit/ce9d2751ce037166eee03eb7e06da803f5767f7a"
+        },
+        "date": 1784580144421,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 116884,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 30100,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 24251,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 16708,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 13262,
             "unit": "lines"
           },
           {
