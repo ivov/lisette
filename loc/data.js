@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1784578168901,
+  "lastUpdate": 1784579535010,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -7027,6 +7027,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "emit",
             "value": 30098,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 24250,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 16708,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 13254,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 10240,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 6375,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 4428,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2812,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1039,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 695,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 6084,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 890,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "03d598eaa80817925e01ebaeaf05fbc5d9a507ed",
+          "message": "fix: shadowed variable in `else` leaking past diverging `if` (#1084)",
+          "timestamp": "2026-07-20T22:31:50+02:00",
+          "tree_id": "83a6dd4c5d3b1a5fe56aeb28e1919d8ff09e67fd",
+          "url": "https://github.com/ivov/lisette/commit/03d598eaa80817925e01ebaeaf05fbc5d9a507ed"
+        },
+        "date": 1784579533937,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 116875,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 30100,
             "unit": "lines"
           },
           {
