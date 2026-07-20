@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1784493887728,
+  "lastUpdate": 1784562863534,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -6701,6 +6701,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "lsp",
             "value": 4431,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2812,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1031,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 695,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 6050,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 890,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "1cccc2f40610970d972d717af4c2dd7ac356abd6",
+          "message": "refactor: drop getters that mirror public fields (#1079)",
+          "timestamp": "2026-07-20T17:54:00+02:00",
+          "tree_id": "21444c1cc295a65c433c130d5e2048dce5409b49",
+          "url": "https://github.com/ivov/lisette/commit/1cccc2f40610970d972d717af4c2dd7ac356abd6"
+        },
+        "date": 1784562862400,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 116725,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 30077,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 24193,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 16706,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 13254,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 10215,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 6375,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 4427,
             "unit": "lines"
           },
           {
