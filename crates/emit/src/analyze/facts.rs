@@ -28,6 +28,7 @@ pub(crate) struct EmitFactsConfig<'a> {
     pub(crate) go_package_names: &'a HashMap<String, String>,
     pub(crate) go_module_ids: &'a HashSet<String>,
     pub(crate) entry_module: ModuleId,
+    pub(crate) entry_package_name: &'a str,
     pub(crate) go_module: String,
     pub(crate) options: EmitOptions,
     pub(crate) line_indexes: Arc<HashMap<u32, LineIndex>>,
@@ -47,6 +48,7 @@ pub(crate) struct EmitFacts<'a> {
     go_package_names: &'a HashMap<String, String>,
     go_module_ids: &'a HashSet<String>,
     entry_module: ModuleId,
+    entry_package_name: &'a str,
     go_module: String,
     options: EmitOptions,
     line_indexes: Arc<HashMap<u32, LineIndex>>,
@@ -68,6 +70,7 @@ impl<'a> EmitFacts<'a> {
             go_package_names: config.go_package_names,
             go_module_ids: config.go_module_ids,
             entry_module: config.entry_module,
+            entry_package_name: config.entry_package_name,
             go_module: config.go_module,
             options: config.options,
             line_indexes: config.line_indexes,
@@ -207,6 +210,10 @@ impl<'a> EmitFacts<'a> {
 
     pub(crate) fn is_entry_module(&self, module: &str) -> bool {
         module == self.entry_module.as_str()
+    }
+
+    pub(crate) fn entry_package_name(&self) -> &str {
+        self.entry_package_name
     }
 
     pub(crate) fn qualified_current(&self, name: &str) -> String {

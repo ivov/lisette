@@ -202,6 +202,7 @@ fn emit_and_write(
         project_root: None,
         locator: TypedefLocator::default(),
         compile_phase: CompilePhase::Emit,
+        project_kind: semantics::inference::ProjectKind::Binary,
         emit_tests: false,
         go_module: module.clone(),
         disable_cache: true,
@@ -219,6 +220,7 @@ fn emit_and_write(
     let files = Planner::emit(
         &result.into_emit_input(),
         &module,
+        "main",
         EmitOptions {
             sourcemap: false,
             emit_tests: false,

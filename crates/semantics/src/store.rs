@@ -120,6 +120,8 @@ pub struct Store {
     /// File IDs of `.test.lis` files, for detecting test-file context during
     /// inference after a module's `files` have been taken out.
     pub test_file_ids: HashSet<u32>,
+    /// Read during inference to gate the binary-only `main` signature check.
+    pub project_kind: crate::inference::ProjectKind,
 }
 
 impl Default for Store {
@@ -154,6 +156,7 @@ impl Store {
             equality_index: Default::default(),
             test_index: Default::default(),
             test_file_ids: Default::default(),
+            project_kind: Default::default(),
         }
     }
 
@@ -295,6 +298,7 @@ impl Store {
             equality_index: EqualityIndex::default(),
             test_index: TestIndex::default(),
             test_file_ids: self.test_file_ids.clone(),
+            project_kind: self.project_kind,
         }
     }
 

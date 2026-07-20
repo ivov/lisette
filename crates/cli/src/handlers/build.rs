@@ -9,7 +9,7 @@ use crate::lock::acquire_target_lock;
 use crate::workspace::{GoWorkspace, WorkspaceBindgen, warm_typedefs};
 use diagnostics::render::{self, Filter};
 use lisette::fs::{LocalFileSystem, prune_orphan_go_files};
-use lisette::pipeline::{CompileConfig, CompilePhase, Sources, TestIndex, compile};
+use lisette::pipeline::{CompileConfig, CompilePhase, ProjectKind, Sources, TestIndex, compile};
 
 pub fn emit(path: Option<String>, sourcemap: bool) -> i32 {
     with_locked_project(path, |prep| {
@@ -116,9 +116,10 @@ pub(super) fn link_project_binary(
 pub(super) fn prepare_project_build(project_path: &Path) -> Result<BuildPrep, i32> {
     crate::go_cli::require_go()?;
 
-    if !validate_project(project_path) {
-        return Err(1);
-    }
+    let layout = match validate_project(project_path) {
+        Some(layout) => layout,
+        None => return Err(1),
+    };
 
     let (manifest, locator) = match deps::TypedefLocator::from_project_with_manifest(project_path) {
         Ok(pair) => pair,
@@ -147,6 +148,7 @@ pub(super) fn prepare_project_build(project_path: &Path) -> Result<BuildPrep, i3
         target_dir,
         manifest,
         locator,
+        layout,
     })
 }
 
@@ -155,6 +157,7 @@ pub(super) struct BuildPrep {
     pub target_dir: PathBuf,
     pub manifest: deps::Manifest,
     pub locator: deps::TypedefLocator,
+    pub layout: ProjectLayout,
 }
 
 pub(super) struct BuildOptions {
@@ -261,7 +264,9 @@ pub(super) fn build_locked(prep: &BuildPrep, options: BuildOptions) -> BuildOutc
 
     let compile_config = CompileConfig {
         target_phase: CompilePhase::Emit,
+        project_kind: prep.layout.kind,
         go_module: go_module_name.to_string(),
+        entry_package_name: "main".to_string(),
         standalone_mode: false,
         load_siblings: true,
         sourcemap,
@@ -443,14 +448,43 @@ pub(super) fn build_locked(prep: &BuildPrep, options: BuildOptions) -> BuildOutc
     }
 }
 
-fn validate_project(project_path: &Path) -> bool {
+pub(super) struct ProjectLayout {
+    pub kind: ProjectKind,
+}
+
+pub(super) fn resolve_project_layout(
+    project_path: &Path,
+    missing_heading: &str,
+    missing_reason: String,
+) -> Option<ProjectLayout> {
+    let root_main = project_path.join("main.lis");
+    if root_main.exists() {
+        cli_error!(
+            "Misplaced entrypoint",
+            "Found `main.lis` in project root, expected it at `src/main.lis`",
+            "Move `main.lis` to `src/main.lis`"
+        );
+        return None;
+    }
+
+    if !project_path.join("src/main.lis").exists() {
+        cli_error!(missing_heading, missing_reason, "Create `src/main.lis`");
+        return None;
+    }
+
+    Some(ProjectLayout {
+        kind: ProjectKind::Binary,
+    })
+}
+
+fn validate_project(project_path: &Path) -> Option<ProjectLayout> {
     if !project_path.exists() {
         cli_error!(
             "Project not found",
             format!("Path `{}` does not exist", project_path.display()),
             "Check the path and try again"
         );
-        return false;
+        return None;
     }
 
     if project_path.is_file() {
@@ -462,31 +496,15 @@ fn validate_project(project_path: &Path) -> bool {
             ),
             "`lis build <path/to/dir>` to build a project, or use `lis run <path/to/file>` to run a single file standalone"
         );
-        return false;
+        return None;
     }
 
-    let root_main = project_path.join("main.lis");
-    if root_main.exists() {
-        cli_error!(
-            "Misplaced entrypoint",
-            "Found `main.lis` in project root, expected it at `src/main.lis`",
-            "Move `main.lis` to `src/main.lis`"
-        );
-        return false;
-    }
-
-    let entrypoint = project_path.join("src/main.lis");
-    if !entrypoint.exists() {
-        cli_error!(
-            "Failed to compile Lisette project to Go",
-            format!(
-                "No `src/main.lis` entrypoint in `{}`",
-                project_path.display()
-            ),
-            "Create `src/main.lis`"
-        );
-        return false;
-    }
-
-    true
+    resolve_project_layout(
+        project_path,
+        "Failed to compile Lisette project to Go",
+        format!(
+            "No `src/main.lis` entrypoint in `{}`",
+            project_path.display()
+        ),
+    )
 }

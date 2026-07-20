@@ -321,7 +321,12 @@ impl<'a> Planner<'a> {
 }
 
 impl<'a> Planner<'a> {
-    pub fn emit(analysis: &'a EmitInput, go_module: &str, options: EmitOptions) -> Vec<OutputFile> {
+    pub fn emit(
+        analysis: &'a EmitInput,
+        go_module: &str,
+        entry_package_name: &'a str,
+        options: EmitOptions,
+    ) -> Vec<OutputFile> {
         let line_indexes: Arc<HashMap<u32, LineIndex>> = Arc::new(if options.sourcemap {
             analysis
                 .files
@@ -353,7 +358,14 @@ impl<'a> Planner<'a> {
         const PARALLEL_THRESHOLD: usize = 4;
 
         let emit_one = |&(module_id, module_info): &(&ModuleId, &syntax::program::ModuleInfo)| {
-            emit_module(analysis, go_module, &shared, module_id, module_info)
+            emit_module(
+                analysis,
+                go_module,
+                entry_package_name,
+                &shared,
+                module_id,
+                module_info,
+            )
         };
 
         let mut output: Vec<OutputFile> = if work.len() < PARALLEL_THRESHOLD {
@@ -391,6 +403,7 @@ impl<'a> Planner<'a> {
             go_module_ids: config.go_module_ids,
             resolved_definitions: config.resolved_definitions,
             entry_module: config.module_id.to_string(),
+            entry_package_name: "main",
             go_module: config.go_module.to_string(),
             options: EmitOptions {
                 sourcemap,
@@ -636,6 +649,7 @@ struct SharedEmitContext {
 fn emit_module<'a>(
     analysis: &'a EmitInput,
     go_module: &str,
+    entry_package_name: &'a str,
     shared_emit_ctx: &SharedEmitContext,
     module_id: &str,
     module_info: &syntax::program::ModuleInfo,
@@ -652,6 +666,7 @@ fn emit_module<'a>(
         go_module_ids: &analysis.go_module_ids,
         resolved_definitions: &analysis.resolved_definitions,
         entry_module: analysis.entry_module_id.to_string(),
+        entry_package_name,
         go_module: go_module.to_string(),
         options: shared_emit_ctx.options.clone(),
         line_indexes: shared_emit_ctx.line_indexes.clone(),

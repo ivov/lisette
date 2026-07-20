@@ -7,7 +7,7 @@ use std::process::Command;
 use crate::cli_error;
 use crate::go_cli;
 use diagnostics::render::{self, Filter};
-use lisette::pipeline::{CompileConfig, CompilePhase, compile};
+use lisette::pipeline::{CompileConfig, CompilePhase, ProjectKind, compile};
 use semantics::loader::MemoryLoader;
 
 fn exec_binary(output_path: &Path, args: &[String], heading: &str) -> i32 {
@@ -139,7 +139,9 @@ fn run_standalone(file: &str, args: Vec<String>, sourcemap: bool, go_flags: &[St
 
     let compile_config = CompileConfig {
         target_phase: CompilePhase::Emit,
+        project_kind: ProjectKind::Binary,
         go_module: "lis-standalone".to_string(),
+        entry_package_name: "main".to_string(),
         standalone_mode: true,
         load_siblings: false,
         sourcemap,

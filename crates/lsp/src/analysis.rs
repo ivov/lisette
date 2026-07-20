@@ -7,7 +7,7 @@ use tower_lsp::lsp_types::*;
 use deps::TypedefLocator;
 use diagnostics::LisetteDiagnostic;
 use passes::analyze;
-use semantics::inference::{AnalyzeInput, CompilePhase, SemanticConfig};
+use semantics::inference::{AnalyzeInput, CompilePhase, ProjectKind, SemanticConfig};
 use syntax::desugar;
 use syntax::lex::Lexer;
 use syntax::parse::Parser;
@@ -145,6 +145,7 @@ impl SharedState {
                 Some(config.root.clone())
             },
             compile_phase: CompilePhase::Check,
+            project_kind: ProjectKind::Binary,
             emit_tests: false,
             locator,
             go_module: String::new(),

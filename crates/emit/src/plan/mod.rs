@@ -44,7 +44,7 @@ impl Planner<'_> {
         let mut make_functions_by_file = self.collect_local_make_function_plans();
 
         let package_name = if self.facts.is_entry_module(module_id) {
-            "main".to_string()
+            self.facts.entry_package_name().to_string()
         } else {
             let raw = module_id.rsplit('/').next().unwrap_or(module_id);
             go_name::sanitize_package_name(raw).into_owned()

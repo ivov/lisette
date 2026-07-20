@@ -9,7 +9,7 @@ use passes::analyze;
 use semantics::cache::EmitStamp;
 use semantics::inference::{AnalyzeInput, SemanticConfig};
 
-pub use semantics::inference::CompilePhase;
+pub use semantics::inference::{CompilePhase, ProjectKind};
 use semantics::loader::Loader;
 pub use syntax::program::TestIndex;
 
@@ -27,7 +27,9 @@ pub type Sources = HashMap<u32, SourceInfo>;
 #[derive(Debug, Clone)]
 pub struct CompileConfig {
     pub target_phase: CompilePhase,
+    pub project_kind: ProjectKind,
     pub go_module: String,
+    pub entry_package_name: String,
     pub standalone_mode: bool,
     pub load_siblings: bool,
     pub sourcemap: bool,
@@ -95,6 +97,7 @@ pub fn compile(
         file_comment: syntax_result.file_comment,
         project_root: config.project_root.clone(),
         compile_phase: config.target_phase,
+        project_kind: config.project_kind,
         emit_tests: config.emit_tests,
         locator: config.locator.clone(),
         go_module: config.go_module.clone(),
@@ -152,6 +155,7 @@ pub fn compile(
     let mut output = Planner::emit(
         &semantic_result.into_emit_input(),
         &config.go_module,
+        &config.entry_package_name,
         EmitOptions {
             sourcemap: config.sourcemap,
             emit_tests: config.emit_tests,
@@ -201,7 +205,9 @@ mod tests {
         let source = stdfs::read_to_string(&src_main).unwrap();
         let config = CompileConfig {
             target_phase: CompilePhase::Check,
+            project_kind: ProjectKind::Binary,
             go_module: "test".to_string(),
+            entry_package_name: "main".to_string(),
             standalone_mode: false,
             load_siblings: true,
             sourcemap: false,
@@ -224,6 +230,95 @@ mod tests {
             .collect();
         diags.sort();
         diags
+    }
+
+    fn compile_project_source(
+        source: &str,
+        project_kind: ProjectKind,
+        target_phase: CompilePhase,
+        entry_package_name: &str,
+    ) -> CompileResult {
+        let tmp = tempdir().unwrap();
+        let root = tmp.path();
+        stdfs::create_dir_all(root.join("src")).unwrap();
+        stdfs::write(
+            root.join("lisette.toml"),
+            "[project]\nname = \"test\"\nversion = \"0.1.0\"\n",
+        )
+        .unwrap();
+        stdfs::write(root.join("src").join("main.lis"), source).unwrap();
+
+        let (_, locator) = TypedefLocator::from_project_with_manifest(root).unwrap();
+        let src_main = root.join("src").join("main.lis");
+        let config = CompileConfig {
+            target_phase,
+            project_kind,
+            go_module: "test".to_string(),
+            entry_package_name: entry_package_name.to_string(),
+            standalone_mode: false,
+            load_siblings: true,
+            sourcemap: false,
+            emit_tests: false,
+            project_root: Some(root.to_path_buf()),
+            locator,
+        };
+        let fs_loader = LocalFileSystem::new(src_main.parent().unwrap().to_str().unwrap());
+        compile(source, "main.lis", "src/main.lis", &config, &fs_loader)
+    }
+
+    #[test]
+    fn entry_package_name_fact_reaches_emitted_output() {
+        let result = compile_project_source(
+            "fn main() {}\n",
+            ProjectKind::Binary,
+            CompilePhase::Emit,
+            "widget",
+        );
+        assert!(
+            !result.errors.iter().any(|d| d.is_error()),
+            "{:?}",
+            result.errors
+        );
+        assert!(
+            result.output.iter().any(|f| f.package_name == "widget"),
+            "the entry-package-name fact should reach emitted output, got: {:?}",
+            result
+                .output
+                .iter()
+                .map(|f| f.package_name.clone())
+                .collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn library_main_function_skips_binary_signature_check() {
+        let binary = compile_project_source(
+            "fn main(x: int) {}\n",
+            ProjectKind::Binary,
+            CompilePhase::Check,
+            "main",
+        );
+        assert!(
+            binary
+                .errors
+                .iter()
+                .any(|d| d.code_str() == Some("infer.invalid_main_signature")),
+            "a binary `main` with parameters must be rejected"
+        );
+
+        let library = compile_project_source(
+            "fn main(x: int) {}\n",
+            ProjectKind::Library,
+            CompilePhase::Check,
+            "main",
+        );
+        assert!(
+            !library
+                .errors
+                .iter()
+                .any(|d| d.code_str() == Some("infer.invalid_main_signature")),
+            "a library `main` is an ordinary function, not a binary entrypoint"
+        );
     }
 
     #[test]
@@ -299,6 +394,7 @@ mod tests {
             file_comment: build_result.file_comment,
             project_root: Some(project_dir.to_path_buf()),
             compile_phase: CompilePhase::Check,
+            project_kind: ProjectKind::Binary,
             emit_tests: false,
             locator,
             go_module: "test".to_string(),
@@ -402,6 +498,7 @@ mod tests {
             file_comment: build_result.file_comment,
             project_root: Some(project_dir.to_path_buf()),
             compile_phase: CompilePhase::Check,
+            project_kind: ProjectKind::Binary,
             emit_tests: false,
             locator,
             go_module: "test".to_string(),

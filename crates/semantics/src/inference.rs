@@ -34,6 +34,13 @@ pub enum CompilePhase {
     Emit,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ProjectKind {
+    #[default]
+    Binary,
+    Library,
+}
+
 #[derive(Debug, Clone)]
 pub struct SemanticConfig {
     pub run_lints: bool,
@@ -54,6 +61,7 @@ pub struct AnalyzeInput<'a> {
     pub file_comment: Option<String>,
     pub project_root: Option<PathBuf>,
     pub compile_phase: CompilePhase,
+    pub project_kind: ProjectKind,
     pub emit_tests: bool,
     pub locator: TypedefLocator,
     /// Go module path (from `lisette.toml`); folded into the cache emit-artifact
@@ -99,6 +107,7 @@ pub struct InferenceOutput {
 /// post-inference passes consume. Internal, unstable API.
 pub fn run_inference(input: AnalyzeInput) -> InferenceOutput {
     let mut store = Store::new();
+    store.project_kind = input.project_kind;
 
     store.init_entry_module();
     store.store_entry_file(

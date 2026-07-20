@@ -9,7 +9,7 @@ use deps::TypedefLocator;
 use diagnostics::render::{self, Filter, OutputFormat};
 use diagnostics::{Fix, apply_fixes};
 use lisette::fs::LocalFileSystem;
-use lisette::pipeline::{CompileConfig, CompilePhase, CompileResult, compile};
+use lisette::pipeline::{CompileConfig, CompilePhase, CompileResult, ProjectKind, compile};
 
 use crate::cli_error;
 use crate::lock::acquire_target_lock;
@@ -53,7 +53,13 @@ pub fn check(
     };
 
     if !target_path.is_dir() {
-        return check_single_file(target_path, &options, false, TypedefLocator::default());
+        return check_single_file(
+            target_path,
+            &options,
+            false,
+            TypedefLocator::default(),
+            ProjectKind::Binary,
+        );
     }
 
     if target_path.join("lisette.toml").exists() {
@@ -64,26 +70,16 @@ pub fn check(
 }
 
 fn check_project(project_path: &Path, options: &CheckOptions) -> i32 {
-    let root_main = project_path.join("main.lis");
+    let layout = match super::build::resolve_project_layout(
+        project_path,
+        "Failed to lint and typecheck project",
+        format!("No `src/main.lis` at `{}`", project_path.display()),
+    ) {
+        Some(layout) => layout,
+        None => return 1,
+    };
+
     let src_main = project_path.join("src/main.lis");
-
-    if root_main.exists() {
-        cli_error!(
-            "Misplaced entrypoint",
-            "Found `main.lis` in project root, expected it at `src/main.lis`",
-            "Move `main.lis` to `src/main.lis`"
-        );
-        return 1;
-    }
-
-    if !src_main.exists() {
-        cli_error!(
-            "Failed to lint and typecheck project",
-            format!("No `src/main.lis` at `{}`", project_path.display()),
-            "Create `src/main.lis`"
-        );
-        return 1;
-    }
 
     let (manifest, locator) = match deps::TypedefLocator::from_project_with_manifest(project_path) {
         Ok(pair) => pair,
@@ -132,7 +128,7 @@ fn check_project(project_path: &Path, options: &CheckOptions) -> i32 {
     ));
     let locator = locator.with_bindgen(bindgen);
 
-    let result = check_single_file(&src_main, options, true, locator);
+    let result = check_single_file(&src_main, options, true, locator, layout.kind);
     drop(target_lock);
     result
 }
@@ -142,10 +138,12 @@ fn check_single_file(
     options: &CheckOptions,
     load_siblings: bool,
     locator: TypedefLocator,
+    project_kind: ProjectKind,
 ) -> i32 {
     let start = Instant::now();
     let unix = matches!(options.format, OutputFormat::Unix);
-    let Some((result, source, filename)) = compile_single_file(file_path, load_siblings, locator)
+    let Some((result, source, filename)) =
+        compile_single_file(file_path, load_siblings, locator, project_kind)
     else {
         return 1; // Read error already reported by compile_single_file
     };
@@ -205,6 +203,7 @@ fn compile_single_file(
     file_path: &Path,
     load_siblings: bool,
     locator: TypedefLocator,
+    project_kind: ProjectKind,
 ) -> Option<(CompileResult, String, String)> {
     let source = match fs::read_to_string(file_path) {
         Ok(s) => s,
@@ -228,7 +227,9 @@ fn compile_single_file(
 
     let config = CompileConfig {
         target_phase: CompilePhase::Check,
+        project_kind,
         go_module: "main".to_string(),
+        entry_package_name: "main".to_string(),
         standalone_mode: !load_siblings,
         load_siblings,
         sourcemap: false,
@@ -282,7 +283,9 @@ fn check_loose_dir(dir: &Path, options: &CheckOptions) -> i32 {
         let mut compiled = None;
         let mut dir_read_failures = 0;
         for file in dir_files {
-            if let Some(result) = compile_single_file(file, true, TypedefLocator::default()) {
+            if let Some(result) =
+                compile_single_file(file, true, TypedefLocator::default(), ProjectKind::Binary)
+            {
                 compiled = Some(result);
                 break;
             }

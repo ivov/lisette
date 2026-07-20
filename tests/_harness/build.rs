@@ -36,6 +36,7 @@ fn compile_with(
         project_root: None,
         locator,
         compile_phase: semantics::inference::CompilePhase::Check,
+        project_kind: semantics::inference::ProjectKind::Binary,
         emit_tests: false,
         go_module: String::new(),
         disable_cache: false,
@@ -86,6 +87,7 @@ pub fn compile_standalone_entry(
         project_root: None,
         locator: deps::TypedefLocator::default(),
         compile_phase: phase,
+        project_kind: semantics::inference::ProjectKind::Binary,
         emit_tests: false,
         go_module: String::new(),
         disable_cache: true,
@@ -174,6 +176,7 @@ pub fn compile_project_files_with_tests(
         project_root: None,
         locator: deps::TypedefLocator::default(),
         compile_phase: semantics::inference::CompilePhase::Emit,
+        project_kind: semantics::inference::ProjectKind::Binary,
         emit_tests,
         go_module: go_module.to_string(),
         disable_cache: true,
@@ -189,6 +192,7 @@ pub fn compile_project_files_with_tests(
     Planner::emit(
         &analysis.into_emit_input(),
         go_module,
+        "main",
         EmitOptions {
             sourcemap,
             emit_tests,

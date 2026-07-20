@@ -203,14 +203,22 @@ pub fn validate_project_name(name: &str) -> Result<(), String> {
     if name.is_empty() {
         return Err("project name is empty".to_string());
     }
-    if let Some(bad) = name
-        .chars()
-        .find(|c| !(c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_' | '~')))
-    {
+    if name.starts_with('/') || name.ends_with('/') || name.contains("//") {
         return Err(format!(
-            "`{}` contains `{}`, which is not allowed in a project name (only ASCII letters, digits, and `.-_~`)",
-            name, bad
+            "`{}` has an empty path element (no leading, trailing, or doubled `/`)",
+            name
         ));
+    }
+    for element in name.split('/') {
+        if let Some(bad) = element
+            .chars()
+            .find(|c| !(c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_' | '~')))
+        {
+            return Err(format!(
+                "`{}` contains `{}`, which is not allowed in a project name (only ASCII letters, digits, `.-_~`, and `/` between path elements)",
+                name, bad
+            ));
+        }
     }
     Ok(())
 }
@@ -817,5 +825,20 @@ version = "0.1.0"
         let manifest = parse_manifest(dir.path()).unwrap();
 
         assert!(check_no_subpackage_deps(&manifest).is_ok());
+    }
+
+    #[test]
+    fn validate_project_name_accepts_simple_and_module_path_names() {
+        assert!(validate_project_name("hello").is_ok());
+        assert!(validate_project_name("github.com/enquora-net/capp-ast").is_ok());
+    }
+
+    #[test]
+    fn validate_project_name_rejects_empty_elements_and_bad_chars() {
+        assert!(validate_project_name("").is_err());
+        assert!(validate_project_name("/github.com/x").is_err());
+        assert!(validate_project_name("github.com/x/").is_err());
+        assert!(validate_project_name("github.com//x").is_err());
+        assert!(validate_project_name("has space").is_err());
     }
 }

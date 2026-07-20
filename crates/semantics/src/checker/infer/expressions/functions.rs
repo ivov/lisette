@@ -16,6 +16,7 @@ use super::primitives::contains_deref;
 use super::struct_call::same_nominal;
 use crate::checker::infer::InferCtx;
 use crate::checker::registration::test_functions::normalize_test_params;
+use crate::inference::ProjectKind;
 use crate::store::ENTRY_MODULE_ID;
 
 impl InferCtx<'_, '_> {
@@ -118,6 +119,7 @@ impl InferCtx<'_, '_> {
         }
 
         if name == "main"
+            && store.project_kind == ProjectKind::Binary
             && self.cursor.module_id == ENTRY_MODULE_ID
             && (!params.is_empty() || return_annotation != Annotation::Unknown)
         {
