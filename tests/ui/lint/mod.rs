@@ -160,6 +160,48 @@ fn main() {
 }
 
 #[test]
+fn append_to_zero_filled_silent_when_other_branch_reads_zero_fill() {
+    assert_no_lint_warnings!(
+        r#"
+fn run(flag: bool) {
+  let mut ids = Slice.make<int>(5)
+  if flag {
+    ids = ids.append(7)
+  } else {
+    let _ = ids[0]
+  }
+  let _ = ids
+}
+
+fn main() {
+  run(true)
+}
+"#
+    );
+}
+
+#[test]
+fn append_to_zero_filled_fires_when_both_branches_append() {
+    assert_lint_snapshot!(
+        r#"
+fn run(flag: bool) {
+  let mut ids = Slice.make<int>(5)
+  if flag {
+    ids = ids.append(1)
+  } else {
+    ids = ids.append(2)
+  }
+  let _ = ids
+}
+
+fn main() {
+  run(true)
+}
+"#
+    );
+}
+
+#[test]
 fn reserve_discarded_output_warns() {
     assert_lint_snapshot!(
         r#"
@@ -871,8 +913,59 @@ fn main() {
 }
 
 #[test]
-fn misrefactored_assign_op_addition() {
+fn misrefactored_assign_op_bitand() {
     assert_lint_snapshot!(
+        r#"
+fn scale(b: int) {
+  let mut a = 2
+  a &= a & b
+  let _ = a
+}
+
+fn main() {
+  scale(2)
+}
+"#
+    );
+}
+
+#[test]
+fn misrefactored_assign_op_bitor_target_on_right() {
+    assert_lint_snapshot!(
+        r#"
+fn combine(b: int) {
+  let mut a = 1
+  a |= b | a
+  let _ = a
+}
+
+fn main() {
+  combine(2)
+}
+"#
+    );
+}
+
+#[test]
+fn misrefactored_assign_op_field() {
+    assert_lint_snapshot!(
+        r#"
+struct Counter { count: int }
+
+fn main() {
+  let mut c = Counter { count: 0 }
+  c.count &= c.count & 1
+  let _ = c.count
+}
+"#
+    );
+}
+
+// `+`, `*`, and `^` are commutative but not idempotent: `a op (a op b) != a op b`
+// in general, so a rewrite to `a op= b` would silently change the computed value.
+#[test]
+fn misrefactored_assign_op_addition_no_warning() {
+    assert_no_lint_warnings!(
         r#"
 fn add(b: int) {
   let mut a = 1
@@ -888,8 +981,8 @@ fn main() {
 }
 
 #[test]
-fn misrefactored_assign_op_multiplication() {
-    assert_lint_snapshot!(
+fn misrefactored_assign_op_multiplication_no_warning() {
+    assert_no_lint_warnings!(
         r#"
 fn scale(b: int) {
   let mut a = 2
@@ -905,32 +998,34 @@ fn main() {
 }
 
 #[test]
-fn misrefactored_assign_op_target_on_right() {
-    assert_lint_snapshot!(
+fn misrefactored_assign_op_xor_no_warning() {
+    assert_no_lint_warnings!(
         r#"
-fn add(b: int) {
+fn toggle(b: int) {
   let mut a = 1
-  a += b + a
+  a ^= a ^ b
   let _ = a
 }
 
 fn main() {
-  add(2)
+  toggle(2)
 }
 "#
     );
 }
 
 #[test]
-fn misrefactored_assign_op_field() {
-    assert_lint_snapshot!(
+fn misrefactored_assign_op_subtraction_target_on_left_no_warning() {
+    assert_no_lint_warnings!(
         r#"
-struct Counter { count: int }
+fn sub(b: int) {
+  let mut a = 10
+  a -= a - b
+  let _ = a
+}
 
 fn main() {
-  let mut c = Counter { count: 0 }
-  c.count += c.count + 1
-  let _ = c.count
+  sub(3)
 }
 "#
     );
@@ -5563,6 +5658,25 @@ fn main() {
 }
 
 #[test]
+fn identical_if_branches_side_effecting_condition_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:fmt"
+
+fn log_and_true() -> bool {
+  fmt.Println("side effect")
+  true
+}
+
+fn main() {
+  let x = if log_and_true() { 42 } else { 42 };
+  let _ = x
+}
+"#
+    );
+}
+
+#[test]
 fn collapsible_if() {
     assert_lint_snapshot!(
         r#"
@@ -7584,6 +7698,27 @@ fn main() {
 }
 
 #[test]
+fn unused_enum_variant_serialization_attr_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:fmt"
+
+#[json]
+enum Status {
+  Active,
+  Inactive,
+  Archived,
+}
+
+fn main() {
+  let s = Status.Active
+  fmt.Println(s)
+}
+"#
+    );
+}
+
+#[test]
 fn public_enum_variants_not_unused() {
     assert_no_lint_warnings!(
         r#"
@@ -8525,6 +8660,22 @@ fn main() {
 }
 
 #[test]
+fn type_parameter_used_only_in_body_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+pub fn make_empty_len<T>() -> int {
+  let s: Slice<T> = Slice.new<T>()
+  s.length()
+}
+
+fn main() {
+  let _ = make_empty_len<int>()
+}
+"#
+    );
+}
+
+#[test]
 fn type_param_only_in_bound_warns() {
     assert_lint_snapshot!(
         r#"
@@ -8576,6 +8727,33 @@ impl Foo {
 
 pub fn squiggle<A: Cloner<B>, B>(a: A) -> B {
   a.clone()
+}
+
+fn main() {
+  let _ = squiggle(Foo{})
+}
+"#
+    );
+}
+
+#[test]
+fn type_param_in_bound_and_used_in_body_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+pub interface Cloner<T: Cloner<T>> {
+  fn clone() -> T
+}
+
+struct Foo{}
+
+impl Foo {
+  fn clone(self) -> Foo { Foo{} }
+}
+
+pub fn squiggle<A: Cloner<B>, B>(a: A) -> int {
+  let x: B = a.clone()
+  let _ = x
+  0
 }
 
 fn main() {
@@ -12060,6 +12238,28 @@ fn main() {
 }
 
 #[test]
+fn invisible_in_string_emoji_zwj_sequence_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let _ = "👨‍👩‍👧"
+}
+"#
+    );
+}
+
+#[test]
+fn invisible_in_string_zwj_between_plain_text_still_warns() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let _ = "admin‍user"
+}
+"#
+    );
+}
+
+#[test]
 fn verbose_failure_propagation_option_match() {
     assert_lint_snapshot!(
         r#"
@@ -13536,6 +13736,47 @@ fn main() {
     wg1.Add(1)
   }
   wg2.Wait()
+}
+"#
+    );
+}
+
+#[test]
+fn waitgroup_add_in_task_covered_by_prior_add_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:sync"
+
+fn main() {
+  let mut wg = sync.WaitGroup {}
+  wg.Add(1)
+  task {
+    defer wg.Done()
+    wg.Add(1)
+  }
+  wg.Wait()
+}
+"#
+    );
+}
+
+#[test]
+fn waitgroup_add_in_nested_task_covered_by_prior_add_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:sync"
+
+fn main() {
+  let mut wg = sync.WaitGroup {}
+  wg.Add(1)
+  task {
+    defer wg.Done()
+    wg.Add(1)
+    task {
+      defer wg.Done()
+    }
+  }
+  wg.Wait()
 }
 "#
     );

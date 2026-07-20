@@ -1,10 +1,11 @@
 use crate::passes::walk::NodeCtx;
 use syntax::ast::Expression;
 
-use super::helpers::{expressions_equivalent, is_empty_block};
+use super::helpers::{expressions_equivalent, is_empty_block, is_side_effect_free};
 
 pub fn check_identical_if_branches(expression: &Expression, ctx: &NodeCtx) {
     let Expression::If {
+        condition,
         consequence,
         alternative,
         span,
@@ -26,6 +27,11 @@ pub fn check_identical_if_branches(expression: &Expression, ctx: &NodeCtx) {
     // Empty blocks are usually in-progress stubs; do not add noise on top of
     // other lints that already cover that case.
     if is_empty_block(consequence) || is_empty_block(alternative) {
+        return;
+    }
+
+    // Removing the `if` also drops the condition, so it must be safe to drop.
+    if !is_side_effect_free(condition) {
         return;
     }
 

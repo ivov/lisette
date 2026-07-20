@@ -14,7 +14,7 @@ use diagnostics::{Edit, Fix};
 use semantics::context::AnalysisContext;
 use semantics::facts::Facts;
 use semantics::store::Store;
-use syntax::ast::{AttributeArg, Expression, ImportAlias, Span, Visibility};
+use syntax::ast::{Attribute, AttributeArg, Expression, ImportAlias, Span, Visibility};
 use syntax::program::EqualityIndex;
 use syntax::program::Module;
 use syntax::program::UnusedInfo;
@@ -295,12 +295,15 @@ fn collect_items(
                     name,
                     name_span,
                     variants,
+                    attributes,
                     visibility,
                     ..
                 } => {
                     let id = ModuleItemId::new(name);
                     let is_public = *visibility == Visibility::Public;
                     graph.add_item(id, *name_span, ItemKind::Type, is_public);
+
+                    let has_serialization_attr = has_serialization_attr(attributes);
 
                     for enum_variant in variants {
                         let variant_id = EnumVariantId::new(name, &enum_variant.name);
@@ -309,6 +312,7 @@ fn collect_items(
                             EnumVariantInfo {
                                 span: enum_variant.name_span,
                                 parent_is_public: is_public,
+                                parent_has_serialization_attr: has_serialization_attr,
                             },
                         );
                     }
@@ -325,24 +329,7 @@ fn collect_items(
                     let is_public = *visibility == Visibility::Public;
                     graph.add_item(id, *name_span, ItemKind::Type, is_public);
 
-                    let has_serialization_attr = attributes.iter().any(|a| {
-                        if SERIALIZATION_KEYS.contains(&a.name.as_str()) {
-                            return true;
-                        }
-                        if a.name == "tag" {
-                            return match a.args.first() {
-                                Some(AttributeArg::String(key)) => {
-                                    SERIALIZATION_KEYS.contains(&key.as_str())
-                                }
-                                Some(AttributeArg::Raw(raw)) => raw
-                                    .split(':')
-                                    .next()
-                                    .is_some_and(|k| SERIALIZATION_KEYS.contains(&k)),
-                                _ => false,
-                            };
-                        }
-                        false
-                    });
+                    let has_serialization_attr = has_serialization_attr(attributes);
 
                     let has_display_attr = attributes.iter().any(|a| a.name == "display");
                     let qualified_name = format!("{module_id}.{name}");
@@ -420,6 +407,25 @@ fn collect_items(
             }
         }
     }
+}
+
+fn has_serialization_attr(attributes: &[Attribute]) -> bool {
+    attributes.iter().any(|a| {
+        if SERIALIZATION_KEYS.contains(&a.name.as_str()) {
+            return true;
+        }
+        if a.name == "tag" {
+            return match a.args.first() {
+                Some(AttributeArg::String(key)) => SERIALIZATION_KEYS.contains(&key.as_str()),
+                Some(AttributeArg::Raw(raw)) => raw
+                    .split(':')
+                    .next()
+                    .is_some_and(|k| SERIALIZATION_KEYS.contains(&k)),
+                _ => false,
+            };
+        }
+        false
+    })
 }
 
 fn create_unused_diagnostic(

@@ -27,10 +27,27 @@ fn visit_expression(expression: &Expression, local: &mut LocalFacts) {
             generics,
             params,
             return_type,
+            body,
             ..
         } => {
-            check_unused_type_parameters(generics, params, return_type, local);
-            check_type_params_only_in_bound(generics, params, return_type, local);
+            if !generics.is_empty() {
+                let mut still_missing: HashSet<EcoString> =
+                    generics.iter().map(|g| g.name.clone()).collect();
+                body_remove_found_type_names(body, &mut still_missing);
+                let found_in_body: HashSet<EcoString> = generics
+                    .iter()
+                    .map(|g| g.name.clone())
+                    .filter(|name| !still_missing.contains(name))
+                    .collect();
+                check_unused_type_parameters(generics, params, return_type, &found_in_body, local);
+                check_type_params_only_in_bound(
+                    generics,
+                    params,
+                    return_type,
+                    &found_in_body,
+                    local,
+                );
+            }
         }
         _ => {}
     }
@@ -44,12 +61,9 @@ fn check_unused_type_parameters(
     generics: &[Generic],
     params: &[Binding],
     return_type: &Type,
+    found_in_body: &HashSet<EcoString>,
     local: &mut LocalFacts,
 ) {
-    if generics.is_empty() {
-        return;
-    }
-
     let mut remaining: HashSet<EcoString> = generics.iter().map(|g| g.name.clone()).collect();
     for param in params {
         param.ty.remove_found_type_names(&mut remaining);
@@ -60,6 +74,7 @@ fn check_unused_type_parameters(
             annotation_remove_names(bound, &mut remaining);
         }
     }
+    remaining.retain(|name| !found_in_body.contains(name));
 
     for generic in generics {
         if generic.name.starts_with('_') {
@@ -76,16 +91,15 @@ fn check_type_params_only_in_bound(
     generics: &[Generic],
     params: &[Binding],
     return_type: &Type,
+    found_in_body: &HashSet<EcoString>,
     local: &mut LocalFacts,
 ) {
-    if generics.is_empty() {
-        return;
-    }
     if generics.iter().all(|g| g.bounds.is_empty()) {
         return;
     }
 
-    let only_in_bound = collect_type_params_only_in_bound(generics, params, return_type);
+    let only_in_bound =
+        collect_type_params_only_in_bound(generics, params, return_type, found_in_body);
     if only_in_bound.is_empty() {
         return;
     }
@@ -102,6 +116,7 @@ fn collect_type_params_only_in_bound(
     generics: &[Generic],
     params: &[Binding],
     return_type: &Type,
+    found_in_body: &HashSet<EcoString>,
 ) -> HashSet<EcoString> {
     let mut unseen_outside_bound_rhs: HashSet<EcoString> =
         generics.iter().map(|g| g.name.clone()).collect();
@@ -111,6 +126,7 @@ fn collect_type_params_only_in_bound(
             .remove_found_type_names(&mut unseen_outside_bound_rhs);
     }
     return_type.remove_found_type_names(&mut unseen_outside_bound_rhs);
+    unseen_outside_bound_rhs.retain(|name| !found_in_body.contains(name));
 
     let mut unseen_anywhere = unseen_outside_bound_rhs.clone();
     for generic in generics {
@@ -123,6 +139,29 @@ fn collect_type_params_only_in_bound(
         .into_iter()
         .filter(|name| !unseen_anywhere.contains(name))
         .collect()
+}
+
+/// Stops at nested function/lambda boundaries, which may shadow the name.
+fn body_remove_found_type_names(expression: &Expression, names: &mut HashSet<EcoString>) {
+    if names.is_empty() {
+        return;
+    }
+    match expression {
+        Expression::Function { .. } | Expression::Lambda { .. } => return,
+        Expression::Let { binding, .. } => binding.ty.remove_found_type_names(names),
+        Expression::Call {
+            resolved_type_args, ..
+        } => {
+            for ty in resolved_type_args {
+                ty.remove_found_type_names(names);
+            }
+        }
+        Expression::Cast { ty, .. } => ty.remove_found_type_names(names),
+        _ => {}
+    }
+    for child in expression.children() {
+        body_remove_found_type_names(child, names);
+    }
 }
 
 fn annotation_remove_names(annotation: &Annotation, names: &mut HashSet<EcoString>) {

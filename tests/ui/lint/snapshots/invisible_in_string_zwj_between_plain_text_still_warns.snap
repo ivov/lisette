@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  ▲ Invisible character in string
+   ╭─[test.lis:3:11]
+ 2 │ fn main() {
+ 3 │   let _ = "admin‍user"
+   ·           ─────┬─────
+   ·                ╰── contains U+200D (zero-width joiner)
+ 4 │ }
+   ╰────
+  help: Invisible characters in strings can hide bugs and silently shift meaning. Remove the character, or replace it with the visible character you meant · code: [lint.invisible_in_string]

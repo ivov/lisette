@@ -37,8 +37,30 @@ pub fn check_invisible_in_string_pattern(pattern: &Pattern, ctx: &NodeCtx) {
 }
 
 fn first_invisible(text: &str) -> Option<(u32, &'static str, bool)> {
-    text.chars()
-        .find_map(|c| classify_invisible(c).map(|(name, is_bidi)| (c as u32, name, is_bidi)))
+    let mut prev: Option<char> = None;
+    let mut chars = text.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c == '\u{200D}' {
+            let next = chars.peek().copied();
+            if prev.is_some_and(is_emoji) && next.is_some_and(is_emoji) {
+                prev = Some(c);
+                continue;
+            }
+        }
+        if let Some((name, is_bidi)) = classify_invisible(c) {
+            return Some((c as u32, name, is_bidi));
+        }
+        prev = Some(c);
+    }
+    None
+}
+
+fn is_emoji(c: char) -> bool {
+    matches!(c as u32,
+        0x1F300..=0x1FAFF
+            | 0x2600..=0x27BF
+            | 0x1F1E6..=0x1F1FF
+            | 0xFE0F)
 }
 
 fn classify_invisible(c: char) -> Option<(&'static str, bool)> {

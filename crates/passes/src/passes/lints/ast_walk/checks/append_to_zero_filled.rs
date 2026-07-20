@@ -119,12 +119,57 @@ fn first_use(expression: &Expression, binding_id: BindingId) -> Option<FirstUse>
     if is_binding(expression, binding_id) {
         return Some(FirstUse::Other);
     }
+    if let Some((unconditional, branches)) = branch_parts(expression) {
+        for part in unconditional {
+            if let Some(found) = first_use(part, binding_id) {
+                return Some(found);
+            }
+        }
+        return first_use_across_branches(&branches, binding_id);
+    }
     for child in expression.children() {
         if let Some(found) = first_use(child, binding_id) {
             return Some(found);
         }
     }
     None
+}
+
+/// The condition/scrutinee and the mutually exclusive branch bodies, if any.
+fn branch_parts(expression: &Expression) -> Option<(Vec<&Expression>, Vec<&Expression>)> {
+    match expression {
+        Expression::If {
+            condition,
+            consequence,
+            alternative,
+            ..
+        } => Some((vec![condition], vec![consequence, alternative])),
+        Expression::IfLet {
+            scrutinee,
+            consequence,
+            alternative,
+            ..
+        } => Some((vec![scrutinee], vec![consequence, alternative])),
+        Expression::Match { subject, arms, .. } => Some((
+            vec![subject.as_ref()],
+            arms.iter().map(|arm| arm.expression.as_ref()).collect(),
+        )),
+        _ => None,
+    }
+}
+
+fn first_use_across_branches(branches: &[&Expression], binding_id: BindingId) -> Option<FirstUse> {
+    let mut append_span = None;
+    for branch in branches {
+        match first_use(branch, binding_id) {
+            Some(FirstUse::Other) => return Some(FirstUse::Other),
+            Some(FirstUse::AppendReceiver(span)) => {
+                append_span.get_or_insert(span);
+            }
+            None => {}
+        }
+    }
+    append_span.map(FirstUse::AppendReceiver)
 }
 
 /// The receiver of a `receiver.append(...)` or `Slice.append(receiver, ...)`

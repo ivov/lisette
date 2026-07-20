@@ -34,11 +34,13 @@ pub fn check_misrefactored_assign_op(expression: &Expression, ctx: &NodeCtx) {
         return;
     }
 
-    // The mirror form `a op= b op a` only collapses to `a op= b` for a commutative
-    // `op`; a non-commutative one (`a -= b - a`) would get a wrong rewrite.
+    // `a op= a op b` only collapses to `a op= b` when `op` is idempotent.
+    if !is_idempotent(*compound) {
+        return;
+    }
     let other = if expressions_equivalent(target, rhs_left) {
         rhs_right
-    } else if is_commutative(*compound) && expressions_equivalent(target, rhs_right) {
+    } else if expressions_equivalent(target, rhs_right) {
         rhs_left
     } else {
         return;
@@ -61,10 +63,9 @@ pub fn check_misrefactored_assign_op(expression: &Expression, ctx: &NodeCtx) {
     ));
 }
 
-fn is_commutative(operator: BinaryOperator) -> bool {
-    use BinaryOperator::*;
+fn is_idempotent(operator: BinaryOperator) -> bool {
     matches!(
         operator,
-        Addition | Multiplication | BitwiseAnd | BitwiseOr | BitwiseXor
+        BinaryOperator::BitwiseAnd | BinaryOperator::BitwiseOr
     )
 }

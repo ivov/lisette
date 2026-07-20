@@ -4,9 +4,9 @@ source: tests/ui/lint/mod.rs
   ▲ Compound assignment repeats `c.count`
    ╭─[test.lis:6:3]
  5 │   let mut c = Counter { count: 0 }
- 6 │   c.count += c.count + 1
+ 6 │   c.count &= c.count & 1
    ·   ───────────┬──────────
    ·              ╰── uses `c.count` twice
  7 │   let _ = c.count
    ╰────
-  help: The `+=` operator already includes `c.count`, so naming `c.count` again on the right applies it twice. To apply `1` once, write `c.count += 1` · code: [lint.misrefactored_assign_op]
+  help: The `&=` operator already includes `c.count`, so naming `c.count` again on the right applies it twice. To apply `1` once, write `c.count &= 1` · code: [lint.misrefactored_assign_op]

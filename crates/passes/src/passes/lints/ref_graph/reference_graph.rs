@@ -75,6 +75,7 @@ impl EnumVariantId {
 pub struct EnumVariantInfo {
     pub span: Span,
     pub parent_is_public: bool,
+    pub parent_has_serialization_attr: bool,
 }
 
 #[derive(Debug, Default)]
@@ -219,7 +220,11 @@ impl ReferenceGraph {
     pub fn get_unused_enum_variants(&self) -> Vec<(&EnumVariantId, &EnumVariantInfo)> {
         self.enum_variants
             .iter()
-            .filter(|(id, info)| !info.parent_is_public && !self.used_enum_variants.contains(*id))
+            .filter(|(id, info)| {
+                !info.parent_is_public
+                    && !info.parent_has_serialization_attr
+                    && !self.used_enum_variants.contains(*id)
+            })
             .collect()
     }
 }

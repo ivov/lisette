@@ -1,0 +1,16 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  ▲ Appending to a zero-filled slice
+   ╭─[test.lis:3:17]
+ 2 │ fn run(flag: bool) {
+ 3 │   let mut ids = Slice.make<int>(5)
+   ·                 ─────────┬────────
+   ·                          ╰── every element is already a zero value
+ 4 │   if flag {
+ 5 │     ids = ids.append(1)
+   ·           ──────┬──────
+   ·                 ╰── `append` adds element 6 here
+ 6 │   } else {
+   ╰────
+  help: For an empty slice with room for 5, use `Slice.new<int>().reserve(5)` · code: [lint.append_to_zero_filled]
