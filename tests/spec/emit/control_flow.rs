@@ -3460,6 +3460,23 @@ fn test() {
 }
 
 #[test]
+fn diverging_if_shadowed_else_binding_does_not_leak() {
+    let input = r#"
+fn test(c: bool) -> int {
+  let count = 10
+  if c {
+    return 0
+  } else {
+    let count = 5
+    let _ = count
+  }
+  count
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn for_loop_map_alias_tuple_destructuring() {
     let input = r#"
 type Table = Map<string, int>

@@ -1,0 +1,26 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: |
+  
+  fn test(c: bool) -> int {
+    let count = 10
+    if c {
+      return 0
+    } else {
+      let count = 5
+      let _ = count
+    }
+    count
+  }
+---
+package main
+
+func test(c bool) int {
+	count := 10
+	if c {
+		return 0
+	}
+	count_1 := 5
+	_ = count_1
+	return count
+}

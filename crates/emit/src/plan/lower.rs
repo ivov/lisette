@@ -1022,7 +1022,9 @@ impl Planner<'_> {
                 }))
             }
         } else if preceding_diverges {
+            self.scope.push_binding_frame();
             let body = self.lower_block_to_place(alternative, place);
+            self.scope.pop_binding_frame();
             ElseArm::Else { body, inline: true }
         } else {
             self.enter_scope();
