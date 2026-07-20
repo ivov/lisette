@@ -241,6 +241,10 @@ func allErrorResults(results *types.Tuple) bool {
 }
 
 func isErrorType(t types.Type) bool {
+	if _, ok := t.(*types.TypeParam); ok {
+		return false
+	}
+
 	if named, ok := t.(*types.Named); ok {
 		if named.Obj().Name() == "error" && named.Obj().Pkg() == nil {
 			return true

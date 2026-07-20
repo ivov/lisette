@@ -103,9 +103,9 @@ func recognizeBound(constraint types.Type, conv *Converter) (boundExpr string, o
 		return "Comparable", true
 	}
 
-	// Excludes inline interface literals (bare *types.Interface, never Named
-	// or Alias) and type-set unions (NumEmbeddeds > 0 from embedded *types.Union).
-	if iface.NumMethods() > 0 && iface.NumEmbeddeds() == 0 {
+	// Method-set interfaces render by name, so embedding (e.g. hash.Hash embeds
+	// io.Writer) is fine. Type-set unions are not method sets and cannot be a bound.
+	if iface.IsMethodSet() && iface.NumMethods() > 0 {
 		switch t := constraint.(type) {
 		case *types.Named:
 			return qualifyTypeNameBound(t.Obj(), t.TypeArgs(), conv)
@@ -155,7 +155,13 @@ func isOrderedBasicKind(kind types.BasicKind) bool {
 // current package render unqualified to avoid a self-import.
 func qualifyTypeNameBound(obj *types.TypeName, typeArgs *types.TypeList, conv *Converter) (string, bool) {
 	pkg := obj.Pkg()
-	if pkg == nil || extract.IsInternalPackagePath(pkg.Path()) {
+	if pkg == nil {
+		if obj.Name() == "error" {
+			return "error", true
+		}
+		return "", false
+	}
+	if extract.IsInternalPackagePath(pkg.Path()) {
 		return "", false
 	}
 	name := obj.Name()

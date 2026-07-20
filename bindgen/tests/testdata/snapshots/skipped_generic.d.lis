@@ -3,14 +3,13 @@
 // Go: 0.0.0
 // Lisette: 0.0.0
 
-/// Base interface to be embedded — its presence makes Target's NumEmbeddeds > 0,
-/// which is what causes recognizeBound to reject Target as a representable bound.
+/// Embedded into Target, whose method set therefore flattens to include Apply.
 pub interface Base {
   fn Apply()
 }
 
-// SKIPPED: SliceFlag - constraint:interface-method
-// type constraint T cannot be represented
+// SKIPPED: SliceFlag - collapsed-type-param
+// generic type with a shape-collapsed type parameter is not representable
 pub type SliceFlag<T, S, E>
 
 /// Dependent alias instantiating the skipped generic — this is the line that
@@ -20,16 +19,15 @@ pub type StringSliceFlag = SliceFlag<Ref<StringTarget>, Slice<string>, string>
 /// Concrete target satisfying Target[string].
 pub type StringTarget
 
-/// Constraint with both an embedded interface and a method referencing the
-/// type parameter. recognizeBound rejects this shape, so any TypeParam bound
-/// by it becomes unrepresentable.
+/// A method-set interface (embed plus a method) is a representable bound, so
+/// binding it as `T: Target<E>` works.
 pub interface Target<E> {
   fn Apply()
   fn Set(es: Slice<E>)
 }
 
 impl<T, S, E> SliceFlag<T, S, E> {
-  // SKIPPED method "Apply": constraint:interface-method — type constraint T cannot be represented
+  // SKIPPED method "Apply": collapsed-type-param — receiver type has a shape-collapsed type parameter
 }
 
 impl StringTarget {

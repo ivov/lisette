@@ -9,6 +9,10 @@ import "go:fmt"
 /// Empty constraint (any)
 pub fn Clone<T>(v: T) -> T
 
+/// The `S ~[]E` collapse must reach the bound: `K: Sink<Slice<E>>`, not `Sink<S>`.
+#[go(collapsed_type_params, "K, Slice<E>, E")]
+pub fn DrainAll<K: Sink<Slice<E>>, E>(k: K, s: Slice<E>)
+
 /// Array-shape rewrite: A ~[4]E with E any.
 #[go(collapsed_type_params, "Array<E, 4>, E")]
 pub fn Echo4<E>(x: Array<E, 4>) -> Array<E, 4>
@@ -16,8 +20,14 @@ pub fn Echo4<E>(x: Array<E, 4>) -> Array<E, 4>
 // SKIPPED: Either - constraint:union
 // type constraint T cannot be represented
 
+/// Bound by the predeclared error interface; the bare-T return must stay T.
+pub fn FirstError<T: error>(errs: Slice<T>) -> T
+
 /// Bound by a method-only interface declared in this package.
 pub fn GreetAll<T: Greeter>(xs: Slice<T>) -> string
+
+/// Bound by an embedding method-set interface — representable by name.
+pub fn GreetLoud<T: LoudGreeter>(xs: Slice<T>)
 
 pub fn Identity<T>(x: T) -> T
 
@@ -87,6 +97,12 @@ pub interface Greeter {
   fn Greet() -> string
 }
 
+/// Method-set interface that embeds another interface (the hash.Hash shape).
+pub interface LoudGreeter {
+  fn Greet() -> string
+  fn Volume() -> int
+}
+
 /// Ordered constraint (type union)
 pub type Ordered
 
@@ -102,6 +118,11 @@ pub interface Pusher<T, C> {
 
 /// Type alias to a method-only interface — exercises *types.Alias path.
 pub type Salutation = Greeter
+
+/// Interface bound whose type argument is itself a shape-collapsed param.
+pub interface Sink<T> {
+  fn Drain(t: T)
+}
 
 /// Generic interface - emits as opaque type with type params
 pub interface Transformer<T> {

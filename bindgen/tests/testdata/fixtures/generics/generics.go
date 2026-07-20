@@ -30,6 +30,29 @@ func GreetAll[T Greeter](xs []T) string {
 // Bound by an alias of a method-only interface.
 func SalutationsAll[T Salutation](xs []T) {}
 
+// Method-set interface that embeds another interface (the hash.Hash shape).
+type LoudGreeter interface {
+	Greeter
+	Volume() int
+}
+
+// Bound by an embedding method-set interface — representable by name.
+func GreetLoud[T LoudGreeter](xs []T) {}
+
+// Bound by the predeclared error interface; the bare-T return must stay T.
+func FirstError[T error](errs []T) T {
+	var zero T
+	return zero
+}
+
+// Interface bound whose type argument is itself a shape-collapsed param.
+type Sink[T any] interface {
+	Drain(T)
+}
+
+// The `S ~[]E` collapse must reach the bound: `K: Sink<Slice<E>>`, not `Sink<S>`.
+func DrainAll[K Sink[S], S ~[]E, E any](k K, s S) {}
+
 // Basic generic types
 
 type Box[T any] struct {

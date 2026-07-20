@@ -1,23 +1,21 @@
-// Mirrors the urfave/cli/v2 SliceFlag pattern: a generic struct whose type
-// constraint cannot be represented in Lisette. The placeholder must keep its
-// arity so the dependent alias and the method's impl block stay in sync.
+// Mirrors the urfave/cli/v2 SliceFlag pattern: a generic type whose shape-collapsed
+// type parameter (`S ~[]E`) cannot be represented on a type. The placeholder must
+// keep its arity so the dependent alias and the method's impl block stay in sync.
 package skipped_generic
 
-// Base interface to be embedded — its presence makes Target's NumEmbeddeds > 0,
-// which is what causes recognizeBound to reject Target as a representable bound.
+// Embedded into Target, whose method set therefore flattens to include Apply.
 type Base interface {
 	Apply()
 }
 
-// Constraint with both an embedded interface and a method referencing the
-// type parameter. recognizeBound rejects this shape, so any TypeParam bound
-// by it becomes unrepresentable.
+// A method-set interface (embed plus a method) is a representable bound, so
+// binding it as `T: Target<E>` works.
 type Target[E any] interface {
 	Base
 	Set([]E)
 }
 
-// SliceFlag's `T Target[E]` constraint is unrepresentable, so the type is
+// The `S ~[]E` shape collapse is only supported for functions, so SliceFlag is
 // skipped — but the opaque placeholder, the impl block below, and the alias
 // below must all agree on arity 3.
 type SliceFlag[T Target[E], S ~[]E, E any] struct {

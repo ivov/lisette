@@ -418,9 +418,16 @@ func (c *Converter) convertMethod(result *ConvertResult, symbolExport extract.Sy
 	})
 
 	if symbolExport.BaseType != nil {
-		_, _, _, skip := collectTypeParams(symbolExport.BaseType.TypeParams(), false, c)
+		_, substitutions, _, skip := collectTypeParams(symbolExport.BaseType.TypeParams(), false, c)
 		if skip != nil {
 			result.SkipReason = skip
+			return
+		}
+		if len(substitutions) > 0 {
+			result.SkipReason = &SkipReason{
+				Code:    "collapsed-type-param",
+				Message: "receiver type has a shape-collapsed type parameter",
+			}
 			return
 		}
 	}
@@ -642,10 +649,20 @@ func (c *Converter) convertType(result *ConvertResult, exp extract.SymbolExport)
 		return
 	}
 
-	typeParams, _, _, skip := collectTypeParams(named.TypeParams(), true, c)
+	typeParams, substitutions, _, skip := collectTypeParams(named.TypeParams(), true, c)
 	if skip != nil {
 		result.TypeParams = bareTypeParamSpecs(named.TypeParams())
 		result.SkipReason = skip
+		return
+	}
+	// Shape collapse (`S ~[]E`) is only supported for functions, not types.
+	if len(substitutions) > 0 {
+		result.TypeParams = bareTypeParamSpecs(named.TypeParams())
+		result.SkipReason = &SkipReason{
+			Code:           "collapsed-type-param",
+			Message:        "generic type with a shape-collapsed type parameter is not representable",
+			EmitOpaqueType: true,
+		}
 		return
 	}
 	result.TypeParams = typeParams
@@ -1109,14 +1126,25 @@ func collectTypeParams(
 	}
 
 	for tp := range typeParams.TypeParams() {
-		name := tp.Obj().Name()
-		constraint := tp.Constraint()
-
-		if shape, ok := collapsedShape(constraint); ok {
+		if shape, ok := collapsedShape(tp.Constraint()); ok {
 			if substitutions == nil {
 				substitutions = make(map[string]string)
 			}
-			substitutions[name] = shape
+			substitutions[tp.Obj().Name()] = shape
+		}
+	}
+
+	if len(substitutions) > 0 && conv != nil {
+		prev := conv.typeParamSubstitutions
+		conv.typeParamSubstitutions = substitutions
+		defer func() { conv.typeParamSubstitutions = prev }()
+	}
+
+	for tp := range typeParams.TypeParams() {
+		name := tp.Obj().Name()
+		constraint := tp.Constraint()
+
+		if shape, ok := substitutions[name]; ok {
 			recipe = append(recipe, shape)
 			continue
 		}
@@ -1150,8 +1178,8 @@ func extractReceiverTypeParams(named *types.Named, conv *Converter) TypeParamSpe
 		return nil
 	}
 
-	specs, _, _, skip := collectTypeParams(typeParams, false, conv)
-	if skip != nil {
+	specs, substitutions, _, skip := collectTypeParams(typeParams, false, conv)
+	if skip != nil || len(substitutions) > 0 {
 		// Base type emits the skip; impl block falls back to bare names.
 		return bareTypeParamSpecs(typeParams)
 	}
