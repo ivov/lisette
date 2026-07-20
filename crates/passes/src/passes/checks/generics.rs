@@ -7,7 +7,9 @@ use diagnostics::LocalSink;
 use syntax::ast::{Annotation, Expression, Generic, Span};
 use syntax::types::{Bound, Type};
 
-use semantics::generics::{bound_implied, bound_requires_evidence, type_obligations};
+use semantics::generics::{
+    bound_implied, bound_requires_evidence, nested_type_obligations, type_obligations,
+};
 use semantics::store::Store;
 
 #[derive(Clone, Copy)]
@@ -117,7 +119,7 @@ fn check_constrained_return_type(
 ) {
     let span = return_annotation.get_span();
     let mut seen = rustc_hash::FxHashSet::default();
-    for applied in type_obligations(store, return_ty) {
+    for applied in nested_type_obligations(store, return_ty) {
         let Type::Parameter(param_name) = &applied.argument else {
             continue;
         };

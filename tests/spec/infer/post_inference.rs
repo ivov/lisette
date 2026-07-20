@@ -1216,6 +1216,45 @@ fn main() {
 }
 
 #[test]
+fn generic_return_propagates_nested_declared_type_bound() {
+    infer(
+        r#"
+struct Box<T: error> {}
+
+fn make<T>() -> Option<Box<T>> {
+  None
+}
+
+fn main() {
+  let boxed = make<int>()
+  let _ = boxed
+}
+"#,
+    )
+    .assert_infer_code_once("missing_constraint_on_return_type");
+}
+
+#[test]
+fn generic_return_propagates_bound_through_nested_alias_reuse() {
+    infer(
+        r#"
+struct Box<T: error> {}
+type Wrap<T> = Option<T>
+
+fn make<T>() -> Wrap<Wrap<Box<T>>> {
+  None
+}
+
+fn main() {
+  let boxed = make<int>()
+  let _ = boxed
+}
+"#,
+    )
+    .assert_infer_code_once("missing_constraint_on_return_type");
+}
+
+#[test]
 fn shadowed_parameter_does_not_inherit_constructor_bound() {
     infer(
         r#"

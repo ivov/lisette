@@ -3290,7 +3290,7 @@ pub fn missing_constraint_on_generic_return_type(
             format!(
                 "Constrain the generic: `{}<{}: {}>()`",
                 fn_name, param_name, constraint
-            ) + ". The function returns a type whose methods depend on the constraint",
+            ) + ". The function returns a type that requires this constraint",
         )
 }
 

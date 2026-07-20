@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
     ·                                     ╰── expected `T` to be constrained
  26 │   Box { val: item }
     ╰────
-  help: Constrain the generic: `create_box<T: Summable>()`. The function returns a type whose methods depend on the constraint · code: [infer.missing_constraint_on_return_type]
+  help: Constrain the generic: `create_box<T: Summable>()`. The function returns a type that requires this constraint · code: [infer.missing_constraint_on_return_type]

@@ -1,6 +1,6 @@
 use ecow::EcoString;
 use syntax::ast::Generic;
-use syntax::types::{Type, build_substitution_map, substitute, unqualified_name};
+use syntax::types::{Symbol, Type, build_substitution_map, substitute, unqualified_name};
 
 use crate::checker::infer::BuiltinBound;
 use crate::checker::infer::InferCtx;
@@ -37,8 +37,57 @@ pub fn apply_bounds(generics: &[Generic], arguments: &[Type]) -> Vec<AppliedGene
 
 /// Instantiate the bounds declared by a nominal type.
 pub fn type_obligations(store: &Store, ty: &Type) -> Vec<AppliedGenericBound> {
+    node_obligations(store, &store.deep_resolve_alias(ty))
+}
+
+pub fn nested_type_obligations(store: &Store, ty: &Type) -> Vec<AppliedGenericBound> {
+    let mut obligations = Vec::new();
+    collect_nested_obligations(
+        store,
+        ty,
+        &mut rustc_hash::FxHashSet::default(),
+        &mut obligations,
+    );
+    obligations
+}
+
+fn collect_nested_obligations(
+    store: &Store,
+    ty: &Type,
+    active_aliases: &mut rustc_hash::FxHashSet<Symbol>,
+    out: &mut Vec<AppliedGenericBound>,
+) {
+    let guarded_alias = alias_head(store, ty);
+    if let Some(id) = &guarded_alias
+        && !active_aliases.insert(id.clone())
+    {
+        for child in type_argument_children(ty) {
+            collect_nested_obligations(store, child, active_aliases, out);
+        }
+        return;
+    }
     let resolved = store.deep_resolve_alias(ty);
-    let Type::Nominal { id, params, .. } = &resolved else {
+    out.extend(node_obligations(store, &resolved));
+    for child in type_argument_children(&resolved) {
+        collect_nested_obligations(store, child, active_aliases, out);
+    }
+    if let Some(id) = &guarded_alias {
+        active_aliases.remove(id);
+    }
+}
+
+fn alias_head(store: &Store, ty: &Type) -> Option<Symbol> {
+    let Type::Nominal { id, .. } = ty else {
+        return None;
+    };
+    store
+        .get_definition(id.as_str())
+        .is_some_and(|definition| definition.is_type_alias())
+        .then(|| id.clone())
+}
+
+fn node_obligations(store: &Store, resolved: &Type) -> Vec<AppliedGenericBound> {
+    let Type::Nominal { id, params, .. } = resolved else {
         return Vec::new();
     };
     let Some(generics) = store
@@ -48,6 +97,21 @@ pub fn type_obligations(store: &Store, ty: &Type) -> Vec<AppliedGenericBound> {
         return Vec::new();
     };
     apply_bounds(generics, params)
+}
+
+pub(crate) fn type_argument_children(ty: &Type) -> Vec<&Type> {
+    match ty {
+        Type::Nominal { params, .. } => params.iter().collect(),
+        Type::Compound { args, .. } => args.iter().collect(),
+        Type::Array { element, .. } => vec![element],
+        Type::Tuple(elements) => elements.iter().collect(),
+        Type::Function(function) => function
+            .params
+            .iter()
+            .chain(std::iter::once(function.return_type.as_ref()))
+            .collect(),
+        _ => Vec::new(),
+    }
 }
 
 pub fn bound_implied(store: &Store, available: &[Type], required: &Type) -> bool {
@@ -153,9 +217,67 @@ fn return_type_declares_obligation(
     argument: &Type,
     required: &Type,
 ) -> bool {
-    type_obligations(store, return_type)
+    nested_type_obligations(store, return_type)
         .into_iter()
         .any(|applied| {
             applied.argument == *argument && bound_implied(store, &[applied.required], required)
         })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use syntax::ast::{Annotation, Span};
+    use syntax::program::{Definition, DefinitionBody, Visibility};
+
+    fn nominal(id: &str, params: Vec<Type>) -> Type {
+        Type::Nominal {
+            id: Symbol::from_raw(id),
+            params,
+            underlying_ty: None,
+        }
+    }
+
+    fn self_referential_alias() -> Definition {
+        Definition {
+            visibility: Visibility::Public,
+            ty: Type::Forall {
+                vars: vec!["T".into()],
+                body: Box::new(nominal(
+                    "Option",
+                    vec![nominal("m.A", vec![Type::Parameter("T".into())])],
+                )),
+            },
+            name: None,
+            name_span: None,
+            doc: None,
+            body: DefinitionBody::TypeAlias {
+                generics: vec![Generic {
+                    name: "T".into(),
+                    bounds: vec![],
+                    resolved_bounds: vec![],
+                    span: Span::new(0, 0, 0),
+                }],
+                annotation: Annotation::Unknown,
+                methods: Default::default(),
+                attributes: Default::default(),
+            },
+        }
+    }
+
+    #[test]
+    fn nested_type_obligations_terminates_on_self_referential_alias() {
+        let mut store = Store::new();
+        store.add_module("m");
+        store
+            .get_module_mut("m")
+            .unwrap()
+            .definitions
+            .insert(Symbol::from_raw("m.A"), self_referential_alias());
+
+        let obligations =
+            nested_type_obligations(&store, &nominal("m.A", vec![Type::Parameter("E".into())]));
+
+        assert!(obligations.is_empty());
+    }
 }

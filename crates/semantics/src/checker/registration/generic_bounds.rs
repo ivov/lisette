@@ -4,7 +4,7 @@ use syntax::types::{CompoundKind, Type, unqualified_name};
 use crate::checker::EnvResolve;
 use crate::checker::TaskState;
 use crate::checker::infer::{BuiltinBound, InferCtx};
-use crate::generics::{apply_bounds, bound_implied};
+use crate::generics::{apply_bounds, bound_implied, type_argument_children};
 use crate::store::Store;
 
 impl TaskState<'_> {
@@ -191,21 +191,6 @@ impl TaskState<'_> {
             .find(|generic| generic.name == parameter_name)?;
         (!generic.resolved_bounds.iter().any(Type::contains_error))
             .then(|| generic.resolved_bounds.clone())
-    }
-}
-
-fn type_argument_children(ty: &Type) -> Vec<&Type> {
-    match ty {
-        Type::Nominal { params, .. } => params.iter().collect(),
-        Type::Compound { args, .. } => args.iter().collect(),
-        Type::Array { element, .. } => vec![element],
-        Type::Tuple(elements) => elements.iter().collect(),
-        Type::Function(function) => function
-            .params
-            .iter()
-            .chain(std::iter::once(function.return_type.as_ref()))
-            .collect(),
-        _ => Vec::new(),
     }
 }
 
