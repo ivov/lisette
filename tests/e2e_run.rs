@@ -200,6 +200,29 @@ fn main() {
 }
 
 #[test]
+fn growing_circular_alias_rejected_at_check() {
+    let scratch = tempfile::tempdir().expect("create temp dir");
+    let project = scratch.path().join("proj");
+    fs::create_dir_all(project.join("src")).unwrap();
+    fs::write(
+        project.join("lisette.toml"),
+        "[project]\nname = \"growingalias\"\nversion = \"0.1.0\"\n",
+    )
+    .unwrap();
+    fs::write(
+        project.join("src/main.lis"),
+        r#"type A<T> = Option<A<Option<T>>>
+type M = Map<A<int>, int>
+
+fn main() {}
+"#,
+    )
+    .unwrap();
+
+    assert_rejected_at_check(&lis(&project, "check"), "Circular type alias");
+}
+
+#[test]
 fn cached_aliased_interface_bound_keeps_its_identity() {
     let scratch = tempfile::tempdir().expect("create temp dir");
     let project = scratch.path().join("proj");

@@ -1067,6 +1067,35 @@ fn circular_type_alias_result_param() {
 }
 
 #[test]
+fn circular_type_alias_growing_argument() {
+    infer(
+        r#"
+    type A<T> = Option<A<Option<T>>>
+
+    fn test(x: A<int>) -> A<int> {
+      return x;
+    }
+        "#,
+    )
+    .assert_circular_type();
+}
+
+#[test]
+fn circular_type_alias_growing_argument_as_map_key() {
+    infer(
+        r#"
+    type A<T> = Option<A<Option<T>>>
+    type M = Map<A<int>, int>
+
+    fn test(m: M) -> M {
+      return m;
+    }
+        "#,
+    )
+    .assert_circular_type();
+}
+
+#[test]
 fn circular_type_alias_mutual_function_allowed() {
     infer(
         r#"
