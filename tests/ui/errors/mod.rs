@@ -12918,6 +12918,15 @@ fn main() {
 }
 
 #[test]
+fn parse_unclosed_tuple_struct_recovers_at_fn_definition() {
+    let input = r#"
+struct Foo(int,
+fn main() {}
+"#;
+    assert_parse_error_snapshot!(input);
+}
+
+#[test]
 fn infer_error_type_does_not_cascade_to_unused_value_lint() {
     let mut fs = MockFileSystem::new();
     let source = r#"

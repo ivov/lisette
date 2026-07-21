@@ -287,15 +287,23 @@ impl<'source> Parser<'source> {
         VariantFields::Unit
     }
 
+    fn at_tuple_fields_end(&self) -> bool {
+        if self.at_eof() {
+            return true;
+        }
+
+        if self.is(Function) {
+            return self.stream.peek_ahead(1).kind != LeftParen;
+        }
+
+        !self.can_start_annotation()
+    }
+
     fn parse_tuple_variant_fields(&mut self) -> VariantFields {
         let mut fields = vec![];
 
         loop {
-            if self.at_eof()
-                || self.is(RightParen)
-                || self.is(RightCurlyBrace)
-                || !self.can_start_annotation()
-            {
+            if self.at_tuple_fields_end() {
                 break;
             }
 
@@ -440,7 +448,7 @@ impl<'source> Parser<'source> {
         let mut index = 0;
 
         while self.is_not(RightParen) {
-            if self.at_eof() || self.at_item_boundary() || !self.can_start_annotation() {
+            if self.at_tuple_fields_end() {
                 break;
             }
 

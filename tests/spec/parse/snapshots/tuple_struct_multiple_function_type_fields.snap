@@ -1,0 +1,98 @@
+---
+source: tests/spec/parse/mod.rs
+description: |
+  
+  struct Callbacks(fn() -> int, fn(int))
+---
+[
+    Struct {
+        doc: None,
+        attributes: [],
+        name: "Callbacks",
+        name_span: Span {
+            file_id: 0,
+            byte_offset: 8,
+            byte_length: 9,
+        },
+        generics: [],
+        fields: [
+            StructFieldDefinition {
+                doc: None,
+                attributes: [],
+                name: "_0",
+                name_span: Span {
+                    file_id: 0,
+                    byte_offset: 18,
+                    byte_length: 11,
+                },
+                annotation: Function {
+                    params: [],
+                    param_mutability: [],
+                    return_type: Constructor {
+                        name: "int",
+                        params: [],
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 26,
+                            byte_length: 3,
+                        },
+                    },
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 18,
+                        byte_length: 11,
+                    },
+                },
+                visibility: Private,
+                ty: Var {
+                    id: uninferred,
+                },
+                embedded: false,
+            },
+            StructFieldDefinition {
+                doc: None,
+                attributes: [],
+                name: "_1",
+                name_span: Span {
+                    file_id: 0,
+                    byte_offset: 31,
+                    byte_length: 7,
+                },
+                annotation: Function {
+                    params: [
+                        Constructor {
+                            name: "int",
+                            params: [],
+                            span: Span {
+                                file_id: 0,
+                                byte_offset: 34,
+                                byte_length: 3,
+                            },
+                        },
+                    ],
+                    param_mutability: [
+                        false,
+                    ],
+                    return_type: Unknown,
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 31,
+                        byte_length: 7,
+                    },
+                },
+                visibility: Private,
+                ty: Var {
+                    id: uninferred,
+                },
+                embedded: false,
+            },
+        ],
+        kind: Tuple,
+        visibility: Private,
+        span: Span {
+            file_id: 0,
+            byte_offset: 1,
+            byte_length: 38,
+        },
+    },
+]

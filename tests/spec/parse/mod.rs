@@ -2314,6 +2314,40 @@ struct Marker()
 }
 
 #[test]
+fn tuple_struct_function_type_field() {
+    let input = r#"
+struct WriterFunc(fn(byte) -> Option<string>)
+"#;
+    assert_parse_snapshot!(input);
+}
+
+#[test]
+fn tuple_struct_function_type_field_after_other_field() {
+    let input = r#"
+struct Handler(int, fn(int) -> int)
+"#;
+    assert_parse_snapshot!(input);
+}
+
+#[test]
+fn tuple_struct_multiple_function_type_fields() {
+    let input = r#"
+struct Callbacks(fn() -> int, fn(int))
+"#;
+    assert_parse_snapshot!(input);
+}
+
+#[test]
+fn enum_tuple_variant_function_type_field() {
+    let input = r#"
+enum E {
+  V(fn(int) -> int)
+}
+"#;
+    assert_parse_snapshot!(input);
+}
+
+#[test]
 fn brace_after_call_is_block() {
     let input = r#"
 fn get_value() -> int { 1 }

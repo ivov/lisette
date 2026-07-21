@@ -1,0 +1,83 @@
+---
+source: tests/spec/parse/mod.rs
+description: |
+  
+  struct WriterFunc(fn(byte) -> Option<string>)
+---
+[
+    Struct {
+        doc: None,
+        attributes: [],
+        name: "WriterFunc",
+        name_span: Span {
+            file_id: 0,
+            byte_offset: 8,
+            byte_length: 10,
+        },
+        generics: [],
+        fields: [
+            StructFieldDefinition {
+                doc: None,
+                attributes: [],
+                name: "_0",
+                name_span: Span {
+                    file_id: 0,
+                    byte_offset: 19,
+                    byte_length: 26,
+                },
+                annotation: Function {
+                    params: [
+                        Constructor {
+                            name: "byte",
+                            params: [],
+                            span: Span {
+                                file_id: 0,
+                                byte_offset: 22,
+                                byte_length: 4,
+                            },
+                        },
+                    ],
+                    param_mutability: [
+                        false,
+                    ],
+                    return_type: Constructor {
+                        name: "Option",
+                        params: [
+                            Constructor {
+                                name: "string",
+                                params: [],
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 38,
+                                    byte_length: 6,
+                                },
+                            },
+                        ],
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 31,
+                            byte_length: 14,
+                        },
+                    },
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 19,
+                        byte_length: 26,
+                    },
+                },
+                visibility: Private,
+                ty: Var {
+                    id: uninferred,
+                },
+                embedded: false,
+            },
+        ],
+        kind: Tuple,
+        visibility: Private,
+        span: Span {
+            file_id: 0,
+            byte_offset: 1,
+            byte_length: 45,
+        },
+    },
+]
