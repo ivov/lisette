@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Value in type position
+   ╭─[test.lis:2:33]
+ 1 │ 
+ 2 │ fn write(value: byte) -> Option<Err> {
+   ·                                 ─┬─
+   ·                                  ╰── expected type, found enum variant
+ 3 │   None
+   ╰────
+  help: Use `Result` for the enum type, or call `Err(...)` to construct a value. If you meant an error type, use `error` · code: [resolve.value_in_type_position]

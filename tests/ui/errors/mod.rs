@@ -2759,6 +2759,31 @@ fn test() {
 }
 
 #[test]
+fn infer_not_a_type_err_variant_suggests_error() {
+    let input = r#"
+fn write(value: byte) -> Option<Err> {
+  None
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_not_a_type_err_variant_user_enum_no_error_hint() {
+    let input = r#"
+enum Outcome {
+  Fine,
+  Err(string),
+}
+
+fn check(x: Outcome.Err) -> bool {
+  true
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
 fn infer_not_a_type_function_name() {
     let input = r#"
 fn helper(x: int) -> int {

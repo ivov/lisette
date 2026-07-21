@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Value in type position
+   ╭─[test.lis:7:13]
+ 6 │ 
+ 7 │ fn check(x: Outcome.Err) -> bool {
+   ·             ─────┬─────
+   ·                  ╰── expected type, found enum variant
+ 8 │   true
+   ╰────
+  help: Use `Outcome` for the enum type, or call `Outcome.Err(...)` to construct a value · code: [resolve.value_in_type_position]

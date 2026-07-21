@@ -505,7 +505,7 @@ impl TaskState<'_> {
 
         if let Some(enum_id) = parent_enum {
             let enum_name = unqualified_name(enum_id);
-            let help = if is_function {
+            let mut help = if is_function {
                 format!(
                     "Use `{}` for the enum type, or call `{}(...)` to construct a value",
                     enum_name, type_name
@@ -513,6 +513,9 @@ impl TaskState<'_> {
             } else {
                 format!("Use `{}` for the enum type", enum_name)
             };
+            if enum_id == "prelude.Result" && variant_name == "Err" {
+                help.push_str(". If you meant an error type, use `error`");
+            }
             return Some(("enum variant", Some(help)));
         }
 
