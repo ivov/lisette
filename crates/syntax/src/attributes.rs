@@ -131,7 +131,7 @@ pub fn struct_attribute_forces_field_export(attribute: &crate::ast::Attribute) -
     is_serialization_key(&attribute.name)
 }
 
-pub fn field_attribute_forces_export(attribute: &crate::ast::Attribute) -> bool {
+pub(crate) fn field_attribute_forces_export(attribute: &crate::ast::Attribute) -> bool {
     if attribute.name == "tag" {
         return matches!(
             attribute.args.first(),

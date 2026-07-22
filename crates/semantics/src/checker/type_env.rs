@@ -35,7 +35,7 @@ impl Default for TypeEnv {
 }
 
 impl TypeEnv {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             entries: Vec::new(),
             undo_log: None,
@@ -43,7 +43,7 @@ impl TypeEnv {
     }
 
     /// Allocate a fresh unbound variable and return its handle.
-    pub fn fresh(&mut self, hint: Option<EcoString>) -> TypeVarId {
+    pub(crate) fn fresh(&mut self, hint: Option<EcoString>) -> TypeVarId {
         let id = TypeVarId(self.entries.len() as u32);
         self.entries.push(VarState::Unbound { hint });
         id
@@ -57,20 +57,13 @@ impl TypeEnv {
         id.0 as usize
     }
 
-    pub fn state(&self, id: TypeVarId) -> &VarState {
+    pub(crate) fn state(&self, id: TypeVarId) -> &VarState {
         &self.entries[Self::slot(id)]
-    }
-
-    pub fn is_unbound(&self, id: TypeVarId) -> bool {
-        if id.is_reserved() {
-            return true;
-        }
-        matches!(self.entries[Self::slot(id)], VarState::Unbound { .. })
     }
 
     /// Bind `id` to `ty`. Reserved sentinel ids (ignored/uninferred) are
     /// silently accepted: they unify with anything without storing anything.
-    pub fn bind(&mut self, id: TypeVarId, ty: Type) {
+    pub(crate) fn bind(&mut self, id: TypeVarId, ty: Type) {
         if id.is_reserved() {
             return;
         }
@@ -83,7 +76,7 @@ impl TypeEnv {
 
     /// Follow a `Type::Var` chain one step at a time until we reach either
     /// an unbound variable or a non-Var type.
-    pub fn shallow_resolve(&self, ty: &Type) -> Type {
+    pub(crate) fn shallow_resolve(&self, ty: &Type) -> Type {
         let mut current = ty.clone();
         loop {
             match &current {
@@ -100,13 +93,13 @@ impl TypeEnv {
     /// its chased value, and recurse into composites. Unbound vars (including
     /// reserved sentinel ids like `IGNORED`/`UNINFERRED`) are preserved as-is.
     /// Used both during inference and as the post-inference freeze pass.
-    pub fn resolve(&self, ty: &Type) -> Type {
+    pub(crate) fn resolve(&self, ty: &Type) -> Type {
         self.resolve_changed(ty).unwrap_or_else(|| ty.clone())
     }
 
     /// Resolve `ty` in place; skips the clone-and-rebuild when nothing is bound.
     /// Returns whether anything changed.
-    pub fn resolve_in_place(&self, ty: &mut Type) -> bool {
+    pub(crate) fn resolve_in_place(&self, ty: &mut Type) -> bool {
         if let Some(resolved) = self.resolve_changed(ty) {
             *ty = resolved;
             true
@@ -229,7 +222,7 @@ impl TypeEnv {
 
     /// Occurs check: does `id` appear anywhere inside `ty` (following Var
     /// chains but stopping at unbound Vars)?
-    pub fn occurs(&self, id: TypeVarId, ty: &Type) -> bool {
+    pub(crate) fn occurs(&self, id: TypeVarId, ty: &Type) -> bool {
         match ty {
             Type::Var { id: other, .. } => {
                 if *other == id {
@@ -257,7 +250,7 @@ impl TypeEnv {
 
     /// Begin a speculative region. Caller holds the returned handle and
     /// passes it back to `end_speculation` with the region's outcome.
-    pub fn begin_speculation(&mut self) -> Speculation {
+    pub(crate) fn begin_speculation(&mut self) -> Speculation {
         let prev = self.undo_log.take();
         self.undo_log = Some(Vec::new());
         Speculation { prev }
@@ -267,7 +260,7 @@ impl TypeEnv {
     /// during the region. Otherwise, either commit them (no enclosing
     /// region) or append them to the enclosing region's log (so it can
     /// still revert them if it fails).
-    pub fn end_speculation(&mut self, spec: Speculation, is_err: bool) {
+    pub(crate) fn end_speculation(&mut self, spec: Speculation, is_err: bool) {
         let log = self.undo_log.take().expect("speculation log must exist");
         self.undo_log = spec.prev;
         if is_err {

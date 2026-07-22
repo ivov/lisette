@@ -38,7 +38,7 @@ struct LambdaReturnInfo {
 }
 
 impl Planner<'_> {
-    pub(crate) fn emit_function_body(
+    fn emit_function_body(
         &mut self,
         output: &mut String,
         body: &Expression,

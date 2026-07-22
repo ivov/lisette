@@ -112,10 +112,6 @@ impl File {
         self.name.ends_with(".d.lis")
     }
 
-    pub fn is_lis(&self) -> bool {
-        !self.is_d_lis()
-    }
-
     /// A test file (`*.test.lis`).
     pub fn is_test(&self) -> bool {
         self.name.ends_with(".test.lis")

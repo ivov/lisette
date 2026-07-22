@@ -12,7 +12,7 @@ pub struct Children<'a> {
 }
 
 impl<'a> Children<'a> {
-    pub fn new() -> Self {
+    fn new() -> Self {
         Children {
             inline: [None; CHILDREN_INLINE_CAP],
             inline_len: 0,
@@ -20,7 +20,7 @@ impl<'a> Children<'a> {
         }
     }
 
-    pub fn push(&mut self, expression: &'a Expression) {
+    fn push(&mut self, expression: &'a Expression) {
         if self.heap.is_empty() && self.inline_len < CHILDREN_INLINE_CAP {
             self.inline[self.inline_len] = Some(expression);
             self.inline_len += 1;
@@ -482,10 +482,10 @@ pub struct FunctionDefinition {
     pub name_span: Span,
     pub generics: Vec<Generic>,
     pub params: Vec<Binding>,
-    pub body: Box<Expression>,
-    pub return_type: Type,
+    body: Box<Expression>,
+    return_type: Type,
     pub annotation: Annotation,
-    pub ty: Type,
+    ty: Type,
 }
 
 #[derive(Clone, Copy)]
@@ -615,7 +615,7 @@ impl StructSpread {
         matches!(self, Self::None)
     }
 
-    pub fn is_some(&self) -> bool {
+    pub(crate) fn is_some(&self) -> bool {
         !self.is_none()
     }
 
@@ -667,7 +667,7 @@ pub enum Annotation {
 }
 
 impl Annotation {
-    pub fn unit() -> Self {
+    pub(crate) fn unit() -> Self {
         Self::Constructor {
             name: "Unit".into(),
             params: vec![],
@@ -691,10 +691,6 @@ impl Annotation {
             Self::Constructor { name, .. } => Some(name.to_string()),
             _ => None,
         }
-    }
-
-    pub fn is_unit(&self) -> bool {
-        matches!(self, Self::Constructor { name, params, .. } if name == "Unit" && params.is_empty())
     }
 
     pub fn is_unknown(&self) -> bool {
@@ -1186,7 +1182,7 @@ impl Expression {
         matches!(self, Expression::NoOp)
     }
 
-    pub fn is_block(&self) -> bool {
+    pub(crate) fn is_block(&self) -> bool {
         matches!(self, Expression::Block { .. })
     }
 
@@ -1224,27 +1220,6 @@ impl Expression {
                 | Expression::TryBlock { .. }
                 | Expression::RecoverBlock { .. }
         )
-    }
-
-    pub fn callee_name(&self) -> Option<String> {
-        let Expression::Call { expression, .. } = self else {
-            return None;
-        };
-        match expression.as_ref() {
-            Expression::Identifier { value, .. } => Some(value.to_string()),
-            Expression::DotAccess {
-                expression: base,
-                member,
-                ..
-            } => {
-                if let Expression::Identifier { value, .. } = base.as_ref() {
-                    Some(format!("{}.{}", value, member))
-                } else {
-                    None
-                }
-            }
-            _ => None,
-        }
     }
 
     pub fn to_function_signature(&self) -> FunctionDefinition {
@@ -1870,11 +1845,7 @@ impl Expression {
         }
     }
 
-    pub fn is_function(&self) -> bool {
-        matches!(self, Expression::Function { .. })
-    }
-
-    pub fn set_public(self) -> Self {
+    pub(crate) fn set_public(self) -> Self {
         match self {
             Expression::Enum {
                 doc,

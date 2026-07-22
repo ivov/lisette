@@ -6,7 +6,7 @@ use crate::lex::TokenKind::*;
 use crate::types::Type;
 
 impl<'source> Parser<'source> {
-    pub fn parse_annotation(&mut self) -> Annotation {
+    pub(crate) fn parse_annotation(&mut self) -> Annotation {
         if !self.enter_recursion() {
             self.resync_on_error();
             return Annotation::Unknown;
@@ -279,7 +279,7 @@ impl<'source> Parser<'source> {
         }
     }
 
-    pub fn parse_generics(&mut self) -> Vec<Generic> {
+    pub(crate) fn parse_generics(&mut self) -> Vec<Generic> {
         if !self.advance_if(LeftAngleBracket) {
             return vec![];
         }
@@ -347,7 +347,7 @@ impl<'source> Parser<'source> {
         bounds
     }
 
-    pub fn parse_function_return_annotation(&mut self) -> Annotation {
+    pub(crate) fn parse_function_return_annotation(&mut self) -> Annotation {
         if self.advance_if(Arrow) {
             return self.parse_annotation();
         }
@@ -355,7 +355,7 @@ impl<'source> Parser<'source> {
         Annotation::Unknown
     }
 
-    pub fn parse_interface_method(
+    pub(crate) fn parse_interface_method(
         &mut self,
         doc: Option<std::string::String>,
         attributes: Vec<crate::ast::Attribute>,
@@ -390,7 +390,7 @@ impl<'source> Parser<'source> {
         }
     }
 
-    pub fn parse_type_alias_with_doc(
+    pub(crate) fn parse_type_alias_with_doc(
         &mut self,
         doc: Option<std::string::String>,
         attributes: Vec<Attribute>,

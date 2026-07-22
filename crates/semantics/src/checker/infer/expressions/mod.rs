@@ -362,7 +362,7 @@ impl InferCtx<'_, '_> {
         }
     }
 
-    pub(super) fn with_value_context<F, R>(&mut self, f: F) -> R
+    fn with_value_context<F, R>(&mut self, f: F) -> R
     where
         F: FnOnce(&mut Self) -> R,
     {

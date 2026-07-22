@@ -2,7 +2,7 @@ mod comments;
 mod formatter;
 mod lindig;
 
-pub use formatter::Formatter;
+pub(crate) use formatter::Formatter;
 
 use comments::Comments;
 use syntax::ParseError;

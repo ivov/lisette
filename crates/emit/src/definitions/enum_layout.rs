@@ -10,7 +10,7 @@ pub(crate) use syntax::go_names::{ENUM_GO_STRINGER_METHOD, ENUM_STRINGER_METHOD,
 #[derive(Debug, Clone)]
 pub(crate) struct EnumLayout {
     pub(crate) enum_name: String,
-    pub(crate) tag_type: String,
+    tag_type: String,
     pub(crate) variants: Vec<VariantLayout>,
     pub(crate) generics: Vec<Generic>,
 }
@@ -19,9 +19,9 @@ pub(crate) struct EnumLayout {
 pub(crate) struct VariantLayout {
     pub(crate) name: String,
     pub(crate) tag_constant: String,
-    pub(crate) is_struct_variant: bool,
+    is_struct_variant: bool,
     pub(crate) fields: Vec<FieldLayout>,
-    pub(crate) doc: Option<String>,
+    doc: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -29,7 +29,7 @@ pub(crate) struct FieldLayout {
     pub(crate) source_name: String,
     pub(crate) go_name: String,
     pub(crate) go_type: String,
-    pub(crate) is_function: bool,
+    is_function: bool,
     pub(crate) is_recursive: bool,
 }
 

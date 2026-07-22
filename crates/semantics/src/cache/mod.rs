@@ -20,21 +20,22 @@ use crate::store::{ENTRY_MODULE_ID, Store};
 use types::CachedDefinition;
 
 /// Current cache format version. Bump this when making breaking changes to the cache format.
-pub const CACHE_FORMAT_VERSION: u32 = 1;
+const CACHE_FORMAT_VERSION: u32 = 1;
 
 /// Compiler version hash. Caches from different compiler versions are invalid.
-pub const COMPILER_VERSION_HASH: u64 = const_fnv1a_hash(env!("CARGO_PKG_VERSION").as_bytes());
+pub(crate) const COMPILER_VERSION_HASH: u64 =
+    const_fnv1a_hash(env!("CARGO_PKG_VERSION").as_bytes());
 
 /// Combined stdlib content hash. Changes to any stdlib file (prelude.d.lis,
 /// test_prelude.d.lis, or any typedefs/*.d.lis) will change this hash, invalidating
 /// all user module caches.
-pub const STDLIB_HASH: u64 = stdlib::STDLIB_CONTENT_HASH;
+const STDLIB_HASH: u64 = stdlib::STDLIB_CONTENT_HASH;
 
 /// Prelude content hash (prelude.d.lis + test_prelude.d.lis).
-pub const PRELUDE_HASH: u64 = stdlib::PRELUDE_CONTENT_HASH;
+pub(crate) const PRELUDE_HASH: u64 = stdlib::PRELUDE_CONTENT_HASH;
 
 /// Go stdlib-only content hash (typedefs/*.d.lis).
-pub const GO_STDLIB_HASH: u64 = stdlib::GO_STD_CONTENT_HASH;
+pub(crate) const GO_STDLIB_HASH: u64 = stdlib::GO_STD_CONTENT_HASH;
 
 const FNV_OFFSET: u64 = 0xcbf29ce484222325;
 const FNV_PRIME: u64 = 0x100000001b3;
@@ -76,53 +77,53 @@ impl Hasher for FnvHasher {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ModuleInterface {
-    pub version: u32,
+    version: u32,
 
-    pub compiler_version: u64,
+    compiler_version: u64,
 
-    pub stdlib_hash: u64,
+    stdlib_hash: u64,
 
     /// This module's content hash: hash(production_hash + dependency module_hashes)
     /// Used by downstream modules to detect transitive changes
-    pub module_hash: u64,
+    module_hash: u64,
 
     /// Hash of production files only; drives `module_hash` and the emit artifact.
-    pub production_hash: u64,
+    production_hash: u64,
 
     /// Hash of all files, tests included; this module's own validity key.
-    pub full_hash: u64,
+    full_hash: u64,
 
     /// Module hash of each direct dependency.
-    pub dependency_hashes: HashMap<String, u64>,
+    dependency_hashes: HashMap<String, u64>,
 
-    pub files: Vec<CachedFile>,
+    pub(crate) files: Vec<CachedFile>,
 
-    pub definitions: HashMap<String, CachedDefinition>,
+    definitions: HashMap<String, CachedDefinition>,
 
     /// UFCS method pairs for this module, computed during registration.
-    pub ufcs_methods: Vec<(String, String)>,
+    ufcs_methods: Vec<(String, String)>,
 
     /// Artifact hash of the on-disk Go files produced for this module.
     /// `None` after a Check-phase save or before the post-write stamp call;
     /// `Some(h)` when the on-disk Go files came from a successful Emit for
     /// artifact hash `h`.
-    pub emit_stamp: Option<u64>,
+    emit_stamp: Option<u64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CachedFile {
-    pub name: String,
-    pub source: String,
+    name: String,
+    source: String,
 }
 
 #[derive(Debug, Clone)]
 pub struct CompiledModule {
     pub module_id: String,
     /// Production-based hash propagated to dependents (production deps only).
-    pub module_hash: u64,
+    pub(crate) module_hash: u64,
     pub production_hash: u64,
-    pub full_hash: u64,
-    pub dep_hashes: HashMap<String, u64>,
+    pub(crate) full_hash: u64,
+    pub(crate) dep_hashes: HashMap<String, u64>,
 }
 
 #[derive(Debug, Clone)]
@@ -141,7 +142,7 @@ pub fn compute_emit_artifact_hash(production_hash: u64, go_module: &str) -> u64 
 
 /// Hashes a module's sources: the production-only hash drives dependents and
 /// the emit artifact, the all-files hash drives the module's own validity.
-pub fn hash_module_source_pair(files: &[File]) -> (u64, u64) {
+pub(crate) fn hash_module_source_pair(files: &[File]) -> (u64, u64) {
     let production_hash = hash_module_sources(files.iter().filter(|f| !f.is_test()));
     let full_hash = if files.iter().any(|f| f.is_test()) {
         hash_module_sources(files)
@@ -151,7 +152,7 @@ pub fn hash_module_source_pair(files: &[File]) -> (u64, u64) {
     (production_hash, full_hash)
 }
 
-pub fn hash_module_sources<'a>(files: impl IntoIterator<Item = &'a File>) -> u64 {
+fn hash_module_sources<'a>(files: impl IntoIterator<Item = &'a File>) -> u64 {
     let mut hasher = FnvHasher::new();
 
     let mut sorted: Vec<&File> = files.into_iter().collect();
@@ -168,7 +169,7 @@ pub fn hash_module_sources<'a>(files: impl IntoIterator<Item = &'a File>) -> u64
 /// Compute a module's hash from its production hash and dependency hashes.
 /// This ensures transitive invalidation: if C changes, B's module_hash changes
 /// (even though B's source didn't), which invalidates A's cache.
-pub fn compute_module_hash(production_hash: u64, dep_hashes: &HashMap<String, u64>) -> u64 {
+pub(crate) fn compute_module_hash(production_hash: u64, dep_hashes: &HashMap<String, u64>) -> u64 {
     let mut hasher = FnvHasher::new();
     production_hash.hash(&mut hasher);
 
@@ -182,7 +183,7 @@ pub fn compute_module_hash(production_hash: u64, dep_hashes: &HashMap<String, u6
     hasher.finish()
 }
 
-pub fn get_dependency_module_hashes(
+pub(crate) fn get_dependency_module_hashes(
     module_id: &str,
     edges: &HashMap<String, HashSet<String>>,
     module_hashes: &HashMap<String, u64>,
@@ -203,7 +204,7 @@ pub fn get_dependency_module_hashes(
         .collect()
 }
 
-pub fn is_cache_valid(
+fn is_cache_valid(
     cache: &ModuleInterface,
     current_full_hash: u64,
     current_dep_hashes: &HashMap<String, u64>,
@@ -215,7 +216,7 @@ pub fn is_cache_valid(
         && cache.dependency_hashes == *current_dep_hashes
 }
 
-pub fn cache_path(project_root: &Path, module_id: &str) -> PathBuf {
+fn cache_path(project_root: &Path, module_id: &str) -> PathBuf {
     project_root
         .join("target")
         .join("cache")
@@ -235,7 +236,7 @@ pub fn cache_file_name(module_id: &str) -> String {
     encoded
 }
 
-pub fn try_load_cache(
+pub(crate) fn try_load_cache(
     module_id: &str,
     expected_full_hash: u64,
     expected_dep_hashes: &HashMap<String, u64>,
@@ -458,7 +459,7 @@ pub fn apply_emit_stamps(
     Ok(())
 }
 
-pub fn is_cache_disabled() -> bool {
+pub(crate) fn is_cache_disabled() -> bool {
     std::env::var("LISETTE_NO_CACHE")
         .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
         .unwrap_or(false)

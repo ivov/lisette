@@ -62,7 +62,7 @@ pub(super) enum ResolvedSink {
 }
 
 /// `slot = value` (a `RawGo` leaf) or a structured `return value`.
-pub(super) fn leaf_statement(sink: &ResolvedSink, value: &str) -> LoweredStatement {
+fn leaf_statement(sink: &ResolvedSink, value: &str) -> LoweredStatement {
     match sink {
         ResolvedSink::Slot(name) => LoweredStatement::RawGo(format!("{} = {}\n", name, value)),
         ResolvedSink::Return => plain_return(value.to_string()),
@@ -420,7 +420,7 @@ impl Planner<'_> {
         }
     }
 
-    pub(crate) fn go_result_needs_nil_guard(&self, ok_ty: &Type) -> bool {
+    fn go_result_needs_nil_guard(&self, ok_ty: &Type) -> bool {
         ok_ty.is_ref()
             || self
                 .facts

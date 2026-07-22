@@ -57,10 +57,7 @@ pub(crate) fn find_module_by_alias(
 }
 
 impl SharedState {
-    pub(crate) async fn run_analysis(
-        &self,
-        uri: &Url,
-    ) -> Result<AnalysisSnapshot, Vec<Diagnostic>> {
+    async fn run_analysis(&self, uri: &Url) -> Result<AnalysisSnapshot, Vec<Diagnostic>> {
         let config = self.ensure_config(uri).await.ok_or_else(Vec::new)?;
         let (module_id, filename) = uri_to_module_file(&config, uri).ok_or_else(Vec::new)?;
 
@@ -188,7 +185,7 @@ impl SharedState {
         ))
     }
 
-    pub(crate) async fn run_analysis_cached(
+    async fn run_analysis_cached(
         &self,
         uri: &Url,
     ) -> Result<Arc<AnalysisSnapshot>, Vec<Diagnostic>> {

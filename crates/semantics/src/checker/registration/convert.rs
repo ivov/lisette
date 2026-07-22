@@ -45,7 +45,7 @@ impl TaskState<'_> {
     /// Resolves a generic-bound annotation. Bound-only markers like
     /// `Comparable` are admitted here; the same names in value position
     /// are flagged inside `convert_to_type`.
-    pub fn convert_bound_to_type(
+    pub(crate) fn convert_bound_to_type(
         &mut self,
         store: &Store,
         annotation: &Annotation,
@@ -67,7 +67,12 @@ impl TaskState<'_> {
         result
     }
 
-    pub fn convert_to_type(&mut self, store: &Store, annotation: &Annotation, span: &Span) -> Type {
+    pub(crate) fn convert_to_type(
+        &mut self,
+        store: &Store,
+        annotation: &Annotation,
+        span: &Span,
+    ) -> Type {
         self.convert_to_type_mode(
             store,
             annotation,
@@ -476,7 +481,7 @@ impl TaskState<'_> {
         }
     }
 
-    pub(super) fn classify_non_type_name(
+    fn classify_non_type_name(
         &self,
         store: &Store,
         qualified_name: &str,
@@ -529,7 +534,7 @@ impl TaskState<'_> {
         Some(("value", Some("Only a type is allowed here".to_string())))
     }
 
-    pub(super) fn resolve_type_with_arity(
+    fn resolve_type_with_arity(
         &mut self,
         store: &Store,
         type_name: &str,
@@ -567,7 +572,7 @@ impl TaskState<'_> {
     /// Substitute the `body` with the resolved `type_args`, returning both the
     /// substituted type and the resolved args (1:1 with `type_args`) so callers
     /// can reuse them without re-resolving (which would re-emit diagnostics).
-    pub fn instantiate_from_annotations(
+    pub(crate) fn instantiate_from_annotations(
         &mut self,
         store: &Store,
         generics: &[EcoString],

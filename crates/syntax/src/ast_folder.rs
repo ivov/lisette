@@ -2,7 +2,7 @@ use crate::ast::{
     Expression, FormatStringPart, MatchArm, SelectArm, SelectArmPattern, StructSpread,
 };
 
-pub trait AstFolder {
+pub(crate) trait AstFolder {
     type Error;
 
     fn fold_module(

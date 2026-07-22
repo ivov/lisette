@@ -15,7 +15,7 @@ pub(crate) enum PreludeType {
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct VariantInfo {
-    pub(crate) name: &'static str,
+    name: &'static str,
 }
 
 impl PreludeType {
@@ -44,7 +44,7 @@ impl PreludeType {
         }
     }
 
-    pub(crate) fn go_name(&self) -> &'static str {
+    fn go_name(&self) -> &'static str {
         match self {
             Self::Option => "Option",
             Self::Result => "Result",
@@ -58,7 +58,7 @@ impl PreludeType {
         }
     }
 
-    pub(crate) fn variants(&self) -> Option<&'static [VariantInfo]> {
+    fn variants(&self) -> Option<&'static [VariantInfo]> {
         match self {
             Self::Option => Some(&[VariantInfo { name: "Some" }, VariantInfo { name: "None" }]),
             Self::Result => Some(&[VariantInfo { name: "Ok" }, VariantInfo { name: "Err" }]),
@@ -76,7 +76,7 @@ impl PreludeType {
         }
     }
 
-    pub(crate) fn make_function_name(&self, variant: &str) -> String {
+    fn make_function_name(&self, variant: &str) -> String {
         format!("prelude.Make{}{}", self.go_name(), variant)
     }
 

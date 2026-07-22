@@ -14,7 +14,7 @@ pub(crate) struct CallPlan<'a> {
     pub(crate) result_transition: AbiTransition,
     /// Variadic spread combine: present when the callee accepts a variadic
     /// parameter and the call supplies a trailing spread argument.
-    pub(crate) variadic: Option<VariadicSpreadPlan>,
+    variadic: Option<VariadicSpreadPlan>,
 }
 
 /// Canonical identity, signatures, and physical ABI for one callable.
@@ -77,11 +77,11 @@ pub(crate) enum ArgumentPlan {
 #[derive(Debug, Clone)]
 pub(crate) struct VariadicSpreadPlan {
     /// Element type of the variadic parameter.
-    pub(crate) element_ty: Type,
+    element_ty: Type,
     /// Count of fixed parameters in the callee's signature (excluding the
     /// trailing variadic). Callers add their own `extra_leading` to derive
     /// the per-call fixed count.
-    pub(crate) fixed_in_signature: usize,
+    fixed_in_signature: usize,
 }
 
 impl VariadicSpreadPlan {
@@ -391,7 +391,7 @@ impl<'a> Planner<'a> {
     }
 
     /// Resolve a Go-interop call's strategy.
-    pub(crate) fn resolve_go_call_abi(&self, expression: &Expression) -> Option<CallableReturnAbi> {
+    fn resolve_go_call_abi(&self, expression: &Expression) -> Option<CallableReturnAbi> {
         let Expression::Call {
             expression: callee,
             ty,

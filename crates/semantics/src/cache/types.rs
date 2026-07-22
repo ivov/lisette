@@ -15,13 +15,13 @@ use syntax::types::{Symbol, Type};
 /// When loading from cache, file indices are remapped to newly assigned file IDs.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct CachedSpan {
-    pub file_index: u32,
-    pub byte_offset: u32,
-    pub byte_length: u32,
+    file_index: u32,
+    byte_offset: u32,
+    byte_length: u32,
 }
 
 impl CachedSpan {
-    pub fn from_span(span: &Span, file_id_to_index: &HashMap<u32, u32>) -> Self {
+    fn from_span(span: &Span, file_id_to_index: &HashMap<u32, u32>) -> Self {
         Self {
             file_index: *file_id_to_index.get(&span.file_id).unwrap_or(&0),
             byte_offset: span.byte_offset,
@@ -29,7 +29,7 @@ impl CachedSpan {
         }
     }
 
-    pub fn to_span(&self, file_ids: &[u32]) -> Span {
+    fn to_span(&self, file_ids: &[u32]) -> Span {
         Span {
             file_id: file_ids.get(self.file_index as usize).copied().unwrap_or(0),
             byte_offset: self.byte_offset,
@@ -40,13 +40,13 @@ impl CachedSpan {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct CachedGeneric {
-    pub name: String,
-    pub bounds: Vec<Annotation>,
-    pub span: CachedSpan,
+    name: String,
+    bounds: Vec<Annotation>,
+    span: CachedSpan,
 }
 
 impl CachedGeneric {
-    pub fn from_generic(generic: &Generic, file_id_to_index: &HashMap<u32, u32>) -> Self {
+    fn from_generic(generic: &Generic, file_id_to_index: &HashMap<u32, u32>) -> Self {
         Self {
             name: generic.name.to_string(),
             bounds: generic.bounds.clone(),
@@ -54,7 +54,7 @@ impl CachedGeneric {
         }
     }
 
-    pub fn to_generic(&self, file_ids: &[u32]) -> Generic {
+    fn to_generic(&self, file_ids: &[u32]) -> Generic {
         Generic {
             name: EcoString::from(self.name.as_str()),
             bounds: self.bounds.clone(),
@@ -74,7 +74,7 @@ pub enum CachedLiteral {
 }
 
 impl CachedLiteral {
-    pub fn from_literal(lit: &syntax::ast::Literal) -> Self {
+    fn from_literal(lit: &syntax::ast::Literal) -> Self {
         use syntax::ast::Literal;
         match lit {
             Literal::Integer { value, text } => CachedLiteral::Integer {
@@ -104,7 +104,7 @@ impl CachedLiteral {
         }
     }
 
-    pub fn to_literal(&self) -> syntax::ast::Literal {
+    fn to_literal(&self) -> syntax::ast::Literal {
         use syntax::ast::Literal;
         match self {
             CachedLiteral::Integer { value, text } => Literal::Integer {
@@ -127,19 +127,19 @@ impl CachedLiteral {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct CachedAttribute {
-    pub name: String,
-    pub args: Vec<AttributeArg>,
+    name: String,
+    args: Vec<AttributeArg>,
 }
 
 impl CachedAttribute {
-    pub fn from_attribute(attribute: &syntax::ast::Attribute) -> Self {
+    fn from_attribute(attribute: &syntax::ast::Attribute) -> Self {
         Self {
             name: attribute.name.clone(),
             args: attribute.args.clone(),
         }
     }
 
-    pub fn to_attribute(&self) -> syntax::ast::Attribute {
+    fn to_attribute(&self) -> syntax::ast::Attribute {
         syntax::ast::Attribute {
             name: self.name.clone(),
             args: self.args.clone(),
@@ -150,17 +150,17 @@ impl CachedAttribute {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct CachedStructField {
-    pub name: String,
-    pub name_span: CachedSpan,
-    pub ty: Type,
-    pub visibility: FieldVisibility,
-    pub attributes: Vec<CachedAttribute>,
-    pub doc: Option<String>,
-    pub embedded: bool,
+    name: String,
+    name_span: CachedSpan,
+    ty: Type,
+    visibility: FieldVisibility,
+    attributes: Vec<CachedAttribute>,
+    doc: Option<String>,
+    embedded: bool,
 }
 
 impl CachedStructField {
-    pub fn from_field(
+    fn from_field(
         field: &syntax::ast::StructFieldDefinition,
         file_id_to_index: &HashMap<u32, u32>,
     ) -> Self {
@@ -179,7 +179,7 @@ impl CachedStructField {
         }
     }
 
-    pub fn to_field(&self, file_ids: &[u32]) -> syntax::ast::StructFieldDefinition {
+    fn to_field(&self, file_ids: &[u32]) -> syntax::ast::StructFieldDefinition {
         syntax::ast::StructFieldDefinition {
             doc: self.doc.clone(),
             name: self.name.clone().into(),
@@ -195,10 +195,10 @@ impl CachedStructField {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct CachedEnumVariant {
-    pub name: String,
-    pub name_span: CachedSpan,
-    pub fields: CachedVariantFields,
-    pub doc: Option<String>,
+    name: String,
+    name_span: CachedSpan,
+    fields: CachedVariantFields,
+    doc: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -209,7 +209,7 @@ pub enum CachedVariantFields {
 }
 
 impl CachedVariantFields {
-    pub fn from_variant_fields(fields: &syntax::ast::VariantFields) -> Self {
+    fn from_variant_fields(fields: &syntax::ast::VariantFields) -> Self {
         match fields {
             syntax::ast::VariantFields::Unit => CachedVariantFields::Unit,
             syntax::ast::VariantFields::Tuple(fs) => {
@@ -221,7 +221,7 @@ impl CachedVariantFields {
         }
     }
 
-    pub fn to_variant_fields(&self) -> syntax::ast::VariantFields {
+    fn to_variant_fields(&self) -> syntax::ast::VariantFields {
         match self {
             CachedVariantFields::Unit => syntax::ast::VariantFields::Unit,
             CachedVariantFields::Tuple(fs) => {
@@ -235,7 +235,7 @@ impl CachedVariantFields {
 }
 
 impl CachedEnumVariant {
-    pub fn from_variant(
+    fn from_variant(
         variant: &syntax::ast::EnumVariant,
         file_id_to_index: &HashMap<u32, u32>,
     ) -> Self {
@@ -247,7 +247,7 @@ impl CachedEnumVariant {
         }
     }
 
-    pub fn to_variant(&self, file_ids: &[u32]) -> syntax::ast::EnumVariant {
+    fn to_variant(&self, file_ids: &[u32]) -> syntax::ast::EnumVariant {
         syntax::ast::EnumVariant {
             doc: self.doc.clone(),
             name: self.name.clone().into(),
@@ -259,19 +259,19 @@ impl CachedEnumVariant {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct CachedEnumField {
-    pub name: String,
-    pub ty: Type,
+    name: String,
+    ty: Type,
 }
 
 impl CachedEnumField {
-    pub fn from_field(field: &syntax::ast::EnumFieldDefinition) -> Self {
+    fn from_field(field: &syntax::ast::EnumFieldDefinition) -> Self {
         Self {
             name: field.name.to_string(),
             ty: Clone::clone(&field.ty),
         }
     }
 
-    pub fn to_field(&self) -> syntax::ast::EnumFieldDefinition {
+    fn to_field(&self) -> syntax::ast::EnumFieldDefinition {
         syntax::ast::EnumFieldDefinition {
             name: self.name.clone().into(),
             name_span: Span::dummy(),
@@ -283,14 +283,14 @@ impl CachedEnumField {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct CachedInterface {
-    pub name: String,
-    pub generics: Vec<CachedGeneric>,
-    pub parents: Vec<Type>,
+    name: String,
+    generics: Vec<CachedGeneric>,
+    parents: Vec<Type>,
     pub methods: HashMap<String, Type>,
 }
 
 impl CachedInterface {
-    pub fn from_interface(iface: &Interface, file_id_to_index: &HashMap<u32, u32>) -> Self {
+    fn from_interface(iface: &Interface, file_id_to_index: &HashMap<u32, u32>) -> Self {
         Self {
             name: iface.name.to_string(),
             generics: iface
@@ -307,7 +307,7 @@ impl CachedInterface {
         }
     }
 
-    pub fn to_interface(&self, file_ids: &[u32]) -> Interface {
+    fn to_interface(&self, file_ids: &[u32]) -> Interface {
         Interface {
             name: EcoString::from(self.name.as_str()),
             generics: self
@@ -330,12 +330,12 @@ impl CachedInterface {
 /// `Definition` shape: common fields up top, variant-specific data in `body`.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct CachedDefinition {
-    pub ty: Type,
-    pub name: Option<String>,
-    pub name_span: Option<CachedSpan>,
-    pub doc: Option<String>,
+    ty: Type,
+    name: Option<String>,
+    name_span: Option<CachedSpan>,
+    doc: Option<String>,
     pub body: CachedDefinitionBody,
-    pub is_const: bool,
+    is_const: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -375,7 +375,7 @@ pub enum CachedDefinitionBody {
 impl CachedDefinition {
     /// Create a CachedDefinition from a Definition.
     /// Only call this for public definitions that should be cached.
-    pub fn from_definition(
+    pub(crate) fn from_definition(
         definition: &Definition,
         is_const: bool,
         file_id_to_index: &HashMap<u32, u32>,
@@ -482,7 +482,12 @@ impl CachedDefinition {
             .collect()
     }
 
-    pub fn install_into(&self, module: &mut Module, qualified_name: Symbol, file_ids: &[u32]) {
+    pub(crate) fn install_into(
+        &self,
+        module: &mut Module,
+        qualified_name: Symbol,
+        file_ids: &[u32],
+    ) {
         if self.is_const {
             module.const_names.insert(qualified_name.clone());
         }
@@ -490,7 +495,7 @@ impl CachedDefinition {
         module.definitions.insert(qualified_name, definition);
     }
 
-    pub fn to_definition(&self, file_ids: &[u32]) -> Definition {
+    pub(crate) fn to_definition(&self, file_ids: &[u32]) -> Definition {
         let body = match &self.body {
             CachedDefinitionBody::TypeAlias {
                 generics,

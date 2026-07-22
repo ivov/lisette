@@ -42,7 +42,7 @@ impl<'a> Formatter<'a> {
         }
     }
 
-    pub(super) fn wrap_params(params_docs: Vec<Document<'a>>) -> Document<'a> {
+    fn wrap_params(params_docs: Vec<Document<'a>>) -> Document<'a> {
         if params_docs.is_empty() {
             return Document::str("()");
         }
@@ -542,7 +542,7 @@ impl<'a> Formatter<'a> {
         }
     }
 
-    pub(super) fn generics(generics: &'a [Generic]) -> Document<'a> {
+    fn generics(generics: &'a [Generic]) -> Document<'a> {
         if generics.is_empty() {
             return Document::Sequence(vec![]);
         }
@@ -566,7 +566,7 @@ impl<'a> Formatter<'a> {
             .append(">")
     }
 
-    pub(super) fn attribute(&mut self, attribute: &'a Attribute) -> Document<'a> {
+    fn attribute(&mut self, attribute: &'a Attribute) -> Document<'a> {
         self.with_leading_comments(attribute.span.byte_offset, |_| {
             let name = Document::string(attribute.name.clone());
             if attribute.args.is_empty() {

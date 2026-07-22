@@ -48,7 +48,7 @@ pub(crate) struct DocumentState {
 }
 
 impl Backend {
-    pub fn new(client: Client, bindgen_setup: Option<Arc<dyn BindgenSetup>>) -> Self {
+    pub(crate) fn new(client: Client, bindgen_setup: Option<Arc<dyn BindgenSetup>>) -> Self {
         let placeholder_config = ProjectConfig {
             root: PathBuf::from("."),
             standalone_mode: true,

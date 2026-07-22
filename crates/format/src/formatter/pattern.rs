@@ -157,7 +157,7 @@ impl<'a> Formatter<'a> {
         prepend_comments(doc, comments)
     }
 
-    pub(super) fn struct_field_pattern(&mut self, field: &'a StructFieldPattern) -> Document<'a> {
+    fn struct_field_pattern(&mut self, field: &'a StructFieldPattern) -> Document<'a> {
         if let Pattern::Identifier { identifier, .. } = &field.value
             && identifier == &field.name
         {

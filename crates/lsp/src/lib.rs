@@ -1514,7 +1514,7 @@ fn member_token_range(usage_text: &str) -> Option<(u32, u32)> {
 
 /// Byte length of a pattern/call head: id chars, dots, and whitespace, stopping
 /// at the first payload character.
-pub(crate) fn head_extent(text: &str) -> usize {
+fn head_extent(text: &str) -> usize {
     let mut byte_pos = 0;
     for c in text.chars() {
         if c.is_alphanumeric() || c == '_' || c == '.' || c.is_whitespace() {

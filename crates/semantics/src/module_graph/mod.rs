@@ -27,7 +27,7 @@ pub struct ModuleGraphResult {
     /// invalidates production importers.
     pub production_edges: HashMap<ModuleId, HashSet<ModuleId>>,
     /// `go:` modules that are only ever blank-imported in the visited file set.
-    pub link_only_modules: HashSet<ModuleId>,
+    pub(crate) link_only_modules: HashSet<ModuleId>,
     /// Reachable from the primary roots, snapshotted before `additional` runs.
     pub primary_reachable: HashSet<ModuleId>,
 }

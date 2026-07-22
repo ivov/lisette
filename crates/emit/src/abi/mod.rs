@@ -115,7 +115,7 @@ impl Planner<'_> {
 
     /// Render a tuple slot's Go type, lowering `Option<NilableT>` to bare
     /// nilable `T` (the only arity-preserving slot recursion).
-    pub(crate) fn tuple_slot_lowered_ty_string(&mut self, slot_ty: &Type) -> String {
+    fn tuple_slot_lowered_ty_string(&mut self, slot_ty: &Type) -> String {
         if self.facts.is_nullable_option(slot_ty) {
             let inner = self.facts.peel_alias(slot_ty).ok_type();
             return self.go_type_string(&inner);

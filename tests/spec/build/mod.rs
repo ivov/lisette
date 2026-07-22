@@ -7976,7 +7976,7 @@ fn test_index_complete_under_parallel_registration() {
         result.errors
     );
     assert_eq!(
-        result.test_index.len(),
+        result.test_index.tests().len(),
         4,
         "every module's test must be recorded under parallel registration, got: {:?}",
         result.test_index.tests()

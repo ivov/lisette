@@ -568,7 +568,7 @@ impl<'a> Planner<'a> {
         Some((param_abi, arg_fn, arg_abi))
     }
 
-    pub(crate) fn detect_lowered_fn_arg_shape(
+    fn detect_lowered_fn_arg_shape(
         &self,
         arg: &Expression,
         generic_param_ty: Option<&Type>,
@@ -680,7 +680,7 @@ impl<'a> Planner<'a> {
     }
 
     /// Resolve the source and target callback contracts at a Go call boundary.
-    pub(crate) fn detect_callback_wrapper(
+    fn detect_callback_wrapper(
         &self,
         arg: &Expression,
         effective_param_ty: Option<&Type>,

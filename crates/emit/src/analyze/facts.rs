@@ -308,11 +308,11 @@ pub(crate) fn is_nullable_option(definitions: &HashMap<Symbol, Definition>, ty: 
     ty.is_option() && is_nilable_go_type(definitions, &ty.ok_type())
 }
 
-pub(crate) fn is_nilable_go_type(definitions: &HashMap<Symbol, Definition>, ty: &Type) -> bool {
+fn is_nilable_go_type(definitions: &HashMap<Symbol, Definition>, ty: &Type) -> bool {
     syntax::types::is_nilable_go_type(ty, |id| definitions.get(id))
 }
 
-pub(crate) fn as_interface(definitions: &HashMap<Symbol, Definition>, ty: &Type) -> Option<String> {
+fn as_interface(definitions: &HashMap<Symbol, Definition>, ty: &Type) -> Option<String> {
     let Type::Nominal { id, .. } = peel_alias(definitions, ty) else {
         return None;
     };
@@ -323,10 +323,7 @@ pub(crate) fn as_interface(definitions: &HashMap<Symbol, Definition>, ty: &Type)
     .then(|| id.to_string())
 }
 
-pub(crate) fn resolve_to_function_type(
-    definitions: &HashMap<Symbol, Definition>,
-    ty: &Type,
-) -> Option<Type> {
+fn resolve_to_function_type(definitions: &HashMap<Symbol, Definition>, ty: &Type) -> Option<Type> {
     fn as_function(ty: &Type) -> Option<Type> {
         if matches!(ty, Type::Function(_)) {
             return Some(ty.clone());
@@ -338,7 +335,7 @@ pub(crate) fn resolve_to_function_type(
     as_function(ty).or_else(|| as_function(&peel_alias(definitions, ty)))
 }
 
-pub(crate) fn peel_alias(definitions: &HashMap<Symbol, Definition>, ty: &Type) -> Type {
+fn peel_alias(definitions: &HashMap<Symbol, Definition>, ty: &Type) -> Type {
     syntax::types::peel_alias(ty, |id| {
         definitions.get(id).is_some_and(Definition::is_type_alias)
     })

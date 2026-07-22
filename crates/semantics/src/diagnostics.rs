@@ -4,17 +4,17 @@ use stdlib::Target;
 use syntax::ast::Span;
 
 /// The import site a typedef-resolution diagnostic refers to.
-pub struct GoImportSite<'a> {
-    pub import_name: &'a str,
-    pub go_pkg: &'a str,
-    pub name_span: Option<Span>,
-    pub target: Target,
-    pub standalone_mode: bool,
+pub(crate) struct GoImportSite<'a> {
+    pub(crate) import_name: &'a str,
+    pub(crate) go_pkg: &'a str,
+    pub(crate) name_span: Option<Span>,
+    pub(crate) target: Target,
+    pub(crate) standalone_mode: bool,
     /// Set when reached through a replaced module's typedef, so the hint points at `lis sync`.
-    pub replace_importer: Option<&'a str>,
+    pub(crate) replace_importer: Option<&'a str>,
 }
 
-pub fn emit_for_locator_result(
+pub(crate) fn emit_for_locator_result(
     result: &TypedefLocatorResult,
     site: &GoImportSite,
     sink: &LocalSink,
@@ -83,7 +83,7 @@ pub fn emit_for_locator_result(
 }
 
 /// Emit a diagnostic for a non-OK `DeclarationStatus`; returns `true` if OK.
-pub fn emit_for_declaration_status(
+pub(crate) fn emit_for_declaration_status(
     status: &DeclarationStatus,
     import_name: &str,
     go_pkg: &str,

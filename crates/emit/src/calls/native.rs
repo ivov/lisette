@@ -380,7 +380,7 @@ pub(super) fn native_method_lowers_to_plain_call(
 }
 
 /// Whether a rule for `(type, method, arity)` defines a negated template.
-pub(super) fn has_inline_negation(native_type: &NativeGoType, method: &str, arity: usize) -> bool {
+fn has_inline_negation(native_type: &NativeGoType, method: &str, arity: usize) -> bool {
     lookup_inline_rule(native_type, method, arity)
         .and_then(|r| r.negated_template)
         .is_some()

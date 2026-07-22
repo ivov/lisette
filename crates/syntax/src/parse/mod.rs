@@ -5,7 +5,7 @@ use crate::lex::TokenKind::*;
 use crate::lex::{Token, TokenKind};
 use crate::types::Type;
 
-pub const MAX_TUPLE_ARITY: usize = 5;
+pub(crate) const MAX_TUPLE_ARITY: usize = 5;
 pub const TUPLE_FIELDS: &[&str] = &["First", "Second", "Third", "Fourth", "Fifth"];
 const MAX_DEPTH: u32 = 64;
 const MAX_ERRORS: usize = 50;
@@ -33,7 +33,7 @@ pub use error::ParseError;
 pub struct ParseResult {
     pub ast: Vec<ast::Expression>,
     pub errors: Vec<ParseError>,
-    pub has_desugarables: bool,
+    pub(crate) has_desugarables: bool,
     pub file_comment: Option<std::string::String>,
 }
 
@@ -47,12 +47,12 @@ pub struct Parser<'source> {
     stream: TokenStream<'source>,
     previous_token: Token<'source>,
     pending_right_angle: Option<u32>,
-    pub errors: Vec<ParseError>,
+    errors: Vec<ParseError>,
     file_id: u32,
     in_control_flow_header: bool,
     source: &'source str,
     depth: u32,
-    pub(crate) has_desugarables: bool,
+    has_desugarables: bool,
 }
 
 impl<'source> Parser<'source> {
@@ -391,7 +391,7 @@ impl<'source> Parser<'source> {
         self.recover_to_comma_or(closing);
     }
 
-    pub(super) fn recover_to_comma_or(&mut self, closing: TokenKind) {
+    fn recover_to_comma_or(&mut self, closing: TokenKind) {
         while !self.at_eof() && !self.is(Comma) && !self.is(closing) && !self.at_item_boundary() {
             self.next();
         }
@@ -399,7 +399,7 @@ impl<'source> Parser<'source> {
         self.advance_if(Comma);
     }
 
-    pub fn at_eof(&self) -> bool {
+    fn at_eof(&self) -> bool {
         self.is(EOF)
     }
 
@@ -784,7 +784,7 @@ impl<'source> Parser<'source> {
         self.errors.push(error);
     }
 
-    pub(super) fn error_map_literal_not_supported(&mut self, span: ast::Span) {
+    fn error_map_literal_not_supported(&mut self, span: ast::Span) {
         if self.too_many_errors() {
             return;
         }
@@ -795,7 +795,7 @@ impl<'source> Parser<'source> {
         self.errors.push(error);
     }
 
-    pub(super) fn error_missing_initializer(&mut self, span: ast::Span) {
+    fn error_missing_initializer(&mut self, span: ast::Span) {
         if self.too_many_errors() {
             return;
         }
@@ -1069,15 +1069,11 @@ impl<'source> Parser<'source> {
         self.errors.push(error);
     }
 
-    pub(crate) fn parse_integer_text(&mut self, text: &str) -> ast::Literal {
+    fn parse_integer_text(&mut self, text: &str) -> ast::Literal {
         self.parse_integer_text_with(text, false)
     }
 
-    pub(crate) fn parse_integer_text_with(
-        &mut self,
-        text: &str,
-        preserve_decimal_text: bool,
-    ) -> ast::Literal {
+    fn parse_integer_text_with(&mut self, text: &str, preserve_decimal_text: bool) -> ast::Literal {
         let clean = if text.contains('_') {
             std::borrow::Cow::Owned(text.replace('_', ""))
         } else {

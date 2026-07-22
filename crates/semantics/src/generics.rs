@@ -11,12 +11,12 @@ use crate::store::Store;
 
 #[derive(Debug, Clone)]
 pub struct AppliedGenericBound {
-    pub parameter_name: EcoString,
+    pub(crate) parameter_name: EcoString,
     pub argument: Type,
     pub required: Type,
 }
 
-pub fn apply_bounds(generics: &[Generic], arguments: &[Type]) -> Vec<AppliedGenericBound> {
+pub(crate) fn apply_bounds(generics: &[Generic], arguments: &[Type]) -> Vec<AppliedGenericBound> {
     let substitution = build_substitution_map(generics, arguments);
     generics
         .iter()

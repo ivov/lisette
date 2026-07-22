@@ -11,21 +11,21 @@ use syntax::types::{
     SubstitutionMap, Symbol, Type, build_substitution_map, substitute, unqualified_name,
 };
 pub(crate) struct AdapterPlan {
-    pub(crate) concrete_id: EcoString,
-    pub(crate) interface_id: EcoString,
-    pub(crate) concrete_ty: Type,
-    pub(crate) methods: Vec<AdapterMethod>,
-    pub(crate) generic_context: Vec<(EcoString, Vec<Type>)>,
+    concrete_id: EcoString,
+    interface_id: EcoString,
+    concrete_ty: Type,
+    methods: Vec<AdapterMethod>,
+    generic_context: Vec<(EcoString, Vec<Type>)>,
 }
 
 pub(crate) struct AdapterMethod {
-    pub(crate) name: EcoString,
-    pub(crate) param_types: Vec<Type>,
-    pub(crate) return_type: Type,
-    pub(crate) user_abi: CallableReturnAbi,
-    pub(crate) interface_abi: CallableReturnAbi,
-    pub(crate) user_returns_void: bool,
-    pub(crate) interface_returns_void: bool,
+    name: EcoString,
+    param_types: Vec<Type>,
+    return_type: Type,
+    user_abi: CallableReturnAbi,
+    interface_abi: CallableReturnAbi,
+    user_returns_void: bool,
+    interface_returns_void: bool,
 }
 
 impl Planner<'_> {

@@ -95,7 +95,7 @@ pub(crate) fn group_params(params: &[(String, String)]) -> String {
     parts.join(", ")
 }
 
-pub(crate) fn is_scalar_literal(expression: &Expression) -> bool {
+fn is_scalar_literal(expression: &Expression) -> bool {
     matches!(
         expression.unwrap_parens(),
         Expression::Literal {

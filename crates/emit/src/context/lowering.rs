@@ -5,7 +5,7 @@ use syntax::types::Type;
 #[derive(Clone)]
 pub(crate) struct LineIndex {
     pub(crate) path: String,
-    pub(crate) line_offsets: Vec<u32>,
+    line_offsets: Vec<u32>,
 }
 
 impl LineIndex {

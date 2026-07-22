@@ -80,11 +80,11 @@ impl Fallible {
         &self.ok_ty
     }
 
-    pub(crate) fn err_ty(&self) -> Option<&Type> {
+    fn err_ty(&self) -> Option<&Type> {
         self.err_ty.as_ref()
     }
 
-    pub(crate) fn struct_name(&self) -> &'static str {
+    fn struct_name(&self) -> &'static str {
         match self.kind {
             FallibleKind::Result => "Result",
             FallibleKind::Option => "Option",
@@ -123,7 +123,7 @@ impl Fallible {
         self.kind == FallibleKind::Result
     }
 
-    pub(crate) fn make_success(&self, value: &str, inner_ty: &str, err_ty: Option<&str>) -> String {
+    fn make_success(&self, value: &str, inner_ty: &str, err_ty: Option<&str>) -> String {
         let pkg = go_name::GO_STDLIB_PKG;
         match self.kind {
             FallibleKind::Option => {
@@ -149,18 +149,18 @@ impl<'a, 'e> FalliblePlanner<'a, 'e> {
         Self { planner, fallible }
     }
 
-    pub(crate) fn ok_type_string(&mut self) -> String {
+    fn ok_type_string(&mut self) -> String {
         self.planner.go_type_string(self.fallible.ok_ty())
     }
 
-    pub(crate) fn err_type_string(&mut self) -> Option<String> {
+    fn err_type_string(&mut self) -> Option<String> {
         self.fallible
             .err_ty()
             .map(|t| self.planner.go_type_string(t))
     }
 
     /// Ok type from the enclosing return context, with the fallible's own ok type as fallback.
-    pub(crate) fn contextual_ok_type_string(&mut self) -> String {
+    fn contextual_ok_type_string(&mut self) -> String {
         let return_ctx = self.planner.return_ctx();
         if let Some(ty) = return_ctx.ty() {
             let ok_ty = ty.ok_type();

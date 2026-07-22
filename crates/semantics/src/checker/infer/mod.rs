@@ -151,7 +151,7 @@ impl InferCtx<'_, '_> {
         }
     }
 
-    pub(crate) fn register_block_local_items(&mut self, items: &[Expression]) {
+    fn register_block_local_items(&mut self, items: &[Expression]) {
         for item in items {
             match item {
                 Expression::Const { .. } => self.register_block_local_const(item),

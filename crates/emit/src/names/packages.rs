@@ -6,7 +6,7 @@ use crate::names::go_name::GeneratedPackage;
 pub(crate) struct PackageId(String);
 
 impl PackageId {
-    pub(crate) fn new(path: impl Into<String>) -> Self {
+    fn new(path: impl Into<String>) -> Self {
         Self(path.into())
     }
 

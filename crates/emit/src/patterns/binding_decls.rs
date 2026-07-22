@@ -15,8 +15,8 @@ use crate::plan::bodies::LoweredStatement;
 /// to field-type substitution.
 #[derive(Clone, Copy)]
 pub(crate) struct GenericArgs<'a> {
-    pub(crate) generics: &'a [Generic],
-    pub(crate) params: &'a [Type],
+    generics: &'a [Generic],
+    params: &'a [Type],
 }
 
 /// Shared view over `StructFieldDefinition` and `EnumFieldDefinition`.

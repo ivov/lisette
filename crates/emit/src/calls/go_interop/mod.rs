@@ -260,7 +260,7 @@ impl Planner<'_> {
             .collect()
     }
 
-    pub(crate) fn emit_tuple_from_vars(
+    fn emit_tuple_from_vars(
         &mut self,
         output: &mut String,
         vars: &[String],

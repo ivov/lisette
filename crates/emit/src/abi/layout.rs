@@ -64,7 +64,7 @@ impl FunctionLayout {
         }
     }
 
-    pub(crate) fn go_type(&self, planner: &Planner<'_>) -> String {
+    fn go_type(&self, planner: &Planner<'_>) -> String {
         let parameters = self
             .parameters
             .iter()

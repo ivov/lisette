@@ -86,7 +86,7 @@ impl SharedState {
         }
     }
 
-    pub(crate) async fn schedule_diagnostics(self: &Arc<Self>, uri: Url) {
+    async fn schedule_diagnostics(self: &Arc<Self>, uri: Url) {
         if let Some((_, (_, old_handle))) = self.pending_diagnostics.remove(&uri) {
             old_handle.abort();
         }

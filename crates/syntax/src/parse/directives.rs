@@ -4,7 +4,7 @@ use crate::lex::TokenKind::*;
 use crate::types::Type;
 
 impl<'source> Parser<'source> {
-    pub fn parse_directive(&mut self) -> Expression {
+    pub(crate) fn parse_directive(&mut self) -> Expression {
         let start = self.current_token();
         let directive_name = start.text.strip_prefix('@').unwrap_or(start.text);
 

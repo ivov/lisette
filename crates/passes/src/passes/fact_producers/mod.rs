@@ -1,5 +1,5 @@
-pub(crate) mod generics;
-pub(crate) mod unused_expressions;
+mod generics;
+mod unused_expressions;
 
 use rayon::prelude::*;
 use std::sync::Arc;

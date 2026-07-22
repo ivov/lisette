@@ -18,7 +18,7 @@ enum GoMakeKind {
 }
 
 impl<'source> Parser<'source> {
-    pub fn parse_expression(&mut self) -> Expression {
+    pub(crate) fn parse_expression(&mut self) -> Expression {
         if !self.enter_recursion() {
             let span = self.span_from_token(self.current_token());
             self.resync_on_error();
@@ -32,7 +32,7 @@ impl<'source> Parser<'source> {
         result
     }
 
-    pub fn parse_atomic_expression(&mut self) -> Expression {
+    pub(crate) fn parse_atomic_expression(&mut self) -> Expression {
         if self.keyword_in_value_position() {
             return self.recover_keyword_as_identifier();
         }
@@ -89,7 +89,7 @@ impl<'source> Parser<'source> {
         }
     }
 
-    pub fn parse_range(
+    pub(crate) fn parse_range(
         &mut self,
         start: Option<Box<Expression>>,
         span_start: crate::lex::Token<'source>,
@@ -276,7 +276,7 @@ impl<'source> Parser<'source> {
         }
     }
 
-    pub fn parse_struct_call(&mut self, expression: Expression) -> Expression {
+    pub(crate) fn parse_struct_call(&mut self, expression: Expression) -> Expression {
         let name = self.make_expression_name(&expression);
         let name_span = expression.get_span();
         let start_offset = name_span.byte_offset; // Start from the name, not the brace
@@ -361,7 +361,7 @@ impl<'source> Parser<'source> {
         }
     }
 
-    pub fn parse_index_expression(&mut self, expression: Expression) -> Expression {
+    pub(crate) fn parse_index_expression(&mut self, expression: Expression) -> Expression {
         let start = self.current_token();
 
         self.ensure(LeftSquareBracket);
@@ -404,7 +404,7 @@ impl<'source> Parser<'source> {
         }
     }
 
-    pub fn parse_function_call(
+    pub(crate) fn parse_function_call(
         &mut self,
         expression: Expression,
         raw_type_args: Vec<Annotation>,
@@ -633,7 +633,7 @@ impl<'source> Parser<'source> {
         span
     }
 
-    pub fn parse_type_args(&mut self) -> Vec<Annotation> {
+    pub(crate) fn parse_type_args(&mut self) -> Vec<Annotation> {
         self.ensure(LeftAngleBracket);
 
         let mut type_args = vec![];
@@ -664,7 +664,7 @@ impl<'source> Parser<'source> {
         type_args
     }
 
-    pub fn parse_binary_operator(&mut self) -> BinaryOperator {
+    pub(crate) fn parse_binary_operator(&mut self) -> BinaryOperator {
         let operator = match self.current_token().kind {
             Plus => BinaryOperator::Addition,
             Minus => BinaryOperator::Subtraction,
@@ -740,7 +740,7 @@ impl<'source> Parser<'source> {
         }
     }
 
-    pub fn parse_try(&mut self, expression: Expression) -> Expression {
+    pub(crate) fn parse_try(&mut self, expression: Expression) -> Expression {
         let start_offset = expression.get_span().byte_offset;
 
         self.ensure(QuestionMark);
@@ -788,7 +788,7 @@ impl<'source> Parser<'source> {
         }
     }
 
-    pub fn parse_block_expression(&mut self) -> Expression {
+    pub(crate) fn parse_block_expression(&mut self) -> Expression {
         let start = self.current_token();
 
         self.ensure(LeftCurlyBrace);
@@ -865,7 +865,7 @@ impl<'source> Parser<'source> {
         params
     }
 
-    pub fn parse_lambda_params(&mut self) -> Vec<Binding> {
+    fn parse_lambda_params(&mut self) -> Vec<Binding> {
         self.ensure(Pipe);
 
         let mut params = vec![];
@@ -926,7 +926,7 @@ impl<'source> Parser<'source> {
         }
     }
 
-    pub fn parse_field_access(&mut self, expression: Expression) -> Expression {
+    pub(crate) fn parse_field_access(&mut self, expression: Expression) -> Expression {
         self.ensure(Dot);
 
         let expression_start = expression.get_span().byte_offset;
@@ -977,7 +977,7 @@ impl<'source> Parser<'source> {
         }
     }
 
-    pub fn collect_delimited_expressions(
+    pub(crate) fn collect_delimited_expressions(
         &mut self,
         open: TokenKind,
         close: TokenKind,
@@ -1047,7 +1047,7 @@ impl<'source> Parser<'source> {
         parts.join(".").into()
     }
 
-    pub fn parse_let(&mut self) -> Expression {
+    pub(crate) fn parse_let(&mut self) -> Expression {
         let start = self.current_token();
 
         self.ensure(Let);
@@ -1134,7 +1134,7 @@ impl<'source> Parser<'source> {
         }
     }
 
-    pub fn parse_import(&mut self) -> Expression {
+    pub(crate) fn parse_import(&mut self) -> Expression {
         let start = self.current_token();
 
         self.ensure(Import);
@@ -1236,7 +1236,7 @@ impl<'source> Parser<'source> {
         }
     }
 
-    pub fn parse_assignment(&mut self) -> Expression {
+    pub(crate) fn parse_assignment(&mut self) -> Expression {
         let start = self.current_token();
 
         let lhs = self.parse_expression();
@@ -1384,7 +1384,7 @@ impl<'source> Parser<'source> {
         }
     }
 
-    pub fn parse_task(&mut self) -> Expression {
+    fn parse_task(&mut self) -> Expression {
         let start = self.current_token();
 
         self.ensure(Task);
@@ -1414,7 +1414,7 @@ impl<'source> Parser<'source> {
         }
     }
 
-    pub fn parse_defer(&mut self) -> Expression {
+    pub(crate) fn parse_defer(&mut self) -> Expression {
         let start = self.current_token();
 
         self.ensure(Defer);
@@ -1444,7 +1444,7 @@ impl<'source> Parser<'source> {
         }
     }
 
-    pub fn parse_try_block(&mut self) -> Expression {
+    fn parse_try_block(&mut self) -> Expression {
         let start = self.current_token();
         let try_keyword_span = Span::new(self.file_id, start.byte_offset, start.byte_length);
 
@@ -1516,7 +1516,7 @@ impl<'source> Parser<'source> {
         }
     }
 
-    pub fn parse_recover_block(&mut self) -> Expression {
+    fn parse_recover_block(&mut self) -> Expression {
         let start = self.current_token();
         let recover_keyword_span = Span::new(self.file_id, start.byte_offset, start.byte_length);
 
@@ -1588,7 +1588,7 @@ impl<'source> Parser<'source> {
         }
     }
 
-    pub fn parse_select(&mut self) -> Expression {
+    fn parse_select(&mut self) -> Expression {
         let start = self.current_token();
 
         self.ensure(Select);
@@ -1676,7 +1676,7 @@ impl<'source> Parser<'source> {
         }
     }
 
-    pub fn with_control_flow_header<F, R>(&mut self, f: F) -> R
+    pub(crate) fn with_control_flow_header<F, R>(&mut self, f: F) -> R
     where
         F: FnOnce(&mut Self) -> R,
     {

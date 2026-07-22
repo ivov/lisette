@@ -394,7 +394,7 @@ impl Planner<'_> {
         self.facts.synthesizes_equals(qualified.as_str())
     }
 
-    pub(crate) fn is_pointer_backed_newtype(&self, name: &str) -> bool {
+    fn is_pointer_backed_newtype(&self, name: &str) -> bool {
         let qualified = self.facts.qualified_current(name);
         self.facts
             .definition(qualified.as_str())
@@ -437,7 +437,7 @@ impl Planner<'_> {
         }
     }
 
-    pub(crate) fn append_equals_method(
+    fn append_equals_method(
         &mut self,
         out: &mut String,
         name: &str,
@@ -507,7 +507,7 @@ pub(crate) fn struct_field_go_name(
     syntax::go_names::struct_field_go_name(field, struct_forces_export).into_owned()
 }
 
-pub(crate) struct StringerField {
+struct StringerField {
     source_name: String,
     go_name: String,
     is_function: bool,

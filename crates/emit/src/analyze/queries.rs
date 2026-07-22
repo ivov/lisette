@@ -272,7 +272,7 @@ impl Planner<'_> {
             .struct_field_name(variant_name, field_name)
     }
 
-    pub(crate) fn enum_tuple_field_name(
+    fn enum_tuple_field_name(
         &self,
         enum_id: &str,
         variant_name: &str,

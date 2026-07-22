@@ -64,9 +64,9 @@ pub struct EmitOptions {
 
 #[derive(Default)]
 pub(crate) struct GlobalEmitData {
-    pub(crate) go_abi_catalog: GoAbiCatalog,
-    pub(crate) exported_method_names: HashSet<String>,
-    pub(crate) make_function_names: HashMap<String, String>,
+    go_abi_catalog: GoAbiCatalog,
+    exported_method_names: HashSet<String>,
+    make_function_names: HashMap<String, String>,
 }
 
 impl GlobalEmitData {
@@ -133,7 +133,7 @@ impl GlobalEmitData {
 }
 
 /// Make-function name registry entries for a user-declared enum.
-pub(crate) fn user_enum_make_function_entries<'a>(
+fn user_enum_make_function_entries<'a>(
     name: &'a str,
     variants: &'a [syntax::ast::EnumVariant],
 ) -> impl Iterator<Item = (String, String)> + 'a {
@@ -202,7 +202,7 @@ pub(crate) fn classify_go_return_type(
     None
 }
 
-pub(crate) fn sentinel_hint(hints: &[String]) -> Option<i64> {
+fn sentinel_hint(hints: &[String]) -> Option<i64> {
     hints
         .iter()
         .any(|h| h == "sentinel_minus_one")
@@ -225,16 +225,16 @@ pub struct TestEmitConfig<'a> {
 }
 
 pub struct Planner<'a> {
-    pub(crate) facts: EmitFacts<'a>,
-    pub(crate) module: ModuleState,
-    pub(crate) function_state: FunctionEmissionState,
-    pub(crate) scope: ScopeState,
-    pub(crate) adapter_registry: AdapterRegistry,
+    facts: EmitFacts<'a>,
+    module: ModuleState,
+    function_state: FunctionEmissionState,
+    scope: ScopeState,
+    adapter_registry: AdapterRegistry,
     namespace: RefCell<Option<FileNamespace>>,
 }
 
 impl Planner<'_> {
-    pub(crate) fn file_namespace(&self) -> Ref<'_, FileNamespace> {
+    fn file_namespace(&self) -> Ref<'_, FileNamespace> {
         Ref::map(self.namespace.borrow(), |namespace| {
             namespace
                 .as_ref()
@@ -242,7 +242,7 @@ impl Planner<'_> {
         })
     }
 
-    pub(crate) fn file_namespace_mut(&self) -> RefMut<'_, FileNamespace> {
+    fn file_namespace_mut(&self) -> RefMut<'_, FileNamespace> {
         RefMut::map(self.namespace.borrow_mut(), |namespace| {
             namespace
                 .as_mut()
@@ -250,62 +250,62 @@ impl Planner<'_> {
         })
     }
 
-    pub(crate) fn require_stdlib(&self) {
+    fn require_stdlib(&self) {
         self.require_generated_package(GeneratedPackage::Prelude);
     }
 
-    pub(crate) fn require_fmt(&self) {
+    fn require_fmt(&self) {
         self.require_generated_package(GeneratedPackage::Fmt);
     }
 
-    pub(crate) fn require_errors(&self) {
+    fn require_errors(&self) {
         self.require_generated_package(GeneratedPackage::Errors);
     }
 
-    pub(crate) fn require_slices(&self) {
+    fn require_slices(&self) {
         self.require_generated_package(GeneratedPackage::Slices);
     }
 
-    pub(crate) fn require_strings(&self) {
+    fn require_strings(&self) {
         self.require_generated_package(GeneratedPackage::Strings);
     }
 
-    pub(crate) fn require_maps(&self) {
+    fn require_maps(&self) {
         self.require_generated_package(GeneratedPackage::Maps);
     }
 
-    pub(crate) fn require_json(&self) {
+    fn require_json(&self) {
         self.require_generated_package(GeneratedPackage::Json);
     }
 
-    pub(crate) fn require_cmp(&self) {
+    fn require_cmp(&self) {
         self.require_generated_package(GeneratedPackage::Cmp);
     }
 
-    pub(crate) fn require_testkit(&self) {
+    fn require_testkit(&self) {
         self.require_generated_package(GeneratedPackage::TestKit);
     }
 
-    pub(crate) fn require_testing(&self) {
+    fn require_testing(&self) {
         self.require_generated_package(GeneratedPackage::Testing);
     }
 
-    pub(crate) fn require_generated_package(&self, package: GeneratedPackage) {
+    fn require_generated_package(&self, package: GeneratedPackage) {
         self.file_namespace_mut()
             .require(PackageUse::generated(package));
     }
 
-    pub(crate) fn note_go_type(&self, go_type: &GoType) {
+    fn note_go_type(&self, go_type: &GoType) {
         self.file_namespace_mut().absorb(go_type.requirements());
     }
 
-    pub(crate) fn require_packages(&self, requirements: &PackageRequirements) {
+    fn require_packages(&self, requirements: &PackageRequirements) {
         self.file_namespace_mut().absorb(requirements);
     }
 }
 
 impl<'a> Planner<'a> {
-    pub(crate) fn return_context_for_type(&self, return_ty: Type) -> ReturnContext {
+    fn return_context_for_type(&self, return_ty: Type) -> ReturnContext {
         match self.classify_direct_emission(&return_ty) {
             Some(shape) => ReturnContext::Lowered { return_ty, shape },
             None => ReturnContext::Tagged(return_ty),
@@ -313,7 +313,7 @@ impl<'a> Planner<'a> {
     }
 
     /// Append this file's newly-synthesized adapter declarations to `source`.
-    pub(crate) fn drain_file_emission_into(&mut self, source: &mut OutputCollector) {
+    fn drain_file_emission_into(&mut self, source: &mut OutputCollector) {
         for adapter_declaration in self.adapter_registry.flush_new_declarations() {
             source.collect_with_blank(adapter_declaration);
         }
@@ -427,42 +427,42 @@ impl<'a> Planner<'a> {
         }
     }
 
-    pub(crate) fn push_loop(&mut self, result_var: impl Into<String>) {
+    fn push_loop(&mut self, result_var: impl Into<String>) {
         self.scope.push_loop(result_var.into());
     }
 
-    pub(crate) fn pop_loop(&mut self) {
+    fn pop_loop(&mut self) {
         self.scope.pop_loop();
     }
 
-    pub(crate) fn current_loop_result_var(&self) -> Option<&str> {
+    fn current_loop_result_var(&self) -> Option<&str> {
         self.scope.current_loop_result_var()
     }
 
-    pub(crate) fn current_loop_id(&self) -> Option<LoopId> {
+    fn current_loop_id(&self) -> Option<LoopId> {
         self.scope.current_loop_id()
     }
 
     /// Push the enclosing function/lambda/try/recover return context. This
     /// scope stack is the single source of truth for return-context lowering;
     /// all readers consult it via [`Planner::return_ctx`].
-    pub(crate) fn push_return_ctx(&mut self, ctx: ReturnContext) {
+    fn push_return_ctx(&mut self, ctx: ReturnContext) {
         self.scope.push_return_ctx(Rc::new(ctx));
     }
 
-    pub(crate) fn pop_return_ctx(&mut self) {
+    fn pop_return_ctx(&mut self) {
         self.scope.pop_return_ctx();
     }
 
-    pub(crate) fn push_test_handle(&mut self, name: String) {
+    fn push_test_handle(&mut self, name: String) {
         self.scope.push_test_handle(name);
     }
 
-    pub(crate) fn pop_test_handle(&mut self) {
+    fn pop_test_handle(&mut self) {
         self.scope.pop_test_handle();
     }
 
-    pub(crate) fn current_test_handle(&self) -> Option<String> {
+    fn current_test_handle(&self) -> Option<String> {
         self.scope.current_test_handle().map(str::to_string)
     }
 
@@ -471,7 +471,7 @@ impl<'a> Planner<'a> {
     /// `ReturnContext::None` outside any function body (e.g. module-level
     /// collection). This is the single source of truth for return-context
     /// lowering.
-    pub(crate) fn return_ctx(&self) -> Rc<ReturnContext> {
+    fn return_ctx(&self) -> Rc<ReturnContext> {
         self.scope
             .current_return_ctx()
             .unwrap_or_else(|| Rc::new(ReturnContext::None))
@@ -479,27 +479,22 @@ impl<'a> Planner<'a> {
 
     /// `true` if this is a new declaration in the current block (use `:=`),
     /// `false` if the name is already declared (use `=`).
-    pub(crate) fn try_declare(&mut self, go_name: &str) -> bool {
+    fn try_declare(&mut self, go_name: &str) -> bool {
         self.scope.try_declare_go_name(go_name)
     }
 
-    pub(crate) fn is_declared(&self, go_name: &str) -> bool {
+    fn is_declared(&self, go_name: &str) -> bool {
         self.scope.is_go_name_declared(go_name)
     }
 
     /// Unconditionally marks `go_name` as declared in the current block.
-    pub(crate) fn declare(&mut self, go_name: &str) {
+    fn declare(&mut self, go_name: &str) {
         self.scope.declare_go_name(go_name);
     }
 
     /// Allocate a fresh Go temp, register it as declared, and emit
     /// `tmp := value` into `output`.
-    pub(crate) fn hoist_tmp_value(
-        &mut self,
-        output: &mut String,
-        hint: &str,
-        value: &str,
-    ) -> String {
+    fn hoist_tmp_value(&mut self, output: &mut String, hint: &str, value: &str) -> String {
         let tmp = self.fresh_var(Some(hint));
         self.declare(&tmp);
         write_line!(output, "{} := {}", tmp, value);
@@ -507,7 +502,7 @@ impl<'a> Planner<'a> {
     }
 
     /// Structured counterpart of `hoist_tmp_value`: push a `TempBind` leaf.
-    pub(crate) fn hoist_tmp_value_statement(
+    fn hoist_tmp_value_statement(
         &mut self,
         setup: &mut Vec<LoweredStatement>,
         hint: &str,
@@ -524,7 +519,7 @@ impl<'a> Planner<'a> {
 
     /// Run `f` inside a fresh scope to build a `LoweredBlock`, returning `None`
     /// when it renders empty.
-    pub(crate) fn capture_scoped_block<F>(&mut self, f: F) -> Option<LoweredBlock>
+    fn capture_scoped_block<F>(&mut self, f: F) -> Option<LoweredBlock>
     where
         F: FnOnce(&mut Self) -> LoweredBlock,
     {
@@ -536,35 +531,35 @@ impl<'a> Planner<'a> {
         (!buffer.is_empty()).then_some(block)
     }
 
-    pub(crate) fn enter_scope(&mut self) {
+    fn enter_scope(&mut self) {
         self.scope.enter_block();
     }
 
-    pub(crate) fn exit_scope(&mut self) {
+    fn exit_scope(&mut self) {
         self.scope.exit_block();
     }
 
-    pub(crate) fn fresh_var(&mut self, hint: Option<&str>) -> String {
+    fn fresh_var(&mut self, hint: Option<&str>) -> String {
         self.scope.fresh_go_name(hint)
     }
 
-    pub(crate) fn push_const_frame(&mut self) {
+    fn push_const_frame(&mut self) {
         self.scope.push_const_frame();
     }
 
-    pub(crate) fn pop_const_frame(&mut self) {
+    fn pop_const_frame(&mut self) {
         self.scope.pop_const_frame();
     }
 
-    pub(crate) fn record_go_const(&mut self, go_identifier: String) {
+    fn record_go_const(&mut self, go_identifier: String) {
         self.scope.record_go_const_binding(go_identifier);
     }
 
-    pub(crate) fn is_go_const_binding(&self, go_identifier: &str) -> bool {
+    fn is_go_const_binding(&self, go_identifier: &str) -> bool {
         self.scope.is_go_const_binding(go_identifier)
     }
 
-    pub(crate) fn maybe_line_directive(&self, span: &Span) -> String {
+    fn maybe_line_directive(&self, span: &Span) -> String {
         if !self.facts.sourcemap_enabled() || span.is_dummy() {
             return String::new();
         }

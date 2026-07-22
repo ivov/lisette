@@ -13,7 +13,7 @@ use syntax::program::{
 use syntax::types::{SimpleKind, SubstitutionMap, Symbol, Type, substitute};
 
 pub const ENTRY_MODULE_ID: &str = "_entry_";
-pub const ENTRY_FILE_ID: u32 = 0;
+const ENTRY_FILE_ID: u32 = 0;
 
 #[derive(Debug, Clone)]
 pub struct ClosedMember {
@@ -71,7 +71,7 @@ impl DomainValue {
 
 /// `uintptr` is an unsigned integer for value purposes but is excluded from
 /// `SimpleKind::is_unsigned_int`, so it is folded in here.
-pub fn is_unsigned_base(base: SimpleKind) -> bool {
+fn is_unsigned_base(base: SimpleKind) -> bool {
     base.is_unsigned_int() || base == SimpleKind::Uintptr
 }
 
@@ -103,7 +103,7 @@ pub struct Store {
     pub modules: HashMap<String, Arc<Module>>,
     pub module_ids: Vec<ModuleId>,
     /// file ID -> module ID
-    pub files: HashMap<u32, String>,
+    files: HashMap<u32, String>,
     /// Go module ID -> package name from the typedef `// Package:` directive.
     pub go_package_names: HashMap<String, String>,
     /// File ID -> on-disk path of the `.d.lis` typedef. Lets the LSP map go: typedef
@@ -121,7 +121,7 @@ pub struct Store {
     /// inference after a module's `files` have been taken out.
     pub test_file_ids: HashSet<u32>,
     /// Read during inference to gate the binary-only `main` signature check.
-    pub project_kind: crate::inference::ProjectKind,
+    pub(crate) project_kind: crate::inference::ProjectKind,
 }
 
 impl Default for Store {
@@ -164,7 +164,7 @@ impl Store {
         self.next_file_id.fetch_add(1, Ordering::Relaxed)
     }
 
-    pub fn reserve_file_ids(&self, count: u32) -> u32 {
+    pub(crate) fn reserve_file_ids(&self, count: u32) -> u32 {
         self.next_file_id.fetch_add(count, Ordering::Relaxed)
     }
 
@@ -172,17 +172,17 @@ impl Store {
         self.files.insert(file_id, module_id.to_string());
     }
 
-    pub fn entry_module_id(&self) -> &'static str {
+    pub(crate) fn entry_module_id(&self) -> &'static str {
         ENTRY_MODULE_ID
     }
 
     /// Initializes the entry module with reserved file ID 0.
-    pub fn init_entry_module(&mut self) {
+    pub(crate) fn init_entry_module(&mut self) {
         self.add_module(ENTRY_MODULE_ID);
         self.register_file(ENTRY_FILE_ID, ENTRY_MODULE_ID);
     }
 
-    pub fn store_entry_file(
+    pub(crate) fn store_entry_file(
         &mut self,
         filename: &str,
         display_path: &str,
@@ -237,7 +237,7 @@ impl Store {
             .or_else(|| module.get_typedef_by_id(file_id))
     }
 
-    pub fn get_file_mut(&mut self, file_id: u32) -> Option<&mut File> {
+    pub(crate) fn get_file_mut(&mut self, file_id: u32) -> Option<&mut File> {
         let module_id = self.files.get(&file_id)?.clone();
         let module = Arc::make_mut(self.modules.get_mut(&module_id)?);
         module
@@ -250,7 +250,7 @@ impl Store {
         self.modules.get(module_id).map(Arc::as_ref)
     }
 
-    pub fn has(&self, module_id: &str) -> bool {
+    pub(crate) fn has(&self, module_id: &str) -> bool {
         self.modules.contains_key(module_id)
     }
 
@@ -306,7 +306,7 @@ impl Store {
         self.visited_modules.contains(module_id)
     }
 
-    pub fn mark_visited(&mut self, module_id: &str) {
+    pub(crate) fn mark_visited(&mut self, module_id: &str) {
         self.visited_modules.insert(module_id.to_string());
     }
 
@@ -333,7 +333,7 @@ impl Store {
         )
     }
 
-    pub fn is_const(&self, qualified_name: &str) -> bool {
+    pub(crate) fn is_const(&self, qualified_name: &str) -> bool {
         self.module_for_qualified_name(qualified_name)
             .and_then(|module_id| self.get_module(module_id))
             .is_some_and(|module| module.const_names.contains(qualified_name))
@@ -352,7 +352,7 @@ impl Store {
             .find(|v| v.name == variant_name)
     }
 
-    pub fn is_nominal_defined_type(&self, qualified_name: &str) -> bool {
+    pub(crate) fn is_nominal_defined_type(&self, qualified_name: &str) -> bool {
         match self.get_definition(qualified_name) {
             Some(def) => def.is_newtype(),
             None => false,
@@ -426,7 +426,7 @@ impl Store {
         self.closed_domains = domains;
     }
 
-    pub fn fields_of(&self, qualified_name: &str) -> Option<&[StructFieldDefinition]> {
+    pub(crate) fn fields_of(&self, qualified_name: &str) -> Option<&[StructFieldDefinition]> {
         match &self.get_definition(qualified_name)?.body {
             DefinitionBody::Struct { fields, .. } => Some(fields),
             _ => None,
@@ -444,21 +444,7 @@ impl Store {
         self.struct_kind(self.deep_resolve_alias(ty).get_qualified_id()?)
     }
 
-    pub fn struct_constructor(&self, qualified_name: &str) -> Option<&Type> {
-        match &self.get_definition(qualified_name)?.body {
-            DefinitionBody::Struct { constructor, .. } => constructor.as_ref(),
-            _ => None,
-        }
-    }
-
-    pub fn parent_interfaces_of(&self, qualified_name: &str) -> Option<&[Type]> {
-        match &self.get_definition(qualified_name)?.body {
-            DefinitionBody::Interface { definition, .. } => Some(&definition.parents),
-            _ => None,
-        }
-    }
-
-    pub fn get_type(&self, qualified_name: &str) -> Option<&Type> {
+    pub(crate) fn get_type(&self, qualified_name: &str) -> Option<&Type> {
         self.get_definition(qualified_name)
             .map(|definition| &definition.ty)
     }
@@ -470,7 +456,7 @@ impl Store {
         }
     }
 
-    pub fn is_interface(&self, ty: &Type) -> bool {
+    pub(crate) fn is_interface(&self, ty: &Type) -> bool {
         matches!(ty, Type::Nominal { id, .. } if self.get_interface(id.as_str()).is_some())
     }
 
@@ -485,7 +471,7 @@ impl Store {
         })
     }
 
-    pub fn peel_refs_and_aliases(&self, ty: &Type) -> (Type, bool) {
+    pub(crate) fn peel_refs_and_aliases(&self, ty: &Type) -> (Type, bool) {
         let mut current = self.peel_alias(ty);
         let mut behind_ref = false;
         while current.is_ref() {
@@ -521,7 +507,7 @@ impl Store {
         }
     }
 
-    pub fn peel_alias_deep(&self, ty: &Type) -> Type {
+    pub(crate) fn peel_alias_deep(&self, ty: &Type) -> Type {
         match self.peel_alias(ty) {
             Type::Compound { kind, args } => Type::Compound {
                 kind,
@@ -561,7 +547,7 @@ impl Store {
         }
     }
 
-    pub fn get_all_methods(
+    pub(crate) fn get_all_methods(
         &self,
         ty: &Type,
         trait_bounds: &HashMap<Symbol, Vec<Type>>,
@@ -661,7 +647,7 @@ impl Store {
         methods
     }
 
-    pub fn get_methods_from_bounds(
+    pub(crate) fn get_methods_from_bounds(
         &self,
         qualified_name: &str,
         trait_bounds: &HashMap<Symbol, Vec<Type>>,

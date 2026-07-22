@@ -11,8 +11,8 @@ use crate::store::Store;
 /// Used to render diagnostics like "outer.inner.b is private to module other".
 #[derive(Debug, Clone)]
 pub struct NoZero {
-    pub chain: Vec<EcoString>,
-    pub reason: NoZeroReason,
+    pub(crate) chain: Vec<EcoString>,
+    pub(crate) reason: NoZeroReason,
     pub leaf_ty: Type,
 }
 

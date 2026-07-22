@@ -233,7 +233,6 @@ impl InferCtx<'_, '_> {
                 err_ty: err_ty.clone(),
                 carrier: Cell::new(None),
                 has_question_mark: Cell::new(false),
-                try_span: span,
                 loop_depth: DepthCounter::new(),
             });
         }
@@ -355,15 +354,13 @@ impl InferCtx<'_, '_> {
         {
             let scope = self.scopes.current_mut();
             scope.recover_block_context = Some(RecoverBlockContext {
-                inner_ty: inner_ty.clone(),
-                recover_span: span,
                 loop_depth: DepthCounter::new(),
             });
         }
 
         self.register_block_local_items(&items);
 
-        let new_items = self.infer_block_items(items, inner_ty.clone());
+        let new_items = self.infer_block_items(items, inner_ty);
 
         self.scopes.pop();
 

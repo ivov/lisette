@@ -6,12 +6,12 @@ use crate::call_classification::compute_module_ufcs;
 use crate::checker::{FileContextKind, TaskState};
 use crate::store::Store;
 
-pub const PRELUDE_MODULE_ID: &str = "prelude";
-pub const PRELUDE_FILE_ID: u32 = 1;
+pub(crate) const PRELUDE_MODULE_ID: &str = "prelude";
+pub(crate) const PRELUDE_FILE_ID: u32 = 1;
 
 /// Synthetic, internal module id. The `**` prefix is reserved: imports beginning with
 /// it are rejected during module-graph processing, so no user module can collide here.
-pub const TEST_PRELUDE_MODULE_ID: &str = "**test_prelude";
+pub(crate) const TEST_PRELUDE_MODULE_ID: &str = "**test_prelude";
 
 pub fn parse_and_register_prelude(store: &mut Store, sink: &LocalSink) {
     let result = syntax::build_ast(LIS_PRELUDE_SOURCE, PRELUDE_FILE_ID);

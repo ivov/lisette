@@ -256,7 +256,7 @@ pub(crate) fn get_instance_completions(
 }
 
 /// A struct's own field completions, honoring visibility. No methods.
-pub(crate) fn struct_field_completions(
+fn struct_field_completions(
     type_id: &str,
     snapshot: &AnalysisSnapshot,
     same_module: bool,

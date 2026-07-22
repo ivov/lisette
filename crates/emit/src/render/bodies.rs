@@ -123,7 +123,7 @@ impl Renderer {
         }
     }
 
-    pub(super) fn render_statement(&self, output: &mut String, statement: &LoweredStatement) {
+    fn render_statement(&self, output: &mut String, statement: &LoweredStatement) {
         match statement {
             LoweredStatement::If(plan) => self.render_if(output, plan),
             LoweredStatement::Loop(plan) => self.render_loop(output, plan),
@@ -207,11 +207,7 @@ impl Renderer {
     /// setup, then emits the value as its own statement line (skipped when
     /// the value text is empty); the `Other` form is dumped via
     /// `render_lowered_block`.
-    pub(crate) fn render_expression_statement(
-        &self,
-        output: &mut String,
-        plan: &ExpressionStatementPlan,
-    ) {
+    fn render_expression_statement(&self, output: &mut String, plan: &ExpressionStatementPlan) {
         match &plan.form {
             ExpressionStatementForm::Async { value } => {
                 let value_text = self.render_value(output, value);
@@ -233,7 +229,7 @@ impl Renderer {
 
     /// Render a `LetPlan`. The `Never` form emits the optional `var X T`
     /// declaration leaf first; every form then renders its body block.
-    pub(crate) fn render_let_statement(&self, output: &mut String, plan: &LetPlan) {
+    fn render_let_statement(&self, output: &mut String, plan: &LetPlan) {
         if let LetForm::Never {
             declaration: Some(declaration),
             ..
@@ -247,7 +243,7 @@ impl Renderer {
     /// Render an `AssignPlan`. The `Compound` form composes `target++`,
     /// `target--`, or `target op= rhs` after flushing target capture and
     /// RHS setup; the `Other` form is dumped via `render_lowered_block`.
-    pub(crate) fn render_assign_statement(&self, output: &mut String, plan: &AssignPlan) {
+    fn render_assign_statement(&self, output: &mut String, plan: &AssignPlan) {
         match &plan.form {
             AssignForm::Compound {
                 target_capture,
@@ -307,7 +303,7 @@ impl Renderer {
     /// setup, then writes `return <value>`. The `Other` form (unit return,
     /// lowered-ABI tail return, fallible-wrapped return, propagate-as-
     /// return) is dumped via `render_lowered_block`.
-    pub(crate) fn render_return_statement(&self, output: &mut String, plan: &ReturnStatementPlan) {
+    fn render_return_statement(&self, output: &mut String, plan: &ReturnStatementPlan) {
         match &plan.form {
             ReturnForm::Plain { value } => {
                 let value_text = self.render_value(output, value);
@@ -332,7 +328,7 @@ impl Renderer {
     /// disposition (assign to result slot / unit-call side effect + unit
     /// assign / discard / no-op when diverged), then emit `break [label]`
     /// (skipped when diverged).
-    pub(crate) fn render_break_value(&self, output: &mut String, plan: &BreakValuePlan) {
+    fn render_break_value(&self, output: &mut String, plan: &BreakValuePlan) {
         let value_text = self.render_value(output, &plan.value);
         match &plan.disposition {
             BreakValueDisposition::Diverged => return,
@@ -425,7 +421,7 @@ impl Renderer {
 
     /// Render a value plan: emit its setup statements (if any), then return the
     /// value text.
-    pub(crate) fn render_value(&self, output: &mut String, plan: &ValuePlan) -> String {
+    fn render_value(&self, output: &mut String, plan: &ValuePlan) -> String {
         for statement in &plan.setup {
             self.render_statement(output, statement);
         }

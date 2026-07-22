@@ -170,7 +170,7 @@ impl Definition {
         }
     }
 
-    pub fn attributes(&self) -> Option<&Attributes> {
+    fn attributes(&self) -> Option<&Attributes> {
         match &self.body {
             DefinitionBody::Struct { attributes, .. }
             | DefinitionBody::Enum { attributes, .. }

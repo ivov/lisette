@@ -376,7 +376,7 @@ impl SequencedValues {
     }
 }
 
-pub(crate) fn render_unary(op: &str, value: &str) -> String {
+fn render_unary(op: &str, value: &str) -> String {
     if op == "-" && value.starts_with('-') {
         format!("-({value})")
     } else {
