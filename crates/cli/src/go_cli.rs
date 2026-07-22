@@ -460,8 +460,7 @@ fn with_exe_suffix(stem: String, target: Target) -> String {
     }
 }
 
-/// Stem that keeps `target/bin/` invisible to Go tooling and is a usable
-/// filename on every host.
+/// Binary filename stem usable on every host (drops reserved names and characters).
 pub fn sanitize_binary_stem(name: &str) -> String {
     let mut stem: String = name
         .chars()
@@ -548,6 +547,31 @@ pub fn build_binary(
         Ok(status) if status.success() => Ok(()),
         Ok(_) => Err(GoCliError {
             message: "`go build` failed".to_string(),
+            hint: "Review the Go compiler output above",
+        }),
+        Err(e) => Err(GoCliError {
+            message: format!("Failed to execute `go build`: {}", e),
+            hint: "Check Go installation with `go version`",
+        }),
+    }
+}
+
+pub fn verify_go_packages(
+    build_dir: &Path,
+    target: Target,
+    go_flags: &[String],
+) -> Result<(), GoCliError> {
+    let mut cmd = go_command(target);
+    cmd.arg("build");
+    for flag in go_flags {
+        cmd.arg(flag);
+    }
+    cmd.arg("./...").current_dir(build_dir);
+
+    match cmd.status() {
+        Ok(status) if status.success() => Ok(()),
+        Ok(_) => Err(GoCliError {
+            message: "`go build ./...` failed".to_string(),
             hint: "Review the Go compiler output above",
         }),
         Err(e) => Err(GoCliError {

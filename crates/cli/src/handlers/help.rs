@@ -15,7 +15,7 @@ Commands:
     `new`          Create a new project
     `run`, `r`       Compile and run a project
     `build`, `b`     Compile a project to a binary
-    `emit`, `e`      Emit Go code into `target` dir
+    `emit`, `e`      Emit Go code into `target/` dir
     `check`, `c`     Lint and typecheck a project
     `format`, `f`    Format a project
     `test`, `t`      Run a project's tests {(in development):d}
@@ -71,7 +71,8 @@ Arguments:
         "build" | "b" => print_help(
             "`lis build` {[path]} {[--flags]:b}
 
-Compile a Lisette project to a binary at the `target/bin` dir.
+Compile a Lisette project to a binary at the `target/.lisette/bin/` dir.
+For a library, generate an importable Go package at the `target/` dir.
 
 Arguments:
     {path:g} {(optional):d}                     Path to project dir (default: current dir)
@@ -89,7 +90,7 @@ Examples:
         "emit" | "e" => print_help(
             "`lis emit` {[path]} {[--flags]:b}
 
-Generate Go code from a Lisette project into the `target` dir.
+Generate Go code from a Lisette project into the `target/` dir.
 
 Arguments:
     {path:g} {(optional):d}             Path to project dir (default: current dir)
@@ -105,7 +106,7 @@ Examples:
         "run" | "r" => print_help(
             "`lis run` {[target]} {[--flags]:b}
 
-Compile a Lisette project to a binary at `target/bin` and run the binary.
+Compile a Lisette project to a binary at `target/bin/` and run the binary.
 
 Arguments:
     {target:g} {(optional):d}                        Project dir (default: current dir)

@@ -176,10 +176,9 @@ impl Store {
         ENTRY_MODULE_ID
     }
 
-    /// Initializes the entry module with reserved file ID 0.
+    /// Creates the entry module (empty for a library, whose root files load as siblings).
     pub fn init_entry_module(&mut self) {
         self.add_module(ENTRY_MODULE_ID);
-        self.register_file(ENTRY_FILE_ID, ENTRY_MODULE_ID);
     }
 
     pub fn store_entry_file(

@@ -62,6 +62,11 @@ pub struct EmitOptions {
     pub emit_tests: bool,
 }
 
+/// A library root's Go package name, from its module path (`example.com/lib/v2` -> `lib`).
+pub fn root_package_name(go_module: &str) -> String {
+    go_name::sanitize_package_name(syntax::program::go_import_default_name(go_module)).into_owned()
+}
+
 #[derive(Default)]
 pub(crate) struct GlobalEmitData {
     pub(crate) go_abi_catalog: GoAbiCatalog,
@@ -680,6 +685,10 @@ fn emit_module<'a>(
         .iter()
         .filter_map(|fid| analysis.files.get(fid))
         .collect();
+
+    if files.is_empty() {
+        return Vec::new();
+    }
 
     let mut module_output = planner.emit_files(&files, module_id);
 

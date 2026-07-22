@@ -48,17 +48,19 @@ pub struct SemanticConfig {
     pub load_siblings: bool,
 }
 
-pub struct AnalyzeInput<'a> {
-    pub config: SemanticConfig,
-    pub loader: &'a dyn Loader,
+pub struct EntryFile {
     pub source: String,
-    /// Bare identity name of the entry file (e.g. `main.lis`).
     pub filename: String,
-    /// Cwd-relative display path for the entry file (e.g. `src/main.lis`);
-    /// equals `filename` when there is no separate display path.
     pub display_path: String,
     pub ast: Vec<Expression>,
     pub file_comment: Option<String>,
+}
+
+pub struct AnalyzeInput<'a> {
+    pub config: SemanticConfig,
+    pub loader: &'a dyn Loader,
+    /// `None` for a library, whose root files load as siblings.
+    pub entry: Option<EntryFile>,
     pub project_root: Option<PathBuf>,
     pub compile_phase: CompilePhase,
     pub project_kind: ProjectKind,
@@ -109,32 +111,34 @@ pub fn run_inference(input: AnalyzeInput) -> InferenceOutput {
     let mut store = Store::new();
     store.project_kind = input.project_kind;
 
-    store.init_entry_module();
-    store.store_entry_file(
-        &input.filename,
-        &input.display_path,
-        &input.source,
-        input.ast,
-        input.file_comment,
-    );
-
     let sink = LocalSink::new();
 
     let include_tests = input.compile_phase == CompilePhase::Check || input.emit_tests;
 
-    if input.filename.ends_with("_test.lis") {
-        sink.push(diagnostics::module_graph::wrong_test_file_suffix(
-            &input.display_path,
-        ));
-    } else if input.filename.ends_with(".test.lis") && !include_tests {
-        sink.push(diagnostics::module_graph::cannot_emit_test_file(
-            &input.display_path,
-        ));
-    }
+    store.init_entry_module();
+    let entry_filename = input.entry.map(|entry| {
+        if entry.filename.ends_with("_test.lis") {
+            sink.push(diagnostics::module_graph::wrong_test_file_suffix(
+                &entry.display_path,
+            ));
+        } else if entry.filename.ends_with(".test.lis") && !include_tests {
+            sink.push(diagnostics::module_graph::cannot_emit_test_file(
+                &entry.display_path,
+            ));
+        }
+        store.store_entry_file(
+            &entry.filename,
+            &entry.display_path,
+            &entry.source,
+            entry.ast,
+            entry.file_comment,
+        );
+        entry.filename
+    });
 
     if input.config.load_siblings {
         for (filename, content) in input.loader.scan_folder(ENTRY_MODULE_ID) {
-            if filename == input.filename {
+            if Some(&filename) == entry_filename.as_ref() {
                 continue;
             }
             if filename.ends_with("_test.lis") {
@@ -173,20 +177,37 @@ pub fn run_inference(input: AnalyzeInput) -> InferenceOutput {
     } else {
         DiscoveredModules::default()
     };
-    let additional = match input.compile_phase {
-        // Test roots too, so a declaration-plus-test module is still checked.
-        CompilePhase::Check => {
-            let mut roots = discovered.production_modules.clone();
-            roots.extend(discovered.test_roots.iter().cloned());
-            roots
+
+    let include_test_roots = input.compile_phase == CompilePhase::Check || input.emit_tests;
+
+    let roots = match input.project_kind {
+        ProjectKind::Binary => {
+            let mut additional = match input.compile_phase {
+                CompilePhase::Check => discovered.production_modules.clone(),
+                _ => Vec::new(),
+            };
+            if include_test_roots {
+                additional.extend(discovered.test_roots.iter().cloned());
+            }
+            Roots {
+                primary: vec![entry_module],
+                additional,
+            }
         }
-        CompilePhase::Emit if input.emit_tests => discovered.test_roots.clone(),
-        CompilePhase::Emit => Vec::new(),
+        ProjectKind::Library => {
+            let mut additional = if include_test_roots {
+                discovered.test_roots.clone()
+            } else {
+                Vec::new()
+            };
+            additional.push(entry_module);
+            Roots {
+                primary: discovered.production_modules.clone(),
+                additional,
+            }
+        }
     };
-    let roots = Roots {
-        primary: vec![entry_module],
-        additional,
-    };
+
     let mut graph_result = build_module_graph(
         &mut store,
         Some(input.loader),

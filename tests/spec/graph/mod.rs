@@ -304,7 +304,7 @@ fn zero_primary_roots_begins_with_additional() {
 #[test]
 fn check_analyzes_orphan_and_surfaces_its_error() {
     use passes::analyze;
-    use semantics::inference::{AnalyzeInput, CompilePhase, SemanticConfig};
+    use semantics::inference::{AnalyzeInput, CompilePhase, EntryFile, SemanticConfig};
     use semantics::loader::MemoryLoader;
 
     let tmp = tempfile::tempdir().unwrap();
@@ -326,11 +326,13 @@ fn check_analyzes_orphan_and_surfaces_its_error() {
             load_siblings: false,
         },
         loader: &fs,
-        source: source.to_string(),
-        filename: "main.lis".to_string(),
-        display_path: "main.lis".to_string(),
-        ast: build.ast,
-        file_comment: build.file_comment,
+        entry: Some(EntryFile {
+            source: source.to_string(),
+            filename: "main.lis".to_string(),
+            display_path: "main.lis".to_string(),
+            ast: build.ast,
+            file_comment: build.file_comment,
+        }),
         project_root: Some(tmp.path().to_path_buf()),
         compile_phase: CompilePhase::Check,
         project_kind: semantics::inference::ProjectKind::Binary,
@@ -359,7 +361,7 @@ fn check_analyzes_orphan_and_surfaces_its_error() {
 #[test]
 fn check_analyzes_tests_in_declaration_only_module() {
     use passes::analyze;
-    use semantics::inference::{AnalyzeInput, CompilePhase, SemanticConfig};
+    use semantics::inference::{AnalyzeInput, CompilePhase, EntryFile, SemanticConfig};
     use semantics::loader::MemoryLoader;
 
     let tmp = tempfile::tempdir().unwrap();
@@ -381,11 +383,13 @@ fn check_analyzes_tests_in_declaration_only_module() {
             load_siblings: false,
         },
         loader: &fs,
-        source: source.to_string(),
-        filename: "main.lis".to_string(),
-        display_path: "main.lis".to_string(),
-        ast: build.ast,
-        file_comment: build.file_comment,
+        entry: Some(EntryFile {
+            source: source.to_string(),
+            filename: "main.lis".to_string(),
+            display_path: "main.lis".to_string(),
+            ast: build.ast,
+            file_comment: build.file_comment,
+        }),
         project_root: Some(tmp.path().to_path_buf()),
         compile_phase: CompilePhase::Check,
         project_kind: semantics::inference::ProjectKind::Binary,
@@ -728,7 +732,7 @@ fn resolver_root_vs_subpackage_typedef_lookup() {
 #[test]
 fn third_party_go_struct_impl_methods_registered() {
     use passes::analyze;
-    use semantics::inference::{AnalyzeInput, CompilePhase, SemanticConfig};
+    use semantics::inference::{AnalyzeInput, CompilePhase, EntryFile, SemanticConfig};
     use semantics::loader::MemoryLoader;
 
     let tmp = tempfile::tempdir().unwrap();
@@ -774,11 +778,13 @@ fn main() {
             load_siblings: false,
         },
         loader: &no_loader,
-        source: source.to_string(),
-        filename: "main.lis".to_string(),
-        display_path: "main.lis".to_string(),
-        ast: build_result.ast,
-        file_comment: build_result.file_comment,
+        entry: Some(EntryFile {
+            source: source.to_string(),
+            filename: "main.lis".to_string(),
+            display_path: "main.lis".to_string(),
+            ast: build_result.ast,
+            file_comment: build_result.file_comment,
+        }),
         project_root: None,
         compile_phase: CompilePhase::Check,
         project_kind: semantics::inference::ProjectKind::Binary,
@@ -824,7 +830,7 @@ fn main() {
 #[test]
 fn stdlib_cache_save_load_excludes_third_party() {
     use passes::analyze;
-    use semantics::inference::{AnalyzeInput, CompilePhase, SemanticConfig};
+    use semantics::inference::{AnalyzeInput, CompilePhase, EntryFile, SemanticConfig};
     use semantics::loader::MemoryLoader;
 
     let tmp = tempfile::tempdir().unwrap();
@@ -867,11 +873,13 @@ fn main() {
             load_siblings: false,
         },
         loader: &no_loader,
-        source: source.to_string(),
-        filename: "main.lis".to_string(),
-        display_path: "main.lis".to_string(),
-        ast: build_result.ast.clone(),
-        file_comment: build_result.file_comment.clone(),
+        entry: Some(EntryFile {
+            source: source.to_string(),
+            filename: "main.lis".to_string(),
+            display_path: "main.lis".to_string(),
+            ast: build_result.ast.clone(),
+            file_comment: build_result.file_comment.clone(),
+        }),
         project_root: None,
         compile_phase: CompilePhase::Check,
         project_kind: semantics::inference::ProjectKind::Binary,
@@ -896,11 +904,13 @@ fn main() {
             load_siblings: false,
         },
         loader: &no_loader,
-        source: source.to_string(),
-        filename: "main.lis".to_string(),
-        display_path: "main.lis".to_string(),
-        ast: build_result.ast,
-        file_comment: build_result.file_comment,
+        entry: Some(EntryFile {
+            source: source.to_string(),
+            filename: "main.lis".to_string(),
+            display_path: "main.lis".to_string(),
+            ast: build_result.ast,
+            file_comment: build_result.file_comment,
+        }),
         project_root: None,
         compile_phase: CompilePhase::Check,
         project_kind: semantics::inference::ProjectKind::Binary,

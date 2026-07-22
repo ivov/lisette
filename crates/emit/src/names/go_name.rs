@@ -269,7 +269,7 @@ pub(crate) fn is_generated_import_qualifier(name: &str) -> bool {
 }
 
 fn is_reserved_package_name(name: &str) -> bool {
-    name == "main" || is_go_reserved_word(name)
+    name == "main" || name == "documentation" || is_go_reserved_word(name)
 }
 
 fn is_reserved_identifier(name: &str) -> bool {

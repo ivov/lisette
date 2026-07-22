@@ -7,7 +7,7 @@ use emit::{EmitOptions, OutputFile, Planner};
 
 use passes::analyze;
 use semantics::cache::EmitStamp;
-use semantics::inference::{AnalyzeInput, SemanticConfig};
+use semantics::inference::{AnalyzeInput, EntryFile, SemanticConfig};
 
 pub use semantics::inference::{CompilePhase, ProjectKind};
 use semantics::loader::Loader;
@@ -38,6 +38,12 @@ pub struct CompileConfig {
     pub locator: TypedefLocator,
 }
 
+pub struct CompileEntry<'a> {
+    pub source: &'a str,
+    pub filename: &'a str,
+    pub display_path: &'a str,
+}
+
 #[derive(Debug)]
 pub struct CompileResult {
     pub output: Vec<OutputFile>,
@@ -51,34 +57,44 @@ pub struct CompileResult {
 }
 
 pub fn compile(
-    source: &str,
-    filename: &str,
-    display_path: &str,
+    entry: Option<CompileEntry<'_>>,
     config: &CompileConfig,
     fs: &dyn Loader,
 ) -> CompileResult {
-    let syntax_result = syntax::build_ast(source, ENTRY_FILE_ID);
-    if syntax_result.failed() {
-        let errors = syntax_result.errors.into_iter().map(Into::into).collect();
-        let mut sources = HashMap::default();
-        sources.insert(
-            ENTRY_FILE_ID,
-            SourceInfo {
-                source: source.to_string(),
-                filename: display_path.to_string(),
-            },
-        );
-        return CompileResult {
-            output: vec![],
-            errors,
-            lints: vec![],
-            sources,
-            user_file_count: 1,
-            live_modules: vec![],
-            emit_stamps: vec![],
-            test_index: TestIndex::default(),
-        };
-    }
+    let entry_file = match entry {
+        Some(entry) => {
+            let syntax_result = syntax::build_ast(entry.source, ENTRY_FILE_ID);
+            if syntax_result.failed() {
+                let errors = syntax_result.errors.into_iter().map(Into::into).collect();
+                let mut sources = HashMap::default();
+                sources.insert(
+                    ENTRY_FILE_ID,
+                    SourceInfo {
+                        source: entry.source.to_string(),
+                        filename: entry.display_path.to_string(),
+                    },
+                );
+                return CompileResult {
+                    output: vec![],
+                    errors,
+                    lints: vec![],
+                    sources,
+                    user_file_count: 1,
+                    live_modules: vec![],
+                    emit_stamps: vec![],
+                    test_index: TestIndex::default(),
+                };
+            }
+            Some(EntryFile {
+                source: entry.source.to_string(),
+                filename: entry.filename.to_string(),
+                display_path: entry.display_path.to_string(),
+                ast: syntax_result.ast,
+                file_comment: syntax_result.file_comment,
+            })
+        }
+        None => None,
+    };
 
     let disable_cache =
         config.emit_tests || (config.sourcemap && config.target_phase == CompilePhase::Emit);
@@ -90,11 +106,7 @@ pub fn compile(
             load_siblings: config.load_siblings,
         },
         loader: fs,
-        source: source.to_string(),
-        filename: filename.to_string(),
-        display_path: display_path.to_string(),
-        ast: syntax_result.ast,
-        file_comment: syntax_result.file_comment,
+        entry: entry_file,
         project_root: config.project_root.clone(),
         compile_phase: config.target_phase,
         project_kind: config.project_kind,
@@ -220,7 +232,15 @@ mod tests {
             .and_then(|p| p.to_str())
             .expect("temp project path is valid utf-8");
         let fs_loader = LocalFileSystem::new(working_dir);
-        let result = compile(&source, "main.lis", "src/main.lis", &config, &fs_loader);
+        let result = compile(
+            Some(CompileEntry {
+                source: &source,
+                filename: "main.lis",
+                display_path: "src/main.lis",
+            }),
+            &config,
+            &fs_loader,
+        );
 
         let mut diags: Vec<(bool, Option<String>)> = result
             .errors
@@ -263,7 +283,15 @@ mod tests {
             locator,
         };
         let fs_loader = LocalFileSystem::new(src_main.parent().unwrap().to_str().unwrap());
-        compile(source, "main.lis", "src/main.lis", &config, &fs_loader)
+        compile(
+            Some(CompileEntry {
+                source,
+                filename: "main.lis",
+                display_path: "src/main.lis",
+            }),
+            &config,
+            &fs_loader,
+        )
     }
 
     #[test]
@@ -363,7 +391,7 @@ mod tests {
             "diagnostics diverge between cold and second warm build"
         );
         assert!(
-            !root.join("target/cache/leaky.cache").exists(),
+            !root.join("target/.lisette/cache/leaky.cache").exists(),
             "leaky has warnings; cache must not write it"
         );
     }
@@ -387,11 +415,13 @@ mod tests {
                 load_siblings: true,
             },
             loader: &fs_loader,
-            source,
-            filename: "main.lis".to_string(),
-            display_path: "src/main.lis".to_string(),
-            ast: build_result.ast,
-            file_comment: build_result.file_comment,
+            entry: Some(EntryFile {
+                source,
+                filename: "main.lis".to_string(),
+                display_path: "src/main.lis".to_string(),
+                ast: build_result.ast,
+                file_comment: build_result.file_comment,
+            }),
             project_root: Some(project_dir.to_path_buf()),
             compile_phase: CompilePhase::Check,
             project_kind: ProjectKind::Binary,
@@ -458,7 +488,8 @@ mod tests {
         );
         for i in 0..N {
             assert!(
-                root.join(format!("target/cache/m{i}.cache")).exists(),
+                root.join(format!("target/.lisette/cache/m{i}.cache"))
+                    .exists(),
                 "m{i} must be cached after the cold run"
             );
         }
@@ -491,11 +522,13 @@ mod tests {
                 load_siblings: true,
             },
             loader: &fs_loader,
-            source,
-            filename: "main.lis".to_string(),
-            display_path: "src/main.lis".to_string(),
-            ast: build_result.ast,
-            file_comment: build_result.file_comment,
+            entry: Some(EntryFile {
+                source,
+                filename: "main.lis".to_string(),
+                display_path: "src/main.lis".to_string(),
+                ast: build_result.ast,
+                file_comment: build_result.file_comment,
+            }),
             project_root: Some(project_dir.to_path_buf()),
             compile_phase: CompilePhase::Check,
             project_kind: ProjectKind::Binary,
@@ -548,7 +581,7 @@ mod tests {
         );
 
         assert!(
-            root.join("target/cache/math.cache").exists(),
+            root.join("target/.lisette/cache/math.cache").exists(),
             "math must be cached after the cold run for this test to be meaningful"
         );
 
