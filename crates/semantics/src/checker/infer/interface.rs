@@ -586,7 +586,11 @@ impl InferCtx<'_, '_> {
                     check.incompatible_impl,
                 ));
             } else {
-                self.record_conformance_use(ty, impl_method_name.as_str());
+                let spelling_pinned = syntax::go_names::interface_matches_by_source_name(
+                    interface_qualified_id,
+                    interface_is_public,
+                );
+                self.record_conformance_use(ty, impl_method_name.as_str(), spelling_pinned);
             }
         }
 
@@ -760,7 +764,7 @@ impl InferCtx<'_, '_> {
         }
     }
 
-    fn record_conformance_use(&mut self, ty: &Type, impl_method_name: &str) {
+    fn record_conformance_use(&mut self, ty: &Type, impl_method_name: &str, spelling_pinned: bool) {
         let store = self.store;
         if let Type::Nominal { id, .. } = ty.strip_refs().resolve_in(&self.env)
             && let Some(module) = store.module_for_qualified_name(id.as_str())
@@ -771,6 +775,7 @@ impl InferCtx<'_, '_> {
                 module.to_string(),
                 impl_method_name.to_string(),
                 type_name.to_string(),
+                spelling_pinned,
             );
         }
     }

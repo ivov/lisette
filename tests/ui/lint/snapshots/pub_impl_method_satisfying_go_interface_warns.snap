@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  ▲ Miscased name
+   ╭─[test.lis:7:10]
+ 6 │ impl Widget {
+ 7 │   pub fn MarshalText(self) -> Result<Slice<byte>, error> {
+   ·          ─────┬─────
+   ·               ╰── expected snake_case
+ 8 │     Ok("custom" as Slice<byte>)
+   ╰────
+  help: Rename to `marshal_text` · code: [lint.non_snake_case_function]

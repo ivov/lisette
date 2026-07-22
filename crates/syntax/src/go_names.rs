@@ -167,6 +167,13 @@ pub struct ConformanceCandidate {
     pub shadowed: bool,
 }
 
+/// Whether an interface's requirements match implementations by exact source
+/// spelling rather than by emitted Go name.
+pub fn interface_matches_by_source_name(interface_id: &str, interface_is_public: bool) -> bool {
+    !interface_id.starts_with(GO_IMPORT_PREFIX)
+        && (interface_id.starts_with("prelude.") || !interface_is_public)
+}
+
 /// Resolve which implementing method satisfies an interface requirement, by
 /// emitted Go name under Go's selector rules.
 pub fn conformance_method<'a>(
@@ -176,10 +183,11 @@ pub fn conformance_method<'a>(
     method_name: &str,
     candidate: &dyn Fn(&str) -> ConformanceCandidate,
 ) -> Option<(&'a EcoString, &'a Type)> {
+    if interface_matches_by_source_name(interface_id, interface_is_public) {
+        return methods.get_key_value(method_name);
+    }
     let want = if interface_id.starts_with(GO_IMPORT_PREFIX) {
         Cow::Borrowed(method_name)
-    } else if interface_id.starts_with("prelude.") || !interface_is_public {
-        return methods.get_key_value(method_name);
     } else {
         Cow::Owned(snake_to_camel(method_name))
     };

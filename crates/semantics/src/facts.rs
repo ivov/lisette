@@ -47,7 +47,7 @@ pub struct Facts {
     pub type_params_only_in_bound: Vec<TypeParamOnlyInBoundFact>,
     pub always_failing_try_blocks: Vec<Span>,
     pub expression_only_fstrings: Vec<ExpressionOnlyFstringFact>,
-    pub interface_satisfied_methods: HashMap<(String, String), Vec<String>>,
+    pub interface_satisfied_methods: HashMap<(String, String), Vec<InterfaceSatisfaction>>,
     pub equality_derivations: Vec<String>,
     pub test_functions: Vec<TestFunction>,
 
@@ -84,6 +84,13 @@ pub struct Facts {
     /// Canonical definition selected for resolved dot accesses, keyed by the
     /// dot expression's span.
     pub resolved_definitions: ResolvedDefinitions,
+}
+
+#[derive(Debug, Clone)]
+pub struct InterfaceSatisfaction {
+    pub impl_type_name: String,
+    /// The interface matches by source spelling, so renaming breaks it.
+    pub spelling_pinned: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -286,16 +293,20 @@ impl Facts {
         module_id: String,
         method_name: String,
         impl_type_name: String,
+        spelling_pinned: bool,
     ) {
         self.interface_satisfied_methods
             .entry((module_id, method_name))
             .or_default()
-            .push(impl_type_name);
+            .push(InterfaceSatisfaction {
+                impl_type_name,
+                spelling_pinned,
+            });
     }
 
-    /// Whether `type_name`'s `method_name` was found to satisfy an interface method,
-    /// so the naming lint keeps its conformance-required spelling.
-    pub fn method_satisfies_interface(
+    /// Whether `type_name`'s `method_name` satisfies an interface that matches
+    /// by source spelling, so the naming lint must not suggest a rename.
+    pub fn method_spelling_pinned_by_interface(
         &self,
         module_id: &str,
         method_name: &str,
@@ -303,7 +314,11 @@ impl Facts {
     ) -> bool {
         self.interface_satisfied_methods
             .get(&(module_id.to_string(), method_name.to_string()))
-            .is_some_and(|types| types.iter().any(|t| t == type_name))
+            .is_some_and(|satisfactions| {
+                satisfactions
+                    .iter()
+                    .any(|s| s.spelling_pinned && s.impl_type_name == type_name)
+            })
     }
 
     pub fn absorb_local_facts(&mut self, local: LocalFacts) {
@@ -638,9 +653,9 @@ mod tests {
         let mut a = Facts::new(allocator.clone());
         let mut b = Facts::new(allocator);
 
-        a.mark_method_used_for_interface("m".into(), "f".into(), "A".into());
-        b.mark_method_used_for_interface("m".into(), "f".into(), "B".into());
-        b.mark_method_used_for_interface("m".into(), "g".into(), "C".into());
+        a.mark_method_used_for_interface("m".into(), "f".into(), "A".into(), true);
+        b.mark_method_used_for_interface("m".into(), "f".into(), "B".into(), false);
+        b.mark_method_used_for_interface("m".into(), "g".into(), "C".into(), true);
 
         a.merge(b);
         assert_eq!(a.interface_satisfied_methods.len(), 2);

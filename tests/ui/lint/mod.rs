@@ -11287,8 +11287,8 @@ fn main() {
 }
 
 #[test]
-fn interface_method_pascal_case_no_warning() {
-    assert_no_lint_warnings!(
+fn interface_string_method_warns() {
+    assert_lint_snapshot!(
         r#"
 pub interface Stringer {
   fn String() -> string
@@ -11353,7 +11353,6 @@ fn builtin_interface_method_names_no_warning() {
     assert_no_lint_warnings!(
         r#"
 pub interface Printable {
-  fn String() -> string
   fn Error() -> string
 }
 "#
@@ -11392,8 +11391,8 @@ fn main() {
 }
 
 #[test]
-fn pub_impl_method_satisfying_go_interface_no_warning() {
-    assert_no_lint_warnings!(
+fn pub_impl_method_satisfying_go_interface_warns() {
+    assert_lint_snapshot!(
         r#"
 import "go:encoding"
 
@@ -11408,6 +11407,71 @@ impl Widget {
 fn main() {
   let w = Widget {}
   let _: encoding.TextMarshaler = w
+}
+"#
+    );
+}
+
+#[test]
+fn snake_case_method_satisfying_go_interface_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:encoding"
+
+pub struct Widget {}
+
+impl Widget {
+  pub fn marshal_text(self) -> Result<Slice<byte>, error> {
+    Ok("custom" as Slice<byte>)
+  }
+}
+
+fn main() {
+  let w = Widget {}
+  let _: encoding.TextMarshaler = w
+}
+"#
+    );
+}
+
+#[test]
+fn pub_impl_method_satisfying_public_interface_warns() {
+    assert_lint_snapshot!(
+        r#"
+pub interface Runner {
+  fn run() -> int
+}
+
+pub struct Job {}
+
+impl Job {
+  pub fn Run(self) -> int { 1 }
+}
+
+fn use_it(r: Runner) -> int { r.run() }
+
+fn main() {
+  let _ = use_it(Job {})
+}
+"#
+    );
+}
+
+#[test]
+fn pub_impl_string_method_satisfying_stringer_warns() {
+    assert_lint_snapshot!(
+        r#"
+import "go:fmt"
+
+pub struct Point { pub x: int }
+
+impl Point {
+  pub fn String(self) -> string { "point" }
+}
+
+fn main() {
+  let p = Point { x: 1 }
+  let _: fmt.Stringer = p
 }
 "#
     );

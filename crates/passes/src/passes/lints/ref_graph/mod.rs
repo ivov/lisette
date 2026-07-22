@@ -174,13 +174,13 @@ fn run_ref_lints(
         }
     }
 
-    for ((method_module_id, method_name), impl_types) in &facts.interface_satisfied_methods {
+    for ((method_module_id, method_name), satisfactions) in &facts.interface_satisfied_methods {
         if method_module_id != &module.id {
             continue;
         }
         if method_name == "equals" {
-            for type_name in impl_types {
-                graph.mark_as_used(ModuleItemId::equals_method(type_name));
+            for satisfaction in satisfactions {
+                graph.mark_as_used(ModuleItemId::equals_method(&satisfaction.impl_type_name));
             }
         } else {
             graph.mark_as_used(ModuleItemId::new(method_name));
