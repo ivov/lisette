@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1784673966138,
+  "lastUpdate": 1784743461158,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -7670,6 +7670,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "cli",
             "value": 10240,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 6375,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 4428,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2812,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1039,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 695,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 6084,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 890,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "c0ed9c46d96b921cac40c94f52edb46d3fa93491",
+          "message": "refactor: extract check-handler compile and report helpers (#1091)",
+          "timestamp": "2026-07-22T20:03:51+02:00",
+          "tree_id": "66d1b6fc5592216b33c9c11832fbf46f99ac54ca",
+          "url": "https://github.com/ivov/lisette/commit/c0ed9c46d96b921cac40c94f52edb46d3fa93491"
+        },
+        "date": 1784743459953,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 117082,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 30100,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 24258,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 16850,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 13268,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 10283,
             "unit": "lines"
           },
           {
