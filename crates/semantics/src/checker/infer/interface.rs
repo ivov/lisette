@@ -92,6 +92,7 @@ impl InferCtx<'_, '_> {
             return Ok(());
         }
 
+        let adapter_capable = self.adapter_capable_receiver(ty, interface, interface_qualified_id);
         let mut violations = Vec::new();
         let mut visited = rustc_hash::FxHashSet::default();
         self.collect_interface_violations(
@@ -100,6 +101,7 @@ impl InferCtx<'_, '_> {
             interface_qualified_id,
             type_args,
             None,
+            adapter_capable,
             span,
             &mut violations,
             &mut visited,
@@ -210,6 +212,7 @@ impl InferCtx<'_, '_> {
             interface,
             interface_qualified_id,
             &methods,
+            ty,
             &mut ptr_methods,
             &mut visited,
         );
@@ -229,11 +232,13 @@ impl InferCtx<'_, '_> {
         Err(vec![])
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn collect_pointer_receiver_methods(
         &self,
         interface: &Interface,
         interface_qualified_id: &str,
         methods: &MethodSignatures,
+        receiver: &Type,
         out: &mut Vec<String>,
         visited: &mut rustc_hash::FxHashSet<String>,
     ) {
@@ -241,8 +246,17 @@ impl InferCtx<'_, '_> {
         if !visited.insert(interface_qualified_id.to_string()) {
             return;
         }
+        let interface_is_public = store
+            .get_definition(interface_qualified_id)
+            .is_some_and(|d| d.visibility.is_public());
         for name in interface.methods.keys() {
-            if let Some(method_ty) = methods.get(name) {
+            if let Some((impl_name, method_ty)) = syntax::go_names::conformance_method(
+                methods,
+                interface_qualified_id,
+                interface_is_public,
+                name.as_str(),
+                &|candidate| self.conformance_candidate(receiver, candidate),
+            ) {
                 let func = match method_ty {
                     Type::Forall { body, .. } => body.as_ref(),
                     other => other,
@@ -250,7 +264,7 @@ impl InferCtx<'_, '_> {
                 if let Type::Function(f) = func
                     && f.params.first().is_some_and(|p| p.is_ref())
                 {
-                    out.push(name.to_string());
+                    out.push(impl_name.to_string());
                 }
             }
         }
@@ -261,12 +275,198 @@ impl InferCtx<'_, '_> {
                     parent_interface,
                     parent_name.as_str(),
                     methods,
+                    receiver,
                     out,
                     visited,
                 );
             }
         }
         visited.remove(interface_qualified_id);
+    }
+
+    fn conformance_candidate(
+        &self,
+        receiver: &Type,
+        method: &str,
+    ) -> syntax::go_names::ConformanceCandidate {
+        let resolved = self
+            .store
+            .deep_resolve_alias(&receiver.strip_refs().resolve_in(&self.env));
+        self.own_candidate(&resolved, method)
+            .or_else(|| self.promoted_candidate(&resolved, method))
+            .or_else(|| self.bound_candidate(&resolved, method))
+            .unwrap_or(syntax::go_names::ConformanceCandidate {
+                exported: false,
+                depth: 0,
+                owner: None,
+                shadowed: false,
+            })
+    }
+
+    fn own_candidate(
+        &self,
+        resolved: &Type,
+        method: &str,
+    ) -> Option<syntax::go_names::ConformanceCandidate> {
+        let id = resolved.get_qualified_id()?;
+        let public = method_definition_public(
+            self.store,
+            id,
+            method,
+            &mut rustc_hash::FxHashSet::default(),
+        )?;
+        // UFCS-lowered methods emit as free functions, not selectors.
+        Some(syntax::go_names::ConformanceCandidate {
+            exported: public,
+            depth: 0,
+            owner: Some(id.into()),
+            shadowed: self.is_ufcs_method(id, method),
+        })
+    }
+
+    fn promoted_candidate(
+        &self,
+        resolved: &Type,
+        method: &str,
+    ) -> Option<syntax::go_names::ConformanceCandidate> {
+        use crate::checker::promotion;
+        let store = self.store;
+        resolved.get_qualified_id()?;
+        let promotion::Resolution::Found(member) =
+            promotion::resolve_selector(store, resolved, method)
+        else {
+            return None;
+        };
+        let public = method_definition_public(
+            store,
+            member.declaring_type.as_str(),
+            method,
+            &mut rustc_hash::FxHashSet::default(),
+        )
+        .unwrap_or(false);
+        let selector = if public {
+            syntax::go_names::snake_to_camel(method)
+        } else {
+            method.to_string()
+        };
+        let shadowed = promotion::field_selector_depth(store, resolved, &selector)
+            .is_some_and(|field_depth| field_depth <= member.depth);
+        Some(syntax::go_names::ConformanceCandidate {
+            exported: public,
+            depth: member.depth,
+            owner: Some(member.declaring_type.as_eco().clone()),
+            shadowed,
+        })
+    }
+
+    // Bound method sets merge as one Go constraint interface.
+    fn bound_candidate(
+        &self,
+        resolved: &Type,
+        method: &str,
+    ) -> Option<syntax::go_names::ConformanceCandidate> {
+        let Type::Parameter(name) = resolved else {
+            return None;
+        };
+        let bounds = self.scopes.collect_all_trait_bounds();
+        let qualified = self.qualify_name(name);
+        bounds.get(&qualified)?.iter().find_map(|bound| {
+            let iface_id = self
+                .store
+                .deep_resolve_alias(bound)
+                .get_qualified_id()?
+                .to_string();
+            let public = method_definition_public(
+                self.store,
+                &iface_id,
+                method,
+                &mut rustc_hash::FxHashSet::default(),
+            )?;
+            Some(syntax::go_names::ConformanceCandidate {
+                exported: public,
+                depth: 0,
+                owner: Some(qualified.as_eco().clone()),
+                shadowed: false,
+            })
+        })
+    }
+
+    /// Mirror of emit's `needs_adapter` precondition.
+    fn adapter_capable_receiver(
+        &self,
+        ty: &Type,
+        interface: &Interface,
+        interface_qualified_id: &str,
+    ) -> bool {
+        let store = self.store;
+        let resolved = store.deep_resolve_alias(&ty.strip_refs().resolve_in(&self.env));
+        let Some(id) = resolved.get_qualified_id() else {
+            return false;
+        };
+        if id.starts_with(GO_IMPORT_PREFIX) {
+            return false;
+        }
+        let own = match store.get_definition(id).map(|d| &d.body) {
+            Some(DefinitionBody::Struct { methods, .. })
+            | Some(DefinitionBody::Enum { methods, .. }) => methods,
+            _ => return false,
+        };
+        self.own_methods_cover_interface(
+            own,
+            id,
+            interface,
+            interface_qualified_id,
+            &mut rustc_hash::FxHashSet::default(),
+        )
+    }
+
+    fn own_methods_cover_interface(
+        &self,
+        own: &MethodSignatures,
+        own_id: &str,
+        interface: &Interface,
+        interface_qualified_id: &str,
+        seen: &mut rustc_hash::FxHashSet<String>,
+    ) -> bool {
+        let store = self.store;
+        if !seen.insert(interface_qualified_id.to_string()) {
+            return true;
+        }
+        let interface_is_public = store
+            .get_definition(interface_qualified_id)
+            .is_some_and(|d| d.visibility.is_public());
+        let own_candidate = |name: &str| syntax::go_names::ConformanceCandidate {
+            exported: store
+                .get_definition(&format!("{own_id}.{name}"))
+                .is_some_and(|d| d.visibility.is_public()),
+            depth: 0,
+            owner: Some(own_id.into()),
+            shadowed: self.is_ufcs_method(own_id, name),
+        };
+        let covered = interface.methods.keys().all(|method| {
+            syntax::go_names::conformance_method(
+                own,
+                interface_qualified_id,
+                interface_is_public,
+                method.as_str(),
+                &own_candidate,
+            )
+            .is_some()
+        });
+        covered
+            && interface.parents.iter().all(|parent| {
+                let parent_name = parent.get_qualified_name();
+                match store.get_interface(&parent_name) {
+                    Some(parent_interface) => self.own_methods_cover_interface(
+                        own,
+                        own_id,
+                        parent_interface,
+                        parent_name.as_str(),
+                        seen,
+                    ),
+                    None => true,
+                }
+            })
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -277,6 +477,7 @@ impl InferCtx<'_, '_> {
         interface_qualified_id: &str,
         type_args: &[Type],
         parent_of: Option<&str>,
+        adapter_capable: bool,
         span: &Span,
         violations: &mut Vec<InterfaceViolation>,
         visited: &mut rustc_hash::FxHashSet<String>,
@@ -316,141 +517,76 @@ impl InferCtx<'_, '_> {
             })
             .unwrap_or_default();
 
+        let interface_is_public = store
+            .get_definition(interface_qualified_id)
+            .is_some_and(|d| d.visibility.is_public());
+
         for (method_name, method_ty) in &interface.methods {
-            let Some(symbol_method) = symbol_methods.get(method_name.as_str()) else {
-                missing.push((method_name.to_string(), method_ty.clone()));
-                continue;
-            };
-
-            if let Some(ref id) = receiver_id
-                && self.is_ufcs_method(id.as_str(), method_name.as_str())
-            {
-                if !receiver_generics.is_empty() {
-                    let type_name = resolved_receiver
-                        .get_name()
-                        .map_or_else(|| resolved_receiver.to_string(), str::to_owned);
-                    self.sink.push(
-                        diagnostics::infer::specialized_impl_cannot_satisfy_interface(
-                            &type_name,
-                            &interface.name,
-                            method_name,
-                            &receiver_generics,
-                            *span,
-                        ),
-                    );
+            let selected = self.select_impl_method(
+                ty,
+                &symbol_methods,
+                interface_qualified_id,
+                interface_is_public,
+                method_name.as_str(),
+                receiver_id.as_ref().map(|id| id.as_str()),
+            );
+            let (impl_method_name, symbol_method) = match selected {
+                SelectedMethod::Found(name, method) => (name, method),
+                SelectedMethod::UfcsOnly => {
+                    if !receiver_generics.is_empty() {
+                        let type_name = resolved_receiver
+                            .get_name()
+                            .map_or_else(|| resolved_receiver.to_string(), str::to_owned);
+                        self.sink.push(
+                            diagnostics::infer::specialized_impl_cannot_satisfy_interface(
+                                &type_name,
+                                &interface.name,
+                                method_name,
+                                &receiver_generics,
+                                *span,
+                            ),
+                        );
+                    }
+                    missing.push((method_name.to_string(), method_ty.clone()));
+                    continue;
                 }
-                missing.push((method_name.to_string(), method_ty.clone()));
-                continue;
-            }
-
-            let substituted_method = substitute(method_ty, &map);
-
-            // Instantiate Forall impl methods before removing receiver
-            let instantiated_method = match symbol_method {
-                Type::Forall { .. } => self.instantiate(symbol_method).0,
-                _ => symbol_method.clone(),
-            };
-            let receiver_to_pin = match symbol_method {
-                Type::Forall { .. } => match &instantiated_method {
-                    Type::Function(f) => f
-                        .params
-                        .first()
-                        .filter(|p| !p.is_receiver_placeholder())
-                        .map(Type::strip_refs),
-                    _ => None,
-                },
-                _ => None,
-            };
-            let impl_method_without_receiver = Self::remove_first_param(&instantiated_method);
-
-            // Strip bounds before comparing - bounds are checked separately via bounds_equivalent
-            let strip_bounds = |ty: &Type| match ty {
-                Type::Function(f) => f.rebuild(f.params.clone(), vec![], f.return_type.clone()),
-                other => other.clone(),
+                SelectedMethod::Missing => {
+                    missing.push((method_name.to_string(), method_ty.clone()));
+                    continue;
+                }
             };
 
-            // Go-imported interfaces allow narrow covariance: impl returning T
-            // satisfies Option<T> in the top-level return position, when both
-            // sides lower to the same Go ABI shape.
-            let impl_for_unify = covariant_return_adjustment(
+            let check = self.check_method_signature(
+                ty,
                 interface_qualified_id,
                 method_name.as_str(),
-                &substituted_method,
-                &impl_method_without_receiver,
-                store,
-            )
-            .unwrap_or_else(|| impl_method_without_receiver.clone());
+                method_ty,
+                &symbol_method,
+                &map,
+            );
 
-            let candidate_ty = ty.strip_refs().resolve_in(&self.env);
-            let mut receiver_pinned = true;
-            let mut resolved_impl_method = None;
-            self.scopes.increment_type_param_depth();
-            let sig_match = self.speculatively(|this| {
-                let mut ctx = InferCtx::new(this, store);
-                if let Some(receiver) = &receiver_to_pin {
-                    ctx.try_unify(receiver, &candidate_ty, &Span::dummy())
-                        .inspect_err(|_| receiver_pinned = false)?;
-                }
-                let result = ctx.try_unify(
-                    &strip_bounds(&substituted_method),
-                    &strip_bounds(&impl_for_unify),
-                    &Span::dummy(),
+            if check.receiver_pinned && check.matched {
+                self.validate_comma_ok_abi(
+                    ty,
+                    interface,
+                    interface_qualified_id,
+                    method_name,
+                    impl_method_name.as_str(),
+                    adapter_capable,
+                    span,
                 );
-                if result.is_err() {
-                    resolved_impl_method = Some(impl_method_without_receiver.resolve_in(&ctx.env));
-                }
-                result
-            });
-            self.scopes.decrement_type_param_depth();
-
-            if receiver_pinned
-                && sig_match.is_ok()
-                && interface_qualified_id.starts_with(GO_IMPORT_PREFIX)
-            {
-                let resolved_ty = ty.strip_refs().resolve_in(&self.env);
-                if let Some(ty_id) = resolved_ty.get_qualified_id()
-                    && let crate::checker::promotion::Resolution::Found(member) =
-                        crate::checker::promotion::resolve_selector(
-                            store,
-                            &resolved_ty,
-                            method_name.as_str(),
-                        )
-                {
-                    let interface_comma_ok =
-                        method_comma_ok(store, interface_qualified_id, method_name);
-                    let selected_comma_ok =
-                        method_comma_ok(store, member.declaring_type.as_str(), method_name);
-                    let native_direct = member.depth == 0 && !ty_id.starts_with(GO_IMPORT_PREFIX);
-                    let adapter_reconciles =
-                        native_direct && interface_comma_ok && !selected_comma_ok;
-                    if interface_comma_ok != selected_comma_ok && !adapter_reconciles {
-                        self.sink.push(diagnostics::embed::comma_ok_abi_mismatch(
-                            &interface.name,
-                            method_name,
-                            *span,
-                        ));
-                    }
-                }
             }
 
-            if !receiver_pinned {
+            if !check.receiver_pinned {
                 missing.push((method_name.to_string(), method_ty.clone()));
-            } else if sig_match.is_err() {
+            } else if !check.matched {
                 incompatible.push((
                     method_name.to_string(),
-                    substituted_method,
-                    resolved_impl_method.unwrap_or(impl_method_without_receiver),
+                    check.substituted_method,
+                    check.incompatible_impl,
                 ));
-            } else if let Type::Nominal { id, .. } = ty.strip_refs().resolve_in(&self.env)
-                && let Some(module) = store.module_for_qualified_name(id.as_str())
-                && let Some(type_name) = id.as_str().get(module.len() + 1..)
-                && !type_name.contains('.')
-            {
-                self.facts.mark_method_used_for_interface(
-                    module.to_string(),
-                    method_name.to_string(),
-                    type_name.to_string(),
-                );
+            } else {
+                self.record_conformance_use(ty, impl_method_name.as_str());
             }
         }
 
@@ -467,9 +603,6 @@ impl InferCtx<'_, '_> {
             let parent_name = parent.get_qualified_name();
             if let Some(parent_interface) = store.get_interface(&parent_name).cloned() {
                 let parent_type_args = parent.get_type_params().unwrap_or_default();
-                // Substitute parent type arguments using the current interface's substitution map.
-                // E.g., if Processor<T> embeds Mapper<T> and we're checking Processor<string>,
-                // we need to substitute T with string before checking the embedded Mapper.
                 let substituted_parent_args: Vec<Type> = parent_type_args
                     .iter()
                     .map(|arg| substitute(arg, &map))
@@ -480,6 +613,7 @@ impl InferCtx<'_, '_> {
                     &parent_name,
                     &substituted_parent_args,
                     Some(&interface.name),
+                    adapter_capable,
                     span,
                     violations,
                     visited,
@@ -490,12 +624,194 @@ impl InferCtx<'_, '_> {
         visited.remove(interface_qualified_id);
     }
 
+    fn select_impl_method(
+        &self,
+        ty: &Type,
+        symbol_methods: &MethodSignatures,
+        interface_qualified_id: &str,
+        interface_is_public: bool,
+        method_name: &str,
+        receiver_id: Option<&str>,
+    ) -> SelectedMethod {
+        let selected = syntax::go_names::conformance_method(
+            symbol_methods,
+            interface_qualified_id,
+            interface_is_public,
+            method_name,
+            &|name| self.conformance_candidate(ty, name),
+        );
+        let ufcs_probe = match &selected {
+            Some((name, _)) => name.as_str(),
+            None => method_name,
+        };
+        if receiver_id.is_some_and(|id| self.is_ufcs_method(id, ufcs_probe)) {
+            return SelectedMethod::UfcsOnly;
+        }
+        match selected {
+            Some((name, method)) => SelectedMethod::Found(name.clone(), method.clone()),
+            None => SelectedMethod::Missing,
+        }
+    }
+
+    fn check_method_signature(
+        &mut self,
+        ty: &Type,
+        interface_qualified_id: &str,
+        method_name: &str,
+        method_ty: &Type,
+        symbol_method: &Type,
+        map: &SubstitutionMap,
+    ) -> SignatureCheck {
+        let store = self.store;
+        let substituted_method = substitute(method_ty, map);
+
+        let instantiated_method = match symbol_method {
+            Type::Forall { .. } => self.instantiate(symbol_method).0,
+            _ => symbol_method.clone(),
+        };
+        let receiver_to_pin = match symbol_method {
+            Type::Forall { .. } => match &instantiated_method {
+                Type::Function(f) => f
+                    .params
+                    .first()
+                    .filter(|p| !p.is_receiver_placeholder())
+                    .map(Type::strip_refs),
+                _ => None,
+            },
+            _ => None,
+        };
+        let impl_method_without_receiver = Self::remove_first_param(&instantiated_method);
+
+        let strip_bounds = |ty: &Type| match ty {
+            Type::Function(f) => f.rebuild(f.params.clone(), vec![], f.return_type.clone()),
+            other => other.clone(),
+        };
+
+        let impl_for_unify = covariant_return_adjustment(
+            interface_qualified_id,
+            method_name,
+            &substituted_method,
+            &impl_method_without_receiver,
+            store,
+        )
+        .unwrap_or_else(|| impl_method_without_receiver.clone());
+
+        let candidate_ty = ty.strip_refs().resolve_in(&self.env);
+        let mut receiver_pinned = true;
+        let mut resolved_impl_method = None;
+        self.scopes.increment_type_param_depth();
+        let sig_match = self.speculatively(|this| {
+            let mut ctx = InferCtx::new(this, store);
+            if let Some(receiver) = &receiver_to_pin {
+                ctx.try_unify(receiver, &candidate_ty, &Span::dummy())
+                    .inspect_err(|_| receiver_pinned = false)?;
+            }
+            let result = ctx.try_unify(
+                &strip_bounds(&substituted_method),
+                &strip_bounds(&impl_for_unify),
+                &Span::dummy(),
+            );
+            if result.is_err() {
+                resolved_impl_method = Some(impl_method_without_receiver.resolve_in(&ctx.env));
+            }
+            result
+        });
+        self.scopes.decrement_type_param_depth();
+
+        SignatureCheck {
+            receiver_pinned,
+            matched: sig_match.is_ok(),
+            substituted_method,
+            incompatible_impl: resolved_impl_method.unwrap_or(impl_method_without_receiver),
+        }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn validate_comma_ok_abi(
+        &mut self,
+        ty: &Type,
+        interface: &Interface,
+        interface_qualified_id: &str,
+        method_name: &str,
+        impl_method_name: &str,
+        adapter_capable: bool,
+        span: &Span,
+    ) {
+        let store = self.store;
+        let resolved_ty = ty.strip_refs().resolve_in(&self.env);
+        if resolved_ty.get_qualified_id().is_none() {
+            return;
+        }
+        let crate::checker::promotion::Resolution::Found(member) =
+            crate::checker::promotion::resolve_selector(store, &resolved_ty, impl_method_name)
+        else {
+            return;
+        };
+        let interface_comma_ok = method_comma_ok(store, interface_qualified_id, method_name);
+        let selected_comma_ok =
+            method_comma_ok(store, member.declaring_type.as_str(), impl_method_name);
+        let adapter_reconciles = adapter_capable && interface_comma_ok && !selected_comma_ok;
+        if interface_comma_ok != selected_comma_ok && !adapter_reconciles {
+            self.sink.push(diagnostics::embed::comma_ok_abi_mismatch(
+                &interface.name,
+                method_name,
+                *span,
+            ));
+        }
+    }
+
+    fn record_conformance_use(&mut self, ty: &Type, impl_method_name: &str) {
+        let store = self.store;
+        if let Type::Nominal { id, .. } = ty.strip_refs().resolve_in(&self.env)
+            && let Some(module) = store.module_for_qualified_name(id.as_str())
+            && let Some(type_name) = id.as_str().get(module.len() + 1..)
+            && !type_name.contains('.')
+        {
+            self.facts.mark_method_used_for_interface(
+                module.to_string(),
+                impl_method_name.to_string(),
+                type_name.to_string(),
+            );
+        }
+    }
+
     fn remove_first_param(ty: &Type) -> Type {
         match ty {
             Type::Function(f) => f.without_receiver(),
             _ => ty.clone(),
         }
     }
+}
+
+enum SelectedMethod {
+    Found(syntax::EcoString, Type),
+    UfcsOnly,
+    Missing,
+}
+
+struct SignatureCheck {
+    receiver_pinned: bool,
+    matched: bool,
+    substituted_method: Type,
+    incompatible_impl: Type,
+}
+
+fn method_definition_public(
+    store: &Store,
+    owner: &str,
+    method: &str,
+    seen: &mut rustc_hash::FxHashSet<String>,
+) -> Option<bool> {
+    if !seen.insert(owner.to_string()) {
+        return None;
+    }
+    if let Some(def) = store.get_definition(&format!("{owner}.{method}")) {
+        return Some(def.visibility.is_public());
+    }
+    let interface = store.get_interface(owner)?;
+    interface.parents.iter().find_map(|parent| {
+        method_definition_public(store, parent.get_qualified_name().as_str(), method, seen)
+    })
 }
 
 pub(crate) fn interface_requires_methods(store: &Store, id: &str) -> bool {

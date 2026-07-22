@@ -1,13 +1,10 @@
 use crate::Planner;
 use crate::definitions::enum_layout::{ENUM_GO_STRINGER_METHOD, ENUM_STRINGER_METHOD};
-use crate::definitions::tags::{
-    field_has_export_forcing_attribute, format_tag_string, interpret_field_attributes,
-};
+use crate::definitions::tags::{format_tag_string, interpret_field_attributes};
 use crate::expressions::top_items::emit_doc;
 use crate::names::go_name::{self, prelude_qualifier};
 use crate::utils::{synthesized_local_name, synthesized_receiver_name};
 use rustc_hash::{FxHashMap, FxHashSet};
-use std::borrow::Cow;
 use syntax::ast::{Attribute, Generic, StructFieldDefinition, StructKind};
 use syntax::attributes::struct_attribute_forces_field_export;
 use syntax::program::{Definition, DefinitionBody, Interface, MethodSignatures};
@@ -507,25 +504,7 @@ pub(crate) fn struct_field_go_name(
     let struct_forces_export = struct_attrs
         .iter()
         .any(struct_attribute_forces_field_export);
-    field_go_name(field, struct_forces_export).into_owned()
-}
-
-fn field_go_name(field: &StructFieldDefinition, struct_forces_export: bool) -> Cow<'_, str> {
-    if field_go_name_is_exported(field, struct_forces_export) {
-        Cow::Owned(go_name::make_exported(&field.name))
-    } else {
-        go_name::escape_keyword(&field.name)
-    }
-}
-
-pub(crate) fn field_go_name_is_exported(
-    field: &StructFieldDefinition,
-    struct_forces_export: bool,
-) -> bool {
-    !field.embedded
-        && (field.visibility.is_public()
-            || struct_forces_export
-            || field_has_export_forcing_attribute(field))
+    syntax::go_names::struct_field_go_name(field, struct_forces_export).into_owned()
 }
 
 pub(crate) struct StringerField {
@@ -608,9 +587,9 @@ fn definition_emits_go_string_field(definition: &Definition) -> bool {
         return false;
     };
     let forces_export = definition.is_serialized();
-    fields
-        .iter()
-        .any(|field| field_go_name(field, forces_export) == ENUM_STRINGER_METHOD)
+    fields.iter().any(|field| {
+        syntax::go_names::struct_field_go_name(field, forces_export) == ENUM_STRINGER_METHOD
+    })
 }
 
 fn type_methods(definition: &Definition) -> Option<&MethodSignatures> {

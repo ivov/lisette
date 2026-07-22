@@ -7,7 +7,9 @@ use crate::write_line;
 use ecow::EcoString;
 use rustc_hash::FxHashSet as HashSet;
 use syntax::program::{Definition, DefinitionBody, Interface};
-use syntax::types::{SubstitutionMap, Type, build_substitution_map, substitute, unqualified_name};
+use syntax::types::{
+    SubstitutionMap, Symbol, Type, build_substitution_map, substitute, unqualified_name,
+};
 pub(crate) struct AdapterPlan {
     pub(crate) concrete_id: EcoString,
     pub(crate) interface_id: EcoString,
@@ -69,11 +71,17 @@ impl Planner<'_> {
         iface: &Interface,
     ) -> Vec<(EcoString, Type, EcoString)> {
         let mut result: Vec<(EcoString, Type, EcoString)> = Vec::new();
-        let mut seen: HashSet<EcoString> = HashSet::default();
+        let mut seen: HashSet<String> = HashSet::default();
         let mut queue: Vec<(&Interface, EcoString)> = vec![(iface, EcoString::from(root_id))];
         while let Some((current, current_id)) = queue.pop() {
             for (name, ty) in &current.methods {
-                if seen.insert(name.clone()) {
+                // Parents may spell one Go method with different source names.
+                let selector = if self.method_needs_export(name) {
+                    go_name::snake_to_camel(name)
+                } else {
+                    go_name::escape_keyword(name).into_owned()
+                };
+                if seen.insert(selector) {
                     result.push((name.clone(), ty.clone(), current_id.clone()));
                 }
             }
@@ -111,66 +119,91 @@ impl Planner<'_> {
         else {
             return None;
         };
-
-        let source_stripped = source_ty.strip_refs();
+        let source_stripped = self.facts.peel_alias(&source_ty.strip_refs());
         let Type::Nominal { id: source_id, .. } = &source_stripped else {
             return None;
         };
+        let methods =
+            self.adapted_methods(source_id, &source_stripped, target_id.as_str(), definition)?;
+        Some(AdapterPlan {
+            concrete_id: source_id.as_eco().clone(),
+            interface_id: target_id.as_eco().clone(),
+            concrete_ty: source_ty.clone(),
+            generic_context: self.adapter_generic_context(source_ty, &methods),
+            methods,
+        })
+    }
+
+    /// The adapter's method plans, or None when the source cannot implement
+    /// the interface or no method needs adapting.
+    fn adapted_methods(
+        &self,
+        source_id: &Symbol,
+        source_stripped: &Type,
+        target_id: &str,
+        definition: &Interface,
+    ) -> Option<Vec<AdapterMethod>> {
         if source_id.starts_with(GO_IMPORT_PREFIX) {
             return None;
         }
-        let Some(Definition {
-            body:
-                DefinitionBody::Struct {
-                    methods: struct_methods,
-                    ..
-                },
-            ..
-        }) = self.facts.definition(source_id.as_str())
-        else {
-            return None;
+        let impl_methods = match &self.facts.definition(source_id.as_str())?.body {
+            DefinitionBody::Struct { methods, .. } | DefinitionBody::Enum { methods, .. } => {
+                methods
+            }
+            _ => return None,
         };
 
-        let all_interface_methods = self.collect_all_interface_methods(target_id, definition);
-        let mut methods = Vec::with_capacity(all_interface_methods.len());
-        let mut any_adapted = false;
+        let is_public_definition = |id: &str| {
+            self.facts
+                .definition(id)
+                .is_some_and(|d| d.visibility.is_public())
+        };
+        let own_candidate = |name: &str| syntax::go_names::ConformanceCandidate {
+            exported: is_public_definition(&format!("{source_id}.{name}")),
+            depth: 0,
+            owner: Some(source_id.as_eco().clone()),
+            shadowed: self.facts.is_ufcs_method(source_id.as_str(), name),
+        };
 
-        for (method_name, interface_method_ty, declaring_id) in &all_interface_methods {
-            let impl_ty = struct_methods.get(method_name)?;
+        let mut methods = Vec::new();
+        let mut any_adapted = false;
+        for (method_name, interface_method_ty, declaring_id) in
+            &self.collect_all_interface_methods(target_id, definition)
+        {
+            let (_, impl_ty) = syntax::go_names::conformance_method(
+                impl_methods,
+                declaring_id.as_str(),
+                is_public_definition(declaring_id.as_str()),
+                method_name.as_str(),
+                &own_candidate,
+            )?;
             let (method, adapted) = self.build_adapter_method(
                 method_name,
                 declaring_id,
                 interface_method_ty,
                 impl_ty,
-                &source_stripped,
+                source_stripped,
             )?;
-            if adapted {
-                any_adapted = true;
-            }
+            any_adapted |= adapted;
             methods.push(method);
         }
+        any_adapted.then_some(methods)
+    }
 
-        if !any_adapted {
-            return None;
-        }
-
-        let generic_context = self.function_state.generic_context();
-        let generic_context = if generic_context
+    fn adapter_generic_context(
+        &self,
+        source_ty: &Type,
+        methods: &[AdapterMethod],
+    ) -> Vec<(EcoString, Vec<Type>)> {
+        let context = self.function_state.generic_context();
+        if context
             .iter()
-            .any(|(name, _)| adapter_uses_type_parameter(source_ty, &methods, name))
+            .any(|(name, _)| adapter_uses_type_parameter(source_ty, methods, name))
         {
-            generic_context.to_vec()
+            context.to_vec()
         } else {
             Vec::new()
-        };
-
-        Some(AdapterPlan {
-            concrete_id: source_id.as_eco().clone(),
-            interface_id: target_id.as_eco().clone(),
-            concrete_ty: source_ty.clone(),
-            methods,
-            generic_context,
-        })
+        }
     }
 
     /// Returns the method plan and whether its physical Go signature differs.

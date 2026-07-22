@@ -72,6 +72,30 @@ pub fn promoted_method_set(store: &Store, outer: &Type) -> MethodSignatures {
     result
 }
 
+/// Shallowest depth at which any field of `outer` emits `selector` as its Go name.
+pub fn field_selector_depth(store: &Store, outer: &Type, selector: &str) -> Option<usize> {
+    let mut min: Option<usize> = None;
+    for entry in walk(store, outer) {
+        let Some(id) = entry.ty.get_qualified_id() else {
+            continue;
+        };
+        let Some(definition) = store.get_definition(id) else {
+            continue;
+        };
+        let DefinitionBody::Struct { fields, .. } = &definition.body else {
+            continue;
+        };
+        let forces_export = definition.is_serialized();
+        let claimed = fields
+            .iter()
+            .any(|field| syntax::go_names::struct_field_go_name(field, forces_export) == selector);
+        if claimed && min.is_none_or(|m| entry.depth < m) {
+            min = Some(entry.depth);
+        }
+    }
+    min
+}
+
 #[derive(Clone)]
 struct Entry {
     ty: Type,

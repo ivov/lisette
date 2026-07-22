@@ -8861,3 +8861,161 @@ fn main() {
 
     assert_build_snapshot!(fs, "github.com/user/myproject");
 }
+
+#[test]
+fn snake_case_impl_satisfies_comma_ok_go_iface_via_adapter() {
+    let mut fs = MockFileSystem::new();
+
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+import "go:crypto/tls"
+
+struct MyCache {}
+
+impl MyCache {
+  pub fn get(self, _key: string) -> Option<Ref<tls.ClientSessionState>> {
+    None
+  }
+  pub fn put(self, _key: string, _cs: Ref<tls.ClientSessionState>) {}
+}
+
+fn use_cache(_c: tls.ClientSessionCache) {}
+
+fn main() {
+  let c = MyCache {}
+  use_cache(c as tls.ClientSessionCache)
+}
+"#,
+    );
+
+    assert_build_snapshot!(fs, "github.com/user/myproject");
+}
+
+#[test]
+fn snake_case_impl_satisfies_pascal_case_lisette_iface() {
+    let mut fs = MockFileSystem::new();
+
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+pub interface Runner {
+  fn Run() -> int
+}
+
+struct Job {}
+
+impl Job {
+  pub fn run(self) -> int { 1 }
+}
+
+fn use_it(r: Runner) -> int { r.Run() }
+
+fn main() {
+  let _ = use_it(Job {})
+}
+"#,
+    );
+
+    assert_build_snapshot!(fs, "github.com/user/myproject");
+}
+
+#[test]
+fn snake_case_enum_impl_satisfies_comma_ok_go_iface_via_adapter() {
+    let mut fs = MockFileSystem::new();
+
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+import "go:crypto/tls"
+
+enum CacheKind { Mem }
+
+impl CacheKind {
+  pub fn get(self, _key: string) -> Option<Ref<tls.ClientSessionState>> {
+    None
+  }
+  pub fn put(self, _key: string, _cs: Ref<tls.ClientSessionState>) {}
+}
+
+fn use_cache(_c: tls.ClientSessionCache) {}
+
+fn main() {
+  use_cache(CacheKind.Mem as tls.ClientSessionCache)
+}
+"#,
+    );
+
+    assert_build_snapshot!(fs, "github.com/user/myproject");
+}
+
+#[test]
+fn snake_case_alias_typed_value_gets_comma_ok_adapter() {
+    let mut fs = MockFileSystem::new();
+
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+import "go:crypto/tls"
+
+pub struct CacheBase {}
+impl CacheBase {
+  pub fn get(self, _key: string) -> Option<Ref<tls.ClientSessionState>> {
+    None
+  }
+  pub fn put(self, _key: string, _cs: Ref<tls.ClientSessionState>) {}
+}
+pub type MyCache = CacheBase
+
+fn main() {
+  let c: MyCache = CacheBase {}
+  let _ = c as tls.ClientSessionCache
+}
+"#,
+    );
+
+    assert_build_snapshot!(fs, "github.com/user/myproject");
+}
+
+#[test]
+fn adapter_dedups_parent_methods_sharing_go_selector() {
+    let mut fs = MockFileSystem::new();
+
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+pub struct Entry { pub name: string }
+
+pub interface ParentA {
+  #[go(comma_ok)]
+  fn get_item(key: string) -> Option<Ref<Entry>>
+}
+
+pub interface ParentB {
+  #[go(comma_ok)]
+  fn getItem(key: string) -> Option<Ref<Entry>>
+}
+
+pub interface Combined {
+  embed ParentA
+  embed ParentB
+}
+
+struct S {}
+impl S {
+  pub fn get_item(self, _key: string) -> Option<Ref<Entry>> { None }
+}
+
+fn main() {
+  let _ = S {} as Combined
+}
+"#,
+    );
+
+    assert_build_snapshot!(fs, "github.com/user/myproject");
+}

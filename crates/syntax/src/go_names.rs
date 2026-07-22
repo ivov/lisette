@@ -3,6 +3,10 @@
 
 use std::borrow::Cow;
 
+use crate::EcoString;
+use crate::program::MethodSignatures;
+use crate::types::{GO_IMPORT_PREFIX, Type};
+
 /// Go reserved keywords that cannot be used as identifiers.
 /// See: https://go.dev/ref/spec#Keywords
 pub const GO_KEYWORDS: &[&str] = &[
@@ -128,6 +132,85 @@ pub fn escape_type_name(name: &str) -> Cow<'_, str> {
     }
 }
 
+/// Whether a struct field emits its camelized Go name.
+pub fn struct_field_is_exported(
+    field: &crate::ast::StructFieldDefinition,
+    struct_forces_export: bool,
+) -> bool {
+    !field.embedded
+        && (field.visibility.is_public()
+            || struct_forces_export
+            || field
+                .attributes
+                .iter()
+                .any(crate::attributes::field_attribute_forces_export))
+}
+
+/// A struct field's emitted Go name under the shared export policy.
+pub fn struct_field_go_name(
+    field: &crate::ast::StructFieldDefinition,
+    struct_forces_export: bool,
+) -> Cow<'_, str> {
+    if struct_field_is_exported(field, struct_forces_export) {
+        Cow::Owned(escape_keyword(&snake_to_camel(&field.name)).into_owned())
+    } else {
+        escape_keyword(&field.name)
+    }
+}
+
+/// A candidate method's standing, resolved by the caller on its declaring owner.
+#[derive(Clone)]
+pub struct ConformanceCandidate {
+    pub exported: bool,
+    pub depth: usize,
+    pub owner: Option<EcoString>,
+    pub shadowed: bool,
+}
+
+/// Resolve which implementing method satisfies an interface requirement, by
+/// emitted Go name under Go's selector rules.
+pub fn conformance_method<'a>(
+    methods: &'a MethodSignatures,
+    interface_id: &str,
+    interface_is_public: bool,
+    method_name: &str,
+    candidate: &dyn Fn(&str) -> ConformanceCandidate,
+) -> Option<(&'a EcoString, &'a Type)> {
+    let want = if interface_id.starts_with(GO_IMPORT_PREFIX) {
+        Cow::Borrowed(method_name)
+    } else if interface_id.starts_with("prelude.") || !interface_is_public {
+        return methods.get_key_value(method_name);
+    } else {
+        Cow::Owned(snake_to_camel(method_name))
+    };
+    let mut matches: Vec<(usize, bool, Option<EcoString>, &EcoString, &Type)> = Vec::new();
+    for (name, ty) in methods {
+        let exact = name == method_name;
+        let info = candidate(name);
+        if info.shadowed {
+            continue;
+        }
+        let emitted = if info.exported {
+            Cow::Owned(snake_to_camel(name))
+        } else {
+            Cow::Borrowed(name.as_str())
+        };
+        if !exact && emitted != *want {
+            continue;
+        }
+        matches.push((info.depth, exact, info.owner, name, ty));
+    }
+    let depth = matches.iter().map(|m| m.0).min()?;
+    matches.retain(|m| m.0 == depth);
+    if matches.iter().any(|m| m.2 != matches[0].2) {
+        return None;
+    }
+    matches
+        .into_iter()
+        .min_by_key(|(_, exact, _, name, _)| (!exact, (*name).clone()))
+        .map(|(_, _, _, name, ty)| (name, ty))
+}
+
 /// Go struct field name for an enum variant field. Emit's enum layout and
 /// the checker's cross-variant conflict check must both use this single
 /// authority so their notions of a field's Go name cannot drift.
@@ -222,6 +305,124 @@ mod tests {
             enum_field_go_name("Click", "go_string", 0, true, true, "Event"),
             "ClickGoString"
         );
+    }
+
+    fn exported_at(depth: usize) -> impl Fn(&str) -> ConformanceCandidate {
+        move |_| ConformanceCandidate {
+            exported: true,
+            depth,
+            owner: Some("main.T".into()),
+            shadowed: false,
+        }
+    }
+
+    const UNEXPORTED: fn(&str) -> ConformanceCandidate = |_| ConformanceCandidate {
+        exported: false,
+        depth: 0,
+        owner: Some("main.T".into()),
+        shadowed: false,
+    };
+
+    #[test]
+    fn conformance_method_matches_source_then_emitted_name() {
+        let mut methods = MethodSignatures::default();
+        methods.insert("read".into(), Type::Error);
+        methods.insert("close".into(), Type::Error);
+
+        let via_emitted = conformance_method(&methods, "go:io", true, "Read", &exported_at(0));
+        assert_eq!(via_emitted.map(|(name, _)| name.as_str()), Some("read"));
+
+        let private_method = conformance_method(&methods, "go:io", true, "Read", &UNEXPORTED);
+        assert_eq!(private_method, None);
+
+        let initialism =
+            conformance_method(&methods, "go:net/http", true, "ServeHTTP", &exported_at(0));
+        assert_eq!(initialism, None);
+
+        methods.insert("Read".into(), Type::Error);
+        let via_source = conformance_method(&methods, "go:io", true, "Read", &UNEXPORTED);
+        assert_eq!(via_source.map(|(name, _)| name.as_str()), Some("Read"));
+    }
+
+    #[test]
+    fn conformance_method_prefers_shallow_over_exact() {
+        let mut methods = MethodSignatures::default();
+        methods.insert("describe".into(), Type::Error);
+        methods.insert("Describe".into(), Type::Error);
+        let candidate = |name: &str| ConformanceCandidate {
+            exported: true,
+            depth: if name == "Describe" { 1 } else { 0 },
+            owner: Some(
+                if name == "Describe" {
+                    "main.Base"
+                } else {
+                    "main.Outer"
+                }
+                .into(),
+            ),
+            shadowed: false,
+        };
+
+        let shallow = conformance_method(&methods, "go:reg", true, "Describe", &candidate);
+        assert_eq!(shallow.map(|(name, _)| name.as_str()), Some("describe"));
+
+        let same_depth = conformance_method(&methods, "go:reg", true, "Describe", &exported_at(0));
+        assert_eq!(same_depth.map(|(name, _)| name.as_str()), Some("Describe"));
+    }
+
+    #[test]
+    fn conformance_method_rejects_equal_depth_cross_owner_ambiguity() {
+        let mut methods = MethodSignatures::default();
+        methods.insert("get_item".into(), Type::Error);
+        methods.insert("getItem".into(), Type::Error);
+        let promoted = |name: &str| ConformanceCandidate {
+            exported: true,
+            depth: 1,
+            owner: Some(
+                if name == "get_item" {
+                    "main.A"
+                } else {
+                    "main.B"
+                }
+                .into(),
+            ),
+            shadowed: false,
+        };
+
+        let ambiguous = conformance_method(&methods, "go:reg", true, "GetItem", &promoted);
+        assert_eq!(ambiguous, None);
+    }
+
+    #[test]
+    fn conformance_method_skips_field_shadowed_candidates() {
+        let mut methods = MethodSignatures::default();
+        methods.insert("getItem".into(), Type::Error);
+        let shadowed = |_: &str| ConformanceCandidate {
+            exported: true,
+            depth: 1,
+            owner: Some("main.Base".into()),
+            shadowed: true,
+        };
+
+        let hidden = conformance_method(&methods, "go:reg", true, "GetItem", &shadowed);
+        assert_eq!(hidden, None);
+    }
+
+    #[test]
+    fn conformance_method_gates_on_interface_kind() {
+        let mut methods = MethodSignatures::default();
+        methods.insert("run".into(), Type::Error);
+
+        let public_lisette =
+            conformance_method(&methods, "main.Runner", true, "Run", &exported_at(0));
+        assert_eq!(public_lisette.map(|(name, _)| name.as_str()), Some("run"));
+
+        let private_lisette =
+            conformance_method(&methods, "main.Runner", false, "Run", &exported_at(0));
+        assert_eq!(private_lisette, None);
+
+        let prelude = conformance_method(&methods, "prelude.Runner", true, "Run", &exported_at(0));
+        assert_eq!(prelude, None);
     }
 
     #[test]
