@@ -25,7 +25,9 @@ fn counts_for_test_root(name: &str) -> bool {
     name.ends_with(".lis") && !name.ends_with(".test.lis")
 }
 
-fn is_production_module_file(name: &str) -> bool {
+/// The predicate module discovery roots on. Shared so callers that pre-scan
+/// `src/` cannot disagree with the graph about what a production module is.
+pub fn is_production_module_file(name: &str) -> bool {
     name.ends_with(".lis") && !name.ends_with(".test.lis") && !name.ends_with(".d.lis")
 }
 

@@ -59,6 +59,7 @@ pub fn check(
             false,
             TypedefLocator::default(),
             ProjectKind::Binary,
+            "main",
         );
     }
 
@@ -128,7 +129,7 @@ fn check_project(project_path: &Path, options: &CheckOptions) -> i32 {
     ));
     let locator = locator.with_bindgen(bindgen);
 
-    let result = check_single_file(&src_main, options, true, locator, layout.kind);
+    let result = check_single_file(&src_main, options, true, locator, layout.kind, "main");
     drop(target_lock);
     result
 }
@@ -139,18 +140,28 @@ fn check_single_file(
     load_siblings: bool,
     locator: TypedefLocator,
     project_kind: ProjectKind,
+    go_module: &str,
 ) -> i32 {
     let start = Instant::now();
-    let unix = matches!(options.format, OutputFormat::Unix);
     let Some((result, source, filename)) =
-        compile_single_file(file_path, load_siblings, locator, project_kind)
+        compile_single_file(file_path, load_siblings, locator, project_kind, go_module)
     else {
         return 1; // Read error already reported by compile_single_file
     };
+    report_check(&result, &source, &filename, options, start)
+}
 
+fn report_check(
+    result: &CompileResult,
+    source: &str,
+    filename: &str,
+    options: &CheckOptions,
+    start: Instant,
+) -> i32 {
+    let unix = matches!(options.format, OutputFormat::Unix);
     if options.fix {
         let mut summary = FixSummary::default();
-        apply_result_fixes(&result, &mut summary);
+        apply_result_fixes(result, &mut summary);
         print_fix_summary(&summary, start.elapsed());
         return i32::from(summary.write_failures > 0);
     }
@@ -168,8 +179,8 @@ fn check_single_file(
             get_source,
             result.user_file_count,
             &options.filter,
-            &source,
-            &filename,
+            source,
+            filename,
         );
         print!("{}", output);
         counts
@@ -180,8 +191,8 @@ fn check_single_file(
             get_source,
             result.user_file_count,
             &options.filter,
-            &source,
-            &filename,
+            source,
+            filename,
         )
     };
     if !unix {
@@ -204,6 +215,7 @@ fn compile_single_file(
     load_siblings: bool,
     locator: TypedefLocator,
     project_kind: ProjectKind,
+    go_module: &str,
 ) -> Option<(CompileResult, String, String)> {
     let source = match fs::read_to_string(file_path) {
         Ok(s) => s,
@@ -224,11 +236,44 @@ fn compile_single_file(
         .to_string();
     let entry_display =
         lisette::fs::relative_to_cwd(file_path).unwrap_or_else(|| entry_name.clone());
+    let working_dir = file_path.parent().unwrap_or_else(|| Path::new("."));
 
+    let result = compile_project_entry(
+        Entry {
+            source: &source,
+            name: &entry_name,
+            display: &entry_display,
+            dir: working_dir,
+        },
+        load_siblings,
+        locator,
+        project_kind,
+        go_module,
+    );
+
+    Some((result, source, entry_display))
+}
+
+/// The file seeding the reserved `_entry_` module, and the directory its
+/// siblings load from.
+struct Entry<'a> {
+    source: &'a str,
+    name: &'a str,
+    display: &'a str,
+    dir: &'a Path,
+}
+
+fn compile_project_entry(
+    entry: Entry<'_>,
+    load_siblings: bool,
+    locator: TypedefLocator,
+    project_kind: ProjectKind,
+    go_module: &str,
+) -> CompileResult {
     let config = CompileConfig {
         target_phase: CompilePhase::Check,
         project_kind,
-        go_module: "main".to_string(),
+        go_module: go_module.to_string(),
         entry_package_name: "main".to_string(),
         standalone_mode: !load_siblings,
         load_siblings,
@@ -238,12 +283,8 @@ fn compile_single_file(
         locator,
     };
 
-    let working_dir = file_path.parent().and_then(|p| p.to_str()).unwrap_or(".");
-
-    let fs = LocalFileSystem::new(working_dir);
-    let result = compile(&source, &entry_name, &entry_display, &config, &fs);
-
-    Some((result, source, entry_display))
+    let fs = LocalFileSystem::new(entry.dir.to_str().unwrap_or("."));
+    compile(entry.source, entry.name, entry.display, &config, &fs)
 }
 
 fn check_loose_dir(dir: &Path, options: &CheckOptions) -> i32 {
@@ -283,9 +324,13 @@ fn check_loose_dir(dir: &Path, options: &CheckOptions) -> i32 {
         let mut compiled = None;
         let mut dir_read_failures = 0;
         for file in dir_files {
-            if let Some(result) =
-                compile_single_file(file, true, TypedefLocator::default(), ProjectKind::Binary)
-            {
+            if let Some(result) = compile_single_file(
+                file,
+                true,
+                TypedefLocator::default(),
+                ProjectKind::Binary,
+                "main",
+            ) {
                 compiled = Some(result);
                 break;
             }

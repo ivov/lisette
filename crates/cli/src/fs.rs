@@ -351,7 +351,7 @@ impl Loader for LocalFileSystem {
                 with_test.insert(dir.to_path_buf());
             } else {
                 with_test_root_file.insert(dir.to_path_buf());
-                if !name.ends_with(".d.lis") {
+                if semantics::loader::is_production_module_file(name) {
                     with_production_module.insert(dir.to_path_buf());
                 }
             }
