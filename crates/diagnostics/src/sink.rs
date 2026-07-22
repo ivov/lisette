@@ -36,16 +36,9 @@ impl LocalSink {
             .collect()
     }
 
+    #[allow(clippy::len_without_is_empty)]
     pub fn len(&self) -> usize {
         self.diagnostics.borrow().len()
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.diagnostics.borrow().is_empty()
-    }
-
-    pub fn to_vec(&self) -> Vec<LisetteDiagnostic> {
-        self.diagnostics.borrow().clone()
     }
 
     pub fn take(&self) -> Vec<LisetteDiagnostic> {

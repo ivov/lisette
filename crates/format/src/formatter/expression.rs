@@ -9,7 +9,7 @@ use syntax::ast::{
 };
 
 impl<'a> Formatter<'a> {
-    pub fn expression(&mut self, expression: &'a Expression) -> Document<'a> {
+    pub(crate) fn expression(&mut self, expression: &'a Expression) -> Document<'a> {
         let start = expression.get_span().byte_offset;
         let comments = self.comments.take_comments_before(start);
 
@@ -212,7 +212,7 @@ impl<'a> Formatter<'a> {
         }
     }
 
-    pub(super) fn slice(&mut self, elements: &'a [Expression]) -> Document<'a> {
+    fn slice(&mut self, elements: &'a [Expression]) -> Document<'a> {
         if elements.is_empty() {
             return Document::str("[]");
         }
@@ -229,7 +229,7 @@ impl<'a> Formatter<'a> {
             .group()
     }
 
-    pub(super) fn format_string(&mut self, parts: &'a [FormatStringPart]) -> Document<'a> {
+    fn format_string(&mut self, parts: &'a [FormatStringPart]) -> Document<'a> {
         let mut docs = vec![Document::str("f\"")];
 
         for part in parts {
@@ -262,7 +262,7 @@ impl<'a> Formatter<'a> {
         concat(docs)
     }
 
-    pub(super) fn block(&mut self, items: &'a [Expression], span: &Span) -> Document<'a> {
+    fn block(&mut self, items: &'a [Expression], span: &Span) -> Document<'a> {
         let block_end = span.byte_offset + span.byte_length;
 
         if items.is_empty() {
@@ -312,7 +312,7 @@ impl<'a> Formatter<'a> {
             .force_break()
     }
 
-    pub(super) fn let_(
+    fn let_(
         &mut self,
         binding: &'a Binding,
         value: &'a Expression,
@@ -339,7 +339,7 @@ impl<'a> Formatter<'a> {
         }
     }
 
-    pub(super) fn return_(&mut self, expression: &'a Expression) -> Document<'a> {
+    fn return_(&mut self, expression: &'a Expression) -> Document<'a> {
         if matches!(expression, Expression::Unit { .. }) {
             Document::str("return")
         } else {
@@ -347,7 +347,7 @@ impl<'a> Formatter<'a> {
         }
     }
 
-    pub(super) fn if_(
+    fn if_(
         &mut self,
         condition: &'a Expression,
         consequence: &'a Expression,
@@ -370,7 +370,7 @@ impl<'a> Formatter<'a> {
         .group()
     }
 
-    pub(super) fn if_let(
+    fn if_let(
         &mut self,
         pattern: &'a Pattern,
         scrutinee: &'a Expression,
@@ -409,7 +409,7 @@ impl<'a> Formatter<'a> {
     /// Like as_block, but allows single-expression blocks to stay inline.
     /// Used for if/else branches where `{ expression }` should stay on one line
     /// when the containing group fits, and expand to multi-line when it doesn't.
-    pub(super) fn as_inline_block(&mut self, expression: &'a Expression) -> Document<'a> {
+    fn as_inline_block(&mut self, expression: &'a Expression) -> Document<'a> {
         match expression {
             Expression::Block { items, span, .. } => {
                 if items.len() == 1 && !self.comments.has_comments_in_range(*span) {
@@ -432,7 +432,7 @@ impl<'a> Formatter<'a> {
         }
     }
 
-    pub(super) fn match_arm_entries(&mut self, arms: &'a [MatchArm]) -> Vec<SiblingEntry<'a>> {
+    fn match_arm_entries(&mut self, arms: &'a [MatchArm]) -> Vec<SiblingEntry<'a>> {
         let mut entries: Vec<SiblingEntry<'a>> = Vec::with_capacity(arms.len());
         for arm in arms {
             let start = arm.pattern.get_span().byte_offset;
@@ -453,7 +453,7 @@ impl<'a> Formatter<'a> {
         entries
     }
 
-    pub(super) fn match_(
+    fn match_(
         &mut self,
         subject: &'a Expression,
         arms: &'a [MatchArm],
@@ -466,22 +466,18 @@ impl<'a> Formatter<'a> {
         Self::braced_body(header, body)
     }
 
-    pub(super) fn loop_(&mut self, body: &'a Expression) -> Document<'a> {
+    fn loop_(&mut self, body: &'a Expression) -> Document<'a> {
         Document::str("loop ").append(self.as_block(body))
     }
 
-    pub(super) fn while_(
-        &mut self,
-        condition: &'a Expression,
-        body: &'a Expression,
-    ) -> Document<'a> {
+    fn while_(&mut self, condition: &'a Expression, body: &'a Expression) -> Document<'a> {
         Document::str("while ")
             .append(self.expression(condition))
             .append(" ")
             .append(self.as_block(body))
     }
 
-    pub(super) fn while_let(
+    fn while_let(
         &mut self,
         pattern: &'a Pattern,
         scrutinee: &'a Expression,
@@ -495,7 +491,7 @@ impl<'a> Formatter<'a> {
             .append(self.as_block(body))
     }
 
-    pub(super) fn for_(
+    fn for_(
         &mut self,
         binding: &'a Binding,
         iterable: &'a Expression,
@@ -509,7 +505,7 @@ impl<'a> Formatter<'a> {
             .append(self.as_block(body))
     }
 
-    pub(super) fn binary_operator(
+    fn binary_operator(
         &mut self,
         operator: &BinaryOperator,
         left_operand: &'a Expression,
@@ -552,7 +548,7 @@ impl<'a> Formatter<'a> {
             .group()
     }
 
-    pub(super) fn pipeline(&mut self, left: &'a Expression, right: &'a Expression) -> Document<'a> {
+    fn pipeline(&mut self, left: &'a Expression, right: &'a Expression) -> Document<'a> {
         let mut segments = vec![right];
         let mut current = left;
 
@@ -594,7 +590,7 @@ impl<'a> Formatter<'a> {
         concat(docs).nest(INDENT_WIDTH)
     }
 
-    pub(super) fn unary_operator(
+    fn unary_operator(
         &mut self,
         operator: &UnaryOperator,
         expression: &'a Expression,
@@ -607,7 +603,7 @@ impl<'a> Formatter<'a> {
         }
     }
 
-    pub(super) fn call(
+    fn call(
         &mut self,
         callee: &'a Expression,
         args: &'a [Expression],
@@ -653,7 +649,7 @@ impl<'a> Formatter<'a> {
         self.format_call_with_head(head, args, spread)
     }
 
-    pub(super) fn format_type_args(type_args: &'a [Annotation]) -> Document<'a> {
+    fn format_type_args(type_args: &'a [Annotation]) -> Document<'a> {
         if type_args.is_empty() {
             Document::Sequence(vec![])
         } else {
@@ -664,7 +660,7 @@ impl<'a> Formatter<'a> {
         }
     }
 
-    pub(super) fn format_call_with_head(
+    fn format_call_with_head(
         &mut self,
         head: Document<'a>,
         args: &'a [Expression],
@@ -742,7 +738,7 @@ impl<'a> Formatter<'a> {
         }
     }
 
-    pub(super) fn call_arg_entries(&mut self, args: &'a [Expression]) -> Vec<PatternEntry<'a>> {
+    fn call_arg_entries(&mut self, args: &'a [Expression]) -> Vec<PatternEntry<'a>> {
         let mut entries: Vec<PatternEntry<'a>> = Vec::with_capacity(args.len());
         for arg in args {
             self.push_pattern_entry(&mut entries, arg.get_span().byte_offset, |s| {
@@ -790,15 +786,11 @@ impl<'a> Formatter<'a> {
             .group()
     }
 
-    pub(super) fn dot_access(
-        &mut self,
-        expression: &'a Expression,
-        member: &'a str,
-    ) -> Document<'a> {
+    fn dot_access(&mut self, expression: &'a Expression, member: &'a str) -> Document<'a> {
         self.expression(expression).append(".").append(member)
     }
 
-    pub(super) fn indexed_access(
+    fn indexed_access(
         &mut self,
         expression: &'a Expression,
         index: &'a Expression,
@@ -823,7 +815,7 @@ impl<'a> Formatter<'a> {
             .append("]")
     }
 
-    pub(super) fn tuple(&mut self, elements: &'a [Expression]) -> Document<'a> {
+    fn tuple(&mut self, elements: &'a [Expression]) -> Document<'a> {
         if elements.is_empty() {
             return Document::str("()");
         }
@@ -840,7 +832,7 @@ impl<'a> Formatter<'a> {
             .group()
     }
 
-    pub(super) fn struct_call(
+    fn struct_call(
         &mut self,
         name: &'a str,
         fields: &'a [StructFieldAssignment],
@@ -893,7 +885,7 @@ impl<'a> Formatter<'a> {
             .group()
     }
 
-    pub(super) fn assignment(
+    fn assignment(
         &mut self,
         target: &'a Expression,
         value: &'a Expression,
@@ -915,7 +907,7 @@ impl<'a> Formatter<'a> {
             .append(self.expression(value))
     }
 
-    pub(super) fn lambda(
+    fn lambda(
         &mut self,
         params: &'a [Binding],
         return_annotation: &'a Annotation,
@@ -947,27 +939,27 @@ impl<'a> Formatter<'a> {
         params_doc.append(return_doc).append(" ").append(body_doc)
     }
 
-    pub(super) fn task(&mut self, expression: &'a Expression) -> Document<'a> {
+    fn task(&mut self, expression: &'a Expression) -> Document<'a> {
         Document::str("task ").append(self.expression(expression))
     }
 
-    pub(super) fn defer_(&mut self, expression: &'a Expression) -> Document<'a> {
+    fn defer_(&mut self, expression: &'a Expression) -> Document<'a> {
         Document::str("defer ").append(self.expression(expression))
     }
 
-    pub(super) fn assert_(&mut self, expression: &'a Expression) -> Document<'a> {
+    fn assert_(&mut self, expression: &'a Expression) -> Document<'a> {
         Document::str("assert ").append(self.expression(expression))
     }
 
-    pub(super) fn try_block(&mut self, items: &'a [Expression], span: &Span) -> Document<'a> {
+    fn try_block(&mut self, items: &'a [Expression], span: &Span) -> Document<'a> {
         Document::str("try ").append(self.block(items, span))
     }
 
-    pub(super) fn recover_block(&mut self, items: &'a [Expression], span: &Span) -> Document<'a> {
+    fn recover_block(&mut self, items: &'a [Expression], span: &Span) -> Document<'a> {
         Document::str("recover ").append(self.block(items, span))
     }
 
-    pub(super) fn range(
+    fn range(
         &mut self,
         start: &'a Option<Box<Expression>>,
         end: &'a Option<Box<Expression>>,
@@ -985,17 +977,13 @@ impl<'a> Formatter<'a> {
         start_doc.append(op).append(end_doc)
     }
 
-    pub(super) fn cast(
-        &mut self,
-        expression: &'a Expression,
-        target_type: &'a Annotation,
-    ) -> Document<'a> {
+    fn cast(&mut self, expression: &'a Expression, target_type: &'a Annotation) -> Document<'a> {
         self.expression(expression)
             .append(" as ")
             .append(Self::annotation(target_type))
     }
 
-    pub(super) fn select(&mut self, arms: &'a [SelectArm], span: &Span) -> Document<'a> {
+    fn select(&mut self, arms: &'a [SelectArm], span: &Span) -> Document<'a> {
         let mut entries: Vec<SiblingEntry<'a>> = Vec::with_capacity(arms.len());
         for (i, arm) in arms.iter().enumerate() {
             let start = Self::select_arm_start(arm);
@@ -1009,7 +997,7 @@ impl<'a> Formatter<'a> {
         Self::braced_body(Document::str("select"), body)
     }
 
-    pub(super) fn select_arm_start(arm: &'a SelectArm) -> u32 {
+    fn select_arm_start(arm: &'a SelectArm) -> u32 {
         match &arm.pattern {
             SelectArmPattern::Receive { binding, .. } => binding.get_span().byte_offset,
             SelectArmPattern::Send {
@@ -1022,7 +1010,7 @@ impl<'a> Formatter<'a> {
         }
     }
 
-    pub(super) fn select_arm_body(&mut self, arm: &'a SelectArm, upper_bound: u32) -> Document<'a> {
+    fn select_arm_body(&mut self, arm: &'a SelectArm, upper_bound: u32) -> Document<'a> {
         match &arm.pattern {
             SelectArmPattern::Receive {
                 binding,
@@ -1069,15 +1057,15 @@ impl<'a> Formatter<'a> {
         }
     }
 
-    pub(super) fn propagate_(&mut self, expression: &'a Expression) -> Document<'a> {
+    fn propagate_(&mut self, expression: &'a Expression) -> Document<'a> {
         self.expression(expression).append("?")
     }
 
-    pub(super) fn ref_(&mut self, expression: &'a Expression) -> Document<'a> {
+    fn ref_(&mut self, expression: &'a Expression) -> Document<'a> {
         Document::str("&").append(self.expression(expression))
     }
 
-    pub(super) fn raw_go(text: &'a str) -> Document<'a> {
+    fn raw_go(text: &'a str) -> Document<'a> {
         Document::str("@rawgo(\"")
             .append(Document::str(text))
             .append("\")")

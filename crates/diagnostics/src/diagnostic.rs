@@ -27,7 +27,7 @@ impl IndexedSource {
         }
     }
 
-    pub fn line_col(&self, offset: usize) -> (usize, usize) {
+    pub(crate) fn line_col(&self, offset: usize) -> (usize, usize) {
         let line = match self.line_starts.binary_search(&offset) {
             Ok(exact) => exact,
             Err(idx) => idx.saturating_sub(1),
@@ -361,7 +361,7 @@ impl LisetteDiagnostic {
         Self::new(message, Severity::Advice)
     }
 
-    pub fn with_color(mut self, use_color: bool) -> Self {
+    pub(crate) fn with_color(mut self, use_color: bool) -> Self {
         self.use_color = use_color;
         self
     }
@@ -379,11 +379,6 @@ impl LisetteDiagnostic {
             self.file_id = Some(span.file_id);
         }
         self.labels.push(span_to_labeled(span, text.into(), true));
-        self
-    }
-
-    pub fn with_labels(mut self, labels: Vec<LabeledSpan>) -> Self {
-        self.labels.extend(labels);
         self
     }
 
@@ -406,12 +401,7 @@ impl LisetteDiagnostic {
         self.fix.as_ref()
     }
 
-    pub fn with_lex_code(mut self, code: &str) -> Self {
-        self.code = Some(format!("lex.{}", code));
-        self
-    }
-
-    pub fn with_parse_code(mut self, code: &str) -> Self {
+    pub(crate) fn with_parse_code(mut self, code: &str) -> Self {
         self.code = Some(format!("parse.{}", code));
         self
     }
@@ -426,7 +416,7 @@ impl LisetteDiagnostic {
         self
     }
 
-    pub fn with_lint_code(mut self, code: &str) -> Self {
+    pub(crate) fn with_lint_code(mut self, code: &str) -> Self {
         debug_assert!(
             matches!(self.severity, Severity::Warning | Severity::Advice),
             "with_lint_code requires Warning or Advice severity (got {:?}); \
@@ -437,17 +427,17 @@ impl LisetteDiagnostic {
         self
     }
 
-    pub fn with_attribute_code(mut self, code: &str) -> Self {
+    pub(crate) fn with_attribute_code(mut self, code: &str) -> Self {
         self.code = Some(format!("attribute.{}", code));
         self
     }
 
-    pub fn with_emit_code(mut self, code: &str) -> Self {
+    pub(crate) fn with_emit_code(mut self, code: &str) -> Self {
         self.code = Some(format!("emit.{}", code));
         self
     }
 
-    pub fn with_code(mut self, code: impl Into<String>) -> Self {
+    fn with_code(mut self, code: impl Into<String>) -> Self {
         self.code = Some(code.into());
         self
     }
@@ -468,7 +458,7 @@ impl LisetteDiagnostic {
         self.labels.first().map(|l| l.offset()).unwrap_or(0)
     }
 
-    pub fn label_offsets(&self) -> Vec<usize> {
+    pub(crate) fn label_offsets(&self) -> Vec<usize> {
         self.labels.iter().map(|l| l.offset()).collect()
     }
 
@@ -480,7 +470,7 @@ impl LisetteDiagnostic {
             .map(|l| l.offset())
     }
 
-    pub fn severity_word(&self) -> &'static str {
+    pub(crate) fn severity_word(&self) -> &'static str {
         match self.severity {
             Severity::Error => "error",
             Severity::Warning => "warning",
@@ -496,7 +486,8 @@ impl LisetteDiagnostic {
         self.severity == Severity::Error
     }
 
-    pub fn is_warning(&self) -> bool {
+    #[cfg_attr(not(test), expect(dead_code))]
+    pub(crate) fn is_warning(&self) -> bool {
         self.severity == Severity::Warning
     }
 

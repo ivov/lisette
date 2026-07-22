@@ -6,12 +6,7 @@ use crate::checker::infer::InferCtx;
 
 impl InferCtx<'_, '_> {
     /// Returns `true` if valid (no error emitted), `false` if an error was emitted.
-    pub(crate) fn check_slice_index_type(
-        &mut self,
-        type_name: &str,
-        index_ty: &Type,
-        span: Span,
-    ) -> bool {
+    fn check_slice_index_type(&mut self, type_name: &str, index_ty: &Type, span: Span) -> bool {
         if type_name != "Slice" || index_ty.is_variable() || index_ty.is_error() {
             return true;
         }

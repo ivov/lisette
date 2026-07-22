@@ -1,0 +1,42 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import (
+	"crypto/tls"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+type CacheBase struct{}
+
+func (c CacheBase) Get(_ string) *tls.ClientSessionState {
+	return nil
+}
+
+func (c CacheBase) Put(_ string, _ *tls.ClientSessionState) {}
+
+type MyCache = CacheBase
+
+func main() {
+	c := CacheBase{}
+	_ = _lisAdapter_CacheBase_ClientSessionCache_0{inner: c}
+}
+
+type _lisAdapter_CacheBase_ClientSessionCache_0 struct {
+	inner MyCache
+}
+
+func (a _lisAdapter_CacheBase_ClientSessionCache_0) Put(arg0 string, arg1 *tls.ClientSessionState) {
+	a.inner.Put(arg0, arg1)
+}
+
+func (a _lisAdapter_CacheBase_ClientSessionCache_0) Get(arg0 string) (*tls.ClientSessionState, bool) {
+	raw_1 := a.inner.Get(arg0)
+	option_2 := lisette.OptionFromNilable[*tls.ClientSessionState](raw_1, raw_1 == nil)
+	if option_2.Tag == lisette.OptionSome {
+		return option_2.SomeVal, true
+	}
+	return nil, false
+}

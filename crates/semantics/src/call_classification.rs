@@ -1,7 +1,7 @@
 use syntax::program::{DefinitionBody, Module};
 use syntax::types::{Type, type_args_match_params};
 
-pub fn is_ufcs_method_type(method_ty: &Type, base_generics_count: usize) -> bool {
+pub(crate) fn is_ufcs_method_type(method_ty: &Type, base_generics_count: usize) -> bool {
     let Type::Forall { vars, body } = method_ty else {
         return base_generics_count > 0;
     };

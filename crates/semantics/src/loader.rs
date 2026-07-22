@@ -7,7 +7,7 @@ use rustc_hash::FxHashMap as HashMap;
 #[derive(Debug, Clone)]
 pub struct FileContent {
     pub source: String,
-    pub display_path: String,
+    pub(crate) display_path: String,
 }
 
 impl FileContent {

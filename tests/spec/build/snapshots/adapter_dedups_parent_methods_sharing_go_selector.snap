@@ -1,0 +1,47 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type Entry struct {
+	Name string
+}
+
+type ParentA interface {
+	GetItem(string) (*Entry, bool)
+}
+
+type ParentB interface {
+	GetItem(string) (*Entry, bool)
+}
+
+type Combined interface {
+	ParentA
+	ParentB
+}
+
+type S struct{}
+
+func (s S) GetItem(_ string) *Entry {
+	return nil
+}
+
+func main() {
+	_ = _lisAdapter_S_Combined_0{inner: S{}}
+}
+
+type _lisAdapter_S_Combined_0 struct {
+	inner S
+}
+
+func (a _lisAdapter_S_Combined_0) GetItem(arg0 string) (*Entry, bool) {
+	raw_1 := a.inner.GetItem(arg0)
+	option_2 := lisette.OptionFromNilable[*Entry](raw_1, raw_1 == nil)
+	if option_2.Tag == lisette.OptionSome {
+		return option_2.SomeVal, true
+	}
+	return nil, false
+}

@@ -54,14 +54,6 @@ impl Module {
         self.typedefs.get(&file_id)
     }
 
-    pub fn get_typedef_by_id_mut(&mut self, file_id: u32) -> Option<&mut File> {
-        self.typedefs.get_mut(&file_id)
-    }
-
-    pub fn typedef_imports(&self) -> Vec<FileImport> {
-        self.typedefs.values().flat_map(|f| f.imports()).collect()
-    }
-
     pub fn all_imports(&self) -> Vec<FileImport> {
         self.files
             .values()

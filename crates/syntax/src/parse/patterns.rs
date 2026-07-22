@@ -8,7 +8,7 @@ use crate::lex::TokenKind::*;
 use crate::types::Type;
 
 impl<'source> Parser<'source> {
-    pub fn parse_pattern_allowing_or(&mut self) -> Pattern {
+    pub(crate) fn parse_pattern_allowing_or(&mut self) -> Pattern {
         let start = self.current_token();
         let first = self.parse_pattern();
 
@@ -27,7 +27,7 @@ impl<'source> Parser<'source> {
         }
     }
 
-    pub fn parse_pattern(&mut self) -> Pattern {
+    pub(crate) fn parse_pattern(&mut self) -> Pattern {
         if !self.enter_recursion() {
             let span = self.span_from_token(self.current_token());
             self.resync_on_error();
@@ -584,7 +584,7 @@ impl<'source> Parser<'source> {
         }
     }
 
-    pub fn parse_binding(&mut self) -> Binding {
+    pub(crate) fn parse_binding(&mut self) -> Binding {
         Binding {
             pattern: self.parse_pattern(),
             annotation: self.parse_optional_type_annotation(),
@@ -594,7 +594,7 @@ impl<'source> Parser<'source> {
         }
     }
 
-    pub fn parse_binding_allowing_or(&mut self) -> Binding {
+    pub(crate) fn parse_binding_allowing_or(&mut self) -> Binding {
         Binding {
             pattern: self.parse_pattern_allowing_or(),
             annotation: self.parse_optional_type_annotation(),
@@ -752,7 +752,7 @@ impl<'source> Parser<'source> {
         self.is(Identifier) && self.is_uppercase(self.current_token().text)
     }
 
-    pub fn can_start_pattern(&self) -> bool {
+    pub(crate) fn can_start_pattern(&self) -> bool {
         matches!(
             self.current_token().kind,
             Integer

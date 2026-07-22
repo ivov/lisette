@@ -20,7 +20,7 @@ pub(crate) enum RangeShape {
 impl Planner<'_> {
     /// Normalize a type for emit decisions by walking aliases and reference
     /// wrappers to a fixed point. Only peels real type aliases (not newtypes).
-    pub(crate) fn emit_shape_ty(&self, ty: &Type) -> Type {
+    fn emit_shape_ty(&self, ty: &Type) -> Type {
         let mut current = ty.clone();
         loop {
             let without_refs = current.strip_refs();

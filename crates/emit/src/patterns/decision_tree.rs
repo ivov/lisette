@@ -38,15 +38,15 @@ pub(crate) struct AccessPath {
 }
 
 impl AccessPath {
-    pub(crate) fn root() -> Self {
+    fn root() -> Self {
         Self { segments: vec![] }
     }
 
-    pub(crate) fn is_root(&self) -> bool {
+    fn is_root(&self) -> bool {
         self.segments.is_empty()
     }
 
-    pub(crate) fn push(&self, seg: PathSegment) -> Self {
+    fn push(&self, seg: PathSegment) -> Self {
         let mut new = self.clone();
         new.segments.push(seg);
         new
@@ -140,7 +140,7 @@ pub(crate) enum Check {
 }
 
 impl Check {
-    pub(crate) fn render(&self, subject: &str) -> String {
+    fn render(&self, subject: &str) -> String {
         match self {
             Check::EnumTag {
                 path, tag_constant, ..
@@ -244,14 +244,14 @@ impl Check {
         }
     }
 
-    pub(crate) fn as_enum_tag(&self) -> Option<&str> {
+    fn as_enum_tag(&self) -> Option<&str> {
         match self {
             Check::EnumTag { tag_constant, .. } => Some(tag_constant),
             _ => None,
         }
     }
 
-    pub(crate) fn as_literal(&self) -> Option<&str> {
+    fn as_literal(&self) -> Option<&str> {
         match self {
             Check::Literal { go_literal, .. } => Some(go_literal),
             _ => None,

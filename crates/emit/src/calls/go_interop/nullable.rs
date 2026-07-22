@@ -198,7 +198,7 @@ impl Planner<'_> {
     }
 
     /// Wrap a Go `*T` (T value-typed) into Lisette `Option<T>`.
-    pub(crate) fn plan_pointer_to_option_wrap(
+    fn plan_pointer_to_option_wrap(
         &mut self,
         statements: &mut Vec<LoweredStatement>,
         ptr_value: &str,

@@ -172,7 +172,7 @@ where
     best
 }
 
-pub fn is_range_type_name(name: &str) -> bool {
+fn is_range_type_name(name: &str) -> bool {
     matches!(
         name,
         "Range" | "RangeInclusive" | "RangeFrom" | "RangeTo" | "RangeToInclusive"
@@ -349,14 +349,14 @@ impl FunctionType {
 pub struct TypeVarId(pub u32);
 
 impl TypeVarId {
-    pub const IGNORED: TypeVarId = TypeVarId(u32::MAX);
-    pub const UNINFERRED: TypeVarId = TypeVarId(u32::MAX - 1);
+    const IGNORED: TypeVarId = TypeVarId(u32::MAX);
+    const UNINFERRED: TypeVarId = TypeVarId(u32::MAX - 1);
 
     pub fn is_reserved(self) -> bool {
         self == Self::IGNORED || self == Self::UNINFERRED
     }
 
-    pub fn as_u32(self) -> u32 {
+    pub(crate) fn as_u32(self) -> u32 {
         self.0
     }
 }
@@ -541,13 +541,10 @@ thread_local! {
     static INTERNED_STRING: OnceCell<Type> = const { OnceCell::new() };
     static INTERNED_BOOL: OnceCell<Type> = const { OnceCell::new() };
     static INTERNED_UNIT: OnceCell<Type> = const { OnceCell::new() };
-    static INTERNED_FLOAT64: OnceCell<Type> = const { OnceCell::new() };
-    static INTERNED_RUNE: OnceCell<Type> = const { OnceCell::new() };
-    static INTERNED_BYTE: OnceCell<Type> = const { OnceCell::new() };
 }
 
 impl Type {
-    pub fn simple(kind: SimpleKind) -> Type {
+    fn simple(kind: SimpleKind) -> Type {
         Self::Simple(kind)
     }
 
@@ -597,21 +594,6 @@ impl Type {
 
     pub fn unit() -> Type {
         INTERNED_UNIT.with(|cell| cell.get_or_init(|| Self::simple(SimpleKind::Unit)).clone())
-    }
-
-    pub fn float64() -> Type {
-        INTERNED_FLOAT64.with(|cell| {
-            cell.get_or_init(|| Self::simple(SimpleKind::Float64))
-                .clone()
-        })
-    }
-
-    pub fn rune() -> Type {
-        INTERNED_RUNE.with(|cell| cell.get_or_init(|| Self::simple(SimpleKind::Rune)).clone())
-    }
-
-    pub fn byte() -> Type {
-        INTERNED_BYTE.with(|cell| cell.get_or_init(|| Self::simple(SimpleKind::Byte)).clone())
     }
 }
 
@@ -724,7 +706,7 @@ impl CompoundKind {
         })
     }
 
-    pub fn from_qualified_id(id: &str) -> Option<CompoundKind> {
+    fn from_qualified_id(id: &str) -> Option<CompoundKind> {
         Self::from_name(id.strip_prefix("prelude.")?)
     }
 }
@@ -860,11 +842,11 @@ impl SimpleKind {
         matches!(self, SimpleKind::Float32 | SimpleKind::Float64)
     }
 
-    pub fn is_complex(self) -> bool {
+    fn is_complex(self) -> bool {
         matches!(self, SimpleKind::Complex64 | SimpleKind::Complex128)
     }
 
-    pub fn numeric_family(self) -> Option<NumericFamily> {
+    fn numeric_family(self) -> Option<NumericFamily> {
         if self.is_signed_int() {
             Some(NumericFamily::SignedInt)
         } else if self.is_unsigned_int() {
@@ -1013,10 +995,6 @@ impl Type {
         }
     }
 
-    pub fn is_array(&self) -> bool {
-        matches!(self, Type::Array { .. })
-    }
-
     pub fn as_import_namespace(&self) -> Option<&str> {
         match self {
             Type::ImportNamespace(module_id) => Some(module_id),
@@ -1104,16 +1082,9 @@ impl Type {
         self.is_simple(SimpleKind::String)
     }
 
-    pub fn is_slice_of_simple(&self, element: SimpleKind) -> bool {
+    fn is_slice_of_simple(&self, element: SimpleKind) -> bool {
         match self.as_compound() {
             Some((CompoundKind::Slice, [elem])) => elem.is_simple(element),
-            _ => false,
-        }
-    }
-
-    pub fn is_slice_of(&self, element_name: &str) -> bool {
-        match self.as_compound() {
-            Some((CompoundKind::Slice, [elem])) => elem.has_name(element_name),
             _ => false,
         }
     }
@@ -1122,11 +1093,11 @@ impl Type {
         self.is_slice_of_simple(SimpleKind::Byte) || self.is_slice_of_simple(SimpleKind::Uint8)
     }
 
-    pub fn is_rune_slice(&self) -> bool {
+    fn is_rune_slice(&self) -> bool {
         self.is_slice_of_simple(SimpleKind::Rune)
     }
 
-    pub fn is_byte_or_rune_slice(&self) -> bool {
+    fn is_byte_or_rune_slice(&self) -> bool {
         self.is_byte_slice() || self.is_rune_slice()
     }
 
@@ -1171,14 +1142,6 @@ impl Type {
         self.is_simple(SimpleKind::Rune)
     }
 
-    pub fn is_float64(&self) -> bool {
-        self.is_simple(SimpleKind::Float64)
-    }
-
-    pub fn is_float32(&self) -> bool {
-        self.is_simple(SimpleKind::Float32)
-    }
-
     pub fn is_float(&self) -> bool {
         self.as_simple().is_some_and(SimpleKind::is_float)
     }
@@ -1202,10 +1165,6 @@ impl Type {
 
     pub fn is_numeric(&self) -> bool {
         self.as_simple().is_some_and(SimpleKind::is_arithmetic)
-    }
-
-    pub fn is_ordered(&self) -> bool {
-        self.as_simple().is_some_and(SimpleKind::is_ordered)
     }
 
     /// Whether `<`/`<=`/`>`/`>=` accept this type: an ordered numeric, a

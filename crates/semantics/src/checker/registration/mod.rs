@@ -44,7 +44,7 @@ pub(crate) fn extract_package_directive(source: &str) -> Option<String> {
     None
 }
 
-pub(super) fn extract_go_name(attributes: &[Attribute]) -> Option<String> {
+fn extract_go_name(attributes: &[Attribute]) -> Option<String> {
     attributes
         .iter()
         .filter(|a| a.name == "go")
@@ -63,7 +63,7 @@ pub(super) fn extract_go_name(attributes: &[Attribute]) -> Option<String> {
 
 /// The recipe string from `#[go(collapsed_type_params, "...")]`. This is
 /// Go's full type-param in declaration order, each entry as a Lisette type.
-pub(super) fn extract_go_type_param_recipe(attributes: &[Attribute]) -> Option<String> {
+fn extract_go_type_param_recipe(attributes: &[Attribute]) -> Option<String> {
     attributes
         .iter()
         .filter(|a| a.name == "go")
@@ -80,39 +80,39 @@ pub(super) fn extract_go_type_param_recipe(attributes: &[Attribute]) -> Option<S
         })
 }
 
-pub(super) fn has_display_attribute(attributes: &[Attribute]) -> bool {
+fn has_display_attribute(attributes: &[Attribute]) -> bool {
     attributes.iter().any(|a| a.name == "display")
 }
 
-pub(super) fn has_closed_domain_attribute(attributes: &[Attribute]) -> bool {
+fn has_closed_domain_attribute(attributes: &[Attribute]) -> bool {
     extract_attribute_flags(attributes, "go")
         .iter()
         .any(|flag| flag == "closed_domain")
 }
 
-pub(super) fn has_anon_struct_attribute(attributes: &[Attribute]) -> bool {
+fn has_anon_struct_attribute(attributes: &[Attribute]) -> bool {
     extract_attribute_flags(attributes, "go")
         .iter()
         .any(|flag| flag == "anon_struct")
 }
 
-pub(super) fn has_hidden_embed_attribute(attributes: &[Attribute]) -> bool {
+fn has_hidden_embed_attribute(attributes: &[Attribute]) -> bool {
     extract_attribute_flags(attributes, "go")
         .iter()
         .any(|flag| flag == "hidden_embed")
 }
 
-pub(super) fn has_unexported_attribute(attributes: &[Attribute]) -> bool {
+fn has_unexported_attribute(attributes: &[Attribute]) -> bool {
     extract_attribute_flags(attributes, "go")
         .iter()
         .any(|flag| flag == "unexported")
 }
 
-pub(super) fn has_serialization_attribute(attributes: &[Attribute]) -> bool {
+fn has_serialization_attribute(attributes: &[Attribute]) -> bool {
     attributes.iter().any(struct_attribute_forces_field_export)
 }
 
-pub(super) fn collect_enum_attributes(attributes: &[Attribute]) -> Attributes {
+fn collect_enum_attributes(attributes: &[Attribute]) -> Attributes {
     let mut map = Attributes::default();
     if has_display_attribute(attributes) {
         map.insert(TypeAttribute::Display, ());
@@ -120,7 +120,7 @@ pub(super) fn collect_enum_attributes(attributes: &[Attribute]) -> Attributes {
     map
 }
 
-pub(super) fn collect_struct_attributes(attributes: &[Attribute]) -> Attributes {
+fn collect_struct_attributes(attributes: &[Attribute]) -> Attributes {
     let mut map = Attributes::default();
     if has_display_attribute(attributes) {
         map.insert(TypeAttribute::Display, ());
@@ -190,7 +190,7 @@ const KNOWN_GO_HINTS: &[&str] = &[
     "unexported",
 ];
 
-pub(super) fn check_go_hints(attributes: &[Attribute], sink: &diagnostics::LocalSink) {
+fn check_go_hints(attributes: &[Attribute], sink: &diagnostics::LocalSink) {
     for attribute in attributes.iter().filter(|a| a.name == "go") {
         for arg in &attribute.args {
             if let AttributeArg::Flag(flag) = arg
@@ -221,7 +221,7 @@ pub(super) fn extract_attribute_flags(attributes: &[Attribute], name: &str) -> V
         .collect()
 }
 
-pub(super) fn extract_attribute_string(attributes: &[Attribute], name: &str) -> Option<String> {
+fn extract_attribute_string(attributes: &[Attribute], name: &str) -> Option<String> {
     attributes.iter().filter(|a| a.name == name).find_map(|a| {
         a.args.iter().find_map(|arg| match arg {
             AttributeArg::String(s) => Some(s.clone()),
@@ -230,7 +230,7 @@ pub(super) fn extract_attribute_string(attributes: &[Attribute], name: &str) -> 
     })
 }
 
-pub(super) fn seal_method_key(
+fn seal_method_key(
     is_d_lis: bool,
     attributes: &[Attribute],
     module_id: &str,
@@ -585,7 +585,7 @@ impl TaskState<'_> {
         self.check_module_recursive_types(store, &module_id);
     }
 
-    pub fn register_type_names(
+    pub(crate) fn register_type_names(
         &mut self,
         store: &mut Store,
         items: &[Expression],
@@ -747,7 +747,7 @@ impl TaskState<'_> {
         }
     }
 
-    pub fn register_type_definitions(&mut self, store: &mut Store, items: &[Expression]) {
+    pub(crate) fn register_type_definitions(&mut self, store: &mut Store, items: &[Expression]) {
         self.register_type_aliases(store, items);
         let module_id = self.cursor.module_id.clone();
         self.settle_module_aliases(store, &module_id);
@@ -870,7 +870,7 @@ impl TaskState<'_> {
         }
     }
 
-    pub fn register_impl_blocks(&mut self, store: &mut Store, items: &[Expression]) {
+    pub(crate) fn register_impl_blocks(&mut self, store: &mut Store, items: &[Expression]) {
         for item in items {
             if let Expression::ImplBlock {
                 annotation,
@@ -900,7 +900,7 @@ impl TaskState<'_> {
         }
     }
 
-    pub fn register_values(
+    pub(crate) fn register_values(
         &mut self,
         store: &mut Store,
         items: &[Expression],

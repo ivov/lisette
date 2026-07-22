@@ -7,7 +7,7 @@ use syntax::types::{Symbol, Type};
 use super::TaskState;
 use crate::store::Store;
 
-pub(crate) fn test_context_type() -> Type {
+fn test_context_type() -> Type {
     Type::Nominal {
         id: Symbol::from_parts(crate::prelude::TEST_PRELUDE_MODULE_ID, "TestContext"),
         params: vec![],

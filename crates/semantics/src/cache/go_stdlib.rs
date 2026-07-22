@@ -13,8 +13,8 @@ use syntax::program::File;
 
 #[derive(Serialize, Deserialize)]
 pub struct GoStdlibCache {
-    pub content_hash: u64,
-    pub compiler_version: u64,
+    content_hash: u64,
+    compiler_version: u64,
     pub modules: HashMap<String, GoModuleCache>,
 }
 
@@ -22,7 +22,7 @@ pub struct GoStdlibCache {
 pub struct GoModuleCache {
     pub definitions: HashMap<String, CachedDefinition>,
     /// Go module imports (e.g., `["go:io", "go:sync"]`).
-    pub go_imports: Vec<String>,
+    go_imports: Vec<String>,
 }
 
 fn cache_file_name(target: Target) -> String {
@@ -45,7 +45,7 @@ pub fn try_load_go_stdlib_cache(target: Target) -> Option<GoStdlibCache> {
     Some(cache)
 }
 
-pub fn save_go_stdlib_cache(store: &Store, go_module_ids: &[String], target: Target) {
+pub(crate) fn save_go_stdlib_cache(store: &Store, go_module_ids: &[String], target: Target) {
     let Some(path) = cache_path(target) else {
         return;
     };
@@ -90,7 +90,7 @@ pub fn save_go_stdlib_cache(store: &Store, go_module_ids: &[String], target: Tar
 }
 
 /// Load a Go module and its transitive deps from cache, recursively.
-pub fn load_cached_go_module(
+pub(crate) fn load_cached_go_module(
     store: &mut Store,
     module_id: &str,
     cache: &GoStdlibCache,

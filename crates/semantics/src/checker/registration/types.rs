@@ -249,7 +249,7 @@ impl TaskState<'_> {
             .collect()
     }
 
-    pub(crate) fn add_enum_variant_to_scope(
+    fn add_enum_variant_to_scope(
         &mut self,
         variant: &EnumVariant,
         enum_name: &str,

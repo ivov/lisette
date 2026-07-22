@@ -9,30 +9,30 @@ use syntax::types::{Symbol, Type};
 pub struct DepthCounter(Cell<usize>);
 
 impl DepthCounter {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self(Cell::new(0))
     }
-    pub fn with_value(n: usize) -> Self {
+    fn with_value(n: usize) -> Self {
         Self(Cell::new(n))
     }
-    pub fn get(&self) -> usize {
+    fn get(&self) -> usize {
         self.0.get()
     }
-    pub fn increment(&self) {
+    pub(crate) fn increment(&self) {
         self.0.set(self.0.get() + 1);
     }
-    pub fn decrement(&self) {
+    pub(crate) fn decrement(&self) {
         self.0.set(self.0.get().saturating_sub(1));
     }
-    pub fn is_active(&self) -> bool {
+    pub(crate) fn is_active(&self) -> bool {
         self.0.get() > 0
     }
-    pub fn reset(&self) -> usize {
+    fn reset(&self) -> usize {
         let prev = self.0.get();
         self.0.set(0);
         prev
     }
-    pub fn restore(&self, depth: usize) {
+    fn restore(&self, depth: usize) {
         self.0.set(depth);
     }
 }
@@ -54,43 +54,40 @@ pub enum CarrierKind {
 
 #[derive(Debug, Clone)]
 pub struct TryBlockContext {
-    pub ok_ty: Type,
-    pub err_ty: Type,
-    pub carrier: Cell<Option<CarrierKind>>,
-    pub has_question_mark: Cell<bool>,
-    pub try_span: Span,
-    pub loop_depth: DepthCounter,
+    pub(crate) ok_ty: Type,
+    pub(crate) err_ty: Type,
+    pub(crate) carrier: Cell<Option<CarrierKind>>,
+    pub(crate) has_question_mark: Cell<bool>,
+    pub(crate) loop_depth: DepthCounter,
 }
 
 #[derive(Debug, Clone)]
 pub struct RecoverBlockContext {
-    pub inner_ty: Type,
-    pub recover_span: Span,
-    pub loop_depth: DepthCounter,
+    pub(crate) loop_depth: DepthCounter,
 }
 
 #[derive(Debug, Clone)]
 pub struct Scope {
     /// variable name -> type
-    pub values: HashMap<String, Type>,
-    pub mutables: Option<HashSet<String>>,
-    pub consts: Option<HashSet<String>>,
-    pub type_params: Option<HashMap<String, usize>>,
-    pub trait_bounds: Option<HashMap<Symbol, Vec<Type>>>,
-    pub fn_return_type: Option<Type>,
+    pub(crate) values: HashMap<String, Type>,
+    pub(crate) mutables: Option<HashSet<String>>,
+    pub(crate) consts: Option<HashSet<String>>,
+    pub(crate) type_params: Option<HashMap<String, usize>>,
+    pub(crate) trait_bounds: Option<HashMap<Symbol, Vec<Type>>>,
+    pub(crate) fn_return_type: Option<Type>,
     deferred_map_key_checks: Vec<(Type, Span, bool)>,
-    pub try_block_context: Option<TryBlockContext>,
-    pub recover_block_context: Option<RecoverBlockContext>,
-    pub loop_break_type: Option<Type>,
-    pub loop_depth: DepthCounter,
-    pub defer_block_depth: DepthCounter,
-    pub negation_depth: DepthCounter,
-    pub type_param_depth: DepthCounter,
-    pub use_context: Cell<UseContext>,
-    pub in_test_handle: bool,
-    pub test_fn_name: Option<EcoString>,
+    pub(crate) try_block_context: Option<TryBlockContext>,
+    pub(crate) recover_block_context: Option<RecoverBlockContext>,
+    loop_break_type: Option<Type>,
+    loop_depth: DepthCounter,
+    defer_block_depth: DepthCounter,
+    negation_depth: DepthCounter,
+    type_param_depth: DepthCounter,
+    use_context: Cell<UseContext>,
+    in_test_handle: bool,
+    test_fn_name: Option<EcoString>,
     /// variable name -> binding ID (for linting)
-    pub name_to_binding: HashMap<String, BindingId>,
+    pub(crate) name_to_binding: HashMap<String, BindingId>,
 }
 
 impl Default for Scope {
@@ -100,7 +97,7 @@ impl Default for Scope {
 }
 
 impl Scope {
-    pub fn new() -> Self {
+    fn new() -> Self {
         Scope {
             values: HashMap::default(),
             mutables: None,
@@ -151,7 +148,7 @@ impl Default for Scopes {
 }
 
 impl Scopes {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Scopes {
             stack: vec![Scope::new()],
             in_subexpression: Cell::new(false),
@@ -161,17 +158,17 @@ impl Scopes {
         }
     }
 
-    pub fn current(&self) -> &Scope {
+    pub(crate) fn current(&self) -> &Scope {
         self.stack.last().expect("scope stack must not be empty")
     }
 
-    pub fn current_mut(&mut self) -> &mut Scope {
+    pub(crate) fn current_mut(&mut self) -> &mut Scope {
         self.stack
             .last_mut()
             .expect("scope stack must not be empty")
     }
 
-    pub fn push(&mut self) {
+    pub(crate) fn push(&mut self) {
         let current = self.current();
         let mut scope = Scope::new();
         scope.loop_break_type = current.loop_break_type.clone();
@@ -185,22 +182,14 @@ impl Scopes {
         self.stack.push(scope);
     }
 
-    pub fn pop(&mut self) {
+    pub(crate) fn pop(&mut self) {
         if self.stack.len() > 1 {
             self.stack.pop();
         }
     }
 
-    pub fn reset(&mut self) {
-        self.stack.clear();
-        self.stack.push(Scope::new());
-        self.in_subexpression.set(false);
-        self.dot_access_base.set(false);
-        self.impl_receiver_type = None;
-    }
-
     /// Look up a value by walking the scope stack from top to bottom.
-    pub fn lookup_value(&self, name: &str) -> Option<&Type> {
+    pub(crate) fn lookup_value(&self, name: &str) -> Option<&Type> {
         for scope in self.stack.iter().rev() {
             if let Some(ty) = scope.values.get(name) {
                 return Some(ty);
@@ -210,7 +199,7 @@ impl Scopes {
     }
 
     /// Check if a variable is marked mutable in any enclosing scope.
-    pub fn lookup_mutable(&self, name: &str) -> bool {
+    pub(crate) fn lookup_mutable(&self, name: &str) -> bool {
         self.stack
             .iter()
             .rev()
@@ -218,7 +207,7 @@ impl Scopes {
     }
 
     /// Whether `name` is a block-local `const` in any enclosing scope.
-    pub fn lookup_const(&self, name: &str) -> bool {
+    pub(crate) fn lookup_const(&self, name: &str) -> bool {
         self.stack
             .iter()
             .rev()
@@ -226,7 +215,7 @@ impl Scopes {
     }
 
     /// Look up a binding ID by walking the scope stack from top to bottom.
-    pub fn lookup_binding_id(&self, name: &str) -> Option<BindingId> {
+    pub(crate) fn lookup_binding_id(&self, name: &str) -> Option<BindingId> {
         for scope in self.stack.iter().rev() {
             if let Some(id) = scope.name_to_binding.get(name) {
                 return Some(*id);
@@ -236,7 +225,7 @@ impl Scopes {
     }
 
     /// Whether resolving `name` crosses a function scope, meaning captured.
-    pub fn binding_crosses_function_boundary(&self, name: &str) -> bool {
+    pub(crate) fn binding_crosses_function_boundary(&self, name: &str) -> bool {
         let mut crossed = false;
         for scope in self.stack.iter().rev() {
             if scope.name_to_binding.contains_key(name) {
@@ -250,7 +239,7 @@ impl Scopes {
     }
 
     /// Look up a type parameter by walking the scope stack from top to bottom.
-    pub fn lookup_type_param(&self, name: &str) -> Option<usize> {
+    pub(crate) fn lookup_type_param(&self, name: &str) -> Option<usize> {
         for scope in self.stack.iter().rev() {
             if let Some(idx) = scope.type_params.as_ref().and_then(|tp| tp.get(name)) {
                 return Some(*idx);
@@ -260,7 +249,7 @@ impl Scopes {
     }
 
     /// Look up the enclosing function's return type.
-    pub fn lookup_fn_return_type(&self) -> Option<&Type> {
+    pub(crate) fn lookup_fn_return_type(&self) -> Option<&Type> {
         for scope in self.stack.iter().rev() {
             if let Some(ref ty) = scope.fn_return_type {
                 return Some(ty);
@@ -287,7 +276,7 @@ impl Scopes {
     }
 
     /// Look up the enclosing try block context, stopping at function boundaries.
-    pub fn lookup_try_block_context(&self) -> Option<&TryBlockContext> {
+    pub(crate) fn lookup_try_block_context(&self) -> Option<&TryBlockContext> {
         for scope in self.stack.iter().rev() {
             if scope.try_block_context.is_some() {
                 return scope.try_block_context.as_ref();
@@ -300,7 +289,7 @@ impl Scopes {
     }
 
     /// Look up the enclosing recover block context, stopping at function boundaries.
-    pub fn lookup_recover_block_context(&self) -> Option<&RecoverBlockContext> {
+    pub(crate) fn lookup_recover_block_context(&self) -> Option<&RecoverBlockContext> {
         for scope in self.stack.iter().rev() {
             if scope.recover_block_context.is_some() {
                 return scope.recover_block_context.as_ref();
@@ -312,7 +301,7 @@ impl Scopes {
         None
     }
 
-    pub fn collect_all_value_names(&self) -> Vec<String> {
+    pub(crate) fn collect_all_value_names(&self) -> Vec<String> {
         let mut names = Vec::new();
         for scope in &self.stack {
             names.extend(scope.values.keys().cloned());
@@ -320,7 +309,7 @@ impl Scopes {
         names
     }
 
-    pub fn collect_all_trait_bounds(&self) -> HashMap<Symbol, Vec<Type>> {
+    pub(crate) fn collect_all_trait_bounds(&self) -> HashMap<Symbol, Vec<Type>> {
         let mut all_bounds: HashMap<Symbol, Vec<Type>> = HashMap::default();
         // Walk from bottom to top so inner scopes override outer
         for scope in &self.stack {
@@ -337,7 +326,7 @@ impl Scopes {
         all_bounds
     }
 
-    pub fn for_each_bound_on_param<F: FnMut(&Type)>(&self, param_name: &str, mut visit: F) {
+    pub(crate) fn for_each_bound_on_param<F: FnMut(&Type)>(&self, param_name: &str, mut visit: F) {
         for scope in self.stack.iter().rev() {
             let introduces = scope
                 .type_params
@@ -359,163 +348,159 @@ impl Scopes {
         }
     }
 
-    pub fn mark_test_handle(&mut self) {
+    pub(crate) fn mark_test_handle(&mut self) {
         self.current_mut().in_test_handle = true;
     }
 
-    pub fn has_test_handle(&self) -> bool {
+    pub(crate) fn has_test_handle(&self) -> bool {
         self.current().in_test_handle
     }
 
-    pub fn set_test_fn_name(&mut self, name: EcoString) {
+    pub(crate) fn set_test_fn_name(&mut self, name: EcoString) {
         self.current_mut().test_fn_name = Some(name);
     }
 
-    pub fn test_fn_name(&self) -> Option<&str> {
+    pub(crate) fn test_fn_name(&self) -> Option<&str> {
         self.current().test_fn_name.as_deref()
     }
 
-    pub fn increment_loop_depth(&self) {
+    pub(crate) fn increment_loop_depth(&self) {
         self.current().loop_depth.increment();
     }
 
-    pub fn decrement_loop_depth(&self) {
+    pub(crate) fn decrement_loop_depth(&self) {
         self.current().loop_depth.decrement();
     }
 
-    pub fn is_inside_loop(&self) -> bool {
+    pub(crate) fn is_inside_loop(&self) -> bool {
         self.current().loop_depth.is_active()
     }
 
-    pub fn set_loop_break_type(&mut self, ty: Type) {
+    pub(crate) fn set_loop_break_type(&mut self, ty: Type) {
         self.current_mut().loop_break_type = Some(ty);
     }
 
-    pub fn clear_loop_break_type(&mut self) {
+    pub(crate) fn clear_loop_break_type(&mut self) {
         self.current_mut().loop_break_type = None;
     }
 
-    pub fn loop_break_type(&self) -> Option<&Type> {
+    pub(crate) fn loop_break_type(&self) -> Option<&Type> {
         self.current().loop_break_type.as_ref()
     }
 
-    pub fn increment_defer_block_depth(&self) {
+    pub(crate) fn increment_defer_block_depth(&self) {
         self.current().defer_block_depth.increment();
     }
 
-    pub fn decrement_defer_block_depth(&self) {
+    pub(crate) fn decrement_defer_block_depth(&self) {
         self.current().defer_block_depth.decrement();
     }
 
-    pub fn is_inside_defer_block(&self) -> bool {
+    pub(crate) fn is_inside_defer_block(&self) -> bool {
         self.current().defer_block_depth.is_active()
     }
 
-    pub fn defer_block_loop_depth(&self) -> usize {
+    pub(crate) fn defer_block_loop_depth(&self) -> usize {
         self.current().loop_depth.get()
     }
 
-    pub fn increment_negation_depth(&self) {
+    pub(crate) fn increment_negation_depth(&self) {
         self.current().negation_depth.increment();
     }
 
-    pub fn decrement_negation_depth(&self) {
+    pub(crate) fn decrement_negation_depth(&self) {
         self.current().negation_depth.decrement();
     }
 
-    pub fn is_inside_negation(&self) -> bool {
+    pub(crate) fn is_inside_negation(&self) -> bool {
         self.current().negation_depth.is_active()
     }
 
-    pub fn reset_loop_depth(&self) -> usize {
+    pub(crate) fn reset_loop_depth(&self) -> usize {
         self.current().loop_depth.reset()
     }
 
-    pub fn restore_loop_depth(&self, depth: usize) {
+    pub(crate) fn restore_loop_depth(&self, depth: usize) {
         self.current().loop_depth.restore(depth);
     }
 
-    pub fn set_value_context(&self) -> UseContext {
+    pub(crate) fn set_value_context(&self) -> UseContext {
         let prev = self.current().use_context.get();
         self.current().use_context.set(UseContext::Value);
         prev
     }
 
-    pub fn set_statement_context(&self) -> UseContext {
+    pub(crate) fn set_statement_context(&self) -> UseContext {
         let prev = self.current().use_context.get();
         self.current().use_context.set(UseContext::Statement);
         prev
     }
 
-    pub fn restore_use_context(&self, ctx: UseContext) {
+    pub(crate) fn restore_use_context(&self, ctx: UseContext) {
         self.current().use_context.set(ctx);
     }
 
-    pub fn is_value_context(&self) -> bool {
+    pub(crate) fn is_value_context(&self) -> bool {
         self.current().use_context.get() == UseContext::Value
     }
 
-    pub fn set_callee_context(&self) -> UseContext {
+    pub(crate) fn set_callee_context(&self) -> UseContext {
         let prev = self.current().use_context.get();
         self.current().use_context.set(UseContext::Callee);
         prev
     }
 
-    pub fn is_callee_context(&self) -> bool {
+    pub(crate) fn is_callee_context(&self) -> bool {
         self.current().use_context.get() == UseContext::Callee
     }
 
-    pub fn set_assignment_target_context(&self) -> UseContext {
+    pub(crate) fn set_assignment_target_context(&self) -> UseContext {
         let prev = self.current().use_context.get();
         self.current().use_context.set(UseContext::AssignmentTarget);
         prev
     }
 
-    pub fn is_assignment_target_context(&self) -> bool {
+    pub(crate) fn is_assignment_target_context(&self) -> bool {
         self.current().use_context.get() == UseContext::AssignmentTarget
     }
 
-    pub fn is_in_subexpression(&self) -> bool {
-        self.in_subexpression.get()
-    }
-
-    pub fn set_in_subexpression(&self, value: bool) -> bool {
+    pub(crate) fn set_in_subexpression(&self, value: bool) -> bool {
         self.in_subexpression.replace(value)
     }
 
-    pub fn is_dot_access_base(&self) -> bool {
+    pub(crate) fn is_dot_access_base(&self) -> bool {
         self.dot_access_base.get()
     }
 
-    pub fn set_dot_access_base(&self, value: bool) -> bool {
+    pub(crate) fn set_dot_access_base(&self, value: bool) -> bool {
         self.dot_access_base.replace(value)
     }
 
-    pub fn is_let_binding_rhs(&self) -> bool {
+    pub(crate) fn is_let_binding_rhs(&self) -> bool {
         self.let_binding_rhs.get()
     }
 
-    pub fn set_let_binding_rhs(&self, value: bool) -> bool {
+    pub(crate) fn set_let_binding_rhs(&self, value: bool) -> bool {
         self.let_binding_rhs.replace(value)
     }
 
-    pub fn increment_type_param_depth(&self) {
+    pub(crate) fn increment_type_param_depth(&self) {
         self.current().type_param_depth.increment();
     }
 
-    pub fn decrement_type_param_depth(&self) {
+    pub(crate) fn decrement_type_param_depth(&self) {
         self.current().type_param_depth.decrement();
     }
 
-    pub fn is_inside_type_param(&self) -> bool {
+    pub(crate) fn is_inside_type_param(&self) -> bool {
         self.current().type_param_depth.is_active()
     }
 
-    pub fn set_impl_receiver_type(&mut self, ty: Option<Type>) {
+    pub(crate) fn set_impl_receiver_type(&mut self, ty: Option<Type>) {
         self.impl_receiver_type = ty;
     }
 
-    pub fn impl_receiver_type(&self) -> Option<&Type> {
+    pub(crate) fn impl_receiver_type(&self) -> Option<&Type> {
         self.impl_receiver_type.as_ref()
     }
 }

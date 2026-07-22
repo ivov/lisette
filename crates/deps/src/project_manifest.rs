@@ -8,8 +8,8 @@ use serde::de::{self, Deserializer, MapAccess, Visitor};
 #[derive(Debug, Clone, Deserialize)]
 pub struct Manifest {
     pub project: Project,
-    pub toolchain: Option<Toolchain>,
-    pub dependencies: Option<Dependencies>,
+    toolchain: Option<Toolchain>,
+    dependencies: Option<Dependencies>,
 }
 
 #[derive(Debug, Clone, Deserialize)]

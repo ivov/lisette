@@ -18,7 +18,7 @@ impl<'source> Parser<'source> {
     /// 4. For postfix operators: Transform the current expression into a larger one.
     ///
     /// The `min_prec` param sets the minimum precedence level for this parsing context.
-    pub fn pratt_parse(&mut self, min_prec: u8) -> ast::Expression {
+    pub(crate) fn pratt_parse(&mut self, min_prec: u8) -> ast::Expression {
         if !self.enter_recursion() {
             let span = self.span_from_token(self.current_token());
             self.resync_on_error();
@@ -210,7 +210,7 @@ impl<'source> Parser<'source> {
         }
     }
 
-    pub fn include_in_larger_expression(&mut self, lhs: ast::Expression) -> ast::Expression {
+    fn include_in_larger_expression(&mut self, lhs: ast::Expression) -> ast::Expression {
         match self.current_token().kind {
             LeftParen => self.parse_function_call(lhs, vec![]),
             LeftSquareBracket => self.parse_index_expression(lhs),
@@ -341,7 +341,7 @@ impl<'source> Parser<'source> {
         }
     }
 
-    pub fn parse_range_end(&mut self) -> ast::Expression {
+    pub(crate) fn parse_range_end(&mut self) -> ast::Expression {
         self.pratt_parse(RANGE_PREC)
     }
 

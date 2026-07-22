@@ -379,14 +379,14 @@ impl InferCtx<'_, '_> {
         }
     }
 
-    pub(crate) fn is_channel_receive_call(&self, expression: &Expression) -> bool {
+    fn is_channel_receive_call(&self, expression: &Expression) -> bool {
         matches!(
             self.valid_channel_operation(expression),
             Some(ChannelOperation::Receive { .. })
         )
     }
 
-    pub(crate) fn is_channel_send_call(&self, expression: &Expression) -> bool {
+    fn is_channel_send_call(&self, expression: &Expression) -> bool {
         matches!(
             self.valid_channel_operation(expression),
             Some(ChannelOperation::Send { .. })

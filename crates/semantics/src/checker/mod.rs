@@ -3,7 +3,7 @@ pub mod infer;
 pub mod promotion;
 pub(crate) mod registration;
 pub mod scopes;
-pub mod sealing;
+mod sealing;
 pub mod type_env;
 
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
@@ -30,7 +30,7 @@ pub use type_env::{EnvResolve, Speculation, TypeEnv, VarState};
 #[derive(Debug, Clone)]
 pub struct Cursor {
     pub module_id: String,
-    pub file_id: Option<u32>,
+    file_id: Option<u32>,
 }
 
 impl Default for Cursor {
@@ -43,7 +43,7 @@ impl Default for Cursor {
 }
 
 impl Cursor {
-    pub fn new() -> Self {
+    fn new() -> Self {
         Self::default()
     }
 }
@@ -52,35 +52,19 @@ impl Cursor {
 pub struct ImportState {
     /// Module prefix -> (struct fields, module type). Fields are `Arc`-shared
     /// since the same module is put in scope once per file.
-    pub imported_modules: HashMap<String, (Arc<[StructFieldDefinition]>, Type)>,
+    imported_modules: HashMap<String, (Arc<[StructFieldDefinition]>, Type)>,
     /// Import prefix -> actual module_id in Store (e.g., "http" -> "go:net/http")
-    pub prefix_to_module: HashMap<String, String>,
+    prefix_to_module: HashMap<String, String>,
     /// Modules whose exports are available without prefix (current module and prelude)
-    pub unprefixed_imports: HashSet<String>,
+    unprefixed_imports: HashSet<String>,
     /// Effective aliases (e.g. `mux`) of imports whose underlying module
     /// failed to load (missing typedef, undeclared, module_not_found, etc.).
-    pub failed_imports: HashSet<String>,
+    failed_imports: HashSet<String>,
 }
 
 impl ImportState {
-    pub fn new() -> Self {
+    fn new() -> Self {
         Self::default()
-    }
-
-    pub fn clear(&mut self) {
-        // Preserve prelude entries since they never change
-        let prelude = self.imported_modules.remove("prelude");
-        self.imported_modules.clear();
-        if let Some(p) = prelude {
-            self.imported_modules.insert("prelude".to_string(), p);
-        }
-        let prelude_mapping = self.prefix_to_module.remove("prelude");
-        self.prefix_to_module.clear();
-        if let Some(m) = prelude_mapping {
-            self.prefix_to_module.insert("prelude".to_string(), m);
-        }
-        self.unprefixed_imports.clear();
-        self.failed_imports.clear();
     }
 }
 
@@ -98,33 +82,28 @@ struct SavedFileContext {
     imports: ImportState,
 }
 
-/// Cache for builtin types (int, bool, string, etc.) resolved from the prelude.
-/// These never change once populated, so no invalidation needed.
-type BuiltinCache = HashMap<String, Type>;
-
 /// Per-task mutable state. Paired with `AnalysisContext` (shared read-only view).
 pub struct TaskState<'s> {
     pub env: TypeEnv,
-    pub scopes: Scopes,
+    pub(crate) scopes: Scopes,
     pub cursor: Cursor,
-    pub imports: ImportState,
-    pub builtins: BuiltinCache,
+    imports: ImportState,
     pub sink: &'s LocalSink,
     pub facts: Facts,
     /// Recursion guard for interface satisfaction. Prevents
     /// `collect_interface_violations` from diverging when a bound on `T`
     /// transitively requires checking `T` against the same interface.
-    pub satisfying_stack: rustc_hash::FxHashSet<(String, String)>,
+    satisfying_stack: rustc_hash::FxHashSet<(String, String)>,
     method_cache: RefCell<HashMap<EcoString, Rc<MethodSignatures>>>,
     /// Per-module field projection, cached to avoid rebuilding it (and recloning
     /// every type) on each file-context entry.
     module_fields_cache: RefCell<HashMap<EcoString, Arc<[StructFieldDefinition]>>>,
     /// Register-phase projections shared read-only with inference workers, so
     /// workers reuse them instead of rebuilding.
-    pub module_fields_shared: Option<Arc<HashMap<EcoString, Arc<[StructFieldDefinition]>>>>,
+    pub(crate) module_fields_shared: Option<Arc<HashMap<EcoString, Arc<[StructFieldDefinition]>>>>,
     pub ufcs_methods: HashSet<(String, String)>,
     /// When set, parallel workers read UFCS methods from here instead of cloning into `ufcs_methods`.
-    pub ufcs_shared: Option<Arc<HashSet<(String, String)>>>,
+    pub(crate) ufcs_shared: Option<Arc<HashSet<(String, String)>>>,
     /// Typed files produced by inference.
     pub typed_files: Vec<(String, File)>,
     pub(crate) pending_generic_bound_checks: Vec<(Type, Type, Span)>,
@@ -134,13 +113,12 @@ pub struct TaskState<'s> {
 }
 
 impl<'s> TaskState<'s> {
-    pub fn new(sink: &'s LocalSink, binding_ids: Arc<BindingIdAllocator>) -> Self {
+    pub(crate) fn new(sink: &'s LocalSink, binding_ids: Arc<BindingIdAllocator>) -> Self {
         Self {
             env: TypeEnv::new(),
             scopes: Scopes::new(),
             cursor: Cursor::new(),
             imports: ImportState::new(),
-            builtins: BuiltinCache::default(),
             sink,
             facts: Facts::new(binding_ids),
             satisfying_stack: rustc_hash::FxHashSet::default(),
@@ -173,7 +151,7 @@ impl<'s> TaskState<'s> {
         Type::Var { id, hint: None }
     }
 
-    pub fn new_type_var_with_hint(&mut self, hint: &str) -> Type {
+    fn new_type_var_with_hint(&mut self, hint: &str) -> Type {
         let hint: EcoString = hint.into();
         let id = self.env.fresh(Some(hint.clone()));
         Type::Var {
@@ -182,7 +160,7 @@ impl<'s> TaskState<'s> {
         }
     }
 
-    pub fn type_from_literal_expression(&mut self, expression: &Expression) -> Option<Type> {
+    fn type_from_literal_expression(&mut self, expression: &Expression) -> Option<Type> {
         use syntax::ast::{Expression, Literal};
         match expression {
             Expression::Literal { literal, .. } => match literal {
@@ -198,7 +176,7 @@ impl<'s> TaskState<'s> {
         }
     }
 
-    pub fn instantiate(&mut self, ty: &Type) -> (Type, SubstitutionMap) {
+    fn instantiate(&mut self, ty: &Type) -> (Type, SubstitutionMap) {
         match ty {
             Type::Forall { vars, body } => {
                 let map: SubstitutionMap = vars
@@ -219,11 +197,7 @@ impl<'s> TaskState<'s> {
         }
     }
 
-    pub fn new_file_id(&mut self, store: &Store) -> u32 {
-        store.new_file_id()
-    }
-
-    pub fn is_d_lis(&self, store: &Store) -> bool {
+    fn is_d_lis(&self, store: &Store) -> bool {
         let Some(file_id) = self.cursor.file_id else {
             return false;
         };
@@ -235,23 +209,23 @@ impl<'s> TaskState<'s> {
         module.typedefs.contains_key(&file_id)
     }
 
-    pub fn is_lis(&self, store: &Store) -> bool {
+    fn is_lis(&self, store: &Store) -> bool {
         !self.is_d_lis(store)
     }
 
-    pub(crate) fn current_module<'a>(&self, store: &'a Store) -> &'a Module {
+    fn current_module<'a>(&self, store: &'a Store) -> &'a Module {
         store
             .get_module(&self.cursor.module_id)
             .expect("current module must exist in store")
     }
 
-    pub(crate) fn current_module_mut<'a>(&self, store: &'a mut Store) -> &'a mut Module {
+    fn current_module_mut<'a>(&self, store: &'a mut Store) -> &'a mut Module {
         store
             .get_module_mut(&self.cursor.module_id)
             .expect("current module must exist in store")
     }
 
-    pub(crate) fn qualify_name(&self, name: &str) -> Symbol {
+    fn qualify_name(&self, name: &str) -> Symbol {
         Symbol::from_parts(&self.cursor.module_id, name)
     }
 
@@ -283,7 +257,7 @@ impl<'s> TaskState<'s> {
         resolved
     }
 
-    pub(crate) fn record_resolved_generic_bounds(&mut self, generics: &[Generic]) {
+    fn record_resolved_generic_bounds(&mut self, generics: &[Generic]) {
         for generic in generics {
             for bound in &generic.resolved_bounds {
                 self.record_generic_bound(&generic.name, bound.clone());
@@ -291,7 +265,7 @@ impl<'s> TaskState<'s> {
         }
     }
 
-    pub(crate) fn ensure_generic_bounds(
+    fn ensure_generic_bounds(
         &mut self,
         store: &Store,
         generics: Vec<Generic>,
@@ -308,7 +282,7 @@ impl<'s> TaskState<'s> {
         }
     }
 
-    pub(crate) fn record_generic_bound(&mut self, parameter: &str, bound: Type) {
+    fn record_generic_bound(&mut self, parameter: &str, bound: Type) {
         let qualified_parameter = self.qualify_name(parameter);
         let bounds = self
             .scopes
@@ -322,11 +296,7 @@ impl<'s> TaskState<'s> {
         }
     }
 
-    pub(crate) fn parameter_satisfies_bound(
-        &self,
-        parameter: &str,
-        target: infer::BuiltinBound,
-    ) -> bool {
+    fn parameter_satisfies_bound(&self, parameter: &str, target: infer::BuiltinBound) -> bool {
         let mut found = false;
         self.scopes.for_each_bound_on_param(parameter, |bound_ty| {
             if found {
@@ -344,7 +314,7 @@ impl<'s> TaskState<'s> {
         found
     }
 
-    pub(crate) fn register_bound_annotation(
+    fn register_bound_annotation(
         &mut self,
         store: &Store,
         bound: &Annotation,
@@ -403,11 +373,7 @@ impl<'s> TaskState<'s> {
         None
     }
 
-    pub(crate) fn lookup_qualified_name(
-        &self,
-        store: &Store,
-        type_name: &str,
-    ) -> Option<EcoString> {
+    fn lookup_qualified_name(&self, store: &Store, type_name: &str) -> Option<EcoString> {
         self.lookup_qualified_name_in_scope(store, type_name, false)
     }
 
@@ -482,22 +448,18 @@ impl<'s> TaskState<'s> {
         value_fallback
     }
 
-    pub(crate) fn get_definition_name_span(
-        &self,
-        store: &Store,
-        qualified_name: &str,
-    ) -> Option<Span> {
+    fn get_definition_name_span(&self, store: &Store, qualified_name: &str) -> Option<Span> {
         store.get_definition(qualified_name)?.name_span
     }
 
-    pub(crate) fn is_const_name(&self, store: &Store, qualified_name: &str) -> bool {
+    fn is_const_name(&self, store: &Store, qualified_name: &str) -> bool {
         if qualified_name.starts_with("go:") {
             return false;
         }
         store.is_const(qualified_name)
     }
 
-    pub(crate) fn is_const_var(&self, store: &Store, var_name: &str) -> bool {
+    fn is_const_var(&self, store: &Store, var_name: &str) -> bool {
         if self.scopes.lookup_binding_id(var_name).is_some() {
             return false;
         }
@@ -509,7 +471,7 @@ impl<'s> TaskState<'s> {
     }
 
     /// Track that `name` (at the start of `span`) refers to the definition at `qualified_name`.
-    pub(crate) fn track_name_usage(
+    fn track_name_usage(
         &mut self,
         store: &Store,
         qualified_name: &str,
@@ -522,7 +484,7 @@ impl<'s> TaskState<'s> {
         }
     }
 
-    pub(crate) fn lookup_generic_index(&self, type_name: &str) -> Option<usize> {
+    fn lookup_generic_index(&self, type_name: &str) -> Option<usize> {
         self.scopes.lookup_type_param(type_name)
     }
 
@@ -561,7 +523,7 @@ impl<'s> TaskState<'s> {
         definition.ty.clone()
     }
 
-    pub(crate) fn lookup_type(&self, store: &Store, value_name: &str) -> Option<Type> {
+    fn lookup_type(&self, store: &Store, value_name: &str) -> Option<Type> {
         if let Some(ty) = self.scopes.lookup_value(value_name) {
             return Some(ty.clone());
         }
@@ -603,7 +565,7 @@ impl<'s> TaskState<'s> {
         None
     }
 
-    pub(crate) fn is_enum_type(&self, store: &Store, ty: &Type) -> bool {
+    fn is_enum_type(&self, store: &Store, ty: &Type) -> bool {
         let Type::Nominal { id, .. } = ty else {
             return false;
         };
@@ -613,11 +575,7 @@ impl<'s> TaskState<'s> {
         matches!(definition.body, DefinitionBody::Enum { .. })
     }
 
-    pub(crate) fn resolve_type_name(
-        &mut self,
-        store: &Store,
-        type_name: &str,
-    ) -> Option<(String, Type)> {
+    fn resolve_type_name(&mut self, store: &Store, type_name: &str) -> Option<(String, Type)> {
         if self.scopes.lookup_type_param(type_name).is_some() {
             return None;
         }
@@ -628,17 +586,13 @@ impl<'s> TaskState<'s> {
         Some((qualified_name.to_string(), ty))
     }
 
-    pub(crate) fn resolve_type_from_prelude(
-        &self,
-        store: &Store,
-        type_name: &str,
-    ) -> Option<(String, Type)> {
+    fn resolve_type_from_prelude(&self, store: &Store, type_name: &str) -> Option<(String, Type)> {
         let qualified_name = format!("prelude.{}", type_name);
         let ty = store.get_type(&qualified_name)?.clone();
         Some((qualified_name, ty))
     }
 
-    pub(crate) fn get_all_methods(&self, store: &Store, ty: &Type) -> Rc<MethodSignatures> {
+    fn get_all_methods(&self, store: &Store, ty: &Type) -> Rc<MethodSignatures> {
         if let Type::Parameter(name) = ty {
             let trait_bounds = self.scopes.collect_all_trait_bounds();
             let qualified_name = self.qualify_name(name);
@@ -686,16 +640,7 @@ impl<'s> TaskState<'s> {
         methods
     }
 
-    pub fn reset_scopes(&mut self) {
-        self.scopes.reset();
-        self.imports.clear();
-    }
-
-    pub(crate) fn with_module_cursor<T>(
-        &mut self,
-        module_id: &str,
-        f: impl FnOnce(&mut Self) -> T,
-    ) -> T {
+    fn with_module_cursor<T>(&mut self, module_id: &str, f: impl FnOnce(&mut Self) -> T) -> T {
         if self.cursor.module_id == module_id {
             return f(self);
         }
@@ -706,7 +651,7 @@ impl<'s> TaskState<'s> {
         result
     }
 
-    pub(crate) fn with_file_context<T>(
+    fn with_file_context<T>(
         &mut self,
         store: &Store,
         module_id: &str,
@@ -807,7 +752,7 @@ impl<'s> TaskState<'s> {
         self.put_module_in_scope(store, "prelude", Some("prelude".to_string()));
     }
 
-    pub fn put_unprefixed_module_in_scope(&mut self, store: &Store, module_id: &str) {
+    fn put_unprefixed_module_in_scope(&mut self, store: &Store, module_id: &str) {
         self.put_module_in_scope(store, module_id, None)
     }
 
@@ -926,19 +871,21 @@ impl<'s> TaskState<'s> {
     }
 
     /// Cached projections so far, to seed workers' `module_fields_shared`.
-    pub fn module_fields_snapshot(&self) -> HashMap<EcoString, Arc<[StructFieldDefinition]>> {
+    pub(crate) fn module_fields_snapshot(
+        &self,
+    ) -> HashMap<EcoString, Arc<[StructFieldDefinition]>> {
         self.module_fields_cache.borrow().clone()
     }
 
     /// Adopt projections built by registration workers so later phases reuse them.
-    pub fn merge_module_fields(
+    pub(crate) fn merge_module_fields(
         &mut self,
         fields: HashMap<EcoString, Arc<[StructFieldDefinition]>>,
     ) {
         self.module_fields_cache.borrow_mut().extend(fields);
     }
 
-    pub fn put_module_in_scope(&mut self, store: &Store, module_id: &str, prefix: Option<String>) {
+    fn put_module_in_scope(&mut self, store: &Store, module_id: &str, prefix: Option<String>) {
         let Some(prefix) = prefix else {
             self.imports
                 .unprefixed_imports
@@ -966,10 +913,7 @@ impl<'s> TaskState<'s> {
 
     /// Run a closure speculatively: if it returns `Err`, all type variable
     /// bindings performed during the closure are rolled back.
-    pub(crate) fn speculatively<T, E>(
-        &mut self,
-        f: impl FnOnce(&mut Self) -> Result<T, E>,
-    ) -> Result<T, E> {
+    fn speculatively<T, E>(&mut self, f: impl FnOnce(&mut Self) -> Result<T, E>) -> Result<T, E> {
         let spec = self.env.begin_speculation();
         let result = f(self);
         self.env.end_speculation(spec, result.is_err());

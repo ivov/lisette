@@ -9195,3 +9195,675 @@ fn baz(value: Bar) {
 
     infer_module("main", fs).assert_no_errors();
 }
+
+#[test]
+fn snake_case_method_satisfies_go_interface() {
+    let typedef = r#"
+pub struct Widget { pub id: int }
+
+pub interface HasWidget {
+  fn GetWidget() -> Ref<Widget>
+}
+"#;
+    let input = r#"
+import "go:example.com/ui"
+
+struct MyBox { value: ui.Widget }
+
+impl MyBox {
+  pub fn get_widget(self: Ref<MyBox>) -> Ref<ui.Widget> { &self.value }
+}
+
+fn use_it(_: ui.HasWidget) {}
+
+fn main() {
+  let b = MyBox { value: ui.Widget { id: 0 } }
+  use_it(&b)
+}
+"#;
+    infer_with_go_typedefs(input, &[("go:example.com/ui", typedef)]).assert_no_errors();
+}
+
+#[test]
+fn private_snake_case_method_does_not_satisfy_go_interface() {
+    let typedef = r#"
+pub struct Widget { pub id: int }
+
+pub interface HasWidget {
+  fn GetWidget() -> Ref<Widget>
+}
+"#;
+    let input = r#"
+import "go:example.com/ui"
+
+struct MyBox { value: ui.Widget }
+
+impl MyBox {
+  fn get_widget(self: Ref<MyBox>) -> Ref<ui.Widget> { &self.value }
+}
+
+fn use_it(_: ui.HasWidget) {}
+
+fn main() {
+  let b = MyBox { value: ui.Widget { id: 0 } }
+  use_it(&b)
+}
+"#;
+    infer_with_go_typedefs(input, &[("go:example.com/ui", typedef)])
+        .assert_infer_code("interface_not_implemented");
+}
+
+#[test]
+fn snake_case_method_satisfies_pascal_case_lisette_interface() {
+    infer(
+        r#"
+    pub interface Runner {
+      fn Run() -> int;
+    }
+
+    struct Job {}
+
+    impl Job {
+      pub fn run(self) -> int { 1 }
+    }
+
+    fn use_it(_: Runner) {}
+
+    fn main() {
+      use_it(Job {});
+    }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn pascal_case_method_satisfies_snake_case_public_interface() {
+    infer(
+        r#"
+    pub interface Runner {
+      fn run() -> int;
+    }
+
+    struct Job {}
+
+    impl Job {
+      pub fn Run(self) -> int { 1 }
+    }
+
+    fn use_it(_: Runner) {}
+
+    fn main() {
+      use_it(Job {});
+    }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn private_lisette_interface_requires_source_name_match() {
+    infer(
+        r#"
+    interface Runner {
+      fn Run() -> int;
+    }
+
+    struct Job {}
+
+    impl Job {
+      pub fn run(self) -> int { 1 }
+    }
+
+    fn use_it(_: Runner) {}
+
+    fn main() {
+      use_it(Job {});
+    }
+        "#,
+    )
+    .assert_infer_code("interface_not_implemented");
+}
+
+#[test]
+fn initialism_method_does_not_satisfy_go_interface() {
+    let typedef = r#"
+pub interface Handler {
+  fn ServeHTTP(code: int)
+}
+"#;
+    let input = r#"
+import "go:example.com/web"
+
+struct MyHandler {}
+
+impl MyHandler {
+  pub fn serve_http(self, _code: int) {}
+}
+
+fn use_it(_: web.Handler) {}
+
+fn main() {
+  use_it(MyHandler {})
+}
+"#;
+    infer_with_go_typedefs(input, &[("go:example.com/web", typedef)])
+        .assert_infer_code("interface_not_implemented");
+}
+
+#[test]
+fn snake_case_pointer_receiver_method_rejected_for_value_coercion() {
+    let typedef = r#"
+pub struct Widget { pub id: int }
+
+pub interface HasWidget {
+  fn GetWidget() -> Ref<Widget>
+}
+"#;
+    let input = r#"
+import "go:example.com/ui"
+
+struct MyBox { value: ui.Widget }
+
+impl MyBox {
+  pub fn get_widget(self: Ref<MyBox>) -> Ref<ui.Widget> { &self.value }
+}
+
+fn use_it(_: ui.HasWidget) {}
+
+fn main() {
+  let b = MyBox { value: ui.Widget { id: 0 } }
+  use_it(b)
+}
+"#;
+    infer_with_go_typedefs(input, &[("go:example.com/ui", typedef)])
+        .assert_infer_code("interface_not_implemented");
+}
+
+#[test]
+fn snake_case_method_satisfies_comma_ok_go_interface() {
+    let typedef = r#"
+pub struct Session { pub key: string }
+
+pub interface Cache {
+  #[go(comma_ok)]
+  fn Get(key: string) -> Option<Ref<Session>>
+}
+"#;
+    let input = r#"
+import "go:example.com/cache"
+
+struct MyCache {}
+
+impl MyCache {
+  pub fn get(self: Ref<MyCache>, key: string) -> Option<Ref<cache.Session>> { None }
+}
+
+fn use_it(_: cache.Cache) {}
+
+fn main() { use_it(&MyCache {}) }
+"#;
+    infer_with_go_typedefs(input, &[("go:example.com/cache", typedef)]).assert_no_errors();
+}
+
+#[test]
+fn exact_source_name_match_preferred_over_emitted_match() {
+    infer(
+        r#"
+    pub interface Runner {
+      fn Run() -> int;
+    }
+
+    struct Job {}
+
+    impl Job {
+      pub fn Run(self) -> int { 1 }
+      pub fn run(self) -> int { 2 }
+    }
+
+    fn use_it(_: Runner) {}
+
+    fn main() {
+      use_it(Job {});
+    }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn promoted_snake_case_method_satisfies_go_interface() {
+    let typedef = r#"
+pub interface Named {
+  fn Describe() -> string
+}
+"#;
+    let input = r#"
+import "go:example.com/reg"
+
+pub struct Base {}
+impl Base {
+  pub fn describe(self) -> string { "base" }
+}
+struct Outer { embed Base }
+
+fn use_it(_: reg.Named) {}
+
+fn main() {
+  use_it(Outer { Base: Base {} })
+}
+"#;
+    infer_with_go_typedefs(input, &[("go:example.com/reg", typedef)]).assert_no_errors();
+}
+
+#[test]
+fn promoted_private_snake_case_method_does_not_satisfy_go_interface() {
+    let typedef = r#"
+pub interface Named {
+  fn Describe() -> string
+}
+"#;
+    let input = r#"
+import "go:example.com/reg"
+
+pub struct Base {}
+impl Base {
+  fn describe(self) -> string { "base" }
+}
+struct Outer { embed Base }
+
+fn use_it(_: reg.Named) {}
+
+fn main() {
+  use_it(Outer { Base: Base {} })
+}
+"#;
+    infer_with_go_typedefs(input, &[("go:example.com/reg", typedef)])
+        .assert_infer_code("interface_not_implemented");
+}
+
+#[test]
+fn promoted_snake_case_method_rejected_for_comma_ok_go_interface() {
+    let typedef = r#"
+pub struct Session { pub key: string }
+
+pub interface Cache {
+  #[go(comma_ok)]
+  fn Get(key: string) -> Option<Ref<Session>>
+}
+"#;
+    let input = r#"
+import "go:example.com/cache"
+
+pub struct Base {}
+impl Base {
+  pub fn get(self, _key: string) -> Option<Ref<cache.Session>> { None }
+}
+struct Outer { embed Base }
+
+fn main() {
+  let _ = Outer { Base: Base {} } as cache.Cache
+}
+"#;
+    infer_with_go_typedefs(input, &[("go:example.com/cache", typedef)])
+        .assert_infer_code("comma_ok_abi_mismatch");
+}
+
+#[test]
+fn aliased_receiver_snake_case_method_satisfies_go_interface() {
+    let typedef = r#"
+pub interface Named {
+  fn Describe() -> string
+}
+"#;
+    let input = r#"
+import "go:example.com/reg"
+
+pub struct Base {}
+impl Base {
+  pub fn describe(self) -> string { "base" }
+}
+pub type Wrap = Base
+
+fn use_it(_: reg.Named) {}
+
+fn main() {
+  let w: Wrap = Base {}
+  use_it(w)
+}
+"#;
+    infer_with_go_typedefs(input, &[("go:example.com/reg", typedef)]).assert_no_errors();
+}
+
+#[test]
+fn direct_snake_case_method_shadows_promoted_pascal_case() {
+    infer(
+        r#"
+    pub struct Base {}
+    impl Base {
+      pub fn Describe(self) -> int { 1 }
+    }
+    struct Outer { embed Base }
+    impl Outer {
+      pub fn describe(self) -> string { "outer" }
+    }
+    pub interface Named {
+      fn Describe() -> string
+    }
+    fn use_it(n: Named) -> string { n.Describe() }
+    fn main() {
+      let _ = use_it(Outer { Base: Base {} })
+    }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn shadowing_direct_method_rejected_when_incompatible() {
+    infer(
+        r#"
+    pub struct Base {}
+    impl Base {
+      pub fn Describe(self) -> string { "base" }
+    }
+    struct Outer { embed Base }
+    impl Outer {
+      pub fn describe(self) -> int { 1 }
+    }
+    pub interface Named {
+      fn Describe() -> string
+    }
+    fn use_it(_n: Named) {}
+    fn main() {
+      use_it(Outer { Base: Base {} })
+    }
+        "#,
+    )
+    .assert_infer_code("interface_not_implemented");
+}
+
+#[test]
+fn interface_value_rejected_for_comma_ok_go_interface() {
+    let typedef = r#"
+pub struct Session { pub key: string }
+
+pub interface Cache {
+  #[go(comma_ok)]
+  fn Get(key: string) -> Option<Ref<Session>>
+}
+"#;
+    let input = r#"
+import "go:example.com/cache"
+
+pub interface MyCache {
+  fn Get(key: string) -> Option<Ref<cache.Session>>
+}
+
+fn coerce(c: MyCache) {
+  let _ = c as cache.Cache
+}
+
+fn main() {}
+"#;
+    infer_with_go_typedefs(input, &[("go:example.com/cache", typedef)])
+        .assert_infer_code("comma_ok_abi_mismatch");
+}
+
+#[test]
+fn mixed_promoted_method_rejected_for_comma_ok_go_interface() {
+    let typedef = r#"
+pub struct Session { pub key: string }
+
+pub interface Cache {
+  #[go(comma_ok)]
+  fn Get(key: string) -> Option<Ref<Session>>
+  fn Put(key: string, s: Ref<Session>)
+}
+"#;
+    let input = r#"
+import "go:example.com/cache"
+
+pub struct Base {}
+impl Base {
+  pub fn put(self, _key: string, _s: Ref<cache.Session>) {}
+}
+struct S { embed Base }
+impl S {
+  pub fn get(self, _key: string) -> Option<Ref<cache.Session>> { None }
+}
+
+fn main() {
+  let _ = S { Base: Base {} } as cache.Cache
+}
+"#;
+    infer_with_go_typedefs(input, &[("go:example.com/cache", typedef)])
+        .assert_infer_code("comma_ok_abi_mismatch");
+}
+
+#[test]
+fn interface_value_rejected_for_user_comma_ok_interface() {
+    infer(
+        r#"
+    pub struct Entry { pub name: string }
+    pub interface Cache {
+      #[go(comma_ok)]
+      fn Get(key: string) -> Option<Ref<Entry>>
+    }
+    pub interface Impl {
+      fn Get(key: string) -> Option<Ref<Entry>>
+    }
+    fn coerce(i: Impl) {
+      let _ = i as Cache
+    }
+    fn main() {}
+        "#,
+    )
+    .assert_infer_code("comma_ok_abi_mismatch");
+}
+
+#[test]
+fn inherited_interface_method_satisfies_pascal_case_requirement() {
+    infer(
+        r#"
+    pub interface Parent {
+      fn describe() -> string
+    }
+    pub interface Child {
+      embed Parent
+    }
+    pub interface Named {
+      fn Describe() -> string
+    }
+    fn coerce(c: Child) {
+      let _ = c as Named
+    }
+    fn main() {}
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn bounded_parameter_snake_case_bound_method_satisfies_pascal_requirement() {
+    infer(
+        r#"
+    pub interface Describer {
+      fn describe() -> string
+    }
+    pub interface Named {
+      fn Describe() -> string
+    }
+    fn needs_named<T: Named>(_v: T) {}
+    fn outer<U: Describer>(v: U) {
+      needs_named(v)
+    }
+    fn main() {}
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn equal_depth_promoted_go_name_ambiguity_rejected() {
+    infer(
+        r#"
+    pub struct A {}
+    impl A {
+      pub fn get_item(self) -> string { "a" }
+    }
+    pub struct B {}
+    impl B {
+      pub fn getItem(self) -> string { "b" }
+    }
+    struct Outer { embed A, embed B }
+    pub interface Getter {
+      fn GetItem() -> string
+    }
+    fn use_it(_g: Getter) {}
+    fn main() {
+      use_it(Outer { A: A {}, B: B {} })
+    }
+        "#,
+    )
+    .assert_infer_code("interface_not_implemented");
+}
+
+#[test]
+fn field_claiming_go_selector_shadows_promoted_method() {
+    infer(
+        r#"
+    pub struct Base {}
+    impl Base {
+      pub fn getItem(self) -> string { "base" }
+    }
+    struct Outer { embed Base, pub get_item: string }
+    pub interface Getter {
+      fn GetItem() -> string
+    }
+    fn use_it(_g: Getter) {}
+    fn main() {
+      use_it(Outer { Base: Base {}, get_item: "f" })
+    }
+        "#,
+    )
+    .assert_infer_code("interface_not_implemented");
+}
+
+#[test]
+fn promoted_field_selector_shadows_promoted_method() {
+    infer(
+        r#"
+    pub struct FieldSide { pub get_item: string }
+    pub struct MethodSide {}
+    impl MethodSide {
+      pub fn getItem(self) -> string { "m" }
+    }
+    struct Outer { embed FieldSide, embed MethodSide }
+    pub interface Getter {
+      fn GetItem() -> string
+    }
+    fn use_it(_g: Getter) {}
+    fn main() {
+      use_it(Outer { FieldSide: FieldSide { get_item: "f" }, MethodSide: MethodSide {} })
+    }
+        "#,
+    )
+    .assert_infer_code("interface_not_implemented");
+}
+
+#[test]
+fn serialized_field_export_shadows_promoted_method() {
+    infer(
+        r#"
+    #[json]
+    pub struct FieldSide { get_item: string }
+    pub struct MethodSide {}
+    impl MethodSide {
+      pub fn getItem(self) -> string { "m" }
+    }
+    struct Outer { embed FieldSide, embed MethodSide }
+    pub interface Getter {
+      fn GetItem() -> string
+    }
+    fn use_it(_g: Getter) {}
+    fn main() {
+      use_it(Outer { FieldSide: FieldSide { get_item: "f" }, MethodSide: MethodSide {} })
+    }
+        "#,
+    )
+    .assert_infer_code("interface_not_implemented");
+}
+
+#[test]
+fn constraint_intersection_merges_shared_go_selector() {
+    infer(
+        r#"
+    pub interface A {
+      fn get_item() -> string
+    }
+    pub interface B {
+      fn getItem() -> string
+    }
+    pub interface Getter {
+      fn GetItem() -> string
+    }
+    fn needs_getter<T: Getter>(_v: T) {}
+    fn outer<U: A + B>(v: U) {
+      needs_getter(v)
+    }
+    fn main() {}
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn generic_receiver_method_wins_over_specialized_ufcs_selector() {
+    infer(
+        r#"
+    pub struct Box<T> { pub value: T }
+    impl Box<int> {
+      pub fn Describe(self) -> string { "int box" }
+    }
+    impl<T> Box<T> {
+      pub fn describe(self) -> string { "any box" }
+    }
+    pub interface Named {
+      fn Describe() -> string
+    }
+    fn use_it(n: Named) -> string { n.Describe() }
+    fn main() {
+      let _ = use_it(Box { value: 1 })
+    }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn comma_ok_interface_value_rejected_for_plain_user_interface() {
+    let typedef = r#"
+pub struct Session { pub key: string }
+
+pub interface Cache {
+  #[go(comma_ok)]
+  fn Get(key: string) -> Option<Ref<Session>>
+}
+"#;
+    let input = r#"
+import "go:example.com/cache"
+
+pub interface Plain {
+  fn Get(key: string) -> Option<Ref<cache.Session>>
+}
+
+fn coerce(c: cache.Cache) {
+  let _ = c as Plain
+}
+
+fn main() {}
+"#;
+    infer_with_go_typedefs(input, &[("go:example.com/cache", typedef)])
+        .assert_infer_code("comma_ok_abi_mismatch");
+}

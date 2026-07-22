@@ -8,15 +8,15 @@ use crate::lindig::{Document, concat, join};
 use syntax::ast::{Attribute, Expression, ImportAlias, Visibility};
 
 pub struct Formatter<'a> {
-    pub(super) comments: Comments<'a>,
+    comments: Comments<'a>,
 }
 
 impl<'a> Formatter<'a> {
-    pub fn new(comments: Comments<'a>) -> Self {
+    pub(crate) fn new(comments: Comments<'a>) -> Self {
         Self { comments }
     }
 
-    pub fn module(&mut self, top_level_items: &'a [Expression]) -> Document<'a> {
+    pub(crate) fn module(&mut self, top_level_items: &'a [Expression]) -> Document<'a> {
         let (imports, rest): (Vec<_>, Vec<_>) = top_level_items
             .iter()
             .partition(|e| matches!(e, Expression::ModuleImport { .. }));

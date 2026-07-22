@@ -138,7 +138,7 @@ impl<'source> Parser<'source> {
         None
     }
 
-    pub fn parse_enum_definition(
+    pub(crate) fn parse_enum_definition(
         &mut self,
         doc: Option<std::string::String>,
         attributes: Vec<Attribute>,
@@ -366,7 +366,7 @@ impl<'source> Parser<'source> {
         VariantFields::Struct(fields)
     }
 
-    pub fn parse_struct_definition(
+    pub(crate) fn parse_struct_definition(
         &mut self,
         doc: Option<std::string::String>,
         attributes: Vec<Attribute>,
@@ -597,7 +597,10 @@ impl<'source> Parser<'source> {
         }
     }
 
-    pub fn parse_const_definition(&mut self, doc: Option<std::string::String>) -> Expression {
+    pub(crate) fn parse_const_definition(
+        &mut self,
+        doc: Option<std::string::String>,
+    ) -> Expression {
         let start = self.current_token();
 
         self.ensure(Const);
@@ -633,7 +636,7 @@ impl<'source> Parser<'source> {
         }
     }
 
-    pub fn parse_var_declaration(&mut self, doc: Option<std::string::String>) -> Expression {
+    pub(crate) fn parse_var_declaration(&mut self, doc: Option<std::string::String>) -> Expression {
         let start = self.current_token();
 
         self.ensure(Var);
@@ -674,7 +677,7 @@ impl<'source> Parser<'source> {
         }
     }
 
-    pub fn parse_impl_block(&mut self) -> Expression {
+    pub(crate) fn parse_impl_block(&mut self) -> Expression {
         let start = self.current_token();
 
         self.ensure(Impl);
@@ -750,7 +753,10 @@ impl<'source> Parser<'source> {
         }
     }
 
-    pub fn parse_interface_definition(&mut self, doc: Option<std::string::String>) -> Expression {
+    pub(crate) fn parse_interface_definition(
+        &mut self,
+        doc: Option<std::string::String>,
+    ) -> Expression {
         let start = self.current_token();
 
         self.ensure(Interface);

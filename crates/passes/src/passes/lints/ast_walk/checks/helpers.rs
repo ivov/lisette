@@ -111,7 +111,7 @@ pub(super) fn is_pure_mapper(expression: &Expression) -> bool {
 
 // Unlike `is_eager_safe`, a slice literal is excluded: moving its allocation
 // onto the success path is not a free simplification.
-pub(super) fn is_cheap_constant(expression: &Expression) -> bool {
+fn is_cheap_constant(expression: &Expression) -> bool {
     match expression.unwrap_parens() {
         Expression::Identifier { .. } => true,
         Expression::Literal { literal, .. } => {

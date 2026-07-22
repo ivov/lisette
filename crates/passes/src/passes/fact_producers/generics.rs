@@ -82,7 +82,7 @@ fn check_unused_type_parameters(
         }
 
         if remaining.contains(&generic.name) {
-            local.add_unused_type_param(generic.name.to_string(), generic.span);
+            local.add_unused_type_param(generic.span);
         }
     }
 }

@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  ▲ Miscased name
+   ╭─[test.lis:7:10]
+ 6 │ impl Point {
+ 7 │   pub fn String(self) -> string { "point" }
+   ·          ───┬──
+   ·             ╰── expected snake_case
+ 8 │ }
+   ╰────
+  help: Rename to `string` · code: [lint.non_snake_case_function]

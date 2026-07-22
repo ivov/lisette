@@ -11,9 +11,9 @@ use crate::store::Store;
 
 #[derive(Serialize, Deserialize)]
 pub struct PreludeCache {
-    pub content_hash: u64,
-    pub compiler_version: u64,
-    pub definitions: HashMap<String, CachedDefinition>,
+    content_hash: u64,
+    compiler_version: u64,
+    definitions: HashMap<String, CachedDefinition>,
 }
 
 fn cache_file_name() -> &'static str {
@@ -24,7 +24,7 @@ fn cache_path() -> Option<PathBuf> {
     disk::global_path(cache_file_name())
 }
 
-pub fn try_load_prelude_cache() -> Option<PreludeCache> {
+pub(crate) fn try_load_prelude_cache() -> Option<PreludeCache> {
     let path = cache_path()?;
     let cache: PreludeCache = disk::read(&path).ok()?;
 
@@ -36,7 +36,7 @@ pub fn try_load_prelude_cache() -> Option<PreludeCache> {
     Some(cache)
 }
 
-pub fn save_prelude_cache(store: &Store) {
+pub(crate) fn save_prelude_cache(store: &Store) {
     let Some(path) = cache_path() else { return };
 
     let Some(module) = store.get_module(PRELUDE_MODULE_ID) else {
@@ -65,7 +65,7 @@ pub fn save_prelude_cache(store: &Store) {
     disk::write_global(&path, &cache, "prelude_defs");
 }
 
-pub fn register_cached_prelude(store: &mut Store, cached: PreludeCache) {
+pub(crate) fn register_cached_prelude(store: &mut Store, cached: PreludeCache) {
     store.mark_visited(PRELUDE_MODULE_ID);
 
     // Register the prelude file for file_id → module_id mapping (needed by diagnostics).

@@ -14,15 +14,15 @@ pub struct BindingIdAllocator {
 }
 
 impl BindingIdAllocator {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self::default()
     }
 
-    pub fn reserve(&self) -> BindingId {
+    fn reserve(&self) -> BindingId {
         self.next.fetch_add(1, Ordering::Relaxed)
     }
 
-    pub fn snapshot(&self) -> BindingId {
+    fn snapshot(&self) -> BindingId {
         self.next.load(Ordering::Relaxed)
     }
 }
@@ -47,9 +47,9 @@ pub struct Facts {
     pub type_params_only_in_bound: Vec<TypeParamOnlyInBoundFact>,
     pub always_failing_try_blocks: Vec<Span>,
     pub expression_only_fstrings: Vec<ExpressionOnlyFstringFact>,
-    pub interface_satisfied_methods: HashMap<(String, String), Vec<String>>,
-    pub equality_derivations: Vec<String>,
-    pub test_functions: Vec<TestFunction>,
+    pub interface_satisfied_methods: HashMap<(String, String), Vec<InterfaceSatisfaction>>,
+    pub(crate) equality_derivations: Vec<String>,
+    pub(crate) test_functions: Vec<TestFunction>,
 
     pub generic_call_checks: Vec<GenericCallCheck>,
     pub generic_bound_obligations: Vec<GenericBoundObligation>,
@@ -60,11 +60,11 @@ pub struct Facts {
 
     /// Value-position `match`/`select` arms that did not reconcile, drained and
     /// checked against the use-site result type at the end of `infer_file`.
-    pub branch_subsumptions: Vec<BranchSubsumption>,
+    pub(crate) branch_subsumptions: Vec<BranchSubsumption>,
 
     /// Value-position selects with one shorthand receive and no default,
     /// checked for exhaustiveness once the result type is pinned.
-    pub select_exhaustiveness_checks: Vec<SelectExhaustivenessCheck>,
+    pub(crate) select_exhaustiveness_checks: Vec<SelectExhaustivenessCheck>,
 
     /// Suppresses contradictory lints from or-patterns whose binding sets disagree.
     pub or_pattern_error_spans: HashSet<Span>,
@@ -87,6 +87,13 @@ pub struct Facts {
 }
 
 #[derive(Debug, Clone)]
+pub struct InterfaceSatisfaction {
+    pub impl_type_name: String,
+    /// The interface matches by source spelling, so renaming breaks it.
+    spelling_pinned: bool,
+}
+
+#[derive(Debug, Clone)]
 pub struct GenericCallCheck {
     /// A type that must be fully resolved once inference finishes; if it still has
     /// unbound type variables, the call's generic parameter couldn't be inferred.
@@ -103,7 +110,7 @@ pub struct GenericBoundObligation {
     pub span: Span,
     pub module_id: String,
     pub param_name: EcoString,
-    pub available_bounds: Vec<(EcoString, Vec<Type>)>,
+    pub(crate) available_bounds: Vec<(EcoString, Vec<Type>)>,
     pub origin: GenericBoundOrigin,
 }
 
@@ -149,14 +156,14 @@ pub struct StatementTailCheck {
 
 #[derive(Debug, Clone)]
 pub struct BranchSubsumption {
-    pub result_ty: Type,
-    pub arms: Vec<(Type, Span)>,
+    pub(crate) result_ty: Type,
+    pub(crate) arms: Vec<(Type, Span)>,
 }
 
 #[derive(Debug, Clone)]
 pub struct SelectExhaustivenessCheck {
-    pub result_ty: Type,
-    pub span: Span,
+    pub(crate) result_ty: Type,
+    pub(crate) span: Span,
 }
 
 impl Facts {
@@ -194,7 +201,7 @@ impl Facts {
         }
     }
 
-    pub fn add_binding(
+    pub(crate) fn add_binding(
         &mut self,
         name: String,
         span: Span,
@@ -221,13 +228,13 @@ impl Facts {
         id
     }
 
-    pub fn mark_used(&mut self, id: BindingId) {
+    pub(crate) fn mark_used(&mut self, id: BindingId) {
         if let Some(fact) = self.bindings.get_mut(&id) {
             fact.used = true;
         }
     }
 
-    pub fn mark_mutated(&mut self, id: BindingId) {
+    pub(crate) fn mark_mutated(&mut self, id: BindingId) {
         if let Some(fact) = self.bindings.get_mut(&id) {
             fact.mutated = true;
         }
@@ -235,44 +242,44 @@ impl Facts {
 
     /// The binding is mutated through an alias (address taken, mutable
     /// capture, mut argument or receiver), so a call can rebind it.
-    pub fn mark_alias_mutated(&mut self, id: BindingId) {
+    pub(crate) fn mark_alias_mutated(&mut self, id: BindingId) {
         if let Some(fact) = self.bindings.get_mut(&id) {
             fact.mutated = true;
             fact.alias_mutated = true;
         }
     }
 
-    pub fn add_function_span(&mut self, span: Span) {
+    pub(crate) fn add_function_span(&mut self, span: Span) {
         self.function_spans.push(span);
     }
 
-    pub fn binding_checkpoint(&self) -> BindingId {
+    pub(crate) fn binding_checkpoint(&self) -> BindingId {
         self.allocator.snapshot()
     }
 
-    pub fn remove_bindings_from(&mut self, checkpoint: BindingId) {
+    pub(crate) fn remove_bindings_from(&mut self, checkpoint: BindingId) {
         self.bindings.retain(|id, _| *id < checkpoint);
     }
 
-    pub fn add_dead_code(&mut self, span: Span, cause: DeadCodeCause) {
+    pub(crate) fn add_dead_code(&mut self, span: Span, cause: DeadCodeCause) {
         self.dead_code.push(DeadCodeFact { span, cause });
     }
 
-    pub fn add_overused_reference(&mut self, span: Span, name: Option<String>) {
+    pub(crate) fn add_overused_reference(&mut self, span: Span, name: Option<String>) {
         self.overused_references
             .push(OverusedReferenceFact { span, name });
     }
 
-    pub fn add_always_failing_try_block(&mut self, span: Span) {
+    pub(crate) fn add_always_failing_try_block(&mut self, span: Span) {
         self.always_failing_try_blocks.push(span);
     }
 
-    pub fn add_expression_only_fstring(&mut self, span: Span, needs_parens: bool) {
+    pub(crate) fn add_expression_only_fstring(&mut self, span: Span, needs_parens: bool) {
         self.expression_only_fstrings
             .push(ExpressionOnlyFstringFact { span, needs_parens });
     }
 
-    pub fn add_usage(&mut self, usage_span: Span, definition_span: Span) {
+    pub(crate) fn add_usage(&mut self, usage_span: Span, definition_span: Span) {
         if self.usage_set.insert((usage_span, definition_span)) {
             self.usages.push(Usage {
                 usage_span,
@@ -281,21 +288,25 @@ impl Facts {
         }
     }
 
-    pub fn mark_method_used_for_interface(
+    pub(crate) fn mark_method_used_for_interface(
         &mut self,
         module_id: String,
         method_name: String,
         impl_type_name: String,
+        spelling_pinned: bool,
     ) {
         self.interface_satisfied_methods
             .entry((module_id, method_name))
             .or_default()
-            .push(impl_type_name);
+            .push(InterfaceSatisfaction {
+                impl_type_name,
+                spelling_pinned,
+            });
     }
 
-    /// Whether `type_name`'s `method_name` was found to satisfy an interface method,
-    /// so the naming lint keeps its conformance-required spelling.
-    pub fn method_satisfies_interface(
+    /// Whether `type_name`'s `method_name` satisfies an interface that matches
+    /// by source spelling, so the naming lint must not suggest a rename.
+    pub fn method_spelling_pinned_by_interface(
         &self,
         module_id: &str,
         method_name: &str,
@@ -303,7 +314,11 @@ impl Facts {
     ) -> bool {
         self.interface_satisfied_methods
             .get(&(module_id.to_string(), method_name.to_string()))
-            .is_some_and(|types| types.iter().any(|t| t == type_name))
+            .is_some_and(|satisfactions| {
+                satisfactions
+                    .iter()
+                    .any(|s| s.spelling_pinned && s.impl_type_name == type_name)
+            })
     }
 
     pub fn absorb_local_facts(&mut self, local: LocalFacts) {
@@ -321,7 +336,7 @@ impl Facts {
             .extend(type_params_only_in_bound);
     }
 
-    pub fn merge(&mut self, other: Facts) {
+    pub(crate) fn merge(&mut self, other: Facts) {
         debug_assert!(
             Arc::ptr_eq(&self.allocator, &other.allocator),
             "Facts::merge requires a shared BindingIdAllocator",
@@ -412,10 +427,10 @@ impl Facts {
 
 #[derive(Debug, Default)]
 pub struct LocalFacts {
-    pub unused_expressions: Vec<UnusedExpressionFact>,
-    pub discarded_tail_expressions: Vec<DiscardedTailFact>,
-    pub unused_type_params: Vec<UnusedTypeParamFact>,
-    pub type_params_only_in_bound: Vec<TypeParamOnlyInBoundFact>,
+    unused_expressions: Vec<UnusedExpressionFact>,
+    discarded_tail_expressions: Vec<DiscardedTailFact>,
+    unused_type_params: Vec<UnusedTypeParamFact>,
+    type_params_only_in_bound: Vec<TypeParamOnlyInBoundFact>,
 }
 
 impl LocalFacts {
@@ -454,9 +469,8 @@ impl LocalFacts {
         });
     }
 
-    pub fn add_unused_type_param(&mut self, name: String, span: Span) {
-        self.unused_type_params
-            .push(UnusedTypeParamFact { name, span });
+    pub fn add_unused_type_param(&mut self, span: Span) {
+        self.unused_type_params.push(UnusedTypeParamFact { span });
     }
 
     pub fn add_type_param_only_in_bound(&mut self, name: String, span: Span) {
@@ -514,7 +528,6 @@ pub struct OverusedReferenceFact {
 
 #[derive(Debug, Clone)]
 pub struct UnusedTypeParamFact {
-    pub name: String,
     pub span: Span,
 }
 
@@ -621,7 +634,7 @@ mod tests {
         let mut local = LocalFacts::default();
         local.add_unused_expression(span(0), UnusedExpressionKind::Value);
         local.add_discarded_tail(span(1), "Int".into(), span(2), "Unit".into());
-        local.add_unused_type_param("T".into(), span(3));
+        local.add_unused_type_param(span(3));
         local.add_type_param_only_in_bound("U".into(), span(4));
 
         facts.absorb_local_facts(local);
@@ -638,9 +651,9 @@ mod tests {
         let mut a = Facts::new(allocator.clone());
         let mut b = Facts::new(allocator);
 
-        a.mark_method_used_for_interface("m".into(), "f".into(), "A".into());
-        b.mark_method_used_for_interface("m".into(), "f".into(), "B".into());
-        b.mark_method_used_for_interface("m".into(), "g".into(), "C".into());
+        a.mark_method_used_for_interface("m".into(), "f".into(), "A".into(), true);
+        b.mark_method_used_for_interface("m".into(), "f".into(), "B".into(), false);
+        b.mark_method_used_for_interface("m".into(), "g".into(), "C".into(), true);
 
         a.merge(b);
         assert_eq!(a.interface_satisfied_methods.len(), 2);

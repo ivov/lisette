@@ -49,7 +49,7 @@ impl DisplayPathBase {
     }
 }
 
-pub fn relative_to_cwd_with(path: &Path, cwd: Option<&Path>) -> Option<String> {
+fn relative_to_cwd_with(path: &Path, cwd: Option<&Path>) -> Option<String> {
     let cwd = cwd?;
     let absolute = if path.is_absolute() {
         path.to_path_buf()

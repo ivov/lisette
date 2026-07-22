@@ -460,7 +460,7 @@ impl Planner<'_> {
         member.as_str() == "log" && is_test_context_ty(&receiver.get_type())
     }
 
-    pub(crate) fn lower_test_log_statement(&mut self, expression: &Expression) -> LoweredStatement {
+    fn lower_test_log_statement(&mut self, expression: &Expression) -> LoweredStatement {
         let (mut statements, call) = self.lower_test_log_call(expression);
         statements.push(LoweredStatement::RawGo(format!("{call}\n")));
         LoweredStatement::Block(LoweredBlock { statements })
@@ -825,7 +825,7 @@ impl Planner<'_> {
     /// statements. Shared by branch-arm return lowering and function-body
     /// lowering; only leaf values and lowered-ABI returns become `RawGo`,
     /// `if`/`if let`/`match`/`select` tails recurse structurally with a `Return` place.
-    pub(crate) fn lower_return_tail(&mut self, last: &Expression) -> Vec<LoweredStatement> {
+    fn lower_return_tail(&mut self, last: &Expression) -> Vec<LoweredStatement> {
         let mut statements = Vec::new();
         let return_span = last.get_span();
         let last = if let Expression::Return { expression, .. } = last {
@@ -940,7 +940,7 @@ impl Planner<'_> {
         }
     }
 
-    pub(crate) fn lower_if(
+    fn lower_if(
         &mut self,
         condition: &Expression,
         consequence: &Expression,

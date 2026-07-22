@@ -3,13 +3,13 @@ use syntax::attributes::{is_serialization_key, struct_attribute_forces_field_exp
 
 #[derive(Default)]
 pub(super) struct TagConfig {
-    pub(super) key: String,
-    pub(super) name_override: Option<String>,
-    pub(super) case_transform: Option<CaseTransform>,
-    pub(super) omitempty: bool,
-    pub(super) skip: bool,
-    pub(super) string_encoding: bool,
-    pub(super) raw_value: Option<String>,
+    key: String,
+    name_override: Option<String>,
+    case_transform: Option<CaseTransform>,
+    omitempty: bool,
+    skip: bool,
+    string_encoding: bool,
+    raw_value: Option<String>,
 }
 
 impl TagConfig {
@@ -39,19 +39,6 @@ impl TagConfig {
 pub(super) enum CaseTransform {
     SnakeCase,
     CamelCase,
-}
-
-pub(super) fn field_has_export_forcing_attribute(field: &StructFieldDefinition) -> bool {
-    field.attributes.iter().any(|attribute| {
-        if attribute.name == "tag" {
-            matches!(
-                attribute.args.first(),
-                Some(AttributeArg::String(_) | AttributeArg::Raw(_))
-            )
-        } else {
-            is_serialization_key(&attribute.name)
-        }
-    })
 }
 
 pub(super) fn interpret_field_attributes(

@@ -24,11 +24,12 @@ pub enum MemberKind {
 
 #[derive(Clone, Debug)]
 pub struct ResolvedMember {
-    pub name: EcoString,
-    pub depth: usize,
-    pub embed_path: Vec<EcoString>,
+    pub(crate) depth: usize,
+    #[cfg_attr(not(test), expect(dead_code))]
+    embed_path: Vec<EcoString>,
     pub declaring_type: Symbol,
-    pub indirect: bool,
+    #[cfg_attr(not(test), expect(dead_code))]
+    indirect: bool,
     pub kind: MemberKind,
 }
 
@@ -53,7 +54,7 @@ pub fn resolve_selector(store: &Store, outer: &Type, name: &str) -> Resolution {
     resolve_in_entries(store, &entries, outer, name)
 }
 
-pub fn promoted_method_set(store: &Store, outer: &Type) -> MethodSignatures {
+pub(crate) fn promoted_method_set(store: &Store, outer: &Type) -> MethodSignatures {
     let entries = walk(store, outer);
 
     let mut names: HashSet<EcoString> = HashSet::default();
@@ -70,6 +71,30 @@ pub fn promoted_method_set(store: &Store, outer: &Type) -> MethodSignatures {
         }
     }
     result
+}
+
+/// Shallowest depth at which any field of `outer` emits `selector` as its Go name.
+pub(crate) fn field_selector_depth(store: &Store, outer: &Type, selector: &str) -> Option<usize> {
+    let mut min: Option<usize> = None;
+    for entry in walk(store, outer) {
+        let Some(id) = entry.ty.get_qualified_id() else {
+            continue;
+        };
+        let Some(definition) = store.get_definition(id) else {
+            continue;
+        };
+        let DefinitionBody::Struct { fields, .. } = &definition.body else {
+            continue;
+        };
+        let forces_export = definition.is_serialized();
+        let claimed = fields
+            .iter()
+            .any(|field| syntax::go_names::struct_field_go_name(field, forces_export) == selector);
+        if claimed && min.is_none_or(|m| entry.depth < m) {
+            min = Some(entry.depth);
+        }
+    }
+    min
 }
 
 #[derive(Clone)]
@@ -162,7 +187,7 @@ fn resolve_in_entries(store: &Store, entries: &[Entry], outer: &Type, name: &str
     if let [(entry, candidate)] = candidates.as_slice()
         && !entry.multiples
     {
-        return Resolution::Found(build_member(outer, name, entry, candidate));
+        return Resolution::Found(build_member(outer, entry, candidate));
     }
 
     let mut sources: Vec<Symbol> = candidates
@@ -223,7 +248,7 @@ fn entry_candidate(store: &Store, ty: &Type, name: &str) -> Option<Candidate> {
     None
 }
 
-fn build_member(outer: &Type, name: &str, entry: &Entry, candidate: &Candidate) -> ResolvedMember {
+fn build_member(outer: &Type, entry: &Entry, candidate: &Candidate) -> ResolvedMember {
     let kind = match &candidate.detail {
         CandidateDetail::Field { ty, visibility } => MemberKind::Field {
             ty: ty.clone(),
@@ -246,7 +271,6 @@ fn build_member(outer: &Type, name: &str, entry: &Entry, candidate: &Candidate) 
     };
 
     ResolvedMember {
-        name: name.into(),
         depth: entry.depth,
         embed_path: entry.embed_path.clone(),
         declaring_type: candidate.declaring_type.clone(),

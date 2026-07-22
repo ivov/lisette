@@ -16,7 +16,7 @@ impl TaskState<'_> {
     /// Register an instance method on the receiver type's definition.
     /// Returns `false` if the receiver was not found (caller should skip).
     #[allow(clippy::too_many_arguments)]
-    pub(super) fn try_register_instance_method(
+    fn try_register_instance_method(
         &mut self,
         store: &mut Store,
         module_id: &str,

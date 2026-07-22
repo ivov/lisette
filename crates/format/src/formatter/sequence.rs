@@ -10,14 +10,14 @@ pub(super) struct SiblingEntry<'a> {
 }
 
 pub(super) struct PatternEntry<'a> {
-    pub(super) leading: Option<Document<'a>>,
-    pub(super) doc: Document<'a>,
-    pub(super) trailing: Option<Document<'a>>,
+    leading: Option<Document<'a>>,
+    doc: Document<'a>,
+    trailing: Option<Document<'a>>,
 }
 
 impl<'a> Formatter<'a> {
     /// Splits comments before `next_start` into `(prev_same_line, this_leading, has_blank)`.
-    pub(super) fn sibling_lead_split(
+    fn sibling_lead_split(
         &mut self,
         has_prev: bool,
         next_start: u32,

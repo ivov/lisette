@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  ▲ Miscased name
+    ╭─[test.lis:9:10]
+  8 │ impl Job {
+  9 │   pub fn Run(self) -> int { 1 }
+    ·          ─┬─
+    ·           ╰── expected snake_case
+ 10 │ }
+    ╰────
+  help: Rename to `run` · code: [lint.non_snake_case_function]

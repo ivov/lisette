@@ -304,7 +304,7 @@ impl Planner<'_> {
 
 /// Wrap a tagged-return callback into a Go body producing the lowered Go
 /// return shape. Returns `(go_return_type, body)`.
-pub(crate) fn emit_return_adapter(
+fn emit_return_adapter(
     planner: &mut Planner,
     inner_call: &str,
     lisette_return_type: &Type,

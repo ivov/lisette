@@ -325,7 +325,7 @@ fn reaches_definition(
     }
 }
 
-pub(crate) fn is_opaque_go_handle(store: &Store, ty: &Type) -> bool {
+fn is_opaque_go_handle(store: &Store, ty: &Type) -> bool {
     let Some(id) = ty.get_qualified_id() else {
         return false;
     };
@@ -350,7 +350,7 @@ fn is_interface_or_unknown(store: &Store, ty: &Type) -> bool {
     resolved.is_unknown() || store.is_interface(&resolved)
 }
 
-pub(crate) fn type_has_usable_equals(store: &Store, ty: &Type, current_module: &str) -> bool {
+fn type_has_usable_equals(store: &Store, ty: &Type, current_module: &str) -> bool {
     let resolved = store.deep_resolve_alias(ty);
     let Some(qualified) = resolved.get_qualified_id() else {
         return false;
@@ -554,7 +554,7 @@ impl InferCtx<'_, '_> {
         false
     }
 
-    pub(super) fn not_equatable_reason(&self, ty: &Type) -> Option<&'static str> {
+    fn not_equatable_reason(&self, ty: &Type) -> Option<&'static str> {
         check_not_equatable(
             &self.env,
             self.store,

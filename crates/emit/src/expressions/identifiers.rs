@@ -6,7 +6,7 @@ use crate::plan::values::GoExpression;
 use crate::state::bindings::BindingValue;
 use syntax::types::{Type, unqualified_name};
 
-pub(crate) enum IdentifierKind {
+enum IdentifierKind {
     /// `Unit` used as expression value → `struct{}{}`
     UnitValue,
     /// Public function needing Go capitalization

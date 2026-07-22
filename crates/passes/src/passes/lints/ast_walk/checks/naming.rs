@@ -183,7 +183,7 @@ fn go_method_name_exempt(
     if let Some(type_name) = impl_type
         && ctx
             .facts
-            .method_satisfies_interface(ctx.module_id, name, type_name)
+            .method_spelling_pinned_by_interface(ctx.module_id, name, type_name)
     {
         return true;
     }
@@ -195,7 +195,7 @@ fn go_method_name_exempt(
 }
 
 fn is_builtin_interface_method(name: &str) -> bool {
-    matches!(name, "Error" | "String")
+    name == "Error"
 }
 
 fn check_type_parameter(generic: &Generic, sink: &LocalSink) {

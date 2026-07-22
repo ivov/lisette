@@ -14,10 +14,10 @@ use syntax::types::Type;
 
 #[derive(Clone, Copy)]
 pub(crate) struct LetSpec<'a> {
-    pub(crate) identifier: &'a str,
-    pub(crate) value: &'a Expression,
-    pub(crate) binding_ty: &'a Type,
-    pub(crate) mutable: bool,
+    identifier: &'a str,
+    value: &'a Expression,
+    binding_ty: &'a Type,
+    mutable: bool,
 }
 
 fn needs_explicit_type_declaration(
@@ -126,7 +126,7 @@ impl Planner<'_> {
 
     /// Lower a `let identifier = value` binding to statements; `raw_go_name ==
     /// None` is unused.
-    pub(crate) fn lower_let_value(
+    fn lower_let_value(
         &mut self,
         let_spec: LetSpec,
         raw_go_name: Option<&str>,
@@ -165,7 +165,7 @@ impl Planner<'_> {
 
     /// `let x = expr?`. Adds a leading `var x T` when the binding widens to
     /// an interface.
-    pub(crate) fn lower_let_propagate(
+    fn lower_let_propagate(
         &mut self,
         identifier: &str,
         raw_go_name: Option<&str>,
@@ -387,7 +387,7 @@ enum LetKind {
     Refutable,
 }
 
-pub(crate) struct LetPlanner<'a, 'e> {
+struct LetPlanner<'a, 'e> {
     planner: &'a mut Planner<'e>,
     binding: &'a Binding,
     value: &'a Expression,
@@ -397,7 +397,7 @@ pub(crate) struct LetPlanner<'a, 'e> {
 }
 
 impl<'a, 'e> LetPlanner<'a, 'e> {
-    pub(crate) fn new(
+    fn new(
         planner: &'a mut Planner<'e>,
         binding: &'a Binding,
         value: &'a Expression,
@@ -416,7 +416,7 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
     }
 
     /// Classify the binding and build the matching `LetForm`.
-    pub(crate) fn build_form(mut self) -> LetForm {
+    fn build_form(mut self) -> LetForm {
         // Never-typed values diverge (break/continue/return). Declare the
         // binding so dead code can reference it, then emit the value as a
         // statement.

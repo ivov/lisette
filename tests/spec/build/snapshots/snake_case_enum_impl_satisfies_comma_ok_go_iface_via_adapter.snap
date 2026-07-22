@@ -1,0 +1,53 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import (
+	"crypto/tls"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func MakeCacheKindMem() CacheKind {
+	return CacheKind{Tag: CacheKindMem}
+}
+
+type CacheKindTag int
+
+const (
+	CacheKindMem CacheKindTag = iota
+)
+
+type CacheKind struct {
+	Tag CacheKindTag
+}
+
+func (c CacheKind) Get(_ string) *tls.ClientSessionState {
+	return nil
+}
+
+func (c CacheKind) Put(_ string, _ *tls.ClientSessionState) {}
+
+func use_cache(_ tls.ClientSessionCache) {}
+
+func main() {
+	use_cache(_lisAdapter_CacheKind_ClientSessionCache_0{inner: MakeCacheKindMem()})
+}
+
+type _lisAdapter_CacheKind_ClientSessionCache_0 struct {
+	inner CacheKind
+}
+
+func (a _lisAdapter_CacheKind_ClientSessionCache_0) Put(arg0 string, arg1 *tls.ClientSessionState) {
+	a.inner.Put(arg0, arg1)
+}
+
+func (a _lisAdapter_CacheKind_ClientSessionCache_0) Get(arg0 string) (*tls.ClientSessionState, bool) {
+	raw_1 := a.inner.Get(arg0)
+	option_2 := lisette.OptionFromNilable[*tls.ClientSessionState](raw_1, raw_1 == nil)
+	if option_2.Tag == lisette.OptionSome {
+		return option_2.SomeVal, true
+	}
+	return nil, false
+}

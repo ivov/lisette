@@ -5,7 +5,7 @@ pub struct Token<'source> {
     pub kind: TokenKind,
     pub text: &'source str,
     pub byte_offset: u32,
-    pub byte_length: u32,
+    pub(crate) byte_length: u32,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -222,7 +222,7 @@ impl fmt::Display for TokenKind {
 }
 
 impl TokenKind {
-    pub fn from_keyword(s: &str) -> Option<Self> {
+    pub(crate) fn from_keyword(s: &str) -> Option<Self> {
         use TokenKind::*;
 
         match s {
@@ -259,7 +259,7 @@ impl TokenKind {
         }
     }
 
-    pub fn is_keyword(&self) -> bool {
+    pub(crate) fn is_keyword(&self) -> bool {
         use TokenKind::*;
         matches!(
             self,
@@ -295,7 +295,7 @@ impl TokenKind {
         )
     }
 
-    pub fn from_three_char_symbol(c1: char, c2: char, c3: char) -> Option<Self> {
+    pub(crate) fn from_three_char_symbol(c1: char, c2: char, c3: char) -> Option<Self> {
         match (c1, c2, c3) {
             ('.', '.', '=') => Some(TokenKind::DotDotEqual),
             ('.', '.', '.') => Some(TokenKind::Ellipsis),
@@ -306,7 +306,7 @@ impl TokenKind {
         }
     }
 
-    pub fn from_two_char_symbol(c1: char, c2: char) -> Option<Self> {
+    pub(crate) fn from_two_char_symbol(c1: char, c2: char) -> Option<Self> {
         use TokenKind::*;
 
         match (c1, c2) {
@@ -335,7 +335,7 @@ impl TokenKind {
         }
     }
 
-    pub fn from_one_char_symbol(c: char) -> Option<Self> {
+    pub(crate) fn from_one_char_symbol(c: char) -> Option<Self> {
         use TokenKind::*;
 
         match c {

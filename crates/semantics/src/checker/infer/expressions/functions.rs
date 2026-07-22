@@ -20,7 +20,7 @@ use crate::inference::ProjectKind;
 use crate::store::ENTRY_MODULE_ID;
 
 impl InferCtx<'_, '_> {
-    pub(crate) fn check_call_arity(
+    fn check_call_arity(
         &mut self,
         param_types: &[Type],
         args: &[Expression],
@@ -66,7 +66,7 @@ impl InferCtx<'_, '_> {
 }
 
 impl InferCtx<'_, '_> {
-    pub(super) fn ty_is_test_context(&self, ty: &Type) -> bool {
+    fn ty_is_test_context(&self, ty: &Type) -> bool {
         let resolved = ty.resolve_in(&self.env).strip_refs();
         resolved.get_qualified_id().is_some_and(|id| {
             id.strip_suffix(".TestContext")

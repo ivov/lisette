@@ -6,10 +6,10 @@ use ecow::EcoString;
 /// `#` and `:` cannot appear in a Lisette identifier, so this key is unforgeable.
 const UNEXPORTED_PREFIX: &str = "#unexported:";
 
-pub fn unexported_key(id: &str) -> EcoString {
+pub(crate) fn unexported_key(id: &str) -> EcoString {
     format!("{UNEXPORTED_PREFIX}{id}").into()
 }
 
-pub fn is_unexported_key(key: &str) -> bool {
+pub(crate) fn is_unexported_key(key: &str) -> bool {
     key.starts_with(UNEXPORTED_PREFIX)
 }

@@ -94,14 +94,6 @@ impl TestIndex {
             .iter()
             .any(|t| t.qualified_name == qualified_name)
     }
-
-    pub fn len(&self) -> usize {
-        self.tests.len()
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.tests.is_empty()
-    }
 }
 
 #[derive(Debug, Clone, Default)]

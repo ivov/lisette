@@ -11,12 +11,12 @@ use crate::expressions::top_items::emit_doc;
 #[derive(Clone, Debug)]
 pub struct OutputFile {
     pub name: String,
-    pub source: String,
+    pub(crate) source: String,
     /// `(path, alias)` pairs; a path may appear twice when a generated
     /// import coexists with a source alias of the same package.
     pub imports: Vec<(String, String)>,
     pub package_name: String,
-    pub file_comment: Option<String>,
+    pub(crate) file_comment: Option<String>,
     pub diagnostics: Vec<LisetteDiagnostic>,
 }
 
@@ -97,7 +97,7 @@ impl OutputCollector {
         self.output.join("\n")
     }
 
-    pub(crate) fn collect(&mut self, line: impl Into<String>) {
+    fn collect(&mut self, line: impl Into<String>) {
         self.output.push(line.into());
     }
 

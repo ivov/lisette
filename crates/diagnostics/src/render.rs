@@ -20,15 +20,15 @@ pub struct Filter {
 }
 
 impl Filter {
-    pub fn show_errors(&self) -> bool {
+    fn show_errors(&self) -> bool {
         !self.warnings_only
     }
 
-    pub fn show_warnings(&self) -> bool {
+    fn show_warnings(&self) -> bool {
         !self.errors_only
     }
 
-    pub fn show_info(&self) -> bool {
+    fn show_info(&self) -> bool {
         !self.errors_only && !self.warnings_only
     }
 }

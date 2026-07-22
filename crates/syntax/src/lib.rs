@@ -1,5 +1,5 @@
 pub mod ast;
-pub mod ast_folder;
+pub(crate) mod ast_folder;
 pub mod attributes;
 pub mod containment;
 pub mod desugar;

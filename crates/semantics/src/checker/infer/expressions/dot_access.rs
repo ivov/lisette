@@ -213,7 +213,7 @@ impl InferCtx<'_, '_> {
         if peeled.is_ref() { peeled } else { ty }
     }
 
-    pub(super) fn infer_dot_access(
+    fn infer_dot_access(
         &mut self,
         expression: Box<Expression>,
         member: EcoString,
@@ -1166,7 +1166,7 @@ impl InferCtx<'_, '_> {
         }
     }
 
-    pub(crate) fn get_receiver_generics_count(&self, receiver_ty: &Type) -> usize {
+    fn get_receiver_generics_count(&self, receiver_ty: &Type) -> usize {
         let store = self.store;
         let lookup_id: Symbol = match receiver_ty {
             Type::Nominal { id, .. } => id.clone(),
