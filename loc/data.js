@@ -191,6 +191,68 @@ window.BENCHMARK_DATA = {
       },
       {
         "commit": {
+          "id": "d3d2fb6e5c674b07bdae1e00d1e772b90bb6d799",
+          "message": "chore: release v0.1.2 (#1)",
+          "timestamp": "2026-03-31T18:34:12+02:00",
+          "url": "https://github.com/ivov/lisette/commit/d3d2fb6e5c674b07bdae1e00d1e772b90bb6d799"
+        },
+        "date": 1774974852000,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "unit": "lines",
+            "value": 55079
+          },
+          {
+            "name": "semantics",
+            "unit": "lines",
+            "value": 17675
+          },
+          {
+            "name": "emit",
+            "unit": "lines",
+            "value": 14381
+          },
+          {
+            "name": "syntax",
+            "unit": "lines",
+            "value": 9796
+          },
+          {
+            "name": "cli",
+            "unit": "lines",
+            "value": 3818
+          },
+          {
+            "name": "lsp",
+            "unit": "lines",
+            "value": 3208
+          },
+          {
+            "name": "diagnostics",
+            "unit": "lines",
+            "value": 3171
+          },
+          {
+            "name": "format",
+            "unit": "lines",
+            "value": 2051
+          },
+          {
+            "name": "stdlib",
+            "unit": "lines",
+            "value": 488
+          },
+          {
+            "name": "prelude",
+            "unit": "lines",
+            "value": 491
+          }
+        ]
+      },
+      {
+        "commit": {
           "id": "d7e91033ae2be001b029b2f310eb25af6d395243",
           "message": "refactor: replace DiscardedTailFact boolean with enum",
           "timestamp": "2026-04-06T12:04:55+02:00",
@@ -459,6 +521,78 @@ window.BENCHMARK_DATA = {
             "name": "bindgen",
             "unit": "lines",
             "value": 3638
+          },
+          {
+            "name": "prelude",
+            "unit": "lines",
+            "value": 626
+          }
+        ]
+      },
+      {
+        "commit": {
+          "id": "1a47728bc2989b05aeb9128efae13d1b8e8a6c15",
+          "message": "chore: release v0.1.23 (#238)",
+          "timestamp": "2026-04-30T23:29:25+02:00",
+          "url": "https://github.com/ivov/lisette/commit/1a47728bc2989b05aeb9128efae13d1b8e8a6c15"
+        },
+        "date": 1777584565000,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "unit": "lines",
+            "value": 71311
+          },
+          {
+            "name": "semantics",
+            "unit": "lines",
+            "value": 22101
+          },
+          {
+            "name": "emit",
+            "unit": "lines",
+            "value": 17828
+          },
+          {
+            "name": "syntax",
+            "unit": "lines",
+            "value": 10822
+          },
+          {
+            "name": "cli",
+            "unit": "lines",
+            "value": 5576
+          },
+          {
+            "name": "diagnostics",
+            "unit": "lines",
+            "value": 3636
+          },
+          {
+            "name": "lsp",
+            "unit": "lines",
+            "value": 3274
+          },
+          {
+            "name": "format",
+            "unit": "lines",
+            "value": 2281
+          },
+          {
+            "name": "stdlib",
+            "unit": "lines",
+            "value": 487
+          },
+          {
+            "name": "deps",
+            "unit": "lines",
+            "value": 452
+          },
+          {
+            "name": "bindgen",
+            "unit": "lines",
+            "value": 4228
           },
           {
             "name": "prelude",
@@ -747,6 +881,83 @@ window.BENCHMARK_DATA = {
             "name": "bindgen",
             "unit": "lines",
             "value": 5310
+          },
+          {
+            "name": "prelude",
+            "unit": "lines",
+            "value": 696
+          }
+        ]
+      },
+      {
+        "commit": {
+          "id": "1a448531a6b8f301a08538fc4a1d7c9c06a02e8a",
+          "message": "feat: warn on match with identical arms (#562)",
+          "timestamp": "2026-05-31T23:51:46+02:00",
+          "url": "https://github.com/ivov/lisette/commit/1a448531a6b8f301a08538fc4a1d7c9c06a02e8a"
+        },
+        "date": 1780264306000,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "unit": "lines",
+            "value": 90103
+          },
+          {
+            "name": "emit",
+            "unit": "lines",
+            "value": 27470
+          },
+          {
+            "name": "semantics",
+            "unit": "lines",
+            "value": 26093
+          },
+          {
+            "name": "syntax",
+            "unit": "lines",
+            "value": 11364
+          },
+          {
+            "name": "cli",
+            "unit": "lines",
+            "value": 6929
+          },
+          {
+            "name": "diagnostics",
+            "unit": "lines",
+            "value": 4429
+          },
+          {
+            "name": "lsp",
+            "unit": "lines",
+            "value": 3507
+          },
+          {
+            "name": "format",
+            "unit": "lines",
+            "value": 2794
+          },
+          {
+            "name": "stdlib",
+            "unit": "lines",
+            "value": 682
+          },
+          {
+            "name": "deps",
+            "unit": "lines",
+            "value": 605
+          },
+          {
+            "name": "benchmark",
+            "unit": "lines",
+            "value": 212
+          },
+          {
+            "name": "bindgen",
+            "unit": "lines",
+            "value": 5322
           },
           {
             "name": "prelude",
@@ -1117,6 +1328,83 @@ window.BENCHMARK_DATA = {
             "name": "deps",
             "unit": "lines",
             "value": 785
+          },
+          {
+            "name": "stdlib",
+            "unit": "lines",
+            "value": 695
+          },
+          {
+            "name": "bindgen",
+            "unit": "lines",
+            "value": 6095
+          },
+          {
+            "name": "prelude",
+            "unit": "lines",
+            "value": 866
+          }
+        ]
+      },
+      {
+        "commit": {
+          "id": "120eb8e8a987911f19ab20fc0b5177ade32d5a8f",
+          "message": "feat: autofix seven more lints (#932)",
+          "timestamp": "2026-06-30T23:45:55+02:00",
+          "url": "https://github.com/ivov/lisette/commit/120eb8e8a987911f19ab20fc0b5177ade32d5a8f"
+        },
+        "date": 1782855955000,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "unit": "lines",
+            "value": 108281
+          },
+          {
+            "name": "emit",
+            "unit": "lines",
+            "value": 27404
+          },
+          {
+            "name": "semantics",
+            "unit": "lines",
+            "value": 21645
+          },
+          {
+            "name": "passes",
+            "unit": "lines",
+            "value": 14996
+          },
+          {
+            "name": "syntax",
+            "unit": "lines",
+            "value": 12545
+          },
+          {
+            "name": "cli",
+            "unit": "lines",
+            "value": 10059
+          },
+          {
+            "name": "diagnostics",
+            "unit": "lines",
+            "value": 5852
+          },
+          {
+            "name": "lsp",
+            "unit": "lines",
+            "value": 4310
+          },
+          {
+            "name": "format",
+            "unit": "lines",
+            "value": 2783
+          },
+          {
+            "name": "deps",
+            "unit": "lines",
+            "value": 1031
           },
           {
             "name": "stdlib",
