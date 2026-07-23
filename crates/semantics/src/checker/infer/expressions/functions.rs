@@ -19,7 +19,18 @@ use crate::checker::registration::test_functions::normalize_test_params;
 use crate::inference::ProjectKind;
 use crate::store::ENTRY_MODULE_ID;
 
-impl InferCtx<'_, '_> {
+struct TypeConversionCall {
+    callee: Expression,
+    target_ty: Type,
+    underlying_fn: Type,
+    args: Vec<Expression>,
+    spread: Box<Option<Expression>>,
+    raw_type_args: Vec<Annotation>,
+    resolved_type_args: Vec<Type>,
+    span: Span,
+}
+
+impl InferCtx<'_> {
     fn check_call_arity(
         &mut self,
         param_types: &[Type],
@@ -65,7 +76,7 @@ impl InferCtx<'_, '_> {
     }
 }
 
-impl InferCtx<'_, '_> {
+impl InferCtx<'_> {
     fn ty_is_test_context(&self, ty: &Type) -> bool {
         let resolved = ty.resolve_in(&self.env).strip_refs();
         resolved.get_qualified_id().is_some_and(|id| {
@@ -289,16 +300,22 @@ impl InferCtx<'_, '_> {
         }
     }
 
-    #[allow(clippy::too_many_arguments)]
     pub(super) fn infer_function_call(
         &mut self,
-        expression: Box<Expression>,
-        args: Vec<Expression>,
-        spread: Box<Option<Expression>>,
-        type_args: Vec<Annotation>,
-        span: Span,
+        call: Expression,
         expected_ty: &Type,
     ) -> Expression {
+        let Expression::Call {
+            expression,
+            args,
+            spread,
+            raw_type_args: type_args,
+            span,
+            ..
+        } = call
+        else {
+            unreachable!("infer_function_call called with non-Call expression");
+        };
         let callee_path = expression.unwrap_parens().as_dotted_path();
 
         // `Array.new` has no prelude signature (no const generics), so resolve inline.
@@ -343,14 +360,16 @@ impl InferCtx<'_, '_> {
 
         if let Some(underlying_fn) = self.try_as_type_conversion(&callee_expression, &callee_ty) {
             return self.infer_type_conversion_call(
-                callee_expression,
-                callee_ty,
-                underlying_fn,
-                args,
-                spread,
-                raw_type_args,
-                resolved_type_args,
-                span,
+                TypeConversionCall {
+                    callee: callee_expression,
+                    target_ty: callee_ty,
+                    underlying_fn,
+                    args,
+                    spread,
+                    raw_type_args,
+                    resolved_type_args,
+                    span,
+                },
                 expected_ty,
             );
         }
@@ -735,7 +754,7 @@ impl InferCtx<'_, '_> {
         self.declared_callee_type(expression)
     }
 
-    fn declared_callee_type(&self, expression: &Expression) -> Type {
+    fn declared_callee_type(&mut self, expression: &Expression) -> Type {
         let store = self.store;
         match expression {
             Expression::Identifier { value, .. } => self
@@ -777,11 +796,11 @@ impl InferCtx<'_, '_> {
         }
     }
 
-    fn is_generic_callee(&self, expression: &Expression) -> bool {
+    fn is_generic_callee(&mut self, expression: &Expression) -> bool {
         matches!(self.declared_callee_type(expression), Type::Forall { .. })
     }
 
-    fn callee_has_phantom_type_param(&self, expression: &Expression) -> bool {
+    fn callee_has_phantom_type_param(&mut self, expression: &Expression) -> bool {
         !phantom_type_params(&self.declared_callee_type(expression)).is_empty()
     }
 
@@ -1056,19 +1075,21 @@ impl InferCtx<'_, '_> {
         Some(underlying.as_ref().clone())
     }
 
-    #[allow(clippy::too_many_arguments)]
     fn infer_type_conversion_call(
         &mut self,
-        callee_expression: Expression,
-        named_ty: Type,
-        underlying_fn: Type,
-        args: Vec<Expression>,
-        spread: Box<Option<Expression>>,
-        raw_type_args: Vec<Annotation>,
-        resolved_type_args: Vec<Type>,
-        span: Span,
+        call: TypeConversionCall,
         expected_ty: &Type,
     ) -> Expression {
+        let TypeConversionCall {
+            callee: callee_expression,
+            target_ty: named_ty,
+            underlying_fn,
+            args,
+            spread,
+            raw_type_args,
+            resolved_type_args,
+            span,
+        } = call;
         if let Some(spread_expr) = *spread {
             self.sink
                 .push(diagnostics::infer::spread_on_non_variadic(span));
@@ -1384,7 +1405,7 @@ impl InferCtx<'_, '_> {
                 let receiver_ty = receiver.get_type().resolve_in(&self.env).strip_refs();
                 let peeled = store.deep_resolve_alias(&receiver_ty);
 
-                let ufcs_methods = self.effective_ufcs_methods();
+                let ufcs_methods = self.ufcs_methods();
                 let is_ufcs_member = |ty: &Type| {
                     matches!(ty, Type::Nominal { id, .. }
                         if ufcs_methods.contains(&(id.to_string(), member.to_string())))
@@ -1504,7 +1525,7 @@ impl InferCtx<'_, '_> {
 
         // If it's a UFCS-lowered method, skip — the emitter handles it differently
         if self
-            .effective_ufcs_methods()
+            .ufcs_methods()
             .contains(&(qualified_name.to_string(), method.to_string()))
         {
             return None;
@@ -1605,7 +1626,7 @@ impl InferCtx<'_, '_> {
         if !is_deref
             && !binding_is_ref
             && !self.scopes.lookup_mutable(&var_name)
-            && !self.imports.imported_modules.contains_key(&var_name)
+            && self.imports.namespace(&var_name).is_none()
         {
             let is_pattern_binding = self
                 .scopes

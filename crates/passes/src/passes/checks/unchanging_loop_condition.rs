@@ -45,7 +45,7 @@ fn is_invariant(
             binding_id: Some(id),
             ..
         } => match bindings.get(id) {
-            Some(fact) if !fact.mutated => {
+            Some(fact) if !fact.mutation.happened() => {
                 *references_binding = true;
                 true
             }

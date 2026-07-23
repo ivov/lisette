@@ -27,14 +27,14 @@ type Box struct {
 	items []int
 }
 
-func get_map(m map[string]Box) map[string]Box {
+func getMap(m map[string]Box) map[string]Box {
 	return m
 }
 
 func main() {
 	m := make(map[string]Box)
 	m["a"] = Box{items: []int{}}
-	map_ := get_map(m)
+	map_ := getMap(m)
 	entry := Box{items: slices.Clone(map_["a"].items)}
 	entry.items = append(entry.items, 1)
 	map_["a"] = entry

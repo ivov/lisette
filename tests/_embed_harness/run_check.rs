@@ -5,7 +5,7 @@ use std::process::Command;
 use deps::TypedefLocator;
 use emit::{EmitOptions, Planner};
 use passes::analyze;
-use semantics::inference::{AnalyzeInput, CompilePhase, SemanticConfig};
+use semantics::inference::{AnalyzeInput, CompilePhase, EntryFile, SemanticConfig};
 use semantics::loader::MemoryLoader;
 use semantics::store::ENTRY_MODULE_ID;
 
@@ -194,11 +194,13 @@ fn emit_and_write(
             load_siblings: true,
         },
         loader: &loader,
-        source: lisette.clone(),
-        filename: "main.lis".to_string(),
-        display_path: "main.lis".to_string(),
-        ast: build.ast,
-        file_comment: build.file_comment,
+        entry: Some(EntryFile {
+            source: lisette.clone(),
+            filename: "main.lis".to_string(),
+            display_path: "main.lis".to_string(),
+            ast: build.ast,
+            file_comment: build.file_comment,
+        }),
         project_root: None,
         locator: TypedefLocator::default(),
         compile_phase: CompilePhase::Emit,

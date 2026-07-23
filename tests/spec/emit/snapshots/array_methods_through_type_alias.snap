@@ -41,7 +41,7 @@ func at(a Addr, i int) (byte, bool) {
 	return 0, false
 }
 
-func to_slice(a Addr) []byte {
+func toSlice(a Addr) []byte {
 	return slices.Clone(a[:])
 }
 

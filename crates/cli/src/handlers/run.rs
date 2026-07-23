@@ -7,7 +7,7 @@ use std::process::Command;
 use crate::cli_error;
 use crate::go_cli;
 use diagnostics::render::{self, Filter};
-use lisette::pipeline::{CompileConfig, CompilePhase, ProjectKind, compile};
+use lisette::pipeline::{CompileConfig, CompileEntry, CompilePhase, ProjectKind, compile};
 use semantics::loader::MemoryLoader;
 
 fn exec_binary(output_path: &Path, args: &[String], heading: &str) -> i32 {
@@ -50,6 +50,18 @@ fn run_project(path: &str, args: Vec<String>, sourcemap: bool, go_flags: &[Strin
         Ok(p) => p,
         Err(code) => return code,
     };
+
+    if prep.kind == ProjectKind::Library {
+        cli_error!(
+            "Nothing to run",
+            format!(
+                "`{}` is a library, as it has no `src/main.lis` entrypoint",
+                prep.manifest.project.name
+            ),
+            "If not meant to be a library, convert it to a binary by adding `src/main.lis`"
+        );
+        return 1;
+    }
 
     // Held through the child's execution too: releasing sooner would let a concurrent
     // `lis build`/`sync`/LSP relink `target/` under the running program.
@@ -159,9 +171,11 @@ fn run_standalone(file: &str, args: Vec<String>, sourcemap: bool, go_flags: &[St
 
     let no_loader = MemoryLoader::new();
     let result = compile(
-        &source,
-        &entry_name,
-        &entry_display,
+        Some(CompileEntry {
+            source: &source,
+            filename: &entry_name,
+            display_path: &entry_display,
+        }),
         &compile_config,
         &no_loader,
     );

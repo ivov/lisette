@@ -219,6 +219,7 @@ fn is_cache_valid(
 fn cache_path(project_root: &Path, module_id: &str) -> PathBuf {
     project_root
         .join("target")
+        .join(".lisette")
         .join("cache")
         .join(cache_file_name(module_id))
 }
@@ -767,12 +768,15 @@ mod tests {
     #[test]
     fn test_cache_path_format() {
         let path = cache_path(Path::new("/project"), "utils");
-        assert_eq!(path, PathBuf::from("/project/target/cache/utils.cache"));
+        assert_eq!(
+            path,
+            PathBuf::from("/project/target/.lisette/cache/utils.cache")
+        );
 
         let path = cache_path(Path::new("/project"), "deep/nested/mod");
         assert_eq!(
             path,
-            PathBuf::from("/project/target/cache/deep_snested_smod.cache")
+            PathBuf::from("/project/target/.lisette/cache/deep_snested_smod.cache")
         );
     }
 
@@ -854,7 +858,7 @@ mod tests {
     fn apply_emit_stamps_round_trip() {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
-        std::fs::create_dir_all(root.join("target").join("cache")).unwrap();
+        std::fs::create_dir_all(root.join("target").join(".lisette").join("cache")).unwrap();
 
         let interface = ModuleInterface {
             version: CACHE_FORMAT_VERSION,
@@ -917,7 +921,7 @@ mod tests {
     fn try_load_cache_rejects_unstamped_for_emit() {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
-        std::fs::create_dir_all(root.join("target").join("cache")).unwrap();
+        std::fs::create_dir_all(root.join("target").join(".lisette").join("cache")).unwrap();
         std::fs::create_dir_all(root.join("target").join("greet")).unwrap();
         std::fs::write(root.join("target").join("greet").join("greet.go"), "").unwrap();
 
@@ -961,7 +965,7 @@ mod tests {
     fn try_load_cache_rejects_after_sourcemap_invalidation() {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
-        std::fs::create_dir_all(root.join("target").join("cache")).unwrap();
+        std::fs::create_dir_all(root.join("target").join(".lisette").join("cache")).unwrap();
         std::fs::create_dir_all(root.join("target").join("greet")).unwrap();
         std::fs::write(root.join("target").join("greet").join("greet.go"), "").unwrap();
 

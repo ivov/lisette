@@ -19,6 +19,6 @@ type Point struct {
 
 type Location = Point
 
-func get_x(loc Location) int {
+func getX(loc Location) int {
 	return loc.X
 }

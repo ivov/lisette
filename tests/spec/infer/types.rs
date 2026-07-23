@@ -1289,6 +1289,20 @@ fn shadowing_changes_mutability() {
 }
 
 #[test]
+fn immutable_shadow_does_not_inherit_outer_mutability() {
+    infer(
+        r#"{
+    let mut x = 42;
+    {
+      let x = x + 1;
+      x = 10;
+    }
+  }"#,
+    )
+    .assert_infer_code("immutable");
+}
+
+#[test]
 fn function_parameter_immutable() {
     infer(
         r#"{

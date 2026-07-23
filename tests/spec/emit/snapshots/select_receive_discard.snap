@@ -15,13 +15,13 @@ description: |
 ---
 package main
 
-func do_work() {}
+func doWork() {}
 
 func test() {
 	ch := make(chan int)
 	select {
 	case <-ch:
-		do_work()
+		doWork()
 	default:
 	}
 }

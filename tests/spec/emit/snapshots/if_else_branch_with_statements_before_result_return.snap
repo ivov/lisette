@@ -18,7 +18,7 @@ package main
 
 import lisette "github.com/ivov/lisette/prelude"
 
-func checked_sqrt(n int) lisette.Result[int, string] {
+func checkedSqrt(n int) lisette.Result[int, string] {
 	if n < 0 {
 		return lisette.MakeResultErr[int, string]("negative input")
 	}

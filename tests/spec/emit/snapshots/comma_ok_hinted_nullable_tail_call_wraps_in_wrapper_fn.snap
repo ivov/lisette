@@ -19,7 +19,7 @@ import (
 	lisette "github.com/ivov/lisette/prelude"
 )
 
-func build_info() *info.BuildInfo {
+func buildInfo() *info.BuildInfo {
 	ret_1, ret_2 := info.Read()
 	var option_3 lisette.Option[*info.BuildInfo]
 	if ret_2 && ret_1 != nil {
@@ -34,5 +34,5 @@ func build_info() *info.BuildInfo {
 }
 
 func main() {
-	build_info()
+	buildInfo()
 }

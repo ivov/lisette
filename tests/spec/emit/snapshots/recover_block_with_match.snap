@@ -16,13 +16,13 @@ package main
 
 import lisette "github.com/ivov/lisette/prelude"
 
-func may_panic() int {
+func mayPanic() int {
 	return 42
 }
 
 func test() int {
 	recoverResult_1 := lisette.RecoverBlock(func() int {
-		return may_panic()
+		return mayPanic()
 	})
 	result := recoverResult_1
 	if result.Tag == lisette.ResultOk {

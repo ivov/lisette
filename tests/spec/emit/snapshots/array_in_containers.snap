@@ -17,9 +17,9 @@ package main
 type Addr = [4]byte
 
 type Holder struct {
-	slice_of_arr [][3]int
-	map_val_arr  map[string][3]int
-	ptr_to_arr   *[3]int
-	multidim     [2][3]int
-	aliased      Addr
+	sliceOfArr [][3]int
+	mapValArr  map[string][3]int
+	ptrToArr   *[3]int
+	multidim   [2][3]int
+	aliased    Addr
 }

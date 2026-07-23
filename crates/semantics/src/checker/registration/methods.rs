@@ -1,7 +1,6 @@
 use ecow::EcoString;
 use syntax::ast::{
-    Annotation, Expression, Generic, ParentInterface, Pattern, Span,
-    Visibility as SyntacticVisibility,
+    Annotation, Expression, Generic, Pattern, Span, Visibility as SyntacticVisibility,
 };
 use syntax::program::{Definition, DefinitionBody, Interface, Visibility};
 use syntax::types::{
@@ -12,25 +11,28 @@ use super::{extract_attribute_flags, has_recursive_instantiation, wrap_with_impl
 use crate::checker::{TaskState, resolved_generic_bounds};
 use crate::store::Store;
 
-impl TaskState<'_> {
+struct ImplReceiver<'a> {
+    module_id: &'a str,
+    qualified_name: &'a str,
+    display_name: &'a str,
+}
+
+impl TaskState {
     /// Register an instance method on the receiver type's definition.
     /// Returns `false` if the receiver was not found (caller should skip).
-    #[allow(clippy::too_many_arguments)]
     fn try_register_instance_method(
         &mut self,
         store: &mut Store,
-        module_id: &str,
-        receiver_qualified_name: &str,
-        type_name: &str,
+        receiver: &ImplReceiver<'_>,
         fn_name: &str,
         fn_name_span: Span,
         method_ty: &Type,
     ) -> bool {
         let module = store
-            .get_module_mut(module_id)
+            .get_module_mut(receiver.module_id)
             .expect("current module must exist in store");
 
-        let Some(definition) = module.definitions.get_mut(receiver_qualified_name) else {
+        let Some(definition) = module.definitions.get_mut(receiver.qualified_name) else {
             // Receiver type not found in current module (e.g. resolved
             // to a same-named type in another module). Skip registering
             // the method to avoid false duplicate errors.
@@ -41,7 +43,7 @@ impl TaskState<'_> {
             && fields.iter().any(|f| f.name == fn_name)
         {
             self.sink.push(diagnostics::infer::method_shadows_field(
-                type_name,
+                receiver.display_name,
                 fn_name,
                 fn_name_span,
             ));
@@ -51,7 +53,7 @@ impl TaskState<'_> {
             for variant in variants {
                 if variant.fields.is_struct() && variant.fields.iter().any(|f| f.name == fn_name) {
                     self.sink.push(diagnostics::infer::method_shadows_field(
-                        type_name,
+                        receiver.display_name,
                         fn_name,
                         fn_name_span,
                     ));
@@ -67,21 +69,19 @@ impl TaskState<'_> {
         true
     }
 
-    #[allow(clippy::too_many_arguments)]
     fn check_duplicate_method(
         &self,
         store: &Store,
-        module_id: &str,
-        receiver_qualified_name: &str,
-        type_name: &str,
+        receiver: &ImplReceiver<'_>,
         fn_name: &str,
         fn_name_span: Span,
         impl_generics_empty: bool,
     ) {
-        let module_qualified_name = Symbol::from_parts(module_id, type_name).with_segment(fn_name);
+        let module_qualified_name =
+            Symbol::from_parts(receiver.module_id, receiver.display_name).with_segment(fn_name);
 
         let module = store
-            .get_module(module_id)
+            .get_module(receiver.module_id)
             .expect("current module must exist in store");
 
         if !module
@@ -93,7 +93,7 @@ impl TaskState<'_> {
 
         let is_cross_specialization = impl_generics_empty
             && matches!(
-                module.definitions.get(receiver_qualified_name).map(|d| &d.body),
+                module.definitions.get(receiver.qualified_name).map(|d| &d.body),
                 Some(DefinitionBody::Struct { generics: struct_generics, .. })
                     if !struct_generics.is_empty()
             );
@@ -101,7 +101,7 @@ impl TaskState<'_> {
         if is_cross_specialization {
             let struct_generic_names: Vec<String> = match module
                 .definitions
-                .get(receiver_qualified_name)
+                .get(receiver.qualified_name)
                 .map(|d| &d.body)
             {
                 Some(DefinitionBody::Struct { generics: g, .. }) => {
@@ -112,7 +112,7 @@ impl TaskState<'_> {
             self.sink.push(
                 diagnostics::infer::duplicate_method_across_specialized_impls(
                     fn_name,
-                    type_name,
+                    receiver.display_name,
                     &struct_generic_names,
                     fn_name_span,
                 ),
@@ -120,7 +120,7 @@ impl TaskState<'_> {
         } else {
             self.sink.push(diagnostics::infer::duplicate_impl_item(
                 fn_name,
-                type_name,
+                receiver.display_name,
                 fn_name_span,
             ));
         }
@@ -218,6 +218,11 @@ impl TaskState<'_> {
         }
         self.check_transitive_generic_bounds(&*store, &generics, *span);
 
+        let receiver = ImplReceiver {
+            module_id: &module_id,
+            qualified_name: receiver_qualified_name.as_str(),
+            display_name: type_name,
+        };
         let mut static_methods: Vec<(String, Type)> = Vec::new();
 
         for function in functions {
@@ -294,9 +299,7 @@ impl TaskState<'_> {
             if is_instance_method {
                 if !self.try_register_instance_method(
                     store,
-                    &module_id,
-                    &receiver_qualified_name,
-                    type_name,
+                    &receiver,
                     &method_key,
                     fn_sig.name_span,
                     &method_ty,
@@ -309,9 +312,7 @@ impl TaskState<'_> {
 
             self.check_duplicate_method(
                 &*store,
-                &module_id,
-                &receiver_qualified_name,
-                type_name,
+                &receiver,
                 &fn_sig.name,
                 fn_sig.name_span,
                 generics.is_empty(),
@@ -343,22 +344,24 @@ impl TaskState<'_> {
 
         let scope = self.scopes.current_mut();
         for (name, ty) in static_methods {
-            scope.values.insert(name, ty);
+            scope.insert_value(name, ty);
         }
     }
 
-    #[allow(clippy::too_many_arguments)]
-    pub(super) fn populate_interface(
-        &mut self,
-        store: &mut Store,
-        interface_name: &str,
-        name_span: &Span,
-        generics: &[Generic],
-        parents: &[ParentInterface],
-        fn_expressions: &[Expression],
-        span: &Span,
-        doc: &Option<String>,
-    ) {
+    pub(super) fn populate_interface(&mut self, store: &mut Store, expression: &Expression) {
+        let Expression::Interface {
+            name: interface_name,
+            name_span,
+            generics,
+            parents,
+            method_signatures: fn_expressions,
+            span,
+            doc,
+            ..
+        } = expression
+        else {
+            unreachable!("populate_interface called with non-Interface expression");
+        };
         self.scopes.push();
         self.put_in_scope(generics);
         let generics = self.resolve_generic_bounds(&*store, generics, span);

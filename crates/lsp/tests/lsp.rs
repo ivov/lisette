@@ -13010,3 +13010,152 @@ async fn exit_without_shutdown_signals_error_exit() {
     client.exit().await;
     assert_eq!(client.await_exit_code().await, 1);
 }
+
+#[tokio::test]
+async fn library_root_file_analyzes_cleanly() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    std::fs::write(
+        root.join("lisette.toml"),
+        "[project]\nname = \"github.com/acme/geo\"\nversion = \"0.1.0\"\n",
+    )
+    .unwrap();
+    let src = root.join("src");
+    std::fs::create_dir_all(&src).unwrap();
+    let content = "pub fn origin() -> int { 0 }";
+    std::fs::write(src.join("geo.lis"), content).unwrap();
+
+    let mut client = TestClient::new().await;
+    client.initialize_with_root(root).await;
+    let uri = Url::from_file_path(src.join("geo.lis"))
+        .unwrap()
+        .to_string();
+    client.open(&uri, content).await;
+
+    let diags = client.await_diagnostics().await;
+    let errors: Vec<_> = diags
+        .iter()
+        .filter(|d| d.severity == Some(DiagnosticSeverity::ERROR))
+        .collect();
+    assert!(
+        errors.is_empty(),
+        "library root file should be clean: {errors:?}"
+    );
+
+    let hover = client.hover(&uri, 0, 8).await;
+    assert!(hover.is_some(), "hover should work in a library");
+    client.shutdown().await;
+}
+
+#[tokio::test]
+async fn library_cross_module_goto_definition_works() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    std::fs::write(
+        root.join("lisette.toml"),
+        "[project]\nname = \"github.com/acme/lib\"\nversion = \"0.1.0\"\n",
+    )
+    .unwrap();
+    let src = root.join("src");
+    std::fs::create_dir_all(src.join("math")).unwrap();
+    std::fs::create_dir_all(src.join("calc")).unwrap();
+    std::fs::write(
+        src.join("math/math.lis"),
+        "pub fn double(n: int) -> int { n * 2 }",
+    )
+    .unwrap();
+    let calc = "import \"math\"\n\npub fn quad(n: int) -> int {\n  math.double(n) * 2\n}";
+    std::fs::write(src.join("calc/calc.lis"), calc).unwrap();
+
+    let mut client = TestClient::new().await;
+    client.initialize_with_root(root).await;
+    let uri = Url::from_file_path(src.join("calc/calc.lis"))
+        .unwrap()
+        .to_string();
+    client.open(&uri, calc).await;
+
+    let diags = client.await_diagnostics().await;
+    let errors: Vec<_> = diags
+        .iter()
+        .filter(|d| d.severity == Some(DiagnosticSeverity::ERROR))
+        .collect();
+    assert!(
+        errors.is_empty(),
+        "cross-module library import should resolve: {errors:?}"
+    );
+
+    let goto = client.goto_definition(&uri, 3, 8).await;
+    assert!(goto.is_some(), "goto across library modules should work");
+    client.shutdown().await;
+}
+
+#[tokio::test]
+async fn library_main_function_is_not_flagged() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    std::fs::write(
+        root.join("lisette.toml"),
+        "[project]\nname = \"github.com/acme/lib\"\nversion = \"0.1.0\"\n",
+    )
+    .unwrap();
+    let src = root.join("src");
+    std::fs::create_dir_all(&src).unwrap();
+    let content = "pub fn main(x: int) -> int { x }";
+    std::fs::write(src.join("lib.lis"), content).unwrap();
+
+    let mut client = TestClient::new().await;
+    client.initialize_with_root(root).await;
+    let uri = Url::from_file_path(src.join("lib.lis"))
+        .unwrap()
+        .to_string();
+    client.open(&uri, content).await;
+
+    let diags = client.await_diagnostics().await;
+    let bad: Vec<_> = diags
+        .iter()
+        .filter(|d| d.message.contains("main signature"))
+        .collect();
+    assert!(
+        bad.is_empty(),
+        "a library `main` is an ordinary function, should not be flagged: {bad:?}"
+    );
+    client.shutdown().await;
+}
+
+#[tokio::test]
+async fn creating_main_lis_flips_a_library_to_a_binary() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    std::fs::write(
+        root.join("lisette.toml"),
+        "[project]\nname = \"github.com/acme/flip\"\nversion = \"0.1.0\"\n",
+    )
+    .unwrap();
+    let src = root.join("src");
+    std::fs::create_dir_all(&src).unwrap();
+    let content = "pub fn main(x: int) -> int { x }";
+    std::fs::write(src.join("flip.lis"), content).unwrap();
+
+    let mut client = TestClient::new().await;
+    client.initialize_with_root(root).await;
+    let uri = Url::from_file_path(src.join("flip.lis"))
+        .unwrap()
+        .to_string();
+    client.open(&uri, content).await;
+
+    let diags = client.await_diagnostics().await;
+    assert!(
+        !diags.iter().any(|d| d.message.contains("main signature")),
+        "library `main` should not be flagged: {diags:?}"
+    );
+
+    std::fs::write(src.join("main.lis"), "fn main() {}").unwrap();
+    client.change(&uri, content, 2).await;
+
+    let diags = client.await_diagnostics().await;
+    assert!(
+        diags.iter().any(|d| d.message.contains("main signature")),
+        "after `src/main.lis` appears the project is a binary: {diags:?}"
+    );
+    client.shutdown().await;
+}

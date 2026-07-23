@@ -13,13 +13,13 @@ type Describable interface {
 	Describe() string
 }
 
-func print_it(item Describable) {
+func printIt(item Describable) {
 	fmt.Println(item.Describe())
 }
 
 func main() {
 	u := models.User{Name: "Alice"}
-	print_it(u)
+	printIt(u)
 }
 
 

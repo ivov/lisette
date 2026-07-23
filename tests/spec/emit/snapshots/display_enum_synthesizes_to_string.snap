@@ -50,6 +50,6 @@ func (c Color) GoString() string {
 	}
 }
 
-func (c Color) to_string() string {
+func (c Color) toString() string {
 	return c.String()
 }

@@ -17,11 +17,11 @@ func (m MyCache) Get(_ string) *tls.ClientSessionState {
 
 func (m MyCache) Put(_ string, _ *tls.ClientSessionState) {}
 
-func use_cache(_ tls.ClientSessionCache) {}
+func useCache(_ tls.ClientSessionCache) {}
 
 func main() {
 	c := MyCache{}
-	use_cache(_lisAdapter_MyCache_ClientSessionCache_0{inner: c})
+	useCache(_lisAdapter_MyCache_ClientSessionCache_0{inner: c})
 }
 
 type _lisAdapter_MyCache_ClientSessionCache_0 struct {

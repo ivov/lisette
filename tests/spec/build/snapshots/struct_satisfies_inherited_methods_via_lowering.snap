@@ -16,11 +16,11 @@ func (d Dev) Write(_ []uint8) (int, error) {
 	return 0, nil
 }
 
-func use_rw(_ io.ReadWriter) int {
+func useRw(_ io.ReadWriter) int {
 	return 0
 }
 
 func main() {
 	d := Dev{}
-	_ = use_rw(d)
+	_ = useRw(d)
 }

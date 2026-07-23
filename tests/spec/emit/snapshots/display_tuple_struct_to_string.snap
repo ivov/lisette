@@ -15,6 +15,6 @@ func (u UserId) String() string {
 	return fmt.Sprintf("UserId(%v)", int(u))
 }
 
-func (u UserId) to_string() string {
+func (u UserId) toString() string {
 	return u.String()
 }

@@ -23,7 +23,7 @@ func (g Grade) String() string {
 	return fmt.Sprintf("Grade(%v)", rune(g))
 }
 
-func (g Grade) to_string() string {
+func (g Grade) toString() string {
 	return g.String()
 }
 

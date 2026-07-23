@@ -11,10 +11,10 @@ description: |
 ---
 package main
 
-func do_nothing() {}
+func doNothing() {}
 
 func test() {
-	do_nothing()
+	doNothing()
 	r := struct{}{}
 	_ = r
 }

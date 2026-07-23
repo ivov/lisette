@@ -30,6 +30,6 @@ func (c Counter) String() string {
 	return fmt.Sprint(c.count)
 }
 
-func make_pair(c Counter) (fmt.Stringer, int) {
+func makePair(c Counter) (fmt.Stringer, int) {
 	return c, c.count
 }

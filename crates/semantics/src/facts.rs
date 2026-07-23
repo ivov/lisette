@@ -2,7 +2,7 @@ use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
 
-use diagnostics::{PatternIssue, UnusedExpressionKind};
+use diagnostics::PatternIssue;
 use syntax::EcoString;
 use syntax::ast::{BindingId, BindingKind, DeadCodeCause, Span};
 use syntax::program::{ResolvedDefinitions, TestFunction};
@@ -33,18 +33,12 @@ pub struct Facts {
 
     // LSP-consumed; reshaping these affects crates/lsp/.
     pub bindings: HashMap<BindingId, BindingFact>,
-    pub usages: Vec<Usage>,
-    usage_set: HashSet<(Span, Span)>,
+    pub usages: HashSet<Usage>,
 
-    // Lint-support facts: read by reference by passes::lints (mostly
-    // from_facts; interface_satisfied_methods by ref_graph).
+    // Lint-support facts recorded during semantic analysis and read by passes::lints.
     pub dead_code: Vec<DeadCodeFact>,
     pub pattern_issues: Vec<PatternIssue>,
-    pub unused_expressions: Vec<UnusedExpressionFact>,
-    pub discarded_tail_expressions: Vec<DiscardedTailFact>,
     pub overused_references: Vec<OverusedReferenceFact>,
-    pub unused_type_params: Vec<UnusedTypeParamFact>,
-    pub type_params_only_in_bound: Vec<TypeParamOnlyInBoundFact>,
     pub always_failing_try_blocks: Vec<Span>,
     pub expression_only_fstrings: Vec<ExpressionOnlyFstringFact>,
     pub interface_satisfied_methods: HashMap<(String, String), Vec<InterfaceSatisfaction>>,
@@ -173,11 +167,7 @@ impl Facts {
             bindings: HashMap::default(),
             dead_code: Vec::new(),
             pattern_issues: Vec::new(),
-            unused_expressions: Vec::new(),
-            discarded_tail_expressions: Vec::new(),
             overused_references: Vec::new(),
-            unused_type_params: Vec::new(),
-            type_params_only_in_bound: Vec::new(),
             always_failing_try_blocks: Vec::new(),
             expression_only_fstrings: Vec::new(),
             generic_call_checks: Vec::new(),
@@ -191,8 +181,7 @@ impl Facts {
             or_pattern_error_spans: HashSet::default(),
             type_error_spans: HashSet::default(),
             function_spans: Vec::new(),
-            usages: Vec::new(),
-            usage_set: HashSet::default(),
+            usages: HashSet::default(),
             interface_satisfied_methods: HashMap::default(),
             equality_derivations: Vec::new(),
             test_functions: Vec::new(),
@@ -201,14 +190,16 @@ impl Facts {
         }
     }
 
+    pub(crate) fn allocator(&self) -> Arc<BindingIdAllocator> {
+        self.allocator.clone()
+    }
+
     pub(crate) fn add_binding(
         &mut self,
         name: String,
         span: Span,
         kind: BindingKind,
-        is_typedef: bool,
-        is_struct_field: bool,
-        is_as_alias: bool,
+        origin: BindingOrigin,
     ) -> BindingId {
         let id = self.allocator.reserve();
         self.bindings.insert(
@@ -218,11 +209,8 @@ impl Facts {
                 span,
                 kind,
                 used: false,
-                mutated: false,
-                alias_mutated: false,
-                is_typedef,
-                is_struct_field,
-                is_as_alias,
+                mutation: BindingMutation::Unchanged,
+                origin,
             },
         );
         id
@@ -235,8 +223,10 @@ impl Facts {
     }
 
     pub(crate) fn mark_mutated(&mut self, id: BindingId) {
-        if let Some(fact) = self.bindings.get_mut(&id) {
-            fact.mutated = true;
+        if let Some(fact) = self.bindings.get_mut(&id)
+            && fact.mutation == BindingMutation::Unchanged
+        {
+            fact.mutation = BindingMutation::Direct;
         }
     }
 
@@ -244,8 +234,7 @@ impl Facts {
     /// capture, mut argument or receiver), so a call can rebind it.
     pub(crate) fn mark_alias_mutated(&mut self, id: BindingId) {
         if let Some(fact) = self.bindings.get_mut(&id) {
-            fact.mutated = true;
-            fact.alias_mutated = true;
+            fact.mutation = BindingMutation::ThroughAlias;
         }
     }
 
@@ -280,12 +269,10 @@ impl Facts {
     }
 
     pub(crate) fn add_usage(&mut self, usage_span: Span, definition_span: Span) {
-        if self.usage_set.insert((usage_span, definition_span)) {
-            self.usages.push(Usage {
-                usage_span,
-                definition_span,
-            });
-        }
+        self.usages.insert(Usage {
+            usage_span,
+            definition_span,
+        });
     }
 
     pub(crate) fn mark_method_used_for_interface(
@@ -321,21 +308,6 @@ impl Facts {
             })
     }
 
-    pub fn absorb_local_facts(&mut self, local: LocalFacts) {
-        let LocalFacts {
-            unused_expressions,
-            discarded_tail_expressions,
-            unused_type_params,
-            type_params_only_in_bound,
-        } = local;
-        self.unused_expressions.extend(unused_expressions);
-        self.discarded_tail_expressions
-            .extend(discarded_tail_expressions);
-        self.unused_type_params.extend(unused_type_params);
-        self.type_params_only_in_bound
-            .extend(type_params_only_in_bound);
-    }
-
     pub(crate) fn merge(&mut self, other: Facts) {
         debug_assert!(
             Arc::ptr_eq(&self.allocator, &other.allocator),
@@ -347,11 +319,7 @@ impl Facts {
             bindings,
             dead_code,
             pattern_issues,
-            unused_expressions,
-            discarded_tail_expressions,
             overused_references,
-            unused_type_params,
-            type_params_only_in_bound,
             always_failing_try_blocks,
             expression_only_fstrings,
             generic_call_checks,
@@ -366,7 +334,6 @@ impl Facts {
             type_error_spans,
             function_spans,
             usages,
-            usage_set: _,
             interface_satisfied_methods,
             equality_derivations,
             test_functions,
@@ -381,13 +348,7 @@ impl Facts {
         self.bindings.extend(bindings);
         self.dead_code.extend(dead_code);
         self.pattern_issues.extend(pattern_issues);
-        self.unused_expressions.extend(unused_expressions);
-        self.discarded_tail_expressions
-            .extend(discarded_tail_expressions);
         self.overused_references.extend(overused_references);
-        self.unused_type_params.extend(unused_type_params);
-        self.type_params_only_in_bound
-            .extend(type_params_only_in_bound);
         self.always_failing_try_blocks
             .extend(always_failing_try_blocks);
         self.expression_only_fstrings
@@ -406,15 +367,7 @@ impl Facts {
         self.type_error_spans.extend(type_error_spans);
         self.function_spans.extend(function_spans);
 
-        self.usages.reserve(usages.len());
-        self.usage_set.reserve(usages.len());
-        for Usage {
-            usage_span,
-            definition_span,
-        } in usages
-        {
-            self.add_usage(usage_span, definition_span);
-        }
+        self.usages.extend(usages);
 
         for (key, impl_types) in interface_satisfied_methods {
             self.interface_satisfied_methods
@@ -422,60 +375,6 @@ impl Facts {
                 .or_default()
                 .extend(impl_types);
         }
-    }
-}
-
-#[derive(Debug, Default)]
-pub struct LocalFacts {
-    unused_expressions: Vec<UnusedExpressionFact>,
-    discarded_tail_expressions: Vec<DiscardedTailFact>,
-    unused_type_params: Vec<UnusedTypeParamFact>,
-    type_params_only_in_bound: Vec<TypeParamOnlyInBoundFact>,
-}
-
-impl LocalFacts {
-    pub fn merge(&mut self, other: LocalFacts) {
-        let LocalFacts {
-            unused_expressions,
-            discarded_tail_expressions,
-            unused_type_params,
-            type_params_only_in_bound,
-        } = other;
-        self.unused_expressions.extend(unused_expressions);
-        self.discarded_tail_expressions
-            .extend(discarded_tail_expressions);
-        self.unused_type_params.extend(unused_type_params);
-        self.type_params_only_in_bound
-            .extend(type_params_only_in_bound);
-    }
-
-    pub fn add_unused_expression(&mut self, span: Span, kind: UnusedExpressionKind) {
-        self.unused_expressions
-            .push(UnusedExpressionFact { span, kind });
-    }
-
-    pub fn add_discarded_tail(
-        &mut self,
-        span: Span,
-        return_type: String,
-        expected_span: Span,
-        expected_type: String,
-    ) {
-        self.discarded_tail_expressions.push(DiscardedTailFact {
-            span,
-            return_type,
-            expected_span,
-            expected_type,
-        });
-    }
-
-    pub fn add_unused_type_param(&mut self, span: Span) {
-        self.unused_type_params.push(UnusedTypeParamFact { span });
-    }
-
-    pub fn add_type_param_only_in_bound(&mut self, name: String, span: Span) {
-        self.type_params_only_in_bound
-            .push(TypeParamOnlyInBoundFact { name, span });
     }
 }
 
@@ -491,13 +390,57 @@ pub struct BindingFact {
     pub span: Span,
     pub kind: BindingKind,
     pub used: bool,
-    pub mutated: bool,
-    pub alias_mutated: bool,
-    pub is_typedef: bool,
-    /// If true, this binding is a shorthand in a struct pattern (e.g., `Point { x }`)
-    pub is_struct_field: bool,
-    /// If true, this binding was introduced by an `as` alias (e.g., `Point { .. } as p`)
-    pub is_as_alias: bool,
+    pub mutation: BindingMutation,
+    pub origin: BindingOrigin,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BindingMutation {
+    Unchanged,
+    Direct,
+    ThroughAlias,
+}
+
+impl BindingMutation {
+    pub fn happened(self) -> bool {
+        self != Self::Unchanged
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum BindingOrigin {
+    Name {
+        in_typedef: bool,
+        shorthand_field: bool,
+    },
+    AsAlias {
+        shorthand_field: bool,
+    },
+}
+
+impl BindingOrigin {
+    pub fn is_typedef(self) -> bool {
+        matches!(
+            self,
+            Self::Name {
+                in_typedef: true,
+                ..
+            }
+        )
+    }
+
+    pub fn is_struct_field(self) -> bool {
+        match self {
+            Self::Name {
+                shorthand_field, ..
+            }
+            | Self::AsAlias { shorthand_field } => shorthand_field,
+        }
+    }
+
+    pub fn is_as_alias(self) -> bool {
+        matches!(self, Self::AsAlias { .. })
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -507,39 +450,14 @@ pub struct DeadCodeFact {
 }
 
 #[derive(Debug, Clone)]
-pub struct UnusedExpressionFact {
-    pub span: Span,
-    pub kind: UnusedExpressionKind,
-}
-
-#[derive(Debug, Clone)]
-pub struct DiscardedTailFact {
-    pub span: Span,
-    pub return_type: String,
-    pub expected_span: Span,
-    pub expected_type: String,
-}
-
-#[derive(Debug, Clone)]
 pub struct OverusedReferenceFact {
     pub span: Span,
     pub name: Option<String>,
 }
 
-#[derive(Debug, Clone)]
-pub struct UnusedTypeParamFact {
-    pub span: Span,
-}
-
-#[derive(Debug, Clone)]
-pub struct TypeParamOnlyInBoundFact {
-    pub name: String,
-    pub span: Span,
-}
-
 /// Records a usage of a symbol, linking the usage location to its definition.
 /// Used by LSP for find-references.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Usage {
     pub usage_span: Span,
     pub definition_span: Span,
@@ -564,17 +482,19 @@ mod tests {
             "a".into(),
             span(0),
             BindingKind::Let { mutable: false },
-            false,
-            false,
-            false,
+            BindingOrigin::Name {
+                in_typedef: false,
+                shorthand_field: false,
+            },
         );
         let b_id = b.add_binding(
             "b".into(),
             span(1),
             BindingKind::Let { mutable: false },
-            false,
-            false,
-            false,
+            BindingOrigin::Name {
+                in_typedef: false,
+                shorthand_field: false,
+            },
         );
         assert_ne!(a_id, b_id);
 
@@ -582,6 +502,26 @@ mod tests {
         assert_eq!(a.bindings.len(), 2);
         assert!(a.bindings.contains_key(&a_id));
         assert!(a.bindings.contains_key(&b_id));
+    }
+
+    #[test]
+    fn direct_mutation_does_not_downgrade_alias_mutation() {
+        let allocator = Arc::new(BindingIdAllocator::new());
+        let mut facts = Facts::new(allocator);
+        let id = facts.add_binding(
+            "value".into(),
+            span(0),
+            BindingKind::Let { mutable: true },
+            BindingOrigin::Name {
+                in_typedef: false,
+                shorthand_field: false,
+            },
+        );
+
+        facts.mark_alias_mutated(id);
+        facts.mark_mutated(id);
+
+        assert_eq!(facts.bindings[&id].mutation, BindingMutation::ThroughAlias);
     }
 
     #[test]
@@ -624,25 +564,6 @@ mod tests {
 
         a.merge(b);
         assert_eq!(a.or_pattern_error_spans.len(), 2);
-    }
-
-    #[test]
-    fn absorb_local_facts_extends_all_four_streams() {
-        let allocator = Arc::new(BindingIdAllocator::new());
-        let mut facts = Facts::new(allocator);
-
-        let mut local = LocalFacts::default();
-        local.add_unused_expression(span(0), UnusedExpressionKind::Value);
-        local.add_discarded_tail(span(1), "Int".into(), span(2), "Unit".into());
-        local.add_unused_type_param(span(3));
-        local.add_type_param_only_in_bound("U".into(), span(4));
-
-        facts.absorb_local_facts(local);
-
-        assert_eq!(facts.unused_expressions.len(), 1);
-        assert_eq!(facts.discarded_tail_expressions.len(), 1);
-        assert_eq!(facts.unused_type_params.len(), 1);
-        assert_eq!(facts.type_params_only_in_bound.len(), 1);
     }
 
     #[test]

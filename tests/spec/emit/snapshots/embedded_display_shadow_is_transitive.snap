@@ -27,7 +27,7 @@ func (l Logger) String() string {
 	return fmt.Sprintf("Logger { prefix: %v }", l.Prefix)
 }
 
-func (l Logger) to_string() string {
+func (l Logger) toString() string {
 	return l.String()
 }
 

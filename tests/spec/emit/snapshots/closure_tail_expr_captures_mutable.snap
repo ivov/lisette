@@ -12,7 +12,7 @@ description: |
 ---
 package main
 
-func make_counter(start int) func() int {
+func makeCounter(start int) func() int {
 	n := start
 	return func() int {
 		n++

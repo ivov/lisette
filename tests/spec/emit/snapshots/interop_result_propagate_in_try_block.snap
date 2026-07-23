@@ -26,7 +26,7 @@ import (
 	"strconv"
 )
 
-func sum_parsed(a, b string) (int, error) {
+func sumParsed(a, b string) (int, error) {
 	tryResult_1 := func() lisette.Result[int, error] {
 		ret_2, ret_3 := strconv.Atoi(a)
 		if ret_3 != nil {
@@ -48,7 +48,7 @@ func sum_parsed(a, b string) (int, error) {
 }
 
 func main() {
-	ret_1, ret_2 := sum_parsed("3", "4")
+	ret_1, ret_2 := sumParsed("3", "4")
 	if ret_2 == nil {
 		n := ret_1
 		_ = n

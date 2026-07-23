@@ -77,12 +77,12 @@ func consume[A any](box Box[lisette.Option[A]]) {
 	}
 }
 
-func use_wrap[A any, B Holder[A]](w Wrap[A, B]) {
+func useWrap[A any, B Holder[A]](w Wrap[A, B]) {
 	consume(_lisAdapter_Wrap_Box_0[A, B]{inner: w})
 }
 
 func main() {
-	use_wrap(Wrap[int, IntHolder]{
+	useWrap(Wrap[int, IntHolder]{
 		a: 3,
 		b: IntHolder{},
 	})

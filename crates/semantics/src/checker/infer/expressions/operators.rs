@@ -8,7 +8,28 @@ use UnaryOperator::*;
 
 use crate::checker::infer::InferCtx;
 
-impl InferCtx<'_, '_> {
+pub(super) struct InferredOperand {
+    pub(super) expression: Expression,
+    pub(super) ty: Type,
+}
+
+impl InferredOperand {
+    pub(super) fn new(expression: Expression, ty: Type) -> Self {
+        Self { expression, ty }
+    }
+}
+
+struct BinaryOperand<'a> {
+    ty: &'a Type,
+    span: Span,
+}
+
+struct BinaryOperands<'a> {
+    left: BinaryOperand<'a>,
+    right: BinaryOperand<'a>,
+}
+
+impl InferCtx<'_> {
     pub(super) fn infer_unary(
         &mut self,
         operator: UnaryOperator,
@@ -127,20 +148,18 @@ impl InferCtx<'_, '_> {
                 stack.push((op, right, s));
                 current = *left;
             }
-            let mut left_ty = self.new_type_var();
-            let mut left_inferred = self.infer_expression(current, &left_ty);
+            let left_ty = self.new_type_var();
+            let left_inferred = self.infer_expression(current, &left_ty);
+            let mut left = InferredOperand::new(left_inferred, left_ty);
             while let Some((op, right, s)) = stack.pop() {
                 let result_ty = if stack.is_empty() {
                     expected_ty.clone()
                 } else {
                     self.new_type_var()
                 };
-                let (inferred, ty) =
-                    self.infer_binary_with_left(op, left_inferred, left_ty, right, &result_ty, s);
-                left_inferred = inferred;
-                left_ty = ty;
+                left = self.infer_binary_with_left(op, left, right, &result_ty, s);
             }
-            return left_inferred;
+            return left.expression;
         }
 
         self.infer_binary_impl(operator, left_operand, right_operand, expected_ty, span)
@@ -148,20 +167,14 @@ impl InferCtx<'_, '_> {
 
     /// Infer a binary expression where the left operand is already inferred.
     /// Returns the inferred expression and its result type.
-    #[allow(clippy::too_many_arguments)]
     pub(super) fn infer_binary_with_left(
         &mut self,
         operator: BinaryOperator,
-        left_inferred: Expression,
-        left_ty: Type,
+        left: InferredOperand,
         right_operand: Box<Expression>,
         expected_ty: &Type,
         span: Span,
-    ) -> (Expression, Type) {
-        let divisor_is_zero =
-            matches!(operator, Division | Remainder) && is_zero_literal(&right_operand);
-
-        let left_operand_ty = left_ty;
+    ) -> InferredOperand {
         let right_operand_ty = self.new_type_var();
 
         let right_literal_kind = literal_kind(&right_operand);
@@ -169,7 +182,7 @@ impl InferCtx<'_, '_> {
 
         let new_right_operand = self.with_value_context(|s| {
             if is_right_literal {
-                let left_resolved = left_operand_ty.resolve_in(&s.env);
+                let left_resolved = left.ty.resolve_in(&s.env);
                 if literal_can_adapt_to(&right_literal_kind, &left_resolved) {
                     let _ = s.try_unify(&right_operand_ty, &left_resolved, &span);
                 }
@@ -177,43 +190,8 @@ impl InferCtx<'_, '_> {
             s.infer_expression(*right_operand, &right_operand_ty)
         });
 
-        if divisor_is_zero {
-            self.report_zero_divisor(operator, &right_operand_ty, span);
-        }
-
-        if matches!(operator, And | Or)
-            && let Some(span) = Self::find_propagate(&new_right_operand)
-        {
-            self.sink
-                .push(diagnostics::infer::propagate_in_condition(span));
-        }
-
-        let left_span = left_inferred.get_span();
-        let right_span = new_right_operand.get_span();
-
-        let errors_before = self.sink.len();
-        let expression_ty = self.resolve_binary_type(
-            &operator,
-            &left_operand_ty,
-            &right_operand_ty,
-            &left_span,
-            &right_span,
-            span,
-        );
-        if self.sink.len() != errors_before {
-            self.facts.type_error_spans.insert(span);
-        }
-
-        self.unify(expected_ty, &expression_ty, &span);
-
-        let result = Expression::Binary {
-            operator,
-            left: Box::new(left_inferred),
-            right: Box::new(new_right_operand),
-            ty: expression_ty.clone(),
-            span,
-        };
-        (result, expression_ty)
+        let right = InferredOperand::new(new_right_operand, right_operand_ty);
+        self.finish_binary(operator, left, right, expected_ty, span)
     }
 
     fn infer_binary_impl(
@@ -224,9 +202,6 @@ impl InferCtx<'_, '_> {
         expected_ty: &Type,
         span: Span,
     ) -> Expression {
-        let divisor_is_zero =
-            matches!(operator, Division | Remainder) && is_zero_literal(&right_operand);
-
         let left_operand_ty = self.new_type_var();
         let right_operand_ty = self.new_type_var();
 
@@ -265,27 +240,43 @@ impl InferCtx<'_, '_> {
             }
         });
 
-        if divisor_is_zero {
-            self.report_zero_divisor(operator, &right_operand_ty, span);
-        }
+        let left = InferredOperand::new(new_left_operand, left_operand_ty);
+        let right = InferredOperand::new(new_right_operand, right_operand_ty);
+        self.finish_binary(operator, left, right, expected_ty, span)
+            .expression
+    }
 
+    fn finish_binary(
+        &mut self,
+        operator: BinaryOperator,
+        left: InferredOperand,
+        right: InferredOperand,
+        expected_ty: &Type,
+        span: Span,
+    ) -> InferredOperand {
+        if matches!(operator, Division | Remainder) && is_zero_literal(&right.expression) {
+            self.report_zero_divisor(operator, &right.ty, span);
+        }
         if matches!(operator, And | Or)
-            && let Some(span) = Self::find_propagate(&new_right_operand)
+            && let Some(span) = Self::find_propagate(&right.expression)
         {
             self.sink
                 .push(diagnostics::infer::propagate_in_condition(span));
         }
 
-        let left_span = new_left_operand.get_span();
-        let right_span = new_right_operand.get_span();
-
         let errors_before = self.sink.len();
         let expression_ty = self.resolve_binary_type(
             &operator,
-            &left_operand_ty,
-            &right_operand_ty,
-            &left_span,
-            &right_span,
+            BinaryOperands {
+                left: BinaryOperand {
+                    ty: &left.ty,
+                    span: left.expression.get_span(),
+                },
+                right: BinaryOperand {
+                    ty: &right.ty,
+                    span: right.expression.get_span(),
+                },
+            },
             span,
         );
         if self.sink.len() != errors_before {
@@ -294,26 +285,27 @@ impl InferCtx<'_, '_> {
 
         self.unify(expected_ty, &expression_ty, &span);
 
-        Expression::Binary {
+        let expression = Expression::Binary {
             operator,
-            left: new_left_operand.into(),
-            right: new_right_operand.into(),
-            ty: expression_ty,
+            left: left.expression.into(),
+            right: right.expression.into(),
+            ty: expression_ty.clone(),
             span,
-        }
+        };
+        InferredOperand::new(expression, expression_ty)
     }
 
     /// Resolve the result type of a binary operation given already-inferred operand types.
-    #[allow(clippy::too_many_arguments)]
     fn resolve_binary_type(
         &mut self,
         operator: &BinaryOperator,
-        left_operand_ty: &Type,
-        right_operand_ty: &Type,
-        left_span: &Span,
-        right_span: &Span,
+        operands: BinaryOperands<'_>,
         span: Span,
     ) -> Type {
+        let left_operand_ty = operands.left.ty;
+        let right_operand_ty = operands.right.ty;
+        let left_span = &operands.left.span;
+        let right_span = &operands.right.span;
         match operator {
             Equal | NotEqual => {
                 let resolved_left_operand = left_operand_ty.resolve_in(&self.env);

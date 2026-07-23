@@ -63,7 +63,7 @@ src/
     └── math.test.lis    # tests internal to math module
 ```
 
-`lis check` includes test files and production code. `lis build` and `lis run` exclude test files from the binary.
+`lis check` includes test files and production code. `lis build` and `lis run` exclude test files from the emitted output.
 
 Tests external to a module are not supported yet.
 

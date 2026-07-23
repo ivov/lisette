@@ -7,7 +7,7 @@ use crate::checker::infer::{BuiltinBound, InferCtx};
 use crate::generics::{apply_bounds, bound_implied, type_argument_children};
 use crate::store::Store;
 
-impl TaskState<'_> {
+impl TaskState {
     pub(crate) fn check_transitive_generic_bounds(
         &mut self,
         store: &Store,

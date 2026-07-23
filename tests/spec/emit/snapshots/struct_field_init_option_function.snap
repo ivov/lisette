@@ -22,7 +22,7 @@ type Wrapper struct {
 	opt lisette.Option[int]
 }
 
-func get_opt(b bool) (int, bool) {
+func getOpt(b bool) (int, bool) {
 	if b {
 		return 42, true
 	}
@@ -30,6 +30,6 @@ func get_opt(b bool) (int, bool) {
 }
 
 func test() {
-	option_1 := lisette.OptionFromCommaOk[int](get_opt(true))
+	option_1 := lisette.OptionFromCommaOk[int](getOpt(true))
 	_ = Wrapper{opt: option_1}
 }

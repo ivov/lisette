@@ -28,6 +28,6 @@ func Point_new(x, y int) Point {
 	}
 }
 
-func (p Point) get_x() int {
+func (p Point) getX() int {
 	return p.x
 }

@@ -14,14 +14,14 @@ func first(xs [3]int) int {
 	return xs[0]
 }
 
-func make_arr() [3]int {
+func makeArr() [3]int {
 	return [3]int{10, 20, 30}
 }
 
 func main() {
 	xs := [3]int{1, 2, 3}
 	g := Grid{cells: [3]int{4, 5, 6}}
-	same := xs == make_arr()
+	same := xs == makeArr()
 	_arg_1 := len(xs)
 	_arg_2 := xs[0]
 	fmt.Println(_arg_1, _arg_2, same, first(g.cells))

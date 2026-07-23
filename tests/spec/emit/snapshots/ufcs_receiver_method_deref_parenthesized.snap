@@ -24,10 +24,10 @@ func (b Box) add(y int) int {
 	return b.x + y
 }
 
-func make_ref() *Box {
+func makeRef() *Box {
 	return &Box{x: 1}
 }
 
 func main() {
-	_ = (*make_ref()).add(1)
+	_ = (*makeRef()).add(1)
 }

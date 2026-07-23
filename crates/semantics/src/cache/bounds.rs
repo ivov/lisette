@@ -20,8 +20,8 @@ pub(crate) fn restore_cached_generic_bounds(
     sink: &LocalSink,
     cached_modules: &FxHashSet<String>,
 ) {
-    let mut checker = TaskState::with_fresh_allocator(sink);
-    let module_ids = store.module_ids.clone();
+    let mut checker = TaskState::with_fresh_allocator();
+    let module_ids: Vec<String> = store.modules.keys().cloned().collect();
     for module_id in module_ids {
         restore_module_bounds(
             &mut checker,
@@ -30,6 +30,7 @@ pub(crate) fn restore_cached_generic_bounds(
             cached_modules.contains(&module_id),
         );
     }
+    sink.extend(checker.sink.take());
 }
 
 fn restore_module_bounds(

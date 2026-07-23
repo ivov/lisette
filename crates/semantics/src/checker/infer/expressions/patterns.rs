@@ -1,6 +1,5 @@
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
-use ecow::EcoString;
 use syntax::ast::BindingKind;
 use syntax::ast::{
     EnumFieldDefinition, Expression, Literal, Pattern, RestPattern, Span, StructFieldPattern,
@@ -12,8 +11,9 @@ use syntax::types::{CompoundKind, Type, substitute, unqualified_name};
 use crate::checker::EnvResolve;
 
 use crate::checker::infer::InferCtx;
+use crate::facts::BindingOrigin;
 
-impl InferCtx<'_, '_> {
+impl InferCtx<'_> {
     pub(super) fn infer_pattern(
         &mut self,
         pattern: Pattern,
@@ -39,9 +39,10 @@ impl InferCtx<'_, '_> {
                     span,
                     expected_ty,
                     kind,
-                    is_d_lis,
-                    is_struct_field,
-                    false,
+                    BindingOrigin::Name {
+                        in_typedef: is_d_lis,
+                        shorthand_field: is_struct_field,
+                    },
                 );
                 (
                     Pattern::Identifier { identifier, span },
@@ -100,21 +101,13 @@ impl InferCtx<'_, '_> {
                 (pattern, typed)
             }
 
-            Pattern::EnumVariant {
-                identifier,
-                fields,
-                rest,
-                span,
-                ..
-            } => self.infer_enum_variant_pattern(identifier, fields, rest, span, expected_ty, kind),
+            pattern @ Pattern::EnumVariant { .. } => {
+                self.infer_enum_variant_pattern(pattern, expected_ty, kind)
+            }
 
-            Pattern::Struct {
-                identifier,
-                fields,
-                rest,
-                span,
-                ..
-            } => self.infer_struct_pattern(identifier, fields, rest, span, expected_ty, kind),
+            pattern @ Pattern::Struct { .. } => {
+                self.infer_struct_pattern(pattern, expected_ty, kind)
+            }
 
             Pattern::WildCard { span } => (Pattern::WildCard { span }, TypedPattern::Wildcard),
 
@@ -124,15 +117,13 @@ impl InferCtx<'_, '_> {
                 (Pattern::Unit { ty: unit_ty, span }, TypedPattern::Wildcard)
             }
 
-            Pattern::Slice {
-                prefix, rest, span, ..
-            } => {
+            pattern @ Pattern::Slice { .. } => {
                 let resolved_ty = store.peel_alias(&expected_ty.resolve_in(&self.env));
                 if let Type::Array { length, element } = &resolved_ty {
                     let (length, element_ty) = (*length, element.as_ref().clone());
-                    self.infer_array_pattern(prefix, rest, span, length, element_ty, kind)
+                    self.infer_array_pattern(pattern, length, element_ty, kind)
                 } else {
-                    self.infer_slice_pattern(prefix, rest, span, resolved_ty, expected_ty, kind)
+                    self.infer_slice_pattern(pattern, resolved_ty, expected_ty, kind)
                 }
             }
 
@@ -186,9 +177,9 @@ impl InferCtx<'_, '_> {
                     name_span,
                     alias_ty,
                     kind,
-                    false,
-                    is_struct_field,
-                    true,
+                    BindingOrigin::AsAlias {
+                        shorthand_field: is_struct_field,
+                    },
                 );
                 (
                     Pattern::AsBinding {
@@ -203,48 +194,34 @@ impl InferCtx<'_, '_> {
         }
     }
 
-    #[allow(clippy::too_many_arguments)]
     fn bind_name_in_scope(
         &mut self,
         name: String,
         span: Span,
         ty: Type,
         kind: BindingKind,
-        is_typedef: bool,
-        is_struct_field: bool,
-        is_as_alias: bool,
+        origin: BindingOrigin,
     ) {
-        self.check_binding_shadows_import(&name, span, is_typedef);
+        self.check_binding_shadows_import(&name, span, origin.is_typedef());
 
-        let binding_id = self.facts.add_binding(
-            name.clone(),
-            span,
-            kind,
-            is_typedef,
-            is_struct_field,
-            is_as_alias,
-        );
+        let binding_id = self.facts.add_binding(name.clone(), span, kind, origin);
         let scope = self.scopes.current_mut();
-        scope.values.insert(name.clone(), ty);
-        scope.name_to_binding.insert(name.clone(), binding_id);
-        if kind.is_mutable() {
-            scope
-                .mutables
-                .get_or_insert_with(HashSet::default)
-                .insert(name);
-        }
+        scope.insert_binding(name, ty, binding_id, kind.is_mutable());
     }
 
-    #[allow(clippy::too_many_arguments)]
     fn infer_array_pattern(
         &mut self,
-        prefix: Vec<Pattern>,
-        rest: RestPattern,
-        span: Span,
+        pattern: Pattern,
         length: u64,
         element_ty: Type,
         kind: BindingKind,
     ) -> (Pattern, TypedPattern) {
+        let Pattern::Slice {
+            prefix, rest, span, ..
+        } = pattern
+        else {
+            unreachable!("infer_array_pattern called with non-Slice pattern");
+        };
         let store = self.store;
         let (inferred_prefix, typed_prefix): (Vec<_>, Vec<_>) = prefix
             .into_iter()
@@ -275,13 +252,16 @@ impl InferCtx<'_, '_> {
                 self.type_array(remaining, element_ty.clone())
             };
             let is_typedef = self.is_d_lis(store);
-            self.check_binding_shadows_import(name, *span, is_typedef);
-            let binding_id =
-                self.facts
-                    .add_binding(name.to_string(), *span, kind, is_typedef, false, false);
-            let scope = self.scopes.current_mut();
-            scope.values.insert(name.to_string(), rest_ty);
-            scope.name_to_binding.insert(name.to_string(), binding_id);
+            self.bind_name_in_scope(
+                name.to_string(),
+                *span,
+                rest_ty,
+                kind,
+                BindingOrigin::Name {
+                    in_typedef: is_typedef,
+                    shorthand_field: false,
+                },
+            );
         }
 
         let pattern = Pattern::Slice {
@@ -298,16 +278,19 @@ impl InferCtx<'_, '_> {
         (pattern, typed)
     }
 
-    #[allow(clippy::too_many_arguments)]
     fn infer_slice_pattern(
         &mut self,
-        prefix: Vec<Pattern>,
-        rest: RestPattern,
-        span: Span,
+        pattern: Pattern,
         resolved_ty: Type,
         expected_ty: Type,
         kind: BindingKind,
     ) -> (Pattern, TypedPattern) {
+        let Pattern::Slice {
+            prefix, rest, span, ..
+        } = pattern
+        else {
+            unreachable!("infer_slice_pattern called with non-Slice pattern");
+        };
         let store = self.store;
         let element_ty = match resolved_ty.as_compound() {
             Some((CompoundKind::Slice, args)) if args.len() == 1 => args[0].clone(),
@@ -331,13 +314,16 @@ impl InferCtx<'_, '_> {
                 self.type_slice(element_ty.clone())
             };
             let is_typedef = self.is_d_lis(store);
-            self.check_binding_shadows_import(name, *span, is_typedef);
-            let binding_id =
-                self.facts
-                    .add_binding(name.to_string(), *span, kind, is_typedef, false, false);
-            let scope = self.scopes.current_mut();
-            scope.values.insert(name.to_string(), rest_ty);
-            scope.name_to_binding.insert(name.to_string(), binding_id);
+            self.bind_name_in_scope(
+                name.to_string(),
+                *span,
+                rest_ty,
+                kind,
+                BindingOrigin::Name {
+                    in_typedef: is_typedef,
+                    shorthand_field: false,
+                },
+            );
         }
 
         let pattern = Pattern::Slice {
@@ -354,16 +340,22 @@ impl InferCtx<'_, '_> {
         (pattern, typed)
     }
 
-    #[allow(clippy::too_many_arguments)]
     fn infer_enum_variant_pattern(
         &mut self,
-        identifier: EcoString,
-        fields: Vec<Pattern>,
-        rest: bool,
-        span: Span,
+        pattern: Pattern,
         expected_ty: Type,
         kind: BindingKind,
     ) -> (Pattern, TypedPattern) {
+        let Pattern::EnumVariant {
+            identifier,
+            fields,
+            rest,
+            span,
+            ..
+        } = pattern
+        else {
+            unreachable!("infer_enum_variant_pattern called with non-EnumVariant pattern");
+        };
         let store = self.store;
         if fields.is_empty()
             && identifier.contains('.')
@@ -655,46 +647,40 @@ impl InferCtx<'_, '_> {
         Some((pattern, typed))
     }
 
-    #[allow(clippy::too_many_arguments)]
     fn infer_struct_pattern(
         &mut self,
-        identifier: EcoString,
-        fields: Vec<StructFieldPattern>,
-        rest: bool,
-        span: Span,
+        pattern: Pattern,
         expected_ty: Type,
         kind: BindingKind,
     ) -> (Pattern, TypedPattern) {
+        let Pattern::Struct {
+            identifier,
+            fields,
+            rest,
+            span,
+            ..
+        } = &pattern
+        else {
+            unreachable!("infer_struct_pattern called with non-Struct pattern");
+        };
+        let rest = *rest;
+        let span = *span;
         let store = self.store;
         if kind.is_match_arm()
             && self
-                .resolve_bare_variant_type(&identifier, &expected_ty)
+                .resolve_bare_variant_type(identifier, &expected_ty)
                 .is_some()
-            && let Some(result) = self.try_infer_enum_struct_variant(
-                &identifier,
-                &fields,
-                rest,
-                &span,
-                &expected_ty,
-                kind,
-            )
+            && let Some(result) = self.try_infer_enum_struct_variant(&pattern, &expected_ty, kind)
         {
             return result;
         }
 
-        let Some(qualified_name) = self.lookup_qualified_name(store, &identifier) else {
+        let Some(qualified_name) = self.lookup_qualified_name(store, identifier) else {
             return self
-                .try_infer_enum_struct_variant(
-                    &identifier,
-                    &fields,
-                    rest,
-                    &span,
-                    &expected_ty,
-                    kind,
-                )
+                .try_infer_enum_struct_variant(&pattern, &expected_ty, kind)
                 .unwrap_or_else(|| {
                     self.sink
-                        .push(diagnostics::infer::struct_not_found(&identifier, span));
+                        .push(diagnostics::infer::struct_not_found(identifier, span));
                     (Pattern::WildCard { span }, TypedPattern::Wildcard)
                 });
         };
@@ -709,17 +695,10 @@ impl InferCtx<'_, '_> {
         }) = store.get_definition(&qualified_name)
         else {
             return self
-                .try_infer_enum_struct_variant(
-                    &identifier,
-                    &fields,
-                    rest,
-                    &span,
-                    &expected_ty,
-                    kind,
-                )
+                .try_infer_enum_struct_variant(&pattern, &expected_ty, kind)
                 .unwrap_or_else(|| {
                     self.sink
-                        .push(diagnostics::infer::struct_not_found(&identifier, span));
+                        .push(diagnostics::infer::struct_not_found(identifier, span));
                     (Pattern::WildCard { span }, TypedPattern::Wildcard)
                 });
         };
@@ -816,7 +795,7 @@ impl InferCtx<'_, '_> {
         };
 
         let pattern = Pattern::Struct {
-            identifier,
+            identifier: identifier.clone(),
             fields: new_fields,
             rest,
             ty: struct_ty,
@@ -954,7 +933,7 @@ impl InferCtx<'_, '_> {
         {
             return simple.to_string();
         }
-        for (prefix, imported_module_id) in &self.imports.prefix_to_module {
+        for (prefix, imported_module_id) in self.imports.modules() {
             if imported_module_id == module_id {
                 return format!("{}.{}", prefix, simple);
             }
@@ -1030,16 +1009,23 @@ impl InferCtx<'_, '_> {
     }
 
     /// Tries to infer an enum struct variant pattern like `Move { x, y }`.
-    #[allow(clippy::too_many_arguments)]
     fn try_infer_enum_struct_variant(
         &mut self,
-        identifier: &str,
-        fields: &[StructFieldPattern],
-        rest: bool,
-        span: &Span,
+        pattern: &Pattern,
         expected_ty: &Type,
         kind: BindingKind,
     ) -> Option<(Pattern, TypedPattern)> {
+        let Pattern::Struct {
+            identifier,
+            fields,
+            rest,
+            span,
+            ..
+        } = pattern
+        else {
+            unreachable!("try_infer_enum_struct_variant called with non-Struct pattern");
+        };
+        let rest = *rest;
         let store = self.store;
         let bare_variant = if kind.is_match_arm() {
             self.resolve_bare_variant_type(identifier, expected_ty)

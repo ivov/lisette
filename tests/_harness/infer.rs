@@ -1,8 +1,11 @@
 use diagnostics::{LisetteDiagnostic, LocalSink};
 use semantics::loader::Loader;
 use semantics::{
-    checker::TaskState, checker::infer::InferCtx, module_graph::Roots,
-    module_graph::build_module_graph, store::Store,
+    checker::TaskState,
+    checker::infer::InferCtx,
+    module_graph::Roots,
+    module_graph::{ModuleGraphOptions, build_module_graph},
+    store::Store,
 };
 use stdlib::{Target, get_go_stdlib_typedef};
 use syntax::{ast::Expression, types::Type};
@@ -48,11 +51,7 @@ pub fn infer_with_go_typedefs(raw_source: &str, typedefs: &[(&str, &str)]) -> In
 }
 
 pub fn infer_module(module_name: &str, fs: MockFileSystem) -> InferResult {
-    let available_folders = fs.folders();
-
     let mut store = Store::new();
-
-    store.module_ids.extend(available_folders);
 
     let sink = LocalSink::new();
 
@@ -61,8 +60,17 @@ pub fn infer_module(module_name: &str, fs: MockFileSystem) -> InferResult {
         primary: vec![module_name.to_string()],
         additional: fs.discover_modules().test_roots,
     };
-    let mut graph_result =
-        build_module_graph(&mut store, Some(&fs), roots, &sink, false, &locator, true);
+    let mut graph_result = build_module_graph(
+        &mut store,
+        roots,
+        ModuleGraphOptions {
+            loader: Some(&fs),
+            sink: &sink,
+            standalone_mode: false,
+            locator: &locator,
+            include_tests: true,
+        },
+    );
 
     if sink.has_errors() {
         return InferResult {
@@ -74,10 +82,8 @@ pub fn infer_module(module_name: &str, fs: MockFileSystem) -> InferResult {
     init_prelude(&mut store);
 
     let ast = {
-        let mut checker = TaskState::with_fresh_allocator(&sink);
-        checker
-            .ufcs_methods
-            .extend(semantics::prelude::compute_prelude_ufcs(&store));
+        let mut checker = TaskState::with_fresh_allocator();
+        checker.extend_ufcs_methods(semantics::prelude::compute_prelude_ufcs(&store));
         register_test_builtins(&mut store, &mut checker);
         checker.put_prelude_in_scope(&store);
 
@@ -147,17 +153,19 @@ pub fn infer_module(module_name: &str, fs: MockFileSystem) -> InferResult {
 
         if !checker.failed() {
             store.build_closed_domains();
-            let analysis = semantics::context::AnalysisContext::new(&store, &checker.ufcs_methods);
+            let ufcs_methods = checker.shared_ufcs_methods();
+            let analysis = semantics::context::AnalysisContext::new(&store, &ufcs_methods);
             let mut unused = syntax::program::UnusedInfo::default();
             passes::run(
                 &analysis,
                 &mut checker.facts,
-                checker.sink,
+                &checker.sink,
                 &mut unused,
                 false,
             );
         }
 
+        sink.extend(checker.sink.take());
         ast
     };
 

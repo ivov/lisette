@@ -14,7 +14,7 @@ description: |
 ---
 package main
 
-func use_ref(r *int) *int {
+func useRef(r *int) *int {
 	return r
 }
 

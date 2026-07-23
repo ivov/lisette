@@ -1,13 +1,16 @@
-use std::cell::Cell;
-
 use crate::checker::EnvResolve;
-use crate::checker::scopes::{CarrierKind, DepthCounter, RecoverBlockContext, TryBlockContext};
+use crate::checker::scopes::{DepthCounter, RecoverBlockContext, TryBlockContext, TryCarrier};
 use syntax::ast::{Expression, Span};
 use syntax::types::Type;
 
 use crate::checker::infer::InferCtx;
 
-impl InferCtx<'_, '_> {
+struct TryBlockTypes {
+    ok: Type,
+    error: Type,
+}
+
+impl InferCtx<'_> {
     pub(super) fn infer_propagate(
         &mut self,
         expression: Box<Expression>,
@@ -30,27 +33,24 @@ impl InferCtx<'_, '_> {
                 .push(diagnostics::infer::propagate_on_partial(span));
         }
 
-        let try_block_types = if let Some(ctx) = self.scopes.lookup_try_block_context() {
+        let try_block_types = if self.scopes.lookup_try_block_context().is_some() {
             let is_result = resolved_tried_ty.is_result();
             let is_option = resolved_tried_ty.is_option();
-
-            ctx.has_question_mark.set(true);
-
-            let has_mismatch = match (is_result, is_option, ctx.carrier.get()) {
-                (true, _, None) => {
-                    ctx.carrier.set(Some(CarrierKind::Result));
-                    false
-                }
-                (_, true, None) => {
-                    ctx.carrier.set(Some(CarrierKind::Option));
-                    false
-                }
-                (true, _, Some(CarrierKind::Option)) | (_, true, Some(CarrierKind::Result)) => true,
-                _ => false,
+            let observed = if is_result {
+                Some(TryCarrier::Result)
+            } else if is_option {
+                Some(TryCarrier::Option)
+            } else {
+                None
             };
-
-            let ok_ty = ctx.ok_ty.clone();
-            let err_ty = ctx.err_ty.clone();
+            let (ok_ty, err_ty, has_mismatch) = {
+                let ctx = self
+                    .scopes
+                    .lookup_try_block_context_mut()
+                    .expect("try block context was just found");
+                let has_mismatch = ctx.carrier.observe(observed);
+                (ctx.ok_ty.clone(), ctx.err_ty.clone(), has_mismatch)
+            };
 
             if !is_result
                 && !is_option
@@ -65,17 +65,19 @@ impl InferCtx<'_, '_> {
                     .push(diagnostics::infer::mixed_carriers_in_try_block(span));
             }
 
-            Some((ok_ty, err_ty))
+            Some(TryBlockTypes {
+                ok: ok_ty,
+                error: err_ty,
+            })
         } else {
             None
         };
 
-        if let Some((try_ok_ty, try_err_ty)) = try_block_types {
+        if let Some(try_types) = try_block_types {
             return self.infer_propagate_in_block(
                 new_expression,
                 &resolved_tried_ty,
-                &try_ok_ty,
-                &try_err_ty,
+                &try_types,
                 span,
                 expected_ty,
             );
@@ -89,13 +91,11 @@ impl InferCtx<'_, '_> {
         Type::Error
     }
 
-    #[allow(clippy::too_many_arguments)]
     fn infer_propagate_in_block(
         &mut self,
         new_expression: Expression,
         tried_ty: &Type,
-        try_ok_ty: &Type,
-        try_err_ty: &Type,
+        try_types: &TryBlockTypes,
         span: Span,
         expected_ty: &Type,
     ) -> Expression {
@@ -103,16 +103,16 @@ impl InferCtx<'_, '_> {
             self.propagate_as_error(expected_ty, span)
         } else if tried_ty.is_result() {
             let ok_ty = tried_ty.ok_type();
-            self.unify(try_err_ty, &tried_ty.err_type(), &span);
+            self.unify(&try_types.error, &tried_ty.err_type(), &span);
             if ok_ty.resolve_in(&self.env).is_variable() {
-                self.unify(try_ok_ty, &ok_ty, &span);
+                self.unify(&try_types.ok, &ok_ty, &span);
             }
             self.unify(expected_ty, &ok_ty, &span);
             ok_ty
         } else if tried_ty.is_option() {
             let some_ty = tried_ty.ok_type();
             if some_ty.resolve_in(&self.env).is_variable() {
-                self.unify(try_ok_ty, &some_ty, &span);
+                self.unify(&try_types.ok, &some_ty, &span);
             }
             self.unify(expected_ty, &some_ty, &span);
             some_ty
@@ -231,8 +231,7 @@ impl InferCtx<'_, '_> {
             scope.try_block_context = Some(TryBlockContext {
                 ok_ty: ok_ty.clone(),
                 err_ty: err_ty.clone(),
-                carrier: Cell::new(None),
-                has_question_mark: Cell::new(false),
+                carrier: TryCarrier::Unset,
                 loop_depth: DepthCounter::new(),
             });
         }
@@ -241,17 +240,17 @@ impl InferCtx<'_, '_> {
 
         let new_items = self.infer_block_items(items, ok_ty.clone());
 
-        let (has_question_mark, carrier) = {
+        let carrier = {
             let ctx = self
                 .scopes
                 .current()
                 .try_block_context
                 .as_ref()
                 .expect("try_block_context must exist");
-            (ctx.has_question_mark.get(), ctx.carrier.get())
+            ctx.carrier
         };
 
-        if !has_question_mark {
+        if !carrier.was_used() {
             self.sink
                 .push(diagnostics::infer::try_block_no_question_mark(
                     try_keyword_span,
@@ -287,15 +286,15 @@ impl InferCtx<'_, '_> {
         let inner_ty = last_item.get_type();
 
         let block_ty = match carrier {
-            Some(CarrierKind::Result) => {
+            TryCarrier::Result => {
                 self.unify(&ok_ty, &inner_ty, &span);
                 self.type_result(store, inner_ty, err_ty)
             }
-            Some(CarrierKind::Option) => {
+            TryCarrier::Option => {
                 self.unify(&ok_ty, &inner_ty, &span);
                 self.type_option(store, inner_ty)
             }
-            None => {
+            TryCarrier::Unset | TryCarrier::Unknown => {
                 let new_err_ty = self.new_type_var();
                 self.type_result(store, inner_ty, new_err_ty)
             }
@@ -313,13 +312,13 @@ impl InferCtx<'_, '_> {
     }
 
     pub(super) fn increment_try_block_loop_depth(&mut self) {
-        if let Some(ctx) = self.scopes.lookup_try_block_context() {
+        if let Some(ctx) = self.scopes.lookup_try_block_context_mut() {
             ctx.loop_depth.increment();
         }
     }
 
     pub(super) fn decrement_try_block_loop_depth(&mut self) {
-        if let Some(ctx) = self.scopes.lookup_try_block_context() {
+        if let Some(ctx) = self.scopes.lookup_try_block_context_mut() {
             ctx.loop_depth.decrement();
         }
     }
@@ -381,13 +380,13 @@ impl InferCtx<'_, '_> {
     }
 
     pub(super) fn increment_recover_block_loop_depth(&mut self) {
-        if let Some(ctx) = self.scopes.lookup_recover_block_context() {
+        if let Some(ctx) = self.scopes.lookup_recover_block_context_mut() {
             ctx.loop_depth.increment();
         }
     }
 
     pub(super) fn decrement_recover_block_loop_depth(&mut self) {
-        if let Some(ctx) = self.scopes.lookup_recover_block_context() {
+        if let Some(ctx) = self.scopes.lookup_recover_block_context_mut() {
             ctx.loop_depth.decrement();
         }
     }

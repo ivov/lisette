@@ -41,7 +41,7 @@ impl TypeArgumentChecks {
     }
 }
 
-impl TaskState<'_> {
+impl TaskState {
     /// Resolves a generic-bound annotation. Bound-only markers like
     /// `Comparable` are admitted here; the same names in value position
     /// are flagged inside `convert_to_type`.

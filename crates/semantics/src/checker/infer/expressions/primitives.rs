@@ -9,6 +9,7 @@ use super::super::addressability::{
     check_is_non_addressable, check_non_addressable_assignment_target,
 };
 use super::functions::phantom_type_params;
+use super::operators::InferredOperand;
 use crate::checker::infer::InferCtx;
 
 /// Checks whether an assignment target expression contains a deref (`.* `)
@@ -87,15 +88,15 @@ fn contains_stored_reference_to(expression: &Expression, var_name: &str) -> bool
     }
 }
 
-impl InferCtx<'_, '_> {
+impl InferCtx<'_> {
     pub(super) fn infer_paren(
         &mut self,
         expression: Box<Expression>,
         span: Span,
         expected_ty: &Type,
-        parent_is_subexpression: bool,
+        is_subexpression: bool,
     ) -> Expression {
-        if !parent_is_subexpression {
+        if !is_subexpression {
             match &*expression {
                 Expression::Return { span: s, .. } => {
                     self.sink
@@ -115,8 +116,7 @@ impl InferCtx<'_, '_> {
             }
         }
 
-        self.scopes.set_in_subexpression(parent_is_subexpression);
-        let new_expression = self.infer_expression(*expression, expected_ty);
+        let new_expression = self.infer_expression_at(*expression, expected_ty, is_subexpression);
         let new_ty = new_expression.get_type();
 
         Expression::Paren {
@@ -395,18 +395,17 @@ impl InferCtx<'_, '_> {
         // get their types from a Map's value type).
         let value_expected = target_ty.resolve_in(&self.env);
         let (new_value, value_ty) = if let Some(operator) = compound_operator {
-            let (binary, result_ty) = self.infer_binary_with_left(
+            let inferred = self.infer_binary_with_left(
                 operator,
-                new_target.clone(),
-                target_ty.clone(),
+                InferredOperand::new(new_target.clone(), target_ty.clone()),
                 value,
                 &value_expected,
                 span,
             );
-            let Expression::Binary { right, .. } = binary else {
+            let Expression::Binary { right, .. } = inferred.expression else {
                 unreachable!("infer_binary_with_left always returns a binary")
             };
-            (*right, result_ty)
+            (*right, inferred.ty)
         } else {
             let new_value = self.infer_expression(*value, &value_expected);
             let value_ty = new_value.get_type();
@@ -443,7 +442,7 @@ impl InferCtx<'_, '_> {
 
             let can_mutate = is_mutable || is_deref || binding_is_ref;
 
-            if !can_mutate && !self.imports.imported_modules.contains_key(&var_name) {
+            if !can_mutate && self.imports.namespace(&var_name).is_none() {
                 let self_type_name = if var_name == "self" {
                     self.lookup_type(store, "self")
                         .and_then(|t| t.get_name().map(str::to_owned))
@@ -543,7 +542,7 @@ impl InferCtx<'_, '_> {
         for (i, item) in items.into_iter().enumerate() {
             if diverged_at.is_some() {
                 let dead_item_ty = self.new_type_var();
-                let inferred_item = self.infer_expression(item, &dead_item_ty);
+                let inferred_item = self.infer_root_expression(item, &dead_item_ty);
                 new_items.push(inferred_item);
                 continue;
             }
@@ -597,8 +596,7 @@ impl InferCtx<'_, '_> {
                 None
             };
 
-            self.scopes.set_in_subexpression(false);
-            let inferred_item = self.infer_expression(item, &expression_ty);
+            let inferred_item = self.infer_root_expression(item, &expression_ty);
 
             if let Some(ctx) = prev_ctx {
                 self.scopes.restore_use_context(ctx);
@@ -622,7 +620,7 @@ impl InferCtx<'_, '_> {
 
     fn error_name_not_found(&mut self, variable_name: &str, span: Span, expected_ty: &Type) {
         let store = self.store;
-        if self.imports.failed_imports.contains(variable_name) {
+        if self.imports.is_failed(variable_name) {
             return;
         }
 

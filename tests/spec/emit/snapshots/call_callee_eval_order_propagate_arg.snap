@@ -21,7 +21,7 @@ package main
 
 import lisette "github.com/ivov/lisette/prelude"
 
-func make_f(_ *int) func(int) int {
+func makeF(_ *int) func(int) int {
 	return func(x int) int {
 		return x
 	}
@@ -34,7 +34,7 @@ func get(i *int) lisette.Result[int, string] {
 
 func run() lisette.Result[int, string] {
 	i := 0
-	callee_2 := make_f(&i)
+	callee_2 := makeF(&i)
 	check_1 := get(&i)
 	if check_1.Tag != lisette.ResultOk {
 		return lisette.MakeResultErr[int, string](check_1.ErrVal)

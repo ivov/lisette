@@ -20,7 +20,7 @@ package main
 
 func process(_ int) {}
 
-func handle_close() {}
+func handleClose() {}
 
 func test() {
 	ch := make(chan int)
@@ -29,7 +29,7 @@ func test() {
 		if ok {
 			process(v)
 		} else {
-			handle_close()
+			handleClose()
 		}
 	default:
 	}

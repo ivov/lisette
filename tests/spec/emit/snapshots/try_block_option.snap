@@ -21,14 +21,14 @@ package main
 
 import lisette "github.com/ivov/lisette/prelude"
 
-func maybe_get() (int, bool) {
+func maybeGet() (int, bool) {
 	return 42, true
 }
 
 func test() int {
 	var opt lisette.Option[int]
 	tryResult_1 := func() lisette.Option[int] {
-		option_2 := lisette.OptionFromCommaOk[int](maybe_get())
+		option_2 := lisette.OptionFromCommaOk[int](maybeGet())
 		check_3 := option_2
 		if check_3.Tag != lisette.OptionSome {
 			return lisette.MakeOptionNone[int]()

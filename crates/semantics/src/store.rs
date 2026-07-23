@@ -7,8 +7,7 @@ use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use syntax::ast::{EnumVariant, Expression, Literal, StructFieldDefinition};
 use syntax::program::{
-    Definition, DefinitionBody, EqualityIndex, File, Interface, MethodSignatures, Module, ModuleId,
-    TestIndex,
+    Definition, DefinitionBody, EqualityIndex, File, Interface, MethodSignatures, Module, TestIndex,
 };
 use syntax::types::{SimpleKind, SubstitutionMap, Symbol, Type, substitute};
 
@@ -101,7 +100,6 @@ pub struct Store {
     /// `Arc` so registration workers share a read view; [`Arc::make_mut`]
     /// writes stay zero-copy while a module has a single owner.
     pub modules: HashMap<String, Arc<Module>>,
-    pub module_ids: Vec<ModuleId>,
     /// file ID -> module ID
     files: HashMap<u32, String>,
     /// Go module ID -> package name from the typedef `// Package:` directive.
@@ -142,12 +140,9 @@ impl Store {
         .into_iter()
         .collect();
 
-        let module_ids = vec!["prelude".to_string()];
-
         Self {
             files: Default::default(),
             modules,
-            module_ids,
             go_package_names: Default::default(),
             typedef_paths: Default::default(),
             visited_modules: Default::default(),
@@ -176,10 +171,9 @@ impl Store {
         ENTRY_MODULE_ID
     }
 
-    /// Initializes the entry module with reserved file ID 0.
+    /// Creates the entry module (empty for a library, whose root files load as siblings).
     pub(crate) fn init_entry_module(&mut self) {
         self.add_module(ENTRY_MODULE_ID);
-        self.register_file(ENTRY_FILE_ID, ENTRY_MODULE_ID);
     }
 
     pub(crate) fn store_entry_file(
@@ -261,7 +255,6 @@ impl Store {
 
         self.modules
             .insert(module_id.to_string(), Arc::new(Module::new(module_id)));
-        self.module_ids.push(module_id.to_string());
     }
 
     pub fn get_module_mut(&mut self, module_id: &str) -> Option<&mut Module> {
@@ -278,7 +271,6 @@ impl Store {
         for (file_id, owner) in file_map {
             self.files.insert(file_id, owner);
         }
-        self.module_ids.push(module_id.clone());
         self.modules.insert(module_id.clone(), Arc::new(module));
         self.visited_modules.insert(module_id);
     }
@@ -288,7 +280,6 @@ impl Store {
     pub(crate) fn registration_view(&self) -> Store {
         Store {
             modules: self.modules.clone(),
-            module_ids: self.module_ids.clone(),
             files: self.files.clone(),
             go_package_names: self.go_package_names.clone(),
             typedef_paths: HashMap::default(),

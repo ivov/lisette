@@ -6,11 +6,11 @@ package main
 
 import "github.com/user/myproject/types"
 
-func get_raw_id(id types.UserId) int {
+func getRawId(id types.UserId) int {
 	return int(id)
 }
 
-func get_x(p types.Point) int {
+func getX(p types.Point) int {
 	return p.F0
 }
 
@@ -24,7 +24,7 @@ func main() {
 		F0: 1,
 		F1: "hello",
 	}
-	_ = get_raw_id(id) + get_x(p) + pair.F0
+	_ = getRawId(id) + getX(p) + pair.F0
 }
 
 

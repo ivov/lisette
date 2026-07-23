@@ -1,12 +1,15 @@
 use rustc_hash::FxHashSet as HashSet;
 
 use syntax::EcoString;
-use syntax::ast::{Attribute, Expression, Generic, Span, VariantFields};
+use syntax::ast::{Generic, Span, VariantFields};
 use syntax::program::{Definition, DefinitionBody};
 use syntax::types::{Symbol, Type};
 
 use super::{TaskState, resolved_generic_bounds, wrap_with_impl_generics};
 use crate::checker::infer::expressions::comparison::{check_not_equatable, param_is_comparable};
+use crate::checker::registration::derived_attributes::{
+    DerivedAttribute, DerivedAttributeKind, DerivedAttributeTarget,
+};
 use crate::store::Store;
 
 fn equals_visibility(store: &Store, id: &str) -> Option<String> {
@@ -30,80 +33,40 @@ enum UserEquals {
     Conflict,
 }
 
-impl TaskState<'_> {
-    pub fn register_equality(&mut self, store: &mut Store, items: &[Expression]) {
-        let module_id = self.cursor.module_id.clone();
-        let is_d_lis = self.is_d_lis(store);
-        let mut candidates = Vec::new();
-        for item in items {
-            collect_equality_candidates(item, is_d_lis, &mut candidates);
-        }
-        for candidate in candidates {
-            self.process_equality_candidate(store, &module_id, candidate);
-        }
-    }
-
-    pub(super) fn register_module_equality(&mut self, store: &mut Store, module_id: &str) {
-        let candidates = {
-            let module = store.get_module(module_id).expect("module must exist");
-            let mut candidates = Vec::new();
-            for file in module.files.values().chain(module.typedefs.values()) {
-                let is_d_lis = file.is_d_lis();
-                for item in &file.items {
-                    collect_equality_candidates(item, is_d_lis, &mut candidates);
-                }
-            }
-            candidates
-        };
-
-        for candidate in candidates {
-            self.process_equality_candidate(store, module_id, candidate);
-        }
-    }
-
-    fn process_equality_candidate(
-        &mut self,
-        store: &mut Store,
-        module_id: &str,
-        candidate: EqualityCandidate,
-    ) {
-        let EqualityCandidate {
-            attribute_span,
-            kind,
-        } = candidate;
-        let TypeCandidate {
-            name,
-            is_d_lis,
-            has_args,
-        } = match kind {
-            CandidateKind::Misplaced => {
+impl TaskState {
+    fn process_equality_candidate(&mut self, store: &mut Store, candidate: &DerivedAttribute) {
+        debug_assert_eq!(candidate.kind, DerivedAttributeKind::Equality);
+        let name = match &candidate.target {
+            DerivedAttributeTarget::Misplaced => {
                 self.sink
                     .push(diagnostics::attribute::equality_not_a_struct_or_enum(
-                        &attribute_span,
+                        &candidate.span,
                     ));
                 return;
             }
-            CandidateKind::Type(type_candidate) => type_candidate,
+            DerivedAttributeTarget::Struct { name } | DerivedAttributeTarget::Enum { name, .. } => {
+                name
+            }
         };
 
-        if has_args {
+        if candidate.has_args {
             self.sink
                 .push(diagnostics::attribute::equality_with_arguments(
-                    &attribute_span,
+                    &candidate.span,
                 ));
             return;
         }
-        if is_d_lis {
+        if candidate.is_d_lis {
             self.sink
-                .push(diagnostics::attribute::equality_in_typedef(&attribute_span));
+                .push(diagnostics::attribute::equality_in_typedef(&candidate.span));
             return;
         }
 
-        let qualified = Symbol::from_parts(module_id, &name);
+        let qualified = Symbol::from_parts(&candidate.module_id, name);
         if is_tuple_struct(store, &qualified) {
             self.sink
                 .push(diagnostics::attribute::equality_on_tuple_struct(
-                    &attribute_span,
+                    &candidate.span,
                 ));
             return;
         }
@@ -113,7 +76,7 @@ impl TaskState<'_> {
                 if self.is_ufcs_method(qualified.as_str(), "equals") {
                     self.sink
                         .push(diagnostics::attribute::equality_specialized_equals(
-                            &attribute_span,
+                            &candidate.span,
                         ));
                     return;
                 }
@@ -122,14 +85,14 @@ impl TaskState<'_> {
             UserEquals::Conflict => {
                 self.sink
                     .push(diagnostics::attribute::equality_conflicting_equals(
-                        &attribute_span,
+                        &candidate.span,
                     ));
                 return;
             }
             UserEquals::Specialized => {
                 self.sink
                     .push(diagnostics::attribute::equality_specialized_equals(
-                        &attribute_span,
+                        &candidate.span,
                     ));
                 return;
             }
@@ -139,17 +102,22 @@ impl TaskState<'_> {
         if has_hidden_user_equals(store, &qualified) {
             self.sink
                 .push(diagnostics::attribute::equality_conflicting_equals(
-                    &attribute_span,
+                    &candidate.span,
                 ));
             return;
         }
 
-        self.synthesize_equals(store, module_id, &qualified);
+        self.synthesize_equals(store, &candidate.module_id, &qualified);
         self.facts.equality_derivations.push(qualified.to_string());
     }
 
-    /// Build the equality verdict and gate derivations. Run once after registration + UFCS.
+    /// Synthesize queued equality methods, build the verdict, and gate derivations.
+    /// Run once after registration has discovered every UFCS method.
     pub fn finalize_equality(&mut self, store: &mut Store) {
+        let candidates = std::mem::take(&mut self.pending_equality_attributes);
+        for candidate in &candidates {
+            self.process_equality_candidate(store, candidate);
+        }
         self.record_equality_index(store);
         self.validate_equality_derivations(store);
     }
@@ -391,94 +359,5 @@ fn type_generics(definition: &Definition) -> Option<Vec<Generic>> {
             Some(generics.clone())
         }
         _ => None,
-    }
-}
-
-struct EqualityCandidate {
-    attribute_span: Span,
-    kind: CandidateKind,
-}
-
-enum CandidateKind {
-    Type(TypeCandidate),
-    Misplaced,
-}
-
-struct TypeCandidate {
-    name: String,
-    is_d_lis: bool,
-    has_args: bool,
-}
-
-fn equality_attribute(attributes: &[Attribute]) -> Option<&Attribute> {
-    attributes.iter().find(|a| a.name == "equality")
-}
-
-fn misplaced_candidate(attribute: &Attribute) -> EqualityCandidate {
-    EqualityCandidate {
-        attribute_span: attribute.span,
-        kind: CandidateKind::Misplaced,
-    }
-}
-
-fn collect_method_attributes(methods: &[Expression], out: &mut Vec<EqualityCandidate>) {
-    for method in methods {
-        if let Expression::Function { attributes, .. } = method {
-            out.extend(equality_attribute(attributes).map(misplaced_candidate));
-        }
-    }
-}
-
-fn collect_equality_candidates(
-    item: &Expression,
-    is_d_lis: bool,
-    out: &mut Vec<EqualityCandidate>,
-) {
-    match item {
-        Expression::Struct {
-            attributes,
-            name,
-            fields,
-            ..
-        } => {
-            if let Some(attribute) = equality_attribute(attributes) {
-                out.push(EqualityCandidate {
-                    attribute_span: attribute.span,
-                    kind: CandidateKind::Type(TypeCandidate {
-                        name: name.to_string(),
-                        is_d_lis,
-                        has_args: !attribute.args.is_empty(),
-                    }),
-                });
-            }
-            for field in fields {
-                out.extend(equality_attribute(&field.attributes).map(misplaced_candidate));
-            }
-        }
-        Expression::Enum {
-            attributes, name, ..
-        } => {
-            if let Some(attribute) = equality_attribute(attributes) {
-                out.push(EqualityCandidate {
-                    attribute_span: attribute.span,
-                    kind: CandidateKind::Type(TypeCandidate {
-                        name: name.to_string(),
-                        is_d_lis,
-                        has_args: !attribute.args.is_empty(),
-                    }),
-                });
-            }
-        }
-        Expression::Function { attributes, .. } => {
-            out.extend(equality_attribute(attributes).map(misplaced_candidate));
-        }
-        Expression::TypeAlias { attributes, .. } => {
-            out.extend(equality_attribute(attributes).map(misplaced_candidate));
-        }
-        Expression::ImplBlock { methods, .. } => collect_method_attributes(methods, out),
-        Expression::Interface {
-            method_signatures, ..
-        } => collect_method_attributes(method_signatures, out),
-        _ => {}
     }
 }

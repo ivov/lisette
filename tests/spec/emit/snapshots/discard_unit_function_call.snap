@@ -12,8 +12,8 @@ description: |
 ---
 package main
 
-func do_something() {}
+func doSomething() {}
 
 func test() {
-	do_something()
+	doSomething()
 }

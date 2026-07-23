@@ -16,7 +16,7 @@ package main
 
 import "example.com/shapes"
 
-func sum_areas(items map[string]shapes.Shape) int {
+func sumAreas(items map[string]shapes.Shape) int {
 	total := 0
 	for key_1, value_2 := range items {
 		_ = key_1

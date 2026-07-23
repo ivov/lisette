@@ -18,8 +18,8 @@ import (
 	"time"
 )
 
-const DELAY time.Duration = time.Second / 12
+const Delay time.Duration = time.Second / 12
 
 func main() {
-	fmt.Println(DELAY)
+	fmt.Println(Delay)
 }

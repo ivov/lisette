@@ -21,7 +21,7 @@ type Box[T any] struct {
 	value T
 }
 
-func Box_only_int(self Box[int]) int {
+func Box_onlyInt(self Box[int]) int {
 	return self.value
 }
 
@@ -29,5 +29,5 @@ type IntBox = Box[int]
 
 func test() int {
 	b := Box[int]{value: 7}
-	return Box_only_int(b)
+	return Box_onlyInt(b)
 }

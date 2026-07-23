@@ -17,7 +17,7 @@ type Foo struct {
 	x int
 }
 
-func (f *Foo) copy_out() Foo {
+func (f *Foo) copyOut() Foo {
 	copy_ := *f
 	return Foo{x: copy_.x}
 }

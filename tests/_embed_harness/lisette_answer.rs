@@ -6,7 +6,7 @@
 use deps::TypedefLocator;
 use diagnostics::LisetteDiagnostic;
 use passes::analyze;
-use semantics::inference::{AnalyzeInput, CompilePhase, SemanticConfig};
+use semantics::inference::{AnalyzeInput, CompilePhase, EntryFile, SemanticConfig};
 use semantics::loader::MemoryLoader;
 use semantics::store::ENTRY_MODULE_ID;
 
@@ -160,11 +160,13 @@ fn check(source: &str) -> Checked {
             load_siblings: true,
         },
         loader: &loader,
-        source: source.to_string(),
-        filename: "main.lis".to_string(),
-        display_path: "main.lis".to_string(),
-        ast: build.ast,
-        file_comment: build.file_comment,
+        entry: Some(EntryFile {
+            source: source.to_string(),
+            filename: "main.lis".to_string(),
+            display_path: "main.lis".to_string(),
+            ast: build.ast,
+            file_comment: build.file_comment,
+        }),
         project_root: None,
         locator: TypedefLocator::default(),
         compile_phase: CompilePhase::Check,

@@ -26,20 +26,20 @@ type User struct {
 	name string
 }
 
-func get_id() lisette.Result[int, string] {
+func getId() lisette.Result[int, string] {
 	return lisette.MakeResultOk[int, string](1)
 }
 
-func get_name() lisette.Result[string, string] {
+func getName() lisette.Result[string, string] {
 	return lisette.MakeResultOk[string, string]("Ada")
 }
 
-func make_user() lisette.Result[User, string] {
-	check_1 := get_id()
+func makeUser() lisette.Result[User, string] {
+	check_1 := getId()
 	if check_1.Tag != lisette.ResultOk {
 		return lisette.MakeResultErr[User, string](check_1.ErrVal)
 	}
-	check_2 := get_name()
+	check_2 := getName()
 	if check_2.Tag != lisette.ResultOk {
 		return lisette.MakeResultErr[User, string](check_2.ErrVal)
 	}

@@ -15,12 +15,12 @@ package main
 
 import lisette "github.com/ivov/lisette/prelude"
 
-func returns_int() lisette.Result[int, string] {
+func returnsInt() lisette.Result[int, string] {
 	return lisette.MakeResultOk[int, string](42)
 }
 
-func returns_unit() lisette.Result[struct{}, string] {
-	check_1 := returns_int()
+func returnsUnit() lisette.Result[struct{}, string] {
+	check_1 := returnsInt()
 	if check_1.Tag != lisette.ResultOk {
 		return lisette.MakeResultErr[struct{}, string](check_1.ErrVal)
 	}

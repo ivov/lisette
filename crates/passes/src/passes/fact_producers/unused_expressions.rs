@@ -4,8 +4,9 @@ use syntax::program::{CallKind, NativeTypeKind};
 use syntax::types::{Symbol, Type};
 
 use diagnostics::infer::MismatchedTailKind;
-use semantics::facts::LocalFacts;
 use semantics::store::Store;
+
+use super::ProducedFacts;
 
 struct TailContext<'a> {
     expected_span: Span,
@@ -16,7 +17,7 @@ pub(crate) fn run(
     typed_ast: &[Expression],
     module_id: &str,
     store: &Store,
-    facts: &mut LocalFacts,
+    facts: &mut ProducedFacts,
 ) {
     for item in typed_ast {
         visit_expression(item, None, module_id, store, facts);
@@ -28,7 +29,7 @@ fn visit_expression(
     tail_ctx: Option<&TailContext<'_>>,
     module_id: &str,
     store: &Store,
-    facts: &mut LocalFacts,
+    facts: &mut ProducedFacts,
 ) {
     match expression {
         Expression::Block { items, ty, .. }
@@ -123,7 +124,7 @@ fn visit_expression(
     }
 }
 
-fn visit_loop_body(body: &Expression, module_id: &str, store: &Store, facts: &mut LocalFacts) {
+fn visit_loop_body(body: &Expression, module_id: &str, store: &Store, facts: &mut ProducedFacts) {
     let items = match body {
         Expression::Block { items, .. }
         | Expression::TryBlock { items, .. }
@@ -155,7 +156,7 @@ fn visit_block_items(
     tail_ctx: Option<&TailContext<'_>>,
     module_id: &str,
     store: &Store,
-    facts: &mut LocalFacts,
+    facts: &mut ProducedFacts,
 ) {
     let len = items.len();
     for (i, item) in items.iter().enumerate() {
@@ -186,7 +187,7 @@ fn descend_discarded(
     mode: &DiscardMode<'_>,
     module_id: &str,
     store: &Store,
-    facts: &mut LocalFacts,
+    facts: &mut ProducedFacts,
 ) {
     match expression.unwrap_parens() {
         Expression::Block { items, .. }
@@ -262,7 +263,7 @@ fn descend_loop_break_values(
     mode: &DiscardMode<'_>,
     module_id: &str,
     store: &Store,
-    facts: &mut LocalFacts,
+    facts: &mut ProducedFacts,
 ) {
     match expression {
         Expression::Break {
@@ -286,7 +287,12 @@ fn descend_loop_break_values(
     }
 }
 
-fn emit_unused_at_leaf(leaf: &Expression, module_id: &str, store: &Store, facts: &mut LocalFacts) {
+fn emit_unused_at_leaf(
+    leaf: &Expression,
+    module_id: &str,
+    store: &Store,
+    facts: &mut ProducedFacts,
+) {
     let span = leaf.get_span();
     let is_literal = is_literal_or_negated_literal(leaf);
     let ty = leaf.get_type();
@@ -333,7 +339,7 @@ fn check_discarded_tail(
     tail_ctx: Option<&TailContext<'_>>,
     module_id: &str,
     store: &Store,
-    facts: &mut LocalFacts,
+    facts: &mut ProducedFacts,
 ) {
     let unwrapped = item.unwrap_parens();
     let reported_ty = get_call_return_type(unwrapped).unwrap_or_else(|| unwrapped.get_type());
@@ -379,7 +385,7 @@ fn emit_unused_expression(
     ty: &Type,
     is_literal: bool,
     allowed_lints: &[String],
-    facts: &mut LocalFacts,
+    facts: &mut ProducedFacts,
 ) {
     let kind = if is_literal {
         Some(UnusedExpressionKind::Literal)

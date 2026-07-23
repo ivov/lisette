@@ -419,7 +419,7 @@ impl Planner<'_> {
         if self.method_needs_export(method) {
             go_name::snake_to_camel(method)
         } else {
-            go_name::escape_keyword(method).into_owned()
+            go_name::unexported_method_go_name(method)
         }
     }
 

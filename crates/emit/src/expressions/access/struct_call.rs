@@ -363,8 +363,10 @@ impl Planner<'_> {
                         format!("F{}", index)
                     } else if self.struct_field_is_exported(ty, &name) {
                         go_name::make_exported(&name)
-                    } else {
+                    } else if self.field_is_embedded(ty, &name) {
                         go_name::escape_keyword(&name).into_owned()
+                    } else {
+                        go_name::unexported_method_go_name(&name)
                     };
                     (go_name, self.lisette_zero(&field_ty))
                 })
@@ -555,7 +557,7 @@ impl Planner<'_> {
         } else if self.struct_field_is_exported(ty, field_name) {
             go_name::make_exported(field_name)
         } else {
-            go_name::escape_keyword(field_name).into_owned()
+            go_name::unexported_method_go_name(field_name)
         }
     }
 

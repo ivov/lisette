@@ -118,15 +118,48 @@ pub fn prune_orphan_go_files(
             continue;
         }
         let path = target_dir.join(&dir);
-        // `cache/` holds interface caches and an ancestor holds a live submodule, so
-        // both keep their dir and shed only `.go`; a departed leaf dir goes entirely.
-        if dir == "cache" || ancestor_dirs.contains(&dir) {
+        // A dir with a live submodule keeps its dir and sheds only `.go`. A leaf goes entirely.
+        if ancestor_dirs.contains(&dir) {
             remove_direct_go_files(&path)?;
         } else {
             remove_dir_all_if_present(&path)?;
         }
     }
     prune_orphan_caches(target_dir, live_modules)?;
+
+    Ok(())
+}
+
+/// Removes root `.go` a library did not produce. `prune_orphan_go_files` skips the root.
+pub fn prune_stale_root_go(target_dir: &Path, produced: &[&str]) -> io::Result<()> {
+    let produced_root: HashSet<&OsStr> = produced
+        .iter()
+        .map(Path::new)
+        .filter(|p| {
+            p.parent()
+                .is_none_or(|parent| parent.as_os_str().is_empty())
+        })
+        .filter_map(|p| p.file_name())
+        .collect();
+
+    let entries = match read_dir(target_dir) {
+        Ok(entries) => entries,
+        Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(()),
+        Err(e) => return Err(e),
+    };
+
+    for entry in entries.flatten() {
+        if !entry.file_type().map(|t| t.is_file()).unwrap_or(false) {
+            continue;
+        }
+        let name = entry.file_name();
+        if Path::new(&name).extension().is_some_and(|ext| ext == "go")
+            && !produced_root.contains(name.as_os_str())
+            && !is_generated_go_file(&entry.path())
+        {
+            remove_file(entry.path())?;
+        }
+    }
 
     Ok(())
 }
@@ -202,9 +235,9 @@ fn remove_dir_all_if_present(dir: &Path) -> io::Result<()> {
     }
 }
 
-/// Removes interface caches in `target/cache/` for modules no longer in the graph.
+/// Removes interface caches in `target/.lisette/cache/` for modules no longer in the graph.
 fn prune_orphan_caches(target_dir: &Path, live_modules: &[String]) -> io::Result<()> {
-    let cache_dir = target_dir.join("cache");
+    let cache_dir = target_dir.join(".lisette").join("cache");
     let live: HashSet<String> = live_modules
         .iter()
         .filter(|id| id.as_str() != ENTRY_MODULE_ID)
@@ -681,14 +714,15 @@ mod tests {
     #[test]
     fn prunes_orphan_cache_file() {
         let tmp = tempfile::tempdir().unwrap();
-        stdfs::create_dir_all(tmp.path().join("cache")).unwrap();
-        write_file(&tmp.path().join("cache"), "greet.cache", "");
-        write_file(&tmp.path().join("cache"), "kept.cache", "");
+        let cache = tmp.path().join(".lisette").join("cache");
+        stdfs::create_dir_all(&cache).unwrap();
+        write_file(&cache, "greet.cache", "");
+        write_file(&cache, "kept.cache", "");
 
         prune_orphan_go_files(tmp.path(), &["main.go"], &[], &["kept".to_string()]).unwrap();
 
-        assert!(!tmp.path().join("cache/greet.cache").exists());
-        assert!(tmp.path().join("cache/kept.cache").exists());
+        assert!(!cache.join("greet.cache").exists());
+        assert!(cache.join("kept.cache").exists());
     }
 
     #[test]
@@ -704,23 +738,24 @@ mod tests {
     }
 
     #[test]
-    fn dead_cache_module_go_is_pruned_but_cache_files_survive() {
+    fn departed_cache_module_dir_is_removed_wholesale() {
         let tmp = tempfile::tempdir().unwrap();
         write_file(tmp.path(), "main.go", "package main\n");
         stdfs::create_dir_all(tmp.path().join("cache")).unwrap();
         write_file(&tmp.path().join("cache"), "cache.go", "package cache\n");
-        write_file(&tmp.path().join("cache"), "kept.cache", "");
 
         prune_orphan_go_files(
             tmp.path(),
             &["main.go"],
             &["main.go", "cache/cache.go"],
-            &["kept".to_string()],
+            &[],
         )
         .unwrap();
 
-        assert!(!tmp.path().join("cache/cache.go").exists());
-        assert!(tmp.path().join("cache/kept.cache").exists());
+        assert!(
+            !tmp.path().join("cache").exists(),
+            "`cache` is an ordinary module dir now and departs wholesale"
+        );
     }
 
     #[test]
@@ -729,7 +764,6 @@ mod tests {
         write_file(tmp.path(), "main.go", "package main\n");
         stdfs::create_dir_all(tmp.path().join("cache")).unwrap();
         write_file(&tmp.path().join("cache"), "cache.go", "package cache\n");
-        write_file(&tmp.path().join("cache"), "cache.cache", "");
 
         prune_orphan_go_files(
             tmp.path(),
@@ -740,7 +774,6 @@ mod tests {
         .unwrap();
 
         assert!(tmp.path().join("cache/cache.go").exists());
-        assert!(tmp.path().join("cache/cache.cache").exists());
     }
 
     #[test]

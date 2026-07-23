@@ -41,7 +41,8 @@ pub const TESTKIT_IMPORT_PATH: &str = "github.com/ivov/lisette/prelude/testkit";
 const TESTKIT_PKG: &str = "testkit";
 
 pub(crate) use syntax::go_names::{
-    GO_BUILTINS, GO_KEYWORDS, escape_keyword, escape_type_name, is_go_reserved_word, snake_to_camel,
+    GO_BUILTINS, GO_KEYWORDS, escape_keyword, escape_type_name, is_go_reserved_word,
+    screaming_snake_to_camel, snake_to_camel, snake_to_lower_camel, unexported_method_go_name,
 };
 pub(crate) use syntax::types::unqualified_name;
 
@@ -273,7 +274,7 @@ pub(crate) fn is_generated_import_qualifier(name: &str) -> bool {
 }
 
 fn is_reserved_package_name(name: &str) -> bool {
-    name == "main" || is_go_reserved_word(name)
+    name == "main" || name == "documentation" || is_go_reserved_word(name)
 }
 
 fn is_reserved_identifier(name: &str) -> bool {
@@ -302,7 +303,7 @@ pub(crate) fn qualify_method(
         let method_name = if is_public {
             snake_to_camel(method)
         } else {
-            method.to_string()
+            snake_to_lower_camel(method)
         };
         return ResolvedName::local(format!("{}_{}", type_name, method_name));
     };
@@ -318,7 +319,7 @@ pub(crate) fn qualify_method(
         let method_name = if is_public {
             snake_to_camel(method)
         } else {
-            method.to_string()
+            snake_to_lower_camel(method)
         };
         ResolvedName::local(format!("{}_{}", type_name, method_name))
     } else {

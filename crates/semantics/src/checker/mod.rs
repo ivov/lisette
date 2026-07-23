@@ -7,7 +7,6 @@ mod sealing;
 pub mod type_env;
 
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
-use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::Arc;
 
@@ -15,6 +14,7 @@ use crate::facts::{BindingIdAllocator, Facts};
 use crate::store::Store;
 use diagnostics::LocalSink;
 use ecow::EcoString;
+use registration::derived_attributes::DerivedAttribute;
 use scopes::Scopes;
 use syntax::ast::Visibility as AstVisibility;
 use syntax::ast::{Annotation, Expression, Generic, ImportAlias, Span, StructFieldDefinition};
@@ -25,7 +25,7 @@ use syntax::program::{
 use syntax::types::{Bound, SubstitutionMap, Symbol, Type, substitute};
 
 pub use infer::expressions::comparison::{check_never_comparable, check_not_comparable};
-pub use type_env::{EnvResolve, Speculation, TypeEnv, VarState};
+pub use type_env::{EnvResolve, TypeEnv, VarState};
 
 #[derive(Debug, Clone)]
 pub struct Cursor {
@@ -50,21 +50,64 @@ impl Cursor {
 
 #[derive(Debug, Default)]
 pub struct ImportState {
-    /// Module prefix -> (struct fields, module type). Fields are `Arc`-shared
-    /// since the same module is put in scope once per file.
-    imported_modules: HashMap<String, (Arc<[StructFieldDefinition]>, Type)>,
-    /// Import prefix -> actual module_id in Store (e.g., "http" -> "go:net/http")
-    prefix_to_module: HashMap<String, String>,
+    prefixed: HashMap<String, PrefixedImport>,
     /// Modules whose exports are available without prefix (current module and prelude)
     unprefixed_imports: HashSet<String>,
-    /// Effective aliases (e.g. `mux`) of imports whose underlying module
-    /// failed to load (missing typedef, undeclared, module_not_found, etc.).
-    failed_imports: HashSet<String>,
+}
+
+#[derive(Debug)]
+enum PrefixedImport {
+    Namespace {
+        module_id: String,
+        fields: Arc<[StructFieldDefinition]>,
+    },
+    /// A typedef's self-prefix resolves qualified names but is not itself a value.
+    LookupOnly {
+        module_id: String,
+    },
+    Failed,
 }
 
 impl ImportState {
     fn new() -> Self {
         Self::default()
+    }
+
+    fn module_id(&self, prefix: &str) -> Option<&str> {
+        match self.prefixed.get(prefix)? {
+            PrefixedImport::Namespace { module_id, .. }
+            | PrefixedImport::LookupOnly { module_id } => Some(module_id),
+            PrefixedImport::Failed => None,
+        }
+    }
+
+    fn namespace(&self, prefix: &str) -> Option<(&str, &Arc<[StructFieldDefinition]>)> {
+        match self.prefixed.get(prefix)? {
+            PrefixedImport::Namespace { module_id, fields } => Some((module_id, fields)),
+            PrefixedImport::LookupOnly { .. } | PrefixedImport::Failed => None,
+        }
+    }
+
+    fn modules(&self) -> impl Iterator<Item = (&str, &str)> {
+        self.prefixed.iter().filter_map(|(prefix, import)| {
+            let module_id = match import {
+                PrefixedImport::Namespace { module_id, .. }
+                | PrefixedImport::LookupOnly { module_id } => module_id,
+                PrefixedImport::Failed => return None,
+            };
+            Some((prefix.as_str(), module_id.as_str()))
+        })
+    }
+
+    fn namespaces(&self) -> impl Iterator<Item = (&str, &Arc<[StructFieldDefinition]>)> {
+        self.prefixed.values().filter_map(|import| match import {
+            PrefixedImport::Namespace { module_id, fields } => Some((module_id.as_str(), fields)),
+            PrefixedImport::LookupOnly { .. } | PrefixedImport::Failed => None,
+        })
+    }
+
+    fn is_failed(&self, prefix: &str) -> bool {
+        matches!(self.prefixed.get(prefix), Some(PrefixedImport::Failed))
     }
 }
 
@@ -82,38 +125,74 @@ struct SavedFileContext {
     imports: ImportState,
 }
 
+type ModuleFieldMap = HashMap<EcoString, Arc<[StructFieldDefinition]>>;
+type UfcsMethod = (String, String);
+
+/// The parts of a checker task that survive after its local inference state is
+/// discarded.
+pub(crate) struct TaskOutput {
+    facts: Facts,
+    module_fields: Arc<ModuleFieldMap>,
+    ufcs_methods: Arc<HashSet<UfcsMethod>>,
+    typed_files: Vec<(String, File)>,
+    pending_equality_attributes: Vec<DerivedAttribute>,
+    pending_generic_bound_checks: Vec<(Type, Type, Span)>,
+    pending_interface_bound_checks: Vec<(Type, Type, Span)>,
+    sink: LocalSink,
+}
+
+/// A consistent read-only snapshot from which parallel checker tasks start.
+pub(crate) struct TaskSeed {
+    binding_ids: Arc<BindingIdAllocator>,
+    module_fields: Arc<ModuleFieldMap>,
+    ufcs_methods: Arc<HashSet<UfcsMethod>>,
+}
+
+impl TaskSeed {
+    pub(crate) fn spawn(&self) -> TaskState {
+        let Self {
+            binding_ids,
+            module_fields,
+            ufcs_methods,
+        } = self;
+        let mut task = TaskState::new(binding_ids.clone(), LocalSink::new());
+        task.module_fields = module_fields.clone();
+        task.ufcs_methods = ufcs_methods.clone();
+        task
+    }
+}
+
 /// Per-task mutable state. Paired with `AnalysisContext` (shared read-only view).
-pub struct TaskState<'s> {
+pub struct TaskState {
     pub env: TypeEnv,
     pub(crate) scopes: Scopes,
     pub cursor: Cursor,
     imports: ImportState,
-    pub sink: &'s LocalSink,
+    pub sink: LocalSink,
     pub facts: Facts,
     /// Recursion guard for interface satisfaction. Prevents
     /// `collect_interface_violations` from diverging when a bound on `T`
     /// transitively requires checking `T` against the same interface.
     satisfying_stack: rustc_hash::FxHashSet<(String, String)>,
-    method_cache: RefCell<HashMap<EcoString, Rc<MethodSignatures>>>,
-    /// Per-module field projection, cached to avoid rebuilding it (and recloning
-    /// every type) on each file-context entry.
-    module_fields_cache: RefCell<HashMap<EcoString, Arc<[StructFieldDefinition]>>>,
-    /// Register-phase projections shared read-only with inference workers, so
-    /// workers reuse them instead of rebuilding.
-    pub(crate) module_fields_shared: Option<Arc<HashMap<EcoString, Arc<[StructFieldDefinition]>>>>,
-    pub ufcs_methods: HashSet<(String, String)>,
-    /// When set, parallel workers read UFCS methods from here instead of cloning into `ufcs_methods`.
-    pub(crate) ufcs_shared: Option<Arc<HashSet<(String, String)>>>,
+    method_cache: HashMap<EcoString, Rc<MethodSignatures>>,
+    /// Per-module projections. Workers share this copy-on-write, and the field
+    /// definitions themselves remain `Arc`-shared if a worker adds an entry.
+    module_fields: Arc<ModuleFieldMap>,
+    /// Canonical UFCS set. Workers share it copy-on-write, so reads stay cheap
+    /// while task-local additions are returned as part of their output.
+    ufcs_methods: Arc<HashSet<UfcsMethod>>,
     /// Typed files produced by inference.
     pub typed_files: Vec<(String, File)>,
+    /// Equality synthesis waits until registration has discovered all UFCS methods.
+    pub(crate) pending_equality_attributes: Vec<DerivedAttribute>,
     pub(crate) pending_generic_bound_checks: Vec<(Type, Type, Span)>,
     /// Interface bounds on concrete type arguments named in annotations. Drained
     /// once after inference, since body annotations register during it.
     pub(crate) pending_interface_bound_checks: Vec<(Type, Type, Span)>,
 }
 
-impl<'s> TaskState<'s> {
-    pub(crate) fn new(sink: &'s LocalSink, binding_ids: Arc<BindingIdAllocator>) -> Self {
+impl TaskState {
+    fn new(binding_ids: Arc<BindingIdAllocator>, sink: LocalSink) -> Self {
         Self {
             env: TypeEnv::new(),
             scopes: Scopes::new(),
@@ -122,27 +201,111 @@ impl<'s> TaskState<'s> {
             sink,
             facts: Facts::new(binding_ids),
             satisfying_stack: rustc_hash::FxHashSet::default(),
-            method_cache: RefCell::new(HashMap::default()),
-            module_fields_cache: RefCell::new(HashMap::default()),
-            module_fields_shared: None,
-            ufcs_methods: HashSet::default(),
-            ufcs_shared: None,
+            method_cache: HashMap::default(),
+            module_fields: Arc::default(),
+            ufcs_methods: Arc::default(),
             typed_files: Vec::new(),
+            pending_equality_attributes: Vec::new(),
             pending_generic_bound_checks: Vec::new(),
             pending_interface_bound_checks: Vec::new(),
         }
     }
 
-    pub fn with_fresh_allocator(sink: &'s LocalSink) -> Self {
-        Self::new(sink, Arc::new(BindingIdAllocator::new()))
+    pub fn with_fresh_allocator() -> Self {
+        Self::new(Arc::new(BindingIdAllocator::new()), LocalSink::new())
     }
 
-    fn effective_ufcs_methods(&self) -> &HashSet<(String, String)> {
-        self.ufcs_shared.as_deref().unwrap_or(&self.ufcs_methods)
+    pub(crate) fn with_sink(sink: LocalSink) -> Self {
+        Self::new(Arc::new(BindingIdAllocator::new()), sink)
+    }
+
+    pub(crate) fn worker_seed(&self) -> TaskSeed {
+        TaskSeed {
+            binding_ids: self.facts.allocator(),
+            module_fields: self.module_fields.clone(),
+            ufcs_methods: self.ufcs_methods.clone(),
+        }
+    }
+
+    pub fn ufcs_methods(&self) -> &HashSet<UfcsMethod> {
+        &self.ufcs_methods
+    }
+
+    pub fn extend_ufcs_methods(&mut self, methods: impl IntoIterator<Item = UfcsMethod>) {
+        Arc::make_mut(&mut self.ufcs_methods).extend(methods);
+    }
+
+    pub fn take_ufcs_methods(&mut self) -> HashSet<UfcsMethod> {
+        Arc::unwrap_or_clone(std::mem::take(&mut self.ufcs_methods))
+    }
+
+    pub fn shared_ufcs_methods(&self) -> Arc<HashSet<UfcsMethod>> {
+        self.ufcs_methods.clone()
+    }
+
+    pub(crate) fn into_output(self) -> TaskOutput {
+        let Self {
+            env: _,
+            scopes: _,
+            cursor: _,
+            imports: _,
+            sink,
+            facts,
+            satisfying_stack: _,
+            method_cache: _,
+            module_fields,
+            ufcs_methods,
+            typed_files,
+            pending_equality_attributes,
+            pending_generic_bound_checks,
+            pending_interface_bound_checks,
+        } = self;
+        TaskOutput {
+            facts,
+            module_fields,
+            ufcs_methods,
+            typed_files,
+            pending_equality_attributes,
+            pending_generic_bound_checks,
+            pending_interface_bound_checks,
+            sink,
+        }
+    }
+
+    pub(crate) fn absorb_outputs(&mut self, outputs: Vec<TaskOutput>) {
+        let mut sinks = Vec::with_capacity(outputs.len());
+        for output in outputs {
+            let TaskOutput {
+                facts,
+                module_fields,
+                ufcs_methods,
+                typed_files,
+                pending_equality_attributes,
+                pending_generic_bound_checks,
+                pending_interface_bound_checks,
+                sink,
+            } = output;
+            if !Arc::ptr_eq(&self.module_fields, &module_fields) {
+                Arc::make_mut(&mut self.module_fields).extend(Arc::unwrap_or_clone(module_fields));
+            }
+            if !Arc::ptr_eq(&self.ufcs_methods, &ufcs_methods) {
+                Arc::make_mut(&mut self.ufcs_methods).extend(Arc::unwrap_or_clone(ufcs_methods));
+            }
+            self.facts.merge(facts);
+            self.typed_files.extend(typed_files);
+            self.pending_equality_attributes
+                .extend(pending_equality_attributes);
+            self.pending_generic_bound_checks
+                .extend(pending_generic_bound_checks);
+            self.pending_interface_bound_checks
+                .extend(pending_interface_bound_checks);
+            sinks.push(sink);
+        }
+        self.sink.extend(LocalSink::merge(sinks));
     }
 
     fn is_ufcs_method(&self, type_id: &str, method: &str) -> bool {
-        self.effective_ufcs_methods()
+        self.ufcs_methods()
             .contains(&(type_id.to_string(), method.to_string()))
     }
 
@@ -411,7 +574,7 @@ impl<'s> TaskState<'s> {
         prefer_type: bool,
     ) -> Option<EcoString> {
         if let Some((prefix, simple_name)) = type_name.split_once('.')
-            && let Some(module_id) = self.imports.prefix_to_module.get(prefix)
+            && let Some(module_id) = self.imports.module_id(prefix)
             && let Some(imported_module) = store.get_module(module_id)
             && let Some((qualified_name, _)) =
                 self.resolve_in_imported_module(store, imported_module, simple_name)
@@ -460,11 +623,8 @@ impl<'s> TaskState<'s> {
     }
 
     fn is_const_var(&self, store: &Store, var_name: &str) -> bool {
-        if self.scopes.lookup_binding_id(var_name).is_some() {
-            return false;
-        }
-        if self.scopes.lookup_const(var_name) {
-            return true;
+        if self.scopes.lookup_value(var_name).is_some() {
+            return self.scopes.lookup_const(var_name);
         }
         self.lookup_qualified_name(store, var_name)
             .is_some_and(|qname| self.is_const_name(store, &qname))
@@ -528,12 +688,12 @@ impl<'s> TaskState<'s> {
             return Some(ty.clone());
         }
 
-        if let Some((_definition, ty)) = self.imports.imported_modules.get(value_name) {
-            return Some(ty.clone());
+        if let Some((module_id, _)) = self.imports.namespace(value_name) {
+            return Some(Type::ImportNamespace(module_id.into()));
         }
 
         if let Some((prefix, rest)) = value_name.split_once('.')
-            && let Some(module_id) = self.imports.prefix_to_module.get(prefix)
+            && let Some(module_id) = self.imports.module_id(prefix)
             && let Some(imported_module) = store.get_module(module_id)
             && let Some((_, definition)) =
                 self.resolve_in_imported_module(store, imported_module, rest)
@@ -592,7 +752,7 @@ impl<'s> TaskState<'s> {
         Some((qualified_name, ty))
     }
 
-    fn get_all_methods(&self, store: &Store, ty: &Type) -> Rc<MethodSignatures> {
+    fn get_all_methods(&mut self, store: &Store, ty: &Type) -> Rc<MethodSignatures> {
         if let Type::Parameter(name) = ty {
             let trait_bounds = self.scopes.collect_all_trait_bounds();
             let qualified_name = self.qualify_name(name);
@@ -622,7 +782,7 @@ impl<'s> TaskState<'s> {
         let is_generic = matches!(&resolved, Type::Nominal { params, .. } if !params.is_empty());
         let cacheable = !(is_embedder && is_generic);
 
-        if cacheable && let Some(cached) = self.method_cache.borrow().get(cache_key.as_str()) {
+        if cacheable && let Some(cached) = self.method_cache.get(cache_key.as_str()) {
             return cached.clone();
         }
 
@@ -633,9 +793,7 @@ impl<'s> TaskState<'s> {
             Rc::new(store.get_all_methods(&resolved, &empty))
         };
         if cacheable {
-            self.method_cache
-                .borrow_mut()
-                .insert(cache_key, methods.clone());
+            self.method_cache.insert(cache_key, methods.clone());
         }
         methods
     }
@@ -717,9 +875,12 @@ impl<'s> TaskState<'s> {
                     .get(module_id)
                     .cloned()
                     .unwrap_or_else(|| go_import_default_name(module_id).to_string());
-                self.imports
-                    .prefix_to_module
-                    .insert(self_alias, module_id.into());
+                self.imports.prefixed.insert(
+                    self_alias,
+                    PrefixedImport::LookupOnly {
+                        module_id: module_id.into(),
+                    },
+                );
             }
             FileContextKind::Prelude => {
                 self.put_unprefixed_module_in_scope(store, module_id);
@@ -746,7 +907,7 @@ impl<'s> TaskState<'s> {
 
     pub fn put_prelude_in_scope(&mut self, store: &Store) {
         self.put_unprefixed_module_in_scope(store, "prelude");
-        if self.imports.imported_modules.contains_key("prelude") {
+        if self.imports.namespace("prelude").is_some() {
             return;
         }
         self.put_module_in_scope(store, "prelude", Some("prelude".to_string()));
@@ -809,7 +970,9 @@ impl<'s> TaskState<'s> {
 
             let module = store.get_module(&import.name);
             if module.is_none() || module.is_some_and(Module::is_empty_stub) {
-                self.imports.failed_imports.insert(effective);
+                self.imports
+                    .prefixed
+                    .insert(effective, PrefixedImport::Failed);
                 continue;
             }
 
@@ -817,14 +980,13 @@ impl<'s> TaskState<'s> {
         }
     }
 
-    fn module_struct_fields(&self, store: &Store, module: &Module) -> Arc<[StructFieldDefinition]> {
-        if let Some(shared) = &self.module_fields_shared
-            && let Some(fields) = shared.get(module.id.as_str())
-        {
+    fn module_struct_fields(
+        &mut self,
+        store: &Store,
+        module: &Module,
+    ) -> Arc<[StructFieldDefinition]> {
+        if let Some(fields) = self.module_fields.get(module.id.as_str()) {
             return fields.clone();
-        }
-        if let Some(cached) = self.module_fields_cache.borrow().get(module.id.as_str()) {
-            return cached.clone();
         }
 
         let module_prefix = format!("{}.", module.id);
@@ -864,25 +1026,8 @@ impl<'s> TaskState<'s> {
             .collect();
 
         let shared: Arc<[StructFieldDefinition]> = fields.into();
-        self.module_fields_cache
-            .borrow_mut()
-            .insert(module.id.clone().into(), shared.clone());
+        Arc::make_mut(&mut self.module_fields).insert(module.id.clone().into(), shared.clone());
         shared
-    }
-
-    /// Cached projections so far, to seed workers' `module_fields_shared`.
-    pub(crate) fn module_fields_snapshot(
-        &self,
-    ) -> HashMap<EcoString, Arc<[StructFieldDefinition]>> {
-        self.module_fields_cache.borrow().clone()
-    }
-
-    /// Adopt projections built by registration workers so later phases reuse them.
-    pub(crate) fn merge_module_fields(
-        &mut self,
-        fields: HashMap<EcoString, Arc<[StructFieldDefinition]>>,
-    ) {
-        self.module_fields_cache.borrow_mut().extend(fields);
     }
 
     fn put_module_in_scope(&mut self, store: &Store, module_id: &str, prefix: Option<String>) {
@@ -901,22 +1046,21 @@ impl<'s> TaskState<'s> {
 
         let module_struct_fields = self.module_struct_fields(store, module);
 
-        let ty = Type::ImportNamespace(imported_module_id.clone().into());
-
-        self.imports
-            .imported_modules
-            .insert(prefix.clone(), (module_struct_fields, ty));
-        self.imports
-            .prefix_to_module
-            .insert(prefix, imported_module_id);
+        self.imports.prefixed.insert(
+            prefix,
+            PrefixedImport::Namespace {
+                module_id: imported_module_id,
+                fields: module_struct_fields,
+            },
+        );
     }
 
     /// Run a closure speculatively: if it returns `Err`, all type variable
     /// bindings performed during the closure are rolled back.
     fn speculatively<T, E>(&mut self, f: impl FnOnce(&mut Self) -> Result<T, E>) -> Result<T, E> {
-        let spec = self.env.begin_speculation();
+        self.env.begin_speculation();
         let result = f(self);
-        self.env.end_speculation(spec, result.is_err());
+        self.env.end_speculation(result.is_err());
         result
     }
 }

@@ -6,7 +6,7 @@ use super::TaskState;
 use crate::generics::{apply_bounds, bound_implied};
 use crate::store::Store;
 
-impl TaskState<'_> {
+impl TaskState {
     /// Make receiver-declaration bounds available inside a regular impl. The impl may state
     /// weaker bounds, but every valid receiver instantiation still satisfies these bounds.
     pub(crate) fn register_receiver_type_bounds(

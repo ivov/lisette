@@ -20,23 +20,26 @@ use syntax::types::Type;
 
 use crate::checker::infer::InferCtx;
 
-impl InferCtx<'_, '_> {
+impl InferCtx<'_> {
+    /// Infer an expression nested inside another expression.
     pub fn infer_expression(&mut self, expression: Expression, expected_ty: &Type) -> Expression {
-        // Track sub-expression depth: `infer_block_items` resets this to false
-        // for each top-level statement, so any nested call sees `true`.
-        let parent_is_subexpression = self.scopes.set_in_subexpression(true);
-
-        let result = self.infer_expression_inner(expression, expected_ty, parent_is_subexpression);
-
-        self.scopes.set_in_subexpression(parent_is_subexpression);
-        result
+        self.infer_expression_at(expression, expected_ty, true)
     }
 
-    fn infer_expression_inner(
+    /// Infer a statement or tail expression, where direct control flow is valid.
+    pub fn infer_root_expression(
         &mut self,
         expression: Expression,
         expected_ty: &Type,
-        parent_is_subexpression: bool,
+    ) -> Expression {
+        self.infer_expression_at(expression, expected_ty, false)
+    }
+
+    pub(super) fn infer_expression_at(
+        &mut self,
+        expression: Expression,
+        expected_ty: &Type,
+        is_subexpression: bool,
     ) -> Expression {
         match expression {
             Expression::Literal { literal, span, .. } => {
@@ -61,47 +64,17 @@ impl InferCtx<'_, '_> {
                 ref value, span, ..
             } => self.infer_identifier(value.clone(), span, expected_ty),
 
-            Expression::Let {
-                binding,
-                value,
-                mutable,
-                mut_span,
-                else_block,
-                else_span,
-                assert,
-                span,
-                typed_pattern: _,
-                ty: _,
-            } => self.infer_let_binding(
-                *binding,
-                value,
-                mutable,
-                mut_span,
-                else_block,
-                else_span,
-                assert,
-                span,
-                expected_ty,
-            ),
+            Expression::Let { .. } => self.infer_let_binding(expression, expected_ty),
 
             Expression::Call {
-                expression,
-                args: call_args,
-                spread,
-                raw_type_args,
+                expression: ref callee,
                 span,
                 ..
             } => {
-                let is_panic = matches!(&*expression, Expression::Identifier { value, .. } if value == "panic");
-                let result = self.infer_function_call(
-                    expression,
-                    call_args,
-                    spread,
-                    raw_type_args,
-                    span,
-                    expected_ty,
-                );
-                if parent_is_subexpression && is_panic {
+                let is_panic =
+                    matches!(&**callee, Expression::Identifier { value, .. } if value == "panic");
+                let result = self.infer_function_call(expression, expected_ty);
+                if is_subexpression && is_panic {
                     self.sink
                         .push(diagnostics::infer::never_call_in_expression(span));
                 }
@@ -116,25 +89,7 @@ impl InferCtx<'_, '_> {
                 ..
             } => self.infer_if(condition, consequence, alternative, span, expected_ty),
 
-            Expression::IfLet {
-                pattern,
-                scrutinee,
-                consequence,
-                alternative,
-                typed_pattern,
-                else_span,
-                span,
-                ..
-            } => self.infer_if_let(
-                pattern,
-                scrutinee,
-                consequence,
-                alternative,
-                typed_pattern,
-                else_span,
-                span,
-                expected_ty,
-            ),
+            Expression::IfLet { .. } => self.infer_if_let(expression, expected_ty),
 
             Expression::Match {
                 subject,
@@ -147,13 +102,7 @@ impl InferCtx<'_, '_> {
                 self.infer_tuple(elements, span, expected_ty)
             }
 
-            Expression::StructCall {
-                name,
-                field_assignments,
-                spread,
-                span,
-                ..
-            } => self.infer_struct_call(name, field_assignments, spread, span, expected_ty),
+            Expression::StructCall { .. } => self.infer_struct_call(expression, expected_ty),
 
             Expression::DotAccess {
                 expression,
@@ -190,12 +139,12 @@ impl InferCtx<'_, '_> {
 
             Expression::Return {
                 expression, span, ..
-            } => self.infer_return_statement(expression, span, parent_is_subexpression),
+            } => self.infer_return_statement(expression, span, is_subexpression),
 
             Expression::Propagate {
                 expression, span, ..
             } => {
-                if parent_is_subexpression {
+                if is_subexpression {
                     self.check_failure_propagation_in_subexpression(&expression, span);
                 }
                 self.infer_propagate(expression, span, expected_ty)
@@ -225,7 +174,7 @@ impl InferCtx<'_, '_> {
 
             Expression::Paren {
                 expression, span, ..
-            } => self.infer_paren(expression, span, expected_ty, parent_is_subexpression),
+            } => self.infer_paren(expression, span, expected_ty, is_subexpression),
 
             Expression::Unary {
                 operator,
@@ -234,24 +183,7 @@ impl InferCtx<'_, '_> {
                 ..
             } => self.infer_unary(operator, expression, expected_ty, span),
 
-            Expression::Const {
-                doc,
-                annotation,
-                ty: _,
-                expression,
-                span,
-                identifier,
-                identifier_span,
-                visibility,
-            } => self.infer_const_binding(
-                doc,
-                annotation,
-                expression,
-                identifier,
-                identifier_span,
-                visibility,
-                span,
-            ),
+            Expression::Const { .. } => self.infer_const_binding(expression),
 
             Expression::Loop { body, span, .. } => self.infer_loop(body, span, expected_ty),
 
@@ -301,7 +233,7 @@ impl InferCtx<'_, '_> {
             } => {
                 // Only fire the generic ban when the dedicated
                 // `task_in_expression_position` check won't — avoids duplicates.
-                if parent_is_subexpression && !self.scopes.is_value_context() {
+                if is_subexpression && !self.scopes.is_value_context() {
                     self.sink
                         .push(diagnostics::infer::control_flow_in_expression("task", span));
                 }
@@ -311,7 +243,7 @@ impl InferCtx<'_, '_> {
             Expression::Defer {
                 expression, span, ..
             } => {
-                if parent_is_subexpression && !self.scopes.is_value_context() {
+                if is_subexpression && !self.scopes.is_value_context() {
                     self.sink
                         .push(diagnostics::infer::control_flow_in_expression(
                             "defer", span,
@@ -353,10 +285,8 @@ impl InferCtx<'_, '_> {
                 ..
             } => self.infer_cast(expression, target_type, span, expected_ty),
 
-            Expression::Break { value, span } => {
-                self.infer_break(value, span, parent_is_subexpression)
-            }
-            Expression::Continue { span } => self.infer_continue(span, parent_is_subexpression),
+            Expression::Break { value, span } => self.infer_break(value, span, is_subexpression),
+            Expression::Continue { span } => self.infer_continue(span, is_subexpression),
             Expression::RawGo { text } => Expression::RawGo { text },
             Expression::NoOp => Expression::NoOp,
         }

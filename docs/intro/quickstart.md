@@ -87,7 +87,7 @@ src/
     └── display.lis      # output formatting
 ```
 
-Each dir in `src/` is a module, imported by name. `main.lis` is the entry point:
+Each dir in `src/` is a module, imported by name. `main.lis` is the entry point. A project without one is a [library](../reference/12-modules.md#library-projects).
 
 ```rust
 import "go:fmt"

@@ -24,12 +24,12 @@ import (
 	"os"
 )
 
-func make_lookup() func(string) (string, bool) {
+func makeLookup() func(string) (string, bool) {
 	return os.LookupEnv
 }
 
 func main() {
-	f := make_lookup()
+	f := makeLookup()
 	option_1 := lisette.OptionFromCommaOk[string](f("HOME"))
 	r := option_1
 	if r.Tag == lisette.OptionSome {

@@ -15,11 +15,11 @@ package main
 
 import lisette "github.com/ivov/lisette/prelude"
 
-func get_value() lisette.Result[int, string] {
+func getValue() lisette.Result[int, string] {
 	return lisette.MakeResultOk[int, string](42)
 }
 
 func test() {
 	_ = lisette.MakeResultErr[int, string]("initial")
-	_ = get_value()
+	_ = getValue()
 }

@@ -29,7 +29,7 @@ package main
 import lisette "github.com/ivov/lisette/prelude"
 
 type Printable interface {
-	to_string() string
+	toString() string
 }
 
 type Text struct {
@@ -40,11 +40,11 @@ type Number struct {
 	value int
 }
 
-func (t Text) to_string() string {
+func (t Text) toString() string {
 	return t.content
 }
 
-func (n Number) to_string() string {
+func (n Number) toString() string {
 	return "number"
 }
 

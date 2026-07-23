@@ -24,15 +24,15 @@ type User struct {
 	name string
 }
 
-func get_base() lisette.Result[User, string] {
+func getBase() lisette.Result[User, string] {
 	return lisette.MakeResultOk[User, string](User{
 		id:   1,
 		name: "a",
 	})
 }
 
-func override_id() lisette.Result[User, string] {
-	check_1 := get_base()
+func overrideId() lisette.Result[User, string] {
+	check_1 := getBase()
 	if check_1.Tag != lisette.ResultOk {
 		return lisette.MakeResultErr[User, string](check_1.ErrVal)
 	}

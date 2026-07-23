@@ -981,8 +981,10 @@ fn compute_struct_field_path(
             })
     } else if planner.struct_field_is_exported(ty, &field.name) {
         go_name::make_exported(&field.name)
-    } else {
+    } else if planner.field_is_embedded(ty, &field.name) {
         go_name::escape_keyword(&field.name).into_owned()
+    } else {
+        go_name::unexported_method_go_name(&field.name)
     };
 
     if let Some((_, variant_name)) = enum_info

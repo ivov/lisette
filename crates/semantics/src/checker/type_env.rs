@@ -5,12 +5,9 @@
 //! handle, so `Type` is a pure value (Clone / Eq / Hash / Serialize friendly)
 //! with no shared mutable state.
 //!
-//! Speculative unification works through the `undo_log`: a fresh log is
-//! pushed when entering speculation, bindings are recorded as they happen,
-//! and on Err the originals are restored in reverse order. On Ok the log is
-//! either discarded (no enclosing speculation) or appended to the parent log
-//! (nested speculation — the bindings are committed to the parent, but still
-//! reversible if the parent fails).
+//! Speculative unification uses a stack of undo logs. Bindings go into the
+//! innermost log; a successful nested region joins its parent, while a failed
+//! region restores its entries in reverse order.
 
 use ecow::EcoString;
 use syntax::types::{Bound, Type, TypeVarId};
@@ -23,9 +20,7 @@ pub enum VarState {
 
 pub struct TypeEnv {
     entries: Vec<VarState>,
-    /// When Some, bindings performed during the current speculative region
-    /// are logged here as `(id, prior_state)` so they can be reverted.
-    undo_log: Option<Vec<(TypeVarId, VarState)>>,
+    undo_logs: Vec<Vec<(TypeVarId, VarState)>>,
 }
 
 impl Default for TypeEnv {
@@ -38,7 +33,7 @@ impl TypeEnv {
     pub(crate) fn new() -> Self {
         Self {
             entries: Vec::new(),
-            undo_log: None,
+            undo_logs: Vec::new(),
         }
     }
 
@@ -69,7 +64,7 @@ impl TypeEnv {
         }
         let slot = Self::slot(id);
         let old = std::mem::replace(&mut self.entries[slot], VarState::Bound(ty));
-        if let Some(log) = &mut self.undo_log {
+        if let Some(log) = self.undo_logs.last_mut() {
             log.push((id, old));
         }
     }
@@ -248,36 +243,23 @@ impl TypeEnv {
         }
     }
 
-    /// Begin a speculative region. Caller holds the returned handle and
-    /// passes it back to `end_speculation` with the region's outcome.
-    pub(crate) fn begin_speculation(&mut self) -> Speculation {
-        let prev = self.undo_log.take();
-        self.undo_log = Some(Vec::new());
-        Speculation { prev }
+    pub(super) fn begin_speculation(&mut self) {
+        self.undo_logs.push(Vec::new());
     }
 
-    /// End a speculative region. If `is_err`, revert all bindings made
-    /// during the region. Otherwise, either commit them (no enclosing
-    /// region) or append them to the enclosing region's log (so it can
-    /// still revert them if it fails).
-    pub(crate) fn end_speculation(&mut self, spec: Speculation, is_err: bool) {
-        let log = self.undo_log.take().expect("speculation log must exist");
-        self.undo_log = spec.prev;
+    pub(super) fn end_speculation(&mut self, is_err: bool) {
+        let log = self
+            .undo_logs
+            .pop()
+            .expect("speculation must be started before it is ended");
         if is_err {
             for (id, original) in log.into_iter().rev() {
                 self.entries[Self::slot(id)] = original;
             }
-        } else if let Some(parent_log) = &mut self.undo_log {
+        } else if let Some(parent_log) = self.undo_logs.last_mut() {
             parent_log.extend(log);
         }
     }
-}
-
-/// Handle returned by `begin_speculation`, consumed by `end_speculation`.
-/// Not clonable — ensures each region is ended exactly once.
-#[must_use]
-pub struct Speculation {
-    prev: Option<Vec<(TypeVarId, VarState)>>,
 }
 
 /// Extension trait for `Type` giving env-aware resolve convenience methods.
@@ -317,5 +299,22 @@ mod tests {
         env.bind(ids[DEPTH - 1], Type::Simple(SimpleKind::Int));
 
         assert_eq!(env.resolve(&var(ids[0])), Type::Simple(SimpleKind::Int));
+    }
+
+    #[test]
+    fn outer_rollback_includes_committed_nested_bindings() {
+        let mut env = TypeEnv::new();
+        let outer = env.fresh(None);
+        let inner = env.fresh(None);
+
+        env.begin_speculation();
+        env.bind(outer, Type::Simple(SimpleKind::Int));
+        env.begin_speculation();
+        env.bind(inner, Type::Simple(SimpleKind::String));
+        env.end_speculation(false);
+        env.end_speculation(true);
+
+        assert!(matches!(env.state(outer), VarState::Unbound { .. }));
+        assert!(matches!(env.state(inner), VarState::Unbound { .. }));
     }
 }

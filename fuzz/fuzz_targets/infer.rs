@@ -23,10 +23,8 @@ fuzz_target!(|data: &[u8]| {
     store.add_module("fuzz");
     lisette_semantics::prelude::parse_and_register_prelude(&mut store, &sink);
 
-    let mut checker = lisette_semantics::checker::TaskState::with_fresh_allocator(&sink);
-    checker
-        .ufcs_methods
-        .extend(lisette_semantics::prelude::compute_prelude_ufcs(&store));
+    let mut checker = lisette_semantics::checker::TaskState::with_fresh_allocator();
+    checker.extend_ufcs_methods(lisette_semantics::prelude::compute_prelude_ufcs(&store));
     checker.cursor.module_id = "fuzz".to_string();
     checker.put_prelude_in_scope(&store);
 
@@ -35,11 +33,13 @@ fuzz_target!(|data: &[u8]| {
         &desugar_result.ast,
         &lisette_syntax::program::Visibility::Private,
     );
+    checker.finalize_equality(&mut store);
     checker.check_pending_generic_bounds(&store);
 
     for expression in desugar_result.ast {
         let type_var = checker.new_type_var();
-        let _ = InferCtx::new(&mut checker, &store).infer_expression(expression, &type_var);
+        let _ =
+            InferCtx::new(&mut checker, &store).infer_root_expression(expression, &type_var);
 
         if checker.failed() {
             break;

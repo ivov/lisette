@@ -152,7 +152,7 @@ impl Planner<'_> {
         let resolved_name = format!("{}.{}", real_type, member);
 
         let capitalized = self.capitalize_static_method_if_public(&resolved_name);
-        let go_name = self.resolve_go_name(&capitalized, None);
+        let go_name = self.resolve_go_name(&capitalized, None, false);
 
         Some(go_name)
     }
@@ -171,7 +171,7 @@ impl Planner<'_> {
             let go_method = if is_exported {
                 go_name::snake_to_camel(member)
             } else {
-                go_name::escape_keyword(member).into_owned()
+                go_name::unexported_method_go_name(member)
             };
             let type_name = self
                 .resolve_alias_type_name(value)
@@ -210,7 +210,7 @@ impl Planner<'_> {
         let go_method = if is_exported {
             go_name::snake_to_camel(member)
         } else {
-            go_name::escape_keyword(member).into_owned()
+            go_name::unexported_method_go_name(member)
         };
 
         let pkg = self.require_module_import(module_name);

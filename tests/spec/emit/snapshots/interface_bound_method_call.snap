@@ -18,10 +18,10 @@ package main
 import "fmt"
 
 type Stringer interface {
-	string_value() string
+	stringValue() string
 }
 
-func print_it[T Stringer](x T) {
-	s := x.string_value()
+func printIt[T Stringer](x T) {
+	s := x.stringValue()
 	fmt.Printf("%s\n", s)
 }

@@ -16,11 +16,11 @@ package main
 
 import lisette "github.com/ivov/lisette/prelude"
 
-func side_a() int {
+func sideA() int {
 	return 1
 }
 
-func get_xs() ([]int, error) {
+func getXs() ([]int, error) {
 	return []int{1, 2, 3}, nil
 }
 
@@ -29,8 +29,8 @@ func variadic(_ int, _ ...int) int {
 }
 
 func run() (int, error) {
-	_arg_5 := side_a()
-	ret_1, ret_2 := get_xs()
+	_arg_5 := sideA()
+	ret_1, ret_2 := getXs()
 	var result_3 lisette.Result[[]int, error]
 	if ret_2 != nil {
 		result_3 = lisette.MakeResultErr[[]int, error](ret_2)

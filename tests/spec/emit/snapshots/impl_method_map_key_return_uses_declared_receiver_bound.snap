@@ -23,11 +23,11 @@ type Box[T comparable] struct {
 	value T
 }
 
-func (b Box[T]) make_map() map[T]int {
+func (b Box[T]) makeMap() map[T]int {
 	return make(map[T]int)
 }
 
 func main() {
 	b := Box[string]{value: "a"}
-	_ = b.make_map()
+	_ = b.makeMap()
 }

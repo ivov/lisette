@@ -2,7 +2,7 @@ use rustc_hash::FxHashMap as HashMap;
 use std::fs::{read_dir, read_to_string};
 use std::path::{Path, PathBuf};
 
-use semantics::loader::{FileContent, Files, Loader};
+use semantics::loader::{DiscoveredModules, FileContent, Files, Loader};
 
 use crate::paths::{ENTRY_MODULE_ID, module_id_to_dir};
 use crate::project::ProjectConfig;
@@ -107,6 +107,13 @@ impl Loader for OverlayLoader {
         }
 
         files
+    }
+
+    fn discover_modules(&self) -> DiscoveredModules {
+        DiscoveredModules {
+            production_modules: vec![ENTRY_MODULE_ID.to_string()],
+            test_roots: Vec::new(),
+        }
     }
 }
 

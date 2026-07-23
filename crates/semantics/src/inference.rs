@@ -4,10 +4,8 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use diagnostics::LocalSink;
-use ecow::EcoString;
-use syntax::ast::{Expression, Span, StructFieldDefinition};
+use syntax::ast::Expression;
 use syntax::program::{File, Module};
-use syntax::types::Type;
 
 use deps::TypedefLocator;
 
@@ -18,12 +16,12 @@ use crate::cache::{
     hash_module_source_pair, is_cache_disabled, prelude as prelude_cache,
     restore_cached_generic_bounds, try_load_cache,
 };
-use crate::checker::TaskState;
 use crate::checker::infer::InferCtx;
+use crate::checker::{TaskOutput, TaskState};
 use crate::diagnostics::{GoImportSite, emit_for_locator_result};
-use crate::facts::{BindingIdAllocator, Facts};
+use crate::facts::Facts;
 use crate::loader::{DiscoveredModules, Loader};
-use crate::module_graph::{Roots, build_module_graph};
+use crate::module_graph::{ModuleGraphOptions, Roots, build_module_graph};
 use crate::prelude::{parse_and_register_prelude, parse_and_register_test_prelude};
 use crate::store::{ENTRY_MODULE_ID, Store};
 
@@ -48,17 +46,19 @@ pub struct SemanticConfig {
     pub load_siblings: bool,
 }
 
-pub struct AnalyzeInput<'a> {
-    pub config: SemanticConfig,
-    pub loader: &'a dyn Loader,
+pub struct EntryFile {
     pub source: String,
-    /// Bare identity name of the entry file (e.g. `main.lis`).
     pub filename: String,
-    /// Cwd-relative display path for the entry file (e.g. `src/main.lis`);
-    /// equals `filename` when there is no separate display path.
     pub display_path: String,
     pub ast: Vec<Expression>,
     pub file_comment: Option<String>,
+}
+
+pub struct AnalyzeInput<'a> {
+    pub config: SemanticConfig,
+    pub loader: &'a dyn Loader,
+    /// `None` for a library, whose root files load as siblings.
+    pub entry: Option<EntryFile>,
     pub project_root: Option<PathBuf>,
     pub compile_phase: CompilePhase,
     pub project_kind: ProjectKind,
@@ -75,20 +75,63 @@ pub struct AnalyzeInput<'a> {
 pub const PARALLEL_THRESHOLD: usize = 4;
 
 struct CacheCandidate {
+    compiled: CompiledModule,
+    files: Vec<File>,
+    topo_rank: usize,
+    expected_artifact_hash: Option<u64>,
+}
+
+struct PendingModule {
     module_id: String,
     topo_rank: usize,
-    files: Vec<File>,
-    full_hash: u64,
-    dep_hashes: HashMap<String, u64>,
-    expected_artifact_hash: Option<u64>,
-    module_hash: u64,
-    production_hash: u64,
 }
 
 struct CacheBuildJob {
     module_id: String,
     interface: ModuleInterface,
     file_id_base: u32,
+}
+
+struct RegistrationOutput {
+    modules: Vec<(String, Arc<Module>)>,
+    task: TaskOutput,
+}
+
+enum LazyGoStdlibCache {
+    Disabled,
+    Unloaded,
+    Missing,
+    Loaded(go_stdlib::GoStdlibCache),
+}
+
+impl LazyGoStdlibCache {
+    fn new(disabled: bool) -> Self {
+        if disabled {
+            Self::Disabled
+        } else {
+            Self::Unloaded
+        }
+    }
+
+    fn get_or_load(&mut self, target: stdlib::Target) -> Option<&go_stdlib::GoStdlibCache> {
+        if matches!(self, Self::Unloaded) {
+            *self = match go_stdlib::try_load_go_stdlib_cache(target) {
+                Some(cache) => Self::Loaded(cache),
+                None => Self::Missing,
+            };
+        }
+        match self {
+            Self::Loaded(cache) => Some(cache),
+            Self::Disabled | Self::Unloaded | Self::Missing => None,
+        }
+    }
+
+    fn into_module_ids(self) -> Option<HashSet<String>> {
+        match self {
+            Self::Loaded(cache) => Some(cache.modules.keys().cloned().collect()),
+            Self::Disabled | Self::Unloaded | Self::Missing => None,
+        }
+    }
 }
 
 pub struct InferenceOutput {
@@ -109,32 +152,34 @@ pub fn run_inference(input: AnalyzeInput) -> InferenceOutput {
     let mut store = Store::new();
     store.project_kind = input.project_kind;
 
-    store.init_entry_module();
-    store.store_entry_file(
-        &input.filename,
-        &input.display_path,
-        &input.source,
-        input.ast,
-        input.file_comment,
-    );
-
     let sink = LocalSink::new();
 
     let include_tests = input.compile_phase == CompilePhase::Check || input.emit_tests;
 
-    if input.filename.ends_with("_test.lis") {
-        sink.push(diagnostics::module_graph::wrong_test_file_suffix(
-            &input.display_path,
-        ));
-    } else if input.filename.ends_with(".test.lis") && !include_tests {
-        sink.push(diagnostics::module_graph::cannot_emit_test_file(
-            &input.display_path,
-        ));
-    }
+    store.init_entry_module();
+    let entry_filename = input.entry.map(|entry| {
+        if entry.filename.ends_with("_test.lis") {
+            sink.push(diagnostics::module_graph::wrong_test_file_suffix(
+                &entry.display_path,
+            ));
+        } else if entry.filename.ends_with(".test.lis") && !include_tests {
+            sink.push(diagnostics::module_graph::cannot_emit_test_file(
+                &entry.display_path,
+            ));
+        }
+        store.store_entry_file(
+            &entry.filename,
+            &entry.display_path,
+            &entry.source,
+            entry.ast,
+            entry.file_comment,
+        );
+        entry.filename
+    });
 
     if input.config.load_siblings {
         for (filename, content) in input.loader.scan_folder(ENTRY_MODULE_ID) {
-            if filename == input.filename {
+            if Some(&filename) == entry_filename.as_ref() {
                 continue;
             }
             if filename.ends_with("_test.lis") {
@@ -173,28 +218,47 @@ pub fn run_inference(input: AnalyzeInput) -> InferenceOutput {
     } else {
         DiscoveredModules::default()
     };
-    let additional = match input.compile_phase {
-        // Test roots too, so a declaration-plus-test module is still checked.
-        CompilePhase::Check => {
-            let mut roots = discovered.production_modules.clone();
-            roots.extend(discovered.test_roots.iter().cloned());
-            roots
+
+    let include_test_roots = input.compile_phase == CompilePhase::Check || input.emit_tests;
+
+    let roots = match input.project_kind {
+        ProjectKind::Binary => {
+            let mut additional = match input.compile_phase {
+                CompilePhase::Check => discovered.production_modules.clone(),
+                _ => Vec::new(),
+            };
+            if include_test_roots {
+                additional.extend(discovered.test_roots.iter().cloned());
+            }
+            Roots {
+                primary: vec![entry_module],
+                additional,
+            }
         }
-        CompilePhase::Emit if input.emit_tests => discovered.test_roots.clone(),
-        CompilePhase::Emit => Vec::new(),
+        ProjectKind::Library => {
+            let mut additional = if include_test_roots {
+                discovered.test_roots.clone()
+            } else {
+                Vec::new()
+            };
+            additional.push(entry_module);
+            Roots {
+                primary: discovered.production_modules.clone(),
+                additional,
+            }
+        }
     };
-    let roots = Roots {
-        primary: vec![entry_module],
-        additional,
-    };
+
     let mut graph_result = build_module_graph(
         &mut store,
-        Some(input.loader),
         roots,
-        &sink,
-        input.config.standalone_mode,
-        &input.locator,
-        include_tests,
+        ModuleGraphOptions {
+            loader: Some(input.loader),
+            sink: &sink,
+            standalone_mode: input.config.standalone_mode,
+            locator: &input.locator,
+            include_tests,
+        },
     );
 
     for cycle in &graph_result.cycles {
@@ -230,13 +294,9 @@ pub fn run_inference(input: AnalyzeInput) -> InferenceOutput {
     let cache_enabled = input.project_root.is_some() && !cache_disabled && !input.disable_cache;
     let check_go_files = input.compile_phase == CompilePhase::Emit;
 
-    let binding_ids = Arc::new(BindingIdAllocator::new());
-
-    let (facts, cached_modules, compiled_modules, ufcs_methods) = {
-        let mut checker = TaskState::new(&sink, binding_ids.clone());
-        checker
-            .ufcs_methods
-            .extend(crate::prelude::compute_prelude_ufcs(&store));
+    let (facts, cached_modules, compiled_modules, ufcs_methods, sink) = {
+        let mut checker = TaskState::with_sink(sink);
+        checker.extend_ufcs_methods(crate::prelude::compute_prelude_ufcs(&store));
 
         let mut module_hashes: HashMap<String, u64> = HashMap::default();
         let mut cached_modules: HashSet<String> = HashSet::default();
@@ -246,12 +306,9 @@ pub fn run_inference(input: AnalyzeInput) -> InferenceOutput {
         let edges = &graph_result.edges;
         let production_edges = &graph_result.production_edges;
 
-        // Outer `None` = not attempted: the deserialize costs milliseconds a
-        // project without stdlib imports should not pay.
-        let mut go_cache: Option<Option<go_stdlib::GoStdlibCache>> =
-            if cache_disabled { Some(None) } else { None };
+        let mut go_cache = LazyGoStdlibCache::new(cache_disabled);
 
-        let mut to_infer: Vec<(usize, String)> = Vec::new();
+        let mut to_infer: Vec<PendingModule> = Vec::new();
         let mut candidates: Vec<CacheCandidate> = Vec::new();
 
         let source_hashes: HashMap<String, (u64, u64)> =
@@ -277,7 +334,6 @@ pub fn run_inference(input: AnalyzeInput) -> InferenceOutput {
                 register_go_module(
                     &mut checker,
                     &mut store,
-                    &sink,
                     &module_id,
                     &input.locator,
                     input.config.standalone_mode,
@@ -305,40 +361,38 @@ pub fn run_inference(input: AnalyzeInput) -> InferenceOutput {
 
             let is_entry = module_id == ENTRY_MODULE_ID;
 
+            let compiled = (!is_entry).then(|| CompiledModule {
+                module_id: module_id.clone(),
+                module_hash,
+                production_hash,
+                full_hash,
+                dep_hashes,
+            });
+
             let expected_artifact_hash = check_go_files
                 .then(|| compute_emit_artifact_hash(production_hash, &input.go_module));
 
-            if cache_enabled && !is_entry {
-                candidates.push(CacheCandidate {
-                    module_id,
-                    topo_rank,
+            match (cache_enabled, compiled) {
+                (true, Some(compiled)) => candidates.push(CacheCandidate {
+                    compiled,
                     files,
-                    full_hash,
-                    dep_hashes,
+                    topo_rank,
                     expected_artifact_hash,
-                    module_hash,
-                    production_hash,
-                });
-                continue;
+                }),
+                (_, compiled) => {
+                    store.store_module(&module_id, files);
+                    if let Some(compiled) = compiled {
+                        compiled_modules.push(compiled);
+                    }
+                    to_infer.push(PendingModule {
+                        module_id,
+                        topo_rank,
+                    });
+                }
             }
-
-            store.store_module(&module_id, files);
-            if !is_entry {
-                compiled_modules.push(CompiledModule {
-                    module_id: module_id.clone(),
-                    module_hash,
-                    production_hash,
-                    full_hash,
-                    dep_hashes,
-                });
-            }
-            to_infer.push((topo_rank, module_id));
         }
 
-        let go_cache_module_ids: Option<HashSet<String>> = go_cache
-            .take()
-            .flatten()
-            .map(|cache| cache.modules.keys().cloned().collect());
+        let go_cache_module_ids = go_cache.into_module_ids();
 
         let cache_load = load_cache_candidates(
             &mut checker,
@@ -351,13 +405,16 @@ pub fn run_inference(input: AnalyzeInput) -> InferenceOutput {
         cached_modules.extend(cache_load.cached);
         to_infer.extend(cache_load.to_infer);
 
-        for (_, module_id) in &to_infer {
-            checker.predeclare_module_types(&mut store, module_id);
+        for pending in &to_infer {
+            checker.predeclare_module_types(&mut store, &pending.module_id);
         }
-        restore_cached_generic_bounds(&mut store, &sink, &cached_modules);
+        restore_cached_generic_bounds(&mut store, &checker.sink, &cached_modules);
 
-        to_infer.sort_by_key(|(topo_rank, _)| *topo_rank);
-        let to_infer: Vec<String> = to_infer.into_iter().map(|(_, id)| id).collect();
+        to_infer.sort_by_key(|pending| pending.topo_rank);
+        let to_infer: Vec<String> = to_infer
+            .into_iter()
+            .map(|pending| pending.module_id)
+            .collect();
 
         let test_ids: Vec<u32> = to_infer
             .iter()
@@ -372,15 +429,8 @@ pub fn run_inference(input: AnalyzeInput) -> InferenceOutput {
             .collect();
         store.test_file_ids.extend(test_ids);
 
-        register_modules(
-            &mut checker,
-            &mut store,
-            &sink,
-            &to_infer,
-            edges,
-            &binding_ids,
-        );
-        infer_modules(&mut checker, &mut store, &sink, &to_infer, &binding_ids);
+        register_modules(&mut checker, &mut store, &to_infer, edges);
+        infer_modules(&mut checker, &mut store, &to_infer);
 
         if !cache_disabled {
             let all_go_modules: Vec<String> = store
@@ -404,11 +454,14 @@ pub fn run_inference(input: AnalyzeInput) -> InferenceOutput {
             prelude_cache::save_prelude_cache(&store);
         }
 
+        let ufcs_methods = checker.take_ufcs_methods();
+
         (
             checker.facts,
             cached_modules,
             compiled_modules,
-            checker.ufcs_methods,
+            ufcs_methods,
+            checker.sink,
         )
     };
 
@@ -429,16 +482,14 @@ pub fn run_inference(input: AnalyzeInput) -> InferenceOutput {
 fn register_go_module(
     checker: &mut TaskState,
     store: &mut Store,
-    sink: &LocalSink,
     module_id: &str,
     locator: &TypedefLocator,
     standalone_mode: bool,
-    go_cache: &mut Option<Option<go_stdlib::GoStdlibCache>>,
+    go_cache: &mut LazyGoStdlibCache,
 ) {
     let go_pkg = module_id.strip_prefix("go:").unwrap_or(module_id);
     if deps::is_stdlib(go_pkg)
-        && let Some(ref cache) =
-            *go_cache.get_or_insert_with(|| go_stdlib::try_load_go_stdlib_cache(locator.target()))
+        && let Some(cache) = go_cache.get_or_load(locator.target())
     {
         load_cached_go_module(store, module_id, cache, locator.target());
         if store.is_visited(module_id) {
@@ -467,7 +518,7 @@ fn register_go_module(
                     standalone_mode,
                     replace_importer: None,
                 },
-                sink,
+                &checker.sink,
             );
         }
     }
@@ -476,8 +527,8 @@ fn register_go_module(
 #[derive(Default)]
 struct CacheLoad {
     compiled: Vec<CompiledModule>,
-    cached: Vec<String>,
-    to_infer: Vec<(usize, String)>,
+    cached: HashSet<String>,
+    to_infer: Vec<PendingModule>,
 }
 
 /// Merges cache hits into the store and returns the misses to register.
@@ -491,9 +542,9 @@ fn load_cache_candidates(
     let load = |c: &CacheCandidate| {
         project_root.and_then(|root| {
             try_load_cache(
-                &c.module_id,
-                c.full_hash,
-                &c.dep_hashes,
+                &c.compiled.module_id,
+                c.compiled.full_hash,
+                &c.compiled.dep_hashes,
                 c.expected_artifact_hash,
                 root,
                 check_go_files,
@@ -511,16 +562,13 @@ fn load_cache_candidates(
     let mut discarded: Vec<Vec<File>> = Vec::new();
     for (candidate, interface) in candidates.into_iter().zip(loaded) {
         let Some(interface) = interface else {
-            let module_id = candidate.module_id;
+            let module_id = candidate.compiled.module_id.clone();
             store.store_module(&module_id, candidate.files);
-            result.compiled.push(CompiledModule {
-                module_id: module_id.clone(),
-                module_hash: candidate.module_hash,
-                production_hash: candidate.production_hash,
-                full_hash: candidate.full_hash,
-                dep_hashes: candidate.dep_hashes,
+            result.compiled.push(candidate.compiled);
+            result.to_infer.push(PendingModule {
+                module_id,
+                topo_rank: candidate.topo_rank,
             });
-            result.to_infer.push((candidate.topo_rank, module_id));
             continue;
         };
         let file_id_base = store.reserve_file_ids(interface.files.len() as u32);
@@ -528,7 +576,7 @@ fn load_cache_candidates(
             discarded.push(candidate.files);
         }
         build_jobs.push(CacheBuildJob {
-            module_id: candidate.module_id,
+            module_id: candidate.compiled.module_id,
             interface,
             file_id_base,
         });
@@ -560,11 +608,11 @@ fn load_cache_candidates(
     };
 
     for build in built {
-        checker.ufcs_methods.extend(build.ufcs_methods);
+        checker.extend_ufcs_methods(build.ufcs_methods);
         let module_id = build.module_id;
         store.insert_prebuilt_module(module_id.clone(), build.module, build.file_map);
         checker.collect_cached_module_tests(store, &module_id);
-        result.cached.push(module_id);
+        result.cached.insert(module_id);
     }
 
     result
@@ -573,10 +621,8 @@ fn load_cache_candidates(
 fn register_modules(
     checker: &mut TaskState,
     store: &mut Store,
-    sink: &LocalSink,
     to_infer: &[String],
     edges: &HashMap<String, HashSet<String>>,
-    binding_ids: &Arc<BindingIdAllocator>,
 ) {
     if to_infer.len() < PARALLEL_THRESHOLD {
         for module_id in to_infer {
@@ -605,34 +651,14 @@ fn register_modules(
             .collect();
 
         let chunk_size = detached.len().div_ceil(rayon::current_num_threads()).max(1);
-        let mut chunks: Vec<Vec<(String, Arc<Module>)>> = Vec::new();
-        let mut remaining = detached.into_iter();
-        loop {
-            let chunk: Vec<_> = remaining.by_ref().take(chunk_size).collect();
-            if chunk.is_empty() {
-                break;
-            }
-            chunks.push(chunk);
-        }
-
-        let allocator = binding_ids.clone();
         let store_ref: &Store = store;
-        let fields_shared = Arc::new(checker.module_fields_snapshot());
+        let seed = checker.worker_seed();
 
-        type RegisterOutput = (
-            Vec<(String, Arc<Module>)>,
-            HashSet<(String, String)>,
-            HashMap<EcoString, Arc<[StructFieldDefinition]>>,
-            Facts,
-            Vec<(Type, Type, Span)>,
-            LocalSink,
-        );
-        let outputs: Vec<RegisterOutput> = chunks
+        let outputs: Vec<RegistrationOutput> = detached
             .into_par_iter()
+            .chunks(chunk_size)
             .map(|chunk| {
-                let local_sink = LocalSink::new();
-                let mut worker = TaskState::new(&local_sink, allocator.clone());
-                worker.module_fields_shared = Some(fields_shared.clone());
+                let mut worker = seed.spawn();
                 let mut view = store_ref.registration_view();
                 let mut registered = Vec::with_capacity(chunk.len());
                 for (module_id, module) in chunk {
@@ -644,41 +670,25 @@ fn register_modules(
                         .expect("registered module must remain in view");
                     registered.push((module_id, module));
                 }
-                let facts = std::mem::replace(&mut worker.facts, Facts::new(allocator.clone()));
-                (
-                    registered,
-                    std::mem::take(&mut worker.ufcs_methods),
-                    worker.module_fields_snapshot(),
-                    facts,
-                    std::mem::take(&mut worker.pending_generic_bound_checks),
-                    local_sink,
-                )
+                RegistrationOutput {
+                    modules: registered,
+                    task: worker.into_output(),
+                }
             })
             .collect();
 
-        let mut worker_sinks: Vec<LocalSink> = Vec::with_capacity(outputs.len());
-        for (registered, ufcs_methods, module_fields, facts, pending_bounds, sink_local) in outputs
-        {
-            for (module_id, module) in registered {
+        let mut task_outputs = Vec::with_capacity(outputs.len());
+        for output in outputs {
+            for (module_id, module) in output.modules {
                 store.modules.insert(module_id, module);
             }
-            checker.ufcs_methods.extend(ufcs_methods);
-            checker.merge_module_fields(module_fields);
-            checker.facts.merge(facts);
-            checker.pending_generic_bound_checks.extend(pending_bounds);
-            worker_sinks.push(sink_local);
+            task_outputs.push(output.task);
         }
-        sink.extend(LocalSink::merge(worker_sinks));
+        checker.absorb_outputs(task_outputs);
     }
 }
 
-fn infer_modules(
-    checker: &mut TaskState,
-    store: &mut Store,
-    sink: &LocalSink,
-    to_infer: &[String],
-    binding_ids: &Arc<BindingIdAllocator>,
-) {
+fn infer_modules(checker: &mut TaskState, store: &mut Store, to_infer: &[String]) {
     checker.finalize_equality(store);
     checker.check_pending_generic_bounds(store);
     checker.finalize_tests(store);
@@ -696,42 +706,19 @@ fn infer_modules(
             InferCtx::new(checker, store).infer_module(&module_id, files);
         }
     } else {
-        let allocator = binding_ids.clone();
-        let ufcs_shared = Arc::new(std::mem::take(&mut checker.ufcs_methods));
-        let fields_shared = Arc::new(checker.module_fields_snapshot());
+        let seed = checker.worker_seed();
         let store_ref: &Store = store;
 
-        type WorkerOutput = (
-            Vec<(String, File)>,
-            Facts,
-            Vec<(Type, Type, Span)>,
-            LocalSink,
-        );
-        let outputs: Vec<WorkerOutput> = module_files
+        let outputs: Vec<TaskOutput> = module_files
             .into_par_iter()
             .map(|(module_id, files)| {
-                let local_sink = LocalSink::new();
-                let mut worker = TaskState::new(&local_sink, allocator.clone());
-                worker.ufcs_shared = Some(ufcs_shared.clone());
-                worker.module_fields_shared = Some(fields_shared.clone());
+                let mut worker = seed.spawn();
                 InferCtx::new(&mut worker, store_ref).infer_module(&module_id, files);
-                let typed_files = std::mem::take(&mut worker.typed_files);
-                let facts = std::mem::replace(&mut worker.facts, Facts::new(allocator.clone()));
-                let pending = std::mem::take(&mut worker.pending_interface_bound_checks);
-                (typed_files, facts, pending, local_sink)
+                worker.into_output()
             })
             .collect();
 
-        checker.ufcs_methods = Arc::try_unwrap(ufcs_shared).unwrap_or_else(|arc| (*arc).clone());
-
-        let mut worker_sinks: Vec<LocalSink> = Vec::with_capacity(outputs.len());
-        for (typed_files, facts, pending, sink_local) in outputs {
-            checker.typed_files.extend(typed_files);
-            checker.facts.merge(facts);
-            checker.pending_interface_bound_checks.extend(pending);
-            worker_sinks.push(sink_local);
-        }
-        sink.extend(LocalSink::merge(worker_sinks));
+        checker.absorb_outputs(outputs);
     }
 
     for (module_id, typed_file) in std::mem::take(&mut checker.typed_files) {

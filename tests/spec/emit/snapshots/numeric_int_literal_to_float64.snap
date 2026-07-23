@@ -12,10 +12,10 @@ description: |
 ---
 package main
 
-func accept_float(x float64) float64 {
+func acceptFloat(x float64) float64 {
 	return x
 }
 
 func test() float64 {
-	return accept_float(42)
+	return acceptFloat(42)
 }

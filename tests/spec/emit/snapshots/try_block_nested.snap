@@ -26,11 +26,11 @@ package main
 
 import lisette "github.com/ivov/lisette/prelude"
 
-func risky_a() lisette.Result[int, string] {
+func riskyA() lisette.Result[int, string] {
 	return lisette.MakeResultOk[int, string](1)
 }
 
-func risky_b() lisette.Result[int, string] {
+func riskyB() lisette.Result[int, string] {
 	return lisette.MakeResultOk[int, string](2)
 }
 
@@ -39,7 +39,7 @@ func test() int {
 	tryResult_1 := func() lisette.Result[int, string] {
 		var inner lisette.Result[int, string]
 		tryResult_2 := func() lisette.Result[int, string] {
-			check_3 := risky_a()
+			check_3 := riskyA()
 			if check_3.Tag != lisette.ResultOk {
 				return lisette.MakeResultErr[int, string](check_3.ErrVal)
 			}
@@ -53,7 +53,7 @@ func test() int {
 			inner_val = 0
 		}
 		_left_5 := inner_val
-		check_4 := risky_b()
+		check_4 := riskyB()
 		if check_4.Tag != lisette.ResultOk {
 			return lisette.MakeResultErr[int, string](check_4.ErrVal)
 		}

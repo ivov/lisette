@@ -10,10 +10,10 @@ description: |
 ---
 package main
 
-func take_any(_ any) {}
+func takeAny(_ any) {}
 
 func test() {
-	take_any(func() {
+	takeAny(func() {
 		panic("boom")
 	})
 }

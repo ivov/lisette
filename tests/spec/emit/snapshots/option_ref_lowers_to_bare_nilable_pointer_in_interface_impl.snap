@@ -31,11 +31,11 @@ func (s Store) Find(_ string) *store.Entry {
 	return nil
 }
 
-func use_store(s store.Storage) {
+func useStore(s store.Storage) {
 	_ = s
 }
 
 func main() {
 	s := Store{}
-	use_store(s)
+	useStore(s)
 }

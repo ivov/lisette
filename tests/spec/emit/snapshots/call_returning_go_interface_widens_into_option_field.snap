@@ -16,13 +16,13 @@ package main
 
 import "example.com/srv"
 
-func setup_handler() srv.Handler {
+func setupHandler() srv.Handler {
 	return srv.NewHandler()
 }
 
 func main() {
 	_ = &srv.Server{
 		Addr:    ":8000",
-		Handler: setup_handler(),
+		Handler: setupHandler(),
 	}
 }

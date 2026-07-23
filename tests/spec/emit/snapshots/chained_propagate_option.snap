@@ -12,7 +12,7 @@ package main
 
 import lisette "github.com/ivov/lisette/prelude"
 
-func get_nested(outer lisette.Option[lisette.Option[int]]) (int, bool) {
+func getNested(outer lisette.Option[lisette.Option[int]]) (int, bool) {
 	if outer.Tag != lisette.OptionSome {
 		return 0, false
 	}

@@ -25,11 +25,11 @@ func (b Box) add(y int) int {
 	return b.x + y
 }
 
-func make_box() Box {
+func makeBox() Box {
 	return Box{x: 1}
 }
 
 func main() {
-	v := make_box().add(1)
+	v := makeBox().add(1)
 	_ = v
 }

@@ -75,8 +75,8 @@ impl Planner<'_> {
         let target_name = self
             .module
             .escape_remap(identifier)
-            .unwrap_or(identifier)
-            .to_string();
+            .map(str::to_string)
+            .unwrap_or_else(|| go_name::screaming_snake_to_camel(identifier));
         let initial_go_name = self.scope.bind(identifier, target_name);
         let go_identifier = if self.try_declare(&initial_go_name) {
             initial_go_name
@@ -136,7 +136,10 @@ impl Planner<'_> {
                 match self.scope.resolve_identifier_binding(value.as_str()) {
                     Some(BindingValue::GoName(name)) => self.is_go_const_binding(name),
                     Some(BindingValue::InlineExpr(_)) => false,
-                    None => self.is_go_const_binding(value.as_str()),
+                    None => {
+                        let go = self.module.escape_remap(value).unwrap_or(value);
+                        self.is_go_const_binding(go)
+                    }
                 }
             }
             Expression::Binary { left, right, .. } => {

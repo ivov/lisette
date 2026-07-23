@@ -12,10 +12,10 @@ description: |
 ---
 package main
 
-func test_int() (int, bool) {
+func testInt() (int, bool) {
 	return 42, true
 }
 
-func test_string() (string, bool) {
+func testString() (string, bool) {
 	return "hello", true
 }

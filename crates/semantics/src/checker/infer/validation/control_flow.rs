@@ -11,7 +11,7 @@ fn is_sync_lock_type(ty: &Type) -> bool {
     )
 }
 
-impl InferCtx<'_, '_> {
+impl InferCtx<'_> {
     pub(crate) fn check_deferred_lock(&mut self, deferred: &Expression) {
         let Expression::Call {
             expression: callee,

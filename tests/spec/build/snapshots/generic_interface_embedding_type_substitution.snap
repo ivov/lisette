@@ -32,7 +32,7 @@ func (s Score) Keep() bool {
 	return s.val > 50
 }
 
-func process_score(item Score) string {
+func processScore(item Score) string {
 	if item.Keep() {
 		return item.MapVal()
 	}
@@ -44,5 +44,5 @@ func main() {
 		name: "hello",
 		val:  42,
 	}
-	fmt.Println(process_score(s))
+	fmt.Println(processScore(s))
 }

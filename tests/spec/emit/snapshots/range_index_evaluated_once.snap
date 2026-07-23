@@ -22,7 +22,7 @@ import (
 	lisette "github.com/ivov/lisette/prelude"
 )
 
-func make_range() lisette.Range[int] {
+func makeRange() lisette.Range[int] {
 	fmt.Println("range")
 	return lisette.Range[int]{
 		Start: 1,
@@ -33,7 +33,7 @@ func make_range() lisette.Range[int] {
 func main() {
 	items := []int{0, 1, 2, 3, 4}
 	_base_2 := items
-	range_1 := make_range()
+	range_1 := makeRange()
 	sub := _base_2[range_1.Start:range_1.End:range_1.End]
 	fmt.Println(len(sub))
 }

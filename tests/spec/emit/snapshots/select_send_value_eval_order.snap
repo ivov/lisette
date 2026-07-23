@@ -13,7 +13,7 @@ description: |
 ---
 package main
 
-func make_ch() chan int {
+func makeCh() chan int {
 	return make(chan int)
 }
 
@@ -25,6 +25,6 @@ func main() {
 		to_send = 0
 	}
 	select {
-	case make_ch() <- to_send:
+	case makeCh() <- to_send:
 	}
 }

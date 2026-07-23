@@ -38,11 +38,11 @@ func (d Dev) Write(_ []uint8) (int, error) {
 	return 0, nil
 }
 
-func use_rw(target rw.ReadWriter) {
+func useRw(target rw.ReadWriter) {
 	_ = target
 }
 
 func main() {
 	d := Dev{}
-	use_rw(d)
+	useRw(d)
 }

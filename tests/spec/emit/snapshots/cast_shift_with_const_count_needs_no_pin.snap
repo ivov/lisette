@@ -10,8 +10,8 @@ description: |
 ---
 package main
 
-const SHIFT int = 60 + 8
+const Shift int = 60 + 8
 
 func scale() float64 {
-	return float64((1 << SHIFT))
+	return float64((1 << Shift))
 }

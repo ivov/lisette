@@ -10,10 +10,10 @@ description: |
 ---
 package main
 
-func always_false(_ bool) bool {
+func alwaysFalse(_ bool) bool {
 	return false
 }
 
 func test(x, y int) bool {
-	return !always_false(x == y)
+	return !alwaysFalse(x == y)
 }

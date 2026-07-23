@@ -15,7 +15,7 @@ package main
 
 import "errors"
 
-func might_fail(n int) (int, error) {
+func mightFail(n int) (int, error) {
 	if n < 0 {
 		return 0, errors.New("negative")
 	}

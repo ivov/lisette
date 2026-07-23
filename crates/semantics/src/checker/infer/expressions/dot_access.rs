@@ -14,7 +14,7 @@ use super::primitives::contains_deref;
 use crate::checker::infer::InferCtx;
 use crate::checker::promotion::{self, MemberKind, Resolution};
 
-impl InferCtx<'_, '_> {
+impl InferCtx<'_> {
     pub(super) fn infer_dot_access_or_qualified_path(
         &mut self,
         expression: Box<Expression>,
@@ -32,7 +32,7 @@ impl InferCtx<'_, '_> {
                 && let Some(path) = inner.as_dotted_path()
                 && inner.root_identifier().is_some_and(|root| {
                     self.lookup_qualified_name(store, root).is_some()
-                        || self.imports.imported_modules.contains_key(root)
+                        || self.imports.namespace(root).is_some()
                 })
             {
                 self.sink.push(diagnostics::infer::parenthesized_qualifier(
@@ -204,7 +204,7 @@ impl DotAccessResolutionArgs<'_> {
     }
 }
 
-impl InferCtx<'_, '_> {
+impl InferCtx<'_> {
     fn normalize_aliased_ref(&self, ty: Type) -> Type {
         if ty.is_ref() {
             return ty;
@@ -370,7 +370,7 @@ impl InferCtx<'_, '_> {
             .is_some_and(|methods| methods.contains_key(member))
     }
 
-    fn get_available_member_names(&self, ty: &Type) -> Vec<String> {
+    fn get_available_member_names(&mut self, ty: &Type) -> Vec<String> {
         let store = self.store;
         let deref_ty = ty.strip_refs();
         let mut names = Vec::new();
@@ -389,7 +389,7 @@ impl InferCtx<'_, '_> {
     }
 
     fn compute_unwrap_hint(
-        &self,
+        &mut self,
         ty: &Type,
         member: &str,
     ) -> Option<diagnostics::infer::UnwrapHint> {
@@ -412,7 +412,7 @@ impl InferCtx<'_, '_> {
         }
     }
 
-    fn has_member(&self, ty: &Type, member: &str) -> bool {
+    fn has_member(&mut self, ty: &Type, member: &str) -> bool {
         let store = self.store;
         let deref_ty = ty.strip_refs();
 
@@ -616,20 +616,21 @@ impl InferCtx<'_, '_> {
         // Look up by type-derived name first (works for non-aliased imports).
         // For aliased imports (e.g. `import u "utils"`), the map key is "u" but
         // the type name is "utils", so fall back to matching by import module id.
-        let (module_fields, module_ty) = self
+        let (module_id, module_fields) = self
             .imports
-            .imported_modules
-            .get(type_name)
-            .filter(|(_, ty)| namespace_id.is_none() || ty.as_import_namespace() == namespace_id)
-            .cloned()
+            .namespace(type_name)
+            .filter(|(module_id, _)| {
+                namespace_id.is_none_or(|namespace_id| *module_id == namespace_id)
+            })
             .or_else(|| {
                 let module_id = namespace_id?;
                 self.imports
-                    .imported_modules
-                    .values()
-                    .find(|(_, ty)| ty.as_import_namespace() == Some(module_id))
-                    .cloned()
+                    .namespaces()
+                    .find(|(imported_module_id, _)| *imported_module_id == module_id)
             })?;
+        let module_fields = module_fields.clone();
+        let module_id = module_id.to_string();
+        let module_ty = Type::ImportNamespace(module_id.clone().into());
 
         let kind = DotAccessKind::ModuleMember;
 
@@ -646,8 +647,7 @@ impl InferCtx<'_, '_> {
             return Some((args.build_dot_access(Type::Error, Some(kind), None), kind));
         };
 
-        let module_id = module_ty.as_import_namespace()?;
-        let resolved_definition = Symbol::from_parts(module_id, args.member_name);
+        let resolved_definition = Symbol::from_parts(&module_id, args.member_name);
         if let Some(definition_span) = self.get_definition_name_span(store, &resolved_definition) {
             self.facts.add_usage(*args.span, definition_span);
         }
@@ -1142,7 +1142,7 @@ impl InferCtx<'_, '_> {
         if !is_deref
             && !binding_is_ref
             && !self.scopes.lookup_mutable(&var_name)
-            && !self.imports.imported_modules.contains_key(&var_name)
+            && self.imports.namespace(&var_name).is_none()
         {
             let self_type_name = if var_name == "self" {
                 self.lookup_type(store, "self")

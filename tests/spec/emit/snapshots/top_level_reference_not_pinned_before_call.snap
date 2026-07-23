@@ -17,7 +17,7 @@ description: |
 ---
 package main
 
-const BASE int = 10
+const Base int = 10
 
 func eff(x *int) int {
 	*x = 1
@@ -26,6 +26,6 @@ func eff(x *int) int {
 
 func run() int {
 	i := 0
-	r := []int{BASE, eff(&i)}
+	r := []int{Base, eff(&i)}
 	return r[0] + r[1]
 }

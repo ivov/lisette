@@ -14,10 +14,10 @@ package main
 
 import lisette "github.com/ivov/lisette/prelude"
 
-func test_string_error() lisette.Result[int, string] {
+func testStringError() lisette.Result[int, string] {
 	return lisette.MakeResultOk[int, string](42)
 }
 
-func test_int_error() lisette.Result[string, int] {
+func testIntError() lisette.Result[string, int] {
 	return lisette.MakeResultOk[string, int]("hello")
 }

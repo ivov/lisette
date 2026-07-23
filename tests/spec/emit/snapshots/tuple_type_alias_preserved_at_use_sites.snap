@@ -18,6 +18,6 @@ type Holder struct {
 	p Pair
 }
 
-func use_it(h Holder, x Pair) int {
+func useIt(h Holder, x Pair) int {
 	return h.p.First + x.Second
 }

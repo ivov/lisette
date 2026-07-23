@@ -28,7 +28,7 @@ type C struct {
 	value int
 }
 
-func make_key() string {
+func makeKey() string {
 	fmt.Println("key")
 	return "a"
 }
@@ -36,7 +36,7 @@ func make_key() string {
 func main() {
 	m := make(map[string]C)
 	m["a"] = C{value: 1}
-	key := make_key()
+	key := makeKey()
 	entry := m[key]
 	entry.value = 2
 	m[key] = entry

@@ -24,12 +24,12 @@ type Box struct {
 	x int
 }
 
-func make_box() Box {
+func makeBox() Box {
 	return Box{x: 1}
 }
 
 func main() {
-	ref_1 := make_box()
+	ref_1 := makeBox()
 	r := &ref_1
 	ref_1_2 := 3
 	fmt.Println(r.x, ref_1_2)

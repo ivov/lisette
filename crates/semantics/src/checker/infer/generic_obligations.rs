@@ -5,7 +5,7 @@ use crate::checker::infer::InferCtx;
 use crate::facts::{GenericBoundObligation, GenericBoundOrigin};
 use crate::generics::{AppliedGenericBound, bound_requires_evidence, type_obligations};
 
-impl InferCtx<'_, '_> {
+impl InferCtx<'_> {
     pub(crate) fn register_construction_obligations(
         &mut self,
         written_name: &str,

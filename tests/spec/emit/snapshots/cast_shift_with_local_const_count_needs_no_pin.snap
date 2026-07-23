@@ -10,6 +10,6 @@ description: |
 package main
 
 func scale() float64 {
-	const SHIFT int = 60 + 8
-	return float64((1 << SHIFT))
+	const Shift int = 60 + 8
+	return float64((1 << Shift))
 }

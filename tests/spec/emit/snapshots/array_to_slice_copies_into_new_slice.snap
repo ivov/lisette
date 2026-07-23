@@ -10,6 +10,6 @@ package main
 
 import "slices"
 
-func to_slice(a [3]int) []int {
+func toSlice(a [3]int) []int {
 	return slices.Clone(a[:])
 }

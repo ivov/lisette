@@ -16,10 +16,10 @@ package main
 
 type Handler func(int) string
 
-func my_handler(_ int) string {
+func myHandler(_ int) string {
 	return "ok"
 }
 
 func test() Handler {
-	return Handler(my_handler)
+	return Handler(myHandler)
 }

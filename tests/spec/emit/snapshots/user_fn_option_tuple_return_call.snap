@@ -14,7 +14,7 @@ package main
 
 import lisette "github.com/ivov/lisette/prelude"
 
-func maybe_pair(n int) (lisette.Tuple2[int, int], bool) {
+func maybePair(n int) (lisette.Tuple2[int, int], bool) {
 	if n > 0 {
 		return lisette.MakeTuple2(n, n+1), true
 	}
@@ -22,7 +22,7 @@ func maybe_pair(n int) (lisette.Tuple2[int, int], bool) {
 }
 
 func main() {
-	option_1 := lisette.OptionFromCommaOk[lisette.Tuple2[int, int]](maybe_pair(5))
+	option_1 := lisette.OptionFromCommaOk[lisette.Tuple2[int, int]](maybePair(5))
 	r := option_1
 	_ = r
 }

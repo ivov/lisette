@@ -21,10 +21,10 @@ type Point struct {
 	y int
 }
 
-func (p Point) get_x() int {
+func (p Point) getX() int {
 	return p.x
 }
 
 func test(p Point) int {
-	return p.get_x()
+	return p.getX()
 }

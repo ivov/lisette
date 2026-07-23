@@ -1,21 +1,21 @@
 //! Generic-parameter fact producers for the lint layer.
 //!
-//! Records facts via `LocalFacts`; rendering happens later in `lints::from_facts`.
+//! Records facts for later rendering by `lints::from_facts`.
 
 use ecow::EcoString;
 use rustc_hash::FxHashSet as HashSet;
 use syntax::ast::{Annotation, Binding, Expression, Generic};
 use syntax::types::Type;
 
-use semantics::facts::LocalFacts;
+use super::ProducedFacts;
 
-pub(crate) fn run(typed_ast: &[Expression], local: &mut LocalFacts) {
+pub(crate) fn run(typed_ast: &[Expression], local: &mut ProducedFacts) {
     for item in typed_ast {
         visit_expression(item, local);
     }
 }
 
-fn visit_expression(expression: &Expression, local: &mut LocalFacts) {
+fn visit_expression(expression: &Expression, local: &mut ProducedFacts) {
     match expression {
         Expression::ImplBlock { methods, .. } => {
             for method in methods {
@@ -62,7 +62,7 @@ fn check_unused_type_parameters(
     params: &[Binding],
     return_type: &Type,
     found_in_body: &HashSet<EcoString>,
-    local: &mut LocalFacts,
+    local: &mut ProducedFacts,
 ) {
     let mut remaining: HashSet<EcoString> = generics.iter().map(|g| g.name.clone()).collect();
     for param in params {
@@ -92,7 +92,7 @@ fn check_type_params_only_in_bound(
     params: &[Binding],
     return_type: &Type,
     found_in_body: &HashSet<EcoString>,
-    local: &mut LocalFacts,
+    local: &mut ProducedFacts,
 ) {
     if generics.iter().all(|g| g.bounds.is_empty()) {
         return;

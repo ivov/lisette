@@ -6,7 +6,7 @@ package main
 
 import lisette "github.com/ivov/lisette/prelude"
 
-func adapt_first() {
+func adaptFirst() {
 	consume(_lisAdapter_First_Cache_1{inner: First{}})
 }
 
@@ -30,7 +30,7 @@ package main
 import lisette "github.com/ivov/lisette/prelude"
 
 func main() {
-	adapt_first()
+	adaptFirst()
 	consume(_lisAdapter_Second_Cache_0{inner: Second{}})
 }
 

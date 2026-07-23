@@ -28,11 +28,11 @@ func (f *Foo) increment() {
 	f.value++
 }
 
-func make_foo() Foo {
+func makeFoo() Foo {
 	return Foo{value: 42}
 }
 
 func test() {
-	ref_1 := (make_foo())
+	ref_1 := (makeFoo())
 	ref_1.increment()
 }

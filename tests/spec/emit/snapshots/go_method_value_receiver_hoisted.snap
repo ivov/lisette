@@ -33,13 +33,13 @@ func make_(counter *int) *bytes.Buffer {
 	return bytes.NewBufferString("a\nb\n")
 }
 
-func use_fn(f func(uint8) (string, error)) {
+func useFn(f func(uint8) (string, error)) {
 	f(10)
 	f(10)
 }
 
 func main() {
 	count := 0
-	use_fn(make_(&count).ReadString)
+	useFn(make_(&count).ReadString)
 	fmt.Println(count)
 }

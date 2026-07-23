@@ -20,11 +20,11 @@ func (m MyCache) Get(_ string) *Entry {
 	return nil
 }
 
-func use_cache(_ Cache) {}
+func useCache(_ Cache) {}
 
 func main() {
 	c := MyCache{}
-	use_cache(_lisAdapter_MyCache_Cache_0{inner: c})
+	useCache(_lisAdapter_MyCache_Cache_0{inner: c})
 }
 
 type _lisAdapter_MyCache_Cache_0 struct {

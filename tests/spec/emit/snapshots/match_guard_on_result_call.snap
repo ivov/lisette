@@ -16,12 +16,12 @@ package main
 
 import lisette "github.com/ivov/lisette/prelude"
 
-func get_value() lisette.Result[int, string] {
+func getValue() lisette.Result[int, string] {
 	return lisette.MakeResultOk[int, string](42)
 }
 
 func test() int {
-	subject_1 := get_value()
+	subject_1 := getValue()
 	if subject_1.Tag == lisette.ResultOk {
 		x := subject_1.OkVal
 		if x > 0 {

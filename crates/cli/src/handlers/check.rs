@@ -9,7 +9,9 @@ use deps::TypedefLocator;
 use diagnostics::render::{self, Filter, OutputFormat};
 use diagnostics::{Fix, apply_fixes};
 use lisette::fs::LocalFileSystem;
-use lisette::pipeline::{CompileConfig, CompilePhase, CompileResult, ProjectKind, compile};
+use lisette::pipeline::{
+    CompileConfig, CompileEntry, CompilePhase, CompileResult, ProjectKind, compile,
+};
 
 use crate::cli_error;
 use crate::lock::acquire_target_lock;
@@ -71,16 +73,10 @@ pub fn check(
 }
 
 fn check_project(project_path: &Path, options: &CheckOptions) -> i32 {
-    let layout = match super::build::resolve_project_layout(
-        project_path,
-        "Failed to lint and typecheck project",
-        format!("No `src/main.lis` at `{}`", project_path.display()),
-    ) {
-        Some(layout) => layout,
+    let kind = match super::build::resolve_project_kind(project_path) {
+        Some(kind) => kind,
         None => return 1,
     };
-
-    let src_main = project_path.join("src/main.lis");
 
     let (manifest, locator) = match deps::TypedefLocator::from_project_with_manifest(project_path) {
         Ok(pair) => pair,
@@ -129,7 +125,19 @@ fn check_project(project_path: &Path, options: &CheckOptions) -> i32 {
     ));
     let locator = locator.with_bindgen(bindgen);
 
-    let result = check_single_file(&src_main, options, true, locator, layout.kind, "main");
+    let go_module = manifest.project.name.clone();
+    let result = match kind {
+        ProjectKind::Binary => {
+            let src_main = project_path.join("src").join("main.lis");
+            check_single_file(&src_main, options, true, locator, kind, &go_module)
+        }
+        ProjectKind::Library => {
+            let start = Instant::now();
+            let src_dir = project_path.join("src");
+            let result = compile_project_entry(&src_dir, None, true, locator, kind, &go_module);
+            report_check(&result, "", "", options, start)
+        }
+    };
     drop(target_lock);
     result
 }
@@ -239,12 +247,12 @@ fn compile_single_file(
     let working_dir = file_path.parent().unwrap_or_else(|| Path::new("."));
 
     let result = compile_project_entry(
-        Entry {
+        working_dir,
+        Some(CompileEntry {
             source: &source,
-            name: &entry_name,
-            display: &entry_display,
-            dir: working_dir,
-        },
+            filename: &entry_name,
+            display_path: &entry_display,
+        }),
         load_siblings,
         locator,
         project_kind,
@@ -254,17 +262,9 @@ fn compile_single_file(
     Some((result, source, entry_display))
 }
 
-/// The file seeding the reserved `_entry_` module, and the directory its
-/// siblings load from.
-struct Entry<'a> {
-    source: &'a str,
-    name: &'a str,
-    display: &'a str,
-    dir: &'a Path,
-}
-
 fn compile_project_entry(
-    entry: Entry<'_>,
+    dir: &Path,
+    entry: Option<CompileEntry<'_>>,
     load_siblings: bool,
     locator: TypedefLocator,
     project_kind: ProjectKind,
@@ -283,8 +283,8 @@ fn compile_project_entry(
         locator,
     };
 
-    let fs = LocalFileSystem::new(entry.dir.to_str().unwrap_or("."));
-    compile(entry.source, entry.name, entry.display, &config, &fs)
+    let fs = LocalFileSystem::new(dir.to_str().unwrap_or("."));
+    compile(entry, &config, &fs)
 }
 
 fn check_loose_dir(dir: &Path, options: &CheckOptions) -> i32 {

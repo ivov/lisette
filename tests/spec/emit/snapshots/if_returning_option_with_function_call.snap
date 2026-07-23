@@ -12,7 +12,7 @@ description: |
 ---
 package main
 
-func get_value() (int, bool) {
+func getValue() (int, bool) {
 	return 99, true
 }
 
@@ -20,5 +20,5 @@ func test(flag bool) (int, bool) {
 	if flag {
 		return 42, true
 	}
-	return get_value()
+	return getValue()
 }

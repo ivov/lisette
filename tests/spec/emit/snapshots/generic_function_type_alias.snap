@@ -16,12 +16,12 @@ package main
 
 type Transform[T any] func(T) T
 
-func apply_transform[T any](val T, f Transform[T]) T {
+func applyTransform[T any](val T, f Transform[T]) T {
 	return f(val)
 }
 
 func test() int {
-	return apply_transform(42, func(x int) int {
+	return applyTransform(42, func(x int) int {
 		return x + 1
 	})
 }

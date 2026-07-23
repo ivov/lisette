@@ -1,7 +1,7 @@
 use crate::checker::EnvResolve;
 use crate::facts::BranchSubsumption;
 use syntax::ast::BindingKind;
-use syntax::ast::{Binding, BindingId, Expression, MatchArm, Pattern, Span, TypedPattern};
+use syntax::ast::{Binding, BindingId, Expression, MatchArm, Pattern, Span};
 use syntax::types::{SimpleKind, Type};
 
 use crate::checker::infer::InferCtx;
@@ -30,7 +30,7 @@ fn iter_seq_kind(ty: &Type) -> Option<IterSeqKind> {
     }
 }
 
-impl InferCtx<'_, '_> {
+impl InferCtx<'_> {
     pub(crate) fn reconcile_and_unify(
         &mut self,
         result_ty: &Type,
@@ -247,11 +247,8 @@ impl InferCtx<'_, '_> {
         }
 
         // Branch bodies are tail-like contexts where Never calls are valid.
-        let saved_subexpression = self.scopes.set_in_subexpression(false);
-        let new_consequence = self.infer_expression(*consequence, &consequence_ty);
-        self.scopes.set_in_subexpression(false);
-        let new_alternative = self.infer_expression(*alternative, &alternative_ty);
-        self.scopes.set_in_subexpression(saved_subexpression);
+        let new_consequence = self.infer_root_expression(*consequence, &consequence_ty);
+        let new_alternative = self.infer_root_expression(*alternative, &alternative_ty);
 
         if has_no_else {
             // An `if` without `else` always has type () (unit), like Rust.
@@ -317,18 +314,24 @@ impl InferCtx<'_, '_> {
         }
     }
 
-    #[allow(clippy::too_many_arguments)]
     pub(super) fn infer_if_let(
         &mut self,
-        pattern: Pattern,
-        scrutinee: Box<Expression>,
-        consequence: Box<Expression>,
-        alternative: Box<Expression>,
-        typed_pattern: Option<TypedPattern>,
-        else_span: Option<Span>,
-        span: Span,
+        expression: Expression,
         expected_ty: &Type,
     ) -> Expression {
+        let Expression::IfLet {
+            pattern,
+            scrutinee,
+            consequence,
+            alternative,
+            typed_pattern,
+            else_span,
+            span,
+            ..
+        } = expression
+        else {
+            unreachable!("infer_if_let called with non-IfLet expression");
+        };
         let is_if_let_without_else = else_span.is_none();
         let arms = vec![
             MatchArm {
@@ -427,8 +430,7 @@ impl InferCtx<'_, '_> {
                     &result_ty
                 };
                 // Arm body is a tail-like context where Never calls are valid.
-                self.scopes.set_in_subexpression(false);
-                let new_expression = self.infer_expression(*a.expression, arm_expected);
+                let new_expression = self.infer_root_expression(*a.expression, arm_expected);
 
                 self.scopes.pop();
 
@@ -744,9 +746,9 @@ impl InferCtx<'_, '_> {
         &mut self,
         expression: Box<Expression>,
         span: Span,
-        parent_is_subexpression: bool,
+        is_subexpression: bool,
     ) -> Expression {
-        if parent_is_subexpression {
+        if is_subexpression {
             self.sink
                 .push(diagnostics::infer::control_flow_in_expression(
                     "return", span,
@@ -772,7 +774,6 @@ impl InferCtx<'_, '_> {
             }
             _ => {}
         }
-        self.scopes.set_in_subexpression(false);
         self.infer_return(expression, span)
     }
 
@@ -788,7 +789,7 @@ impl InferCtx<'_, '_> {
             });
 
         let new_expression =
-            self.with_value_context(|s| s.infer_expression(*expression, &return_ty));
+            self.with_value_context(|s| s.infer_root_expression(*expression, &return_ty));
 
         Expression::Return {
             expression: new_expression.into(),
@@ -874,9 +875,9 @@ impl InferCtx<'_, '_> {
         &mut self,
         value: Option<Box<Expression>>,
         span: Span,
-        parent_is_subexpression: bool,
+        is_subexpression: bool,
     ) -> Expression {
-        if parent_is_subexpression {
+        if is_subexpression {
             self.sink
                 .push(diagnostics::infer::control_flow_in_expression(
                     "break", span,
@@ -913,12 +914,8 @@ impl InferCtx<'_, '_> {
         }
     }
 
-    pub(super) fn infer_continue(
-        &mut self,
-        span: Span,
-        parent_is_subexpression: bool,
-    ) -> Expression {
-        if parent_is_subexpression {
+    pub(super) fn infer_continue(&mut self, span: Span, is_subexpression: bool) -> Expression {
+        if is_subexpression {
             self.sink
                 .push(diagnostics::infer::control_flow_in_expression(
                     "continue", span,

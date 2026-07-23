@@ -39,10 +39,10 @@ func (b Bar) get() (int, error) {
 	return 0, errors.New("failure")
 }
 
-func use_foo(_ Foo[error]) {}
+func useFoo(_ Foo[error]) {}
 
 func main() {
-	use_foo(_lisAdapter_Bar_Foo_0{inner: Bar{}})
+	useFoo(_lisAdapter_Bar_Foo_0{inner: Bar{}})
 }
 
 type _lisAdapter_Bar_Foo_0 struct {

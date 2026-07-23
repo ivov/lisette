@@ -41,13 +41,13 @@ func (b B) text() string {
 	return "b"
 }
 
-func make_a() lisette.Result[A, string] {
+func makeA() lisette.Result[A, string] {
 	return lisette.MakeResultOk[A, string](A{})
 }
 
 func run() lisette.Result[struct{}, string] {
 	var p Printable
-	check_1 := make_a()
+	check_1 := makeA()
 	if check_1.Tag != lisette.ResultOk {
 		return lisette.MakeResultErr[struct{}, string](check_1.ErrVal)
 	}

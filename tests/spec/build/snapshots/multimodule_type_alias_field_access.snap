@@ -17,7 +17,7 @@ package main
 
 import "github.com/user/myproject/geo"
 
-func get_x(c geo.Coordinate) int {
+func getX(c geo.Coordinate) int {
 	return c.X
 }
 
@@ -26,5 +26,5 @@ func main() {
 		X: 10,
 		Y: 20,
 	}
-	_ = get_x(c)
+	_ = getX(c)
 }

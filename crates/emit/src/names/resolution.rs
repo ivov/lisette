@@ -5,8 +5,16 @@ use crate::names::go_name;
 use crate::names::packages::{PackageRequirements, PackageUse};
 
 impl Planner<'_> {
-    pub(crate) fn resolve_go_name(&mut self, name: &str, qualified: Option<&str>) -> String {
-        if !name.contains('.')
+    /// A `locally_bound` name must not be rewritten by a module-level remap
+    /// of the same text.
+    pub(crate) fn resolve_go_name(
+        &mut self,
+        name: &str,
+        qualified: Option<&str>,
+        locally_bound: bool,
+    ) -> String {
+        if !locally_bound
+            && !name.contains('.')
             && let Some(remapped) = self.module.escape_remap(name)
         {
             return remapped.to_string();
@@ -82,8 +90,22 @@ impl Planner<'_> {
         if is_public {
             format!("{}.{}", type_part, go_name::snake_to_camel(method_part))
         } else {
-            name.to_string()
+            format!(
+                "{}.{}",
+                type_part,
+                go_name::snake_to_lower_camel(method_part)
+            )
         }
+    }
+
+    pub(crate) fn reference_go_name(&self, lisette_name: &str) -> String {
+        if let Some(bound) = self.scope.resolve_binding_go_name(lisette_name) {
+            return bound.to_string();
+        }
+        self.module
+            .escape_remap(lisette_name)
+            .map(str::to_string)
+            .unwrap_or_else(|| go_name::escape_reserved(lisette_name).into_owned())
     }
 
     /// Record `module`'s Go import and return the package

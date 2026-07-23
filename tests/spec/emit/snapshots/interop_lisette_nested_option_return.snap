@@ -28,7 +28,7 @@ func make_() ([]lisette.Option[string], bool) {
 	}, true
 }
 
-func use_it(o lisette.Option[[]lisette.Option[string]]) {
+func useIt(o lisette.Option[[]lisette.Option[string]]) {
 	if o.Tag == lisette.OptionSome {
 		for _, x := range o.SomeVal {
 			_ = x
@@ -38,5 +38,5 @@ func use_it(o lisette.Option[[]lisette.Option[string]]) {
 
 func main() {
 	option_1 := lisette.OptionFromCommaOk[[]lisette.Option[string]](make_())
-	use_it(option_1)
+	useIt(option_1)
 }

@@ -5,7 +5,7 @@ use syntax::types::{SimpleKind, Type};
 
 use crate::checker::infer::InferCtx;
 
-impl InferCtx<'_, '_> {
+impl InferCtx<'_> {
     pub(super) fn infer_literal(
         &mut self,
         literal: Literal,

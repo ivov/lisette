@@ -69,7 +69,7 @@ impl Planner<'_> {
         let method_name = if is_public || self.method_needs_export(func.name) {
             go_name::snake_to_camel(func.name)
         } else {
-            go_name::escape_keyword(func.name).into_owned()
+            go_name::unexported_method_go_name(func.name)
         };
 
         if return_type == "struct{}" {

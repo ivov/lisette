@@ -111,6 +111,21 @@ error: Private field
   help: Cannot access private field `secret_key` of struct `config.Config`
 ```
 
+## Library projects
+
+A project with `src/main.lis` is a binary: `lis build` compiles the file tree under `src/` into an executable at `target/.lisette/bin/`.
+
+A project without `src/main.lis` is a library: `lis build` turns the modules under `src/` into Go packages at `target/` and files at `src/` become the module's root package. `src/internal/` dir stays private, as in Go. Set `name` in `lisette.toml` to the Go module path that consumers will import.
+
+```sh
+geo/
+├── lisette.toml        # name = "github.com/you/geo"
+└── src/
+    ├── geo.lis         # emits: target/geo.go, package geo
+    └── shapes/
+        └── shapes.lis  # emits: target/shapes/shapes.go, package shapes
+```
+
 ## The prelude
 
 Lisette's prelude is a set of definitions that are always available in every file without an import.

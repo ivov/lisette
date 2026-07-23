@@ -14,8 +14,8 @@ package main
 
 import "example.com/consts"
 
-const DELAY int = consts.SHIFT / 12
+const Delay int = consts.SHIFT / 12
 
 func main() {
-	_ = DELAY
+	_ = Delay
 }

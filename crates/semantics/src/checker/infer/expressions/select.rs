@@ -17,7 +17,7 @@ fn select_arm_body_span(pattern: &SelectArmPattern) -> Span {
     }
 }
 
-impl InferCtx<'_, '_> {
+impl InferCtx<'_> {
     pub fn resolve_select_exhaustiveness(&mut self) {
         for check in std::mem::take(&mut self.facts.select_exhaustiveness_checks) {
             let resolved = check.result_ty.resolve_in(&self.env);
@@ -227,8 +227,7 @@ impl InferCtx<'_, '_> {
             syntax::ast::BindingKind::Let { mutable: false },
         );
 
-        self.scopes.set_in_subexpression(false);
-        let new_body = self.infer_expression(*body, result_ty);
+        let new_body = self.infer_root_expression(*body, result_ty);
 
         SelectArmPattern::Receive {
             binding: Box::new(new_binding),
@@ -257,8 +256,7 @@ impl InferCtx<'_, '_> {
             ));
         }
 
-        self.scopes.set_in_subexpression(false);
-        let new_body = self.infer_expression(*body, result_ty);
+        let new_body = self.infer_root_expression(*body, result_ty);
 
         SelectArmPattern::Send {
             send_expression: Box::new(new_send_expression),
@@ -328,8 +326,8 @@ impl InferCtx<'_, '_> {
                     result_ty
                 };
 
-                self.scopes.set_in_subexpression(false);
-                let new_expression = self.infer_expression(*match_arm.expression, arm_expected);
+                let new_expression =
+                    self.infer_root_expression(*match_arm.expression, arm_expected);
 
                 if needs_reconciliation {
                     arm_expression_types.push(arm_expected.clone());
@@ -372,8 +370,7 @@ impl InferCtx<'_, '_> {
         body: Box<Expression>,
         result_ty: &Type,
     ) -> SelectArmPattern {
-        self.scopes.set_in_subexpression(false);
-        let new_body = self.infer_expression(*body, result_ty);
+        let new_body = self.infer_root_expression(*body, result_ty);
         SelectArmPattern::WildCard {
             body: Box::new(new_body),
         }

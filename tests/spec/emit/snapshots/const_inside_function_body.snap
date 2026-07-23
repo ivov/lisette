@@ -10,6 +10,6 @@ description: |
 package main
 
 func main() {
-	const MAX int = 100
-	_ = MAX + 1
+	const Max int = 100
+	_ = Max + 1
 }

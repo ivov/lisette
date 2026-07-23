@@ -24,24 +24,24 @@ func (b Bar[T]) get() (T, bool) {
 
 func consume[T any](_ Box[lisette.Option[T]]) {}
 
-func generic_collision[_lisAdapter_Bar_Box_0 any](bar Bar[_lisAdapter_Bar_Box_0]) {
+func genericCollision[_lisAdapter_Bar_Box_0 any](bar Bar[_lisAdapter_Bar_Box_0]) {
 	consume(_lisAdapter_Bar_Box_0_[_lisAdapter_Bar_Box_0]{inner: bar})
 }
 
-func prime_cache(bar Bar[int]) {
+func primeCache(bar Bar[int]) {
 	consume(_lisAdapter_Bar_Box_1{inner: bar})
 }
 
-func cached_collision(bar Bar[int]) {
+func cachedCollision(bar Bar[int]) {
 	_lisAdapter_Bar_Box_1 := 1
 	consume(_lisAdapter_Bar_Box_2{inner: bar})
 	_ = _lisAdapter_Bar_Box_1
 }
 
 func main() {
-	generic_collision(Bar[int]{value: lisette.MakeOptionSome(1)})
-	prime_cache(Bar[int]{value: lisette.MakeOptionSome(2)})
-	cached_collision(Bar[int]{value: lisette.MakeOptionSome(3)})
+	genericCollision(Bar[int]{value: lisette.MakeOptionSome(1)})
+	primeCache(Bar[int]{value: lisette.MakeOptionSome(2)})
+	cachedCollision(Bar[int]{value: lisette.MakeOptionSome(3)})
 }
 
 type _lisAdapter_Bar_Box_0_[_lisAdapter_Bar_Box_0 any] struct {

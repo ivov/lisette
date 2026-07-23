@@ -16,6 +16,6 @@ type Counter struct {
 	count int
 }
 
-func (c *Counter) get_count() int {
+func (c *Counter) getCount() int {
 	return c.count
 }

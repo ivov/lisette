@@ -19,12 +19,12 @@ import (
 	"mime"
 )
 
-func use_fn(f func(string) (lisette.Tuple2[string, map[string]string], error)) {
+func useFn(f func(string) (lisette.Tuple2[string, map[string]string], error)) {
 	f("text/plain")
 }
 
 func main() {
-	use_fn(func(arg0 string) (lisette.Tuple2[string, map[string]string], error) {
+	useFn(func(arg0 string) (lisette.Tuple2[string, map[string]string], error) {
 		ret_1, ret_2, ret_3 := mime.ParseMediaType(arg0)
 		tup_4 := lisette.MakeTuple2(ret_1, ret_2)
 		return tup_4, ret_3

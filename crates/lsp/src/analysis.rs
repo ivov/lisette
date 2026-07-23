@@ -7,7 +7,7 @@ use tower_lsp::lsp_types::*;
 use deps::TypedefLocator;
 use diagnostics::LisetteDiagnostic;
 use passes::analyze;
-use semantics::inference::{AnalyzeInput, CompilePhase, ProjectKind, SemanticConfig};
+use semantics::inference::{AnalyzeInput, CompilePhase, EntryFile, ProjectKind, SemanticConfig};
 use syntax::desugar;
 use syntax::lex::Lexer;
 use syntax::parse::Parser;
@@ -124,6 +124,12 @@ impl SharedState {
                 (locator, None, None)
             };
 
+        let project_kind = if config.standalone_mode || config.root.join("src/main.lis").exists() {
+            ProjectKind::Binary
+        } else {
+            ProjectKind::Library
+        };
+
         let analyze_output = analyze(AnalyzeInput {
             config: SemanticConfig {
                 run_lints: !has_parse_errors,
@@ -131,18 +137,20 @@ impl SharedState {
                 load_siblings: true,
             },
             loader: &loader_clone,
-            source,
-            display_path: filename.clone(),
-            filename,
-            ast: desugar_result.ast,
-            file_comment: parse_result.file_comment,
+            entry: Some(EntryFile {
+                source,
+                display_path: filename.clone(),
+                filename,
+                ast: desugar_result.ast,
+                file_comment: parse_result.file_comment,
+            }),
             project_root: if config.standalone_mode {
                 None
             } else {
                 Some(config.root.clone())
             },
             compile_phase: CompilePhase::Check,
-            project_kind: ProjectKind::Binary,
+            project_kind,
             emit_tests: false,
             locator,
             go_module: String::new(),

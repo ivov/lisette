@@ -30,7 +30,7 @@ type Box struct {
 	x int
 }
 
-func make_i() int {
+func makeI() int {
 	fmt.Println("i")
 	return 0
 }
@@ -40,7 +40,7 @@ func main() {
 	inner := make(map[string]Box)
 	inner["k"] = Box{x: 0}
 	maps_[0] = inner
-	i := make_i()
+	i := makeI()
 	entry := maps_[i]["k"]
 	entry.x = 1
 	maps_[i]["k"] = entry

@@ -14,10 +14,10 @@ func (j Job) Run() int {
 	return 1
 }
 
-func use_it(r Runner) int {
+func useIt(r Runner) int {
 	return r.Run()
 }
 
 func main() {
-	_ = use_it(Job{})
+	_ = useIt(Job{})
 }

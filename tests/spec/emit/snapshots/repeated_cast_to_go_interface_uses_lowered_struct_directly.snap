@@ -36,16 +36,16 @@ func (d Doubler) Read(_ []uint8) (int, error) {
 	return 0, nil
 }
 
-func consume_a(r io.Reader) {
+func consumeA(r io.Reader) {
 	_ = r
 }
 
-func consume_b(r io.Reader) {
+func consumeB(r io.Reader) {
 	_ = r
 }
 
 func main() {
 	d := Doubler{}
-	consume_a(d)
-	consume_b(d)
+	consumeA(d)
+	consumeB(d)
 }

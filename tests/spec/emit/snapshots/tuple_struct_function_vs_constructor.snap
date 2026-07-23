@@ -23,7 +23,7 @@ type Point struct {
 	F1 int
 }
 
-func add_points(a, b Point) Point {
+func addPoints(a, b Point) Point {
 	x1 := a.F0
 	y1 := a.F1
 	x2 := b.F0
@@ -43,5 +43,5 @@ func test() Point {
 		F0: 3,
 		F1: 4,
 	}
-	return add_points(p1, p2)
+	return addPoints(p1, p2)
 }

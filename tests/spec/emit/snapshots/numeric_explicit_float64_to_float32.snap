@@ -12,10 +12,10 @@ description: |
 ---
 package main
 
-func get_float64() float64 {
+func getFloat64() float64 {
 	return 3.14
 }
 
 func test() float32 {
-	return float32(get_float64())
+	return float32(getFloat64())
 }

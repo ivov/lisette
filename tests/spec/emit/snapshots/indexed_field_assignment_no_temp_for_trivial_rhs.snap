@@ -28,7 +28,7 @@ type Snake struct {
 	head  int
 }
 
-func (s *Snake) set_head(x, y int) {
+func (s *Snake) setHead(x, y int) {
 	s.parts[s.head].x = x
 	s.parts[s.head].y = y
 }

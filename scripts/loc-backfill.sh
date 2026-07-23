@@ -11,8 +11,14 @@ trap 'rm -rf "$workdir"' EXIT
 entries="$workdir/entries.ndjson"
 : > "$entries"
 
-for sha in $(git log --first-parent --reverse main --date=format:'%G-%V' --format='%H %cd' |
-  awk '!seen[$2]++ {print $1}'); do
+for sha in $(git log --first-parent --reverse main --date=format:'%G-%V %Y-%m' --format='%H %cd' |
+  awk '
+    { order[NR] = $1; if (!($2 in week_first)) week_first[$2] = $1; month_last[$3] = $1 }
+    END {
+      for (w in week_first) keep[week_first[w]]
+      for (m in month_last) keep[month_last[m]]
+      for (i = 1; i <= NR; i++) if (order[i] in keep) print order[i]
+    }'); do
   tree="$workdir/tree"
   mkdir "$tree"
   git archive "$sha" | tar -x -C "$tree"

@@ -11,12 +11,12 @@ description: |
 ---
 package main
 
-func make_items() []int {
+func makeItems() []int {
 	return []int{10, 20, 30}
 }
 
 func test() int {
-	base_1 := make_items()
+	base_1 := makeItems()
 	len_2 := len(base_1)
 	ys := base_1[1:len_2:len_2]
 	return len(ys)

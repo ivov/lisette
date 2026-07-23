@@ -1,5 +1,6 @@
 mod builtins;
 mod convert;
+pub(crate) mod derived_attributes;
 mod display;
 mod equality;
 mod generic_bounds;
@@ -244,7 +245,7 @@ fn seal_method_key(
     crate::checker::sealing::unexported_key(&id)
 }
 
-impl TaskState<'_> {
+impl TaskState {
     fn definition_exists(&self, store: &Store, qualified_name: &str) -> bool {
         self.current_module(store)
             .definitions
@@ -285,16 +286,14 @@ impl TaskState<'_> {
             self.register_file_values(store, id, *file_id, imports);
         }
 
-        self.register_module_iterate(store, id);
-        self.register_module_display(store, id);
+        self.register_module_derived_attributes(store, id);
         self.validate_module_embeds(store, id);
         self.check_module_recursive_types(store, id);
 
         let module = store.get_module(id).expect("module must exist");
         let ufcs_entries = compute_module_ufcs(module);
-        self.ufcs_methods.extend(ufcs_entries);
+        self.extend_ufcs_methods(ufcs_entries);
 
-        self.register_module_equality(store, id);
         self.register_module_tests(store, id);
         self.populate_module_generic_bounds(store, id);
     }
@@ -415,7 +414,7 @@ impl TaskState<'_> {
                                 standalone_mode: false,
                                 replace_importer,
                             },
-                            self.sink,
+                            &self.sink,
                         );
                     }
                 }
@@ -441,7 +440,6 @@ impl TaskState<'_> {
                         .items,
                 );
                 this.register_types_and_values(store, &items, &Visibility::Public);
-                this.register_equality(store, &items);
             },
         );
     }
@@ -578,11 +576,15 @@ impl TaskState<'_> {
         self.check_type_generic_bounds(store, items);
         self.register_impl_blocks(store, items);
         self.register_values(store, items, visibility);
-        self.register_iterate(store, items);
-        self.register_display(store, items);
+        self.register_item_derived_attributes(store, items);
         let module_id = self.cursor.module_id.clone();
         self.validate_module_embeds(store, &module_id);
         self.check_module_recursive_types(store, &module_id);
+
+        let module = store
+            .get_module(&module_id)
+            .expect("current module must exist after registration");
+        self.extend_ufcs_methods(compute_module_ufcs(module));
     }
 
     pub(crate) fn register_type_names(
@@ -727,7 +729,7 @@ impl TaskState<'_> {
                 | Expression::Struct { attributes, .. }
                 | Expression::TypeAlias { attributes, .. }
                 | Expression::Function { attributes, .. } => {
-                    check_go_hints(attributes, self.sink);
+                    check_go_hints(attributes, &self.sink);
                 }
                 Expression::ImplBlock {
                     methods: functions, ..
@@ -738,7 +740,7 @@ impl TaskState<'_> {
                 } => {
                     for function in functions {
                         if let Expression::Function { attributes, .. } = function {
-                            check_go_hints(attributes, self.sink);
+                            check_go_hints(attributes, &self.sink);
                         }
                     }
                 }
@@ -756,20 +758,8 @@ impl TaskState<'_> {
 
     fn register_type_aliases(&mut self, store: &mut Store, items: &[Expression]) {
         for item in items {
-            if let Expression::TypeAlias {
-                name,
-                name_span,
-                generics,
-                annotation,
-                attributes,
-                span,
-                doc,
-                ..
-            } = item
-            {
-                self.populate_type_alias(
-                    store, name, name_span, generics, annotation, attributes, span, doc,
-                );
+            if matches!(item, Expression::TypeAlias { .. }) {
+                self.populate_type_alias(store, item);
             }
         }
     }
@@ -778,65 +768,9 @@ impl TaskState<'_> {
         self.check_go_hints_in_items(items);
         for item in items {
             match item {
-                Expression::Enum {
-                    name,
-                    name_span,
-                    generics,
-                    variants,
-                    span,
-                    doc,
-                    attributes,
-                    ..
-                } => self.populate_enum(
-                    store,
-                    name,
-                    name_span,
-                    generics,
-                    variants,
-                    span,
-                    doc,
-                    collect_enum_attributes(attributes),
-                ),
-                Expression::Struct {
-                    name,
-                    name_span,
-                    generics,
-                    fields,
-                    kind,
-                    span,
-                    doc,
-                    attributes,
-                    ..
-                } => self.populate_struct(
-                    store,
-                    name,
-                    name_span,
-                    generics,
-                    fields,
-                    *kind,
-                    span,
-                    doc,
-                    collect_struct_attributes(attributes),
-                ),
-                Expression::Interface {
-                    name,
-                    name_span,
-                    generics,
-                    parents,
-                    method_signatures,
-                    span,
-                    doc,
-                    ..
-                } => self.populate_interface(
-                    store,
-                    name,
-                    name_span,
-                    generics,
-                    parents,
-                    method_signatures,
-                    span,
-                    doc,
-                ),
+                Expression::Enum { .. } => self.populate_enum(store, item),
+                Expression::Struct { .. } => self.populate_struct(store, item),
+                Expression::Interface { .. } => self.populate_interface(store, item),
                 _ => (),
             }
         }
@@ -1168,12 +1102,8 @@ impl TaskState<'_> {
             tuple_struct_constructor_type_from_fields(&field_types, &struct_ty, generics);
 
         let scope = self.scopes.current_mut();
-        scope
-            .values
-            .insert(qualified_name.to_string(), constructor_ty.clone());
-        scope
-            .values
-            .insert(name.to_string(), constructor_ty.clone());
+        scope.insert_value(qualified_name.to_string(), constructor_ty.clone());
+        scope.insert_value(name.to_string(), constructor_ty.clone());
 
         let module = self.current_module_mut(store);
         if let Some(def) = module.definitions.get_mut(qualified_name.as_str())

@@ -19,7 +19,7 @@ import (
 	lisette "github.com/ivov/lisette/prelude"
 )
 
-func make_it() []lisette.Option[string] {
+func makeIt() []lisette.Option[string] {
 	return []lisette.Option[string]{
 		lisette.MakeOptionSome("hi"),
 		lisette.MakeOptionNone[string](),
@@ -27,7 +27,7 @@ func make_it() []lisette.Option[string] {
 }
 
 func main() {
-	cb_1 := make_it
+	cb_1 := makeIt
 	aws.Use(func() []*string {
 		src_2 := cb_1()
 		unwrapped_3 := make([]*string, len(src_2))

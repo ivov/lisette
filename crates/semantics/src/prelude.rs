@@ -36,7 +36,7 @@ pub fn parse_and_register_prelude(store: &mut Store, sink: &LocalSink) {
         store.typedef_paths.insert(PRELUDE_FILE_ID, path);
     }
 
-    let mut checker = TaskState::with_fresh_allocator(sink);
+    let mut checker = TaskState::with_fresh_allocator();
     let module = store
         .get_module(PRELUDE_MODULE_ID)
         .cloned()
@@ -61,6 +61,7 @@ pub fn parse_and_register_prelude(store: &mut Store, sink: &LocalSink) {
             checker.check_pending_generic_bounds(&*store);
         },
     );
+    sink.extend(checker.sink.take());
 }
 
 /// Registers the test-only prelude module (`TestContext`). Scopes the main prelude during
@@ -86,7 +87,7 @@ pub fn parse_and_register_test_prelude(store: &mut Store, sink: &LocalSink) {
         },
     );
 
-    let mut checker = TaskState::with_fresh_allocator(sink);
+    let mut checker = TaskState::with_fresh_allocator();
     let module = store
         .get_module(TEST_PRELUDE_MODULE_ID)
         .cloned()
@@ -111,6 +112,7 @@ pub fn parse_and_register_test_prelude(store: &mut Store, sink: &LocalSink) {
             checker.check_pending_generic_bounds(&*store);
         },
     );
+    sink.extend(checker.sink.take());
 }
 
 pub fn compute_prelude_ufcs(store: &Store) -> Vec<(String, String)> {
