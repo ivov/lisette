@@ -29,6 +29,12 @@ pub(crate) struct LoweredBlock {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct LoopId(pub(crate) u32);
 
+pub(crate) enum LoopTransfer {
+    Unlabeled,
+    Source(LoopId),
+    Labeled(String),
+}
+
 pub(crate) fn directed(directive: String, stmt: LoweredStatement) -> LoweredStatement {
     if directive.is_empty() {
         stmt
@@ -44,14 +50,8 @@ pub(crate) enum LoweredStatement {
     If(IfPlan),
     Loop(LoopPlan),
     Block(LoweredBlock),
-    Break {
-        target: Option<LoopId>,
-        label: Option<String>,
-    },
-    Continue {
-        target: Option<LoopId>,
-        label: Option<String>,
-    },
+    Break(LoopTransfer),
+    Continue(LoopTransfer),
     Const(ConstPlan),
     Return(ReturnStatementPlan),
     BreakValue(BreakValuePlan),
@@ -133,22 +133,21 @@ pub(crate) enum ReturnForm {
     },
 }
 
-/// `break value` statement. `disposition` decides how the value text
-/// reaches the loop-result slot (or is discarded); a trailing `break`
-/// terminates unless the value already diverged.
-pub(crate) struct BreakValuePlan {
-    pub(crate) value: ValuePlan,
-    pub(crate) disposition: BreakValueDisposition,
-    pub(crate) target: Option<LoopId>,
-    pub(crate) label: Option<String>,
+/// A `break value` statement. A diverged value terminates on its own; all
+/// other values carry the action and transfer needed to finish the break.
+pub(crate) enum BreakValuePlan {
+    Diverged {
+        value: ValuePlan,
+    },
+    Transfer {
+        value: ValuePlan,
+        action: BreakValueAction,
+        target: LoopTransfer,
+    },
 }
 
-/// What to do with the value of a `break value` statement after its setup
-/// has run.
-pub(crate) enum BreakValueDisposition {
-    /// The value diverged (empty `Propagate`); no further code is emitted
-    /// and the `break` is skipped because the value already terminates.
-    Diverged,
+/// What to do with a non-diverging `break value` after its setup has run.
+pub(crate) enum BreakValueAction {
     /// Inside a loop with a result slot, when the value is a unit-typed
     /// call: emit `<value>` as a side-effect statement (skipped if value
     /// text is empty), then `<result_var> = struct{}{}`, then break.
@@ -387,13 +386,26 @@ pub(crate) struct WhileLetPlan {
 
 /// A statement-position loop. `prologue` is pre-loop setup (a for-loop's
 /// iterable capture); `header` is the rendered Go loop opener through the body's
-/// opening brace; `label` is the optional break/continue label.
+/// opening brace; its kind records whether transfers inside it can target an
+/// enclosing source loop.
 pub(crate) struct LoopPlan {
     pub(crate) prologue: Vec<LoweredStatement>,
-    pub(crate) target: Option<LoopId>,
-    pub(crate) label: Option<String>,
+    pub(crate) kind: LoopKind,
     pub(crate) header: String,
     pub(crate) body: LoweredBlock,
+}
+
+pub(crate) enum LoopKind {
+    Source { label: Option<String> },
+    Generated { label: Option<String> },
+}
+
+impl LoopKind {
+    pub(crate) fn label(&self) -> Option<&str> {
+        match self {
+            LoopKind::Source { label } | LoopKind::Generated { label } => label.as_deref(),
+        }
+    }
 }
 
 pub(crate) struct IfPlan {
@@ -429,16 +441,84 @@ impl LoweredBlock {
     pub(crate) fn is_empty(&self) -> bool {
         self.statements.is_empty()
     }
+
+    pub(crate) fn renders_empty(&self) -> bool {
+        self.statements
+            .iter()
+            .all(|statement| !statement.emits_output())
+    }
 }
 
 impl LoweredStatement {
+    fn emits_output(&self) -> bool {
+        match self {
+            LoweredStatement::If(_)
+            | LoweredStatement::Loop(_)
+            | LoweredStatement::Block(_)
+            | LoweredStatement::Break(_)
+            | LoweredStatement::Continue(_)
+            | LoweredStatement::Const(_)
+            | LoweredStatement::Select(_)
+            | LoweredStatement::Switch(_)
+            | LoweredStatement::TempBind { .. }
+            | LoweredStatement::VarDecl { .. }
+            | LoweredStatement::ClosureBind { .. }
+            | LoweredStatement::UnreachablePanic => true,
+            LoweredStatement::Return(plan) => match &plan.form {
+                ReturnForm::LoweredAbi { body } | ReturnForm::Wrapped { body } => {
+                    !body.renders_empty()
+                }
+                ReturnForm::Plain { .. } | ReturnForm::Unit { .. } | ReturnForm::Multi { .. } => {
+                    true
+                }
+            },
+            LoweredStatement::BreakValue(plan) => match plan {
+                BreakValuePlan::Diverged { value } => {
+                    value.setup.iter().any(LoweredStatement::emits_output)
+                }
+                BreakValuePlan::Transfer { .. } => true,
+            },
+            LoweredStatement::Let(plan) => {
+                matches!(
+                    &plan.form,
+                    LetForm::Never {
+                        declaration: Some(_),
+                        ..
+                    }
+                ) || !plan.form.body().renders_empty()
+            }
+            LoweredStatement::Assign(plan) => match &plan.form {
+                AssignForm::Compound { .. } | AssignForm::Simple { .. } => true,
+                AssignForm::Discard { body } | AssignForm::NeverTyped { body } => {
+                    !body.renders_empty()
+                }
+            },
+            LoweredStatement::Expression(plan) => match &plan.form {
+                ExpressionStatementForm::Async { value } => {
+                    !value.is_empty() || value.setup.iter().any(LoweredStatement::emits_output)
+                }
+                ExpressionStatementForm::AsyncBlock { .. } => true,
+                ExpressionStatementForm::Propagate { body }
+                | ExpressionStatementForm::Discard { body } => !body.renders_empty(),
+            },
+            LoweredStatement::Match(plan) => !plan.body.renders_empty(),
+            LoweredStatement::WhileLet(plan) => !plan.body.renders_empty(),
+            LoweredStatement::Directed { directive, inner } => {
+                !directive.is_empty() || inner.emits_output()
+            }
+            LoweredStatement::RawGo(code) | LoweredStatement::DivergingRawGo(code) => {
+                !code.is_empty()
+            }
+        }
+    }
+
     fn ends_with_diverge(&self) -> bool {
         match self {
             LoweredStatement::If(plan) => plan.ends_with_diverge(),
             LoweredStatement::Loop(_) | LoweredStatement::Block(_) | LoweredStatement::Const(_) => {
                 false
             }
-            LoweredStatement::Break { .. } | LoweredStatement::Continue { .. } => true,
+            LoweredStatement::Break(_) | LoweredStatement::Continue(_) => true,
             LoweredStatement::Return(_) => true,
             LoweredStatement::BreakValue(_) => true,
             LoweredStatement::Let(plan) => plan.form.body().ends_with_diverge(),

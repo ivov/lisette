@@ -1,7 +1,7 @@
 use crate::plan::bodies::{
-    AssignForm, AssignPlan, BreakValueDisposition, BreakValuePlan, CompoundKind, ConstPlan,
-    ElseArm, ExpressionStatementForm, ExpressionStatementPlan, IfPlan, LetForm, LetPlan, LoopPlan,
-    LoweredBlock, LoweredStatement, ReturnForm, ReturnStatementPlan, SelectArmPlan,
+    AssignForm, AssignPlan, BreakValueAction, BreakValuePlan, CompoundKind, ConstPlan, ElseArm,
+    ExpressionStatementForm, ExpressionStatementPlan, IfPlan, LetForm, LetPlan, LoopPlan,
+    LoopTransfer, LoweredBlock, LoweredStatement, ReturnForm, ReturnStatementPlan, SelectArmPlan,
     SelectStatementPlan, SwitchKind, SwitchStatementPlan,
 };
 #[cfg(debug_assertions)]
@@ -33,16 +33,6 @@ impl Renderer {
         for statement in &block.statements {
             self.render_statement(output, statement);
         }
-    }
-
-    /// True when `block` renders to no output. Some structurally non-empty
-    /// statements (e.g. a side-effect-free discard `let _`) render empty, so
-    /// callers that gate scaffolding on emptiness query this rather than
-    /// `LoweredBlock::is_empty`.
-    pub(crate) fn renders_empty(&self, block: &LoweredBlock) -> bool {
-        let mut buffer = String::new();
-        self.render_lowered_block(&mut buffer, block);
-        buffer.is_empty()
     }
 
     /// Render a `select` statement: optional retry-loop framing around the
@@ -132,14 +122,8 @@ impl Renderer {
                 self.render_lowered_block(output, body);
                 output.push_str("}\n");
             }
-            LoweredStatement::Break { label, .. } => match label {
-                Some(label) => write_line!(output, "break {}", label),
-                None => output.push_str("break\n"),
-            },
-            LoweredStatement::Continue { label, .. } => match label {
-                Some(label) => write_line!(output, "continue {}", label),
-                None => output.push_str("continue\n"),
-            },
+            LoweredStatement::Break(target) => self.render_transfer(output, "break", target),
+            LoweredStatement::Continue(target) => self.render_transfer(output, "continue", target),
             LoweredStatement::Const(plan) => {
                 self.render_const_declaration(output, plan);
             }
@@ -324,34 +308,49 @@ impl Renderer {
         }
     }
 
-    /// Render a `BreakValuePlan`: flush the value's setup, apply the
-    /// disposition (assign to result slot / unit-call side effect + unit
-    /// assign / discard / no-op when diverged), then emit `break [label]`
-    /// (skipped when diverged).
-    fn render_break_value(&self, output: &mut String, plan: &BreakValuePlan) {
-        let value_text = self.render_value(output, &plan.value);
-        match &plan.disposition {
-            BreakValueDisposition::Diverged => return,
-            BreakValueDisposition::UnitCallIntoResult { result_var } => {
-                if !value_text.is_empty() {
-                    write_line!(output, "{}", value_text);
-                }
-                write_line!(output, "{} = struct{{}}{{}}", result_var);
-            }
-            BreakValueDisposition::AssignToResult { result_var } => {
-                if !value_text.is_empty() {
-                    write_line!(output, "{} = {}", result_var, value_text);
-                }
-            }
-            BreakValueDisposition::Discard => {
-                if !value_text.is_empty() {
-                    write_line!(output, "_ = {}", value_text);
-                }
+    fn render_transfer(&self, output: &mut String, keyword: &str, target: &LoopTransfer) {
+        match target {
+            LoopTransfer::Unlabeled => write_line!(output, "{}", keyword),
+            LoopTransfer::Labeled(label) => write_line!(output, "{} {}", keyword, label),
+            LoopTransfer::Source(target) => {
+                unreachable!(
+                    "source loop transfer must be legalized before rendering: {keyword} {target:?}"
+                )
             }
         }
-        match &plan.label {
-            Some(label) => write_line!(output, "break {}", label),
-            None => output.push_str("break\n"),
+    }
+
+    fn render_break_value(&self, output: &mut String, plan: &BreakValuePlan) {
+        match plan {
+            BreakValuePlan::Diverged { value } => {
+                self.render_value(output, value);
+            }
+            BreakValuePlan::Transfer {
+                value,
+                action,
+                target,
+            } => {
+                let value_text = self.render_value(output, value);
+                match action {
+                    BreakValueAction::UnitCallIntoResult { result_var } => {
+                        if !value_text.is_empty() {
+                            write_line!(output, "{}", value_text);
+                        }
+                        write_line!(output, "{} = struct{{}}{{}}", result_var);
+                    }
+                    BreakValueAction::AssignToResult { result_var } => {
+                        if !value_text.is_empty() {
+                            write_line!(output, "{} = {}", result_var, value_text);
+                        }
+                    }
+                    BreakValueAction::Discard => {
+                        if !value_text.is_empty() {
+                            write_line!(output, "_ = {}", value_text);
+                        }
+                    }
+                }
+                self.render_transfer(output, "break", target);
+            }
         }
     }
 
@@ -374,7 +373,7 @@ impl Renderer {
 
     fn render_loop(&self, output: &mut String, plan: &LoopPlan) {
         output.push_str(&self.render_setup(&plan.prologue));
-        if let Some(label) = &plan.label {
+        if let Some(label) = plan.kind.label() {
             write_line!(output, "{}:", label);
         }
         output.push_str(&plan.header);

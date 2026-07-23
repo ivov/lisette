@@ -10,11 +10,7 @@ use crate::plan::bodies::LoweredStatement;
 use super::callable::AbiTransition;
 use super::layout::{FunctionLayout, ValueLayout};
 
-pub(crate) struct CoercionPlan {
-    kind: CoercionKind,
-}
-
-enum CoercionKind {
+pub(crate) enum CoercionPlan {
     Identity,
     WrapAsInterface(AdapterPlan),
     WrapNewtype { ty: Type },
@@ -92,14 +88,13 @@ impl LayoutBridge {
 
 impl CoercionPlan {
     pub(crate) fn internal(planner: &Planner<'_>, from: &Type, to: &Type) -> Self {
-        let kind = if let Some(plan) = planner.needs_adapter(from, to) {
-            CoercionKind::WrapAsInterface(plan)
+        if let Some(plan) = planner.needs_adapter(from, to) {
+            Self::WrapAsInterface(plan)
         } else if needs_newtype_wrap(planner, from, to) {
-            CoercionKind::WrapNewtype { ty: to.clone() }
+            Self::WrapNewtype { ty: to.clone() }
         } else {
-            CoercionKind::Identity
-        };
-        Self { kind }
+            Self::Identity
+        }
     }
 
     pub(crate) fn bridge(
@@ -108,16 +103,15 @@ impl CoercionPlan {
         target: &ValueLayout,
     ) -> Self {
         let bridge = resolve_layout_bridge(planner, source, target);
-        let kind = if bridge.is_identity() {
-            CoercionKind::Identity
+        if bridge.is_identity() {
+            Self::Identity
         } else {
-            CoercionKind::Layout(bridge)
-        };
-        Self { kind }
+            Self::Layout(bridge)
+        }
     }
 
     pub(crate) fn is_identity(&self) -> bool {
-        matches!(self.kind, CoercionKind::Identity)
+        matches!(self, Self::Identity)
     }
 
     pub(crate) fn lower(
@@ -126,19 +120,17 @@ impl CoercionPlan {
         value: String,
     ) -> (Vec<LoweredStatement>, String) {
         let mut statements = Vec::new();
-        let value = match self.kind {
-            CoercionKind::Identity => value,
-            CoercionKind::WrapAsInterface(plan) => {
+        let value = match self {
+            Self::Identity => value,
+            Self::WrapAsInterface(plan) => {
                 let adapter_name = planner.ensure_adapter_type(plan);
                 format!("{}{{inner: {}}}", adapter_name, value)
             }
-            CoercionKind::WrapNewtype { ty } => {
+            Self::WrapNewtype { ty } => {
                 let type_name = planner.go_type_string(&ty);
                 format!("{}({})", type_name, value)
             }
-            CoercionKind::Layout(bridge) => {
-                planner.plan_layout_bridge(&mut statements, &value, &bridge)
-            }
+            Self::Layout(bridge) => planner.plan_layout_bridge(&mut statements, &value, &bridge),
         };
         (statements, value)
     }

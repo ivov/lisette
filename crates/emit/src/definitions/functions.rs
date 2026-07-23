@@ -45,11 +45,9 @@ impl Planner<'_> {
         should_return: bool,
         return_ctx: &ReturnContext,
     ) {
-        self.push_const_frame();
-        self.push_return_ctx(return_ctx.clone());
-        self.emit_function_body_inner(output, body, should_return);
-        self.pop_return_ctx();
-        self.pop_const_frame();
+        self.with_function_body_context(return_ctx.clone(), |this| {
+            this.emit_function_body_inner(output, body, should_return);
+        });
     }
 
     fn emit_function_body_inner(
@@ -69,63 +67,54 @@ impl Planner<'_> {
         ty: &Type,
         ctx: ExpressionContext<'_>,
     ) -> String {
-        let frame = self.scope.enter_isolated_function();
+        self.with_fresh_scope(|this| {
+            let (mut param_pairs, destructure_bindings) = this.build_lambda_param_pairs(params);
 
-        let (mut param_pairs, destructure_bindings) = self.build_lambda_param_pairs(params);
+            let handle = params
+                .iter()
+                .position(|p| is_test_context_ty(&p.ty))
+                .map(|index| {
+                    if param_pairs[index].0 == "_" {
+                        let name = this.fresh_var(Some("lisetteSub"));
+                        this.declare(&name);
+                        param_pairs[index].0 = name.clone();
+                        name
+                    } else {
+                        param_pairs[index].0.clone()
+                    }
+                });
 
-        // A `t.run` subtest closure binds its own handle. Name a discarded `|_|`
-        // so `assert` targets the subtest, not the enclosing test.
-        let handle = params
-            .iter()
-            .position(|p| is_test_context_ty(&p.ty))
-            .map(|index| {
-                if param_pairs[index].0 == "_" {
-                    let name = self.fresh_var(Some("lisetteSub"));
-                    self.declare(&name);
-                    param_pairs[index].0 = name.clone();
-                    name
-                } else {
-                    param_pairs[index].0.clone()
-                }
+            let recover = handle.as_ref().map(|name| {
+                this.require_testkit();
+                let span = body.get_span();
+                format!(
+                    "defer {name}.Recover({}, {}, {})\n",
+                    span.file_id,
+                    span.byte_offset,
+                    span.byte_offset + span.byte_length,
+                )
             });
-        if let Some(name) = handle.clone() {
-            self.push_test_handle(name);
-        }
 
-        let recover = handle.as_ref().map(|name| {
-            self.require_testkit();
-            let span = body.get_span();
+            let return_info = this.lambda_return_info(ty, ctx);
+            let mut body_string = this.with_test_handle(handle, |this| {
+                this.emit_lambda_body_with_deferred(
+                    body,
+                    &destructure_bindings,
+                    &return_info.ctx,
+                    return_info.has_return,
+                )
+            });
+            if let Some(recover) = recover {
+                body_string.insert_str(0, &recover);
+            }
+
             format!(
-                "defer {name}.Recover({}, {}, {})\n",
-                span.file_id,
-                span.byte_offset,
-                span.byte_offset + span.byte_length,
+                "func({}){} {{\n{}}}",
+                group_params(&param_pairs),
+                return_info.ty_string,
+                body_string
             )
-        });
-
-        let return_info = self.lambda_return_info(ty, ctx);
-        let mut body_string = self.emit_lambda_body_with_deferred(
-            body,
-            &destructure_bindings,
-            &return_info.ctx,
-            return_info.has_return,
-        );
-        if let Some(recover) = recover {
-            body_string.insert_str(0, &recover);
-        }
-
-        if handle.is_some() {
-            self.pop_test_handle();
-        }
-
-        self.scope.exit_isolated_function(frame);
-
-        format!(
-            "func({}){} {{\n{}}}",
-            group_params(&param_pairs),
-            return_info.ty_string,
-            body_string
-        )
+        })
     }
 
     fn build_lambda_param_pairs<'a>(
@@ -334,18 +323,14 @@ impl Planner<'_> {
                         .then(|| this.go_name_for_binding(&param.pattern))
                         .flatten()
                 });
-                if let Some(name) = test_handle.clone() {
-                    this.push_test_handle(name);
-                }
-                this.emit_function_body_with_deferred_patterns(
-                    &mut body,
-                    function_definition,
-                    deferred_patterns,
-                    &return_ctx,
-                );
-                if test_handle.is_some() {
-                    this.pop_test_handle();
-                }
+                this.with_test_handle(test_handle, |this| {
+                    this.emit_function_body_with_deferred_patterns(
+                        &mut body,
+                        function_definition,
+                        deferred_patterns,
+                        &return_ctx,
+                    );
+                });
                 signature
             },
         );
@@ -520,8 +505,6 @@ impl Planner<'_> {
     where
         F: FnOnce(&mut Self) -> R,
     {
-        let saved = std::mem::take(&mut self.function_state);
-        self.function_state.set_generic_context(generic_context);
         let bounded_generics: HashSet<&str> = match resolved_signature_generics {
             Some(generics) => generics
                 .iter()
@@ -534,16 +517,26 @@ impl Planner<'_> {
                 .map(|generic| generic.name.as_str())
                 .collect(),
         };
-        for param in params.iter() {
-            if param.ty.is_ref()
-                && let Some(inner) = param.ty.inner()
-                && let Type::Parameter(name) = &inner
-                && bounded_generics.contains(name.as_str())
-            {
-                self.function_state
-                    .record_absorbed_ref_generic(name.to_string());
-            }
-        }
+        let absorbed_ref_generics = params
+            .iter()
+            .filter_map(|param| {
+                if !param.ty.is_ref() {
+                    return None;
+                }
+                let inner = param.ty.inner()?;
+                let Type::Parameter(name) = inner else {
+                    return None;
+                };
+                bounded_generics
+                    .contains(name.as_str())
+                    .then(|| name.to_string())
+            })
+            .collect();
+        let state = crate::state::module_state::FunctionEmissionState::for_function(
+            generic_context,
+            absorbed_ref_generics,
+        );
+        let saved = std::mem::replace(&mut self.function_state, state);
         let result = f(self);
         self.function_state = saved;
         result

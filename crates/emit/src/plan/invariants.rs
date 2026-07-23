@@ -19,7 +19,7 @@ fn walk_statement(statement: &LoweredStatement, issues: &mut Vec<String>, path: 
         LoweredStatement::If(plan) => walk_if(plan, issues, &format!("{}/If", path)),
         LoweredStatement::Loop(plan) => walk_loop(plan, issues, &format!("{}/Loop", path)),
         LoweredStatement::Block(body) => walk_block(body, issues, &format!("{}/Block", path)),
-        LoweredStatement::Break { .. } | LoweredStatement::Continue { .. } => {}
+        LoweredStatement::Break(_) | LoweredStatement::Continue(_) => {}
         LoweredStatement::Directed { inner, .. } => {
             walk_statement(inner, issues, &format!("{}/Directed", path))
         }

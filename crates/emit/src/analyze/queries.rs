@@ -86,7 +86,6 @@ impl Planner<'_> {
 
     pub(crate) fn method_needs_export(&self, method_name: &str) -> bool {
         self.facts.has_global_exported_method_name(method_name)
-            || self.module.has_local_exported_method_name(method_name)
             || matches!(method_name, "string" | "goString" | "error")
     }
 
@@ -209,14 +208,13 @@ impl Planner<'_> {
 
 impl Planner<'_> {
     pub(crate) fn enum_layout(&self, enum_id: &str) -> Option<Rc<EnumLayout>> {
-        let file_id = self.file_namespace().file_id();
-        if let Some(layout) = self.module.enum_layout(file_id, enum_id) {
+        if let Some(layout) = self.file_namespace().enum_layout(enum_id) {
             return Some(layout);
         }
-        let layout = self.compute_enum_layout(enum_id)?;
-        self.module
-            .record_enum_layout(file_id, enum_id.to_string(), layout);
-        self.module.enum_layout(file_id, enum_id)
+        let layout = Rc::new(self.compute_enum_layout(enum_id)?);
+        self.file_namespace_mut()
+            .record_enum_layout(enum_id.to_string(), layout.clone());
+        Some(layout)
     }
 
     fn compute_enum_layout(&self, enum_id: &str) -> Option<EnumLayout> {

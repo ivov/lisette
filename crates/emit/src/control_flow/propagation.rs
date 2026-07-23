@@ -1,5 +1,4 @@
 use crate::Planner;
-use crate::Renderer;
 use crate::abi::callable::{CallableReturnAbi, PayloadLayout};
 use crate::abi::transition;
 use crate::context::expression::ExpressionContext;
@@ -289,7 +288,7 @@ impl Planner<'_> {
                 let body = LoweredBlock {
                     statements: vec![self.lower_statement(expression)],
                 };
-                (!Renderer.renders_empty(&body)).then_some(body)
+                (!body.renders_empty()).then_some(body)
             };
             return ReturnStatementPlan {
                 form: ReturnForm::Unit { side_effect },
@@ -485,13 +484,7 @@ impl Planner<'_> {
     ) -> Vec<LoweredStatement> {
         let mut statements = Vec::new();
         if let Some(shape) = lowered {
-            let ok_arg = if matches!(
-                shape,
-                CallableReturnAbi::Result {
-                    bare_error: true,
-                    ..
-                }
-            ) {
+            let ok_arg = if matches!(shape, CallableReturnAbi::BareError) {
                 if !args.is_empty() {
                     let (setup, _) = self
                         .lower_composite_value(&args[0], ExpressionContext::value())

@@ -21,8 +21,6 @@ pub(crate) struct ModulePlan {
 }
 
 pub(crate) struct FilePlan {
-    pub(crate) file_id: u32,
-    pub(crate) output_name: String,
     pub(crate) make_functions: Vec<MakeFunctionPlan>,
     pub(crate) namespace: FileNamespace,
 }
@@ -36,8 +34,8 @@ impl Planner<'_> {
     /// Run module-level collection and fix per-file identity before any item
     /// is rendered.
     pub(crate) fn build_module_plan(&mut self, files: &[&File], module_id: &str) -> ModulePlan {
-        self.facts.set_current_module(module_id);
-        self.collect_local_method_facts(files);
+        debug_assert_eq!(self.facts.current_module(), module_id);
+        self.collect_user_to_string_facts(files);
         self.collect_escape_remap(files);
         self.collect_generic_renames(files);
         let collision_diagnostics = self.detect_name_collisions(files);
@@ -53,8 +51,6 @@ impl Planner<'_> {
         let file_plans = files
             .iter()
             .map(|file| FilePlan {
-                file_id: file.id,
-                output_name: file.go_filename(),
                 make_functions: make_functions_by_file.remove(&file.id).unwrap_or_default(),
                 namespace: FileNamespace::build(
                     file,

@@ -66,21 +66,15 @@ pub(crate) fn lowered_err_values(
     err_expr: &str,
 ) -> Vec<String> {
     match shape {
-        CallableReturnAbi::Result {
-            bare_error: true, ..
-        } => vec![err_expr.to_string()],
-        CallableReturnAbi::Result {
-            bare_error: false, ..
-        } => {
+        CallableReturnAbi::BareError => vec![err_expr.to_string()],
+        CallableReturnAbi::Result { .. } => {
             let ok_ty = planner.facts.peel_alias(return_ty).ok_type();
             vec![lowered_zero(planner, &ok_ty), err_expr.to_string()]
         }
         CallableReturnAbi::Partial { .. } | CallableReturnAbi::Tuple { .. } => {
             unreachable!("not reached for shapes with their own emission paths")
         }
-        CallableReturnAbi::Tagged
-        | CallableReturnAbi::Direct
-        | CallableReturnAbi::Option { .. } => {
+        CallableReturnAbi::Tagged | CallableReturnAbi::Direct | CallableReturnAbi::Option(_) => {
             unreachable!("Option's failure constructor `None` carries no payload")
         }
     }
@@ -90,29 +84,20 @@ pub(crate) fn lowered_err_values(
 /// enclosing function's lowered shape (e.g. `[ok, "nil"]`).
 pub(crate) fn lowered_ok_values(shape: &CallableReturnAbi, ok_expr: &str) -> Vec<String> {
     match shape {
-        CallableReturnAbi::Result {
-            bare_error: true, ..
-        } => vec!["nil".to_string()],
-        CallableReturnAbi::Result {
-            bare_error: false, ..
-        } => vec![ok_expr.to_string(), "nil".to_string()],
+        CallableReturnAbi::BareError => vec!["nil".to_string()],
+        CallableReturnAbi::Result { .. } => vec![ok_expr.to_string(), "nil".to_string()],
         CallableReturnAbi::Partial { .. } | CallableReturnAbi::Tuple { .. } => {
             unreachable!("not reached for shapes with their own emission paths")
         }
-        CallableReturnAbi::Option {
-            encoding: OptionReturnAbi::CommaOk,
-            ..
-        } => vec![ok_expr.to_string(), "true".to_string()],
-        CallableReturnAbi::Option {
-            encoding: OptionReturnAbi::Nullable,
-            ..
-        } => vec![ok_expr.to_string()],
+        CallableReturnAbi::Option(OptionReturnAbi::CommaOk { .. }) => {
+            vec![ok_expr.to_string(), "true".to_string()]
+        }
+        CallableReturnAbi::Option(OptionReturnAbi::Nullable) => vec![ok_expr.to_string()],
         CallableReturnAbi::Tagged
         | CallableReturnAbi::Direct
-        | CallableReturnAbi::Option {
-            encoding: OptionReturnAbi::Sentinel(_),
-            ..
-        } => unreachable!("not a lowered Lisette return ABI"),
+        | CallableReturnAbi::Option(OptionReturnAbi::Sentinel(_)) => {
+            unreachable!("not a lowered Lisette return ABI")
+        }
     }
 }
 
@@ -124,17 +109,11 @@ pub(crate) fn lowered_none_values(
     return_ty: &Type,
 ) -> Vec<String> {
     match shape {
-        CallableReturnAbi::Option {
-            encoding: OptionReturnAbi::CommaOk,
-            ..
-        } => {
+        CallableReturnAbi::Option(OptionReturnAbi::CommaOk { .. }) => {
             let inner = planner.facts.peel_alias(return_ty).ok_type();
             vec![lowered_zero(planner, &inner), "false".to_string()]
         }
-        CallableReturnAbi::Option {
-            encoding: OptionReturnAbi::Nullable,
-            ..
-        } => vec!["nil".to_string()],
+        CallableReturnAbi::Option(OptionReturnAbi::Nullable) => vec!["nil".to_string()],
         _ => unreachable!("only Option's `None` lacks a payload"),
     }
 }
@@ -154,18 +133,14 @@ pub(crate) fn emit_lowered_result_return(
         lowered_zero(planner, &ok_ty)
     };
     match shape {
-        CallableReturnAbi::Result {
-            bare_error: true, ..
-        } => vec![
+        CallableReturnAbi::BareError => vec![
             tag_check(
                 format!("{p}.Tag == {RESULT_OK_TAG}"),
                 vec!["nil".to_string()],
             ),
             multi_value_return(vec![format!("{p}.ErrVal")]),
         ],
-        CallableReturnAbi::Result {
-            bare_error: false, ..
-        } => {
+        CallableReturnAbi::Result { .. } => {
             let zero = ok_zero(planner);
             vec![
                 tag_check(
@@ -189,10 +164,7 @@ pub(crate) fn emit_lowered_result_return(
                 multi_value_return(vec![format!("{p}.OkVal"), format!("{p}.ErrVal")]),
             ]
         }
-        CallableReturnAbi::Option {
-            encoding: OptionReturnAbi::CommaOk,
-            ..
-        } => {
+        CallableReturnAbi::Option(OptionReturnAbi::CommaOk { .. }) => {
             let zero = ok_zero(planner);
             vec![
                 tag_check(
@@ -202,10 +174,7 @@ pub(crate) fn emit_lowered_result_return(
                 multi_value_return(vec![zero, "false".to_string()]),
             ]
         }
-        CallableReturnAbi::Option {
-            encoding: OptionReturnAbi::Nullable,
-            ..
-        } => vec![
+        CallableReturnAbi::Option(OptionReturnAbi::Nullable) => vec![
             tag_check(
                 format!("{p}.Tag == {OPTION_SOME_TAG}"),
                 vec![format!("{p}.SomeVal")],
@@ -217,10 +186,9 @@ pub(crate) fn emit_lowered_result_return(
         }
         CallableReturnAbi::Tagged
         | CallableReturnAbi::Direct
-        | CallableReturnAbi::Option {
-            encoding: OptionReturnAbi::Sentinel(_),
-            ..
-        } => unreachable!("not a lowered Lisette return ABI"),
+        | CallableReturnAbi::Option(OptionReturnAbi::Sentinel(_)) => {
+            unreachable!("not a lowered Lisette return ABI")
+        }
     }
 }
 

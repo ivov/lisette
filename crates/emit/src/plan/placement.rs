@@ -5,8 +5,8 @@ use crate::context::expression::ExpressionContext;
 use crate::control_flow::fallible::{ConstructorKind, Fallible, FalliblePlanner};
 use crate::definitions::functions::{is_breakless_loop, is_go_never};
 use crate::plan::bodies::{
-    AssignForm, AssignPlan, BreakValueDisposition, BreakValuePlan, LoweredBlock, LoweredStatement,
-    PlacePlan,
+    AssignForm, AssignPlan, BreakValueAction, BreakValuePlan, LoopTransfer, LoweredBlock,
+    LoweredStatement, PlacePlan,
 };
 use crate::plan::calls::plan_variadic_spread;
 use crate::plan::values::{CaptureBoundary, EvaluationEffect, GoExpression, ValuePlan};
@@ -264,9 +264,9 @@ impl Planner<'_> {
         }
 
         if let Expression::Loop { body, .. } = expression {
-            self.push_loop(var);
-            let plan = self.lower_loop_with_header("for {\n".to_string(), body);
-            self.pop_loop();
+            let plan = self.with_loop(var, |this| {
+                this.lower_loop_with_header("for {\n".to_string(), body)
+            });
             return vec![LoweredStatement::Loop(plan)];
         }
 
@@ -397,43 +397,34 @@ impl Planner<'_> {
             std::slice::from_ref(expression)
         };
 
-        self.enter_block_scope(is_block, has_go_braces);
-
-        let mut statements = Vec::new();
-        if let Some((last, rest)) = items.split_last() {
-            let is_new_target = self.scope.try_acquire_assign_target(var);
-            for item in rest {
-                statements.push(self.lower_statement(item));
-            }
-            statements.extend(self.lower_assign_tail(last, var, target_ty));
-            if is_new_target {
-                self.scope.release_assign_target(var);
-            }
-        }
-
-        self.exit_block_scope(is_block, has_go_braces);
-        statements
+        self.with_block_scope(is_block, has_go_braces, |this| {
+            let Some((last, rest)) = items.split_last() else {
+                return Vec::new();
+            };
+            this.with_assign_target(var, |this| {
+                let mut statements = Vec::new();
+                for item in rest {
+                    statements.push(this.lower_statement(item));
+                }
+                statements.extend(this.lower_assign_tail(last, var, target_ty));
+                statements
+            })
+        })
     }
 
-    fn enter_block_scope(&mut self, is_block: bool, has_go_braces: bool) {
+    fn with_block_scope<R>(
+        &mut self,
+        is_block: bool,
+        has_go_braces: bool,
+        f: impl FnOnce(&mut Self) -> R,
+    ) -> R {
         if !is_block {
-            return;
+            return f(self);
         }
         if has_go_braces {
-            self.enter_scope();
+            self.with_scope(f)
         } else {
-            self.scope.push_binding_frame();
-        }
-    }
-
-    fn exit_block_scope(&mut self, is_block: bool, has_go_braces: bool) {
-        if !is_block {
-            return;
-        }
-        if has_go_braces {
-            self.exit_scope();
-        } else {
-            self.scope.pop_binding_frame();
+            self.with_binding_frame(f)
         }
     }
 
@@ -662,22 +653,26 @@ impl Planner<'_> {
         let value = self.plan_value(val, ExpressionContext::value());
         let value_is_empty = value.is_empty();
         let is_propagate_diverged = value_is_empty && matches!(val, Expression::Propagate { .. });
-        let disposition = if is_propagate_diverged {
-            BreakValueDisposition::Diverged
-        } else if let Some(result_var) = self.current_loop_result_var().map(str::to_string) {
+        if is_propagate_diverged {
+            return BreakValuePlan::Diverged { value };
+        }
+
+        let action = if let Some(result_var) = self.current_loop_result_var().map(str::to_string) {
             if is_unit_call(val) {
-                BreakValueDisposition::UnitCallIntoResult { result_var }
+                BreakValueAction::UnitCallIntoResult { result_var }
             } else {
-                BreakValueDisposition::AssignToResult { result_var }
+                BreakValueAction::AssignToResult { result_var }
             }
         } else {
-            BreakValueDisposition::Discard
+            BreakValueAction::Discard
         };
-        BreakValuePlan {
+        let target = self
+            .current_loop_id()
+            .map_or(LoopTransfer::Unlabeled, LoopTransfer::Source);
+        BreakValuePlan::Transfer {
             value,
-            disposition,
-            target: self.current_loop_id(),
-            label: None,
+            action,
+            target,
         }
     }
 }

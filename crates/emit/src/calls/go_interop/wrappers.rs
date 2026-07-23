@@ -133,15 +133,10 @@ impl Planner<'_> {
                 let value = self.plan_layout_bridge(statements, call, &bridge);
                 statements.push(plain_return(value));
             }
-            CallableReturnAbi::Result {
-                bare_error: true, ..
-            } => statements.push(plain_return(call.to_string())),
+            CallableReturnAbi::BareError => statements.push(plain_return(call.to_string())),
             CallableReturnAbi::Result { .. }
             | CallableReturnAbi::Partial { .. }
-            | CallableReturnAbi::Option {
-                encoding: OptionReturnAbi::CommaOk,
-                ..
-            } => {
+            | CallableReturnAbi::Option(OptionReturnAbi::CommaOk { .. }) => {
                 let value = self.fresh_var(Some("ret"));
                 self.declare(&value);
                 let auxiliary = self.fresh_var(Some("ret"));
@@ -176,10 +171,7 @@ impl Planner<'_> {
                 let value = self.plan_layout_bridge(statements, &value, &bridge);
                 statements.push(plain_return(format!("{value}, {auxiliary}")));
             }
-            CallableReturnAbi::Option {
-                encoding: OptionReturnAbi::Nullable,
-                ..
-            } => {
+            CallableReturnAbi::Option(OptionReturnAbi::Nullable) => {
                 let raw = self.hoist_tmp_value_statement(statements, "raw", call);
                 let condition = if self.is_interface_option(source.result.logical_type()) {
                     self.require_stdlib();
@@ -207,10 +199,9 @@ impl Planner<'_> {
                 let value = self.plan_layout_bridge(statements, &raw, &bridge);
                 statements.push(plain_return(value));
             }
-            CallableReturnAbi::Option {
-                encoding: OptionReturnAbi::Sentinel(_),
-                ..
-            } => statements.push(plain_return(call.to_string())),
+            CallableReturnAbi::Option(OptionReturnAbi::Sentinel(_)) => {
+                statements.push(plain_return(call.to_string()))
+            }
             CallableReturnAbi::Tuple { arity } => {
                 let values = self.create_temp_vars("ret", *arity);
                 statements.push(LoweredStatement::RawGo(format!(
@@ -450,10 +441,7 @@ impl Planner<'_> {
         target: WrapperTarget<'_>,
     ) -> (Vec<LoweredStatement>, WrapperOutcome) {
         let fallible = Fallible::from_type(result_ty).expect("Result type expected");
-
-        if fallible.ok_ty().is_unit() {
-            return self.lower_unit_result_wrapping(call_str, &fallible, target);
-        }
+        debug_assert!(!fallible.ok_ty().is_unit());
 
         let mut statements = Vec::new();
         let ok_ty = fallible.ok_ty();
@@ -524,6 +512,18 @@ impl Planner<'_> {
             else_arm,
         }));
         (statements, outcome)
+    }
+
+    /// Lower a bare `error` Go return into a tagged `Result<(), E>`.
+    pub(crate) fn lower_bare_error_wrapping(
+        &mut self,
+        call_str: &str,
+        result_ty: &Type,
+        target: WrapperTarget<'_>,
+    ) -> (Vec<LoweredStatement>, WrapperOutcome) {
+        let fallible = Fallible::from_type(result_ty).expect("Result type expected");
+        debug_assert!(fallible.ok_ty().is_unit());
+        self.lower_unit_result_wrapping(call_str, &fallible, target)
     }
 
     fn plan_optional_payload_bridge(

@@ -25,7 +25,7 @@ impl Planner<'_> {
         type_args: &[Type],
         arg_shape: CallArgShape,
     ) -> Option<String> {
-        let definition_ty = callee.declared.as_ref()?;
+        let definition_ty = callee.declared_type()?;
 
         // A method with no type parameters lowers to a non-generic free function.
         let Type::Forall { vars, body } = &definition_ty else {
@@ -222,8 +222,7 @@ impl Planner<'_> {
             (!callee.is_prelude_dispatch)
                 .then(|| {
                     callee
-                        .declared
-                        .as_ref()
+                        .declared_type()
                         .and_then(|ty| ty.unwrap_forall().get_function_params())
                 })
                 .flatten(),

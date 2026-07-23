@@ -777,6 +777,26 @@ fn main() {
 }
 
 #[test]
+fn select_receive_bindings_are_scoped_per_arm_and_after_select() {
+    let input = r#"
+fn test() -> int {
+  let value = 40
+  let first = Channel.new<int>()
+  let outbound = Channel.new<int>()
+
+  let selected = select {
+    let Some(value) = first.receive() => value,
+    outbound.send(1) => value + 1,
+    _ => value + 2,
+  }
+
+  selected + value
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn select_send_channel_expression_hoisted() {
     let input = r#"
 import "go:fmt"

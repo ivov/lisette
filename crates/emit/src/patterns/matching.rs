@@ -57,9 +57,9 @@ impl Planner<'_> {
         let (subject_var, declaration) =
             self.lower_match_subject_var(&mut statements, subject, arms);
 
-        self.scope.enter_use_region();
-        let block = self.lower_match_tree(arms, subject_var.clone(), subject_ty, place);
-        let used_set = self.scope.exit_use_region();
+        let (block, used_set) = self.capture_go_uses(|this| {
+            this.lower_match_tree(arms, subject_var.clone(), subject_ty, place)
+        });
         let used = used_set.contains(&subject_var);
 
         match declaration {
@@ -107,7 +107,10 @@ impl Planner<'_> {
         let shape = plan.resolved.abi.result.clone();
         let nil_guard = match &plan.resolved.origin {
             CallableOrigin::GoInterop
-                if matches!(plan.resolved.abi.result, CallableReturnAbi::Result { .. }) =>
+                if matches!(
+                    plan.resolved.abi.result,
+                    CallableReturnAbi::BareError | CallableReturnAbi::Result { .. }
+                ) =>
             {
                 let ok_ty = self.facts.peel_alias(&subject.get_type()).ok_type();
                 if matches!(self.facts.peel_alias(&ok_ty), Type::Tuple(_)) {
@@ -124,7 +127,11 @@ impl Planner<'_> {
             CallableOrigin::GoInterop => return None,
             _ => None,
         };
-        matches!(shape, CallableReturnAbi::Result { .. }).then_some(FusedShape { shape, nil_guard })
+        matches!(
+            shape,
+            CallableReturnAbi::BareError | CallableReturnAbi::Result { .. }
+        )
+        .then_some(FusedShape { shape, nil_guard })
     }
 
     /// Fuse the lift+match into one `if err == nil { ... } else { ... }`
@@ -149,13 +156,8 @@ impl Planner<'_> {
         let ok_name = ok_binding.filter(|n| *n != "_");
         let err_name = err_binding.filter(|n| *n != "_");
 
-        let need_val = matches!(
-            shape,
-            CallableReturnAbi::Result {
-                bare_error: false,
-                ..
-            }
-        ) && (ok_name.is_some() || nil_guard.is_some());
+        let need_val = matches!(shape, CallableReturnAbi::Result { .. })
+            && (ok_name.is_some() || nil_guard.is_some());
         let val_var = need_val.then(|| {
             let v = self.fresh_var(Some("ret"));
             self.declare(&v);
@@ -170,16 +172,12 @@ impl Planner<'_> {
         let bind_line = match &val_var {
             Some(v) => format!("{}, {} := {}\n", v, err_var, call_str),
             None => match shape {
-                CallableReturnAbi::Result {
-                    bare_error: false, ..
-                } => format!("_, {} := {}\n", err_var, call_str),
-                CallableReturnAbi::Result {
-                    bare_error: true, ..
-                } => format!("{} := {}\n", err_var, call_str),
+                CallableReturnAbi::Result { .. } => format!("_, {} := {}\n", err_var, call_str),
+                CallableReturnAbi::BareError => format!("{} := {}\n", err_var, call_str),
                 CallableReturnAbi::Tagged
                 | CallableReturnAbi::Direct
                 | CallableReturnAbi::Partial { .. }
-                | CallableReturnAbi::Option { .. }
+                | CallableReturnAbi::Option(_)
                 | CallableReturnAbi::Tuple { .. } => unreachable!("rejected above"),
             },
         };
@@ -344,36 +342,35 @@ impl Planner<'_> {
         body: &Expression,
         place: &PlacePlan,
     ) -> (LoweredBlock, bool) {
-        self.scope.push_binding_frame();
-        let bound: Vec<Option<(String, String)>> = bindings
-            .iter()
-            .map(|binding| {
-                binding.map(|(name, value)| {
-                    let go_name = self.scope.bind(name, name);
-                    self.declare(&go_name);
-                    (go_name, value.to_string())
+        self.with_binding_frame(|this| {
+            let bound: Vec<Option<(String, String)>> = bindings
+                .iter()
+                .map(|binding| {
+                    binding.map(|(name, value)| {
+                        let go_name = this.scope.bind(name, name);
+                        this.declare(&go_name);
+                        (go_name, value.to_string())
+                    })
                 })
-            })
-            .collect();
-        self.scope.enter_use_region();
-        let body_block = self.lower_block_to_place(body, place);
-        let used = self.scope.exit_use_region();
-        let mut statements = Vec::new();
-        let mut any_referenced = false;
-        for (go_name, value) in bound.iter().flatten() {
-            statements.push(LoweredStatement::TempBind {
-                name: go_name.clone(),
-                value: value.clone(),
-            });
-            if used.contains(go_name) {
-                any_referenced = true;
-            } else {
-                statements.push(LoweredStatement::RawGo(format!("_ = {}\n", go_name)));
+                .collect();
+            let (body_block, used) =
+                this.capture_go_uses(|this| this.lower_block_to_place(body, place));
+            let mut statements = Vec::new();
+            let mut any_referenced = false;
+            for (go_name, value) in bound.iter().flatten() {
+                statements.push(LoweredStatement::TempBind {
+                    name: go_name.clone(),
+                    value: value.clone(),
+                });
+                if used.contains(go_name) {
+                    any_referenced = true;
+                } else {
+                    statements.push(LoweredStatement::RawGo(format!("_ = {}\n", go_name)));
+                }
             }
-        }
-        statements.extend(body_block.statements);
-        self.scope.pop_binding_frame();
-        (LoweredBlock { statements }, any_referenced)
+            statements.extend(body_block.statements);
+            (LoweredBlock { statements }, any_referenced)
+        })
     }
 
     fn lower_match_subject_var(
@@ -533,16 +530,14 @@ fn ok_arm_payload_is_omitted(arm: &MatchArm, shape: &CallableReturnAbi) -> bool 
         return false;
     };
     match shape {
-        CallableReturnAbi::Result {
-            bare_error: true, ..
-        } => fields.is_empty() || matches!(fields.as_slice(), [Pattern::Unit { .. }]),
+        CallableReturnAbi::BareError => {
+            fields.is_empty() || matches!(fields.as_slice(), [Pattern::Unit { .. }])
+        }
         CallableReturnAbi::Tagged
         | CallableReturnAbi::Direct
-        | CallableReturnAbi::Result {
-            bare_error: false, ..
-        }
+        | CallableReturnAbi::Result { .. }
         | CallableReturnAbi::Partial { .. }
-        | CallableReturnAbi::Option { .. }
+        | CallableReturnAbi::Option(_)
         | CallableReturnAbi::Tuple { .. } => false,
     }
 }

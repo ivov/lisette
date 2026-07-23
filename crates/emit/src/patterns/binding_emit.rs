@@ -1,5 +1,5 @@
 use crate::Planner;
-use crate::analyze::inline_uses::{InlineDecision, analyze_inline_candidate};
+use crate::analyze::inline_uses::{InlineDecision, analyze_inline_candidate, region_blocks_inline};
 use crate::patterns::decision_tree::{Check, PatternBinding, PatternInfo, render_condition};
 use crate::plan::bodies::LoweredStatement;
 use crate::plan::placement::simple_assign;
@@ -110,6 +110,7 @@ pub(crate) fn tree_binding_statements(
     bindings: &[PatternBinding],
     subject_var: &str,
     consumers: &[&syntax::ast::Expression],
+    inline_blockers: &[&syntax::ast::Expression],
 ) -> Vec<(String, Option<BindingValue>)> {
     let mut installed_inlines = Vec::new();
     for binding in bindings {
@@ -122,6 +123,7 @@ pub(crate) fn tree_binding_statements(
 
         if !consumers.is_empty()
             && analyze_inline_candidate(&binding.lisette_name, consumers) == InlineDecision::Inline
+            && !region_blocks_inline(inline_blockers.iter().copied(), &binding.lisette_name)
         {
             let previous = planner
                 .scope
@@ -182,6 +184,28 @@ pub(crate) fn drop_inline_overlays(
             }
         }
     }
+}
+
+pub(crate) fn with_tree_bindings<R>(
+    planner: &mut Planner,
+    statements: &mut Vec<LoweredStatement>,
+    bindings: &[PatternBinding],
+    subject_var: &str,
+    consumers: &[&syntax::ast::Expression],
+    inline_blockers: &[&syntax::ast::Expression],
+    f: impl FnOnce(&mut Planner, &mut Vec<LoweredStatement>) -> R,
+) -> R {
+    let overlays = tree_binding_statements(
+        planner,
+        statements,
+        bindings,
+        subject_var,
+        consumers,
+        inline_blockers,
+    );
+    let result = f(planner, statements);
+    drop_inline_overlays(planner, &overlays);
+    result
 }
 
 /// Push `name = subject.path` leaves for or-pattern alternatives whose

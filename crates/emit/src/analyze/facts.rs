@@ -196,10 +196,6 @@ impl<'a> EmitFacts<'a> {
         &self.current_module
     }
 
-    pub(crate) fn set_current_module(&mut self, module_id: &str) {
-        self.current_module = module_id.to_string();
-    }
-
     pub(crate) fn is_current_module(&self, module: &str) -> bool {
         module == self.current_module.as_str()
     }
@@ -251,11 +247,26 @@ impl<'a> EmitFacts<'a> {
         self.globals.exported_method_names.contains(method)
     }
 
-    pub(crate) fn make_function_name(&self, key: &str) -> Option<&str> {
-        self.globals
-            .make_function_names
-            .get(key)
-            .map(String::as_str)
+    pub(crate) fn make_function_name(&self, enum_id: &str, variant_name: &str) -> Option<String> {
+        let definition = self.definition(enum_id)?;
+        let DefinitionBody::Enum { variants, .. } = &definition.body else {
+            return None;
+        };
+        variants
+            .iter()
+            .any(|variant| variant.name == variant_name)
+            .then(|| {
+                let enum_name = definition
+                    .name
+                    .as_deref()
+                    .unwrap_or_else(|| syntax::types::unqualified_name(enum_id));
+                let make_function = go_name::enum_make_function(enum_name, variant_name);
+                if enum_id.starts_with(go_name::PRELUDE_PREFIX) {
+                    format!("{}{}", go_name::PRELUDE_PREFIX, make_function)
+                } else {
+                    make_function
+                }
+            })
     }
 
     pub(crate) fn go_callable_return(&self, qualified_name: &str) -> Option<&CallableReturnAbi> {

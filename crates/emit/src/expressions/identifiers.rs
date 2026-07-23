@@ -100,31 +100,18 @@ impl Planner<'_> {
             return IdentifierKind::PublicFunction { capitalized };
         }
 
-        let mut make_fn = self.facts.make_function_name(&name);
-
-        if make_fn.is_none() {
-            let enum_id = match ty {
-                Type::Function(f) => {
-                    if let Type::Nominal { id, .. } = f.return_type.as_ref() {
-                        Some(id.as_str())
-                    } else {
-                        None
-                    }
-                }
+        let enum_id = match ty {
+            Type::Function(f) => match f.return_type.as_ref() {
                 Type::Nominal { id, .. } => Some(id.as_str()),
                 _ => None,
-            };
+            },
+            Type::Nominal { id, .. } => Some(id.as_str()),
+            _ => None,
+        };
+        let make_fn =
+            enum_id.and_then(|id| self.facts.make_function_name(id, unqualified_name(value)));
 
-            if let Some(id) = enum_id {
-                let enum_name = unqualified_name(id);
-                let qualified = format!("{}.{}", enum_name, value);
-                make_fn = self.facts.make_function_name(&qualified);
-            }
-        }
-
-        if let Some(make_fn_value) = make_fn {
-            let name = make_fn_value.to_string();
-
+        if let Some(name) = make_fn {
             match ty {
                 Type::Nominal { params, .. } => {
                     let type_args = match ctx.expected_slot_type() {
@@ -150,8 +137,7 @@ impl Planner<'_> {
             }
         }
 
-        let resolved = make_fn.map(str::to_string).unwrap_or(name);
-        IdentifierKind::Regular { name: resolved }
+        IdentifierKind::Regular { name }
     }
 
     /// Type args for a constructor function reference (e.g. `MakeFoo[T]` used as a value).

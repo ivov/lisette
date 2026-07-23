@@ -2446,6 +2446,18 @@ struct User {
 }
 
 #[test]
+fn later_struct_tag_attribute_can_disable_omitempty() {
+    let input = r#"
+#[json(omitempty)]
+#[json(!omitempty)]
+struct User {
+  id: int,
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn struct_with_snake_case_oauth() {
     let input = r#"
 #[json(snake_case)]

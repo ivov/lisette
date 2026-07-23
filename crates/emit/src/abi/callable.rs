@@ -20,7 +20,7 @@ impl PayloadLayout {
 /// Physical encoding of an `Option<T>` result at a callable boundary.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum OptionReturnAbi {
-    CommaOk,
+    CommaOk { payload: PayloadLayout },
     Nullable,
     Sentinel(i64),
 }
@@ -32,17 +32,15 @@ pub(crate) enum CallableReturnAbi {
     Tagged,
     /// No generated tagged/lowered boundary encoding is required.
     Direct,
+    /// A `Result<(), E>` represented by its error value alone.
+    BareError,
     Result {
-        bare_error: bool,
         payload: PayloadLayout,
     },
     Partial {
         payload: PayloadLayout,
     },
-    Option {
-        encoding: OptionReturnAbi,
-        payload: PayloadLayout,
-    },
+    Option(OptionReturnAbi),
     Tuple {
         arity: usize,
     },
@@ -74,14 +72,9 @@ impl CallableReturnAbi {
     pub(crate) fn is_multi_return(&self) -> bool {
         matches!(
             self,
-            Self::Result {
-                bare_error: false,
-                ..
-            } | Self::Partial { .. }
-                | Self::Option {
-                    encoding: OptionReturnAbi::CommaOk,
-                    ..
-                }
+            Self::Result { .. }
+                | Self::Partial { .. }
+                | Self::Option(OptionReturnAbi::CommaOk { .. })
                 | Self::Tuple { .. }
         )
     }

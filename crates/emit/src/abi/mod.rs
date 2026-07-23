@@ -36,9 +36,12 @@ impl Planner<'_> {
     pub(crate) fn classify_direct_emission(&self, return_ty: &Type) -> Option<CallableReturnAbi> {
         let peeled = self.facts.peel_alias(return_ty);
         if peeled.is_result() && self.err_slot_is_nilable(&peeled) {
-            return Some(CallableReturnAbi::Result {
-                bare_error: peeled.ok_type().is_unit(),
-                payload: PayloadLayout::Packed,
+            return Some(if peeled.ok_type().is_unit() {
+                CallableReturnAbi::BareError
+            } else {
+                CallableReturnAbi::Result {
+                    payload: PayloadLayout::Packed,
+                }
             });
         }
         if peeled.is_partial() && self.err_slot_is_nilable(&peeled) {
@@ -47,14 +50,14 @@ impl Planner<'_> {
             });
         }
         if peeled.is_option() {
-            return Some(CallableReturnAbi::Option {
-                encoding: if self.facts.is_nullable_option(&peeled) {
-                    OptionReturnAbi::Nullable
-                } else {
-                    OptionReturnAbi::CommaOk
-                },
-                payload: PayloadLayout::Packed,
-            });
+            let encoding = if self.facts.is_nullable_option(&peeled) {
+                OptionReturnAbi::Nullable
+            } else {
+                OptionReturnAbi::CommaOk {
+                    payload: PayloadLayout::Packed,
+                }
+            };
+            return Some(CallableReturnAbi::Option(encoding));
         }
         if let Some(arity) = peeled.tuple_arity()
             && arity >= 2
@@ -81,28 +84,19 @@ impl Planner<'_> {
         let peeled = self.facts.peel_alias(return_ty);
         match shape {
             CallableReturnAbi::Tagged | CallableReturnAbi::Direct => self.go_type_string(&peeled),
-            CallableReturnAbi::Result {
-                bare_error: true, ..
-            } => self.go_type_string(&peeled.err_type()),
-            CallableReturnAbi::Result {
-                bare_error: false, ..
-            }
-            | CallableReturnAbi::Partial { .. } => {
+            CallableReturnAbi::BareError => self.go_type_string(&peeled.err_type()),
+            CallableReturnAbi::Result { .. } | CallableReturnAbi::Partial { .. } => {
                 let ok_str = self.go_type_string(&peeled.ok_type());
                 let err_str = self.go_type_string(&peeled.err_type());
                 format!("({}, {})", ok_str, err_str)
             }
-            CallableReturnAbi::Option {
-                encoding: OptionReturnAbi::CommaOk,
-                ..
-            } => {
+            CallableReturnAbi::Option(OptionReturnAbi::CommaOk { .. }) => {
                 let inner_str = self.go_type_string(&peeled.ok_type());
                 format!("({}, bool)", inner_str)
             }
-            CallableReturnAbi::Option {
-                encoding: OptionReturnAbi::Nullable | OptionReturnAbi::Sentinel(_),
-                ..
-            } => self.go_type_string(&peeled.ok_type()),
+            CallableReturnAbi::Option(OptionReturnAbi::Nullable | OptionReturnAbi::Sentinel(_)) => {
+                self.go_type_string(&peeled.ok_type())
+            }
             CallableReturnAbi::Tuple { .. } => {
                 let parts: Vec<String> = tuple_element_types(&peeled)
                     .iter()
@@ -133,13 +127,8 @@ impl Planner<'_> {
         let peeled = self.facts.peel_alias(return_ty);
         match shape {
             CallableReturnAbi::Tagged | CallableReturnAbi::Direct => self.go_type(&peeled),
-            CallableReturnAbi::Result {
-                bare_error: true, ..
-            } => self.go_type(&peeled.err_type()),
-            CallableReturnAbi::Result {
-                bare_error: false, ..
-            }
-            | CallableReturnAbi::Partial { .. } => {
+            CallableReturnAbi::BareError => self.go_type(&peeled.err_type()),
+            CallableReturnAbi::Result { .. } | CallableReturnAbi::Partial { .. } => {
                 let ok_go = self.go_type(&peeled.ok_type());
                 let err_go = self.go_type(&peeled.err_type());
                 let mut result = GoType::new(format!("({}, {})", ok_go.code, err_go.code));
@@ -147,19 +136,15 @@ impl Planner<'_> {
                 result.merge(&err_go);
                 result
             }
-            CallableReturnAbi::Option {
-                encoding: OptionReturnAbi::CommaOk,
-                ..
-            } => {
+            CallableReturnAbi::Option(OptionReturnAbi::CommaOk { .. }) => {
                 let inner_go = self.go_type(&peeled.ok_type());
                 let mut result = GoType::new(format!("({}, bool)", inner_go.code));
                 result.merge(&inner_go);
                 result
             }
-            CallableReturnAbi::Option {
-                encoding: OptionReturnAbi::Nullable | OptionReturnAbi::Sentinel(_),
-                ..
-            } => self.go_type(&peeled.ok_type()),
+            CallableReturnAbi::Option(OptionReturnAbi::Nullable | OptionReturnAbi::Sentinel(_)) => {
+                self.go_type(&peeled.ok_type())
+            }
             CallableReturnAbi::Tuple { .. } => {
                 let elements = tuple_element_types(&peeled);
                 let element_gos: Vec<GoType> = elements

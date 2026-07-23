@@ -186,6 +186,10 @@ pub(crate) fn enum_tag_constant(enum_name: &str, variant_name: &str) -> String {
     }
 }
 
+pub(crate) fn enum_make_function(enum_name: &str, variant_name: &str) -> String {
+    format!("Make{}{}", escape_type_name(enum_name), variant_name)
+}
+
 /// Go builtins re-exposed by the Lisette prelude under the same name. The
 /// `prelude_function_shadowed` diagnostic forbids user code from declaring
 /// identifiers with these names, so the emitter need not escape them.

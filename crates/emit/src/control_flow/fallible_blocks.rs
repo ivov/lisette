@@ -18,7 +18,7 @@ impl Planner<'_> {
         self.require_stdlib();
 
         let return_ctx = self.return_ctx();
-        let effective_ty = resolve_fallible_block_type(items, ty, Some(return_ctx.as_ref()));
+        let effective_ty = resolve_fallible_block_type(items, ty, Some(&return_ctx));
         let fallible = Fallible::from_type(&effective_ty)
             .expect("`try` block must have Result or Option type");
 
@@ -30,9 +30,9 @@ impl Planner<'_> {
         };
 
         let body_ctx = ReturnContext::TaggedBlock(effective_ty);
-        self.push_return_ctx(body_ctx.clone());
-        let body = self.with_fresh_scope(|planner| planner.lower_try_body(items, &fallible));
-        self.pop_return_ctx();
+        let body = self.with_return_context(body_ctx, |planner| {
+            planner.with_fresh_scope(|planner| planner.lower_try_body(items, &fallible))
+        });
 
         let setup = vec![LoweredStatement::ClosureBind {
             name: result_var.clone(),
@@ -172,7 +172,7 @@ impl Planner<'_> {
         self.require_stdlib();
 
         let return_ctx = self.return_ctx();
-        let effective_ty = resolve_fallible_block_type(items, ty, Some(return_ctx.as_ref()));
+        let effective_ty = resolve_fallible_block_type(items, ty, Some(&return_ctx));
         let fallible = Fallible::from_type(&effective_ty)
             .expect("recover block type must be Result<T, PanicValue>");
 
@@ -181,10 +181,9 @@ impl Planner<'_> {
         let inner_ty_str = self.go_type_string(fallible.ok_ty());
 
         let body_return_ctx = self.return_context_for_type(fallible.ok_ty().clone());
-        self.push_return_ctx(body_return_ctx.clone());
-        let body =
-            self.with_fresh_scope(|planner| planner.lower_recover_body_block(items, &fallible));
-        self.pop_return_ctx();
+        let body = self.with_return_context(body_return_ctx, |planner| {
+            planner.with_fresh_scope(|planner| planner.lower_recover_body_block(items, &fallible))
+        });
 
         let setup = vec![LoweredStatement::ClosureBind {
             name: result_var.clone(),

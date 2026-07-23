@@ -1,0 +1,44 @@
+---
+source: tests/spec/emit/concurrency.rs
+description: |
+  
+  fn test() -> int {
+    let value = 40
+    let first = Channel.new<int>()
+    let outbound = Channel.new<int>()
+  
+    let selected = select {
+      let Some(value) = first.receive() => value,
+      outbound.send(1) => value + 1,
+      _ => value + 2,
+    }
+  
+    selected + value
+  }
+---
+package main
+
+func test() int {
+	value := 40
+	first := make(chan int)
+	outbound := make(chan int)
+	var selected int
+	ch_1 := first
+	for {
+		select {
+		case value, ok := <-ch_1:
+			if ok {
+				selected = value
+			} else {
+				ch_1 = nil
+				continue
+			}
+		case outbound <- 1:
+			selected = value + 1
+		default:
+			selected = value + 2
+		}
+		break
+	}
+	return selected + value
+}

@@ -34,7 +34,6 @@ pub use output::imports;
 
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use std::cell::{Ref, RefCell, RefMut};
-use std::rc::Rc;
 use std::sync::Arc;
 
 use abi::callable::{CallableReturnAbi, OptionReturnAbi, PayloadLayout};
@@ -45,6 +44,7 @@ use names::packages::{PackageRequirements, PackageUse};
 use plan::ModulePlan;
 use plan::bodies::{LoopId, LoweredBlock, LoweredStatement};
 use state::adapter_registry::AdapterRegistry;
+use state::bindings::BindingSnapshot;
 use state::file_namespace::FileNamespace;
 use state::module_state::{FunctionEmissionState, ModuleState};
 use state::scope::ScopeState;
@@ -62,30 +62,21 @@ pub struct EmitOptions {
     pub emit_tests: bool,
 }
 
-#[derive(Default)]
 pub(crate) struct GlobalEmitData {
     go_abi_catalog: GoAbiCatalog,
     exported_method_names: HashSet<String>,
-    make_function_names: HashMap<String, String>,
 }
 
 impl GlobalEmitData {
     fn compute(definitions: &HashMap<Symbol, Definition>) -> Self {
         let mut globals = GlobalEmitData {
             go_abi_catalog: GoAbiCatalog::from_definitions(definitions),
-            ..GlobalEmitData::default()
+            exported_method_names: HashSet::default(),
         };
-
-        for prelude_type in PreludeType::enum_types() {
-            for (constructor, make_fn) in prelude_type.make_function_entries() {
-                globals.make_function_names.insert(constructor, make_fn);
-            }
-        }
 
         for (key, definition) in definitions.iter() {
             let is_go = go_name::is_go_import(key);
             globals.register_exported_methods(key, definition, is_go);
-            globals.register_enum_make_functions(definition);
         }
 
         globals
@@ -116,33 +107,6 @@ impl GlobalEmitData {
             self.exported_method_names.insert("to_string".to_string());
         }
     }
-
-    fn register_enum_make_functions(&mut self, definition: &Definition) {
-        if let Definition {
-            name: Some(name),
-            body: DefinitionBody::Enum { variants, .. },
-            ..
-        } = definition
-            && PreludeType::from_name(name).is_none()
-        {
-            for (constructor, make_fn) in user_enum_make_function_entries(name, variants) {
-                self.make_function_names.insert(constructor, make_fn);
-            }
-        }
-    }
-}
-
-/// Make-function name registry entries for a user-declared enum.
-fn user_enum_make_function_entries<'a>(
-    name: &'a str,
-    variants: &'a [syntax::ast::EnumVariant],
-) -> impl Iterator<Item = (String, String)> + 'a {
-    let go_type_name = go_name::escape_type_name(name).into_owned();
-    variants.iter().map(move |variant| {
-        let constructor = format!("{}.{}", name, variant.name);
-        let make_fn = format!("Make{}{}", go_type_name, variant.name);
-        (constructor, make_fn)
-    })
 }
 
 pub(crate) fn classify_go_return_type(
@@ -165,34 +129,27 @@ pub(crate) fn classify_go_return_type(
         return Some(CallableReturnAbi::Partial { payload: payload() });
     }
     if return_ty.is_result() {
-        return Some(CallableReturnAbi::Result {
-            bare_error: return_ty.ok_type().is_unit(),
-            payload: payload(),
+        return Some(if return_ty.ok_type().is_unit() {
+            CallableReturnAbi::BareError
+        } else {
+            CallableReturnAbi::Result { payload: payload() }
         });
     }
     if return_ty.is_option() {
         if let Some(value) = sentinel_hint(go_hints) {
-            return Some(CallableReturnAbi::Option {
-                encoding: OptionReturnAbi::Sentinel(value),
-                payload: PayloadLayout::Packed,
-            });
+            return Some(CallableReturnAbi::Option(OptionReturnAbi::Sentinel(value)));
         }
         if !is_nullable_option(definitions, return_ty) {
-            return Some(CallableReturnAbi::Option {
-                encoding: OptionReturnAbi::CommaOk,
+            return Some(CallableReturnAbi::Option(OptionReturnAbi::CommaOk {
                 payload: payload(),
-            });
+            }));
         }
         if go_hints.iter().any(|s| s == "comma_ok") {
-            return Some(CallableReturnAbi::Option {
-                encoding: OptionReturnAbi::CommaOk,
+            return Some(CallableReturnAbi::Option(OptionReturnAbi::CommaOk {
                 payload: payload(),
-            });
+            }));
         }
-        return Some(CallableReturnAbi::Option {
-            encoding: OptionReturnAbi::Nullable,
-            payload: PayloadLayout::Packed,
-        });
+        return Some(CallableReturnAbi::Option(OptionReturnAbi::Nullable));
     }
     if let Some(arity) = return_ty.tuple_arity()
         && arity >= 2
@@ -314,7 +271,7 @@ impl<'a> Planner<'a> {
 
     /// Append this file's newly-synthesized adapter declarations to `source`.
     fn drain_file_emission_into(&mut self, source: &mut OutputCollector) {
-        for adapter_declaration in self.adapter_registry.flush_new_declarations() {
+        for adapter_declaration in self.adapter_registry.drain_declarations() {
             source.collect_with_blank(adapter_declaration);
         }
     }
@@ -427,12 +384,11 @@ impl<'a> Planner<'a> {
         }
     }
 
-    fn push_loop(&mut self, result_var: impl Into<String>) {
+    fn with_loop<R>(&mut self, result_var: impl Into<String>, f: impl FnOnce(&mut Self) -> R) -> R {
         self.scope.push_loop(result_var.into());
-    }
-
-    fn pop_loop(&mut self) {
+        let result = f(self);
         self.scope.pop_loop();
+        result
     }
 
     fn current_loop_result_var(&self) -> Option<&str> {
@@ -446,20 +402,22 @@ impl<'a> Planner<'a> {
     /// Push the enclosing function/lambda/try/recover return context. This
     /// scope stack is the single source of truth for return-context lowering;
     /// all readers consult it via [`Planner::return_ctx`].
-    fn push_return_ctx(&mut self, ctx: ReturnContext) {
-        self.scope.push_return_ctx(Rc::new(ctx));
-    }
-
-    fn pop_return_ctx(&mut self) {
+    fn with_return_context<R>(&mut self, ctx: ReturnContext, f: impl FnOnce(&mut Self) -> R) -> R {
+        self.scope.push_return_ctx(ctx);
+        let result = f(self);
         self.scope.pop_return_ctx();
+        result
     }
 
-    fn push_test_handle(&mut self, name: String) {
-        self.scope.push_test_handle(name);
-    }
-
-    fn pop_test_handle(&mut self) {
-        self.scope.pop_test_handle();
+    fn with_test_handle<R>(&mut self, name: Option<String>, f: impl FnOnce(&mut Self) -> R) -> R {
+        if let Some(name) = name {
+            self.scope.push_test_handle(name);
+            let result = f(self);
+            self.scope.pop_test_handle();
+            result
+        } else {
+            f(self)
+        }
     }
 
     fn current_test_handle(&self) -> Option<String> {
@@ -471,10 +429,10 @@ impl<'a> Planner<'a> {
     /// `ReturnContext::None` outside any function body (e.g. module-level
     /// collection). This is the single source of truth for return-context
     /// lowering.
-    fn return_ctx(&self) -> Rc<ReturnContext> {
+    fn return_ctx(&self) -> ReturnContext {
         self.scope
             .current_return_ctx()
-            .unwrap_or_else(|| Rc::new(ReturnContext::None))
+            .unwrap_or(ReturnContext::None)
     }
 
     /// `true` if this is a new declaration in the current block (use `:=`),
@@ -518,17 +476,13 @@ impl<'a> Planner<'a> {
     }
 
     /// Run `f` inside a fresh scope to build a `LoweredBlock`, returning `None`
-    /// when it renders empty.
+    /// when its IR emits no output.
     fn capture_scoped_block<F>(&mut self, f: F) -> Option<LoweredBlock>
     where
         F: FnOnce(&mut Self) -> LoweredBlock,
     {
-        self.enter_scope();
-        let block = f(self);
-        self.exit_scope();
-        let mut buffer = String::new();
-        Renderer.render_lowered_block(&mut buffer, &block);
-        (!buffer.is_empty()).then_some(block)
+        let block = self.with_scope(f);
+        (!block.renders_empty()).then_some(block)
     }
 
     fn enter_scope(&mut self) {
@@ -539,16 +493,62 @@ impl<'a> Planner<'a> {
         self.scope.exit_block();
     }
 
+    fn with_scope<R>(&mut self, f: impl FnOnce(&mut Self) -> R) -> R {
+        self.enter_scope();
+        let result = f(self);
+        self.exit_scope();
+        result
+    }
+
+    fn with_binding_frame<R>(&mut self, f: impl FnOnce(&mut Self) -> R) -> R {
+        self.scope.push_binding_frame();
+        let result = f(self);
+        self.scope.pop_binding_frame();
+        result
+    }
+
+    fn with_assign_target<R>(&mut self, target: &str, f: impl FnOnce(&mut Self) -> R) -> R {
+        let newly_active = self.scope.activate_assign_target(target);
+        let result = f(self);
+        if newly_active {
+            self.scope.deactivate_assign_target(target);
+        }
+        result
+    }
+
+    fn with_binding_snapshot<R>(
+        &mut self,
+        snapshot: BindingSnapshot,
+        f: impl FnOnce(&mut Self) -> R,
+    ) -> R {
+        let current = self.scope.replace_binding_snapshot(snapshot);
+        let result = f(self);
+        let _ = self.scope.replace_binding_snapshot(current);
+        result
+    }
+
+    fn capture_go_uses<R>(&mut self, f: impl FnOnce(&mut Self) -> R) -> (R, HashSet<String>) {
+        self.scope.enter_use_region();
+        let result = f(self);
+        let uses = self.scope.exit_use_region();
+        (result, uses)
+    }
+
     fn fresh_var(&mut self, hint: Option<&str>) -> String {
         self.scope.fresh_go_name(hint)
     }
 
-    fn push_const_frame(&mut self) {
+    fn with_function_body_context<R>(
+        &mut self,
+        return_ctx: ReturnContext,
+        f: impl FnOnce(&mut Self) -> R,
+    ) -> R {
         self.scope.push_const_frame();
-    }
-
-    fn pop_const_frame(&mut self) {
+        self.scope.push_return_ctx(return_ctx);
+        let result = f(self);
+        self.scope.pop_return_ctx();
         self.scope.pop_const_frame();
+        result
     }
 
     fn record_go_const(&mut self, go_identifier: String) {
@@ -588,8 +588,6 @@ impl<'a> Planner<'a> {
         let mut output_files = Vec::new();
 
         for (i, (file, file_plan)) in files.iter().zip(file_plans).enumerate() {
-            debug_assert_eq!(file.id, file_plan.file_id, "plan/file order mismatch");
-
             *self.namespace.borrow_mut() = Some(file_plan.namespace);
             let mut source = OutputCollector::new();
 
@@ -621,7 +619,7 @@ impl<'a> Planner<'a> {
                 diagnostics.append(&mut collision_diagnostics);
             }
             output_files.push(OutputFile {
-                name: file_plan.output_name.clone(),
+                name: file.go_filename(),
                 imports,
                 source: rendered_source,
                 package_name: package_name.clone(),

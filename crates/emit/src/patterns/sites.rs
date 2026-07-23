@@ -10,10 +10,12 @@ use crate::names::go_name::{self, prelude_qualifier, testkit_qualifier};
 use crate::patterns::binding_decls::pattern_binds_name;
 use crate::patterns::binding_emit::{
     apply_refutable_root_assertion, apply_root_assertion, compose_refutable_condition,
-    drop_inline_overlays, tree_assignment_statements, tree_binding_statements,
+    tree_assignment_statements, tree_binding_statements, with_tree_bindings,
 };
 use crate::patterns::decision_tree::{self, PatternInfo, render_condition};
-use crate::plan::bodies::{ElseArm, IfPlan, LoweredBlock, LoweredStatement, PlacePlan};
+use crate::plan::bodies::{
+    ElseArm, IfPlan, LoopTransfer, LoweredBlock, LoweredStatement, PlacePlan,
+};
 use crate::state::bindings::BindingValue;
 use crate::utils::wrap_if_struct_literal;
 use crate::write_line;
@@ -146,11 +148,12 @@ impl Planner<'_> {
         let info = decision_tree::collect_pattern_info(self, pattern, typed, subject_ty);
         self.require_packages(&info.packages);
 
-        let mut body = Vec::new();
-        self.scope.enter_use_region();
-        let effective = apply_root_assertion(self, &mut body, &info, resolved.var());
-        tree_binding_statements(self, &mut body, &info.bindings, &effective, &[]);
-        let used = self.scope.exit_use_region();
+        let (body, used) = self.capture_go_uses(|this| {
+            let mut body = Vec::new();
+            let effective = apply_root_assertion(this, &mut body, &info, resolved.var());
+            tree_binding_statements(this, &mut body, &info.bindings, &effective, &[], &[]);
+            body
+        });
         let body_block = LoweredBlock { statements: body };
 
         let references = used.contains(resolved.var());
@@ -211,13 +214,13 @@ impl Planner<'_> {
             ty: &value_ty,
         };
 
-        self.scope.enter_use_region();
-        let body = if matches!(ap.pattern, Pattern::Or { .. }) {
-            self.lower_let_else_or_pattern(ap, binding_ty, subject, fail)
-        } else {
-            self.lower_let_else_single_pattern(ap, subject, fail)
-        };
-        let used = self.scope.exit_use_region();
+        let (body, used) = self.capture_go_uses(|this| {
+            if matches!(ap.pattern, Pattern::Or { .. }) {
+                this.lower_let_else_or_pattern(ap, binding_ty, subject, fail)
+            } else {
+                this.lower_let_else_single_pattern(ap, subject, fail)
+            }
+        });
         let body_block = LoweredBlock { statements: body };
 
         let references = used.contains(resolved.var());
@@ -302,13 +305,21 @@ impl Planner<'_> {
             apply_refutable_root_assertion(self, &mut loop_body, &info, &subject_var);
         let condition = compose_refutable_condition(ok_var.as_deref(), &info.checks, &effective);
 
-        self.enter_scope();
-        let mut then_body: Vec<LoweredStatement> = Vec::new();
-        if !matches!(pattern, Pattern::Or { .. }) {
-            tree_binding_statements(self, &mut then_body, &info.bindings, &effective, &[body]);
-        }
-        then_body.extend(self.lower_block_as_body(body).statements);
-        self.exit_scope();
+        let then_body = self.with_scope(|this| {
+            let mut then_body: Vec<LoweredStatement> = Vec::new();
+            if !matches!(pattern, Pattern::Or { .. }) {
+                tree_binding_statements(
+                    this,
+                    &mut then_body,
+                    &info.bindings,
+                    &effective,
+                    &[body],
+                    &[],
+                );
+            }
+            then_body.extend(this.lower_block_as_body(body).statements);
+            then_body
+        });
 
         loop_body.push(LoweredStatement::If(IfPlan {
             condition_setup: Vec::new(),
@@ -318,10 +329,10 @@ impl Planner<'_> {
             },
             else_arm: ElseArm::Else {
                 body: LoweredBlock {
-                    statements: vec![LoweredStatement::Break {
-                        target: self.current_loop_id(),
-                        label: None,
-                    }],
+                    statements: vec![LoweredStatement::Break(
+                        self.current_loop_id()
+                            .map_or(LoopTransfer::Unlabeled, LoopTransfer::Source),
+                    )],
                 },
                 inline: false,
             },
@@ -391,6 +402,7 @@ impl Planner<'_> {
                 &info.bindings,
                 &effective_subject,
                 &[],
+                &[],
             );
             return statements;
         }
@@ -422,6 +434,7 @@ impl Planner<'_> {
             &info.bindings,
             &effective_subject,
             &[],
+            &[],
         );
         statements
     }
@@ -444,7 +457,6 @@ impl Planner<'_> {
         let pre_let_snapshot = self.scope.binding_snapshot();
         let mut statements = Vec::new();
         self.lower_binding_declarations_with_type(&mut statements, pattern, binding_ty, typed);
-        let post_declaration_snapshot = self.scope.binding_snapshot();
 
         let mut asserts = Vec::new();
         let alts =
@@ -502,13 +514,9 @@ impl Planner<'_> {
                     statements: assigns,
                 }
             }
-            None => {
-                self.scope.restore_binding_snapshot(pre_let_snapshot);
-                let fail_lowered = self.lower_refutable_fail(fail, subject_var);
-                self.scope
-                    .restore_binding_snapshot(post_declaration_snapshot);
-                fail_lowered
-            }
+            None => self.with_binding_snapshot(pre_let_snapshot, |this| {
+                this.lower_refutable_fail(fail, subject_var)
+            }),
         };
 
         statements.push(assemble_if_else_chain(pieces, terminal));
@@ -590,22 +598,30 @@ impl Planner<'_> {
             let (effective, ok_var) = &hoisted[i];
             let condition = compose_refutable_condition(ok_var.as_deref(), &info.checks, effective);
 
-            self.enter_scope();
-            let mut branch = Vec::new();
-            let overlays =
-                tree_binding_statements(self, &mut branch, &info.bindings, effective, &[body]);
-            branch.extend(self.lower_block_as_body(body).statements);
-            drop_inline_overlays(self, &overlays);
-            self.exit_scope();
+            let branch = self.with_scope(|this| {
+                let mut branch = Vec::new();
+                with_tree_bindings(
+                    this,
+                    &mut branch,
+                    &info.bindings,
+                    effective,
+                    &[body],
+                    &[],
+                    |this, branch| {
+                        branch.extend(this.lower_block_as_body(body).statements);
+                    },
+                );
+                branch
+            });
 
             pieces.push((condition, LoweredBlock { statements: branch }));
         }
 
         let terminal = LoweredBlock {
-            statements: vec![LoweredStatement::Break {
-                target: self.current_loop_id(),
-                label: None,
-            }],
+            statements: vec![LoweredStatement::Break(
+                self.current_loop_id()
+                    .map_or(LoopTransfer::Unlabeled, LoopTransfer::Source),
+            )],
         };
         statements.push(assemble_if_else_chain(pieces, terminal));
     }
@@ -659,9 +675,18 @@ impl Planner<'_> {
             apply_refutable_root_assertion(self, &mut statements, &info, subject_var);
 
         if info.checks.is_empty() && ok_var.is_none() {
-            tree_binding_statements(self, &mut statements, &info.bindings, &effective, &[body]);
-            let block = self.lower_block_to_place(body, place);
-            statements.extend(block.statements);
+            with_tree_bindings(
+                self,
+                &mut statements,
+                &info.bindings,
+                &effective,
+                &[body],
+                &[],
+                |this, statements| {
+                    let block = this.lower_block_to_place(body, place);
+                    statements.extend(block.statements);
+                },
+            );
             return statements;
         }
 
@@ -670,11 +695,18 @@ impl Planner<'_> {
         }
         let condition = compose_refutable_condition(ok_var.as_deref(), &info.checks, &effective);
         let mut then_body = Vec::new();
-        let overlays =
-            tree_binding_statements(self, &mut then_body, &info.bindings, &effective, &[body]);
-        let block = self.lower_block_to_place(body, place);
-        then_body.extend(block.statements);
-        drop_inline_overlays(self, &overlays);
+        with_tree_bindings(
+            self,
+            &mut then_body,
+            &info.bindings,
+            &effective,
+            &[body],
+            &[],
+            |this, then_body| {
+                let block = this.lower_block_to_place(body, place);
+                then_body.extend(block.statements);
+            },
+        );
         let else_arm = match failure(self) {
             Some(body) => ElseArm::Else {
                 body,

@@ -1,0 +1,15 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  #[json(omitempty)]
+  #[json(!omitempty)]
+  struct User {
+    id: int,
+  }
+---
+package main
+
+type User struct {
+	Id int `json:"id"`
+}

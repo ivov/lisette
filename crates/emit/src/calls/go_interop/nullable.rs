@@ -5,7 +5,7 @@ use crate::abi::layout::ValueLayout;
 use crate::calls::go_interop::build_tuple_literal;
 use crate::calls::go_interop::wrappers::{WrapperOutcome, WrapperTarget, leaf_block};
 use crate::control_flow::fallible::{Fallible, FalliblePlanner, OPTION_SOME_TAG};
-use crate::plan::bodies::{ElseArm, IfPlan, LoopPlan, LoweredBlock, LoweredStatement};
+use crate::plan::bodies::{ElseArm, IfPlan, LoopKind, LoopPlan, LoweredBlock, LoweredStatement};
 use syntax::types::Type;
 
 impl Planner<'_> {
@@ -497,8 +497,7 @@ impl Planner<'_> {
         }
         statements.push(LoweredStatement::Loop(LoopPlan {
             prologue: Vec::new(),
-            target: None,
-            label: None,
+            kind: LoopKind::Generated { label: None },
             header: format!("for {index}, {element} := range {source} {{\n"),
             body,
         }));

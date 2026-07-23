@@ -4,8 +4,8 @@ use rustc_hash::FxHashMap as HashMap;
 #[derive(Default)]
 pub(crate) struct AdapterRegistry {
     synthesized: HashMap<(EcoString, EcoString), String>,
-    declarations: Vec<String>,
-    emitted_count: usize,
+    pending_declarations: Vec<String>,
+    next_index: usize,
 }
 
 impl AdapterRegistry {
@@ -13,8 +13,10 @@ impl AdapterRegistry {
         self.synthesized.get(key).map(String::as_str)
     }
 
-    pub(crate) fn next_index(&self) -> usize {
-        self.declarations.len()
+    pub(crate) fn allocate_index(&mut self) -> usize {
+        let index = self.next_index;
+        self.next_index += 1;
+        index
     }
 
     pub(crate) fn insert(
@@ -24,16 +26,14 @@ impl AdapterRegistry {
         declaration: String,
     ) {
         self.synthesized.insert(key, name);
-        self.declarations.push(declaration);
+        self.pending_declarations.push(declaration);
     }
 
     pub(crate) fn push_declaration(&mut self, declaration: String) {
-        self.declarations.push(declaration);
+        self.pending_declarations.push(declaration);
     }
 
-    pub(crate) fn flush_new_declarations(&mut self) -> Vec<String> {
-        let new_declarations = self.declarations[self.emitted_count..].to_vec();
-        self.emitted_count = self.declarations.len();
-        new_declarations
+    pub(crate) fn drain_declarations(&mut self) -> Vec<String> {
+        std::mem::take(&mut self.pending_declarations)
     }
 }

@@ -1,5 +1,4 @@
 use crate::Planner;
-use crate::Renderer;
 use crate::context::expression::ExpressionContext;
 use crate::names::go_name;
 use crate::patterns::sites::{
@@ -7,7 +6,8 @@ use crate::patterns::sites::{
     unwrap_some_typed_pattern,
 };
 use crate::plan::bodies::{
-    ElseArm, IfPlan, LoweredBlock, LoweredStatement, PlacePlan, SelectArmPlan, SelectStatementPlan,
+    ElseArm, IfPlan, LoopTransfer, LoweredBlock, LoweredStatement, PlacePlan, SelectArmPlan,
+    SelectStatementPlan,
 };
 use crate::plan::placement::unreachable_panic_if_needed;
 use crate::plan::values::{GoExpression, ValuePlan};
@@ -35,7 +35,6 @@ enum PreparedSelectArm<'a> {
         typed_pattern: Option<&'a TypedPattern>,
         body: &'a Expression,
         channel: String,
-        retry_on_close: bool,
         element_ty: Type,
     },
     Send {
@@ -70,9 +69,7 @@ impl Planner<'_> {
             .iter()
             .any(|arm| matches!(arm, PreparedSelectArm::Default { .. }));
 
-        self.enter_scope();
-        let arm_plans = self.lower_select_arms(prep, place);
-        self.exit_scope();
+        let arm_plans = self.with_scope(|this| this.lower_select_arms(prep, place));
 
         let all_arms_diverge =
             !arm_plans.is_empty() && arm_plans.iter().all(|arm| arm.body().ends_with_diverge());
@@ -108,14 +105,13 @@ impl Planner<'_> {
                     typed_pattern,
                     body,
                     channel,
-                    retry_on_close,
                     element_ty,
                 } => {
                     let receiver_ctx = SelectReceiveContext {
                         channel: &channel,
                         body,
                         default_body,
-                        retry_var: retry_on_close.then_some(channel.as_str()),
+                        retry_var: binding.is_some_pattern().then_some(channel.as_str()),
                         element_ty,
                         place,
                     };
@@ -168,23 +164,20 @@ impl Planner<'_> {
                     let channel_has_call = channel.evaluation.effect.has_call();
                     let (channel_setup, ch) = channel.into_parts();
                     setup.extend(channel_setup);
-                    let (channel, retry_on_close) = if binding.is_some_pattern() && needs_retry_loop
-                    {
-                        (self.hoist_tmp_value_statement(setup, "ch", &ch), true)
+                    let channel = if binding.is_some_pattern() {
+                        self.hoist_tmp_value_statement(setup, "ch", &ch)
                     } else {
-                        let ch = if needs_retry_loop && channel_has_call {
+                        if needs_retry_loop && channel_has_call {
                             self.hoist_tmp_value_statement(setup, "ch", &ch)
                         } else {
                             ch
-                        };
-                        (ch, false)
+                        }
                     };
                     PreparedSelectArm::Receive {
                         binding,
                         typed_pattern: typed_pattern.as_ref(),
                         body,
                         channel,
-                        retry_on_close,
                         element_ty: receive_expression.get_type().ok_type(),
                     }
                 }
@@ -249,7 +242,7 @@ impl Planner<'_> {
         // statements (e.g. a discard `let _`) render to empty text even when the
         // IR is structurally non-empty.
         let body_block = self.lower_block_to_place(ctx.body, ctx.place);
-        let body_empty = Renderer.renders_empty(&body_block);
+        let body_empty = body_block.renders_empty();
         let else_block = self.build_ok_else_block(ctx);
         let has_else = else_block.is_some();
 
@@ -289,10 +282,7 @@ impl Planner<'_> {
             return Some(LoweredBlock {
                 statements: vec![
                     LoweredStatement::RawGo(format!("{} = nil\n", retry_var)),
-                    LoweredStatement::Continue {
-                        target: None,
-                        label: None,
-                    },
+                    LoweredStatement::Continue(LoopTransfer::Unlabeled),
                 ],
             });
         }
@@ -302,40 +292,41 @@ impl Planner<'_> {
     }
 
     /// `case v, ok := <-ch:` plus an `if ok { ... } else { ... }` body.
-    fn lower_ok_guard(
+    fn lower_ok_guard<F>(
         &mut self,
-        receiver_var: &str,
+        prepare_receiver: F,
         inner_pattern: Option<(&Pattern, Option<&TypedPattern>)>,
         ctx: &SelectReceiveContext,
-    ) -> SelectArmPlan {
-        let ok_var = self.fresh_ok_var();
-        let receive_vars = format!("{}, {}", receiver_var, ok_var);
-        self.scope.enter_use_region();
-        let body_statements = if let Some((pattern, typed)) = inner_pattern {
-            self.lower_select_receive_pattern_site(
-                TypedSubject {
-                    var: receiver_var,
-                    ty: &ctx.element_ty,
-                },
-                AnnotatedPattern { pattern, typed },
-                ctx.body,
-                ctx.default_body,
-                ctx.place,
-            )
-        } else {
-            self.lower_block_to_place(ctx.body, ctx.place).statements
-        };
-        let used = self.scope.exit_use_region();
-        let body_holder = LoweredBlock {
-            statements: body_statements,
-        };
-        let mut then_statements: Vec<LoweredStatement> = Vec::new();
-        let references_receiver = used.contains(receiver_var);
-        if !references_receiver {
-            then_statements.push(LoweredStatement::RawGo(format!("_ = {}\n", receiver_var)));
-        }
-        then_statements.extend(body_holder.statements);
-        self.scope.pop_binding_frame();
+    ) -> SelectArmPlan
+    where
+        F: FnOnce(&mut Self) -> String,
+    {
+        let (receiver_var, ok_var, then_statements) = self.with_binding_frame(|this| {
+            let receiver_var = prepare_receiver(this);
+            let ok_var = this.fresh_ok_var();
+            let (body_statements, used) = this.capture_go_uses(|this| {
+                if let Some((pattern, typed)) = inner_pattern {
+                    this.lower_select_receive_pattern_site(
+                        TypedSubject {
+                            var: &receiver_var,
+                            ty: &ctx.element_ty,
+                        },
+                        AnnotatedPattern { pattern, typed },
+                        ctx.body,
+                        ctx.default_body,
+                        ctx.place,
+                    )
+                } else {
+                    this.lower_block_to_place(ctx.body, ctx.place).statements
+                }
+            });
+            let mut then_statements: Vec<LoweredStatement> = Vec::new();
+            if !used.contains(&receiver_var) {
+                then_statements.push(LoweredStatement::RawGo(format!("_ = {}\n", receiver_var)));
+            }
+            then_statements.extend(body_statements);
+            (receiver_var, ok_var, then_statements)
+        });
 
         let else_arm = match self.build_ok_else_block(ctx) {
             Some(body) => ElseArm::Else {
@@ -344,6 +335,7 @@ impl Planner<'_> {
             },
             None => ElseArm::None,
         };
+        let receive_vars = format!("{}, {}", receiver_var, ok_var);
         let if_plan = IfPlan {
             condition_setup: Vec::new(),
             condition: ok_var,
@@ -370,7 +362,6 @@ impl Planner<'_> {
         let effective_pattern = unwrap_some_pattern(binding);
         let inner_typed = unwrap_some_typed_pattern(typed_pattern);
 
-        self.scope.push_binding_frame();
         if binding.is_some_pattern() {
             self.lower_receive_arm_with_ok_check(effective_pattern, inner_typed, ctx)
         } else {
@@ -388,16 +379,17 @@ impl Planner<'_> {
         if let Pattern::Identifier { identifier, .. } = effective_pattern
             && let Some(go_name) = self.go_name_for_binding(effective_pattern)
         {
-            let var = self.scope.bind(identifier, go_name);
-            return self.lower_ok_guard(&var, None, ctx);
+            return self.lower_ok_guard(|this| this.scope.bind(identifier, go_name), None, ctx);
         }
         if matches!(
             effective_pattern,
             Pattern::Identifier { .. } | Pattern::WildCard { .. }
         ) {
-            let ok_var = self.fresh_ok_var();
-            let body = self.lower_ok_check(&ok_var, ctx);
-            self.scope.pop_binding_frame();
+            let (ok_var, body) = self.with_binding_frame(|this| {
+                let ok_var = this.fresh_ok_var();
+                let body = this.lower_ok_check(&ok_var, ctx);
+                (ok_var, body)
+            });
             return SelectArmPlan::Receive {
                 receive_vars: Some(format!("_, {}", ok_var)),
                 channel: ctx.channel.to_string(),
@@ -405,7 +397,11 @@ impl Planner<'_> {
             };
         }
         let receiver_var = self.fresh_var(Some("recv"));
-        self.lower_ok_guard(&receiver_var, Some((effective_pattern, inner_typed)), ctx)
+        self.lower_ok_guard(
+            |_| receiver_var,
+            Some((effective_pattern, inner_typed)),
+            ctx,
+        )
     }
 
     /// Plain receive: `case v := <-ch:` then the arm body.
@@ -415,36 +411,37 @@ impl Planner<'_> {
         inner_typed: Option<&TypedPattern>,
         ctx: &SelectReceiveContext,
     ) -> SelectArmPlan {
-        let mut body_statements: Vec<LoweredStatement> = Vec::new();
-        let receive_vars = if let Pattern::Identifier { identifier, .. } = effective_pattern
-            && let Some(go_name) = self.go_name_for_binding(effective_pattern)
-        {
-            Some(self.scope.bind(identifier, go_name))
-        } else if matches!(
-            effective_pattern,
-            Pattern::Identifier { .. } | Pattern::WildCard { .. }
-        ) {
-            None
-        } else {
-            let receiver_var = self.fresh_var(Some("recv"));
-            body_statements.extend(self.lower_irrefutable_pattern_site(
-                PatternSubject::for_value(receiver_var.clone()),
+        self.with_binding_frame(|this| {
+            let mut body_statements: Vec<LoweredStatement> = Vec::new();
+            let receive_vars = if let Pattern::Identifier { identifier, .. } = effective_pattern
+                && let Some(go_name) = this.go_name_for_binding(effective_pattern)
+            {
+                Some(this.scope.bind(identifier, go_name))
+            } else if matches!(
                 effective_pattern,
-                inner_typed,
-                &ctx.element_ty,
-            ));
-            Some(receiver_var)
-        };
-        let block = self.lower_block_to_place(ctx.body, ctx.place);
-        self.scope.pop_binding_frame();
-        body_statements.extend(block.statements);
-        SelectArmPlan::Receive {
-            receive_vars,
-            channel: ctx.channel.to_string(),
-            body: LoweredBlock {
-                statements: body_statements,
-            },
-        }
+                Pattern::Identifier { .. } | Pattern::WildCard { .. }
+            ) {
+                None
+            } else {
+                let receiver_var = this.fresh_var(Some("recv"));
+                body_statements.extend(this.lower_irrefutable_pattern_site(
+                    PatternSubject::for_value(receiver_var.clone()),
+                    effective_pattern,
+                    inner_typed,
+                    &ctx.element_ty,
+                ));
+                Some(receiver_var)
+            };
+            let block = this.lower_block_to_place(ctx.body, ctx.place);
+            body_statements.extend(block.statements);
+            SelectArmPlan::Receive {
+                receive_vars,
+                channel: ctx.channel.to_string(),
+                body: LoweredBlock {
+                    statements: body_statements,
+                },
+            }
+        })
     }
 
     fn prepare_send_arm(
@@ -521,79 +518,68 @@ impl Planner<'_> {
         element_ty: &syntax::types::Type,
         place: &PlacePlan,
     ) -> SelectArmPlan {
-        self.scope.push_binding_frame();
+        self.with_binding_frame(|this| {
+            let (receiver_var_pattern, some_arm) = match_arms
+                .iter()
+                .find_map(|arm| {
+                    if let Pattern::EnumVariant {
+                        identifier, fields, ..
+                    } = &arm.pattern
+                        && go_name::unqualified_name(identifier) == "Some"
+                        && fields.len() == 1
+                    {
+                        Some((&fields[0], arm))
+                    } else {
+                        None
+                    }
+                })
+                .expect("MatchReceive must have Some arm");
 
-        let (receiver_var_pattern, some_arm) = match_arms
-            .iter()
-            .find_map(|arm| {
-                if let Pattern::EnumVariant {
-                    identifier, fields, ..
-                } = &arm.pattern
-                    && go_name::unqualified_name(identifier) == "Some"
-                    && fields.len() == 1
-                {
-                    Some((&fields[0], arm))
-                } else {
-                    None
+            let (case_var, needs_receiver_destructure) =
+                this.classify_receive_var_pattern(receiver_var_pattern);
+            let ok_var = this.fresh_ok_var();
+
+            let (arms_plan, used) = this.capture_go_uses(|this| {
+                let some_block = this.lower_receive_some_arm(
+                    some_arm,
+                    match_arms,
+                    receiver_var_pattern,
+                    &case_var,
+                    needs_receiver_destructure,
+                    element_ty,
+                    place,
+                );
+                let none_block = this.capture_scoped_block(|this| {
+                    sites::lower_none_arm_body(this, match_arms, place)
+                });
+
+                let arms_plan = build_receive_arms_plan(&ok_var, some_block, none_block);
+                if arms_plan.is_some() {
+                    this.scope.record_go_use(&ok_var);
                 }
-            })
-            .expect("MatchReceive must have Some arm");
+                arms_plan
+            });
 
-        let (case_var, needs_receiver_destructure) =
-            self.classify_receive_var_pattern(receiver_var_pattern);
-
-        let ok_var = self.fresh_ok_var();
-
-        self.scope.enter_use_region();
-        let some_block = self.lower_receive_some_arm(
-            some_arm,
-            match_arms,
-            receiver_var_pattern,
-            &case_var,
-            needs_receiver_destructure,
-            element_ty,
-            place,
-        );
-        let none_block =
-            self.capture_scoped_block(|this| sites::lower_none_arm_body(this, match_arms, place));
-
-        let arms_plan = build_receive_arms_plan(&ok_var, some_block, none_block);
-        if arms_plan.is_some() {
-            self.scope.record_go_use(&ok_var);
-        }
-        let used = self.scope.exit_use_region();
-
-        // Compose the receive-arms body as a structured `if ok { ... } else
-        // { ... }` plan so usage of `case_var` and `ok_var` can be checked
-        // structurally before deciding whether to emit per-var discards.
-        let body_block = LoweredBlock {
-            statements: match arms_plan {
-                Some(plan) => vec![LoweredStatement::If(plan)],
-                None => Vec::new(),
-            },
-        };
-
-        self.scope.pop_binding_frame();
-
-        // Per-var discards (emitted when the body does not reference the var)
-        // precede the structured body inside the `case x, ok := <-ch:` arm.
-        let mut body_statements: Vec<LoweredStatement> = Vec::new();
-        let references_ok = used.contains(&ok_var);
-        if !references_ok {
-            body_statements.push(LoweredStatement::RawGo(format!("_ = {}\n", ok_var)));
-        }
-        let references_case = used.contains(&case_var);
-        if case_var != "_" && !references_case {
-            body_statements.push(LoweredStatement::RawGo(format!("_ = {}\n", case_var)));
-        }
-        body_statements.extend(body_block.statements);
-        SelectArmPlan::Receive {
-            receive_vars: Some(format!("{}, {}", case_var, ok_var)),
-            channel: channel.to_string(),
-            body: LoweredBlock {
-                statements: body_statements,
-            },
-        }
+            // Per-var discards (emitted when the body does not reference the var)
+            // precede the structured body inside the `case x, ok := <-ch:` arm.
+            let mut body_statements: Vec<LoweredStatement> = Vec::new();
+            if !used.contains(&ok_var) {
+                body_statements.push(LoweredStatement::RawGo(format!("_ = {}\n", ok_var)));
+            }
+            if case_var != "_" && !used.contains(&case_var) {
+                body_statements.push(LoweredStatement::RawGo(format!("_ = {}\n", case_var)));
+            }
+            if let Some(plan) = arms_plan {
+                body_statements.push(LoweredStatement::If(plan));
+            }
+            SelectArmPlan::Receive {
+                receive_vars: Some(format!("{}, {}", case_var, ok_var)),
+                channel: channel.to_string(),
+                body: LoweredBlock {
+                    statements: body_statements,
+                },
+            }
+        })
     }
 
     /// Lower the Some arm body (with payload destructure) so the caller can

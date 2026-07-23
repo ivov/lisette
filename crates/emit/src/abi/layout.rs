@@ -55,11 +55,12 @@ impl FunctionLayout {
         match self.return_abi {
             CallableReturnAbi::Result { .. }
             | CallableReturnAbi::Partial { .. }
-            | CallableReturnAbi::Option { .. } => {
+            | CallableReturnAbi::Option(_) => {
                 optional_layouts_match(self.payload.as_deref(), other.payload.as_deref())
             }
             CallableReturnAbi::Tagged
             | CallableReturnAbi::Direct
+            | CallableReturnAbi::BareError
             | CallableReturnAbi::Tuple { .. } => self.result.same_representation(&other.result),
         }
     }
@@ -85,9 +86,9 @@ impl FunctionLayout {
         }
         match &self.return_abi {
             CallableReturnAbi::Tagged | CallableReturnAbi::Direct => self.result.go_type(planner),
-            CallableReturnAbi::Result {
-                bare_error: true, ..
-            } => planner.go_type_string(&self.result.logical_type().err_type()),
+            CallableReturnAbi::BareError => {
+                planner.go_type_string(&self.result.logical_type().err_type())
+            }
             CallableReturnAbi::Result { .. } | CallableReturnAbi::Partial { .. } => {
                 let payload = self
                     .payload
@@ -96,28 +97,19 @@ impl FunctionLayout {
                 let error = planner.go_type_string(&self.result.logical_type().err_type());
                 format!("({}, {error})", payload.go_type(planner))
             }
-            CallableReturnAbi::Option {
-                encoding: OptionReturnAbi::CommaOk,
-                ..
-            } => {
+            CallableReturnAbi::Option(OptionReturnAbi::CommaOk { .. }) => {
                 let payload = self
                     .payload
                     .as_deref()
                     .expect("option callable layout has a payload");
                 format!("({}, bool)", payload.go_type(planner))
             }
-            CallableReturnAbi::Option {
-                encoding: OptionReturnAbi::Nullable,
-                ..
-            } => self
+            CallableReturnAbi::Option(OptionReturnAbi::Nullable) => self
                 .payload
                 .as_deref()
                 .expect("option callable layout has a payload")
                 .go_type(planner),
-            CallableReturnAbi::Option {
-                encoding: OptionReturnAbi::Sentinel(_),
-                ..
-            } => self
+            CallableReturnAbi::Option(OptionReturnAbi::Sentinel(_)) => self
                 .payload
                 .as_deref()
                 .expect("option callable layout has a payload")

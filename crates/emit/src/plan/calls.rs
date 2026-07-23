@@ -20,14 +20,18 @@ pub(crate) struct CallPlan<'a> {
 /// Canonical identity, signatures, and physical ABI for one callable.
 #[derive(Debug)]
 pub(crate) struct ResolvedCallee<'a> {
-    pub(crate) id: Option<String>,
     pub(crate) origin: CallableOrigin,
     pub(crate) definition: Option<&'a Definition>,
     pub(crate) instantiated: Type,
-    pub(crate) declared: Option<Type>,
     pub(crate) receiver_offset: usize,
     pub(crate) abi: CallableAbi,
     pub(crate) is_prelude_dispatch: bool,
+}
+
+impl ResolvedCallee<'_> {
+    pub(crate) fn declared_type(&self) -> Option<&Type> {
+        self.definition.map(|definition| &definition.ty)
+    }
 }
 
 /// AST-level `CallKind` plus emit-side classification.
@@ -195,13 +199,12 @@ impl<'a> Planner<'a> {
         arg_count: usize,
     ) -> ResolvedCallee<'a> {
         let (id, definition) = self.resolve_callee_definition(function);
-        let declared = definition.map(|definition| definition.ty.clone());
         let instantiated = self
             .facts
             .resolve_to_function_type(function.get_type().unwrap_forall())
             .unwrap_or_else(|| function.get_type().unwrap_forall().clone());
-        let declared_params = declared
-            .as_ref()
+        let declared_params = definition
+            .map(|definition| &definition.ty)
             .and_then(|ty| ty.unwrap_forall().get_function_params());
         let receiver_offset =
             declared_params.map_or(0, |params| params.len().saturating_sub(arg_count));
@@ -225,8 +228,8 @@ impl<'a> Planner<'a> {
                 }),
         };
         let return_type = instantiated.get_function_ret().unwrap_or(&Type::Never);
-        let declared_return = declared
-            .as_ref()
+        let declared_return = definition
+            .map(|definition| &definition.ty)
             .and_then(|ty| ty.unwrap_forall().get_function_ret());
         let catalog_return = matches!(origin, CallableOrigin::GoInterop)
             .then(|| {
@@ -261,11 +264,9 @@ impl<'a> Planner<'a> {
             );
 
         ResolvedCallee {
-            id,
             origin,
             definition,
             instantiated,
-            declared,
             receiver_offset,
             abi: CallableAbi {
                 params,

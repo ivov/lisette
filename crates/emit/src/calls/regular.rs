@@ -264,7 +264,6 @@ impl<'a> Planner<'a> {
     }
 
     fn callee_collapsed_recipe(&self, callee: &ResolvedCallee<'_>) -> Option<String> {
-        callee.id.as_deref()?;
         callee
             .definition?
             .go_type_param_recipe()
@@ -280,7 +279,7 @@ impl<'a> Planner<'a> {
         callee: &ResolvedCallee<'_>,
         arg_shape: CallArgShape,
     ) -> bool {
-        let Some(Type::Forall { vars, body }) = callee.declared.as_ref() else {
+        let Some(Type::Forall { vars, body }) = callee.declared_type() else {
             return false;
         };
         let Type::Function(f) = body.as_ref() else {
@@ -294,12 +293,11 @@ impl<'a> Planner<'a> {
         callee: &ResolvedCallee<'_>,
         recipe: &str,
     ) -> Option<String> {
-        let definition_ty = callee.declared.clone()?;
-        let Type::Forall { body, .. } = definition_ty else {
+        let Type::Forall { body, .. } = callee.declared_type()? else {
             return None;
         };
         let mut mapping = rustc_hash::FxHashMap::default();
-        extract_type_mapping(&body, &callee.instantiated, &mut mapping);
+        extract_type_mapping(body, &callee.instantiated, &mut mapping);
         self.reconstruct_collapsed_type_args(recipe, &mapping)
     }
 
@@ -334,7 +332,7 @@ impl<'a> Planner<'a> {
 
         if type_args_string.is_empty()
             && let Some(inferred) =
-                self.infer_return_only_type_args(function, callee.declared.as_ref(), arg_shape)
+                self.infer_return_only_type_args(function, callee.declared_type(), arg_shape)
         {
             type_args_string = match slot_ty {
                 Some(t) => self.prelude_container_type_args(t).unwrap_or(inferred),
@@ -394,8 +392,7 @@ impl<'a> Planner<'a> {
             ctx.spread,
             ctx.plan
                 .resolved
-                .declared
-                .as_ref()
+                .declared_type()
                 .and_then(|ty| ty.unwrap_forall().get_function_params()),
             ctx.wrap_spread_to_any,
             ctx.combine_variadic.clone(),
@@ -546,9 +543,11 @@ impl<'a> Planner<'a> {
         arg: &Expression,
         raw_param_ty: &Type,
     ) -> Option<(CallableReturnAbi, Type, CallableReturnAbi)> {
-        let variadic_inner = (raw_param_ty.get_name() == Some("VarArgs"))
-            .then(|| raw_param_ty.inner())
-            .flatten();
+        let variadic_inner = if raw_param_ty.get_name() == Some("VarArgs") {
+            raw_param_ty.inner()
+        } else {
+            None
+        };
         let param_ty = variadic_inner.as_ref().unwrap_or(raw_param_ty);
         let param_fn = self
             .facts
@@ -895,7 +894,7 @@ impl<'a> Planner<'a> {
 }
 
 fn callee_curries_receiver(callee: &ResolvedCallee<'_>) -> bool {
-    let Some(Type::Forall { body, .. }) = callee.declared.as_ref() else {
+    let Some(Type::Forall { body, .. }) = callee.declared_type() else {
         return false;
     };
     let Type::Function(declared_fn) = body.as_ref() else {

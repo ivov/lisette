@@ -316,7 +316,7 @@ impl Planner<'_> {
                 .entry(tag_constant)
                 .or_default()
                 .push(variant.name_span);
-            let constructor = format!("Make{}{}", go_name::escape_type_name(name), variant.name);
+            let constructor = go_name::enum_make_function(name, &variant.name);
             package_block
                 .entry(constructor)
                 .or_default()

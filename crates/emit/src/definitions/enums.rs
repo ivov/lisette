@@ -205,8 +205,8 @@ impl Planner<'_> {
 
         let enum_name = layout.enum_name.clone();
         let generics = layout.generics.clone();
+        let func_name = go_name::enum_make_function(&enum_name, &variant.name);
         let go_type_name = go_name::escape_type_name(&enum_name);
-        let func_name = format!("Make{}{}", go_type_name, variant.name);
         let tag_constant = variant.tag_constant.clone();
 
         let (fields, params): (Vec<_>, Vec<_>) = variant

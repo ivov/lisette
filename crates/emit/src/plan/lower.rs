@@ -7,8 +7,9 @@ use crate::control_flow::targets::legalize_source_loop;
 use crate::definitions::functions::{is_breakless_loop, is_go_never, is_test_context_ty};
 use crate::names::go_name::{prelude_qualifier, testkit_qualifier};
 use crate::plan::bodies::{
-    ElseArm, ExpressionStatementForm, ExpressionStatementPlan, IfPlan, LoopPlan, LoweredBlock,
-    LoweredStatement, MatchStatementPlan, PlacePlan, WhileLetPlan, directed,
+    ElseArm, ExpressionStatementForm, ExpressionStatementPlan, IfPlan, LoopKind, LoopPlan,
+    LoopTransfer, LoweredBlock, LoweredStatement, MatchStatementPlan, PlacePlan, WhileLetPlan,
+    directed,
 };
 use crate::plan::placement::{requires_temp_var, try_elide_tail_let};
 use crate::plan::values::ValuePlan;
@@ -122,9 +123,9 @@ impl Planner<'_> {
             unreachable!("plan_loop_as_operand_temp called on non-Loop expression");
         };
         let (result_var, declaration) = self.operand_temp_declaration(ty);
-        self.push_loop(result_var.clone());
-        let plan = self.lower_loop_with_header("for {\n".to_string(), body);
-        self.pop_loop();
+        let plan = self.with_loop(result_var.clone(), |this| {
+            this.lower_loop_with_header("for {\n".to_string(), body)
+        });
         ValuePlan::name(
             vec![declaration, LoweredStatement::Loop(plan)],
             result_var,
@@ -227,32 +228,21 @@ impl Planner<'_> {
                 let plan = self.lower_while(condition, body);
                 self.directed_at(expression, LoweredStatement::Loop(plan))
             }
-            Expression::Block { .. } => {
-                self.enter_scope();
-                let body = self.lower_block_as_body(expression);
-                self.exit_scope();
-                LoweredStatement::Block(body)
-            }
+            Expression::Block { .. } => LoweredStatement::Block(
+                self.with_scope(|this| this.lower_block_as_body(expression)),
+            ),
             Expression::For { .. } => self.lower_for_statement(expression),
             Expression::Continue { .. } => {
-                let target = self.current_loop_id();
-                self.directed_at(
-                    expression,
-                    LoweredStatement::Continue {
-                        target,
-                        label: None,
-                    },
-                )
+                let target = self
+                    .current_loop_id()
+                    .map_or(LoopTransfer::Unlabeled, LoopTransfer::Source);
+                self.directed_at(expression, LoweredStatement::Continue(target))
             }
             Expression::Break { value: None, .. } => {
-                let target = self.current_loop_id();
-                self.directed_at(
-                    expression,
-                    LoweredStatement::Break {
-                        target,
-                        label: None,
-                    },
-                )
+                let target = self
+                    .current_loop_id()
+                    .map_or(LoopTransfer::Unlabeled, LoopTransfer::Source);
+                self.directed_at(expression, LoweredStatement::Break(target))
             }
             Expression::Break {
                 value: Some(value), ..
@@ -641,17 +631,16 @@ impl Planner<'_> {
             unreachable!("lower_while_let_statement requires a WhileLet expression");
         };
         let directive = self.maybe_line_directive(&expression.get_span());
-        self.push_loop("_");
-        let body = self.lower_while_let(pattern, typed_pattern.as_ref(), scrutinee, body);
-        self.pop_loop();
+        let body = self.with_loop("_", |this| {
+            this.lower_while_let(pattern, typed_pattern.as_ref(), scrutinee, body)
+        });
         directed(directive, LoweredStatement::WhileLet(WhileLetPlan { body }))
     }
 
     fn lower_infinite_loop(&mut self, body: &Expression) -> LoopPlan {
-        self.push_loop("_");
-        let plan = self.lower_loop_with_header("for {\n".to_string(), body);
-        self.pop_loop();
-        plan
+        self.with_loop("_", |this| {
+            this.lower_loop_with_header("for {\n".to_string(), body)
+        })
     }
 
     fn lower_condition(&mut self, condition: &Expression) -> (Vec<LoweredStatement>, String) {
@@ -660,35 +649,30 @@ impl Planner<'_> {
     }
 
     fn lower_while(&mut self, condition: &Expression, body: &Expression) -> LoopPlan {
-        self.push_loop("_");
-        let (setup, rendered) = self.lower_condition(condition);
-        let header = if !setup.is_empty() {
-            // Condition produced setup statements (temps); they must re-run each
-            // iteration, so move everything inside the loop.
-            let setup_text = Renderer.render_setup(&setup);
-            format!("for {{\n{}if !({}) {{ break }}\n", setup_text, rendered)
-        } else if matches!(
-            condition.unwrap_parens(),
-            Expression::Literal {
-                literal: Literal::Boolean(true),
-                ..
-            }
-        ) {
-            "for {\n".to_string()
-        } else {
-            format!("for {} {{\n", wrap_if_struct_literal(rendered))
-        };
-        let plan = self.lower_loop_with_header(header, body);
-        self.pop_loop();
-        plan
+        self.with_loop("_", |this| {
+            let (setup, rendered) = this.lower_condition(condition);
+            let header = if !setup.is_empty() {
+                let setup_text = Renderer.render_setup(&setup);
+                format!("for {{\n{}if !({}) {{ break }}\n", setup_text, rendered)
+            } else if matches!(
+                condition.unwrap_parens(),
+                Expression::Literal {
+                    literal: Literal::Boolean(true),
+                    ..
+                }
+            ) {
+                "for {\n".to_string()
+            } else {
+                format!("for {} {{\n", wrap_if_struct_literal(rendered))
+            };
+            this.lower_loop_with_header(header, body)
+        })
     }
 
-    /// Shared loop lowering once the header is known. Caller owns
-    /// `push_loop`/`pop_loop`.
+    /// Shared loop lowering once the header is known. The caller must have an
+    /// active loop context.
     pub(crate) fn lower_loop_with_header(&mut self, header: String, body: &Expression) -> LoopPlan {
-        self.enter_scope();
-        let lowered_body = self.lower_block_as_body(body);
-        self.exit_scope();
+        let lowered_body = self.with_scope(|this| this.lower_block_as_body(body));
         self.build_source_loop(Vec::new(), header, lowered_body)
     }
 
@@ -696,20 +680,18 @@ impl Planner<'_> {
         &mut self,
         prologue: Vec<LoweredStatement>,
         header: String,
-        body: LoweredBlock,
+        mut body: LoweredBlock,
     ) -> LoopPlan {
-        let mut plan = LoopPlan {
+        let target = self
+            .current_loop_id()
+            .expect("source loop plan requires an active loop context");
+        let label = legalize_source_loop(&mut body, target);
+        LoopPlan {
             prologue,
-            target: Some(
-                self.current_loop_id()
-                    .expect("source loop plan requires an active loop context"),
-            ),
-            label: None,
+            kind: LoopKind::Source { label },
             header,
             body,
-        };
-        legalize_source_loop(&mut plan);
-        plan
+        }
     }
 
     /// Lower a branch arm body in statement position (`PlacePlan::Statement`).
@@ -950,9 +932,7 @@ impl Planner<'_> {
         let (condition_setup, condition_string) = self.lower_condition(condition);
         let condition = wrap_if_struct_literal(condition_string);
 
-        self.enter_scope();
-        let then_body = self.lower_block_to_place(consequence, place);
-        self.exit_scope();
+        let then_body = self.with_scope(|this| this.lower_block_to_place(consequence, place));
 
         let preceding_diverges = then_body.ends_with_diverge();
         let else_arm = self.lower_else_chain(alternative, preceding_diverges, place);
@@ -995,23 +975,24 @@ impl Planner<'_> {
             // that also wraps the recursion. Plain else-if uses a single scope
             // around the body and recurses outside it.
             if !condition_setup.is_empty() {
-                self.enter_scope();
-                self.enter_scope();
-                let then_body = self.lower_block_to_place(consequence, place);
-                self.exit_scope();
-                let inner =
-                    self.lower_else_chain(next_alternative, then_body.ends_with_diverge(), place);
-                self.exit_scope();
-                ElseArm::ElseIf(Box::new(IfPlan {
-                    condition_setup,
-                    condition,
-                    then_body,
-                    else_arm: inner,
-                }))
+                self.with_scope(|this| {
+                    let then_body =
+                        this.with_scope(|this| this.lower_block_to_place(consequence, place));
+                    let inner = this.lower_else_chain(
+                        next_alternative,
+                        then_body.ends_with_diverge(),
+                        place,
+                    );
+                    ElseArm::ElseIf(Box::new(IfPlan {
+                        condition_setup,
+                        condition,
+                        then_body,
+                        else_arm: inner,
+                    }))
+                })
             } else {
-                self.enter_scope();
-                let then_body = self.lower_block_to_place(consequence, place);
-                self.exit_scope();
+                let then_body =
+                    self.with_scope(|this| this.lower_block_to_place(consequence, place));
                 let inner =
                     self.lower_else_chain(next_alternative, then_body.ends_with_diverge(), place);
                 ElseArm::ElseIf(Box::new(IfPlan {
@@ -1022,14 +1003,11 @@ impl Planner<'_> {
                 }))
             }
         } else if preceding_diverges {
-            self.scope.push_binding_frame();
-            let body = self.lower_block_to_place(alternative, place);
-            self.scope.pop_binding_frame();
+            let body =
+                self.with_binding_frame(|this| this.lower_block_to_place(alternative, place));
             ElseArm::Else { body, inline: true }
         } else {
-            self.enter_scope();
-            let body = self.lower_block_to_place(alternative, place);
-            self.exit_scope();
+            let body = self.with_scope(|this| this.lower_block_to_place(alternative, place));
             ElseArm::Else {
                 body,
                 inline: false,

@@ -56,10 +56,7 @@ impl Planner<'_> {
             return None;
         };
 
-        let enum_name = unqualified_name(enum_id);
-        let constructor_key = format!("{}.{}", enum_name, variant_name);
-
-        let make_fn_name = self.facts.make_function_name(&constructor_key)?.to_string();
+        let make_fn_name = self.facts.make_function_name(enum_id, variant_name)?;
 
         let enum_module = self.facts.module_for_qualified_name(enum_id)?;
         let needs_qualifier = !self.facts.is_current_module(enum_module);
@@ -116,9 +113,7 @@ impl Planner<'_> {
             return None;
         }
 
-        let enum_name = unqualified_name(enum_id);
-        let key = format!("{}.{}", enum_name, variant_name);
-        let make_fn = self.facts.make_function_name(&key)?.to_string();
+        let make_fn = self.facts.make_function_name(enum_id, variant_name)?;
         let type_args = self.format_type_args(params);
 
         if is_prelude {

@@ -1,0 +1,74 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === first.go ===
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func adapt_first() {
+	consume(_lisAdapter_First_Cache_1{inner: First{}})
+}
+
+type _lisAdapter_First_Cache_1 struct {
+	inner First
+}
+
+func (a _lisAdapter_First_Cache_1) get() (*Entry, bool) {
+	raw_1 := a.inner.get()
+	option_2 := lisette.OptionFromNilable[*Entry](raw_1, raw_1 == nil)
+	if option_2.Tag == lisette.OptionSome {
+		return option_2.SomeVal, true
+	}
+	return nil, false
+}
+
+
+// === main.go ===
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func main() {
+	adapt_first()
+	consume(_lisAdapter_Second_Cache_0{inner: Second{}})
+}
+
+type _lisAdapter_Second_Cache_0 struct {
+	inner Second
+}
+
+func (a _lisAdapter_Second_Cache_0) get() (*Entry, bool) {
+	raw_1 := a.inner.get()
+	option_2 := lisette.OptionFromNilable[*Entry](raw_1, raw_1 == nil)
+	if option_2.Tag == lisette.OptionSome {
+		return option_2.SomeVal, true
+	}
+	return nil, false
+}
+
+
+// === types.go ===
+package main
+
+type Entry struct {
+	value int
+}
+
+type Cache interface {
+	get() (*Entry, bool)
+}
+
+func consume(_ Cache) {}
+
+type First struct{}
+
+func (f First) get() *Entry {
+	return nil
+}
+
+type Second struct{}
+
+func (s Second) get() *Entry {
+	return nil
+}

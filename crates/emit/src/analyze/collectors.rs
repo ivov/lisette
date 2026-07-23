@@ -8,41 +8,21 @@ use syntax::ast::{Expression, Generic, Visibility};
 use syntax::program::{DefinitionBody, File};
 
 impl Planner<'_> {
-    pub(crate) fn collect_local_method_facts(&mut self, files: &[&File]) {
-        for item in files.iter().flat_map(|file| &file.items) {
-            match item {
-                Expression::Interface {
-                    visibility: Visibility::Public,
-                    method_signatures,
-                    ..
-                } => {
-                    for method in method_signatures {
-                        let func = method.function_definition_view();
-                        self.module
-                            .record_exported_method_name(func.name.to_string());
-                    }
-                }
-                Expression::ImplBlock {
-                    receiver_name,
-                    methods,
-                    ..
-                } => self.record_impl_method_facts(receiver_name, methods),
-                _ => {}
-            }
-        }
-    }
-
-    fn record_impl_method_facts(&mut self, receiver_name: &str, methods: &[Expression]) {
-        for method in methods {
-            if let Expression::Function {
-                name,
-                visibility: Visibility::Public,
-                ..
-            } = method
-            {
-                self.module.record_exported_method_name(name.to_string());
-            }
-            if is_display_to_string(method)
+    pub(crate) fn collect_user_to_string_facts(&mut self, files: &[&File]) {
+        for (receiver_name, methods) in
+            files
+                .iter()
+                .flat_map(|file| &file.items)
+                .filter_map(|item| match item {
+                    Expression::ImplBlock {
+                        receiver_name,
+                        methods,
+                        ..
+                    } => Some((receiver_name, methods)),
+                    _ => None,
+                })
+        {
+            if methods.iter().any(is_display_to_string)
                 && !self
                     .facts
                     .is_ufcs_method(&self.facts.qualified_current(receiver_name), "to_string")

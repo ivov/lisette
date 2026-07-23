@@ -1,4 +1,4 @@
-use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
+use rustc_hash::FxHashMap as HashMap;
 use syntax::program::{Definition, DefinitionBody};
 use syntax::types::{Symbol, Type};
 
@@ -11,7 +11,6 @@ use crate::names::go_name;
 pub(crate) struct GoAbiCatalog {
     callables: HashMap<String, GoCallableSlots>,
     fields: HashMap<String, HashMap<String, GoSlotDescriptor>>,
-    imported_types: HashSet<String>,
 }
 
 #[derive(Debug)]
@@ -63,7 +62,7 @@ impl GoAbiCatalog {
     }
 
     pub(crate) fn is_imported_type(&self, qualified_name: &str) -> bool {
-        self.imported_types.contains(qualified_name)
+        self.fields.contains_key(qualified_name)
     }
 
     fn register_callable(
@@ -103,7 +102,6 @@ impl GoAbiCatalog {
         let DefinitionBody::Struct { fields, .. } = &definition.body else {
             return;
         };
-        self.imported_types.insert(qualified_name.to_string());
         let slots = self.fields.entry(qualified_name.to_string()).or_default();
         for field in fields {
             slots.insert(

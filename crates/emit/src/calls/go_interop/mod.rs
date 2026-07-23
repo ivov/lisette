@@ -82,10 +82,7 @@ impl Planner<'_> {
         let target = self.value_layout(result_ty, SlotOrigin::Lisette);
         match abi.result {
             CallableReturnAbi::Direct => {}
-            CallableReturnAbi::Option {
-                encoding: OptionReturnAbi::Nullable,
-                ..
-            } => {
+            CallableReturnAbi::Option(OptionReturnAbi::Nullable) => {
                 let source_payload = abi.return_layout.option_payload()?;
                 let target_payload = target.option_payload()?;
                 if source_payload.same_representation(target_payload) {
@@ -156,7 +153,11 @@ impl Planner<'_> {
             | CallableReturnAbi::Tuple { .. } => {
                 unreachable!("direct and tuple results do not use a scalar wrapper")
             }
-            CallableReturnAbi::Result { payload, .. } => {
+            CallableReturnAbi::BareError => {
+                self.require_stdlib();
+                self.lower_bare_error_wrapping(call_str, result_ty, target)
+            }
+            CallableReturnAbi::Result { payload } => {
                 self.require_stdlib();
                 self.lower_result_wrapping(call_str, result_ty, *payload, payload_bridge, target)
             }
@@ -164,26 +165,19 @@ impl Planner<'_> {
                 self.require_stdlib();
                 self.lower_partial_wrapping(call_str, result_ty, *payload, payload_bridge, target)
             }
-            CallableReturnAbi::Option {
-                encoding: OptionReturnAbi::CommaOk,
-                payload,
-            } => {
+            CallableReturnAbi::Option(OptionReturnAbi::CommaOk { payload }) => {
                 self.lower_comma_ok_wrapping(call_str, result_ty, *payload, payload_bridge, target)
             }
-            CallableReturnAbi::Option {
-                encoding: OptionReturnAbi::Nullable,
-                ..
-            } => {
+            CallableReturnAbi::Option(OptionReturnAbi::Nullable) => {
                 let mut statements = Vec::new();
                 let raw_var = self.hoist_tmp_value_statement(&mut statements, "raw", call_str);
                 let (wrap, outcome) = self.lower_nil_check_option_wrap(&raw_var, result_ty, target);
                 statements.extend(wrap);
                 (statements, outcome)
             }
-            CallableReturnAbi::Option {
-                encoding: OptionReturnAbi::Sentinel(value),
-                ..
-            } => self.lower_sentinel_wrapping(call_str, result_ty, *value, target),
+            CallableReturnAbi::Option(OptionReturnAbi::Sentinel(value)) => {
+                self.lower_sentinel_wrapping(call_str, result_ty, *value, target)
+            }
         }
     }
 

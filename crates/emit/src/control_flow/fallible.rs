@@ -21,16 +21,9 @@ pub(crate) const PARTIAL_OK_CTOR: &str = "lisette.MakePartialOk";
 pub(crate) const PARTIAL_BOTH_CTOR: &str = "lisette.MakePartialBoth";
 pub(crate) const PARTIAL_ERR_CTOR: &str = "lisette.MakePartialErr";
 
-pub(crate) struct Fallible {
-    kind: FallibleKind,
-    ok_ty: Type,
-    err_ty: Option<Type>,
-}
-
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub(crate) enum FallibleKind {
-    Result,
-    Option,
+pub(crate) enum Fallible {
+    Result { ok_ty: Type, err_ty: Type },
+    Option { ok_ty: Type },
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -43,16 +36,13 @@ impl Fallible {
     pub(crate) fn from_type(ty: &Type) -> Option<Self> {
         if ty.is_result() {
             let args = ty.get_type_params()?;
-            Some(Self {
-                kind: FallibleKind::Result,
+            Some(Self::Result {
                 ok_ty: args.first()?.clone(),
-                err_ty: args.get(1).cloned(),
+                err_ty: args.get(1)?.clone(),
             })
         } else if ty.is_option() {
-            Some(Self {
-                kind: FallibleKind::Option,
+            Some(Self::Option {
                 ok_ty: ty.ok_type(),
-                err_ty: None,
             })
         } else {
             None
@@ -60,7 +50,7 @@ impl Fallible {
     }
 
     pub(crate) fn is_result(&self) -> bool {
-        self.kind == FallibleKind::Result
+        matches!(self, Self::Result { .. })
     }
 
     pub(crate) fn classify_constructor(&self, expression: &Expression) -> Option<ConstructorKind> {
@@ -77,59 +67,64 @@ impl Fallible {
     }
 
     pub(crate) fn ok_ty(&self) -> &Type {
-        &self.ok_ty
+        match self {
+            Self::Result { ok_ty, .. } | Self::Option { ok_ty } => ok_ty,
+        }
     }
 
     fn err_ty(&self) -> Option<&Type> {
-        self.err_ty.as_ref()
+        match self {
+            Self::Result { err_ty, .. } => Some(err_ty),
+            Self::Option { .. } => None,
+        }
     }
 
     fn struct_name(&self) -> &'static str {
-        match self.kind {
-            FallibleKind::Result => "Result",
-            FallibleKind::Option => "Option",
+        match self {
+            Self::Result { .. } => "Result",
+            Self::Option { .. } => "Option",
         }
     }
 
     pub(crate) fn success_tag(&self) -> &'static str {
-        match self.kind {
-            FallibleKind::Result => RESULT_OK_TAG,
-            FallibleKind::Option => OPTION_SOME_TAG,
+        match self {
+            Self::Result { .. } => RESULT_OK_TAG,
+            Self::Option { .. } => OPTION_SOME_TAG,
         }
     }
 
     pub(crate) fn ok_field(&self) -> &'static str {
-        match self.kind {
-            FallibleKind::Result => RESULT_OK_FIELD,
-            FallibleKind::Option => OPTION_SOME_FIELD,
+        match self {
+            Self::Result { .. } => RESULT_OK_FIELD,
+            Self::Option { .. } => OPTION_SOME_FIELD,
         }
     }
 
     pub(crate) fn ok_constructor(&self) -> &'static str {
-        match self.kind {
-            FallibleKind::Result => RESULT_OK_CTOR,
-            FallibleKind::Option => OPTION_SOME_CTOR,
+        match self {
+            Self::Result { .. } => RESULT_OK_CTOR,
+            Self::Option { .. } => OPTION_SOME_CTOR,
         }
     }
 
     pub(crate) fn err_constructor(&self) -> &'static str {
-        match self.kind {
-            FallibleKind::Result => RESULT_ERR_CTOR,
-            FallibleKind::Option => OPTION_NONE_CTOR,
+        match self {
+            Self::Result { .. } => RESULT_ERR_CTOR,
+            Self::Option { .. } => OPTION_NONE_CTOR,
         }
     }
 
     pub(crate) fn err_constructor_takes_arg(&self) -> bool {
-        self.kind == FallibleKind::Result
+        self.is_result()
     }
 
     fn make_success(&self, value: &str, inner_ty: &str, err_ty: Option<&str>) -> String {
         let pkg = go_name::GO_STDLIB_PKG;
-        match self.kind {
-            FallibleKind::Option => {
+        match self {
+            Self::Option { .. } => {
                 format!("{pkg}.MakeOptionSome[{}]({})", inner_ty, value)
             }
-            FallibleKind::Result => {
+            Self::Result { .. } => {
                 let err_ty = err_ty.expect("Result must have error type");
                 format!("{pkg}.MakeResultOk[{}, {}]({})", inner_ty, err_ty, value)
             }

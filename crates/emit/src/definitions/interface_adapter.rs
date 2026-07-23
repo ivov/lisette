@@ -1,5 +1,5 @@
 use crate::Planner;
-use crate::abi::callable::{CallableReturnAbi, OptionReturnAbi};
+use crate::abi::callable::{CallableReturnAbi, OptionReturnAbi, PayloadLayout};
 use crate::abi::transition::render_lowered_result_return;
 use crate::names::go_name;
 use crate::names::go_name::GO_IMPORT_PREFIX;
@@ -269,16 +269,12 @@ impl Planner<'_> {
         hints: &[String],
     ) -> CallableReturnAbi {
         let base = self.callable_return_abi(return_ty);
-        if let CallableReturnAbi::Option {
-            encoding: OptionReturnAbi::Nullable,
-            payload,
-        } = base
+        if matches!(base, CallableReturnAbi::Option(OptionReturnAbi::Nullable))
             && hints.iter().any(|h| h == "comma_ok")
         {
-            return CallableReturnAbi::Option {
-                encoding: OptionReturnAbi::CommaOk,
-                payload,
-            };
+            return CallableReturnAbi::Option(OptionReturnAbi::CommaOk {
+                payload: PayloadLayout::Packed,
+            });
         }
         base
     }
@@ -296,7 +292,7 @@ impl Planner<'_> {
             return name.to_string();
         }
 
-        let index = self.adapter_registry.next_index();
+        let index = self.adapter_registry.allocate_index();
         let mut base_name = adapter_type_name(&plan, index);
         while self.is_declared(&base_name) {
             base_name.push('_');
@@ -353,48 +349,47 @@ impl Planner<'_> {
         generic_context: &[(EcoString, Vec<Type>)],
         method: &AdapterMethod,
     ) {
-        self.enter_scope();
+        self.with_scope(|this| {
+            for (name, _) in generic_context {
+                let go_name = this.generic_go_name(name).into_owned();
+                this.declare(&go_name);
+            }
+            let receiver_name = this.declare_adapter_method_binding("a".to_string());
+            let param_names: Vec<String> = (0..method.param_types.len())
+                .map(|i| this.declare_adapter_method_binding(format!("arg{}", i)))
+                .collect();
 
-        for (name, _) in generic_context {
-            let go_name = self.generic_go_name(name).into_owned();
-            self.declare(&go_name);
-        }
-        let receiver_name = self.declare_adapter_method_binding("a".to_string());
-        let param_names: Vec<String> = (0..method.param_types.len())
-            .map(|i| self.declare_adapter_method_binding(format!("arg{}", i)))
-            .collect();
+            let params_str = param_names
+                .iter()
+                .zip(method.param_types.iter())
+                .map(|(n, t)| format!("{} {}", n, this.go_type_string(t)))
+                .collect::<Vec<_>>()
+                .join(", ");
 
-        let params_str = param_names
-            .iter()
-            .zip(method.param_types.iter())
-            .map(|(n, t)| format!("{} {}", n, self.go_type_string(t)))
-            .collect::<Vec<_>>()
-            .join(", ");
+            let go_method_name = if this.method_needs_export(&method.name) {
+                go_name::snake_to_camel(&method.name)
+            } else {
+                go_name::escape_keyword(&method.name).into_owned()
+            };
+            let inner_call = format!(
+                "{}.inner.{}({})",
+                receiver_name,
+                go_method_name,
+                param_names.join(", ")
+            );
 
-        let go_method_name = if self.method_needs_export(&method.name) {
-            go_name::snake_to_camel(&method.name)
-        } else {
-            go_name::escape_keyword(&method.name).into_owned()
-        };
-        let inner_call = format!(
-            "{}.inner.{}({})",
-            receiver_name,
-            go_method_name,
-            param_names.join(", ")
-        );
-
-        let (go_ret, body) = self.build_adapter_body(method, &inner_call);
-        write_method_header(
-            declaration,
-            &receiver_name,
-            adapter_name,
-            &go_method_name,
-            &params_str,
-            &go_ret,
-        );
-        declaration.push_str(&body);
-        write_line!(declaration, "}}");
-        self.exit_scope();
+            let (go_ret, body) = this.build_adapter_body(method, &inner_call);
+            write_method_header(
+                declaration,
+                &receiver_name,
+                adapter_name,
+                &go_method_name,
+                &params_str,
+                &go_ret,
+            );
+            declaration.push_str(&body);
+            write_line!(declaration, "}}");
+        });
     }
 
     fn declare_adapter_method_binding(&mut self, preferred: String) -> String {
@@ -640,9 +635,9 @@ fn adapter_uses_type_parameter(
 fn abi_matches_type(abi: &CallableReturnAbi, peeled: &Type) -> bool {
     match abi {
         CallableReturnAbi::Tagged | CallableReturnAbi::Direct => true,
-        CallableReturnAbi::Result { .. } => peeled.is_result(),
+        CallableReturnAbi::BareError | CallableReturnAbi::Result { .. } => peeled.is_result(),
         CallableReturnAbi::Partial { .. } => peeled.is_partial(),
-        CallableReturnAbi::Option { .. } => peeled.is_option(),
+        CallableReturnAbi::Option(_) => peeled.is_option(),
         CallableReturnAbi::Tuple { .. } => peeled.tuple_arity().is_some_and(|arity| arity >= 2),
     }
 }

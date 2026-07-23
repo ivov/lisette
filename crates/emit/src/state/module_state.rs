@@ -1,47 +1,16 @@
-use std::cell::RefCell;
-use std::rc::Rc;
-
 use ecow::EcoString;
 use rustc_hash::FxHashMap as HashMap;
 use rustc_hash::FxHashSet as HashSet;
 use syntax::types::Type;
 
-use crate::EnumLayout;
-
 #[derive(Default)]
 pub(crate) struct ModuleState {
-    enum_layouts: RefCell<HashMap<u32, HashMap<String, Rc<EnumLayout>>>>,
-    exported_method_names: HashSet<String>,
     user_to_string_types: HashSet<String>,
     escape_remap: HashMap<String, String>,
     generic_renames: HashMap<String, String>,
 }
 
 impl ModuleState {
-    pub(crate) fn record_enum_layout(&self, file_id: u32, enum_id: String, layout: EnumLayout) {
-        self.enum_layouts
-            .borrow_mut()
-            .entry(file_id)
-            .or_default()
-            .insert(enum_id, Rc::new(layout));
-    }
-
-    pub(crate) fn enum_layout(&self, file_id: u32, enum_id: &str) -> Option<Rc<EnumLayout>> {
-        self.enum_layouts
-            .borrow()
-            .get(&file_id)?
-            .get(enum_id)
-            .cloned()
-    }
-
-    pub(crate) fn record_exported_method_name(&mut self, name: impl Into<String>) {
-        self.exported_method_names.insert(name.into());
-    }
-
-    pub(crate) fn has_local_exported_method_name(&self, name: &str) -> bool {
-        self.exported_method_names.contains(name)
-    }
-
     pub(crate) fn record_user_to_string_type(&mut self, type_name: impl Into<String>) {
         self.user_to_string_types.insert(type_name.into());
     }
@@ -84,16 +53,18 @@ pub(crate) struct FunctionEmissionState {
 }
 
 impl FunctionEmissionState {
+    pub(crate) fn for_function(
+        generic_context: &[(EcoString, Vec<Type>)],
+        absorbed_ref_generics: HashSet<String>,
+    ) -> Self {
+        Self {
+            absorbed_ref_generics,
+            generic_context: generic_context.to_vec(),
+        }
+    }
+
     pub(crate) fn is_absorbed_ref_generic(&self, name: &str) -> bool {
         self.absorbed_ref_generics.contains(name)
-    }
-
-    pub(crate) fn record_absorbed_ref_generic(&mut self, name: impl Into<String>) {
-        self.absorbed_ref_generics.insert(name.into());
-    }
-
-    pub(crate) fn set_generic_context(&mut self, context: &[(EcoString, Vec<Type>)]) {
-        self.generic_context = context.to_vec();
     }
 
     pub(crate) fn generic_context(&self) -> &[(EcoString, Vec<Type>)] {

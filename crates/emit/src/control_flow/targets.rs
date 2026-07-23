@@ -1,39 +1,37 @@
 use crate::plan::bodies::{
-    AssignForm, BreakValueDisposition, CompoundKind, ElseArm, ExpressionStatementForm, IfPlan,
-    LetForm, LoopId, LoopPlan, LoweredBlock, LoweredStatement, ReturnForm,
+    AssignForm, BreakValuePlan, CompoundKind, ElseArm, ExpressionStatementForm, IfPlan, LetForm,
+    LoopId, LoopKind, LoopTransfer, LoweredBlock, LoweredStatement, ReturnForm,
 };
 use crate::plan::values::ValuePlan;
 
-#[derive(Clone, Copy, Default)]
-struct Interception {
-    break_transfer: bool,
-    continue_transfer: bool,
+#[derive(Clone, Copy)]
+enum Interception {
+    None,
+    Break,
+    All,
 }
 
 impl Interception {
-    fn all() -> Self {
-        Self {
-            break_transfer: true,
-            continue_transfer: true,
-        }
+    fn intercepts_break(self) -> bool {
+        !matches!(self, Interception::None)
     }
 
-    fn breakable(self) -> Self {
-        Self {
-            break_transfer: true,
-            ..self
+    fn intercepts_continue(self) -> bool {
+        matches!(self, Interception::All)
+    }
+
+    fn with_break(self) -> Self {
+        match self {
+            Interception::None => Interception::Break,
+            Interception::Break | Interception::All => self,
         }
     }
 }
 
-pub(crate) fn legalize_source_loop(plan: &mut LoopPlan) {
-    let Some(target) = plan.target else {
-        return;
-    };
-    debug_assert!(plan.label.is_none());
+pub(crate) fn legalize_source_loop(body: &mut LoweredBlock, target: LoopId) -> Option<String> {
     let mut legalizer = Legalizer::new(target);
-    legalizer.walk_block(&mut plan.body, Interception::default());
-    plan.label = legalizer.label;
+    legalizer.walk_block(body, Interception::None);
+    legalizer.label
 }
 
 struct Legalizer {
@@ -63,23 +61,22 @@ impl Legalizer {
         self.walk_statements(&mut value.setup, interception);
     }
 
-    fn resolve_transfer(
-        &mut self,
-        transfer_target: Option<LoopId>,
-        resolved_label: &mut Option<String>,
-        intercepted: bool,
-    ) {
-        if transfer_target != Some(self.target) {
+    fn resolve_transfer(&mut self, transfer: &mut LoopTransfer, intercepted: bool) {
+        let LoopTransfer::Source(target) = transfer else {
+            return;
+        };
+        if *target != self.target {
             return;
         }
+
         if intercepted {
             let label_number = self.target.0 + 1;
             let label = self
                 .label
                 .get_or_insert_with(|| format!("loop_{label_number}"));
-            *resolved_label = Some(label.clone());
+            *transfer = LoopTransfer::Labeled(label.clone());
         } else {
-            *resolved_label = None;
+            *transfer = LoopTransfer::Unlabeled;
         }
     }
 
@@ -88,16 +85,16 @@ impl Legalizer {
             LoweredStatement::If(plan) => self.walk_if(plan, interception),
             LoweredStatement::Loop(plan) => {
                 self.walk_statements(&mut plan.prologue, interception);
-                if plan.target.is_none() {
-                    self.walk_block(&mut plan.body, Interception::all());
+                if matches!(&plan.kind, LoopKind::Generated { .. }) {
+                    self.walk_block(&mut plan.body, Interception::All);
                 }
             }
             LoweredStatement::Block(body) => self.walk_block(body, interception),
-            LoweredStatement::Break { target, label } => {
-                self.resolve_transfer(*target, label, interception.break_transfer)
+            LoweredStatement::Break(target) => {
+                self.resolve_transfer(target, interception.intercepts_break())
             }
-            LoweredStatement::Continue { target, label } => {
-                self.resolve_transfer(*target, label, interception.continue_transfer)
+            LoweredStatement::Continue(target) => {
+                self.resolve_transfer(target, interception.intercepts_continue())
             }
             LoweredStatement::Const(plan) => self.walk_value(&mut plan.value, interception),
             LoweredStatement::Return(plan) => match &mut plan.form {
@@ -112,16 +109,13 @@ impl Legalizer {
                 }
                 ReturnForm::Multi { .. } => {}
             },
-            LoweredStatement::BreakValue(plan) => {
-                self.walk_value(&mut plan.value, interception);
-                if !matches!(&plan.disposition, BreakValueDisposition::Diverged) {
-                    self.resolve_transfer(
-                        plan.target,
-                        &mut plan.label,
-                        interception.break_transfer,
-                    );
+            LoweredStatement::BreakValue(plan) => match plan {
+                BreakValuePlan::Diverged { value } => self.walk_value(value, interception),
+                BreakValuePlan::Transfer { value, target, .. } => {
+                    self.walk_value(value, interception);
+                    self.resolve_transfer(target, interception.intercepts_break());
                 }
-            }
+            },
             LoweredStatement::Let(plan) => {
                 if let LetForm::Never {
                     declaration: Some(declaration),
@@ -165,9 +159,9 @@ impl Legalizer {
             LoweredStatement::Select(plan) => {
                 self.walk_statements(&mut plan.setup, interception);
                 let arm_interception = if plan.retry_loop {
-                    Interception::all()
+                    Interception::All
                 } else {
-                    interception.breakable()
+                    interception.with_break()
                 };
                 for arm in &mut plan.arms {
                     self.walk_block(arm.body_mut(), arm_interception);
@@ -175,7 +169,7 @@ impl Legalizer {
                 self.walk_statements(&mut plan.postlude, interception);
             }
             LoweredStatement::Switch(plan) => {
-                let case_interception = interception.breakable();
+                let case_interception = interception.with_break();
                 for case in &mut plan.cases {
                     self.walk_block(&mut case.body, case_interception);
                 }

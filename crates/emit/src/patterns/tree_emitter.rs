@@ -2,21 +2,19 @@ use syntax::ast::{Expression, MatchArm};
 use syntax::types::Type;
 
 use crate::Planner;
-use crate::analyze::inline_uses::{InlineDecision, analyze_inline_candidate, region_blocks_inline};
 use crate::context::expression::ExpressionContext;
 use crate::patterns::binding_decls::{is_catchall_pattern, is_unconditional_catchall};
-use crate::patterns::binding_emit::drop_inline_overlays;
+use crate::patterns::binding_emit::{drop_inline_overlays, tree_binding_statements};
 use crate::patterns::decision_tree::{
     ChainTest, Decision, PatternBinding, SwitchBranch, SwitchKind as PatternSwitchKind,
     SwitchShape, compile_expanded_arms, decision_is_exhaustive, expand_or_patterns,
     render_condition, tree_has_unguarded_terminal,
 };
 use crate::plan::bodies::{
-    ElseArm, IfPlan, LoopPlan, LoweredBlock, LoweredStatement, PlacePlan, SwitchCasePlan,
-    SwitchKind, SwitchStatementPlan,
+    ElseArm, IfPlan, LoopKind, LoopPlan, LoopTransfer, LoweredBlock, LoweredStatement, PlacePlan,
+    SwitchCasePlan, SwitchKind, SwitchStatementPlan,
 };
 use crate::plan::placement::unreachable_panic_if_needed;
-use crate::state::bindings::{BindingValue, InlineExpr};
 use crate::utils::wrap_if_struct_literal;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -138,6 +136,27 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         result
     }
 
+    fn with_scope<R>(&mut self, f: impl FnOnce(&mut Self) -> R) -> R {
+        self.planner.enter_scope();
+        let result = f(self);
+        self.planner.exit_scope();
+        result
+    }
+
+    fn with_optional_scope<R>(&mut self, scoped: bool, f: impl FnOnce(&mut Self) -> R) -> R {
+        if scoped { self.with_scope(f) } else { f(self) }
+    }
+
+    fn capture_go_uses<R>(
+        &mut self,
+        f: impl FnOnce(&mut Self) -> R,
+    ) -> (R, rustc_hash::FxHashSet<String>) {
+        self.planner.scope.enter_use_region();
+        let result = f(self);
+        let uses = self.planner.scope.exit_use_region();
+        (result, uses)
+    }
+
     fn render_single_catchall(
         &mut self,
         statements: &mut Vec<LoweredStatement>,
@@ -150,14 +169,15 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
             .pattern_has_binding_collisions(&self.arms[arm_index].pattern);
         let arm_body = &*self.arms[arm_index].expression;
 
-        self.planner.enter_scope();
-        let mut inner: Vec<LoweredStatement> = Vec::new();
-        let inlines = self.emit_bindings(&mut inner, bindings, &[arm_body], None);
-        self.emit_arm_body(&mut inner, arm_index, place);
-        drop_inline_overlays(self.planner, &inlines);
-        let needs_block =
-            self.planner.scope.current_block_declared_nonempty() || pattern_has_collisions;
-        self.planner.exit_scope();
+        let (inner, needs_block) = self.with_scope(|this| {
+            let mut inner: Vec<LoweredStatement> = Vec::new();
+            this.with_bindings(&mut inner, bindings, &[arm_body], None, |this, inner| {
+                this.emit_arm_body(inner, arm_index, place)
+            });
+            let needs_block =
+                this.planner.scope.current_block_declared_nonempty() || pattern_has_collisions;
+            (inner, needs_block)
+        });
 
         if needs_block {
             statements.push(LoweredStatement::Block(LoweredBlock { statements: inner }));
@@ -195,9 +215,13 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
                 bindings,
             } => {
                 let arm_body = &*self.arms[*arm_index].expression;
-                let inlines = self.emit_bindings(statements, bindings, &[arm_body], None);
-                self.emit_arm_body(statements, *arm_index, place);
-                drop_inline_overlays(self.planner, &inlines);
+                self.with_bindings(
+                    statements,
+                    bindings,
+                    &[arm_body],
+                    None,
+                    |this, statements| this.emit_arm_body(statements, *arm_index, place),
+                );
             }
             Decision::Chain { tests, fallback } => {
                 self.lower_chain_branch(statements, tests, fallback, place);
@@ -244,10 +268,11 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
             } else {
                 &chain_ctx
             };
-            self.planner.enter_scope();
-            let mut body: Vec<LoweredStatement> = Vec::new();
-            self.walk(&mut body, &test.decision, walk_ctx);
-            self.planner.exit_scope();
+            let body = self.with_scope(|this| {
+                let mut body: Vec<LoweredStatement> = Vec::new();
+                this.walk(&mut body, &test.decision, walk_ctx);
+                body
+            });
             let body = LoweredBlock { statements: body };
             last_diverges = body.ends_with_diverge();
             branches.push(ChainBranch { condition, body });
@@ -311,15 +336,13 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         let mut body: Vec<LoweredStatement> = Vec::new();
         self.walk(&mut body, tree, &ctx);
         if !unguarded_exit {
-            body.push(LoweredStatement::Break {
-                target: None,
-                label: Some(label.clone()),
-            });
+            body.push(LoweredStatement::Break(LoopTransfer::Labeled(
+                label.clone(),
+            )));
         }
         statements.push(LoweredStatement::Loop(LoopPlan {
             prologue: Vec::new(),
-            target: None,
-            label: Some(label),
+            kind: LoopKind::Generated { label: Some(label) },
             header: "for {\n".to_string(),
             body: LoweredBlock { statements: body },
         }));
@@ -333,18 +356,17 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
             } => {
                 let wrap = ctx.leaf_scope_explicit();
                 let arm_body = &*self.arms[*arm_index].expression;
+                let leaf = self.with_optional_scope(wrap, |this| {
+                    let mut leaf: Vec<LoweredStatement> = Vec::new();
+                    this.with_bindings(&mut leaf, bindings, &[arm_body], None, |this, leaf| {
+                        let mut body_statements: Vec<LoweredStatement> = Vec::new();
+                        this.emit_arm_body(&mut body_statements, *arm_index, ctx.arm_place);
+                        let body_diverges = capture_diverge(body_statements, leaf);
+                        apply_leaf_terminator(leaf, ctx, body_diverges);
+                    });
+                    leaf
+                });
                 if wrap {
-                    self.planner.enter_scope();
-                }
-                let mut leaf: Vec<LoweredStatement> = Vec::new();
-                let inlines = self.emit_bindings(&mut leaf, bindings, &[arm_body], None);
-                let mut body_statements: Vec<LoweredStatement> = Vec::new();
-                self.emit_arm_body(&mut body_statements, *arm_index, ctx.arm_place);
-                let body_diverges = capture_diverge(body_statements, &mut leaf);
-                apply_leaf_terminator(&mut leaf, ctx, body_diverges);
-                drop_inline_overlays(self.planner, &inlines);
-                if wrap {
-                    self.planner.exit_scope();
                     statements.push(LoweredStatement::Block(LoweredBlock { statements: leaf }));
                 } else {
                     statements.extend(leaf);
@@ -463,10 +485,11 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
     ) {
         self.planner.scope.record_go_use(&self.current_subject);
         let inner = WalkCtx::switch_case(ctx.arm_place);
-        self.planner.enter_scope();
-        let mut then_statements: Vec<LoweredStatement> = Vec::new();
-        self.walk(&mut then_statements, then_branch, &inner);
-        self.planner.exit_scope();
+        let then_statements = self.with_scope(|this| {
+            let mut then_statements: Vec<LoweredStatement> = Vec::new();
+            this.walk(&mut then_statements, then_branch, &inner);
+            then_statements
+        });
         let then_body = LoweredBlock {
             statements: then_statements,
         };
@@ -492,9 +515,6 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         ctx: &WalkCtx,
     ) {
         let needs_pre_scope = ctx.leaf_scope_explicit() && !bindings.is_empty();
-        if needs_pre_scope {
-            self.planner.enter_scope();
-        }
         let arm = &self.arms[arm_index];
         let arm_body = &*arm.expression;
         let mut guard_consumers: Vec<&Expression> = Vec::with_capacity(2);
@@ -505,39 +525,42 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
 
         // Collect the bindings and the guard `if` into one block so a pre-scope
         // can wrap them as a single `LoweredStatement::Block`.
-        let mut guard_statements: Vec<LoweredStatement> = Vec::new();
-        let inlines = self.emit_bindings(
-            &mut guard_statements,
-            bindings,
-            &guard_consumers,
-            Some(failure),
-        );
-        if let Some((condition_setup, condition)) = self.lower_guard_condition(arm_index) {
-            self.planner.enter_scope();
-            let mut success_statements: Vec<LoweredStatement> = Vec::new();
-            self.walk(&mut success_statements, success, &ctx.nested());
-            let then_body = LoweredBlock {
-                statements: success_statements,
-            };
-            let success_diverges = then_body.ends_with_diverge();
-            self.planner.exit_scope();
-            drop_inline_overlays(self.planner, &inlines);
-            let else_arm = if ctx.role == WalkRole::SwitchCase {
-                self.lower_else_or_flat(failure, ctx, success_diverges)
-            } else {
-                ElseArm::None
-            };
-            guard_statements.push(LoweredStatement::If(IfPlan {
-                condition_setup,
-                condition,
-                then_body,
-                else_arm,
-            }));
-        } else {
-            drop_inline_overlays(self.planner, &inlines);
-        }
+        let guard_statements = self.with_optional_scope(needs_pre_scope, |this| {
+            let mut guard_statements: Vec<LoweredStatement> = Vec::new();
+            let guarded = this.with_bindings(
+                &mut guard_statements,
+                bindings,
+                &guard_consumers,
+                Some(failure),
+                |this, _| {
+                    let (condition_setup, condition) = this.lower_guard_condition(arm_index)?;
+                    let then_body = this.with_scope(|this| {
+                        let mut success_statements: Vec<LoweredStatement> = Vec::new();
+                        this.walk(&mut success_statements, success, &ctx.nested());
+                        LoweredBlock {
+                            statements: success_statements,
+                        }
+                    });
+                    Some((condition_setup, condition, then_body))
+                },
+            );
+            if let Some((condition_setup, condition, then_body)) = guarded {
+                let success_diverges = then_body.ends_with_diverge();
+                let else_arm = if ctx.role == WalkRole::SwitchCase {
+                    this.lower_else_or_flat(failure, ctx, success_diverges)
+                } else {
+                    ElseArm::None
+                };
+                guard_statements.push(LoweredStatement::If(IfPlan {
+                    condition_setup,
+                    condition,
+                    then_body,
+                    else_arm,
+                }));
+            }
+            guard_statements
+        });
         if needs_pre_scope {
-            self.planner.exit_scope();
             statements.push(LoweredStatement::Block(LoweredBlock {
                 statements: guard_statements,
             }));
@@ -570,10 +593,11 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
                 inline: true,
             };
         }
-        self.planner.enter_scope();
-        let mut body: Vec<LoweredStatement> = Vec::new();
-        self.walk(&mut body, decision, ctx);
-        self.planner.exit_scope();
+        let body = self.with_scope(|this| {
+            let mut body: Vec<LoweredStatement> = Vec::new();
+            this.walk(&mut body, decision, ctx);
+            body
+        });
         ElseArm::Else {
             body: LoweredBlock { statements: body },
             inline: false,
@@ -616,13 +640,13 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         place: &PlacePlan,
     ) -> SwitchStatementPlan {
         let (regular, default) = split_with_default_lift(branches, fallback);
-        self.planner.scope.enter_use_region();
-        let (case_plans, default_block) = self.with_subject(base.clone(), |tree_planner| {
-            let case_plans = tree_planner.lower_switch_cases(regular, place);
-            let default_block = tree_planner.lower_switch_default(default, place);
-            (case_plans, default_block)
+        let ((case_plans, default_block), used) = self.capture_go_uses(|this| {
+            this.with_subject(base.clone(), |this| {
+                let case_plans = this.lower_switch_cases(regular, place);
+                let default_block = this.lower_switch_default(default, place);
+                (case_plans, default_block)
+            })
         });
-        let used = self.planner.scope.exit_use_region();
 
         // Keep the `base :=` type-switch binding only when a case references it;
         // Go rejects an unused `:= base` assignment otherwise.
@@ -648,10 +672,11 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         let ctx = WalkCtx::switch_case(place);
         let mut case_plans = Vec::with_capacity(branches.len());
         for branch in branches {
-            let mut body: Vec<LoweredStatement> = Vec::new();
-            self.planner.enter_scope();
-            self.walk(&mut body, &branch.decision, &ctx);
-            self.planner.exit_scope();
+            let body = self.with_scope(|this| {
+                let mut body: Vec<LoweredStatement> = Vec::new();
+                this.walk(&mut body, &branch.decision, &ctx);
+                body
+            });
             case_plans.push(SwitchCasePlan {
                 labels: branch.case_label.clone(),
                 body: LoweredBlock { statements: body },
@@ -669,10 +694,11 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
     ) -> Option<LoweredBlock> {
         let default_decision = default?;
         let ctx = WalkCtx::switch_case(place);
-        let mut body: Vec<LoweredStatement> = Vec::new();
-        self.planner.enter_scope();
-        self.walk(&mut body, default_decision, &ctx);
-        self.planner.exit_scope();
+        let body = self.with_scope(|this| {
+            let mut body: Vec<LoweredStatement> = Vec::new();
+            this.walk(&mut body, default_decision, &ctx);
+            body
+        });
         (!body.is_empty()).then_some(LoweredBlock { statements: body })
     }
 
@@ -721,14 +747,15 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
             return;
         }
 
-        self.planner.enter_scope();
-        let mut body: Vec<LoweredStatement> = Vec::new();
-        if bindings_are_hoistable(tests, indices) {
-            self.emit_chain_group_hoisted(&mut body, indices, tests, ctx);
-        } else {
-            self.emit_chain_group_per_test(&mut body, indices, tests, ctx);
-        }
-        self.planner.exit_scope();
+        let body = self.with_scope(|this| {
+            let mut body: Vec<LoweredStatement> = Vec::new();
+            if bindings_are_hoistable(tests, indices) {
+                this.emit_chain_group_hoisted(&mut body, indices, tests, ctx);
+            } else {
+                this.emit_chain_group_per_test(&mut body, indices, tests, ctx);
+            }
+            body
+        });
 
         let body = LoweredBlock { statements: body };
         let first_condition = &conditions[indices[0]];
@@ -753,7 +780,6 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         tests: &[ChainTest],
         ctx: &WalkCtx,
     ) {
-        let mut inlines: Vec<(String, Option<BindingValue>)> = Vec::new();
         if let Some(&ref_index) = indices
             .iter()
             .find(|&&index| !decision_top_bindings(&tests[index].decision).is_empty())
@@ -775,13 +801,27 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
                     consumers.push(&arm.expression);
                 }
             }
-            inlines = self.emit_bindings(
+            self.with_bindings(
                 statements,
                 decision_top_bindings(&tests[ref_index].decision),
                 &consumers,
                 None,
+                |this, statements| {
+                    this.emit_chain_group_bodies(statements, indices, tests, ctx);
+                },
             );
+        } else {
+            self.emit_chain_group_bodies(statements, indices, tests, ctx);
         }
+    }
+
+    fn emit_chain_group_bodies(
+        &mut self,
+        statements: &mut Vec<LoweredStatement>,
+        indices: &[usize],
+        tests: &[ChainTest],
+        ctx: &WalkCtx,
+    ) {
         for &test_index in indices {
             match &tests[test_index].decision {
                 Decision::Success { arm_index, .. } => {
@@ -794,13 +834,14 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
                     if let Some((condition_setup, condition)) =
                         self.lower_guard_condition(*arm_index)
                     {
-                        self.planner.enter_scope();
-                        let mut arm_body: Vec<LoweredStatement> = Vec::new();
-                        self.emit_arm_body(&mut arm_body, *arm_index, ctx.arm_place);
-                        let mut then_body: Vec<LoweredStatement> = Vec::new();
-                        let body_diverges = capture_diverge(arm_body, &mut then_body);
-                        apply_leaf_terminator(&mut then_body, ctx, body_diverges);
-                        self.planner.exit_scope();
+                        let then_body = self.with_scope(|this| {
+                            let mut arm_body: Vec<LoweredStatement> = Vec::new();
+                            this.emit_arm_body(&mut arm_body, *arm_index, ctx.arm_place);
+                            let mut then_body: Vec<LoweredStatement> = Vec::new();
+                            let body_diverges = capture_diverge(arm_body, &mut then_body);
+                            apply_leaf_terminator(&mut then_body, ctx, body_diverges);
+                            then_body
+                        });
                         statements.push(LoweredStatement::If(IfPlan {
                             condition_setup,
                             condition,
@@ -814,7 +855,6 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
                 _ => self.walk(statements, &tests[test_index].decision, ctx),
             }
         }
-        drop_inline_overlays(self.planner, &inlines);
     }
 
     fn emit_chain_group_per_test(
@@ -829,10 +869,11 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
             let needs_wrapper =
                 !is_last_in_group && !decision_top_bindings(&tests[test_index].decision).is_empty();
             if needs_wrapper {
-                self.planner.enter_scope();
-                let mut wrapped: Vec<LoweredStatement> = Vec::new();
-                self.walk(&mut wrapped, &tests[test_index].decision, ctx);
-                self.planner.exit_scope();
+                let wrapped = self.with_scope(|this| {
+                    let mut wrapped: Vec<LoweredStatement> = Vec::new();
+                    this.walk(&mut wrapped, &tests[test_index].decision, ctx);
+                    wrapped
+                });
                 statements.push(LoweredStatement::Block(LoweredBlock {
                     statements: wrapped,
                 }));
@@ -850,7 +891,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         bindings: &[PatternBinding],
         consumers: &[&Expression],
         failure_blocker: Option<&Decision>,
-    ) -> Vec<(String, Option<BindingValue>)> {
+    ) -> Vec<(String, Option<crate::state::bindings::BindingValue>)> {
         let failure_trees: Vec<&Expression> = match failure_blocker {
             Some(failure) => {
                 let mut reached: Vec<usize> = Vec::new();
@@ -868,84 +909,28 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
             None => Vec::new(),
         };
 
-        let mut installed_inlines: Vec<(String, Option<BindingValue>)> = Vec::new();
-        for binding in bindings {
-            let Some(ref go_name) = binding.go_name else {
-                self.planner.scope.bind(&binding.lisette_name, "");
-                continue;
-            };
-
-            let previous = self
-                .planner
-                .scope
-                .resolve_identifier_binding(&binding.lisette_name)
-                .cloned();
-            if self.try_inline_binding(binding, consumers, &failure_trees) {
-                installed_inlines.push((binding.lisette_name.clone(), previous));
-                continue;
-            }
-
-            let access_expression = binding.path.render(&self.current_subject);
-            self.planner.scope.record_go_use(&self.current_subject);
-            if self.planner.scope.has_binding_for_go_name(go_name) {
-                let fresh = self.planner.fresh_var(Some(&binding.lisette_name));
-                self.planner.scope.bind(&binding.lisette_name, &fresh);
-                self.planner.try_declare(&fresh);
-                statements.push(LoweredStatement::RawGo(format!(
-                    "{} := {}\n",
-                    fresh, access_expression
-                )));
-            } else {
-                let name = self
-                    .planner
-                    .scope
-                    .bind(&binding.lisette_name, go_name.clone());
-                if self.planner.try_declare(&name) {
-                    statements.push(LoweredStatement::RawGo(format!(
-                        "{} := {}\n",
-                        name, access_expression
-                    )));
-                } else {
-                    let fresh = self.planner.fresh_var(Some(&binding.lisette_name));
-                    self.planner.scope.bind(&binding.lisette_name, &fresh);
-                    self.planner.try_declare(&fresh);
-                    statements.push(LoweredStatement::RawGo(format!(
-                        "{} := {}\n",
-                        fresh, access_expression
-                    )));
-                }
-            }
-        }
-        installed_inlines
+        tree_binding_statements(
+            self.planner,
+            statements,
+            bindings,
+            &self.current_subject,
+            consumers,
+            &failure_trees,
+        )
     }
 
-    fn try_inline_binding(
+    fn with_bindings<R>(
         &mut self,
-        binding: &PatternBinding,
+        statements: &mut Vec<LoweredStatement>,
+        bindings: &[PatternBinding],
         consumers: &[&Expression],
-        failure_trees: &[&Expression],
-    ) -> bool {
-        if consumers.is_empty() {
-            return false;
-        }
-        if analyze_inline_candidate(&binding.lisette_name, consumers) != InlineDecision::Inline {
-            return false;
-        }
-        if !failure_trees.is_empty()
-            && region_blocks_inline(failure_trees.iter().copied(), &binding.lisette_name)
-        {
-            return false;
-        }
-        let composable_access = binding.path.render_composable(&self.current_subject);
-        self.planner.scope.bind_inline_expr(
-            &binding.lisette_name,
-            InlineExpr::new(
-                composable_access,
-                vec![self.current_subject.clone()],
-                binding.path.contains_deferred_evaluation(),
-            ),
-        );
-        true
+        failure_blocker: Option<&Decision>,
+        f: impl FnOnce(&mut Self, &mut Vec<LoweredStatement>) -> R,
+    ) -> R {
+        let overlays = self.emit_bindings(statements, bindings, consumers, failure_blocker);
+        let result = f(self, statements);
+        drop_inline_overlays(self.planner, &overlays);
+        result
     }
 
     fn emit_arm_body(
@@ -1159,9 +1144,8 @@ fn apply_leaf_terminator(
     if let Some(label) = ctx.break_label
         && !body_diverges
     {
-        statements.push(LoweredStatement::Break {
-            target: None,
-            label: Some(label.to_string()),
-        });
+        statements.push(LoweredStatement::Break(LoopTransfer::Labeled(
+            label.to_string(),
+        )));
     }
 }

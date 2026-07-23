@@ -5753,6 +5753,61 @@ fn main() {
 }
 
 #[test]
+fn adapter_declarations_drain_to_the_file_that_synthesizes_them() {
+    let mut fs = MockFileSystem::new();
+
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "types.lis",
+        r#"
+struct Entry { value: int }
+
+interface Cache {
+  #[go(comma_ok)]
+  fn get() -> Option<Ref<Entry>>
+}
+
+fn consume(_cache: Cache) {}
+
+struct First {}
+
+impl First {
+  fn get(self) -> Option<Ref<Entry>> { None }
+}
+
+struct Second {}
+
+impl Second {
+  fn get(self) -> Option<Ref<Entry>> { None }
+}
+"#,
+    );
+
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "first.lis",
+        r#"
+fn adapt_first() {
+  consume(First {} as Cache)
+}
+"#,
+    );
+
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+fn main() {
+  adapt_first()
+  consume(Second {} as Cache)
+}
+"#,
+    );
+
+    assert_build_snapshot!(fs, "github.com/user/myproject");
+}
+
+#[test]
 fn inherited_comma_ok_hint_propagates_to_child_iface_cast() {
     let mut fs = MockFileSystem::new();
 

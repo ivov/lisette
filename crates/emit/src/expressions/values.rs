@@ -53,10 +53,7 @@ impl Planner<'_> {
                 let mut setup = Vec::new();
                 let value = if self.go_fn_needs_lowered_tuple_adapter(expression, abi, ctx) {
                     self.emit_go_fn_lowered_tuple_adapter(&mut setup, expression)
-                } else if let CallableReturnAbi::Option {
-                    encoding: OptionReturnAbi::Sentinel(value),
-                    ..
-                } = abi
+                } else if let CallableReturnAbi::Option(OptionReturnAbi::Sentinel(value)) = abi
                     && !ctx.forces_tagged_go_function()
                 {
                     self.emit_go_fn_sentinel_adapter(&mut setup, expression, *value)
@@ -217,13 +214,11 @@ impl Planner<'_> {
             (
                 CallableReturnAbi::Result {
                     payload: PayloadLayout::Flattened,
-                    ..
                 } | CallableReturnAbi::Partial {
                     payload: PayloadLayout::Flattened,
                 },
                 CallableReturnAbi::Result {
                     payload: PayloadLayout::Packed,
-                    ..
                 } | CallableReturnAbi::Partial {
                     payload: PayloadLayout::Packed,
                 }
