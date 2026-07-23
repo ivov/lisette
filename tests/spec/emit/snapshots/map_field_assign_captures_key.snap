@@ -26,7 +26,7 @@ type Pair struct {
 	x int
 }
 
-func set_key(k *string) int {
+func setKey(k *string) int {
 	*k = "b"
 	return 1
 }
@@ -37,7 +37,7 @@ func main() {
 	k := "a"
 	captured_key := k
 	entry := m[captured_key]
-	entry.x = set_key(&k)
+	entry.x = setKey(&k)
 	m[captured_key] = entry
 	_ = m
 }

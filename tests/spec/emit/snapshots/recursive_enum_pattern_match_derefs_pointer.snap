@@ -37,9 +37,9 @@ type List struct {
 	Cons1 *List
 }
 
-func list_sum(l List) int {
+func listSum(l List) int {
 	if l.Tag == ListCons {
-		return l.Cons0 + list_sum((*l.Cons1))
+		return l.Cons0 + listSum((*l.Cons1))
 	}
 	return 0
 }

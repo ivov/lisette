@@ -17,7 +17,7 @@ func (t Thing) String() string {
 	return fmt.Sprintf("Thing { x: %v }", t.X)
 }
 
-func (t Thing) to_string() string {
+func (t Thing) toString() string {
 	return t.String()
 }
 

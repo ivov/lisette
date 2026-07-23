@@ -47,7 +47,7 @@ func (b Bar) get() *Thing {
 	return nil
 }
 
-func use_box(box Box[lisette.Option[*Thing]]) {
+func useBox(box Box[lisette.Option[*Thing]]) {
 	subject_1 := box.get()
 	if subject_1.Tag == lisette.OptionSome {
 		_ = subject_1.SomeVal
@@ -55,7 +55,7 @@ func use_box(box Box[lisette.Option[*Thing]]) {
 }
 
 func main() {
-	use_box(_lisAdapter_Bar_Box_0{inner: Bar{}})
+	useBox(_lisAdapter_Bar_Box_0{inner: Bar{}})
 }
 
 type _lisAdapter_Bar_Box_0 struct {

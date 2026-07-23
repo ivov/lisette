@@ -46,7 +46,7 @@ func (c Circle) ToString() string {
 	return "circle"
 }
 
-func find_it(n int) Printable {
+func findIt(n int) Printable {
 	switch n {
 	case 1:
 		return Box{label: "found"}

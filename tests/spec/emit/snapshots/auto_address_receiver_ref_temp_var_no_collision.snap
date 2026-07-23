@@ -33,12 +33,12 @@ func (b *Box) inc() int {
 	return b.x
 }
 
-func make_box() Box {
+func makeBox() Box {
 	return Box{x: 1}
 }
 
 func main() {
-	ref_1 := make_box()
+	ref_1 := makeBox()
 	v := ref_1.inc()
 	ref_1_2 := 7
 	_ = v

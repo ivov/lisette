@@ -29,10 +29,10 @@ func (c CacheKind) Get(_ string) *tls.ClientSessionState {
 
 func (c CacheKind) Put(_ string, _ *tls.ClientSessionState) {}
 
-func use_cache(_ tls.ClientSessionCache) {}
+func useCache(_ tls.ClientSessionCache) {}
 
 func main() {
-	use_cache(_lisAdapter_CacheKind_ClientSessionCache_0{inner: MakeCacheKindMem()})
+	useCache(_lisAdapter_CacheKind_ClientSessionCache_0{inner: MakeCacheKindMem()})
 }
 
 type _lisAdapter_CacheKind_ClientSessionCache_0 struct {

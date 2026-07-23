@@ -118,7 +118,7 @@ impl Planner<'_> {
                         Some(BindingValue::InlineExpr(_))
                     )
                 {
-                    let var = self.scope.resolve_or_escape_go_name(value);
+                    let var = self.reference_go_name(value);
                     return ResolvedSubject::Existing { var };
                 }
                 let var = self.fresh_var(temp_hint);
@@ -244,7 +244,7 @@ impl Planner<'_> {
                 Some(BindingValue::InlineExpr(_))
             );
             if !has_collision && !value.contains('.') && !bound_to_inline {
-                return (self.scope.resolve_or_escape_go_name(value), Vec::new());
+                return (self.reference_go_name(value), Vec::new());
             }
         }
         let var = self.fresh_var(Some("subject"));

@@ -39,11 +39,11 @@ func (b *Box) mutate(val string) {
 	b.content = val
 }
 
-func apply_mutation[T Mutable](item T, val string) {
+func applyMutation[T Mutable](item T, val string) {
 	item.mutate(val)
 }
 
 func test() {
 	b := Box{content: "original"}
-	apply_mutation(&b, "changed")
+	applyMutation(&b, "changed")
 }

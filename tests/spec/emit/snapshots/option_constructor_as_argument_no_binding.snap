@@ -14,7 +14,7 @@ package main
 
 import lisette "github.com/ivov/lisette/prelude"
 
-func unwrap_or(o lisette.Option[int], fallback int) int {
+func unwrapOr(o lisette.Option[int], fallback int) int {
 	if o.Tag == lisette.OptionSome {
 		return o.SomeVal
 	}
@@ -22,5 +22,5 @@ func unwrap_or(o lisette.Option[int], fallback int) int {
 }
 
 func test() int {
-	return unwrap_or(lisette.MakeOptionSome(42), 0)
+	return unwrapOr(lisette.MakeOptionSome(42), 0)
 }

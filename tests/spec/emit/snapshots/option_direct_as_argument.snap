@@ -18,14 +18,14 @@ package main
 
 import lisette "github.com/ivov/lisette/prelude"
 
-func maybe_int(b bool) (int, bool) {
+func maybeInt(b bool) (int, bool) {
 	if b {
 		return 42, true
 	}
 	return 0, false
 }
 
-func unwrap_or(o lisette.Option[int], fallback int) int {
+func unwrapOr(o lisette.Option[int], fallback int) int {
 	if o.Tag == lisette.OptionSome {
 		return o.SomeVal
 	}
@@ -33,6 +33,6 @@ func unwrap_or(o lisette.Option[int], fallback int) int {
 }
 
 func test() int {
-	option_1 := lisette.OptionFromCommaOk[int](maybe_int(true))
-	return unwrap_or(option_1, 0)
+	option_1 := lisette.OptionFromCommaOk[int](maybeInt(true))
+	return unwrapOr(option_1, 0)
 }

@@ -17,13 +17,13 @@ description: |
 ---
 package main
 
-func get_ch() chan int {
+func getCh() chan int {
 	return make(chan int, 1)
 }
 
 func main() int {
 	var result int
-	ch_1 := get_ch()
+	ch_1 := getCh()
 	for {
 		select {
 		case v, ok := <-ch_1:

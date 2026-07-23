@@ -67,7 +67,7 @@ impl Planner<'_> {
             let method_name = if should_export {
                 go_name::snake_to_camel(function.name)
             } else {
-                function.name.to_string()
+                go_name::snake_to_lower_camel(function.name)
             };
             let free_name = format!("{}_{}", ctx.receiver_name, method_name).into();
             let mut combined_generics = ctx.generics.to_vec();

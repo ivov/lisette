@@ -12,12 +12,12 @@ func (r Reader) Read(_ []uint8) (int, error) {
 	return 0, io.EOF
 }
 
-func use_reader(r io.Reader) int {
+func useReader(r io.Reader) int {
 	_ = r
 	return 0
 }
 
 func main() {
 	r := Reader{}
-	_ = use_reader(r)
+	_ = useReader(r)
 }

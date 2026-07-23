@@ -16,7 +16,7 @@ package main
 
 import lisette "github.com/ivov/lisette/prelude"
 
-func get_range() lisette.Range[int] {
+func getRange() lisette.Range[int] {
 	return lisette.Range[int]{
 		Start: 0,
 		End:   5,
@@ -25,7 +25,7 @@ func get_range() lisette.Range[int] {
 
 func test() int {
 	sum := 0
-	_range_1 := get_range()
+	_range_1 := getRange()
 	for i := _range_1.Start; i < _range_1.End; i++ {
 		sum += i
 	}

@@ -47,7 +47,7 @@ type Level struct {
 	Tag LevelTag
 }
 
-const LIMIT int = 9
+const Limit int = 9
 
 func Pick() Level {
 	return MakeLevelHigh()

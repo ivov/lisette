@@ -24,7 +24,7 @@ func (p Point) GoString() string {
 	return fmt.Sprintf("Point { x: %v, y: %v }", p.x, p.y)
 }
 
-func (p Point) to_string() string {
+func (p Point) toString() string {
 	return p.String()
 }
 

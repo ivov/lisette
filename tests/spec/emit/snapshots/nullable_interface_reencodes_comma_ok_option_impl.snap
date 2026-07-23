@@ -55,7 +55,7 @@ func (b Bar[T]) find() (T, bool) {
 	return *new(T), false
 }
 
-func use_opt(o Opt) {
+func useOpt(o Opt) {
 	raw_2 := o.find()
 	option_3 := lisette.OptionFromNilable[*Thing](raw_2, raw_2 == nil)
 	if option_3.Tag == lisette.OptionSome {
@@ -64,7 +64,7 @@ func use_opt(o Opt) {
 }
 
 func main() {
-	use_opt(_lisAdapter_Bar_Opt_0{inner: Bar[*Thing]{x: lisette.MakeOptionNone[*Thing]()}})
+	useOpt(_lisAdapter_Bar_Opt_0{inner: Bar[*Thing]{x: lisette.MakeOptionNone[*Thing]()}})
 }
 
 type _lisAdapter_Bar_Opt_0 struct {

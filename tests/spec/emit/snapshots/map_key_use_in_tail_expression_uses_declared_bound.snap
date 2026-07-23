@@ -12,10 +12,10 @@ description: |
 ---
 package main
 
-func is_empty[T comparable]() bool {
+func isEmpty[T comparable]() bool {
 	return len(make(map[T]int)) == 0
 }
 
 func main() {
-	_ = is_empty[int]()
+	_ = isEmpty[int]()
 }

@@ -34,23 +34,23 @@ package main
 
 import "example.com/box"
 
-func use_ref(r box.Ref[int]) int {
+func useRef(r box.Ref[int]) int {
 	return r.Inner
 }
 
-func use_slice(s box.Slice[int]) int {
+func useSlice(s box.Slice[int]) int {
 	return s.Value
 }
 
-func use_map(m box.Map[string, int]) int {
+func useMap(m box.Map[string, int]) int {
 	return m.Val
 }
 
-func make_ref() box.Ref[int] {
+func makeRef() box.Ref[int] {
 	return box.Ref[int]{Inner: 1}
 }
 
-func maybe_ref(r box.Ref[int]) (box.Ref[int], bool) {
+func maybeRef(r box.Ref[int]) (box.Ref[int], bool) {
 	return r, true
 }
 

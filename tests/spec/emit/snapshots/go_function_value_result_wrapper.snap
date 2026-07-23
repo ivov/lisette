@@ -24,7 +24,7 @@ import (
 	"strconv"
 )
 
-func parse_with(f func(string) (int, error), s string) int {
+func parseWith(f func(string) (int, error), s string) int {
 	ret_1, ret_2 := f(s)
 	if ret_2 == nil {
 		n := ret_1
@@ -35,6 +35,6 @@ func parse_with(f func(string) (int, error), s string) int {
 }
 
 func main() {
-	n := parse_with(strconv.Atoi, "42")
+	n := parseWith(strconv.Atoi, "42")
 	fmt.Println(n)
 }

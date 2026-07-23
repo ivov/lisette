@@ -12,10 +12,10 @@ description: |
 ---
 package main
 
-func get_value() int {
+func getValue() int {
 	return 42
 }
 
 func test() int {
-	return get_value()
+	return getValue()
 }

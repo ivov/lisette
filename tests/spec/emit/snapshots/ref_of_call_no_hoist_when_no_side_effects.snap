@@ -11,15 +11,15 @@ description: |
 ---
 package main
 
-func takes_two(a int, b *int) int {
+func takesTwo(a int, b *int) int {
 	return a + *b
 }
 
-func make_int() int {
+func makeInt() int {
 	return 2
 }
 
 func test() int {
-	ref_1 := make_int()
-	return takes_two(1, &ref_1)
+	ref_1 := makeInt()
+	return takesTwo(1, &ref_1)
 }

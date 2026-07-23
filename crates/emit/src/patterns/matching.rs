@@ -395,7 +395,7 @@ impl Planner<'_> {
                 Some(BindingValue::InlineExpr(_))
             );
             if !has_collision && !name.contains('.') && !bound_to_inline {
-                let var = self.scope.resolve_or_escape_go_name(&name);
+                let var = self.reference_go_name(&name);
                 return (var.clone(), SubjectDeclaration::PlainDiscard { var });
             }
         }

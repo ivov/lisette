@@ -17,14 +17,14 @@ description: |
 ---
 package main
 
-func process_close() {}
+func processClose() {}
 
 func test() {
 	ch := make(chan int)
 	select {
 	case _, ok := <-ch:
 		if !ok {
-			process_close()
+			processClose()
 		}
 	default:
 	}

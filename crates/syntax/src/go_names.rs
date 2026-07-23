@@ -112,6 +112,48 @@ pub fn snake_to_camel(s: &str) -> String {
     }
 }
 
+fn split_underscore_prefix(s: &str) -> (&str, &str) {
+    s.split_at(s.len() - s.trim_start_matches('_').len())
+}
+
+fn camel_segment(segment: &str) -> String {
+    if segment.chars().any(char::is_lowercase) {
+        return capitalize_first(segment);
+    }
+    let mut chars = segment.chars();
+    match chars.next() {
+        None => String::new(),
+        Some(first) => first
+            .to_uppercase()
+            .chain(chars.flat_map(char::to_lowercase))
+            .collect(),
+    }
+}
+
+pub fn screaming_snake_to_camel(s: &str) -> String {
+    let (prefix, rest) = split_underscore_prefix(s);
+    let converted: String = rest.split('_').map(camel_segment).collect();
+    format!("{}{}", prefix, converted)
+}
+
+pub fn snake_to_lower_camel(s: &str) -> String {
+    let (prefix, rest) = split_underscore_prefix(s);
+    let mut segments = rest.split('_');
+    let mut out = String::from(prefix);
+    if let Some(first) = segments.next() {
+        out.push_str(first);
+    }
+    for segment in segments {
+        out.push_str(&capitalize_first(segment));
+    }
+    out
+}
+
+/// The emitted Go name of an unexported method.
+pub fn unexported_method_go_name(name: &str) -> String {
+    escape_keyword(&snake_to_lower_camel(name)).into_owned()
+}
+
 pub fn escape_keyword(name: &str) -> Cow<'_, str> {
     if GO_KEYWORDS.contains(&name) {
         Cow::Owned(format!("{}_", name))
@@ -153,8 +195,10 @@ pub fn struct_field_go_name(
 ) -> Cow<'_, str> {
     if struct_field_is_exported(field, struct_forces_export) {
         Cow::Owned(escape_keyword(&snake_to_camel(&field.name)).into_owned())
-    } else {
+    } else if field.embedded {
         escape_keyword(&field.name)
+    } else {
+        Cow::Owned(escape_keyword(&snake_to_lower_camel(&field.name)).into_owned())
     }
 }
 
@@ -201,7 +245,7 @@ pub fn conformance_method<'a>(
         let emitted = if info.exported {
             Cow::Owned(snake_to_camel(name))
         } else {
-            Cow::Borrowed(name.as_str())
+            Cow::Owned(snake_to_lower_camel(name))
         };
         if !exact && emitted != *want {
             continue;
@@ -268,6 +312,43 @@ mod tests {
         assert_eq!(snake_to_camel("fooBar"), "FooBar");
         assert_eq!(snake_to_camel("x"), "X");
         assert_eq!(snake_to_camel("x_"), "X");
+    }
+
+    #[test]
+    fn screaming_snake_to_camel_converts_constants() {
+        assert_eq!(screaming_snake_to_camel("MAX_SIZE"), "MaxSize");
+        assert_eq!(screaming_snake_to_camel("HTTP_TIMEOUT"), "HttpTimeout");
+        assert_eq!(screaming_snake_to_camel("A"), "A");
+        assert_eq!(screaming_snake_to_camel("MAX_SIZE_2"), "MaxSize2");
+        assert_eq!(screaming_snake_to_camel("max_size"), "MaxSize");
+    }
+
+    #[test]
+    fn screaming_snake_to_camel_preserves_visibility_and_tails() {
+        assert_eq!(screaming_snake_to_camel("_INTERNAL"), "_Internal");
+        assert_eq!(screaming_snake_to_camel("HTTPTimeout"), "HTTPTimeout");
+        assert_eq!(screaming_snake_to_camel("定数"), "定数");
+    }
+
+    #[test]
+    fn snake_to_lower_camel_converts_private_names() {
+        assert_eq!(snake_to_lower_camel("retry_count"), "retryCount");
+        assert_eq!(snake_to_lower_camel("used_private"), "usedPrivate");
+        assert_eq!(snake_to_lower_camel("helper"), "helper");
+        assert_eq!(snake_to_lower_camel("foo_bar_"), "fooBar");
+    }
+
+    #[test]
+    fn snake_to_lower_camel_preserves_prefix_and_first_segment() {
+        assert_eq!(snake_to_lower_camel("_temp_val"), "_tempVal");
+        assert_eq!(snake_to_lower_camel("挨拶_する"), "挨拶する");
+        assert_eq!(snake_to_lower_camel("Read"), "Read");
+    }
+
+    #[test]
+    fn unexported_method_go_name_escapes_keywords() {
+        assert_eq!(unexported_method_go_name("select"), "select_");
+        assert_eq!(unexported_method_go_name("do_select"), "doSelect");
     }
 
     #[test]

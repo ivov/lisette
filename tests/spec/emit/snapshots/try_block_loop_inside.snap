@@ -26,14 +26,14 @@ package main
 
 import lisette "github.com/ivov/lisette/prelude"
 
-func get_items() lisette.Result[[]int, string] {
+func getItems() lisette.Result[[]int, string] {
 	return lisette.MakeResultOk[[]int, string]([]int{1, 2, 3})
 }
 
 func test() int {
 	var result lisette.Result[int, string]
 	tryResult_1 := func() lisette.Result[int, string] {
-		check_2 := get_items()
+		check_2 := getItems()
 		if check_2.Tag != lisette.ResultOk {
 			return lisette.MakeResultErr[int, string](check_2.ErrVal)
 		}

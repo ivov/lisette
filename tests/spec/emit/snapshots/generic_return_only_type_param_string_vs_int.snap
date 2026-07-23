@@ -47,21 +47,21 @@ type Validated[T any] struct {
 }
 
 type ValidationResult[T any] struct {
-	value      Validated[T]
-	field_name string
+	value     Validated[T]
+	fieldName string
 }
 
-func ValidationResult_new_invalid[T any](field, msg string) ValidationResult[T] {
+func ValidationResult_newInvalid[T any](field, msg string) ValidationResult[T] {
 	return ValidationResult[T]{
-		value:      MakeValidatedInvalid[T](msg),
-		field_name: field,
+		value:     MakeValidatedInvalid[T](msg),
+		fieldName: field,
 	}
 }
 
-func validate_positive(field string, _ int) ValidationResult[int] {
-	return ValidationResult_new_invalid[int](field, "must be positive")
+func validatePositive(field string, _ int) ValidationResult[int] {
+	return ValidationResult_newInvalid[int](field, "must be positive")
 }
 
-func validate_non_empty(field, _ string) ValidationResult[string] {
-	return ValidationResult_new_invalid[string](field, "must not be empty")
+func validateNonEmpty(field, _ string) ValidationResult[string] {
+	return ValidationResult_newInvalid[string](field, "must not be empty")
 }

@@ -23,7 +23,7 @@ import (
 	"os"
 )
 
-func write_all(file *os.File) {
+func writeAll(file *os.File) {
 	ret_1, ret_2 := file.Write([]byte{'h', 'i'})
 	if ret_2 == nil {
 		n := ret_1

@@ -14,7 +14,7 @@ package main
 
 import lisette "github.com/ivov/lisette/prelude"
 
-func try_value(x int) lisette.Result[int, string] {
+func tryValue(x int) lisette.Result[int, string] {
 	if x > 0 {
 		return lisette.MakeResultOk[int, string](x)
 	}
@@ -22,5 +22,5 @@ func try_value(x int) lisette.Result[int, string] {
 }
 
 func test() {
-	_ = []lisette.Result[int, string]{try_value(1), try_value(-1), try_value(3)}
+	_ = []lisette.Result[int, string]{tryValue(1), tryValue(-1), tryValue(3)}
 }

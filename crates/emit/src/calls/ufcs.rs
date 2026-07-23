@@ -320,7 +320,7 @@ impl Planner<'_> {
         let go_method = if is_public {
             go_name::snake_to_camel(method)
         } else {
-            go_name::escape_keyword(method).into_owned()
+            go_name::unexported_method_go_name(method)
         };
 
         let stages: Vec<ValuePlan> = args

@@ -18,7 +18,7 @@ description: |
 ---
 package main
 
-func bump_false(r *int) bool {
+func bumpFalse(r *int) bool {
 	*r = 1
 	return false
 }
@@ -27,7 +27,7 @@ func test() int {
 	x := 0
 	subject_1 := x
 	if subject_1 == 0 {
-		if bump_false(&x) {
+		if bumpFalse(&x) {
 			return -1
 		}
 	}

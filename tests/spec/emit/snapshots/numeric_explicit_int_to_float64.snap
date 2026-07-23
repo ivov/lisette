@@ -16,14 +16,14 @@ description: |
 ---
 package main
 
-func get_int() int {
+func getInt() int {
 	return 42
 }
 
-func accept_float(x float64) float64 {
+func acceptFloat(x float64) float64 {
 	return x
 }
 
 func test() float64 {
-	return accept_float(float64(get_int()))
+	return acceptFloat(float64(getInt()))
 }

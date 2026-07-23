@@ -19,7 +19,7 @@ import (
 
 type Ints = []int
 
-func convert_all(xs Ints) {
+func convertAll(xs Ints) {
 	_ = lisette.SliceMap(xs, func(arg0 int) lisette.Result[string, error] {
 		ret_1, ret_2 := ext.Parse(arg0)
 		if ret_2 != nil {

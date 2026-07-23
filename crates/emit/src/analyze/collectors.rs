@@ -53,15 +53,24 @@ impl Planner<'_> {
         }
     }
 
-    /// Detect free top-level private Lisette names (free functions and
-    /// constants) whose natural Go form would collide after `escape_reserved`
-    /// — e.g. `len` escapes to `len_` and clashes with a sibling `len_`. The
-    /// verbatim name claims its Go form; each escaped collider is remapped
-    /// to `name_2`, `name_3`, etc. until unique. Public functions go through
-    /// `snake_to_camel` and a separate identifier path, so they are not
-    /// considered here.
+    /// Record the emitted Go names of top-level private functions and
+    /// constants that differ from their source spelling. Colliding private
+    /// functions freshen to `name_2`, `name_3`, etc. Constants never
+    /// freshen: cross-module references derive a constant's Go name from
+    /// the source name alone, so converging constants surface as a Go name
+    /// collision instead.
     pub(crate) fn collect_escape_remap(&mut self, files: &[&File]) {
-        let entries: Vec<(&str, String)> = files
+        for item in files.iter().flat_map(|f| &f.items) {
+            if let Expression::Const { identifier, .. } = item {
+                let natural = go_name::screaming_snake_to_camel(identifier);
+                if natural != identifier.as_str() {
+                    self.module
+                        .record_escape_remap(identifier.to_string(), natural);
+                }
+            }
+        }
+
+        let entries: Vec<(&str, String, String)> = files
             .iter()
             .flat_map(|f| &f.items)
             .filter_map(|item| match item {
@@ -69,27 +78,32 @@ impl Planner<'_> {
                     name,
                     visibility: Visibility::Private,
                     ..
-                } => Some((name.as_str(), go_name::escape_reserved(name).into_owned())),
-                Expression::Const { identifier, .. } => Some((
-                    identifier.as_str(),
-                    go_name::escape_reserved(identifier).into_owned(),
-                )),
+                } => {
+                    let base = go_name::snake_to_lower_camel(name);
+                    let natural = go_name::escape_reserved(&base).into_owned();
+                    Some((name.as_str(), base, natural))
+                }
                 _ => None,
             })
             .collect();
 
         let mut taken: HashSet<String> = entries
             .iter()
-            .filter(|(name, natural)| *name == natural)
-            .map(|(_, natural)| natural.clone())
+            .filter(|(name, _, natural)| *name == natural)
+            .map(|(_, _, natural)| natural.clone())
             .collect();
 
-        for (name, natural) in &entries {
-            if *name == natural || taken.insert(natural.clone()) {
+        for (name, base, natural) in &entries {
+            if *name == natural {
+                continue;
+            }
+            if taken.insert(natural.clone()) {
+                self.module
+                    .record_escape_remap((*name).to_string(), natural.clone());
                 continue;
             }
             let fresh = (2..)
-                .map(|n| format!("{}_{}", name, n))
+                .map(|n| format!("{}_{}", base, n))
                 .find(|c| !taken.contains(c))
                 .expect("freshening counter is unbounded");
             taken.insert(fresh.clone());

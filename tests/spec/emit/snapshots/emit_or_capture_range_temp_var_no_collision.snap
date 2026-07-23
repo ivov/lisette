@@ -16,7 +16,7 @@ package main
 
 import lisette "github.com/ivov/lisette/prelude"
 
-func make_range() lisette.Range[int] {
+func makeRange() lisette.Range[int] {
 	return lisette.Range[int]{
 		Start: 0,
 		End:   2,
@@ -26,7 +26,7 @@ func make_range() lisette.Range[int] {
 func main() {
 	s := []int{1, 2, 3}
 	_base_2 := s
-	range_1 := make_range()
+	range_1 := makeRange()
 	sub := _base_2[range_1.Start:range_1.End:range_1.End]
 	range_1_3 := 7
 	_ = sub

@@ -16,7 +16,7 @@ import (
 	"os"
 )
 
-func open_first(path string) (int, error) {
+func openFirst(path string) (int, error) {
 	ret_1, ret_2 := os.Open(path)
 	if ret_2 != nil {
 		return 0, ret_2

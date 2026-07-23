@@ -38,7 +38,7 @@ type T struct {
 	v int
 }
 
-func make_t() T {
+func makeT() T {
 	return T{v: 7}
 }
 
@@ -48,7 +48,7 @@ type Box[T_2 any] struct {
 
 func (b Box[T_2]) probe() int {
 	opt := lisette.MakeOptionNone[T]()
-	opt = lisette.MakeOptionSome(make_t())
+	opt = lisette.MakeOptionSome(makeT())
 	if opt.Tag == lisette.OptionSome {
 		return opt.SomeVal.v
 	}

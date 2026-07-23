@@ -20,10 +20,10 @@ import (
 	"runtime"
 )
 
-func const_count() float64 {
+func constCount() float64 {
 	return float64((1 << math.MaxInt8))
 }
 
-func var_count() float64 {
+func varCount() float64 {
 	return float64(int((1 << runtime.MemProfileRate)))
 }

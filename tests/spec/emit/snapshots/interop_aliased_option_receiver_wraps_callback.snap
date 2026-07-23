@@ -19,7 +19,7 @@ import (
 
 type MyOpt = lisette.Option[int]
 
-func use_it(o MyOpt) {
+func useIt(o MyOpt) {
 	lisette.OptionAndThen(o, func(arg0 int) lisette.Option[string] {
 		return lisette.OptionFromCommaOk[string](ext.Lookup(arg0))
 	})

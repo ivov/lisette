@@ -11,14 +11,14 @@ description: |
 ---
 package main
 
-func make_i() int {
+func makeI() int {
 	return 0
 }
 
 func main() {
 	outer := [][]int{[]int{1}, []int{2}, []int{3}}
 	base_2 := outer
-	idx_3 := make_i()
-	recv_1 := outer[make_i()]
+	idx_3 := makeI()
+	recv_1 := outer[makeI()]
 	base_2[idx_3] = append(recv_1[:len(recv_1):len(recv_1)], 4)
 }

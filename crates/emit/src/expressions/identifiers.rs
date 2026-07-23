@@ -54,14 +54,14 @@ impl Planner<'_> {
             IdentifierKind::UnitConstructor { name, type_args } => GoExpression::call(
                 GoExpression::opaque(format!(
                     "{}{}",
-                    self.resolve_go_name(&name, None),
+                    self.resolve_go_name(&name, None, false),
                     type_args
                 )),
                 Vec::new(),
             ),
             IdentifierKind::ConstructorFunction { name, type_args } => GoExpression::name(format!(
                 "{}{}",
-                self.resolve_go_name(&name, None),
+                self.resolve_go_name(&name, None, false),
                 type_args
             )),
             IdentifierKind::Regular { name } => {
@@ -69,7 +69,7 @@ impl Planner<'_> {
                     return GoExpression::opaque(expression);
                 }
                 let resolved = self.capitalize_static_method_if_public(&name);
-                let go_name = self.resolve_go_name(&resolved, qualified);
+                let go_name = self.resolve_go_name(&resolved, qualified, bound_go_name.is_some());
                 if !ctx.is_callee()
                     && let Some(type_args) = self.format_generic_value_type_args(&name, ty)
                 {
@@ -295,7 +295,7 @@ impl Planner<'_> {
         let go_method = if should_export {
             go_name::snake_to_camel(method_part)
         } else {
-            go_name::escape_keyword(method_part).into_owned()
+            go_name::unexported_method_go_name(method_part)
         };
 
         let type_args = if let Type::Nominal { ref params, .. } = stripped {

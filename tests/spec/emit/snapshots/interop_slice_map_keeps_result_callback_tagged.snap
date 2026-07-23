@@ -15,7 +15,7 @@ import (
 	lisette "github.com/ivov/lisette/prelude"
 )
 
-func convert_all(xs []int) {
+func convertAll(xs []int) {
 	_ = lisette.SliceMap(xs, func(arg0 int) lisette.Result[string, error] {
 		ret_1, ret_2 := ext.Parse(arg0)
 		if ret_2 != nil {

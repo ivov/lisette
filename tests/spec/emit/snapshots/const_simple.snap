@@ -10,8 +10,8 @@ description: |
 ---
 package main
 
-const MAX_SIZE int = 100
+const MaxSize int = 100
 
 func test() int {
-	return MAX_SIZE
+	return MaxSize
 }

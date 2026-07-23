@@ -21,7 +21,7 @@ type Point struct {
 	y int
 }
 
-func make_point() Point {
+func makePoint() Point {
 	return Point{
 		x: 1,
 		y: 2,
@@ -29,6 +29,6 @@ func make_point() Point {
 }
 
 func test() int {
-	_ = make_point()
+	_ = makePoint()
 	return 1
 }

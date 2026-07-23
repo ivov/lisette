@@ -8,6 +8,6 @@ description: |
 ---
 package main
 
-func get_value() int {
+func getValue() int {
 	return 42
 }

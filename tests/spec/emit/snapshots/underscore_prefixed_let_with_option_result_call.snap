@@ -14,10 +14,10 @@ package main
 
 import lisette "github.com/ivov/lisette/prelude"
 
-func get_result() lisette.Result[int, string] {
+func getResult() lisette.Result[int, string] {
 	return lisette.MakeResultOk[int, string](42)
 }
 
 func test() {
-	_ = get_result()
+	_ = getResult()
 }

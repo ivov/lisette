@@ -15,7 +15,7 @@ description: |
 ---
 package main
 
-func sum_positives(items []int) int {
+func sumPositives(items []int) int {
 	sum := 0
 loop_1:
 	for _, item := range items {

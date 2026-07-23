@@ -13,7 +13,7 @@ package main
 
 import "example.com/shapes"
 
-func try_area(s shapes.Shape) int {
+func tryArea(s shapes.Shape) int {
 	asserted_1, ok_2 := s.(shapes.Rect)
 	if !ok_2 {
 		return -1

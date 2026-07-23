@@ -15,7 +15,7 @@ package main
 
 import lisette "github.com/ivov/lisette/prelude"
 
-func get_value(s string) (int, bool) {
+func getValue(s string) (int, bool) {
 	if s == "ok" {
 		return 42, true
 	}
@@ -23,7 +23,7 @@ func get_value(s string) (int, bool) {
 }
 
 func test() int {
-	option_2 := lisette.OptionFromCommaOk[int](get_value("ok"))
+	option_2 := lisette.OptionFromCommaOk[int](getValue("ok"))
 	subject_1 := option_2
 	if subject_1.Tag != lisette.OptionSome {
 		return 0

@@ -15,12 +15,12 @@ package main
 
 import lisette "github.com/ivov/lisette/prelude"
 
-func get_value() (int, bool) {
+func getValue() (int, bool) {
 	return 42, true
 }
 
 func test() (int, bool) {
-	option_1 := lisette.OptionFromCommaOk[int](get_value())
+	option_1 := lisette.OptionFromCommaOk[int](getValue())
 	x := option_1
 	v_2 := x
 	if v_2.Tag == lisette.OptionSome {

@@ -37,7 +37,7 @@ type Box struct {
 	x int
 }
 
-func make_key(counter *int) Key {
+func makeKey(counter *int) Key {
 	*counter++
 	return Key{k: "a"}
 }
@@ -45,7 +45,7 @@ func make_key(counter *int) Key {
 func main() {
 	counter := 0
 	m := lisette.MapFrom([]lisette.Tuple2[string, Box]{lisette.MakeTuple2("a", Box{x: 1})})
-	key := make_key(&counter).k
+	key := makeKey(&counter).k
 	entry := m[key]
 	entry.x = 2
 	m[key] = entry

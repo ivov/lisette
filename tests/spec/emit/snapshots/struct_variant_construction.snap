@@ -28,7 +28,7 @@ type Message struct {
 	Y   int
 }
 
-func make_move() Message {
+func makeMove() Message {
 	return Message{
 		Tag: MessageMove,
 		X:   10,

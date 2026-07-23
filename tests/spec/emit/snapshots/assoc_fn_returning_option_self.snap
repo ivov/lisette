@@ -23,7 +23,7 @@ type Thing struct {
 	name string
 }
 
-func Thing_maybe_create(name string) (Thing, bool) {
+func Thing_maybeCreate(name string) (Thing, bool) {
 	if len(name) > 0 {
 		return Thing{name: name}, true
 	}
@@ -31,5 +31,5 @@ func Thing_maybe_create(name string) (Thing, bool) {
 }
 
 func test() (Thing, bool) {
-	return Thing_maybe_create("hello")
+	return Thing_maybeCreate("hello")
 }

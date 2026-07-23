@@ -13,10 +13,10 @@ package main
 
 import lisette "github.com/ivov/lisette/prelude"
 
-func do_nothing() {}
+func doNothing() {}
 
 func main() {
-	do_nothing()
+	doNothing()
 	t := lisette.MakeTuple2(42, struct{}{})
 	_ = t.First
 }

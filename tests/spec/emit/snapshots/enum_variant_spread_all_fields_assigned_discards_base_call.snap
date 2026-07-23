@@ -41,7 +41,7 @@ type Cursor struct {
 	W   int
 }
 
-func make_base() Cursor {
+func makeBase() Cursor {
 	fmt.Println("base")
 	return Cursor{
 		Tag: CursorPoint,
@@ -51,7 +51,7 @@ func make_base() Cursor {
 }
 
 func test() Cursor {
-	_ = make_base()
+	_ = makeBase()
 	return Cursor{
 		Tag: CursorArea,
 		Id:  4,

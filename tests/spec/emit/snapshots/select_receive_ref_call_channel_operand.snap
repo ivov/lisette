@@ -17,12 +17,12 @@ description: |
 ---
 package main
 
-func get_channel(ch *chan int) *chan int {
+func getChannel(ch *chan int) *chan int {
 	return ch
 }
 
 func test(ch *chan int) {
-	ch_1 := *get_channel(ch)
+	ch_1 := *getChannel(ch)
 	for {
 		select {
 		case v, ok := <-ch_1:

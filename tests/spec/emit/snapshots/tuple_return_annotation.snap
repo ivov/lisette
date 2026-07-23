@@ -12,10 +12,10 @@ description: |
 ---
 package main
 
-func get_pair() (int, string) {
+func getPair() (int, string) {
 	return 42, "hello"
 }
 
 func test() {
-	get_pair()
+	getPair()
 }

@@ -33,7 +33,7 @@ func (c Counter) String() string {
 	return fmt.Sprint(c.count)
 }
 
-func make_pair(c Counter, positive bool) (fmt.Stringer, int) {
+func makePair(c Counter, positive bool) (fmt.Stringer, int) {
 	if positive {
 		return Counter{count: c.count + 1}, c.count
 	}

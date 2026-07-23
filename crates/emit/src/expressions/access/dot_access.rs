@@ -75,9 +75,10 @@ impl Planner<'_> {
 
         let is_exported =
             self.resolve_is_exported(expression, &expression_ty, member, dot_access_kind);
+        let is_embedded = self.field_is_embedded(&expression_ty, member);
         let field = self
             .try_resolve_cross_module_const(&expression_ty, member)
-            .unwrap_or_else(|| go_field_name(&expression_ty, member, is_exported));
+            .unwrap_or_else(|| go_field_name(&expression_ty, member, is_exported, is_embedded));
 
         if let Some(s) = self.plan_nullable_field_access(
             &mut setup,
@@ -413,15 +414,21 @@ impl Planner<'_> {
         if is_function {
             return None;
         }
-        Some(member.to_string())
+        Some(go_name::screaming_snake_to_camel(member))
     }
 }
 
 /// Pick the Go-side name for a struct field or method. Exported members on
 /// prelude types follow snake_case → camelCase (matching the stdlib
 /// convention); exported members elsewhere get first-letter capitalization;
-/// non-exported members are escaped to avoid Go keywords.
-fn go_field_name(expression_ty: &Type, member: &str, is_exported: bool) -> String {
+/// non-exported members become lower camelCase, embedded fields keep their
+/// type's name.
+fn go_field_name(
+    expression_ty: &Type,
+    member: &str,
+    is_exported: bool,
+    is_embedded: bool,
+) -> String {
     if expression_ty
         .as_import_namespace()
         .is_some_and(go_name::is_go_import)
@@ -435,7 +442,10 @@ fn go_field_name(expression_ty: &Type, member: &str, is_exported: bool) -> Strin
         .is_some_and(|id| id.starts_with(go_name::PRELUDE_PREFIX));
 
     if !is_exported {
-        return go_name::escape_keyword(member).into_owned();
+        if is_embedded {
+            return go_name::escape_keyword(member).into_owned();
+        }
+        return go_name::unexported_method_go_name(member);
     }
     if is_prelude_type {
         go_name::snake_to_camel(member)

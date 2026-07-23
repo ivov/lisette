@@ -16,13 +16,13 @@ description: |
 ---
 package main
 
-func make_bound() int {
+func makeBound() int {
 	return 3
 }
 
 func main() {
 	sum := 0
-	_bound_1 := make_bound()
+	_bound_1 := makeBound()
 	for i := 0; i < _bound_1; i++ {
 		sum += i
 	}

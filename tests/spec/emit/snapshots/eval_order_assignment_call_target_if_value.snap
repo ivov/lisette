@@ -11,14 +11,14 @@ description: |
 ---
 package main
 
-func get_items() []int {
+func getItems() []int {
 	return []int{1, 2, 3}
 }
 
 func main() {
 	items := []int{0, 0, 0}
 	base_2 := items
-	_base_3 := get_items()
+	_base_3 := getItems()
 	idx_4 := _base_3[0]
 	var tmp_1 int
 	if true {

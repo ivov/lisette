@@ -35,7 +35,7 @@ func (d D) String() string {
 	return fmt.Sprintf("D { x: %v }", d.X)
 }
 
-func (d D) to_string() string {
+func (d D) toString() string {
 	return d.String()
 }
 

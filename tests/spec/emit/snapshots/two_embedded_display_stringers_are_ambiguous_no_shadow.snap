@@ -25,7 +25,7 @@ func (a A) String() string {
 	return fmt.Sprintf("A { a: %v }", a.A)
 }
 
-func (a A) to_string() string {
+func (a A) toString() string {
 	return a.String()
 }
 
@@ -37,7 +37,7 @@ func (b B) String() string {
 	return fmt.Sprintf("B { b: %v }", b.B)
 }
 
-func (b B) to_string() string {
+func (b B) toString() string {
 	return b.String()
 }
 

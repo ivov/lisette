@@ -12,12 +12,12 @@ description: |
 ---
 package main
 
-func get_items() []int {
+func getItems() []int {
 	return []int{1}
 }
 
 func test() {
-	_arg_1 := get_items()
+	_arg_1 := getItems()
 	defer func() {
 		_ = len(_arg_1)
 	}()

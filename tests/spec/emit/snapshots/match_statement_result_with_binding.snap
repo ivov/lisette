@@ -19,7 +19,7 @@ package main
 
 import lisette "github.com/ivov/lisette/prelude"
 
-func use_value(_ int) {}
+func useValue(_ int) {}
 
 func divide(a, b int) lisette.Result[int, string] {
 	if b == 0 {
@@ -31,8 +31,8 @@ func divide(a, b int) lisette.Result[int, string] {
 func test() {
 	subject_1 := divide(10, 2)
 	if subject_1.Tag == lisette.ResultOk {
-		use_value(subject_1.OkVal)
+		useValue(subject_1.OkVal)
 	} else {
-		use_value(0)
+		useValue(0)
 	}
 }

@@ -367,7 +367,7 @@ impl Planner<'_> {
         if is_public {
             go_name::snake_to_camel(function_definition.name)
         } else if has_receiver {
-            go_name::escape_keyword(function_definition.name).into_owned()
+            go_name::unexported_method_go_name(function_definition.name)
         } else if let Some(remapped) = self.module.escape_remap(function_definition.name.as_str()) {
             remapped.to_string()
         } else {

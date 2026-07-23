@@ -21,7 +21,7 @@ import (
 	lisette "github.com/ivov/lisette/prelude"
 )
 
-func try_parse(s string) lisette.Result[int, string] {
+func tryParse(s string) lisette.Result[int, string] {
 	if s == "42" {
 		return lisette.MakeResultOk[int, string](42)
 	}
@@ -29,7 +29,7 @@ func try_parse(s string) lisette.Result[int, string] {
 }
 
 func test() {
-	subject_1 := try_parse("42")
+	subject_1 := tryParse("42")
 	if subject_1.Tag == lisette.ResultOk {
 		x := subject_1.OkVal
 		fmt.Printf("Parsed: %d\n", x)

@@ -22,7 +22,7 @@ func risky() lisette.Result[int, string] {
 	return lisette.MakeResultOk[int, string](1)
 }
 
-func do_something() {}
+func doSomething() {}
 
 func test() {
 	var r lisette.Result[int, string]
@@ -33,7 +33,7 @@ func test() {
 		}
 		x := check_2.OkVal
 		go func() {
-			do_something()
+			doSomething()
 		}()
 		return lisette.MakeResultOk[int, string](x)
 	}()

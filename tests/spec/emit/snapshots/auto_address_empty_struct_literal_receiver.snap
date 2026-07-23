@@ -16,8 +16,8 @@ package main
 
 type Foo struct{}
 
-func (f *Foo) need_ref() {}
+func (f *Foo) needRef() {}
 
 func test() {
-	(&Foo{}).need_ref()
+	(&Foo{}).needRef()
 }

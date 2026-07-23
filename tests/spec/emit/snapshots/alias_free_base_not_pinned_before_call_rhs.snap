@@ -12,12 +12,12 @@ description: |
 ---
 package main
 
-func pure_add(a int) int {
+func pureAdd(a int) int {
 	return a + 100
 }
 
 func run() int {
 	ws := []int{1, 2, 3}
-	ws[0] = pure_add(7)
+	ws[0] = pureAdd(7)
 	return ws[0]
 }

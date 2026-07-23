@@ -354,7 +354,7 @@ impl InferCtx<'_> {
         let selector = if public {
             syntax::go_names::snake_to_camel(method)
         } else {
-            method.to_string()
+            syntax::go_names::unexported_method_go_name(method)
         };
         let shadowed = promotion::field_selector_depth(store, resolved, &selector)
             .is_some_and(|field_depth| field_depth <= member.depth);

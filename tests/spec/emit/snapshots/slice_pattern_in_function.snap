@@ -15,7 +15,7 @@ description: |
 ---
 package main
 
-func sum_pair(pair []int) int {
+func sumPair(pair []int) int {
 	if len(pair) == 2 {
 		return pair[0] + pair[1]
 	}
@@ -23,5 +23,5 @@ func sum_pair(pair []int) int {
 }
 
 func test() int {
-	return sum_pair([]int{10, 20})
+	return sumPair([]int{10, 20})
 }

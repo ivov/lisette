@@ -135,6 +135,7 @@ impl Planner<'_> {
         }
         self.check_reserved_qualifier_generics(generics, diagnostics);
         let go = self.free_function_go_name(name, visibility);
+        self.check_reserved_prefix(name, name_span, diagnostics);
         self.check_reserved_prefix(&go, name_span, diagnostics);
         package_block.entry(go).or_default().push(*name_span);
         if syntax::attributes::has_test_attribute(attributes) {
@@ -158,6 +159,7 @@ impl Planner<'_> {
             return;
         };
         let go = self.const_go_name(identifier);
+        self.check_reserved_prefix(identifier, identifier_span, diagnostics);
         self.check_reserved_prefix(&go, identifier_span, diagnostics);
         package_block.entry(go).or_default().push(*identifier_span);
     }
@@ -468,7 +470,7 @@ impl Planner<'_> {
                 let method_go = if is_public || self.method_needs_export(method_name) {
                     go_name::snake_to_camel(method_name)
                 } else {
-                    go_name::escape_keyword(method_name).into_owned()
+                    go_name::unexported_method_go_name(method_name)
                 };
                 methods.entry(method_go).or_default().push(*method_span);
             }
@@ -521,8 +523,9 @@ impl Planner<'_> {
                 let method_go = if should_export {
                     go_name::snake_to_camel(name)
                 } else {
-                    go_name::escape_keyword(name).into_owned()
+                    go_name::unexported_method_go_name(name)
                 };
+                self.check_reserved_prefix(name, name_span, diagnostics);
                 self.check_reserved_prefix(&method_go, name_span, diagnostics);
                 selectors
                     .entry(type_go.clone())
@@ -536,7 +539,7 @@ impl Planner<'_> {
                 let method_go = if should_export {
                     go_name::snake_to_camel(name)
                 } else {
-                    name.to_string()
+                    go_name::snake_to_lower_camel(name)
                 };
                 let base = format!("{}_{}", receiver_name, method_go);
                 let go = self
@@ -544,6 +547,7 @@ impl Planner<'_> {
                     .escape_remap(&base)
                     .map(str::to_string)
                     .unwrap_or_else(|| go_name::escape_reserved(&base).into_owned());
+                self.check_reserved_prefix(name, name_span, diagnostics);
                 self.check_reserved_prefix(&go, name_span, diagnostics);
                 package_block.entry(go).or_default().push(*name_span);
             }

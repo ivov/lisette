@@ -11,7 +11,7 @@ import (
 
 type K = reflect.Kind
 
-func name_of(k K) string {
+func nameOf(k K) string {
 	switch k {
 	case reflect.String:
 		return "string"
@@ -23,5 +23,5 @@ func name_of(k K) string {
 }
 
 func main() {
-	fmt.Println(name_of(reflect.String))
+	fmt.Println(nameOf(reflect.String))
 }

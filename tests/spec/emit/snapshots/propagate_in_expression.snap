@@ -15,12 +15,12 @@ package main
 
 import lisette "github.com/ivov/lisette/prelude"
 
-func get_value() lisette.Result[int, string] {
+func getValue() lisette.Result[int, string] {
 	return lisette.MakeResultOk[int, string](100)
 }
 
 func test() lisette.Result[int, string] {
-	check_1 := get_value()
+	check_1 := getValue()
 	if check_1.Tag != lisette.ResultOk {
 		return lisette.MakeResultErr[int, string](check_1.ErrVal)
 	}

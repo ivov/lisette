@@ -79,7 +79,7 @@ impl Planner<'_> {
                 let selector = if self.method_needs_export(name) {
                     go_name::snake_to_camel(name)
                 } else {
-                    go_name::escape_keyword(name).into_owned()
+                    go_name::unexported_method_go_name(name)
                 };
                 if seen.insert(selector) {
                     result.push((name.clone(), ty.clone(), current_id.clone()));
@@ -374,7 +374,7 @@ impl Planner<'_> {
         let go_method_name = if self.method_needs_export(&method.name) {
             go_name::snake_to_camel(&method.name)
         } else {
-            go_name::escape_keyword(&method.name).into_owned()
+            go_name::unexported_method_go_name(&method.name)
         };
         let inner_call = format!(
             "{}.inner.{}({})",

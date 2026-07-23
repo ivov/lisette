@@ -22,7 +22,7 @@ package main
 import "fmt"
 
 type Display interface {
-	to_string() string
+	toString() string
 }
 
 type Point struct {
@@ -34,15 +34,15 @@ func (p Point) String() string {
 	return fmt.Sprintf("Point { x: %v, y: %v }", p.x, p.y)
 }
 
-func (p Point) to_string() string {
+func (p Point) toString() string {
 	return p.String()
 }
 
 func render(d Display) string {
-	return d.to_string()
+	return d.toString()
 }
 
-func use_it() string {
+func useIt() string {
 	return render(Point{
 		x: 1,
 		y: 2,

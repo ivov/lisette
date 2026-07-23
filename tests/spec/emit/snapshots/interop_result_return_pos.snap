@@ -24,12 +24,12 @@ import (
 	"strconv"
 )
 
-func make_parser() func(string) (int, error) {
+func makeParser() func(string) (int, error) {
 	return strconv.Atoi
 }
 
 func main() {
-	f := make_parser()
+	f := makeParser()
 	ret_1, ret_2 := f("42")
 	var result_3 lisette.Result[int, error]
 	if ret_2 != nil {

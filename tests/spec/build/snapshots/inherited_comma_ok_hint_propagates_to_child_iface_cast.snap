@@ -27,11 +27,11 @@ func (m MyCache) Get(_ string) *Entry {
 
 func (m MyCache) Touch() {}
 
-func use_extended(_ ExtendedCache) {}
+func useExtended(_ ExtendedCache) {}
 
 func main() {
 	c := MyCache{}
-	use_extended(_lisAdapter_MyCache_ExtendedCache_0{inner: c})
+	useExtended(_lisAdapter_MyCache_ExtendedCache_0{inner: c})
 }
 
 type _lisAdapter_MyCache_ExtendedCache_0 struct {

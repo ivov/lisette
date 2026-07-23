@@ -21,16 +21,16 @@ import (
 	lisette "github.com/ivov/lisette/prelude"
 )
 
-func safe_divide(a, b float64) (float64, bool) {
+func safeDivide(a, b float64) (float64, bool) {
 	if b == 0.0 {
 		return 0.0, false
 	}
 	return a / b, true
 }
 
-func parse_and_divide(a, b float64) lisette.Result[string, string] {
+func parseAndDivide(a, b float64) lisette.Result[string, string] {
 	var result float64
-	option_2 := lisette.OptionFromCommaOk[float64](safe_divide(a, b))
+	option_2 := lisette.OptionFromCommaOk[float64](safeDivide(a, b))
 	if option_2.Tag == lisette.OptionSome {
 		result = option_2.SomeVal
 	} else {

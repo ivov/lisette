@@ -5,7 +5,6 @@ use std::rc::Rc;
 use crate::Bindings;
 use crate::ReturnContext;
 use crate::context::lowering::LoopContext;
-use crate::escape_reserved;
 use crate::plan::bodies::LoopId;
 use crate::state::bindings::{BindingValue, InlineExpr};
 
@@ -112,13 +111,6 @@ impl ScopeState {
 
     /// Falls back to the keyword-escaped form when the name is unbound or
     /// inline-bound; callers needing a usable local must hoist a fresh temp.
-    pub(crate) fn resolve_or_escape_go_name(&self, lisette_name: &str) -> String {
-        self.bindings
-            .get_go_name(lisette_name)
-            .map(String::from)
-            .unwrap_or_else(|| escape_reserved(lisette_name).into_owned())
-    }
-
     pub(crate) fn has_binding_for_go_name(&self, go_name: &str) -> bool {
         self.bindings.has_go_name(go_name)
     }

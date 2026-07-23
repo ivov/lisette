@@ -24,7 +24,7 @@ func (a A) String() string {
 	return fmt.Sprintf("A { a: %v }", a.A)
 }
 
-func (a A) to_string() string {
+func (a A) toString() string {
 	return a.String()
 }
 

@@ -21,7 +21,7 @@ import (
 	lisette "github.com/ivov/lisette/prelude"
 )
 
-func make_i() int {
+func makeI() int {
 	fmt.Println("i")
 	return 0
 }
@@ -29,7 +29,7 @@ func make_i() int {
 func main() {
 	items := []lisette.Tuple2[int, int]{lisette.MakeTuple2(0, 0)}
 	base_2 := items
-	idx_3 := make_i()
+	idx_3 := makeI()
 	var tmp_1 int
 	if true {
 		tmp_1 = 1

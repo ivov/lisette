@@ -22,12 +22,12 @@ type Point struct {
 	y int
 }
 
-func make_x() int {
+func makeX() int {
 	fmt.Println("x")
 	return 1
 }
 
-func make_base() Point {
+func makeBase() Point {
 	fmt.Println("base")
 	return Point{
 		x: 0,
@@ -36,8 +36,8 @@ func make_base() Point {
 }
 
 func main() {
-	field_1 := make_x()
-	copy_2 := make_base()
+	field_1 := makeX()
+	copy_2 := makeBase()
 	copy_2.x = field_1
 	_ = copy_2
 }

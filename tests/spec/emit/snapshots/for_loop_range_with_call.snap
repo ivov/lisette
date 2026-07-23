@@ -14,13 +14,13 @@ description: |
 ---
 package main
 
-func get_end() int {
+func getEnd() int {
 	return 5
 }
 
 func test() int {
 	sum := 0
-	_bound_1 := get_end()
+	_bound_1 := getEnd()
 	for i := 0; i < _bound_1; i++ {
 		sum += i
 	}

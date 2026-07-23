@@ -17,10 +17,10 @@ package main
 
 import "errors"
 
-func fail_unit() error {
+func failUnit() error {
 	return errors.New("boom")
 }
 
 func main() {
-	fail_unit()
+	failUnit()
 }

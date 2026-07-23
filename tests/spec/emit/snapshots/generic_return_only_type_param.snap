@@ -12,10 +12,10 @@ description: |
 ---
 package main
 
-func default_value[T any]() (T, bool) {
+func defaultValue[T any]() (T, bool) {
 	return *new(T), false
 }
 
 func test() (int, bool) {
-	return default_value[int]()
+	return defaultValue[int]()
 }

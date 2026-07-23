@@ -101,11 +101,11 @@ func (bb *Box[b]) UnmarshalJSON(data []byte) error {
 	return fmt.Errorf("empty Box JSON object")
 }
 
-func (bb Box[b]) to_string() string {
+func (bb Box[b]) toString() string {
 	return bb.String()
 }
 
 func test() string {
 	x := MakeBoxFull(7)
-	return x.to_string()
+	return x.toString()
 }

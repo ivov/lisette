@@ -391,7 +391,10 @@ impl Planner<'_> {
             Some(binding) => binding
                 .as_go_name()
                 .is_some_and(|name| self.is_go_const_binding(name)),
-            None => self.is_go_const_binding(value),
+            None => {
+                let go = self.module.escape_remap(value).unwrap_or(value);
+                self.is_go_const_binding(go)
+            }
         }
     }
 

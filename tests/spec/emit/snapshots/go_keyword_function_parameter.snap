@@ -12,10 +12,10 @@ description: |
 ---
 package main
 
-func use_map(map_, range_ int) int {
+func useMap(map_, range_ int) int {
 	return map_ + range_
 }
 
 func test() int {
-	return use_map(10, 20)
+	return useMap(10, 20)
 }

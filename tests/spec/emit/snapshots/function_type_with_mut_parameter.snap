@@ -20,7 +20,7 @@ description: |
 package main
 
 type Counter struct {
-	times_called int
+	timesCalled int
 }
 
 func run(counter Counter, action func(Counter)) {
@@ -28,10 +28,10 @@ func run(counter Counter, action func(Counter)) {
 }
 
 func bump(counter Counter) {
-	counter.times_called++
+	counter.timesCalled++
 }
 
 func test() {
-	counter := Counter{times_called: 0}
+	counter := Counter{timesCalled: 0}
 	run(counter, bump)
 }

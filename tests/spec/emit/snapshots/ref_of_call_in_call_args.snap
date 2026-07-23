@@ -12,20 +12,20 @@ description: |
 ---
 package main
 
-func make_int() int {
+func makeInt() int {
 	return 1
 }
 
-func read_ref(r *int) int {
+func readRef(r *int) int {
 	return *r
 }
 
-func side_effect() int {
+func sideEffect() int {
 	return 1
 }
 
 func test() int {
-	_left_2 := side_effect()
-	ref_1 := make_int()
-	return _left_2 + read_ref(&ref_1)
+	_left_2 := sideEffect()
+	ref_1 := makeInt()
+	return _left_2 + readRef(&ref_1)
 }

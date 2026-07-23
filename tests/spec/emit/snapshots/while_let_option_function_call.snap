@@ -23,7 +23,7 @@ import (
 	lisette "github.com/ivov/lisette/prelude"
 )
 
-func next_item(counter int) (int, bool) {
+func nextItem(counter int) (int, bool) {
 	if counter < 5 {
 		return counter, true
 	}
@@ -33,7 +33,7 @@ func next_item(counter int) (int, bool) {
 func test() {
 	i := 0
 	for {
-		option_2 := lisette.OptionFromCommaOk[int](next_item(i))
+		option_2 := lisette.OptionFromCommaOk[int](nextItem(i))
 		subject_1 := option_2
 		if subject_1.Tag == lisette.OptionSome {
 			x := subject_1.SomeVal

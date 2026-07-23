@@ -43,7 +43,7 @@ type Shape struct {
 	Triangle int
 }
 
-func shape_size(s Shape) int {
+func shapeSize(s Shape) int {
 	switch s.Tag {
 	case ShapeCircle:
 		return s.Circle

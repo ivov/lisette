@@ -12,6 +12,6 @@ package main
 
 import "fmt"
 
-func print_hello() (int, error) {
+func printHello() (int, error) {
 	return fmt.Println("hello")
 }

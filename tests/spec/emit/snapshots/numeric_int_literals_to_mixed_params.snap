@@ -12,10 +12,10 @@ description: |
 ---
 package main
 
-func mixed_params(a float64, _ int, c float64) float64 {
+func mixedParams(a float64, _ int, c float64) float64 {
 	return a + c
 }
 
 func test() float64 {
-	return mixed_params(1, 2, 3)
+	return mixedParams(1, 2, 3)
 }

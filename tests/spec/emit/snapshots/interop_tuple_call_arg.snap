@@ -22,7 +22,7 @@ import (
 	"path"
 )
 
-func use_split(f func(string) (string, string), p string) string {
+func useSplit(f func(string) (string, string), p string) string {
 	ret_2, ret_3 := f(p)
 	tup_4 := lisette.MakeTuple2(ret_2, ret_3)
 	tmp_1 := tup_4
@@ -32,6 +32,6 @@ func use_split(f func(string) (string, string), p string) string {
 }
 
 func main() {
-	r := use_split(path.Split, "/foo/bar.txt")
+	r := useSplit(path.Split, "/foo/bar.txt")
 	_ = r
 }

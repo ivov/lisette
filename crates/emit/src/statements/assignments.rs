@@ -276,8 +276,10 @@ impl Planner<'_> {
         }
         let field = if self.struct_field_is_exported(expression_ty, member) {
             go_name::make_exported(member)
-        } else {
+        } else if self.field_is_embedded(expression_ty, member) {
             go_name::escape_keyword(member).into_owned()
+        } else {
+            go_name::unexported_method_go_name(member)
         };
         format!("{}.{}", base_str, field)
     }

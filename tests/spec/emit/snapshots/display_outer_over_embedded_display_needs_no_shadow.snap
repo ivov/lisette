@@ -23,7 +23,7 @@ func (l Logger) String() string {
 	return fmt.Sprintf("Logger { prefix: %v }", l.Prefix)
 }
 
-func (l Logger) to_string() string {
+func (l Logger) toString() string {
 	return l.String()
 }
 
@@ -36,6 +36,6 @@ func (s Server) String() string {
 	return fmt.Sprintf("Server { Logger: %v, port: %v }", s.Logger, s.Port)
 }
 
-func (s Server) to_string() string {
+func (s Server) toString() string {
 	return s.String()
 }

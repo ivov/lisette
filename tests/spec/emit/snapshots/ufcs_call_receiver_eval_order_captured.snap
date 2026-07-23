@@ -31,7 +31,7 @@ func (c Counter) get() int {
 	return c.n
 }
 
-func bump_and_get(c *Counter) int {
+func bumpAndGet(c *Counter) int {
 	c.n++
 	return c.n
 }
@@ -42,6 +42,6 @@ func sum(a, b int) int {
 
 func main() {
 	c := Counter{n: 0}
-	v := sum(c.get(), bump_and_get(&c))
+	v := sum(c.get(), bumpAndGet(&c))
 	_ = v
 }

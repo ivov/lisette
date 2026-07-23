@@ -37,11 +37,11 @@ func (p Person) greet() string {
 	return fmt.Sprintf("Hello, %s", p.name)
 }
 
-func greet_ref[T Greetable](item T) string {
+func greetRef[T Greetable](item T) string {
 	return item.greet()
 }
 
 func test() {
 	p := Person{name: "Alice"}
-	_ = greet_ref(&p)
+	_ = greetRef(&p)
 }

@@ -13,7 +13,7 @@ package main
 
 import "example.com/shapes"
 
-func area_or_neg(s shapes.Shape) int {
+func areaOrNeg(s shapes.Shape) int {
 	var w int
 	var h int
 	asserted_1, ok_2 := s.(shapes.Rect)

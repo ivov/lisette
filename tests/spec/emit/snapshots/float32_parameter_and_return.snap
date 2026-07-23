@@ -8,6 +8,6 @@ description: |
 ---
 package main
 
-func accept_float32(x float32) float32 {
+func acceptFloat32(x float32) float32 {
 	return x
 }

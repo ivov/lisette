@@ -22,15 +22,15 @@ func (m MyCache[T]) Get(_ string) *Entry[T] {
 	return nil
 }
 
-func use_int(_ Cache[int]) {}
+func useInt(_ Cache[int]) {}
 
-func use_string(_ Cache[string]) {}
+func useString(_ Cache[string]) {}
 
 func main() {
 	ci := MyCache[int]{entry: Entry[int]{value: 1}}
 	cs := MyCache[string]{entry: Entry[string]{value: "x"}}
-	use_int(_lisAdapter_MyCache_Cache_0{inner: ci})
-	use_string(_lisAdapter_MyCache_Cache_1{inner: cs})
+	useInt(_lisAdapter_MyCache_Cache_0{inner: ci})
+	useString(_lisAdapter_MyCache_Cache_1{inner: cs})
 }
 
 type _lisAdapter_MyCache_Cache_0 struct {

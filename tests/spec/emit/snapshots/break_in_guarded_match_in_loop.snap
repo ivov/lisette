@@ -15,7 +15,7 @@ description: |
 ---
 package main
 
-func find_first_negative(items []int) int {
+func findFirstNegative(items []int) int {
 	result := 0
 loop_1:
 	for _, item := range items {

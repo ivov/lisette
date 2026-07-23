@@ -12,10 +12,10 @@ description: |
 ---
 package main
 
-func do_work() {}
+func doWork() {}
 
 func test() {
 	for _i_1 := 0; _i_1 < 3; _i_1++ {
-		do_work()
+		doWork()
 	}
 }

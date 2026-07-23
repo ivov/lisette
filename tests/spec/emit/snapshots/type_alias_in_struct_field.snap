@@ -24,6 +24,6 @@ type Outer struct {
 	Item Wrapper
 }
 
-func get_val(o Outer) int {
+func getVal(o Outer) int {
 	return o.Item.Val
 }

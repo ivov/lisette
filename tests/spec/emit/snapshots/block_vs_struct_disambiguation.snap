@@ -20,7 +20,7 @@ type Point struct {
 	x int
 }
 
-func test_if() int {
+func testIf() int {
 	x := 1
 	if true {
 		return x
@@ -28,7 +28,7 @@ func test_if() int {
 	return 0
 }
 
-func test_struct() Point {
+func testStruct() Point {
 	x := 42
 	return Point{x: x}
 }

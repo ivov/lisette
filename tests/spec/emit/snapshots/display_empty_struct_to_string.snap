@@ -13,6 +13,6 @@ func (b Blank) String() string {
 	return "Blank"
 }
 
-func (b Blank) to_string() string {
+func (b Blank) toString() string {
 	return b.String()
 }

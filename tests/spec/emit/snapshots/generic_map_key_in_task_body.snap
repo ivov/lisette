@@ -11,7 +11,7 @@ description: |
 ---
 package main
 
-func use_map_in_task[K comparable, V any](key K, value V) {
+func useMapInTask[K comparable, V any](key K, value V) {
 	go func() {
 		m := make(map[K]V)
 		m[key] = value

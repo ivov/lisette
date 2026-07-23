@@ -10,6 +10,6 @@ package main
 
 import lisette "github.com/ivov/lisette/prelude"
 
-func get_start(r *lisette.Range[int]) int {
+func getStart(r *lisette.Range[int]) int {
 	return r.Start
 }

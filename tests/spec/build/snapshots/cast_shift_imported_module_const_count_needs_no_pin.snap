@@ -4,7 +4,7 @@ source: tests/spec/build/mod.rs
 // === config/config.go ===
 package config
 
-const SHIFT int = 60 + 8
+const Shift int = 60 + 8
 
 
 // === main.go ===
@@ -16,5 +16,5 @@ import (
 )
 
 func main() {
-	fmt.Println(float64((1 << config.SHIFT)))
+	fmt.Println(float64((1 << config.Shift)))
 }

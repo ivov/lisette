@@ -26,12 +26,12 @@ import (
 	lisette "github.com/ivov/lisette/prelude"
 )
 
-func make_items() []int {
+func makeItems() []int {
 	fmt.Println("receiver")
 	return []int{10, 20, 30, 40}
 }
 
-func make_range() lisette.Range[int] {
+func makeRange() lisette.Range[int] {
 	fmt.Println("range")
 	return lisette.Range[int]{
 		Start: 1,
@@ -40,8 +40,8 @@ func make_range() lisette.Range[int] {
 }
 
 func main() {
-	_base_1 := make_items()
-	range_2 := make_range()
+	_base_1 := makeItems()
+	range_2 := makeRange()
 	xs := _base_1[range_2.Start:range_2.End:range_2.End]
 	fmt.Println(len(xs))
 }

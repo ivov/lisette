@@ -12,21 +12,21 @@ description: |
 ---
 package main
 
-func make_a() int {
+func makeA() int {
 	return 0
 }
 
-func make_b() int {
+func makeB() int {
 	return 1
 }
 
 func main() {
 	s := []int{0, 0, 0}
 	base_2 := s
-	idx_3 := make_a()
+	idx_3 := makeA()
 	var tmp_1 int
 	if true {
-		tmp_1 = make_b()
+		tmp_1 = makeB()
 	} else {
 		tmp_1 = 0
 	}

@@ -23,15 +23,15 @@ type Foo struct {
 	value int
 }
 
-func make_foo() Foo {
+func makeFoo() Foo {
 	return Foo{value: 42}
 }
 
-func takes_ref(f *Foo) int {
+func takesRef(f *Foo) int {
 	return f.value
 }
 
 func test() int {
-	tmp := make_foo()
-	return takes_ref(&tmp)
+	tmp := makeFoo()
+	return takesRef(&tmp)
 }

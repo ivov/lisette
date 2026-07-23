@@ -23,7 +23,7 @@ import (
 	lisette "github.com/ivov/lisette/prelude"
 )
 
-func next_result(counter int) lisette.Result[int, string] {
+func nextResult(counter int) lisette.Result[int, string] {
 	if counter < 5 {
 		return lisette.MakeResultOk[int, string](counter)
 	}
@@ -33,7 +33,7 @@ func next_result(counter int) lisette.Result[int, string] {
 func test() {
 	i := 0
 	for {
-		subject_1 := next_result(i)
+		subject_1 := nextResult(i)
 		if subject_1.Tag == lisette.ResultOk {
 			x := subject_1.OkVal
 			fmt.Printf("Got: %d\n", x)
