@@ -32,15 +32,16 @@ pub fn emit(path: Option<String>, sourcemap: bool) -> i32 {
 
 pub fn build(path: Option<String>, sourcemap: bool, go_flags: Vec<String>) -> i32 {
     with_locked_project(path, |prep| {
-        if prep.kind == ProjectKind::Library
-            && go_flags.iter().any(|f| go_cli::is_go_output_flag(f))
-        {
-            cli_error!(
-                "Unsupported flag",
-                "`-o` has no meaning for a library build, which produces no single artifact",
-                "Remove `-o`"
-            );
-            return 1;
+        if prep.kind == ProjectKind::Library {
+            if go_flags.iter().any(|f| go_cli::is_go_output_flag(f)) {
+                cli_error!(
+                    "Unsupported flag",
+                    "`-o` has no meaning for a library build, which produces no single artifact",
+                    "Remove `-o`"
+                );
+                return 1;
+            }
+            crate::output::print_preview_notice("Library projects", true);
         }
 
         let outcome = build_locked(
