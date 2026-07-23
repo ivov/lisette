@@ -108,6 +108,32 @@
         position: relative;
         height: 180px;
       }
+      .deltas {
+        position: relative;
+        margin-top: 6px;
+        height: 2.1rem;
+      }
+      .deltas .cell {
+        position: absolute;
+        transform: translateX(-50%);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 2px;
+        white-space: nowrap;
+      }
+      .deltas .month {
+        font-size: 10px;
+        color: var(--text-muted);
+      }
+      .deltas .value {
+        font-size: 0.75rem;
+        color: var(--text-secondary);
+        font-variant-numeric: tabular-nums;
+      }
+      .deltas .value.empty {
+        color: var(--text-muted);
+      }
       details {
         margin-top: 20px;
       }
@@ -240,6 +266,7 @@
         const formatDate = (ms) => formatDay(ms) + '.' + new Date(ms).getFullYear();
         const formatCount = (v) => v.toLocaleString('en-US');
         const kFormat = (v) => (Math.abs(v) >= 1000 ? +(v / 1000).toFixed(1) + 'k' : String(v));
+        const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
         const crosshair = {
           id: 'crosshair',
@@ -325,7 +352,17 @@
         }
 
         function renderSuite(entries, parent) {
-          const labels = entries.map((e) => formatDay(e.date));
+          const monthTicks = [];
+          const firstDate = new Date(entries[0].date);
+          const lastDate = new Date(entries[entries.length - 1].date);
+          let tickYear = firstDate.getUTCFullYear();
+          let tickMonth = firstDate.getUTCMonth() + 1;
+          for (;;) {
+            const boundary = Date.UTC(tickYear, tickMonth, 1);
+            if (boundary > lastDate.getTime()) break;
+            monthTicks.push({ value: boundary });
+            tickMonth++;
+          }
 
           // color by first appearance so a series keeps its hue as data grows
           const series = new Map();
@@ -360,14 +397,34 @@
           // shared y max so panel heights are proportional across crates
           const yMax = 40000;
 
+          const lastAtOrBefore = (boundary) => {
+            let index = -1;
+            entries.forEach((entry, i) => {
+              if (entry.date <= boundary) index = i;
+            });
+            return index;
+          };
+          // one delta per month tick, exact because every month-end commit is
+          // sampled, the current month runs to the newest sample
+          const months = monthTicks.map((tick) => {
+            const date = new Date(tick.value);
+            const end = Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 1);
+            return {
+              startValue: tick.value,
+              endValue: end,
+              startIndex: lastAtOrBefore(tick.value),
+              endIndex: lastAtOrBefore(end),
+            };
+          });
+
           const grid = document.createElement('div');
           grid.className = 'charts';
           parent.appendChild(grid);
-          for (const s of panels) renderPanel(grid, s, entries, labels, yMax);
+          for (const s of panels) renderPanel(grid, s, entries, monthTicks, yMax, months);
           renderTable(panels, entries);
         }
 
-        function renderPanel(parent, s, entries, labels, yMax) {
+        function renderPanel(parent, s, entries, monthTicks, yMax, months) {
           const card = document.createElement('div');
           card.className = 'card';
 
@@ -395,18 +452,56 @@
           const canvas = document.createElement('canvas');
           plot.appendChild(canvas);
           card.appendChild(plot);
+
+          const deltas = document.createElement('div');
+          deltas.className = 'deltas';
+          const deltaCells = [];
+          for (const month of months) {
+            const cell = document.createElement('div');
+            cell.className = 'cell';
+            const monthLabel = document.createElement('span');
+            monthLabel.className = 'month';
+            monthLabel.textContent = MONTH_NAMES[new Date(month.startValue).getUTCMonth()];
+            cell.appendChild(monthLabel);
+            const deltaValue = document.createElement('span');
+            deltaValue.className = 'value';
+            const start = month.startIndex < 0 ? null : s.values[month.startIndex];
+            const end = month.endIndex < 0 ? null : s.values[month.endIndex];
+            if (start != null && end != null) {
+              const thousands = +((end - start) / 1000).toFixed(1);
+              deltaValue.textContent = (thousands >= 0 ? '+' : '') + thousands + 'k';
+            } else {
+              deltaValue.textContent = '0k';
+              deltaValue.classList.add('empty');
+            }
+            cell.appendChild(deltaValue);
+            deltas.appendChild(cell);
+            deltaCells.push({ element: cell, start: month.startValue, end: month.endValue });
+          }
+          card.appendChild(deltas);
           parent.appendChild(card);
 
-          const lastIdx = s.values.reduce((acc, v, i) => (v != null ? i : acc), -1);
+          // keep each month cell centered within its span through resizes, the
+          // current month's span is clipped at the newest sample
+          const deltaAlign = {
+            id: 'deltaAlign',
+            afterLayout(chart) {
+              const x = chart.scales.x;
+              for (const cell of deltaCells) {
+                const startPixel = x.getPixelForValue(cell.start);
+                const endPixel = Math.min(x.getPixelForValue(cell.end), chart.chartArea.right);
+                cell.element.style.left = (startPixel + endPixel) / 2 + 'px';
+              }
+            },
+          };
 
           new Chart(canvas, {
             type: 'line',
             data: {
-              labels,
               datasets: [
                 {
                   label: s.name,
-                  data: s.values,
+                  data: entries.map((entry, i) => ({ x: entry.date, y: s.values[i] })),
                   borderColor: s.color,
                   backgroundColor: s.color + '1a',
                   fill: true,
@@ -414,10 +509,7 @@
                   borderJoinStyle: 'round',
                   borderCapStyle: 'round',
                   spanGaps: false,
-                  pointRadius: (ctx) => (ctx.dataIndex === lastIdx ? 4 : 0),
-                  pointBackgroundColor: s.color,
-                  pointBorderColor: SURFACE,
-                  pointBorderWidth: 2,
+                  pointRadius: 0,
                   pointHoverRadius: 5,
                   pointHoverBackgroundColor: s.color,
                   pointHoverBorderColor: SURFACE,
@@ -425,7 +517,7 @@
                 },
               ],
             },
-            plugins: [crosshair],
+            plugins: [crosshair, deltaAlign],
             options: {
               maintainAspectRatio: false,
               interaction: { mode: 'index', intersect: false },
@@ -447,15 +539,15 @@
               },
               scales: {
                 x: {
-                  grid: { display: false },
-                  border: { color: token('--axis') },
-                  ticks: {
-                    color: token('--text-muted'),
-                    maxRotation: 0,
-                    autoSkip: true,
-                    maxTicksLimit: 4,
-                    font: { size: 10 },
+                  type: 'linear',
+                  min: entries[0].date,
+                  max: entries[entries.length - 1].date,
+                  afterBuildTicks: (axis) => {
+                    axis.ticks = monthTicks;
                   },
+                  grid: { color: token('--grid'), drawTicks: false },
+                  border: { color: token('--axis') },
+                  ticks: { display: false },
                 },
                 y: {
                   beginAtZero: true,
