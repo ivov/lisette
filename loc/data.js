@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1784834961744,
+  "lastUpdate": 1784835716190,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -8482,6 +8482,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "passes",
             "value": 16850,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 13283,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 10560,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 6363,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 4438,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2800,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1039,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 695,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 6084,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 890,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "8fef96b3111d59cecb57f8178142470a1195a8e8",
+          "message": "refactor: simplify inference flows (#1097)",
+          "timestamp": "2026-07-23T21:41:32+02:00",
+          "tree_id": "177ff827ad7faf0a0105984a54bf25f6b19a1108",
+          "url": "https://github.com/ivov/lisette/commit/8fef96b3111d59cecb57f8178142470a1195a8e8"
+        },
+        "date": 1784835714698,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 117537,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 30097,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 24375,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 16913,
             "unit": "lines"
           },
           {
