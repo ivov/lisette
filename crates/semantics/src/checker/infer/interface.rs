@@ -7,6 +7,21 @@ use syntax::types::{GO_IMPORT_PREFIX, SubstitutionMap, Type, substitute};
 
 use crate::checker::infer::InferCtx;
 
+struct PointerReceiverCheck<'a> {
+    methods: &'a MethodSignatures,
+    receiver: &'a Type,
+    found: Vec<String>,
+    visiting: rustc_hash::FxHashSet<String>,
+}
+
+struct ConformanceTraversal<'a> {
+    receiver: &'a Type,
+    span: Span,
+    adapter_capable: bool,
+    violations: Vec<InterfaceViolation>,
+    visiting: rustc_hash::FxHashSet<String>,
+}
+
 fn method_comma_ok(store: &Store, type_id: &str, method: &str) -> bool {
     fn walk(
         store: &Store,
@@ -35,7 +50,7 @@ fn method_comma_ok(store: &Store, type_id: &str, method: &str) -> bool {
     )
 }
 
-impl InferCtx<'_, '_> {
+impl InferCtx<'_> {
     pub(crate) fn check_concrete_bound(&mut self, ty: &Type, bound: &Type, span: &Span) {
         let bound = self.store.deep_resolve_alias(bound);
         let Type::Nominal { id, params, .. } = bound else {
@@ -93,19 +108,21 @@ impl InferCtx<'_, '_> {
         }
 
         let adapter_capable = self.adapter_capable_receiver(ty, interface, interface_qualified_id);
-        let mut violations = Vec::new();
-        let mut visited = rustc_hash::FxHashSet::default();
+        let mut check = ConformanceTraversal {
+            receiver: ty,
+            span: *span,
+            adapter_capable,
+            violations: Vec::new(),
+            visiting: rustc_hash::FxHashSet::default(),
+        };
         self.collect_interface_violations(
-            ty,
+            &mut check,
             interface,
             interface_qualified_id,
             type_args,
             None,
-            adapter_capable,
-            span,
-            &mut violations,
-            &mut visited,
         );
+        let violations = check.violations;
 
         self.satisfying_stack.remove(&pair);
 
@@ -193,7 +210,7 @@ impl InferCtx<'_, '_> {
     /// interface. Runs on direct value-to-interface assignment and bounds checking,
     /// minus generics absorbed via a `Ref<T>` param (see `generic_absorbed_via_ref_param`).
     pub(super) fn check_pointer_receivers(
-        &self,
+        &mut self,
         ty: &Type,
         interface: &Interface,
         interface_qualified_id: &str,
@@ -205,17 +222,14 @@ impl InferCtx<'_, '_> {
         }
 
         let methods = self.get_all_methods(store, ty);
-        let mut ptr_methods = Vec::new();
-        let mut visited = rustc_hash::FxHashSet::default();
-
-        self.collect_pointer_receiver_methods(
-            interface,
-            interface_qualified_id,
-            &methods,
-            ty,
-            &mut ptr_methods,
-            &mut visited,
-        );
+        let mut check = PointerReceiverCheck {
+            methods: &methods,
+            receiver: ty,
+            found: Vec::new(),
+            visiting: rustc_hash::FxHashSet::default(),
+        };
+        self.collect_pointer_receiver_methods(&mut check, interface, interface_qualified_id);
+        let ptr_methods = check.found;
 
         if ptr_methods.is_empty() {
             return Ok(());
@@ -232,18 +246,14 @@ impl InferCtx<'_, '_> {
         Err(vec![])
     }
 
-    #[allow(clippy::too_many_arguments)]
     fn collect_pointer_receiver_methods(
         &self,
+        check: &mut PointerReceiverCheck<'_>,
         interface: &Interface,
         interface_qualified_id: &str,
-        methods: &MethodSignatures,
-        receiver: &Type,
-        out: &mut Vec<String>,
-        visited: &mut rustc_hash::FxHashSet<String>,
     ) {
         let store = self.store;
-        if !visited.insert(interface_qualified_id.to_string()) {
+        if !check.visiting.insert(interface_qualified_id.to_string()) {
             return;
         }
         let interface_is_public = store
@@ -251,11 +261,11 @@ impl InferCtx<'_, '_> {
             .is_some_and(|d| d.visibility.is_public());
         for name in interface.methods.keys() {
             if let Some((impl_name, method_ty)) = syntax::go_names::conformance_method(
-                methods,
+                check.methods,
                 interface_qualified_id,
                 interface_is_public,
                 name.as_str(),
-                &|candidate| self.conformance_candidate(receiver, candidate),
+                &|candidate| self.conformance_candidate(check.receiver, candidate),
             ) {
                 let func = match method_ty {
                     Type::Forall { body, .. } => body.as_ref(),
@@ -264,7 +274,7 @@ impl InferCtx<'_, '_> {
                 if let Type::Function(f) = func
                     && f.params.first().is_some_and(|p| p.is_ref())
                 {
-                    out.push(impl_name.to_string());
+                    check.found.push(impl_name.to_string());
                 }
             }
         }
@@ -272,16 +282,13 @@ impl InferCtx<'_, '_> {
             let parent_name = parent.get_qualified_name();
             if let Some(parent_interface) = store.get_interface(&parent_name) {
                 self.collect_pointer_receiver_methods(
+                    check,
                     parent_interface,
                     parent_name.as_str(),
-                    methods,
-                    receiver,
-                    out,
-                    visited,
                 );
             }
         }
-        visited.remove(interface_qualified_id);
+        check.visiting.remove(interface_qualified_id);
     }
 
     fn conformance_candidate(
@@ -469,23 +476,20 @@ impl InferCtx<'_, '_> {
             })
     }
 
-    #[allow(clippy::too_many_arguments)]
     fn collect_interface_violations(
         &mut self,
-        ty: &Type,
+        check: &mut ConformanceTraversal<'_>,
         interface: &Interface,
         interface_qualified_id: &str,
         type_args: &[Type],
         parent_of: Option<&str>,
-        adapter_capable: bool,
-        span: &Span,
-        violations: &mut Vec<InterfaceViolation>,
-        visited: &mut rustc_hash::FxHashSet<String>,
     ) {
         let store = self.store;
-        if !visited.insert(interface_qualified_id.to_string()) {
+        if !check.visiting.insert(interface_qualified_id.to_string()) {
             return;
         }
+        let ty = check.receiver;
+        let span = &check.span;
 
         let symbol_methods = self.get_all_methods(store, ty);
 
@@ -556,7 +560,7 @@ impl InferCtx<'_, '_> {
                 }
             };
 
-            let check = self.check_method_signature(
+            let signature = self.check_method_signature(
                 ty,
                 interface_qualified_id,
                 method_name.as_str(),
@@ -565,25 +569,23 @@ impl InferCtx<'_, '_> {
                 &map,
             );
 
-            if check.receiver_pinned && check.matched {
+            if signature.receiver_pinned && signature.matched {
                 self.validate_comma_ok_abi(
-                    ty,
+                    check,
                     interface,
                     interface_qualified_id,
                     method_name,
                     impl_method_name.as_str(),
-                    adapter_capable,
-                    span,
                 );
             }
 
-            if !check.receiver_pinned {
+            if !signature.receiver_pinned {
                 missing.push((method_name.to_string(), method_ty.clone()));
-            } else if !check.matched {
+            } else if !signature.matched {
                 incompatible.push((
                     method_name.to_string(),
-                    check.substituted_method,
-                    check.incompatible_impl,
+                    signature.substituted_method,
+                    signature.incompatible_impl,
                 ));
             } else {
                 let spelling_pinned = syntax::go_names::interface_matches_by_source_name(
@@ -595,7 +597,7 @@ impl InferCtx<'_, '_> {
         }
 
         if !missing.is_empty() || !incompatible.is_empty() {
-            violations.push(InterfaceViolation {
+            check.violations.push(InterfaceViolation {
                 interface_name: interface.name.to_string(),
                 parent_of: parent_of.map(String::from),
                 missing,
@@ -612,20 +614,16 @@ impl InferCtx<'_, '_> {
                     .map(|arg| substitute(arg, &map))
                     .collect();
                 self.collect_interface_violations(
-                    ty,
+                    check,
                     &parent_interface,
                     &parent_name,
                     &substituted_parent_args,
                     Some(&interface.name),
-                    adapter_capable,
-                    span,
-                    violations,
-                    visited,
                 );
             }
         }
 
-        visited.remove(interface_qualified_id);
+        check.visiting.remove(interface_qualified_id);
     }
 
     fn select_impl_method(
@@ -730,19 +728,16 @@ impl InferCtx<'_, '_> {
         }
     }
 
-    #[allow(clippy::too_many_arguments)]
     fn validate_comma_ok_abi(
         &mut self,
-        ty: &Type,
+        check: &ConformanceTraversal<'_>,
         interface: &Interface,
         interface_qualified_id: &str,
         method_name: &str,
         impl_method_name: &str,
-        adapter_capable: bool,
-        span: &Span,
     ) {
         let store = self.store;
-        let resolved_ty = ty.strip_refs().resolve_in(&self.env);
+        let resolved_ty = check.receiver.strip_refs().resolve_in(&self.env);
         if resolved_ty.get_qualified_id().is_none() {
             return;
         }
@@ -754,12 +749,12 @@ impl InferCtx<'_, '_> {
         let interface_comma_ok = method_comma_ok(store, interface_qualified_id, method_name);
         let selected_comma_ok =
             method_comma_ok(store, member.declaring_type.as_str(), impl_method_name);
-        let adapter_reconciles = adapter_capable && interface_comma_ok && !selected_comma_ok;
+        let adapter_reconciles = check.adapter_capable && interface_comma_ok && !selected_comma_ok;
         if interface_comma_ok != selected_comma_ok && !adapter_reconciles {
             self.sink.push(diagnostics::embed::comma_ok_abi_mismatch(
                 &interface.name,
                 method_name,
-                *span,
+                check.span,
             ));
         }
     }

@@ -35,32 +35,31 @@ pub fn run(
     run_lints: bool,
 ) {
     let facts_ref: &Facts = facts;
-    let (((checks_diagnostics, pattern_issues), producer_facts), lint_outputs) = rayon::join(
-        || {
-            rayon::join(
-                || checks::run_all(analysis, facts_ref),
-                || fact_producers::run_all(analysis),
-            )
-        },
+    let ((checks_diagnostics, pattern_issues), lint_outputs) = rayon::join(
+        || checks::run_all(analysis, facts_ref),
         || {
             run_lints.then(|| {
-                rayon::join(
-                    || lints::ast_walk::run(analysis, facts_ref),
-                    || lints::ref_graph::run(analysis, facts_ref),
-                )
+                let (produced_facts, (ast_walk_diagnostics, ref_graph_output)) = rayon::join(
+                    || fact_producers::run_all(analysis),
+                    || {
+                        rayon::join(
+                            || lints::ast_walk::run(analysis, facts_ref),
+                            || lints::ref_graph::run(analysis, facts_ref),
+                        )
+                    },
+                );
+                (produced_facts, ast_walk_diagnostics, ref_graph_output)
             })
         },
     );
 
     facts.pattern_issues = pattern_issues;
-    facts.absorb_local_facts(producer_facts);
 
     sink.extend(checks_diagnostics);
     deferred::run(analysis.store, facts, sink);
-    if run_lints {
-        lints::from_facts::run(analysis, facts, unused, sink);
-    }
-    if let Some((ast_walk_diagnostics, (ref_graph_diagnostics, ref_graph_unused))) = lint_outputs {
+    if let Some((produced_facts, ast_walk_diagnostics, ref_graph_output)) = lint_outputs {
+        lints::from_facts::run(analysis, facts, &produced_facts, unused, sink);
+        let (ref_graph_diagnostics, ref_graph_unused) = ref_graph_output;
         sink.extend(ast_walk_diagnostics);
         sink.extend(ref_graph_diagnostics);
         unused.merge(ref_graph_unused);

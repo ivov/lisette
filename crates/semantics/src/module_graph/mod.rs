@@ -39,32 +39,72 @@ pub struct Roots {
     pub additional: Vec<ModuleId>,
 }
 
-#[allow(clippy::too_many_arguments)]
+pub struct ModuleGraphOptions<'a> {
+    pub loader: Option<&'a dyn Loader>,
+    pub sink: &'a LocalSink,
+    pub standalone_mode: bool,
+    pub locator: &'a TypedefLocator,
+    pub include_tests: bool,
+}
+
 pub fn build_module_graph(
     store: &mut Store,
-    loader: Option<&dyn Loader>,
-    mut roots: Roots,
-    sink: &LocalSink,
-    standalone_mode: bool,
-    locator: &TypedefLocator,
-    include_tests: bool,
+    roots: Roots,
+    options: ModuleGraphOptions<'_>,
 ) -> ModuleGraphResult {
-    let mut edges: HashMap<ModuleId, HashSet<ModuleId>> = HashMap::default();
-    let mut production_edges: HashMap<ModuleId, HashSet<ModuleId>> = HashMap::default();
-    let mut to_visit = roots.primary;
-    let mut visited: HashSet<ModuleId> = HashSet::default();
-    let mut files: HashMap<ModuleId, Vec<File>> = HashMap::default();
-    let mut import_spans: HashMap<ModuleId, Span> = HashMap::default();
-    let mut blank_tracker = BlankTracker::default();
+    let Roots {
+        primary,
+        additional,
+    } = roots;
+    let ModuleGraphOptions {
+        loader,
+        sink,
+        standalone_mode,
+        locator,
+        include_tests,
+    } = options;
+    let mut builder = GraphBuilder {
+        store,
+        loader,
+        sink,
+        standalone_mode,
+        locator,
+        include_tests,
+        edges: HashMap::default(),
+        production_edges: HashMap::default(),
+        visited: HashSet::default(),
+        files: HashMap::default(),
+        import_spans: HashMap::default(),
+        blank_tracker: BlankTracker::default(),
+    };
+    builder.visit(primary);
+    let primary_reachable = builder.visited.clone();
+    builder.visit(additional);
+    builder.finish(primary_reachable)
+}
 
-    let mut primary_reachable: HashSet<ModuleId> = HashSet::default();
-    let mut additional_injected = false;
-    loop {
+struct GraphBuilder<'a> {
+    store: &'a mut Store,
+    loader: Option<&'a dyn Loader>,
+    sink: &'a LocalSink,
+    standalone_mode: bool,
+    locator: &'a TypedefLocator,
+    include_tests: bool,
+    edges: HashMap<ModuleId, HashSet<ModuleId>>,
+    production_edges: HashMap<ModuleId, HashSet<ModuleId>>,
+    visited: HashSet<ModuleId>,
+    files: HashMap<ModuleId, Vec<File>>,
+    import_spans: HashMap<ModuleId, Span>,
+    blank_tracker: BlankTracker,
+}
+
+impl<'a> GraphBuilder<'a> {
+    fn visit(&mut self, mut to_visit: Vec<ModuleId>) {
         while !to_visit.is_empty() {
             let drained: Vec<ModuleId> = std::mem::take(&mut to_visit);
             let mut batch: Vec<ModuleId> = Vec::with_capacity(drained.len());
             for module_id in drained {
-                if visited.insert(module_id.clone()) {
+                if self.visited.insert(module_id.clone()) {
                     batch.push(module_id);
                 }
             }
@@ -74,13 +114,19 @@ pub fn build_module_graph(
 
             batch.sort();
 
-            let mut parsed = batch_parse_modules(&batch, store, loader, sink, include_tests);
+            let mut parsed = batch_parse_modules(
+                &batch,
+                self.store,
+                self.loader,
+                self.sink,
+                self.include_tests,
+            );
 
             for module_id in &batch {
                 let module_files = parsed.remove(module_id).unwrap_or_default();
                 let file_imports: Vec<_> = if !module_files.is_empty() {
                     module_files.iter().flat_map(|f| f.imports()).collect()
-                } else if let Some(module) = store.get_module(module_id) {
+                } else if let Some(module) = self.store.get_module(module_id) {
                     module.all_imports()
                 } else {
                     Vec::new()
@@ -94,48 +140,51 @@ pub fn build_module_graph(
                     .collect();
                 let imports_with_spans = process_file_imports(
                     file_imports,
-                    sink,
-                    standalone_mode,
-                    locator,
-                    &mut blank_tracker,
+                    self.sink,
+                    self.standalone_mode,
+                    self.locator,
+                    &mut self.blank_tracker,
                 );
 
                 let has_production_file = module_files.iter().any(|file| !file.is_test());
-                let module_exists =
-                    has_production_file || store.has(module_id) || module_id.starts_with("go:");
+                let module_exists = has_production_file
+                    || self.store.has(module_id)
+                    || module_id.starts_with("go:");
 
                 if !module_exists {
-                    if let Some(span) = import_spans.get(module_id) {
+                    if let Some(span) = self.import_spans.get(module_id) {
                         let is_go_stdlib =
-                            stdlib::get_go_stdlib_typedef(module_id, locator.target()).is_some();
+                            stdlib::get_go_stdlib_typedef(module_id, self.locator.target())
+                                .is_some();
 
                         let src_prefix_hint = module_id
                             .strip_prefix("src/")
                             .filter(|stripped| {
-                                loader.is_some_and(|fs| !fs.scan_folder(stripped).is_empty())
+                                self.loader
+                                    .is_some_and(|fs| !fs.scan_folder(stripped).is_empty())
                             })
                             .map(String::from);
 
-                        sink.push(diagnostics::module_graph::module_not_found(
+                        self.sink.push(diagnostics::module_graph::module_not_found(
                             module_id,
                             *span,
                             is_go_stdlib,
-                            standalone_mode,
+                            self.standalone_mode,
                             src_prefix_hint,
                         ));
                     }
                     continue;
                 }
 
-                files.insert(module_id.clone(), module_files);
+                self.files.insert(module_id.clone(), module_files);
 
                 let imports: HashSet<_> = imports_with_spans.keys().cloned().collect();
 
                 for (import, span) in imports_with_spans {
-                    if !visited.contains(&import) {
+                    if !self.visited.contains(&import) {
                         to_visit.push(import.clone());
                     }
-                    import_spans.entry(import).or_insert(span);
+                    self.import_spans.entry(import).or_insert(span);
                 }
 
                 let production_edge_set: HashSet<ModuleId> = if has_parsed_files {
@@ -147,57 +196,63 @@ pub fn build_module_graph(
                 } else {
                     imports.clone()
                 };
-                production_edges.insert(module_id.clone(), production_edge_set);
-                edges.insert(module_id.clone(), imports);
+                self.production_edges
+                    .insert(module_id.clone(), production_edge_set);
+                self.edges.insert(module_id.clone(), imports);
             }
         }
-
-        if !additional_injected {
-            primary_reachable = visited.clone();
-            to_visit.extend(std::mem::take(&mut roots.additional));
-            additional_injected = true;
-            continue;
-        }
-        break;
     }
 
-    let (order, cycles) = kahn::topological_sort(&edges);
+    fn finish(self, primary_reachable: HashSet<ModuleId>) -> ModuleGraphResult {
+        let (order, cycles) = kahn::topological_sort(&self.edges);
 
-    ModuleGraphResult {
-        order,
-        cycles,
-        files,
-        edges,
-        production_edges,
-        link_only_modules: blank_tracker.into_link_only_modules(),
-        primary_reachable,
+        ModuleGraphResult {
+            order,
+            cycles,
+            files: self.files,
+            edges: self.edges,
+            production_edges: self.production_edges,
+            link_only_modules: self.blank_tracker.into_link_only_modules(),
+            primary_reachable,
+        }
     }
 }
 
-#[derive(Clone, Copy)]
-enum SeenLookup {
-    OkBlank,
-    OkNonBlank,
-    Errored,
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ImportUse {
+    LinkOnly,
+    Referenced,
 }
 
 #[derive(Default)]
 struct BlankTracker {
-    blank: HashSet<ModuleId>,
-    non_blank: HashSet<ModuleId>,
+    modules: HashMap<ModuleId, ImportUse>,
 }
 
 impl BlankTracker {
-    fn record_blank(&mut self, module_id: &str) {
-        self.blank.insert(module_id.to_string());
-    }
-
-    fn record_non_blank(&mut self, module_id: &str) {
-        self.non_blank.insert(module_id.to_string());
+    fn record(&mut self, module_id: &str, is_blank: bool) {
+        let use_kind = if is_blank {
+            ImportUse::LinkOnly
+        } else {
+            ImportUse::Referenced
+        };
+        self.modules
+            .entry(module_id.to_string())
+            .and_modify(|prior| {
+                if use_kind == ImportUse::Referenced {
+                    *prior = ImportUse::Referenced;
+                }
+            })
+            .or_insert(use_kind);
     }
 
     fn into_link_only_modules(self) -> HashSet<ModuleId> {
-        self.blank.difference(&self.non_blank).cloned().collect()
+        self.modules
+            .into_iter()
+            .filter_map(|(module_id, use_kind)| {
+                (use_kind == ImportUse::LinkOnly).then_some(module_id)
+            })
+            .collect()
     }
 }
 
@@ -302,9 +357,16 @@ fn process_file_imports(
     blank_tracker: &mut BlankTracker,
 ) -> HashMap<ModuleId, Span> {
     let mut imports = HashMap::default();
-    let mut seen_go_imports: HashMap<String, SeenLookup> = HashMap::default();
+    let referenced_go_imports: HashSet<&str> = file_imports
+        .iter()
+        .filter(|import| {
+            import.name.starts_with("go:") && !matches!(import.alias, Some(ImportAlias::Blank(_)))
+        })
+        .map(|import| import.name.as_str())
+        .collect();
+    let mut go_import_results: HashMap<&str, bool> = HashMap::default();
 
-    for file_import in file_imports {
+    for file_import in &file_imports {
         if file_import.name == "prelude" {
             sink.push(diagnostics::module_graph::cannot_import_prelude(
                 file_import.span,
@@ -321,74 +383,41 @@ fn process_file_imports(
 
         if let Some(go_pkg) = file_import.name.strip_prefix("go:") {
             let is_blank = matches!(file_import.alias, Some(ImportAlias::Blank(_)));
-
-            let prior = seen_go_imports.get(file_import.name.as_str()).copied();
-            let needs_lookup = match (prior, is_blank) {
-                (None, _) => true,
-                (Some(SeenLookup::Errored), _) => false,
-                (Some(SeenLookup::OkNonBlank), _) => false,
-                (Some(SeenLookup::OkBlank), true) => false,
-                (Some(SeenLookup::OkBlank), false) => true,
-            };
-
-            if !needs_lookup {
-                if matches!(prior, Some(SeenLookup::OkBlank | SeenLookup::OkNonBlank)) {
-                    let module_key = file_import.name.to_string();
-                    if is_blank {
-                        blank_tracker.record_blank(&module_key);
+            let ok = *go_import_results
+                .entry(file_import.name.as_str())
+                .or_insert_with(|| {
+                    if referenced_go_imports.contains(file_import.name.as_str()) {
+                        let result = locator.find_typedef_content(go_pkg);
+                        emit_for_locator_result(
+                            &result,
+                            &GoImportSite {
+                                import_name: &file_import.name,
+                                go_pkg,
+                                name_span: Some(file_import.name_span),
+                                target: locator.target(),
+                                standalone_mode,
+                                replace_importer: None,
+                            },
+                            sink,
+                        )
                     } else {
-                        blank_tracker.record_non_blank(&module_key);
+                        let status = locator.validate_declaration(go_pkg);
+                        emit_for_declaration_status(
+                            &status,
+                            &file_import.name,
+                            go_pkg,
+                            file_import.name_span,
+                            locator.target(),
+                            standalone_mode,
+                            sink,
+                        )
                     }
-                    imports.insert(module_key, file_import.name_span);
-                }
-                continue;
-            }
-
-            let ok = if is_blank {
-                let status = locator.validate_declaration(go_pkg);
-                emit_for_declaration_status(
-                    &status,
-                    &file_import.name,
-                    go_pkg,
-                    file_import.name_span,
-                    locator.target(),
-                    standalone_mode,
-                    sink,
-                )
-            } else {
-                let result = locator.find_typedef_content(go_pkg);
-                emit_for_locator_result(
-                    &result,
-                    &GoImportSite {
-                        import_name: &file_import.name,
-                        go_pkg,
-                        name_span: Some(file_import.name_span),
-                        target: locator.target(),
-                        standalone_mode,
-                        replace_importer: None,
-                    },
-                    sink,
-                )
-            };
-
-            seen_go_imports.insert(
-                file_import.name.to_string(),
-                if !ok {
-                    SeenLookup::Errored
-                } else if is_blank {
-                    SeenLookup::OkBlank
-                } else {
-                    SeenLookup::OkNonBlank
-                },
-            );
+                });
             if ok {
-                let module_key = file_import.name.to_string();
-                if is_blank {
-                    blank_tracker.record_blank(&module_key);
-                } else {
-                    blank_tracker.record_non_blank(&module_key);
-                }
-                imports.insert(module_key, file_import.name_span);
+                blank_tracker.record(&file_import.name, is_blank);
+                imports
+                    .entry(file_import.name.to_string())
+                    .or_insert(file_import.name_span);
             }
             continue;
         }
@@ -427,4 +456,51 @@ fn process_file_imports(
     }
 
     imports
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use syntax::program::FileImport;
+
+    fn go_import(is_blank: bool, offset: u32) -> FileImport {
+        let span = Span::new(0, offset, 1);
+        FileImport {
+            name: "go:fmt".into(),
+            name_span: span,
+            alias: is_blank.then_some(ImportAlias::Blank(span)),
+            span,
+        }
+    }
+
+    fn is_link_only(imports: Vec<FileImport>) -> bool {
+        let sink = LocalSink::new();
+        let mut tracker = BlankTracker::default();
+        let resolved = process_file_imports(
+            imports,
+            &sink,
+            false,
+            &TypedefLocator::default(),
+            &mut tracker,
+        );
+
+        assert!(!sink.has_errors());
+        assert!(resolved.contains_key("go:fmt"));
+        tracker.into_link_only_modules().contains("go:fmt")
+    }
+
+    #[test]
+    fn blank_only_import_is_link_only() {
+        assert!(is_link_only(vec![go_import(true, 0)]));
+    }
+
+    #[test]
+    fn referenced_import_wins_regardless_of_order() {
+        assert!(!is_link_only(
+            vec![go_import(true, 0), go_import(false, 1),]
+        ));
+        assert!(!is_link_only(
+            vec![go_import(false, 0), go_import(true, 1),]
+        ));
+    }
 }

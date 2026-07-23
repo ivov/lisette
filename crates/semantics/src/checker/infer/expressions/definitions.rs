@@ -3,7 +3,7 @@ use syntax::program::{Definition, DefinitionBody};
 
 use crate::checker::infer::InferCtx;
 
-impl InferCtx<'_, '_> {
+impl InferCtx<'_> {
     pub(super) fn infer_struct_definition(&mut self, expression: Expression) -> Expression {
         let store = self.store;
         let Expression::Struct {

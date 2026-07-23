@@ -11,7 +11,7 @@ struct ConstEntry<'a> {
     body: &'a Expression,
 }
 
-impl InferCtx<'_, '_> {
+impl InferCtx<'_> {
     pub fn check_const_cycles(&mut self, items_per_file: &[&[Expression]]) {
         let store = self.store;
         let module_const_names_empty = store
@@ -73,7 +73,7 @@ impl InferCtx<'_, '_> {
                     &mut color,
                     &mut path,
                     &mut reported,
-                    self.sink,
+                    &self.sink,
                 );
             }
         }

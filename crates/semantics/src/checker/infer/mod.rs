@@ -10,7 +10,7 @@ mod validation;
 pub use context::InferCtx;
 pub(crate) use unify::BuiltinBound;
 
-use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
+use rustc_hash::FxHashMap as HashMap;
 
 use super::freeze::FreezeFolder;
 use super::{FileContextKind, TaskState};
@@ -18,7 +18,7 @@ use crate::store::Store;
 use syntax::ast::{Expression, Span};
 use syntax::program::{File, FileImport};
 
-impl TaskState<'_> {
+impl TaskState {
     /// Extract a module's `.lis` files from the store.
     pub fn take_module_files(&mut self, store: &mut Store, module_id: &str) -> Vec<File> {
         self.with_module_cursor(module_id, |_this| {
@@ -30,7 +30,7 @@ impl TaskState<'_> {
     }
 }
 
-impl InferCtx<'_, '_> {
+impl InferCtx<'_> {
     /// Infer types for `files` belonging to `module_id`.
     pub fn infer_module(&mut self, module_id: &str, files: Vec<File>) {
         let items_per_file: Vec<&[Expression]> = files.iter().map(|f| f.items.as_slice()).collect();
@@ -61,7 +61,7 @@ impl InferCtx<'_, '_> {
                     .into_iter()
                     .map(|item| {
                         let type_var = ctx.new_type_var();
-                        ctx.infer_expression(item, &type_var)
+                        ctx.infer_root_expression(item, &type_var)
                     })
                     .collect();
 
@@ -141,7 +141,7 @@ impl InferCtx<'_, '_> {
     fn check_binding_shadows_import(&mut self, name: &str, span: Span, is_typedef: bool) {
         if !is_typedef
             && name != crate::prelude::PRELUDE_MODULE_ID
-            && let Some(import_path) = self.imports.prefix_to_module.get(name)
+            && let Some(import_path) = self.imports.module_id(name)
         {
             self.sink.push(diagnostics::infer::name_shadows_import(
                 name,
@@ -199,11 +199,7 @@ impl InferCtx<'_, '_> {
         self.sink.truncate(before);
 
         let scope = self.scopes.current_mut();
-        scope.values.insert(identifier.to_string(), const_ty);
-        scope
-            .consts
-            .get_or_insert_with(HashSet::default)
-            .insert(identifier.to_string());
+        scope.insert_const(identifier.to_string(), const_ty);
     }
 
     fn register_block_local_fn(&mut self, item: &Expression) {
@@ -225,6 +221,6 @@ impl InferCtx<'_, '_> {
         self.sink.truncate(before);
 
         let scope = self.scopes.current_mut();
-        scope.values.insert(name.to_string(), fn_ty);
+        scope.insert_value(name.to_string(), fn_ty);
     }
 }

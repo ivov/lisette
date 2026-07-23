@@ -2,8 +2,7 @@ use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use diagnostics::{LisetteDiagnostic, LocalSink};
 use semantics::{
-    call_classification::compute_module_ufcs, checker::TaskState, checker::infer::InferCtx,
-    store::Store,
+    checker::TaskState, checker::infer::InferCtx, facts::BindingMutation, store::Store,
 };
 use stdlib::{Target, get_go_stdlib_typedef};
 use syntax::{
@@ -116,10 +115,8 @@ impl CompiledTest {
             go_module_ids,
             resolved_definitions,
         ) = {
-            let mut checker = TaskState::with_fresh_allocator(&sink);
-            checker
-                .ufcs_methods
-                .extend(semantics::prelude::compute_prelude_ufcs(&store));
+            let mut checker = TaskState::with_fresh_allocator();
+            checker.extend_ufcs_methods(semantics::prelude::compute_prelude_ufcs(&store));
             checker.cursor.module_id = TEST_MODULE_ID.to_string();
             register_test_builtins(&mut store, &mut checker);
             checker.put_prelude_in_scope(&store);
@@ -178,15 +175,6 @@ impl CompiledTest {
                     test_file_id,
                 ),
             );
-            {
-                let module = store
-                    .get_module(TEST_MODULE_ID)
-                    .expect("test module must exist");
-                let ufcs_entries = compute_module_ufcs(module);
-                checker.ufcs_methods.extend(ufcs_entries);
-            }
-
-            checker.register_equality(&mut store, &self.ast);
             checker.finalize_equality(&mut store);
             checker.check_pending_generic_bounds(&store);
 
@@ -194,8 +182,8 @@ impl CompiledTest {
 
             for expression in self.ast {
                 let type_var = checker.new_type_var();
-                let typed_expression =
-                    InferCtx::new(&mut checker, &store).infer_expression(expression, &type_var);
+                let typed_expression = InferCtx::new(&mut checker, &store)
+                    .infer_root_expression(expression, &type_var);
                 typed_ast.push(typed_expression);
 
                 if checker.failed() {
@@ -235,13 +223,13 @@ impl CompiledTest {
                     ),
                 );
                 store.build_closed_domains();
-                let analysis =
-                    semantics::context::AnalysisContext::new(&store, &checker.ufcs_methods);
+                let ufcs_methods = checker.shared_ufcs_methods();
+                let analysis = semantics::context::AnalysisContext::new(&store, &ufcs_methods);
                 let mut harness_unused = UnusedInfo::default();
                 passes::run(
                     &analysis,
                     &mut checker.facts,
-                    checker.sink,
+                    &checker.sink,
                     &mut harness_unused,
                     false,
                 );
@@ -289,14 +277,16 @@ impl CompiledTest {
                 if !b.used {
                     unused.mark_binding_unused(b.span);
                 }
-                if b.alias_mutated {
-                    mutations.mark_binding_alias_mutated(binding_id);
-                } else if b.mutated {
-                    mutations.mark_binding_mutated(binding_id);
+                match b.mutation {
+                    BindingMutation::Unchanged => {}
+                    BindingMutation::Direct => mutations.mark_binding_mutated(binding_id),
+                    BindingMutation::ThroughAlias => {
+                        mutations.mark_binding_alias_mutated(binding_id);
+                    }
                 }
             }
 
-            let ufcs_methods = std::mem::take(&mut checker.ufcs_methods);
+            let ufcs_methods = checker.take_ufcs_methods();
             let equality_index = std::mem::take(&mut store.equality_index);
             let resolved_definitions = std::mem::take(&mut checker.facts.resolved_definitions);
             let go_package_names = store.go_package_names.clone();
@@ -306,6 +296,8 @@ impl CompiledTest {
                 .filter(|id| id.starts_with(syntax::types::GO_IMPORT_PREFIX))
                 .cloned()
                 .collect();
+
+            sink.extend(checker.sink.take());
 
             (
                 typed_ast,

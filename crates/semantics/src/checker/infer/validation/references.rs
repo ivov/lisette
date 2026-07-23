@@ -4,7 +4,7 @@ use syntax::ast::{Expression, Span};
 
 use crate::checker::infer::InferCtx;
 
-impl InferCtx<'_, '_> {
+impl InferCtx<'_> {
     /// Reject `Err(x)?` and `None?` when used as sub-expressions of a larger
     /// expression (call arg, binary operand, etc.).  These always early-return
     /// and never produce a value, so the surrounding expression is dead code.

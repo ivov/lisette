@@ -5,7 +5,7 @@ use syntax::types::Type;
 
 use crate::checker::infer::InferCtx;
 
-impl InferCtx<'_, '_> {
+impl InferCtx<'_> {
     pub(super) fn infer_impl_block(
         &mut self,
         annotation: Annotation,
@@ -38,7 +38,7 @@ impl InferCtx<'_, '_> {
         };
 
         let scope = self.scopes.current_mut();
-        scope.values.insert(receiver_name.to_string(), receiver_ty);
+        scope.insert_value(receiver_name.to_string(), receiver_ty);
 
         // If this is a tuple struct with a constructor, the receiver_name (which is the
         // type name) shadows the constructor function in the parent scope. Re-insert the
@@ -56,8 +56,7 @@ impl InferCtx<'_, '_> {
             let ctor_ty = ctor_ty.clone();
             self.scopes
                 .current_mut()
-                .values
-                .insert(receiver_name.to_string(), ctor_ty);
+                .insert_value(receiver_name.to_string(), ctor_ty);
         }
 
         self.scopes.set_impl_receiver_type(Some(impl_ty.clone()));

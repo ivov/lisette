@@ -1,7 +1,7 @@
 use crate::_harness::build::compile_check;
 use crate::_harness::filesystem::MockFileSystem;
 use crate::_harness::formatting::{format_diagnostic_for_snapshot, format_diagnostic_standalone};
-use crate::_harness::infer::infer_module;
+use crate::_harness::infer::{infer, infer_module};
 use crate::{
     assert_desugar_error_snapshot, assert_infer_error_snapshot, assert_lex_error_snapshot,
     assert_multimodule_infer_error_snapshot, assert_parse_error_snapshot,
@@ -11384,6 +11384,32 @@ struct Point { x: int, y: int }
 }
 
 #[test]
+fn iterate_on_type_alias() {
+    let result = infer("#[iterate]\ntype Count = int");
+    assert!(
+        has_code(&result, "iterate_not_an_enum"),
+        "an iterate attribute on an alias must be rejected, got: {:?}",
+        result.errors
+    );
+}
+
+#[test]
+fn iterate_in_typedef_rejected() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "colors",
+        "colors.d.lis",
+        "#[iterate]\npub enum Color { Red, Green }",
+    );
+    let result = infer_module("colors", fs);
+    assert!(
+        has_code(&result, "iterate_in_typedef"),
+        "an iterate attribute in a typedef must be rejected, got: {:?}",
+        result.errors
+    );
+}
+
+#[test]
 fn iterate_variants_method_collision() {
     let input = r#"
 #[iterate]
@@ -11459,6 +11485,32 @@ fn run() -> int {
 }
 "#;
     assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn display_on_type_alias() {
+    let result = infer("#[display]\ntype Count = int");
+    assert!(
+        has_code(&result, "display_not_a_struct_or_enum"),
+        "a display attribute on an alias must be rejected, got: {:?}",
+        result.errors
+    );
+}
+
+#[test]
+fn display_in_typedef_rejected() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "shapes",
+        "shapes.d.lis",
+        "#[display]\npub struct Point { pub x: int, pub y: int }",
+    );
+    let result = infer_module("shapes", fs);
+    assert!(
+        has_code(&result, "display_in_typedef"),
+        "a display attribute in a typedef must be rejected, got: {:?}",
+        result.errors
+    );
 }
 
 #[test]

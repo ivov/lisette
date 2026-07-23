@@ -1,30 +1,33 @@
 use crate::checker::EnvResolve;
 use rustc_hash::{FxHashMap, FxHashSet};
 use syntax::ast::{
-    Annotation, Attribute, EnumFieldDefinition, EnumVariant, Generic, Span, StructFieldDefinition,
-    StructKind, VariantFields,
+    EnumFieldDefinition, EnumVariant, Expression, Generic, Span, StructFieldDefinition, StructKind,
+    VariantFields,
 };
 use syntax::containment::{EnumPayloads, definition_contains_by_value};
-use syntax::program::{Attributes, Definition, DefinitionBody, MethodSignatures, Visibility};
+use syntax::program::{Definition, DefinitionBody, MethodSignatures, Visibility};
 use syntax::types::{Symbol, Type};
 
 use super::enum_variant_constructor_type;
 use crate::checker::TaskState;
 use crate::store::Store;
 
-impl TaskState<'_> {
-    #[allow(clippy::too_many_arguments)]
-    pub(super) fn populate_enum(
-        &mut self,
-        store: &mut Store,
-        name: &str,
-        name_span: &Span,
-        generics: &[Generic],
-        variants: &[EnumVariant],
-        span: &Span,
-        doc: &Option<String>,
-        attributes: Attributes,
-    ) {
+impl TaskState {
+    pub(super) fn populate_enum(&mut self, store: &mut Store, expression: &Expression) {
+        let Expression::Enum {
+            name,
+            name_span,
+            generics,
+            variants,
+            span,
+            doc,
+            attributes,
+            ..
+        } = expression
+        else {
+            unreachable!("populate_enum called with non-Enum expression");
+        };
+        let attributes = super::collect_enum_attributes(attributes);
         let qualified_name = self.qualify_name(name);
         let enum_ty = store
             .get_type(&qualified_name)
@@ -261,29 +264,27 @@ impl TaskState<'_> {
 
         let scope = self.scopes.current_mut();
 
-        scope
-            .values
-            .insert(qualified_name.clone(), enum_variant_constructor_ty.clone());
+        scope.insert_value(qualified_name.clone(), enum_variant_constructor_ty.clone());
 
-        scope
-            .values
-            .entry(variant.name.to_string())
-            .or_insert(enum_variant_constructor_ty);
+        scope.insert_value_if_absent(variant.name.to_string(), enum_variant_constructor_ty);
     }
 
-    #[allow(clippy::too_many_arguments)]
-    pub(super) fn populate_struct(
-        &mut self,
-        store: &mut Store,
-        name: &str,
-        name_span: &Span,
-        generics: &[Generic],
-        fields: &[StructFieldDefinition],
-        kind: StructKind,
-        span: &Span,
-        doc: &Option<String>,
-        attributes: Attributes,
-    ) {
+    pub(super) fn populate_struct(&mut self, store: &mut Store, expression: &Expression) {
+        let Expression::Struct {
+            name,
+            name_span,
+            generics,
+            fields,
+            kind,
+            span,
+            doc,
+            attributes,
+            ..
+        } = expression
+        else {
+            unreachable!("populate_struct called with non-Struct expression");
+        };
+        let attributes = super::collect_struct_attributes(attributes);
         let qualified_name = self.qualify_name(name);
         let struct_ty = store
             .get_type(&qualified_name)
@@ -316,19 +317,19 @@ impl TaskState<'_> {
         // Single-field non-generic tuple structs (e.g. `struct FileMode(uint32)`) are
         // emitted as Go type aliases (`type FileMode uint32`). Set underlying_ty so the
         // type checker allows numeric casts through them.
-        let struct_ty = if kind == StructKind::Tuple && new_fields.len() == 1 && generics.is_empty()
-        {
-            match struct_ty {
-                Type::Nominal { id, params, .. } => Type::Nominal {
-                    id,
-                    params,
-                    underlying_ty: Some(Box::new(new_fields[0].ty.clone())),
-                },
-                other => other,
-            }
-        } else {
-            struct_ty
-        };
+        let struct_ty =
+            if *kind == StructKind::Tuple && new_fields.len() == 1 && generics.is_empty() {
+                match struct_ty {
+                    Type::Nominal { id, params, .. } => Type::Nominal {
+                        id,
+                        params,
+                        underlying_ty: Some(Box::new(new_fields[0].ty.clone())),
+                    },
+                    other => other,
+                }
+            } else {
+                struct_ty
+            };
 
         let visibility = self
             .current_module(&*store)
@@ -354,7 +355,7 @@ impl TaskState<'_> {
                 body: DefinitionBody::Struct {
                     generics,
                     fields: new_fields,
-                    kind,
+                    kind: *kind,
                     methods: Default::default(),
                     constructor: None,
                     attributes,
@@ -518,18 +519,20 @@ impl TaskState<'_> {
         }
     }
 
-    #[allow(clippy::too_many_arguments)]
-    pub(super) fn populate_type_alias(
-        &mut self,
-        store: &mut Store,
-        name: &str,
-        name_span: &Span,
-        generics: &[Generic],
-        annotation: &Annotation,
-        attributes: &[Attribute],
-        span: &Span,
-        doc: &Option<String>,
-    ) {
+    pub(super) fn populate_type_alias(&mut self, store: &mut Store, expression: &Expression) {
+        let Expression::TypeAlias {
+            name,
+            name_span,
+            generics,
+            annotation,
+            attributes,
+            span,
+            doc,
+            ..
+        } = expression
+        else {
+            unreachable!("populate_type_alias called with non-TypeAlias expression");
+        };
         let qualified_name = self.qualify_name(name);
 
         self.scopes.push();

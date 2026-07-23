@@ -4,7 +4,7 @@ use syntax::types::{CompoundKind, Type, peel_to_range_type};
 
 use crate::checker::infer::InferCtx;
 
-impl InferCtx<'_, '_> {
+impl InferCtx<'_> {
     /// Returns `true` if valid (no error emitted), `false` if an error was emitted.
     fn check_slice_index_type(&mut self, type_name: &str, index_ty: &Type, span: Span) -> bool {
         if type_name != "Slice" || index_ty.is_variable() || index_ty.is_error() {

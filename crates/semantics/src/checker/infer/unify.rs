@@ -52,7 +52,7 @@ pub enum Dispatched {
     Fallthrough,
 }
 
-impl InferCtx<'_, '_> {
+impl InferCtx<'_> {
     /// Make two types equal. Returns `false` when they do not match.
     ///
     /// - For two concrete types, verifies that they match.

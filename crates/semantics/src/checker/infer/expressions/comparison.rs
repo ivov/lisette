@@ -491,7 +491,7 @@ pub(crate) fn param_is_comparable(scopes: &Scopes, env: &TypeEnv, param_name: &s
     found
 }
 
-impl InferCtx<'_, '_> {
+impl InferCtx<'_> {
     fn is_comparable_with_param_bounds(&self, ty: &Type) -> bool {
         let resolved = ty.resolve_in(&self.env);
         check_not_comparable_with_bounds(&self.env, self.store, &resolved, &mut |parameter| {

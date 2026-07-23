@@ -9,6 +9,8 @@ use semantics::facts::Facts;
 use syntax::ast::Span;
 use syntax::program::UnusedInfo;
 
+use super::super::fact_producers::{ProducedFact, ProducedFacts};
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Lint {
     UnusedVariable,
@@ -74,6 +76,7 @@ impl LintConfig {
 pub(crate) fn run(
     analysis: &AnalysisContext,
     facts: &Facts,
+    produced: &ProducedFacts,
     unused: &mut UnusedInfo,
     sink: &LocalSink,
 ) {
@@ -90,11 +93,8 @@ pub(crate) fn run(
     );
     collect_dead_code(facts, &mut diagnostics);
     collect_pattern_issues(facts, &mut diagnostics);
-    collect_unused_expressions(facts, &mut diagnostics);
-    collect_discarded_tail_expressions(facts, &mut diagnostics);
+    collect_produced_facts(produced, &mut diagnostics);
     collect_overused_references(facts, &mut diagnostics);
-    collect_unused_type_params(facts, &mut diagnostics);
-    collect_type_params_only_in_bound(facts, &mut diagnostics);
     collect_always_failing_try_blocks(facts, &mut diagnostics);
     collect_expression_only_fstrings(facts, &sources, &mut diagnostics);
 
@@ -174,27 +174,29 @@ fn collect_bindings(
 ) {
     for b in facts.bindings.values() {
         let is_anon = b.name.starts_with('_');
-        let written_but_not_read = b.kind.is_mutable() && b.mutated && !b.used && !is_anon;
+        let written_but_not_read =
+            b.kind.is_mutable() && b.mutation.happened() && !b.used && !is_anon;
         let is_write_only_param = written_but_not_read && b.kind.is_param();
 
         if !b.used && !is_write_only_param {
-            if !is_anon && b.kind.is_param() && !b.is_typedef && b.name != "self" {
+            if !is_anon && b.kind.is_param() && !b.origin.is_typedef() && b.name != "self" {
                 out.push(diagnostics::lint::unused_parameter(&b.span, &b.name));
             } else if !written_but_not_read
                 && !is_anon
                 && !b.kind.is_param()
-                && (!b.kind.is_pattern_position() || b.is_as_alias)
+                && (!b.kind.is_pattern_position() || b.origin.is_as_alias())
             {
                 out.push(diagnostics::lint::unused_variable(
                     &b.span,
                     &b.name,
-                    b.is_struct_field,
+                    b.origin.is_struct_field(),
                 ));
             }
             unused.mark_binding_unused(b.span);
         }
 
-        if b.kind.is_mutable() && !b.mutated && !within_any(erroring_functions, b.span) {
+        if b.kind.is_mutable() && !b.mutation.happened() && !within_any(erroring_functions, b.span)
+        {
             let mut diagnostic = diagnostics::lint::unused_mut(&b.span);
             if let Some(deletion) = mut_keyword_deletion(sources, b.span) {
                 diagnostic =
@@ -221,20 +223,31 @@ fn collect_pattern_issues(facts: &Facts, out: &mut Vec<LisetteDiagnostic>) {
     }
 }
 
-fn collect_unused_expressions(facts: &Facts, out: &mut Vec<LisetteDiagnostic>) {
-    for fact in &facts.unused_expressions {
-        out.push(diagnostics::lint::unused_expression(&fact.span, fact.kind));
-    }
-}
-
-fn collect_discarded_tail_expressions(facts: &Facts, out: &mut Vec<LisetteDiagnostic>) {
-    for fact in &facts.discarded_tail_expressions {
-        out.push(diagnostics::infer::mismatched_tail_value(
-            &fact.span,
-            &fact.return_type,
-            &fact.expected_span,
-            &fact.expected_type,
-        ));
+fn collect_produced_facts(produced: &ProducedFacts, out: &mut Vec<LisetteDiagnostic>) {
+    for fact in &produced.items {
+        let diagnostic = match fact {
+            ProducedFact::UnusedExpression { span, kind } => {
+                diagnostics::lint::unused_expression(span, *kind)
+            }
+            ProducedFact::DiscardedTail {
+                span,
+                return_type,
+                expected_span,
+                expected_type,
+            } => diagnostics::infer::mismatched_tail_value(
+                span,
+                return_type,
+                expected_span,
+                expected_type,
+            ),
+            ProducedFact::UnusedTypeParam { span } => {
+                diagnostics::lint::unused_type_parameter(span)
+            }
+            ProducedFact::TypeParamOnlyInBound { name, span } => {
+                diagnostics::lint::type_param_only_in_bound(span, name)
+            }
+        };
+        out.push(diagnostic);
     }
 }
 
@@ -248,20 +261,6 @@ fn collect_overused_references(facts: &Facts, out: &mut Vec<LisetteDiagnostic>) 
                 ),
             ),
         );
-    }
-}
-
-fn collect_unused_type_params(facts: &Facts, out: &mut Vec<LisetteDiagnostic>) {
-    for fact in &facts.unused_type_params {
-        out.push(diagnostics::lint::unused_type_parameter(&fact.span));
-    }
-}
-
-fn collect_type_params_only_in_bound(facts: &Facts, out: &mut Vec<LisetteDiagnostic>) {
-    for fact in &facts.type_params_only_in_bound {
-        out.push(diagnostics::lint::type_param_only_in_bound(
-            &fact.span, &fact.name,
-        ));
     }
 }
 

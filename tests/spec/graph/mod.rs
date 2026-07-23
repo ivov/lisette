@@ -2,7 +2,7 @@ use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use diagnostics::LocalSink;
 use semantics::module_graph::kahn::topological_sort;
-use semantics::module_graph::{Roots, build_module_graph};
+use semantics::module_graph::{ModuleGraphOptions, Roots, build_module_graph};
 use semantics::store::Store;
 
 use crate::_harness::filesystem::MockFileSystem;
@@ -15,6 +15,21 @@ fn roots(entry: &str) -> Roots {
     Roots {
         primary: vec![entry.to_string()],
         additional: vec![],
+    }
+}
+
+fn graph_options<'a>(
+    loader: &'a MockFileSystem,
+    sink: &'a LocalSink,
+    locator: &'a deps::TypedefLocator,
+    standalone_mode: bool,
+) -> ModuleGraphOptions<'a> {
+    ModuleGraphOptions {
+        loader: Some(loader),
+        sink,
+        standalone_mode,
+        locator,
+        include_tests: true,
     }
 }
 
@@ -103,19 +118,12 @@ fn test_only_imports_excluded_from_production_edges() {
     fs.add_file("fixture", "fixture.lis", "pub fn sample() -> int { 2 }");
 
     let mut store = Store::new();
-    store.module_ids.push("main".to_string());
-    store.module_ids.push("math".to_string());
-    store.module_ids.push("fixture".to_string());
 
     let sink = LocalSink::new();
     let result = build_module_graph(
         &mut store,
-        Some(&fs),
         roots("main"),
-        &sink,
-        false,
-        &default_resolver(),
-        true,
+        graph_options(&fs, &sink, &default_resolver(), false),
     );
 
     assert!(
@@ -139,18 +147,12 @@ fn graph_simple_dependency() {
     fs.add_file("lib", "lib.lis", "fn foo() { 1 }");
 
     let mut store = Store::new();
-    store.module_ids.push("main".to_string());
-    store.module_ids.push("lib".to_string());
 
     let sink = LocalSink::new();
     let result = build_module_graph(
         &mut store,
-        Some(&fs),
         roots("main"),
-        &sink,
-        false,
-        &default_resolver(),
-        true,
+        graph_options(&fs, &sink, &default_resolver(), false),
     );
 
     assert!(result.cycles.is_empty());
@@ -170,17 +172,12 @@ fn graph_missing_module() {
     fs.add_file("main", "main.lis", r#"import "missing""#);
 
     let mut store = Store::new();
-    store.module_ids.push("main".to_string());
 
     let sink = LocalSink::new();
     let _result = build_module_graph(
         &mut store,
-        Some(&fs),
         roots("main"),
-        &sink,
-        false,
-        &default_resolver(),
-        true,
+        graph_options(&fs, &sink, &default_resolver(), false),
     );
 
     assert!(sink.has_errors());
@@ -194,19 +191,12 @@ fn graph_cycle_detection() {
     fs.add_file("c", "c.lis", r#"import "a""#);
 
     let mut store = Store::new();
-    store.module_ids.push("a".to_string());
-    store.module_ids.push("b".to_string());
-    store.module_ids.push("c".to_string());
 
     let sink = LocalSink::new();
     let result = build_module_graph(
         &mut store,
-        Some(&fs),
         roots("a"),
-        &sink,
-        false,
-        &default_resolver(),
-        true,
+        graph_options(&fs, &sink, &default_resolver(), false),
     );
 
     assert!(!result.cycles.is_empty());
@@ -220,22 +210,15 @@ fn additional_roots_widen_graph_but_not_reachable_set() {
     fs.add_file("orphan", "orphan.lis", "pub fn g() -> int { 2 }");
 
     let mut store = Store::new();
-    for m in ["main", "lib", "orphan"] {
-        store.module_ids.push(m.to_string());
-    }
 
     let sink = LocalSink::new();
     let result = build_module_graph(
         &mut store,
-        Some(&fs),
         Roots {
             primary: vec!["main".to_string()],
             additional: vec!["orphan".to_string()],
         },
-        &sink,
-        false,
-        &default_resolver(),
-        true,
+        graph_options(&fs, &sink, &default_resolver(), false),
     );
 
     assert!(result.order.iter().any(|m| m == "orphan"));
@@ -257,19 +240,12 @@ fn empty_additional_leaves_orphan_out_of_graph() {
     fs.add_file("orphan", "orphan.lis", "pub fn g() -> int { 2 }");
 
     let mut store = Store::new();
-    for m in ["main", "lib", "orphan"] {
-        store.module_ids.push(m.to_string());
-    }
 
     let sink = LocalSink::new();
     let result = build_module_graph(
         &mut store,
-        Some(&fs),
         roots("main"),
-        &sink,
-        false,
-        &default_resolver(),
-        true,
+        graph_options(&fs, &sink, &default_resolver(), false),
     );
 
     assert!(!result.order.iter().any(|m| m == "orphan"));
@@ -281,20 +257,15 @@ fn zero_primary_roots_begins_with_additional() {
     fs.add_file("lib", "lib.lis", "pub fn f() -> int { 1 }");
 
     let mut store = Store::new();
-    store.module_ids.push("lib".to_string());
 
     let sink = LocalSink::new();
     let result = build_module_graph(
         &mut store,
-        Some(&fs),
         Roots {
             primary: vec![],
             additional: vec!["lib".to_string()],
         },
-        &sink,
-        false,
-        &default_resolver(),
-        true,
+        graph_options(&fs, &sink, &default_resolver(), false),
     );
 
     assert!(result.primary_reachable.is_empty());
@@ -412,17 +383,12 @@ fn graph_standalone_third_party_go_import_uses_module_not_found() {
     fs.add_file("main", "main.lis", r#"import "go:github.com/gorilla/mux""#);
 
     let mut store = Store::new();
-    store.module_ids.push("main".to_string());
 
     let sink = LocalSink::new();
     let _result = build_module_graph(
         &mut store,
-        Some(&fs),
         roots("main"),
-        &sink,
-        true, // standalone mode
-        &default_resolver(),
-        true,
+        graph_options(&fs, &sink, &default_resolver(), true),
     );
 
     assert!(sink.has_errors());
@@ -435,17 +401,12 @@ fn graph_project_third_party_go_import_undeclared() {
     fs.add_file("main", "main.lis", r#"import "go:github.com/gorilla/mux""#);
 
     let mut store = Store::new();
-    store.module_ids.push("main".to_string());
 
     let sink = LocalSink::new();
     let _result = build_module_graph(
         &mut store,
-        Some(&fs),
         roots("main"),
-        &sink,
-        false, // project mode
-        &default_resolver(),
-        true,
+        graph_options(&fs, &sink, &default_resolver(), false),
     );
 
     assert!(sink.has_errors());
@@ -460,7 +421,6 @@ fn graph_declared_dep_missing_typedef() {
     fs.add_file("main", "main.lis", r#"import "go:github.com/gorilla/mux""#);
 
     let mut store = Store::new();
-    store.module_ids.push("main".to_string());
 
     // Declare the dep in the resolver but do not place any .d.lis file on disk
     let mut go_deps = BTreeMap::new();
@@ -476,12 +436,8 @@ fn graph_declared_dep_missing_typedef() {
     let sink = LocalSink::new();
     let _result = build_module_graph(
         &mut store,
-        Some(&fs),
         roots("main"),
-        &sink,
-        false,
-        &resolver,
-        true,
+        graph_options(&fs, &sink, &resolver, false),
     );
 
     assert!(sink.has_errors());
@@ -510,7 +466,6 @@ fn graph_subpackage_missing_typedef_points_at_add() {
     fs.add_file("main", "main.lis", r#"import "go:k8s.io/api/core/v1""#);
 
     let mut store = Store::new();
-    store.module_ids.push("main".to_string());
 
     let mut go_deps = BTreeMap::new();
     go_deps.insert(
@@ -525,12 +480,8 @@ fn graph_subpackage_missing_typedef_points_at_add() {
     let sink = LocalSink::new();
     let _result = build_module_graph(
         &mut store,
-        Some(&fs),
         roots("main"),
-        &sink,
-        false,
-        &resolver,
-        true,
+        graph_options(&fs, &sink, &resolver, false),
     );
 
     assert!(sink.has_errors());

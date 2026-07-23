@@ -25,7 +25,7 @@ pub(crate) fn normalize_test_params(mut params: Vec<Binding>, is_test: bool) -> 
     params
 }
 
-impl TaskState<'_> {
+impl TaskState {
     /// Collect and validate a module's `#[test]` functions into `facts`
     /// (merge-safe, since this runs during parallel registration).
     pub(super) fn register_module_tests(&mut self, store: &Store, module_id: &str) {
@@ -41,7 +41,7 @@ impl TaskState<'_> {
                     in_test_file,
                     context_shadowed,
                     &mut records,
-                    self.sink,
+                    &self.sink,
                 );
             }
         }

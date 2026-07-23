@@ -4,7 +4,7 @@ use syntax::types::CompoundKind;
 use crate::checker::EnvResolve;
 use crate::checker::infer::InferCtx;
 
-impl InferCtx<'_, '_> {
+impl InferCtx<'_> {
     /// Reject map bracket reads whose value type has no zero value. A missing
     /// key surfaces the Go zero value, which for types like `Ref<T>` is a nil
     /// pointer with no Lisette equivalent.

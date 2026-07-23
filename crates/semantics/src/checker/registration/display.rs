@@ -1,82 +1,51 @@
-use syntax::ast::{Attribute, Expression, Span};
+use syntax::ast::Span;
 use syntax::program::{Definition, DefinitionBody};
 use syntax::types::{Symbol, Type};
 
 use super::{TaskState, wrap_with_impl_generics};
 use crate::call_classification::is_ufcs_method_type;
+use crate::checker::registration::derived_attributes::{
+    DerivedAttribute, DerivedAttributeKind, DerivedAttributeTarget,
+};
 use crate::store::Store;
 
-impl TaskState<'_> {
-    pub(super) fn register_display(&mut self, store: &mut Store, items: &[Expression]) {
-        let module_id = self.cursor.module_id.clone();
-        let is_d_lis = self.is_d_lis(store);
-        let mut candidates = Vec::new();
-        for item in items {
-            collect_display_candidates(item, is_d_lis, &mut candidates);
-        }
-        for candidate in candidates {
-            self.process_display_candidate(store, &module_id, candidate);
+impl TaskState {
+    pub(super) fn register_display(&mut self, store: &mut Store, candidates: &[DerivedAttribute]) {
+        for candidate in candidates
+            .iter()
+            .filter(|candidate| candidate.kind == DerivedAttributeKind::Display)
+        {
+            self.process_display_candidate(store, candidate);
         }
     }
 
-    pub(super) fn register_module_display(&mut self, store: &mut Store, module_id: &str) {
-        let candidates = {
-            let module = store.get_module(module_id).expect("module must exist");
-            let mut candidates = Vec::new();
-            for file in module.files.values() {
-                let is_d_lis = file.is_d_lis();
-                for item in &file.items {
-                    collect_display_candidates(item, is_d_lis, &mut candidates);
-                }
-            }
-            candidates
-        };
-
-        for candidate in candidates {
-            self.process_display_candidate(store, module_id, candidate);
-        }
-    }
-
-    fn process_display_candidate(
-        &mut self,
-        store: &mut Store,
-        module_id: &str,
-        candidate: DisplayCandidate,
-    ) {
-        let DisplayCandidate {
-            attribute_span,
-            kind,
-        } = candidate;
-        let TypeCandidate {
-            name,
-            is_struct,
-            is_d_lis,
-            has_args,
-        } = match kind {
-            CandidateKind::Misplaced => {
+    fn process_display_candidate(&mut self, store: &mut Store, candidate: &DerivedAttribute) {
+        let (name, is_struct) = match &candidate.target {
+            DerivedAttributeTarget::Misplaced => {
                 self.sink
                     .push(diagnostics::attribute::display_not_a_struct_or_enum(
-                        &attribute_span,
+                        &candidate.span,
                     ));
                 return;
             }
-            CandidateKind::Type(type_candidate) => type_candidate,
+            DerivedAttributeTarget::Struct { name } => (name, true),
+            DerivedAttributeTarget::Enum { name, .. } => (name, false),
         };
 
-        if has_args {
+        if candidate.has_args {
             self.sink
                 .push(diagnostics::attribute::display_with_arguments(
-                    &attribute_span,
+                    &candidate.span,
                 ));
             return;
         }
-        if is_d_lis {
+        if candidate.is_d_lis {
             self.sink
-                .push(diagnostics::attribute::display_in_typedef(&attribute_span));
+                .push(diagnostics::attribute::display_in_typedef(&candidate.span));
             return;
         }
 
-        let qualified = Symbol::from_parts(module_id, &name);
+        let qualified = Symbol::from_parts(&candidate.module_id, name);
         if is_struct
             && let Some(definition) = store.get_definition(qualified.as_str())
             && definition.is_pointer_backed_newtype(|id| {
@@ -87,12 +56,12 @@ impl TaskState<'_> {
         {
             self.sink
                 .push(diagnostics::attribute::display_on_pointer_newtype(
-                    &attribute_span,
+                    &candidate.span,
                 ));
             return;
         }
 
-        self.synthesize_to_string(store, module_id, &attribute_span, &qualified);
+        self.synthesize_to_string(store, &candidate.module_id, &candidate.span, &qualified);
     }
 
     fn synthesize_to_string(
@@ -183,90 +152,5 @@ fn type_generics(definition: &Definition) -> Option<Vec<syntax::ast::Generic>> {
             Some(generics.clone())
         }
         _ => None,
-    }
-}
-
-struct DisplayCandidate {
-    attribute_span: Span,
-    kind: CandidateKind,
-}
-
-enum CandidateKind {
-    Type(TypeCandidate),
-    Misplaced,
-}
-
-struct TypeCandidate {
-    name: String,
-    is_struct: bool,
-    is_d_lis: bool,
-    has_args: bool,
-}
-
-fn display_attribute(attributes: &[Attribute]) -> Option<&Attribute> {
-    attributes.iter().find(|a| a.name == "display")
-}
-
-fn misplaced_candidate(attribute: &Attribute) -> DisplayCandidate {
-    DisplayCandidate {
-        attribute_span: attribute.span,
-        kind: CandidateKind::Misplaced,
-    }
-}
-
-fn collect_method_attributes(methods: &[Expression], out: &mut Vec<DisplayCandidate>) {
-    for method in methods {
-        if let Expression::Function { attributes, .. } = method {
-            out.extend(display_attribute(attributes).map(misplaced_candidate));
-        }
-    }
-}
-
-fn collect_display_candidates(item: &Expression, is_d_lis: bool, out: &mut Vec<DisplayCandidate>) {
-    match item {
-        Expression::Struct {
-            attributes,
-            name,
-            fields,
-            ..
-        } => {
-            if let Some(attribute) = display_attribute(attributes) {
-                out.push(DisplayCandidate {
-                    attribute_span: attribute.span,
-                    kind: CandidateKind::Type(TypeCandidate {
-                        name: name.to_string(),
-                        is_struct: true,
-                        is_d_lis,
-                        has_args: !attribute.args.is_empty(),
-                    }),
-                });
-            }
-            for field in fields {
-                out.extend(display_attribute(&field.attributes).map(misplaced_candidate));
-            }
-        }
-        Expression::Enum {
-            attributes, name, ..
-        } => {
-            if let Some(attribute) = display_attribute(attributes) {
-                out.push(DisplayCandidate {
-                    attribute_span: attribute.span,
-                    kind: CandidateKind::Type(TypeCandidate {
-                        name: name.to_string(),
-                        is_struct: false,
-                        is_d_lis,
-                        has_args: !attribute.args.is_empty(),
-                    }),
-                });
-            }
-        }
-        Expression::Function { attributes, .. } => {
-            out.extend(display_attribute(attributes).map(misplaced_candidate));
-        }
-        Expression::ImplBlock { methods, .. } => collect_method_attributes(methods, out),
-        Expression::Interface {
-            method_signatures, ..
-        } => collect_method_attributes(method_signatures, out),
-        _ => {}
     }
 }

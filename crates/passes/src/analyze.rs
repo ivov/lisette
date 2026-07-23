@@ -6,6 +6,7 @@ use diagnostics::SemanticResult;
 use syntax::program::{ModuleInfo, MutationInfo, UnusedInfo};
 
 use semantics::cache::{EmitStamp, compute_emit_artifact_hash, save_module_cache};
+use semantics::facts::BindingMutation;
 use semantics::facts::Facts;
 use semantics::inference::AnalyzeInput;
 use semantics::inference::{InferenceOutput, PARALLEL_THRESHOLD, run_inference};
@@ -49,10 +50,12 @@ pub fn analyze(input: AnalyzeInput) -> AnalyzeOutput {
     }
     let mut mutations = MutationInfo::default();
     for (&binding_id, b) in facts.bindings.iter() {
-        if b.alias_mutated {
-            mutations.mark_binding_alias_mutated(binding_id);
-        } else if b.mutated {
-            mutations.mark_binding_mutated(binding_id);
+        match b.mutation {
+            BindingMutation::Unchanged => {}
+            BindingMutation::Direct => mutations.mark_binding_mutated(binding_id),
+            BindingMutation::ThroughAlias => {
+                mutations.mark_binding_alias_mutated(binding_id);
+            }
         }
     }
 

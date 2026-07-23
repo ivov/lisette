@@ -4,7 +4,7 @@ use syntax::types::{SimpleKind, Type, peel_alias};
 
 use crate::checker::infer::InferCtx;
 
-impl InferCtx<'_, '_> {
+impl InferCtx<'_> {
     /// Validates that a cast from source_ty to target_ty is allowed.
     /// Pushes a diagnostic if the cast is invalid.
     ///

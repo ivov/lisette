@@ -3,7 +3,7 @@ use syntax::types::unqualified_name;
 
 use crate::checker::infer::InferCtx;
 
-impl InferCtx<'_, '_> {
+impl InferCtx<'_> {
     pub(crate) fn check_select_match_arms(
         &mut self,
         match_arms: &[syntax::ast::MatchArm],

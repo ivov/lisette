@@ -1,4 +1,4 @@
-use diagnostics::{Fix, LisetteDiagnostic, LocalSink, apply_fixes};
+use diagnostics::{Fix, LisetteDiagnostic, apply_fixes};
 use semantics::{checker::TaskState, checker::infer::InferCtx, store::Store};
 use stdlib::{Target, get_go_stdlib_typedef};
 use syntax::{
@@ -18,8 +18,6 @@ use super::TEST_MODULE_ID;
 pub fn lint(source: &str) -> Vec<LisetteDiagnostic> {
     let mut store = Store::new();
     store.add_module(TEST_MODULE_ID);
-
-    let sink = LocalSink::new();
 
     init_prelude(&mut store);
 
@@ -47,7 +45,7 @@ pub fn lint(source: &str) -> Vec<LisetteDiagnostic> {
     }
     let ast = desugar_result.ast;
 
-    let mut checker = TaskState::with_fresh_allocator(&sink);
+    let mut checker = TaskState::with_fresh_allocator();
     checker.cursor.module_id = TEST_MODULE_ID.to_string();
     register_test_builtins(&mut store, &mut checker);
     checker.put_prelude_in_scope(&store);
@@ -81,7 +79,6 @@ pub fn lint(source: &str) -> Vec<LisetteDiagnostic> {
     checker.put_imported_modules_in_scope(&store, &imports);
 
     checker.register_types_and_values(&mut store, &ast, &Visibility::Private);
-    checker.register_equality(&mut store, &ast);
     checker.finalize_equality(&mut store);
     checker.check_pending_generic_bounds(&store);
 
@@ -90,7 +87,7 @@ pub fn lint(source: &str) -> Vec<LisetteDiagnostic> {
     for expression in ast {
         let type_var = checker.new_type_var();
         let typed_expression =
-            InferCtx::new(&mut checker, &store).infer_expression(expression, &type_var);
+            InferCtx::new(&mut checker, &store).infer_root_expression(expression, &type_var);
         typed_ast.push(typed_expression);
     }
 
@@ -120,11 +117,18 @@ pub fn lint(source: &str) -> Vec<LisetteDiagnostic> {
     store.store_file(TEST_MODULE_ID, typed_file);
     store.build_closed_domains();
 
-    let inference_len = sink.len();
+    let inference_len = checker.sink.len();
 
-    let analysis = semantics::context::AnalysisContext::new(&store, &checker.ufcs_methods);
+    let ufcs_methods = checker.shared_ufcs_methods();
+    let analysis = semantics::context::AnalysisContext::new(&store, &ufcs_methods);
     let mut unused = UnusedInfo::default();
-    passes::run(&analysis, &mut checker.facts, &sink, &mut unused, true);
+    passes::run(
+        &analysis,
+        &mut checker.facts,
+        &checker.sink,
+        &mut unused,
+        true,
+    );
 
     // Deferred inference errors surface during passes::run, mixed in with
     // the error-severity lint diagnostics the tests assert on.
@@ -133,7 +137,7 @@ pub fn lint(source: &str) -> Vec<LisetteDiagnostic> {
         "infer.type_not_inferred",
         "infer.missing_type_argument",
     ];
-    let mut all_diagnostics = sink.take();
+    let mut all_diagnostics = checker.sink.take();
     let pass_diagnostics = all_diagnostics.split_off(inference_len);
     let mut diagnostics: Vec<LisetteDiagnostic> = all_diagnostics
         .into_iter()

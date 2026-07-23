@@ -12,12 +12,16 @@ use crate::checker::infer::carry_mut::{
 struct AliasFinding {
     source: String,
     span: Span,
-    via_non_severing_clone: bool,
-    clone_severs: bool,
+    kind: AliasKind,
     addressable: bool,
 }
 
-impl InferCtx<'_, '_> {
+enum AliasKind {
+    Direct { clone_severs: bool },
+    NonSeveringClone,
+}
+
+impl InferCtx<'_> {
     /// Reject a mutable binding that would share the backing store of a live one.
     pub(super) fn check_mut_binding_alias(&mut self, binding_name: &str, value: &Expression) {
         let Some(finding) = self.find_alias(value, true) else {
@@ -34,21 +38,20 @@ impl InferCtx<'_, '_> {
     }
 
     fn push_binding_alias(&mut self, binding_name: &str, finding: AliasFinding) {
-        let diagnostic = if finding.via_non_severing_clone {
-            diagnostics::infer::mut_binding_clone_does_not_sever(
+        let diagnostic = match finding.kind {
+            AliasKind::NonSeveringClone => diagnostics::infer::mut_binding_clone_does_not_sever(
                 binding_name,
                 &finding.source,
                 finding.addressable,
                 finding.span,
-            )
-        } else {
-            diagnostics::infer::mut_binding_aliases(
+            ),
+            AliasKind::Direct { clone_severs } => diagnostics::infer::mut_binding_aliases(
                 binding_name,
                 &finding.source,
                 finding.addressable,
-                finding.clone_severs,
+                clone_severs,
                 finding.span,
-            )
+            ),
         };
         self.sink.push(diagnostic);
     }
@@ -139,14 +142,18 @@ impl InferCtx<'_, '_> {
             return None;
         }
         let clone_severs = clone_severs_alias(&ty, &self.env, self.store);
-        if via_clone && clone_severs {
-            return None;
-        }
+        let kind = if via_clone {
+            if clone_severs {
+                return None;
+            }
+            AliasKind::NonSeveringClone
+        } else {
+            AliasKind::Direct { clone_severs }
+        };
         Some(AliasFinding {
             source: render_place(place),
             span,
-            via_non_severing_clone: via_clone,
-            clone_severs,
+            kind,
             addressable: check_is_non_addressable(place, &self.env).is_none(),
         })
     }

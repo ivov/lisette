@@ -21,17 +21,62 @@ struct StructishCtx<'a, 'b, F> {
     _marker: std::marker::PhantomData<&'a ()>,
 }
 
-impl InferCtx<'_, '_> {
+struct StructLiteral {
+    name: EcoString,
+    fields: Vec<StructFieldAssignment>,
+    spread: StructSpread,
+    span: Span,
+}
+
+impl StructLiteral {
+    fn with_type(self, ty: Type) -> Expression {
+        Expression::StructCall {
+            name: self.name,
+            field_assignments: self.fields,
+            spread: self.spread,
+            ty,
+            span: self.span,
+        }
+    }
+}
+
+struct ResolvedStruct {
+    qualified_name: EcoString,
+    ty: Type,
+    fields: Vec<syntax::ast::StructFieldDefinition>,
+    alias_underlying: Option<Type>,
+}
+
+struct ResolvedVariant {
+    fields: Vec<syntax::ast::EnumFieldDefinition>,
+    substitutions: SubstitutionMap,
+    ty: Type,
+}
+
+impl InferCtx<'_> {
     pub(super) fn infer_struct_call(
         &mut self,
-        struct_name: EcoString,
-        field_assignments: Vec<StructFieldAssignment>,
-        spread: StructSpread,
-        span: Span,
+        expression: Expression,
         expected_ty: &Type,
     ) -> Expression {
+        let Expression::StructCall {
+            name,
+            field_assignments,
+            spread,
+            span,
+            ..
+        } = expression
+        else {
+            unreachable!("infer_struct_call called with non-StructCall expression");
+        };
+        let literal = StructLiteral {
+            name,
+            fields: field_assignments,
+            spread,
+            span,
+        };
         let store = self.store;
-        if let Some(qualified_name) = self.lookup_qualified_name(store, &struct_name)
+        if let Some(qualified_name) = self.lookup_qualified_name(store, &literal.name)
             && let Some(Definition {
                 ty: struct_ty,
                 body:
@@ -45,21 +90,25 @@ impl InferCtx<'_, '_> {
             let struct_ty = struct_ty.clone();
             let struct_fields = struct_fields.clone();
 
-            self.track_name_usage(store, &qualified_name, &span, struct_name.len() as u32);
+            self.track_name_usage(
+                store,
+                &qualified_name,
+                &literal.span,
+                literal.name.len() as u32,
+            );
             return self.infer_struct_call_for_struct(
-                struct_name,
-                qualified_name,
-                struct_ty,
-                struct_fields,
-                field_assignments,
-                spread,
-                span,
+                literal,
+                ResolvedStruct {
+                    qualified_name,
+                    ty: struct_ty,
+                    fields: struct_fields,
+                    alias_underlying: None,
+                },
                 expected_ty,
-                None,
             );
         }
 
-        if let Some(qualified_name) = self.lookup_qualified_name(store, &struct_name)
+        if let Some(qualified_name) = self.lookup_qualified_name(store, &literal.name)
             && let Some(Definition {
                 ty: alias_ty,
                 body: DefinitionBody::TypeAlias { annotation, .. },
@@ -93,34 +142,27 @@ impl InferCtx<'_, '_> {
                     Some(underlying)
                 };
                 return self.infer_struct_call_for_struct(
-                    struct_name,
-                    struct_id_str,
-                    struct_ty,
-                    struct_fields,
-                    field_assignments,
-                    spread,
-                    span,
+                    literal,
+                    ResolvedStruct {
+                        qualified_name: struct_id_str,
+                        ty: struct_ty,
+                        fields: struct_fields,
+                        alias_underlying,
+                    },
                     expected_ty,
-                    alias_underlying,
                 );
             }
 
             // Opaque types (e.g., Go's sync.WaitGroup) can be zero-value instantiated
             // with T{} even though they have no struct definition.
-            if is_opaque && field_assignments.is_empty() {
+            if is_opaque && literal.fields.is_empty() {
                 let (instantiated_ty, _) = self.instantiate(&alias_ty);
-                self.unify(expected_ty, &instantiated_ty, &span);
-                return Expression::StructCall {
-                    name: struct_name,
-                    field_assignments,
-                    spread,
-                    ty: instantiated_ty,
-                    span,
-                };
+                self.unify(expected_ty, &instantiated_ty, &literal.span);
+                return literal.with_type(instantiated_ty);
             }
         }
 
-        if let Some((type_part, variant_name)) = struct_name.rsplit_once('.')
+        if let Some((type_part, variant_name)) = literal.name.rsplit_once('.')
             && let Some(qualified_name) = self.lookup_qualified_name(store, type_part)
             && let Some(Definition {
                 ty: alias_ty,
@@ -151,40 +193,35 @@ impl InferCtx<'_, '_> {
                     _ => instantiated_ty,
                 };
                 return self.infer_struct_call_for_enum_variant(
-                    struct_name,
-                    variant_fields,
-                    map,
-                    field_assignments,
-                    spread,
-                    span,
+                    literal,
+                    ResolvedVariant {
+                        fields: variant_fields,
+                        substitutions: map,
+                        ty: enum_ty,
+                    },
                     expected_ty,
-                    enum_ty,
                 );
             }
         }
 
-        if let Some(ty) = self.lookup_type(store, &struct_name) {
+        if let Some(ty) = self.lookup_type(store, &literal.name) {
             let (value_constructor_type, map) = self.instantiate(&ty);
 
             let pattern_ty = match value_constructor_type {
                 Type::Function(f) => (*f.return_type).clone(),
                 Type::Nominal { .. } => value_constructor_type,
                 _ => {
-                    self.sink
-                        .push(diagnostics::infer::struct_not_found(&struct_name, span));
-                    self.unify(expected_ty, &Type::Error, &span);
-                    return Expression::StructCall {
-                        name: struct_name,
-                        field_assignments,
-                        spread,
-                        ty: Type::Error,
-                        span,
-                    };
+                    self.sink.push(diagnostics::infer::struct_not_found(
+                        &literal.name,
+                        literal.span,
+                    ));
+                    self.unify(expected_ty, &Type::Error, &literal.span);
+                    return literal.with_type(Type::Error);
                 }
             };
 
             let resolved_ty = pattern_ty.resolve_in(&self.env);
-            let variant_name = unqualified_name(&struct_name);
+            let variant_name = unqualified_name(&literal.name);
 
             if let Type::Nominal { id, .. } = &resolved_ty
                 && let Some(variants) = store.variants_of(id)
@@ -193,43 +230,43 @@ impl InferCtx<'_, '_> {
             {
                 let variant_fields: Vec<_> = variant.fields.iter().cloned().collect();
                 return self.infer_struct_call_for_enum_variant(
-                    struct_name,
-                    variant_fields,
-                    map,
-                    field_assignments,
-                    spread,
-                    span,
+                    literal,
+                    ResolvedVariant {
+                        fields: variant_fields,
+                        substitutions: map,
+                        ty: pattern_ty,
+                    },
                     expected_ty,
-                    pattern_ty,
                 );
             }
         }
 
-        self.sink
-            .push(diagnostics::infer::struct_not_found(&struct_name, span));
-        self.unify(expected_ty, &Type::Error, &span);
-        Expression::StructCall {
-            name: struct_name,
-            field_assignments,
-            spread,
-            ty: Type::Error,
-            span,
-        }
+        self.sink.push(diagnostics::infer::struct_not_found(
+            &literal.name,
+            literal.span,
+        ));
+        self.unify(expected_ty, &Type::Error, &literal.span);
+        literal.with_type(Type::Error)
     }
 
-    #[allow(clippy::too_many_arguments)]
     fn infer_struct_call_for_struct(
         &mut self,
-        struct_name: EcoString,
-        qualified_name: EcoString,
-        struct_ty: Type,
-        struct_fields: Vec<syntax::ast::StructFieldDefinition>,
-        field_assignments: Vec<StructFieldAssignment>,
-        spread: StructSpread,
-        span: Span,
+        literal: StructLiteral,
+        target: ResolvedStruct,
         expected_ty: &Type,
-        alias_underlying: Option<Type>,
     ) -> Expression {
+        let StructLiteral {
+            name: struct_name,
+            fields: field_assignments,
+            spread,
+            span,
+        } = literal;
+        let ResolvedStruct {
+            qualified_name,
+            ty: struct_ty,
+            fields: struct_fields,
+            alias_underlying,
+        } = target;
         let store = self.store;
         let (struct_call_ty, map) = self.instantiate(&struct_ty);
 
@@ -252,7 +289,7 @@ impl InferCtx<'_, '_> {
         let is_cross_module = struct_module != self.cursor.module_id
             || struct_name
                 .split_once('.')
-                .is_some_and(|(prefix, _)| self.imports.imported_modules.contains_key(prefix));
+                .is_some_and(|(prefix, _)| self.imports.namespace(prefix).is_some());
         let is_go_imported = qualified_name.starts_with("go:");
 
         let (new_field_assignments, matched_fields) = self.infer_structish_fields(
@@ -335,18 +372,23 @@ impl InferCtx<'_, '_> {
         }
     }
 
-    #[allow(clippy::too_many_arguments)]
     fn infer_struct_call_for_enum_variant(
         &mut self,
-        variant_name: EcoString,
-        variant_fields: Vec<syntax::ast::EnumFieldDefinition>,
-        map: SubstitutionMap,
-        field_assignments: Vec<StructFieldAssignment>,
-        spread: StructSpread,
-        span: Span,
+        literal: StructLiteral,
+        target: ResolvedVariant,
         expected_ty: &Type,
-        enum_ty: Type,
     ) -> Expression {
+        let StructLiteral {
+            name: variant_name,
+            fields: field_assignments,
+            spread,
+            span,
+        } = literal;
+        let ResolvedVariant {
+            fields: variant_fields,
+            substitutions: map,
+            ty: enum_ty,
+        } = target;
         let store = self.store;
         self.unify(expected_ty, &enum_ty, &span);
 

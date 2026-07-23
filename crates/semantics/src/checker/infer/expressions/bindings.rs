@@ -1,7 +1,6 @@
 use crate::checker::EnvResolve;
-use ecow::EcoString;
 use syntax::ast::BindingKind;
-use syntax::ast::{Annotation, Binding, Expression, Literal, Span, Visibility};
+use syntax::ast::{Binding, Expression, Literal};
 use syntax::program::DefinitionBody;
 use syntax::types::{Symbol, Type};
 
@@ -12,7 +11,7 @@ enum ConstInitReject {
     Composite,
 }
 
-impl InferCtx<'_, '_> {
+impl InferCtx<'_> {
     fn classify_const_init(&self, expression: &Expression) -> Option<ConstInitReject> {
         match expression.unwrap_parens() {
             Expression::Literal { literal, .. } => match literal {
@@ -49,17 +48,20 @@ impl InferCtx<'_, '_> {
         self.store.is_const(qualified.as_str())
     }
 
-    #[allow(clippy::too_many_arguments)]
-    pub(super) fn infer_const_binding(
-        &mut self,
-        doc: Option<String>,
-        annotation: Option<Annotation>,
-        expression: Box<Expression>,
-        identifier: EcoString,
-        identifier_span: Span,
-        visibility: Visibility,
-        span: Span,
-    ) -> Expression {
+    pub(super) fn infer_const_binding(&mut self, expression: Expression) -> Expression {
+        let Expression::Const {
+            doc,
+            annotation,
+            expression,
+            identifier,
+            identifier_span,
+            visibility,
+            span,
+            ..
+        } = expression
+        else {
+            unreachable!("infer_const_binding called with non-Const expression");
+        };
         let store = self.store;
         let ty = if let Some(annotation) = &annotation {
             let ty = self.convert_to_type(store, annotation, &span);
@@ -107,19 +109,26 @@ impl InferCtx<'_, '_> {
         }
     }
 
-    #[allow(clippy::too_many_arguments)]
     pub(super) fn infer_let_binding(
         &mut self,
-        binding: Binding,
-        value: Box<Expression>,
-        mutable: bool,
-        mut_span: Option<Span>,
-        else_block: Option<Box<Expression>>,
-        else_span: Option<Span>,
-        assert: bool,
-        span: Span,
+        expression: Expression,
         expected_ty: &Type,
     ) -> Expression {
+        let Expression::Let {
+            binding,
+            value,
+            mutable,
+            mut_span,
+            else_block,
+            else_span,
+            assert,
+            span,
+            ..
+        } = expression
+        else {
+            unreachable!("infer_let_binding called with non-Let expression");
+        };
+        let binding = *binding;
         let store = self.store;
         let has_annotation = binding.annotation.is_some();
         let binding_name = binding.pattern.get_identifier();
