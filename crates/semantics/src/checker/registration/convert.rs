@@ -8,7 +8,9 @@ use crate::checker::infer::expressions::comparison::{
 use syntax::EcoString;
 use syntax::ast::{Annotation, Generic, Span};
 use syntax::program::{Definition, DefinitionBody};
-use syntax::types::{SubstitutionMap, Symbol, Type, substitute, unqualified_name};
+use syntax::types::{
+    FunctionParameter, SubstitutionMap, Symbol, Type, substitute, unqualified_name,
+};
 
 use crate::checker::TaskState;
 use crate::generics::apply_bounds;
@@ -129,7 +131,6 @@ impl TaskState {
 
             Annotation::Function {
                 params,
-                param_mutability,
                 return_type,
                 ..
             } => {
@@ -140,7 +141,7 @@ impl TaskState {
                     .map(|(index, param)| {
                         self.convert_to_type_mode(
                             store,
-                            param,
+                            &param.annotation,
                             span,
                             index == last_param,
                             type_argument_checks.nested(),
@@ -164,8 +165,11 @@ impl TaskState {
                 };
 
                 Type::function(
-                    new_params,
-                    param_mutability.clone(),
+                    new_params
+                        .into_iter()
+                        .zip(params)
+                        .map(|(ty, param)| FunctionParameter::new(ty, param.mutable))
+                        .collect(),
                     Default::default(),
                     new_return_type.into(),
                 )

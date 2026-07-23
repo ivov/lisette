@@ -79,8 +79,8 @@ impl GoAbiCatalog {
             .params
             .iter()
             .map(|parameter| GoSlotDescriptor {
-                origin: SlotOrigin::go_parameter(parameter),
-                declared_type: parameter.clone(),
+                origin: SlotOrigin::go_parameter(&parameter.ty),
+                declared_type: parameter.ty.clone(),
             })
             .collect();
         let return_slot = GoSlotDescriptor {

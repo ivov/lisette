@@ -521,7 +521,11 @@ impl Store {
                 underlying_ty,
             },
             Type::Function(f) => {
-                let new_params = f.params.iter().map(|p| self.peel_alias_deep(p)).collect();
+                let new_params = f
+                    .params
+                    .iter()
+                    .map(|p| p.with_type(self.peel_alias_deep(&p.ty)))
+                    .collect();
                 let new_return = Box::new(self.peel_alias_deep(&f.return_type));
                 f.rebuild(new_params, f.bounds.clone(), new_return)
             }

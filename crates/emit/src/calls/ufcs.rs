@@ -37,7 +37,11 @@ impl Planner<'_> {
 
         let mut receiver_mapping: HashMap<String, Type> = HashMap::default();
         if let Some(self_param) = f.params.first() {
-            extract_type_mapping(&self_param.strip_refs(), receiver_ty, &mut receiver_mapping);
+            extract_type_mapping(
+                &self_param.ty.strip_refs(),
+                receiver_ty,
+                &mut receiver_mapping,
+            );
         }
 
         if !type_args.is_empty() {
@@ -68,7 +72,7 @@ impl Planner<'_> {
                 &f.params[..]
             };
             for (decl, conc) in declared.iter().zip(inst.params.iter()) {
-                extract_type_mapping(decl, conc, &mut inferred_mapping);
+                extract_type_mapping(&decl.ty, &conc.ty, &mut inferred_mapping);
             }
             extract_type_mapping(&f.return_type, &inst.return_type, &mut inferred_mapping);
         }

@@ -94,7 +94,7 @@ impl LeakCtx<'_> {
                     _ => None,
                 };
                 for param in &f.params {
-                    self.check(param, None);
+                    self.check(&param.ty, None);
                 }
                 self.check(&f.return_type, return_ann);
             }

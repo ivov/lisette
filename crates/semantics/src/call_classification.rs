@@ -15,7 +15,7 @@ pub(crate) fn is_ufcs_method_type(method_ty: &Type, base_generics_count: usize) 
         && let Type::Nominal {
             params: receiver_params,
             ..
-        } = receiver_param.strip_refs()
+        } = receiver_param.ty.strip_refs()
         && !type_args_match_params(&receiver_params, vars.iter())
     {
         return true;

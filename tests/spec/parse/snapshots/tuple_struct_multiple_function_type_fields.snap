@@ -27,7 +27,6 @@ description: |
                 },
                 annotation: Function {
                     params: [],
-                    param_mutability: [],
                     return_type: Constructor {
                         name: "int",
                         params: [],
@@ -60,18 +59,18 @@ description: |
                 },
                 annotation: Function {
                     params: [
-                        Constructor {
-                            name: "int",
-                            params: [],
-                            span: Span {
-                                file_id: 0,
-                                byte_offset: 34,
-                                byte_length: 3,
+                        FunctionAnnotationParameter {
+                            annotation: Constructor {
+                                name: "int",
+                                params: [],
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 34,
+                                    byte_length: 3,
+                                },
                             },
+                            mutable: false,
                         },
-                    ],
-                    param_mutability: [
-                        false,
                     ],
                     return_type: Unknown,
                     span: Span {

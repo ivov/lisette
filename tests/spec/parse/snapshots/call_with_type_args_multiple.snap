@@ -66,36 +66,37 @@ description: |
                         },
                     ],
                     spread: None,
-                    raw_type_args: [
-                        Constructor {
-                            name: "A",
-                            params: [],
-                            span: Span {
-                                file_id: 0,
-                                byte_offset: 18,
-                                byte_length: 1,
+                    type_arguments: Unresolved(
+                        [
+                            Constructor {
+                                name: "A",
+                                params: [],
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 18,
+                                    byte_length: 1,
+                                },
                             },
-                        },
-                        Constructor {
-                            name: "B",
-                            params: [],
-                            span: Span {
-                                file_id: 0,
-                                byte_offset: 21,
-                                byte_length: 1,
+                            Constructor {
+                                name: "B",
+                                params: [],
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 21,
+                                    byte_length: 1,
+                                },
                             },
-                        },
-                        Constructor {
-                            name: "C",
-                            params: [],
-                            span: Span {
-                                file_id: 0,
-                                byte_offset: 24,
-                                byte_length: 1,
+                            Constructor {
+                                name: "C",
+                                params: [],
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 24,
+                                    byte_length: 1,
+                                },
                             },
-                        },
-                    ],
-                    resolved_type_args: [],
+                        ],
+                    ),
                     ty: Var {
                         id: uninferred,
                     },

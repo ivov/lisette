@@ -217,10 +217,10 @@ impl Planner<'_> {
     ) -> Option<(AdapterMethod, bool)> {
         let f = impl_ty.as_function_type()?;
         let (receiver_ty, params) = f.params.split_first()?;
-        let substitution = method_receiver_substitution(receiver_ty, concrete_ty)?;
+        let substitution = method_receiver_substitution(&receiver_ty.ty, concrete_ty)?;
         let param_types = params
             .iter()
-            .map(|param| substitute(param, &substitution))
+            .map(|param| substitute(&param.ty, &substitution))
             .collect();
         let return_type = substitute(&f.return_type, &substitution);
 

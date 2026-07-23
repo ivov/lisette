@@ -9,7 +9,7 @@ use crate::plan::values::{
     CaptureBoundary, EvaluationEffect, GoExpression, SequencedValues, Stability, ValuePlan,
 };
 use syntax::ast::Expression;
-use syntax::types::Type;
+use syntax::types::{FunctionParameter, Type};
 
 /// Folds `f(leading, spread...)` into `f(append([]T{leading}, spread...)...)` — Go rejects the former.
 #[derive(Clone)]
@@ -399,7 +399,7 @@ impl Planner<'_> {
         &mut self,
         mut stages: Vec<ValuePlan>,
         spread: Option<&Expression>,
-        adapter_params: Option<&[Type]>,
+        adapter_params: Option<&[FunctionParameter]>,
         wrap_to_any: bool,
         combine: Option<VariadicCombine>,
         boundary: CaptureBoundary,

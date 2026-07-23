@@ -90,8 +90,7 @@ description: |
                                     },
                                     args: [],
                                     spread: None,
-                                    raw_type_args: [],
-                                    resolved_type_args: [],
+                                    type_arguments: None,
                                     ty: Var {
                                         id: uninferred,
                                     },
@@ -102,7 +101,6 @@ description: |
                                     },
                                     call_kind: None,
                                 },
-                                mutable: false,
                                 mut_span: None,
                                 else_block: Some(
                                     Block {
@@ -134,7 +132,6 @@ description: |
                                     },
                                 ),
                                 assert: false,
-                                typed_pattern: None,
                                 ty: Var {
                                     id: uninferred,
                                 },
@@ -174,8 +171,7 @@ description: |
                                     },
                                 ],
                                 spread: None,
-                                raw_type_args: [],
-                                resolved_type_args: [],
+                                type_arguments: None,
                                 ty: Var {
                                     id: uninferred,
                                 },

@@ -1,4 +1,4 @@
-use crate::ast::{BinaryOperator, Expression, Span};
+use crate::ast::{BinaryOperator, CallTypeArguments, Expression, Span};
 use crate::ast_folder::AstFolder;
 use crate::parse::ParseError;
 use crate::types::Type;
@@ -15,12 +15,36 @@ pub struct DesugarResult {
 /// - `x |> func` into `func(x)`
 /// - `x |> func(a, b)` into `func(x, a, b)`
 pub fn desugar(expressions: Vec<Expression>) -> DesugarResult {
+    if !contains_pipeline(&expressions) {
+        return DesugarResult {
+            ast: expressions,
+            errors: Vec::new(),
+        };
+    }
+
     let mut desugarer = Desugarer::new();
     let ast = desugarer.fold_module(expressions).unwrap(); // Infallible
     DesugarResult {
         ast,
         errors: desugarer.errors,
     }
+}
+
+fn contains_pipeline(expressions: &[Expression]) -> bool {
+    let mut pending: Vec<_> = expressions.iter().collect();
+    while let Some(expression) = pending.pop() {
+        if matches!(
+            expression,
+            Expression::Binary {
+                operator: BinaryOperator::Pipeline,
+                ..
+            }
+        ) {
+            return true;
+        }
+        pending.extend(expression.children());
+    }
+    false
 }
 
 struct Desugarer {
@@ -122,8 +146,7 @@ impl Desugarer {
                 expression: Box::new(right),
                 args: vec![left],
                 spread: Box::new(None),
-                raw_type_args: vec![],
-                resolved_type_args: vec![],
+                type_arguments: CallTypeArguments::none(),
                 ty: Type::uninferred(),
                 span,
                 call_kind: None,
@@ -133,8 +156,7 @@ impl Desugarer {
                 expression,
                 args,
                 spread,
-                raw_type_args,
-                resolved_type_args,
+                type_arguments,
                 ty,
                 span: _,
                 call_kind,
@@ -145,8 +167,7 @@ impl Desugarer {
                     expression,
                     args: new_args,
                     spread,
-                    raw_type_args,
-                    resolved_type_args,
+                    type_arguments,
                     ty,
                     span,
                     call_kind,

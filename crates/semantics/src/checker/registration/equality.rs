@@ -3,7 +3,7 @@ use rustc_hash::FxHashSet as HashSet;
 use syntax::EcoString;
 use syntax::ast::{Generic, Span, VariantFields};
 use syntax::program::{Definition, DefinitionBody};
-use syntax::types::{Symbol, Type};
+use syntax::types::{FunctionParameter, Symbol, Type};
 
 use super::{TaskState, resolved_generic_bounds, wrap_with_impl_generics};
 use crate::checker::infer::expressions::comparison::{check_not_equatable, param_is_comparable};
@@ -263,8 +263,10 @@ impl TaskState {
             other => other,
         };
         let fn_ty = Type::function(
-            vec![receiver_ty.clone(), receiver_ty],
-            vec![false, false],
+            vec![
+                FunctionParameter::new(receiver_ty.clone(), false),
+                FunctionParameter::new(receiver_ty, false),
+            ],
             Default::default(),
             Box::new(Type::bool()),
         );

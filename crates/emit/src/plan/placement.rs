@@ -91,13 +91,12 @@ pub(crate) fn try_elide_tail_let(items: &[Expression]) -> Option<(&Expression, &
         binding,
         value,
         else_block,
-        mutable,
         ..
     } = penultimate
     else {
         return None;
     };
-    if else_block.is_some() || *mutable {
+    if else_block.is_some() || binding.mutable {
         return None;
     }
     let syntax::ast::Pattern::Identifier { identifier, .. } = &binding.pattern else {

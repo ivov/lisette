@@ -13,7 +13,6 @@ pub struct Lexer<'source> {
     current_offset: usize,
     file_id: u32,
     errors: Vec<ParseError>,
-    pending_tokens: Vec<Token<'source>>,
     trivia: Trivia,
     last_newline_offset: Option<usize>,
 }
@@ -26,7 +25,6 @@ impl<'source> Lexer<'source> {
             current_offset: 0,
             file_id,
             errors: vec![],
-            pending_tokens: vec![],
             trivia: Trivia::default(),
             last_newline_offset: None,
         }
@@ -36,11 +34,6 @@ impl<'source> Lexer<'source> {
         let mut tokens = Vec::new();
 
         loop {
-            if let Some(token) = self.pending_tokens.pop() {
-                tokens.push(token);
-                continue;
-            }
-
             self.skip_whitespace();
 
             if self.at_eof() {
@@ -53,9 +46,7 @@ impl<'source> Lexer<'source> {
             }
 
             if self.current_byte() == b'f' && self.peek_byte() == b'"' {
-                let mut fstring_tokens = self.lex_format_string_tokens();
-                fstring_tokens.reverse();
-                self.pending_tokens = fstring_tokens;
+                tokens.extend(self.lex_format_string_tokens());
                 continue;
             }
 

@@ -367,7 +367,7 @@ fn method_has_pointer_receiver(method_ty: &Type) -> bool {
         Type::Forall { body, .. } => body.as_ref(),
         other => other,
     };
-    matches!(body, Type::Function(f) if f.params.first().is_some_and(Type::is_ref))
+    matches!(body, Type::Function(f) if f.params.first().is_some_and(|param| param.ty.is_ref()))
 }
 
 fn ref_of(ty: &Type) -> Type {
@@ -428,6 +428,7 @@ mod tests {
     use syntax::ast::{Annotation, Span, StructFieldDefinition, StructKind};
     use syntax::program::Visibility as ProgVis;
     use syntax::program::{Attributes, Definition, DefinitionBody, Interface};
+    use syntax::types::FunctionParameter;
 
     const MODULE: &str = "m";
 
@@ -441,8 +442,7 @@ mod tests {
 
     fn value_method(owner: &str) -> Type {
         Type::function(
-            vec![nominal(owner)],
-            vec![false],
+            vec![FunctionParameter::new(nominal(owner), false)],
             vec![],
             Box::new(Type::string()),
         )
@@ -450,15 +450,14 @@ mod tests {
 
     fn pointer_method(owner: &str) -> Type {
         Type::function(
-            vec![ref_of(&nominal(owner))],
-            vec![false],
+            vec![FunctionParameter::new(ref_of(&nominal(owner)), false)],
             vec![],
             Box::new(Type::string()),
         )
     }
 
     fn interface_method() -> Type {
-        Type::function(vec![], vec![], vec![], Box::new(Type::string()))
+        Type::function(vec![], vec![], Box::new(Type::string()))
     }
 
     fn field(name: &str, ty: Type, embedded: bool) -> StructFieldDefinition {
@@ -600,8 +599,10 @@ mod tests {
         Type::Forall {
             vars: vec![impl_var.into()],
             body: Box::new(Type::function(
-                vec![generic_nominal(owner, vec![param(impl_var)])],
-                vec![false],
+                vec![FunctionParameter::new(
+                    generic_nominal(owner, vec![param(impl_var)]),
+                    false,
+                )],
                 vec![],
                 Box::new(ret),
             )),
@@ -617,7 +618,7 @@ mod tests {
 
     fn is_pointer_receiver(member: &ResolvedMember) -> bool {
         match &member.kind {
-            MemberKind::Method { ty } => ty.get_function_params().unwrap()[0].is_ref(),
+            MemberKind::Method { ty } => ty.get_function_params().unwrap()[0].ty.is_ref(),
             other => panic!("expected a method, got {other:?}"),
         }
     }
@@ -826,8 +827,16 @@ mod tests {
         assert!(set.contains_key("o"));
         assert!(set.contains_key("m"));
         assert!(set.contains_key("pm"));
-        assert!(!set.get("m").unwrap().get_function_params().unwrap()[0].is_ref());
-        assert!(set.get("pm").unwrap().get_function_params().unwrap()[0].is_ref());
+        assert!(
+            !set.get("m").unwrap().get_function_params().unwrap()[0]
+                .ty
+                .is_ref()
+        );
+        assert!(
+            set.get("pm").unwrap().get_function_params().unwrap()[0]
+                .ty
+                .is_ref()
+        );
     }
 
     #[test]
@@ -955,14 +964,16 @@ mod tests {
         let specialized = Type::Forall {
             vars: vec!["V".into()],
             body: Box::new(Type::function(
-                vec![generic_nominal(
-                    "Box",
-                    vec![Type::Compound {
-                        kind: CompoundKind::Slice,
-                        args: vec![param("V")],
-                    }],
+                vec![FunctionParameter::new(
+                    generic_nominal(
+                        "Box",
+                        vec![Type::Compound {
+                            kind: CompoundKind::Slice,
+                            args: vec![param("V")],
+                        }],
+                    ),
+                    false,
                 )],
-                vec![false],
                 vec![],
                 Box::new(param("V")),
             )),
@@ -988,8 +999,10 @@ mod tests {
     /// without a `Forall` because it binds no type variables.
     fn concrete_int_method() -> Type {
         Type::function(
-            vec![generic_nominal("Box", vec![Type::int()])],
-            vec![false],
+            vec![FunctionParameter::new(
+                generic_nominal("Box", vec![Type::int()]),
+                false,
+            )],
             vec![],
             Box::new(Type::int()),
         )

@@ -21,7 +21,6 @@ description: |
         params: [],
         return_annotation: Function {
             params: [],
-            param_mutability: [],
             return_type: Constructor {
                 name: "int",
                 params: [],
@@ -73,12 +72,10 @@ description: |
                             byte_length: 2,
                         },
                     },
-                    mutable: false,
                     mut_span: None,
                     else_block: None,
                     else_span: None,
                     assert: false,
-                    typed_pattern: None,
                     ty: Var {
                         id: uninferred,
                     },

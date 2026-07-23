@@ -142,12 +142,10 @@ description: |
                         },
                         from_colon_syntax: false,
                     },
-                    mutable: false,
                     mut_span: None,
                     else_block: None,
                     else_span: None,
                     assert: false,
-                    typed_pattern: None,
                     ty: Var {
                         id: uninferred,
                     },

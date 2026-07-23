@@ -16,7 +16,6 @@ pub fn check_let_and_return(expression: &Expression, ctx: &NodeCtx) {
     let Expression::Let {
         binding,
         value: bound_value,
-        mutable: false,
         else_block: None,
         span,
         ..
@@ -24,6 +23,10 @@ pub fn check_let_and_return(expression: &Expression, ctx: &NodeCtx) {
     else {
         return;
     };
+
+    if binding.mutable {
+        return;
+    }
 
     // An annotation can coerce the value's type (for example binding a concrete
     // type to an interface), which the tail position would otherwise lose.

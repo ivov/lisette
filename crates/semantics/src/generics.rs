@@ -108,6 +108,7 @@ pub(crate) fn type_argument_children(ty: &Type) -> Vec<&Type> {
         Type::Function(function) => function
             .params
             .iter()
+            .map(|param| &param.ty)
             .chain(std::iter::once(function.return_type.as_ref()))
             .collect(),
         _ => Vec::new(),

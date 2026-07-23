@@ -6,13 +6,14 @@ use stdlib::{Target, get_go_stdlib_typedef};
 
 use super::disk;
 use super::types::CachedDefinition;
-use super::{COMPILER_VERSION_HASH, GO_STDLIB_HASH};
+use super::{CACHE_FORMAT_VERSION, COMPILER_VERSION_HASH, GO_STDLIB_HASH};
 use crate::checker::registration::extract_package_directive;
 use crate::store::Store;
 use syntax::program::File;
 
 #[derive(Serialize, Deserialize)]
 pub struct GoStdlibCache {
+    version: u32,
     content_hash: u64,
     compiler_version: u64,
     pub modules: HashMap<String, GoModuleCache>,
@@ -37,7 +38,10 @@ pub fn try_load_go_stdlib_cache(target: Target) -> Option<GoStdlibCache> {
     let path = cache_path(target)?;
     let cache: GoStdlibCache = disk::read(&path).ok()?;
 
-    if cache.content_hash != GO_STDLIB_HASH || cache.compiler_version != COMPILER_VERSION_HASH {
+    if cache.version != CACHE_FORMAT_VERSION
+        || cache.content_hash != GO_STDLIB_HASH
+        || cache.compiler_version != COMPILER_VERSION_HASH
+    {
         let _ = std::fs::remove_file(&path);
         return None;
     }
@@ -81,6 +85,7 @@ pub(crate) fn save_go_stdlib_cache(store: &Store, go_module_ids: &[String], targ
     }
 
     let cache = GoStdlibCache {
+        version: CACHE_FORMAT_VERSION,
         content_hash: GO_STDLIB_HASH,
         compiler_version: COMPILER_VERSION_HASH,
         modules,

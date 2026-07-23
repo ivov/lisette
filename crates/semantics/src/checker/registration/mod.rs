@@ -24,7 +24,7 @@ use syntax::attributes::struct_attribute_forces_field_export;
 use syntax::program::{
     Attributes, Definition, DefinitionBody, File, FileImport, TypeAttribute, Visibility,
 };
-use syntax::types::{Bound, Symbol, Type, unqualified_name};
+use syntax::types::{Bound, FunctionParameter, Symbol, Type, unqualified_name};
 
 use super::{FileContextKind, TaskState, resolved_generic_bounds};
 use crate::store::Store;
@@ -1147,15 +1147,15 @@ impl TaskState {
 
         self.scopes.pop();
 
-        let param_mutability: Vec<bool> = params.iter().map(|b| b.mutable).collect();
+        let function_params = param_types
+            .into_iter()
+            .zip(params)
+            .map(|(ty, binding)| {
+                FunctionParameter::named(ty, binding.pattern.get_identifier(), binding.mutable)
+            })
+            .collect();
 
-        let base_fn_ty = Type::function_with_names(
-            param_types,
-            params.iter().map(|b| b.pattern.get_identifier()).collect(),
-            param_mutability,
-            bounds,
-            return_ty.into(),
-        );
+        let base_fn_ty = Type::function(function_params, bounds, return_ty.into());
 
         if generics.is_empty() {
             base_fn_ty
@@ -1200,7 +1200,7 @@ fn function_signature_pairs(
                 .get(index)
                 .and_then(|binding| binding.annotation.as_ref())
                 .map_or(fallback, Annotation::get_span);
-            (param_ty.clone(), span)
+            (param_ty.ty.clone(), span)
         })
         .collect();
     (pairs, function.bounds.clone())
@@ -1293,8 +1293,11 @@ pub(super) fn enum_variant_constructor_type(
     };
 
     let fn_ty = Type::function(
-        enum_variant.fields.iter().map(|f| f.ty.clone()).collect(),
-        vec![false; enum_variant.fields.len()],
+        enum_variant
+            .fields
+            .iter()
+            .map(|field| FunctionParameter::new(field.ty.clone(), false))
+            .collect(),
         Default::default(),
         return_type.into(),
     );
@@ -1320,8 +1323,11 @@ fn tuple_struct_constructor_type_from_fields(
     };
 
     let fn_ty = Type::function(
-        field_types.to_vec(),
-        vec![false; field_types.len()],
+        field_types
+            .iter()
+            .cloned()
+            .map(|ty| FunctionParameter::new(ty, false))
+            .collect(),
         Default::default(),
         return_type.into(),
     );

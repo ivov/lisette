@@ -163,7 +163,7 @@ fn check_one(
     let Some(first) = fn_params.first() else {
         return;
     };
-    let stripped = first.strip_refs();
+    let stripped = first.ty.strip_refs();
     let is_self = matches!(&stripped, Type::Nominal { id, .. }
         if unqualified_name(id) == type_part);
     if !is_self {

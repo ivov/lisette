@@ -1,13 +1,13 @@
 use crate::checker::{EnvResolve, resolved_generic_bounds};
 use ecow::EcoString;
-use syntax::ast::BindingKind;
 use syntax::ast::{
     Annotation, Binding, Expression, Literal, Pattern, Span, StructKind, UnaryOperator,
 };
+use syntax::ast::{BindingKind, CallTypeArguments};
 use syntax::program::{CallKind, Definition, DefinitionBody, NativeTypeKind};
 use syntax::types::{
-    Bound, CompoundKind, SubstitutionMap, Symbol, Type, peel_to_range_type, substitute,
-    unqualified_name,
+    Bound, CompoundKind, FunctionParameter, SubstitutionMap, Symbol, Type, peel_to_range_type,
+    substitute, unqualified_name,
 };
 
 use super::super::carry_mut::can_carry_mutation_across_fn_boundary;
@@ -25,25 +25,32 @@ struct TypeConversionCall {
     underlying_fn: Type,
     args: Vec<Expression>,
     spread: Box<Option<Expression>>,
-    raw_type_args: Vec<Annotation>,
-    resolved_type_args: Vec<Type>,
+    type_arguments: CallTypeArguments,
     span: Span,
+}
+
+struct CallSignature {
+    parameters: Vec<FunctionParameter>,
+    variadic: Option<FunctionParameter>,
+    declared_parameter_count: usize,
+    return_type: Type,
+    bounds: Vec<Bound>,
 }
 
 impl InferCtx<'_> {
     fn check_call_arity(
         &mut self,
-        param_types: &[Type],
+        parameters: &[FunctionParameter],
         args: &[Expression],
         callee_expression: &Expression,
         span: &Span,
     ) {
-        if param_types.len() == args.len() {
+        if parameters.len() == args.len() {
             return;
         }
-        let expected: Vec<Type> = param_types
+        let expected: Vec<Type> = parameters
             .iter()
-            .map(|t| t.resolve_in(&self.env))
+            .map(|param| param.ty.resolve_in(&self.env))
             .collect();
         let actual: Vec<Type> = args
             .iter()
@@ -168,13 +175,17 @@ impl InferCtx<'_> {
 
         self.scopes.current_mut().fn_return_type = Some(return_ty.clone());
 
-        let base_fn_ty = Type::function_with_names(
-            new_params.iter().map(|p| p.ty.clone()).collect(),
+        let base_fn_ty = Type::function(
             new_params
                 .iter()
-                .map(|p| p.pattern.get_identifier())
+                .map(|param| {
+                    FunctionParameter::named(
+                        param.ty.clone(),
+                        param.pattern.get_identifier(),
+                        param.mutable,
+                    )
+                })
                 .collect(),
-            new_params.iter().map(|p| p.mutable).collect(),
             bounds,
             return_ty.clone().into(),
         );
@@ -259,13 +270,17 @@ impl InferCtx<'_> {
 
         self.scopes.current_mut().fn_return_type = Some(return_ty.clone());
 
-        let base_fn_ty = Type::function_with_names(
-            new_params.iter().map(|p| p.ty.clone()).collect(),
+        let base_fn_ty = Type::function(
             new_params
                 .iter()
-                .map(|p| p.pattern.get_identifier())
+                .map(|param| {
+                    FunctionParameter::named(
+                        param.ty.clone(),
+                        param.pattern.get_identifier(),
+                        param.mutable,
+                    )
+                })
                 .collect(),
-            new_params.iter().map(|p| p.mutable).collect(),
             vec![],
             return_ty.clone().into(),
         );
@@ -309,13 +324,14 @@ impl InferCtx<'_> {
             expression,
             args,
             spread,
-            raw_type_args: type_args,
+            type_arguments,
             span,
             ..
         } = call
         else {
             unreachable!("infer_function_call called with non-Call expression");
         };
+        let type_args = type_arguments.into_annotations();
         let callee_path = expression.unwrap_parens().as_dotted_path();
 
         // `Array.new` has no prelude signature (no const generics), so resolve inline.
@@ -339,8 +355,7 @@ impl InferCtx<'_> {
                 expression,
                 args: new_args,
                 spread: Box::new(new_spread),
-                raw_type_args: type_args,
-                resolved_type_args: Vec::new(),
+                type_arguments: CallTypeArguments::resolved(type_args, Vec::new()),
                 ty: Type::Error,
                 span,
                 call_kind: None,
@@ -355,7 +370,7 @@ impl InferCtx<'_> {
         self.scopes.restore_use_context(prev_context);
 
         let forall_ty = self.resolve_callee_forall_type(&callee_expression, &type_args);
-        let (callee_ty, raw_type_args, resolved_type_args) =
+        let (callee_ty, type_arguments) =
             self.instantiate_callee_type(&forall_ty, &type_args, &callee_expression, &span);
 
         if let Some(underlying_fn) = self.try_as_type_conversion(&callee_expression, &callee_ty) {
@@ -366,36 +381,20 @@ impl InferCtx<'_> {
                     underlying_fn,
                     args,
                     spread,
-                    raw_type_args,
-                    resolved_type_args,
+                    type_arguments,
                     span,
                 },
                 expected_ty,
             );
         }
 
-        let needs_variadic_check = spread.is_some()
-            || matches!(
-                args.last(),
-                Some(Expression::Range {
-                    start: None,
-                    end: Some(_),
-                    inclusive: false,
-                    ..
-                })
-            );
-
-        let resolved_callee = callee_ty.resolve_in(&self.env);
-        let variadic_elem_var = resolved_callee.is_variadic();
-        let callee_param_count = resolved_callee.get_function_params().map_or(0, |p| p.len());
-        let variadic_elem_ty = if needs_variadic_check {
-            variadic_elem_var.clone()
-        } else {
-            None
-        };
-
-        let (param_types, param_mutability, return_ty, bounds) =
-            self.extract_call_signature(callee_ty, &args, &callee_expression);
+        let CallSignature {
+            parameters,
+            variadic,
+            declared_parameter_count,
+            return_type: return_ty,
+            bounds,
+        } = self.extract_call_signature(callee_ty, &args, &callee_expression);
 
         if self.is_panic_call(&callee_expression)
             && self.scopes.is_value_context()
@@ -424,23 +423,18 @@ impl InferCtx<'_> {
         let call_kind = self.classify_call(&callee_expression);
 
         let substring_range_idx =
-            self.substring_carve_out_param_idx(call_kind, &callee_expression, &param_types);
+            self.substring_carve_out_param_idx(call_kind, &callee_expression, &parameters);
         let new_args = if let Some(idx) = substring_range_idx {
-            let mut adjusted = param_types.clone();
-            adjusted[idx] = self.new_type_var();
+            let mut adjusted = parameters.clone();
+            adjusted[idx] = adjusted[idx].with_type(self.new_type_var());
             self.infer_call_arguments(args, &adjusted)
         } else {
-            self.infer_call_arguments(args, &param_types)
+            self.infer_call_arguments(args, &parameters)
         };
-        self.check_call_arity(&param_types, &new_args, &callee_expression, &span);
-        self.check_mut_param_arguments(
-            &new_args,
-            &param_types,
-            &param_mutability,
-            &callee_expression,
-        );
+        self.check_call_arity(&parameters, &new_args, &callee_expression, &span);
+        self.check_mut_param_arguments(&new_args, &parameters, &callee_expression);
 
-        self.check_range_to_for_variadic(&new_args, &variadic_elem_ty);
+        self.check_range_to_for_variadic(&new_args, variadic.as_ref());
 
         if let Some(idx) = substring_range_idx
             && let Some(arg) = new_args.get(idx)
@@ -453,19 +447,19 @@ impl InferCtx<'_> {
             .resolve_in(&self.env)
             .is_error();
 
-        let new_spread = (*spread).map(|spread_expr| match variadic_elem_ty {
-            Some(elem_ty) => {
-                let expected = if elem_ty.is_unknown() {
+        let new_spread = (*spread).map(|spread_expr| match &variadic {
+            Some(variadic) => {
+                let expected = if variadic.ty.is_unknown() {
                     let var = self.new_type_var();
                     self.type_slice(var)
                 } else {
-                    self.type_slice(elem_ty.clone())
+                    self.type_slice(variadic.ty.clone())
                 };
                 let inferred =
                     self.with_value_context(|s| s.infer_expression(spread_expr, &expected));
-                if param_mutability.last().copied().unwrap_or(false) {
+                if variadic.mutable {
                     let callee_label = callee_label(&callee_expression);
-                    self.check_arg_against_mut_param(&inferred, &elem_ty, &callee_label);
+                    self.check_arg_against_mut_param(&inferred, &variadic.ty, &callee_label);
                 }
                 inferred
             }
@@ -487,7 +481,7 @@ impl InferCtx<'_> {
             Some((CompoundKind::Map, _))
         );
         self.unify(&resolved_expected, &return_ty, &span);
-        self.unify_trait_bounds(&bounds, &param_types, &new_args, &span);
+        self.unify_trait_bounds(&bounds, &parameters, &new_args, &span);
 
         let resolved_return = store.deep_resolve_alias(&return_ty.resolve_in(&self.env));
         if call_kind == CallKind::TupleStructConstructor
@@ -531,17 +525,17 @@ impl InferCtx<'_> {
         // unbound. Skip when the return-type check above already records it.
         if type_args.is_empty()
             && new_spread.is_none()
-            && let Some(elem_ty) = &variadic_elem_var
-            && new_args.len() < callee_param_count
+            && let Some(variadic) = &variadic
+            && new_args.len() < declared_parameter_count
         {
             let already_covered = return_check_recorded
-                && resolved_return.contains_type(&elem_ty.resolve_in(&self.env));
+                && resolved_return.contains_type(&variadic.ty.resolve_in(&self.env));
             if !already_covered {
                 let module_id = self.cursor.module_id.clone();
                 self.facts
                     .generic_call_checks
                     .push(crate::facts::GenericCallCheck {
-                        ty: elem_ty.clone(),
+                        ty: variadic.ty.clone(),
                         span,
                         module_id,
                     });
@@ -589,8 +583,7 @@ impl InferCtx<'_> {
             expression: callee_expression.into(),
             args: new_args,
             spread: Box::new(new_spread),
-            raw_type_args,
-            resolved_type_args,
+            type_arguments,
             ty: call_ty,
             span,
             call_kind: Some(call_kind),
@@ -717,12 +710,7 @@ impl InferCtx<'_> {
 
         self.unify(expected_ty, &array_ty, &span);
 
-        let callee_ty = Type::function(
-            Vec::new(),
-            Vec::new(),
-            Vec::new(),
-            Box::new(array_ty.clone()),
-        );
+        let callee_ty = Type::function(Vec::new(), Vec::new(), Box::new(array_ty.clone()));
         let callee_expression = Expression::Identifier {
             value: "Array.new".into(),
             ty: callee_ty,
@@ -735,8 +723,7 @@ impl InferCtx<'_> {
             expression: callee_expression.into(),
             args: new_args,
             spread: Box::new(None),
-            raw_type_args: type_args,
-            resolved_type_args: Vec::new(),
+            type_arguments: CallTypeArguments::resolved(type_args, Vec::new()),
             ty: array_ty,
             span,
             call_kind: Some(CallKind::NativeConstructor(NativeTypeKind::Array)),
@@ -810,7 +797,7 @@ impl InferCtx<'_> {
         type_args: &[Annotation],
         callee_expression: &Expression,
         span: &Span,
-    ) -> (Type, Vec<Annotation>, Vec<Type>) {
+    ) -> (Type, CallTypeArguments) {
         let store = self.store;
         let Type::Forall { vars, body } = forall_ty else {
             if !type_args.is_empty() {
@@ -820,12 +807,18 @@ impl InferCtx<'_> {
                 ));
             }
             let (instantiated, _) = self.instantiate(forall_ty);
-            return (instantiated.resolve_in(&self.env), vec![], vec![]);
+            return (
+                instantiated.resolve_in(&self.env),
+                CallTypeArguments::none(),
+            );
         };
 
         if type_args.is_empty() {
             let (instantiated, _) = self.instantiate(forall_ty);
-            return (instantiated.resolve_in(&self.env), vec![], vec![]);
+            return (
+                instantiated.resolve_in(&self.env),
+                CallTypeArguments::none(),
+            );
         }
 
         let declared_param_count = match body.as_ref() {
@@ -913,7 +906,10 @@ impl InferCtx<'_> {
         }
         self.unify(&instantiated, &callee_ty, span);
 
-        (instantiated, type_args.to_vec(), resolved_args)
+        (
+            instantiated,
+            CallTypeArguments::resolved(type_args.to_vec(), resolved_args),
+        )
     }
 
     fn extract_call_signature(
@@ -921,73 +917,81 @@ impl InferCtx<'_> {
         callee_ty: Type,
         args: &[Expression],
         callee_expression: &Expression,
-    ) -> (Vec<Type>, Vec<bool>, Type, Vec<Bound>) {
+    ) -> CallSignature {
         let arg_count = args.len();
         let callee_ty = callee_ty.resolve_in(&self.env);
         let bounds = callee_ty.get_bounds().to_vec();
-        let mut param_mutability = callee_ty.get_param_mutability().to_vec();
         let is_variadic = callee_ty.is_variadic();
 
-        let (param_types, return_ty) = match self.extract_function_type(&callee_ty) {
-            Some((mut params, return_type)) => {
-                if let Some(variadic_ty) = is_variadic {
-                    params.pop();
-                    while params.len() < arg_count {
-                        params.push(variadic_ty.clone());
-                    }
-                    if let Some(&variadic_mut) = param_mutability.last() {
-                        while param_mutability.len() < arg_count {
-                            param_mutability.push(variadic_mut);
+        let (parameters, variadic, declared_parameter_count, return_type) =
+            match self.extract_function_type(&callee_ty) {
+                Some((mut params, return_type)) => {
+                    let declared_parameter_count = params.len();
+                    let variadic = is_variadic.map(|variadic_ty| {
+                        let variadic = params
+                            .pop()
+                            .expect("variadic function has a trailing parameter");
+                        while params.len() < arg_count {
+                            params.push(variadic.with_type(variadic_ty.clone()));
                         }
-                    }
+                        variadic.with_type(variadic_ty)
+                    });
+                    (params, variadic, declared_parameter_count, return_type)
                 }
-                (params, return_type)
-            }
-            None if callee_ty.is_variable() => {
-                let param_types = (0..arg_count).map(|_| self.new_type_var()).collect();
-                let return_ty = self.new_type_var();
-                (param_types, return_ty)
-            }
-            None if callee_ty.resolve_in(&self.env).is_error() => {
-                let param_types = (0..arg_count).map(|_| Type::Error).collect();
-                let return_ty = Type::Error;
-                (param_types, return_ty)
-            }
-            None => {
-                let callee_name = match callee_expression.unwrap_parens() {
-                    Expression::Identifier {
-                        value,
-                        binding_id: None,
-                        ..
-                    } => Some(value.as_str()),
-                    _ => None,
-                };
-                let arg_name = if args.len() == 1 {
-                    match args[0].unwrap_parens() {
-                        Expression::Identifier { value, .. } => Some(value.as_str()),
+                None if callee_ty.is_variable() => {
+                    let parameters = (0..arg_count)
+                        .map(|_| FunctionParameter::new(self.new_type_var(), false))
+                        .collect();
+                    (parameters, None, arg_count, self.new_type_var())
+                }
+                None if callee_ty.resolve_in(&self.env).is_error() => {
+                    let parameters = (0..arg_count)
+                        .map(|_| FunctionParameter::new(Type::Error, false))
+                        .collect();
+                    (parameters, None, arg_count, Type::Error)
+                }
+                None => {
+                    let callee_name = match callee_expression.unwrap_parens() {
+                        Expression::Identifier {
+                            value,
+                            binding_id: None,
+                            ..
+                        } => Some(value.as_str()),
                         _ => None,
-                    }
-                } else {
-                    None
-                };
-                self.sink.push(diagnostics::infer::not_callable(
-                    &callee_ty,
-                    callee_name,
-                    arg_name,
-                    callee_expression.get_span(),
-                ));
-                let param_types = (0..arg_count).map(|_| Type::Error).collect();
-                let return_ty = Type::Error;
-                (param_types, return_ty)
-            }
-        };
+                    };
+                    let arg_name = if args.len() == 1 {
+                        match args[0].unwrap_parens() {
+                            Expression::Identifier { value, .. } => Some(value.as_str()),
+                            _ => None,
+                        }
+                    } else {
+                        None
+                    };
+                    self.sink.push(diagnostics::infer::not_callable(
+                        &callee_ty,
+                        callee_name,
+                        arg_name,
+                        callee_expression.get_span(),
+                    ));
+                    let parameters = (0..arg_count)
+                        .map(|_| FunctionParameter::new(Type::Error, false))
+                        .collect();
+                    (parameters, None, arg_count, Type::Error)
+                }
+            };
 
-        (param_types, param_mutability, return_ty, bounds)
+        CallSignature {
+            parameters,
+            variadic,
+            declared_parameter_count,
+            return_type,
+            bounds,
+        }
     }
 
-    fn extract_function_type(&self, ty: &Type) -> Option<(Vec<Type>, Type)> {
+    fn extract_function_type(&self, ty: &Type) -> Option<(Vec<FunctionParameter>, Type)> {
         let store = self.store;
-        let fn_type = |ty: &Type| -> Option<(Vec<Type>, Type)> {
+        let fn_type = |ty: &Type| -> Option<(Vec<FunctionParameter>, Type)> {
             if let Type::Function(f) = ty {
                 Some((f.params.clone(), (*f.return_type).clone()))
             } else {
@@ -1086,8 +1090,7 @@ impl InferCtx<'_> {
             underlying_fn,
             args,
             spread,
-            raw_type_args,
-            resolved_type_args,
+            type_arguments,
             span,
         } = call;
         if let Some(spread_expr) = *spread {
@@ -1114,8 +1117,7 @@ impl InferCtx<'_> {
                 expression: callee_expression.into(),
                 args: new_args,
                 spread: Box::new(None),
-                raw_type_args,
-                resolved_type_args,
+                type_arguments,
                 ty: Type::Error,
                 span,
                 call_kind: Some(CallKind::Regular),
@@ -1131,8 +1133,7 @@ impl InferCtx<'_> {
             expression: callee_expression.into(),
             args: vec![new_arg],
             spread: Box::new(None),
-            raw_type_args,
-            resolved_type_args,
+            type_arguments,
             ty: named_ty,
             span,
             call_kind: Some(CallKind::Regular),
@@ -1142,14 +1143,14 @@ impl InferCtx<'_> {
     fn infer_call_arguments(
         &mut self,
         args: Vec<Expression>,
-        param_types: &[Type],
+        parameters: &[FunctionParameter],
     ) -> Vec<Expression> {
         args.into_iter()
             .enumerate()
             .map(|(i, arg)| {
-                let expected_ty = param_types
+                let expected_ty = parameters
                     .get(i)
-                    .cloned()
+                    .map(|param| param.ty.clone())
                     .unwrap_or_else(|| self.new_type_var());
                 self.with_value_context(|s| s.infer_expression(arg, &expected_ty))
             })
@@ -1183,9 +1184,9 @@ impl InferCtx<'_> {
     fn check_range_to_for_variadic(
         &mut self,
         args: &[Expression],
-        variadic_elem_ty: &Option<Type>,
+        variadic: Option<&FunctionParameter>,
     ) {
-        if variadic_elem_ty.is_none() {
+        if variadic.is_none() {
             return;
         }
 
@@ -1222,7 +1223,7 @@ impl InferCtx<'_> {
     fn unify_trait_bounds(
         &mut self,
         bounds: &[Bound],
-        signature_params: &[Type],
+        signature_params: &[FunctionParameter],
         args: &[Expression],
         fallback_span: &Span,
     ) {
@@ -1256,7 +1257,10 @@ impl InferCtx<'_> {
             if self
                 .satisfies_interface(&resolved_ty, &interface, &id, &params, &span)
                 .is_ok()
-                && !self.generic_absorbed_via_ref_param(&bound.generic, signature_params)
+                && !self.generic_absorbed_via_ref_param(
+                    &bound.generic,
+                    signature_params.iter().map(|param| &param.ty),
+                )
             {
                 let _ = self.check_pointer_receivers(&resolved_ty, &interface, &id, &span);
             }
@@ -1297,7 +1301,7 @@ impl InferCtx<'_> {
     fn infer_function_params(
         &mut self,
         params: Vec<Binding>,
-        expected_params: &[Type],
+        expected_params: &[FunctionParameter],
         handle_self_receiver: bool,
     ) -> Vec<Binding> {
         let store = self.store;
@@ -1324,7 +1328,7 @@ impl InferCtx<'_> {
                     // annotation. Honor it before falling back to the expected
                     // function type.
                     None if !binding.ty.is_uninferred() => Some(binding.ty.clone()),
-                    None => expected_params.get(index).cloned(),
+                    None => expected_params.get(index).map(|param| param.ty.clone()),
                     _ => None,
                 };
 
@@ -1647,19 +1651,18 @@ impl InferCtx<'_> {
     fn check_mut_param_arguments(
         &mut self,
         args: &[Expression],
-        param_types: &[Type],
-        param_mutability: &[bool],
+        parameters: &[FunctionParameter],
         callee: &Expression,
     ) {
         let callee_label = callee_label(callee);
         for (i, arg) in args.iter().enumerate() {
-            if !param_mutability.get(i).copied().unwrap_or(false) {
-                continue;
-            }
-            let Some(param_ty) = param_types.get(i) else {
+            let Some(param) = parameters.get(i) else {
                 continue;
             };
-            self.check_arg_against_mut_param(arg, param_ty, &callee_label);
+            if !param.mutable {
+                continue;
+            }
+            self.check_arg_against_mut_param(arg, &param.ty, &callee_label);
         }
     }
 
@@ -1720,7 +1723,7 @@ impl InferCtx<'_> {
         &self,
         call_kind: CallKind,
         callee: &Expression,
-        param_types: &[Type],
+        parameters: &[FunctionParameter],
     ) -> Option<usize> {
         if !matches!(
             call_kind,
@@ -1739,8 +1742,10 @@ impl InferCtx<'_> {
         if !is_substring {
             return None;
         }
-        param_types.iter().position(|p| {
-            p.resolve_in(&self.env)
+        parameters.iter().position(|param| {
+            param
+                .ty
+                .resolve_in(&self.env)
                 .get_name()
                 .is_some_and(|n| n == "Range")
         })
@@ -1757,7 +1762,10 @@ pub(crate) fn phantom_type_params(ty: &Type) -> Vec<String> {
     vars.iter()
         .filter(|var| {
             let param = Type::Parameter((**var).clone());
-            let in_signature = f.params.iter().any(|pt| pt.contains_type(&param))
+            let in_signature = f
+                .params
+                .iter()
+                .any(|function_param| function_param.ty.contains_type(&param))
                 || f.return_type.contains_type(&param);
             let is_bounded = f.bounds.iter().any(|bound| bound.param_name == **var);
             !in_signature && !is_bounded
@@ -1773,7 +1781,7 @@ fn receiver_inferred_prefix_count(body: &Type, vars: &[EcoString]) -> usize {
     let Some(self_param) = f.params.first() else {
         return 0;
     };
-    let self_ty = self_param.strip_refs();
+    let self_ty = self_param.ty.strip_refs();
     vars.iter()
         .take_while(|var| self_ty.contains_type(&Type::Parameter((*var).clone())))
         .count()

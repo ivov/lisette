@@ -110,7 +110,7 @@ fn does_real_work(argument: &Expression) -> bool {
                 true
             }
         }
-        other => other.children().iter().any(does_real_work),
+        other => other.children().into_iter().any(does_real_work),
     }
 }
 

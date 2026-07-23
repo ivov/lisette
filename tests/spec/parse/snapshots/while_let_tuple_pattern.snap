@@ -108,6 +108,7 @@ description: |
                         ty: Var {
                             id: uninferred,
                         },
+                        mutable: true,
                     },
                     value: Literal {
                         literal: Integer {
@@ -123,7 +124,6 @@ description: |
                             byte_length: 1,
                         },
                     },
-                    mutable: true,
                     mut_span: Some(
                         Span {
                             file_id: 0,
@@ -134,7 +134,6 @@ description: |
                     else_block: None,
                     else_span: None,
                     assert: false,
-                    typed_pattern: None,
                     ty: Var {
                         id: uninferred,
                     },
@@ -277,8 +276,7 @@ description: |
                                     },
                                 ],
                                 spread: None,
-                                raw_type_args: [],
-                                resolved_type_args: [],
+                                type_arguments: None,
                                 ty: Var {
                                     id: uninferred,
                                 },

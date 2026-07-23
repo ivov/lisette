@@ -50,6 +50,7 @@ description: |
                         ty: Var {
                             id: uninferred,
                         },
+                        mutable: true,
                     },
                     value: Literal {
                         literal: Boolean(
@@ -64,7 +65,6 @@ description: |
                             byte_length: 4,
                         },
                     },
-                    mutable: true,
                     mut_span: Some(
                         Span {
                             file_id: 0,
@@ -75,7 +75,6 @@ description: |
                     else_block: None,
                     else_span: None,
                     assert: false,
-                    typed_pattern: None,
                     ty: Var {
                         id: uninferred,
                     },

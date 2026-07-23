@@ -929,7 +929,14 @@ fn fill_alias_underlyings(
             let params = function
                 .params
                 .iter()
-                .map(|param| fill_alias_underlyings(param, store, changed, in_progress))
+                .map(|param| {
+                    param.with_type(fill_alias_underlyings(
+                        &param.ty,
+                        store,
+                        changed,
+                        in_progress,
+                    ))
+                })
                 .collect();
             let return_type = Box::new(fill_alias_underlyings(
                 &function.return_type,

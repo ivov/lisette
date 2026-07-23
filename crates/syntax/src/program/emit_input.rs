@@ -169,27 +169,51 @@ impl EqualityIndex {
 
 #[derive(Debug, Clone, Default)]
 pub struct MutationInfo {
-    bindings: HashSet<AstBindingId>,
-    alias_bindings: HashSet<AstBindingId>,
+    bindings: HashMap<AstBindingId, BindingMutation>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BindingMutation {
+    Unchanged,
+    Direct,
+    ThroughAlias,
+}
+
+impl BindingMutation {
+    pub fn happened(self) -> bool {
+        self != Self::Unchanged
+    }
+
+    pub fn merged_with(self, other: Self) -> Self {
+        match (self, other) {
+            (Self::ThroughAlias, _) | (_, Self::ThroughAlias) => Self::ThroughAlias,
+            (Self::Direct, _) | (_, Self::Direct) => Self::Direct,
+            (Self::Unchanged, Self::Unchanged) => Self::Unchanged,
+        }
+    }
 }
 
 impl MutationInfo {
-    pub fn mark_binding_mutated(&mut self, id: AstBindingId) {
-        self.bindings.insert(id);
+    pub fn record(&mut self, id: AstBindingId, mutation: BindingMutation) {
+        let merged = self.mutation(id).merged_with(mutation);
+        if merged.happened() {
+            self.bindings.insert(id, merged);
+        }
     }
 
-    /// The binding is mutated through an alias, so a call can rebind it.
-    pub fn mark_binding_alias_mutated(&mut self, id: AstBindingId) {
-        self.bindings.insert(id);
-        self.alias_bindings.insert(id);
+    pub fn mutation(&self, id: AstBindingId) -> BindingMutation {
+        self.bindings
+            .get(&id)
+            .copied()
+            .unwrap_or(BindingMutation::Unchanged)
     }
 
     pub fn is_mutated(&self, id: AstBindingId) -> bool {
-        self.bindings.contains(&id)
+        self.mutation(id).happened()
     }
 
     pub fn is_alias_mutated(&self, id: AstBindingId) -> bool {
-        self.alias_bindings.contains(&id)
+        self.mutation(id) == BindingMutation::ThroughAlias
     }
 }
 

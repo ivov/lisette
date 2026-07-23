@@ -884,7 +884,7 @@ impl InferCtx<'_> {
         let is_pointer_receiver = f
             .params
             .first()
-            .is_some_and(|param| param.resolve_in(&self.env).is_ref());
+            .is_some_and(|param| param.ty.resolve_in(&self.env).is_ref());
 
         let is_exported =
             self.promoted_method_is_exported(&member.declaring_type, args.member_name);
@@ -1032,14 +1032,14 @@ impl InferCtx<'_> {
 
         // Don't remove self — the value type should include the receiver.
         // Still unify the receiver type with the expression type for generic resolution.
-        let receiver_ty = params[0].resolve_in(&self.env);
+        let receiver_ty = params[0].ty.resolve_in(&self.env);
         let receiver_stripped = receiver_ty.strip_refs();
         let expression_stripped = args.expression_ty.resolve_in(&self.env).strip_refs();
         self.unify(&receiver_stripped, &expression_stripped, args.span);
 
         self.unify(args.expected_ty, method_ty, args.span);
 
-        let is_pointer_receiver = matches!(method_ty, Type::Function(f) if !f.params.is_empty() && f.params[0].resolve_in(&self.env).is_ref());
+        let is_pointer_receiver = matches!(method_ty, Type::Function(f) if !f.params.is_empty() && f.params[0].ty.resolve_in(&self.env).is_ref());
         let value_kind = DotAccessKind::InstanceMethodValue {
             is_exported,
             is_pointer_receiver,

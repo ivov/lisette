@@ -491,7 +491,7 @@ fn is_instance_method(ty: &syntax::types::Type, type_id: &str) -> bool {
     };
     match func_ty {
         syntax::types::Type::Function(f) if !f.params.is_empty() => {
-            type_name(&f.params[0]).is_some_and(|name| name == type_id)
+            type_name(&f.params[0].ty).is_some_and(|name| name == type_id)
         }
         _ => false,
     }

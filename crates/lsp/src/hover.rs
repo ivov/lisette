@@ -82,6 +82,7 @@ fn resolve_annotation_hover(
             ..
         } => params
             .iter()
+            .map(|param| &param.annotation)
             .find_map(recurse)
             .or_else(|| recurse(return_type.as_ref())),
         Annotation::Tuple { elements, .. } => elements.iter().find_map(recurse),

@@ -20,7 +20,7 @@ use crate::store::{ENTRY_MODULE_ID, Store};
 use types::CachedDefinition;
 
 /// Current cache format version. Bump this when making breaking changes to the cache format.
-const CACHE_FORMAT_VERSION: u32 = 1;
+pub(super) const CACHE_FORMAT_VERSION: u32 = 1;
 
 /// Compiler version hash. Caches from different compiler versions are invalid.
 pub(crate) const COMPILER_VERSION_HASH: u64 =
@@ -469,7 +469,7 @@ pub(crate) fn is_cache_disabled() -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use syntax::types::{Symbol, Type};
+    use syntax::types::{FunctionParameter, Symbol, Type};
 
     #[test]
     fn test_hash_module_sources_deterministic() {
@@ -746,12 +746,14 @@ mod tests {
     #[test]
     fn test_type_roundtrip_bincode() {
         let ty = Type::function(
-            vec![Type::Nominal {
-                id: Symbol::from_raw("int"),
-                params: vec![],
-                underlying_ty: None,
-            }],
-            vec![false],
+            vec![FunctionParameter::new(
+                Type::Nominal {
+                    id: Symbol::from_raw("int"),
+                    params: vec![],
+                    underlying_ty: None,
+                },
+                false,
+            )],
             vec![],
             Box::new(Type::Nominal {
                 id: Symbol::from_raw("main.MyType"),

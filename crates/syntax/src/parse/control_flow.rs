@@ -24,7 +24,7 @@ impl<'source> Parser<'source> {
             }
 
             if block_bodied && !self.at_match_arm_terminator() {
-                let span = self.span_from_token(self.previous_token);
+                let span = self.span_from_token(self.stream.previous());
                 self.error_match_arm_missing_comma(span);
                 self.recover_to_comma_or(RightCurlyBrace);
             } else {

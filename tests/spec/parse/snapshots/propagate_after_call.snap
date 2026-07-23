@@ -58,8 +58,7 @@ description: |
                             },
                             args: [],
                             spread: None,
-                            raw_type_args: [],
-                            resolved_type_args: [],
+                            type_arguments: None,
                             ty: Var {
                                 id: uninferred,
                             },
@@ -79,12 +78,10 @@ description: |
                             byte_length: 12,
                         },
                     },
-                    mutable: false,
                     mut_span: None,
                     else_block: None,
                     else_span: None,
                     assert: false,
-                    typed_pattern: None,
                     ty: Var {
                         id: uninferred,
                     },

@@ -118,10 +118,10 @@ pub fn check(expression: &Expression, ctx: &PatternAnalysisContext, sink: &Local
             value,
             else_block,
             assert,
-            typed_pattern,
             ..
         } => {
             check(value, ctx, sink);
+            let typed_pattern = &binding.typed_pattern;
 
             if let Some(else_expression) = else_block {
                 check(else_expression, ctx, sink);

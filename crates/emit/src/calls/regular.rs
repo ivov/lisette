@@ -133,7 +133,7 @@ impl<'a> Planner<'a> {
         let Expression::Call {
             expression: callee,
             args,
-            resolved_type_args,
+            type_arguments,
             spread,
             ..
         } = call_expression
@@ -142,6 +142,9 @@ impl<'a> Planner<'a> {
         };
         let function = callee.unwrap_parens();
         let spread = (**spread).as_ref();
+        let resolved_type_args = type_arguments
+            .resolved_types()
+            .expect("emission requires checked call type arguments");
 
         if let Some(go_name) = self.get_callee_go_name(function).map(str::to_string) {
             let arg_ctx = match (expression_ctx.retired_receiver(), args.len()) {
@@ -608,14 +611,14 @@ impl<'a> Planner<'a> {
     pub(crate) fn try_emit_variadic_spread_adapter(
         &mut self,
         spread: &Expression,
-        generic_params: Option<&[Type]>,
+        generic_params: Option<&[syntax::types::FunctionParameter]>,
     ) -> Option<ValuePlan> {
         let generic_params = generic_params?;
         let raw_variadic = generic_params.last()?;
-        if raw_variadic.get_name() != Some("VarArgs") {
+        if raw_variadic.ty.get_name() != Some("VarArgs") {
             return None;
         }
-        let variadic_inner = raw_variadic.inner()?;
+        let variadic_inner = raw_variadic.ty.inner()?;
         let param_fn = self
             .facts
             .resolve_to_function_type(variadic_inner.unwrap_forall())?;
@@ -647,7 +650,7 @@ impl<'a> Planner<'a> {
         let arg_fn_params = arg_fn.get_function_params().unwrap_or(&[]);
         let param_type_strs: Vec<String> = arg_fn_params
             .iter()
-            .map(|p| self.go_type_string(p))
+            .map(|param| self.go_type_string(&param.ty))
             .collect();
         let target_element_ty = format!(
             "func({}) {}",

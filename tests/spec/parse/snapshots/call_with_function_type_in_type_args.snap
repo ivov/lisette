@@ -52,58 +52,61 @@ description: |
                     },
                     args: [],
                     spread: None,
-                    raw_type_args: [
-                        Constructor {
-                            name: "string",
-                            params: [],
-                            span: Span {
-                                file_id: 0,
-                                byte_offset: 21,
-                                byte_length: 6,
-                            },
-                        },
-                        Function {
-                            params: [
-                                Constructor {
-                                    name: "int",
-                                    params: [],
-                                    span: Span {
-                                        file_id: 0,
-                                        byte_offset: 32,
-                                        byte_length: 3,
-                                    },
-                                },
-                                Constructor {
-                                    name: "int",
-                                    params: [],
-                                    span: Span {
-                                        file_id: 0,
-                                        byte_offset: 37,
-                                        byte_length: 3,
-                                    },
-                                },
-                            ],
-                            param_mutability: [
-                                false,
-                                false,
-                            ],
-                            return_type: Constructor {
-                                name: "int",
+                    type_arguments: Unresolved(
+                        [
+                            Constructor {
+                                name: "string",
                                 params: [],
                                 span: Span {
                                     file_id: 0,
-                                    byte_offset: 45,
-                                    byte_length: 3,
+                                    byte_offset: 21,
+                                    byte_length: 6,
                                 },
                             },
-                            span: Span {
-                                file_id: 0,
-                                byte_offset: 29,
-                                byte_length: 19,
+                            Function {
+                                params: [
+                                    FunctionAnnotationParameter {
+                                        annotation: Constructor {
+                                            name: "int",
+                                            params: [],
+                                            span: Span {
+                                                file_id: 0,
+                                                byte_offset: 32,
+                                                byte_length: 3,
+                                            },
+                                        },
+                                        mutable: false,
+                                    },
+                                    FunctionAnnotationParameter {
+                                        annotation: Constructor {
+                                            name: "int",
+                                            params: [],
+                                            span: Span {
+                                                file_id: 0,
+                                                byte_offset: 37,
+                                                byte_length: 3,
+                                            },
+                                        },
+                                        mutable: false,
+                                    },
+                                ],
+                                return_type: Constructor {
+                                    name: "int",
+                                    params: [],
+                                    span: Span {
+                                        file_id: 0,
+                                        byte_offset: 45,
+                                        byte_length: 3,
+                                    },
+                                },
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 29,
+                                    byte_length: 19,
+                                },
                             },
-                        },
-                    ],
-                    resolved_type_args: [],
+                        ],
+                    ),
                     ty: Var {
                         id: uninferred,
                     },

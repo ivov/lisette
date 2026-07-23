@@ -272,7 +272,7 @@ impl InferCtx<'_> {
                     other => other,
                 };
                 if let Type::Function(f) = func
-                    && f.params.first().is_some_and(|p| p.is_ref())
+                    && f.params.first().is_some_and(|param| param.ty.is_ref())
                 {
                     check.found.push(impl_name.to_string());
                 }
@@ -676,7 +676,8 @@ impl InferCtx<'_> {
                 Type::Function(f) => f
                     .params
                     .first()
-                    .filter(|p| !p.is_receiver_placeholder())
+                    .map(|param| &param.ty)
+                    .filter(|ty| !ty.is_receiver_placeholder())
                     .map(Type::strip_refs),
                 _ => None,
             },

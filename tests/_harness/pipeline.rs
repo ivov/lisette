@@ -1,9 +1,7 @@
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use diagnostics::{LisetteDiagnostic, LocalSink};
-use semantics::{
-    checker::TaskState, checker::infer::InferCtx, facts::BindingMutation, store::Store,
-};
+use semantics::{checker::TaskState, checker::infer::InferCtx, store::Store};
 use stdlib::{Target, get_go_stdlib_typedef};
 use syntax::{
     ast::Expression,
@@ -277,13 +275,7 @@ impl CompiledTest {
                 if !b.used {
                     unused.mark_binding_unused(b.span);
                 }
-                match b.mutation {
-                    BindingMutation::Unchanged => {}
-                    BindingMutation::Direct => mutations.mark_binding_mutated(binding_id),
-                    BindingMutation::ThroughAlias => {
-                        mutations.mark_binding_alias_mutated(binding_id);
-                    }
-                }
+                mutations.record(binding_id, b.mutation);
             }
 
             let ufcs_methods = checker.take_ufcs_methods();

@@ -41,6 +41,7 @@ description: |
                         ty: Var {
                             id: uninferred,
                         },
+                        mutable: true,
                     },
                     value: StructCall {
                         name: "Point",
@@ -100,7 +101,6 @@ description: |
                             byte_length: 19,
                         },
                     },
-                    mutable: true,
                     mut_span: Some(
                         Span {
                             file_id: 0,
@@ -111,7 +111,6 @@ description: |
                     else_block: None,
                     else_span: None,
                     assert: false,
-                    typed_pattern: None,
                     ty: Var {
                         id: uninferred,
                     },

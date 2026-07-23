@@ -148,7 +148,7 @@ impl TypeEnv {
                 .resolve_slice(args)
                 .map(|args| Type::Compound { kind: *kind, args }),
             Type::Function(f) => {
-                let new_params = self.resolve_slice(&f.params);
+                let new_params = self.resolve_function_params(&f.params);
                 let new_return = self.resolve_changed(&f.return_type).map(Box::new);
                 let new_bounds = self.resolve_bounds(&f.bounds);
                 if new_params.is_none() && new_return.is_none() && new_bounds.is_none() {
@@ -187,6 +187,27 @@ impl TypeEnv {
                 None => {
                     if let Some(v) = out.as_mut() {
                         v.push(item.clone());
+                    }
+                }
+            }
+        }
+        out
+    }
+
+    fn resolve_function_params(
+        &self,
+        params: &[syntax::types::FunctionParameter],
+    ) -> Option<Vec<syntax::types::FunctionParameter>> {
+        let mut out: Option<Vec<syntax::types::FunctionParameter>> = None;
+        for (index, param) in params.iter().enumerate() {
+            match self.resolve_changed(&param.ty) {
+                Some(resolved) => {
+                    out.get_or_insert_with(|| params[..index].to_vec())
+                        .push(param.with_type(resolved));
+                }
+                None => {
+                    if let Some(resolved) = out.as_mut() {
+                        resolved.push(param.clone());
                     }
                 }
             }
@@ -234,7 +255,7 @@ impl TypeEnv {
             Type::Nominal { params, .. } => params.iter().any(|p| self.occurs(id, p)),
             Type::Compound { args, .. } => args.iter().any(|a| self.occurs(id, a)),
             Type::Function(f) => {
-                f.params.iter().any(|p| self.occurs(id, p)) || self.occurs(id, &f.return_type)
+                f.params.iter().any(|p| self.occurs(id, &p.ty)) || self.occurs(id, &f.return_type)
             }
             Type::Forall { body, .. } => self.occurs(id, body),
             Type::Tuple(elements) => elements.iter().any(|e| self.occurs(id, e)),

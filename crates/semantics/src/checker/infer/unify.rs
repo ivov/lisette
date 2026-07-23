@@ -354,7 +354,7 @@ impl InferCtx<'_> {
             }
             Function(f) => {
                 for p in &f.params {
-                    self.collapse_vars_to_error(p, span);
+                    self.collapse_vars_to_error(&p.ty, span);
                 }
                 self.collapse_vars_to_error(&f.return_type, span);
             }
@@ -573,11 +573,22 @@ impl InferCtx<'_> {
 
         // A function with `mut` params cannot unify with one without (or vice versa),
         // since that would let callers bypass the `let mut` requirement.
-        if f1.param_mutability != f2.param_mutability {
+        if f1
+            .params
+            .iter()
+            .zip(&f2.params)
+            .any(|(left, right)| left.mutable != right.mutable)
+        {
             return Err(UnifyError::TypeMismatch);
         }
 
-        let params_result = self.unify_pairs(f1.params.iter().zip(&f2.params), span);
+        let params_result = self.unify_pairs(
+            f1.params
+                .iter()
+                .zip(&f2.params)
+                .map(|(left, right)| (&left.ty, &right.ty)),
+            span,
+        );
         let return_type_result = self.try_unify(&f1.return_type, &f2.return_type, span);
 
         for bound in &f1.bounds {
@@ -632,7 +643,12 @@ impl InferCtx<'_> {
         all_in(bounds1, bounds2) && all_in(bounds2, bounds1)
     }
 
-    fn check_function_bound(&mut self, bound: &Bound, signature_params: &[Type], span: &Span) {
+    fn check_function_bound(
+        &mut self,
+        bound: &Bound,
+        signature_params: &[syntax::types::FunctionParameter],
+        span: &Span,
+    ) {
         let store = self.store;
         let resolved_ty = bound.generic.resolve_in(&self.env);
 
@@ -656,7 +672,10 @@ impl InferCtx<'_> {
         if self
             .satisfies_interface(&resolved_ty, &interface, &id, &params, span)
             .is_ok()
-            && !self.generic_absorbed_via_ref_param(&bound.generic, signature_params)
+            && !self.generic_absorbed_via_ref_param(
+                &bound.generic,
+                signature_params.iter().map(|param| &param.ty),
+            )
         {
             let _ = self.check_pointer_receivers(&resolved_ty, &interface, &id, span);
         }
@@ -837,11 +856,15 @@ impl InferCtx<'_> {
     /// Whether the emitter absorbs this bounded generic into a pointer type argument
     /// via a top-level `Ref<T>` param (`with_absorbed_ref_generics`), so the pointer
     /// satisfies the interface. Decided from params alone, like the emitter.
-    pub(super) fn generic_absorbed_via_ref_param(&self, generic: &Type, params: &[Type]) -> bool {
+    pub(super) fn generic_absorbed_via_ref_param<'a>(
+        &self,
+        generic: &Type,
+        params: impl IntoIterator<Item = &'a Type>,
+    ) -> bool {
         let is_absorbed_param = |param: &Type| matches!(param.as_compound(), Some((CompoundKind::Ref, [inner, ..])) if inner == generic);
 
         let Type::Var { id, .. } = generic else {
-            return params.iter().any(is_absorbed_param);
+            return params.into_iter().any(is_absorbed_param);
         };
 
         let mut absorbed = false;

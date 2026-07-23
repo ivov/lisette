@@ -415,7 +415,10 @@ impl InferCtx<'_> {
             .iter()
             .enumerate()
             .map(|(i, f)| {
-                let param_ty = params.get(i).cloned().unwrap_or_else(|| Type::Error);
+                let param_ty = params
+                    .get(i)
+                    .map(|param| param.ty.clone())
+                    .unwrap_or(Type::Error);
                 self.infer_pattern_inner(f.clone(), param_ty, kind, false)
             })
             .unzip();
@@ -429,8 +432,9 @@ impl InferCtx<'_> {
                 .iter()
                 .map(|p| p.get_type().unwrap_or_else(|| self.new_type_var()))
                 .collect();
+            let expected_types: Vec<Type> = params.iter().map(|param| param.ty.clone()).collect();
             self.sink.push(diagnostics::infer::arity_mismatch(
-                &params,
+                &expected_types,
                 &actual_types,
                 &[],
                 true,
@@ -438,8 +442,10 @@ impl InferCtx<'_> {
             ));
         }
 
-        let resolved_field_types: Box<[Type]> =
-            params.iter().map(|p| p.resolve_in(&self.env)).collect();
+        let resolved_field_types: Box<[Type]> = params
+            .iter()
+            .map(|param| param.ty.resolve_in(&self.env))
+            .collect();
 
         let resolved_ty = pattern_ty.resolve_in(&self.env);
         let typed = match &resolved_ty {

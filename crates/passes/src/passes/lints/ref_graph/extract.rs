@@ -86,7 +86,7 @@ pub(super) fn walk_expression(
             expression: callee,
             args,
             spread,
-            raw_type_args,
+            type_arguments,
             ..
         } => {
             walk_call(
@@ -94,7 +94,7 @@ pub(super) fn walk_expression(
                 callee,
                 args,
                 spread,
-                raw_type_args,
+                type_arguments.annotations(),
                 graph,
                 alias_map,
                 ctx,
@@ -676,7 +676,7 @@ fn walk_annotation(
             ..
         } => {
             for p in params {
-                walk_annotation(module, p, graph, alias_map, from);
+                walk_annotation(module, &p.annotation, graph, alias_map, from);
             }
             walk_annotation(module, return_type, graph, alias_map, from);
         }
@@ -714,7 +714,7 @@ fn walk_type(
         }
         Type::Function(f) => {
             for p in &f.params {
-                walk_type(module, p, graph, alias_map, from);
+                walk_type(module, &p.ty, graph, alias_map, from);
             }
             walk_type(module, &f.return_type, graph, alias_map, from);
         }

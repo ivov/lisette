@@ -149,10 +149,11 @@ fn body_remove_found_type_names(expression: &Expression, names: &mut HashSet<Eco
     match expression {
         Expression::Function { .. } | Expression::Lambda { .. } => return,
         Expression::Let { binding, .. } => binding.ty.remove_found_type_names(names),
-        Expression::Call {
-            resolved_type_args, ..
-        } => {
-            for ty in resolved_type_args {
+        Expression::Call { type_arguments, .. } => {
+            for ty in type_arguments
+                .resolved_types()
+                .expect("generic fact production requires checked call type arguments")
+            {
                 ty.remove_found_type_names(names);
             }
         }
@@ -178,7 +179,7 @@ fn annotation_remove_names(annotation: &Annotation, names: &mut HashSet<EcoStrin
             ..
         } => {
             for p in params {
-                annotation_remove_names(p, names);
+                annotation_remove_names(&p.annotation, names);
             }
             annotation_remove_names(return_type, names);
         }

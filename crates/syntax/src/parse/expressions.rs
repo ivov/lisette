@@ -3,9 +3,9 @@ use ecow::EcoString;
 use super::strings::cook_string_contents;
 use super::{MAX_TUPLE_ARITY, ParamMode, ParseError, Parser};
 use crate::ast::{
-    Annotation, Attribute, BinaryOperator, Binding, Expression, FormatStringPart, ImportAlias,
-    Literal, SelectArm, SelectArmPattern, Span, StructFieldAssignment, StructSpread, UnaryOperator,
-    Visibility,
+    Annotation, Attribute, BinaryOperator, Binding, CallTypeArguments, Expression,
+    FormatStringPart, ImportAlias, Literal, SelectArm, SelectArmPattern, Span,
+    StructFieldAssignment, StructSpread, UnaryOperator, Visibility,
 };
 use crate::lex::TokenKind::{self, *};
 use crate::types::Type;
@@ -425,8 +425,7 @@ impl<'source> Parser<'source> {
             expression: expression.into(),
             args,
             spread: spread.into(),
-            raw_type_args,
-            resolved_type_args: Vec::new(),
+            type_arguments: CallTypeArguments::unresolved(raw_type_args),
             span: self.span_from_offset(start_offset),
             call_kind: None,
         }
@@ -685,10 +684,7 @@ impl<'source> Parser<'source> {
             NotEqual => BinaryOperator::NotEqual,
             AmpersandDouble => BinaryOperator::And,
             PipeDouble => BinaryOperator::Or,
-            Pipeline => {
-                self.has_desugarables = true;
-                BinaryOperator::Pipeline
-            }
+            Pipeline => BinaryOperator::Pipeline,
 
             _ => {
                 self.track_error(format!(
@@ -1074,7 +1070,8 @@ impl<'source> Parser<'source> {
             );
         }
 
-        let binding = self.parse_binding_allowing_or();
+        let mut binding = self.parse_binding_allowing_or();
+        binding.mutable = mutable;
 
         if !self.is(Equal)
             && let Some(Annotation::Constructor { span, .. }) = binding.annotation.as_ref()
@@ -1088,12 +1085,10 @@ impl<'source> Parser<'source> {
                     items: vec![],
                     span: stub_span,
                 }),
-                mutable,
                 mut_span,
                 else_block: None,
                 else_span: None,
                 assert,
-                typed_pattern: None,
                 ty: Type::uninferred(),
                 span: stub_span,
             };
@@ -1123,12 +1118,10 @@ impl<'source> Parser<'source> {
         Expression::Let {
             binding: Box::new(binding),
             value: expression.into(),
-            mutable,
             mut_span,
             else_block,
             else_span,
             assert,
-            typed_pattern: None,
             ty: Type::uninferred(),
             span: self.span_from_tokens(start),
         }
@@ -1818,14 +1811,18 @@ mod tests {
     use crate::build_ast;
 
     fn count_nodes(expression: &Expression) -> usize {
-        1 + expression.children().iter().map(count_nodes).sum::<usize>()
+        1 + expression
+            .children()
+            .into_iter()
+            .map(count_nodes)
+            .sum::<usize>()
     }
 
     fn first_assignment(expression: &Expression) -> Option<&Expression> {
         if matches!(expression, Expression::Assignment { .. }) {
             return Some(expression);
         }
-        expression.children().iter().find_map(first_assignment)
+        expression.children().into_iter().find_map(first_assignment)
     }
 
     #[test]
@@ -1867,7 +1864,8 @@ mod tests {
             unreachable!("expected a top-level function")
         };
         let Some(Annotation::Function {
-            param_mutability, ..
+            params: type_params,
+            ..
         }) = &params[0].annotation
         else {
             panic!(
@@ -1876,7 +1874,13 @@ mod tests {
             )
         };
 
-        assert_eq!(param_mutability, &vec![true, false]);
+        assert_eq!(
+            type_params
+                .iter()
+                .map(|param| param.mutable)
+                .collect::<Vec<_>>(),
+            vec![true, false]
+        );
     }
 
     #[test]

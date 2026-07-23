@@ -68,12 +68,10 @@ description: |
                         binding_id: None,
                         qualified: None,
                     },
-                    mutable: false,
                     mut_span: None,
                     else_block: None,
                     else_span: None,
                     assert: true,
-                    typed_pattern: None,
                     ty: Var {
                         id: uninferred,
                     },

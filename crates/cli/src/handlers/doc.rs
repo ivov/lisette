@@ -87,16 +87,14 @@ fn annotation_to_string(ann: &Annotation) -> String {
         }
         Annotation::Function {
             params,
-            param_mutability,
             return_type,
             ..
         } => {
             let params_str = params
                 .iter()
-                .enumerate()
-                .map(|(index, param)| {
-                    let rendered = annotation_to_string(param);
-                    if param_mutability.get(index).copied().unwrap_or(false) {
+                .map(|param| {
+                    let rendered = annotation_to_string(&param.annotation);
+                    if param.mutable {
                         format!("mut {}", rendered)
                     } else {
                         rendered

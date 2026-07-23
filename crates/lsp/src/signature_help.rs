@@ -33,13 +33,10 @@ pub(crate) fn handle(items: &[Expression], offset: u32) -> Option<SignatureHelp>
 
     let param_strs: Vec<String> = params
         .iter()
-        .enumerate()
-        .map(
-            |(i, ty)| match f.param_names.get(i).and_then(Option::as_ref) {
-                Some(name) => format!("{name}: {ty}"),
-                None => ty.to_string(),
-            },
-        )
+        .map(|param| match &param.name {
+            Some(name) => format!("{name}: {}", param.ty),
+            None => param.ty.to_string(),
+        })
         .collect();
     let signature = format!("fn {func_name}({}) -> {return_type}", param_strs.join(", "));
 

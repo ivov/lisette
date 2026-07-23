@@ -141,7 +141,7 @@ pub(crate) fn extract_type_mapping(
     match (generic, concrete) {
         (Type::Function(gen_f), Type::Function(conc_f)) => {
             for (g, c) in gen_f.params.iter().zip(conc_f.params.iter()) {
-                extract_type_mapping(g, c, mapping);
+                extract_type_mapping(&g.ty, &c.ty, mapping);
             }
             extract_type_mapping(&gen_f.return_type, &conc_f.return_type, mapping);
         }

@@ -17,7 +17,8 @@ use syntax::EcoString;
 use syntax::ast::{Expression, StructKind};
 use syntax::program::{CallKind, Definition, DefinitionBody};
 use syntax::types::{
-    CompoundKind, SimpleKind, SubstitutionMap, Symbol, Type, build_substitution_map, substitute,
+    CompoundKind, FunctionParameter, SimpleKind, SubstitutionMap, Symbol, Type,
+    build_substitution_map, substitute,
 };
 
 struct TupleStructTarget {
@@ -35,13 +36,13 @@ pub(crate) struct CallArgShape {
 
 pub(crate) fn all_type_params_inferrable(
     vars: &[EcoString],
-    params: &[Type],
+    params: &[FunctionParameter],
     receiver_count: usize,
     arg_shape: CallArgShape,
 ) -> bool {
     let variadic_idx = params
         .iter()
-        .position(|p| p.is_native(CompoundKind::VarArgs))
+        .position(|p| p.ty.is_native(CompoundKind::VarArgs))
         .filter(|&i| i == params.len() - 1);
     let variadic_has_args = arg_shape.has_spread
         || variadic_idx.is_some_and(|i| arg_shape.value_count + receiver_count > i);
@@ -49,7 +50,7 @@ pub(crate) fn all_type_params_inferrable(
     vars.iter().all(|var| {
         let param_ty = Type::Parameter(var.clone());
         params.iter().enumerate().any(|(i, pt)| {
-            pt.contains_type(&param_ty) && (Some(i) != variadic_idx || variadic_has_args)
+            pt.ty.contains_type(&param_ty) && (Some(i) != variadic_idx || variadic_has_args)
         })
     })
 }
@@ -307,7 +308,7 @@ impl Planner<'_> {
             args,
             spread,
             call_kind,
-            resolved_type_args,
+            type_arguments,
             ..
         } = call_expression
         else {
@@ -315,6 +316,9 @@ impl Planner<'_> {
         };
         let function = callee.unwrap_parens();
         let spread = (**spread).as_ref();
+        let resolved_type_args = type_arguments
+            .resolved_types()
+            .expect("emission requires checked call type arguments");
 
         let call_kind = call_kind.filter(|_| !self.is_local_binding(function))?;
         let kind = match call_kind {
@@ -355,7 +359,7 @@ impl Planner<'_> {
         let Expression::Call {
             expression: callee,
             args,
-            resolved_type_args,
+            type_arguments,
             spread,
             ..
         } = call_expression
@@ -364,6 +368,9 @@ impl Planner<'_> {
         };
         let function = callee.unwrap_parens();
         let spread = (**spread).as_ref();
+        let resolved_type_args = type_arguments
+            .resolved_types()
+            .expect("emission requires checked call type arguments");
 
         let plan = self
             .plan_call(call_expression)

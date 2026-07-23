@@ -8,7 +8,6 @@ pub fn check_redundant_rebinding(expression: &Expression, ctx: &NodeCtx) {
     let Expression::Let {
         binding,
         value,
-        mutable: false,
         else_block: None,
         span,
         ..
@@ -16,6 +15,10 @@ pub fn check_redundant_rebinding(expression: &Expression, ctx: &NodeCtx) {
     else {
         return;
     };
+
+    if binding.mutable {
+        return;
+    }
 
     // An annotation can coerce the value (for example to an interface).
     if binding.annotation.is_some() {

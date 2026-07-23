@@ -53,8 +53,7 @@ description: |
                             qualified: None,
                         },
                     ),
-                    raw_type_args: [],
-                    resolved_type_args: [],
+                    type_arguments: None,
                     ty: Var {
                         id: uninferred,
                     },

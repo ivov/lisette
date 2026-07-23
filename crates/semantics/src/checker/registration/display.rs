@@ -1,6 +1,6 @@
 use syntax::ast::Span;
 use syntax::program::{Definition, DefinitionBody};
-use syntax::types::{Symbol, Type};
+use syntax::types::{FunctionParameter, Symbol, Type};
 
 use super::{TaskState, wrap_with_impl_generics};
 use crate::call_classification::is_ufcs_method_type;
@@ -101,8 +101,7 @@ impl TaskState {
             other => other,
         };
         let fn_ty = Type::function(
-            vec![receiver_ty],
-            vec![false],
+            vec![FunctionParameter::new(receiver_ty, false)],
             Default::default(),
             Box::new(Type::string()),
         );

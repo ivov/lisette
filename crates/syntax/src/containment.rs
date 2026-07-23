@@ -1,5 +1,4 @@
 use rustc_hash::FxHashSet as HashSet;
-use std::cell::RefCell;
 
 use crate::program::{Definition, DefinitionBody};
 use crate::types::{CompoundKind, Type, peel_alias};
@@ -21,14 +20,12 @@ where
     F: Fn(&str) -> Option<&'d Definition>,
 {
     let severed = HashSet::default();
-    let wrap_checking = RefCell::new(HashSet::default());
     ContainmentWalk {
         lookup: &lookup,
         enum_payloads: EnumPayloads::Traverse,
         severed: &severed,
-        wrap_checking: &wrap_checking,
     }
-    .payload_pointer_wrapped(enum_id, variant, field, payload)
+    .payload_pointer_wrapped(enum_id, variant, field, payload, &HashSet::default())
 }
 
 pub fn definition_contains_by_value<'d, F>(
@@ -41,25 +38,33 @@ pub fn definition_contains_by_value<'d, F>(
 where
     F: Fn(&str) -> Option<&'d Definition>,
 {
-    let wrap_checking = RefCell::new(HashSet::default());
     ContainmentWalk {
         lookup: &lookup,
         enum_payloads,
         severed,
-        wrap_checking: &wrap_checking,
     }
-    .definition_contains(current_id, target_id, &mut HashSet::default())
+    .definition_contains(
+        current_id,
+        target_id,
+        &mut HashSet::default(),
+        &HashSet::default(),
+    )
 }
 
 struct ContainmentWalk<'w, F> {
     lookup: &'w F,
     enum_payloads: EnumPayloads,
     severed: &'w HashSet<String>,
-    wrap_checking: &'w RefCell<HashSet<(String, usize, usize)>>,
 }
 
 impl<'d, F: Fn(&str) -> Option<&'d Definition>> ContainmentWalk<'_, F> {
-    fn type_contains(&self, ty: &Type, target_id: &str, visited: &mut HashSet<String>) -> bool {
+    fn type_contains(
+        &self,
+        ty: &Type,
+        target_id: &str,
+        visited: &mut HashSet<String>,
+        wrap_checking: &HashSet<(String, usize, usize)>,
+    ) -> bool {
         let peeled = peel_alias(ty, |id| {
             (self.lookup)(id).is_some_and(Definition::is_type_alias)
         });
@@ -74,19 +79,25 @@ impl<'d, F: Fn(&str) -> Option<&'d Definition>> ContainmentWalk<'_, F> {
                 }
 
                 for (position, param) in params.iter().enumerate() {
-                    if self.argument_stored_inline(id.as_str(), position, &mut HashSet::default())
-                        && self.type_contains(param, target_id, visited)
+                    if self.argument_stored_inline(
+                        id.as_str(),
+                        position,
+                        &mut HashSet::default(),
+                        wrap_checking,
+                    ) && self.type_contains(param, target_id, visited, wrap_checking)
                     {
                         return true;
                     }
                 }
 
-                self.definition_contains(id.as_str(), target_id, visited)
+                self.definition_contains(id.as_str(), target_id, visited, wrap_checking)
             }
             Type::Tuple(elements) => elements
                 .iter()
-                .any(|e| self.type_contains(e, target_id, visited)),
-            Type::Array { element, .. } => self.type_contains(element, target_id, visited),
+                .any(|e| self.type_contains(e, target_id, visited, wrap_checking)),
+            Type::Array { element, .. } => {
+                self.type_contains(element, target_id, visited, wrap_checking)
+            }
             _ => false,
         }
     }
@@ -96,6 +107,7 @@ impl<'d, F: Fn(&str) -> Option<&'d Definition>> ContainmentWalk<'_, F> {
         current_id: &str,
         target_id: &str,
         visited: &mut HashSet<String>,
+        wrap_checking: &HashSet<(String, usize, usize)>,
     ) -> bool {
         if self.severed.contains(current_id) {
             return false;
@@ -106,14 +118,14 @@ impl<'d, F: Fn(&str) -> Option<&'d Definition>> ContainmentWalk<'_, F> {
         match (self.lookup)(current_id).map(|d| &d.body) {
             Some(DefinitionBody::Struct { fields, .. }) => fields
                 .iter()
-                .any(|field| self.type_contains(&field.ty, target_id, visited)),
+                .any(|field| self.type_contains(&field.ty, target_id, visited, wrap_checking)),
             Some(DefinitionBody::Enum { variants, .. })
                 if self.enum_payloads == EnumPayloads::Traverse =>
             {
                 variants
                     .iter()
                     .flat_map(|variant| variant.fields.iter())
-                    .any(|field| self.type_contains(&field.ty, target_id, visited))
+                    .any(|field| self.type_contains(&field.ty, target_id, visited, wrap_checking))
             }
             _ => false,
         }
@@ -124,6 +136,7 @@ impl<'d, F: Fn(&str) -> Option<&'d Definition>> ContainmentWalk<'_, F> {
         id: &str,
         position: usize,
         checking: &mut HashSet<(String, usize)>,
+        wrap_checking: &HashSet<(String, usize, usize)>,
     ) -> bool {
         if !checking.insert((id.to_string(), position)) {
             return false;
@@ -138,9 +151,9 @@ impl<'d, F: Fn(&str) -> Option<&'d Definition>> ContainmentWalk<'_, F> {
                 let Some(generic) = generics.get(position) else {
                     return true;
                 };
-                fields
-                    .iter()
-                    .any(|field| self.parameter_stored_inline(&field.ty, &generic.name, checking))
+                fields.iter().any(|field| {
+                    self.parameter_stored_inline(&field.ty, &generic.name, checking, wrap_checking)
+                })
             }
             DefinitionBody::Enum {
                 generics, variants, ..
@@ -159,8 +172,13 @@ impl<'d, F: Fn(&str) -> Option<&'d Definition>> ContainmentWalk<'_, F> {
                             .map(move |(fi, field)| (vi, fi, field))
                     })
                     .any(|(vi, fi, field)| {
-                        !self.payload_pointer_wrapped(id, vi, fi, &field.ty)
-                            && self.parameter_stored_inline(&field.ty, &generic.name, checking)
+                        !self.payload_pointer_wrapped(id, vi, fi, &field.ty, wrap_checking)
+                            && self.parameter_stored_inline(
+                                &field.ty,
+                                &generic.name,
+                                checking,
+                                wrap_checking,
+                            )
                     })
             }
             DefinitionBody::TypeAlias { .. } => {
@@ -177,11 +195,11 @@ impl<'d, F: Fn(&str) -> Option<&'d Definition>> ContainmentWalk<'_, F> {
                         ..
                     } if body_id.as_str() == id => match underlying_ty {
                         Some(underlying) => {
-                            self.parameter_stored_inline(underlying, name, checking)
+                            self.parameter_stored_inline(underlying, name, checking, wrap_checking)
                         }
                         None => true,
                     },
-                    _ => self.parameter_stored_inline(body, name, checking),
+                    _ => self.parameter_stored_inline(body, name, checking, wrap_checking),
                 }
             }
             DefinitionBody::Interface { .. } => false,
@@ -195,21 +213,21 @@ impl<'d, F: Fn(&str) -> Option<&'d Definition>> ContainmentWalk<'_, F> {
         variant: usize,
         field: usize,
         payload: &Type,
+        wrap_checking: &HashSet<(String, usize, usize)>,
     ) -> bool {
         let key = (enum_id.to_string(), variant, field);
-        if !self.wrap_checking.borrow_mut().insert(key.clone()) {
+        if wrap_checking.contains(&key) {
             return false;
         }
+        let mut nested_checking = wrap_checking.clone();
+        nested_checking.insert(key);
         let severed = HashSet::default();
-        let wrapped = ContainmentWalk {
+        ContainmentWalk {
             lookup: self.lookup,
             enum_payloads: EnumPayloads::Traverse,
             severed: &severed,
-            wrap_checking: self.wrap_checking,
         }
-        .type_contains(payload, enum_id, &mut HashSet::default());
-        self.wrap_checking.borrow_mut().remove(&key);
-        wrapped
+        .type_contains(payload, enum_id, &mut HashSet::default(), &nested_checking)
     }
 
     fn parameter_stored_inline(
@@ -217,6 +235,7 @@ impl<'d, F: Fn(&str) -> Option<&'d Definition>> ContainmentWalk<'_, F> {
         ty: &Type,
         parameter: &str,
         checking: &mut HashSet<(String, usize)>,
+        wrap_checking: &HashSet<(String, usize, usize)>,
     ) -> bool {
         match ty {
             Type::Parameter(name) => name == parameter,
@@ -225,15 +244,20 @@ impl<'d, F: Fn(&str) -> Option<&'d Definition>> ContainmentWalk<'_, F> {
                     return false;
                 }
                 params.iter().enumerate().any(|(position, argument)| {
-                    self.parameter_stored_inline(argument, parameter, checking)
-                        && self.argument_stored_inline(id.as_str(), position, checking)
+                    self.parameter_stored_inline(argument, parameter, checking, wrap_checking)
+                        && self.argument_stored_inline(
+                            id.as_str(),
+                            position,
+                            checking,
+                            wrap_checking,
+                        )
                 })
             }
             Type::Tuple(elements) => elements
                 .iter()
-                .any(|e| self.parameter_stored_inline(e, parameter, checking)),
+                .any(|e| self.parameter_stored_inline(e, parameter, checking, wrap_checking)),
             Type::Array { element, .. } => {
-                self.parameter_stored_inline(element, parameter, checking)
+                self.parameter_stored_inline(element, parameter, checking, wrap_checking)
             }
             _ => false,
         }

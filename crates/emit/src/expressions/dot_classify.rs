@@ -241,7 +241,7 @@ impl Planner<'_> {
         let Type::Nominal {
             params: receiver_params,
             ..
-        } = first_param.strip_refs()
+        } = first_param.ty.strip_refs()
         else {
             return String::new();
         };

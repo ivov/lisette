@@ -33,7 +33,6 @@ pub use error::ParseError;
 pub struct ParseResult {
     pub ast: Vec<ast::Expression>,
     pub errors: Vec<ParseError>,
-    pub(crate) has_desugarables: bool,
     pub file_comment: Option<std::string::String>,
 }
 
@@ -45,14 +44,11 @@ impl ParseResult {
 
 pub struct Parser<'source> {
     stream: TokenStream<'source>,
-    previous_token: Token<'source>,
-    pending_right_angle: Option<u32>,
     errors: Vec<ParseError>,
     file_id: u32,
     in_control_flow_header: bool,
     source: &'source str,
     depth: u32,
-    has_desugarables: bool,
 }
 
 impl<'source> Parser<'source> {
@@ -67,7 +63,6 @@ impl<'source> Parser<'source> {
             return ParseResult {
                 ast: vec![],
                 errors: lex_result.errors,
-                has_desugarables: false,
                 file_comment: None,
             };
         }
@@ -81,18 +76,14 @@ impl<'source> Parser<'source> {
         file_id: u32,
     ) -> Parser<'source> {
         let stream = TokenStream::new(tokens);
-        let first_token = stream.peek();
 
         Parser {
             stream,
-            previous_token: first_token,
-            pending_right_angle: None,
             errors: Default::default(),
             file_id,
             in_control_flow_header: false,
             source,
             depth: 0,
-            has_desugarables: false,
         }
     }
 
@@ -117,7 +108,6 @@ impl<'source> Parser<'source> {
         ParseResult {
             ast: top_items,
             errors: self.errors,
-            has_desugarables: self.has_desugarables,
             file_comment,
         }
     }
@@ -278,19 +268,12 @@ impl<'source> Parser<'source> {
     }
 
     fn current_token(&self) -> Token<'source> {
-        if let Some(byte_offset) = self.pending_right_angle {
-            return Token {
-                kind: TokenKind::RightAngleBracket,
-                text: ">",
-                byte_offset,
-                byte_length: 1,
-            };
-        }
         self.stream.peek()
     }
 
     fn newline_before_current(&self) -> bool {
-        let prev_end = (self.previous_token.byte_offset + self.previous_token.byte_length) as usize;
+        let previous = self.stream.previous();
+        let prev_end = (previous.byte_offset + previous.byte_length) as usize;
         let curr_start = self.current_token().byte_offset as usize;
         if prev_end <= curr_start && curr_start <= self.source.len() {
             return self.source[prev_end..curr_start].contains('\n');
@@ -299,18 +282,12 @@ impl<'source> Parser<'source> {
     }
 
     fn next(&mut self) {
-        self.previous_token = self.current_token();
-        if self.pending_right_angle.take().is_some() {
-            self.skip_comments();
-            return;
-        }
         self.stream.consume();
         self.skip_comments();
     }
 
     fn skip_comments(&mut self) {
         while self.is(Comment) {
-            self.previous_token = self.current_token();
             self.stream.consume();
         }
         if self.is(FileComment) {
@@ -344,7 +321,6 @@ impl<'source> Parser<'source> {
             }
             docs.push(token.text.to_string());
             previous_end = Some(token.byte_offset + token.byte_length);
-            self.previous_token = token;
             self.stream.consume();
         }
 
@@ -365,7 +341,6 @@ impl<'source> Parser<'source> {
                 first_span = Some(self.span_from_token(token));
             }
             docs.push(token.text.to_string());
-            self.previous_token = token;
             self.stream.consume();
             self.skip_comments();
         }
@@ -451,25 +426,11 @@ impl<'source> Parser<'source> {
     }
 
     fn advance_if_right_angle(&mut self) -> bool {
-        let token = self.current_token();
-        match token.kind {
-            RightAngleBracket => {
-                self.next();
-                true
-            }
-            ShiftRight => {
-                self.previous_token = Token {
-                    kind: RightAngleBracket,
-                    text: ">",
-                    byte_offset: token.byte_offset,
-                    byte_length: 1,
-                };
-                self.stream.consume();
-                self.pending_right_angle = Some(token.byte_offset + 1);
-                self.skip_comments();
-                true
-            }
-            _ => false,
+        if self.stream.consume_right_angle().is_some() {
+            self.skip_comments();
+            true
+        } else {
+            false
         }
     }
 
@@ -478,14 +439,16 @@ impl<'source> Parser<'source> {
     }
 
     fn span_from_tokens(&self, start_token: Token<'source>) -> ast::Span {
-        let end_byte_offset = self.previous_token.byte_offset + self.previous_token.byte_length;
+        let previous = self.stream.previous();
+        let end_byte_offset = previous.byte_offset + previous.byte_length;
         let byte_length = end_byte_offset.saturating_sub(start_token.byte_offset);
 
         ast::Span::new(self.file_id, start_token.byte_offset, byte_length)
     }
 
     fn span_from_offset(&self, start_byte_offset: u32) -> ast::Span {
-        let end_byte_offset = self.previous_token.byte_offset + self.previous_token.byte_length;
+        let previous = self.stream.previous();
+        let end_byte_offset = previous.byte_offset + previous.byte_length;
         let byte_length = end_byte_offset.saturating_sub(start_byte_offset);
 
         ast::Span::new(self.file_id, start_byte_offset, byte_length)
@@ -581,14 +544,12 @@ impl<'source> Parser<'source> {
     }
 
     fn is_struct_instantiation(&self) -> bool {
-        if self.previous_token.kind != Identifier {
+        let previous = self.stream.previous();
+        if previous.kind != Identifier {
             return false;
         }
 
-        let is_uppercase = self
-            .previous_token
-            .text
-            .starts_with(|c: char| c.is_uppercase());
+        let is_uppercase = previous.text.starts_with(|c: char| c.is_uppercase());
         let first_ahead = self.stream.peek_ahead(1);
 
         if first_ahead.kind == DotDot {
@@ -1004,10 +965,8 @@ impl<'source> Parser<'source> {
 
         while self.is(FileComment) {
             last = self.current_token();
-            self.previous_token = last;
             self.stream.consume();
             while self.is(Comment) {
-                self.previous_token = self.current_token();
                 self.stream.consume();
             }
         }
@@ -1210,7 +1169,6 @@ fn is_go_build_constraint(text: &str) -> bool {
 struct TokenStream<'source> {
     tokens: Vec<Token<'source>>,
     position: usize,
-    last_index: usize,
 }
 
 impl<'source> TokenStream<'source> {
@@ -1219,11 +1177,9 @@ impl<'source> TokenStream<'source> {
             !tokens.is_empty(),
             "lexer must always produce at least an EOF token",
         );
-        let last_index = tokens.len() - 1;
         Self {
             tokens,
             position: 0,
-            last_index,
         }
     }
 
@@ -1232,21 +1188,44 @@ impl<'source> TokenStream<'source> {
     }
 
     fn peek_ahead(&self, n: usize) -> Token<'source> {
-        let idx = self.position.saturating_add(n);
-        let idx = if idx > self.last_index {
-            self.last_index
-        } else {
-            idx
-        };
+        let last_index = self.tokens.len() - 1;
+        let idx = self.position.saturating_add(n).min(last_index);
         self.tokens[idx]
+    }
+
+    fn previous(&self) -> Token<'source> {
+        self.tokens[self.position.saturating_sub(1)]
     }
 
     fn consume(&mut self) -> Token<'source> {
         let token = self.tokens[self.position];
-        if self.position < self.last_index {
+        if self.position + 1 < self.tokens.len() {
             self.position += 1;
         }
         token
+    }
+
+    fn consume_right_angle(&mut self) -> Option<Token<'source>> {
+        let token = self.peek();
+        match token.kind {
+            RightAngleBracket => Some(self.consume()),
+            ShiftRight => {
+                let first = Token {
+                    kind: RightAngleBracket,
+                    text: ">",
+                    byte_offset: token.byte_offset,
+                    byte_length: 1,
+                };
+                let second = Token {
+                    byte_offset: token.byte_offset + 1,
+                    ..first
+                };
+                self.tokens[self.position] = first;
+                self.tokens.insert(self.position + 1, second);
+                Some(self.consume())
+            }
+            _ => None,
+        }
     }
 }
 

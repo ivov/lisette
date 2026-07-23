@@ -507,16 +507,14 @@ impl<'a> Formatter<'a> {
             }
             Annotation::Function {
                 params,
-                param_mutability,
                 return_type,
                 ..
             } => {
                 let param_docs: Vec<_> = params
                     .iter()
-                    .enumerate()
-                    .map(|(index, param)| {
-                        let doc = Self::annotation(param);
-                        if param_mutability.get(index).copied().unwrap_or(false) {
+                    .map(|param| {
+                        let doc = Self::annotation(&param.annotation);
+                        if param.mutable {
                             Document::str("mut ").append(doc)
                         } else {
                             doc

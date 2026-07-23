@@ -6,7 +6,7 @@ use crate::names::packages::{PackageRequirements, PackageUse};
 use crate::types::native::NativeGoType;
 use crate::types::prelude::PreludeType;
 use syntax::program::DefinitionBody;
-use syntax::types::{CompoundKind, SimpleKind, Type};
+use syntax::types::{CompoundKind, FunctionParameter, SimpleKind, Type};
 
 #[derive(Debug, Clone, Default)]
 pub(crate) struct GoType {
@@ -284,8 +284,8 @@ impl Planner<'_> {
         build_param_typed(native.emit_type_syntax(&type_args), &arg_types)
     }
 
-    fn emit_function_type(&self, params: &[Type], return_ty: &Type) -> GoType {
-        let param_types: Vec<GoType> = params.iter().map(|p| self.go_type(p)).collect();
+    fn emit_function_type(&self, params: &[FunctionParameter], return_ty: &Type) -> GoType {
+        let param_types: Vec<GoType> = params.iter().map(|p| self.go_type(&p.ty)).collect();
 
         let lowered = self.classify_direct_emission(return_ty);
         let return_type = match &lowered {

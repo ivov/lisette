@@ -52,7 +52,10 @@ impl Planner<'_> {
             .get_function_params()
             .expect("interface method must have function type");
 
-        let args: Vec<String> = all_args.iter().map(|a| self.go_type_string(a)).collect();
+        let args: Vec<String> = all_args
+            .iter()
+            .map(|param| self.go_type_string(&param.ty))
+            .collect();
         let raw_return_ty = ty
             .get_function_ret()
             .expect("interface method must have return type")

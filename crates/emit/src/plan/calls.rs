@@ -5,7 +5,7 @@ use crate::expressions::staging::VariadicCombine;
 use crate::types::native::NativeGoType;
 use syntax::ast::Expression;
 use syntax::program::{CallKind, Definition, NativeTypeKind, resolved_definition};
-use syntax::types::Type;
+use syntax::types::{FunctionParameter, Type};
 
 #[derive(Debug)]
 pub(crate) struct CallPlan<'a> {
@@ -440,7 +440,7 @@ fn receiver_is_prelude_type(ty: &Type) -> bool {
 fn build_param_abi(
     planner: &Planner<'_>,
     instantiated: &Type,
-    declared: Option<&[Type]>,
+    declared: Option<&[FunctionParameter]>,
     receiver_offset: usize,
     callee_id: Option<&str>,
     callable_origin: &CallableOrigin,
@@ -453,7 +453,7 @@ fn build_param_abi(
         .map(|(index, instantiated)| {
             let declared = declared
                 .and_then(|params| params.get(receiver_offset + index))
-                .cloned();
+                .map(|param| param.ty.clone());
             let catalog_slot = if matches!(callable_origin, CallableOrigin::GoInterop) {
                 callee_id.and_then(|id| {
                     planner
@@ -466,7 +466,7 @@ fn build_param_abi(
             let origin = catalog_slot.map_or_else(
                 || {
                     if matches!(callable_origin, CallableOrigin::GoInterop) {
-                        SlotOrigin::go_parameter(declared.as_ref().unwrap_or(instantiated))
+                        SlotOrigin::go_parameter(declared.as_ref().unwrap_or(&instantiated.ty))
                     } else {
                         SlotOrigin::Lisette
                     }
@@ -475,16 +475,20 @@ fn build_param_abi(
             );
             let layout = catalog_slot
                 .map(|slot| {
-                    planner.value_layout_with_declaration(instantiated, origin, &slot.declared_type)
+                    planner.value_layout_with_declaration(
+                        &instantiated.ty,
+                        origin,
+                        &slot.declared_type,
+                    )
                 })
                 .or_else(|| {
                     declared.as_ref().map(|declared| {
-                        planner.value_layout_with_declaration(instantiated, origin, declared)
+                        planner.value_layout_with_declaration(&instantiated.ty, origin, declared)
                     })
                 })
-                .unwrap_or_else(|| planner.value_layout(instantiated, origin));
+                .unwrap_or_else(|| planner.value_layout(&instantiated.ty, origin));
             CallableParamAbi {
-                instantiated: instantiated.clone(),
+                instantiated: instantiated.ty.clone(),
                 declared,
                 origin,
                 layout,

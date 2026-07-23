@@ -230,7 +230,10 @@ pub fn substitute(ty: &Type, map: &HashMap<EcoString, Type>) -> Type {
             underlying_ty: underlying.as_ref().map(|u| Box::new(substitute(u, map))),
         },
         Type::Function(f) => f.rebuild(
-            f.params.iter().map(|p| substitute(p, map)).collect(),
+            f.params
+                .iter()
+                .map(|param| param.with_type(substitute(&param.ty, map)))
+                .collect(),
             f.bounds
                 .iter()
                 .map(|b| Bound {
@@ -282,21 +285,52 @@ pub struct Bound {
     pub ty: Type,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct FunctionParameter {
+    pub ty: Type,
+    pub name: Option<EcoString>,
+    pub mutable: bool,
+}
+
+impl FunctionParameter {
+    pub fn new(ty: Type, mutable: bool) -> Self {
+        Self {
+            ty,
+            name: None,
+            mutable,
+        }
+    }
+
+    pub fn named(ty: Type, name: Option<EcoString>, mutable: bool) -> Self {
+        Self { ty, name, mutable }
+    }
+
+    pub fn with_type(&self, ty: Type) -> Self {
+        Self {
+            ty,
+            name: self.name.clone(),
+            mutable: self.mutable,
+        }
+    }
+}
+
 #[derive(Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct FunctionType {
-    pub params: Vec<Type>,
-    #[cfg_attr(feature = "serde", serde(default))]
-    pub param_names: Vec<Option<EcoString>>,
-    pub param_mutability: Vec<bool>,
+    pub params: Vec<FunctionParameter>,
     pub bounds: Vec<Bound>,
     pub return_type: Box<Type>,
 }
 
 impl PartialEq for FunctionType {
     fn eq(&self, other: &Self) -> bool {
-        self.params == other.params
-            && self.param_mutability == other.param_mutability
+        self.params.len() == other.params.len()
+            && self
+                .params
+                .iter()
+                .zip(&other.params)
+                .all(|(left, right)| left.ty == right.ty && left.mutable == right.mutable)
             && self.bounds == other.bounds
             && self.return_type == other.return_type
     }
@@ -304,14 +338,7 @@ impl PartialEq for FunctionType {
 
 impl FunctionType {
     pub fn remove_receiver(&mut self) -> Type {
-        let receiver = self.params.remove(0);
-        if !self.param_mutability.is_empty() {
-            self.param_mutability.remove(0);
-        }
-        if !self.param_names.is_empty() {
-            self.param_names.remove(0);
-        }
-        receiver
+        self.params.remove(0).ty
     }
 
     pub fn without_receiver(&self) -> Type {
@@ -322,22 +349,13 @@ impl FunctionType {
         Type::Function(Arc::new(stripped))
     }
 
-    pub fn rebuild(&self, params: Vec<Type>, bounds: Vec<Bound>, return_type: Box<Type>) -> Type {
-        debug_assert!(
-            self.param_names.is_empty() || self.param_names.len() == params.len(),
-            "rebuild changed arity: param_names would misalign with params"
-        );
-        debug_assert!(
-            self.param_mutability.is_empty() || self.param_mutability.len() == params.len(),
-            "rebuild changed arity: param_mutability would misalign with params"
-        );
-        Type::function_with_names(
-            params,
-            self.param_names.clone(),
-            self.param_mutability.clone(),
-            bounds,
-            return_type,
-        )
+    pub fn rebuild(
+        &self,
+        params: Vec<FunctionParameter>,
+        bounds: Vec<Bound>,
+        return_type: Box<Type>,
+    ) -> Type {
+        Type::function(params, bounds, return_type)
     }
 }
 
@@ -441,11 +459,8 @@ impl std::fmt::Debug for Type {
                 .finish(),
             Type::Function(f_ty) => {
                 let mut s = f.debug_struct("Function");
-                s.field("params", &f_ty.params);
-                if f_ty.param_mutability.iter().any(|m| *m) {
-                    s.field("param_mutability", &f_ty.param_mutability);
-                }
-                s.field("bounds", &f_ty.bounds)
+                s.field("params", &f_ty.params)
+                    .field("bounds", &f_ty.bounds)
                     .field("return_type", &f_ty.return_type)
                     .finish()
             }
@@ -553,25 +568,12 @@ impl Type {
     }
 
     pub fn function(
-        params: Vec<Type>,
-        param_mutability: Vec<bool>,
-        bounds: Vec<Bound>,
-        return_type: Box<Type>,
-    ) -> Type {
-        Self::function_with_names(params, Vec::new(), param_mutability, bounds, return_type)
-    }
-
-    pub fn function_with_names(
-        params: Vec<Type>,
-        param_names: Vec<Option<EcoString>>,
-        param_mutability: Vec<bool>,
+        params: Vec<FunctionParameter>,
         bounds: Vec<Bound>,
         return_type: Box<Type>,
     ) -> Type {
         Type::Function(Arc::new(FunctionType {
             params,
-            param_names,
-            param_mutability,
             bounds,
             return_type,
         }))
@@ -646,7 +648,7 @@ impl Type {
             }
             Type::Compound { args, .. } => args.iter().collect(),
             Type::Function(f) => {
-                let mut c: Vec<&Type> = f.params.iter().collect();
+                let mut c: Vec<&Type> = f.params.iter().map(|param| &param.ty).collect();
                 c.push(&f.return_type);
                 c
             }
@@ -890,8 +892,8 @@ impl Type {
             Type::Function(f)
                 if f.params.len() == 2
                     && matches!(f.return_type.as_ref(), Type::Simple(SimpleKind::Bool))
-                    && f.params[0] == f.params[1]
-                    && !f.params[0].is_ref()
+                    && f.params[0].ty == f.params[1].ty
+                    && !f.params[0].ty.is_ref()
         )
     }
 
@@ -909,7 +911,7 @@ impl Type {
         let Type::Function(f) = func else {
             return None;
         };
-        let Type::Nominal { id, params, .. } = &f.params[0] else {
+        let Type::Nominal { id, params, .. } = &f.params[0].ty else {
             return None;
         };
         if id.as_str() != owner_id || params.len() != arity {
@@ -1052,7 +1054,7 @@ impl Type {
         match &peeled {
             Type::Compound { args, .. } => args.iter().any(|a| a.contains_unknown()),
             Type::Function(f) => {
-                f.params.iter().any(|p| p.contains_unknown()) || f.return_type.contains_unknown()
+                f.params.iter().any(|p| p.ty.contains_unknown()) || f.return_type.contains_unknown()
             }
             Type::Tuple(elements) => elements.iter().any(|e| e.contains_unknown()),
             Type::Array { element, .. } => element.contains_unknown(),
@@ -1072,8 +1074,8 @@ impl Type {
 
     pub fn is_variadic(&self) -> Option<Type> {
         let last = self.get_function_params()?.last()?;
-        match last.as_compound()? {
-            (CompoundKind::VarArgs, _) => last.inner(),
+        match last.ty.as_compound()? {
+            (CompoundKind::VarArgs, _) => last.ty.inner(),
             _ => None,
         }
     }
@@ -1242,7 +1244,8 @@ impl Type {
             }
             Type::Compound { args, .. } => args.iter().any(Type::contains_error),
             Type::Function(f) => {
-                f.params.iter().any(Type::contains_error) || f.return_type.contains_error()
+                f.params.iter().any(|param| param.ty.contains_error())
+                    || f.return_type.contains_error()
             }
             Type::Tuple(elements) => elements.iter().any(Type::contains_error),
             Type::Array { element, .. } => element.contains_error(),
@@ -1256,7 +1259,7 @@ impl Type {
             Type::Var { hint, .. } => hint.is_some(),
             Type::Nominal { params, .. } => params.iter().any(|p| p.has_unbound_variables()),
             Type::Function(f) => {
-                f.params.iter().any(|p| p.has_unbound_variables())
+                f.params.iter().any(|p| p.ty.has_unbound_variables())
                     || f.return_type.has_unbound_variables()
             }
             Type::Forall { body, .. } => body.has_unbound_variables(),
@@ -1286,7 +1289,7 @@ impl Type {
             }
             Type::Function(f) => {
                 for p in &f.params {
-                    p.collect_unbound_variables(out);
+                    p.ty.collect_unbound_variables(out);
                 }
                 f.return_type.collect_unbound_variables(out);
             }
@@ -1325,7 +1328,7 @@ impl Type {
             }
             Type::Function(f) => {
                 for param in &f.params {
-                    param.remove_found_type_names(names);
+                    param.ty.remove_found_type_names(names);
                 }
                 f.return_type.remove_found_type_names(names);
                 for bound in &f.bounds {
@@ -1394,7 +1397,7 @@ impl Type {
                 .is_some_and(|first| *first == *inner)
     }
 
-    pub fn get_function_params(&self) -> Option<&[Type]> {
+    pub fn get_function_params(&self) -> Option<&[FunctionParameter]> {
         match self {
             Type::Function(f) => Some(&f.params),
             Type::Nominal {
@@ -1412,13 +1415,6 @@ impl Type {
         }
     }
 
-    pub fn get_param_mutability(&self) -> &[bool] {
-        match self {
-            Type::Function(f) => &f.param_mutability,
-            _ => &[],
-        }
-    }
-
     pub fn with_replaced_first_param(&self, new_first: &Type) -> Type {
         match self {
             Type::Function(f) => {
@@ -1426,7 +1422,7 @@ impl Type {
                     return self.clone();
                 }
                 let mut new_params = f.params.clone();
-                new_params[0] = new_first.clone();
+                new_params[0] = new_params[0].with_type(new_first.clone());
                 f.rebuild(new_params, f.bounds.clone(), f.return_type.clone())
             }
             Type::Forall { vars, body } => Type::Forall {
@@ -1582,27 +1578,10 @@ impl Type {
         match self {
             Type::Function(f) => {
                 let f = Arc::try_unwrap(f).unwrap_or_else(|arc| (*arc).clone());
-                let mut new_params = vec![Type::ReceiverPlaceholder];
+                let mut new_params = vec![FunctionParameter::new(Type::ReceiverPlaceholder, false)];
                 new_params.extend(f.params);
 
-                let mut new_mutability = vec![false];
-                new_mutability.extend(f.param_mutability);
-
-                let new_param_names = if f.param_names.is_empty() {
-                    Vec::new()
-                } else {
-                    let mut names = vec![None];
-                    names.extend(f.param_names);
-                    names
-                };
-
-                Type::function_with_names(
-                    new_params,
-                    new_param_names,
-                    new_mutability,
-                    f.bounds,
-                    f.return_type,
-                )
+                Type::function(new_params, f.bounds, f.return_type)
             }
             _ => unreachable!(
                 "with_receiver_placeholder called on non-function type: {:?}",
@@ -1641,9 +1620,8 @@ impl Type {
             Type::Function(f) => Type::function(
                 f.params
                     .iter()
-                    .map(|a| Self::remove_vars_impl(a, vars))
+                    .map(|param| param.with_type(Self::remove_vars_impl(&param.ty, vars)))
                     .collect(),
-                f.param_mutability.clone(),
                 f.bounds
                     .iter()
                     .map(|b| Bound {
@@ -1699,7 +1677,7 @@ impl Type {
         match self {
             Type::Nominal { params, .. } => params.iter().any(|p| p.contains_type(target)),
             Type::Function(f) => {
-                f.params.iter().any(|p| p.contains_type(target))
+                f.params.iter().any(|p| p.ty.contains_type(target))
                     || f.return_type.contains_type(target)
             }
             Type::Var { .. } => false,
@@ -1830,23 +1808,26 @@ mod tests {
 
     #[test]
     fn function_equality_ignores_param_names() {
-        let named = Type::function_with_names(
-            vec![Type::int()],
-            vec![Some("width".into())],
-            vec![false],
+        let named = Type::function(
+            vec![FunctionParameter::named(
+                Type::int(),
+                Some("width".into()),
+                false,
+            )],
             vec![],
             Box::new(Type::bool()),
         );
-        let differently_named = Type::function_with_names(
-            vec![Type::int()],
-            vec![Some("height".into())],
-            vec![false],
+        let differently_named = Type::function(
+            vec![FunctionParameter::named(
+                Type::int(),
+                Some("height".into()),
+                false,
+            )],
             vec![],
             Box::new(Type::bool()),
         );
         let unnamed = Type::function(
-            vec![Type::int()],
-            vec![false],
+            vec![FunctionParameter::new(Type::int(), false)],
             vec![],
             Box::new(Type::bool()),
         );
@@ -1886,8 +1867,10 @@ mod tests {
     #[test]
     fn remove_vars_handles_more_than_six_unhinted_vars() {
         let func = Type::function(
-            (0..6).map(unhinted_var).collect(),
-            vec![false; 6],
+            (0..6)
+                .map(unhinted_var)
+                .map(|ty| FunctionParameter::new(ty, false))
+                .collect(),
             vec![],
             Box::new(unhinted_var(6)),
         );
@@ -1901,6 +1884,7 @@ mod tests {
         let names: Vec<_> = f
             .params
             .iter()
+            .map(|param| &param.ty)
             .chain(std::iter::once(f.return_type.as_ref()))
             .map(|p| match p {
                 Type::Parameter(name) => name.to_string(),
@@ -1914,8 +1898,11 @@ mod tests {
     fn remove_vars_handles_dozens_of_unhinted_vars() {
         let params: Vec<Type> = (0..30).map(unhinted_var).collect();
         let func = Type::function(
-            params.clone(),
-            vec![false; params.len()],
+            params
+                .iter()
+                .cloned()
+                .map(|ty| FunctionParameter::new(ty, false))
+                .collect(),
             vec![],
             Box::new(Type::Simple(SimpleKind::Unit)),
         );

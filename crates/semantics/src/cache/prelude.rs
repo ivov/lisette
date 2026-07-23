@@ -5,12 +5,13 @@ use serde::{Deserialize, Serialize};
 
 use super::disk;
 use super::types::CachedDefinition;
-use super::{COMPILER_VERSION_HASH, PRELUDE_HASH};
+use super::{CACHE_FORMAT_VERSION, COMPILER_VERSION_HASH, PRELUDE_HASH};
 use crate::prelude::{PRELUDE_FILE_ID, PRELUDE_MODULE_ID};
 use crate::store::Store;
 
 #[derive(Serialize, Deserialize)]
 pub struct PreludeCache {
+    version: u32,
     content_hash: u64,
     compiler_version: u64,
     definitions: HashMap<String, CachedDefinition>,
@@ -28,7 +29,10 @@ pub(crate) fn try_load_prelude_cache() -> Option<PreludeCache> {
     let path = cache_path()?;
     let cache: PreludeCache = disk::read(&path).ok()?;
 
-    if cache.content_hash != PRELUDE_HASH || cache.compiler_version != COMPILER_VERSION_HASH {
+    if cache.version != CACHE_FORMAT_VERSION
+        || cache.content_hash != PRELUDE_HASH
+        || cache.compiler_version != COMPILER_VERSION_HASH
+    {
         let _ = std::fs::remove_file(&path);
         return None;
     }
@@ -57,6 +61,7 @@ pub(crate) fn save_prelude_cache(store: &Store) {
         .collect();
 
     let cache = PreludeCache {
+        version: CACHE_FORMAT_VERSION,
         content_hash: PRELUDE_HASH,
         compiler_version: COMPILER_VERSION_HASH,
         definitions,

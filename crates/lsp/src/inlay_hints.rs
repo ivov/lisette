@@ -246,10 +246,12 @@ fn collect_parameter_hints(
     };
     let Type::Function(f) = func else { return };
 
-    // Zipping against `param_names` stops at the last param, so a trailing variadic labels
+    // Zipping against the parameters stops at the last one, so a trailing variadic labels
     // only its first argument.
-    for (arg, name) in args.iter().zip(f.param_names.iter()) {
-        let Some(name) = name else { continue };
+    for (arg, parameter) in args.iter().zip(&f.params) {
+        let Some(name) = &parameter.name else {
+            continue;
+        };
 
         if let Expression::Identifier { value, .. } = arg.unwrap_parens()
             && value.as_str() == name.as_str()

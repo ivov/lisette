@@ -68,27 +68,28 @@ description: |
                         },
                         args: [],
                         spread: None,
-                        raw_type_args: [
-                            Constructor {
-                                name: "int",
-                                params: [],
-                                span: Span {
-                                    file_id: 0,
-                                    byte_offset: 33,
-                                    byte_length: 3,
+                        type_arguments: Unresolved(
+                            [
+                                Constructor {
+                                    name: "int",
+                                    params: [],
+                                    span: Span {
+                                        file_id: 0,
+                                        byte_offset: 33,
+                                        byte_length: 3,
+                                    },
                                 },
-                            },
-                            Constant {
-                                value: 3,
-                                text: None,
-                                span: Span {
-                                    file_id: 0,
-                                    byte_offset: 38,
-                                    byte_length: 1,
+                                Constant {
+                                    value: 3,
+                                    text: None,
+                                    span: Span {
+                                        file_id: 0,
+                                        byte_offset: 38,
+                                        byte_length: 1,
+                                    },
                                 },
-                            },
-                        ],
-                        resolved_type_args: [],
+                            ],
+                        ),
                         ty: Var {
                             id: uninferred,
                         },
@@ -99,12 +100,10 @@ description: |
                         },
                         call_kind: None,
                     },
-                    mutable: false,
                     mut_span: None,
                     else_block: None,
                     else_span: None,
                     assert: false,
-                    typed_pattern: None,
                     ty: Var {
                         id: uninferred,
                     },

@@ -5,7 +5,7 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use diagnostics::PatternIssue;
 use syntax::EcoString;
 use syntax::ast::{BindingId, BindingKind, DeadCodeCause, Span};
-use syntax::program::{ResolvedDefinitions, TestFunction};
+use syntax::program::{BindingMutation, ResolvedDefinitions, TestFunction};
 use syntax::types::Type;
 
 #[derive(Debug, Default)]
@@ -223,10 +223,8 @@ impl Facts {
     }
 
     pub(crate) fn mark_mutated(&mut self, id: BindingId) {
-        if let Some(fact) = self.bindings.get_mut(&id)
-            && fact.mutation == BindingMutation::Unchanged
-        {
-            fact.mutation = BindingMutation::Direct;
+        if let Some(fact) = self.bindings.get_mut(&id) {
+            fact.mutation = fact.mutation.merged_with(BindingMutation::Direct);
         }
     }
 
@@ -234,7 +232,7 @@ impl Facts {
     /// capture, mut argument or receiver), so a call can rebind it.
     pub(crate) fn mark_alias_mutated(&mut self, id: BindingId) {
         if let Some(fact) = self.bindings.get_mut(&id) {
-            fact.mutation = BindingMutation::ThroughAlias;
+            fact.mutation = fact.mutation.merged_with(BindingMutation::ThroughAlias);
         }
     }
 
@@ -392,19 +390,6 @@ pub struct BindingFact {
     pub used: bool,
     pub mutation: BindingMutation,
     pub origin: BindingOrigin,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum BindingMutation {
-    Unchanged,
-    Direct,
-    ThroughAlias,
-}
-
-impl BindingMutation {
-    pub fn happened(self) -> bool {
-        self != Self::Unchanged
-    }
 }
 
 #[derive(Debug, Clone, Copy)]

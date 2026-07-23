@@ -117,7 +117,6 @@ impl InferCtx<'_> {
         let Expression::Let {
             binding,
             value,
-            mutable,
             mut_span,
             else_block,
             else_span,
@@ -129,6 +128,7 @@ impl InferCtx<'_> {
             unreachable!("infer_let_binding called with non-Let expression");
         };
         let binding = *binding;
+        let mutable = binding.mutable;
         let store = self.store;
         let has_annotation = binding.annotation.is_some();
         let binding_name = binding.pattern.get_identifier();
@@ -175,9 +175,9 @@ impl InferCtx<'_> {
         let new_binding = Binding {
             pattern: inferred_pattern,
             annotation: binding.annotation,
-            typed_pattern: Some(typed_pattern.clone()),
+            typed_pattern: Some(typed_pattern),
             ty: ty.clone(),
-            mutable: false,
+            mutable,
         };
 
         if !has_annotation
@@ -237,12 +237,10 @@ impl InferCtx<'_> {
         Expression::Let {
             binding: Box::new(new_binding),
             value: new_value.into(),
-            mutable,
             mut_span,
             else_block: new_else_block,
             else_span,
             assert,
-            typed_pattern: Some(typed_pattern),
             ty: self.type_unit(),
             span,
         }

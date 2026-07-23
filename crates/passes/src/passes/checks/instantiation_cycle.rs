@@ -342,7 +342,7 @@ impl<'a> EdgeCollector<'_, 'a> {
         let receiver = receiver.map(Type::strip_refs);
 
         let mut bindings: HashMap<EcoString, &Type> = HashMap::default();
-        let actual_params: &[Type] = if instantiated.params.len() == target.declared_params.len() {
+        let actual_params = if instantiated.params.len() == target.declared_params.len() {
             if let (Some(declared_self), Some(receiver)) = (&declared_self, &receiver) {
                 bind_type_arguments(declared_self, receiver, &target.vars, &mut bindings);
             }
@@ -355,7 +355,7 @@ impl<'a> EdgeCollector<'_, 'a> {
             if let Some(declared_self) = &declared_self {
                 bind_type_arguments(
                     declared_self,
-                    &instantiated.params[0],
+                    &instantiated.params[0].ty,
                     &target.vars,
                     &mut bindings,
                 );
@@ -365,7 +365,7 @@ impl<'a> EdgeCollector<'_, 'a> {
             return;
         };
         for (declared, actual) in target.declared_params.iter().zip(actual_params) {
-            bind_type_arguments(declared, actual, &target.vars, &mut bindings);
+            bind_type_arguments(declared, &actual.ty, &target.vars, &mut bindings);
         }
         bind_type_arguments(
             target.declared_return,
@@ -451,6 +451,7 @@ fn structural_children(ty: &Type) -> Vec<&Type> {
         Type::Function(function) => function
             .params
             .iter()
+            .map(|param| &param.ty)
             .chain(std::iter::once(function.return_type.as_ref()))
             .collect(),
         Type::Tuple(elements) => elements.iter().collect(),

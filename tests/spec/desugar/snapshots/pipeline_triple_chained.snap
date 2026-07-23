@@ -81,8 +81,7 @@ description: "fn test() { x |> f |> g |> h; }"
                                         },
                                     ],
                                     spread: None,
-                                    raw_type_args: [],
-                                    resolved_type_args: [],
+                                    type_arguments: None,
                                     ty: Var {
                                         id: uninferred,
                                     },
@@ -95,8 +94,7 @@ description: "fn test() { x |> f |> g |> h; }"
                                 },
                             ],
                             spread: None,
-                            raw_type_args: [],
-                            resolved_type_args: [],
+                            type_arguments: None,
                             ty: Var {
                                 id: uninferred,
                             },
@@ -109,8 +107,7 @@ description: "fn test() { x |> f |> g |> h; }"
                         },
                     ],
                     spread: None,
-                    raw_type_args: [],
-                    resolved_type_args: [],
+                    type_arguments: None,
                     ty: Var {
                         id: uninferred,
                     },

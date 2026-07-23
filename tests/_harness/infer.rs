@@ -547,11 +547,9 @@ fn types_equal_with(t1: &Type, t2: &Type, vars: &mut VarBijection) -> bool {
 
         (Type::Function(f1), Type::Function(f2)) => {
             f1.params.len() == f2.params.len()
-                && f1
-                    .params
-                    .iter()
-                    .zip(f2.params.iter())
-                    .all(|(a1, a2)| types_equal_with(a1, a2, vars))
+                && f1.params.iter().zip(f2.params.iter()).all(|(a1, a2)| {
+                    a1.mutable == a2.mutable && types_equal_with(&a1.ty, &a2.ty, vars)
+                })
                 && types_equal_with(&f1.return_type, &f2.return_type, vars)
         }
 

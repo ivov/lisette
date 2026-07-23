@@ -36,11 +36,10 @@ impl<'a> Formatter<'a> {
             Expression::Let {
                 binding,
                 value,
-                mutable,
                 else_block,
                 assert,
                 ..
-            } => self.let_(binding, value, *mutable, else_block.as_deref(), *assert),
+            } => self.let_(binding, value, else_block.as_deref(), *assert),
 
             Expression::Return { expression, .. } => self.return_(expression),
 
@@ -83,9 +82,9 @@ impl<'a> Formatter<'a> {
                 expression,
                 args,
                 spread,
-                raw_type_args,
+                type_arguments,
                 ..
-            } => self.call(expression, args, spread, raw_type_args),
+            } => self.call(expression, args, spread, type_arguments.annotations()),
 
             Expression::DotAccess {
                 expression, member, ..
@@ -316,16 +315,10 @@ impl<'a> Formatter<'a> {
         &mut self,
         binding: &'a Binding,
         value: &'a Expression,
-        mutable: bool,
         else_block: Option<&'a Expression>,
         assert: bool,
     ) -> Document<'a> {
-        let keyword = match (assert, mutable) {
-            (true, true) => "let assert mut ",
-            (true, false) => "let assert ",
-            (false, true) => "let mut ",
-            (false, false) => "let ",
-        };
+        let keyword = if assert { "let assert " } else { "let " };
 
         let base = Document::str(keyword)
             .append(self.binding(binding))
@@ -1088,7 +1081,7 @@ fn collect_method_chain(expression: &Expression) -> (&Expression, Vec<MethodChai
         expression,
         args,
         spread,
-        raw_type_args,
+        type_arguments,
         ..
     } = current
     {
@@ -1107,7 +1100,7 @@ fn collect_method_chain(expression: &Expression) -> (&Expression, Vec<MethodChai
             member_start,
             args,
             spread,
-            raw_type_args,
+            raw_type_args: type_arguments.annotations(),
         });
         current = inner;
     }

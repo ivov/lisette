@@ -83,7 +83,7 @@ impl TaskState {
             kind: CompoundKind::Slice,
             args: vec![enum_ty],
         };
-        let fn_ty = Type::function(vec![], vec![], Default::default(), Box::new(slice_ty));
+        let fn_ty = Type::function(vec![], Default::default(), Box::new(slice_ty));
 
         let module = store
             .get_module_mut(&candidate.module_id)

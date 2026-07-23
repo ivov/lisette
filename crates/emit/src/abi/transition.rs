@@ -491,7 +491,7 @@ pub(crate) fn emit_lisette_callback_wrapper(
     let inner_args: Vec<String> = arg_names
         .iter()
         .zip(params.iter())
-        .map(|(name, param_ty)| lower_arg_to_tagged(planner, &mut prelude, name, param_ty))
+        .map(|(name, param)| lower_arg_to_tagged(planner, &mut prelude, name, &param.ty))
         .collect();
 
     let call_str = format!("{}({})", cb_var, inner_args.join(", "));

@@ -24,7 +24,7 @@ pub fn check_redundant_closure(expression: &Expression, ctx: &NodeCtx) {
         expression: callee,
         args,
         spread,
-        raw_type_args,
+        type_arguments,
         call_kind,
         ..
     } = lambda_body(body)
@@ -34,7 +34,7 @@ pub fn check_redundant_closure(expression: &Expression, ctx: &NodeCtx) {
 
     if !matches!(call_kind, Some(CallKind::Regular))
         || spread.is_some()
-        || !raw_type_args.is_empty()
+        || !type_arguments.is_empty()
         || args.len() != params.len()
     {
         return;
@@ -79,7 +79,11 @@ fn lambda_body(body: &Expression) -> &Expression {
 fn hoistable_callee(callee: &Expression, params: &[&str], facts: &Facts) -> Option<String> {
     // A `mut`-param callee (e.g. `sort.Ints`) is valid only wrapped in a closure,
     // never as a bare function value.
-    if callee.get_type().get_param_mutability().iter().any(|m| *m) {
+    if callee
+        .get_type()
+        .get_function_params()
+        .is_some_and(|params| params.iter().any(|param| param.mutable))
+    {
         return None;
     }
     match callee {

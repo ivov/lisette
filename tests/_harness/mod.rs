@@ -22,7 +22,7 @@ use semantics::checker::TaskState;
 use semantics::prelude::{parse_and_register_prelude, parse_and_register_test_prelude};
 use semantics::store::Store;
 use syntax::program::{Definition, DefinitionBody, Visibility};
-use syntax::types::{CompoundKind, Type};
+use syntax::types::{CompoundKind, FunctionParameter, Type};
 
 pub fn init_prelude(store: &mut Store) {
     let sink = LocalSink::new();
@@ -36,12 +36,18 @@ pub fn register_test_builtins(store: &mut Store, _checker: &mut TaskState) {
         .expect("prelude module must exist");
 
     let mut define = |name: &str, params: Vec<Type>, return_type: Type| {
-        let param_mutability = vec![false; params.len()];
         module.definitions.insert(
             format!("prelude.{name}").into(),
             Definition {
                 visibility: Visibility::Public,
-                ty: Type::function(params, param_mutability, vec![], Box::new(return_type)),
+                ty: Type::function(
+                    params
+                        .into_iter()
+                        .map(|ty| FunctionParameter::new(ty, false))
+                        .collect(),
+                    vec![],
+                    Box::new(return_type),
+                ),
                 name: None,
                 name_span: None,
                 doc: None,

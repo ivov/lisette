@@ -48,13 +48,11 @@ impl Type {
                 let args_formatted = f
                     .params
                     .iter()
-                    .enumerate()
-                    .map(|(i, a)| {
-                        let is_mut = f.param_mutability.get(i).copied().unwrap_or(false);
-                        if is_mut {
-                            format!("mut {}", a.stringify())
+                    .map(|param| {
+                        if param.mutable {
+                            format!("mut {}", param.ty.stringify())
                         } else {
-                            a.stringify()
+                            param.ty.stringify()
                         }
                     })
                     .collect::<Vec<_>>()

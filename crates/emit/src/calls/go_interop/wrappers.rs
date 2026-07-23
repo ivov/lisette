@@ -12,7 +12,7 @@ use crate::names::go_name;
 use crate::plan::bodies::{ElseArm, IfPlan, LoweredBlock, LoweredStatement};
 use crate::write_line;
 use syntax::ast::Expression;
-use syntax::types::Type;
+use syntax::types::{FunctionParameter, Type};
 
 #[derive(Clone, Copy)]
 pub(crate) enum NilGuard {
@@ -633,15 +633,18 @@ impl Planner<'_> {
         }
     }
 
-    pub(crate) fn build_wrapper_params(&mut self, params: &[Type]) -> (Vec<String>, Vec<String>) {
+    pub(crate) fn build_wrapper_params(
+        &mut self,
+        params: &[FunctionParameter],
+    ) -> (Vec<String>, Vec<String>) {
         let mut param_strs = Vec::new();
         let mut arg_names = Vec::new();
         let last_index = params.len().saturating_sub(1);
-        for (i, param_ty) in params.iter().enumerate() {
+        for (i, param) in params.iter().enumerate() {
             let name = format!("arg{}", i);
-            let ty_str = self.go_type_string(param_ty);
+            let ty_str = self.go_type_string(&param.ty);
             param_strs.push(format!("{} {}", name, ty_str));
-            if i == last_index && param_ty.get_name() == Some("VarArgs") {
+            if i == last_index && param.ty.get_name() == Some("VarArgs") {
                 arg_names.push(format!("{}...", name));
             } else {
                 arg_names.push(name);

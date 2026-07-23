@@ -80,8 +80,7 @@ description: "fn test() { x |> add(5) |> multiply(2); }"
                                 },
                             ],
                             spread: None,
-                            raw_type_args: [],
-                            resolved_type_args: [],
+                            type_arguments: None,
                             ty: Var {
                                 id: uninferred,
                             },
@@ -108,8 +107,7 @@ description: "fn test() { x |> add(5) |> multiply(2); }"
                         },
                     ],
                     spread: None,
-                    raw_type_args: [],
-                    resolved_type_args: [],
+                    type_arguments: None,
                     ty: Var {
                         id: uninferred,
                     },

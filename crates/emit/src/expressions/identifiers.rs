@@ -159,7 +159,7 @@ impl Planner<'_> {
     /// inferred from the parameter types.
     fn constructor_fn_type_args(
         &mut self,
-        fn_params: &[Type],
+        fn_params: &[syntax::types::FunctionParameter],
         ret_params: &[Type],
         ctx: ExpressionContext<'_>,
     ) -> String {
@@ -167,10 +167,10 @@ impl Planner<'_> {
             || ret_params.len() > fn_params.len()
             || !ret_params
                 .iter()
-                .all(|rp| fn_params.iter().any(|fp| fp.contains_type(rp)))
+                .all(|rp| fn_params.iter().any(|fp| fp.ty.contains_type(rp)))
             || fn_params
                 .iter()
-                .any(|t| self.needs_explicit_args_for_go_inference(t));
+                .any(|param| self.needs_explicit_args_for_go_inference(&param.ty));
         if needs_type_args {
             self.format_type_args(ret_params)
         } else {
@@ -271,7 +271,7 @@ impl Planner<'_> {
             .unwrap_or_else(|| type_part.to_string());
         let qualified_name = self.facts.qualified_current(&real_type_part);
         let first = fn_params.first()?;
-        let stripped = first.strip_refs();
+        let stripped = first.ty.strip_refs();
         let is_self =
             matches!(stripped, Type::Nominal { ref id, .. } if id.as_str() == qualified_name);
         if !is_self {
@@ -279,7 +279,7 @@ impl Planner<'_> {
         }
         let type_part = &real_type_part;
 
-        let is_pointer = first.is_ref();
+        let is_pointer = first.ty.is_ref();
 
         if self.facts.is_ufcs_method(&qualified_name, method_part) {
             return None;

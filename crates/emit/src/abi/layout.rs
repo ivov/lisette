@@ -540,9 +540,9 @@ impl Planner<'_> {
                         .enumerate()
                         .map(|(index, parameter)| {
                             self.value_layout_with_hint(
-                                parameter,
+                                &parameter.ty,
                                 origin.nested(),
-                                declared_parameters.get(index),
+                                declared_parameters.get(index).map(|param| &param.ty),
                             )
                         })
                         .collect();

@@ -60,7 +60,7 @@ impl<'a> FreezeFolder<'a> {
             Type::Function(f) => f.rebuild(
                 f.params
                     .iter()
-                    .map(|p| self.normalize_ref_aliases(p))
+                    .map(|p| p.with_type(self.normalize_ref_aliases(&p.ty)))
                     .collect(),
                 f.bounds.iter().map(|b| self.normalize_bound(b)).collect(),
                 Box::new(self.normalize_ref_aliases(&f.return_type)),
@@ -605,17 +605,9 @@ impl<'a> FreezeFolder<'a> {
                 }
             }
 
-            Expression::Let {
-                ty,
-                binding,
-                typed_pattern,
-                ..
-            } => {
+            Expression::Let { ty, binding, .. } => {
                 self.freeze_ty(ty);
                 self.freeze_binding(binding);
-                if let Some(tp) = typed_pattern {
-                    self.freeze_typed_pattern(tp);
-                }
             }
 
             Expression::IfLet {

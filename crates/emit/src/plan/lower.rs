@@ -278,13 +278,17 @@ impl Planner<'_> {
             Expression::Let {
                 binding,
                 value,
-                mutable,
                 else_block,
                 assert,
                 ..
             } => {
-                let plan =
-                    self.build_let_plan(binding, value, else_block.as_deref(), *mutable, *assert);
+                let plan = self.build_let_plan(
+                    binding,
+                    value,
+                    else_block.as_deref(),
+                    binding.mutable,
+                    *assert,
+                );
                 self.directed_at(expression, LoweredStatement::Let(plan))
             }
             Expression::Assignment {

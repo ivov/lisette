@@ -3,102 +3,10 @@ use ecow::EcoString;
 use crate::program::{CallKind, DotAccessKind, ReceiverCoercion};
 use crate::types::Type;
 
-const CHILDREN_INLINE_CAP: usize = 4;
-
-pub struct Children<'a> {
-    inline: [Option<&'a Expression>; CHILDREN_INLINE_CAP],
-    inline_len: usize,
-    heap: Vec<&'a Expression>,
-}
-
-impl<'a> Children<'a> {
-    fn new() -> Self {
-        Children {
-            inline: [None; CHILDREN_INLINE_CAP],
-            inline_len: 0,
-            heap: Vec::new(),
-        }
-    }
-
-    fn push(&mut self, expression: &'a Expression) {
-        if self.heap.is_empty() && self.inline_len < CHILDREN_INLINE_CAP {
-            self.inline[self.inline_len] = Some(expression);
-            self.inline_len += 1;
-        } else {
-            self.heap.push(expression);
-        }
-    }
-
-    pub fn iter(&self) -> impl Iterator<Item = &'a Expression> + '_ {
-        self.inline[..self.inline_len]
-            .iter()
-            .filter_map(|slot| *slot)
-            .chain(self.heap.iter().copied())
-    }
-}
-
-impl Default for Children<'_> {
-    fn default() -> Self {
-        Children::new()
-    }
-}
-
-impl<'a> Extend<&'a Expression> for Children<'a> {
-    fn extend<T: IntoIterator<Item = &'a Expression>>(&mut self, iter: T) {
-        for expression in iter {
-            self.push(expression);
-        }
-    }
-}
-
-impl<'a> FromIterator<&'a Expression> for Children<'a> {
-    fn from_iter<T: IntoIterator<Item = &'a Expression>>(iter: T) -> Self {
-        let mut children = Children::new();
-        children.extend(iter);
-        children
-    }
-}
-
-pub struct ChildrenIntoIter<'a> {
-    inline: [Option<&'a Expression>; CHILDREN_INLINE_CAP],
-    pos: usize,
-    inline_len: usize,
-    heap: std::vec::IntoIter<&'a Expression>,
-}
-
-impl<'a> Iterator for ChildrenIntoIter<'a> {
-    type Item = &'a Expression;
-
-    fn next(&mut self) -> Option<&'a Expression> {
-        if self.pos < self.inline_len {
-            let item = self.inline[self.pos];
-            self.pos += 1;
-            item
-        } else {
-            self.heap.next()
-        }
-    }
-}
-
-impl<'a> IntoIterator for Children<'a> {
-    type Item = &'a Expression;
-    type IntoIter = ChildrenIntoIter<'a>;
-
-    fn into_iter(self) -> ChildrenIntoIter<'a> {
-        ChildrenIntoIter {
-            inline: self.inline,
-            pos: 0,
-            inline_len: self.inline_len,
-            heap: self.heap.into_iter(),
-        }
-    }
-}
-
 macro_rules! children {
-    () => { Children::new() };
+    () => { Vec::new() };
     ($($expression:expr),+ $(,)?) => {{
-        let mut __children = Children::new();
-        $( __children.push($expression); )+
+        let __children: Vec<&Expression> = vec![$($expression),+];
         __children
     }};
 }
@@ -637,6 +545,102 @@ impl StructSpread {
 
 #[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct FunctionAnnotationParameter {
+    pub annotation: Annotation,
+    pub mutable: bool,
+}
+
+#[derive(Clone, PartialEq)]
+pub struct CallTypeArguments(CallTypeArgumentState);
+
+#[derive(Clone, PartialEq)]
+enum CallTypeArgumentState {
+    None,
+    Unresolved(Vec<Annotation>),
+    Resolved {
+        annotations: Vec<Annotation>,
+        types: Vec<Type>,
+    },
+}
+
+impl std::fmt::Debug for CallTypeArguments {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match &self.0 {
+            CallTypeArgumentState::None => f.write_str("None"),
+            CallTypeArgumentState::Unresolved(annotations) => {
+                f.debug_tuple("Unresolved").field(annotations).finish()
+            }
+            CallTypeArgumentState::Resolved { annotations, types } => f
+                .debug_struct("Resolved")
+                .field("annotations", annotations)
+                .field("types", types)
+                .finish(),
+        }
+    }
+}
+
+impl CallTypeArguments {
+    pub const fn none() -> Self {
+        Self(CallTypeArgumentState::None)
+    }
+
+    pub fn unresolved(annotations: Vec<Annotation>) -> Self {
+        if annotations.is_empty() {
+            Self::none()
+        } else {
+            Self(CallTypeArgumentState::Unresolved(annotations))
+        }
+    }
+
+    pub fn resolved(annotations: Vec<Annotation>, types: Vec<Type>) -> Self {
+        if annotations.is_empty() {
+            assert!(
+                types.is_empty(),
+                "resolved type arguments require source annotations"
+            );
+            Self::none()
+        } else {
+            Self(CallTypeArgumentState::Resolved { annotations, types })
+        }
+    }
+
+    pub fn annotations(&self) -> &[Annotation] {
+        match &self.0 {
+            CallTypeArgumentState::None => &[],
+            CallTypeArgumentState::Unresolved(annotations)
+            | CallTypeArgumentState::Resolved { annotations, .. } => annotations,
+        }
+    }
+
+    pub fn resolved_types(&self) -> Option<&[Type]> {
+        match &self.0 {
+            CallTypeArgumentState::None => Some(&[]),
+            CallTypeArgumentState::Unresolved(_) => None,
+            CallTypeArgumentState::Resolved { types, .. } => Some(types),
+        }
+    }
+
+    pub fn into_annotations(self) -> Vec<Annotation> {
+        match self.0 {
+            CallTypeArgumentState::None => Vec::new(),
+            CallTypeArgumentState::Unresolved(annotations)
+            | CallTypeArgumentState::Resolved { annotations, .. } => annotations,
+        }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.annotations().is_empty()
+    }
+}
+
+impl Default for CallTypeArguments {
+    fn default() -> Self {
+        Self::none()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Annotation {
     Constructor {
         name: EcoString,
@@ -644,8 +648,7 @@ pub enum Annotation {
         span: Span,
     },
     Function {
-        params: Vec<Self>,
-        param_mutability: Vec<bool>,
+        params: Vec<FunctionAnnotationParameter>,
         return_type: Box<Self>,
         span: Span,
     },
@@ -789,12 +792,10 @@ pub enum Expression {
     Let {
         binding: Box<Binding>,
         value: Box<Expression>,
-        mutable: bool,
         mut_span: Option<Span>,
         else_block: Option<Box<Expression>>,
         else_span: Option<Span>,
         assert: bool,
-        typed_pattern: Option<TypedPattern>,
         ty: Type,
         span: Span,
     },
@@ -809,13 +810,7 @@ pub enum Expression {
         expression: Box<Expression>,
         args: Vec<Expression>,
         spread: Box<Option<Expression>>,
-        /// Explicit turbofish type arguments as written. Surface form consumed
-        /// by the formatter. The checker resolves these into `resolved_type_args`.
-        raw_type_args: Vec<Annotation>,
-        /// Explicit type arguments resolved to types by the checker. Empty when
-        /// no turbofish was written. Emit renders these directly instead of
-        /// re-resolving `raw_type_args`.
-        resolved_type_args: Vec<Type>,
+        type_arguments: CallTypeArguments,
         ty: Type,
         span: Span,
         call_kind: Option<CallKind>,
@@ -1573,7 +1568,7 @@ impl Expression {
     ///
     /// This is the single source of truth for expression tree recursion. Use this
     /// instead of writing per-variant match arms when you need to walk an expression tree.
-    pub fn children(&self) -> Children<'_> {
+    pub fn children(&self) -> Vec<&Expression> {
         match self {
             Expression::Literal { literal, .. } => match literal {
                 Literal::Slice(elements) => elements.iter().collect(),
@@ -1584,7 +1579,7 @@ impl Expression {
                         FormatStringPart::Text(_) => None,
                     })
                     .collect(),
-                _ => Children::new(),
+                _ => Vec::new(),
             },
             Expression::Function { body, .. } => children![body],
             Expression::Lambda { body, .. } => children![body],
@@ -1598,7 +1593,7 @@ impl Expression {
                 }
                 c
             }
-            Expression::Identifier { .. } => Children::new(),
+            Expression::Identifier { .. } => Vec::new(),
             Expression::Call {
                 expression,
                 args,
@@ -1640,7 +1635,8 @@ impl Expression {
                 spread,
                 ..
             } => {
-                let mut c: Children = field_assignments.iter().map(|f| f.value.as_ref()).collect();
+                let mut c: Vec<&Expression> =
+                    field_assignments.iter().map(|f| f.value.as_ref()).collect();
                 if let Some(s) = spread.as_expression() {
                     c.push(s);
                 }
@@ -1678,7 +1674,7 @@ impl Expression {
             Expression::Defer { expression, .. } => children![expression],
             Expression::Assert { expression, .. } => children![expression],
             Expression::Select { arms, .. } => {
-                let mut c = Children::new();
+                let mut c = Vec::new();
                 for arm in arms {
                     match &arm.pattern {
                         SelectArmPattern::Receive {
@@ -1716,7 +1712,7 @@ impl Expression {
                 c
             }
             Expression::Range { start, end, .. } => {
-                let mut c = Children::new();
+                let mut c = Vec::new();
                 if let Some(s) = start {
                     c.push(s.as_ref());
                 }
@@ -1737,7 +1733,7 @@ impl Expression {
             | Expression::VariableDeclaration { .. }
             | Expression::ModuleImport { .. }
             | Expression::RawGo { .. }
-            | Expression::NoOp => Children::new(),
+            | Expression::NoOp => Vec::new(),
         }
     }
 
