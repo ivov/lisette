@@ -46,11 +46,17 @@ impl<'source> Parser<'source> {
             }
 
             if self.at_range() && RANGE_PREC > min_prec {
+                if !self.enter_recursion() {
+                    break;
+                }
                 lhs = self.parse_range(Some(lhs.into()), start);
                 continue;
             }
 
             if self.current_token().kind == As && CAST_PREC > min_prec {
+                if !self.enter_recursion() {
+                    break;
+                }
                 self.next();
                 let target_type = self.parse_annotation();
                 lhs = ast::Expression::Cast {
@@ -72,6 +78,9 @@ impl<'source> Parser<'source> {
             if let Some(prec) = self.binary_operator_precedence(self.current_token().kind)
                 && prec > min_prec
             {
+                if !self.enter_recursion() {
+                    break;
+                }
                 let operator = self.parse_binary_operator();
                 let rhs = self.pratt_parse(prec);
                 lhs = ast::Expression::Binary {
@@ -480,5 +489,50 @@ fn format_annotation(ann: &ast::Annotation) -> std::string::String {
             text.clone().unwrap_or_else(|| value.to_string())
         }
         ast::Annotation::Unknown | ast::Annotation::Opaque { .. } => "_".to_string(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::ast::Expression;
+    use crate::parse::{MAX_DEPTH, Parser};
+
+    fn depth(expression: &Expression) -> u32 {
+        1 + expression
+            .children()
+            .into_iter()
+            .map(depth)
+            .max()
+            .unwrap_or(0)
+    }
+
+    fn parse_bounded(source: &str) -> u32 {
+        let result = Parser::lex_and_parse_file(source, 0);
+        assert!(result.failed(), "expected a nesting error");
+        result.ast.iter().map(depth).max().unwrap_or(0)
+    }
+
+    #[test]
+    fn long_pipeline_chain_stays_shallow() {
+        let source = format!("pub const x = a{}", " |> f".repeat(500));
+        assert!(parse_bounded(&source) <= MAX_DEPTH);
+    }
+
+    #[test]
+    fn long_binary_chain_stays_shallow() {
+        let source = format!("pub const x: int = 1{}", " + 1".repeat(500));
+        assert!(parse_bounded(&source) <= MAX_DEPTH);
+    }
+
+    #[test]
+    fn long_cast_chain_stays_shallow() {
+        let source = format!("pub const x = 1{}", " as int".repeat(500));
+        assert!(parse_bounded(&source) <= MAX_DEPTH);
+    }
+
+    #[test]
+    fn long_range_chain_stays_shallow() {
+        let source = format!("pub const x = 1{}", "..2".repeat(500));
+        assert!(parse_bounded(&source) <= MAX_DEPTH);
     }
 }
