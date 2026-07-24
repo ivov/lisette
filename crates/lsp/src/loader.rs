@@ -112,7 +112,8 @@ impl Loader for OverlayLoader {
     fn discover_modules(&self) -> DiscoveredModules {
         DiscoveredModules {
             production_modules: vec![ENTRY_MODULE_ID.to_string()],
-            test_roots: Vec::new(),
+            internal_test_roots: Vec::new(),
+            external_test_roots: Vec::new(),
         }
     }
 }
@@ -129,6 +130,13 @@ impl OverlayLoader {
                     .map(|s| s.to_string())
             }
         } else {
+            if let Ok(relative) = path.strip_prefix(&self.config.root) {
+                let id = crate::paths::module_id_from_components(relative);
+                if semantics::loader::is_external_test_module(&id) {
+                    return Some(id);
+                }
+            }
+
             let src_dir = self.config.root.join("src");
             if path == src_dir {
                 Some(ENTRY_MODULE_ID.to_string())

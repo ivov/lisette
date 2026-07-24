@@ -228,7 +228,8 @@ pub fn run_inference(input: AnalyzeInput) -> InferenceOutput {
                 _ => Vec::new(),
             };
             if include_test_roots {
-                additional.extend(discovered.test_roots.iter().cloned());
+                additional.extend(discovered.internal_test_roots.iter().cloned());
+                additional.extend(discovered.external_test_roots.iter().cloned());
             }
             Roots {
                 primary: vec![entry_module],
@@ -236,11 +237,11 @@ pub fn run_inference(input: AnalyzeInput) -> InferenceOutput {
             }
         }
         ProjectKind::Library => {
-            let mut additional = if include_test_roots {
-                discovered.test_roots.clone()
-            } else {
-                Vec::new()
-            };
+            let mut additional = Vec::new();
+            if include_test_roots {
+                additional.extend(discovered.internal_test_roots.iter().cloned());
+                additional.extend(discovered.external_test_roots.iter().cloned());
+            }
             additional.push(entry_module);
             Roots {
                 primary: discovered.production_modules.clone(),

@@ -56,9 +56,12 @@ pub fn infer_module(module_name: &str, fs: MockFileSystem) -> InferResult {
     let sink = LocalSink::new();
 
     let locator = deps::TypedefLocator::default();
+    let discovered = fs.discover_modules();
+    let mut additional = discovered.internal_test_roots;
+    additional.extend(discovered.external_test_roots);
     let roots = Roots {
         primary: vec![module_name.to_string()],
-        additional: fs.discover_modules().test_roots,
+        additional,
     };
     let mut graph_result = build_module_graph(
         &mut store,

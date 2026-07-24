@@ -270,6 +270,7 @@ fn compile_project_entry(
     project_kind: ProjectKind,
     go_module: &str,
 ) -> CompileResult {
+    let project_root = locator.project_root().map(|p| p.to_path_buf());
     let config = CompileConfig {
         target_phase: CompilePhase::Check,
         project_kind,
@@ -279,11 +280,11 @@ fn compile_project_entry(
         load_siblings,
         sourcemap: false,
         emit_tests: false,
-        project_root: locator.project_root().map(|p| p.to_path_buf()),
+        project_root: project_root.clone(),
         locator,
     };
 
-    let fs = LocalFileSystem::new(dir.to_str().unwrap_or("."));
+    let fs = LocalFileSystem::new(dir.to_str().unwrap_or("."), project_root.as_deref());
     compile(entry, &config, &fs)
 }
 

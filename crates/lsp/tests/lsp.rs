@@ -13171,3 +13171,61 @@ async fn creating_main_lis_flips_a_library_to_a_binary() {
     );
     client.shutdown().await;
 }
+
+#[tokio::test]
+async fn external_test_file_is_analyzed_with_visibility_rules() {
+    let mut client = TestClient::new().await;
+
+    let root = tempfile::tempdir().unwrap();
+    let root_path = root.path();
+
+    std::fs::write(
+        root_path.join("lisette.toml"),
+        "[project]\nname = \"test\"\nversion = \"0.1.0\"\n",
+    )
+    .unwrap();
+    std::fs::create_dir_all(root_path.join("src/geometry")).unwrap();
+    std::fs::write(
+        root_path.join("src/main.lis"),
+        "import \"geometry\"\nfn main() {\n  geometry.area()\n}\n",
+    )
+    .unwrap();
+    std::fs::write(
+        root_path.join("src/geometry/geometry.lis"),
+        "pub fn area() -> int {\n  hidden()\n}\n\nfn hidden() -> int {\n  4\n}\n",
+    )
+    .unwrap();
+    std::fs::create_dir_all(root_path.join("tests")).unwrap();
+    let ok_source =
+        "import \"geometry\"\n\n#[test]\nfn uses_api() {\n  assert geometry.area() == 4\n}\n";
+    std::fs::write(root_path.join("tests/ok.test.lis"), ok_source).unwrap();
+    let peek_source =
+        "import \"geometry\"\n\n#[test]\nfn peeks() {\n  assert geometry.hidden() == 4\n}\n";
+    std::fs::write(root_path.join("tests/peek.test.lis"), peek_source).unwrap();
+
+    client.initialize_with_root(root_path).await;
+
+    let ok_uri = format!("file://{}", root_path.join("tests/ok.test.lis").display());
+    client.open(&ok_uri, ok_source).await;
+    let diagnostics = client
+        .await_diagnostics_for(&ok_uri)
+        .await
+        .expect("diagnostics for valid external test");
+    assert!(diagnostics.is_empty(), "got: {diagnostics:?}");
+
+    let peek_uri = format!("file://{}", root_path.join("tests/peek.test.lis").display());
+    client.open(&peek_uri, peek_source).await;
+    let diagnostics = client
+        .await_diagnostics_for(&peek_uri)
+        .await
+        .expect("diagnostics for private-symbol reference");
+    assert!(
+        diagnostics.iter().any(|d| d.code
+            == Some(tower_lsp::lsp_types::NumberOrString::String(
+                "resolve.not_found_in_module".to_string()
+            ))),
+        "got: {diagnostics:?}"
+    );
+
+    client.shutdown().await;
+}

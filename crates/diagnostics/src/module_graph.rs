@@ -69,6 +69,13 @@ pub fn reserved_module_import(span: Span) -> LisetteDiagnostic {
         .with_help("Rename the module so its import path does not begin with `**`.")
 }
 
+pub fn cannot_import_external_tests(span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Invalid import")
+        .with_resolve_code("cannot_import_external_tests")
+        .with_span_label(&span, "reserved module name")
+        .with_help("The `tests` module at project root is reserved for external tests")
+}
+
 pub fn wrong_test_file_suffix(display_path: &str) -> LisetteDiagnostic {
     let help = match display_path.strip_suffix("_test.lis") {
         Some(stem) => format!(

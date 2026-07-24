@@ -1,10 +1,18 @@
 use std::path::{Path, PathBuf};
 
+use semantics::loader::is_external_test_module;
 use tower_lsp::lsp_types::Url;
 
 use crate::project::ProjectConfig;
 
 pub(crate) const ENTRY_MODULE_ID: &str = "_entry_";
+
+pub(crate) fn module_id_from_components(rel: &Path) -> String {
+    rel.components()
+        .filter_map(|c| c.as_os_str().to_str())
+        .collect::<Vec<_>>()
+        .join("/")
+}
 
 pub(crate) fn module_id_to_dir(config: &ProjectConfig, module_id: &str) -> PathBuf {
     if config.standalone_mode {
@@ -15,6 +23,8 @@ pub(crate) fn module_id_to_dir(config: &ProjectConfig, module_id: &str) -> PathB
         }
     } else if module_id == ENTRY_MODULE_ID {
         config.root.join("src")
+    } else if is_external_test_module(module_id) {
+        config.root.join(module_id)
     } else {
         config.root.join("src").join(module_id)
     }
@@ -34,6 +44,8 @@ pub(crate) fn module_file_to_path(
     } else {
         let module_dir = if module_id == ENTRY_MODULE_ID {
             config.root.join("src")
+        } else if is_external_test_module(module_id) {
+            config.root.join(module_id)
         } else {
             config.root.join("src").join(module_id)
         };
@@ -52,6 +64,15 @@ fn path_to_module_file(config: &ProjectConfig, file_path: &Path) -> Option<(Stri
         let module_id = relative.parent()?.to_str()?.to_string();
         Some((module_id, filename))
     } else {
+        if let Ok(relative) = file_path.strip_prefix(&config.root)
+            && let Some(dir) = relative.parent()
+        {
+            let module_id = module_id_from_components(dir);
+            if is_external_test_module(&module_id) {
+                return Some((module_id, filename));
+            }
+        }
+
         let src_dir = config.root.join("src");
         let relative = file_path.strip_prefix(&src_dir).ok()?;
 

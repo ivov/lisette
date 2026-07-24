@@ -149,7 +149,8 @@ impl<'a> GraphBuilder<'a> {
                 let has_production_file = module_files.iter().any(|file| !file.is_test());
                 let module_exists = has_production_file
                     || self.store.has(module_id)
-                    || module_id.starts_with("go:");
+                    || module_id.starts_with("go:")
+                    || semantics_loader::is_external_test_module(module_id);
 
                 if !module_exists {
                     if let Some(span) = self.import_spans.get(module_id) {
@@ -381,6 +382,13 @@ fn process_file_imports(
             continue;
         }
 
+        if !standalone_mode && semantics_loader::is_external_test_module(&file_import.name) {
+            sink.push(diagnostics::module_graph::cannot_import_external_tests(
+                file_import.name_span,
+            ));
+            continue;
+        }
+
         if let Some(go_pkg) = file_import.name.strip_prefix("go:") {
             let is_blank = matches!(file_import.alias, Some(ImportAlias::Blank(_)));
             let ok = *go_import_results
@@ -502,5 +510,54 @@ mod tests {
         assert!(!is_link_only(
             vec![go_import(false, 0), go_import(true, 1),]
         ));
+    }
+
+    #[test]
+    fn external_test_imports_are_rejected() {
+        for name in ["tests", "tests/integration"] {
+            let span = Span::new(0, 0, 1);
+            let sink = LocalSink::new();
+            let mut tracker = BlankTracker::default();
+            let resolved = process_file_imports(
+                vec![FileImport {
+                    name: name.into(),
+                    name_span: span,
+                    alias: None,
+                    span,
+                }],
+                &sink,
+                false,
+                &TypedefLocator::default(),
+                &mut tracker,
+            );
+
+            assert!(sink.has_errors(), "`import \"{name}\"` should be rejected");
+            assert!(resolved.is_empty());
+        }
+    }
+
+    #[test]
+    fn external_test_reservation_is_project_only() {
+        let span = Span::new(0, 0, 1);
+        let sink = LocalSink::new();
+        let mut tracker = BlankTracker::default();
+        let resolved = process_file_imports(
+            vec![FileImport {
+                name: "tests".into(),
+                name_span: span,
+                alias: None,
+                span,
+            }],
+            &sink,
+            true,
+            &TypedefLocator::default(),
+            &mut tracker,
+        );
+
+        assert!(
+            !sink.has_errors(),
+            "standalone mode has no `tests/` to reserve"
+        );
+        assert!(resolved.contains_key("tests"));
     }
 }
