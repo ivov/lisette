@@ -1,0 +1,19 @@
+#[display]
+struct Vec2 { x: int, y: int }
+
+#[equality]
+struct Bounds { low: int, high: int }
+
+#[display]
+#[equality]
+struct Tagged { name: string }
+
+#[iterate]
+pub enum Phase {
+  Validate,
+  Parse,
+  Codegen,
+}
+
+#[display]
+enum Mode { Fast, Slow }

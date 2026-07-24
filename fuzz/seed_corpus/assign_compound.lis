@@ -1,3 +1,5 @@
+struct Point { x: int, y: int }
+
 fn test() {
   let mut x = 10;
   x += 5;
@@ -6,7 +8,15 @@ fn test() {
   x /= 4;
   x %= 3;
 
-  let mut p = Point { x: 1, y: 1};
+  let mut bits = 12;
+  bits &= 10;
+  bits |= 3;
+  bits ^= 5;
+  bits <<= 2;
+  bits >>= 1;
+  bits &^= 4;
+
+  let mut p = Point { x: 1, y: 1 };
   p.x = 10;
 
   let mut arr = [1, 2, 3];

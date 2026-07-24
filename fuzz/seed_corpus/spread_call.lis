@@ -1,0 +1,9 @@
+fn head_or<T>(fallback: T, rest: VarArgs<T>) -> T { fallback }
+
+fn test(xs: Slice<int>) -> int { head_or(0, xs...) }
+
+fn test2(xs: Slice<int>) -> int { head_or(0, xs...,) }
+
+fn test3(xs: Slice<int>) -> Slice<int> { xs.append(xs...) }
+
+fn test4(a: int, b: int) -> int { max(a, b) }

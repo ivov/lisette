@@ -1,0 +1,7 @@
+//! Describes the module.
+//! Second line of the file comment.
+
+/// Doubles the input.
+pub fn double(n: int) -> int {
+  n * 2
+}

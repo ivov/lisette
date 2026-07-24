@@ -1,0 +1,20 @@
+#[xml]
+struct XmlUser { name: string }
+
+#[yaml]
+struct YamlUser { name: string }
+
+#[toml]
+struct TomlUser { name: string }
+
+#[bson]
+struct BsonUser { name: string }
+
+#[mapstructure]
+struct DecodedUser { name: string }
+
+#[msgpack]
+struct PackedUser {
+  #[msgpack(omitempty)]
+  name: string,
+}

@@ -1,0 +1,9 @@
+fn test(n: int) -> float64 { n as float64 }
+
+fn test2(f: float64) -> int { f as int }
+
+fn test3(n: int, m: int) -> float64 { (n + m) as float64 }
+
+fn test4(n: int, shift: int) -> float64 { (2 << shift) as float64 * n as float64 }
+
+fn test5(b: byte) -> int { b as int }

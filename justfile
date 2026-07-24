@@ -91,10 +91,10 @@ loc:
     open target/loc-chart/loc/index.html
 
 fuzz-parse duration="300":
-    cargo +nightly fuzz run parse --sanitizer address -- -max_total_time={{duration}} -rss_limit_mb=2048 -dict=fuzz/lisette.dict
+    cargo +nightly fuzz run --sanitizer address parse fuzz/corpus/parse fuzz/seed_corpus -- -max_total_time={{duration}} -rss_limit_mb=2048 -dict=fuzz/lisette.dict
 
 fuzz-infer duration="300":
-    cargo +nightly fuzz run infer --sanitizer address -- -max_total_time={{duration}} -rss_limit_mb=2048 -dict=fuzz/lisette.dict
+    cargo +nightly fuzz run --sanitizer address infer fuzz/corpus/infer fuzz/seed_corpus -- -max_total_time={{duration}} -rss_limit_mb=2048 -dict=fuzz/lisette.dict
 
 _supported-targets := "linux/amd64,linux/arm64,darwin/amd64,darwin/arm64,windows/amd64"
 

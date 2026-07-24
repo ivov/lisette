@@ -1,0 +1,7 @@
+#[allow(unused_variable)]
+fn holds_unused() {
+  let scratch = 1
+}
+
+#[allow(unused_function)]
+fn never_called() -> int { 2 }

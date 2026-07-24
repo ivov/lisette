@@ -1,0 +1,12 @@
+fn test(a: int, b: int) -> int {
+  let shifted_left = a << 2
+  let shifted_right = a >> 2
+  let masked = a & b
+  let combined = a | b
+  let flipped = a ^ b
+  let cleared = a &^ b
+  let inverted = ^a
+  shifted_left + shifted_right + masked + combined + flipped + cleared + inverted
+}
+
+fn test2(a: int, b: int, c: int) -> int { a << b | c &^ a }

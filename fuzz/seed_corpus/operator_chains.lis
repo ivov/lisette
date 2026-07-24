@@ -1,0 +1,9 @@
+fn double(n: int) -> int { n * 2 }
+
+fn negate(n: int) -> int { -n }
+
+fn test() -> int { 1 + 2 + 3 + 4 + 5 + 6 + 7 + 8 + 9 + 10 + 11 + 12 }
+
+fn test2(x: int) -> int { x |> double |> negate |> double |> negate |> double }
+
+fn test3(a: int) -> int { a << 1 << 2 >> 1 & 7 | 8 ^ 3 &^ 2 }
