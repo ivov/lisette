@@ -1,0 +1,48 @@
+---
+source: tests/spec/emit/expressions.rs
+description: |
+  
+  import "go:errors"
+  
+  fn plain() -> error {
+    errors.New("plain message")
+  }
+  
+  fn no_interpolation() -> error {
+    errors.New(f"nothing to fill in")
+  }
+  
+  fn solo(msg: string) -> error {
+    errors.New(f"{msg}")
+  }
+  
+  fn main() {
+    let _ = plain()
+    let _ = no_interpolation()
+    let _ = solo("y")
+  }
+---
+package main
+
+import (
+	"errors"
+	"fmt"
+)
+
+func plain() error {
+	return errors.New("plain message")
+}
+
+func noInterpolation() error {
+	return errors.New("nothing to fill in")
+}
+
+func solo(msg string) error {
+	return errors.New(fmt.Sprint(msg))
+}
+
+func main() {
+	_ = plain()
+	_ = noInterpolation()
+	_ = solo("y")
+}

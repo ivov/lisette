@@ -182,6 +182,19 @@ impl Planner<'_> {
             effect,
         )
     }
+
+    pub(crate) fn format_string_lowers_to_sprintf(&self, parts: &[FormatStringPart]) -> bool {
+        let has_interpolation = parts
+            .iter()
+            .any(|p| matches!(p, FormatStringPart::Expression(_)));
+        if !has_interpolation {
+            return false;
+        }
+        let [FormatStringPart::Expression(solo)] = parts else {
+            return true;
+        };
+        format_verb_for(&self.facts.peel_alias(&solo.get_type())) == "%c"
+    }
 }
 
 /// The `fmt` printf verb for interpolating a value of alias-peeled `ty` into

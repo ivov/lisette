@@ -1,0 +1,41 @@
+---
+source: tests/spec/emit/expressions.rs
+description: |
+  
+  struct O {}
+  
+  impl O {
+    fn a(self, num: int) -> O { self }
+    fn b(self, num: int) -> O { self }
+    fn c(self) {}
+  }
+  
+  fn one() -> int { 1 }
+  
+  fn main() {
+    let o = O {}
+    o.a(1).b(one()).c()
+  }
+---
+package main
+
+type O struct{}
+
+func (o O) a(_ int) O {
+	return o
+}
+
+func (o O) b(_ int) O {
+	return o
+}
+
+func (o O) c() {}
+
+func one() int {
+	return 1
+}
+
+func main() {
+	o := O{}
+	o.a(1).b(one()).c()
+}

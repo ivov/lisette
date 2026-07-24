@@ -137,3 +137,27 @@ pub(crate) fn reads_mutable_operand(expression: &Expression) -> bool {
         _ => false,
     }
 }
+
+pub(crate) fn reads_unsequenced_mutable_operand(expression: &Expression) -> bool {
+    match expression.unwrap_parens() {
+        Expression::Call { .. } => false,
+        Expression::IndexedAccess { .. } => true,
+        Expression::Unary {
+            operator: UnaryOperator::Deref,
+            ..
+        } => true,
+        Expression::DotAccess {
+            expression,
+            dot_access_kind,
+            ..
+        } => match dot_access_kind {
+            Some(
+                DotAccessKind::StructField { .. }
+                | DotAccessKind::TupleStructField { .. }
+                | DotAccessKind::TupleElement,
+            ) => true,
+            _ => reads_unsequenced_mutable_operand(expression),
+        },
+        _ => false,
+    }
+}

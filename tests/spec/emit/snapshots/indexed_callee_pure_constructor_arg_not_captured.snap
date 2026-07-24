@@ -1,0 +1,33 @@
+---
+source: tests/spec/emit/expressions.rs
+description: |
+  
+  struct P(int)
+  fn f0(p: P) -> int { 0 }
+  fn f1(p: P) -> int { 1 }
+  
+  fn main() {
+    let fs = [f0, f1]
+    let i = 0
+    let r = fs[i](P(2))
+    let _ = r
+  }
+---
+package main
+
+type P int
+
+func f0(_ P) int {
+	return 0
+}
+
+func f1(_ P) int {
+	return 1
+}
+
+func main() {
+	fs := []func(P) int{f0, f1}
+	i := 0
+	r := fs[i](P(2))
+	_ = r
+}

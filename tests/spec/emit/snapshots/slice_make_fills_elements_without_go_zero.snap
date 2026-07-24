@@ -27,11 +27,9 @@ func main() {
 		}
 		return s
 	}()
-	callee_1 := lisette.SliceGet(maps_, 0).UnwrapOr
-	first := callee_1(make(map[string]int))
+	first := lisette.SliceGet(maps_, 0).UnwrapOr(make(map[string]int))
 	first["k"] = 1
-	callee_2 := lisette.SliceGet(maps_, 1).UnwrapOr
-	second := callee_2(make(map[string]int))
+	second := lisette.SliceGet(maps_, 1).UnwrapOr(make(map[string]int))
 	if len(first) != 1 {
 		panic("expected a writable empty map element")
 	}

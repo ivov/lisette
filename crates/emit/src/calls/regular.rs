@@ -16,7 +16,7 @@ use crate::plan::calls::{ArgumentPlan, CallPlan, CallableOrigin, ResolvedCallee}
 use crate::plan::values::{
     CaptureBoundary, EvaluationEffect, GoExpression, SequencedValues, ValuePlan,
 };
-use crate::utils::reads_mutable_operand;
+use crate::utils::{reads_mutable_operand, reads_unsequenced_mutable_operand};
 use crate::write_line;
 use syntax::ast::{Expression, Literal};
 use syntax::types::Type;
@@ -47,6 +47,16 @@ fn find_go_string_literal_close(s: &str) -> Option<usize> {
         }
     }
     None
+}
+
+fn is_errors_new_callee(function: &Expression) -> bool {
+    let Expression::DotAccess {
+        expression, member, ..
+    } = function
+    else {
+        return false;
+    };
+    member == "New" && expression.get_type().as_import_namespace() == Some("go:errors")
 }
 
 fn lowers_to_bare_sprintf(expression: &Expression) -> bool {
@@ -146,6 +156,12 @@ impl<'a> Planner<'a> {
             .resolved_types()
             .expect("emission requires checked call type arguments");
 
+        if let Some(plan) =
+            self.collapse_errors_new_format_arg(function, args, spread, expression_ctx)
+        {
+            return plan;
+        }
+
         if let Some(go_name) = self.get_callee_go_name(function).map(str::to_string) {
             let arg_ctx = match (expression_ctx.retired_receiver(), args.len()) {
                 (Some(retired), 1) if self.callee_lowers_to_type_construction(function) => {
@@ -216,11 +232,12 @@ impl<'a> Planner<'a> {
         let args_effect = sequenced_args.effect;
         let (args_setup, args_strings) = sequenced_args.into_rendered();
 
+        let delayed_after_arg_setup = !args_setup.is_empty() && reads_mutable_operand(function);
+        let racing_inline_arg_calls =
+            args_effect.has_effectful_call() && reads_unsequenced_mutable_operand(function);
         let callee_needs_pin = setup.is_empty()
             && type_args_string.is_empty()
-            && reads_mutable_operand(function)
-            && (!args_setup.is_empty()
-                || (!matches!(function, Expression::Call { .. }) && args_effect.has_call()));
+            && (delayed_after_arg_setup || racing_inline_arg_calls);
         if callee_needs_pin {
             function_string =
                 self.hoist_tmp_value_statement(&mut setup, "callee", &function_string);
@@ -252,6 +269,54 @@ impl<'a> Planner<'a> {
                 effect,
             )
         }
+    }
+
+    /// Emit `errors.New(f"...")` as `fmt.Errorf(...)`: compiler-built format strings
+    /// cannot contain `%w`, and bypassing the callee drops an unused `errors` import.
+    fn collapse_errors_new_format_arg(
+        &mut self,
+        function: &Expression,
+        args: &[Expression],
+        spread: Option<&Expression>,
+        expression_ctx: ExpressionContext<'_>,
+    ) -> Option<ValuePlan> {
+        if spread.is_some() || !is_errors_new_callee(function) {
+            return None;
+        }
+        let [argument] = args else {
+            return None;
+        };
+        let Expression::Literal {
+            literal: Literal::FormatString(parts),
+            ..
+        } = argument.unwrap_parens()
+        else {
+            return None;
+        };
+        if !self.format_string_lowers_to_sprintf(parts) {
+            return None;
+        }
+        let staged = self.stage_operand(argument, ExpressionContext::value());
+        let mut sequenced =
+            self.sequence_values(vec![staged], expression_ctx.capture_boundary(), "_arg");
+        let effect = self.regular_call_effect(function, sequenced.effect);
+        let value = sequenced
+            .values
+            .pop()
+            .expect("sequenced exactly one argument");
+        let call = match value {
+            GoExpression::Call { callee, arguments } if callee.rendered() == "fmt.Sprintf" => {
+                GoExpression::call(GoExpression::opaque("fmt.Errorf".to_string()), arguments)
+            }
+            captured => {
+                let qualifier = self.require_module_import("go:errors");
+                GoExpression::call(
+                    GoExpression::opaque(format!("{}.New", qualifier)),
+                    vec![captured],
+                )
+            }
+        };
+        Some(ValuePlan::plain_call(sequenced.setup, call, effect))
     }
 
     fn regular_call_effect(

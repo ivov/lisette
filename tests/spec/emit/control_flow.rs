@@ -522,6 +522,20 @@ fn test(m: Map<string, int>) -> int {
 }
 
 #[test]
+fn for_loop_tuple_pattern_map_discard_value() {
+    let input = r#"
+fn test(m: Map<string, int>) -> Slice<string> {
+  let mut keys: Slice<string> = []
+  for (key, _) in m {
+    keys = keys.append(key)
+  }
+  keys
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn for_loop_iter_seq_single_value() {
     let input = r#"
 import "go:maps"

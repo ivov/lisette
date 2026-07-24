@@ -275,6 +275,9 @@ impl Planner<'_> {
             || self.go_name_for_binding(second).is_none();
         let header = if first_is_discard && second_is_discard {
             format!("for range {} {{\n", iter_expression)
+        } else if second_is_discard {
+            let key = self.bind_loop_pattern(first, None);
+            format!("for {} := range {} {{\n", key, iter_expression)
         } else {
             let key = self.bind_loop_pattern(first, None);
             let value = self.bind_loop_pattern(second, None);

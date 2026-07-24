@@ -1165,6 +1165,116 @@ fn main() {
 }
 
 #[test]
+fn chained_callee_call_arg_stays_inline() {
+    let input = r#"
+struct O {}
+
+impl O {
+  fn a(self, num: int) -> O { self }
+  fn b(self, num: int) -> O { self }
+  fn c(self) {}
+}
+
+fn one() -> int { 1 }
+
+fn main() {
+  let o = O {}
+  o.a(1).b(one()).c()
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn chained_callee_constructor_args_stay_inline() {
+    let input = r#"
+struct O {}
+struct P(int)
+
+enum Color {
+  Red(int),
+  Blue,
+}
+
+impl O {
+  fn p(self, p: P) -> O { self }
+  fn col(self, c: Color) -> O { self }
+  fn c(self) {}
+}
+
+fn main() {
+  let o = O {}
+  o.p(P(2)).col(Color.Red(3)).col(Color.Blue).c()
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn errors_new_format_string_collapses_to_errorf() {
+    let input = r#"
+import "go:errors"
+
+fn fail(line: string) -> error {
+  errors.New(f"malformed line: {line}")
+}
+
+fn percent(rate: int) -> error {
+  errors.New(f"{rate}% failed")
+}
+
+fn main() {
+  let _ = fail("x")
+  let _ = percent(3)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn errors_new_non_sprintf_args_stay() {
+    let input = r#"
+import "go:errors"
+
+fn plain() -> error {
+  errors.New("plain message")
+}
+
+fn no_interpolation() -> error {
+  errors.New(f"nothing to fill in")
+}
+
+fn solo(msg: string) -> error {
+  errors.New(f"{msg}")
+}
+
+fn main() {
+  let _ = plain()
+  let _ = no_interpolation()
+  let _ = solo("y")
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn indexed_callee_pure_constructor_arg_not_captured() {
+    let input = r#"
+struct P(int)
+fn f0(p: P) -> int { 0 }
+fn f1(p: P) -> int { 1 }
+
+fn main() {
+  let fs = [f0, f1]
+  let i = 0
+  let r = fs[i](P(2))
+  let _ = r
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn index_access_eval_order_captured() {
     let input = r#"
 fn bump(i: Ref<int>) -> int {

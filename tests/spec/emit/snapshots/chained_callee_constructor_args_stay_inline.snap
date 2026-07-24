@@ -1,0 +1,63 @@
+---
+source: tests/spec/emit/expressions.rs
+description: |
+  
+  struct O {}
+  struct P(int)
+  
+  enum Color {
+    Red(int),
+    Blue,
+  }
+  
+  impl O {
+    fn p(self, p: P) -> O { self }
+    fn col(self, c: Color) -> O { self }
+    fn c(self) {}
+  }
+  
+  fn main() {
+    let o = O {}
+    o.p(P(2)).col(Color.Red(3)).col(Color.Blue).c()
+  }
+---
+package main
+
+func MakeColorRed(arg0 int) Color {
+	return Color{Tag: ColorRed, Red: arg0}
+}
+
+func MakeColorBlue() Color {
+	return Color{Tag: ColorBlue}
+}
+
+type O struct{}
+
+type P int
+
+type ColorTag int
+
+const (
+	ColorRed ColorTag = iota
+	ColorBlue
+)
+
+type Color struct {
+	Tag ColorTag
+	Red int
+}
+
+func (o O) p(_ P) O {
+	return o
+}
+
+func (o O) col(_ Color) O {
+	return o
+}
+
+func (o O) c() {}
+
+func main() {
+	o := O{}
+	o.p(P(2)).col(MakeColorRed(3)).col(MakeColorBlue()).c()
+}

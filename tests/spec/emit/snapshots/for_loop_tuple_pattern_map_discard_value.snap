@@ -1,0 +1,21 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: |
+  
+  fn test(m: Map<string, int>) -> Slice<string> {
+    let mut keys: Slice<string> = []
+    for (key, _) in m {
+      keys = keys.append(key)
+    }
+    keys
+  }
+---
+package main
+
+func test(m map[string]int) []string {
+	keys := []string{}
+	for key := range m {
+		keys = append(keys, key)
+	}
+	return keys
+}

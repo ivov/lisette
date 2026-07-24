@@ -1,0 +1,35 @@
+---
+source: tests/spec/emit/expressions.rs
+description: |
+  
+  import "go:errors"
+  
+  fn fail(line: string) -> error {
+    errors.New(f"malformed line: {line}")
+  }
+  
+  fn percent(rate: int) -> error {
+    errors.New(f"{rate}% failed")
+  }
+  
+  fn main() {
+    let _ = fail("x")
+    let _ = percent(3)
+  }
+---
+package main
+
+import "fmt"
+
+func fail(line string) error {
+	return fmt.Errorf("malformed line: %s", line)
+}
+
+func percent(rate int) error {
+	return fmt.Errorf("%d%% failed", rate)
+}
+
+func main() {
+	_ = fail("x")
+	_ = percent(3)
+}
