@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1784919985615,
+  "lastUpdate": 1784923235991,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -9174,6 +9174,95 @@ window.BENCHMARK_DATA = {
           "url": "https://github.com/ivov/lisette/commit/1ac30e21c58d2d0b8477dd8ae76e53a472ec76ab"
         },
         "date": 1784919983953,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 117896,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 30211,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 24500,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 16914,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 13367,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 10558,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 6405,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 4442,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2791,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1039,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 695,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 6084,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 890,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "bb5f6b47575d96972d6158a810e1d279000a4b70",
+          "message": "ci: seed fuzz targets and cover missing operators (#1107)",
+          "timestamp": "2026-07-24T22:00:10+02:00",
+          "tree_id": "2d6f5377f73ea08c3745c7b12a8ae1ce870781d2",
+          "url": "https://github.com/ivov/lisette/commit/bb5f6b47575d96972d6158a810e1d279000a4b70"
+        },
+        "date": 1784923235396,
         "tool": "customSmallerIsBetter",
         "benches": [
           {
