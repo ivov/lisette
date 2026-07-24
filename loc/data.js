@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1784918604323,
+  "lastUpdate": 1784919985615,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -9125,6 +9125,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "lsp",
             "value": 4439,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2791,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1039,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 695,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 6084,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 890,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "1ac30e21c58d2d0b8477dd8ae76e53a472ec76ab",
+          "message": "feat: add LSP restart command and label-first diagnostics (#1106)",
+          "timestamp": "2026-07-24T21:05:57+02:00",
+          "tree_id": "5414cb1f92ac97c5c1b1325126004798d9e9e9b8",
+          "url": "https://github.com/ivov/lisette/commit/1ac30e21c58d2d0b8477dd8ae76e53a472ec76ab"
+        },
+        "date": 1784919983953,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 117896,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 30211,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 24500,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 16914,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 13367,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 10558,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 6405,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 4442,
             "unit": "lines"
           },
           {
