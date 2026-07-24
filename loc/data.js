@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1784840454671,
+  "lastUpdate": 1784911118228,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -8828,6 +8828,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "emit",
             "value": 30114,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 24442,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 16914,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 13334,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 10558,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 6363,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 4439,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2791,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1039,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 695,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 6084,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 890,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "077367874e1825d574d760409f2344275419397d",
+          "message": "refactor: emit idiomatic Go for chains, errors, and key-only loops (#1103)",
+          "timestamp": "2026-07-24T18:38:10+02:00",
+          "tree_id": "dd70539a777dbe6b26e9d56d5fd8b6f70f78e55f",
+          "url": "https://github.com/ivov/lisette/commit/077367874e1825d574d760409f2344275419397d"
+        },
+        "date": 1784911117026,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 117760,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 30211,
             "unit": "lines"
           },
           {
