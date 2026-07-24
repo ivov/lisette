@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Type not found
+   ╭─[test.lis:2:16]
+ 1 │ 
+ 2 │ fn test(items: Vec<int>) -> int {
+   ·                ─┬─
+   ·                 ╰── type not found in scope
+ 3 │   0
+   ╰────
+  help: Did you mean `Slice`? · code: [resolve.type_not_found]

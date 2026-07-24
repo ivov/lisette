@@ -230,6 +230,29 @@ pub fn conformance_method<'a>(
     if interface_matches_by_source_name(interface_id, interface_is_public) {
         return methods.get_key_value(method_name);
     }
+    select_by_emitted_name(methods, interface_id, method_name, candidate, false)
+}
+
+pub fn conformance_method_if_public<'a>(
+    methods: &'a MethodSignatures,
+    interface_id: &str,
+    interface_is_public: bool,
+    method_name: &str,
+    candidate: &dyn Fn(&str) -> ConformanceCandidate,
+) -> Option<(&'a EcoString, &'a Type)> {
+    if interface_matches_by_source_name(interface_id, interface_is_public) {
+        return None;
+    }
+    select_by_emitted_name(methods, interface_id, method_name, candidate, true)
+}
+
+fn select_by_emitted_name<'a>(
+    methods: &'a MethodSignatures,
+    interface_id: &str,
+    method_name: &str,
+    candidate: &dyn Fn(&str) -> ConformanceCandidate,
+    as_if_public: bool,
+) -> Option<(&'a EcoString, &'a Type)> {
     let want = if interface_id.starts_with(GO_IMPORT_PREFIX) {
         Cow::Borrowed(method_name)
     } else {
@@ -242,7 +265,10 @@ pub fn conformance_method<'a>(
         if info.shadowed {
             continue;
         }
-        let emitted = if info.exported {
+        if as_if_public && (info.exported || exact) {
+            continue;
+        }
+        let emitted = if info.exported || as_if_public {
             Cow::Owned(snake_to_camel(name))
         } else {
             Cow::Owned(snake_to_lower_camel(name))
@@ -431,6 +457,28 @@ mod tests {
         methods.insert("Read".into(), Type::Error);
         let via_source = conformance_method(&methods, "go:io", true, "Read", &UNEXPORTED);
         assert_eq!(via_source.map(|(name, _)| name.as_str()), Some("Read"));
+    }
+
+    #[test]
+    fn conformance_method_if_public_finds_private_near_misses() {
+        let mut methods = MethodSignatures::default();
+        methods.insert("write".into(), Type::Error);
+
+        let private_hit =
+            conformance_method_if_public(&methods, "go:io", true, "Write", &UNEXPORTED);
+        assert_eq!(private_hit.map(|(name, _)| name.as_str()), Some("write"));
+
+        let already_exported =
+            conformance_method_if_public(&methods, "go:io", true, "Write", &exported_at(0));
+        assert_eq!(already_exported, None);
+
+        let exact_name =
+            conformance_method_if_public(&methods, "main.W", true, "write", &UNEXPORTED);
+        assert_eq!(exact_name, None);
+
+        let source_matched =
+            conformance_method_if_public(&methods, "main.W", false, "write", &UNEXPORTED);
+        assert_eq!(source_matched, None);
     }
 
     #[test]

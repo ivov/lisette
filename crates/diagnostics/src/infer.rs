@@ -193,10 +193,34 @@ pub fn type_not_found(type_name: &str, annotation_span: Span) -> LisetteDiagnost
             ));
     }
 
-    LisetteDiagnostic::error("Type not found")
+    let diagnostic = LisetteDiagnostic::error("Type not found")
         .with_resolve_code("type_not_found")
-        .with_span_label(&name_span, "type not found in scope")
-        .with_help("Define or import this type")
+        .with_span_label(&name_span, "type not found in scope");
+
+    match foreign_type_alias(simple_name) {
+        Some(suggestion) => diagnostic.with_help(format!("Did you mean `{}`?", suggestion)),
+        None => diagnostic.with_help("Define or import this type"),
+    }
+}
+
+fn foreign_type_alias(name: &str) -> Option<&'static str> {
+    Some(match name {
+        "float" | "double" | "f64" => "float64",
+        "f32" => "float32",
+        "i8" => "int8",
+        "i16" => "int16",
+        "i32" => "int32",
+        "i64" => "int64",
+        "u8" => "uint8",
+        "u16" => "uint16",
+        "u32" => "uint32",
+        "u64" => "uint64",
+        "usize" | "isize" => "int",
+        "str" | "String" => "string",
+        "Vec" => "Slice",
+        "HashMap" => "Map",
+        _ => return None,
+    })
 }
 
 pub fn value_in_type_position(
@@ -2022,8 +2046,16 @@ pub fn type_conversion_arity(
 pub struct InterfaceViolation {
     pub interface_name: String,
     pub parent_of: Option<String>,
-    pub missing: Vec<(String, Type)>,
+    pub missing: Vec<MissingMethod>,
     pub incompatible: Vec<(String, Type, Type)>,
+}
+
+#[derive(Debug, Clone)]
+pub struct MissingMethod {
+    pub name: String,
+    pub signature: Type,
+    /// A private method that would satisfy this requirement if it were `pub`.
+    pub private_candidate: Option<String>,
 }
 
 pub fn sealed_interface_not_satisfiable(
@@ -2071,7 +2103,16 @@ pub fn interface_not_implemented(
             let methods: Vec<String> = violation
                 .missing
                 .iter()
-                .map(|(name, sig)| format!("  - {}: {}", name, sig))
+                .flat_map(|method| {
+                    let mut lines = vec![format!("  - {}: {}", method.name, method.signature)];
+                    if let Some(private_name) = &method.private_candidate {
+                        lines.push(format!(
+                            "    (add `pub` to the private method `{}` to satisfy this)",
+                            private_name
+                        ));
+                    }
+                    lines
+                })
                 .collect();
             missing_sections.push((header.clone(), methods));
         }
@@ -2380,10 +2421,10 @@ fn operator_verb(operator: &BinaryOperator) -> &'static str {
 fn operator_help(op: &BinaryOperator) -> &'static str {
     match op {
         BinaryOperator::Addition => "requires both operands to have the same type",
-        BinaryOperator::Subtraction
-        | BinaryOperator::Multiplication
-        | BinaryOperator::Division
-        | BinaryOperator::Remainder
+        BinaryOperator::Subtraction | BinaryOperator::Multiplication | BinaryOperator::Division => {
+            "requires both operands to have the same numeric type"
+        }
+        BinaryOperator::Remainder
         | BinaryOperator::BitwiseAnd
         | BinaryOperator::BitwiseOr
         | BinaryOperator::BitwiseXor

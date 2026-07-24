@@ -2687,6 +2687,24 @@ fn test() {
 }
 
 #[test]
+fn infer_type_not_found_float_suggests_float64() {
+    let input = r#"
+struct Circle { radius: float }
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_type_not_found_vec_suggests_slice() {
+    let input = r#"
+fn test(items: Vec<int>) -> int {
+  0
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
 fn infer_type_not_found_struct_bound() {
     let input = r#"
 struct Foo<T: Undefined> {}
@@ -3585,6 +3603,16 @@ fn test() {
 }
 
 #[test]
+fn infer_division_int_float_mismatch() {
+    let input = r#"
+fn half(n: int) -> float64 {
+  n / 2.0
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
 fn infer_comparison_type_mismatch() {
     let input = r#"
 fn test() {
@@ -3858,6 +3886,63 @@ impl Ctx {
 fn test() {
   let c = Ctx {}
   c.fatal(c.read())
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_interface_not_implemented_ref_argument_resolves() {
+    let input = r#"
+import "go:fmt"
+
+struct Sink {}
+
+fn main() {
+  let mut sink = Sink {}
+  fmt.Fprintf(&sink, "x")
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_interface_missing_method_private_candidate_hint() {
+    let input = r#"
+import "go:fmt"
+
+struct Shouter { written: Slice<byte> }
+
+impl Shouter {
+  fn write(self: Ref<Shouter>, p: Slice<byte>) -> Partial<int, error> {
+    Partial.Ok(p.length())
+  }
+}
+
+fn main() {
+  let mut shouter = Shouter { written: [] }
+  fmt.Fprintf(&shouter, "x")
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_interface_missing_method_private_candidate_wrong_signature() {
+    let input = r#"
+import "go:fmt"
+
+struct Shouter {}
+
+impl Shouter {
+  fn write(self: Ref<Shouter>, p: string) -> Partial<int, error> {
+    Partial.Ok(p.length())
+  }
+}
+
+fn main() {
+  let mut shouter = Shouter {}
+  fmt.Fprintf(&shouter, "x")
 }
 "#;
     assert_infer_error_snapshot!(input);

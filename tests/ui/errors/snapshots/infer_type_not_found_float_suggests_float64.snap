@@ -1,0 +1,11 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Type not found
+   ╭─[test.lis:2:25]
+ 1 │ 
+ 2 │ struct Circle { radius: float }
+   ·                         ──┬──
+   ·                           ╰── type not found in scope
+   ╰────
+  help: Did you mean `float64`? · code: [resolve.type_not_found]

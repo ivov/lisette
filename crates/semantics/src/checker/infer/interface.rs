@@ -1,6 +1,6 @@
 use crate::checker::EnvResolve;
 use crate::store::Store;
-use diagnostics::infer::InterfaceViolation;
+use diagnostics::infer::{InterfaceViolation, MissingMethod};
 use syntax::ast::Span;
 use syntax::program::{DefinitionBody, Interface, MethodSignatures};
 use syntax::types::{GO_IMPORT_PREFIX, SubstitutionMap, Type, substitute};
@@ -139,12 +139,15 @@ impl InferCtx<'_> {
             return Ok(());
         }
 
+        let resolved = ty.resolve_in(&self.env);
         if let Some(sealed) = violations.iter().find(|v| {
             v.missing
                 .iter()
-                .any(|(name, _)| crate::checker::sealing::is_unexported_key(name))
+                .any(|method| crate::checker::sealing::is_unexported_key(&method.name))
         }) {
-            let type_name = ty.get_name().map_or_else(|| ty.to_string(), str::to_owned);
+            let type_name = resolved
+                .get_name()
+                .map_or_else(|| resolved.to_string(), str::to_owned);
             self.sink
                 .push(diagnostics::infer::sealed_interface_not_satisfiable(
                     &sealed.interface_name,
@@ -153,7 +156,6 @@ impl InferCtx<'_> {
                 ));
             return Err(violations);
         }
-        let resolved = ty.resolve_in(&self.env);
         let wrapper = if resolved.is_result() {
             Some(diagnostics::infer::WrapperKind::Result)
         } else if resolved.is_option() {
@@ -172,7 +174,9 @@ impl InferCtx<'_> {
                     *span,
                 ));
         } else if builtin_receiver {
-            let type_name = ty.get_name().map_or_else(|| ty.to_string(), str::to_owned);
+            let type_name = resolved
+                .get_name()
+                .map_or_else(|| resolved.to_string(), str::to_owned);
             self.sink
                 .push(diagnostics::infer::builtin_type_cannot_implement_interface(
                     &interface.name,
@@ -180,7 +184,9 @@ impl InferCtx<'_> {
                     *span,
                 ));
         } else {
-            let type_name = ty.get_name().map_or_else(|| ty.to_string(), str::to_owned);
+            let type_name = resolved
+                .get_name()
+                .map_or_else(|| resolved.to_string(), str::to_owned);
             self.sink
                 .push(diagnostics::infer::interface_not_implemented(
                     &interface.name,
@@ -500,7 +506,7 @@ impl InferCtx<'_> {
             .zip(type_args.iter().cloned())
             .collect();
 
-        let mut missing: Vec<(String, Type)> = Vec::new();
+        let mut missing: Vec<MissingMethod> = Vec::new();
         let mut incompatible: Vec<(String, Type, Type)> = Vec::new();
 
         let resolved_receiver = store.deep_resolve_alias(&ty.strip_refs().resolve_in(&self.env));
@@ -551,11 +557,27 @@ impl InferCtx<'_> {
                             ),
                         );
                     }
-                    missing.push((method_name.to_string(), method_ty.clone()));
+                    missing.push(MissingMethod {
+                        name: method_name.to_string(),
+                        signature: method_ty.clone(),
+                        private_candidate: None,
+                    });
                     continue;
                 }
                 SelectedMethod::Missing => {
-                    missing.push((method_name.to_string(), method_ty.clone()));
+                    let private_candidate = self.private_method_hint(
+                        ty,
+                        &symbol_methods,
+                        interface_qualified_id,
+                        method_name.as_str(),
+                        method_ty,
+                        &map,
+                    );
+                    missing.push(MissingMethod {
+                        name: method_name.to_string(),
+                        signature: method_ty.clone(),
+                        private_candidate,
+                    });
                     continue;
                 }
             };
@@ -580,7 +602,11 @@ impl InferCtx<'_> {
             }
 
             if !signature.receiver_pinned {
-                missing.push((method_name.to_string(), method_ty.clone()));
+                missing.push(MissingMethod {
+                    name: method_name.to_string(),
+                    signature: method_ty.clone(),
+                    private_candidate: None,
+                });
             } else if !signature.matched {
                 incompatible.push((
                     method_name.to_string(),
@@ -653,6 +679,39 @@ impl InferCtx<'_> {
             Some((name, method)) => SelectedMethod::Found(name.clone(), method.clone()),
             None => SelectedMethod::Missing,
         }
+    }
+
+    fn private_method_hint(
+        &mut self,
+        ty: &Type,
+        symbol_methods: &MethodSignatures,
+        interface_qualified_id: &str,
+        method_name: &str,
+        method_ty: &Type,
+        map: &SubstitutionMap,
+    ) -> Option<String> {
+        let interface_is_public = self
+            .store
+            .get_definition(interface_qualified_id)
+            .is_some_and(|d| d.visibility.is_public());
+        let (impl_name, impl_method) = syntax::go_names::conformance_method_if_public(
+            symbol_methods,
+            interface_qualified_id,
+            interface_is_public,
+            method_name,
+            &|name| self.conformance_candidate(ty, name),
+        )?;
+        let impl_name = impl_name.to_string();
+        let impl_method = impl_method.clone();
+        let signature = self.check_method_signature(
+            ty,
+            interface_qualified_id,
+            method_name,
+            method_ty,
+            &impl_method,
+            map,
+        );
+        (signature.receiver_pinned && signature.matched).then_some(impl_name)
     }
 
     fn check_method_signature(
