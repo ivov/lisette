@@ -1,4 +1,4 @@
-import { type ExtensionContext, window, workspace } from "vscode";
+import { type ExtensionContext, commands, window, workspace } from "vscode";
 import {
   LanguageClient,
   type LanguageClientOptions,
@@ -8,7 +8,7 @@ import {
 
 let client: LanguageClient | undefined;
 
-export async function activate(context: ExtensionContext) {
+async function startClient() {
   const config = workspace.getConfiguration("lisette");
   const command: string = config.get("serverPath") || "lis";
 
@@ -35,6 +35,17 @@ export async function activate(context: ExtensionContext) {
       `Failed to find the Lisette language server. Install it with "cargo install lisette" or configure "lisette.serverPath" in VS Code settings to point to your binary.`,
     );
   }
+}
+
+export async function activate(context: ExtensionContext) {
+  context.subscriptions.push(
+    commands.registerCommand("lisette.restartServer", async () => {
+      await client?.stop();
+      await startClient();
+    }),
+  );
+
+  await startClient();
 }
 
 export async function deactivate() {

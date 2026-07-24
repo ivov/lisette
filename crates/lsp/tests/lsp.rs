@@ -13113,7 +13113,12 @@ async fn library_main_function_is_not_flagged() {
     let diags = client.await_diagnostics().await;
     let bad: Vec<_> = diags
         .iter()
-        .filter(|d| d.message.contains("main signature"))
+        .filter(|d| {
+            d.code
+                == Some(NumberOrString::String(
+                    "infer.invalid_main_signature".to_string(),
+                ))
+        })
         .collect();
     assert!(
         bad.is_empty(),
@@ -13143,9 +13148,16 @@ async fn creating_main_lis_flips_a_library_to_a_binary() {
         .to_string();
     client.open(&uri, content).await;
 
+    let is_main_signature = |d: &Diagnostic| {
+        d.code
+            == Some(NumberOrString::String(
+                "infer.invalid_main_signature".to_string(),
+            ))
+    };
+
     let diags = client.await_diagnostics().await;
     assert!(
-        !diags.iter().any(|d| d.message.contains("main signature")),
+        !diags.iter().any(is_main_signature),
         "library `main` should not be flagged: {diags:?}"
     );
 
@@ -13154,7 +13166,7 @@ async fn creating_main_lis_flips_a_library_to_a_binary() {
 
     let diags = client.await_diagnostics().await;
     assert!(
-        diags.iter().any(|d| d.message.contains("main signature")),
+        diags.iter().any(is_main_signature),
         "after `src/main.lis` appears the project is a binary: {diags:?}"
     );
     client.shutdown().await;

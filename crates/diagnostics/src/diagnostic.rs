@@ -321,6 +321,12 @@ impl LisetteDiagnostic {
         &self.message
     }
 
+    pub fn plain_label(&self) -> Option<&str> {
+        self.labels
+            .iter()
+            .find_map(|span| span.label().filter(|text| !text.is_empty()))
+    }
+
     pub fn plain_help(&self) -> Option<&str> {
         self.help.as_deref()
     }

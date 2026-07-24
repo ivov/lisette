@@ -278,13 +278,16 @@ pub(crate) fn convert_diagnostic(d: &LisetteDiagnostic, index: &LineIndex) -> Di
             DiagnosticSeverity::WARNING
         }),
         message: {
-            let mut msg = d.plain_message().to_string();
+            let mut msg = match d.plain_label() {
+                Some(label) => label.to_string(),
+                None => d.plain_message().to_string(),
+            };
             if let Some(help) = d.plain_help() {
-                msg.push_str(". ");
+                msg.push_str(" · ");
                 msg.push_str(help);
             }
             if let Some(note) = d.plain_note() {
-                msg.push_str(". ");
+                msg.push_str(" · ");
                 msg.push_str(note);
             }
             msg
