@@ -426,10 +426,17 @@ pub fn static_method_called_on_instance(
         ))
 }
 
-pub fn function_or_value_not_found_in_module(name: &str, span: Span) -> LisetteDiagnostic {
+pub fn function_or_value_not_found_in_module(
+    name: &str,
+    module: &str,
+    span: Span,
+) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Name not found")
         .with_resolve_code("not_found_in_module")
-        .with_span_label(&span, format!("`{}` not found in module", name))
+        .with_span_label(
+            &span,
+            format!("`{}` not found in module `{}`", name, module),
+        )
         .with_help("Ensure the name is exported and spelled correctly")
 }
 

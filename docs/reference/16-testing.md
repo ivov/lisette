@@ -11,7 +11,7 @@ In the test report, tests are grouped by module and file:
 ```
   ✓ Compiled `demo` v0.1.0 (120ms)
 
-  math
+  src/math/
     math.test.lis
       ├── ✓ addition
       ├── ✓ subtraction
@@ -26,7 +26,7 @@ On failure, the test report includes a `Failures` section:
 ```
   ✓ Compiled `demo` v0.1.0 (120ms)
 
-  math
+  src/math/
     math.test.lis
       ├── ✕ addition
       ├── ✓ subtraction
@@ -35,13 +35,13 @@ On failure, the test report includes a `Failures` section:
 
   Failures
 
-  ✕ addition · expected ==
+  ✕ addition
        ╭─[src/math/math.test.lis:3:10]
      1 │ #[test]
      2 │ fn addition() {
      3 │   assert add(2, 2) == 5
        ·          ───────┬──────
-       ·                 ╰── left: 4 · right: 5
+       ·                 ╰── `4` is not equal to `5`
      4 │ }
      5 │
        ╰────
@@ -93,14 +93,14 @@ The function title replaces the function name in the report, and the description
 ```
   Failures
 
-  ✕ counts fields in a CSV row · expected ==
+  ✕ counts fields in a CSV row
     Surrounding whitespace is trimmed before the count is taken.
        ╭─[src/math/math.test.lis:4:10]
      2 │ #[test("counts fields in a CSV row")]
      3 │ fn counts_fields() {
      4 │   assert field_count("  a , b ") == 3
        ·          ──────────────┬─────────────
-       ·                        ╰── left: 2 · right: 3
+       ·                        ╰── `2` is not equal to `3`
      5 │ }
        ╰────
 ```
@@ -157,7 +157,7 @@ On failure:
 ```
   Failures
 
-  ✕ orders_match · expected ==
+  ✕ orders_match
         ╭─[src/math/math.test.lis:11:10]
       9 │   let a = Order { id: 1, tags: ["a"] }
      10 │   let b = Order { id: 9, tags: ["z"] }
@@ -270,7 +270,7 @@ fn status_ok(t: TestContext) {
 On skipping:
 
 ```
-  math
+  src/math/
     math.test.lis
       └── ○ status_ok (service offline)
 
@@ -293,7 +293,7 @@ Logged values appear in a `Logs` section:
 ```
   Logs
 
-  ≡ computes_total
+  » computes_total
        ╭─[src/math/math.test.lis:4:9]
      2 │ fn computes_total(t: TestContext) {
      3 │   let total = add(20, 22)

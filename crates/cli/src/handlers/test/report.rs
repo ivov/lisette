@@ -482,16 +482,16 @@ fn package_of_import_path(import_path: &str) -> &str {
         .map_or(import_path, |(pkg, _)| pkg)
 }
 
-fn package_display<'a>(package: &'a str, go_module: &str) -> &'a str {
+fn package_display(package: &str, go_module: &str) -> String {
     if package == go_module {
-        package.rsplit('/').next().unwrap_or(package)
-    } else if let Some(rel) = package
+        "src".to_string()
+    } else if let Some(module_id) = package
         .strip_prefix(go_module)
         .and_then(|rest| rest.strip_prefix('/'))
     {
-        rel
+        format!("src/{module_id}")
     } else {
-        package
+        package.to_string()
     }
 }
 
@@ -509,12 +509,16 @@ pub fn render(
         return out;
     }
 
-    let mut by_package: BTreeMap<&str, Vec<&TestRow>> = BTreeMap::new();
+    let mut by_package: BTreeMap<String, (&str, Vec<&TestRow>)> = BTreeMap::new();
     for row in &report.rows {
-        by_package.entry(&row.package).or_default().push(row);
+        by_package
+            .entry(package_display(&row.package, &report.go_module))
+            .or_insert_with(|| (row.package.as_str(), Vec::new()))
+            .1
+            .push(row);
     }
 
-    for (index, (package, mut group)) in by_package.into_iter().enumerate() {
+    for (index, (header, (package, mut group))) in by_package.into_iter().enumerate() {
         if index > 0 {
             out.push('\n');
         }
@@ -523,13 +527,8 @@ pub fn render(
             let file_b = sources.get(&b.span.file_id).map(|s| s.filename.as_str());
             (file_a, a.span.byte_offset).cmp(&(file_b, b.span.byte_offset))
         });
-        let header = package_display(package, &report.go_module);
-        let header = if color {
-            header.bright_magenta().to_string()
-        } else {
-            header.to_string()
-        };
-        out.push_str(&format!("  {header}\n"));
+        let header = format!("{header}/");
+        out.push_str(&format!("  {}\n", dim(&header, color)));
         render_package_rows(&mut out, &group, sources, color, term_width);
 
         // Crash before any test ran (init/`TestMain` panic): cause is package-level only.
@@ -591,7 +590,12 @@ fn render_package_rows(
         if basename.is_empty() {
             render_rows(out, chunk, "    ", color, term_width);
         } else {
-            out.push_str(&format!("    {basename}\n"));
+            let name = if color {
+                basename.bright_magenta().to_string()
+            } else {
+                basename.to_string()
+            };
+            out.push_str(&format!("    {name}\n"));
             render_rows(out, chunk, "      ", color, term_width);
         }
     }
@@ -663,6 +667,21 @@ fn render_rows(out: &mut String, rows: &[&TestRow], prefix: &str, color: bool, t
     }
 }
 
+fn tree_ordered<'a>(rows: &'a [TestRow], go_module: &str, sources: &Sources) -> Vec<&'a TestRow> {
+    let mut ordered: Vec<&TestRow> = rows.iter().collect();
+    ordered.sort_by(|a, b| {
+        let key = |row: &TestRow| {
+            (
+                package_display(&row.package, go_module),
+                sources.get(&row.span.file_id).map(|s| s.filename.clone()),
+                row.span.byte_offset,
+            )
+        };
+        key(a).cmp(&key(b))
+    });
+    ordered
+}
+
 fn render_logs(
     out: &mut String,
     rows: &[TestRow],
@@ -670,20 +689,9 @@ fn render_logs(
     sources: &Sources,
     color: bool,
 ) {
-    let multi_package = rows
-        .iter()
-        .map(|r| &r.package)
-        .collect::<HashSet<_>>()
-        .len()
-        > 1;
     let mut blocks: Vec<(String, String)> = Vec::new();
-    for row in rows {
-        let prefix = if multi_package {
-            package_display(&row.package, go_module).to_string()
-        } else {
-            String::new()
-        };
-        collect_logs(row, &prefix, sources, color, &mut blocks);
+    for row in tree_ordered(rows, go_module, sources) {
+        collect_logs(row, "", sources, color, &mut blocks);
     }
     if blocks.is_empty() {
         return;
@@ -696,10 +704,15 @@ fn render_logs(
         "Logs".to_string()
     };
     out.push_str(&format!("  {heading}\n"));
-    let glyph = "≡";
     for (path, body) in blocks {
         out.push('\n');
-        out.push_str(&format!("  {glyph} {}\n", path.replace('`', "")));
+        let header = format!("» {}", path.replace('`', ""));
+        let header = if color {
+            header.blue().to_string()
+        } else {
+            header
+        };
+        out.push_str(&format!("  {header}\n"));
         for line in body.lines() {
             out.push_str(&format!("    {line}\n"));
         }
@@ -733,34 +746,16 @@ fn render_log(record: &LogRecord, sources: &Sources, color: bool) -> Option<Stri
     let span = Span::new(record.file, record.lo, record.hi.saturating_sub(record.lo));
     let diagnostic = LisetteDiagnostic::info(String::new())
         .with_span_primary_label(&span, truncate_log_value(&record.value))
-        .with_label_accent(Style::new());
+        .with_label_accent(Style::new().blue());
     let rendered = diagnostics::render::render_to_string(
         &diagnostic,
         &info.source,
         &info.filename,
         color,
-        Style::new(),
+        Style::new().blue(),
         2,
     );
-    let body = rendered.lines().skip(1).collect::<Vec<_>>().join("\n");
-    Some(dim_source_lines(&body, color))
-}
-
-fn dim_source_lines(frame: &str, color: bool) -> String {
-    if !color {
-        return frame.to_string();
-    }
-    frame
-        .lines()
-        .map(|line| match line.find('│') {
-            Some(pos) => {
-                let (head, code) = line.split_at(pos + '│'.len_utf8());
-                format!("{head}{}", code.dimmed())
-            }
-            None => line.to_string(),
-        })
-        .collect::<Vec<_>>()
-        .join("\n")
+    Some(rendered.lines().skip(1).collect::<Vec<_>>().join("\n"))
 }
 
 fn truncate_log_value(value: &str) -> String {
@@ -787,22 +782,9 @@ fn render_failures(
     color: bool,
     term_width: usize,
 ) {
-    // The flat Failures section loses the tree's package grouping, so prefix the package when the run
-    // spans more than one, to disambiguate same-named tests across packages.
-    let multi_package = rows
-        .iter()
-        .map(|r| &r.package)
-        .collect::<HashSet<_>>()
-        .len()
-        > 1;
     let mut blocks: Vec<FailureBlock> = Vec::new();
-    for row in rows {
-        let prefix = if multi_package {
-            package_display(&row.package, go_module).to_string()
-        } else {
-            String::new()
-        };
-        collect_failures(row, &prefix, sources, color, term_width, &mut blocks);
+    for row in tree_ordered(rows, go_module, sources) {
+        collect_failures(row, "", sources, color, term_width, &mut blocks);
     }
     if blocks.is_empty() {
         return;
@@ -872,7 +854,7 @@ fn collect_failures(
     };
 
     if matches!(row.status, Status::Failed | Status::Crashed) {
-        if let Some((kind, body)) = row
+        if let Some((suffix, body)) = row
             .failure
             .as_ref()
             .and_then(|record| render_failure(record, sources, color, term_width))
@@ -881,7 +863,7 @@ fn collect_failures(
                 status: row.status,
                 path: path.clone(),
                 description: row.description.clone(),
-                kind: Some(kind),
+                kind: suffix,
                 body,
             });
         } else if !has_failing_descendant(row) {
@@ -921,7 +903,7 @@ fn render_failure(
     sources: &Sources,
     color: bool,
     term_width: usize,
-) -> Option<(String, String)> {
+) -> Option<(Option<String>, String)> {
     let info = sources.get(&record.file)?;
     let span = Span::new(record.file, record.lo, record.hi.saturating_sub(record.lo));
 
@@ -939,26 +921,14 @@ fn render_failure(
     let paired = matches!(record.kind.as_str(), "relation" | "labeled");
     let mut diagnostic = LisetteDiagnostic::error(record.message.clone());
     if paired {
-        let label =
-            paired_inline_label(&record.operands, &values, term_width).unwrap_or_else(|| {
-                let label_width = record
-                    .operands
-                    .iter()
-                    .map(|operand| operand.label.chars().count())
-                    .max()
-                    .unwrap_or(0)
-                    + 1;
-                record
-                    .operands
-                    .iter()
-                    .zip(&values)
-                    .map(|(operand, value)| {
-                        let token = format!("{}:", operand.label);
-                        format!("{token:<label_width$} {value}")
-                    })
-                    .collect::<Vec<_>>()
-                    .join("\n")
-            });
+        let scalar = record
+            .operands
+            .iter()
+            .all(|operand| is_scalar(&operand.value));
+        let label = scalar
+            .then(|| comparison_sentence(&record.message, &values, term_width))
+            .flatten()
+            .unwrap_or_else(|| stacked_operand_label(&record.operands, &values));
         diagnostic = diagnostic.with_span_primary_label(&span, label);
     } else {
         let label = values
@@ -986,7 +956,47 @@ fn render_failure(
         2,
     );
     let body = rendered.lines().skip(1).collect::<Vec<_>>().join("\n");
-    Some((record.message.clone(), body))
+    let suffix = (!paired).then(|| record.message.clone());
+    Some((suffix, body))
+}
+
+fn is_scalar(value: &str) -> bool {
+    !value.contains(['\n', '{', '[', '('])
+}
+
+fn comparison_sentence(message: &str, values: &[String], term_width: usize) -> Option<String> {
+    let [left, right] = values else {
+        return None;
+    };
+    let phrase = match message.strip_prefix("expected ")? {
+        "==" => "is not equal to",
+        "!=" => "is equal to",
+        "<" => "is not less than",
+        "<=" => "is not less than or equal to",
+        ">" => "is not greater than",
+        ">=" => "is not greater than or equal to",
+        _ => return None,
+    };
+    let sentence = format!("`{left}` {phrase} `{right}`");
+    (sentence.chars().count() <= operand_budget(term_width)).then_some(sentence)
+}
+
+fn stacked_operand_label(operands: &[Operand], values: &[String]) -> String {
+    let label_width = operands
+        .iter()
+        .map(|operand| operand.label.chars().count())
+        .max()
+        .unwrap_or(0)
+        + 1;
+    operands
+        .iter()
+        .zip(values)
+        .map(|(operand, value)| {
+            let token = format!("{}:", operand.label);
+            format!("{token:<label_width$} {value}")
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 fn count_status(rows: &[TestRow], status: Status) -> usize {
@@ -1121,24 +1131,6 @@ fn operand_budget(term_width: usize) -> usize {
     term_width
         .saturating_sub(reserved)
         .clamp(OPERAND_MIN_CHARS, OPERAND_MAX_CHARS)
-}
-
-fn paired_inline_label(
-    operands: &[Operand],
-    values: &[String],
-    term_width: usize,
-) -> Option<String> {
-    let is_scalar = |value: &str| !value.contains(['\n', '{', '[', '(']);
-    if !operands.iter().all(|operand| is_scalar(&operand.value)) {
-        return None;
-    }
-    let line = operands
-        .iter()
-        .zip(values)
-        .map(|(operand, value)| format!("{}: {}", operand.label, value))
-        .collect::<Vec<_>>()
-        .join(" · ");
-    (line.chars().count() <= operand_budget(term_width)).then_some(line)
 }
 
 fn first_divergence(a: &str, b: &str) -> usize {
@@ -1496,15 +1488,15 @@ mod tests {
     }
 
     #[test]
-    fn paired_label_inlines_scalars_but_stacks_composites() {
-        let render_relation = |left: &str, right: &str| {
+    fn scalar_comparisons_read_as_a_sentence_composites_stack() {
+        let render_relation = |operator: &str, left: &str, right: &str| {
             let index = index(&[(ENTRY_MODULE_ID, "cmp")]);
             let inner = serde_json::json!({
                 "file": 7,
                 "lo": 3,
                 "hi": 9,
                 "kind": "relation",
-                "message": "expected ==",
+                "message": format!("expected {operator}"),
                 "operands": [
                     {"label": "left", "value": left},
                     {"label": "right", "value": right},
@@ -1533,20 +1525,31 @@ mod tests {
             )
         };
 
-        let scalar = render_relation("1", "2");
+        let equal = render_relation("==", "1", "2");
         assert!(
-            scalar
-                .lines()
-                .any(|line| line.contains("left: 1") && line.contains("right: 2")),
-            "short scalars share one line, got:\n{scalar}"
+            equal.contains("`1` is not equal to `2`"),
+            "scalar `==` reads as a sentence, got:\n{equal}"
+        );
+        assert!(
+            !equal.contains("left:"),
+            "the sentence replaces the left/right pair, got:\n{equal}"
         );
 
-        let composite = render_relation("Point { x: 1, y: 2 }", "Point { x: 1, y: 9 }");
+        let less = render_relation("<", "5", "3");
         assert!(
-            !composite
-                .lines()
-                .any(|line| line.contains("left:") && line.contains("right:")),
+            less.contains("`5` is not less than `3`"),
+            "the phrasing is per-operator, got:\n{less}"
+        );
+
+        let composite = render_relation("==", "Point { x: 1, y: 2 }", "Point { x: 1, y: 9 }");
+        assert!(
+            composite.lines().any(|line| line.contains("left:"))
+                && composite.lines().any(|line| line.contains("right:")),
             "composite operands stay stacked, got:\n{composite}"
+        );
+        assert!(
+            !composite.contains("is not equal to"),
+            "composites do not use the sentence form, got:\n{composite}"
         );
     }
 
@@ -1566,9 +1569,9 @@ mod tests {
             TEST_WIDTH,
         );
 
-        assert!(text.contains("  demo\n"));
+        assert!(text.contains("  src/\n"));
         assert!(text.contains("✓ root_smoke"));
-        assert!(text.contains("  math\n"));
+        assert!(text.contains("  src/math/\n"));
         assert!(text.contains("✓ adds_numbers"));
         assert!(text.contains("2 passed"));
         assert_eq!(exit_code(&report.rows, true), 0);

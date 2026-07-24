@@ -642,6 +642,7 @@ impl InferCtx<'_> {
             self.sink
                 .push(diagnostics::infer::function_or_value_not_found_in_module(
                     args.member_name,
+                    &module_id,
                     *args.span,
                 ));
             return Some((args.build_dot_access(Type::Error, Some(kind), None), kind));
