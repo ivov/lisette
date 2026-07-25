@@ -39,7 +39,7 @@ pub fn check_double_comparison(expression: &Expression, ctx: &NodeCtx) {
         return;
     }
 
-    let both_non_float = is_known_non_float(left_lhs) && is_known_non_float(left_rhs);
+    let both_non_float = is_known_non_float(left_lhs, ctx) && is_known_non_float(left_rhs, ctx);
     let Some(combined) = combine(*operator, left_op, right_op, both_non_float) else {
         return;
     };
@@ -60,10 +60,9 @@ pub fn check_double_comparison(expression: &Expression, ctx: &NodeCtx) {
 
 /// True only when the operand's type is known to have a non-float underlying
 /// kind. An unknown kind (e.g. an unbounded type parameter) is possibly-float.
-fn is_known_non_float(expression: &Expression) -> bool {
-    expression
-        .get_type()
-        .underlying_simple_kind()
+fn is_known_non_float(expression: &Expression, ctx: &NodeCtx<'_>) -> bool {
+    ctx.store
+        .underlying_simple_kind(&expression.get_type())
         .is_some_and(|kind| !kind.is_float())
 }
 

@@ -6,7 +6,11 @@ use super::helpers::{span_text, wrapped_single_arg};
 
 pub fn check_needless_question_mark(expression: &Expression, ctx: &NodeCtx) {
     match expression {
-        Expression::Function { body, .. } => flag_tail(body, ctx),
+        Expression::Function { body, .. } => {
+            if let Some(body) = body.definition() {
+                flag_tail(body, ctx);
+            }
+        }
         Expression::Return {
             expression: value, ..
         } => flag_needless(value, ctx),

@@ -8,7 +8,7 @@ use crate::plan::calls::CallableOrigin;
 use crate::plan::values::{
     CaptureBoundary, EvaluationEffect, GoExpression, SequencedValues, Stability, ValuePlan,
 };
-use syntax::ast::Expression;
+use syntax::ast::{Expression, IdentifierResolution};
 use syntax::types::{FunctionParameter, Type};
 
 /// Folds `f(leading, spread...)` into `f(append([]T{leading}, spread...)...)` — Go rejects the former.
@@ -131,12 +131,10 @@ impl Planner<'_> {
     pub(crate) fn is_unmutated_identifier(&self, expression: &Expression) -> bool {
         match expression {
             Expression::Identifier {
-                binding_id: Some(id),
+                resolution: IdentifierResolution::Binding(id),
                 ..
             } => !self.facts.is_mutated(*id),
-            Expression::Identifier {
-                binding_id: None, ..
-            } => true,
+            Expression::Identifier { .. } => true,
             _ => false,
         }
     }
@@ -146,12 +144,10 @@ impl Planner<'_> {
     pub(crate) fn identifier_immune_to_calls(&self, expression: &Expression) -> bool {
         match expression {
             Expression::Identifier {
-                binding_id: Some(id),
+                resolution: IdentifierResolution::Binding(id),
                 ..
             } => !self.facts.is_alias_mutated(*id),
-            Expression::Identifier {
-                binding_id: None, ..
-            } => true,
+            Expression::Identifier { .. } => true,
             _ => false,
         }
     }

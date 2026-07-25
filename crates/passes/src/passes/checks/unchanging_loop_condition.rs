@@ -1,5 +1,5 @@
 use rustc_hash::FxHashMap as HashMap;
-use syntax::ast::{BindingId, Expression, UnaryOperator};
+use syntax::ast::{BindingId, Expression, IdentifierResolution, UnaryOperator};
 
 use crate::passes::walk::NodeCtx;
 use semantics::facts::BindingFact;
@@ -42,7 +42,7 @@ fn is_invariant(
 ) -> bool {
     match expression {
         Expression::Identifier {
-            binding_id: Some(id),
+            resolution: IdentifierResolution::Binding(id),
             ..
         } => match bindings.get(id) {
             Some(fact) if !fact.mutation.happened() => {

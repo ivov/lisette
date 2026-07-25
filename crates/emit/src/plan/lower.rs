@@ -14,12 +14,11 @@ use crate::plan::bodies::{
 use crate::plan::placement::{requires_temp_var, try_elide_tail_let};
 use crate::plan::values::ValuePlan;
 use crate::utils::wrap_if_struct_literal;
-use syntax::ast::{BinaryOperator, Expression, Literal, MatchArm, Pattern, TypedPattern};
+use syntax::ast::{BinaryOperator, Expression, IdentifierResolution, Literal, MatchArm, Pattern};
 use syntax::types::Type;
 
 fn if_let_match_arms(
     pattern: &Pattern,
-    typed_pattern: &Option<TypedPattern>,
     consequence: &Expression,
     alternative: &Expression,
 ) -> Vec<MatchArm> {
@@ -27,7 +26,6 @@ fn if_let_match_arms(
         MatchArm {
             pattern: pattern.clone(),
             guard: None,
-            typed_pattern: typed_pattern.clone(),
             expression: Box::new(consequence.clone()),
         },
         MatchArm {
@@ -35,7 +33,6 @@ fn if_let_match_arms(
                 span: alternative.get_span(),
             },
             guard: None,
-            typed_pattern: None,
             expression: Box::new(alternative.clone()),
         },
     ]
@@ -256,6 +253,9 @@ impl Planner<'_> {
                 ty,
                 ..
             } => {
+                let Some(value) = value.value() else {
+                    return LoweredStatement::Block(LoweredBlock { statements: vec![] });
+                };
                 let plan = self.build_const_plan(identifier, value, ty);
                 self.directed_at(expression, LoweredStatement::Const(plan))
             }
@@ -268,16 +268,15 @@ impl Planner<'_> {
             Expression::Let {
                 binding,
                 value,
-                else_block,
-                assert,
+                mode,
                 ..
             } => {
                 let plan = self.build_let_plan(
                     binding,
                     value,
-                    else_block.as_deref(),
-                    binding.mutable,
-                    *assert,
+                    mode.else_block(),
+                    binding.is_mutable(),
+                    mode.is_assert(),
                 );
                 self.directed_at(expression, LoweredStatement::Let(plan))
             }
@@ -295,10 +294,9 @@ impl Planner<'_> {
                 scrutinee,
                 consequence,
                 alternative,
-                typed_pattern,
                 ..
             } => {
-                let arms = if_let_match_arms(pattern, typed_pattern, consequence, alternative);
+                let arms = if_let_match_arms(pattern, consequence, alternative);
                 let body = self.lower_match_to_block(scrutinee, &arms, &PlacePlan::Statement);
                 self.directed_at(
                     expression,
@@ -626,7 +624,6 @@ impl Planner<'_> {
     fn lower_while_let_statement(&mut self, expression: &Expression) -> LoweredStatement {
         let Expression::WhileLet {
             pattern,
-            typed_pattern,
             scrutinee,
             body,
             ..
@@ -635,9 +632,7 @@ impl Planner<'_> {
             unreachable!("lower_while_let_statement requires a WhileLet expression");
         };
         let directive = self.maybe_line_directive(&expression.get_span());
-        let body = self.with_loop("_", |this| {
-            this.lower_while_let(pattern, typed_pattern.as_ref(), scrutinee, body)
-        });
+        let body = self.with_loop("_", |this| this.lower_while_let(pattern, scrutinee, body));
         directed(directive, LoweredStatement::WhileLet(WhileLetPlan { body }))
     }
 
@@ -737,10 +732,9 @@ impl Planner<'_> {
                 scrutinee,
                 consequence,
                 alternative,
-                typed_pattern,
                 ..
             } => {
-                let arms = if_let_match_arms(pattern, typed_pattern, consequence, alternative);
+                let arms = if_let_match_arms(pattern, consequence, alternative);
                 self.lower_match_to_block(scrutinee, &arms, place)
             }
             Expression::Match { subject, arms, .. } => {
@@ -847,13 +841,12 @@ impl Planner<'_> {
                 scrutinee,
                 consequence,
                 alternative,
-                typed_pattern,
                 ..
             } => {
                 if !directive.is_empty() {
                     statements.push(LoweredStatement::RawGo(directive));
                 }
-                let arms = if_let_match_arms(pattern, typed_pattern, consequence, alternative);
+                let arms = if_let_match_arms(pattern, consequence, alternative);
                 let block = self.lower_match_to_block(scrutinee, &arms, &PlacePlan::Return);
                 statements.extend(block.statements);
             }
@@ -1042,8 +1035,7 @@ fn temp_identifier(name: &str, original: &Expression) -> Expression {
         value: name.into(),
         ty: original.get_type(),
         span: original.get_span(),
-        binding_id: None,
-        qualified: None,
+        resolution: IdentifierResolution::Unresolved,
     }
 }
 

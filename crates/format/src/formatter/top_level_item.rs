@@ -3,8 +3,8 @@ use super::sequence::SiblingEntry;
 use crate::INDENT_WIDTH;
 use crate::lindig::{Document, join, strict_break};
 use syntax::ast::{
-    Annotation, Attribute, AttributeArg, Binding, EnumVariant, Expression, Generic,
-    ParentInterface, Span, StructFieldDefinition, StructKind, VariantFields,
+    Annotation, Attribute, AttributeArg, Binding, ConstInitializer, EnumVariant, Expression,
+    FunctionBody, Generic, ParentInterface, Span, StructFieldDefinition, StructKind, VariantFields,
 };
 
 impl<'a> Formatter<'a> {
@@ -14,7 +14,7 @@ impl<'a> Formatter<'a> {
         generics: &'a [Generic],
         params: &'a [Binding],
         return_annotation: &'a Annotation,
-        body: &'a Expression,
+        body: &'a FunctionBody,
     ) -> Document<'a> {
         let generics_doc = Self::generics(generics);
 
@@ -35,10 +35,9 @@ impl<'a> Formatter<'a> {
             .append(return_doc)
             .group();
 
-        if matches!(body, Expression::NoOp) {
-            signature
-        } else {
-            signature.append(" ").append(self.as_block(body))
+        match body.definition() {
+            None => signature,
+            Some(body) => signature.append(" ").append(self.as_block(body)),
         }
     }
 
@@ -456,7 +455,7 @@ impl<'a> Formatter<'a> {
         &mut self,
         name: &'a str,
         annotation: Option<&'a Annotation>,
-        value: &'a Expression,
+        value: &'a ConstInitializer,
     ) -> Document<'a> {
         let type_doc = match annotation {
             Some(ann) => Document::str(": ").append(Self::annotation(ann)),
@@ -465,16 +464,15 @@ impl<'a> Formatter<'a> {
 
         let declaration = Document::str("const ").append(name).append(type_doc);
 
-        if matches!(value, Expression::NoOp) {
-            declaration
-        } else {
-            declaration.append(" = ").append(self.expression(value))
+        match value.value() {
+            None => declaration,
+            Some(value) => declaration.append(" = ").append(self.expression(value)),
         }
     }
 
     pub(super) fn binding(&mut self, binding: &'a Binding) -> Document<'a> {
         self.with_leading_comments(binding.pattern.get_span().byte_offset, |s| {
-            let pattern_doc = if binding.mutable {
+            let pattern_doc = if binding.is_mutable() {
                 Document::str("mut ").append(s.pattern(&binding.pattern))
             } else {
                 s.pattern(&binding.pattern)
@@ -548,10 +546,10 @@ impl<'a> Formatter<'a> {
         let generics_docs: Vec<_> = generics
             .iter()
             .map(|g| {
-                if g.bounds.is_empty() {
+                if g.bound_count() == 0 {
                     Document::string(g.name.to_string())
                 } else {
-                    let bounds: Vec<_> = g.bounds.iter().map(Self::annotation).collect();
+                    let bounds: Vec<_> = g.bounds().map(Self::annotation).collect();
                     Document::string(g.name.to_string())
                         .append(": ")
                         .append(join(bounds, Document::str(" + ")))

@@ -61,7 +61,6 @@ fn restore_module_bounds(
     let sources: Vec<(u32, String)> = module
         .files
         .values()
-        .chain(module.typedefs.values())
         .filter(|file| file.items.is_empty() && !file.is_test())
         .map(|file| (file.id, file.source.clone()))
         .collect();
@@ -219,5 +218,5 @@ fn file_context_kind(module_id: &str) -> FileContextKind {
 }
 
 fn needs_restoration(generic: &Generic) -> bool {
-    generic.bounds.len() != generic.resolved_bounds.len()
+    !generic.bounds_are_resolved()
 }

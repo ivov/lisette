@@ -37,7 +37,6 @@ description: |
                             },
                         },
                         annotation: None,
-                        typed_pattern: None,
                         ty: Var {
                             id: uninferred,
                         },
@@ -48,7 +47,7 @@ description: |
                     id: uninferred,
                 },
                 visibility: Private,
-                body: NoOp,
+                body: Declaration,
                 ty: Var {
                     id: uninferred,
                 },

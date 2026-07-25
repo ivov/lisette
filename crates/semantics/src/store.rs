@@ -184,18 +184,15 @@ impl Store {
         ast: Vec<Expression>,
         file_comment: Option<String>,
     ) {
-        self.store_file(
-            ENTRY_MODULE_ID,
-            File {
-                id: ENTRY_FILE_ID,
-                module_id: ENTRY_MODULE_ID.to_string(),
-                name: filename.to_string(),
-                display_path: display_path.to_string(),
-                source: source.to_string(),
-                items: ast,
-                file_comment,
-            },
-        );
+        self.store_file(File {
+            id: ENTRY_FILE_ID,
+            module_id: ENTRY_MODULE_ID.to_string(),
+            name: filename.to_string(),
+            display_path: display_path.to_string(),
+            source: source.to_string(),
+            items: ast,
+            file_comment,
+        });
     }
 
     pub fn store_module(&mut self, module_id: &str, files: Vec<File>) {
@@ -203,41 +200,32 @@ impl Store {
         self.add_module(module_id);
 
         for file in files {
-            self.store_file(module_id, file);
+            assert_eq!(file.module_id, module_id);
+            self.store_file(file);
         }
     }
 
     /// Stores a file in the module and registers the file_id -> module_id mapping.
-    /// .d.lis files go to `typedefs`, .lis files go to `files`.
-    pub fn store_file(&mut self, module_id: &str, file: File) {
-        self.files.insert(file.id, module_id.to_string());
+    pub fn store_file(&mut self, file: File) {
+        let module_id = file.module_id.clone();
+        self.files.insert(file.id, module_id.clone());
 
         let module = self
-            .get_module_mut(module_id)
+            .get_module_mut(&module_id)
             .expect("module must exist to store file");
-
-        if file.is_d_lis() {
-            module.typedefs.insert(file.id, file);
-        } else {
-            module.files.insert(file.id, file);
-        }
+        module.files.insert(file.id, file);
     }
 
     pub fn get_file(&self, file_id: u32) -> Option<&File> {
         let module_id = self.files.get(&file_id)?;
         let module = self.get_module(module_id)?;
-        module
-            .get_file(file_id)
-            .or_else(|| module.get_typedef_by_id(file_id))
+        module.get_file(file_id)
     }
 
     pub(crate) fn get_file_mut(&mut self, file_id: u32) -> Option<&mut File> {
         let module_id = self.files.get(&file_id)?.clone();
         let module = Arc::make_mut(self.modules.get_mut(&module_id)?);
-        module
-            .files
-            .get_mut(&file_id)
-            .or_else(|| module.typedefs.get_mut(&file_id))
+        module.files.get_mut(&file_id)
     }
 
     pub fn get_module(&self, module_id: &str) -> Option<&Module> {
@@ -325,9 +313,8 @@ impl Store {
     }
 
     pub(crate) fn is_const(&self, qualified_name: &str) -> bool {
-        self.module_for_qualified_name(qualified_name)
-            .and_then(|module_id| self.get_module(module_id))
-            .is_some_and(|module| module.const_names.contains(qualified_name))
+        self.get_definition(qualified_name)
+            .is_some_and(Definition::is_const)
     }
 
     pub fn variants_of(&self, qualified_name: &str) -> Option<&[EnumVariant]> {
@@ -358,7 +345,7 @@ impl Store {
                 // Float domains rely on exact-equality over fragile values and do
                 // not occur in the Go stdlib; they are deliberately not indexed.
                 if definition.is_closed_domain()
-                    && let Some(base) = definition.ty.underlying_simple_kind()
+                    && let Some(base) = self.underlying_simple_kind(&definition.ty)
                     && !base.is_float()
                 {
                     bases.insert(qualified_name.clone(), (base, module.id.clone()));
@@ -456,46 +443,99 @@ impl Store {
     }
 
     pub fn peel_alias(&self, ty: &Type) -> Type {
-        syntax::types::peel_alias(ty, |id| {
-            self.get_definition(id)
-                .is_some_and(Definition::is_type_alias)
-        })
+        syntax::types::peel_alias(ty, |id| self.get_definition(id))
     }
 
-    pub(crate) fn peel_refs_and_aliases(&self, ty: &Type) -> (Type, bool) {
+    pub fn underlying_type(&self, ty: &Type) -> Option<Type> {
+        syntax::types::underlying_type(ty, |id| self.get_definition(id))
+    }
+
+    pub fn peel_underlying(&self, ty: &Type) -> Type {
+        syntax::types::peel_underlying(ty, |id| self.get_definition(id))
+    }
+
+    pub fn underlying_simple_kind(&self, ty: &Type) -> Option<SimpleKind> {
+        syntax::types::underlying_simple_kind(ty, |id| self.get_definition(id))
+    }
+
+    pub fn underlying_numeric_type(&self, ty: &Type) -> Option<Type> {
+        syntax::types::underlying_numeric_type(ty, |id| self.get_definition(id))
+    }
+
+    pub fn literal_adaptation_target(&self, ty: &Type) -> Option<Type> {
+        syntax::types::literal_adaptation_target(ty, |id| self.get_definition(id))
+    }
+
+    pub fn is_numeric_compatible_with(&self, left: &Type, right: &Type) -> bool {
+        syntax::types::is_numeric_compatible_with(left, right, |id| self.get_definition(id))
+    }
+
+    pub fn is_aliased_numeric_type(&self, ty: &Type) -> bool {
+        syntax::types::is_aliased_numeric_type(ty, |id| self.get_definition(id))
+    }
+
+    pub fn has_underlying_numeric_type(&self, ty: &Type) -> bool {
+        self.underlying_numeric_type(ty).is_some()
+    }
+
+    pub fn has_underlying_rune(&self, ty: &Type) -> bool {
+        self.underlying_numeric_type(ty)
+            .is_some_and(|ty| ty.is_rune())
+    }
+
+    pub fn has_underlying_byte(&self, ty: &Type) -> bool {
+        self.underlying_numeric_type(ty)
+            .is_some_and(|ty| ty.is_simple(SimpleKind::Byte) || ty.is_simple(SimpleKind::Uint8))
+    }
+
+    pub fn has_byte_or_rune_slice_underlying(&self, ty: &Type) -> bool {
+        syntax::types::has_byte_or_rune_slice_underlying(ty, |id| self.get_definition(id))
+    }
+
+    pub fn is_orderable(&self, ty: &Type) -> bool {
+        syntax::types::is_orderable(ty, |id| self.get_definition(id))
+    }
+
+    pub fn satisfies_ordered_constraint(&self, ty: &Type) -> bool {
+        syntax::types::satisfies_ordered_constraint(ty, |id| self.get_definition(id))
+    }
+
+    pub fn resolves_to_unknown(&self, ty: &Type) -> bool {
+        syntax::types::resolves_to_unknown(ty, |id| self.get_definition(id))
+    }
+
+    pub fn contains_unknown(&self, ty: &Type) -> bool {
+        syntax::types::contains_unknown(ty, |id| self.get_definition(id))
+    }
+
+    pub fn resolve_to_function_type(&self, ty: &Type) -> Option<Type> {
+        let resolved = self.peel_alias(ty);
+        if matches!(resolved, Type::Function(_)) {
+            return Some(resolved);
+        }
+        self.underlying_type(ty)
+            .filter(|underlying| matches!(underlying, Type::Function(_)))
+    }
+
+    pub fn peel_refs_and_aliases(&self, ty: &Type) -> (Type, bool) {
         let mut current = self.peel_alias(ty);
         let mut behind_ref = false;
+        let mut seen = HashSet::default();
         while current.is_ref() {
             behind_ref = true;
-            current = self.peel_alias(&current.strip_refs());
+            let stripped = current.strip_refs();
+            if let Type::Nominal { id, .. } = stripped.unwrap_forall()
+                && !seen.insert(id.clone())
+            {
+                return (stripped, behind_ref);
+            }
+            current = self.peel_alias(&stripped);
         }
         (current, behind_ref)
     }
 
     pub fn deep_resolve_alias(&self, ty: &Type) -> Type {
-        let mut current = ty.clone();
-        let mut seen: HashSet<Symbol> = HashSet::default();
-        loop {
-            let Type::Nominal { id, params, .. } = &current else {
-                return current;
-            };
-            if !seen.insert(id.clone()) {
-                return current;
-            }
-            let Some(def) = self.get_definition(id.as_str()) else {
-                return current;
-            };
-            if !matches!(def.body, DefinitionBody::TypeAlias { .. }) {
-                return current;
-            }
-            let def_ty = &def.ty;
-            let (vars, body) = match def_ty {
-                Type::Forall { vars, body } => (vars.clone(), body.as_ref().clone()),
-                other => (vec![], other.clone()),
-            };
-            let map: SubstitutionMap = vars.iter().cloned().zip(params.iter().cloned()).collect();
-            current = substitute(&body, &map);
-        }
+        self.peel_alias(ty)
     }
 
     pub(crate) fn peel_alias_deep(&self, ty: &Type) -> Type {
@@ -511,14 +551,9 @@ impl Store {
                 length,
                 element: Box::new(self.peel_alias_deep(&element)),
             },
-            Type::Nominal {
-                id,
-                params,
-                underlying_ty,
-            } => Type::Nominal {
+            Type::Nominal { id, params } => Type::Nominal {
                 id,
                 params: params.iter().map(|p| self.peel_alias_deep(p)).collect(),
-                underlying_ty,
             },
             Type::Function(f) => {
                 let new_params = f
@@ -612,27 +647,10 @@ impl Store {
         if let Some(definition) = self.get_definition(&qualified_name)
             && matches!(definition.body, DefinitionBody::TypeAlias { .. })
         {
-            let alias_ty = &definition.ty;
-            let underlying = match alias_ty {
-                Type::Forall { body, .. } => body.as_ref(),
-                other => other,
-            };
-            let underlying_key = match underlying {
-                Type::Nominal { id, .. } => Some(id.as_str().to_string()),
-                Type::Simple(kind) => Some(format!("prelude.{}", kind.leaf_name())),
-                Type::Compound { kind, .. } => Some(format!("prelude.{}", kind.leaf_name())),
-                Type::Array { .. } => Some("prelude.Array".to_string()),
-                _ => None,
-            };
-            // Follow only when the alias body names a different type. For
-            // opaque prelude natives (e.g. `type Map<K, V>`) the body points
-            // to itself — following would loop.
-            if let Some(k) = underlying_key
-                && k != qualified_name.as_str()
-            {
-                let alias_ty = alias_ty.clone();
+            let underlying = self.peel_alias(&stripped);
+            if underlying != stripped {
                 for (name, method_ty) in
-                    self.get_all_methods_recursive(&alias_ty, trait_bounds, visited)
+                    self.get_all_methods_recursive(&underlying, trait_bounds, visited)
                 {
                     methods.entry(name).or_insert(method_ty);
                 }
@@ -687,21 +705,21 @@ fn method_lookup_key(ty: &Type) -> Option<Symbol> {
 #[cfg(test)]
 mod closed_domain_tests {
     use super::*;
-    use syntax::ast::StructKind;
-    use syntax::program::{Attributes, TypeAttribute, Visibility};
+    use syntax::ast::{Annotation, Generic, Span, StructKind};
+    use syntax::program::{AliasKind, Attributes, TypeAttribute, Visibility};
+    use syntax::types::CompoundKind;
 
     fn nominal_int(id: &str) -> Type {
         Type::Nominal {
             id: Symbol::from_raw(id),
             params: vec![],
-            underlying_ty: Some(Box::new(Type::Simple(SimpleKind::Int))),
         }
     }
 
     fn struct_def(ty: Type, closed_domain: bool) -> Definition {
         let mut attributes = Attributes::default();
         if closed_domain {
-            attributes.insert(TypeAttribute::ClosedDomain, ());
+            attributes.insert(TypeAttribute::ClosedDomain);
         }
         Definition {
             visibility: Visibility::Public,
@@ -711,7 +729,16 @@ mod closed_domain_tests {
             doc: None,
             body: DefinitionBody::Struct {
                 generics: vec![],
-                fields: vec![],
+                fields: vec![StructFieldDefinition {
+                    doc: None,
+                    attributes: vec![],
+                    name: "0".into(),
+                    name_span: syntax::ast::Span::dummy(),
+                    annotation: syntax::ast::Annotation::Unknown,
+                    visibility: syntax::ast::Visibility::Private,
+                    ty: Type::Simple(SimpleKind::Int),
+                    embedded: false,
+                }],
                 kind: StructKind::Tuple,
                 methods: Default::default(),
                 constructor: None,
@@ -728,11 +755,13 @@ mod closed_domain_tests {
             name_span: None,
             doc: None,
             body: DefinitionBody::Value {
+                kind: syntax::program::ValueKind::Constant {
+                    value: Some(Literal::Integer { value, text: None }),
+                },
                 allowed_lints: vec![],
                 go_hints: vec![],
                 go_name: None,
                 go_type_param_recipe: None,
-                const_value: Some(Literal::Integer { value, text: None }),
             },
         }
     }
@@ -819,5 +848,102 @@ mod closed_domain_tests {
             .map(|m| m.display_name.as_str())
             .collect();
         assert_eq!(names, vec!["Sunday"]);
+    }
+
+    #[test]
+    fn generic_alias_target_is_instantiated_from_its_definition() {
+        let mut store = Store::new();
+        let generic = Generic::new("T", Vec::new(), Span::dummy());
+        let alias_ref = Type::Nominal {
+            id: Symbol::from_raw("m.Items"),
+            params: vec![Type::Parameter("T".into())],
+        };
+        insert(
+            &mut store,
+            "m",
+            "m.Items",
+            Definition {
+                visibility: Visibility::Public,
+                ty: Type::Forall {
+                    vars: vec!["T".into()],
+                    body: Box::new(alias_ref),
+                },
+                name: Some("Items".into()),
+                name_span: None,
+                doc: None,
+                body: DefinitionBody::TypeAlias {
+                    generics: vec![generic],
+                    alias: AliasKind::Transparent {
+                        annotation: Annotation::Unknown,
+                        target: Type::Compound {
+                            kind: CompoundKind::Slice,
+                            args: vec![Type::Parameter("T".into())],
+                        },
+                    },
+                    methods: Default::default(),
+                    attributes: Default::default(),
+                },
+            },
+        );
+
+        let occurrence = Type::Nominal {
+            id: Symbol::from_raw("m.Items"),
+            params: vec![Type::int()],
+        };
+        let expected = Type::Compound {
+            kind: CompoundKind::Slice,
+            args: vec![Type::int()],
+        };
+
+        assert_eq!(store.underlying_type(&occurrence), Some(expected.clone()));
+        assert_eq!(store.peel_alias(&occurrence), expected);
+    }
+
+    #[test]
+    fn newtype_representation_comes_from_its_definition() {
+        let mut store = Store::new();
+        let occurrence = nominal_int("m.Count");
+        insert(
+            &mut store,
+            "m",
+            "m.Count",
+            struct_def(occurrence.clone(), false),
+        );
+
+        assert_eq!(store.peel_underlying(&occurrence), Type::int());
+    }
+
+    #[test]
+    fn peeling_references_and_aliases_terminates_on_recursive_aliases() {
+        fn recursive_alias(name: &str, target: &str) -> Definition {
+            Definition {
+                visibility: Visibility::Public,
+                ty: nominal_int(name),
+                name: name.rsplit('.').next().map(Into::into),
+                name_span: None,
+                doc: None,
+                body: DefinitionBody::TypeAlias {
+                    generics: vec![],
+                    alias: AliasKind::Transparent {
+                        annotation: Annotation::Unknown,
+                        target: Type::Compound {
+                            kind: CompoundKind::Ref,
+                            args: vec![nominal_int(target)],
+                        },
+                    },
+                    methods: Default::default(),
+                    attributes: Default::default(),
+                },
+            }
+        }
+
+        let mut store = Store::new();
+        insert(&mut store, "m", "m.A", recursive_alias("m.A", "m.B"));
+        insert(&mut store, "m", "m.B", recursive_alias("m.B", "m.A"));
+
+        let (peeled, behind_ref) = store.peel_refs_and_aliases(&nominal_int("m.A"));
+
+        assert!(behind_ref);
+        assert_eq!(peeled, nominal_int("m.B"));
     }
 }

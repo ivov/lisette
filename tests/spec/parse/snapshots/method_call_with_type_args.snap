@@ -21,84 +21,83 @@ description: |
             id: uninferred,
         },
         visibility: Private,
-        body: Block {
-            items: [
-                Call {
-                    expression: DotAccess {
-                        expression: Identifier {
-                            value: "obj",
+        body: Definition(
+            Block {
+                items: [
+                    Call {
+                        expression: DotAccess {
+                            expression: Identifier {
+                                value: "obj",
+                                ty: Var {
+                                    id: uninferred,
+                                },
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 13,
+                                    byte_length: 3,
+                                },
+                                resolution: Unresolved,
+                            },
+                            member: "method",
                             ty: Var {
                                 id: uninferred,
                             },
                             span: Span {
                                 file_id: 0,
                                 byte_offset: 13,
-                                byte_length: 3,
+                                byte_length: 10,
                             },
-                            binding_id: None,
-                            qualified: None,
+                            resolution: Unresolved,
                         },
-                        member: "method",
+                        args: [
+                            Identifier {
+                                value: "arg",
+                                ty: Var {
+                                    id: uninferred,
+                                },
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 29,
+                                    byte_length: 3,
+                                },
+                                resolution: Unresolved,
+                            },
+                        ],
+                        spread: None,
+                        type_arguments: Unresolved(
+                            [
+                                Constructor {
+                                    name: "int",
+                                    params: [],
+                                    span: Span {
+                                        file_id: 0,
+                                        byte_offset: 24,
+                                        byte_length: 3,
+                                    },
+                                },
+                            ],
+                        ),
                         ty: Var {
                             id: uninferred,
                         },
                         span: Span {
                             file_id: 0,
                             byte_offset: 13,
-                            byte_length: 10,
+                            byte_length: 20,
                         },
-                        dot_access_kind: None,
-                        receiver_coercion: None,
+                        call_kind: None,
                     },
-                    args: [
-                        Identifier {
-                            value: "arg",
-                            ty: Var {
-                                id: uninferred,
-                            },
-                            span: Span {
-                                file_id: 0,
-                                byte_offset: 29,
-                                byte_length: 3,
-                            },
-                            binding_id: None,
-                            qualified: None,
-                        },
-                    ],
-                    spread: None,
-                    type_arguments: Unresolved(
-                        [
-                            Constructor {
-                                name: "int",
-                                params: [],
-                                span: Span {
-                                    file_id: 0,
-                                    byte_offset: 24,
-                                    byte_length: 3,
-                                },
-                            },
-                        ],
-                    ),
-                    ty: Var {
-                        id: uninferred,
-                    },
-                    span: Span {
-                        file_id: 0,
-                        byte_offset: 13,
-                        byte_length: 20,
-                    },
-                    call_kind: None,
+                ],
+                ty: Var {
+                    id: uninferred,
                 },
-            ],
-            ty: Var {
-                id: uninferred,
+                span: Span {
+                    file_id: 0,
+                    byte_offset: 11,
+                    byte_length: 25,
+                },
             },
-            span: Span {
-                file_id: 0,
-                byte_offset: 11,
-                byte_length: 25,
-            },
-        },
+        ),
         ty: Var {
             id: uninferred,
         },

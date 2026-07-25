@@ -46,7 +46,6 @@ pub struct Parser<'source> {
     stream: TokenStream<'source>,
     errors: Vec<ParseError>,
     file_id: u32,
-    in_control_flow_header: bool,
     source: &'source str,
     depth: u32,
 }
@@ -81,7 +80,6 @@ impl<'source> Parser<'source> {
             stream,
             errors: Default::default(),
             file_id,
-            in_control_flow_header: false,
             source,
             depth: 0,
         }
@@ -543,7 +541,7 @@ impl<'source> Parser<'source> {
         )
     }
 
-    fn is_struct_instantiation(&self) -> bool {
+    fn is_struct_instantiation(&self, context: pratt::ExpressionContext) -> bool {
         let previous = self.stream.previous();
         if previous.kind != Identifier {
             return false;
@@ -557,7 +555,7 @@ impl<'source> Parser<'source> {
         }
 
         if first_ahead.kind == RightCurlyBrace {
-            if self.in_control_flow_header {
+            if context.is_control_flow_header() {
                 return is_uppercase && self.has_block_after_struct();
             }
             return is_uppercase;
@@ -568,7 +566,7 @@ impl<'source> Parser<'source> {
             return match second_ahead.kind {
                 Colon => self.stream.peek_ahead(3).kind != Colon,
                 Comma | RightCurlyBrace => {
-                    if self.in_control_flow_header {
+                    if context.is_control_flow_header() {
                         is_uppercase && self.has_block_after_struct()
                     } else {
                         is_uppercase
@@ -581,7 +579,17 @@ impl<'source> Parser<'source> {
         false
     }
 
-    fn enter_recursion(&mut self) -> bool {
+    fn with_recursion<T>(&mut self, parse: impl FnOnce(&mut Self) -> T) -> Option<T> {
+        let outer_depth = self.depth;
+        if !self.try_deepen() {
+            return None;
+        }
+        let result = parse(self);
+        self.depth = outer_depth;
+        Some(result)
+    }
+
+    fn try_deepen(&mut self) -> bool {
         if self.depth >= MAX_DEPTH {
             let span = self.span_from_token(self.current_token());
             self.track_error_at(span, "too deeply nested", "Reduce nesting depth");
@@ -589,10 +597,6 @@ impl<'source> Parser<'source> {
         }
         self.depth += 1;
         true
-    }
-
-    fn leave_recursion(&mut self) {
-        self.depth -= 1;
     }
 
     fn too_many_errors(&self) -> bool {

@@ -13,24 +13,20 @@ pub(crate) enum SlotOrigin {
 }
 
 impl SlotOrigin {
-    pub(crate) fn go_parameter(ty: &Type) -> Self {
-        Self::go_slot(Self::GoParameter, ty)
+    pub(crate) fn go_parameter(is_any: bool) -> Self {
+        Self::go_slot(Self::GoParameter, is_any)
     }
 
-    pub(crate) fn go_return(ty: &Type) -> Self {
-        Self::go_slot(Self::GoReturn, ty)
+    pub(crate) fn go_return(is_any: bool) -> Self {
+        Self::go_slot(Self::GoReturn, is_any)
     }
 
-    pub(crate) fn go_field(ty: &Type) -> Self {
-        Self::go_slot(Self::GoField, ty)
+    pub(crate) fn go_field(is_any: bool) -> Self {
+        Self::go_slot(Self::GoField, is_any)
     }
 
-    fn go_slot(origin: Self, ty: &Type) -> Self {
-        if ty.resolves_to_unknown() {
-            Self::GoAny
-        } else {
-            origin
-        }
+    fn go_slot(origin: Self, is_any: bool) -> Self {
+        if is_any { Self::GoAny } else { origin }
     }
 
     fn nested(self) -> Self {
@@ -370,10 +366,13 @@ impl Planner<'_> {
         declaration: Option<&Type>,
     ) -> ValueLayout {
         let resolved_declaration = declaration.map(|ty| self.facts.peel_alias(ty));
-        if resolved_declaration
-            .as_ref()
-            .is_some_and(is_opaque_layout_hint)
-        {
+        if resolved_declaration.as_ref().is_some_and(|ty| {
+            self.facts.resolves_to_unknown(ty)
+                || matches!(
+                    ty.unwrap_forall(),
+                    Type::Parameter(_) | Type::Var { .. } | Type::ReceiverPlaceholder
+                )
+        }) {
             return self.value_layout_with_hint(ty, SlotOrigin::Lisette, None);
         }
 
@@ -591,14 +590,6 @@ fn optional_layouts_match(left: Option<&ValueLayout>, right: Option<&ValueLayout
         (None, None) => true,
         _ => false,
     }
-}
-
-fn is_opaque_layout_hint(ty: &Type) -> bool {
-    ty.resolves_to_unknown()
-        || matches!(
-            ty.unwrap_forall(),
-            Type::Parameter(_) | Type::Var { .. } | Type::ReceiverPlaceholder
-        )
 }
 
 fn compound_hint(

@@ -11,7 +11,7 @@ use crate::plan::bodies::LoweredStatement;
 use crate::plan::calls::{CallPlan, ResolvedCallee};
 use crate::plan::values::{CaptureBoundary, EvaluationEffect, GoExpression, ValuePlan};
 use crate::types::native::NativeGoType;
-use syntax::ast::{Expression, Literal};
+use syntax::ast::{Expression, Literal, ResolvedCallTypeArguments};
 use syntax::program::ReceiverCoercion;
 use syntax::types::Type;
 
@@ -22,7 +22,7 @@ impl Planner<'_> {
         function: &Expression,
         callee: &ResolvedCallee<'_>,
         receiver_ty: &Type,
-        type_args: &[Type],
+        type_args: ResolvedCallTypeArguments<'_>,
         arg_shape: CallArgShape,
     ) -> Option<String> {
         let definition_ty = callee.declared_type()?;
@@ -91,20 +91,21 @@ impl Planner<'_> {
         &mut self,
         function: &Expression,
         args: &[Expression],
-        type_args: &[Type],
+        type_args: ResolvedCallTypeArguments<'_>,
         spread: Option<&Expression>,
         call_plan: &CallPlan<'_>,
     ) -> ValuePlan {
         let Expression::DotAccess {
             expression: receiver,
             member,
-            receiver_coercion: coercion,
+            resolution,
             ..
         } = function
         else {
             unreachable!("lower_ufcs_call called on non-DotAccess");
         };
 
+        let coercion = resolution.receiver_coercion();
         let receiver_ty = self.facts.strip_and_peel(&receiver.get_type());
         let Type::Nominal {
             id: qualified_name, ..
@@ -120,7 +121,7 @@ impl Planner<'_> {
                 args,
                 spread,
                 &call_plan.resolved,
-                *coercion,
+                coercion,
             );
         let receiver_arg = match coercion {
             Some(ReceiverCoercion::AutoDeref) => format!("*{receiver_arg}"),
@@ -218,7 +219,7 @@ impl Planner<'_> {
                 param.map(|param| &param.instantiated),
             ));
         }
-        let combine = plan_variadic_spread(function, spread).map(|p| p.combine(1));
+        let combine = plan_variadic_spread(&self.facts, function, spread).map(|p| p.combine(1));
 
         let sequenced = self.sequence_args_with_spread_adapter_values(
             all_stages,
@@ -270,7 +271,7 @@ impl Planner<'_> {
         receiver_ty: &Type,
         qualified_name: &str,
         member: &str,
-        type_args: &[Type],
+        type_args: ResolvedCallTypeArguments<'_>,
         arg_shape: CallArgShape,
     ) -> String {
         let type_args_string = self
@@ -331,7 +332,7 @@ impl Planner<'_> {
             .map(|a| self.stage_composite(a, ExpressionContext::value()))
             .collect();
 
-        let combine = plan_variadic_spread(function, spread).map(|p| p.combine(0));
+        let combine = plan_variadic_spread(&self.facts, function, spread).map(|p| p.combine(0));
         let sequenced = self.sequence_with_spread_values(
             stages,
             spread,

@@ -5,7 +5,7 @@
 use diagnostics::LocalSink;
 use ecow::EcoString;
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
-use syntax::ast::{Binding, Expression, Pattern, Span};
+use syntax::ast::{Binding, Expression, IdentifierResolution, Pattern, Span};
 use syntax::program::DotAccessKind;
 use syntax::types::{CompoundKind, FunctionType, Symbol, Type};
 
@@ -80,7 +80,7 @@ fn collect_generic_targets(store: &Store) -> Targets<'_> {
     let mut targets = Targets::default();
     for module_id in module_ids {
         let module = &store.modules[module_id];
-        let mut files: Vec<_> = module.files.values().collect();
+        let mut files: Vec<_> = module.source_files().collect();
         files.sort_unstable_by(|a, b| a.name.cmp(&b.name).then_with(|| a.id.cmp(&b.id)));
         for file in files {
             for item in &file.items {
@@ -93,6 +93,9 @@ fn collect_generic_targets(store: &Store) -> Targets<'_> {
                         body,
                         ..
                     } if !generics.is_empty() => {
+                        let Some(body) = body.definition() else {
+                            continue;
+                        };
                         let index = targets.add(GenericTarget {
                             name,
                             vars: generics.iter().map(|g| &g.name).collect(),
@@ -155,6 +158,9 @@ fn collect_method<'a>(
     if vars.is_empty() {
         return;
     }
+    let Some(body) = body.definition() else {
+        return;
+    };
     let (declared_self, declared_params) = split_self_param(params);
     let receiver_id = declared_self.and_then(receiver_type_id).unwrap_or_else(|| {
         Symbol::from_parts(module_id, receiver_name)
@@ -273,7 +279,7 @@ impl<'a> EdgeCollector<'_, 'a> {
     fn process_reference(&mut self, reference: &'a Expression, span: Span) {
         match reference {
             Expression::Identifier {
-                qualified: Some(qualified),
+                resolution: IdentifierResolution::Definition(qualified),
                 ty,
                 ..
             } => {
@@ -287,9 +293,9 @@ impl<'a> EdgeCollector<'_, 'a> {
                 expression: base,
                 member,
                 ty,
-                dot_access_kind,
+                resolution,
                 ..
-            } => self.process_method_reference(base, member, ty, dot_access_kind, span),
+            } => self.process_method_reference(base, member, ty, resolution.kind(), span),
             _ => {}
         }
     }
@@ -299,7 +305,7 @@ impl<'a> EdgeCollector<'_, 'a> {
         base: &'a Expression,
         member: &EcoString,
         ty: &'a Type,
-        dot_access_kind: &Option<DotAccessKind>,
+        dot_access_kind: Option<DotAccessKind>,
         span: Span,
     ) {
         let is_instance = match dot_access_kind {
@@ -311,7 +317,7 @@ impl<'a> EdgeCollector<'_, 'a> {
         let base_ty = base.get_type();
         let receiver_id = receiver_type_id(&base_ty).or_else(|| match base {
             Expression::Identifier {
-                qualified: Some(qualified),
+                resolution: IdentifierResolution::Definition(qualified),
                 ..
             } => Some(qualified.clone()),
             _ => None,
@@ -442,8 +448,8 @@ fn same_shape(declared: &Type, actual: &Type) -> bool {
 }
 
 /// Child positions matched pairwise between the declared and instantiated
-/// sides. Excludes `Nominal.underlying_ty`, which can be present on only one
-/// side.
+/// sides. A nominal occurrence contains only its type arguments; its alias
+/// target lives in the definition store and is not part of this shape.
 fn structural_children(ty: &Type) -> Vec<&Type> {
     match ty {
         Type::Compound { args, .. } => args.iter().collect(),

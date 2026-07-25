@@ -8,7 +8,7 @@ use crate::Planner;
 use crate::names::go_name::PRELUDE_ERROR_ID;
 use crate::types::go_type::GoType;
 use callable::{CallableReturnAbi, OptionReturnAbi, PayloadLayout};
-use syntax::ast::Expression;
+use syntax::ast::{Expression, IdentifierResolution};
 use syntax::types::Type;
 
 impl Planner<'_> {
@@ -189,6 +189,9 @@ pub(crate) fn is_tagged_shape_fn_value(expression: &Expression) -> bool {
     }
     matches!(
         inner,
-        Expression::Identifier { qualified: Some(q), .. } if q.starts_with("prelude.")
+        Expression::Identifier {
+            resolution: IdentifierResolution::Definition(q),
+            ..
+        } if q.starts_with("prelude.")
     )
 }

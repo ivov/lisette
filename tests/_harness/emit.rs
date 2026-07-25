@@ -45,7 +45,6 @@ fn emit_inner(
     let test_index = syntax::program::TestIndex::default();
     let config = TestEmitConfig {
         definitions: &result.definitions,
-        const_names: &result.const_names,
         module_id: &result.module_id,
         go_module: "myproject",
         unused: &result.unused,
@@ -55,7 +54,6 @@ fn emit_inner(
         test_index: &test_index,
         go_package_names: &result.go_package_names,
         go_module_ids: &result.go_module_ids,
-        resolved_definitions: &result.resolved_definitions,
     };
     let mut emitter = Planner::new_for_tests(&config, source_for_sourcemap);
     let emitted_files = emitter.emit_files(&[&file], &result.module_id);

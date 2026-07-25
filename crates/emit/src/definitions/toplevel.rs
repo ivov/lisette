@@ -15,33 +15,22 @@ impl Planner<'_> {
         generics: &[Generic],
         ty: &Type,
     ) -> String {
-        let is_fn_alias;
-        let underlying = match ty {
-            Type::Forall { body, .. } => match body.as_ref() {
-                Type::Nominal {
-                    underlying_ty: Some(inner),
-                    ..
-                } if matches!(inner.as_ref(), Type::Function(_)) => {
-                    is_fn_alias = true;
-                    inner.as_ref()
-                }
-                other => {
-                    is_fn_alias = false;
-                    other
-                }
-            },
-            Type::Nominal {
-                underlying_ty: Some(inner),
-                ..
-            } if matches!(inner.as_ref(), Type::Function(_)) => {
-                is_fn_alias = true;
-                inner.as_ref()
-            }
-            _ => {
-                is_fn_alias = false;
-                ty
-            }
-        };
+        let params: Vec<Type> = generics
+            .iter()
+            .map(|generic| Type::Parameter(generic.name.clone()))
+            .collect();
+        let declared_target = self
+            .facts
+            .definition(&self.facts.qualified_current(name))
+            .and_then(|definition| definition.instantiate_alias_target(&params));
+        let function_target = declared_target
+            .as_ref()
+            .and_then(|target| self.facts.resolve_to_function_type(target));
+        let is_fn_alias = function_target.is_some();
+        let underlying = function_target
+            .as_ref()
+            .or(declared_target.as_ref())
+            .unwrap_or(ty);
         let ty_string = self.go_type_string(underlying);
 
         if let Type::Nominal { id, .. } = underlying

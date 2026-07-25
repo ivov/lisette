@@ -1,13 +1,15 @@
 use ecow::EcoString;
 
+use super::pratt::ExpressionContext;
 use super::strings::cook_string_contents;
 use super::{MAX_TUPLE_ARITY, ParamMode, ParseError, Parser};
 use crate::ast::{
     Annotation, Attribute, BinaryOperator, Binding, CallTypeArguments, Expression,
-    FormatStringPart, ImportAlias, Literal, SelectArm, SelectArmPattern, Span,
-    StructFieldAssignment, StructSpread, UnaryOperator, Visibility,
+    FormatStringPart, FunctionBody, IdentifierResolution, ImportAlias, LetMode, Literal, SelectArm,
+    SelectArmPattern, Span, StructFieldAssignment, StructSpread, UnaryOperator, Visibility,
 };
 use crate::lex::TokenKind::{self, *};
+use crate::program::DotAccessResolution;
 use crate::types::Type;
 
 #[derive(Clone, Copy)]
@@ -19,20 +21,26 @@ enum GoMakeKind {
 
 impl<'source> Parser<'source> {
     pub(crate) fn parse_expression(&mut self) -> Expression {
-        if !self.enter_recursion() {
-            let span = self.span_from_token(self.current_token());
-            self.resync_on_error();
-            return Expression::Unit {
-                ty: Type::uninferred(),
-                span,
-            };
-        }
-        let result = self.pratt_parse(0);
-        self.leave_recursion();
-        result
+        self.parse_expression_in(ExpressionContext::Normal)
     }
 
-    pub(crate) fn parse_atomic_expression(&mut self) -> Expression {
+    pub(crate) fn parse_control_flow_header(&mut self) -> Expression {
+        self.parse_expression_in(ExpressionContext::ControlFlowHeader)
+    }
+
+    fn parse_expression_in(&mut self, context: ExpressionContext) -> Expression {
+        if let Some(result) = self.with_recursion(|parser| parser.pratt_parse(0, context)) {
+            return result;
+        }
+        let span = self.span_from_token(self.current_token());
+        self.resync_on_error();
+        Expression::Unit {
+            ty: Type::uninferred(),
+            span,
+        }
+    }
+
+    pub(super) fn parse_atomic_expression(&mut self, context: ExpressionContext) -> Expression {
         if self.keyword_in_value_position() {
             return self.recover_keyword_as_identifier();
         }
@@ -62,7 +70,7 @@ impl<'source> Parser<'source> {
             Return => self.parse_return(false),
             Break => self.parse_break(),
             Continue => self.parse_continue(),
-            DotDot | DotDotEqual => self.parse_range(None, self.current_token()),
+            DotDot | DotDotEqual => self.parse_range(None, self.current_token(), context),
 
             LeftAngleBracket
                 if self.stream.peek_ahead(1).kind == Minus
@@ -89,10 +97,11 @@ impl<'source> Parser<'source> {
         }
     }
 
-    pub(crate) fn parse_range(
+    pub(super) fn parse_range(
         &mut self,
         start: Option<Box<Expression>>,
         span_start: crate::lex::Token<'source>,
+        context: ExpressionContext,
     ) -> Expression {
         if matches!(start.as_deref(), Some(Expression::Range { .. })) {
             self.track_error("not allowed", "Chained range operators are not supported");
@@ -121,7 +130,7 @@ impl<'source> Parser<'source> {
         }
 
         let end = if has_end {
-            Some(Box::new(self.parse_range_end()))
+            Some(Box::new(self.parse_range_end(context)))
         } else {
             None
         };
@@ -271,8 +280,7 @@ impl<'source> Parser<'source> {
             value: text.into(),
             ty: Type::uninferred(),
             span: self.span_from_tokens(start),
-            binding_id: None,
-            qualified: None,
+            resolution: IdentifierResolution::Unresolved,
         }
     }
 
@@ -336,8 +344,7 @@ impl<'source> Parser<'source> {
                     value: field_name.clone(),
                     ty: Type::uninferred(),
                     span: self.span_from_tokens(field_name_token),
-                    binding_id: None,
-                    qualified: None,
+                    resolution: IdentifierResolution::Unresolved,
                 }
             };
 
@@ -412,7 +419,7 @@ impl<'source> Parser<'source> {
         let start_offset = expression.get_span().byte_offset;
 
         if raw_type_args.is_empty()
-            && matches!(&expression, Expression::Identifier { value, qualified: None, .. } if value == "make")
+            && matches!(&expression, Expression::Identifier { value, resolution: IdentifierResolution::Unresolved, .. } if value == "make")
             && let Some(recovered) = self.try_go_make_shim(&expression)
         {
             return recovered;
@@ -424,7 +431,7 @@ impl<'source> Parser<'source> {
             ty: Type::uninferred(),
             expression: expression.into(),
             args,
-            spread: spread.into(),
+            spread: spread.map(Box::new),
             type_arguments: CallTypeArguments::unresolved(raw_type_args),
             span: self.span_from_offset(start_offset),
             call_kind: None,
@@ -610,7 +617,10 @@ impl<'source> Parser<'source> {
         let body = if self.is(LeftCurlyBrace) {
             self.parse_block_expression()
         } else {
-            Expression::NoOp
+            Expression::Unit {
+                ty: Type::uninferred(),
+                span: self.span_from_tokens(start),
+            }
         };
 
         Expression::Lambda {
@@ -800,50 +810,40 @@ impl<'source> Parser<'source> {
             };
         }
 
-        if !self.enter_recursion() {
-            let span = self.span_from_token(self.current_token());
-            let mut brace_depth = 1u32;
-            while brace_depth > 0 && !self.at_eof() {
-                match self.current_token().kind {
-                    LeftCurlyBrace => brace_depth += 1,
-                    RightCurlyBrace => brace_depth -= 1,
-                    _ => {}
-                }
-                if brace_depth > 0 {
-                    self.next();
-                }
-            }
-            self.advance_if(RightCurlyBrace);
-            return Expression::Block {
-                ty: Type::uninferred(),
-                items: vec![],
-                span,
-            };
-        }
-
-        let mut items = vec![];
-
-        while self.is_not(RightCurlyBrace) && !self.too_many_errors() {
-            let position = self.position();
-            let item = self.parse_block_item();
-
-            self.advance_if(Semicolon);
-
-            items.push(item);
-            if self.position() == position {
-                self.next();
-            }
-        }
-
-        let span = self.close_brace_span(start, start);
-
-        self.leave_recursion();
+        let (items, span) = self.parse_braced_items(start, start);
 
         Expression::Block {
             ty: Type::uninferred(),
             items,
             span,
         }
+    }
+
+    fn parse_braced_items(
+        &mut self,
+        span_start: crate::lex::Token<'source>,
+        opening_brace: crate::lex::Token<'source>,
+    ) -> (Vec<Expression>, Span) {
+        if let Some(result) = self.with_recursion(|parser| {
+            let mut items = vec![];
+            while parser.is_not(RightCurlyBrace) && !parser.too_many_errors() {
+                let position = parser.position();
+                let item = parser.parse_block_item();
+                parser.advance_if(Semicolon);
+                items.push(item);
+                if parser.position() == position {
+                    parser.next();
+                }
+            }
+            let span = parser.close_brace_span(span_start, opening_brace);
+            (items, span)
+        }) {
+            return result;
+        }
+
+        let span = self.span_from_token(self.current_token());
+        self.consume_to_matching_close_brace();
+        (vec![], span)
     }
 
     pub(crate) fn parse_function_params(&mut self, mode: ParamMode) -> Vec<Binding> {
@@ -867,9 +867,9 @@ impl<'source> Parser<'source> {
         let mut params = vec![];
 
         while self.is_not(Pipe) {
-            let is_mut = self.advance_if(Mut);
+            let mut_span = self.parse_mut_span();
             let mut binding = self.parse_binding();
-            binding.mutable = is_mut;
+            binding.mut_span = mut_span;
             params.push(binding);
             self.expect_comma_or(Pipe);
         }
@@ -901,9 +901,9 @@ impl<'source> Parser<'source> {
         let return_annotation = self.parse_function_return_annotation();
 
         let body = if self.is(LeftCurlyBrace) {
-            self.parse_block_expression()
+            FunctionBody::Definition(Box::new(self.parse_block_expression()))
         } else {
-            Expression::NoOp
+            FunctionBody::Declaration
         };
 
         Expression::Function {
@@ -916,7 +916,7 @@ impl<'source> Parser<'source> {
             return_annotation,
             return_type: Type::uninferred(),
             visibility: Visibility::Private,
-            body: body.into(),
+            body,
             ty: Type::uninferred(),
             span: self.span_from_tokens(start),
         }
@@ -954,8 +954,7 @@ impl<'source> Parser<'source> {
                 expression: expression.into(),
                 member: index.to_string().into(),
                 span: self.span_from_offset(expression_start),
-                dot_access_kind: None,
-                receiver_coercion: None,
+                resolution: DotAccessResolution::Unresolved,
             };
         }
 
@@ -968,8 +967,7 @@ impl<'source> Parser<'source> {
             expression: expression.into(),
             member: field.into(),
             span: self.span_from_offset(expression_start),
-            dot_access_kind: None,
-            receiver_coercion: None,
+            resolution: DotAccessResolution::Unresolved,
         }
     }
 
@@ -1053,14 +1051,7 @@ impl<'source> Parser<'source> {
             self.next(); // consume `assert`
         }
 
-        let (mutable, mut_span) = if self.is(Mut) {
-            let mut_token = self.current_token();
-            let span = Span::new(self.file_id, mut_token.byte_offset, mut_token.byte_length);
-            self.next(); // consume `mut`
-            (true, Some(span))
-        } else {
-            (false, None)
-        };
+        let mut_span = self.parse_mut_span();
 
         if assert && let Some(span) = mut_span {
             self.track_error_at(
@@ -1071,7 +1062,7 @@ impl<'source> Parser<'source> {
         }
 
         let mut binding = self.parse_binding_allowing_or();
-        binding.mutable = mutable;
+        binding.mut_span = mut_span;
 
         if !self.is(Equal)
             && let Some(Annotation::Constructor { span, .. }) = binding.annotation.as_ref()
@@ -1085,10 +1076,11 @@ impl<'source> Parser<'source> {
                     items: vec![],
                     span: stub_span,
                 }),
-                mut_span,
-                else_block: None,
-                else_span: None,
-                assert,
+                mode: if assert {
+                    LetMode::Assert
+                } else {
+                    LetMode::Plain
+                },
                 ty: Type::uninferred(),
                 span: stub_span,
             };
@@ -1098,30 +1090,33 @@ impl<'source> Parser<'source> {
 
         let expression = self.parse_expression();
 
-        let (else_block, else_span) = if self.is(Else) {
+        let else_clause = if self.is(Else) {
             let else_token = self.current_token();
             let span = Span::new(self.file_id, else_token.byte_offset, else_token.byte_length);
             self.next(); // consume `else`
-            (Some(Box::new(self.parse_block_expression())), Some(span))
+            Some((Box::new(self.parse_block_expression()), span))
         } else {
-            (None, None)
+            None
         };
 
-        if assert && else_block.is_some() {
-            self.track_error_at(
-                else_span.expect("else_block implies else_span"),
-                "`let assert` cannot have an `else` block",
-                "`let assert` already fails the test on mismatch. Remove the `else`",
-            );
-        }
+        let mode = match (assert, else_clause) {
+            (false, None) => LetMode::Plain,
+            (true, None) => LetMode::Assert,
+            (false, Some((block, else_span))) => LetMode::Else { block, else_span },
+            (true, Some((block, else_span))) => {
+                self.track_error_at(
+                    else_span,
+                    "`let assert` cannot have an `else` block",
+                    "`let assert` already fails the test on mismatch. Remove the `else`",
+                );
+                LetMode::InvalidAssertElse { block, else_span }
+            }
+        };
 
         Expression::Let {
             binding: Box::new(binding),
             value: expression.into(),
-            mut_span,
-            else_block,
-            else_span,
-            assert,
+            mode,
             ty: Type::uninferred(),
             span: self.span_from_tokens(start),
         }
@@ -1460,46 +1455,7 @@ impl<'source> Parser<'source> {
 
         let brace_token = self.current_token();
         self.ensure(LeftCurlyBrace);
-
-        if !self.enter_recursion() {
-            let span = self.span_from_token(self.current_token());
-            let mut brace_depth = 1u32;
-            while brace_depth > 0 && !self.at_eof() {
-                match self.current_token().kind {
-                    LeftCurlyBrace => brace_depth += 1,
-                    RightCurlyBrace => brace_depth -= 1,
-                    _ => {}
-                }
-                if brace_depth > 0 {
-                    self.next();
-                }
-            }
-            self.advance_if(RightCurlyBrace);
-            return Expression::TryBlock {
-                items: vec![],
-                ty: Type::uninferred(),
-                try_keyword_span,
-                span,
-            };
-        }
-
-        let mut items = vec![];
-
-        while self.is_not(RightCurlyBrace) && !self.too_many_errors() {
-            let position = self.position();
-            let item = self.parse_block_item();
-
-            self.advance_if(Semicolon);
-
-            items.push(item);
-            if self.position() == position {
-                self.next();
-            }
-        }
-
-        let span = self.close_brace_span(start, brace_token);
-
-        self.leave_recursion();
+        let (items, span) = self.parse_braced_items(start, brace_token);
 
         Expression::TryBlock {
             items,
@@ -1532,46 +1488,7 @@ impl<'source> Parser<'source> {
 
         let brace_token = self.current_token();
         self.ensure(LeftCurlyBrace);
-
-        if !self.enter_recursion() {
-            let span = self.span_from_token(self.current_token());
-            let mut brace_depth = 1u32;
-            while brace_depth > 0 && !self.at_eof() {
-                match self.current_token().kind {
-                    LeftCurlyBrace => brace_depth += 1,
-                    RightCurlyBrace => brace_depth -= 1,
-                    _ => {}
-                }
-                if brace_depth > 0 {
-                    self.next();
-                }
-            }
-            self.advance_if(RightCurlyBrace);
-            return Expression::RecoverBlock {
-                items: vec![],
-                ty: Type::uninferred(),
-                recover_keyword_span,
-                span,
-            };
-        }
-
-        let mut items = vec![];
-
-        while self.is_not(RightCurlyBrace) && !self.too_many_errors() {
-            let position = self.position();
-            let item = self.parse_block_item();
-
-            self.advance_if(Semicolon);
-
-            items.push(item);
-            if self.position() == position {
-                self.next();
-            }
-        }
-
-        let span = self.close_brace_span(start, brace_token);
-
-        self.leave_recursion();
+        let (items, span) = self.parse_braced_items(start, brace_token);
 
         Expression::RecoverBlock {
             items,
@@ -1621,7 +1538,6 @@ impl<'source> Parser<'source> {
                 SelectArm {
                     pattern: SelectArmPattern::Receive {
                         binding: Box::new(binding),
-                        typed_pattern: None,
                         receive_expression,
                         body,
                     },
@@ -1667,17 +1583,6 @@ impl<'source> Parser<'source> {
                 }
             }
         }
-    }
-
-    pub(crate) fn with_control_flow_header<F, R>(&mut self, f: F) -> R
-    where
-        F: FnOnce(&mut Self) -> R,
-    {
-        let old = self.in_control_flow_header;
-        self.in_control_flow_header = true;
-        let result = f(self);
-        self.in_control_flow_header = old;
-        result
     }
 
     fn keyword_in_value_position(&self) -> bool {
@@ -1757,8 +1662,7 @@ impl<'source> Parser<'source> {
             value: keyword.into(),
             ty: Type::uninferred(),
             span,
-            binding_id: None,
-            qualified: None,
+            resolution: IdentifierResolution::Unresolved,
         }
     }
 
@@ -1905,7 +1809,7 @@ mod tests {
 
         assert_eq!(params.len(), 1);
         assert!(
-            params[0].mutable,
+            params[0].is_mutable(),
             "`mut x` lambda parameter should be mutable"
         );
     }

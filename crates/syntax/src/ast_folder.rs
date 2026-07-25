@@ -3,29 +3,21 @@ use crate::ast::{
 };
 
 pub(crate) trait AstFolder {
-    type Error;
-
-    fn fold_module(
-        &mut self,
-        expressions: Vec<Expression>,
-    ) -> Result<Vec<Expression>, Self::Error> {
+    fn fold_module(&mut self, expressions: Vec<Expression>) -> Vec<Expression> {
         expressions
             .into_iter()
             .map(|e| self.fold_expression(e))
             .collect()
     }
 
-    fn fold_expression(&mut self, expression: Expression) -> Result<Expression, Self::Error> {
+    fn fold_expression(&mut self, expression: Expression) -> Expression {
         self.fold_expression_default(expression)
     }
 
-    fn fold_expression_default(
-        &mut self,
-        expression: Expression,
-    ) -> Result<Expression, Self::Error> {
+    fn fold_expression_default(&mut self, expression: Expression) -> Expression {
         use Expression::*;
 
-        Ok(match expression {
+        match expression {
             Binary {
                 operator,
                 left,
@@ -34,8 +26,8 @@ pub(crate) trait AstFolder {
                 span,
             } => Binary {
                 operator,
-                left: Box::new(self.fold_expression(*left)?),
-                right: Box::new(self.fold_expression(*right)?),
+                left: Box::new(self.fold_expression(*left)),
+                right: Box::new(self.fold_expression(*right)),
                 ty,
                 span,
             },
@@ -49,9 +41,9 @@ pub(crate) trait AstFolder {
                 span,
                 call_kind,
             } => Call {
-                expression: Box::new(self.fold_expression(*expression)?),
-                args: self.fold_vec(args)?,
-                spread: Box::new((*spread).map(|e| self.fold_expression(e)).transpose()?),
+                expression: Box::new(self.fold_expression(*expression)),
+                args: self.fold_vec(args),
+                spread: spread.map(|e| Box::new(self.fold_expression(*e))),
                 type_arguments,
                 ty,
                 span,
@@ -59,7 +51,7 @@ pub(crate) trait AstFolder {
             },
 
             Block { items, ty, span } => Block {
-                items: self.fold_vec(items)?,
+                items: self.fold_vec(items),
                 ty,
                 span,
             },
@@ -70,7 +62,7 @@ pub(crate) trait AstFolder {
                 try_keyword_span,
                 span,
             } => TryBlock {
-                items: self.fold_vec(items)?,
+                items: self.fold_vec(items),
                 ty,
                 try_keyword_span,
                 span,
@@ -82,7 +74,7 @@ pub(crate) trait AstFolder {
                 recover_keyword_span,
                 span,
             } => RecoverBlock {
-                items: self.fold_vec(items)?,
+                items: self.fold_vec(items),
                 ty,
                 recover_keyword_span,
                 span,
@@ -95,9 +87,9 @@ pub(crate) trait AstFolder {
                 ty,
                 span,
             } => If {
-                condition: Box::new(self.fold_expression(*condition)?),
-                consequence: Box::new(self.fold_expression(*consequence)?),
-                alternative: Box::new(self.fold_expression(*alternative)?),
+                condition: Box::new(self.fold_expression(*condition)),
+                consequence: Box::new(self.fold_expression(*consequence)),
+                alternative: Box::new(self.fold_expression(*alternative)),
                 ty,
                 span,
             },
@@ -107,16 +99,14 @@ pub(crate) trait AstFolder {
                 scrutinee,
                 consequence,
                 alternative,
-                typed_pattern,
                 else_span,
                 ty,
                 span,
             } => IfLet {
                 pattern,
-                scrutinee: Box::new(self.fold_expression(*scrutinee)?),
-                consequence: Box::new(self.fold_expression(*consequence)?),
-                alternative: Box::new(self.fold_expression(*alternative)?),
-                typed_pattern,
+                scrutinee: Box::new(self.fold_expression(*scrutinee)),
+                consequence: Box::new(self.fold_expression(*consequence)),
+                alternative: Box::new(self.fold_expression(*alternative)),
                 else_span,
                 ty,
                 span,
@@ -128,11 +118,11 @@ pub(crate) trait AstFolder {
                 ty,
                 span,
             } => Match {
-                subject: Box::new(self.fold_expression(*subject)?),
+                subject: Box::new(self.fold_expression(*subject)),
                 arms: arms
                     .into_iter()
                     .map(|arm| self.fold_match_arm(arm))
-                    .collect::<Result<_, _>>()?,
+                    .collect(),
                 ty,
                 span,
             },
@@ -140,21 +130,13 @@ pub(crate) trait AstFolder {
             Let {
                 binding,
                 value,
-                mut_span,
-                else_block,
-                else_span,
-                assert,
+                mode,
                 ty,
                 span,
             } => Let {
                 binding,
-                value: Box::new(self.fold_expression(*value)?),
-                mut_span,
-                else_block: else_block
-                    .map(|e| self.fold_expression(*e).map(Box::new))
-                    .transpose()?,
-                else_span,
-                assert,
+                value: Box::new(self.fold_expression(*value)),
+                mode: mode.map_else(|expression, _| self.fold_expression(expression)),
                 ty,
                 span,
             },
@@ -164,7 +146,7 @@ pub(crate) trait AstFolder {
                 ty,
                 span,
             } => Return {
-                expression: Box::new(self.fold_expression(*expression)?),
+                expression: Box::new(self.fold_expression(*expression)),
                 ty,
                 span,
             },
@@ -174,7 +156,7 @@ pub(crate) trait AstFolder {
                 ty,
                 span,
             } => Propagate {
-                expression: Box::new(self.fold_expression(*expression)?),
+                expression: Box::new(self.fold_expression(*expression)),
                 ty,
                 span,
             },
@@ -186,7 +168,7 @@ pub(crate) trait AstFolder {
                 span,
             } => Unary {
                 operator,
-                expression: Box::new(self.fold_expression(*expression)?),
+                expression: Box::new(self.fold_expression(*expression)),
                 ty,
                 span,
             },
@@ -196,7 +178,7 @@ pub(crate) trait AstFolder {
                 ty,
                 span,
             } => Paren {
-                expression: Box::new(self.fold_expression(*expression)?),
+                expression: Box::new(self.fold_expression(*expression)),
                 ty,
                 span,
             },
@@ -206,15 +188,13 @@ pub(crate) trait AstFolder {
                 member,
                 ty,
                 span,
-                dot_access_kind,
-                receiver_coercion,
+                resolution,
             } => DotAccess {
-                expression: Box::new(self.fold_expression(*expression)?),
+                expression: Box::new(self.fold_expression(*expression)),
                 member,
                 ty,
                 span,
-                dot_access_kind,
-                receiver_coercion,
+                resolution,
             },
 
             IndexedAccess {
@@ -224,8 +204,8 @@ pub(crate) trait AstFolder {
                 span,
                 from_colon_syntax,
             } => IndexedAccess {
-                expression: Box::new(self.fold_expression(*expression)?),
-                index: Box::new(self.fold_expression(*index)?),
+                expression: Box::new(self.fold_expression(*expression)),
+                index: Box::new(self.fold_expression(*index)),
                 ty,
                 span,
                 from_colon_syntax,
@@ -237,14 +217,14 @@ pub(crate) trait AstFolder {
                 compound_operator,
                 span,
             } => Assignment {
-                target: Box::new(self.fold_expression(*target)?),
-                value: Box::new(self.fold_expression(*value)?),
+                target: Box::new(self.fold_expression(*target)),
+                value: Box::new(self.fold_expression(*value)),
                 compound_operator,
                 span,
             },
 
             Tuple { elements, ty, span } => Tuple {
-                elements: self.fold_vec(elements)?,
+                elements: self.fold_vec(elements),
                 ty,
                 span,
             },
@@ -260,15 +240,13 @@ pub(crate) trait AstFolder {
                 field_assignments: field_assignments
                     .into_iter()
                     .map(|mut f| {
-                        f.value = Box::new(self.fold_expression(*f.value)?);
-                        Ok(f)
+                        f.value = Box::new(self.fold_expression(*f.value));
+                        f
                     })
-                    .collect::<Result<_, Self::Error>>()?,
+                    .collect(),
                 spread: match spread {
                     StructSpread::None => StructSpread::None,
-                    StructSpread::From(e) => {
-                        StructSpread::From(Box::new(self.fold_expression(*e)?))
-                    }
+                    StructSpread::From(e) => StructSpread::From(Box::new(self.fold_expression(*e))),
                     StructSpread::Autofill { span } => StructSpread::Autofill { span },
                 },
                 ty,
@@ -298,7 +276,7 @@ pub(crate) trait AstFolder {
                 return_annotation,
                 return_type,
                 visibility,
-                body: Box::new(self.fold_expression(*body)?),
+                body: body.map_definition(|body| self.fold_expression(body)),
                 ty,
                 span,
             },
@@ -312,7 +290,7 @@ pub(crate) trait AstFolder {
             } => Lambda {
                 params,
                 return_annotation,
-                body: Box::new(self.fold_expression(*body)?),
+                body: Box::new(self.fold_expression(*body)),
                 ty,
                 span,
             },
@@ -322,7 +300,7 @@ pub(crate) trait AstFolder {
                 ty,
                 span,
             } => Reference {
-                expression: Box::new(self.fold_expression(*expression)?),
+                expression: Box::new(self.fold_expression(*expression)),
                 ty,
                 span,
             },
@@ -332,13 +310,11 @@ pub(crate) trait AstFolder {
                 iterable,
                 body,
                 span,
-                binding_id,
             } => For {
                 binding,
-                iterable: Box::new(self.fold_expression(*iterable)?),
-                body: Box::new(self.fold_expression(*body)?),
+                iterable: Box::new(self.fold_expression(*iterable)),
+                body: Box::new(self.fold_expression(*body)),
                 span,
-                binding_id,
             },
 
             While {
@@ -346,8 +322,8 @@ pub(crate) trait AstFolder {
                 body,
                 span,
             } => While {
-                condition: Box::new(self.fold_expression(*condition)?),
-                body: Box::new(self.fold_expression(*body)?),
+                condition: Box::new(self.fold_expression(*condition)),
+                body: Box::new(self.fold_expression(*body)),
                 span,
             },
 
@@ -355,18 +331,16 @@ pub(crate) trait AstFolder {
                 pattern,
                 scrutinee,
                 body,
-                typed_pattern,
                 span,
             } => WhileLet {
                 pattern,
-                scrutinee: Box::new(self.fold_expression(*scrutinee)?),
-                body: Box::new(self.fold_expression(*body)?),
-                typed_pattern,
+                scrutinee: Box::new(self.fold_expression(*scrutinee)),
+                body: Box::new(self.fold_expression(*body)),
                 span,
             },
 
             Loop { body, ty, span } => Loop {
-                body: Box::new(self.fold_expression(*body)?),
+                body: Box::new(self.fold_expression(*body)),
                 ty,
                 span,
             },
@@ -376,7 +350,7 @@ pub(crate) trait AstFolder {
                 ty,
                 span,
             } => Task {
-                expression: Box::new(self.fold_expression(*expression)?),
+                expression: Box::new(self.fold_expression(*expression)),
                 ty,
                 span,
             },
@@ -386,7 +360,7 @@ pub(crate) trait AstFolder {
                 ty,
                 span,
             } => Defer {
-                expression: Box::new(self.fold_expression(*expression)?),
+                expression: Box::new(self.fold_expression(*expression)),
                 ty,
                 span,
             },
@@ -396,7 +370,7 @@ pub(crate) trait AstFolder {
                 ty,
                 span,
             } => Assert {
-                expression: Box::new(self.fold_expression(*expression)?),
+                expression: Box::new(self.fold_expression(*expression)),
                 ty,
                 span,
             },
@@ -405,7 +379,7 @@ pub(crate) trait AstFolder {
                 arms: arms
                     .into_iter()
                     .map(|arm| self.fold_select_arm(arm))
-                    .collect::<Result<_, _>>()?,
+                    .collect(),
                 ty,
                 span,
             },
@@ -420,7 +394,7 @@ pub(crate) trait AstFolder {
             } => ImplBlock {
                 annotation,
                 receiver_name,
-                methods: self.fold_vec(methods)?,
+                methods: self.fold_vec(methods),
                 generics,
                 ty,
                 span,
@@ -440,7 +414,7 @@ pub(crate) trait AstFolder {
                 identifier,
                 identifier_span,
                 annotation,
-                expression: Box::new(self.fold_expression(*expression)?),
+                expression: expression.map_value(|value| self.fold_expression(value)),
                 visibility,
                 ty,
                 span,
@@ -452,17 +426,14 @@ pub(crate) trait AstFolder {
                 ty,
                 span,
             } => Cast {
-                expression: Box::new(self.fold_expression(*expression)?),
+                expression: Box::new(self.fold_expression(*expression)),
                 target_type,
                 ty,
                 span,
             },
 
             Break { value, span } => Break {
-                value: match value {
-                    Some(v) => Some(Box::new(self.fold_expression(*v)?)),
-                    None => None,
-                },
+                value: value.map(|value| Box::new(self.fold_expression(*value))),
                 span,
             },
 
@@ -474,14 +445,12 @@ pub(crate) trait AstFolder {
                 let folded_parts = parts
                     .into_iter()
                     .map(|part| match part {
-                        FormatStringPart::Expression(expression) => {
-                            Ok(FormatStringPart::Expression(Box::new(
-                                self.fold_expression(*expression)?,
-                            )))
-                        }
-                        other => Ok(other),
+                        FormatStringPart::Expression(expression) => FormatStringPart::Expression(
+                            Box::new(self.fold_expression(*expression)),
+                        ),
+                        other => other,
                     })
-                    .collect::<Result<Vec<_>, Self::Error>>()?;
+                    .collect();
                 Literal {
                     literal: crate::ast::Literal::FormatString(folded_parts),
                     ty,
@@ -494,7 +463,7 @@ pub(crate) trait AstFolder {
                 ty,
                 span,
             } => {
-                let folded_elements = self.fold_vec(elements)?;
+                let folded_elements = self.fold_vec(elements);
                 Literal {
                     literal: crate::ast::Literal::Slice(folded_elements),
                     ty,
@@ -509,12 +478,8 @@ pub(crate) trait AstFolder {
                 ty,
                 span,
             } => Range {
-                start: start
-                    .map(|e| self.fold_expression(*e).map(Box::new))
-                    .transpose()?,
-                end: end
-                    .map(|e| self.fold_expression(*e).map(Box::new))
-                    .transpose()?,
+                start: start.map(|expression| Box::new(self.fold_expression(*expression))),
+                end: end.map(|expression| Box::new(self.fold_expression(*expression))),
                 inclusive,
                 ty,
                 span,
@@ -530,61 +495,57 @@ pub(crate) trait AstFolder {
             | Interface { .. }
             | Continue { .. }
             | Unit { .. }
-            | RawGo { .. }
-            | NoOp => expression,
-        })
+            | RawGo { .. } => expression,
+        }
     }
 
-    fn fold_vec(&mut self, expressions: Vec<Expression>) -> Result<Vec<Expression>, Self::Error> {
+    fn fold_vec(&mut self, expressions: Vec<Expression>) -> Vec<Expression> {
         expressions
             .into_iter()
             .map(|e| self.fold_expression(e))
             .collect()
     }
 
-    fn fold_match_arm(&mut self, mut arm: MatchArm) -> Result<MatchArm, Self::Error> {
-        arm.expression = Box::new(self.fold_expression(*arm.expression)?);
+    fn fold_match_arm(&mut self, mut arm: MatchArm) -> MatchArm {
+        arm.expression = Box::new(self.fold_expression(*arm.expression));
         arm.guard = arm
             .guard
-            .map(|g| self.fold_expression(*g).map(Box::new))
-            .transpose()?;
-        Ok(arm)
+            .map(|guard| Box::new(self.fold_expression(*guard)));
+        arm
     }
 
-    fn fold_select_arm(&mut self, arm: SelectArm) -> Result<SelectArm, Self::Error> {
+    fn fold_select_arm(&mut self, arm: SelectArm) -> SelectArm {
         let pattern = match arm.pattern {
             SelectArmPattern::Receive {
                 binding,
-                typed_pattern,
                 receive_expression,
                 body,
             } => SelectArmPattern::Receive {
                 binding,
-                typed_pattern,
-                receive_expression: Box::new(self.fold_expression(*receive_expression)?),
-                body: Box::new(self.fold_expression(*body)?),
+                receive_expression: Box::new(self.fold_expression(*receive_expression)),
+                body: Box::new(self.fold_expression(*body)),
             },
             SelectArmPattern::Send {
                 send_expression,
                 body,
             } => SelectArmPattern::Send {
-                send_expression: Box::new(self.fold_expression(*send_expression)?),
-                body: Box::new(self.fold_expression(*body)?),
+                send_expression: Box::new(self.fold_expression(*send_expression)),
+                body: Box::new(self.fold_expression(*body)),
             },
             SelectArmPattern::MatchReceive {
                 receive_expression,
                 arms,
             } => SelectArmPattern::MatchReceive {
-                receive_expression: Box::new(self.fold_expression(*receive_expression)?),
+                receive_expression: Box::new(self.fold_expression(*receive_expression)),
                 arms: arms
                     .into_iter()
                     .map(|arm| self.fold_match_arm(arm))
-                    .collect::<Result<_, _>>()?,
+                    .collect(),
             },
             SelectArmPattern::WildCard { body } => SelectArmPattern::WildCard {
-                body: Box::new(self.fold_expression(*body)?),
+                body: Box::new(self.fold_expression(*body)),
             },
         };
-        Ok(SelectArm { pattern })
+        SelectArm { pattern }
     }
 }

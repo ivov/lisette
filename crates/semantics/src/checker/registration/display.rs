@@ -48,11 +48,7 @@ impl TaskState {
         let qualified = Symbol::from_parts(&candidate.module_id, name);
         if is_struct
             && let Some(definition) = store.get_definition(qualified.as_str())
-            && definition.is_pointer_backed_newtype(|id| {
-                store
-                    .get_definition(id)
-                    .is_some_and(Definition::is_type_alias)
-            })
+            && definition.is_pointer_backed_newtype(|id| store.get_definition(id))
         {
             self.sink
                 .push(diagnostics::attribute::display_on_pointer_newtype(
@@ -126,11 +122,11 @@ impl TaskState {
                 name_span,
                 doc: None,
                 body: DefinitionBody::Value {
+                    kind: syntax::program::ValueKind::Runtime,
                     allowed_lints: vec![],
                     go_hints: vec![],
                     go_name: None,
                     go_type_param_recipe: None,
-                    const_value: None,
                 },
             });
     }

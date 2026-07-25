@@ -17656,11 +17656,8 @@ fn main() {
 }
 
 #[test]
-fn float_equality_without_abs_rejected_newtype_subtraction_no_diagnostic() {
-    let mut fs = MockFileSystem::new();
-    fs.add_file(
-        ENTRY_MODULE_ID,
-        "main.lis",
+fn float_equality_without_abs_newtype_alias() {
+    let diagnostics = crate::_harness::lint::lint(
         r#"
 struct Distance(float64)
 type DA = Distance
@@ -17671,14 +17668,13 @@ fn main() {
 }
 "#,
     );
-    let result = compile_check(fs);
-    assert!(
-        !result
-            .lints
-            .iter()
-            .any(|d| d.plain_message() == "Float equality without `abs`"),
-        "must not fire when the checker rejected the subtraction: {:?}",
-        result.lints
+    let count = diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.code_str() == Some("lint.float_equality_without_abs"))
+        .count();
+    assert_eq!(
+        count, 1,
+        "an alias to a newtype has the same numeric identity and must fire: {diagnostics:?}"
     );
 }
 

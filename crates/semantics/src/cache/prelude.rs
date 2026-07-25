@@ -52,10 +52,9 @@ pub(crate) fn save_prelude_cache(store: &Store) {
         .definitions
         .iter()
         .map(|(name, definition)| {
-            let is_const = module.const_names.contains(name);
             (
                 name.to_string(),
-                CachedDefinition::from_definition(definition, is_const, &file_id_to_index),
+                CachedDefinition::from_definition(definition, &file_id_to_index),
             )
         })
         .collect();
@@ -76,18 +75,15 @@ pub(crate) fn register_cached_prelude(store: &mut Store, cached: PreludeCache) {
     // Register the prelude file for file_id → module_id mapping (needed by diagnostics).
     // Items are empty since we're loading definitions from cache.
     use syntax::program::File;
-    store.store_file(
-        PRELUDE_MODULE_ID,
-        File {
-            id: PRELUDE_FILE_ID,
-            module_id: PRELUDE_MODULE_ID.to_string(),
-            name: "prelude.d.lis".to_string(),
-            display_path: "prelude.d.lis".to_string(),
-            source: stdlib::LIS_PRELUDE_SOURCE.to_string(),
-            items: vec![],
-            file_comment: None,
-        },
-    );
+    store.store_file(File {
+        id: PRELUDE_FILE_ID,
+        module_id: PRELUDE_MODULE_ID.to_string(),
+        name: "prelude.d.lis".to_string(),
+        display_path: "prelude.d.lis".to_string(),
+        source: stdlib::LIS_PRELUDE_SOURCE.to_string(),
+        items: vec![],
+        file_comment: None,
+    });
 
     let file_ids: &[u32] = &[PRELUDE_FILE_ID];
     let module = store

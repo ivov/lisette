@@ -5,30 +5,29 @@ use ecow::EcoString;
 use crate::ast::{BindingId as AstBindingId, Pattern, RestPattern, Span};
 use crate::types::Symbol;
 
-use super::{Definition, File, ModuleInfo};
+use super::{Definition, File};
 
 #[derive(Debug, Clone, Default)]
 pub struct UnusedInfo {
-    bindings: HashSet<Span>,
-    definitions: HashSet<Span>,
+    symbols: HashSet<Span>,
     pub imports_by_module: HashMap<EcoString, HashSet<EcoString>>,
 }
 
 impl UnusedInfo {
     pub fn mark_binding_unused(&mut self, span: Span) {
-        self.bindings.insert(span);
+        self.symbols.insert(span);
     }
 
     pub fn is_unused_binding(&self, pattern: &Pattern) -> bool {
         match pattern {
-            Pattern::Identifier { span, .. } => self.bindings.contains(span),
+            Pattern::Identifier { span, .. } => self.symbols.contains(span),
             Pattern::AsBinding { span, name, .. } => {
                 let name_span = Span::new(
                     span.file_id,
                     span.byte_offset + span.byte_length - name.len() as u32,
                     name.len() as u32,
                 );
-                self.bindings.contains(&name_span)
+                self.symbols.contains(&name_span)
             }
             _ => false,
         }
@@ -36,27 +35,25 @@ impl UnusedInfo {
 
     pub fn is_unused_rest_binding(&self, rest: &RestPattern) -> bool {
         match rest {
-            RestPattern::Bind { span, .. } => self.bindings.contains(span),
+            RestPattern::Bind { span, .. } => self.symbols.contains(span),
             _ => false,
         }
     }
 
     pub fn mark_definition_unused(&mut self, span: Span) {
-        self.definitions.insert(span);
+        self.symbols.insert(span);
     }
 
     pub fn is_unused_definition(&self, span: &Span) -> bool {
-        self.definitions.contains(span)
+        self.symbols.contains(span)
     }
 
     pub fn merge(&mut self, other: UnusedInfo) {
         let UnusedInfo {
-            bindings,
-            definitions,
+            symbols,
             imports_by_module,
         } = other;
-        self.bindings.extend(bindings);
-        self.definitions.extend(definitions);
+        self.symbols.extend(symbols);
         for (module, imports) in imports_by_module {
             self.imports_by_module
                 .entry(module)
@@ -103,13 +100,9 @@ pub struct EqualityIndex {
 
 #[derive(Debug, Clone)]
 enum EqualityInfo {
-    Method {
-        private_to_module: Option<String>,
-        synthesized: bool,
-    },
-    UfcsLowered {
-        private_to_module: Option<String>,
-    },
+    DeclaredMethod { private_to_module: Option<String> },
+    SynthesizedMethod { private_to_module: Option<String> },
+    UfcsLowered { private_to_module: Option<String> },
 }
 
 fn visible_from(private_to_module: &Option<String>, current_module: &str) -> bool {
@@ -120,19 +113,14 @@ fn visible_from(private_to_module: &Option<String>, current_module: &str) -> boo
 }
 
 impl EqualityIndex {
-    pub fn insert_method(
-        &mut self,
-        id: String,
-        private_to_module: Option<String>,
-        synthesized: bool,
-    ) {
-        self.by_id.insert(
-            id,
-            EqualityInfo::Method {
-                private_to_module,
-                synthesized,
-            },
-        );
+    pub fn insert_declared_method(&mut self, id: String, private_to_module: Option<String>) {
+        self.by_id
+            .insert(id, EqualityInfo::DeclaredMethod { private_to_module });
+    }
+
+    pub fn insert_synthesized_method(&mut self, id: String, private_to_module: Option<String>) {
+        self.by_id
+            .insert(id, EqualityInfo::SynthesizedMethod { private_to_module });
     }
 
     pub fn insert_ufcs_lowered(&mut self, id: String, private_to_module: Option<String>) {
@@ -143,7 +131,10 @@ impl EqualityIndex {
     pub fn usable_from(&self, id: &str, current_module: &str) -> bool {
         matches!(
             self.by_id.get(id),
-            Some(EqualityInfo::Method { private_to_module, .. })
+            Some(
+                EqualityInfo::DeclaredMethod { private_to_module }
+                    | EqualityInfo::SynthesizedMethod { private_to_module }
+            )
                 if visible_from(private_to_module, current_module)
         )
     }
@@ -159,10 +150,7 @@ impl EqualityIndex {
     pub fn is_synthesized(&self, id: &str) -> bool {
         matches!(
             self.by_id.get(id),
-            Some(EqualityInfo::Method {
-                synthesized: true,
-                ..
-            })
+            Some(EqualityInfo::SynthesizedMethod { .. })
         )
     }
 }
@@ -220,8 +208,6 @@ impl MutationInfo {
 pub struct EmitInput {
     pub files: HashMap<u32, File>,
     pub definitions: HashMap<Symbol, Definition>,
-    pub const_names: HashSet<Symbol>,
-    pub modules: HashMap<String, ModuleInfo>,
     pub entry_module_id: String,
     pub unused: UnusedInfo,
     pub mutations: MutationInfo,
@@ -231,8 +217,6 @@ pub struct EmitInput {
     pub test_index: TestIndex,
     pub go_package_names: HashMap<String, String>,
     pub go_module_ids: HashSet<String>,
-    pub bound_types: HashMap<crate::ast::Span, crate::types::Type>,
-    pub resolved_definitions: super::ResolvedDefinitions,
 }
 
 #[cfg(test)]
@@ -261,8 +245,7 @@ mod tests {
 
         a.merge(b);
 
-        assert_eq!(a.bindings.len(), 2);
-        assert_eq!(a.definitions.len(), 2);
+        assert_eq!(a.symbols.len(), 4);
         assert_eq!(a.imports_by_module["m1"].len(), 2);
         assert_eq!(a.imports_by_module["m2"].len(), 1);
     }

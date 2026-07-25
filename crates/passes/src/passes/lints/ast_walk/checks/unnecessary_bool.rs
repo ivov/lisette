@@ -38,7 +38,7 @@ pub fn check_unnecessary_bool(expression: &Expression, ctx: &NodeCtx) {
     let replacement = if then_value {
         span_text(ctx.source, condition).map(|text| as_tight_operand(text, condition))
     } else {
-        negated_condition(ctx.source, condition)
+        negated_condition(ctx.source, condition, ctx)
     };
     if let Some(replacement) = replacement {
         diagnostic = diagnostic.with_fix(Fix::new(
@@ -50,7 +50,7 @@ pub fn check_unnecessary_bool(expression: &Expression, ctx: &NodeCtx) {
 }
 
 /// Source text negating `condition`: flip a comparison operator, else prefix `!`.
-fn negated_condition(source: &str, condition: &Expression) -> Option<String> {
+fn negated_condition(source: &str, condition: &Expression, ctx: &NodeCtx<'_>) -> Option<String> {
     if let Expression::Binary {
         operator,
         left,
@@ -58,7 +58,7 @@ fn negated_condition(source: &str, condition: &Expression) -> Option<String> {
         ..
     } = condition
         && let Some(negated) = negate_comparison(*operator)
-        && flip_preserves_nan(*operator, left, right)
+        && flip_preserves_nan(*operator, left, right, ctx)
     {
         let lhs = span_text(source, left)?;
         let rhs = span_text(source, right)?;
@@ -69,15 +69,19 @@ fn negated_condition(source: &str, condition: &Expression) -> Option<String> {
 }
 
 // Ordered flips are not NaN-safe (`!(a < b)` is not `a >= b`), only `==`/`!=` are.
-fn flip_preserves_nan(operator: BinaryOperator, left: &Expression, right: &Expression) -> bool {
+fn flip_preserves_nan(
+    operator: BinaryOperator,
+    left: &Expression,
+    right: &Expression,
+    ctx: &NodeCtx<'_>,
+) -> bool {
     matches!(operator, BinaryOperator::Equal | BinaryOperator::NotEqual)
-        || (is_non_float(left) && is_non_float(right))
+        || (is_non_float(left, ctx) && is_non_float(right, ctx))
 }
 
-fn is_non_float(expression: &Expression) -> bool {
-    expression
-        .get_type()
-        .underlying_simple_kind()
+fn is_non_float(expression: &Expression, ctx: &NodeCtx<'_>) -> bool {
+    ctx.store
+        .underlying_simple_kind(&expression.get_type())
         .is_some_and(|kind| !kind.is_float())
 }
 

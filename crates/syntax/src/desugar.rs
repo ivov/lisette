@@ -23,7 +23,7 @@ pub fn desugar(expressions: Vec<Expression>) -> DesugarResult {
     }
 
     let mut desugarer = Desugarer::new();
-    let ast = desugarer.fold_module(expressions).unwrap(); // Infallible
+    let ast = desugarer.fold_module(expressions);
     DesugarResult {
         ast,
         errors: desugarer.errors,
@@ -58,18 +58,15 @@ impl Desugarer {
 }
 
 impl AstFolder for Desugarer {
-    type Error = std::convert::Infallible;
-
-    fn fold_expression(&mut self, expression: Expression) -> Result<Expression, Self::Error> {
+    fn fold_expression(&mut self, expression: Expression) -> Expression {
         if let Expression::Binary { ref left, .. } = expression
             && matches!(**left, Expression::Binary { .. })
         {
             return self.fold_binary_iterative(expression);
         }
 
-        let expression = self.fold_expression_default(expression)?;
-
-        Ok(self.apply_desugar(expression))
+        let expression = self.fold_expression_default(expression);
+        self.apply_desugar(expression)
     }
 }
 
@@ -85,10 +82,7 @@ impl Desugarer {
         }
     }
 
-    fn fold_binary_iterative(
-        &mut self,
-        expression: Expression,
-    ) -> Result<Expression, std::convert::Infallible> {
+    fn fold_binary_iterative(&mut self, expression: Expression) -> Expression {
         let Expression::Binary {
             operator,
             left,
@@ -115,9 +109,9 @@ impl Desugarer {
             current = *l;
         }
 
-        let mut result = self.fold_expression(current)?;
+        let mut result = self.fold_expression(current);
         while let Some((op, right, t, s)) = stack.pop() {
-            let folded_right = self.fold_expression(*right)?;
+            let folded_right = self.fold_expression(*right);
             let binary = Expression::Binary {
                 operator: op,
                 left: Box::new(result),
@@ -127,7 +121,7 @@ impl Desugarer {
             };
             result = self.apply_desugar(binary);
         }
-        Ok(result)
+        result
     }
 
     fn desugar_pipeline(&mut self, pipeline: Expression) -> Expression {
@@ -145,7 +139,7 @@ impl Desugarer {
             Expression::Identifier { .. } | Expression::DotAccess { .. } => Expression::Call {
                 expression: Box::new(right),
                 args: vec![left],
-                spread: Box::new(None),
+                spread: None,
                 type_arguments: CallTypeArguments::none(),
                 ty: Type::uninferred(),
                 span,

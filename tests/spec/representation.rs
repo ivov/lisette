@@ -1,9 +1,14 @@
 use crate::_harness::infer;
-use syntax::ast::{BinaryOperator, Expression};
+use syntax::ast::{
+    Annotation, BinaryOperator, CallTypeArguments, ConstructorPatternResolution, Expression,
+    Pattern,
+};
 use syntax::lex::Lexer;
 use syntax::parse::Parser;
-use syntax::program::{BindingMutation, MutationInfo};
-use syntax::types::{FunctionParameter, SubstitutionMap, Type, substitute};
+use syntax::program::{
+    BindingMutation, Definition, DefinitionBody, File, Module, MutationInfo, ValueKind, Visibility,
+};
+use syntax::types::{FunctionParameter, SubstitutionMap, Type, TypeVarId, substitute};
 
 fn walk(expression: &Expression, visit: &mut impl FnMut(&Expression)) {
     visit(expression);
@@ -106,5 +111,249 @@ fn main() -> int { identity<int>(1) }
 
     let checked = checked.expect("expected an explicitly instantiated call");
     assert_eq!(checked.annotations().len(), 1);
-    assert_eq!(checked.resolved_types(), Some([Type::int()].as_slice()));
+    let resolved = checked
+        .resolved_types()
+        .expect("checked call must have resolved type arguments");
+    assert_eq!(resolved.len(), 1);
+    assert_eq!(resolved[0], Type::int());
+}
+
+#[test]
+fn checked_call_type_arguments_cannot_have_misaligned_types() {
+    let resolved = CallTypeArguments::resolved([(Annotation::Unknown, Type::int())]);
+    assert_eq!(resolved.annotations().len(), 1);
+    let types = resolved.resolved_types().expect("call is checked");
+    assert_eq!(types.len(), 1);
+    assert_eq!(types[0], Type::int());
+
+    let const_like = CallTypeArguments::checked_without_types(vec![Annotation::Unknown]);
+    assert_eq!(const_like.annotations().len(), 1);
+    assert!(
+        const_like
+            .resolved_types()
+            .expect("call is checked")
+            .is_empty()
+    );
+}
+
+#[test]
+fn placeholder_types_are_not_reserved_type_variable_ids() {
+    let variable = Type::Var {
+        id: TypeVarId::new(u32::MAX),
+        hint: None,
+    };
+
+    assert!(variable.is_variable());
+    assert_eq!(variable, variable.clone());
+    assert!(!Type::uninferred().is_variable());
+    assert!(!Type::ignored().is_variable());
+    assert!(Type::uninferred().is_uninferred());
+    assert!(Type::ignored().is_ignored());
+}
+
+#[test]
+fn statement_only_try_tail_has_unit_success_type() {
+    let result = infer(
+        r#"
+fn test() -> Result<(), string> {
+  let mut value = 0
+  try {
+    let _ = Ok(1)?
+    value = 1
+  }
+}
+"#,
+    )
+    .assert_no_errors();
+
+    let mut success_type = None;
+    for item in &result.ast {
+        walk(item, &mut |expression| {
+            if let Expression::TryBlock { ty, .. } = expression {
+                success_type = Some(ty.ok_type());
+            }
+        });
+    }
+
+    assert_eq!(success_type, Some(Type::unit()));
+}
+
+#[test]
+fn generic_bounds_have_an_explicit_resolution_transition() {
+    let source = "fn constrained<T: Comparable>(value: T) -> T { value }";
+    let parsed = syntax::build_ast(source, 0);
+    assert!(parsed.errors.is_empty(), "{:?}", parsed.errors);
+    let [Expression::Function { generics, .. }] = parsed.ast.as_slice() else {
+        panic!("expected one function");
+    };
+    let [generic] = generics.as_slice() else {
+        panic!("expected one generic");
+    };
+    assert_eq!(generic.bound_count(), 1);
+    assert!(!generic.bounds_are_resolved());
+    assert!(generic.resolved_bounds().is_none());
+
+    let inferred = infer(source).assert_no_errors();
+    let generic = inferred
+        .ast
+        .iter()
+        .find_map(|item| match item {
+            Expression::Function { name, generics, .. } if name == "constrained" => {
+                generics.first()
+            }
+            _ => None,
+        })
+        .expect("expected constrained function");
+    assert!(generic.bounds_are_resolved());
+    assert_eq!(generic.resolved_bounds().unwrap().count(), 1);
+}
+
+#[test]
+fn inference_enriches_the_canonical_pattern_tree() {
+    let source = r#"
+enum Item { Value(int) }
+
+fn unwrap(item: Item) -> int {
+  match item {
+    Item.Value(value) => value,
+  }
+}
+"#;
+
+    let parsed = syntax::build_ast(source, 0);
+    assert!(parsed.errors.is_empty(), "{:?}", parsed.errors);
+    let mut parsed_pattern = None;
+    for item in &parsed.ast {
+        walk(item, &mut |expression| {
+            if let Expression::Match { arms, .. } = expression {
+                parsed_pattern = arms.first().map(|arm| arm.pattern.clone());
+            }
+        });
+    }
+    assert!(matches!(
+        parsed_pattern,
+        Some(Pattern::EnumVariant {
+            resolution: ConstructorPatternResolution::Unresolved,
+            ..
+        })
+    ));
+
+    let inferred = infer(source).assert_no_errors();
+    let mut checked_pattern = None;
+    for item in &inferred.ast {
+        walk(item, &mut |expression| {
+            if let Expression::Match { arms, .. } = expression {
+                checked_pattern = arms.first().map(|arm| arm.pattern.clone());
+            }
+        });
+    }
+    let Some(Pattern::EnumVariant {
+        fields,
+        ty,
+        resolution:
+            ConstructorPatternResolution::EnumVariant {
+                enum_name,
+                variant_name,
+            },
+        ..
+    }) = checked_pattern
+    else {
+        panic!("expected a resolved constructor pattern");
+    };
+    assert_eq!(variant_name, "Item.Value");
+    assert_eq!(ty.get_qualified_id(), Some(enum_name.as_str()));
+    assert!(
+        matches!(fields.as_slice(), [Pattern::Identifier { identifier, .. }] if identifier == "value")
+    );
+}
+
+#[test]
+fn inferred_signatures_retain_transparent_alias_identity() {
+    let result = infer(
+        r#"
+type UserId = int
+fn identity(value: UserId) -> UserId { value }
+"#,
+    )
+    .assert_no_errors();
+
+    let function_ty = result
+        .ast
+        .iter()
+        .find_map(|expression| match expression {
+            Expression::Function { name, ty, .. } if name == "identity" => ty.as_function_type(),
+            _ => None,
+        })
+        .expect("expected identity's function type");
+    let [parameter] = function_ty.params.as_slice() else {
+        panic!("expected one parameter");
+    };
+
+    for ty in [&parameter.ty, function_ty.return_type.as_ref()] {
+        assert!(
+            matches!(ty, Type::Nominal { id, params } if id.last_segment() == "UserId" && params.is_empty()),
+            "transparent alias identity was lost: {ty:?}"
+        );
+    }
+}
+
+fn value_definition(kind: ValueKind) -> Definition {
+    Definition {
+        visibility: Visibility::Private,
+        ty: Type::int(),
+        name: None,
+        name_span: None,
+        doc: None,
+        body: DefinitionBody::Value {
+            kind,
+            allowed_lints: vec![],
+            go_hints: vec![],
+            go_name: None,
+            go_type_param_recipe: None,
+        },
+    }
+}
+
+#[test]
+fn nonliteral_constants_remain_distinguishable_from_runtime_values() {
+    let constant = value_definition(ValueKind::Constant { value: None });
+    let runtime = value_definition(ValueKind::Runtime);
+
+    assert!(constant.is_const());
+    assert!(constant.const_value().is_none());
+    assert!(!runtime.is_const());
+}
+
+#[test]
+fn module_derives_file_classification_from_each_file() {
+    let mut module = Module::new("example");
+    let source = File::new("example", "main.lis", "main.lis", "", vec![], None, 1);
+    let typedef = File::new(
+        "example",
+        "native.d.lis",
+        "native.d.lis",
+        "",
+        vec![],
+        None,
+        2,
+    );
+    module.files.insert(source.id, source);
+    module.files.insert(typedef.id, typedef);
+
+    assert_eq!(module.source_files().count(), 1);
+    assert_eq!(module.typedef_files().count(), 1);
+    assert_eq!(module.file_ids().collect::<Vec<_>>(), vec![1]);
+    assert!(module.get_file(2).is_some());
+    assert!(module.is_typedef(2));
+}
+
+#[test]
+fn recursion_depth_is_scoped_to_each_top_level_item() {
+    let source = (0..80)
+        .map(|index| format!("fn item_{index}() -> int {{ 1 }}\n"))
+        .collect::<String>();
+    let parsed = syntax::build_ast(&source, 0);
+
+    assert!(parsed.errors.is_empty(), "{:?}", parsed.errors);
+    assert_eq!(parsed.ast.len(), 80);
 }

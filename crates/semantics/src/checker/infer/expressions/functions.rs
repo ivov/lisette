@@ -1,7 +1,8 @@
 use crate::checker::{EnvResolve, resolved_generic_bounds};
 use ecow::EcoString;
 use syntax::ast::{
-    Annotation, Binding, Expression, Literal, Pattern, Span, StructKind, UnaryOperator,
+    Annotation, Binding, Expression, IdentifierResolution, Literal, Pattern, Span, StructKind,
+    UnaryOperator,
 };
 use syntax::ast::{BindingKind, CallTypeArguments};
 use syntax::program::{CallKind, Definition, DefinitionBody, NativeTypeKind};
@@ -24,7 +25,7 @@ struct TypeConversionCall {
     target_ty: Type,
     underlying_fn: Type,
     args: Vec<Expression>,
-    spread: Box<Option<Expression>>,
+    spread: Option<Box<Expression>>,
     type_arguments: CallTypeArguments,
     span: Span,
 }
@@ -152,7 +153,11 @@ impl InferCtx<'_> {
         let bounds = resolved_generic_bounds(&generics);
 
         let resolved_expected = expected_ty.resolve_in(&self.env);
-        let expected_params = resolved_expected.get_function_params().unwrap_or_default();
+        let expected_function = store.resolve_to_function_type(&resolved_expected);
+        let expected_params = expected_function
+            .as_ref()
+            .and_then(Type::get_function_params)
+            .unwrap_or_default();
         let is_test = attributes.iter().any(|a| a.name == "test");
         let params = normalize_test_params(params, is_test);
         let new_params = self.infer_function_params(params, expected_params, true);
@@ -182,7 +187,7 @@ impl InferCtx<'_> {
                     FunctionParameter::named(
                         param.ty.clone(),
                         param.pattern.get_identifier(),
-                        param.mutable,
+                        param.is_mutable(),
                     )
                 })
                 .collect(),
@@ -199,7 +204,9 @@ impl InferCtx<'_> {
             return_ty.clone()
         };
 
-        let new_body = self.infer_function_body(body, &body_ty, &return_annotation, &return_ty);
+        let new_body = body.map_definition(|body| {
+            self.infer_function_body(Box::new(body), &body_ty, &return_annotation, &return_ty)
+        });
 
         self.check_deferred_map_key_bounds(store);
 
@@ -229,7 +236,7 @@ impl InferCtx<'_> {
             return_annotation,
             return_type: return_ty,
             visibility,
-            body: new_body.into(),
+            body: new_body,
             ty: fn_ty,
             span,
         }
@@ -249,7 +256,11 @@ impl InferCtx<'_> {
         // Resolve type variables so that a Go function alias bound via speculative
         // unification (e.g. T = tea.Cmd) is visible as its underlying function shape.
         let resolved_expected = expected_ty.resolve_in(&self.env);
-        let expected_params = resolved_expected.get_function_params().unwrap_or_default();
+        let expected_function = store.resolve_to_function_type(&resolved_expected);
+        let expected_params = expected_function
+            .as_ref()
+            .and_then(Type::get_function_params)
+            .unwrap_or_default();
         let new_params = self.infer_function_params(params, expected_params, false);
 
         if new_params
@@ -277,7 +288,7 @@ impl InferCtx<'_> {
                     FunctionParameter::named(
                         param.ty.clone(),
                         param.pattern.get_identifier(),
-                        param.mutable,
+                        param.is_mutable(),
                     )
                 })
                 .collect(),
@@ -350,12 +361,12 @@ impl InferCtx<'_> {
                 .map(|arg| self.with_value_context(|s| s.infer_expression(arg, &Type::Error)))
                 .collect();
             let new_spread = spread
-                .map(|s| self.with_value_context(|state| state.infer_expression(s, &Type::Error)));
+                .map(|s| self.with_value_context(|state| state.infer_expression(*s, &Type::Error)));
             return Expression::Call {
                 expression,
                 args: new_args,
-                spread: Box::new(new_spread),
-                type_arguments: CallTypeArguments::resolved(type_args, Vec::new()),
+                spread: new_spread.map(Box::new),
+                type_arguments: CallTypeArguments::checked_without_types(type_args),
                 ty: Type::Error,
                 span,
                 call_kind: None,
@@ -411,7 +422,7 @@ impl InferCtx<'_> {
             let resolved_expected = expected_ty.resolve_in(&self.env);
             if !resolved_expected.is_variable()
                 && (self.is_enum_type(store, &return_ty.resolve_in(&self.env))
-                    || !resolved_expected.contains_unknown())
+                    || !store.contains_unknown(&resolved_expected))
             {
                 let peeled = store.deep_resolve_alias(&resolved_expected);
                 let _ = self.speculatively(|this| {
@@ -447,7 +458,7 @@ impl InferCtx<'_> {
             .resolve_in(&self.env)
             .is_error();
 
-        let new_spread = (*spread).map(|spread_expr| match &variadic {
+        let new_spread = spread.map(|spread_expr| match &variadic {
             Some(variadic) => {
                 let expected = if variadic.ty.is_unknown() {
                     let var = self.new_type_var();
@@ -456,7 +467,7 @@ impl InferCtx<'_> {
                     self.type_slice(variadic.ty.clone())
                 };
                 let inferred =
-                    self.with_value_context(|s| s.infer_expression(spread_expr, &expected));
+                    self.with_value_context(|s| s.infer_expression(*spread_expr, &expected));
                 if variadic.mutable {
                     let callee_label = callee_label(&callee_expression);
                     self.check_arg_against_mut_param(&inferred, &variadic.ty, &callee_label);
@@ -468,19 +479,16 @@ impl InferCtx<'_> {
                     self.sink
                         .push(diagnostics::infer::spread_on_non_variadic(span));
                 }
-                self.with_value_context(|s| s.infer_expression(spread_expr, &Type::Error))
+                self.with_value_context(|s| s.infer_expression(*spread_expr, &Type::Error))
             }
         });
 
-        // Bridge multi-hop aliases by re-resolving the expected type through
-        // the store before the final unify (forward-declared intermediates
-        // leave gaps in the cached `underlying_ty` chain).
         let resolved_expected = store.deep_resolve_alias(&expected_ty.resolve_in(&self.env));
         let expected_is_map = matches!(
             resolved_expected.as_compound(),
             Some((CompoundKind::Map, _))
         );
-        self.unify(&resolved_expected, &return_ty, &span);
+        self.unify(expected_ty, &return_ty, &span);
         self.unify_trait_bounds(&bounds, &parameters, &new_args, &span);
 
         let resolved_return = store.deep_resolve_alias(&return_ty.resolve_in(&self.env));
@@ -582,7 +590,7 @@ impl InferCtx<'_> {
         Expression::Call {
             expression: callee_expression.into(),
             args: new_args,
-            spread: Box::new(new_spread),
+            spread: new_spread.map(Box::new),
             type_arguments,
             ty: call_ty,
             span,
@@ -715,15 +723,14 @@ impl InferCtx<'_> {
             value: "Array.new".into(),
             ty: callee_ty,
             span: callee.get_span(),
-            binding_id: None,
-            qualified: None,
+            resolution: IdentifierResolution::Unresolved,
         };
 
         Expression::Call {
             expression: callee_expression.into(),
             args: new_args,
-            spread: Box::new(None),
-            type_arguments: CallTypeArguments::resolved(type_args, Vec::new()),
+            spread: None,
+            type_arguments: CallTypeArguments::checked_without_types(type_args),
             ty: array_ty,
             span,
             call_kind: Some(CallKind::NativeConstructor(NativeTypeKind::Array)),
@@ -838,7 +845,7 @@ impl InferCtx<'_> {
         let is_method_only_arity =
             receiver_generics_count > 0 && type_args.len() == method_only_count;
 
-        let mut resolved_args: Vec<Type> = Vec::new();
+        let mut resolved_args: Vec<(Annotation, Type)> = Vec::new();
         let mut instantiated = if is_method_only_arity {
             let mut map: SubstitutionMap = SubstitutionMap::default();
             for var in &vars[..receiver_generics_count] {
@@ -846,7 +853,7 @@ impl InferCtx<'_> {
             }
             for (var, ann) in vars[receiver_generics_count..].iter().zip(type_args.iter()) {
                 let arg_ty = self.convert_to_type(store, ann, span);
-                resolved_args.push(arg_ty.clone());
+                resolved_args.push((ann.clone(), arg_ty.clone()));
                 map.insert(var.clone(), arg_ty);
             }
             substitute(body, &map)
@@ -859,10 +866,14 @@ impl InferCtx<'_> {
 
         if !is_full_arity && !is_method_only_arity {
             let vars_as_str: Vec<String> = vars.iter().map(|s| s.to_string()).collect();
+            let resolved_types = resolved_args
+                .iter()
+                .map(|(_, ty)| ty.clone())
+                .collect::<Vec<_>>();
             self.sink.push(diagnostics::infer::generics_arity_mismatch(
                 &vars_as_str,
                 type_args,
-                &resolved_args,
+                &resolved_types,
                 *span,
             ));
         }
@@ -906,10 +917,7 @@ impl InferCtx<'_> {
         }
         self.unify(&instantiated, &callee_ty, span);
 
-        (
-            instantiated,
-            CallTypeArguments::resolved(type_args.to_vec(), resolved_args),
-        )
+        (instantiated, CallTypeArguments::resolved(resolved_args))
     }
 
     fn extract_call_signature(
@@ -921,7 +929,8 @@ impl InferCtx<'_> {
         let arg_count = args.len();
         let callee_ty = callee_ty.resolve_in(&self.env);
         let bounds = callee_ty.get_bounds().to_vec();
-        let is_variadic = callee_ty.is_variadic();
+        let function_ty = self.store.resolve_to_function_type(&callee_ty);
+        let is_variadic = function_ty.as_ref().and_then(Type::is_variadic);
 
         let (parameters, variadic, declared_parameter_count, return_type) =
             match self.extract_function_type(&callee_ty) {
@@ -953,10 +962,10 @@ impl InferCtx<'_> {
                 None => {
                     let callee_name = match callee_expression.unwrap_parens() {
                         Expression::Identifier {
-                            value,
-                            binding_id: None,
-                            ..
-                        } => Some(value.as_str()),
+                            value, resolution, ..
+                        } if !matches!(resolution, IdentifierResolution::Binding(_)) => {
+                            Some(value.as_str())
+                        }
                         _ => None,
                     };
                     let arg_name = if args.len() == 1 {
@@ -971,6 +980,7 @@ impl InferCtx<'_> {
                         &callee_ty,
                         callee_name,
                         arg_name,
+                        self.store.underlying_type(&callee_ty).is_some(),
                         callee_expression.get_span(),
                     ));
                     let parameters = (0..arg_count)
@@ -990,7 +1000,6 @@ impl InferCtx<'_> {
     }
 
     fn extract_function_type(&self, ty: &Type) -> Option<(Vec<FunctionParameter>, Type)> {
-        let store = self.store;
         let fn_type = |ty: &Type| -> Option<(Vec<FunctionParameter>, Type)> {
             if let Type::Function(f) = ty {
                 Some((f.params.clone(), (*f.return_type).clone()))
@@ -999,69 +1008,28 @@ impl InferCtx<'_> {
             }
         };
 
-        if let result @ Some(_) = fn_type(ty) {
-            return result;
-        }
-
-        if let Type::Nominal {
-            underlying_ty: Some(underlying),
-            ..
-        } = ty
-            && let result @ Some(_) = fn_type(underlying)
-        {
-            return result;
-        }
-
-        if let Type::Nominal { id, params, .. } = ty
-            && let Some(def) = store.get_definition(id)
-            && matches!(def.body, DefinitionBody::TypeAlias { .. })
-        {
-            let alias_ty = &def.ty;
-            let concrete_alias_ty = match alias_ty {
-                Type::Forall { vars, body } => {
-                    let map: SubstitutionMap =
-                        vars.iter().cloned().zip(params.iter().cloned()).collect();
-                    substitute(body, &map)
-                }
-                other => other.clone(),
-            };
-            let resolved = concrete_alias_ty.resolve_in(&self.env);
-            if let Type::Nominal {
-                underlying_ty: Some(underlying),
-                ..
-            } = &resolved
-            {
-                return fn_type(underlying);
-            }
-        }
-
-        None
+        fn_type(ty).or_else(|| {
+            self.store
+                .resolve_to_function_type(ty)
+                .and_then(|resolved| fn_type(&resolved))
+        })
     }
 
     fn try_as_type_conversion(&self, callee: &Expression, callee_ty: &Type) -> Option<Type> {
         let store = self.store;
-        let Type::Nominal {
-            id,
-            underlying_ty: Some(underlying),
-            ..
-        } = callee_ty
-        else {
+        let Type::Nominal { id, params } = callee_ty else {
             return None;
         };
-
-        if !matches!(underlying.as_ref(), Type::Function(_)) {
-            return None;
-        }
-
-        if !matches!(
-            store.get_definition(id).map(|d| &d.body),
-            Some(DefinitionBody::TypeAlias { .. })
-        ) {
+        let definition = store.get_definition(id)?;
+        let underlying = definition.instantiate_alias_target(params)?;
+        if !matches!(underlying, Type::Function(_)) {
             return None;
         }
 
         let is_bare_type_name = match callee.unwrap_parens() {
-            Expression::Identifier { binding_id, .. } => binding_id.is_none(),
+            Expression::Identifier { resolution, .. } => {
+                !matches!(resolution, IdentifierResolution::Binding(_))
+            }
             Expression::DotAccess {
                 expression: base, ..
             } => base
@@ -1076,7 +1044,7 @@ impl InferCtx<'_> {
             return None;
         }
 
-        Some(underlying.as_ref().clone())
+        Some(underlying)
     }
 
     fn infer_type_conversion_call(
@@ -1093,10 +1061,10 @@ impl InferCtx<'_> {
             type_arguments,
             span,
         } = call;
-        if let Some(spread_expr) = *spread {
+        if let Some(spread_expr) = spread {
             self.sink
                 .push(diagnostics::infer::spread_on_non_variadic(span));
-            self.with_value_context(|s| s.infer_expression(spread_expr, &Type::Error));
+            self.with_value_context(|s| s.infer_expression(*spread_expr, &Type::Error));
         }
 
         if args.len() != 1 {
@@ -1116,7 +1084,7 @@ impl InferCtx<'_> {
             return Expression::Call {
                 expression: callee_expression.into(),
                 args: new_args,
-                spread: Box::new(None),
+                spread: None,
                 type_arguments,
                 ty: Type::Error,
                 span,
@@ -1132,7 +1100,7 @@ impl InferCtx<'_> {
         Expression::Call {
             expression: callee_expression.into(),
             args: vec![new_arg],
-            spread: Box::new(None),
+            spread: None,
             type_arguments,
             ty: named_ty,
             span,
@@ -1351,20 +1319,18 @@ impl InferCtx<'_> {
                         .unwrap_or_else(|| self.new_type_var())
                 });
 
-                let (new_pattern, typed_pattern) = self.infer_pattern(
+                let mutable = binding.is_mutable();
+                let new_pattern = self.infer_pattern(
                     binding.pattern,
                     binding_ty.clone(),
-                    BindingKind::Parameter {
-                        mutable: binding.mutable,
-                    },
+                    BindingKind::Parameter { mutable },
                 );
 
                 Binding {
                     pattern: new_pattern,
                     annotation: binding.annotation,
-                    typed_pattern: Some(typed_pattern),
                     ty: binding_ty,
-                    mutable: binding.mutable,
+                    mut_span: binding.mut_span,
                 }
             })
             .collect()
@@ -1380,14 +1346,8 @@ impl InferCtx<'_> {
         let store = self.store;
         match annotation {
             Annotation::Unknown => {
-                if let Type::Function(f) = expected_ty {
-                    (*f.return_type).clone()
-                } else if let Type::Nominal {
-                    underlying_ty: Some(inner),
-                    ..
-                } = expected_ty
-                    && let Type::Function(f) = inner.as_ref()
-                {
+                let expected_function = store.resolve_to_function_type(expected_ty);
+                if let Type::Function(f) = expected_function.as_ref().unwrap_or(expected_ty) {
                     (*f.return_type).clone()
                 } else {
                     default_for_unknown
@@ -1490,13 +1450,12 @@ impl InferCtx<'_> {
             .and_then(|definition| match &definition.body {
                 DefinitionBody::Struct { methods, .. } => methods.get(method).cloned(),
                 DefinitionBody::Enum { methods, .. } => methods.get(method).cloned(),
-                DefinitionBody::TypeAlias { methods, .. } => {
-                    let alias_ty = &definition.ty;
+                DefinitionBody::TypeAlias { alias, methods, .. } => {
                     methods.get(method).cloned().or_else(|| {
                         // Follow the alias to its underlying type.
-                        let underlying = match alias_ty {
-                            Type::Forall { body, .. } => body.as_ref(),
-                            other => other,
+                        let underlying = match alias {
+                            syntax::program::AliasKind::Transparent { target, .. } => target,
+                            syntax::program::AliasKind::Opaque(_) => return None,
                         };
                         let underlying_key: Option<String> = match underlying {
                             Type::Simple(kind) => Some(format!("prelude.{}", kind.leaf_name())),
@@ -1708,7 +1667,7 @@ impl InferCtx<'_> {
         let arg_span = arg.get_span();
         let int_ty = self.type_int();
 
-        if let Some(peeled) = peel_to_range_type(&arg_ty) {
+        if let Some(peeled) = peel_to_range_type(&arg_ty, |id| self.store.get_definition(id)) {
             if let Some(inner) = peeled.get_type_params().and_then(|p| p.first()) {
                 self.unify(&int_ty, inner, &arg_span);
             }

@@ -40,8 +40,10 @@ impl InferCtx<'_> {
         let propagate_to_operand = {
             let resolved = expected_ty.resolve_in(&self.env);
             match operator {
-                Negative => resolved.is_numeric() || resolved.has_underlying_numeric_type(),
-                Not => resolved.underlying_simple_kind() == Some(SimpleKind::Bool),
+                Negative => {
+                    resolved.is_numeric() || self.store.has_underlying_numeric_type(&resolved)
+                }
+                Not => self.store.underlying_simple_kind(&resolved) == Some(SimpleKind::Bool),
                 _ => false,
             }
         };
@@ -66,7 +68,8 @@ impl InferCtx<'_> {
         let expression_ty = match operator {
             Negative => {
                 let resolved = operand_expected_ty.resolve_in(&self.env);
-                if resolved.is_numeric() || resolved.underlying_numeric_type().is_some() {
+                if resolved.is_numeric() || self.store.underlying_numeric_type(&resolved).is_some()
+                {
                     let is_literal = is_numeric_literal(&new_expression);
                     if resolved.is_unsigned_int() && !is_literal {
                         let type_name = resolved.get_name().unwrap_or_default();
@@ -86,7 +89,7 @@ impl InferCtx<'_> {
             Not => {
                 let resolved = operand_expected_ty.resolve_in(&self.env);
                 if !resolved.is_boolean()
-                    && resolved.underlying_simple_kind() == Some(SimpleKind::Bool)
+                    && self.store.underlying_simple_kind(&resolved) == Some(SimpleKind::Bool)
                 {
                     operand_expected_ty.clone()
                 } else {
@@ -99,7 +102,7 @@ impl InferCtx<'_> {
                 let resolved = operand_expected_ty.resolve_in(&self.env);
                 if resolved.is_error()
                     || matches!(resolved, Type::Var { .. })
-                    || is_integer_type(&resolved, &self.env)
+                    || is_integer_type(&resolved, &self.env, self.store)
                 {
                     operand_expected_ty.clone()
                 } else {
@@ -183,7 +186,7 @@ impl InferCtx<'_> {
         let new_right_operand = self.with_value_context(|s| {
             if is_right_literal {
                 let left_resolved = left.ty.resolve_in(&s.env);
-                if literal_can_adapt_to(&right_literal_kind, &left_resolved) {
+                if literal_can_adapt_to(&right_literal_kind, &left_resolved, self.store) {
                     let _ = s.try_unify(&right_operand_ty, &left_resolved, &span);
                 }
             }
@@ -222,7 +225,7 @@ impl InferCtx<'_> {
                 // can guide the literal's type adaptation.
                 let right = s.infer_expression(*right_operand, &right_operand_ty);
                 let right_resolved = right_operand_ty.resolve_in(&s.env);
-                if literal_can_adapt_to(&left_literal_kind, &right_resolved) {
+                if literal_can_adapt_to(&left_literal_kind, &right_resolved, self.store) {
                     let _ = s.try_unify(&left_operand_ty, &right_resolved, &span);
                 }
                 let left = s.infer_expression(*left_operand, &left_operand_ty);
@@ -231,7 +234,7 @@ impl InferCtx<'_> {
                 let left = s.infer_expression(*left_operand, &left_operand_ty);
                 if is_right_literal {
                     let left_resolved = left_operand_ty.resolve_in(&s.env);
-                    if literal_can_adapt_to(&right_literal_kind, &left_resolved) {
+                    if literal_can_adapt_to(&right_literal_kind, &left_resolved, self.store) {
                         let _ = s.try_unify(&right_operand_ty, &left_resolved, &span);
                     }
                 }
@@ -317,11 +320,13 @@ impl InferCtx<'_> {
                     span,
                 ) {
                     let same_aliased_numeric = resolved_left_operand == resolved_right_operand
-                        && resolved_left_operand.is_aliased_numeric_type();
+                        && self.store.is_aliased_numeric_type(&resolved_left_operand);
 
                     let different_but_compatible = resolved_left_operand != resolved_right_operand
-                        && resolved_left_operand
-                            .is_numeric_compatible_with(&resolved_right_operand);
+                        && self.store.is_numeric_compatible_with(
+                            &resolved_left_operand,
+                            &resolved_right_operand,
+                        );
 
                     if !same_aliased_numeric && !different_but_compatible {
                         self.unify_binary_operands(
@@ -350,8 +355,10 @@ impl InferCtx<'_> {
                     span,
                 ) {
                     left_operand_ty.clone()
-                } else if resolved_left_operand.underlying_simple_kind() == Some(SimpleKind::Bool)
-                    || resolved_right_operand.underlying_simple_kind() == Some(SimpleKind::Bool)
+                } else if self.store.underlying_simple_kind(&resolved_left_operand)
+                    == Some(SimpleKind::Bool)
+                    || self.store.underlying_simple_kind(&resolved_right_operand)
+                        == Some(SimpleKind::Bool)
                 {
                     self.unify_binary_operands(operator, left_operand_ty, right_operand_ty, &span);
                     left_operand_ty.clone()
@@ -376,14 +383,17 @@ impl InferCtx<'_> {
                 }
 
                 let same_aliased_numeric = resolved_left_operand == resolved_right_operand
-                    && resolved_left_operand.is_aliased_numeric_type();
+                    && self.store.is_aliased_numeric_type(&resolved_left_operand);
 
                 let different_but_compatible = resolved_left_operand != resolved_right_operand
-                    && resolved_left_operand.is_numeric_compatible_with(&resolved_right_operand);
+                    && self.store.is_numeric_compatible_with(
+                        &resolved_left_operand,
+                        &resolved_right_operand,
+                    );
 
                 if (same_aliased_numeric || different_but_compatible)
-                    && resolved_left_operand.is_orderable()
-                    && resolved_right_operand.is_orderable()
+                    && self.store.is_orderable(&resolved_left_operand)
+                    && self.store.is_orderable(&resolved_right_operand)
                 {
                     self.type_bool()
                 } else {
@@ -412,8 +422,9 @@ impl InferCtx<'_> {
                 ) {
                     left_operand_ty.clone()
                 } else {
-                    let is_string_like =
-                        |t: &Type| t.underlying_simple_kind() == Some(SimpleKind::String);
+                    let is_string_like = |ty: &Type| {
+                        self.store.underlying_simple_kind(ty) == Some(SimpleKind::String)
+                    };
                     let numeric_ok = if !is_string_like(&resolved_left_operand)
                         && !is_string_like(&resolved_right_operand)
                     {
@@ -556,7 +567,7 @@ impl InferCtx<'_> {
         if matches!(resolved_ty, Type::Var { .. } | Type::Error) {
             return true;
         }
-        if !is_integer_type(&resolved_ty, &self.env) {
+        if !is_integer_type(&resolved_ty, &self.env, self.store) {
             self.sink.push(diagnostics::infer::not_integer_for_binary(
                 operator,
                 &resolved_ty,
@@ -582,7 +593,7 @@ impl InferCtx<'_> {
             return;
         }
 
-        if !resolved_ty.is_orderable() {
+        if !self.store.is_orderable(&resolved_ty) {
             self.sink
                 .push(diagnostics::infer::not_orderable(&resolved_ty, *span));
         }
@@ -620,8 +631,8 @@ impl InferCtx<'_> {
         let right_is_defined_type = is_nominal_defined_type(right, store);
 
         if left_is_defined_type && right_is_defined_type {
-            let underlying = left
-                .underlying_simple_kind()
+            let underlying = store
+                .underlying_simple_kind(left)
                 .map(Type::Simple)
                 .unwrap_or_else(|| left.clone());
             self.sink.push(diagnostics::infer::incompatible_named_types(
@@ -629,13 +640,13 @@ impl InferCtx<'_> {
                 span,
             ));
             true
-        } else if left_is_defined_type && plain_primitive_of_backing(left, right) {
+        } else if left_is_defined_type && plain_primitive_of_backing(left, right, store) {
             self.sink
                 .push(diagnostics::infer::named_primitive_needs_cast(
                     right, left, span,
                 ));
             true
-        } else if right_is_defined_type && plain_primitive_of_backing(right, left) {
+        } else if right_is_defined_type && plain_primitive_of_backing(right, left, store) {
             self.sink
                 .push(diagnostics::infer::named_primitive_needs_cast(
                     left, right, span,
@@ -654,8 +665,8 @@ impl InferCtx<'_> {
         span: &Span,
     ) -> Option<Type> {
         let store = self.store;
-        let left_underlying = left_ty.underlying_numeric_type();
-        let right_underlying = right_ty.underlying_numeric_type();
+        let left_underlying = store.underlying_numeric_type(left_ty);
+        let right_underlying = store.underlying_numeric_type(right_ty);
 
         let (left_underlying, right_underlying) = match (left_underlying, right_underlying) {
             (Some(l), Some(r)) => (l, r),
@@ -669,8 +680,8 @@ impl InferCtx<'_> {
             return None;
         }
 
-        let left_is_aliased = left_ty.is_aliased_numeric_type();
-        let right_is_aliased = right_ty.is_aliased_numeric_type();
+        let left_is_aliased = store.is_aliased_numeric_type(left_ty);
+        let right_is_aliased = store.is_aliased_numeric_type(right_ty);
 
         match (left_is_aliased, right_is_aliased) {
             (false, false) => None,
@@ -786,7 +797,7 @@ impl InferCtx<'_> {
 
         self.check_valid_cast(&source_ty, &target_ty, span);
 
-        if is_float_literal(&new_expression) && is_integer_type(&target_ty, &self.env) {
+        if is_float_literal(&new_expression) && is_integer_type(&target_ty, &self.env, self.store) {
             self.sink
                 .push(diagnostics::infer::float_literal_int_cast(span));
         }
@@ -847,7 +858,7 @@ fn is_float_literal(expression: &Expression) -> bool {
     }
 }
 
-fn is_integer_type(ty: &Type, env: &crate::checker::TypeEnv) -> bool {
+fn is_integer_type(ty: &Type, env: &crate::checker::TypeEnv, store: &Store) -> bool {
     let resolved = ty.resolve_in(env);
     let direct_match = matches!(
         resolved.get_name(),
@@ -872,8 +883,8 @@ fn is_integer_type(ty: &Type, env: &crate::checker::TypeEnv) -> bool {
         return true;
     }
 
-    resolved
-        .underlying_numeric_type()
+    store
+        .underlying_numeric_type(&resolved)
         .is_some_and(|underlying| {
             matches!(
                 underlying.get_name(),
@@ -952,14 +963,14 @@ fn literal_kind(expression: &Expression) -> LiteralKind {
     }
 }
 
-fn literal_can_adapt_to(kind: &LiteralKind, target: &Type) -> bool {
+fn literal_can_adapt_to(kind: &LiteralKind, target: &Type, store: &Store) -> bool {
     let named_backed_by = |k: SimpleKind| {
-        matches!(target, Type::Nominal { .. }) && target.underlying_simple_kind() == Some(k)
+        matches!(target, Type::Nominal { .. }) && store.underlying_simple_kind(target) == Some(k)
     };
     match kind {
-        LiteralKind::Integer => target.literal_adaptation_target().is_some(),
-        LiteralKind::Float => target
-            .literal_adaptation_target()
+        LiteralKind::Integer => store.literal_adaptation_target(target).is_some(),
+        LiteralKind::Float => store
+            .literal_adaptation_target(target)
             .is_some_and(|underlying| underlying.is_float()),
         LiteralKind::String => named_backed_by(SimpleKind::String),
         LiteralKind::Boolean => named_backed_by(SimpleKind::Bool),
@@ -971,14 +982,14 @@ fn is_nominal_defined_type(ty: &Type, store: &Store) -> bool {
     matches!(store.deep_resolve_alias(ty), Type::Nominal { id, .. } if store.is_nominal_defined_type(id.as_str()))
 }
 
-fn is_plain_numeric_primitive(ty: &Type) -> bool {
-    ty.is_numeric() && !ty.is_aliased_numeric_type()
+fn is_plain_numeric_primitive(ty: &Type, store: &Store) -> bool {
+    ty.is_numeric() && !store.is_aliased_numeric_type(ty)
 }
 
-fn plain_primitive_of_backing(defined_ty: &Type, other: &Type) -> bool {
-    match defined_ty.underlying_simple_kind() {
+fn plain_primitive_of_backing(defined_ty: &Type, other: &Type, store: &Store) -> bool {
+    match store.underlying_simple_kind(defined_ty) {
         Some(SimpleKind::String) => other.is_string(),
         Some(SimpleKind::Bool) => other.is_boolean(),
-        _ => is_plain_numeric_primitive(other),
+        _ => is_plain_numeric_primitive(other, store),
     }
 }

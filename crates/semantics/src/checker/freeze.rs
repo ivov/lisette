@@ -8,7 +8,8 @@
 
 use syntax::ast::{
     Binding, EnumFieldDefinition, Expression, FormatStringPart, Literal, Pattern, SelectArm,
-    SelectArmPattern, StructFieldDefinition, StructSpread, TypedPattern, VariantFields,
+    SelectArmPattern, SequencePatternResolution, StructFieldDefinition, StructSpread,
+    VariantFields,
 };
 use syntax::types::Type;
 
@@ -27,16 +28,10 @@ impl<'a> FreezeFolder<'a> {
 
     fn normalize_ref_aliases(&self, ty: &Type) -> Type {
         match ty {
-            Type::Nominal {
-                id,
-                params,
-                underlying_ty,
-            } => {
-                if underlying_ty.is_some() {
-                    let peeled = self.store.peel_alias(ty);
-                    if peeled.is_ref() {
-                        return self.normalize_ref_aliases(&peeled);
-                    }
+            Type::Nominal { id, params } => {
+                let peeled = self.store.peel_alias(ty);
+                if peeled.is_ref() {
+                    return self.normalize_ref_aliases(&peeled);
                 }
                 Type::Nominal {
                     id: id.clone(),
@@ -44,7 +39,6 @@ impl<'a> FreezeFolder<'a> {
                         .iter()
                         .map(|p| self.normalize_ref_aliases(p))
                         .collect(),
-                    underlying_ty: underlying_ty.clone(),
                 }
             }
             Type::Compound { kind, args } => Type::Compound {
@@ -173,9 +167,6 @@ impl<'a> FreezeFolder<'a> {
                 self.freeze_expr(subject.as_mut());
                 for arm in arms {
                     self.freeze_pattern(&mut arm.pattern);
-                    if let Some(tp) = &mut arm.typed_pattern {
-                        self.freeze_typed_pattern(tp);
-                    }
                     self.freeze_expr(arm.expression.as_mut());
                     if let Some(guard) = &mut arm.guard {
                         self.freeze_expr(guard.as_mut());
@@ -183,12 +174,10 @@ impl<'a> FreezeFolder<'a> {
                 }
             }
 
-            Expression::Let {
-                value, else_block, ..
-            } => {
+            Expression::Let { value, mode, .. } => {
                 self.freeze_expr(value.as_mut());
-                if let Some(else_block) = else_block {
-                    self.freeze_expr(else_block.as_mut());
+                if let Some(else_block) = mode.else_block_mut() {
+                    self.freeze_expr(else_block);
                 }
             }
 
@@ -201,9 +190,14 @@ impl<'a> FreezeFolder<'a> {
             | Expression::Task { expression, .. }
             | Expression::Defer { expression, .. }
             | Expression::Assert { expression, .. }
-            | Expression::Cast { expression, .. }
-            | Expression::Const { expression, .. } => {
+            | Expression::Cast { expression, .. } => {
                 self.freeze_expr(expression.as_mut());
+            }
+
+            Expression::Const { expression, .. } => {
+                if let Some(value) = expression.value_mut() {
+                    self.freeze_expr(value);
+                }
             }
 
             Expression::IndexedAccess {
@@ -231,9 +225,13 @@ impl<'a> FreezeFolder<'a> {
                 }
             }
 
-            Expression::Function { body, .. }
-            | Expression::Lambda { body, .. }
-            | Expression::Loop { body, .. } => {
+            Expression::Function { body, .. } => {
+                if let Some(body) = body.definition_mut() {
+                    self.freeze_expr(body);
+                }
+            }
+
+            Expression::Lambda { body, .. } | Expression::Loop { body, .. } => {
                 self.freeze_expr(body.as_mut());
             }
 
@@ -304,8 +302,7 @@ impl<'a> FreezeFolder<'a> {
             | Expression::Break { value: None, .. }
             | Expression::Continue { .. }
             | Expression::Unit { .. }
-            | Expression::RawGo { .. }
-            | Expression::NoOp => {}
+            | Expression::RawGo { .. } => {}
         }
     }
 
@@ -313,14 +310,10 @@ impl<'a> FreezeFolder<'a> {
         match &mut arm.pattern {
             SelectArmPattern::Receive {
                 binding,
-                typed_pattern,
                 receive_expression,
                 body,
             } => {
                 self.freeze_pattern(binding);
-                if let Some(tp) = typed_pattern {
-                    self.freeze_typed_pattern(tp);
-                }
                 self.freeze_expr(receive_expression.as_mut());
                 self.freeze_expr(body.as_mut());
             }
@@ -338,9 +331,6 @@ impl<'a> FreezeFolder<'a> {
                 self.freeze_expr(receive_expression.as_mut());
                 for arm in arms {
                     self.freeze_pattern(&mut arm.pattern);
-                    if let Some(tp) = &mut arm.typed_pattern {
-                        self.freeze_typed_pattern(tp);
-                    }
                     self.freeze_expr(arm.expression.as_mut());
                     if let Some(guard) = &mut arm.guard {
                         self.freeze_expr(guard.as_mut());
@@ -399,9 +389,6 @@ impl<'a> FreezeFolder<'a> {
     fn freeze_binding(&self, binding: &mut Binding) {
         self.freeze_ty(&mut binding.ty);
         self.freeze_pattern(&mut binding.pattern);
-        if let Some(tp) = &mut binding.typed_pattern {
-            self.freeze_typed_pattern(tp);
-        }
     }
 
     fn freeze_pattern(&self, pattern: &mut Pattern) {
@@ -420,11 +407,17 @@ impl<'a> FreezeFolder<'a> {
                 }
             }
             Pattern::Slice {
-                element_ty, prefix, ..
+                prefix, resolution, ..
             } => {
-                self.freeze_ty(element_ty);
                 for p in prefix {
                     self.freeze_pattern(p);
+                }
+                match resolution {
+                    SequencePatternResolution::Slice { element_type }
+                    | SequencePatternResolution::Array { element_type, .. } => {
+                        self.freeze_ty(element_type);
+                    }
+                    SequencePatternResolution::Unresolved => {}
                 }
             }
             Pattern::Tuple { elements, .. } => {
@@ -439,95 +432,6 @@ impl<'a> FreezeFolder<'a> {
             }
             Pattern::AsBinding { pattern, .. } => self.freeze_pattern(pattern),
             Pattern::WildCard { .. } | Pattern::Identifier { .. } => {}
-        }
-    }
-
-    fn freeze_typed_pattern(&self, tp: &mut TypedPattern) {
-        match tp {
-            TypedPattern::Wildcard | TypedPattern::Literal(_) => {}
-            TypedPattern::Const { ty, .. } => self.freeze_ty(ty),
-            TypedPattern::EnumVariant {
-                type_args,
-                field_types,
-                fields,
-                variant_fields,
-                ..
-            } => {
-                for t in type_args {
-                    self.freeze_ty(t);
-                }
-                for t in field_types.iter_mut() {
-                    self.freeze_ty(t);
-                }
-                for f in fields {
-                    self.freeze_typed_pattern(f);
-                }
-                for vf in variant_fields {
-                    self.freeze_ty(&mut vf.ty);
-                }
-            }
-            TypedPattern::EnumStructVariant {
-                type_args,
-                pattern_fields,
-                variant_fields,
-                ..
-            } => {
-                for t in type_args {
-                    self.freeze_ty(t);
-                }
-                for (_, f) in pattern_fields {
-                    self.freeze_typed_pattern(f);
-                }
-                for vf in variant_fields {
-                    self.freeze_ty(&mut vf.ty);
-                }
-            }
-            TypedPattern::Struct {
-                type_args,
-                pattern_fields,
-                struct_fields,
-                ..
-            } => {
-                for t in type_args {
-                    self.freeze_ty(t);
-                }
-                for (_, f) in pattern_fields {
-                    self.freeze_typed_pattern(f);
-                }
-                for sf in struct_fields {
-                    self.freeze_ty(&mut sf.ty);
-                }
-            }
-            TypedPattern::Slice {
-                element_type,
-                prefix,
-                ..
-            } => {
-                self.freeze_ty(element_type);
-                for p in prefix {
-                    self.freeze_typed_pattern(p);
-                }
-            }
-            TypedPattern::Array {
-                element_type,
-                prefix,
-                ..
-            } => {
-                self.freeze_ty(element_type);
-                for p in prefix {
-                    self.freeze_typed_pattern(p);
-                }
-            }
-            TypedPattern::Tuple { elements, .. } => {
-                for e in elements {
-                    self.freeze_typed_pattern(e);
-                }
-            }
-            TypedPattern::Or { alternatives } => {
-                for a in alternatives {
-                    self.freeze_typed_pattern(a);
-                }
-            }
         }
     }
 
@@ -610,32 +514,17 @@ impl<'a> FreezeFolder<'a> {
                 self.freeze_binding(binding);
             }
 
-            Expression::IfLet {
-                ty,
-                pattern,
-                typed_pattern,
-                ..
-            } => {
+            Expression::IfLet { ty, pattern, .. } => {
                 self.freeze_ty(ty);
                 self.freeze_pattern(pattern);
-                if let Some(tp) = typed_pattern {
-                    self.freeze_typed_pattern(tp);
-                }
             }
 
             Expression::For { binding, .. } => {
                 self.freeze_binding(binding);
             }
 
-            Expression::WhileLet {
-                pattern,
-                typed_pattern,
-                ..
-            } => {
+            Expression::WhileLet { pattern, .. } => {
                 self.freeze_pattern(pattern);
-                if let Some(tp) = typed_pattern {
-                    self.freeze_typed_pattern(tp);
-                }
             }
 
             Expression::Struct { fields, .. } => {
@@ -670,8 +559,7 @@ impl<'a> FreezeFolder<'a> {
             | Expression::Break { .. }
             | Expression::Continue { .. }
             | Expression::ModuleImport { .. }
-            | Expression::RawGo { .. }
-            | Expression::NoOp => {}
+            | Expression::RawGo { .. } => {}
         }
     }
 }

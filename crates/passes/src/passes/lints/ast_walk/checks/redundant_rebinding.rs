@@ -1,14 +1,14 @@
 use crate::passes::lints::span_edit::statement_deletion;
 use crate::passes::walk::NodeCtx;
 use diagnostics::{Edit, Fix};
-use syntax::ast::{Expression, Pattern};
+use syntax::ast::{Expression, IdentifierResolution, Pattern};
 
 /// Flags `let x = x`, an immutable rebinding of a variable to itself.
 pub fn check_redundant_rebinding(expression: &Expression, ctx: &NodeCtx) {
     let Expression::Let {
         binding,
         value,
-        else_block: None,
+        mode,
         span,
         ..
     } = expression
@@ -16,7 +16,11 @@ pub fn check_redundant_rebinding(expression: &Expression, ctx: &NodeCtx) {
         return;
     };
 
-    if binding.mutable {
+    if mode.else_block().is_some() {
+        return;
+    }
+
+    if binding.is_mutable() {
         return;
     }
 
@@ -35,7 +39,7 @@ pub fn check_redundant_rebinding(expression: &Expression, ctx: &NodeCtx) {
 
     let Expression::Identifier {
         value: rhs_name,
-        binding_id: Some(outer_id),
+        resolution: IdentifierResolution::Binding(outer_id),
         ..
     } = value.unwrap_parens()
     else {

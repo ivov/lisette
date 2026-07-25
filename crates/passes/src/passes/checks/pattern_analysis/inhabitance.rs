@@ -42,7 +42,9 @@ fn type_key(ty: &Type) -> String {
         }
         Type::Array { length, element } => format!("[{}]{}", length, type_key(element)),
         Type::Function(_) => "fn".to_string(),
-        Type::Var { .. } | Type::Parameter(_) | Type::Error => "param".to_string(),
+        Type::Var { .. } | Type::Uninferred | Type::Ignored | Type::Parameter(_) | Type::Error => {
+            "param".to_string()
+        }
         Type::Forall { body, .. } => type_key(body),
         Type::ImportNamespace(m) => format!("<import:{}>", m),
         Type::ReceiverPlaceholder => "<receiver>".to_string(),
@@ -62,7 +64,7 @@ pub fn is_inhabited(ty: &Type, store: &Store, cache: &InhabitanceCache) -> bool 
     match ty {
         Type::Never => return false,
         Type::Function(_) => return true,
-        Type::Var { .. } | Type::Parameter(_) => return true,
+        Type::Var { .. } | Type::Uninferred | Type::Ignored | Type::Parameter(_) => return true,
         _ => {}
     }
 
@@ -135,9 +137,14 @@ fn check_constructor_inhabited(
             })
         }
 
-        DefinitionBody::TypeAlias { generics, .. } => {
+        DefinitionBody::TypeAlias {
+            generics, alias, ..
+        } => {
+            let syntax::program::AliasKind::Transparent { target, .. } = alias else {
+                return true;
+            };
             let map = build_substitution_map(generics, params);
-            let target_ty = substitute(&definition.ty, &map);
+            let target_ty = substitute(target, &map);
 
             if is_self_referential_alias(id, &target_ty) {
                 return true;

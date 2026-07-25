@@ -123,18 +123,21 @@ impl Planner<'_> {
             .zip(ctx.generics)
             .map(|(receiver_generic, impl_generic)| {
                 let bounds = receiver_generic
-                    .resolved_bounds
-                    .iter()
+                    .resolved_bounds()
+                    .expect("generic bounds must be resolved before emission")
                     .map(|bound| substitute(bound, &substitution))
                     .collect();
                 (impl_generic.name.clone(), bounds)
             })
             .collect::<Vec<_>>();
-        generic_bounds.extend(
-            method_generics
-                .iter()
-                .map(|generic| (generic.name.clone(), generic.resolved_bounds.clone())),
-        );
+        generic_bounds.extend(method_generics.iter().map(|generic| {
+            let bounds = generic
+                .resolved_bounds()
+                .expect("generic bounds must be resolved before emission")
+                .cloned()
+                .collect();
+            (generic.name.clone(), bounds)
+        }));
         Some(generic_bounds)
     }
 }

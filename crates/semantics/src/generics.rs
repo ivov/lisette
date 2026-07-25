@@ -24,8 +24,8 @@ pub(crate) fn apply_bounds(generics: &[Generic], arguments: &[Type]) -> Vec<Appl
         .flat_map(|(generic, argument)| {
             let substitution = &substitution;
             generic
-                .resolved_bounds
-                .iter()
+                .resolved_bounds()
+                .expect("generic bounds must be resolved before use")
                 .map(move |bound| AppliedGenericBound {
                     parameter_name: generic.name.clone(),
                     argument: argument.clone(),
@@ -160,7 +160,7 @@ impl TaskState {
             let key = (obligation.span, argument.to_string(), required.to_string());
             if !seen.insert(key)
                 || argument.contains_error()
-                || argument.contains_unknown()
+                || store.contains_unknown(&argument)
                 || required.contains_error()
             {
                 continue;
@@ -229,13 +229,12 @@ fn return_type_declares_obligation(
 mod tests {
     use super::*;
     use syntax::ast::{Annotation, Span};
-    use syntax::program::{Definition, DefinitionBody, Visibility};
+    use syntax::program::{AliasKind, Definition, DefinitionBody, Visibility};
 
     fn nominal(id: &str, params: Vec<Type>) -> Type {
         Type::Nominal {
             id: Symbol::from_raw(id),
             params,
-            underlying_ty: None,
         }
     }
 
@@ -253,13 +252,14 @@ mod tests {
             name_span: None,
             doc: None,
             body: DefinitionBody::TypeAlias {
-                generics: vec![Generic {
-                    name: "T".into(),
-                    bounds: vec![],
-                    resolved_bounds: vec![],
-                    span: Span::new(0, 0, 0),
-                }],
-                annotation: Annotation::Unknown,
+                generics: vec![Generic::new("T", vec![], Span::new(0, 0, 0))],
+                alias: AliasKind::Transparent {
+                    annotation: Annotation::Unknown,
+                    target: nominal(
+                        "Option",
+                        vec![nominal("m.A", vec![Type::Parameter("T".into())])],
+                    ),
+                },
                 methods: Default::default(),
                 attributes: Default::default(),
             },

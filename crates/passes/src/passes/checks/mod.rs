@@ -63,7 +63,7 @@ pub(crate) fn run_all(
         .modules
         .values()
         .map(Arc::as_ref)
-        .flat_map(|m| m.files.values().map(move |f| (m, f)))
+        .flat_map(|module| module.source_files().map(move |file| (module, file)))
         .collect();
     work.sort_unstable_by(|a, b| {
         a.0.id
@@ -140,8 +140,6 @@ fn run_file_checks(
         is_d_lis: file.is_d_lis(),
         sink,
         claimed_spans: Default::default(),
-        function_role: Default::default(),
-        pattern_role: Default::default(),
     };
     node_walk::run(&file.items, &ctx);
     interpolation_stringer::run(&file.items, store, ufcs_methods, sink);

@@ -95,6 +95,9 @@ impl Planner<'_> {
                 ty,
                 ..
             } => {
+                let Some(expression) = expression.value() else {
+                    return String::new();
+                };
                 let doc_comment = emit_doc(doc);
                 let code = self.emit_const(identifier, expression, ty);
                 format!("{}{}", doc_comment, code)
@@ -165,13 +168,11 @@ impl Planner<'_> {
                 span: function.name_span,
             },
             annotation: None,
-            typed_pattern: None,
             ty: Type::Nominal {
                 id: Symbol::from_parts(go_name::TEST_PRELUDE_MODULE, "TestContext"),
                 params: vec![],
-                underlying_ty: None,
             },
-            mutable: false,
+            mut_span: None,
         }])
     }
 }

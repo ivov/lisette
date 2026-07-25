@@ -50,7 +50,7 @@ impl InferCtx<'_> {
                 spread,
                 ..
             } => {
-                if let Some(s) = spread.as_ref().as_ref() {
+                if let Some(s) = spread.as_deref() {
                     let mut siblings: Vec<&Expression> = args.iter().collect();
                     siblings.push(s);
                     self.check_sibling_ref_aliasing_refs(&siblings);

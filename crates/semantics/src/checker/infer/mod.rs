@@ -25,7 +25,11 @@ impl TaskState {
             let module = store
                 .get_module_mut(module_id)
                 .expect("module must exist for inference");
-            std::mem::take(&mut module.files).into_values().collect()
+            let file_ids = module.file_ids().collect::<Vec<_>>();
+            file_ids
+                .into_iter()
+                .filter_map(|file_id| module.files.remove(&file_id))
+                .collect()
         })
     }
 }
@@ -193,7 +197,9 @@ impl InferCtx<'_> {
         let const_ty = if let Some(annotation) = annotation {
             self.convert_to_type(store, annotation, span)
         } else {
-            self.type_from_literal_expression(expression)
+            expression
+                .value()
+                .and_then(|value| self.type_from_literal_expression(value))
                 .unwrap_or_else(|| self.new_type_var())
         };
         self.sink.truncate(before);

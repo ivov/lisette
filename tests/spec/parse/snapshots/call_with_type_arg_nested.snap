@@ -21,76 +21,77 @@ description: |
             id: uninferred,
         },
         visibility: Private,
-        body: Block {
-            items: [
-                Call {
-                    expression: Identifier {
-                        value: "func",
+        body: Definition(
+            Block {
+                items: [
+                    Call {
+                        expression: Identifier {
+                            value: "func",
+                            ty: Var {
+                                id: uninferred,
+                            },
+                            span: Span {
+                                file_id: 0,
+                                byte_offset: 13,
+                                byte_length: 4,
+                            },
+                            resolution: Unresolved,
+                        },
+                        args: [],
+                        spread: None,
+                        type_arguments: Unresolved(
+                            [
+                                Constructor {
+                                    name: "Map",
+                                    params: [
+                                        Constructor {
+                                            name: "string",
+                                            params: [],
+                                            span: Span {
+                                                file_id: 0,
+                                                byte_offset: 22,
+                                                byte_length: 6,
+                                            },
+                                        },
+                                        Constructor {
+                                            name: "int",
+                                            params: [],
+                                            span: Span {
+                                                file_id: 0,
+                                                byte_offset: 30,
+                                                byte_length: 3,
+                                            },
+                                        },
+                                    ],
+                                    span: Span {
+                                        file_id: 0,
+                                        byte_offset: 18,
+                                        byte_length: 16,
+                                    },
+                                },
+                            ],
+                        ),
                         ty: Var {
                             id: uninferred,
                         },
                         span: Span {
                             file_id: 0,
                             byte_offset: 13,
-                            byte_length: 4,
+                            byte_length: 24,
                         },
-                        binding_id: None,
-                        qualified: None,
+                        call_kind: None,
                     },
-                    args: [],
-                    spread: None,
-                    type_arguments: Unresolved(
-                        [
-                            Constructor {
-                                name: "Map",
-                                params: [
-                                    Constructor {
-                                        name: "string",
-                                        params: [],
-                                        span: Span {
-                                            file_id: 0,
-                                            byte_offset: 22,
-                                            byte_length: 6,
-                                        },
-                                    },
-                                    Constructor {
-                                        name: "int",
-                                        params: [],
-                                        span: Span {
-                                            file_id: 0,
-                                            byte_offset: 30,
-                                            byte_length: 3,
-                                        },
-                                    },
-                                ],
-                                span: Span {
-                                    file_id: 0,
-                                    byte_offset: 18,
-                                    byte_length: 16,
-                                },
-                            },
-                        ],
-                    ),
-                    ty: Var {
-                        id: uninferred,
-                    },
-                    span: Span {
-                        file_id: 0,
-                        byte_offset: 13,
-                        byte_length: 24,
-                    },
-                    call_kind: None,
+                ],
+                ty: Var {
+                    id: uninferred,
                 },
-            ],
-            ty: Var {
-                id: uninferred,
+                span: Span {
+                    file_id: 0,
+                    byte_offset: 11,
+                    byte_length: 29,
+                },
             },
-            span: Span {
-                file_id: 0,
-                byte_offset: 11,
-                byte_length: 29,
-            },
-        },
+        ),
         ty: Var {
             id: uninferred,
         },

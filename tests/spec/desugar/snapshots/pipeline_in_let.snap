@@ -19,88 +19,84 @@ description: "fn test() { let result = x |> func; }"
             id: uninferred,
         },
         visibility: Private,
-        body: Block {
-            items: [
-                Let {
-                    binding: Binding {
-                        pattern: Identifier {
-                            identifier: "result",
-                            span: Span {
-                                file_id: 0,
-                                byte_offset: 16,
-                                byte_length: 6,
+        body: Definition(
+            Block {
+                items: [
+                    Let {
+                        binding: Binding {
+                            pattern: Identifier {
+                                identifier: "result",
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 16,
+                                    byte_length: 6,
+                                },
                             },
-                        },
-                        annotation: None,
-                        typed_pattern: None,
-                        ty: Var {
-                            id: uninferred,
-                        },
-                    },
-                    value: Call {
-                        expression: Identifier {
-                            value: "func",
+                            annotation: None,
                             ty: Var {
                                 id: uninferred,
                             },
-                            span: Span {
-                                file_id: 0,
-                                byte_offset: 30,
-                                byte_length: 4,
-                            },
-                            binding_id: None,
-                            qualified: None,
                         },
-                        args: [
-                            Identifier {
-                                value: "x",
+                        value: Call {
+                            expression: Identifier {
+                                value: "func",
                                 ty: Var {
                                     id: uninferred,
                                 },
                                 span: Span {
                                     file_id: 0,
-                                    byte_offset: 25,
-                                    byte_length: 1,
+                                    byte_offset: 30,
+                                    byte_length: 4,
                                 },
-                                binding_id: None,
-                                qualified: None,
+                                resolution: Unresolved,
                             },
-                        ],
-                        spread: None,
-                        type_arguments: None,
+                            args: [
+                                Identifier {
+                                    value: "x",
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
+                                    span: Span {
+                                        file_id: 0,
+                                        byte_offset: 25,
+                                        byte_length: 1,
+                                    },
+                                    resolution: Unresolved,
+                                },
+                            ],
+                            spread: None,
+                            type_arguments: None,
+                            ty: Var {
+                                id: uninferred,
+                            },
+                            span: Span {
+                                file_id: 0,
+                                byte_offset: 25,
+                                byte_length: 9,
+                            },
+                            call_kind: None,
+                        },
+                        mode: Plain,
                         ty: Var {
                             id: uninferred,
                         },
                         span: Span {
                             file_id: 0,
-                            byte_offset: 25,
-                            byte_length: 9,
+                            byte_offset: 12,
+                            byte_length: 22,
                         },
-                        call_kind: None,
                     },
-                    mut_span: None,
-                    else_block: None,
-                    else_span: None,
-                    assert: false,
-                    ty: Var {
-                        id: uninferred,
-                    },
-                    span: Span {
-                        file_id: 0,
-                        byte_offset: 12,
-                        byte_length: 22,
-                    },
+                ],
+                ty: Var {
+                    id: uninferred,
                 },
-            ],
-            ty: Var {
-                id: uninferred,
+                span: Span {
+                    file_id: 0,
+                    byte_offset: 10,
+                    byte_length: 27,
+                },
             },
-            span: Span {
-                file_id: 0,
-                byte_offset: 10,
-                byte_length: 27,
-            },
-        },
+        ),
         ty: Var {
             id: uninferred,
         },

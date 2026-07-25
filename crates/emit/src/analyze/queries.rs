@@ -164,16 +164,15 @@ impl Planner<'_> {
     }
 
     pub(crate) fn peel_alias_id(&self, id: &str) -> String {
-        syntax::types::peel_alias_id(id, |current| {
-            let definition = self.facts.definition(current)?;
-            if !matches!(definition.body, DefinitionBody::TypeAlias { .. }) {
-                return None;
-            }
-            let Type::Nominal { id: next, .. } = definition.ty.unwrap_forall() else {
-                return None;
-            };
-            Some(next.to_string())
-        })
+        let nominal = Type::Nominal {
+            id: id.into(),
+            params: Vec::new(),
+        };
+        self.facts
+            .peel_alias(&nominal)
+            .get_qualified_id()
+            .unwrap_or(id)
+            .to_string()
     }
 
     pub(crate) fn as_enum(&self, ty: &Type) -> Option<String> {
@@ -189,7 +188,7 @@ impl Planner<'_> {
             return false;
         }
         let inner = ty.ok_type();
-        if inner.contains_unknown() || inner.has_name("any") {
+        if self.facts.contains_unknown(&inner) || inner.has_name("any") {
             return false;
         }
         !self.facts.is_nilable_go_type(&inner)

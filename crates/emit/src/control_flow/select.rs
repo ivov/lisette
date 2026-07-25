@@ -3,7 +3,6 @@ use crate::context::expression::ExpressionContext;
 use crate::names::go_name;
 use crate::patterns::sites::{
     self, AnnotatedPattern, PatternSubject, TypedSubject, unwrap_some_pattern,
-    unwrap_some_typed_pattern,
 };
 use crate::plan::bodies::{
     ElseArm, IfPlan, LoopTransfer, LoweredBlock, LoweredStatement, PlacePlan, SelectArmPlan,
@@ -11,7 +10,7 @@ use crate::plan::bodies::{
 };
 use crate::plan::placement::unreachable_panic_if_needed;
 use crate::plan::values::{GoExpression, ValuePlan};
-use syntax::ast::{Expression, MatchArm, Pattern, SelectArm, SelectArmPattern, TypedPattern};
+use syntax::ast::{Expression, MatchArm, Pattern, SelectArm, SelectArmPattern};
 use syntax::program::{ChannelOperation, channel_operation};
 use syntax::types::Type;
 
@@ -32,7 +31,6 @@ struct SelectReceiveContext<'a> {
 enum PreparedSelectArm<'a> {
     Receive {
         binding: &'a Pattern,
-        typed_pattern: Option<&'a TypedPattern>,
         body: &'a Expression,
         channel: String,
         element_ty: Type,
@@ -102,7 +100,6 @@ impl Planner<'_> {
             let plan = match arm {
                 PreparedSelectArm::Receive {
                     binding,
-                    typed_pattern,
                     body,
                     channel,
                     element_ty,
@@ -115,7 +112,7 @@ impl Planner<'_> {
                         element_ty,
                         place,
                     };
-                    self.lower_receive_arm(binding, typed_pattern, &receiver_ctx)
+                    self.lower_receive_arm(binding, &receiver_ctx)
                 }
                 PreparedSelectArm::Send { body, operation } => {
                     self.lower_send_arm(&operation, body, place)
@@ -156,7 +153,6 @@ impl Planner<'_> {
                 SelectArmPattern::Receive {
                     receive_expression,
                     binding,
-                    typed_pattern,
                     body,
                     ..
                 } => {
@@ -175,7 +171,6 @@ impl Planner<'_> {
                     };
                     PreparedSelectArm::Receive {
                         binding,
-                        typed_pattern: typed_pattern.as_ref(),
                         body,
                         channel,
                         element_ty: receive_expression.get_type().ok_type(),
@@ -295,7 +290,7 @@ impl Planner<'_> {
     fn lower_ok_guard<F>(
         &mut self,
         prepare_receiver: F,
-        inner_pattern: Option<(&Pattern, Option<&TypedPattern>)>,
+        inner_pattern: Option<&Pattern>,
         ctx: &SelectReceiveContext,
     ) -> SelectArmPlan
     where
@@ -305,13 +300,13 @@ impl Planner<'_> {
             let receiver_var = prepare_receiver(this);
             let ok_var = this.fresh_ok_var();
             let (body_statements, used) = this.capture_go_uses(|this| {
-                if let Some((pattern, typed)) = inner_pattern {
+                if let Some(pattern) = inner_pattern {
                     this.lower_select_receive_pattern_site(
                         TypedSubject {
                             var: &receiver_var,
                             ty: &ctx.element_ty,
                         },
-                        AnnotatedPattern { pattern, typed },
+                        AnnotatedPattern { pattern },
                         ctx.body,
                         ctx.default_body,
                         ctx.place,
@@ -356,16 +351,14 @@ impl Planner<'_> {
     fn lower_receive_arm(
         &mut self,
         binding: &Pattern,
-        typed_pattern: Option<&TypedPattern>,
         ctx: &SelectReceiveContext,
     ) -> SelectArmPlan {
         let effective_pattern = unwrap_some_pattern(binding);
-        let inner_typed = unwrap_some_typed_pattern(typed_pattern);
 
         if binding.is_some_pattern() {
-            self.lower_receive_arm_with_ok_check(effective_pattern, inner_typed, ctx)
+            self.lower_receive_arm_with_ok_check(effective_pattern, ctx)
         } else {
-            self.lower_receive_arm_simple(effective_pattern, inner_typed, ctx)
+            self.lower_receive_arm_simple(effective_pattern, ctx)
         }
     }
 
@@ -373,7 +366,6 @@ impl Planner<'_> {
     fn lower_receive_arm_with_ok_check(
         &mut self,
         effective_pattern: &Pattern,
-        inner_typed: Option<&TypedPattern>,
         ctx: &SelectReceiveContext,
     ) -> SelectArmPlan {
         if let Pattern::Identifier { identifier, .. } = effective_pattern
@@ -397,18 +389,13 @@ impl Planner<'_> {
             };
         }
         let receiver_var = self.fresh_var(Some("recv"));
-        self.lower_ok_guard(
-            |_| receiver_var,
-            Some((effective_pattern, inner_typed)),
-            ctx,
-        )
+        self.lower_ok_guard(|_| receiver_var, Some(effective_pattern), ctx)
     }
 
     /// Plain receive: `case v := <-ch:` then the arm body.
     fn lower_receive_arm_simple(
         &mut self,
         effective_pattern: &Pattern,
-        inner_typed: Option<&TypedPattern>,
         ctx: &SelectReceiveContext,
     ) -> SelectArmPlan {
         self.with_binding_frame(|this| {
@@ -427,7 +414,6 @@ impl Planner<'_> {
                 body_statements.extend(this.lower_irrefutable_pattern_site(
                     PatternSubject::for_value(receiver_var.clone()),
                     effective_pattern,
-                    inner_typed,
                     &ctx.element_ty,
                 ));
                 Some(receiver_var)
@@ -599,7 +585,6 @@ impl Planner<'_> {
             if !needs_receiver_destructure {
                 return this.lower_block_to_place(&some_arm.expression, place);
             }
-            let inner_typed = unwrap_some_typed_pattern(some_arm.typed_pattern.as_ref());
             LoweredBlock {
                 statements: this.lower_select_match_receive_some_site(
                     TypedSubject {
@@ -608,7 +593,6 @@ impl Planner<'_> {
                     },
                     AnnotatedPattern {
                         pattern: receiver_var_pattern,
-                        typed: inner_typed,
                     },
                     &some_arm.expression,
                     match_arms,

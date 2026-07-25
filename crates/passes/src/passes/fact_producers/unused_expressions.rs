@@ -45,6 +45,9 @@ fn visit_expression(
             return_annotation,
             ..
         } => {
+            let Some(body) = body.definition() else {
+                return;
+            };
             let is_implicit_return = matches!(return_annotation, Annotation::Unknown);
             let body_ty = body.get_type();
             let tail_is_discarded = is_implicit_return
@@ -395,7 +398,12 @@ fn emit_unused_expression(
         Some(UnusedExpressionKind::Option)
     } else if ty.is_partial() {
         Some(UnusedExpressionKind::Partial)
-    } else if !ty.is_unit() && !ty.is_variable() && !ty.is_never() && !ty.is_error() {
+    } else if !ty.is_unit()
+        && !ty.is_variable()
+        && !ty.is_placeholder()
+        && !ty.is_never()
+        && !ty.is_error()
+    {
         Some(UnusedExpressionKind::Value)
     } else {
         None
@@ -429,7 +437,6 @@ fn is_statement_only(expression: &Expression) -> bool {
             | Expression::VariableDeclaration { .. }
             | Expression::ModuleImport { .. }
             | Expression::RawGo { .. }
-            | Expression::NoOp
     )
 }
 
@@ -454,11 +461,11 @@ fn callee_allowed_lints(expression: &Expression, module_id: &str, store: &Store)
     };
 
     if let Expression::Identifier {
-        value, qualified, ..
+        value, resolution, ..
     } = callee.as_ref()
     {
-        if let Some(q) = qualified
-            && let Some(definition) = store.get_definition(q.as_str())
+        if let Some(q) = resolution.definition()
+            && let Some(definition) = store.get_definition(q)
         {
             return definition.allowed_lints().to_vec();
         }

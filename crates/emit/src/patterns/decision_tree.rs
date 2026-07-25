@@ -2,14 +2,16 @@ use crate::patterns::binding_decls::pattern_has_bindings;
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use syntax::ast::{
-    EnumFieldDefinition, MatchArm, Pattern, RestPattern, StructFieldPattern, TypedPattern,
+    ConstructorPatternResolution, EnumFieldDefinition, MatchArm, Pattern, RecordPatternResolution,
+    RestPattern, SequencePatternResolution, StructFieldPattern,
 };
 use syntax::parse::TUPLE_FIELDS;
+use syntax::program::DefinitionBody;
 use syntax::types::{Type, unqualified_name};
 
 use crate::Planner;
-use crate::names::go_name;
 use crate::names::packages::PackageRequirements;
+use crate::names::{generics, go_name};
 use crate::patterns::binding_decls::emit_pattern_literal;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -749,7 +751,6 @@ fn collect_checks_and_bindings(
     planner: &Planner,
     path: &AccessPath,
     pattern: &Pattern,
-    typed: Option<&TypedPattern>,
     path_ty: Option<&Type>,
     collector: &mut PatternCollector,
 ) {
@@ -773,23 +774,28 @@ fn collect_checks_and_bindings(
         }
 
         Pattern::EnumVariant { .. } => {
-            collect_enum_variant_checks(planner, path, pattern, typed, path_ty, collector);
+            collect_enum_variant_checks(planner, path, pattern, path_ty, collector);
         }
 
         Pattern::Struct { .. } => {
-            collect_struct_checks(planner, path, pattern, typed, path_ty, collector);
+            collect_struct_checks(planner, path, pattern, path_ty, collector);
         }
 
         Pattern::Tuple { elements, .. } => {
-            collect_tuple_checks(planner, path, elements, typed, path_ty, collector);
+            collect_tuple_checks(planner, path, elements, path_ty, collector);
         }
 
-        Pattern::Slice { prefix, rest, .. } => {
-            collect_slice_checks(planner, path, prefix, rest, typed, collector);
+        Pattern::Slice {
+            prefix,
+            rest,
+            resolution,
+            ..
+        } => {
+            collect_slice_checks(planner, path, prefix, rest, resolution, collector);
         }
 
         Pattern::Or { patterns, .. } => {
-            collect_or_pattern_checks(planner, path, patterns, typed, pattern, path_ty, collector);
+            collect_or_pattern_checks(planner, path, patterns, pattern, path_ty, collector);
         }
 
         p @ Pattern::AsBinding {
@@ -797,7 +803,7 @@ fn collect_checks_and_bindings(
             name,
             ..
         } => {
-            collect_checks_and_bindings(planner, path, inner, typed, path_ty, collector);
+            collect_checks_and_bindings(planner, path, inner, path_ty, collector);
             let go_name = planner.go_name_for_binding(p);
             collector.bindings.push(PatternBinding {
                 lisette_name: name.to_string(),
@@ -812,15 +818,9 @@ fn collect_tuple_checks(
     planner: &Planner,
     path: &AccessPath,
     elements: &[Pattern],
-    typed: Option<&TypedPattern>,
     path_ty: Option<&Type>,
     collector: &mut PatternCollector,
 ) {
-    let typed_elements: Vec<Option<&TypedPattern>> = match typed {
-        Some(TypedPattern::Tuple { elements: te, .. }) => te.iter().map(Some).collect(),
-        _ => vec![None; elements.len()],
-    };
-
     let stripped_path_ty = path_ty.map(Type::strip_refs);
     let element_tys: Option<&[Type]> = match &stripped_path_ty {
         Some(Type::Tuple(tys)) => Some(tys.as_slice()),
@@ -834,7 +834,6 @@ fn collect_tuple_checks(
             planner,
             &field_path,
             element,
-            typed_elements.get(i).copied().flatten(),
             element_tys.and_then(|tys| tys.get(i)),
             collector,
         );
@@ -846,15 +845,14 @@ fn collect_slice_checks(
     path: &AccessPath,
     prefix: &[Pattern],
     rest: &RestPattern,
-    typed: Option<&TypedPattern>,
+    resolution: &SequencePatternResolution,
     collector: &mut PatternCollector,
 ) {
-    let array_info = match typed {
-        Some(TypedPattern::Array {
+    let array_info = match resolution {
+        SequencePatternResolution::Array {
             length,
             element_type,
-            ..
-        }) => Some((*length, element_type.clone())),
+        } => Some((*length, element_type)),
         _ => None,
     };
 
@@ -872,26 +870,15 @@ fn collect_slice_checks(
         }
     }
 
-    let typed_prefix: Vec<Option<&TypedPattern>> = match typed {
-        Some(TypedPattern::Slice {
-            prefix: tp_prefix, ..
-        })
-        | Some(TypedPattern::Array {
-            prefix: tp_prefix, ..
-        }) => tp_prefix.iter().map(Some).collect(),
-        _ => vec![None; prefix.len()],
+    let element_type = match resolution {
+        SequencePatternResolution::Slice { element_type }
+        | SequencePatternResolution::Array { element_type, .. } => Some(element_type),
+        SequencePatternResolution::Unresolved => None,
     };
 
     for (i, element) in prefix.iter().enumerate() {
         let element_path = path.push(PathSegment::Index(i));
-        collect_checks_and_bindings(
-            planner,
-            &element_path,
-            element,
-            typed_prefix.get(i).copied().flatten(),
-            None,
-            collector,
-        );
+        collect_checks_and_bindings(planner, &element_path, element, element_type, collector);
     }
 
     if let RestPattern::Bind { name, .. } = rest {
@@ -901,7 +888,7 @@ fn collect_slice_checks(
                 let sub_length = length.saturating_sub(prefix.len() as u64);
                 let sub_ty = Type::Array {
                     length: sub_length,
-                    element: Box::new(element_type.clone()),
+                    element: Box::new((*element_type).clone()),
                 };
                 PathSegment::ArraySliceFrom {
                     offset: prefix.len(),
@@ -924,25 +911,17 @@ fn collect_or_pattern_checks(
     planner: &Planner,
     path: &AccessPath,
     patterns: &[Pattern],
-    typed: Option<&TypedPattern>,
     pattern: &Pattern,
     path_ty: Option<&Type>,
     collector: &mut PatternCollector,
 ) {
     let has_bindings = pattern_has_bindings(pattern);
     if !has_bindings {
-        let typed_alternatives: Vec<Option<&TypedPattern>> = match typed {
-            Some(TypedPattern::Or { alternatives }) => alternatives.iter().map(Some).collect(),
-            _ => vec![None; patterns.len()],
-        };
-
         let alt_collectors: Vec<PatternCollector> = patterns
             .iter()
-            .enumerate()
-            .map(|(i, p)| {
+            .map(|p| {
                 let mut alt_collector = PatternCollector::new();
-                let tc = typed_alternatives.get(i).copied().flatten();
-                collect_checks_and_bindings(planner, path, p, tc, path_ty, &mut alt_collector);
+                collect_checks_and_bindings(planner, path, p, path_ty, &mut alt_collector);
                 alt_collector
             })
             .collect();
@@ -968,7 +947,7 @@ fn compute_struct_field_path(
     field: &StructFieldPattern,
     ty: &Type,
     enum_info: Option<&(String, String)>,
-    typed_variant_fields: Option<&[syntax::ast::EnumFieldDefinition]>,
+    variant_fields: Option<&[EnumFieldDefinition]>,
 ) -> AccessPath {
     let go_field_name = if let Some((enum_id, variant_name)) = enum_info {
         planner
@@ -991,7 +970,7 @@ fn compute_struct_field_path(
         && let Some(field_index) =
             planner.get_enum_struct_field_index(ty, variant_name, &field.name)
     {
-        let is_source_ref = typed_variant_fields
+        let is_source_ref = variant_fields
             .and_then(|vf| vf.get(field_index).map(|f| f.ty.is_ref()))
             .unwrap_or_else(|| planner.is_enum_field_source_ref(ty, variant_name, field_index));
         let is_auto_pointer =
@@ -1038,13 +1017,13 @@ fn collect_enum_variant_checks(
     planner: &Planner,
     path: &AccessPath,
     pattern: &Pattern,
-    typed: Option<&TypedPattern>,
     path_ty: Option<&Type>,
     collector: &mut PatternCollector,
 ) {
     let Pattern::EnumVariant {
         identifier,
         fields,
+        resolution,
         ty,
         ..
     } = pattern
@@ -1054,26 +1033,60 @@ fn collect_enum_variant_checks(
 
     // A const pattern is a value comparison against a named constant, emitted
     // as a Go `case` expression rather than an enum tag or newtype destructure.
-    if let Some(TypedPattern::Const { qualified_name, .. }) = typed {
+    if let ConstructorPatternResolution::Const { qualified_name, .. } = resolution {
         collect_const_pattern_check(planner, path, qualified_name, collector);
         return;
     }
 
-    let (typed_children, typed_variant_fields) = match typed {
-        Some(TypedPattern::EnumVariant {
-            fields: tf,
-            variant_fields: vf,
-            ..
-        }) => (tf.iter().map(Some).collect::<Vec<_>>(), Some(vf.as_slice())),
-        _ => (vec![None; fields.len()], None),
+    let ConstructorPatternResolution::EnumVariant {
+        enum_name,
+        variant_name,
+    } = resolution
+    else {
+        return;
+    };
+    let params = pattern_type_args(planner, ty);
+    let Some(definition) = planner.facts.definition(enum_name) else {
+        return;
+    };
+    let (variant_fields, field_types): (&[EnumFieldDefinition], Vec<Type>) = match &definition.body
+    {
+        DefinitionBody::Struct {
+            fields, generics, ..
+        } => (
+            &[],
+            fields
+                .iter()
+                .map(|field| generics::resolve_field_type(generics, &params, &field.ty))
+                .collect(),
+        ),
+        DefinitionBody::Enum {
+            variants, generics, ..
+        } => {
+            let Some(variant) = variants
+                .iter()
+                .find(|variant| variant.name == unqualified_name(variant_name))
+            else {
+                return;
+            };
+            (
+                variant.fields.as_slice(),
+                variant
+                    .fields
+                    .iter()
+                    .map(|field| generics::resolve_field_type(generics, &params, &field.ty))
+                    .collect(),
+            )
+        }
+        _ => return,
     };
 
     let variant_data = EnumVariantData {
         identifier,
         fields,
         ty,
-        typed_children: &typed_children,
-        typed_variant_fields,
+        variant_fields,
+        field_types: &field_types,
     };
 
     if planner.is_tuple_struct_type(ty) {
@@ -1082,7 +1095,7 @@ fn collect_enum_variant_checks(
         if planner.is_newtype_struct(ty) {
             collect_newtype_checks(planner, &child_path, &variant_data, collector);
         } else {
-            collect_tuple_struct_checks(planner, &child_path, fields, &typed_children, collector);
+            collect_tuple_struct_checks(planner, &child_path, fields, &field_types, collector);
         }
         return;
     }
@@ -1165,8 +1178,7 @@ fn collect_newtype_checks(
             planner,
             &field_path,
             field,
-            variant.typed_children.first().copied().flatten(),
-            None,
+            variant.field_types.first(),
             collector,
         );
     }
@@ -1177,19 +1189,12 @@ fn collect_tuple_struct_checks(
     planner: &Planner,
     path: &AccessPath,
     fields: &[Pattern],
-    typed_children: &[Option<&TypedPattern>],
+    field_types: &[Type],
     collector: &mut PatternCollector,
 ) {
     for (i, field) in fields.iter().enumerate() {
         let field_path = path.push(PathSegment::Field(format!("F{}", i)));
-        collect_checks_and_bindings(
-            planner,
-            &field_path,
-            field,
-            typed_children.get(i).copied().flatten(),
-            None,
-            collector,
-        );
+        collect_checks_and_bindings(planner, &field_path, field, field_types.get(i), collector);
     }
 }
 
@@ -1197,8 +1202,8 @@ struct EnumVariantData<'a> {
     identifier: &'a str,
     fields: &'a [Pattern],
     ty: &'a Type,
-    typed_children: &'a [Option<&'a TypedPattern>],
-    typed_variant_fields: Option<&'a [syntax::ast::EnumFieldDefinition]>,
+    variant_fields: &'a [EnumFieldDefinition],
+    field_types: &'a [Type],
 }
 
 fn enum_module_of<'a>(planner: &Planner<'a>, ty: &'a Type) -> &'a str {
@@ -1245,8 +1250,9 @@ fn collect_tagged_enum_checks(
         let field_name = planner.get_enum_tuple_field_name(variant.ty, variant_name, i);
 
         let is_source_ref = variant
-            .typed_variant_fields
-            .and_then(|vf| vf.get(i).map(|f| f.ty.is_ref()))
+            .variant_fields
+            .get(i)
+            .map(|f| f.ty.is_ref())
             .unwrap_or_else(|| planner.is_enum_field_source_ref(variant.ty, variant_name, i));
         let is_auto_pointer =
             planner.is_enum_field_pointer(variant.ty, variant_name, i) && !is_source_ref;
@@ -1273,8 +1279,7 @@ fn collect_tagged_enum_checks(
                 planner,
                 &field_path,
                 field,
-                variant.typed_children.get(i).copied().flatten(),
-                None,
+                variant.field_types.get(i),
                 collector,
             );
         }
@@ -1284,28 +1289,17 @@ fn collect_tagged_enum_checks(
 /// Collect checks and bindings for a struct pattern (plain struct or enum struct variant).
 /// Detect whether a struct pattern is actually an enum struct variant,
 /// returning `(enum_id, variant_name)` if so.
-fn detect_enum_info(
-    planner: &Planner,
-    ty: &Type,
-    identifier: &str,
-    typed: Option<&TypedPattern>,
-) -> Option<(String, String)> {
-    match typed {
-        Some(TypedPattern::EnumStructVariant {
-            variant_name: vn, ..
-        }) => {
-            let variant_name_str = unqualified_name(vn);
-            let id = planner.as_enum(ty).unwrap_or_else(|| {
-                vn.rsplit_once('.')
-                    .map_or(vn.to_string(), |(e, _)| e.to_string())
-            });
-            Some((id, variant_name_str.to_string()))
-        }
-        Some(TypedPattern::Struct { .. }) => None,
-        _ => planner.as_enum(ty).map(|id| {
-            let variant_name_str = unqualified_name(identifier);
-            (id, variant_name_str.to_string())
-        }),
+fn detect_enum_info(resolution: &RecordPatternResolution) -> Option<(String, String)> {
+    match resolution {
+        RecordPatternResolution::EnumVariant {
+            enum_name,
+            variant_name,
+            ..
+        } => Some((
+            enum_name.to_string(),
+            unqualified_name(variant_name).to_string(),
+        )),
+        RecordPatternResolution::Struct { .. } | RecordPatternResolution::Unresolved => None,
     }
 }
 
@@ -1313,7 +1307,6 @@ fn collect_struct_checks(
     planner: &Planner,
     path: &AccessPath,
     pattern: &Pattern,
-    typed: Option<&TypedPattern>,
     path_ty: Option<&Type>,
     collector: &mut PatternCollector,
 ) {
@@ -1321,33 +1314,33 @@ fn collect_struct_checks(
         fields,
         ty,
         identifier,
+        resolution,
         ..
     } = pattern
     else {
         return;
     };
 
-    let (enum_info, child_path) =
-        resolve_struct_child_path(planner, path, ty, identifier, typed, path_ty, collector);
-    let types = StructPatternTypes::build(typed);
+    let (enum_info, child_path) = resolve_struct_child_path(
+        planner, path, ty, identifier, resolution, path_ty, collector,
+    );
+    let variant_fields = record_variant_fields(planner, resolution);
 
     for field in fields {
-        let typed_child = types.lookup_typed_child(&field.name);
         let field_path = compute_struct_field_path(
             planner,
             &child_path,
             field,
             ty,
             enum_info.as_ref(),
-            types.typed_variant_fields,
+            variant_fields,
         );
-        let field_ty = types.lookup_field_ty(&field.name);
+        let field_ty = record_field_type(planner, resolution, ty, &field.name);
         collect_checks_and_bindings(
             planner,
             &field_path,
             &field.value,
-            typed_child,
-            field_ty,
+            field_ty.as_ref(),
             collector,
         );
     }
@@ -1363,14 +1356,14 @@ fn resolve_struct_child_path(
     path: &AccessPath,
     ty: &Type,
     identifier: &str,
-    typed: Option<&TypedPattern>,
+    resolution: &RecordPatternResolution,
     path_ty: Option<&Type>,
     collector: &mut PatternCollector,
 ) -> (Option<(String, String)>, AccessPath) {
     if let Some(asserted) = interface_assert_child_path(planner, path, ty, path_ty, collector) {
         return (None, asserted);
     }
-    let enum_info = detect_enum_info(planner, ty, identifier, typed);
+    let enum_info = detect_enum_info(resolution);
     if enum_info.is_some() {
         let enum_module = enum_module_of(planner, ty);
         let alias = if planner.facts.is_foreign_module(enum_module) {
@@ -1396,63 +1389,68 @@ fn resolve_struct_child_path(
     (enum_info, path.clone())
 }
 
-/// Per-call typed-pattern lookups for a struct pattern. Built once so the
-/// per-field loop can do `O(1)` lookups instead of three parallel matches.
-struct StructPatternTypes<'a> {
-    typed_fields_map: Option<Vec<(&'a str, Option<&'a TypedPattern>)>>,
-    typed_variant_fields: Option<&'a [EnumFieldDefinition]>,
-    field_tys: Vec<(&'a str, &'a Type)>,
+fn pattern_type_args(planner: &Planner, ty: &Type) -> Vec<Type> {
+    match planner.facts.peel_alias(ty) {
+        Type::Nominal { params, .. } => params,
+        _ => vec![],
+    }
 }
 
-impl<'a> StructPatternTypes<'a> {
-    fn build(typed: Option<&'a TypedPattern>) -> Self {
-        let typed_fields_map = match typed {
-            Some(TypedPattern::Struct { pattern_fields, .. })
-            | Some(TypedPattern::EnumStructVariant { pattern_fields, .. }) => Some(
-                pattern_fields
-                    .iter()
-                    .map(|(name, tp)| (name.as_str(), Some(tp)))
-                    .collect(),
-            ),
-            _ => None,
-        };
-        let typed_variant_fields = match typed {
-            Some(TypedPattern::EnumStructVariant { variant_fields, .. }) => {
-                Some(variant_fields.as_slice())
-            }
-            _ => None,
-        };
-        let field_tys: Vec<(&str, &Type)> = match typed {
-            Some(TypedPattern::Struct { struct_fields, .. }) => struct_fields
+fn record_variant_fields<'a>(
+    planner: &'a Planner,
+    resolution: &RecordPatternResolution,
+) -> Option<&'a [EnumFieldDefinition]> {
+    let RecordPatternResolution::EnumVariant {
+        enum_name,
+        variant_name,
+    } = resolution
+    else {
+        return None;
+    };
+    let DefinitionBody::Enum { variants, .. } = &planner.facts.definition(enum_name)?.body else {
+        return None;
+    };
+    variants
+        .iter()
+        .find(|variant| variant.name == unqualified_name(variant_name))
+        .map(|variant| variant.fields.as_slice())
+}
+
+fn record_field_type(
+    planner: &Planner,
+    resolution: &RecordPatternResolution,
+    pattern_ty: &Type,
+    field_name: &str,
+) -> Option<Type> {
+    let params = pattern_type_args(planner, pattern_ty);
+    match resolution {
+        RecordPatternResolution::Struct { struct_name } => {
+            let DefinitionBody::Struct {
+                fields, generics, ..
+            } = &planner.facts.definition(struct_name)?.body
+            else {
+                return None;
+            };
+            fields
                 .iter()
-                .map(|f| (f.name.as_str(), &f.ty))
-                .collect(),
-            Some(TypedPattern::EnumStructVariant { variant_fields, .. }) => variant_fields
-                .iter()
-                .map(|f| (f.name.as_str(), &f.ty))
-                .collect(),
-            _ => Vec::new(),
-        };
-        Self {
-            typed_fields_map,
-            typed_variant_fields,
-            field_tys,
+                .find(|field| field.name == field_name)
+                .map(|field| generics::resolve_field_type(generics, &params, &field.ty))
         }
-    }
-
-    fn lookup_typed_child(&self, field_name: &str) -> Option<&'a TypedPattern> {
-        self.typed_fields_map
-            .as_ref()?
-            .iter()
-            .find(|(name, _)| *name == field_name)
-            .and_then(|(_, tp)| *tp)
-    }
-
-    fn lookup_field_ty(&self, field_name: &str) -> Option<&'a Type> {
-        self.field_tys
-            .iter()
-            .find(|(name, _)| *name == field_name)
-            .map(|(_, ty)| *ty)
+        RecordPatternResolution::EnumVariant { .. } => {
+            let fields = record_variant_fields(planner, resolution)?;
+            let RecordPatternResolution::EnumVariant { enum_name, .. } = resolution else {
+                unreachable!()
+            };
+            let DefinitionBody::Enum { generics, .. } = &planner.facts.definition(enum_name)?.body
+            else {
+                return None;
+            };
+            fields
+                .iter()
+                .find(|field| field.name == field_name)
+                .map(|field| generics::resolve_field_type(generics, &params, &field.ty))
+        }
+        RecordPatternResolution::Unresolved => None,
     }
 }
 
@@ -1467,17 +1465,10 @@ pub(super) fn expand_or_patterns<'a>(arms: &'a [MatchArm]) -> Vec<ExpandedArm<'a
         if let Pattern::Or { patterns, .. } = &arm.pattern
             && pattern_has_bindings(&arm.pattern)
         {
-            let typed_alternatives: Vec<Option<&TypedPattern>> =
-                if let Some(TypedPattern::Or { alternatives }) = &arm.typed_pattern {
-                    alternatives.iter().map(Some).collect()
-                } else {
-                    vec![None; patterns.len()]
-                };
-            for (j, alt) in patterns.iter().enumerate() {
+            for alt in patterns {
                 result.push(ExpandedArm {
                     arm_index: i,
                     pattern: alt,
-                    typed_pattern: typed_alternatives.get(j).copied().flatten(),
                     has_guard: arm.has_guard(),
                 });
             }
@@ -1486,7 +1477,6 @@ pub(super) fn expand_or_patterns<'a>(arms: &'a [MatchArm]) -> Vec<ExpandedArm<'a
         result.push(ExpandedArm {
             arm_index: i,
             pattern: &arm.pattern,
-            typed_pattern: arm.typed_pattern.as_ref(),
             has_guard: arm.has_guard(),
         });
     }
@@ -1497,7 +1487,6 @@ pub(super) fn expand_or_patterns<'a>(arms: &'a [MatchArm]) -> Vec<ExpandedArm<'a
 pub(super) struct ExpandedArm<'a> {
     pub arm_index: usize,
     pub pattern: &'a Pattern,
-    pub typed_pattern: Option<&'a TypedPattern>,
     pub has_guard: bool,
 }
 
@@ -1552,7 +1541,7 @@ pub(super) fn compile_expanded_arms<'a>(
     let arm_infos: Vec<ArmInfo> = expanded
         .iter()
         .map(|ea| {
-            let info = collect_pattern_info(planner, ea.pattern, ea.typed_pattern, subject_ty);
+            let info = collect_pattern_info(planner, ea.pattern, subject_ty);
             packages.extend(&info.packages);
             ArmInfo {
                 arm_index: ea.arm_index,
@@ -1607,7 +1596,6 @@ pub(super) fn compile_expanded_arms<'a>(
 pub(crate) fn collect_pattern_info(
     planner: &Planner,
     pattern: &Pattern,
-    typed: Option<&TypedPattern>,
     subject_ty: &Type,
 ) -> PatternInfo {
     let mut collector = PatternCollector::new();
@@ -1615,7 +1603,6 @@ pub(crate) fn collect_pattern_info(
         planner,
         &AccessPath::root(),
         pattern,
-        typed,
         Some(subject_ty),
         &mut collector,
     );

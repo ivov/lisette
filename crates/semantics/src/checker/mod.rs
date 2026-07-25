@@ -310,13 +310,13 @@ impl TaskState {
     }
 
     pub fn new_type_var(&mut self) -> Type {
-        let id = self.env.fresh(None);
+        let id = self.env.fresh();
         Type::Var { id, hint: None }
     }
 
     fn new_type_var_with_hint(&mut self, hint: &str) -> Type {
         let hint: EcoString = hint.into();
-        let id = self.env.fresh(Some(hint.clone()));
+        let id = self.env.fresh();
         Type::Var {
             id,
             hint: Some(hint),
@@ -345,7 +345,7 @@ impl TaskState {
                 let map: SubstitutionMap = vars
                     .iter()
                     .map(|name| {
-                        let id = self.env.fresh(Some(name.clone()));
+                        let id = self.env.fresh();
                         let fresh_var = Type::Var {
                             id,
                             hint: Some(name.clone()),
@@ -369,7 +369,7 @@ impl TaskState {
             return false;
         };
 
-        module.typedefs.contains_key(&file_id)
+        module.is_typedef(file_id)
     }
 
     fn is_lis(&self, store: &Store) -> bool {
@@ -410,11 +410,7 @@ impl TaskState {
     ) -> Vec<Generic> {
         let mut resolved = generics.to_vec();
         for generic in &mut resolved {
-            generic.resolved_bounds = generic
-                .bounds
-                .iter()
-                .map(|bound| self.register_bound_annotation(store, bound, span))
-                .collect();
+            generic.resolve_bounds_with(|bound| self.register_bound_annotation(store, bound, span));
         }
         self.record_resolved_generic_bounds(&resolved);
         resolved
@@ -422,7 +418,10 @@ impl TaskState {
 
     fn record_resolved_generic_bounds(&mut self, generics: &[Generic]) {
         for generic in generics {
-            for bound in &generic.resolved_bounds {
+            for bound in generic
+                .resolved_bounds()
+                .expect("generic bounds were resolved before recording")
+            {
                 self.record_generic_bound(&generic.name, bound.clone());
             }
         }
@@ -434,10 +433,7 @@ impl TaskState {
         generics: Vec<Generic>,
         span: &Span,
     ) -> Vec<Generic> {
-        if generics
-            .iter()
-            .all(|generic| generic.bounds.len() == generic.resolved_bounds.len())
-        {
+        if generics.iter().all(Generic::bounds_are_resolved) {
             self.record_resolved_generic_bounds(&generics);
             generics
         } else {
@@ -484,7 +480,7 @@ impl TaskState {
         span: &Span,
     ) -> Type {
         let resolved = self.convert_bound_to_type(store, bound, span);
-        if self.is_lis(store) && resolved.contains_unknown() {
+        if self.is_lis(store) && store.contains_unknown(&resolved) {
             self.sink
                 .push(diagnostics::infer::unknown_in_bound_position(
                     bound.get_span(),
@@ -661,12 +657,8 @@ impl TaskState {
 
         // Type alias to tuple struct should return constructor type.
         if let DefinitionBody::TypeAlias { .. } = &definition.body {
-            let alias_ty = &definition.ty;
-            let underlying = match alias_ty {
-                Type::Forall { body, .. } => body.as_ref(),
-                other => other,
-            };
-            if let Type::Nominal { id, .. } = underlying
+            let underlying = store.peel_alias(&definition.ty);
+            if let Type::Nominal { id, .. } = &underlying
                 && let Some(Definition {
                     body:
                         DefinitionBody::Struct {
@@ -1069,11 +1061,15 @@ pub(crate) fn resolved_generic_bounds(generics: &[Generic]) -> Vec<Bound> {
     generics
         .iter()
         .flat_map(|generic| {
-            generic.resolved_bounds.iter().cloned().map(|ty| Bound {
-                param_name: generic.name.clone(),
-                generic: Type::Parameter(generic.name.clone()),
-                ty,
-            })
+            generic
+                .resolved_bounds()
+                .expect("generic bounds must be resolved before use")
+                .cloned()
+                .map(|ty| Bound {
+                    param_name: generic.name.clone(),
+                    generic: Type::Parameter(generic.name.clone()),
+                    ty,
+                })
         })
         .collect()
 }

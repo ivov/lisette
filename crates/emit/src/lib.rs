@@ -50,8 +50,7 @@ use state::module_state::{FunctionEmissionState, ModuleState};
 use state::scope::ScopeState;
 use syntax::ast::Span;
 use syntax::program::{
-    Definition, DefinitionBody, EmitInput, EqualityIndex, File, ModuleId, MutationInfo,
-    ResolvedDefinitions, TestIndex, UnusedInfo,
+    Definition, DefinitionBody, EmitInput, EqualityIndex, File, MutationInfo, TestIndex, UnusedInfo,
 };
 use syntax::types::{Symbol, Type};
 use types::go_type::GoType;
@@ -174,7 +173,6 @@ fn sentinel_hint(hints: &[String]) -> Option<i64> {
 
 pub struct TestEmitConfig<'a> {
     pub definitions: &'a HashMap<Symbol, Definition>,
-    pub const_names: &'a HashSet<Symbol>,
     pub module_id: &'a str,
     pub go_module: &'a str,
     pub unused: &'a UnusedInfo,
@@ -184,7 +182,6 @@ pub struct TestEmitConfig<'a> {
     pub test_index: &'a TestIndex,
     pub go_package_names: &'a HashMap<String, String>,
     pub go_module_ids: &'a HashSet<String>,
-    pub resolved_definitions: &'a ResolvedDefinitions,
 }
 
 pub struct Planner<'a> {
@@ -311,23 +308,31 @@ impl<'a> Planner<'a> {
             globals: Arc::new(GlobalEmitData::compute(&analysis.definitions)),
         };
 
-        let mut work: Vec<(&ModuleId, &syntax::program::ModuleInfo)> = analysis
-            .modules
-            .iter()
-            .filter(|(id, _)| !analysis.cached_modules.contains(*id))
-            .collect();
-        work.sort_unstable_by(|a, b| a.0.cmp(b.0));
+        let mut files_by_module: HashMap<&str, Vec<&File>> = HashMap::default();
+        for file in analysis.files.values().filter(|file| !file.is_d_lis()) {
+            if !analysis.cached_modules.contains(&file.module_id) {
+                files_by_module
+                    .entry(file.module_id.as_str())
+                    .or_default()
+                    .push(file);
+            }
+        }
+        for files in files_by_module.values_mut() {
+            files.sort_unstable_by_key(|file| file.id);
+        }
+        let mut work: Vec<_> = files_by_module.into_iter().collect();
+        work.sort_unstable_by_key(|(module_id, _)| *module_id);
 
         const PARALLEL_THRESHOLD: usize = 4;
 
-        let emit_one = |&(module_id, module_info): &(&ModuleId, &syntax::program::ModuleInfo)| {
+        let emit_one = |(module_id, files): &(&str, Vec<&File>)| {
             emit_module(
                 analysis,
                 go_module,
                 entry_package_name,
                 &shared,
                 module_id,
-                module_info,
+                files,
             )
         };
 
@@ -356,7 +361,6 @@ impl<'a> Planner<'a> {
         let globals = Arc::new(GlobalEmitData::compute(config.definitions));
         let facts = EmitFacts::new(EmitFactsConfig {
             definitions: config.definitions,
-            const_names: config.const_names,
             unused: config.unused,
             mutations: config.mutations,
             ufcs_methods: config.ufcs_methods,
@@ -364,7 +368,6 @@ impl<'a> Planner<'a> {
             test_index: config.test_index,
             go_package_names: config.go_package_names,
             go_module_ids: config.go_module_ids,
-            resolved_definitions: config.resolved_definitions,
             entry_module: config.module_id.to_string(),
             entry_package_name: "main",
             go_module: config.go_module.to_string(),
@@ -651,11 +654,10 @@ fn emit_module<'a>(
     entry_package_name: &'a str,
     shared_emit_ctx: &SharedEmitContext,
     module_id: &str,
-    module_info: &syntax::program::ModuleInfo,
+    files: &[&'a File],
 ) -> Vec<OutputFile> {
     let facts = EmitFacts::new(EmitFactsConfig {
         definitions: &analysis.definitions,
-        const_names: &analysis.const_names,
         unused: &analysis.unused,
         mutations: &analysis.mutations,
         ufcs_methods: &analysis.ufcs_methods,
@@ -663,7 +665,6 @@ fn emit_module<'a>(
         test_index: &analysis.test_index,
         go_package_names: &analysis.go_package_names,
         go_module_ids: &analysis.go_module_ids,
-        resolved_definitions: &analysis.resolved_definitions,
         entry_module: analysis.entry_module_id.to_string(),
         entry_package_name,
         go_module: go_module.to_string(),
@@ -674,21 +675,11 @@ fn emit_module<'a>(
     });
     let mut planner: Planner<'a> = Planner::new(facts);
 
-    let files: Vec<_> = module_info
-        .file_ids
-        .iter()
-        .filter_map(|fid| analysis.files.get(fid))
-        .collect();
-
-    if files.is_empty() {
-        return Vec::new();
-    }
-
-    let mut module_output = planner.emit_files(&files, module_id);
+    let mut module_output = planner.emit_files(files, module_id);
 
     if module_id != analysis.entry_module_id.as_str() {
         for file in &mut module_output {
-            file.name = format!("{}/{}", module_info.path, file.name);
+            file.name = format!("{}/{}", module_id, file.name);
         }
     }
 

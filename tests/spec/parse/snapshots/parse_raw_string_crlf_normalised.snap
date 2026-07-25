@@ -21,61 +21,59 @@ description: |-
             id: uninferred,
         },
         visibility: Private,
-        body: Block {
-            items: [
-                Let {
-                    binding: Binding {
-                        pattern: Identifier {
-                            identifier: "s",
-                            span: Span {
-                                file_id: 0,
-                                byte_offset: 16,
-                                byte_length: 1,
+        body: Definition(
+            Block {
+                items: [
+                    Let {
+                        binding: Binding {
+                            pattern: Identifier {
+                                identifier: "s",
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 16,
+                                    byte_length: 1,
+                                },
+                            },
+                            annotation: None,
+                            ty: Var {
+                                id: uninferred,
                             },
                         },
-                        annotation: None,
-                        typed_pattern: None,
-                        ty: Var {
-                            id: uninferred,
+                        value: Literal {
+                            literal: String {
+                                value: "a\nb",
+                                raw: true,
+                            },
+                            ty: Var {
+                                id: uninferred,
+                            },
+                            span: Span {
+                                file_id: 0,
+                                byte_offset: 20,
+                                byte_length: 7,
+                            },
                         },
-                    },
-                    value: Literal {
-                        literal: String {
-                            value: "a\nb",
-                            raw: true,
-                        },
+                        mode: Plain,
                         ty: Var {
                             id: uninferred,
                         },
                         span: Span {
                             file_id: 0,
-                            byte_offset: 20,
-                            byte_length: 7,
+                            byte_offset: 12,
+                            byte_length: 15,
                         },
                     },
-                    mut_span: None,
-                    else_block: None,
-                    else_span: None,
-                    assert: false,
-                    ty: Var {
-                        id: uninferred,
-                    },
-                    span: Span {
-                        file_id: 0,
-                        byte_offset: 12,
-                        byte_length: 15,
-                    },
+                ],
+                ty: Var {
+                    id: uninferred,
                 },
-            ],
-            ty: Var {
-                id: uninferred,
+                span: Span {
+                    file_id: 0,
+                    byte_offset: 10,
+                    byte_length: 19,
+                },
             },
-            span: Span {
-                file_id: 0,
-                byte_offset: 10,
-                byte_length: 19,
-            },
-        },
+        ),
         ty: Var {
             id: uninferred,
         },

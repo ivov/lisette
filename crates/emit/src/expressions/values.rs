@@ -238,10 +238,10 @@ impl Planner<'_> {
             Expression::Identifier {
                 value,
                 ty,
-                qualified,
+                resolution,
                 ..
             } => {
-                let go_expression = self.emit_identifier(value, qualified.as_deref(), ty, ctx);
+                let go_expression = self.emit_identifier(value, resolution.definition(), ty, ctx);
                 let stable_across_calls = self.identifier_immune_to_calls(expression);
                 let plan =
                     ValuePlan::from_identifier_expression(go_expression, stable_across_calls);
@@ -268,13 +268,15 @@ impl Planner<'_> {
             Expression::Call { ty, .. } => self.lower_call_value(expression, ty, ctx),
             Expression::RawGo { text } => ValuePlan::opaque(text.clone()),
             Expression::Unit { .. } => ValuePlan::opaque("struct{}{}".to_string()),
-            Expression::NoOp => ValuePlan::opaque(String::new()),
             Expression::Lambda {
                 params, body, ty, ..
-            }
-            | Expression::Function {
-                params, body, ty, ..
             } => ValuePlan::opaque(self.emit_lambda(params, body, ty, ctx)),
+            Expression::Function {
+                params, body, ty, ..
+            } => match body.definition() {
+                Some(body) => ValuePlan::opaque(self.emit_lambda(params, body, ty, ctx)),
+                None => ValuePlan::opaque(String::new()),
+            },
             Expression::IfLet { ty, .. }
             | Expression::Match { ty, .. }
             | Expression::Select { ty, .. }
@@ -417,15 +419,16 @@ impl Planner<'_> {
     }
 
     fn shift_pin_go_type(&self, expression: &Expression, target_ty: &Type) -> Option<String> {
-        let target_is_float = target_ty
-            .underlying_simple_kind()
+        let target_is_float = self
+            .facts
+            .underlying_simple_kind(target_ty)
             .is_some_and(|kind| kind.is_float());
         if !target_is_float || !self.contains_untyped_constant_shift(expression) {
             return None;
         }
         let source_ty = expression.get_type();
-        source_ty
-            .underlying_simple_kind()
+        self.facts
+            .underlying_simple_kind(&source_ty)
             .is_some_and(|kind| kind.integer_range().is_some())
             .then(|| self.go_type_string(&source_ty))
     }

@@ -21,59 +21,60 @@ description: |
             id: uninferred,
         },
         visibility: Private,
-        body: Block {
-            items: [
-                Call {
-                    expression: Identifier {
-                        value: "func",
+        body: Definition(
+            Block {
+                items: [
+                    Call {
+                        expression: Identifier {
+                            value: "func",
+                            ty: Var {
+                                id: uninferred,
+                            },
+                            span: Span {
+                                file_id: 0,
+                                byte_offset: 13,
+                                byte_length: 4,
+                            },
+                            resolution: Unresolved,
+                        },
+                        args: [
+                            Range {
+                                start: None,
+                                end: None,
+                                inclusive: false,
+                                ty: Var {
+                                    id: uninferred,
+                                },
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 18,
+                                    byte_length: 2,
+                                },
+                            },
+                        ],
+                        spread: None,
+                        type_arguments: None,
                         ty: Var {
                             id: uninferred,
                         },
                         span: Span {
                             file_id: 0,
                             byte_offset: 13,
-                            byte_length: 4,
+                            byte_length: 8,
                         },
-                        binding_id: None,
-                        qualified: None,
+                        call_kind: None,
                     },
-                    args: [
-                        Range {
-                            start: None,
-                            end: None,
-                            inclusive: false,
-                            ty: Var {
-                                id: uninferred,
-                            },
-                            span: Span {
-                                file_id: 0,
-                                byte_offset: 18,
-                                byte_length: 2,
-                            },
-                        },
-                    ],
-                    spread: None,
-                    type_arguments: None,
-                    ty: Var {
-                        id: uninferred,
-                    },
-                    span: Span {
-                        file_id: 0,
-                        byte_offset: 13,
-                        byte_length: 8,
-                    },
-                    call_kind: None,
+                ],
+                ty: Var {
+                    id: uninferred,
                 },
-            ],
-            ty: Var {
-                id: uninferred,
+                span: Span {
+                    file_id: 0,
+                    byte_offset: 11,
+                    byte_length: 13,
+                },
             },
-            span: Span {
-                file_id: 0,
-                byte_offset: 11,
-                byte_length: 13,
-            },
-        },
+        ),
         ty: Var {
             id: uninferred,
         },

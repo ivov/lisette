@@ -99,7 +99,9 @@ impl InferCtx<'_> {
         let r2_is_unknown = r2.is_unknown();
 
         match (&r1, &r2) {
-            _ if r1.is_ignored() || r2.is_ignored() => Ok(()),
+            _ if r1.is_ignored() || r2.is_ignored() || r1.is_uninferred() || r2.is_uninferred() => {
+                Ok(())
+            }
             _ if r1.is_receiver_placeholder() || r2.is_receiver_placeholder() => Ok(()),
             _ if self.should_unify_refs(&r1, &r2) => self.unify_refs(&r1, &r2, span),
 
@@ -137,37 +139,28 @@ impl InferCtx<'_> {
             // Go-level aliases for scalar types: byte <-> uint8, rune <-> int32.
             (Type::Simple(k1), Type::Simple(k2)) if simple_kinds_are_go_aliases(*k1, *k2) => Ok(()),
 
-            // Alias follow-through: `type MyFoo = Foo` stores a Nominal with
-            // `Foo` as `underlying_ty`; when unifying against a structural
-            // body, peel to the underlying type.
-            (
-                Nominal {
-                    id,
-                    underlying_ty: Some(underlying),
-                    ..
-                },
-                other,
-            ) if other.is_structural_alias_body() => {
+            (Nominal { id, .. }, other)
+                if other.is_structural_alias_body() && store.underlying_type(&r1).is_some() =>
+            {
                 if matches!(other, Type::Simple(_)) && store.is_nominal_defined_type(id.as_str()) {
                     Err(UnifyError::TypeMismatch)
                 } else {
-                    let u = underlying.as_ref().clone();
+                    let u = store
+                        .underlying_type(&r1)
+                        .expect("guard checked underlying");
                     self.try_unify(&u, &r2, span)
                 }
             }
 
-            (
-                other,
-                Nominal {
-                    id,
-                    underlying_ty: Some(underlying),
-                    ..
-                },
-            ) if other.is_structural_alias_body() => {
+            (other, Nominal { id, .. })
+                if other.is_structural_alias_body() && store.underlying_type(&r2).is_some() =>
+            {
                 if matches!(other, Type::Simple(_)) && store.is_nominal_defined_type(id.as_str()) {
                     Err(UnifyError::TypeMismatch)
                 } else {
-                    let u = underlying.as_ref().clone();
+                    let u = store
+                        .underlying_type(&r2)
+                        .expect("guard checked underlying");
                     self.try_unify(&r1, &u, span)
                 }
             }
@@ -179,7 +172,6 @@ impl InferCtx<'_> {
                 let synth = Type::Nominal {
                     id: format!("prelude.{}", kind.leaf_name()).into(),
                     params: vec![],
-                    underlying_ty: None,
                 };
                 self.try_unify(&synth, &r2, span)
             }
@@ -187,7 +179,6 @@ impl InferCtx<'_> {
                 let synth = Type::Nominal {
                     id: format!("prelude.{}", kind.leaf_name()).into(),
                     params: vec![],
-                    underlying_ty: None,
                 };
                 self.try_unify(&r1, &synth, span)
             }
@@ -195,7 +186,6 @@ impl InferCtx<'_> {
                 let synth = Type::Nominal {
                     id: format!("prelude.{}", kind.leaf_name()).into(),
                     params: args.clone(),
-                    underlying_ty: None,
                 };
                 self.try_unify(&synth, &r2, span)
             }
@@ -203,7 +193,6 @@ impl InferCtx<'_> {
                 let synth = Type::Nominal {
                     id: format!("prelude.{}", kind.leaf_name()).into(),
                     params: args.clone(),
-                    underlying_ty: None,
                 };
                 self.try_unify(&r1, &synth, span)
             }
@@ -266,25 +255,17 @@ impl InferCtx<'_> {
                 }
             }
 
-            (
-                Nominal {
-                    underlying_ty: Some(underlying),
-                    ..
-                },
-                Function(_),
-            ) => {
-                let u = underlying.as_ref().clone();
+            (Nominal { .. }, Function(_)) if store.underlying_type(&r1).is_some() => {
+                let u = store
+                    .underlying_type(&r1)
+                    .expect("guard checked underlying");
                 self.try_unify(&u, &r2, span)
             }
 
-            (
-                Function(_),
-                Nominal {
-                    underlying_ty: Some(underlying),
-                    ..
-                },
-            ) => {
-                let u = underlying.as_ref().clone();
+            (Function(_), Nominal { .. }) if store.underlying_type(&r2).is_some() => {
+                let u = store
+                    .underlying_type(&r2)
+                    .expect("guard checked underlying");
                 self.try_unify(&r1, &u, span)
             }
 
@@ -311,17 +292,12 @@ impl InferCtx<'_> {
     }
 
     fn is_transparent_alias(&self, ty: &Type) -> bool {
-        let Type::Nominal {
-            id,
-            underlying_ty: Some(_),
-            ..
-        } = ty
-        else {
+        let Type::Nominal { id, .. } = ty else {
             return false;
         };
         self.store
             .get_definition(id)
-            .is_some_and(|definition| definition.is_type_alias())
+            .is_some_and(|definition| definition.is_transparent_type_alias())
     }
 
     fn is_interface(&self, ty: &Type) -> bool {
@@ -344,7 +320,7 @@ impl InferCtx<'_> {
     fn collapse_vars_to_error(&mut self, ty: &Type, span: &Span) {
         let resolved = self.env.shallow_resolve(ty);
         match resolved {
-            Type::Var { id, .. } if !id.is_reserved() => {
+            Type::Var { id, .. } => {
                 let _ = self.unify_type_variable(id, &Type::Error, span, false);
             }
             Type::Nominal { params, .. } => {
@@ -382,11 +358,6 @@ impl InferCtx<'_> {
         span: &Span,
         var_on_right: bool,
     ) -> Result<(), UnifyError> {
-        // Reserved sentinel ids (ignored/uninferred) unify silently with
-        // anything. Their binding doesn't go into the env.
-        if id.is_reserved() {
-            return Ok(());
-        }
         match self.env.state(id).clone() {
             VarState::Bound(ty) => {
                 if var_on_right {
@@ -395,7 +366,7 @@ impl InferCtx<'_> {
                     self.try_unify(&ty, other_ty, span)
                 }
             }
-            VarState::Unbound { .. } => {
+            VarState::Unbound => {
                 if self.env.occurs(id, other_ty) {
                     return Err(UnifyError::InfiniteType);
                 }
@@ -424,23 +395,17 @@ impl InferCtx<'_> {
         };
 
         if symbol1 != symbol2 {
-            if let Nominal {
-                underlying_ty: Some(u),
-                ..
-            } = t1
-                && store.get_interface(symbol2).is_none()
+            if store.get_interface(symbol2).is_none()
                 && !store.is_nominal_defined_type(symbol1.as_str())
-                && self.try_unify(u, t2, span).is_ok()
+                && let Some(underlying) = store.underlying_type(t1)
+                && self.try_unify(&underlying, t2, span).is_ok()
             {
                 return Ok(());
             }
-            if let Nominal {
-                underlying_ty: Some(u),
-                ..
-            } = t2
-                && store.get_interface(symbol1).is_none()
+            if store.get_interface(symbol1).is_none()
                 && !store.is_nominal_defined_type(symbol2.as_str())
-                && self.try_unify(t1, u, span).is_ok()
+                && let Some(underlying) = store.underlying_type(t2)
+                && self.try_unify(t1, &underlying, span).is_ok()
             {
                 return Ok(());
             }
@@ -821,28 +786,36 @@ impl InferCtx<'_> {
             return "Wrap the value in a slice literal".to_string();
         }
 
-        if expected.contains_unknown() && !actual.contains_unknown() {
+        if self.store.contains_unknown(expected) && !self.store.contains_unknown(actual) {
             use syntax::types::CompoundKind::{Map, Slice};
             return match expected.as_compound() {
-                Some((Map, args)) if args.get(1).is_some_and(|v| v.resolves_to_unknown()) => {
+                Some((Map, args))
+                    if args
+                        .get(1)
+                        .is_some_and(|ty| self.store.resolves_to_unknown(ty)) =>
+                {
                     format!(
                         "Build the map with `Map.new()` plus indexed assignment: `let mut m: {} = Map.new(); m[k] = v`",
                         expected
                     )
                 }
-                Some((Slice, args)) if args.first().is_some_and(|v| v.resolves_to_unknown()) => {
+                Some((Slice, args))
+                    if args
+                        .first()
+                        .is_some_and(|ty| self.store.resolves_to_unknown(ty)) =>
+                {
                     format!("Annotate the slice literal: `let xs: {} = [v1, v2, ...]`", expected)
                 }
                 _ => "The expected type contains `Unknown`. Produce the value in a context where the expected type provides the `Unknown` slot (annotation, parameter type, struct field, or return position).".to_string(),
             };
         }
 
-        if expected.is_numeric_compatible_with(actual) {
+        if self.store.is_numeric_compatible_with(expected, actual) {
             return format!("Cast with `as`, e.g. `value as {}`", expected);
         }
 
-        if let Some(ret) = function_return_under_nominal(expected)
-            && ret == actual
+        if let Some(Type::Function(function)) = self.store.resolve_to_function_type(expected)
+            && function.return_type.as_ref() == actual
         {
             return "Remove the `()` so that the type matches".to_string();
         }
@@ -891,17 +864,6 @@ fn array_to_slice_help_applies(expected: &Type, actual: &Type) -> bool {
         return false;
     };
     expected_element == element.as_ref()
-}
-
-fn function_return_under_nominal(ty: &Type) -> Option<&Type> {
-    match ty {
-        Type::Function(f) => Some(&f.return_type),
-        Type::Nominal {
-            underlying_ty: Some(u),
-            ..
-        } => function_return_under_nominal(u),
-        _ => None,
-    }
 }
 
 fn are_go_type_aliases(a: &str, b: &str) -> bool {

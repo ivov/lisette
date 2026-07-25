@@ -1,7 +1,7 @@
 use crate::checker::EnvResolve;
 use crate::facts::BranchSubsumption;
 use syntax::ast::BindingKind;
-use syntax::ast::{Binding, BindingId, Expression, MatchArm, Pattern, Span};
+use syntax::ast::{Binding, Expression, MatchArm, Pattern, Span};
 use syntax::types::{SimpleKind, Type};
 
 use crate::checker::infer::InferCtx;
@@ -162,7 +162,7 @@ impl InferCtx<'_> {
                 self.sink
                     .push(diagnostics::infer::cannot_match_on_functions(*span));
             }
-            Type::Var { .. } => {
+            Type::Var { .. } | Type::Uninferred | Type::Ignored => {
                 self.sink
                     .push(diagnostics::infer::cannot_match_on_unconstrained_type(
                         *span,
@@ -214,7 +214,11 @@ impl InferCtx<'_> {
     fn infer_condition(&mut self, condition: Expression, span: &Span) -> Expression {
         let cond_ty = self.new_type_var();
         let inferred = self.infer_expression(condition, &cond_ty);
-        if cond_ty.resolve_in(&self.env).underlying_simple_kind() != Some(SimpleKind::Bool) {
+        if self
+            .store
+            .underlying_simple_kind(&cond_ty.resolve_in(&self.env))
+            != Some(SimpleKind::Bool)
+        {
             let bool_ty = self.type_bool();
             self.unify(&bool_ty, &cond_ty, span);
         }
@@ -324,7 +328,6 @@ impl InferCtx<'_> {
             scrutinee,
             consequence,
             alternative,
-            typed_pattern,
             else_span,
             span,
             ..
@@ -337,7 +340,6 @@ impl InferCtx<'_> {
             MatchArm {
                 pattern,
                 guard: None,
-                typed_pattern,
                 expression: consequence,
             },
             MatchArm {
@@ -345,7 +347,6 @@ impl InferCtx<'_> {
                     span: alternative.get_span(),
                 },
                 guard: None,
-                typed_pattern: None,
                 expression: alternative,
             },
         ];
@@ -367,7 +368,6 @@ impl InferCtx<'_> {
             scrutinee: new_scrutinee.into(),
             consequence: pattern_arm.expression,
             alternative: wildcard_arm.expression,
-            typed_pattern: pattern_arm.typed_pattern,
             else_span,
             ty: result_ty,
             span,
@@ -415,8 +415,7 @@ impl InferCtx<'_> {
                 self.scopes.push();
 
                 let pattern_ty = subject_ty.resolve_in(&self.env);
-                let (new_pattern, typed_pattern) =
-                    self.infer_pattern(a.pattern, pattern_ty, arm_kind);
+                let new_pattern = self.infer_pattern(a.pattern, pattern_ty, arm_kind);
 
                 let new_guard = a
                     .guard
@@ -437,7 +436,6 @@ impl InferCtx<'_> {
                 MatchArm {
                     pattern: new_pattern,
                     guard: new_guard,
-                    typed_pattern: Some(typed_pattern),
                     expression: Box::new(new_expression),
                 }
             })
@@ -538,7 +536,7 @@ impl InferCtx<'_> {
         );
 
         self.scopes.push();
-        let (new_pattern, typed_pattern) = self.infer_pattern(
+        let new_pattern = self.infer_pattern(
             pattern,
             scrutinee_ty.resolve_in(&self.env),
             BindingKind::WhileLet,
@@ -553,7 +551,6 @@ impl InferCtx<'_> {
             pattern: new_pattern,
             scrutinee: new_scrutinee.into(),
             body: new_body.into(),
-            typed_pattern: Some(typed_pattern),
             span,
         }
     }
@@ -693,7 +690,7 @@ impl InferCtx<'_> {
         // Push a new scope so the loop variable doesn't shadow outer bindings
         self.scopes.push();
 
-        let (inferred_pattern, typed_pattern) = self.infer_pattern(
+        let inferred_pattern = self.infer_pattern(
             binding.pattern,
             element_ty.clone(),
             BindingKind::Let { mutable: false },
@@ -702,15 +699,9 @@ impl InferCtx<'_> {
         let new_binding = Binding {
             pattern: inferred_pattern,
             annotation: binding.annotation,
-            typed_pattern: Some(typed_pattern),
             ty: element_ty.clone(),
-            mutable: false,
+            mut_span: None,
         };
-
-        let binding_id: Option<BindingId> = new_binding
-            .pattern
-            .get_identifier()
-            .and_then(|name| self.scopes.lookup_binding_id(&name));
 
         // When iterating over types that yield multiple values (`Map`, `EnumeratedSlice`),
         // Go's `range` returns multiple values, so the binding must be a tuple literal.
@@ -738,7 +729,6 @@ impl InferCtx<'_> {
             iterable: new_iterable.into(),
             body: new_body.into(),
             span,
-            binding_id,
         }
     }
 

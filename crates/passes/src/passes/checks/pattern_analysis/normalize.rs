@@ -1,7 +1,10 @@
 use semantics::store::Store;
-use syntax::ast::{Literal, MatchArm, TypedPattern};
+use syntax::ast::{
+    ConstructorPatternResolution, Literal, MatchArm, Pattern, RecordPatternResolution,
+    SequencePatternResolution,
+};
 use syntax::program::{Definition, DefinitionBody};
-use syntax::types::{SubstitutionMap, Type, build_substitution_map, substitute, unqualified_name};
+use syntax::types::{Type, build_substitution_map, substitute, unqualified_name};
 
 use super::NormalizedPattern::Wildcard;
 use super::inhabitance::{InhabitanceCache, is_inhabited, is_variant_inhabited};
@@ -21,20 +24,11 @@ fn make_type_key(name: &str, type_args: &[Type]) -> String {
     }
 }
 
-/// Map a definition's generics to a pattern's type args, so a field declared
-/// `T` resolves to its concrete type at this position. Empty for non-generics.
-fn field_substitution_map(
-    ctx: &NormalizationContext,
-    type_name: &str,
-    type_args: &[Type],
-) -> SubstitutionMap {
-    let generics = match ctx.store.get_definition(type_name).map(|d| &d.body) {
-        Some(DefinitionBody::Struct { generics, .. } | DefinitionBody::Enum { generics, .. }) => {
-            generics.as_slice()
-        }
-        _ => &[],
-    };
-    build_substitution_map(generics, type_args)
+fn pattern_type_args(ctx: &NormalizationContext, ty: &Type) -> Vec<Type> {
+    match ctx.store.peel_alias(ty) {
+        Type::Nominal { params, .. } => params,
+        _ => vec![],
+    }
 }
 
 pub struct NormalizationContext<'a> {
@@ -120,31 +114,26 @@ pub fn normalize_arm(
     unions: &mut UnionTable,
     ctx: &NormalizationContext,
 ) -> Vec<Row> {
-    let typed_pattern = arm
-        .typed_pattern
-        .as_ref()
-        .expect("typed pattern should be populated during inference");
-
-    match typed_pattern {
-        TypedPattern::Or { alternatives } => alternatives
+    match &arm.pattern {
+        Pattern::Or { patterns, .. } => patterns
             .iter()
-            .map(|alt| vec![normalize_typed_pattern(alt, unions, ctx)])
+            .map(|alt| vec![normalize_pattern(alt, unions, ctx)])
             .collect(),
-        _ => {
-            vec![vec![normalize_typed_pattern(typed_pattern, unions, ctx)]]
-        }
+        pattern => vec![vec![normalize_pattern(pattern, unions, ctx)]],
     }
 }
 
-pub fn normalize_typed_pattern(
-    typed_pattern: &TypedPattern,
+pub fn normalize_pattern(
+    pattern: &Pattern,
     unions: &mut UnionTable,
     ctx: &NormalizationContext,
 ) -> NormalizedPattern {
-    match typed_pattern {
-        TypedPattern::Wildcard => Wildcard,
+    match pattern {
+        Pattern::Identifier { .. } | Pattern::WildCard { .. } | Pattern::Unit { .. } => Wildcard,
 
-        TypedPattern::Literal(literal) => {
+        Pattern::AsBinding { pattern, .. } => normalize_pattern(pattern, unions, ctx),
+
+        Pattern::Literal { literal, .. } => {
             if let Literal::Boolean(b) = literal {
                 return normalize_boolean(*b, unions);
             }
@@ -152,129 +141,186 @@ pub fn normalize_typed_pattern(
             NormalizedPattern::Literal(literal.clone())
         }
 
-        TypedPattern::Const {
-            qualified_name,
-            value,
-            ..
-        } => match value {
-            Some(Literal::Boolean(b)) => normalize_boolean(*b, unions),
-            Some(literal) => NormalizedPattern::Literal(literal.clone()),
-            None => NormalizedPattern::OpaqueConst(qualified_name.to_string()),
-        },
-
-        TypedPattern::EnumVariant {
-            enum_name,
-            variant_name,
+        Pattern::EnumVariant {
             fields,
-            type_args,
-            field_types,
+            rest,
+            resolution,
+            ty,
             ..
-        } => {
-            let patterns: Vec<NormalizedPattern> = fields
-                .iter()
-                .enumerate()
-                .map(|(i, f)| {
-                    let child = ctx.at_position(field_types.get(i).cloned());
-                    normalize_typed_pattern(f, unions, &child)
-                })
-                .collect();
-
-            let enum_def = ctx.store.get_definition(enum_name);
-
-            if let Some(Definition {
-                body:
-                    DefinitionBody::Struct {
-                        fields: struct_fields,
-                        ..
-                    },
-                ..
-            }) = enum_def
-            {
-                let arity = struct_fields.len();
-                let mut args = patterns.clone();
-                while args.len() < arity {
-                    args.push(Wildcard);
-                }
-                if let Some(normalized) =
-                    try_normalize_interface_implementer(ctx, enum_name, arity, args, unions)
-                {
-                    return normalized;
-                }
-            }
-
-            let type_name = make_type_key(enum_name, type_args);
-            let enum_body = enum_def.map(|d| &d.body);
-
-            // Tuple struct / newtype tags are the bare type name (like record
-            // structs); enum variants are `Type.Variant`.
-            let is_struct_def = matches!(enum_body, Some(DefinitionBody::Struct { .. }));
-            let tag = if is_struct_def {
-                enum_name.to_string()
-            } else {
-                format!("{}.{}", enum_name, unqualified_name(variant_name))
-            };
-
-            if unions.get(&type_name).is_none() {
-                let alternatives = match enum_body {
+        } => match resolution {
+            ConstructorPatternResolution::Unresolved => Wildcard,
+            ConstructorPatternResolution::Const {
+                qualified_name,
+                value,
+            } => match value {
+                Some(Literal::Boolean(b)) => normalize_boolean(*b, unions),
+                Some(literal) => NormalizedPattern::Literal(literal.clone()),
+                None => NormalizedPattern::OpaqueConst(qualified_name.to_string()),
+            },
+            ConstructorPatternResolution::EnumVariant {
+                enum_name,
+                variant_name,
+            } => {
+                let type_args = pattern_type_args(ctx, ty);
+                let enum_def = ctx.store.get_definition(enum_name);
+                let field_types = match enum_def.map(|definition| &definition.body) {
+                    Some(DefinitionBody::Struct {
+                        fields, generics, ..
+                    }) => {
+                        let substitution = build_substitution_map(generics, &type_args);
+                        fields
+                            .iter()
+                            .map(|field| substitute(&field.ty, &substitution))
+                            .collect::<Vec<_>>()
+                    }
                     Some(DefinitionBody::Enum {
                         variants, generics, ..
-                    }) => variants
-                        .iter()
-                        .filter(|v| {
-                            is_variant_inhabited(v, type_args, generics, ctx.store, ctx.cache)
-                        })
-                        .map(|v| Constructor {
-                            tag_id: format!("{}.{}", enum_name, v.name),
-                            arity: v.fields.len(),
-                        })
-                        .collect(),
-                    Some(DefinitionBody::Struct {
-                        fields: struct_fields,
-                        generics,
-                        ..
-                    }) if super::inhabitance::is_struct_inhabited(
-                        struct_fields,
-                        type_args,
-                        generics,
-                        ctx.store,
-                        ctx.cache,
-                    ) =>
-                    {
-                        vec![Constructor {
-                            tag_id: tag.clone(),
-                            arity: struct_fields.len(),
-                        }]
+                    }) => {
+                        let Some(variant) = variants
+                            .iter()
+                            .find(|variant| variant.name == unqualified_name(variant_name))
+                        else {
+                            return Wildcard;
+                        };
+                        let substitution = build_substitution_map(generics, &type_args);
+                        variant
+                            .fields
+                            .iter()
+                            .map(|field| substitute(&field.ty, &substitution))
+                            .collect()
                     }
-                    _ => vec![],
+                    _ => return Wildcard,
+                };
+                let patterns: Vec<NormalizedPattern> = fields
+                    .iter()
+                    .enumerate()
+                    .map(|(i, f)| {
+                        let child = ctx.at_position(field_types.get(i).cloned());
+                        normalize_pattern(f, unions, &child)
+                    })
+                    .collect();
+
+                let mut patterns = patterns;
+                if *rest && patterns.len() < field_types.len() {
+                    patterns.resize(field_types.len(), Wildcard);
+                }
+
+                if let Some(Definition {
+                    body:
+                        DefinitionBody::Struct {
+                            fields: struct_fields,
+                            ..
+                        },
+                    ..
+                }) = enum_def
+                {
+                    let arity = struct_fields.len();
+                    let mut args = patterns.clone();
+                    while args.len() < arity {
+                        args.push(Wildcard);
+                    }
+                    if let Some(normalized) =
+                        try_normalize_interface_implementer(ctx, enum_name, arity, args, unions)
+                    {
+                        return normalized;
+                    }
+                }
+
+                let type_name = make_type_key(enum_name, &type_args);
+                let enum_body = enum_def.map(|d| &d.body);
+
+                // Tuple struct / newtype tags are the bare type name (like record
+                // structs); enum variants are `Type.Variant`.
+                let is_struct_def = matches!(enum_body, Some(DefinitionBody::Struct { .. }));
+                let tag = if is_struct_def {
+                    enum_name.to_string()
+                } else {
+                    format!("{}.{}", enum_name, unqualified_name(variant_name))
                 };
 
-                unions.insert(type_name.clone(), alternatives);
-            }
+                if unions.get(&type_name).is_none() {
+                    let alternatives = match enum_body {
+                        Some(DefinitionBody::Enum {
+                            variants, generics, ..
+                        }) => variants
+                            .iter()
+                            .filter(|v| {
+                                is_variant_inhabited(v, &type_args, generics, ctx.store, ctx.cache)
+                            })
+                            .map(|v| Constructor {
+                                tag_id: format!("{}.{}", enum_name, v.name),
+                                arity: v.fields.len(),
+                            })
+                            .collect(),
+                        Some(DefinitionBody::Struct {
+                            fields: struct_fields,
+                            generics,
+                            ..
+                        }) if super::inhabitance::is_struct_inhabited(
+                            struct_fields,
+                            &type_args,
+                            generics,
+                            ctx.store,
+                            ctx.cache,
+                        ) =>
+                        {
+                            vec![Constructor {
+                                tag_id: tag.clone(),
+                                arity: struct_fields.len(),
+                            }]
+                        }
+                        _ => vec![],
+                    };
 
-            NormalizedPattern::Constructor {
-                type_name,
-                tag,
-                args: patterns,
-            }
-        }
+                    unions.insert(type_name.clone(), alternatives);
+                }
 
-        TypedPattern::EnumStructVariant {
-            enum_name,
-            variant_name,
-            variant_fields,
-            pattern_fields,
-            type_args,
+                NormalizedPattern::Constructor {
+                    type_name,
+                    tag,
+                    args: patterns,
+                }
+            }
+        },
+
+        Pattern::Struct {
+            fields,
+            ty,
+            resolution:
+                RecordPatternResolution::EnumVariant {
+                    enum_name,
+                    variant_name,
+                },
+            ..
         } => {
-            let substitution = field_substitution_map(ctx, enum_name, type_args);
-            let patterns = variant_fields
+            let type_args = pattern_type_args(ctx, ty);
+            let Some(Definition {
+                body:
+                    DefinitionBody::Enum {
+                        variants, generics, ..
+                    },
+                ..
+            }) = ctx.store.get_definition(enum_name)
+            else {
+                return Wildcard;
+            };
+            let Some(variant) = variants
+                .iter()
+                .find(|variant| variant.name == unqualified_name(variant_name))
+            else {
+                return Wildcard;
+            };
+            let substitution = build_substitution_map(generics, &type_args);
+            let patterns = variant
+                .fields
                 .iter()
                 .map(|f| {
-                    pattern_fields
+                    fields
                         .iter()
-                        .find_map(|(name, pattern)| {
-                            if *name == f.name {
+                        .find_map(|field| {
+                            if field.name == f.name {
                                 let child = ctx.at_position(Some(substitute(&f.ty, &substitution)));
-                                Some(normalize_typed_pattern(pattern, unions, &child))
+                                Some(normalize_pattern(&field.value, unions, &child))
                             } else {
                                 None
                             }
@@ -283,24 +329,17 @@ pub fn normalize_typed_pattern(
                 })
                 .collect();
 
-            let type_name = make_type_key(enum_name, type_args);
+            let type_name = make_type_key(enum_name, &type_args);
 
             if unions.get(&type_name).is_none() {
-                let alternatives = match ctx.store.get_definition(enum_name).map(|d| &d.body) {
-                    Some(DefinitionBody::Enum {
-                        variants, generics, ..
-                    }) => variants
-                        .iter()
-                        .filter(|v| {
-                            is_variant_inhabited(v, type_args, generics, ctx.store, ctx.cache)
-                        })
-                        .map(|v| Constructor {
-                            tag_id: format!("{}.{}", enum_name, v.name),
-                            arity: v.fields.len(),
-                        })
-                        .collect(),
-                    _ => vec![],
-                };
+                let alternatives = variants
+                    .iter()
+                    .filter(|v| is_variant_inhabited(v, &type_args, generics, ctx.store, ctx.cache))
+                    .map(|v| Constructor {
+                        tag_id: format!("{}.{}", enum_name, v.name),
+                        arity: v.fields.len(),
+                    })
+                    .collect();
 
                 unions.insert(type_name.clone(), alternatives);
             }
@@ -315,22 +354,35 @@ pub fn normalize_typed_pattern(
             }
         }
 
-        TypedPattern::Struct {
-            struct_name,
-            struct_fields,
-            pattern_fields,
-            type_args,
+        Pattern::Struct {
+            fields,
+            ty,
+            resolution: RecordPatternResolution::Struct { struct_name },
+            ..
         } => {
-            let substitution = field_substitution_map(ctx, struct_name, type_args);
+            let type_args = pattern_type_args(ctx, ty);
+            let Some(Definition {
+                body:
+                    DefinitionBody::Struct {
+                        fields: struct_fields,
+                        generics,
+                        ..
+                    },
+                ..
+            }) = ctx.store.get_definition(struct_name)
+            else {
+                return Wildcard;
+            };
+            let substitution = build_substitution_map(generics, &type_args);
             let patterns: Vec<NormalizedPattern> = struct_fields
                 .iter()
                 .map(|f| {
-                    pattern_fields
+                    fields
                         .iter()
-                        .find_map(|(name, pattern)| {
-                            if *name == f.name {
+                        .find_map(|field| {
+                            if field.name == f.name {
                                 let child = ctx.at_position(Some(substitute(&f.ty, &substitution)));
-                                Some(normalize_typed_pattern(pattern, unions, &child))
+                                Some(normalize_pattern(&field.value, unions, &child))
                             } else {
                                 None
                             }
@@ -349,21 +401,16 @@ pub fn normalize_typed_pattern(
                 return normalized;
             }
 
-            let type_name = make_type_key(struct_name, type_args);
+            let type_name = make_type_key(struct_name, &type_args);
 
             if unions.get(&type_name).is_none() {
-                let is_inhabited = ctx
-                    .store
-                    .get_definition(struct_name)
-                    .map(|definition| match &definition.body {
-                        DefinitionBody::Struct {
-                            generics, fields, ..
-                        } => super::inhabitance::is_struct_inhabited(
-                            fields, type_args, generics, ctx.store, ctx.cache,
-                        ),
-                        _ => true,
-                    })
-                    .unwrap_or(true);
+                let is_inhabited = super::inhabitance::is_struct_inhabited(
+                    struct_fields,
+                    &type_args,
+                    generics,
+                    ctx.store,
+                    ctx.cache,
+                );
 
                 if is_inhabited {
                     let constructor = Constructor {
@@ -383,22 +430,36 @@ pub fn normalize_typed_pattern(
             }
         }
 
-        TypedPattern::Slice {
-            prefix,
-            has_rest,
-            element_type,
-        } => normalize_slice(prefix, *has_rest, element_type, unions, ctx),
+        Pattern::Struct {
+            resolution: RecordPatternResolution::Unresolved,
+            ..
+        } => Wildcard,
 
-        TypedPattern::Array {
+        Pattern::Slice {
             prefix,
-            element_type,
-            length,
+            rest,
+            resolution: SequencePatternResolution::Slice { element_type },
+            ..
+        } => normalize_slice(prefix, rest.is_present(), element_type, unions, ctx),
+
+        Pattern::Slice {
+            prefix,
+            resolution:
+                SequencePatternResolution::Array {
+                    element_type,
+                    length,
+                },
             ..
         } => normalize_array(prefix, element_type, *length, unions, ctx),
 
-        TypedPattern::Tuple { arity, elements } => normalize_tuple(elements, *arity, unions, ctx),
+        Pattern::Slice {
+            resolution: SequencePatternResolution::Unresolved,
+            ..
+        } => Wildcard,
 
-        TypedPattern::Or { .. } => {
+        Pattern::Tuple { elements, .. } => normalize_tuple(elements, unions, ctx),
+
+        Pattern::Or { .. } => {
             unreachable!("Or-pattern should be handled by normalize_arm")
         }
     }
@@ -417,7 +478,7 @@ pub fn normalize_typed_pattern(
 /// - [a, ..rest] → NonEmptySlice(a, Wildcard)
 /// - [..] → Wildcard (matches any slice)
 fn normalize_slice(
-    prefix: &[TypedPattern],
+    prefix: &[Pattern],
     has_rest: bool,
     element_type: &Type,
     unions: &mut UnionTable,
@@ -467,7 +528,7 @@ fn normalize_slice(
     let element_ctx = ctx.at_position(Some(element_type.clone()));
     let mut result = tail;
     for element in prefix.iter().rev() {
-        let head = normalize_typed_pattern(element, unions, &element_ctx);
+        let head = normalize_pattern(element, unions, &element_ctx);
         result = NormalizedPattern::Constructor {
             type_name: type_name.clone(),
             tag: "NonEmptySlice".to_string(),
@@ -479,11 +540,11 @@ fn normalize_slice(
 }
 
 fn normalize_tuple(
-    elements: &[TypedPattern],
-    arity: usize,
+    elements: &[Pattern],
     unions: &mut UnionTable,
     ctx: &NormalizationContext,
 ) -> NormalizedPattern {
+    let arity = elements.len();
     let type_name = format!("Tuple{}", arity);
 
     if unions.get(&type_name).is_none() {
@@ -504,7 +565,7 @@ fn normalize_tuple(
         .enumerate()
         .map(|(i, e)| {
             let child = ctx.at_position(element_types.as_ref().and_then(|ts| ts.get(i).cloned()));
-            normalize_typed_pattern(e, unions, &child)
+            normalize_pattern(e, unions, &child)
         })
         .collect();
 
@@ -516,7 +577,7 @@ fn normalize_tuple(
 }
 
 fn normalize_array(
-    prefix: &[TypedPattern],
+    prefix: &[Pattern],
     element_type: &Type,
     length: u64,
     unions: &mut UnionTable,
@@ -561,7 +622,7 @@ fn normalize_array(
     };
 
     let element_ctx = ctx.at_position(Some(element_type.clone()));
-    let head = normalize_typed_pattern(first, unions, &element_ctx);
+    let head = normalize_pattern(first, unions, &element_ctx);
     let tail = normalize_array(rest, element_type, length - 1, unions, ctx);
 
     NormalizedPattern::Constructor {

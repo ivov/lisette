@@ -21,28 +21,30 @@ description: |
             id: uninferred,
         },
         visibility: Private,
-        body: Block {
-            items: [
-                Unit {
-                    ty: Var {
-                        id: uninferred,
+        body: Definition(
+            Block {
+                items: [
+                    Unit {
+                        ty: Var {
+                            id: uninferred,
+                        },
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 13,
+                            byte_length: 8,
+                        },
                     },
-                    span: Span {
-                        file_id: 0,
-                        byte_offset: 13,
-                        byte_length: 8,
-                    },
+                ],
+                ty: Var {
+                    id: uninferred,
                 },
-            ],
-            ty: Var {
-                id: uninferred,
+                span: Span {
+                    file_id: 0,
+                    byte_offset: 11,
+                    byte_length: 13,
+                },
             },
-            span: Span {
-                file_id: 0,
-                byte_offset: 11,
-                byte_length: 13,
-            },
-        },
+        ),
         ty: Var {
             id: uninferred,
         },

@@ -299,11 +299,7 @@ pub fn save_module_cache(
         return Err(io::Error::other("module not found in store"));
     };
 
-    let mut all_files: Vec<_> = module
-        .files
-        .values()
-        .chain(module.typedefs.values())
-        .collect();
+    let mut all_files: Vec<_> = module.files.values().collect();
     all_files.sort_by_key(|f| &f.name);
 
     let file_id_to_index: HashMap<u32, u32> = all_files
@@ -358,10 +354,9 @@ fn extract_public_definitions(
         .filter(|(_, definition)| definition.visibility.is_public())
         .filter(|(_, definition)| !store.is_test_definition(definition))
         .map(|(name, definition)| {
-            let is_const = module.const_names.contains(name);
             (
                 name.to_string(),
-                CachedDefinition::from_definition(definition, is_const, file_id_to_index),
+                CachedDefinition::from_definition(definition, file_id_to_index),
             )
         })
         .collect()
@@ -398,11 +393,7 @@ pub(crate) fn build_cached_module(
             &cached_file.source,
             file_id,
         );
-        if file.is_d_lis() {
-            module.typedefs.insert(file_id, file);
-        } else {
-            module.files.insert(file_id, file);
-        }
+        module.files.insert(file_id, file);
     }
 
     for (qualified_name, cached_definition) in cached.definitions {
@@ -616,44 +607,45 @@ mod tests {
     }
 
     #[test]
-    fn build_cached_module_restores_const_names() {
+    fn build_cached_module_preserves_constant_kind() {
         use syntax::ast::Literal;
-        use syntax::program::{Definition, DefinitionBody, Visibility};
+        use syntax::program::{Definition, DefinitionBody, ValueKind, Visibility};
 
-        let make_value = |const_value: Option<Literal>| Definition {
+        let make_value = |kind| Definition {
             visibility: Visibility::Public,
             ty: Type::Nominal {
                 id: Symbol::from_raw("int"),
                 params: vec![],
-                underlying_ty: None,
             },
             name: None,
             name_span: None,
             doc: None,
             body: DefinitionBody::Value {
+                kind,
                 allowed_lints: vec![],
                 go_hints: vec![],
                 go_name: None,
                 go_type_param_recipe: None,
-                const_value,
             },
         };
 
         let empty_files = HashMap::default();
-        let const_def = make_value(Some(Literal::Integer {
-            value: 5,
-            text: None,
-        }));
-        let var_def = make_value(None);
+        let const_def = make_value(ValueKind::Constant {
+            value: Some(Literal::Integer {
+                value: 5,
+                text: None,
+            }),
+        });
+        let var_def = make_value(ValueKind::Runtime);
 
         let mut definitions = HashMap::default();
         definitions.insert(
             "mymod.MAX".to_string(),
-            CachedDefinition::from_definition(&const_def, true, &empty_files),
+            CachedDefinition::from_definition(&const_def, &empty_files),
         );
         definitions.insert(
             "mymod.counter".to_string(),
-            CachedDefinition::from_definition(&var_def, false, &empty_files),
+            CachedDefinition::from_definition(&var_def, &empty_files),
         );
 
         let interface = ModuleInterface {
@@ -677,8 +669,8 @@ mod tests {
             &DisplayPathBase::new(Path::new("/project/src")),
         );
 
-        assert!(built.module.const_names.contains("mymod.MAX"));
-        assert!(!built.module.const_names.contains("mymod.counter"));
+        assert!(built.module.definitions["mymod.MAX"].is_const());
+        assert!(!built.module.definitions["mymod.counter"].is_const());
     }
 
     #[test]
@@ -687,14 +679,13 @@ mod tests {
         use syntax::program::{Attributes, Definition, DefinitionBody, TypeAttribute, Visibility};
 
         let mut attributes = Attributes::default();
-        attributes.insert(TypeAttribute::Serialized, ());
+        attributes.insert(TypeAttribute::Serialized);
 
         let struct_def = Definition {
             visibility: Visibility::Public,
             ty: Type::Nominal {
                 id: Symbol::from_raw("dep.Inner"),
                 params: vec![],
-                underlying_ty: None,
             },
             name: Some("Inner".into()),
             name_span: None,
@@ -710,7 +701,7 @@ mod tests {
         };
 
         let empty_files = HashMap::default();
-        let cached = CachedDefinition::from_definition(&struct_def, false, &empty_files);
+        let cached = CachedDefinition::from_definition(&struct_def, &empty_files);
         let bytes = bincode::serialize(&cached).unwrap();
         let restored: CachedDefinition = bincode::deserialize(&bytes).unwrap();
 
@@ -750,7 +741,6 @@ mod tests {
                 Type::Nominal {
                     id: Symbol::from_raw("int"),
                     params: vec![],
-                    underlying_ty: None,
                 },
                 false,
             )],
@@ -758,7 +748,6 @@ mod tests {
             Box::new(Type::Nominal {
                 id: Symbol::from_raw("main.MyType"),
                 params: vec![Type::Tuple(vec![Type::Never])],
-                underlying_ty: None,
             }),
         );
 

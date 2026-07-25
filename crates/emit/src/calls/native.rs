@@ -500,7 +500,7 @@ impl Planner<'_> {
             let receiver_ty = expression.get_type();
             self.format_type_args_with_receiver(&receiver_ty, ctx.resolved_type_args)
         } else {
-            self.format_type_args(ctx.resolved_type_args)
+            self.format_resolved_type_args(ctx.resolved_type_args)
         };
         NativeCallResult::new(
             setup,
@@ -593,11 +593,11 @@ impl Planner<'_> {
             } => true,
             Expression::DotAccess {
                 expression: base,
-                dot_access_kind,
+                resolution,
                 ..
             } => {
                 if matches!(
-                    dot_access_kind,
+                    resolution.kind(),
                     Some(DotAccessKind::TupleStructField { is_newtype: true })
                 ) {
                     return false;
@@ -701,7 +701,8 @@ impl Planner<'_> {
             all_stages.len() - 1
         });
 
-        let combine = plan_variadic_spread(ctx.function, ctx.spread).map(|p| p.combine(1));
+        let combine =
+            plan_variadic_spread(&self.facts, ctx.function, ctx.spread).map(|p| p.combine(1));
         let mut sequenced = self.sequence_values(all_stages, ctx.capture_boundary, "_arg");
         if let Some(spread_index) = spread_index {
             self.finalize_spread_stage(&mut sequenced.values, spread_index, false, combine);
@@ -814,7 +815,7 @@ impl Planner<'_> {
             ctx.native_type.method_prefix(),
             go_name::snake_to_camel(ctx.method)
         );
-        let type_args_string = self.format_type_args(ctx.resolved_type_args);
+        let type_args_string = self.format_resolved_type_args(ctx.resolved_type_args);
         NativeCallResult::new(
             setup,
             format!(
@@ -867,7 +868,8 @@ impl Planner<'_> {
             stages.push(stage);
             stages.len() - 1
         });
-        let combine = plan_variadic_spread(ctx.function, ctx.spread).map(|p| p.combine(0));
+        let combine =
+            plan_variadic_spread(&self.facts, ctx.function, ctx.spread).map(|p| p.combine(0));
         let mut sequenced = self.sequence_values(stages, ctx.capture_boundary, "_arg");
         if let Some(spread_index) = spread_index {
             self.finalize_spread_stage(&mut sequenced.values, spread_index, false, combine);
@@ -936,8 +938,8 @@ impl Planner<'_> {
         }
 
         let arg_ty = arg.get_type();
-        let range_kind = peel_to_range_type(&arg_ty)
-            .and_then(|t| t.get_name())
+        let range_kind = peel_to_range_type(&arg_ty, |id| self.facts.definition(id))
+            .and_then(|ty| ty.get_name().map(str::to_owned))
             .expect("substring arg should resolve to a known range type");
         let receiver_staged = self.stage_operand(receiver_expr, ExpressionContext::value());
         let range_staged = self.stage_or_capture(arg, "range");
@@ -949,7 +951,7 @@ impl Planner<'_> {
         let effect = sequenced.effect;
         let contains_deferred_evaluation = sequenced.contains_deferred_evaluation();
         let (setup, values) = sequenced.into_rendered();
-        let (start, end) = range_var_bounds(&values[1], range_kind);
+        let (start, end) = range_var_bounds(&values[1], &range_kind);
         NativeCallResult::new(
             setup,
             format_substring_call(&deref(&values[0]), start.as_deref(), end.as_deref()),

@@ -18,7 +18,7 @@ use crate::plan::values::{
 };
 use crate::utils::{reads_mutable_operand, reads_unsequenced_mutable_operand};
 use crate::write_line;
-use syntax::ast::{Expression, Literal};
+use syntax::ast::{Expression, Literal, ResolvedCallTypeArguments};
 use syntax::types::Type;
 
 struct CallArgsContext<'plan, 'facts> {
@@ -151,7 +151,7 @@ impl<'a> Planner<'a> {
             unreachable!("lower_regular_call requires a Call expression");
         };
         let function = callee.unwrap_parens();
-        let spread = (**spread).as_ref();
+        let spread = spread.as_deref();
         let resolved_type_args = type_arguments
             .resolved_types()
             .expect("emission requires checked call type arguments");
@@ -173,7 +173,7 @@ impl<'a> Planner<'a> {
                 .iter()
                 .map(|a| self.stage_operand(a, arg_ctx))
                 .collect();
-            let wrap_to_any = spread_needs_any_wrap(function, spread);
+            let wrap_to_any = spread_needs_any_wrap(&self.facts, function, spread);
             let combine = call_plan.variadic_combine(0);
             let sequenced = self.sequence_with_spread_values(
                 stages,
@@ -220,7 +220,7 @@ impl<'a> Planner<'a> {
         let args_ctx = CallArgsContext {
             plan: call_plan,
             spread,
-            wrap_spread_to_any: spread_needs_any_wrap(function, spread),
+            wrap_spread_to_any: spread_needs_any_wrap(&self.facts, function, spread),
             combine_variadic: call_plan.variadic_combine(0),
             capture_boundary: expression_ctx.capture_boundary(),
             retired_receiver: (args.len() == 1
@@ -374,7 +374,7 @@ impl<'a> Planner<'a> {
         &mut self,
         function: &Expression,
         callee: &ResolvedCallee<'_>,
-        type_args: &[Type],
+        type_args: ResolvedCallTypeArguments<'_>,
         call_ty: Option<&Type>,
         arg_shape: CallArgShape,
         function_string: &mut String,
@@ -394,7 +394,7 @@ impl<'a> Planner<'a> {
                 .unwrap_or_default();
         }
 
-        let mut type_args_string = self.format_type_args(type_args);
+        let mut type_args_string = self.format_resolved_type_args(type_args);
 
         let slot_ty = ctx.expected_slot_type();
 
@@ -512,7 +512,7 @@ impl<'a> Planner<'a> {
             ArgumentPlan::TaggedGoLowering => {
                 let target =
                     effective_param_ty.expect("TaggedGoLowering requires effective_param_ty");
-                let arg_ctx = direct_arg_emit_ctx(Some(target), true);
+                let arg_ctx = direct_arg_emit_ctx(&self.facts, Some(target), true);
                 let argument = self.lower_composite_value(arg, arg_ctx);
                 argument.map_rendered_as_computed(|setup, value, _contains_deferred_evaluation| {
                     let lowered = self.emit_lower_arg_to_tagged(setup, &value, target);
@@ -574,7 +574,7 @@ impl<'a> Planner<'a> {
         declared_param_ty: Option<&Type>,
     ) -> ValuePlan {
         let suppress = would_suppress_tagged_go(&ctx.plan.resolved, declared_param_ty);
-        let mut arg_ctx = direct_arg_emit_ctx(effective_param_ty, suppress);
+        let mut arg_ctx = direct_arg_emit_ctx(&self.facts, effective_param_ty, suppress);
         if let Some(retired) = ctx.retired_receiver {
             arg_ctx = arg_ctx.with_retired_receiver(retired);
         }
@@ -983,20 +983,27 @@ fn varargs_inner_or_self(ty: &Type) -> Type {
     }
 }
 
-fn spread_needs_any_wrap(function: &Expression, spread: Option<&Expression>) -> bool {
+fn spread_needs_any_wrap(
+    facts: &crate::EmitFacts<'_>,
+    function: &Expression,
+    spread: Option<&Expression>,
+) -> bool {
     let Some(spread_expr) = spread else {
         return false;
     };
-    let Some(variadic_element) = function.get_type().unwrap_forall().is_variadic() else {
+    let Some(function_ty) = facts.resolve_to_function_type(&function.get_type()) else {
         return false;
     };
-    if !variadic_element.is_unknown() {
+    let Some(variadic_element) = function_ty.is_variadic() else {
+        return false;
+    };
+    if !facts.resolves_to_unknown(&variadic_element) {
         return false;
     }
     spread_expr
         .get_type()
         .inner()
-        .is_some_and(|t| !t.is_unknown())
+        .is_some_and(|ty| !facts.resolves_to_unknown(&ty))
 }
 
 fn would_suppress_tagged_go(callee: &ResolvedCallee<'_>, declared_param_ty: Option<&Type>) -> bool {
@@ -1007,11 +1014,12 @@ fn would_suppress_tagged_go(callee: &ResolvedCallee<'_>, declared_param_ty: Opti
 /// Compute the `ExpressionContext` for emitting a Direct or TaggedGoLowering
 /// argument's underlying value via `emit_composite_value`.
 fn direct_arg_emit_ctx<'b>(
+    facts: &crate::EmitFacts<'_>,
     effective_param_ty: Option<&'b Type>,
     suppress: bool,
 ) -> ExpressionContext<'b> {
     let unwrapped = effective_param_ty.map(|p| p.unwrap_forall());
-    let flows_to_unknown = unwrapped.is_some_and(|p| p.resolves_to_unknown());
+    let flows_to_unknown = unwrapped.is_some_and(|ty| facts.resolves_to_unknown(ty));
     ExpressionContext::value()
         .with_forced_tagged_go_function(suppress)
         .with_unknown_argument_target(flows_to_unknown)

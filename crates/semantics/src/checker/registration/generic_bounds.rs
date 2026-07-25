@@ -15,7 +15,10 @@ impl TaskState {
         declaration_span: Span,
     ) {
         for generic in own_generics {
-            for bound in &generic.resolved_bounds {
+            for bound in generic
+                .resolved_bounds()
+                .expect("generic bounds were resolved before checking")
+            {
                 self.check_bound_type(store, own_generics, declaration_span, bound, true, false);
             }
         }
@@ -134,7 +137,7 @@ impl TaskState {
             {
                 self.check_builtin_bound_argument(store, &argument, required, declaration_span);
             } else if !argument.contains_error()
-                && !argument.contains_unknown()
+                && !store.contains_unknown(&argument)
                 && !argument.is_variable()
                 && resolved_required
                     .get_qualified_id()
@@ -189,8 +192,8 @@ impl TaskState {
         let generic = own_generics
             .iter()
             .find(|generic| generic.name == parameter_name)?;
-        (!generic.resolved_bounds.iter().any(Type::contains_error))
-            .then(|| generic.resolved_bounds.clone())
+        let bounds = generic.resolved_bounds()?.cloned().collect::<Vec<_>>();
+        (!bounds.iter().any(Type::contains_error)).then_some(bounds)
     }
 }
 

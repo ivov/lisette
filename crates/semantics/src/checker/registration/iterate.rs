@@ -97,11 +97,11 @@ impl TaskState {
                 name_span: Some(*name_span),
                 doc: None,
                 body: DefinitionBody::Value {
+                    kind: syntax::program::ValueKind::Runtime,
                     allowed_lints: vec![],
                     go_hints: vec![],
                     go_name: None,
                     go_type_param_recipe: None,
-                    const_value: None,
                 },
             },
         );

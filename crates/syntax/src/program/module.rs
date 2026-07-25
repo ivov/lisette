@@ -1,4 +1,4 @@
-use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
+use rustc_hash::FxHashMap as HashMap;
 
 use super::definition::{Definition, Visibility};
 use super::file::{File, FileImport};
@@ -9,14 +9,10 @@ pub type ModuleId = String;
 #[derive(Debug, Clone)]
 pub struct Module {
     pub id: String,
-    /// file ID -> .lis file
+    /// file ID -> file. Source and declaration files are classified by [`File::is_d_lis`].
     pub files: HashMap<u32, File>,
-    /// file ID -> .d.lis file (declarations only)
-    pub typedefs: HashMap<u32, File>,
     /// qualified name -> definition
     pub definitions: HashMap<Symbol, Definition>,
-    /// Qualified names of module-level `const` bindings.
-    pub const_names: HashSet<Symbol>,
 }
 
 impl Module {
@@ -24,9 +20,7 @@ impl Module {
         Module {
             id: id.to_string(),
             files: Default::default(),
-            typedefs: Default::default(),
             definitions: Default::default(),
-            const_names: Default::default(),
         }
     }
 
@@ -47,23 +41,27 @@ impl Module {
     }
 
     pub fn file_ids(&self) -> impl Iterator<Item = u32> + '_ {
-        self.files.keys().copied()
+        self.source_file_entries().map(|(file_id, _)| *file_id)
     }
 
-    pub fn get_typedef_by_id(&self, file_id: u32) -> Option<&File> {
-        self.typedefs.get(&file_id)
+    pub fn source_files(&self) -> impl Iterator<Item = &File> {
+        self.files.values().filter(|file| !file.is_d_lis())
+    }
+
+    pub fn source_file_entries(&self) -> impl Iterator<Item = (&u32, &File)> {
+        self.files.iter().filter(|(_, file)| !file.is_d_lis())
+    }
+
+    pub fn typedef_files(&self) -> impl Iterator<Item = &File> {
+        self.files.values().filter(|file| file.is_d_lis())
+    }
+
+    pub fn is_typedef(&self, file_id: u32) -> bool {
+        self.files.get(&file_id).is_some_and(File::is_d_lis)
     }
 
     pub fn all_imports(&self) -> Vec<FileImport> {
-        self.files
-            .values()
-            .chain(self.typedefs.values())
-            .flat_map(|f| f.imports())
-            .collect()
-    }
-
-    pub fn all_typedefs(&self) -> impl Iterator<Item = &File> {
-        self.typedefs.values()
+        self.files.values().flat_map(|f| f.imports()).collect()
     }
 
     pub fn is_internal(&self) -> bool {
@@ -74,13 +72,6 @@ impl Module {
     }
 
     pub fn is_empty_stub(&self) -> bool {
-        self.files.is_empty() && self.typedefs.is_empty() && self.definitions.is_empty()
+        self.files.is_empty() && self.definitions.is_empty()
     }
-}
-
-pub struct ModuleInfo {
-    pub id: String,
-    pub path: String,
-    pub file_ids: Vec<u32>,
-    pub typedef_ids: Vec<u32>,
 }

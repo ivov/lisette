@@ -21,86 +21,84 @@ description: |
             id: uninferred,
         },
         visibility: Private,
-        body: Block {
-            items: [
-                Call {
-                    expression: Identifier {
-                        value: "func",
+        body: Definition(
+            Block {
+                items: [
+                    Call {
+                        expression: Identifier {
+                            value: "func",
+                            ty: Var {
+                                id: uninferred,
+                            },
+                            span: Span {
+                                file_id: 0,
+                                byte_offset: 13,
+                                byte_length: 4,
+                            },
+                            resolution: Unresolved,
+                        },
+                        args: [
+                            Identifier {
+                                value: "a",
+                                ty: Var {
+                                    id: uninferred,
+                                },
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 18,
+                                    byte_length: 1,
+                                },
+                                resolution: Unresolved,
+                            },
+                            Identifier {
+                                value: "b",
+                                ty: Var {
+                                    id: uninferred,
+                                },
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 21,
+                                    byte_length: 1,
+                                },
+                                resolution: Unresolved,
+                            },
+                        ],
+                        spread: Some(
+                            Identifier {
+                                value: "xs",
+                                ty: Var {
+                                    id: uninferred,
+                                },
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 24,
+                                    byte_length: 2,
+                                },
+                                resolution: Unresolved,
+                            },
+                        ),
+                        type_arguments: None,
                         ty: Var {
                             id: uninferred,
                         },
                         span: Span {
                             file_id: 0,
                             byte_offset: 13,
-                            byte_length: 4,
+                            byte_length: 17,
                         },
-                        binding_id: None,
-                        qualified: None,
+                        call_kind: None,
                     },
-                    args: [
-                        Identifier {
-                            value: "a",
-                            ty: Var {
-                                id: uninferred,
-                            },
-                            span: Span {
-                                file_id: 0,
-                                byte_offset: 18,
-                                byte_length: 1,
-                            },
-                            binding_id: None,
-                            qualified: None,
-                        },
-                        Identifier {
-                            value: "b",
-                            ty: Var {
-                                id: uninferred,
-                            },
-                            span: Span {
-                                file_id: 0,
-                                byte_offset: 21,
-                                byte_length: 1,
-                            },
-                            binding_id: None,
-                            qualified: None,
-                        },
-                    ],
-                    spread: Some(
-                        Identifier {
-                            value: "xs",
-                            ty: Var {
-                                id: uninferred,
-                            },
-                            span: Span {
-                                file_id: 0,
-                                byte_offset: 24,
-                                byte_length: 2,
-                            },
-                            binding_id: None,
-                            qualified: None,
-                        },
-                    ),
-                    type_arguments: None,
-                    ty: Var {
-                        id: uninferred,
-                    },
-                    span: Span {
-                        file_id: 0,
-                        byte_offset: 13,
-                        byte_length: 17,
-                    },
-                    call_kind: None,
+                ],
+                ty: Var {
+                    id: uninferred,
                 },
-            ],
-            ty: Var {
-                id: uninferred,
+                span: Span {
+                    file_id: 0,
+                    byte_offset: 11,
+                    byte_length: 22,
+                },
             },
-            span: Span {
-                file_id: 0,
-                byte_offset: 11,
-                byte_length: 22,
-            },
-        },
+        ),
         ty: Var {
             id: uninferred,
         },

@@ -93,22 +93,10 @@ fn bound_references_interface(annotation: &Annotation, interface_name: &str) -> 
 fn strip_self_referential_bounds(generics: &[Generic], interface_name: &str) -> Vec<Generic> {
     generics
         .iter()
-        .map(|g| Generic {
-            name: g.name.clone(),
-            bounds: g
-                .bounds
-                .iter()
-                .filter(|ann| !bound_references_interface(ann, interface_name))
-                .cloned()
-                .collect(),
-            resolved_bounds: g
-                .bounds
-                .iter()
-                .zip(&g.resolved_bounds)
-                .filter(|(ann, _)| !bound_references_interface(ann, interface_name))
-                .map(|(_, ty)| ty.clone())
-                .collect(),
-            span: g.span,
+        .cloned()
+        .map(|mut generic| {
+            generic.retain_bounds(|bound| !bound_references_interface(bound, interface_name));
+            generic
         })
         .collect()
 }

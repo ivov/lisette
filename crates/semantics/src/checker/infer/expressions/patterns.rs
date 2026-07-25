@@ -2,8 +2,9 @@ use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use syntax::ast::BindingKind;
 use syntax::ast::{
-    EnumFieldDefinition, Expression, Literal, Pattern, RestPattern, Span, StructFieldPattern,
-    TypedPattern, collect_pattern_bindings,
+    ConstructorPatternResolution, EnumFieldDefinition, Expression, Literal, Pattern,
+    RecordPatternResolution, RestPattern, SequencePatternResolution, Span, StructFieldPattern,
+    collect_pattern_bindings,
 };
 use syntax::program::{Definition, DefinitionBody};
 use syntax::types::{CompoundKind, Type, substitute, unqualified_name};
@@ -19,7 +20,7 @@ impl InferCtx<'_> {
         pattern: Pattern,
         expected_ty: Type,
         kind: BindingKind,
-    ) -> (Pattern, TypedPattern) {
+    ) -> Pattern {
         self.infer_pattern_inner(pattern, expected_ty, kind, false)
     }
 
@@ -29,7 +30,7 @@ impl InferCtx<'_> {
         expected_ty: Type,
         kind: BindingKind,
         is_struct_field: bool,
-    ) -> (Pattern, TypedPattern) {
+    ) -> Pattern {
         let store = self.store;
         match pattern {
             Pattern::Identifier { identifier, span } => {
@@ -44,10 +45,7 @@ impl InferCtx<'_> {
                         shorthand_field: is_struct_field,
                     },
                 );
-                (
-                    Pattern::Identifier { identifier, span },
-                    TypedPattern::Wildcard,
-                )
+                Pattern::Identifier { identifier, span }
             }
 
             Pattern::Literal { literal, ty, span } => {
@@ -56,8 +54,7 @@ impl InferCtx<'_> {
 
                 match inferred_literal {
                     Expression::Literal { literal, ty, span } => {
-                        let typed = TypedPattern::Literal(literal.clone());
-                        (Pattern::Literal { literal, ty, span }, typed)
+                        Pattern::Literal { literal, ty, span }
                     }
                     _ => unreachable!(),
                 }
@@ -84,21 +81,16 @@ impl InferCtx<'_> {
                     }
                 };
 
-                let (inferred_elements, typed_elements): (Vec<_>, Vec<_>) = elements
+                let inferred_elements: Vec<_> = elements
                     .into_iter()
                     .zip(element_types.iter())
                     .map(|(p, ty)| self.infer_pattern_inner(p, ty.clone(), kind, false))
-                    .unzip();
+                    .collect();
 
-                let pattern = Pattern::Tuple {
+                Pattern::Tuple {
                     elements: inferred_elements,
                     span,
-                };
-                let typed = TypedPattern::Tuple {
-                    arity: typed_elements.len(),
-                    elements: typed_elements,
-                };
-                (pattern, typed)
+                }
             }
 
             pattern @ Pattern::EnumVariant { .. } => {
@@ -109,12 +101,12 @@ impl InferCtx<'_> {
                 self.infer_struct_pattern(pattern, expected_ty, kind)
             }
 
-            Pattern::WildCard { span } => (Pattern::WildCard { span }, TypedPattern::Wildcard),
+            Pattern::WildCard { span } => Pattern::WildCard { span },
 
             Pattern::Unit { span, .. } => {
                 let unit_ty = self.type_unit();
                 self.unify(&expected_ty, &unit_ty, &span);
-                (Pattern::Unit { ty: unit_ty, span }, TypedPattern::Wildcard)
+                Pattern::Unit { ty: unit_ty, span }
             }
 
             pattern @ Pattern::Slice { .. } => {
@@ -165,7 +157,7 @@ impl InferCtx<'_> {
                     BindingKind::Parameter { .. } => BindingKind::Parameter { mutable: false },
                     other => other,
                 };
-                let (inner, typed) = self.infer_pattern_inner(
+                let inner = self.infer_pattern_inner(
                     *pattern,
                     expected_ty.clone(),
                     inner_kind,
@@ -181,15 +173,12 @@ impl InferCtx<'_> {
                         shorthand_field: is_struct_field,
                     },
                 );
-                (
-                    Pattern::AsBinding {
-                        pattern: Box::new(inner),
-                        name,
-                        name_span,
-                        span,
-                    },
-                    typed,
-                )
+                Pattern::AsBinding {
+                    pattern: Box::new(inner),
+                    name,
+                    name_span,
+                    span,
+                }
             }
         }
     }
@@ -215,7 +204,7 @@ impl InferCtx<'_> {
         length: u64,
         element_ty: Type,
         kind: BindingKind,
-    ) -> (Pattern, TypedPattern) {
+    ) -> Pattern {
         let Pattern::Slice {
             prefix, rest, span, ..
         } = pattern
@@ -223,10 +212,10 @@ impl InferCtx<'_> {
             unreachable!("infer_array_pattern called with non-Slice pattern");
         };
         let store = self.store;
-        let (inferred_prefix, typed_prefix): (Vec<_>, Vec<_>) = prefix
+        let inferred_prefix: Vec<_> = prefix
             .into_iter()
             .map(|p| self.infer_pattern_inner(p, element_ty.clone(), kind, false))
-            .unzip();
+            .collect();
 
         let prefix_count = inferred_prefix.len() as u64;
         let arity_ok = if rest.is_present() {
@@ -264,18 +253,15 @@ impl InferCtx<'_> {
             );
         }
 
-        let pattern = Pattern::Slice {
+        Pattern::Slice {
             prefix: inferred_prefix,
-            rest: rest.clone(),
-            element_ty: element_ty.clone(),
+            rest,
+            resolution: SequencePatternResolution::Array {
+                element_type: element_ty,
+                length,
+            },
             span,
-        };
-        let typed = TypedPattern::Array {
-            prefix: typed_prefix,
-            element_type: element_ty,
-            length,
-        };
-        (pattern, typed)
+        }
     }
 
     fn infer_slice_pattern(
@@ -284,7 +270,7 @@ impl InferCtx<'_> {
         resolved_ty: Type,
         expected_ty: Type,
         kind: BindingKind,
-    ) -> (Pattern, TypedPattern) {
+    ) -> Pattern {
         let Pattern::Slice {
             prefix, rest, span, ..
         } = pattern
@@ -302,10 +288,10 @@ impl InferCtx<'_> {
             }
         };
 
-        let (inferred_prefix, typed_prefix): (Vec<_>, Vec<_>) = prefix
+        let inferred_prefix: Vec<_> = prefix
             .into_iter()
             .map(|p| self.infer_pattern_inner(p, element_ty.clone(), kind, false))
-            .unzip();
+            .collect();
 
         if let RestPattern::Bind { ref name, ref span } = rest {
             let rest_ty = if element_ty.shallow_resolve_in(&self.env).is_error() {
@@ -326,18 +312,14 @@ impl InferCtx<'_> {
             );
         }
 
-        let pattern = Pattern::Slice {
+        Pattern::Slice {
             prefix: inferred_prefix,
-            rest: rest.clone(),
-            element_ty: element_ty.clone(),
+            rest,
+            resolution: SequencePatternResolution::Slice {
+                element_type: element_ty,
+            },
             span,
-        };
-        let typed = TypedPattern::Slice {
-            prefix: typed_prefix,
-            has_rest: rest.is_present(),
-            element_type: element_ty,
-        };
-        (pattern, typed)
+        }
     }
 
     fn infer_enum_variant_pattern(
@@ -345,7 +327,7 @@ impl InferCtx<'_> {
         pattern: Pattern,
         expected_ty: Type,
         kind: BindingKind,
-    ) -> (Pattern, TypedPattern) {
+    ) -> Pattern {
         let Pattern::EnumVariant {
             identifier,
             fields,
@@ -374,7 +356,7 @@ impl InferCtx<'_> {
             ty
         } else if let Some(value_ty) = self.lookup_type(store, &identifier) {
             if matches!(self.instantiate(&value_ty).0, Type::Error) {
-                return (Pattern::WildCard { span }, TypedPattern::Wildcard);
+                return Pattern::WildCard { span };
             }
             let Some(ty) =
                 self.resolve_pattern_constructor(&identifier, &expected_ty, is_bare_name)
@@ -411,7 +393,7 @@ impl InferCtx<'_> {
         let unify_expected = store.deep_resolve_alias(&expected_ty.resolve_in(&self.env));
         self.unify(&unify_expected, &pattern_ty, &span);
 
-        let (new_fields, mut typed_fields): (Vec<_>, Vec<_>) = fields
+        let new_fields: Vec<_> = fields
             .iter()
             .enumerate()
             .map(|(i, f)| {
@@ -421,13 +403,9 @@ impl InferCtx<'_> {
                     .unwrap_or(Type::Error);
                 self.infer_pattern_inner(f.clone(), param_ty, kind, false)
             })
-            .unzip();
+            .collect();
 
-        if rest {
-            for _ in new_fields.len()..params.len() {
-                typed_fields.push(TypedPattern::Wildcard);
-            }
-        } else if params.len() != new_fields.len() {
+        if !rest && params.len() != new_fields.len() {
             let actual_types: Vec<Type> = new_fields
                 .iter()
                 .map(|p| p.get_type().unwrap_or_else(|| self.new_type_var()))
@@ -442,14 +420,9 @@ impl InferCtx<'_> {
             ));
         }
 
-        let resolved_field_types: Box<[Type]> = params
-            .iter()
-            .map(|param| param.ty.resolve_in(&self.env))
-            .collect();
-
         let resolved_ty = pattern_ty.resolve_in(&self.env);
-        let typed = match &resolved_ty {
-            Type::Nominal { id, params, .. } => {
+        let resolution = match &resolved_ty {
+            Type::Nominal { id, .. } => {
                 let variant_name = unqualified_name(&identifier);
                 let variant_qualified = id.with_segment(variant_name);
                 if let Some(definition_span) =
@@ -458,36 +431,22 @@ impl InferCtx<'_> {
                     self.facts.add_usage(span, definition_span);
                 }
 
-                let variant_fields = store
-                    .variants_of(id)
-                    .and_then(|variants| {
-                        variants
-                            .iter()
-                            .find(|v| v.name == variant_name)
-                            .map(|v| v.fields.iter().cloned().collect())
-                    })
-                    .unwrap_or_default();
-
-                TypedPattern::EnumVariant {
+                ConstructorPatternResolution::EnumVariant {
                     enum_name: id.into(),
                     variant_name: identifier.clone(),
-                    variant_fields,
-                    fields: typed_fields,
-                    type_args: params.clone(),
-                    field_types: resolved_field_types,
                 }
             }
-            _ => TypedPattern::Wildcard,
+            _ => return Pattern::WildCard { span },
         };
 
-        let pattern = Pattern::EnumVariant {
+        Pattern::EnumVariant {
             identifier,
             fields: new_fields,
             rest,
+            resolution,
             ty: pattern_ty,
             span,
-        };
-        (pattern, typed)
+        }
     }
 
     fn resolve_pattern_constructor(
@@ -548,7 +507,7 @@ impl InferCtx<'_> {
         match &definition.body {
             DefinitionBody::Struct { .. } => Some(definition),
             DefinitionBody::TypeAlias { .. } => {
-                let underlying = store.deep_resolve_alias(definition.ty.unwrap_forall());
+                let underlying = store.peel_alias(&definition.ty);
                 let Type::Nominal { id, .. } = underlying else {
                     return None;
                 };
@@ -566,7 +525,7 @@ impl InferCtx<'_> {
         span: Span,
         kind: BindingKind,
         is_bare_name: bool,
-    ) -> (Pattern, TypedPattern) {
+    ) -> Pattern {
         if is_bare_name {
             self.sink
                 .push(diagnostics::infer::uppercase_binding(span, identifier));
@@ -580,7 +539,7 @@ impl InferCtx<'_> {
                     kind.is_match_arm(),
                 ));
         }
-        (Pattern::WildCard { span }, TypedPattern::Wildcard)
+        Pattern::WildCard { span }
     }
 
     fn try_infer_const_pattern(
@@ -590,7 +549,7 @@ impl InferCtx<'_> {
         kind: BindingKind,
         expected_ty: &Type,
         span: Span,
-    ) -> Option<(Pattern, TypedPattern)> {
+    ) -> Option<Pattern> {
         let store = self.store;
         let qualified = self.lookup_qualified_name(store, identifier)?;
         let definition = store.get_definition(&qualified)?;
@@ -617,7 +576,7 @@ impl InferCtx<'_> {
                 .push(diagnostics::infer::const_pattern_outside_match_arm(
                     identifier, span,
                 ));
-            return Some((Pattern::WildCard { span }, TypedPattern::Wildcard));
+            return Some(Pattern::WildCard { span });
         }
 
         if matches!(unwrapped_ty, Type::Function(_)) {
@@ -625,7 +584,7 @@ impl InferCtx<'_> {
                 .push(diagnostics::infer::const_pattern_not_eligible(
                     identifier, span,
                 ));
-            return Some((Pattern::WildCard { span }, TypedPattern::Wildcard));
+            return Some(Pattern::WildCard { span });
         }
 
         let (const_ty, _) = self.instantiate(definition_ty);
@@ -638,19 +597,17 @@ impl InferCtx<'_> {
         }
 
         let resolved_ty = const_ty.resolve_in(&self.env);
-        let pattern = Pattern::EnumVariant {
+        Some(Pattern::EnumVariant {
             identifier: identifier.into(),
             fields: vec![],
             rest,
-            ty: resolved_ty.clone(),
-            span,
-        };
-        let typed = TypedPattern::Const {
-            qualified_name: qualified,
+            resolution: ConstructorPatternResolution::Const {
+                qualified_name: qualified,
+                value: const_value,
+            },
             ty: resolved_ty,
-            value: const_value,
-        };
-        Some((pattern, typed))
+            span,
+        })
     }
 
     fn infer_struct_pattern(
@@ -658,7 +615,7 @@ impl InferCtx<'_> {
         pattern: Pattern,
         expected_ty: Type,
         kind: BindingKind,
-    ) -> (Pattern, TypedPattern) {
+    ) -> Pattern {
         let Pattern::Struct {
             identifier,
             fields,
@@ -687,7 +644,7 @@ impl InferCtx<'_> {
                 .unwrap_or_else(|| {
                     self.sink
                         .push(diagnostics::infer::struct_not_found(identifier, span));
-                    (Pattern::WildCard { span }, TypedPattern::Wildcard)
+                    Pattern::WildCard { span }
                 });
         };
         let Some(Definition {
@@ -705,7 +662,7 @@ impl InferCtx<'_> {
                 .unwrap_or_else(|| {
                     self.sink
                         .push(diagnostics::infer::struct_not_found(identifier, span));
-                    (Pattern::WildCard { span }, TypedPattern::Wildcard)
+                    Pattern::WildCard { span }
                 });
         };
 
@@ -727,7 +684,7 @@ impl InferCtx<'_> {
 
         let available: Vec<String> = struct_fields.iter().map(|f| f.name.to_string()).collect();
 
-        let (new_fields, typed_field_values): (Vec<_>, Vec<_>) = fields
+        let new_fields: Vec<_> = fields
             .iter()
             .map(|field| {
                 let field_definition = struct_fields.iter().find(|x| x.name == field.name);
@@ -764,17 +721,14 @@ impl InferCtx<'_> {
                     &field.value,
                     Pattern::Identifier { identifier, .. } if identifier == &field.name
                 );
-                let (inferred_value, typed_value) =
+                let inferred_value =
                     self.infer_pattern_inner(field.value.clone(), field_ty, kind, is_shorthand);
-                (
-                    StructFieldPattern {
-                        name: field.name.clone(),
-                        value: inferred_value,
-                    },
-                    (field.name.clone(), typed_value),
-                )
+                StructFieldPattern {
+                    name: field.name.clone(),
+                    value: inferred_value,
+                }
             })
-            .unzip();
+            .collect();
 
         if !rest {
             let pattern_field_names: Vec<&str> = fields.iter().map(|f| f.name.as_str()).collect();
@@ -790,24 +744,21 @@ impl InferCtx<'_> {
         }
 
         let resolved_ty = struct_ty.resolve_in(&self.env);
-        let typed = match &resolved_ty {
-            Type::Nominal { id, params, .. } => TypedPattern::Struct {
+        let resolution = match &resolved_ty {
+            Type::Nominal { id, .. } => RecordPatternResolution::Struct {
                 struct_name: id.into(),
-                struct_fields,
-                pattern_fields: typed_field_values,
-                type_args: params.clone(),
             },
-            _ => TypedPattern::Wildcard,
+            _ => return Pattern::WildCard { span },
         };
 
-        let pattern = Pattern::Struct {
+        Pattern::Struct {
             identifier: identifier.clone(),
             fields: new_fields,
             rest,
+            resolution,
             ty: struct_ty,
             span,
-        };
-        (pattern, typed)
+        }
     }
 
     fn infer_or_pattern(
@@ -816,8 +767,8 @@ impl InferCtx<'_> {
         span: Span,
         expected_ty: Type,
         kind: BindingKind,
-    ) -> (Pattern, TypedPattern) {
-        let (first, first_typed) = self.infer_pattern_inner(
+    ) -> Pattern {
+        let first = self.infer_pattern_inner(
             patterns
                 .first()
                 .cloned()
@@ -842,13 +793,11 @@ impl InferCtx<'_> {
             .collect();
 
         let mut inferred = vec![first];
-        let mut typed_alternatives = vec![first_typed];
 
         for pattern in patterns.iter().skip(1) {
             self.scopes.push();
             let checkpoint = self.facts.binding_checkpoint();
-            let (alt, alt_typed) =
-                self.infer_pattern_inner(pattern.clone(), expected_ty.clone(), kind, false);
+            let alt = self.infer_pattern_inner(pattern.clone(), expected_ty.clone(), kind, false);
             let alt_bindings = collect_pattern_bindings(&alt);
             let alt_names: HashSet<&str> =
                 alt_bindings.iter().map(|(name, _)| name.as_str()).collect();
@@ -900,17 +849,12 @@ impl InferCtx<'_> {
             self.scopes.pop();
             self.facts.remove_bindings_from(checkpoint);
             inferred.push(alt);
-            typed_alternatives.push(alt_typed);
         }
 
-        let pattern = Pattern::Or {
+        Pattern::Or {
             patterns: inferred,
             span,
-        };
-        let typed = TypedPattern::Or {
-            alternatives: typed_alternatives,
-        };
-        (pattern, typed)
+        }
     }
 
     fn get_enum_variant_info(&self, ty: &Type) -> Option<(String, Vec<String>)> {
@@ -961,13 +905,7 @@ impl InferCtx<'_> {
         let DefinitionBody::TypeAlias { .. } = &def.body else {
             return None;
         };
-        let alias_ty = &def.ty;
-
-        let underlying = match alias_ty {
-            Type::Forall { body, .. } => body.as_ref().clone(),
-            _ => alias_ty.clone(),
-        };
-        let underlying = store.deep_resolve_alias(&underlying);
+        let underlying = store.peel_alias(&def.ty);
 
         if let Type::Nominal { id: enum_id, .. } = &underlying
             && let Some(variants) = store.variants_of(enum_id.as_str())
@@ -1020,7 +958,7 @@ impl InferCtx<'_> {
         pattern: &Pattern,
         expected_ty: &Type,
         kind: BindingKind,
-    ) -> Option<(Pattern, TypedPattern)> {
+    ) -> Option<Pattern> {
         let Pattern::Struct {
             identifier,
             fields,
@@ -1078,7 +1016,7 @@ impl InferCtx<'_> {
         let variant_fields: Vec<EnumFieldDefinition> = variant.fields.iter().cloned().collect();
         let available: Vec<String> = variant_fields.iter().map(|f| f.name.to_string()).collect();
 
-        let (new_fields, typed_field_values): (Vec<_>, Vec<_>) = fields
+        let new_fields: Vec<_> = fields
             .iter()
             .map(|field| {
                 let field_definition = variant_fields.iter().find(|x| x.name == field.name);
@@ -1101,17 +1039,14 @@ impl InferCtx<'_> {
                     &field.value,
                     Pattern::Identifier { identifier, .. } if identifier == &field.name
                 );
-                let (inferred_value, typed_value) =
+                let inferred_value =
                     self.infer_pattern_inner(field.value.clone(), field_ty, kind, is_shorthand);
-                (
-                    StructFieldPattern {
-                        name: field.name.clone(),
-                        value: inferred_value,
-                    },
-                    (field.name.clone(), typed_value),
-                )
+                StructFieldPattern {
+                    name: field.name.clone(),
+                    value: inferred_value,
+                }
             })
-            .unzip();
+            .collect();
 
         if !rest {
             let pattern_field_names: Vec<&str> = fields.iter().map(|f| f.name.as_str()).collect();
@@ -1126,8 +1061,8 @@ impl InferCtx<'_> {
             }
         }
 
-        let typed = match &resolved_ty {
-            Type::Nominal { id, params, .. } => {
+        let resolution = match &resolved_ty {
+            Type::Nominal { id, .. } => {
                 let variant_qualified = id.with_segment(&variant_name);
                 if let Some(definition_span) =
                     self.get_definition_name_span(store, &variant_qualified)
@@ -1135,25 +1070,22 @@ impl InferCtx<'_> {
                     self.facts.add_usage(*span, definition_span);
                 }
 
-                TypedPattern::EnumStructVariant {
+                RecordPatternResolution::EnumVariant {
                     enum_name: id.into(),
                     variant_name: identifier.into(),
-                    variant_fields,
-                    pattern_fields: typed_field_values,
-                    type_args: params.clone(),
                 }
             }
-            _ => TypedPattern::Wildcard,
+            _ => return None,
         };
 
-        let pattern = Pattern::Struct {
+        Some(Pattern::Struct {
             identifier: identifier.into(),
             fields: new_fields,
             rest,
+            resolution,
             ty: pattern_ty,
             span: *span,
-        };
-        Some((pattern, typed))
+        })
     }
 }
 

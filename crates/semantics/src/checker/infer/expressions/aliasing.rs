@@ -1,4 +1,4 @@
-use syntax::ast::{Expression, Literal, Span, UnaryOperator};
+use syntax::ast::{Expression, IdentifierResolution, Literal, Span, UnaryOperator};
 use syntax::program::{CallKind, DefinitionBody};
 use syntax::types::Type;
 
@@ -125,7 +125,7 @@ impl InferCtx<'_> {
     fn alias_leaf(&self, place: &Expression, via_clone: bool, span: Span) -> Option<AliasFinding> {
         let Expression::Identifier {
             value,
-            binding_id: Some(root_id),
+            resolution: IdentifierResolution::Binding(root_id),
             ..
         } = place_root(place)?
         else {
@@ -154,7 +154,7 @@ impl InferCtx<'_> {
             source: render_place(place),
             span,
             kind,
-            addressable: check_is_non_addressable(place, &self.env).is_none(),
+            addressable: check_is_non_addressable(place, &self.env, self.store).is_none(),
         })
     }
 

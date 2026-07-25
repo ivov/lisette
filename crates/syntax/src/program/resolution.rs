@@ -1,21 +1,11 @@
-use rustc_hash::FxHashMap as HashMap;
-
-use crate::ast::{Expression, Span};
+use crate::ast::Expression;
 use crate::types::Symbol;
 use crate::types::Type;
 
-pub type ResolvedDefinitions = HashMap<Span, Symbol>;
-
-pub fn resolved_definition<'a>(
-    expression: &'a Expression,
-    definitions: &'a ResolvedDefinitions,
-) -> Option<&'a str> {
+pub fn resolved_definition(expression: &Expression) -> Option<&str> {
     match expression.unwrap_parens() {
-        Expression::Identifier {
-            qualified: Some(definition),
-            ..
-        } => Some(definition),
-        Expression::DotAccess { span, .. } => definitions.get(span).map(Symbol::as_str),
+        Expression::Identifier { resolution, .. } => resolution.definition(),
+        Expression::DotAccess { resolution, .. } => resolution.definition(),
         _ => None,
     }
 }
@@ -120,6 +110,95 @@ pub enum DotAccessKind {
     },
     /// Static method (no `self` receiver)
     StaticMethod { is_exported: bool },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DotAccessResolution {
+    Unresolved,
+    StructField {
+        is_exported: bool,
+    },
+    TupleStructField {
+        is_newtype: bool,
+    },
+    TupleElement,
+    ModuleMember {
+        definition: Option<Symbol>,
+    },
+    EnumVariant {
+        definition: Symbol,
+    },
+    InstanceMethod {
+        is_exported: bool,
+        receiver_coercion: Option<ReceiverCoercion>,
+        definition: Option<Symbol>,
+    },
+    InstanceMethodValue {
+        is_exported: bool,
+        is_pointer_receiver: bool,
+        definition: Option<Symbol>,
+    },
+    StaticMethod {
+        is_exported: bool,
+        definition: Symbol,
+    },
+}
+
+impl DotAccessResolution {
+    pub fn kind(&self) -> Option<DotAccessKind> {
+        Some(match self {
+            Self::Unresolved => return None,
+            Self::StructField { is_exported } => DotAccessKind::StructField {
+                is_exported: *is_exported,
+            },
+            Self::TupleStructField { is_newtype } => DotAccessKind::TupleStructField {
+                is_newtype: *is_newtype,
+            },
+            Self::TupleElement => DotAccessKind::TupleElement,
+            Self::ModuleMember { .. } => DotAccessKind::ModuleMember,
+            Self::EnumVariant { .. } => DotAccessKind::EnumVariant,
+            Self::InstanceMethod { is_exported, .. } => DotAccessKind::InstanceMethod {
+                is_exported: *is_exported,
+            },
+            Self::InstanceMethodValue {
+                is_exported,
+                is_pointer_receiver,
+                ..
+            } => DotAccessKind::InstanceMethodValue {
+                is_exported: *is_exported,
+                is_pointer_receiver: *is_pointer_receiver,
+            },
+            Self::StaticMethod { is_exported, .. } => DotAccessKind::StaticMethod {
+                is_exported: *is_exported,
+            },
+        })
+    }
+
+    pub fn receiver_coercion(&self) -> Option<ReceiverCoercion> {
+        match self {
+            Self::InstanceMethod {
+                receiver_coercion, ..
+            } => *receiver_coercion,
+            _ => None,
+        }
+    }
+
+    pub fn definition(&self) -> Option<&str> {
+        match self {
+            Self::ModuleMember { definition }
+            | Self::InstanceMethod { definition, .. }
+            | Self::InstanceMethodValue { definition, .. } => {
+                definition.as_ref().map(Symbol::as_str)
+            }
+            Self::EnumVariant { definition } | Self::StaticMethod { definition, .. } => {
+                Some(definition)
+            }
+            Self::Unresolved
+            | Self::StructField { .. }
+            | Self::TupleStructField { .. }
+            | Self::TupleElement => None,
+        }
+    }
 }
 
 /// What kind of native built-in type (Slice, Map, Channel, etc.) a call targets.

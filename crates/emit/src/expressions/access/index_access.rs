@@ -30,7 +30,9 @@ impl Planner<'_> {
         // Range-typed variable as index (e.g. `items[r]` where `r: Range<int>`,
         // or `r: Prefix` where `type Prefix = RangeTo<int>`).
         let index_ty = index.get_type();
-        if let Some(range_kind) = peel_to_range_type(&index_ty).and_then(|t| t.get_name()) {
+        if let Some(range_kind) = peel_to_range_type(&index_ty, |id| self.facts.definition(id))
+            .and_then(|ty| ty.get_name().map(str::to_owned))
+        {
             let needs_cap = self.is_native_shape(&expression.get_type(), NativeGoType::Slice);
             if base_staged.evaluation.effect.has_call() {
                 self.pin_staged(&mut base_staged, "_base");
@@ -44,7 +46,7 @@ impl Planner<'_> {
             let effect = sequenced.effect;
             let contains_deferred_evaluation = sequenced.contains_deferred_evaluation();
             let (setup, values) = sequenced.into_rendered();
-            let value = emit_range_var_slice(&values[0], &values[1], range_kind, needs_cap);
+            let value = emit_range_var_slice(&values[0], &values[1], &range_kind, needs_cap);
             return ValuePlan::computed(
                 setup,
                 GoExpression::opaque_with_deferred_evaluation(value, contains_deferred_evaluation),

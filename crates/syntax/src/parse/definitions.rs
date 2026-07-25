@@ -2,8 +2,9 @@ use ecow::EcoString;
 
 use super::{ParamMode, Parser};
 use crate::ast::{
-    Annotation, Attribute, AttributeArg, EnumFieldDefinition, EnumVariant, Expression, Generic,
-    ParentInterface, Span, StructFieldDefinition, StructKind, VariantFields, Visibility,
+    Annotation, Attribute, AttributeArg, ConstInitializer, EnumFieldDefinition, EnumVariant,
+    Expression, Generic, ParentInterface, Span, StructFieldDefinition, StructKind, VariantFields,
+    Visibility,
 };
 use crate::lex::Token;
 use crate::lex::TokenKind::*;
@@ -619,9 +620,9 @@ impl<'source> Parser<'source> {
         };
 
         let expression = if self.advance_if(Equal) {
-            self.parse_expression()
+            ConstInitializer::Value(Box::new(self.parse_expression()))
         } else {
-            Expression::NoOp
+            ConstInitializer::Declaration
         };
 
         Expression::Const {
@@ -629,7 +630,7 @@ impl<'source> Parser<'source> {
             identifier,
             identifier_span,
             annotation,
-            expression: expression.into(),
+            expression,
             visibility: Visibility::Private,
             ty: Type::uninferred(),
             span: self.span_from_tokens(start),

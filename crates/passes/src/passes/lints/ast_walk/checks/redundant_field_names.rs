@@ -1,4 +1,4 @@
-use syntax::ast::{Expression, Span, StructFieldAssignment};
+use syntax::ast::{Expression, IdentifierResolution, Span, StructFieldAssignment};
 
 use super::helpers::struct_field_names;
 use crate::passes::walk::NodeCtx;
@@ -47,8 +47,7 @@ fn redundant_field(assignment: &StructFieldAssignment) -> Option<Span> {
     let Expression::Identifier {
         value,
         span,
-        binding_id,
-        qualified,
+        resolution,
         ..
     } = assignment.value.as_ref()
     else {
@@ -57,7 +56,7 @@ fn redundant_field(assignment: &StructFieldAssignment) -> Option<Span> {
     if value != &assignment.name {
         return None;
     }
-    if binding_id.is_none() && qualified.is_none() {
+    if matches!(resolution, IdentifierResolution::Unresolved) {
         return None;
     }
     if span.byte_offset == assignment.name_span.byte_offset {

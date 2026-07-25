@@ -21,21 +21,23 @@ description: |
             id: uninferred,
         },
         visibility: Private,
-        body: Block {
-            items: [
-                RawGo {
-                    text: "fmt.Println(\\\"Hello\\\")",
+        body: Definition(
+            Block {
+                items: [
+                    RawGo {
+                        text: "fmt.Println(\\\"Hello\\\")",
+                    },
+                ],
+                ty: Var {
+                    id: uninferred,
                 },
-            ],
-            ty: Var {
-                id: uninferred,
+                span: Span {
+                    file_id: 0,
+                    byte_offset: 11,
+                    byte_length: 37,
+                },
             },
-            span: Span {
-                file_id: 0,
-                byte_offset: 11,
-                byte_length: 37,
-            },
-        },
+        ),
         ty: Var {
             id: uninferred,
         },

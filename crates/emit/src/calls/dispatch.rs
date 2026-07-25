@@ -1,6 +1,6 @@
 use crate::expressions::access::struct_call::emit_struct_literal;
 use crate::names::generics::extract_type_mapping;
-use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
+use rustc_hash::FxHashMap as HashMap;
 use std::borrow::Cow;
 
 use super::NativeCallContext;
@@ -14,11 +14,10 @@ use crate::plan::calls::CallableOrigin;
 use crate::plan::values::{CaptureBoundary, EvaluationEffect, GoExpression, ValuePlan};
 use crate::types::native::NativeGoType;
 use syntax::EcoString;
-use syntax::ast::{Expression, StructKind};
+use syntax::ast::{Expression, ResolvedCallTypeArguments, StructKind};
 use syntax::program::{CallKind, Definition, DefinitionBody};
 use syntax::types::{
-    CompoundKind, FunctionParameter, SimpleKind, SubstitutionMap, Symbol, Type,
-    build_substitution_map, substitute,
+    CompoundKind, FunctionParameter, SimpleKind, Type, build_substitution_map, substitute,
 };
 
 struct TupleStructTarget {
@@ -63,27 +62,7 @@ impl Planner<'_> {
         if self.is_function_alias(ty) {
             return true;
         }
-        let mut current = ty.clone();
-        let mut seen: HashSet<Symbol> = HashSet::default();
-        while let Type::Nominal { id, params, .. } = &current {
-            if !seen.insert(id.clone()) {
-                break;
-            }
-            let Some(definition) = self.facts.definition(id.as_str()) else {
-                break;
-            };
-            if !matches!(definition.body, DefinitionBody::TypeAlias { .. }) {
-                break;
-            }
-            let definition_ty = &definition.ty;
-            let (vars, body) = match definition_ty {
-                Type::Forall { vars, body } => (vars.clone(), body.as_ref().clone()),
-                other => (vec![], other.clone()),
-            };
-            let map: SubstitutionMap = vars.iter().cloned().zip(params.iter().cloned()).collect();
-            current = substitute(&body, &map);
-        }
-        let Some(numeric) = current.underlying_numeric_type() else {
+        let Some(numeric) = self.facts.underlying_numeric_type(ty) else {
             return false;
         };
         let Some(kind) = numeric.as_simple() else {
@@ -110,7 +89,7 @@ impl Planner<'_> {
     fn resolve_element_type(
         &mut self,
         function: &Expression,
-        type_args: &[Type],
+        type_args: ResolvedCallTypeArguments<'_>,
         call_ty: Option<&Type>,
     ) -> String {
         let element = self.resolve_element_lisette_type(function, type_args, call_ty);
@@ -120,7 +99,7 @@ impl Planner<'_> {
     fn resolve_element_lisette_type<'t>(
         &self,
         function: &Expression,
-        type_args: &'t [Type],
+        type_args: ResolvedCallTypeArguments<'t>,
         call_ty: Option<&'t Type>,
     ) -> Cow<'t, Type> {
         if let Some(first) = type_args.first() {
@@ -140,7 +119,7 @@ impl Planner<'_> {
     fn resolve_map_types(
         &mut self,
         function: &Expression,
-        type_args: &[Type],
+        type_args: ResolvedCallTypeArguments<'_>,
         call_ty: Option<&Type>,
     ) -> (String, String) {
         if type_args.len() >= 2 {
@@ -315,7 +294,7 @@ impl Planner<'_> {
             return None;
         };
         let function = callee.unwrap_parens();
-        let spread = (**spread).as_ref();
+        let spread = spread.as_deref();
         let resolved_type_args = type_arguments
             .resolved_types()
             .expect("emission requires checked call type arguments");
@@ -367,7 +346,7 @@ impl Planner<'_> {
             unreachable!("lower_call requires a Call expression");
         };
         let function = callee.unwrap_parens();
-        let spread = (**spread).as_ref();
+        let spread = spread.as_deref();
         let resolved_type_args = type_arguments
             .resolved_types()
             .expect("emission requires checked call type arguments");
@@ -625,7 +604,7 @@ impl Planner<'_> {
         &mut self,
         function: &Expression,
         args: &[Expression],
-        type_args: &[Type],
+        type_args: ResolvedCallTypeArguments<'_>,
     ) -> (Vec<LoweredStatement>, String) {
         let target_ty = if !type_args.is_empty() {
             self.go_type_string(&type_args[0])

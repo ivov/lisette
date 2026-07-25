@@ -1,14 +1,22 @@
 use crate::passes::walk::NodeCtx;
-use syntax::ast::{BindingId, Expression};
+use syntax::ast::{BindingId, Expression, IdentifierResolution, Pattern};
 
 pub fn check_unnecessary_range_loop(expression: &Expression, ctx: &NodeCtx) {
     let Expression::For {
+        binding,
         iterable,
         body,
-        binding_id: Some(index_id),
         ..
     } = expression
     else {
+        return;
+    };
+    let binding_span = match &binding.pattern {
+        Pattern::Identifier { span, .. } => *span,
+        Pattern::AsBinding { name_span, .. } => *name_span,
+        _ => return,
+    };
+    let Some(index_id) = ctx.facts.binding_id_at(binding_span) else {
         return;
     };
     let Expression::Range {
@@ -29,7 +37,7 @@ pub fn check_unnecessary_range_loop(expression: &Expression, ctx: &NodeCtx) {
     };
 
     let mut walk = Walk {
-        index_id: *index_id,
+        index_id,
         collection_id,
         found: false,
         blocked: false,
@@ -67,7 +75,7 @@ fn length_receiver(expression: &Expression) -> Option<(&str, BindingId)> {
     }
     let Expression::Identifier {
         value,
-        binding_id: Some(binding_id),
+        resolution: IdentifierResolution::Binding(binding_id),
         ..
     } = receiver.unwrap_parens()
     else {

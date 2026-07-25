@@ -1,5 +1,5 @@
 use diagnostics::{Edit, Fix};
-use syntax::ast::{Expression, Pattern};
+use syntax::ast::{Expression, IdentifierResolution, Pattern};
 use syntax::program::{CallKind, DotAccessKind};
 
 use super::helpers::lambda_is_annotated;
@@ -88,14 +88,14 @@ fn hoistable_callee(callee: &Expression, params: &[&str], facts: &Facts) -> Opti
     }
     match callee {
         Expression::Identifier {
-            value, binding_id, ..
+            value, resolution, ..
         } => {
             if params.contains(&value.as_str()) {
                 return None;
             }
             // A reassignable capture is read lazily by the closure but bound
             // eagerly as a bare reference, so hoisting it would change behavior.
-            if let Some(id) = binding_id {
+            if let IdentifierResolution::Binding(id) = resolution {
                 match facts.bindings.get(id) {
                     Some(binding) if !binding.kind.is_mutable() => {}
                     _ => return None,
@@ -106,9 +106,9 @@ fn hoistable_callee(callee: &Expression, params: &[&str], facts: &Facts) -> Opti
         Expression::DotAccess {
             expression: base,
             member,
-            dot_access_kind: Some(DotAccessKind::ModuleMember),
+            resolution,
             ..
-        } => {
+        } if resolution.kind() == Some(DotAccessKind::ModuleMember) => {
             let Expression::Identifier { value: base, .. } = base.unwrap_parens() else {
                 return None;
             };

@@ -2008,12 +2008,13 @@ pub fn not_callable(
     ty: &Type,
     callee_name: Option<&str>,
     arg_name: Option<&str>,
+    has_underlying_type: bool,
     span: Span,
 ) -> LisetteDiagnostic {
     let type_name = ty.get_name();
     let is_type_call = matches!((callee_name, type_name), (Some(c), Some(t)) if c == t);
-    let is_cast_target = ty.get_underlying().is_some()
-        || type_name.is_some_and(|n| SimpleKind::from_name(n).is_some());
+    let is_cast_target =
+        has_underlying_type || type_name.is_some_and(|n| SimpleKind::from_name(n).is_some());
 
     let help = if is_type_call && is_cast_target {
         let subject = arg_name.unwrap_or("value");
@@ -2818,7 +2819,20 @@ pub fn continue_in_defer_block(span: Span) -> LisetteDiagnostic {
         .with_help("Remove the `continue`, or move it inside a loop within the `defer` block")
 }
 
-pub fn invalid_cast(source_ty: &Type, target_ty: &Type, span: Span) -> LisetteDiagnostic {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum InvalidCastKind {
+    Complex,
+    RuneToByte,
+    ByteToString,
+    Other,
+}
+
+pub fn invalid_cast(
+    source_ty: &Type,
+    target_ty: &Type,
+    kind: InvalidCastKind,
+    span: Span,
+) -> LisetteDiagnostic {
     let same_constructor_with_unresolved = source_ty
         .get_qualified_id()
         .zip(target_ty.get_qualified_id())
@@ -2832,11 +2846,11 @@ pub fn invalid_cast(source_ty: &Type, target_ty: &Type, span: Span) -> LisetteDi
         )
     } else if source_ty.is_string() {
         "Strings cannot be cast to numbers and require explicit conversion. Use `strconv.Atoi()` to parse.".into()
-    } else if source_ty.is_complex() || target_ty.is_complex() {
+    } else if kind == InvalidCastKind::Complex {
         "Complex numbers cannot be cast directly. Use `real(c)` or `imaginary(c)` to extract components.".into()
-    } else if source_ty.has_underlying_rune() && target_ty.has_underlying_byte() {
+    } else if kind == InvalidCastKind::RuneToByte {
         "rune (int32) is wider than byte (uint8) and may not fit. Use an intermediate variable to cast via int first: `let n = r as int; n as byte`".into()
-    } else if source_ty.has_underlying_byte() && target_ty.is_string() {
+    } else if kind == InvalidCastKind::ByteToString {
         "A byte has two readings as a string. Use `[b] as string` to preserve the byte (may be invalid UTF-8), or cast through a rune to encode as a codepoint: `let r = b as rune; r as string`".into()
     } else {
         "Casts are supported between numeric types, between string and byte/rune slices, from rune to string, and from concrete types to interfaces.".into()

@@ -33,7 +33,9 @@ fn visit_expression(expression: &Expression, local: &mut ProducedFacts) {
             if !generics.is_empty() {
                 let mut still_missing: HashSet<EcoString> =
                     generics.iter().map(|g| g.name.clone()).collect();
-                body_remove_found_type_names(body, &mut still_missing);
+                if let Some(body) = body.definition() {
+                    body_remove_found_type_names(body, &mut still_missing);
+                }
                 let found_in_body: HashSet<EcoString> = generics
                     .iter()
                     .map(|g| g.name.clone())
@@ -70,7 +72,7 @@ fn check_unused_type_parameters(
     }
     return_type.remove_found_type_names(&mut remaining);
     for generic in generics {
-        for bound in &generic.bounds {
+        for bound in generic.bounds() {
             annotation_remove_names(bound, &mut remaining);
         }
     }
@@ -94,7 +96,7 @@ fn check_type_params_only_in_bound(
     found_in_body: &HashSet<EcoString>,
     local: &mut ProducedFacts,
 ) {
-    if generics.iter().all(|g| g.bounds.is_empty()) {
+    if generics.iter().all(|generic| generic.bound_count() == 0) {
         return;
     }
 
@@ -130,7 +132,7 @@ fn collect_type_params_only_in_bound(
 
     let mut unseen_anywhere = unseen_outside_bound_rhs.clone();
     for generic in generics {
-        for bound in &generic.bounds {
+        for bound in generic.bounds() {
             annotation_remove_names(bound, &mut unseen_anywhere);
         }
     }
@@ -153,6 +155,7 @@ fn body_remove_found_type_names(expression: &Expression, names: &mut HashSet<Eco
             for ty in type_arguments
                 .resolved_types()
                 .expect("generic fact production requires checked call type arguments")
+                .iter()
             {
                 ty.remove_found_type_names(names);
             }

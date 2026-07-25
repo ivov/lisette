@@ -1,5 +1,5 @@
 use crate::passes::walk::NodeCtx;
-use syntax::ast::{BindingId, Expression};
+use syntax::ast::{BindingId, Expression, IdentifierResolution};
 use syntax::types::Type;
 
 pub fn check_almost_swapped(expression: &Expression, ctx: &NodeCtx) {
@@ -69,7 +69,7 @@ struct Variable<'a> {
 
 fn variable(expression: &Expression) -> Option<Variable<'_>> {
     if let Expression::Identifier {
-        binding_id: Some(id),
+        resolution: IdentifierResolution::Binding(id),
         ty,
         value,
         ..

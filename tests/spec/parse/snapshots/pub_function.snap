@@ -21,17 +21,19 @@ description: |
             id: uninferred,
         },
         visibility: Public,
-        body: Block {
-            items: [],
-            ty: Var {
-                id: uninferred,
+        body: Definition(
+            Block {
+                items: [],
+                ty: Var {
+                    id: uninferred,
+                },
+                span: Span {
+                    file_id: 0,
+                    byte_offset: 16,
+                    byte_length: 3,
+                },
             },
-            span: Span {
-                file_id: 0,
-                byte_offset: 16,
-                byte_length: 3,
-            },
-        },
+        ),
         ty: Var {
             id: uninferred,
         },

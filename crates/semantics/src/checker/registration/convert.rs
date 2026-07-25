@@ -7,7 +7,7 @@ use crate::checker::infer::expressions::comparison::{
 };
 use syntax::EcoString;
 use syntax::ast::{Annotation, Generic, Span};
-use syntax::program::{Definition, DefinitionBody};
+use syntax::program::DefinitionBody;
 use syntax::types::{
     FunctionParameter, SubstitutionMap, Symbol, Type, substitute, unqualified_name,
 };
@@ -342,30 +342,6 @@ impl TaskState {
                     self.check_map_key_comparable(store, key_ty, *annotation_span);
                 }
 
-                // Preserve alias name in emitter output. Guard against re-wrapping bodies whose
-                // id already matches (function aliases are pre-wrapped by populate_type_alias).
-                let body_differs = match &resolved_ty {
-                    Type::Nominal { id, .. } => id.as_str() != qualified_name.as_str(),
-                    other => other.is_structural_alias_body(),
-                };
-                if body_differs
-                    && let Some(Definition {
-                        body:
-                            DefinitionBody::TypeAlias {
-                                annotation: alias_ann,
-                                ..
-                            },
-                        ..
-                    }) = store.get_definition(&qualified_name)
-                    && !alias_ann.is_opaque()
-                {
-                    return Type::Nominal {
-                        id: qualified_name.into(),
-                        params: concrete_args,
-                        underlying_ty: Some(Box::new(resolved_ty)),
-                    };
-                }
-
                 resolved_ty
             }
 
@@ -420,7 +396,6 @@ impl TaskState {
             return Type::Nominal {
                 id: Symbol::from_parts("prelude", "Array"),
                 params: vec![element],
-                underlying_ty: None,
             };
         }
 
@@ -573,9 +548,9 @@ impl TaskState {
         self.resolve_type_from_prelude(store, type_name)
     }
 
-    /// Substitute the `body` with the resolved `type_args`, returning both the
-    /// substituted type and the resolved args (1:1 with `type_args`) so callers
-    /// can reuse them without re-resolving (which would re-emit diagnostics).
+    /// Substitute the `body` with the resolved `type_args`, keeping each source
+    /// annotation paired with its type so callers can reuse the result without
+    /// re-resolving (which would re-emit diagnostics).
     pub(crate) fn instantiate_from_annotations(
         &mut self,
         store: &Store,
@@ -583,16 +558,21 @@ impl TaskState {
         body: &Type,
         type_args: &[Annotation],
         span: &Span,
-    ) -> (Type, Vec<Type>) {
-        let args: Vec<Type> = type_args
+    ) -> (Type, Vec<(Annotation, Type)>) {
+        let args: Vec<(Annotation, Type)> = type_args
             .iter()
-            .map(|arg_ann| self.convert_to_type(store, arg_ann, span))
+            .map(|annotation| {
+                (
+                    annotation.clone(),
+                    self.convert_to_type(store, annotation, span),
+                )
+            })
             .collect();
 
         let map: SubstitutionMap = generics
             .iter()
             .zip(args.iter())
-            .map(|(name, ty)| (name.clone(), ty.clone()))
+            .map(|(name, (_, ty))| (name.clone(), ty.clone()))
             .collect();
 
         (substitute(body, &map), args)
@@ -659,7 +639,7 @@ impl TaskState {
     pub(super) fn check_map_key_comparable(&mut self, store: &Store, key_ty: &Type, span: Span) {
         let resolved = key_ty.resolve_in(&self.env);
 
-        if self.is_lis(store) && resolved.resolves_to_unknown() {
+        if self.is_lis(store) && store.resolves_to_unknown(&resolved) {
             self.sink.push(diagnostics::infer::unknown_as_map_key(span));
             return;
         }
@@ -698,7 +678,7 @@ impl TaskState {
         for (key, span, check_concrete) in self.scopes.take_deferred_map_key_checks() {
             if check_concrete {
                 let resolved = key.resolve_in(&self.env);
-                if !resolved.resolves_to_unknown() {
+                if !store.resolves_to_unknown(&resolved) {
                     self.check_map_key_comparable(store, &resolved, span);
                 }
             } else {
@@ -758,7 +738,7 @@ impl TaskState {
         if argument.is_variable()
             || matches!(argument, Type::Parameter(_))
             || argument.contains_error()
-            || argument.contains_unknown()
+            || store.contains_unknown(&argument)
         {
             return;
         }
@@ -815,7 +795,7 @@ impl TaskState {
                         .push(diagnostics::infer::not_comparable_bound(span));
                 }
             }
-            BuiltinBound::Ordered if !resolved.satisfies_ordered_constraint() => {
+            BuiltinBound::Ordered if !store.satisfies_ordered_constraint(&resolved) => {
                 self.sink
                     .push(diagnostics::infer::not_orderable_bound(span));
             }

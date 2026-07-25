@@ -1,6 +1,6 @@
 use super::helpers::{is_bare_identifier, is_zero_literal};
 use crate::passes::walk::NodeCtx;
-use syntax::ast::{BindingId, Expression, Literal, Pattern, Span};
+use syntax::ast::{BindingId, Expression, IdentifierResolution, Literal, Pattern, Span};
 use syntax::program::{CallKind, NativeTypeKind};
 
 pub fn check_append_to_zero_filled(expression: &Expression, ctx: &NodeCtx) {
@@ -213,6 +213,9 @@ fn growing_append_receiver(expression: &Expression) -> Option<&Expression> {
 fn is_binding(expression: &Expression, binding_id: BindingId) -> bool {
     matches!(
         expression.unwrap_parens(),
-        Expression::Identifier { binding_id: Some(id), .. } if *id == binding_id
+        Expression::Identifier {
+            resolution: IdentifierResolution::Binding(id),
+            ..
+        } if *id == binding_id
     )
 }

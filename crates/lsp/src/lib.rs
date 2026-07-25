@@ -16,6 +16,7 @@ mod state;
 mod traversal;
 mod validation;
 
+use syntax::ast::IdentifierResolution;
 use tower_lsp::LanguageServer;
 use tower_lsp::jsonrpc::Result;
 use tower_lsp::lsp_types::*;
@@ -227,9 +228,9 @@ impl LanguageServer for Backend {
         };
 
         let (ty, span) = hover::resolve_declaration_hover(expression, offset, file, &snapshot)
-            .unwrap_or_else(|| hover::get_hover_type_and_span(expression, offset));
+            .unwrap_or_else(|| hover::get_hover_type_and_span(&snapshot, expression, offset));
 
-        if ty.is_type_var() || ty.is_error() {
+        if ty.is_variable() || ty.is_placeholder() || ty.is_error() {
             return Ok(None);
         }
 
@@ -277,6 +278,7 @@ impl LanguageServer for Backend {
             .unwrap_or(eof);
 
         Ok(Some(inlay_hints::collect(
+            &snapshot,
             &file.items,
             (start, end),
             line_index,
@@ -322,13 +324,13 @@ impl LanguageServer for Backend {
 
         let definition_span = match expression {
             syntax::ast::Expression::Identifier {
-                binding_id: Some(id),
+                resolution: IdentifierResolution::Binding(id),
                 ..
             } => snapshot.facts().bindings.get(id).map(|b| b.span),
 
             syntax::ast::Expression::Identifier {
                 value,
-                qualified: Some(qname),
+                resolution: IdentifierResolution::Definition(qname),
                 span: id_span,
                 ..
             } => {
@@ -440,18 +442,12 @@ impl LanguageServer for Backend {
                     .or_else(|| resolve_word_at_offset(&file.source, offset, file, &snapshot))
             }
 
-            syntax::ast::Expression::IfLet {
-                pattern,
-                typed_pattern,
-                ..
+            syntax::ast::Expression::IfLet { pattern, .. }
+            | syntax::ast::Expression::WhileLet { pattern, .. } => {
+                resolve_enum_in_pattern(pattern, offset, file, &snapshot)
+                    .or_else(&find_binding)
+                    .or_else(|| resolve_word_at_offset(&file.source, offset, file, &snapshot))
             }
-            | syntax::ast::Expression::WhileLet {
-                pattern,
-                typed_pattern,
-                ..
-            } => resolve_enum_in_pattern(pattern, typed_pattern.as_ref(), offset, file, &snapshot)
-                .or_else(&find_binding)
-                .or_else(|| resolve_word_at_offset(&file.source, offset, file, &snapshot)),
 
             _ => find_binding()
                 .or_else(|| resolve_word_at_offset(&file.source, offset, file, &snapshot)),
@@ -642,7 +638,7 @@ impl LanguageServer for Backend {
             offset,
             |expression| match expression {
                 syntax::ast::Expression::Identifier {
-                    qualified: Some(qname),
+                    resolution: IdentifierResolution::Definition(qname),
                     ..
                 } => snapshot
                     .definitions()
@@ -661,23 +657,11 @@ impl LanguageServer for Backend {
                         .or_else(|| resolve_word_at_offset(&file.source, offset, file, &snapshot))
                 }
 
-                syntax::ast::Expression::IfLet {
-                    pattern,
-                    typed_pattern,
-                    ..
+                syntax::ast::Expression::IfLet { pattern, .. }
+                | syntax::ast::Expression::WhileLet { pattern, .. } => {
+                    resolve_enum_in_pattern(pattern, offset, file, &snapshot)
+                        .or_else(|| resolve_word_at_offset(&file.source, offset, file, &snapshot))
                 }
-                | syntax::ast::Expression::WhileLet {
-                    pattern,
-                    typed_pattern,
-                    ..
-                } => resolve_enum_in_pattern(
-                    pattern,
-                    typed_pattern.as_ref(),
-                    offset,
-                    file,
-                    &snapshot,
-                )
-                .or_else(|| resolve_word_at_offset(&file.source, offset, file, &snapshot)),
 
                 _ => resolve_word_at_offset(&file.source, offset, file, &snapshot),
             },
@@ -787,7 +771,7 @@ impl LanguageServer for Backend {
             && let Some(fa) = field_assignments
                 .iter()
                 .find(|fa| offset_in_span(offset, &fa.name_span))
-            && type_name(ty)
+            && type_name(ty, &snapshot)
                 .and_then(|type_id| find_struct_field_span(&type_id, &fa.name, &snapshot))
                 .is_some()
         {
@@ -800,7 +784,7 @@ impl LanguageServer for Backend {
         match expression {
             syntax::ast::Expression::Identifier {
                 value,
-                binding_id: Some(id),
+                resolution: IdentifierResolution::Binding(id),
                 span,
                 ..
             } => {
@@ -818,7 +802,7 @@ impl LanguageServer for Backend {
 
             syntax::ast::Expression::Identifier {
                 value,
-                qualified: Some(qname),
+                resolution: IdentifierResolution::Definition(qname),
                 span,
                 ..
             } => {
@@ -959,23 +943,10 @@ impl LanguageServer for Backend {
                 Ok(None)
             }
 
-            syntax::ast::Expression::IfLet {
-                pattern,
-                typed_pattern,
-                ..
-            }
-            | syntax::ast::Expression::WhileLet {
-                pattern,
-                typed_pattern,
-                ..
-            } => {
-                if let Some(def_span) = resolve_enum_in_pattern(
-                    pattern,
-                    typed_pattern.as_ref(),
-                    offset,
-                    file,
-                    &snapshot,
-                ) && !is_generated_typedef_span(&snapshot, &def_span)
+            syntax::ast::Expression::IfLet { pattern, .. }
+            | syntax::ast::Expression::WhileLet { pattern, .. } => {
+                if let Some(def_span) = resolve_enum_in_pattern(pattern, offset, file, &snapshot)
+                    && !is_generated_typedef_span(&snapshot, &def_span)
                     && let Some((word, start, end)) = word_at_offset(&file.source, offset)
                 {
                     let span = syntax::ast::Span::new(file_id, start as u32, (end - start) as u32);
@@ -1037,7 +1008,7 @@ impl LanguageServer for Backend {
             offset,
             |expression| match expression {
                 syntax::ast::Expression::Identifier {
-                    qualified: Some(qname),
+                    resolution: IdentifierResolution::Definition(qname),
                     ..
                 } => {
                     if validation::check_rename_guards(qname.as_str()).is_err() {
@@ -1061,23 +1032,11 @@ impl LanguageServer for Backend {
                         .or_else(|| resolve_word_at_offset(&file.source, offset, file, &snapshot))
                 }
 
-                syntax::ast::Expression::IfLet {
-                    pattern,
-                    typed_pattern,
-                    ..
+                syntax::ast::Expression::IfLet { pattern, .. }
+                | syntax::ast::Expression::WhileLet { pattern, .. } => {
+                    resolve_enum_in_pattern(pattern, offset, file, &snapshot)
+                        .or_else(|| resolve_word_at_offset(&file.source, offset, file, &snapshot))
                 }
-                | syntax::ast::Expression::WhileLet {
-                    pattern,
-                    typed_pattern,
-                    ..
-                } => resolve_enum_in_pattern(
-                    pattern,
-                    typed_pattern.as_ref(),
-                    offset,
-                    file,
-                    &snapshot,
-                )
-                .or_else(|| resolve_word_at_offset(&file.source, offset, file, &snapshot)),
 
                 _ => resolve_word_at_offset(&file.source, offset, file, &snapshot),
             },
@@ -1311,7 +1270,7 @@ impl LanguageServer for Backend {
 
         // In a struct literal's field-name position, offer the unassigned fields.
         if let Some((name, ty, assigned)) = detect_struct_literal_field_context(file, offset)
-            && let Some(type_id) = type_name(ty)
+            && let Some(type_id) = type_name(ty, &snapshot)
         {
             let same_module = id_is_in_module(&type_id, &file.module_id);
             let items = get_struct_literal_completions(

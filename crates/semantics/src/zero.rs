@@ -113,7 +113,11 @@ fn has_zero_seen(
             has_zero_nominal(store, id, params, from_module, ty, visited)
         }
         Type::Forall { body, .. } => has_zero_seen(store, body, from_module, visited),
-        Type::Var { .. } | Type::Parameter(_) | Type::ReceiverPlaceholder => {
+        Type::Var { .. }
+        | Type::Uninferred
+        | Type::Ignored
+        | Type::Parameter(_)
+        | Type::ReceiverPlaceholder => {
             // Conservative: unresolved/abstract types have no known zero.
             Err(NoZero {
                 chain: vec![],
@@ -231,26 +235,17 @@ fn has_zero_nominal_fields(
             }
             Ok(())
         }
-        DefinitionBody::TypeAlias { annotation, .. } => {
-            let alias_ty = &def.ty;
-            if annotation.is_opaque() {
+        DefinitionBody::TypeAlias { alias, .. } => {
+            if matches!(alias, syntax::program::AliasKind::Opaque(_)) {
                 return Err(NoZero {
                     chain: vec![],
                     reason: NoZeroReason::NoZeroForType,
                     leaf_ty: original_ty.clone(),
                 });
             }
-            let underlying = match alias_ty {
-                Type::Forall { body, .. } => body.as_ref().clone(),
-                other => other.clone(),
-            };
-            let underlying = store.peel_alias(&underlying);
-            let map = build_substitution(alias_ty, params);
-            let resolved = if map.is_empty() {
-                underlying
-            } else {
-                substitute(&underlying, &map)
-            };
+            let resolved = def
+                .instantiate_alias_target(params)
+                .expect("transparent alias has a target");
             has_zero_seen(store, &resolved, from_module, visited)
         }
         // Enums and other definitions have no zero unless we add a designated

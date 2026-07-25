@@ -65,10 +65,9 @@ pub(crate) fn save_go_stdlib_cache(store: &Store, go_module_ids: &[String], targ
             .definitions
             .iter()
             .map(|(name, definition)| {
-                let is_const = module.const_names.contains(name);
                 (
                     name.to_string(),
-                    CachedDefinition::from_definition(definition, is_const, &empty_file_map),
+                    CachedDefinition::from_definition(definition, &empty_file_map),
                 )
             })
             .collect();
@@ -149,10 +148,9 @@ fn register_cached_go_module(
     if let (Some(go_pkg), Some(source)) = (go_pkg, source) {
         let file_id = store.new_file_id();
         let filename = format!("{}.d.lis", go_pkg.replace('/', "_"));
-        store.store_file(
-            module_id,
-            File::new_cached(module_id, &filename, &filename, source, file_id),
-        );
+        store.store_file(File::new_cached(
+            module_id, &filename, &filename, source, file_id,
+        ));
         if let Some(path) = deps::stdlib_typedef_path(target, go_pkg) {
             store.typedef_paths.insert(file_id, path);
         }

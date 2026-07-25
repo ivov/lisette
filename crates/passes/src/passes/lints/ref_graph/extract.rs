@@ -3,8 +3,8 @@ use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use semantics::checker::promotion::{self, MemberKind, Resolution};
 use semantics::store::Store;
 use syntax::ast::{
-    Annotation, Attribute, Binding, Expression, Generic, ImportAlias, Pattern, SelectArm,
-    SelectArmPattern, StructSpread,
+    Annotation, Attribute, Binding, CallTypeArguments, Expression, Generic, ImportAlias, Pattern,
+    SelectArm, SelectArmPattern, StructSpread,
 };
 use syntax::program::File;
 use syntax::program::{DefinitionBody, DotAccessKind, EqualityIndex, Module};
@@ -21,7 +21,7 @@ impl<'a> AliasMap<'a> {
     pub fn build(files: &HashMap<u32, File>, store: &'a Store) -> Self {
         let mut aliases = HashMap::default();
 
-        for file in files.values() {
+        for file in files.values().filter(|file| !file.is_d_lis()) {
             for import in file.imports() {
                 if matches!(import.alias, Some(ImportAlias::Blank(_))) {
                     continue;
@@ -46,28 +46,10 @@ impl<'a> AliasMap<'a> {
     fn is_import_alias(&self, name: &str) -> bool {
         self.aliases.contains_key(name)
     }
-
-    fn is_type_alias(&self, id: &Symbol) -> bool {
-        self.store
-            .get_definition(id.as_str())
-            .is_some_and(|def| def.is_type_alias())
-    }
 }
 
 fn deref_for_keying(ty: &Type, aliases: &AliasMap) -> Type {
-    let mut current = ty.strip_refs();
-    while let Type::Nominal {
-        id,
-        underlying_ty: Some(underlying),
-        ..
-    } = &current
-    {
-        if !aliases.is_type_alias(id) {
-            break;
-        }
-        current = underlying.strip_refs();
-    }
-    current
+    aliases.store.peel_refs_and_aliases(ty).0
 }
 
 pub(super) fn walk_expression(
@@ -94,7 +76,7 @@ pub(super) fn walk_expression(
                 callee,
                 args,
                 spread,
-                type_arguments.annotations(),
+                type_arguments,
                 graph,
                 alias_map,
                 ctx,
@@ -108,7 +90,7 @@ pub(super) fn walk_expression(
         Expression::DotAccess {
             expression,
             member,
-            dot_access_kind,
+            resolution,
             ..
         } => {
             walk_expression(module, expression, graph, alias_map, ctx);
@@ -118,7 +100,7 @@ pub(super) fn walk_expression(
             }
             mark_promoted_field_read(&receiver_ty, member, graph, alias_map);
             if let Some(from) = ctx
-                && is_method_access(dot_access_kind)
+                && is_method_access(resolution.kind())
                 && credits_local_method(&expression.get_type(), module, alias_map)
             {
                 let to = method_node(member, &expression.get_type(), alias_map);
@@ -146,7 +128,7 @@ pub(super) fn walk_expression(
                 generics,
                 params,
                 return_annotation,
-                body,
+                body.definition(),
                 graph,
                 alias_map,
                 &fn_ctx,
@@ -165,7 +147,9 @@ pub(super) fn walk_expression(
             if let Some(ann) = annotation {
                 walk_annotation(module, ann, graph, alias_map, &const_ctx);
             }
-            walk_expression(module, expression, graph, alias_map, Some(&const_ctx));
+            if let Some(value) = expression.value() {
+                walk_expression(module, value, graph, alias_map, Some(&const_ctx));
+            }
         }
 
         Expression::Enum {
@@ -196,7 +180,7 @@ pub(super) fn walk_expression(
         } => {
             let struct_ctx = ModuleItemId::new(name);
             for g in generics {
-                for bound in &g.bounds {
+                for bound in g.bounds() {
                     walk_annotation(module, bound, graph, alias_map, &struct_ctx);
                 }
             }
@@ -252,7 +236,7 @@ pub(super) fn walk_expression(
         Expression::Let {
             binding,
             value,
-            else_block,
+            mode,
             ..
         } => {
             walk_pattern(module, &binding.pattern, graph, alias_map, ctx);
@@ -267,7 +251,7 @@ pub(super) fn walk_expression(
                 );
             }
             walk_expression(module, value, graph, alias_map, ctx);
-            if let Some(eb) = else_block {
+            if let Some(eb) = mode.else_block() {
                 walk_expression(module, eb, graph, alias_map, ctx);
             }
         }
@@ -285,7 +269,7 @@ pub(super) fn walk_expression(
             let impl_id = ModuleItemId::new(receiver_name);
             let impl_context = ctx.unwrap_or(&impl_id);
             for g in generics {
-                for bound in &g.bounds {
+                for bound in g.bounds() {
                     walk_annotation(module, bound, graph, alias_map, impl_context);
                 }
             }
@@ -305,7 +289,7 @@ pub(super) fn walk_expression(
                         generics,
                         params,
                         return_annotation,
-                        body,
+                        body.definition(),
                         graph,
                         alias_map,
                         &method_ctx,
@@ -419,8 +403,8 @@ fn walk_call(
     module: &Module,
     callee: &Expression,
     args: &[Expression],
-    spread: &Option<Expression>,
-    type_args: &[Annotation],
+    spread: &Option<Box<Expression>>,
+    type_arguments: &CallTypeArguments,
     graph: &mut ReferenceGraph,
     alias_map: &AliasMap,
     ctx: Option<&ModuleItemId>,
@@ -451,7 +435,7 @@ fn walk_call(
         walk_expression(module, spread_expr, graph, alias_map, ctx);
     }
     if let Some(from) = ctx {
-        for type_arg in type_args {
+        for type_arg in type_arguments.annotations() {
             walk_annotation(module, type_arg, graph, alias_map, from);
         }
     }
@@ -732,6 +716,8 @@ fn walk_type(
         Type::Array { element, .. } => walk_type(module, element, graph, alias_map, from),
         Type::Simple(_)
         | Type::Var { .. }
+        | Type::Uninferred
+        | Type::Ignored
         | Type::Parameter(_)
         | Type::Never
         | Type::Error
@@ -780,7 +766,7 @@ fn mark_constructor_pattern(
     }
 }
 
-fn is_method_access(kind: &Option<DotAccessKind>) -> bool {
+fn is_method_access(kind: Option<DotAccessKind>) -> bool {
     matches!(
         kind,
         Some(
@@ -797,13 +783,13 @@ fn walk_callable_body(
     generics: &[Generic],
     params: &[Binding],
     return_annotation: &Annotation,
-    body: &Expression,
+    body: Option<&Expression>,
     graph: &mut ReferenceGraph,
     alias_map: &AliasMap,
     fn_ctx: &ModuleItemId,
 ) {
     for g in generics {
-        for bound in &g.bounds {
+        for bound in g.bounds() {
             walk_annotation(module, bound, graph, alias_map, fn_ctx);
         }
     }
@@ -819,7 +805,9 @@ fn walk_callable_body(
         );
     }
     walk_annotation(module, return_annotation, graph, alias_map, fn_ctx);
-    walk_expression(module, body, graph, alias_map, Some(fn_ctx));
+    if let Some(body) = body {
+        walk_expression(module, body, graph, alias_map, Some(fn_ctx));
+    }
 }
 
 /// The graph node for a `member` method call on `receiver_ty`, resolving the receiver to
@@ -849,11 +837,19 @@ fn has_equality_attr(attributes: &[Attribute]) -> bool {
 pub(super) fn equals_targets(
     ty: &Type,
     module: &Module,
+    store: &Store,
     index: &EqualityIndex,
     out: &mut Vec<ModuleItemId>,
 ) {
     let mut current = ty.clone();
-    while let Some(next) = current.get_underlying().cloned() {
+    let mut seen = HashSet::default();
+    while let Type::Nominal { id, .. } = &current {
+        if !seen.insert(id.clone()) {
+            break;
+        }
+        let Some(next) = store.underlying_type(&current) else {
+            break;
+        };
         current = next;
     }
     match &current {
@@ -862,7 +858,7 @@ pub(super) fn equals_targets(
             args,
         } => {
             if let Some(element) = args.first() {
-                equals_targets(element, module, index, out);
+                equals_targets(element, module, store, index, out);
             }
         }
         Type::Compound {
@@ -870,7 +866,7 @@ pub(super) fn equals_targets(
             args,
         } => {
             if let Some(value) = args.get(1) {
-                equals_targets(value, module, index, out);
+                equals_targets(value, module, store, index, out);
             }
         }
         Type::Nominal { id, .. } => {

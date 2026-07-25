@@ -1,8 +1,12 @@
 use crate::passes::lints::span_edit::match_arm_deletion;
 use crate::passes::walk::NodeCtx;
 use diagnostics::{Edit, Fix};
-use ecow::EcoString;
-use syntax::ast::{Expression, Literal, MatchArm, TypedPattern, collect_pattern_bindings};
+use semantics::store::Store;
+use syntax::ast::{
+    ConstructorPatternResolution, Expression, Literal, MatchArm, Pattern, RecordPatternResolution,
+    StructFieldPattern, collect_pattern_bindings,
+};
+use syntax::program::DefinitionBody;
 use syntax::types::unqualified_name;
 
 use super::helpers::{expressions_equivalent, is_empty_block};
@@ -26,12 +30,10 @@ pub fn check_match_same_arms(expression: &Expression, ctx: &NodeCtx) {
     }
 
     for (index, later) in arms.iter().enumerate().skip(1) {
-        if !is_mergeable(later) {
+        if !is_mergeable(later, ctx.store) {
             continue;
         }
-        let Some(later_pattern) = later.typed_pattern.as_ref() else {
-            continue;
-        };
+        let later_pattern = &later.pattern;
         // Each arm between, and the earlier arm itself, must provably not match the
         // later value, or the merge reroutes it. Guards are opaque here, so an
         // overlapping guarded arm still blocks the merge.
@@ -39,7 +41,7 @@ pub fn check_match_same_arms(expression: &Expression, ctx: &NodeCtx) {
             .iter()
             .enumerate()
             .find_map(|(earlier_index, earlier)| {
-                let safe = is_mergeable(earlier)
+                let safe = is_mergeable(earlier, ctx.store)
                     && expressions_equivalent(&earlier.expression, &later.expression)
                     && disjoint_from_later(earlier, later_pattern)
                     && arms[earlier_index + 1..index]
@@ -76,87 +78,160 @@ pub fn check_match_same_arms(expression: &Expression, ctx: &NodeCtx) {
     }
 }
 
-fn is_mergeable(arm: &MatchArm) -> bool {
+fn is_mergeable(arm: &MatchArm, store: &Store) -> bool {
     !arm.has_guard()
         && !is_empty_block(&arm.expression)
-        // On the surface pattern: the typed form erases an `as` binding, and only a
-        // binding-free value arm can join an `|` merge.
+        // Only a binding-free value arm can join an `|` merge.
         && collect_pattern_bindings(&arm.pattern).is_empty()
-        && arm.typed_pattern.as_ref().is_some_and(is_singleton_typed)
+        && is_singleton_pattern(&arm.pattern, store)
 }
 
-fn disjoint_from_later(arm: &MatchArm, later_pattern: &TypedPattern) -> bool {
-    arm.typed_pattern
-        .as_ref()
-        .is_some_and(|pattern| typed_patterns_disjoint(pattern, later_pattern))
+fn disjoint_from_later(arm: &MatchArm, later_pattern: &Pattern) -> bool {
+    patterns_disjoint(&arm.pattern, later_pattern)
 }
 
-fn is_singleton_typed(pattern: &TypedPattern) -> bool {
+fn is_singleton_pattern(pattern: &Pattern, store: &Store) -> bool {
     match pattern {
-        TypedPattern::Literal(_) | TypedPattern::Const { .. } => true,
-        TypedPattern::EnumVariant { fields, .. } => fields.iter().all(is_singleton_typed),
-        TypedPattern::EnumStructVariant {
-            variant_fields,
-            pattern_fields,
+        Pattern::Literal { .. } => true,
+        Pattern::EnumVariant {
+            resolution: ConstructorPatternResolution::Const { .. },
             ..
-        } => {
-            pattern_fields.len() == variant_fields.len()
-                && pattern_fields.iter().all(|(_, p)| is_singleton_typed(p))
+        } => true,
+        Pattern::EnumVariant {
+            fields, resolution, ..
+        } => constructor_arity(resolution, store).is_some_and(|arity| {
+            fields.len() == arity
+                && fields
+                    .iter()
+                    .all(|field| is_singleton_pattern(field, store))
+        }),
+        Pattern::Struct {
+            fields, resolution, ..
+        } => record_arity(resolution, store).is_some_and(|arity| {
+            fields.len() == arity
+                && fields
+                    .iter()
+                    .all(|field| is_singleton_pattern(&field.value, store))
+        }),
+        Pattern::Tuple { elements, .. } => elements
+            .iter()
+            .all(|element| is_singleton_pattern(element, store)),
+        Pattern::AsBinding { pattern, .. } => is_singleton_pattern(pattern, store),
+        Pattern::Unit { .. }
+        | Pattern::Identifier { .. }
+        | Pattern::WildCard { .. }
+        | Pattern::Slice { .. }
+        | Pattern::Or { .. } => false,
+    }
+}
+
+fn constructor_arity(resolution: &ConstructorPatternResolution, store: &Store) -> Option<usize> {
+    let ConstructorPatternResolution::EnumVariant {
+        enum_name,
+        variant_name,
+    } = resolution
+    else {
+        return None;
+    };
+    match &store.get_definition(enum_name)?.body {
+        DefinitionBody::Struct { fields, .. } => Some(fields.len()),
+        DefinitionBody::Enum { variants, .. } => variants
+            .iter()
+            .find(|variant| variant.name == unqualified_name(variant_name))
+            .map(|variant| variant.fields.len()),
+        _ => None,
+    }
+}
+
+fn record_arity(resolution: &RecordPatternResolution, store: &Store) -> Option<usize> {
+    match resolution {
+        RecordPatternResolution::Struct { struct_name } => {
+            match &store.get_definition(struct_name)?.body {
+                DefinitionBody::Struct { fields, .. } => Some(fields.len()),
+                _ => None,
+            }
         }
-        TypedPattern::Struct {
-            struct_fields,
-            pattern_fields,
-            ..
-        } => {
-            pattern_fields.len() == struct_fields.len()
-                && pattern_fields.iter().all(|(_, p)| is_singleton_typed(p))
-        }
-        TypedPattern::Tuple { elements, .. } => elements.iter().all(is_singleton_typed),
-        TypedPattern::Wildcard
-        | TypedPattern::Slice { .. }
-        | TypedPattern::Array { .. }
-        | TypedPattern::Or { .. } => false,
+        RecordPatternResolution::EnumVariant {
+            enum_name,
+            variant_name,
+        } => match &store.get_definition(enum_name)?.body {
+            DefinitionBody::Enum { variants, .. } => variants
+                .iter()
+                .find(|variant| variant.name == unqualified_name(variant_name))
+                .map(|variant| variant.fields.len()),
+            _ => None,
+        },
+        RecordPatternResolution::Unresolved => None,
     }
 }
 
 // Conservative: `false` unless disjointness is proven. A const is a value
 // comparison (compare folded values, never names). An enum variant is a
 // constructor (distinct names are disjoint).
-fn typed_patterns_disjoint(a: &TypedPattern, b: &TypedPattern) -> bool {
-    use TypedPattern as T;
+fn patterns_disjoint(a: &Pattern, b: &Pattern) -> bool {
+    use Pattern as P;
     match (a, b) {
-        (T::Literal(la), T::Literal(lb)) => distinct_literals(la, lb),
+        (P::AsBinding { pattern, .. }, other) | (other, P::AsBinding { pattern, .. }) => {
+            patterns_disjoint(pattern, other)
+        }
+        (P::Literal { literal: la, .. }, P::Literal { literal: lb, .. }) => {
+            distinct_literals(la, lb)
+        }
         (
-            T::Const {
-                value: Some(la), ..
+            P::EnumVariant {
+                resolution:
+                    ConstructorPatternResolution::Const {
+                        value: Some(la), ..
+                    },
+                ..
             },
-            T::Const {
-                value: Some(lb), ..
+            P::EnumVariant {
+                resolution:
+                    ConstructorPatternResolution::Const {
+                        value: Some(lb), ..
+                    },
+                ..
             },
         ) => distinct_literals(la, lb),
         (
-            T::Const {
-                value: Some(cv), ..
+            P::EnumVariant {
+                resolution:
+                    ConstructorPatternResolution::Const {
+                        value: Some(cv), ..
+                    },
+                ..
             },
-            T::Literal(lv),
+            P::Literal { literal: lv, .. },
         )
         | (
-            T::Literal(lv),
-            T::Const {
-                value: Some(cv), ..
+            P::Literal { literal: lv, .. },
+            P::EnumVariant {
+                resolution:
+                    ConstructorPatternResolution::Const {
+                        value: Some(cv), ..
+                    },
+                ..
             },
         ) => distinct_literals(cv, lv),
         (
-            T::EnumVariant {
-                enum_name: ea,
-                variant_name: va,
+            P::EnumVariant {
                 fields: fa,
+                resolution:
+                    ConstructorPatternResolution::EnumVariant {
+                        enum_name: ea,
+                        variant_name: va,
+                        ..
+                    },
                 ..
             },
-            T::EnumVariant {
-                enum_name: eb,
-                variant_name: vb,
+            P::EnumVariant {
                 fields: fb,
+                resolution:
+                    ConstructorPatternResolution::EnumVariant {
+                        enum_name: eb,
+                        variant_name: vb,
+                        ..
+                    },
                 ..
             },
         ) => {
@@ -165,22 +240,27 @@ fn typed_patterns_disjoint(a: &TypedPattern, b: &TypedPattern) -> bool {
             ea == eb
                 && (unqualified_name(va) != unqualified_name(vb)
                     || (fa.len() == fb.len()
-                        && fa
-                            .iter()
-                            .zip(fb)
-                            .any(|(x, y)| typed_patterns_disjoint(x, y))))
+                        && fa.iter().zip(fb).any(|(x, y)| patterns_disjoint(x, y))))
         }
         (
-            T::EnumStructVariant {
-                enum_name: ea,
-                variant_name: va,
-                pattern_fields: fa,
+            P::Struct {
+                fields: fa,
+                resolution:
+                    RecordPatternResolution::EnumVariant {
+                        enum_name: ea,
+                        variant_name: va,
+                        ..
+                    },
                 ..
             },
-            T::EnumStructVariant {
-                enum_name: eb,
-                variant_name: vb,
-                pattern_fields: fb,
+            P::Struct {
+                fields: fb,
+                resolution:
+                    RecordPatternResolution::EnumVariant {
+                        enum_name: eb,
+                        variant_name: vb,
+                        ..
+                    },
                 ..
             },
         ) => {
@@ -188,32 +268,29 @@ fn typed_patterns_disjoint(a: &TypedPattern, b: &TypedPattern) -> bool {
                 && (unqualified_name(va) != unqualified_name(vb) || struct_fields_disjoint(fa, fb))
         }
         (
-            T::Struct {
-                pattern_fields: fa, ..
+            P::Struct {
+                fields: fa,
+                resolution: RecordPatternResolution::Struct { .. },
+                ..
             },
-            T::Struct {
-                pattern_fields: fb, ..
+            P::Struct {
+                fields: fb,
+                resolution: RecordPatternResolution::Struct { .. },
+                ..
             },
         ) => struct_fields_disjoint(fa, fb),
-        (T::Tuple { elements: ea, .. }, T::Tuple { elements: eb, .. }) => {
-            ea.len() == eb.len()
-                && ea
-                    .iter()
-                    .zip(eb)
-                    .any(|(x, y)| typed_patterns_disjoint(x, y))
+        (P::Tuple { elements: ea, .. }, P::Tuple { elements: eb, .. }) => {
+            ea.len() == eb.len() && ea.iter().zip(eb).any(|(x, y)| patterns_disjoint(x, y))
         }
         _ => false,
     }
 }
 
-fn struct_fields_disjoint(
-    a: &[(EcoString, TypedPattern)],
-    b: &[(EcoString, TypedPattern)],
-) -> bool {
-    a.iter().any(|(name, ap)| {
+fn struct_fields_disjoint(a: &[StructFieldPattern], b: &[StructFieldPattern]) -> bool {
+    a.iter().any(|field| {
         b.iter()
-            .find(|(other, _)| other == name)
-            .is_some_and(|(_, bp)| typed_patterns_disjoint(ap, bp))
+            .find(|other| other.name == field.name)
+            .is_some_and(|other| patterns_disjoint(&field.value, &other.value))
     })
 }
 

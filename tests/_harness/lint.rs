@@ -114,7 +114,7 @@ pub fn lint(source: &str) -> Vec<LisetteDiagnostic> {
         file_comment: None,
     };
 
-    store.store_file(TEST_MODULE_ID, typed_file);
+    store.store_file(typed_file);
     store.build_closed_domains();
 
     let inference_len = checker.sink.len();

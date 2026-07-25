@@ -94,7 +94,7 @@ impl InferCtx<'_> {
             body:
                 DefinitionBody::TypeAlias {
                     generics: definition_generics,
-                    annotation: definition_annotation,
+                    alias,
                     ..
                 },
             ..
@@ -108,7 +108,7 @@ impl InferCtx<'_> {
                     .expect("type alias definition has a name"),
                 name_span,
                 generics: definition_generics.clone(),
-                annotation: definition_annotation.clone(),
+                annotation: alias.annotation().clone(),
                 ty: definition_ty.clone(),
                 visibility,
                 span,

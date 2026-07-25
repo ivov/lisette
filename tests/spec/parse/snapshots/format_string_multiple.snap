@@ -21,100 +21,96 @@ description: |
             id: uninferred,
         },
         visibility: Private,
-        body: Block {
-            items: [
-                Let {
-                    binding: Binding {
-                        pattern: Identifier {
-                            identifier: "result",
-                            span: Span {
-                                file_id: 0,
-                                byte_offset: 17,
-                                byte_length: 6,
+        body: Definition(
+            Block {
+                items: [
+                    Let {
+                        binding: Binding {
+                            pattern: Identifier {
+                                identifier: "result",
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 17,
+                                    byte_length: 6,
+                                },
+                            },
+                            annotation: None,
+                            ty: Var {
+                                id: uninferred,
                             },
                         },
-                        annotation: None,
-                        typed_pattern: None,
-                        ty: Var {
-                            id: uninferred,
+                        value: Literal {
+                            literal: FormatString(
+                                [
+                                    Text(
+                                        "hello ",
+                                    ),
+                                    Expression(
+                                        Identifier {
+                                            value: "first",
+                                            ty: Var {
+                                                id: uninferred,
+                                            },
+                                            span: Span {
+                                                file_id: 0,
+                                                byte_offset: 35,
+                                                byte_length: 5,
+                                            },
+                                            resolution: Unresolved,
+                                        },
+                                    ),
+                                    Text(
+                                        " ",
+                                    ),
+                                    Expression(
+                                        Identifier {
+                                            value: "last",
+                                            ty: Var {
+                                                id: uninferred,
+                                            },
+                                            span: Span {
+                                                file_id: 0,
+                                                byte_offset: 43,
+                                                byte_length: 4,
+                                            },
+                                            resolution: Unresolved,
+                                        },
+                                    ),
+                                    Text(
+                                        "!",
+                                    ),
+                                ],
+                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
+                            span: Span {
+                                file_id: 0,
+                                byte_offset: 26,
+                                byte_length: 24,
+                            },
                         },
-                    },
-                    value: Literal {
-                        literal: FormatString(
-                            [
-                                Text(
-                                    "hello ",
-                                ),
-                                Expression(
-                                    Identifier {
-                                        value: "first",
-                                        ty: Var {
-                                            id: uninferred,
-                                        },
-                                        span: Span {
-                                            file_id: 0,
-                                            byte_offset: 35,
-                                            byte_length: 5,
-                                        },
-                                        binding_id: None,
-                                        qualified: None,
-                                    },
-                                ),
-                                Text(
-                                    " ",
-                                ),
-                                Expression(
-                                    Identifier {
-                                        value: "last",
-                                        ty: Var {
-                                            id: uninferred,
-                                        },
-                                        span: Span {
-                                            file_id: 0,
-                                            byte_offset: 43,
-                                            byte_length: 4,
-                                        },
-                                        binding_id: None,
-                                        qualified: None,
-                                    },
-                                ),
-                                Text(
-                                    "!",
-                                ),
-                            ],
-                        ),
+                        mode: Plain,
                         ty: Var {
                             id: uninferred,
                         },
                         span: Span {
                             file_id: 0,
-                            byte_offset: 26,
-                            byte_length: 24,
+                            byte_offset: 13,
+                            byte_length: 37,
                         },
                     },
-                    mut_span: None,
-                    else_block: None,
-                    else_span: None,
-                    assert: false,
-                    ty: Var {
-                        id: uninferred,
-                    },
-                    span: Span {
-                        file_id: 0,
-                        byte_offset: 13,
-                        byte_length: 37,
-                    },
+                ],
+                ty: Var {
+                    id: uninferred,
                 },
-            ],
-            ty: Var {
-                id: uninferred,
+                span: Span {
+                    file_id: 0,
+                    byte_offset: 11,
+                    byte_length: 42,
+                },
             },
-            span: Span {
-                file_id: 0,
-                byte_offset: 11,
-                byte_length: 42,
-            },
-        },
+        ),
         ty: Var {
             id: uninferred,
         },

@@ -11,7 +11,6 @@ fn test_context_type() -> Type {
     Type::Nominal {
         id: Symbol::from_parts(crate::prelude::TEST_PRELUDE_MODULE_ID, "TestContext"),
         params: vec![],
-        underlying_ty: None,
     }
 }
 
@@ -32,7 +31,7 @@ impl TaskState {
         let module = store.get_module(module_id).expect("module must exist");
         let context_shadowed = module_shadows_test_context(store, module_id);
         let mut records: Vec<TestFunction> = Vec::new();
-        for file in module.files.values().chain(module.typedefs.values()) {
+        for file in module.files.values() {
             let in_test_file = file.is_test();
             for item in &file.items {
                 collect_test_candidates(

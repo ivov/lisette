@@ -231,7 +231,7 @@ impl Planner<'_> {
         }
 
         let tag_configs = interpret_field_attributes(f, struct_attrs);
-        let is_option = is_option_type(&f.ty);
+        let is_option = self.facts.peel_alias(&f.ty).is_option();
         let tag_string = format_tag_string(&f.name, &tag_configs, is_option);
 
         let field_name = struct_field_go_name(f, struct_attrs);
@@ -399,11 +399,7 @@ impl Planner<'_> {
         self.facts
             .definition(qualified.as_str())
             .is_some_and(|definition| {
-                definition.is_pointer_backed_newtype(|id| {
-                    self.facts
-                        .definition(id)
-                        .is_some_and(Definition::is_type_alias)
-                })
+                definition.is_pointer_backed_newtype(|id| self.facts.definition(id))
             })
     }
 
@@ -527,15 +523,6 @@ pub(crate) fn stringer_verb(is_function: bool) -> &'static str {
 
 pub(crate) fn debug_verb(is_function: bool) -> &'static str {
     if is_function { "%p" } else { "%s" }
-}
-
-fn is_option_type(ty: &Type) -> bool {
-    match ty {
-        Type::Nominal { underlying_ty, .. } => {
-            ty.is_option() || underlying_ty.as_deref().is_some_and(is_option_type)
-        }
-        _ => false,
-    }
 }
 
 fn emit_to_string_method(name: &str, receiver_generics: &str, method_name: &str) -> String {

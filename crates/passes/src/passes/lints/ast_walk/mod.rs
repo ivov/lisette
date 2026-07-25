@@ -3,17 +3,19 @@ pub(crate) mod casing;
 mod checks;
 mod deprecation;
 
-use std::sync::{Arc, LazyLock};
+use std::sync::Arc;
 
 use crate::passes::PARALLEL_THRESHOLD;
-use crate::passes::walk::{CheckTable, NodeCtx, walk_nodes};
+use crate::passes::walk::{
+    FunctionRole, NodeCtx, PatternRole, apply_expression_checks, apply_pattern_checks, walk_nodes,
+};
 use diagnostics::{LisetteDiagnostic, LocalSink};
 use rayon::prelude::*;
 use rustc_hash::FxHashMap as HashMap;
 use semantics::context::AnalysisContext;
 use semantics::facts::{Facts, Usage};
 use semantics::store::Store;
-use syntax::ast::Span;
+use syntax::ast::{Expression, Pattern, Span};
 use syntax::program::Module;
 
 use attributes::{check_attributes, check_enum_attributes, check_struct_attributes};
@@ -56,148 +58,153 @@ use checks::{
     check_wildcard_in_or_patterns,
 };
 
-static LINT_CHECKS: LazyLock<CheckTable> = LazyLock::new(|| {
-    use syntax::ast::ExpressionKind::*;
-    use syntax::ast::PatternKind;
+fn run_expression_checks(expression: &Expression, ctx: &NodeCtx<'_>, role: FunctionRole<'_>) {
+    apply_expression_checks!(
+        expression,
+        ctx,
+        (check_double_negation, &[Unary]),
+        (check_self_comparison, &[Binary]),
+        (check_float_cmp, &[Binary]),
+        (check_float_equality_without_abs, &[Binary]),
+        (check_redundant_comparison, &[Binary]),
+        (check_double_comparison, &[Binary]),
+        (check_bad_bit_mask, &[Binary]),
+        (check_ineffective_bit_mask, &[Binary]),
+        (check_equal_operands, &[Binary]),
+        (check_unsigned_comparison, &[Binary]),
+        (check_type_limit_comparison, &[Binary]),
+        (check_non_negative_comparison, &[Binary]),
+        (check_goos_goarch_comparison, &[Binary]),
+        (check_redundant_operation, &[Binary]),
+        (check_integer_division_to_zero, &[Binary]),
+        (check_self_assignment, &[Assignment]),
+        (check_manual_compound_assignment, &[Assignment]),
+        (check_misrefactored_assign_op, &[Assignment]),
+        (check_neg_multiply, &[Binary]),
+        (check_manual_bytes_equal, &[Binary]),
+        (check_manual_rotate, &[Binary]),
+        (check_manual_replace_all, &[Call]),
+        (check_needless_splitn, &[Call]),
+        (check_redundant_sprintf, &[Call]),
+        (check_manual_equal_fold, &[Binary]),
+        (check_manual_find, &[Call]),
+        (check_manual_contains, &[Call]),
+        (check_unnecessary_first_then_check, &[Call]),
+        (check_unnecessary_min_or_max, &[Call]),
+        (check_manual_is_empty, &[Binary]),
+        (check_bool_literal_comparison, &[Binary]),
+        (check_identical_if_branches, &[If]),
+        (check_collapsible_if, &[If]),
+        (check_collapsible_else_if, &[If]),
+        (check_needless_bool_assign, &[If]),
+        // Must precede `match_as_if_let`: it claims the span that one cedes on,
+        // and checks run in listed order per node.
+        (check_collapsible_match, &[Match, IfLet]),
+        (check_identical_match_arms, &[Match]),
+        (check_match_same_arms, &[Match]),
+        (check_redundant_guards, &[Match]),
+        (check_loop_runs_once, &[Loop, While, WhileLet, For]),
+        (check_regexp_in_loop, &[Loop, While, WhileLet, For]),
+        (check_single_element_loop, &[For]),
+        (check_while_let_loop, &[Loop]),
+        (check_empty_match_arm, &[Match]),
+        (check_excess_parens_on_condition, &[If, IfLet, While, Match]),
+        (check_match_literal_collection, &[Match]),
+        (check_match_on_bool, &[Match]),
+        (check_match_single_binding, &[Match]),
+        (check_negated_equality, &[Unary]),
+        (check_let_and_return, &[Block]),
+        (check_almost_swapped, &[Block, TryBlock, RecoverBlock]),
+        (check_append_to_zero_filled, &[Block, Call]),
+        (check_unnecessary_bool, &[If]),
+        (check_unnecessary_range_loop, &[For]),
+        (check_unnecessary_return, &[Function]),
+        (check_match_as_if_let, &[Match]),
+        (check_single_arm_select, &[Select]),
+        (check_redundant_slice_bounds, &[IndexedAccess]),
+        (check_redundant_pattern_matching, &[Match]),
+        (check_equatable_if_let, &[IfLet]),
+        (check_manual_map, &[Match]),
+        (check_manual_map_or, &[Match]),
+        (check_manual_filter, &[Match]),
+        (check_manual_ok_or, &[Match]),
+        (check_manual_ok_err, &[Match]),
+        (check_needless_match, &[Match]),
+        (check_manual_time_since, &[Call]),
+        (check_manual_time_until, &[Call]),
+        (check_map_unwrap_or, &[Call]),
+        (check_bind_instead_of_map, &[Call]),
+        (check_map_flatten, &[Call]),
+        (check_map_identity, &[Call]),
+        (check_unnecessary_map_on_constructor, &[Call]),
+        (check_map_or_none, &[Call]),
+        (check_or_fn_call, &[Call]),
+        (check_unnecessary_lazy_evaluations, &[Call]),
+        (check_manual_option_zip, &[Call]),
+        (check_needless_question_mark, &[Function, Return]),
+        (check_manual_unwrap_or, &[Match]),
+        (check_uninterpolated_fstring, &[Literal]),
+        (check_nested_fstring, &[Literal]),
+        (check_redundant_fstring_conversion, &[Literal]),
+        (check_unnecessary_raw_string_expression, &[Literal]),
+        (check_invisible_in_string_expression, &[Literal]),
+        (check_verbose_failure_propagation, &[Match, IfLet]),
+        (check_dup_arg, &[Call]),
+        (check_duplicate_cutset, &[Call]),
+        (check_waitgroup_add_in_task, &[Function, Lambda]),
+        (check_exit_after_defer, &[Function, Lambda]),
+        (check_struct_attributes, &[Struct]),
+        (check_attributes, &[Function]),
+        (check_enum_attributes, &[Enum]),
+        (check_duplicate_logical_operand, &[Binary]),
+        (check_negated_logical_operand, &[Binary]),
+    );
+    if matches!(
+        expression,
+        Expression::Struct { .. }
+            | Expression::Enum { .. }
+            | Expression::TypeAlias { .. }
+            | Expression::Interface { .. }
+            | Expression::Function { .. }
+            | Expression::ImplBlock { .. }
+    ) {
+        check_expression_naming(expression, ctx, role);
+    }
+    apply_expression_checks!(
+        expression,
+        ctx,
+        (check_enum_variant_names, &[Enum]),
+        (check_self_named_constructors, &[ImplBlock]),
+        (check_replaceable_with_autofill, &[StructCall]),
+        (check_redundant_field_names, &[StructCall]),
+        (check_needless_update, &[StructCall]),
+        (check_lost_query_mutation, &[Call]),
+        (check_lost_cancel, &[Let]),
+        (check_redundant_rebinding, &[Let]),
+        (check_discarded_unit_binding, &[Let]),
+        (check_redundant_closure, &[Lambda]),
+        (check_redundant_closure_call, &[Call]),
+        (check_redundant_else, &[Block]),
+        (check_out_of_domain_value, &[Literal, Unary, Call]),
+    );
+}
 
-    CheckTable::new(
-        &[
-            (check_double_negation, &[Unary]),
-            (check_self_comparison, &[Binary]),
-            (check_float_cmp, &[Binary]),
-            (check_float_equality_without_abs, &[Binary]),
-            (check_redundant_comparison, &[Binary]),
-            (check_double_comparison, &[Binary]),
-            (check_bad_bit_mask, &[Binary]),
-            (check_ineffective_bit_mask, &[Binary]),
-            (check_equal_operands, &[Binary]),
-            (check_unsigned_comparison, &[Binary]),
-            (check_type_limit_comparison, &[Binary]),
-            (check_non_negative_comparison, &[Binary]),
-            (check_goos_goarch_comparison, &[Binary]),
-            (check_redundant_operation, &[Binary]),
-            (check_integer_division_to_zero, &[Binary]),
-            (check_self_assignment, &[Assignment]),
-            (check_manual_compound_assignment, &[Assignment]),
-            (check_misrefactored_assign_op, &[Assignment]),
-            (check_neg_multiply, &[Binary]),
-            (check_manual_bytes_equal, &[Binary]),
-            (check_manual_rotate, &[Binary]),
-            (check_manual_replace_all, &[Call]),
-            (check_needless_splitn, &[Call]),
-            (check_redundant_sprintf, &[Call]),
-            (check_manual_equal_fold, &[Binary]),
-            (check_manual_find, &[Call]),
-            (check_manual_contains, &[Call]),
-            (check_unnecessary_first_then_check, &[Call]),
-            (check_unnecessary_min_or_max, &[Call]),
-            (check_manual_is_empty, &[Binary]),
-            (check_bool_literal_comparison, &[Binary]),
-            (check_identical_if_branches, &[If]),
-            (check_collapsible_if, &[If]),
-            (check_collapsible_else_if, &[If]),
-            (check_needless_bool_assign, &[If]),
-            // Must precede `match_as_if_let`: it claims the span that one cedes on,
-            // and checks run in table order per node.
-            (check_collapsible_match, &[Match, IfLet]),
-            (check_identical_match_arms, &[Match]),
-            (check_match_same_arms, &[Match]),
-            (check_redundant_guards, &[Match]),
-            (check_loop_runs_once, &[Loop, While, WhileLet, For]),
-            (check_regexp_in_loop, &[Loop, While, WhileLet, For]),
-            (check_single_element_loop, &[For]),
-            (check_while_let_loop, &[Loop]),
-            (check_empty_match_arm, &[Match]),
-            (check_excess_parens_on_condition, &[If, IfLet, While, Match]),
-            (check_match_literal_collection, &[Match]),
-            (check_match_on_bool, &[Match]),
-            (check_match_single_binding, &[Match]),
-            (check_negated_equality, &[Unary]),
-            (check_let_and_return, &[Block]),
-            (check_almost_swapped, &[Block, TryBlock, RecoverBlock]),
-            (check_append_to_zero_filled, &[Block, Call]),
-            (check_unnecessary_bool, &[If]),
-            (check_unnecessary_range_loop, &[For]),
-            (check_unnecessary_return, &[Function]),
-            (check_match_as_if_let, &[Match]),
-            (check_single_arm_select, &[Select]),
-            (check_redundant_slice_bounds, &[IndexedAccess]),
-            (check_redundant_pattern_matching, &[Match]),
-            (check_equatable_if_let, &[IfLet]),
-            (check_manual_map, &[Match]),
-            (check_manual_map_or, &[Match]),
-            (check_manual_filter, &[Match]),
-            (check_manual_ok_or, &[Match]),
-            (check_manual_ok_err, &[Match]),
-            (check_needless_match, &[Match]),
-            (check_manual_time_since, &[Call]),
-            (check_manual_time_until, &[Call]),
-            (check_map_unwrap_or, &[Call]),
-            (check_bind_instead_of_map, &[Call]),
-            (check_map_flatten, &[Call]),
-            (check_map_identity, &[Call]),
-            (check_unnecessary_map_on_constructor, &[Call]),
-            (check_map_or_none, &[Call]),
-            (check_or_fn_call, &[Call]),
-            (check_unnecessary_lazy_evaluations, &[Call]),
-            (check_manual_option_zip, &[Call]),
-            (check_needless_question_mark, &[Function, Return]),
-            (check_manual_unwrap_or, &[Match]),
-            (check_uninterpolated_fstring, &[Literal]),
-            (check_nested_fstring, &[Literal]),
-            (check_redundant_fstring_conversion, &[Literal]),
-            (check_unnecessary_raw_string_expression, &[Literal]),
-            (check_invisible_in_string_expression, &[Literal]),
-            (check_verbose_failure_propagation, &[Match, IfLet]),
-            (check_dup_arg, &[Call]),
-            (check_duplicate_cutset, &[Call]),
-            (check_waitgroup_add_in_task, &[Function, Lambda]),
-            (check_exit_after_defer, &[Function, Lambda]),
-            (check_struct_attributes, &[Struct]),
-            (check_attributes, &[Function]),
-            (check_enum_attributes, &[Enum]),
-            (check_duplicate_logical_operand, &[Binary]),
-            (check_negated_logical_operand, &[Binary]),
-            (
-                check_expression_naming,
-                &[Struct, Enum, TypeAlias, Interface, Function, ImplBlock],
-            ),
-            (check_enum_variant_names, &[Enum]),
-            (check_self_named_constructors, &[ImplBlock]),
-            (check_replaceable_with_autofill, &[StructCall]),
-            (check_redundant_field_names, &[StructCall]),
-            (check_needless_update, &[StructCall]),
-            (check_lost_query_mutation, &[Call]),
-            (check_lost_cancel, &[Let]),
-            (check_redundant_rebinding, &[Let]),
-            (check_discarded_unit_binding, &[Let]),
-            (check_redundant_closure, &[Lambda]),
-            (check_redundant_closure_call, &[Call]),
-            (check_redundant_else, &[Block]),
-            (check_out_of_domain_value, &[Literal, Unary, Call]),
-        ],
-        &[
-            (
-                check_rest_only_pattern,
-                &[PatternKind::Slice, PatternKind::Or],
-            ),
-            (check_wildcard_in_or_patterns, &[PatternKind::Or]),
-            (
-                check_unnecessary_raw_string_pattern,
-                &[PatternKind::Literal],
-            ),
-            (check_invisible_in_string_pattern, &[PatternKind::Literal]),
-            (
-                check_pattern_naming,
-                &[
-                    PatternKind::Identifier,
-                    PatternKind::AsBinding,
-                    PatternKind::Slice,
-                ],
-            ),
-        ],
-    )
-});
+fn run_pattern_checks(pattern: &Pattern, ctx: &NodeCtx<'_>, role: PatternRole) {
+    apply_pattern_checks!(
+        pattern,
+        ctx,
+        (check_rest_only_pattern, &[Slice, Or],),
+        (check_wildcard_in_or_patterns, &[Or]),
+        (check_unnecessary_raw_string_pattern, &[Literal],),
+        (check_invisible_in_string_pattern, &[Literal]),
+    );
+    if matches!(
+        pattern,
+        Pattern::Identifier { .. } | Pattern::AsBinding { .. } | Pattern::Slice { .. }
+    ) {
+        check_pattern_naming(pattern, ctx, role);
+    }
+}
 
 pub(crate) fn run(analysis: &AnalysisContext, facts: &Facts) -> Vec<LisetteDiagnostic> {
     let store = analysis.store;
@@ -255,7 +262,7 @@ fn run_module(
     deprecated: &HashMap<Span, String>,
     usages_by_file: &HashMap<u32, Vec<&Usage>>,
 ) {
-    for (file_id, file) in &module.files {
+    for (file_id, file) in module.source_file_entries() {
         let file_sink = LocalSink::new();
         let ctx = NodeCtx {
             store,
@@ -266,10 +273,8 @@ fn run_module(
             is_d_lis: file.is_d_lis(),
             sink: &file_sink,
             claimed_spans: Default::default(),
-            function_role: Default::default(),
-            pattern_role: Default::default(),
         };
-        walk_nodes(&file.items, &ctx, &LINT_CHECKS);
+        walk_nodes(&file.items, &ctx, run_expression_checks, run_pattern_checks);
 
         if let Some(usages) = usages_by_file.get(file_id) {
             deprecation::sweep(usages, deprecated, &file_sink);

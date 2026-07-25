@@ -1,4 +1,5 @@
 use diagnostics::{LisetteDiagnostic, LocalSink};
+use rustc_hash::FxHashMap as HashMap;
 use semantics::loader::Loader;
 use semantics::{
     checker::TaskState,
@@ -8,7 +9,11 @@ use semantics::{
     store::Store,
 };
 use stdlib::{Target, get_go_stdlib_typedef};
-use syntax::{ast::Expression, types::Type};
+use syntax::{
+    ast::Expression,
+    program::Definition,
+    types::{Symbol, Type},
+};
 
 use super::init_prelude;
 
@@ -34,6 +39,7 @@ pub fn infer(raw_source: &str) -> InferResult {
     InferResult {
         ast: result.ast,
         errors: result.errors,
+        definitions: result.definitions,
     }
 }
 
@@ -47,6 +53,7 @@ pub fn infer_with_go_typedefs(raw_source: &str, typedefs: &[(&str, &str)]) -> In
     InferResult {
         ast: result.ast,
         errors: result.errors,
+        definitions: result.definitions,
     }
 }
 
@@ -76,6 +83,7 @@ pub fn infer_module(module_name: &str, fs: MockFileSystem) -> InferResult {
         return InferResult {
             ast: vec![],
             errors: sink.take(),
+            definitions: HashMap::default(),
         };
     }
 
@@ -138,16 +146,15 @@ pub fn infer_module(module_name: &str, fs: MockFileSystem) -> InferResult {
             checker.cursor.module_id = prev_module_id;
         }
 
-        for (module_id, typed_file) in std::mem::take(&mut checker.typed_files) {
-            store.store_file(&module_id, typed_file);
+        for (_, typed_file) in std::mem::take(&mut checker.typed_files) {
+            store.store_file(typed_file);
         }
 
         checker.check_post_inference_bounds(&store);
 
         let module = store.get_module(module_name).unwrap();
         let ast: Vec<_> = module
-            .files
-            .values()
+            .source_files()
             .flat_map(|f| f.items.clone())
             .collect();
 
@@ -169,15 +176,24 @@ pub fn infer_module(module_name: &str, fs: MockFileSystem) -> InferResult {
         ast
     };
 
+    let definitions = store
+        .modules
+        .values()
+        .flat_map(|module| module.definitions.iter())
+        .map(|(name, definition)| (name.clone(), definition.clone()))
+        .collect();
+
     InferResult {
         ast,
         errors: sink.take(),
+        definitions,
     }
 }
 
 pub struct InferResult {
     pub ast: Vec<Expression>,
     pub errors: Vec<LisetteDiagnostic>,
+    definitions: HashMap<Symbol, Definition>,
 }
 
 impl InferResult {
@@ -188,7 +204,7 @@ impl InferResult {
             .get_expression_type_at(0)
             .unwrap_or_else(|| panic!("No expression found at index 0"));
 
-        if !types_equal(&actual, &expected) {
+        if !types_equal(&actual, &expected, &self.definitions) {
             panic!(
                 "Type mismatch at expression 0\nExpected: {}\nActual:   {}",
                 expected.stringify(),
@@ -207,7 +223,7 @@ impl InferResult {
             .get_expression_type_at(last_index)
             .unwrap_or_else(|| panic!("No expression found at index {}", last_index));
 
-        if !types_equal(&actual, &expected) {
+        if !types_equal(&actual, &expected, &self.definitions) {
             panic!(
                 "Type mismatch at expression {}\nExpected: {}\nActual: {}",
                 last_index,
@@ -453,11 +469,28 @@ impl VarBijection {
     }
 }
 
-fn types_equal(t1: &Type, t2: &Type) -> bool {
-    types_equal_with(t1, t2, &mut VarBijection::default())
+fn types_equal(t1: &Type, t2: &Type, definitions: &HashMap<Symbol, Definition>) -> bool {
+    types_equal_with(t1, t2, definitions, &mut VarBijection::default())
 }
 
-fn types_equal_with(t1: &Type, t2: &Type, vars: &mut VarBijection) -> bool {
+fn types_equal_with(
+    t1: &Type,
+    t2: &Type,
+    definitions: &HashMap<Symbol, Definition>,
+    vars: &mut VarBijection,
+) -> bool {
+    let resolved1 = if matches!(t1, Type::Nominal { .. }) {
+        syntax::types::peel_alias(t1, |id| definitions.get(id))
+    } else {
+        t1.clone()
+    };
+    let resolved2 = if matches!(t2, Type::Nominal { .. }) {
+        syntax::types::peel_alias(t2, |id| definitions.get(id))
+    } else {
+        t2.clone()
+    };
+    let (t1, t2) = (&resolved1, &resolved2);
+
     if let (Some(n1), Some(n2)) = (t1.get_name(), t2.get_name())
         && n1 == n2
     {
@@ -467,7 +500,7 @@ fn types_equal_with(t1: &Type, t2: &Type, vars: &mut VarBijection) -> bool {
             && args1
                 .iter()
                 .zip(args2.iter())
-                .all(|(a1, a2)| types_equal_with(a1, a2, vars))
+                .all(|(a1, a2)| types_equal_with(a1, a2, definitions, vars))
         {
             return true;
         }
@@ -481,7 +514,7 @@ fn types_equal_with(t1: &Type, t2: &Type, vars: &mut VarBijection) -> bool {
                 return args
                     .iter()
                     .zip(params.iter())
-                    .all(|(x, y)| types_equal_with(x, y, vars));
+                    .all(|(x, y)| types_equal_with(x, y, definitions, vars));
             }
         }
         (Type::Simple(kind), Type::Nominal { id, params, .. })
@@ -494,31 +527,13 @@ fn types_equal_with(t1: &Type, t2: &Type, vars: &mut VarBijection) -> bool {
         _ => {}
     }
 
-    if let Type::Nominal {
-        underlying_ty: Some(u),
-        ..
-    } = t1
-        && types_equal_with(u, t2, vars)
-    {
-        return true;
-    }
-    if let Type::Nominal {
-        underlying_ty: Some(u),
-        ..
-    } = t2
-        && types_equal_with(t1, u, vars)
-    {
-        return true;
-    }
-
     match (t1, t2) {
-        (Type::Var { id: a, .. }, Type::Var { id: b, .. }) => vars.unify(a.0, b.0),
+        (Type::Var { id: a, .. }, Type::Var { id: b, .. }) => vars.unify(a.index(), b.index()),
 
         (
             Type::Nominal {
                 id: id1,
                 params: args1,
-                underlying_ty: u1,
             },
             Type::Nominal {
                 id: id2,
@@ -533,12 +548,7 @@ fn types_equal_with(t1: &Type, t2: &Type, vars: &mut VarBijection) -> bool {
                 && args1
                     .iter()
                     .zip(args2.iter())
-                    .all(|(a1, a2)| types_equal_with(a1, a2, vars))
-            {
-                return true;
-            }
-            if let Some(u) = u1
-                && types_equal_with(u, t2, vars)
+                    .all(|(a1, a2)| types_equal_with(a1, a2, definitions, vars))
             {
                 return true;
             }
@@ -548,9 +558,9 @@ fn types_equal_with(t1: &Type, t2: &Type, vars: &mut VarBijection) -> bool {
         (Type::Function(f1), Type::Function(f2)) => {
             f1.params.len() == f2.params.len()
                 && f1.params.iter().zip(f2.params.iter()).all(|(a1, a2)| {
-                    a1.mutable == a2.mutable && types_equal_with(&a1.ty, &a2.ty, vars)
+                    a1.mutable == a2.mutable && types_equal_with(&a1.ty, &a2.ty, definitions, vars)
                 })
-                && types_equal_with(&f1.return_type, &f2.return_type, vars)
+                && types_equal_with(&f1.return_type, &f2.return_type, definitions, vars)
         }
 
         (Type::Tuple(elems1), Type::Tuple(elems2)) => {
@@ -558,7 +568,7 @@ fn types_equal_with(t1: &Type, t2: &Type, vars: &mut VarBijection) -> bool {
                 && elems1
                     .iter()
                     .zip(elems2.iter())
-                    .all(|(e1, e2)| types_equal_with(e1, e2, vars))
+                    .all(|(e1, e2)| types_equal_with(e1, e2, definitions, vars))
         }
 
         (Type::Simple(k1), Type::Simple(k2)) => k1 == k2,
@@ -569,7 +579,7 @@ fn types_equal_with(t1: &Type, t2: &Type, vars: &mut VarBijection) -> bool {
                 && a1
                     .iter()
                     .zip(a2.iter())
-                    .all(|(x, y)| types_equal_with(x, y, vars))
+                    .all(|(x, y)| types_equal_with(x, y, definitions, vars))
         }
 
         _ => false,

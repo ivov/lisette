@@ -3,10 +3,23 @@ use ecow::EcoString;
 use super::{ParseError, Parser};
 use crate::ast;
 use crate::lex::TokenKind::{self, *};
+use crate::program::DotAccessResolution;
 use crate::types::Type;
 
 const RANGE_PREC: u8 = 6;
 const CAST_PREC: u8 = 9;
+
+#[derive(Clone, Copy)]
+pub(super) enum ExpressionContext {
+    Normal,
+    ControlFlowHeader,
+}
+
+impl ExpressionContext {
+    pub(super) fn is_control_flow_header(self) -> bool {
+        matches!(self, Self::ControlFlowHeader)
+    }
+}
 
 impl<'source> Parser<'source> {
     /// Parses by grouping together operations in expressions based on precedence.
@@ -18,43 +31,47 @@ impl<'source> Parser<'source> {
     /// 4. For postfix operators: Transform the current expression into a larger one.
     ///
     /// The `min_prec` param sets the minimum precedence level for this parsing context.
-    pub(crate) fn pratt_parse(&mut self, min_prec: u8) -> ast::Expression {
-        if !self.enter_recursion() {
-            let span = self.span_from_token(self.current_token());
-            self.resync_on_error();
-            return ast::Expression::Unit {
-                ty: Type::uninferred(),
-                span,
-            };
+    pub(super) fn pratt_parse(
+        &mut self,
+        min_prec: u8,
+        context: ExpressionContext,
+    ) -> ast::Expression {
+        if let Some(result) =
+            self.with_recursion(|parser| parser.pratt_parse_inner(min_prec, context))
+        {
+            return result;
         }
+        let span = self.span_from_token(self.current_token());
+        self.resync_on_error();
+        ast::Expression::Unit {
+            ty: Type::uninferred(),
+            span,
+        }
+    }
 
+    fn pratt_parse_inner(&mut self, min_prec: u8, context: ExpressionContext) -> ast::Expression {
         let start = self.current_token();
-        let mut lhs = self.parse_left_hand_side();
-        let depth_before_loop = self.depth;
+        let mut lhs = self.parse_left_hand_side(context);
 
         while !self.at_eof() && !self.too_many_errors() {
             if self.check_go_channel_send() {
-                self.depth = depth_before_loop;
-                self.leave_recursion();
                 return lhs;
             }
 
-            if self.check_increment_decrement(&lhs, start.byte_offset) {
-                self.depth = depth_before_loop;
-                self.leave_recursion();
+            if self.check_increment_decrement(&lhs, start.byte_offset, context) {
                 return lhs;
             }
 
             if self.at_range() && RANGE_PREC > min_prec {
-                if !self.enter_recursion() {
+                if !self.try_deepen() {
                     break;
                 }
-                lhs = self.parse_range(Some(lhs.into()), start);
+                lhs = self.parse_range(Some(lhs.into()), start, context);
                 continue;
             }
 
             if self.current_token().kind == As && CAST_PREC > min_prec {
-                if !self.enter_recursion() {
+                if !self.try_deepen() {
                     break;
                 }
                 self.next();
@@ -78,11 +95,11 @@ impl<'source> Parser<'source> {
             if let Some(prec) = self.binary_operator_precedence(self.current_token().kind)
                 && prec > min_prec
             {
-                if !self.enter_recursion() {
+                if !self.try_deepen() {
                     break;
                 }
                 let operator = self.parse_binary_operator();
-                let rhs = self.pratt_parse(prec);
+                let rhs = self.pratt_parse(prec, context);
                 lhs = ast::Expression::Binary {
                     operator,
                     left: lhs.into(),
@@ -93,8 +110,8 @@ impl<'source> Parser<'source> {
                 continue;
             }
 
-            if self.is_postfix_operator(&lhs) {
-                if !self.enter_recursion() {
+            if self.is_postfix_operator(&lhs, context) {
+                if !self.try_deepen() {
                     break;
                 }
                 if self.is_format_string(&lhs)
@@ -110,9 +127,6 @@ impl<'source> Parser<'source> {
 
             break;
         }
-
-        self.depth = depth_before_loop;
-        self.leave_recursion();
 
         lhs
     }
@@ -142,12 +156,12 @@ impl<'source> Parser<'source> {
         }
     }
 
-    fn is_postfix_operator(&self, lhs: &ast::Expression) -> bool {
+    fn is_postfix_operator(&self, lhs: &ast::Expression, context: ExpressionContext) -> bool {
         match self.current_token().kind {
             LeftParen | LeftSquareBracket | QuestionMark | Dot => true,
             LeftCurlyBrace => match lhs {
                 ast::Expression::Identifier { .. } | ast::Expression::DotAccess { .. } => {
-                    self.is_struct_instantiation()
+                    self.is_struct_instantiation(context)
                 }
                 _ => false,
             },
@@ -167,7 +181,7 @@ impl<'source> Parser<'source> {
         )
     }
 
-    fn parse_left_hand_side(&mut self) -> ast::Expression {
+    fn parse_left_hand_side(&mut self, context: ExpressionContext) -> ast::Expression {
         let start = self.current_token();
 
         match start.kind {
@@ -185,7 +199,7 @@ impl<'source> Parser<'source> {
 
                 ast::Expression::Unary {
                     operator,
-                    expression: self.pratt_parse(prec).into(),
+                    expression: self.pratt_parse(prec, context).into(),
                     ty: Type::uninferred(),
                     span: self.span_from_tokens(start),
                 }
@@ -209,13 +223,13 @@ impl<'source> Parser<'source> {
                 }
                 let prec = self.prefix_operator_precedence(start.kind);
                 ast::Expression::Reference {
-                    expression: self.pratt_parse(prec).into(),
+                    expression: self.pratt_parse(prec, context).into(),
                     ty: Type::uninferred(),
                     span: self.span_from_tokens(start),
                 }
             }
 
-            _ => self.parse_atomic_expression(),
+            _ => self.parse_atomic_expression(context),
         }
     }
 
@@ -332,8 +346,7 @@ impl<'source> Parser<'source> {
                         expression: lhs.into(),
                         member: field,
                         span: self.span_from_tokens(field_start),
-                        dot_access_kind: None,
-                        receiver_coercion: None,
+                        resolution: DotAccessResolution::Unresolved,
                     }
                 }
             }
@@ -350,8 +363,8 @@ impl<'source> Parser<'source> {
         }
     }
 
-    pub(crate) fn parse_range_end(&mut self) -> ast::Expression {
-        self.pratt_parse(RANGE_PREC)
+    pub(super) fn parse_range_end(&mut self, context: ExpressionContext) -> ast::Expression {
+        self.pratt_parse(RANGE_PREC, context)
     }
 
     fn check_go_channel_send(&mut self) -> bool {
@@ -381,7 +394,12 @@ impl<'source> Parser<'source> {
         true
     }
 
-    fn check_increment_decrement(&mut self, lhs: &ast::Expression, start_offset: u32) -> bool {
+    fn check_increment_decrement(
+        &mut self,
+        lhs: &ast::Expression,
+        start_offset: u32,
+        context: ExpressionContext,
+    ) -> bool {
         let current = self.current_token();
         let kind = current.kind;
         if kind != Plus && kind != Minus {
@@ -416,7 +434,7 @@ impl<'source> Parser<'source> {
                 after.kind,
                 EOF | Semicolon | RightCurlyBrace | RightParen | RightSquareBracket | Comma
             )
-            || (after.kind == LeftCurlyBrace && self.in_control_flow_header);
+            || (after.kind == LeftCurlyBrace && context.is_control_flow_header());
         if !ends_statement {
             return false;
         }

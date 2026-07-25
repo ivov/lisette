@@ -1,12 +1,18 @@
 //! Pattern-to-type resolution shared by hover and inlay hints.
 
-use syntax::ast::{Pattern, RestPattern, Span, TypedPattern};
-use syntax::types::{CompoundKind, Type};
+use syntax::ast::{
+    ConstructorPatternResolution, Pattern, RecordPatternResolution, RestPattern,
+    SequencePatternResolution, Span,
+};
+use syntax::program::DefinitionBody;
+use syntax::types::{CompoundKind, Type, build_substitution_map, substitute, unqualified_name};
+
+use crate::snapshot::AnalysisSnapshot;
 
 /// Resolve the type and span of the pattern element at `offset`.
 pub(crate) fn get_pattern_element_type(
+    snapshot: &AnalysisSnapshot,
     pattern: &Pattern,
-    typed_pattern: Option<&TypedPattern>,
     fallback_ty: &Type,
     offset: u32,
 ) -> Option<(Type, Span)> {
@@ -15,133 +21,83 @@ pub(crate) fn get_pattern_element_type(
         return None;
     }
 
-    match (pattern, typed_pattern) {
-        (Pattern::Identifier { .. }, _) => Some((fallback_ty.clone(), span)),
+    match pattern {
+        Pattern::Identifier { .. } => Some((fallback_ty.clone(), span)),
 
-        (Pattern::Tuple { elements, .. }, typed) => {
-            // Element types come from decomposing the tuple type; the typed sub-pattern
-            // only carries deeper structure.
-            let typed_elements = match typed {
-                Some(TypedPattern::Tuple { elements, .. }) => Some(elements),
-                _ => None,
-            };
+        Pattern::Tuple { elements, .. } => {
             let type_elements = match fallback_ty {
                 Type::Tuple(elems) => elems,
                 _ => return None,
             };
-            elements.iter().enumerate().find_map(|(i, elem)| {
+            elements.iter().enumerate().find_map(|(i, element)| {
                 let elem_ty = type_elements.get(i)?;
-                let typed_elem = typed_elements.and_then(|te| te.get(i));
-                get_pattern_element_type(elem, typed_elem, elem_ty, offset)
+                get_pattern_element_type(snapshot, element, elem_ty, offset)
             })
         }
 
-        (
-            Pattern::EnumVariant { fields, .. },
-            Some(TypedPattern::EnumVariant {
-                fields: typed_fields,
-                field_types,
-                ..
-            }),
-        ) => fields
-            .iter()
-            .enumerate()
-            .find_map(|(i, field)| {
-                let field_ty = field_types.get(i).unwrap_or(fallback_ty);
-                get_pattern_element_type(field, typed_fields.get(i), field_ty, offset)
-            })
-            .or_else(|| Some((fallback_ty.clone(), span))),
-
-        (
-            Pattern::EnumVariant { fields, .. },
-            Some(TypedPattern::EnumStructVariant { variant_fields, .. }),
-        ) => fields
-            .iter()
-            .enumerate()
-            .find_map(|(i, field)| {
-                let field_ty = variant_fields.get(i).map(|f| &f.ty).unwrap_or(fallback_ty);
-                get_pattern_element_type(field, None, field_ty, offset)
-            })
-            .or_else(|| Some((fallback_ty.clone(), span))),
-
-        (Pattern::EnumVariant { .. }, _) => Some((fallback_ty.clone(), span)),
-
-        (Pattern::Struct { fields, .. }, Some(typed)) => {
-            let (field_defs, pattern_fields): (Vec<_>, _) = match typed {
-                TypedPattern::Struct {
-                    struct_fields,
-                    pattern_fields,
-                    ..
-                } => (
-                    struct_fields.iter().map(|f| (&f.name, &f.ty)).collect(),
-                    pattern_fields,
-                ),
-                TypedPattern::EnumStructVariant {
-                    variant_fields,
-                    pattern_fields,
-                    ..
-                } => (
-                    variant_fields.iter().map(|f| (&f.name, &f.ty)).collect(),
-                    pattern_fields,
-                ),
-                _ => return None,
-            };
-
-            fields.iter().find_map(|field| {
-                let field_ty = field_defs
-                    .iter()
-                    .find(|(name, _)| *name == &field.name)
-                    .map(|(_, ty)| *ty)
-                    .unwrap_or(fallback_ty);
-                let typed_field = pattern_fields
-                    .iter()
-                    .find(|(name, _)| name == &field.name)
-                    .map(|(_, tp)| tp);
-                get_pattern_element_type(&field.value, typed_field, field_ty, offset)
-            })
-        }
-
-        (
-            Pattern::Slice {
-                prefix,
-                rest,
-                element_ty,
-                ..
-            },
-            typed,
-        ) => {
-            let (elem_type, typed_prefix) = match typed {
-                Some(TypedPattern::Slice {
-                    element_type,
-                    prefix: typed_prefix,
-                    ..
+        Pattern::EnumVariant {
+            fields,
+            resolution,
+            ty,
+            ..
+        } => {
+            let field_types = constructor_field_types(snapshot, resolution, ty);
+            fields
+                .iter()
+                .enumerate()
+                .find_map(|(i, field)| {
+                    let field_ty = field_types.get(i).unwrap_or(fallback_ty);
+                    get_pattern_element_type(snapshot, field, field_ty, offset)
                 })
-                | Some(TypedPattern::Array {
+                .or_else(|| Some((fallback_ty.clone(), span)))
+        }
+
+        Pattern::Struct {
+            fields,
+            resolution,
+            ty,
+            ..
+        } => fields.iter().find_map(|field| {
+            let field_ty = record_field_type(snapshot, resolution, ty, &field.name);
+            get_pattern_element_type(
+                snapshot,
+                &field.value,
+                field_ty.as_ref().unwrap_or(fallback_ty),
+                offset,
+            )
+        }),
+
+        Pattern::Slice {
+            prefix,
+            rest,
+            resolution,
+            ..
+        } => {
+            let (element_type, array_length) = match resolution {
+                SequencePatternResolution::Slice { element_type } => (element_type, None),
+                SequencePatternResolution::Array {
                     element_type,
-                    prefix: typed_prefix,
-                    ..
-                }) => (element_type, Some(typed_prefix)),
-                _ => (element_ty, None),
+                    length,
+                } => (element_type, Some(*length)),
+                SequencePatternResolution::Unresolved => return None,
             };
 
             prefix
                 .iter()
-                .enumerate()
-                .find_map(|(i, elem)| {
-                    let typed_elem = typed_prefix.and_then(|tp| tp.get(i));
-                    get_pattern_element_type(elem, typed_elem, elem_type, offset)
+                .find_map(|element| {
+                    get_pattern_element_type(snapshot, element, element_type, offset)
                 })
                 .or_else(|| {
                     if let RestPattern::Bind { span, .. } = rest
                         && offset >= span.byte_offset
                         && offset < span.byte_offset + span.byte_length
                     {
-                        let rest_ty = match typed {
-                            Some(TypedPattern::Array { length, .. }) => Type::Array {
+                        let rest_ty = match array_length {
+                            Some(length) => Type::Array {
                                 length: length.saturating_sub(prefix.len() as u64),
-                                element: Box::new(elem_type.clone()),
+                                element: Box::new(element_type.clone()),
                             },
-                            _ => Type::compound(CompoundKind::Slice, vec![elem_type.clone()]),
+                            None => Type::compound(CompoundKind::Slice, vec![element_type.clone()]),
                         };
                         Some((rest_ty, *span))
                     } else {
@@ -150,20 +106,15 @@ pub(crate) fn get_pattern_element_type(
                 })
         }
 
-        (Pattern::Or { patterns, .. }, Some(TypedPattern::Or { alternatives, .. })) => {
-            patterns.iter().enumerate().find_map(|(i, alt)| {
-                get_pattern_element_type(alt, alternatives.get(i), fallback_ty, offset)
-            })
-        }
+        Pattern::Or { patterns, .. } => patterns.iter().find_map(|alternative| {
+            get_pattern_element_type(snapshot, alternative, fallback_ty, offset)
+        }),
 
-        (
-            Pattern::AsBinding {
-                pattern: inner,
-                name,
-                ..
-            },
-            _,
-        ) => get_pattern_element_type(inner, typed_pattern, fallback_ty, offset).or_else(|| {
+        Pattern::AsBinding {
+            pattern: inner,
+            name,
+            ..
+        } => get_pattern_element_type(snapshot, inner, fallback_ty, offset).or_else(|| {
             let binding_ty = inner.get_type().unwrap_or_else(|| fallback_ty.clone());
             let name_span = Span::new(
                 span.file_id,
@@ -173,10 +124,108 @@ pub(crate) fn get_pattern_element_type(
             Some((binding_ty, name_span))
         }),
 
-        (Pattern::Literal { .. }, _) | (Pattern::WildCard { .. }, _) => {
+        Pattern::Literal { .. } | Pattern::WildCard { .. } | Pattern::Unit { .. } => {
             Some((fallback_ty.clone(), span))
         }
+    }
+}
 
-        _ => None,
+fn pattern_type_args(snapshot: &AnalysisSnapshot, ty: &Type) -> Vec<Type> {
+    match syntax::types::peel_alias(ty, |id| snapshot.definitions().get(id)) {
+        Type::Nominal { params, .. } => params,
+        _ => vec![],
+    }
+}
+
+fn constructor_field_types(
+    snapshot: &AnalysisSnapshot,
+    resolution: &ConstructorPatternResolution,
+    ty: &Type,
+) -> Vec<Type> {
+    let ConstructorPatternResolution::EnumVariant {
+        enum_name,
+        variant_name,
+    } = resolution
+    else {
+        return vec![];
+    };
+    let params = pattern_type_args(snapshot, ty);
+    let Some(definition) = snapshot.definitions().get(enum_name.as_str()) else {
+        return vec![];
+    };
+    match &definition.body {
+        DefinitionBody::Struct {
+            fields, generics, ..
+        } => {
+            let substitution = build_substitution_map(generics, &params);
+            fields
+                .iter()
+                .map(|field| substitute(&field.ty, &substitution))
+                .collect()
+        }
+        DefinitionBody::Enum {
+            variants, generics, ..
+        } => {
+            let Some(variant) = variants
+                .iter()
+                .find(|variant| variant.name == unqualified_name(variant_name))
+            else {
+                return vec![];
+            };
+            let substitution = build_substitution_map(generics, &params);
+            variant
+                .fields
+                .iter()
+                .map(|field| substitute(&field.ty, &substitution))
+                .collect()
+        }
+        _ => vec![],
+    }
+}
+
+fn record_field_type(
+    snapshot: &AnalysisSnapshot,
+    resolution: &RecordPatternResolution,
+    pattern_ty: &Type,
+    field_name: &str,
+) -> Option<Type> {
+    let params = pattern_type_args(snapshot, pattern_ty);
+    match resolution {
+        RecordPatternResolution::Struct { struct_name } => {
+            let DefinitionBody::Struct {
+                fields, generics, ..
+            } = &snapshot.definitions().get(struct_name.as_str())?.body
+            else {
+                return None;
+            };
+            let field = fields.iter().find(|field| field.name == field_name)?;
+            Some(substitute(
+                &field.ty,
+                &build_substitution_map(generics, &params),
+            ))
+        }
+        RecordPatternResolution::EnumVariant {
+            enum_name,
+            variant_name,
+        } => {
+            let DefinitionBody::Enum {
+                variants, generics, ..
+            } = &snapshot.definitions().get(enum_name.as_str())?.body
+            else {
+                return None;
+            };
+            let variant = variants
+                .iter()
+                .find(|variant| variant.name == unqualified_name(variant_name))?;
+            let field = variant
+                .fields
+                .iter()
+                .find(|field| field.name == field_name)?;
+            Some(substitute(
+                &field.ty,
+                &build_substitution_map(generics, &params),
+            ))
+        }
+        RecordPatternResolution::Unresolved => None,
     }
 }

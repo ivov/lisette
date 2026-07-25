@@ -21,8 +21,7 @@ pub fn check_visibility_constraints(
             .next_back()
             .unwrap_or(qualified_name);
 
-        let annotation = find_function_annotation(files, item_name)
-            .or_else(|| find_function_annotation(&module.typedefs, item_name));
+        let annotation = find_function_annotation(files, item_name);
 
         let mut ctx = LeakCtx {
             module,
@@ -127,6 +126,8 @@ impl LeakCtx<'_> {
             }
             Type::Simple(_)
             | Type::Var { .. }
+            | Type::Uninferred
+            | Type::Ignored
             | Type::Parameter(_)
             | Type::Never
             | Type::Error

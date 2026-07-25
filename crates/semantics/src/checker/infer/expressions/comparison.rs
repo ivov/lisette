@@ -101,11 +101,11 @@ fn check_not_comparable_impl(
         return (!definite_only).then_some("interface values");
     }
 
-    if let Some(underlying) = ty.get_underlying() {
+    if let Some(underlying) = store.underlying_type(ty) {
         return check_not_comparable_impl(
             env,
             store,
-            underlying,
+            &underlying,
             visiting,
             definite_only,
             comparable_parameter,
@@ -339,7 +339,7 @@ fn is_opaque_go_handle(store: &Store, ty: &Type) -> bool {
         && matches!(
             &definition.body,
             DefinitionBody::TypeAlias {
-                annotation: Annotation::Opaque { .. },
+                alias: syntax::program::AliasKind::Opaque(Annotation::Opaque { .. }),
                 ..
             }
         )

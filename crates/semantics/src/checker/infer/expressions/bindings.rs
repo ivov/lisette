@@ -65,7 +65,7 @@ impl InferCtx<'_> {
         let store = self.store;
         let ty = if let Some(annotation) = &annotation {
             let ty = self.convert_to_type(store, annotation, &span);
-            if self.is_lis(store) && ty.contains_unknown() {
+            if self.is_lis(store) && store.contains_unknown(&ty) {
                 self.sink
                     .push(diagnostics::infer::unknown_in_const_annotation(
                         annotation.get_span(),
@@ -79,29 +79,31 @@ impl InferCtx<'_> {
                 .unwrap_or_else(|| self.new_type_var())
         };
 
-        let new_expression = self.infer_expression(*expression, &ty);
-
-        match self.classify_const_init(&new_expression) {
-            None => {}
-            Some(ConstInitReject::NotSimple) => {
-                self.sink
-                    .push(diagnostics::infer::const_requires_simple_expression(
-                        new_expression.get_span(),
-                    ));
+        let new_expression = expression.map_value(|expression| {
+            let expression = self.infer_expression(expression, &ty);
+            match self.classify_const_init(&expression) {
+                None => {}
+                Some(ConstInitReject::NotSimple) => {
+                    self.sink
+                        .push(diagnostics::infer::const_requires_simple_expression(
+                            expression.get_span(),
+                        ));
+                }
+                Some(ConstInitReject::Composite) => {
+                    self.sink
+                        .push(diagnostics::infer::const_disallows_composite(
+                            expression.get_span(),
+                        ));
+                }
             }
-            Some(ConstInitReject::Composite) => {
-                self.sink
-                    .push(diagnostics::infer::const_disallows_composite(
-                        new_expression.get_span(),
-                    ));
-            }
-        }
+            expression
+        });
 
         Expression::Const {
             doc,
             identifier,
             identifier_span,
-            expression: new_expression.into(),
+            expression: new_expression,
             annotation,
             ty,
             span,
@@ -117,10 +119,7 @@ impl InferCtx<'_> {
         let Expression::Let {
             binding,
             value,
-            mut_span,
-            else_block,
-            else_span,
-            assert,
+            mode,
             span,
             ..
         } = expression
@@ -128,13 +127,14 @@ impl InferCtx<'_> {
             unreachable!("infer_let_binding called with non-Let expression");
         };
         let binding = *binding;
-        let mutable = binding.mutable;
+        let mutable = binding.is_mutable();
+        let mut_span = binding.mut_span;
         let store = self.store;
         let has_annotation = binding.annotation.is_some();
         let binding_name = binding.pattern.get_identifier();
         let pattern_span = binding.pattern.get_span();
 
-        if assert && !self.scopes.has_test_handle() {
+        if mode.is_assert() && !self.scopes.has_test_handle() {
             self.sink
                 .push(diagnostics::infer::assert_without_test_context(
                     pattern_span,
@@ -151,33 +151,29 @@ impl InferCtx<'_> {
         let new_value = self.with_value_context(|s| s.infer_expression(*value, &ty));
         self.scopes.set_let_binding_rhs(prior_let_rhs);
 
-        let new_else_block = if let Some(else_expression) = else_block {
+        let new_mode = mode.map_else(|else_expression, else_span| {
             let else_ty = self.new_type_var();
-            let new_else = self.infer_expression(*else_expression, &else_ty);
+            let new_else = self.infer_expression(else_expression, &else_ty);
 
             let resolved_else_ty = else_ty.resolve_in(&self.env);
             if new_else.diverges().is_none() && !resolved_else_ty.is_never() {
-                let error_span = else_span.expect("let-else must have else_span");
                 self.sink
-                    .push(diagnostics::infer::let_else_must_diverge(error_span));
+                    .push(diagnostics::infer::let_else_must_diverge(else_span));
             }
             let never_ty = self.type_never();
             self.unify(&else_ty, &never_ty, &span);
 
-            Some(Box::new(new_else))
-        } else {
-            None
-        };
+            new_else
+        });
 
-        let (inferred_pattern, typed_pattern) =
+        let inferred_pattern =
             self.infer_pattern(binding.pattern, ty.clone(), BindingKind::Let { mutable });
 
         let new_binding = Binding {
             pattern: inferred_pattern,
             annotation: binding.annotation,
-            typed_pattern: Some(typed_pattern),
             ty: ty.clone(),
-            mutable,
+            mut_span,
         };
 
         if !has_annotation
@@ -237,10 +233,7 @@ impl InferCtx<'_> {
         Expression::Let {
             binding: Box::new(new_binding),
             value: new_value.into(),
-            mut_span,
-            else_block: new_else_block,
-            else_span,
-            assert,
+            mode: new_mode,
             ty: self.type_unit(),
             span,
         }

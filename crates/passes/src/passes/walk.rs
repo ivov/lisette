@@ -1,10 +1,8 @@
-use std::cell::{Cell, RefCell};
+use std::cell::RefCell;
 
 use diagnostics::LocalSink;
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
-use syntax::ast::{
-    Expression, ExpressionKind, Pattern, PatternKind, RestPattern, SelectArmPattern, Span,
-};
+use syntax::ast::{Expression, Pattern, RestPattern, SelectArmPattern, Span};
 use syntax::program::File;
 
 use semantics::facts::Facts;
@@ -21,8 +19,6 @@ pub(crate) struct NodeCtx<'a> {
     /// Node spans already claimed by an enclosing node, so a check does not also
     /// judge them standalone (e.g. the nested `&&` of an outer comparison chain).
     pub claimed_spans: RefCell<HashSet<Span>>,
-    pub function_role: Cell<FunctionRole<'a>>,
-    pub pattern_role: Cell<PatternRole>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -44,54 +40,46 @@ pub enum FunctionRole<'a> {
     Free,
 }
 
-pub(crate) type NodeCheck = fn(&Expression, &NodeCtx);
-pub(crate) type PatternCheck = fn(&Pattern, &NodeCtx);
-
-pub(crate) struct CheckTable {
-    expression_buckets: [Vec<NodeCheck>; ExpressionKind::COUNT],
-    pattern_buckets: [Vec<PatternCheck>; PatternKind::COUNT],
+macro_rules! apply_expression_checks {
+    ($expression:expr, $ctx:expr, $(($check:path, &[$($kind:ident),+ $(,)?] $(,)?)),* $(,)?) => {
+        $(
+            if matches!($expression, $(syntax::ast::Expression::$kind { .. })|+) {
+                $check($expression, $ctx);
+            }
+        )*
+    };
 }
 
-impl CheckTable {
-    pub(crate) fn new(
-        expression_checks: &[(NodeCheck, &[ExpressionKind])],
-        pattern_checks: &[(PatternCheck, &[PatternKind])],
-    ) -> Self {
-        let mut expression_buckets: [Vec<NodeCheck>; ExpressionKind::COUNT] =
-            std::array::from_fn(|_| Vec::new());
-        for (check, kinds) in expression_checks {
-            for kind in *kinds {
-                expression_buckets[*kind as usize].push(*check);
+pub(crate) use apply_expression_checks;
+
+macro_rules! apply_pattern_checks {
+    ($pattern:expr, $ctx:expr, $(($check:path, &[$($kind:ident),+ $(,)?] $(,)?)),* $(,)?) => {
+        $(
+            if matches!($pattern, $(syntax::ast::Pattern::$kind { .. })|+) {
+                $check($pattern, $ctx);
             }
-        }
-        let mut pattern_buckets: [Vec<PatternCheck>; PatternKind::COUNT] =
-            std::array::from_fn(|_| Vec::new());
-        for (check, kinds) in pattern_checks {
-            for kind in *kinds {
-                pattern_buckets[*kind as usize].push(*check);
-            }
-        }
-        Self {
-            expression_buckets,
-            pattern_buckets,
-        }
-    }
+        )*
+    };
 }
 
-pub(crate) fn walk_nodes<'a>(ast: &'a [Expression], ctx: &NodeCtx<'a>, checks: &CheckTable) {
+pub(crate) use apply_pattern_checks;
+
+pub(crate) fn walk_nodes<'a, E, P>(
+    ast: &'a [Expression],
+    ctx: &NodeCtx<'a>,
+    expression_checks: E,
+    pattern_checks: P,
+) where
+    E: Fn(&Expression, &NodeCtx<'a>, FunctionRole<'a>),
+    P: Fn(&Pattern, &NodeCtx<'a>, PatternRole),
+{
     visit_ast(
         ast,
         &mut |expression, role| {
-            ctx.function_role.set(role);
-            for check in &checks.expression_buckets[expression.kind() as usize] {
-                check(expression, ctx);
-            }
+            expression_checks(expression, ctx, role);
         },
         &mut |pattern, role| {
-            ctx.pattern_role.set(role);
-            for check in &checks.pattern_buckets[pattern.kind() as usize] {
-                check(pattern, ctx);
-            }
+            pattern_checks(pattern, ctx, role);
         },
     );
 }

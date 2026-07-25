@@ -16,7 +16,7 @@ pub fn check_let_and_return(expression: &Expression, ctx: &NodeCtx) {
     let Expression::Let {
         binding,
         value: bound_value,
-        else_block: None,
+        mode,
         span,
         ..
     } = binding_statement
@@ -24,7 +24,11 @@ pub fn check_let_and_return(expression: &Expression, ctx: &NodeCtx) {
         return;
     };
 
-    if binding.mutable {
+    if mode.else_block().is_some() {
+        return;
+    }
+
+    if binding.is_mutable() {
         return;
     }
 

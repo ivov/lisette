@@ -111,18 +111,15 @@ impl InferCtx<'_> {
         if let Some(qualified_name) = self.lookup_qualified_name(store, &literal.name)
             && let Some(Definition {
                 ty: alias_ty,
-                body: DefinitionBody::TypeAlias { annotation, .. },
+                body: DefinitionBody::TypeAlias { alias, .. },
                 ..
             }) = store.get_definition(&qualified_name)
         {
             let alias_ty = alias_ty.clone();
-            let is_opaque = annotation.is_opaque();
+            let is_opaque = matches!(alias, syntax::program::AliasKind::Opaque(_));
 
-            let underlying = match &alias_ty {
-                Type::Forall { body, .. } => body.as_ref().clone(),
-                _ => alias_ty.clone(),
-            };
-            if let Type::Nominal { id: struct_id, .. } = &underlying
+            let underlying = (!is_opaque).then(|| store.peel_alias(&alias_ty));
+            if let Some(Type::Nominal { id: struct_id, .. }) = &underlying
                 && let Some(Definition {
                     ty: struct_ty,
                     body:
@@ -139,7 +136,7 @@ impl InferCtx<'_> {
                 let alias_underlying = if matches!(&alias_ty, Type::Forall { .. }) {
                     None
                 } else {
-                    Some(underlying)
+                    underlying
                 };
                 return self.infer_struct_call_for_struct(
                     literal,
@@ -166,16 +163,16 @@ impl InferCtx<'_> {
             && let Some(qualified_name) = self.lookup_qualified_name(store, type_part)
             && let Some(Definition {
                 ty: alias_ty,
-                body: DefinitionBody::TypeAlias { .. },
+                body:
+                    DefinitionBody::TypeAlias {
+                        alias: syntax::program::AliasKind::Transparent { .. },
+                        ..
+                    },
                 ..
             }) = store.get_definition(&qualified_name)
         {
             let alias_ty = alias_ty.clone();
-
-            let underlying = match &alias_ty {
-                Type::Forall { body, .. } => body.as_ref().clone(),
-                _ => alias_ty.clone(),
-            };
+            let underlying = store.peel_alias(&alias_ty);
             let variant_fields = if let Type::Nominal { id: enum_id, .. } = &underlying
                 && let Some(variants) = store.variants_of(enum_id)
                 && let Some(variant) = variants.iter().find(|v| v.name == variant_name)
@@ -188,9 +185,10 @@ impl InferCtx<'_> {
 
             if let Some(variant_fields) = variant_fields {
                 let (instantiated_ty, map) = self.instantiate(&alias_ty);
-                let enum_ty = match instantiated_ty {
+                let instantiated_target = store.peel_alias(&instantiated_ty);
+                let enum_ty = match instantiated_target {
                     Type::Function(f) => (*f.return_type).clone(),
-                    _ => instantiated_ty,
+                    other => other,
                 };
                 return self.infer_struct_call_for_enum_variant(
                     literal,
@@ -275,7 +273,9 @@ impl InferCtx<'_> {
         }
 
         let peeled_expected = store.deep_resolve_alias(&expected_ty.resolve_in(&self.env));
-        if same_nominal(&peeled_expected, &struct_call_ty) && !peeled_expected.contains_unknown() {
+        if same_nominal(&peeled_expected, &struct_call_ty)
+            && !store.contains_unknown(&peeled_expected)
+        {
             let _ = self.speculatively(|this| {
                 InferCtx::new(this, store).try_unify(&peeled_expected, &struct_call_ty, &span)
             });

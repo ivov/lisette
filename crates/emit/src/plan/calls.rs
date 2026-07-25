@@ -3,7 +3,7 @@ use crate::abi::callable::{AbiTransition, CallableAbi, CallableParamAbi, Callabl
 use crate::abi::layout::SlotOrigin;
 use crate::expressions::staging::VariadicCombine;
 use crate::types::native::NativeGoType;
-use syntax::ast::Expression;
+use syntax::ast::{Expression, IdentifierResolution};
 use syntax::program::{CallKind, Definition, NativeTypeKind, resolved_definition};
 use syntax::types::{FunctionParameter, Type};
 
@@ -126,7 +126,7 @@ impl<'a> Planner<'a> {
         };
 
         let function = callee.unwrap_parens();
-        let variadic = plan_variadic_spread(function, (**spread).as_ref());
+        let variadic = plan_variadic_spread(&self.facts, function, spread.as_deref());
 
         let go_return = self.resolve_go_call_abi(expression);
 
@@ -238,7 +238,10 @@ impl<'a> Planner<'a> {
             })
             .flatten();
         let return_origin = if matches!(origin, CallableOrigin::GoInterop) {
-            catalog_return.map_or_else(|| SlotOrigin::go_return(return_type), |slot| slot.origin)
+            catalog_return.map_or_else(
+                || SlotOrigin::go_return(self.facts.resolves_to_unknown(return_type)),
+                |slot| slot.origin,
+            )
         } else {
             SlotOrigin::Lisette
         };
@@ -300,7 +303,7 @@ impl<'a> Planner<'a> {
         &self,
         function: &Expression,
     ) -> (Option<String>, Option<&'a Definition>) {
-        let id = resolved_definition(function, self.facts.resolved_definitions).map(str::to_string);
+        let id = resolved_definition(function).map(str::to_string);
         let definition = id
             .as_deref()
             .and_then(|definition| self.facts.definition(definition));
@@ -353,7 +356,7 @@ impl<'a> Planner<'a> {
             return None;
         };
         let inner = callee.unwrap_parens();
-        let callee_definition = resolved_definition(callee, self.facts.resolved_definitions);
+        let callee_definition = resolved_definition(callee);
         if callee_definition.is_some_and(|definition| definition.starts_with("go:")) {
             return None;
         }
@@ -367,7 +370,10 @@ impl<'a> Planner<'a> {
                 || receiver_is_prelude_type(&receiver_type)
                 || matches!(
                     &**receiver,
-                    Expression::Identifier { qualified: Some(definition), .. }
+                    Expression::Identifier {
+                        resolution: IdentifierResolution::Definition(definition),
+                        ..
+                    }
                         if definition.starts_with("prelude.")
                 )
             {
@@ -410,7 +416,7 @@ impl<'a> Planner<'a> {
         callee: &Expression,
         return_ty: &Type,
     ) -> Option<CallableReturnAbi> {
-        let qualified_name = resolved_definition(callee, self.facts.resolved_definitions)?;
+        let qualified_name = resolved_definition(callee)?;
         if !qualified_name.starts_with("go:") {
             return None;
         }
@@ -426,8 +432,7 @@ impl<'a> Planner<'a> {
     }
 
     fn is_go_callable(&self, expression: &Expression) -> bool {
-        resolved_definition(expression, self.facts.resolved_definitions)
-            .is_some_and(|definition| definition.starts_with("go:"))
+        resolved_definition(expression).is_some_and(|definition| definition.starts_with("go:"))
     }
 }
 
@@ -467,7 +472,11 @@ fn build_param_abi(
             let origin = catalog_slot.map_or_else(
                 || {
                     if matches!(callable_origin, CallableOrigin::GoInterop) {
-                        SlotOrigin::go_parameter(declared.as_ref().unwrap_or(&instantiated.ty))
+                        SlotOrigin::go_parameter(
+                            planner
+                                .facts
+                                .resolves_to_unknown(declared.as_ref().unwrap_or(&instantiated.ty)),
+                        )
                     } else {
                         SlotOrigin::Lisette
                     }
@@ -501,14 +510,14 @@ fn build_param_abi(
 /// Plan a variadic spread: present when the callee accepts a variadic
 /// parameter and the call supplies a trailing spread argument.
 pub(crate) fn plan_variadic_spread(
+    facts: &crate::EmitFacts<'_>,
     function: &Expression,
     spread: Option<&Expression>,
 ) -> Option<VariadicSpreadPlan> {
     spread?;
-    let fn_ty = function.get_type();
-    let unwrapped = fn_ty.unwrap_forall();
-    let element_ty = unwrapped.is_variadic()?;
-    let fixed_in_signature = unwrapped.get_function_params()?.len().saturating_sub(1);
+    let function_ty = facts.resolve_to_function_type(&function.get_type())?;
+    let element_ty = function_ty.is_variadic()?;
+    let fixed_in_signature = function_ty.get_function_params()?.len().saturating_sub(1);
     Some(VariadicSpreadPlan {
         element_ty,
         fixed_in_signature,

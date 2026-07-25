@@ -11,7 +11,7 @@ use crate::passes::is_trivial_expression;
 pub use inhabitance::InhabitanceCache;
 pub use inhabitance::is_inhabited;
 pub use maranget::check_exhaustiveness;
-pub use normalize::{NormalizationContext, normalize_typed_pattern};
+pub use normalize::{NormalizationContext, normalize_pattern};
 pub use types::*;
 pub use witness::format_witness;
 
@@ -23,7 +23,7 @@ use std::cell::RefCell;
 use diagnostics::{IssueKind, LocalSink, PatternIssue};
 use semantics::context::AnalysisContext;
 use semantics::store::Store;
-use syntax::ast::{Expression, Literal, Pattern, SelectArmPattern, Span, TypedPattern};
+use syntax::ast::{Expression, Literal, Pattern, SelectArmPattern, Span};
 use syntax::types::Type;
 
 use maranget::is_useful;
@@ -86,15 +86,17 @@ pub fn check(expression: &Expression, ctx: &PatternAnalysisContext, sink: &Local
 
         Expression::Function { params, body, .. } => {
             for param in params {
-                if !check_refutability(&param.pattern, param.typed_pattern.as_ref(), ctx, sink) {
+                if !check_refutability(&param.pattern, ctx, sink) {
                     return;
                 }
             }
-            check(body, ctx, sink);
+            if let Some(body) = body.definition() {
+                check(body, ctx, sink);
+            }
         }
         Expression::Lambda { params, body, .. } => {
             for param in params {
-                if !check_refutability(&param.pattern, param.typed_pattern.as_ref(), ctx, sink) {
+                if !check_refutability(&param.pattern, ctx, sink) {
                     return;
                 }
             }
@@ -116,28 +118,22 @@ pub fn check(expression: &Expression, ctx: &PatternAnalysisContext, sink: &Local
         Expression::Let {
             binding,
             value,
-            else_block,
-            assert,
+            mode,
             ..
         } => {
             check(value, ctx, sink);
-            let typed_pattern = &binding.typed_pattern;
 
-            if let Some(else_expression) = else_block {
+            if let Some(else_expression) = mode.else_block() {
                 check(else_expression, ctx, sink);
 
-                if let Some(tp) = typed_pattern
-                    && is_pattern_irrefutable(tp, ctx.store)
-                {
+                if is_pattern_irrefutable(&binding.pattern, ctx.store) {
                     ctx.add_issue(binding.pattern.get_span(), IssueKind::RedundantLetElse);
                 }
-            } else if *assert {
-                if let Some(tp) = typed_pattern
-                    && is_pattern_irrefutable(tp, ctx.store)
-                {
+            } else if mode.is_assert() {
+                if is_pattern_irrefutable(&binding.pattern, ctx.store) {
                     ctx.add_issue(binding.pattern.get_span(), IssueKind::RedundantLetAssert);
                 }
-            } else if !check_refutability(&binding.pattern, typed_pattern.as_ref(), ctx, sink) {
+            } else if !check_refutability(&binding.pattern, ctx, sink) {
             }
         }
 
@@ -174,12 +170,11 @@ pub fn check(expression: &Expression, ctx: &PatternAnalysisContext, sink: &Local
             scrutinee,
             consequence,
             alternative,
-            typed_pattern,
             else_span,
             ..
         } => {
             check(scrutinee, ctx, sink);
-            check_if_let(pattern, typed_pattern, alternative, *else_span, ctx);
+            check_if_let(pattern, alternative, *else_span, ctx);
             check(consequence, ctx, sink);
             check(alternative, ctx, sink);
         }
@@ -267,7 +262,11 @@ pub fn check(expression: &Expression, ctx: &PatternAnalysisContext, sink: &Local
 
         Expression::Paren { expression, .. } => check(expression, ctx, sink),
         Expression::Unary { expression, .. } => check(expression, ctx, sink),
-        Expression::Const { expression, .. } => check(expression, ctx, sink),
+        Expression::Const { expression, .. } => {
+            if let Some(value) = expression.value() {
+                check(value, ctx, sink);
+            }
+        }
         Expression::Reference { expression, .. } => check(expression, ctx, sink),
         Expression::IndexedAccess {
             expression, index, ..
@@ -289,15 +288,12 @@ pub fn check(expression: &Expression, ctx: &PatternAnalysisContext, sink: &Local
             pattern,
             scrutinee,
             body,
-            typed_pattern,
             ..
         } => {
             check(scrutinee, ctx, sink);
             check(body, ctx, sink);
 
-            if let Some(tp) = typed_pattern
-                && is_pattern_irrefutable(tp, ctx.store)
-            {
+            if is_pattern_irrefutable(pattern, ctx.store) {
                 sink.push(diagnostics::pattern::irrefutable_while_let(
                     pattern.get_span(),
                 ));
@@ -310,7 +306,7 @@ pub fn check(expression: &Expression, ctx: &PatternAnalysisContext, sink: &Local
             body,
             ..
         } => {
-            if !check_refutability(&binding.pattern, binding.typed_pattern.as_ref(), ctx, sink) {
+            if !check_refutability(&binding.pattern, ctx, sink) {
                 return;
             }
             check(iterable, ctx, sink);
@@ -380,7 +376,6 @@ pub fn check(expression: &Expression, ctx: &PatternAnalysisContext, sink: &Local
             }
         }
         Expression::Continue { .. } => {}
-        Expression::NoOp => {}
     }
 }
 
@@ -473,21 +468,16 @@ fn check_redundancy_with_guards(
 
 fn check_if_let(
     pattern: &Pattern,
-    typed_pattern: &Option<TypedPattern>,
     alternative: &Expression,
     else_span: Option<Span>,
     ctx: &PatternAnalysisContext,
 ) {
-    let Some(tp) = typed_pattern else {
-        return;
-    };
-
     // Suppress lints for patterns that already have or-pattern binding errors.
     if ctx.or_pattern_error_spans.contains(&pattern.get_span()) {
         return;
     }
 
-    if is_pattern_irrefutable(tp, ctx.store) {
+    if is_pattern_irrefutable(pattern, ctx.store) {
         ctx.add_issue(pattern.get_span(), IssueKind::RedundantIfLet);
 
         if let Some(else_span) = else_span
@@ -504,27 +494,14 @@ fn check_if_let(
 }
 
 /// Returns true if pattern is irrefutable, false if an error was pushed to sink.
-fn check_refutability(
-    pattern: &Pattern,
-    typed_pattern: Option<&TypedPattern>,
-    ctx: &PatternAnalysisContext,
-    sink: &LocalSink,
-) -> bool {
-    let Some(typed_pattern) = typed_pattern else {
-        return true;
-    };
-
-    if matches!(typed_pattern, TypedPattern::Or { .. }) {
+fn check_refutability(pattern: &Pattern, ctx: &PatternAnalysisContext, sink: &LocalSink) -> bool {
+    if matches!(pattern, Pattern::Or { .. }) {
         return true;
     }
 
     let mut unions = HashMap::default();
     let norm_ctx = ctx.normalize_context();
-    let row = vec![normalize_typed_pattern(
-        typed_pattern,
-        &mut unions,
-        &norm_ctx,
-    )];
+    let row = vec![normalize_pattern(pattern, &mut unions, &norm_ctx)];
 
     if let Err(witnesses) = check_exhaustiveness(&[row], &unions) {
         let witness = witnesses.first().expect("witnesses not empty");
@@ -547,7 +524,7 @@ fn check_refutability(
     true
 }
 
-pub fn is_pattern_irrefutable(typed_pattern: &TypedPattern, store: &Store) -> bool {
+pub fn is_pattern_irrefutable(pattern: &Pattern, store: &Store) -> bool {
     let cache = InhabitanceCache::new();
     let norm_ctx = NormalizationContext {
         store,
@@ -557,17 +534,13 @@ pub fn is_pattern_irrefutable(typed_pattern: &TypedPattern, store: &Store) -> bo
 
     let mut unions = HashMap::default();
 
-    let rows: Vec<Row> = if let TypedPattern::Or { alternatives } = typed_pattern {
-        alternatives
+    let rows: Vec<Row> = if let Pattern::Or { patterns, .. } = pattern {
+        patterns
             .iter()
-            .map(|alt| vec![normalize_typed_pattern(alt, &mut unions, &norm_ctx)])
+            .map(|alt| vec![normalize_pattern(alt, &mut unions, &norm_ctx)])
             .collect()
     } else {
-        vec![vec![normalize_typed_pattern(
-            typed_pattern,
-            &mut unions,
-            &norm_ctx,
-        )]]
+        vec![vec![normalize_pattern(pattern, &mut unions, &norm_ctx)]]
     };
 
     check_exhaustiveness(&rows, &unions).is_ok()

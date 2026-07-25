@@ -124,9 +124,9 @@ pub(crate) fn reads_mutable_operand(expression: &Expression) -> bool {
         } => true,
         Expression::DotAccess {
             expression,
-            dot_access_kind,
+            resolution,
             ..
-        } => match dot_access_kind {
+        } => match resolution.kind() {
             Some(
                 DotAccessKind::StructField { .. }
                 | DotAccessKind::TupleStructField { .. }
@@ -148,9 +148,9 @@ pub(crate) fn reads_unsequenced_mutable_operand(expression: &Expression) -> bool
         } => true,
         Expression::DotAccess {
             expression,
-            dot_access_kind,
+            resolution,
             ..
-        } => match dot_access_kind {
+        } => match resolution.kind() {
             Some(
                 DotAccessKind::StructField { .. }
                 | DotAccessKind::TupleStructField { .. }

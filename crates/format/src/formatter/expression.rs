@@ -4,8 +4,9 @@ use crate::INDENT_WIDTH;
 use crate::comments::prepend_comments;
 use crate::lindig::{Document, concat, flex_break, join, strict_break};
 use syntax::ast::{
-    Annotation, BinaryOperator, Binding, Expression, FormatStringPart, Literal, MatchArm, Pattern,
-    SelectArm, SelectArmPattern, Span, StructFieldAssignment, StructSpread, UnaryOperator,
+    Annotation, BinaryOperator, Binding, CallTypeArguments, Expression, FormatStringPart, Literal,
+    MatchArm, Pattern, SelectArm, SelectArmPattern, Span, StructFieldAssignment, StructSpread,
+    UnaryOperator,
 };
 
 impl<'a> Formatter<'a> {
@@ -25,7 +26,6 @@ impl<'a> Formatter<'a> {
                 }
             }
             Expression::Continue { .. } => Document::str("continue"),
-            Expression::NoOp => Document::Sequence(vec![]),
 
             Expression::Paren { expression, .. } => Document::str("(")
                 .append(self.expression(expression))
@@ -36,10 +36,9 @@ impl<'a> Formatter<'a> {
             Expression::Let {
                 binding,
                 value,
-                else_block,
-                assert,
+                mode,
                 ..
-            } => self.let_(binding, value, else_block.as_deref(), *assert),
+            } => self.let_(binding, value, mode.else_block(), mode.is_assert()),
 
             Expression::Return { expression, .. } => self.return_(expression),
 
@@ -84,7 +83,7 @@ impl<'a> Formatter<'a> {
                 spread,
                 type_arguments,
                 ..
-            } => self.call(expression, args, spread, type_arguments.annotations()),
+            } => self.call(expression, args, spread, type_arguments),
 
             Expression::DotAccess {
                 expression, member, ..
@@ -392,7 +391,6 @@ impl<'a> Formatter<'a> {
     pub(super) fn as_block(&mut self, expression: &'a Expression) -> Document<'a> {
         match expression {
             Expression::Block { items, span, .. } => self.block(items, span),
-            Expression::NoOp => Document::Sequence(vec![]),
             _ => Document::str("{ ")
                 .append(self.expression(expression))
                 .append(" }"),
@@ -414,7 +412,6 @@ impl<'a> Formatter<'a> {
                 }
                 self.block(items, span)
             }
-            Expression::NoOp => Document::Sequence(vec![]),
             _ => {
                 let expression = self.expression(expression);
                 Document::str("{")
@@ -600,8 +597,8 @@ impl<'a> Formatter<'a> {
         &mut self,
         callee: &'a Expression,
         args: &'a [Expression],
-        spread: &'a Option<Expression>,
-        raw_type_args: &'a [Annotation],
+        spread: &'a Option<Box<Expression>>,
+        type_arguments: &'a CallTypeArguments,
     ) -> Document<'a> {
         if let Expression::DotAccess {
             expression: inner,
@@ -617,7 +614,7 @@ impl<'a> Formatter<'a> {
                 member_start,
                 args,
                 spread,
-                raw_type_args,
+                type_arguments,
             });
             if chain_segments.len() >= 2 {
                 return self.format_method_chain(root, &chain_segments);
@@ -638,15 +635,15 @@ impl<'a> Formatter<'a> {
 
         let head = self
             .expression(callee)
-            .append(Self::format_type_args(raw_type_args));
+            .append(Self::format_type_args(type_arguments));
         self.format_call_with_head(head, args, spread)
     }
 
-    fn format_type_args(type_args: &'a [Annotation]) -> Document<'a> {
-        if type_args.is_empty() {
+    fn format_type_args(type_arguments: &'a CallTypeArguments) -> Document<'a> {
+        if type_arguments.is_empty() {
             Document::Sequence(vec![])
         } else {
-            let types: Vec<_> = type_args.iter().map(Self::annotation).collect();
+            let types: Vec<_> = type_arguments.annotations().map(Self::annotation).collect();
             Document::str("<")
                 .append(join(types, Document::str(", ")))
                 .append(">")
@@ -657,7 +654,7 @@ impl<'a> Formatter<'a> {
         &mut self,
         head: Document<'a>,
         args: &'a [Expression],
-        spread: &'a Option<Expression>,
+        spread: &'a Option<Box<Expression>>,
     ) -> Document<'a> {
         if args.is_empty() && spread.is_none() {
             return head.append("()");
@@ -761,7 +758,7 @@ impl<'a> Formatter<'a> {
                 let comments = self.comments.take_comments_before(seg.member_start);
                 let head = Document::str(".")
                     .append(seg.member)
-                    .append(Self::format_type_args(seg.raw_type_args));
+                    .append(Self::format_type_args(seg.type_arguments));
                 let call_doc = strict_break("", "")
                     .append(self.format_call_with_head(head, seg.args, seg.spread));
                 match comments {
@@ -1069,8 +1066,8 @@ struct MethodChainSegment<'a> {
     member: &'a str,
     member_start: u32,
     args: &'a [Expression],
-    spread: &'a Option<Expression>,
-    raw_type_args: &'a [Annotation],
+    spread: &'a Option<Box<Expression>>,
+    type_arguments: &'a CallTypeArguments,
 }
 
 fn collect_method_chain(expression: &Expression) -> (&Expression, Vec<MethodChainSegment<'_>>) {
@@ -1100,7 +1097,7 @@ fn collect_method_chain(expression: &Expression) -> (&Expression, Vec<MethodChai
             member_start,
             args,
             spread,
-            raw_type_args: type_arguments.annotations(),
+            type_arguments,
         });
         current = inner;
     }

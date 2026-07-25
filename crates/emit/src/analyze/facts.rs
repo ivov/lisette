@@ -5,8 +5,7 @@ use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use syntax::ast::{BindingId, Pattern, RestPattern, Span};
 use syntax::program::{
-    Definition, DefinitionBody, EqualityIndex, ModuleId, MutationInfo, ResolvedDefinitions,
-    TestIndex, UnusedInfo,
+    Definition, DefinitionBody, EqualityIndex, ModuleId, MutationInfo, TestIndex, UnusedInfo,
 };
 use syntax::types::{Symbol, Type};
 
@@ -19,7 +18,6 @@ use crate::{EmitOptions, GlobalEmitData};
 
 pub(crate) struct EmitFactsConfig<'a> {
     pub(crate) definitions: &'a HashMap<Symbol, Definition>,
-    pub(crate) const_names: &'a HashSet<Symbol>,
     pub(crate) unused: &'a UnusedInfo,
     pub(crate) mutations: &'a MutationInfo,
     pub(crate) ufcs_methods: &'a HashSet<(String, String)>,
@@ -33,13 +31,11 @@ pub(crate) struct EmitFactsConfig<'a> {
     pub(crate) options: EmitOptions,
     pub(crate) line_indexes: Arc<HashMap<u32, LineIndex>>,
     pub(crate) globals: Arc<GlobalEmitData>,
-    pub(crate) resolved_definitions: &'a ResolvedDefinitions,
     pub(crate) current_module: ModuleId,
 }
 
 pub(crate) struct EmitFacts<'a> {
     definitions: &'a HashMap<Symbol, Definition>,
-    const_names: &'a HashSet<Symbol>,
     unused: &'a UnusedInfo,
     mutations: &'a MutationInfo,
     ufcs_methods: &'a HashSet<(String, String)>,
@@ -53,7 +49,6 @@ pub(crate) struct EmitFacts<'a> {
     options: EmitOptions,
     line_indexes: Arc<HashMap<u32, LineIndex>>,
     globals: Arc<GlobalEmitData>,
-    pub(crate) resolved_definitions: &'a ResolvedDefinitions,
     current_module: ModuleId,
 }
 
@@ -61,7 +56,6 @@ impl<'a> EmitFacts<'a> {
     pub(crate) fn new(config: EmitFactsConfig<'a>) -> Self {
         Self {
             definitions: config.definitions,
-            const_names: config.const_names,
             unused: config.unused,
             mutations: config.mutations,
             ufcs_methods: config.ufcs_methods,
@@ -75,7 +69,6 @@ impl<'a> EmitFacts<'a> {
             options: config.options,
             line_indexes: config.line_indexes,
             globals: config.globals,
-            resolved_definitions: config.resolved_definitions,
             current_module: config.current_module,
         }
     }
@@ -92,7 +85,8 @@ impl<'a> EmitFacts<'a> {
     }
 
     pub(crate) fn is_const(&self, qualified_name: &str) -> bool {
-        self.const_names.contains(qualified_name)
+        self.definition(qualified_name)
+            .is_some_and(Definition::is_const)
     }
 
     pub(crate) fn iter_definitions(&self) -> impl Iterator<Item = (&'a Symbol, &'a Definition)> {
@@ -109,6 +103,30 @@ impl<'a> EmitFacts<'a> {
 
     pub(crate) fn peel_alias(&self, ty: &Type) -> Type {
         peel_alias(self.definitions, ty)
+    }
+
+    pub(crate) fn underlying_type(&self, ty: &Type) -> Option<Type> {
+        syntax::types::underlying_type(ty, |id| self.definition(id))
+    }
+
+    pub(crate) fn underlying_simple_kind(&self, ty: &Type) -> Option<syntax::types::SimpleKind> {
+        syntax::types::underlying_simple_kind(ty, |id| self.definition(id))
+    }
+
+    pub(crate) fn underlying_numeric_type(&self, ty: &Type) -> Option<Type> {
+        syntax::types::underlying_numeric_type(ty, |id| self.definition(id))
+    }
+
+    pub(crate) fn is_aliased_numeric_type(&self, ty: &Type) -> bool {
+        syntax::types::is_aliased_numeric_type(ty, |id| self.definition(id))
+    }
+
+    pub(crate) fn resolves_to_unknown(&self, ty: &Type) -> bool {
+        syntax::types::resolves_to_unknown(ty, |id| self.definition(id))
+    }
+
+    pub(crate) fn contains_unknown(&self, ty: &Type) -> bool {
+        syntax::types::contains_unknown(ty, |id| self.definition(id))
     }
 
     pub(crate) fn strip_and_peel(&self, ty: &Type) -> Type {
@@ -335,19 +353,14 @@ fn as_interface(definitions: &HashMap<Symbol, Definition>, ty: &Type) -> Option<
 }
 
 fn resolve_to_function_type(definitions: &HashMap<Symbol, Definition>, ty: &Type) -> Option<Type> {
-    fn as_function(ty: &Type) -> Option<Type> {
-        if matches!(ty, Type::Function(_)) {
-            return Some(ty.clone());
-        }
-        ty.get_underlying()
-            .filter(|u| matches!(u, Type::Function(_)))
-            .cloned()
+    let resolved = peel_alias(definitions, ty);
+    if matches!(resolved, Type::Function(_)) {
+        return Some(resolved);
     }
-    as_function(ty).or_else(|| as_function(&peel_alias(definitions, ty)))
+    syntax::types::underlying_type(ty, |id| definitions.get(id))
+        .filter(|underlying| matches!(underlying, Type::Function(_)))
 }
 
 fn peel_alias(definitions: &HashMap<Symbol, Definition>, ty: &Type) -> Type {
-    syntax::types::peel_alias(ty, |id| {
-        definitions.get(id).is_some_and(Definition::is_type_alias)
-    })
+    syntax::types::peel_alias(ty, |id| definitions.get(id))
 }

@@ -33,32 +33,34 @@ description: |
             id: uninferred,
         },
         visibility: Private,
-        body: Block {
-            items: [
-                Literal {
-                    literal: Integer {
-                        value: 1,
-                        text: None,
+        body: Definition(
+            Block {
+                items: [
+                    Literal {
+                        literal: Integer {
+                            value: 1,
+                            text: None,
+                        },
+                        ty: Var {
+                            id: uninferred,
+                        },
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 25,
+                            byte_length: 1,
+                        },
                     },
-                    ty: Var {
-                        id: uninferred,
-                    },
-                    span: Span {
-                        file_id: 0,
-                        byte_offset: 25,
-                        byte_length: 1,
-                    },
+                ],
+                ty: Var {
+                    id: uninferred,
                 },
-            ],
-            ty: Var {
-                id: uninferred,
+                span: Span {
+                    file_id: 0,
+                    byte_offset: 23,
+                    byte_length: 5,
+                },
             },
-            span: Span {
-                file_id: 0,
-                byte_offset: 23,
-                byte_length: 5,
-            },
-        },
+        ),
         ty: Var {
             id: uninferred,
         },
@@ -84,113 +86,109 @@ description: |
             id: uninferred,
         },
         visibility: Private,
-        body: Block {
-            items: [
-                Let {
-                    binding: Binding {
-                        pattern: Identifier {
-                            identifier: "x",
+        body: Definition(
+            Block {
+                items: [
+                    Let {
+                        binding: Binding {
+                            pattern: Identifier {
+                                identifier: "x",
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 47,
+                                    byte_length: 1,
+                                },
+                            },
+                            annotation: None,
+                            ty: Var {
+                                id: uninferred,
+                            },
+                        },
+                        value: Literal {
+                            literal: Integer {
+                                value: 1,
+                                text: None,
+                            },
+                            ty: Var {
+                                id: uninferred,
+                            },
                             span: Span {
                                 file_id: 0,
-                                byte_offset: 47,
+                                byte_offset: 51,
                                 byte_length: 1,
                             },
                         },
-                        annotation: None,
-                        typed_pattern: None,
-                        ty: Var {
-                            id: uninferred,
-                        },
-                    },
-                    value: Literal {
-                        literal: Integer {
-                            value: 1,
-                            text: None,
-                        },
+                        mode: Plain,
                         ty: Var {
                             id: uninferred,
                         },
                         span: Span {
                             file_id: 0,
-                            byte_offset: 51,
-                            byte_length: 1,
+                            byte_offset: 43,
+                            byte_length: 9,
                         },
                     },
-                    mut_span: None,
-                    else_block: None,
-                    else_span: None,
-                    assert: false,
-                    ty: Var {
-                        id: uninferred,
-                    },
-                    span: Span {
-                        file_id: 0,
-                        byte_offset: 43,
-                        byte_length: 9,
-                    },
-                },
-                Call {
-                    expression: Identifier {
-                        value: "get_value",
+                    Call {
+                        expression: Identifier {
+                            value: "get_value",
+                            ty: Var {
+                                id: uninferred,
+                            },
+                            span: Span {
+                                file_id: 0,
+                                byte_offset: 56,
+                                byte_length: 9,
+                            },
+                            resolution: Unresolved,
+                        },
+                        args: [],
+                        spread: None,
+                        type_arguments: None,
                         ty: Var {
                             id: uninferred,
                         },
                         span: Span {
                             file_id: 0,
                             byte_offset: 56,
-                            byte_length: 9,
+                            byte_length: 11,
                         },
-                        binding_id: None,
-                        qualified: None,
+                        call_kind: None,
                     },
-                    args: [],
-                    spread: None,
-                    type_arguments: None,
-                    ty: Var {
-                        id: uninferred,
-                    },
-                    span: Span {
-                        file_id: 0,
-                        byte_offset: 56,
-                        byte_length: 11,
-                    },
-                    call_kind: None,
-                },
-                Block {
-                    items: [
-                        Identifier {
-                            value: "x",
-                            ty: Var {
-                                id: uninferred,
+                    Block {
+                        items: [
+                            Identifier {
+                                value: "x",
+                                ty: Var {
+                                    id: uninferred,
+                                },
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 70,
+                                    byte_length: 1,
+                                },
+                                resolution: Unresolved,
                             },
-                            span: Span {
-                                file_id: 0,
-                                byte_offset: 70,
-                                byte_length: 1,
-                            },
-                            binding_id: None,
-                            qualified: None,
+                        ],
+                        ty: Var {
+                            id: uninferred,
                         },
-                    ],
-                    ty: Var {
-                        id: uninferred,
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 68,
+                            byte_length: 5,
+                        },
                     },
-                    span: Span {
-                        file_id: 0,
-                        byte_offset: 68,
-                        byte_length: 5,
-                    },
+                ],
+                ty: Var {
+                    id: uninferred,
                 },
-            ],
-            ty: Var {
-                id: uninferred,
+                span: Span {
+                    file_id: 0,
+                    byte_offset: 39,
+                    byte_length: 36,
+                },
             },
-            span: Span {
-                file_id: 0,
-                byte_offset: 39,
-                byte_length: 36,
-            },
-        },
+        ),
         ty: Var {
             id: uninferred,
         },

@@ -241,13 +241,13 @@ impl TaskState {
             } else {
                 Visibility::Private
             };
-            let fn_sig = function.to_function_signature();
+            let fn_sig = function.function_definition_view();
             let fn_span = function.get_span();
             let mut fn_ty = self.extract_signature_parts(
                 &*store,
-                &fn_sig.generics,
-                &fn_sig.params,
-                &fn_sig.annotation,
+                fn_sig.generics,
+                fn_sig.params,
+                fn_sig.annotation,
                 &fn_span,
             );
             let qualified_name = format!("{}.{}", type_name, fn_sig.name);
@@ -266,9 +266,9 @@ impl TaskState {
             }
 
             let (method_signature_pairs, method_signature_bounds) =
-                super::function_signature_pairs(&fn_ty, &fn_sig.params, fn_span);
+                super::function_signature_pairs(&fn_ty, fn_sig.params, fn_span);
             self.scopes.push();
-            self.put_in_scope(&fn_sig.generics);
+            self.put_in_scope(fn_sig.generics);
             for bound in &method_signature_bounds {
                 self.record_generic_bound(&bound.param_name, bound.ty.clone());
             }
@@ -280,7 +280,7 @@ impl TaskState {
             let go_hints = extract_attribute_flags(fn_attrs, "go");
             let method_key: EcoString =
                 if is_instance_method && go_hints.iter().any(|h| h == "unexported") {
-                    super::seal_method_key(is_d_lis, fn_attrs, &module_id, &fn_sig.name)
+                    super::seal_method_key(is_d_lis, fn_attrs, &module_id, fn_sig.name)
                 } else {
                     fn_sig.name.clone()
                 };
@@ -313,7 +313,7 @@ impl TaskState {
             self.check_duplicate_method(
                 &*store,
                 &receiver,
-                &fn_sig.name,
+                fn_sig.name,
                 fn_sig.name_span,
                 generics.is_empty(),
             );
@@ -330,11 +330,11 @@ impl TaskState {
                     name_span: Some(fn_sig.name_span),
                     doc: fn_doc,
                     body: DefinitionBody::Value {
+                        kind: syntax::program::ValueKind::Runtime,
                         allowed_lints: extract_attribute_flags(fn_attrs, "allow"),
                         go_hints,
                         go_name: None,
                         go_type_param_recipe: None,
-                        const_value: None,
                     },
                 },
             );
@@ -394,13 +394,13 @@ impl TaskState {
                 } else {
                     (&[][..], None)
                 };
-                let method_sig = fe.to_function_signature();
+                let method_sig = fe.function_definition_view();
                 let method_span = fe.get_span();
                 let fn_ty = self.extract_signature_parts(
                     &*store,
-                    &method_sig.generics,
-                    &method_sig.params,
-                    &method_sig.annotation,
+                    method_sig.generics,
+                    method_sig.params,
+                    method_sig.annotation,
                     &method_span,
                 );
                 let fn_ty = match &fn_ty {
@@ -434,7 +434,7 @@ impl TaskState {
                 self.scopes.push();
                 self.put_in_scope(&generics);
                 self.record_resolved_generic_bounds(&generics);
-                self.put_in_scope(&method_sig.generics);
+                self.put_in_scope(method_sig.generics);
                 for bound in &signature_bounds {
                     self.record_generic_bound(&bound.param_name, bound.ty.clone());
                 }
@@ -444,7 +444,7 @@ impl TaskState {
                 let go_hints = extract_attribute_flags(fn_attrs, "go");
                 if go_hints.iter().any(|h| h == "unexported") {
                     (
-                        super::seal_method_key(is_d_lis, fn_attrs, &module_id, &method_sig.name),
+                        super::seal_method_key(is_d_lis, fn_attrs, &module_id, method_sig.name),
                         fn_ty,
                     )
                 } else {
@@ -456,7 +456,7 @@ impl TaskState {
                         name_span: method_sig.name_span,
                         doc: fn_doc,
                     });
-                    (method_sig.name, fn_ty)
+                    (method_sig.name.clone(), fn_ty)
                 }
             })
             .collect();
@@ -518,11 +518,11 @@ impl TaskState {
                     name_span: Some(method.name_span),
                     doc: method.doc,
                     body: DefinitionBody::Value {
+                        kind: syntax::program::ValueKind::Runtime,
                         allowed_lints: method.allowed_lints,
                         go_hints: method.go_hints,
                         go_name: None,
                         go_type_param_recipe: None,
-                        const_value: None,
                     },
                 },
             );

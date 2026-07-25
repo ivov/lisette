@@ -1,6 +1,5 @@
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use std::borrow::Borrow;
-use std::cell::OnceCell;
 use std::sync::Arc;
 
 use ecow::EcoString;
@@ -179,15 +178,15 @@ fn is_range_type_name(name: &str) -> bool {
     )
 }
 
-pub fn peel_to_range_type(ty: &Type) -> Option<&Type> {
-    std::iter::successors(Some(ty), |t| match t {
-        Type::Nominal {
-            underlying_ty: Some(u),
-            ..
-        } => Some(u.as_ref()),
-        _ => None,
-    })
-    .find(|t| t.get_name().is_some_and(is_range_type_name))
+pub fn peel_to_range_type<'d, F>(ty: &Type, lookup: F) -> Option<Type>
+where
+    F: Fn(&str) -> Option<&'d Definition>,
+{
+    let peeled = peel_alias(ty, lookup);
+    peeled
+        .get_name()
+        .is_some_and(is_range_type_name)
+        .then_some(peeled)
 }
 
 /// type param name -> type variable
@@ -220,14 +219,9 @@ pub fn substitute(ty: &Type, map: &HashMap<EcoString, Type>) -> Type {
     }
     match ty {
         Type::Parameter(name) => map.get(name).cloned().unwrap_or_else(|| ty.clone()),
-        Type::Nominal {
-            id,
-            params,
-            underlying_ty: underlying,
-        } => Type::Nominal {
+        Type::Nominal { id, params } => Type::Nominal {
             id: id.clone(),
             params: params.iter().map(|p| substitute(p, map)).collect(),
-            underlying_ty: underlying.as_ref().map(|u| Box::new(substitute(u, map))),
         },
         Type::Function(f) => f.rebuild(
             f.params
@@ -244,7 +238,7 @@ pub fn substitute(ty: &Type, map: &HashMap<EcoString, Type>) -> Type {
                 .collect(),
             Box::new(substitute(&f.return_type, map)),
         ),
-        Type::Var { .. } | Type::Error => ty.clone(),
+        Type::Var { .. } | Type::Uninferred | Type::Ignored | Type::Error => ty.clone(),
         Type::Forall { vars, body } => {
             let has_overlap = map.keys().any(|k| vars.contains(k));
             let substituted_body = if has_overlap {
@@ -359,33 +353,24 @@ impl FunctionType {
     }
 }
 
-/// A unique handle identifying a type variable. The binding state (Unbound /
-/// Bound-to-a-Type) lives in a `TypeEnv` owned by the checker; the handle is
-/// a plain id so `Type` stays a pure value (Clone, Eq, Hash, Serialize).
+/// A unique handle identifying an inference variable in a checker's type environment.
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct TypeVarId(pub u32);
+pub struct TypeVarId(u32);
 
 impl TypeVarId {
-    const IGNORED: TypeVarId = TypeVarId(u32::MAX);
-    const UNINFERRED: TypeVarId = TypeVarId(u32::MAX - 1);
-
-    pub fn is_reserved(self) -> bool {
-        self == Self::IGNORED || self == Self::UNINFERRED
+    pub const fn new(index: u32) -> Self {
+        Self(index)
     }
 
-    pub(crate) fn as_u32(self) -> u32 {
+    pub const fn index(self) -> u32 {
         self.0
     }
 }
 
 impl std::fmt::Debug for TypeVarId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match *self {
-            Self::IGNORED => write!(f, "ignored"),
-            Self::UNINFERRED => write!(f, "uninferred"),
-            TypeVarId(n) => write!(f, "#{}", n),
-        }
+        write!(f, "#{}", self.0)
     }
 }
 
@@ -402,7 +387,6 @@ pub enum Type {
     Nominal {
         id: Symbol,
         params: Vec<Type>,
-        underlying_ty: Option<Box<Type>>,
     },
 
     /// Module namespace handle. Produced by imports (e.g. `import http "net/http"`
@@ -419,6 +403,12 @@ pub enum Type {
         id: TypeVarId,
         hint: Option<EcoString>,
     },
+
+    /// Placeholder on syntax that has not entered type inference yet.
+    Uninferred,
+
+    /// Expected type for an expression whose value is intentionally discarded.
+    Ignored,
 
     Forall {
         vars: Vec<EcoString>,
@@ -449,6 +439,14 @@ pub enum Type {
     ReceiverPlaceholder,
 }
 
+struct TypePlaceholder(&'static str);
+
+impl std::fmt::Debug for TypePlaceholder {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.0)
+    }
+}
+
 impl std::fmt::Debug for Type {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -472,6 +470,14 @@ impl std::fmt::Debug for Type {
                 }
                 s.finish()
             }
+            Type::Uninferred => f
+                .debug_struct("Var")
+                .field("id", &TypePlaceholder("uninferred"))
+                .finish(),
+            Type::Ignored => f
+                .debug_struct("Var")
+                .field("id", &TypePlaceholder("ignored"))
+                .finish(),
             Type::Forall { vars, body } => f
                 .debug_struct("Forall")
                 .field("vars", vars)
@@ -517,6 +523,7 @@ impl PartialEq for Type {
             ) => id1 == id2 && params1 == params2,
             (Type::Function(f1), Type::Function(f2)) => f1 == f2,
             (Type::Var { id: id1, .. }, Type::Var { id: id2, .. }) => id1 == id2,
+            (Type::Uninferred, Type::Uninferred) | (Type::Ignored, Type::Ignored) => true,
             (
                 Type::Forall {
                     vars: vars1,
@@ -551,13 +558,6 @@ impl PartialEq for Type {
     }
 }
 
-thread_local! {
-    static INTERNED_INT: OnceCell<Type> = const { OnceCell::new() };
-    static INTERNED_STRING: OnceCell<Type> = const { OnceCell::new() };
-    static INTERNED_BOOL: OnceCell<Type> = const { OnceCell::new() };
-    static INTERNED_UNIT: OnceCell<Type> = const { OnceCell::new() };
-}
-
 impl Type {
     fn simple(kind: SimpleKind) -> Type {
         Self::Simple(kind)
@@ -580,48 +580,33 @@ impl Type {
     }
 
     pub fn int() -> Type {
-        INTERNED_INT.with(|cell| cell.get_or_init(|| Self::simple(SimpleKind::Int)).clone())
+        Self::simple(SimpleKind::Int)
     }
 
     pub fn string() -> Type {
-        INTERNED_STRING.with(|cell| {
-            cell.get_or_init(|| Self::simple(SimpleKind::String))
-                .clone()
-        })
+        Self::simple(SimpleKind::String)
     }
 
     pub fn bool() -> Type {
-        INTERNED_BOOL.with(|cell| cell.get_or_init(|| Self::simple(SimpleKind::Bool)).clone())
+        Self::simple(SimpleKind::Bool)
     }
 
     pub fn unit() -> Type {
-        INTERNED_UNIT.with(|cell| cell.get_or_init(|| Self::simple(SimpleKind::Unit)).clone())
+        Self::simple(SimpleKind::Unit)
     }
 }
 
 impl Type {
     pub fn uninferred() -> Self {
-        Self::Var {
-            id: TypeVarId::UNINFERRED,
-            hint: None,
-        }
+        Self::Uninferred
     }
 
     pub fn is_uninferred(&self) -> bool {
-        matches!(
-            self,
-            Self::Var {
-                id: TypeVarId::UNINFERRED,
-                ..
-            }
-        )
+        matches!(self, Self::Uninferred)
     }
 
     pub fn ignored() -> Self {
-        Self::Var {
-            id: TypeVarId::IGNORED,
-            hint: None,
-        }
+        Self::Ignored
     }
 
     pub fn get_type_params(&self) -> Option<&[Type]> {
@@ -635,17 +620,7 @@ impl Type {
     /// Direct child types, for read-only walks. Excludes `Function.bounds`.
     pub fn children(&self) -> Vec<&Type> {
         match self {
-            Type::Nominal {
-                params,
-                underlying_ty,
-                ..
-            } => {
-                let mut c: Vec<&Type> = params.iter().collect();
-                if let Some(u) = underlying_ty {
-                    c.push(u);
-                }
-                c
-            }
+            Type::Nominal { params, .. } => params.iter().collect(),
             Type::Compound { args, .. } => args.iter().collect(),
             Type::Function(f) => {
                 let mut c: Vec<&Type> = f.params.iter().map(|param| &param.ty).collect();
@@ -949,16 +924,6 @@ impl Type {
         }
     }
 
-    pub fn get_underlying(&self) -> Option<&Type> {
-        match self {
-            Type::Nominal {
-                underlying_ty: underlying,
-                ..
-            } => underlying.as_deref(),
-            _ => None,
-        }
-    }
-
     pub fn is_result(&self) -> bool {
         self.has_qualified_id("prelude.Result")
     }
@@ -1042,34 +1007,16 @@ impl Type {
         self.has_name("Unknown")
     }
 
-    pub fn resolves_to_unknown(&self) -> bool {
-        peel_alias(self, |_| true).is_unknown()
-    }
-
-    pub fn contains_unknown(&self) -> bool {
-        let peeled = peel_alias(self, |_| true);
-        if peeled.is_unknown() {
-            return true;
-        }
-        match &peeled {
-            Type::Compound { args, .. } => args.iter().any(|a| a.contains_unknown()),
-            Type::Function(f) => {
-                f.params.iter().any(|p| p.ty.contains_unknown()) || f.return_type.contains_unknown()
-            }
-            Type::Tuple(elements) => elements.iter().any(|e| e.contains_unknown()),
-            Type::Array { element, .. } => element.contains_unknown(),
-            Type::Nominal { params, .. } => params.iter().any(|p| p.contains_unknown()),
-            Type::Forall { body, .. } => body.contains_unknown(),
-            _ => false,
-        }
-    }
-
     pub fn is_receiver(&self) -> bool {
         self.is_native(CompoundKind::Receiver)
     }
 
     pub fn is_ignored(&self) -> bool {
-        matches!(self, Type::Var { id, .. } if *id == TypeVarId::IGNORED)
+        matches!(self, Type::Ignored)
+    }
+
+    pub fn is_placeholder(&self) -> bool {
+        matches!(self, Type::Uninferred | Type::Ignored)
     }
 
     pub fn is_variadic(&self) -> Option<Type> {
@@ -1103,27 +1050,6 @@ impl Type {
         self.is_byte_slice() || self.is_rune_slice()
     }
 
-    pub fn has_underlying_rune(&self) -> bool {
-        self.underlying_numeric_type().is_some_and(|t| t.is_rune())
-    }
-
-    pub fn has_underlying_byte(&self) -> bool {
-        self.underlying_numeric_type()
-            .is_some_and(|t| t.is_simple(SimpleKind::Byte) || t.is_simple(SimpleKind::Uint8))
-    }
-
-    pub fn has_byte_or_rune_slice_underlying(&self) -> bool {
-        if self.is_byte_or_rune_slice() {
-            return true;
-        }
-        match self {
-            Type::Nominal { underlying_ty, .. } => underlying_ty
-                .as_deref()
-                .is_some_and(|u| u.has_byte_or_rune_slice_underlying()),
-            _ => false,
-        }
-    }
-
     pub fn as_simple(&self) -> Option<SimpleKind> {
         match self {
             Type::Simple(kind) => Some(*kind),
@@ -1152,10 +1078,6 @@ impl Type {
         matches!(self, Type::Var { .. })
     }
 
-    pub fn is_type_var(&self) -> bool {
-        matches!(self, Type::Var { .. })
-    }
-
     /// A transparent alias over this keeps its name, wrapped in a `Nominal`
     /// that unification peels back to it.
     pub fn is_structural_alias_body(&self) -> bool {
@@ -1169,58 +1091,12 @@ impl Type {
         self.as_simple().is_some_and(SimpleKind::is_arithmetic)
     }
 
-    /// Whether `<`/`<=`/`>`/`>=` accept this type: an ordered numeric, a
-    /// string-backed type (resolved through named types), or a plain boolean.
-    pub fn is_orderable(&self) -> bool {
-        matches!(
-            self.underlying_simple_kind(),
-            Some(kind) if kind.is_ordered() || kind == SimpleKind::String
-        ) || self.is_boolean()
-    }
-
-    /// True for Go's `cmp.Ordered` set: ints, floats, strings, and named aliases over them.
-    pub fn satisfies_ordered_constraint(&self) -> bool {
-        if let Some(kind) = self.as_simple() {
-            return matches!(
-                kind,
-                SimpleKind::Int
-                    | SimpleKind::Int8
-                    | SimpleKind::Int16
-                    | SimpleKind::Int32
-                    | SimpleKind::Int64
-                    | SimpleKind::Uint
-                    | SimpleKind::Uint8
-                    | SimpleKind::Uint16
-                    | SimpleKind::Uint32
-                    | SimpleKind::Uint64
-                    | SimpleKind::Uintptr
-                    | SimpleKind::Byte
-                    | SimpleKind::Rune
-                    | SimpleKind::Float32
-                    | SimpleKind::Float64
-                    | SimpleKind::String
-            );
-        }
-        match self {
-            Type::Nominal { underlying_ty, .. } => underlying_ty
-                .as_deref()
-                .is_some_and(Type::satisfies_ordered_constraint),
-            Type::Parameter(_) => true,
-            _ => false,
-        }
-    }
-
     pub fn is_complex(&self) -> bool {
         self.as_simple().is_some_and(SimpleKind::is_complex)
     }
 
     pub fn is_unsigned_int(&self) -> bool {
         self.as_simple().is_some_and(SimpleKind::is_unsigned_int)
-    }
-
-    pub fn underlying_is_unsigned_int(&self) -> bool {
-        self.underlying_simple_kind()
-            .is_some_and(SimpleKind::is_unsigned_int)
     }
 
     pub fn is_never(&self) -> bool {
@@ -1234,14 +1110,7 @@ impl Type {
     pub fn contains_error(&self) -> bool {
         match self {
             Type::Error => true,
-            Type::Nominal {
-                params,
-                underlying_ty,
-                ..
-            } => {
-                params.iter().any(Type::contains_error)
-                    || underlying_ty.as_deref().is_some_and(Type::contains_error)
-            }
+            Type::Nominal { params, .. } => params.iter().any(Type::contains_error),
             Type::Compound { args, .. } => args.iter().any(Type::contains_error),
             Type::Function(f) => {
                 f.params.iter().any(|param| param.ty.contains_error())
@@ -1269,6 +1138,8 @@ impl Type {
             Type::Simple(_)
             | Type::Parameter(_)
             | Type::Never
+            | Type::Uninferred
+            | Type::Ignored
             | Type::Error
             | Type::ImportNamespace(_)
             | Type::ReceiverPlaceholder => false,
@@ -1308,6 +1179,8 @@ impl Type {
             Type::Simple(_)
             | Type::Parameter(_)
             | Type::Never
+            | Type::Uninferred
+            | Type::Ignored
             | Type::Error
             | Type::ImportNamespace(_)
             | Type::ReceiverPlaceholder => {}
@@ -1361,7 +1234,12 @@ impl Type {
             Type::Simple(kind) => {
                 names.remove(kind.leaf_name());
             }
-            Type::Never | Type::Error | Type::ImportNamespace(_) | Type::ReceiverPlaceholder => {}
+            Type::Never
+            | Type::Uninferred
+            | Type::Ignored
+            | Type::Error
+            | Type::ImportNamespace(_)
+            | Type::ReceiverPlaceholder => {}
         }
     }
 }
@@ -1400,10 +1278,6 @@ impl Type {
     pub fn get_function_params(&self) -> Option<&[FunctionParameter]> {
         match self {
             Type::Function(f) => Some(&f.params),
-            Type::Nominal {
-                underlying_ty: Some(inner),
-                ..
-            } => inner.get_function_params(),
             _ => None,
         }
     }
@@ -1475,64 +1349,219 @@ impl Type {
     }
 }
 
-/// Walk an alias chain via `underlying_ty` (preserves substitution); cycle
-/// guard defends against chains that slip past `circular_type_alias`.
-pub fn peel_alias<F>(ty: &Type, is_alias: F) -> Type
+/// Resolve transparent aliases from their canonical definition targets. The
+/// cycle guard defends against invalid external definitions and recovery types.
+pub fn peel_alias<'d, F>(ty: &Type, lookup: F) -> Type
 where
-    F: Fn(&str) -> bool,
+    F: Fn(&str) -> Option<&'d Definition>,
 {
     let mut current = ty.unwrap_forall().clone();
-    let mut seen: Vec<String> = Vec::new();
-    while let Type::Nominal {
-        id,
-        underlying_ty: Some(u),
-        ..
-    } = &current
-    {
-        if !is_alias(id.as_str()) {
+    let mut seen: HashSet<Symbol> = HashSet::default();
+    while let Type::Nominal { id, params } = &current {
+        if !seen.insert(id.clone()) {
             break;
         }
-        if seen.iter().any(|s| s == id.as_str()) {
+        let Some(target) =
+            lookup(id.as_str()).and_then(|definition| definition.instantiate_alias_target(params))
+        else {
             break;
-        }
-        seen.push(id.to_string());
-        current = u.unwrap_forall().clone();
+        };
+        current = target.unwrap_forall().clone();
     }
     current
 }
 
-pub fn is_nilable_go_type<'a>(ty: &Type, lookup: impl Fn(&str) -> Option<&'a Definition>) -> bool {
-    let is_alias = |id: &str| lookup(id).is_some_and(Definition::is_type_alias);
-    let is_interface = |id: &str| matches!(lookup(id), Some(d) if matches!(d.body, DefinitionBody::Interface { .. }));
-    resolves_to_pointer(ty, is_alias)
-        || resolves_to_interface(ty, is_alias, is_interface)
-        || resolves_to_function(ty, is_alias)
-}
-
-fn resolves_to_pointer<FA: Fn(&str) -> bool>(ty: &Type, is_alias: FA) -> bool {
-    fn as_pointer(ty: &Type) -> bool {
-        ty.is_ref() || ty.get_underlying().is_some_and(Type::is_ref)
-    }
-    as_pointer(ty) || as_pointer(&peel_alias(ty, is_alias))
-}
-
-fn resolves_to_interface<FA, FI>(ty: &Type, is_alias: FA, is_interface: FI) -> bool
+/// Return the immediate underlying type of a nominal occurrence, instantiated
+/// with that occurrence's type arguments.
+pub fn underlying_type<'d, F>(ty: &Type, lookup: F) -> Option<Type>
 where
-    FA: Fn(&str) -> bool,
+    F: Fn(&str) -> Option<&'d Definition>,
+{
+    let Type::Nominal { id, params } = ty.unwrap_forall() else {
+        return None;
+    };
+    lookup(id.as_str())?.instantiate_underlying(params)
+}
+
+/// Follow transparent aliases and newtype fields to their canonical
+/// representation. The cycle guard also makes this safe for recovery types
+/// built from invalid recursive declarations.
+pub fn peel_underlying<'d, F>(ty: &Type, lookup: F) -> Type
+where
+    F: Fn(&str) -> Option<&'d Definition>,
+{
+    let mut current = ty.unwrap_forall().clone();
+    let mut seen: HashSet<Symbol> = HashSet::default();
+    while let Type::Nominal { id, params } = &current {
+        if !seen.insert(id.clone()) {
+            break;
+        }
+        let Some(underlying) =
+            lookup(id.as_str()).and_then(|definition| definition.instantiate_underlying(params))
+        else {
+            break;
+        };
+        current = underlying.unwrap_forall().clone();
+    }
+    current
+}
+
+pub fn resolves_to_unknown<'d, F>(ty: &Type, lookup: F) -> bool
+where
+    F: Fn(&str) -> Option<&'d Definition>,
+{
+    peel_alias(ty, lookup).is_unknown()
+}
+
+pub fn contains_unknown<'d, F>(ty: &Type, lookup: F) -> bool
+where
+    F: Fn(&str) -> Option<&'d Definition>,
+{
+    fn contains<'d, F>(ty: &Type, lookup: &F) -> bool
+    where
+        F: Fn(&str) -> Option<&'d Definition>,
+    {
+        let peeled = peel_alias(ty, lookup);
+        peeled.is_unknown()
+            || peeled
+                .children()
+                .into_iter()
+                .any(|child| contains(child, lookup))
+    }
+
+    contains(ty, &lookup)
+}
+
+pub fn underlying_simple_kind<'d, F>(ty: &Type, lookup: F) -> Option<SimpleKind>
+where
+    F: Fn(&str) -> Option<&'d Definition>,
+{
+    peel_underlying(ty, lookup).as_simple()
+}
+
+pub fn underlying_numeric_type<'d, F>(ty: &Type, lookup: F) -> Option<Type>
+where
+    F: Fn(&str) -> Option<&'d Definition>,
+{
+    let underlying = peel_underlying(ty, lookup);
+    underlying.is_numeric().then_some(underlying)
+}
+
+pub fn literal_adaptation_target<'d, F>(ty: &Type, lookup: F) -> Option<Type>
+where
+    F: Fn(&str) -> Option<&'d Definition>,
+{
+    underlying_numeric_type(ty, &lookup).or_else(|| {
+        (matches!(ty.unwrap_forall(), Type::Nominal { .. })
+            && underlying_simple_kind(ty, &lookup) == Some(SimpleKind::Uintptr))
+        .then_some(Type::Simple(SimpleKind::Uintptr))
+    })
+}
+
+pub fn is_numeric_compatible_with<'d, F>(left: &Type, right: &Type, lookup: F) -> bool
+where
+    F: Fn(&str) -> Option<&'d Definition>,
+{
+    match (
+        underlying_numeric_type(left, &lookup),
+        underlying_numeric_type(right, &lookup),
+    ) {
+        (Some(left), Some(right)) => left.numeric_family() == right.numeric_family(),
+        _ => false,
+    }
+}
+
+pub fn is_aliased_numeric_type<'d, F>(ty: &Type, lookup: F) -> bool
+where
+    F: Fn(&str) -> Option<&'d Definition>,
+{
+    matches!(ty.unwrap_forall(), Type::Nominal { .. })
+        && underlying_type(ty, &lookup).is_some()
+        && !ty.is_numeric()
+        && underlying_numeric_type(ty, lookup).is_some()
+}
+
+pub fn has_byte_or_rune_slice_underlying<'d, F>(ty: &Type, lookup: F) -> bool
+where
+    F: Fn(&str) -> Option<&'d Definition>,
+{
+    peel_underlying(ty, lookup).is_byte_or_rune_slice()
+}
+
+pub fn is_orderable<'d, F>(ty: &Type, lookup: F) -> bool
+where
+    F: Fn(&str) -> Option<&'d Definition>,
+{
+    matches!(
+        underlying_simple_kind(ty, lookup),
+        Some(kind) if kind.is_ordered() || kind == SimpleKind::String
+    ) || ty.is_boolean()
+}
+
+/// True for Go's `cmp.Ordered` set: ints, floats, strings, parameters, and
+/// named aliases over those types.
+pub fn satisfies_ordered_constraint<'d, F>(ty: &Type, lookup: F) -> bool
+where
+    F: Fn(&str) -> Option<&'d Definition>,
+{
+    let Some(kind) = underlying_simple_kind(ty, lookup) else {
+        return matches!(ty.unwrap_forall(), Type::Parameter(_));
+    };
+    matches!(
+        kind,
+        SimpleKind::Int
+            | SimpleKind::Int8
+            | SimpleKind::Int16
+            | SimpleKind::Int32
+            | SimpleKind::Int64
+            | SimpleKind::Uint
+            | SimpleKind::Uint8
+            | SimpleKind::Uint16
+            | SimpleKind::Uint32
+            | SimpleKind::Uint64
+            | SimpleKind::Uintptr
+            | SimpleKind::Byte
+            | SimpleKind::Rune
+            | SimpleKind::Float32
+            | SimpleKind::Float64
+            | SimpleKind::String
+    )
+}
+
+pub fn is_nilable_go_type<'a>(ty: &Type, lookup: impl Fn(&str) -> Option<&'a Definition>) -> bool {
+    let is_interface = |id: &str| matches!(lookup(id), Some(d) if matches!(d.body, DefinitionBody::Interface { .. }));
+    resolves_to_pointer(ty, &lookup)
+        || resolves_to_interface(ty, &lookup, is_interface)
+        || resolves_to_function(ty, &lookup)
+}
+
+fn resolves_to_pointer<'d, F: Fn(&str) -> Option<&'d Definition>>(ty: &Type, lookup: &F) -> bool {
+    let as_pointer = |ty: &Type| {
+        ty.is_ref()
+            || underlying_type(ty, lookup)
+                .as_ref()
+                .is_some_and(Type::is_ref)
+    };
+    as_pointer(ty) || as_pointer(&peel_alias(ty, lookup))
+}
+
+fn resolves_to_interface<'d, F, FI>(ty: &Type, lookup: &F, is_interface: FI) -> bool
+where
+    F: Fn(&str) -> Option<&'d Definition>,
     FI: Fn(&str) -> bool,
 {
-    matches!(peel_alias(ty, is_alias), Type::Nominal { id, .. } if is_interface(id.as_str()))
+    matches!(peel_alias(ty, lookup), Type::Nominal { id, .. } if is_interface(id.as_str()))
 }
 
-fn resolves_to_function<FA: Fn(&str) -> bool>(ty: &Type, is_alias: FA) -> bool {
-    fn as_function(ty: &Type) -> bool {
-        matches!(ty, Type::Function(_)) || matches!(ty.get_underlying(), Some(Type::Function(_)))
-    }
-    as_function(ty) || as_function(&peel_alias(ty, is_alias))
+fn resolves_to_function<'d, F: Fn(&str) -> Option<&'d Definition>>(ty: &Type, lookup: &F) -> bool {
+    let as_function = |ty: &Type| {
+        matches!(ty, Type::Function(_))
+            || matches!(underlying_type(ty, lookup), Some(Type::Function(_)))
+    };
+    as_function(ty) || as_function(&peel_alias(ty, lookup))
 }
 
-/// Walk an alias chain by id alone; used when no `Type` with
-/// `underlying_ty` is available (e.g. Go-name resolution).
+/// Walk an alias chain by id alone (for example during Go-name resolution).
 pub fn peel_alias_id<F>(id: &str, next_alias: F) -> String
 where
     F: Fn(&str) -> Option<String>,
@@ -1605,16 +1634,12 @@ impl Type {
             Type::Nominal {
                 id: name,
                 params: args,
-                underlying_ty: underlying,
             } => Type::Nominal {
                 id: name.clone(),
                 params: args
                     .iter()
                     .map(|a| Self::remove_vars_impl(a, vars))
                     .collect(),
-                underlying_ty: underlying
-                    .as_ref()
-                    .map(|u| Box::new(Self::remove_vars_impl(u, vars))),
             },
 
             Type::Function(f) => Type::function(
@@ -1633,14 +1658,14 @@ impl Type {
                 Self::remove_vars_impl(&f.return_type, vars).into(),
             ),
 
-            Type::Var { id, hint } => match vars.get(&id.0) {
+            Type::Var { id, hint } => match vars.get(&id.index()) {
                 Some(g) => Type::Parameter(g.clone()),
                 None => {
                     let name: EcoString = hint
                         .clone()
                         .unwrap_or_else(|| alpha_index(vars.len()).into());
 
-                    vars.insert(id.0, name.clone());
+                    vars.insert(id.index(), name.clone());
                     Type::Parameter(name)
                 }
             },
@@ -1664,9 +1689,12 @@ impl Type {
                 element: Box::new(Self::remove_vars_impl(element, vars)),
             },
             Type::Simple(_) | Type::Parameter(_) => ty.clone(),
-            Type::Never | Type::Error | Type::ImportNamespace(_) | Type::ReceiverPlaceholder => {
-                ty.clone()
-            }
+            Type::Never
+            | Type::Uninferred
+            | Type::Ignored
+            | Type::Error
+            | Type::ImportNamespace(_)
+            | Type::ReceiverPlaceholder => ty.clone(),
         }
     }
 
@@ -1688,6 +1716,8 @@ impl Type {
             Type::Simple(_)
             | Type::Parameter(_)
             | Type::Never
+            | Type::Uninferred
+            | Type::Ignored
             | Type::Error
             | Type::ImportNamespace(_)
             | Type::ReceiverPlaceholder => false,
@@ -1696,97 +1726,8 @@ impl Type {
 }
 
 impl Type {
-    pub fn underlying_numeric_type(&self) -> Option<Type> {
-        self.underlying_numeric_type_recursive(&mut HashSet::default())
-    }
-
-    pub fn has_underlying_numeric_type(&self) -> bool {
-        self.underlying_numeric_type().is_some()
-    }
-
-    pub fn literal_adaptation_target(&self) -> Option<Type> {
-        if let Some(numeric) = self.underlying_numeric_type() {
-            return Some(numeric);
-        }
-        match self {
-            Type::Nominal { .. } if self.underlying_simple_kind() == Some(SimpleKind::Uintptr) => {
-                Some(Type::Simple(SimpleKind::Uintptr))
-            }
-            _ => None,
-        }
-    }
-
-    pub fn underlying_simple_kind(&self) -> Option<SimpleKind> {
-        self.underlying_simple_kind_recursive(&mut HashSet::default())
-    }
-
-    fn underlying_simple_kind_recursive(
-        &self,
-        visited: &mut HashSet<Symbol>,
-    ) -> Option<SimpleKind> {
-        if let Some(kind) = self.as_simple() {
-            return Some(kind);
-        }
-        match self {
-            Type::Nominal {
-                id,
-                underlying_ty: Some(underlying),
-                ..
-            } => {
-                if !visited.insert(id.clone()) {
-                    return None;
-                }
-                underlying.underlying_simple_kind_recursive(visited)
-            }
-            _ => None,
-        }
-    }
-
-    fn underlying_numeric_type_recursive(&self, visited: &mut HashSet<Symbol>) -> Option<Type> {
-        match self {
-            Type::Simple(_) if self.is_numeric() => Some(self.clone()),
-            Type::Nominal {
-                id,
-                underlying_ty: underlying,
-                ..
-            } => {
-                if self.is_numeric() {
-                    return Some(self.clone());
-                }
-
-                if !visited.insert(id.clone()) {
-                    return None;
-                }
-
-                underlying
-                    .as_ref()?
-                    .underlying_numeric_type_recursive(visited)
-            }
-            _ => None,
-        }
-    }
-
     pub fn numeric_family(&self) -> Option<NumericFamily> {
         self.as_simple()?.numeric_family()
-    }
-
-    pub fn is_numeric_compatible_with(&self, other: &Type) -> bool {
-        let self_underlying_ty = self.underlying_numeric_type();
-        let other_underlying_ty = other.underlying_numeric_type();
-
-        match (self_underlying_ty, other_underlying_ty) {
-            (Some(s), Some(o)) => s.numeric_family() == o.numeric_family(),
-            _ => false,
-        }
-    }
-
-    pub fn is_aliased_numeric_type(&self) -> bool {
-        match self {
-            Type::Nominal { underlying_ty, .. } => {
-                underlying_ty.is_some() && !self.is_numeric() && self.has_underlying_numeric_type()
-            }
-            _ => false,
-        }
     }
 }
 
@@ -1859,7 +1800,7 @@ mod tests {
 
     fn unhinted_var(id: u32) -> Type {
         Type::Var {
-            id: TypeVarId(id),
+            id: TypeVarId::new(id),
             hint: None,
         }
     }

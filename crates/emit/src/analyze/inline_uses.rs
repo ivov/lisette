@@ -113,7 +113,6 @@ impl<'a> Walker<'a> {
             }
             Expression::Literal { .. }
             | Expression::Unit { .. }
-            | Expression::NoOp
             | Expression::Break { value: None, .. }
             | Expression::Continue { .. } => {}
 
@@ -155,11 +154,11 @@ impl<'a> Walker<'a> {
             Expression::Let {
                 binding,
                 value,
-                else_block,
+                mode,
                 ..
             } => {
                 self.walk(value);
-                if let Some(else_b) = else_block {
+                if let Some(else_b) = mode.else_block() {
                     self.walk(else_b);
                 }
                 if pattern_binds_name(&binding.pattern, self.name) {
@@ -275,12 +274,22 @@ impl<'a> Walker<'a> {
                 self.enclosure_depth -= 1;
             }
 
-            Expression::Lambda { params, body, .. } | Expression::Function { params, body, .. } => {
+            Expression::Lambda { params, body, .. } => {
                 self.enclosure_depth += 1;
                 let shadowed = params
                     .iter()
                     .any(|p| pattern_binds_name(&p.pattern, self.name));
                 self.with_shadow(shadowed, |w| w.walk(body));
+                self.enclosure_depth -= 1;
+            }
+            Expression::Function { params, body, .. } => {
+                self.enclosure_depth += 1;
+                let shadowed = params
+                    .iter()
+                    .any(|p| pattern_binds_name(&p.pattern, self.name));
+                if let Some(body) = body.definition() {
+                    self.with_shadow(shadowed, |w| w.walk(body));
+                }
                 self.enclosure_depth -= 1;
             }
             Expression::Task { expression, .. } | Expression::Defer { expression, .. } => {
@@ -308,7 +317,11 @@ impl<'a> Walker<'a> {
             }
 
             // Block-local `Const`/`Function` shadowing is applied in `walk_block`.
-            Expression::Const { expression, .. } => self.walk(expression),
+            Expression::Const { expression, .. } => {
+                if let Some(value) = expression.value() {
+                    self.walk(value);
+                }
+            }
             Expression::VariableDeclaration { .. } => {}
 
             Expression::ImplBlock { methods, .. } => {

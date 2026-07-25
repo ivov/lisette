@@ -1,7 +1,9 @@
 use rustc_hash::FxHashMap;
 use syntax::ast::{
-    Annotation, Expression, MatchArm, Pattern, Span, StructFieldPattern, TypedPattern,
+    Annotation, ConstructorPatternResolution, Expression, IdentifierResolution, MatchArm, Pattern,
+    RecordPatternResolution, Span, StructFieldPattern,
 };
+use syntax::program::DefinitionBody;
 use syntax::types::unqualified_name;
 
 use crate::analysis::find_module_by_alias;
@@ -47,7 +49,7 @@ pub(crate) fn resolve_struct_call_field(
     file: &syntax::program::File,
     snapshot: &AnalysisSnapshot,
 ) -> Option<syntax::ast::Span> {
-    let type_id = type_name(ty);
+    let type_id = type_name(ty, snapshot);
 
     field_assignments
         .iter()
@@ -112,7 +114,7 @@ pub(crate) fn resolve_dot_access_definition(
     };
 
     let resolve_by_type = || {
-        type_name(&expression.get_type()).and_then(|type_id| {
+        type_name(&expression.get_type(), snapshot).and_then(|type_id| {
             let name = format!("{}.{}", type_id, member);
             try_lookup(&name).or_else(|| find_struct_field_span(&type_id, member, snapshot))
         })
@@ -127,7 +129,7 @@ pub(crate) fn resolve_dot_access_definition(
         if matches!(
             root_expression,
             Expression::Identifier {
-                binding_id: Some(_),
+                resolution: IdentifierResolution::Binding(_),
                 ..
             }
         ) {
@@ -147,10 +149,9 @@ pub(crate) fn resolve_dot_access_definition(
             try_lookup(&dotted_path)
         }
     } else if let Expression::Identifier {
-        value,
-        binding_id: None,
-        ..
+        value, resolution, ..
     } = expression.unwrap_parens()
+        && !matches!(resolution, IdentifierResolution::Binding(_))
     {
         if let Some(module_name) =
             find_module_by_alias(file, value.as_str(), &snapshot.result.go_package_names)
@@ -352,21 +353,13 @@ pub(crate) fn resolve_match_pattern_definition(
     file: &syntax::program::File,
     snapshot: &AnalysisSnapshot,
 ) -> Option<syntax::ast::Span> {
-    arms.iter().find_map(|arm| {
-        resolve_enum_in_pattern(
-            &arm.pattern,
-            arm.typed_pattern.as_ref(),
-            offset,
-            file,
-            snapshot,
-        )
-    })
+    arms.iter()
+        .find_map(|arm| resolve_enum_in_pattern(&arm.pattern, offset, file, snapshot))
 }
 
 /// Resolve an enum variant in a single pattern (used by match, if-let, while-let).
 pub(crate) fn resolve_enum_in_pattern(
     pattern: &Pattern,
-    typed_pattern: Option<&TypedPattern>,
     offset: u32,
     file: &syntax::program::File,
     snapshot: &AnalysisSnapshot,
@@ -377,20 +370,16 @@ pub(crate) fn resolve_enum_in_pattern(
 
     match pattern {
         Pattern::EnumVariant {
-            identifier, fields, ..
+            identifier,
+            fields,
+            resolution,
+            ..
         } => {
-            let typed_fields = match typed_pattern {
-                Some(TypedPattern::EnumVariant { fields: tf, .. }) => Some(tf.as_slice()),
-                _ => None,
-            };
             let mut offset_in_field = false;
-            for (i, field) in fields.iter().enumerate() {
+            for field in fields {
                 if offset_in_span(offset, &field.get_span()) {
                     offset_in_field = true;
-                    let child_typed = typed_fields.and_then(|tf| tf.get(i));
-                    if let Some(result) =
-                        resolve_enum_in_pattern(field, child_typed, offset, file, snapshot)
-                    {
+                    if let Some(result) = resolve_enum_in_pattern(field, offset, file, snapshot) {
                         return Some(result);
                     }
                 }
@@ -399,19 +388,12 @@ pub(crate) fn resolve_enum_in_pattern(
                 return None;
             }
 
-            match typed_pattern {
-                Some(
-                    TypedPattern::EnumVariant {
-                        enum_name,
-                        variant_name,
-                        ..
-                    }
-                    | TypedPattern::EnumStructVariant {
-                        enum_name,
-                        variant_name,
-                        ..
-                    },
-                ) => {
+            match resolution {
+                ConstructorPatternResolution::EnumVariant {
+                    enum_name,
+                    variant_name,
+                    ..
+                } => {
                     let variant_last = unqualified_name(variant_name);
                     let qualified = format!("{}.{}", enum_name, variant_last);
                     snapshot
@@ -419,67 +401,51 @@ pub(crate) fn resolve_enum_in_pattern(
                         .get(qualified.as_str())
                         .and_then(|d| d.name_span)
                 }
-                Some(TypedPattern::Const { qualified_name, .. }) => snapshot
+                ConstructorPatternResolution::Const { qualified_name, .. } => snapshot
                     .definitions()
                     .get(qualified_name.as_str())
                     .and_then(|d| d.name_span),
-                _ => lookup_definition_span(identifier, file, snapshot),
+                ConstructorPatternResolution::Unresolved => {
+                    lookup_definition_span(identifier, file, snapshot)
+                }
             }
         }
 
-        Pattern::Or { patterns, .. } => {
-            let alternatives = match typed_pattern {
-                Some(TypedPattern::Or { alternatives, .. }) => Some(alternatives.as_slice()),
-                _ => None,
-            };
-            patterns.iter().enumerate().find_map(|(i, pat)| {
-                let child_typed = alternatives.and_then(|a| a.get(i));
-                resolve_enum_in_pattern(pat, child_typed, offset, file, snapshot)
-            })
-        }
+        Pattern::Or { patterns, .. }
+        | Pattern::Tuple {
+            elements: patterns, ..
+        } => patterns
+            .iter()
+            .find_map(|pattern| resolve_enum_in_pattern(pattern, offset, file, snapshot)),
 
         Pattern::Struct {
             identifier,
             fields,
             span,
+            resolution,
             ..
         } => {
             if let Some(field) = fields
                 .iter()
-                .find(|f| offset_in_span(offset, &f.value.get_span()))
-                && let Some(TypedPattern::Struct { struct_fields, .. }) = typed_pattern
-                && let Some(sf) = struct_fields.iter().find(|sf| sf.name == field.name)
+                .find(|field| offset_in_span(offset, &field.value.get_span()))
             {
-                return Some(sf.name_span);
+                if let Some(result) = resolve_enum_in_pattern(&field.value, offset, file, snapshot)
+                {
+                    return Some(result);
+                }
+                let definition_span = record_pattern_field_span(snapshot, resolution, &field.name);
+                if is_shorthand_field(field, *span, snapshot) {
+                    return definition_span;
+                }
+                return None;
             }
-            if let Some(TypedPattern::EnumStructVariant {
+
+            if let RecordPatternResolution::EnumVariant {
                 enum_name,
                 variant_name,
-                variant_fields,
-                pattern_fields,
                 ..
-            }) = typed_pattern
+            } = resolution
             {
-                if let Some(field) = fields
-                    .iter()
-                    .find(|f| offset_in_span(offset, &f.value.get_span()))
-                {
-                    let child_typed = pattern_fields
-                        .iter()
-                        .find(|(name, _)| name == &field.name)
-                        .map(|(_, t)| t);
-                    if let Some(result) =
-                        resolve_enum_in_pattern(&field.value, child_typed, offset, file, snapshot)
-                    {
-                        return Some(result);
-                    }
-                    if is_shorthand_field(field, *span, snapshot)
-                        && let Some(vf) = variant_fields.iter().find(|vf| vf.name == field.name)
-                    {
-                        return Some(vf.name_span);
-                    }
-                    return None;
-                }
                 if !offset_in_variant_token_span(*span, offset, snapshot) {
                     return None;
                 }
@@ -493,22 +459,53 @@ pub(crate) fn resolve_enum_in_pattern(
             lookup_definition_span(identifier, file, snapshot)
         }
 
-        Pattern::Tuple { elements, .. } => {
-            let typed_elements = match typed_pattern {
-                Some(TypedPattern::Tuple { elements: te, .. }) => Some(te.as_slice()),
-                _ => None,
-            };
-            elements.iter().enumerate().find_map(|(i, pat)| {
-                let child_typed = typed_elements.and_then(|te| te.get(i));
-                resolve_enum_in_pattern(pat, child_typed, offset, file, snapshot)
-            })
-        }
+        Pattern::Slice { prefix, .. } => prefix
+            .iter()
+            .find_map(|pattern| resolve_enum_in_pattern(pattern, offset, file, snapshot)),
 
         Pattern::AsBinding { pattern, .. } => {
-            resolve_enum_in_pattern(pattern, typed_pattern, offset, file, snapshot)
+            resolve_enum_in_pattern(pattern, offset, file, snapshot)
         }
 
         _ => None,
+    }
+}
+
+fn record_pattern_field_span(
+    snapshot: &AnalysisSnapshot,
+    resolution: &RecordPatternResolution,
+    field_name: &str,
+) -> Option<Span> {
+    match resolution {
+        RecordPatternResolution::Struct { struct_name } => {
+            let DefinitionBody::Struct { fields, .. } =
+                &snapshot.definitions().get(struct_name.as_str())?.body
+            else {
+                return None;
+            };
+            fields
+                .iter()
+                .find(|field| field.name == field_name)
+                .map(|field| field.name_span)
+        }
+        RecordPatternResolution::EnumVariant {
+            enum_name,
+            variant_name,
+        } => {
+            let DefinitionBody::Enum { variants, .. } =
+                &snapshot.definitions().get(enum_name.as_str())?.body
+            else {
+                return None;
+            };
+            variants
+                .iter()
+                .find(|variant| variant.name == unqualified_name(variant_name))?
+                .fields
+                .iter()
+                .find(|field| field.name == field_name)
+                .map(|field| field.name_span)
+        }
+        RecordPatternResolution::Unresolved => None,
     }
 }
 
@@ -538,7 +535,7 @@ pub(crate) fn resolve_definition_span(
             let expression = find_expression_at(&file.items, offset)?;
             match expression {
                 Expression::Identifier {
-                    binding_id: Some(id),
+                    resolution: IdentifierResolution::Binding(id),
                     ..
                 } => snapshot.facts().bindings.get(id).map(|b| b.span),
 

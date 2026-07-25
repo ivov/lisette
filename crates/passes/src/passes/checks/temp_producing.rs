@@ -80,12 +80,12 @@ fn has_auto_address_on_call(expression: &Expression) -> bool {
     if let Expression::Call { expression, .. } = expression
         && let Expression::DotAccess {
             expression: receiver,
-            receiver_coercion,
+            resolution,
             ..
         } = expression.unwrap_parens()
     {
         if matches!(receiver.unwrap_parens(), Expression::Call { .. })
-            && *receiver_coercion == Some(ReceiverCoercion::AutoAddress)
+            && resolution.receiver_coercion() == Some(ReceiverCoercion::AutoAddress)
         {
             return true;
         }

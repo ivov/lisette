@@ -260,14 +260,14 @@ fn fstring_inner_needs_parens(expression: &Expression) -> bool {
 }
 
 fn numeric_adapt_target(ty: &Type, store: &Store) -> Option<Type> {
-    store.deep_resolve_alias(ty).literal_adaptation_target()
+    store.literal_adaptation_target(ty)
 }
 
 fn adapts_to_named_type(ty: &Type, store: &Store, kind: SimpleKind) -> bool {
     let peeled = store.deep_resolve_alias(ty);
     matches!(&peeled, Type::Nominal { id, .. }
         if store.is_nominal_defined_type(id.as_str())
-            && peeled.underlying_simple_kind() == Some(kind))
+            && store.underlying_simple_kind(&peeled) == Some(kind))
 }
 
 fn char_literal_codepoint(s: &str) -> Option<u64> {

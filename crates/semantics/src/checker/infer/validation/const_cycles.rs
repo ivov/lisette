@@ -1,7 +1,7 @@
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use ecow::EcoString;
-use syntax::ast::{Expression, Span};
+use syntax::ast::{Expression, IdentifierResolution, Span};
 
 use crate::checker::infer::InferCtx;
 
@@ -13,14 +13,6 @@ struct ConstEntry<'a> {
 
 impl InferCtx<'_> {
     pub fn check_const_cycles(&mut self, items_per_file: &[&[Expression]]) {
-        let store = self.store;
-        let module_const_names_empty = store
-            .get_module(&self.cursor.module_id)
-            .is_some_and(|m| m.const_names.is_empty());
-        if module_const_names_empty {
-            return;
-        }
-
         let mut consts: Vec<ConstEntry<'_>> = Vec::new();
         for items in items_per_file {
             for item in *items {
@@ -30,6 +22,7 @@ impl InferCtx<'_> {
                     expression,
                     ..
                 } = item
+                    && let Some(expression) = expression.value()
                 {
                     consts.push(ConstEntry {
                         name: identifier,
@@ -128,12 +121,12 @@ fn collect_const_refs<'a>(
     out: &mut Vec<&'a EcoString>,
 ) {
     if let Expression::Identifier {
-        value, qualified, ..
+        value,
+        resolution: IdentifierResolution::Unresolved,
+        ..
     } = expression
     {
-        if qualified.is_none()
-            && let Some(&name) = const_names.get(value)
-        {
+        if let Some(&name) = const_names.get(value) {
             out.push(name);
         }
         return;

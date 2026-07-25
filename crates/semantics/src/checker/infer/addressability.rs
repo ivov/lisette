@@ -3,10 +3,12 @@ use syntax::types::peel_to_range_type;
 
 use crate::checker::EnvResolve;
 use crate::checker::TypeEnv;
+use crate::store::Store;
 
 pub(crate) fn check_is_non_addressable(
     expression: &Expression,
     env: &TypeEnv,
+    store: &Store,
 ) -> Option<&'static str> {
     match expression {
         Expression::Identifier { .. } => None,
@@ -18,14 +20,14 @@ pub(crate) fn check_is_non_addressable(
             if is_non_addressable_origin {
                 Some("field access on non-addressable value")
             } else {
-                check_is_non_addressable(expression, env)
+                check_is_non_addressable(expression, env, store)
             }
         }
         Expression::IndexedAccess {
             expression, index, ..
         } => {
             let is_range_index = matches!(index.unwrap_parens(), Expression::Range { .. })
-                || peel_to_range_type(&index.get_type()).is_some();
+                || peel_to_range_type(&index.get_type(), |id| store.get_definition(id)).is_some();
             if is_range_index {
                 return Some("sub-slice expression");
             }
@@ -41,7 +43,7 @@ pub(crate) fn check_is_non_addressable(
             if matches!(expression.unwrap_parens(), Expression::Call { .. }) {
                 Some("index access on function call")
             } else {
-                check_is_non_addressable(expression, env)
+                check_is_non_addressable(expression, env, store)
             }
         }
         Expression::Unary {
@@ -49,7 +51,7 @@ pub(crate) fn check_is_non_addressable(
             ..
         } => None,
         Expression::StructCall { .. } => None,
-        Expression::Paren { expression, .. } => check_is_non_addressable(expression, env),
+        Expression::Paren { expression, .. } => check_is_non_addressable(expression, env, store),
         Expression::Call { .. } => None,
         Expression::Literal { .. } => Some("literal"),
         Expression::Binary { .. } => Some("binary expression"),
@@ -69,6 +71,7 @@ pub(crate) fn check_is_non_addressable(
 pub(crate) fn check_non_addressable_assignment_target(
     expression: &Expression,
     env: &TypeEnv,
+    store: &Store,
 ) -> Option<&'static str> {
     match expression.unwrap_parens() {
         Expression::Identifier { .. } => None,
@@ -78,15 +81,15 @@ pub(crate) fn check_non_addressable_assignment_target(
             {
                 None
             } else {
-                check_non_addressable_assignment_target(expression, env)
+                check_non_addressable_assignment_target(expression, env, store)
             }
         }
         Expression::IndexedAccess {
             expression: base, ..
         } => {
             if base.get_type().resolve_in(env).get_name() == Some("Array") {
-                check_is_non_addressable(base, env)
-                    .or_else(|| check_non_addressable_assignment_target(base, env))
+                check_is_non_addressable(base, env, store)
+                    .or_else(|| check_non_addressable_assignment_target(base, env, store))
             } else {
                 None
             }

@@ -105,7 +105,7 @@ pub(crate) fn run(
 fn source_by_file<'a>(analysis: &AnalysisContext<'a>) -> HashMap<u32, &'a str> {
     let mut sources = HashMap::default();
     for module in analysis.store.modules.values() {
-        for (file_id, file) in &module.files {
+        for (file_id, file) in module.source_file_entries() {
             sources.insert(*file_id, file.source.as_str());
         }
     }

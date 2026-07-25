@@ -3,7 +3,7 @@ use std::sync::Arc;
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use diagnostics::SemanticResult;
-use syntax::program::{ModuleInfo, MutationInfo, UnusedInfo};
+use syntax::program::{MutationInfo, UnusedInfo};
 
 use semantics::cache::{EmitStamp, compute_emit_artifact_hash, save_module_cache};
 use semantics::facts::Facts;
@@ -100,8 +100,6 @@ pub fn analyze(input: AnalyzeInput) -> AnalyzeOutput {
 
     let mut files = HashMap::default();
     let mut definitions = HashMap::default();
-    let mut const_names = HashSet::default();
-    let mut modules = HashMap::default();
 
     let go_module_ids: HashSet<String> = store
         .modules
@@ -110,41 +108,25 @@ pub fn analyze(input: AnalyzeInput) -> AnalyzeOutput {
         .cloned()
         .collect();
 
-    for (mod_id, module) in store.modules {
+    for (_, module) in store.modules {
         // Worker views are gone by now, so this unwraps without cloning.
         let module = Arc::try_unwrap(module).unwrap_or_else(|shared| (*shared).clone());
         let is_internal = module.is_internal();
-
-        const_names.extend(module.const_names);
         definitions.extend(module.definitions);
 
-        // Internal modules (prelude, **nominal, go:...) stay out of `modules`
-        // so emit and lints skip them; their typedef files still join `files`
-        // so the LSP can map typedef file IDs to URIs for go-to-definition.
+        // Internal typedef files remain available so the LSP can map their IDs
+        // to URIs for go-to-definition. Source files identify their own module.
         if is_internal {
-            files.extend(module.typedefs);
+            files.extend(module.files.into_iter().filter(|(_, file)| file.is_d_lis()));
             continue;
         }
 
-        modules.insert(
-            mod_id,
-            ModuleInfo {
-                file_ids: module.files.keys().copied().collect(),
-                typedef_ids: module.typedefs.keys().copied().collect(),
-                id: module.id.clone(),
-                path: module.id,
-            },
-        );
-
         files.extend(module.files);
-        files.extend(module.typedefs);
     }
 
     let result = SemanticResult {
         files,
         definitions,
-        const_names,
-        modules,
         errors,
         lints,
         entry_module_id: ENTRY_MODULE_ID.to_string(),
@@ -157,8 +139,6 @@ pub fn analyze(input: AnalyzeInput) -> AnalyzeOutput {
         typedef_paths: store.typedef_paths,
         go_package_names: store.go_package_names,
         go_module_ids,
-        bound_types: std::mem::take(&mut facts.bound_types),
-        resolved_definitions: std::mem::take(&mut facts.resolved_definitions),
     };
 
     AnalyzeOutput {

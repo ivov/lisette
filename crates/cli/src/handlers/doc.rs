@@ -134,14 +134,13 @@ fn generics_to_string(generics: &[Generic]) -> String {
             generics
                 .iter()
                 .map(|g| {
-                    if g.bounds.is_empty() {
+                    if g.bound_count() == 0 {
                         g.name.to_string()
                     } else {
                         format!(
                             "{}: {}",
                             g.name,
-                            g.bounds
-                                .iter()
+                            g.bounds()
                                 .map(annotation_to_string)
                                 .collect::<Vec<_>>()
                                 .join(" + ")

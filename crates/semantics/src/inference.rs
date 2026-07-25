@@ -197,18 +197,15 @@ pub fn run_inference(input: AnalyzeInput) -> InferenceOutput {
             let file_id = store.new_file_id();
             let result = syntax::build_ast(&content.source, file_id);
             sink.extend_parse_errors(result.errors);
-            store.store_file(
+            store.store_file(File::new(
                 ENTRY_MODULE_ID,
-                File::new(
-                    ENTRY_MODULE_ID,
-                    &filename,
-                    &content.display_path,
-                    &content.source,
-                    result.ast,
-                    result.file_comment,
-                    file_id,
-                ),
-            );
+                &filename,
+                &content.display_path,
+                &content.source,
+                result.ast,
+                result.file_comment,
+                file_id,
+            ));
         }
     }
 
@@ -721,8 +718,8 @@ fn infer_modules(checker: &mut TaskState, store: &mut Store, to_infer: &[String]
         checker.absorb_outputs(outputs);
     }
 
-    for (module_id, typed_file) in std::mem::take(&mut checker.typed_files) {
-        store.store_file(&module_id, typed_file);
+    for (_, typed_file) in std::mem::take(&mut checker.typed_files) {
+        store.store_file(typed_file);
     }
 
     checker.check_post_inference_bounds(store);

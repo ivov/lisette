@@ -1,11 +1,17 @@
 use crate::passes::walk::NodeCtx;
 use rustc_hash::FxHashSet;
-use syntax::ast::{BindingId, Expression, Literal, Span, UnaryOperator};
+use syntax::ast::{BindingId, Expression, IdentifierResolution, Literal, Span, UnaryOperator};
 use syntax::types::Type;
 
 pub fn check_waitgroup_add_in_task(expression: &Expression, ctx: &NodeCtx) {
     let body = match expression {
-        Expression::Function { body, .. } | Expression::Lambda { body, .. } => body,
+        Expression::Function { body, .. } => {
+            let Some(body) = body.definition() else {
+                return;
+            };
+            body
+        }
+        Expression::Lambda { body, .. } => body.as_ref(),
         _ => return,
     };
 
@@ -82,7 +88,7 @@ fn waitgroup_method(callee: &Expression) -> Option<(&str, BindingId)> {
         return None;
     };
     let Expression::Identifier {
-        binding_id: Some(binding),
+        resolution: IdentifierResolution::Binding(binding),
         ..
     } = receiver.unwrap_parens()
     else {

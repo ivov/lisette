@@ -31,7 +31,7 @@ fn needs_explicit_type_declaration(
             return true;
         }
     }
-    if is_fn_alias_nominal(binding_ty) {
+    if planner.is_function_alias(binding_ty) {
         let value_ty = value.get_type();
         if matches!(value_ty.unwrap_forall(), Type::Function(_)) {
             return true;
@@ -61,17 +61,6 @@ fn unwrap_unary_negation(expression: &Expression) -> &Expression {
     }
 }
 
-fn is_fn_alias_nominal(ty: &Type) -> bool {
-    let Type::Nominal {
-        underlying_ty: Some(inner),
-        ..
-    } = ty.unwrap_forall()
-    else {
-        return false;
-    };
-    matches!(inner.unwrap_forall(), Type::Function(_))
-}
-
 /// Pick the Go type for a `let` binding's `var X T` temp. Diverging values
 /// use the binding type so dead `return x` paths still typecheck; branching
 /// values that produce tuples widen slots to match the assignment site.
@@ -87,7 +76,7 @@ fn resolve_let_temp_declaration_ty(
         return binding_ty.clone();
     }
     let base = if value_ty.is_unit() || value_ty.is_never() {
-        if !binding_ty.is_unit() && !binding_ty.is_variable() {
+        if !binding_ty.is_unit() && !binding_ty.is_variable() && !binding_ty.is_placeholder() {
             binding_ty.clone()
         } else {
             value_ty
@@ -350,14 +339,15 @@ impl Planner<'_> {
         }
         let return_ctx = self.return_ctx();
         let resolved_ty = resolve_let_temp_declaration_ty(self, value, binding_ty);
-        let has_variable_ok_ty = matches!(
+        let needs_context = |ty: &Type| ty.is_variable() || ty.is_placeholder();
+        let has_contextual_ok_ty = matches!(
             value,
             Expression::TryBlock { .. } | Expression::RecoverBlock { .. }
-        ) && !resolved_ty.is_variable()
-            && resolved_ty.ok_type().is_variable();
+        ) && !needs_context(&resolved_ty)
+            && needs_context(&resolved_ty.ok_type());
 
-        let var_ty = if has_variable_ok_ty {
-            if !binding_ty.is_variable() && !binding_ty.ok_type().is_variable() {
+        let var_ty = if has_contextual_ok_ty {
+            if !needs_context(binding_ty) && !needs_context(&binding_ty.ok_type()) {
                 self.go_type_string(binding_ty)
             } else if let Some(ctx_ty) = return_ctx.ty().cloned() {
                 if Fallible::from_type(&ctx_ty).is_some() {
@@ -447,7 +437,6 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
             LetKind::Refutable => {
                 let ap = AnnotatedPattern {
                     pattern: &self.binding.pattern,
-                    typed: self.binding.typed_pattern.as_ref(),
                 };
                 let statements = if self.assert {
                     let span = self.binding.pattern.get_span();
@@ -486,7 +475,6 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
                 let statements = self.planner.lower_irrefutable_pattern_site(
                     PatternSubject::expression(self.value, &self.binding.pattern, None),
                     &self.binding.pattern,
-                    self.binding.typed_pattern.as_ref(),
                     &value_ty,
                 );
                 LetForm::ComplexPattern {

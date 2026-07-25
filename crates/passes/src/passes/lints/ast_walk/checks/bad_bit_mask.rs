@@ -6,7 +6,7 @@ pub fn check_bad_bit_mask(expression: &Expression, ctx: &NodeCtx) {
     let Expression::Binary { span, .. } = expression else {
         return;
     };
-    let Some(mask) = mask_comparison(expression) else {
+    let Some(mask) = mask_comparison(expression, ctx.store) else {
         return;
     };
     let Some(always_true) = constant_result(&mask) else {

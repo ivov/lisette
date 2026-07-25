@@ -22,14 +22,9 @@ use syntax::ast::{Binding, Expression, Pattern, SelectArm, SelectArmPattern};
 pub(crate) fn check(expression: &Expression, ctx: &NodeCtx) {
     let sink = ctx.sink;
     match expression {
-        Expression::Let {
-            binding,
-            else_block,
-            assert,
-            ..
-        } => {
+        Expression::Let { binding, mode, .. } => {
             reject_as_binding(&binding.pattern, sink);
-            if else_block.is_none() && !assert {
+            if mode.else_block().is_none() && !mode.is_assert() {
                 check_binding_pattern(&binding.pattern, sink);
             } else {
                 check_literal_only(&binding.pattern, sink);

@@ -236,11 +236,15 @@ impl TaskState {
                     .equality_index
                     .insert_ufcs_lowered(id.to_string(), visibility);
             } else if matches!(classification, UserEquals::ValidReceiver) {
-                store.equality_index.insert_method(
-                    id.to_string(),
-                    visibility,
-                    synthesized.contains(id_str),
-                );
+                if synthesized.contains(id_str) {
+                    store
+                        .equality_index
+                        .insert_synthesized_method(id.to_string(), visibility);
+                } else {
+                    store
+                        .equality_index
+                        .insert_declared_method(id.to_string(), visibility);
+                }
             }
         }
     }
@@ -292,11 +296,11 @@ impl TaskState {
                 name_span,
                 doc: None,
                 body: DefinitionBody::Value {
+                    kind: syntax::program::ValueKind::Runtime,
                     allowed_lints: vec![],
                     go_hints: vec![],
                     go_name: None,
                     go_type_param_recipe: None,
-                    const_value: None,
                 },
             });
     }

@@ -3,7 +3,13 @@ use syntax::ast::Expression;
 
 pub fn check_exit_after_defer(expression: &Expression, ctx: &NodeCtx) {
     let body = match expression {
-        Expression::Function { body, .. } | Expression::Lambda { body, .. } => body,
+        Expression::Function { body, .. } => {
+            let Some(body) = body.definition() else {
+                return;
+            };
+            body
+        }
+        Expression::Lambda { body, .. } => body.as_ref(),
         _ => return,
     };
 

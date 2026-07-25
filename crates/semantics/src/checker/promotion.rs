@@ -436,7 +436,6 @@ mod tests {
         Type::Nominal {
             id: Symbol::from_parts(MODULE, name),
             params: vec![],
-            underlying_ty: None,
         }
     }
 
@@ -540,12 +539,7 @@ mod tests {
                 DefinitionBody::Struct {
                     generics: generics
                         .into_iter()
-                        .map(|g| Generic {
-                            name: g.into(),
-                            bounds: vec![],
-                            resolved_bounds: vec![],
-                            span: Span::dummy(),
-                        })
+                        .map(|g| Generic::new(g, vec![], Span::dummy()))
                         .collect(),
                     fields,
                     kind: StructKind::Record,
@@ -591,7 +585,6 @@ mod tests {
         Type::Nominal {
             id: Symbol::from_parts(MODULE, name),
             params: args,
-            underlying_ty: None,
         }
     }
 

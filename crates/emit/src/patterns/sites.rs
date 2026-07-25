@@ -1,7 +1,7 @@
 use crate::patterns::binding_decls::pattern_has_bindings;
 use std::borrow::Cow;
 
-use syntax::ast::{Expression, MatchArm, Pattern, Span, TypedPattern};
+use syntax::ast::{Expression, MatchArm, Pattern, Span};
 use syntax::types::Type;
 
 use crate::Planner;
@@ -23,7 +23,6 @@ use crate::write_line;
 #[derive(Clone, Copy)]
 pub(crate) struct AnnotatedPattern<'a> {
     pub(crate) pattern: &'a Pattern,
-    pub(crate) typed: Option<&'a TypedPattern>,
 }
 
 #[derive(Clone, Copy)]
@@ -140,12 +139,11 @@ impl Planner<'_> {
         &mut self,
         subject: PatternSubject<'_>,
         pattern: &Pattern,
-        typed: Option<&TypedPattern>,
         subject_ty: &Type,
     ) -> Vec<LoweredStatement> {
         let mut statements = Vec::new();
         let resolved = self.resolve_pattern_subject(&mut statements, subject);
-        let info = decision_tree::collect_pattern_info(self, pattern, typed, subject_ty);
+        let info = decision_tree::collect_pattern_info(self, pattern, subject_ty);
         self.require_packages(&info.packages);
 
         let (body, used) = self.capture_go_uses(|this| {
@@ -263,7 +261,6 @@ impl Planner<'_> {
     pub(crate) fn lower_while_let(
         &mut self,
         pattern: &Pattern,
-        typed: Option<&TypedPattern>,
         scrutinee: &Expression,
         body: &Expression,
     ) -> LoweredBlock {
@@ -298,7 +295,7 @@ impl Planner<'_> {
             };
         }
 
-        let info = decision_tree::collect_pattern_info(self, pattern, typed, &scrutinee_ty);
+        let info = decision_tree::collect_pattern_info(self, pattern, &scrutinee_ty);
         self.require_packages(&info.packages);
         let mut loop_body = subject_setup;
         let (effective, ok_var) =
@@ -383,12 +380,12 @@ impl Planner<'_> {
         subject: TypedSubject,
         fail: RefutableFail,
     ) -> Vec<LoweredStatement> {
-        let AnnotatedPattern { pattern, typed } = ap;
+        let AnnotatedPattern { pattern } = ap;
         let TypedSubject {
             var: subject_var,
             ty: subject_ty,
         } = subject;
-        let info = decision_tree::collect_pattern_info(self, pattern, typed, subject_ty);
+        let info = decision_tree::collect_pattern_info(self, pattern, subject_ty);
         self.require_packages(&info.packages);
 
         let mut statements = Vec::new();
@@ -446,7 +443,7 @@ impl Planner<'_> {
         subject: TypedSubject,
         fail: RefutableFail,
     ) -> Vec<LoweredStatement> {
-        let AnnotatedPattern { pattern, typed } = ap;
+        let AnnotatedPattern { pattern } = ap;
         let TypedSubject {
             var: subject_var,
             ty: subject_ty,
@@ -456,7 +453,7 @@ impl Planner<'_> {
         };
         let pre_let_snapshot = self.scope.binding_snapshot();
         let mut statements = Vec::new();
-        self.lower_binding_declarations_with_type(&mut statements, pattern, binding_ty, typed);
+        self.lower_binding_declarations_with_type(&mut statements, pattern, binding_ty);
 
         let mut asserts = Vec::new();
         let alts =
@@ -532,7 +529,7 @@ impl Planner<'_> {
     ) -> LetElseAlternatives<'s> {
         let collected: Vec<PatternInfo> = patterns
             .iter()
-            .map(|alt| decision_tree::collect_pattern_info(self, alt, None, subject_ty))
+            .map(|alt| decision_tree::collect_pattern_info(self, alt, subject_ty))
             .collect();
         for info in &collected {
             self.require_packages(&info.packages);
@@ -568,7 +565,7 @@ impl Planner<'_> {
         } = subject;
         let mut alternatives: Vec<_> = patterns
             .iter()
-            .map(|alt| decision_tree::collect_pattern_info(self, alt, None, subject_ty))
+            .map(|alt| decision_tree::collect_pattern_info(self, alt, subject_ty))
             .collect();
         for info in &alternatives {
             self.require_packages(&info.packages);
@@ -663,12 +660,12 @@ impl Planner<'_> {
         place: &PlacePlan,
         failure: impl FnOnce(&mut Planner) -> Option<LoweredBlock>,
     ) -> Vec<LoweredStatement> {
-        let AnnotatedPattern { pattern, typed } = ap;
+        let AnnotatedPattern { pattern } = ap;
         let TypedSubject {
             var: subject_var,
             ty: subject_ty,
         } = subject;
-        let info = decision_tree::collect_pattern_info(self, pattern, typed, subject_ty);
+        let info = decision_tree::collect_pattern_info(self, pattern, subject_ty);
         self.require_packages(&info.packages);
         let mut statements = Vec::new();
         let (effective, ok_var) =
@@ -757,20 +754,6 @@ pub(crate) fn unwrap_some_pattern(pattern: &Pattern) -> &Pattern {
         return &fields[0];
     }
     pattern
-}
-
-pub(crate) fn unwrap_some_typed_pattern(typed: Option<&TypedPattern>) -> Option<&TypedPattern> {
-    if let Some(TypedPattern::EnumVariant {
-        variant_name,
-        fields,
-        ..
-    }) = typed
-        && variant_name == "Some"
-        && fields.len() == 1
-    {
-        return Some(&fields[0]);
-    }
-    None
 }
 
 fn peel_as_binding(pattern: &Pattern) -> &Pattern {

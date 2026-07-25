@@ -1,24 +1,27 @@
-use syntax::ast::{Annotation, Binding, Expression, Pattern, RestPattern, Span, TypedPattern};
+use syntax::ast::{Annotation, Binding, Expression, Pattern, RestPattern, Span};
 use syntax::types::Type;
 use tower_lsp::lsp_types::{InlayHint, InlayHintKind, InlayHintLabel};
 
 use crate::patterns::get_pattern_element_type;
 use crate::position::LineIndex;
+use crate::snapshot::AnalysisSnapshot;
 
 /// Inlay hints for `items` within the range.
 pub(crate) fn collect(
+    snapshot: &AnalysisSnapshot,
     items: &[Expression],
     range: (u32, u32),
     line_index: &LineIndex,
 ) -> Vec<InlayHint> {
     let mut hints = Vec::new();
     for item in items {
-        walk(item, range, line_index, &mut hints);
+        walk(snapshot, item, range, line_index, &mut hints);
     }
     hints
 }
 
 fn walk(
+    snapshot: &AnalysisSnapshot,
     expression: &Expression,
     range: (u32, u32),
     line_index: &LineIndex,
@@ -36,32 +39,19 @@ fn walk(
         Expression::Match { subject, arms, .. } => {
             let fallback = subject.get_type();
             for arm in arms {
-                pattern_hints(
-                    &arm.pattern,
-                    arm.typed_pattern.as_ref(),
-                    &fallback,
-                    range,
-                    line_index,
-                    hints,
-                );
+                pattern_hints(snapshot, &arm.pattern, &fallback, range, line_index, hints);
             }
         }
 
         Expression::IfLet {
-            pattern,
-            scrutinee,
-            typed_pattern,
-            ..
+            pattern, scrutinee, ..
         }
         | Expression::WhileLet {
-            pattern,
-            scrutinee,
-            typed_pattern,
-            ..
+            pattern, scrutinee, ..
         } => {
             pattern_hints(
+                snapshot,
                 pattern,
-                typed_pattern.as_ref(),
                 &scrutinee.get_type(),
                 range,
                 line_index,
@@ -95,7 +85,7 @@ fn walk(
     }
 
     for child in expression.children() {
-        walk(child, range, line_index, hints);
+        walk(snapshot, child, range, line_index, hints);
     }
 }
 
@@ -117,8 +107,8 @@ fn binding_type_hint(
 }
 
 fn pattern_hints(
+    snapshot: &AnalysisSnapshot,
     pattern: &Pattern,
-    typed_pattern: Option<&TypedPattern>,
     fallback: &Type,
     range: (u32, u32),
     line_index: &LineIndex,
@@ -128,7 +118,7 @@ fn pattern_hints(
     collect_identifier_spans(pattern, &mut spans);
     for span in spans {
         if let Some((ty, name_span)) =
-            get_pattern_element_type(pattern, typed_pattern, fallback, span.byte_offset)
+            get_pattern_element_type(snapshot, pattern, fallback, span.byte_offset)
         {
             let at = name_span.byte_offset + name_span.byte_length;
             push_type_hint(at, &ty, range, line_index, hints);
@@ -187,7 +177,8 @@ fn lambda_hints(
         && !matches!(body, Expression::Lambda { .. })
         && let Some(ret) = ty.get_function_ret()
         && !ret.is_unit()
-        && !ret.is_type_var()
+        && !ret.is_variable()
+        && !ret.is_placeholder()
         && !ret.is_error()
     {
         let at = leftmost_offset(body);
@@ -214,7 +205,7 @@ fn push_type_hint(
     line_index: &LineIndex,
     hints: &mut Vec<InlayHint>,
 ) {
-    if ty.is_type_var() || ty.is_error() {
+    if ty.is_variable() || ty.is_placeholder() || ty.is_error() {
         return;
     }
     if at >= range.0 && at < range.1 {

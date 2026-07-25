@@ -75,7 +75,6 @@ impl TaskState {
         Type::Nominal {
             id: self.builtin_qualified_name(store, "Result"),
             params: vec![ok_type, error_type],
-            underlying_ty: None,
         }
     }
 
@@ -83,7 +82,6 @@ impl TaskState {
         Type::Nominal {
             id: self.builtin_qualified_name(store, "Option"),
             params: vec![some_type],
-            underlying_ty: None,
         }
     }
 
@@ -91,7 +89,6 @@ impl TaskState {
         Type::Nominal {
             id: self.builtin_qualified_name(store, "PanicValue"),
             params: vec![],
-            underlying_ty: None,
         }
     }
 
@@ -99,7 +96,6 @@ impl TaskState {
         Type::Nominal {
             id: self.builtin_qualified_name(store, "Range"),
             params: vec![element_type],
-            underlying_ty: None,
         }
     }
 
@@ -107,7 +103,6 @@ impl TaskState {
         Type::Nominal {
             id: self.builtin_qualified_name(store, "RangeInclusive"),
             params: vec![element_type],
-            underlying_ty: None,
         }
     }
 
@@ -115,7 +110,6 @@ impl TaskState {
         Type::Nominal {
             id: self.builtin_qualified_name(store, "RangeFrom"),
             params: vec![element_type],
-            underlying_ty: None,
         }
     }
 
@@ -123,7 +117,6 @@ impl TaskState {
         Type::Nominal {
             id: self.builtin_qualified_name(store, "RangeTo"),
             params: vec![element_type],
-            underlying_ty: None,
         }
     }
 
@@ -131,7 +124,6 @@ impl TaskState {
         Type::Nominal {
             id: self.builtin_qualified_name(store, "RangeToInclusive"),
             params: vec![element_type],
-            underlying_ty: None,
         }
     }
 

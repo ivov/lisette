@@ -3,20 +3,16 @@ use std::path::PathBuf;
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use syntax::ParseError;
-use syntax::ast::Span;
 use syntax::program::{
-    Definition, EmitInput, EqualityIndex, File, ModuleInfo, MutationInfo, ResolvedDefinitions,
-    TestIndex, UnusedInfo,
+    Definition, EmitInput, EqualityIndex, File, MutationInfo, TestIndex, UnusedInfo,
 };
-use syntax::types::{Symbol, Type};
+use syntax::types::Symbol;
 
 use crate::LisetteDiagnostic;
 
 pub struct SemanticResult {
     pub files: HashMap<u32, File>,
     pub definitions: HashMap<Symbol, Definition>,
-    pub const_names: HashSet<Symbol>,
-    pub modules: HashMap<String, ModuleInfo>,
     pub errors: Vec<LisetteDiagnostic>,
     pub lints: Vec<LisetteDiagnostic>,
     pub entry_module_id: String,
@@ -32,9 +28,6 @@ pub struct SemanticResult {
     pub typedef_paths: HashMap<u32, PathBuf>,
     pub go_package_names: HashMap<String, String>,
     pub go_module_ids: HashSet<String>,
-    /// Resolved type for each generic-bound annotation, keyed by span.
-    pub bound_types: HashMap<Span, Type>,
-    pub resolved_definitions: ResolvedDefinitions,
 }
 
 impl SemanticResult {
@@ -42,8 +35,6 @@ impl SemanticResult {
         Self {
             files: HashMap::default(),
             definitions: HashMap::default(),
-            const_names: HashSet::default(),
-            modules: HashMap::default(),
             errors: errors.into_iter().map(Into::into).collect(),
             lints: vec![],
             entry_module_id: entry_module_id.to_string(),
@@ -56,8 +47,6 @@ impl SemanticResult {
             typedef_paths: HashMap::default(),
             go_package_names: HashMap::default(),
             go_module_ids: HashSet::default(),
-            bound_types: HashMap::default(),
-            resolved_definitions: HashMap::default(),
         }
     }
 
@@ -69,8 +58,6 @@ impl SemanticResult {
         EmitInput {
             files: self.files,
             definitions: self.definitions,
-            const_names: self.const_names,
-            modules: self.modules,
             entry_module_id: self.entry_module_id,
             unused: self.unused,
             mutations: self.mutations,
@@ -80,8 +67,6 @@ impl SemanticResult {
             test_index: self.test_index,
             go_package_names: self.go_package_names,
             go_module_ids: self.go_module_ids,
-            bound_types: self.bound_types,
-            resolved_definitions: self.resolved_definitions,
         }
     }
 }

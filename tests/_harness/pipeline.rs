@@ -4,14 +4,11 @@ use diagnostics::{LisetteDiagnostic, LocalSink};
 use semantics::{checker::TaskState, checker::infer::InferCtx, store::Store};
 use stdlib::{Target, get_go_stdlib_typedef};
 use syntax::{
-    ast::Expression,
+    ast::{Expression, FunctionBody},
     desugar,
     lex::Lexer,
     parse::Parser,
-    program::{
-        Definition, EqualityIndex, File, FileImport, MutationInfo, ResolvedDefinitions, UnusedInfo,
-        Visibility,
-    },
+    program::{Definition, EqualityIndex, File, FileImport, MutationInfo, UnusedInfo, Visibility},
     types::Symbol,
 };
 
@@ -104,14 +101,12 @@ impl CompiledTest {
         let (
             typed_ast,
             definitions,
-            const_names,
             unused,
             mutations,
             ufcs_methods,
             equality_index,
             go_package_names,
             go_module_ids,
-            resolved_definitions,
         ) = {
             let mut checker = TaskState::with_fresh_allocator();
             checker.extend_ufcs_methods(semantics::prelude::compute_prelude_ufcs(&store));
@@ -161,18 +156,15 @@ impl CompiledTest {
             InferCtx::new(&mut checker, &store).check_const_cycles(&[self.ast.as_slice()]);
 
             let test_file_id = store.new_file_id();
-            store.store_file(
+            store.store_file(File::new(
                 TEST_MODULE_ID,
-                File::new(
-                    TEST_MODULE_ID,
-                    "test.lis",
-                    "test.lis",
-                    "",
-                    self.ast.clone(),
-                    None,
-                    test_file_id,
-                ),
-            );
+                "test.lis",
+                "test.lis",
+                "",
+                self.ast.clone(),
+                None,
+                test_file_id,
+            ));
             checker.finalize_equality(&mut store);
             checker.check_pending_generic_bounds(&store);
 
@@ -208,18 +200,15 @@ impl CompiledTest {
             if !checker.failed() {
                 // Overwrite the stored file with the typed AST so passes::run
                 // sees post-inference items when iterating store.modules.
-                store.store_file(
+                store.store_file(File::new(
                     TEST_MODULE_ID,
-                    File::new(
-                        TEST_MODULE_ID,
-                        "test.lis",
-                        "test.lis",
-                        "",
-                        typed_ast.clone(),
-                        None,
-                        test_file_id,
-                    ),
-                );
+                    "test.lis",
+                    "test.lis",
+                    "",
+                    typed_ast.clone(),
+                    None,
+                    test_file_id,
+                ));
                 store.build_closed_domains();
                 let ufcs_methods = checker.shared_ufcs_methods();
                 let analysis = semantics::context::AnalysisContext::new(&store, &ufcs_methods);
@@ -263,12 +252,6 @@ impl CompiledTest {
                 .map(|(k, v)| (k.clone(), v.clone()))
                 .collect();
 
-            let const_names: HashSet<Symbol> = store
-                .modules
-                .values()
-                .flat_map(|m| m.const_names.iter().cloned())
-                .collect();
-
             let mut unused = UnusedInfo::default();
             let mut mutations = MutationInfo::default();
             for (&binding_id, b) in checker.facts.bindings.iter() {
@@ -280,7 +263,6 @@ impl CompiledTest {
 
             let ufcs_methods = checker.take_ufcs_methods();
             let equality_index = std::mem::take(&mut store.equality_index);
-            let resolved_definitions = std::mem::take(&mut checker.facts.resolved_definitions);
             let go_package_names = store.go_package_names.clone();
             let go_module_ids: HashSet<String> = store
                 .modules
@@ -294,14 +276,12 @@ impl CompiledTest {
             (
                 typed_ast,
                 definitions,
-                const_names,
                 unused,
                 mutations,
                 ufcs_methods,
                 equality_index,
                 go_package_names,
                 go_module_ids,
-                resolved_definitions,
             )
         };
 
@@ -309,7 +289,6 @@ impl CompiledTest {
             ast: typed_ast,
             errors: sink.take(),
             definitions,
-            const_names,
             module_id: TEST_MODULE_ID.to_string(),
             unused,
             mutations,
@@ -317,7 +296,6 @@ impl CompiledTest {
             equality_index,
             go_package_names,
             go_module_ids,
-            resolved_definitions,
         }
     }
 }
@@ -326,7 +304,6 @@ pub struct InferenceResult {
     pub ast: Vec<Expression>,
     pub errors: Vec<LisetteDiagnostic>,
     pub definitions: HashMap<Symbol, Definition>,
-    pub const_names: HashSet<Symbol>,
     pub module_id: String,
     pub unused: UnusedInfo,
     pub mutations: MutationInfo,
@@ -334,7 +311,6 @@ pub struct InferenceResult {
     pub equality_index: EqualityIndex,
     pub go_package_names: HashMap<String, String>,
     pub go_module_ids: HashSet<String>,
-    pub resolved_definitions: ResolvedDefinitions,
 }
 
 fn unwrap_test_wrapper(expression: Expression) -> Expression {
@@ -350,6 +326,9 @@ fn unwrap_test_wrapper(expression: Expression) -> Expression {
         unreachable!()
     };
 
+    let FunctionBody::Definition(body) = body else {
+        panic!("Expected definition for {TEST_WRAPPER_NAME} wrapper function");
+    };
     let Expression::Block { items, .. } = *body else {
         panic!(
             "Expected Block as body of {} wrapper function",

@@ -51,7 +51,14 @@ impl Planner<'_> {
     pub(crate) fn generics_to_string(&mut self, generics: &[Generic]) -> String {
         let resolved_generics = generics
             .iter()
-            .map(|generic| (generic.name.clone(), generic.resolved_bounds.clone()))
+            .map(|generic| {
+                let bounds = generic
+                    .resolved_bounds()
+                    .expect("generic bounds must be resolved before emission")
+                    .cloned()
+                    .collect();
+                (generic.name.clone(), bounds)
+            })
             .collect::<Vec<_>>();
         self.resolved_generics_to_string(&resolved_generics)
     }
