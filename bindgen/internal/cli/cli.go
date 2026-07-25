@@ -154,16 +154,19 @@ func ParseTargets(s string) ([]Target, error) {
 		return nil, fmt.Errorf("empty target list")
 	}
 	var targets []Target
+	seen := make(map[Target]bool)
 	for _, part := range strings.Split(s, ",") {
 		part = strings.TrimSpace(part)
-		slash := strings.Index(part, "/")
-		if slash < 0 {
+		goos, goarch, ok := strings.Cut(part, "/")
+		if !ok || goos == "" || goarch == "" || strings.Contains(goarch, "/") {
 			return nil, fmt.Errorf("target %q: expected GOOS/GOARCH", part)
 		}
-		targets = append(targets, Target{
-			GOOS:   part[:slash],
-			GOARCH: part[slash+1:],
-		})
+		target := Target{goos: goos, goarch: goarch}
+		if seen[target] {
+			return nil, fmt.Errorf("duplicate target %q", part)
+		}
+		seen[target] = true
+		targets = append(targets, target)
 	}
 	return targets, nil
 }
@@ -171,81 +174,36 @@ func ParseTargets(s string) ([]Target, error) {
 func generateFromPackage(pkg *packages.Package, displayPath, lisetteVersion, goVersion string, cfg *config.Config) GeneratePkgResult {
 	converter := convert.NewConverter(pkg.PkgPath, pkg, cfg)
 	exports := extract.ExtractExports(pkg, converter.EmbedIsFaithful)
-	var results []convert.ConvertResult
-	for _, exp := range exports {
-		results = append(results, converter.Convert(exp))
-	}
-
-	converter.FinalizeInterfaceBuilders(results)
-
-	constGroups, constantTypes, constGroupTypeNames, bitFlagSetTypeNames := convert.DetectConstGroups(results, exports, cfg, pkg.PkgPath)
-
-	groupConstants := make(map[string][]convert.ConvertResult)
-	for i, result := range results {
-		if typeName, isGroupConstant := constantTypes[i]; isGroupConstant {
-			groupConstants[typeName] = append(groupConstants[typeName], result)
-		}
-	}
-
-	groupTypeResult := make(map[string]convert.ConvertResult)
-	for _, result := range results {
-		if result.Kind == extract.ExportType && constGroupTypeNames[result.Name] {
-			groupTypeResult[result.Name] = result
-		}
-	}
+	converted := converter.ConvertAll(exports)
 
 	closedDomainTypeNames := make(map[string]bool)
-	for typeName := range constGroupTypeNames {
-		if cfg.IsClosedDomain(pkg.PkgPath, typeName) {
-			closedDomainTypeNames[typeName] = true
+	for _, group := range converted.ConstGroups {
+		if cfg.IsClosedDomain(pkg.PkgPath, group.Type.Name) {
+			closedDomainTypeNames[group.Type.Name] = true
 		}
 	}
 
-	emitter := emit.NewEmitter(cfg, pkg.PkgPath, pkg.Name, bitFlagSetTypeNames, closedDomainTypeNames)
+	emitter := emit.NewEmitter(cfg, pkg.PkgPath, pkg.Name, converted.BitFlagSetTypeNames, closedDomainTypeNames)
 	emitter.EmitHeader(displayPath, pkg.Name, lisetteVersion, goVersion)
 
-	selfQualifies := false
-	for _, result := range results {
-		if result.Kind == extract.ExportType && convert.CollidesWithBuiltinType(result.Name, len(result.TypeParams)) {
-			selfQualifies = true
-			break
-		}
-	}
-	emitter.EmitImports(converter.ExternalPkgs(), selfQualifies)
+	emitter.EmitImports(converted.ExternalPkgs, converted.NeedsSelfQualification())
 
-	for _, synth := range converter.SyntheticStructs() {
+	for _, synth := range converted.SyntheticTypes {
 		emitter.EmitExport(synth)
 	}
 
-	emittedTypeNames := make(map[string]bool)
-	for _, result := range results {
-		if result.Kind == extract.ExportType {
-			emittedTypeNames[result.Name] = true
-		}
-	}
-	for _, handle := range converter.OpaqueHandles() {
-		if emittedTypeNames[handle.Name] {
-			continue
-		}
+	for _, handle := range converted.OpaqueTypes {
 		emitter.EmitExport(handle)
 	}
 
-	for _, group := range constGroups {
-		if typeResult, ok := groupTypeResult[group.TypeName]; ok {
-			emitter.EmitExport(typeResult)
-		}
-		for _, constResult := range groupConstants[group.TypeName] {
-			emitter.EmitTypedConst(constResult, group.TypeName)
+	for _, group := range converted.ConstGroups {
+		emitter.EmitExport(group.Type)
+		for _, constant := range group.Constants {
+			emitter.EmitTypedConst(constant, group.Type.Name)
 		}
 	}
 
-	for i, result := range results {
-		if _, isGroupConstant := constantTypes[i]; isGroupConstant {
-			continue
-		}
-		if result.Kind == extract.ExportType && constGroupTypeNames[result.Name] {
-			continue
-		}
+	for _, result := range converted.Symbols {
 		if result.SkipReason != nil {
 			if result.Kind == extract.ExportMethod && emitter.CollectSkippedMethod(result) {
 				continue
@@ -258,8 +216,8 @@ func generateFromPackage(pkg *packages.Package, displayPath, lisetteVersion, goV
 
 	emitter.EmitImplBlocks()
 
-	externalImports := make([]string, 0, len(converter.ExternalPkgs()))
-	for path := range converter.ExternalPkgs() {
+	externalImports := make([]string, 0, len(converted.ExternalPkgs))
+	for path := range converted.ExternalPkgs {
 		externalImports = append(externalImports, path)
 	}
 

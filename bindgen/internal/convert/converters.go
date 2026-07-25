@@ -6,7 +6,6 @@ import (
 	"go/constant"
 	"go/token"
 	"go/types"
-	"maps"
 	"slices"
 	"strings"
 
@@ -114,21 +113,17 @@ func (c *Converter) convertFunction(result *ConvertResult, symbolExport extract.
 		result.CollapsedTypeParamRecipe = strings.Join(recipe, ", ")
 	}
 
-	prevSubs := c.typeParamSubstitutions
-	c.typeParamSubstitutions = substitutions
-	defer func() { c.typeParamSubstitutions = prevSubs }()
-
 	liftedSpecs, paramOverrides := c.liftReflectionDecodeParams(signature, result.Name, result.TypeParams)
 	result.TypeParams = liftedSpecs
 
-	params, skip := c.convertParams(signature, result.Name, result.Name, paramOverrides, true)
+	params, skip := c.convertParams(signature, result.Name, result.Name, paramOverrides, true, substitutions)
 	if skip != nil {
 		result.SkipReason = skip
 		return
 	}
 	result.Params = params
 
-	returnType := c.applyReturnType(result, signature, result.Name)
+	returnType := c.applyReturnType(result, signature, result.Name, substitutions)
 
 	c.resolveNilability(result, signature, returnType, nilabilityDecision{
 		obj:               symbolExport.Obj,
@@ -158,7 +153,7 @@ func (c *Converter) convertFunction(result *ConvertResult, symbolExport extract.
 // applySentinelInt rewrites a bare `int` return into `Option<int>` when
 // the config declares a sentinel; emit then writes the matching flag.
 func (c *Converter) applySentinelInt(result *ConvertResult, qualifiedName string) {
-	if c.cfg == nil || result.ReturnType != "int" {
+	if result.ReturnType != "int" {
 		return
 	}
 	value, ok := c.cfg.SentinelInt(c.currentPkgPath, qualifiedName)
@@ -169,7 +164,7 @@ func (c *Converter) applySentinelInt(result *ConvertResult, qualifiedName string
 	result.SentinelInt = &value
 }
 
-func (c *Converter) convertParams(sig *types.Signature, lookupName, methodName string, paramOverrides map[int]string, directEligible bool) ([]FunctionParameter, *SkipReason) {
+func (c *Converter) convertParams(sig *types.Signature, lookupName, methodName string, paramOverrides map[int]string, directEligible bool, substitutions map[string]string) ([]FunctionParameter, *SkipReason) {
 	mutParams := c.cfg.MutatingParams(c.currentPkgPath, lookupName)
 	nilableParams := c.cfg.NilableParams(c.currentPkgPath, lookupName)
 
@@ -190,7 +185,7 @@ func (c *Converter) convertParams(sig *types.Signature, lookupName, methodName s
 		if named, ok := c.directHandleIfEligible(param.Type(), directEligible); ok {
 			paramType = TypeResult{LisetteType: named.Obj().Name()}
 		} else {
-			paramType = convertParamType(param.Type(), name, nilableParams, c)
+			paramType = convertParamType(param.Type(), name, nilableParams, c, substitutions)
 		}
 		if paramType.SkipReason != nil {
 			return nil, paramType.SkipReason
@@ -213,8 +208,8 @@ func (c *Converter) convertParams(sig *types.Signature, lookupName, methodName s
 	return out, nil
 }
 
-func (c *Converter) applyReturnType(result *ConvertResult, sig *types.Signature, lookupName string) TypeResult {
-	returnType := ReturnsToLisette(sig, c, lookupName)
+func (c *Converter) applyReturnType(result *ConvertResult, sig *types.Signature, lookupName string, substitutions map[string]string) TypeResult {
+	returnType := returnsToLisetteWithSubstitutions(sig, c, lookupName, substitutions)
 	if returnType.LisetteType != "" {
 		result.ReturnType = returnType.LisetteType
 	} else if returnType.SkipReason != nil {
@@ -377,14 +372,14 @@ func (c *Converter) convertMethod(result *ConvertResult, symbolExport extract.Sy
 	}
 	liftedSpecs, paramOverrides := c.liftReflectionDecodeParams(signature, qualifiedName, methodSpecs)
 
-	params, skip := c.convertParams(signature, qualifiedName, result.Name, paramOverrides, true)
+	params, skip := c.convertParams(signature, qualifiedName, result.Name, paramOverrides, true, nil)
 	if skip != nil {
 		result.SkipReason = skip
 		return
 	}
 	result.Params = params
 
-	returnType := c.applyReturnType(result, signature, qualifiedName)
+	returnType := c.applyReturnType(result, signature, qualifiedName, nil)
 
 	lookups := []configKey{{c.currentPkgPath, qualifiedName}}
 	if symbolExport.IsPromoted && symbolExport.OriginalTypeName != "" {
@@ -436,7 +431,7 @@ func (c *Converter) convertMethod(result *ConvertResult, symbolExport extract.Sy
 
 	if isFluentBuilderCandidate(result, symbolExport, signature) {
 		if fn := c.findFuncDecl(symbolExport.Obj); fn != nil && isFluentMethod(fn, ncGetReceiverName(fn)) {
-			if c.cfg == nil || !c.cfg.ShouldDenyUnusedValue(c.currentPkgPath, qualifiedName) {
+			if !c.cfg.ShouldDenyUnusedValue(c.currentPkgPath, qualifiedName) {
 				result.BuilderMethod = true
 			}
 		}
@@ -502,14 +497,14 @@ func returnIsReceiverShaped(sig *types.Signature) bool {
 	return false
 }
 
-// FinalizeInterfaceBuilders carries the BuilderMethod flag from concrete methods to matching interface methods, when a concrete implementer is itself marked.
-func (c *Converter) FinalizeInterfaceBuilders(results []ConvertResult) {
+func (c *Converter) finalizeInterfaceBuilders(symbols []convertedSymbol) {
 	if c.pkg == nil || c.pkg.Types == nil {
 		return
 	}
 
 	concreteBuilders := make(map[string]map[string]bool)
-	for _, r := range results {
+	for _, symbol := range symbols {
+		r := symbol.result
 		if r.Kind != extract.ExportMethod || r.Receiver == nil || !r.BuilderMethod {
 			continue
 		}
@@ -525,8 +520,8 @@ func (c *Converter) FinalizeInterfaceBuilders(results []ConvertResult) {
 	}
 
 	scope := c.pkg.Types.Scope()
-	for i := range results {
-		result := &results[i]
+	for i := range symbols {
+		result := &symbols[i].result
 		if result.Kind != extract.ExportType || !result.IsInterface || len(result.InterfaceMethods) == 0 {
 			continue
 		}
@@ -767,7 +762,7 @@ func (c *Converter) convertVariable(result *ConvertResult, exp extract.SymbolExp
 	}
 
 	isNilable := isNilableGoType(exp.GoType)
-	forceNonNilable := c.cfg != nil && (c.cfg.IsNonNilableVar(c.currentPkgPath, result.Name) || c.cfg.IsNonNilableReturn(c.currentPkgPath, result.Name))
+	forceNonNilable := c.cfg.IsNonNilableVar(c.currentPkgPath, result.Name) || c.cfg.IsNonNilableReturn(c.currentPkgPath, result.Name)
 	if !forceNonNilable && isNilable {
 		forceNonNilable = c.isProvenNonNilVar(exp.Obj)
 	}
@@ -820,14 +815,8 @@ func (c *Converter) EmbedIsFaithful(field *types.Var) bool {
 		}
 		return true
 	}
-	// Probe runs before the owner's Convert checkpoint; snapshot/restore so its synth structs and imports do not leak.
-	synthMark := c.synthMark()
-	savedPkgs := make(ExternalPkgs, len(c.externalPkgs))
-	maps.Copy(savedPkgs, c.externalPkgs)
-	faithful := embeddedStructField(field, c).IsEmbedded
-	c.rollbackSynth(synthMark)
-	c.externalPkgs = savedPkgs
-	return faithful
+	probe := c.forkProbe()
+	return embeddedStructField(field, probe).IsEmbedded
 }
 
 // unexportedSamePkgStruct returns the named type behind t (peeling one pointer)
@@ -1134,12 +1123,6 @@ func collectTypeParams(
 		}
 	}
 
-	if len(substitutions) > 0 && conv != nil {
-		prev := conv.typeParamSubstitutions
-		conv.typeParamSubstitutions = substitutions
-		defer func() { conv.typeParamSubstitutions = prev }()
-	}
-
 	for tp := range typeParams.TypeParams() {
 		name := tp.Obj().Name()
 		constraint := tp.Constraint()
@@ -1155,7 +1138,7 @@ func collectTypeParams(
 			continue
 		}
 
-		if boundExpr, ok := recognizeBound(constraint, conv); ok {
+		if boundExpr, ok := recognizeBound(constraint, conv, substitutions); ok {
 			specs = append(specs, TypeParamSpec{Name: name, Bound: boundExpr})
 			recipe = append(recipe, name)
 			continue
@@ -1592,12 +1575,8 @@ func (c *Converter) interfaceRepresentable(named *types.Named) bool {
 	defer delete(c.ifaceProbing, named)
 
 	iface := named.Underlying().(*types.Interface)
-	synthMark := c.synthMark()
-	savedPkgs := make(ExternalPkgs, len(c.externalPkgs))
-	maps.Copy(savedPkgs, c.externalPkgs)
-	_, representable := c.extractInterfaceMethods(iface, named.Obj().Name())
-	c.rollbackSynth(synthMark)
-	c.externalPkgs = savedPkgs
+	probe := c.forkProbe()
+	_, representable := probe.extractInterfaceMethods(iface, named.Obj().Name())
 	c.ifaceRepresentable[named] = representable
 	return representable
 }
@@ -1780,7 +1759,7 @@ func (c *Converter) directHandleIfEligible(t types.Type, directEligible bool) (*
 	return c.directHandle(t)
 }
 
-func (c *Converter) OpaqueHandles() []ConvertResult {
+func (c *Converter) opaqueHandles() []ConvertResult {
 	if c.directProducers == nil {
 		c.computeDirectProducers()
 	}
@@ -1904,7 +1883,7 @@ func (c *Converter) extractInterfaceMethods(_interface *types.Interface, typeNam
 		}
 
 		qualifiedName := typeName + "." + method.Name()
-		params, skip := c.convertParams(signature, qualifiedName, method.Name(), nil, false)
+		params, skip := c.convertParams(signature, qualifiedName, method.Name(), nil, false, nil)
 		if skip != nil {
 			return nil, false
 		}
@@ -1916,7 +1895,7 @@ func (c *Converter) extractInterfaceMethods(_interface *types.Interface, typeNam
 
 		// Interface methods are contracts; any nilable return permits nil.
 		if isSingleNilableResult(signature) && !returnType.IsDirectError &&
-			(c.cfg == nil || !c.cfg.IsNonNilableReturn(c.currentPkgPath, qualifiedName)) {
+			!c.cfg.IsNonNilableReturn(c.currentPkgPath, qualifiedName) {
 			returnType.LisetteType = optionOf(returnType.LisetteType)
 		}
 

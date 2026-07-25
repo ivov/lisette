@@ -42,13 +42,13 @@ func (c *Converter) internAnonStruct(s *types.Struct) TypeResult {
 	}
 
 	key := anonShapeKey(fields)
-	if idx, ok := c.synthByShape[key]; ok {
-		return TypeResult{LisetteType: c.synth[idx].result.Name}
+	for _, existing := range c.synth {
+		if existing.key == key {
+			return TypeResult{LisetteType: existing.result.Name}
+		}
 	}
 
 	name := c.mintAnonName(fields)
-	c.synthByShape[key] = len(c.synth)
-	c.synthTaken[name] = true
 	c.synth = append(c.synth, syntheticStruct{
 		key: key,
 		result: ConvertResult{
@@ -100,31 +100,25 @@ func (c *Converter) mintAnonName(fields []StructField) string {
 	}
 	base := b.String()
 
-	c.seedReservedNames()
 	name := base
-	for i := 2; c.synthTaken[name]; i++ {
+	for i := 2; c.syntheticNameTaken(name); i++ {
 		name = fmt.Sprintf("%s_%d", base, i)
 	}
 	return name
 }
 
-// seedReservedNames reserves the package's declared names so a synthesized name
-// never clashes with a real type. Runs once.
-func (c *Converter) seedReservedNames() {
-	if c.reservedSeeded {
-		return
+func (c *Converter) syntheticNameTaken(name string) bool {
+	if c.pkg != nil && c.pkg.Types != nil && c.pkg.Types.Scope().Lookup(name) != nil {
+		return true
 	}
-	c.reservedSeeded = true
-	if c.pkg == nil || c.pkg.Types == nil {
-		return
+	for _, existing := range c.synth {
+		if existing.result.Name == name {
+			return true
+		}
 	}
-	for _, name := range c.pkg.Types.Scope().Names() {
-		c.synthTaken[name] = true
-	}
+	return false
 }
 
-// synthMark/rollbackSynth bracket a probe whose result may be discarded, so any
-// type minted during it does not leak into the output as an orphan.
 func (c *Converter) synthMark() int {
 	if c == nil {
 		return 0
@@ -136,15 +130,10 @@ func (c *Converter) rollbackSynth(checkpoint int) {
 	if c == nil {
 		return
 	}
-	for i := checkpoint; i < len(c.synth); i++ {
-		delete(c.synthByShape, c.synth[i].key)
-		delete(c.synthTaken, c.synth[i].result.Name)
-	}
 	c.synth = c.synth[:checkpoint]
 }
 
-// SyntheticStructs returns the synthesized types, name-sorted for stable emission.
-func (c *Converter) SyntheticStructs() []ConvertResult {
+func (c *Converter) syntheticStructs() []ConvertResult {
 	out := make([]ConvertResult, len(c.synth))
 	for i, s := range c.synth {
 		out[i] = s.result

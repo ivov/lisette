@@ -23,15 +23,15 @@ type GenerateStdResult struct {
 }
 
 type Target struct {
-	GOOS, GOARCH string
+	goos, goarch string
 }
 
 func (t Target) String() string {
-	return t.GOOS + "/" + t.GOARCH
+	return t.goos + "/" + t.goarch
 }
 
 func (t Target) Suffix() string {
-	return t.GOOS + "_" + t.GOARCH
+	return t.goos + "_" + t.goarch
 }
 
 // GenerateStd generates per-target `.d.lis` files and deduplicates them
@@ -54,7 +54,7 @@ func GenerateStd(ctx context.Context, outDir, lisetteVersion, goVersion string, 
 		}
 
 		loadStart := time.Now()
-		pkgs, err := extract.LoadPackages(pkgPaths, target.GOOS, target.GOARCH)
+		pkgs, err := extract.LoadPackages(pkgPaths, target.goos, target.goarch)
 		if err != nil {
 			return GenerateStdResult{}, fmt.Errorf("target %s: failed to load packages: %w", target, err)
 		}
@@ -123,8 +123,8 @@ func GenerateStd(ctx context.Context, outDir, lisetteVersion, goVersion string, 
 func listStdlibPackages(target Target) ([]string, error) {
 	cmd := exec.Command("go", "list", "std")
 	cmd.Env = append(os.Environ(),
-		"GOOS="+target.GOOS,
-		"GOARCH="+target.GOARCH,
+		"GOOS="+target.goos,
+		"GOARCH="+target.goarch,
 		"CGO_ENABLED=0",
 	)
 	out, err := cmd.Output()
@@ -168,14 +168,14 @@ func writeDedupedTypedefs(outDir string, partition partitioned) error {
 		return nil
 	}
 
-	for pkgPath, content := range partition.common {
-		if err := write(filepath.Join(outDir, pkgPath+".d.lis"), content); err != nil {
-			return err
+	for pkgPath, pkg := range partition {
+		if len(pkg.variants) == 1 {
+			if err := write(filepath.Join(outDir, pkgPath+".d.lis"), pkg.variants[0].content); err != nil {
+				return err
+			}
+			continue
 		}
-	}
-
-	for pkgPath, variants := range partition.variants {
-		for _, v := range variants {
+		for _, v := range pkg.variants {
 			if err := write(filepath.Join(outDir, suffixedPath(pkgPath, v.canonical)), v.content); err != nil {
 				return err
 			}

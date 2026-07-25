@@ -11,18 +11,13 @@ type variant struct {
 	content   string
 }
 
-type partitioned struct {
-	common          map[string]string    // pkgPath -> shared content
-	variants        map[string][]variant // pkgPath -> per-content variants (divergent only)
-	intendedTargets map[string][]Target  // pkgPath -> targets where it is available
+type packagePartition struct {
+	targets  []Target
+	variants []variant
 }
 
-// partitionByTarget classifies packages as common (suffixless, byte-identical
-// across every target where present) or divergent (one variant per content
-// equivalence class). Header-only outputs are dropped — they signal a
-// build-tag stub like `log/syslog` on windows. Lookup gates by
-// `intendedTargets` before falling through, so a shared file is never
-// returned for an unsupported target.
+type partitioned map[string]packagePartition
+
 func partitionByTarget(captured map[Target]map[string]string, targets []Target) partitioned {
 	hasRealContent := make(map[string]bool)
 	for _, results := range captured {
@@ -32,14 +27,6 @@ func partitionByTarget(captured map[Target]map[string]string, targets []Target) 
 			}
 		}
 	}
-	for _, results := range captured {
-		for pkgPath, content := range results {
-			if isHeaderOnly(content) && hasRealContent[pkgPath] {
-				delete(results, pkgPath)
-			}
-		}
-	}
-
 	allPkgs := make(map[string]struct{})
 	for _, results := range captured {
 		for pkgPath := range results {
@@ -47,18 +34,14 @@ func partitionByTarget(captured map[Target]map[string]string, targets []Target) 
 		}
 	}
 
-	result := partitioned{
-		common:          make(map[string]string),
-		variants:        make(map[string][]variant),
-		intendedTargets: make(map[string][]Target),
-	}
+	result := make(partitioned, len(allPkgs))
 
 	for pkgPath := range allPkgs {
 		var presentTargets []Target
 		var groups []*variant
 		for _, target := range targets {
 			content, ok := captured[target][pkgPath]
-			if !ok {
+			if !ok || (isHeaderOnly(content) && hasRealContent[pkgPath]) {
 				continue
 			}
 			presentTargets = append(presentTargets, target)
@@ -80,12 +63,7 @@ func partitionByTarget(captured map[Target]map[string]string, targets []Target) 
 			}
 		}
 
-		if len(presentTargets) < len(targets) {
-			result.intendedTargets[pkgPath] = presentTargets
-		}
-
-		if len(groups) == 1 {
-			result.common[pkgPath] = groups[0].content
+		if len(groups) == 0 {
 			continue
 		}
 
@@ -93,7 +71,10 @@ func partitionByTarget(captured map[Target]map[string]string, targets []Target) 
 		for i, g := range groups {
 			variants[i] = *g
 		}
-		result.variants[pkgPath] = variants
+		result[pkgPath] = packagePartition{
+			targets:  presentTargets,
+			variants: variants,
+		}
 	}
 
 	return result

@@ -4,6 +4,8 @@ import (
 	"go/ast"
 	"go/token"
 	"go/types"
+	"maps"
+	"slices"
 
 	"github.com/ivov/lisette/bindgen/internal/config"
 	"github.com/ivov/lisette/bindgen/internal/extract"
@@ -21,7 +23,6 @@ type ConvertResult struct {
 	TypeParams       TypeParamSpecs
 	Fields           []StructField     // for structs
 	InterfaceMethods []InterfaceMethod // for interfaces
-	Variants         []EnumVariant     // for enums (via iota)
 	ConstValue       string            // for constants
 	SkipReason       *SkipReason
 	// SkipNote attaches a leading "SKIPPED returns-with"/"SKIPPED type-with"
@@ -96,13 +97,36 @@ func (m *InterfaceMethod) HasReturn() bool {
 	return m.ReturnType != "" && m.ReturnType != "()"
 }
 
-type EnumVariant struct {
-	Name  string
-	Value string
-}
-
 // ExternalPkgs maps package paths to package names (e.g., "time" -> "time").
 type ExternalPkgs map[string]string
+
+type ConstGroup struct {
+	Type      ConvertResult
+	Constants []ConvertResult
+}
+
+type PackageConversion struct {
+	Symbols             []ConvertResult
+	ConstGroups         []ConstGroup
+	SyntheticTypes      []ConvertResult
+	OpaqueTypes         []ConvertResult
+	ExternalPkgs        ExternalPkgs
+	BitFlagSetTypeNames map[string]bool
+}
+
+func (p PackageConversion) NeedsSelfQualification() bool {
+	for _, result := range p.Symbols {
+		if result.Kind == extract.ExportType && CollidesWithBuiltinType(result.Name, len(result.TypeParams)) {
+			return true
+		}
+	}
+	for _, group := range p.ConstGroups {
+		if CollidesWithBuiltinType(group.Type.Name, len(group.Type.TypeParams)) {
+			return true
+		}
+	}
+	return false
+}
 
 // ASCII SOH/STX, used to wrap a package path in reference strings so the
 // emitter can substitute it with the resolved local prefix after collision
@@ -120,7 +144,7 @@ type Converter struct {
 	currentPkgPath           string
 	externalPkgs             ExternalPkgs
 	pkg                      *packages.Package
-	cfg                      *config.Config
+	cfg                      config.Config
 	uniformPointerTypes      map[string]bool              // lazily computed; types with 10+ single-pointer-return methods
 	manyToOneTypes           map[string]bool              // lazily computed; return types with 10+ free functions
 	majorityPointerTypes     map[string]bool              // lazily computed; types where ≥20 methods return same *T (>90%)
@@ -135,28 +159,28 @@ type Converter struct {
 	ifaceRepresentable       map[*types.Named]bool        // memoized per-interface "bindgen can emit this" verdicts
 	ifaceProbing             map[*types.Named]bool        // interfaces with an in-flight representability probe, to break self-referential cycles
 	shallowUnderlyingCache   map[token.Pos]types.Type     // lazily built; spec-level wrapped type by Named.Obj().Pos(). nil sentinels cached.
-	// Set per-function-conversion: maps `S` to `Slice<E>` for the `S ~[]E` shape.
-	typeParamSubstitutions map[string]string
 	// Stand-ins for Go anonymous struct types, in first-seen order.
-	synth          []syntheticStruct
-	synthByShape   map[string]int  // shape key -> index into synth
-	synthTaken     map[string]bool // names reserved against collision
-	reservedSeeded bool
+	synth []syntheticStruct
 }
 
 func NewConverter(pkgPath string, pkg *packages.Package, cfg *config.Config) *Converter {
+	var effectiveConfig config.Config
+	if cfg != nil {
+		effectiveConfig = *cfg
+	}
 	return &Converter{
 		currentPkgPath: pkgPath,
 		externalPkgs:   make(ExternalPkgs),
 		pkg:            pkg,
-		cfg:            cfg,
-		synthByShape:   make(map[string]int),
-		synthTaken:     make(map[string]bool),
+		cfg:            effectiveConfig,
 	}
 }
 
-func (c *Converter) ExternalPkgs() ExternalPkgs {
-	return c.externalPkgs
+func (c *Converter) forkProbe() *Converter {
+	probe := *c
+	probe.externalPkgs = maps.Clone(c.externalPkgs)
+	probe.synth = slices.Clone(c.synth)
+	return &probe
 }
 
 func (c *Converter) trackExternalPkg(pkgPath, pkgName string) {
@@ -234,7 +258,7 @@ func (c *Converter) salvageInternalAlias(rhs types.Type, reason *SkipReason) (st
 	return under.LisetteType, true
 }
 
-func (c *Converter) Convert(symbolExport extract.SymbolExport) ConvertResult {
+func (c *Converter) convert(symbolExport extract.SymbolExport) ConvertResult {
 	result := ConvertResult{
 		Name: symbolExport.Name,
 		Kind: symbolExport.Kind,
@@ -261,4 +285,38 @@ func (c *Converter) Convert(symbolExport extract.SymbolExport) ConvertResult {
 	}
 
 	return result
+}
+
+func (c *Converter) ConvertAll(exports []extract.SymbolExport) PackageConversion {
+	converted := make([]convertedSymbol, 0, len(exports))
+	for _, exp := range exports {
+		result := c.convert(exp)
+		converted = append(converted, convertedSymbol{export: exp, result: result})
+	}
+
+	c.finalizeInterfaceBuilders(converted)
+
+	regular, groups, bitFlagSetTypeNames := classifyConstGroups(converted, &c.cfg, c.currentPkgPath)
+	emittedTypeNames := make(map[string]bool)
+	for _, symbol := range converted {
+		if symbol.result.Kind == extract.ExportType {
+			emittedTypeNames[symbol.result.Name] = true
+		}
+	}
+
+	var opaqueTypes []ConvertResult
+	for _, handle := range c.opaqueHandles() {
+		if !emittedTypeNames[handle.Name] {
+			opaqueTypes = append(opaqueTypes, handle)
+		}
+	}
+
+	return PackageConversion{
+		Symbols:             regular,
+		ConstGroups:         groups,
+		SyntheticTypes:      c.syntheticStructs(),
+		OpaqueTypes:         opaqueTypes,
+		ExternalPkgs:        maps.Clone(c.externalPkgs),
+		BitFlagSetTypeNames: bitFlagSetTypeNames,
+	}
 }

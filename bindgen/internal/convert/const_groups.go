@@ -11,29 +11,26 @@ import (
 	"github.com/ivov/lisette/bindgen/internal/extract"
 )
 
-// ConstGroupInfo describes a Go defined primitive type (e.g. `type Duration
-// int64`) together with the constants declared at that type. It emits as a named
-// primitive struct plus package-level typed constants.
-type ConstGroupInfo struct {
-	TypeName       string
-	UnderlyingType string // e.g., "int64" for time.Duration
-	Variants       []EnumVariant
-}
-
 type constInfo struct {
-	index int
-	name  string
-	value string
+	object types.Object
+	result ConvertResult
 }
 
-// DetectConstGroups groups exported constants by their named primitive type,
-// returning one ConstGroupInfo per group (minimum two constants, not a bit-flag
-// set). `constGroupTypeNames` is the set of type names that own such a group.
-func DetectConstGroups(results []ConvertResult, exports []extract.SymbolExport, cfg *config.Config, pkgPath string) (constGroups []ConstGroupInfo, constantTypes map[int]string, constGroupTypeNames map[string]bool, bitFlagSetTypeNames map[string]bool) {
+type convertedSymbol struct {
+	export extract.SymbolExport
+	result ConvertResult
+}
+
+func classifyConstGroups(symbols []convertedSymbol, cfg *config.Config, pkgPath string) (regular []ConvertResult, groups []ConstGroup, bitFlagSetTypeNames map[string]bool) {
 	typeToConstants := make(map[string][]constInfo)
 	typeToUnderlying := make(map[string]string)
+	typeResults := make(map[string]ConvertResult)
 
-	for i, result := range results {
+	for _, symbol := range symbols {
+		result := symbol.result
+		if result.Kind == extract.ExportType {
+			typeResults[result.Name] = result
+		}
 		if result.Kind != extract.ExportConstant {
 			continue
 		}
@@ -44,8 +41,7 @@ func DetectConstGroups(results []ConvertResult, exports []extract.SymbolExport, 
 			continue
 		}
 
-		exp := exports[i]
-		constObj, ok := exp.Obj.(*types.Const)
+		constObj, ok := symbol.export.Obj.(*types.Const)
 		if !ok {
 			continue
 		}
@@ -83,15 +79,14 @@ func DetectConstGroups(results []ConvertResult, exports []extract.SymbolExport, 
 		}
 
 		typeToConstants[typeName] = append(typeToConstants[typeName], constInfo{
-			index: i,
-			name:  result.Name,
-			value: result.ConstValue,
+			object: symbol.export.Obj,
+			result: result,
 		})
 	}
 
-	constantTypes = make(map[int]string)
-	constGroupTypeNames = make(map[string]bool)
 	bitFlagSetTypeNames = make(map[string]bool)
+	groupedObjects := make(map[types.Object]bool)
+	groupedTypeNames := make(map[string]bool)
 
 	typeNames := make([]string, 0, len(typeToConstants))
 	for typeName := range typeToConstants {
@@ -104,6 +99,10 @@ func DetectConstGroups(results []ConvertResult, exports []extract.SymbolExport, 
 		if len(constants) < 2 {
 			continue
 		}
+		typeResult, hasType := typeResults[typeName]
+		if !hasType {
+			continue
+		}
 
 		// Bit operations on a string-underlying type are not meaningful;
 		// neither H13 nor the config override applies here.
@@ -114,24 +113,27 @@ func DetectConstGroups(results []ConvertResult, exports []extract.SymbolExport, 
 			continue
 		}
 
-		var variants []EnumVariant
-		for _, c := range constants {
-			variants = append(variants, EnumVariant{
-				Name:  c.name,
-				Value: c.value,
-			})
-			constantTypes[c.index] = typeName
+		constantResults := make([]ConvertResult, 0, len(constants))
+		for _, constant := range constants {
+			constantResults = append(constantResults, constant.result)
+			groupedObjects[constant.object] = true
 		}
-
-		constGroups = append(constGroups, ConstGroupInfo{
-			TypeName:       typeName,
-			UnderlyingType: typeToUnderlying[typeName],
-			Variants:       variants,
+		groups = append(groups, ConstGroup{
+			Type:      typeResult,
+			Constants: constantResults,
 		})
-		constGroupTypeNames[typeName] = true
+		groupedTypeNames[typeName] = true
 	}
 
-	return constGroups, constantTypes, constGroupTypeNames, bitFlagSetTypeNames
+	regular = make([]ConvertResult, 0, len(symbols))
+	for _, symbol := range symbols {
+		if groupedObjects[symbol.export.Obj] ||
+			(symbol.result.Kind == extract.ExportType && groupedTypeNames[symbol.result.Name]) {
+			continue
+		}
+		regular = append(regular, symbol.result)
+	}
+	return regular, groups, bitFlagSetTypeNames
 }
 
 // looksLikeBitFlags classifies a named integer type as a bit-flag set.
@@ -150,7 +152,7 @@ func looksLikeBitFlags(constants []constInfo) bool {
 	}
 
 	for _, c := range constants {
-		val := parseIntValue(c.value)
+		val := parseIntValue(c.result.ConstValue)
 		if val == 0 {
 			continue
 		}
@@ -165,7 +167,7 @@ func looksLikeBitFlags(constants []constInfo) bool {
 func isSequentialRange(constants []constInfo) bool {
 	vals := make([]int64, 0, len(constants))
 	for _, c := range constants {
-		vals = append(vals, parseIntValue(c.value))
+		vals = append(vals, parseIntValue(c.result.ConstValue))
 	}
 	slices.Sort(vals)
 	if vals[0] != 0 && vals[0] != 1 {

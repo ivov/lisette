@@ -39,7 +39,7 @@ type Emitter struct {
 	stats             stats
 	skipped           int
 	methods           map[string][]convert.ConvertResult // receiver type name -> methods
-	cfg               *config.Config
+	cfg               config.Config
 	pkgPath           string
 	pkgName           string            // package name, used to self-qualify prelude-colliding types
 	pkgAliases        map[string]string // package path -> local prefix used in references
@@ -48,9 +48,13 @@ type Emitter struct {
 }
 
 func NewEmitter(cfg *config.Config, pkgPath, pkgName string, bitFlagSetTypes, closedDomainTypes map[string]bool) *Emitter {
+	var effectiveConfig config.Config
+	if cfg != nil {
+		effectiveConfig = *cfg
+	}
 	return &Emitter{
 		methods:           make(map[string][]convert.ConvertResult),
-		cfg:               cfg,
+		cfg:               effectiveConfig,
 		pkgPath:           pkgPath,
 		pkgName:           pkgName,
 		bitFlagSetTypes:   bitFlagSetTypes,
@@ -422,7 +426,7 @@ func allowDiscardLint(returnType string) string {
 //   - Close() error
 //   - Flush() error
 func (e *Emitter) shouldAllowUnusedResult(qualifiedName, methodName string, result convert.ConvertResult) bool {
-	if e.cfg != nil && e.cfg.ShouldAllowUnusedResult(e.pkgPath, qualifiedName) {
+	if e.cfg.ShouldAllowUnusedResult(e.pkgPath, qualifiedName) {
 		return true
 	}
 
